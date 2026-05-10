@@ -11,7 +11,6 @@ using DataAcquisition.Infrastructure.Metrics;
 using DataAcquisition.Infrastructure.Queues;
 using DataAcquisition.Edge.Agent.BackgroundServices;
 using DataAcquisition.Edge.Agent.Services;
-using MediatR;
 using Prometheus;
 using Serilog;
 using Serilog.Events;
@@ -36,9 +35,6 @@ builder.Services.Configure<LogOptions>(builder.Configuration.GetSection("Logging
 // 配置 Edge 上报（注册/心跳）
 builder.Services.Configure<EdgeReportingOptions>(builder.Configuration.GetSection("Edge"));
 builder.Services.AddSingleton<EdgeIdentityService>();
-
-// CQRS/MediatR
-builder.Services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(typeof(DataAcquisition.Application.AssemblyMarker).Assembly));
 
 builder.Services.AddSingleton<IMetricsCollector, MetricsCollector>();
 builder.Services.AddSingleton<MetricsBridge>();

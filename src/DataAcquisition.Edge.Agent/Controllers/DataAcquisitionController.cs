@@ -1,9 +1,7 @@
 using System.Text.Json;
-using DataAcquisition.Application.Commands;
-using DataAcquisition.Application.Queries;
+using DataAcquisition.Application.Abstractions;
 using DataAcquisition.Contracts;
 using DataAcquisition.Domain.Models;
-using MediatR;
 using Microsoft.AspNetCore.Mvc;
 
 namespace DataAcquisition.Edge.Agent.Controllers;
@@ -12,25 +10,22 @@ namespace DataAcquisition.Edge.Agent.Controllers;
 ///     数据采集控制器
 /// </summary>
 [Route("api/[controller]")]
-public class DataAcquisitionController(IMediator mediator) : ControllerBase
+public class DataAcquisitionController(IDataAcquisitionService acquisitionService) : ControllerBase
 {
     /// <summary>
     ///     获取所有 Plc 连接状态
     /// </summary>
     /// <returns></returns>
     [HttpGet("plc-connections")]
-    public async Task<IActionResult> GetPlcConnections(CancellationToken ct)
-    {
-        var plcConnections = await mediator.Send(new GetPlcConnectionsQuery(), ct);
-        return Ok(plcConnections);
-    }
+    public IActionResult GetPlcConnections()
+        => Ok(acquisitionService.GetPlcConnections());
 
     /// <summary>
     ///     写入 PLC 寄存器
     /// </summary>
     /// <param name="request">写入请求</param>
     [HttpPost]
-    public async Task<IActionResult> WriteRegister([FromBody] PlcWriteRequest? request)
+    public async Task<IActionResult> WriteRegister([FromBody] PlcWriteRequest? request, CancellationToken ct)
     {
         // 输入验证
         if (request == null) return BadRequest(new { error = "请求体不能为空" });
@@ -47,13 +42,19 @@ public class DataAcquisitionController(IMediator mediator) : ControllerBase
             if (item.Value == null) return BadRequest(new { error = "写入值不能为空" });
         }
 
-        var command = new WritePlcRegisterCommand(
-            request.PlcCode,
-            request.Items
-                .Select(i => new WritePlcRegisterItem(i.Address, i.DataType, ConvertJsonValue(i.Value, i.DataType)!))
-                .ToList());
+        var results = new List<PlcWriteResult>(request.Items.Count);
+        foreach (var item in request.Items)
+        {
+            var value = ConvertJsonValue(item.Value, item.DataType)!;
+            var result = await acquisitionService.WritePlcAsync(
+                request.PlcCode,
+                item.Address,
+                value,
+                item.DataType,
+                ct);
+            results.Add(result);
+        }
 
-        var results = await mediator.Send(command);
         var allSuccess = results.All(r => r.IsSuccess);
 
         if (allSuccess) return Ok(results);

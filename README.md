@@ -307,7 +307,7 @@ Edge Agent -----> PLC / Device
 - [src/DataAcquisition.Infrastructure](src/DataAcquisition.Infrastructure)
   PLC 驱动、采集编排、队列、InfluxDB、SQLite、日志和指标实现
 - [src/DataAcquisition.Application](src/DataAcquisition.Application)
-  抽象接口、命令查询与运行时契约
+  抽象接口、应用服务与运行时契约
 - [src/DataAcquisition.Domain](src/DataAcquisition.Domain)
   领域模型、配置模型和消息模型
 - [src/DataAcquisition.Central.Api](src/DataAcquisition.Central.Api)

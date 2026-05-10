@@ -307,7 +307,7 @@ For more implementation detail, start with [docs/design.en.md](docs/design.en.md
 - [src/DataAcquisition.Infrastructure](src/DataAcquisition.Infrastructure)
   PLC drivers, orchestration, queueing, InfluxDB, SQLite, logging, and metrics implementations
 - [src/DataAcquisition.Application](src/DataAcquisition.Application)
-  abstractions, CQRS handlers, and runtime contracts
+  abstractions, application services, and runtime contracts
 - [src/DataAcquisition.Domain](src/DataAcquisition.Domain)
   domain, configuration, and message models
 - [src/DataAcquisition.Central.Api](src/DataAcquisition.Central.Api)
