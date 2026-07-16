@@ -1,6 +1,7 @@
 <a id="top"></a>
 
 <div align="center">
+  <img src="./docs/assets/ingot-logo.png" alt="Ingot Logo" width="320" />
   <h1 align="center">Ingot</h1>
   <p align="center">
     <strong>Forge production data into facts.</strong>
