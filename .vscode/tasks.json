@@ -55,7 +55,7 @@
             "type": "process",
             "args": [
                 "build",
-                "${workspaceFolder}/DataAcquisition.sln",
+                "${workspaceFolder}/Ingot.sln",
                 "/property:GenerateFullPaths=true",
                 "/consoleloggerparameters:NoSummary;ForceNoAlign"
             ],
@@ -67,7 +67,7 @@
             "type": "process",
             "args": [
                 "publish",
-                "${workspaceFolder}/DataAcquisition.sln",
+                "${workspaceFolder}/Ingot.sln",
                 "/property:GenerateFullPaths=true",
                 "/consoleloggerparameters:NoSummary;ForceNoAlign"
             ],
@@ -81,7 +81,7 @@
                 "watch",
                 "run",
                 "--project",
-                "${workspaceFolder}/DataAcquisition.sln"
+                "${workspaceFolder}/Ingot.sln"
             ],
             "problemMatcher": "$msCompile"
         }

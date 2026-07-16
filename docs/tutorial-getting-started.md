@@ -1,6 +1,6 @@
 # 快速开始
 
-本文说明如何在本地完成 DataAcquisition 的最小可运行验证，包括配置校验、Edge Agent 启动以及主采集链路验证。
+本文说明如何在本地完成 Ingot 的最小可运行验证，包括配置校验、Edge Agent 启动以及主采集链路验证。
 
 ## 前置要求
 
@@ -15,7 +15,7 @@
 在仓库根目录执行：
 
 ```bash
-dotnet build DataAcquisition.sln
+dotnet build Ingot.sln
 ```
 
 ## 第二步：启动 InfluxDB

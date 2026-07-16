@@ -1,9 +1,11 @@
 <a id="top"></a>
 
 <div align="center">
-  <h1 align="center">DataAcquisition</h1>
+  <h1 align="center">Ingot</h1>
   <p align="center">
-    An open-source PLC data acquisition runtime for industrial edge environments, focused on stable connectivity, configuration-driven collection, direct TSDB writes, and runtime diagnostics.
+    <strong>Forge production data into facts.</strong>
+    <br />
+    Open-source production data infrastructure for the industrial edge, starting with reliable acquisition and evolving raw telemetry into standardized, traceable production facts.
     <br />
     <a href="./docs/index.en.md"><strong>Explore the docs »</strong></a>
     <br />
@@ -45,9 +47,22 @@
 
 ## About The Project
 
-DataAcquisition is an open-source PLC data acquisition runtime for industrial edge environments. It is designed to run close to equipment, where it handles PLC communication, configuration-driven collection, batched writes into a time-series database, and runtime diagnostics.
+**Ingot** (formerly DataAcquisition) is an open-source production data infrastructure project for industrial edge environments. The current release runs close to equipment and handles PLC communication, configuration-driven collection, batched writes into a time-series database, and runtime diagnostics. Over time, it will standardize and eventize data from PLCs, OPC UA, CNC systems, vision systems, and other industrial sources into immutable, traceable production facts.
 
 The main product is the `Edge Agent`. It owns the collection path, reads PLC values, organizes acquisition tasks, batches messages, and writes them directly into a TSDB. The default implementation is InfluxDB. `Central API / Central Web` are optional control-plane components for node status, metrics, and log visibility rather than required runtime dependencies.
+
+See the [Production Events RFC](docs/rfc-production-events.md) for the event-oriented evolution plan. This README describes capabilities that exist today; the unified event envelope, context state, immutable event log, and central event store described in the RFC will be delivered incrementally.
+
+> Rename note: the product and solution file are now named **Ingot** and `Ingot.sln`. Existing project directories, assemblies, and namespaces temporarily retain `DataAcquisition.*` and will be migrated separately.
+
+### Why Ingot
+
+An **ingot** is a standardized unit created by refining and casting raw material. Raw telemetry resembles ore: abundant, fragmented, and low-value in isolation. Ingot refines it into standardized, event-oriented production facts.
+
+- **Standardized**: an ingot is cast in a consistent mold, reflecting a unified production event model
+- **Immutable**: once cast, an ingot has a definite form, matching the direction of immutable production events
+- **Stackable**: events can accumulate, be stored, and be consolidated into a complete production record
+- **Industrial by nature**: “ingot” is native vocabulary in foundries, metallurgy, and steel production
 
 ### Core Capabilities
 
@@ -115,7 +130,7 @@ cd DataAcquisition
 2. Build the solution
 
 ```bash
-dotnet build DataAcquisition.sln
+dotnet build Ingot.sln
 ```
 
 3. Start InfluxDB
@@ -334,6 +349,7 @@ Then go deeper by topic:
 
 - [Design](docs/design.en.md)
 - [Modules](docs/modules.en.md)
+- [Production Events RFC](docs/rfc-production-events.md)
 - [Development](docs/tutorial-development.en.md)
 - [FAQ](docs/faq.en.md)
 - [Contributing](CONTRIBUTING.en.md)
@@ -344,6 +360,7 @@ Then go deeper by topic:
 
 Based on the current design and docs, the most valuable next steps are:
 
+- [x] establish the Ingot product name and rename the solution to `Ingot.sln`
 - [ ] add more real-world PLC sample configs
 - [ ] expand end-to-end test coverage
 - [ ] improve `ProtocolOptions` coverage for major drivers

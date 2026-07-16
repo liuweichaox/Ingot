@@ -1,6 +1,6 @@
 # Getting Started
 
-This guide explains how to complete a minimal local validation of DataAcquisition, including configuration validation, Edge Agent startup, and verification of the primary acquisition path.
+This guide explains how to complete a minimal local validation of Ingot, including configuration validation, Edge Agent startup, and verification of the primary acquisition path.
 
 ## Prerequisites
 
@@ -15,7 +15,7 @@ If you only want to validate configuration first, you do not need a real PLC yet
 From the repository root:
 
 ```bash
-dotnet build DataAcquisition.sln
+dotnet build Ingot.sln
 ```
 
 ## Step 2: Start InfluxDB

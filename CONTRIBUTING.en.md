@@ -1,6 +1,6 @@
 # Contributing Guide
 
-Thanks for your interest in DataAcquisition.
+Thanks for your interest in Ingot.
 
 The project is acquisition-first. Its primary goal is not to become a generalized central platform, but to strengthen the PLC acquisition path in terms of stability, correctness, real-time behavior, and observability. Contributions should reinforce that objective.
 
@@ -18,7 +18,7 @@ The project is acquisition-first. Its primary goal is not to become a generalize
 ```bash
 dotnet restore
 dotnet test tests/DataAcquisition.Core.Tests/DataAcquisition.Core.Tests.csproj
-dotnet build DataAcquisition.sln --no-restore
+dotnet build Ingot.sln --no-restore
 ```
 
 For end-to-end local validation, prepare:

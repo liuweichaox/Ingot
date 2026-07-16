@@ -1,9 +1,11 @@
 <a id="top"></a>
 
 <div align="center">
-  <h1 align="center">DataAcquisition</h1>
+  <h1 align="center">Ingot</h1>
   <p align="center">
-    面向工业边缘场景的开源 PLC 数据采集运行时，聚焦稳定连接、配置化采集、直接写入时序数据库与运行诊断。
+    <strong>把生产数据炼成事实。</strong>
+    <br />
+    面向工业边缘的开源生产数据基础设施，从稳定采集起步，逐步将原始遥测标准化、事件化为可追溯的生产事实。
     <br />
     <a href="./docs/index.md"><strong>阅读项目文档 »</strong></a>
     <br />
@@ -45,9 +47,22 @@
 
 ## 关于项目
 
-DataAcquisition 是一个面向工业边缘场景的开源 PLC 数据采集运行时，用于在靠近设备侧的节点上完成 PLC 通信、配置化采集、批量写入时序数据库，以及运行状态诊断。
+**Ingot**（原 DataAcquisition）是一个面向工业边缘场景的开源生产数据基础设施项目。当前版本用于在靠近设备侧的节点上完成 PLC 通信、配置化采集、批量写入时序数据库，以及运行状态诊断；后续将把来自 PLC、OPC UA、CNC、视觉和其他工业系统的数据，逐步标准化、事件化为不可变、可追溯的生产事实。
 
 项目主产品是 `Edge Agent`。它负责读取 PLC 数据、组织采集任务、聚合批次并直接写入 TSDB。当前默认实现是 InfluxDB。`Central API / Central Web` 提供可选的中心化状态查看、指标浏览与日志代理能力，但不是采集主链路的前置依赖。
+
+生产数据事件化的演进方案见 [生产事件 RFC](docs/rfc-production-events.md)。README 描述当前已经实现的能力，RFC 中的统一事件信封、上下文状态、不可变事件日志与中心事件库将按阶段落地。
+
+> 更名说明：产品名和解决方案文件已经改为 **Ingot** 与 `Ingot.sln`。现有项目目录、程序集及命名空间暂时保留 `DataAcquisition.*`，将在后续全仓迁移中统一调整。
+
+### 为什么叫 Ingot
+
+**Ingot** 意为“锭”。原始遥测数据像矿砂——量大、分散、单位价值低；Ingot 将它熔炼为标准化、事件化的生产事实。
+
+- **标准化**：锭由统一模具铸成，对应统一的生产事件模型
+- **不可变**：锭一旦铸成便具有确定形态，对应不可变生产事件的设计方向
+- **可堆叠**：事件可以持续积累、存储和汇聚，形成完整的生产记录
+- **制造业语境**：锭是铸造、冶金和钢铁生产中的原生词汇，与工业现场天然相连
 
 ### 核心能力
 
@@ -115,7 +130,7 @@ cd DataAcquisition
 2. 构建解决方案
 
 ```bash
-dotnet build DataAcquisition.sln
+dotnet build Ingot.sln
 ```
 
 3. 启动 InfluxDB
@@ -334,6 +349,7 @@ Edge Agent -----> PLC / Device
 
 - [设计说明](docs/design.md)
 - [模块说明](docs/modules.md)
+- [生产事件 RFC](docs/rfc-production-events.md)
 - [开发扩展](docs/tutorial-development.md)
 - [常见问题](docs/faq.md)
 - [贡献指南](CONTRIBUTING.md)
@@ -344,6 +360,7 @@ Edge Agent -----> PLC / Device
 
 基于当前文档和实现，后续更值得持续投入的方向包括：
 
+- [x] 确立 Ingot 产品名并将解决方案更名为 `Ingot.sln`
 - [ ] 增加更多真实 PLC 的示例配置
 - [ ] 补充更多端到端测试
 - [ ] 继续完善主流驱动的 `ProtocolOptions`

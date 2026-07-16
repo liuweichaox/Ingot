@@ -123,7 +123,7 @@
 在提交代码前，至少执行：
 
 ```bash
-dotnet build DataAcquisition.sln --no-restore
+dotnet build Ingot.sln --no-restore
 dotnet test tests/DataAcquisition.Core.Tests/DataAcquisition.Core.Tests.csproj
 dotnet run --project src/DataAcquisition.Edge.Agent -- --validate-configs
 ```

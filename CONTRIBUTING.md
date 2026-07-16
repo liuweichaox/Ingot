@@ -1,6 +1,6 @@
 # 贡献指南
 
-感谢你关注 DataAcquisition。
+感谢你关注 Ingot。
 
 本项目的核心目标不是构建功能泛化的中心平台，而是持续强化 PLC 数据采集主链路的稳定性、正确性、实时性和可观测性。所有贡献都应优先服务这一目标。
 
@@ -18,7 +18,7 @@
 ```bash
 dotnet restore
 dotnet test tests/DataAcquisition.Core.Tests/DataAcquisition.Core.Tests.csproj
-dotnet build DataAcquisition.sln --no-restore
+dotnet build Ingot.sln --no-restore
 ```
 
 如果要联调完整链路，建议同时准备：

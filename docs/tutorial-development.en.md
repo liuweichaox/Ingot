@@ -123,7 +123,7 @@ The highest-value coverage areas are:
 Before opening a PR, run at least:
 
 ```bash
-dotnet build DataAcquisition.sln --no-restore
+dotnet build Ingot.sln --no-restore
 dotnet test tests/DataAcquisition.Core.Tests/DataAcquisition.Core.Tests.csproj
 dotnet run --project src/DataAcquisition.Edge.Agent -- --validate-configs
 ```
