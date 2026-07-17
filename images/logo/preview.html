@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ingot — 品牌标识</title>
+<style>
+  :root{
+    --gold-1:#FFC94A; --gold-2:#E8891A;
+    --steel-1:#33414F; --steel-2:#1F2933;
+    --ink:#1F2933; --paper:#FFFFFF; --coal:#10161C; --fog:#EDF1F5;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:Inter,'Segoe UI',system-ui,-apple-system,'PingFang SC','Microsoft YaHei',sans-serif;background:#F4F6F8;color:var(--ink);padding:48px 24px;max-width:1080px;margin:0 auto}
+  h1{font-size:28px;margin-bottom:6px}
+  .sub{color:#5B6B7A;margin-bottom:36px;font-size:15px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px}
+  .card{border-radius:14px;padding:44px 32px;display:flex;align-items:center;justify-content:center;min-height:200px;border:1px solid #E2E8EE}
+  .card.light{background:var(--paper)}
+  .card.dark{background:var(--coal);border-color:#232E38}
+  .label{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#8A97A5;margin:26px 0 10px}
+  .row{background:var(--paper);border:1px solid #E2E8EE;border-radius:14px;padding:28px 32px;display:flex;align-items:flex-end;gap:40px;flex-wrap:wrap}
+  .cell{text-align:center}
+  .cell span{display:block;font-size:11px;color:#8A97A5;margin-top:8px}
+  .palette{display:flex;gap:12px;flex-wrap:wrap}
+  .chip{width:150px;border-radius:12px;overflow:hidden;border:1px solid #E2E8EE;background:#fff}
+  .chip .sw{height:64px}
+  .chip .nm{padding:8px 12px;font-size:12px;color:#455361}
+  .story{background:var(--paper);border:1px solid #E2E8EE;border-radius:14px;padding:28px 32px;line-height:1.85;font-size:14.5px}
+  .story b{color:#B9700F}
+  .tag{margin-top:10px;color:#5B6B7A;font-style:italic}
+</style>
+</head>
+<body>
+
+<!-- 共享渐变定义 -->
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <linearGradient id="gL" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFC94A"/><stop offset="1" stop-color="#E8891A"/></linearGradient>
+    <linearGradient id="sL" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#33414F"/><stop offset="1" stop-color="#1F2933"/></linearGradient>
+    <linearGradient id="gD" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFCE57"/><stop offset="1" stop-color="#F09A24"/></linearGradient>
+    <linearGradient id="sD" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5B6E80"/><stop offset="1" stop-color="#3C4A58"/></linearGradient>
+    <symbol id="markL" viewBox="0 0 128 128">
+      <g stroke-linejoin="round">
+        <path d="M43.5 30 H84.5 L91.5 64 H36.5 Z" fill="url(#gL)" stroke="url(#gL)" stroke-width="4"/>
+        <path d="M47 36 H81" fill="none" stroke="#FFE9B0" stroke-width="3" stroke-linecap="round" opacity="0.75"/>
+        <path d="M13 70 H54 L61 104 H6 Z" fill="url(#sL)" stroke="url(#sL)" stroke-width="4"/>
+        <path d="M74 70 H115 L122 104 H67 Z" fill="url(#sL)" stroke="url(#sL)" stroke-width="4"/>
+      </g>
+    </symbol>
+    <symbol id="markD" viewBox="0 0 128 128">
+      <g stroke-linejoin="round">
+        <path d="M43.5 30 H84.5 L91.5 64 H36.5 Z" fill="url(#gD)" stroke="url(#gD)" stroke-width="4"/>
+        <path d="M47 36 H81" fill="none" stroke="#FFEDC0" stroke-width="3" stroke-linecap="round" opacity="0.8"/>
+        <path d="M13 70 H54 L61 104 H6 Z" fill="url(#sD)" stroke="url(#sD)" stroke-width="4"/>
+        <path d="M74 70 H115 L122 104 H67 Z" fill="url(#sD)" stroke="url(#sD)" stroke-width="4"/>
+      </g>
+    </symbol>
+  </defs>
+</svg>
+
+<h1>Ingot — 品牌标识</h1>
+<p class="sub">把生产数据炼成事实 · Smelt production data into facts</p>
+
+<div class="label">横排锁定版式 Lockup</div>
+<div class="grid">
+  <div class="card light">
+    <svg viewBox="0 0 344 128" width="310"><use href="#markL" width="128" height="128"/><text x="144" y="89" font-family="Inter,'Segoe UI',system-ui,sans-serif" font-size="62" font-weight="700" letter-spacing="-1.5" fill="#1F2933">Ingot</text></svg>
+  </div>
+  <div class="card dark">
+    <svg viewBox="0 0 344 128" width="310"><use href="#markD" width="128" height="128"/><text x="144" y="89" font-family="Inter,'Segoe UI',system-ui,sans-serif" font-size="62" font-weight="700" letter-spacing="-1.5" fill="#EDF1F5">Ingot</text></svg>
+  </div>
+</div>
+
+<div class="label">图标 Mark · 各尺寸</div>
+<div class="grid">
+  <div class="row" style="border-radius:14px">
+    <div class="cell"><svg width="128" height="128"><use href="#markL"/></svg><span>128</span></div>
+    <div class="cell"><svg width="64" height="64" viewBox="0 0 128 128"><use href="#markL"/></svg><span>64</span></div>
+    <div class="cell"><svg width="32" height="32" viewBox="0 0 128 128"><use href="#markL"/></svg><span>32</span></div>
+    <div class="cell"><svg width="16" height="16" viewBox="0 0 128 128"><use href="#markL"/></svg><span>16 favicon</span></div>
+  </div>
+  <div class="card dark" style="gap:40px;align-items:flex-end;justify-content:flex-start;padding:28px 32px">
+    <div class="cell"><svg width="128" height="128"><use href="#markD"/></svg><span style="color:#5B6B7A">128</span></div>
+    <div class="cell"><svg width="64" height="64" viewBox="0 0 128 128"><use href="#markD"/></svg><span style="color:#5B6B7A">64</span></div>
+    <div class="cell"><svg width="32" height="32" viewBox="0 0 128 128"><use href="#markD"/></svg><span style="color:#5B6B7A">32</span></div>
+    <div class="cell"><svg width="16" height="16" viewBox="0 0 128 128"><use href="#markD"/></svg><span style="color:#5B6B7A">16</span></div>
+  </div>
+</div>
+
+<div class="label">色板 Palette</div>
+<div class="palette">
+  <div class="chip"><div class="sw" style="background:linear-gradient(#FFC94A,#E8891A)"></div><div class="nm">Molten Gold<br>#FFC94A → #E8891A</div></div>
+  <div class="chip"><div class="sw" style="background:linear-gradient(#33414F,#1F2933)"></div><div class="nm">Cast Steel<br>#33414F → #1F2933</div></div>
+  <div class="chip"><div class="sw" style="background:#10161C"></div><div class="nm">Coal（深色底）<br>#10161C</div></div>
+  <div class="chip"><div class="sw" style="background:#EDF1F5;border-bottom:1px solid #E2E8EE"></div><div class="nm">Fog（深色底文字）<br>#EDF1F5</div></div>
+</div>
+
+<div class="label">设计释义</div>
+<div class="story">
+  标识由三块<b>锭</b>的截面（梯形）堆叠而成，直接来自 RFC §12.1 的命名释义：遥测是矿砂，Ingot 把它熔炼成标准化、不可变、可堆叠的事实之锭。
+  两块<b>钢色底锭</b>是已沉淀的事件日志（append-only，越垒越高的既成事实）；顶部的<b>金锭</b>是刚刚铸成的最新事实，锭面上的一道反光是出炉时的余温。
+  三块锭之间保持等距缝隙——事件是离散的、一块一块铸成的，不是连续流。
+  整体轮廓在 16px 下仍可辨认，适用于 favicon、终端徽标与 NuGet 包图标。
+  <div class="tag">Ingot — 把生产数据炼成事实。Smelt production data into facts.</div>
+</div>
+
+</body>
+</html>

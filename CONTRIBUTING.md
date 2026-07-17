@@ -17,15 +17,15 @@
 
 ```bash
 dotnet restore
-dotnet test tests/DataAcquisition.Core.Tests/DataAcquisition.Core.Tests.csproj
+dotnet test tests/Ingot.Core.Tests/Ingot.Core.Tests.csproj
 dotnet build Ingot.sln --no-restore
 ```
 
 如果要联调完整链路，建议同时准备：
 
 - InfluxDB 2.x
-- `src/DataAcquisition.Edge.Agent/Configs/TEST_PLC.json`
-- `src/DataAcquisition.Simulator`
+- `src/Ingot.Edge.Agent/Configs/TEST_PLC.json`
+- `src/Ingot.Simulator`
 
 ## 贡献范围
 

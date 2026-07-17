@@ -1,6 +1,6 @@
 # 驱动目录
 
-本文档说明项目当前内置 PLC 驱动目录及其支持的 `ProtocolOptions`。相关驱动实现由 [HslStandardPlcDriverProvider.cs](../src/DataAcquisition.Infrastructure/Clients/HslStandardPlcDriverProvider.cs) 提供。
+本文档说明项目当前内置 PLC 驱动目录及其支持的 `ProtocolOptions`。相关驱动实现由 [HslStandardPlcDriverProvider.cs](../src/Ingot.Infrastructure/Clients/HslStandardPlcDriverProvider.cs) 提供。
 
 本文档主要覆盖以下内容：
 
@@ -222,13 +222,13 @@
 你也可以直接用离线校验命令检查自己的目录：
 
 ```bash
-dotnet run --project src/DataAcquisition.Edge.Agent -- --validate-configs --config-dir ./examples/device-configs
+dotnet run --project src/Ingot.Edge.Agent -- --validate-configs --config-dir ./examples/device-configs
 ```
 
 ## 扩展新驱动
 
 如果当前内置驱动不够用，扩展入口是：
 
-- [IPlcDriverProvider](../src/DataAcquisition.Application/Abstractions/IPlcDriverProvider.cs)
-- [IPlcClientService](../src/DataAcquisition.Application/Abstractions/IPlcClientService.cs)
+- [IPlcDriverProvider](../src/Ingot.Application/Abstractions/IPlcDriverProvider.cs)
+- [IPlcClientService](../src/Ingot.Application/Abstractions/IPlcClientService.cs)
 - [../CONTRIBUTING.md](../CONTRIBUTING.md)

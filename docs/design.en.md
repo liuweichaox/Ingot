@@ -1,199 +1,76 @@
 # Design
 
-This document explains the project's core design principles, system boundaries, and engineering tradeoffs rather than providing file-by-file implementation details.
+Ingot is edge-first production event infrastructure. PLC is the first source adapter; production events are the stable product model exposed to consumers.
 
-## 1. Product Boundary
-
-The main product in this repository is the `Edge Agent`.
-
-The project primarily addresses the following concerns:
-
-- how to connect to PLCs
-- how to collect data
-- how to turn device reads into consistent acquisition messages
-- how to write batches into TSDB reliably
-- how to make field failures easy to diagnose
-
-`Central API` and `Central Web` are support components used for:
-
-- edge registration
-- heartbeat and status inspection
-- metrics and log proxying
-
-They are not required to keep the acquisition path working.
-
-## 2. Main Data Path
-
-The runtime path is:
+## Dual planes
 
 ```text
-PLC -> Collector -> Queue -> Storage
+Source
+  |-- telemetry --> ChannelCollector --> QueueService --> TSDB
+  `-- changes ----> EventRuleEvaluator --> EventSink --> events.db
+                                                  |--> query / SSE
+                                                  |--> TSDB projection
+                                                  `--> EventShipper --> Central API --> PostgreSQL
 ```
 
-Meaning:
+Telemetry answers “what is the value now?” It is high-rate, batched in memory, and at-most-once. A failed TSDB batch is logged and dropped.
 
-1. `Collector`
-   reads data from PLCs according to device and channel configuration.
+Events answer “what happened?” They use `ProductionEvent`, are appended to SQLite before any projection, and remain queryable across restarts. `EventId`, monotonic edge `Seq`, and `CorrelationId` provide idempotency, cursors, and cycle correlation.
 
-2. `Queue`
-   batches messages by `plcCode + channelCode + measurement` and triggers writes.
+## Source and asset separation
 
-3. `Storage`
-   is currently InfluxDB by default.
+`SourceCode` identifies a communication endpoint. `ObjectRef` identifies a business asset. Schema v2 adds `Adapter`, `Profile`, `Asset`, and `EventRules`; v1 `PlcCode` remains a compatibility alias only.
 
-The current runtime no longer includes a local WAL, replay folders, or a background replay worker.
+## Implemented event foundation
 
-When storage writes fail:
+- v1 Conditional channels emit cycle and diagnostic events
+- v2 rules support edge pairs, value changes, bit flags, and thresholds
+- successful PLC control writes emit `parameter.applied`
+- `EdgeStateStore` persists active cycles and asset context
+- `/api/v1/events`, SSE, cycle lookup, and context APIs are local and edge-autonomous
+- `core` and `optical` Profiles validate object types, event types, and required context
 
-- the current batch is logged as failed
-- the current batch is dropped
-- later batches continue trying to write
+## Storage semantics
 
-That behavior is an explicit product decision, not an unfinished placeholder.
+| File | Purpose |
+|---|---|
+| `events.db` | immutable production events, edge sequence, shipping state |
+| `acquisition-state.db` | active cycles and asset context |
+| `logs.db` | runtime logs |
 
-## 3. Why Direct-to-TSDB
+Every dynamic context key/value is written in the same append transaction to `event_context(event_seq, ctx_key, ctx_value)`. The `(ctx_key, ctx_value, event_seq)` index supports `ctx.*` queries without predeclaring industry fields, and existing databases are backfilled from `context_json` on startup.
 
-The current project targets real-time acquisition rather than durable edge-side recovery.
+An event-log append failure records the latest error and consecutive failure count and degrades `/health`; a later successful append recovers it. A TSDB projection failure does not revoke an event that already exists. `EventShipper` reads pending events in edge-sequence order, retries with exponential backoff, safely resends an unacknowledged batch, and advances local shipped state only after a valid `AckSeq`.
 
-The direct-to-TSDB decision is driven by:
+Central uses PostgreSQL monthly partitions, JSONB/GIN context indexes, a central `IngestId` cursor, per-edge bearer tokens, and unique constraints on both `EventId` and `(EdgeId, Seq)`. Before persistence it validates UUIDv7 identity, event type/version, subject, context, positive sequence, in-batch identity uniqueness, and that `Source` belongs to the token-bound Edge. Transport is at-least-once while central persistence has an exactly-once effect.
 
-- a simpler runtime model
-- clearer success semantics, where success means storage confirmed the write
-- avoiding local backlog replay that can distort time-series write ordering
-- alignment with the project's current business priority, which is visibility of failure rather than local compensation
+Webhook subscriptions are also durable in PostgreSQL. Each subscription has its own central cursor; matching events advance only after a 2xx response, so failures are safely retried. Delivery uses CloudEvents 1.0 structured JSON and can include `X-Ingot-Signature: sha256=...` using the subscription secret.
 
-The resulting contract is:
+`scripts/benchmark-edge-event-log.sh` and `scripts/benchmark-central-ingest.sh` enforce the RFC performance gates for million-row local append/query latency and real HTTP-to-PostgreSQL ingest throughput and sequence integrity.
 
-- a sample is considered persisted only when storage succeeds
-- failures surface through logs and metrics
-- the project does not claim local replay, durable edge buffering, or delayed compensation
+Source configurations are validated strictly before runtime and then checked against their Profile. Unknown JSON members (including misspelled keys), duplicate source/rule identifiers, invalid adapter parameters, and undeclared object or event types are rejected.
 
-If your environment requires long offline retention or strict backfill, that is outside the current project boundary.
+Edge and Central share the same query-boundary validation. Reversed time ranges, negative cursors, out-of-range limits, invalid context keys, and malformed `Last-Event-ID` values return HTTP 400.
 
-## 4. Configuration Model
+## API
 
-The project uses JSON device configuration instead of a database-backed config center.
+- `GET /health`
+- `GET /metrics`
+- `GET /api/v1/events`
+- `GET /api/v1/events/stream`
+- `GET /api/v1/cycles/{correlationId}`
+- `GET|PUT /api/v1/context/{subjectType}/{subjectId}`
+- `GET /api/acquisition/plc-connections`
+- `POST /api/acquisition`
 
-Reasons:
+Central API exposes:
 
-- easier edge deployment
-- simple file-based operations
-- natural integration with the .NET configuration model
-- better fit for industrial single-node operations
+- `POST /api/v1/events:batch`
+- `GET /api/v1/events`
+- `GET /api/v1/events/stream`
+- `GET /api/v1/cycles/{correlationId}`
+- `POST|GET /api/v1/subscriptions`
+- `GET|DELETE /api/v1/subscriptions/{subscriptionId}`
+- `PUT /api/v1/subscriptions/{subscriptionId}/enabled`
 
-The core config fields are:
-
-- `Driver`
-- `Host`
-- `Port`
-- `ProtocolOptions`
-- `Channels`
-
-The design rule is:
-
-- keep top-level fields stable
-- push protocol-specific differences into `ProtocolOptions`
-- validate configs before runtime
-
-## 5. Driver Model
-
-Drivers are selected through stable `Driver` names such as:
-
-- `melsec-a1e`
-- `melsec-mc`
-- `siemens-s7`
-
-The runtime core does not depend directly on a specific PLC library. Instead, it depends on:
-
-- `IPlcDriverProvider`
-- `IPlcClientService`
-
-The current built-in implementation uses HslCommunication, but that is a default implementation choice, not an architectural requirement.
-
-## 6. Acquisition Modes
-
-The runtime supports two acquisition modes.
-
-### Always
-
-For continuous signals and real-time values.
-
-### Conditional
-
-For cycle boundaries, steps, and edge-triggered events.
-
-In conditional mode:
-
-- formal business events are written as `Start` / `End`
-- recovery diagnostics are written to `<measurement>_diagnostic`
-
-This keeps recovery semantics out of formal cycle analytics.
-
-## 7. Time Semantics
-
-The runtime uses UTC timestamps internally.
-
-Why:
-
-- multiple edge nodes can be compared on one timeline
-- TSDB writes and queries remain easier to reason about
-- local timezone and DST issues do not leak into storage semantics
-
-If local display time is needed, it should be handled in the UI or query layer.
-
-## 8. State Recovery
-
-Conditional acquisition depends not only on the current register value but also on the current active cycle state.
-
-To survive process restarts, active cycle state is stored as:
-
-- in-memory hot state
-- SQLite-backed local recovery state
-
-This allows the runtime to recover context and emit recovery diagnostics instead of silently forgetting state.
-
-This recovery applies to conditional acquisition context only, not raw data replay.
-
-## 9. Layering
-
-The current layering is:
-
-- `Domain`
-  domain, message, and configuration models
-- `Application`
-  runtime abstractions and contracts
-- `Infrastructure`
-  drivers, acquisition, storage, logging, and metrics
-- `Edge.Agent`
-  main runtime entry
-- `Central.Api` / `Central.Web`
-  optional central support components
-
-The goal is not academic purity. The goal is:
-
-- keep default implementations inside Infrastructure
-- keep extension points stable in Application
-- keep runtime entry points simple
-
-## 10. Design Principles
-
-The current architecture is built around these principles:
-
-- `Edge First`
-- `Real-Time First`
-- `Configuration Before Runtime`
-- `Explicit Driver Contracts`
-- `Observability First`
-- `Formal Events Separate From Diagnostics`
-
-These principles matter more than whether one class is split into three files.
-
-## 11. Near-Term Direction
-
-The architecture is already stable enough. The next valuable improvements are:
-
-1. more real-world example configs
-2. more end-to-end tests
-3. fuller `ProtocolOptions` support for the most common drivers
-4. stronger troubleshooting and operations docs
-5. better central observability and diagnostics workflows
+See the [Production Events RFC](rfc-production-events.md) for the full roadmap and trade-offs.

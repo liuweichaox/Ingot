@@ -1,0 +1,251 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/liuweichaox/Ingot/schemas/device-config.v2.schema.json",
+  "title": "Ingot Source Config v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "SchemaVersion",
+    "IsEnabled",
+    "SourceCode",
+    "Adapter",
+    "Driver",
+    "Host",
+    "Port",
+    "HeartbeatMonitorRegister",
+    "HeartbeatPollingInterval"
+  ],
+  "anyOf": [
+    {
+      "required": ["Channels"],
+      "properties": {
+        "Channels": { "minItems": 1 }
+      }
+    },
+    {
+      "required": ["EventRules"],
+      "properties": {
+        "EventRules": { "minItems": 1 }
+      }
+    }
+  ],
+  "properties": {
+    "SchemaVersion": {
+      "type": "integer",
+      "const": 2
+    },
+    "IsEnabled": {
+      "type": "boolean"
+    },
+    "SourceCode": {
+      "type": "string",
+      "minLength": 1
+    },
+    "PlcCode": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Schema v1 compatibility alias for SourceCode."
+    },
+    "Adapter": {
+      "type": "string",
+      "const": "plc"
+    },
+    "Profile": {
+      "type": "string",
+      "default": "core"
+    },
+    "Asset": {
+      "$ref": "#/$defs/objectRef"
+    },
+    "Driver": {
+      "type": "string",
+      "minLength": 1
+    },
+    "Host": {
+      "type": "string",
+      "minLength": 1
+    },
+    "Port": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 65535
+    },
+    "ProtocolOptions": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "HeartbeatMonitorRegister": {
+      "type": "string",
+      "minLength": 1
+    },
+    "HeartbeatPollingInterval": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "Channels": {
+      "type": "array",
+      "items": {
+        "$ref": "device-config.schema.json#/$defs/channel"
+      }
+    },
+    "EventRules": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/eventRule"
+      }
+    }
+  },
+  "$defs": {
+    "objectRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["Type", "Id"],
+      "properties": {
+        "Type": {
+          "type": "string",
+          "minLength": 1
+        },
+        "Id": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "eventRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["RuleId", "Category", "Trigger"],
+      "properties": {
+        "RuleId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "Category": {
+          "type": "string",
+          "minLength": 1
+        },
+        "Subject": {
+          "$ref": "#/$defs/objectRef"
+        },
+        "StartedEventType": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_.-]*$"
+        },
+        "CompletedEventType": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_.-]*$"
+        },
+        "EventType": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_.-]*$"
+        },
+        "ContextKeys": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "SetContext": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "Data": {
+          "type": "object"
+        },
+        "SnapshotOnStart": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/snapshotField"
+          }
+        },
+        "SnapshotOnEnd": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/snapshotField"
+          }
+        },
+        "Trigger": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["Kind", "Tag", "DataType"],
+          "properties": {
+            "Kind": {
+              "type": "string",
+              "enum": ["EdgePair", "ValueChanged", "BitFlag", "Threshold"]
+            },
+            "Tag": {
+              "type": "string",
+              "minLength": 1
+            },
+            "DataType": {
+              "type": "string",
+              "minLength": 1
+            },
+            "StringByteLength": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "Encoding": {
+              "type": "string"
+            },
+            "Bit": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 63
+            },
+            "Threshold": {
+              "type": "number"
+            },
+            "ThresholdDirection": {
+              "type": "string",
+              "enum": ["AboveOrEqual", "BelowOrEqual"],
+              "default": "AboveOrEqual"
+            },
+            "StartTriggerMode": {
+              "type": "string",
+              "enum": ["RisingEdge", "FallingEdge"],
+              "default": "RisingEdge"
+            },
+            "EndTriggerMode": {
+              "type": "string",
+              "enum": ["RisingEdge", "FallingEdge"],
+              "default": "FallingEdge"
+            }
+          }
+        }
+      }
+    },
+    "snapshotField": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["FieldName", "Tag", "DataType"],
+      "properties": {
+        "FieldName": {
+          "type": "string",
+          "minLength": 1
+        },
+        "Tag": {
+          "type": "string",
+          "minLength": 1
+        },
+        "DataType": {
+          "type": "string",
+          "minLength": 1
+        },
+        "StringByteLength": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "Encoding": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

@@ -10,28 +10,31 @@
 
 ## 项目定位
 
-### DataAcquisition 的定位是什么
+### Ingot 的定位是什么
 
-它是一个 PLC 数据采集运行时。
+它是一个边缘优先的生产事件基础设施，PLC 是当前首个源适配器。
 
 它负责：
 
 - 从 PLC 读取数据
-- 生成统一的采集消息
-- 按批次直接写存储
+- 将高频遥测按批次写入 TSDB
+- 将周期、参数和诊断变化写成不可变生产事件
+- 提供本地事件查询、SSE、周期关联与业务上下文
 - 暴露本地日志、指标和诊断接口
 - 在条件采集场景下恢复 active cycle 上下文
 
-### DataAcquisition 的系统边界是什么
+### Ingot 的系统边界是什么
 
 当前边界是：
 
 - 主产品是 `Edge Agent`
 - 中心侧页面是辅助控制面，不是采集主链路
-- 项目默认直接写 InfluxDB，不提供本地 WAL 或后台回放
-- 当存储失败时，会记录错误并丢弃当前批次
+- 遥测默认直接写 InfluxDB，失败批次记录后丢弃
+- 生产事件先写入 `events.db`，不依赖 InfluxDB 成功才成立
+- 中心事件通过本地 outbox 自动上行，Central 使用 PostgreSQL 幂等汇聚多个 Edge
+- 中心不可用不影响本地采集与事件产生，恢复后会继续发送待确认事件
 
-如果场景要求长时间离线缓存或严格补写，这不属于当前实现承诺。
+遥测仍不提供本地补写；生产事件提供受 `Events:MaxBacklogRows` 和本地磁盘容量约束的离线积压。
 
 ## 配置与驱动
 
@@ -47,15 +50,16 @@
 
 - JSON 格式不合法
 - 缺少必填字段
-- `PlcCode` 为空
-- `PlcCode` 在多个配置文件中重复
+- `SourceCode`（v1 为 `PlcCode`）为空或重复
+- v2 引用了不存在的 Profile、对象类型或事件类型
+- EventRule 缺少 Profile 要求的上下文键
 - `Driver` 不在内置目录里
 - `ProtocolOptions` 包含当前驱动不支持的键
 
 建议先执行：
 
 ```bash
-dotnet run --project src/DataAcquisition.Edge.Agent -- --validate-configs
+dotnet run --project src/Ingot.Edge.Agent -- --validate-configs
 ```
 
 ### 修改配置后需要重启吗
@@ -83,16 +87,13 @@ dotnet run --project src/DataAcquisition.Edge.Agent -- --validate-configs
 
 ## 采集与存储
 
-### 为什么直接写 TSDB
+### 为什么遥测直接写 TSDB，事件却写 SQLite
 
-因为当前项目优先解决的是实时采集和故障可见性，而不是本地补偿恢复。
+两类数据价值和速率不同：
 
-Direct-to-TSDB 的含义是：
-
-- 队列在内存中聚合批次
-- 批次直接写存储
-- 存储失败时记录日志和指标
-- 不在本地保留待重放原始数据
+- 高频遥测在内存中聚合并直接写 TSDB，失败时丢弃当前批次
+- 低频生产事件先写 `events.db`，保证重启后仍可查询
+- TSDB 中的事件副本只是可重建投影
 
 ### InfluxDB 挂了会不会影响采集
 
@@ -100,8 +101,8 @@ Direct-to-TSDB 的含义是：
 
 当前预期是：
 
-- 失败批次会被记录
-- 失败批次会被丢弃
+- 遥测失败批次会被记录并丢弃
+- 事件仍可先落本地事件库
 - 后续采集任务继续运行并继续尝试写入
 
 这意味着你应该把 TSDB 写入失败当成运行告警，而不是等待系统后续补偿。
@@ -186,6 +187,9 @@ curl http://localhost:8001/metrics
 
 - 节点注册和心跳上报会失败
 - 中心页面不可用
+- 事件保留在 Edge 的 `events.db` 待上行队列
+- EventShipper 指数退避；中心恢复后从未确认的 `Seq` 继续
+- 可能发生安全重发，但 Central 会按 `EventId` 和 `(EdgeId, Seq)` 去重
 
 但这不应该成为采集主链路的停止条件。
 

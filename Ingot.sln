@@ -1,26 +1,32 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DataAcquisition.Domain", "src\DataAcquisition.Domain\DataAcquisition.Domain.csproj", "{7E96DBFF-2901-425C-A6C0-AEA06603BDAC}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ingot.Domain", "src\Ingot.Domain\Ingot.Domain.csproj", "{7E96DBFF-2901-425C-A6C0-AEA06603BDAC}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DataAcquisition.Application", "src\DataAcquisition.Application\DataAcquisition.Application.csproj", "{DB95C0C3-A429-403E-A3EE-A82730119924}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ingot.Application", "src\Ingot.Application\Ingot.Application.csproj", "{DB95C0C3-A429-403E-A3EE-A82730119924}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DataAcquisition.Contracts", "src\DataAcquisition.Contracts\DataAcquisition.Contracts.csproj", "{FBC4F6D3-0B70-4D48-A00F-3BFFF8565B85}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ingot.Contracts", "src\Ingot.Contracts\Ingot.Contracts.csproj", "{FBC4F6D3-0B70-4D48-A00F-3BFFF8565B85}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DataAcquisition.Infrastructure", "src\DataAcquisition.Infrastructure\DataAcquisition.Infrastructure.csproj", "{5163F3AE-F084-483D-A8C2-A67B4A0FAA4D}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ingot.Infrastructure", "src\Ingot.Infrastructure\Ingot.Infrastructure.csproj", "{5163F3AE-F084-483D-A8C2-A67B4A0FAA4D}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DataAcquisition.Central.Api", "src\DataAcquisition.Central.Api\DataAcquisition.Central.Api.csproj", "{9E98A827-32FA-4FBA-9E75-6B3973DC8A7D}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ingot.Central.Api", "src\Ingot.Central.Api\Ingot.Central.Api.csproj", "{9E98A827-32FA-4FBA-9E75-6B3973DC8A7D}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DataAcquisition.Edge.Agent", "src\DataAcquisition.Edge.Agent\DataAcquisition.Edge.Agent.csproj", "{7D3D6F4F-D635-4E30-A634-B9B0ABF226B2}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ingot.Edge.Agent", "src\Ingot.Edge.Agent\Ingot.Edge.Agent.csproj", "{7D3D6F4F-D635-4E30-A634-B9B0ABF226B2}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DataAcquisition.Simulator", "src\DataAcquisition.Simulator\DataAcquisition.Simulator.csproj", "{A1B2C3D4-E5F6-4A5B-8C9D-0E1F2A3B4C5D}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ingot.Simulator", "src\Ingot.Simulator\Ingot.Simulator.csproj", "{A1B2C3D4-E5F6-4A5B-8C9D-0E1F2A3B4C5D}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{2150E333-8FDC-42A3-9474-1A3956D46DE8}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{0AB3BF05-4346-4AA6-1389-037BE0695223}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DataAcquisition.Core.Tests", "tests\DataAcquisition.Core.Tests\DataAcquisition.Core.Tests.csproj", "{CB8FED05-0D0A-446B-86AD-66FAF5EE9394}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ingot.Core.Tests", "tests\Ingot.Core.Tests\Ingot.Core.Tests.csproj", "{CB8FED05-0D0A-446B-86AD-66FAF5EE9394}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{827E0CD3-B72D-47B6-A68D-7590B98EB39B}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tools", "tools", "{07C2787E-EAC7-C090-1BA3-A61EC2A24D84}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ingot.EventBenchmarks", "tools\Ingot.EventBenchmarks\Ingot.EventBenchmarks.csproj", "{92416EE5-8404-49CE-B76F-9623E04E2BC1}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ingot.CentralBenchmarks", "tools\Ingot.CentralBenchmarks\Ingot.CentralBenchmarks.csproj", "{136CD0B4-BBE2-4323-B2E0-BA8B6CAD0AD5}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -128,18 +134,44 @@ Global
 		{CB8FED05-0D0A-446B-86AD-66FAF5EE9394}.Release|x64.Build.0 = Release|Any CPU
 		{CB8FED05-0D0A-446B-86AD-66FAF5EE9394}.Release|x86.ActiveCfg = Release|Any CPU
 		{CB8FED05-0D0A-446B-86AD-66FAF5EE9394}.Release|x86.Build.0 = Release|Any CPU
+		{92416EE5-8404-49CE-B76F-9623E04E2BC1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{92416EE5-8404-49CE-B76F-9623E04E2BC1}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{92416EE5-8404-49CE-B76F-9623E04E2BC1}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{92416EE5-8404-49CE-B76F-9623E04E2BC1}.Debug|x64.Build.0 = Debug|Any CPU
+		{92416EE5-8404-49CE-B76F-9623E04E2BC1}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{92416EE5-8404-49CE-B76F-9623E04E2BC1}.Debug|x86.Build.0 = Debug|Any CPU
+		{92416EE5-8404-49CE-B76F-9623E04E2BC1}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{92416EE5-8404-49CE-B76F-9623E04E2BC1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{92416EE5-8404-49CE-B76F-9623E04E2BC1}.Release|x64.ActiveCfg = Release|Any CPU
+		{92416EE5-8404-49CE-B76F-9623E04E2BC1}.Release|x64.Build.0 = Release|Any CPU
+		{92416EE5-8404-49CE-B76F-9623E04E2BC1}.Release|x86.ActiveCfg = Release|Any CPU
+		{92416EE5-8404-49CE-B76F-9623E04E2BC1}.Release|x86.Build.0 = Release|Any CPU
+		{136CD0B4-BBE2-4323-B2E0-BA8B6CAD0AD5}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{136CD0B4-BBE2-4323-B2E0-BA8B6CAD0AD5}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{136CD0B4-BBE2-4323-B2E0-BA8B6CAD0AD5}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{136CD0B4-BBE2-4323-B2E0-BA8B6CAD0AD5}.Debug|x64.Build.0 = Debug|Any CPU
+		{136CD0B4-BBE2-4323-B2E0-BA8B6CAD0AD5}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{136CD0B4-BBE2-4323-B2E0-BA8B6CAD0AD5}.Debug|x86.Build.0 = Debug|Any CPU
+		{136CD0B4-BBE2-4323-B2E0-BA8B6CAD0AD5}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{136CD0B4-BBE2-4323-B2E0-BA8B6CAD0AD5}.Release|Any CPU.Build.0 = Release|Any CPU
+		{136CD0B4-BBE2-4323-B2E0-BA8B6CAD0AD5}.Release|x64.ActiveCfg = Release|Any CPU
+		{136CD0B4-BBE2-4323-B2E0-BA8B6CAD0AD5}.Release|x64.Build.0 = Release|Any CPU
+		{136CD0B4-BBE2-4323-B2E0-BA8B6CAD0AD5}.Release|x86.ActiveCfg = Release|Any CPU
+		{136CD0B4-BBE2-4323-B2E0-BA8B6CAD0AD5}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
-		{CB8FED05-0D0A-446B-86AD-66FAF5EE9394} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
-		{DB95C0C3-A429-403E-A3EE-A82730119924} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
-		{9E98A827-32FA-4FBA-9E75-6B3973DC8A7D} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
-		{FBC4F6D3-0B70-4D48-A00F-3BFFF8565B85} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{7E96DBFF-2901-425C-A6C0-AEA06603BDAC} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
-		{7D3D6F4F-D635-4E30-A634-B9B0ABF226B2} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
+		{DB95C0C3-A429-403E-A3EE-A82730119924} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
+		{FBC4F6D3-0B70-4D48-A00F-3BFFF8565B85} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{5163F3AE-F084-483D-A8C2-A67B4A0FAA4D} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
+		{9E98A827-32FA-4FBA-9E75-6B3973DC8A7D} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
+		{7D3D6F4F-D635-4E30-A634-B9B0ABF226B2} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{A1B2C3D4-E5F6-4A5B-8C9D-0E1F2A3B4C5D} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
+		{CB8FED05-0D0A-446B-86AD-66FAF5EE9394} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
+		{92416EE5-8404-49CE-B76F-9623E04E2BC1} = {07C2787E-EAC7-C090-1BA3-A61EC2A24D84}
+		{136CD0B4-BBE2-4323-B2E0-BA8B6CAD0AD5} = {07C2787E-EAC7-C090-1BA3-A61EC2A24D84}
 	EndGlobalSection
 EndGlobal

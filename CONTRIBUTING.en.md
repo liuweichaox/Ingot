@@ -17,15 +17,15 @@ The project is acquisition-first. Its primary goal is not to become a generalize
 
 ```bash
 dotnet restore
-dotnet test tests/DataAcquisition.Core.Tests/DataAcquisition.Core.Tests.csproj
+dotnet test tests/Ingot.Core.Tests/Ingot.Core.Tests.csproj
 dotnet build Ingot.sln --no-restore
 ```
 
 For end-to-end local validation, prepare:
 
 - InfluxDB 2.x
-- `src/DataAcquisition.Edge.Agent/Configs/TEST_PLC.json`
-- `src/DataAcquisition.Simulator`
+- `src/Ingot.Edge.Agent/Configs/TEST_PLC.json`
+- `src/Ingot.Simulator`
 
 ## Contribution Scope
 

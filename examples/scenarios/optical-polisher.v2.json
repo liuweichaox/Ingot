@@ -1,0 +1,117 @@
+{
+  "SchemaVersion": 2,
+  "IsEnabled": true,
+  "SourceCode": "POL-03-SIM",
+  "Adapter": "plc",
+  "Profile": "optical",
+  "Asset": {
+    "Type": "polishing-machine",
+    "Id": "POL-03"
+  },
+  "Driver": "melsec-a1e",
+  "Host": "127.0.0.1",
+  "Port": 502,
+  "ProtocolOptions": {},
+  "HeartbeatMonitorRegister": "D100",
+  "HeartbeatPollingInterval": 1000,
+  "Channels": [],
+  "EventRules": [
+    {
+      "RuleId": "polish-cycle",
+      "Category": "cycle",
+      "Subject": {
+        "Type": "polishing-machine",
+        "Id": "POL-03"
+      },
+      "ContextKeys": [
+        "material_lot",
+        "tooling"
+      ],
+      "SnapshotOnStart": [
+        {
+          "FieldName": "recipe_id",
+          "Tag": "D6100",
+          "DataType": "string",
+          "StringByteLength": 16
+        }
+      ],
+      "SnapshotOnEnd": [
+        {
+          "FieldName": "good_count",
+          "Tag": "D6110",
+          "DataType": "ushort"
+        }
+      ],
+      "Trigger": {
+        "Kind": "EdgePair",
+        "Tag": "D6006",
+        "DataType": "short",
+        "StartTriggerMode": "RisingEdge",
+        "EndTriggerMode": "FallingEdge"
+      }
+    },
+    {
+      "RuleId": "lot-change",
+      "Category": "material",
+      "EventType": "material.lot_changed",
+      "Subject": {
+        "Type": "polishing-machine",
+        "Id": "POL-03"
+      },
+      "ContextKeys": [
+        "material_lot"
+      ],
+      "SetContext": {
+        "material_lot": "$value"
+      },
+      "Trigger": {
+        "Kind": "ValueChanged",
+        "Tag": "D6200",
+        "DataType": "string",
+        "StringByteLength": 20
+      }
+    },
+    {
+      "RuleId": "tooling-change",
+      "Category": "tooling",
+      "EventType": "tooling.changed",
+      "Subject": {
+        "Type": "polishing-machine",
+        "Id": "POL-03"
+      },
+      "ContextKeys": [
+        "material_lot",
+        "tooling"
+      ],
+      "SetContext": {
+        "tooling": "$value"
+      },
+      "Trigger": {
+        "Kind": "ValueChanged",
+        "Tag": "D6300",
+        "DataType": "string",
+        "StringByteLength": 12
+      }
+    },
+    {
+      "RuleId": "spindle-alarm",
+      "Category": "alarm",
+      "Subject": {
+        "Type": "polishing-machine",
+        "Id": "POL-03"
+      },
+      "ContextKeys": [
+        "material_lot"
+      ],
+      "Data": {
+        "alarm_code": "SPINDLE_OVERLOAD"
+      },
+      "Trigger": {
+        "Kind": "BitFlag",
+        "Tag": "M100",
+        "DataType": "ushort",
+        "Bit": 0
+      }
+    }
+  ]
+}

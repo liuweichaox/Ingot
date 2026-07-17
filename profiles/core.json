@@ -1,0 +1,20 @@
+{
+  "SchemaVersion": 1,
+  "Name": "core",
+  "Description": "Ingot 核心生产事件类型。",
+  "ObjectTypes": [
+    "equipment",
+    "line",
+    "workcell"
+  ],
+  "EventTypes": [
+    { "Type": "cycle.started", "RequiredContext": [] },
+    { "Type": "cycle.completed", "RequiredContext": [] },
+    { "Type": "alarm.raised", "RequiredContext": [] },
+    { "Type": "alarm.cleared", "RequiredContext": [] },
+    { "Type": "parameter.applied", "RequiredContext": [] },
+    { "Type": "diagnostic.cycle_recovered", "RequiredContext": [] },
+    { "Type": "diagnostic.cycle_interrupted", "RequiredContext": [] },
+    { "Type": "diagnostic.backlog_dropped", "RequiredContext": [] }
+  ]
+}

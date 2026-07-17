@@ -10,15 +10,16 @@ If you are new to the project, start with:
 
 ## Project Scope
 
-### What is the role of DataAcquisition
+### What is the role of Ingot
 
-It is a PLC data collection runtime.
+It is edge-first production event infrastructure. PLC is the first source adapter.
 
 It is responsible for:
 
 - reading values from PLCs
-- producing normalized acquisition messages
-- writing batches directly to storage
+- writing high-rate telemetry batches to a TSDB
+- persisting cycles, parameter writes, and diagnostics as immutable production events
+- exposing local event queries, SSE, cycle correlation, and business context
 - exposing local logs, metrics, and diagnostics
 - recovering active-cycle context for conditional acquisition
 
@@ -28,10 +29,12 @@ The current boundary is:
 
 - the main product is the `Edge Agent`
 - the central UI is an auxiliary control plane, not the acquisition path itself
-- the default runtime writes directly to InfluxDB without a local WAL or replay worker
-- when storage fails, the current batch is logged and dropped
+- telemetry writes directly to InfluxDB and failed telemetry batches are dropped
+- production events are appended to `events.db` before projection
+- production events ship automatically from the local outbox to an idempotent PostgreSQL event hub
+- central downtime does not stop local acquisition or event creation; pending events resume after recovery
 
-If your environment requires long offline buffering or strict backfill, that is outside the current implementation promise.
+Telemetry still has no local replay queue. Event buffering is bounded by `Events:MaxBacklogRows` and available edge disk space.
 
 ## Configuration and Drivers
 
@@ -47,15 +50,16 @@ Common reasons:
 
 - invalid JSON
 - missing required fields
-- empty `PlcCode`
-- duplicated `PlcCode` across files
+- empty or duplicated `SourceCode` (`PlcCode` in v1)
+- unknown Profiles, object types, or event types in v2
+- missing context keys required by a Profile
 - `Driver` not found in the built-in catalog
 - unsupported keys in `ProtocolOptions`
 
 Run this first:
 
 ```bash
-dotnet run --project src/DataAcquisition.Edge.Agent -- --validate-configs
+dotnet run --project src/Ingot.Edge.Agent -- --validate-configs
 ```
 
 ### Do I need to restart after editing config
@@ -83,16 +87,9 @@ If you only use the built-in Hsl drivers, no core change is usually required.
 
 ## Acquisition and Storage
 
-### Why write directly to TSDB
+### Why is telemetry direct-to-TSDB while events use SQLite
 
-Because the current project prioritizes real-time collection and visible failure handling over local recovery queues.
-
-Direct-to-TSDB means:
-
-- the queue batches messages in memory
-- batches write directly to storage
-- storage failures surface through logs and metrics
-- raw data is not retained locally for replay
+Telemetry is high-rate and remains at-most-once. Production events are low-rate, high-value facts and are appended to `events.db` before any projection.
 
 ### Does InfluxDB downtime stop collection
 
@@ -186,6 +183,9 @@ If Central is unavailable:
 
 - registration and heartbeat reporting fail
 - the central UI is unavailable
+- events remain pending in the Edge `events.db` outbox
+- EventShipper backs off and resumes from the first unacknowledged `Seq`
+- safe resends may occur, but Central deduplicates by `EventId` and `(EdgeId, Seq)`
 
 But the collection path should continue running.
 

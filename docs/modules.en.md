@@ -1,244 +1,38 @@
-# Module Overview
+# Modules
 
-This document describes the main runtime surfaces, module responsibilities, and boundary lines of the project rather than enumerating every source file.
+## Domain
 
-The primary product is `Edge Agent`.  
-All other modules should be understood in relation to that acquisition path.
+`src/Ingot.Domain` contains source configuration, the `ProductionEvent` envelope, event rules and queries, asset references, and Profile definitions. It has no infrastructure dependencies.
 
-## Module View
+## Application
 
-### Domain
+`src/Ingot.Application` defines acquisition, event log/sink/shipper, edge context/state, event rule collector, Profile registry, source driver, queue, storage, and metrics contracts.
 
-Location:
+## Infrastructure
 
-- `src/DataAcquisition.Domain`
+`src/Ingot.Infrastructure` provides:
 
-Responsibilities:
+- acquisition orchestration and v1 Conditional event integration
+- v2 `EventRuleCollector` with `EdgePair`, `ValueChanged`, `BitFlag`, and `Threshold`
+- `EdgeStateStore` for active cycles and context
+- `EventSink` and `SqliteEventLog`
+- `HttpEventShipper` with ordered batches, acknowledgement-based advancement, and retry
+- `JsonProfileRegistry`
+- in-memory telemetry batching and InfluxDB storage
+- Hsl PLC drivers, config hot reload, logs, and metrics
 
-- define configuration models
-- define acquisition messages
-- define controlled value normalization rules
-- define core models that do not depend on specific libraries
+## Edge Agent
 
-This layer should not know about Hsl, InfluxDB, SQLite, or ASP.NET.
+`src/Ingot.Edge.Agent` composes the runtime, loads configs and Profiles, runs background services, and exposes event, cycle, context, acquisition, log, metric, and health APIs.
 
-### Application
+## Contracts
 
-Location:
+`src/Ingot.Contracts` contains edge registration/heartbeat, control-write, event-batch, and central event-result contracts. Control writes use `SourceCode` while accepting v1 `PlcCode` JSON.
 
-- `src/DataAcquisition.Application`
+## Central
 
-Responsibilities:
+`src/Ingot.Central.Api` provides per-edge authenticated idempotent ingest, partitioned PostgreSQL event storage, JSONB context query, SSE, cycle aggregation, durable webhook subscriptions, CloudEvents/HMAC delivery, node registration, metrics, and diagnostics proxying. `src/Ingot.Central.Web` is a Vue 3/Vite UI for edges, events, metrics, and logs.
 
-- define runtime abstractions
-- define PLC driver interfaces
-- define storage contracts
-- define configuration, queue, and acquisition contracts
+## Tests
 
-This layer answers:
-
-- what capabilities the system needs
-- not how those capabilities are implemented
-
-### Infrastructure
-
-Location:
-
-- `src/DataAcquisition.Infrastructure`
-
-Responsibilities:
-
-- provide default implementations
-- wrap Hsl drivers
-- wrap InfluxDB
-- wrap SQLite logs and state storage
-- implement config hot reload, metrics, and diagnostics
-
-This is the largest implementation layer, but it should not define the upper-level abstractions.
-
-### Edge Agent
-
-Location:
-
-- `src/DataAcquisition.Edge.Agent`
-
-Responsibilities:
-
-- bootstrap the runtime
-- register default implementations
-- host background workers
-- expose local health, metrics, logs, and diagnostics
-
-If you only care about what the project actually does, start here.
-
-### Central API / Central Web
-
-Location:
-
-- `src/DataAcquisition.Central.Api`
-- `src/DataAcquisition.Central.Web`
-
-Responsibilities:
-
-- provide centralized visibility
-- show heartbeats, metrics, and diagnostic proxies
-
-These are part of the control plane, not the collection path itself.
-
-### Tests
-
-Location:
-
-- `tests/DataAcquisition.Core.Tests`
-
-Responsibilities:
-
-- validate driver config contracts
-- validate queue batch behavior
-- validate conditional acquisition recovery logic
-- validate configuration rules
-
-## Main Runtime Path
-
-The core runtime path is intentionally fixed:
-
-1. `Edge Agent` starts
-2. device configs are loaded
-3. PLC drivers are created
-4. heartbeat and acquisition tasks start
-5. `DataMessage` instances are produced
-6. messages enter `QueueService`
-7. messages are grouped into batches
-8. batches are written directly to `InfluxDB`
-9. failed writes are surfaced through logs and metrics, and the current batch is dropped
-
-This path is the baseline for judging whether module boundaries make sense.
-
-## Key Modules
-
-### PLC Driver Layer
-
-Key files:
-
-- `src/DataAcquisition.Application/Abstractions/IPlcDriverProvider.cs`
-- `src/DataAcquisition.Application/Abstractions/IPlcClientService.cs`
-- `src/DataAcquisition.Infrastructure/Clients/PlcClientFactory.cs`
-- `src/DataAcquisition.Infrastructure/Clients/HslStandardPlcDriverProvider.cs`
-- `src/DataAcquisition.Infrastructure/Clients/HslPlcClientService.cs`
-
-Responsibilities:
-
-- select concrete PLC implementations using stable `Driver` names
-- keep upper layers decoupled from Hsl
-- parse and apply driver-specific configuration
-
-The important design decision here is:
-
-- the framework is not coupled to a PLC type enum
-- Hsl is the default implementation, not the architectural foundation
-
-### Acquisition Orchestration Layer
-
-Key files:
-
-- `src/DataAcquisition.Infrastructure/DataAcquisitions/DataAcquisitionService.cs`
-- `src/DataAcquisition.Infrastructure/DataAcquisitions/HeartbeatMonitor.cs`
-- `src/DataAcquisition.Infrastructure/DataAcquisitions/ChannelCollector.cs`
-- `src/DataAcquisition.Infrastructure/DataAcquisitions/ChannelMetricReader.cs`
-- `src/DataAcquisition.Infrastructure/DataAcquisitions/MetricExpressionEvaluator.cs`
-- `src/DataAcquisition.Infrastructure/DataAcquisitions/AcquisitionStateManager.cs`
-
-Responsibilities:
-
-- start and manage acquisition tasks
-- decide whether a device is readable
-- run Always / Conditional acquisition
-- read fields, evaluate expressions, and produce events
-- recover active cycle state for conditional acquisition
-
-### Queue and Storage Layer
-
-Key files:
-
-- `src/DataAcquisition.Infrastructure/Queues/QueueService.cs`
-- `src/DataAcquisition.Infrastructure/DataStorages/InfluxDbDataStorageService.cs`
-
-Responsibilities:
-
-- batch messages
-- write directly to storage
-- surface write failures through logs and metrics
-- preserve the runtime's explicit failure semantics
-
-This is the most important boundary before data reaches storage.
-
-### Configuration and Operability Layer
-
-Key files:
-
-- `src/DataAcquisition.Infrastructure/DeviceConfigs/DeviceConfigService.cs`
-- `src/DataAcquisition.Infrastructure/DeviceConfigs/DeviceConfigValidator.cs`
-- `src/DataAcquisition.Infrastructure/DeviceConfigs/DeviceConfigFileLoader.cs`
-- `src/DataAcquisition.Infrastructure/Logs/*`
-- `src/DataAcquisition.Infrastructure/Metrics/*`
-
-Responsibilities:
-
-- read and validate JSON configuration
-- monitor the config directory and hot-reload it
-- provide Prometheus metrics
-- provide local log querying
-
-## Boundary Rules
-
-If I were maintaining this as a long-lived open source project, I would keep these rules:
-
-- `Domain` does not depend on infrastructure libraries
-- `Application` defines contracts only
-- `Infrastructure` implements, but does not define upper-level business rules
-- `Edge Agent` stays the primary product
-- documentation only promises capabilities that are actually supported
-
-## Extension Points
-
-### Add a New PLC Driver
-
-Path:
-
-1. implement a new `IPlcDriverProvider`
-2. provide a new `IPlcClientService` if needed
-3. register it in the host
-4. document the full `Driver` name and provide a config example
-
-### Replace the Storage Backend
-
-Path:
-
-1. implement `IDataStorageService`
-2. replace the default host registration
-3. document the success and failure semantics clearly
-
-### Adjust Queue Strategy
-
-Path:
-
-1. modify `QueueService`
-2. keep batch boundaries explicit
-3. update tests and docs together when failure behavior changes
-
-## Recommended Reading Order
-
-If you want to understand the codebase quickly, read in this order:
-
-1. `README.en.md`
-2. `docs/design.en.md`
-3. `src/DataAcquisition.Edge.Agent/Program.cs`
-4. `src/DataAcquisition.Infrastructure/DataAcquisitions/DataAcquisitionService.cs`
-5. `src/DataAcquisition.Infrastructure/Queues/QueueService.cs`
-6. `src/DataAcquisition.Infrastructure/Clients/HslStandardPlcDriverProvider.cs`
-
-## Related Docs
-
-- [Design](design.en.md)
-- [Configuration](tutorial-configuration.en.md)
-- [Deployment](tutorial-deployment.en.md)
+`tests/Ingot.Core.Tests` covers event persistence and queries, rule semantics, restart state, Profile validation, configuration, queues, drivers, logs, edge-token validation, EventShipper acknowledgement behavior, scenario timelines, and CloudEvents webhook mapping/signatures.

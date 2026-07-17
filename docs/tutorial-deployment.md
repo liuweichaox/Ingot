@@ -1,13 +1,13 @@
 # 部署
 
-本文说明如何将 DataAcquisition 部署为一个长期运行、可观测、以实时采集为优先的 PLC 数据采集系统。
+本文说明如何将 Ingot 部署为一个长期运行、可观测、边缘优先的生产事件系统。
 
 推荐部署原则如下：
 
 - `Edge Agent` 是采集主程序，必须部署在靠近 PLC 的节点
 - `InfluxDB` 是默认 TSDB 实现
-- 本地状态只保留日志与条件采集状态，不引入 WAL 或后台回放目录
-- `Central API / Central Web` 是可选的中心控制面，不是采集前提
+- 遥测直接写 TSDB；生产事件先写本地 `events.db`
+- `Central API / Central Web` 与 PostgreSQL 组成可选中心事件枢纽，不是采集前提
 
 ## 推荐部署拓扑
 
@@ -17,21 +17,21 @@
 
 - 1 个 `Edge Agent`
 - 1 个 `InfluxDB`
-- 可选 1 套 `Central API / Central Web`
+- 可选 1 套 `PostgreSQL + Central API + Central Web`
 
 ### 多节点
 
 适合多车间、多产线或多工厂：
 
 - 每个采集节点部署自己的 `Edge Agent`
-- 每个采集节点保留自己的日志和条件采集状态库
-- 中心侧部署统一的 `Central API / Central Web`
+- 每个采集节点保留自己的事件事实库、业务上下文和日志
+- 中心侧部署统一的 `PostgreSQL + Central API + Central Web`
 - `InfluxDB` 可以集中部署，也可以按站点拆分
 
 核心约束是：
 
 - `Edge Agent` 必须在 PLC 可达的网络里
-- TSDB 可达性比中心侧可达性更关键
+- 中心侧不可达不影响本地事件产生与查询
 
 ## 运行时组件
 
@@ -43,7 +43,8 @@
 - 建立 PLC 连接
 - 执行 Always / Conditional 采集
 - 按批次直接写 InfluxDB
-- 暴露本地健康、日志、指标和诊断接口
+- 派生并持久化生产事件
+- 暴露本地事件、上下文、健康、日志和指标接口
 
 ### InfluxDB
 
@@ -59,6 +60,9 @@
 - 查看心跳
 - 聚合指标
 - 代理边缘诊断接口
+- 通过 per-edge token 摄入生产事件
+- 在 PostgreSQL 中幂等汇聚、分区存储并按上下文查询
+- 提供跨 Edge 事件流、SSE 和周期聚合
 
 注意：
 
@@ -72,33 +76,33 @@
 ### 发布 Edge Agent
 
 ```bash
-dotnet publish src/DataAcquisition.Edge.Agent -c Release -o ./publish/edge
+dotnet publish src/Ingot.Edge.Agent -c Release -o ./publish/edge
 ```
 
 启动：
 
 ```bash
-./publish/edge/DataAcquisition.Edge.Agent
+./publish/edge/Ingot.Edge.Agent
 ```
 
 ### 发布 Central API
 
 ```bash
-dotnet publish src/DataAcquisition.Central.Api -c Release -o ./publish/central-api
+dotnet publish src/Ingot.Central.Api -c Release -o ./publish/central-api
 ```
 
 启动：
 
 ```bash
-./publish/central-api/DataAcquisition.Central.Api
+./publish/central-api/Ingot.Central.Api
 ```
 
 ### 构建 Central Web
 
 ```bash
-cd src/DataAcquisition.Central.Web
-pnpm install
-pnpm run build
+cd src/Ingot.Central.Web
+npm ci
+npm run build
 ```
 
 构建输出在 `dist/`，应由 nginx 或其他静态文件服务托管。
@@ -108,8 +112,15 @@ pnpm run build
 仓库里的 Compose 文件主要用于：
 
 - `InfluxDB`
+- `PostgreSQL`
 - `Central API`
 - `Central Web`
+
+启动中心事件枢纽：
+
+```bash
+docker compose -f docker-compose.events.yml up -d --build
+```
 
 不建议把 `Edge Agent` 作为默认容器化部署模型写进主路径。
 
@@ -131,14 +142,18 @@ pnpm run build
 
 - `Data/logs.db`
 - `Data/acquisition-state.db`
+- `Data/events.db`
 
 含义：
 
 - `logs.db`：本地日志存储，默认保留 30 天
 - `Logging:RetentionDays`：用于调整本地日志保留天数；设置为 `<= 0` 时关闭清理
 - `acquisition-state.db`：条件采集的 active cycle 状态库
+- `events.db`：不可变生产事件与待上行状态
 
-这里不保存原始采集数据的本地补偿副本。
+这里不保存原始遥测的本地补偿副本；事件事实独立持久化。
+
+`Events:MaxBacklogRows` 是断网积压的硬上限。触顶时系统会为审计事件预留空间、删除最旧待传事实并写入 `diagnostic.backlog_dropped`；`event_backlog_dropped_total` 记录累计丢弃数，`event_outbox_backlog` 以 gauge 暴露当前积压。每次上行失败还会递增对应行的 `ship_attempts`。
 
 ## 上线前配置检查
 
@@ -152,22 +167,78 @@ pnpm run build
 - `InfluxDB:*`
 - `Acquisition:DeviceConfigService:ConfigDirectory`
 - `Acquisition:StateStore:DatabasePath`
+- `Events:DatabasePath`
+- `Events:RetentionDays`
+- `Events:CleanupIntervalSeconds`
+- `Events:MaxBacklogRows`
+- `Profiles:Directory`
 - `Edge:EnableCentralReporting`
 - `Edge:CentralApiBaseUrl`
+- `Edge:EnableEventShipping`
+- `Edge:EdgeId`
+- `Edge:EventIngestToken`
+- `Edge:EventBatchSize`
+
+中心侧还必须确认：
+
+- `ConnectionStrings:Events`
+- `EventIngest:RequireToken`
+- `EventIngest:EdgeTokens:{EdgeId}`
+- `Webhook:Enabled`
+- `Webhook:PollIntervalMs`
+- `Webhook:RequestTimeoutSeconds`
+- `Webhook:EventTypePrefix`
+
+不要在生产环境继续使用仓库中的示例密码和 token。
+
+### Webhook 订阅
+
+以下订阅只接收 `cycle.completed`，并要求批次上下文存在指定值。缺省从创建后的新事件开始；设置 `StartAfterIngestId: 0` 可以重放中心历史事件：
+
+```bash
+curl -X POST http://localhost:8000/api/v1/subscriptions \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "name": "mes-cycle-consumer",
+    "endpoint": "https://mes.example.com/hooks/ingot",
+    "eventTypes": ["cycle.completed"],
+    "context": {"material_lot": "LOT-001"},
+    "secret": "replace-with-a-long-random-secret"
+  }'
+```
+
+接收端应按 CloudEvent `id` 幂等处理。配置 `secret` 后，还应验证 `X-Ingot-Signature` 的 HMAC-SHA256。
+
+### SQL 报表与完整性检查
+
+仓库提供两个可直接交给 `psql` 的消费者脚本：
+
+```bash
+docker exec -i ingot-postgres psql -U ingot -d ingot \
+  -v material_lot=LOT-001 < scripts/report-production-events.sql
+
+docker exec -i ingot-postgres psql -U ingot -d ingot \
+  -v edge_id=EDGE-001 < scripts/verify-event-integrity.sql
+```
+
+第一个脚本输出周期时长、配方、良品数和批次履历；第二个检查 `event_id`、`(edge_id, seq)` 唯一性、序号缺口以及只保留了幂等键却没有事实行的异常。
 
 ### 设备级
 
-- `PlcCode`
+- v2 使用 `SourceCode`；v1 配置兼容 `PlcCode`
 - `Driver`
 - `Host`
 - `Port`
 - `ProtocolOptions`
 - `Channels`
+- `Asset`
+- `Profile`
+- `EventRules`
 
 上线前建议执行：
 
 ```bash
-dotnet run --project src/DataAcquisition.Edge.Agent -- --validate-configs
+dotnet run --project src/Ingot.Edge.Agent -- --validate-configs
 ```
 
 这是推荐流程的一部分，不是可选技巧。
@@ -180,6 +251,7 @@ dotnet run --project src/DataAcquisition.Edge.Agent -- --validate-configs
 
 - `Edge Agent` 是否在运行
 - `InfluxDB` 是否可访问
+- 如启用中心汇聚，PostgreSQL 与 `Central API` 是否健康
 
 ### 2. 健康接口
 
@@ -199,6 +271,9 @@ curl http://localhost:8001/metrics
 
 - 是否出现 PLC 连接错误
 - 是否出现 TSDB 写入失败
+- `event-log` 健康检查是否正常
+- 是否出现事件持久化失败或积压指标
+- 是否出现事件上行失败或边缘序号缺口指标
 - 配置变更是否被正确加载
 
 ### 5. 存储写入
@@ -213,12 +288,14 @@ curl http://localhost:8001/metrics
 
 - `Data/logs.db`
 - `Data/acquisition-state.db`
+- `Data/events.db`
 
 如果需要更长的本地诊断窗口，应显式调大 `Logging:RetentionDays`，不要默认认为 `logs.db` 会无限增长。
 
 ### 存储
 
 - InfluxDB bucket 数据
+- 中心 PostgreSQL 数据库及其备份/WAL 策略
 
 项目当前不依赖本地原始数据补偿目录，因此备份策略应以 InfluxDB 为主。
 
@@ -226,7 +303,7 @@ curl http://localhost:8001/metrics
 
 - 使用 `systemd`、Windows Service 或其他服务管理器托管 `Edge Agent`
 - 把中心服务和采集服务看作两个独立运行面
-- 先保证 `Edge -> InfluxDB` 正常，再考虑中心可视化
+- 分别检查 `Edge -> InfluxDB` 遥测链路与 `Edge outbox -> Central PostgreSQL` 事件链路
 - 如果 TSDB 写入失败，应把它视为需要立即处理的运行告警，而不是等待后台补写
 
 ## 相关文档

@@ -5,6 +5,7 @@
 
 # User-specific files
 *.DS_Store
+.claude-sync/
 *.rsuser
 *.suo
 *.user
@@ -33,8 +34,8 @@ bld/
 [Ll]og/
 [Ll]ogs/
 # 排除代码中的 Logs 目录（视图和服务）
-!src/DataAcquisition.Central.Web/Views/Logs/
-!src/DataAcquisition.Infrastructure/Logs/
+!src/Ingot.Central.Web/Views/Logs/
+!src/Ingot.Infrastructure/Logs/
 
 # Visual Studio 2015/2017 cache/options directory
 .vs/
@@ -74,15 +75,15 @@ StyleCopReport.xml
 
 # Frontend
 node_modules/
-src/DataAcquisition.Central.Web/ClientApp/dist/
-src/DataAcquisition.Central.Web/dist/
+src/Ingot.Central.Web/ClientApp/dist/
+src/Ingot.Central.Web/dist/
 
 # Local runtime data
 Data/*.db
 Data/*.db-*
-src/DataAcquisition.Edge.Agent/Data/
-src/DataAcquisition.Edge.Agent/Logs/
-src/DataAcquisition.Central.Api/Logs/
+src/Ingot.Edge.Agent/Data/
+src/Ingot.Edge.Agent/Logs/
+src/Ingot.Central.Api/Logs/
 
 # Files built by Visual Studio
 *_i.c

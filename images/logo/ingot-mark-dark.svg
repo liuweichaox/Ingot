@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Ingot logo mark (dark background)">
+  <defs>
+    <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFCE57"/>
+      <stop offset="1" stop-color="#F09A24"/>
+    </linearGradient>
+    <linearGradient id="steel" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#5B6E80"/>
+      <stop offset="1" stop-color="#3C4A58"/>
+    </linearGradient>
+  </defs>
+  <g stroke-linejoin="round">
+    <path d="M43.5 30 H84.5 L91.5 64 H36.5 Z" fill="url(#gold)" stroke="url(#gold)" stroke-width="4"/>
+    <path d="M47 36 H81" fill="none" stroke="#FFEDC0" stroke-width="3" stroke-linecap="round" opacity="0.8"/>
+    <path d="M13 70 H54 L61 104 H6 Z" fill="url(#steel)" stroke="url(#steel)" stroke-width="4"/>
+    <path d="M74 70 H115 L122 104 H67 Z" fill="url(#steel)" stroke="url(#steel)" stroke-width="4"/>
+  </g>
+</svg>

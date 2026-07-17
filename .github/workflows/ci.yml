@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: src/Ingot.Central.Web/package-lock.json
+
+      - name: Verify repository
+        run: ./scripts/verify.sh
+
+      - name: Verify optical production trace
+        run: ./scripts/verify-optical-trace.sh
+
+      - name: Verify Edge restart recovery
+        run: ./scripts/verify-edge-restart-recovery.sh
+
+      - name: Verify SchemaVersion 1 compatibility
+        run: ./scripts/verify-v1-compatibility.sh

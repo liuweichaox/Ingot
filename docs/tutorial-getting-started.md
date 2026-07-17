@@ -26,17 +26,17 @@ dotnet build Ingot.sln
 docker compose -f docker-compose.tsdb.yml up -d
 ```
 
-如果你已经有自己的 InfluxDB，只需要确认 [appsettings.json](../src/DataAcquisition.Edge.Agent/appsettings.json) 里的 `InfluxDB` 配置正确即可。
+如果你已经有自己的 InfluxDB，只需要确认 [appsettings.json](../src/Ingot.Edge.Agent/appsettings.json) 里的 `InfluxDB` 配置正确即可。
 
 ## 第三步：检查设备配置
 
 默认设备配置目录是：
 
-- [src/DataAcquisition.Edge.Agent/Configs](../src/DataAcquisition.Edge.Agent/Configs)
+- [src/Ingot.Edge.Agent/Configs](../src/Ingot.Edge.Agent/Configs)
 
 仓库里已经带了一个本地联调示例：
 
-- [TEST_PLC.json](../src/DataAcquisition.Edge.Agent/Configs/TEST_PLC.json)
+- [TEST_PLC.json](../src/Ingot.Edge.Agent/Configs/TEST_PLC.json)
 
 你也可以参考：
 
@@ -48,13 +48,13 @@ docker compose -f docker-compose.tsdb.yml up -d
 先确认配置本身是合法的：
 
 ```bash
-dotnet run --project src/DataAcquisition.Edge.Agent -- --validate-configs
+dotnet run --project src/Ingot.Edge.Agent -- --validate-configs
 ```
 
 如果你要校验其他目录：
 
 ```bash
-dotnet run --project src/DataAcquisition.Edge.Agent -- --validate-configs --config-dir ./examples/device-configs
+dotnet run --project src/Ingot.Edge.Agent -- --validate-configs --config-dir ./examples/device-configs
 ```
 
 校验通过后，你应该能看到类似输出：
@@ -66,10 +66,10 @@ dotnet run --project src/DataAcquisition.Edge.Agent -- --validate-configs --conf
 ## 第五步：启动 Edge Agent
 
 ```bash
-dotnet run --project src/DataAcquisition.Edge.Agent
+dotnet run --project src/Ingot.Edge.Agent
 ```
 
-默认端口来自 [appsettings.json](../src/DataAcquisition.Edge.Agent/appsettings.json) 中的 `Urls`，默认是：
+默认端口来自 [appsettings.json](../src/Ingot.Edge.Agent/appsettings.json) 中的 `Urls`，默认是：
 
 - `http://localhost:8001`
 
@@ -78,19 +78,21 @@ dotnet run --project src/DataAcquisition.Edge.Agent
 - `/health`
 - `/metrics`
 - `/api/logs`
-- `/api/DataAcquisition/plc-connections`
+- `/api/acquisition/plc-connections`
+- `/api/v1/events`
+- `/api/v1/events/stream`
 
 ## 可选：启动 PLC 模拟器
 
 如果你想在本地做闭环联调，可以启动模拟器：
 
 ```bash
-dotnet run --project src/DataAcquisition.Simulator
+dotnet run --project src/Ingot.Simulator
 ```
 
 模拟器默认监听 `502` 端口，并输出当前寄存器变化。详细说明见：
 
-- [src/DataAcquisition.Simulator/README.md](../src/DataAcquisition.Simulator/README.md)
+- [src/Ingot.Simulator/README.md](../src/Ingot.Simulator/README.md)
 
 ## 验证结果
 
@@ -131,19 +133,21 @@ Agent 启动日志里应能看到配置校验成功和 PLC/通道启动相关信
 
 ## 可选：启动中心侧
 
-中心侧不是采集主链路的前置条件，但如果你要看注册、心跳和 Web 界面，可以继续启动：
+中心侧不是采集主链路的前置条件。最简单的方式是一次启动 PostgreSQL、Central API 和 Central Web：
 
 ```bash
-dotnet run --project src/DataAcquisition.Central.Api
+docker compose -f docker-compose.events.yml up -d --build
 ```
 
-如果要运行 Web：
+如果要本地开发 Web，先确保 PostgreSQL 和 Central API 正在运行，然后执行：
 
 ```bash
-cd src/DataAcquisition.Central.Web
-pnpm install
-pnpm run serve
+cd src/Ingot.Central.Web
+npm install
+npm run dev
 ```
+
+打开 `http://localhost:3000/events` 查看跨 Edge 生产事件。Edge 与 Central 的 token 必须一致：`Edge:EventIngestToken` 对应 `EventIngest:EdgeTokens:{EdgeId}`。
 
 ## 常见问题
 

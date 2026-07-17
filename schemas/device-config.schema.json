@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/liuweichaox/DataAcquisition/schemas/device-config.schema.json",
-  "title": "DataAcquisition Device Config",
+  "$id": "https://github.com/liuweichaox/Ingot/schemas/device-config.schema.json",
+  "title": "Ingot Device Config",
   "type": "object",
   "additionalProperties": false,
   "required": [

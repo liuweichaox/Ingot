@@ -1,6 +1,6 @@
 # Documentation Home
 
-This documentation set describes how to configure, deploy, operate, understand, and extend DataAcquisition.
+This documentation set describes how to configure, deploy, operate, understand, and extend Ingot.
 
 For faster navigation, it is organized by usage goal rather than as a loose collection of isolated notes.
 
@@ -35,6 +35,7 @@ If this is your first time with the project, read in this order:
 
 - [Design](design.en.md)
 - [Modules](modules.en.md)
+- [Production Events RFC](rfc-production-events.md) (Chinese)
 
 ### Extension and Contribution
 
@@ -47,11 +48,12 @@ Before going deeper, keep these rules in mind:
 
 - the `Edge Agent` is the main product
 - `Central` is an optional control plane
-- the main path is `PLC -> Collector -> Queue -> TSDB`
-- queue batches write directly to storage without a local WAL or replay worker
+- the runtime has two planes: telemetry writes directly to TSDB, events append to `events.db`
+- PLC is the first source adapter; v2 event contracts use `SourceCode` and asset models
 - drivers are selected by stable `Driver` names
 - configuration must be validated before runtime
 - formal business events and recovery diagnostics are stored separately
+- Profiles constrain object types, event types, and required context
 
 ## Documentation Set
 
@@ -63,5 +65,7 @@ The documentation tree intentionally keeps only the core set:
 - [Deployment](tutorial-deployment.en.md)
 - [Design](design.en.md)
 - [Modules](modules.en.md)
+- [Production Events RFC](rfc-production-events.md) (Chinese)
+- [Brand & Logo](brand.md) (Chinese)
 - [Development](tutorial-development.en.md)
 - [FAQ](faq.en.md)

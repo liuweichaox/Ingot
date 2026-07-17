@@ -26,17 +26,17 @@ The repository includes a simple compose file:
 docker compose -f docker-compose.tsdb.yml up -d
 ```
 
-If you already have your own InfluxDB instance, just make sure the `InfluxDB` section in [appsettings.json](../src/DataAcquisition.Edge.Agent/appsettings.json) points to the right endpoint.
+If you already have your own InfluxDB instance, just make sure the `InfluxDB` section in [appsettings.json](../src/Ingot.Edge.Agent/appsettings.json) points to the right endpoint.
 
 ## Step 3: Review Device Configuration
 
 The default device config directory is:
 
-- [src/DataAcquisition.Edge.Agent/Configs](../src/DataAcquisition.Edge.Agent/Configs)
+- [src/Ingot.Edge.Agent/Configs](../src/Ingot.Edge.Agent/Configs)
 
 The repository already includes a local development sample:
 
-- [TEST_PLC.json](../src/DataAcquisition.Edge.Agent/Configs/TEST_PLC.json)
+- [TEST_PLC.json](../src/Ingot.Edge.Agent/Configs/TEST_PLC.json)
 
 You can also use:
 
@@ -48,13 +48,13 @@ You can also use:
 Validate configs before starting the runtime:
 
 ```bash
-dotnet run --project src/DataAcquisition.Edge.Agent -- --validate-configs
+dotnet run --project src/Ingot.Edge.Agent -- --validate-configs
 ```
 
 To validate another directory:
 
 ```bash
-dotnet run --project src/DataAcquisition.Edge.Agent -- --validate-configs --config-dir ./examples/device-configs
+dotnet run --project src/Ingot.Edge.Agent -- --validate-configs --config-dir ./examples/device-configs
 ```
 
 On success, you should see output like:
@@ -66,10 +66,10 @@ On success, you should see output like:
 ## Step 5: Start the Edge Agent
 
 ```bash
-dotnet run --project src/DataAcquisition.Edge.Agent
+dotnet run --project src/Ingot.Edge.Agent
 ```
 
-The default URL comes from [appsettings.json](../src/DataAcquisition.Edge.Agent/appsettings.json):
+The default URL comes from [appsettings.json](../src/Ingot.Edge.Agent/appsettings.json):
 
 - `http://localhost:8001`
 
@@ -78,19 +78,21 @@ Useful endpoints after startup:
 - `/health`
 - `/metrics`
 - `/api/logs`
-- `/api/DataAcquisition/plc-connections`
+- `/api/acquisition/plc-connections`
+- `/api/v1/events`
+- `/api/v1/events/stream`
 
 ## Optional: Start the PLC Simulator
 
 For a local closed-loop workflow, start the simulator:
 
 ```bash
-dotnet run --project src/DataAcquisition.Simulator
+dotnet run --project src/Ingot.Simulator
 ```
 
 The simulator listens on port `502` by default and prints changing registers to the console. Details:
 
-- [src/DataAcquisition.Simulator/README.md](../src/DataAcquisition.Simulator/README.md)
+- [src/Ingot.Simulator/README.md](../src/Ingot.Simulator/README.md)
 
 ## Verification
 
@@ -131,19 +133,21 @@ If you do not, check:
 
 ## Optional: Start Central Components
 
-Central services are not required for the acquisition path itself, but you can run them for registration, heartbeat, and UI:
+Central services are not required by the acquisition path. The simplest option starts PostgreSQL, Central API, and Central Web together:
 
 ```bash
-dotnet run --project src/DataAcquisition.Central.Api
+docker compose -f docker-compose.events.yml up -d --build
 ```
 
-To run the web UI:
+For local web development, keep PostgreSQL and Central API running, then use:
 
 ```bash
-cd src/DataAcquisition.Central.Web
-pnpm install
-pnpm run serve
+cd src/Ingot.Central.Web
+npm install
+npm run dev
 ```
+
+Open `http://localhost:3000/events` for cross-edge events. The tokens must match: `Edge:EventIngestToken` maps to `EventIngest:EdgeTokens:{EdgeId}`.
 
 ## Common Issues
 

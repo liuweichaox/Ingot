@@ -1,0 +1,36 @@
+name: Performance
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "23 18 * * 0"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: performance-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore
+        run: dotnet restore Ingot.sln
+
+      - name: Benchmark edge event log
+        run: ./scripts/benchmark-edge-event-log.sh
+
+      - name: Benchmark central ingest
+        run: ./scripts/benchmark-central-ingest.sh

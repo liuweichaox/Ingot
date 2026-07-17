@@ -1,6 +1,6 @@
 # 配置说明
 
-本文说明 DataAcquisition 的配置模型、字段约束和目录规则。配置设计遵循以下原则：
+本文说明 Ingot 的配置模型、字段约束和目录规则。配置设计遵循以下原则：
 
 - 顶层结构稳定
 - 驱动选择明确
@@ -11,21 +11,23 @@
 
 设备配置默认目录：
 
-- [src/DataAcquisition.Edge.Agent/Configs](../src/DataAcquisition.Edge.Agent/Configs)
+- [src/Ingot.Edge.Agent/Configs](../src/Ingot.Edge.Agent/Configs)
 
 应用配置：
 
-- [src/DataAcquisition.Edge.Agent/appsettings.json](../src/DataAcquisition.Edge.Agent/appsettings.json)
+- [src/Ingot.Edge.Agent/appsettings.json](../src/Ingot.Edge.Agent/appsettings.json)
 
 离线校验入口：
 
 ```bash
-dotnet run --project src/DataAcquisition.Edge.Agent -- --validate-configs
+dotnet run --project src/Ingot.Edge.Agent -- --validate-configs
 ```
 
 JSON Schema：
 
-- [../schemas/device-config.schema.json](../schemas/device-config.schema.json)
+- [v1 设备配置](../schemas/device-config.schema.json)
+- [v2 数据源配置](../schemas/device-config.v2.schema.json)
+- [行业 Profile](../schemas/profile.schema.json)
 
 示例配置：
 
@@ -57,7 +59,7 @@ JSON Schema：
 
 | 字段 | 必填 | 说明 |
 |------|:----:|------|
-| `SchemaVersion` | ✅ | 配置结构版本，当前固定为 `1` |
+| `SchemaVersion` | ✅ | 配置结构版本；兼容配置使用 `1`，新配置建议使用 `2` |
 | `IsEnabled` | ✅ | 是否启用该设备 |
 | `PlcCode` | ✅ | 设备唯一编码，不能和其他文件重复 |
 | `Driver` | ✅ | 稳定驱动名称，例如 `melsec-a1e`、`siemens-s7` |
@@ -73,6 +75,107 @@ JSON Schema：
 - `Driver` 只接受完整名称，不接受别名
 - `ProtocolOptions` 不是自由字典，未声明支持的键会被拒绝
 - `PlcCode` 在配置目录内必须唯一
+
+## v2 数据源与事件配置
+
+新配置建议使用 `SchemaVersion: 2`。顶层身份从 PLC 专有的 `PlcCode` 改为源中立的 `SourceCode`，并显式区分通讯源与业务资产。
+
+```json
+{
+  "SchemaVersion": 2,
+  "IsEnabled": true,
+  "SourceCode": "POL-03-PLC",
+  "Adapter": "plc",
+  "Profile": "optical",
+  "Asset": {
+    "Type": "polishing-machine",
+    "Id": "POL-03"
+  },
+  "Driver": "melsec-mc",
+  "Host": "192.168.10.33",
+  "Port": 6000,
+  "HeartbeatMonitorRegister": "D100",
+  "HeartbeatPollingInterval": 5000,
+  "EventRules": []
+}
+```
+
+v2 新字段：
+
+| 字段 | 说明 |
+|---|---|
+| `SourceCode` | 通讯端点唯一编码 |
+| `Adapter` | 源适配器；当前实现为 `plc` |
+| `Profile` | 生效的行业事件语言 |
+| `Asset` | 默认业务资产；事件的主体，不等同于通讯端点 |
+| `EventRules` | 与 `Channels` 并列的事件派生规则 |
+
+完整示例见 [optical-polisher.v2.json](../examples/device-configs/optical-polisher.v2.json)。
+
+## EventRules
+
+当前支持四种触发器：
+
+| Kind | 语义 | 事件 |
+|---|---|---|
+| `EdgePair` | 激活/失活边沿 | `*.started` / `*.completed` |
+| `ValueChanged` | 值发生变化 | `EventType` 指定的单事件 |
+| `BitFlag` | 指定位从 0→1 / 1→0 | `*.raised` / `*.cleared` |
+| `Threshold` | 进入/离开阈值区间 | `*.entered` / `*.exited` |
+
+值变化规则可以同时更新上下文：
+
+```json
+{
+  "RuleId": "lot-change",
+  "Category": "material",
+  "EventType": "material.lot_changed",
+  "ContextKeys": ["material_lot"],
+  "SetContext": {
+    "material_lot": "$value"
+  },
+  "Trigger": {
+    "Kind": "ValueChanged",
+    "Tag": "D6200",
+    "DataType": "string",
+    "StringByteLength": 20
+  }
+}
+```
+
+`SetContext` 先写入资产上下文，随后事件获取快照，因此本次事件会携带变更后的值。规则中的对象类型、事件类型与必需上下文必须在所选 Profile 中声明。
+
+成对事件还可以在边沿成立时读取额外字段并固化进事件载荷：
+
+```json
+{
+  "RuleId": "polish-cycle",
+  "Category": "cycle",
+  "ContextKeys": ["material_lot", "tooling"],
+  "SnapshotOnStart": [
+    {
+      "FieldName": "recipe_id",
+      "Tag": "D6100",
+      "DataType": "string",
+      "StringByteLength": 16
+    }
+  ],
+  "SnapshotOnEnd": [
+    {
+      "FieldName": "good_count",
+      "Tag": "D6110",
+      "DataType": "ushort"
+    }
+  ],
+  "Trigger": {
+    "Kind": "EdgePair",
+    "Tag": "D6006",
+    "DataType": "short"
+  }
+}
+```
+
+`SnapshotOnStart` 与 `SnapshotOnEnd` 的字段读取失败时，周期事实仍然发出，并在 `data.snapshot_errors` 中列出失败字段。`StringByteLength` 在 Ingot 配置层始终表示字节数；HSL 适配器会截断协议层可能返回的额外字节，避免读入相邻寄存器。
 
 ## 通道配置
 
@@ -238,7 +341,7 @@ Conditional 模式语义：
 
 ## 配置建议
 
-- `PlcCode`、`ChannelCode` 使用稳定、可读、可搜索的命名
+- v2 的 `SourceCode`、`ChannelCode` 使用稳定、可读、可搜索的命名
 - 连续寄存器优先批量读取
 - 在采集阶段做基础单位换算，不把脏原始值留给下游
 - 在上线前先执行配置校验

@@ -7,7 +7,7 @@
             "type": "process",
             "args": [
                 "build",
-                "${workspaceFolder}/src/DataAcquisition.Central.Api/DataAcquisition.Central.Api.csproj",
+                "${workspaceFolder}/src/Ingot.Central.Api/Ingot.Central.Api.csproj",
                 "/property:GenerateFullPaths=true",
                 "/consoleloggerparameters:NoSummary;ForceNoAlign"
             ],
@@ -19,7 +19,7 @@
             "type": "process",
             "args": [
                 "publish",
-                "${workspaceFolder}/src/DataAcquisition.Central.Api/DataAcquisition.Central.Api.csproj",
+                "${workspaceFolder}/src/Ingot.Central.Api/Ingot.Central.Api.csproj",
                 "/property:GenerateFullPaths=true",
                 "/consoleloggerparameters:NoSummary;ForceNoAlign"
             ],
@@ -33,7 +33,7 @@
                 "watch",
                 "run",
                 "--project",
-                "${workspaceFolder}/src/DataAcquisition.Central.Api/DataAcquisition.Central.Api.csproj"
+                "${workspaceFolder}/src/Ingot.Central.Api/Ingot.Central.Api.csproj"
             ],
             "problemMatcher": "$msCompile"
         },
@@ -46,7 +46,7 @@
                 "serve"
             ],
             "options": {
-                "cwd": "${workspaceFolder}/src/DataAcquisition.Central.Web"
+                "cwd": "${workspaceFolder}/src/Ingot.Central.Web"
             }
         },
         {

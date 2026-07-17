@@ -1,244 +1,133 @@
 # 模块说明
 
-本文说明项目的主要运行面、模块职责和边界关系，而不逐项枚举所有源码文件。
+## Domain
 
-DataAcquisition 的主产品是 `Edge Agent`。  
-其他模块均应围绕该采集链路理解其职责边界。
+位置：`src/Ingot.Domain`
 
-## 模块视图
+主要内容：
 
-### Domain
+- `Models/DeviceConfig.cs`：v1/v2 数据源配置
+- `Events/ProductionEvent.cs`：统一生产事件信封
+- `Events/EventRule.cs`：事件派生规则
+- `Events/EventQuery.cs`：本地事件查询条件
+- `Events/ObjectRef.cs`：业务资产引用
+- `Profiles/ProfileDefinition.cs`：行业 Profile 模型
+
+Domain 不依赖 Hsl、InfluxDB、SQLite 或 ASP.NET。
+
+## Application
+
+位置：`src/Ingot.Application`
+
+关键抽象：
+
+- `IAcquisitionService`：数据源运行时编排与控制写入
+- `IEventSink`：生产事件唯一写入口
+- `IEventLog`：不可变事件日志
+- `IEdgeContextStore`：资产上下文
+- `IEdgeStateStore`：周期状态与上下文的组合边界
+- `IEventRuleCollector`：事件规则采集
+- `IEventShipper`：边缘事件批量上行
+- `IProfileRegistry`：Profile 查询与配置验证
+- PLC 客户端、驱动、队列、存储和指标接口
+
+Application 只定义需要什么能力，不决定具体数据库或驱动库。
+
+## Infrastructure
+
+位置：`src/Ingot.Infrastructure`
+
+### Acquisition
+
+- `AcquisitionService`：按 `SourceCode` 管理运行时、热更新和成功写入后的 `parameter.applied`
+- `ChannelCollector`：v1 遥测与 Conditional 周期事件
+- `EventRuleCollector`：v2 `EventRules` 采集
+- `EdgeStateStore`：active cycle 与 `context_state`
+- `HeartbeatMonitor`：PLC 连接门控与状态
+
+### Events
+
+- `EventRuleEvaluator`：实现 `EdgePair`、`ValueChanged`、`BitFlag` 和 `Threshold`
+- `EventSink`：先落盘，再执行可失败投影
+- `SqliteEventLog`：事件表、索引、查询、游标和待上行状态
+- `HttpEventShipper`：按序批量上行、确认后推进 outbox、指数退避
+
+### Profiles
+
+- `JsonProfileRegistry`：启动时加载 Profile 并校验 v2 配置引用
+
+### Telemetry
+
+- `QueueService`：内存批量聚合
+- `InfluxDbDataStorageService`：默认遥测和事件投影存储
+
+### DeviceConfigs / Clients / Logs / Metrics
+
+- 配置加载、热更新和离线校验
+- Hsl PLC 驱动选择与生命周期
+- SQLite 日志
+- Prometheus 与 `System.Diagnostics.Metrics`
+
+## Edge Agent
+
+位置：`src/Ingot.Edge.Agent`
+
+职责：
+
+- 组合所有默认实现
+- 加载 `Configs` 与 `Profiles`
+- 启动采集、中心心跳和事件上行后台服务
+- 暴露事件、周期、上下文、采集控制、日志、指标和健康 API
+
+`EventLogHealthCheck` 会实际访问事件库，并返回待上行事件数量。
+
+## Contracts
+
+位置：`src/Ingot.Contracts`
+
+包括边缘注册/心跳、控制写入，以及 Edge/Central 事件批次和中心事件结果契约。控制写入以 `SourceCode` 为主字段，并兼容 v1 请求中的 `PlcCode`。
+
+## Central API / Central Web
 
 位置：
 
-- `src/DataAcquisition.Domain`
+- `src/Ingot.Central.Api`
+- `src/Ingot.Central.Web`
 
-职责：
+`Central.Api` 包含：
 
-- 定义配置模型
-- 定义采集消息
-- 定义受控值类型和归一化规则
-- 定义不会依赖具体库的基础模型
+- per-edge token 校验与幂等批量摄入
+- PostgreSQL 月度分区事件库
+- JSONB 上下文过滤与 GIN 索引
+- 跨 Edge 查询、SSE 和周期聚合
+- PostgreSQL Webhook 订阅、CloudEvents 映射、过滤、游标和 HMAC 投递
+- 节点注册、心跳、指标和日志代理
 
-这里不应该知道 Hsl、InfluxDB、SQLite 或 ASP.NET。
+`Central.Web` 使用 Vue 3 + Vite，提供 Edges、Events、Metrics 和 Logs 页面。
 
-### Application
+## Tests
 
-位置：
+位置：`tests/Ingot.Core.Tests`
 
-- `src/DataAcquisition.Application`
+覆盖：
 
-职责：
+- 事件信封与 UUIDv7
+- SQLite 事件持久化、过滤、序号和待上行状态
+- EdgePair 语义
+- 上下文与周期状态重启恢复
+- Profile 约束
+- v1/v2 配置校验
+- 队列、驱动、日志等既有核心行为
+- Edge token 校验与 EventShipper 确认语义
+- CloudEvents 映射、订阅匹配与签名投递
 
-- 定义运行时抽象
-- 定义 PLC 驱动接口
-- 定义存储接口
-- 定义配置、队列、采集相关契约
-
-这一层回答的是：
-
-- 上层需要什么能力
-- 而不是这些能力如何实现
-
-### Infrastructure
-
-位置：
-
-- `src/DataAcquisition.Infrastructure`
-
-职责：
-
-- 提供默认实现
-- 封装 Hsl 驱动
-- 封装 InfluxDB
-- 封装 SQLite 日志和状态存储
-- 实现配置热更新、指标和诊断
-
-这是项目里最大的实现层，但不应该反向定义上层抽象。
-
-### Edge Agent
-
-位置：
-
-- `src/DataAcquisition.Edge.Agent`
-
-职责：
-
-- 作为采集宿主进程启动整个系统
-- 注册默认实现
-- 运行后台 Worker
-- 暴露本地健康、指标、日志和诊断接口
-
-如果你只关心“项目真正做什么”，先看这一层。
-
-### Central API / Central Web
-
-位置：
-
-- `src/DataAcquisition.Central.Api`
-- `src/DataAcquisition.Central.Web`
-
-职责：
-
-- 提供中心化状态查看
-- 展示心跳、指标和诊断代理
-
-它们是控制面，不是采集主链路。
-
-### Tests
-
-位置：
-
-- `tests/DataAcquisition.Core.Tests`
-
-职责：
-
-- 验证驱动配置契约
-- 验证队列批次行为
-- 验证条件采集状态恢复逻辑
-- 验证配置校验
-
-## 主运行时链路
-
-DataAcquisition 的核心链路很固定：
-
-1. `Edge Agent` 启动
-2. 加载设备配置
-3. 为每个设备创建 PLC 驱动
-4. 启动心跳与采集任务
-5. 生成 `DataMessage`
-6. 进入 `QueueService`
-7. 聚合成批次
-8. 直接写 `InfluxDB`
-9. 写入失败时记录日志和指标，当前批次被丢弃
-
-这条链路是判断模块边界是否合理的基准。
-
-## 关键模块
-
-### PLC 驱动层
-
-关键文件：
-
-- `src/DataAcquisition.Application/Abstractions/IPlcDriverProvider.cs`
-- `src/DataAcquisition.Application/Abstractions/IPlcClientService.cs`
-- `src/DataAcquisition.Infrastructure/Clients/PlcClientFactory.cs`
-- `src/DataAcquisition.Infrastructure/Clients/HslStandardPlcDriverProvider.cs`
-- `src/DataAcquisition.Infrastructure/Clients/HslPlcClientService.cs`
-
-职责：
-
-- 用稳定的 `Driver` 名称选择具体 PLC 实现
-- 屏蔽上层对 Hsl 的直接依赖
-- 解析并应用驱动相关配置
-
-这个设计的重点是：
-
-- 核心框架不绑死在具体 PLC 类型枚举上
-- Hsl 是默认实现，不是架构前提
-
-### 采集编排层
-
-关键文件：
-
-- `src/DataAcquisition.Infrastructure/DataAcquisitions/DataAcquisitionService.cs`
-- `src/DataAcquisition.Infrastructure/DataAcquisitions/HeartbeatMonitor.cs`
-- `src/DataAcquisition.Infrastructure/DataAcquisitions/ChannelCollector.cs`
-- `src/DataAcquisition.Infrastructure/DataAcquisitions/ChannelMetricReader.cs`
-- `src/DataAcquisition.Infrastructure/DataAcquisitions/MetricExpressionEvaluator.cs`
-- `src/DataAcquisition.Infrastructure/DataAcquisitions/AcquisitionStateManager.cs`
-
-职责：
-
-- 启动和管理采集任务
-- 判断设备是否可采
-- 执行 Always / Conditional 采集
-- 读取字段、计算表达式、生成事件
-- 恢复条件采集 active cycle 状态
-
-### 队列与存储层
-
-关键文件：
-
-- `src/DataAcquisition.Infrastructure/Queues/QueueService.cs`
-- `src/DataAcquisition.Infrastructure/DataStorages/InfluxDbDataStorageService.cs`
-
-职责：
-
-- 批量聚合消息
-- 直接写存储
-- 通过日志和指标暴露写入失败
-- 保持当前运行时的简单失败语义
-
-这里是数据进入存储前最关键的一层。
-
-### 配置与运维层
-
-关键文件：
-
-- `src/DataAcquisition.Infrastructure/DeviceConfigs/DeviceConfigService.cs`
-- `src/DataAcquisition.Infrastructure/DeviceConfigs/DeviceConfigValidator.cs`
-- `src/DataAcquisition.Infrastructure/DeviceConfigs/DeviceConfigFileLoader.cs`
-- `src/DataAcquisition.Infrastructure/Logs/*`
-- `src/DataAcquisition.Infrastructure/Metrics/*`
-
-职责：
-
-- 读取和验证 JSON 配置
-- 监控配置目录并热更新
-- 提供 Prometheus 指标
-- 提供本地日志查询
-
-## 模块边界原则
-
-如果把这个项目做成长期维护的开源项目，我会坚持这些边界：
-
-- `Domain` 不依赖基础设施库
-- `Application` 只定义契约
-- `Infrastructure` 只实现，不定义上层业务规则
-- `Edge Agent` 是主产品，不把中心服务当主链路
-- 文档只承诺真实支持的能力
-
-## 扩展点
-
-### 新增 PLC 驱动
-
-做法：
-
-1. 实现新的 `IPlcDriverProvider`
-2. 如有需要，提供新的 `IPlcClientService`
-3. 在宿主层注册
-4. 提供完整 `Driver` 名称和示例配置
-
-### 替换存储后端
-
-做法：
-
-1. 实现 `IDataStorageService`
-2. 替换宿主层默认注册
-3. 明确文档化你的成功/失败语义
-
-### 调整队列策略
-
-做法：
-
-1. 修改 `QueueService`
-2. 保持批量写入边界清晰
-3. 同步更新测试和文档中的失败语义
-
-## 阅读建议
-
-如果你想快速理解代码，推荐这个顺序：
+## 推荐阅读顺序
 
 1. `README.md`
 2. `docs/design.md`
-3. `src/DataAcquisition.Edge.Agent/Program.cs`
-4. `src/DataAcquisition.Infrastructure/DataAcquisitions/DataAcquisitionService.cs`
-5. `src/DataAcquisition.Infrastructure/Queues/QueueService.cs`
-6. `src/DataAcquisition.Infrastructure/Clients/HslStandardPlcDriverProvider.cs`
-
-## 相关文档
-
-- [设计](design.md)
-- [配置](tutorial-configuration.md)
-- [部署](tutorial-deployment.md)
+3. `src/Ingot.Edge.Agent/Program.cs`
+4. `src/Ingot.Infrastructure/Events/EventSink.cs`
+5. `src/Ingot.Infrastructure/Events/SqliteEventLog.cs`
+6. `src/Ingot.Infrastructure/Acquisition/ChannelCollector.cs`
+7. `src/Ingot.Infrastructure/Events/EventRuleCollector.cs`
+8. `docs/rfc-production-events.md`

@@ -11,11 +11,11 @@
 
 推荐阅读顺序：
 
-1. `src/DataAcquisition.Edge.Agent/Program.cs`
-2. `src/DataAcquisition.Infrastructure/DataAcquisitions/DataAcquisitionService.cs`
-3. `src/DataAcquisition.Infrastructure/Queues/QueueService.cs`
-4. `src/DataAcquisition.Infrastructure/Clients/HslStandardPlcDriverProvider.cs`
-5. `src/DataAcquisition.Infrastructure/DataStorages/InfluxDbDataStorageService.cs`
+1. `src/Ingot.Edge.Agent/Program.cs`
+2. `src/Ingot.Infrastructure/Acquisition/AcquisitionService.cs`
+3. `src/Ingot.Infrastructure/Queues/QueueService.cs`
+4. `src/Ingot.Infrastructure/Clients/HslStandardPlcDriverProvider.cs`
+5. `src/Ingot.Infrastructure/DataStorages/InfluxDbDataStorageService.cs`
 
 如果你想先理解模块边界，再看：
 
@@ -124,8 +124,8 @@
 
 ```bash
 dotnet build Ingot.sln --no-restore
-dotnet test tests/DataAcquisition.Core.Tests/DataAcquisition.Core.Tests.csproj
-dotnet run --project src/DataAcquisition.Edge.Agent -- --validate-configs
+dotnet test tests/Ingot.Core.Tests/Ingot.Core.Tests.csproj
+dotnet run --project src/Ingot.Edge.Agent -- --validate-configs
 ```
 
 ## 相关文档

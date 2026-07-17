@@ -1,6 +1,6 @@
 # 文档首页
 
-本文档集用于说明 DataAcquisition 的配置、部署、运行、设计与扩展方式。
+本文档集用于说明 Ingot 的配置、部署、运行、设计与扩展方式。
 
 为便于快速定位所需信息，建议按使用目标组织阅读，而不是将其视为彼此独立的零散说明页。
 
@@ -35,6 +35,7 @@
 
 - [设计](design.md)
 - [模块](modules.md)
+- [生产事件 RFC](rfc-production-events.md)
 
 ### 扩展与贡献
 
@@ -47,11 +48,12 @@
 
 - `Edge Agent` 是主产品
 - `Central` 是可选控制面
-- 主链路是 `PLC -> Collector -> Queue -> TSDB`
-- 队列批次直接写存储，不做本地 WAL 或后台回放
+- 运行时是遥测与事件双平面：遥测直写 TSDB，事件先落 `events.db`
+- PLC 是首个源适配器，v2 事件契约使用 `SourceCode` 与资产模型
 - 驱动由稳定的 `Driver` 名称选择
 - 配置必须先校验，再运行
 - 正式业务事件和恢复诊断事件分开写入
+- Profile 约束对象类型、事件类型和必需上下文
 
 ## 文档清单
 
@@ -63,5 +65,7 @@
 - [部署](tutorial-deployment.md)
 - [设计](design.md)
 - [模块](modules.md)
+- [生产事件 RFC](rfc-production-events.md)
+- [品牌与标识](brand.md)
 - [开发扩展](tutorial-development.md)
 - [常见问题](faq.md)

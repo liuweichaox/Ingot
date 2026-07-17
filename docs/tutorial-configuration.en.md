@@ -1,6 +1,6 @@
 # Configuration
 
-This document describes the configuration model, field constraints, and directory rules used by DataAcquisition.
+This document describes the configuration model, field constraints, and directory rules used by Ingot.
 
 The configuration model is designed to be:
 
@@ -13,21 +13,23 @@ The configuration model is designed to be:
 
 Default device config directory:
 
-- [src/DataAcquisition.Edge.Agent/Configs](../src/DataAcquisition.Edge.Agent/Configs)
+- [src/Ingot.Edge.Agent/Configs](../src/Ingot.Edge.Agent/Configs)
 
 Application settings:
 
-- [src/DataAcquisition.Edge.Agent/appsettings.json](../src/DataAcquisition.Edge.Agent/appsettings.json)
+- [src/Ingot.Edge.Agent/appsettings.json](../src/Ingot.Edge.Agent/appsettings.json)
 
 Offline validation:
 
 ```bash
-dotnet run --project src/DataAcquisition.Edge.Agent -- --validate-configs
+dotnet run --project src/Ingot.Edge.Agent -- --validate-configs
 ```
 
 JSON Schema:
 
-- [../schemas/device-config.schema.json](../schemas/device-config.schema.json)
+- [v1 device config](../schemas/device-config.schema.json)
+- [v2 source config](../schemas/device-config.v2.schema.json)
+- [industry Profile](../schemas/profile.schema.json)
 
 Example configs:
 
@@ -59,7 +61,7 @@ Field reference:
 
 | Field | Required | Description |
 |------|:--------:|-------------|
-| `SchemaVersion` | ✅ | config schema version, currently fixed at `1` |
+| `SchemaVersion` | ✅ | use `1` for compatibility configs and `2` for new source/event configs |
 | `IsEnabled` | ✅ | whether the device is enabled |
 | `PlcCode` | ✅ | unique device identifier, must not be duplicated across files |
 | `Driver` | ✅ | stable driver name such as `melsec-a1e` or `siemens-s7` |
@@ -75,6 +77,71 @@ Rules:
 - `Driver` accepts full names only
 - `ProtocolOptions` is not an unrestricted bag; unsupported keys are rejected
 - `PlcCode` must be unique inside the config directory
+
+## v2 Source and Event Configuration
+
+New configurations should use SchemaVersion 2 with source-neutral `SourceCode`, `Adapter`, `Profile`, `Asset`, and `EventRules`. See [optical-polisher.v2.json](../examples/device-configs/optical-polisher.v2.json).
+
+Supported trigger kinds:
+
+| Kind | Meaning | Output |
+|---|---|---|
+| `EdgePair` | active/inactive edge pair | `*.started` / `*.completed` |
+| `ValueChanged` | value changed | one configured `EventType` |
+| `BitFlag` | bit 0→1 / 1→0 | `*.raised` / `*.cleared` |
+| `Threshold` | enter/leave a numeric range | `*.entered` / `*.exited` |
+
+`SetContext` can update asset context before the event snapshot is created:
+
+```json
+{
+  "RuleId": "lot-change",
+  "Category": "material",
+  "EventType": "material.lot_changed",
+  "ContextKeys": ["material_lot"],
+  "SetContext": { "material_lot": "$value" },
+  "Trigger": {
+    "Kind": "ValueChanged",
+    "Tag": "D6200",
+    "DataType": "string",
+    "StringByteLength": 20
+  }
+}
+```
+
+The selected Profile must declare every referenced object type, event type, and required context key.
+
+Pair rules can also capture source values into the immutable event payload at each edge:
+
+```json
+{
+  "RuleId": "polish-cycle",
+  "Category": "cycle",
+  "ContextKeys": ["material_lot", "tooling"],
+  "SnapshotOnStart": [
+    {
+      "FieldName": "recipe_id",
+      "Tag": "D6100",
+      "DataType": "string",
+      "StringByteLength": 16
+    }
+  ],
+  "SnapshotOnEnd": [
+    {
+      "FieldName": "good_count",
+      "Tag": "D6110",
+      "DataType": "ushort"
+    }
+  ],
+  "Trigger": {
+    "Kind": "EdgePair",
+    "Tag": "D6006",
+    "DataType": "short"
+  }
+}
+```
+
+Snapshot read failures do not suppress the cycle fact; failed fields are listed in `data.snapshot_errors`. `StringByteLength` always means bytes at the Ingot configuration boundary, and the HSL adapter truncates protocol over-reads so adjacent registers cannot leak into the value.
 
 ## Channel Configuration
 
@@ -240,7 +307,7 @@ Notes:
 
 ## Configuration Guidance
 
-- use stable, searchable `PlcCode` and `ChannelCode` values
+- use stable, searchable `SourceCode` and `ChannelCode` values for v2 configs
 - prefer batch reads for contiguous registers
 - do basic unit conversion during acquisition, not downstream
 - validate configs before deployment

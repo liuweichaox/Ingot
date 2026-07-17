@@ -1,6 +1,6 @@
 # Driver Catalog
 
-This document describes the current built-in PLC driver catalog and the supported `ProtocolOptions`. The corresponding driver implementation is provided by [HslStandardPlcDriverProvider.cs](../src/DataAcquisition.Infrastructure/Clients/HslStandardPlcDriverProvider.cs).
+This document describes the current built-in PLC driver catalog and the supported `ProtocolOptions`. The corresponding driver implementation is provided by [HslStandardPlcDriverProvider.cs](../src/Ingot.Infrastructure/Clients/HslStandardPlcDriverProvider.cs).
 
 It covers the following:
 
@@ -222,13 +222,13 @@ Example config directory:
 You can validate your own directory with:
 
 ```bash
-dotnet run --project src/DataAcquisition.Edge.Agent -- --validate-configs --config-dir ./examples/device-configs
+dotnet run --project src/Ingot.Edge.Agent -- --validate-configs --config-dir ./examples/device-configs
 ```
 
 ## Extending Drivers
 
 If the built-in catalog is not enough, start here:
 
-- [IPlcDriverProvider](../src/DataAcquisition.Application/Abstractions/IPlcDriverProvider.cs)
-- [IPlcClientService](../src/DataAcquisition.Application/Abstractions/IPlcClientService.cs)
+- [IPlcDriverProvider](../src/Ingot.Application/Abstractions/IPlcDriverProvider.cs)
+- [IPlcClientService](../src/Ingot.Application/Abstractions/IPlcClientService.cs)
 - [../CONTRIBUTING.en.md](../CONTRIBUTING.en.md)
