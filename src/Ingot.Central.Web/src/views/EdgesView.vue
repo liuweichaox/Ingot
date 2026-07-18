@@ -5,11 +5,19 @@
         <div class="card-header">
           <span>
             <el-icon><Connection /></el-icon>
-            <span style="margin-left: 8px">连接器宿主（Connector Host）管理</span>
+            <span style="margin-left: 8px">数据接入节点</span>
           </span>
           <el-button type="primary" :icon="Refresh" :loading="loading" @click="load">刷新</el-button>
         </div>
       </template>
+
+      <el-alert
+        title="显示用户自行部署的数据适配器接入状态。"
+        type="info"
+        :closable="false"
+        show-icon
+        style="margin-bottom: 16px"
+      />
 
       <el-alert
         v-if="error"
@@ -20,7 +28,7 @@
         style="margin-bottom: 16px"
       />
 
-      <el-empty v-if="!loading && !error && edges.length === 0" description="暂无边缘节点" />
+      <el-empty v-if="!loading && !error && edges.length === 0" description="暂无数据接入节点" />
 
       <el-table
         v-if="edges.length"
@@ -35,7 +43,7 @@
             <el-tag type="primary" effect="plain">{{ row.edgeId }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="hostBaseUrl" label="Connector Host 地址" min-width="200">
+        <el-table-column prop="hostBaseUrl" label="数据适配器地址" min-width="200">
           <template #default="{ row }">
             <el-link v-if="row.hostBaseUrl" :href="row.hostBaseUrl" target="_blank" type="primary">
               {{ row.hostBaseUrl }}

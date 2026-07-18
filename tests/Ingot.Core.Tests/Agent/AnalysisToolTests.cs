@@ -16,7 +16,7 @@ public sealed class AnalysisToolTests
         ActorId = "operator",
         Surface = ProductSurfaces.Chat,
         Purpose = RunPurposes.ReadOnlyAnalysis,
-        Request = new CreateAgentRunRequest { Question = "test" }
+        Request = new CreateChatRunRequest { Question = "test" }
     };
 
     [Fact]

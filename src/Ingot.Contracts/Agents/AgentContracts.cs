@@ -2,15 +2,6 @@ using System.Text.Json;
 
 namespace Ingot.Contracts.Agents;
 
-public sealed record CreateAgentRunRequest
-{
-    public required string Question { get; init; }
-
-    public PageContextRef? PageContext { get; init; }
-
-    public string Mode { get; init; } = "standard";
-}
-
 public sealed record CreateChatRunRequest
 {
     public required string Question { get; init; }
@@ -24,12 +15,9 @@ public static class ProductSurfaces
 {
     public const string Chat = "chat";
 
-    public const string Agent = "agent";
-
     public static readonly IReadOnlySet<string> All = new HashSet<string>(StringComparer.Ordinal)
     {
-        Chat,
-        Agent
+        Chat
     };
 }
 
@@ -37,12 +25,9 @@ public static class RunPurposes
 {
     public const string ReadOnlyAnalysis = "read-only-analysis";
 
-    public const string ConnectorCodeGeneration = "connector-code-generation";
-
     public static string ForSurface(string surface) => surface switch
     {
         ProductSurfaces.Chat => ReadOnlyAnalysis,
-        ProductSurfaces.Agent => ConnectorCodeGeneration,
         _ => throw new ArgumentOutOfRangeException(nameof(surface), surface, "不支持的产品面。")
     };
 }
@@ -65,15 +50,6 @@ public sealed record AnalysisPlan
     public DateTimeOffset? From { get; init; }
 
     public DateTimeOffset? To { get; init; }
-
-    public IReadOnlyList<AnalysisToolCall> ToolCalls { get; init; } = [];
-}
-
-public sealed record AgentContinuation
-{
-    public bool IsComplete { get; init; }
-
-    public required string Summary { get; init; }
 
     public IReadOnlyList<AnalysisToolCall> ToolCalls { get; init; } = [];
 }
@@ -185,7 +161,7 @@ public sealed record AgentRunSnapshot
 
     public AnalysisPlan? Plan { get; init; }
 
-    public string WorkflowStage { get; init; } = ConnectorWorkflowStages.Intake;
+    public string WorkflowStage { get; init; } = "analysis";
 
     public int Iteration { get; init; }
 
@@ -225,7 +201,7 @@ public sealed record AgentCapabilities
 
     public required bool Enabled { get; init; }
 
-    public required bool MultiAgentEnabled { get; init; }
+    public required bool DeepInvestigationEnabled { get; init; }
 
     public required string Provider { get; init; }
 
@@ -239,14 +215,6 @@ public sealed record AgentCapabilities
 
     public IReadOnlyList<AgentToolCapability> Tools { get; init; } = [];
 
-    public IReadOnlyList<string> ArtifactKinds { get; init; } = [];
-
-    public bool ConnectorSpecificationWorkflow { get; init; }
-
-    public bool ConnectorWorkspaceWorkflow { get; init; }
-
-    public required int MaxIterations { get; init; }
-
     public required int MaxToolCalls { get; init; }
 
     public required int MaxRunSeconds { get; init; }
@@ -258,9 +226,13 @@ public sealed record AgentCapabilities
 
 public sealed record ChatCapabilities
 {
+    public required string Surface { get; init; }
+
+    public required string Purpose { get; init; }
+
     public required bool Enabled { get; init; }
 
-    public required bool DeepAnalysisEnabled { get; init; }
+    public required bool DeepInvestigationEnabled { get; init; }
 
     public required string Provider { get; init; }
 
@@ -281,33 +253,6 @@ public sealed record ChatCapabilities
     public required int MaxDiscussionRounds { get; init; }
 
     public required int MaxDiscussionTurns { get; init; }
-}
-
-public sealed record DesktopAgentCapabilities
-{
-    public required bool Enabled { get; init; }
-
-    public required string Provider { get; init; }
-
-    public required string FastModel { get; init; }
-
-    public required string ReasoningModel { get; init; }
-
-    public IReadOnlyList<string> Modes { get; init; } = [];
-
-    public IReadOnlyList<AgentToolCapability> Tools { get; init; } = [];
-
-    public IReadOnlyList<string> ArtifactKinds { get; init; } = [];
-
-    public bool ConnectorSpecificationWorkflow { get; init; }
-
-    public bool ConnectorWorkspaceWorkflow { get; init; }
-
-    public required int MaxIterations { get; init; }
-
-    public required int MaxToolCalls { get; init; }
-
-    public required int MaxRunSeconds { get; init; }
 }
 
 public sealed record ChatToolCapability
@@ -345,6 +290,10 @@ public sealed record ChatRunSnapshot
     public required string RunId { get; init; }
 
     public required string ActorId { get; init; }
+
+    public required string Surface { get; init; }
+
+    public required string Purpose { get; init; }
 
     public required string Question { get; init; }
 
@@ -390,6 +339,10 @@ public sealed record ChatRunListItem
     public required string RunId { get; init; }
 
     public required string Question { get; init; }
+
+    public required string Surface { get; init; }
+
+    public required string Purpose { get; init; }
 
     public required string Mode { get; init; }
 
@@ -487,8 +440,6 @@ public static class AgentStreamEventTypes
     public const string PlanRejected = "plan.rejected";
     public const string IterationStarted = "iteration.started";
     public const string IterationCompleted = "iteration.completed";
-    public const string WorkflowStageChanged = "workflow.stage_changed";
-    public const string ApprovalRequired = "approval.required";
     public const string ToolStarted = "tool.started";
     public const string ToolCompleted = "tool.completed";
     public const string ToolFailed = "tool.failed";

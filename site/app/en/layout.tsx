@@ -5,12 +5,12 @@ const origin = "https://ingotstack.com";
 
 export const metadata: Metadata = {
   metadataBase: new URL(origin),
-  title: "Ingot — Trusted production facts, Chat, and desktop connector Agent",
-  description: "Central Web Chat queries production facts and finds data problems. Ingot Agent Desktop generates, builds, tests, and packages connector code.",
+  title: "Ingot — Trusted production facts, standard event ingestion, and Ingot Chat",
+  description: "Ingest different sources through a standard event API, then use Ingot Chat in Central Web to query production facts and find data problems.",
   applicationName: "Ingot",
   keywords: [
-    "Ingot", "production facts", "Chat", "Ingot Agent Desktop", "inspection facts",
-    "normalized production events", "industrial connectors", "evidence traceability", "connector code generation",
+    "Ingot", "production facts", "Ingot Chat", "inspection facts",
+    "normalized production events", "event ingestion API", "source adaptation", "evidence traceability",
   ],
   alternates: {
     canonical: "/en/",
@@ -22,19 +22,19 @@ export const metadata: Metadata = {
     apple: "/brand/ingot-mark-dark.svg",
   },
   openGraph: {
-    title: "Ingot — Trusted production facts, Chat, and desktop connector Agent",
-    description: "Central Web Chat queries facts. Ingot Agent Desktop generates connector code with governed build, test, and operator-approved packaging.",
+    title: "Ingot — Trusted production facts, standard event ingestion, and Ingot Chat",
+    description: "Ingest production facts through a standard event API, then use Ingot Chat in Central Web to investigate them with evidence.",
     url: `${origin}/en/`,
     locale: "en_US",
     alternateLocale: ["zh_CN"],
     siteName: "Ingot",
     type: "website",
-    images: [{ url: "/og.png", width: 1200, height: 630, alt: "Ingot — Trusted production facts, Chat, and desktop connector Agent" }],
+    images: [{ url: "/og.png", width: 1200, height: 630, alt: "Ingot — Trusted production facts, standard event ingestion, and Ingot Chat" }],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Ingot — Trusted production facts, Chat, and desktop connector Agent",
-    description: "Chat finds production-data problems; the desktop Agent generates, builds, tests, and packages connector code.",
+    title: "Ingot — Trusted production facts, standard event ingestion, and Ingot Chat",
+    description: "Ingot Chat finds production-data problems and links evidence to standard production facts.",
     images: ["/og.png"],
   },
 };

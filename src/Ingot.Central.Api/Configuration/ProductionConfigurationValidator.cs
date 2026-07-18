@@ -21,18 +21,6 @@ public static class ProductionConfigurationValidator
             errors.Add("Cors:AllowedOrigins must contain absolute HTTP or HTTPS origins.");
         }
 
-        if (configuration.GetValue<bool>("Agent:Enabled"))
-        {
-            RequireProtectedMap(configuration, "Agent", "ActorTokens", errors);
-            if (!string.Equals(configuration["Agent:Provider"], "OpenAI", StringComparison.OrdinalIgnoreCase))
-                errors.Add("Agent:Provider must be OpenAI when Agent is enabled in production.");
-            RequireValue(configuration, "Agent:FastModel", errors);
-            RequireValue(configuration, "Agent:ReasoningModel", errors);
-            RequireValue(configuration, "OPENAI_API_KEY", errors);
-            RequireValue(configuration, "ConnectorBuilder:ContainerWorkspaceVolume", errors);
-            RequirePackagingApprovers(configuration, errors);
-        }
-
         if (configuration.GetValue<bool>("Chat:Enabled"))
         {
             RequireProtectedMap(configuration, "Chat", "ActorTokens", errors);
@@ -95,27 +83,12 @@ public static class ProductionConfigurationValidator
         }
     }
 
-    private static void RequirePackagingApprovers(IConfiguration configuration, ICollection<string> errors)
-    {
-        var actors = configuration.GetSection("Agent:ActorTokens").GetChildren()
-            .Select(static actor => actor.Key)
-            .ToArray();
-        var approvers = configuration.GetSection("Agent:PackagingApprovers").Get<string[]>() ?? [];
-        if (approvers.Length == 0)
-        {
-            errors.Add("Agent:PackagingApprovers must contain at least one Actor.");
-            return;
-        }
-        if (approvers.Any(approver => !actors.Contains(approver, StringComparer.OrdinalIgnoreCase)))
-            errors.Add("Every Agent:PackagingApprovers entry must reference a configured Agent Actor.");
-    }
-
     private static void RequireValue(
         IConfiguration configuration,
         string key,
         ICollection<string> errors)
     {
         if (string.IsNullOrWhiteSpace(configuration[key]))
-            errors.Add($"{key} is required when Agent is enabled in production.");
+            errors.Add($"{key} is required when its product surface is enabled in production.");
     }
 }

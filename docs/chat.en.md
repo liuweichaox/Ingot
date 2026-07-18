@@ -1,17 +1,17 @@
-# Chat
+# Ingot Chat
 
-Chat is the read-only production-fact conversation in Central Web. It queries recorded facts, checks data quality, and locates cycle-data problems. Chat is neither a code generator nor the desktop Agent.
+Ingot Chat is the only user-facing AI conversation in Central Web. It focuses on querying recorded production facts, checking data quality, and locating cycle-data problems. It reads production records only and preserves field-equipment state.
 
 ## Capabilities
 
 - Interpret natural-language questions with optional asset or cycle page context;
 - produce a governed typed query plan;
 - call `check_data_quality` for event completeness, missing context, freshness, and available range;
-- call `get_cycle_trace` for an ordered `CorrelationId`-scoped cycle event chain;
+- call `get_cycle_trace` for an ordered `correlationId`-scoped cycle event chain;
 - stream plan, read-only tool activity, answer, limitations, and evidence references;
 - retain Actor-scoped history with cancellation and SSE resume.
 
-The current implementation does not compare process parameters with inspection results, analyze high-frequency time series, or confirm root cause.
+The available tools are `check_data_quality` and `get_cycle_trace`.
 
 ## Execution flow
 
@@ -24,7 +24,23 @@ question and page context
   → answer, limitations, and fact references
 ```
 
-The model interprets language and composes the response. Deterministic code owns queries, permissions, range limits, tool execution, and evidence verification. Chat cannot generate SQL, Flux, or scripts and cannot call tools outside its allowlist.
+The model interprets language and composes the response. Deterministic code owns queries, permissions, range limits, tool execution, and evidence verification. Chat uses governed fact tools and does not generate SQL, Flux, or scripts.
+
+## Enable in production
+
+Production Compose leaves Chat disabled. Configure the model, model key, Actor token, and data scope together when enabling it:
+
+```bash
+export INGOT_CHAT_ENABLED=true
+export INGOT_CHAT_PROVIDER=OpenAI
+export INGOT_CHAT_FAST_MODEL="<fast-model>"
+export INGOT_CHAT_REASONING_MODEL="<reasoning-model>"
+export OPENAI_API_KEY="<secret>"
+export INGOT_CHAT_OPERATOR_TOKEN="$(openssl rand -hex 24)"
+export INGOT_CHAT_OPERATOR_ALLOW_ALL=true
+```
+
+Central Web and the HTTP API use Actor `operator` with `INGOT_CHAT_OPERATOR_TOKEN`. Production deployments configure access for the fact scope required by each Actor.
 
 ## Use Chat
 
@@ -45,21 +61,17 @@ The model interprets language and composes the response. Deterministic code owns
 | `GET /api/v1/chat/runs/{runId}/stream` | Stream SSE events and resume with `Last-Event-ID` |
 | `POST /api/v1/chat/runs/{runId}:cancel` | Cancel a run |
 
-Example:
-
 ```bash
 curl -X POST http://localhost:8000/api/v1/chat/runs \
   -H "Content-Type: application/json" \
   -H "X-Ingot-Actor: operator" \
-  -H "Authorization: Bearer ${INGOT_OPERATOR_TOKEN}" \
+  -H "Authorization: Bearer ${INGOT_CHAT_OPERATOR_TOKEN}" \
   -d '{
     "question": "What happened during this cycle, and is its data complete?",
     "pageContext": { "kind": "cycle", "id": "CYCLE-001" },
     "mode": "standard"
   }'
 ```
-
-Chat endpoints accept only Chat-purpose runs. Ingot Agent desktop uses a separate product identifier, authorization boundary, and run history.
 
 ## Security boundary
 
@@ -69,6 +81,6 @@ Chat endpoints accept only Chat-purpose runs. Ingot Agent desktop uses a separat
 - instruction-like text in tool results remains untrusted data and cannot change policy;
 - answer numbers must come from tool results, and key findings require resolvable evidence;
 - insufficient, conflicting, or low-quality data produces explicit limitations rather than a definitive conclusion;
-- Chat cannot change configuration, events, inspection records, connector source, or equipment state.
+- Chat cannot change configuration, events, inspection records, or equipment state.
 
 See [configuration](tutorial-configuration.en.md) and the [production event specification](rfc-production-events.en.md).

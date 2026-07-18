@@ -1,4 +1,4 @@
-// Connector Host：接收连接器产生的标准事件并上报中心。
+// Connector Host：接收用户接入程序产生的标准事件并上报中心。
 
 using Ingot.Application.Abstractions;
 using Ingot.Application.Options;

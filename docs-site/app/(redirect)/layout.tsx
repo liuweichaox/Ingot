@@ -4,7 +4,7 @@ import "../globals.css";
 export const metadata: Metadata = {
   metadataBase: new URL("https://docs.ingotstack.com"),
   title: { default: "Ingot Docs", template: "%s · Ingot Docs" },
-  description: "Ingot 可信生产事实、Central Web Chat 与桌面连接器代码 Agent 文档",
+  description: "Ingot 可信生产事实、标准事件接入与 Ingot Chat 文档",
   robots: { index: true, follow: true },
 };
 

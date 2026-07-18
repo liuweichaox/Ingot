@@ -15,7 +15,7 @@
           >
             <el-menu-item index="/edges">
               <el-icon><Connection /></el-icon>
-              <span>连接器宿主（Connector Host）</span>
+              <span>数据接入节点</span>
             </el-menu-item>
             <el-menu-item index="/events">
               <el-icon><List /></el-icon>
@@ -23,7 +23,7 @@
             </el-menu-item>
             <el-menu-item index="/chat">
               <el-icon><ChatDotRound /></el-icon>
-              <span>Chat 工艺分析</span>
+              <span>Ingot Chat</span>
             </el-menu-item>
             <el-menu-item index="/metrics">
               <el-icon><DataAnalysis /></el-icon>

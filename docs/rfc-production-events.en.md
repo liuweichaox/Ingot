@@ -1,89 +1,107 @@
 # Production Event Specification
 
-`ProductionEvent` is the immutable event envelope shared by connectors, Connector Host, Central API, and Chat fact tools.
+`ProductionEvent` is the immutable event envelope shared by team-owned source adaptation, Central API, query, and Ingot Chat. Teams map equipment, instrument, or business-system semantics to this contract and submit it through Central API.
 
-## JSON contract
+## Batch request
+
+```http
+POST /api/v1/events:batch
+Authorization: Bearer <edge-token>
+Content-Type: application/json
+```
+
+```json
+{
+  "edgeId": "EDGE-001",
+  "events": [
+    {
+      "eventId": "0198a820-7f91-7a5d-8c44-111111111111",
+      "eventType": "cycle.started",
+      "eventTypeVersion": 1,
+      "occurredAt": "2026-07-18T08:00:00Z",
+      "recordedAt": "2026-07-18T08:00:00Z",
+      "source": "edge/EDGE-001/furnace/FURNACE-01",
+      "subject": { "type": "asset", "id": "FURNACE-01" },
+      "context": { "workpiece_id": "WP-001", "lot": "LOT-0718" },
+      "data": {},
+      "correlationId": "CYCLE-001",
+      "seq": 1
+    }
+  ]
+}
+```
+
+## `ProductionEvent` fields
 
 | Field | Type | Constraint |
 |---|---|---|
 | `eventId` | string | UUIDv7 global event identifier |
 | `eventType` | string | lowercase dotted name such as `cycle.started` |
 | `eventTypeVersion` | integer | greater than 0; defaults to 1 |
-| `occurredAt` | ISO 8601 timestamp | UTC time at which the connector observed the fact |
-| `recordedAt` | ISO 8601 timestamp | required in the connector request; Connector Host replaces it with host UTC at persistence |
-| `source` | string | source path inside the connector; Host prefixes `edge/{EdgeId}/` |
+| `occurredAt` | ISO 8601 timestamp | UTC time at which the fact occurred |
+| `recordedAt` | ISO 8601 timestamp | UTC time at which the adapter recorded or submitted the event |
+| `source` | string | must start with `edge/{edgeId}/` |
 | `subject` | object | non-empty `type` and `id` |
-| `context` | object | string key/value context; may be `{}` but not null |
+| `context` | object | string values needed for query association; may be `{}` |
 | `data` | object | event-specific fields; may be `{}` |
 | `correlationId` | string or null | optional cycle or business-chain identifier |
-| `seq` | integer | connectors send 0; Connector Host assigns a monotonic local sequence |
+| `seq` | integer | persisted, monotonically increasing sequence within one `edgeId` |
 
-Example:
+## Validation and response
+
+- `edgeId` may contain letters, numbers, dots, underscores, and hyphens, with 1–128 characters;
+- every batch contains 1–500 events;
+- `eventId` and `seq` cannot repeat within a batch;
+- every `source` must match the request `edgeId`;
+- the Bearer token must match the configured token for that `edgeId`;
+- Central deduplicates by `eventId` and `(edgeId, seq)`.
+
+A successful response contains:
 
 ```json
 {
-  "eventId": "0198a820-7f91-7a5d-8c44-111111111111",
-  "eventType": "cycle.started",
-  "eventTypeVersion": 1,
-  "occurredAt": "2026-07-18T08:00:00Z",
-  "recordedAt": "2026-07-18T08:00:00Z",
-  "source": "connector/FURNACE-01",
-  "subject": { "type": "asset", "id": "FURNACE-01" },
-  "context": { "workpiece_id": "WP-001", "lot": "LOT-0718" },
-  "data": {},
-  "correlationId": "CYCLE-001",
-  "seq": 0
+  "accepted": 1,
+  "duplicates": 0,
+  "ackSeq": 1,
+  "gapDetected": false
 }
 ```
 
-## Connector Host ingress
+`ackSeq` means all preceding contiguous sequences are safely accepted or recognized as duplicates. Callers should persist unacknowledged events and retry from acknowledgments; this does not promise end-to-end exactly-once delivery.
+
+## Optional Connector Host ingress
+
+`Ingot.Connector.Host` is a plant-local ingress and SQLite outbox that a team may deploy itself. Teams deploy and operate both source adaptation and the Host. An adapter may submit:
 
 ```http
-POST /api/v1/connector-events
+POST http://<host>:8001/api/v1/connector-events
 Authorization: Bearer <connector-host-token>
 Content-Type: application/json
 ```
 
-The request body is `ProductionEvent[]`. Connector Host:
+The body is `ProductionEvent[]`. The Host validates the local token and events, assigns local sequence values, persists them, and sends standard batches to Central. It fits network boundaries that need offline buffering or cannot reach Central directly. Direct Central batches and Host ingress use separate tokens; the deployment owns the choice, monitoring, and operation of either path.
 
-1. validates the Bearer token and `ConnectorHost:MaxBatchSize`;
-2. rejects an empty source or a source claiming another Edge;
-3. normalizes the source to `edge/{EdgeId}/{connector-source}`;
-4. resets `seq` to 0 and sets `recordedAt` from host UTC;
-5. runs `ProductionEventValidator`;
-6. commits to the SQLite event log, which assigns local `seq`;
-7. returns `202 Accepted`, event IDs, and local sequences.
+Default Compose does not start the Host. Enable the `connector-host` profile when a local ingress is needed:
 
-## Delivery and idempotency
-
-```text
-Connector
-  → Connector Host
-  → SQLite event log + outbox
-  → POST /api/v1/events:batch
-  → Central PostgreSQL fact store
+```bash
+export INGOT_CONNECTOR_TOKEN="$(openssl rand -hex 24)"
+docker compose -f docker-compose.app.yml --profile connector-host up -d connector-host
 ```
 
-Delivery retries with at-least-once semantics. Central deduplicates by `EventId` and `(EdgeId, Seq)` and returns an acknowledged `AckSeq`. Connector Host marks outbox records shipped only after a valid acknowledgment. This mechanism does not promise end-to-end exactly-once delivery.
+## Query and fact chains
 
-`Events:MaxBacklogRows` sets a hard outbox limit of 500,000 records by default. At the limit, Connector Host deletes the oldest unshipped events and emits a `diagnostic.backlog_dropped` audit event with the count and sequence range plus the `event_backlog_dropped_total` metric. Deployments must monitor both signals.
+- `GET /api/v1/events`: filter by Edge, event type, subject, context, `correlationId`, and time;
+- `GET /api/v1/events/stream`: production-event SSE;
+- `GET /api/v1/cycles/{correlationId}`: the event chain for one correlation ID;
+- `get_cycle_trace`: a cycle timeline with evidence, ordered by occurrence time and Central ingest order;
+- `check_data_quality`: cycle pairing, empty context, sequence gaps, and latest-event-time checks.
 
-Central requires every source in a batch to start with `edge/{EdgeId}/`. Connector Host source normalization makes connector submissions satisfy that contract.
-
-## Queries and fact chains
-
-- `GET /api/v1/events` filters by Edge, event type, subject, context, `correlationId`, and time.
-- `GET /api/v1/events/stream` publishes event SSE.
-- `GET /api/v1/cycles/{correlationId}` returns events sharing the correlation ID.
-- `get_cycle_trace` orders cycle events by occurrence and central ingest order and returns `EvidenceRef` values.
-- `check_data_quality` checks cycle pairing, empty context, Edge sequence gaps, and latest event time.
-
-Inspection records use a separate `InspectionRecord` contract and API. Current `get_cycle_trace` does not automatically merge inspections.
+Inspection facts use a separate `InspectionRecord` contract and API. Current cycle tools build cycle fact chains from production events.
 
 ## Extension rules
 
-- Use stable business names for `eventType` and `data` fields.
-- Carry numeric units as explicit event fields; the core does not infer units.
-- Define source quality codes and timestamp semantics in the connector specification.
-- Increase `eventTypeVersion` or introduce a new event type for incompatible semantics.
-- Keep `context` to stable string identifiers needed for queries; never put secrets or large objects in it.
+- Use stable business names for `eventType` and `data`;
+- carry numeric units as explicit event fields; the core does not infer units;
+- increase `eventTypeVersion` or introduce an event type for incompatible semantics;
+- keep `context` to stable strings needed for query association; never put secrets or large objects there;
+- teams maintain source protocols, mapping code, buffering, and retry logic.

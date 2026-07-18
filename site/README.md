@@ -1,12 +1,12 @@
-# Ingot product website
+# Ingot Product Website
 
-The bilingual website for Ingot trusted production facts, Central Web Chat, and Ingot Agent Desktop.
+The bilingual website for Ingot trusted production facts, standard event ingestion, and Ingot Chat.
 
 Public product terms are fixed:
 
-- **Chat** is the read-only conversation in Central Web for fact queries and problem finding.
-- **Ingot Agent** is the downloadable desktop application for connector code generation, build, test, repair, and packaging.
-- **Connector Host** accepts normalized `ProductionEvent[]` and ships them to Central.
+- **Ingot Chat** is the only user-facing AI conversation in Central Web. It queries recorded facts and presents evidence.
+- **Standard event ingestion** is how teams bring in data. They implement source adaptation and submit `ProductionEvent` batches to Central.
+- **Connector Host** is an optional, team-operated local ingress and SQLite outbox for plant networks that need it.
 
 ```bash
 npm install
@@ -15,4 +15,4 @@ npm test
 npm run lint
 ```
 
-The product site is statically exported. Its download CTA targets the latest GitHub Release, and documentation targets `https://docs.ingotstack.com`.
+The site is statically exported. Its documentation links point to `https://docs.ingotstack.com`; public links lead to documentation and describe source adaptation as team-owned. The site states the production-fact and field-control boundaries.

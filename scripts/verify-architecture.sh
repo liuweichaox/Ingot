@@ -73,10 +73,6 @@ check "agent-infrastructure" src/Ingot.Agent.Infrastructure \
   'using Ingot\.Central' \
   "Agent Infrastructure 必须独立于 Central 实现"
 
-check "connector-builder" src/Ingot.Connector.Builder \
-  'using (Ingot\.Central|Ingot\.Agent\.Infrastructure|Npgsql|Microsoft\.Data\.Sqlite)' \
-  "Connector Builder 必须独立于 Central、Agent Infrastructure 和存储实现"
-
 check "analysis-tools" src/Ingot.Central.Infrastructure/AgentTools \
   '(INSERT|UPDATE|DELETE|ExecuteNonQuery|Http(Post|Put|Patch|Delete)|WriteAsync)' \
   "事实分析工具必须保持查询职责"
@@ -102,10 +98,6 @@ project_check src/Ingot.Central.Api/Ingot.Central.Api.csproj \
 project_check src/Ingot.Connector.Host/Ingot.Connector.Host.csproj \
   'Npgsql|Microsoft\.Data\.Sqlite' \
   "Connector Host 的存储实现必须位于 Infrastructure"
-
-project_check src/Ingot.Connector.Builder/Ingot.Connector.Builder.csproj \
-  'Ingot\.Central|Ingot\.Agent\.Infrastructure|Npgsql|Microsoft\.Data\.Sqlite' \
-  "Connector Builder 必须只依赖 Agent 核心与公共契约"
 
 project_check src/Ingot.Agent/Ingot.Agent.csproj \
   'Ingot\.(Central|Agent\.Infrastructure|Connector\.Builder)|Npgsql|Microsoft\.Data\.Sqlite|Microsoft\.Agents|OpenAI' \

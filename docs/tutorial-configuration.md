@@ -1,118 +1,100 @@
-# 配置说明
+# 配置
 
-配置分为 Chat、Ingot Agent、Connector Builder、Connector Host 和中心事实服务。桌面端只保存 Central URL、Actor 与 Token；模型、工作区和 Builder 均在 Central 部署配置。
+Central 使用环境变量和受保护配置存储。生产环境不要把密码、令牌或模型密钥提交到仓库。
 
-## Chat
+## 必需配置
 
 ```json
 {
-  "Chat": {
-    "Enabled": false,
-    "Provider": "Deterministic",
-    "FastModel": "deterministic-v1",
-    "ReasoningModel": "deterministic-v1",
-    "MaxToolCalls": 8,
-    "MaxRunSeconds": 60,
-    "RequireToken": true,
-    "ActorTokens": {},
-    "ModelPricing": {}
+  "Urls": "http://0.0.0.0:8000",
+  "ConnectionStrings": {
+    "Events": "Host=postgres;Database=ingot;Username=ingot;Password=<secret>"
   },
+  "EventIngest": {
+    "RequireToken": true,
+    "EdgeTokens": {
+      "EDGE-001": "<secret>"
+    }
+  },
+  "InspectionSubmission": {
+    "RequireToken": true,
+    "ActorTokens": {
+      "OPERATOR-001": "<strong-secret>"
+    }
+  },
+  "Cors": {
+    "AllowedOrigins": ["https://central.example.com"]
+  },
+  "Chat": {
+    "Enabled": true,
+    "RequireToken": true,
+    "Provider": "OpenAI",
+    "FastModel": "<fast-model>",
+    "ReasoningModel": "<reasoning-model>",
+    "ActorTokens": {
+      "operator": "<strong-secret>"
+    },
+    "MaxToolCalls": 8,
+    "MaxRunSeconds": 60
+  }
+}
+```
+
+`EventIngest:EdgeTokens` 的键必须与批次请求中的 `edgeId` 一致。每个数据源适配运行应使用独立、可轮换的令牌。
+
+## Chat 数据范围与生产启用
+
+```json
+{
   "ChatDataAccess": {
     "Actors": {
-      "operator": { "AllowAll": false, "EdgeIds": ["EDGE-01"] }
+      "operator": { "AllowAll": true, "EdgeIds": [] }
     }
   }
 }
 ```
 
-Chat 只注册 `check_data_quality` 与 `get_cycle_trace`。每个 Actor 必须配置事实访问范围；生产环境优先列出明确的 `EdgeIds`，只有受信的全局角色可使用 `AllowAll=true`。
-
-## Ingot Agent
-
-```json
-{
-  "Agent": {
-    "Enabled": false,
-    "DatabasePath": "Data/agent.db",
-    "Provider": "Deterministic",
-    "FastModel": "deterministic-v1",
-    "ReasoningModel": "deterministic-v1",
-    "MaxToolCalls": 24,
-    "MaxIterations": 8,
-    "MaxRunSeconds": 300,
-    "RequireToken": true,
-    "ActorTokens": {},
-    "PackagingApprovers": ["operator"],
-    "ModelPricing": {}
-  }
-}
-```
-
-Agent 只接受来自 Ingot Agent Desktop 的 `standard` 连接器代码生成运行。`PackagingApprovers` 必须引用已配置 Actor；只有这些 Actor 可以打开人工打包批准门。
-
-正式环境启用 Chat 或 Agent 时，Provider 使用 `OpenAI` 并配置模型名称与 `OPENAI_API_KEY`。`Deterministic` 仅用于开发和自动化测试。Actor Token、模型密钥和连接器密钥通过环境变量或 Secret Store 注入。
-
-模型用量使用供应商响应中的输入和输出 token。只有每个实际模型都配置同一币种的 `ModelPricing` 时才计算 `estimatedCost`；否则返回 `null`。
-
-## Connector Builder
-
-```json
-{
-  "ConnectorBuilder": {
-    "WorkspaceRoot": "Data/connector-workspaces",
-    "ArtifactRoot": "Data/connector-packages",
-    "ContainerCommand": "docker",
-    "ContainerWorkspaceVolume": "",
-    "DotnetSdkImage": "mcr.microsoft.com/dotnet/sdk:10.0",
-    "CommandTimeoutSeconds": 120,
-    "MaxFileBytes": 524288,
-    "MaxWorkspaceFiles": 256,
-    "MaxWorkspaceBytes": 8388608,
-    "MaxOutputCharacters": 32000
-  }
-}
-```
-
-Builder 只在禁网子容器中执行平台固定的构建和测试入口，测试输入仅来自工作区内的固定样本与模拟数据。Agent 和 Builder 不连接数据源。模型不能选择命令、镜像、宿主路径或工作目录。工作区按 Actor 隔离，单文件上限 512 KiB，最多 256 个可见文件和 8 MiB 源码。
-
-## Connector Host
-
-```json
-{
-  "ConnectorHost": { "MaxBatchSize": 1000 },
-  "Context": { "DatabasePath": "Data/context.db" },
-  "Events": {
-    "DatabasePath": "Data/events.db",
-    "MaxBacklogRows": 500000
-  }
-}
-```
-
-Connector Host 接受标准 `ProductionEvent[]`。达到 outbox 上限时删除最旧未上报记录，并记录 `diagnostic.backlog_dropped` 与丢弃指标。
+Chat 只注册 `check_data_quality` 与 `get_cycle_trace`。每个 Actor 必须配置事实访问范围。生产 Compose 的 `operator` 示例使用 `AllowAll=true`；受限部署可在受保护配置中为 Actor 列出明确的 `EdgeIds`。
 
 ## 环境变量
 
-.NET 层级配置使用双下划线：
-
-```text
+```bash
+ConnectionStrings__Events='Host=postgres;Database=ingot;Username=ingot;Password=<secret>'
+EventIngest__RequireToken=true
+EventIngest__EdgeTokens__EDGE-001='<secret>'
+InspectionSubmission__RequireToken=true
+InspectionSubmission__ActorTokens__OPERATOR-001='<strong-secret>'
+Cors__AllowedOrigins__0='https://central.example.com'
 Chat__Enabled=true
+Chat__RequireToken=true
 Chat__Provider=OpenAI
-Chat__FastModel=<model>
-Chat__ReasoningModel=<model>
-Chat__ActorTokens__operator=<secret-store-reference>
-Agent__Enabled=true
-Agent__Provider=OpenAI
-Agent__FastModel=<model>
-Agent__ReasoningModel=<model>
-Agent__ActorTokens__operator=<secret-store-reference>
-Agent__PackagingApprovers__0=operator
-ChatDataAccess__Actors__operator__AllowAll=false
-ChatDataAccess__Actors__operator__EdgeIds__0=EDGE-01
-OPENAI_API_KEY=<secret-store-reference>
-ConnectorBuilder__DotnetSdkImage=mcr.microsoft.com/dotnet/sdk:10.0
-ConnectorHost__IngestToken=<secret-store-reference>
-Edge__EventIngestToken=<secret-store-reference>
-ConnectionStrings__Events=<secret-store-reference>
+Chat__FastModel='<fast-model>'
+Chat__ReasoningModel='<reasoning-model>'
+OPENAI_API_KEY='<secret>'
+Chat__ActorTokens__operator='<strong-secret>'
+ChatDataAccess__Actors__operator__AllowAll=true
 ```
 
-生产环境还必须配置 CORS、数据库、事件摄入和检测提交凭据。完整启动要求见[部署](tutorial-deployment.md)。
+使用 Docker Compose 时，使用以下生产变量名称：
+
+```bash
+INGOT_CHAT_ENABLED=true
+INGOT_CHAT_PROVIDER=OpenAI
+INGOT_CHAT_FAST_MODEL='<fast-model>'
+INGOT_CHAT_REASONING_MODEL='<reasoning-model>'
+OPENAI_API_KEY='<secret>'
+INGOT_CHAT_OPERATOR_TOKEN='<strong-secret>'
+INGOT_CHAT_OPERATOR_ALLOW_ALL=true
+```
+
+生产验证器要求事件和检测提交令牌、CORS 来源，以及 Chat Provider 为 `OpenAI`、同时存在 Fast/Reasoning 模型、`OPENAI_API_KEY`、Chat Actor 令牌和每个 Actor 的数据范围。模型密钥只从 Secret Store 或环境变量读取。日志默认不记录完整问题、回答或敏感工具参数。
+
+## 运行上限
+
+- `Chat:MaxToolCalls`：单次对话最多调用的只读工具数；
+- `Chat:MaxRunSeconds`：单次对话最长运行时间；
+- 事件批次：每批 1 至 500 条；
+- 事件来源：必须以 `edge/{edgeId}/` 开头；
+- Chat 未启用或认证未配置时，Central 事件、查询和检测链路保持可用。
+
+参见[部署](tutorial-deployment.md)和[生产事件规范](rfc-production-events.md)。

@@ -1,48 +1,39 @@
 # Development
 
-## Product surfaces
-
-- Central Web exposes fact pages and Chat only. Do not add an Agent code-generation surface to the browser.
-- `/api/v1/chat/*` handles read-only analysis only, with `check_data_quality` and `get_cycle_trace`.
-- `/api/v1/agent/*` handles connector code generation only and must validate `X-Ingot-Client: ingot-agent-desktop`.
-- Chat and Agent create, history, read, stream, and cancel operations must be isolated by surface and Actor.
-
-## Dependency direction
-
-1. `Ingot.Contracts`: public Chat, Agent, connector, event, and inspection contracts;
-2. `Ingot.Agent`: surfaces, workflow, plans, budgets, and verification;
-3. `Ingot.Agent.Infrastructure`: models, SQLite store, and tools;
-4. `Ingot.Connector.Builder`: Actor workspace, fixed container build/test, approval, and packaging;
-5. `Ingot.Central.Infrastructure`: central facts and read-only Chat tools;
-6. `Ingot.Connector.Host`: protocol-neutral normalized event ingress;
-7. `desktop`: Tauri 2 desktop Agent client.
-
-## Connector extension
-
-Do not link equipment protocol SDKs or readers into the platform core. Ingot Agent writes a concrete protocol into a connector workspace. Shared changes belong in connector specifications, templates, deterministic transformation tests, and Builder fixed entries.
-
-The default template must preserve:
-
-```text
-stdin/json-lines → stdout/production-event-json-lines
-```
-
-Connector acceptance covers parsing fixed workspace fixtures and simulated input, field mapping, units, event types, subjects, context, correlation IDs, and `ProductionEvent` validation. Agent and Builder do not connect to live data sources. Generated packages must not include production tokens, an HTTP submission client, or automatic deployment scripts.
-
-## Desktop development
-
-```bash
-cd desktop
-npm install
-npm run desktop:dev
-```
-
-Every Central request must cross the Rust native boundary, add the fixed desktop-client identifier, constrain allowed Central URLs, and verify download SHA-256. The React layer must not hold unrestricted network or filesystem permissions.
-
-## Gate
+## Local verification
 
 ```bash
 ./scripts/verify.sh
 ```
 
-Update bilingual documentation and tests with every change. See [Chat](chat.en.md) and [Ingot Agent desktop](desktop-agent.en.md).
+This gate builds the .NET projects, runs tests, builds Central Web, the product site, and the documentation site, then checks formatting, architecture, and product scope.
+
+## Development principles
+
+- Update contracts before Central API, fact services, Web, and documentation;
+- event ingestion accepts strongly typed `ProductionEvent` and `InspectionRecord` only, never arbitrary SQL or scripts from callers;
+- Chat statistics, authorization, tool execution, and evidence validation remain deterministic;
+- every new tool is read-only by default and needs data-scope, result-size, and timeout limits;
+- public copy uses Ingot Chat and does not expose internal implementation terminology;
+- when a public interface changes, update bilingual documentation, the product site, and static-site tests together.
+
+## Event-contract changes
+
+1. Assess whether the event type, version, and fields remain backward compatible;
+2. update strong typed contracts and validation in `Ingot.Contracts`;
+3. add matching API, storage, and integration tests;
+4. record semantics in the [production event specification](rfc-production-events.en.md);
+5. validate with de-identified samples that Chat still produces correct limitations and evidence.
+
+## Documentation and website
+
+`docs/` is the bilingual content source. `docs-site/` reads Markdown at build time and generates navigation, a search index, and static pages. `site/` is the product website. After a change, run at least:
+
+```bash
+npm --prefix docs-site run build
+npm --prefix docs-site test
+npm --prefix site run build
+npm --prefix site test
+```
+
+See [architecture](architecture.en.md), [design](design.en.md), and the [contribution guide](../CONTRIBUTING.en.md).

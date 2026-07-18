@@ -8,11 +8,8 @@ using System.Text.RegularExpressions;
 
 namespace Ingot.Agent;
 
-public sealed class DefaultPlanValidator(
-    IOptions<AgentOptions> agentOptions,
-    IOptions<ChatOptions> chatOptions) : IPlanValidator
+public sealed class DefaultPlanValidator(IOptions<ChatOptions> chatOptions) : IPlanValidator
 {
-    private readonly AgentOptions _agentOptions = agentOptions.Value;
     private readonly ChatOptions _chatOptions = chatOptions.Value;
 
     public bool TryValidate(
@@ -27,17 +24,12 @@ public sealed class DefaultPlanValidator(
             return false;
         }
 
-        var maxToolCalls = surface switch
-        {
-            ProductSurfaces.Chat => Math.Clamp(_chatOptions.MaxToolCalls, 1, 8),
-            ProductSurfaces.Agent => Math.Clamp(_agentOptions.MaxToolCalls, 1, 32),
-            _ => 0
-        };
-        if (maxToolCalls == 0)
+        if (!string.Equals(surface, ProductSurfaces.Chat, StringComparison.Ordinal))
         {
             error = "计划包含无效的产品面。";
             return false;
         }
+        var maxToolCalls = Math.Clamp(_chatOptions.MaxToolCalls, 1, 8);
 
         if (plan.ToolCalls.Count > maxToolCalls)
         {

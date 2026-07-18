@@ -5,37 +5,6 @@ namespace Ingot.Contracts.Agents;
 public static partial class AgentContractValidator
 {
     public static bool TryValidate(
-        CreateAgentRunRequest? request,
-        out CreateAgentRunRequest? normalized,
-        out string error)
-    {
-        normalized = null;
-        if (request is null)
-        {
-            error = "请求体不能为空。";
-            return false;
-        }
-        if (!TryNormalize(
-                request.Question,
-                request.PageContext,
-                request.Mode,
-                allowDeep: false,
-                out var question,
-                out var pageContext,
-                out var mode,
-                out error))
-            return false;
-
-        normalized = new CreateAgentRunRequest
-        {
-            Question = question!,
-            Mode = mode!,
-            PageContext = pageContext
-        };
-        return true;
-    }
-
-    public static bool TryValidate(
         CreateChatRunRequest? request,
         out CreateChatRunRequest? normalized,
         out string error)
@@ -50,7 +19,6 @@ public static partial class AgentContractValidator
                 request.Question,
                 request.PageContext,
                 request.Mode,
-                allowDeep: true,
                 out var question,
                 out var pageContext,
                 out var mode,
@@ -70,7 +38,6 @@ public static partial class AgentContractValidator
         string? rawQuestion,
         PageContextRef? rawPageContext,
         string? rawMode,
-        bool allowDeep,
         out string? question,
         out PageContextRef? pageContext,
         out string? mode,
@@ -93,9 +60,9 @@ public static partial class AgentContractValidator
         }
 
         mode = rawMode?.Trim().ToLowerInvariant();
-        if (mode != "standard" && (!allowDeep || mode != "deep"))
+        if (mode is not ("standard" or "deep"))
         {
-            error = allowDeep ? "Mode 只支持 standard 或 deep。" : "Agent Mode 只支持 standard。";
+            error = "Mode 只支持 standard 或 deep。";
             return false;
         }
 

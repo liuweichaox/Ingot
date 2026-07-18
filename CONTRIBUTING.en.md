@@ -2,14 +2,14 @@
 
 [简体中文](CONTRIBUTING.md)
 
-Thank you for contributing code, tests, documentation, or design feedback. Every change must preserve trusted production facts, read-only Chat, governed desktop Agent permissions, auditable connectors, and synchronized Chinese and English documentation.
+Thank you for contributing code, tests, documentation, or design feedback. Every change must preserve trusted production facts, read-only Ingot Chat, stable ingestion contracts, and synchronized Chinese and English documentation.
 
 ## Engineering principles
 
 - `Ingot.Domain`, `Ingot.Application`, and `Ingot.Agent` remain independent of databases, model providers, and equipment protocols.
-- Connector specifications and packages represent source-specific behavior; vendor SDKs do not enter the platform core.
+- User-owned ingestion programs and existing systems handle source-specific behavior; vendor SDKs do not enter the platform core.
 - Chat models handle question interpretation and response composition. Deterministic code owns fact retrieval, data validation, authorization, run limits, and evidence verification.
-- Chat fact tools remain read-only. Agent artifact tools write only Actor-isolated connector workspaces and platform-controlled versioned records.
+- Chat fact tools remain read-only.
 - Do not add arbitrary SQL execution, scripts, shell access, open networking, model-selected file paths, or equipment control.
 - Public contracts do not retain duplicate fields, implicit aliases, or silent compatibility behavior.
 
@@ -26,7 +26,6 @@ Install dependencies:
 ```bash
 dotnet restore Ingot.sln
 npm --prefix src/Ingot.Central.Web ci
-npm --prefix desktop ci
 npm --prefix site ci
 npm --prefix docs-site ci
 ```
@@ -35,34 +34,32 @@ See [Getting started](docs/tutorial-getting-started.en.md) for local services.
 
 ## Change requirements
 
-### Chat, Agent, and models
+### Ingot Chat and models
 
 - The core depends only on `IModelClient`, `IAnalysisTool`, and other `Ingot.Agent` contracts.
 - Model output must be typed and deterministically validated before execution.
 - Every tool defines a stable name, version, JSON Schema, access type, timeout, cancellation, and result limit.
 - Every key number and conclusion must resolve to a real `EvidenceRef`.
-- `/api/v1/chat/*` accepts only read-only fact queries. `/api/v1/agent/*` accepts connector code generation only with the fixed desktop-client identifier.
-- Chat and Agent runs, histories, events, and permissions remain isolated by product surface and Actor.
+- `/api/v1/chat/*` accepts only read-only fact queries.
+- Chat runs, histories, events, and permissions remain isolated by Actor.
 
 ### Connectors
 
 - Connectors emit normalized `ProductionEvent[]` and never leak source protocol models into core contracts.
-- Specifications include protocol, endpoint, authentication, data contract, sampling policy, and acceptance criteria.
-- Source packages include a Dockerfile, `connector.manifest.json`, and tests.
-- Generated code is built and tested only through fixed Connector Builder entries in a network-disabled Docker child container with read-only source; host builds, arbitrary commands, and runtime image pulls are prohibited.
-- Agent and Builder do not connect to live data sources. Tests use only fixed workspace fixtures and simulated input.
-- Successful tests stop at the packaging approval gate. An operator reviews and explicitly approves the current revision; the platform emits a verifiable ZIP but does not deploy, start, or schedule connectors.
+- Users implement and deploy source adapters, which submit production facts through the standard event contract.
+- Adapters submit facts through the published event contract and never leak source-protocol models into core contracts.
+- Ingestion documentation describes authentication, idempotency, timestamps, units, quality fields, and recoverable errors.
 
 ### APIs and storage
 
 - API inputs are type- and authorization-validated at the controller boundary.
-- PostgreSQL stores central facts. SQLite WAL stores shop-floor events, outbox records, Agent runs, and artifacts.
+- PostgreSQL stores central facts. SQLite WAL stores shop-floor events, outbox records, and Chat runs.
 - Database changes include initialization or migration, concurrency semantics, failure handling, and integration tests.
 - Logs, metrics, and traces exclude secrets, full prompts, and sensitive tool arguments.
 
 ### Web and documentation
 
-- Central Web exposes only Chat and obtains its availability and read-only tools from `/api/v1/chat/capabilities`. Code generation appears only in Ingot Agent Desktop.
+- Central Web's AI entry point is Ingot Chat, which obtains availability and read-only tools from `/api/v1/chat/capabilities`.
 - Any chart capability first defines a `ChartSpec` type allowlist, deterministic validation, renderer, and tests; never execute model-generated front-end code.
 - The product website describes implemented capabilities only and labels sample facts explicitly.
 - Public capability, configuration, API, or terminology changes update the README, bilingual `docs/`, product website, and docs site together.

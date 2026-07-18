@@ -33,11 +33,11 @@ export const docs: Doc[] = files.map((file) => {
 
 export const groups = [
   { key: "start", zh: "开始使用", en: "Get started", slugs: ["", "tutorial-getting-started"] },
-  { key: "chat", zh: "Chat", en: "Chat", slugs: ["chat"] },
-  { key: "agent", zh: "Ingot Agent 桌面端", en: "Ingot Agent desktop", slugs: ["desktop-agent"] },
+  { key: "chat", zh: "Ingot Chat", en: "Ingot Chat", slugs: ["chat"] },
+  { key: "ingestion", zh: "事件接入", en: "Event ingestion", slugs: ["rfc-production-events"] },
   { key: "ops", zh: "部署运维", en: "Deployment & operations", slugs: ["tutorial-deployment", "tutorial-configuration", "faq"] },
   { key: "architecture", zh: "架构开发", en: "Architecture & development", slugs: ["architecture", "design", "modules", "tutorial-development"] },
-  { key: "reference", zh: "参考资料", en: "References", slugs: ["rfc-production-events", "brand"] },
+  { key: "reference", zh: "参考资料", en: "References", slugs: ["brand"] },
 ];
 
 export const routeFor = (lang: Lang, slug: string) => `/${lang}${slug ? `/${slug}` : ""}`;

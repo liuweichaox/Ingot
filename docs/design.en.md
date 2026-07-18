@@ -1,45 +1,36 @@
 # Design
 
-## Chat design
+## Ingot Chat design
 
 ```text
 question and page context
   → typed query plan
-  → authorization, range, and tool-allowlist validation
+  → authorization, scope, and tool-allowlist validation
   → check_data_quality / get_cycle_trace
   → number and evidence verification
   → streamed answer
 ```
 
-The Chat model handles language interpretation and response composition. Deterministic Central code owns data queries, authorization, tool execution, number checks, and evidence verification. Chat runs persist with `surface=chat` and are accessible only through `/api/v1/chat/*`.
+The Chat model interprets language and composes responses. Central deterministic code owns data query, permissions, tool execution, number validation, and evidence validation. Chat runs are Actor-isolated and available only under `/api/v1/chat/*`.
 
-## Ingot Agent design
+## Event-ingestion design
 
-```text
-structured connector requirement
-  → typed code plan
-  → Actor workspace tools
-  → fixed build/test
-  → bounded repair
-  → awaiting-package-approval
-  → operator approval
-  → SHA-256 ZIP
-```
+Teams map any source to `ProductionEvent` batches and call `/api/v1/events:batch`. Central deterministically:
 
-The Tauri 2 desktop calls Agent endpoints through a Rust network boundary. The server accepts only `X-Ingot-Client: ingot-agent-desktop`. `Ingot.Agent` supplies a provider-neutral workflow. `Ingot.Agent.Infrastructure` adapts models, SQLite, and tools. `Ingot.Connector.Builder` owns workspaces, fixed container entries, the approval gate, and content-addressed packaging.
+1. validates the Edge token, `edgeId`, batch size, and event fields;
+2. validates source prefixes, event IDs, and sequence uniqueness;
+3. handles duplicate submission by `eventId` and `(edgeId, seq)`;
+4. persists central facts and returns `ackSeq`;
+5. exposes query, SSE, and correlation-ID cycle fact chains.
 
-The model cannot select host paths, shell commands, images, or working directories. Agent and Builder do not connect to data sources; network-disabled tests read only fixed workspace fixtures and simulated input. Bounded build/test errors can repair only current-workspace code. Passing tests never package automatically.
-
-## Connector contract
-
-The default template uses stdin JSONL input and stdout ProductionEvent JSONL output. The external runtime owns batching, Connector Token use, submission to Connector Host, process supervision, and upgrades. Connector Host validates events, commits them to SQLite, and ships them through an outbox.
+Teams choose source protocols, local buffering, retry timing, and process supervision. The standard contract keeps those implementation details decoupled from Central.
 
 ## Isolation and recovery
 
-- Chat and Agent create, list, read, SSE, cancellation, and history are mutually isolated.
-- Every run uses Actor authorization; Agent source and packages add workspace boundaries.
-- SSE uses monotonic event sequences and resumes with `Last-Event-ID`.
-- After service restart, interrupted runs move to an explicit terminal state rather than silently continuing writes.
-- Package download recomputes SHA-256, which the desktop verifies before saving.
+- Chat creation, history, reads, SSE, and cancellation are Actor-authorized;
+- SSE uses monotonic event sequences; clients resume with `Last-Event-ID`;
+- interrupted Chat runs enter an explicit terminal state after service restart;
+- event batches are validated as a unit; callers should retain submitted sequences and use `ackSeq` for retries;
+- Chat never holds source credentials or calls field networks or equipment interfaces.
 
-See [Chat](chat.en.md) and [Ingot Agent desktop](desktop-agent.en.md).
+See [Ingot Chat](chat.en.md) and the [production event specification](rfc-production-events.en.md).

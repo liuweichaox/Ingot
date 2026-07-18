@@ -1,4 +1,4 @@
-export function resolveUrl(url) {
+function resolveUrl(url) {
   return url;
 }
 
@@ -19,12 +19,6 @@ export function getJson(url, options = {}) {
 
 export function postJson(url, body, options = {}) {
   return jsonRequest(url, { ...options, method: "POST", body: JSON.stringify(body) });
-}
-
-export async function getBlob(url, options = {}) {
-  const response = await fetch(resolveUrl(url), options);
-  if (!response.ok) throw new Error(`HTTP ${response.status} ${response.statusText}`);
-  return response.blob();
 }
 
 export async function streamSse(url, { headers = {}, signal, onEvent, lastEventId = 0 }) {

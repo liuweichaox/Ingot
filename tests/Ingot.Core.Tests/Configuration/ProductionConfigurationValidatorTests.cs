@@ -25,91 +25,11 @@ public sealed class ProductionConfigurationValidatorTests
             ["EventIngest:EdgeTokens:EDGE-001"] = "edge-token-with-at-least-24-characters",
             ["InspectionSubmission:RequireToken"] = "true",
             ["InspectionSubmission:ActorTokens:OPERATOR-001"] = "operator-token-with-at-least-24-characters",
-            ["Agent:Enabled"] = "false",
+            ["Chat:Enabled"] = "false",
             ["Cors:AllowedOrigins:0"] = "https://ingotstack.com"
         });
 
         CentralValidator.Validate(configuration);
-    }
-
-    [Fact]
-    public void Central_RejectsDeterministicProviderInProduction()
-    {
-        var configuration = Build(new Dictionary<string, string?>
-        {
-            ["ConnectionStrings:Events"] = "Host=postgres;Database=ingot",
-            ["EventIngest:RequireToken"] = "true",
-            ["EventIngest:EdgeTokens:EDGE-001"] = "edge-token-with-at-least-24-characters",
-            ["InspectionSubmission:RequireToken"] = "true",
-            ["InspectionSubmission:ActorTokens:OPERATOR-001"] = "operator-token-with-at-least-24-characters",
-            ["Agent:Enabled"] = "true",
-            ["Agent:Provider"] = "Deterministic",
-            ["Agent:RequireToken"] = "true",
-            ["Agent:ActorTokens:OPERATOR-001"] = "agent-token-with-at-least-24-characters",
-            ["Cors:AllowedOrigins:0"] = "https://ingotstack.com"
-        });
-
-        var error = Assert.Throws<InvalidOperationException>(() => CentralValidator.Validate(configuration));
-        Assert.Contains("Agent:Provider must be OpenAI", error.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void Central_AcceptsConfiguredOpenAiProviderInProduction()
-    {
-        var configuration = Build(new Dictionary<string, string?>
-        {
-            ["ConnectionStrings:Events"] = "Host=postgres;Database=ingot",
-            ["EventIngest:RequireToken"] = "true",
-            ["EventIngest:EdgeTokens:EDGE-001"] = "edge-token-with-at-least-24-characters",
-            ["InspectionSubmission:RequireToken"] = "true",
-            ["InspectionSubmission:ActorTokens:OPERATOR-001"] = "operator-token-with-at-least-24-characters",
-            ["Agent:Enabled"] = "true",
-            ["Agent:Provider"] = "OpenAI",
-            ["Agent:FastModel"] = "fast-model",
-            ["Agent:ReasoningModel"] = "reasoning-model",
-            ["Agent:RequireToken"] = "true",
-            ["Agent:ActorTokens:operator"] = "agent-token-with-at-least-24-characters",
-            ["Agent:PackagingApprovers:0"] = "operator",
-            ["OPENAI_API_KEY"] = "secret-store-value",
-            ["ConnectorBuilder:ContainerWorkspaceVolume"] = "ingot-connector-workspaces",
-            ["Cors:AllowedOrigins:0"] = "https://ingotstack.com"
-        });
-
-        CentralValidator.Validate(configuration);
-    }
-
-    [Fact]
-    public void Central_RejectsAgentWithoutConnectorWorkspaceVolume()
-    {
-        var configuration = Build(new Dictionary<string, string?>
-        {
-            ["ConnectionStrings:Events"] = "Host=postgres;Database=ingot",
-            ["EventIngest:RequireToken"] = "true",
-            ["EventIngest:EdgeTokens:EDGE-001"] = "edge-token-with-at-least-24-characters",
-            ["InspectionSubmission:RequireToken"] = "true",
-            ["InspectionSubmission:ActorTokens:OPERATOR-001"] = "operator-token-with-at-least-24-characters",
-            ["Agent:Enabled"] = "true",
-            ["Agent:Provider"] = "OpenAI",
-            ["Agent:FastModel"] = "fast-model",
-            ["Agent:ReasoningModel"] = "reasoning-model",
-            ["Agent:RequireToken"] = "true",
-            ["Agent:ActorTokens:operator"] = "agent-token-with-at-least-24-characters",
-            ["OPENAI_API_KEY"] = "secret-store-value",
-            ["Cors:AllowedOrigins:0"] = "https://ingotstack.com"
-        });
-
-        var error = Assert.Throws<InvalidOperationException>(() => CentralValidator.Validate(configuration));
-        Assert.Contains("ConnectorBuilder:ContainerWorkspaceVolume is required", error.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void AgentDefaults_MatchPublishedExecutionLimits()
-    {
-        var options = new Ingot.Agent.AgentOptions();
-
-        Assert.Equal(24, options.MaxToolCalls);
-        Assert.Equal(8, options.MaxIterations);
-        Assert.Equal(300, options.MaxRunSeconds);
     }
 
     [Fact]
@@ -122,7 +42,6 @@ public sealed class ProductionConfigurationValidatorTests
             ["EventIngest:EdgeTokens:EDGE-001"] = "edge-token-with-at-least-24-characters",
             ["InspectionSubmission:RequireToken"] = "true",
             ["InspectionSubmission:ActorTokens:OPERATOR-001"] = "operator-token-with-at-least-24-characters",
-            ["Agent:Enabled"] = "false",
             ["Chat:Enabled"] = "true",
             ["Chat:Provider"] = "OpenAI",
             ["Chat:FastModel"] = "chat-fast-model",
@@ -147,7 +66,6 @@ public sealed class ProductionConfigurationValidatorTests
             ["EventIngest:EdgeTokens:EDGE-001"] = "edge-token-with-at-least-24-characters",
             ["InspectionSubmission:RequireToken"] = "true",
             ["InspectionSubmission:ActorTokens:OPERATOR-001"] = "operator-token-with-at-least-24-characters",
-            ["Agent:Enabled"] = "false",
             ["Chat:Enabled"] = "true",
             ["Chat:Provider"] = "OpenAI",
             ["Chat:FastModel"] = "chat-fast-model",
@@ -163,16 +81,12 @@ public sealed class ProductionConfigurationValidatorTests
     }
 
     [Fact]
-    public void ChatDefaults_AreIndependentFromAgentDefaults()
+    public void ChatDefaults_MatchPublishedLimits()
     {
         var chat = new Ingot.Agent.ChatOptions();
-        var agent = new Ingot.Agent.AgentOptions();
 
         Assert.Equal(8, chat.MaxToolCalls);
         Assert.Equal(60, chat.MaxRunSeconds);
-        Assert.NotEqual(agent.MaxToolCalls, chat.MaxToolCalls);
-        Assert.NotSame(agent.ActorTokens, chat.ActorTokens);
-        Assert.NotSame(agent.ModelPricing, chat.ModelPricing);
     }
 
     [Fact]
@@ -206,13 +120,13 @@ public sealed class ProductionConfigurationValidatorTests
     }
 
     [Fact]
-    public void DisabledAgent_DoesNotConstructProviderClient()
+    public void DisabledChat_DoesNotConstructProviderClient()
     {
         var configuration = Build(new Dictionary<string, string?>
         {
-            ["Agent:Enabled"] = "false",
-            ["Agent:Provider"] = "OpenAI",
-            ["Agent:DatabasePath"] = Path.Combine(Path.GetTempPath(), $"ingot-disabled-agent-{Guid.NewGuid():N}.db")
+            ["Chat:Enabled"] = "false",
+            ["Chat:Provider"] = "OpenAI",
+            ["Chat:DatabasePath"] = Path.Combine(Path.GetTempPath(), $"ingot-disabled-chat-{Guid.NewGuid():N}.db")
         });
         var services = new ServiceCollection();
         services.AddSingleton<IConfiguration>(configuration);
@@ -222,7 +136,7 @@ public sealed class ProductionConfigurationValidatorTests
         using var provider = services.BuildServiceProvider();
 
         var capabilities = provider.GetRequiredService<Ingot.Agent.IAgentRuntime>()
-            .GetCapabilities(Ingot.Contracts.Agents.ProductSurfaces.Agent);
+            .GetCapabilities(Ingot.Contracts.Agents.ProductSurfaces.Chat);
 
         Assert.False(capabilities.Enabled);
         Assert.Empty(capabilities.Modes);

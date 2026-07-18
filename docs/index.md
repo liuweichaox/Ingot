@@ -1,19 +1,23 @@
 # Ingot 文档
 
-Ingot 将不同数据源转换为标准生产事件，并在 Central 中形成可信事实。Central Web 的 **Chat** 用于只读查询和问题定位；下载安装的 **Ingot Agent** 桌面端只用于连接器代码生成、构建、测试和打包。
+Ingot 将不同来源的数据保存为标准生产事实，并在 Central Web 中提供 **Ingot Chat** 对话查询。使用方自行实现数据源适配，将 `ProductionEvent` 或 `InspectionRecord` 提交到公开 API；Ingot 不内置现场设备协议。
 
 ## 开始使用
 
 1. [快速开始](tutorial-getting-started.md)
-2. [Chat](chat.md)
-3. [Ingot Agent 桌面端](desktop-agent.md)
+2. [事件接入](rfc-production-events.md)
+3. [Ingot Chat](chat.md)
 4. [部署](tutorial-deployment.md)
 5. [配置](tutorial-configuration.md)
 
-## Chat 与 Agent
+## Ingot Chat
 
-- [Chat](chat.md)：Central Web 对话、只读事实工具、证据和 API。
-- [Ingot Agent 桌面端](desktop-agent.md)：下载、技术栈、代码生成工作流、构建测试、人工批准和连接器运行契约。
+- [Ingot Chat](chat.md)：Central Web 中的只读生产事实对话、证据与 HTTP API。
+
+## 事件接入
+
+- [生产事件规范](rfc-production-events.md)：`ProductionEvent` 批次、认证、去重、查询和扩展规则。
+- [快速开始](tutorial-getting-started.md)：从启动 Central 到提交第一批事件。
 
 ## 部署运维
 

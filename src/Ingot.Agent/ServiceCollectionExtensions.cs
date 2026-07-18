@@ -9,7 +9,6 @@ public static class ServiceCollectionExtensions
         this IServiceCollection services,
         IConfiguration configuration)
     {
-        services.Configure<AgentOptions>(configuration.GetSection("Agent"));
         services.Configure<ChatOptions>(configuration.GetSection("Chat"));
         services.AddSingleton<DeterministicModelClient>();
         services.AddSingleton<IModelClient>(static provider =>

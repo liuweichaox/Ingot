@@ -1,47 +1,104 @@
 # Getting started
 
-## Start Central and Connector Host
+This tutorial starts Central, submits a standard production-event batch, and uses Ingot Chat to query a cycle fact chain. Source adaptation is implemented by your team; map its output to the public event contract.
 
-Prerequisites: .NET 10, Node.js 22.13+, Docker Engine 26+, and Docker Compose.
+## 1. Prepare the environment
+
+- .NET SDK 10
+- Node.js 22.13 or later
+- Docker Engine 26 or later with Docker Compose
+- OpenSSL
+
+## 2. Start Central
 
 ```bash
+git clone https://github.com/liuweichaox/Ingot.git
+cd Ingot
+
 export INGOT_POSTGRES_PASSWORD="$(openssl rand -hex 24)"
 export INGOT_EDGE_TOKEN="$(openssl rand -hex 24)"
 export INGOT_OPERATOR_TOKEN="$(openssl rand -hex 24)"
-export INGOT_CONNECTOR_TOKEN="$(openssl rand -hex 24)"
+
 docker compose -f docker-compose.app.yml up -d --build
 ```
 
-Open `http://localhost:3000`. Central Web provides events, inspections, logs, metrics, and Chat. Connector Host accepts normalized events at `http://localhost:8001`.
+Wait for the health check:
 
-## Use Chat
+```bash
+curl http://localhost:8000/health
+```
 
-Chat is disabled by default. Configure `Chat:Enabled`, models, Actor tokens, and Actor data scopes, then recreate Central API. Open **Chat** in Central Web and enter a question with optional asset or cycle context.
+Open <http://localhost:3000> for Central Web.
+
+The default Compose stack starts PostgreSQL, Central API, and Central Web. If an adapter can reach Central, use the direct batch API in this tutorial.
+
+### Optional: enable Connector Host
+
+When a plant network needs a local SQLite outbox, enable the Connector Host profile:
+
+```bash
+export INGOT_CONNECTOR_TOKEN="$(openssl rand -hex 24)"
+docker compose -f docker-compose.app.yml --profile connector-host up -d connector-host
+```
+
+The Host listens on <http://localhost:8001>, accepts `ProductionEvent[]`, and sends standard batches to Central with at-least-once delivery. The team deploys and operates this local ingress.
+
+## 3. Submit the first production-event batch
+
+Call Central from your own source-adaptation process. This example sends one `cycle.started` event:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/events:batch \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer ${INGOT_EDGE_TOKEN}" \
+  -d '{
+    "edgeId": "EDGE-001",
+    "events": [{
+      "eventId": "0198a820-7f91-7a5d-8c44-111111111111",
+      "eventType": "cycle.started",
+      "eventTypeVersion": 1,
+      "occurredAt": "2026-07-18T08:00:00Z",
+      "recordedAt": "2026-07-18T08:00:00Z",
+      "source": "edge/EDGE-001/demo/FURNACE-01",
+      "subject": { "type": "asset", "id": "FURNACE-01" },
+      "context": { "workpiece_id": "WP-001" },
+      "data": {},
+      "correlationId": "CYCLE-001",
+      "seq": 1
+    }]
+  }'
+```
+
+`ackSeq` in the response means Central has safely accepted, or recognized as a duplicate, the contiguous sequence. Retain local sequence state and retry only unacknowledged events.
+
+## 4. Enable Chat in production
+
+The default Compose stack keeps Chat disabled. The following configuration enables OpenAI, Actor `operator`, and full fact access:
+
+```bash
+export INGOT_CHAT_ENABLED=true
+export INGOT_CHAT_PROVIDER=OpenAI
+export INGOT_CHAT_FAST_MODEL="<fast-model>"
+export INGOT_CHAT_REASONING_MODEL="<reasoning-model>"
+export OPENAI_API_KEY="<secret>"
+export INGOT_CHAT_OPERATOR_TOKEN="$(openssl rand -hex 24)"
+export INGOT_CHAT_OPERATOR_ALLOW_ALL=true
+
+docker compose -f docker-compose.app.yml up -d --build
+```
+
+For production, replace broad access with the actual data scope required by each Actor. Central Web and the Chat API use `operator` with `INGOT_CHAT_OPERATOR_TOKEN`.
+
+## 5. Query events and use Chat
+
+```bash
+curl "http://localhost:8000/api/v1/events?edgeId=EDGE-001&correlationId=CYCLE-001"
+```
+
+Then open **Chat** in Central Web and ask:
 
 ```text
 What happened during this cycle, and is its data complete?
 ```
 
-Chat calls only `check_data_quality` and `get_cycle_trace`, then returns tool activity, findings, limitations, and evidence. See [Chat](chat.en.md) for the complete interface.
-
-## Download Ingot Agent
-
-Download Ingot Agent Desktop from the [latest GitHub Release](https://github.com/liuweichaox/Ingot/releases/latest). On first launch, enter:
-
-1. Central API URL;
-2. Actor ID;
-3. Actor token.
-
-The desktop verifies Agent capabilities before creating a structured connector-code task. It presents SSE progress, source, and network-disabled container build/fixture-test output. Agent does not connect to data sources. After tests pass, an authorized Actor reviews and approves packaging. The desktop generates the ZIP, verifies the server SHA-256, and downloads it.
-
-See [Ingot Agent desktop](desktop-agent.en.md) for the full workflow. Central Web does not expose Agent code generation.
-
-## Verify normalized event ingress
-
-An external connector transforms source data into `ProductionEvent[]` and submits it to `POST http://localhost:8001/api/v1/connector-events` with `INGOT_CONNECTOR_TOKEN`. The default Agent template only transforms stdin JSONL into stdout ProductionEvent JSONL. The external runtime owns batching, authentication, and submission.
-
-## Complete gate
-
-```bash
-./scripts/verify.sh
-```
+Chat returns read-only tool activity, limitations, and fact references. See the [production event specification](rfc-production-events.en.md) for all fields and [Ingot Chat](chat.en.md) for Chat behavior.

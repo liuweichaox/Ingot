@@ -14,27 +14,13 @@ public sealed class AgentRuntime : IAgentRuntime
         "check_data_quality",
         "get_cycle_trace"
     };
-    private static readonly IReadOnlySet<string> AgentToolNames = new HashSet<string>(StringComparer.Ordinal)
-    {
-        "draft_connector_specification",
-        "create_connector_workspace",
-        "list_connector_workspace_files",
-        "read_connector_workspace_file",
-        "write_connector_workspace_file",
-        "build_connector_workspace",
-        "test_connector_workspace",
-        "package_connector_workspace"
-    };
     private const string ChatPromptVersion = "ingot-chat-v1";
-    private const string AgentPromptVersion = "ingot-desktop-agent-v1";
     private const string ChatToolsetVersion = "production-facts-readonly-v1";
-    private const string AgentToolsetVersion = "connector-engineering-v1";
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _active = new(StringComparer.Ordinal);
     private readonly IEvidenceVerifier _evidenceVerifier;
     private readonly ILogger<AgentRuntime> _logger;
     private readonly IInvestigationWorkflow _investigationWorkflow;
     private readonly IModelRouter _models;
-    private readonly AgentOptions _options;
     private readonly ChatOptions _chatOptions;
     private readonly IPlanValidator _planValidator;
     private readonly IAgentRunStore _store;
@@ -47,7 +33,6 @@ public sealed class AgentRuntime : IAgentRuntime
         IPlanValidator planValidator,
         IEvidenceVerifier evidenceVerifier,
         IInvestigationWorkflow investigationWorkflow,
-        IOptions<AgentOptions> options,
         IOptions<ChatOptions> chatOptions,
         ILogger<AgentRuntime> logger)
     {
@@ -56,7 +41,6 @@ public sealed class AgentRuntime : IAgentRuntime
         _planValidator = planValidator;
         _evidenceVerifier = evidenceVerifier;
         _investigationWorkflow = investigationWorkflow;
-        _options = options.Value;
         _chatOptions = chatOptions.Value;
         _logger = logger;
         _tools = tools.ToDictionary(static tool => tool.Definition.Name, StringComparer.Ordinal);
@@ -65,26 +49,21 @@ public sealed class AgentRuntime : IAgentRuntime
     public async Task<AgentRunSnapshot> StartAsync(
         string surface,
         string actorId,
-        CreateAgentRunRequest request,
+        CreateChatRunRequest request,
         CancellationToken ct = default)
     {
         ValidateSurface(surface);
-        var settings = GetSettings(surface);
+        var settings = GetSettings();
         if (!settings.Enabled)
-            throw new InvalidOperationException(surface == ProductSurfaces.Chat
-                ? "Chat 功能尚未启用。"
-                : "Ingot Agent Desktop 代码生成功能尚未启用。");
-        if (surface == ProductSurfaces.Agent && !string.Equals(request.Mode, "standard", StringComparison.Ordinal))
-            throw new InvalidOperationException("Ingot Agent Desktop 只支持 standard 代码生成模式。");
-        if (surface == ProductSurfaces.Chat &&
-            string.Equals(request.Mode, "deep", StringComparison.Ordinal) && !settings.EnableDeepAnalysis)
+            throw new InvalidOperationException("Chat 功能尚未启用。");
+        if (string.Equals(request.Mode, "deep", StringComparison.Ordinal) && !settings.EnableDeepInvestigation)
             throw new InvalidOperationException("Chat 深度分析模式尚未启用。");
 
         var tools = ToolsForSurface(surface);
         if (tools.Count == 0)
             throw new InvalidOperationException($"{surface} 没有已注册工具。");
 
-        var model = _models.GetClient(surface, request.Mode == "deep" ? ModelRole.Reasoning : ModelRole.Fast);
+        var model = _models.GetClient(ProductSurfaces.Chat, request.Mode == "deep" ? ModelRole.Reasoning : ModelRole.Fast);
         if (!string.Equals(model.Provider, settings.Provider, StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException($"{surface} 配置的模型 Provider 没有对应客户端。");
         var run = new AgentRunSnapshot
@@ -92,17 +71,17 @@ public sealed class AgentRuntime : IAgentRuntime
             RunId = Guid.CreateVersion7().ToString(),
             ActorId = actorId,
             Surface = surface,
-            Purpose = RunPurposes.ForSurface(surface),
+            Purpose = RunPurposes.ReadOnlyAnalysis,
             Question = request.Question,
             PageContext = request.PageContext,
             Mode = request.Mode,
             Status = AgentRunStatuses.Queued,
             ModelProvider = model.Provider,
             Model = model.Model,
-            PromptVersion = surface == ProductSurfaces.Chat ? ChatPromptVersion : AgentPromptVersion,
-            ToolsetVersion = surface == ProductSurfaces.Chat ? ChatToolsetVersion : AgentToolsetVersion,
+            PromptVersion = ChatPromptVersion,
+            ToolsetVersion = ChatToolsetVersion,
             CreatedAt = DateTimeOffset.UtcNow,
-            WorkflowStage = surface == ProductSurfaces.Chat ? "analysis" : ConnectorWorkflowStages.Intake,
+            WorkflowStage = "analysis",
             Usage = new AgentUsageSummary()
         };
         await _store.CreateAsync(run, ct).ConfigureAwait(false);
@@ -110,9 +89,7 @@ public sealed class AgentRuntime : IAgentRuntime
         var timeout = TimeSpan.FromSeconds(Math.Clamp(settings.MaxRunSeconds, 1, 900));
         var runCts = new CancellationTokenSource(timeout);
         if (!_active.TryAdd(run.RunId, runCts))
-            throw new InvalidOperationException(surface == ProductSurfaces.Chat
-                ? "无法注册 Chat 运行。"
-                : "无法注册桌面代码生成运行。");
+            throw new InvalidOperationException("无法注册 Chat 运行。");
         _ = ExecuteAsync(run, request, model, tools, settings, runCts.Token);
         return run;
     }
@@ -120,21 +97,21 @@ public sealed class AgentRuntime : IAgentRuntime
     public AgentCapabilities GetCapabilities(string surface)
     {
         ValidateSurface(surface);
-        var settings = GetSettings(surface);
+        var settings = GetSettings();
         var tools = ToolsForSurface(surface);
         return new()
         {
             Surface = surface,
             Purpose = RunPurposes.ForSurface(surface),
             Enabled = settings.Enabled,
-            MultiAgentEnabled = settings.Enabled && settings.EnableDeepAnalysis,
+            DeepInvestigationEnabled = settings.Enabled && settings.EnableDeepInvestigation,
             Provider = settings.Provider,
             FastModel = settings.FastModel,
             ReasoningModel = settings.ReasoningModel,
             Modes = settings.Enabled
-                ? settings.EnableDeepAnalysis ? ["standard", "deep"] : ["standard"]
+                ? settings.EnableDeepInvestigation ? ["standard", "deep"] : ["standard"]
                 : [],
-            Roles = settings.Enabled && settings.EnableDeepAnalysis ? InvestigationRoles.All : [],
+            Roles = settings.Enabled && settings.EnableDeepInvestigation ? InvestigationRoles.All : [],
             Tools = tools.Values.Select(static tool => new AgentToolCapability
             {
                 Name = tool.Definition.Name,
@@ -144,14 +121,6 @@ public sealed class AgentRuntime : IAgentRuntime
                 Purpose = tool.Definition.Purpose,
                 Access = tool.Definition.Access
             }).OrderBy(static tool => tool.Name, StringComparer.Ordinal).ToArray(),
-            ArtifactKinds = surface == ProductSurfaces.Agent
-                ? AgentArtifactKinds.All.Order(StringComparer.Ordinal).ToArray()
-                : [],
-            ConnectorSpecificationWorkflow = tools.ContainsKey("draft_connector_specification"),
-            ConnectorWorkspaceWorkflow = tools.ContainsKey("create_connector_workspace") &&
-                                         tools.ContainsKey("build_connector_workspace") &&
-                                         tools.ContainsKey("test_connector_workspace"),
-            MaxIterations = settings.MaxIterations,
             MaxToolCalls = settings.MaxToolCalls,
             MaxRunSeconds = settings.MaxRunSeconds,
             MaxDiscussionRounds = settings.MaxDiscussionRounds,
@@ -262,7 +231,7 @@ public sealed class AgentRuntime : IAgentRuntime
 
     private async Task ExecuteAsync(
         AgentRunSnapshot initial,
-        CreateAgentRunRequest request,
+        CreateChatRunRequest request,
         IModelClient model,
         IReadOnlyDictionary<string, IAnalysisTool> tools,
         SurfaceSettings settings,
@@ -306,10 +275,10 @@ public sealed class AgentRuntime : IAgentRuntime
             var invocations = new List<AgentToolInvocation>();
             IReadOnlyList<AnalysisToolCall> pendingCalls = plan.ToolCalls;
             AnalysisToolCall? previousCall = null;
-            var maxIterations = settings.MaxIterations;
             var maxToolCalls = settings.MaxToolCalls;
-            for (var iteration = 1; pendingCalls.Count > 0 && iteration <= maxIterations; iteration++)
+            if (pendingCalls.Count > 0)
             {
+                const int iteration = 1;
                 run = run with { Iteration = iteration };
                 await _store.UpdateAsync(run, CancellationToken.None).ConfigureAwait(false);
                 await EmitAsync(run.RunId, AgentStreamEventTypes.IterationStarted,
@@ -368,16 +337,11 @@ public sealed class AgentRuntime : IAgentRuntime
                             Evidence = result.Evidence
                         };
                         invocations[^1] = invocation;
-                        var nextStage = InferWorkflowStage(run.WorkflowStage, call.Tool, result);
-                        var stageChanged = !string.Equals(run.WorkflowStage, nextStage, StringComparison.Ordinal);
-                        run = run with { ToolInvocations = invocations.ToArray(), WorkflowStage = nextStage };
+                        run = run with { ToolInvocations = invocations.ToArray() };
                         await _store.UpdateAsync(run, CancellationToken.None).ConfigureAwait(false);
                         await EmitAsync(run.RunId, AgentStreamEventTypes.ToolCompleted,
                                 new { tool = invocation.Tool, result.Summary, result.Evidence, iteration }, ct)
                             .ConfigureAwait(false);
-                        if (stageChanged)
-                            await EmitAsync(run.RunId, AgentStreamEventTypes.WorkflowStageChanged,
-                                new { stage = nextStage, iteration }, ct).ConfigureAwait(false);
                     }
                     catch (Exception ex) when (ex is not OperationCanceledException)
                     {
@@ -399,51 +363,6 @@ public sealed class AgentRuntime : IAgentRuntime
                 await EmitAsync(run.RunId, AgentStreamEventTypes.IterationCompleted,
                     new { iteration, stage = run.WorkflowStage, toolCalls = invocations.Count }, ct).ConfigureAwait(false);
 
-                if (run.Surface == ProductSurfaces.Agent &&
-                    run.WorkflowStage == ConnectorWorkflowStages.AwaitingPackageApproval)
-                {
-                    await EmitAsync(run.RunId, AgentStreamEventTypes.ApprovalRequired,
-                        new { stage = run.WorkflowStage, message = "测试已通过。请由操作者检查代码并批准打包。" }, ct)
-                        .ConfigureAwait(false);
-                    break;
-                }
-                if (run.Surface != ProductSurfaces.Agent ||
-                    run.WorkflowStage == ConnectorWorkflowStages.Packaged ||
-                    !model.SupportsToolContinuation || invocations.Count >= maxToolCalls)
-                    break;
-
-                var continuationResult = await model.ContinueAsync(
-                    new AgentContinuationContext
-                    {
-                        Request = request,
-                        Plan = plan,
-                        ToolResults = results.ToArray(),
-                        Iteration = iteration,
-                        RemainingToolCalls = maxToolCalls - invocations.Count,
-                        WorkflowStage = run.WorkflowStage
-                    },
-                    tools.Values.Select(static x => x.Definition).ToArray(),
-                    ct).ConfigureAwait(false);
-                modelCalls.Add(continuationResult.Usage);
-                RecordModelCall(continuationResult.Usage);
-                var continuation = continuationResult.Value;
-                if (continuation.IsComplete || continuation.ToolCalls.Count == 0)
-                    break;
-                var continuationPlan = new AnalysisPlan
-                {
-                    Surface = run.Surface,
-                    Intent = plan.Intent,
-                    Summary = continuation.Summary,
-                    From = plan.From,
-                    To = plan.To,
-                    ToolCalls = continuation.ToolCalls
-                };
-                if (!_planValidator.TryValidate(run.Surface, continuationPlan, tools, out var continuationError) ||
-                    continuation.ToolCalls.Count > maxToolCalls - invocations.Count)
-                    throw new InvalidOperationException(continuationError.Length == 0
-                        ? "Agent 续行超过剩余工具调用额度。"
-                        : continuationError);
-                pendingCalls = continuation.ToolCalls;
             }
 
             if (!_evidenceVerifier.TryVerify(results, out var evidence, out var evidenceError))
@@ -455,8 +374,7 @@ public sealed class AgentRuntime : IAgentRuntime
             var insufficientData = results.Any(static result =>
                 string.Equals(result.Outcome, AnalysisToolOutcomes.InsufficientData, StringComparison.Ordinal));
             InvestigationVerdict? investigation = null;
-            if (!insufficientData && run.Surface == ProductSurfaces.Chat &&
-                settings.EnableDeepAnalysis && request.Mode == "deep")
+            if (!insufficientData && settings.EnableDeepInvestigation && request.Mode == "deep")
             {
                 var investigationResult = await _investigationWorkflow.RunAsync(
                         request,
@@ -583,32 +501,6 @@ public sealed class AgentRuntime : IAgentRuntime
            left.Arguments.OrderBy(static item => item.Key, StringComparer.Ordinal)
                .SequenceEqual(right.Arguments.OrderBy(static item => item.Key, StringComparer.Ordinal));
 
-    private static string InferWorkflowStage(
-        string current,
-        string tool,
-        AnalysisToolResult result)
-    {
-        var succeeded = !result.Data.TryGetProperty("result", out var command) ||
-                        !command.TryGetProperty("succeeded", out var successValue) ||
-                        successValue.GetBoolean();
-        return tool switch
-        {
-            "draft_connector_specification" => ConnectorWorkflowStages.AwaitingSpecificationApproval,
-            "create_connector_workspace" => ConnectorWorkflowStages.Coding,
-            "write_connector_workspace_file" => current == ConnectorWorkflowStages.Fixing
-                ? ConnectorWorkflowStages.Fixing
-                : ConnectorWorkflowStages.Coding,
-            "build_connector_workspace" => succeeded
-                ? ConnectorWorkflowStages.Testing
-                : ConnectorWorkflowStages.Fixing,
-            "test_connector_workspace" => succeeded
-                ? ConnectorWorkflowStages.AwaitingPackageApproval
-                : ConnectorWorkflowStages.Fixing,
-            "package_connector_workspace" => ConnectorWorkflowStages.Packaged,
-            _ => current
-        };
-    }
-
     private static AgentUsageSummary BuildUsage(
         IReadOnlyList<ModelCallUsage> calls,
         int toolCalls,
@@ -667,47 +559,25 @@ public sealed class AgentRuntime : IAgentRuntime
     private IReadOnlyDictionary<string, IAnalysisTool> ToolsForSurface(string surface)
         => _tools.Values
             .Where(tool => string.Equals(tool.Definition.Surface, surface, StringComparison.Ordinal))
-            .Where(tool => surface switch
-            {
-                ProductSurfaces.Chat => ChatToolNames.Contains(tool.Definition.Name) &&
-                                        tool.Definition.Access == AgentToolAccess.Read,
-                ProductSurfaces.Agent => AgentToolNames.Contains(tool.Definition.Name),
-                _ => false
-            })
+            .Where(tool => ChatToolNames.Contains(tool.Definition.Name) &&
+                           tool.Definition.Access == AgentToolAccess.Read)
             .ToDictionary(static tool => tool.Definition.Name, StringComparer.Ordinal);
 
-    private SurfaceSettings GetSettings(string surface) => surface switch
-    {
-        ProductSurfaces.Chat => new SurfaceSettings(
+    private SurfaceSettings GetSettings() => new(
             _chatOptions.Enabled,
             _chatOptions.Provider,
             _chatOptions.FastModel,
             _chatOptions.ReasoningModel,
             Math.Clamp(_chatOptions.MaxToolCalls, 1, 8),
-            1,
             Math.Clamp(_chatOptions.MaxRunSeconds, 1, 900),
-            _chatOptions.EnableMultiAgent,
+            _chatOptions.EnableDeepInvestigation,
             Math.Clamp(_chatOptions.MaxDiscussionRounds, 1, 5),
             Math.Clamp(_chatOptions.MaxDiscussionTurns, 3, 15),
-            _chatOptions.ModelPricing),
-        ProductSurfaces.Agent => new SurfaceSettings(
-            _options.Enabled,
-            _options.Provider,
-            _options.FastModel,
-            _options.ReasoningModel,
-            Math.Clamp(_options.MaxToolCalls, 1, 32),
-            Math.Clamp(_options.MaxIterations, 1, 20),
-            Math.Clamp(_options.MaxRunSeconds, 1, 900),
-            false,
-            0,
-            0,
-            _options.ModelPricing),
-        _ => throw new ArgumentOutOfRangeException(nameof(surface), surface, "不支持的产品面。")
-    };
+            _chatOptions.ModelPricing);
 
     private static void ValidateSurface(string surface)
     {
-        if (!ProductSurfaces.All.Contains(surface))
+        if (!string.Equals(surface, ProductSurfaces.Chat, StringComparison.Ordinal))
             throw new ArgumentOutOfRangeException(nameof(surface), surface, "不支持的产品面。");
     }
 
@@ -717,9 +587,8 @@ public sealed class AgentRuntime : IAgentRuntime
         string FastModel,
         string ReasoningModel,
         int MaxToolCalls,
-        int MaxIterations,
         int MaxRunSeconds,
-        bool EnableDeepAnalysis,
+        bool EnableDeepInvestigation,
         int MaxDiscussionRounds,
         int MaxDiscussionTurns,
         IReadOnlyDictionary<string, ModelPricingOptions> ModelPricing);

@@ -1,32 +1,5 @@
 namespace Ingot.Agent;
 
-public sealed class AgentOptions
-{
-    public bool Enabled { get; set; }
-
-    public string Provider { get; set; } = "Deterministic";
-
-    public string FastModel { get; set; } = "deterministic-v1";
-
-    public string ReasoningModel { get; set; } = "deterministic-v1";
-
-    public int MaxToolCalls { get; set; } = 24;
-
-    public int MaxIterations { get; set; } = 8;
-
-    public int MaxRunSeconds { get; set; } = 300;
-
-    public bool RequireToken { get; set; } = true;
-
-    public Dictionary<string, string> ActorTokens { get; set; }
-        = new(StringComparer.OrdinalIgnoreCase);
-
-    public IReadOnlyList<string> PackagingApprovers { get; set; } = ["operator"];
-
-    public Dictionary<string, ModelPricingOptions> ModelPricing { get; set; }
-        = new(StringComparer.OrdinalIgnoreCase);
-}
-
 public sealed class ChatOptions
 {
     public bool Enabled { get; set; }
@@ -41,7 +14,7 @@ public sealed class ChatOptions
 
     public int MaxRunSeconds { get; set; } = 60;
 
-    public bool EnableMultiAgent { get; set; }
+    public bool EnableDeepInvestigation { get; set; }
 
     public int MaxDiscussionRounds { get; set; } = 3;
 

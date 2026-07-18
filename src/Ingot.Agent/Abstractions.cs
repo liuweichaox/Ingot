@@ -17,7 +17,7 @@ public interface IAgentRuntime
     Task<AgentRunSnapshot> StartAsync(
         string surface,
         string actorId,
-        CreateAgentRunRequest request,
+        CreateChatRunRequest request,
         CancellationToken ct = default);
 
     Task<AgentRunSnapshot?> GetAsync(string surface, string runId, CancellationToken ct = default);
@@ -85,43 +85,20 @@ public interface IModelClient
 
     string Model { get; }
 
-    bool SupportsToolContinuation => false;
-
     Task<ModelCallResult<AnalysisPlan>> ResolveIntentAsync(
-        CreateAgentRunRequest request,
+        CreateChatRunRequest request,
         IReadOnlyCollection<AnalysisToolDefinition> tools,
         CancellationToken ct = default);
 
     Task<ModelCallResult<AnalysisAnswer>> ComposeAnswerAsync(
-        CreateAgentRunRequest request,
+        CreateChatRunRequest request,
         AnalysisPlan plan,
         IReadOnlyList<AnalysisToolResult> results,
         CancellationToken ct = default);
 
-    Task<ModelCallResult<AgentContinuation>> ContinueAsync(
-        AgentContinuationContext context,
-        IReadOnlyCollection<AnalysisToolDefinition> tools,
-        CancellationToken ct = default)
-        => throw new NotSupportedException("当前模型不支持多轮工具续行。");
-
     Task<ModelCallResult<InvestigationContribution>> ParticipateAsync(
         InvestigationTurn turn,
         CancellationToken ct = default);
-}
-
-public sealed record AgentContinuationContext
-{
-    public required CreateAgentRunRequest Request { get; init; }
-
-    public required AnalysisPlan Plan { get; init; }
-
-    public required IReadOnlyList<AnalysisToolResult> ToolResults { get; init; }
-
-    public required int Iteration { get; init; }
-
-    public required int RemainingToolCalls { get; init; }
-
-    public required string WorkflowStage { get; init; }
 }
 
 public sealed record InvestigationTurn
@@ -132,7 +109,7 @@ public sealed record InvestigationTurn
 
     public required InvestigationTask Task { get; init; }
 
-    public required CreateAgentRunRequest Request { get; init; }
+    public required CreateChatRunRequest Request { get; init; }
 
     public required AnalysisPlan Plan { get; init; }
 
@@ -175,7 +152,7 @@ public sealed record InvestigationWorkflowResult
 public interface IInvestigationWorkflow
 {
     Task<InvestigationWorkflowResult> RunAsync(
-        CreateAgentRunRequest request,
+        CreateChatRunRequest request,
         AnalysisPlan plan,
         IReadOnlyList<AnalysisToolResult> results,
         IModelClient model,
@@ -213,9 +190,6 @@ public sealed record AnalysisToolDefinition
 public static class AgentToolAccess
 {
     public const string Read = "read";
-    public const string ArtifactWrite = "artifact-write";
-    public const string WorkspaceWrite = "workspace-write";
-    public const string ProcessExecute = "process-execute";
 }
 
 public sealed record AnalysisToolResult
@@ -250,26 +224,7 @@ public sealed record AgentExecutionContext
 
     public required string Purpose { get; init; }
 
-    public required CreateAgentRunRequest Request { get; init; }
-}
-
-public interface IAgentArtifactStore
-{
-    Task InitializeAsync(CancellationToken ct = default);
-
-    Task<AgentArtifact> SaveAsync(
-        string actorId,
-        string? runId,
-        string kind,
-        string title,
-        string format,
-        string content,
-        JsonElement? metadata,
-        CancellationToken ct = default);
-
-    Task<AgentArtifact?> GetAsync(string actorId, string artifactId, CancellationToken ct = default);
-
-    Task<IReadOnlyList<AgentArtifact>> ListAsync(string actorId, int limit, CancellationToken ct = default);
+    public required CreateChatRunRequest Request { get; init; }
 }
 
 public interface IPlanValidator

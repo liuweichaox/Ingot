@@ -37,9 +37,9 @@ const stageMeta = FACTORY_STAGES;
 const messages = {
   zh: {
     meta: {
-      title: "Ingot — 可信生产事实、Chat 与桌面连接器 Agent",
+      title: "Ingot — 可信生产事实、标准事件接入与 Ingot Chat",
       description:
-        "Central Web Chat 只读查询生产事实并查找数据问题；Ingot Agent 桌面端生成、构建、测试并打包连接器代码。",
+        "使用标准事件 API 接入不同数据源，在 Central Web 中使用 Ingot Chat 查询生产事实并查找数据问题。",
     },
     languageLabel: "语言",
     nav: {
@@ -47,26 +47,26 @@ const messages = {
       home: "Ingot 首页",
       product: "产品",
       data: "事件接入",
-      analytics: "Chat",
-      deployment: "桌面 Agent",
+      analytics: "Ingot Chat",
+      deployment: "事件接入",
       technical: "技术架构",
       docs: "文档",
     },
     hero: {
-      eyebrow: "TRUSTED FACTS / CHAT / DESKTOP AGENT",
-      heading: ["用 Chat 查找问题，", "用桌面 Agent 编写连接器。"],
+      eyebrow: "TRUSTED FACTS / EVENT API / INGOT CHAT",
+      heading: ["用标准事件接入数据，", "用 Ingot Chat 查找问题。"],
       lead:
-        "Central Web Chat 只读查询生产事实、检查数据质量并回链证据。下载安装的 Ingot Agent 只负责连接器代码生成，在禁网环境使用固定样本构建测试、修复并经人工批准打包；Agent 不连接数据源。",
-      analysis: "打开 Chat 能力",
-      github: "下载 Ingot Agent",
+        "使用方按现场要求实现数据源适配，并通过标准事件 API 提交事实。Central Web 中的 Ingot Chat 只读查询生产事实、检查数据质量并回链证据；它不修改事件、检测记录或设备。",
+      analysis: "打开 Ingot Chat",
+      github: "查看事件接入规范",
       pause: "暂停动画",
       play: "继续动画",
       proofLabel: "产品特性",
-      proof: ["Chat 只读事实查询", "周期问题与证据回链", "桌面 Agent 连接器代码生成", "人工批准 SHA-256 打包"],
+      proof: ["标准事件 API", "使用方自主适配数据源", "Ingot Chat 只读事实查询", "周期问题与证据回链"],
       viewLabel: "三维工厂视角",
       views: ["机器人上料", "CNC 加工", "机器人下料", "视觉质检", "人工检测"],
       dataKinds: ["设备状态", "加工事件", "设备状态", "检测结果", "人工检测记录"],
-      captureAuto: "示例连接器事件",
+      captureAuto: "示例生产事件",
       captureGenerated: "示例上下文与关联 ID",
       captureHybrid: "示例检测记录",
     },
@@ -118,20 +118,20 @@ const messages = {
       railLabel: "示例生产工序",
       heading: ["一组标准事件，", "形成一条可追溯事实链。"],
       lead:
-        "三维工厂使用示例事实说明数据契约。外部连接器负责读取设备或系统并转换为 ProductionEvent；检测系统通过独立 API 提交检测事实。Ingot 不在核心中内置设备协议。",
-      provenanceTitle: "连接器事件与检测事实，使用统一标识回链",
+        "三维工厂使用示例事实说明数据契约。使用方将设备或系统数据转换为 ProductionEvent；检测系统通过独立 API 提交检测事实。Ingot 不在核心中内置设备协议。",
+      provenanceTitle: "标准事件与检测事实，使用统一标识回链",
       provenanceLead:
-        "ProductionEvent 保留来源、对象、上下文、时间和 CorrelationId。检测记录独立保存；当前周期工具只读取生产事件，不自动合并检测结果。",
+        "ProductionEvent 保留来源、对象、上下文、时间和 CorrelationId。检测记录独立保存；当前周期工具基于生产事件构建事实链。",
       provenance: [
-        ["桌面 Agent 完成连接器工程", "在 Ingot Agent Desktop 中补齐协议、端点、数据契约和验收条件；Agent 写源码并执行固定构建、测试和修复，测试通过后进入 awaiting-package-approval。"],
+        ["使用方实现数据源适配", "设备协议、字段映射、凭据和运行方式由使用方负责；适配程序只需提交符合契约的标准事件。"],
         ["检测事实进入 Central", "人工或仪器系统通过检测 API 提交结果、测量值、单位、仪器和证据引用。"],
-        ["标准事件有界上报", "Connector Host 校验 ProductionEvent，写入 SQLite outbox，再以有界、至少一次语义上报 Central。"],
+        ["可选本地事件入口", "使用方可部署 Connector Host 获得 SQLite outbox 与至少一次上报；也可直接调用 Central 批次 API。"],
       ],
     },
     platform: {
       heading: ["从标准事件，", "检查周期事实与数据质量。"],
       lead:
-        "以下工作台使用示例事实展示事件查询、检测记录和 Chat。当前 Chat 工具检查事件完整性并按 CorrelationId 返回周期事件链，不执行参数与质量比较。",
+        "以下工作台使用示例事实展示事件查询、检测记录和 Chat。当前 Chat 工具检查事件完整性并按 CorrelationId 返回周期事件链。",
       workspace: "INGOT 示例事实工作台",
       site: "华东一厂 / CELL-A",
       connected: "示例数据",
@@ -171,7 +171,7 @@ const messages = {
       },
       review: {
         title: "示例流程：机旁人工检测",
-        lead: "该示例展示外部检测客户端可提交的检测事实：工件、结果、测量值、单位、仪器、检测员和时间。当前 Central Web 不提供此现场操作界面，质量判定与放行仍由企业现有流程负责。",
+        lead: "该示例展示外部检测客户端可提交的检测事实：工件、结果、测量值、单位、仪器、检测员和时间。质量判定与放行由企业现有流程负责。",
         taskLabel: "当前检测任务",
         task: "MI-LOT-0716-001",
         state: "等待测量",
@@ -198,45 +198,45 @@ const messages = {
         lead: "检查当前周期的数据完整性，并沿证据引用返回生产事件和上下文。",
         chat: {
           title: "Chat · 示例事实",
-          note: "Chat 位于 Central Web，只呈现只读事实查询、数据问题、限制条件和证据；连接器代码生成仅在 Ingot Agent Desktop 中提供。",
+          note: "Ingot Chat 位于 Central Web，只呈现只读事实查询、数据问题、限制条件和证据。",
           modes: ["只读事实问答"],
           question: "这个周期发生了什么，数据是否完整？",
           standard: ["check_data_quality · 已完成", "get_cycle_trace · 已完成"],
           roles: [],
           outcome: ["数据质量通过；周期事实链已回链到原始事件。"],
-          boundary: "Chat 只调用白名单中的只读事实工具，不写代码、不修改事件或检测记录，也不控制设备。",
+          boundary: "Chat 调用白名单中的只读事实工具，呈现事实、限制条件和证据；现场系统负责设备控制。",
         },
       },
     },
     trust: {
-      heading: "Ingot Agent，只在桌面端编写连接器",
-      lead: "下载 Ingot Agent Desktop，完成连接器源码生成、固定构建测试、错误修复、人工批准和校验下载。Agent 不出现在 Central Web Chat 中。",
+      heading: "按现场边界接入数据",
+      lead: "数据源适配由使用方实现。直接调用 Central 批次 API，或在现场部署可选的 Connector Host 作为本地事件入口与 outbox。",
       cards: [
-        ["桌面专用入口", "Tauri 2 桌面端通过 Rust 原生边界连接 Central，配置 Central URL、Actor 和 Token；浏览器没有 Agent 代码生成入口。"],
-        ["真实代码与禁网测试", "Agent 只修改 Actor 隔离工作区，使用工作区固定样本运行禁网容器构建和测试；不连接数据源，不能提交任意 Shell 或选择镜像。"],
-        ["测试驱动修复", "桌面端展示源码、受限错误输出和修复进度；测试通过后状态进入 awaiting-package-approval。"],
-        ["人工批准与下载", "授权 Actor 审查后批准打包，桌面端下载 SHA-256 ZIP 并校验内容；Ingot 不部署连接器或控制设备。"],
+        ["直接提交 Central", "可访问 Central 的适配程序使用 Edge Token 调用 POST /api/v1/events:batch；每批按 eventId 和序号去重。"],
+        ["可选 Connector Host", "需要现场 SQLite outbox 或断网缓冲时，由使用方部署本地 Host，并以独立令牌接收 ProductionEvent。"],
+        ["稳定事件契约", "事件包含来源、对象、上下文、关联 ID、时间和显式单位；协议细节留在使用方的适配程序中。"],
+        ["清晰控制边界", "Ingot 保存事实并提供查询与对话；使用方运行数据源程序，现场系统负责设备控制。"],
       ],
     },
     boundary: {
-      heading: ["一个 Connector Host，", "接收所有标准事件。"],
+      heading: ["一个标准事件 API，", "适配多种数据来源。"],
       lead:
-        "设备、仪器和业务系统由外部连接器读取。Connector Host 只接收标准 ProductionEvent，负责认证、校验、本地持久化和有界至少一次上报。",
+        "设备、仪器和业务系统由使用方适配。Central 接收标准 ProductionEvent；Connector Host 可作为用户自管的可选本地入口与 outbox。",
       cards: [
         [
           "INDEPENDENT BY DEFAULT",
-          "本地事件入口",
-          "连接器提交标准事件后先写入本地 SQLite。outbox 默认最多保留 500,000 条未确认事件；达到上限时丢弃最旧记录并写入 diagnostic.backlog_dropped 和指标。",
+          "可选本地事件入口",
+          "Connector Host 由使用方部署时可先写入本地 SQLite。outbox 默认最多保留 500,000 条未确认事件；达到上限时丢弃最旧记录并写入 diagnostic.backlog_dropped 和指标。",
         ],
         [
           "OPTIONAL SYSTEM CONNECTION",
-          "协议留在连接器",
-          "MES、ERP、设备或仪器协议由各自连接器处理，Ingot 核心只接收统一事件契约。",
+          "协议留在适配程序",
+          "MES、ERP、设备或仪器协议由使用方处理，Ingot 核心只接收统一事件契约。",
         ],
         [
           "CLEAR SCOPE",
           "边界清晰，实施更轻",
-          "Ingot 保存生产事件和检测事实并提供 Central Web Chat 查询；不负责排产、库存、物流、质量处置或设备控制。",
+          "Ingot 保存生产事件和检测事实并提供 Central Web Chat 查询；排产、库存、物流、质量处置和设备控制由现场业务系统负责。",
         ],
       ],
     },
@@ -244,22 +244,22 @@ const messages = {
       telemetryHeading: ["生产事件回答", "现场记录了什么。"],
       eventHeading: ["Chat 回答", "周期事实是否完整。"],
       nodes: [
-        ["SOURCE CONNECTOR", "source payload → ProductionEvent"],
+        ["SOURCE ADAPTER", "source payload → ProductionEvent"],
         ["PRODUCTION FACTS", "event + subject + context + correlation"],
         ["CENTRAL WEB CHAT", "data quality + cycle trace + evidence"],
       ],
       journey: [
-        "连接器把源数据转换为带时间、来源、对象和上下文的标准生产事件。",
-        "CorrelationId 将同一周期的事件组成可排序时间线，Context 保留连接器提交的业务标识。",
+        "使用方适配程序把源数据转换为带时间、来源、对象和上下文的标准生产事件。",
+        "CorrelationId 将同一周期的事件组成可排序时间线，Context 保留适配程序提交的业务标识。",
         "Chat 检查周期配对、上下文空缺、来源序号间断和事件新鲜度，并返回证据链接。",
       ],
     },
     planes: {
       heading: ["标准事件与检测事实，", "分别保存、清晰引用。"],
       lead:
-        "当前平台保存离散 ProductionEvent 和独立 InspectionRecord，不提供高频时序趋势或自动质量关联。Chat 的周期工具仅基于生产事件工作。",
-      telemetryTitle: "连接器提交了什么",
-      telemetryFoot: ["标准事件", "本地落盘", "至少一次上报"],
+        "当前平台保存离散 ProductionEvent 和独立 InspectionRecord。Chat 的周期工具基于生产事件事实工作。",
+      telemetryTitle: "适配程序提交了什么",
+      telemetryFoot: ["标准事件", "直接批次", "可选本地 outbox"],
       eventTitle: "Central 保存了什么",
       eventFoot: ["加工事件", "自动检测结果", "人工检测结果"],
     },
@@ -278,19 +278,19 @@ const messages = {
       ],
     },
     architecture: {
-      heading: ["连接器负责源协议，", "Ingot 负责标准事实。"],
+      heading: ["使用方负责数据源协议，", "Ingot 负责标准事实。"],
       lead:
-        "外部连接器读取设备、仪器或业务系统并生成 ProductionEvent。Connector Host 在本地提交事件，Central 提供事件、检测、Chat 和 Webhook API。",
+        "使用方适配设备、仪器或业务系统并生成 ProductionEvent。适配程序可直接提交 Central，或通过可选 Connector Host 使用本地 outbox；Central 提供事件、检测、Ingot Chat 和 Webhook API。",
       sources: [
-        ["设备 / 业务系统", "连接器输入"],
+        ["设备 / 业务系统", "使用方适配"],
         ["VISION", "结果推送"],
         ["量仪", "串口 / 文件"],
         ["人工检测", "扫码 / 表单"],
       ],
       stream: "设备数据流",
-      engine: "INGOT 连接器主机",
-      engineItems: ["标准事件入口", "契约与 Token 校验", "SQLite outbox", "查询 + SSE"],
-      status: "独立运行 · 在线",
+      engine: "可选 Connector Host",
+      engineItems: ["本地事件入口", "契约与 Token 校验", "SQLite outbox", "向 Central 批量上报"],
+      status: "用户自管 · 可选",
       retry: "重试 · ACK · 去重",
       consumers: ["INGOT 分析平台", "报表 / BI", "AI / 质量应用", "现有业务系统（可选）"],
     },
@@ -314,7 +314,7 @@ const messages = {
     edge: {
       heading: ["轻量部署在现场，", "有界保存标准事件。"],
       metrics: [
-        "单次 Connector Host 接入上限",
+        "可选本地入口单批上限",
         "默认未确认事件硬上限",
         "现场事件与 outbox 存储",
         "有界离线积压，按 ACK 顺序重试",
@@ -328,7 +328,7 @@ const messages = {
         [
           "CONFIG DRIVEN",
           "事件契约定义生产语言",
-          "连接器负责识别源系统语义，Connector Host 对统一事件类型、时间、来源、对象和上下文进行校验。",
+          "使用方适配程序识别源系统语义；Central 对统一事件类型、时间、来源、对象和上下文进行校验。",
         ],
         [
           "OPEN BY DESIGN",
@@ -338,17 +338,17 @@ const messages = {
       ],
     },
     cta: {
-      kicker: "INGOT AGENT DESKTOP / CONNECTOR CODE",
-      heading: ["下载 Ingot Agent 编写连接器，", "由工程师掌握批准、下载与外部部署。"],
-      button: "下载 Ingot Agent",
-      footer: "可信生产事实、Central Web Chat 与桌面连接器 Agent。",
+      kicker: "STANDARD EVENT API / INGOT CHAT",
+      heading: ["用标准事件接入事实，", "用 Ingot Chat 查询问题。"],
+      button: "查看文档",
+      footer: "可信生产事实、标准事件接入与 Ingot Chat。",
     },
   },
   en: {
     meta: {
-      title: "Ingot — Trusted production facts, Chat, and desktop connector Agent",
+      title: "Ingot — Trusted production facts, standard event ingestion, and Ingot Chat",
       description:
-        "Central Web Chat queries production facts and finds data problems. Ingot Agent Desktop generates, builds, tests, and packages connector code.",
+        "Ingest different sources through a standard event API, then use Ingot Chat in Central Web to query production facts and find data problems.",
     },
     languageLabel: "Language",
     nav: {
@@ -356,31 +356,31 @@ const messages = {
       home: "Ingot home",
       product: "Product",
       data: "Event Ingress",
-      analytics: "Chat",
-      deployment: "Desktop Agent",
+      analytics: "Ingot Chat",
+      deployment: "Event Ingestion",
       technical: "Architecture",
       docs: "Docs",
     },
     hero: {
-      eyebrow: "TRUSTED FACTS / CHAT / DESKTOP AGENT",
-      heading: ["Use Chat to find problems.", "Use the desktop Agent to write connectors."],
+      eyebrow: "TRUSTED FACTS / EVENT API / INGOT CHAT",
+      heading: ["Ingest data through standard events.", "Use Ingot Chat to find problems."],
       lead:
-        "Central Web Chat queries production facts, checks data quality, and links evidence. The downloadable Ingot Agent handles only connector code generation, network-disabled build/test with fixed fixtures, repair, and operator-approved packaging; Agent does not connect to data sources.",
-      analysis: "Explore Chat",
-      github: "Download Ingot Agent",
+        "Teams implement source adaptation for their own plant requirements and submit facts through the standard event API. Ingot Chat in Central Web reads production facts, checks data quality, and links evidence; it does not change events, inspections, or equipment.",
+      analysis: "Explore Ingot Chat",
+      github: "Read event-ingestion docs",
       pause: "Pause animation",
       play: "Resume animation",
       proofLabel: "Product capabilities",
       proof: [
-        "Read-only production-fact Chat",
+        "Standard event API",
+        "Team-owned source adaptation",
+        "Read-only Ingot Chat",
         "Cycle problems with evidence links",
-        "Desktop Agent connector code generation",
-        "Operator-approved SHA-256 packages",
       ],
       viewLabel: "3D factory views",
       views: ["Robot loading", "CNC machining", "Robot unloading", "Vision inspection", "Manual inspection"],
       dataKinds: ["Equipment state", "Machining event", "Equipment state", "Inspection result", "Manual inspection record"],
-      captureAuto: "SAMPLE CONNECTOR EVENT",
+      captureAuto: "SAMPLE PRODUCTION EVENT",
       captureGenerated: "SAMPLE CONTEXT + CORRELATION ID",
       captureHybrid: "SAMPLE INSPECTION RECORD",
     },
@@ -432,20 +432,20 @@ const messages = {
       railLabel: "Sample production stages",
       heading: ["One standard event contract.", "One traceable fact chain."],
       lead:
-        "The 3D factory uses sample facts to explain the data contract. External connectors read equipment or systems and emit ProductionEvent records. Inspection systems submit separate inspection facts. Ingot embeds no equipment protocol in its core.",
-      provenanceTitle: "CONNECTOR EVENTS AND INSPECTION FACTS, LINKED BY STABLE IDENTIFIERS",
+        "The 3D factory uses sample facts to explain the data contract. Team-owned adaptation reads equipment or systems and emits ProductionEvent records. Inspection systems submit separate inspection facts. Ingot embeds no equipment protocol in its core.",
+      provenanceTitle: "STANDARD EVENTS AND INSPECTION FACTS, LINKED BY STABLE IDENTIFIERS",
       provenanceLead:
-        "ProductionEvent retains source, subject, context, time, and CorrelationId. Inspection records are stored separately; current cycle tools read production events and do not automatically merge inspection results.",
+        "ProductionEvent retains source, subject, context, time, and CorrelationId. Inspection records are stored separately; current cycle tools build fact chains from production events.",
       provenance: [
-        ["DESKTOP AGENT CONNECTOR ENGINEERING", "In Ingot Agent Desktop, complete protocol, endpoint, contract, and acceptance criteria. Agent writes source and runs fixed build, test, and repair entries; successful tests enter awaiting-package-approval."],
+        ["TEAM-OWNED SOURCE ADAPTATION", "Teams own protocol handling, field mapping, credentials, and runtime operation; an adapter only needs to submit standard events that match the contract."],
         ["INSPECTION FACTS IN CENTRAL", "Human or instrument systems submit results, measurements, units, instruments, and evidence references through the inspection API."],
-        ["BOUNDED STANDARD EVENTS", "Connector Host validates ProductionEvent, commits it to a SQLite outbox, and ships it to Central with bounded at-least-once semantics."],
+        ["OPTIONAL LOCAL INGRESS", "Teams may deploy Connector Host for a SQLite outbox and at-least-once delivery, or call the Central batch API directly."],
       ],
     },
     platform: {
       heading: ["From standard events", "to cycle facts and data quality."],
       lead:
-        "This workspace uses sample facts to show event queries, inspection records, and Chat. Current Chat tools check event completeness and return a CorrelationId-scoped event chain; they do not compare process parameters with quality.",
+        "This workspace uses sample facts to show event queries, inspection records, and Chat. Current Chat tools check event completeness and return a CorrelationId-scoped event chain.",
       workspace: "INGOT SAMPLE FACT WORKSPACE",
       site: "EAST PLANT / CELL-A",
       connected: "SAMPLE DATA",
@@ -485,7 +485,7 @@ const messages = {
       },
       review: {
         title: "Sample workflow: machine-side inspection",
-        lead: "This sample shows inspection facts an external client can submit: part, outcome, measurement, unit, instrument, inspector, and time. Central Web does not currently provide this shop-floor operation screen. Quality decisions and release remain in the plant's existing workflow.",
+        lead: "This sample shows inspection facts an external client can submit: part, outcome, measurement, unit, instrument, inspector, and time. Quality decisions and release remain in the plant's existing workflow.",
         taskLabel: "Current inspection task",
         task: "MI-LOT-0716-001",
         state: "AWAITING MEASUREMENT",
@@ -512,45 +512,45 @@ const messages = {
         lead: "Check cycle completeness and follow evidence citations to production events and context.",
         chat: {
           title: "Chat · Sample facts",
-          note: "Chat lives in Central Web and presents only read-only fact queries, data problems, limitations, and evidence. Connector code generation exists only in Ingot Agent Desktop.",
+          note: "Ingot Chat lives in Central Web and presents only read-only fact queries, data problems, limitations, and evidence.",
           modes: ["Read-only fact question"],
           question: "What happened in this cycle, and is its data complete?",
           standard: ["check_data_quality · completed", "get_cycle_trace · completed"],
           roles: [],
           outcome: ["Data quality passed; cycle evidence links to source events."],
-          boundary: "Chat calls only allowlisted read-only fact tools. It does not write code, modify events or inspection records, or control equipment.",
+          boundary: "Chat calls allowlisted read-only fact tools and presents facts, limitations, and evidence; field systems retain equipment control.",
         },
       },
     },
     trust: {
-      heading: "Ingot Agent writes connectors only on desktop",
-      lead: "Download Ingot Agent Desktop for connector source generation, fixed build/test, repair, operator approval, and verified download. Agent does not appear in Central Web Chat.",
+      heading: "Ingest data at the boundary that fits the plant",
+      lead: "Teams implement source adaptation. Call the Central batch API directly, or deploy optional Connector Host as a local event ingress and outbox.",
       cards: [
-        ["Desktop-only entry", "The Tauri 2 desktop connects to Central through a Rust native boundary and stores Central URL, Actor, and token. The browser has no Agent code-generation entry."],
-        ["Real source and offline tests", "Agent changes only the Actor-isolated workspace and uses fixed workspace fixtures for network-disabled container build/test. It does not connect to data sources and cannot submit arbitrary shell or select images."],
-        ["Test-driven repair", "The desktop shows source, bounded errors, and repair progress. Passing tests move the run to awaiting-package-approval."],
-        ["Operator approval and download", "An authorized Actor reviews and approves packaging. The desktop downloads and verifies the SHA-256 ZIP. Ingot does not deploy connectors or control equipment."],
+        ["Submit directly to Central", "Adapters that can reach Central use an Edge token with POST /api/v1/events:batch; each batch is deduplicated by event ID and sequence."],
+        ["Optional Connector Host", "When a plant needs a local SQLite outbox or offline buffering, a team deploys its own Host and submits ProductionEvent with a separate token."],
+        ["Stable event contract", "Events carry source, subject, context, correlation ID, time, and explicit units; protocol details remain in the team-owned adapter."],
+        ["Clear control boundary", "Ingot stores facts and provides query and conversation; teams operate source programs and field systems retain equipment control."],
       ],
     },
     boundary: {
-      heading: ["One Connector Host.", "One ingress for standard events."],
+      heading: ["One standard event API.", "Many source boundaries."],
       lead:
-        "External connectors read equipment, instruments, and business systems. Connector Host accepts only normalized ProductionEvent records and owns authentication, validation, local persistence, and bounded at-least-once delivery.",
+        "Teams adapt equipment, instruments, and business systems. Central accepts standard ProductionEvent records; Connector Host is a team-operated optional local ingress and outbox.",
       cards: [
         [
           "INDEPENDENT BY DEFAULT",
-          "Local event ingress",
-          "Connector events commit to local SQLite first. The outbox retains at most 500,000 unacknowledged events by default; at capacity, it drops the oldest records and emits diagnostic.backlog_dropped plus a metric.",
+          "Optional local event ingress",
+          "When team-operated, Connector Host commits events to local SQLite first. The outbox retains at most 500,000 unacknowledged events by default; at capacity, it drops the oldest records and emits diagnostic.backlog_dropped plus a metric.",
         ],
         [
           "OPTIONAL SYSTEM CONNECTION",
-          "Keep protocols in connectors",
-          "MES, ERP, equipment, and instrument protocols remain in their connectors. The Ingot core accepts one normalized event contract.",
+          "Keep protocols in adapters",
+          "MES, ERP, equipment, and instrument protocols remain in team-owned adaptation. The Ingot core accepts one normalized event contract.",
         ],
         [
           "CLEAR SCOPE",
           "A clear scope keeps deployment light",
-          "Ingot stores production events and inspection facts and exposes Central Web Chat queries. It does not own scheduling, inventory, logistics, quality disposition, or equipment control.",
+          "Ingot stores production events and inspection facts and exposes Central Web Chat queries. Plant business systems own scheduling, inventory, logistics, quality disposition, and equipment control.",
         ],
       ],
     },
@@ -558,22 +558,22 @@ const messages = {
       telemetryHeading: ["Production events show", "what the floor recorded."],
       eventHeading: ["Chat answers", "whether cycle facts are complete."],
       nodes: [
-        ["SOURCE CONNECTOR", "source payload → ProductionEvent"],
+        ["SOURCE ADAPTER", "source payload → ProductionEvent"],
         ["PRODUCTION FACTS", "event + subject + context + correlation"],
         ["CENTRAL WEB CHAT", "data quality + cycle trace + evidence"],
       ],
       journey: [
-        "Connectors translate source data into standard production events with time, source, subject, and context.",
-        "CorrelationId groups events into an ordered cycle timeline; Context retains the business identifiers submitted by the connector.",
+        "Team-owned adapters translate source data into standard production events with time, source, subject, and context.",
+        "CorrelationId groups events into an ordered cycle timeline; Context retains the business identifiers submitted by the adapter.",
         "Chat checks cycle pairing, empty context, source sequence gaps, and freshness and returns evidence links.",
       ],
     },
     planes: {
       heading: ["Standard events and inspection facts.", "Stored separately and cited clearly."],
       lead:
-        "The current platform stores discrete ProductionEvent and InspectionRecord facts. It does not provide high-frequency time-series trends or automatic process-quality association. Current cycle tools use production events only.",
-      telemetryTitle: "What did the connector submit?",
-      telemetryFoot: ["Normalized events", "Local commit", "At-least-once shipping"],
+        "The current platform stores discrete ProductionEvent and InspectionRecord facts. Current cycle tools use production-event facts.",
+      telemetryTitle: "What did the adapter submit?",
+      telemetryFoot: ["Normalized events", "Direct batch", "Optional local outbox"],
       eventTitle: "What did Central persist?",
       eventFoot: ["Machining events", "Automatic inspection", "Manual inspection"],
     },
@@ -592,19 +592,19 @@ const messages = {
       ],
     },
     architecture: {
-      heading: ["Connectors own source protocols.", "Ingot owns normalized facts."],
+      heading: ["Teams own source protocols.", "Ingot owns normalized facts."],
       lead:
-        "External connectors read equipment, instruments, or business systems and emit ProductionEvent records. Connector Host commits events locally; Central provides event, inspection, Chat, and webhook APIs.",
+        "Teams adapt equipment, instruments, or business systems and emit ProductionEvent records. An adapter can submit directly to Central or use optional Connector Host for a local outbox; Central provides event, inspection, Ingot Chat, and webhook APIs.",
       sources: [
-        ["Equipment / business systems", "Connector input"],
+        ["Equipment / business systems", "Team-owned adaptation"],
         ["VISION", "Result push"],
         ["METROLOGY", "Serial / File"],
         ["HUMAN QA", "Scan / Form"],
       ],
       stream: "EQUIPMENT DATA STREAM",
-      engine: "INGOT CONNECTOR HOST",
-      engineItems: ["Standard Event Ingress", "Contract + Token Validation", "SQLite Outbox", "Query + SSE"],
-      status: "STANDALONE · ONLINE",
+      engine: "OPTIONAL CONNECTOR HOST",
+      engineItems: ["Local Event Ingress", "Contract + Token Validation", "SQLite Outbox", "Batch to Central"],
+      status: "TEAM-OPERATED · OPTIONAL",
       retry: "RETRY · ACK · DEDUPE",
       consumers: ["INGOT ANALYTICS", "REPORTING / BI", "AI / QUALITY APPS", "EXISTING SYSTEMS (OPTIONAL)"],
     },
@@ -628,7 +628,7 @@ const messages = {
     edge: {
       heading: ["Lightweight at the edge.", "Bounded persistence for normalized events."],
       metrics: [
-        "Connector Host ingress limit per request",
+        "Optional local-ingress limit per request",
         "Default hard limit for unacknowledged events",
         "Shop-floor event and outbox storage",
         "Bounded offline backlog with ACK-ordered retries",
@@ -642,7 +642,7 @@ const messages = {
         [
           "CONFIG DRIVEN",
           "Define production language through the event contract",
-          "Connectors interpret source semantics. Connector Host validates normalized event type, time, source, subject, and context.",
+          "Team-owned adaptation interprets source semantics. Central validates normalized event type, time, source, subject, and context.",
         ],
         [
           "OPEN BY DESIGN",
@@ -652,10 +652,10 @@ const messages = {
       ],
     },
     cta: {
-      kicker: "INGOT AGENT DESKTOP / CONNECTOR CODE",
-      heading: ["Download Ingot Agent to write connectors.", "Keep approval, download, and external deployment with engineers."],
-      button: "Download Ingot Agent",
-      footer: "Trusted production facts, Central Web Chat, and a desktop connector Agent.",
+      kicker: "STANDARD EVENT API / INGOT CHAT",
+      heading: ["Ingest facts through standard events.", "Use Ingot Chat to investigate them."],
+      button: "Read the docs",
+      footer: "Trusted production facts, standard event ingestion, and Ingot Chat.",
     },
   },
 } as const;
@@ -1458,7 +1458,7 @@ export default function IngotSite({ initialLocale = "zh" }: { initialLocale?: Lo
               </a>
               <a
                 className="button button-ghost"
-                href="https://github.com/liuweichaox/Ingot/releases/latest"
+                href={`https://docs.ingotstack.com/${locale}/rfc-production-events`}
                 target="_blank"
                 rel="noreferrer"
               >
@@ -1871,14 +1871,14 @@ export default function IngotSite({ initialLocale = "zh" }: { initialLocale?: Lo
       </section>
 
       <section className="trust-section shell reveal-section" id="trust">
-        <div className="section-heading compact"><div><p className="section-index">03 / INGOT AGENT DESKTOP</p><h2>{copy.trust.heading}</h2></div><p>{copy.trust.lead}</p></div>
+        <div className="section-heading compact"><div><p className="section-index">03 / EVENT INGESTION</p><h2>{copy.trust.heading}</h2></div><p>{copy.trust.lead}</p></div>
         <div className="trust-grid">{copy.trust.cards.map(([title, detail], index) => <article key={title}><span>0{index + 1}</span><h3>{title}</h3><p>{detail}</p></article>)}</div>
       </section>
 
       <section className="boundary-section shell reveal-section" id="boundary">
         <div className="section-heading compact">
           <div>
-            <p className="section-index">04 / STANDALONE DEPLOYMENT</p>
+            <p className="section-index">04 / INGESTION OPTIONS</p>
             <h2>{copy.boundary.heading[0]}<br />{copy.boundary.heading[1]}</h2>
           </div>
           <p>{copy.boundary.lead}</p>
@@ -1948,7 +1948,7 @@ export default function IngotSite({ initialLocale = "zh" }: { initialLocale?: Lo
               <div className="plane-head">
                 <span className="plane-icon">≈</span>
                 <div>
-                  <small>CONNECTOR EVENTS</small>
+                  <small>SOURCE EVENTS</small>
                   <h3>{copy.planes.telemetryTitle}</h3>
                 </div>
                     <b>≤ 1000 ev/batch</b>
@@ -2081,7 +2081,7 @@ export default function IngotSite({ initialLocale = "zh" }: { initialLocale?: Lo
             </div>
 
             <div className="edge-node arch-column">
-              <small>02 · CONNECTOR HOST</small>
+              <small>02 · OPTIONAL LOCAL INGRESS</small>
               <div className="node-core">
                 <div className="node-brand">
                   <BrandMark />
@@ -2199,7 +2199,7 @@ export default function IngotSite({ initialLocale = "zh" }: { initialLocale?: Lo
         <h2>{copy.cta.heading[0]}<br />{copy.cta.heading[1]}</h2>
         <a
           className="button button-primary"
-          href="https://github.com/liuweichaox/Ingot/releases/latest"
+          href={`https://docs.ingotstack.com/${locale}`}
           target="_blank"
           rel="noreferrer"
         >

@@ -24,12 +24,6 @@ npm --prefix src/Ingot.Central.Web run test
 npm --prefix src/Ingot.Central.Web run lint
 npm --prefix src/Ingot.Central.Web audit --omit=dev
 
-npm --prefix desktop ci
-npm --prefix desktop run build
-npm --prefix desktop run test
-npm --prefix desktop run lint
-npm --prefix desktop audit --omit=dev
-
 npm --prefix site ci
 npm --prefix site run build
 node --test site/tests/rendered-html.test.mjs

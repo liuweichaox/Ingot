@@ -1,6 +1,14 @@
 # Ingot Central Web
 
-基于 Vue 3 与 Vite 的 Central 操作界面，提供 Chat 工艺分析、边缘节点、生产事件、指标和日志。Chat 通过只读工具查找生产数据问题，页面能力由服务端能力接口、Actor 权限和运行状态驱动。
+基于 Vue 3 与 Vite 的 Central 操作界面，提供数据接入节点、生产事件、指标、日志和 **Ingot Chat**。
+
+## 产品入口
+
+- **Ingot Chat**：基于可信生产事实进行对话查询、问题定位和分析；回答提供事实证据与数据限制。
+- **数据接入节点**：查看用户自行部署的数据适配器接入状态。
+- **生产事件、指标与日志**：查看平台已接入的生产事实和运行状态。
+
+Ingot Chat 仅访问当前身份有权读取的生产事实，不提供设备控制、配置修改或数据写入。
 
 ## 本地开发
 
@@ -29,10 +37,10 @@ npm run dev
 
 - dev server：`http://localhost:3000`
 - 事件页：`http://localhost:3000/events`
-- Chat 工艺分析：`http://localhost:3000/chat`
+- Ingot Chat：`http://localhost:3000/chat`
 - `vite.config.mjs` 将 `/api`、`/metrics` 和 `/health` 代理到 `http://localhost:8000`
 
-Chat 服务默认关闭。页面通过 `GET /api/v1/chat/capabilities` 获取实际开放的模式、角色、只读工具和运行限制，不在前端推断服务端能力。
+Ingot Chat 服务默认关闭。页面通过 `GET /api/v1/chat/capabilities` 获取当前可用的回答方式；对话、历史、流式结果和取消请求均使用 `/api/v1/chat/*`。
 
 ## 验证
 

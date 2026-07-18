@@ -5,7 +5,7 @@ namespace Ingot.Agent;
 
 /// <summary>
 ///     无外部模型时使用的安全基线模型。它只把明确的问题映射到白名单工具，
-///     用于本地部署、回归测试和模型故障降级。它可以建立受管制制品，但不执行制品内容。
+///     用于本地部署、回归测试和模型故障降级。
 /// </summary>
 public sealed class DeterministicModelClient : IModelClient
 {
@@ -14,7 +14,7 @@ public sealed class DeterministicModelClient : IModelClient
     public string Model => "deterministic-v1";
 
     public Task<ModelCallResult<AnalysisPlan>> ResolveIntentAsync(
-        CreateAgentRunRequest request,
+        CreateChatRunRequest request,
         IReadOnlyCollection<AnalysisToolDefinition> tools,
         CancellationToken ct = default)
     {
@@ -23,22 +23,6 @@ public sealed class DeterministicModelClient : IModelClient
         var calls = new List<AnalysisToolCall>();
         var question = request.Question;
         var context = request.PageContext;
-
-        if (ContainsAny(question, "接入", "采集", "连接器", "数据源") &&
-            available.Contains("draft_connector_specification"))
-        {
-            calls.Add(new AnalysisToolCall
-            {
-                Tool = "draft_connector_specification",
-                Arguments = context?.Kind == "agent-artifact"
-                    ? new Dictionary<string, string?> { ["artifactId"] = context.Id }
-                    : new Dictionary<string, string?>
-                    {
-                        ["name"] = $"{context?.Id ?? "待命名数据源"}采集连接器",
-                        ["sourceCode"] = context?.Id ?? "UNSPECIFIED"
-                    }
-            });
-        }
 
         if (ContainsAny(question, "质量", "完整", "缺失", "缺口", "断网", "健康") &&
             available.Contains("check_data_quality"))
@@ -82,7 +66,7 @@ public sealed class DeterministicModelClient : IModelClient
     }
 
     public Task<ModelCallResult<AnalysisAnswer>> ComposeAnswerAsync(
-        CreateAgentRunRequest request,
+        CreateChatRunRequest request,
         AnalysisPlan plan,
         IReadOnlyList<AnalysisToolResult> results,
         CancellationToken ct = default)
@@ -95,6 +79,11 @@ public sealed class DeterministicModelClient : IModelClient
             .Distinct(StringComparer.Ordinal)
             .ToArray();
         var findings = results.Select(static result => result.Summary).ToArray();
+        var followUps = new[]
+        {
+            "是否需要缩小到具体资产或生产周期？",
+            "是否需要查看证据对应的完整事件时间线？"
+        };
         return Task.FromResult(Result(new AnalysisAnswer
         {
             Summary = findings.Length == 0
@@ -103,11 +92,7 @@ public sealed class DeterministicModelClient : IModelClient
             Findings = findings,
             Limitations = limitations,
             Evidence = evidence,
-            FollowUpQuestions =
-            [
-                "是否需要缩小到具体资产或生产周期？",
-                "是否需要查看证据对应的完整事件时间线？"
-            ]
+            FollowUpQuestions = followUps
         }, "answer.compose"));
     }
 

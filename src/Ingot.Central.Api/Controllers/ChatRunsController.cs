@@ -27,12 +27,7 @@ public sealed class ChatRunsController(
             var run = await runtime.StartAsync(
                 ProductSurfaces.Chat,
                 actorId!,
-                new CreateAgentRunRequest
-                {
-                    Question = normalized!.Question,
-                    PageContext = normalized.PageContext,
-                    Mode = normalized.Mode
-                },
+                normalized!,
                 ct).ConfigureAwait(false);
             return Accepted(new
             {
@@ -62,6 +57,8 @@ public sealed class ChatRunsController(
             {
                 RunId = run.RunId,
                 Question = run.Question,
+                Surface = ProductSurfaces.Chat,
+                Purpose = RunPurposes.ReadOnlyAnalysis,
                 Mode = run.Mode,
                 Status = run.Status,
                 CreatedAt = run.CreatedAt,
@@ -76,10 +73,12 @@ public sealed class ChatRunsController(
     [HttpGet("{runId}")]
     public async Task<IActionResult> Get(string runId, CancellationToken ct)
     {
+        if (!TryAuthorize(out var actorId, out var unauthorized))
+            return unauthorized!;
         var run = await runtime.GetAsync(ProductSurfaces.Chat, runId, ct).ConfigureAwait(false);
         if (run is null)
             return NotFound();
-        return IsAuthorized(run.ActorId)
+        return string.Equals(run.ActorId, actorId, StringComparison.OrdinalIgnoreCase)
             ? Ok(ToChatSnapshot(run))
             : Unauthorized(new { error = "Chat 运行访问凭据无效。" });
     }
@@ -87,13 +86,18 @@ public sealed class ChatRunsController(
     [HttpGet("{runId}/stream")]
     public async Task Stream(string runId, CancellationToken ct)
     {
+        if (!TryAuthorize(out var actorId, out var unauthorized))
+        {
+            Response.StatusCode = (unauthorized as ObjectResult)?.StatusCode ?? StatusCodes.Status401Unauthorized;
+            return;
+        }
         var run = await runtime.GetAsync(ProductSurfaces.Chat, runId, ct).ConfigureAwait(false);
         if (run is null)
         {
             Response.StatusCode = StatusCodes.Status404NotFound;
             return;
         }
-        if (!IsAuthorized(run.ActorId))
+        if (!string.Equals(run.ActorId, actorId, StringComparison.OrdinalIgnoreCase))
         {
             Response.StatusCode = StatusCodes.Status401Unauthorized;
             return;
@@ -122,10 +126,12 @@ public sealed class ChatRunsController(
     [HttpPost("{runId}:cancel")]
     public async Task<IActionResult> Cancel(string runId, CancellationToken ct)
     {
+        if (!TryAuthorize(out var actorId, out var unauthorized))
+            return unauthorized!;
         var run = await runtime.GetAsync(ProductSurfaces.Chat, runId, ct).ConfigureAwait(false);
         if (run is null)
             return NotFound();
-        if (!IsAuthorized(run.ActorId))
+        if (!string.Equals(run.ActorId, actorId, StringComparison.OrdinalIgnoreCase))
             return Unauthorized(new { error = "Chat 运行访问凭据无效。" });
 
         var cancelled = await runtime.CancelAsync(
@@ -148,8 +154,10 @@ public sealed class ChatRunsController(
         var capabilities = runtime.GetCapabilities(ProductSurfaces.Chat);
         return Ok(new ChatCapabilities
         {
+            Surface = capabilities.Surface,
+            Purpose = capabilities.Purpose,
             Enabled = capabilities.Enabled,
-            DeepAnalysisEnabled = capabilities.MultiAgentEnabled,
+            DeepInvestigationEnabled = capabilities.DeepInvestigationEnabled,
             Provider = capabilities.Provider,
             FastModel = capabilities.FastModel,
             ReasoningModel = capabilities.ReasoningModel,
@@ -173,6 +181,8 @@ public sealed class ChatRunsController(
     {
         RunId = run.RunId,
         ActorId = run.ActorId,
+        Surface = run.Surface,
+        Purpose = run.Purpose,
         Question = run.Question,
         PageContext = run.PageContext,
         Mode = run.Mode,

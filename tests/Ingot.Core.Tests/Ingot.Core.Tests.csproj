@@ -8,7 +8,6 @@
     <ItemGroup>
         <ProjectReference Include="..\..\src\Ingot.Agent\Ingot.Agent.csproj" />
         <ProjectReference Include="..\..\src\Ingot.Agent.Infrastructure\Ingot.Agent.Infrastructure.csproj" />
-        <ProjectReference Include="..\..\src\Ingot.Connector.Builder\Ingot.Connector.Builder.csproj" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageReference Include="xunit" Version="2.9.2" />
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.1">

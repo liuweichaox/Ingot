@@ -33,16 +33,10 @@ jobs:
           cache: npm
           cache-dependency-path: |
             src/Ingot.Central.Web/package-lock.json
-            desktop/package-lock.json
             site/package-lock.json
             docs-site/package-lock.json
 
-      - name: Prepare Connector Builder image
-        run: docker pull mcr.microsoft.com/dotnet/sdk:10.0
-
       - name: Verify repository
-        env:
-          INGOT_RUN_CONNECTOR_CONTAINER_TEST: "1"
         run: ./scripts/verify.sh
 
       - name: Build application images
@@ -51,7 +45,7 @@ jobs:
           INGOT_EDGE_TOKEN: verification-edge-token-0001
           INGOT_OPERATOR_TOKEN: verification-operator-token-0001
           INGOT_CONNECTOR_TOKEN: verification-connector-token-0001
-        run: docker compose -f docker-compose.app.yml build central-api central-web connector-host
+        run: docker compose -f docker-compose.app.yml --profile connector-host build central-api central-web connector-host
 
       - name: Smoke application stack
         env:
@@ -60,7 +54,7 @@ jobs:
           INGOT_OPERATOR_TOKEN: verification-operator-token-0001
           INGOT_CONNECTOR_TOKEN: verification-connector-token-0001
         run: |
-          docker compose -f docker-compose.app.yml up -d --no-build --wait
+          docker compose -f docker-compose.app.yml --profile connector-host up -d --no-build --wait
           curl --fail --silent http://127.0.0.1:3000/health
           curl --fail --silent http://127.0.0.1:8000/health
           curl --fail --silent http://127.0.0.1:8001/health
@@ -76,39 +70,3 @@ jobs:
           INGOT_OPERATOR_TOKEN: verification-operator-token-0001
           INGOT_CONNECTOR_TOKEN: verification-connector-token-0001
         run: docker compose -f docker-compose.app.yml down -v --remove-orphans
-
-  desktop-native:
-    runs-on: ubuntu-22.04
-    timeout-minutes: 30
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Install Tauri system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install --yes libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: desktop/package-lock.json
-
-      - name: Set up Rust
-        run: |
-          rustup toolchain install stable --profile minimal --component rustfmt
-          rustup default stable
-
-      - name: Build desktop frontend
-        run: |
-          npm --prefix desktop ci
-          npm --prefix desktop run build
-
-      - name: Verify desktop native core
-        run: |
-          cargo fmt --manifest-path desktop/src-tauri/Cargo.toml -- --check
-          cargo test --manifest-path desktop/src-tauri/Cargo.toml --locked
-          cargo check --manifest-path desktop/src-tauri/Cargo.toml --locked

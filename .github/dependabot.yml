@@ -32,22 +32,6 @@ updates:
       docs-site:
         patterns: ["*"]
 
-  - package-ecosystem: npm
-    directory: /desktop
-    schedule:
-      interval: weekly
-    groups:
-      desktop:
-        patterns: ["*"]
-
-  - package-ecosystem: cargo
-    directory: /desktop/src-tauri
-    schedule:
-      interval: weekly
-    groups:
-      desktop-native:
-        patterns: ["*"]
-
   - package-ecosystem: github-actions
     directory: /
     schedule:

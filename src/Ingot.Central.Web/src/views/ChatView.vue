@@ -6,31 +6,31 @@
           <template #header>
             <div class="heading">
               <el-icon><ChatDotRound /></el-icon>
-              <span>Chat 工艺分析</span>
+              <span>Ingot Chat</span>
             </div>
           </template>
           <el-alert
-            title="通过对话查找生产数据问题，查看受控分析过程、事实证据和候选解释。"
+            title="基于可信生产事实查询数据、定位问题，并回到相关证据；不执行设备控制或数据写入。"
             type="info"
             show-icon
             :closable="false"
             class="notice"
           />
           <el-form label-position="top">
-            <el-form-item label="分析模式">
+            <el-form-item label="回答方式">
               <el-radio-group v-model="form.mode">
                 <el-radio-button value="standard" :disabled="!supportsMode('standard')">
                   标准分析
                 </el-radio-button>
                 <el-radio-button value="deep" :disabled="!supportsMode('deep')">
-                  深度协作调查
+                  深入调查
                 </el-radio-button>
               </el-radio-group>
               <div class="muted capability-note">
                 {{ capabilitySummary }}
               </div>
             </el-form-item>
-            <el-form-item label="分析问题">
+            <el-form-item label="想了解什么？">
               <el-input
                 v-model="form.question"
                 type="textarea"
@@ -40,8 +40,8 @@
                 placeholder="例如：这个周期发生了什么，数据是否完整？"
               />
             </el-form-item>
-            <el-form-item label="页面上下文（可选）">
-              <el-input v-model="form.contextId" placeholder="资产 ID 或周期 CorrelationId">
+            <el-form-item label="当前上下文（可选）">
+              <el-input v-model="form.contextId" placeholder="资产 ID 或周期关联 ID">
                 <template #prepend>
                   <el-select v-model="form.contextKind" style="width: 130px">
                     <el-option label="资产" value="asset" />
@@ -52,12 +52,12 @@
             </el-form-item>
             <el-row :gutter="12">
               <el-col :span="12">
-                <el-form-item label="分析身份">
+                <el-form-item label="访问身份">
                   <el-input v-model="form.actor" />
                 </el-form-item>
               </el-col>
               <el-col :span="12">
-                <el-form-item label="访问 Token">
+                <el-form-item label="访问令牌">
                   <el-input v-model="form.token" type="password" show-password />
                 </el-form-item>
               </el-col>
@@ -69,13 +69,13 @@
                 :disabled="running || !canStart"
                 @click="start"
               >
-                开始分析
+                发送问题
               </el-button>
               <el-button v-if="running" type="danger" plain @click="cancel">
-                取消运行
+                取消回答
               </el-button>
               <el-button @click="loadChat">
-                刷新能力与历史
+                刷新
               </el-button>
             </div>
           </el-form>
@@ -84,11 +84,11 @@
         <el-card shadow="never" class="history-card">
           <template #header>
             <div class="heading">
-              <span>对话历史</span>
+              <span>对话记录</span>
               <el-tag size="small">当前身份</el-tag>
             </div>
           </template>
-          <el-empty v-if="!history.length" description="暂无可见对话" :image-size="54" />
+          <el-empty v-if="!history.length" description="暂无可见记录" :image-size="54" />
           <button
             v-for="item in history"
             :key="item.runId"
@@ -96,7 +96,7 @@
             @click="openHistory(item.runId)"
           >
             <span>{{ item.question }}</span>
-            <small>{{ modeLabel(item.mode) }} · {{ item.status }} · {{ formatTime(item.createdAt) }}</small>
+            <small>{{ modeLabel(item.mode) }} · {{ runStatusLabel(item.status) }} · {{ formatTime(item.createdAt) }}</small>
           </button>
           <el-button v-if="historyNext" text type="primary" @click="loadHistory(historyNext, true)">
             加载更多
@@ -108,7 +108,7 @@
         <el-card shadow="never" class="result-card">
           <template #header>
             <div class="result-header">
-              <span>分析结果</span>
+              <span>Ingot Chat</span>
               <el-tag :type="statusType">{{ statusLabel }}</el-tag>
             </div>
           </template>
@@ -122,26 +122,15 @@
           />
           <el-empty
             v-if="!runId"
-            description="提交问题后，这里会实时展示计划、工具活动、证据和结论。"
+            description="发送问题后，这里会展示回答、相关事实和证据。"
           />
           <template v-else>
-            <el-descriptions :column="2" border size="small">
-              <el-descriptions-item label="Run ID">{{ runId }}</el-descriptions-item>
-              <el-descriptions-item label="实时事件">{{ events.length }}</el-descriptions-item>
-              <el-descriptions-item label="模型">
-                {{ snapshot?.modelProvider || capabilities?.provider || "-" }} / {{ snapshot?.model || "-" }}
-              </el-descriptions-item>
-              <el-descriptions-item label="模型用量">{{ usageText }}</el-descriptions-item>
-              <el-descriptions-item label="分析阶段">{{ stageLabel(snapshot?.workflowStage) }}</el-descriptions-item>
-              <el-descriptions-item label="迭代轮次">{{ snapshot?.iteration || 0 }}</el-descriptions-item>
-            </el-descriptions>
-
             <section v-if="participantFailures.length" class="section">
-              <h3>角色状态</h3>
+              <h3>调查说明</h3>
               <el-alert
                 v-for="item in participantFailures"
                 :key="`${item.data?.role}-${item.data?.round}`"
-                :title="`第 ${item.data?.round} 轮 ${roleLabel(item.data?.role)} 不可用，其他角色已继续运行`"
+                title="部分分析步骤暂不可用，已保留可验证的结果和限制条件。"
                 type="warning"
                 show-icon
                 :closable="false"
@@ -150,7 +139,7 @@
             </section>
 
             <section v-if="snapshot?.plan" class="section">
-              <h3>结构化计划</h3>
+              <h3>查询范围</h3>
               <p>{{ snapshot.plan.summary }}</p>
               <el-tag
                 v-for="call in snapshot.plan.toolCalls"
@@ -158,26 +147,26 @@
                 class="tool-tag"
                 effect="plain"
               >
-                {{ call.tool }}
+                {{ toolLabel(call.tool) }}
               </el-tag>
             </section>
 
             <section v-if="snapshot?.toolInvocations?.length" class="section">
-              <h3>只读工具活动</h3>
+              <h3>事实查询</h3>
               <el-timeline>
                 <el-timeline-item
                   v-for="(item, index) in snapshot.toolInvocations"
                   :key="`${item.tool}-${index}`"
                   :type="item.status === 'completed' ? 'success' : item.status === 'failed' ? 'danger' : 'primary'"
                 >
-                  <strong>{{ item.tool }}</strong> · {{ item.status }}
+                  <strong>{{ toolLabel(item.tool) }}</strong> · {{ queryStatusLabel(item.status) }}
                   <div class="muted">{{ item.summary || item.error }}</div>
                 </el-timeline-item>
               </el-timeline>
             </section>
 
             <section v-if="snapshot?.answer?.investigation" class="section investigation">
-              <h3>多角色调查</h3>
+              <h3>深入调查</h3>
               <el-alert
                 :title="snapshot.answer.investigation.summary"
                 :type="snapshot.answer.investigation.status === 'candidate' ? 'warning' : 'info'"
@@ -192,37 +181,10 @@
                 class="hypothesis"
               >
                 <div class="hypothesis-title">
-                  <el-tag effect="plain">{{ roleLabel(item.authorRole) }}</el-tag>
                   <strong>{{ item.statement }}</strong>
                 </div>
                 <div class="muted">{{ item.rationale }}</div>
               </el-card>
-              <el-collapse class="transcript">
-                <el-collapse-item title="查看公开讨论记录" name="transcript">
-                  <el-timeline>
-                    <el-timeline-item
-                      v-for="(item, index) in snapshot.answer.investigation.transcript"
-                      :key="`${item.round}-${item.role}-${index}`"
-                    >
-                      <strong>第 {{ item.round }} 轮 · {{ roleLabel(item.role) }}</strong>
-                      <div>{{ item.summary }}</div>
-                      <div
-                        v-for="claim in item.claims"
-                        :key="`${claim.hypothesisId}-${claim.statement}`"
-                        class="claim"
-                      >
-                        <el-tag
-                          size="small"
-                          :type="claim.position === 'oppose' ? 'danger' : claim.position === 'support' ? 'success' : 'info'"
-                        >
-                          {{ claim.position }}
-                        </el-tag>
-                        {{ claim.statement }}
-                      </div>
-                    </el-timeline-item>
-                  </el-timeline>
-                </el-collapse-item>
-              </el-collapse>
               <el-alert
                 v-for="item in snapshot.answer.investigation.limitations"
                 :key="item"
@@ -270,7 +232,7 @@
             </section>
 
             <section v-if="snapshot?.answer" class="section answer">
-              <h3>分析结论</h3>
+              <h3>回答</h3>
               <p>{{ snapshot.answer.summary }}</p>
               <ul>
                 <li v-for="item in snapshot.answer.findings" :key="item">{{ item }}</li>
@@ -340,7 +302,7 @@ const authHeaders = () => ({
 });
 const running = computed(() => ["queued", "running", "cancelling"].includes(snapshot.value?.status));
 const canStart = computed(() => Boolean(capabilities.value?.enabled && supportsMode(form.mode) && form.question.trim()));
-const statusLabel = computed(() => snapshot.value?.status || "尚未运行");
+const statusLabel = computed(() => runStatusLabel(snapshot.value?.status));
 const statusType = computed(() => ({
   completed: "success",
   failed: "danger",
@@ -349,17 +311,11 @@ const statusType = computed(() => ({
   running: "primary",
 })[snapshot.value?.status] || "info");
 const participantFailures = computed(() => events.value.filter((item) => item.type === "discussion.participant_failed"));
-const usageText = computed(() => {
-  const usage = snapshot.value?.usage;
-  if (!usage) return "等待运行数据";
-  const cost = usage.estimatedCost == null
-    ? "成本未知"
-    : `${usage.currency} ${Number(usage.estimatedCost).toFixed(4)}`;
-  return `${usage.totalTokens || 0} tokens · ${usage.modelCalls || 0} 次模型 · ${cost}`;
-});
 const capabilitySummary = computed(() => {
-  if (!capabilities.value) return "填写凭据后读取服务端能力";
-  return `${capabilities.value.provider} · 最多 ${capabilities.value.maxIterations} 轮 / ${capabilities.value.maxToolCalls} 次工具调用 / ${capabilities.value.maxRunSeconds} 秒`;
+  if (!capabilities.value) return "填写访问凭据后读取可用回答方式";
+  const modes = capabilities.value.modes || [];
+  if (!modes.length) return "当前没有可用的回答方式";
+  return `当前可用：${modes.map(modeLabel).join("、")}`;
 });
 
 const supportsMode = (mode) => capabilities.value?.modes?.includes(mode) ?? false;
@@ -458,27 +414,36 @@ async function openHistory(id) {
   }
 }
 
-function roleLabel(role) {
+function toolLabel(tool) {
   return ({
-    "process-analyst": "工艺分析",
-    "quality-analyst": "质量分析",
-    skeptic: "反证审查",
-  })[role] || role;
+    check_data_quality: "检查数据质量",
+    get_cycle_trace: "查看周期事实",
+  })[tool] || "查询生产事实";
 }
 
-function stageLabel(stage) {
+function queryStatusLabel(status) {
   return ({
-    intake: "理解问题",
-    planning: "制定计划",
-    validating: "校验计划",
-    executing: "查询事实",
-    verifying: "核验证据",
-    composing: "组织回答",
-  })[stage] || stage || "-";
+    queued: "等待中",
+    running: "查询中",
+    completed: "已完成",
+    failed: "未完成",
+    cancelled: "已取消",
+  })[status] || status || "处理中";
 }
 
 function modeLabel(mode) {
   return mode === "deep" ? "深度调查" : "标准分析";
+}
+
+function runStatusLabel(status) {
+  return ({
+    queued: "等待回答",
+    running: "正在回答",
+    cancelling: "正在取消",
+    completed: "已完成",
+    failed: "未完成",
+    cancelled: "已取消",
+  })[status] || "尚未开始";
 }
 
 function chartTypeLabel(type) {
@@ -533,8 +498,6 @@ onBeforeUnmount(() => streamController?.abort());
 .follow-ups h4 { margin: 18px 0 10px; }
 .hypothesis { margin: 10px 0; }
 .hypothesis-title { display: flex; align-items: flex-start; gap: 10px; line-height: 1.6; }
-.transcript { margin-top: 14px; }
-.claim { margin-top: 7px; line-height: 1.6; }
 .capability-note { width: 100%; }
 .history-card { margin-top: 18px; }
 .history-item {

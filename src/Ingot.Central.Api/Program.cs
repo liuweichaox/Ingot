@@ -31,7 +31,6 @@ builder.Services.AddIngotAgentInfrastructure(builder.Configuration);
 // 宿主职责：入站鉴权策略
 builder.Services.AddSingleton<EdgeTokenValidator>();
 builder.Services.AddSingleton<InspectionActorTokenValidator>();
-builder.Services.AddSingleton<AgentTokenValidator>();
 builder.Services.AddSingleton<ChatTokenValidator>();
 
 builder.Services.AddHealthChecks()
@@ -102,11 +101,7 @@ app.MapGet("/", () => Results.Ok(new
         inspectionRecords = "/api/v1/inspection-records",
         subscriptions = "/api/v1/subscriptions",
         chatRuns = "/api/v1/chat/runs",
-        chatCapabilities = "/api/v1/chat/capabilities",
-        agentRuns = "/api/v1/agent/runs",
-        agentCapabilities = "/api/v1/agent/capabilities",
-        agentArtifacts = "/api/v1/agent/artifacts",
-        connectorWorkspaces = "/api/v1/connector-workspaces/{workspaceId}"
+        chatCapabilities = "/api/v1/chat/capabilities"
     }
 }));
 
@@ -137,10 +132,6 @@ Log.Logger.Information("    > Inspections:   {0}/api/v1/inspection-records", bas
 Log.Logger.Information("    > Subscriptions: {0}/api/v1/subscriptions", baseAddress);
 Log.Logger.Information("    > Chat Runs:     {0}/api/v1/chat/runs", baseAddress);
 Log.Logger.Information("    > Chat Capabilities:{0}/api/v1/chat/capabilities", baseAddress);
-Log.Logger.Information("    > Desktop Agent Runs:{0}/api/v1/agent/runs", baseAddress);
-Log.Logger.Information("    > Desktop Agent Capabilities:{0}/api/v1/agent/capabilities", baseAddress);
-Log.Logger.Information("    > Agent Artifacts:{0}/api/v1/agent/artifacts", baseAddress);
-Log.Logger.Information("    > Connector Workspaces:{0}/api/v1/connector-workspaces/{{workspaceId}}", baseAddress);
 Log.Logger.Information("==================================================================");
 
 app.Run();

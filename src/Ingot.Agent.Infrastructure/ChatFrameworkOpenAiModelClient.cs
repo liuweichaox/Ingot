@@ -42,7 +42,7 @@ public sealed class ChatFrameworkOpenAiModelClient : IModelClient
     public string Model => $"{_options.FastModel}/{_options.ReasoningModel}";
 
     public async Task<ModelCallResult<AnalysisPlan>> ResolveIntentAsync(
-        CreateAgentRunRequest request,
+        CreateChatRunRequest request,
         IReadOnlyCollection<AnalysisToolDefinition> tools,
         CancellationToken ct = default)
     {
@@ -64,7 +64,7 @@ public sealed class ChatFrameworkOpenAiModelClient : IModelClient
     }
 
     public async Task<ModelCallResult<AnalysisAnswer>> ComposeAnswerAsync(
-        CreateAgentRunRequest request,
+        CreateChatRunRequest request,
         AnalysisPlan plan,
         IReadOnlyList<AnalysisToolResult> results,
         CancellationToken ct = default)

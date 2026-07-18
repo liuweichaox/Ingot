@@ -1,45 +1,37 @@
 # FAQ
 
-## What is the difference between Chat and Ingot Agent?
+## Does Ingot connect directly to equipment?
 
-Chat is the read-only conversation in Central Web for production-fact queries, data-quality checks, and cycle problem finding. Ingot Agent is a downloadable desktop application used only for connector code generation, build, test, repair, and packaging.
+No. Teams implement source adaptation, map equipment, instrument, or business-system data to `ProductionEvent`, and call `POST /api/v1/events:batch`. This lets each plant choose the language and runtime that meet its safety, network, and operations requirements.
 
-## Does Chat generate code?
+For a local SQLite outbox, a team may deploy `Ingot.Connector.Host` and submit events to it; it is an optional local ingress, while teams own adaptation implementation and runtime operation.
 
-No. Chat calls only `check_data_quality` and `get_cycle_trace`. It cannot write files, execute SQL or shell, or modify production facts.
+## What must a source-adaptation program do?
 
-## Why is there no Agent entry in Central Web?
+Use a stable `edgeId`, locally increasing `seq`, globally unique `eventId`, and a `source` that starts with `edge/{edgeId}/`. Retain unacknowledged batches and use `ackSeq` for retries; never put secrets or large objects in `context`.
 
-Agent requires a local desktop security boundary, a fixed client identity, and a code-engineering workspace. Central Web exposes only Chat and production facts. Download Agent from [GitHub Releases](https://github.com/liuweichaox/Ingot/releases/latest).
+## What can Chat do?
 
-## Where do models and builds run for Ingot Agent?
+Chat queries recorded production facts, checks data completeness, returns cycle event chains, and displays evidence. It does not write events, inspection records, configuration, or equipment; it cannot execute arbitrary SQL, scripts, or open network requests.
 
-The desktop configures Central URL, Actor, and token. Models, workspaces, fixed container build/test, and artifact storage run on the Central server. The desktop accesses them through a Tauri Rust native boundary.
+## How do I enable Chat in production?
 
-## How is a data source onboarded?
+Default Compose keeps Chat disabled. Enable it with `INGOT_CHAT_ENABLED=true`, `INGOT_CHAT_PROVIDER=OpenAI`, Fast and Reasoning models, `OPENAI_API_KEY`, `INGOT_CHAT_OPERATOR_TOKEN`, and `INGOT_CHAT_OPERATOR_ALLOW_ALL`. Central Web and the Chat API use Actor `operator` with the Chat Actor token. See [configuration](tutorial-configuration.en.md) for the complete configuration.
 
-In Ingot Agent Desktop, provide protocol, endpoint description, input contract, samples, sampling policy, target events, and acceptance criteria. Agent generates source and runs fixed build/test entries. After tests pass, an authorized Actor approves packaging and downloads the SHA-256 ZIP.
+## Can Chat confirm root cause?
 
-## How does the default connector run?
+Chat output consists of verified facts, limitations, and candidate investigation directions, with correlation and causation clearly distinguished.
 
-The default template reads source JSONL from stdin and writes ProductionEvent JSONL to stdout. The external deployment runtime owns the source connection, batching, Connector Token, submission to Connector Host, retries, and process supervision.
+## How is data access scoped?
 
-## Does Ingot deploy or start generated connectors?
+Configure allowed `EdgeIds` for every Chat Actor. Event ingestion uses an independent token matching the `edgeId`. Production deployments should rotate tokens and avoid global access.
 
-No. Ingot provides source, build/test results, operator approval, and a ZIP. Deployment, startup, scheduling, production credentials, and rollback belong to the external runtime.
+## What happens when an event is submitted twice?
 
-## What does Connector Host accept?
+Central detects duplicates by `eventId` and `(edgeId, seq)`. Callers should still retain local acknowledgment state and avoid mixing unacknowledged and new events into an unordered batch.
 
-Bearer-authenticated `ProductionEvent[]`. The host validates events, assigns local sequence numbers, commits to SQLite, and ships to Central API through an outbox.
+## Does the platform control equipment?
 
-## Do Chat and Agent share history?
+No. PLCs, CNCs, robots, safety interlocks, equipment authentication, and plant operations remain with existing field systems.
 
-No. Create, list, read, SSE, cancellation, and history are isolated by product surface and Actor. Agent endpoints also require the fixed desktop-client identifier.
-
-## What happens when Chat has insufficient data?
-
-Chat returns limitations or refuses a definitive conclusion. Answer numbers must come from tool results, and key findings require resolvable evidence.
-
-## Can Ingot control equipment?
-
-No. Neither Chat nor Agent has PLC, CNC, robot, or other equipment-control tools.
+See the [production event specification](rfc-production-events.en.md), [configuration](tutorial-configuration.en.md), and [Ingot Chat](chat.en.md).

@@ -6,11 +6,10 @@ using Microsoft.Extensions.Configuration;
 namespace Ingot.Agent.Infrastructure;
 
 /// <summary>
-/// Local-first Agent control-plane store. WAL keeps readers independent from the single writer and
-/// the database remains one portable file. It stores platform artifacts as records, never as
-/// model-selected filesystem paths.
+/// Local-first Chat run store. WAL keeps readers independent from the single writer and the
+/// database remains one portable file.
 /// </summary>
-public sealed class SqliteAgentStore : IAgentRunStore, IAgentArtifactStore, IDisposable
+public sealed class SqliteAgentStore : IAgentRunStore, IDisposable
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private readonly string _connectionString;
@@ -19,8 +18,8 @@ public sealed class SqliteAgentStore : IAgentRunStore, IAgentArtifactStore, IDis
 
     public SqliteAgentStore(IConfiguration configuration)
     {
-        var configured = configuration["Agent:DatabasePath"];
-        var path = string.IsNullOrWhiteSpace(configured) ? "data/agent.db" : configured.Trim();
+        var configured = configuration["Chat:DatabasePath"];
+        var path = string.IsNullOrWhiteSpace(configured) ? "data/chat.db" : configured.Trim();
         if (!Path.IsPathRooted(path))
             path = Path.Combine(AppContext.BaseDirectory, path);
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
@@ -74,20 +73,6 @@ public sealed class SqliteAgentStore : IAgentRunStore, IAgentArtifactStore, IDis
                 CREATE INDEX IF NOT EXISTS idx_agent_stream_events_run_sequence
                   ON agent_stream_events(run_id, sequence);
 
-                CREATE TABLE IF NOT EXISTS agent_artifacts (
-                  artifact_id TEXT PRIMARY KEY,
-                  actor_id TEXT NOT NULL,
-                  run_id TEXT,
-                  kind TEXT NOT NULL,
-                  title TEXT NOT NULL,
-                  format TEXT NOT NULL,
-                  content TEXT NOT NULL,
-                  version INTEGER NOT NULL,
-                  metadata TEXT,
-                  created_at TEXT NOT NULL
-                );
-                CREATE INDEX IF NOT EXISTS idx_agent_artifacts_actor_created
-                  ON agent_artifacts(actor_id, created_at DESC);
                 """;
             await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
             await RecoverInterruptedRunsAsync(connection, ct).ConfigureAwait(false);
@@ -169,7 +154,7 @@ public sealed class SqliteAgentStore : IAgentRunStore, IAgentArtifactStore, IDis
             """;
         BindRun(command, run);
         if (await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false) != 1)
-            throw new InvalidOperationException($"Agent 运行不存在: {run.RunId}");
+            throw new InvalidOperationException($"Chat 运行不存在: {run.RunId}");
     }
 
     public async Task<AgentStreamEvent> AppendEventAsync(
@@ -226,80 +211,6 @@ public sealed class SqliteAgentStore : IAgentRunStore, IAgentArtifactStore, IDis
                 Data = reader.IsDBNull(3) ? null : JsonSerializer.Deserialize<JsonElement>(reader.GetString(3), JsonOptions)
             });
         }
-        return result;
-    }
-
-    public async Task<AgentArtifact> SaveAsync(
-        string actorId,
-        string? runId,
-        string kind,
-        string title,
-        string format,
-        string content,
-        JsonElement? metadata,
-        CancellationToken ct = default)
-    {
-        await InitializeAsync(ct).ConfigureAwait(false);
-        if (!AgentArtifactKinds.All.Contains(kind))
-            throw new ArgumentOutOfRangeException(nameof(kind), "不支持的 Agent 制品类型。");
-        if (content.Length > 1_000_000)
-            throw new ArgumentException("单个 Agent 制品不得超过 1 MB。", nameof(content));
-        await using var connection = await OpenAsync(ct).ConfigureAwait(false);
-        await using var versionCommand = connection.CreateCommand();
-        versionCommand.CommandText =
-            "SELECT COALESCE(MAX(version), 0) + 1 FROM agent_artifacts WHERE actor_id=$actor AND kind=$kind AND title=$title;";
-        versionCommand.Parameters.AddWithValue("$actor", actorId);
-        versionCommand.Parameters.AddWithValue("$kind", kind);
-        versionCommand.Parameters.AddWithValue("$title", title.Trim());
-        var version = Convert.ToInt32(await versionCommand.ExecuteScalarAsync(ct).ConfigureAwait(false));
-        var artifact = new AgentArtifact
-        {
-            ArtifactId = Guid.CreateVersion7().ToString(),
-            ActorId = actorId,
-            RunId = runId,
-            Kind = kind,
-            Title = title.Trim(),
-            Format = format.Trim(),
-            Content = content,
-            Version = version,
-            Metadata = metadata,
-            CreatedAt = DateTimeOffset.UtcNow
-        };
-        await using var command = connection.CreateCommand();
-        command.CommandText =
-            """
-            INSERT INTO agent_artifacts(artifact_id,actor_id,run_id,kind,title,format,content,version,metadata,created_at)
-            VALUES($id,$actor,$run,$kind,$title,$format,$content,$version,$metadata,$created);
-            """;
-        BindArtifact(command, artifact);
-        await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
-        return artifact;
-    }
-
-    public async Task<AgentArtifact?> GetAsync(string actorId, string artifactId, CancellationToken ct = default)
-    {
-        await InitializeAsync(ct).ConfigureAwait(false);
-        await using var connection = await OpenAsync(ct).ConfigureAwait(false);
-        await using var command = connection.CreateCommand();
-        command.CommandText = "SELECT artifact_id,actor_id,run_id,kind,title,format,content,version,metadata,created_at FROM agent_artifacts WHERE actor_id=$actor AND artifact_id=$id;";
-        command.Parameters.AddWithValue("$actor", actorId);
-        command.Parameters.AddWithValue("$id", artifactId);
-        await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
-        return await reader.ReadAsync(ct).ConfigureAwait(false) ? ReadArtifact(reader) : null;
-    }
-
-    public async Task<IReadOnlyList<AgentArtifact>> ListAsync(string actorId, int limit, CancellationToken ct = default)
-    {
-        await InitializeAsync(ct).ConfigureAwait(false);
-        await using var connection = await OpenAsync(ct).ConfigureAwait(false);
-        await using var command = connection.CreateCommand();
-        command.CommandText = "SELECT artifact_id,actor_id,run_id,kind,title,format,content,version,metadata,created_at FROM agent_artifacts WHERE actor_id=$actor ORDER BY created_at DESC LIMIT $limit;";
-        command.Parameters.AddWithValue("$actor", actorId);
-        command.Parameters.AddWithValue("$limit", Math.Clamp(limit, 1, 100));
-        var result = new List<AgentArtifact>();
-        await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
-        while (await reader.ReadAsync(ct).ConfigureAwait(false))
-            result.Add(ReadArtifact(reader));
         return result;
     }
 
@@ -373,31 +284,4 @@ public sealed class SqliteAgentStore : IAgentRunStore, IAgentArtifactStore, IDis
         command.Parameters.AddWithValue("$updatedAt", DateTimeOffset.UtcNow.UtcDateTime.ToString("O"));
     }
 
-    private static void BindArtifact(SqliteCommand command, AgentArtifact artifact)
-    {
-        command.Parameters.AddWithValue("$id", artifact.ArtifactId);
-        command.Parameters.AddWithValue("$actor", artifact.ActorId);
-        command.Parameters.AddWithValue("$run", artifact.RunId ?? (object)DBNull.Value);
-        command.Parameters.AddWithValue("$kind", artifact.Kind);
-        command.Parameters.AddWithValue("$title", artifact.Title);
-        command.Parameters.AddWithValue("$format", artifact.Format);
-        command.Parameters.AddWithValue("$content", artifact.Content);
-        command.Parameters.AddWithValue("$version", artifact.Version);
-        command.Parameters.AddWithValue("$metadata", artifact.Metadata?.GetRawText() ?? (object)DBNull.Value);
-        command.Parameters.AddWithValue("$created", artifact.CreatedAt.UtcDateTime.ToString("O"));
-    }
-
-    private static AgentArtifact ReadArtifact(SqliteDataReader reader) => new()
-    {
-        ArtifactId = reader.GetString(0),
-        ActorId = reader.GetString(1),
-        RunId = reader.IsDBNull(2) ? null : reader.GetString(2),
-        Kind = reader.GetString(3),
-        Title = reader.GetString(4),
-        Format = reader.GetString(5),
-        Content = reader.GetString(6),
-        Version = reader.GetInt32(7),
-        Metadata = reader.IsDBNull(8) ? null : JsonSerializer.Deserialize<JsonElement>(reader.GetString(8), JsonOptions),
-        CreatedAt = DateTimeOffset.Parse(reader.GetString(9))
-    };
 }

@@ -1,70 +1,87 @@
 # Deployment
 
-## Central and Connector Host
+This guide deploys Central Web, Central API, and PostgreSQL. Teams deploy source adaptation in the network and runtime appropriate to the plant and submit facts to Central through the standard event API.
 
-The repository provides a single-host Docker Compose baseline:
+## Pre-deployment checks
+
+- Prepare separate secrets for PostgreSQL, event ingestion, and Chat;
+- if deploying optional `Ingot.Connector.Host`, prepare an independent local-ingress token;
+- create an independent event token for every `edgeId`;
+- configure the model, model key, independent token, and required fact scope for every Chat Actor;
+- place Central API and the database on a controlled network and use TLS in production;
+- ensure source-adaptation programs do not put device credentials, raw large objects, or sensitive text into event context.
+
+## Docker Compose
 
 ```bash
 export INGOT_POSTGRES_PASSWORD="$(openssl rand -hex 24)"
 export INGOT_EDGE_TOKEN="$(openssl rand -hex 24)"
 export INGOT_OPERATOR_TOKEN="$(openssl rand -hex 24)"
-export INGOT_CONNECTOR_TOKEN="$(openssl rand -hex 24)"
-docker pull mcr.microsoft.com/dotnet/sdk:10.0
+
 docker compose -f docker-compose.app.yml up -d --build
+docker compose -f docker-compose.app.yml ps
 ```
 
-| Service | Responsibility |
-|---|---|
-| `central-web` | production-fact pages and Chat |
-| `central-api` | Chat, desktop Agent, fact, inspection, webhook, and SSE APIs |
-| `connector-host` | protocol-neutral normalized event ingress and shop-floor outbox |
-| `postgres` | central production facts |
-
-The default ports bind only to the host loopback interface. Public deployment requires an authenticated gateway, TLS, rate limits, and an explicit ingress allowlist.
-
-## Chat deployment
-
-Chat runs in Central API; Central Web only provides its user interface. Production configures the Chat provider, models, Actor tokens, and data scopes. Chat reads through central fact services and receives no database credentials, filesystem access, or equipment-network access.
-
-## Ingot Agent deployment
-
-Users download Ingot Agent Desktop from [GitHub Releases](https://github.com/liuweichaox/Ingot/releases/latest). The desktop stores Central URL, Actor, and token and uses a Rust native boundary for desktop-only Agent API requests.
-
-Agent models, SQLite run storage, source workspaces, Builder, and package directories run on the Central side:
-
-- `Data/agent.db`: Chat/Agent runs, SSE events, and artifact metadata;
-- `Data/connector-workspaces`: Actor-isolated source, command results, and packaging-approval metadata;
-- `Data/connector-packages`: tested and approved content-addressed ZIPs.
-
-Central API uses the Docker socket to start constrained build children. The socket is a privileged operations boundary and must be exposed only to the trusted Central API. Production should use a dedicated host, rootless daemon, or equivalent governed build service. The model cannot access the socket or supply Docker arguments.
-
-Fixed build/test children use `--network none`, `--pull never`, a read-only root filesystem, resource limits, dropped capabilities, and `no-new-privileges`. Pre-pull and audit the SDK image. Production can pin `INGOT_CONNECTOR_BUILDER_IMAGE` to a digest.
-
-## Connector Host data
-
-- `Data/connector-host/events.db`: shop-floor events and outbox;
-- `Data/connector-host/context.db`: business context;
-- `ingot-postgres-data`: central fact PostgreSQL volume.
-
-The Connector Host outbox defaults to 500,000 records. At `Events:MaxBacklogRows`, it drops the oldest unshipped events and emits `diagnostic.backlog_dropped` plus `event_backlog_dropped_total`. Production monitoring must cover both.
-
-## External connectors
-
-Generated packages use a stdin JSONL → stdout ProductionEvent JSONL contract and contain no production credentials, HTTP submission client, or process supervision. The external deployment environment must:
-
-- run and restart the connector;
-- provide source and Connector Host credentials;
-- form batches and call `POST /api/v1/connector-events`;
-- own logs, upgrades, rollback, and network policy.
-
-Ingot does not deploy, start, or schedule connectors and does not control equipment.
-
-## Release gate
-
-Retention, backup, and recovery must cover source, run records, approval metadata, packages, SQLite files, and PostgreSQL volumes. Run before release:
+Check the services:
 
 ```bash
-./scripts/verify.sh
+curl http://localhost:8000/health
 ```
 
-The website and docs site deploy independently with `deploy/compose.yml` and `deploy/deploy.sh`; see [`deploy/README.md`](../deploy/README.md).
+The default Compose stack starts PostgreSQL, Central API, and Central Web, with Chat disabled.
+
+## Enable Chat in production
+
+Production Chat requires this complete configuration before it is enabled:
+
+```bash
+export INGOT_CHAT_ENABLED=true
+export INGOT_CHAT_PROVIDER=OpenAI
+export INGOT_CHAT_FAST_MODEL="<fast-model>"
+export INGOT_CHAT_REASONING_MODEL="<reasoning-model>"
+export OPENAI_API_KEY="<secret>"
+export INGOT_CHAT_OPERATOR_TOKEN="$(openssl rand -hex 24)"
+export INGOT_CHAT_OPERATOR_ALLOW_ALL=true
+
+docker compose -f docker-compose.app.yml up -d --build
+
+curl http://localhost:8000/api/v1/chat/capabilities \
+  -H "X-Ingot-Actor: operator" \
+  -H "Authorization: Bearer ${INGOT_CHAT_OPERATOR_TOKEN}"
+```
+
+This Compose configuration grants `operator` access to all facts. Production deployments should configure the actual scope required by each role and inject every secret through a secret store or protected environment variables.
+
+## Source ingestion
+
+Source-adaptation programs own:
+
+1. reading equipment, instruments, or business systems;
+2. mapping stable event types, subjects, context, and units;
+3. retaining local sequence state and unacknowledged batches;
+4. submitting events with `POST /api/v1/events:batch` and an Edge token;
+5. retrying unacknowledged events from `ackSeq`;
+6. monitoring authorization failures, latency, and duplicate rate.
+
+`Ingot.Connector.Host` is an optional path: a team may deploy it in the plant for a local SQLite outbox and submit `ProductionEvent[]` to it; the Host ships batches to Central with at-least-once delivery. Default Compose does not start the Host. Enable this path when needed:
+
+```bash
+export INGOT_CONNECTOR_TOKEN="$(openssl rand -hex 24)"
+docker compose -f docker-compose.app.yml --profile connector-host up -d connector-host
+```
+
+Direct Central batches and Host ingress use different tokens, so choose, monitor, and operate one path for each network boundary.
+
+Central requires no specific language, process model, or plant operating system. See the [production event specification](rfc-production-events.en.md) for full fields and retry semantics.
+
+## Backup and upgrade
+
+- Back up PostgreSQL according to organizational recovery objectives;
+- run `./scripts/verify.sh` and validate Compose configuration before an upgrade;
+- validate compatibility in an isolated environment with real but de-identified event batches;
+- increase `eventTypeVersion` or add an event type for incompatible semantic changes;
+- pass Chat evaluation before changing model or prompt versions and retain run, tool, and evidence audit records.
+
+## Operating boundary
+
+Ingot provides fact storage, query, and conversation. Device protocols, plant safety, network isolation, credential rotation, source-adaptation availability, and equipment control remain deployment and field-system responsibilities.

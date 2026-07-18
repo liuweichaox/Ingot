@@ -1,19 +1,23 @@
 # Ingot Documentation
 
-Ingot normalizes different sources into production events and stores trusted facts in Central. **Chat** in Central Web provides read-only queries and problem finding. The downloadable **Ingot Agent** desktop app is used only for connector code generation, build, test, and packaging.
+Ingot stores data from different sources as standard production facts and provides **Ingot Chat** in Central Web. Teams implement their own source adaptation and submit `ProductionEvent` or `InspectionRecord` records through the public APIs; Ingot embeds no field-device protocol.
 
 ## Get started
 
 1. [Getting started](tutorial-getting-started.en.md)
-2. [Chat](chat.en.md)
-3. [Ingot Agent desktop](desktop-agent.en.md)
+2. [Event ingestion](rfc-production-events.en.md)
+3. [Ingot Chat](chat.en.md)
 4. [Deployment](tutorial-deployment.en.md)
 5. [Configuration](tutorial-configuration.en.md)
 
-## Chat and Agent
+## Ingot Chat
 
-- [Chat](chat.en.md): Central Web conversation, read-only fact tools, evidence, and API.
-- [Ingot Agent desktop](desktop-agent.en.md): download, technology, code workflow, build/test, operator approval, and connector runtime contract.
+- [Ingot Chat](chat.en.md): read-only production-fact conversation, evidence, and HTTP API in Central Web.
+
+## Event ingestion
+
+- [Production event specification](rfc-production-events.en.md): `ProductionEvent` batches, authentication, deduplication, query, and extension rules.
+- [Getting started](tutorial-getting-started.en.md): start Central and submit the first batch.
 
 ## Deployment and operations
 
@@ -32,5 +36,5 @@ Ingot normalizes different sources into production events and stores trusted fac
 ## References
 
 - [Production event specification](rfc-production-events.en.md)
-- [Brand](brand.md) (Chinese)
+- [Brand](brand.en.md)
 - [Security policy](../SECURITY.md)

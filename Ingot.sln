@@ -32,8 +32,6 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ingot.EventBenchmarks", "to
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ingot.CentralBenchmarks", "tools\Ingot.CentralBenchmarks\Ingot.CentralBenchmarks.csproj", "{136CD0B4-BBE2-4323-B2E0-BA8B6CAD0AD5}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ingot.Connector.Builder", "src\Ingot.Connector.Builder\Ingot.Connector.Builder.csproj", "{31F13BB5-98BA-4048-9BD4-6B954A2352F4}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -188,18 +186,6 @@ Global
 		{136CD0B4-BBE2-4323-B2E0-BA8B6CAD0AD5}.Release|x64.Build.0 = Release|Any CPU
 		{136CD0B4-BBE2-4323-B2E0-BA8B6CAD0AD5}.Release|x86.ActiveCfg = Release|Any CPU
 		{136CD0B4-BBE2-4323-B2E0-BA8B6CAD0AD5}.Release|x86.Build.0 = Release|Any CPU
-		{31F13BB5-98BA-4048-9BD4-6B954A2352F4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{31F13BB5-98BA-4048-9BD4-6B954A2352F4}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{31F13BB5-98BA-4048-9BD4-6B954A2352F4}.Debug|x64.ActiveCfg = Debug|Any CPU
-		{31F13BB5-98BA-4048-9BD4-6B954A2352F4}.Debug|x64.Build.0 = Debug|Any CPU
-		{31F13BB5-98BA-4048-9BD4-6B954A2352F4}.Debug|x86.ActiveCfg = Debug|Any CPU
-		{31F13BB5-98BA-4048-9BD4-6B954A2352F4}.Debug|x86.Build.0 = Debug|Any CPU
-		{31F13BB5-98BA-4048-9BD4-6B954A2352F4}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{31F13BB5-98BA-4048-9BD4-6B954A2352F4}.Release|Any CPU.Build.0 = Release|Any CPU
-		{31F13BB5-98BA-4048-9BD4-6B954A2352F4}.Release|x64.ActiveCfg = Release|Any CPU
-		{31F13BB5-98BA-4048-9BD4-6B954A2352F4}.Release|x64.Build.0 = Release|Any CPU
-		{31F13BB5-98BA-4048-9BD4-6B954A2352F4}.Release|x86.ActiveCfg = Release|Any CPU
-		{31F13BB5-98BA-4048-9BD4-6B954A2352F4}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -217,6 +203,5 @@ Global
 		{CB8FED05-0D0A-446B-86AD-66FAF5EE9394} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 		{92416EE5-8404-49CE-B76F-9623E04E2BC1} = {07C2787E-EAC7-C090-1BA3-A61EC2A24D84}
 		{136CD0B4-BBE2-4323-B2E0-BA8B6CAD0AD5} = {07C2787E-EAC7-C090-1BA3-A61EC2A24D84}
-		{31F13BB5-98BA-4048-9BD4-6B954A2352F4} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 	EndGlobalSection
 EndGlobal

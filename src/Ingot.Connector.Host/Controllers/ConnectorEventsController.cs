@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace Ingot.Connector.Host.Controllers;
 
 /// <summary>
-/// Protocol-neutral ingress for generated connector packages. Connectors translate their source
+/// Protocol-neutral ingress for user-owned source adapters. Adapters translate their source
 /// protocol into Ingot production events; this host never loads a PLC/device SDK.
 /// </summary>
 [ApiController]

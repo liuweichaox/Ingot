@@ -13,7 +13,7 @@ public sealed partial class BoundedInvestigationWorkflow(IOptions<ChatOptions> o
     private readonly ChatOptions _options = options.Value;
 
     public async Task<InvestigationWorkflowResult> RunAsync(
-        CreateAgentRunRequest request,
+        CreateChatRunRequest request,
         AnalysisPlan plan,
         IReadOnlyList<AnalysisToolResult> results,
         IModelClient model,
@@ -42,7 +42,7 @@ public sealed partial class BoundedInvestigationWorkflow(IOptions<ChatOptions> o
         var modelCalls = new List<ModelCallUsage>();
         var limitations = new List<string>
         {
-            "多 Agent 讨论只生成候选解释，不能替代确定性统计检验或工程师确认。",
+            "深度分析的多角色讨论只生成候选解释，不能替代确定性统计检验或工程师确认。",
             "参与者只能读取本次已验证工具结果，不能自行访问数据库、网络或设备。"
         };
         var turns = 0;

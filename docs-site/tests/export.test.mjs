@@ -6,10 +6,10 @@ import test from "node:test";
 const root = path.resolve(import.meta.dirname, "../..");
 const out = path.join(root, "docs-site/out");
 
-test("exports bilingual core pages and search", async () => {
-  for (const file of ["zh/index.html", "en/index.html", "zh/chat/index.html", "en/chat/index.html", "zh/desktop-agent/index.html", "en/desktop-agent/index.html", "search-index.json", "sitemap.xml", "robots.txt"])
+test("exports bilingual Chat and event-ingestion documentation", async () => {
+  for (const file of ["zh/index.html", "en/index.html", "zh/chat/index.html", "en/chat/index.html", "zh/rfc-production-events/index.html", "en/rfc-production-events/index.html", "search-index.json", "sitemap.xml", "robots.txt"])
     assert.ok((await readFile(path.join(out, file))).length > 0, file);
-  for (const slug of ["chat", "desktop-agent", "architecture", "design", "modules", "tutorial-getting-started", "tutorial-configuration", "tutorial-deployment", "faq"])
+  for (const slug of ["chat", "rfc-production-events", "architecture", "design", "modules", "tutorial-getting-started", "tutorial-configuration", "tutorial-deployment", "faq", "brand"])
     for (const lang of ["zh", "en"])
       assert.ok((await readFile(path.join(out, lang, slug, "index.html"))).length > 0, `${lang}/${slug}`);
 
@@ -21,8 +21,6 @@ test("exports bilingual core pages and search", async () => {
   assert.match(en, /hrefLang="zh"/i);
   assert.match(zh, /https:\/\/github\.com\/liuweichaox\/Ingot\/blob\/main\/CONTRIBUTING\.md/);
   assert.match(en, /https:\/\/github\.com\/liuweichaox\/Ingot\/blob\/main\/CONTRIBUTING\.en\.md/);
-  assert.doesNotMatch(zh, /blob\/main\/CONTRIBUTING(?:["#?])/);
-  assert.doesNotMatch(en, /blob\/main\/CONTRIBUTING\.en(?:["#?])/);
 });
 
 test("uses the exact official brand assets", async () => {
@@ -44,25 +42,26 @@ test("uses the canonical repository links", async () => {
   assert.match(brand, /github\.com\/liuweichaox\/Ingot\/tree\/main\/images\/logo/);
 });
 
-test("publishes separate Chat and desktop Agent contracts", async () => {
+test("publishes only Ingot Chat and the standard event contract as public AI and ingestion surfaces", async () => {
   for (const lang of ["zh", "en"]) {
     const chat = await readFile(path.join(out, lang, "chat", "index.html"), "utf8");
-    const agent = await readFile(path.join(out, lang, "desktop-agent", "index.html"), "utf8");
+    const events = await readFile(path.join(out, lang, "rfc-production-events", "index.html"), "utf8");
     assert.match(chat, /\/api\/v1\/chat\/runs/);
     assert.match(chat, /check_data_quality/);
     assert.match(chat, /get_cycle_trace/);
-    assert.doesNotMatch(chat, /connector-workspaces/);
-    assert.match(agent, /Ingot Agent/);
-    assert.match(agent, /Tauri 2/);
-    assert.match(agent, /X-Ingot-Client/);
-    assert.match(agent, /ingot-agent-desktop/);
-    assert.match(agent, /awaiting-package-approval/);
-    assert.match(agent, /approve-package/);
-    assert.match(agent, /GET \/api\/v1\/connector-workspaces\/\{id\}\/package/);
-    assert.match(agent, /stdin\/json-lines/);
-    assert.match(agent, /stdout\/production-event-json-lines/);
-    assert.match(agent, /github\.com\/liuweichaox\/Ingot\/releases\/latest/);
-    assert.doesNotMatch(agent, /awaiting-publish-approval/);
+    assert.match(events, /\/api\/v1\/events:batch/);
+    assert.match(events, /ackSeq/);
+    assert.match(events, /edge\/\{edgeId\}\//);
+    assert.doesNotMatch(chat, /connector-workspaces|awaiting-package-approval|Tauri 2/i);
+    assert.doesNotMatch(events, /connector-workspaces|awaiting-package-approval|Tauri 2/i);
+  }
+});
+
+test("does not publish legacy desktop or code-generation product copy", async () => {
+  const files = (await readdir(out, { recursive: true })).filter((file) => file.endsWith(".html"));
+  for (const file of files) {
+    const html = await readFile(path.join(out, file), "utf8");
+    assert.doesNotMatch(html, /Ingot Agent|desktop Agent|desktop-agent|code generation|code-generation|connector-workspaces|awaiting-package-approval|SHA256SUMS|AppImage|SmartScreen|notarized/i, file);
   }
 });
 
@@ -97,13 +96,5 @@ test("all exported local links and assets resolve", async () => {
       }
       assert.ok(resolved, `${file} -> ${urlPath}`);
     }
-  }
-});
-
-test("does not publish Agent data-source network testing", async () => {
-  const files = (await readdir(out, { recursive: true })).filter((file) => file.endsWith(".html"));
-  for (const file of files) {
-    const html = await readFile(path.join(out, file), "utf8");
-    assert.doesNotMatch(html, /test_http_connector|ConnectorTest|AllowedNetworkTargets/i, file);
   }
 });

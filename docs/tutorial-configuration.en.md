@@ -1,118 +1,100 @@
 # Configuration
 
-Configuration is separated across Chat, Ingot Agent, Connector Builder, Connector Host, and central fact services. The desktop stores only Central URL, Actor, and token. Models, workspaces, and Builder run in the Central deployment.
+Central uses environment variables and protected configuration storage. Never commit passwords, tokens, or model keys to the repository.
 
-## Chat
+## Required configuration
 
 ```json
 {
-  "Chat": {
-    "Enabled": false,
-    "Provider": "Deterministic",
-    "FastModel": "deterministic-v1",
-    "ReasoningModel": "deterministic-v1",
-    "MaxToolCalls": 8,
-    "MaxRunSeconds": 60,
-    "RequireToken": true,
-    "ActorTokens": {},
-    "ModelPricing": {}
+  "Urls": "http://0.0.0.0:8000",
+  "ConnectionStrings": {
+    "Events": "Host=postgres;Database=ingot;Username=ingot;Password=<secret>"
   },
+  "EventIngest": {
+    "RequireToken": true,
+    "EdgeTokens": {
+      "EDGE-001": "<secret>"
+    }
+  },
+  "InspectionSubmission": {
+    "RequireToken": true,
+    "ActorTokens": {
+      "OPERATOR-001": "<strong-secret>"
+    }
+  },
+  "Cors": {
+    "AllowedOrigins": ["https://central.example.com"]
+  },
+  "Chat": {
+    "Enabled": true,
+    "RequireToken": true,
+    "Provider": "OpenAI",
+    "FastModel": "<fast-model>",
+    "ReasoningModel": "<reasoning-model>",
+    "ActorTokens": {
+      "operator": "<strong-secret>"
+    },
+    "MaxToolCalls": 8,
+    "MaxRunSeconds": 60
+  }
+}
+```
+
+Every `EventIngest:EdgeTokens` key must match the batch request `edgeId`. Give every source-adaptation runtime an independent, rotatable token.
+
+## Chat data scope and production enablement
+
+```json
+{
   "ChatDataAccess": {
     "Actors": {
-      "operator": { "AllowAll": false, "EdgeIds": ["EDGE-01"] }
+      "operator": { "AllowAll": true, "EdgeIds": [] }
     }
   }
 }
 ```
 
-Chat registers only `check_data_quality` and `get_cycle_trace`. Every Actor needs an explicit fact-data scope. Prefer specific `EdgeIds` in production; reserve `AllowAll=true` for trusted global roles.
-
-## Ingot Agent
-
-```json
-{
-  "Agent": {
-    "Enabled": false,
-    "DatabasePath": "Data/agent.db",
-    "Provider": "Deterministic",
-    "FastModel": "deterministic-v1",
-    "ReasoningModel": "deterministic-v1",
-    "MaxToolCalls": 24,
-    "MaxIterations": 8,
-    "MaxRunSeconds": 300,
-    "RequireToken": true,
-    "ActorTokens": {},
-    "PackagingApprovers": ["operator"],
-    "ModelPricing": {}
-  }
-}
-```
-
-Agent accepts only `standard` connector-code-generation runs from Ingot Agent Desktop. `PackagingApprovers` must reference configured Actors; only those Actors can open the manual packaging gate.
-
-When Chat or Agent is enabled in production, use the `OpenAI` provider, configured model names, and `OPENAI_API_KEY`. `Deterministic` is for development and automated tests only. Supply Actor tokens, model keys, and connector keys through environment variables or a secret store.
-
-Usage comes from provider input/output token fields. `estimatedCost` is calculated only when every called model has `ModelPricing` in one currency; otherwise it is `null`.
-
-## Connector Builder
-
-```json
-{
-  "ConnectorBuilder": {
-    "WorkspaceRoot": "Data/connector-workspaces",
-    "ArtifactRoot": "Data/connector-packages",
-    "ContainerCommand": "docker",
-    "ContainerWorkspaceVolume": "",
-    "DotnetSdkImage": "mcr.microsoft.com/dotnet/sdk:10.0",
-    "CommandTimeoutSeconds": 120,
-    "MaxFileBytes": 524288,
-    "MaxWorkspaceFiles": 256,
-    "MaxWorkspaceBytes": 8388608,
-    "MaxOutputCharacters": 32000
-  }
-}
-```
-
-Builder executes platform-fixed build and test entries only in network-disabled child containers. Test input comes only from fixed workspace fixtures and simulated data. Agent and Builder do not connect to data sources. The model cannot select commands, images, host paths, or working directories. Workspaces are Actor-isolated and limited to 512 KiB per file, 256 visible files, and 8 MiB of source.
-
-## Connector Host
-
-```json
-{
-  "ConnectorHost": { "MaxBatchSize": 1000 },
-  "Context": { "DatabasePath": "Data/context.db" },
-  "Events": {
-    "DatabasePath": "Data/events.db",
-    "MaxBacklogRows": 500000
-  }
-}
-```
-
-Connector Host accepts normalized `ProductionEvent[]`. At the outbox cap it drops the oldest unshipped records and emits `diagnostic.backlog_dropped` plus a drop metric.
+Chat registers only `check_data_quality` and `get_cycle_trace`. Every Actor needs an explicit fact-data scope. The production Compose example gives `operator` `AllowAll=true`; restricted deployments can list explicit `EdgeIds` for an Actor in protected configuration.
 
 ## Environment variables
 
-.NET hierarchical configuration uses double underscores:
-
-```text
+```bash
+ConnectionStrings__Events='Host=postgres;Database=ingot;Username=ingot;Password=<secret>'
+EventIngest__RequireToken=true
+EventIngest__EdgeTokens__EDGE-001='<secret>'
+InspectionSubmission__RequireToken=true
+InspectionSubmission__ActorTokens__OPERATOR-001='<strong-secret>'
+Cors__AllowedOrigins__0='https://central.example.com'
 Chat__Enabled=true
+Chat__RequireToken=true
 Chat__Provider=OpenAI
-Chat__FastModel=<model>
-Chat__ReasoningModel=<model>
-Chat__ActorTokens__operator=<secret-store-reference>
-Agent__Enabled=true
-Agent__Provider=OpenAI
-Agent__FastModel=<model>
-Agent__ReasoningModel=<model>
-Agent__ActorTokens__operator=<secret-store-reference>
-Agent__PackagingApprovers__0=operator
-ChatDataAccess__Actors__operator__AllowAll=false
-ChatDataAccess__Actors__operator__EdgeIds__0=EDGE-01
-OPENAI_API_KEY=<secret-store-reference>
-ConnectorBuilder__DotnetSdkImage=mcr.microsoft.com/dotnet/sdk:10.0
-ConnectorHost__IngestToken=<secret-store-reference>
-Edge__EventIngestToken=<secret-store-reference>
-ConnectionStrings__Events=<secret-store-reference>
+Chat__FastModel='<fast-model>'
+Chat__ReasoningModel='<reasoning-model>'
+OPENAI_API_KEY='<secret>'
+Chat__ActorTokens__operator='<strong-secret>'
+ChatDataAccess__Actors__operator__AllowAll=true
 ```
 
-Production also requires CORS, database, event-ingress, and inspection-submission credentials. See [deployment](tutorial-deployment.en.md).
+With Docker Compose, use these production variable names:
+
+```bash
+INGOT_CHAT_ENABLED=true
+INGOT_CHAT_PROVIDER=OpenAI
+INGOT_CHAT_FAST_MODEL='<fast-model>'
+INGOT_CHAT_REASONING_MODEL='<reasoning-model>'
+OPENAI_API_KEY='<secret>'
+INGOT_CHAT_OPERATOR_TOKEN='<strong-secret>'
+INGOT_CHAT_OPERATOR_ALLOW_ALL=true
+```
+
+The production validator requires event- and inspection-submission tokens, a CORS origin, `OpenAI` as the Chat provider, both Fast and Reasoning models, `OPENAI_API_KEY`, a Chat Actor token, and a data scope for every Actor. Model keys are read only from a secret store or environment variables. Logs do not record complete questions, answers, or sensitive tool parameters by default.
+
+## Runtime limits
+
+- `Chat:MaxToolCalls`: maximum read-only tool calls per conversation;
+- `Chat:MaxRunSeconds`: maximum duration of one conversation;
+- event batches: 1–500 events each;
+- event source: must start with `edge/{edgeId}/`;
+- when Chat is disabled or its authentication is not configured, Central event, query, and inspection paths remain available.
+
+See [deployment](tutorial-deployment.en.md) and the [production event specification](rfc-production-events.en.md).

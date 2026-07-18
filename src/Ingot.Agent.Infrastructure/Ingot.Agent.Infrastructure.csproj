@@ -17,7 +17,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Ingot.Agent\Ingot.Agent.csproj" />
-    <ProjectReference Include="..\Ingot.Connector.Builder\Ingot.Connector.Builder.csproj" />
     <ProjectReference Include="..\Ingot.Contracts\Ingot.Contracts.csproj" />
   </ItemGroup>
 </Project>
