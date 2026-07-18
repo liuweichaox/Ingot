@@ -10,8 +10,8 @@
         <FrameworkReference Include="Microsoft.AspNetCore.App" />
     </ItemGroup>
     <ItemGroup>
-        <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.1" />
-        <PackageReference Include="Serilog" Version="4.1.0" />
+        <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.10" />
+        <PackageReference Include="Serilog" Version="4.4.0" />
     </ItemGroup>
     <ItemGroup>
         <ProjectReference Include="..\Ingot.Application\Ingot.Application.csproj" />
