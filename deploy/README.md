@@ -53,6 +53,14 @@ ACME_EMAIL=admin@ingotstack.com ./deploy/deploy.sh all
 
 每个选择都是完整目标状态。例如从 `all` 执行 `site` 会移除文档容器，但不会删除证书卷。`ACME_EMAIL` 可选，建议设置，便于接收证书服务通知。
 
+临时使用 HTTP 部署时：
+
+```bash
+HTTP_ONLY=true ./deploy/deploy.sh all
+```
+
+该模式不申请证书，也不启用 HTTP→HTTPS 跳转。恢复 HTTPS 时移除 `HTTP_ONLY=true` 后重新部署。
+
 自定义域名时使用：
 
 ```bash

@@ -9,6 +9,7 @@ STATE_FILE="${RUNTIME_DIR}/target"
 SITE_DOMAIN="${SITE_DOMAIN:-ingotstack.com}"
 DOCS_DOMAIN="${DOCS_DOMAIN:-docs.ingotstack.com}"
 ACME_EMAIL="${ACME_EMAIL:-}"
+HTTP_ONLY="${HTTP_ONLY:-false}"
 
 usage() {
   cat <<'EOF'
@@ -21,7 +22,7 @@ usage() {
   ./deploy/deploy.sh stop              停止服务（保留证书卷）
   ./deploy/deploy.sh backup [目录]     备份 Caddy 证书与配置卷
 
-可选环境变量：SITE_DOMAIN、DOCS_DOMAIN、ACME_EMAIL。
+可选环境变量：SITE_DOMAIN、DOCS_DOMAIN、ACME_EMAIL、HTTP_ONLY=true。
 EOF
 }
 
@@ -43,9 +44,18 @@ require_docker() {
 write_caddyfile() {
   local target="$1"
   local global_options=""
+  local site_address="${SITE_DOMAIN}"
+  local docs_address="${DOCS_DOMAIN}"
+  local www_address="www.${SITE_DOMAIN}"
+  local redirect_scheme="https"
   mkdir -p "${RUNTIME_DIR}"
 
-  if [[ -n "${ACME_EMAIL}" ]]; then
+  if [[ "${HTTP_ONLY}" == "true" ]]; then
+    site_address="http://${SITE_DOMAIN}"
+    docs_address="http://${DOCS_DOMAIN}"
+    www_address="http://www.${SITE_DOMAIN}"
+    redirect_scheme="http"
+  elif [[ -n "${ACME_EMAIL}" ]]; then
     global_options="{\n\temail ${ACME_EMAIL}\n}\n\n"
   fi
 
@@ -53,11 +63,11 @@ write_caddyfile() {
     printf '%b' "${global_options}"
     if [[ "${target}" == "site" || "${target}" == "all" ]]; then
       cat <<EOF
-www.${SITE_DOMAIN} {
-	redir https://${SITE_DOMAIN}{uri} permanent
+${www_address} {
+	redir ${redirect_scheme}://${SITE_DOMAIN}{uri} permanent
 }
 
-${SITE_DOMAIN} {
+${site_address} {
 	encode zstd gzip
 	reverse_proxy site:3000
 	header {
@@ -70,7 +80,7 @@ EOF
     fi
     if [[ "${target}" == "docs" || "${target}" == "all" ]]; then
       cat <<EOF
-${DOCS_DOMAIN} {
+${docs_address} {
 	encode zstd gzip
 	reverse_proxy docs:80
 	header {
