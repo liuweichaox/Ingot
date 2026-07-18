@@ -69,7 +69,7 @@ jobs:
           cache-dependency-path: desktop/package-lock.json
 
       - name: Set up Rust
-        uses: dtolnay/rust-toolchain@1.97.1
+        uses: dtolnay/rust-toolchain@1.100.0
         with:
           components: rustfmt
 
@@ -134,7 +134,7 @@ jobs:
           cache-dependency-path: desktop/package-lock.json
 
       - name: Set up Rust
-        uses: dtolnay/rust-toolchain@1.97.1
+        uses: dtolnay/rust-toolchain@1.100.0
         with:
           targets: ${{ matrix.rust-targets }}
 
