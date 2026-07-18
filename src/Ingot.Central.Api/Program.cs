@@ -1,39 +1,40 @@
 // Central API（中心侧）：提供中心 API（边缘注册/心跳、诊断代理、查询与管理）。
 
+using Ingot.Agent;
+using Ingot.Agent.Infrastructure;
+using Ingot.Central.Api.Agents;
 using Ingot.Central.Api.HealthChecks;
 using Ingot.Central.Api.Events;
-using Ingot.Central.Api.Webhooks;
+using Ingot.Central.Api.Inspections;
+using Ingot.Central.Api.Configuration;
+using Ingot.Central.Infrastructure;
+using Ingot.Central.Infrastructure.HealthChecks;
 using Serilog;
 using Prometheus;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// 从配置读取 URL，支持环境变量和配置文件
-var urls = builder.Configuration["Urls"] ?? builder.Configuration["ASPNETCORE_URLS"] ?? "http://localhost:8000";
+if (!builder.Environment.IsDevelopment())
+    ProductionConfigurationValidator.Validate(builder.Configuration);
+
+var urls = builder.Configuration["Urls"]
+    ?? throw new InvalidOperationException("Urls is required.");
 builder.WebHost.UseUrls(urls);
 
 builder.Services.AddHttpClient();
-builder.Services.AddHttpClient("webhook", (services, client) =>
-{
-    var webhookOptions = services.GetRequiredService<Microsoft.Extensions.Options.IOptions<WebhookOptions>>().Value;
-    client.Timeout = TimeSpan.FromSeconds(Math.Clamp(webhookOptions.RequestTimeoutSeconds, 1, 300));
-});
 builder.Services.AddControllers();
-builder.Services.AddSingleton<Ingot.Central.Api.Services.EdgeRegistry>();
-builder.Services.Configure<CentralEventOptions>(builder.Configuration.GetSection("EventIngest"));
-builder.Services.AddSingleton<CentralEventMetrics>();
-builder.Services.AddSingleton<EdgeTokenValidator>();
-builder.Services.AddSingleton<ICentralEventStore, PostgresEventStore>();
-builder.Services.AddHostedService<EventStoreInitializerHostedService>();
-builder.Services.Configure<WebhookOptions>(builder.Configuration.GetSection("Webhook"));
-builder.Services.AddSingleton<IWebhookSubscriptionStore, PostgresWebhookSubscriptionStore>();
-builder.Services.AddSingleton<WebhookDispatcher>();
-builder.Services.AddSingleton<WebhookMetrics>();
-builder.Services.AddHostedService<WebhookStoreInitializerHostedService>();
-builder.Services.AddHostedService<WebhookDeliveryHostedService>();
 
-builder.Services
-    .AddHealthChecks()
+builder.Services.AddIngotCentralInfrastructure(builder.Configuration);
+builder.Services.AddIngotAgentCore(builder.Configuration);
+builder.Services.AddIngotAgentInfrastructure(builder.Configuration);
+
+// 宿主职责：入站鉴权策略
+builder.Services.AddSingleton<EdgeTokenValidator>();
+builder.Services.AddSingleton<InspectionActorTokenValidator>();
+builder.Services.AddSingleton<AgentTokenValidator>();
+builder.Services.AddSingleton<ChatTokenValidator>();
+
+builder.Services.AddHealthChecks()
     .AddCheck<SqliteHealthCheck>("sqlite")
     .AddCheck<PostgresEventStoreHealthCheck>("event-store");
 
@@ -46,7 +47,6 @@ builder.Services.AddCors(options =>
         var origins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
         if (origins.Length == 0)
         {
-            // 默认允许本地 Vue dev server
             policy.WithOrigins("http://localhost:3000")
                 .AllowAnyHeader()
                 .AllowAnyMethod();
@@ -99,13 +99,20 @@ app.MapGet("/", () => Results.Ok(new
         events = "/api/v1/events",
         eventStream = "/api/v1/events/stream",
         eventIngest = "/api/v1/events:batch",
-        subscriptions = "/api/v1/subscriptions"
+        inspectionRecords = "/api/v1/inspection-records",
+        subscriptions = "/api/v1/subscriptions",
+        chatRuns = "/api/v1/chat/runs",
+        chatCapabilities = "/api/v1/chat/capabilities",
+        agentRuns = "/api/v1/agent/runs",
+        agentCapabilities = "/api/v1/agent/capabilities",
+        agentArtifacts = "/api/v1/agent/artifacts",
+        connectorWorkspaces = "/api/v1/connector-workspaces/{workspaceId}"
     }
 }));
 
 // 解析并显示所有监听地址
 var addresses = urls.Split(';', ',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-var baseAddress = addresses.FirstOrDefault()?.Trim() ?? "http://localhost:8000";
+var baseAddress = addresses.First();
 
 Log.Logger.Information("==================================================================");
 Log.Logger.Information("              Central API Service Started");
@@ -126,7 +133,14 @@ Log.Logger.Information("    > Edge Logs:     {0}/api/edges/{{edgeId}}/logs", bas
 Log.Logger.Information("    > Events:        {0}/api/v1/events", baseAddress);
 Log.Logger.Information("    > Event Stream:  {0}/api/v1/events/stream", baseAddress);
 Log.Logger.Information("    > Event Ingest:  {0}/api/v1/events:batch", baseAddress);
+Log.Logger.Information("    > Inspections:   {0}/api/v1/inspection-records", baseAddress);
 Log.Logger.Information("    > Subscriptions: {0}/api/v1/subscriptions", baseAddress);
+Log.Logger.Information("    > Chat Runs:     {0}/api/v1/chat/runs", baseAddress);
+Log.Logger.Information("    > Chat Capabilities:{0}/api/v1/chat/capabilities", baseAddress);
+Log.Logger.Information("    > Desktop Agent Runs:{0}/api/v1/agent/runs", baseAddress);
+Log.Logger.Information("    > Desktop Agent Capabilities:{0}/api/v1/agent/capabilities", baseAddress);
+Log.Logger.Information("    > Agent Artifacts:{0}/api/v1/agent/artifacts", baseAddress);
+Log.Logger.Information("    > Connector Workspaces:{0}/api/v1/connector-workspaces/{{workspaceId}}", baseAddress);
 Log.Logger.Information("==================================================================");
 
 app.Run();

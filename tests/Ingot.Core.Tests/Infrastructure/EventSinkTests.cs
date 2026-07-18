@@ -1,9 +1,7 @@
 using Ingot.Application.Abstractions;
 using Ingot.Domain.Events;
-using Ingot.Domain.Models;
 using Ingot.Infrastructure.Events;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace Ingot.Core.Tests.Infrastructure;
@@ -106,8 +104,6 @@ public sealed class EventSinkTests
         IMetricsCollector metrics)
         => new(
             eventLog,
-            new NoOpQueue(),
-            Options.Create(new EventOptions { EnableInfluxProjection = false }),
             NullLogger<EventSink>.Instance,
             health,
             metrics);
@@ -160,13 +156,6 @@ public sealed class EventSinkTests
             => CountPendingException is null
                 ? Task.FromResult(0L)
                 : Task.FromException<long>(CountPendingException);
-    }
-
-    private sealed class NoOpQueue : IQueueService
-    {
-        public Task PublishAsync(DataMessage dataMessage) => Task.CompletedTask;
-
-        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 
     private sealed class RecordingMetrics : IMetricsCollector

@@ -1,185 +1,47 @@
-# Getting Started
+# Getting started
 
-This guide explains how to complete a minimal local validation of Ingot, including configuration validation, Edge Agent startup, and verification of the primary acquisition path.
+## Start Central and Connector Host
 
-## Prerequisites
-
-- .NET 10 SDK
-- Docker
-- InfluxDB 2.x
-
-If you only want to validate configuration first, you do not need a real PLC yet.
-
-## Step 1: Build the Solution
-
-From the repository root:
+Prerequisites: .NET 10, Node.js 22.13+, Docker Engine 26+, and Docker Compose.
 
 ```bash
-dotnet build Ingot.sln
+export INGOT_POSTGRES_PASSWORD="$(openssl rand -hex 24)"
+export INGOT_EDGE_TOKEN="$(openssl rand -hex 24)"
+export INGOT_OPERATOR_TOKEN="$(openssl rand -hex 24)"
+export INGOT_CONNECTOR_TOKEN="$(openssl rand -hex 24)"
+docker compose -f docker-compose.app.yml up -d --build
 ```
 
-## Step 2: Start InfluxDB
+Open `http://localhost:3000`. Central Web provides events, inspections, logs, metrics, and Chat. Connector Host accepts normalized events at `http://localhost:8001`.
 
-The repository includes a simple compose file:
+## Use Chat
 
-```bash
-docker compose -f docker-compose.tsdb.yml up -d
-```
-
-If you already have your own InfluxDB instance, just make sure the `InfluxDB` section in [appsettings.json](../src/Ingot.Edge.Agent/appsettings.json) points to the right endpoint.
-
-## Step 3: Review Device Configuration
-
-The default device config directory is:
-
-- [src/Ingot.Edge.Agent/Configs](../src/Ingot.Edge.Agent/Configs)
-
-The repository already includes a local development sample:
-
-- [TEST_PLC.json](../src/Ingot.Edge.Agent/Configs/TEST_PLC.json)
-
-You can also use:
-
-- [examples/device-configs](../examples/device-configs)
-- [device-config.schema.json](../schemas/device-config.schema.json)
-
-## Step 4: Validate Configuration Offline
-
-Validate configs before starting the runtime:
-
-```bash
-dotnet run --project src/Ingot.Edge.Agent -- --validate-configs
-```
-
-To validate another directory:
-
-```bash
-dotnet run --project src/Ingot.Edge.Agent -- --validate-configs --config-dir ./examples/device-configs
-```
-
-On success, you should see output like:
+Chat is disabled by default. Configure `Chat:Enabled`, models, Actor tokens, and Actor data scopes, then recreate Central API. Open **Chat** in Central Web and enter a question with optional asset or cycle context.
 
 ```text
-[OK] .../TEST_PLC.json (TEST_PLC)
+What happened during this cycle, and is its data complete?
 ```
 
-## Step 5: Start the Edge Agent
+Chat calls only `check_data_quality` and `get_cycle_trace`, then returns tool activity, findings, limitations, and evidence. See [Chat](chat.en.md) for the complete interface.
+
+## Download Ingot Agent
+
+Download Ingot Agent Desktop from the [latest GitHub Release](https://github.com/liuweichaox/Ingot/releases/latest). On first launch, enter:
+
+1. Central API URL;
+2. Actor ID;
+3. Actor token.
+
+The desktop verifies Agent capabilities before creating a structured connector-code task. It presents SSE progress, source, and network-disabled container build/fixture-test output. Agent does not connect to data sources. After tests pass, an authorized Actor reviews and approves packaging. The desktop generates the ZIP, verifies the server SHA-256, and downloads it.
+
+See [Ingot Agent desktop](desktop-agent.en.md) for the full workflow. Central Web does not expose Agent code generation.
+
+## Verify normalized event ingress
+
+An external connector transforms source data into `ProductionEvent[]` and submits it to `POST http://localhost:8001/api/v1/connector-events` with `INGOT_CONNECTOR_TOKEN`. The default Agent template only transforms stdin JSONL into stdout ProductionEvent JSONL. The external runtime owns batching, authentication, and submission.
+
+## Complete gate
 
 ```bash
-dotnet run --project src/Ingot.Edge.Agent
+./scripts/verify.sh
 ```
-
-The default URL comes from [appsettings.json](../src/Ingot.Edge.Agent/appsettings.json):
-
-- `http://localhost:8001`
-
-Useful endpoints after startup:
-
-- `/health`
-- `/metrics`
-- `/api/logs`
-- `/api/acquisition/plc-connections`
-- `/api/v1/events`
-- `/api/v1/events/stream`
-
-## Optional: Start the PLC Simulator
-
-For a local closed-loop workflow, start the simulator:
-
-```bash
-dotnet run --project src/Ingot.Simulator
-```
-
-The simulator listens on port `502` by default and prints changing registers to the console. Details:
-
-- [src/Ingot.Simulator/README.md](../src/Ingot.Simulator/README.md)
-
-## Verification
-
-You can verify the system from four angles.
-
-### 1. Agent liveness
-
-```bash
-curl http://localhost:8001/health
-```
-
-### 2. Config loading
-
-Startup logs should show successful config validation and runtime startup for PLCs and channels.
-
-### 3. Local diagnostic files
-
-The runtime directory should usually contain:
-
-- `Data/logs.db`
-- `Data/acquisition-state.db`
-
-Meaning:
-
-- `logs.db` supports local log querying and keeps 30 days of logs by default
-- `Logging:RetentionDays` can change the retention window, and `<= 0` disables cleanup
-- `acquisition-state.db` stores active-cycle recovery state for conditional acquisition
-
-### 4. InfluxDB writes
-
-If InfluxDB is reachable, you should see measurements being written into the configured bucket.
-
-If you do not, check:
-
-- Edge logs for TSDB write failures
-- `/metrics` for runtime errors
-- `InfluxDB:Url`, `Bucket`, `Org`, and `Token`
-
-## Optional: Start Central Components
-
-Central services are not required by the acquisition path. The simplest option starts PostgreSQL, Central API, and Central Web together:
-
-```bash
-docker compose -f docker-compose.events.yml up -d --build
-```
-
-For local web development, keep PostgreSQL and Central API running, then use:
-
-```bash
-cd src/Ingot.Central.Web
-npm install
-npm run dev
-```
-
-Open `http://localhost:3000/events` for cross-edge events. The tokens must match: `Edge:EventIngestToken` maps to `EventIngest:EdgeTokens:{EdgeId}`.
-
-## Common Issues
-
-### Config validation fails
-
-Check:
-
-- whether `Driver` is a full stable driver name
-- whether `ProtocolOptions` contains keys unsupported by that driver
-- whether `PlcCode` is duplicated across files
-
-### InfluxDB is not receiving data
-
-This usually means storage is unavailable or write settings are incorrect.
-
-Check:
-
-- whether InfluxDB is running
-- whether `InfluxDB:Url` is correct
-- whether `Bucket`, `Org`, and `Token` match the target instance
-- Edge logs for storage write failures
-
-### The simulator works, but the real PLC does not
-
-Check:
-
-- `Host` and `Port`
-- network connectivity
-- whether the selected driver matches the real device and protocol
-
-## Related Docs
-
-- [Configuration](tutorial-configuration.en.md)
-- [Driver Catalog](hsl-drivers.en.md)
-- [Deployment](tutorial-deployment.en.md)

@@ -49,7 +49,7 @@
         <el-statistic title="事件类型数" :value="eventTypeCount" />
       </div>
 
-      <el-table :data="events" stripe v-loading="loading" max-height="650">
+      <el-table v-loading="loading" :data="events" stripe max-height="650">
         <el-table-column label="发生时间" width="190">
           <template #default="{ row }">{{ formatTime(row.event.occurredAt) }}</template>
         </el-table-column>
@@ -114,33 +114,11 @@
   </div>
 </template>
 
-<script>
-import { defineComponent, h } from "vue";
-import { ElButton, ElPopover } from "element-plus";
-
-const JsonPopover = defineComponent({
-  name: "JsonPopover",
-  props: { label: String, value: Object },
-  setup(props) {
-    return () =>
-      h(
-        ElPopover,
-        { width: 440, trigger: "click", placement: "left" },
-        {
-          reference: () => h(ElButton, { text: true, type: "primary" }, () => props.label),
-          default: () => h("pre", { class: "json-preview" }, JSON.stringify(props.value || {}, null, 2)),
-        }
-      );
-  },
-});
-
-export default { components: { JsonPopover } };
-</script>
-
 <script setup>
 import { computed, onMounted, onUnmounted, reactive, ref } from "vue";
 import { List, Refresh, RefreshLeft, Search } from "@element-plus/icons-vue";
 import { getJson } from "../api/http";
+import JsonPopover from "../components/JsonPopover.js";
 
 const edges = ref([]);
 const events = ref([]);

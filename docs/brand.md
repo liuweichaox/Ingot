@@ -1,8 +1,8 @@
 # 品牌与标识
 
-Ingot 的名称与标识共享同一个隐喻：**遥测是矿砂，Ingot 把它熔炼成标准化、不可变、可堆叠的生产事实。**
+Ingot 的名称与标识共享同一个隐喻：**连接器提交的生产事件、检测事实与生产上下文是矿砂，Ingot 把它们熔炼成标准化、可信、可堆叠的生产事实。**
 
-命名释义的完整版本见 [生产事件 RFC §12](rfc-production-events.md)，README 的「为什么叫 Ingot」是其摘要。本文只约定标识本身。
+本文约定 Ingot 的品牌定位、命名资产和标识使用规则。
 
 ## 标识释义
 
@@ -18,16 +18,33 @@ Ingot 的名称与标识共享同一个隐喻：**遥测是矿砂，Ingot 把它
 
 > **Ingot — 把生产数据炼成事实。** Smelt production data into facts.
 
+## 品牌定位
+
+- **产品类别**：工厂数据与工艺分析平台 / Factory Data & Process Analytics Platform
+- **主要用户**：制造现场的生产、工艺、质量、设备与 IT 角色，尤其是需要快速独立部署的中小制造企业
+- **价值链**：连接器规格 → 受控源码与禁网构建/测试 → 人工打包批准 → 标准生产事件 + 检测事实 + 生产上下文 → 可信生产事实 → 周期核查与数据质量分析
+- **系统边界**：MES 可以是可选数据源或集成目标，但不是运行前提；Ingot 不以排程、订单执行、库存或考勤定义自身
+
+对外表达优先正面说明“接入标准生产事件、形成可信事实、基于证据分析”，不通过贬低其他工业数据平台或声称其缺少某项能力来建立差异。
+
+## 命名资产
+
+| 资产 | 值 |
+|---|---|
+| 产品名 | **Ingot**（域名不改变品牌称谓，避免漂移成 "IngotStack"） |
+| 官方域名 | [ingotstack.com](https://ingotstack.com)（2026-07 注册；stack 同时呼应堆叠的锭与技术栈） |
+| 仓库 | [github.com/liuweichaox/Ingot](https://github.com/liuweichaox/Ingot) |
+| .NET 命名空间 | `Ingot.*` |
+
 ## 资产清单
 
 | 文件 | 用途 |
 |---|---|
-| [`docs/assets/ingot-logo.png`](assets/ingot-logo.png) | README 浅色模式展示（透明底） |
-| [`docs/assets/ingot-logo-dark.png`](assets/ingot-logo-dark.png) | README 深色模式展示（透明底，配合 `<picture>`） |
+| [`images/logo/ingot-lockup.svg`](../images/logo/ingot-lockup.svg) / [`ingot-lockup-dark.svg`](../images/logo/ingot-lockup-dark.svg) | README 明暗主题横排标识 |
 | [`images/logo/ingot-mark.svg`](../images/logo/ingot-mark.svg) / [`ingot-mark-dark.svg`](../images/logo/ingot-mark-dark.svg) | 图标源文件（明/暗），一切导出以此为准 |
-| [`images/logo/ingot-lockup.svg`](../images/logo/ingot-lockup.svg) / [`ingot-lockup-dark.svg`](../images/logo/ingot-lockup-dark.svg) | 横排锁定版式（图标 + 字标） |
 | [`images/logo/*.png`](../images/logo) | 各尺寸 PNG 导出（512 / 32 / 横排 1032） |
 | [`images/logo/preview.html`](../images/logo/preview.html) | 品牌预览页：版式、尺寸、色板一览 |
+| `site/public/brand/` / `docs-site/public/brand/` | 官网与文档站构建资产；校验测试保证内容一致 |
 
 ## 色板
 
@@ -48,5 +65,5 @@ Ingot 的名称与标识共享同一个隐喻：**遥测是矿砂，Ingot 把它
 
 ## 相关文档
 
-- [生产事件 RFC](rfc-production-events.md)
+- [生产事件规范](rfc-production-events.md)
 - [文档首页](index.md)

@@ -1,4 +1,4 @@
-using Ingot.Central.Api.Services;
+using Ingot.Central.Infrastructure.Services;
 using Ingot.Contracts.Edge;
 using Microsoft.AspNetCore.Mvc;
 
@@ -18,15 +18,15 @@ public class EdgesController(EdgeRegistry registry) : ControllerBase
     public IActionResult Register([FromBody] EdgeRegistrationRequest request)
     {
         var now = DateTimeOffset.UtcNow;
-        var state = registry.Upsert(request.EdgeId, request.AgentBaseUrl, request.Hostname, null, now);
-        return Ok(new { state.EdgeId, state.AgentBaseUrl, state.Hostname, state.LastSeen });
+        var state = registry.Upsert(request.EdgeId, request.HostBaseUrl, request.Hostname, null, now);
+        return Ok(new { state.EdgeId, state.HostBaseUrl, state.Hostname, state.LastSeen });
     }
 
     [HttpPost("heartbeat")]
     public IActionResult Heartbeat([FromBody] EdgeHeartbeatRequest request)
     {
         var now = request.Timestamp == default ? DateTimeOffset.UtcNow : request.Timestamp.ToUniversalTime();
-        var state = registry.Heartbeat(request.EdgeId, request.AgentBaseUrl, request.LastError, now);
-        return Ok(new { state.EdgeId, state.AgentBaseUrl, state.LastSeen, state.LastError });
+        var state = registry.Heartbeat(request.EdgeId, request.HostBaseUrl, request.LastError, now);
+        return Ok(new { state.EdgeId, state.HostBaseUrl, state.LastSeen, state.LastError });
     }
 }

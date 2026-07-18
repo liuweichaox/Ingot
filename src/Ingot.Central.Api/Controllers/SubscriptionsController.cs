@@ -1,5 +1,5 @@
 using System.Text.RegularExpressions;
-using Ingot.Central.Api.Webhooks;
+using Ingot.Central.Infrastructure.Webhooks;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Ingot.Central.Api.Controllers;

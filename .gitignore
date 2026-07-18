@@ -5,6 +5,8 @@
 
 # User-specific files
 *.DS_Store
+.env
+.env.*
 .claude-sync/
 *.rsuser
 *.suo
@@ -81,8 +83,10 @@ src/Ingot.Central.Web/dist/
 # Local runtime data
 Data/*.db
 Data/*.db-*
-src/Ingot.Edge.Agent/Data/
-src/Ingot.Edge.Agent/Logs/
+deploy/runtime/
+deploy/backups/
+src/Ingot.Connector.Host/Data/
+src/Ingot.Connector.Host/Logs/
 src/Ingot.Central.Api/Logs/
 
 # Files built by Visual Studio

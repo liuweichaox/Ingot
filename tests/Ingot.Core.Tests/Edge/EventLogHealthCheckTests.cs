@@ -1,6 +1,6 @@
 using Ingot.Application.Abstractions;
 using Ingot.Domain.Events;
-using Ingot.Edge.Agent.HealthChecks;
+using Ingot.Connector.Host.HealthChecks;
 using Ingot.Infrastructure.Events;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Xunit;

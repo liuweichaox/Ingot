@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Ingot.Central.Api.Events;
+using Ingot.Central.Infrastructure.Events;
 using Ingot.Contracts.Events;
 using Microsoft.AspNetCore.Mvc;
 
@@ -224,11 +225,5 @@ public sealed class EventsController(
     }
 
     private static bool TryValidateQuery(CentralEventQuery query, out string error)
-        => EventQueryContractValidator.TryValidate(
-            query.From,
-            query.To,
-            query.AfterIngestId,
-            query.Limit,
-            query.Context,
-            out error);
+        => EventQueryContractValidator.TryValidate(query, query.AfterIngestId, out error);
 }

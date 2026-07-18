@@ -5,9 +5,9 @@
         <div class="card-header">
           <span>
             <el-icon><Connection /></el-icon>
-            <span style="margin-left: 8px">边缘节点管理</span>
+            <span style="margin-left: 8px">连接器宿主（Connector Host）管理</span>
           </span>
-          <el-button type="primary" :icon="Refresh" @click="load" :loading="loading">刷新</el-button>
+          <el-button type="primary" :icon="Refresh" :loading="loading" @click="load">刷新</el-button>
         </div>
       </template>
 
@@ -24,10 +24,10 @@
 
       <el-table
         v-if="edges.length"
+        v-loading="loading"
         :data="edges"
         stripe
         style="width: 100%"
-        v-loading="loading"
         element-loading-text="加载中..."
       >
         <el-table-column prop="edgeId" label="节点ID" width="180">
@@ -35,10 +35,10 @@
             <el-tag type="primary" effect="plain">{{ row.edgeId }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="agentBaseUrl" label="Agent地址" min-width="200">
+        <el-table-column prop="hostBaseUrl" label="Connector Host 地址" min-width="200">
           <template #default="{ row }">
-            <el-link v-if="row.agentBaseUrl" :href="row.agentBaseUrl" target="_blank" type="primary">
-              {{ row.agentBaseUrl }}
+            <el-link v-if="row.hostBaseUrl" :href="row.hostBaseUrl" target="_blank" type="primary">
+              {{ row.hostBaseUrl }}
             </el-link>
             <span v-else style="color: #909399">-</span>
           </template>

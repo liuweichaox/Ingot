@@ -1,135 +1,48 @@
-# 开发扩展
+# 开发指南
 
-本文面向准备修改源码、增加驱动或替换默认实现的开发者，说明代码阅读入口、扩展边界和提交前检查事项。
+## 产品面
 
-如果你只是想把系统跑起来，先看：
+- Central Web 只提供事实页面和 Chat；不要在浏览器中增加 Agent 代码生成入口。
+- `/api/v1/chat/*` 只处理只读分析用途，工具仅为 `check_data_quality` 与 `get_cycle_trace`。
+- `/api/v1/agent/*` 只处理连接器代码生成，必须验证 `X-Ingot-Client: ingot-agent-desktop`。
+- Chat 与 Agent 的创建、历史、读取、流和取消必须按产品面与 Actor 隔离。
 
-- [快速开始](tutorial-getting-started.md)
-- [配置](tutorial-configuration.md)
+## 模块依赖
 
-## 代码阅读入口
+1. `Ingot.Contracts`：公共 Chat、Agent、连接器、事件与检测契约；
+2. `Ingot.Agent`：产品面、工作流、计划、预算和验证；
+3. `Ingot.Agent.Infrastructure`：模型、SQLite Store 和工具；
+4. `Ingot.Connector.Builder`：Actor 工作区、固定容器构建/测试、批准和打包；
+5. `Ingot.Central.Infrastructure`：中心事实与 Chat 只读工具；
+6. `Ingot.Connector.Host`：协议无关标准事件入口；
+7. `desktop`：Tauri 2 桌面 Agent 客户端。
 
-推荐阅读顺序：
+## 连接器扩展
 
-1. `src/Ingot.Edge.Agent/Program.cs`
-2. `src/Ingot.Infrastructure/Acquisition/AcquisitionService.cs`
-3. `src/Ingot.Infrastructure/Queues/QueueService.cs`
-4. `src/Ingot.Infrastructure/Clients/HslStandardPlcDriverProvider.cs`
-5. `src/Ingot.Infrastructure/DataStorages/InfluxDbDataStorageService.cs`
+不要把设备协议 SDK 或读取器链接进平台核心。具体协议由 Ingot Agent 写入连接器工作区。通用扩展应修改连接器规格、模板、确定性转换测试和 Builder 固定入口。
 
-如果你想先理解模块边界，再看：
+默认模板必须保持：
 
-- [模块](modules.md)
-- [设计](design.md)
-
-## 扩展 PLC 驱动
-
-新增驱动时，不应该改成“往工厂里继续堆 `switch`”。
-
-当前推荐扩展方式是：
-
-1. 实现新的 `IPlcDriverProvider`
-2. 视情况复用 `PlcClientServiceBase`，或提供新的 `IPlcClientService`
-3. 在宿主层注册 provider
-4. 为新的 `Driver` 写示例配置和文档
-
-实现时建议遵守这些约束：
-
-- `Driver` 名称稳定且完整
-- `Host` / `Port` 是否生效要明确
-- `ProtocolOptions` 只开放真实支持的键
-- 不要默默接受未使用的配置
-- 不要把驱动私有逻辑泄漏到上层采集流程
-
-## 扩展存储
-
-项目当前采用“队列聚合后直写存储”的模式。
-
-### 替换存储后端
-
-实现：
-
-- `IDataStorageService`
-
-当前主入口是：
-
-- `SaveBatchAsync(List<DataMessage>)`
-
-扩展时要注意：
-
-- 不要绕过 `QueueService` 直接写存储
-- 明确你的成功返回语义
-- 文档与测试要同步说明失败行为
-
-### 调整队列语义
-
-如果你要修改 `QueueService`，建议先明确：
-
-- 批次边界如何定义
-- 失败是否继续处理后续批次
-- 日志和指标如何体现失败
-
-不要把失败语义藏进实现细节里。
-
-## 修改采集逻辑
-
-如果你要调整采集行为，先理解这些边界：
-
-- `HeartbeatMonitor` 决定当前 PLC 是否可采
-- `ChannelCollector` 负责通道级采集流程
-- `ChannelMetricReader` 负责字段读取
-- `MetricExpressionEvaluator` 负责表达式计算
-- `AcquisitionStateManager` 负责条件采集状态恢复
-
-不要把：
-
-- PLC 底层读写细节
-- 业务周期判断
-- 存储写入逻辑
-
-重新揉回一个类里。
-
-## 修改配置系统
-
-当前配置系统的设计目标是：
-
-- JSON 文件可读
-- 可热更新
-- 可离线校验
-- 对驱动契约有显式约束
-
-如果你要继续扩展配置，建议优先保持：
-
-- 顶层字段稳定
-- 驱动差异收敛到 `ProtocolOptions`
-- 校验规则和文档同步演进
-
-## 测试建议
-
-如果你新增能力，至少补其中一种：
-
-- 单元测试
-- 集成测试
-- 配置校验测试
-
-优先级最高的是：
-
-- 驱动配置校验
-- 队列批次与失败语义
-- 条件采集状态恢复
-
-## 提交前检查
-
-在提交代码前，至少执行：
-
-```bash
-dotnet build Ingot.sln --no-restore
-dotnet test tests/Ingot.Core.Tests/Ingot.Core.Tests.csproj
-dotnet run --project src/Ingot.Edge.Agent -- --validate-configs
+```text
+stdin/json-lines → stdout/production-event-json-lines
 ```
 
-## 相关文档
+连接器验收覆盖工作区固定样本与模拟输入的解析、字段映射、单位、事件类型、对象、上下文、关联 ID 和 `ProductionEvent` 校验。Agent 与 Builder 不连接真实数据源。生成包不得包含生产 Token、HTTP 提交客户端或自动部署脚本。
 
-- [贡献指南](../CONTRIBUTING.md)
-- [模块](modules.md)
-- [设计](design.md)
+## 桌面开发
+
+```bash
+cd desktop
+npm install
+npm run desktop:dev
+```
+
+桌面端所有 Central 请求必须经过 Rust 原生边界，添加固定桌面客户端标识，限制允许的 Central URL，并校验下载 SHA-256。React 层不得直接持有不受控网络或文件系统权限。
+
+## 门禁
+
+```bash
+./scripts/verify.sh
+```
+
+提交同时更新中英文文档与测试。详细约束见 [Chat](chat.md) 和 [Ingot Agent 桌面端](desktop-agent.md)。

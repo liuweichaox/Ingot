@@ -1,7 +1,7 @@
 import { createRouter, createWebHistory } from "vue-router";
 
 const routes = [
-  { path: "/", redirect: "/edges" },
+  { path: "/", redirect: "/chat" },
   {
     path: "/edges",
     name: "edges",
@@ -11,6 +11,11 @@ const routes = [
     path: "/events",
     name: "events",
     component: () => import("../views/EventsView.vue"),
+  },
+  {
+    path: "/chat",
+    name: "chat",
+    component: () => import("../views/ChatView.vue"),
   },
   {
     path: "/metrics",

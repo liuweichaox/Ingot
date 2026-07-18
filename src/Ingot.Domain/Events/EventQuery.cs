@@ -1,18 +1,10 @@
 namespace Ingot.Domain.Events;
 
 /// <summary>
-///     边缘与中心共享的事件查询条件。
+///     Edge 本地事件日志的查询条件。共享过滤字段见 <see cref="EventFilter" />；
+///     AfterSeq 是边缘本地单调序号游标（与中心的 AfterIngestId 语义不同）。
 /// </summary>
-public sealed record EventQuery
+public sealed record EventQuery : EventFilter
 {
-    public string? EventType { get; init; }
-    public string? SubjectType { get; init; }
-    public string? SubjectId { get; init; }
-    public string? CorrelationId { get; init; }
-    public DateTimeOffset? From { get; init; }
-    public DateTimeOffset? To { get; init; }
     public long? AfterSeq { get; init; }
-    public int Limit { get; init; } = 100;
-    public IReadOnlyDictionary<string, string> Context { get; init; }
-        = new Dictionary<string, string>();
 }

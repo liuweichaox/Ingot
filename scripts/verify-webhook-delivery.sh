@@ -19,6 +19,16 @@ central_pid=""
 receiver_pid=""
 postgres_was_running=false
 succeeded=false
+compose_file="docker-compose.app.yml"
+postgres_password="${INGOT_WEBHOOK_POSTGRES_PASSWORD:-ingot}"
+
+compose() {
+  INGOT_POSTGRES_PASSWORD="$postgres_password" \
+  INGOT_EDGE_TOKEN="webhook-edge-token" \
+  INGOT_OPERATOR_TOKEN="webhook-operator-token" \
+  INGOT_CONNECTOR_TOKEN="webhook-connector-token" \
+    docker compose -f "$compose_file" "$@"
+}
 
 stop_process() {
   local pid="${1:-}"
@@ -32,7 +42,7 @@ cleanup() {
   stop_process "$receiver_pid"
   stop_process "$central_pid"
   if [[ "$postgres_was_running" == false ]]; then
-    docker compose -f docker-compose.events.yml stop postgres >/dev/null
+    compose stop postgres >/dev/null
   fi
 
   if [[ "$succeeded" == true && "${INGOT_KEEP_ACCEPTANCE_DATA:-false}" != true ]]; then
@@ -65,7 +75,7 @@ wait_for_http() {
 if docker inspect -f '{{.State.Running}}' ingot-postgres 2>/dev/null | grep -q true; then
   postgres_was_running=true
 else
-  docker compose -f docker-compose.events.yml up -d postgres
+  compose up -d postgres
 fi
 
 for _ in $(seq 1 60); do
@@ -88,7 +98,7 @@ wait_for_http "http://127.0.0.1:${receiver_port}/health" "$receiver_pid" "$recei
 
 dotnet run --project src/Ingot.Central.Api --no-build -- \
   "Urls=http://127.0.0.1:${central_port}" \
-  "ConnectionStrings:Events=Host=localhost;Port=5432;Database=ingot;Username=ingot;Password=ingot" \
+  "ConnectionStrings:Events=Host=localhost;Port=5432;Database=ingot;Username=ingot;Password=${postgres_password}" \
   "Central:DatabasePath=${run_dir}/central.db" \
   "EventIngest:RequireToken=true" \
   "EventIngest:EdgeTokens:${edge_id}=${token}" \

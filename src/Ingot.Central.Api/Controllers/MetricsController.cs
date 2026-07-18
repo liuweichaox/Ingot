@@ -1,4 +1,4 @@
-using Ingot.Central.Api.Services;
+using Ingot.Central.Infrastructure.Services;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Ingot.Central.Api.Controllers;

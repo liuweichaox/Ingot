@@ -13,5 +13,4 @@ public sealed class EventOptions
 
     public int MaxBacklogRows { get; set; } = 500_000;
 
-    public bool EnableInfluxProjection { get; set; } = true;
 }

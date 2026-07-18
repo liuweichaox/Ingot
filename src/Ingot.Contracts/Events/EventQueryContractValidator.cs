@@ -34,6 +34,22 @@ public static partial class EventQueryContractValidator
         return true;
     }
 
+    /// <summary>
+    ///     基座重载：校验共享过滤字段 + 派生类型自带的游标。
+    ///     Edge 传 AfterSeq，Central 传 AfterIngestId。
+    /// </summary>
+    public static bool TryValidate(
+        Ingot.Domain.Events.EventFilter filter,
+        long? cursor,
+        out string error)
+        => TryValidate(filter.From, filter.To, cursor, filter.Limit, filter.Context, out error);
+
+    /// <summary>
+    ///     ctx.&lt;key&gt; 合法性的唯一出处：字母、数字、点、下划线、连字符，长度 1-128。
+    ///     存储层与查询层都应引用本方法，避免规则漂移。
+    /// </summary>
+    public static bool IsValidContextKey(string key) => ContextKeyPattern().IsMatch(key);
+
     public static bool TryParseCursor(string? value, out long? cursor)
     {
         if (string.IsNullOrWhiteSpace(value))

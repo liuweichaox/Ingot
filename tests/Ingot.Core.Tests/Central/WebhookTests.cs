@@ -1,6 +1,6 @@
 using System.Net;
 using System.Text.Json;
-using Ingot.Central.Api.Webhooks;
+using Ingot.Central.Infrastructure.Webhooks;
 using Ingot.Contracts.Events;
 using Ingot.Domain.Events;
 using Microsoft.Extensions.Logging.Abstractions;

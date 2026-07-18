@@ -1,354 +1,118 @@
 # 配置说明
 
-本文说明 Ingot 的配置模型、字段约束和目录规则。配置设计遵循以下原则：
+配置分为 Chat、Ingot Agent、Connector Builder、Connector Host 和中心事实服务。桌面端只保存 Central URL、Actor 与 Token；模型、工作区和 Builder 均在 Central 部署配置。
 
-- 顶层结构稳定
-- 驱动选择明确
-- 驱动私有差异放进 `ProtocolOptions`
-- 配置先校验，再运行
-
-## 配置入口
-
-设备配置默认目录：
-
-- [src/Ingot.Edge.Agent/Configs](../src/Ingot.Edge.Agent/Configs)
-
-应用配置：
-
-- [src/Ingot.Edge.Agent/appsettings.json](../src/Ingot.Edge.Agent/appsettings.json)
-
-离线校验入口：
-
-```bash
-dotnet run --project src/Ingot.Edge.Agent -- --validate-configs
-```
-
-JSON Schema：
-
-- [v1 设备配置](../schemas/device-config.schema.json)
-- [v2 数据源配置](../schemas/device-config.v2.schema.json)
-- [行业 Profile](../schemas/profile.schema.json)
-
-示例配置：
-
-- [../examples/device-configs](../examples/device-configs)
-
-## 设备配置结构
-
-最小示例：
+## Chat
 
 ```json
 {
-  "SchemaVersion": 1,
-  "IsEnabled": true,
-  "PlcCode": "PLC01",
-  "Driver": "melsec-a1e",
-  "Host": "127.0.0.1",
-  "Port": 502,
-  "ProtocolOptions": {
-    "connect-timeout-ms": "5000",
-    "receive-timeout-ms": "5000"
+  "Chat": {
+    "Enabled": false,
+    "Provider": "Deterministic",
+    "FastModel": "deterministic-v1",
+    "ReasoningModel": "deterministic-v1",
+    "MaxToolCalls": 8,
+    "MaxRunSeconds": 60,
+    "RequireToken": true,
+    "ActorTokens": {},
+    "ModelPricing": {}
   },
-  "HeartbeatMonitorRegister": "D100",
-  "HeartbeatPollingInterval": 5000,
-  "Channels": []
-}
-```
-
-字段说明：
-
-| 字段 | 必填 | 说明 |
-|------|:----:|------|
-| `SchemaVersion` | ✅ | 配置结构版本；兼容配置使用 `1`，新配置建议使用 `2` |
-| `IsEnabled` | ✅ | 是否启用该设备 |
-| `PlcCode` | ✅ | 设备唯一编码，不能和其他文件重复 |
-| `Driver` | ✅ | 稳定驱动名称，例如 `melsec-a1e`、`siemens-s7` |
-| `Host` | ✅ | PLC 主机地址，支持 IP 或主机名 |
-| `Port` | ✅ | PLC 端口 |
-| `ProtocolOptions` | 可选 | 驱动附加参数 |
-| `HeartbeatMonitorRegister` | ✅ | 心跳寄存器 |
-| `HeartbeatPollingInterval` | ✅ | 心跳轮询间隔，毫秒 |
-| `Channels` | ✅ | 通道列表 |
-
-规则：
-
-- `Driver` 只接受完整名称，不接受别名
-- `ProtocolOptions` 不是自由字典，未声明支持的键会被拒绝
-- `PlcCode` 在配置目录内必须唯一
-
-## v2 数据源与事件配置
-
-新配置建议使用 `SchemaVersion: 2`。顶层身份从 PLC 专有的 `PlcCode` 改为源中立的 `SourceCode`，并显式区分通讯源与业务资产。
-
-```json
-{
-  "SchemaVersion": 2,
-  "IsEnabled": true,
-  "SourceCode": "POL-03-PLC",
-  "Adapter": "plc",
-  "Profile": "optical",
-  "Asset": {
-    "Type": "polishing-machine",
-    "Id": "POL-03"
-  },
-  "Driver": "melsec-mc",
-  "Host": "192.168.10.33",
-  "Port": 6000,
-  "HeartbeatMonitorRegister": "D100",
-  "HeartbeatPollingInterval": 5000,
-  "EventRules": []
-}
-```
-
-v2 新字段：
-
-| 字段 | 说明 |
-|---|---|
-| `SourceCode` | 通讯端点唯一编码 |
-| `Adapter` | 源适配器；当前实现为 `plc` |
-| `Profile` | 生效的行业事件语言 |
-| `Asset` | 默认业务资产；事件的主体，不等同于通讯端点 |
-| `EventRules` | 与 `Channels` 并列的事件派生规则 |
-
-完整示例见 [optical-polisher.v2.json](../examples/device-configs/optical-polisher.v2.json)。
-
-## EventRules
-
-当前支持四种触发器：
-
-| Kind | 语义 | 事件 |
-|---|---|---|
-| `EdgePair` | 激活/失活边沿 | `*.started` / `*.completed` |
-| `ValueChanged` | 值发生变化 | `EventType` 指定的单事件 |
-| `BitFlag` | 指定位从 0→1 / 1→0 | `*.raised` / `*.cleared` |
-| `Threshold` | 进入/离开阈值区间 | `*.entered` / `*.exited` |
-
-值变化规则可以同时更新上下文：
-
-```json
-{
-  "RuleId": "lot-change",
-  "Category": "material",
-  "EventType": "material.lot_changed",
-  "ContextKeys": ["material_lot"],
-  "SetContext": {
-    "material_lot": "$value"
-  },
-  "Trigger": {
-    "Kind": "ValueChanged",
-    "Tag": "D6200",
-    "DataType": "string",
-    "StringByteLength": 20
-  }
-}
-```
-
-`SetContext` 先写入资产上下文，随后事件获取快照，因此本次事件会携带变更后的值。规则中的对象类型、事件类型与必需上下文必须在所选 Profile 中声明。
-
-成对事件还可以在边沿成立时读取额外字段并固化进事件载荷：
-
-```json
-{
-  "RuleId": "polish-cycle",
-  "Category": "cycle",
-  "ContextKeys": ["material_lot", "tooling"],
-  "SnapshotOnStart": [
-    {
-      "FieldName": "recipe_id",
-      "Tag": "D6100",
-      "DataType": "string",
-      "StringByteLength": 16
-    }
-  ],
-  "SnapshotOnEnd": [
-    {
-      "FieldName": "good_count",
-      "Tag": "D6110",
-      "DataType": "ushort"
-    }
-  ],
-  "Trigger": {
-    "Kind": "EdgePair",
-    "Tag": "D6006",
-    "DataType": "short"
-  }
-}
-```
-
-`SnapshotOnStart` 与 `SnapshotOnEnd` 的字段读取失败时，周期事实仍然发出，并在 `data.snapshot_errors` 中列出失败字段。`StringByteLength` 在 Ingot 配置层始终表示字节数；HSL 适配器会截断协议层可能返回的额外字节，避免读入相邻寄存器。
-
-## 通道配置
-
-一个设备下可以配置多个通道。每个通道通常对应一个 measurement。
-
-示例：
-
-```json
-{
-  "Measurement": "sensor",
-  "ChannelCode": "PLC01C01",
-  "EnableBatchRead": true,
-  "BatchReadRegister": "D6000",
-  "BatchReadLength": 10,
-  "BatchSize": 10,
-  "AcquisitionInterval": 100,
-  "AcquisitionMode": "Always",
-  "Metrics": []
-}
-```
-
-字段说明：
-
-| 字段 | 必填 | 说明 |
-|------|:----:|------|
-| `Measurement` | ✅ | 写入存储的 measurement |
-| `ChannelCode` | ✅ | 通道编码 |
-| `EnableBatchRead` | ✅ | 是否启用批量读取 |
-| `BatchReadRegister` | 条件 | 批量读取起始地址 |
-| `BatchReadLength` | 条件 | 批量读取长度 |
-| `BatchSize` | ✅ | 队列聚合大小 |
-| `AcquisitionInterval` | ✅ | 采集间隔，毫秒 |
-| `AcquisitionMode` | ✅ | `Always` 或 `Conditional` |
-| `ConditionalAcquisition` | 条件 | 条件采集配置 |
-| `Metrics` | 条件 | 指标列表 |
-
-## 指标配置
-
-示例：
-
-```json
-{
-  "MetricLabel": "temperature",
-  "FieldName": "temperature",
-  "Register": "D6000",
-  "Index": 0,
-  "DataType": "short",
-  "EvalExpression": "value / 100.0"
-}
-```
-
-字段说明：
-
-| 字段 | 必填 | 说明 |
-|------|:----:|------|
-| `MetricLabel` | ✅ | 可读标签 |
-| `FieldName` | ✅ | 存储字段名 |
-| `Register` | ✅ | PLC 地址 |
-| `Index` | ✅ | 批量读取缓冲区偏移 |
-| `DataType` | ✅ | 数据类型 |
-| `EvalExpression` | 可选 | 表达式计算 |
-| `StringByteLength` | 条件 | 字符串字节长度 |
-| `Encoding` | 条件 | 字符串编码，建议 `utf-8` |
-
-说明：
-
-- 固定长度字符串会自动去除尾部 `\0`
-- 表达式仅对数值类型生效
-
-## 采集模式
-
-### Always
-
-适合连续信号、实时量：
-
-```json
-{
-  "AcquisitionMode": "Always",
-  "AcquisitionInterval": 100
-}
-```
-
-### Conditional
-
-适合周期开始/结束、事件触发：
-
-```json
-{
-  "AcquisitionMode": "Conditional",
-  "ConditionalAcquisition": {
-    "Register": "D6006",
-    "DataType": "short",
-    "StartTriggerMode": "RisingEdge",
-    "EndTriggerMode": "FallingEdge"
-  }
-}
-```
-
-Conditional 模式语义：
-
-- 正式业务事件写为 `Start` / `End`
-- 恢复诊断写入 `<measurement>_diagnostic`
-- 正式统计只应基于成对的 `Start` / `End`
-
-## `ProtocolOptions` 说明
-
-`ProtocolOptions` 是驱动的附加参数区。
-
-通用键：
-
-- `connect-timeout-ms`
-- `receive-timeout-ms`
-
-部分驱动还有专属键，例如：
-
-- `siemens-s7` 使用 `plc`
-- `inovance-tcp` 使用 `series`、`station`
-- `lsis-fast-enet` 使用 `cpu-type`、`slot-no`
-
-完整清单见：
-
-- [hsl-drivers.md](hsl-drivers.md)
-
-## 配置目录
-
-默认设备配置目录来自应用配置：
-
-```json
-{
-  "Acquisition": {
-    "DeviceConfigService": {
-      "ConfigDirectory": "Configs"
+  "ChatDataAccess": {
+    "Actors": {
+      "operator": { "AllowAll": false, "EdgeIds": ["EDGE-01"] }
     }
   }
 }
 ```
 
-规则：
+Chat 只注册 `check_data_quality` 与 `get_cycle_trace`。每个 Actor 必须配置事实访问范围；生产环境优先列出明确的 `EdgeIds`，只有受信的全局角色可使用 `AllowAll=true`。
 
-- 相对路径基于应用运行目录解析
-- 离线校验默认使用同一个目录
-- 可用 `--config-dir` 临时覆盖
-
-## 应用日志配置
-
-默认本地日志配置如下：
+## Ingot Agent
 
 ```json
 {
-  "Logging": {
-    "DatabasePath": "Data/logs.db",
-    "RetentionDays": 30
+  "Agent": {
+    "Enabled": false,
+    "DatabasePath": "Data/agent.db",
+    "Provider": "Deterministic",
+    "FastModel": "deterministic-v1",
+    "ReasoningModel": "deterministic-v1",
+    "MaxToolCalls": 24,
+    "MaxIterations": 8,
+    "MaxRunSeconds": 300,
+    "RequireToken": true,
+    "ActorTokens": {},
+    "PackagingApprovers": ["operator"],
+    "ModelPricing": {}
   }
 }
 ```
 
-说明：
+Agent 只接受来自 Ingot Agent Desktop 的 `standard` 连接器代码生成运行。`PackagingApprovers` 必须引用已配置 Actor；只有这些 Actor 可以打开人工打包批准门。
 
-- `Logging:DatabasePath` 用于设置 SQLite 日志数据库路径
-- 相对路径基于应用运行目录解析
-- `Logging:RetentionDays` 默认值为 `30`
-- `Logging:RetentionDays <= 0` 表示关闭自动清理
+正式环境启用 Chat 或 Agent 时，Provider 使用 `OpenAI` 并配置模型名称与 `OPENAI_API_KEY`。`Deterministic` 仅用于开发和自动化测试。Actor Token、模型密钥和连接器密钥通过环境变量或 Secret Store 注入。
 
-## 配置建议
+模型用量使用供应商响应中的输入和输出 token。只有每个实际模型都配置同一币种的 `ModelPricing` 时才计算 `estimatedCost`；否则返回 `null`。
 
-- v2 的 `SourceCode`、`ChannelCode` 使用稳定、可读、可搜索的命名
-- 连续寄存器优先批量读取
-- 在采集阶段做基础单位换算，不把脏原始值留给下游
-- 在上线前先执行配置校验
-- 不要把驱动不支持的私有参数硬塞进 `ProtocolOptions`
+## Connector Builder
 
-## 相关文档
+```json
+{
+  "ConnectorBuilder": {
+    "WorkspaceRoot": "Data/connector-workspaces",
+    "ArtifactRoot": "Data/connector-packages",
+    "ContainerCommand": "docker",
+    "ContainerWorkspaceVolume": "",
+    "DotnetSdkImage": "mcr.microsoft.com/dotnet/sdk:10.0",
+    "CommandTimeoutSeconds": 120,
+    "MaxFileBytes": 524288,
+    "MaxWorkspaceFiles": 256,
+    "MaxWorkspaceBytes": 8388608,
+    "MaxOutputCharacters": 32000
+  }
+}
+```
 
-- [快速开始](tutorial-getting-started.md)
-- [驱动目录](hsl-drivers.md)
-- [部署说明](tutorial-deployment.md)
+Builder 只在禁网子容器中执行平台固定的构建和测试入口，测试输入仅来自工作区内的固定样本与模拟数据。Agent 和 Builder 不连接数据源。模型不能选择命令、镜像、宿主路径或工作目录。工作区按 Actor 隔离，单文件上限 512 KiB，最多 256 个可见文件和 8 MiB 源码。
+
+## Connector Host
+
+```json
+{
+  "ConnectorHost": { "MaxBatchSize": 1000 },
+  "Context": { "DatabasePath": "Data/context.db" },
+  "Events": {
+    "DatabasePath": "Data/events.db",
+    "MaxBacklogRows": 500000
+  }
+}
+```
+
+Connector Host 接受标准 `ProductionEvent[]`。达到 outbox 上限时删除最旧未上报记录，并记录 `diagnostic.backlog_dropped` 与丢弃指标。
+
+## 环境变量
+
+.NET 层级配置使用双下划线：
+
+```text
+Chat__Enabled=true
+Chat__Provider=OpenAI
+Chat__FastModel=<model>
+Chat__ReasoningModel=<model>
+Chat__ActorTokens__operator=<secret-store-reference>
+Agent__Enabled=true
+Agent__Provider=OpenAI
+Agent__FastModel=<model>
+Agent__ReasoningModel=<model>
+Agent__ActorTokens__operator=<secret-store-reference>
+Agent__PackagingApprovers__0=operator
+ChatDataAccess__Actors__operator__AllowAll=false
+ChatDataAccess__Actors__operator__EdgeIds__0=EDGE-01
+OPENAI_API_KEY=<secret-store-reference>
+ConnectorBuilder__DotnetSdkImage=mcr.microsoft.com/dotnet/sdk:10.0
+ConnectorHost__IngestToken=<secret-store-reference>
+Edge__EventIngestToken=<secret-store-reference>
+ConnectionStrings__Events=<secret-store-reference>
+```
+
+生产环境还必须配置 CORS、数据库、事件摄入和检测提交凭据。完整启动要求见[部署](tutorial-deployment.md)。

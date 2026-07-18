@@ -5,9 +5,9 @@ services:
     environment:
       POSTGRES_DB: ingot
       POSTGRES_USER: ingot
-      POSTGRES_PASSWORD: ingot
+      POSTGRES_PASSWORD: ${INGOT_POSTGRES_PASSWORD:?INGOT_POSTGRES_PASSWORD is required}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - ingot-postgres-data:/var/lib/postgresql
     healthcheck:
@@ -23,19 +23,57 @@ services:
       dockerfile: src/Ingot.Central.Api/Dockerfile
     container_name: ingot-central-api
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     volumes:
-      - ./Data:/app/Data # SQLite DB 持久化 (Data/central.db)
+      - ./Data:/app/Data
+      - ingot-connector-workspaces:/app/Data/connector-workspaces
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     environment:
-      - ASPNETCORE_ENVIRONMENT=Production
-      - Urls=http://+:8000
-      - ConnectionStrings__Events=Host=postgres;Port=5432;Database=ingot;Username=ingot;Password=ingot
-      - EventIngest__RequireToken=true
-      - EventIngest__EdgeTokens__EDGE-001=change-me-edge-001
-      - Webhook__Enabled=true
+      ASPNETCORE_ENVIRONMENT: Production
+      Urls: http://+:8000
+      ConnectionStrings__Events: Host=postgres;Port=5432;Database=ingot;Username=ingot;Password=${INGOT_POSTGRES_PASSWORD:?INGOT_POSTGRES_PASSWORD is required}
+      EventIngest__RequireToken: "true"
+      EventIngest__EdgeTokens__EDGE-001: ${INGOT_EDGE_TOKEN:?INGOT_EDGE_TOKEN is required}
+      InspectionSubmission__RequireToken: "true"
+      InspectionSubmission__ActorTokens__OPERATOR-001: ${INGOT_OPERATOR_TOKEN:?INGOT_OPERATOR_TOKEN is required}
+      Agent__Enabled: ${INGOT_AGENT_ENABLED:-false}
+      Agent__Provider: ${INGOT_AGENT_PROVIDER:-Deterministic}
+      Agent__FastModel: ${INGOT_AGENT_FAST_MODEL:-deterministic-v1}
+      Agent__ReasoningModel: ${INGOT_AGENT_REASONING_MODEL:-deterministic-v1}
+      Agent__MaxToolCalls: ${INGOT_AGENT_MAX_TOOL_CALLS:-24}
+      Agent__MaxIterations: ${INGOT_AGENT_MAX_ITERATIONS:-8}
+      Agent__MaxRunSeconds: ${INGOT_AGENT_MAX_RUN_SECONDS:-300}
+      Agent__RequireToken: "true"
+      Agent__ActorTokens__operator: ${INGOT_AGENT_OPERATOR_TOKEN:-}
+      Chat__Enabled: ${INGOT_CHAT_ENABLED:-false}
+      Chat__Provider: ${INGOT_CHAT_PROVIDER:-Deterministic}
+      Chat__FastModel: ${INGOT_CHAT_FAST_MODEL:-deterministic-v1}
+      Chat__ReasoningModel: ${INGOT_CHAT_REASONING_MODEL:-deterministic-v1}
+      Chat__EnableMultiAgent: ${INGOT_CHAT_ENABLE_MULTI_AGENT:-false}
+      Chat__MaxToolCalls: ${INGOT_CHAT_MAX_TOOL_CALLS:-8}
+      Chat__MaxRunSeconds: ${INGOT_CHAT_MAX_RUN_SECONDS:-60}
+      Chat__MaxDiscussionRounds: ${INGOT_CHAT_MAX_DISCUSSION_ROUNDS:-3}
+      Chat__MaxDiscussionTurns: ${INGOT_CHAT_MAX_DISCUSSION_TURNS:-9}
+      Chat__RequireToken: "true"
+      Chat__ActorTokens__operator: ${INGOT_CHAT_OPERATOR_TOKEN:-}
+      ChatDataAccess__Actors__operator__AllowAll: ${INGOT_CHAT_OPERATOR_ALLOW_ALL:-true}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ConnectorBuilder__WorkspaceRoot: /app/Data/connector-workspaces
+      ConnectorBuilder__ArtifactRoot: /app/Data/connector-packages
+      ConnectorBuilder__ContainerWorkspaceVolume: ingot-connector-workspaces
+      ConnectorBuilder__DotnetSdkImage: ${INGOT_CONNECTOR_BUILDER_IMAGE:-mcr.microsoft.com/dotnet/sdk:10.0}
+      ConnectorBuilder__CommandTimeoutSeconds: ${INGOT_CONNECTOR_BUILD_TIMEOUT_SECONDS:-120}
+      Cors__AllowedOrigins__0: http://localhost:3000
+      Webhook__Enabled: "true"
     depends_on:
       postgres:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:8000/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
     restart: unless-stopped
 
   central-web:
@@ -44,10 +82,45 @@ services:
       dockerfile: Dockerfile
     container_name: ingot-central-web
     ports:
-      - "3000:80"
+      - "127.0.0.1:3000:80"
     depends_on:
-      - central-api
+      central-api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 5s
+    restart: unless-stopped
+
+  connector-host:
+    build:
+      context: .
+      dockerfile: src/Ingot.Connector.Host/Dockerfile
+    container_name: ingot-connector-host
+    ports:
+      - "127.0.0.1:8001:8001"
+    volumes:
+      - ./Data/connector-host:/app/Data
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      Urls: http://+:8001
+      ConnectorHost__IngestToken: ${INGOT_CONNECTOR_TOKEN:?INGOT_CONNECTOR_TOKEN is required}
+      Edge__CentralApiBaseUrl: http://central-api:8000
+      Edge__EventIngestToken: ${INGOT_EDGE_TOKEN:?INGOT_EDGE_TOKEN is required}
+    depends_on:
+      central-api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:8001/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
     restart: unless-stopped
 
 volumes:
   ingot-postgres-data:
+  ingot-connector-workspaces:
+    name: ingot-connector-workspaces

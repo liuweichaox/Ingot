@@ -7,10 +7,10 @@
             <el-icon><DataAnalysis /></el-icon>
             <span style="margin-left: 8px">指标监控</span>
           </span>
-          <el-button type="primary" :icon="Refresh" @click="loadMetrics" :loading="loading" :disabled="!edgeId">
+          <el-button type="primary" :icon="Refresh" :loading="loading" :disabled="!edgeId" @click="loadMetrics">
             刷新
           </el-button>
-      </div>
+        </div>
       </template>
 
       <el-alert
@@ -19,7 +19,7 @@
         style="margin-bottom: 16px"
       >
         <template #default>
-          通过 <code>/api/edges/&lt;edgeId&gt;/metrics/json</code> 代理读取 Edge.Agent 的 <code>/metrics</code>
+          通过 <code>/api/edges/&lt;edgeId&gt;/metrics/json</code> 代理读取边缘节点的 <code>/metrics</code>
         </template>
       </el-alert>
 
@@ -29,9 +29,9 @@
             <el-select
               v-model="edgeId"
               placeholder="请选择边缘节点"
-              @change="onEdgeChange"
               :loading="edgesLoading"
               style="width: 300px"
+              @change="onEdgeChange"
             >
               <el-option
                 v-for="e in edges"
@@ -42,7 +42,7 @@
             </el-select>
           </el-form-item>
           <el-form-item>
-            <el-text type="info" v-if="lastUpdate">最后更新：{{ lastUpdate }}</el-text>
+            <el-text v-if="lastUpdate" type="info">最后更新：{{ lastUpdate }}</el-text>
           </el-form-item>
         </el-form>
       </el-card>
@@ -61,28 +61,28 @@
           <div class="kpi-label">
             <el-icon><Timer /></el-icon>
             <span>采集延迟</span>
-      </div>
+          </div>
           <div class="kpi-value">{{ fmtNum(getOne("ingot_telemetry_collection_latency_ms")) }} ms</div>
         </el-card>
         <el-card shadow="hover" class="kpi-card">
           <div class="kpi-label">
             <el-icon><TrendCharts /></el-icon>
             <span>采集频率</span>
-      </div>
+          </div>
           <div class="kpi-value">{{ fmtNum(getOne("ingot_telemetry_collection_rate")) }} points/s</div>
         </el-card>
         <el-card shadow="hover" class="kpi-card">
           <div class="kpi-label">
             <el-icon><Box /></el-icon>
             <span>队列深度</span>
-      </div>
+          </div>
           <div class="kpi-value">{{ fmtNum(getOne("ingot_telemetry_queue_depth")) }}</div>
         </el-card>
         <el-card shadow="hover" class="kpi-card">
           <div class="kpi-label">
             <el-icon><Warning /></el-icon>
             <span>错误总数</span>
-      </div>
+          </div>
           <div class="kpi-value error-value">{{ fmtNum(getOne("ingot_telemetry_errors_total")) }}</div>
         </el-card>
       </div>
@@ -189,7 +189,7 @@ const loadEdges = async () => {
   edgesLoading.value = true;
       try {
     edges.value = await getJson("/api/edges");
-      } catch (e) {
+      } catch {
     ElMessage.error("加载边缘节点列表失败");
       } finally {
     edgesLoading.value = false;

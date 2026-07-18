@@ -1,0 +1,8 @@
+/node_modules/
+/.next/
+/out/
+/public/brand/
+/public/search-index.json
+next-env.d.ts
+*.tsbuildinfo
+npm-debug.log*

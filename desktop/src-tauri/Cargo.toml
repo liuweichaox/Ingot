@@ -1,0 +1,28 @@
+[package]
+name = "ingot-agent-desktop"
+version = "0.1.0"
+description = "Governed connector code generation desktop application for Ingot"
+authors = ["Ingot Contributors"]
+license = "MIT"
+repository = "https://github.com/liuweichaox/Ingot"
+edition = "2021"
+rust-version = "1.77.2"
+
+[lib]
+name = "ingot_agent_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+futures-util = "0.3"
+hex = "0.4"
+reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+tempfile = "3"
+url = "2"

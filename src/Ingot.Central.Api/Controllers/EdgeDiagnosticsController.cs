@@ -1,4 +1,4 @@
-using Ingot.Central.Api.Services;
+using Ingot.Central.Infrastructure.Services;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Ingot.Central.Api.Controllers;
@@ -15,7 +15,7 @@ public sealed class EdgeDiagnosticsController(EdgeRegistry registry, IHttpClient
     public async Task<IActionResult> GetEdgeMetricsRaw([FromRoute] string edgeId, CancellationToken cancellationToken)
     {
         var baseUrl = GetEdgeBaseUrlOrNull(edgeId);
-        if (baseUrl == null) return BadRequest(new { error = "该 edge 未上报 AgentBaseUrl，无法代理 metrics。" });
+        if (baseUrl == null) return BadRequest(new { error = "该 edge 未上报 HostBaseUrl，无法代理 metrics。" });
 
         var uri = new Uri(new Uri(baseUrl), "/metrics");
         var client = httpClientFactory.CreateClient();
@@ -31,7 +31,7 @@ public sealed class EdgeDiagnosticsController(EdgeRegistry registry, IHttpClient
     public async Task<IActionResult> GetEdgeMetricsJson([FromRoute] string edgeId, CancellationToken cancellationToken)
     {
         var baseUrl = GetEdgeBaseUrlOrNull(edgeId);
-        if (baseUrl == null) return BadRequest(new { error = "该 edge 未上报 AgentBaseUrl，无法代理 metrics。" });
+        if (baseUrl == null) return BadRequest(new { error = "该 edge 未上报 HostBaseUrl，无法代理 metrics。" });
 
         var uri = new Uri(new Uri(baseUrl), "/metrics");
         var client = httpClientFactory.CreateClient();
@@ -59,7 +59,7 @@ public sealed class EdgeDiagnosticsController(EdgeRegistry registry, IHttpClient
         CancellationToken cancellationToken = default)
     {
         var baseUrl = GetEdgeBaseUrlOrNull(edgeId);
-        if (baseUrl == null) return BadRequest(new { error = "该 edge 未上报 AgentBaseUrl，无法代理 logs。" });
+        if (baseUrl == null) return BadRequest(new { error = "该 edge 未上报 HostBaseUrl，无法代理 logs。" });
 
         var query = new Dictionary<string, string?>
         {
@@ -88,7 +88,7 @@ public sealed class EdgeDiagnosticsController(EdgeRegistry registry, IHttpClient
     public async Task<IActionResult> GetEdgeLogLevels([FromRoute] string edgeId, CancellationToken cancellationToken)
     {
         var baseUrl = GetEdgeBaseUrlOrNull(edgeId);
-        if (baseUrl == null) return BadRequest(new { error = "该 edge 未上报 AgentBaseUrl，无法代理 logs。" });
+        if (baseUrl == null) return BadRequest(new { error = "该 edge 未上报 HostBaseUrl，无法代理 logs。" });
 
         var uri = new Uri(new Uri(baseUrl), "/api/logs/levels");
         var client = httpClientFactory.CreateClient();
@@ -102,7 +102,7 @@ public sealed class EdgeDiagnosticsController(EdgeRegistry registry, IHttpClient
     private string? GetEdgeBaseUrlOrNull(string edgeId)
     {
         var state = registry.Find(edgeId);
-        var baseUrl = state?.AgentBaseUrl;
+        var baseUrl = state?.HostBaseUrl;
         if (string.IsNullOrWhiteSpace(baseUrl)) return null;
         return baseUrl;
     }

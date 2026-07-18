@@ -6,15 +6,15 @@
         <RootNamespace>Ingot.Infrastructure</RootNamespace>
     </PropertyGroup>
     <ItemGroup>
-        <PackageReference Include="HslCommunication" Version="12.2.0" />
-        <PackageReference Include="InfluxDB.Client" Version="4.18.0" />
-        <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.0" />
-        <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.1" />
-        <PackageReference Include="NCalcAsync" Version="5.4.0" />
-        <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+        <!-- HttpEventShipper 等网络实现依赖共享框架中的 HttpClientFactory/Logging/Options 抽象 -->
+        <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    </ItemGroup>
+    <ItemGroup>
+        <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.1" />
         <PackageReference Include="Serilog" Version="4.1.0" />
     </ItemGroup>
     <ItemGroup>
         <ProjectReference Include="..\Ingot.Application\Ingot.Application.csproj" />
+        <ProjectReference Include="..\Ingot.Contracts\Ingot.Contracts.csproj" />
     </ItemGroup>
 </Project>

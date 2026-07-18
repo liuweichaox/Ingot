@@ -11,6 +11,16 @@ token="benchmark-token"
 central_log="$(mktemp -t ingot-central-benchmark.XXXXXX.log)"
 central_pid=""
 postgres_was_running=false
+compose_file="docker-compose.app.yml"
+postgres_password="${INGOT_BENCHMARK_POSTGRES_PASSWORD:-ingot}"
+
+compose() {
+  INGOT_POSTGRES_PASSWORD="$postgres_password" \
+  INGOT_EDGE_TOKEN="benchmark-edge-token" \
+  INGOT_OPERATOR_TOKEN="benchmark-operator-token" \
+  INGOT_CONNECTOR_TOKEN="benchmark-connector-token" \
+    docker compose -f "$compose_file" "$@"
+}
 
 cleanup() {
   if [[ -n "$central_pid" ]] && kill -0 "$central_pid" 2>/dev/null; then
@@ -18,7 +28,7 @@ cleanup() {
     wait "$central_pid" 2>/dev/null || true
   fi
   if [[ "$postgres_was_running" == false ]]; then
-    docker compose -f docker-compose.events.yml stop postgres >/dev/null
+    compose stop postgres >/dev/null
   fi
   rm -f "$central_log"
 }
@@ -27,7 +37,7 @@ trap cleanup EXIT
 if docker inspect -f '{{.State.Running}}' ingot-postgres 2>/dev/null | grep -q true; then
   postgres_was_running=true
 else
-  docker compose -f docker-compose.events.yml up -d postgres
+  compose up -d postgres
 fi
 
 for _ in $(seq 1 30); do
@@ -40,7 +50,7 @@ done
 dotnet build Ingot.sln --no-restore >/dev/null
 dotnet run --project src/Ingot.Central.Api --no-build -- \
   "Urls=http://127.0.0.1:${port}" \
-  "ConnectionStrings:Events=Host=localhost;Port=5432;Database=ingot;Username=ingot;Password=ingot" \
+  "ConnectionStrings:Events=Host=localhost;Port=5432;Database=ingot;Username=ingot;Password=${postgres_password}" \
   "Central:DatabasePath=/tmp/ingot-central-benchmark.db" \
   "EventIngest:EdgeTokens:${edge_id}=${token}" \
   >"$central_log" 2>&1 &

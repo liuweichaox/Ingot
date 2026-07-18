@@ -7,19 +7,19 @@
             <el-icon><Document /></el-icon>
             <span style="margin-left: 8px">日志查看</span>
           </span>
-      <div>
+          <div>
             <el-switch
               v-model="autoRefresh"
               active-text="自动刷新"
               inactive-text="手动刷新"
-              @change="toggleAutoRefresh"
               style="margin-right: 12px"
+              @change="toggleAutoRefresh"
             />
-            <el-button type="primary" :icon="Refresh" @click="loadLogs" :loading="loading" :disabled="!edgeId">
+            <el-button type="primary" :icon="Refresh" :loading="loading" :disabled="!edgeId" @click="loadLogs">
               刷新
             </el-button>
-      </div>
-      </div>
+          </div>
+        </div>
       </template>
 
       <el-alert
@@ -28,7 +28,7 @@
         style="margin-bottom: 16px"
       >
         <template #default>
-          通过 <code>/api/edges/&lt;edgeId&gt;/logs</code> 代理读取 Edge.Agent 日志
+          通过 <code>/api/edges/&lt;edgeId&gt;/logs</code> 代理读取边缘节点日志
         </template>
       </el-alert>
 
@@ -38,9 +38,9 @@
             <el-select
               v-model="edgeId"
               placeholder="请选择边缘节点"
-              @change="onEdgeChange"
               :loading="edgesLoading"
               style="width: 300px"
+              @change="onEdgeChange"
             >
               <el-option
                 v-for="e in edges"
@@ -54,10 +54,10 @@
             <el-select
               v-model="level"
               placeholder="全部"
-              @change="applyFilters"
               :disabled="!edgeId"
               style="width: 150px"
               clearable
+              @change="applyFilters"
             >
               <el-option
                 v-for="l in levels"
@@ -71,24 +71,24 @@
             <el-input
               v-model="keyword"
               placeholder="搜索消息内容..."
-              @keyup.enter="applyFilters"
               :disabled="!edgeId"
               style="width: 300px"
               clearable
               :prefix-icon="Search"
+              @keyup.enter="applyFilters"
             />
           </el-form-item>
           <el-form-item>
-            <el-button type="primary" :icon="Search" @click="applyFilters" :disabled="loading || !edgeId">
+            <el-button type="primary" :icon="Search" :disabled="loading || !edgeId" @click="applyFilters">
               搜索
             </el-button>
-            <el-button :icon="RefreshLeft" @click="clearFilters" :disabled="loading || !edgeId">
+            <el-button :icon="RefreshLeft" :disabled="loading || !edgeId" @click="clearFilters">
               清空
             </el-button>
           </el-form-item>
         </el-form>
         <div style="margin-top: 12px; color: #909399; font-size: 12px">
-        <span v-if="lastUpdate">最后更新：{{ lastUpdate }}</span>
+          <span v-if="lastUpdate">最后更新：{{ lastUpdate }}</span>
           <span v-if="total > 0" style="margin-left: 16px">共 {{ total }} 条</span>
         </div>
       </el-card>
@@ -139,7 +139,7 @@
               @size-change="applyFilters"
               @current-change="applyFilters"
             />
-      </div>
+          </div>
         </template>
 
         <el-empty v-if="!loading && logs.length === 0" description="暂无日志数据" />
@@ -158,7 +158,7 @@
               <el-tag v-if="log.source" type="info" size="small" effect="plain">
                 {{ log.source }}
               </el-tag>
-      </div>
+            </div>
             <div class="log-message">{{ log.message }}</div>
             <div v-if="log.exception" class="log-exception">
               <el-collapse>
@@ -171,7 +171,7 @@
                   <pre class="exception-content">{{ log.exception }}</pre>
                 </el-collapse-item>
               </el-collapse>
-          </div>
+            </div>
           </div>
         </div>
 
@@ -250,7 +250,7 @@ const loadEdges = async () => {
   edgesLoading.value = true;
       try {
     edges.value = await getJson("/api/edges");
-      } catch (e) {
+      } catch {
     ElMessage.error("加载边缘节点列表失败");
       } finally {
     edgesLoading.value = false;

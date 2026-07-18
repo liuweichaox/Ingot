@@ -5,7 +5,10 @@
     <IsPackable>false</IsPackable>
   </PropertyGroup>
 
-  <ItemGroup>
+    <ItemGroup>
+        <ProjectReference Include="..\..\src\Ingot.Agent\Ingot.Agent.csproj" />
+        <ProjectReference Include="..\..\src\Ingot.Agent.Infrastructure\Ingot.Agent.Infrastructure.csproj" />
+        <ProjectReference Include="..\..\src\Ingot.Connector.Builder\Ingot.Connector.Builder.csproj" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageReference Include="xunit" Version="2.9.2" />
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.1">
@@ -21,9 +24,10 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Ingot.Application\Ingot.Application.csproj" />
     <ProjectReference Include="..\..\src\Ingot.Domain\Ingot.Domain.csproj" />
+    <ProjectReference Include="..\..\src\Ingot.Contracts\Ingot.Contracts.csproj" />
     <ProjectReference Include="..\..\src\Ingot.Infrastructure\Ingot.Infrastructure.csproj" />
-    <ProjectReference Include="..\..\src\Ingot.Edge.Agent\Ingot.Edge.Agent.csproj" />
+    <ProjectReference Include="..\..\src\Ingot.Central.Infrastructure\Ingot.Central.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\Ingot.Connector.Host\Ingot.Connector.Host.csproj" />
     <ProjectReference Include="..\..\src\Ingot.Central.Api\Ingot.Central.Api.csproj" />
-    <ProjectReference Include="..\..\src\Ingot.Simulator\Ingot.Simulator.csproj" />
   </ItemGroup>
 </Project>

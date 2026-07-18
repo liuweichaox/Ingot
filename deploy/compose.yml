@@ -1,0 +1,65 @@
+name: ingot-public
+
+services:
+  gateway:
+    image: caddy:2-alpine
+    container_name: ingot-gateway
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./runtime/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks:
+      - public
+
+  site:
+    profiles: ["site"]
+    build:
+      context: ..
+      dockerfile: deploy/docker/site.Dockerfile
+    image: ingot-site:local
+    container_name: ingot-site
+    restart: unless-stopped
+    expose:
+      - "3000"
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1:3000/"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks:
+      - public
+
+  docs:
+    profiles: ["docs"]
+    build:
+      context: ..
+      dockerfile: deploy/docker/docs.Dockerfile
+    image: ingot-docs:local
+    container_name: ingot-docs
+    restart: unless-stopped
+    expose:
+      - "80"
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - public
+
+networks:
+  public:
+    name: ingot-public-network
+
+volumes:
+  caddy-data:
+    name: ingot-caddy-data
+  caddy-config:
+    name: ingot-caddy-config

@@ -5,7 +5,7 @@
         <div class="header-content">
           <div class="logo">
             <el-icon :size="24"><Box /></el-icon>
-            <span class="title">Ingot 生产事件中心</span>
+            <span class="title">Ingot 工厂数据与工艺分析平台</span>
           </div>
           <el-menu
             mode="horizontal"
@@ -15,23 +15,27 @@
           >
             <el-menu-item index="/edges">
               <el-icon><Connection /></el-icon>
-              <span>边缘节点</span>
+              <span>连接器宿主（Connector Host）</span>
             </el-menu-item>
             <el-menu-item index="/events">
               <el-icon><List /></el-icon>
               <span>生产事件</span>
             </el-menu-item>
+            <el-menu-item index="/chat">
+              <el-icon><ChatDotRound /></el-icon>
+              <span>Chat 工艺分析</span>
+            </el-menu-item>
             <el-menu-item index="/metrics">
               <el-icon><DataAnalysis /></el-icon>
-              <span>指标监控</span>
+              <span>平台指标</span>
             </el-menu-item>
             <el-menu-item index="/logs">
               <el-icon><Document /></el-icon>
-              <span>日志查看</span>
+              <span>运行日志</span>
             </el-menu-item>
             <el-menu-item index="/metrics" @click="openMetrics">
               <el-icon><Link /></el-icon>
-              <span>Prometheus</span>
+              <span>原始指标</span>
             </el-menu-item>
           </el-menu>
         </div>
@@ -44,9 +48,8 @@
 </template>
 
 <script setup>
-import { Box, Connection, DataAnalysis, Document, Link, List } from "@element-plus/icons-vue";
+import { Box, ChatDotRound, Connection, DataAnalysis, Document, Link, List } from "@element-plus/icons-vue";
 import zhCn from "element-plus/dist/locale/zh-cn.mjs";
-
 const openMetrics = () => {
   window.open("/metrics", "_blank");
 };

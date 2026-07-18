@@ -1,135 +1,48 @@
 # Development
 
-This guide is intended for developers who want to modify the runtime, add drivers, or replace default implementations. It summarizes code entry points, extension boundaries, and pre-submission checks.
+## Product surfaces
 
-If you only want to run the system, start with:
+- Central Web exposes fact pages and Chat only. Do not add an Agent code-generation surface to the browser.
+- `/api/v1/chat/*` handles read-only analysis only, with `check_data_quality` and `get_cycle_trace`.
+- `/api/v1/agent/*` handles connector code generation only and must validate `X-Ingot-Client: ingot-agent-desktop`.
+- Chat and Agent create, history, read, stream, and cancel operations must be isolated by surface and Actor.
 
-- [Getting Started](tutorial-getting-started.en.md)
-- [Configuration](tutorial-configuration.en.md)
+## Dependency direction
 
-## Code Reading Entry Points
+1. `Ingot.Contracts`: public Chat, Agent, connector, event, and inspection contracts;
+2. `Ingot.Agent`: surfaces, workflow, plans, budgets, and verification;
+3. `Ingot.Agent.Infrastructure`: models, SQLite store, and tools;
+4. `Ingot.Connector.Builder`: Actor workspace, fixed container build/test, approval, and packaging;
+5. `Ingot.Central.Infrastructure`: central facts and read-only Chat tools;
+6. `Ingot.Connector.Host`: protocol-neutral normalized event ingress;
+7. `desktop`: Tauri 2 desktop Agent client.
 
-Recommended order:
+## Connector extension
 
-1. `src/Ingot.Edge.Agent/Program.cs`
-2. `src/Ingot.Infrastructure/Acquisition/AcquisitionService.cs`
-3. `src/Ingot.Infrastructure/Queues/QueueService.cs`
-4. `src/Ingot.Infrastructure/Clients/HslStandardPlcDriverProvider.cs`
-5. `src/Ingot.Infrastructure/DataStorages/InfluxDbDataStorageService.cs`
+Do not link equipment protocol SDKs or readers into the platform core. Ingot Agent writes a concrete protocol into a connector workspace. Shared changes belong in connector specifications, templates, deterministic transformation tests, and Builder fixed entries.
 
-If you want the architectural picture first, read:
+The default template must preserve:
 
-- [Modules](modules.en.md)
-- [Design](design.en.md)
-
-## Add a PLC Driver
-
-Do not extend the runtime by piling more `switch` branches into a factory.
-
-The recommended path is:
-
-1. implement a new `IPlcDriverProvider`
-2. reuse `PlcClientServiceBase` when it fits, or provide a new `IPlcClientService`
-3. register the provider in the host
-4. document the new `Driver` and provide an example config
-
-Follow these rules:
-
-- keep the `Driver` name stable and explicit
-- be honest about whether `Host` and `Port` are used
-- expose only real `ProtocolOptions`
-- do not silently accept unused configuration
-- do not leak driver-private logic into the upper acquisition flow
-
-## Extend Storage
-
-The current runtime batches messages in memory and writes them directly to storage.
-
-### Replace the Storage Backend
-
-Implement:
-
-- `IDataStorageService`
-
-The main entry point is:
-
-- `SaveBatchAsync(List<DataMessage>)`
-
-When extending storage:
-
-- do not bypass `QueueService`
-- define your success-return contract clearly
-- update docs and tests together when failure behavior changes
-
-### Adjust Queue Semantics
-
-If you change `QueueService`, make the following decisions explicit:
-
-- how batch boundaries are defined
-- whether later batches continue after a failed batch
-- how failures surface through logs and metrics
-
-Do not hide runtime failure semantics inside implementation details.
-
-## Change Acquisition Logic
-
-If you are changing runtime acquisition behavior, understand these boundaries first:
-
-- `HeartbeatMonitor` decides whether a PLC is readable
-- `ChannelCollector` owns channel-level orchestration
-- `ChannelMetricReader` reads fields
-- `MetricExpressionEvaluator` evaluates expressions
-- `AcquisitionStateManager` owns conditional recovery state
-
-Do not merge:
-
-- low-level PLC reads
-- cycle semantics
-- storage persistence
-
-back into a single class.
-
-## Change the Configuration System
-
-The current configuration system is designed to be:
-
-- JSON-based
-- hot-reload friendly
-- offline-validatable
-- explicit about driver contracts
-
-If you extend it, try to preserve:
-
-- stable top-level fields
-- protocol-specific differences pushed into `ProtocolOptions`
-- validation rules that evolve together with documentation
-
-## Testing Expectations
-
-If you add new behavior, add at least one of:
-
-- unit tests
-- integration tests
-- configuration validation tests
-
-The highest-value coverage areas are:
-
-- driver configuration contracts
-- queue batching and failure behavior
-- conditional acquisition recovery semantics
-
-## Pre-Submission Checklist
-
-Before opening a PR, run at least:
-
-```bash
-dotnet build Ingot.sln --no-restore
-dotnet test tests/Ingot.Core.Tests/Ingot.Core.Tests.csproj
-dotnet run --project src/Ingot.Edge.Agent -- --validate-configs
+```text
+stdin/json-lines → stdout/production-event-json-lines
 ```
 
-## Related Docs
+Connector acceptance covers parsing fixed workspace fixtures and simulated input, field mapping, units, event types, subjects, context, correlation IDs, and `ProductionEvent` validation. Agent and Builder do not connect to live data sources. Generated packages must not include production tokens, an HTTP submission client, or automatic deployment scripts.
 
-- [Contributing](../CONTRIBUTING.en.md)
-- [Modules](modules.en.md)
-- [Design](design.en.md)
+## Desktop development
+
+```bash
+cd desktop
+npm install
+npm run desktop:dev
+```
+
+Every Central request must cross the Rust native boundary, add the fixed desktop-client identifier, constrain allowed Central URLs, and verify download SHA-256. The React layer must not hold unrestricted network or filesystem permissions.
+
+## Gate
+
+```bash
+./scripts/verify.sh
+```
+
+Update bilingual documentation and tests with every change. See [Chat](chat.en.md) and [Ingot Agent desktop](desktop-agent.en.md).

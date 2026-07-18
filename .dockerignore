@@ -1,0 +1,15 @@
+.git
+.github
+.vs
+.idea
+.vscode
+**/.DS_Store
+**/node_modules
+**/.next
+**/out
+**/bin
+**/obj
+**/target
+Data
+deploy/runtime
+deploy/backups

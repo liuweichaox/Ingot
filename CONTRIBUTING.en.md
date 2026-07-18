@@ -1,94 +1,95 @@
-# Contributing Guide
+# Contributing to Ingot
 
-Thanks for your interest in Ingot.
+[简体中文](CONTRIBUTING.md)
 
-The project is acquisition-first. Its primary goal is not to become a generalized central platform, but to strengthen the PLC acquisition path in terms of stability, correctness, real-time behavior, and observability. Contributions should reinforce that objective.
+Thank you for contributing code, tests, documentation, or design feedback. Every change must preserve trusted production facts, read-only Chat, governed desktop Agent permissions, auditable connectors, and synchronized Chinese and English documentation.
 
-## Contribution Principles
+## Engineering principles
 
-- The Edge Agent is the main product; Central API / Web are diagnostics and management helpers
-- Do not bypass `QueueService` and write directly into storage
-- Do not reintroduce `Type + switch` style hard-coded factories
-- Extend PLC protocols through `IPlcDriverProvider`
-- Keep configuration stable through full `Driver` names
-- Update docs and examples together with code
+- `Ingot.Domain`, `Ingot.Application`, and `Ingot.Agent` remain independent of databases, model providers, and equipment protocols.
+- Connector specifications and packages represent source-specific behavior; vendor SDKs do not enter the platform core.
+- Chat models handle question interpretation and response composition. Deterministic code owns fact retrieval, data validation, authorization, run limits, and evidence verification.
+- Chat fact tools remain read-only. Agent artifact tools write only Actor-isolated connector workspaces and platform-controlled versioned records.
+- Do not add arbitrary SQL execution, scripts, shell access, open networking, model-selected file paths, or equipment control.
+- Public contracts do not retain duplicate fields, implicit aliases, or silent compatibility behavior.
 
-## Local Development
+## Local environment
+
+Requirements:
+
+- .NET SDK 10
+- Node.js 22.13 or later
+- Docker and Docker Compose
+
+Install dependencies:
 
 ```bash
-dotnet restore
-dotnet test tests/Ingot.Core.Tests/Ingot.Core.Tests.csproj
-dotnet build Ingot.sln --no-restore
+dotnet restore Ingot.sln
+npm --prefix src/Ingot.Central.Web ci
+npm --prefix desktop ci
+npm --prefix site ci
+npm --prefix docs-site ci
 ```
 
-For end-to-end local validation, prepare:
+See [Getting started](docs/tutorial-getting-started.en.md) for local services.
 
-- InfluxDB 2.x
-- `src/Ingot.Edge.Agent/Configs/TEST_PLC.json`
-- `src/Ingot.Simulator`
+## Change requirements
 
-## Contribution Scope
+### Chat, Agent, and models
 
-Useful contributions include:
+- The core depends only on `IModelClient`, `IAnalysisTool`, and other `Ingot.Agent` contracts.
+- Model output must be typed and deterministically validated before execution.
+- Every tool defines a stable name, version, JSON Schema, access type, timeout, cancellation, and result limit.
+- Every key number and conclusion must resolve to a real `EvidenceRef`.
+- `/api/v1/chat/*` accepts only read-only fact queries. `/api/v1/agent/*` accepts connector code generation only with the fixed desktop-client identifier.
+- Chat and Agent runs, histories, events, and permissions remain isolated by product surface and Actor.
 
-- new PLC drivers or improvements to existing ones
-- reliability fixes in the acquisition path
-- TSDB write and queue-semantics improvements
-- docs, configuration examples, tutorials
-- automated tests
+### Connectors
 
-## Adding a New PLC Driver
+- Connectors emit normalized `ProductionEvent[]` and never leak source protocol models into core contracts.
+- Specifications include protocol, endpoint, authentication, data contract, sampling policy, and acceptance criteria.
+- Source packages include a Dockerfile, `connector.manifest.json`, and tests.
+- Generated code is built and tested only through fixed Connector Builder entries in a network-disabled Docker child container with read-only source; host builds, arbitrary commands, and runtime image pulls are prohibited.
+- Agent and Builder do not connect to live data sources. Tests use only fixed workspace fixtures and simulated input.
+- Successful tests stop at the packaging approval gate. An operator reviews and explicitly approves the current revision; the platform emits a verifiable ZIP but does not deploy, start, or schedule connectors.
 
-Recommended path:
+### APIs and storage
 
-1. Prefer inheriting `PlcClientServiceBase`, or implement `IPlcConnectionClient` / `IPlcDataAccessClient` / `IPlcTypedWriteClient` as needed
-2. Implement an `IPlcDriverProvider`
-3. Register the provider through DI
-4. Add docs and sample configuration for the new driver
-5. Add tests for important configuration behavior
+- API inputs are type- and authorization-validated at the controller boundary.
+- PostgreSQL stores central facts. SQLite WAL stores shop-floor events, outbox records, Agent runs, and artifacts.
+- Database changes include initialization or migration, concurrency semantics, failure handling, and integration tests.
+- Logs, metrics, and traces exclude secrets, full prompts, and sensitive tool arguments.
 
-Requirements:
+### Web and documentation
 
-- use a stable `Driver` name
-- do not introduce alias systems
-- keep the `Host` / `Port` contract honest and never ignore endpoint config silently
-- only expose `ProtocolOptions` that the driver truly supports
-- fail explicitly for unsupported `ProtocolOptions`
+- Central Web exposes only Chat and obtains its availability and read-only tools from `/api/v1/chat/capabilities`. Code generation appears only in Ingot Agent Desktop.
+- Any chart capability first defines a `ChartSpec` type allowlist, deterministic validation, renderer, and tests; never execute model-generated front-end code.
+- The product website describes implemented capabilities only and labels sample facts explicitly.
+- Public capability, configuration, API, or terminology changes update the README, bilingual `docs/`, product website, and docs site together.
 
-## Extending Storage Backends
+## Testing
 
-- Replace the storage backend by implementing `IDataStorageService.SaveBatchAsync`
-- Adjust queue semantics by modifying `QueueService` or `QueueBatchPersister`
+Run the complete gate before submitting:
 
-Requirements:
+```bash
+./scripts/verify.sh
+```
 
-- failure behavior must stay explicit
-- logs and metrics must remain part of the contract
-- README, design docs, and tests must be updated together
+It covers .NET build and tests; Central Web build, tests, lint, and production dependency audit; product and docs site static builds, links, lint, and audits; architecture dependencies; shell syntax; Compose configuration; and diff formatting.
 
-## Pre-Submission Checklist
+New behavior includes success, rejection, and authorization-boundary tests. Bug fixes first add a test that reproduces the defect.
 
-At minimum, make sure that:
+## Pull requests
 
-- the code builds
-- relevant tests pass
-- new behavior has at least minimal automated coverage
-- README / tutorials / sample configs are updated
-- local runtime artifacts are not committed
+1. Fork the repository and branch from the latest `main`.
+2. Keep the change focused and exclude unrelated formatting or refactors.
+3. Update implementation, tests, and affected bilingual documentation.
+4. Run `./scripts/verify.sh`.
+5. Open a pull request that states:
+   - problem and objective;
+   - public contract or data-model changes;
+   - security and authorization impact;
+   - verification results;
+   - deployment or configuration requirements.
 
-## Recommended PR Content
-
-PR descriptions should include:
-
-- problem statement
-- design trade-offs
-- risks
-- validation steps
-- migration notes if configuration behavior changes
-
-## Changes We Intentionally Avoid
-
-- forcing unlike PLC protocols into an oversized “unified” model
-- bloating the shared configuration model for one driver-specific need
-- adding configuration without tests and docs
-- making claims the implementation cannot prove, such as absolute “zero data loss”
+Use [GitHub Issues](https://github.com/liuweichaox/Ingot/issues) for regular defects and feature requests. Do not open a public issue for a vulnerability; follow [SECURITY.md](SECURITY.md).

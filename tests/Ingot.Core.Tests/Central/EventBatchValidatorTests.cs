@@ -1,4 +1,3 @@
-using Ingot.Central.Api.Events;
 using Ingot.Contracts.Events;
 using Ingot.Domain.Events;
 using Xunit;

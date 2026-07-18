@@ -2,11 +2,16 @@
   "name": "ingot-central-web",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=22.13.0"
+  },
   "scripts": {
     "dev": "vite --port 3000",
     "serve": "vite --port 3000",
     "build": "vite build",
-    "preview": "vite preview --port 3000"
+    "preview": "vite preview --port 3000",
+    "test": "node --test tests/*.test.mjs",
+    "lint": "eslint src"
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.1",
@@ -17,6 +22,10 @@
   "devDependencies": {
     "@vitejs/plugin-vue": "^5.2.4",
     "@vue/compiler-sfc": "^3.5.39",
+    "@eslint/js": "9.39.4",
+    "eslint": "9.39.4",
+    "eslint-plugin-vue": "10.6.2",
+    "globals": "16.5.0",
     "vite": "6.4.3"
   }
 }
