@@ -53,6 +53,14 @@ public sealed class ChatDataAccessTests
             return Task.FromResult<IReadOnlyList<CentralProductionEvent>>([]);
         }
 
+        public Task<CentralEventScopeStats> GetScopeStatsAsync(
+            CentralEventQuery query,
+            CancellationToken ct = default)
+        {
+            Queries.Add(query);
+            return Task.FromResult(new CentralEventScopeStats());
+        }
+
         public Task<bool> CanConnectAsync(CancellationToken ct = default) => Task.FromResult(true);
     }
 }

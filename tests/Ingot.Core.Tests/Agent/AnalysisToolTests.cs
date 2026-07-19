@@ -38,6 +38,28 @@ public sealed class AnalysisToolTests
     }
 
     [Fact]
+    public async Task CheckDataQuality_ReportsFullScopeFreshnessAndCountBeyondDetailWindow()
+    {
+        var windowLatest = DateTimeOffset.Parse("2026-07-18T10:00:00Z");
+        var trueLatest = windowLatest.AddHours(6);
+        var tool = new CheckDataQualityTool(new StubEventReader(
+            [Row(1, 1, "telemetry.observed", windowLatest)],
+            new CentralEventScopeStats
+            {
+                Count = 4200,
+                LatestOccurredAt = trueLatest,
+                EarliestOccurredAt = windowLatest
+            }));
+
+        var result = await tool.ExecuteAsync(
+            new AnalysisToolCall { Tool = tool.Definition.Name },
+            ExecutionContext);
+
+        Assert.Equal(trueLatest, result.Data.GetProperty("latestOccurredAt").GetDateTimeOffset());
+        Assert.Equal(4200, result.Data.GetProperty("totalEventCount").GetInt64());
+    }
+
+    [Fact]
     public async Task CheckDataQuality_RejectsAWindowAtTheQueryLimit()
     {
         var rows = Enumerable.Range(1, 500)
@@ -142,12 +164,25 @@ public sealed class AnalysisToolTests
             }
         };
 
-    private sealed class StubEventReader(IReadOnlyList<CentralProductionEvent> rows) : IChatEventReader
+    private sealed class StubEventReader(
+        IReadOnlyList<CentralProductionEvent> rows,
+        CentralEventScopeStats? stats = null) : IChatEventReader
     {
         public Task<IReadOnlyList<CentralProductionEvent>> QueryAsync(
             string actorId,
             CentralEventQuery query,
             CancellationToken ct = default)
             => Task.FromResult(rows);
+
+        public Task<CentralEventScopeStats> GetScopeStatsAsync(
+            string actorId,
+            CentralEventQuery query,
+            CancellationToken ct = default)
+            => Task.FromResult(stats ?? new CentralEventScopeStats
+            {
+                Count = rows.Count,
+                LatestOccurredAt = rows.Count == 0 ? null : rows.Max(static row => row.Event.OccurredAt),
+                EarliestOccurredAt = rows.Count == 0 ? null : rows.Min(static row => row.Event.OccurredAt)
+            });
     }
 }

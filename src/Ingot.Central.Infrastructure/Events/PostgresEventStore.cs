@@ -182,6 +182,59 @@ public sealed partial class PostgresEventStore : ICentralEventStore, IAsyncDispo
         await InitializeAsync(ct).ConfigureAwait(false);
 
         await using var command = _dataSource.CreateCommand();
+        var where = BuildWhere(command, query);
+        var order = query.AfterIngestId.HasValue ? "ASC" : "DESC";
+        command.CommandText = $"""
+                              SELECT ingest_id, edge_id, ingested_at, event_id, event_type, type_version,
+                                     occurred_at, recorded_at, source, subject_type, subject_id,
+                                     correlation_id, context::text, data::text, seq
+                              FROM production_events
+                              {where}
+                              ORDER BY ingest_id {order}
+                              LIMIT @limit;
+                              """;
+        command.Parameters.AddWithValue("limit", Math.Clamp(query.Limit, 1, 500));
+
+        var events = new List<CentralProductionEvent>();
+        await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
+        while (await reader.ReadAsync(ct).ConfigureAwait(false))
+            events.Add(ReadEvent(reader));
+        return events;
+    }
+
+    public async Task<CentralEventScopeStats> GetScopeStatsAsync(
+        CentralEventQuery query,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        await InitializeAsync(ct).ConfigureAwait(false);
+
+        await using var command = _dataSource.CreateCommand();
+        var where = BuildWhere(command, query);
+        // 全范围聚合，不受 Limit 截断；hypertable 上 max/min(occurred_at) 与 count 都能借助时间维索引与块裁剪。
+        command.CommandText = $"""
+                              SELECT count(*), max(occurred_at), min(occurred_at)
+                              FROM production_events
+                              {where};
+                              """;
+        await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
+        if (!await reader.ReadAsync(ct).ConfigureAwait(false))
+            return new CentralEventScopeStats();
+        return new CentralEventScopeStats
+        {
+            Count = reader.IsDBNull(0) ? 0 : reader.GetInt64(0),
+            LatestOccurredAt = reader.IsDBNull(1)
+                ? null
+                : new DateTimeOffset(reader.GetDateTime(1).ToUniversalTime()),
+            EarliestOccurredAt = reader.IsDBNull(2)
+                ? null
+                : new DateTimeOffset(reader.GetDateTime(2).ToUniversalTime())
+        };
+    }
+
+    // 依据查询条件构造 WHERE 子句并绑定参数（QueryAsync 与 GetScopeStatsAsync 共用，保证过滤语义一致）。
+    private static string BuildWhere(NpgsqlCommand command, CentralEventQuery query)
+    {
         var predicates = new List<string>();
         AddEquality(command, predicates, "edge_id", "edge_id", query.EdgeId);
         AddEquality(command, predicates, "event_type", "event_type", query.EventType);
@@ -218,24 +271,7 @@ public sealed partial class PostgresEventStore : ICentralEventStore, IAsyncDispo
             contextIndex++;
         }
 
-        var where = predicates.Count == 0 ? string.Empty : $"WHERE {string.Join(" AND ", predicates)}";
-        var order = query.AfterIngestId.HasValue ? "ASC" : "DESC";
-        command.CommandText = $"""
-                              SELECT ingest_id, edge_id, ingested_at, event_id, event_type, type_version,
-                                     occurred_at, recorded_at, source, subject_type, subject_id,
-                                     correlation_id, context::text, data::text, seq
-                              FROM production_events
-                              {where}
-                              ORDER BY ingest_id {order}
-                              LIMIT @limit;
-                              """;
-        command.Parameters.AddWithValue("limit", Math.Clamp(query.Limit, 1, 500));
-
-        var events = new List<CentralProductionEvent>();
-        await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
-        while (await reader.ReadAsync(ct).ConfigureAwait(false))
-            events.Add(ReadEvent(reader));
-        return events;
+        return predicates.Count == 0 ? string.Empty : $"WHERE {string.Join(" AND ", predicates)}";
     }
 
     public async Task<bool> CanConnectAsync(CancellationToken ct = default)

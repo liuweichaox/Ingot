@@ -23,6 +23,11 @@ public interface IChatEventReader
         string actorId,
         CentralEventQuery query,
         CancellationToken ct = default);
+
+    Task<CentralEventScopeStats> GetScopeStatsAsync(
+        string actorId,
+        CentralEventQuery query,
+        CancellationToken ct = default);
 }
 
 public sealed class ChatEventReader(
@@ -36,23 +41,12 @@ public sealed class ChatEventReader(
         CentralEventQuery query,
         CancellationToken ct = default)
     {
-        if (!_options.Actors.TryGetValue(actorId, out var scope))
-            throw new UnauthorizedAccessException("当前 Actor 没有配置生产事实访问范围。");
-        if (scope.AllowAll)
+        var edgeIds = ResolveEdgeScope(actorId);
+        if (edgeIds is null)
             return await events.QueryAsync(query, ct).ConfigureAwait(false);
-
-        var edgeIds = scope.EdgeIds
-            .Where(static edgeId => !string.IsNullOrWhiteSpace(edgeId))
-            .Select(static edgeId => edgeId.Trim())
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToArray();
-        if (edgeIds.Length == 0)
-            throw new UnauthorizedAccessException("当前 Actor 的生产事实访问范围为空。");
-
         if (!string.IsNullOrWhiteSpace(query.EdgeId))
         {
-            if (!edgeIds.Contains(query.EdgeId, StringComparer.OrdinalIgnoreCase))
-                throw new UnauthorizedAccessException("当前 Actor 不能访问请求的 Edge 数据。");
+            EnsureEdgeAllowed(edgeIds, query.EdgeId);
             return await events.QueryAsync(query, ct).ConfigureAwait(false);
         }
 
@@ -62,5 +56,62 @@ public sealed class ChatEventReader(
             ? batches.SelectMany(static batch => batch).OrderBy(static row => row.IngestId)
             : batches.SelectMany(static batch => batch).OrderByDescending(static row => row.IngestId);
         return ordered.Take(Math.Clamp(query.Limit, 1, 500)).ToArray();
+    }
+
+    public async Task<CentralEventScopeStats> GetScopeStatsAsync(
+        string actorId,
+        CentralEventQuery query,
+        CancellationToken ct = default)
+    {
+        var edgeIds = ResolveEdgeScope(actorId);
+        if (edgeIds is null)
+            return await events.GetScopeStatsAsync(query, ct).ConfigureAwait(false);
+        if (!string.IsNullOrWhiteSpace(query.EdgeId))
+        {
+            EnsureEdgeAllowed(edgeIds, query.EdgeId);
+            return await events.GetScopeStatsAsync(query, ct).ConfigureAwait(false);
+        }
+
+        var parts = await Task.WhenAll(edgeIds.Select(edgeId =>
+            events.GetScopeStatsAsync(query with { EdgeId = edgeId }, ct))).ConfigureAwait(false);
+        return Combine(parts);
+    }
+
+    // null 表示 AllowAll（不按 Edge 收窄）；否则返回该 Actor 被授权的 Edge 集合。
+    private string[]? ResolveEdgeScope(string actorId)
+    {
+        if (!_options.Actors.TryGetValue(actorId, out var scope))
+            throw new UnauthorizedAccessException("当前 Actor 没有配置生产事实访问范围。");
+        if (scope.AllowAll)
+            return null;
+
+        var edgeIds = scope.EdgeIds
+            .Where(static edgeId => !string.IsNullOrWhiteSpace(edgeId))
+            .Select(static edgeId => edgeId.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        if (edgeIds.Length == 0)
+            throw new UnauthorizedAccessException("当前 Actor 的生产事实访问范围为空。");
+        return edgeIds;
+    }
+
+    private static void EnsureEdgeAllowed(string[] edgeIds, string requestedEdgeId)
+    {
+        if (!edgeIds.Contains(requestedEdgeId, StringComparer.OrdinalIgnoreCase))
+            throw new UnauthorizedAccessException("当前 Actor 不能访问请求的 Edge 数据。");
+    }
+
+    private static CentralEventScopeStats Combine(IReadOnlyList<CentralEventScopeStats> parts)
+    {
+        var latests = parts.Where(static part => part.LatestOccurredAt.HasValue)
+            .Select(static part => part.LatestOccurredAt!.Value).ToArray();
+        var earliests = parts.Where(static part => part.EarliestOccurredAt.HasValue)
+            .Select(static part => part.EarliestOccurredAt!.Value).ToArray();
+        return new CentralEventScopeStats
+        {
+            Count = parts.Sum(static part => part.Count),
+            LatestOccurredAt = latests.Length == 0 ? null : latests.Max(),
+            EarliestOccurredAt = earliests.Length == 0 ? null : earliests.Min()
+        };
     }
 }

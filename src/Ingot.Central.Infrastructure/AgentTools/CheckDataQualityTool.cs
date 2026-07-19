@@ -33,14 +33,17 @@ public sealed class CheckDataQualityTool(IChatEventReader events) : IAnalysisToo
     {
         call.Arguments.TryGetValue("subjectId", out var subjectId);
         call.Arguments.TryGetValue("correlationId", out var correlationId);
+        var scope = new CentralEventQuery
+        {
+            SubjectId = NullIfBlank(subjectId),
+            CorrelationId = NullIfBlank(correlationId)
+        };
+        // 全范围聚合：总条数与新鲜度不受 500 明细窗口截断（在 hypertable 上是廉价的时间聚合）。
+        var stats = await events.GetScopeStatsAsync(context.ActorId, scope, ct).ConfigureAwait(false);
+        // 明细窗口：周期配对 / 序号连续性 / 上下文缺失需要逐行数据，仍限 500 行。
         var rows = await events.QueryAsync(
             context.ActorId,
-            new CentralEventQuery
-            {
-                SubjectId = NullIfBlank(subjectId),
-                CorrelationId = NullIfBlank(correlationId),
-                Limit = 500
-            },
+            scope with { Limit = 500 },
             ct).ConfigureAwait(false);
         var ordered = rows.OrderBy(static row => row.IngestId).ToArray();
         var emptyContext = ordered.Count(static row => row.Event.Context.Count == 0);
@@ -66,14 +69,15 @@ public sealed class CheckDataQualityTool(IChatEventReader events) : IAnalysisToo
                     return sequences.Zip(sequences.Skip(1)).Count(static pair => pair.Second > pair.First + 1);
                 });
         }
-        var latest = ordered.Length == 0
-            ? (DateTimeOffset?)null
-            : ordered.Max(static row => row.Event.OccurredAt);
+        // 新鲜度取自全范围聚合，不再受 500 明细窗口影响（即使乱序回填也能反映真实最新时间）。
+        var latest = stats.LatestOccurredAt;
+        var totalEvents = stats.Count;
+        var scopeEmpty = totalEvents == 0;
         var reachedResultLimit = ordered.Length == 500;
         var limitations = new List<string>();
         if (reachedResultLimit)
-            limitations.Add("本次检查达到 500 条查询上限，无法确认窗口外的数据质量。");
-        if (ordered.Length == 0)
+            limitations.Add("周期配对、序号连续性等明细检查达到 500 条窗口上限，无法确认窗口外的明细质量（总量与新鲜度已按全范围统计）。");
+        if (scopeEmpty)
             limitations.Add("当前范围没有生产事件，无法判断周期配对和序号连续性。");
         else if (scopedQuery)
             limitations.Add("按对象或周期过滤后的事件不是完整 Edge 序列，因此不计算序号连续性。");
@@ -82,12 +86,12 @@ public sealed class CheckDataQualityTool(IChatEventReader events) : IAnalysisToo
         {
             Kind = "event-query",
             Id = scopeId,
-            Label = $"生产事件查询窗口（{ordered.Length} 条）",
+            Label = $"生产事件查询窗口（明细 {ordered.Length} 条 / 范围内共 {totalEvents} 条）",
             Url = BuildEventsUrl(subjectId, correlationId)
         };
-        var summary = ordered.Length == 0
+        var summary = scopeEmpty
             ? "当前范围没有生产事件，无法确认数据质量。"
-            : $"检查了 {ordered.Length} 条事件：发现 {incompleteCycles} 个未配对关联组、" +
+            : $"范围内共 {totalEvents} 条事件，抽检 {ordered.Length} 条：发现 {incompleteCycles} 个未配对关联组、" +
               (sequenceGaps.HasValue ? $"{sequenceGaps} 个序号间断，" : "序号连续性未在当前过滤范围计算，") +
               $"{emptyContext} 条事件没有上下文；最新事件时间为 {latest:O}。";
         return new AnalysisToolResult
@@ -97,15 +101,17 @@ public sealed class CheckDataQualityTool(IChatEventReader events) : IAnalysisToo
             Data = JsonSerializer.SerializeToElement(new
             {
                 eventCount = ordered.Length,
+                totalEventCount = totalEvents,
                 correlationCount = correlations.Length,
                 incompleteCycles,
                 sequenceGaps,
                 emptyContext,
-                latestOccurredAt = latest
+                latestOccurredAt = latest,
+                earliestOccurredAt = stats.EarliestOccurredAt
             }),
             Evidence = [evidence],
             Limitations = limitations,
-            Outcome = ordered.Length == 0 || reachedResultLimit
+            Outcome = scopeEmpty || reachedResultLimit
                 ? AnalysisToolOutcomes.InsufficientData
                 : AnalysisToolOutcomes.Sufficient
         };
