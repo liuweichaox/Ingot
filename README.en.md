@@ -24,8 +24,8 @@
 
   <p>
     <a href="https://github.com/liuweichaox/Ingot/actions/workflows/ci.yml"><img src="https://github.com/liuweichaox/Ingot/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-    <a href="LICENSE"><img src="https://img.shields.io/github/license/liuweichaox/Ingot" alt="MIT License"></a>
-    <a href="https://github.com/liuweichaox/Ingot/issues"><img src="https://img.shields.io/github/issues/liuweichaox/Ingot" alt="Issues"></a>
+    <a href="LICENSE"><img src="images/badges/license.svg" alt="MIT License"></a>
+    <a href="https://github.com/liuweichaox/Ingot/issues"><img src="images/badges/issues.svg" alt="GitHub Issues"></a>
   </p>
 
   <p>English · <a href="README.md">简体中文</a></p>
