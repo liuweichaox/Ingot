@@ -1,6 +1,6 @@
 # Ingot Documentation
 
-Ingot stores data from different sources as standard production facts and provides **Ingot Chat** in Central Web. Teams implement their own source adaptation and submit `ProductionEvent` or `InspectionRecord` records through the public APIs; Ingot embeds no field-device protocol.
+Ingot is a trusted production-facts and process-investigation platform. It stores important records from different sources as standard production facts and provides **Ingot Chat** in Central Web as the main workspace for engineers. Teams implement their own source adaptation and submit `ProductionEvent` or `InspectionRecord` records through the public APIs; Ingot embeds no field-device protocol.
 
 ## Get started
 
@@ -12,7 +12,7 @@ Ingot stores data from different sources as standard production facts and provid
 
 ## Ingot Chat
 
-- [Ingot Chat](chat.en.md): read-only production-fact conversation, evidence, and HTTP API in Central Web.
+- [Ingot Chat](chat.en.md): everyday fact questions and bounded deeper investigations involving process, quality, and challenge roles; every result links back to evidence.
 
 ## Event ingestion
 

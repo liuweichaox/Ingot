@@ -4,7 +4,7 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "Ingot",
     short_name: "Ingot",
-    description: "可信生产事实、标准事件接入与 Ingot Chat",
+    description: "让生产事实可验证、可追问、可调查",
     start_url: "/",
     display: "standalone",
     background_color: "#10161c",

@@ -169,6 +169,30 @@ section {
   color: var(--gold-bright);
 }
 
+.technical-details {
+  margin-block: 28px 72px;
+  color: var(--muted);
+  border: 1px solid color-mix(in srgb, var(--steel) 38%, transparent);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--ink) 72%, #ffffff);
+}
+
+.technical-details summary {
+  padding: 18px 22px;
+  color: var(--paper);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.technical-details > p {
+  margin: 0;
+  padding: 0 22px 20px;
+}
+
+.technical-details-content {
+  border-top: 1px solid color-mix(in srgb, var(--steel) 28%, transparent);
+}
+
 .hero {
   min-height: calc(100svh - 88px);
   display: grid;

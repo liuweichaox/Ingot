@@ -1,10 +1,10 @@
 # Ingot Product Website
 
-The bilingual website for Ingot trusted production facts, standard event ingestion, and Ingot Chat.
+The bilingual public website for the Ingot production-facts and process-investigation platform.
 
 Public product terms are fixed:
 
-- **Ingot Chat** is the only user-facing AI conversation in Central Web. It queries recorded facts and presents evidence.
+- **Ingot Chat** is the main workspace for engineers: everyday questions establish facts, while deeper investigation brings process, quality, and challenge perspectives to the same verified evidence.
 - **Standard event ingestion** is how teams bring in data. They implement source adaptation and submit `ProductionEvent` batches to Central.
 - **Connector Host** is an optional, team-operated local ingress and SQLite outbox for plant networks that need it.
 

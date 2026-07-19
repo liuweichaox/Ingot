@@ -5,12 +5,12 @@ const origin = "https://ingotstack.com";
 
 export const metadata: Metadata = {
   metadataBase: new URL(origin),
-  title: "Ingot — Trusted production facts, standard event ingestion, and Ingot Chat",
-  description: "Ingest different sources through a standard event API, then use Ingot Chat in Central Web to query production facts and find data problems.",
+  title: "Ingot — Production facts you can verify, question, and investigate",
+  description: "Ingot brings important production records together. Engineers use Ingot Chat to ask questions, inspect evidence, and investigate complex problems.",
   applicationName: "Ingot",
   keywords: [
     "Ingot", "production facts", "Ingot Chat", "inspection facts",
-    "normalized production events", "event ingestion API", "source adaptation", "evidence traceability",
+    "production history", "process investigation", "quality investigation", "evidence traceability",
   ],
   alternates: {
     canonical: "/en/",
@@ -22,19 +22,19 @@ export const metadata: Metadata = {
     apple: "/brand/ingot-mark-dark.svg",
   },
   openGraph: {
-    title: "Ingot — Trusted production facts, standard event ingestion, and Ingot Chat",
-    description: "Ingest production facts through a standard event API, then use Ingot Chat in Central Web to investigate them with evidence.",
+    title: "Ingot — Production facts you can verify, question, and investigate",
+    description: "Bring production records together, then use Ingot Chat to ask questions, inspect evidence, and investigate when needed.",
     url: `${origin}/en/`,
     locale: "en_US",
     alternateLocale: ["zh_CN"],
     siteName: "Ingot",
     type: "website",
-    images: [{ url: "/og.png", width: 1200, height: 630, alt: "Ingot — Trusted production facts, standard event ingestion, and Ingot Chat" }],
+    images: [{ url: "/og.png", width: 1200, height: 630, alt: "Ingot — Production facts you can verify, question, and investigate" }],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Ingot — Trusted production facts, standard event ingestion, and Ingot Chat",
-    description: "Ingot Chat finds production-data problems and links evidence to standard production facts.",
+    title: "Ingot — Production facts you can verify, question, and investigate",
+    description: "Ingot Chat helps engineers investigate problems with production records and evidence.",
     images: ["/og.png"],
   },
 };

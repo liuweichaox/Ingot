@@ -20,9 +20,10 @@ Tagline:
 
 ## Brand position
 
-- **Category**: Trusted Production Facts & Problem-Finding Platform / 可信生产事实与生产问题查询平台
+- **Category**: Trusted Production Facts & Process Investigation Platform / 可信生产事实与工艺调查平台
 - **Primary users**: Production, process, quality, equipment, and IT roles in manufacturing, especially teams that need independent deployment
-- **Value chain**: Team-owned source adaptation → standard production events + inspection facts + production context → trusted production facts → Ingot Chat cycle review and data-quality queries
+- **Product architecture**: Ingot is the platform brand; Ingot Chat is the main workspace for engineers; deeper investigation is the advanced Chat mode where process, quality, and challenge roles review evidence together
+- **Value chain**: Team-owned source adaptation → standard production events + inspection facts + production context → trusted production facts → everyday Ingot Chat questions or deeper investigation → engineer confirmation
 - **System boundary**: MES can be a source or integration target, but is not a runtime prerequisite; Ingot is not defined by scheduling, order execution, inventory, or attendance
 
 Public wording leads with standard production-event ingestion, trusted facts, and evidence-based investigation.

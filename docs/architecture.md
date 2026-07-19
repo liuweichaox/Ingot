@@ -1,6 +1,6 @@
 # 宏观架构
 
-Ingot 由 Central API、Central Web、事实存储和使用方实现的数据源适配组成。对外产品入口只有 Central Web 的 Ingot Chat；数据源通过标准事件 API 接入。
+Ingot 由 Central API、Central Web、事实存储和使用方实现的数据源适配组成。Ingot 是可信生产事实与工艺调查平台；Central Web 中的 Ingot Chat 是工程师的主要入口，提供日常问答和可选的有界多 Agent 深入调查。数据源通过标准事件 API 接入。
 
 ```text
 设备、仪器、业务系统或自定义数据源
@@ -15,7 +15,7 @@ Ingot 由 Central API、Central Web、事实存储和使用方实现的数据源
 
 ## 产品边界
 
-- Ingot Chat 运行在 Central Web，只查询事实、检查数据质量并返回证据。
+- Ingot Chat 运行在 Central Web，只查询事实、检查数据质量并返回证据；深入调查模式由工艺、质量和反证角色审查同一批已验证证据，不能访问设备或自行扩展数据范围。
 - 使用方负责设备协议、字段映射、凭据、离线缓存、重试和本地进程监管。
 - `Ingot.Connector.Host` 是可选的用户自管本地事件入口与 outbox；数据源适配的实现与运行由使用方负责。
 - `POST /api/v1/events:batch` 接受经过令牌和契约校验的标准事件批次。

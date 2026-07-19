@@ -8,10 +8,10 @@
     </picture>
   </a>
 
-  <h3>Trusted production facts and conversational problem finding</h3>
+  <h3>Trusted production facts and process investigation</h3>
 
   <p>
-    Ingest every source through a standard event API, then use Ingot Chat to query facts, check data quality, and follow evidence.
+    Bring production records together as traceable facts; use Ingot Chat to ask questions, inspect evidence, and investigate when needed.
   </p>
 
   <p>
@@ -50,9 +50,9 @@
 
 ## About Ingot
 
-Ingot stores queryable, verifiable, and traceable production facts for manufacturing operations. Teams integrate equipment, instruments, MES, ERP, and custom systems themselves: they map source data to the standard `ProductionEvent` or `InspectionRecord` contracts and call the public HTTP APIs. Ingot embeds no device protocol and does not replace plant control, scheduling, inventory, or quality-disposition systems.
+Ingot is a trusted production-facts and process-investigation platform for manufacturing operations. It brings important records from equipment, instruments, MES, ERP, and custom systems together as queryable, verifiable, and traceable facts. Teams map source data to the standard `ProductionEvent` or `InspectionRecord` contracts and call the public HTTP APIs; Ingot embeds no device protocol and does not replace plant control, scheduling, inventory, or quality-disposition systems.
 
-**Ingot Chat** is the only user-facing AI entry point. It runs in Central Web, reads recorded production facts only, and exposes tool activity, limitations, and resolvable evidence with every answer.
+**Ingot Chat** is the main way engineers use Ingot. It runs in Central Web and reads recorded production facts only: everyday mode checks facts and completeness, while deeper investigation lets process, quality, and challenge roles review the same verified evidence and return candidate explanations for an engineer to assess.
 
 ## Core capabilities
 
@@ -63,6 +63,7 @@ Ingot stores queryable, verifiable, and traceable production facts for manufactu
 | Trusted fact store | Production events, inspection records, subjects, context, correlation IDs, query, and SSE |
 | Ingot Chat | Natural-language questions, page context, streamed responses, history, limitations, and evidence links |
 | Chat fact tools | `check_data_quality` and `get_cycle_trace` |
+| Deeper investigation | Bounded process, quality, and challenge roles; at most 3 rounds and 9 turns; produces evidence-backed candidate explanations only |
 | Operations | Health checks, Prometheus metrics, and structured logs |
 
 ### Security boundary
@@ -130,6 +131,7 @@ export INGOT_CHAT_REASONING_MODEL="<reasoning-model>"
 export OPENAI_API_KEY="<secret>"
 export INGOT_CHAT_OPERATOR_TOKEN="$(openssl rand -hex 24)"
 export INGOT_CHAT_OPERATOR_ALLOW_ALL=true
+export INGOT_CHAT_ENABLE_DEEP_INVESTIGATION=true
 
 docker compose -f docker-compose.app.yml up -d --build
 ```

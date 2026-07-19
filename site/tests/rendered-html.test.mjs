@@ -56,7 +56,7 @@ const oldDesktopTerms = new RegExp([
   "SHA256SUMS",
 ].join("|"), "i");
 
-test("renders the Chinese product site around Ingot Chat and standard event ingestion", async () => {
+test("renders the Chinese product site around Ingot, Ingot Chat, and deeper investigation", async () => {
   const response = await render();
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
@@ -66,12 +66,12 @@ test("renders the Chinese product site around Ingot Chat and standard event inge
   assert.equal(response.headers.get("permissions-policy"), "camera=(), microphone=(), geolocation=()");
 
   const html = await response.text();
-  assert.match(html, /<title>Ingot — 可信生产事实、标准事件接入与 Ingot Chat<\/title>/i);
-  assert.match(html, /TRUSTED FACTS \/ EVENT API \/ INGOT CHAT/);
-  assert.match(html, /用标准事件接入数据/);
-  assert.match(html, /用 Ingot Chat 查找问题/);
-  assert.match(html, /可选 Connector Host/);
-  assert.match(html, /用户自管 · 可选/);
+  assert.match(html, /<title>Ingot — 让生产事实可验证、可追问、可调查<\/title>/i);
+  assert.match(html, /INGOT · PRODUCTION INTELLIGENCE/);
+  assert.match(html, /让生产事实可验证/);
+  assert.match(html, /深入调查/);
+  assert.match(html, /多角色深入调查/);
+  assert.match(html, /让每个回答都有依据/);
   assert.match(html, /https:\/\/docs\.ingotstack\.com\/zh\/rfc-production-events/);
   assert.match(html, /cycle\.completed/);
   assert.match(html, /https:\/\/ingotstack\.com\/og\.png/i);
@@ -83,12 +83,11 @@ test("renders the stable English route with equivalent product scope", async () 
   const response = await render("/en/");
   assert.equal(response.status, 200);
   const html = await response.text();
-  assert.match(html, /<title>Ingot — Trusted production facts, standard event ingestion, and Ingot Chat<\/title>/i);
-  assert.match(html, /TRUSTED FACTS \/ EVENT API \/ INGOT CHAT/);
-  assert.match(html, /Ingest data through standard events/i);
-  assert.match(html, /Use Ingot Chat to find problems/i);
-  assert.match(html, /Optional Connector Host/);
-  assert.match(html, /TEAM-OPERATED · OPTIONAL/);
+  assert.match(html, /<title>Ingot — Production facts you can verify, question, and investigate<\/title>/i);
+  assert.match(html, /INGOT · PRODUCTION INTELLIGENCE/);
+  assert.match(html, /Production facts you can verify/i);
+  assert.match(html, /multi-perspective investigation/i);
+  assert.match(html, /Give every answer a basis/);
   assert.match(html, /https:\/\/docs\.ingotstack\.com\/en\/rfc-production-events/);
   assert.match(html, /<html lang="en">/);
   assert.match(html, /rel="canonical" href="https:\/\/ingotstack\.com\/en\/"/i);
@@ -103,12 +102,14 @@ test("keeps the public source aligned with the published boundaries", async () =
   ]);
 
   assert.match(pageSource, /Ingot Chat/);
-  assert.match(pageSource, /POST \/api\/v1\/events:batch/);
-  assert.match(pageSource, /Optional Connector Host/);
-  assert.match(pageSource, /Chat 调用白名单中的只读事实工具/);
+  assert.match(pageSource, /深入调查/);
+  assert.match(pageSource, /Deeper investigation/);
+  assert.match(pageSource, /工艺视角：检查过程变化/);
+  assert.match(pageSource, /Process view: review changes in the work/);
+  assert.match(pageSource, /只读取已有记录/);
   assert.match(pageSource, /check_data_quality/);
   assert.match(pageSource, /get_cycle_trace/);
-  assert.match(pageSource, /teams operate source programs and field systems retain equipment control/i);
+  assert.match(pageSource, /never changes equipment or production records/i);
   assert.doesNotMatch(pageSource, oldDesktopTerms);
   assert.match(stageSource, /cycle\.started/);
   assert.match(stageSource, /cycle\.completed/);

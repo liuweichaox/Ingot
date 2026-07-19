@@ -1,6 +1,6 @@
 # Ingot Chat
 
-Ingot Chat is the only user-facing AI conversation in Central Web. It focuses on querying recorded production facts, checking data quality, and locating cycle-data problems. It reads production records only and preserves field-equipment state.
+Ingot Chat is the main way engineers use Ingot: it helps people query recorded production facts, check data quality, and locate cycle-data problems. Ingot is the trusted production-facts and process-investigation platform; Chat is its conversation and investigation workspace. It reads production records only and preserves field-equipment state.
 
 ## Capabilities
 
@@ -12,6 +12,19 @@ Ingot Chat is the only user-facing AI conversation in Central Web. It focuses on
 - retain Actor-scoped history with cancellation and SSE resume.
 
 The available tools are `check_data_quality` and `get_cycle_trace`.
+
+## Deeper investigation: bounded multi-agent collaboration
+
+Everyday questions use `standard` mode. For a complex question that benefits from several perspectives, explicitly enable `deep` investigation mode.
+
+- The **process role** reviews cycles, state changes, and parameter differences.
+- The **quality role** reviews inspection outcomes, sample scope, and quality associations.
+- The **challenge role** looks for data gaps, confounders, and alternative explanations.
+- All roles can read only the verified tool results from this run; they cannot access a database, network, or equipment themselves.
+- The default limit is 3 rounds and 9 turns, with hard limits of 5 rounds and 15 turns. At least two first-round roles must succeed before a candidate explanation is returned.
+- The result includes supporting evidence, challenges, and limitations. It can describe only a candidate explanation, never a confirmed root cause or causation.
+
+This is not an unconstrained group chat. It is a read-only investigation workflow with fixed roles, turn limits, evidence scope, and stop conditions. An engineer always makes the final judgement.
 
 ## Execution flow
 
@@ -38,6 +51,7 @@ export INGOT_CHAT_REASONING_MODEL="<reasoning-model>"
 export OPENAI_API_KEY="<secret>"
 export INGOT_CHAT_OPERATOR_TOKEN="$(openssl rand -hex 24)"
 export INGOT_CHAT_OPERATOR_ALLOW_ALL=true
+export INGOT_CHAT_ENABLE_DEEP_INVESTIGATION=true
 ```
 
 Central Web and the HTTP API use Actor `operator` with `INGOT_CHAT_OPERATOR_TOKEN`. Production deployments configure access for the fact scope required by each Actor.
@@ -69,7 +83,7 @@ curl -X POST http://localhost:8000/api/v1/chat/runs \
   -d '{
     "question": "What happened during this cycle, and is its data complete?",
     "pageContext": { "kind": "cycle", "id": "CYCLE-001" },
-    "mode": "standard"
+    "mode": "deep"
   }'
 ```
 

@@ -1,6 +1,6 @@
 # Macro architecture
 
-Ingot consists of Central API, Central Web, fact storage, and source adaptation implemented by each team. The only public product entry is Ingot Chat in Central Web; sources enter through the standard event API.
+Ingot consists of Central API, Central Web, fact storage, and source adaptation implemented by each team. Ingot is the trusted production-facts and process-investigation platform; Ingot Chat in Central Web is the main workspace for engineers, with everyday questions and optional bounded multi-agent deeper investigation. Sources enter through the standard event API.
 
 ```text
 equipment, instruments, business systems, or custom data sources
@@ -15,7 +15,7 @@ For plant-local persistence and an outbox, a team may deploy `Ingot.Connector.Ho
 
 ## Product boundaries
 
-- Ingot Chat runs in Central Web and only queries facts, checks data quality, and returns evidence.
+- Ingot Chat runs in Central Web and only queries facts, checks data quality, and returns evidence. Its deeper-investigation mode lets process, quality, and challenge roles review the same verified evidence; they cannot access equipment or expand the data scope themselves.
 - Teams own device protocols, field mapping, credentials, offline buffering, retries, and local process supervision.
 - `Ingot.Connector.Host` is an optional team-operated local ingress and outbox; teams own source-adaptation implementation and runtime operation.
 - `POST /api/v1/events:batch` accepts standard event batches after token and contract validation.

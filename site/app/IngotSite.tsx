@@ -37,32 +37,31 @@ const stageMeta = FACTORY_STAGES;
 const messages = {
   zh: {
     meta: {
-      title: "Ingot — 可信生产事实、标准事件接入与 Ingot Chat",
+      title: "Ingot — 让生产事实可验证、可追问、可调查",
       description:
-        "使用标准事件 API 接入不同数据源，在 Central Web 中使用 Ingot Chat 查询生产事实并查找数据问题。",
+        "Ingot 汇集生产现场的重要记录；工程师通过 Ingot Chat 查问题、看证据，并在需要时深入调查。",
     },
     languageLabel: "语言",
     nav: {
       label: "主导航",
       home: "Ingot 首页",
       product: "产品",
-      data: "事件接入",
+      data: "生产记录",
       analytics: "Ingot Chat",
-      deployment: "事件接入",
-      technical: "技术架构",
+      deployment: "为什么可信",
       docs: "文档",
     },
     hero: {
-      eyebrow: "TRUSTED FACTS / EVENT API / INGOT CHAT",
-      heading: ["用标准事件接入数据，", "用 Ingot Chat 查找问题。"],
+      eyebrow: "INGOT · PRODUCTION INTELLIGENCE",
+      heading: ["让生产事实可验证、", "可追问、可调查。"],
       lead:
-        "使用方按现场要求实现数据源适配，并通过标准事件 API 提交事实。Central Web 中的 Ingot Chat 只读查询生产事实、检查数据质量并回链证据；它不修改事件、检测记录或设备。",
-      analysis: "打开 Ingot Chat",
-      github: "查看事件接入规范",
+        "Ingot 把来自设备、检测和业务系统的记录放在同一条可追溯的生产履历中。工程师通过 Ingot Chat 提问、查看证据；遇到复杂问题时，可启动多角色深入调查。它不会改变现场设备或已有记录。",
+      analysis: "认识 Ingot Chat",
+      github: "了解 Ingot 平台",
       pause: "暂停动画",
       play: "继续动画",
       proofLabel: "产品特性",
-      proof: ["标准事件 API", "使用方自主适配数据源", "Ingot Chat 只读事实查询", "周期问题与证据回链"],
+      proof: ["连接多种生产来源", "保存可追溯记录", "Ingot Chat 日常问答", "深入调查与证据回链"],
       viewLabel: "三维工厂视角",
       views: ["机器人上料", "CNC 加工", "机器人下料", "视觉质检", "人工检测"],
       dataKinds: ["设备状态", "加工事件", "设备状态", "检测结果", "人工检测记录"],
@@ -116,27 +115,27 @@ const messages = {
     ],
     factory: {
       railLabel: "示例生产工序",
-      heading: ["一组标准事件，", "形成一条可追溯事实链。"],
+      heading: ["每一次生产，", "都有一条可追溯的履历。"],
       lead:
-        "三维工厂使用示例事实说明数据契约。使用方将设备或系统数据转换为 ProductionEvent；检测系统通过独立 API 提交检测事实。Ingot 不在核心中内置设备协议。",
-      provenanceTitle: "标准事件与检测事实，使用统一标识回链",
+        "这是一个示例生产过程。从上料、加工到检测，Ingot 将关键记录整理成同一件工件的完整履历，方便回看、比对和调查。",
+      provenanceTitle: "设备、检测与业务记录，汇成一条生产履历",
       provenanceLead:
-        "ProductionEvent 保留来源、对象、上下文、时间和 CorrelationId。检测记录独立保存；当前周期工具基于生产事件构建事实链。",
+        "每条记录都保留来源、时间、对象和关联关系；当有人提出问题时，可以回到对应的原始记录。",
       provenance: [
-        ["使用方实现数据源适配", "设备协议、字段映射、凭据和运行方式由使用方负责；适配程序只需提交符合契约的标准事件。"],
-        ["检测事实进入 Central", "人工或仪器系统通过检测 API 提交结果、测量值、单位、仪器和证据引用。"],
-        ["可选本地事件入口", "使用方可部署 Connector Host 获得 SQLite outbox 与至少一次上报；也可直接调用 Central 批次 API。"],
+        ["接入现场记录", "设备、仪器和现有系统可以按照现场情况接入 Ingot，保留各自的工作方式。"],
+        ["汇集检测结果", "自动或人工检测的结果与工件、批次和生产过程放在一起，形成完整上下文。"],
+        ["保留事实依据", "每个结论都可以回到相应的生产记录；数据不完整时，Ingot 会明确提示。"],
       ],
     },
     platform: {
-      heading: ["从标准事件，", "检查周期事实与数据质量。"],
+      heading: ["从生产记录，", "到可以行动的问题调查。"],
       lead:
-        "以下工作台使用示例事实展示事件查询、检测记录和 Chat。当前 Chat 工具检查事件完整性并按 CorrelationId 返回周期事件链。",
-      workspace: "INGOT 示例事实工作台",
+        "Ingot 是平台；Ingot Chat 是工程师最常使用的入口。先快速了解发生了什么，再在需要时把不同视角放在一起深入审查。",
+      workspace: "INGOT 示例生产工作台",
       site: "华东一厂 / CELL-A",
       connected: "示例数据",
       tabsLabel: "平台能力视图",
-      tabs: ["生产总览", "人工检测", "Chat"],
+      tabs: ["生产总览", "人工检测", "Ingot Chat"],
       overview: "生产总览",
       viewKickers: ["FACTORY / OVERVIEW", "HUMAN / MANUAL INSPECTION", "CHAT / FACT QUERY"],
       range: "当前班次",
@@ -194,28 +193,28 @@ const messages = {
         toAnalysis: "在 Chat 中查看周期事件与数据质量",
       },
       analysis: {
-        title: "Chat · 周期事实与数据质量",
-        lead: "检查当前周期的数据完整性，并沿证据引用返回生产事件和上下文。",
+        title: "Ingot Chat · 日常问答与深入调查",
+        lead: "先用日常问答快速查清事实；遇到复杂问题，再邀请多个专业视角共同审查现有证据。",
         chat: {
-          title: "Chat · 示例事实",
-          note: "Ingot Chat 位于 Central Web，只呈现只读事实查询、数据问题、限制条件和证据。",
-          modes: ["只读事实问答"],
+          title: "Ingot Chat · 示例调查",
+          note: "这是示例数据。Chat 只读取已有记录，显示依据和限制，不会改变现场或写入生产数据。",
+          modes: ["日常问答", "深入调查"],
           question: "这个周期发生了什么，数据是否完整？",
           standard: ["check_data_quality · 已完成", "get_cycle_trace · 已完成"],
-          roles: [],
-          outcome: ["数据质量通过；周期事实链已回链到原始事件。"],
-          boundary: "Chat 调用白名单中的只读事实工具，呈现事实、限制条件和证据；现场系统负责设备控制。",
+          roles: ["工艺视角：检查过程变化", "质量视角：检查检测结果与样本", "反证视角：寻找遗漏与其他解释"],
+          outcome: ["数据质量通过；周期事实链已回链到原始事件。", "形成待工程师确认的候选解释，并同时呈现支持依据、反证和数据限制。"],
+          boundary: "深入调查只基于已验证的记录；它给出候选解释，不替代工程师判断，也不控制设备。",
         },
       },
     },
     trust: {
-      heading: "按现场边界接入数据",
-      lead: "数据源适配由使用方实现。直接调用 Central 批次 API，或在现场部署可选的 Connector Host 作为本地事件入口与 outbox。",
+      heading: "让每个回答都有依据",
+      lead: "Ingot 不是用猜测回答问题。它把现场记录保留为可核对的事实，让每个结论都能回到来源。",
       cards: [
-        ["直接提交 Central", "可访问 Central 的适配程序使用 Edge Token 调用 POST /api/v1/events:batch；每批按 eventId 和序号去重。"],
-        ["可选 Connector Host", "需要现场 SQLite outbox 或断网缓冲时，由使用方部署本地 Host，并以独立令牌接收 ProductionEvent。"],
-        ["稳定事件契约", "事件包含来源、对象、上下文、关联 ID、时间和显式单位；协议细节留在使用方的适配程序中。"],
-        ["清晰控制边界", "Ingot 保存事实并提供查询与对话；使用方运行数据源程序，现场系统负责设备控制。"],
+        ["记录来自现场", "设备、检测和业务系统仍由企业按自己的方式运行；Ingot 接收它们的重要生产记录。"],
+        ["结论回到依据", "Chat 的重要数字和结论都会附上对应记录；查不到足够依据时会直接说明。"],
+        ["不同来源放在一起", "同一件工件、同一个批次和同一次加工可以串成完整的生产履历，而不是分散在不同系统中。"],
+        ["不触碰现场控制", "Ingot 只帮助理解已经发生的事情；它不改变设备、工艺设置、检测结果或业务流程。"],
       ],
     },
     boundary: {
@@ -338,44 +337,43 @@ const messages = {
       ],
     },
     cta: {
-      kicker: "STANDARD EVENT API / INGOT CHAT",
-      heading: ["用标准事件接入事实，", "用 Ingot Chat 查询问题。"],
+      kicker: "INGOT PLATFORM / INGOT CHAT",
+      heading: ["把生产记录变成", "每个人都能追问的事实。"],
       button: "查看文档",
-      footer: "可信生产事实、标准事件接入与 Ingot Chat。",
+      footer: "Ingot 平台 · Ingot Chat · 有依据的生产调查。",
     },
   },
   en: {
     meta: {
-      title: "Ingot — Trusted production facts, standard event ingestion, and Ingot Chat",
+      title: "Ingot — Production facts you can verify, question, and investigate",
       description:
-        "Ingest different sources through a standard event API, then use Ingot Chat in Central Web to query production facts and find data problems.",
+        "Ingot brings important production records together. Engineers use Ingot Chat to ask questions, inspect evidence, and investigate complex problems.",
     },
     languageLabel: "Language",
     nav: {
       label: "Main navigation",
       home: "Ingot home",
       product: "Product",
-      data: "Event Ingress",
+      data: "Production Records",
       analytics: "Ingot Chat",
-      deployment: "Event Ingestion",
-      technical: "Architecture",
+      deployment: "Why it is trusted",
       docs: "Docs",
     },
     hero: {
-      eyebrow: "TRUSTED FACTS / EVENT API / INGOT CHAT",
-      heading: ["Ingest data through standard events.", "Use Ingot Chat to find problems."],
+      eyebrow: "INGOT · PRODUCTION INTELLIGENCE",
+      heading: ["Production facts you can verify,", "question, and investigate."],
       lead:
-        "Teams implement source adaptation for their own plant requirements and submit facts through the standard event API. Ingot Chat in Central Web reads production facts, checks data quality, and links evidence; it does not change events, inspections, or equipment.",
+        "Ingot brings records from equipment, inspections, and business systems into one traceable production history. Engineers ask questions and inspect evidence in Ingot Chat, then start a multi-perspective investigation when a problem needs a closer look. It never changes equipment or production records.",
       analysis: "Explore Ingot Chat",
-      github: "Read event-ingestion docs",
+      github: "Explore the Ingot platform",
       pause: "Pause animation",
       play: "Resume animation",
       proofLabel: "Product capabilities",
       proof: [
-        "Standard event API",
-        "Team-owned source adaptation",
-        "Read-only Ingot Chat",
-        "Cycle problems with evidence links",
+        "Connect production sources",
+        "Keep a traceable history",
+        "Everyday Ingot Chat",
+        "Evidence-led investigation",
       ],
       viewLabel: "3D factory views",
       views: ["Robot loading", "CNC machining", "Robot unloading", "Vision inspection", "Manual inspection"],
@@ -430,27 +428,27 @@ const messages = {
     ],
     factory: {
       railLabel: "Sample production stages",
-      heading: ["One standard event contract.", "One traceable fact chain."],
+      heading: ["Every production run.", "One traceable history."],
       lead:
-        "The 3D factory uses sample facts to explain the data contract. Team-owned adaptation reads equipment or systems and emits ProductionEvent records. Inspection systems submit separate inspection facts. Ingot embeds no equipment protocol in its core.",
-      provenanceTitle: "STANDARD EVENTS AND INSPECTION FACTS, LINKED BY STABLE IDENTIFIERS",
+        "This sample process follows a part from loading through machining and inspection. Ingot brings the important records together, making them easy to review, compare, and investigate.",
+      provenanceTitle: "EQUIPMENT, INSPECTION, AND BUSINESS RECORDS BECOME ONE HISTORY",
       provenanceLead:
-        "ProductionEvent retains source, subject, context, time, and CorrelationId. Inspection records are stored separately; current cycle tools build fact chains from production events.",
+        "Each record keeps its source, time, subject, and connection to the work. When a question is raised, people can return to the original record.",
       provenance: [
-        ["TEAM-OWNED SOURCE ADAPTATION", "Teams own protocol handling, field mapping, credentials, and runtime operation; an adapter only needs to submit standard events that match the contract."],
-        ["INSPECTION FACTS IN CENTRAL", "Human or instrument systems submit results, measurements, units, instruments, and evidence references through the inspection API."],
-        ["OPTIONAL LOCAL INGRESS", "Teams may deploy Connector Host for a SQLite outbox and at-least-once delivery, or call the Central batch API directly."],
+        ["Bring in shop-floor records", "Equipment, instruments, and existing systems can connect to Ingot in a way that fits the plant and preserves how they already work."],
+        ["Bring inspection results together", "Automatic and manual inspection results sit beside the part, lot, and production process that give them meaning."],
+        ["Keep the evidence", "Every conclusion can link back to the records behind it. When information is incomplete, Ingot says so clearly."],
       ],
     },
     platform: {
-      heading: ["From standard events", "to cycle facts and data quality."],
+      heading: ["From production records", "to investigations people can act on."],
       lead:
-        "This workspace uses sample facts to show event queries, inspection records, and Chat. Current Chat tools check event completeness and return a CorrelationId-scoped event chain.",
-      workspace: "INGOT SAMPLE FACT WORKSPACE",
+        "Ingot is the platform. Ingot Chat is the main place engineers use it: first to understand what happened, then to bring multiple perspectives into a deeper review when needed.",
+      workspace: "INGOT SAMPLE PRODUCTION WORKSPACE",
       site: "EAST PLANT / CELL-A",
       connected: "SAMPLE DATA",
       tabsLabel: "Platform capability views",
-      tabs: ["Production Overview", "Manual Inspection", "Chat"],
+      tabs: ["Production Overview", "Manual Inspection", "Ingot Chat"],
       overview: "Production Overview",
       viewKickers: ["FACTORY / OVERVIEW", "HUMAN / MANUAL INSPECTION", "CHAT / FACT QUERY"],
       range: "CURRENT SHIFT",
@@ -508,28 +506,28 @@ const messages = {
         toAnalysis: "Open cycle events and data quality in Chat",
       },
       analysis: {
-        title: "Chat · Cycle facts and data quality",
-        lead: "Check cycle completeness and follow evidence citations to production events and context.",
+        title: "Ingot Chat · Everyday questions and deeper investigation",
+        lead: "Use everyday questions to establish the facts quickly. For complex issues, bring several professional perspectives together to review the same evidence.",
         chat: {
-          title: "Chat · Sample facts",
-          note: "Ingot Chat lives in Central Web and presents only read-only fact queries, data problems, limitations, and evidence.",
-          modes: ["Read-only fact question"],
+          title: "Ingot Chat · Sample investigation",
+          note: "This uses sample data. Chat reads existing records, shows evidence and limitations, and never changes production records or field equipment.",
+          modes: ["Everyday question", "Deeper investigation"],
           question: "What happened in this cycle, and is its data complete?",
           standard: ["check_data_quality · completed", "get_cycle_trace · completed"],
-          roles: [],
-          outcome: ["Data quality passed; cycle evidence links to source events."],
-          boundary: "Chat calls allowlisted read-only fact tools and presents facts, limitations, and evidence; field systems retain equipment control.",
+          roles: ["Process view: review changes in the work", "Quality view: review inspection results and samples", "Challenge view: look for gaps and alternative explanations"],
+          outcome: ["Data quality passed; cycle evidence links to source events.", "A candidate explanation is ready for an engineer to review, with supporting evidence, challenges, and data limitations."],
+          boundary: "The deeper investigation uses only verified records. It offers candidate explanations, not a substitute for engineering judgement or equipment control.",
         },
       },
     },
     trust: {
-      heading: "Ingest data at the boundary that fits the plant",
-      lead: "Teams implement source adaptation. Call the Central batch API directly, or deploy optional Connector Host as a local event ingress and outbox.",
+      heading: "Give every answer a basis",
+      lead: "Ingot does not answer from guesswork. It keeps shop-floor records as facts that can be checked, so every important conclusion can lead back to its source.",
       cards: [
-        ["Submit directly to Central", "Adapters that can reach Central use an Edge token with POST /api/v1/events:batch; each batch is deduplicated by event ID and sequence."],
-        ["Optional Connector Host", "When a plant needs a local SQLite outbox or offline buffering, a team deploys its own Host and submits ProductionEvent with a separate token."],
-        ["Stable event contract", "Events carry source, subject, context, correlation ID, time, and explicit units; protocol details remain in the team-owned adapter."],
-        ["Clear control boundary", "Ingot stores facts and provides query and conversation; teams operate source programs and field systems retain equipment control."],
+        ["Records come from the plant", "Equipment, inspection, and business systems continue to run in the ways a business chooses. Ingot receives their important production records."],
+        ["Conclusions lead to evidence", "Important numbers and conclusions in Chat include the records behind them. If there is not enough evidence, Chat says so."],
+        ["Different sources, one context", "The workpiece, lot, and production run can be connected into one history instead of being scattered across systems."],
+        ["It never touches control", "Ingot helps people understand what already happened. It does not change equipment, process settings, inspection outcomes, or business workflows."],
       ],
     },
     boundary: {
@@ -652,10 +650,10 @@ const messages = {
       ],
     },
     cta: {
-      kicker: "STANDARD EVENT API / INGOT CHAT",
-      heading: ["Ingest facts through standard events.", "Use Ingot Chat to investigate them."],
+      kicker: "INGOT PLATFORM / INGOT CHAT",
+      heading: ["Turn production records into", "facts that everyone can question."],
       button: "Read the docs",
-      footer: "Trusted production facts, standard event ingestion, and Ingot Chat.",
+      footer: "Ingot platform · Ingot Chat · evidence-led production investigation.",
     },
   },
 } as const;
@@ -1364,7 +1362,6 @@ export default function IngotSite({ initialLocale = "zh" }: { initialLocale?: Lo
           <a href="#factory">{copy.nav.data}</a>
           <a href="#platform" onClick={() => selectPlatformView("analysis")}>{copy.nav.analytics}</a>
           <a href="#trust">{copy.nav.deployment}</a>
-          <a href="#architecture">{copy.nav.technical}</a>
           <a href="https://docs.ingotstack.com" target="_blank" rel="noreferrer">{copy.nav.docs}</a>
         </div>
         <div className="nav-actions">
@@ -1875,6 +1872,12 @@ export default function IngotSite({ initialLocale = "zh" }: { initialLocale?: Lo
         <div className="trust-grid">{copy.trust.cards.map(([title, detail], index) => <article key={title}><span>0{index + 1}</span><h3>{title}</h3><p>{detail}</p></article>)}</div>
       </section>
 
+      <details className="technical-details shell">
+        <summary>{locale === "zh" ? "面向技术团队的实施资料" : "Implementation details for technical teams"}</summary>
+        <p>{locale === "zh"
+          ? "接入方式、数据结构、部署边界和开放接口请查看文档。"
+          : "See the documentation for integration, data structure, deployment boundaries, and public interfaces."}</p>
+        <div className="technical-details-content">
       <section className="boundary-section shell reveal-section" id="boundary">
         <div className="section-heading compact">
           <div>
@@ -2191,6 +2194,8 @@ export default function IngotSite({ initialLocale = "zh" }: { initialLocale?: Lo
           </div>
         </div>
       </section>
+        </div>
+      </details>
 
       <section className="final-cta shell">
         <div className="cta-glow" aria-hidden="true" />
