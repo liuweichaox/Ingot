@@ -1,39 +1,46 @@
-using System.Collections.Concurrent;
 using System.Globalization;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Ingot.Contracts.Events;
 using Ingot.Domain.Events;
+using Microsoft.Extensions.Options;
 using Npgsql;
 using NpgsqlTypes;
 
 namespace Ingot.Central.Infrastructure.Events;
 
 /// <summary>
-///     PostgreSQL/JSONB 中心事实库。全局去重键与月度分区事实表分离，
-///     同时保证 EventId、(EdgeId, Seq) 幂等和按月维护能力。
+///     TimescaleDB（PostgreSQL + 时序扩展）中心事实库。全局去重键表与事实 hypertable 分离，
+///     保证 EventId、(EdgeId, Seq) 幂等；事实表由 Timescale 按 occurred_at 自动分块，
+///     并可按配置启用保留与压缩策略。
 /// </summary>
-public sealed class PostgresEventStore : ICentralEventStore, IAsyncDisposable
+public sealed partial class PostgresEventStore : ICentralEventStore, IAsyncDisposable
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     private readonly NpgsqlDataSource _dataSource;
     private readonly ILogger<PostgresEventStore> _logger;
     private readonly CentralEventMetrics _metrics;
+    private readonly CentralEventOptions _options;
     private readonly SemaphoreSlim _initializeLock = new(1, 1);
-    // 已确保存在的月度分区（进程内缓存），避免在摄入热路径上反复执行会取父表 ACCESS EXCLUSIVE 锁的 DDL。
-    private readonly ConcurrentDictionary<string, byte> _ensuredPartitions = new(StringComparer.Ordinal);
     private volatile bool _initialized;
+
+    // Postgres INTERVAL 字面量白名单：配置为可信来源，仍做防御式校验后才内联进 DDL。
+    [GeneratedRegex(@"^\d+\s+(second|minute|hour|day|week|month|year)s?$", RegexOptions.IgnoreCase)]
+    private static partial Regex IntervalPattern();
 
     public PostgresEventStore(
         IConfiguration configuration,
         ILogger<PostgresEventStore> logger,
-        CentralEventMetrics metrics)
+        CentralEventMetrics metrics,
+        IOptions<CentralEventOptions> options)
     {
         var connectionString = configuration.GetConnectionString("Events")
             ?? throw new InvalidOperationException("缺少 ConnectionStrings:Events PostgreSQL 连接字符串。");
         _dataSource = NpgsqlDataSource.Create(connectionString);
         _logger = logger;
         _metrics = metrics;
+        _options = options.Value;
     }
 
     public async Task InitializeAsync(CancellationToken ct = default)
@@ -47,8 +54,12 @@ public sealed class PostgresEventStore : ICentralEventStore, IAsyncDisposable
             if (_initialized)
                 return;
 
+            // 注意：production_events 不再使用原生 PARTITION BY，改由 Timescale hypertable 自动分块。
+            // 幂等去重仍由独立的 event_ingest_keys（普通表、带唯一约束）承担，不受 hypertable 约束影响。
             await using var command = _dataSource.CreateCommand(
                 """
+                CREATE EXTENSION IF NOT EXISTS timescaledb;
+
                 CREATE SEQUENCE IF NOT EXISTS production_events_ingest_id_seq;
 
                 CREATE TABLE IF NOT EXISTS event_ingest_keys (
@@ -75,7 +86,7 @@ public sealed class PostgresEventStore : ICentralEventStore, IAsyncDisposable
                   correlation_id TEXT,
                   context        JSONB NOT NULL DEFAULT '{}'::jsonb,
                   data           JSONB NOT NULL DEFAULT '{}'::jsonb
-                ) PARTITION BY RANGE (occurred_at);
+                );
 
                 CREATE INDEX IF NOT EXISTS idx_production_events_ingest
                   ON production_events (ingest_id);
@@ -89,8 +100,11 @@ public sealed class PostgresEventStore : ICentralEventStore, IAsyncDisposable
                   ON production_events USING GIN (context);
                 """);
             await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+
+            await ConfigureHypertableAsync(ct).ConfigureAwait(false);
+
             _initialized = true;
-            _logger.LogInformation("PostgreSQL 中心事件库结构已就绪");
+            _logger.LogInformation("TimescaleDB 中心事件库结构已就绪");
         }
         finally
         {
@@ -109,11 +123,8 @@ public sealed class PostgresEventStore : ICentralEventStore, IAsyncDisposable
         if (ordered.Length == 0)
             return new EventBatchResponse();
 
-        // 分区 DDL 放在摄入事务之外、且做进程内缓存：CREATE ... PARTITION OF 会短暂取父表
-        // ACCESS EXCLUSIVE 锁，若置于摄入事务内会串行化并阻塞并发写入与查询。
-        foreach (var month in ordered.Select(static evt => MonthStart(evt.OccurredAt)).Distinct())
-            await EnsurePartitionAsync(month, ct).ConfigureAwait(false);
-
+        // 无需在热路径创建分区：Timescale hypertable 在插入时自动落到对应时间块。
+        // OccurredAt 的合理区间由上游 CentralIngestWindow 校验，防止异常时间戳撑出无意义的远期块。
         await using var connection = await _dataSource.OpenConnectionAsync(ct).ConfigureAwait(false);
         await using var transaction = await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
 
@@ -247,32 +258,42 @@ public sealed class PostgresEventStore : ICentralEventStore, IAsyncDisposable
         return _dataSource.DisposeAsync();
     }
 
-    private async Task EnsurePartitionAsync(
-        DateTimeOffset month,
-        CancellationToken ct)
+    // 把 production_events 变为 hypertable，并按配置注册保留 / 压缩策略。幂等：重复调用安全。
+    private async Task ConfigureHypertableAsync(CancellationToken ct)
     {
-        var table = $"production_events_{month:yyyyMM}";
-        if (_ensuredPartitions.ContainsKey(table))
-            return;
+        var chunkInterval = IntervalPattern().IsMatch(_options.ChunkTimeInterval.Trim())
+            ? _options.ChunkTimeInterval.Trim()
+            : "30 days";
+        if (!string.Equals(chunkInterval, _options.ChunkTimeInterval.Trim(), StringComparison.Ordinal))
+            _logger.LogWarning(
+                "无效的 ChunkTimeInterval='{Configured}'，回退为 '30 days'。",
+                _options.ChunkTimeInterval);
 
-        var next = month.AddMonths(1);
-        try
+        // migrate_data 允许在已有数据的表上首次转 hypertable；已是 hypertable 时 if_not_exists 直接跳过。
+        await using (var hypertable = _dataSource.CreateCommand(
+            $"SELECT create_hypertable('production_events', 'occurred_at', "
+            + $"chunk_time_interval => INTERVAL '{chunkInterval}', if_not_exists => TRUE, migrate_data => TRUE);"))
         {
-            await using var command = _dataSource.CreateCommand(
-                $"""
-                 CREATE TABLE IF NOT EXISTS {table}
-                 PARTITION OF production_events
-                 FOR VALUES FROM ('{month:yyyy-MM-01T00:00:00Z}')
-                 TO ('{next:yyyy-MM-01T00:00:00Z}');
-                 """);
-            await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
-        }
-        catch (PostgresException ex) when (ex.SqlState is "42P07" or "42710" or "23505")
-        {
-            // 并发下另一连接已创建同一分区，视为成功。
+            await hypertable.ExecuteScalarAsync(ct).ConfigureAwait(false);
         }
 
-        _ensuredPartitions.TryAdd(table, 0);
+        if (_options.CompressAfterDays > 0)
+        {
+            await using var compress = _dataSource.CreateCommand(
+                "ALTER TABLE production_events SET ("
+                + "timescaledb.compress, "
+                + "timescaledb.compress_segmentby = 'edge_id, subject_type, subject_id', "
+                + "timescaledb.compress_orderby = 'occurred_at DESC');"
+                + $"SELECT add_compression_policy('production_events', INTERVAL '{_options.CompressAfterDays} days', if_not_exists => TRUE);");
+            await compress.ExecuteScalarAsync(ct).ConfigureAwait(false);
+        }
+
+        if (_options.RetentionDays > 0)
+        {
+            await using var retention = _dataSource.CreateCommand(
+                $"SELECT add_retention_policy('production_events', INTERVAL '{_options.RetentionDays} days', if_not_exists => TRUE);");
+            await retention.ExecuteScalarAsync(ct).ConfigureAwait(false);
+        }
     }
 
     private static async Task<long?> GetMaxEdgeSeqAsync(
@@ -417,12 +438,6 @@ public sealed class PostgresEventStore : ICentralEventStore, IAsyncDisposable
             return;
         predicates.Add($"{column} = @{parameter}");
         command.Parameters.AddWithValue(parameter, value.Trim());
-    }
-
-    private static DateTimeOffset MonthStart(DateTimeOffset timestamp)
-    {
-        var utc = timestamp.ToUniversalTime();
-        return new DateTimeOffset(utc.Year, utc.Month, 1, 0, 0, 0, TimeSpan.Zero);
     }
 
     internal static bool HasSequenceGap(

@@ -1,6 +1,8 @@
 services:
   postgres:
-    image: postgres:18-alpine
+    # TimescaleDB = PostgreSQL + 时序扩展（自动分块 hypertable / 连续聚合 / 压缩 / 保留策略）。
+    # 镜像已预置 shared_preload_libraries=timescaledb，应用启动时 CREATE EXTENSION 即可。
+    image: timescale/timescaledb:latest-pg17
     container_name: ingot-postgres
     environment:
       POSTGRES_DB: ingot

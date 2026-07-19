@@ -7,7 +7,7 @@ Ingot 由 Central API、Central Web、事实存储和使用方实现的数据源
   → 使用方适配与运行
   → POST /api/v1/events:batch
   → Central API
- → PostgreSQL 生产事实
+ → TimescaleDB（PostgreSQL + 时序扩展）生产事实
   → 查询、SSE 与 Central Web · Ingot Chat
 ```
 
@@ -25,8 +25,8 @@ Ingot 由 Central API、Central Web、事实存储和使用方实现的数据源
 
 ## 存储与网络
 
-- PostgreSQL：中心生产事件、检测记录和查询事实。
-- SQLite：部署可选的本地缓存、日志或边缘运行状态；其运行方式由使用方选择。
+- TimescaleDB（PostgreSQL + 时序扩展）：中心生产事件、检测记录和查询事实。生产事件表为 hypertable，按 `occurred_at` 自动分块，并可按配置启用块级压缩与保留策略；幂等去重仍由独立的 `event_ingest_keys` 键表承担。本地自托管（Docker 镜像 `timescale/timescaledb`），无需外部托管服务。
+- SQLite：部署可选的本地缓存、日志或边缘运行状态；亦作为离线/气隙单机的可选事实库形态。其运行方式由使用方选择。
 - Chat 只经 Central 事实服务读取数据；模型配置不会改变数据权限或工具白名单。
 - 生产环境应将 Central 与数据库置于受控网络边界，并使用 TLS、令牌轮换和最小化数据访问范围。
 

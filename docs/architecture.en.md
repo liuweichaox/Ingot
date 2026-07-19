@@ -7,7 +7,7 @@ equipment, instruments, business systems, or custom data sources
   → team-owned adaptation and runtime
   → POST /api/v1/events:batch
   → Central API
-  → PostgreSQL production facts
+  → TimescaleDB (PostgreSQL + time-series extension) production facts
   → query, SSE, and Central Web · Ingot Chat
 ```
 
@@ -25,8 +25,8 @@ For plant-local persistence and an outbox, a team may deploy `Ingot.Connector.Ho
 
 ## Storage and network
 
-- PostgreSQL stores central production events, inspection records, and query facts.
-- SQLite can support optional local cache, logs, or edge runtime state; teams choose its operating model.
+- TimescaleDB (PostgreSQL + time-series extension) stores central production events, inspection records, and query facts. The production-event table is a hypertable auto-chunked by `occurred_at`, with optional chunk compression and retention policies by configuration; idempotent dedup stays in the separate `event_ingest_keys` table. Self-hosted locally (Docker image `timescale/timescaledb`), no managed service required.
+- SQLite can support optional local cache, logs, or edge runtime state, and is the optional fact-store form for offline/air-gapped single-box deployments; teams choose its operating model.
 - Chat reads only through Central fact services; model configuration never changes data permissions or the tool allowlist.
 - Production deployments should place Central and the database behind controlled network boundaries and use TLS, token rotation, and minimum data scope.
 
