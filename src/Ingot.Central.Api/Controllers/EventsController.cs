@@ -3,6 +3,7 @@ using Ingot.Central.Api.Events;
 using Ingot.Central.Infrastructure.Events;
 using Ingot.Contracts.Events;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 
 namespace Ingot.Central.Api.Controllers;
 
@@ -10,9 +11,11 @@ namespace Ingot.Central.Api.Controllers;
 [Route("api/v1/events")]
 public sealed class EventsController(
     ICentralEventStore store,
-    EdgeTokenValidator tokenValidator) : ControllerBase
+    EdgeTokenValidator tokenValidator,
+    IOptions<CentralEventOptions> eventOptions) : ControllerBase
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private readonly CentralEventOptions _eventOptions = eventOptions.Value;
 
     [HttpPost("/api/v1/events:batch")]
     public async Task<IActionResult> Ingest(
@@ -27,6 +30,9 @@ public sealed class EventsController(
         {
             return Unauthorized(new { error = "Edge token 无效。" });
         }
+
+        if (!CentralIngestWindow.TryValidate(normalized, _eventOptions, DateTimeOffset.UtcNow, out var windowError))
+            return BadRequest(new { error = windowError });
 
         return Ok(await store.IngestAsync(normalized, ct).ConfigureAwait(false));
     }

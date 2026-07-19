@@ -260,9 +260,6 @@ public sealed class DefaultEvidenceVerifier : IEvidenceVerifier
         "histogram",
         "boxplot"
     };
-    private static readonly Regex NumberRegex = new(
-        @"(?<![\p{L}\p{N}_])[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?",
-        RegexOptions.CultureInvariant);
     public bool TryVerify(
         IReadOnlyList<AnalysisToolResult> results,
         out IReadOnlyList<EvidenceRef> evidence,
@@ -315,18 +312,13 @@ public sealed class DefaultEvidenceVerifier : IEvidenceVerifier
         var answerText = string.Join('\n', new[] { answer.Summary }
             .Concat(answer.Findings)
             .Concat(answer.Limitations));
-        var sourceNumbers = ExtractNumbers(source)
-            .ToHashSet(StringComparer.Ordinal);
+        var sourceNumbers = NumberGrounding.ExtractNormalized(source);
         if (!TryValidateCharts(answer.Charts, sourceNumbers, out error))
             return false;
 
-        var unsupported = NumberRegex.Matches(answerText)
-            .Select(static match => (Raw: match.Value, Normalized: NormalizeNumber(match.Value)))
-            .DistinctBy(static number => number.Normalized)
-            .FirstOrDefault(number => !sourceNumbers.Contains(number.Normalized));
-        if (unsupported.Raw is not null)
+        if (!NumberGrounding.IsGrounded(answerText, sourceNumbers, out var unsupportedRaw))
         {
-            error = $"回答包含工具结果无法支持的数字: {unsupported.Raw}";
+            error = $"回答包含工具结果无法支持的数字: {unsupportedRaw}";
             return false;
         }
 
@@ -407,7 +399,7 @@ public sealed class DefaultEvidenceVerifier : IEvidenceVerifier
                 var unsupported = series.Values
                     .Where(static value => value.HasValue)
                     .Select(static value => value!.Value.ToString("R", CultureInfo.InvariantCulture))
-                    .FirstOrDefault(value => !sourceNumbers.Contains(NormalizeNumber(value)));
+                    .FirstOrDefault(value => !sourceNumbers.Contains(NumberGrounding.Normalize(value)));
                 if (unsupported is not null)
                 {
                     error = $"图表数据系列 {series.Name} 包含工具结果无法支持的数字: {unsupported}";
@@ -418,39 +410,5 @@ public sealed class DefaultEvidenceVerifier : IEvidenceVerifier
 
         error = string.Empty;
         return true;
-    }
-
-    private static IEnumerable<string> ExtractNumbers(string value)
-        => NumberRegex.Matches(value).Select(static match => NormalizeNumber(match.Value));
-
-    private static string NormalizeNumber(string value)
-    {
-        var span = value.AsSpan();
-        var negative = false;
-        if (span[0] is '+' or '-')
-        {
-            negative = span[0] == '-';
-            span = span[1..];
-        }
-
-        var exponentIndex = span.IndexOfAny('e', 'E');
-        var mantissa = exponentIndex >= 0 ? span[..exponentIndex] : span;
-        var exponent = exponentIndex >= 0
-            ? BigInteger.Parse(span[(exponentIndex + 1)..], NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture)
-            : BigInteger.Zero;
-        var decimalIndex = mantissa.IndexOf('.');
-        var fractionalDigits = decimalIndex >= 0 ? mantissa.Length - decimalIndex - 1 : 0;
-        var digits = mantissa.ToString().Replace(".", string.Empty, StringComparison.Ordinal).TrimStart('0');
-        if (digits.Length == 0)
-            return "0";
-
-        var trailingZeros = digits.Length - digits.TrimEnd('0').Length;
-        if (trailingZeros > 0)
-        {
-            digits = digits[..^trailingZeros];
-            exponent += trailingZeros;
-        }
-        exponent -= fractionalDigits;
-        return $"{(negative ? "-" : string.Empty)}{digits}e{exponent.ToString(CultureInfo.InvariantCulture)}";
     }
 }

@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Globalization;
 using System.Text.Json;
 using Ingot.Contracts.Events;
@@ -19,6 +20,8 @@ public sealed class PostgresEventStore : ICentralEventStore, IAsyncDisposable
     private readonly ILogger<PostgresEventStore> _logger;
     private readonly CentralEventMetrics _metrics;
     private readonly SemaphoreSlim _initializeLock = new(1, 1);
+    // 已确保存在的月度分区（进程内缓存），避免在摄入热路径上反复执行会取父表 ACCESS EXCLUSIVE 锁的 DDL。
+    private readonly ConcurrentDictionary<string, byte> _ensuredPartitions = new(StringComparer.Ordinal);
     private volatile bool _initialized;
 
     public PostgresEventStore(
@@ -106,11 +109,13 @@ public sealed class PostgresEventStore : ICentralEventStore, IAsyncDisposable
         if (ordered.Length == 0)
             return new EventBatchResponse();
 
+        // 分区 DDL 放在摄入事务之外、且做进程内缓存：CREATE ... PARTITION OF 会短暂取父表
+        // ACCESS EXCLUSIVE 锁，若置于摄入事务内会串行化并阻塞并发写入与查询。
+        foreach (var month in ordered.Select(static evt => MonthStart(evt.OccurredAt)).Distinct())
+            await EnsurePartitionAsync(month, ct).ConfigureAwait(false);
+
         await using var connection = await _dataSource.OpenConnectionAsync(ct).ConfigureAwait(false);
         await using var transaction = await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
-
-        foreach (var month in ordered.Select(static evt => MonthStart(evt.OccurredAt)).Distinct())
-            await EnsurePartitionAsync(connection, transaction, month, ct).ConfigureAwait(false);
 
         var previousMax = await GetMaxEdgeSeqAsync(connection, transaction, request.EdgeId, ct)
             .ConfigureAwait(false);
@@ -242,24 +247,32 @@ public sealed class PostgresEventStore : ICentralEventStore, IAsyncDisposable
         return _dataSource.DisposeAsync();
     }
 
-    private static async Task EnsurePartitionAsync(
-        NpgsqlConnection connection,
-        NpgsqlTransaction transaction,
+    private async Task EnsurePartitionAsync(
         DateTimeOffset month,
         CancellationToken ct)
     {
-        var next = month.AddMonths(1);
         var table = $"production_events_{month:yyyyMM}";
-        await using var command = new NpgsqlCommand(
-            $"""
-             CREATE TABLE IF NOT EXISTS {table}
-             PARTITION OF production_events
-             FOR VALUES FROM ('{month:yyyy-MM-01T00:00:00Z}')
-             TO ('{next:yyyy-MM-01T00:00:00Z}');
-             """,
-            connection,
-            transaction);
-        await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+        if (_ensuredPartitions.ContainsKey(table))
+            return;
+
+        var next = month.AddMonths(1);
+        try
+        {
+            await using var command = _dataSource.CreateCommand(
+                $"""
+                 CREATE TABLE IF NOT EXISTS {table}
+                 PARTITION OF production_events
+                 FOR VALUES FROM ('{month:yyyy-MM-01T00:00:00Z}')
+                 TO ('{next:yyyy-MM-01T00:00:00Z}');
+                 """);
+            await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+        }
+        catch (PostgresException ex) when (ex.SqlState is "42P07" or "42710" or "23505")
+        {
+            // 并发下另一连接已创建同一分区，视为成功。
+        }
+
+        _ensuredPartitions.TryAdd(table, 0);
     }
 
     private static async Task<long?> GetMaxEdgeSeqAsync(

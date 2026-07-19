@@ -44,17 +44,20 @@ builder.Services.AddCors(options =>
     {
         // 支持配置：Cors:AllowedOrigins=["http://localhost:3000", "..."]
         var origins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
+        // 仅暴露本 API 实际使用的方法（查询/SSE 用 GET，摄入/取消用 POST），收敛 CORS 面。
+        // 头部保持放开，因为需要 Authorization、Content-Type 与 SSE 续读的 Last-Event-ID。
+        string[] allowedMethods = ["GET", "POST", "OPTIONS"];
         if (origins.Length == 0)
         {
             policy.WithOrigins("http://localhost:3000")
                 .AllowAnyHeader()
-                .AllowAnyMethod();
+                .WithMethods(allowedMethods);
         }
         else
         {
             policy.WithOrigins(origins)
                 .AllowAnyHeader()
-                .AllowAnyMethod();
+                .WithMethods(allowedMethods);
         }
     });
 });

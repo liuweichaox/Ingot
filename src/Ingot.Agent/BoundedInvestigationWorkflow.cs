@@ -173,13 +173,14 @@ public sealed partial class BoundedInvestigationWorkflow(IOptions<ChatOptions> o
         IReadOnlyList<AnalysisToolResult> toolResults)
     {
         var groundedFacts = string.Join('\n', toolResults.Select(static item => $"{item.Summary}\n{item.Data.GetRawText()}"));
+        var groundedNumbers = NumberGrounding.ExtractNormalized(groundedFacts);
         var allowed = allowedEvidence.ToDictionary(static item => (item.Kind, item.Id));
         var knownHypothesisIds = existingHypotheses.Select(static item => item.HypothesisId)
             .ToHashSet(StringComparer.Ordinal);
         var hypotheses = raw.Hypotheses
             .Where(item => IsSafeStatement(item.Statement) && IsSafeStatement(item.Rationale) &&
-                           HasGroundedNumbers(item.Statement, groundedFacts) &&
-                           HasGroundedNumbers(item.Rationale, groundedFacts))
+                           HasGroundedNumbers(item.Statement, groundedNumbers) &&
+                           HasGroundedNumbers(item.Rationale, groundedNumbers))
             .Take(3)
             .Select((item, index) => item with
             {
@@ -198,7 +199,7 @@ public sealed partial class BoundedInvestigationWorkflow(IOptions<ChatOptions> o
 
         var claims = raw.Claims
             .Where(item => knownHypothesisIds.Contains(item.HypothesisId) && IsSafeStatement(item.Statement) &&
-                           HasGroundedNumbers(item.Statement, groundedFacts))
+                           HasGroundedNumbers(item.Statement, groundedNumbers))
             .Where(item => item.Position is EvidenceClaimPositions.Support or
                 EvidenceClaimPositions.Oppose or EvidenceClaimPositions.Uncertain)
             .Take(10)
@@ -234,14 +235,12 @@ public sealed partial class BoundedInvestigationWorkflow(IOptions<ChatOptions> o
         => !string.IsNullOrWhiteSpace(value) &&
            !CausalLanguage().IsMatch(value);
 
-    private static bool HasGroundedNumbers(string? value, string groundedFacts)
-        => string.IsNullOrWhiteSpace(value) || Number().Matches(value).All(match => groundedFacts.Contains(match.Value, StringComparison.Ordinal));
+    // 用统一的“归一化数值相等”溯源，替代此前脆弱的子串匹配（子串匹配会让 "1" 命中 "100"）。
+    private static bool HasGroundedNumbers(string? value, IReadOnlySet<string> groundedNumbers)
+        => NumberGrounding.IsGrounded(value, groundedNumbers, out _);
 
     [GeneratedRegex(@"确定原因|已证明因果|直接导致|confirmed\s+(the\s+)?root\s+cause|directly\s+caused|proves?\s+causation", RegexOptions.IgnoreCase)]
     private static partial Regex CausalLanguage();
-
-    [GeneratedRegex(@"(?<![\p{L}\p{N}])[-+]?\d+(?:[.,]\d+)?%?(?![\p{L}\p{N}])")]
-    private static partial Regex Number();
 
     private static string Limit(string? value, int maxLength)
     {
