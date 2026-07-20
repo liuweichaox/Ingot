@@ -5,6 +5,9 @@ services:
     image: caddy:2-alpine
     container_name: ingot-gateway
     restart: unless-stopped
+    dns:
+      - "${GATEWAY_DNS_1:-223.5.5.5}"
+      - "${GATEWAY_DNS_2:-1.1.1.1}"
     ports:
       - "80:80"
       - "443:443"

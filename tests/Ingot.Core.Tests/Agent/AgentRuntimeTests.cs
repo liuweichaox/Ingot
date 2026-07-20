@@ -60,7 +60,9 @@ public sealed class AgentRuntimeTests
 
         Assert.Empty(page.Items);
         Assert.Throws<ArgumentOutOfRangeException>(() => runtime.GetCapabilities("unsupported"));
-        Assert.Equal([ProductSurfaces.Chat], ProductSurfaces.All);
+        Assert.Contains(ProductSurfaces.Chat, ProductSurfaces.All);
+        Assert.Contains(ProductSurfaces.Mcp, ProductSurfaces.All);
+        Assert.Contains(ProductSurfaces.Monitor, ProductSurfaces.All);
     }
 
     [Fact]

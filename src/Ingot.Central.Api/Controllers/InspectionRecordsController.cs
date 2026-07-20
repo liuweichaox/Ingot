@@ -9,6 +9,7 @@ namespace Ingot.Central.Api.Controllers;
 [Route("api/v1/inspection-records")]
 public sealed class InspectionRecordsController(
     IInspectionRecordStore store,
+    IInspectionEvidenceStore evidenceStore,
     InspectionActorTokenValidator tokenValidator) : ControllerBase
 {
     [HttpPost]
@@ -18,8 +19,20 @@ public sealed class InspectionRecordsController(
     {
         if (!InspectionRecordValidator.TryValidate(request, out var normalized, out var error))
             return BadRequest(new { error });
+        foreach (var evidence in normalized!.Evidence)
+        {
+            var stored = await evidenceStore.GetAsync(evidence.EvidenceId, ct).ConfigureAwait(false);
+            if (stored is null)
+                return BadRequest(new { error = $"EvidenceId 不存在: {evidence.EvidenceId}" });
+            if (!string.Equals(stored.Sha256, evidence.Sha256, StringComparison.Ordinal) ||
+                !string.Equals(stored.StorageRef, evidence.StorageRef, StringComparison.Ordinal) ||
+                stored.SizeBytes != evidence.SizeBytes)
+            {
+                return BadRequest(new { error = $"EvidenceId 元数据与已上传证据不一致: {evidence.EvidenceId}" });
+            }
+        }
         if (!tokenValidator.IsAuthorized(
-                normalized!.SubmittedBy,
+                normalized.SubmittedBy,
                 Request.Headers.Authorization.FirstOrDefault()))
         {
             return Unauthorized(new { error = "提交者 token 无效。" });

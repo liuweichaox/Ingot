@@ -418,6 +418,8 @@ function toolLabel(tool) {
   return ({
     check_data_quality: "检查数据质量",
     get_cycle_trace: "查看周期事实",
+    find_comparable_cycles: "查找同类周期",
+    compare_cycles: "比较周期差异",
   })[tool] || "查询生产事实";
 }
 

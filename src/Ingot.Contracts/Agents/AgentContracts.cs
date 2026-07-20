@@ -15,9 +15,15 @@ public static class ProductSurfaces
 {
     public const string Chat = "chat";
 
+    public const string Mcp = "mcp";
+
+    public const string Monitor = "monitor";
+
     public static readonly IReadOnlySet<string> All = new HashSet<string>(StringComparer.Ordinal)
     {
-        Chat
+        Chat,
+        Mcp,
+        Monitor
     };
 }
 
@@ -25,11 +31,10 @@ public static class RunPurposes
 {
     public const string ReadOnlyAnalysis = "read-only-analysis";
 
-    public static string ForSurface(string surface) => surface switch
-    {
-        ProductSurfaces.Chat => ReadOnlyAnalysis,
-        _ => throw new ArgumentOutOfRangeException(nameof(surface), surface, "不支持的产品面。")
-    };
+    public static string ForSurface(string surface)
+        => ProductSurfaces.All.Contains(surface)
+            ? ReadOnlyAnalysis
+            : throw new ArgumentOutOfRangeException(nameof(surface), surface, "不支持的产品面。");
 }
 
 public sealed record PageContextRef

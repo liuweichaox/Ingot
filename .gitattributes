@@ -1,0 +1,4 @@
+deploy/*.conf text eol=lf
+deploy/*.md text eol=lf
+deploy/*.sh text eol=lf
+deploy/*.yml text eol=lf

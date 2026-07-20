@@ -48,6 +48,22 @@ public sealed class DeterministicModelClient : IModelClient
             });
         }
 
+        if (context is not null &&
+            context.Kind is "cycle" or "correlation" or "operation-run" &&
+            ContainsAny(question, "比较", "不同", "差异", "上批", "同类", "趋势", "recent") &&
+            available.Contains("find_comparable_cycles"))
+        {
+            calls.Add(new AnalysisToolCall
+            {
+                Tool = "find_comparable_cycles",
+                Arguments = new Dictionary<string, string?>
+                {
+                    ["correlationId"] = context.Id,
+                    ["limit"] = "20"
+                }
+            });
+        }
+
         if (calls.Count == 0 && available.Contains("check_data_quality"))
         {
             calls.Add(new AnalysisToolCall

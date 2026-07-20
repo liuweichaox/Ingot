@@ -21,6 +21,16 @@ export function postJson(url, body, options = {}) {
   return jsonRequest(url, { ...options, method: "POST", body: JSON.stringify(body) });
 }
 
+export async function postForm(url, formData, options = {}) {
+  const headers = { Accept: "application/json", ...(options.headers || {}) };
+  const res = await fetch(resolveUrl(url), { ...options, method: "POST", headers, body: formData });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`HTTP ${res.status} ${res.statusText}${text ? `: ${text}` : ""}`);
+  }
+  return await res.json();
+}
+
 export async function streamSse(url, { headers = {}, signal, onEvent, lastEventId = 0 }) {
   const res = await fetch(resolveUrl(url), {
     headers: {

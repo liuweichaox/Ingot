@@ -51,7 +51,7 @@ sudo ./deploy/install-docker-ubuntu.sh
 ACME_EMAIL=admin@ingotstack.com ./deploy/deploy.sh all
 ```
 
-每个选择都是完整目标状态。例如从 `all` 执行 `site` 会移除文档容器，但不会删除证书卷。`ACME_EMAIL` 可选，建议设置，便于接收证书服务通知。
+每个选择都是完整目标状态。例如从 `all` 执行 `site` 会移除文档容器，但不会删除证书卷。`ACME_EMAIL` 可选，建议设置，便于接收证书服务通知。网关容器默认使用 `GATEWAY_DNS_1=223.5.5.5` 与 `GATEWAY_DNS_2=1.1.1.1` 解析证书签发服务；如果服务器网络需要指定 DNS，可在部署命令前覆盖这两个变量。
 
 临时使用 HTTP 部署时：
 
@@ -89,7 +89,7 @@ git pull --ff-only
 
 ## 故障排查
 
-- 证书失败：确认 DNS 已指向本机，云防火墙和 UFW 已开放 TCP 80/443，并检查 `./deploy/deploy.sh logs gateway`。
+- 证书失败：确认 DNS 已指向本机，云防火墙和 UFW 已开放 TCP 80/443，并检查 `./deploy/deploy.sh logs gateway`。如果日志包含 `lookup ... on 127.0.0.53:53: connection refused`，说明容器继承了不可用的 systemd-resolved stub；重新部署会使用 compose 中的显式 DNS，也可用 `GATEWAY_DNS_1=223.5.5.5 GATEWAY_DNS_2=119.29.29.29 ./deploy/deploy.sh all` 指定解析器。
 - 页面未更新：确认拉取了最新提交，再执行同一目标的部署命令重新构建镜像。
 - 查看实际目标：`cat deploy/runtime/target`。
 - Caddy 配置位于 `deploy/runtime/Caddyfile`，由脚本生成，不应手工编辑。

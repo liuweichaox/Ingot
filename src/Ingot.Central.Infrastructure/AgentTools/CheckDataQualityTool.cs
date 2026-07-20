@@ -57,6 +57,37 @@ public sealed class CheckDataQualityTool(IChatEventReader events) : IAnalysisToo
                 row.Event.EventType.EndsWith(".completed", StringComparison.Ordinal) ||
                 row.Event.EventType.EndsWith(".cleared", StringComparison.Ordinal) ||
                 row.Event.EventType.EndsWith(".exited", StringComparison.Ordinal)));
+        var phaseEvents = ordered
+            .Where(static row => row.Event.EventType.StartsWith("phase.", StringComparison.Ordinal))
+            .ToArray();
+        var phaseGroups = phaseEvents
+            .Select(static row => new
+            {
+                Row = row,
+                PhaseCode = TryReadPhaseCode(row.Event.EventType)
+            })
+            .Where(static item => item.PhaseCode is not null)
+            .GroupBy(
+                static item => new { item.Row.Event.CorrelationId, PhaseCode = item.PhaseCode! },
+                item => item.Row)
+            .ToArray();
+        var incompletePhases = phaseGroups.Count(group =>
+            group.Any(static row => row.Event.EventType.EndsWith(".started", StringComparison.Ordinal)) !=
+            group.Any(static row => row.Event.EventType.EndsWith(".completed", StringComparison.Ordinal)));
+        var phaseOrderIssues = phaseGroups.Count(group =>
+        {
+            var phaseStarted = group.FirstOrDefault(static row =>
+                row.Event.EventType.EndsWith(".started", StringComparison.Ordinal))?.Event.OccurredAt;
+            var phaseCompleted = group.LastOrDefault(static row =>
+                row.Event.EventType.EndsWith(".completed", StringComparison.Ordinal))?.Event.OccurredAt;
+            return phaseStarted.HasValue && phaseCompleted.HasValue && phaseCompleted < phaseStarted;
+        });
+        var unknownPhaseAttribution = ordered.Count(static row =>
+            row.Event.Context.TryGetValue("phase_code", out var phase) &&
+            string.Equals(phase, "unknown", StringComparison.OrdinalIgnoreCase));
+        var inferredPhaseAttribution = ordered.Count(static row =>
+            row.Event.Context.TryGetValue("provenance", out var provenance) &&
+            string.Equals(provenance, "inferred", StringComparison.OrdinalIgnoreCase));
         var scopedQuery = !string.IsNullOrWhiteSpace(subjectId) || !string.IsNullOrWhiteSpace(correlationId);
         int? sequenceGaps = null;
         if (!scopedQuery)
@@ -81,6 +112,14 @@ public sealed class CheckDataQualityTool(IChatEventReader events) : IAnalysisToo
             limitations.Add("当前范围没有生产事件，无法判断周期配对和序号连续性。");
         else if (scopedQuery)
             limitations.Add("按对象或周期过滤后的事件不是完整 Edge 序列，因此不计算序号连续性。");
+        if (incompletePhases > 0)
+            limitations.Add($"发现 {incompletePhases} 个阶段 started/completed 未配对。");
+        if (phaseOrderIssues > 0)
+            limitations.Add($"发现 {phaseOrderIssues} 个阶段完成时间早于开始时间。");
+        if (unknownPhaseAttribution > 0)
+            limitations.Add($"发现 {unknownPhaseAttribution} 条事件阶段归属为 unknown。");
+        if (inferredPhaseAttribution > 0)
+            limitations.Add($"发现 {inferredPhaseAttribution} 条事件阶段归属为 inferred，后续质量关联需降级解释。");
         var scopeId = $"events:{subjectId ?? "*"}:{correlationId ?? "*"}:{ordered.FirstOrDefault()?.IngestId ?? 0}-{ordered.LastOrDefault()?.IngestId ?? 0}";
         var evidence = new EvidenceRef
         {
@@ -104,6 +143,11 @@ public sealed class CheckDataQualityTool(IChatEventReader events) : IAnalysisToo
                 totalEventCount = totalEvents,
                 correlationCount = correlations.Length,
                 incompleteCycles,
+                phaseEventCount = phaseEvents.Length,
+                incompletePhases,
+                phaseOrderIssues,
+                unknownPhaseAttribution,
+                inferredPhaseAttribution,
                 sequenceGaps,
                 emptyContext,
                 latestOccurredAt = latest,
@@ -111,7 +155,7 @@ public sealed class CheckDataQualityTool(IChatEventReader events) : IAnalysisToo
             }),
             Evidence = [evidence],
             Limitations = limitations,
-            Outcome = scopeEmpty || reachedResultLimit
+            Outcome = scopeEmpty || reachedResultLimit || incompletePhases > 0 || phaseOrderIssues > 0
                 ? AnalysisToolOutcomes.InsufficientData
                 : AnalysisToolOutcomes.Sufficient
         };
@@ -129,5 +173,11 @@ public sealed class CheckDataQualityTool(IChatEventReader events) : IAnalysisToo
             values.Add($"correlationId={Uri.EscapeDataString(correlationId)}");
         values.Add("limit=500");
         return $"/api/v1/events?{string.Join('&', values)}";
+    }
+
+    private static string? TryReadPhaseCode(string eventType)
+    {
+        var parts = eventType.Split('.');
+        return parts.Length == 3 && parts[0] == "phase" ? parts[1] : null;
     }
 }

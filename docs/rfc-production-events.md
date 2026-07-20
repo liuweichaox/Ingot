@@ -22,7 +22,20 @@ Content-Type: application/json
       "recordedAt": "2026-07-18T08:00:00Z",
       "source": "edge/EDGE-001/furnace/FURNACE-01",
       "subject": { "type": "asset", "id": "FURNACE-01" },
-      "context": { "workpiece_id": "WP-001", "lot": "LOT-0718" },
+      "context": {
+        "workpiece_id": "WP-001",
+        "product_code": "LENS-A",
+        "operation_code": "molding",
+        "recipe_id": "RCP-LENS-A",
+        "recipe_version": "3",
+        "recipe_template": "optical-molding",
+        "recipe_step": "4",
+        "recipe_step_name": "anneal",
+        "mold_id": "MOLD-02",
+        "mold_shot_count": "12880",
+        "preform_lot": "PF-0718",
+        "cavity_id": "C1"
+      },
       "data": {},
       "correlationId": "CYCLE-001",
       "seq": 1
@@ -97,6 +110,34 @@ docker compose -f docker-compose.app.yml --profile connector-host up -d connecto
 - `check_data_quality`：检查周期配对、空上下文、序号间断和最新事件时间。
 
 检测事实使用独立的 `InspectionRecord` 契约和 API。当前周期工具基于生产事件构建周期事实链。
+
+## 保留上下文键
+
+适配器必须在能取得这些事实时写入下列 `context` 键。所有值均为字符串；未知值不要猜测，不要写入密钥或大对象。
+
+| 用途 | 键 | 说明 |
+|---|---|---|
+| 阶段归属 | `recipe_id` | 配方稳定标识 |
+| 阶段归属 | `recipe_version` | 配方版本；源系统无版本时可省略 |
+| 阶段归属 | `recipe_template` | 中心侧阶段映射可用的配方模板 |
+| 阶段归属 | `recipe_step` | 源系统观测到的步序事实 |
+| 阶段归属 | `recipe_step_name` | 源系统原始步序名称 |
+| 分组维度 | `product_code` | 产品或规格编码 |
+| 分组维度 | `operation_code` | 工序编码 |
+| 分组维度 | `mold_id` | 模具稳定标识 |
+| 分组维度 | `mold_shot_count` | 当前模具累计模次 |
+| 分组维度 | `preform_lot` | 预制件批次 |
+| 分组维度 | `cavity_id` | 腔位或穴号 |
+
+`recipe_step` 必须与过程数据在同一次扫描周期读取；当 step 发生变化时，适配器除继续上报过程数据外，还应额外发送一条事件，确保中心可以按 `occurred_at` 重建阶段边界。
+
+## 周期与检测关联
+
+`InspectionRecord.operationRunId` 默认等于该次加工运行的 `ProductionEvent.correlationId`。检测记录引用的周期必须能通过 `/api/v1/events?correlationId=<operationRunId>` 找到对应生产事实链。若源系统无法使用同一标识，必须在后续版本引入显式映射；在此之前不得让检测事实和过程事实各自独立命名。
+
+## 阶段事件命名
+
+中心阶段语义使用 `phase.{code}.started` 与 `phase.{code}.completed` 表示，例如 `phase.anneal.started`。这些事件复用现有 `.started` / `.completed` 配对逻辑。边缘默认只上报 `recipe_step` 事实，由中心 `PhaseMapping` 解释为 `phase_code`；只有源系统原生事实就是阶段时，边缘才应照实上报 phase 事件。
 
 ## 扩展规则
 

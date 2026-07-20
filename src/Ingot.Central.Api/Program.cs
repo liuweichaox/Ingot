@@ -46,7 +46,7 @@ builder.Services.AddCors(options =>
         var origins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
         // 仅暴露本 API 实际使用的方法（查询/SSE 用 GET，摄入/取消用 POST），收敛 CORS 面。
         // 头部保持放开，因为需要 Authorization、Content-Type 与 SSE 续读的 Last-Event-ID。
-        string[] allowedMethods = ["GET", "POST", "OPTIONS"];
+        string[] allowedMethods = ["GET", "POST", "DELETE", "OPTIONS"];
         if (origins.Length == 0)
         {
             policy.WithOrigins("http://localhost:3000")
@@ -101,6 +101,8 @@ app.MapGet("/", () => Results.Ok(new
         events = "/api/v1/events",
         eventStream = "/api/v1/events/stream",
         eventIngest = "/api/v1/events:batch",
+        evidence = "/api/v1/evidence",
+        inspectionDefinitions = "/api/v1/inspection-definitions",
         inspectionRecords = "/api/v1/inspection-records",
         subscriptions = "/api/v1/subscriptions",
         chatRuns = "/api/v1/chat/runs",
@@ -131,6 +133,8 @@ Log.Logger.Information("    > Edge Logs:     {0}/api/edges/{{edgeId}}/logs", bas
 Log.Logger.Information("    > Events:        {0}/api/v1/events", baseAddress);
 Log.Logger.Information("    > Event Stream:  {0}/api/v1/events/stream", baseAddress);
 Log.Logger.Information("    > Event Ingest:  {0}/api/v1/events:batch", baseAddress);
+Log.Logger.Information("    > Evidence:      {0}/api/v1/evidence", baseAddress);
+Log.Logger.Information("    > Definitions:   {0}/api/v1/inspection-definitions", baseAddress);
 Log.Logger.Information("    > Inspections:   {0}/api/v1/inspection-records", baseAddress);
 Log.Logger.Information("    > Subscriptions: {0}/api/v1/subscriptions", baseAddress);
 Log.Logger.Information("    > Chat Runs:     {0}/api/v1/chat/runs", baseAddress);

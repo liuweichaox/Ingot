@@ -200,11 +200,24 @@ public sealed record AnalysisToolResult
 
     public required JsonElement Data { get; init; }
 
+    public IReadOnlyList<AnalysisArtifactRef> Artifacts { get; init; } = [];
+
     public IReadOnlyList<EvidenceRef> Evidence { get; init; } = [];
 
     public IReadOnlyList<string> Limitations { get; init; } = [];
 
     public string Outcome { get; init; } = AnalysisToolOutcomes.Sufficient;
+}
+
+public sealed record AnalysisArtifactRef
+{
+    public required string Kind { get; init; }
+
+    public required string Label { get; init; }
+
+    public required string Url { get; init; }
+
+    public long? SizeBytes { get; init; }
 }
 
 public static class AnalysisToolOutcomes

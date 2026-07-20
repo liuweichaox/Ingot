@@ -1,4 +1,5 @@
 using Ingot.Agent;
+using Ingot.Central.Infrastructure.Cycles;
 using Ingot.Central.Infrastructure.Events;
 using Ingot.Central.Infrastructure.AgentTools;
 using Ingot.Central.Infrastructure.Inspections;
@@ -31,11 +32,18 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IChatEventReader, ChatEventReader>();
         services.AddSingleton<IAnalysisTool, CheckDataQualityTool>();
         services.AddSingleton<IAnalysisTool, GetCycleTraceTool>();
+        services.AddSingleton<IAnalysisTool, FindComparableCyclesTool>();
+        services.AddSingleton<IAnalysisTool, CompareCyclesTool>();
 
         // 人工检测结果事实（PostgreSQL）；与生产事件分表、分 API 建模
         services.Configure<InspectionSubmissionOptions>(configuration.GetSection("InspectionSubmission"));
+        services.Configure<InspectionEvidenceOptions>(configuration.GetSection("InspectionEvidence"));
         services.AddSingleton<IInspectionRecordStore, PostgresInspectionRecordStore>();
+        services.AddSingleton<IInspectionEvidenceStore, PostgresInspectionEvidenceStore>();
+        services.AddSingleton<IInspectionMasterDataStore, PostgresInspectionMasterDataStore>();
         services.AddHostedService<InspectionStoreInitializerHostedService>();
+        services.AddSingleton<ICycleAnalyticsStore, PostgresCycleAnalyticsStore>();
+        services.AddHostedService<CycleAnalyticsInitializerHostedService>();
 
         // Webhook 订阅与投递（PostgreSQL + CloudEvents）
         services.Configure<WebhookOptions>(configuration.GetSection("Webhook"));

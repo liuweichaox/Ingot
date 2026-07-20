@@ -24,7 +24,7 @@ public sealed class DefaultPlanValidator(IOptions<ChatOptions> chatOptions) : IP
             return false;
         }
 
-        if (!string.Equals(surface, ProductSurfaces.Chat, StringComparison.Ordinal))
+        if (!ProductSurfaces.All.Contains(surface))
         {
             error = "计划包含无效的产品面。";
             return false;
@@ -249,6 +249,7 @@ public sealed class DefaultPlanValidator(IOptions<ChatOptions> chatOptions) : IP
 
 public sealed class DefaultEvidenceVerifier : IEvidenceVerifier
 {
+    private const int MaxToolDataBytes = 32 * 1024;
     private const int MaxCharts = 8;
     private const int MaxLabels = 500;
     private const int MaxSeries = 16;
@@ -265,6 +266,27 @@ public sealed class DefaultEvidenceVerifier : IEvidenceVerifier
         out IReadOnlyList<EvidenceRef> evidence,
         out string error)
     {
+        foreach (var result in results)
+        {
+            var dataBytes = Encoding.UTF8.GetByteCount(result.Data.GetRawText());
+            if (dataBytes > MaxToolDataBytes)
+            {
+                evidence = [];
+                error = $"工具 {result.Tool} 的 Data 超过 {MaxToolDataBytes} 字节上限。";
+                return false;
+            }
+
+            if (result.Artifacts.Any(static artifact =>
+                    string.IsNullOrWhiteSpace(artifact.Kind) ||
+                    string.IsNullOrWhiteSpace(artifact.Label) ||
+                    string.IsNullOrWhiteSpace(artifact.Url)))
+            {
+                evidence = [];
+                error = $"工具 {result.Tool} 包含无效 Artifact 引用。";
+                return false;
+            }
+        }
+
         evidence = results.SelectMany(static result => result.Evidence)
             .Where(static item =>
                 !string.IsNullOrWhiteSpace(item.Kind) &&

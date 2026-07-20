@@ -23,6 +23,7 @@ usage() {
   ./deploy/deploy.sh backup [目录]     备份 Caddy 证书与配置卷
 
 可选环境变量：SITE_DOMAIN、DOCS_DOMAIN、ACME_EMAIL、HTTP_ONLY=true。
+可选 DNS：GATEWAY_DNS_1、GATEWAY_DNS_2（默认 223.5.5.5 和 1.1.1.1）。
 EOF
 }
 
@@ -96,6 +97,11 @@ EOF
 deploy_target() {
   local target="$1"
   local -a profiles=()
+  local scheme="https"
+
+  if [[ "${HTTP_ONLY}" == "true" ]]; then
+    scheme="http"
+  fi
 
   case "${target}" in
     site) profiles=(--profile site) ;;
@@ -122,8 +128,8 @@ deploy_target() {
 
   echo
   echo "部署完成：${target}"
-  [[ "${target}" == "docs" ]] || echo "官网：https://${SITE_DOMAIN}"
-  [[ "${target}" == "site" ]] || echo "文档：https://${DOCS_DOMAIN}"
+  [[ "${target}" == "docs" ]] || echo "官网：${scheme}://${SITE_DOMAIN}"
+  [[ "${target}" == "site" ]] || echo "文档：${scheme}://${DOCS_DOMAIN}"
 }
 
 backup_volumes() {

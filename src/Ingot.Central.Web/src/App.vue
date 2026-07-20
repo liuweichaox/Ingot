@@ -21,6 +21,10 @@
               <el-icon><List /></el-icon>
               <span>生产事件</span>
             </el-menu-item>
+            <el-menu-item index="/inspections">
+              <el-icon><DocumentChecked /></el-icon>
+              <span>检测录入</span>
+            </el-menu-item>
             <el-menu-item index="/chat">
               <el-icon><ChatDotRound /></el-icon>
               <span>Ingot Chat</span>
@@ -48,7 +52,7 @@
 </template>
 
 <script setup>
-import { Box, ChatDotRound, Connection, DataAnalysis, Document, Link, List } from "@element-plus/icons-vue";
+import { Box, ChatDotRound, Connection, DataAnalysis, Document, DocumentChecked, Link, List } from "@element-plus/icons-vue";
 import zhCn from "element-plus/dist/locale/zh-cn.mjs";
 const openMetrics = () => {
   window.open("/metrics", "_blank");

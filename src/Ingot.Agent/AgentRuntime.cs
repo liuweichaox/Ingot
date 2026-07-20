@@ -9,11 +9,6 @@ namespace Ingot.Agent;
 
 public sealed class AgentRuntime : IAgentRuntime
 {
-    private static readonly IReadOnlySet<string> ChatToolNames = new HashSet<string>(StringComparer.Ordinal)
-    {
-        "check_data_quality",
-        "get_cycle_trace"
-    };
     private const string ChatPromptVersion = "ingot-chat-v1";
     private const string ChatToolsetVersion = "production-facts-readonly-v1";
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _active = new(StringComparer.Ordinal);
@@ -63,7 +58,7 @@ public sealed class AgentRuntime : IAgentRuntime
         if (tools.Count == 0)
             throw new InvalidOperationException($"{surface} 没有已注册工具。");
 
-        var model = _models.GetClient(ProductSurfaces.Chat, request.Mode == "deep" ? ModelRole.Reasoning : ModelRole.Fast);
+        var model = _models.GetClient(surface, request.Mode == "deep" ? ModelRole.Reasoning : ModelRole.Fast);
         if (!string.Equals(model.Provider, settings.Provider, StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException($"{surface} 配置的模型 Provider 没有对应客户端。");
         var run = new AgentRunSnapshot
@@ -559,8 +554,7 @@ public sealed class AgentRuntime : IAgentRuntime
     private IReadOnlyDictionary<string, IAnalysisTool> ToolsForSurface(string surface)
         => _tools.Values
             .Where(tool => string.Equals(tool.Definition.Surface, surface, StringComparison.Ordinal))
-            .Where(tool => ChatToolNames.Contains(tool.Definition.Name) &&
-                           tool.Definition.Access == AgentToolAccess.Read)
+            .Where(tool => tool.Definition.Access == AgentToolAccess.Read)
             .ToDictionary(static tool => tool.Definition.Name, StringComparer.Ordinal);
 
     private SurfaceSettings GetSettings() => new(
@@ -577,7 +571,7 @@ public sealed class AgentRuntime : IAgentRuntime
 
     private static void ValidateSurface(string surface)
     {
-        if (!string.Equals(surface, ProductSurfaces.Chat, StringComparison.Ordinal))
+        if (!ProductSurfaces.All.Contains(surface))
             throw new ArgumentOutOfRangeException(nameof(surface), surface, "不支持的产品面。");
     }
 

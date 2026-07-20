@@ -34,7 +34,8 @@ public sealed class ContextStore : IEdgeContextStore
         _connectionString = new SqliteConnectionStringBuilder
         {
             DataSource = databasePath,
-            Cache = SqliteCacheMode.Shared
+            Cache = SqliteCacheMode.Shared,
+            Pooling = false
         }.ToString();
 
         EnsureSchema();
