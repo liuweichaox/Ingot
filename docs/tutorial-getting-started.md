@@ -41,7 +41,7 @@ export INGOT_CONNECTOR_TOKEN="$(openssl rand -hex 24)"
 docker compose -f docker-compose.app.yml --profile connector-host up -d connector-host
 ```
 
-Host 监听 <http://localhost:8001>，接收 `ProductionEvent[]`，并以至少一次语义将标准批次发送到 Platform。使用方负责这个本地入口的部署和运维。
+Host 监听 <http://localhost:8001>，接收 `ProductionEvent[]`，并以至少传递一次将标准批次发送到 Platform。使用方负责这个本地入口的部署和运维。
 
 ## 3. 提交第一批生产事件
 
@@ -73,7 +73,7 @@ curl -X POST http://localhost:8000/api/v1/events:batch \
 
 ## 4. 启用生产 Chat
 
-默认 Compose 保持 Chat 关闭。以下配置启用 OpenAI、Actor `operator` 和完整事实范围：
+默认 Compose 保持 Chat 关闭。以下配置启用 OpenAI、用户 `operator` 和完整数据范围：
 
 ```bash
 export INGOT_CHAT_ENABLED=true
@@ -87,7 +87,7 @@ export INGOT_CHAT_OPERATOR_ALLOW_ALL=true
 docker compose -f docker-compose.app.yml up -d --build
 ```
 
-生产部署应以每个 Actor 实际所需的数据范围替代全局范围。Chat API 与 Platform Web 使用 `operator` 和 `INGOT_CHAT_OPERATOR_TOKEN`。
+生产部署应以每个用户 实际所需的数据范围替代全局范围。Chat API 与 Platform Web 使用 `operator` 和 `INGOT_CHAT_OPERATOR_TOKEN`。
 
 ## 5. 查询事件并使用 Chat
 
@@ -101,4 +101,4 @@ curl "http://localhost:8000/api/v1/events?edgeId=EDGE-001&correlationId=CYCLE-00
 这个周期发生了什么，数据是否完整？
 ```
 
-Chat 会返回只读工具活动、限制条件和数据引用。完整事件字段见[生产事件规范](rfc-production-events.md)，Chat 行为见[Ingot Chat](chat.md)。
+Chat 会返回只读工具活动、注意事项和数据引用。完整事件字段见[生产事件规范](rfc-production-events.md)，Chat 行为见[Ingot Chat](chat.md)。

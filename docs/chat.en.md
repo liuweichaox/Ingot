@@ -1,47 +1,47 @@
 # Ingot Chat
 
-Ingot Chat is the main way engineers use Ingot: it helps people query recorded production facts, check data quality, and locate cycle-data problems. Ingot is the trusted production-facts and process-investigation platform; Chat is its conversation and investigation workspace. It reads production records only and preserves field-equipment state.
+Ingot Chat is the main way engineers use Ingot: it helps people query production records, check whether a run is complete, compare runs, and review possible causes. It reads saved records only and never changes field equipment or production data.
 
 ## Capabilities
 
-- Interpret natural-language questions with optional asset or cycle page context;
+- Interpret natural-language questions with an optional equipment ID or production run ID;
 - produce a governed typed query plan;
 - call `check_data_quality` for event completeness, missing context, freshness, and available range;
 - call `get_cycle_trace` for an ordered `correlationId`-scoped cycle event chain;
-- stream plan, read-only tool activity, answer, limitations, and evidence references;
-- retain Actor-scoped history with cancellation and SSE resume.
+- stream the query steps, answer, missing information, and links to related production records;
+- retain user-scoped history with cancellation and SSE resume.
 
 The available tools are `check_data_quality` and `get_cycle_trace`.
 
-## Deeper investigation: bounded multi-agent collaboration
+## Combined analysis: bounded multi-agent collaboration
 
-Everyday questions use `standard` mode. For a complex question that benefits from several perspectives, explicitly enable `deep` investigation mode.
+Quick queries use `quick` mode. For a complex question that benefits from several perspectives, explicitly enable `combined` mode.
 
 - The **process role** reviews cycles, state changes, and parameter differences.
 - The **quality role** reviews inspection outcomes, sample scope, and quality associations.
-- The **challenge role** looks for data gaps, confounders, and alternative explanations.
-- All roles can read only the verified tool results from this run; they cannot access a database, network, or equipment themselves.
-- The default limit is 3 rounds and 9 turns, with hard limits of 5 rounds and 15 turns. At least two first-round roles must succeed before a candidate explanation is returned.
-- The result includes supporting evidence, challenges, and limitations. It can describe only a candidate explanation, never a confirmed root cause or causation.
+- The **review role** looks for missing data, mixed influences, and other possible explanations.
+- All roles use only the saved production records returned for this run; they cannot access a database, network, or equipment themselves.
+- The default limit is 3 rounds and 9 turns, with hard limits of 5 rounds and 15 turns. At least two first-round perspectives must finish before possible causes are returned for review.
+- The result includes matching production records, conflicting conditions, and missing data. It lists possible causes for engineering review and never presents them as confirmed root causes.
 
-This is not an unconstrained group chat. It is a read-only investigation workflow with fixed roles, turn limits, evidence scope, and stop conditions. An engineer always makes the final judgement.
+This is not an unconstrained group chat. It is a read-only combined analysis with fixed perspectives, turn limits, production-record scope, and stop conditions. An engineer always makes the final judgement.
 
 ## Execution flow
 
 ```text
-question and page context
+question and selected equipment or production run
   → intent and time-range parsing
   → authorization, tool, and data-range validation
-  → read-only fact tools
-  → number, unit, and evidence verification
-  → answer, limitations, and fact references
+  → read-only record tools
+  → number, unit, and original-record checks
+  → answer, missing information, and record links
 ```
 
-The model interprets language and composes the response. Deterministic code owns queries, permissions, range limits, tool execution, and evidence verification. Chat uses governed fact tools and does not generate SQL, Flux, or scripts.
+The model interprets language and composes the response. Application code owns queries, permissions, range limits, and checks that results link to the original records. Chat uses read-only record queries and does not generate SQL, Flux, or scripts.
 
 ## Enable in production
 
-Production Compose leaves Chat disabled. Configure the model, model key, Actor token, and data scope together when enabling it:
+Production Compose leaves Chat disabled. Configure the model, model key, user token, and data scope together when enabling it:
 
 ```bash
 export INGOT_CHAT_ENABLED=true
@@ -51,18 +51,18 @@ export INGOT_CHAT_REASONING_MODEL="<reasoning-model>"
 export OPENAI_API_KEY="<secret>"
 export INGOT_CHAT_OPERATOR_TOKEN="$(openssl rand -hex 24)"
 export INGOT_CHAT_OPERATOR_ALLOW_ALL=true
-export INGOT_CHAT_ENABLE_DEEP_INVESTIGATION=true
+export INGOT_CHAT_ENABLE_COMBINED_ANALYSIS=true
 ```
 
-Platform Web and the HTTP API use Actor `operator` with `INGOT_CHAT_OPERATOR_TOKEN`. Production deployments configure access for the fact scope required by each Actor.
+Platform Web and the HTTP API use user `operator` with `INGOT_CHAT_OPERATOR_TOKEN`. Production deployments configure access for the record scope required by each user.
 
 ## Use Chat
 
 1. Open Platform Web and select **Chat**.
 2. Enter a question such as “What happened during this cycle, and is its data complete?”
 3. Optionally select an asset or cycle and supply page context.
-4. Review read-only tool activity, findings, limitations, and evidence.
-5. Follow evidence references back to production events or cycle facts.
+4. Review read-only tool activity, findings, limitations, and related records.
+5. Follow related records references back to production events or cycle records.
 
 ## HTTP API
 
@@ -70,30 +70,30 @@ Platform Web and the HTTP API use Actor `operator` with `INGOT_CHAT_OPERATOR_TOK
 |---|---|
 | `GET /api/v1/chat/capabilities` | Discover availability, modes, read-only tools, models, and run limits |
 | `POST /api/v1/chat/runs` | Create a Chat run |
-| `GET /api/v1/chat/runs` | Page through history for the current Actor |
-| `GET /api/v1/chat/runs/{runId}` | Read snapshot, plan, tools, evidence, and answer |
+| `GET /api/v1/chat/runs` | Page through history for the current user |
+| `GET /api/v1/chat/runs/{runId}` | Read snapshot, plan, tools, related records, and answer |
 | `GET /api/v1/chat/runs/{runId}/stream` | Stream SSE events and resume with `Last-Event-ID` |
 | `POST /api/v1/chat/runs/{runId}:cancel` | Cancel a run |
 
 ```bash
 curl -X POST http://localhost:8000/api/v1/chat/runs \
   -H "Content-Type: application/json" \
-  -H "X-Ingot-Actor: operator" \
+  -H "X-Ingot-User: operator" \
   -H "Authorization: Bearer ${INGOT_CHAT_OPERATOR_TOKEN}" \
   -d '{
     "question": "What happened during this cycle, and is its data complete?",
     "pageContext": { "kind": "cycle", "id": "CYCLE-001" },
-    "mode": "deep"
+    "mode": "combined"
   }'
 ```
 
 ## Security boundary
 
-- The read-only allowlist contains only registered fact-query tools;
-- every tool inherits the current Actor's data scope;
+- The read-only allowlist contains only registered record-query tools;
+- every tool inherits the current user's data scope;
 - arbitrary SQL, scripts, shell, filesystem access, and open network access are prohibited;
 - instruction-like text in tool results remains untrusted data and cannot change policy;
-- answer numbers must come from tool results, and key findings require resolvable evidence;
+- answer numbers must come from tool results, and key findings require resolvable related records;
 - insufficient, conflicting, or low-quality data produces explicit limitations rather than a definitive conclusion;
 - Chat cannot change configuration, events, inspection records, or equipment state.
 

@@ -145,7 +145,7 @@ public sealed class SqliteEventLog : IEventLog
         {
             _logger.LogWarning(
                 ex,
-                "backlog 丢弃事实已经提交，但记录相关指标失败。");
+                "backlog 丢弃记录已经提交，但记录相关指标失败。");
         }
     }
 
@@ -187,7 +187,7 @@ public sealed class SqliteEventLog : IEventLog
         foreach (var pair in query.Context)
         {
             if (!ContextKeyPattern.IsMatch(pair.Key))
-                throw new ArgumentException($"非法上下文键: {pair.Key}", nameof(query));
+                throw new ArgumentException($"非法生产信息项: {pair.Key}", nameof(query));
 
             var keyParameter = $"$ctx_key_{contextIndex}";
             var valueParameter = $"$ctx_value_{contextIndex}";

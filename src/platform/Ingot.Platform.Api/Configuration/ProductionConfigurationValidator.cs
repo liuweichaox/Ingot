@@ -11,7 +11,7 @@ public static class ProductionConfigurationValidator
             errors.Add("ConnectionStrings:Events is required.");
 
         RequireProtectedMap(configuration, "EventIngest", "EdgeTokens", errors);
-        RequireProtectedMap(configuration, "InspectionSubmission", "ActorTokens", errors);
+        RequireProtectedMap(configuration, "InspectionSubmission", "UserTokens", errors);
 
         var origins = configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
         if (origins.Length == 0 || origins.Any(static origin =>
@@ -23,7 +23,7 @@ public static class ProductionConfigurationValidator
 
         if (configuration.GetValue<bool>("Chat:Enabled"))
         {
-            RequireProtectedMap(configuration, "Chat", "ActorTokens", errors);
+            RequireProtectedMap(configuration, "Chat", "UserTokens", errors);
             if (!string.Equals(configuration["Chat:Provider"], "OpenAI", StringComparison.OrdinalIgnoreCase))
                 errors.Add("Chat:Provider must be OpenAI when Chat is enabled in production.");
             RequireValue(configuration, "Chat:FastModel", errors);
@@ -65,21 +65,21 @@ public static class ProductionConfigurationValidator
 
     private static void RequireChatDataScopes(IConfiguration configuration, ICollection<string> errors)
     {
-        var scopes = configuration.GetSection("ChatDataAccess:Actors").GetChildren().ToArray();
-        foreach (var actor in configuration.GetSection("Chat:ActorTokens").GetChildren())
+        var scopes = configuration.GetSection("ChatDataAccess:Users").GetChildren().ToArray();
+        foreach (var user in configuration.GetSection("Chat:UserTokens").GetChildren())
         {
             var scope = scopes.FirstOrDefault(candidate =>
-                string.Equals(candidate.Key, actor.Key, StringComparison.OrdinalIgnoreCase));
+                string.Equals(candidate.Key, user.Key, StringComparison.OrdinalIgnoreCase));
             if (scope is null)
             {
-                errors.Add($"ChatDataAccess:Actors:{actor.Key} is required.");
+                errors.Add($"ChatDataAccess:Users:{user.Key} is required.");
                 continue;
             }
 
             var allowAll = scope.GetValue<bool>("AllowAll");
             var edgeIds = scope.GetSection("EdgeIds").Get<string[]>() ?? [];
             if (!allowAll && edgeIds.All(static edgeId => string.IsNullOrWhiteSpace(edgeId)))
-                errors.Add($"ChatDataAccess:Actors:{actor.Key} must allow all data or list at least one EdgeId.");
+                errors.Add($"ChatDataAccess:Users:{user.Key} must allow all data or list at least one EdgeId.");
         }
     }
 
@@ -89,6 +89,6 @@ public static class ProductionConfigurationValidator
         ICollection<string> errors)
     {
         if (string.IsNullOrWhiteSpace(configuration[key]))
-            errors.Add($"{key} is required when its product surface is enabled in production.");
+            errors.Add($"{key} is required when its product entry point is enabled in production.");
     }
 }

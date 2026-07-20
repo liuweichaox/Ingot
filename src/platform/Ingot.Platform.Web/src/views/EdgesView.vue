@@ -86,7 +86,7 @@
                 :icon="List"
                 @click="$router.push({ path: '/events', query: { edgeId: row.edgeId } })"
               >
-                事件
+                生产记录
               </el-button>
               <el-button
                 type="primary"

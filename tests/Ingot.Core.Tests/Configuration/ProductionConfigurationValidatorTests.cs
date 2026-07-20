@@ -24,7 +24,7 @@ public sealed class ProductionConfigurationValidatorTests
             ["EventIngest:RequireToken"] = "true",
             ["EventIngest:EdgeTokens:EDGE-001"] = "edge-token-with-at-least-24-characters",
             ["InspectionSubmission:RequireToken"] = "true",
-            ["InspectionSubmission:ActorTokens:OPERATOR-001"] = "operator-token-with-at-least-24-characters",
+            ["InspectionSubmission:UserTokens:OPERATOR-001"] = "operator-token-with-at-least-24-characters",
             ["Chat:Enabled"] = "false",
             ["Cors:AllowedOrigins:0"] = "https://ingotstack.com"
         });
@@ -41,14 +41,14 @@ public sealed class ProductionConfigurationValidatorTests
             ["EventIngest:RequireToken"] = "true",
             ["EventIngest:EdgeTokens:EDGE-001"] = "edge-token-with-at-least-24-characters",
             ["InspectionSubmission:RequireToken"] = "true",
-            ["InspectionSubmission:ActorTokens:OPERATOR-001"] = "operator-token-with-at-least-24-characters",
+            ["InspectionSubmission:UserTokens:OPERATOR-001"] = "operator-token-with-at-least-24-characters",
             ["Chat:Enabled"] = "true",
             ["Chat:Provider"] = "OpenAI",
             ["Chat:FastModel"] = "chat-fast-model",
             ["Chat:ReasoningModel"] = "chat-reasoning-model",
             ["Chat:RequireToken"] = "true",
-            ["Chat:ActorTokens:analyst"] = "chat-token-with-at-least-24-characters",
-            ["ChatDataAccess:Actors:analyst:EdgeIds:0"] = "EDGE-001",
+            ["Chat:UserTokens:analyst"] = "chat-token-with-at-least-24-characters",
+            ["ChatDataAccess:Users:analyst:EdgeIds:0"] = "EDGE-001",
             ["OPENAI_API_KEY"] = "secret-store-value",
             ["Cors:AllowedOrigins:0"] = "https://ingotstack.com"
         });
@@ -57,7 +57,7 @@ public sealed class ProductionConfigurationValidatorTests
     }
 
     [Fact]
-    public void Chat_RejectsActorWithoutDataScope()
+    public void Chat_RejectsUserWithoutDataScope()
     {
         var configuration = Build(new Dictionary<string, string?>
         {
@@ -65,19 +65,19 @@ public sealed class ProductionConfigurationValidatorTests
             ["EventIngest:RequireToken"] = "true",
             ["EventIngest:EdgeTokens:EDGE-001"] = "edge-token-with-at-least-24-characters",
             ["InspectionSubmission:RequireToken"] = "true",
-            ["InspectionSubmission:ActorTokens:OPERATOR-001"] = "operator-token-with-at-least-24-characters",
+            ["InspectionSubmission:UserTokens:OPERATOR-001"] = "operator-token-with-at-least-24-characters",
             ["Chat:Enabled"] = "true",
             ["Chat:Provider"] = "OpenAI",
             ["Chat:FastModel"] = "chat-fast-model",
             ["Chat:ReasoningModel"] = "chat-reasoning-model",
             ["Chat:RequireToken"] = "true",
-            ["Chat:ActorTokens:analyst"] = "chat-token-with-at-least-24-characters",
+            ["Chat:UserTokens:analyst"] = "chat-token-with-at-least-24-characters",
             ["OPENAI_API_KEY"] = "secret-store-value",
             ["Cors:AllowedOrigins:0"] = "https://ingotstack.com"
         });
 
         var error = Assert.Throws<InvalidOperationException>(() => PlatformValidator.Validate(configuration));
-        Assert.Contains("ChatDataAccess:Actors:analyst is required", error.Message, StringComparison.Ordinal);
+        Assert.Contains("ChatDataAccess:Users:analyst is required", error.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -151,7 +151,7 @@ public sealed class ProductionConfigurationValidatorTests
         using var provider = services.BuildServiceProvider();
 
         var capabilities = provider.GetRequiredService<Ingot.Agent.IAgentRuntime>()
-            .GetCapabilities(Ingot.Contracts.Agents.ProductSurfaces.Chat);
+            .GetCapabilities(Ingot.Contracts.Agents.ProductEntryPoints.Chat);
 
         Assert.False(capabilities.Enabled);
         Assert.Empty(capabilities.Modes);

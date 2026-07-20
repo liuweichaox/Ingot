@@ -21,10 +21,10 @@
 ## 核心安全边界
 
 - Chat 不直接访问数据库、宿主文件系统、Shell 或设备控制接口，只能调用白名单中的只读数据工具。
-- Chat 的接口、历史和运行按 Actor 隔离。
+- Chat 的接口、历史和运行按用户 隔离。
 - 用户接入程序通过标准事件 API 提交生产数据，并独立运行在部署方选择的环境中。
 - 生产环境强制 Token、模型、数据库连接和 CORS 配置校验。
-- 密钥只通过环境变量或 Secret Store 提供。用户不得把真实密钥写入 Chat 问题、事件上下文或日志。
+- 密钥只通过环境变量或 Secret Store 提供。用户不得把真实密钥写入 Chat 问题、事件关联信息或日志。
 
 Central 的查询、边缘注册、诊断代理和 Webhook 管理接口当前没有统一 RBAC。生产部署必须把这些接口置于受信网络或认证网关之后，并对可注册的 Edge 地址和 Webhook 目标实施网络出口策略。
 
@@ -42,9 +42,9 @@ Security fixes target the current `main` branch. Deployments must use supported 
 
 ## Core boundaries
 
-- Chat receives no direct database, host-filesystem, shell, or equipment-control access and calls only allowlisted read-only fact tools.
-- Chat APIs, histories, and runs are isolated by Actor.
-- User adapters submit production facts through the standard event API and run independently in deployment-selected environments.
+- Chat receives no direct database, host-filesystem, shell, or equipment-control access and calls only allowlisted read-only record tools.
+- Chat APIs, histories, and runs are isolated by 用户.
+- User adapters submit production records through the standard event API and run independently in deployment-selected environments.
 - Production startup validates tokens, models, database connectivity, and CORS configuration.
 - Supply secrets only through environment variables or a secret store. Never place real secrets in Chat questions, event context, or logs.
 

@@ -112,7 +112,7 @@ public class MetricsCollector : IMetricsCollector
         _contextStateEntriesGauge = _meter.CreateUpDownCounter<long>(
             "context_state_entries",
             "entries",
-            "当前持久化的资产业务上下文项数量");
+            "当前持久化的资产业务关联信息项数量");
 
         _eventPersistenceFailureCounter = _meter.CreateCounter<long>(
             "event_persistence_failures_total",

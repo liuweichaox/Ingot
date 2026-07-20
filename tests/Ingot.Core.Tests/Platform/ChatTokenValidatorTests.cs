@@ -13,7 +13,7 @@ public sealed class ChatTokenValidatorTests
         var chat = new ChatTokenValidator(Options.Create(new ChatOptions
         {
             RequireToken = true,
-            ActorTokens = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            UserTokens = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
                 ["analyst"] = "chat-secret"
             }

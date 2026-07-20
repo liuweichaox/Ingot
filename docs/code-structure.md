@@ -38,7 +38,7 @@ src/
 │   └── Ingot.Platform.Web/               工程师工作界面
 │
 └── agent/
-    ├── Ingot.Agent/                      有界运行时、护栏、证据校验
+    ├── Ingot.Agent/                      有界运行时、护栏、结果与原始记录核对
     └── Ingot.Agent.Providers/            模型客户端与运行存储
 
 apps/
@@ -46,7 +46,7 @@ apps/
 └── docs-site/
 ```
 
-`Ingot.Platform.Infrastructure` 是明确的过渡项目，不是长期目标。它仍然包含事实存储、主数据、周期计算、分析工具和 Webhook，后续按路线图阶段 2 拆分。
+`Ingot.Platform.Infrastructure` 是明确的过渡项目，不是长期目标。它仍然包含生产记录存储、主数据、周期计算、分析工具和 Webhook，后续按路线图阶段 2 拆分。
 
 ---
 
@@ -56,7 +56,7 @@ apps/
 src/platform/
 ├── Ingot.Platform.MasterData/            Phase、Mapping、Feature、Inspection 定义
 ├── Ingot.Platform.Analytics/             周期物化、聚合下推、特征计算、幂等重算
-├── Ingot.Platform.Persistence/           事件、检测、证据的事实存储
+├── Ingot.Platform.Persistence/           事件、检测、相关记录的生产记录存储
 ├── Ingot.Platform.Integration/           Webhook、SSE 投递、Edge 注册
 ├── Ingot.Platform.Tools/                 IAnalysisTool 薄层包装
 ├── Ingot.Platform.Api/
@@ -79,7 +79,7 @@ src/platform/
 
 ### MasterData
 
-保存阶段定义、步序映射、特征定义和检测定义。主数据低频变化、需要版本和历史回填，与高频不可变事实具有不同生命周期。
+保存阶段定义、步序映射、特征定义和检测定义。主数据低频变化、需要版本和历史回填，与高频不可变记录具有不同生命周期。
 
 ### Analytics
 
@@ -87,15 +87,15 @@ src/platform/
 
 ### Persistence
 
-保存不可变生产事件、检测记录和证据 metadata。接口与实现按事实类型分目录，不承载跨周期统计逻辑。
+保存不可变生产事件、检测记录和相关记录 metadata。接口与实现按记录类型分目录，不承载跨周期统计逻辑。
 
 ### Integration
 
-承载 Webhook、CloudEvents、SSE 投递和 Edge 注册。对外通信失败不得污染事实与计算模块。
+承载 Webhook、CloudEvents、SSE 投递和 Edge 注册。对外通信失败不得污染记录与计算模块。
 
 ### Tools
 
-把 Platform 的确定性查询和计算包装为 `IAnalysisTool`。只定义输入 schema、调用能力、组装 `Data`、`Artifacts`、`Evidence` 与 `Limitations`；不得包含 SQL 或统计计算。
+把 Platform 的确定性查询和计算包装为 `IAnalysisTool`。只定义输入 schema、调用能力、组装 `Data`、`Details`、`RelatedRecords` 与 `Limitations`；不得包含 SQL 或统计计算。
 
 ---
 
@@ -157,7 +157,7 @@ Platform.Api                → Platform 各模块，仅负责组合与 HTTP 适
 
 - `Cycles` 与新增聚合代码进入 `Platform.Analytics`。
 - 检测定义、阶段定义和特征定义进入 `Platform.MasterData`。
-- 事件、检测和证据存储进入 `Platform.Persistence`。
+- 事件、检测和相关记录存储进入 `Platform.Persistence`。
 - Webhook 与 Edge 注册进入 `Platform.Integration`。
 - `AgentTools` 变成 `Platform.Tools` 薄层，计算下沉到 Analytics。
 

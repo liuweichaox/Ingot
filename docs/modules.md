@@ -8,7 +8,7 @@
 | `Ingot.Domain` | 生产事件、对象引用和领域校验 |
 | `Ingot.Edge.Application` | 应用服务抽象 |
 | `Ingot.Edge.Infrastructure` | 存储、日志、指标与运行时实现 |
-| `Ingot.Platform.Web` | 事实页面、检测、日志、指标和 Ingot Chat 界面 |
+| `Ingot.Platform.Web` | 记录页面、检测、日志、指标和 Ingot Chat 界面 |
 | `site` / `docs-site` | 官网与静态文档站 |
 
 依赖关系由 `scripts/verify-architecture.sh` 校验。公开产品范围由 `scripts/verify-product-scope.sh` 校验。

@@ -14,8 +14,8 @@
           <el-alert v-if="success" :title="success" type="success" show-icon :closable="false" class="notice" />
 
           <el-form label-position="top">
-            <el-form-item label="检测定义">
-              <el-select v-model="selectedDefinitionKey" filterable placeholder="选择检测定义" @change="applyDefinition">
+            <el-form-item label="检测项目">
+              <el-select v-model="selectedDefinitionKey" filterable placeholder="选择检测项目" @change="applyDefinition">
                 <el-option
                   v-for="item in definitions"
                   :key="`${item.code}:${item.version}`"
@@ -32,7 +32,7 @@
                 </el-form-item>
               </el-col>
               <el-col :span="12">
-                <el-form-item label="周期关联 ID">
+                <el-form-item label="生产周期号">
                   <el-input v-model="form.operationRunId" placeholder="CYCLE-001" />
                 </el-form-item>
               </el-col>
@@ -40,13 +40,13 @@
 
             <el-row :gutter="12">
               <el-col :span="12">
-                <el-form-item label="提交人">
+                <el-form-item label="检测员或工位">
                   <el-input v-model="form.submittedBy" />
                 </el-form-item>
               </el-col>
               <el-col :span="12">
                 <el-form-item label="结果">
-                  <el-segmented v-model="form.outcome" :options="['PASS', 'FAIL', 'INCONCLUSIVE']" />
+                  <el-segmented v-model="form.outcome" :options="outcomeOptions" />
                 </el-form-item>
               </el-col>
             </el-row>
@@ -69,13 +69,13 @@
               </div>
             </el-form-item>
 
-            <el-form-item label="证据照片/文件">
+            <el-form-item label="现场照片或附件">
               <input type="file" @change="onFileChange">
-              <el-button :loading="uploading" :disabled="!pendingFile" @click="uploadEvidence">
-                上传证据
+              <el-button :loading="uploading" :disabled="!pendingFile" @click="uploadAttachments">
+                上传附件
               </el-button>
             </el-form-item>
-            <el-table v-if="evidence.length" :data="evidence" size="small" stripe class="evidence-table">
+            <el-table v-if="attachments.length" :data="attachments" size="small" stripe class="attachments-table">
               <el-table-column prop="fileName" label="文件" min-width="160" />
               <el-table-column prop="mediaType" label="类型" width="140" />
               <el-table-column label="大小" width="100">
@@ -111,19 +111,19 @@
             </el-table-column>
             <el-table-column prop="workpieceId" label="工件" min-width="130" />
             <el-table-column prop="operationRunId" label="周期" min-width="160" show-overflow-tooltip />
-            <el-table-column prop="definitionCode" label="定义" min-width="150" />
+            <el-table-column prop="definitionCode" label="检测项目" min-width="150" />
             <el-table-column label="结果" width="110">
               <template #default="{ row }">
                 <el-tag :type="row.outcome === 'PASS' ? 'success' : row.outcome === 'FAIL' ? 'danger' : 'warning'">
-                  {{ row.outcome }}
+                  {{ outcomeLabel(row.outcome) }}
                 </el-tag>
               </template>
             </el-table-column>
             <el-table-column label="测量" width="100">
               <template #default="{ row }">{{ row.measurements?.length || 0 }}</template>
             </el-table-column>
-            <el-table-column label="证据" width="100">
-              <template #default="{ row }">{{ row.evidence?.length || 0 }}</template>
+            <el-table-column label="附件" width="100">
+              <template #default="{ row }">{{ row.attachments?.length || 0 }}</template>
             </el-table-column>
           </el-table>
           <el-empty v-if="!loadingRecords && !records.length" description="暂无检测记录" />
@@ -142,7 +142,7 @@ const definitions = ref([]);
 const selectedDefinitionKey = ref("");
 const selectedDefinition = ref(null);
 const measurements = reactive({});
-const evidence = ref([]);
+const attachments = ref([]);
 const records = ref([]);
 const pendingFile = ref(null);
 const error = ref("");
@@ -150,6 +150,11 @@ const success = ref("");
 const uploading = ref(false);
 const submitting = ref(false);
 const loadingRecords = ref(false);
+const outcomeOptions = [
+  { label: "合格", value: "PASS" },
+  { label: "不合格", value: "FAIL" },
+  { label: "待确认", value: "INCONCLUSIVE" },
+];
 
 const form = reactive({
   workpieceId: "",
@@ -164,7 +169,7 @@ const canSubmit = computed(() =>
   form.workpieceId.trim() &&
   form.operationRunId.trim() &&
   form.submittedBy.trim() &&
-  (Object.values(measurements).some((value) => value !== null && value !== undefined && value !== "") || evidence.value.length)
+  (Object.values(measurements).some((value) => value !== null && value !== undefined && value !== "") || attachments.value.length)
 );
 
 function applyDefinition() {
@@ -178,16 +183,16 @@ function onFileChange(event) {
   pendingFile.value = event.target.files?.[0] || null;
 }
 
-async function uploadEvidence() {
+async function uploadAttachments() {
   if (!pendingFile.value) return;
   uploading.value = true;
   error.value = "";
   try {
     const data = new FormData();
     data.append("file", pendingFile.value);
-    const uploaded = await postForm("/api/v1/evidence", data);
-    if (!evidence.value.some((item) => item.evidenceId === uploaded.evidenceId)) {
-      evidence.value = [...evidence.value, uploaded];
+    const uploaded = await postForm("/api/v1/inspection-attachments", data);
+    if (!attachments.value.some((item) => item.attachmentId === uploaded.attachmentId)) {
+      attachments.value = [...attachments.value, uploaded];
     }
     pendingFile.value = null;
   } catch (requestError) {
@@ -235,7 +240,7 @@ async function submit() {
       outcome: form.outcome,
       submittedBy: form.submittedBy,
       measurements: measurementRows,
-      evidence: evidence.value,
+      attachments: attachments.value,
       notes: form.notes || null,
     });
     success.value = `检测记录已提交：${record.recordId}`;
@@ -268,7 +273,7 @@ async function loadRecords() {
 
 function resetForm() {
   Object.assign(form, { workpieceId: "", operationRunId: "", submittedBy: "operator", outcome: "PASS", notes: "" });
-  evidence.value = [];
+  attachments.value = [];
   Object.keys(measurements).forEach((key) => measurements[key] = null);
   success.value = "";
   error.value = "";
@@ -278,6 +283,10 @@ function evaluateOutcome(value, characteristic) {
   if (characteristic.lowerLimit != null && value < Number(characteristic.lowerLimit)) return "FAIL";
   if (characteristic.upperLimit != null && value > Number(characteristic.upperLimit)) return "FAIL";
   return "PASS";
+}
+
+function outcomeLabel(value) {
+  return outcomeOptions.find((item) => item.value === value)?.label || value;
 }
 
 function limitText(characteristic) {
@@ -335,7 +344,7 @@ onMounted(async () => {
 .full-width { width: 100%; }
 .hint { width: 100%; margin-top: 4px; color: #909399; font-size: 12px; }
 .actions { display: flex; gap: 10px; }
-.evidence-table { margin-bottom: 16px; }
+.attachments-table { margin-bottom: 16px; }
 @media (max-width: 1200px) {
   .inspections-view :deep(.el-card) { margin-bottom: 18px; }
 }

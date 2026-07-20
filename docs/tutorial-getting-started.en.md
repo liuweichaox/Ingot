@@ -1,6 +1,6 @@
 # Getting started
 
-This tutorial starts Platform, submits a standard production-event batch, and uses Ingot Chat to query a cycle fact chain. Source adaptation is implemented by your team; map its output to the public event contract.
+This tutorial starts Platform, submits a standard production-event batch, and uses Ingot Chat to query a cycle record chain. Source adaptation is implemented by your team; map its output to the public event contract.
 
 ## 1. Prepare the environment
 
@@ -73,7 +73,7 @@ curl -X POST http://localhost:8000/api/v1/events:batch \
 
 ## 4. Enable Chat in production
 
-The default Compose stack keeps Chat disabled. The following configuration enables OpenAI, Actor `operator`, and full fact access:
+The default Compose stack keeps Chat disabled. The following configuration enables OpenAI, user `operator`, and full record access:
 
 ```bash
 export INGOT_CHAT_ENABLED=true
@@ -87,7 +87,7 @@ export INGOT_CHAT_OPERATOR_ALLOW_ALL=true
 docker compose -f docker-compose.app.yml up -d --build
 ```
 
-For production, replace broad access with the actual data scope required by each Actor. Platform Web and the Chat API use `operator` with `INGOT_CHAT_OPERATOR_TOKEN`.
+For production, replace broad access with the actual data scope required by each user. Platform Web and the Chat API use `operator` with `INGOT_CHAT_OPERATOR_TOKEN`.
 
 ## 5. Query events and use Chat
 
@@ -101,4 +101,4 @@ Then open **Chat** in Platform Web and ask:
 What happened during this cycle, and is its data complete?
 ```
 
-Chat returns read-only tool activity, limitations, and fact references. See the [production event specification](rfc-production-events.en.md) for all fields and [Ingot Chat](chat.en.md) for Chat behavior.
+Chat returns read-only tool activity, limitations, and record references. See the [production event specification](rfc-production-events.en.md) for all fields and [Ingot Chat](chat.en.md) for Chat behavior.

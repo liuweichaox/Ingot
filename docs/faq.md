@@ -12,19 +12,19 @@
 
 ## Chat 能做什么？
 
-Chat 可以查询已保存的生产数据、检查数据完整性、返回周期事件链并展示证据。它不写入事件、检测记录、配置或设备，不执行任意 SQL、脚本或开放网络请求。
+Chat 可以查询已保存的生产数据、检查数据完整性、返回周期事件链并展示相关记录。它不写入事件、检测记录、配置或设备，不执行任意 SQL、脚本或开放网络请求。
 
 ## 如何在生产环境启用 Chat？
 
-默认 Compose 保持 Chat 关闭。启用时同时设置 `INGOT_CHAT_ENABLED=true`、`INGOT_CHAT_PROVIDER=OpenAI`、Fast/Reasoning 模型、`OPENAI_API_KEY`、`INGOT_CHAT_OPERATOR_TOKEN` 和 `INGOT_CHAT_OPERATOR_ALLOW_ALL`。Platform Web 与 Chat API 使用 Actor `operator` 和 Chat Actor 令牌。完整配置见[配置](tutorial-configuration.md)。
+默认 Compose 保持 Chat 关闭。启用时同时设置 `INGOT_CHAT_ENABLED=true`、`INGOT_CHAT_PROVIDER=OpenAI`、Fast/Reasoning 模型、`OPENAI_API_KEY`、`INGOT_CHAT_OPERATOR_TOKEN` 和 `INGOT_CHAT_OPERATOR_ALLOW_ALL`。Platform Web 与 Chat API 使用用户 `operator` 和 Chat 用户令牌。完整配置见[配置](tutorial-configuration.md)。
 
 ## Chat 能确认根因吗？
 
-Chat 输出已验证事实、限制条件和候选调查方向，并将相关性与因果关系明确区分。
+Chat 展示已保存的生产记录、需要注意的情况和后续排查方向，并明确区分参数相关与已经确认的原因。
 
 ## 如何控制数据访问范围？
 
-为每个 Chat Actor 配置允许的 `EdgeIds`。事件接入使用与 `edgeId` 匹配的独立令牌。生产环境应轮换令牌并避免使用全局访问。
+为每个 Chat 用户 配置允许的 `EdgeIds`。事件接入使用与 `edgeId` 匹配的独立令牌。生产环境应轮换令牌并避免使用全局访问。
 
 ## 事件重复提交会怎样？
 

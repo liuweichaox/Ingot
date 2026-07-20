@@ -53,15 +53,15 @@ public sealed class SqliteAgentStore : IAgentRunStore, IDisposable
 
                 CREATE TABLE IF NOT EXISTS agent_runs (
                   run_id TEXT PRIMARY KEY,
-                  actor_id TEXT NOT NULL,
+                  user_id TEXT NOT NULL,
                   status TEXT NOT NULL,
                   created_at TEXT NOT NULL,
                   completed_at TEXT,
                   snapshot TEXT NOT NULL,
                   updated_at TEXT NOT NULL
                 );
-                CREATE INDEX IF NOT EXISTS idx_agent_runs_actor_created
-                  ON agent_runs(actor_id, created_at DESC);
+                CREATE INDEX IF NOT EXISTS idx_agent_runs_user_created
+                  ON agent_runs(user_id, created_at DESC);
 
                 CREATE TABLE IF NOT EXISTS agent_stream_events (
                   sequence INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -91,8 +91,8 @@ public sealed class SqliteAgentStore : IAgentRunStore, IDisposable
         await using var command = connection.CreateCommand();
         command.CommandText =
             """
-            INSERT INTO agent_runs(run_id, actor_id, status, created_at, completed_at, snapshot, updated_at)
-            VALUES ($runId, $actorId, $status, $createdAt, $completedAt, $snapshot, $updatedAt);
+            INSERT INTO agent_runs(run_id, user_id, status, created_at, completed_at, snapshot, updated_at)
+            VALUES ($runId, $userId, $status, $createdAt, $completedAt, $snapshot, $updatedAt);
             """;
         BindRun(command, run);
         await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
@@ -110,8 +110,8 @@ public sealed class SqliteAgentStore : IAgentRunStore, IDisposable
     }
 
     public async Task<IReadOnlyList<AgentRunSnapshot>> ListAsync(
-        string surface,
-        string actorId,
+        string entryPoint,
+        string userId,
         DateTimeOffset? before,
         int limit,
         CancellationToken ct = default)
@@ -122,13 +122,13 @@ public sealed class SqliteAgentStore : IAgentRunStore, IDisposable
         command.CommandText =
             """
             SELECT snapshot FROM agent_runs
-            WHERE actor_id = $actorId
-              AND json_extract(snapshot, '$.surface') = $surface
+            WHERE user_id = $userId
+              AND json_extract(snapshot, '$.entryPoint') = $entryPoint
               AND ($before IS NULL OR created_at < $before)
             ORDER BY created_at DESC LIMIT $limit;
             """;
-        command.Parameters.AddWithValue("$actorId", actorId);
-        command.Parameters.AddWithValue("$surface", surface);
+        command.Parameters.AddWithValue("$userId", userId);
+        command.Parameters.AddWithValue("$entryPoint", entryPoint);
         command.Parameters.AddWithValue("$before", before?.UtcDateTime.ToString("O") ?? (object)DBNull.Value);
         command.Parameters.AddWithValue("$limit", Math.Clamp(limit, 1, 101));
         var result = new List<AgentRunSnapshot>();
@@ -149,7 +149,7 @@ public sealed class SqliteAgentStore : IAgentRunStore, IDisposable
         await using var command = connection.CreateCommand();
         command.CommandText =
             """
-            UPDATE agent_runs SET actor_id=$actorId, status=$status, completed_at=$completedAt,
+            UPDATE agent_runs SET user_id=$userId, status=$status, completed_at=$completedAt,
               snapshot=$snapshot, updated_at=$updatedAt WHERE run_id=$runId;
             """;
         BindRun(command, run);
@@ -276,7 +276,7 @@ public sealed class SqliteAgentStore : IAgentRunStore, IDisposable
     private static void BindRun(SqliteCommand command, AgentRunSnapshot run)
     {
         command.Parameters.AddWithValue("$runId", run.RunId);
-        command.Parameters.AddWithValue("$actorId", run.ActorId);
+        command.Parameters.AddWithValue("$userId", run.UserId);
         command.Parameters.AddWithValue("$status", run.Status);
         command.Parameters.AddWithValue("$createdAt", run.CreatedAt.UtcDateTime.ToString("O"));
         command.Parameters.AddWithValue("$completedAt", run.CompletedAt?.UtcDateTime.ToString("O") ?? (object)DBNull.Value);

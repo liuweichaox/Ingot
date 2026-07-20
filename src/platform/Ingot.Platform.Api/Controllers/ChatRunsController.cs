@@ -19,14 +19,14 @@ public sealed class ChatRunsController(
     {
         if (!AgentContractValidator.TryValidate(request, out var normalized, out var error))
             return BadRequest(new { error });
-        if (!TryAuthorize(out var actorId, out var unauthorized))
+        if (!TryAuthorize(out var userId, out var unauthorized))
             return unauthorized!;
 
         try
         {
             var run = await runtime.StartAsync(
-                ProductSurfaces.Chat,
-                actorId!,
+                ProductEntryPoints.Chat,
+                userId!,
                 normalized!,
                 ct).ConfigureAwait(false);
             return Accepted(new
@@ -48,16 +48,16 @@ public sealed class ChatRunsController(
         [FromQuery] DateTimeOffset? before = null,
         CancellationToken ct = default)
     {
-        if (!TryAuthorize(out var actorId, out var unauthorized))
+        if (!TryAuthorize(out var userId, out var unauthorized))
             return unauthorized!;
-        var page = await runtime.ListAsync(ProductSurfaces.Chat, actorId!, before, limit, ct).ConfigureAwait(false);
+        var page = await runtime.ListAsync(ProductEntryPoints.Chat, userId!, before, limit, ct).ConfigureAwait(false);
         return Ok(new ChatRunPage
         {
             Items = page.Items.Select(static run => new ChatRunListItem
             {
                 RunId = run.RunId,
                 Question = run.Question,
-                Surface = ProductSurfaces.Chat,
+                EntryPoint = ProductEntryPoints.Chat,
                 Purpose = RunPurposes.ReadOnlyAnalysis,
                 Mode = run.Mode,
                 Status = run.Status,
@@ -73,12 +73,12 @@ public sealed class ChatRunsController(
     [HttpGet("{runId}")]
     public async Task<IActionResult> Get(string runId, CancellationToken ct)
     {
-        if (!TryAuthorize(out var actorId, out var unauthorized))
+        if (!TryAuthorize(out var userId, out var unauthorized))
             return unauthorized!;
-        var run = await runtime.GetAsync(ProductSurfaces.Chat, runId, ct).ConfigureAwait(false);
+        var run = await runtime.GetAsync(ProductEntryPoints.Chat, runId, ct).ConfigureAwait(false);
         if (run is null)
             return NotFound();
-        return string.Equals(run.ActorId, actorId, StringComparison.OrdinalIgnoreCase)
+        return string.Equals(run.UserId, userId, StringComparison.OrdinalIgnoreCase)
             ? Ok(ToChatSnapshot(run))
             : Unauthorized(new { error = "Chat 运行访问凭据无效。" });
     }
@@ -86,18 +86,18 @@ public sealed class ChatRunsController(
     [HttpGet("{runId}/stream")]
     public async Task Stream(string runId, CancellationToken ct)
     {
-        if (!TryAuthorize(out var actorId, out var unauthorized))
+        if (!TryAuthorize(out var userId, out var unauthorized))
         {
             Response.StatusCode = (unauthorized as ObjectResult)?.StatusCode ?? StatusCodes.Status401Unauthorized;
             return;
         }
-        var run = await runtime.GetAsync(ProductSurfaces.Chat, runId, ct).ConfigureAwait(false);
+        var run = await runtime.GetAsync(ProductEntryPoints.Chat, runId, ct).ConfigureAwait(false);
         if (run is null)
         {
             Response.StatusCode = StatusCodes.Status404NotFound;
             return;
         }
-        if (!string.Equals(run.ActorId, actorId, StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(run.UserId, userId, StringComparison.OrdinalIgnoreCase))
         {
             Response.StatusCode = StatusCodes.Status401Unauthorized;
             return;
@@ -112,7 +112,7 @@ public sealed class ChatRunsController(
         Response.Headers.CacheControl = "no-cache";
         Response.Headers.Append("X-Accel-Buffering", "no");
 
-        await foreach (var item in runtime.StreamAsync(ProductSurfaces.Chat, runId, afterSequence, ct)
+        await foreach (var item in runtime.StreamAsync(ProductEntryPoints.Chat, runId, afterSequence, ct)
                            .ConfigureAwait(false))
         {
             await Response.WriteAsync($"id: {item.Sequence}\n", ct).ConfigureAwait(false);
@@ -126,18 +126,18 @@ public sealed class ChatRunsController(
     [HttpPost("{runId}:cancel")]
     public async Task<IActionResult> Cancel(string runId, CancellationToken ct)
     {
-        if (!TryAuthorize(out var actorId, out var unauthorized))
+        if (!TryAuthorize(out var userId, out var unauthorized))
             return unauthorized!;
-        var run = await runtime.GetAsync(ProductSurfaces.Chat, runId, ct).ConfigureAwait(false);
+        var run = await runtime.GetAsync(ProductEntryPoints.Chat, runId, ct).ConfigureAwait(false);
         if (run is null)
             return NotFound();
-        if (!string.Equals(run.ActorId, actorId, StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(run.UserId, userId, StringComparison.OrdinalIgnoreCase))
             return Unauthorized(new { error = "Chat 运行访问凭据无效。" });
 
         var cancelled = await runtime.CancelAsync(
-            ProductSurfaces.Chat,
+            ProductEntryPoints.Chat,
             runId,
-            run.ActorId,
+            run.UserId,
             "用户请求取消 Chat 分析。",
             ct).ConfigureAwait(false);
         return cancelled ? Accepted(new { runId, status = "cancelling" }) : Conflict(new
@@ -151,13 +151,13 @@ public sealed class ChatRunsController(
     {
         if (!TryAuthorize(out _, out var unauthorized))
             return unauthorized!;
-        var capabilities = runtime.GetCapabilities(ProductSurfaces.Chat);
+        var capabilities = runtime.GetCapabilities(ProductEntryPoints.Chat);
         return Ok(new ChatCapabilities
         {
-            Surface = capabilities.Surface,
+            EntryPoint = capabilities.EntryPoint,
             Purpose = capabilities.Purpose,
             Enabled = capabilities.Enabled,
-            DeepInvestigationEnabled = capabilities.DeepInvestigationEnabled,
+            CombinedAnalysisEnabled = capabilities.CombinedAnalysisEnabled,
             Provider = capabilities.Provider,
             FastModel = capabilities.FastModel,
             ReasoningModel = capabilities.ReasoningModel,
@@ -180,8 +180,8 @@ public sealed class ChatRunsController(
     private static ChatRunSnapshot ToChatSnapshot(AgentRunSnapshot run) => new()
     {
         RunId = run.RunId,
-        ActorId = run.ActorId,
-        Surface = run.Surface,
+        UserId = run.UserId,
+        EntryPoint = run.EntryPoint,
         Purpose = run.Purpose,
         Question = run.Question,
         PageContext = run.PageContext,
@@ -206,7 +206,7 @@ public sealed class ChatRunsController(
             CompletedAt = tool.CompletedAt,
             Summary = tool.Summary,
             Error = tool.Error,
-            Evidence = tool.Evidence
+            RelatedRecords = tool.RelatedRecords
         }).ToArray(),
         Answer = run.Answer,
         Usage = run.Usage,
@@ -214,25 +214,25 @@ public sealed class ChatRunsController(
         CancellationReason = run.CancellationReason
     };
 
-    private bool TryAuthorize(out string? actorId, out IActionResult? error)
+    private bool TryAuthorize(out string? userId, out IActionResult? error)
     {
-        actorId = Request.Headers["X-Ingot-Actor"].FirstOrDefault()?.Trim();
-        if (string.IsNullOrWhiteSpace(actorId))
+        userId = Request.Headers["X-Ingot-User"].FirstOrDefault()?.Trim();
+        if (string.IsNullOrWhiteSpace(userId))
         {
-            error = BadRequest(new { error = "必须提供 X-Ingot-Actor。" });
+            error = BadRequest(new { error = "必须提供 X-Ingot-User。" });
             return false;
         }
-        if (!IsAuthorized(actorId))
+        if (!IsAuthorized(userId))
         {
             error = Unauthorized(new { error = "Chat 访问凭据无效。" });
             return false;
         }
 
-        actorId = tokenValidator.CanonicalizeActorId(actorId);
+        userId = tokenValidator.CanonicalizeUserId(userId);
         error = null;
         return true;
     }
 
-    private bool IsAuthorized(string actorId)
-        => tokenValidator.IsAuthorized(actorId, Request.Headers.Authorization.FirstOrDefault());
+    private bool IsAuthorized(string userId)
+        => tokenValidator.IsAuthorized(userId, Request.Headers.Authorization.FirstOrDefault());
 }

@@ -18,7 +18,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     },
     description: lang === "zh"
       ? "Ingot 生产数据、标准事件接入与 Ingot Chat 文档"
-      : "Documentation for Ingot trusted production facts, standard event ingestion, and Ingot Chat",
+      : "Documentation for Ingot trusted production records, standard event ingestion, and Ingot Chat",
     robots: { index: true, follow: true },
   };
 }

@@ -4,7 +4,7 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "Ingot",
     short_name: "Ingot",
-    description: "让生产数据可验证、可追问、可分析",
+    description: "汇集生产记录，查询异常，比较周期并分析可能原因",
     start_url: "/",
     display: "standalone",
     background_color: "#10161c",

@@ -1,8 +1,8 @@
 namespace Ingot.Contracts.Inspections;
 
-public sealed record EvidenceUploadResponse
+public sealed record AttachmentUploadResponse
 {
-    public required Guid EvidenceId { get; init; }
+    public required Guid AttachmentId { get; init; }
     public required string StorageRef { get; init; }
     public required string Sha256 { get; init; }
     public required string MediaType { get; init; }
@@ -49,7 +49,7 @@ public sealed record PhaseMapping
     public required string RecipeStep { get; init; }
     public string? RecipeStepName { get; init; }
     public required string PhaseCode { get; init; }
-    public string Provenance { get; init; } = "configured";
+    public string PhaseSource { get; init; } = "recipe";
     public DateTimeOffset UpdatedAt { get; init; }
 }
 

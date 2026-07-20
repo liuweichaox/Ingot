@@ -13,20 +13,20 @@ public sealed class DefaultPlanValidator(IOptions<ChatOptions> chatOptions) : IP
     private readonly ChatOptions _chatOptions = chatOptions.Value;
 
     public bool TryValidate(
-        string surface,
+        string entryPoint,
         AnalysisPlan plan,
         IReadOnlyDictionary<string, IAnalysisTool> tools,
         out string error)
     {
         if (plan.ToolCalls.Count == 0)
         {
-            error = "计划没有选择任何已授权工具。";
+            error = "没有选择可用的数据查询。";
             return false;
         }
 
-        if (!ProductSurfaces.All.Contains(surface))
+        if (!ProductEntryPoints.All.Contains(entryPoint))
         {
-            error = "计划包含无效的产品面。";
+            error = "选择的功能入口无效。";
             return false;
         }
         var maxToolCalls = Math.Clamp(_chatOptions.MaxToolCalls, 1, 8);
@@ -45,10 +45,10 @@ public sealed class DefaultPlanValidator(IOptions<ChatOptions> chatOptions) : IP
                 return false;
             }
 
-            if (!string.Equals(tool.Definition.Surface, surface, StringComparison.Ordinal) ||
-                !string.Equals(tool.Definition.Purpose, RunPurposes.ForSurface(surface), StringComparison.Ordinal))
+            if (!string.Equals(tool.Definition.EntryPoint, entryPoint, StringComparison.Ordinal) ||
+                !string.Equals(tool.Definition.Purpose, RunPurposes.ForEntryPoint(entryPoint), StringComparison.Ordinal))
             {
-                error = $"工具 {call.Tool} 不属于当前产品面。";
+                error = $"查询功能 {call.Tool} 不适用于当前功能入口。";
                 return false;
             }
 
@@ -247,7 +247,7 @@ public sealed class DefaultPlanValidator(IOptions<ChatOptions> chatOptions) : IP
     }
 }
 
-public sealed class DefaultEvidenceVerifier : IEvidenceVerifier
+public sealed class DefaultAnalysisResultValidator : IAnalysisResultValidator
 {
     private const int MaxToolDataBytes = 32 * 1024;
     private const int MaxCharts = 8;
@@ -263,7 +263,7 @@ public sealed class DefaultEvidenceVerifier : IEvidenceVerifier
     };
     public bool TryVerify(
         IReadOnlyList<AnalysisToolResult> results,
-        out IReadOnlyList<EvidenceRef> evidence,
+        out IReadOnlyList<RelatedRecordRef> relatedRecords,
         out string error)
     {
         foreach (var result in results)
@@ -271,23 +271,23 @@ public sealed class DefaultEvidenceVerifier : IEvidenceVerifier
             var dataBytes = Encoding.UTF8.GetByteCount(result.Data.GetRawText());
             if (dataBytes > MaxToolDataBytes)
             {
-                evidence = [];
+                relatedRecords = [];
                 error = $"工具 {result.Tool} 的 Data 超过 {MaxToolDataBytes} 字节上限。";
                 return false;
             }
 
-            if (result.Artifacts.Any(static artifact =>
-                    string.IsNullOrWhiteSpace(artifact.Kind) ||
-                    string.IsNullOrWhiteSpace(artifact.Label) ||
-                    string.IsNullOrWhiteSpace(artifact.Url)))
+            if (result.Details.Any(static detail =>
+                    string.IsNullOrWhiteSpace(detail.Kind) ||
+                    string.IsNullOrWhiteSpace(detail.Label) ||
+                    string.IsNullOrWhiteSpace(detail.Url)))
             {
-                evidence = [];
-                error = $"工具 {result.Tool} 包含无效 Artifact 引用。";
+                relatedRecords = [];
+                error = $"工具 {result.Tool} 包含无效 明细结果 引用。";
                 return false;
             }
         }
 
-        evidence = results.SelectMany(static result => result.Evidence)
+        relatedRecords = results.SelectMany(static result => result.RelatedRecords)
             .Where(static item =>
                 !string.IsNullOrWhiteSpace(item.Kind) &&
                 !string.IsNullOrWhiteSpace(item.Id) &&
@@ -300,9 +300,9 @@ public sealed class DefaultEvidenceVerifier : IEvidenceVerifier
             return false;
         }
 
-        if (evidence.Count == 0)
+        if (relatedRecords.Count == 0)
         {
-            error = "工具结果没有可解析的证据引用。";
+            error = "分析结果无法关联到原始生产记录。";
             return false;
         }
 
@@ -318,14 +318,14 @@ public sealed class DefaultEvidenceVerifier : IEvidenceVerifier
         var insufficientData = results.Any(static result =>
             string.Equals(result.Outcome, AnalysisToolOutcomes.InsufficientData, StringComparison.Ordinal));
         if (insufficientData &&
-            (answer.Findings.Count > 0 || answer.Charts.Count > 0 || answer.Investigation is not null))
+            (answer.Findings.Count > 0 || answer.Charts.Count > 0 || answer.CombinedAnalysis is not null))
         {
-            error = "数据不足时不得生成确定性发现、图表或候选根因。";
+            error = "数据不足时不能给出明确原因或分析图表。";
             return false;
         }
         if (insufficientData && answer.Limitations.Count == 0)
         {
-            error = "数据不足时回答必须明确列出限制条件。";
+            error = "数据不足时必须直接说明缺少什么。";
             return false;
         }
 
@@ -352,7 +352,7 @@ public sealed class DefaultEvidenceVerifier : IEvidenceVerifier
             answerText.Contains("directly caused", StringComparison.OrdinalIgnoreCase) ||
             answerText.Contains("caused by", StringComparison.OrdinalIgnoreCase))
         {
-            error = "回答把候选关联表述成了已验证因果关系。";
+            error = "回答把参数相关性说成了已经确认的原因。";
             return false;
         }
 

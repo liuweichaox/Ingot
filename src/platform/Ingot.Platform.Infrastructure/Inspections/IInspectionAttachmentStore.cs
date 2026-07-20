@@ -2,18 +2,18 @@ using Ingot.Contracts.Inspections;
 
 namespace Ingot.Platform.Infrastructure.Inspections;
 
-public interface IInspectionEvidenceStore
+public interface IInspectionAttachmentStore
 {
     Task InitializeAsync(CancellationToken ct = default);
 
-    Task<EvidenceUploadResponse> SaveAsync(
+    Task<AttachmentUploadResponse> SaveAsync(
         Stream content,
         string fileName,
         string mediaType,
         CancellationToken ct = default);
 
-    Task<InspectionEvidenceRef?> GetAsync(Guid evidenceId, CancellationToken ct = default);
+    Task<InspectionAttachment?> GetAsync(Guid attachmentId, CancellationToken ct = default);
 
-    Task<bool> ExistsAsync(Guid evidenceId, CancellationToken ct = default);
+    Task<bool> ExistsAsync(Guid attachmentId, CancellationToken ct = default);
 }
 

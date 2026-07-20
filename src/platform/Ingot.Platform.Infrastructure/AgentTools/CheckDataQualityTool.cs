@@ -11,9 +11,9 @@ public sealed class CheckDataQualityTool(IChatEventReader events) : IAnalysisToo
     {
         Name = "check_data_quality",
         Version = "1.0.0",
-        Surface = ProductSurfaces.Chat,
+        EntryPoint = ProductEntryPoints.Chat,
         Purpose = RunPurposes.ReadOnlyAnalysis,
-        Description = "检查生产事件的周期配对、上下文完整性、边缘序号连续性和数据新鲜度。只读。",
+        Description = "检查生产周期是否完整、生产信息是否缺失、现场采集是否中断。只查询，不修改数据。",
         InputSchema = JsonSerializer.SerializeToElement(new
         {
             type = "object",
@@ -39,10 +39,10 @@ public sealed class CheckDataQualityTool(IChatEventReader events) : IAnalysisToo
             CorrelationId = NullIfBlank(correlationId)
         };
         // 全范围聚合：总条数与新鲜度不受 500 明细窗口截断（在 hypertable 上是廉价的时间聚合）。
-        var stats = await events.GetScopeStatsAsync(context.ActorId, scope, ct).ConfigureAwait(false);
-        // 明细窗口：周期配对 / 序号连续性 / 上下文缺失需要逐行数据，仍限 500 行。
+        var stats = await events.GetScopeStatsAsync(context.UserId, scope, ct).ConfigureAwait(false);
+        // 明细窗口：周期配对 / 序号连续性 / 生产信息缺失需要逐行数据，仍限 500 行。
         var rows = await events.QueryAsync(
-            context.ActorId,
+            context.UserId,
             scope with { Limit = 500 },
             ct).ConfigureAwait(false);
         var ordered = rows.OrderBy(static row => row.IngestId).ToArray();
@@ -85,9 +85,9 @@ public sealed class CheckDataQualityTool(IChatEventReader events) : IAnalysisToo
         var unknownPhaseAttribution = ordered.Count(static row =>
             row.Event.Context.TryGetValue("phase_code", out var phase) &&
             string.Equals(phase, "unknown", StringComparison.OrdinalIgnoreCase));
-        var inferredPhaseAttribution = ordered.Count(static row =>
-            row.Event.Context.TryGetValue("provenance", out var provenance) &&
-            string.Equals(provenance, "inferred", StringComparison.OrdinalIgnoreCase));
+        var estimatedPhaseCount = ordered.Count(static row =>
+            row.Event.Context.TryGetValue("phase_source", out var phaseSource) &&
+            string.Equals(phaseSource, "estimated", StringComparison.OrdinalIgnoreCase));
         var scopedQuery = !string.IsNullOrWhiteSpace(subjectId) || !string.IsNullOrWhiteSpace(correlationId);
         int? sequenceGaps = null;
         if (!scopedQuery)
@@ -109,30 +109,30 @@ public sealed class CheckDataQualityTool(IChatEventReader events) : IAnalysisToo
         if (reachedResultLimit)
             limitations.Add("周期配对、序号连续性等明细检查达到 500 条窗口上限，无法确认窗口外的明细质量（总量与新鲜度已按全范围统计）。");
         if (scopeEmpty)
-            limitations.Add("当前范围没有生产事件，无法判断周期配对和序号连续性。");
+            limitations.Add("当前范围没有生产记录，无法检查周期是否完整或采集是否中断。");
         else if (scopedQuery)
             limitations.Add("按对象或周期过滤后的事件不是完整 Edge 序列，因此不计算序号连续性。");
         if (incompletePhases > 0)
-            limitations.Add($"发现 {incompletePhases} 个阶段 started/completed 未配对。");
+            limitations.Add($"有 {incompletePhases} 个工艺阶段缺少开始或结束记录。");
         if (phaseOrderIssues > 0)
             limitations.Add($"发现 {phaseOrderIssues} 个阶段完成时间早于开始时间。");
         if (unknownPhaseAttribution > 0)
-            limitations.Add($"发现 {unknownPhaseAttribution} 条事件阶段归属为 unknown。");
-        if (inferredPhaseAttribution > 0)
-            limitations.Add($"发现 {inferredPhaseAttribution} 条事件阶段归属为 inferred，后续质量关联需降级解释。");
+            limitations.Add($"有 {unknownPhaseAttribution} 条生产记录无法归入工艺阶段。");
+        if (estimatedPhaseCount > 0)
+            limitations.Add($"有 {estimatedPhaseCount} 条记录的工艺阶段由系统估算，分析结果仅作参考。");
         var scopeId = $"events:{subjectId ?? "*"}:{correlationId ?? "*"}:{ordered.FirstOrDefault()?.IngestId ?? 0}-{ordered.LastOrDefault()?.IngestId ?? 0}";
-        var evidence = new EvidenceRef
+        var relatedRecords = new RelatedRecordRef
         {
             Kind = "event-query",
             Id = scopeId,
-            Label = $"生产事件查询窗口（明细 {ordered.Length} 条 / 范围内共 {totalEvents} 条）",
+            Label = $"生产记录查询结果（当前显示 {ordered.Length} 条 / 范围内共 {totalEvents} 条）",
             Url = BuildEventsUrl(subjectId, correlationId)
         };
         var summary = scopeEmpty
-            ? "当前范围没有生产事件，无法确认数据质量。"
-            : $"范围内共 {totalEvents} 条事件，抽检 {ordered.Length} 条：发现 {incompleteCycles} 个未配对关联组、" +
+            ? "当前范围没有生产记录，无法检查数据完整性。"
+            : $"范围内共 {totalEvents} 条生产记录，检查 {ordered.Length} 条：发现 {incompleteCycles} 个不完整生产周期、" +
               (sequenceGaps.HasValue ? $"{sequenceGaps} 个序号间断，" : "序号连续性未在当前过滤范围计算，") +
-              $"{emptyContext} 条事件没有上下文；最新事件时间为 {latest:O}。";
+              $"{emptyContext} 条记录缺少生产信息；最新记录时间为 {latest:O}。";
         return new AnalysisToolResult
         {
             Tool = Definition.Name,
@@ -147,13 +147,13 @@ public sealed class CheckDataQualityTool(IChatEventReader events) : IAnalysisToo
                 incompletePhases,
                 phaseOrderIssues,
                 unknownPhaseAttribution,
-                inferredPhaseAttribution,
+                estimatedPhaseCount,
                 sequenceGaps,
                 emptyContext,
                 latestOccurredAt = latest,
                 earliestOccurredAt = stats.EarliestOccurredAt
             }),
-            Evidence = [evidence],
+            RelatedRecords = [relatedRecords],
             Limitations = limitations,
             Outcome = scopeEmpty || reachedResultLimit || incompletePhases > 0 || phaseOrderIssues > 0
                 ? AnalysisToolOutcomes.InsufficientData

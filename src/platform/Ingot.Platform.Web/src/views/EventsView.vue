@@ -5,11 +5,11 @@
         <div class="card-header">
           <div>
             <el-icon><List /></el-icon>
-            <span class="title">生产事件流</span>
+            <span class="title">生产记录</span>
           </div>
           <div class="actions">
             <el-tag :type="live ? 'success' : 'info'" effect="plain">
-              {{ live ? "实时订阅中" : "查询模式" }}
+              {{ live ? "实时更新中" : "按条件查询" }}
             </el-tag>
             <el-switch v-model="live" active-text="实时" @change="toggleLive" />
             <el-button :icon="Refresh" :loading="loading" @click="load">刷新</el-button>
@@ -23,13 +23,13 @@
             <el-option v-for="edge in edges" :key="edge.edgeId" :label="edge.edgeId" :value="edge.edgeId" />
           </el-select>
         </el-form-item>
-        <el-form-item label="事件类型">
+        <el-form-item label="记录类型">
           <el-input v-model="filters.type" clearable placeholder="cycle.completed" style="width: 190px" />
         </el-form-item>
-        <el-form-item label="主体">
+        <el-form-item label="设备或工件">
           <el-input v-model="filters.subjectId" clearable placeholder="POL-03" style="width: 150px" />
         </el-form-item>
-        <el-form-item label="上下文键">
+        <el-form-item label="生产信息项">
           <el-input v-model="filters.contextKey" clearable placeholder="material_lot" style="width: 150px" />
         </el-form-item>
         <el-form-item label="值">
@@ -45,8 +45,8 @@
 
       <div class="summary">
         <el-statistic title="当前结果" :value="events.length" />
-        <el-statistic title="最新平台游标" :value="latestIngestId || 0" />
-        <el-statistic title="事件类型数" :value="eventTypeCount" />
+        <el-statistic title="最新记录序号" :value="latestIngestId || 0" />
+        <el-statistic title="记录类型数" :value="eventTypeCount" />
       </div>
 
       <el-table v-loading="loading" :data="events" stripe max-height="650">
@@ -56,17 +56,17 @@
         <el-table-column prop="edgeId" label="Edge" width="130">
           <template #default="{ row }"><el-tag effect="plain">{{ row.edgeId }}</el-tag></template>
         </el-table-column>
-        <el-table-column label="事件类型" min-width="190">
+        <el-table-column label="记录类型" min-width="190">
           <template #default="{ row }">
             <el-tag :type="eventTagType(row.event.eventType)" effect="dark">{{ row.event.eventType }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="主体" min-width="180">
+        <el-table-column label="设备或工件" min-width="180">
           <template #default="{ row }">
             <span>{{ row.event.subject.type }}/{{ row.event.subject.id }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="关联 ID" min-width="180" show-overflow-tooltip>
+        <el-table-column label="生产周期号" min-width="180" show-overflow-tooltip>
           <template #default="{ row }">
             <el-link
               v-if="row.event.correlationId"
@@ -78,23 +78,23 @@
             <span v-else>-</span>
           </template>
         </el-table-column>
-        <el-table-column label="上下文" width="110">
+        <el-table-column label="生产信息" width="110">
           <template #default="{ row }">
             <json-popover label="查看" :value="row.event.context" />
           </template>
         </el-table-column>
-        <el-table-column label="载荷" width="110">
+        <el-table-column label="记录内容" width="110">
           <template #default="{ row }">
             <json-popover label="查看" :value="row.event.data" />
           </template>
         </el-table-column>
-        <el-table-column prop="ingestId" label="游标" width="90" />
+        <el-table-column prop="ingestId" label="序号" width="90" />
       </el-table>
 
-      <el-empty v-if="!loading && events.length === 0" description="暂无符合条件的生产事件" />
+      <el-empty v-if="!loading && events.length === 0" description="暂无符合条件的生产记录" />
     </el-card>
 
-    <el-dialog v-model="cycleVisible" title="周期事件链" width="900px">
+    <el-dialog v-model="cycleVisible" title="生产周期过程" width="900px">
       <el-timeline v-if="cycleEvents.length">
         <el-timeline-item
           v-for="item in cycleEvents"
@@ -109,7 +109,7 @@
           </el-card>
         </el-timeline-item>
       </el-timeline>
-      <el-empty v-else description="暂无周期事件" />
+      <el-empty v-else description="暂无该周期的生产记录" />
     </el-dialog>
   </div>
 </template>
@@ -180,7 +180,7 @@ const startLive = () => {
     }
   };
   source.onerror = () => {
-    error.value = "实时事件流暂时断开，浏览器正在自动重连。";
+    error.value = "生产记录的实时更新暂时断开，浏览器正在自动重连。";
   };
   source.onopen = () => {
     error.value = "";

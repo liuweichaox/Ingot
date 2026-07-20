@@ -28,11 +28,11 @@ public static partial class InspectionRecordValidator
         if (!TryNormalizeOutcome(request.Outcome, out var outcome, out error))
             return false;
         if (request.Measurements is null || request.Measurements.Count > 200)
-            return Fail("Measurements 不能为 null，且最多包含 200 项。", out error);
-        if (request.Evidence is null || request.Evidence.Count > 50)
-            return Fail("Evidence 不能为 null，且最多包含 50 项。", out error);
-        if (request.Measurements.Count == 0 && request.Evidence.Count == 0)
-            return Fail("检测记录必须至少包含一项结构化结果或证据引用。", out error);
+            return Fail("测量结果列表不能为空，且最多包含 200 项。", out error);
+        if (request.Attachments is null || request.Attachments.Count > 50)
+            return Fail("附件列表不能为空，且最多包含 50 个文件。", out error);
+        if (request.Measurements.Count == 0 && request.Attachments.Count == 0)
+            return Fail("检测记录必须至少包含一项结构化结果或附件。", out error);
         if (!TryNormalizeInstrument(request.Instrument, out var instrument, out error))
             return false;
 
@@ -46,18 +46,18 @@ public static partial class InspectionRecordValidator
         if (measurements.Select(static item => item.CharacteristicCode)
             .Distinct(StringComparer.OrdinalIgnoreCase).Count() != measurements.Count)
         {
-            return Fail("Measurements 不能包含重复 CharacteristicCode。", out error);
+            return Fail("同一个检测项目不能重复填写。", out error);
         }
 
-        var evidence = new List<InspectionEvidenceRef>(request.Evidence.Count);
-        foreach (var reference in request.Evidence)
+        var attachments = new List<InspectionAttachment>(request.Attachments.Count);
+        foreach (var reference in request.Attachments)
         {
-            if (!TryNormalizeEvidence(reference, out var item, out error))
+            if (!TryNormalizeAttachment(reference, out var item, out error))
                 return false;
-            evidence.Add(item!);
+            attachments.Add(item!);
         }
-        if (evidence.Select(static item => item.EvidenceId).Distinct().Count() != evidence.Count)
-            return Fail("Evidence 不能包含重复 EvidenceId。", out error);
+        if (attachments.Select(static item => item.AttachmentId).Distinct().Count() != attachments.Count)
+            return Fail("不能重复添加同一个附件。", out error);
 
         var notes = NormalizeOptional(request.Notes);
         if (notes?.Length > 2_000)
@@ -74,7 +74,7 @@ public static partial class InspectionRecordValidator
             SubmittedBy = submittedBy!,
             Instrument = instrument,
             Measurements = measurements.OrderBy(static item => item.CharacteristicCode, StringComparer.Ordinal).ToArray(),
-            Evidence = evidence.OrderBy(static item => item.EvidenceId).ToArray(),
+            Attachments = attachments.OrderBy(static item => item.AttachmentId).ToArray(),
             Notes = notes
         };
         error = string.Empty;
@@ -152,30 +152,30 @@ public static partial class InspectionRecordValidator
         return Succeed(out error);
     }
 
-    private static bool TryNormalizeEvidence(
-        InspectionEvidenceRef? value,
-        out InspectionEvidenceRef? normalized,
+    private static bool TryNormalizeAttachment(
+        InspectionAttachment? value,
+        out InspectionAttachment? normalized,
         out string error)
     {
         normalized = null;
         if (value is null)
-            return Fail("Evidence 不能包含 null。", out error);
-        if (value.EvidenceId == Guid.Empty)
-            return Fail("EvidenceId 不能为空。", out error);
+            return Fail("附件列表中包含无效项目。", out error);
+        if (value.AttachmentId == Guid.Empty)
+            return Fail("附件编号不能为空。", out error);
         var storageRef = NormalizeOptional(value.StorageRef);
         var mediaType = NormalizeOptional(value.MediaType);
         var fileName = NormalizeOptional(value.FileName);
         if (storageRef is null || storageRef.Length > 1_000)
-            return Fail("StorageRef 不能为空且最长为 1000 个字符。", out error);
+            return Fail("附件保存位置不能为空且最长为 1000 个字符。", out error);
         if (mediaType is null || mediaType.Length > 128 || !MediaTypePattern().IsMatch(mediaType))
-            return Fail("MediaType 必须是合法的 MIME 类型。", out error);
+            return Fail("附件类型格式不正确。", out error);
         if (fileName is null || fileName.Length > 255)
-            return Fail("FileName 不能为空且最长为 255 个字符。", out error);
+            return Fail("附件文件名不能为空且最长为 255 个字符。", out error);
         if (value.SizeBytes <= 0)
-            return Fail("SizeBytes 必须大于 0。", out error);
+            return Fail("附件必须包含内容。", out error);
         var hash = value.Sha256?.Trim().ToLowerInvariant();
         if (hash is null || !Sha256Pattern().IsMatch(hash))
-            return Fail("Sha256 必须是 64 位十六进制内容哈希。", out error);
+            return Fail("附件完整性校验值格式不正确。", out error);
 
         normalized = value with
         {

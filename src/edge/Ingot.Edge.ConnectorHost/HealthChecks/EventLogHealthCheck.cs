@@ -4,7 +4,7 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 namespace Ingot.Edge.ConnectorHost.HealthChecks;
 
 /// <summary>
-///     验证生产事件事实库可访问，并把待上行积压量附加到健康检查结果。
+///     验证生产事件生产记录库可访问，并把待上行积压量附加到健康检查结果。
 /// </summary>
 public sealed class EventLogHealthCheck(
     IEventLog eventLog,

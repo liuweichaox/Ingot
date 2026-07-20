@@ -10,11 +10,11 @@ namespace Ingot.Agent;
 public sealed class AgentRuntime : IAgentRuntime
 {
     private const string ChatPromptVersion = "ingot-chat-v1";
-    private const string ChatToolsetVersion = "production-facts-readonly-v1";
+    private const string ChatToolsetVersion = "production-records-readonly-v2";
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _active = new(StringComparer.Ordinal);
-    private readonly IEvidenceVerifier _evidenceVerifier;
+    private readonly IAnalysisResultValidator _relatedRecordsVerifier;
     private readonly ILogger<AgentRuntime> _logger;
-    private readonly IInvestigationWorkflow _investigationWorkflow;
+    private readonly ICombinedAnalysisWorkflow _investigationWorkflow;
     private readonly IModelRouter _models;
     private readonly ChatOptions _chatOptions;
     private readonly IPlanValidator _planValidator;
@@ -26,15 +26,15 @@ public sealed class AgentRuntime : IAgentRuntime
         IModelRouter models,
         IEnumerable<IAnalysisTool> tools,
         IPlanValidator planValidator,
-        IEvidenceVerifier evidenceVerifier,
-        IInvestigationWorkflow investigationWorkflow,
+        IAnalysisResultValidator relatedRecordsVerifier,
+        ICombinedAnalysisWorkflow investigationWorkflow,
         IOptions<ChatOptions> chatOptions,
         ILogger<AgentRuntime> logger)
     {
         _store = store;
         _models = models;
         _planValidator = planValidator;
-        _evidenceVerifier = evidenceVerifier;
+        _relatedRecordsVerifier = relatedRecordsVerifier;
         _investigationWorkflow = investigationWorkflow;
         _chatOptions = chatOptions.Value;
         _logger = logger;
@@ -42,30 +42,30 @@ public sealed class AgentRuntime : IAgentRuntime
     }
 
     public async Task<AgentRunSnapshot> StartAsync(
-        string surface,
-        string actorId,
+        string entryPoint,
+        string userId,
         CreateChatRunRequest request,
         CancellationToken ct = default)
     {
-        ValidateSurface(surface);
+        ValidateEntryPoint(entryPoint);
         var settings = GetSettings();
         if (!settings.Enabled)
             throw new InvalidOperationException("Chat 功能尚未启用。");
-        if (string.Equals(request.Mode, "deep", StringComparison.Ordinal) && !settings.EnableDeepInvestigation)
-            throw new InvalidOperationException("Chat 深度分析模式尚未启用。");
+        if (string.Equals(request.Mode, "combined", StringComparison.Ordinal) && !settings.EnableCombinedAnalysis)
+            throw new InvalidOperationException("Chat 综合分析尚未启用。");
 
-        var tools = ToolsForSurface(surface);
+        var tools = ToolsForEntryPoint(entryPoint);
         if (tools.Count == 0)
-            throw new InvalidOperationException($"{surface} 没有已注册工具。");
+            throw new InvalidOperationException($"{entryPoint} 没有已注册工具。");
 
-        var model = _models.GetClient(surface, request.Mode == "deep" ? ModelRole.Reasoning : ModelRole.Fast);
+        var model = _models.GetClient(entryPoint, request.Mode == "combined" ? ModelRole.Reasoning : ModelRole.Fast);
         if (!string.Equals(model.Provider, settings.Provider, StringComparison.OrdinalIgnoreCase))
-            throw new InvalidOperationException($"{surface} 配置的模型 Provider 没有对应客户端。");
+            throw new InvalidOperationException($"{entryPoint} 配置的模型 Provider 没有对应客户端。");
         var run = new AgentRunSnapshot
         {
             RunId = Guid.CreateVersion7().ToString(),
-            ActorId = actorId,
-            Surface = surface,
+            UserId = userId,
+            EntryPoint = entryPoint,
             Purpose = RunPurposes.ReadOnlyAnalysis,
             Question = request.Question,
             PageContext = request.PageContext,
@@ -89,30 +89,30 @@ public sealed class AgentRuntime : IAgentRuntime
         return run;
     }
 
-    public AgentCapabilities GetCapabilities(string surface)
+    public AgentCapabilities GetCapabilities(string entryPoint)
     {
-        ValidateSurface(surface);
+        ValidateEntryPoint(entryPoint);
         var settings = GetSettings();
-        var tools = ToolsForSurface(surface);
+        var tools = ToolsForEntryPoint(entryPoint);
         return new()
         {
-            Surface = surface,
-            Purpose = RunPurposes.ForSurface(surface),
+            EntryPoint = entryPoint,
+            Purpose = RunPurposes.ForEntryPoint(entryPoint),
             Enabled = settings.Enabled,
-            DeepInvestigationEnabled = settings.Enabled && settings.EnableDeepInvestigation,
+            CombinedAnalysisEnabled = settings.Enabled && settings.EnableCombinedAnalysis,
             Provider = settings.Provider,
             FastModel = settings.FastModel,
             ReasoningModel = settings.ReasoningModel,
             Modes = settings.Enabled
-                ? settings.EnableDeepInvestigation ? ["standard", "deep"] : ["standard"]
+                ? settings.EnableCombinedAnalysis ? ["quick", "combined"] : ["quick"]
                 : [],
-            Roles = settings.Enabled && settings.EnableDeepInvestigation ? InvestigationRoles.All : [],
+            Roles = settings.Enabled && settings.EnableCombinedAnalysis ? AnalysisPerspectives.All : [],
             Tools = tools.Values.Select(static tool => new AgentToolCapability
             {
                 Name = tool.Definition.Name,
                 Version = tool.Definition.Version,
                 Description = tool.Definition.Description,
-                Surface = tool.Definition.Surface,
+                EntryPoint = tool.Definition.EntryPoint,
                 Purpose = tool.Definition.Purpose,
                 Access = tool.Definition.Access
             }).OrderBy(static tool => tool.Name, StringComparer.Ordinal).ToArray(),
@@ -124,15 +124,15 @@ public sealed class AgentRuntime : IAgentRuntime
     }
 
     public async Task<AgentRunPage> ListAsync(
-        string surface,
-        string actorId,
+        string entryPoint,
+        string userId,
         DateTimeOffset? before,
         int limit,
         CancellationToken ct = default)
     {
         var normalizedLimit = Math.Clamp(limit, 1, 100);
-        ValidateSurface(surface);
-        var runs = await _store.ListAsync(surface, actorId, before, normalizedLimit + 1, ct).ConfigureAwait(false);
+        ValidateEntryPoint(entryPoint);
+        var runs = await _store.ListAsync(entryPoint, userId, before, normalizedLimit + 1, ct).ConfigureAwait(false);
         var hasMore = runs.Count > normalizedLimit;
         var page = runs.Take(normalizedLimit).ToArray();
         return new AgentRunPage
@@ -141,7 +141,7 @@ public sealed class AgentRuntime : IAgentRuntime
             {
                 RunId = run.RunId,
                 Question = run.Question,
-                Surface = run.Surface,
+                EntryPoint = run.EntryPoint,
                 Purpose = run.Purpose,
                 Mode = run.Mode,
                 Status = run.Status,
@@ -154,21 +154,21 @@ public sealed class AgentRuntime : IAgentRuntime
         };
     }
 
-    public async Task<AgentRunSnapshot?> GetAsync(string surface, string runId, CancellationToken ct = default)
+    public async Task<AgentRunSnapshot?> GetAsync(string entryPoint, string runId, CancellationToken ct = default)
     {
-        ValidateSurface(surface);
+        ValidateEntryPoint(entryPoint);
         var run = await _store.GetAsync(runId, ct).ConfigureAwait(false);
-        return run is not null && string.Equals(run.Surface, surface, StringComparison.Ordinal) ? run : null;
+        return run is not null && string.Equals(run.EntryPoint, entryPoint, StringComparison.Ordinal) ? run : null;
     }
 
     public async IAsyncEnumerable<AgentStreamEvent> StreamAsync(
-        string surface,
+        string entryPoint,
         string runId,
         long afterSequence = 0,
         [EnumeratorCancellation] CancellationToken ct = default)
     {
-        ValidateSurface(surface);
-        if (await GetAsync(surface, runId, ct).ConfigureAwait(false) is null)
+        ValidateEntryPoint(entryPoint);
+        if (await GetAsync(entryPoint, runId, ct).ConfigureAwait(false) is null)
             yield break;
         var cursor = Math.Max(0, afterSequence);
         while (!ct.IsCancellationRequested)
@@ -180,7 +180,7 @@ public sealed class AgentRuntime : IAgentRuntime
                 yield return item;
             }
 
-            var run = await GetAsync(surface, runId, ct).ConfigureAwait(false);
+            var run = await GetAsync(entryPoint, runId, ct).ConfigureAwait(false);
             if (run is null || (AgentRunStatuses.IsTerminal(run.Status) && events.Count == 0))
                 yield break;
             await Task.Delay(TimeSpan.FromMilliseconds(350), ct).ConfigureAwait(false);
@@ -188,15 +188,15 @@ public sealed class AgentRuntime : IAgentRuntime
     }
 
     public async Task<bool> CancelAsync(
-        string surface,
+        string entryPoint,
         string runId,
-        string actorId,
+        string userId,
         string reason,
         CancellationToken ct = default)
     {
-        ValidateSurface(surface);
-        var run = await GetAsync(surface, runId, ct).ConfigureAwait(false);
-        if (run is null || !string.Equals(run.ActorId, actorId, StringComparison.OrdinalIgnoreCase) ||
+        ValidateEntryPoint(entryPoint);
+        var run = await GetAsync(entryPoint, runId, ct).ConfigureAwait(false);
+        if (run is null || !string.Equals(run.UserId, userId, StringComparison.OrdinalIgnoreCase) ||
             AgentRunStatuses.IsTerminal(run.Status))
             return false;
         var cancellationReason = string.IsNullOrWhiteSpace(reason) ? "用户请求取消。" : reason.Trim();
@@ -229,7 +229,7 @@ public sealed class AgentRuntime : IAgentRuntime
         CreateChatRunRequest request,
         IModelClient model,
         IReadOnlyDictionary<string, IAnalysisTool> tools,
-        SurfaceSettings settings,
+        EntryPointSettings settings,
         CancellationToken ct)
     {
         var run = initial;
@@ -241,7 +241,7 @@ public sealed class AgentRuntime : IAgentRuntime
         activity?.SetTag("gen_ai.request.model", model.Model);
         activity?.SetTag("ingot.agent.run.id", run.RunId);
         activity?.SetTag("ingot.agent.mode", run.Mode);
-        activity?.SetTag("ingot.product.surface", run.Surface);
+        activity?.SetTag("ingot.product.entryPoint", run.EntryPoint);
         activity?.SetTag("ingot.run.purpose", run.Purpose);
         try
         {
@@ -254,8 +254,8 @@ public sealed class AgentRuntime : IAgentRuntime
                 .ConfigureAwait(false);
             modelCalls.Add(planResult.Usage);
             RecordModelCall(planResult.Usage);
-            var plan = planResult.Value with { Surface = run.Surface };
-            if (!_planValidator.TryValidate(run.Surface, plan, tools, out var planError))
+            var plan = planResult.Value with { EntryPoint = run.EntryPoint };
+            if (!_planValidator.TryValidate(run.EntryPoint, plan, tools, out var planError))
             {
                 await EmitAsync(run.RunId, AgentStreamEventTypes.PlanRejected, new { error = planError }, ct)
                     .ConfigureAwait(false);
@@ -314,8 +314,8 @@ public sealed class AgentRuntime : IAgentRuntime
                                 new AgentExecutionContext
                                 {
                                     RunId = run.RunId,
-                                    ActorId = run.ActorId,
-                                    Surface = run.Surface,
+                                    UserId = run.UserId,
+                                    EntryPoint = run.EntryPoint,
                                     Purpose = run.Purpose,
                                     Request = request
                                 },
@@ -329,13 +329,13 @@ public sealed class AgentRuntime : IAgentRuntime
                             Status = "completed",
                             CompletedAt = DateTimeOffset.UtcNow,
                             Summary = result.Summary,
-                            Evidence = result.Evidence
+                            RelatedRecords = result.RelatedRecords
                         };
                         invocations[^1] = invocation;
                         run = run with { ToolInvocations = invocations.ToArray() };
                         await _store.UpdateAsync(run, CancellationToken.None).ConfigureAwait(false);
                         await EmitAsync(run.RunId, AgentStreamEventTypes.ToolCompleted,
-                                new { tool = invocation.Tool, result.Summary, result.Evidence, iteration }, ct)
+                                new { tool = invocation.Tool, result.Summary, result.RelatedRecords, iteration }, ct)
                             .ConfigureAwait(false);
                     }
                     catch (Exception ex) when (ex is not OperationCanceledException)
@@ -360,16 +360,16 @@ public sealed class AgentRuntime : IAgentRuntime
 
             }
 
-            if (!_evidenceVerifier.TryVerify(results, out var evidence, out var evidenceError))
-                throw new InvalidOperationException(evidenceError);
-            await EmitAsync(run.RunId, AgentStreamEventTypes.EvidenceVerified,
-                    new { count = evidence.Count, evidence }, ct)
+            if (!_relatedRecordsVerifier.TryVerify(results, out var relatedRecords, out var relatedRecordsError))
+                throw new InvalidOperationException(relatedRecordsError);
+            await EmitAsync(run.RunId, AgentStreamEventTypes.RelatedRecordsChecked,
+                    new { count = relatedRecords.Count, relatedRecords }, ct)
                 .ConfigureAwait(false);
 
             var insufficientData = results.Any(static result =>
                 string.Equals(result.Outcome, AnalysisToolOutcomes.InsufficientData, StringComparison.Ordinal));
-            InvestigationVerdict? investigation = null;
-            if (!insufficientData && settings.EnableDeepInvestigation && request.Mode == "deep")
+            CombinedAnalysisResult? investigation = null;
+            if (!insufficientData && settings.EnableCombinedAnalysis && request.Mode == "combined")
             {
                 var investigationResult = await _investigationWorkflow.RunAsync(
                         request,
@@ -400,8 +400,8 @@ public sealed class AgentRuntime : IAgentRuntime
                     Limitations = limitations.Length > 0
                         ? limitations
                         : ["当前数据不足，无法得出确定性结论。"],
-                    Evidence = evidence,
-                    FollowUpQuestions = ["补充缺失的生产事件后重新运行分析。"]
+                    RelatedRecords = relatedRecords,
+                    FollowUpQuestions = ["补充缺失的生产记录后重新分析。"]
                 };
             }
             else
@@ -416,12 +416,12 @@ public sealed class AgentRuntime : IAgentRuntime
                     .ToArray();
                 answer = answerResult.Value with
                 {
-                    Evidence = evidence,
-                    Investigation = investigation,
+                    RelatedRecords = relatedRecords,
+                    CombinedAnalysis = investigation,
                     Limitations = limitations
                 };
             }
-            if (!_evidenceVerifier.TryVerifyAnswer(answer, results, out var answerError))
+            if (!_relatedRecordsVerifier.TryVerifyAnswer(answer, results, out var answerError))
                 throw new InvalidOperationException(answerError);
             await EmitAsync(run.RunId, AgentStreamEventTypes.AnswerDelta,
                     new { text = answer.Summary }, ct)
@@ -551,38 +551,38 @@ public sealed class AgentRuntime : IAgentRuntime
         AgentTelemetry.ModelDuration.Record(usage.DurationMilliseconds, tags);
     }
 
-    private IReadOnlyDictionary<string, IAnalysisTool> ToolsForSurface(string surface)
+    private IReadOnlyDictionary<string, IAnalysisTool> ToolsForEntryPoint(string entryPoint)
         => _tools.Values
-            .Where(tool => string.Equals(tool.Definition.Surface, surface, StringComparison.Ordinal))
+            .Where(tool => string.Equals(tool.Definition.EntryPoint, entryPoint, StringComparison.Ordinal))
             .Where(tool => tool.Definition.Access == AgentToolAccess.Read)
             .ToDictionary(static tool => tool.Definition.Name, StringComparer.Ordinal);
 
-    private SurfaceSettings GetSettings() => new(
+    private EntryPointSettings GetSettings() => new(
             _chatOptions.Enabled,
             _chatOptions.Provider,
             _chatOptions.FastModel,
             _chatOptions.ReasoningModel,
             Math.Clamp(_chatOptions.MaxToolCalls, 1, 8),
             Math.Clamp(_chatOptions.MaxRunSeconds, 1, 900),
-            _chatOptions.EnableDeepInvestigation,
+            _chatOptions.EnableCombinedAnalysis,
             Math.Clamp(_chatOptions.MaxDiscussionRounds, 1, 5),
             Math.Clamp(_chatOptions.MaxDiscussionTurns, 3, 15),
             _chatOptions.ModelPricing);
 
-    private static void ValidateSurface(string surface)
+    private static void ValidateEntryPoint(string entryPoint)
     {
-        if (!ProductSurfaces.All.Contains(surface))
-            throw new ArgumentOutOfRangeException(nameof(surface), surface, "不支持的产品面。");
+        if (!ProductEntryPoints.All.Contains(entryPoint))
+            throw new ArgumentOutOfRangeException(nameof(entryPoint), entryPoint, "不支持的功能入口。");
     }
 
-    private sealed record SurfaceSettings(
+    private sealed record EntryPointSettings(
         bool Enabled,
         string Provider,
         string FastModel,
         string ReasoningModel,
         int MaxToolCalls,
         int MaxRunSeconds,
-        bool EnableDeepInvestigation,
+        bool EnableCombinedAnalysis,
         int MaxDiscussionRounds,
         int MaxDiscussionTurns,
         IReadOnlyDictionary<string, ModelPricingOptions> ModelPricing);

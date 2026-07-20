@@ -32,7 +32,7 @@ public sealed class PostgresCycleAnalyticsStore : ICycleAnalyticsStore, IAsyncDi
                   ordinal INTEGER NOT NULL,
                   started_at TIMESTAMPTZ NOT NULL,
                   completed_at TIMESTAMPTZ,
-                  provenance TEXT NOT NULL,
+                  phase_source TEXT NOT NULL,
                   source_event_id_start TEXT,
                   source_event_id_end TEXT,
                   PRIMARY KEY (correlation_id, phase_code, ordinal)
@@ -47,7 +47,7 @@ public sealed class PostgresCycleAnalyticsStore : ICycleAnalyticsStore, IAsyncDi
                   numeric_value DOUBLE PRECISION,
                   unit TEXT,
                   sample_count INTEGER NOT NULL DEFAULT 0,
-                  provenance TEXT NOT NULL,
+                  calculation_source TEXT NOT NULL,
                   computed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
                   PRIMARY KEY (correlation_id, phase_code, feature_code)
                 );
@@ -102,7 +102,7 @@ public sealed class PostgresCycleAnalyticsStore : ICycleAnalyticsStore, IAsyncDi
                          mapped AS (
                            SELECT step_events.*,
                                   coalesce(phase_mappings.phase_code, 'unknown') AS phase_code,
-                                  coalesce((phase_mappings.payload->>'provenance'), 'inferred') AS provenance
+                                  coalesce((phase_mappings.payload->>'phaseSource'), 'estimated') AS phase_source
                            FROM step_events
                            LEFT JOIN phase_mappings
                              ON phase_mappings.recipe_id = step_events.recipe_id
@@ -121,14 +121,14 @@ public sealed class PostgresCycleAnalyticsStore : ICycleAnalyticsStore, IAsyncDi
                            FROM markers
                          )
                          INSERT INTO cycle_phases(
-                           correlation_id, phase_code, ordinal, started_at, completed_at, provenance,
+                           correlation_id, phase_code, ordinal, started_at, completed_at, phase_source,
                            source_event_id_start, source_event_id_end)
                          SELECT @correlation_id,
                                 phase_code,
                                 row_number() OVER (PARTITION BY phase_code ORDER BY min(occurred_at))::int,
                                 min(occurred_at),
                                 max(next_at),
-                                CASE WHEN bool_or(provenance = 'inferred') THEN 'inferred' ELSE 'configured' END,
+                                CASE WHEN bool_or(phase_source = 'estimated') THEN 'estimated' ELSE 'recipe' END,
                                 (array_agg(event_id ORDER BY occurred_at))[1],
                                 (array_agg(next_event_id ORDER BY occurred_at DESC))[1]
                          FROM islands

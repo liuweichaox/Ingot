@@ -9,19 +9,19 @@ public sealed class ChatTokenValidator(IOptions<ChatOptions> options)
 {
     private readonly ChatOptions _options = options.Value;
 
-    public string CanonicalizeActorId(string actorId)
+    public string CanonicalizeUserId(string userId)
     {
-        var normalized = actorId.Trim();
-        var configured = _options.ActorTokens.Keys.FirstOrDefault(key =>
+        var normalized = userId.Trim();
+        var configured = _options.UserTokens.Keys.FirstOrDefault(key =>
             string.Equals(key, normalized, StringComparison.OrdinalIgnoreCase));
         return configured ?? normalized.ToLowerInvariant();
     }
 
-    public bool IsAuthorized(string actorId, string? authorization)
+    public bool IsAuthorized(string userId, string? authorization)
     {
         if (!_options.RequireToken)
             return true;
-        if (!_options.ActorTokens.TryGetValue(actorId, out var expected) ||
+        if (!_options.UserTokens.TryGetValue(userId, out var expected) ||
             string.IsNullOrWhiteSpace(expected) ||
             string.IsNullOrWhiteSpace(authorization) ||
             !authorization.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))

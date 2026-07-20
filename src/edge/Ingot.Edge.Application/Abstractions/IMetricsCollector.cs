@@ -74,7 +74,7 @@ public interface IMetricsCollector
     /// <summary>记录 outbox 硬上限触发后显式丢弃的事件数量。</summary>
     void RecordEventBacklogDropped(long count);
 
-    /// <summary>记录当前持久化业务上下文项数量。</summary>
+    /// <summary>记录当前持久化业务关联信息项数量。</summary>
     void RecordContextStateEntries(long count);
 
     /// <summary>记录事件持久化硬故障。</summary>

@@ -49,7 +49,7 @@ public sealed class EventsController(IEventLog eventLog) : ControllerBase
     }
 
     /// <summary>
-    ///     按关联 ID 返回一个生产周期内已经落盘的全部事实。
+    ///     按生产周期号 返回一个生产周期内已经落盘的全部记录。
     /// </summary>
     [HttpGet("/api/v1/cycles/{correlationId}")]
     public async Task<IActionResult> GetCycle(

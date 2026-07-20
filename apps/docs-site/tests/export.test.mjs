@@ -42,7 +42,7 @@ test("uses the canonical repository links", async () => {
   assert.match(brand, /github\.com\/liuweichaox\/Ingot\/tree\/main\/images\/logo/);
 });
 
-test("publishes only Ingot Chat and the standard event contract as public AI and ingestion surfaces", async () => {
+test("publishes only Ingot Chat and the standard event contract as public AI and ingestion entry points", async () => {
   for (const lang of ["zh", "en"]) {
     const chat = await readFile(path.join(out, lang, "chat", "index.html"), "utf8");
     const events = await readFile(path.join(out, lang, "rfc-production-events", "index.html"), "utf8");

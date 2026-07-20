@@ -11,9 +11,9 @@ public sealed class GetCycleTraceTool(IChatEventReader events) : IAnalysisTool
     {
         Name = "get_cycle_trace",
         Version = "1.0.0",
-        Surface = ProductSurfaces.Chat,
+        EntryPoint = ProductEntryPoints.Chat,
         Purpose = RunPurposes.ReadOnlyAnalysis,
-        Description = "按 CorrelationId 返回一个生产周期的不可变事件时间线。只读。",
+        Description = "按生产周期号还原一次完整生产过程。只查询，不修改数据。",
         InputSchema = JsonSerializer.SerializeToElement(new
         {
             type = "object",
@@ -30,16 +30,16 @@ public sealed class GetCycleTraceTool(IChatEventReader events) : IAnalysisTool
     {
         if (!call.Arguments.TryGetValue("correlationId", out var correlationId) ||
             string.IsNullOrWhiteSpace(correlationId))
-            throw new ArgumentException("get_cycle_trace 需要 correlationId。 ", nameof(call));
+            throw new ArgumentException("请提供生产周期号。", nameof(call));
         correlationId = correlationId.Trim();
         var rows = await events.QueryAsync(
-            context.ActorId,
+            context.UserId,
             new PlatformEventQuery { CorrelationId = correlationId, Limit = 500 }, ct)
             .ConfigureAwait(false);
         var ordered = rows.OrderBy(static row => row.Event.OccurredAt)
             .ThenBy(static row => row.IngestId)
             .ToArray();
-        var evidence = ordered.Select(row => new EvidenceRef
+        var relatedRecords = ordered.Select(row => new RelatedRecordRef
         {
             Kind = "production-event",
             Id = row.Event.EventId,
@@ -48,9 +48,9 @@ public sealed class GetCycleTraceTool(IChatEventReader events) : IAnalysisTool
         }).ToArray();
         if (ordered.Length == 0)
         {
-            evidence =
+            relatedRecords =
             [
-                new EvidenceRef
+                new RelatedRecordRef
                 {
                     Kind = "event-query",
                     Id = $"correlation:{correlationId}",
@@ -73,21 +73,21 @@ public sealed class GetCycleTraceTool(IChatEventReader events) : IAnalysisTool
         var validDuration = durationMs.HasValue;
         var limitations = new List<string>();
         if (ordered.Length == 0)
-            limitations.Add("当前范围没有生产事件，无法还原周期事件链。");
+            limitations.Add("当前范围没有生产记录，无法还原该生产周期。");
         if (reachedResultLimit)
-            limitations.Add("周期查询达到 500 条上限，无法确认事件链完整性。");
+            limitations.Add("该周期超过 500 条生产记录，当前结果可能不完整。");
         if (ordered.Length > 0 && !startedAt.HasValue)
-            limitations.Add("没有找到周期开始事件，无法确认周期起点和持续时间。");
+            limitations.Add("没有找到加工开始记录，无法确认周期起点和持续时间。");
         if (ordered.Length > 0 && !completedAt.HasValue)
-            limitations.Add("没有找到周期完成事件，无法确认完整持续时间。");
+            limitations.Add("没有找到加工完成记录，无法确认完整持续时间。");
         if (startedAt.HasValue && completedAt.HasValue && completedAt < startedAt)
             limitations.Add("周期完成时间早于开始时间，无法确认有效持续时间。");
 
         var summary = ordered.Length == 0
-            ? $"没有找到关联 ID 为 {correlationId} 的生产周期。"
-            : $"周期 {correlationId} 包含 {ordered.Length} 条事件" +
-              (startedAt.HasValue ? $"，开始于 {startedAt:O}" : "，未发现开始事件") +
-              (completedAt.HasValue ? $"，完成于 {completedAt:O}。" : "，未发现完成事件。");
+            ? $"没有找到生产周期 {correlationId}。"
+            : $"生产周期 {correlationId} 包含 {ordered.Length} 条记录" +
+              (startedAt.HasValue ? $"，开始于 {startedAt:O}" : "，未发现加工开始记录") +
+              (completedAt.HasValue ? $"，完成于 {completedAt:O}。" : "，未发现加工完成记录。");
         return new AnalysisToolResult
         {
             Tool = Definition.Name,
@@ -110,7 +110,7 @@ public sealed class GetCycleTraceTool(IChatEventReader events) : IAnalysisTool
                     row.Event.Data
                 })
             }),
-            Evidence = evidence,
+            RelatedRecords = relatedRecords,
             Limitations = limitations,
             Outcome = ordered.Length > 0 && !reachedResultLimit && validDuration
                 ? AnalysisToolOutcomes.Sufficient

@@ -37,9 +37,9 @@ const stageMeta = FACTORY_STAGES;
 const messages = {
   zh: {
     meta: {
-      title: "Ingot — 让生产数据可验证、可追问、可分析",
+      title: "Ingot — 查清生产过程，分析参数与质量",
       description:
-        "Ingot 汇集生产现场的重要记录；工程师通过 Ingot Chat 查问题、看证据，并在需要时深入调查。",
+        "Ingot 汇集设备参数、生产过程和检测结果；工程师通过 Ingot Chat 查询异常、比较周期并分析可能原因。",
     },
     languageLabel: "语言",
     nav: {
@@ -48,25 +48,25 @@ const messages = {
       product: "产品",
       data: "生产记录",
       analytics: "Ingot Chat",
-      deployment: "为什么可信",
+      deployment: "数据从哪里来",
       docs: "文档",
     },
     hero: {
       eyebrow: "INGOT · PRODUCTION INTELLIGENCE",
-      heading: ["让生产数据可验证、", "可追问、可分析。"],
+      heading: ["把生产过程查清楚，", "把参数和质量联系起来。"],
       lead:
-        "Ingot 把来自设备、检测和业务系统的记录放在同一条可追溯的生产履历中。工程师通过 Ingot Chat 提问、查看证据；遇到复杂问题时，可启动多角色深入调查。它不会改变现场设备或已有记录。",
+        "Ingot 把设备参数、检测结果和业务系统记录放进同一份生产履历。工程师可通过 Ingot Chat 查询问题；遇到复杂情况时，可从工艺、质量和复核三个角度综合分析。它不会改变现场设备或已有记录。",
       analysis: "认识 Ingot Chat",
       github: "了解 Ingot 平台",
       pause: "暂停动画",
       play: "继续动画",
       proofLabel: "产品特性",
-      proof: ["连接多种生产来源", "保存可追溯记录", "Ingot Chat 日常问答", "深入调查与证据回链"],
+      proof: ["连接多种生产来源", "保存完整生产履历", "Ingot Chat 快速查询", "综合分析与原始记录"],
       viewLabel: "三维工厂视角",
       views: ["机器人上料", "CNC 加工", "机器人下料", "视觉质检", "人工检测"],
-      dataKinds: ["设备状态", "加工事件", "设备状态", "检测结果", "人工检测记录"],
-      captureAuto: "示例生产事件",
-      captureGenerated: "示例上下文与关联 ID",
+      dataKinds: ["设备状态", "加工记录", "设备状态", "检测结果", "人工检测记录"],
+      captureAuto: "示例生产记录",
+      captureGenerated: "示例生产信息与周期号",
       captureHybrid: "示例检测记录",
     },
     stageData: [
@@ -78,7 +78,7 @@ const messages = {
         settledDetail: "夹具已夹紧 · 机械臂已回安全位 · 主轴保持 0 rpm",
       },
       {
-        label: "CNC 核心加工事件",
+        label: "CNC 核心加工记录",
         active: "加工开始",
         activeDetail: "工件已夹紧，程序 O1207 开始执行",
         settled: "加工结束",
@@ -111,20 +111,20 @@ const messages = {
       { label: "CNC 加工", detail: "工件已定位，O1207 加工程序正在执行", data: "自动：程序/刀具 · 主轴/进给 · 周期/报警" },
       { label: "机器人下料", detail: "加工结束、主轴退回且门打开后，机械臂水平伸入固定夹具取件，再放到独立的视觉输送入口", data: "自动：主轴安全位 · TCP/速度 · 抓手/保护停机 · 放件确认" },
       { label: "视觉质检", detail: "工件已停稳，三相机正在采集尺寸与表面数据", data: "自动：测量值 · 图像 ID · PASS/FAIL · 得分" },
-      { label: "人工检测", detail: "示例检测客户端记录工件、测量值、单位、仪器和检测员，并提交检测 API", data: "示例事实：工件 ID · 粗糙度 Ra · 仪器 · 检测员" },
+      { label: "人工检测", detail: "示例检测客户端记录工件、测量值、单位、仪器和检测员，并提交检测 API", data: "示例数据：工件 ID · 粗糙度 Ra · 仪器 · 检测员" },
     ],
     factory: {
       railLabel: "示例生产工序",
       heading: ["每一次生产，", "都有一条可追溯的履历。"],
       lead:
         "这是一个示例生产过程。从上料、加工到检测，Ingot 将关键记录整理成同一件工件的完整履历，方便回看、比对和调查。",
-      provenanceTitle: "设备、检测与业务记录，汇成一条生产履历",
-      provenanceLead:
+      sourceTitle: "设备、检测与业务记录，汇成一条生产履历",
+      sourceLead:
         "每条记录都保留来源、时间、对象和关联关系；当有人提出问题时，可以回到对应的原始记录。",
-      provenance: [
+      sources: [
         ["接入现场记录", "设备、仪器和现有系统可以按照现场情况接入 Ingot，保留各自的工作方式。"],
-        ["汇集检测结果", "自动或人工检测的结果与工件、批次和生产过程放在一起，形成完整上下文。"],
-        ["保留事实依据", "每个结论都可以回到相应的生产记录；数据不完整时，Ingot 会明确提示。"],
+        ["汇集检测结果", "自动或人工检测结果与工件、批次和生产过程放在一起，形成完整生产履历。"],
+        ["查看原始记录", "每个分析结果都可以打开相应的生产记录；数据不完整时，Ingot 会明确提示。"],
       ],
     },
     platform: {
@@ -137,10 +137,10 @@ const messages = {
       tabsLabel: "平台能力视图",
       tabs: ["生产总览", "人工检测", "Ingot Chat"],
       overview: "生产总览",
-      viewKickers: ["FACTORY / OVERVIEW", "HUMAN / MANUAL INSPECTION", "CHAT / FACT QUERY"],
+      viewKickers: ["FACTORY / OVERVIEW", "HUMAN / MANUAL INSPECTION", "CHAT / record QUERY"],
       range: "当前班次",
       metrics: [
-        ["在线工位", "5 / 5", "全部数据源健康"],
+        ["在线工位", "5 / 5", "全部数据接入正常"],
         ["当前批次", "LOT-0716", "AL-6061"],
         ["一次通过率", "99.2%", "+0.4% 本班次"],
         ["平均周期", "47.2s", "目标 50.0s"],
@@ -151,7 +151,7 @@ const messages = {
       envelope: "工程字段",
       envelopeShow: "查看工程字段",
       envelopeHide: "收起工程字段",
-      healthTitle: "事件接入状态",
+      healthTitle: "生产数据接入状态",
       health: [
         ["自动数据源", "5 / 5 在线"],
         ["待处理检测任务", "2"],
@@ -170,12 +170,12 @@ const messages = {
       },
       review: {
         title: "示例流程：机旁人工检测",
-        lead: "该示例展示外部检测客户端可提交的检测事实：工件、结果、测量值、单位、仪器、检测员和时间。质量判定与放行由企业现有流程负责。",
+        lead: "该示例展示外部检测客户端可提交的内容：工件、检测结果、测量值、单位、仪器、检测员和时间。质量判定与放行仍由企业现有流程负责。",
         taskLabel: "当前检测任务",
         task: "MI-LOT-0716-001",
         state: "等待测量",
-        evidenceTitle: "本次检测要求",
-        evidence: [
+        requirementsTitle: "本次检测要求",
+        requirements: [
           ["工件", "ING-0718-0127"],
           ["检测项目", "表面粗糙度 Ra"],
           ["规格上限", "1.60 μm"],
@@ -187,87 +187,87 @@ const messages = {
           ["01", "确认人员和工件", "检测员刷卡，固定扫码器读取工件码，避免测错工件或批次。"],
           ["02", "确认仪器可用", "企业检测客户端确认粗糙度仪、校准状态、检测项目和规格范围。"],
           ["03", "完成测量", "检测员把探头放到指定表面；客户端取得示例测量值 Ra 0.82 μm。"],
-          ["04", "提交事实", "客户端核对测量值和结果，通过 InspectionRecord API 保存检测事实。"],
+          ["04", "保存结果", "客户端核对测量值和结果，通过 InspectionRecord API 保存检测记录。"],
         ],
-        boundary: "Ingot 保存客户端提交的检测事实；人员认证、仪器连接、校准判断、返工、报废和首件放行由企业现有系统负责。",
-        toAnalysis: "在 Chat 中查看周期事件与数据质量",
+        boundary: "Ingot 保存客户端提交的检测结果；人员认证、仪器连接、校准判断、返工、报废和首件放行由企业现有系统负责。",
+        toAnalysis: "在 Chat 中查看生产过程与记录完整情况",
       },
       analysis: {
-        title: "Ingot Chat · 日常问答与深入调查",
-        lead: "先用日常问答快速查清事实；遇到复杂问题，再邀请多个专业视角共同审查现有证据。",
+        title: "Ingot Chat · 快速查询与综合分析",
+        lead: "先快速查看生产记录；遇到复杂问题，再从工艺、质量和复核三个角度比较数据。",
         chat: {
           title: "Ingot Chat · 示例调查",
-          note: "这是示例数据。Chat 只读取已有记录，显示依据和限制，不会改变现场或写入生产数据。",
-          modes: ["日常问答", "深入调查"],
+          note: "这是示例数据。Chat 只读取已有记录，显示分析结果和缺少的数据，不会改变现场或写入生产数据。",
+          modes: ["快速查询", "综合分析"],
           question: "这个周期发生了什么，数据是否完整？",
           standard: ["check_data_quality · 已完成", "get_cycle_trace · 已完成"],
-          roles: ["工艺视角：检查过程变化", "质量视角：检查检测结果与样本", "反证视角：寻找遗漏与其他解释"],
-          outcome: ["数据质量通过；周期事件链已回链到原始事件。", "形成待工程师确认的候选解释，并同时呈现支持依据、反证和数据限制。"],
-          boundary: "深入调查只基于已验证的记录；它给出候选解释，不替代工程师判断，也不控制设备。",
+          roles: ["工艺视角：检查过程变化", "质量视角：检查检测结果与样本", "复核视角：寻找遗漏与其他解释"],
+          outcome: ["数据完整；可以查看该周期的原始记录。", "列出需要工程师确认的可能原因，同时说明相反情况和缺少的数据。"],
+          boundary: "综合分析只使用已经保存的生产记录；结果需要工程师确认，也不会直接控制设备。",
         },
       },
     },
     trust: {
-      heading: "让每个回答都有依据",
-      lead: "Ingot 不是用猜测回答问题。它把现场记录保留为可核对的事实，让每个结论都能回到来源。",
+      heading: "分析结果可以回到原始记录",
+      lead: "Ingot 使用现场实际保存的数据回答问题。每个数字都可以打开对应的生产记录，数据不足时会直接说明。",
       cards: [
         ["记录来自现场", "设备、检测和业务系统仍由企业按自己的方式运行；Ingot 接收它们的重要生产记录。"],
-        ["结论回到依据", "Chat 的重要数字和结论都会附上对应记录；查不到足够依据时会直接说明。"],
+        ["结论对应原始记录", "Chat 的重要数字和结论都会附上对应记录；找不到足够记录时会直接说明。"],
         ["不同来源放在一起", "同一件工件、同一个批次和同一次加工可以串成完整的生产履历，而不是分散在不同系统中。"],
         ["不触碰现场控制", "Ingot 只帮助理解已经发生的事情；它不改变设备、工艺设置、检测结果或业务流程。"],
       ],
     },
     boundary: {
-      heading: ["一个标准事件 API，", "适配多种数据来源。"],
+      heading: ["一个生产数据接口，", "连接多种现场来源。"],
       lead:
-        "设备、仪器和业务系统由使用方适配。Platform 接收标准 ProductionEvent；Connector Host 可作为用户自管的可选本地入口与 outbox。",
+        "设备、仪器和业务系统由使用方连接。Platform 接收统一格式的生产记录；无法直连时，Connector Host 可在现场暂存并补传。",
       cards: [
         [
           "INDEPENDENT BY DEFAULT",
-          "可选本地事件入口",
-          "Connector Host 由使用方部署时可先写入本地 SQLite。outbox 默认最多保留 500,000 条未确认事件；达到上限时丢弃最旧记录并写入 diagnostic.backlog_dropped 和指标。",
+          "可选现场暂存",
+          "Connector Host 可先把生产记录保存在现场 SQLite 中，网络恢复后按顺序补传。默认最多暂存 500,000 条未确认记录。",
         ],
         [
           "OPTIONAL SYSTEM CONNECTION",
           "协议留在适配程序",
-          "MES、ERP、设备或仪器协议由使用方处理，Ingot 核心只接收统一事件契约。",
+          "MES、ERP、设备或仪器的连接方式由使用方处理，Ingot 接收统一格式的生产记录。",
         ],
         [
           "CLEAR SCOPE",
           "边界清晰，实施更轻",
-          "Ingot 保存生产事件和检测事实并提供 Platform Web Chat 查询；排产、库存、物流、质量处置和设备控制由现场业务系统负责。",
+          "Ingot 保存生产过程和检测结果，并提供 Platform Web Chat 查询；排产、库存、物流、质量处置和设备控制仍由现场业务系统负责。",
         ],
       ],
     },
     language: {
-      telemetryHeading: ["生产事件回答", "现场记录了什么。"],
+      telemetryHeading: ["生产记录说明", "现场发生了什么。"],
       eventHeading: ["Chat 回答", "周期数据是否完整。"],
       nodes: [
         ["SOURCE ADAPTER", "source payload → ProductionEvent"],
-        ["PRODUCTION FACTS", "event + subject + context + correlation"],
-        ["CENTRAL WEB CHAT", "data quality + cycle trace + evidence"],
+        ["production records", "event + subject + context + correlation"],
+        ["CENTRAL WEB CHAT", "data quality + cycle trace + related records"],
       ],
       journey: [
-        "使用方适配程序把源数据转换为带时间、来源、对象和上下文的标准生产事件。",
-        "CorrelationId 将同一周期的事件组成可排序时间线，Context 保留适配程序提交的业务标识。",
-        "Chat 检查周期配对、上下文空缺、来源序号间断和事件新鲜度，并返回证据链接。",
+        "使用方适配程序把源数据转换为带时间、来源设备、工件和生产信息的标准记录。",
+        "生产周期号把同一次加工的记录串在一起，生产信息保留批次、模具和配方等现场编号。",
+        "Chat 检查周期是否完整、生产信息是否缺失、采集记录是否中断，并提供原始记录链接。",
       ],
     },
     planes: {
-      heading: ["标准事件与检测事实，", "分别保存、清晰引用。"],
+      heading: ["生产过程与检测结果，", "分别保存、按周期关联。"],
       lead:
-        "当前平台保存离散 ProductionEvent 和独立 InspectionRecord。Chat 的周期工具基于生产事件事实工作。",
+        "当前平台分别保存生产过程记录和检测结果，并通过生产周期号把过程与质量结果关联起来。",
       telemetryTitle: "适配程序提交了什么",
-      telemetryFoot: ["标准事件", "直接批次", "可选本地 outbox"],
+      telemetryFoot: ["标准生产记录", "直接上传", "可选现场暂存"],
       eventTitle: "Platform 保存了什么",
-      eventFoot: ["加工事件", "自动检测结果", "人工检测结果"],
+      eventFoot: ["加工记录", "自动检测结果", "人工检测结果"],
     },
     anatomy: {
-      heading: "加工开始与结束，是完整的生产事件。",
+      heading: "加工开始与结束，组成一次完整生产过程。",
       lead:
         "只有核心加工使用 cycle.started 与 cycle.completed。上料和机器人记录设备状态，视觉与人工检测保存检测结果，不为每个动作重复增加开始/结束事件。",
-      tabsLabel: "加工事件五元组",
-      immutable: "不可变",
+      tabsLabel: "一条加工记录包含什么",
+      immutable: "保存后不修改",
       fields: [
         ["TYPE", "发生了什么", "cycle.completed"],
         ["TIME", "何时发生", "2026-07-17 14:32:08.429Z"],
@@ -277,9 +277,9 @@ const messages = {
       ],
     },
     architecture: {
-      heading: ["使用方负责数据源协议，", "Ingot 负责标准事实。"],
+      heading: ["使用方负责连接现场数据，", "Ingot 负责统一生产记录。"],
       lead:
-        "使用方适配设备、仪器或业务系统并生成 ProductionEvent。适配程序可直接提交 Platform，或通过可选 Connector Host 使用本地 outbox；Platform 提供事件、检测、Ingot Chat 和 Webhook API。",
+        "使用方连接设备、仪器或业务系统并生成统一生产记录。数据可直接提交 Platform，也可以先在现场暂存；Platform 提供生产记录、检测、Ingot Chat 和通知接口。",
       sources: [
         ["设备 / 业务系统", "使用方适配"],
         ["VISION", "结果推送"],
@@ -288,18 +288,18 @@ const messages = {
       ],
       stream: "设备数据流",
       engine: "可选 Connector Host",
-      engineItems: ["本地事件入口", "契约与 Token 校验", "SQLite outbox", "向 Platform 批量上报"],
+      engineItems: ["现场数据入口", "格式与令牌检查", "SQLite 断网暂存", "向 Platform 批量补传"],
       status: "用户自管 · 可选",
-      retry: "重试 · ACK · 去重",
+      retry: "补传 · 确认 · 去重",
       consumers: ["INGOT 分析平台", "报表 / BI", "AI / 质量应用", "现有业务系统（可选）"],
     },
     trace: {
-      heading: ["按关联 ID，", "还原周期事件时间线。"],
+      heading: ["按生产周期号，", "还原完整加工过程。"],
       lead:
-        "事件可按对象、上下文、CorrelationId 和时间查询。周期工具按发生时间排序同一 CorrelationId 的事件，并明确标记缺少完成事件等限制。以下内容均为示例事实。",
+        "生产记录可按设备、工件、生产周期和时间查询。周期查询按实际发生时间还原过程，并明确提示周期未完成等情况。以下内容均为示例数据。",
       filter: "筛选",
-      live: "示例追溯",
-      events: "7 条 ProductionEvent",
+      live: "示例生产过程",
+      events: "7 条生产记录",
       steps: [
         ["14:02:11", "context.updated", "批次 LOT-0716 · 工件 ING-0718-0127", "LINE-02"],
         ["14:05:43", "context.updated", "模具 MOLD-A17 · 程序 O1207", "POL-03"],
@@ -311,43 +311,43 @@ const messages = {
       ],
     },
     edge: {
-      heading: ["轻量部署在现场，", "有界保存标准事件。"],
+      heading: ["轻量部署在现场，", "断网时继续保存生产记录。"],
       metrics: [
         "可选本地入口单批上限",
-        "默认未确认事件硬上限",
-        "现场事件与 outbox 存储",
-        "有界离线积压，按 ACK 顺序重试",
+        "默认未确认记录上限",
+        "现场生产记录暂存",
+        "联网后按顺序补传",
       ],
       principles: [
         [
           "SOURCE NEUTRAL",
-          "资产与来源彻底分离",
-          "一个资产可以关联设备、视觉和业务系统；连接器统一输出标准生产事件。",
+          "设备与数据来源分开管理",
+          "一台设备可以关联视觉检测和业务系统；连接器统一输出标准生产记录。",
         ],
         [
           "CONFIG DRIVEN",
-          "事件契约定义生产语言",
-          "使用方适配程序识别源系统语义；Platform 对统一事件类型、时间、来源、对象和上下文进行校验。",
+          "统一格式保留现场含义",
+          "使用方适配程序确认源字段代表什么；Platform 检查事件类型、时间、来源设备、生产对象和关联信息。",
         ],
         [
           "OPEN BY DESIGN",
           "按需连接，不设前置条件",
-          "统一查询、SSE 实时订阅与 CloudEvents 映射，让报表、AI 与现有业务系统按需接入。",
+          "统一查询、实时更新和标准消息格式，让报表、AI 与现有业务系统按需接入。",
         ],
       ],
     },
     cta: {
       kicker: "INGOT PLATFORM / INGOT CHAT",
-      heading: ["把生产记录变成", "每个人都能追问的事实。"],
+      heading: ["把分散的生产数据变成", "每个人都能查询的生产履历。"],
       button: "查看文档",
-      footer: "Ingot 平台 · Ingot Chat · 有依据的生产调查。",
+      footer: "Ingot 平台 · Ingot Chat · 基于生产记录的问题调查。",
     },
   },
   en: {
     meta: {
-      title: "Ingot — Production facts you can verify, question, and investigate",
+      title: "Ingot — understand production, process settings, and quality",
       description:
-        "Ingot brings important production records together. Engineers use Ingot Chat to ask questions, inspect evidence, and investigate complex problems.",
+        "Ingot brings equipment settings, production history, and inspection results together so engineers can investigate issues and compare runs.",
     },
     languageLabel: "Language",
     nav: {
@@ -356,14 +356,14 @@ const messages = {
       product: "Product",
       data: "Production Records",
       analytics: "Ingot Chat",
-      deployment: "Why it is trusted",
+      deployment: "Where records come from",
       docs: "Docs",
     },
     hero: {
       eyebrow: "INGOT · PRODUCTION INTELLIGENCE",
-      heading: ["Production facts you can verify,", "question, and investigate."],
+      heading: ["Understand production runs,", "process settings, and quality."],
       lead:
-        "Ingot brings records from equipment, inspections, and business systems into one traceable production history. Engineers ask questions and inspect evidence in Ingot Chat, then start a multi-perspective investigation when a problem needs a closer look. It never changes equipment or production records.",
+        "Ingot brings equipment settings, inspection results, and business records into one production history. Engineers use Ingot Chat for quick queries, then compare process, quality, and review findings when a problem needs closer analysis. It never changes equipment or production records.",
       analysis: "Explore Ingot Chat",
       github: "Explore the Ingot platform",
       pause: "Pause animation",
@@ -372,14 +372,14 @@ const messages = {
       proof: [
         "Connect production sources",
         "Keep a traceable history",
-        "Everyday Ingot Chat",
-        "Evidence-led investigation",
+        "Quick queries in Ingot Chat",
+        "Combined analysis with original records",
       ],
       viewLabel: "3D factory views",
       views: ["Robot loading", "CNC machining", "Robot unloading", "Vision inspection", "Manual inspection"],
       dataKinds: ["Equipment state", "Machining event", "Equipment state", "Inspection result", "Manual inspection record"],
       captureAuto: "SAMPLE PRODUCTION EVENT",
-      captureGenerated: "SAMPLE CONTEXT + CORRELATION ID",
+      captureGenerated: "SAMPLE PRODUCTION DETAILS + RUN ID",
       captureHybrid: "SAMPLE INSPECTION RECORD",
     },
     stageData: [
@@ -424,20 +424,20 @@ const messages = {
       { label: "CNC Machining", detail: "Part located; machining program O1207 is running", data: "AUTO · program/tool · spindle/feed · cycle/alarms" },
       { label: "Robot Unloading", detail: "After the spindle retracts and the door opens, the robot inserts horizontally into the fixed fixture, removes the part, and places it at the separate vision infeed", data: "AUTO · spindle safe position · TCP/speed · gripper/stops · place confirmation" },
       { label: "Vision Inspection", detail: "Part stopped; three cameras are acquiring dimensional and surface data", data: "AUTO · measurements · image ID · PASS/FAIL · score" },
-      { label: "Manual Inspection", detail: "A sample inspection client records the part, measurement, unit, instrument, and inspector and submits the inspection API", data: "SAMPLE FACT · part ID · roughness Ra · instrument · inspector" },
+      { label: "Manual Inspection", detail: "A sample inspection client records the part, measurement, unit, instrument, and inspector and submits the inspection API", data: "SAMPLE record · part ID · roughness Ra · instrument · inspector" },
     ],
     factory: {
       railLabel: "Sample production stages",
       heading: ["Every production run.", "One traceable history."],
       lead:
         "This sample process follows a part from loading through machining and inspection. Ingot brings the important records together, making them easy to review, compare, and investigate.",
-      provenanceTitle: "EQUIPMENT, INSPECTION, AND BUSINESS RECORDS BECOME ONE HISTORY",
-      provenanceLead:
+      sourceTitle: "EQUIPMENT, INSPECTION, AND BUSINESS RECORDS BECOME ONE HISTORY",
+      sourceLead:
         "Each record keeps its source, time, subject, and connection to the work. When a question is raised, people can return to the original record.",
-      provenance: [
+      sources: [
         ["Bring in shop-floor records", "Equipment, instruments, and existing systems can connect to Ingot in a way that fits the plant and preserves how they already work."],
         ["Bring inspection results together", "Automatic and manual inspection results sit beside the part, lot, and production process that give them meaning."],
-        ["Keep the evidence", "Every conclusion can link back to the records behind it. When information is incomplete, Ingot says so clearly."],
+        ["Open the original records", "Each analysis result links to the production records behind it. When records are incomplete, Ingot says so clearly."],
       ],
     },
     platform: {
@@ -450,7 +450,7 @@ const messages = {
       tabsLabel: "Platform capability views",
       tabs: ["Production Overview", "Manual Inspection", "Ingot Chat"],
       overview: "Production Overview",
-      viewKickers: ["FACTORY / OVERVIEW", "HUMAN / MANUAL INSPECTION", "CHAT / FACT QUERY"],
+      viewKickers: ["FACTORY / OVERVIEW", "HUMAN / MANUAL INSPECTION", "CHAT / record QUERY"],
       range: "CURRENT SHIFT",
       metrics: [
         ["Stations online", "5 / 5", "All sources healthy"],
@@ -483,12 +483,12 @@ const messages = {
       },
       review: {
         title: "Sample workflow: machine-side inspection",
-        lead: "This sample shows inspection facts an external client can submit: part, outcome, measurement, unit, instrument, inspector, and time. Quality decisions and release remain in the plant's existing workflow.",
+        lead: "This sample shows inspection records an external client can submit: part, outcome, measurement, unit, instrument, inspector, and time. Quality decisions and release remain in the plant's existing workflow.",
         taskLabel: "Current inspection task",
         task: "MI-LOT-0716-001",
         state: "AWAITING MEASUREMENT",
-        evidenceTitle: "Inspection requirement",
-        evidence: [
+        requirementsTitle: "Inspection requirement",
+        requirements: [
           ["Part", "ING-0718-0127"],
           ["Check item", "Surface roughness Ra"],
           ["Upper limit", "1.60 μm"],
@@ -500,33 +500,33 @@ const messages = {
           ["01", "Confirm person and part", "The inspector badges in and the fixed scanner reads the part code, preventing a part or lot mix-up."],
           ["02", "Confirm the instrument", "The plant inspection client confirms the tester, calibration state, inspection item, and specification range."],
           ["03", "Perform the measurement", "The inspector places the probe on the specified surface; the client obtains sample value Ra 0.82 μm."],
-          ["04", "Submit the fact", "The client verifies the value and outcome and saves the fact through the InspectionRecord API."],
+          ["04", "Submit the record", "The client verifies the value and outcome and saves the record through the InspectionRecord API."],
         ],
-        boundary: "Ingot stores inspection facts submitted by a client. Identity, instrument connectivity, calibration decisions, rework, scrap, and first-article release remain in the plant's systems.",
+        boundary: "Ingot stores inspection records submitted by a client. Identity, instrument connectivity, calibration decisions, rework, scrap, and first-article release remain in the plant's systems.",
         toAnalysis: "Open cycle events and data quality in Chat",
       },
       analysis: {
-        title: "Ingot Chat · Everyday questions and deeper investigation",
-        lead: "Use everyday questions to establish the facts quickly. For complex issues, bring several professional perspectives together to review the same evidence.",
+        title: "Ingot Chat · Quick queries and combined analysis",
+        lead: "Start with a quick look at the production records. For complex issues, compare process, quality, and review findings against the same original records.",
         chat: {
           title: "Ingot Chat · Sample investigation",
-          note: "This uses sample data. Chat reads existing records, shows evidence and limitations, and never changes production records or field equipment.",
-          modes: ["Everyday question", "Deeper investigation"],
+          note: "This uses sample data. Chat reads existing records, shows related records and limitations, and never changes production records or field equipment.",
+          modes: ["Quick query", "Combined analysis"],
           question: "What happened in this cycle, and is its data complete?",
           standard: ["check_data_quality · completed", "get_cycle_trace · completed"],
           roles: ["Process view: review changes in the work", "Quality view: review inspection results and samples", "Challenge view: look for gaps and alternative explanations"],
-          outcome: ["Data quality passed; cycle evidence links to source events.", "A candidate explanation is ready for an engineer to review, with supporting evidence, challenges, and data limitations."],
-          boundary: "The deeper investigation uses only verified records. It offers candidate explanations, not a substitute for engineering judgement or equipment control.",
+          outcome: ["The run records are complete, and the original production records are available.", "Possible causes are listed for engineering review, together with conflicting conditions and missing data."],
+          boundary: "Combined analysis uses saved production records only. Engineers confirm the result, and Ingot never controls equipment.",
         },
       },
     },
     trust: {
-      heading: "Give every answer a basis",
-      lead: "Ingot does not answer from guesswork. It keeps shop-floor records as facts that can be checked, so every important conclusion can lead back to its source.",
+      heading: "Open the original record behind each result",
+      lead: "Ingot answers from saved shop-floor records. Each important number can open the matching production record, and missing information is stated clearly.",
       cards: [
         ["Records come from the plant", "Equipment, inspection, and business systems continue to run in the ways a business chooses. Ingot receives their important production records."],
-        ["Conclusions lead to evidence", "Important numbers and conclusions in Chat include the records behind them. If there is not enough evidence, Chat says so."],
-        ["Different sources, one context", "The workpiece, lot, and production run can be connected into one history instead of being scattered across systems."],
+        ["Results link to original records", "Important numbers and conclusions in Chat include the matching production records. If too few records are available, Chat says so."],
+        ["Different sources, one production history", "The workpiece, lot, and production run can be connected into one history instead of being scattered across systems."],
         ["It never touches control", "Ingot helps people understand what already happened. It does not change equipment, process settings, inspection outcomes, or business workflows."],
       ],
     },
@@ -548,28 +548,28 @@ const messages = {
         [
           "CLEAR SCOPE",
           "A clear scope keeps deployment light",
-          "Ingot stores production events and inspection facts and exposes Platform Web Chat queries. Plant business systems own scheduling, inventory, logistics, quality disposition, and equipment control.",
+          "Ingot stores production events and inspection records and exposes Platform Web Chat queries. Plant business systems own scheduling, inventory, logistics, quality disposition, and equipment control.",
         ],
       ],
     },
     language: {
       telemetryHeading: ["Production events show", "what the floor recorded."],
-      eventHeading: ["Chat answers", "whether cycle facts are complete."],
+      eventHeading: ["Chat answers", "whether cycle records are complete."],
       nodes: [
         ["SOURCE ADAPTER", "source payload → ProductionEvent"],
-        ["PRODUCTION FACTS", "event + subject + context + correlation"],
-        ["CENTRAL WEB CHAT", "data quality + cycle trace + evidence"],
+        ["production records", "event + subject + context + correlation"],
+        ["CENTRAL WEB CHAT", "data quality + cycle trace + related records"],
       ],
       journey: [
         "Team-owned adapters translate source data into standard production events with time, source, subject, and context.",
         "CorrelationId groups events into an ordered cycle timeline; Context retains the business identifiers submitted by the adapter.",
-        "Chat checks cycle pairing, empty context, source sequence gaps, and freshness and returns evidence links.",
+        "Chat checks whether the run has a start and end, whether production details are missing, and whether collection was interrupted, then provides links to the original records.",
       ],
     },
     planes: {
-      heading: ["Standard events and inspection facts.", "Stored separately and cited clearly."],
+      heading: ["Standard events and inspection records.", "Stored separately and cited clearly."],
       lead:
-        "The current platform stores discrete ProductionEvent and InspectionRecord facts. Current cycle tools use production-event facts.",
+        "The current platform stores discrete ProductionEvent and InspectionRecord records. Current cycle tools use production-event records.",
       telemetryTitle: "What did the adapter submit?",
       telemetryFoot: ["Normalized events", "Direct batch", "Optional local outbox"],
       eventTitle: "What did Platform persist?",
@@ -590,7 +590,7 @@ const messages = {
       ],
     },
     architecture: {
-      heading: ["Teams own source protocols.", "Ingot owns normalized facts."],
+      heading: ["Teams own source protocols.", "Ingot owns normalized records."],
       lead:
         "Teams adapt equipment, instruments, or business systems and emit ProductionEvent records. An adapter can submit directly to Platform or use optional Connector Host for a local outbox; Platform provides event, inspection, Ingot Chat, and webhook APIs.",
       sources: [
@@ -609,7 +609,7 @@ const messages = {
     trace: {
       heading: ["Use CorrelationId", "to reconstruct a cycle timeline."],
       lead:
-        "Query events by subject, context, CorrelationId, or time. The cycle tool orders events sharing one CorrelationId and reports limitations such as a missing completion event. Every record below is a sample fact.",
+        "Query events by subject, context, CorrelationId, or time. The cycle tool orders events sharing one CorrelationId and reports limitations such as a missing completion event. Every record below is a sample record.",
       filter: "FILTER",
       live: "SAMPLE TRACE",
       events: "7 PRODUCTION EVENTS",
@@ -635,12 +635,12 @@ const messages = {
         [
           "SOURCE NEUTRAL",
           "Keep assets independent from data sources",
-          "An asset can combine equipment, vision, and business-system facts through normalized production events.",
+          "An asset can combine equipment, vision, and business-system records through normalized production events.",
         ],
         [
           "CONFIG DRIVEN",
           "Define production language through the event contract",
-          "Team-owned adaptation interprets source semantics. Platform validates normalized event type, time, source, subject, and context.",
+          "Team-owned adaptation interprets source handling rules. Platform validates normalized event type, time, source, subject, and context.",
         ],
         [
           "OPEN BY DESIGN",
@@ -651,9 +651,9 @@ const messages = {
     },
     cta: {
       kicker: "INGOT PLATFORM / INGOT CHAT",
-      heading: ["Turn production records into", "facts that everyone can question."],
+      heading: ["Turn production records into", "records that everyone can question."],
       button: "Read the docs",
-      footer: "Ingot platform · Ingot Chat · evidence-led production investigation.",
+      footer: "Ingot platform · Ingot Chat · production investigations based on original records.",
     },
   },
 } as const;
@@ -1476,7 +1476,7 @@ export default function IngotSite({ initialLocale = "zh" }: { initialLocale?: Lo
           >
             <div className="factory-card-head">
               <span className={`event-pip ${liveDatum.tone}`} />
-              <span>{liveStageData.kind === "machining" ? (locale === "zh" ? "加工事件" : "MACHINING EVENT") : (locale === "zh" ? "示例事实" : "SAMPLE FACT")}</span>
+              <span>{liveStageData.kind === "machining" ? (locale === "zh" ? "加工记录" : "MACHINING RECORD") : (locale === "zh" ? "示例数据" : "SAMPLE RECORD")}</span>
               <span className="factory-card-sync">↔ CAM 0{liveIndex + 1}</span>
               <time>{liveDatum.time}</time>
             </div>
@@ -1559,12 +1559,12 @@ export default function IngotSite({ initialLocale = "zh" }: { initialLocale?: Lo
 
         <div className="capture-model" aria-labelledby="capture-model-title">
           <header>
-            <p className="section-index" id="capture-model-title">DATA PROVENANCE</p>
-            <strong>{copy.factory.provenanceTitle}</strong>
-            <span>{copy.factory.provenanceLead}</span>
+            <p className="section-index" id="capture-model-title">DATA SOURCES</p>
+            <strong>{copy.factory.sourceTitle}</strong>
+            <span>{copy.factory.sourceLead}</span>
           </header>
           <div>
-            {copy.factory.provenance.map(([label, detail], index) => (
+            {copy.factory.sources.map(([label, detail], index) => (
               <article className={`capture-model-${index + 1}`} key={label}>
                 <span>0{index + 1}</span>
                 <strong>{label}</strong>
@@ -1744,13 +1744,13 @@ export default function IngotSite({ initialLocale = "zh" }: { initialLocale?: Lo
                       </div>
                     </article>
 
-                    <article className="platform-fact-card" key={`platform-${platformFocus ?? liveIndex}`}>
+                    <article className="platform-record-card" key={`platform-${platformFocus ?? liveIndex}`}>
                       <header>
                         <div><span className={`event-pip ${platformDatum.tone}`} /><strong>{copy.platform.factsTitle}</strong></div>
                         <time>{platformDatum.time}</time>
                       </header>
                       <small>{copy.platform.factsHint}</small>
-                      <div className="platform-fact-human">
+                      <div className="platform-record-human">
                         <span>{platformDatum.dataLabel}</span>
                         <h4>{platformDatum.detail}</h4>
                         <p>{platformDatum.context}</p>
@@ -1811,10 +1811,10 @@ export default function IngotSite({ initialLocale = "zh" }: { initialLocale?: Lo
                     <p>{copy.platform.review.lead}</p>
                   </div>
                   <div className="review-grid">
-                    <article className="review-evidence-card">
-                      <header><span className="event-pip cyan" /><strong>{copy.platform.review.evidenceTitle}</strong></header>
+                    <article className="review-requirements-card">
+                      <header><span className="event-pip cyan" /><strong>{copy.platform.review.requirementsTitle}</strong></header>
                       <dl>
-                        {copy.platform.review.evidence.map(([label, value]) => (
+                        {copy.platform.review.requirements.map(([label, value]) => (
                           <div key={label}><dt>{label}</dt><dd>{value}</dd></div>
                         ))}
                       </dl>
@@ -1857,7 +1857,7 @@ export default function IngotSite({ initialLocale = "zh" }: { initialLocale?: Lo
                     <div className="chat-capability-flow">
                       {(chatMode === 0 ? copy.platform.analysis.chat.standard : copy.platform.analysis.chat.roles).map((item) => <span key={item}>✓ {item}</span>)}
                     </div>
-                    <p><b>EVIDENCE VERIFIED</b>{copy.platform.analysis.chat.outcome[chatMode]}</p>
+                    <p><b>SOURCE RECORDS CHECKED</b>{copy.platform.analysis.chat.outcome[chatMode]}</p>
                     <footer>↳ {copy.platform.analysis.chat.boundary}</footer>
                   </section>
                 </div>
@@ -1940,7 +1940,7 @@ export default function IngotSite({ initialLocale = "zh" }: { initialLocale?: Lo
         <div className="shell">
           <div className="section-heading">
             <div>
-              <p className="section-index">06 / STANDARD EVENTS + CENTRAL FACTS</p>
+              <p className="section-index">06 / STANDARD EVENTS + CENTRAL records</p>
               <h2>{copy.planes.heading[0]}<br />{copy.planes.heading[1]}</h2>
             </div>
             <p>{copy.planes.lead}</p>
@@ -1978,7 +1978,7 @@ export default function IngotSite({ initialLocale = "zh" }: { initialLocale?: Lo
               <div className="plane-head">
                 <span className="plane-icon">◆</span>
                 <div>
-                  <small>CENTRAL FACTS</small>
+                  <small>CENTRAL records</small>
                   <h3>{copy.planes.eventTitle}</h3>
                 </div>
                     <b>≤ 500 ev/batch</b>

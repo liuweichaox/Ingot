@@ -16,25 +16,25 @@ public sealed class RoadmapAgentToolTests
     private static readonly AgentExecutionContext ExecutionContext = new()
     {
         RunId = "run-test",
-        ActorId = "operator",
-        Surface = ProductSurfaces.Chat,
+        UserId = "operator",
+        EntryPoint = ProductEntryPoints.Chat,
         Purpose = RunPurposes.ReadOnlyAnalysis,
         Request = new CreateChatRunRequest { Question = "test" }
     };
 
     [Fact]
-    public void EvidenceVerifier_RejectsToolDataOver32Kb()
+    public void RelatedRecordsVerifier_RejectsToolDataOver32Kb()
     {
-        var verifier = new DefaultEvidenceVerifier();
+        var verifier = new DefaultAnalysisResultValidator();
         var large = new string('x', 33 * 1024);
         var result = new AnalysisToolResult
         {
             Tool = "oversized",
             Summary = "oversized",
             Data = JsonSerializer.SerializeToElement(new { large }),
-            Evidence =
+            RelatedRecords =
             [
-                new EvidenceRef { Kind = "test", Id = "1", Label = "test" }
+                new RelatedRecordRef { Kind = "test", Id = "1", Label = "test" }
             ]
         };
 
@@ -89,7 +89,7 @@ public sealed class RoadmapAgentToolTests
     }
 
     [Fact]
-    public async Task CompareCycles_ComputesInspectionEffectSizeAndEvidenceLinks()
+    public async Task CompareCycles_ComputesInspectionEffectSizeAndRelatedRecordsLinks()
     {
         var events = new[]
         {
@@ -113,21 +113,21 @@ public sealed class RoadmapAgentToolTests
                 Tool = tool.Definition.Name,
                 Arguments = new Dictionary<string, string?>
                 {
-                    ["baselineCorrelationId"] = "cycle-a",
-                    ["candidateCorrelationIds"] = "cycle-b"
+                    ["baselineCycleId"] = "cycle-a",
+                    ["comparisonCycleIds"] = "cycle-b"
                 }
             },
             ExecutionContext);
 
         Assert.Equal(AnalysisToolOutcomes.Sufficient, result.Outcome);
-        Assert.NotEmpty(result.Artifacts);
+        Assert.NotEmpty(result.Details);
         var characteristic = result.Data.GetProperty("inspection")
             .GetProperty("characteristics")
             .EnumerateArray()
             .Single();
         Assert.Equal("pv", characteristic.GetProperty("characteristicCode").GetString());
-        Assert.Equal(11d, characteristic.GetProperty("baselineMean").GetDouble());
-        Assert.Equal(21d, characteristic.GetProperty("candidateMean").GetDouble());
+        Assert.Equal(11d, characteristic.GetProperty("baselineAverage").GetDouble());
+        Assert.Equal(21d, characteristic.GetProperty("comparisonAverage").GetDouble());
         Assert.True(characteristic.GetProperty("effectSize").GetDouble() > 0);
     }
 
@@ -139,7 +139,7 @@ public sealed class RoadmapAgentToolTests
             Row(1, "phase.anneal.started", "cycle-a", new Dictionary<string, string>
             {
                 ["phase_code"] = "unknown",
-                ["provenance"] = "inferred"
+                ["phase_source"] = "estimated"
             })
         ]));
 
@@ -149,7 +149,7 @@ public sealed class RoadmapAgentToolTests
 
         Assert.Equal(AnalysisToolOutcomes.InsufficientData, result.Outcome);
         Assert.Contains(result.Limitations, item => item.Contains("阶段", StringComparison.Ordinal));
-        Assert.Equal(1, result.Data.GetProperty("inferredPhaseAttribution").GetInt32());
+        Assert.Equal(1, result.Data.GetProperty("estimatedPhaseCount").GetInt32());
     }
 
     private static PlatformProductionEvent Row(
@@ -191,7 +191,7 @@ public sealed class RoadmapAgentToolTests
             RecordId = Guid.CreateVersion7(),
             WorkpieceId = $"wp-{operationRunId}-{value}",
             OperationRunId = operationRunId,
-            DefinitionCode = "surface",
+            DefinitionCode = "entryPoint",
             DefinitionVersion = 1,
             MeasuredAt = DateTimeOffset.Parse("2026-07-18T11:00:00Z"),
             RecordedAt = DateTimeOffset.Parse("2026-07-18T11:00:00Z"),
@@ -214,7 +214,7 @@ public sealed class RoadmapAgentToolTests
     private sealed class FilteringEventReader(IReadOnlyList<PlatformProductionEvent> rows) : IChatEventReader
     {
         public Task<IReadOnlyList<PlatformProductionEvent>> QueryAsync(
-            string actorId,
+            string userId,
             PlatformEventQuery query,
             CancellationToken ct = default)
         {
@@ -229,11 +229,11 @@ public sealed class RoadmapAgentToolTests
         }
 
         public Task<PlatformEventScopeStats> GetScopeStatsAsync(
-            string actorId,
+            string userId,
             PlatformEventQuery query,
             CancellationToken ct = default)
         {
-            var filtered = QueryAsync(actorId, query with { Limit = 500 }, ct).Result;
+            var filtered = QueryAsync(userId, query with { Limit = 500 }, ct).Result;
             return Task.FromResult(new PlatformEventScopeStats
             {
                 Count = filtered.Count,
@@ -266,4 +266,3 @@ public sealed class RoadmapAgentToolTests
                 .ToArray());
     }
 }
-

@@ -1912,7 +1912,7 @@ section {
 }
 
 .platform-line-card,
-.platform-fact-card,
+.platform-record-card,
 .platform-health {
   border: 1px solid rgba(238, 231, 214, 0.09);
   background: rgba(12, 16, 13, 0.94);
@@ -1925,7 +1925,7 @@ section {
 }
 
 .platform-line-card > header,
-.platform-fact-card > header,
+.platform-record-card > header,
 .platform-health > header {
   display: flex;
   align-items: center;
@@ -1934,14 +1934,14 @@ section {
 }
 
 .platform-line-card > header > div,
-.platform-fact-card > header > div {
+.platform-record-card > header > div {
   display: flex;
   align-items: center;
   gap: 9px;
 }
 
 .platform-line-card > header strong,
-.platform-fact-card > header strong,
+.platform-record-card > header strong,
 .platform-health > header strong {
   color: #bfc1ba;
   font-size: 10px;
@@ -1949,7 +1949,7 @@ section {
 }
 
 .platform-line-card > header small,
-.platform-fact-card > header time,
+.platform-record-card > header time,
 .platform-health > header span {
   color: #50564f;
   font-family: "SFMono-Regular", Consolas, monospace;
@@ -2102,14 +2102,14 @@ section {
   animation: waveform 5.4s ease-in-out infinite alternate;
 }
 
-.platform-fact-card {
+.platform-record-card {
   min-width: 0;
   min-height: 410px;
   padding: 20px;
   animation: event-in 420ms ease both;
 }
 
-.platform-fact-card > small {
+.platform-record-card > small {
   display: block;
   margin-top: 10px;
   color: #50564f;
@@ -2117,18 +2117,18 @@ section {
   line-height: 1.5;
 }
 
-.platform-fact-human {
+.platform-record-human {
   margin-top: 22px;
   padding: 17px 0;
   border-block: 1px solid rgba(238, 231, 214, 0.08);
 }
 
-.platform-fact-human span {
+.platform-record-human span {
   color: var(--gold-bright);
   font-size: 9px;
 }
 
-.platform-fact-human h4 {
+.platform-record-human h4 {
   margin: 9px 0 0;
   color: #dedcd4;
   font-size: 17px;
@@ -2136,14 +2136,14 @@ section {
   line-height: 1.45;
 }
 
-.platform-fact-human p {
+.platform-record-human p {
   margin: 9px 0 0;
   color: #686e67;
   font-family: "SFMono-Regular", Consolas, monospace;
   font-size: 7px;
 }
 
-.platform-fact-card > .capture-badges {
+.platform-record-card > .capture-badges {
   margin-top: 13px;
 }
 
@@ -2210,7 +2210,7 @@ section {
   color: #79958c;
 }
 
-.platform-fact-card footer {
+.platform-record-card footer {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -2220,7 +2220,7 @@ section {
   font-size: 6px;
 }
 
-.platform-fact-card footer span {
+.platform-record-card footer span {
   width: 17px;
   height: 17px;
   display: grid;
@@ -2304,7 +2304,7 @@ section {
 
 .review-summary small,
 .review-summary > span,
-.review-evidence-card dt,
+.review-requirements-card dt,
 .review-steps-card li > span {
   color: #626961;
   font-family: "SFMono-Regular", Consolas, monospace;
@@ -2351,7 +2351,7 @@ section {
   margin-top: 10px;
 }
 
-.review-evidence-card,
+.review-requirements-card,
 .review-steps-card {
   min-height: 405px;
   padding: 22px;
@@ -2359,7 +2359,7 @@ section {
   background: rgba(12, 16, 13, 0.95);
 }
 
-.review-evidence-card > header,
+.review-requirements-card > header,
 .review-steps-card > header {
   display: flex;
   align-items: center;
@@ -2368,11 +2368,11 @@ section {
   font-size: 10px;
 }
 
-.review-evidence-card dl {
+.review-requirements-card dl {
   margin: 29px 0 0;
 }
 
-.review-evidence-card dl div {
+.review-requirements-card dl div {
   display: grid;
   grid-template-columns: 110px 1fr;
   gap: 18px;
@@ -2380,7 +2380,7 @@ section {
   border-bottom: 1px solid rgba(238, 231, 214, 0.065);
 }
 
-.review-evidence-card dd {
+.review-requirements-card dd {
   min-width: 0;
   margin: 0;
   overflow-wrap: anywhere;
@@ -2451,7 +2451,7 @@ section {
   cursor: pointer;
 }
 
-/* Chat fact query */
+/* Chat production-record query */
 .chat-capability {
   margin-bottom: 24px;
   padding: 22px;
@@ -4119,7 +4119,7 @@ section {
   }
 
   .platform-line-card,
-  .platform-fact-card {
+  .platform-record-card {
     min-height: 0;
     padding: 16px 13px;
   }
@@ -4170,13 +4170,13 @@ section {
     grid-template-columns: 1fr;
   }
 
-  .review-evidence-card,
+  .review-requirements-card,
   .review-steps-card {
     min-height: 0;
     padding: 17px;
   }
 
-  .review-evidence-card dl div {
+  .review-requirements-card dl div {
     grid-template-columns: 92px 1fr;
     gap: 10px;
   }

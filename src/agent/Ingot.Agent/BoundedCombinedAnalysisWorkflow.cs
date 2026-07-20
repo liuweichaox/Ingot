@@ -6,13 +6,13 @@ namespace Ingot.Agent;
 
 /// <summary>
 ///     有界群聊工作流。参与者只读取同一批已经验证的工具结果，不能自行调用工具，
-///     协调器负责轮数、消息预算、证据归一化和确定性终止。
+///     协调器负责轮数、消息预算、相关记录归一化和确定性终止。
 /// </summary>
-public sealed partial class BoundedInvestigationWorkflow(IOptions<ChatOptions> options) : IInvestigationWorkflow
+public sealed partial class BoundedCombinedAnalysisWorkflow(IOptions<ChatOptions> options) : ICombinedAnalysisWorkflow
 {
     private readonly ChatOptions _options = options.Value;
 
-    public async Task<InvestigationWorkflowResult> RunAsync(
+    public async Task<CombinedAnalysisWorkflowResult> RunAsync(
         CreateChatRunRequest request,
         AnalysisPlan plan,
         IReadOnlyList<AnalysisToolResult> results,
@@ -22,10 +22,10 @@ public sealed partial class BoundedInvestigationWorkflow(IOptions<ChatOptions> o
     {
         var maxRounds = Math.Clamp(_options.MaxDiscussionRounds, 1, 5);
         var maxTurns = Math.Clamp(_options.MaxDiscussionTurns, 3, 15);
-        var evidence = results.SelectMany(static result => result.Evidence)
+        var relatedRecords = results.SelectMany(static result => result.RelatedRecords)
             .DistinctBy(static item => (item.Kind, item.Id))
             .ToArray();
-        var task = new InvestigationTask
+        var task = new CombinedAnalysisTask
         {
             Question = request.Question,
             Scope = request.PageContext is null
@@ -34,25 +34,25 @@ public sealed partial class BoundedInvestigationWorkflow(IOptions<ChatOptions> o
             MaxRounds = maxRounds
         };
         await publish(AgentStreamEventTypes.DiscussionStarted,
-            new { task, roles = InvestigationRoles.All, maxTurns }, ct).ConfigureAwait(false);
+            new { task, roles = AnalysisPerspectives.All, maxTurns }, ct).ConfigureAwait(false);
 
-        var transcript = new List<InvestigationContribution>();
-        var hypotheses = new List<InvestigationHypothesis>();
-        var claims = new List<EvidenceClaim>();
+        var transcript = new List<PerspectiveAnalysis>();
+        var hypotheses = new List<PossibleCause>();
+        var claims = new List<FindingReview>();
         var modelCalls = new List<ModelCallUsage>();
         var limitations = new List<string>
         {
-            "深度分析的多角色讨论只生成候选解释，不能替代确定性统计检验或工程师确认。",
-            "参与者只能读取本次已验证工具结果，不能自行访问数据库、网络或设备。"
+            "综合分析只列出可能原因，不能替代统计检验或工程师确认。",
+            "分析过程只能使用本次查询结果，不能自行访问其他数据、网络或设备。"
         };
         var turns = 0;
 
         for (var round = 1; round <= maxRounds && turns < maxTurns; round++)
         {
-            var roles = InvestigationRoles.All.Take(maxTurns - turns).ToArray();
+            var roles = AnalysisPerspectives.All.Take(maxTurns - turns).ToArray();
             var roleTasks = roles.Select(role => RunParticipantAsync(
                 model,
-                new InvestigationTurn
+                new CombinedAnalysisTurn
                 {
                     Role = role,
                     Round = round,
@@ -60,8 +60,8 @@ public sealed partial class BoundedInvestigationWorkflow(IOptions<ChatOptions> o
                     Request = request,
                     Plan = plan,
                     ToolResults = results,
-                    Hypotheses = hypotheses.ToArray(),
-                    Claims = claims.ToArray()
+                    PossibleCauses = hypotheses.ToArray(),
+                    Reviews = claims.ToArray()
                 }, ct)).ToArray();
             var participantResults = await Task.WhenAll(roleTasks).ConfigureAwait(false);
             foreach (var failed in participantResults.Where(static item => item.ErrorType is not null))
@@ -75,13 +75,13 @@ public sealed partial class BoundedInvestigationWorkflow(IOptions<ChatOptions> o
             modelCalls.AddRange(successful.Select(static item => item.Result!.Usage));
             if (round == 1 && successful.Length < 2)
             {
-                limitations.Add("第一轮少于两个角色成功返回，无法形成有交叉审查的候选解释。");
+                limitations.Add("第一轮少于两个角色成功返回，无法形成有交叉审查的可能原因。");
                 break;
             }
             if (successful.Length == 0)
                 break;
 
-            var normalizedThisRound = new List<InvestigationContribution>();
+            var normalizedThisRound = new List<PerspectiveAnalysis>();
             foreach (var participant in successful)
             {
                 ct.ThrowIfCancellationRequested();
@@ -90,64 +90,64 @@ public sealed partial class BoundedInvestigationWorkflow(IOptions<ChatOptions> o
                     result.Value,
                     participant.Role,
                     round,
-                    evidence,
+                    relatedRecords,
                     hypotheses,
                     results);
                 normalizedThisRound.Add(contribution);
                 transcript.Add(contribution);
-                foreach (var hypothesis in contribution.Hypotheses)
+                foreach (var hypothesis in contribution.PossibleCauses)
                 {
                     if (hypotheses.All(item => !string.Equals(
-                            item.HypothesisId,
-                            hypothesis.HypothesisId,
+                            item.CauseId,
+                            hypothesis.CauseId,
                             StringComparison.Ordinal)))
                         hypotheses.Add(hypothesis);
                 }
-                claims.AddRange(contribution.Claims);
+                claims.AddRange(contribution.Reviews);
                 turns++;
                 await publish(AgentStreamEventTypes.DiscussionMessage, contribution, ct)
                     .ConfigureAwait(false);
             }
 
-            // 第一轮必须形成候选假设；后续轮次若所有角色都没有新增主张，确定性终止。
+            // 第一轮必须形成可能原因；后续轮次若所有视角都没有新增复核意见，立即终止。
             if (round == 1 && hypotheses.Count == 0)
                 break;
-            if (round > 1 && normalizedThisRound.All(item => item.Claims.Count == 0 && item.Hypotheses.Count == 0))
+            if (round > 1 && normalizedThisRound.All(item => item.Reviews.Count == 0 && item.PossibleCauses.Count == 0))
                 break;
         }
 
         var supported = hypotheses.Count(hypothesis =>
-            claims.Any(claim => claim.HypothesisId == hypothesis.HypothesisId &&
-                                claim.Position == EvidenceClaimPositions.Support) &&
-            claims.All(claim => claim.HypothesisId != hypothesis.HypothesisId ||
-                                claim.Position != EvidenceClaimPositions.Oppose));
+            claims.Any(claim => claim.CauseId == hypothesis.CauseId &&
+                                claim.Position == FindingReviewPositions.Support) &&
+            claims.All(claim => claim.CauseId != hypothesis.CauseId ||
+                                claim.Position != FindingReviewPositions.Oppose));
         var participantQuorumReached = transcript.Where(static item => item.Round == 1)
             .Select(static item => item.Role)
             .Distinct(StringComparer.Ordinal)
             .Count() >= 2;
-        var verdict = new InvestigationVerdict
+        var verdict = new CombinedAnalysisResult
         {
-            Status = !participantQuorumReached || hypotheses.Count == 0 ? "insufficient-data" : "candidate",
+            Status = !participantQuorumReached || hypotheses.Count == 0 ? "insufficient-data" : "needs-review",
             Summary = !participantQuorumReached
-                ? "参与调查的角色不足，无法形成经过交叉审查的候选解释。"
+                ? "参与调查的角色不足，无法形成经过交叉审查的可能原因。"
                 : hypotheses.Count == 0
-                ? "现有只读证据不足以形成可审查的调查假设。"
+                ? "现有生产记录不足以列出可复核的可能原因。"
                 : supported > 0
-                    ? "形成了有证据支持的候选解释，但尚未证明因果关系。"
-                    : "形成了待验证假设，但现有证据不足以确定主要原因。",
-            Hypotheses = hypotheses,
-            Claims = claims,
-            Transcript = transcript,
-            Evidence = evidence,
+                    ? "已经列出有生产数据支持的可能原因，但还不能确认因果关系。"
+                    : "已经列出可能原因，但现有生产记录不足以确定主要原因。",
+            PossibleCauses = hypotheses,
+            Reviews = claims,
+            ReviewSteps = transcript,
+            RelatedRecords = relatedRecords,
             Limitations = limitations.Distinct(StringComparer.Ordinal).ToArray()
         };
         await publish(AgentStreamEventTypes.DiscussionCompleted, verdict, ct).ConfigureAwait(false);
-        return new InvestigationWorkflowResult { Verdict = verdict, ModelCalls = modelCalls };
+        return new CombinedAnalysisWorkflowResult { Verdict = verdict, ModelCalls = modelCalls };
     }
 
     private static async Task<ParticipantResult> RunParticipantAsync(
         IModelClient model,
-        InvestigationTurn turn,
+        CombinedAnalysisTurn turn,
         CancellationToken ct)
     {
         try
@@ -164,70 +164,70 @@ public sealed partial class BoundedInvestigationWorkflow(IOptions<ChatOptions> o
         }
     }
 
-    private static InvestigationContribution Normalize(
-        InvestigationContribution raw,
+    private static PerspectiveAnalysis Normalize(
+        PerspectiveAnalysis raw,
         string expectedRole,
         int expectedRound,
-        IReadOnlyList<EvidenceRef> allowedEvidence,
-        IReadOnlyList<InvestigationHypothesis> existingHypotheses,
+        IReadOnlyList<RelatedRecordRef> allowedRelatedRecords,
+        IReadOnlyList<PossibleCause> existingPossibleCauses,
         IReadOnlyList<AnalysisToolResult> toolResults)
     {
         var groundedFacts = string.Join('\n', toolResults.Select(static item => $"{item.Summary}\n{item.Data.GetRawText()}"));
         var groundedNumbers = NumberGrounding.ExtractNormalized(groundedFacts);
-        var allowed = allowedEvidence.ToDictionary(static item => (item.Kind, item.Id));
-        var knownHypothesisIds = existingHypotheses.Select(static item => item.HypothesisId)
+        var allowed = allowedRelatedRecords.ToDictionary(static item => (item.Kind, item.Id));
+        var knownCauseIds = existingPossibleCauses.Select(static item => item.CauseId)
             .ToHashSet(StringComparer.Ordinal);
-        var hypotheses = raw.Hypotheses
-            .Where(item => IsSafeStatement(item.Statement) && IsSafeStatement(item.Rationale) &&
+        var hypotheses = raw.PossibleCauses
+            .Where(item => IsSafeStatement(item.Statement) && IsSafeStatement(item.Reason) &&
                            HasGroundedNumbers(item.Statement, groundedNumbers) &&
-                           HasGroundedNumbers(item.Rationale, groundedNumbers))
+                           HasGroundedNumbers(item.Reason, groundedNumbers))
             .Take(3)
             .Select((item, index) => item with
             {
-                HypothesisId = string.IsNullOrWhiteSpace(item.HypothesisId)
+                CauseId = string.IsNullOrWhiteSpace(item.CauseId)
                     ? $"h-{expectedRound}-{expectedRole}-{index + 1}"
-                    : item.HypothesisId.Trim()[..Math.Min(item.HypothesisId.Trim().Length, 100)],
+                    : item.CauseId.Trim()[..Math.Min(item.CauseId.Trim().Length, 100)],
                 AuthorRole = expectedRole,
                 Statement = Limit(item.Statement, 500),
-                Rationale = Limit(item.Rationale, 1000),
-                Evidence = CanonicalEvidence(item.Evidence, allowed)
+                Reason = Limit(item.Reason, 1000),
+                RelatedRecords = CanonicalRelatedRecords(item.RelatedRecords, allowed)
             })
-            .Where(static item => item.Evidence.Count > 0)
+            .Where(static item => item.RelatedRecords.Count > 0)
             .ToArray();
         foreach (var hypothesis in hypotheses)
-            knownHypothesisIds.Add(hypothesis.HypothesisId);
+            knownCauseIds.Add(hypothesis.CauseId);
 
-        var claims = raw.Claims
-            .Where(item => knownHypothesisIds.Contains(item.HypothesisId) && IsSafeStatement(item.Statement) &&
+        var claims = raw.Reviews
+            .Where(item => knownCauseIds.Contains(item.CauseId) && IsSafeStatement(item.Statement) &&
                            HasGroundedNumbers(item.Statement, groundedNumbers))
-            .Where(item => item.Position is EvidenceClaimPositions.Support or
-                EvidenceClaimPositions.Oppose or EvidenceClaimPositions.Uncertain)
+            .Where(item => item.Position is FindingReviewPositions.Support or
+                FindingReviewPositions.Oppose or FindingReviewPositions.Uncertain)
             .Take(10)
             .Select(item => item with
             {
                 AuthorRole = expectedRole,
                 Statement = Limit(item.Statement, 700),
-                Evidence = CanonicalEvidence(item.Evidence, allowed)
+                RelatedRecords = CanonicalRelatedRecords(item.RelatedRecords, allowed)
             })
-            .Where(static item => item.Evidence.Count > 0)
+            .Where(static item => item.RelatedRecords.Count > 0)
             .ToArray();
 
-        return new InvestigationContribution
+        return new PerspectiveAnalysis
         {
             Role = expectedRole,
             Round = expectedRound,
             Summary = Limit(raw.Summary, 500),
-            Hypotheses = hypotheses,
-            Claims = claims
+            PossibleCauses = hypotheses,
+            Reviews = claims
         };
     }
 
-    private static IReadOnlyList<EvidenceRef> CanonicalEvidence(
-        IEnumerable<EvidenceRef> requested,
-        IReadOnlyDictionary<(string Kind, string Id), EvidenceRef> allowed)
+    private static IReadOnlyList<RelatedRecordRef> CanonicalRelatedRecords(
+        IEnumerable<RelatedRecordRef> requested,
+        IReadOnlyDictionary<(string Kind, string Id), RelatedRecordRef> allowed)
         => requested.Select(item => allowed.GetValueOrDefault((item.Kind, item.Id)))
             .Where(static item => item is not null)
-            .Cast<EvidenceRef>()
+            .Cast<RelatedRecordRef>()
             .DistinctBy(static item => (item.Kind, item.Id))
             .ToArray();
 
@@ -235,7 +235,7 @@ public sealed partial class BoundedInvestigationWorkflow(IOptions<ChatOptions> o
         => !string.IsNullOrWhiteSpace(value) &&
            !CausalLanguage().IsMatch(value);
 
-    // 用统一的“归一化数值相等”溯源，替代此前脆弱的子串匹配（子串匹配会让 "1" 命中 "100"）。
+    // 用统一的“归一化数值相等”追查来源，替代此前脆弱的子串匹配（子串匹配会让 "1" 命中 "100"）。
     private static bool HasGroundedNumbers(string? value, IReadOnlySet<string> groundedNumbers)
         => NumberGrounding.IsGrounded(value, groundedNumbers, out _);
 
@@ -250,6 +250,6 @@ public sealed partial class BoundedInvestigationWorkflow(IOptions<ChatOptions> o
 
     private sealed record ParticipantResult(
         string Role,
-        ModelCallResult<InvestigationContribution>? Result,
+        ModelCallResult<PerspectiveAnalysis>? Result,
         string? ErrorType);
 }

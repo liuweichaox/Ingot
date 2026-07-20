@@ -13,8 +13,8 @@ public sealed class AnalysisToolTests
     private static readonly AgentExecutionContext ExecutionContext = new()
     {
         RunId = "run-test",
-        ActorId = "operator",
-        Surface = ProductSurfaces.Chat,
+        UserId = "operator",
+        EntryPoint = ProductEntryPoints.Chat,
         Purpose = RunPurposes.ReadOnlyAnalysis,
         Request = new CreateChatRunRequest { Question = "test" }
     };
@@ -112,7 +112,7 @@ public sealed class AnalysisToolTests
             ExecutionContext);
         Assert.Equal(AnalysisToolOutcomes.InsufficientData, missingStart.Outcome);
         Assert.Contains(missingStart.Limitations,
-            limitation => limitation.Contains("开始事件", StringComparison.Ordinal));
+            limitation => limitation.Contains("加工开始记录", StringComparison.Ordinal));
 
         var start = DateTimeOffset.Parse("2026-07-18T10:00:00Z");
         var rows = Enumerable.Range(1, 500)
@@ -169,13 +169,13 @@ public sealed class AnalysisToolTests
         PlatformEventScopeStats? stats = null) : IChatEventReader
     {
         public Task<IReadOnlyList<PlatformProductionEvent>> QueryAsync(
-            string actorId,
+            string userId,
             PlatformEventQuery query,
             CancellationToken ct = default)
             => Task.FromResult(rows);
 
         public Task<PlatformEventScopeStats> GetScopeStatsAsync(
-            string actorId,
+            string userId,
             PlatformEventQuery query,
             CancellationToken ct = default)
             => Task.FromResult(stats ?? new PlatformEventScopeStats

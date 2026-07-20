@@ -92,9 +92,9 @@ public static partial class InspectionMasterDataValidator
             return false;
         }
 
-        var provenance = Normalize(value.Provenance)?.ToLowerInvariant() ?? "configured";
-        if (provenance is not ("configured" or "observed" or "inferred"))
-            return Fail("Provenance 只能是 configured、observed 或 inferred。", out error);
+        var phaseSource = Normalize(value.PhaseSource)?.ToLowerInvariant() ?? "recipe";
+        if (phaseSource is not ("recipe" or "machine" or "estimated"))
+            return Fail("阶段来源只能是 recipe、machine 或 estimated。", out error);
         var recipeVersion = Normalize(value.RecipeVersion);
         var recipeTemplate = Normalize(value.RecipeTemplate);
         var mappingId = string.Join(
@@ -113,7 +113,7 @@ public static partial class InspectionMasterDataValidator
             RecipeStep = recipeStep!,
             RecipeStepName = Normalize(value.RecipeStepName),
             PhaseCode = phaseCode!,
-            Provenance = provenance,
+            PhaseSource = phaseSource,
             UpdatedAt = DateTimeOffset.UtcNow
         };
         return Succeed(out error);

@@ -88,7 +88,7 @@ public sealed class DeterministicModelClient : IModelClient
         CancellationToken ct = default)
     {
         ct.ThrowIfCancellationRequested();
-        var evidence = results.SelectMany(static result => result.Evidence)
+        var relatedRecords = results.SelectMany(static result => result.RelatedRecords)
             .DistinctBy(static item => (item.Kind, item.Id))
             .ToArray();
         var limitations = results.SelectMany(static result => result.Limitations)
@@ -97,83 +97,83 @@ public sealed class DeterministicModelClient : IModelClient
         var findings = results.Select(static result => result.Summary).ToArray();
         var followUps = new[]
         {
-            "是否需要缩小到具体资产或生产周期？",
-            "是否需要查看证据对应的完整事件时间线？"
+            "是否需要指定具体设备或生产周期？",
+            "是否需要查看该生产周期的完整记录？"
         };
         return Task.FromResult(Result(new AnalysisAnswer
         {
             Summary = findings.Length == 0
-                ? "没有足够的工具结果回答该问题。"
+                ? "没有足够的生产数据回答该问题。"
                 : string.Join(" ", findings),
             Findings = findings,
             Limitations = limitations,
-            Evidence = evidence,
+            RelatedRecords = relatedRecords,
             FollowUpQuestions = followUps
         }, "answer.compose"));
     }
 
-    public Task<ModelCallResult<InvestigationContribution>> ParticipateAsync(
-        InvestigationTurn turn,
+    public Task<ModelCallResult<PerspectiveAnalysis>> ParticipateAsync(
+        CombinedAnalysisTurn turn,
         CancellationToken ct = default)
     {
         ct.ThrowIfCancellationRequested();
-        var evidence = turn.ToolResults.SelectMany(static result => result.Evidence)
+        var relatedRecords = turn.ToolResults.SelectMany(static result => result.RelatedRecords)
             .DistinctBy(static item => (item.Kind, item.Id))
             .ToArray();
         if (turn.Round == 1)
         {
-            var (statement, rationale) = turn.Role switch
+            var (statement, reason) = turn.Role switch
             {
-                InvestigationRoles.ProcessAnalyst => (
+                AnalysisPerspectives.Process => (
                     "需要检查工艺状态或周期参数变化是否与当前现象同步。",
-                    "当前工具结果提供周期事件和数据质量证据。"),
-                InvestigationRoles.QualityAnalyst => (
+                    "当前查询结果包含生产周期过程和数据完整性信息。"),
+                AnalysisPerspectives.Quality => (
                     "需要检查检测结果与周期特征之间是否存在稳定关联。",
-                    "现有事实可以界定周期范围，但仍需要质量样本和特征统计才能评价关联强度。"),
+                    "现有记录可以界定周期范围，但仍需要质量样本和特征统计才能评价关联强度。"),
                 _ => (
-                    "当前现象可能受到数据缺失、样本范围或上下文不完整的影响。",
-                    "在提出原因解释前，应先排除周期未配对、序号间断和上下文缺失。")
+                    "当前现象可能受到数据缺失、样本范围或关联信息不完整的影响。",
+                    "在提出原因解释前，应先排除周期未配对、序号间断和生产信息缺失。")
             };
-            return Task.FromResult(Result(new InvestigationContribution
+            return Task.FromResult(Result(new PerspectiveAnalysis
             {
                 Role = turn.Role,
                 Round = turn.Round,
-                Summary = "提出一个需要用更多确定性分析验证的候选假设。",
-                Hypotheses = evidence.Length == 0
+                Summary = "提出一个需要更多生产数据或统计分析确认的可能原因。",
+                PossibleCauses = relatedRecords.Length == 0
                     ? []
                     :
                     [
-                        new InvestigationHypothesis
+                        new PossibleCause
                         {
-                            HypothesisId = $"h-{turn.Role}",
+                            CauseId = $"h-{turn.Role}",
                             AuthorRole = turn.Role,
                             Statement = statement,
-                            Rationale = rationale,
-                            Evidence = evidence
+                            Reason = reason,
+                            RelatedRecords = relatedRecords
                         }
                     ]
-            }, "investigation.participate"));
+            }, "combinedAnalysis.review"));
         }
 
-        var claims = turn.Hypotheses.Select(hypothesis => new EvidenceClaim
+        var claims = turn.PossibleCauses.Select(hypothesis => new FindingReview
         {
-            HypothesisId = hypothesis.HypothesisId,
+            CauseId = hypothesis.CauseId,
             AuthorRole = turn.Role,
-            Position = turn.Role == InvestigationRoles.Skeptic
-                ? EvidenceClaimPositions.Oppose
-                : EvidenceClaimPositions.Uncertain,
-            Statement = turn.Role == InvestigationRoles.Skeptic
-                ? "现有证据只能支持继续调查，不能确认该假设为原因。"
-                : "当前工具结果与该假设相关，但尚缺少组间比较或质量关联检验。",
-            Evidence = evidence
+            Position = turn.Role == AnalysisPerspectives.Review
+                ? FindingReviewPositions.Oppose
+                : FindingReviewPositions.Uncertain,
+            Statement = turn.Role == AnalysisPerspectives.Review
+                ? "现有生产记录只能支持继续分析，不能确认该项就是原因。"
+                : "当前数据与该项可能原因相关，但还缺少同类周期比较或质量关系分析。",
+            RelatedRecords = relatedRecords
         }).ToArray();
-        return Task.FromResult(Result(new InvestigationContribution
+        return Task.FromResult(Result(new PerspectiveAnalysis
         {
             Role = turn.Role,
             Round = turn.Round,
-            Summary = "复核候选假设并标记当前证据强度。",
-            Claims = claims
-        }, "investigation.participate"));
+            Summary = "复核可能原因并说明当前数据能支持到什么程度。",
+            Reviews = claims
+        }, "combinedAnalysis.review"));
     }
 
     private ModelCallResult<T> Result<T>(T value, string operation)
@@ -208,8 +208,8 @@ public sealed class DefaultModelRouter(IEnumerable<IModelClient> clients) : IMod
 {
     private readonly IReadOnlyList<IModelClient> _clients = clients.ToArray();
 
-    public IModelClient GetClient(string surface, ModelRole role)
-        => _clients.FirstOrDefault(client => string.Equals(client.Surface, surface, StringComparison.Ordinal))
-           ?? _clients.FirstOrDefault(client => client.Surface == "*")
-           ?? throw new InvalidOperationException($"产品面 {surface} 没有可用模型客户端。");
+    public IModelClient GetClient(string entryPoint, ModelRole role)
+        => _clients.FirstOrDefault(client => string.Equals(client.EntryPoint, entryPoint, StringComparison.Ordinal))
+           ?? _clients.FirstOrDefault(client => client.EntryPoint == "*")
+           ?? throw new InvalidOperationException($"功能入口 {entryPoint} 没有可用分析模型。");
 }

@@ -8,10 +8,10 @@
     </picture>
   </a>
 
-  <h3>Trusted production facts and process investigation</h3>
+  <h3>Manufacturing data collection and process analysis</h3>
 
   <p>
-    Bring production records together as traceable facts; use Ingot Chat to ask questions, inspect evidence, and investigate when needed.
+    Bring equipment parameters, production processes, and inspection results together; use Ingot Chat to query abnormalities, compare cycles, and analyze possible causes.
   </p>
 
   <p>
@@ -50,26 +50,26 @@
 
 ## About Ingot
 
-Ingot is a trusted production-facts and process-investigation platform for manufacturing operations. It brings important records from equipment, instruments, MES, ERP, and custom systems together as queryable, verifiable, and traceable facts. Teams map source data to the standard `ProductionEvent` or `InspectionRecord` contracts and call the public HTTP APIs; Ingot embeds no device protocol and does not replace plant control, scheduling, inventory, or quality-disposition systems.
+Ingot is a manufacturing data collection and process analysis platform. It combines important records from equipment, instruments, MES, ERP, and custom systems into a searchable production history. Teams map source data to the standard `ProductionEvent` or `InspectionRecord` contracts and call the public HTTP APIs; Ingot embeds no device protocol and does not replace plant control, scheduling, inventory, or quality-disposition systems.
 
-**Ingot Chat** is the main way engineers use Ingot. It runs in Platform Web and reads recorded production facts only: everyday mode checks facts and completeness, while deeper investigation lets process, quality, and challenge roles review the same verified evidence and return candidate explanations for an engineer to assess.
+**Ingot Chat** is the main way engineers use Ingot. It runs in Platform Web and reads saved production data only. Quick Query retrieves records and checks completeness; Combined Analysis compares similar cycles from process, quality, and review perspectives and lists possible causes for an engineer to assess.
 
 ## Core capabilities
 
 | Capability | Implemented scope |
 |---|---|
-| Standard event ingestion | Teams submit `ProductionEvent` batches with source, subject, context, correlation ID, and sequence through `POST /api/v1/events:batch` |
+| Standard event ingestion | Teams submit `ProductionEvent` batches with equipment, workpiece, production-cycle, and collection-order fields through `POST /api/v1/events:batch` |
 | Inspection records | Human or instrument clients submit inspection results through `POST /api/v1/inspection-records` |
-| Central data store | Stores production events, inspection records, subjects, context, and correlation IDs, with query and SSE support |
-| Ingot Chat | Natural-language questions, page context, streamed responses, history, limitations, and evidence links |
-| Chat-assisted analysis | Checks data completeness, traces cycle event timelines, and returns evidence links |
-| Deeper investigation | Bounded process, quality, and challenge roles; at most 3 rounds and 9 turns; produces evidence-backed candidate explanations only |
+| Central data store | Stores production processes, inspection results, equipment, workpieces, and production-cycle information with query and live-update support |
+| Ingot Chat | Accepts everyday questions and shows analysis results, missing data, and related production records |
+| Chat-assisted analysis | Checks completeness, reconstructs production cycles, and compares similar cycles |
+| Combined analysis | Reviews one problem from process, quality, and review perspectives and lists possible causes and opposing results |
 | Operations | Health checks, Prometheus metrics, and structured logs |
 
 ### Security boundary
 
-- Chat calls explicitly registered read-only fact tools only; it cannot execute SQL, scripts, shell commands, file writes, or open network requests.
-- Answer numbers and key findings must come from tool results and have evidence references. Insufficient data produces explicit limitations.
+- Chat calls explicitly registered read-only record tools only; it cannot execute SQL, scripts, shell commands, file writes, or open network requests.
+- Answer numbers come from actual query results and link to the corresponding production records. When data is incomplete, Chat names what is missing.
 - The standard event API accepts only contract- and token-validated batches. Source protocols, credentials, retry strategy, and runtime ownership remain with the implementing team.
 - Ingot never writes to PLCs, CNCs, robots, or other field controllers.
 - Secrets enter only through environment variables or a secret store, never source code, logs, or repository configuration.
@@ -80,12 +80,12 @@ Ingot is a trusted production-facts and process-investigation platform for manuf
 equipment, instruments, MES, ERP, or custom systems
   └─ team-owned source adaptation
        └─ ProductionEvent[] / InspectionRecord
-            └─ Platform API ──► PostgreSQL production facts
+            └─ Platform API ──► PostgreSQL production records
                                     ├─ query and SSE
                                     └─ Platform Web · Ingot Chat
 ```
 
-Teams own source protocols and runtime operation. Ingot owns the fact contract, access control, query, and evidence links. See the [architecture](docs/architecture.en.md) and [production event specification](docs/rfc-production-events.en.md).
+Teams own source protocols and runtime operation. Ingot owns the common event format, access control, queries, and links to original production records. See the [architecture](docs/architecture.en.md) and [production event specification](docs/rfc-production-events.en.md).
 
 <p align="right"><a href="#readme-top">Back to top</a></p>
 
@@ -117,11 +117,11 @@ docker compose -f docker-compose.app.yml up -d --build
 | Platform API | <http://localhost:8000> |
 | Platform health | <http://localhost:8000/health> |
 
-The default Compose stack starts PostgreSQL, Platform API, and Platform Web. Chat and Connector Host are enabled only when needed. `INGOT_OPERATOR_TOKEN` protects inspection-fact submission; Chat uses a separate `INGOT_CHAT_OPERATOR_TOKEN`.
+The default Compose stack starts PostgreSQL, Platform API, and Platform Web. Chat and Connector Host are enabled only when needed. `INGOT_OPERATOR_TOKEN` protects inspection-record submission; Chat uses a separate `INGOT_CHAT_OPERATOR_TOKEN`.
 
 ### Enable Chat in production
 
-Production Compose leaves Chat disabled by default. Provide the model, model key, Chat Actor token, and data scope together before enabling it:
+Production Compose leaves Chat disabled by default. Provide the model, model key, Chat user token, and data scope together before enabling it:
 
 ```bash
 export INGOT_CHAT_ENABLED=true
@@ -131,12 +131,12 @@ export INGOT_CHAT_REASONING_MODEL="<reasoning-model>"
 export OPENAI_API_KEY="<secret>"
 export INGOT_CHAT_OPERATOR_TOKEN="$(openssl rand -hex 24)"
 export INGOT_CHAT_OPERATOR_ALLOW_ALL=true
-export INGOT_CHAT_ENABLE_DEEP_INVESTIGATION=true
+export INGOT_CHAT_ENABLE_COMBINED_ANALYSIS=true
 
 docker compose -f docker-compose.app.yml up -d --build
 ```
 
-The browser and Chat HTTP API use Actor `operator` with `INGOT_CHAT_OPERATOR_TOKEN`. Configure each production Actor with the data scope it needs; this Compose example gives `operator` access to all facts.
+The browser and Chat HTTP API use user `operator` with `INGOT_CHAT_OPERATOR_TOKEN`. Configure each production user with the data scope it needs; this Compose example gives `operator` access to all records.
 
 See [getting started](docs/tutorial-getting-started.en.md) and [configuration](docs/tutorial-configuration.en.md) for the complete walkthrough.
 
@@ -168,7 +168,7 @@ curl -X POST http://localhost:8000/api/v1/events:batch \
 
 Each batch accepts 1–500 events. Platform deduplicates by `eventId` and `(edgeId, seq)` and returns `ackSeq`. See the [production event specification](docs/rfc-production-events.en.md) for the contract, validation rules, and retry guidance.
 
-When an adapter runs on a plant network, needs a local SQLite outbox, or cannot reach Platform directly, a team can enable **Ingot.Edge.ConnectorHost** as an optional local ingress. It accepts `ProductionEvent[]`, persists them, and ships them to Platform with at-least-once delivery. Teams choose, deploy, and operate this path.
+When an adapter runs on a plant network or cannot reach Platform directly, a team can enable **Ingot.Edge.ConnectorHost**. It saves `ProductionEvent[]` locally and uploads them in order after the network recovers; duplicate uploads do not create duplicate records.
 
 ```bash
 export INGOT_CONNECTOR_TOKEN="$(openssl rand -hex 24)"
@@ -179,13 +179,13 @@ See the [production event specification](docs/rfc-production-events.en.md).
 
 ## Chat
 
-After configuring Chat for production, open <http://localhost:3000>, select **Chat**, and ask a question with optional asset or cycle context:
+After configuring Chat for production, open <http://localhost:3000>, select **Chat**, and ask a question for an optional equipment number or production-cycle number:
 
 ```text
 What happened during this cycle, and is its data complete?
 ```
 
-Chat uses governed read-only fact tools and returns findings, limitations, and source-fact references. It does not change events, inspection records, configuration, or equipment state.
+Chat only queries saved production data. It returns analysis results, missing-data notices, and related production records. It does not change events, inspection records, configuration, or equipment state.
 
 See [Chat](docs/chat.en.md) for the complete capability and API reference.
 
@@ -196,11 +196,12 @@ See [Chat](docs/chat.en.md) for the complete capability and API reference.
 | `POST /api/v1/events:batch` | Submit a standard production-event batch |
 | `GET /api/v1/events` | Query production events |
 | `GET /api/v1/events/stream` | Subscribe to production events over SSE |
-| `GET /api/v1/cycles/{correlationId}` | Read the event timeline for one correlation ID |
+| `GET /api/v1/cycles/{correlationId}` | Read the production process for one cycle |
+| `POST /api/v1/inspection-attachments` | Upload an inspection photo or attachment |
 | `POST /api/v1/inspection-records` | Submit a human or instrument inspection record |
 | `GET /api/v1/chat/capabilities` | Discover Chat availability, tools, and run limits |
 | `POST /api/v1/chat/runs` | Create a Chat run |
-| `GET /api/v1/chat/runs/{runId}` | Read an answer, plan, tool activity, and evidence |
+| `GET /api/v1/chat/runs/{runId}` | Read an answer, query progress, and related production records |
 | `GET /api/v1/chat/runs/{runId}/stream` | Stream Chat events over SSE with resume support |
 | `POST /api/v1/chat/runs/{runId}:cancel` | Cancel a Chat run |
 

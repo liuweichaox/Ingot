@@ -10,9 +10,9 @@ This gate builds the .NET projects, runs tests, builds Platform Web, the product
 
 ## Development principles
 
-- Update contracts before Platform API, fact services, Web, and documentation;
+- Update contracts before Platform API, record services, Web, and documentation;
 - event ingestion accepts strongly typed `ProductionEvent` and `InspectionRecord` only, never arbitrary SQL or scripts from callers;
-- Chat statistics, authorization, tool execution, and evidence validation remain deterministic;
+- Chat statistics, authorization, tool execution, and related records validation remain deterministic;
 - every new tool is read-only by default and needs data-scope, result-size, and timeout limits;
 - public copy uses Ingot Chat and does not expose internal implementation terminology;
 - when a public interface changes, update bilingual documentation, the product site, and static-site tests together.
@@ -22,8 +22,8 @@ This gate builds the .NET projects, runs tests, builds Platform Web, the product
 1. Assess whether the event type, version, and fields remain backward compatible;
 2. update strong typed contracts and validation in `Ingot.Contracts`;
 3. add matching API, storage, and integration tests;
-4. record semantics in the [production event specification](rfc-production-events.en.md);
-5. validate with de-identified samples that Chat still produces correct limitations and evidence.
+4. record handling rules in the [production event specification](rfc-production-events.en.md);
+5. validate with de-identified samples that Chat still produces correct limitations and related records.
 
 ## Documentation and website
 

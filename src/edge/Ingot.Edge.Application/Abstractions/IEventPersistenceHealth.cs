@@ -1,7 +1,7 @@
 namespace Ingot.Edge.Application.Abstractions;
 
 /// <summary>
-///     记录事件事实持久化路径的最近状态。它与数据库连通性检查互补：
+///     记录事件记录持久化路径的最近状态。它与数据库连通性检查互补：
 ///     一次真实 append 失败必须立即反映到健康端点。
 /// </summary>
 public interface IEventPersistenceHealth

@@ -8,7 +8,7 @@ namespace Ingot.Edge.Application.Abstractions;
 public interface IEventSink
 {
     /// <summary>
-    ///     同步落盘并返回带边缘序号的事件；返回即表示事实已经持久化。
+    ///     同步落盘并返回带边缘序号的事件；返回即表示记录已经持久化。
     /// </summary>
     ValueTask<ProductionEvent> EmitAsync(ProductionEvent evt, CancellationToken ct = default);
 }

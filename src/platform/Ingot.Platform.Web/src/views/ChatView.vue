@@ -10,7 +10,7 @@
             </div>
           </template>
           <el-alert
-            title="基于可信生产数据查询数据、定位问题，并回到相关证据；不执行设备控制或数据写入。"
+            title="查询生产记录、比较周期差异、定位异常；不会修改设备或生产数据。"
             type="info"
             show-icon
             :closable="false"
@@ -19,11 +19,11 @@
           <el-form label-position="top">
             <el-form-item label="回答方式">
               <el-radio-group v-model="form.mode">
-                <el-radio-button value="standard" :disabled="!supportsMode('standard')">
-                  标准分析
+                <el-radio-button value="quick" :disabled="!supportsMode('quick')">
+                  快速查询
                 </el-radio-button>
-                <el-radio-button value="deep" :disabled="!supportsMode('deep')">
-                  深入调查
+                <el-radio-button value="combined" :disabled="!supportsMode('combined')">
+                  综合分析
                 </el-radio-button>
               </el-radio-group>
               <div class="muted capability-note">
@@ -40,11 +40,11 @@
                 placeholder="例如：这个周期发生了什么，数据是否完整？"
               />
             </el-form-item>
-            <el-form-item label="当前上下文（可选）">
-              <el-input v-model="form.contextId" placeholder="资产 ID 或周期关联 ID">
+            <el-form-item label="查询对象（可选）">
+              <el-input v-model="form.contextId" placeholder="设备编号或生产周期号">
                 <template #prepend>
                   <el-select v-model="form.contextKind" style="width: 130px">
-                    <el-option label="资产" value="asset" />
+                    <el-option label="设备" value="asset" />
                     <el-option label="生产周期" value="cycle" />
                   </el-select>
                 </template>
@@ -52,12 +52,12 @@
             </el-form-item>
             <el-row :gutter="12">
               <el-col :span="12">
-                <el-form-item label="访问身份">
-                  <el-input v-model="form.actor" />
+                <el-form-item label="用户">
+                  <el-input v-model="form.user" />
                 </el-form-item>
               </el-col>
               <el-col :span="12">
-                <el-form-item label="访问令牌">
+                <el-form-item label="访问密码">
                   <el-input v-model="form.token" type="password" show-password />
                 </el-form-item>
               </el-col>
@@ -122,7 +122,7 @@
           />
           <el-empty
             v-if="!runId"
-            description="发送问题后，这里会展示回答、相关事实和证据。"
+            description="发送问题后，这里会展示分析结果和相关生产记录。"
           />
           <template v-else>
             <section v-if="participantFailures.length" class="section">
@@ -130,7 +130,7 @@
               <el-alert
                 v-for="item in participantFailures"
                 :key="`${item.data?.role}-${item.data?.round}`"
-                title="部分分析步骤暂不可用，已保留可验证的结果和限制条件。"
+                title="部分分析步骤暂时无法完成，页面仅展示已经查到的结果。"
                 type="warning"
                 show-icon
                 :closable="false"
@@ -152,7 +152,7 @@
             </section>
 
             <section v-if="snapshot?.toolInvocations?.length" class="section">
-              <h3>事实查询</h3>
+              <h3>生产记录查询</h3>
               <el-timeline>
                 <el-timeline-item
                   v-for="(item, index) in snapshot.toolInvocations"
@@ -165,28 +165,28 @@
               </el-timeline>
             </section>
 
-            <section v-if="snapshot?.answer?.investigation" class="section investigation">
-              <h3>深入调查</h3>
+            <section v-if="snapshot?.answer?.combinedAnalysis" class="section combined-analysis">
+              <h3>综合分析</h3>
               <el-alert
-                :title="snapshot.answer.investigation.summary"
-                :type="snapshot.answer.investigation.status === 'candidate' ? 'warning' : 'info'"
+                :title="snapshot.answer.combinedAnalysis.summary"
+                :type="snapshot.answer.combinedAnalysis.status === 'needs-review' ? 'warning' : 'info'"
                 show-icon
                 :closable="false"
               />
-              <h4>候选假设</h4>
+              <h4>可能原因</h4>
               <el-card
-                v-for="item in snapshot.answer.investigation.hypotheses"
-                :key="item.hypothesisId"
+                v-for="item in snapshot.answer.combinedAnalysis.possibleCauses"
+                :key="item.causeId"
                 shadow="never"
-                class="hypothesis"
+                class="possible-cause"
               >
-                <div class="hypothesis-title">
+                <div class="possible-cause-title">
                   <strong>{{ item.statement }}</strong>
                 </div>
-                <div class="muted">{{ item.rationale }}</div>
+                <div class="muted">{{ item.reason }}</div>
               </el-card>
               <el-alert
-                v-for="item in snapshot.answer.investigation.limitations"
+                v-for="item in snapshot.answer.combinedAnalysis.limitations"
                 :key="item"
                 :title="item"
                 type="warning"
@@ -253,11 +253,11 @@
                 </ul>
               </div>
               <el-collapse>
-                <el-collapse-item title="证据抽屉" name="evidence">
-                  <el-table :data="snapshot.answer.evidence" size="small" stripe>
+                <el-collapse-item title="查看相关生产记录" name="relatedRecords">
+                  <el-table :data="snapshot.answer.relatedRecords" size="small" stripe>
                     <el-table-column prop="kind" label="类型" width="150" />
-                    <el-table-column prop="label" label="事实" min-width="260" />
-                    <el-table-column label="回到事实" width="100">
+                    <el-table-column prop="label" label="生产记录" min-width="260" />
+                    <el-table-column label="操作" width="100">
                       <template #default="{ row }">
                         <el-link v-if="row.url" type="primary" :href="row.url">查看</el-link>
                       </template>
@@ -280,10 +280,10 @@ import { getJson, postJson, streamSse } from "../api/http";
 
 const form = reactive({
   question: "",
-  mode: "standard",
+  mode: "quick",
   contextKind: "asset",
   contextId: "",
-  actor: "operator",
+  user: "operator",
   token: "",
 });
 const runId = ref("");
@@ -297,7 +297,7 @@ const historyNext = ref(null);
 let streamController;
 
 const authHeaders = () => ({
-  "X-Ingot-Actor": form.actor.trim(),
+  "X-Ingot-User": form.user.trim(),
   ...(form.token ? { Authorization: `Bearer ${form.token}` } : {}),
 });
 const running = computed(() => ["queued", "running", "cancelling"].includes(snapshot.value?.status));
@@ -326,7 +326,7 @@ async function refresh() {
 
 async function loadCapabilities() {
   capabilities.value = await getJson("/api/v1/chat/capabilities", { headers: authHeaders() });
-  if (!supportsMode(form.mode)) form.mode = capabilities.value.modes?.[0] || "standard";
+  if (!supportsMode(form.mode)) form.mode = capabilities.value.modes?.[0] || "quick";
 }
 
 async function loadHistory(before = null, append = false) {
@@ -417,7 +417,7 @@ async function openHistory(id) {
 function toolLabel(tool) {
   return ({
     check_data_quality: "检查数据质量",
-    get_cycle_trace: "查看周期事件",
+    get_cycle_trace: "查看生产周期过程",
     find_comparable_cycles: "查找同类周期",
     compare_cycles: "比较周期差异",
   })[tool] || "查询数据";
@@ -434,7 +434,7 @@ function queryStatusLabel(status) {
 }
 
 function modeLabel(mode) {
-  return mode === "deep" ? "深度调查" : "标准分析";
+  return mode === "combined" ? "综合分析" : "快速查询";
 }
 
 function runStatusLabel(status) {
@@ -467,7 +467,7 @@ function formatTime(value) {
   return value ? new Date(value).toLocaleString("zh-CN") : "";
 }
 
-watch(() => [form.actor, form.token], () => {
+watch(() => [form.user, form.token], () => {
   capabilities.value = null;
   history.value = [];
 });
@@ -496,10 +496,10 @@ onBeforeUnmount(() => streamController?.abort());
 .muted { margin-top: 4px; color: #909399; }
 .answer ul { padding-left: 20px; line-height: 1.8; }
 .limitation { margin: 8px 0; }
-.investigation h4,
+.combined-analysis h4,
 .follow-ups h4 { margin: 18px 0 10px; }
-.hypothesis { margin: 10px 0; }
-.hypothesis-title { display: flex; align-items: flex-start; gap: 10px; line-height: 1.6; }
+.possible-cause { margin: 10px 0; }
+.possible-cause-title { display: flex; align-items: flex-start; gap: 10px; line-height: 1.6; }
 .capability-note { width: 100%; }
 .history-card { margin-top: 18px; }
 .history-item {

@@ -1,6 +1,6 @@
 # 生产事件规范
 
-`ProductionEvent` 是使用方数据源适配、Platform API、查询和 Ingot Chat 共享的不可变事件信封。使用方负责将设备、仪器或业务系统的语义映射为该契约，并通过 Platform API 提交。
+`ProductionEvent` 是使用方数据源适配、Platform API、查询和 Ingot Chat 共享的不可变事件信封。使用方负责将设备、仪器或业务系统的含义映射为该契约，并通过 Platform API 提交。
 
 ## 批次请求
 
@@ -51,7 +51,7 @@ Content-Type: application/json
 | `eventId` | string | UUIDv7；事件全局标识 |
 | `eventType` | string | 小写点分名称，例如 `cycle.started` |
 | `eventTypeVersion` | integer | 大于 0；默认值为 1 |
-| `occurredAt` | ISO 8601 timestamp | 事实发生的 UTC 时间 |
+| `occurredAt` | ISO 8601 timestamp | 记录发生的 UTC 时间 |
 | `recordedAt` | ISO 8601 timestamp | 适配程序记录或提交事件的 UTC 时间 |
 | `source` | string | 必须以 `edge/{edgeId}/` 开头 |
 | `subject` | object | 必须包含非空 `type` 和 `id` |
@@ -103,24 +103,24 @@ docker compose -f docker-compose.app.yml --profile connector-host up -d connecto
 
 ## 查询与事件链
 
-- `GET /api/v1/events`：按 Edge、事件类型、对象、上下文、`correlationId` 和时间查询；
+- `GET /api/v1/events`：按 Edge、事件类型、对象、关联信息、`correlationId` 和时间查询；
 - `GET /api/v1/events/stream`：生产事件 SSE；
-- `GET /api/v1/cycles/{correlationId}`：同一关联 ID 的事件链；
-- `get_cycle_trace`：按发生时间和中心摄入顺序生成带证据的周期时间线；
-- `check_data_quality`：检查周期配对、空上下文、序号间断和最新事件时间。
+- `GET /api/v1/cycles/{correlationId}`：同一生产周期号 的事件链；
+- `get_cycle_trace`：按发生时间和中心摄入顺序生成带相关记录的周期时间线；
+- `check_data_quality`：检查周期配对、生产信息为空、序号间断和最新事件时间。
 
 检测记录使用独立的 `InspectionRecord` 契约和 API。当前周期工具基于生产事件构建周期事件链。
 
-## 保留上下文键
+## 保留生产信息项
 
-适配器必须在能取得这些事实时写入下列 `context` 键。所有值均为字符串；未知值不要猜测，不要写入密钥或大对象。
+适配器必须在能取得这些记录时写入下列 `context` 键。所有值均为字符串；未知值不要猜测，不要写入密钥或大对象。
 
 | 用途 | 键 | 说明 |
 |---|---|---|
 | 阶段归属 | `recipe_id` | 配方稳定标识 |
 | 阶段归属 | `recipe_version` | 配方版本；源系统无版本时可省略 |
 | 阶段归属 | `recipe_template` | 中心侧阶段映射可用的配方模板 |
-| 阶段归属 | `recipe_step` | 源系统观测到的步序事实 |
+| 阶段归属 | `recipe_step` | 源系统观测到的步序记录 |
 | 阶段归属 | `recipe_step_name` | 源系统原始步序名称 |
 | 分组维度 | `product_code` | 产品或规格编码 |
 | 分组维度 | `operation_code` | 工序编码 |
@@ -137,12 +137,12 @@ docker compose -f docker-compose.app.yml --profile connector-host up -d connecto
 
 ## 阶段事件命名
 
-中心阶段语义使用 `phase.{code}.started` 与 `phase.{code}.completed` 表示，例如 `phase.anneal.started`。这些事件复用现有 `.started` / `.completed` 配对逻辑。边缘默认只上报 `recipe_step` 事实，由中心 `PhaseMapping` 解释为 `phase_code`；只有源系统原生事实就是阶段时，边缘才应照实上报 phase 事件。
+中心阶段含义使用 `phase.{code}.started` 与 `phase.{code}.completed` 表示，例如 `phase.anneal.started`。这些事件复用现有 `.started` / `.completed` 配对逻辑。边缘默认只上报 `recipe_step` 记录，由中心 `PhaseMapping` 解释为 `phase_code`；只有源系统原生记录就是阶段时，边缘才应照实上报 phase 事件。
 
 ## 扩展规则
 
 - `eventType` 和 `data` 使用稳定业务名称；
 - 数值单位作为明确字段随事件传递，核心不推断单位；
-- 语义不兼容时提升 `eventTypeVersion` 或新增事件类型；
+- 含义不兼容时提升 `eventTypeVersion` 或新增事件类型；
 - `context` 只存储建立查询关联所需的稳定字符串，不写入密钥或大对象；
 - 数据源协议、映射代码、缓冲与重试逻辑由使用方维护。

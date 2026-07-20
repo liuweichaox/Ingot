@@ -5,16 +5,16 @@ using Npgsql;
 
 namespace Ingot.Platform.Infrastructure.Inspections;
 
-public sealed class PostgresInspectionEvidenceStore : IInspectionEvidenceStore, IAsyncDisposable
+public sealed class PostgresInspectionAttachmentStore : IInspectionAttachmentStore, IAsyncDisposable
 {
     private readonly NpgsqlDataSource _dataSource;
-    private readonly InspectionEvidenceOptions _options;
+    private readonly InspectionAttachmentOptions _options;
     private readonly SemaphoreSlim _initializeLock = new(1, 1);
     private volatile bool _initialized;
 
-    public PostgresInspectionEvidenceStore(
+    public PostgresInspectionAttachmentStore(
         IConfiguration configuration,
-        IOptions<InspectionEvidenceOptions> options)
+        IOptions<InspectionAttachmentOptions> options)
     {
         var connectionString = configuration.GetConnectionString("Events")
             ?? throw new InvalidOperationException("缺少 ConnectionStrings:Events PostgreSQL 连接字符串。");
@@ -34,8 +34,8 @@ public sealed class PostgresInspectionEvidenceStore : IInspectionEvidenceStore, 
             Directory.CreateDirectory(GetRootPath());
             await using var command = _dataSource.CreateCommand(
                 """
-                CREATE TABLE IF NOT EXISTS inspection_evidence (
-                  evidence_id UUID PRIMARY KEY,
+                CREATE TABLE IF NOT EXISTS inspection_attachments (
+                  attachment_id UUID PRIMARY KEY,
                   storage_ref TEXT NOT NULL,
                   sha256 TEXT NOT NULL UNIQUE,
                   media_type TEXT NOT NULL,
@@ -44,8 +44,8 @@ public sealed class PostgresInspectionEvidenceStore : IInspectionEvidenceStore, 
                   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
                   CHECK (size_bytes > 0)
                 );
-                CREATE INDEX IF NOT EXISTS idx_inspection_evidence_sha256
-                  ON inspection_evidence(sha256);
+                CREATE INDEX IF NOT EXISTS idx_inspection_attachments_sha256
+                  ON inspection_attachments(sha256);
                 """);
             await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
             _initialized = true;
@@ -56,7 +56,7 @@ public sealed class PostgresInspectionEvidenceStore : IInspectionEvidenceStore, 
         }
     }
 
-    public async Task<EvidenceUploadResponse> SaveAsync(
+    public async Task<AttachmentUploadResponse> SaveAsync(
         Stream content,
         string fileName,
         string mediaType,
@@ -85,7 +85,7 @@ public sealed class PostgresInspectionEvidenceStore : IInspectionEvidenceStore, 
                     break;
                 size += read;
                 if (size > _options.MaxFileBytes)
-                    throw new InvalidDataException($"证据文件超过 {_options.MaxFileBytes} 字节上限。");
+                    throw new InvalidDataException($"附件超过 {_options.MaxFileBytes} 字节上限。");
                 sha.TransformBlock(buffer, 0, read, null, 0);
                 await temp.WriteAsync(buffer.AsMemory(0, read), ct).ConfigureAwait(false);
             }
@@ -95,25 +95,25 @@ public sealed class PostgresInspectionEvidenceStore : IInspectionEvidenceStore, 
         }
 
         if (size <= 0)
-            throw new InvalidDataException("证据文件不能为空。");
+            throw new InvalidDataException("附件不能为空。");
 
-        var finalPath = GetEvidencePath(hash, safeFileName);
+        var finalPath = GetAttachmentPath(hash, safeFileName);
         Directory.CreateDirectory(Path.GetDirectoryName(finalPath)!);
         if (!File.Exists(finalPath))
             File.Move(tempPath, finalPath);
         else
             File.Delete(tempPath);
-        var storageRef = $"evidence://sha256/{hash}/{Uri.EscapeDataString(safeFileName)}";
+        var storageRef = $"attachment://sha256/{hash}/{Uri.EscapeDataString(safeFileName)}";
 
         await using var insert = _dataSource.CreateCommand(
             """
-            INSERT INTO inspection_evidence(evidence_id, storage_ref, sha256, media_type, file_name, size_bytes)
-            VALUES (@evidence_id, @storage_ref, @sha256, @media_type, @file_name, @size_bytes)
+            INSERT INTO inspection_attachments(attachment_id, storage_ref, sha256, media_type, file_name, size_bytes)
+            VALUES (@attachment_id, @storage_ref, @sha256, @media_type, @file_name, @size_bytes)
             ON CONFLICT (sha256) DO NOTHING
-            RETURNING evidence_id;
+            RETURNING attachment_id;
             """);
-        var evidenceId = Guid.CreateVersion7();
-        insert.Parameters.AddWithValue("evidence_id", evidenceId);
+        var attachmentId = Guid.CreateVersion7();
+        insert.Parameters.AddWithValue("attachment_id", attachmentId);
         insert.Parameters.AddWithValue("storage_ref", storageRef);
         insert.Parameters.AddWithValue("sha256", hash);
         insert.Parameters.AddWithValue("media_type", normalizedMediaType);
@@ -122,10 +122,10 @@ public sealed class PostgresInspectionEvidenceStore : IInspectionEvidenceStore, 
         await insert.ExecuteScalarAsync(ct).ConfigureAwait(false);
 
         var stored = await GetByShaAsync(hash, ct).ConfigureAwait(false)
-            ?? throw new InvalidOperationException("证据文件写入后无法读取元数据。");
-        return new EvidenceUploadResponse
+            ?? throw new InvalidOperationException("附件写入后无法读取元数据。");
+        return new AttachmentUploadResponse
         {
-            EvidenceId = stored.EvidenceId,
+            AttachmentId = stored.AttachmentId,
             StorageRef = stored.StorageRef,
             Sha256 = stored.Sha256,
             MediaType = stored.MediaType,
@@ -134,22 +134,22 @@ public sealed class PostgresInspectionEvidenceStore : IInspectionEvidenceStore, 
         };
     }
 
-    public async Task<InspectionEvidenceRef?> GetAsync(Guid evidenceId, CancellationToken ct = default)
+    public async Task<InspectionAttachment?> GetAsync(Guid attachmentId, CancellationToken ct = default)
     {
         await InitializeAsync(ct).ConfigureAwait(false);
         await using var command = _dataSource.CreateCommand(
             """
-            SELECT evidence_id, storage_ref, sha256, media_type, file_name, size_bytes
-            FROM inspection_evidence
-            WHERE evidence_id = @evidence_id;
+            SELECT attachment_id, storage_ref, sha256, media_type, file_name, size_bytes
+            FROM inspection_attachments
+            WHERE attachment_id = @attachment_id;
             """);
-        command.Parameters.AddWithValue("evidence_id", evidenceId);
+        command.Parameters.AddWithValue("attachment_id", attachmentId);
         await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
         return await reader.ReadAsync(ct).ConfigureAwait(false) ? Read(reader) : null;
     }
 
-    public async Task<bool> ExistsAsync(Guid evidenceId, CancellationToken ct = default)
-        => await GetAsync(evidenceId, ct).ConfigureAwait(false) is not null;
+    public async Task<bool> ExistsAsync(Guid attachmentId, CancellationToken ct = default)
+        => await GetAsync(attachmentId, ct).ConfigureAwait(false) is not null;
 
     public async ValueTask DisposeAsync()
     {
@@ -157,12 +157,12 @@ public sealed class PostgresInspectionEvidenceStore : IInspectionEvidenceStore, 
         await _dataSource.DisposeAsync().ConfigureAwait(false);
     }
 
-    private async Task<InspectionEvidenceRef?> GetByShaAsync(string sha256, CancellationToken ct)
+    private async Task<InspectionAttachment?> GetByShaAsync(string sha256, CancellationToken ct)
     {
         await using var command = _dataSource.CreateCommand(
             """
-            SELECT evidence_id, storage_ref, sha256, media_type, file_name, size_bytes
-            FROM inspection_evidence
+            SELECT attachment_id, storage_ref, sha256, media_type, file_name, size_bytes
+            FROM inspection_attachments
             WHERE sha256 = @sha256;
             """);
         command.Parameters.AddWithValue("sha256", sha256);
@@ -170,10 +170,10 @@ public sealed class PostgresInspectionEvidenceStore : IInspectionEvidenceStore, 
         return await reader.ReadAsync(ct).ConfigureAwait(false) ? Read(reader) : null;
     }
 
-    private static InspectionEvidenceRef Read(NpgsqlDataReader reader)
+    private static InspectionAttachment Read(NpgsqlDataReader reader)
         => new()
         {
-            EvidenceId = reader.GetGuid(0),
+            AttachmentId = reader.GetGuid(0),
             StorageRef = reader.GetString(1),
             Sha256 = reader.GetString(2),
             MediaType = reader.GetString(3),
@@ -184,6 +184,6 @@ public sealed class PostgresInspectionEvidenceStore : IInspectionEvidenceStore, 
     private string GetRootPath()
         => Path.GetFullPath(_options.RootPath, AppContext.BaseDirectory);
 
-    private string GetEvidencePath(string sha256, string fileName)
+    private string GetAttachmentPath(string sha256, string fileName)
         => Path.Combine(GetRootPath(), sha256[..2], sha256, fileName);
 }

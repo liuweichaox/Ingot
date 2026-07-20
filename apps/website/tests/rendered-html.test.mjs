@@ -56,7 +56,7 @@ const oldDesktopTerms = new RegExp([
   "SHA256SUMS",
 ].join("|"), "i");
 
-test("renders the Chinese product site around Ingot, Ingot Chat, and deeper investigation", async () => {
+test("renders the Chinese product site around Ingot, Ingot Chat, and combined analysis", async () => {
   const response = await render();
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
@@ -66,12 +66,12 @@ test("renders the Chinese product site around Ingot, Ingot Chat, and deeper inve
   assert.equal(response.headers.get("permissions-policy"), "camera=(), microphone=(), geolocation=()");
 
   const html = await response.text();
-  assert.match(html, /<title>Ingot — 让生产数据可验证、可追问、可分析<\/title>/i);
+  assert.match(html, /<title>Ingot — 查清生产过程，分析参数与质量<\/title>/i);
   assert.match(html, /INGOT · PRODUCTION INTELLIGENCE/);
-  assert.match(html, /让生产数据可验证/);
-  assert.match(html, /深入调查/);
-  assert.match(html, /多角色深入调查/);
-  assert.match(html, /让每个回答都有依据/);
+  assert.match(html, /把生产过程查清楚/);
+  assert.match(html, /综合分析/);
+  assert.match(html, /综合分析与原始记录/);
+  assert.match(html, /分析结果可以回到原始记录/);
   assert.match(html, /https:\/\/docs\.ingotstack\.com\/zh\/rfc-production-events/);
   assert.match(html, /cycle\.completed/);
   assert.match(html, /https:\/\/ingotstack\.com\/og\.png/i);
@@ -83,11 +83,11 @@ test("renders the stable English route with equivalent product scope", async () 
   const response = await render("/en/");
   assert.equal(response.status, 200);
   const html = await response.text();
-  assert.match(html, /<title>Ingot — Production facts you can verify, question, and investigate<\/title>/i);
+  assert.match(html, /<title>Ingot — understand production, process settings, and quality<\/title>/i);
   assert.match(html, /INGOT · PRODUCTION INTELLIGENCE/);
-  assert.match(html, /Production facts you can verify/i);
-  assert.match(html, /multi-perspective investigation/i);
-  assert.match(html, /Give every answer a basis/);
+  assert.match(html, /Understand production runs/i);
+  assert.match(html, /Combined analysis with original records/i);
+  assert.match(html, /Open the original record behind each result/);
   assert.match(html, /https:\/\/docs\.ingotstack\.com\/en\/rfc-production-events/);
   assert.match(html, /<html lang="en">/);
   assert.match(html, /rel="canonical" href="https:\/\/ingotstack\.com\/en\/"/i);
@@ -102,8 +102,8 @@ test("keeps the public source aligned with the published boundaries", async () =
   ]);
 
   assert.match(pageSource, /Ingot Chat/);
-  assert.match(pageSource, /深入调查/);
-  assert.match(pageSource, /Deeper investigation/);
+  assert.match(pageSource, /综合分析/);
+  assert.match(pageSource, /Combined analysis/);
   assert.match(pageSource, /工艺视角：检查过程变化/);
   assert.match(pageSource, /Process view: review changes in the work/);
   assert.match(pageSource, /只读取已有记录/);

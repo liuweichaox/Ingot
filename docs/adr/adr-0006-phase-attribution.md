@@ -4,27 +4,27 @@
 **日期（Date）：** 2026-07-20
 **决策者（Deciders）：** Ingot 维护者（@liuweichaox）
 **依赖：** [ADR-0005](adr-0005-feature-registry.md) 的 phase 维度
-**决策：** 边缘上报**配方步序**（事实），中心做**阶段语义映射**（配置）；阶段区间物化并携带出处
+**决策：** 边缘上报**配方步序**（记录），中心做**阶段含义映射**（配置）；阶段区间物化并携带出处
 
 ---
 
-## 1. 核心分层：边缘报步序，中心做语义
+## 1. 核心分层：边缘报步序，中心做含义
 
-模压机是按配方步序运行的。PLC / 配方控制器里有 step number 或 segment index —— **这是机器上的客观事实，不是推断**。
+模压机是按配方步序运行的。PLC / 配方控制器里有 step number 或 segment index —— **这是机器上的客观记录，不是推断**。
 
-绝大多数团队的第一直觉是让边缘直接发 `phase = "anneal"`。这是错的，理由是它把**语义固化在了现场**：
+绝大多数团队的第一直觉是让边缘直接发 `phase = "anneal"`。这是错的，理由是它把**含义固化在了现场**：
 
 | | 边缘报 `phase="anneal"` | 边缘报 `recipe_step=4` |
 |---|---|---|
 | 阶段划分要调整 | 改适配器，下车间，重启 | 改中心一张映射表 |
 | 历史数据重新划分 | 不可能 | 重算即可 |
 | 边缘需要知道 | 什么叫退火 | 现在是第几步 |
-| 上报的是 | 一个解释 | 一个事实 |
+| 上报的是 | 一个解释 | 一个记录 |
 
-**这与 README 的定位是同一条线：`Teams own source protocols. Ingot owns the fact contract.`** 边缘只报它确切知道的东西，语义归属留在中心，因为语义会变而事实不会。
+**这与 README 的定位是同一条线：`Teams own source protocols. Ingot owns the record contract.`** 边缘只报它确切知道的东西，含义归属留在中心，因为含义会变而记录不会。
 
 ```text
-边缘（事实）                        中心（语义）
+边缘（记录）                        中心（含义）
 context.recipe_id      = "PGM-A17"
 context.recipe_version = 3            PhaseMapping
 context.recipe_step    = 4      ──►   (PGM-A17, v3, step 4) → anneal
@@ -42,7 +42,7 @@ context.recipe_step    = 4      ──►   (PGM-A17, v3, step 4) → anneal
 |---|---|---|---|
 | `recipe_id` / `recipe_version` | **周期级常量**：这一炉跑哪个程序 | `PGM-A17 v3` | `context`，周期内不变 |
 | `recipe_step` | **点级变量**：现在跑到第几段 | `1…12` | `context`，逐事件变化 |
-| `PhaseDefinition` | **语义分组**：哪几段算一个阶段 | step 7,8,9 → anneal | 中心注册表 |
+| `PhaseDefinition` | **含义分组**：哪几段算一个阶段 | step 7,8,9 → anneal | 中心注册表 |
 
 ### 1.5.1 步 → 阶段是多对一
 
@@ -88,7 +88,7 @@ PGM-A17 v3
 2. **纯信号规则推断**：温度阈值、斜率符号、压力信号有无。脆弱，随产品变化。
 3. **归为 `unknown`**，只做整周期特征，放弃阶段级分析。
 
-无论 1 还是 2，结果都是 `provenance = inferred`（见 §2），**不能因为方法更聪明就升级为事实**。区别只在推断质量，不在证据等级。
+无论 1 还是 2，结果都是 “阶段来源：系统估算”（见 §2），**不能因为方法更聪明就当成机器直接采集的记录**。区别只在推断质量，不在数据支持程度。
 
 > 注意路线 1 有个反直觉的失效点：实际执行常常偏离标称时序 —— 保温段要等到温才转下一段，所以实际时长普遍长于标称。**因此绝不能用"周期起点 + 标称时间偏移"直接展开阶段边界**，必须用转换条件去信号里对齐。前者是最容易想到、也最容易错的做法。
 
@@ -98,21 +98,21 @@ PGM-A17 v3
 
 现场情况参差不齐，必须有降级路径。但降级的结果**必须可区分**：
 
-| 优先级 | 来源 | `provenance` | 说明 |
+| 优先级 | 来源 | “记录方式” | 说明 |
 |---|---|---|---|
 | 1 | 显式阶段事件 `phase.{code}.started` / `.completed` | `explicit_event` | 最强。边界精确到事件时刻 |
 | 2 | 配方步序 + 映射表 | `recipe_step` | **推荐主路径**（§1） |
 | 3 | 事件自带 `context.phase` 标注 | `event_tag` | 兼容已有系统 |
-| 4 | 服务端规则推断（温度阈值、斜率符号、压力有无） | `inferred` | 降级，仅用于无步序的老设备 |
+| 4 | 服务端规则推断（温度阈值、斜率符号、压力有无） | “系统估算” | 降级，仅用于无步序的老设备 |
 | 5 | 无法归属 | `unknown` | 计入数据质量问题，不静默丢弃 |
 
 **这条链的价值不在于有几层，而在于第 4 层必须被标记出来。**
 
-Ingot 的全部定位建立在"记录的是事实"上。推断出来的阶段不是事实，让它冒充观测结果，就是在事实库里掺沙子 —— 而且是最难发现的那种，因为它看起来和真的一模一样。
+Ingot 的全部定位建立在"记录的是记录"上。推断出来的阶段不是记录，让它冒充观测结果，就是在生产记录库里掺沙子 —— 而且是最难发现的那种，因为它看起来和真的一模一样。
 
 因此：
-- `cycle_phases` 与 `cycle_features` 每行都带 `provenance`
-- 基于 `inferred` 阶段算出的特征，工具结果必须附 `Limitation`
+- `cycle_phases` 与 `cycle_features` 每行都带 “记录方式”
+- 基于 “系统估算” 阶段算出的特征，工具结果必须附 `Limitation`
 - Web 上视觉区分（虚线边界 / 灰色标注）
 - Chat 回答引用这类数字时，限制说明不可省略
 
@@ -131,9 +131,9 @@ cycle_phases (
   phase_order           int         not null,
   started_at            timestamptz not null,
   ended_at              timestamptz,           -- null = 未闭合
-  provenance            text        not null,  -- explicit_event|recipe_step|event_tag|inferred
-  rule_version          int,                   -- provenance=inferred 时必填
-  source_event_id_start uuid,                  -- 证据链
+  phase_source            text        not null,  -- machine|recipe|estimated
+  rule_version          int,                   -- 阶段来源为“系统估算” 时必填
+  source_event_id_start uuid,                  -- 原始记录链接
   source_event_id_end   uuid,
   is_complete           boolean     not null,
   computed_at           timestamptz not null,
@@ -149,11 +149,11 @@ event.occurred_at >= phase.started_at AND event.occurred_at < phase.ended_at
 
 `occurred_at` 是 hypertable 的分区键，这个 join 很便宜 —— 这正是 ADR-0004 §2「聚合下推、无行数上限」能成立的原因。
 
-`source_event_id_start/end` 提供证据链：用户可以点开"凭什么说这段是退火"，看到具体是哪条事件划的界。**没有这两列，阶段就成了一个无法质疑的黑箱**，而 `BoundedInvestigationWorkflow` 里 challenge 角色最该攻击的就是这类隐含前提。
+`source_event_id_start/end` 提供原始记录链接：用户可以点开“为什么把这段算作退火”，看到具体是哪条记录划定了边界。**没有这两列，阶段就成了一个无法复核的黑箱**，而 `BoundedCombinedAnalysisWorkflow` 的复核视角应优先检查这类隐含前提。
 
 ---
 
-## 4. 边界语义（直接影响数字正确性）
+## 4. 边界计算规则（直接影响数字正确性）
 
 `slope` 和 `integral` 对边界点极其敏感。必须明确规定，否则退火速率会因为实现细节的差异而给出不同答案。
 
@@ -207,7 +207,7 @@ public string BoundaryMode { get; init; } = "strict";
 | 顺序错乱 | 压制出现在退火之后 |
 | 时长异常 | 超出 `PhaseDefinition` 的期望时长范围 |
 | 时间空洞 | 周期内有事件不属于任何阶段（`unknown` 归属） |
-| 出处降级 | 该周期有阶段来自 `inferred` |
+| 出处降级 | 该周期有阶段来自 “系统估算” |
 
 这些直接扩展 `check_data_quality` —— 把现有的周期级配对检查提升到阶段级。事件类型建议采用 `phase.{code}.started` / `.completed` 命名，正是为了让现有的后缀配对逻辑（`.started` / `.completed` / `.cleared` / `.exited`）能直接复用，不必新写一套。
 
@@ -219,10 +219,10 @@ public string BoundaryMode { get; init; } = "strict";
 
 | 不要 | 原因 |
 |---|---|
-| 让边缘上报语义化的 `phase="anneal"` | 语义固化在现场，改一次要下车间；历史数据无法重新划分 |
-| 把阈值推断作为主路径 | 脆弱、随产品变化、不可审计、污染事实定位 |
+| 让边缘上报含义化的 `phase="anneal"` | 含义固化在现场，改一次要下车间；历史数据无法重新划分 |
+| 把阈值推断作为主路径 | 脆弱、随产品变化、不可审计、让机器采集与系统估算混在一起 |
 | 查询时实时推断阶段 | 不可复现（同一问题两次答案不同）、且贵 |
-| 不区分 `inferred` 与观测 | 事实库掺沙子，且是最难发现的那种 |
+| 不区分 “系统估算” 与观测 | 把系统估算结果混进机器采集记录，且是最难发现的那种 |
 | 静默丢弃无法归属的事件 | 归属失败本身就是重要的数据质量信号 |
 | 对比分析时静默排除未闭合周期 | 异常中断的周期往往正是有问题的那些，排除会让良率系统性偏好 |
 
@@ -237,7 +237,7 @@ public string BoundaryMode { get; init; } = "strict";
 | 3 | `cycle_phases` 物化 + 封口/重算作业 | 2 |
 | 4 | `BoundaryMode` 进 `FeatureDefinition`，`cycle_features` 按阶段计算 | 3 |
 | 5 | `check_data_quality` 扩展阶段级检查 | 3 |
-| 6 | `inferred` 推断规则引擎（仅在遇到无步序的老设备时才做） | 3，可延后 |
+| 6 | “系统估算” 推断规则引擎（仅在遇到无步序的老设备时才做） | 3，可延后 |
 
 步骤 6 刻意排在最后：**先把有步序的设备做好，不要一开始就为最差的数据源设计**。
 
@@ -247,9 +247,9 @@ public string BoundaryMode { get; init; } = "strict";
 
 | 决策 | 收益 | 代价 |
 |---|---|---|
-| 步序 → 阶段的中心映射 | 语义可改、历史可重划、边缘极简 | 依赖边缘能拿到 step number；拿不到时要走 `inferred` |
+| 步序 → 阶段的中心映射 | 含义可改、历史可重划、边缘极简 | 依赖边缘能拿到 step number；拿不到时要走 “系统估算” |
 | 物化 `cycle_phases` | 特征计算变成廉价 join | 存储与重算作业；迟到事件带来一致性窗口 |
-| `provenance` 贯穿到底 | 守住事实定位 | 每一层（存储、工具、UI、回答）都要传递和呈现，容易漏 |
+| “记录方式” 贯穿到底 | 区分机器采集与系统估算 | 每一层（存储、工具、UI、回答）都要传递和呈现，容易漏 |
 | `BoundaryMode` 可配置 | 斜率/积分数值正确且唯一 | 增加配置认知负担；默认值必须选对，否则多数人不会改 |
 | 未闭合周期不静默排除 | 避免良率偏差 | 用户会看到更多 limitation，观感上"系统很啰嗦" |
 

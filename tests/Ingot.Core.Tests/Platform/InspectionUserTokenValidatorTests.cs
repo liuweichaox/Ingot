@@ -5,10 +5,10 @@ using Xunit;
 
 namespace Ingot.Core.Tests.Platform;
 
-public sealed class InspectionActorTokenValidatorTests
+public sealed class InspectionUserTokenValidatorTests
 {
     [Fact]
-    public void IsAuthorized_ShouldBindTokenToSubmittedActor()
+    public void IsAuthorized_ShouldBindTokenToSubmittedUser()
     {
         var validator = CreateValidator(requireToken: true);
 
@@ -27,11 +27,11 @@ public sealed class InspectionActorTokenValidatorTests
         Assert.True(validator.IsAuthorized("UNREGISTERED", null));
     }
 
-    private static InspectionActorTokenValidator CreateValidator(bool requireToken)
+    private static InspectionUserTokenValidator CreateValidator(bool requireToken)
         => new(Options.Create(new InspectionSubmissionOptions
         {
             RequireToken = requireToken,
-            ActorTokens = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            UserTokens = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
                 ["OPERATOR-001"] = "operator-secret"
             }

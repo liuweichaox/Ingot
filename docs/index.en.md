@@ -1,20 +1,20 @@
 # Ingot Documentation
 
-Ingot is a trusted production-facts and process-investigation platform. It stores important records from different sources as standard production facts and provides **Ingot Chat** in Platform Web as the main workspace for engineers. Teams implement their own source adaptation and submit `ProductionEvent` or `InspectionRecord` records through the public APIs; Ingot embeds no field-device protocol.
+Ingot is a manufacturing data collection and process analysis platform. It organizes important data from different sources as standard production records and provides **Ingot Chat** as the main workspace for engineers. Teams implement their own source connections and submit `ProductionEvent` or `InspectionRecord` records through the public APIs; Ingot embeds no field-device protocol.
 
 ## Get started
 
 1. [Getting started](tutorial-getting-started.en.md)
-2. [Event ingestion](rfc-production-events.en.md)
+2. [Production record ingestion](rfc-production-events.en.md)
 3. [Ingot Chat](chat.en.md)
 4. [Deployment](tutorial-deployment.en.md)
 5. [Configuration](tutorial-configuration.en.md)
 
 ## Ingot Chat
 
-- [Ingot Chat](chat.en.md): everyday fact questions and bounded deeper investigations involving process, quality, and challenge roles; every result links back to evidence.
+- [Ingot Chat](chat.en.md): quick queries and bounded combined analysis across process, quality, and review perspectives; every result links to the matching production records.
 
-## Event ingestion
+## Production record ingestion
 
 - [Production event specification](rfc-production-events.en.md): `ProductionEvent` batches, authentication, deduplication, query, and extension rules.
 - [Getting started](tutorial-getting-started.en.md): start Platform and submit the first batch.
@@ -32,6 +32,7 @@ Ingot is a trusted production-facts and process-investigation platform. It store
 - [Modules](modules.en.md)
 - [Development](tutorial-development.en.md)
 - [Contributing](../CONTRIBUTING.en.md)
+- [Product language](product-language.en.md)
 
 ## References
 

@@ -22,7 +22,7 @@ public static partial class EventQueryContractValidator
         if (limit is < 1 or > 500)
             return Fail("limit 必须在 1 到 500 之间。", out error);
         if (context is null)
-            return Fail("上下文过滤不能为空。", out error);
+            return Fail("关联信息过滤不能为空。", out error);
         if (context.Keys.Any(static key => !ContextKeyPattern().IsMatch(key)))
         {
             return Fail(

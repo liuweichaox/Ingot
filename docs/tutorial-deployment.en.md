@@ -1,13 +1,13 @@
 # Deployment
 
-This guide deploys Platform Web, Platform API, and PostgreSQL. Teams deploy source adaptation in the network and runtime appropriate to the plant and submit facts to Platform through the standard event API.
+This guide deploys Platform Web, Platform API, and PostgreSQL. Teams deploy source adaptation in the network and runtime appropriate to the plant and submit records to Platform through the standard event API.
 
 ## Pre-deployment checks
 
 - Prepare separate secrets for PostgreSQL, event ingestion, and Chat;
 - if deploying optional `Ingot.Edge.ConnectorHost`, prepare an independent local-ingress token;
 - create an independent event token for every `edgeId`;
-- configure the model, model key, independent token, and required fact scope for every Chat Actor;
+- configure the model, model key, independent token, and required record scope for every Chat user;
 - place Platform API and the database on a controlled network and use TLS in production;
 - ensure source-adaptation programs do not put device credentials, raw large objects, or sensitive text into event context.
 
@@ -46,11 +46,11 @@ export INGOT_CHAT_OPERATOR_ALLOW_ALL=true
 docker compose -f docker-compose.app.yml up -d --build
 
 curl http://localhost:8000/api/v1/chat/capabilities \
-  -H "X-Ingot-Actor: operator" \
+  -H "X-Ingot-User: operator" \
   -H "Authorization: Bearer ${INGOT_CHAT_OPERATOR_TOKEN}"
 ```
 
-This Compose configuration grants `operator` access to all facts. Production deployments should configure the actual scope required by each role and inject every secret through a secret store or protected environment variables.
+This Compose configuration grants `operator` access to all records. Production deployments should configure the actual scope required by each role and inject every secret through a secret store or protected environment variables.
 
 ## Source ingestion
 
@@ -72,16 +72,16 @@ docker compose -f docker-compose.app.yml --profile connector-host up -d connecto
 
 Direct Platform batches and Host ingress use different tokens, so choose, monitor, and operate one path for each network boundary.
 
-Platform requires no specific language, process model, or plant operating system. See the [production event specification](rfc-production-events.en.md) for full fields and retry semantics.
+Platform requires no specific language, process model, or plant operating system. See the [production event specification](rfc-production-events.en.md) for full fields and retry handling rules.
 
 ## Backup and upgrade
 
 - Back up PostgreSQL according to organizational recovery objectives;
 - run `./scripts/verify.sh` and validate Compose configuration before an upgrade;
 - validate compatibility in an isolated environment with real but de-identified event batches;
-- increase `eventTypeVersion` or add an event type for incompatible semantic changes;
-- pass Chat evaluation before changing model or prompt versions and retain run, tool, and evidence audit records.
+- increase `eventTypeVersion` or add an event type for incompatible meaning changes;
+- pass Chat evaluation before changing model or prompt versions and retain run, tool, and related records audit records.
 
 ## Operating boundary
 
-Ingot provides fact storage, query, and conversation. Device protocols, plant safety, network isolation, credential rotation, source-adaptation availability, and equipment control remain deployment and field-system responsibilities.
+Ingot provides record storage, query, and conversation. Device protocols, plant safety, network isolation, credential rotation, source-adaptation availability, and equipment control remain deployment and field-system responsibilities.

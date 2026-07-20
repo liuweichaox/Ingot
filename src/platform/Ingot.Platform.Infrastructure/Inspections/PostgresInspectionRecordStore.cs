@@ -47,7 +47,7 @@ public sealed class PostgresInspectionRecordStore : IInspectionRecordStore, IAsy
                   submitter_verified  BOOLEAN NOT NULL,
                   instrument          JSONB,
                   measurements        JSONB NOT NULL DEFAULT '[]'::jsonb,
-                  evidence            JSONB NOT NULL DEFAULT '[]'::jsonb,
+                  attachments            JSONB NOT NULL DEFAULT '[]'::jsonb,
                   notes               TEXT,
                   payload_hash        TEXT NOT NULL,
                   CHECK (definition_version > 0),
@@ -85,11 +85,11 @@ public sealed class PostgresInspectionRecordStore : IInspectionRecordStore, IAsy
             INSERT INTO inspection_records(
               record_id, workpiece_id, operation_run_id, definition_code, definition_version,
               measured_at, recorded_at, outcome, submitted_by, submitter_verified, instrument,
-              measurements, evidence, notes, payload_hash)
+              measurements, attachments, notes, payload_hash)
             VALUES (
               @record_id, @workpiece_id, @operation_run_id, @definition_code, @definition_version,
               @measured_at, @recorded_at, @outcome, @submitted_by, @submitter_verified, @instrument,
-              @measurements, @evidence, @notes, @payload_hash)
+              @measurements, @attachments, @notes, @payload_hash)
             ON CONFLICT (record_id) DO NOTHING
             RETURNING record_id;
             """);
@@ -194,9 +194,9 @@ public sealed class PostgresInspectionRecordStore : IInspectionRecordStore, IAsy
             NpgsqlDbType.Jsonb,
             JsonSerializer.Serialize(request.Measurements, JsonOptions));
         command.Parameters.AddWithValue(
-            "evidence",
+            "attachments",
             NpgsqlDbType.Jsonb,
-            JsonSerializer.Serialize(request.Evidence, JsonOptions));
+            JsonSerializer.Serialize(request.Attachments, JsonOptions));
         command.Parameters.AddWithValue("notes", (object?)request.Notes ?? DBNull.Value);
         command.Parameters.AddWithValue("payload_hash", payloadHash);
     }
@@ -208,7 +208,7 @@ public sealed class PostgresInspectionRecordStore : IInspectionRecordStore, IAsy
             : JsonSerializer.Deserialize<InspectionInstrumentRef>(reader.GetString(11), JsonOptions);
         var measurements = JsonSerializer.Deserialize<InspectionCharacteristicResult[]>(
                                reader.GetString(12), JsonOptions) ?? [];
-        var evidence = JsonSerializer.Deserialize<InspectionEvidenceRef[]>(
+        var attachments = JsonSerializer.Deserialize<InspectionAttachment[]>(
                            reader.GetString(13), JsonOptions) ?? [];
         return new StoredInspectionRecord(
             new InspectionRecord
@@ -226,7 +226,7 @@ public sealed class PostgresInspectionRecordStore : IInspectionRecordStore, IAsy
                 SubmitterVerified = reader.GetBoolean(10),
                 Instrument = instrument,
                 Measurements = measurements,
-                Evidence = evidence,
+                Attachments = attachments,
                 Notes = reader.IsDBNull(14) ? null : reader.GetString(14)
             },
             reader.GetString(15));
@@ -257,7 +257,7 @@ public sealed class PostgresInspectionRecordStore : IInspectionRecordStore, IAsy
     private const string SelectColumns = """
         SELECT record_id, workpiece_id, operation_run_id, definition_code, definition_version,
                measured_at, recorded_at, ingested_at, outcome, submitted_by, submitter_verified,
-               instrument::text, measurements::text, evidence::text, notes, payload_hash
+               instrument::text, measurements::text, attachments::text, notes, payload_hash
         FROM inspection_records
         """;
 }

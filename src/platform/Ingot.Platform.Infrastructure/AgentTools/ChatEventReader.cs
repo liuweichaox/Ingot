@@ -6,11 +6,11 @@ namespace Ingot.Platform.Infrastructure.AgentTools;
 
 public sealed class ChatDataAccessOptions
 {
-    public Dictionary<string, ChatActorDataScope> Actors { get; set; }
+    public Dictionary<string, ChatUserDataScope> Users { get; set; }
         = new(StringComparer.OrdinalIgnoreCase);
 }
 
-public sealed class ChatActorDataScope
+public sealed class ChatUserDataScope
 {
     public bool AllowAll { get; set; }
 
@@ -20,12 +20,12 @@ public sealed class ChatActorDataScope
 public interface IChatEventReader
 {
     Task<IReadOnlyList<PlatformProductionEvent>> QueryAsync(
-        string actorId,
+        string userId,
         PlatformEventQuery query,
         CancellationToken ct = default);
 
     Task<PlatformEventScopeStats> GetScopeStatsAsync(
-        string actorId,
+        string userId,
         PlatformEventQuery query,
         CancellationToken ct = default);
 }
@@ -37,11 +37,11 @@ public sealed class ChatEventReader(
     private readonly ChatDataAccessOptions _options = options.Value;
 
     public async Task<IReadOnlyList<PlatformProductionEvent>> QueryAsync(
-        string actorId,
+        string userId,
         PlatformEventQuery query,
         CancellationToken ct = default)
     {
-        var edgeIds = ResolveEdgeScope(actorId);
+        var edgeIds = ResolveEdgeScope(userId);
         if (edgeIds is null)
             return await events.QueryAsync(query, ct).ConfigureAwait(false);
         if (!string.IsNullOrWhiteSpace(query.EdgeId))
@@ -59,11 +59,11 @@ public sealed class ChatEventReader(
     }
 
     public async Task<PlatformEventScopeStats> GetScopeStatsAsync(
-        string actorId,
+        string userId,
         PlatformEventQuery query,
         CancellationToken ct = default)
     {
-        var edgeIds = ResolveEdgeScope(actorId);
+        var edgeIds = ResolveEdgeScope(userId);
         if (edgeIds is null)
             return await events.GetScopeStatsAsync(query, ct).ConfigureAwait(false);
         if (!string.IsNullOrWhiteSpace(query.EdgeId))
@@ -77,11 +77,11 @@ public sealed class ChatEventReader(
         return Combine(parts);
     }
 
-    // null 表示 AllowAll（不按 Edge 收窄）；否则返回该 Actor 被授权的 Edge 集合。
-    private string[]? ResolveEdgeScope(string actorId)
+    // null 表示 AllowAll（不按 Edge 收窄）；否则返回该用户 被授权的 Edge 集合。
+    private string[]? ResolveEdgeScope(string userId)
     {
-        if (!_options.Actors.TryGetValue(actorId, out var scope))
-            throw new UnauthorizedAccessException("当前 Actor 没有配置生产数据访问范围。");
+        if (!_options.Users.TryGetValue(userId, out var scope))
+            throw new UnauthorizedAccessException("当前用户 没有配置生产数据访问范围。");
         if (scope.AllowAll)
             return null;
 
@@ -91,14 +91,14 @@ public sealed class ChatEventReader(
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
         if (edgeIds.Length == 0)
-            throw new UnauthorizedAccessException("当前 Actor 的生产数据访问范围为空。");
+            throw new UnauthorizedAccessException("当前用户 的生产数据访问范围为空。");
         return edgeIds;
     }
 
     private static void EnsureEdgeAllowed(string[] edgeIds, string requestedEdgeId)
     {
         if (!edgeIds.Contains(requestedEdgeId, StringComparer.OrdinalIgnoreCase))
-            throw new UnauthorizedAccessException("当前 Actor 不能访问请求的 Edge 数据。");
+            throw new UnauthorizedAccessException("当前用户 不能访问请求的 Edge 数据。");
     }
 
     private static PlatformEventScopeStats Combine(IReadOnlyList<PlatformEventScopeStats> parts)

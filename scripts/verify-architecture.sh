@@ -75,7 +75,7 @@ check "agent-providers" src/agent/Ingot.Agent.Providers \
 
 check "analysis-tools" src/platform/Ingot.Platform.Infrastructure/AgentTools \
   '(INSERT|UPDATE|DELETE|ExecuteNonQuery|Http(Post|Put|Patch|Delete)|WriteAsync)' \
-  "事实分析工具必须保持查询职责"
+  "记录分析工具必须保持查询职责"
 
 check "edge-infrastructure" src/edge/Ingot.Edge.Infrastructure \
   'using (Ingot\.Platform|Ingot\.Edge\.ConnectorHost)' \

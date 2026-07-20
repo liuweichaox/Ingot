@@ -16,17 +16,17 @@ public sealed class CompareCyclesTool(
     {
         Name = "compare_cycles",
         Version = "1.0.0",
-        Surface = ProductSurfaces.Chat,
+        EntryPoint = ProductEntryPoints.Chat,
         Purpose = RunPurposes.ReadOnlyAnalysis,
-        Description = "比较基准周期与一组候选周期的事件序列、检测结果和数值特性差异。只读。",
+        Description = "比较一个生产周期与一组同类周期的过程、检测结果和参数差异。只查询，不修改数据。",
         InputSchema = JsonSerializer.SerializeToElement(new
         {
             type = "object",
-            required = new[] { "baselineCorrelationId", "candidateCorrelationIds" },
+            required = new[] { "baselineCycleId", "comparisonCycleIds" },
             properties = new
             {
-                baselineCorrelationId = new { type = "string", minLength = 1, maxLength = 200 },
-                candidateCorrelationIds = new { type = "string", minLength = 1, maxLength = 4000 }
+                baselineCycleId = new { type = "string", minLength = 1, maxLength = 200 },
+                comparisonCycleIds = new { type = "string", minLength = 1, maxLength = 4000 }
             },
             additionalProperties = false
         })
@@ -37,20 +37,20 @@ public sealed class CompareCyclesTool(
         AgentExecutionContext context,
         CancellationToken ct = default)
     {
-        var baselineId = Require(call, "baselineCorrelationId").Trim();
-        var candidateIds = Require(call, "candidateCorrelationIds")
+        var baselineId = Require(call, "baselineCycleId").Trim();
+        var candidateIds = Require(call, "comparisonCycleIds")
             .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Distinct(StringComparer.Ordinal)
             .Where(id => !string.Equals(id, baselineId, StringComparison.Ordinal))
             .Take(200)
             .ToArray();
         if (candidateIds.Length == 0)
-            throw new ArgumentException("compare_cycles 至少需要一个候选周期。", nameof(call));
+            throw new ArgumentException("compare_cycles 至少需要一个对比周期。", nameof(call));
 
-        var baseline = await LoadCycleAsync(context.ActorId, baselineId, ct).ConfigureAwait(false);
+        var baseline = await LoadCycleAsync(context.UserId, baselineId, ct).ConfigureAwait(false);
         var candidates = new List<CycleSnapshot>();
         foreach (var candidateId in candidateIds)
-            candidates.Add(await LoadCycleAsync(context.ActorId, candidateId, ct).ConfigureAwait(false));
+            candidates.Add(await LoadCycleAsync(context.UserId, candidateId, ct).ConfigureAwait(false));
 
         var baselineInspections = await inspections.QueryAsync(
             new InspectionRecordQuery { OperationRunId = baselineId, Limit = 500 },
@@ -75,63 +75,63 @@ public sealed class CompareCyclesTool(
         var durationStats = new
         {
             baseline.DurationMs,
-            candidateMeanMs = candidateDurations.Length == 0 ? (double?)null : candidateDurations.Average(),
-            candidateP50Ms = Percentile(candidateDurations, 0.5),
-            candidateP90Ms = Percentile(candidateDurations, 0.9)
+            comparisonAverageMs = candidateDurations.Length == 0 ? (double?)null : candidateDurations.Average(),
+            comparisonMedianMs = Percentile(candidateDurations, 0.5),
+            comparisonP90Ms = Percentile(candidateDurations, 0.9)
         };
         var baselinePassRate = PassRate(baselineInspections);
         var candidatePassRate = PassRate(candidateInspections);
         var limitations = new List<string>();
         if (baseline.RowsReachedLimit || candidates.Any(static item => item.RowsReachedLimit))
-            limitations.Add("至少一个周期命中 500 条事件窗口上限，事件序列差异可能被截断。");
+            limitations.Add("至少一个周期超过 500 条生产记录，过程差异可能没有完全显示。");
         if (baselineInspections.Count == 500 || candidateInspections.Count >= candidateIds.Length * 500)
             limitations.Add("检测记录查询达到窗口上限，合格率和测量统计可能被截断。");
         if (baseline.Events == 0)
-            limitations.Add("基准周期没有生产事件。");
+            limitations.Add("基准周期没有生产记录。");
         if (candidates.Any(static item => item.Events == 0))
-            limitations.Add("部分候选周期没有生产事件。");
+            limitations.Add("部分同类周期没有生产记录。");
 
         return new AnalysisToolResult
         {
             Tool = Definition.Name,
-            Summary = $"已比较基准周期 {baselineId} 与 {candidateIds.Length} 个候选周期：基准检测合格率 {FormatRate(baselinePassRate)}，候选检测合格率 {FormatRate(candidatePassRate)}。",
+            Summary = $"已比较基准周期 {baselineId} 与 {candidateIds.Length} 个对比周期：基准检测合格率 {FormatRate(baselinePassRate)}，对比周期检测合格率 {FormatRate(candidatePassRate)}。",
             Data = JsonSerializer.SerializeToElement(new
             {
-                baselineCorrelationId = baselineId,
-                candidateCorrelationIds = candidateIds,
+                baselineCycleId = baselineId,
+                comparisonCycleIds = candidateIds,
                 eventSequence = new
                 {
-                    baselineEventCount = baseline.Events,
-                    candidateEventCount = candidates.Sum(static item => item.Events),
-                    eventTypesOnlyInBaseline = onlyBaseline,
-                    eventTypesOnlyInCandidates = onlyCandidates
+                    baselineProductionRecordCount = baseline.Events,
+                    comparisonProductionRecordCount = candidates.Sum(static item => item.Events),
+                    recordTypesOnlyInBaseline = onlyBaseline,
+                    recordTypesOnlyInComparison = onlyCandidates
                 },
                 duration = durationStats,
                 inspection = new
                 {
-                    baselineRecords = baselineInspections.Count,
-                    candidateRecords = candidateInspections.Count,
+                    baselineInspectionCount = baselineInspections.Count,
+                    comparisonInspectionCount = candidateInspections.Count,
                     baselinePassRate,
-                    candidatePassRate,
+                    comparisonPassRate = candidatePassRate,
                     characteristics = comparison
                 }
             }),
-            Artifacts =
+            Details =
             [
-                new AnalysisArtifactRef
+                new ResultDetailLink
                 {
                     Kind = "event-query",
-                    Label = "基准周期完整事件",
+                    Label = "基准周期完整生产记录",
                     Url = $"/api/v1/events?correlationId={Uri.EscapeDataString(baselineId)}&limit=500"
                 },
-                new AnalysisArtifactRef
+                new ResultDetailLink
                 {
                     Kind = "inspection-query",
                     Label = "基准周期检测记录",
                     Url = $"/api/v1/inspection-records?operationRunId={Uri.EscapeDataString(baselineId)}&limit=500"
                 }
             ],
-            Evidence = BuildEvidence(baselineId, candidateIds),
+            RelatedRecords = BuildRelatedRecords(baselineId, candidateIds),
             Limitations = limitations,
             Outcome = baseline.Events > 0 && candidates.Any(static item => item.Events > 0)
                 ? AnalysisToolOutcomes.Sufficient
@@ -139,10 +139,10 @@ public sealed class CompareCyclesTool(
         };
     }
 
-    private async Task<CycleSnapshot> LoadCycleAsync(string actorId, string correlationId, CancellationToken ct)
+    private async Task<CycleSnapshot> LoadCycleAsync(string userId, string correlationId, CancellationToken ct)
     {
         var rows = await events.QueryAsync(
-            actorId,
+            userId,
             new PlatformEventQuery { CorrelationId = correlationId, Limit = 500 },
             ct).ConfigureAwait(false);
         var ordered = rows.OrderBy(static row => row.Event.OccurredAt).ThenBy(static row => row.IngestId).ToArray();
@@ -182,11 +182,11 @@ public sealed class CompareCyclesTool(
                 return new
                 {
                     characteristicCode = code,
-                    baselineCount = left.Count,
-                    candidateCount = right.Count,
-                    baselineMean = leftMean,
-                    candidateMean = rightMean,
-                    meanDifference = leftMean.HasValue && rightMean.HasValue ? rightMean - leftMean : null,
+                    baselineSampleCount = left.Count,
+                    comparisonSampleCount = right.Count,
+                    baselineAverage = leftMean,
+                    comparisonAverage = rightMean,
+                    averageDifference = leftMean.HasValue && rightMean.HasValue ? rightMean - leftMean : null,
                     effectSize = CohenD(left, right)
                 };
             })
@@ -242,21 +242,21 @@ public sealed class CompareCyclesTool(
             ? null
             : records.Count(static record => record.Outcome == "PASS") / (double)records.Count;
 
-    private static IReadOnlyList<EvidenceRef> BuildEvidence(string baselineId, IReadOnlyList<string> candidateIds)
+    private static IReadOnlyList<RelatedRecordRef> BuildRelatedRecords(string baselineId, IReadOnlyList<string> candidateIds)
         =>
         [
-            new EvidenceRef
+            new RelatedRecordRef
             {
                 Kind = "event-query",
                 Id = $"correlation:{baselineId}",
                 Label = $"基准周期 {baselineId}",
                 Url = $"/api/v1/events?correlationId={Uri.EscapeDataString(baselineId)}&limit=500"
             },
-            .. candidateIds.Take(20).Select(id => new EvidenceRef
+            .. candidateIds.Take(20).Select(id => new RelatedRecordRef
             {
                 Kind = "event-query",
                 Id = $"correlation:{id}",
-                Label = $"候选周期 {id}",
+                Label = $"对比周期 {id}",
                 Url = $"/api/v1/events?correlationId={Uri.EscapeDataString(id)}&limit=500"
             })
         ];
@@ -278,4 +278,3 @@ public sealed class CompareCyclesTool(
         double? DurationMs,
         IReadOnlyList<string> EventTypes);
 }
-

@@ -19,7 +19,7 @@
             </el-menu-item>
             <el-menu-item index="/events">
               <el-icon><List /></el-icon>
-              <span>生产事件</span>
+              <span>生产记录</span>
             </el-menu-item>
             <el-menu-item index="/inspections">
               <el-icon><DocumentChecked /></el-icon>

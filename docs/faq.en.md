@@ -12,19 +12,19 @@ Use a stable `edgeId`, locally increasing `seq`, globally unique `eventId`, and 
 
 ## What can Chat do?
 
-Chat queries recorded production facts, checks data completeness, returns cycle event chains, and displays evidence. It does not write events, inspection records, configuration, or equipment; it cannot execute arbitrary SQL, scripts, or open network requests.
+Chat queries recorded production records, checks data completeness, returns cycle event chains, and displays related records. It does not write events, inspection records, configuration, or equipment; it cannot execute arbitrary SQL, scripts, or open network requests.
 
 ## How do I enable Chat in production?
 
-Default Compose keeps Chat disabled. Enable it with `INGOT_CHAT_ENABLED=true`, `INGOT_CHAT_PROVIDER=OpenAI`, Fast and Reasoning models, `OPENAI_API_KEY`, `INGOT_CHAT_OPERATOR_TOKEN`, and `INGOT_CHAT_OPERATOR_ALLOW_ALL`. Platform Web and the Chat API use Actor `operator` with the Chat Actor token. See [configuration](tutorial-configuration.en.md) for the complete configuration.
+Default Compose keeps Chat disabled. Enable it with `INGOT_CHAT_ENABLED=true`, `INGOT_CHAT_PROVIDER=OpenAI`, Fast and Reasoning models, `OPENAI_API_KEY`, `INGOT_CHAT_OPERATOR_TOKEN`, and `INGOT_CHAT_OPERATOR_ALLOW_ALL`. Platform Web and the Chat API use user `operator` with the Chat user token. See [configuration](tutorial-configuration.en.md) for the complete configuration.
 
 ## Can Chat confirm root cause?
 
-Chat output consists of verified facts, limitations, and candidate investigation directions, with correlation and causation clearly distinguished.
+Chat shows saved production records, missing information, and next checks, while clearly separating parameter correlation from confirmed causes.
 
 ## How is data access scoped?
 
-Configure allowed `EdgeIds` for every Chat Actor. Event ingestion uses an independent token matching the `edgeId`. Production deployments should rotate tokens and avoid global access.
+Configure allowed `EdgeIds` for every Chat user. Event ingestion uses an independent token matching the `edgeId`. Production deployments should rotate tokens and avoid global access.
 
 ## What happens when an event is submitted twice?
 

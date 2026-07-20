@@ -6,6 +6,7 @@ cd "$repo_root"
 
 bash scripts/verify-architecture.sh
 bash scripts/verify-product-scope.sh
+bash scripts/verify-product-language.sh
 
 for required_file in \
   src/platform/Ingot.Platform.Api/Dockerfile \

@@ -4,8 +4,8 @@ using Microsoft.AspNetCore.Mvc;
 namespace Ingot.Platform.Api.Controllers;
 
 [ApiController]
-[Route("api/v1/evidence")]
-public sealed class EvidenceController(IInspectionEvidenceStore store) : ControllerBase
+[Route("api/v1/inspection-attachments")]
+public sealed class InspectionAttachmentsController(IInspectionAttachmentStore store) : ControllerBase
 {
     [HttpPost]
     [RequestSizeLimit(30_000_000)]
@@ -31,11 +31,10 @@ public sealed class EvidenceController(IInspectionEvidenceStore store) : Control
         }
     }
 
-    [HttpGet("{evidenceId:guid}")]
-    public async Task<IActionResult> Get(Guid evidenceId, CancellationToken ct)
+    [HttpGet("{attachmentId:guid}")]
+    public async Task<IActionResult> Get(Guid attachmentId, CancellationToken ct)
     {
-        var evidence = await store.GetAsync(evidenceId, ct).ConfigureAwait(false);
-        return evidence is null ? NotFound() : Ok(evidence);
+        var attachment = await store.GetAsync(attachmentId, ct).ConfigureAwait(false);
+        return attachment is null ? NotFound() : Ok(attachment);
     }
 }
-

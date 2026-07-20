@@ -14,7 +14,7 @@ public sealed class ChatOptions
 
     public int MaxRunSeconds { get; set; } = 60;
 
-    public bool EnableDeepInvestigation { get; set; }
+    public bool EnableCombinedAnalysis { get; set; }
 
     public int MaxDiscussionRounds { get; set; } = 3;
 
@@ -22,7 +22,7 @@ public sealed class ChatOptions
 
     public bool RequireToken { get; set; } = true;
 
-    public Dictionary<string, string> ActorTokens { get; set; }
+    public Dictionary<string, string> UserTokens { get; set; }
         = new(StringComparer.OrdinalIgnoreCase);
 
     public Dictionary<string, ModelPricingOptions> ModelPricing { get; set; }

@@ -11,7 +11,7 @@ namespace Ingot.Platform.Infrastructure.Events;
 
 /// <summary>
 ///     TimescaleDB（PostgreSQL + 时序扩展）中心数据存储。全局去重键表与事件 hypertable 分离，
-///     保证 EventId、(EdgeId, Seq) 幂等；事实表由 Timescale 按 occurred_at 自动分块，
+///     保证 EventId、(EdgeId, Seq) 幂等；记录表由 Timescale 按 occurred_at 自动分块，
 ///     并可按配置启用保留与压缩策略。
 /// </summary>
 public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, IAsyncDisposable
@@ -232,7 +232,7 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, IA
         };
     }
 
-    // 依据查询条件构造 WHERE 子句并绑定参数（QueryAsync 与 GetScopeStatsAsync 共用，保证过滤语义一致）。
+    // 按查询条件构造 WHERE 子句并绑定参数（QueryAsync 与 GetScopeStatsAsync 共用，保证筛选规则一致）。
     private static string BuildWhere(NpgsqlCommand command, PlatformEventQuery query)
     {
         var predicates = new List<string>();
@@ -262,7 +262,7 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, IA
         foreach (var pair in query.Context)
         {
             if (!EventQueryContractValidator.IsValidContextKey(pair.Key))
-                throw new ArgumentException($"非法上下文键: {pair.Key}", nameof(query));
+                throw new ArgumentException($"非法生产信息项: {pair.Key}", nameof(query));
             var keyName = $"ctx_key_{contextIndex}";
             var valueName = $"ctx_value_{contextIndex}";
             predicates.Add($"context ->> @{keyName} = @{valueName}");

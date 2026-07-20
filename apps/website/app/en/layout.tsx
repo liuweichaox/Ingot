@@ -5,12 +5,12 @@ const origin = "https://ingotstack.com";
 
 export const metadata: Metadata = {
   metadataBase: new URL(origin),
-  title: "Ingot — Production facts you can verify, question, and investigate",
-  description: "Ingot brings important production records together. Engineers use Ingot Chat to ask questions, inspect evidence, and investigate complex problems.",
+  title: "Ingot — understand production, process settings, and quality",
+  description: "Ingot brings equipment settings, production history, and inspection results together so engineers can investigate issues and compare runs.",
   applicationName: "Ingot",
   keywords: [
-    "Ingot", "production facts", "Ingot Chat", "inspection facts",
-    "production history", "process investigation", "quality investigation", "evidence traceability",
+    "Ingot", "production records", "Ingot Chat", "inspection records",
+    "production history", "process analysis", "quality analysis", "parameter correlation",
   ],
   alternates: {
     canonical: "/en/",
@@ -22,19 +22,19 @@ export const metadata: Metadata = {
     apple: "/brand/ingot-mark-dark.svg",
   },
   openGraph: {
-    title: "Ingot — Production facts you can verify, question, and investigate",
-    description: "Bring production records together, then use Ingot Chat to ask questions, inspect evidence, and investigate when needed.",
+    title: "Ingot — understand production, process settings, and quality",
+    description: "Bring production records together, then use Ingot Chat to investigate issues, compare runs, and review possible causes.",
     url: `${origin}/en/`,
     locale: "en_US",
     alternateLocale: ["zh_CN"],
     siteName: "Ingot",
     type: "website",
-    images: [{ url: "/og.png", width: 1200, height: 630, alt: "Ingot — Production facts you can verify, question, and investigate" }],
+    images: [{ url: "/og.png", width: 1200, height: 630, alt: "Ingot — understand production, process settings, and quality" }],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Ingot — Production facts you can verify, question, and investigate",
-    description: "Ingot Chat helps engineers investigate problems with production records and evidence.",
+    title: "Ingot — understand production, process settings, and quality",
+    description: "Ingot Chat helps engineers investigate problems using production records and inspection results.",
     images: ["/og.png"],
   },
 };

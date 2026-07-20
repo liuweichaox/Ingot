@@ -14,7 +14,7 @@ public sealed class ChatDataAccessTests
         var store = new RecordingEventStore();
         var reader = new ChatEventReader(store, Options.Create(new ChatDataAccessOptions
         {
-            Actors = new Dictionary<string, ChatActorDataScope>(StringComparer.OrdinalIgnoreCase)
+            Users = new Dictionary<string, ChatUserDataScope>(StringComparer.OrdinalIgnoreCase)
             {
                 ["operator"] = new() { EdgeIds = ["EDGE-001", "EDGE-002"] }
             }
@@ -26,7 +26,7 @@ public sealed class ChatDataAccessTests
     }
 
     [Fact]
-    public async Task Reader_DeniesActorWithoutScope()
+    public async Task Reader_DeniesUserWithoutScope()
     {
         var reader = new ChatEventReader(
             new RecordingEventStore(),

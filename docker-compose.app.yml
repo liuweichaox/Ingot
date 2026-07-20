@@ -35,19 +35,19 @@ services:
       EventIngest__RequireToken: "true"
       EventIngest__EdgeTokens__EDGE-001: ${INGOT_EDGE_TOKEN:?INGOT_EDGE_TOKEN is required}
       InspectionSubmission__RequireToken: "true"
-      InspectionSubmission__ActorTokens__OPERATOR-001: ${INGOT_OPERATOR_TOKEN:?INGOT_OPERATOR_TOKEN is required}
+      InspectionSubmission__UserTokens__OPERATOR-001: ${INGOT_OPERATOR_TOKEN:?INGOT_OPERATOR_TOKEN is required}
       Chat__Enabled: ${INGOT_CHAT_ENABLED:-false}
       Chat__Provider: ${INGOT_CHAT_PROVIDER:-Deterministic}
       Chat__FastModel: ${INGOT_CHAT_FAST_MODEL:-deterministic-v1}
       Chat__ReasoningModel: ${INGOT_CHAT_REASONING_MODEL:-deterministic-v1}
-      Chat__EnableDeepInvestigation: ${INGOT_CHAT_ENABLE_DEEP_INVESTIGATION:-false}
+      Chat__EnableCombinedAnalysis: ${INGOT_CHAT_ENABLE_COMBINED_ANALYSIS:-false}
       Chat__MaxToolCalls: ${INGOT_CHAT_MAX_TOOL_CALLS:-8}
       Chat__MaxRunSeconds: ${INGOT_CHAT_MAX_RUN_SECONDS:-60}
       Chat__MaxDiscussionRounds: ${INGOT_CHAT_MAX_DISCUSSION_ROUNDS:-3}
       Chat__MaxDiscussionTurns: ${INGOT_CHAT_MAX_DISCUSSION_TURNS:-9}
       Chat__RequireToken: "true"
-      Chat__ActorTokens__operator: ${INGOT_CHAT_OPERATOR_TOKEN:-}
-      ChatDataAccess__Actors__operator__AllowAll: ${INGOT_CHAT_OPERATOR_ALLOW_ALL:-true}
+      Chat__UserTokens__operator: ${INGOT_CHAT_OPERATOR_TOKEN:-}
+      ChatDataAccess__Users__operator__AllowAll: ${INGOT_CHAT_OPERATOR_ALLOW_ALL:-true}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       Cors__AllowedOrigins__0: http://localhost:3000
       Webhook__Enabled: "true"

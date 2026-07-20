@@ -1,6 +1,6 @@
 # Production Event Specification
 
-`ProductionEvent` is the immutable event envelope shared by team-owned source adaptation, Platform API, query, and Ingot Chat. Teams map equipment, instrument, or business-system semantics to this contract and submit it through Platform API.
+`ProductionEvent` is the immutable event envelope shared by team-owned source adaptation, Platform API, query, and Ingot Chat. Teams map equipment, instrument, or business-system handling rules to this contract and submit it through Platform API.
 
 ## Batch request
 
@@ -38,7 +38,7 @@ Content-Type: application/json
 | `eventId` | string | UUIDv7 global event identifier |
 | `eventType` | string | lowercase dotted name such as `cycle.started` |
 | `eventTypeVersion` | integer | greater than 0; defaults to 1 |
-| `occurredAt` | ISO 8601 timestamp | UTC time at which the fact occurred |
+| `occurredAt` | ISO 8601 timestamp | UTC time at which the record occurred |
 | `recordedAt` | ISO 8601 timestamp | UTC time at which the adapter recorded or submitted the event |
 | `source` | string | must start with `edge/{edgeId}/` |
 | `subject` | object | non-empty `type` and `id` |
@@ -88,20 +88,20 @@ export INGOT_CONNECTOR_TOKEN="$(openssl rand -hex 24)"
 docker compose -f docker-compose.app.yml --profile connector-host up -d connector-host
 ```
 
-## Query and fact chains
+## Query and record chains
 
 - `GET /api/v1/events`: filter by Edge, event type, subject, context, `correlationId`, and time;
 - `GET /api/v1/events/stream`: production-event SSE;
 - `GET /api/v1/cycles/{correlationId}`: the event chain for one correlation ID;
-- `get_cycle_trace`: a cycle timeline with evidence, ordered by occurrence time and Platform ingest order;
+- `get_cycle_trace`: a cycle timeline with related records, ordered by occurrence time and Platform ingest order;
 - `check_data_quality`: cycle pairing, empty context, sequence gaps, and latest-event-time checks.
 
-Inspection facts use a separate `InspectionRecord` contract and API. Current cycle tools build cycle fact chains from production events.
+Inspection records use a separate `InspectionRecord` contract and API. Current cycle tools build cycle record chains from production events.
 
 ## Extension rules
 
 - Use stable business names for `eventType` and `data`;
 - carry numeric units as explicit event fields; the core does not infer units;
-- increase `eventTypeVersion` or introduce an event type for incompatible semantics;
+- increase `eventTypeVersion` or introduce an event type for incompatible handling rules;
 - keep `context` to stable strings needed for query association; never put secrets or large objects there;
 - teams maintain source protocols, mapping code, buffering, and retry logic.

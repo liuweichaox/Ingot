@@ -24,9 +24,9 @@ public sealed class FindComparableCyclesTool(IChatEventReader events) : IAnalysi
     {
         Name = "find_comparable_cycles",
         Version = "1.0.0",
-        Surface = ProductSurfaces.Chat,
+        EntryPoint = ProductEntryPoints.Chat,
         Purpose = RunPurposes.ReadOnlyAnalysis,
-        Description = "查找同类生产周期，并返回判定同类所依据的上下文键。只读。",
+        Description = "按产品、工序和配方查找同类生产周期。只查询，不修改数据。",
         InputSchema = JsonSerializer.SerializeToElement(new
         {
             type = "object",
@@ -48,7 +48,7 @@ public sealed class FindComparableCyclesTool(IChatEventReader events) : IAnalysi
         var correlationId = Require(call, "correlationId").Trim();
         var limit = ParseLimit(call.Arguments.GetValueOrDefault("limit"), 20, 1, 200);
         var currentRows = await events.QueryAsync(
-            context.ActorId,
+            context.UserId,
             new PlatformEventQuery { CorrelationId = correlationId, Limit = 500 },
             ct).ConfigureAwait(false);
         if (currentRows.Count == 0)
@@ -68,11 +68,11 @@ public sealed class FindComparableCyclesTool(IChatEventReader events) : IAnalysi
             return new AnalysisToolResult
             {
                 Tool = Definition.Name,
-                Summary = $"周期 {correlationId} 缺少可用于同类检索的保留上下文键。",
+                Summary = $"周期 {correlationId} 缺少可用于同类检索的保留生产信息项。",
                 Data = JsonSerializer.SerializeToElement(new { correlationId, comparableCycles = Array.Empty<object>() }),
-                Evidence =
+                RelatedRecords =
                 [
-                    new EvidenceRef
+                    new RelatedRecordRef
                     {
                         Kind = "event-query",
                         Id = $"correlation:{correlationId}",
@@ -90,7 +90,7 @@ public sealed class FindComparableCyclesTool(IChatEventReader events) : IAnalysi
             .ToDictionary(key => key, key => contextFacts[key], StringComparer.Ordinal);
         var queryContext = strictKeys.Count == 0 ? contextFacts.Take(2).ToDictionary() : strictKeys;
         var candidates = await events.QueryAsync(
-            context.ActorId,
+            context.UserId,
             new PlatformEventQuery { Context = queryContext, Limit = 500 },
             ct).ConfigureAwait(false);
 
@@ -131,32 +131,32 @@ public sealed class FindComparableCyclesTool(IChatEventReader events) : IAnalysi
 
         var limitations = new List<string>();
         if (candidates.Count == 500)
-            limitations.Add("同类检索命中 500 条事件窗口上限，候选周期可能被截断。");
+            limitations.Add("同类周期查询超过 500 条生产记录，可能还有周期没有显示。");
         if (comparable.Length == 0)
-            limitations.Add("没有找到共享保留上下文键的其他周期。");
+            limitations.Add("没有找到共享保留生产信息项的其他周期。");
 
         return new AnalysisToolResult
         {
             Tool = Definition.Name,
-            Summary = $"周期 {correlationId} 找到 {comparable.Length} 个同类候选，依据键：{string.Join("、", queryContext.Keys)}。",
+            Summary = $"周期 {correlationId} 找到 {comparable.Length} 个可对比周期，对比条件：{string.Join("、", queryContext.Keys)}。",
             Data = JsonSerializer.SerializeToElement(new
             {
                 correlationId,
                 criteria = queryContext,
                 comparableCycles = comparableData
             }),
-            Artifacts =
+            Details =
             [
-                new AnalysisArtifactRef
+                new ResultDetailLink
                 {
                     Kind = "event-query",
-                    Label = "完整同类事件查询",
+                    Label = "完整同类周期生产记录",
                     Url = BuildEventsUrl(queryContext)
                 }
             ],
-            Evidence =
+            RelatedRecords =
             [
-                new EvidenceRef
+                new RelatedRecordRef
                 {
                     Kind = "event-query",
                     Id = $"comparable:{correlationId}",
@@ -175,9 +175,9 @@ public sealed class FindComparableCyclesTool(IChatEventReader events) : IAnalysi
             Tool = "find_comparable_cycles",
             Summary = $"没有找到周期 {correlationId}。",
             Data = JsonSerializer.SerializeToElement(new { correlationId, comparableCycles = Array.Empty<object>() }),
-            Evidence =
+            RelatedRecords =
             [
-                new EvidenceRef
+                new RelatedRecordRef
                 {
                     Kind = "event-query",
                     Id = $"correlation:{correlationId}",
@@ -185,7 +185,7 @@ public sealed class FindComparableCyclesTool(IChatEventReader events) : IAnalysi
                     Url = $"/api/v1/events?correlationId={Uri.EscapeDataString(correlationId)}&limit=500"
                 }
             ],
-            Limitations = ["当前 correlationId 没有生产事件。"],
+            Limitations = ["当前生产周期号没有对应的生产记录。"],
             Outcome = AnalysisToolOutcomes.InsufficientData
         };
 

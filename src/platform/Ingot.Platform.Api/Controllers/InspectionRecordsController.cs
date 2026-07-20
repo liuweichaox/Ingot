@@ -9,8 +9,8 @@ namespace Ingot.Platform.Api.Controllers;
 [Route("api/v1/inspection-records")]
 public sealed class InspectionRecordsController(
     IInspectionRecordStore store,
-    IInspectionEvidenceStore evidenceStore,
-    InspectionActorTokenValidator tokenValidator) : ControllerBase
+    IInspectionAttachmentStore attachmentsStore,
+    InspectionUserTokenValidator tokenValidator) : ControllerBase
 {
     [HttpPost]
     public async Task<IActionResult> Create(
@@ -19,16 +19,16 @@ public sealed class InspectionRecordsController(
     {
         if (!InspectionRecordValidator.TryValidate(request, out var normalized, out var error))
             return BadRequest(new { error });
-        foreach (var evidence in normalized!.Evidence)
+        foreach (var attachments in normalized!.Attachments)
         {
-            var stored = await evidenceStore.GetAsync(evidence.EvidenceId, ct).ConfigureAwait(false);
+            var stored = await attachmentsStore.GetAsync(attachments.AttachmentId, ct).ConfigureAwait(false);
             if (stored is null)
-                return BadRequest(new { error = $"EvidenceId 不存在: {evidence.EvidenceId}" });
-            if (!string.Equals(stored.Sha256, evidence.Sha256, StringComparison.Ordinal) ||
-                !string.Equals(stored.StorageRef, evidence.StorageRef, StringComparison.Ordinal) ||
-                stored.SizeBytes != evidence.SizeBytes)
+                return BadRequest(new { error = $"AttachmentId 不存在: {attachments.AttachmentId}" });
+            if (!string.Equals(stored.Sha256, attachments.Sha256, StringComparison.Ordinal) ||
+                !string.Equals(stored.StorageRef, attachments.StorageRef, StringComparison.Ordinal) ||
+                stored.SizeBytes != attachments.SizeBytes)
             {
-                return BadRequest(new { error = $"EvidenceId 元数据与已上传证据不一致: {evidence.EvidenceId}" });
+                return BadRequest(new { error = $"AttachmentId 元数据与已上传附件不一致: {attachments.AttachmentId}" });
             }
         }
         if (!tokenValidator.IsAuthorized(
@@ -46,7 +46,7 @@ public sealed class InspectionRecordsController(
         {
             return Conflict(new
             {
-                error = "RecordId 已存在，但提交内容不同。检测事实不可原地覆盖。",
+                error = "RecordId 已存在，但提交内容不同。检测记录不可原地覆盖。",
                 existing = result.Record
             });
         }

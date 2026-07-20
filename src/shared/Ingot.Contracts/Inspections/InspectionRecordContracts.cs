@@ -1,7 +1,7 @@
 namespace Ingot.Contracts.Inspections;
 
 /// <summary>
-///     人工或半自动检测提交。它是检测结果事实，不是生产事件，也不代表 QMS 放行。
+///     人工或半自动检测提交。它是检测结果记录，不是生产事件，也不代表 QMS 放行。
 /// </summary>
 public sealed record CreateInspectionRecordRequest
 {
@@ -33,7 +33,7 @@ public sealed record CreateInspectionRecordRequest
 
     public IReadOnlyList<InspectionCharacteristicResult> Measurements { get; init; } = [];
 
-    public IReadOnlyList<InspectionEvidenceRef> Evidence { get; init; } = [];
+    public IReadOnlyList<InspectionAttachment> Attachments { get; init; } = [];
 
     public string? Notes { get; init; }
 }
@@ -67,10 +67,10 @@ public sealed record InspectionCharacteristicResult
     public decimal? UpperLimit { get; init; }
 }
 
-/// <summary>已经进入受控证据暂存区的文件引用；API 不会主动抓取该地址。</summary>
-public sealed record InspectionEvidenceRef
+/// <summary>已经进入受控附件暂存区的文件引用；API 不会主动抓取该地址。</summary>
+public sealed record InspectionAttachment
 {
-    public required Guid EvidenceId { get; init; }
+    public required Guid AttachmentId { get; init; }
 
     public required string StorageRef { get; init; }
 
@@ -98,7 +98,7 @@ public sealed record InspectionRecord
     public required bool SubmitterVerified { get; init; }
     public InspectionInstrumentRef? Instrument { get; init; }
     public IReadOnlyList<InspectionCharacteristicResult> Measurements { get; init; } = [];
-    public IReadOnlyList<InspectionEvidenceRef> Evidence { get; init; } = [];
+    public IReadOnlyList<InspectionAttachment> Attachments { get; init; } = [];
     public string? Notes { get; init; }
 }
 

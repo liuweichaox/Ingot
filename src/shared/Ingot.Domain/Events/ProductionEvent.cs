@@ -1,7 +1,7 @@
 namespace Ingot.Domain.Events;
 
 /// <summary>
-///     生产事件：已经发生且不可变的业务事实。
+///     生产事件：已经发生且不可变的业务记录。
 /// </summary>
 public sealed record ProductionEvent
 {
@@ -26,7 +26,7 @@ public sealed record ProductionEvent
     /// <summary>事件发生的业务对象。</summary>
     public required ObjectRef Subject { get; init; }
 
-    /// <summary>事件发生时的业务上下文快照。</summary>
+    /// <summary>事件发生时的业务关联信息快照。</summary>
     public IReadOnlyDictionary<string, string> Context { get; init; }
         = new Dictionary<string, string>();
 
@@ -34,7 +34,7 @@ public sealed record ProductionEvent
     public IReadOnlyDictionary<string, object?> Data { get; init; }
         = new Dictionary<string, object?>();
 
-    /// <summary>成对或成组事件的关联 ID。</summary>
+    /// <summary>成对或成组事件的生产周期号。</summary>
     public string? CorrelationId { get; init; }
 
     /// <summary>边缘日志分配的单调序号。</summary>

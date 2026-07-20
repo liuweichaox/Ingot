@@ -7,7 +7,7 @@ using Microsoft.Extensions.Options;
 namespace Ingot.Edge.Infrastructure.Events;
 
 /// <summary>
-///     协议无关的事件写入口：先持久化事实，再由 outbox 上报中心。
+///     协议无关的事件写入口：先持久化记录，再由 outbox 上报中心。
 /// </summary>
 public sealed class EventSink : IEventSink
 {
@@ -71,7 +71,7 @@ public sealed class EventSink : IEventSink
         {
             _logger.LogWarning(
                 ex,
-                "事件已经落盘，但记录 event_emitted 指标失败；事实成立状态不受影响。");
+                "事件已经落盘，但记录 event_emitted 指标失败；记录保存状态不受影响。");
         }
     }
 
@@ -103,7 +103,7 @@ public sealed class EventSink : IEventSink
         {
             _logger.LogWarning(
                 ex,
-                "事件已经落盘，但读取 outbox backlog 指标失败；事实成立状态不受影响。");
+                "事件已经落盘，但读取 outbox backlog 指标失败；记录保存状态不受影响。");
         }
     }
 

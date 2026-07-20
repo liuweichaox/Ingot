@@ -30,7 +30,7 @@ builder.Services.AddIngotAgentProviders(builder.Configuration);
 
 // 宿主职责：入站鉴权策略
 builder.Services.AddSingleton<EdgeTokenValidator>();
-builder.Services.AddSingleton<InspectionActorTokenValidator>();
+builder.Services.AddSingleton<InspectionUserTokenValidator>();
 builder.Services.AddSingleton<ChatTokenValidator>();
 
 builder.Services.AddHealthChecks()
@@ -101,7 +101,7 @@ app.MapGet("/", () => Results.Ok(new
         events = "/api/v1/events",
         eventStream = "/api/v1/events/stream",
         eventIngest = "/api/v1/events:batch",
-        evidence = "/api/v1/evidence",
+        attachments = "/api/v1/inspection-attachments",
         inspectionDefinitions = "/api/v1/inspection-definitions",
         inspectionRecords = "/api/v1/inspection-records",
         subscriptions = "/api/v1/subscriptions",
@@ -133,7 +133,7 @@ Log.Logger.Information("    > Edge Logs:     {0}/api/edges/{{edgeId}}/logs", bas
 Log.Logger.Information("    > Events:        {0}/api/v1/events", baseAddress);
 Log.Logger.Information("    > Event Stream:  {0}/api/v1/events/stream", baseAddress);
 Log.Logger.Information("    > Event Ingest:  {0}/api/v1/events:batch", baseAddress);
-Log.Logger.Information("    > Evidence:      {0}/api/v1/evidence", baseAddress);
+Log.Logger.Information("    > Attachments:      {0}/api/v1/inspection-attachments", baseAddress);
 Log.Logger.Information("    > Definitions:   {0}/api/v1/inspection-definitions", baseAddress);
 Log.Logger.Information("    > Inspections:   {0}/api/v1/inspection-records", baseAddress);
 Log.Logger.Information("    > Subscriptions: {0}/api/v1/subscriptions", baseAddress);

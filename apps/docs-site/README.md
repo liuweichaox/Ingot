@@ -1,6 +1,6 @@
 # Ingot Documentation Site
 
-The static documentation site for trusted production facts, standard event ingestion, and Ingot Chat.
+The static documentation site for trusted production records, standard event ingestion, and Ingot Chat.
 
 `docs-site` reads bilingual Markdown from `../docs` at build time, creates navigation and a local search index, and exports static pages for `docs.ingotstack.com`.
 

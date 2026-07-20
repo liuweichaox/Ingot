@@ -11,12 +11,12 @@ namespace Ingot.Core.Tests.Agent;
 public sealed class AgentRuntimeTests
 {
     [Fact]
-    public async Task ChatRun_CompletesWithWhitelistedReadOnlyToolAndEvidence()
+    public async Task ChatRun_CompletesWithWhitelistedReadOnlyToolAndRelatedRecords()
     {
         var store = new MemoryRunStore();
         var runtime = CreateRuntime(store, [new QualityTool()]);
 
-        var created = await runtime.StartAsync(ProductSurfaces.Chat, "analyst", new CreateChatRunRequest
+        var created = await runtime.StartAsync(ProductEntryPoints.Chat, "analyst", new CreateChatRunRequest
         {
             Question = "检查最近数据是否完整"
         });
@@ -26,7 +26,7 @@ public sealed class AgentRuntimeTests
         Assert.Equal(RunPurposes.ReadOnlyAnalysis, completed.Purpose);
         Assert.NotNull(completed.Answer);
         Assert.Equal("check_data_quality", Assert.Single(completed.ToolInvocations).Tool);
-        Assert.Single(completed.Answer!.Evidence);
+        Assert.Single(completed.Answer!.RelatedRecords);
         var events = await store.ReadEventsAsync(created.RunId, 0, 100);
         Assert.Contains(events, item => item.Type == AgentStreamEventTypes.PlanCreated);
         Assert.Contains(events, item => item.Type == AgentStreamEventTypes.RunCompleted);
@@ -36,7 +36,7 @@ public sealed class AgentRuntimeTests
     public async Task ChatRun_RefusesConclusionWhenToolReportsInsufficientData()
     {
         var runtime = CreateRuntime(new MemoryRunStore(), [new InsufficientQualityTool()]);
-        var created = await runtime.StartAsync(ProductSurfaces.Chat, "analyst", new CreateChatRunRequest
+        var created = await runtime.StartAsync(ProductEntryPoints.Chat, "analyst", new CreateChatRunRequest
         {
             Question = "检查数据完整性"
         });
@@ -50,19 +50,19 @@ public sealed class AgentRuntimeTests
     }
 
     [Fact]
-    public async Task ChatRun_HistoryIsActorScopedAndUnsupportedSurfaceIsRejected()
+    public async Task ChatRun_HistoryIsUserScopedAndUnsupportedEntryPointIsRejected()
     {
         var store = new MemoryRunStore();
         var runtime = CreateRuntime(store, [new QualityTool()]);
-        await store.CreateAsync(Snapshot("other", "other-actor"));
+        await store.CreateAsync(Snapshot("other", "other-user"));
 
-        var page = await runtime.ListAsync(ProductSurfaces.Chat, "analyst", null, 20);
+        var page = await runtime.ListAsync(ProductEntryPoints.Chat, "analyst", null, 20);
 
         Assert.Empty(page.Items);
         Assert.Throws<ArgumentOutOfRangeException>(() => runtime.GetCapabilities("unsupported"));
-        Assert.Contains(ProductSurfaces.Chat, ProductSurfaces.All);
-        Assert.Contains(ProductSurfaces.Mcp, ProductSurfaces.All);
-        Assert.Contains(ProductSurfaces.Monitor, ProductSurfaces.All);
+        Assert.Contains(ProductEntryPoints.Chat, ProductEntryPoints.All);
+        Assert.Contains(ProductEntryPoints.Mcp, ProductEntryPoints.All);
+        Assert.Contains(ProductEntryPoints.Monitor, ProductEntryPoints.All);
     }
 
     [Fact]
@@ -70,12 +70,12 @@ public sealed class AgentRuntimeTests
     {
         var store = new MemoryRunStore();
         var runtime = CreateRuntime(store, [new BlockingQualityTool()]);
-        var created = await runtime.StartAsync(ProductSurfaces.Chat, "operator", new CreateChatRunRequest
+        var created = await runtime.StartAsync(ProductEntryPoints.Chat, "operator", new CreateChatRunRequest
         {
             Question = "检查数据"
         });
 
-        Assert.True(await runtime.CancelAsync(ProductSurfaces.Chat, created.RunId, "operator", "取消"));
+        Assert.True(await runtime.CancelAsync(ProductEntryPoints.Chat, created.RunId, "operator", "取消"));
         var completed = await WaitForTerminalAsync(runtime, created.RunId);
         Assert.Equal(AgentRunStatuses.Cancelled, completed.Status);
     }
@@ -86,7 +86,7 @@ public sealed class AgentRuntimeTests
         {
             Enabled = true,
             MaxRunSeconds = 10,
-            EnableDeepInvestigation = true,
+            EnableCombinedAnalysis = true,
             MaxDiscussionRounds = 1,
             MaxDiscussionTurns = 3
         });
@@ -96,8 +96,8 @@ public sealed class AgentRuntimeTests
             new DefaultModelRouter([model]),
             tools,
             new DefaultPlanValidator(options),
-            new DefaultEvidenceVerifier(),
-            new BoundedInvestigationWorkflow(options),
+            new DefaultAnalysisResultValidator(),
+            new BoundedCombinedAnalysisWorkflow(options),
             options,
             NullLogger<AgentRuntime>.Instance);
     }
@@ -106,7 +106,7 @@ public sealed class AgentRuntimeTests
     {
         for (var attempt = 0; attempt < 200; attempt++)
         {
-            var snapshot = await runtime.GetAsync(ProductSurfaces.Chat, runId);
+            var snapshot = await runtime.GetAsync(ProductEntryPoints.Chat, runId);
             if (snapshot is not null && AgentRunStatuses.IsTerminal(snapshot.Status))
                 return snapshot;
             await Task.Delay(10);
@@ -114,14 +114,14 @@ public sealed class AgentRuntimeTests
         throw new TimeoutException("Chat 运行没有在预期时间内结束。");
     }
 
-    private static AgentRunSnapshot Snapshot(string runId, string actorId) => new()
+    private static AgentRunSnapshot Snapshot(string runId, string userId) => new()
     {
         RunId = runId,
-        ActorId = actorId,
-        Surface = ProductSurfaces.Chat,
+        UserId = userId,
+        EntryPoint = ProductEntryPoints.Chat,
         Purpose = RunPurposes.ReadOnlyAnalysis,
         Question = "history",
-        Mode = "standard",
+        Mode = "quick",
         Status = AgentRunStatuses.Completed,
         ModelProvider = "test",
         Model = "test",
@@ -144,7 +144,7 @@ public sealed class AgentRuntimeTests
                 Tool = call.Tool,
                 Summary = "已检查 10 条事件，数据完整。",
                 Data = JsonSerializer.SerializeToElement(new { eventCount = 10 }),
-                Evidence = [new EvidenceRef { Kind = "dataset", Id = "quality-1", Label = "数据质量" }]
+                RelatedRecords = [new RelatedRecordRef { Kind = "dataset", Id = "quality-1", Label = "数据质量" }]
             });
     }
 
@@ -163,7 +163,7 @@ public sealed class AgentRuntimeTests
                 Data = JsonSerializer.SerializeToElement(new { missing = true }),
                 Outcome = AnalysisToolOutcomes.InsufficientData,
                 Limitations = ["遥测窗口不完整。"],
-                Evidence = [new EvidenceRef { Kind = "dataset", Id = "quality-2", Label = "数据质量" }]
+                RelatedRecords = [new RelatedRecordRef { Kind = "dataset", Id = "quality-2", Label = "数据质量" }]
             });
     }
 
@@ -186,7 +186,7 @@ public sealed class AgentRuntimeTests
         Name = name,
         Version = "v1",
         Description = "test",
-        Surface = ProductSurfaces.Chat,
+        EntryPoint = ProductEntryPoints.Chat,
         Purpose = RunPurposes.ReadOnlyAnalysis,
         Access = AgentToolAccess.Read,
         InputSchema = JsonSerializer.SerializeToElement(new
@@ -216,13 +216,13 @@ public sealed class AgentRuntimeTests
             => Task.FromResult(_runs.TryGetValue(runId, out var run) ? run : null);
 
         public Task<IReadOnlyList<AgentRunSnapshot>> ListAsync(
-            string surface,
-            string actorId,
+            string entryPoint,
+            string userId,
             DateTimeOffset? before,
             int limit,
             CancellationToken ct = default)
             => Task.FromResult<IReadOnlyList<AgentRunSnapshot>>(_runs.Values
-                .Where(run => run.Surface == surface && run.ActorId == actorId && (!before.HasValue || run.CreatedAt < before.Value))
+                .Where(run => run.EntryPoint == entryPoint && run.UserId == userId && (!before.HasValue || run.CreatedAt < before.Value))
                 .OrderByDescending(static run => run.CreatedAt)
                 .Take(limit)
                 .ToArray());

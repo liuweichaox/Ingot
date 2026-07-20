@@ -8,10 +8,10 @@ public sealed record CreateChatRunRequest
 
     public PageContextRef? PageContext { get; init; }
 
-    public string Mode { get; init; } = "standard";
+    public string Mode { get; init; } = "quick";
 }
 
-public static class ProductSurfaces
+public static class ProductEntryPoints
 {
     public const string Chat = "chat";
 
@@ -31,10 +31,10 @@ public static class RunPurposes
 {
     public const string ReadOnlyAnalysis = "read-only-analysis";
 
-    public static string ForSurface(string surface)
-        => ProductSurfaces.All.Contains(surface)
+    public static string ForEntryPoint(string entryPoint)
+        => ProductEntryPoints.All.Contains(entryPoint)
             ? ReadOnlyAnalysis
-            : throw new ArgumentOutOfRangeException(nameof(surface), surface, "不支持的产品面。");
+            : throw new ArgumentOutOfRangeException(nameof(entryPoint), entryPoint, "不支持的功能入口。");
 }
 
 public sealed record PageContextRef
@@ -46,7 +46,7 @@ public sealed record PageContextRef
 
 public sealed record AnalysisPlan
 {
-    public string Surface { get; init; } = string.Empty;
+    public string EntryPoint { get; init; } = string.Empty;
 
     public required string Intent { get; init; }
 
@@ -75,16 +75,16 @@ public sealed record AnalysisAnswer
 
     public IReadOnlyList<string> Limitations { get; init; } = [];
 
-    public IReadOnlyList<EvidenceRef> Evidence { get; init; } = [];
+    public IReadOnlyList<RelatedRecordRef> RelatedRecords { get; init; } = [];
 
     public IReadOnlyList<ChartSpec> Charts { get; init; } = [];
 
     public IReadOnlyList<string> FollowUpQuestions { get; init; } = [];
 
-    public InvestigationVerdict? Investigation { get; init; }
+    public CombinedAnalysisResult? CombinedAnalysis { get; init; }
 }
 
-public sealed record EvidenceRef
+public sealed record RelatedRecordRef
 {
     public required string Kind { get; init; }
 
@@ -129,16 +129,16 @@ public sealed record AgentToolInvocation
 
     public string? Error { get; init; }
 
-    public IReadOnlyList<EvidenceRef> Evidence { get; init; } = [];
+    public IReadOnlyList<RelatedRecordRef> RelatedRecords { get; init; } = [];
 }
 
 public sealed record AgentRunSnapshot
 {
     public required string RunId { get; init; }
 
-    public required string ActorId { get; init; }
+    public required string UserId { get; init; }
 
-    public required string Surface { get; init; }
+    public required string EntryPoint { get; init; }
 
     public required string Purpose { get; init; }
 
@@ -200,13 +200,13 @@ public sealed record AgentUsageSummary
 
 public sealed record AgentCapabilities
 {
-    public required string Surface { get; init; }
+    public required string EntryPoint { get; init; }
 
     public required string Purpose { get; init; }
 
     public required bool Enabled { get; init; }
 
-    public required bool DeepInvestigationEnabled { get; init; }
+    public required bool CombinedAnalysisEnabled { get; init; }
 
     public required string Provider { get; init; }
 
@@ -231,13 +231,13 @@ public sealed record AgentCapabilities
 
 public sealed record ChatCapabilities
 {
-    public required string Surface { get; init; }
+    public required string EntryPoint { get; init; }
 
     public required string Purpose { get; init; }
 
     public required bool Enabled { get; init; }
 
-    public required bool DeepInvestigationEnabled { get; init; }
+    public required bool CombinedAnalysisEnabled { get; init; }
 
     public required string Provider { get; init; }
 
@@ -287,16 +287,16 @@ public sealed record ChatToolInvocation
 
     public string? Error { get; init; }
 
-    public IReadOnlyList<EvidenceRef> Evidence { get; init; } = [];
+    public IReadOnlyList<RelatedRecordRef> RelatedRecords { get; init; } = [];
 }
 
 public sealed record ChatRunSnapshot
 {
     public required string RunId { get; init; }
 
-    public required string ActorId { get; init; }
+    public required string UserId { get; init; }
 
-    public required string Surface { get; init; }
+    public required string EntryPoint { get; init; }
 
     public required string Purpose { get; init; }
 
@@ -345,7 +345,7 @@ public sealed record ChatRunListItem
 
     public required string Question { get; init; }
 
-    public required string Surface { get; init; }
+    public required string EntryPoint { get; init; }
 
     public required string Purpose { get; init; }
 
@@ -377,7 +377,7 @@ public sealed record AgentToolCapability
 
     public required string Description { get; init; }
 
-    public required string Surface { get; init; }
+    public required string EntryPoint { get; init; }
 
     public required string Purpose { get; init; }
 
@@ -390,7 +390,7 @@ public sealed record AgentRunListItem
 
     public required string Question { get; init; }
 
-    public required string Surface { get; init; }
+    public required string EntryPoint { get; init; }
 
     public required string Purpose { get; init; }
 
@@ -448,7 +448,7 @@ public static class AgentStreamEventTypes
     public const string ToolStarted = "tool.started";
     public const string ToolCompleted = "tool.completed";
     public const string ToolFailed = "tool.failed";
-    public const string EvidenceVerified = "evidence.verified";
+    public const string RelatedRecordsChecked = "relatedRecords.checked";
     public const string AnswerDelta = "answer.delta";
     public const string ChartCompleted = "chart.completed";
     public const string DiscussionStarted = "discussion.started";

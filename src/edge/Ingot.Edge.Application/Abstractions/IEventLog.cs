@@ -3,7 +3,7 @@ using Ingot.Domain.Events;
 namespace Ingot.Edge.Application.Abstractions;
 
 /// <summary>
-///     不可变生产事件日志。Append 返回即表示事实已经持久化。
+///     不可变生产事件日志。Append 返回即表示记录已经持久化。
 /// </summary>
 public interface IEventLog
 {

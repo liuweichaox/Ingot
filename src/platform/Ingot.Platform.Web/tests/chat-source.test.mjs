@@ -17,7 +17,7 @@ async function readSources(directory) {
   }))).flat();
 }
 
-test("Ingot Chat is the primary production-fact dialogue entry", () => {
+test("Ingot Chat is the primary production-record dialogue entry", () => {
   assert.match(app, /index="\/chat"/);
   assert.match(app, /Ingot Chat/);
   assert.match(router, /redirect: "\/chat"/);
@@ -25,20 +25,20 @@ test("Ingot Chat is the primary production-fact dialogue entry", () => {
   assert.match(router, /ChatView\.vue/);
   assert.match(view, /Ingot Chat/);
   assert.match(view, /生产数据/);
-  assert.match(view, /证据抽屉/);
+  assert.match(view, /查看相关生产记录/);
   assert.match(view, /\/api\/v1\/chat\/capabilities/);
   assert.match(view, /\/api\/v1\/chat\/runs\?\$\{query\}/);
-  assert.match(view, /X-Ingot-Actor/);
+  assert.match(view, /X-Ingot-User/);
   assert.doesNotMatch(view, /Chat 工艺分析|多角色调查|深度协作调查|模型用量|角色状态/);
 });
 
-test("Ingot Chat resumes SSE and renders fact queries, evidence, and charts", () => {
+test("Ingot Chat resumes SSE and renders record queries, relatedRecords, and charts", () => {
   assert.match(http, /Last-Event-ID/);
   assert.match(view, /lastEventId/);
   assert.match(view, /discussion\.participant_failed/);
   assert.match(view, /调查说明/);
-  assert.match(view, /事实查询/);
-  assert.match(view, /证据抽屉/);
+  assert.match(view, /生产记录查询/);
+  assert.match(view, /查看相关生产记录/);
   assert.match(view, /snapshot\?\.answer\?\.charts\?\.length/);
   assert.match(view, /对话记录/);
   assert.doesNotMatch(view, /roleLabel|usageText|stageLabel/);
@@ -54,7 +54,7 @@ test("data ingress is presented as user-owned adapter status", () => {
 test("public source is Chat-only and has no desktop, code-generation, or Agent product surface", async () => {
   const source = (await readSources(sourceRoot)).join("\n");
   assert.doesNotMatch(source, /\/api\/v1\/agent(?:\/|\b)/);
-  assert.doesNotMatch(source, /\/api\/v1\/agent\/artifacts/);
+  assert.doesNotMatch(source, /\/api\/v1\/agent\/details/);
   assert.doesNotMatch(source, /\/api\/v1\/connector-workspaces/);
   assert.doesNotMatch(source, /approve-package/);
   assert.doesNotMatch(source, /下载连接器包|生成连接器包|连接器源码工作区/);

@@ -21,7 +21,7 @@ public static class ServiceCollectionExtensions
         // 边缘注册表（SQLite）
         services.AddSingleton<EdgeRegistry>();
 
-        // 事件事实库（PostgreSQL）
+        // 事件生产记录库（PostgreSQL）
         services.Configure<PlatformEventOptions>(configuration.GetSection("EventIngest"));
         services.AddSingleton<PlatformEventMetrics>();
         services.AddSingleton<IPlatformEventStore, PostgresPlatformEventStore>();
@@ -35,11 +35,11 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IAnalysisTool, FindComparableCyclesTool>();
         services.AddSingleton<IAnalysisTool, CompareCyclesTool>();
 
-        // 人工检测结果事实（PostgreSQL）；与生产事件分表、分 API 建模
+        // 人工检测结果记录（PostgreSQL）；与生产事件分表、分 API 建模
         services.Configure<InspectionSubmissionOptions>(configuration.GetSection("InspectionSubmission"));
-        services.Configure<InspectionEvidenceOptions>(configuration.GetSection("InspectionEvidence"));
+        services.Configure<InspectionAttachmentOptions>(configuration.GetSection("InspectionAttachments"));
         services.AddSingleton<IInspectionRecordStore, PostgresInspectionRecordStore>();
-        services.AddSingleton<IInspectionEvidenceStore, PostgresInspectionEvidenceStore>();
+        services.AddSingleton<IInspectionAttachmentStore, PostgresInspectionAttachmentStore>();
         services.AddSingleton<IInspectionMasterDataStore, PostgresInspectionMasterDataStore>();
         services.AddHostedService<InspectionStoreInitializerHostedService>();
         services.AddSingleton<ICycleAnalyticsStore, PostgresCycleAnalyticsStore>();

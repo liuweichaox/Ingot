@@ -1,6 +1,6 @@
 # Brand and Identity
 
-The Ingot name and identity share one metaphor: **production events, inspection facts, and production context submitted by source adaptation are ore; Ingot smelts them into standardized, trustworthy, stackable production facts.**
+The Ingot name and identity share one metaphor: **production events, inspection records, and production context submitted by source adaptation are ore; Ingot smelts them into standardized, trustworthy, stackable production records.**
 
 This document defines Ingot brand positioning, naming assets, and identity-use rules.
 
@@ -8,25 +8,25 @@ This document defines Ingot brand positioning, naming assets, and identity-use r
 
 The mark stacks three **ingot** cross-sections (trapezoids):
 
-- two **steel ingots**: accumulated event history—append-only facts that build over time;
-- one **gold ingot**: the newest fact, with a reflective line for its recency;
-- equal **gaps** between ingots: events are discrete facts, not a continuous stream.
+- two **steel ingots**: accumulated event history—append-only records that build over time;
+- one **gold ingot**: the newest record, with a reflective line for its recency;
+- equal **gaps** between ingots: events are discrete records, not a continuous stream.
 
 The silhouette remains recognizable at 16px and is suitable for favicons, terminal marks, and ecosystem icons.
 
 Tagline:
 
-> **Ingot — Smelt production data into facts.** 把生产数据炼成事实。
+> **Ingot — Turn scattered plant data into a complete production history.** 把分散数据整理成完整生产履历。
 
 ## Brand position
 
 - **Category**: Manufacturing Data Collection & Process Analysis Platform / 制造数据采集与工艺分析平台
 - **Primary users**: Production, process, quality, equipment, and IT roles in manufacturing, especially teams that need independent deployment
-- **Product architecture**: Ingot is the platform brand; Ingot Chat is the main workspace for engineers; deeper investigation is the advanced Chat mode where process, quality, and challenge roles review evidence together
-- **Value chain**: Team-owned source adaptation → standard production events + inspection facts + production context → trusted production facts → everyday Ingot Chat questions or deeper investigation → engineer confirmation
+- **Product architecture**: Ingot is the platform brand; Ingot Chat is the main workspace for engineers; quick queries show production records, while combined analysis compares parameters and lists possible causes
+- **Value chain**: Connect equipment and business systems → combine production processes and inspection results → build a production history → query abnormalities or run combined analysis → engineer confirmation
 - **System boundary**: MES can be a source or integration target, but is not a runtime prerequisite; Ingot is not defined by scheduling, order execution, inventory, or attendance
 
-Public wording leads with standard production-event ingestion, trusted facts, and evidence-based investigation.
+Public wording leads with production-process collection, inspection-result linkage, parameter comparison, and possible-cause analysis.
 
 ## Naming assets
 
@@ -51,7 +51,7 @@ Public wording leads with standard production-event ingestion, trusted facts, an
 
 | Name | Value | Use |
 |---|---|---|
-| Molten Gold | `#FFC94A → #E8891A` | Gold ingot, latest fact, emphasis |
+| Molten Gold | `#FFC94A → #E8891A` | Gold ingot, latest record, emphasis |
 | Cast Steel | `#33414F → #1F2933` | Base ingots and body text on light backgrounds |
 | Steel on Dark | `#5B6E80 → #3C4A58` | Base ingots on dark backgrounds |
 | Coal | `#10161C` | Dark background |

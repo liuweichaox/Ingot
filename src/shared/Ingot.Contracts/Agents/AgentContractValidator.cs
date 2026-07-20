@@ -60,7 +60,7 @@ public static partial class AgentContractValidator
         }
 
         mode = rawMode?.Trim().ToLowerInvariant();
-        if (mode is not ("standard" or "deep"))
+        if (mode is not ("quick" or "combined"))
         {
             error = "Mode 只支持 standard 或 deep。";
             return false;

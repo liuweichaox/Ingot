@@ -55,7 +55,7 @@ public sealed class ContextStore : IEdgeContextStore
     {
         ArgumentNullException.ThrowIfNull(asset);
         if (string.IsNullOrWhiteSpace(key))
-            throw new ArgumentException("上下文键不能为空。", nameof(key));
+            throw new ArgumentException("生产信息项不能为空。", nameof(key));
 
         var normalizedKey = key.Trim();
         var normalizedValue = value ?? string.Empty;
@@ -149,7 +149,7 @@ public sealed class ContextStore : IEdgeContextStore
         }
         catch (Exception exception)
         {
-            _logger.LogWarning(exception, "记录上下文状态指标失败");
+            _logger.LogWarning(exception, "记录关联信息状态指标失败");
         }
     }
 

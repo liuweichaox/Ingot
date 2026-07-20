@@ -15,8 +15,8 @@ public static class ServiceCollectionExtensions
             provider.GetRequiredService<DeterministicModelClient>());
         services.AddSingleton<IModelRouter, DefaultModelRouter>();
         services.AddSingleton<IPlanValidator, DefaultPlanValidator>();
-        services.AddSingleton<IEvidenceVerifier, DefaultEvidenceVerifier>();
-        services.AddSingleton<IInvestigationWorkflow, BoundedInvestigationWorkflow>();
+        services.AddSingleton<IAnalysisResultValidator, DefaultAnalysisResultValidator>();
+        services.AddSingleton<ICombinedAnalysisWorkflow, BoundedCombinedAnalysisWorkflow>();
         services.AddSingleton<IAgentRuntime, AgentRuntime>();
         return services;
     }

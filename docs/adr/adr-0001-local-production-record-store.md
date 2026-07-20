@@ -89,7 +89,7 @@
 | 团队熟悉度 | 低 |
 
 **Pros：** 列式，摄入与大时间窗聚合极快、压缩极好，适合超大事件量。
-**Cons：** **去重是异步 merge（ReplacingMergeTree）**，无法当场返回 accepted/duplicate → **不适合做可信系统源**；无强事务；JSON/关系语义弱于 JSONB。定位应为"下游只读分析镜像"，非 SoR。
+**Cons：** **去重是异步 merge（ReplacingMergeTree）**，无法当场返回 accepted/duplicate → **不适合做可信系统源**；无强事务；JSON/关系含义弱于 JSONB。定位应为"下游只读分析镜像"，非 SoR。
 
 ### Option D：嵌入式 SQLite SoR（+ 可选 DuckDB 分析）【可选 · 边缘档】
 | 维度 | 评估 |
@@ -103,8 +103,8 @@
 **Cons：** 单写者并发天花板（写队列缓解）；重分析弱（需挂 DuckDB）；跨月 `ATTACH`。**在允许 Docker 后，它从"主推"降级为"边缘特化档"。** （完整设计见附录 A。）
 
 ### 快速否决
-- **QuestDB / InfluxDB**：时序快，但**同步幂等 / 关系 + JSON 过滤 / 证据式关系模型**支持弱，与"可信事实 + 幂等 + 证据回链"定位不合。
-- **MongoDB**：文档/JSON 原生，但面向时间窗聚合与数值证据模型不如 JSONB/Timescale，且相对现状是纯增复杂度。
+- **QuestDB / InfluxDB**：时序快，但**同步幂等 / 关系 + JSON 过滤 / 相关记录式关系模型**支持弱，与"可信记录 + 幂等 + 原始记录链接"定位不合。
+- **MongoDB**：文档/JSON 原生，但面向时间窗聚合与数值相关记录模型不如 JSONB/Timescale，且相对现状是纯增复杂度。
 
 ---
 
@@ -150,7 +150,7 @@
 | `ingest_id` 单调序列（SSE 游标） | **原样保留**（普通序列/BIGINT，供 `ingest_id > cursor`） |
 | `context JSONB` + GIN | **原样保留**（JSONB + GIN） |
 | Chat：`check_data_quality` 新鲜度/完整性即时聚合 | **连续聚合**（`CREATE MATERIALIZED VIEW ... WITH (timescaledb.continuous)`）按 subject/时间桶预物化 last-seen / 计数 / 缺口 |
-| `get_cycle_trace` 关联+subject 时间窗 | 走 hypertable 时间维索引 + 连续聚合，证据回链契约不变 |
+| `get_cycle_trace` 关联+subject 时间窗 | 走 hypertable 时间维索引 + 连续聚合，原始记录链接契约不变 |
 | `DROP PARTITION` 保留 | `add_retention_policy('production_events', INTERVAL '18 months')` |
 | 冷数据存储 | `add_compression_policy(...)` 列式压缩老块 |
 | `inspection_records` / `webhook_subscriptions` | 保持普通表（非时序，不必 hypertable） |

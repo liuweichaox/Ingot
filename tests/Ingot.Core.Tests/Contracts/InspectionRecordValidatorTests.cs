@@ -35,9 +35,9 @@ public sealed class InspectionRecordValidatorTests
     }
 
     [Fact]
-    public void TryValidate_ShouldRequireStructuredResultOrEvidence()
+    public void TryValidate_ShouldRequireStructuredResultOrAttachments()
     {
-        var request = CreateRequest() with { Measurements = [], Evidence = [] };
+        var request = CreateRequest() with { Measurements = [], Attachments = [] };
 
         Assert.False(InspectionRecordValidator.TryValidate(request, out _, out var error));
         Assert.Contains("至少包含", error, StringComparison.Ordinal);
@@ -60,7 +60,7 @@ public sealed class InspectionRecordValidatorTests
             },
             out _,
             out var duplicateError));
-        Assert.Contains("重复 CharacteristicCode", duplicateError, StringComparison.Ordinal);
+        Assert.Contains("检测项目不能重复", duplicateError, StringComparison.Ordinal);
     }
 
     [Fact]
