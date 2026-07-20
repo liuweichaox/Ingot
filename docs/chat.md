@@ -54,11 +54,11 @@ export INGOT_CHAT_OPERATOR_ALLOW_ALL=true
 export INGOT_CHAT_ENABLE_DEEP_INVESTIGATION=true
 ```
 
-Central Web 与 HTTP API 使用 Actor `operator` 和 `INGOT_CHAT_OPERATOR_TOKEN`。生产部署应按每个 Actor 所需事实范围配置访问权限。
+Platform Web 与 HTTP API 使用 Actor `operator` 和 `INGOT_CHAT_OPERATOR_TOKEN`。生产部署应按每个 Actor 所需事实范围配置访问权限。
 
 ## 使用
 
-1. 打开 Central Web，进入 **Chat**。
+1. 打开 Platform Web，进入 **Chat**。
 2. 输入问题，例如“这个周期发生了什么，数据是否完整？”
 3. 可选择资产或周期并填写页面上下文。
 4. 查看只读工具活动、结论、限制条件和证据。

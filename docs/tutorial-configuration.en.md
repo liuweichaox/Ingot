@@ -1,6 +1,6 @@
 # Configuration
 
-Central uses environment variables and protected configuration storage. Never commit passwords, tokens, or model keys to the repository.
+Platform uses environment variables and protected configuration storage. Never commit passwords, tokens, or model keys to the repository.
 
 ## Required configuration
 
@@ -23,7 +23,7 @@ Central uses environment variables and protected configuration storage. Never co
     }
   },
   "Cors": {
-    "AllowedOrigins": ["https://central.example.com"]
+    "AllowedOrigins": ["https://platform.example.com"]
   },
   "Chat": {
     "Enabled": true,
@@ -64,7 +64,7 @@ EventIngest__RequireToken=true
 EventIngest__EdgeTokens__EDGE-001='<secret>'
 InspectionSubmission__RequireToken=true
 InspectionSubmission__ActorTokens__OPERATOR-001='<strong-secret>'
-Cors__AllowedOrigins__0='https://central.example.com'
+Cors__AllowedOrigins__0='https://platform.example.com'
 Chat__Enabled=true
 Chat__RequireToken=true
 Chat__Provider=OpenAI
@@ -95,6 +95,6 @@ The production validator requires event- and inspection-submission tokens, a COR
 - `Chat:MaxRunSeconds`: maximum duration of one conversation;
 - event batches: 1–500 events each;
 - event source: must start with `edge/{edgeId}/`;
-- when Chat is disabled or its authentication is not configured, Central event, query, and inspection paths remain available.
+- when Chat is disabled or its authentication is not configured, Platform event, query, and inspection paths remain available.
 
 See [deployment](tutorial-deployment.en.md) and the [production event specification](rfc-production-events.en.md).

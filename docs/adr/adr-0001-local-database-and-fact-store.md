@@ -16,7 +16,7 @@
 ```text
 设备/仪器/MES/ERP ──适配──> ProductionEvent[] / InspectionRecord
         ▼
-  Central API (.NET 10)  ──────────────────────>  PostgreSQL（Docker，本地）
+  Platform API (.NET 10)  ──────────────────────>  PostgreSQL（Docker，本地）
         ├─ 鉴权 / 契约校验 / 幂等                          ├─ production_events（手写按月 RANGE 分区, JSONB+GIN）
         ├─ 查询 + SSE（轮询 ingest_id 游标）               ├─ event_ingest_keys（幂等键）
         ├─ Ingot Chat（只读事实工具 + 有界调查）           ├─ inspection_records
@@ -46,7 +46,7 @@
 
 ## 2. 决策（Decision）
 
-**推荐：中心事实库改用 TimescaleDB（Docker 本地部署）作为默认档；保留嵌入式 SQLite 作为"边缘/气隙单机"可选档；两者藏在同一个 `ICentralEventStore` 抽象后，按部署配置切换。**
+**推荐：中心事实库改用 TimescaleDB（Docker 本地部署）作为默认档；保留嵌入式 SQLite 作为"边缘/气隙单机"可选档；两者藏在同一个 `IPlatformEventStore` 抽象后，按部署配置切换。**
 
 - **默认档 — TimescaleDB（Docker）**：把 `production_events` 建为 **hypertable**（按 `occurred_at` 自动分块，取代手写分区 DDL）；为 data-quality/freshness 建 **连续聚合**；对冷块启用**原生列式压缩**；用**保留策略**自动丢弃过期块。幂等两表事务、JSONB、SSE 游标全部保留。
 - **可选档 — 嵌入式 SQLite SoR**：面向真正离线/单机/气隙现场（无 Docker 亦可跑），按月库文件 + 单写队列 + WAL（详见附录 A）。
@@ -133,7 +133,7 @@
 **变得更难 / 新增能力：**
 - 需一次性设计 **hypertable 分块间隔、连续聚合刷新策略、压缩阈值、保留窗口**（配置化）。
 - 运行时多一个 `timescale/timescaledb` 镜像（替换现 `postgres` 镜像即可）。
-- 若要边缘档，需实现并维护 SQLite SoR（附录 A）——两档共用 `ICentralEventStore`。
+- 若要边缘档，需实现并维护 SQLite SoR（附录 A）——两档共用 `IPlatformEventStore`。
 
 **Revisit triggers：**
 - 事件体量/分析并发爆发 → 引入 ClickHouse 下游镜像（另开 ADR）。
@@ -155,7 +155,7 @@
 | 冷数据存储 | `add_compression_policy(...)` 列式压缩老块 |
 | `inspection_records` / `webhook_subscriptions` | 保持普通表（非时序，不必 hypertable） |
 
-**本会话加固的继承：** 幂等 reserve+insert 事务、`HasSequenceGap`、以及新加的 `CentralIngestWindow` **全部保留并仍有价值**——时间窗校验此时用于约束 hypertable 不被异常时间戳撑出无意义的远期块。
+**本会话加固的继承：** 幂等 reserve+insert 事务、`HasSequenceGap`、以及新加的 `PlatformIngestWindow` **全部保留并仍有价值**——时间窗校验此时用于约束 hypertable 不被异常时间戳撑出无意义的远期块。
 
 ---
 
@@ -163,15 +163,15 @@
 
 **默认档 —— 迁移到 TimescaleDB**
 1. [ ] `docker-compose.app.yml`：`postgres:xx` 镜像换为 `timescale/timescaledb:xx-pgYY`；连接串/凭据不变。
-2. [ ] `PostgresEventStore.InitializeAsync`：建表后 `CREATE EXTENSION IF NOT EXISTS timescaledb;` + `create_hypertable(...)`；**移除**手写分区逻辑（`EnsurePartitionAsync` 及月表 DDL）。
+2. [ ] `PostgresPlatformEventStore.InitializeAsync`：建表后 `CREATE EXTENSION IF NOT EXISTS timescaledb;` + `create_hypertable(...)`；**移除**手写分区逻辑（`EnsurePartitionAsync` 及月表 DDL）。
 3. [ ] 为 `check_data_quality` 的新鲜度/完整性建**连续聚合**视图 + 刷新策略；改造 `ChatEventReader`/data-quality 工具优先查聚合，回退明细。
-4. [ ] 配置化 `chunk_time_interval` / 压缩阈值 / 保留窗口（沿用 `CentralEventOptions`，与 `CentralIngestWindow` 呼应）。
+4. [ ] 配置化 `chunk_time_interval` / 压缩阈值 / 保留窗口（沿用 `PlatformEventOptions`，与 `PlatformIngestWindow` 呼应）。
 5. [ ] 数据迁移：现有 `production_events` → hypertable（`INSERT ... SELECT` 或 `create_hypertable(..., migrate_data => true)`）。
-6. [ ] 压测：用 `scripts/benchmark-central-ingest.sh` 对比 裸 PG vs Timescale 的摄入 P50/P99 与大时间窗聚合延迟，确认无回退、聚合有提升。
+6. [ ] 压测：用 `scripts/benchmark-platform-ingest.sh` 对比 裸 PG vs Timescale 的摄入 P50/P99 与大时间窗聚合延迟，确认无回退、聚合有提升。
 7. [ ] 文档：更新 `architecture.md` / 部署文档，说明 Timescale 默认档与调参。
 
 **可选档 —— 边缘 SQLite SoR（按需）**
-8. [ ] 在 `ICentralEventStore` 后增 `SqliteCentralEventStore`（配置切换），实现月库文件生命周期 + 单写队列 + WAL（附录 A）。
+8. [ ] 在 `IPlatformEventStore` 后增 `SqlitePlatformEventStore`（配置切换），实现月库文件生命周期 + 单写队列 + WAL（附录 A）。
 
 **逃生舱 —— ClickHouse（远期）**
 9. [ ] 仅当分析压力爆发：从 Timescale CDC/批同步到 ClickHouse 只读镜像，Chat 重聚合切过去，SoR 仍在 Timescale。

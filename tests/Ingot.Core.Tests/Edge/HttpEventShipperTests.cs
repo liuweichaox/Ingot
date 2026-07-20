@@ -1,11 +1,11 @@
 using System.Net;
 using System.Net.Http.Json;
-using Ingot.Application.Abstractions;
+using Ingot.Edge.Application.Abstractions;
 using Ingot.Contracts.Events;
 using Ingot.Domain.Events;
-using Ingot.Application.Options;
-using Ingot.Connector.Host.Services;
-using Ingot.Infrastructure.Events;
+using Ingot.Edge.Application.Options;
+using Ingot.Edge.ConnectorHost.Services;
+using Ingot.Edge.Infrastructure.Events;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Xunit;
@@ -17,7 +17,7 @@ public sealed class HttpEventShipperTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task RunAsync_ShouldAdvanceOutboxOnlyAfterCentralAck(
+    public async Task RunAsync_ShouldAdvanceOutboxOnlyAfterPlatformAck(
         bool eventMetricsThrow)
     {
         using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(5));
@@ -32,7 +32,7 @@ public sealed class HttpEventShipperTests
         var reportingOptions = Options.Create(new EdgeReportingOptions
         {
             EdgeId = "EDGE-001",
-            CentralApiBaseUrl = "http://central/",
+            PlatformApiBaseUrl = "http://platform/",
             EnableEventShipping = true,
             EventIngestToken = "secret",
             EventBatchSize = 100,

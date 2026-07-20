@@ -1,6 +1,6 @@
 using System;
 using System.IO;
-using Ingot.Infrastructure.Logs;
+using Ingot.Edge.Infrastructure.Logs;
 using Microsoft.Data.Sqlite;
 using Xunit;
 

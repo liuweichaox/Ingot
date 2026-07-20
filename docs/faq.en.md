@@ -4,7 +4,7 @@
 
 No. Teams implement source adaptation, map equipment, instrument, or business-system data to `ProductionEvent`, and call `POST /api/v1/events:batch`. This lets each plant choose the language and runtime that meet its safety, network, and operations requirements.
 
-For a local SQLite outbox, a team may deploy `Ingot.Connector.Host` and submit events to it; it is an optional local ingress, while teams own adaptation implementation and runtime operation.
+For a local SQLite outbox, a team may deploy `Ingot.Edge.ConnectorHost` and submit events to it; it is an optional local ingress, while teams own adaptation implementation and runtime operation.
 
 ## What must a source-adaptation program do?
 
@@ -16,7 +16,7 @@ Chat queries recorded production facts, checks data completeness, returns cycle 
 
 ## How do I enable Chat in production?
 
-Default Compose keeps Chat disabled. Enable it with `INGOT_CHAT_ENABLED=true`, `INGOT_CHAT_PROVIDER=OpenAI`, Fast and Reasoning models, `OPENAI_API_KEY`, `INGOT_CHAT_OPERATOR_TOKEN`, and `INGOT_CHAT_OPERATOR_ALLOW_ALL`. Central Web and the Chat API use Actor `operator` with the Chat Actor token. See [configuration](tutorial-configuration.en.md) for the complete configuration.
+Default Compose keeps Chat disabled. Enable it with `INGOT_CHAT_ENABLED=true`, `INGOT_CHAT_PROVIDER=OpenAI`, Fast and Reasoning models, `OPENAI_API_KEY`, `INGOT_CHAT_OPERATOR_TOKEN`, and `INGOT_CHAT_OPERATOR_ALLOW_ALL`. Platform Web and the Chat API use Actor `operator` with the Chat Actor token. See [configuration](tutorial-configuration.en.md) for the complete configuration.
 
 ## Can Chat confirm root cause?
 
@@ -28,7 +28,7 @@ Configure allowed `EdgeIds` for every Chat Actor. Event ingestion uses an indepe
 
 ## What happens when an event is submitted twice?
 
-Central detects duplicates by `eventId` and `(edgeId, seq)`. Callers should still retain local acknowledgment state and avoid mixing unacknowledged and new events into an unordered batch.
+Platform detects duplicates by `eventId` and `(edgeId, seq)`. Callers should still retain local acknowledgment state and avoid mixing unacknowledged and new events into an unordered batch.
 
 ## Does the platform control equipment?
 

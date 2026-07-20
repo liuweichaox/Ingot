@@ -1,6 +1,6 @@
 # 快速开始
 
-本教程启动 Central、提交一批标准生产事件，并用 Ingot Chat 查询周期事实。数据源适配由使用方实现；只需将结果映射为公开事件契约。
+本教程启动 Platform、提交一批标准生产事件，并用 Ingot Chat 查询周期事实。数据源适配由使用方实现；只需将结果映射为公开事件契约。
 
 ## 1. 准备环境
 
@@ -9,7 +9,7 @@
 - Docker Engine 26 或更高版本，以及 Docker Compose
 - OpenSSL
 
-## 2. 启动 Central
+## 2. 启动 Platform
 
 ```bash
 git clone https://github.com/liuweichaox/Ingot.git
@@ -28,9 +28,9 @@ docker compose -f docker-compose.app.yml up -d --build
 curl http://localhost:8000/health
 ```
 
-打开 <http://localhost:3000> 访问 Central Web。
+打开 <http://localhost:3000> 访问 Platform Web。
 
-默认 Compose 启动 PostgreSQL、Central API 和 Central Web。若适配程序能直连 Central，直接使用本教程的批次 API。
+默认 Compose 启动 PostgreSQL、Platform API 和 Platform Web。若适配程序能直连 Platform，直接使用本教程的批次 API。
 
 ### 可选：启用 Connector Host
 
@@ -41,11 +41,11 @@ export INGOT_CONNECTOR_TOKEN="$(openssl rand -hex 24)"
 docker compose -f docker-compose.app.yml --profile connector-host up -d connector-host
 ```
 
-Host 监听 <http://localhost:8001>，接收 `ProductionEvent[]`，并以至少一次语义将标准批次发送到 Central。使用方负责这个本地入口的部署和运维。
+Host 监听 <http://localhost:8001>，接收 `ProductionEvent[]`，并以至少一次语义将标准批次发送到 Platform。使用方负责这个本地入口的部署和运维。
 
 ## 3. 提交第一批生产事件
 
-使用你自己的数据源适配进程调用 Central。示例使用一个 `cycle.started` 事件：
+使用你自己的数据源适配进程调用 Platform。示例使用一个 `cycle.started` 事件：
 
 ```bash
 curl -X POST http://localhost:8000/api/v1/events:batch \
@@ -69,7 +69,7 @@ curl -X POST http://localhost:8000/api/v1/events:batch \
   }'
 ```
 
-响应中的 `ackSeq` 表示 Central 已安全接收或识别为重复的连续序号。调用方应保存本地序号，仅重试未确认事件。
+响应中的 `ackSeq` 表示 Platform 已安全接收或识别为重复的连续序号。调用方应保存本地序号，仅重试未确认事件。
 
 ## 4. 启用生产 Chat
 
@@ -87,7 +87,7 @@ export INGOT_CHAT_OPERATOR_ALLOW_ALL=true
 docker compose -f docker-compose.app.yml up -d --build
 ```
 
-生产部署应以每个 Actor 实际所需的数据范围替代全局范围。Chat API 与 Central Web 使用 `operator` 和 `INGOT_CHAT_OPERATOR_TOKEN`。
+生产部署应以每个 Actor 实际所需的数据范围替代全局范围。Chat API 与 Platform Web 使用 `operator` 和 `INGOT_CHAT_OPERATOR_TOKEN`。
 
 ## 5. 查询事件并使用 Chat
 
@@ -95,7 +95,7 @@ docker compose -f docker-compose.app.yml up -d --build
 curl "http://localhost:8000/api/v1/events?edgeId=EDGE-001&correlationId=CYCLE-001"
 ```
 
-然后在 Central Web 中打开 **Chat** 并提问：
+然后在 Platform Web 中打开 **Chat** 并提问：
 
 ```text
 这个周期发生了什么，数据是否完整？

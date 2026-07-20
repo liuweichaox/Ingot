@@ -4,7 +4,7 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repo_root"
 
-central_port="${INGOT_WEBHOOK_CENTRAL_PORT:-18280}"
+platform_port="${INGOT_WEBHOOK_PLATFORM_PORT:-${INGOT_WEBHOOK_CENTRAL_PORT:-18280}}"
 receiver_port="${INGOT_WEBHOOK_RECEIVER_PORT:-18290}"
 event_count="${INGOT_WEBHOOK_EVENT_COUNT:-50}"
 delivery_timeout="${INGOT_WEBHOOK_DELIVERY_TIMEOUT_SECONDS:-120}"
@@ -12,10 +12,10 @@ edge_id="WEBHOOK-$(date +%s)-$$"
 token="webhook-acceptance-token"
 secret="webhook-acceptance-secret"
 run_dir="$(mktemp -d -t ingot-webhook.XXXXXX)"
-central_log="$run_dir/central.log"
+platform_log="$run_dir/platform.log"
 receiver_log="$run_dir/receiver.log"
 events_file="$run_dir/events.jsonl"
-central_pid=""
+platform_pid=""
 receiver_pid=""
 postgres_was_running=false
 succeeded=false
@@ -40,7 +40,7 @@ stop_process() {
 
 cleanup() {
   stop_process "$receiver_pid"
-  stop_process "$central_pid"
+  stop_process "$platform_pid"
   if [[ "$postgres_was_running" == false ]]; then
     compose stop postgres >/dev/null
   fi
@@ -96,19 +96,19 @@ python3 tools/webhook_receiver.py \
 receiver_pid=$!
 wait_for_http "http://127.0.0.1:${receiver_port}/health" "$receiver_pid" "$receiver_log"
 
-dotnet run --project src/Ingot.Central.Api --no-build -- \
-  "Urls=http://127.0.0.1:${central_port}" \
+dotnet run --project src/platform/Ingot.Platform.Api --no-build -- \
+  "Urls=http://127.0.0.1:${platform_port}" \
   "ConnectionStrings:Events=Host=localhost;Port=5432;Database=ingot;Username=ingot;Password=${postgres_password}" \
-  "Central:DatabasePath=${run_dir}/central.db" \
+  "Platform:DatabasePath=${run_dir}/platform.db" \
   "EventIngest:RequireToken=true" \
   "EventIngest:EdgeTokens:${edge_id}=${token}" \
   "Webhook:Enabled=true" \
   "Webhook:PollIntervalMs=100" \
   "Webhook:BatchSize=100" \
   "Webhook:RequestTimeoutSeconds=5" \
-  >"$central_log" 2>&1 &
-central_pid=$!
-wait_for_http "http://127.0.0.1:${central_port}/health" "$central_pid" "$central_log"
+  >"$platform_log" 2>&1 &
+platform_pid=$!
+wait_for_http "http://127.0.0.1:${platform_port}/health" "$platform_pid" "$platform_log"
 
 subscription_payload="$(jq -n \
   --arg endpoint "http://127.0.0.1:${receiver_port}/events" \
@@ -123,11 +123,11 @@ subscription_payload="$(jq -n \
 subscription="$(curl -fsS \
   -H "Content-Type: application/json" \
   -d "$subscription_payload" \
-  "http://127.0.0.1:${central_port}/api/v1/subscriptions")"
+  "http://127.0.0.1:${platform_port}/api/v1/subscriptions")"
 subscription_id="$(jq -er '.subscriptionId' <<<"$subscription")"
 
-dotnet run --project tools/Ingot.CentralBenchmarks --no-build -- \
-  --central-url "http://127.0.0.1:${central_port}" \
+dotnet run --project tools/Ingot.PlatformBenchmarks --no-build -- \
+  --platform-url "http://127.0.0.1:${platform_port}" \
   --edge-id "$edge_id" \
   --token "$token" \
   --events "$event_count" \
@@ -157,7 +157,7 @@ unique="$(jq -r '.unique' <<<"$stats")"
 duplicates="$(jq -r '.duplicates' <<<"$stats")"
 invalid="$(jq -r '.invalid' <<<"$stats")"
 subscription_state="$(curl -fsS \
-  "http://127.0.0.1:${central_port}/api/v1/subscriptions/${subscription_id}")"
+  "http://127.0.0.1:${platform_port}/api/v1/subscriptions/${subscription_id}")"
 last_success="$(jq -r '.lastSuccessAt // empty' <<<"$subscription_state")"
 last_error="$(jq -r '.lastError // empty' <<<"$subscription_state")"
 consecutive_failures="$(jq -r '.consecutiveFailures' <<<"$subscription_state")"
@@ -171,7 +171,7 @@ if (( received != event_count ||
   echo "Webhook acceptance failed." >&2
   echo "stats=${stats}" >&2
   echo "subscription=${subscription_state}" >&2
-  tail -100 "$central_log" >&2 || true
+  tail -100 "$platform_log" >&2 || true
   exit 1
 fi
 

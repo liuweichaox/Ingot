@@ -1,6 +1,6 @@
 using Ingot.Agent;
-using Ingot.Central.Infrastructure.AgentTools;
-using Ingot.Central.Infrastructure.Events;
+using Ingot.Platform.Infrastructure.AgentTools;
+using Ingot.Platform.Infrastructure.Events;
 using Ingot.Contracts.Agents;
 using Ingot.Contracts.Events;
 using Ingot.Domain.Events;
@@ -44,7 +44,7 @@ public sealed class AnalysisToolTests
         var trueLatest = windowLatest.AddHours(6);
         var tool = new CheckDataQualityTool(new StubEventReader(
             [Row(1, 1, "telemetry.observed", windowLatest)],
-            new CentralEventScopeStats
+            new PlatformEventScopeStats
             {
                 Count = 4200,
                 LatestOccurredAt = trueLatest,
@@ -139,7 +139,7 @@ public sealed class AnalysisToolTests
         Arguments = new Dictionary<string, string?> { ["correlationId"] = correlationId }
     };
 
-    private static CentralProductionEvent Row(
+    private static PlatformProductionEvent Row(
         long ingestId,
         long sequence,
         string eventType,
@@ -165,20 +165,20 @@ public sealed class AnalysisToolTests
         };
 
     private sealed class StubEventReader(
-        IReadOnlyList<CentralProductionEvent> rows,
-        CentralEventScopeStats? stats = null) : IChatEventReader
+        IReadOnlyList<PlatformProductionEvent> rows,
+        PlatformEventScopeStats? stats = null) : IChatEventReader
     {
-        public Task<IReadOnlyList<CentralProductionEvent>> QueryAsync(
+        public Task<IReadOnlyList<PlatformProductionEvent>> QueryAsync(
             string actorId,
-            CentralEventQuery query,
+            PlatformEventQuery query,
             CancellationToken ct = default)
             => Task.FromResult(rows);
 
-        public Task<CentralEventScopeStats> GetScopeStatsAsync(
+        public Task<PlatformEventScopeStats> GetScopeStatsAsync(
             string actorId,
-            CentralEventQuery query,
+            PlatformEventQuery query,
             CancellationToken ct = default)
-            => Task.FromResult(stats ?? new CentralEventScopeStats
+            => Task.FromResult(stats ?? new PlatformEventScopeStats
             {
                 Count = rows.Count,
                 LatestOccurredAt = rows.Count == 0 ? null : rows.Max(static row => row.Event.OccurredAt),

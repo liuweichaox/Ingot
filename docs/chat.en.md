@@ -54,11 +54,11 @@ export INGOT_CHAT_OPERATOR_ALLOW_ALL=true
 export INGOT_CHAT_ENABLE_DEEP_INVESTIGATION=true
 ```
 
-Central Web and the HTTP API use Actor `operator` with `INGOT_CHAT_OPERATOR_TOKEN`. Production deployments configure access for the fact scope required by each Actor.
+Platform Web and the HTTP API use Actor `operator` with `INGOT_CHAT_OPERATOR_TOKEN`. Production deployments configure access for the fact scope required by each Actor.
 
 ## Use Chat
 
-1. Open Central Web and select **Chat**.
+1. Open Platform Web and select **Chat**.
 2. Enter a question such as “What happened during this cycle, and is its data complete?”
 3. Optionally select an asset or cycle and supply page context.
 4. Review read-only tool activity, findings, limitations, and evidence.

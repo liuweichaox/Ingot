@@ -2,43 +2,43 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "build:central-api",
+            "label": "build:platform-api",
             "command": "dotnet",
             "type": "process",
             "args": [
                 "build",
-                "${workspaceFolder}/src/Ingot.Central.Api/Ingot.Central.Api.csproj",
+                "${workspaceFolder}/src/platform/Ingot.Platform.Api/Ingot.Platform.Api.csproj",
                 "/property:GenerateFullPaths=true",
                 "/consoleloggerparameters:NoSummary;ForceNoAlign"
             ],
             "problemMatcher": "$msCompile"
         },
         {
-            "label": "publish:central-api",
+            "label": "publish:platform-api",
             "command": "dotnet",
             "type": "process",
             "args": [
                 "publish",
-                "${workspaceFolder}/src/Ingot.Central.Api/Ingot.Central.Api.csproj",
+                "${workspaceFolder}/src/platform/Ingot.Platform.Api/Ingot.Platform.Api.csproj",
                 "/property:GenerateFullPaths=true",
                 "/consoleloggerparameters:NoSummary;ForceNoAlign"
             ],
             "problemMatcher": "$msCompile"
         },
         {
-            "label": "watch:central-api",
+            "label": "watch:platform-api",
             "command": "dotnet",
             "type": "process",
             "args": [
                 "watch",
                 "run",
                 "--project",
-                "${workspaceFolder}/src/Ingot.Central.Api/Ingot.Central.Api.csproj"
+                "${workspaceFolder}/src/platform/Ingot.Platform.Api/Ingot.Platform.Api.csproj"
             ],
             "problemMatcher": "$msCompile"
         },
         {
-            "label": "serve:central-web",
+            "label": "serve:platform-web",
             "type": "process",
             "command": "npm",
             "args": [
@@ -46,7 +46,7 @@
                 "serve"
             ],
             "options": {
-                "cwd": "${workspaceFolder}/src/Ingot.Central.Web"
+                "cwd": "${workspaceFolder}/src/platform/Ingot.Platform.Web"
             }
         },
         {

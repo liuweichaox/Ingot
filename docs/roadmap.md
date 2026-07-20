@@ -68,7 +68,7 @@
 - [ ] `POST /api/v1/evidence`（multipart）→ 返回 `evidenceId`/`storageRef`/`sha256`/`sizeBytes`。**sha256 由服务端算**
 - [ ] `InspectionDefinition` 注册表 + CRUD（特性、单位、上下限、输入类型）
 - [ ] `PhaseDefinition` + `PhaseMapping` 注册表（与上者同一套主数据，不要另起炉灶）
-- [ ] Central Web 检测录入页 —— 表单**由定义生成**，不硬编码
+- [ ] Platform Web 检测录入页 —— 表单**由定义生成**，不硬编码
 - [ ] 一个参考适配器样例（含 `recipe_step` 采集）
 
 **验收**：一个质检员能在浏览器里提交一条带照片的检测记录，且该记录能关联到具体的模压周期。

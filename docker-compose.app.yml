@@ -19,11 +19,11 @@ services:
       retries: 20
     restart: unless-stopped
 
-  central-api:
+  platform-api:
     build:
       context: .
-      dockerfile: src/Ingot.Central.Api/Dockerfile
-    container_name: ingot-central-api
+      dockerfile: src/platform/Ingot.Platform.Api/Dockerfile
+    container_name: ingot-platform-api
     ports:
       - "127.0.0.1:8000:8000"
     volumes:
@@ -62,15 +62,15 @@ services:
       start_period: 10s
     restart: unless-stopped
 
-  central-web:
+  platform-web:
     build:
-      context: src/Ingot.Central.Web
+      context: src/platform/Ingot.Platform.Web
       dockerfile: Dockerfile
-    container_name: ingot-central-web
+    container_name: ingot-platform-web
     ports:
       - "127.0.0.1:3000:80"
     depends_on:
-      central-api:
+      platform-api:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1/health"]
@@ -85,7 +85,7 @@ services:
       - connector-host
     build:
       context: .
-      dockerfile: src/Ingot.Connector.Host/Dockerfile
+      dockerfile: src/edge/Ingot.Edge.ConnectorHost/Dockerfile
     container_name: ingot-connector-host
     ports:
       - "127.0.0.1:8001:8001"
@@ -95,10 +95,10 @@ services:
       ASPNETCORE_ENVIRONMENT: Production
       Urls: http://+:8001
       ConnectorHost__IngestToken: ${INGOT_CONNECTOR_TOKEN:?INGOT_CONNECTOR_TOKEN is required}
-      Edge__CentralApiBaseUrl: http://central-api:8000
+      Edge__PlatformApiBaseUrl: http://platform-api:8000
       Edge__EventIngestToken: ${INGOT_EDGE_TOKEN:?INGOT_EDGE_TOKEN is required}
     depends_on:
-      central-api:
+      platform-api:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:8001/health"]

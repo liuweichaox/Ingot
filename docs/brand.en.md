@@ -45,7 +45,7 @@ Public wording leads with standard production-event ingestion, trusted facts, an
 | [`images/logo/ingot-mark.svg`](../images/logo/ingot-mark.svg) / [`ingot-mark-dark.svg`](../images/logo/ingot-mark-dark.svg) | Source icon files; all exports derive from these |
 | [`images/logo/*.png`](../images/logo) | PNG exports (512 / 32 / horizontal 1032) |
 | [`images/logo/preview.html`](../images/logo/preview.html) | Brand preview: layout, scale, and palette |
-| `site/public/brand/` / `docs-site/public/brand/` | Website and docs-site build assets; tests keep them identical |
+| `apps/website/public/brand/` / `apps/docs-site/public/brand/` | Website and docs-site build assets; tests keep them identical |
 
 ## Palette
 

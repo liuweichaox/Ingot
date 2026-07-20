@@ -1,6 +1,6 @@
 # 配置
 
-Central 使用环境变量和受保护配置存储。生产环境不要把密码、令牌或模型密钥提交到仓库。
+Platform 使用环境变量和受保护配置存储。生产环境不要把密码、令牌或模型密钥提交到仓库。
 
 ## 必需配置
 
@@ -23,7 +23,7 @@ Central 使用环境变量和受保护配置存储。生产环境不要把密码
     }
   },
   "Cors": {
-    "AllowedOrigins": ["https://central.example.com"]
+    "AllowedOrigins": ["https://platform.example.com"]
   },
   "Chat": {
     "Enabled": true,
@@ -64,7 +64,7 @@ EventIngest__RequireToken=true
 EventIngest__EdgeTokens__EDGE-001='<secret>'
 InspectionSubmission__RequireToken=true
 InspectionSubmission__ActorTokens__OPERATOR-001='<strong-secret>'
-Cors__AllowedOrigins__0='https://central.example.com'
+Cors__AllowedOrigins__0='https://platform.example.com'
 Chat__Enabled=true
 Chat__RequireToken=true
 Chat__Provider=OpenAI
@@ -95,6 +95,6 @@ INGOT_CHAT_OPERATOR_ALLOW_ALL=true
 - `Chat:MaxRunSeconds`：单次对话最长运行时间；
 - 事件批次：每批 1 至 500 条；
 - 事件来源：必须以 `edge/{edgeId}/` 开头；
-- Chat 未启用或认证未配置时，Central 事件、查询和检测链路保持可用。
+- Chat 未启用或认证未配置时，Platform 事件、查询和检测链路保持可用。
 
 参见[部署](tutorial-deployment.md)和[生产事件规范](rfc-production-events.md)。

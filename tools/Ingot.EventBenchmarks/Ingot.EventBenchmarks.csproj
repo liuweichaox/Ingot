@@ -8,6 +8,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\Ingot.Infrastructure\Ingot.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\edge\Ingot.Edge.Infrastructure\Ingot.Edge.Infrastructure.csproj" />
   </ItemGroup>
 </Project>

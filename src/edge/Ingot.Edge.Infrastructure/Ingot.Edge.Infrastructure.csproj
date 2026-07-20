@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <Nullable>enable</Nullable>
+        <LangVersion>latest</LangVersion>
+        <RootNamespace>Ingot.Edge.Infrastructure</RootNamespace>
+    </PropertyGroup>
+    <ItemGroup>
+        <!-- HttpEventShipper 等网络实现依赖共享框架中的 HttpClientFactory/Logging/Options 抽象 -->
+        <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    </ItemGroup>
+    <ItemGroup>
+        <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.1" />
+        <PackageReference Include="Serilog" Version="4.1.0" />
+    </ItemGroup>
+    <ItemGroup>
+        <ProjectReference Include="..\Ingot.Edge.Application\Ingot.Edge.Application.csproj" />
+        <ProjectReference Include="..\..\shared\Ingot.Contracts\Ingot.Contracts.csproj" />
+    </ItemGroup>
+</Project>

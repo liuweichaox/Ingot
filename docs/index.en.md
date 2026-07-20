@@ -1,6 +1,6 @@
 # Ingot Documentation
 
-Ingot is a trusted production-facts and process-investigation platform. It stores important records from different sources as standard production facts and provides **Ingot Chat** in Central Web as the main workspace for engineers. Teams implement their own source adaptation and submit `ProductionEvent` or `InspectionRecord` records through the public APIs; Ingot embeds no field-device protocol.
+Ingot is a trusted production-facts and process-investigation platform. It stores important records from different sources as standard production facts and provides **Ingot Chat** in Platform Web as the main workspace for engineers. Teams implement their own source adaptation and submit `ProductionEvent` or `InspectionRecord` records through the public APIs; Ingot embeds no field-device protocol.
 
 ## Get started
 
@@ -17,7 +17,7 @@ Ingot is a trusted production-facts and process-investigation platform. It store
 ## Event ingestion
 
 - [Production event specification](rfc-production-events.en.md): `ProductionEvent` batches, authentication, deduplication, query, and extension rules.
-- [Getting started](tutorial-getting-started.en.md): start Central and submit the first batch.
+- [Getting started](tutorial-getting-started.en.md): start Platform and submit the first batch.
 
 ## Deployment and operations
 

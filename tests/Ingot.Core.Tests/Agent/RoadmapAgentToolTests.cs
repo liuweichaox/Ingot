@@ -1,8 +1,8 @@
 using System.Text.Json;
 using Ingot.Agent;
-using Ingot.Central.Infrastructure.AgentTools;
-using Ingot.Central.Infrastructure.Events;
-using Ingot.Central.Infrastructure.Inspections;
+using Ingot.Platform.Infrastructure.AgentTools;
+using Ingot.Platform.Infrastructure.Events;
+using Ingot.Platform.Infrastructure.Inspections;
 using Ingot.Contracts.Agents;
 using Ingot.Contracts.Events;
 using Ingot.Contracts.Inspections;
@@ -152,7 +152,7 @@ public sealed class RoadmapAgentToolTests
         Assert.Equal(1, result.Data.GetProperty("inferredPhaseAttribution").GetInt32());
     }
 
-    private static CentralProductionEvent Row(
+    private static PlatformProductionEvent Row(
         long ingestId,
         string eventType,
         string correlationId,
@@ -160,7 +160,7 @@ public sealed class RoadmapAgentToolTests
         DateTimeOffset? occurredAt = null)
     {
         var timestamp = occurredAt ?? DateTimeOffset.Parse("2026-07-18T10:00:00Z").AddSeconds(ingestId);
-        return new CentralProductionEvent
+        return new PlatformProductionEvent
         {
             IngestId = ingestId,
             EdgeId = "EDGE-001",
@@ -211,30 +211,30 @@ public sealed class RoadmapAgentToolTests
             ]
         };
 
-    private sealed class FilteringEventReader(IReadOnlyList<CentralProductionEvent> rows) : IChatEventReader
+    private sealed class FilteringEventReader(IReadOnlyList<PlatformProductionEvent> rows) : IChatEventReader
     {
-        public Task<IReadOnlyList<CentralProductionEvent>> QueryAsync(
+        public Task<IReadOnlyList<PlatformProductionEvent>> QueryAsync(
             string actorId,
-            CentralEventQuery query,
+            PlatformEventQuery query,
             CancellationToken ct = default)
         {
-            IEnumerable<CentralProductionEvent> filtered = rows;
+            IEnumerable<PlatformProductionEvent> filtered = rows;
             if (!string.IsNullOrWhiteSpace(query.CorrelationId))
                 filtered = filtered.Where(row => row.Event.CorrelationId == query.CorrelationId);
             foreach (var pair in query.Context)
                 filtered = filtered.Where(row =>
                     row.Event.Context.TryGetValue(pair.Key, out var value) &&
                     string.Equals(value, pair.Value, StringComparison.Ordinal));
-            return Task.FromResult<IReadOnlyList<CentralProductionEvent>>(filtered.Take(query.Limit).ToArray());
+            return Task.FromResult<IReadOnlyList<PlatformProductionEvent>>(filtered.Take(query.Limit).ToArray());
         }
 
-        public Task<CentralEventScopeStats> GetScopeStatsAsync(
+        public Task<PlatformEventScopeStats> GetScopeStatsAsync(
             string actorId,
-            CentralEventQuery query,
+            PlatformEventQuery query,
             CancellationToken ct = default)
         {
             var filtered = QueryAsync(actorId, query with { Limit = 500 }, ct).Result;
-            return Task.FromResult(new CentralEventScopeStats
+            return Task.FromResult(new PlatformEventScopeStats
             {
                 Count = filtered.Count,
                 LatestOccurredAt = filtered.Count == 0 ? null : filtered.Max(static row => row.Event.OccurredAt),

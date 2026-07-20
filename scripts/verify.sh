@@ -8,9 +8,9 @@ bash scripts/verify-architecture.sh
 bash scripts/verify-product-scope.sh
 
 for required_file in \
-  src/Ingot.Central.Api/Dockerfile \
-  src/Ingot.Central.Web/Dockerfile \
-  src/Ingot.Connector.Host/Dockerfile \
+  src/platform/Ingot.Platform.Api/Dockerfile \
+  src/platform/Ingot.Platform.Web/Dockerfile \
+  src/edge/Ingot.Edge.ConnectorHost/Dockerfile \
   deploy/docker/site.Dockerfile \
   deploy/docker/docs.Dockerfile; do
   test -f "$required_file"
@@ -18,23 +18,23 @@ done
 
 dotnet build Ingot.sln --disable-build-servers -m:1
 dotnet test tests/Ingot.Core.Tests/Ingot.Core.Tests.csproj --no-build --disable-build-servers -m:1
-npm --prefix src/Ingot.Central.Web ci
-npm --prefix src/Ingot.Central.Web run build
-npm --prefix src/Ingot.Central.Web run test
-npm --prefix src/Ingot.Central.Web run lint
-npm --prefix src/Ingot.Central.Web audit --omit=dev
+npm --prefix src/platform/Ingot.Platform.Web ci
+npm --prefix src/platform/Ingot.Platform.Web run build
+npm --prefix src/platform/Ingot.Platform.Web run test
+npm --prefix src/platform/Ingot.Platform.Web run lint
+npm --prefix src/platform/Ingot.Platform.Web audit --omit=dev
 
-npm --prefix site ci
-npm --prefix site run build
-node --test site/tests/rendered-html.test.mjs
-npm --prefix site run lint
-npm --prefix site audit --omit=dev
+npm --prefix apps/website ci
+npm --prefix apps/website run build
+node --test apps/website/tests/rendered-html.test.mjs
+npm --prefix apps/website run lint
+npm --prefix apps/website audit --omit=dev
 
-npm --prefix docs-site ci
-npm --prefix docs-site run build
-node --test docs-site/tests/export.test.mjs
-npm --prefix docs-site run lint
-npm --prefix docs-site audit --omit=dev
+npm --prefix apps/docs-site ci
+npm --prefix apps/docs-site run build
+node --test apps/docs-site/tests/export.test.mjs
+npm --prefix apps/docs-site run lint
+npm --prefix apps/docs-site audit --omit=dev
 
 for script in scripts/*.sh deploy/*.sh; do
   bash -n "$script"

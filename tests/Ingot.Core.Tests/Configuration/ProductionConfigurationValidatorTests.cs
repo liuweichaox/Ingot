@@ -1,7 +1,7 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using CentralValidator = Ingot.Central.Api.Configuration.ProductionConfigurationValidator;
-using EdgeValidator = Ingot.Connector.Host.Configuration.ProductionConfigurationValidator;
+using PlatformValidator = Ingot.Platform.Api.Configuration.ProductionConfigurationValidator;
+using EdgeValidator = Ingot.Edge.ConnectorHost.Configuration.ProductionConfigurationValidator;
 using Xunit;
 
 namespace Ingot.Core.Tests.Configuration;
@@ -9,14 +9,14 @@ namespace Ingot.Core.Tests.Configuration;
 public sealed class ProductionConfigurationValidatorTests
 {
     [Fact]
-    public void Central_RejectsMissingCredentials()
+    public void Platform_RejectsMissingCredentials()
     {
         var configuration = Build(new Dictionary<string, string?>());
-        Assert.Throws<InvalidOperationException>(() => CentralValidator.Validate(configuration));
+        Assert.Throws<InvalidOperationException>(() => PlatformValidator.Validate(configuration));
     }
 
     [Fact]
-    public void Central_AcceptsCompleteConfiguration()
+    public void Platform_AcceptsCompleteConfiguration()
     {
         var configuration = Build(new Dictionary<string, string?>
         {
@@ -29,7 +29,7 @@ public sealed class ProductionConfigurationValidatorTests
             ["Cors:AllowedOrigins:0"] = "https://ingotstack.com"
         });
 
-        CentralValidator.Validate(configuration);
+        PlatformValidator.Validate(configuration);
     }
 
     [Fact]
@@ -53,7 +53,7 @@ public sealed class ProductionConfigurationValidatorTests
             ["Cors:AllowedOrigins:0"] = "https://ingotstack.com"
         });
 
-        CentralValidator.Validate(configuration);
+        PlatformValidator.Validate(configuration);
     }
 
     [Fact]
@@ -76,7 +76,7 @@ public sealed class ProductionConfigurationValidatorTests
             ["Cors:AllowedOrigins:0"] = "https://ingotstack.com"
         });
 
-        var error = Assert.Throws<InvalidOperationException>(() => CentralValidator.Validate(configuration));
+        var error = Assert.Throws<InvalidOperationException>(() => PlatformValidator.Validate(configuration));
         Assert.Contains("ChatDataAccess:Actors:analyst is required", error.Message, StringComparison.Ordinal);
     }
 
@@ -95,8 +95,8 @@ public sealed class ProductionConfigurationValidatorTests
         var configuration = Build(new Dictionary<string, string?>
         {
             ["ConnectorHost:IngestToken"] = "short-connector-token",
-            ["Edge:EnableCentralReporting"] = "true",
-            ["Edge:CentralApiBaseUrl"] = "http://central-api:8000",
+            ["Edge:EnablePlatformReporting"] = "true",
+            ["Edge:PlatformApiBaseUrl"] = "http://platform-api:8000",
             ["Edge:EnableEventShipping"] = "true",
             ["Edge:EventIngestToken"] = "short-edge-token"
         });
@@ -110,8 +110,23 @@ public sealed class ProductionConfigurationValidatorTests
         var configuration = Build(new Dictionary<string, string?>
         {
             ["ConnectorHost:IngestToken"] = "connector-token-with-at-least-24-characters",
+            ["Edge:EnablePlatformReporting"] = "true",
+            ["Edge:PlatformApiBaseUrl"] = "http://platform-api:8000",
+            ["Edge:EnableEventShipping"] = "true",
+            ["Edge:EventIngestToken"] = "edge-token-with-at-least-24-characters"
+        });
+
+        EdgeValidator.Validate(configuration);
+    }
+
+    [Fact]
+    public void ConnectorHost_AcceptsLegacyCentralApiConfiguration()
+    {
+        var configuration = Build(new Dictionary<string, string?>
+        {
+            ["ConnectorHost:IngestToken"] = "connector-token-with-at-least-24-characters",
             ["Edge:EnableCentralReporting"] = "true",
-            ["Edge:CentralApiBaseUrl"] = "http://central-api:8000",
+            ["Edge:CentralApiBaseUrl"] = "http://platform-api:8000",
             ["Edge:EnableEventShipping"] = "true",
             ["Edge:EventIngestToken"] = "edge-token-with-at-least-24-characters"
         });
@@ -132,7 +147,7 @@ public sealed class ProductionConfigurationValidatorTests
         services.AddSingleton<IConfiguration>(configuration);
         services.AddLogging();
         Ingot.Agent.ServiceCollectionExtensions.AddIngotAgentCore(services, configuration);
-        Ingot.Agent.Infrastructure.ServiceCollectionExtensions.AddIngotAgentInfrastructure(services, configuration);
+        Ingot.Agent.Providers.ServiceCollectionExtensions.AddIngotAgentProviders(services, configuration);
         using var provider = services.BuildServiceProvider();
 
         var capabilities = provider.GetRequiredService<Ingot.Agent.IAgentRuntime>()

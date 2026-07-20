@@ -32,9 +32,9 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: |
-            src/Ingot.Central.Web/package-lock.json
-            site/package-lock.json
-            docs-site/package-lock.json
+            src/platform/Ingot.Platform.Web/package-lock.json
+            apps/website/package-lock.json
+            apps/docs-site/package-lock.json
 
       - name: Verify repository
         run: ./scripts/verify.sh
@@ -45,7 +45,7 @@ jobs:
           INGOT_EDGE_TOKEN: verification-edge-token-0001
           INGOT_OPERATOR_TOKEN: verification-operator-token-0001
           INGOT_CONNECTOR_TOKEN: verification-connector-token-0001
-        run: docker compose -f docker-compose.app.yml --profile connector-host build central-api central-web connector-host
+        run: docker compose -f docker-compose.app.yml --profile connector-host build platform-api platform-web connector-host
 
       - name: Smoke application stack
         env:

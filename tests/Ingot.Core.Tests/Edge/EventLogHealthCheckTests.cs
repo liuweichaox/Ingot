@@ -1,7 +1,7 @@
-using Ingot.Application.Abstractions;
+using Ingot.Edge.Application.Abstractions;
 using Ingot.Domain.Events;
-using Ingot.Connector.Host.HealthChecks;
-using Ingot.Infrastructure.Events;
+using Ingot.Edge.ConnectorHost.HealthChecks;
+using Ingot.Edge.Infrastructure.Events;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Xunit;
 

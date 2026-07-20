@@ -1,6 +1,6 @@
-using Ingot.Application.Abstractions;
+using Ingot.Edge.Application.Abstractions;
 using Ingot.Domain.Events;
-using Ingot.Infrastructure.Events;
+using Ingot.Edge.Infrastructure.Events;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 

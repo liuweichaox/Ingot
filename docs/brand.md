@@ -45,7 +45,7 @@ Ingot 的名称与标识共享同一个隐喻：**数据源适配提交的生产
 | [`images/logo/ingot-mark.svg`](../images/logo/ingot-mark.svg) / [`ingot-mark-dark.svg`](../images/logo/ingot-mark-dark.svg) | 图标源文件（明/暗），一切导出以此为准 |
 | [`images/logo/*.png`](../images/logo) | 各尺寸 PNG 导出（512 / 32 / 横排 1032） |
 | [`images/logo/preview.html`](../images/logo/preview.html) | 品牌预览页：版式、尺寸、色板一览 |
-| `site/public/brand/` / `docs-site/public/brand/` | 官网与文档站构建资产；校验测试保证内容一致 |
+| `apps/website/public/brand/` / `apps/docs-site/public/brand/` | 官网与文档站构建资产；校验测试保证内容一致 |
 
 ## 色板
 

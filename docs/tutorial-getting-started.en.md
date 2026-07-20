@@ -1,6 +1,6 @@
 # Getting started
 
-This tutorial starts Central, submits a standard production-event batch, and uses Ingot Chat to query a cycle fact chain. Source adaptation is implemented by your team; map its output to the public event contract.
+This tutorial starts Platform, submits a standard production-event batch, and uses Ingot Chat to query a cycle fact chain. Source adaptation is implemented by your team; map its output to the public event contract.
 
 ## 1. Prepare the environment
 
@@ -9,7 +9,7 @@ This tutorial starts Central, submits a standard production-event batch, and use
 - Docker Engine 26 or later with Docker Compose
 - OpenSSL
 
-## 2. Start Central
+## 2. Start Platform
 
 ```bash
 git clone https://github.com/liuweichaox/Ingot.git
@@ -28,9 +28,9 @@ Wait for the health check:
 curl http://localhost:8000/health
 ```
 
-Open <http://localhost:3000> for Central Web.
+Open <http://localhost:3000> for Platform Web.
 
-The default Compose stack starts PostgreSQL, Central API, and Central Web. If an adapter can reach Central, use the direct batch API in this tutorial.
+The default Compose stack starts PostgreSQL, Platform API, and Platform Web. If an adapter can reach Platform, use the direct batch API in this tutorial.
 
 ### Optional: enable Connector Host
 
@@ -41,11 +41,11 @@ export INGOT_CONNECTOR_TOKEN="$(openssl rand -hex 24)"
 docker compose -f docker-compose.app.yml --profile connector-host up -d connector-host
 ```
 
-The Host listens on <http://localhost:8001>, accepts `ProductionEvent[]`, and sends standard batches to Central with at-least-once delivery. The team deploys and operates this local ingress.
+The Host listens on <http://localhost:8001>, accepts `ProductionEvent[]`, and sends standard batches to Platform with at-least-once delivery. The team deploys and operates this local ingress.
 
 ## 3. Submit the first production-event batch
 
-Call Central from your own source-adaptation process. This example sends one `cycle.started` event:
+Call Platform from your own source-adaptation process. This example sends one `cycle.started` event:
 
 ```bash
 curl -X POST http://localhost:8000/api/v1/events:batch \
@@ -69,7 +69,7 @@ curl -X POST http://localhost:8000/api/v1/events:batch \
   }'
 ```
 
-`ackSeq` in the response means Central has safely accepted, or recognized as a duplicate, the contiguous sequence. Retain local sequence state and retry only unacknowledged events.
+`ackSeq` in the response means Platform has safely accepted, or recognized as a duplicate, the contiguous sequence. Retain local sequence state and retry only unacknowledged events.
 
 ## 4. Enable Chat in production
 
@@ -87,7 +87,7 @@ export INGOT_CHAT_OPERATOR_ALLOW_ALL=true
 docker compose -f docker-compose.app.yml up -d --build
 ```
 
-For production, replace broad access with the actual data scope required by each Actor. Central Web and the Chat API use `operator` with `INGOT_CHAT_OPERATOR_TOKEN`.
+For production, replace broad access with the actual data scope required by each Actor. Platform Web and the Chat API use `operator` with `INGOT_CHAT_OPERATOR_TOKEN`.
 
 ## 5. Query events and use Chat
 
@@ -95,7 +95,7 @@ For production, replace broad access with the actual data scope required by each
 curl "http://localhost:8000/api/v1/events?edgeId=EDGE-001&correlationId=CYCLE-001"
 ```
 
-Then open **Chat** in Central Web and ask:
+Then open **Chat** in Platform Web and ask:
 
 ```text
 What happened during this cycle, and is its data complete?

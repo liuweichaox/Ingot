@@ -1,6 +1,6 @@
-using Ingot.Application.Abstractions;
+using Ingot.Edge.Application.Abstractions;
 using Ingot.Domain.Events;
-using Ingot.Connector.Host.Controllers;
+using Ingot.Edge.ConnectorHost.Controllers;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;

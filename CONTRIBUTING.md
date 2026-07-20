@@ -6,7 +6,7 @@
 
 ## 开发原则
 
-- `Ingot.Domain`、`Ingot.Application` 和 `Ingot.Agent` 不依赖具体数据库、模型供应商或设备协议。
+- `Ingot.Domain`、`Ingot.Edge.Application` 和 `Ingot.Agent` 不依赖具体数据库、模型供应商或设备协议。
 - 设备和系统差异由用户的接入程序或现有系统处理，不把厂商 SDK 加入平台核心。
 - Chat 模型负责问题理解和回答组织；事实查询、数据校验、权限、运行上限和证据验证使用确定性代码。
 - Chat 事实工具保持只读。
@@ -25,9 +25,9 @@
 
 ```bash
 dotnet restore Ingot.sln
-npm --prefix src/Ingot.Central.Web ci
-npm --prefix site ci
-npm --prefix docs-site ci
+npm --prefix src/platform/Ingot.Platform.Web ci
+npm --prefix apps/website ci
+npm --prefix apps/docs-site ci
 ```
 
 本地服务启动方式见[快速开始](docs/tutorial-getting-started.md)。
@@ -59,7 +59,7 @@ npm --prefix docs-site ci
 
 ### Web 与文档
 
-- Central Web 的 AI 入口统一为 Ingot Chat，能力和只读工具由 `/api/v1/chat/capabilities` 驱动。
+- Platform Web 的 AI 入口统一为 Ingot Chat，能力和只读工具由 `/api/v1/chat/capabilities` 驱动。
 - 新增图表能力时必须先定义 `ChartSpec` 类型白名单、确定性校验、渲染器和测试；禁止执行模型生成的前端代码。
 - 官网只描述已经实现的能力，示例事实必须明确标识。
 - 修改公开能力、配置、接口或术语时，同步更新 README、中英文 `docs/`、官网和文档站。
@@ -75,7 +75,7 @@ npm --prefix docs-site ci
 门禁包括：
 
 - .NET 构建与单元、集成测试；
-- Central Web 构建、测试、Lint 和生产依赖审计；
+- Platform Web 构建、测试、Lint 和生产依赖审计；
 - 官网与文档站静态构建、链接测试、Lint 和生产依赖审计；
 - 架构依赖、Shell 语法、Compose 配置和差异格式检查。
 

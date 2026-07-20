@@ -52,7 +52,7 @@
 
 Ingot is a trusted production-facts and process-investigation platform for manufacturing operations. It brings important records from equipment, instruments, MES, ERP, and custom systems together as queryable, verifiable, and traceable facts. Teams map source data to the standard `ProductionEvent` or `InspectionRecord` contracts and call the public HTTP APIs; Ingot embeds no device protocol and does not replace plant control, scheduling, inventory, or quality-disposition systems.
 
-**Ingot Chat** is the main way engineers use Ingot. It runs in Central Web and reads recorded production facts only: everyday mode checks facts and completeness, while deeper investigation lets process, quality, and challenge roles review the same verified evidence and return candidate explanations for an engineer to assess.
+**Ingot Chat** is the main way engineers use Ingot. It runs in Platform Web and reads recorded production facts only: everyday mode checks facts and completeness, while deeper investigation lets process, quality, and challenge roles review the same verified evidence and return candidate explanations for an engineer to assess.
 
 ## Core capabilities
 
@@ -80,9 +80,9 @@ Ingot is a trusted production-facts and process-investigation platform for manuf
 equipment, instruments, MES, ERP, or custom systems
   └─ team-owned source adaptation
        └─ ProductionEvent[] / InspectionRecord
-            └─ Central API ──► PostgreSQL production facts
+            └─ Platform API ──► PostgreSQL production facts
                                     ├─ query and SSE
-                                    └─ Central Web · Ingot Chat
+                                    └─ Platform Web · Ingot Chat
 ```
 
 Teams own source protocols and runtime operation. Ingot owns the fact contract, access control, query, and evidence links. See the [architecture](docs/architecture.en.md) and [production event specification](docs/rfc-production-events.en.md).
@@ -98,7 +98,7 @@ Teams own source protocols and runtime operation. Ingot owns the fact contract, 
 - Docker Engine 26 or later with Docker Compose
 - OpenSSL for local credentials
 
-### Start Central
+### Start Platform
 
 ```bash
 git clone https://github.com/liuweichaox/Ingot.git
@@ -113,11 +113,11 @@ docker compose -f docker-compose.app.yml up -d --build
 
 | Service | URL |
 |---|---|
-| Central Web | <http://localhost:3000> |
-| Central API | <http://localhost:8000> |
-| Central health | <http://localhost:8000/health> |
+| Platform Web | <http://localhost:3000> |
+| Platform API | <http://localhost:8000> |
+| Platform health | <http://localhost:8000/health> |
 
-The default Compose stack starts PostgreSQL, Central API, and Central Web. Chat and Connector Host are enabled only when needed. `INGOT_OPERATOR_TOKEN` protects inspection-fact submission; Chat uses a separate `INGOT_CHAT_OPERATOR_TOKEN`.
+The default Compose stack starts PostgreSQL, Platform API, and Platform Web. Chat and Connector Host are enabled only when needed. `INGOT_OPERATOR_TOKEN` protects inspection-fact submission; Chat uses a separate `INGOT_CHAT_OPERATOR_TOKEN`.
 
 ### Enable Chat in production
 
@@ -142,7 +142,7 @@ See [getting started](docs/tutorial-getting-started.en.md) and [configuration](d
 
 ## Event ingestion
 
-Implement one adapter per source type in the runtime that suits your environment. The adapter maps source data to `ProductionEvent`, persists its local sequence, and submits it to Central with an Edge credential. Every event `source` must start with `edge/{edgeId}/`.
+Implement one adapter per source type in the runtime that suits your environment. The adapter maps source data to `ProductionEvent`, persists its local sequence, and submits it to Platform with an Edge credential. Every event `source` must start with `edge/{edgeId}/`.
 
 ```bash
 curl -X POST http://localhost:8000/api/v1/events:batch \
@@ -166,9 +166,9 @@ curl -X POST http://localhost:8000/api/v1/events:batch \
   }'
 ```
 
-Each batch accepts 1–500 events. Central deduplicates by `eventId` and `(edgeId, seq)` and returns `ackSeq`. See the [production event specification](docs/rfc-production-events.en.md) for the contract, validation rules, and retry guidance.
+Each batch accepts 1–500 events. Platform deduplicates by `eventId` and `(edgeId, seq)` and returns `ackSeq`. See the [production event specification](docs/rfc-production-events.en.md) for the contract, validation rules, and retry guidance.
 
-When an adapter runs on a plant network, needs a local SQLite outbox, or cannot reach Central directly, a team can enable **Ingot.Connector.Host** as an optional local ingress. It accepts `ProductionEvent[]`, persists them, and ships them to Central with at-least-once delivery. Teams choose, deploy, and operate this path.
+When an adapter runs on a plant network, needs a local SQLite outbox, or cannot reach Platform directly, a team can enable **Ingot.Edge.ConnectorHost** as an optional local ingress. It accepts `ProductionEvent[]`, persists them, and ships them to Platform with at-least-once delivery. Teams choose, deploy, and operate this path.
 
 ```bash
 export INGOT_CONNECTOR_TOKEN="$(openssl rand -hex 24)"
@@ -209,15 +209,15 @@ See [Chat](docs/chat.en.md) for the complete capability and API reference.
 ```text
 Ingot/
 ├── src/
-│   ├── Ingot.Central.Api/            Central HTTP, authorization, and SSE
-│   ├── Ingot.Central.Infrastructure/ central facts, inspections, webhooks, and Chat fact tools
+│   ├── Ingot.Platform.Api/            Platform HTTP, authorization, and SSE
+│   ├── Ingot.Platform.Infrastructure/ platform facts, inspections, webhooks, and Chat fact tools
 │   ├── Ingot.Contracts/              event, inspection, and Chat HTTP contracts
 │   ├── Ingot.Domain/                 production events, subject references, and domain validation
-│   ├── Ingot.Application/            application-service abstractions
-│   └── Ingot.Infrastructure/         storage, logging, metrics, and runtime implementations
-├── site/                             product website
+│   ├── Ingot.Edge.Application/            application-service abstractions
+│   └── Ingot.Edge.Infrastructure/         storage, logging, metrics, and runtime implementations
+├── apps/website/                     product website
 ├── docs/                             bilingual Markdown documentation
-├── docs-site/                        static documentation site
+├── apps/docs-site/                   static documentation site
 └── tests/                            automated tests
 ```
 

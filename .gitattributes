@@ -1,4 +1,7 @@
-deploy/*.conf text eol=lf
-deploy/*.md text eol=lf
-deploy/*.sh text eol=lf
-deploy/*.yml text eol=lf
+* text=auto
+
+*.sh text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+Dockerfile text eol=lf
+*.Dockerfile text eol=lf

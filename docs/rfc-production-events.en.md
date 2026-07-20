@@ -1,6 +1,6 @@
 # Production Event Specification
 
-`ProductionEvent` is the immutable event envelope shared by team-owned source adaptation, Central API, query, and Ingot Chat. Teams map equipment, instrument, or business-system semantics to this contract and submit it through Central API.
+`ProductionEvent` is the immutable event envelope shared by team-owned source adaptation, Platform API, query, and Ingot Chat. Teams map equipment, instrument, or business-system semantics to this contract and submit it through Platform API.
 
 ## Batch request
 
@@ -54,7 +54,7 @@ Content-Type: application/json
 - `eventId` and `seq` cannot repeat within a batch;
 - every `source` must match the request `edgeId`;
 - the Bearer token must match the configured token for that `edgeId`;
-- Central deduplicates by `eventId` and `(edgeId, seq)`.
+- Platform deduplicates by `eventId` and `(edgeId, seq)`.
 
 A successful response contains:
 
@@ -71,7 +71,7 @@ A successful response contains:
 
 ## Optional Connector Host ingress
 
-`Ingot.Connector.Host` is a plant-local ingress and SQLite outbox that a team may deploy itself. Teams deploy and operate both source adaptation and the Host. An adapter may submit:
+`Ingot.Edge.ConnectorHost` is a plant-local ingress and SQLite outbox that a team may deploy itself. Teams deploy and operate both source adaptation and the Host. An adapter may submit:
 
 ```http
 POST http://<host>:8001/api/v1/connector-events
@@ -79,7 +79,7 @@ Authorization: Bearer <connector-host-token>
 Content-Type: application/json
 ```
 
-The body is `ProductionEvent[]`. The Host validates the local token and events, assigns local sequence values, persists them, and sends standard batches to Central. It fits network boundaries that need offline buffering or cannot reach Central directly. Direct Central batches and Host ingress use separate tokens; the deployment owns the choice, monitoring, and operation of either path.
+The body is `ProductionEvent[]`. The Host validates the local token and events, assigns local sequence values, persists them, and sends standard batches to Platform. It fits network boundaries that need offline buffering or cannot reach Platform directly. Direct Platform batches and Host ingress use separate tokens; the deployment owns the choice, monitoring, and operation of either path.
 
 Default Compose does not start the Host. Enable the `connector-host` profile when a local ingress is needed:
 
@@ -93,7 +93,7 @@ docker compose -f docker-compose.app.yml --profile connector-host up -d connecto
 - `GET /api/v1/events`: filter by Edge, event type, subject, context, `correlationId`, and time;
 - `GET /api/v1/events/stream`: production-event SSE;
 - `GET /api/v1/cycles/{correlationId}`: the event chain for one correlation ID;
-- `get_cycle_trace`: a cycle timeline with evidence, ordered by occurrence time and Central ingest order;
+- `get_cycle_trace`: a cycle timeline with evidence, ordered by occurrence time and Platform ingest order;
 - `check_data_quality`: cycle pairing, empty context, sequence gaps, and latest-event-time checks.
 
 Inspection facts use a separate `InspectionRecord` contract and API. Current cycle tools build cycle fact chains from production events.

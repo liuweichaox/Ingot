@@ -1,14 +1,14 @@
 # 部署
 
-本指南部署 Central Web、Central API 和 PostgreSQL。数据源适配由使用方部署在适合现场的网络与运行环境中，并通过标准事件 API 向 Central 提交事实。
+本指南部署 Platform Web、Platform API 和 PostgreSQL。数据源适配由使用方部署在适合现场的网络与运行环境中，并通过标准事件 API 向 Platform 提交事实。
 
 ## 部署前检查
 
 - 为 PostgreSQL、事件接入和 Chat 准备独立机密；
-- 如部署可选的 `Ingot.Connector.Host`，为它准备独立本地入口令牌；
+- 如部署可选的 `Ingot.Edge.ConnectorHost`，为它准备独立本地入口令牌；
 - 为每个 `edgeId` 创建独立事件令牌；
 - 为每个 Chat Actor 配置模型、模型密钥、独立令牌和所需事实范围；
-- 将 Central API 与数据库置于受控网络，生产环境使用 TLS；
+- 将 Platform API 与数据库置于受控网络，生产环境使用 TLS；
 - 确认使用方适配程序不会把设备凭据、原始大对象或敏感文本写入事件上下文。
 
 ## Docker Compose
@@ -28,7 +28,7 @@ docker compose -f docker-compose.app.yml ps
 curl http://localhost:8000/health
 ```
 
-默认 Compose 只启动 PostgreSQL、Central API 与 Central Web，且保持 Chat 关闭。
+默认 Compose 只启动 PostgreSQL、Platform API 与 Platform Web，且保持 Chat 关闭。
 
 ## 启用生产 Chat
 
@@ -63,16 +63,16 @@ curl http://localhost:8000/api/v1/chat/capabilities \
 5. 依据 `ackSeq` 重试未确认事件；
 6. 监控认证失败、延迟和重复率。
 
-`Ingot.Connector.Host` 是可选路径：使用方可在现场部署它以获得本地 SQLite outbox，并向其提交 `ProductionEvent[]`；Host 以至少一次语义向 Central 上报。默认 Compose 不启动 Host。需要该路径时：
+`Ingot.Edge.ConnectorHost` 是可选路径：使用方可在现场部署它以获得本地 SQLite outbox，并向其提交 `ProductionEvent[]`；Host 以至少一次语义向 Platform 上报。默认 Compose 不启动 Host。需要该路径时：
 
 ```bash
 export INGOT_CONNECTOR_TOKEN="$(openssl rand -hex 24)"
 docker compose -f docker-compose.app.yml --profile connector-host up -d connector-host
 ```
 
-直接 Central 批次与 Host 入口使用不同令牌，部署方应按网络边界选择、监控和运维其中的路径。
+直接 Platform 批次与 Host 入口使用不同令牌，部署方应按网络边界选择、监控和运维其中的路径。
 
-Central 不要求特定语言、进程模型或现场操作系统。完整字段与重试语义见[生产事件规范](rfc-production-events.md)。
+Platform 不要求特定语言、进程模型或现场操作系统。完整字段与重试语义见[生产事件规范](rfc-production-events.md)。
 
 ## 备份与升级
 

@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using Ingot.Domain.Events;
-using Ingot.Infrastructure.State;
+using Ingot.Edge.Infrastructure.State;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;

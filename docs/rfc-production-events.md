@@ -1,6 +1,6 @@
 # 生产事件规范
 
-`ProductionEvent` 是使用方数据源适配、Central API、查询和 Ingot Chat 共享的不可变事件信封。使用方负责将设备、仪器或业务系统的语义映射为该契约，并通过 Central API 提交。
+`ProductionEvent` 是使用方数据源适配、Platform API、查询和 Ingot Chat 共享的不可变事件信封。使用方负责将设备、仪器或业务系统的语义映射为该契约，并通过 Platform API 提交。
 
 ## 批次请求
 
@@ -67,7 +67,7 @@ Content-Type: application/json
 - 批次内 `eventId` 与 `seq` 不能重复；
 - 所有 `source` 必须与请求 `edgeId` 匹配；
 - Bearer Token 必须与该 `edgeId` 的配置令牌匹配；
-- Central 按 `eventId` 与 `(edgeId, seq)` 去重。
+- Platform 按 `eventId` 与 `(edgeId, seq)` 去重。
 
 成功响应包含：
 
@@ -84,7 +84,7 @@ Content-Type: application/json
 
 ## 可选的 Connector Host 入口
 
-`Ingot.Connector.Host` 是使用方可自行部署的现场入口与 SQLite outbox。数据源适配与 Host 均由使用方部署和运行。适配程序可提交以下请求：
+`Ingot.Edge.ConnectorHost` 是使用方可自行部署的现场入口与 SQLite outbox。数据源适配与 Host 均由使用方部署和运行。适配程序可提交以下请求：
 
 ```http
 POST http://<host>:8001/api/v1/connector-events
@@ -92,7 +92,7 @@ Authorization: Bearer <connector-host-token>
 Content-Type: application/json
 ```
 
-请求体为 `ProductionEvent[]`。Host 校验本地令牌和事件，分配本地序号、持久化并向 Central 发送标准批次。适合需要本地断网缓冲或不能直接访问 Central 的网络边界。直接 Central 批次和 Host 入口使用不同令牌；部署方负责选择、监控和运维其中的路径。
+请求体为 `ProductionEvent[]`。Host 校验本地令牌和事件，分配本地序号、持久化并向 Platform 发送标准批次。适合需要本地断网缓冲或不能直接访问 Platform 的网络边界。直接 Platform 批次和 Host 入口使用不同令牌；部署方负责选择、监控和运维其中的路径。
 
 默认 Compose 不启动 Host。需要本地入口时启用 `connector-host` profile：
 

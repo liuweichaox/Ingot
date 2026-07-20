@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using System.Globalization;
 using Ingot.Domain.Events;
-using Ingot.Infrastructure.Events;
+using Ingot.Edge.Infrastructure.Events;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;

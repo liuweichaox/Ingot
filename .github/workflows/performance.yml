@@ -32,5 +32,5 @@ jobs:
       - name: Benchmark edge event log
         run: ./scripts/benchmark-edge-event-log.sh
 
-      - name: Benchmark central ingest
-        run: ./scripts/benchmark-central-ingest.sh
+      - name: Benchmark platform ingest
+        run: ./scripts/benchmark-platform-ingest.sh

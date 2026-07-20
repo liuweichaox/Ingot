@@ -1,14 +1,14 @@
 # Deployment
 
-This guide deploys Central Web, Central API, and PostgreSQL. Teams deploy source adaptation in the network and runtime appropriate to the plant and submit facts to Central through the standard event API.
+This guide deploys Platform Web, Platform API, and PostgreSQL. Teams deploy source adaptation in the network and runtime appropriate to the plant and submit facts to Platform through the standard event API.
 
 ## Pre-deployment checks
 
 - Prepare separate secrets for PostgreSQL, event ingestion, and Chat;
-- if deploying optional `Ingot.Connector.Host`, prepare an independent local-ingress token;
+- if deploying optional `Ingot.Edge.ConnectorHost`, prepare an independent local-ingress token;
 - create an independent event token for every `edgeId`;
 - configure the model, model key, independent token, and required fact scope for every Chat Actor;
-- place Central API and the database on a controlled network and use TLS in production;
+- place Platform API and the database on a controlled network and use TLS in production;
 - ensure source-adaptation programs do not put device credentials, raw large objects, or sensitive text into event context.
 
 ## Docker Compose
@@ -28,7 +28,7 @@ Check the services:
 curl http://localhost:8000/health
 ```
 
-The default Compose stack starts PostgreSQL, Central API, and Central Web, with Chat disabled.
+The default Compose stack starts PostgreSQL, Platform API, and Platform Web, with Chat disabled.
 
 ## Enable Chat in production
 
@@ -63,16 +63,16 @@ Source-adaptation programs own:
 5. retrying unacknowledged events from `ackSeq`;
 6. monitoring authorization failures, latency, and duplicate rate.
 
-`Ingot.Connector.Host` is an optional path: a team may deploy it in the plant for a local SQLite outbox and submit `ProductionEvent[]` to it; the Host ships batches to Central with at-least-once delivery. Default Compose does not start the Host. Enable this path when needed:
+`Ingot.Edge.ConnectorHost` is an optional path: a team may deploy it in the plant for a local SQLite outbox and submit `ProductionEvent[]` to it; the Host ships batches to Platform with at-least-once delivery. Default Compose does not start the Host. Enable this path when needed:
 
 ```bash
 export INGOT_CONNECTOR_TOKEN="$(openssl rand -hex 24)"
 docker compose -f docker-compose.app.yml --profile connector-host up -d connector-host
 ```
 
-Direct Central batches and Host ingress use different tokens, so choose, monitor, and operate one path for each network boundary.
+Direct Platform batches and Host ingress use different tokens, so choose, monitor, and operate one path for each network boundary.
 
-Central requires no specific language, process model, or plant operating system. See the [production event specification](rfc-production-events.en.md) for full fields and retry semantics.
+Platform requires no specific language, process model, or plant operating system. See the [production event specification](rfc-production-events.en.md) for full fields and retry semantics.
 
 ## Backup and upgrade
 

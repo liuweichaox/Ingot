@@ -6,11 +6,11 @@
 ./scripts/verify.sh
 ```
 
-This gate builds the .NET projects, runs tests, builds Central Web, the product site, and the documentation site, then checks formatting, architecture, and product scope.
+This gate builds the .NET projects, runs tests, builds Platform Web, the product site, and the documentation site, then checks formatting, architecture, and product scope.
 
 ## Development principles
 
-- Update contracts before Central API, fact services, Web, and documentation;
+- Update contracts before Platform API, fact services, Web, and documentation;
 - event ingestion accepts strongly typed `ProductionEvent` and `InspectionRecord` only, never arbitrary SQL or scripts from callers;
 - Chat statistics, authorization, tool execution, and evidence validation remain deterministic;
 - every new tool is read-only by default and needs data-scope, result-size, and timeout limits;
@@ -27,13 +27,13 @@ This gate builds the .NET projects, runs tests, builds Central Web, the product 
 
 ## Documentation and website
 
-`docs/` is the bilingual content source. `docs-site/` reads Markdown at build time and generates navigation, a search index, and static pages. `site/` is the product website. After a change, run at least:
+`docs/` is the bilingual content source. `apps/docs-site/` reads Markdown at build time and generates navigation, a search index, and static pages. `apps/website/` is the product website. After a change, run at least:
 
 ```bash
-npm --prefix docs-site run build
-npm --prefix docs-site test
-npm --prefix site run build
-npm --prefix site test
+npm --prefix apps/docs-site run build
+npm --prefix apps/docs-site test
+npm --prefix apps/website run build
+npm --prefix apps/website test
 ```
 
 See [architecture](architecture.en.md), [design](design.en.md), and the [contribution guide](../CONTRIBUTING.en.md).

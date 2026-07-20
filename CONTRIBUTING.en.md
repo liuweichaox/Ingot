@@ -6,7 +6,7 @@ Thank you for contributing code, tests, documentation, or design feedback. Every
 
 ## Engineering principles
 
-- `Ingot.Domain`, `Ingot.Application`, and `Ingot.Agent` remain independent of databases, model providers, and equipment protocols.
+- `Ingot.Domain`, `Ingot.Edge.Application`, and `Ingot.Agent` remain independent of databases, model providers, and equipment protocols.
 - User-owned ingestion programs and existing systems handle source-specific behavior; vendor SDKs do not enter the platform core.
 - Chat models handle question interpretation and response composition. Deterministic code owns fact retrieval, data validation, authorization, run limits, and evidence verification.
 - Chat fact tools remain read-only.
@@ -25,9 +25,9 @@ Install dependencies:
 
 ```bash
 dotnet restore Ingot.sln
-npm --prefix src/Ingot.Central.Web ci
-npm --prefix site ci
-npm --prefix docs-site ci
+npm --prefix src/platform/Ingot.Platform.Web ci
+npm --prefix apps/website ci
+npm --prefix apps/docs-site ci
 ```
 
 See [Getting started](docs/tutorial-getting-started.en.md) for local services.
@@ -53,13 +53,13 @@ See [Getting started](docs/tutorial-getting-started.en.md) for local services.
 ### APIs and storage
 
 - API inputs are type- and authorization-validated at the controller boundary.
-- PostgreSQL stores central facts. SQLite WAL stores shop-floor events, outbox records, and Chat runs.
+- PostgreSQL stores platform facts. SQLite WAL stores shop-floor events, outbox records, and Chat runs.
 - Database changes include initialization or migration, concurrency semantics, failure handling, and integration tests.
 - Logs, metrics, and traces exclude secrets, full prompts, and sensitive tool arguments.
 
 ### Web and documentation
 
-- Central Web's AI entry point is Ingot Chat, which obtains availability and read-only tools from `/api/v1/chat/capabilities`.
+- Platform Web's AI entry point is Ingot Chat, which obtains availability and read-only tools from `/api/v1/chat/capabilities`.
 - Any chart capability first defines a `ChartSpec` type allowlist, deterministic validation, renderer, and tests; never execute model-generated front-end code.
 - The product website describes implemented capabilities only and labels sample facts explicitly.
 - Public capability, configuration, API, or terminology changes update the README, bilingual `docs/`, product website, and docs site together.
@@ -72,7 +72,7 @@ Run the complete gate before submitting:
 ./scripts/verify.sh
 ```
 
-It covers .NET build and tests; Central Web build, tests, lint, and production dependency audit; product and docs site static builds, links, lint, and audits; architecture dependencies; shell syntax; Compose configuration; and diff formatting.
+It covers .NET build and tests; Platform Web build, tests, lint, and production dependency audit; product and docs site static builds, links, lint, and audits; architecture dependencies; shell syntax; Compose configuration; and diff formatting.
 
 New behavior includes success, rejection, and authorization-boundary tests. Bug fixes first add a test that reproduces the defect.
 
