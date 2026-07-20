@@ -59,10 +59,10 @@ Ingot is a trusted production-facts and process-investigation platform for manuf
 | Capability | Implemented scope |
 |---|---|
 | Standard event ingestion | Teams submit `ProductionEvent` batches with source, subject, context, correlation ID, and sequence through `POST /api/v1/events:batch` |
-| Inspection facts | Human or instrument clients submit independent inspection records through `POST /api/v1/inspection-records` |
-| Trusted fact store | Production events, inspection records, subjects, context, correlation IDs, query, and SSE |
+| Inspection records | Human or instrument clients submit inspection results through `POST /api/v1/inspection-records` |
+| Central data store | Stores production events, inspection records, subjects, context, and correlation IDs, with query and SSE support |
 | Ingot Chat | Natural-language questions, page context, streamed responses, history, limitations, and evidence links |
-| Chat fact tools | `check_data_quality` and `get_cycle_trace` |
+| Chat-assisted analysis | Checks data completeness, traces cycle event timelines, and returns evidence links |
 | Deeper investigation | Bounded process, quality, and challenge roles; at most 3 rounds and 9 turns; produces evidence-backed candidate explanations only |
 | Operations | Health checks, Prometheus metrics, and structured logs |
 
@@ -210,7 +210,7 @@ See [Chat](docs/chat.en.md) for the complete capability and API reference.
 Ingot/
 ├── src/
 │   ├── Ingot.Platform.Api/            Platform HTTP, authorization, and SSE
-│   ├── Ingot.Platform.Infrastructure/ platform facts, inspections, webhooks, and Chat fact tools
+│   ├── Ingot.Platform.Infrastructure/ platform data, inspections, webhooks, and Chat analysis capabilities
 │   ├── Ingot.Contracts/              event, inspection, and Chat HTTP contracts
 │   ├── Ingot.Domain/                 production events, subject references, and domain validation
 │   ├── Ingot.Edge.Application/            application-service abstractions
