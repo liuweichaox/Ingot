@@ -1,6 +1,6 @@
 # Ingot 文档
 
-Ingot 是可信生产事实与工艺调查平台：它将不同来源的重要生产记录保存为标准生产事实，并在 Platform Web 中提供 **Ingot Chat** 作为工程师的主要入口。使用方自行实现数据源适配，将 `ProductionEvent` 或 `InspectionRecord` 提交到公开 API；Ingot 不内置现场设备协议。
+Ingot 是制造数据采集与工艺分析平台：它将不同来源的重要生产记录保存为标准事件数据，并在 Platform Web 中提供 **Ingot Chat** 作为工程师的主要入口。使用方自行实现数据源适配，将 `ProductionEvent` 或 `InspectionRecord` 提交到公开 API；Ingot 不内置现场设备协议。
 
 ## 开始使用
 

@@ -20,8 +20,8 @@ Chat 的模型负责语言理解和回答组织。Platform 的确定性代码负
 1. 校验 Edge 令牌、`edgeId`、批次大小和事件字段；
 2. 校验 `source` 前缀、事件 ID 与序号唯一性；
 3. 以 `eventId` 和 `(edgeId, seq)` 处理重复提交；
-4. 保存中心事实并返回 `ackSeq`；
-5. 提供查询、SSE 和按 `correlationId` 的周期事实链。
+4. 保存中心数据并返回 `ackSeq`；
+5. 提供查询、SSE 和按 `correlationId` 的周期事件链。
 
 数据源协议、现场缓存、重试时机和进程监管由使用方决定。标准契约避免把这些实现细节耦合到 Platform。
 

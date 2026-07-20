@@ -3,7 +3,7 @@
 | 项目 | 职责 |
 |---|---|
 | `Ingot.Platform.Api` | Platform HTTP、事件接入、鉴权、查询、SSE 与 Chat API |
-| `Ingot.Platform.Infrastructure` | 中心生产事实、检测、Webhook 与 Chat 事实工具 |
+| `Ingot.Platform.Infrastructure` | 中心生产数据、检测、Webhook 与 Chat 数据工具 |
 | `Ingot.Contracts` | 事件、检测和 Chat 的公开 HTTP 契约 |
 | `Ingot.Domain` | 生产事件、对象引用和领域校验 |
 | `Ingot.Edge.Application` | 应用服务抽象 |

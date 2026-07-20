@@ -10,7 +10,7 @@ using NpgsqlTypes;
 namespace Ingot.Platform.Infrastructure.Events;
 
 /// <summary>
-///     TimescaleDB（PostgreSQL + 时序扩展）中心事实库。全局去重键表与事实 hypertable 分离，
+///     TimescaleDB（PostgreSQL + 时序扩展）中心数据存储。全局去重键表与事件 hypertable 分离，
 ///     保证 EventId、(EdgeId, Seq) 幂等；事实表由 Timescale 按 occurred_at 自动分块，
 ///     并可按配置启用保留与压缩策略。
 /// </summary>

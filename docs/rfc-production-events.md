@@ -101,7 +101,7 @@ export INGOT_CONNECTOR_TOKEN="$(openssl rand -hex 24)"
 docker compose -f docker-compose.app.yml --profile connector-host up -d connector-host
 ```
 
-## 查询与事实链
+## 查询与事件链
 
 - `GET /api/v1/events`：按 Edge、事件类型、对象、上下文、`correlationId` 和时间查询；
 - `GET /api/v1/events/stream`：生产事件 SSE；
@@ -109,7 +109,7 @@ docker compose -f docker-compose.app.yml --profile connector-host up -d connecto
 - `get_cycle_trace`：按发生时间和中心摄入顺序生成带证据的周期时间线；
 - `check_data_quality`：检查周期配对、空上下文、序号间断和最新事件时间。
 
-检测事实使用独立的 `InspectionRecord` 契约和 API。当前周期工具基于生产事件构建周期事实链。
+检测记录使用独立的 `InspectionRecord` 契约和 API。当前周期工具基于生产事件构建周期事件链。
 
 ## 保留上下文键
 
@@ -133,7 +133,7 @@ docker compose -f docker-compose.app.yml --profile connector-host up -d connecto
 
 ## 周期与检测关联
 
-`InspectionRecord.operationRunId` 默认等于该次加工运行的 `ProductionEvent.correlationId`。检测记录引用的周期必须能通过 `/api/v1/events?correlationId=<operationRunId>` 找到对应生产事实链。若源系统无法使用同一标识，必须在后续版本引入显式映射；在此之前不得让检测事实和过程事实各自独立命名。
+`InspectionRecord.operationRunId` 默认等于该次加工运行的 `ProductionEvent.correlationId`。检测记录引用的周期必须能通过 `/api/v1/events?correlationId=<operationRunId>` 找到对应事件链路。若源系统无法使用同一标识，必须在后续版本引入显式映射；在此之前不得让检测记录和过程事件各自独立命名。
 
 ## 阶段事件命名
 

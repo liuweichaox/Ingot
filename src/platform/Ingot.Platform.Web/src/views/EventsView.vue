@@ -94,7 +94,7 @@
       <el-empty v-if="!loading && events.length === 0" description="暂无符合条件的生产事件" />
     </el-card>
 
-    <el-dialog v-model="cycleVisible" title="周期事实链" width="900px">
+    <el-dialog v-model="cycleVisible" title="周期事件链" width="900px">
       <el-timeline v-if="cycleEvents.length">
         <el-timeline-item
           v-for="item in cycleEvents"

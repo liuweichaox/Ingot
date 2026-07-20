@@ -27,7 +27,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IPlatformEventStore, PostgresPlatformEventStore>();
         services.AddHostedService<EventStoreInitializerHostedService>();
 
-        // Chat 只能通过显式注册的只读工具访问中心事实。
+        // Chat 只能通过显式注册的只读工具访问中心数据。
         services.Configure<ChatDataAccessOptions>(configuration.GetSection("ChatDataAccess"));
         services.AddSingleton<IChatEventReader, ChatEventReader>();
         services.AddSingleton<IAnalysisTool, CheckDataQualityTool>();

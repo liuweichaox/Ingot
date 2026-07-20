@@ -1,4 +1,4 @@
-# ADR-0001：中心事实库的本地数据库选型与架构优化
+# ADR-0001：中心数据存储的本地数据库选型与架构优化
 
 **状态（Status）：** Proposed（v2，已放宽约束）
 **日期（Date）：** 2026-07-19
@@ -19,12 +19,12 @@
   Platform API (.NET 10)  ──────────────────────>  PostgreSQL（Docker，本地）
         ├─ 鉴权 / 契约校验 / 幂等                          ├─ production_events（手写按月 RANGE 分区, JSONB+GIN）
         ├─ 查询 + SSE（轮询 ingest_id 游标）               ├─ event_ingest_keys（幂等键）
-        ├─ Ingot Chat（只读事实工具 + 有界调查）           ├─ inspection_records
+        ├─ Ingot Chat（只读数据工具 + 有界调查）           ├─ inspection_records
         └─ Webhook 投递                                   └─ webhook_subscriptions
         └─ SQLite ×4：Chat run / 边缘 outbox / 日志 / 边缘注册
 ```
 
-事实（代码走查）：中心事实库已经是 **Docker 本地部署的 PostgreSQL**；事件表按 `occurred_at` **手写**月度 RANGE 分区、`context` 用 JSONB+GIN、幂等靠 `event_id` 主键 + `(edge_id,seq)` 唯一键的"先抢占后插入"两表事务。
+现状（代码走查）：中心数据存储已经是 **Docker 本地部署的 PostgreSQL**；事件表按 `occurred_at` **手写**月度 RANGE 分区、`context` 用 JSONB+GIN、幂等靠 `event_id` 主键 + `(edge_id,seq)` 唯一键的"先抢占后插入"两表事务。
 
 ### 1.2 关键洞察：现状离最优只差一个扩展
 
@@ -46,7 +46,7 @@
 
 ## 2. 决策（Decision）
 
-**推荐：中心事实库改用 TimescaleDB（Docker 本地部署）作为默认档；保留嵌入式 SQLite 作为"边缘/气隙单机"可选档；两者藏在同一个 `IPlatformEventStore` 抽象后，按部署配置切换。**
+**推荐：中心数据存储改用 TimescaleDB（Docker 本地部署）作为默认档；保留嵌入式 SQLite 作为"边缘/气隙单机"可选档；两者藏在同一个 `IPlatformEventStore` 抽象后，按部署配置切换。**
 
 - **默认档 — TimescaleDB（Docker）**：把 `production_events` 建为 **hypertable**（按 `occurred_at` 自动分块，取代手写分区 DDL）；为 data-quality/freshness 建 **连续聚合**；对冷块启用**原生列式压缩**；用**保留策略**自动丢弃过期块。幂等两表事务、JSONB、SSE 游标全部保留。
 - **可选档 — 嵌入式 SQLite SoR**：面向真正离线/单机/气隙现场（无 Docker 亦可跑），按月库文件 + 单写队列 + WAL（详见附录 A）。

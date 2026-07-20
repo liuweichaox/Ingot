@@ -10,7 +10,7 @@
             </div>
           </template>
           <el-alert
-            title="基于可信生产事实查询数据、定位问题，并回到相关证据；不执行设备控制或数据写入。"
+            title="基于可信生产数据查询数据、定位问题，并回到相关证据；不执行设备控制或数据写入。"
             type="info"
             show-icon
             :closable="false"
@@ -253,7 +253,7 @@
                 </ul>
               </div>
               <el-collapse>
-                <el-collapse-item title="事实证据抽屉" name="evidence">
+                <el-collapse-item title="证据抽屉" name="evidence">
                   <el-table :data="snapshot.answer.evidence" size="small" stripe>
                     <el-table-column prop="kind" label="类型" width="150" />
                     <el-table-column prop="label" label="事实" min-width="260" />
@@ -417,10 +417,10 @@ async function openHistory(id) {
 function toolLabel(tool) {
   return ({
     check_data_quality: "检查数据质量",
-    get_cycle_trace: "查看周期事实",
+    get_cycle_trace: "查看周期事件",
     find_comparable_cycles: "查找同类周期",
     compare_cycles: "比较周期差异",
-  })[tool] || "查询生产事实";
+  })[tool] || "查询数据";
 }
 
 function queryStatusLabel(status) {

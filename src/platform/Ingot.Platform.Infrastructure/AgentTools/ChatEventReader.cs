@@ -81,7 +81,7 @@ public sealed class ChatEventReader(
     private string[]? ResolveEdgeScope(string actorId)
     {
         if (!_options.Actors.TryGetValue(actorId, out var scope))
-            throw new UnauthorizedAccessException("当前 Actor 没有配置生产事实访问范围。");
+            throw new UnauthorizedAccessException("当前 Actor 没有配置生产数据访问范围。");
         if (scope.AllowAll)
             return null;
 
@@ -91,7 +91,7 @@ public sealed class ChatEventReader(
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
         if (edgeIds.Length == 0)
-            throw new UnauthorizedAccessException("当前 Actor 的生产事实访问范围为空。");
+            throw new UnauthorizedAccessException("当前 Actor 的生产数据访问范围为空。");
         return edgeIds;
     }
 

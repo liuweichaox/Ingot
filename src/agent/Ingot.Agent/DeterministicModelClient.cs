@@ -126,7 +126,7 @@ public sealed class DeterministicModelClient : IModelClient
             {
                 InvestigationRoles.ProcessAnalyst => (
                     "需要检查工艺状态或周期参数变化是否与当前现象同步。",
-                    "当前工具结果提供周期事实和数据质量证据。"),
+                    "当前工具结果提供周期事件和数据质量证据。"),
                 InvestigationRoles.QualityAnalyst => (
                     "需要检查检测结果与周期特征之间是否存在稳定关联。",
                     "现有事实可以界定周期范围，但仍需要质量样本和特征统计才能评价关联强度。"),

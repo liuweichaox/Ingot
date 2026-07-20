@@ -73,9 +73,9 @@ public sealed class GetCycleTraceTool(IChatEventReader events) : IAnalysisTool
         var validDuration = durationMs.HasValue;
         var limitations = new List<string>();
         if (ordered.Length == 0)
-            limitations.Add("当前范围没有生产事件，无法还原周期事实链。");
+            limitations.Add("当前范围没有生产事件，无法还原周期事件链。");
         if (reachedResultLimit)
-            limitations.Add("周期查询达到 500 条上限，无法确认事实链完整性。");
+            limitations.Add("周期查询达到 500 条上限，无法确认事件链完整性。");
         if (ordered.Length > 0 && !startedAt.HasValue)
             limitations.Add("没有找到周期开始事件，无法确认周期起点和持续时间。");
         if (ordered.Length > 0 && !completedAt.HasValue)

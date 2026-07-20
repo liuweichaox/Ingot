@@ -66,9 +66,9 @@ test("renders the Chinese product site around Ingot, Ingot Chat, and deeper inve
   assert.equal(response.headers.get("permissions-policy"), "camera=(), microphone=(), geolocation=()");
 
   const html = await response.text();
-  assert.match(html, /<title>Ingot — 让生产事实可验证、可追问、可调查<\/title>/i);
+  assert.match(html, /<title>Ingot — 让生产数据可验证、可追问、可分析<\/title>/i);
   assert.match(html, /INGOT · PRODUCTION INTELLIGENCE/);
-  assert.match(html, /让生产事实可验证/);
+  assert.match(html, /让生产数据可验证/);
   assert.match(html, /深入调查/);
   assert.match(html, /多角色深入调查/);
   assert.match(html, /让每个回答都有依据/);

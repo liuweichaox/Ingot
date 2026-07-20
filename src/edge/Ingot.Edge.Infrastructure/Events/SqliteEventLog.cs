@@ -10,7 +10,7 @@ using Microsoft.Extensions.Options;
 namespace Ingot.Edge.Infrastructure.Events;
 
 /// <summary>
-///     SQLite outbox：边缘生产事实的本地不可变日志。
+///     SQLite outbox：边缘生产数据的本地不可变日志。
 /// </summary>
 public sealed class SqliteEventLog : IEventLog
 {

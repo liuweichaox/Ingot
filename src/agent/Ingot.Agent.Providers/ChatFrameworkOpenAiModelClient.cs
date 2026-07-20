@@ -47,7 +47,7 @@ public sealed class ChatFrameworkOpenAiModelClient : IModelClient
         CancellationToken ct = default)
     {
         var prompt = $"""
-                     将用户对话转换为 AnalysisPlan。只能选择列出的 Chat 只读事实工具，不能生成或修改代码、规格、制品和工作区。
+                     将用户对话转换为 AnalysisPlan。只能选择列出的 Chat 只读数据工具，不能生成或修改代码、规格、制品和工作区。
                      不得生成 SQL、脚本、网络请求或设备操作。工具参数必须来自用户问题和页面上下文，不能编造标识。
                      工具: {JsonSerializer.Serialize(tools, JsonOptions)}
                      页面上下文: {JsonSerializer.Serialize(request.PageContext, JsonOptions)}

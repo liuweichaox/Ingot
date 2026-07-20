@@ -20,7 +20,7 @@ Tagline:
 
 ## Brand position
 
-- **Category**: Trusted Production Facts & Process Investigation Platform / 可信生产事实与工艺调查平台
+- **Category**: Manufacturing Data Collection & Process Analysis Platform / 制造数据采集与工艺分析平台
 - **Primary users**: Production, process, quality, equipment, and IT roles in manufacturing, especially teams that need independent deployment
 - **Product architecture**: Ingot is the platform brand; Ingot Chat is the main workspace for engineers; deeper investigation is the advanced Chat mode where process, quality, and challenge roles review evidence together
 - **Value chain**: Team-owned source adaptation → standard production events + inspection facts + production context → trusted production facts → everyday Ingot Chat questions or deeper investigation → engineer confirmation

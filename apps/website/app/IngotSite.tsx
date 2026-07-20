@@ -37,7 +37,7 @@ const stageMeta = FACTORY_STAGES;
 const messages = {
   zh: {
     meta: {
-      title: "Ingot — 让生产事实可验证、可追问、可调查",
+      title: "Ingot — 让生产数据可验证、可追问、可分析",
       description:
         "Ingot 汇集生产现场的重要记录；工程师通过 Ingot Chat 查问题、看证据，并在需要时深入调查。",
     },
@@ -53,7 +53,7 @@ const messages = {
     },
     hero: {
       eyebrow: "INGOT · PRODUCTION INTELLIGENCE",
-      heading: ["让生产事实可验证、", "可追问、可调查。"],
+      heading: ["让生产数据可验证、", "可追问、可分析。"],
       lead:
         "Ingot 把来自设备、检测和业务系统的记录放在同一条可追溯的生产履历中。工程师通过 Ingot Chat 提问、查看证据；遇到复杂问题时，可启动多角色深入调查。它不会改变现场设备或已有记录。",
       analysis: "认识 Ingot Chat",
@@ -202,7 +202,7 @@ const messages = {
           question: "这个周期发生了什么，数据是否完整？",
           standard: ["check_data_quality · 已完成", "get_cycle_trace · 已完成"],
           roles: ["工艺视角：检查过程变化", "质量视角：检查检测结果与样本", "反证视角：寻找遗漏与其他解释"],
-          outcome: ["数据质量通过；周期事实链已回链到原始事件。", "形成待工程师确认的候选解释，并同时呈现支持依据、反证和数据限制。"],
+          outcome: ["数据质量通过；周期事件链已回链到原始事件。", "形成待工程师确认的候选解释，并同时呈现支持依据、反证和数据限制。"],
           boundary: "深入调查只基于已验证的记录；它给出候选解释，不替代工程师判断，也不控制设备。",
         },
       },
@@ -241,7 +241,7 @@ const messages = {
     },
     language: {
       telemetryHeading: ["生产事件回答", "现场记录了什么。"],
-      eventHeading: ["Chat 回答", "周期事实是否完整。"],
+      eventHeading: ["Chat 回答", "周期数据是否完整。"],
       nodes: [
         ["SOURCE ADAPTER", "source payload → ProductionEvent"],
         ["PRODUCTION FACTS", "event + subject + context + correlation"],

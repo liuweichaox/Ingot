@@ -1,6 +1,6 @@
 # 快速开始
 
-本教程启动 Platform、提交一批标准生产事件，并用 Ingot Chat 查询周期事实。数据源适配由使用方实现；只需将结果映射为公开事件契约。
+本教程启动 Platform、提交一批标准生产事件，并用 Ingot Chat 查询周期数据。数据源适配由使用方实现；只需将结果映射为公开事件契约。
 
 ## 1. 准备环境
 
@@ -101,4 +101,4 @@ curl "http://localhost:8000/api/v1/events?edgeId=EDGE-001&correlationId=CYCLE-00
 这个周期发生了什么，数据是否完整？
 ```
 
-Chat 会返回只读工具活动、限制条件和事实引用。完整事件字段见[生产事件规范](rfc-production-events.md)，Chat 行为见[Ingot Chat](chat.md)。
+Chat 会返回只读工具活动、限制条件和数据引用。完整事件字段见[生产事件规范](rfc-production-events.md)，Chat 行为见[Ingot Chat](chat.md)。

@@ -24,8 +24,8 @@ test("Ingot Chat is the primary production-fact dialogue entry", () => {
   assert.match(router, /path: "\/chat"/);
   assert.match(router, /ChatView\.vue/);
   assert.match(view, /Ingot Chat/);
-  assert.match(view, /可信生产事实/);
-  assert.match(view, /事实证据抽屉/);
+  assert.match(view, /生产数据/);
+  assert.match(view, /证据抽屉/);
   assert.match(view, /\/api\/v1\/chat\/capabilities/);
   assert.match(view, /\/api\/v1\/chat\/runs\?\$\{query\}/);
   assert.match(view, /X-Ingot-Actor/);
@@ -38,7 +38,7 @@ test("Ingot Chat resumes SSE and renders fact queries, evidence, and charts", ()
   assert.match(view, /discussion\.participant_failed/);
   assert.match(view, /调查说明/);
   assert.match(view, /事实查询/);
-  assert.match(view, /事实证据抽屉/);
+  assert.match(view, /证据抽屉/);
   assert.match(view, /snapshot\?\.answer\?\.charts\?\.length/);
   assert.match(view, /对话记录/);
   assert.doesNotMatch(view, /roleLabel|usageText|stageLabel/);
