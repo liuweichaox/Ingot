@@ -9,6 +9,7 @@ Ingot is written for production, process, quality, equipment, and plant IT teams
 - Distinguish machine collection, manual entry, and system estimation with a specific business label.
 - Present analysis progressively: data completeness, observed changes, parameter relationships, possible causes, then process recommendations.
 - When data is incomplete, name the missing parameter, inspection result, batch field, or cycle record.
+- Analyze only core parameters that directly affect the process or quality; do not introduce unavailable shift, organization, or individual-performance fields for convenience.
 
 ## Preferred terms
 

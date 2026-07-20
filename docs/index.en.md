@@ -13,6 +13,7 @@ Ingot is a manufacturing data collection and process analysis platform. It organ
 ## Ingot Chat
 
 - [Ingot Chat](chat.en.md): quick queries and bounded combined analysis across process, quality, and review perspectives; every result links to the matching production records.
+- [Analysis capability ladder](capability-ladder.en.md): long-term stages from usable production records to process optimization recommendations.
 
 ## Production record ingestion
 

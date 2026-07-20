@@ -9,7 +9,7 @@ const out = path.join(root, "apps/docs-site/out");
 test("exports bilingual Chat and event-ingestion documentation", async () => {
   for (const file of ["zh/index.html", "en/index.html", "zh/chat/index.html", "en/chat/index.html", "zh/rfc-production-events/index.html", "en/rfc-production-events/index.html", "search-index.json", "sitemap.xml", "robots.txt"])
     assert.ok((await readFile(path.join(out, file))).length > 0, file);
-  for (const slug of ["chat", "rfc-production-events", "architecture", "design", "modules", "tutorial-getting-started", "tutorial-configuration", "tutorial-deployment", "faq", "brand"])
+  for (const slug of ["chat", "capability-ladder", "rfc-production-events", "architecture", "design", "modules", "tutorial-getting-started", "tutorial-configuration", "tutorial-deployment", "faq", "brand"])
     for (const lang of ["zh", "en"])
       assert.ok((await readFile(path.join(out, lang, slug, "index.html"))).length > 0, `${lang}/${slug}`);
 
