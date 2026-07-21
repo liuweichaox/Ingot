@@ -40,17 +40,14 @@ export INGOT_CHAT_PROVIDER=OpenAI
 export INGOT_CHAT_FAST_MODEL="<fast-model>"
 export INGOT_CHAT_REASONING_MODEL="<reasoning-model>"
 export OPENAI_API_KEY="<secret>"
-export INGOT_CHAT_OPERATOR_TOKEN="$(openssl rand -hex 24)"
 export INGOT_CHAT_OPERATOR_ALLOW_ALL=true
 
 docker compose -f docker-compose.app.yml up -d --build
 
-curl http://localhost:8000/api/v1/chat/capabilities \
-  -H "X-Ingot-User: operator" \
-  -H "Authorization: Bearer ${INGOT_CHAT_OPERATOR_TOKEN}"
+curl http://localhost:8000/api/v1/chat/capabilities
 ```
 
-该 Compose 配置为 `operator` 启用完整数据范围。生产部署应按角色和网络边界配置实际所需的数据范围，并将所有机密注入 Secret Store 或受保护环境变量。
+该 Compose 配置为平台身份 `operator` 启用完整数据范围。开发环境由服务端提供此本地身份；生产部署必须配置统一认证，并按角色和网络边界设置实际所需的数据范围。
 
 ## 数据源接入
 

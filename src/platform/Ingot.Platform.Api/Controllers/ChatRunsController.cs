@@ -10,7 +10,7 @@ namespace Ingot.Platform.Api.Controllers;
 [Route("api/v1/chat/runs")]
 public sealed class ChatRunsController(
     IAgentRuntime runtime,
-    ChatTokenValidator tokenValidator) : ControllerBase
+    PlatformUserResolver userResolver) : ControllerBase
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
@@ -80,7 +80,7 @@ public sealed class ChatRunsController(
             return NotFound();
         return string.Equals(run.UserId, userId, StringComparison.OrdinalIgnoreCase)
             ? Ok(ToChatSnapshot(run))
-            : Unauthorized(new { error = "Chat 运行访问凭据无效。" });
+            : StatusCode(StatusCodes.Status403Forbidden, new { error = "无权访问该 Chat 运行。" });
     }
 
     [HttpGet("{runId}/stream")]
@@ -99,7 +99,7 @@ public sealed class ChatRunsController(
         }
         if (!string.Equals(run.UserId, userId, StringComparison.OrdinalIgnoreCase))
         {
-            Response.StatusCode = StatusCodes.Status401Unauthorized;
+            Response.StatusCode = StatusCodes.Status403Forbidden;
             return;
         }
 
@@ -132,7 +132,7 @@ public sealed class ChatRunsController(
         if (run is null)
             return NotFound();
         if (!string.Equals(run.UserId, userId, StringComparison.OrdinalIgnoreCase))
-            return Unauthorized(new { error = "Chat 运行访问凭据无效。" });
+            return StatusCode(StatusCodes.Status403Forbidden, new { error = "无权访问该 Chat 运行。" });
 
         var cancelled = await runtime.CancelAsync(
             ProductEntryPoints.Chat,
@@ -216,23 +216,14 @@ public sealed class ChatRunsController(
 
     private bool TryAuthorize(out string? userId, out IActionResult? error)
     {
-        userId = Request.Headers["X-Ingot-User"].FirstOrDefault()?.Trim();
-        if (string.IsNullOrWhiteSpace(userId))
+        userId = userResolver.Resolve(User);
+        if (userId is null)
         {
-            error = BadRequest(new { error = "必须提供 X-Ingot-User。" });
-            return false;
-        }
-        if (!IsAuthorized(userId))
-        {
-            error = Unauthorized(new { error = "Chat 访问凭据无效。" });
+            error = Unauthorized(new { error = "需要先登录 Ingot 平台。" });
             return false;
         }
 
-        userId = tokenValidator.CanonicalizeUserId(userId);
         error = null;
         return true;
     }
-
-    private bool IsAuthorized(string userId)
-        => tokenValidator.IsAuthorized(userId, Request.Headers.Authorization.FirstOrDefault());
 }

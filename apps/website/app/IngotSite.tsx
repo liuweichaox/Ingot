@@ -1,2239 +1,618 @@
 "use client";
 
-import Image from "next/image";
-import dynamic from "next/dynamic";
-import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
-import {
-  FACTORY_STAGE_DATA,
-  FACTORY_STAGE_MS,
-  FACTORY_STAGES,
-  type FactoryDatum,
-  type FactoryView,
-} from "./factoryStages";
+import { useEffect, useRef } from "react";
 
 type Locale = "zh" | "en";
-type PlatformView = "overview" | "review" | "analysis";
-type ResolvedStageDatum = FactoryDatum & {
-  capture: "automatic" | "hybrid";
-  code: string;
-  dataLabel: string;
-  detail: string;
-  label: string;
-  operation: string;
-  stored: boolean;
-  view: FactoryView;
-};
-const PLATFORM_VIEW_KEYS = ["overview", "review", "analysis"] as const satisfies readonly PlatformView[];
 
-const factoryViews = FACTORY_STAGES.map((stage) => stage.view);
-
-const FactoryScene3D = dynamic(() => import("./FactoryScene3D"), {
-  ssr: false,
-});
-
-const stageMeta = FACTORY_STAGES;
-
-const messages = {
-  zh: {
-    meta: {
-      title: "Ingot — 查清生产过程，分析参数与质量",
-      description:
-        "Ingot 汇集设备参数、生产过程和检测结果；工程师通过 Ingot Chat 查询异常、比较周期并分析可能原因。",
-    },
-    languageLabel: "语言",
-    nav: {
-      label: "主导航",
-      home: "Ingot 首页",
-      product: "产品",
-      data: "生产记录",
-      analytics: "Ingot Chat",
-      deployment: "数据从哪里来",
-      docs: "文档",
-    },
-    hero: {
-      eyebrow: "INGOT · PRODUCTION INTELLIGENCE",
-      heading: ["把生产过程查清楚，", "把参数和质量联系起来。"],
-      lead:
-        "Ingot 把设备参数、检测结果和业务系统记录放进同一份生产履历。工程师可通过 Ingot Chat 查询问题；遇到复杂情况时，可从工艺、质量和复核三个角度综合分析。它不会改变现场设备或已有记录。",
-      analysis: "认识 Ingot Chat",
-      github: "了解 Ingot 平台",
-      pause: "暂停动画",
-      play: "继续动画",
-      proofLabel: "产品特性",
-      proof: ["连接多种生产来源", "保存完整生产履历", "Ingot Chat 快速查询", "综合分析与原始记录"],
-      viewLabel: "三维工厂视角",
-      views: ["机器人上料", "CNC 加工", "机器人下料", "视觉质检", "人工检测"],
-      dataKinds: ["设备状态", "加工记录", "设备状态", "检测结果", "人工检测记录"],
-      captureAuto: "示例生产记录",
-      captureGenerated: "示例生产信息与周期号",
-      captureHybrid: "示例检测记录",
-    },
-    stageData: [
-      {
-        label: "机器人上料状态",
-        active: "取毛坯 · 进入机床",
-        activeDetail: "机械臂从机旁料盘取件，正沿门口水平方向伸入机罩并放入固定夹具",
-        settled: "工件已装夹 · 机械臂退出",
-        settledDetail: "夹具已夹紧 · 机械臂已回安全位 · 主轴保持 0 rpm",
-      },
-      {
-        label: "CNC 核心加工记录",
-        active: "加工开始",
-        activeDetail: "工件已夹紧，程序 O1207 开始执行",
-        settled: "加工结束",
-        settledDetail: "程序 O1207 正常结束 · 用时 42.8 s · 工件 ING-0718-0127",
-      },
-      {
-        label: "机器人运行状态",
-        active: "机床取件 · 下料",
-        activeDetail: "主轴已退回安全位、机床门打开，机械臂正水平伸入固定夹具取件并送往视觉入口",
-        settled: "机器人已回待机位",
-        settledDetail: "工件位于视觉检测位 · 姿态 90° · 抓手已释放",
-      },
-      {
-        label: "视觉检测数据",
-        active: "相机采集中",
-        activeDetail: "工件已停稳，三相机正在采集尺寸与表面数据",
-        settled: "检测结果已记录",
-        settledDetail: "结果 PASS · 得分 97.8 · 孔距 32.047 mm · 图像 IMG-182347",
-      },
-      {
-        label: "人工检测记录",
-        active: "正在检测表面粗糙度",
-        activeDetail: "QE-018 已扫码确认工件，正在使用粗糙度仪检测 Ra 值；外部检测客户端将示例结果提交到检测 API",
-        settled: "人工检测结果已保存",
-        settledDetail: "表面粗糙度 Ra 0.82 μm · 合格 · 仪器 ROUGHNESS-01 · 检测员 QE-018",
-      },
-    ],
-    stages: [
-      { label: "机器人上料", detail: "机械臂从机旁料盘取毛坯，经打开的正面自动门水平伸入固定夹具；完全退出后机床才允许关门加工", data: "自动：料盘到位 · 抓手双通道 · 门/主轴互锁 · 夹紧确认" },
-      { label: "CNC 加工", detail: "工件已定位，O1207 加工程序正在执行", data: "自动：程序/刀具 · 主轴/进给 · 周期/报警" },
-      { label: "机器人下料", detail: "加工结束、主轴退回且门打开后，机械臂水平伸入固定夹具取件，再放到独立的视觉输送入口", data: "自动：主轴安全位 · TCP/速度 · 抓手/保护停机 · 放件确认" },
-      { label: "视觉质检", detail: "工件已停稳，三相机正在采集尺寸与表面数据", data: "自动：测量值 · 图像 ID · PASS/FAIL · 得分" },
-      { label: "人工检测", detail: "示例检测客户端记录工件、测量值、单位、仪器和检测员，并提交检测 API", data: "示例数据：工件 ID · 粗糙度 Ra · 仪器 · 检测员" },
-    ],
-    factory: {
-      railLabel: "示例生产工序",
-      heading: ["每一次生产，", "都有一条可追溯的履历。"],
-      lead:
-        "这是一个示例生产过程。从上料、加工到检测，Ingot 将关键记录整理成同一件工件的完整履历，方便回看、比对和调查。",
-      sourceTitle: "设备、检测与业务记录，汇成一条生产履历",
-      sourceLead:
-        "每条记录都保留来源、时间、对象和关联关系；当有人提出问题时，可以回到对应的原始记录。",
-      sources: [
-        ["接入现场记录", "设备、仪器和现有系统可以按照现场情况接入 Ingot，保留各自的工作方式。"],
-        ["汇集检测结果", "自动或人工检测结果与工件、批次和生产过程放在一起，形成完整生产履历。"],
-        ["查看原始记录", "每个分析结果都可以打开相应的生产记录；数据不完整时，Ingot 会明确提示。"],
-      ],
-    },
-    platform: {
-      heading: ["从生产记录，", "到可以行动的问题调查。"],
-      lead:
-        "Ingot 是平台；Ingot Chat 是工程师最常使用的入口。先快速了解发生了什么，再在需要时把不同视角放在一起深入审查。",
-      workspace: "INGOT 示例生产工作台",
-      site: "华东一厂 / CELL-A",
-      connected: "示例数据",
-      tabsLabel: "平台能力视图",
-      tabs: ["生产总览", "人工检测", "Ingot Chat"],
-      overview: "生产总览",
-      viewKickers: ["FACTORY / OVERVIEW", "HUMAN / MANUAL INSPECTION", "CHAT / record QUERY"],
-      range: "近期生产",
-      metrics: [
-        ["在线工位", "5 / 5", "全部数据接入正常"],
-        ["当前批次", "LOT-0716", "AL-6061"],
-        ["一次通过率", "99.2%", "最近 200 件"],
-        ["平均周期", "47.2s", "目标 50.0s"],
-      ],
-      lineTitle: "本次生产履历",
-      factsTitle: "当前工位记录",
-      factsHint: "加工开始/结束、设备状态和检测结果分别记录，名称与现场工序一致",
-      envelope: "工程字段",
-      envelopeShow: "查看工程字段",
-      envelopeHide: "收起工程字段",
-      healthTitle: "生产数据接入状态",
-      health: [
-        ["自动数据源", "5 / 5 在线"],
-        ["待处理检测任务", "2"],
-        ["工件信息完整率", "99.8%"],
-        ["生产履历缺失", "0"],
-      ],
-      dataStatus: "数据已保存 · 已归入工件履历",
-      pendingDataStatus: "人工检测进行中 · 结果尚未保存",
-      status: {
-        run: "数据更新中",
-        pass: "已记录",
-        ready: "待采集",
-        sign: "检测中",
-        submitted: "已提交",
-        onDemand: "按需触发",
-      },
-      review: {
-        title: "示例流程：机旁人工检测",
-        lead: "该示例展示外部检测客户端可提交的内容：工件、检测结果、测量值、单位、仪器、检测员和时间。质量判定与放行仍由企业现有流程负责。",
-        taskLabel: "当前检测任务",
-        task: "MI-LOT-0716-001",
-        state: "等待测量",
-        requirementsTitle: "本次检测要求",
-        requirements: [
-          ["工件", "ING-0718-0127"],
-          ["检测项目", "表面粗糙度 Ra"],
-          ["规格上限", "1.60 μm"],
-          ["检测结果", "0.82 μm · 合格"],
-          ["仪器与人员", "ROUGHNESS-01 · QE-018"],
-        ],
-        stepsTitle: "现场检测步骤",
-        steps: [
-          ["01", "确认人员和工件", "检测员刷卡，固定扫码器读取工件码，避免测错工件或批次。"],
-          ["02", "确认仪器可用", "企业检测客户端确认粗糙度仪、校准状态、检测项目和规格范围。"],
-          ["03", "完成测量", "检测员把探头放到指定表面；客户端取得示例测量值 Ra 0.82 μm。"],
-          ["04", "保存结果", "客户端核对测量值和结果，通过 InspectionRecord API 保存检测记录。"],
-        ],
-        boundary: "Ingot 保存客户端提交的检测结果；人员认证、仪器连接、校准判断、返工、报废和首件放行由企业现有系统负责。",
-        toAnalysis: "在 Chat 中查看生产过程与记录完整情况",
-      },
-      analysis: {
-        title: "Ingot Chat · 快速查询与综合分析",
-        lead: "先快速查看生产记录；遇到复杂问题，再从工艺、质量和复核三个角度比较数据。",
-        chat: {
-          title: "Ingot Chat · 示例调查",
-          note: "这是示例数据。Chat 只读取已有记录，显示分析结果和缺少的数据，不会改变现场或写入生产数据。",
-          modes: ["快速查询", "综合分析"],
-          question: "这个周期发生了什么，数据是否完整？",
-          standard: ["check_data_quality · 已完成", "get_cycle_trace · 已完成"],
-          roles: ["工艺视角：检查过程变化", "质量视角：检查检测结果与样本", "复核视角：寻找遗漏与其他解释"],
-          outcome: ["数据完整；可以查看该周期的原始记录。", "列出需要工程师确认的可能原因，同时说明相反情况和缺少的数据。"],
-          boundary: "综合分析只使用已经保存的生产记录；结果需要工程师确认，也不会直接控制设备。",
-        },
-      },
-    },
-    trust: {
-      heading: "分析结果可以回到原始记录",
-      lead: "Ingot 使用现场实际保存的数据回答问题。每个数字都可以打开对应的生产记录，数据不足时会直接说明。",
-      cards: [
-        ["记录来自现场", "设备、检测和业务系统仍由企业按自己的方式运行；Ingot 接收它们的重要生产记录。"],
-        ["结论对应原始记录", "Chat 的重要数字和结论都会附上对应记录；找不到足够记录时会直接说明。"],
-        ["不同来源放在一起", "同一件工件、同一个批次和同一次加工可以串成完整的生产履历，而不是分散在不同系统中。"],
-        ["不触碰现场控制", "Ingot 只帮助理解已经发生的事情；它不改变设备、工艺设置、检测结果或业务流程。"],
-      ],
-    },
-    boundary: {
-      heading: ["一个生产数据接口，", "连接多种现场来源。"],
-      lead:
-        "设备、仪器和业务系统由使用方连接。Platform 接收统一格式的生产记录；无法直连时，Connector Host 可在现场暂存并补传。",
-      cards: [
-        [
-          "INDEPENDENT BY DEFAULT",
-          "可选现场暂存",
-          "Connector Host 可先把生产记录保存在现场 SQLite 中，网络恢复后按顺序补传。默认最多暂存 500,000 条未确认记录。",
-        ],
-        [
-          "OPTIONAL SYSTEM CONNECTION",
-          "协议留在适配程序",
-          "MES、ERP、设备或仪器的连接方式由使用方处理，Ingot 接收统一格式的生产记录。",
-        ],
-        [
-          "CLEAR SCOPE",
-          "边界清晰，实施更轻",
-          "Ingot 保存生产过程和检测结果，并提供 Platform Web Chat 查询；排产、库存、物流、质量处置和设备控制仍由现场业务系统负责。",
-        ],
-      ],
-    },
-    language: {
-      telemetryHeading: ["生产记录说明", "现场发生了什么。"],
-      eventHeading: ["Chat 回答", "周期数据是否完整。"],
-      nodes: [
-        ["SOURCE ADAPTER", "source payload → ProductionEvent"],
-        ["production records", "event + subject + context + correlation"],
-        ["CENTRAL WEB CHAT", "data quality + cycle trace + related records"],
-      ],
-      journey: [
-        "使用方适配程序把源数据转换为带时间、来源设备、工件和生产信息的标准记录。",
-        "生产周期号把同一次加工的记录串在一起，生产信息保留批次、模具和配方等现场编号。",
-        "Chat 检查周期是否完整、生产信息是否缺失、采集记录是否中断，并提供原始记录链接。",
-      ],
-    },
-    planes: {
-      heading: ["生产过程与检测结果，", "分别保存、按周期关联。"],
-      lead:
-        "当前平台分别保存生产过程记录和检测结果，并通过生产周期号把过程与质量结果关联起来。",
-      telemetryTitle: "适配程序提交了什么",
-      telemetryFoot: ["标准生产记录", "直接上传", "可选现场暂存"],
-      eventTitle: "Platform 保存了什么",
-      eventFoot: ["加工记录", "自动检测结果", "人工检测结果"],
-    },
-    anatomy: {
-      heading: "加工开始与结束，组成一次完整生产过程。",
-      lead:
-        "只有核心加工使用 cycle.started 与 cycle.completed。上料和机器人记录设备状态，视觉与人工检测保存检测结果，不为每个动作重复增加开始/结束事件。",
-      tabsLabel: "一条加工记录包含什么",
-      immutable: "保存后不修改",
-      fields: [
-        ["TYPE", "发生了什么", "cycle.completed"],
-        ["TIME", "何时发生", "2026-07-17 14:32:08.429Z"],
-        ["SUBJECT", "发生在谁身上", "equipment / POL-03"],
-        ["CONTEXT", "当时的业务环境", "lot · tooling · recipe"],
-        ["DATA", "这件事的细节", "duration · good_count"],
-      ],
-    },
-    architecture: {
-      heading: ["使用方负责连接现场数据，", "Ingot 负责统一生产记录。"],
-      lead:
-        "使用方连接设备、仪器或业务系统并生成统一生产记录。数据可直接提交 Platform，也可以先在现场暂存；Platform 提供生产记录、检测、Ingot Chat 和通知接口。",
-      sources: [
-        ["设备 / 业务系统", "使用方适配"],
-        ["VISION", "结果推送"],
-        ["量仪", "串口 / 文件"],
-        ["人工检测", "扫码 / 表单"],
-      ],
-      stream: "设备数据流",
-      engine: "可选 Connector Host",
-      engineItems: ["现场数据入口", "格式与令牌检查", "SQLite 断网暂存", "向 Platform 批量补传"],
-      status: "用户自管 · 可选",
-      retry: "补传 · 确认 · 去重",
-      consumers: ["INGOT 分析平台", "报表 / BI", "AI / 质量应用", "现有业务系统（可选）"],
-    },
-    trace: {
-      heading: ["按生产周期号，", "还原完整加工过程。"],
-      lead:
-        "生产记录可按设备、工件、生产周期和时间查询。周期查询按实际发生时间还原过程，并明确提示周期未完成等情况。以下内容均为示例数据。",
-      filter: "筛选",
-      live: "示例生产过程",
-      events: "7 条生产记录",
-      steps: [
-        ["14:02:11", "context.updated", "批次 LOT-0716 · 工件 ING-0718-0127", "LINE-02"],
-        ["14:05:43", "context.updated", "模具 MOLD-A17 · 程序 O1207", "POL-03"],
-        ["14:06:02", "equipment.state", "夹具已夹紧 · 机床门已关闭", "POL-03"],
-        ["14:06:11", "cycle.started", "加工开始 · O1207", "POL-03"],
-        ["14:07:04", "equipment.state", "主轴 8,200 rpm · 进给 480 mm/min", "POL-03"],
-        ["14:08:09", "cycle.completed", "加工结束 · 118.4 s", "POL-03"],
-        ["14:08:15", "equipment.state", "工件已卸载 · 主轴安全位", "POL-03"],
-      ],
-    },
-    edge: {
-      heading: ["轻量部署在现场，", "断网时继续保存生产记录。"],
-      metrics: [
-        "可选本地入口单批上限",
-        "默认未确认记录上限",
-        "现场生产记录暂存",
-        "联网后按顺序补传",
-      ],
-      principles: [
-        [
-          "SOURCE NEUTRAL",
-          "设备与数据来源分开管理",
-          "一台设备可以关联视觉检测和业务系统；连接器统一输出标准生产记录。",
-        ],
-        [
-          "CONFIG DRIVEN",
-          "统一格式保留现场含义",
-          "使用方适配程序确认源字段代表什么；Platform 检查事件类型、时间、来源设备、生产对象和关联信息。",
-        ],
-        [
-          "OPEN BY DESIGN",
-          "按需连接，不设前置条件",
-          "统一查询、实时更新和标准消息格式，让报表、AI 与现有业务系统按需接入。",
-        ],
-      ],
-    },
-    cta: {
-      kicker: "INGOT PLATFORM / INGOT CHAT",
-      heading: ["把分散的生产数据变成", "每个人都能查询的生产履历。"],
-      button: "查看文档",
-      footer: "Ingot 平台 · Ingot Chat · 基于生产记录的问题调查。",
-    },
-  },
-  en: {
-    meta: {
-      title: "Ingot — understand production, process settings, and quality",
-      description:
-        "Ingot brings equipment settings, production history, and inspection results together so engineers can investigate issues and compare runs.",
-    },
-    languageLabel: "Language",
-    nav: {
-      label: "Main navigation",
-      home: "Ingot home",
-      product: "Product",
-      data: "Production Records",
-      analytics: "Ingot Chat",
-      deployment: "Where records come from",
-      docs: "Docs",
-    },
-    hero: {
-      eyebrow: "INGOT · PRODUCTION INTELLIGENCE",
-      heading: ["Understand production runs,", "process settings, and quality."],
-      lead:
-        "Ingot brings equipment settings, inspection results, and business records into one production history. Engineers use Ingot Chat for quick queries, then compare process, quality, and review findings when a problem needs closer analysis. It never changes equipment or production records.",
-      analysis: "Explore Ingot Chat",
-      github: "Explore the Ingot platform",
-      pause: "Pause animation",
-      play: "Resume animation",
-      proofLabel: "Product capabilities",
-      proof: [
-        "Connect production sources",
-        "Keep a traceable history",
-        "Quick queries in Ingot Chat",
-        "Combined analysis with original records",
-      ],
-      viewLabel: "3D factory views",
-      views: ["Robot loading", "CNC machining", "Robot unloading", "Vision inspection", "Manual inspection"],
-      dataKinds: ["Equipment state", "Machining event", "Equipment state", "Inspection result", "Manual inspection record"],
-      captureAuto: "SAMPLE PRODUCTION EVENT",
-      captureGenerated: "SAMPLE PRODUCTION DETAILS + RUN ID",
-      captureHybrid: "SAMPLE INSPECTION RECORD",
-    },
-    stageData: [
-      {
-        label: "Robot loading state",
-        active: "Pick blank · enter machine",
-        activeDetail: "The robot takes a blank from the machine-side tray and inserts horizontally through the open door into the fixed fixture",
-        settled: "Part clamped · robot clear",
-        settledDetail: "Fixture clamped · robot at safe position · spindle remains at 0 rpm",
-      },
-      {
-        label: "Core CNC machining events",
-        active: "Machining started",
-        activeDetail: "Part clamped; program O1207 has started",
-        settled: "Machining ended",
-        settledDetail: "Program O1207 ended normally · 42.8 s · part ING-0718-0127",
-      },
-      {
-        label: "Robot operating state",
-        active: "Machine unload · transfer",
-        activeDetail: "The spindle is at its safe position and the door is open; the robot inserts horizontally to remove the part from the fixed fixture",
-        settled: "Robot at home position",
-        settledDetail: "Part at vision station · orientation 90° · gripper released",
-      },
-      {
-        label: "Vision inspection data",
-        active: "Cameras acquiring",
-        activeDetail: "Part stopped; three cameras are acquiring dimensions and surfaces",
-        settled: "Inspection result recorded",
-        settledDetail: "Result PASS · score 97.8 · hole pitch 32.047 mm · image IMG-182347",
-      },
-      {
-        label: "Manual inspection record",
-        active: "Measuring surface roughness",
-        activeDetail: "QE-018 scanned the part and is measuring Ra; an external inspection client submits this sample result to the inspection API",
-        settled: "Manual inspection result saved",
-        settledDetail: "Surface roughness Ra 0.82 μm · PASS · instrument ROUGHNESS-01 · inspector QE-018",
-      },
-    ],
-    stages: [
-      { label: "Robot Loading", detail: "The robot picks from a machine-side tray and inserts horizontally through the open front door into the fixed fixture; machining waits until the robot clears", data: "AUTO · tray present · dual-channel grip · door/spindle interlock · clamp confirmation" },
-      { label: "CNC Machining", detail: "Part located; machining program O1207 is running", data: "AUTO · program/tool · spindle/feed · cycle/alarms" },
-      { label: "Robot Unloading", detail: "After the spindle retracts and the door opens, the robot inserts horizontally into the fixed fixture, removes the part, and places it at the separate vision infeed", data: "AUTO · spindle safe position · TCP/speed · gripper/stops · place confirmation" },
-      { label: "Vision Inspection", detail: "Part stopped; three cameras are acquiring dimensional and surface data", data: "AUTO · measurements · image ID · PASS/FAIL · score" },
-      { label: "Manual Inspection", detail: "A sample inspection client records the part, measurement, unit, instrument, and inspector and submits the inspection API", data: "SAMPLE record · part ID · roughness Ra · instrument · inspector" },
-    ],
-    factory: {
-      railLabel: "Sample production stages",
-      heading: ["Every production run.", "One traceable history."],
-      lead:
-        "This sample process follows a part from loading through machining and inspection. Ingot brings the important records together, making them easy to review, compare, and investigate.",
-      sourceTitle: "EQUIPMENT, INSPECTION, AND BUSINESS RECORDS BECOME ONE HISTORY",
-      sourceLead:
-        "Each record keeps its source, time, subject, and connection to the work. When a question is raised, people can return to the original record.",
-      sources: [
-        ["Bring in shop-floor records", "Equipment, instruments, and existing systems can connect to Ingot in a way that fits the plant and preserves how they already work."],
-        ["Bring inspection results together", "Automatic and manual inspection results sit beside the part, lot, and production process that give them meaning."],
-        ["Open the original records", "Each analysis result links to the production records behind it. When records are incomplete, Ingot says so clearly."],
-      ],
-    },
-    platform: {
-      heading: ["From production records", "to investigations people can act on."],
-      lead:
-        "Ingot is the platform. Ingot Chat is the main place engineers use it: first to understand what happened, then to bring multiple perspectives into a deeper review when needed.",
-      workspace: "INGOT SAMPLE PRODUCTION WORKSPACE",
-      site: "EAST PLANT / CELL-A",
-      connected: "SAMPLE DATA",
-      tabsLabel: "Platform capability views",
-      tabs: ["Production Overview", "Manual Inspection", "Ingot Chat"],
-      overview: "Production Overview",
-      viewKickers: ["FACTORY / OVERVIEW", "HUMAN / MANUAL INSPECTION", "CHAT / record QUERY"],
-      range: "RECENT PRODUCTION",
-      metrics: [
-        ["Stations online", "5 / 5", "All sources healthy"],
-        ["Active lot", "LOT-0716", "AL-6061"],
-        ["First-pass yield", "99.2%", "Last 200 parts"],
-        ["Average cycle", "47.2s", "Target 50.0s"],
-      ],
-      lineTitle: "Current production history",
-      factsTitle: "Current station record",
-      factsHint: "Machining start/end, equipment state, and inspection results use names that match the shop-floor operation",
-      envelope: "ENGINEERING FIELDS",
-      envelopeShow: "View engineering fields",
-      envelopeHide: "Hide engineering fields",
-      healthTitle: "Event ingress status",
-      health: [
-        ["Automatic sources", "5 / 5 online"],
-        ["Open inspection tasks", "2"],
-        ["Part information complete", "99.8%"],
-        ["Missing production records", "0"],
-      ],
-      dataStatus: "DATA SAVED · ADDED TO PART HISTORY",
-      pendingDataStatus: "MANUAL INSPECTION IN PROGRESS · RESULT NOT SAVED",
-      status: {
-        run: "DATA UPDATING",
-        pass: "RECORDED",
-        ready: "AWAITING DATA",
-        sign: "INSPECTING",
-        submitted: "SUBMITTED",
-        onDemand: "ON DEMAND",
-      },
-      review: {
-        title: "Sample workflow: machine-side inspection",
-        lead: "This sample shows inspection records an external client can submit: part, outcome, measurement, unit, instrument, inspector, and time. Quality decisions and release remain in the plant's existing workflow.",
-        taskLabel: "Current inspection task",
-        task: "MI-LOT-0716-001",
-        state: "AWAITING MEASUREMENT",
-        requirementsTitle: "Inspection requirement",
-        requirements: [
-          ["Part", "ING-0718-0127"],
-          ["Check item", "Surface roughness Ra"],
-          ["Upper limit", "1.60 μm"],
-          ["Inspection result", "0.82 μm · PASS"],
-          ["Instrument and inspector", "ROUGHNESS-01 · QE-018"],
-        ],
-        stepsTitle: "Shop-floor inspection steps",
-        steps: [
-          ["01", "Confirm person and part", "The inspector badges in and the fixed scanner reads the part code, preventing a part or lot mix-up."],
-          ["02", "Confirm the instrument", "The plant inspection client confirms the tester, calibration state, inspection item, and specification range."],
-          ["03", "Perform the measurement", "The inspector places the probe on the specified surface; the client obtains sample value Ra 0.82 μm."],
-          ["04", "Submit the record", "The client verifies the value and outcome and saves the record through the InspectionRecord API."],
-        ],
-        boundary: "Ingot stores inspection records submitted by a client. Identity, instrument connectivity, calibration decisions, rework, scrap, and first-article release remain in the plant's systems.",
-        toAnalysis: "Open cycle events and data quality in Chat",
-      },
-      analysis: {
-        title: "Ingot Chat · Quick queries and combined analysis",
-        lead: "Start with a quick look at the production records. For complex issues, compare process, quality, and review findings against the same original records.",
-        chat: {
-          title: "Ingot Chat · Sample investigation",
-          note: "This uses sample data. Chat reads existing records, shows related records and limitations, and never changes production records or field equipment.",
-          modes: ["Quick query", "Combined analysis"],
-          question: "What happened in this cycle, and is its data complete?",
-          standard: ["check_data_quality · completed", "get_cycle_trace · completed"],
-          roles: ["Process view: review changes in the work", "Quality view: review inspection results and samples", "Challenge view: look for gaps and alternative explanations"],
-          outcome: ["The run records are complete, and the original production records are available.", "Possible causes are listed for engineering review, together with conflicting conditions and missing data."],
-          boundary: "Combined analysis uses saved production records only. Engineers confirm the result, and Ingot never controls equipment.",
-        },
-      },
-    },
-    trust: {
-      heading: "Open the original record behind each result",
-      lead: "Ingot answers from saved shop-floor records. Each important number can open the matching production record, and missing information is stated clearly.",
-      cards: [
-        ["Records come from the plant", "Equipment, inspection, and business systems continue to run in the ways a business chooses. Ingot receives their important production records."],
-        ["Results link to original records", "Important numbers and conclusions in Chat include the matching production records. If too few records are available, Chat says so."],
-        ["Different sources, one production history", "The workpiece, lot, and production run can be connected into one history instead of being scattered across systems."],
-        ["It never touches control", "Ingot helps people understand what already happened. It does not change equipment, process settings, inspection outcomes, or business workflows."],
-      ],
-    },
-    boundary: {
-      heading: ["One standard event API.", "Many source boundaries."],
-      lead:
-        "Teams adapt equipment, instruments, and business systems. Platform accepts standard ProductionEvent records; Connector Host is a team-operated optional local ingress and outbox.",
-      cards: [
-        [
-          "INDEPENDENT BY DEFAULT",
-          "Optional local event ingress",
-          "When team-operated, Connector Host commits events to local SQLite first. The outbox retains at most 500,000 unacknowledged events by default; at capacity, it drops the oldest records and emits diagnostic.backlog_dropped plus a metric.",
-        ],
-        [
-          "OPTIONAL SYSTEM CONNECTION",
-          "Keep protocols in adapters",
-          "MES, ERP, equipment, and instrument protocols remain in team-owned adaptation. The Ingot core accepts one normalized event contract.",
-        ],
-        [
-          "CLEAR SCOPE",
-          "A clear scope keeps deployment light",
-          "Ingot stores production events and inspection records and exposes Platform Web Chat queries. Plant business systems own scheduling, inventory, logistics, quality disposition, and equipment control.",
-        ],
-      ],
-    },
-    language: {
-      telemetryHeading: ["Production events show", "what the floor recorded."],
-      eventHeading: ["Chat answers", "whether cycle records are complete."],
-      nodes: [
-        ["SOURCE ADAPTER", "source payload → ProductionEvent"],
-        ["production records", "event + subject + context + correlation"],
-        ["CENTRAL WEB CHAT", "data quality + cycle trace + related records"],
-      ],
-      journey: [
-        "Team-owned adapters translate source data into standard production events with time, source, subject, and context.",
-        "CorrelationId groups events into an ordered cycle timeline; Context retains the business identifiers submitted by the adapter.",
-        "Chat checks whether the run has a start and end, whether production details are missing, and whether collection was interrupted, then provides links to the original records.",
-      ],
-    },
-    planes: {
-      heading: ["Standard events and inspection records.", "Stored separately and cited clearly."],
-      lead:
-        "The current platform stores discrete ProductionEvent and InspectionRecord records. Current cycle tools use production-event records.",
-      telemetryTitle: "What did the adapter submit?",
-      telemetryFoot: ["Normalized events", "Direct batch", "Optional local outbox"],
-      eventTitle: "What did Platform persist?",
-      eventFoot: ["Machining events", "Automatic inspection", "Manual inspection"],
-    },
-    anatomy: {
-      heading: "Machining start and end are complete production events.",
-      lead:
-        "Only core machining uses cycle.started and cycle.completed. Loading and robot motion are equipment state, while vision and manual inspection store inspection results—without adding artificial start/end events to every action.",
-      tabsLabel: "Five dimensions of a machining event",
-      immutable: "IMMUTABLE",
-      fields: [
-        ["TYPE", "What happened", "cycle.completed"],
-        ["TIME", "When it happened", "2026-07-17 14:32:08.429Z"],
-        ["SUBJECT", "The asset involved", "equipment / POL-03"],
-        ["CONTEXT", "Business context at the time", "lot · tooling · recipe"],
-        ["DATA", "Event details", "duration · good_count"],
-      ],
-    },
-    architecture: {
-      heading: ["Teams own source protocols.", "Ingot owns normalized records."],
-      lead:
-        "Teams adapt equipment, instruments, or business systems and emit ProductionEvent records. An adapter can submit directly to Platform or use optional Connector Host for a local outbox; Platform provides event, inspection, Ingot Chat, and webhook APIs.",
-      sources: [
-        ["Equipment / business systems", "Team-owned adaptation"],
-        ["VISION", "Result push"],
-        ["METROLOGY", "Serial / File"],
-        ["HUMAN QA", "Scan / Form"],
-      ],
-      stream: "EQUIPMENT DATA STREAM",
-      engine: "OPTIONAL CONNECTOR HOST",
-      engineItems: ["Local Event Ingress", "Contract + Token Validation", "SQLite Outbox", "Batch to Platform"],
-      status: "TEAM-OPERATED · OPTIONAL",
-      retry: "RETRY · ACK · DEDUPE",
-      consumers: ["INGOT ANALYTICS", "REPORTING / BI", "AI / QUALITY APPS", "EXISTING SYSTEMS (OPTIONAL)"],
-    },
-    trace: {
-      heading: ["Use CorrelationId", "to reconstruct a cycle timeline."],
-      lead:
-        "Query events by subject, context, CorrelationId, or time. The cycle tool orders events sharing one CorrelationId and reports limitations such as a missing completion event. Every record below is a sample record.",
-      filter: "FILTER",
-      live: "SAMPLE TRACE",
-      events: "7 PRODUCTION EVENTS",
-      steps: [
-        ["14:02:11", "context.updated", "Lot LOT-0716 · part ING-0718-0127", "LINE-02"],
-        ["14:05:43", "context.updated", "Tooling MOLD-A17 · program O1207", "POL-03"],
-        ["14:06:02", "equipment.state", "Fixture clamped · machine door closed", "POL-03"],
-        ["14:06:11", "cycle.started", "Machining started · O1207", "POL-03"],
-        ["14:07:04", "equipment.state", "Spindle 8,200 rpm · feed 480 mm/min", "POL-03"],
-        ["14:08:09", "cycle.completed", "Machining ended · 118.4 s", "POL-03"],
-        ["14:08:15", "equipment.state", "Part unloaded · spindle at safe position", "POL-03"],
-      ],
-    },
-    edge: {
-      heading: ["Lightweight at the edge.", "Bounded persistence for normalized events."],
-      metrics: [
-        "Optional local-ingress limit per request",
-        "Default hard limit for unacknowledged events",
-        "Shop-floor event and outbox storage",
-        "Bounded offline backlog with ACK-ordered retries",
-      ],
-      principles: [
-        [
-          "SOURCE NEUTRAL",
-          "Keep assets independent from data sources",
-          "An asset can combine equipment, vision, and business-system records through normalized production events.",
-        ],
-        [
-          "CONFIG DRIVEN",
-          "Define production language through the event contract",
-          "Team-owned adaptation interprets source handling rules. Platform validates normalized event type, time, source, subject, and context.",
-        ],
-        [
-          "OPEN BY DESIGN",
-          "Connect by choice, never by prerequisite",
-          "Unified queries, live SSE subscriptions, and CloudEvents mappings let reporting, AI, and existing business systems connect when useful.",
-        ],
-      ],
-    },
-    cta: {
-      kicker: "INGOT PLATFORM / INGOT CHAT",
-      heading: ["Turn production records into", "records that everyone can question."],
-      button: "Read the docs",
-      footer: "Ingot platform · Ingot Chat · production investigations based on original records.",
-    },
-  },
-} as const;
-
-function FactoryCanvas({ activeStage, cycleId, locale }: { activeStage: number; cycleId: number; locale: Locale }) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const activeStageRef = useRef(activeStage);
-
-  useEffect(() => {
-    activeStageRef.current = activeStage;
-  }, [activeStage]);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const context = canvas.getContext("2d");
-    if (!context) return;
-
-    let width = 0;
-    let height = 0;
-    let animationId = 0;
-    const startedAt = performance.now();
-    let isVisible = true;
-    const reduceMotion = window.matchMedia(
-      "(prefers-reduced-motion: reduce)",
-    ).matches;
-
-    const stationLabels = ["RAW NEST", "CNC-07", "ROBOT-02", "VISION-03"];
-    const motes = Array.from({ length: 48 }, () => ({
-      x: Math.random(),
-      y: Math.random(),
-      r: 0.4 + Math.random() * 1.5,
-      phase: Math.random() * Math.PI * 2,
-    }));
-
-    const resize = () => {
-      const ratio = Math.min(window.devicePixelRatio || 1, 2);
-      const rect = canvas.getBoundingClientRect();
-      width = rect.width;
-      height = rect.height;
-      canvas.width = Math.round(width * ratio);
-      canvas.height = Math.round(height * ratio);
-      context.setTransform(ratio, 0, 0, ratio, 0, 0);
-      if (reduceMotion) window.requestAnimationFrame(() => draw(performance.now()));
-    };
-
-    const roundedRect = (
-      x: number,
-      y: number,
-      rectWidth: number,
-      rectHeight: number,
-      radius: number,
-    ) => {
-      const r = Math.min(radius, rectWidth / 2, rectHeight / 2);
-      context.beginPath();
-      context.moveTo(x + r, y);
-      context.lineTo(x + rectWidth - r, y);
-      context.quadraticCurveTo(x + rectWidth, y, x + rectWidth, y + r);
-      context.lineTo(x + rectWidth, y + rectHeight - r);
-      context.quadraticCurveTo(
-        x + rectWidth,
-        y + rectHeight,
-        x + rectWidth - r,
-        y + rectHeight,
-      );
-      context.lineTo(x + r, y + rectHeight);
-      context.quadraticCurveTo(x, y + rectHeight, x, y + rectHeight - r);
-      context.lineTo(x, y + r);
-      context.quadraticCurveTo(x, y, x + r, y);
-      context.closePath();
-    };
-
-    const drawLabel = (text: string, x: number, y: number, active: boolean) => {
-      context.font = "600 9px SFMono-Regular, Consolas, monospace";
-      context.textAlign = "center";
-      context.fillStyle = active ? "rgba(245, 203, 115, .95)" : "rgba(168, 173, 163, .5)";
-      context.fillText(text, x, y);
-    };
-
-    const drawFeeder = (x: number, y: number, scale: number, active: boolean, t: number) => {
-      context.save();
-      context.translate(x, y);
-      context.scale(scale, scale);
-      context.strokeStyle = active ? "rgba(242, 205, 121, .92)" : "rgba(154, 163, 154, .42)";
-      context.fillStyle = "rgba(28, 32, 28, .96)";
-      context.lineWidth = 1.4;
-      context.beginPath();
-      context.moveTo(-34, -88);
-      context.lineTo(34, -88);
-      context.lineTo(22, -38);
-      context.lineTo(-22, -38);
-      context.closePath();
-      context.fill();
-      context.stroke();
-      roundedRect(-28, -38, 56, 42, 4);
-      context.fill();
-      context.stroke();
-      context.fillStyle = active ? "rgba(112, 217, 208, .82)" : "rgba(112, 217, 208, .28)";
-      for (let i = 0; i < 5; i += 1) {
-        const px = -21 + i * 10;
-        const py = -71 + Math.sin(t * 2.2 + i) * 3;
-        context.fillRect(px, py, 5, 5);
-      }
-      context.restore();
-    };
-
-    const drawCnc = (x: number, y: number, scale: number, active: boolean, t: number) => {
-      context.save();
-      context.translate(x, y);
-      context.scale(scale, scale);
-      context.fillStyle = "rgba(24, 28, 25, .98)";
-      context.strokeStyle = active ? "rgba(242, 205, 121, .95)" : "rgba(164, 170, 161, .45)";
-      context.lineWidth = 1.4;
-      roundedRect(-46, -104, 92, 108, 7);
-      context.fill();
-      context.stroke();
-      context.fillStyle = "rgba(5, 10, 10, .9)";
-      roundedRect(-31, -83, 62, 49, 3);
-      context.fill();
-      context.strokeStyle = "rgba(112, 217, 208, .35)";
-      context.stroke();
-      context.strokeStyle = active ? "rgba(112, 217, 208, .95)" : "rgba(112, 217, 208, .32)";
-      context.beginPath();
-      context.moveTo(0, -78);
-      context.lineTo(0, -55);
-      context.stroke();
-      context.save();
-      context.translate(0, -50);
-      context.rotate(t * 5);
-      context.beginPath();
-      context.moveTo(-12, 0);
-      context.lineTo(12, 0);
-      context.moveTo(0, -12);
-      context.lineTo(0, 12);
-      context.stroke();
-      context.restore();
-      context.fillStyle = active ? "rgba(221, 168, 74, .85)" : "rgba(221, 168, 74, .25)";
-      context.fillRect(-27, -20, 54, 6);
-      context.restore();
-    };
-
-    const drawRobot = (x: number, y: number, scale: number, active: boolean, t: number) => {
-      context.save();
-      context.translate(x, y);
-      context.scale(scale, scale);
-      const a1 = -1.12 + Math.sin(t * 1.35) * 0.2;
-      const a2 = 0.9 + Math.sin(t * 1.35 + 1.2) * 0.3;
-      const p1 = { x: Math.cos(a1) * 49, y: -26 + Math.sin(a1) * 49 };
-      const p2 = {
-        x: p1.x + Math.cos(a1 + a2) * 42,
-        y: p1.y + Math.sin(a1 + a2) * 42,
-      };
-      context.lineCap = "round";
-      context.lineWidth = 14;
-      context.strokeStyle = active ? "rgba(229, 171, 66, .96)" : "rgba(127, 100, 48, .72)";
-      context.beginPath();
-      context.moveTo(0, -26);
-      context.lineTo(p1.x, p1.y);
-      context.lineTo(p2.x, p2.y);
-      context.stroke();
-      context.lineWidth = 2;
-      context.strokeStyle = "rgba(255, 222, 151, .7)";
-      for (const point of [{ x: 0, y: -26 }, p1, p2]) {
-        context.beginPath();
-        context.arc(point.x, point.y, 8, 0, Math.PI * 2);
-        context.fillStyle = "rgba(24, 25, 20, 1)";
-        context.fill();
-        context.stroke();
-      }
-      context.fillStyle = "rgba(29, 31, 26, 1)";
-      roundedRect(-26, -19, 52, 23, 4);
-      context.fill();
-      context.stroke();
-      context.beginPath();
-      context.moveTo(p2.x - 8, p2.y + 3);
-      context.lineTo(p2.x - 13, p2.y + 14);
-      context.moveTo(p2.x + 8, p2.y + 3);
-      context.lineTo(p2.x + 13, p2.y + 14);
-      context.stroke();
-      context.restore();
-    };
-
-    const drawVision = (x: number, y: number, scale: number, active: boolean, t: number) => {
-      context.save();
-      context.translate(x, y);
-      context.scale(scale, scale);
-      context.strokeStyle = active ? "rgba(112, 217, 208, .95)" : "rgba(112, 217, 208, .38)";
-      context.fillStyle = "rgba(21, 27, 26, .96)";
-      context.lineWidth = 1.5;
-      context.fillRect(-38, -87, 12, 91);
-      context.fillRect(26, -87, 12, 91);
-      roundedRect(-42, -101, 84, 20, 4);
-      context.fill();
-      context.stroke();
-      context.fillStyle = active ? "rgba(112, 217, 208, .9)" : "rgba(112, 217, 208, .3)";
-      context.beginPath();
-      context.arc(0, -91, 5, 0, Math.PI * 2);
-      context.fill();
-      const scanY = -72 + ((t * 28) % 62);
-      const beam = context.createLinearGradient(-25, scanY, 25, scanY);
-      beam.addColorStop(0, "rgba(112, 217, 208, 0)");
-      beam.addColorStop(0.5, active ? "rgba(112, 217, 208, .9)" : "rgba(112, 217, 208, .2)");
-      beam.addColorStop(1, "rgba(112, 217, 208, 0)");
-      context.fillStyle = beam;
-      context.fillRect(-25, scanY, 50, 2);
-      context.restore();
-    };
-
-    const drawManualQa = (x: number, y: number, scale: number, active: boolean, t: number) => {
-      context.save();
-      context.translate(x, y);
-      context.scale(scale, scale);
-
-      const screenGlow = active ? 0.76 + Math.sin(t * 4.2) * 0.12 : 0.28;
-      context.fillStyle = "rgba(22, 27, 24, .98)";
-      context.strokeStyle = active ? "rgba(242, 205, 121, .92)" : "rgba(146, 154, 146, .42)";
-      context.lineWidth = 1.4;
-      roundedRect(-68, -126, 58, 58, 4);
-      context.fill();
-      context.stroke();
-      context.fillStyle = `rgba(112, 217, 208, ${screenGlow * 0.16})`;
-      context.fillRect(-61, -118, 44, 39);
-      context.strokeStyle = `rgba(112, 217, 208, ${screenGlow})`;
-      context.strokeRect(-61, -118, 44, 39);
-      context.fillStyle = `rgba(168, 223, 189, ${screenGlow})`;
-      context.fillRect(-56, -110, 31, 2);
-      context.fillRect(-56, -103, 23, 2);
-      context.fillStyle = active ? "rgba(242, 205, 121, .9)" : "rgba(242, 205, 121, .28)";
-      context.fillRect(-56, -90, active ? 28 + Math.sin(t * 2.1) * 5 : 15, 3);
-      context.strokeStyle = "rgba(148, 155, 146, .46)";
-      context.beginPath();
-      context.moveTo(-39, -68);
-      context.lineTo(-39, -29);
-      context.moveTo(-57, -29);
-      context.lineTo(-21, -29);
-      context.stroke();
-
-      const gesture = active ? Math.max(0, Math.sin(t * 1.8)) : 0;
-      context.fillStyle = "rgba(205, 178, 142, .9)";
-      context.beginPath();
-      context.arc(26, -105, 10, 0, Math.PI * 2);
-      context.fill();
-      context.strokeStyle = active ? "rgba(242, 205, 121, .78)" : "rgba(136, 142, 134, .5)";
-      context.fillStyle = "rgba(38, 47, 43, .98)";
-      roundedRect(14, -92, 25, 50, 7);
-      context.fill();
-      context.stroke();
-      context.lineCap = "round";
-      context.lineWidth = 6;
-      context.beginPath();
-      context.moveTo(17, -79);
-      context.lineTo(-5 - gesture * 9, -91 - gesture * 4);
-      context.stroke();
-      context.lineWidth = 5;
-      context.beginPath();
-      context.moveTo(20, -43);
-      context.lineTo(16, -8);
-      context.moveTo(34, -43);
-      context.lineTo(39, -8);
-      context.stroke();
-
-      context.textAlign = "center";
-      context.font = "600 8px SFMono-Regular, Consolas, monospace";
-      context.fillStyle = active ? "rgba(242, 205, 121, .94)" : "rgba(156, 163, 154, .48)";
-      context.fillText("QA-HMI-01", -8, 8);
-      context.font = "500 6px SFMono-Regular, Consolas, monospace";
-      context.fillStyle = active ? "rgba(168, 223, 189, .88)" : "rgba(135, 145, 136, .42)";
-      context.fillText(
-        locale === "zh" ? "扫码工件 · 人工检测" : "PART SCAN · MANUAL INSPECTION",
-        -8,
-        19,
-      );
-      context.restore();
-    };
-
-    const draw = (now: number) => {
-      context.clearRect(0, 0, width, height);
-      const t = reduceMotion ? 0 : (now - startedAt) / 1000;
-      const active = activeStageRef.current;
-      animationId = 0;
-      const sceneBlend = Math.max(0, Math.min(1, (width - 840) / 420));
-      const sceneLeft = width * (0.08 + 0.325 * sceneBlend);
-      const sceneRight = Math.min(
-        width * (0.92 + 0.045 * sceneBlend),
-        sceneLeft + Math.min(1000, width * 0.84),
-      );
-      const sceneWidth = sceneRight - sceneLeft;
-      const baseY = height * 0.69;
-      const scale = Math.max(0.62, Math.min(1.08, sceneWidth / 760));
-      const physicalActive = active < 4 ? active : -1;
-      const manualActive = active === 4;
-      const qaX = sceneLeft + sceneWidth * 0.58;
-      const qaY = baseY + 128 * scale;
-      const qaDataY = qaY - 106 * scale;
-
-      const background = context.createLinearGradient(0, 0, 0, height);
-      background.addColorStop(0, "#080a08");
-      background.addColorStop(0.55, "#0b0e0b");
-      background.addColorStop(1, "#050605");
-      context.fillStyle = background;
-      context.fillRect(0, 0, width, height);
-
-      const ambient = context.createRadialGradient(
-        width * 0.76,
-        height * 0.34,
-        0,
-        width * 0.76,
-        height * 0.34,
-        Math.max(width, height) * 0.55,
-      );
-      ambient.addColorStop(0, "rgba(202, 137, 42, .12)");
-      ambient.addColorStop(0.35, "rgba(26, 66, 62, .08)");
-      ambient.addColorStop(1, "rgba(0, 0, 0, 0)");
-      context.fillStyle = ambient;
-      context.fillRect(0, 0, width, height);
-
-      motes.forEach((mote) => {
-        const px = sceneLeft + mote.x * sceneWidth;
-        const py = height * 0.13 + mote.y * height * 0.58 + Math.sin(t * 0.4 + mote.phase) * 5;
-        context.fillStyle = `rgba(112, 217, 208, ${0.05 + mote.r * 0.035})`;
-        context.beginPath();
-        context.arc(px, py, mote.r, 0, Math.PI * 2);
-        context.fill();
-      });
-
-      const vanishX = width * 0.73;
-      const horizonY = height * 0.37;
-      context.lineWidth = 0.7;
-      context.strokeStyle = "rgba(171, 177, 166, .085)";
-      for (let i = -8; i <= 8; i += 1) {
-        context.beginPath();
-        context.moveTo(vanishX, horizonY);
-        context.lineTo(vanishX + i * width * 0.105, height);
-        context.stroke();
-      }
-      for (let i = 0; i < 11; i += 1) {
-        const p = i / 10;
-        const gy = horizonY + Math.pow(p, 1.75) * (height - horizonY);
-        context.beginPath();
-        context.moveTo(sceneLeft * 0.82, gy);
-        context.lineTo(width, gy);
-        context.stroke();
-      }
-
-      const hubX = width * 0.79;
-      const hubY = height * 0.235;
-      const activeX = manualActive ? qaX : sceneLeft + (sceneWidth * Math.max(physicalActive, 0)) / 4;
-      const activeY = manualActive ? qaDataY : baseY - 112 * scale;
-      const pulse = 0.5 + Math.sin(t * 3.2) * 0.5;
-      const hubGlow = context.createRadialGradient(hubX, hubY, 0, hubX, hubY, 110 + pulse * 18);
-      hubGlow.addColorStop(0, "rgba(244, 196, 96, .28)");
-      hubGlow.addColorStop(0.32, "rgba(221, 168, 74, .08)");
-      hubGlow.addColorStop(1, "rgba(221, 168, 74, 0)");
-      context.fillStyle = hubGlow;
-      context.fillRect(hubX - 150, hubY - 150, 300, 300);
-
-      context.strokeStyle = "rgba(112, 217, 208, .22)";
-      context.lineWidth = 1;
-      for (let i = 0; i < 5; i += 1) {
-        const stationX = sceneLeft + (sceneWidth * i) / 4;
-        context.beginPath();
-        context.moveTo(stationX, baseY - 112 * scale);
-        context.bezierCurveTo(stationX, hubY + 80, hubX - 80, hubY + 60, hubX, hubY);
-        context.stroke();
-      }
-      context.beginPath();
-      context.moveTo(qaX, qaDataY);
-      context.bezierCurveTo(qaX, hubY + 112, hubX - 42, hubY + 78, hubX, hubY);
-      context.stroke();
-      context.strokeStyle = "rgba(242, 205, 121, .68)";
-      context.beginPath();
-      context.moveTo(activeX, activeY);
-      context.bezierCurveTo(activeX, hubY + 70, hubX - 65, hubY + 45, hubX, hubY);
-      context.stroke();
-      for (let i = 0; i < 9; i += 1) {
-        const p = (t * 0.32 + i / 9) % 1;
-        const inv = 1 - p;
-        const bx =
-          inv * inv * inv * activeX +
-          3 * inv * inv * p * activeX +
-          3 * inv * p * p * (hubX - 65) +
-          p * p * p * hubX;
-        const by =
-          inv * inv * inv * activeY +
-          3 * inv * inv * p * (hubY + 70) +
-          3 * inv * p * p * (hubY + 45) +
-          p * p * p * hubY;
-        context.fillStyle = i % 3 === 0 ? "rgba(242, 205, 121, .95)" : "rgba(112, 217, 208, .7)";
-        context.beginPath();
-        context.arc(bx, by, i % 3 === 0 ? 2.2 : 1.3, 0, Math.PI * 2);
-        context.fill();
-      }
-
-      context.save();
-      context.translate(hubX, hubY);
-      const hubSize = Math.max(26, Math.min(42, width * 0.027));
-      context.beginPath();
-      for (let i = 0; i < 6; i += 1) {
-        const angle = -Math.PI / 2 + (i * Math.PI) / 3;
-        const px = Math.cos(angle) * hubSize;
-        const py = Math.sin(angle) * hubSize;
-        if (i === 0) context.moveTo(px, py);
-        else context.lineTo(px, py);
-      }
-      context.closePath();
-      context.fillStyle = "rgba(13, 13, 9, .96)";
-      context.fill();
-      context.lineWidth = 2;
-      context.strokeStyle = "rgba(242, 205, 121, .9)";
-      context.stroke();
-      const logoScale = hubSize / 42;
-      context.scale(logoScale, logoScale);
-      context.fillStyle = "#f5b93e";
-      context.beginPath();
-      context.moveTo(-8, -16);
-      context.lineTo(8, -16);
-      context.lineTo(11, -3);
-      context.lineTo(-11, -3);
-      context.closePath();
-      context.fill();
-      context.fillStyle = "#526476";
-      context.beginPath();
-      context.moveTo(-18, 1);
-      context.lineTo(-2, 1);
-      context.lineTo(1, 14);
-      context.lineTo(-21, 14);
-      context.closePath();
-      context.fill();
-      context.beginPath();
-      context.moveTo(2, 1);
-      context.lineTo(18, 1);
-      context.lineTo(21, 14);
-      context.lineTo(-1, 14);
-      context.closePath();
-      context.fill();
-      context.restore();
-      context.font = "600 8px SFMono-Regular, Consolas, monospace";
-      context.textAlign = "center";
-      context.fillStyle = "rgba(242, 205, 121, .72)";
-      context.fillText("INGOT DATA CORE", hubX, hubY + hubSize + 19);
-
-      const beltGradient = context.createLinearGradient(sceneLeft, 0, sceneRight, 0);
-      beltGradient.addColorStop(0, "rgba(76, 83, 77, .5)");
-      beltGradient.addColorStop(0.5, "rgba(118, 123, 113, .78)");
-      beltGradient.addColorStop(1, "rgba(76, 83, 77, .5)");
-      context.fillStyle = "rgba(17, 20, 17, .96)";
-      roundedRect(sceneLeft - 28, baseY - 9, sceneWidth + 56, 30, 7);
-      context.fill();
-      context.strokeStyle = beltGradient;
-      context.stroke();
-      context.fillStyle = beltGradient;
-      for (let x = sceneLeft - 14; x < sceneRight + 24; x += 24) {
-        context.beginPath();
-        context.arc(x, baseY + 6, 5, 0, Math.PI * 2);
-        context.fill();
-      }
-
-      for (let i = 0; i < 6; i += 1) {
-        const progress = (t / 13 + i / 6) % 1;
-        const partX = sceneLeft - 12 + progress * (sceneWidth + 24);
-        const highlightedPosition = manualActive ? 3 : physicalActive;
-        const isHot = Math.abs(progress * 3 - highlightedPosition) < 0.42;
-        context.shadowColor = isHot ? "rgba(242, 205, 121, .8)" : "transparent";
-        context.shadowBlur = isHot ? 12 : 0;
-        context.fillStyle = isHot ? "rgba(232, 178, 74, .95)" : "rgba(176, 184, 176, .76)";
-        roundedRect(partX - 10, baseY - 17, 20, 13, 3);
-        context.fill();
-        context.shadowBlur = 0;
-      }
-
-      const stationXs = Array.from({ length: 4 }, (_, index) => sceneLeft + (sceneWidth * index) / 3);
-      const drawStation = [drawFeeder, drawCnc, drawRobot, drawVision];
-      stationXs.forEach((stationX, index) => {
-        const isActive = index === physicalActive;
-        if (isActive) {
-          const stationGlow = context.createRadialGradient(
-            stationX,
-            baseY - 55,
-            0,
-            stationX,
-            baseY - 55,
-            95 * scale,
-          );
-          stationGlow.addColorStop(0, "rgba(221, 168, 74, .18)");
-          stationGlow.addColorStop(1, "rgba(221, 168, 74, 0)");
-          context.fillStyle = stationGlow;
-          context.fillRect(stationX - 110, baseY - 170, 220, 190);
-        }
-        drawStation[index](stationX, baseY - 21, scale, isActive, isActive ? t : 0);
-        drawLabel(stationLabels[index], stationX, baseY + 48, isActive);
-      });
-      drawManualQa(qaX, qaY, Math.max(0.58, scale * 0.76), manualActive, manualActive ? t : 0);
-
-      context.textAlign = "left";
-      context.font = "500 8px SFMono-Regular, Consolas, monospace";
-      context.fillStyle = "rgba(163, 169, 159, .42)";
-      context.fillText(
-        locale === "zh" ? "生产线 / CELL-A" : "PRODUCTION LINE / CELL-A",
-        sceneLeft - 24,
-        baseY + 76,
-      );
-      context.textAlign = "right";
-      context.fillText(
-        `${locale === "zh" ? "循环周期" : "LOOP CYCLE"} 02:14.018`,
-        sceneRight + 24,
-        baseY + 76,
-      );
-      context.shadowBlur = 0;
-      if (!reduceMotion && isVisible && document.visibilityState === "visible") {
-        animationId = window.requestAnimationFrame(draw);
-      }
-    };
-
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        isVisible = entry.isIntersecting;
-        if (!isVisible && animationId) {
-          window.cancelAnimationFrame(animationId);
-          animationId = 0;
-        } else if (isVisible && !reduceMotion && !animationId) {
-          animationId = window.requestAnimationFrame(draw);
-        }
-      },
-      { threshold: 0.02 },
-    );
-
-    const handleVisibility = () => {
-      if (document.visibilityState === "visible" && isVisible && !reduceMotion && !animationId) {
-        animationId = window.requestAnimationFrame(draw);
-      } else if (document.visibilityState !== "visible" && animationId) {
-        window.cancelAnimationFrame(animationId);
-        animationId = 0;
-      }
-    };
-
-    resize();
-    window.addEventListener("resize", resize);
-    document.addEventListener("visibilitychange", handleVisibility);
-    observer.observe(canvas);
-    if (reduceMotion) draw(performance.now());
-    else animationId = window.requestAnimationFrame(draw);
-    return () => {
-      window.cancelAnimationFrame(animationId);
-      window.removeEventListener("resize", resize);
-      document.removeEventListener("visibilitychange", handleVisibility);
-      observer.disconnect();
-    };
-  }, [cycleId, locale]);
-
-  return <canvas ref={canvasRef} className="factory-canvas" aria-hidden="true" />;
-}
-
-function BrandMark() {
+/* Brand mark: molten ingot + two verified bars. */
+function Mark({ size = 26 }: { size?: number }) {
   return (
-    <Image
-      className="brand-mark"
-      src="/brand/ingot-mark-dark.svg"
-      width={32}
-      height={32}
-      alt=""
-      aria-hidden="true"
-      unoptimized
-    />
+    <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden="true">
+      <path d="M9 8 L23 8 L26 15 L6 15 Z" fill="#F5B93E" />
+      <path d="M6 17 L15 17 L17.5 24 L3.5 24 Z" fill="#5FD4C8" opacity=".9" />
+      <path d="M17 17 L26 17 L28.5 24 L14.5 24 Z" fill="#526476" />
+    </svg>
   );
 }
 
-function BrandLockup() {
+/* A grounded number: a value that traces to a real query result. */
+function G({ src, children }: { src: string; children: React.ReactNode }) {
   return (
-    <Image
-      className="brand-lockup"
-      src="/brand/ingot-lockup-dark.svg"
-      width={94}
-      height={35}
-      alt=""
-      aria-hidden="true"
-      unoptimized
-    />
-  );
-}
-
-function CaptureBadges({
-  capture,
-  autoLabel,
-  generatedLabel,
-  hybridLabel,
-}: {
-  capture: "automatic" | "hybrid";
-  autoLabel: string;
-  generatedLabel: string;
-  hybridLabel: string;
-}) {
-  return (
-    <span className="capture-badges">
-      <span className={`capture-badge ${capture}`}>
-        {capture === "hybrid" ? hybridLabel : autoLabel}
-      </span>
-      <span className="capture-badge generated">{generatedLabel}</span>
+    <span className="g" data-src={src}>
+      {children}
     </span>
   );
 }
 
-export default function IngotSite({ initialLocale = "zh" }: { initialLocale?: Locale }) {
-  const [liveIndex, setLiveIndex] = useState(0);
-  const [stageRevision, setStageRevision] = useState(0);
-  const [settledRevision, setSettledRevision] = useState<number | null>(null);
-  const [activeAnatomy, setActiveAnatomy] = useState(0);
-  const [locale] = useState<Locale>(initialLocale);
-  const [platformFocus, setPlatformFocus] = useState<number | null>(null);
-  const [platformView, setPlatformView] = useState<PlatformView>("overview");
-  const [chatMode, setChatMode] = useState(0);
-  const [showEnvelope, setShowEnvelope] = useState(false);
-  const [factoryPlaying, setFactoryPlaying] = useState(true);
+const DOCS = "https://docs.ingotstack.com";
 
-  const copy = messages[locale];
-  const stageStream = stageMeta.map((stage, index) => ({
-    ...stage,
-    ...copy.stages[index],
-  }));
-  const anatomy = copy.anatomy.fields;
-  const traceSteps = copy.trace.steps;
+const COPY = {
+  zh: {
+    docs: `${DOCS}/zh`,
+    nav: { g1: "两个保证", g2: "能回答什么", g3: "怎么做到", g4: "边界", cta: "开始追因 →", lang: "EN", langHref: "/en/" },
+    hero: {
+      eyebrow: "Ingot · 工艺追因引擎",
+      h1a: "为什么这批",
+      h1b: "和上批不一样?",
+      leadA: "用日常语言问,30 秒得到答案。",
+      leadB: "每个数字都来自真实生产数据、点开就是原始曲线;",
+      leadC: "查不到,它会直接告诉你缺什么 —— 绝不圆场。",
+      pill1: "永不编造数字",
+      pill2: "永不触碰设备",
+      ctaPrimary: "给我们两周试试",
+      ctaSecondary: "看它怎么回答",
+      cardTtl: "Ingot Chat",
+      ro: "只读 · READ-ONLY",
+      you: "你",
+      q: "LOT-0716 一次通过率掉了,和上一批比,问题出在哪个环节?",
+      sparkHead: "一次通过率 / 近 8 批",
+      sparkUnit: "%",
+    },
+    problem: {
+      eyebrow: "现状",
+      h2a: "今天,这个问题",
+      h2b: "只有",
+      h2em: "一个人",
+      h2c: "答得上来。",
+      cells: [
+        ["数据 · 两处", "过程和质量,从不在一起", "温度、压力、转速、周期在 historian 里;合格率、关键尺寸、缺陷判定在 MES 里。它们从没在“一个周期”这个粒度上对上过。"],
+        ["分析 · 一个人", "答案活在王工的 Excel 里", "把两边数据对起来、判断“这批为什么不一样”,靠一位资深工艺工程师手工导表、凭经验比对。"],
+        ["风险 · 断档", "他一休假,追因就停摆", "这份能力没有沉淀成系统。人走了、忙了、记错了,工厂就再也说不清废品到底出在哪一步。"],
+      ],
+    },
+    guar: {
+      eyebrow: "凭什么信它",
+      h2a: "工厂对 AI 的两个恐惧,",
+      h2u: "代码",
+      h2b: "堵死了。",
+      sub: "不是承诺,是机制。“会瞎编”和“会乱动设备”—— 这两颗雷,在架构里就拆掉了。",
+      cards: [
+        { v: true, tag: "Number Grounding", h: "不会瞎编", pa: "回答里", hl: "每一个数字", pb: ",都要在真实查询结果里找到来源,点开就是原始曲线。找不到,它直说缺什么 —— 而不是编一个看着合理的数糊弄过去。", foot: "数值归一化溯源,非子串匹配" },
+        { v: false, tag: "Read-Only by Design", h: "不碰设备", pa: "只读你的生产数据,", hl: "永不写 PLC / CNC / 机器人", pb: "。责任边界清清楚楚 —— 过工厂安全审查,不用为它单独开会。", foot: "不参与任何实时控制回路" },
+        { v: false, tag: "No Specialist Needed", h: "不用请专家", pa: "用日常语言提问就行。", hl: "原本只有资深工艺工程师做得了的分析", pb: ",现在产线上任何人都能问 —— 追因能力不再锁在一个人脑子里。", foot: "自然语言进,可核对的答案出" },
+      ],
+    },
+    quest: {
+      eyebrow: "价值在哪",
+      h2a: "它不做泛泛的看板。",
+      h2b: "它死磕最贵的那几个问题。",
+      sub: "工艺分析的价值极度不均匀 —— 同一个平台,不同问题的回报差一到两个数量级。Ingot 只对准能换算成钱的那几类。这些问题,几乎每家工厂都在问,但今天很难系统回答:",
+      rank: "最贵的那一类",
+      heroH: "良率为什么突然下滑?",
+      heroP: "从哪一批开始、掉在哪个环节、和哪个过程参数一起变的 —— 把“良率归因”从开会拍脑袋,变成一条能定位到工位和批次的证据链。少说清一天,就多一天的废品和返工。",
+      dim1a: "分组 · ", dim1b: "批次",
+      dim2a: "定位 · ", dim2b: "工位 · 过程参数",
+      small: [
+        ["工装 / 刀具到寿命了吗?", "固定一件工装,看关键指标随使用次数怎么走,预测该维护或更换的时点。修早了浪费,修晚了报废。", "趋势 · 设备 · 使用次数"],
+        ["同配方,为什么这台不一样?", "同一套参数,不同设备做出的结果有系统性差异。按设备分层对比,把问题定位到具体那一台。", "分层 · 设备"],
+      ],
+    },
+    how: {
+      eyebrow: "怎么做到",
+      h2: "四步,从一条事件到一个可核对的答案。",
+      steps: [
+        { n: "01 · 接入", h: "标准事件进来", pa: "把任意来源映射成标准 ", code: "ProductionEvent", pb: ",按批提交。平台负责去重、补序、按周期串联。" },
+        { n: "02 · 成形", h: "拼成生产履历", pa: "同一次加工的过程和质量,用生产周期号对上,还原成一条可回看、可比对的完整履历。", code: "", pb: "" },
+        { n: "03 · 提问", h: "用人话问", pa: "模型只负责听懂和组织语言;真正的查询、聚合、计算,由确定性代码在数据库里完成。", code: "", pb: "" },
+        { n: "04 · 核对", h: "可核对的答案", pa: "每个数字带来源、可下钻;缺数据就写进 ", code: "Limitations", pb: "。结论交工程师确认,平台不替你放行。" },
+      ],
+    },
+    bound: {
+      eyebrow: "边界",
+      h2: "边界画得越清楚,进厂越轻。",
+      yesLbl: "Ingot 做这些",
+      noLbl: "Ingot 不做这些",
+      yes: [
+        "汇集设备参数、检测结果、业务记录,成一条生产履历",
+        "还原生产周期过程,比较同类周期,列出可能原因",
+        "每个结论对应原始记录,数据不足时直接说明",
+        "把判定权交给你的 QMS(通过通知),而不是替你决定",
+      ],
+      no: [
+        "不写 PLC / CNC / 机器人,不参与安全相关的实时控制",
+        "不做排产、库存、物流",
+        "不做质量放行 / 阻断判定 —— 那是 QMS 的职责",
+        "不改变现场设备、工艺设置或已有记录",
+      ],
+    },
+    cta: {
+      eyebrow: "开始",
+      h2a: "不用先上平台。",
+      h2b: "先让我们",
+      h2g: "把一个问题回答出来",
+      h2c: "。",
+      p: "给我们两周,拿你现场的数据,挑你现在最说不清的那一个问题,端到端跑通。看到价值,再谈别的。",
+      primary: "预约一次追因",
+      secondary: "读文档",
+    },
+    foot: "工艺追因引擎 · 基于原始记录 · ",
+    footB: "永不编造 · 永不控制",
+  },
+  en: {
+    docs: `${DOCS}/en`,
+    nav: { g1: "Two guarantees", g2: "What it answers", g3: "How", g4: "Boundary", cta: "Start →", lang: "中文", langHref: "/" },
+    hero: {
+      eyebrow: "Ingot · Process Root-Cause Engine",
+      h1a: "Why is this batch",
+      h1b: "different from the last?",
+      leadA: "Ask in plain language, get an answer in 30 seconds. ",
+      leadB: "Every number comes from real production data and opens to the original curve; ",
+      leadC: "if it can't find the data, it tells you exactly what's missing — no bluffing.",
+      pill1: "Never invents a number",
+      pill2: "Never touches equipment",
+      ctaPrimary: "Try it for two weeks",
+      ctaSecondary: "See how it answers",
+      cardTtl: "Ingot Chat",
+      ro: "READ-ONLY",
+      you: "You",
+      q: "LOT-0716's first-pass yield dropped. Compared to the last batch, which step is it?",
+      sparkHead: "First-pass yield / last 8 batches",
+      sparkUnit: "%",
+    },
+    problem: {
+      eyebrow: "The status quo",
+      h2a: "Today, only",
+      h2b: "",
+      h2em: "one person",
+      h2c: "can answer this.",
+      cells: [
+        ["Data · two places", "Process and quality never meet", "Temperature, pressure, speed, cycle live in the historian; yield, key dimensions, defect calls live in the MES. They've never been joined at the granularity of a single cycle."],
+        ["Analysis · one person", "The answer lives in one engineer's spreadsheet", "Joining the two sides and judging “why this batch differs” relies on one senior process engineer exporting tables and comparing by experience."],
+        ["Risk · single point", "They take leave, and root-cause stops", "This capability was never captured as a system. When they leave, get busy, or misremember, the plant can no longer say where the scrap came from."],
+      ],
+    },
+    guar: {
+      eyebrow: "Why trust it",
+      h2a: "The two fears factories have about AI, we closed off in ",
+      h2u: "code",
+      h2b: ".",
+      sub: "Not a promise — a mechanism. “It makes things up” and “it moves my machines” — both defused in the architecture.",
+      cards: [
+        { v: true, tag: "Number Grounding", h: "It won't make things up", pa: "", hl: "Every single number", pb: " in an answer must trace to a real query result; click it to see the original curve. If it can't find one, it says what's missing — instead of inventing a plausible-looking figure.", foot: "Numeric-normalized grounding, not substring matching" },
+        { v: false, tag: "Read-Only by Design", h: "It won't touch equipment", pa: "It only reads your production data; ", hl: "it never writes to a PLC / CNC / robot", pb: ". A clean responsibility boundary — it passes a factory safety review without a special meeting.", foot: "Never in any real-time control loop" },
+        { v: false, tag: "No Specialist Needed", h: "No expert required", pa: "Just ask in plain language. ", hl: "Analysis that used to need a senior process engineer", pb: " is now something anyone on the line can ask — root-cause is no longer locked in one person's head.", foot: "Natural language in, verifiable answers out" },
+      ],
+    },
+    quest: {
+      eyebrow: "Where the value is",
+      h2a: "It doesn't do generic dashboards.",
+      h2b: "It goes after the few expensive questions.",
+      sub: "The value of process analysis is extremely uneven — on the same platform, different questions pay back one to two orders of magnitude apart. Ingot aims only at the few that convert to money. Almost every plant asks these, yet can't answer them systematically today:",
+      rank: "The most expensive class",
+      heroH: "Why did yield suddenly drop?",
+      heroP: "From which batch, at which step, and moving together with which process parameter — turning “yield attribution” from a meeting-room guess into an evidence chain that pins it to a station and a batch. Every day it stays unclear is another day of scrap and rework.",
+      dim1a: "Group · ", dim1b: "batch",
+      dim2a: "Locate · ", dim2b: "station · parameter",
+      small: [
+        ["Is the tooling / cutter at end of life?", "Fix one tool, watch a key metric drift with usage count, predict when to service or replace. Too early wastes it; too late scraps parts.", "Trend · asset · usage count"],
+        ["Same recipe — why is this machine different?", "Same parameters, systematic differences across machines. Compare stratified by asset to pin it to the specific one.", "Stratify · asset"],
+      ],
+    },
+    how: {
+      eyebrow: "How it works",
+      h2: "Four steps, from one event to a verifiable answer.",
+      steps: [
+        { n: "01 · Ingest", h: "Standard events come in", pa: "Map any source to a standard ", code: "ProductionEvent", pb: " and submit in batches. The platform dedupes, orders, and threads by cycle." },
+        { n: "02 · Assemble", h: "Into a production history", pa: "Process and quality from one run are joined by correlation id, reconstructed into one reviewable, comparable history.", code: "", pb: "" },
+        { n: "03 · Ask", h: "In plain words", pa: "The model only understands and phrases language; the real querying, aggregation, and math run as deterministic code in the database.", code: "", pb: "" },
+        { n: "04 · Verify", h: "A verifiable answer", pa: "Every number carries its source and drills down; missing data goes into ", code: "Limitations", pb: ". Conclusions go to an engineer to confirm — the platform never releases for you." },
+      ],
+    },
+    bound: {
+      eyebrow: "Boundary",
+      h2: "The clearer the boundary, the lighter the install.",
+      yesLbl: "Ingot does this",
+      noLbl: "Ingot does not do this",
+      yes: [
+        "Bring equipment settings, inspection results, and business records into one production history",
+        "Reconstruct a cycle, compare comparable cycles, and list possible causes",
+        "Every conclusion links to the original record; state clearly when data is insufficient",
+        "Hand the decision to your QMS (via webhook), instead of deciding for you",
+      ],
+      no: [
+        "It never writes to a PLC / CNC / robot; no part in safety-related real-time control",
+        "No scheduling, inventory, or logistics",
+        "No quality release / block decisions — that's the QMS's job",
+        "No changing field equipment, process settings, or existing records",
+      ],
+    },
+    cta: {
+      eyebrow: "Start",
+      h2a: "Don't buy a platform first.",
+      h2b: "Let us ",
+      h2g: "answer one question",
+      h2c: " first.",
+      p: "Give us two weeks with your shop-floor data. Pick the one question you can least explain today, and run it end to end. See the value, then talk about the rest.",
+      primary: "Book a root-cause session",
+      secondary: "Read the docs",
+    },
+    foot: "Process root-cause engine · grounded in original records · ",
+    footB: "Never invents · Never controls",
+  },
+} as const;
+
+function AnswerBody({ locale }: { locale: Locale }) {
+  if (locale === "en") {
+    return (
+      <>
+        LOT-0716 first-pass yield <G src="check_data_quality · LOT-0716">96.2%</G>,{" "}
+        <G src="compare_cycles · delta">2.9 pts</G> below the previous batch&apos;s{" "}
+        <G src="compare_cycles · previous batch">99.1%</G>. The gap is concentrated at station 07: this
+        batch&apos;s average cycle <G src="get_cycle_trace · station 07 · LOT-0716">51.3s</G> vs the previous{" "}
+        <G src="get_cycle_trace · station 07 · prev">47.2s</G>,{" "}
+        <G src="compare_cycles · cycle delta">4.1s</G> longer, with{" "}
+        <G src="check_data_quality · over-limit count">12</G> parts crossing the process control limit. Other
+        stations match the previous batch.
+      </>
+    );
+  }
+  return (
+    <>
+      LOT-0716 一次通过率 <G src="check_data_quality · LOT-0716">96.2%</G>,比上批{" "}
+      <G src="compare_cycles · 上一批">99.1%</G> 低 <G src="compare_cycles · 差值">2.9 个点</G>
+      。差异集中在工位 07:该批平均周期 <G src="get_cycle_trace · 工位07 · LOT-0716">51.3s</G>,较上批{" "}
+      <G src="get_cycle_trace · 工位07 · 上批">47.2s</G> 长 <G src="compare_cycles · 周期差">4.1s</G>,同期{" "}
+      <G src="check_data_quality · 越限计数">12</G> 件过程参数越过控制上限。其余工位与上批持平。
+    </>
+  );
+}
+
+export default function IngotSite({ initialLocale }: { initialLocale: Locale }) {
+  const locale = initialLocale;
+  const t = COPY[locale];
+  const answerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const frame = window.requestAnimationFrame(() => {
-      if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) setFactoryPlaying(false);
-    });
-    return () => window.cancelAnimationFrame(frame);
+    const card = answerRef.current;
+    if (!card) return;
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const chips = Array.from(card.querySelectorAll<HTMLElement>(".g"));
+    const plot = card.querySelector<SVGPathElement>("#plot");
+    const endpt = card.querySelector<SVGCircleElement>("#endpt");
+    let done = false;
+
+    const run = () => {
+      if (done) return;
+      done = true;
+      chips.forEach((c, i) => {
+        const delay = reduce ? 0 : 360 + i * 240;
+        window.setTimeout(() => c.classList.add("on"), delay);
+      });
+      if (!reduce && plot) {
+        const len = plot.getTotalLength();
+        plot.style.strokeDasharray = String(len);
+        plot.style.strokeDashoffset = String(len);
+        plot.getBoundingClientRect();
+        plot.style.transition = "stroke-dashoffset 1s ease .3s";
+        plot.style.strokeDashoffset = "0";
+        if (endpt) {
+          endpt.style.opacity = "0";
+          window.setTimeout(() => {
+            endpt.style.transition = "opacity .4s";
+            endpt.style.opacity = "1";
+          }, 1300);
+        }
+      }
+    };
+
+    const io = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((e) => {
+          if (e.isIntersecting) {
+            run();
+            io.disconnect();
+          }
+        });
+      },
+      { threshold: 0.35 },
+    );
+    io.observe(card);
+    return () => io.disconnect();
   }, []);
 
-  useEffect(() => {
-    document.documentElement.lang = locale === "zh" ? "zh-CN" : "en";
-    document.title = copy.meta.title;
-    const description = document.querySelector<HTMLMetaElement>('meta[name="description"]');
-    if (description) description.content = copy.meta.description;
-  }, [copy.meta.description, copy.meta.title, locale]);
-
-  useEffect(() => {
-    if (!factoryPlaying || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    const timeout = window.setTimeout(() => {
-      setLiveIndex((liveIndex + 1) % stageMeta.length);
-      setStageRevision((current) => current + 1);
-    }, FACTORY_STAGE_MS);
-    return () => window.clearTimeout(timeout);
-  }, [stageRevision, factoryPlaying, liveIndex]);
-
-  useEffect(() => {
-    if (!factoryPlaying || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    const stageData = FACTORY_STAGE_DATA[liveIndex] ?? FACTORY_STAGE_DATA[0];
-    const timeout = window.setTimeout(() => {
-      setSettledRevision(stageRevision);
-    }, FACTORY_STAGE_MS * stageData.settleAt);
-    return () => window.clearTimeout(timeout);
-  }, [stageRevision, factoryPlaying, liveIndex]);
-
-  const stageSettled = settledRevision === stageRevision;
-  const resolveStageDatum = (index: number, settled: boolean): ResolvedStageDatum => {
-    const stage = stageStream[index] ?? stageStream[0];
-    const stageData = FACTORY_STAGE_DATA[index] ?? FACTORY_STAGE_DATA[0];
-    const labels = copy.stageData[index] ?? copy.stageData[0];
-    const datum = stageData.kind === "machining"
-      ? settled ? stageData.completed : stageData.started
-      : settled ? stageData.settled : stageData.active;
-    return {
-      ...stage,
-      ...datum,
-      detail: settled ? labels.settledDetail : labels.activeDetail,
-      dataLabel: settled ? labels.settled : labels.active,
-      stored: !(index === 4 && !settled),
-    };
-  };
-  const liveDatum = resolveStageDatum(liveIndex, stageSettled);
-  const liveStageData = FACTORY_STAGE_DATA[liveIndex] ?? FACTORY_STAGE_DATA[0];
-  const liveDataCopy = copy.stageData[liveIndex] ?? copy.stageData[0];
-  const factoryView = factoryViews[liveIndex];
-  const platformDatum = platformFocus === null || platformFocus === liveIndex
-    ? liveDatum
-    : resolveStageDatum(platformFocus, true);
-  const liveDatumData = liveDatum.data;
-  const platformDatumData = platformDatum.data;
-  const platformCorrelation = platformDatum.correlationId;
-  const platformViewIndex = platformView === "overview" ? 0 : platformView === "review" ? 1 : 2;
-  const stageDataTypes = FACTORY_STAGE_DATA.map((stageData) =>
-    stageData.kind === "machining"
-      ? [stageData.started.eventType, stageData.completed.eventType]
-      : Array.from(new Set([stageData.active.recordType, stageData.settled.recordType])),
-  );
-
-  const selectLiveStage = (index: number) => {
-    setLiveIndex(index);
-    setStageRevision((current) => current + 1);
-    setFactoryPlaying(false);
-  };
-
-  const selectPlatformView = (view: PlatformView) => {
-    setPlatformView(view);
-    if (view !== "overview") setShowEnvelope(false);
-  };
-
   return (
-    <main lang={locale === "zh" ? "zh-CN" : "en"}>
-      <nav className="nav shell" aria-label={copy.nav.label}>
-        <a className="brand" href="#top" aria-label={copy.nav.home}>
-          <BrandLockup />
-        </a>
-        <div className="nav-links">
-          <a href="#top">{copy.nav.product}</a>
-          <a href="#factory">{copy.nav.data}</a>
-          <a href="#platform" onClick={() => selectPlatformView("analysis")}>{copy.nav.analytics}</a>
-          <a href="#trust">{copy.nav.deployment}</a>
-          <a href="https://docs.ingotstack.com" target="_blank" rel="noreferrer">{copy.nav.docs}</a>
-        </div>
-        <div className="nav-actions">
-          <div className="language-switch" aria-label={copy.languageLabel}>
-            <Link
-              className={locale === "zh" ? "active" : ""}
-              aria-current={locale === "zh" ? "page" : undefined}
-              href="/"
-            >
-              中
-            </Link>
-            <Link
-              className={locale === "en" ? "active" : ""}
-              aria-current={locale === "en" ? "page" : undefined}
-              href="/en/"
-            >
-              EN
-            </Link>
-          </div>
-          <a
-            className="nav-cta"
-            href="https://github.com/liuweichaox/Ingot"
-            target="_blank"
-            rel="noreferrer"
-          >
-            GitHub <span>↗</span>
+    <>
+      <header className="nav">
+        <div className="wrap nav-in">
+          <a className="brand" href={locale === "en" ? "/en/" : "/"} aria-label="Ingot">
+            <Mark />
+            <b>INGOT</b>
           </a>
+          <nav className="nav-links" aria-label={locale === "en" ? "Main navigation" : "主导航"}>
+            <a className="hide-sm" href="#guar">{t.nav.g1}</a>
+            <a className="hide-sm" href="#quest">{t.nav.g2}</a>
+            <a className="hide-sm" href="#how">{t.nav.g3}</a>
+            <a className="hide-sm" href="#bound">{t.nav.g4}</a>
+            <a className="nav-lang" href={t.nav.langHref}>{t.nav.lang}</a>
+            <a className="nav-cta" href="#cta">{t.nav.cta}</a>
+          </nav>
         </div>
-      </nav>
+      </header>
 
-      <section className="factory-hero" id="top">
-        <FactoryScene3D
-          activeStage={liveIndex}
-          stageSettled={stageSettled}
-          stageRevision={stageRevision}
-          paused={!factoryPlaying}
-          view={factoryView}
-          fallback={<FactoryCanvas activeStage={liveIndex} cycleId={stageRevision} locale={locale} />}
-        />
-        <div className="factory-haze" aria-hidden="true" />
-        <div className="factory-scan" aria-hidden="true" />
-
-        <div className="factory-view-switch" role="group" aria-label={copy.hero.viewLabel}>
-          <div className="factory-view-toolbar">
-            <span>3D CAMERA</span>
-            <button
-              type="button"
-              className="factory-playback"
-              aria-pressed={!factoryPlaying}
-              onClick={() => setFactoryPlaying((current) => !current)}
-            >
-              <i aria-hidden="true">{factoryPlaying ? "Ⅱ" : "▶"}</i>
-              {factoryPlaying ? copy.hero.pause : copy.hero.play}
-            </button>
-          </div>
-          <div>
-            {factoryViews.map((view, index) => (
-              <button
-                type="button"
-                className={liveIndex === index ? "active" : ""}
-                aria-pressed={liveIndex === index}
-                onClick={() => selectLiveStage(index)}
-                key={view}
-              >
-                <i>0{index + 1}</i>
-                {copy.hero.views[index]}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="factory-hero-shell shell">
-          <div className="hero-copy factory-copy">
-            <div className="eyebrow">
-              <span className="live-dot" />
-              {copy.hero.eyebrow}
-            </div>
+      {/* HERO */}
+      <section className="hero" id="top">
+        <div className="wrap hero-grid">
+          <div className="hero-copy">
+            <span className="eyebrow">{t.hero.eyebrow}</span>
             <h1>
-              {copy.hero.heading[0]}
+              {t.hero.h1a}
               <br />
-              <span>{copy.hero.heading[1]}</span>
+              <span className="q">{t.hero.h1b}</span>
             </h1>
-            <p className="hero-lead">{copy.hero.lead}</p>
-            <div className="hero-actions">
-              <a
-                className="button button-primary"
-                href="#platform"
-                onClick={() => selectPlatformView("analysis")}
-              >
-                {copy.hero.analysis} <span>↓</span>
-              </a>
-              <a
-                className="button button-ghost"
-                href={`https://docs.ingotstack.com/${locale}/rfc-production-events`}
-                target="_blank"
-                rel="noreferrer"
-              >
-                {copy.hero.github} <span>↗</span>
-              </a>
-            </div>
-            <div className="hero-proof" aria-label={copy.hero.proofLabel}>
-              {copy.hero.proof.map((item) => (
-                <span key={item}>{item}</span>
-              ))}
-            </div>
-          </div>
+            <p className="lead">
+              {t.hero.leadA}
+              <b>{t.hero.leadB}</b>
+              {t.hero.leadC}
+            </p>
 
-          <aside
-            className="factory-live-card"
-            key={`${liveDatum.recordName}-${liveIndex}-${stageRevision}`}
-            aria-live="polite"
-          >
-            <div className="factory-card-head">
-              <span className={`event-pip ${liveDatum.tone}`} />
-              <span>{liveStageData.kind === "machining" ? (locale === "zh" ? "加工记录" : "MACHINING RECORD") : (locale === "zh" ? "示例数据" : "SAMPLE RECORD")}</span>
-              <span className="factory-card-sync">↔ CAM 0{liveIndex + 1}</span>
-              <time>{liveDatum.time}</time>
-            </div>
-            <div className="factory-card-machine">
-              <span>
-                {liveDatum.label}
-                <small>{liveDatum.dataLabel}</small>
+            <div className="pills">
+              <span className="pill">
+                <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true">
+                  <path d="M8 1.5 2 4v3.6c0 3.5 2.4 5.7 6 6.9 3.6-1.2 6-3.4 6-6.9V4L8 1.5Z" fill="none" stroke="#FFD06D" strokeWidth="1.3" />
+                  <path d="M5.5 8.2 7.2 10l3.3-3.6" fill="none" stroke="#FFD06D" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                {t.hero.pill1}
               </span>
-              <strong>{liveDatum.code}</strong>
+              <span className="pill">
+                <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true">
+                  <rect x="2.2" y="3" width="11.6" height="8" rx="1.4" fill="none" stroke="#FFD06D" strokeWidth="1.3" />
+                  <path d="M3 13.2h10" stroke="#FFD06D" strokeWidth="1.3" strokeLinecap="round" />
+                  <path d="M4.6 3 11.4 11" stroke="#FFD06D" strokeWidth="1.3" strokeLinecap="round" />
+                </svg>
+                {t.hero.pill2}
+              </span>
             </div>
-            <CaptureBadges
-              capture={liveDatum.capture}
-              autoLabel={copy.hero.captureAuto}
-              generatedLabel={copy.hero.captureGenerated}
-              hybridLabel={copy.hero.captureHybrid}
-            />
-            {liveStageData.kind === "machining" ? (
-              <ol className="factory-event-pair" aria-label={liveDataCopy.label}>
-                <li className={stageSettled ? "done" : "active"}>
-                  <span><i />{liveDataCopy.active}</span>
-                  <code>{liveStageData.started.eventType}</code>
-                  <time>{liveStageData.started.time}</time>
-                </li>
-                <li className={stageSettled ? "active" : "pending"}>
-                  <span><i />{liveDataCopy.settled}</span>
-                  <code>{liveStageData.completed.eventType}</code>
-                  <time>{stageSettled ? liveStageData.completed.time : "—"}</time>
-                </li>
-              </ol>
-            ) : (
-              <ol className="factory-event-pair point-event" aria-label={liveDataCopy.label}>
-                <li className="active">
-                  <span><i />{liveDatum.dataLabel}</span>
-                  <code>{copy.hero.dataKinds[liveIndex]}</code>
-                  <time>{liveDatum.time}</time>
-                </li>
-              </ol>
-            )}
-            <code>{liveDatum.eventType ?? copy.hero.dataKinds[liveIndex]}</code>
-            <p>{liveDatum.detail}</p>
-            {liveDatumData && <small className="factory-event-payload">{liveDatumData}</small>}
-            <div className="factory-card-foot">
-              <span>{liveDatum.context}</span>
-              <span>{liveDatum.stored ? `#${String(liveDatum.sequence).padStart(6, "0")}` : (locale === "zh" ? "尚未保存" : "NOT SAVED")}</span>
-            </div>
-          </aside>
-        </div>
 
-        <ol className="factory-stage-rail shell" aria-label={copy.factory.railLabel}>
-          {stageStream.map((stage, index) => (
-            <li
-              className={liveIndex === index ? "active" : ""}
-              key={`${stage.code}-${liveIndex === index ? stageRevision : "idle"}`}
-            >
-              <button type="button" onClick={() => selectLiveStage(index)} aria-pressed={liveIndex === index}>
-                <span>0{index + 1}</span>
-                <div>
-                  <strong>{stage.label}</strong>
-                  <small>{stage.code}</small>
+            <div className="cta-row">
+              <a className="btn btn-primary" href="#cta">
+                {t.hero.ctaPrimary} <span className="arr">→</span>
+              </a>
+              <a className="btn btn-ghost" href="#how">{t.hero.ctaSecondary}</a>
+            </div>
+          </div>
+
+          <div className="answer" ref={answerRef} role="img" aria-label={t.hero.cardTtl}>
+            <div className="answer-bar">
+              <span className="dot live" />
+              <span className="ttl">{t.hero.cardTtl}</span>
+              <span className="ro">{t.hero.ro}</span>
+            </div>
+            <div className="answer-body">
+              <div className="q-line">
+                <span className="who">{t.hero.you}</span>
+                <span className="txt">{t.hero.q}</span>
+              </div>
+              <div className="a-txt">
+                <span className="who">INGOT</span>
+                <AnswerBody locale={locale} />
+
+                <div className="limitation">
+                  {locale === "en" ? (
+                    <>
+                      <b>8 parts missing</b> · 8 parts lack inspection records, excluded from this comparison and listed
+                      separately.
+                    </>
+                  ) : (
+                    <>
+                      <b>缺 8 件</b> · 有 8 件缺检测记录,未纳入本次对比,已单列说明。
+                    </>
+                  )}
                 </div>
-              </button>
-              <i aria-hidden="true" style={{ animationDuration: `${FACTORY_STAGE_MS}ms` }} />
-            </li>
-          ))}
-        </ol>
+
+                <div className="spark">
+                  <div className="spark-head">
+                    <span>{t.hero.sparkHead}</span>
+                    <span>{t.hero.sparkUnit}</span>
+                  </div>
+                  <svg viewBox="0 0 320 76" preserveAspectRatio="none" aria-hidden="true">
+                    <line className="thresh" x1="0" y1="16" x2="320" y2="16" />
+                    <path className="plot" id="plot" d="M4,24 L48,22 L92,25 L136,21 L180,24 L224,22 L268,25" />
+                    <path className="proj" id="proj" d="M268,25 L302,52" />
+                    <circle className="end" id="endpt" cx="302" cy="52" r="3.4" />
+                  </svg>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </section>
 
-      <section className="factory-loop-section shell reveal-section" id="factory">
-        <div className="factory-loop-intro">
-          <div>
-            <p className="section-index">01 / THE RUNNING FACTORY</p>
+      {/* PROBLEM */}
+      <section className="problem sec-line">
+        <div className="wrap">
+          <span className="eyebrow">{t.problem.eyebrow}</span>
+          <h2>
+            {t.problem.h2a}
+            <br />
+            {t.problem.h2b}
+            <em>{t.problem.h2em}</em>
+            {t.problem.h2c}
+          </h2>
+          <div className="cols">
+            {t.problem.cells.map((c) => (
+              <div className="cell" key={c[0]}>
+                <span className="n">{c[0]}</span>
+                <h4>{c[1]}</h4>
+                <p>{c[2]}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* GUARANTEES */}
+      <section className="guar sec-line" id="guar">
+        <div className="wrap">
+          <div className="head">
+            <span className="eyebrow">{t.guar.eyebrow}</span>
             <h2>
-              {copy.factory.heading[0]}
+              {t.guar.h2a}
               <br />
-              <span>{copy.factory.heading[1]}</span>
+              <span className="u">{t.guar.h2u}</span>
+              {t.guar.h2b}
             </h2>
+            <p className="sub">{t.guar.sub}</p>
           </div>
-          <p>{copy.factory.lead}</p>
-        </div>
-
-        <div className="capture-model" aria-labelledby="capture-model-title">
-          <header>
-            <p className="section-index" id="capture-model-title">DATA SOURCES</p>
-            <strong>{copy.factory.sourceTitle}</strong>
-            <span>{copy.factory.sourceLead}</span>
-          </header>
-          <div>
-            {copy.factory.sources.map(([label, detail], index) => (
-              <article className={`capture-model-${index + 1}`} key={label}>
-                <span>0{index + 1}</span>
-                <strong>{label}</strong>
-                <p>{detail}</p>
-              </article>
+          <div className="cards3">
+            {t.guar.cards.map((card) => (
+              <div className={`gcard${card.v ? " v" : ""}`} key={card.tag}>
+                <span className="tag">{card.tag}</span>
+                <div className="icn">
+                  {card.v ? (
+                    <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true">
+                      <circle cx="9" cy="9" r="6" fill="none" stroke="#5FD4C8" strokeWidth="1.5" />
+                      <path d="m13.5 13.5 3.5 3.5" stroke="#5FD4C8" strokeWidth="1.7" strokeLinecap="round" />
+                    </svg>
+                  ) : (
+                    <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true">
+                      <rect x="4" y="9" width="12" height="8" rx="1.6" fill="none" stroke="#E6A73A" strokeWidth="1.5" />
+                      <path d="M7 9V6.5a3 3 0 0 1 6 0V9" fill="none" stroke="#E6A73A" strokeWidth="1.5" />
+                    </svg>
+                  )}
+                </div>
+                <h3>{card.h}</h3>
+                <p>
+                  {card.pa}
+                  <span className="hl">{card.hl}</span>
+                  {card.pb}
+                </p>
+                <div className="foot">{card.foot}</div>
+              </div>
             ))}
           </div>
         </div>
-
-        <div className="factory-flow-cards">
-          {stageStream.map((stage, index) => (
-            <article className={liveIndex === index ? "active" : ""} key={stage.code}>
-              <div className="factory-node-head">
-                <span>0{index + 1}</span>
-                <small>{stage.source}</small>
-              </div>
-              <div className={`factory-machine-icon machine-${index + 1}`} aria-hidden="true">
-                <i />
-                <i />
-                <i />
-              </div>
-              <CaptureBadges
-                capture={stage.capture}
-                autoLabel={copy.hero.captureAuto}
-                generatedLabel={copy.hero.captureGenerated}
-                hybridLabel={copy.hero.captureHybrid}
-              />
-              <strong>{stage.label}</strong>
-              <b>{stage.code}</b>
-              <div className="factory-card-event-types">
-                {index === 1
-                  ? stageDataTypes[index].map((type) => <code key={type}>{type}</code>)
-                  : <code>{copy.hero.dataKinds[index]}</code>}
-              </div>
-              <p>{stage.detail}</p>
-              <small className={`factory-data-fields ${stage.capture}`}>{stage.data}</small>
-              <div className="factory-node-link" aria-hidden="true">
-                <span />
-                {index < stageStream.length - 1 && <i>›</i>}
-              </div>
-            </article>
-          ))}
-        </div>
       </section>
 
-      <section className="platform-section" id="platform">
-        <div className="shell">
-          <div className="section-heading platform-heading">
-            <div>
-            <p className="section-index">02 / DATA TO PROCESS INSIGHT</p>
-              <h2>
-                {copy.platform.heading[0]}
-                <br />
-                <span>{copy.platform.heading[1]}</span>
-              </h2>
-            </div>
-            <p>{copy.platform.lead}</p>
-          </div>
-
-          <div className="platform-console">
-            <div className="platform-console-bar">
-              <div className="console-dots" aria-hidden="true"><i /><i /><i /></div>
-              <span>{copy.platform.workspace}</span>
-              <div><i /> {copy.platform.connected}</div>
-            </div>
-
-            <aside className="platform-sidebar">
-              <div className="platform-sidebar-brand">
-                <BrandMark />
-                <div><strong>INGOT</strong><small>PLATFORM</small></div>
-              </div>
-              <nav aria-label={copy.platform.tabsLabel}>
-                {copy.platform.tabs.map((item, index) => (
-                  <button
-                    type="button"
-                    className={platformViewIndex === index ? "active" : ""}
-                    aria-pressed={platformViewIndex === index}
-                    onClick={() => selectPlatformView(PLATFORM_VIEW_KEYS[index])}
-                    key={item}
-                  >
-                    <span>0{index + 1}</span>
-                    {item}
-                  </button>
-                ))}
-              </nav>
-              <div className="platform-sidebar-site">
-                <span className="live-dot" />
-                <div><small>SITE</small><strong>{copy.platform.site}</strong></div>
-              </div>
-            </aside>
-
-            <div className="platform-workspace">
-              <div className="platform-mobile-tabs" role="group" aria-label={copy.platform.tabsLabel}>
-                {copy.platform.tabs.map((item, index) => (
-                  <button
-                    type="button"
-                    className={platformViewIndex === index ? "active" : ""}
-                    aria-pressed={platformViewIndex === index}
-                    onClick={() => selectPlatformView(PLATFORM_VIEW_KEYS[index])}
-                    key={item}
-                  >
-                    {item}
-                  </button>
-                ))}
-              </div>
-              <header className="platform-workspace-head">
-                <div>
-                  <small>{copy.platform.viewKickers[platformViewIndex]}</small>
-                  <h3>
-                    {platformView === "overview"
-                      ? copy.platform.overview
-                      : platformView === "review"
-                        ? copy.platform.review.title
-                        : copy.platform.analysis.title}
-                  </h3>
-                </div>
-                <span className="platform-range"><span className="live-dot" /> {copy.platform.range}</span>
-              </header>
-
-              {platformView === "overview" && (
-                <div className="platform-view-panel" key="overview">
-                  <div className="platform-metrics">
-                    {copy.platform.metrics.map(([label, value, note], index) => (
-                      <article key={label}>
-                        <div><span>0{index + 1}</span><i className={index === 2 ? "gold" : ""} /></div>
-                        <small>{label}</small>
-                        <strong>{value}</strong>
-                        <p>{note}</p>
-                      </article>
-                    ))}
-                  </div>
-
-                  <div className="platform-grid">
-                    <article className="platform-line-card">
-                      <header>
-                        <div><span className="live-dot" /><strong>{copy.platform.lineTitle}</strong></div>
-                        <small>CELL-A · {liveDatum.time}</small>
-                      </header>
-                      <div className="platform-line-flow">
-                        {stageStream.map((stage, index) => (
-                          <button
-                            type="button"
-                            className={`${liveIndex === index ? "active" : ""} ${platformFocus === index ? "selected" : ""}`}
-                            onClick={() => setPlatformFocus(index === liveIndex ? null : index)}
-                            key={stage.code}
-                          >
-                            <span><i />0{index + 1}</span>
-                            <strong>{stage.label}</strong>
-                            <small>{stage.code}</small>
-                            <em className={`capture-badge capture-inline ${stage.capture}`}>
-                              {stage.capture === "hybrid" ? copy.hero.captureHybrid : copy.hero.captureAuto}
-                            </em>
-                            <b>
-                              {stage.capture === "hybrid"
-                                ? liveIndex === index
-                                  ? stageSettled
-                                    ? copy.platform.status.submitted
-                                    : copy.platform.status.sign
-                                  : index < liveIndex
-                                    ? copy.platform.status.submitted
-                                    : copy.platform.status.onDemand
-                                : liveIndex === index
-                                  ? stageSettled
-                                    ? copy.platform.status.pass
-                                    : copy.platform.status.run
-                                  : index < liveIndex
-                                    ? copy.platform.status.pass
-                                    : copy.platform.status.ready}
-                            </b>
-                          </button>
-                        ))}
-                      </div>
-                      <div className="platform-throughput" aria-hidden="true">
-                        <span>60</span>
-                        <div>{Array.from({ length: 38 }).map((_, index) => <i key={index} style={{ height: `${18 + ((index * 23) % 70)}%` }} />)}</div>
-                        <span>0</span>
-                      </div>
-                    </article>
-
-                    <article className="platform-record-card" key={`platform-${platformFocus ?? liveIndex}`}>
-                      <header>
-                        <div><span className={`event-pip ${platformDatum.tone}`} /><strong>{copy.platform.factsTitle}</strong></div>
-                        <time>{platformDatum.time}</time>
-                      </header>
-                      <small>{copy.platform.factsHint}</small>
-                      <div className="platform-record-human">
-                        <span>{platformDatum.dataLabel}</span>
-                        <h4>{platformDatum.detail}</h4>
-                        <p>{platformDatum.context}</p>
-                      </div>
-                      <CaptureBadges
-                        capture={platformDatum.capture}
-                        autoLabel={copy.hero.captureAuto}
-                        generatedLabel={copy.hero.captureGenerated}
-                        hybridLabel={copy.hero.captureHybrid}
-                      />
-                      <button
-                        type="button"
-                        className="platform-envelope-toggle"
-                        aria-expanded={showEnvelope}
-                        onClick={() => setShowEnvelope((current) => !current)}
-                      >
-                        <span>{showEnvelope ? "−" : "+"}</span>
-                        {showEnvelope ? copy.platform.envelopeHide : copy.platform.envelopeShow}
-                      </button>
-                      {showEnvelope && (
-                        <div className="platform-envelope-mini">
-                          <span>{copy.platform.envelope}</span>
-                          <dl>
-                            <div><dt>record_type</dt><dd>{platformDatum.recordType}</dd></div>
-                            {platformDatum.eventType && <div><dt>event_type</dt><dd>{platformDatum.eventType}</dd></div>}
-                            <div><dt>name</dt><dd>{platformDatum.recordName}</dd></div>
-                            <div><dt>source</dt><dd>{platformDatum.source}</dd></div>
-                            <div><dt>subject</dt><dd>{platformDatum.subject}</dd></div>
-                            {platformCorrelation && <div><dt>correlation</dt><dd>{platformCorrelation}</dd></div>}
-                            {platformDatumData && <div><dt>data</dt><dd>{platformDatumData}</dd></div>}
-                            <div><dt>seq</dt><dd>{platformDatum.stored ? `#${String(platformDatum.sequence).padStart(6, "0")}` : "—"}</dd></div>
-                          </dl>
-                        </div>
-                      )}
-                      <footer><span>{platformDatum.stored ? "✓" : "○"}</span>{platformDatum.stored ? copy.platform.dataStatus : copy.platform.pendingDataStatus}</footer>
-                    </article>
-                  </div>
-
-                  <section className="platform-health" aria-label={copy.platform.healthTitle}>
-                    <header><strong>{copy.platform.healthTitle}</strong><span>EDGE → CENTRAL</span></header>
-                    <div>
-                      {copy.platform.health.map(([label, value]) => (
-                        <p key={label}><span><i />{label}</span><strong>{value}</strong></p>
-                      ))}
-                    </div>
-                  </section>
-                </div>
-              )}
-
-              {platformView === "review" && (
-                <div className="platform-view-panel review-view" key="review">
-                  <div className="review-summary">
-                    <div>
-                      <small>{copy.platform.review.taskLabel}</small>
-                      <strong>{copy.platform.review.task}</strong>
-                    </div>
-                    <span><i />{copy.platform.review.state}</span>
-                    <p>{copy.platform.review.lead}</p>
-                  </div>
-                  <div className="review-grid">
-                    <article className="review-requirements-card">
-                      <header><span className="event-pip cyan" /><strong>{copy.platform.review.requirementsTitle}</strong></header>
-                      <dl>
-                        {copy.platform.review.requirements.map(([label, value]) => (
-                          <div key={label}><dt>{label}</dt><dd>{value}</dd></div>
-                        ))}
-                      </dl>
-                    </article>
-                    <article className="review-steps-card">
-                      <header><span className="event-pip gold" /><strong>{copy.platform.review.stepsTitle}</strong></header>
-                      <ol>
-                        {copy.platform.review.steps.map(([number, title, detail]) => (
-                          <li key={number}>
-                            <span>{number}</span>
-                            <div><strong>{title}</strong><p>{detail}</p></div>
-                          </li>
-                        ))}
-                      </ol>
-                    </article>
-                  </div>
-                  <div className="review-boundary-note">
-                    <span>↗</span>
-                    <p>{copy.platform.review.boundary}</p>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setPlatformView("analysis");
-                      }}
-                    >
-                      {copy.platform.review.toAnalysis} →
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {platformView === "analysis" && (
-                <div className="platform-view-panel analysis-view" key="analysis">
-                  <section className="chat-capability" aria-label={copy.platform.analysis.chat.title}>
-                    <header><div><small>CENTRAL WEB · READ ONLY</small><strong>{copy.platform.analysis.chat.title}</strong></div><span>{copy.platform.analysis.chat.note}</span></header>
-                    <div className="chat-mode-switch" role="group">
-                      {copy.platform.analysis.chat.modes.map((mode, index) => <button type="button" className={chatMode === index ? "active" : ""} aria-pressed={chatMode === index} onClick={() => setChatMode(index)} key={mode}>{mode}</button>)}
-                    </div>
-                    <blockquote>{copy.platform.analysis.chat.question}</blockquote>
-                    <div className="chat-capability-flow">
-                      {(chatMode === 0 ? copy.platform.analysis.chat.standard : copy.platform.analysis.chat.roles).map((item) => <span key={item}>✓ {item}</span>)}
-                    </div>
-                    <p><b>SOURCE RECORDS CHECKED</b>{copy.platform.analysis.chat.outcome[chatMode]}</p>
-                    <footer>↳ {copy.platform.analysis.chat.boundary}</footer>
-                  </section>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="trust-section shell reveal-section" id="trust">
-        <div className="section-heading compact"><div><p className="section-index">03 / EVENT INGESTION</p><h2>{copy.trust.heading}</h2></div><p>{copy.trust.lead}</p></div>
-        <div className="trust-grid">{copy.trust.cards.map(([title, detail], index) => <article key={title}><span>0{index + 1}</span><h3>{title}</h3><p>{detail}</p></article>)}</div>
-      </section>
-
-      <details className="technical-details shell">
-        <summary>{locale === "zh" ? "面向技术团队的实施资料" : "Implementation details for technical teams"}</summary>
-        <p>{locale === "zh"
-          ? "接入方式、数据结构、部署边界和开放接口请查看文档。"
-          : "See the documentation for integration, data structure, deployment boundaries, and public interfaces."}</p>
-        <div className="technical-details-content">
-      <section className="boundary-section shell reveal-section" id="boundary">
-        <div className="section-heading compact">
-          <div>
-            <p className="section-index">04 / INGESTION OPTIONS</p>
-            <h2>{copy.boundary.heading[0]}<br />{copy.boundary.heading[1]}</h2>
-          </div>
-          <p>{copy.boundary.lead}</p>
-        </div>
-        <div className="edge-principles boundary-grid">
-          {copy.boundary.cards.map(([overline, title, detail], index) => (
-            <article key={title}>
-              <span>0{index + 1}</span>
-              <small>{overline}</small>
-              <h3>{title}</h3>
-              <p>{detail}</p>
-            </article>
-          ))}
-        </div>
-      </section>
-
-      <section className="statement shell reveal-section" id="language">
-        <p className="section-index">05 / DATA TO PROCESS INSIGHT</p>
-        <div className="statement-grid">
+      {/* QUESTIONS */}
+      <section className="quest sec-line" id="quest">
+        <div className="wrap">
+          <span className="eyebrow">{t.quest.eyebrow}</span>
           <h2>
-            {copy.language.telemetryHeading[0]}
+            {t.quest.h2a}
             <br />
-            <span>{copy.language.telemetryHeading[1]}</span>
+            {t.quest.h2b}
           </h2>
-          <h2>
-            {copy.language.eventHeading[0]}
-            <br />
-            <em>{copy.language.eventHeading[1]}</em>
-          </h2>
-        </div>
-        <div className="value-journey">
-          <article>
-            <span className="journey-number">01</span>
-            <small>{copy.language.nodes[0][0]}</small>
-            <strong>{copy.language.nodes[0][1]}</strong>
-            <p>{copy.language.journey[0]}</p>
-          </article>
-          <div className="journey-arrow">→</div>
-          <article>
-            <span className="journey-number">02</span>
-            <small>{copy.language.nodes[1][0]}</small>
-            <strong>{copy.language.nodes[1][1]}</strong>
-            <p>{copy.language.journey[1]}</p>
-          </article>
-          <div className="journey-arrow">→</div>
-          <article className="journey-highlight">
-            <span className="journey-number">03</span>
-            <small>{copy.language.nodes[2][0]}</small>
-            <strong>{copy.language.nodes[2][1]}</strong>
-            <p>{copy.language.journey[2]}</p>
-          </article>
-        </div>
-      </section>
-
-      <section className="dual-plane">
-        <div className="shell">
-          <div className="section-heading">
-            <div>
-              <p className="section-index">06 / STANDARD EVENTS + CENTRAL records</p>
-              <h2>{copy.planes.heading[0]}<br />{copy.planes.heading[1]}</h2>
-            </div>
-            <p>{copy.planes.lead}</p>
-          </div>
-
-          <div className="planes">
-            <article className="plane telemetry-plane">
-              <div className="plane-head">
-                <span className="plane-icon">≈</span>
-                <div>
-                  <small>SOURCE EVENTS</small>
-                  <h3>{copy.planes.telemetryTitle}</h3>
-                </div>
-                    <b>≤ 1000 ev/batch</b>
-              </div>
-              <div className="waveform" aria-hidden="true">
-                {Array.from({ length: 48 }).map((_, index) => (
-                  <i
-                    key={index}
-                    style={{
-                      height: `${22 + ((index * 17) % 57)}%`,
-                      opacity: 0.22 + ((index * 13) % 60) / 100,
-                    }}
-                  />
-                ))}
-              </div>
-              <div className="plane-foot">
-                {copy.planes.telemetryFoot.map((item) => (
-                  <span key={item}>{item}</span>
-                ))}
+          <p className="sub">{t.quest.sub}</p>
+          <div className="qgrid">
+            <article className="qhero">
+              <span className="rank">{t.quest.rank}</span>
+              <h3>{t.quest.heroH}</h3>
+              <p>{t.quest.heroP}</p>
+              <div className="dims">
+                <span className="dim">{t.quest.dim1a}<b>{t.quest.dim1b}</b></span>
+                <span className="dim">{t.quest.dim2a}<b>{t.quest.dim2b}</b></span>
               </div>
             </article>
-
-            <article className="plane event-plane">
-              <div className="plane-head">
-                <span className="plane-icon">◆</span>
-                <div>
-                  <small>CENTRAL records</small>
-                  <h3>{copy.planes.eventTitle}</h3>
-                </div>
-                    <b>≤ 500 ev/batch</b>
-              </div>
-              <div className="event-rail" aria-hidden="true">
-                <span />
-                {["LOT", "CYCLE", "ALARM", "CYCLE", "PARAM"].map(
-                  (label, index) => (
-                    <i key={label + index} style={{ left: `${8 + index * 21}%` }}>
-                      <em>{label}</em>
-                    </i>
-                  ),
-                )}
-              </div>
-              <div className="plane-foot">
-                {copy.planes.eventFoot.map((item) => (
-                  <span key={item}>{item}</span>
-                ))}
-              </div>
-            </article>
-          </div>
-        </div>
-      </section>
-
-      <section className="anatomy shell reveal-section">
-        <div className="section-heading compact">
-          <div>
-            <p className="section-index">07 / MACHINING EVENT</p>
-            <h2>{copy.anatomy.heading}</h2>
-          </div>
-          <p>{copy.anatomy.lead}</p>
-        </div>
-
-        <div className="anatomy-board">
-          <div className="anatomy-tabs" role="tablist" aria-label={copy.anatomy.tabsLabel}>
-            {anatomy.map(([key, label], index) => (
-              <button
-                key={key}
-                className={activeAnatomy === index ? "active" : ""}
-                onMouseEnter={() => setActiveAnatomy(index)}
-                onFocus={() => setActiveAnatomy(index)}
-                onClick={() => setActiveAnatomy(index)}
-                role="tab"
-                aria-selected={activeAnatomy === index}
-              >
-                <span>0{index + 1}</span>
-                <strong>{key}</strong>
-                <small>{label}</small>
-              </button>
-            ))}
-          </div>
-          <div className="event-envelope">
-            <div className="envelope-top">
-              <span>ProductionEvent</span>
-              <span className="immutable-badge">{copy.anatomy.immutable}</span>
-            </div>
-            <div className="envelope-code">
-              {anatomy.map(([key, , value], index) => (
-                <div
-                  key={key}
-                  className={activeAnatomy === index ? "active" : ""}
-                  onMouseEnter={() => setActiveAnatomy(index)}
-                >
-                  <span>{key.toLowerCase()}</span>
-                  <strong>{value}</strong>
-                </div>
-              ))}
-            </div>
-            <div className="envelope-focus">
-              <small>{anatomy[activeAnatomy][0]}</small>
-              <p>{anatomy[activeAnatomy][1]}</p>
-              <strong>{anatomy[activeAnatomy][2]}</strong>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="architecture" id="architecture">
-        <div className="shell">
-          <div className="section-heading">
-            <div>
-              <p className="section-index">08 / EDGE TO ENTERPRISE</p>
-              <h2>{copy.architecture.heading[0]}<br />{copy.architecture.heading[1]}</h2>
-            </div>
-            <p>{copy.architecture.lead}</p>
-          </div>
-
-          <div className="architecture-flow">
-            <div className="arch-sources arch-column">
-              <small>01 · SOURCES</small>
-              {copy.architecture.sources.map(([name, mode]) => (
-                <div className="source-chip" key={name}>
-                  <span>{name.slice(0, 2)}</span>
-                  <strong>{name}</strong>
-                  <small>{mode}</small>
-                </div>
-              ))}
-            </div>
-
-            <div className="flow-connector" aria-hidden="true">
-              <span>{copy.architecture.stream}</span>
-              <i />
-            </div>
-
-            <div className="edge-node arch-column">
-              <small>02 · OPTIONAL LOCAL INGRESS</small>
-              <div className="node-core">
-                <div className="node-brand">
-                  <BrandMark />
-                  <strong>{copy.architecture.engine}</strong>
-                </div>
-                {copy.architecture.engineItems.map((item) => (
-                  <span key={item}>{item}</span>
-                ))}
-              </div>
-              <div className="edge-status">
-                <span />
-                {copy.architecture.status}
-              </div>
-            </div>
-
-            <div className="flow-connector uplink" aria-hidden="true">
-              <span>{copy.architecture.retry}</span>
-              <i />
-            </div>
-
-            <div className="arch-consumers arch-column">
-              <small>03 · PLATFORM + ECOSYSTEM</small>
-              {copy.architecture.consumers.map(
-                (item, index) => (
-                  <div className="consumer-chip" key={item}>
-                    <span>0{index + 1}</span>
-                    <strong>{item}</strong>
-                  </div>
-                ),
-              )}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="trace shell reveal-section" id="trace">
-        <div className="trace-copy">
-          <p className="section-index">09 / TRACEABILITY BY DESIGN</p>
-          <h2>{copy.trace.heading[0]}<br />{copy.trace.heading[1]}</h2>
-          <p>{copy.trace.lead}</p>
-          <div className="query-chip">
-            <small>{copy.trace.filter}</small>
-            <code>ctx.material_lot = &quot;LOT-0716&quot;</code>
-          </div>
-        </div>
-        <div className="trace-panel">
-          <div className="trace-head">
-            <div>
-              <span className="live-dot" />
-              {copy.trace.live}
-            </div>
-            <strong>LOT-0716</strong>
-            <span>{copy.trace.events}</span>
-          </div>
-          <div className="trace-list">
-            {traceSteps.map(([time, type, detail, asset], index) => (
-              <div className="trace-row" key={time + type}>
-                <time>{time}</time>
-                <div className="trace-marker">
-                  <i className={type.includes("alarm") ? "alert" : ""} />
-                  {index < traceSteps.length - 1 && <span />}
-                </div>
-                <div>
-                  <strong>{type}</strong>
-                  <p>{detail}</p>
-                </div>
-                <small>{asset}</small>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section className="edge-section" id="edge">
-        <div className="shell">
-          <div className="edge-intro">
-            <p className="section-index">10 / BUILT FOR THE EDGE</p>
-            <h2>{copy.edge.heading[0]}<br />{copy.edge.heading[1]}</h2>
-          </div>
-          <div className="edge-metrics">
-            <article>
-              <strong>≤ 1000<span> events</span></strong>
-              <p>{copy.edge.metrics[0]}</p>
-            </article>
-            <article>
-              <strong>500k<span> rows</span></strong>
-              <p>{copy.edge.metrics[1]}</p>
-            </article>
-            <article>
-              <strong>SQLite<span> WAL</span></strong>
-              <p>{copy.edge.metrics[2]}</p>
-            </article>
-            <article>
-              <strong>ACK<span> seq</span></strong>
-              <p>{copy.edge.metrics[3]}</p>
-            </article>
-          </div>
-          <div className="edge-principles">
-            {copy.edge.principles.map(([overline, title, principleCopy], index) => (
-              <article key={title}>
-                <span>0{index + 1}</span>
-                <small>{overline}</small>
-                <h3>{title}</h3>
-                <p>{principleCopy}</p>
+            {t.quest.small.map((s) => (
+              <article className="qsmall" key={s[0]}>
+                <h4>{s[0]}</h4>
+                <p>{s[1]}</p>
+                <div className="by">{s[2]}</div>
               </article>
             ))}
           </div>
         </div>
       </section>
-        </div>
-      </details>
 
-      <section className="final-cta shell">
-        <div className="cta-glow" aria-hidden="true" />
-        <BrandMark />
-        <p>{copy.cta.kicker}</p>
-        <h2>{copy.cta.heading[0]}<br />{copy.cta.heading[1]}</h2>
-        <a
-          className="button button-primary"
-          href={`https://docs.ingotstack.com/${locale}`}
-          target="_blank"
-          rel="noreferrer"
-        >
-          {copy.cta.button} <span>↑</span>
-        </a>
+      {/* HOW */}
+      <section className="how sec-line" id="how">
+        <div className="wrap">
+          <span className="eyebrow">{t.how.eyebrow}</span>
+          <h2>{t.how.h2}</h2>
+          <div className="steps">
+            {t.how.steps.map((s) => (
+              <div className="step" key={s.n}>
+                <span className="s-n">{s.n}</span>
+                <h4>{s.h}</h4>
+                <p>
+                  {s.pa}
+                  {s.code ? (
+                    s.code === "ProductionEvent" ? (
+                      <a href={`${t.docs}/rfc-production-events`}>
+                        <code>{s.code}</code>
+                      </a>
+                    ) : (
+                      <code>{s.code}</code>
+                    )
+                  ) : null}
+                  {s.pb}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
       </section>
 
-      <footer className="footer shell">
-        <a className="brand" href="#top" aria-label={copy.nav.home}>
-          <BrandLockup />
-        </a>
-        <p>{copy.cta.footer}</p>
-        <div>
-          <a
-            href="https://github.com/liuweichaox/Ingot"
-            target="_blank"
-            rel="noreferrer"
-          >
-            GitHub ↗
-          </a>
-          <a
-            href="https://github.com/liuweichaox/Ingot/issues"
-            target="_blank"
-            rel="noreferrer"
-          >
-            Issues ↗
-          </a>
+      {/* BOUNDARY */}
+      <section className="bound sec-line" id="bound">
+        <div className="wrap">
+          <span className="eyebrow">{t.bound.eyebrow}</span>
+          <h2>{t.bound.h2}</h2>
+          <div className="split">
+            <div className="bcol yes">
+              <div className="lbl">
+                <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+                  <path d="M3 8.5 6.5 12 13 4.5" fill="none" stroke="#5FD4C8" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                {t.bound.yesLbl}
+              </div>
+              <ul>
+                {t.bound.yes.map((li) => (
+                  <li key={li}><span className="mk">·</span>{li}</li>
+                ))}
+              </ul>
+            </div>
+            <div className="bcol no">
+              <div className="lbl">
+                <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+                  <circle cx="8" cy="8" r="6" fill="none" stroke="#E6A73A" strokeWidth="1.5" />
+                  <path d="M5 8h6" stroke="#E6A73A" strokeWidth="1.6" strokeLinecap="round" />
+                </svg>
+                {t.bound.noLbl}
+              </div>
+              <ul>
+                {t.bound.no.map((li) => (
+                  <li key={li}><span className="mk">·</span>{li}</li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* CTA */}
+      <section className="cta sec-line" id="cta">
+        <div className="wrap">
+          <span className="eyebrow">{t.cta.eyebrow}</span>
+          <h2>
+            {t.cta.h2a}
+            <br />
+            {t.cta.h2b}
+            <span className="g2">{t.cta.h2g}</span>
+            {t.cta.h2c}
+          </h2>
+          <p>{t.cta.p}</p>
+          <div className="cta-row">
+            <a className="btn btn-primary" href={`${t.docs}/`}>
+              {t.cta.primary} <span className="arr">→</span>
+            </a>
+            <a className="btn btn-ghost" href={`${t.docs}/`}>{t.cta.secondary}</a>
+          </div>
+        </div>
+      </section>
+
+      <footer>
+        <div className="wrap foot-in">
+          <div className="brand">
+            <Mark size={22} />
+            <b>INGOT</b>
+          </div>
+          <div className="m">
+            {t.foot}
+            <b>{t.footB}</b>
+          </div>
         </div>
       </footer>
-    </main>
+    </>
   );
 }

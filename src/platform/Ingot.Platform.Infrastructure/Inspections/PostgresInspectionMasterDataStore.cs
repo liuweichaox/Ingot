@@ -39,6 +39,15 @@ public sealed class PostgresInspectionMasterDataStore : IInspectionMasterDataSto
                   CHECK (version > 0)
                 );
 
+                CREATE TABLE IF NOT EXISTS inspection_plans (
+                  plan_id TEXT NOT NULL,
+                  version INTEGER NOT NULL,
+                  payload JSONB NOT NULL,
+                  updated_at TIMESTAMPTZ NOT NULL,
+                  PRIMARY KEY (plan_id, version),
+                  CHECK (version > 0)
+                );
+
                 CREATE TABLE IF NOT EXISTS phase_definitions (
                   code TEXT PRIMARY KEY,
                   payload JSONB NOT NULL,
@@ -71,7 +80,6 @@ public sealed class PostgresInspectionMasterDataStore : IInspectionMasterDataSto
                 """);
             await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
             _initialized = true;
-            await SeedDefaultOpticalMoldingAsync(ct).ConfigureAwait(false);
         }
         finally
         {
@@ -116,6 +124,47 @@ public sealed class PostgresInspectionMasterDataStore : IInspectionMasterDataSto
             command =>
             {
                 command.Parameters.AddWithValue("code", code);
+                command.Parameters.AddWithValue("version", version);
+            },
+            ct);
+
+    public async Task<InspectionPlan> UpsertInspectionPlanAsync(InspectionPlan plan, CancellationToken ct = default)
+    {
+        await InitializeAsync(ct).ConfigureAwait(false);
+        await UpsertAsync(
+            "inspection_plans",
+            "plan_id, version, payload, updated_at",
+            "plan_id = @code, version = @version",
+            "plan_id, version",
+            plan.PlanId,
+            plan.Version,
+            plan,
+            plan.UpdatedAt,
+            ct).ConfigureAwait(false);
+        return plan;
+    }
+
+    public Task<IReadOnlyList<InspectionPlan>> ListInspectionPlansAsync(CancellationToken ct = default)
+        => ListAsync<InspectionPlan>("inspection_plans", "ORDER BY plan_id, version DESC", ct);
+
+    public Task<InspectionPlan?> GetInspectionPlanAsync(string planId, int version, CancellationToken ct = default)
+        => GetAsync<InspectionPlan>(
+            "inspection_plans",
+            "plan_id = @plan_id AND version = @version",
+            command =>
+            {
+                command.Parameters.AddWithValue("plan_id", planId);
+                command.Parameters.AddWithValue("version", version);
+            },
+            ct);
+
+    public Task<bool> DeleteInspectionPlanAsync(string planId, int version, CancellationToken ct = default)
+        => DeleteAsync(
+            "inspection_plans",
+            "plan_id = @plan_id AND version = @version",
+            command =>
+            {
+                command.Parameters.AddWithValue("plan_id", planId);
                 command.Parameters.AddWithValue("version", version);
             },
             ct);
@@ -213,66 +262,6 @@ public sealed class PostgresInspectionMasterDataStore : IInspectionMasterDataSto
     {
         _initializeLock.Dispose();
         await _dataSource.DisposeAsync().ConfigureAwait(false);
-    }
-
-    private async Task SeedDefaultOpticalMoldingAsync(CancellationToken ct)
-    {
-        await using var countCommand = _dataSource.CreateCommand(
-            "SELECT count(*) FROM inspection_definitions;");
-        var count = Convert.ToInt64(await countCommand.ExecuteScalarAsync(ct).ConfigureAwait(false));
-        if (count > 0)
-            return;
-
-        var phases = new[]
-        {
-            new PhaseDefinition { Code = "preheat", Name = "预热", SortOrder = 10, Required = true, UpdatedAt = DateTimeOffset.UtcNow },
-            new PhaseDefinition { Code = "soak", Name = "均热", SortOrder = 20, Required = true, UpdatedAt = DateTimeOffset.UtcNow },
-            new PhaseDefinition { Code = "press", Name = "压制", SortOrder = 30, Required = true, UpdatedAt = DateTimeOffset.UtcNow },
-            new PhaseDefinition { Code = "anneal", Name = "退火", SortOrder = 40, Required = true, UpdatedAt = DateTimeOffset.UtcNow },
-            new PhaseDefinition { Code = "cool", Name = "冷却", SortOrder = 50, Required = false, UpdatedAt = DateTimeOffset.UtcNow }
-        };
-        foreach (var phase in phases)
-            await UpsertPhaseDefinitionAsync(phase, ct).ConfigureAwait(false);
-
-        var inspection = new InspectionDefinition
-        {
-            Code = "optical.surface",
-            Version = 1,
-            Name = "光学镜片模压检测",
-            Description = "首站默认检测定义，限值需由工艺工程师核定。",
-            UpdatedAt = DateTimeOffset.UtcNow,
-            Characteristics =
-            [
-                new InspectionCharacteristicDefinition { Code = "surface.pv_um", Name = "面形 PV", InputType = "numeric", Unit = "um", Required = true },
-                new InspectionCharacteristicDefinition { Code = "surface.rms_um", Name = "面形 RMS", InputType = "numeric", Unit = "um", Required = false },
-                new InspectionCharacteristicDefinition { Code = "center_thickness_mm", Name = "中心厚度", InputType = "numeric", Unit = "mm", Required = false },
-                new InspectionCharacteristicDefinition { Code = "decentration_um", Name = "偏心", InputType = "numeric", Unit = "um", Required = false },
-                new InspectionCharacteristicDefinition { Code = "roughness_nm", Name = "表面粗糙度", InputType = "numeric", Unit = "nm", Required = false },
-                new InspectionCharacteristicDefinition { Code = "defect_count", Name = "条纹/气泡计数", InputType = "numeric", Unit = "1", LowerLimit = 0, Required = false }
-            ]
-        };
-        if (InspectionMasterDataValidator.TryValidate(inspection, out var normalizedInspection, out _))
-            await UpsertInspectionDefinitionAsync(normalizedInspection!, ct).ConfigureAwait(false);
-
-        var features = new[]
-        {
-            new FeatureDefinition { Code = "mold.temp.peak_c", Name = "峰值模温", PhaseCode = "press", Signal = "mold.temperature_c", Aggregation = "max", Unit = "Cel" },
-            new FeatureDefinition { Code = "mold.temp.uniformity_c", Name = "上下模温差", PhaseCode = "press", Signal = "mold.temperature_c", Aggregation = "range_across", Unit = "Cel" },
-            new FeatureDefinition { Code = "soak.dwell_above_tg_ms", Name = "均热驻留", PhaseCode = "soak", Signal = "mold.temperature_c", Aggregation = "dwell", Unit = "ms" },
-            new FeatureDefinition { Code = "press.force_peak_n", Name = "压制力峰值", PhaseCode = "press", Signal = "press.force_n", Aggregation = "max", Unit = "N" },
-            new FeatureDefinition { Code = "press.force_impulse", Name = "保压冲量", PhaseCode = "press", Signal = "press.force_n", Aggregation = "integral" },
-            new FeatureDefinition { Code = "press.rate_mm_per_s", Name = "压制速度", PhaseCode = "press", Signal = "press.position_mm", Aggregation = "slope", Unit = "mm/s" },
-            new FeatureDefinition { Code = "anneal.rate_c_per_min", Name = "退火速率", PhaseCode = "anneal", Signal = "mold.temperature_c", Aggregation = "slope", Unit = "Cel/min" },
-            new FeatureDefinition { Code = "anneal.rate_deviation", Name = "退火速率偏差", PhaseCode = "anneal", Signal = "mold.temperature_c", Aggregation = "slope_deviation", Unit = "Cel/min" },
-            new FeatureDefinition { Code = "cool.rate_c_per_min", Name = "冷却速率", PhaseCode = "cool", Signal = "mold.temperature_c", Aggregation = "slope", Unit = "Cel/min" },
-            new FeatureDefinition { Code = "atmosphere.o2_ppm_max", Name = "氧含量最大值", PhaseCode = "cycle", Signal = "atmosphere.o2_ppm", Aggregation = "max", Unit = "ppm" },
-            new FeatureDefinition { Code = "thermal.budget", Name = "等效热负荷", PhaseCode = "cycle", Signal = "mold.temperature_c", Aggregation = "integral" }
-        };
-        foreach (var feature in features)
-        {
-            if (InspectionMasterDataValidator.TryValidate(feature, out var normalizedFeature, out _))
-                await UpsertFeatureDefinitionAsync(normalizedFeature!, ct).ConfigureAwait(false);
-        }
     }
 
     private async Task UpsertSingleAsync<T>(

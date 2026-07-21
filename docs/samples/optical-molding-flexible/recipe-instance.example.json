@@ -1,0 +1,53 @@
+{
+  "recipeId": "RCP-LENS-A",
+  "version": 7,
+  "displayName": "LENS-A 标准模压配方 v7",
+  "productSeries": "LENS-A",
+  "profileRef": "optical-molding.demo.recipe@1",
+  "basedOn": {
+    "recipeId": "RCP-LENS-A",
+    "version": 6
+  },
+  "overrides": {
+    "upper_mold.set_temperature": 620.0,
+    "lower_mold.set_temperature": 615.0,
+    "work.set_pressure": 128.0
+  },
+  "resolvedParameters": {
+    "position.heat": 25.0,
+    "position.work": 12.5,
+    "position.host": 0.0,
+    "upper_mold.set_temperature": 620.0,
+    "lower_mold.set_temperature": 615.0,
+    "nitrogen.charge_temperature": 450.0,
+    "preheat.soak_delay": 60.0,
+    "press.differential_upper_limit": 5.0,
+    "upper_mold.temperature_upper_limit": 635.0,
+    "lower_mold.temperature_upper_limit": 630.0,
+    "press.upper_limit": 150.0,
+    "work.set_pressure": 128.0,
+    "upper_mold.pid.p": 18.0,
+    "upper_mold.pid.i": 2.5,
+    "upper_mold.pid.d": 0.8,
+    "lower_mold.pid.p": 17.5,
+    "lower_mold.pid.i": 2.4,
+    "lower_mold.pid.d": 0.7,
+    "upper_mold.core": "CORE-UP-A023",
+    "lower_mold.core": "CORE-LOW-A019",
+    "upper_mold.holder": "HOLDER-UP-006",
+    "lower_mold.holder": "HOLDER-LOW-004",
+    "glass.tg_temperature": 515.0,
+    "work.upper_mold.heating_delay": 5.0,
+    "work.lower_mold.heating_delay": 6.0,
+    "work.speed": 1.2,
+    "hold.upper_mold.temperature": 605.0,
+    "hold.lower_mold.temperature": 600.0,
+    "upper_mold.power_off_delay": 15.0,
+    "lower_mold.power_off_delay": 18.0,
+    "hold.pressure": 120.0,
+    "work.upper_mold.temperature": 610.0,
+    "work.lower_mold.temperature": 605.0,
+    "molding.temperature": 608.0,
+    "hold.speed": 0.35
+  }
+}

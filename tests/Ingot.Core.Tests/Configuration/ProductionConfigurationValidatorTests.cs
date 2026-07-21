@@ -23,8 +23,6 @@ public sealed class ProductionConfigurationValidatorTests
             ["ConnectionStrings:Events"] = "Host=postgres;Database=ingot",
             ["EventIngest:RequireToken"] = "true",
             ["EventIngest:EdgeTokens:EDGE-001"] = "edge-token-with-at-least-24-characters",
-            ["InspectionSubmission:RequireToken"] = "true",
-            ["InspectionSubmission:UserTokens:OPERATOR-001"] = "operator-token-with-at-least-24-characters",
             ["Chat:Enabled"] = "false",
             ["Cors:AllowedOrigins:0"] = "https://ingotstack.com"
         });
@@ -33,21 +31,17 @@ public sealed class ProductionConfigurationValidatorTests
     }
 
     [Fact]
-    public void Chat_AcceptsIndependentCredentialsAndDataScope()
+    public void Chat_AcceptsPlatformIdentityDataScope()
     {
         var configuration = Build(new Dictionary<string, string?>
         {
             ["ConnectionStrings:Events"] = "Host=postgres;Database=ingot",
             ["EventIngest:RequireToken"] = "true",
             ["EventIngest:EdgeTokens:EDGE-001"] = "edge-token-with-at-least-24-characters",
-            ["InspectionSubmission:RequireToken"] = "true",
-            ["InspectionSubmission:UserTokens:OPERATOR-001"] = "operator-token-with-at-least-24-characters",
             ["Chat:Enabled"] = "true",
             ["Chat:Provider"] = "OpenAI",
             ["Chat:FastModel"] = "chat-fast-model",
             ["Chat:ReasoningModel"] = "chat-reasoning-model",
-            ["Chat:RequireToken"] = "true",
-            ["Chat:UserTokens:analyst"] = "chat-token-with-at-least-24-characters",
             ["ChatDataAccess:Users:analyst:EdgeIds:0"] = "EDGE-001",
             ["OPENAI_API_KEY"] = "secret-store-value",
             ["Cors:AllowedOrigins:0"] = "https://ingotstack.com"
@@ -57,27 +51,23 @@ public sealed class ProductionConfigurationValidatorTests
     }
 
     [Fact]
-    public void Chat_RejectsUserWithoutDataScope()
+    public void Chat_RejectsMissingPlatformUserScopes()
     {
         var configuration = Build(new Dictionary<string, string?>
         {
             ["ConnectionStrings:Events"] = "Host=postgres;Database=ingot",
             ["EventIngest:RequireToken"] = "true",
             ["EventIngest:EdgeTokens:EDGE-001"] = "edge-token-with-at-least-24-characters",
-            ["InspectionSubmission:RequireToken"] = "true",
-            ["InspectionSubmission:UserTokens:OPERATOR-001"] = "operator-token-with-at-least-24-characters",
             ["Chat:Enabled"] = "true",
             ["Chat:Provider"] = "OpenAI",
             ["Chat:FastModel"] = "chat-fast-model",
             ["Chat:ReasoningModel"] = "chat-reasoning-model",
-            ["Chat:RequireToken"] = "true",
-            ["Chat:UserTokens:analyst"] = "chat-token-with-at-least-24-characters",
             ["OPENAI_API_KEY"] = "secret-store-value",
             ["Cors:AllowedOrigins:0"] = "https://ingotstack.com"
         });
 
         var error = Assert.Throws<InvalidOperationException>(() => PlatformValidator.Validate(configuration));
-        Assert.Contains("ChatDataAccess:Users:analyst is required", error.Message, StringComparison.Ordinal);
+        Assert.Contains("ChatDataAccess:Users must contain at least one platform user scope", error.Message, StringComparison.Ordinal);
     }
 
     [Fact]

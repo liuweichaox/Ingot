@@ -1,0 +1,31 @@
+{
+  "recordId": "019c8f70-5e00-7000-8000-000000000001",
+  "workpieceId": "LENS-A-20260721-000001",
+  "operationRunId": "CYCLE-20260721-000001",
+  "definitionCode": "optical-appearance-machine",
+  "definitionVersion": 1,
+  "measuredAt": "2026-07-21T08:10:20Z",
+  "recordedAt": "2026-07-21T08:10:21Z",
+  "outcome": "PASS",
+  "submittedBy": "vision-station-03",
+  "instrument": {
+    "instrumentId": "VISION-03",
+    "model": "AOI-DEMO-01",
+    "calibrationRef": "CAL-VISION-2026-07"
+  },
+  "measurements": [
+    { "characteristicCode": "scratch_count", "outcome": "PASS", "numericValue": 0, "unit": "1", "upperLimit": 0 },
+    { "characteristicCode": "edge_chip_area", "outcome": "PASS", "numericValue": 0.002, "unit": "mm2", "upperLimit": 0.01 }
+  ],
+  "attachments": [
+    {
+      "attachmentId": "019c8f70-5e00-7000-8000-000000000002",
+      "storageRef": "s3://ingot-inspections-retained/LENS-A/2026/07/21/CYCLE-20260721-000001/original/top-0001.tiff",
+      "sha256": "f51d0f7d36a84a97a321bda32f3e601bd1bf4d9fc25ce6ea8c13f9ec1010b46b",
+      "mediaType": "image/tiff",
+      "fileName": "top-0001.tiff",
+      "sizeBytes": 18432000
+    }
+  ],
+  "notes": "必须保存相机原始图；缩略图和标注图属于派生附件，不能替代原图。"
+}

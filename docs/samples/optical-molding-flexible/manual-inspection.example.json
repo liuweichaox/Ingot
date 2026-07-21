@@ -1,0 +1,23 @@
+{
+  "recordId": "019c8f70-5e00-7000-8000-000000000003",
+  "workpieceId": "LENS-A-20260721-000001",
+  "operationRunId": "CYCLE-20260721-000001",
+  "definitionCode": "optical-final-manual",
+  "definitionVersion": 1,
+  "measuredAt": "2026-07-21T08:14:00Z",
+  "recordedAt": "2026-07-21T08:14:08Z",
+  "outcome": "PASS",
+  "submittedBy": "operator/QC-017",
+  "instrument": {
+    "instrumentId": "INTERFEROMETER-02",
+    "model": "DEMO-FIZEAU",
+    "calibrationRef": "CAL-INT-2026-Q3",
+    "calibrationValidUntil": "2026-09-30T23:59:59Z"
+  },
+  "measurements": [
+    { "characteristicCode": "surface_fringe", "outcome": "PASS", "numericValue": 0.18, "unit": "1", "upperLimit": 0.25 },
+    { "characteristicCode": "visual_appearance", "outcome": "PASS", "textValue": "无可见裂纹、缺口和异物" }
+  ],
+  "attachments": [],
+  "notes": "人工终检；只表示检测结果，不等同于 QMS 放行。"
+}

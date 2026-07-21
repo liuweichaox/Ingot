@@ -34,8 +34,6 @@ services:
       ConnectionStrings__Events: Host=postgres;Port=5432;Database=ingot;Username=ingot;Password=${INGOT_POSTGRES_PASSWORD:?INGOT_POSTGRES_PASSWORD is required}
       EventIngest__RequireToken: "true"
       EventIngest__EdgeTokens__EDGE-001: ${INGOT_EDGE_TOKEN:?INGOT_EDGE_TOKEN is required}
-      InspectionSubmission__RequireToken: "true"
-      InspectionSubmission__UserTokens__OPERATOR-001: ${INGOT_OPERATOR_TOKEN:?INGOT_OPERATOR_TOKEN is required}
       Chat__Enabled: ${INGOT_CHAT_ENABLED:-false}
       Chat__Provider: ${INGOT_CHAT_PROVIDER:-Deterministic}
       Chat__FastModel: ${INGOT_CHAT_FAST_MODEL:-deterministic-v1}
@@ -45,8 +43,6 @@ services:
       Chat__MaxRunSeconds: ${INGOT_CHAT_MAX_RUN_SECONDS:-60}
       Chat__MaxDiscussionRounds: ${INGOT_CHAT_MAX_DISCUSSION_ROUNDS:-3}
       Chat__MaxDiscussionTurns: ${INGOT_CHAT_MAX_DISCUSSION_TURNS:-9}
-      Chat__RequireToken: "true"
-      Chat__UserTokens__operator: ${INGOT_CHAT_OPERATOR_TOKEN:-}
       ChatDataAccess__Users__operator__AllowAll: ${INGOT_CHAT_OPERATOR_ALLOW_ALL:-true}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       Cors__AllowedOrigins__0: http://localhost:3000

@@ -16,7 +16,7 @@ Chat 可以查询已保存的生产数据、检查数据完整性、返回周期
 
 ## 如何在生产环境启用 Chat？
 
-默认 Compose 保持 Chat 关闭。启用时同时设置 `INGOT_CHAT_ENABLED=true`、`INGOT_CHAT_PROVIDER=OpenAI`、Fast/Reasoning 模型、`OPENAI_API_KEY`、`INGOT_CHAT_OPERATOR_TOKEN` 和 `INGOT_CHAT_OPERATOR_ALLOW_ALL`。Platform Web 与 Chat API 使用用户 `operator` 和 Chat 用户令牌。完整配置见[配置](tutorial-configuration.md)。
+默认 Compose 保持 Chat 关闭。启用时同时设置 `INGOT_CHAT_ENABLED=true`、`INGOT_CHAT_PROVIDER=OpenAI`、Fast/Reasoning 模型、`OPENAI_API_KEY` 和 `INGOT_CHAT_OPERATOR_ALLOW_ALL`。开发环境使用服务端本地平台身份 `operator`；生产环境必须接入统一认证。完整配置见[配置](tutorial-configuration.md)。
 
 ## Chat 能确认根因吗？
 

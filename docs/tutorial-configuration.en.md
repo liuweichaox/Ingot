@@ -16,24 +16,14 @@ Platform uses environment variables and protected configuration storage. Never c
       "EDGE-001": "<secret>"
     }
   },
-  "InspectionSubmission": {
-    "RequireToken": true,
-    "UserTokens": {
-      "OPERATOR-001": "<strong-secret>"
-    }
-  },
   "Cors": {
     "AllowedOrigins": ["https://platform.example.com"]
   },
   "Chat": {
     "Enabled": true,
-    "RequireToken": true,
     "Provider": "OpenAI",
     "FastModel": "<fast-model>",
     "ReasoningModel": "<reasoning-model>",
-    "UserTokens": {
-      "operator": "<strong-secret>"
-    },
     "MaxToolCalls": 8,
     "MaxRunSeconds": 60
   }
@@ -54,7 +44,7 @@ Every `EventIngest:EdgeTokens` key must match the batch request `edgeId`. Give e
 }
 ```
 
-Chat registers only `check_data_quality` and `get_cycle_trace`. Every user needs an explicit record-data scope. The production Compose example gives `operator` `AllowAll=true`; restricted deployments can list explicit `EdgeIds` for an user in protected configuration.
+Chat registers only `check_data_quality` and `get_cycle_trace`. Every platform-authenticated user needs an explicit record-data scope. Chat has no separate username or password; production establishes `HttpContext.User` through platform authentication middleware. The production Compose example gives `operator` `AllowAll=true`; restricted deployments can list explicit `EdgeIds` for a user in protected configuration.
 
 ## Environment variables
 
@@ -62,16 +52,12 @@ Chat registers only `check_data_quality` and `get_cycle_trace`. Every user needs
 ConnectionStrings__Events='Host=postgres;Database=ingot;Username=ingot;Password=<secret>'
 EventIngest__RequireToken=true
 EventIngest__EdgeTokens__EDGE-001='<secret>'
-InspectionSubmission__RequireToken=true
-InspectionSubmission__UserTokens__OPERATOR-001='<strong-secret>'
 Cors__AllowedOrigins__0='https://platform.example.com'
 Chat__Enabled=true
-Chat__RequireToken=true
 Chat__Provider=OpenAI
 Chat__FastModel='<fast-model>'
 Chat__ReasoningModel='<reasoning-model>'
 OPENAI_API_KEY='<secret>'
-Chat__UserTokens__operator='<strong-secret>'
 ChatDataAccess__Users__operator__AllowAll=true
 ```
 
@@ -83,11 +69,10 @@ INGOT_CHAT_PROVIDER=OpenAI
 INGOT_CHAT_FAST_MODEL='<fast-model>'
 INGOT_CHAT_REASONING_MODEL='<reasoning-model>'
 OPENAI_API_KEY='<secret>'
-INGOT_CHAT_OPERATOR_TOKEN='<strong-secret>'
 INGOT_CHAT_OPERATOR_ALLOW_ALL=true
 ```
 
-The production validator requires event- and inspection-submission tokens, a CORS origin, `OpenAI` as the Chat provider, both Fast and Reasoning models, `OPENAI_API_KEY`, a Chat user token, and a data scope for every user. Model keys are read only from a secret store or environment variables. Logs do not record complete questions, answers, or sensitive tool parameters by default.
+The production validator requires an event-ingestion token, a CORS origin, `OpenAI` as the Chat provider, both Fast and Reasoning models, `OPENAI_API_KEY`, and at least one platform-user data scope. Inspection submission, visual review, and original-image access use the platform identity and roles directly; there is no inspection-specific username or access token. Model keys are read only from a secret store or environment variables. Logs do not record complete questions, answers, or sensitive tool parameters by default.
 
 ## Runtime limits
 

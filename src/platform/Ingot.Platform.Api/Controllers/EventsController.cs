@@ -144,7 +144,7 @@ public sealed class EventsController(
     [HttpGet("/api/v1/cycles/{correlationId}")]
     public async Task<IActionResult> GetCycle(string correlationId, CancellationToken ct)
     {
-        var correlated = await store.QueryAsync(
+        var correlated = await QueryAllAsync(
             BuildQuery(null, null, null, null, correlationId, null, null, null, 500),
             ct).ConfigureAwait(false);
         var pair = correlated
@@ -164,7 +164,7 @@ public sealed class EventsController(
             .Select(static item => (DateTimeOffset?)item.Event.OccurredAt)
             .LastOrDefault();
         var windowEnd = completedAt ?? pair.Max(static item => item.Event.OccurredAt);
-        var sameSubjectWindow = await store.QueryAsync(
+        var sameSubjectWindow = await QueryAllAsync(
                 BuildQuery(
                     first.EdgeId,
                     null,
@@ -196,6 +196,36 @@ public sealed class EventsController(
                 : (double?)null,
             events = ordered
         });
+    }
+
+    private async Task<IReadOnlyList<PlatformProductionEvent>> QueryAllAsync(
+        PlatformEventQuery query,
+        CancellationToken ct)
+    {
+        const int pageSize = 500;
+        var cursor = query.AfterIngestId ?? 0;
+        var result = new List<PlatformProductionEvent>();
+
+        while (true)
+        {
+            var page = await store.QueryAsync(
+                    query with { AfterIngestId = cursor, Limit = pageSize },
+                    ct)
+                .ConfigureAwait(false);
+            if (page.Count == 0)
+                break;
+
+            var nextCursor = page.Max(static item => item.IngestId);
+            if (nextCursor <= cursor)
+                throw new InvalidOperationException("完整周期查询的摄入游标没有前进。");
+
+            result.AddRange(page);
+            cursor = nextCursor;
+            if (page.Count < pageSize)
+                break;
+        }
+
+        return result;
     }
 
     private PlatformEventQuery BuildQuery(

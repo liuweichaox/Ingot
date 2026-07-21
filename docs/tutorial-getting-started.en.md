@@ -73,7 +73,7 @@ curl -X POST http://localhost:8000/api/v1/events:batch \
 
 ## 4. Enable Chat in production
 
-The default Compose stack keeps Chat disabled. The following configuration enables OpenAI, user `operator`, and full record access:
+The default Compose stack keeps Chat disabled. The following configuration enables OpenAI, the local platform identity `operator`, and full record access:
 
 ```bash
 export INGOT_CHAT_ENABLED=true
@@ -81,13 +81,12 @@ export INGOT_CHAT_PROVIDER=OpenAI
 export INGOT_CHAT_FAST_MODEL="<fast-model>"
 export INGOT_CHAT_REASONING_MODEL="<reasoning-model>"
 export OPENAI_API_KEY="<secret>"
-export INGOT_CHAT_OPERATOR_TOKEN="$(openssl rand -hex 24)"
 export INGOT_CHAT_OPERATOR_ALLOW_ALL=true
 
 docker compose -f docker-compose.app.yml up -d --build
 ```
 
-For production, replace broad access with the actual data scope required by each user. Platform Web and the Chat API use `operator` with `INGOT_CHAT_OPERATOR_TOKEN`.
+Production must integrate unified authentication and replace broad access with the actual data scope required by each platform user. Platform Web and the Chat API do not use a separate username or password.
 
 ## 5. Query events and use Chat
 

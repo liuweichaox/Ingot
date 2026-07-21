@@ -1,4 +1,4 @@
-using Ingot.Platform.Api.Inspections;
+using Ingot.Platform.Api.Agents;
 using Ingot.Platform.Infrastructure.Inspections;
 using Ingot.Contracts.Inspections;
 using Microsoft.AspNetCore.Mvc;
@@ -10,15 +10,39 @@ namespace Ingot.Platform.Api.Controllers;
 public sealed class InspectionRecordsController(
     IInspectionRecordStore store,
     IInspectionAttachmentStore attachmentsStore,
-    InspectionUserTokenValidator tokenValidator) : ControllerBase
+    IInspectionMasterDataStore masterData,
+    IInspectionWorkflowService workflow,
+    PlatformUserResolver userResolver) : ControllerBase
 {
     [HttpPost]
     public async Task<IActionResult> Create(
         [FromBody] CreateInspectionRecordRequest? request,
         CancellationToken ct)
     {
-        if (!InspectionRecordValidator.TryValidate(request, out var normalized, out var error))
+        var identity = userResolver.ResolveIdentity(User);
+        if (identity is null)
+            return Unauthorized(new { error = "需要平台统一认证。" });
+        if (!identity.HasAnyRole(PlatformRoles.QualityInspector, PlatformRoles.QualityReviewer, PlatformRoles.PlatformAdministrator))
+            return Forbid();
+        var attributed = request is null ? null : request with { SubmittedBy = identity.UserId };
+        if (!InspectionRecordValidator.TryValidate(attributed, out var normalized, out var error))
             return BadRequest(new { error });
+        var definition = await masterData.GetInspectionDefinitionAsync(
+            normalized!.DefinitionCode,
+            normalized.DefinitionVersion,
+            ct).ConfigureAwait(false);
+        if (definition is null)
+            return BadRequest(new { error = $"检测定义不存在：{normalized.DefinitionCode} v{normalized.DefinitionVersion}。" });
+        var task = await workflow.GetTaskAsync(normalized.OperationRunId, ct).ConfigureAwait(false);
+        if (task is null)
+            return BadRequest(new { error = "生产周期没有匹配的已发布质量方案。" });
+        var planItem = task.RequiredInspections.FirstOrDefault(item =>
+            item.DefinitionCode == normalized.DefinitionCode &&
+            item.DefinitionVersion == normalized.DefinitionVersion);
+        if (planItem is null)
+            return BadRequest(new { error = "当前质量方案不包含该检测定义版本。" });
+        if (planItem.RequiresAttachment && normalized.Attachments.Count == 0)
+            return BadRequest(new { error = "当前质量方案要求上传原始附件。" });
         foreach (var attachments in normalized!.Attachments)
         {
             var stored = await attachmentsStore.GetAsync(attachments.AttachmentId, ct).ConfigureAwait(false);
@@ -31,16 +55,9 @@ public sealed class InspectionRecordsController(
                 return BadRequest(new { error = $"AttachmentId 元数据与已上传附件不一致: {attachments.AttachmentId}" });
             }
         }
-        if (!tokenValidator.IsAuthorized(
-                normalized.SubmittedBy,
-                Request.Headers.Authorization.FirstOrDefault()))
-        {
-            return Unauthorized(new { error = "提交者 token 无效。" });
-        }
-
         var result = await store.CreateAsync(
             normalized,
-            submitterVerified: tokenValidator.RequiresToken,
+            submitterVerified: true,
             ct).ConfigureAwait(false);
         if (result.PayloadConflict)
         {
@@ -59,6 +76,11 @@ public sealed class InspectionRecordsController(
     [HttpGet("{recordId:guid}")]
     public async Task<IActionResult> Get(Guid recordId, CancellationToken ct)
     {
+        var identity = userResolver.ResolveIdentity(User);
+        if (identity is null)
+            return Unauthorized(new { error = "需要平台统一认证。" });
+        if (!identity.HasAnyRole(PlatformRoles.QualityRead))
+            return Forbid();
         var record = await store.GetAsync(recordId, ct).ConfigureAwait(false);
         return record is null ? NotFound() : Ok(record);
     }
@@ -74,6 +96,11 @@ public sealed class InspectionRecordsController(
         [FromQuery] int limit = 100,
         CancellationToken ct = default)
     {
+        var identity = userResolver.ResolveIdentity(User);
+        if (identity is null)
+            return Unauthorized(new { error = "需要平台统一认证。" });
+        if (!identity.HasAnyRole(PlatformRoles.QualityRead))
+            return Forbid();
         var query = new InspectionRecordQuery
         {
             WorkpieceId = workpieceId?.Trim(),

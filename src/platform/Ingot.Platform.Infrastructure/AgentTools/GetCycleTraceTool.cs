@@ -32,33 +32,24 @@ public sealed class GetCycleTraceTool(IChatEventReader events) : IAnalysisTool
             string.IsNullOrWhiteSpace(correlationId))
             throw new ArgumentException("请提供生产周期号。", nameof(call));
         correlationId = correlationId.Trim();
-        var rows = await events.QueryAsync(
+        var rows = await events.QueryAllAsync(
             context.UserId,
-            new PlatformEventQuery { CorrelationId = correlationId, Limit = 500 }, ct)
+            new PlatformEventQuery { CorrelationId = correlationId }, ct)
             .ConfigureAwait(false);
         var ordered = rows.OrderBy(static row => row.Event.OccurredAt)
             .ThenBy(static row => row.IngestId)
             .ToArray();
-        var relatedRecords = ordered.Select(row => new RelatedRecordRef
-        {
-            Kind = "production-event",
-            Id = row.Event.EventId,
-            Label = $"{row.Event.EventType} · {row.Event.OccurredAt:O}",
-            Url = $"/api/v1/events?correlationId={Uri.EscapeDataString(correlationId)}&limit=500"
-        }).ToArray();
-        if (ordered.Length == 0)
-        {
-            relatedRecords =
-            [
-                new RelatedRecordRef
-                {
-                    Kind = "event-query",
-                    Id = $"correlation:{correlationId}",
-                    Label = $"周期查询 {correlationId}",
-                    Url = $"/api/v1/events?correlationId={Uri.EscapeDataString(correlationId)}&limit=500"
-                }
-            ];
-        }
+        var cycleUrl = $"/api/v1/cycles/{Uri.EscapeDataString(correlationId)}";
+        RelatedRecordRef[] relatedRecords =
+        [
+            new RelatedRecordRef
+            {
+                Kind = "cycle-query",
+                Id = $"correlation:{correlationId}",
+                Label = $"完整周期 {correlationId}",
+                Url = cycleUrl
+            }
+        ];
 
         var startedAt = ordered.FirstOrDefault(row =>
             row.Event.EventType.EndsWith(".started", StringComparison.Ordinal))?.Event.OccurredAt;
@@ -66,7 +57,6 @@ public sealed class GetCycleTraceTool(IChatEventReader events) : IAnalysisTool
             row.Event.EventType.EndsWith(".completed", StringComparison.Ordinal) ||
             row.Event.EventType.EndsWith(".cleared", StringComparison.Ordinal) ||
             row.Event.EventType.EndsWith(".exited", StringComparison.Ordinal))?.Event.OccurredAt;
-        var reachedResultLimit = ordered.Length == 500;
         var durationMs = startedAt is { } start && completedAt is { } completed && completed >= start
             ? (completed - start).TotalMilliseconds
             : (double?)null;
@@ -74,8 +64,6 @@ public sealed class GetCycleTraceTool(IChatEventReader events) : IAnalysisTool
         var limitations = new List<string>();
         if (ordered.Length == 0)
             limitations.Add("当前范围没有生产记录，无法还原该生产周期。");
-        if (reachedResultLimit)
-            limitations.Add("该周期超过 500 条生产记录，当前结果可能不完整。");
         if (ordered.Length > 0 && !startedAt.HasValue)
             limitations.Add("没有找到加工开始记录，无法确认周期起点和持续时间。");
         if (ordered.Length > 0 && !completedAt.HasValue)
@@ -98,7 +86,12 @@ public sealed class GetCycleTraceTool(IChatEventReader events) : IAnalysisTool
                 startedAt,
                 completedAt,
                 durationMs,
-                events = ordered.Select(static row => new
+                eventCount = ordered.Length,
+                eventTypes = ordered
+                    .GroupBy(static row => row.Event.EventType, StringComparer.Ordinal)
+                    .OrderBy(static group => group.Key, StringComparer.Ordinal)
+                    .Select(static group => new { eventType = group.Key, count = group.Count() }),
+                timeline = ordered.Where(static row => IsTimelineEvent(row.Event.EventType)).Select(static row => new
                 {
                     row.IngestId,
                     row.EdgeId,
@@ -110,11 +103,28 @@ public sealed class GetCycleTraceTool(IChatEventReader events) : IAnalysisTool
                     row.Event.Data
                 })
             }),
+            Details =
+            [
+                new ResultDetailLink
+                {
+                    Kind = "cycle-query",
+                    Label = "完整周期生产记录",
+                    Url = cycleUrl
+                }
+            ],
             RelatedRecords = relatedRecords,
             Limitations = limitations,
-            Outcome = ordered.Length > 0 && !reachedResultLimit && validDuration
+            Outcome = ordered.Length > 0 && validDuration
                 ? AnalysisToolOutcomes.Sufficient
                 : AnalysisToolOutcomes.InsufficientData
         };
     }
+
+    private static bool IsTimelineEvent(string eventType)
+        => eventType.EndsWith(".started", StringComparison.Ordinal) ||
+           eventType.EndsWith(".completed", StringComparison.Ordinal) ||
+           eventType.EndsWith(".cleared", StringComparison.Ordinal) ||
+           eventType.EndsWith(".exited", StringComparison.Ordinal) ||
+           eventType.StartsWith("alarm.", StringComparison.Ordinal) ||
+           eventType.StartsWith("diagnostic.", StringComparison.Ordinal);
 }

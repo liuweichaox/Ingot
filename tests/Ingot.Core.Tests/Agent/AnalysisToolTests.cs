@@ -100,7 +100,7 @@ public sealed class AnalysisToolTests
     }
 
     [Fact]
-    public async Task GetCycleTrace_RejectsMissingStartAndTruncatedTimeline()
+    public async Task GetCycleTrace_RejectsMissingStartAndReadsCompleteLargeTimeline()
     {
         var completedOnly = new GetCycleTraceTool(new StubEventReader(
         [
@@ -115,22 +115,32 @@ public sealed class AnalysisToolTests
             limitation => limitation.Contains("加工开始记录", StringComparison.Ordinal));
 
         var start = DateTimeOffset.Parse("2026-07-18T10:00:00Z");
-        var rows = Enumerable.Range(1, 500)
+        var rows = Enumerable.Range(1, 602)
             .Select(index => Row(
                 index,
                 index,
-                index == 1 ? "cycle.started" : index == 500 ? "cycle.completed" : "cycle.observed",
+                index == 1 ? "cycle.started" : index == 602 ? "cycle.completed" : "process.sample",
                 start.AddSeconds(index),
                 "cycle-2"))
             .ToArray();
-        var truncatedTool = new GetCycleTraceTool(new StubEventReader(rows));
+        var completeTool = new GetCycleTraceTool(new StubEventReader(rows));
 
-        var truncated = await truncatedTool.ExecuteAsync(
-            CycleCall(truncatedTool, "cycle-2"),
+        var complete = await completeTool.ExecuteAsync(
+            CycleCall(completeTool, "cycle-2"),
             ExecutionContext);
-        Assert.Equal(AnalysisToolOutcomes.InsufficientData, truncated.Outcome);
-        Assert.Contains(truncated.Limitations,
+        Assert.Equal(AnalysisToolOutcomes.Sufficient, complete.Outcome);
+        Assert.Equal(602, complete.Data.GetProperty("eventCount").GetInt32());
+        Assert.Contains(
+            complete.Data.GetProperty("eventTypes").EnumerateArray(),
+            item => item.GetProperty("eventType").GetString() == "process.sample" &&
+                    item.GetProperty("count").GetInt32() == 600);
+        Assert.DoesNotContain(complete.Limitations,
             limitation => limitation.Contains("500", StringComparison.Ordinal));
+        Assert.True(new DefaultAnalysisResultValidator().TryVerify(
+            [complete],
+            out _,
+            out var validationError),
+            validationError);
     }
 
     private static AnalysisToolCall CycleCall(GetCycleTraceTool tool, string correlationId) => new()

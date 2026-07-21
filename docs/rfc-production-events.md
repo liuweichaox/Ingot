@@ -105,8 +105,8 @@ docker compose -f docker-compose.app.yml --profile connector-host up -d connecto
 
 - `GET /api/v1/events`：按 Edge、事件类型、对象、关联信息、`correlationId` 和时间查询；
 - `GET /api/v1/events/stream`：生产事件 SSE；
-- `GET /api/v1/cycles/{correlationId}`：同一生产周期号 的事件链；
-- `get_cycle_trace`：按发生时间和中心摄入顺序生成带相关记录的周期时间线；
+- `GET /api/v1/cycles/{correlationId}`：同一生产周期号的完整事件链；服务端内部按 500 条分页读取，不以单页上限截断周期；
+- `get_cycle_trace`：完整读取周期参与计算，按发生时间和中心摄入顺序生成有界时间线摘要，并提供完整周期记录链接；
 - `check_data_quality`：检查周期配对、生产信息为空、序号间断和最新事件时间。
 
 检测记录使用独立的 `InspectionRecord` 契约和 API。当前周期工具基于生产事件构建周期事件链。

@@ -92,8 +92,8 @@ docker compose -f docker-compose.app.yml --profile connector-host up -d connecto
 
 - `GET /api/v1/events`: filter by Edge, event type, subject, context, `correlationId`, and time;
 - `GET /api/v1/events/stream`: production-event SSE;
-- `GET /api/v1/cycles/{correlationId}`: the event chain for one correlation ID;
-- `get_cycle_trace`: a cycle timeline with related records, ordered by occurrence time and Platform ingest order;
+- `GET /api/v1/cycles/{correlationId}`: the complete event chain for one correlation ID; the server reads 500-row pages internally and does not truncate the cycle at one page;
+- `get_cycle_trace`: reads the complete cycle for deterministic computation, returns a bounded timeline summary ordered by occurrence time and Platform ingest order, and links to the complete cycle record;
 - `check_data_quality`: cycle pairing, empty context, sequence gaps, and latest-event-time checks.
 
 Inspection records use a separate `InspectionRecord` contract and API. Current cycle tools build cycle record chains from production events.

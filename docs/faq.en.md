@@ -16,7 +16,7 @@ Chat queries recorded production records, checks data completeness, returns cycl
 
 ## How do I enable Chat in production?
 
-Default Compose keeps Chat disabled. Enable it with `INGOT_CHAT_ENABLED=true`, `INGOT_CHAT_PROVIDER=OpenAI`, Fast and Reasoning models, `OPENAI_API_KEY`, `INGOT_CHAT_OPERATOR_TOKEN`, and `INGOT_CHAT_OPERATOR_ALLOW_ALL`. Platform Web and the Chat API use user `operator` with the Chat user token. See [configuration](tutorial-configuration.en.md) for the complete configuration.
+Default Compose keeps Chat disabled. Enable it with `INGOT_CHAT_ENABLED=true`, `INGOT_CHAT_PROVIDER=OpenAI`, Fast and Reasoning models, `OPENAI_API_KEY`, and `INGOT_CHAT_OPERATOR_ALLOW_ALL`. Development uses the server-owned local platform identity `operator`; production must integrate unified authentication. See [configuration](tutorial-configuration.en.md) for the complete configuration.
 
 ## Can Chat confirm root cause?
 

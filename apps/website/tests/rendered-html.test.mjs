@@ -46,17 +46,19 @@ async function render(pathname = "/") {
 
 after(() => serverProcess?.kill("SIGTERM"));
 
-const oldDesktopTerms = new RegExp([
+// Terms from earlier, retired product framings that must never resurface.
+const retiredTerms = new RegExp([
   ["Ingot", "Agent"].join("\\s+"),
   ["desktop", "Agent"].join("\\s+"),
-  ["code", "generation"].join("[-\\s]?"),
   "awaiting-package-approval",
   "connector-workspaces",
   "Tauri\\s+2",
   "SHA256SUMS",
+  "PRODUCTION INTELLIGENCE",
+  "FactoryScene3D",
 ].join("|"), "i");
 
-test("renders the Chinese product site around Ingot, Ingot Chat, and combined analysis", async () => {
+test("renders the Chinese root around the root-cause positioning and trust guarantees", async () => {
   const response = await render();
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
@@ -66,52 +68,46 @@ test("renders the Chinese product site around Ingot, Ingot Chat, and combined an
   assert.equal(response.headers.get("permissions-policy"), "camera=(), microphone=(), geolocation=()");
 
   const html = await response.text();
-  assert.match(html, /<title>Ingot — 查清生产过程，分析参数与质量<\/title>/i);
-  assert.match(html, /INGOT · PRODUCTION INTELLIGENCE/);
-  assert.match(html, /把生产过程查清楚/);
-  assert.match(html, /综合分析/);
-  assert.match(html, /综合分析与原始记录/);
-  assert.match(html, /分析结果可以回到原始记录/);
+  assert.match(html, /<title>Ingot — 工艺追因引擎 · 可核对、不编造数字的生产分析<\/title>/i);
+  assert.match(html, /Ingot · 工艺追因引擎/);
+  assert.match(html, /和上批不一样/);
+  assert.match(html, /永不编造数字/);
+  assert.match(html, /永不触碰设备/);
+  assert.match(html, /工厂对 AI 的两个恐惧/);
+  assert.match(html, /良率为什么突然下滑/);
+  assert.match(html, /ProductionEvent/);
   assert.match(html, /https:\/\/docs\.ingotstack\.com\/zh\/rfc-production-events/);
-  assert.match(html, /cycle\.completed/);
   assert.match(html, /https:\/\/ingotstack\.com\/og\.png/i);
-  assert.doesNotMatch(html, oldDesktopTerms);
+  assert.doesNotMatch(html, retiredTerms);
   assert.doesNotMatch(html, /untrusted\.invalid|codex-preview|Your site is taking shape/i);
 });
 
-test("renders the stable English route with equivalent product scope", async () => {
+test("renders the stable English route with equivalent scope", async () => {
   const response = await render("/en/");
   assert.equal(response.status, 200);
   const html = await response.text();
-  assert.match(html, /<title>Ingot — understand production, process settings, and quality<\/title>/i);
-  assert.match(html, /INGOT · PRODUCTION INTELLIGENCE/);
-  assert.match(html, /Understand production runs/i);
-  assert.match(html, /Combined analysis with original records/i);
-  assert.match(html, /Open the original record behind each result/);
+  assert.match(html, /<title>Ingot — Process Root-Cause Engine · verifiable answers, no hallucinated numbers<\/title>/i);
+  assert.match(html, /Ingot · Process Root-Cause Engine/);
+  assert.match(html, /different from the last/i);
+  assert.match(html, /Never invents a number/i);
+  assert.match(html, /Why did yield suddenly drop/i);
   assert.match(html, /https:\/\/docs\.ingotstack\.com\/en\/rfc-production-events/);
   assert.match(html, /<html lang="en">/);
   assert.match(html, /rel="canonical" href="https:\/\/ingotstack\.com\/en\/"/i);
   assert.match(html, /hreflang="zh-CN"/i);
-  assert.doesNotMatch(html, oldDesktopTerms);
+  assert.doesNotMatch(html, retiredTerms);
 });
 
 test("keeps the public source aligned with the published boundaries", async () => {
-  const [pageSource, stageSource] = await Promise.all([
-    readFile(new URL("../app/IngotSite.tsx", import.meta.url), "utf8"),
-    readFile(new URL("../app/factoryStages.ts", import.meta.url), "utf8"),
-  ]);
+  const pageSource = await readFile(new URL("../app/IngotSite.tsx", import.meta.url), "utf8");
 
   assert.match(pageSource, /Ingot Chat/);
-  assert.match(pageSource, /综合分析/);
-  assert.match(pageSource, /Combined analysis/);
-  assert.match(pageSource, /工艺视角：检查过程变化/);
-  assert.match(pageSource, /Process view: review changes in the work/);
-  assert.match(pageSource, /只读取已有记录/);
+  assert.match(pageSource, /Number Grounding/);
+  assert.match(pageSource, /永不编造数字/);
+  assert.match(pageSource, /Never invents a number/);
   assert.match(pageSource, /check_data_quality/);
   assert.match(pageSource, /get_cycle_trace/);
-  assert.match(pageSource, /never changes equipment or production records/i);
-  assert.doesNotMatch(pageSource, oldDesktopTerms);
-  assert.match(stageSource, /cycle\.started/);
-  assert.match(stageSource, /cycle\.completed/);
-  assert.doesNotMatch(stageSource, /cycle\.aborted|inspection\.completed|x\.quality\./);
+  assert.match(pageSource, /永不写 PLC \/ CNC \/ 机器人/);
+  assert.match(pageSource, /it never writes to a PLC \/ CNC \/ robot/i);
+  assert.doesNotMatch(pageSource, retiredTerms);
 });

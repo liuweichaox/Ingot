@@ -11,7 +11,6 @@ public static class ProductionConfigurationValidator
             errors.Add("ConnectionStrings:Events is required.");
 
         RequireProtectedMap(configuration, "EventIngest", "EdgeTokens", errors);
-        RequireProtectedMap(configuration, "InspectionSubmission", "UserTokens", errors);
 
         var origins = configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
         if (origins.Length == 0 || origins.Any(static origin =>
@@ -23,7 +22,6 @@ public static class ProductionConfigurationValidator
 
         if (configuration.GetValue<bool>("Chat:Enabled"))
         {
-            RequireProtectedMap(configuration, "Chat", "UserTokens", errors);
             if (!string.Equals(configuration["Chat:Provider"], "OpenAI", StringComparison.OrdinalIgnoreCase))
                 errors.Add("Chat:Provider must be OpenAI when Chat is enabled in production.");
             RequireValue(configuration, "Chat:FastModel", errors);
@@ -66,20 +64,18 @@ public static class ProductionConfigurationValidator
     private static void RequireChatDataScopes(IConfiguration configuration, ICollection<string> errors)
     {
         var scopes = configuration.GetSection("ChatDataAccess:Users").GetChildren().ToArray();
-        foreach (var user in configuration.GetSection("Chat:UserTokens").GetChildren())
+        if (scopes.Length == 0)
         {
-            var scope = scopes.FirstOrDefault(candidate =>
-                string.Equals(candidate.Key, user.Key, StringComparison.OrdinalIgnoreCase));
-            if (scope is null)
-            {
-                errors.Add($"ChatDataAccess:Users:{user.Key} is required.");
-                continue;
-            }
+            errors.Add("ChatDataAccess:Users must contain at least one platform user scope.");
+            return;
+        }
 
+        foreach (var scope in scopes)
+        {
             var allowAll = scope.GetValue<bool>("AllowAll");
             var edgeIds = scope.GetSection("EdgeIds").Get<string[]>() ?? [];
             if (!allowAll && edgeIds.All(static edgeId => string.IsNullOrWhiteSpace(edgeId)))
-                errors.Add($"ChatDataAccess:Users:{user.Key} must allow all data or list at least one EdgeId.");
+                errors.Add($"ChatDataAccess:Users:{scope.Key} must allow all data or list at least one EdgeId.");
         }
     }
 

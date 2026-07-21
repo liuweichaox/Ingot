@@ -5,7 +5,6 @@ using Ingot.Agent.Providers;
 using Ingot.Platform.Api.Agents;
 using Ingot.Platform.Api.HealthChecks;
 using Ingot.Platform.Api.Events;
-using Ingot.Platform.Api.Inspections;
 using Ingot.Platform.Api.Configuration;
 using Ingot.Platform.Infrastructure;
 using Ingot.Platform.Infrastructure.HealthChecks;
@@ -23,6 +22,7 @@ builder.WebHost.UseUrls(urls);
 
 builder.Services.AddHttpClient();
 builder.Services.AddControllers();
+builder.Services.AddAuthentication();
 
 builder.Services.AddIngotPlatformInfrastructure(builder.Configuration);
 builder.Services.AddIngotAgentCore(builder.Configuration);
@@ -30,8 +30,7 @@ builder.Services.AddIngotAgentProviders(builder.Configuration);
 
 // 宿主职责：入站鉴权策略
 builder.Services.AddSingleton<EdgeTokenValidator>();
-builder.Services.AddSingleton<InspectionUserTokenValidator>();
-builder.Services.AddSingleton<ChatTokenValidator>();
+builder.Services.AddSingleton<PlatformUserResolver>();
 
 builder.Services.AddHealthChecks()
     .AddCheck<SqliteHealthCheck>("sqlite")
@@ -74,6 +73,7 @@ builder.Host.UseSerilog();
 var app = builder.Build();
 
 app.UseRouting();
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.UseCors("frontend");
@@ -103,7 +103,12 @@ app.MapGet("/", () => Results.Ok(new
         eventIngest = "/api/v1/events:batch",
         attachments = "/api/v1/inspection-attachments",
         inspectionDefinitions = "/api/v1/inspection-definitions",
+        inspectionPlans = "/api/v1/inspection-plans",
         inspectionRecords = "/api/v1/inspection-records",
+        inspectionTasks = "/api/v1/inspection-tasks",
+        inspectionReviews = "/api/v1/inspection-reviews",
+        cycles = "/api/v1/cycles",
+        cycleComparisons = "/api/v1/cycle-comparisons/{correlationId}",
         subscriptions = "/api/v1/subscriptions",
         chatRuns = "/api/v1/chat/runs",
         chatCapabilities = "/api/v1/chat/capabilities"
@@ -135,7 +140,12 @@ Log.Logger.Information("    > Event Stream:  {0}/api/v1/events/stream", baseAddr
 Log.Logger.Information("    > Event Ingest:  {0}/api/v1/events:batch", baseAddress);
 Log.Logger.Information("    > Attachments:      {0}/api/v1/inspection-attachments", baseAddress);
 Log.Logger.Information("    > Definitions:   {0}/api/v1/inspection-definitions", baseAddress);
+Log.Logger.Information("    > Quality Plans: {0}/api/v1/inspection-plans", baseAddress);
 Log.Logger.Information("    > Inspections:   {0}/api/v1/inspection-records", baseAddress);
+Log.Logger.Information("    > Quality Tasks: {0}/api/v1/inspection-tasks", baseAddress);
+Log.Logger.Information("    > Reviews:       {0}/api/v1/inspection-reviews", baseAddress);
+Log.Logger.Information("    > Cycles:        {0}/api/v1/cycles", baseAddress);
+Log.Logger.Information("    > Comparisons:   {0}/api/v1/cycle-comparisons/{{correlationId}}", baseAddress);
 Log.Logger.Information("    > Subscriptions: {0}/api/v1/subscriptions", baseAddress);
 Log.Logger.Information("    > Chat Runs:     {0}/api/v1/chat/runs", baseAddress);
 Log.Logger.Information("    > Chat Capabilities:{0}/api/v1/chat/capabilities", baseAddress);

@@ -151,6 +151,23 @@ public sealed class PostgresInspectionAttachmentStore : IInspectionAttachmentSto
     public async Task<bool> ExistsAsync(Guid attachmentId, CancellationToken ct = default)
         => await GetAsync(attachmentId, ct).ConfigureAwait(false) is not null;
 
+    public async Task<Stream?> OpenReadAsync(Guid attachmentId, CancellationToken ct = default)
+    {
+        var attachment = await GetAsync(attachmentId, ct).ConfigureAwait(false);
+        if (attachment is null)
+            return null;
+        var path = GetAttachmentPath(attachment.Sha256, attachment.FileName);
+        if (!File.Exists(path))
+            return null;
+        return new FileStream(
+            path,
+            FileMode.Open,
+            FileAccess.Read,
+            FileShare.Read,
+            bufferSize: 81920,
+            options: FileOptions.Asynchronous | FileOptions.SequentialScan);
+    }
+
     public async ValueTask DisposeAsync()
     {
         _initializeLock.Dispose();

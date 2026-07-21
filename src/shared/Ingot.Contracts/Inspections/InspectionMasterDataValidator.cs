@@ -80,6 +80,70 @@ public static partial class InspectionMasterDataValidator
         return Succeed(out error);
     }
 
+    public static bool TryValidate(InspectionPlan? value, out InspectionPlan? normalized, out string error)
+    {
+        normalized = null;
+        if (value is null)
+            return Fail("质量方案不能为空。", out error);
+        if (!TryId(value.PlanId, "PlanId", out var planId, out error))
+            return false;
+        if (value.Version <= 0)
+            return Fail("Version 必须大于 0。", out error);
+        var name = Normalize(value.Name);
+        if (name is null || name.Length > 200)
+            return Fail("Name 不能为空且最长 200 个字符。", out error);
+        var status = Normalize(value.Status)?.ToLowerInvariant() ?? InspectionPlanStatuses.Draft;
+        if (!InspectionPlanStatuses.IsValid(status))
+            return Fail("Status 只能是 draft、published 或 retired。", out error);
+        if (value.Items is null || value.Items.Count is 0 or > 100)
+            return Fail("Items 必须包含 1 到 100 项。", out error);
+        if (value.EffectiveFrom.HasValue && value.EffectiveTo.HasValue && value.EffectiveFrom >= value.EffectiveTo)
+            return Fail("EffectiveFrom 必须早于 EffectiveTo。", out error);
+        if (status == InspectionPlanStatuses.Retired && !value.EffectiveTo.HasValue)
+            return Fail("停用方案必须设置 EffectiveTo。", out error);
+
+        var items = new List<InspectionPlanItem>();
+        foreach (var item in value.Items)
+        {
+            if (item is null || !TryCode(item.DefinitionCode, "Item.DefinitionCode", out var definitionCode, out error))
+                return false;
+            if (item.DefinitionVersion <= 0)
+                return Fail("Item.DefinitionVersion 必须大于 0。", out error);
+            items.Add(item with
+            {
+                DefinitionCode = definitionCode!,
+                RequiresAttachment = item.RequiresAttachment || item.RequiresReview
+            });
+        }
+
+        if (items.Select(static item => (item.DefinitionCode, item.DefinitionVersion))
+            .Distinct().Count() != items.Count)
+        {
+            return Fail("Items 不能包含重复的检测定义版本。", out error);
+        }
+
+        var scope = value.Scope ?? new InspectionPlanScope();
+        normalized = value with
+        {
+            PlanId = planId!.ToLowerInvariant(),
+            Name = name,
+            Description = Normalize(value.Description),
+            Status = status,
+            Scope = scope with
+            {
+                ProductSeries = NormalizeSelector(scope.ProductSeries),
+                ProductCode = NormalizeSelector(scope.ProductCode),
+                RecipeId = NormalizeSelector(scope.RecipeId),
+                MachineId = NormalizeSelector(scope.MachineId)
+            },
+            Items = items.OrderBy(static item => item.Sequence)
+                .ThenBy(static item => item.DefinitionCode, StringComparer.Ordinal)
+                .ToArray(),
+            UpdatedAt = DateTimeOffset.UtcNow
+        };
+        return Succeed(out error);
+    }
+
     public static bool TryValidate(PhaseMapping? value, out PhaseMapping? normalized, out string error)
     {
         normalized = null;
@@ -153,6 +217,10 @@ public static partial class InspectionMasterDataValidator
             Aggregation = aggregation,
             BoundaryMode = boundaryMode,
             Unit = Normalize(value.Unit),
+            ProductSeries = NormalizeSelector(value.ProductSeries),
+            ProductCode = NormalizeSelector(value.ProductCode),
+            RecipeId = NormalizeSelector(value.RecipeId),
+            MachineId = NormalizeSelector(value.MachineId),
             UpdatedAt = DateTimeOffset.UtcNow
         };
         return Succeed(out error);
@@ -176,6 +244,9 @@ public static partial class InspectionMasterDataValidator
 
     private static string? Normalize(string? value)
         => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private static string? NormalizeSelector(string? value)
+        => Normalize(value)?.ToLowerInvariant();
 
     private static bool Succeed(out string error)
     {

@@ -1,0 +1,20 @@
+{
+  "mappingId": "optical-molding.demo.five-phases",
+  "version": 1,
+  "status": "draft",
+  "recipeTemplate": "optical-molding.demo.recipe@1",
+  "sourceContextKey": "recipe_step",
+  "boundarySemantics": "[startedAt, endedAt)",
+  "mappings": [
+    { "sourceStep": "10", "phaseCode": "preheat", "displayName": "预热", "exampleDurationSeconds": 90 },
+    { "sourceStep": "20", "phaseCode": "soak", "displayName": "均热保温", "exampleDurationSeconds": 150 },
+    { "sourceStep": "30", "phaseCode": "press", "displayName": "模压保压", "exampleDurationSeconds": 120 },
+    { "sourceStep": "40", "phaseCode": "anneal", "displayName": "退火", "exampleDurationSeconds": 120 },
+    { "sourceStep": "50", "phaseCode": "cool", "displayName": "冷却脱模", "exampleDurationSeconds": 120 }
+  ],
+  "notes": [
+    "sourceStep 10/20/30/40/50 仅是样例，投产前替换为控制器真实步序。",
+    "recipe_step 必须与 13 个传感器值在同一次 PLC 扫描中读取。",
+    "修改阶段映射只发布新版本，不改写原始 process.sample 事件。"
+  ]
+}

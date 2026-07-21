@@ -5,7 +5,7 @@
         <div class="card-header">
           <div>
             <el-icon><List /></el-icon>
-            <span class="title">生产记录</span>
+            <span class="title">事件查询</span>
           </div>
           <div class="actions">
             <el-tag :type="live ? 'success' : 'info'" effect="plain">
@@ -28,6 +28,9 @@
         </el-form-item>
         <el-form-item label="设备或工件">
           <el-input v-model="filters.subjectId" clearable placeholder="POL-03" style="width: 150px" />
+        </el-form-item>
+        <el-form-item label="生产周期号">
+          <el-input v-model="filters.correlationId" clearable placeholder="周期 ID" style="width: 190px" />
         </el-form-item>
         <el-form-item label="生产信息项">
           <el-input v-model="filters.contextKey" clearable placeholder="material_lot" style="width: 150px" />
@@ -110,17 +113,27 @@
         </el-timeline-item>
       </el-timeline>
       <el-empty v-else description="暂无该周期的生产记录" />
+      <template #footer>
+        <el-button @click="cycleVisible = false">关闭</el-button>
+        <el-button :disabled="!cycleContext" @click="openComparison">历史对比</el-button>
+        <el-button type="primary" :icon="DocumentChecked" :disabled="!cycleContext" @click="openInspection">
+          进入质量检验
+        </el-button>
+      </template>
     </el-dialog>
   </div>
 </template>
 
 <script setup>
 import { computed, onMounted, onUnmounted, reactive, ref } from "vue";
-import { List, Refresh, RefreshLeft, Search } from "@element-plus/icons-vue";
+import { useRoute, useRouter } from "vue-router";
+import { DocumentChecked, List, Refresh, RefreshLeft, Search } from "@element-plus/icons-vue";
 import { getJson } from "../api/http";
 import JsonPopover from "../components/JsonPopover.js";
 
 const edges = ref([]);
+const route = useRoute();
+const router = useRouter();
 const events = ref([]);
 const loading = ref(false);
 const error = ref("");
@@ -128,10 +141,12 @@ const live = ref(false);
 const stream = ref(null);
 const cycleVisible = ref(false);
 const cycleEvents = ref([]);
+const cycleContext = ref(null);
 const filters = reactive({
   edgeId: "",
   type: "",
   subjectId: "",
+  correlationId: String(route.query.cycleId || ""),
   contextKey: "",
   contextValue: "",
 });
@@ -148,6 +163,7 @@ const buildParams = () => {
   if (filters.edgeId) params.set("edgeId", filters.edgeId);
   if (filters.type) params.set("type", filters.type);
   if (filters.subjectId) params.set("subjectId", filters.subjectId);
+  if (filters.correlationId) params.set("correlationId", filters.correlationId);
   if (filters.contextKey && filters.contextValue) {
     params.set(`ctx.${filters.contextKey}`, filters.contextValue);
   }
@@ -159,9 +175,21 @@ const load = async () => {
   error.value = "";
   try {
     const params = buildParams();
-    params.set("limit", "500");
-    const result = await getJson(`/api/v1/events?${params}`);
-    events.value = result.data || [];
+    const allEvents = [];
+    let cursor = 0;
+    while (true) {
+      params.set("afterIngestId", String(cursor));
+      params.set("limit", "500");
+      const result = await getJson(`/api/v1/events?${params}`);
+      const page = result.data || [];
+      if (!page.length) break;
+      allEvents.push(...page);
+      const nextCursor = Math.max(...page.map((item) => Number(item.ingestId || 0)));
+      if (nextCursor <= cursor) throw new Error("生产记录查询游标没有前进。");
+      cursor = nextCursor;
+      if (page.length < 500) break;
+    }
+    events.value = allEvents.sort((left, right) => Number(right.ingestId) - Number(left.ingestId));
   } catch (e) {
     error.value = e?.message || String(e);
   } finally {
@@ -176,7 +204,7 @@ const startLive = () => {
   source.onmessage = (message) => {
     const item = JSON.parse(message.data);
     if (!events.value.some((existing) => existing.ingestId === item.ingestId)) {
-      events.value = [item, ...events.value].slice(0, 500);
+      events.value = [item, ...events.value];
     }
   };
   source.onerror = () => {
@@ -205,14 +233,33 @@ const applyFilters = async () => {
 };
 
 const resetFilters = async () => {
-  Object.assign(filters, { edgeId: "", type: "", subjectId: "", contextKey: "", contextValue: "" });
+  Object.assign(filters, { edgeId: "", type: "", subjectId: "", correlationId: "", contextKey: "", contextValue: "" });
   await applyFilters();
 };
 
 const openCycle = async (correlationId) => {
   const result = await getJson(`/api/v1/cycles/${encodeURIComponent(correlationId)}`);
   cycleEvents.value = result.events || [];
+  const workpieceId = cycleEvents.value
+    .map((item) => item.event?.context?.workpiece_id)
+    .find(Boolean) || "";
+  cycleContext.value = {
+    operationRunId: result.correlationId,
+    workpieceId,
+  };
   cycleVisible.value = true;
+};
+
+const openComparison = async () => {
+  if (!cycleContext.value) return;
+  cycleVisible.value = false;
+  await router.push({ path: "/comparisons", query: { cycleId: cycleContext.value.operationRunId } });
+};
+
+const openInspection = async () => {
+  if (!cycleContext.value) return;
+  cycleVisible.value = false;
+  await router.push({ path: "/inspections", query: cycleContext.value });
 };
 
 const formatTime = (value) => (value ? new Date(value).toLocaleString("zh-CN") : "-");

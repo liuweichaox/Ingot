@@ -8,6 +8,21 @@ const routes = [
     component: () => import("../views/EdgesView.vue"),
   },
   {
+    path: "/profiles",
+    name: "profiles",
+    component: () => import("../views/ProfileConfigView.vue"),
+  },
+  {
+    path: "/quality-plans",
+    name: "quality-plans",
+    component: () => import("../views/QualityPlansView.vue"),
+  },
+  {
+    path: "/cycles",
+    name: "cycles",
+    component: () => import("../views/CyclesView.vue"),
+  },
+  {
     path: "/events",
     name: "events",
     component: () => import("../views/EventsView.vue"),
@@ -16,6 +31,16 @@ const routes = [
     path: "/inspections",
     name: "inspections",
     component: () => import("../views/InspectionsView.vue"),
+  },
+  {
+    path: "/data-quality",
+    name: "data-quality",
+    component: () => import("../views/DataQualityView.vue"),
+  },
+  {
+    path: "/comparisons",
+    name: "comparisons",
+    component: () => import("../views/CycleComparisonView.vue"),
   },
   {
     path: "/chat",

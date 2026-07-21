@@ -73,7 +73,7 @@ curl -X POST http://localhost:8000/api/v1/events:batch \
 
 ## 4. 启用生产 Chat
 
-默认 Compose 保持 Chat 关闭。以下配置启用 OpenAI、用户 `operator` 和完整数据范围：
+默认 Compose 保持 Chat 关闭。以下配置启用 OpenAI、本地平台身份 `operator` 和完整数据范围：
 
 ```bash
 export INGOT_CHAT_ENABLED=true
@@ -81,13 +81,12 @@ export INGOT_CHAT_PROVIDER=OpenAI
 export INGOT_CHAT_FAST_MODEL="<fast-model>"
 export INGOT_CHAT_REASONING_MODEL="<reasoning-model>"
 export OPENAI_API_KEY="<secret>"
-export INGOT_CHAT_OPERATOR_TOKEN="$(openssl rand -hex 24)"
 export INGOT_CHAT_OPERATOR_ALLOW_ALL=true
 
 docker compose -f docker-compose.app.yml up -d --build
 ```
 
-生产部署应以每个用户 实际所需的数据范围替代全局范围。Chat API 与 Platform Web 使用 `operator` 和 `INGOT_CHAT_OPERATOR_TOKEN`。
+生产部署必须接入统一认证，并以每个平台用户实际所需的数据范围替代全局范围。Chat API 与 Platform Web 不使用独立用户名或密码。
 
 ## 5. 查询事件并使用 Chat
 

@@ -11,6 +11,11 @@ public interface IInspectionMasterDataStore
     Task<InspectionDefinition?> GetInspectionDefinitionAsync(string code, int version, CancellationToken ct = default);
     Task<bool> DeleteInspectionDefinitionAsync(string code, int version, CancellationToken ct = default);
 
+    Task<InspectionPlan> UpsertInspectionPlanAsync(InspectionPlan plan, CancellationToken ct = default);
+    Task<IReadOnlyList<InspectionPlan>> ListInspectionPlansAsync(CancellationToken ct = default);
+    Task<InspectionPlan?> GetInspectionPlanAsync(string planId, int version, CancellationToken ct = default);
+    Task<bool> DeleteInspectionPlanAsync(string planId, int version, CancellationToken ct = default);
+
     Task<PhaseDefinition> UpsertPhaseDefinitionAsync(PhaseDefinition definition, CancellationToken ct = default);
     Task<IReadOnlyList<PhaseDefinition>> ListPhaseDefinitionsAsync(CancellationToken ct = default);
     Task<PhaseDefinition?> GetPhaseDefinitionAsync(string code, CancellationToken ct = default);
@@ -26,4 +31,3 @@ public interface IInspectionMasterDataStore
     Task<FeatureDefinition?> GetFeatureDefinitionAsync(string code, CancellationToken ct = default);
     Task<bool> DeleteFeatureDefinitionAsync(string code, CancellationToken ct = default);
 }
-

@@ -14,6 +14,7 @@ public interface IInspectionAttachmentStore
 
     Task<InspectionAttachment?> GetAsync(Guid attachmentId, CancellationToken ct = default);
 
+    Task<Stream?> OpenReadAsync(Guid attachmentId, CancellationToken ct = default);
+
     Task<bool> ExistsAsync(Guid attachmentId, CancellationToken ct = default);
 }
-

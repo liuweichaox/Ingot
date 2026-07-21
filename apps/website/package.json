@@ -13,12 +13,9 @@
     "lint": "eslint . --ignore-pattern .next"
   },
   "dependencies": {
-    "@react-three/fiber": "9.6.1",
-    "@types/three": "0.185.1",
     "next": "16.2.6",
     "react": "19.2.6",
-    "react-dom": "19.2.6",
-    "three": "0.185.1"
+    "react-dom": "19.2.6"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "4.2.1",

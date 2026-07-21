@@ -36,13 +36,16 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IAnalysisTool, CompareCyclesTool>();
 
         // 人工检测结果记录（PostgreSQL）；与生产事件分表、分 API 建模
-        services.Configure<InspectionSubmissionOptions>(configuration.GetSection("InspectionSubmission"));
         services.Configure<InspectionAttachmentOptions>(configuration.GetSection("InspectionAttachments"));
         services.AddSingleton<IInspectionRecordStore, PostgresInspectionRecordStore>();
         services.AddSingleton<IInspectionAttachmentStore, PostgresInspectionAttachmentStore>();
         services.AddSingleton<IInspectionMasterDataStore, PostgresInspectionMasterDataStore>();
+        services.AddSingleton<IInspectionReviewStore, PostgresInspectionReviewStore>();
+        services.AddSingleton<IInspectionWorkflowService, InspectionWorkflowService>();
         services.AddHostedService<InspectionStoreInitializerHostedService>();
         services.AddSingleton<ICycleAnalyticsStore, PostgresCycleAnalyticsStore>();
+        services.AddSingleton<ICycleComparisonService, CycleComparisonService>();
+        services.AddSingleton<ICycleRecordService, CycleRecordService>();
         services.AddHostedService<CycleAnalyticsInitializerHostedService>();
 
         // Webhook 订阅与投递（PostgreSQL + CloudEvents）

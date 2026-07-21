@@ -40,17 +40,14 @@ export INGOT_CHAT_PROVIDER=OpenAI
 export INGOT_CHAT_FAST_MODEL="<fast-model>"
 export INGOT_CHAT_REASONING_MODEL="<reasoning-model>"
 export OPENAI_API_KEY="<secret>"
-export INGOT_CHAT_OPERATOR_TOKEN="$(openssl rand -hex 24)"
 export INGOT_CHAT_OPERATOR_ALLOW_ALL=true
 
 docker compose -f docker-compose.app.yml up -d --build
 
-curl http://localhost:8000/api/v1/chat/capabilities \
-  -H "X-Ingot-User: operator" \
-  -H "Authorization: Bearer ${INGOT_CHAT_OPERATOR_TOKEN}"
+curl http://localhost:8000/api/v1/chat/capabilities
 ```
 
-This Compose configuration grants `operator` access to all records. Production deployments should configure the actual scope required by each role and inject every secret through a secret store or protected environment variables.
+This Compose configuration grants the platform identity `operator` access to all records. Development supplies this local identity on the server; production must configure unified authentication and the actual data scope required by each role.
 
 ## Source ingestion
 

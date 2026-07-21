@@ -41,7 +41,7 @@ The model interprets language and composes the response. Application code owns q
 
 ## Enable in production
 
-Production Compose leaves Chat disabled. Configure the model, model key, user token, and data scope together when enabling it:
+Production Compose leaves Chat disabled. Configure the model, model key, and platform-user data scope together when enabling it:
 
 ```bash
 export INGOT_CHAT_ENABLED=true
@@ -49,12 +49,11 @@ export INGOT_CHAT_PROVIDER=OpenAI
 export INGOT_CHAT_FAST_MODEL="<fast-model>"
 export INGOT_CHAT_REASONING_MODEL="<reasoning-model>"
 export OPENAI_API_KEY="<secret>"
-export INGOT_CHAT_OPERATOR_TOKEN="$(openssl rand -hex 24)"
 export INGOT_CHAT_OPERATOR_ALLOW_ALL=true
 export INGOT_CHAT_ENABLE_COMBINED_ANALYSIS=true
 ```
 
-Platform Web and the HTTP API use user `operator` with `INGOT_CHAT_OPERATOR_TOKEN`. Production deployments configure access for the record scope required by each user.
+Development uses the server-owned local platform identity `operator`. Production must integrate unified authentication and configure the record scope required by each platform user.
 
 ## Use Chat
 
@@ -78,8 +77,6 @@ Platform Web and the HTTP API use user `operator` with `INGOT_CHAT_OPERATOR_TOKE
 ```bash
 curl -X POST http://localhost:8000/api/v1/chat/runs \
   -H "Content-Type: application/json" \
-  -H "X-Ingot-User: operator" \
-  -H "Authorization: Bearer ${INGOT_CHAT_OPERATOR_TOKEN}" \
   -d '{
     "question": "What happened during this cycle, and is its data complete?",
     "pageContext": { "kind": "cycle", "id": "CYCLE-001" },
@@ -87,9 +84,12 @@ curl -X POST http://localhost:8000/api/v1/chat/runs \
   }'
 ```
 
+Development uses the server-owned local `operator` identity. Production must establish the user principal through platform authentication middleware; the Chat API does not accept a client-asserted user or a Chat-specific password.
+
 ## Security boundary
 
 - The read-only allowlist contains only registered record-query tools;
+- production trusts only the platform-authenticated principal, not `X-Ingot-User` or a Chat-specific bearer password;
 - every tool inherits the current user's data scope;
 - arbitrary SQL, scripts, shell, filesystem access, and open network access are prohibited;
 - instruction-like text in tool results remains untrusted data and cannot change policy;

@@ -20,11 +20,6 @@ public sealed class ChatOptions
 
     public int MaxDiscussionTurns { get; set; } = 9;
 
-    public bool RequireToken { get; set; } = true;
-
-    public Dictionary<string, string> UserTokens { get; set; }
-        = new(StringComparer.OrdinalIgnoreCase);
-
     public Dictionary<string, ModelPricingOptions> ModelPricing { get; set; }
         = new(StringComparer.OrdinalIgnoreCase);
 }
