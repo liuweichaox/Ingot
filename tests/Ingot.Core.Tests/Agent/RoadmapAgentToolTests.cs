@@ -91,20 +91,23 @@ public sealed class RoadmapAgentToolTests
     [Fact]
     public async Task CompareCycles_ComputesInspectionEffectSizeAndRelatedRecordsLinks()
     {
-        var events = new[]
-        {
-            Row(1, "cycle.started", "cycle-a"),
-            Row(2, "cycle.completed", "cycle-a", occurredAt: DateTimeOffset.Parse("2026-07-18T10:01:00Z")),
-            Row(3, "cycle.started", "cycle-b"),
-            Row(4, "cycle.completed", "cycle-b", occurredAt: DateTimeOffset.Parse("2026-07-18T10:02:00Z"))
-        };
-        var inspections = new StubInspectionStore(
-        [
-            Inspection("cycle-a", "PASS", 10m),
-            Inspection("cycle-a", "PASS", 12m),
-            Inspection("cycle-b", "FAIL", 20m),
-            Inspection("cycle-b", "PASS", 22m)
-        ]);
+        var events = Enumerable.Range(1, 502)
+            .Select(id => Row(
+                id,
+                id == 1 ? "cycle.started" : id == 502 ? "cycle.completed" : "process.sample",
+                "cycle-a"))
+            .Concat(Enumerable.Range(1, 502)
+                .Select(id => Row(
+                    1_000 + id,
+                    id == 1 ? "cycle.started" : id == 502 ? "cycle.completed" : "process.sample",
+                    "cycle-b")))
+            .ToArray();
+        var inspectionRows = Enumerable.Range(0, 501)
+            .Select(id => Inspection("cycle-a", "PASS", id == 500 ? 11m : id % 2 == 0 ? 10m : 12m))
+            .Concat(Enumerable.Range(0, 501)
+                .Select(id => Inspection("cycle-b", id % 2 == 0 ? "PASS" : "FAIL", id == 500 ? 21m : id % 2 == 0 ? 20m : 22m)))
+            .ToArray();
+        var inspections = new StubInspectionStore(inspectionRows);
         var tool = new CompareCyclesTool(new FilteringEventReader(events), inspections);
 
         var result = await tool.ExecuteAsync(
@@ -129,6 +132,11 @@ public sealed class RoadmapAgentToolTests
         Assert.Equal(11d, characteristic.GetProperty("baselineAverage").GetDouble());
         Assert.Equal(21d, characteristic.GetProperty("comparisonAverage").GetDouble());
         Assert.True(characteristic.GetProperty("effectSize").GetDouble() > 0);
+        Assert.Equal(502, result.Data.GetProperty("eventSequence")
+            .GetProperty("baselineProductionRecordCount").GetInt32());
+        Assert.Equal(501, result.Data.GetProperty("inspection")
+            .GetProperty("baselineInspectionCount").GetInt32());
+        Assert.DoesNotContain(result.Limitations, item => item.Contains("500", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -228,6 +236,21 @@ public sealed class RoadmapAgentToolTests
             return Task.FromResult<IReadOnlyList<PlatformProductionEvent>>(filtered.Take(query.Limit).ToArray());
         }
 
+        public Task<IReadOnlyList<PlatformProductionEvent>> QueryAllAsync(
+            string userId,
+            PlatformEventQuery query,
+            CancellationToken ct = default)
+        {
+            IEnumerable<PlatformProductionEvent> filtered = rows;
+            if (!string.IsNullOrWhiteSpace(query.CorrelationId))
+                filtered = filtered.Where(row => row.Event.CorrelationId == query.CorrelationId);
+            foreach (var pair in query.Context)
+                filtered = filtered.Where(row =>
+                    row.Event.Context.TryGetValue(pair.Key, out var value) &&
+                    string.Equals(value, pair.Value, StringComparison.Ordinal));
+            return Task.FromResult<IReadOnlyList<PlatformProductionEvent>>(filtered.ToArray());
+        }
+
         public Task<PlatformEventScopeStats> GetScopeStatsAsync(
             string userId,
             PlatformEventQuery query,
@@ -264,5 +287,14 @@ public sealed class RoadmapAgentToolTests
                                  record.OperationRunId == query.OperationRunId)
                 .Take(query.Limit)
                 .ToArray());
+
+        public Task<IReadOnlyList<InspectionRecord>> QueryAllByOperationRunIdsAsync(
+            IReadOnlyCollection<string> operationRunIds,
+            CancellationToken ct = default)
+        {
+            var ids = operationRunIds.ToHashSet(StringComparer.Ordinal);
+            return Task.FromResult<IReadOnlyList<InspectionRecord>>(
+                records.Where(record => ids.Contains(record.OperationRunId)).ToArray());
+        }
     }
 }

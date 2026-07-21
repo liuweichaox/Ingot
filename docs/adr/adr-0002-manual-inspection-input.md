@@ -218,4 +218,4 @@ SubmitterVerified = 工位 token 有效 && 人员身份已核验
 
 ---
 
-参见 [ADR-0001](adr-0001-local-production-record-store.md)、[生产事件规范](../rfc-production-events.md)、[设计说明](../design.md)。
+参见 [架构说明](../architecture.md)、[生产事件规范](../rfc-production-events.md)、[设计说明](../design.md)。

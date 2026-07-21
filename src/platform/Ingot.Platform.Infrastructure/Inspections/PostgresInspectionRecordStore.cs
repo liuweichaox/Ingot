@@ -149,6 +149,34 @@ public sealed class PostgresInspectionRecordStore : IInspectionRecordStore, IAsy
         return records;
     }
 
+    public async Task<IReadOnlyList<InspectionRecord>> QueryAllByOperationRunIdsAsync(
+        IReadOnlyCollection<string> operationRunIds,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(operationRunIds);
+        var normalizedIds = operationRunIds
+            .Where(static value => !string.IsNullOrWhiteSpace(value))
+            .Select(static value => value.Trim())
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        if (normalizedIds.Length == 0)
+            return [];
+
+        await InitializeAsync(ct).ConfigureAwait(false);
+        await using var command = _dataSource.CreateCommand(
+            $"""
+             {SelectColumns}
+             WHERE operation_run_id = ANY(@operation_run_ids)
+             ORDER BY measured_at DESC, record_id DESC;
+             """);
+        command.Parameters.AddWithValue("operation_run_ids", normalizedIds);
+        var records = new List<InspectionRecord>();
+        await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
+        while (await reader.ReadAsync(ct).ConfigureAwait(false))
+            records.Add(Read(reader).Record);
+        return records;
+    }
+
     public async ValueTask DisposeAsync()
     {
         _initializeLock.Dispose();

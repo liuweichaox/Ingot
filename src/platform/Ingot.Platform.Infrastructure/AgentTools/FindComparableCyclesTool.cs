@@ -47,9 +47,9 @@ public sealed class FindComparableCyclesTool(IChatEventReader events) : IAnalysi
     {
         var correlationId = Require(call, "correlationId").Trim();
         var limit = ParseLimit(call.Arguments.GetValueOrDefault("limit"), 20, 1, 200);
-        var currentRows = await events.QueryAsync(
+        var currentRows = await events.QueryAllAsync(
             context.UserId,
-            new PlatformEventQuery { CorrelationId = correlationId, Limit = 500 },
+            new PlatformEventQuery { CorrelationId = correlationId },
             ct).ConfigureAwait(false);
         if (currentRows.Count == 0)
             return Empty(correlationId);
@@ -89,9 +89,9 @@ public sealed class FindComparableCyclesTool(IChatEventReader events) : IAnalysi
             .Where(static key => key is "product_code" or "operation_code" or "recipe_id" or "recipe_version")
             .ToDictionary(key => key, key => contextFacts[key], StringComparer.Ordinal);
         var queryContext = strictKeys.Count == 0 ? contextFacts.Take(2).ToDictionary() : strictKeys;
-        var candidates = await events.QueryAsync(
+        var candidates = await events.QueryAllAsync(
             context.UserId,
-            new PlatformEventQuery { Context = queryContext, Limit = 500 },
+            new PlatformEventQuery { Context = queryContext },
             ct).ConfigureAwait(false);
 
         var comparable = candidates
@@ -130,8 +130,6 @@ public sealed class FindComparableCyclesTool(IChatEventReader events) : IAnalysi
         }).ToArray();
 
         var limitations = new List<string>();
-        if (candidates.Count == 500)
-            limitations.Add("同类周期查询超过 500 条生产记录，可能还有周期没有显示。");
         if (comparable.Length == 0)
             limitations.Add("没有找到共享保留生产信息项的其他周期。");
 
@@ -150,7 +148,7 @@ public sealed class FindComparableCyclesTool(IChatEventReader events) : IAnalysi
                 new ResultDetailLink
                 {
                     Kind = "event-query",
-                    Label = "完整同类周期生产记录",
+                    Label = "同类周期生产记录明细（分页）",
                     Url = BuildEventsUrl(queryContext)
                 }
             ],

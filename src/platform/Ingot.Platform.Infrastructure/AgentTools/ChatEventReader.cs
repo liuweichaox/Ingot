@@ -24,6 +24,14 @@ public interface IChatEventReader
         PlatformEventQuery query,
         CancellationToken ct = default);
 
+    /// <summary>
+    ///     读取完整分析范围。底层仍按 500 行分页，500 只约束单页传输，不约束参与计算的数据量。
+    /// </summary>
+    Task<IReadOnlyList<PlatformProductionEvent>> QueryAllAsync(
+        string userId,
+        PlatformEventQuery query,
+        CancellationToken ct = default);
+
     Task<PlatformEventScopeStats> GetScopeStatsAsync(
         string userId,
         PlatformEventQuery query,
@@ -56,6 +64,38 @@ public sealed class ChatEventReader(
             ? batches.SelectMany(static batch => batch).OrderBy(static row => row.IngestId)
             : batches.SelectMany(static batch => batch).OrderByDescending(static row => row.IngestId);
         return ordered.Take(Math.Clamp(query.Limit, 1, 500)).ToArray();
+    }
+
+    public async Task<IReadOnlyList<PlatformProductionEvent>> QueryAllAsync(
+        string userId,
+        PlatformEventQuery query,
+        CancellationToken ct = default)
+    {
+        const int pageSize = 500;
+        var cursor = query.AfterIngestId ?? 0;
+        var result = new List<PlatformProductionEvent>();
+
+        while (true)
+        {
+            var page = await QueryAsync(
+                    userId,
+                    query with { AfterIngestId = cursor, Limit = pageSize },
+                    ct)
+                .ConfigureAwait(false);
+            if (page.Count == 0)
+                break;
+
+            var nextCursor = page.Max(static row => row.IngestId);
+            if (nextCursor <= cursor)
+                throw new InvalidOperationException("完整事件查询的摄入游标没有前进。");
+
+            result.AddRange(page);
+            cursor = nextCursor;
+            if (page.Count < pageSize)
+                break;
+        }
+
+        return result;
     }
 
     public async Task<PlatformEventScopeStats> GetScopeStatsAsync(

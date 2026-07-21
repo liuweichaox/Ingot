@@ -98,7 +98,7 @@ production_events (hypertable, 明细)
 
 对比 10 个周期 = 读 10 行 `cycles` + 几十行 `cycle_features` = 几 KB。而这几 KB 背后是**全量明细扫过一遍**得到的结果 —— 物化的时候扫过。这正是"加载每个周期的所有数据进行分析"的正确实现方式：全量被计算了，只是没有被搬运。
 
-ADR-0001 已经迁到 TimescaleDB hypertable，continuous aggregate 正是为这件事准备的。
+[当前架构](../architecture.md)已经使用 TimescaleDB hypertable，continuous aggregate 正是为这件事准备的。
 
 ---
 
@@ -240,4 +240,4 @@ ADR-0003 §4.3 的产品族 / 工艺路线本体，让"同类"可以是推导出
 
 ---
 
-参见 [ADR-0001](adr-0001-local-production-record-store.md)、[ADR-0002](adr-0002-manual-inspection-input.md)、[ADR-0003](adr-0003-capability-amplification-roadmap.md)、[生产事件规范](../rfc-production-events.md)。
+参见 [架构说明](../architecture.md)、[ADR-0002](adr-0002-manual-inspection-input.md)、[ADR-0003](adr-0003-capability-amplification-roadmap.md)、[生产事件规范](../rfc-production-events.md)。

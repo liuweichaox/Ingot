@@ -52,17 +52,16 @@ public sealed class CompareCyclesTool(
         foreach (var candidateId in candidateIds)
             candidates.Add(await LoadCycleAsync(context.UserId, candidateId, ct).ConfigureAwait(false));
 
-        var baselineInspections = await inspections.QueryAsync(
-            new InspectionRecordQuery { OperationRunId = baselineId, Limit = 500 },
+        var allInspections = await inspections.QueryAllByOperationRunIdsAsync(
+            [baselineId, .. candidateIds],
             ct).ConfigureAwait(false);
-        var candidateInspections = new List<InspectionRecord>();
-        foreach (var candidateId in candidateIds)
-        {
-            var records = await inspections.QueryAsync(
-                new InspectionRecordQuery { OperationRunId = candidateId, Limit = 500 },
-                ct).ConfigureAwait(false);
-            candidateInspections.AddRange(records);
-        }
+        var baselineInspections = allInspections
+            .Where(record => string.Equals(record.OperationRunId, baselineId, StringComparison.Ordinal))
+            .ToArray();
+        var candidateIdSet = candidateIds.ToHashSet(StringComparer.Ordinal);
+        var candidateInspections = allInspections
+            .Where(record => candidateIdSet.Contains(record.OperationRunId))
+            .ToArray();
 
         var comparison = BuildMeasurementComparison(baselineInspections, candidateInspections);
         var baselineEventTypes = baseline.EventTypes.ToHashSet(StringComparer.Ordinal);
@@ -82,10 +81,6 @@ public sealed class CompareCyclesTool(
         var baselinePassRate = PassRate(baselineInspections);
         var candidatePassRate = PassRate(candidateInspections);
         var limitations = new List<string>();
-        if (baseline.RowsReachedLimit || candidates.Any(static item => item.RowsReachedLimit))
-            limitations.Add("至少一个周期超过 500 条生产记录，过程差异可能没有完全显示。");
-        if (baselineInspections.Count == 500 || candidateInspections.Count >= candidateIds.Length * 500)
-            limitations.Add("检测记录查询达到窗口上限，合格率和测量统计可能被截断。");
         if (baseline.Events == 0)
             limitations.Add("基准周期没有生产记录。");
         if (candidates.Any(static item => item.Events == 0))
@@ -109,8 +104,8 @@ public sealed class CompareCyclesTool(
                 duration = durationStats,
                 inspection = new
                 {
-                    baselineInspectionCount = baselineInspections.Count,
-                    comparisonInspectionCount = candidateInspections.Count,
+                    baselineInspectionCount = baselineInspections.Length,
+                    comparisonInspectionCount = candidateInspections.Length,
                     baselinePassRate,
                     comparisonPassRate = candidatePassRate,
                     characteristics = comparison
@@ -121,13 +116,13 @@ public sealed class CompareCyclesTool(
                 new ResultDetailLink
                 {
                     Kind = "event-query",
-                    Label = "基准周期完整生产记录",
+                    Label = "基准周期生产记录明细（分页）",
                     Url = $"/api/v1/events?correlationId={Uri.EscapeDataString(baselineId)}&limit=500"
                 },
                 new ResultDetailLink
                 {
                     Kind = "inspection-query",
-                    Label = "基准周期检测记录",
+                    Label = "基准周期检测记录明细（分页）",
                     Url = $"/api/v1/inspection-records?operationRunId={Uri.EscapeDataString(baselineId)}&limit=500"
                 }
             ],
@@ -141,9 +136,9 @@ public sealed class CompareCyclesTool(
 
     private async Task<CycleSnapshot> LoadCycleAsync(string userId, string correlationId, CancellationToken ct)
     {
-        var rows = await events.QueryAsync(
+        var rows = await events.QueryAllAsync(
             userId,
-            new PlatformEventQuery { CorrelationId = correlationId, Limit = 500 },
+            new PlatformEventQuery { CorrelationId = correlationId },
             ct).ConfigureAwait(false);
         var ordered = rows.OrderBy(static row => row.Event.OccurredAt).ThenBy(static row => row.IngestId).ToArray();
         var startedAt = ordered.FirstOrDefault(static row =>
@@ -155,7 +150,6 @@ public sealed class CompareCyclesTool(
         return new CycleSnapshot(
             correlationId,
             ordered.Length,
-            ordered.Length == 500,
             startedAt,
             completedAt,
             startedAt.HasValue && completedAt.HasValue && completedAt >= startedAt
@@ -272,7 +266,6 @@ public sealed class CompareCyclesTool(
     private sealed record CycleSnapshot(
         string CorrelationId,
         int Events,
-        bool RowsReachedLimit,
         DateTimeOffset? StartedAt,
         DateTimeOffset? CompletedAt,
         double? DurationMs,

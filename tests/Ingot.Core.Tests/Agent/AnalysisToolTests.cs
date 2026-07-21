@@ -174,6 +174,12 @@ public sealed class AnalysisToolTests
             CancellationToken ct = default)
             => Task.FromResult(rows);
 
+        public Task<IReadOnlyList<PlatformProductionEvent>> QueryAllAsync(
+            string userId,
+            PlatformEventQuery query,
+            CancellationToken ct = default)
+            => Task.FromResult(rows);
+
         public Task<PlatformEventScopeStats> GetScopeStatsAsync(
             string userId,
             PlatformEventQuery query,
