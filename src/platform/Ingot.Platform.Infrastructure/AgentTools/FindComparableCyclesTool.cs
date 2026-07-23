@@ -3,10 +3,13 @@ using Ingot.Agent;
 using Ingot.Platform.Infrastructure.Events;
 using Ingot.Contracts.Agents;
 using Ingot.Contracts.Events;
+using Ingot.Platform.Infrastructure.ProcessConfiguration;
 
 namespace Ingot.Platform.Infrastructure.AgentTools;
 
-public sealed class FindComparableCyclesTool(IChatEventReader events) : IAnalysisTool
+public sealed class FindComparableCyclesTool(
+    IChatEventReader events,
+    ProcessAnalysisResolver? analysisResolver = null) : IAnalysisTool
 {
     private static readonly string[] ComparableKeys =
     [
@@ -54,15 +57,22 @@ public sealed class FindComparableCyclesTool(IChatEventReader events) : IAnalysi
         if (currentRows.Count == 0)
             return Empty(correlationId);
 
-        var contextFacts = currentRows
-            .SelectMany(static row => row.Event.Context)
-            .Where(static pair => ComparableKeys.Contains(pair.Key, StringComparer.Ordinal) &&
-                                  !string.IsNullOrWhiteSpace(pair.Value))
-            .GroupBy(static pair => pair.Key, StringComparer.Ordinal)
-            .ToDictionary(
-                static group => group.Key,
-                static group => group.Select(static pair => pair.Value).First(),
-                StringComparer.Ordinal);
+        var currentContext = currentRows.Select(static row => row.Event.Context)
+            .FirstOrDefault(static item => item.Count > 0) ?? new Dictionary<string, string>();
+        var analysis = analysisResolver is null
+            ? null
+            : await analysisResolver.ResolveAsync(currentContext, "production-cycle", ct).ConfigureAwait(false);
+        var configuredKeys = analysis?.Plan.ComparisonKeys.Count > 0
+            ? analysis.Plan.ComparisonKeys
+            : analysisResolver is null ? ComparableKeys : [];
+        var contextFacts = configuredKeys
+            .Select(key => new
+            {
+                Key = key.Replace('.', '_'),
+                Value = ProcessAnalysisResolver.ContextValue(currentContext, key)
+            })
+            .Where(static item => !string.IsNullOrWhiteSpace(item.Value))
+            .ToDictionary(static item => item.Key, static item => item.Value!, StringComparer.Ordinal);
         if (contextFacts.Count == 0)
         {
             return new AnalysisToolResult
@@ -80,15 +90,19 @@ public sealed class FindComparableCyclesTool(IChatEventReader events) : IAnalysi
                         Url = $"/api/v1/events?correlationId={Uri.EscapeDataString(correlationId)}&limit=500"
                     }
                 ],
-                Limitations = ["当前周期缺少 product_code、operation_code、recipe_id 等同类检索键。"],
+                Limitations = [analysis is null
+                    ? "当前周期没有匹配的已发布分析方案。"
+                    : "当前周期缺少分析方案要求的同类比较键。"],
                 Outcome = AnalysisToolOutcomes.InsufficientData
             };
         }
 
-        var strictKeys = contextFacts.Keys
-            .Where(static key => key is "product_code" or "operation_code" or "recipe_id" or "recipe_version")
-            .ToDictionary(key => key, key => contextFacts[key], StringComparer.Ordinal);
-        var queryContext = strictKeys.Count == 0 ? contextFacts.Take(2).ToDictionary() : strictKeys;
+        var queryContext = analysisResolver is null
+            ? contextFacts.Where(static pair => pair.Key is "product_code" or "operation_code" or "recipe_id" or "recipe_version")
+                .ToDictionary(static pair => pair.Key, static pair => pair.Value, StringComparer.Ordinal)
+            : contextFacts;
+        if (queryContext.Count == 0)
+            queryContext = contextFacts;
         var candidates = await events.QueryAllAsync(
             context.UserId,
             new PlatformEventQuery { Context = queryContext },

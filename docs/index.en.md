@@ -1,6 +1,6 @@
 # Ingot Documentation
 
-Ingot is a manufacturing data collection and process analysis platform. It organizes important data from different sources as standard production records and provides **Ingot Chat** as the main workspace for engineers. Teams implement their own source connections and submit `ProductionEvent` or `InspectionRecord` records through the public APIs; Ingot embeds no field-device protocol.
+Ingot is a manufacturing data collection and process analysis platform. It organizes important data from different sources as standard production records and provides **Ingot Chat** as the main workspace for engineers. Teams can submit `ProductionEvent` or `InspectionRecord` records through public APIs, or configure edge acquisition tasks for HTTP, MQTT, OPC UA, and Modbus TCP.
 
 ## Get started
 
@@ -17,6 +17,7 @@ Ingot is a manufacturing data collection and process analysis platform. It organ
 
 ## Production record ingestion
 
+- [Configurable acquisition](acquisition.en.md): versioned tasks, four device protocols, point mapping, and edge credentials.
 - [Production event specification](rfc-production-events.en.md): `ProductionEvent` batches, authentication, deduplication, query, and extension rules.
 - [Getting started](tutorial-getting-started.en.md): start Platform and submit the first batch.
 
@@ -40,3 +41,4 @@ Ingot is a manufacturing data collection and process analysis platform. It organ
 - [Production event specification](rfc-production-events.en.md)
 - [Brand](brand.en.md)
 - [Security policy](../SECURITY.md)
+- [Open-source dependencies](open-source-dependencies.en.md)

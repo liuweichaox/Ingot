@@ -57,6 +57,7 @@ public sealed record InspectionAuditEntry
 
 public sealed record InspectionTask
 {
+    public string ScopeType { get; init; } = "production-cycle";
     public required string OperationRunId { get; init; }
 
     public required string WorkpieceId { get; init; }
@@ -86,4 +87,39 @@ public sealed record InspectionTask
     public Guid? VisualInspectionRecordId { get; init; }
 
     public string? VisualReviewDecision { get; init; }
+}
+
+public sealed record InspectionScope
+{
+    public required string ScopeId { get; init; }
+    public string ScopeType { get; init; } = "analysis-window";
+    public required string WorkpieceId { get; init; }
+    public string SubjectType { get; init; } = "equipment";
+    public required string SubjectId { get; init; }
+    public required string ProductSeries { get; init; }
+    public required string InspectionPlanId { get; init; }
+    public int InspectionPlanVersion { get; init; } = 1;
+    public required DateTimeOffset From { get; init; }
+    public required DateTimeOffset To { get; init; }
+    public IReadOnlyDictionary<string, string> Context { get; init; } = new Dictionary<string, string>();
+    public DateTimeOffset CreatedAt { get; init; }
+    public string CreatedBy { get; init; } = string.Empty;
+}
+
+public sealed record InspectionTaskSummary
+{
+    public int Total { get; init; }
+    public int Pending { get; init; }
+    public int InProgress { get; init; }
+    public int ReviewPending { get; init; }
+    public int Completed { get; init; }
+    public int ActionRequired => Pending + InProgress + ReviewPending;
+}
+
+public sealed record InspectionTaskPage
+{
+    public IReadOnlyList<InspectionTask> Data { get; init; } = [];
+    public int Total { get; init; }
+    public int Offset { get; init; }
+    public int Limit { get; init; }
 }

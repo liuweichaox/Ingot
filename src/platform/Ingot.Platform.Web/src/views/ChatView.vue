@@ -2,7 +2,7 @@
   <div class="chat-view">
     <header class="chat-topbar">
       <div class="chat-brand">
-        <div class="brand-mark"><el-icon><ChatDotRound /></el-icon></div>
+        <div class="brand-mark"><img src="/ingot-mark.svg" alt="Ingot"></div>
         <div>
           <strong>Ingot Chat</strong>
           <span>生产数据只读分析</span>
@@ -25,7 +25,7 @@
       />
 
       <section v-if="!runId" class="welcome-state">
-        <div class="welcome-mark"><el-icon><ChatDotRound /></el-icon></div>
+        <div class="welcome-mark"><img src="/ingot-mark.svg" alt=""></div>
         <h1>今天想分析什么？</h1>
         <p>查询生产记录、比较同系列周期、检查数据质量。Ingot Chat 不会修改设备或生产数据。</p>
         <div class="suggestion-grid">
@@ -47,7 +47,7 @@
         </article>
 
         <article class="message-row assistant-message">
-          <div class="assistant-avatar"><el-icon><ChatDotRound /></el-icon></div>
+          <div class="assistant-avatar"><img src="/ingot-mark.svg" alt=""></div>
           <div class="message-content assistant-content">
             <div class="assistant-heading">
               <strong>Ingot Chat</strong>
@@ -65,15 +65,9 @@
                 <li v-for="item in snapshot.answer.findings" :key="item">{{ item }}</li>
               </ul>
 
-              <el-alert
-                v-for="item in snapshot.answer.limitations"
-                :key="item"
-                :title="item"
-                type="warning"
-                show-icon
-                :closable="false"
-                class="limitation"
-              />
+              <ul v-if="snapshot.answer.limitations?.length" class="limitation-list">
+                <li v-for="item in snapshot.answer.limitations" :key="item">{{ item }}</li>
+              </ul>
 
               <div v-if="snapshot.answer.followUpQuestions?.length" class="follow-ups">
                 <h3>你还可以继续问</h3>
@@ -90,12 +84,7 @@
 
             <section v-if="snapshot?.answer?.combinedAnalysis" class="detail-section combined-analysis">
               <h3>综合分析</h3>
-              <el-alert
-                :title="snapshot.answer.combinedAnalysis.summary"
-                :type="snapshot.answer.combinedAnalysis.status === 'needs-review' ? 'warning' : 'info'"
-                show-icon
-                :closable="false"
-              />
+              <p class="analysis-summary">{{ snapshot.answer.combinedAnalysis.summary }}</p>
               <div
                 v-for="item in snapshot.answer.combinedAnalysis.possibleCauses"
                 :key="item.causeId"
@@ -104,15 +93,9 @@
                 <strong>{{ item.statement }}</strong>
                 <p>{{ item.reason }}</p>
               </div>
-              <el-alert
-                v-for="item in snapshot.answer.combinedAnalysis.limitations"
-                :key="item"
-                :title="item"
-                type="warning"
-                show-icon
-                :closable="false"
-                class="limitation"
-              />
+              <ul v-if="snapshot.answer.combinedAnalysis.limitations?.length" class="limitation-list">
+                <li v-for="item in snapshot.answer.combinedAnalysis.limitations" :key="item">{{ item }}</li>
+              </ul>
             </section>
 
             <section v-if="snapshot?.answer?.charts?.length" class="detail-section">
@@ -129,39 +112,39 @@
                     <el-tag size="small" effect="plain">{{ chartTypeLabel(chart.type) }}</el-tag>
                   </div>
                 </template>
-                <div class="chart-table-wrap">
-                  <table class="chart-table">
-                    <thead>
-                      <tr>
-                        <th>系列</th>
-                        <th v-for="label in chart.labels" :key="label">{{ label }}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr v-for="series in chart.series" :key="series.name">
-                        <th>{{ series.name }}</th>
-                        <td v-for="(value, index) in series.values" :key="`${series.name}-${index}`">
-                          {{ formatChartValue(value) }}
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
+                <PlotlyChart
+                  :traces="agentChartTraces(chart)"
+                  :layout="agentChartLayout(chart)"
+                  height="320px"
+                />
+                <details class="chart-data-details">
+                  <summary>查看图表数据</summary>
+                  <div class="chart-table-wrap">
+                    <table class="chart-table">
+                      <thead>
+                        <tr>
+                          <th>系列</th>
+                          <th v-for="label in chart.labels" :key="label">{{ label }}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr v-for="series in chart.series" :key="series.name">
+                          <th>{{ series.name }}</th>
+                          <td v-for="(value, index) in series.values" :key="`${series.name}-${index}`">
+                            {{ formatChartValue(value) }}
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </details>
               </el-card>
             </section>
 
             <el-collapse v-if="snapshot?.plan || snapshot?.toolInvocations?.length" class="process-collapse">
               <el-collapse-item title="查看分析过程" name="process">
                 <section v-if="participantFailures.length" class="process-section">
-                  <el-alert
-                    v-for="item in participantFailures"
-                    :key="`${item.data?.role}-${item.data?.round}`"
-                    title="部分分析步骤暂时无法完成，页面仅展示已经查到的结果。"
-                    type="warning"
-                    show-icon
-                    :closable="false"
-                    class="limitation"
-                  />
+                  <p class="process-warning">部分分析步骤未完成，以下内容仅包含已取得的结果。</p>
                 </section>
                 <section v-if="snapshot?.plan" class="process-section">
                   <h3>调查说明</h3>
@@ -266,20 +249,26 @@
     </footer>
 
     <el-drawer v-model="historyVisible" title="对话记录" size="380px">
-      <div class="history-toolbar">
-        <el-button :icon="Refresh" @click="loadChat">刷新</el-button>
-      </div>
       <el-empty v-if="!history.length" description="暂无可见记录" :image-size="64" />
-      <button
+      <div
         v-for="item in history"
         :key="item.runId"
-        type="button"
-        class="history-item"
-        @click="openHistory(item.runId)"
+        class="history-row"
       >
-        <span>{{ item.question }}</span>
-        <small>{{ modeLabel(item.mode) }} · {{ runStatusLabel(item.status) }} · {{ formatTime(item.createdAt) }}</small>
-      </button>
+        <button type="button" class="history-item" @click="openHistory(item.runId)">
+          <span>{{ item.question }}</span>
+          <small>{{ modeLabel(item.mode) }} · {{ runStatusLabel(item.status) }} · {{ formatTime(item.createdAt) }}</small>
+        </button>
+        <el-button
+          class="history-delete"
+          text
+          type="danger"
+          :icon="Delete"
+          aria-label="删除对话"
+          :disabled="!isTerminal(item.status)"
+          @click="removeHistory(item)"
+        />
+      </div>
       <el-button v-if="historyNext" text type="primary" @click="loadHistory(historyNext, true)">加载更多</el-button>
     </el-drawer>
   </div>
@@ -287,8 +276,11 @@
 
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from "vue";
-import { ChatDotRound, Clock, Loading, Plus, Promotion, Refresh, Right } from "@element-plus/icons-vue";
-import { getJson, postJson, streamSse } from "../api/http";
+import { Clock, Delete, Loading, Plus, Promotion, Right } from "@element-plus/icons-vue";
+import { ElMessageBox } from "element-plus";
+import { deleteJson, getJson, postJson, streamSse } from "../api/http";
+import { agentChartLayout, agentChartTraces } from "../charts/chartAdapters";
+import PlotlyChart from "../components/PlotlyChart.vue";
 
 const suggestions = [
   "这个周期发生了什么，数据是否完整？",
@@ -425,6 +417,19 @@ async function openHistory(id) {
   }
 }
 
+function isTerminal(status) { return ["completed", "failed", "cancelled"].includes(status); }
+
+async function removeHistory(item) {
+  try {
+    await ElMessageBox.confirm("删除后将同时移除该对话的分析过程，且不可恢复。", "删除对话", { type: "warning" });
+    await deleteJson(`/api/v1/chat/runs/${item.runId}`);
+    if (runId.value === item.runId) newChat();
+    await loadHistory();
+  } catch (requestError) {
+    if (requestError !== "cancel" && requestError !== "close") error.value = requestError.message;
+  }
+}
+
 function newChat() {
   streamController?.abort();
   runId.value = "";
@@ -516,9 +521,10 @@ onBeforeUnmount(() => streamController?.abort());
   justify-content: center;
   flex: 0 0 auto;
   border-radius: 12px;
-  color: #fff;
-  background: linear-gradient(135deg, #409eff, #6b7cff);
+  background: #fff8eb;
+  box-shadow: inset 0 0 0 1px rgba(232, 137, 26, .16);
 }
+.brand-mark img, .welcome-mark img, .assistant-avatar img { display: block; width: 76%; height: 76%; }
 .brand-mark { width: 36px; height: 36px; }
 .topbar-actions { display: flex; gap: 8px; }
 .conversation-stream {
@@ -529,7 +535,7 @@ onBeforeUnmount(() => streamController?.abort());
 }
 .conversation-alert { margin-bottom: 24px; }
 .welcome-state { display: grid; justify-items: center; padding: 72px 0 30px; text-align: center; }
-.welcome-mark { width: 58px; height: 58px; margin-bottom: 18px; font-size: 26px; box-shadow: 0 12px 28px rgba(64, 158, 255, .22); }
+.welcome-mark { width: 58px; height: 58px; margin-bottom: 18px; box-shadow: 0 12px 28px rgba(232, 137, 26, .16), inset 0 0 0 1px rgba(232, 137, 26, .16); }
 .welcome-state h1 { margin: 0 0 10px; color: #182238; font-size: 30px; letter-spacing: -.5px; }
 .welcome-state > p { max-width: 620px; margin: 0; color: #6d788a; line-height: 1.75; }
 .suggestion-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; width: 100%; margin-top: 34px; }
@@ -565,7 +571,9 @@ onBeforeUnmount(() => streamController?.abort());
 .answer-summary { margin: 0 0 14px; white-space: pre-wrap; }
 .finding-list { margin: 10px 0 0; padding-left: 22px; }
 .finding-list li { margin: 7px 0; }
-.limitation { margin: 10px 0; }
+.limitation-list { margin: 14px 0 0; padding-left: 20px; color: #8b6b32; line-height: 1.75; }
+.analysis-summary { margin: 8px 0 14px; color: #465266; line-height: 1.75; }
+.process-warning { margin: 0; color: #9a6b22; font-size: 13px; }
 .follow-ups { margin-top: 22px; }
 .follow-ups h3,
 .detail-section h3,
@@ -592,6 +600,8 @@ onBeforeUnmount(() => streamController?.abort());
 .tool-tag { margin: 0 8px 8px 0; }
 .muted { margin-top: 4px; color: #909399; }
 .chart-card { margin: 10px 0; }
+.chart-data-details { margin-top: 8px; border-top: 1px solid #edf0f4; }
+.chart-data-details summary { padding: 12px 2px 4px; color: #607086; font-size: 12px; cursor: pointer; }
 .chart-table-wrap { overflow-x: auto; }
 .chart-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .chart-table th,
@@ -627,7 +637,8 @@ onBeforeUnmount(() => streamController?.abort());
 .context-control :deep(.el-select__wrapper) { box-shadow: 0 0 0 1px #e2e7ee inset; }
 .send-actions { display: flex; align-items: center; gap: 8px; }
 .composer-note { margin: 7px auto 0; color: #939cad; font-size: 11px; text-align: center; pointer-events: none; }
-.history-toolbar { display: flex; justify-content: flex-end; margin-bottom: 10px; }
+.history-row { display: grid; grid-template-columns: minmax(0, 1fr) 40px; align-items: center; border-bottom: 1px solid #ebeef5; border-radius: 9px; }
+.history-row:hover { background: #f4f7fb; }
 .history-item {
   display: flex;
   width: 100%;
@@ -635,15 +646,15 @@ onBeforeUnmount(() => streamController?.abort());
   gap: 6px;
   padding: 13px 12px;
   border: 0;
-  border-bottom: 1px solid #ebeef5;
   border-radius: 9px;
   background: transparent;
   color: #303b4f;
   text-align: left;
   cursor: pointer;
 }
-.history-item:hover { background: #f4f7fb; }
+.history-item:hover { background: transparent; }
 .history-item small { color: #9099a8; }
+.history-delete { justify-self: center; }
 @media (max-width: 900px) {
   .conversation-stream { padding-right: 8px; padding-left: 8px; }
   .suggestion-grid { grid-template-columns: 1fr; }

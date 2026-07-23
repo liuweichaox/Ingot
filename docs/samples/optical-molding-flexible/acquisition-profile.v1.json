@@ -7,20 +7,21 @@
   "stepContextKey": "recipe_step",
   "defaults": {
     "dataType": "double",
-    "nullable": true
+    "nullable": true,
+    "semanticRole": "process"
   },
   "fields": [
-    { "code": "upper_mold.ir_temperature", "sourceField": "上模红外温度℃", "unit": "Cel", "useInComparison": true },
+    { "code": "upper_mold.ir_temperature", "sourceField": "上模红外温度℃", "unit": "Cel" },
     { "code": "upper_mold.current", "sourceField": "上模电流A", "unit": "A" },
     { "code": "upper_mold.voltage", "sourceField": "上模电压V", "unit": "V" },
-    { "code": "lower_mold.ir_temperature", "sourceField": "下模红外温度℃", "unit": "Cel", "useInComparison": true },
+    { "code": "lower_mold.ir_temperature", "sourceField": "下模红外温度℃", "unit": "Cel" },
     { "code": "lower_mold.current", "sourceField": "下模电流A", "unit": "A" },
     { "code": "lower_mold.voltage", "sourceField": "下模电压V", "unit": "V" },
-    { "code": "press.load", "sourceField": "压力kg", "unit": "kg", "unitStatus": "needs-confirmation", "useInComparison": true },
+    { "code": "press.load", "sourceField": "压力kg", "unit": "kg" },
     { "code": "grating.position", "sourceField": "光栅位置mm", "unit": "mm" },
     { "code": "servo.speed", "sourceField": "伺服速度mm/s", "unit": "mm/s" },
-    { "code": "chamber.vacuum", "sourceField": "真空度kPa", "unit": "kPa", "referenceStatus": "needs-confirmation", "useInComparison": true },
-    { "code": "servo.position", "sourceField": "伺服位置mm", "unit": "mm", "useInComparison": true },
+    { "code": "chamber.vacuum", "sourceField": "真空度kPa", "unit": "kPa" },
+    { "code": "servo.position", "sourceField": "伺服位置mm", "unit": "mm" },
     { "code": "upper_mold.power", "sourceField": "上模功率W", "unit": "W" },
     { "code": "lower_mold.power", "sourceField": "下模功率W", "unit": "W" }
   ]

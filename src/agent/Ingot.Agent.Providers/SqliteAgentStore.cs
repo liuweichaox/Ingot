@@ -157,6 +157,16 @@ public sealed class SqliteAgentStore : IAgentRunStore, IDisposable
             throw new InvalidOperationException($"Chat 运行不存在: {run.RunId}");
     }
 
+    public async Task<bool> DeleteAsync(string runId, CancellationToken ct = default)
+    {
+        await InitializeAsync(ct).ConfigureAwait(false);
+        await using var connection = await OpenAsync(ct).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandText = "DELETE FROM agent_runs WHERE run_id = $runId;";
+        command.Parameters.AddWithValue("$runId", runId);
+        return await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false) > 0;
+    }
+
     public async Task<AgentStreamEvent> AppendEventAsync(
         string runId,
         string type,

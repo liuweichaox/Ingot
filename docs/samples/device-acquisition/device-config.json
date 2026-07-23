@@ -1,0 +1,33 @@
+{
+  "device": {
+    "id": "FURNACE-001",
+    "name": "连续热处理炉 1#",
+    "type": "continuous-heat-treatment-furnace",
+    "productSeries": "SHAFT-20"
+  },
+  "initialRecipeId": "HT-SHAFT-860",
+  "recipes": [
+    {
+      "id": "HT-SHAFT-860",
+      "version": 3,
+      "name": "轴类零件 860℃ 标准工艺",
+      "parameters": {
+        "目标温度℃": 860.0,
+        "保温时间min": 45,
+        "保护气启用": true,
+        "工艺模式": "normalizing"
+      }
+    },
+    {
+      "id": "HT-SHAFT-900",
+      "version": 1,
+      "name": "轴类零件 900℃ 高温工艺",
+      "parameters": {
+        "目标温度℃": 900.0,
+        "保温时间min": 30,
+        "保护气启用": true,
+        "工艺模式": "hardening"
+      }
+    }
+  ]
+}

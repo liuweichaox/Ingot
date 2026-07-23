@@ -38,12 +38,12 @@ public sealed class CheckDataQualityTool(IChatEventReader events) : IAnalysisToo
             SubjectId = NullIfBlank(subjectId),
             CorrelationId = NullIfBlank(correlationId)
         };
-        // 全范围聚合：总条数与新鲜度不受 500 明细窗口截断（在 hypertable 上是廉价的时间聚合）。
+        // 全范围聚合用于快速获得总量与时间边界。
         var stats = await events.GetScopeStatsAsync(context.UserId, scope, ct).ConfigureAwait(false);
-        // 明细窗口：周期配对 / 序号连续性 / 生产信息缺失需要逐行数据，仍限 500 行。
-        var rows = await events.QueryAsync(
+        // 明细检查自动翻页读取完整范围；500 只是内部单页传输大小，不是分析上限。
+        var rows = await events.QueryAllAsync(
             context.UserId,
-            scope with { Limit = 500 },
+            scope,
             ct).ConfigureAwait(false);
         var ordered = rows.OrderBy(static row => row.IngestId).ToArray();
         var emptyContext = ordered.Count(static row => row.Event.Context.Count == 0);
@@ -104,10 +104,7 @@ public sealed class CheckDataQualityTool(IChatEventReader events) : IAnalysisToo
         var latest = stats.LatestOccurredAt;
         var totalEvents = stats.Count;
         var scopeEmpty = totalEvents == 0;
-        var reachedResultLimit = ordered.Length == 500;
         var limitations = new List<string>();
-        if (reachedResultLimit)
-            limitations.Add("周期配对、序号连续性等明细检查达到 500 条窗口上限，无法确认窗口外的明细质量（总量与新鲜度已按全范围统计）。");
         if (scopeEmpty)
             limitations.Add("当前范围没有生产记录，无法检查周期是否完整或采集是否中断。");
         else if (scopedQuery)
@@ -125,12 +122,12 @@ public sealed class CheckDataQualityTool(IChatEventReader events) : IAnalysisToo
         {
             Kind = "event-query",
             Id = scopeId,
-            Label = $"生产记录查询结果（当前显示 {ordered.Length} 条 / 范围内共 {totalEvents} 条）",
+            Label = $"生产记录查询结果（已完整检查 {ordered.Length} 条）",
             Url = BuildEventsUrl(subjectId, correlationId)
         };
         var summary = scopeEmpty
             ? "当前范围没有生产记录，无法检查数据完整性。"
-            : $"范围内共 {totalEvents} 条生产记录，检查 {ordered.Length} 条：发现 {incompleteCycles} 个不完整生产周期、" +
+            : $"范围内共 {totalEvents} 条生产记录，已完整检查 {ordered.Length} 条：发现 {incompleteCycles} 个不完整生产周期、" +
               (sequenceGaps.HasValue ? $"{sequenceGaps} 个序号间断，" : "序号连续性未在当前过滤范围计算，") +
               $"{emptyContext} 条记录缺少生产信息；最新记录时间为 {latest:O}。";
         return new AnalysisToolResult
@@ -155,7 +152,7 @@ public sealed class CheckDataQualityTool(IChatEventReader events) : IAnalysisToo
             }),
             RelatedRecords = [relatedRecords],
             Limitations = limitations,
-            Outcome = scopeEmpty || reachedResultLimit || incompletePhases > 0 || phaseOrderIssues > 0
+            Outcome = scopeEmpty || incompletePhases > 0 || phaseOrderIssues > 0
                 ? AnalysisToolOutcomes.InsufficientData
                 : AnalysisToolOutcomes.Sufficient
         };
@@ -171,8 +168,7 @@ public sealed class CheckDataQualityTool(IChatEventReader events) : IAnalysisToo
             values.Add($"subjectId={Uri.EscapeDataString(subjectId)}");
         if (!string.IsNullOrWhiteSpace(correlationId))
             values.Add($"correlationId={Uri.EscapeDataString(correlationId)}");
-        values.Add("limit=500");
-        return $"/api/v1/events?{string.Join('&', values)}";
+        return values.Count == 0 ? "/events" : $"/events?{string.Join('&', values)}";
     }
 
     private static string? TryReadPhaseCode(string eventType)

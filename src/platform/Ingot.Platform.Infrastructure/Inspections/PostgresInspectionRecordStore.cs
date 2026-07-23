@@ -49,6 +49,8 @@ public sealed class PostgresInspectionRecordStore : IInspectionRecordStore, IAsy
                   measurements        JSONB NOT NULL DEFAULT '[]'::jsonb,
                   attachments            JSONB NOT NULL DEFAULT '[]'::jsonb,
                   notes               TEXT,
+                  supersedes_record_id UUID,
+                  correction_reason   TEXT,
                   payload_hash        TEXT NOT NULL,
                   CHECK (definition_version > 0),
                   CHECK (outcome IN ('PASS', 'FAIL', 'INCONCLUSIVE'))
@@ -61,6 +63,24 @@ public sealed class PostgresInspectionRecordStore : IInspectionRecordStore, IAsy
                   ON inspection_records(definition_code, measured_at DESC);
                 CREATE INDEX IF NOT EXISTS idx_inspection_records_outcome_time
                   ON inspection_records(outcome, measured_at DESC);
+                ALTER TABLE inspection_records ADD COLUMN IF NOT EXISTS supersedes_record_id UUID;
+                ALTER TABLE inspection_records ADD COLUMN IF NOT EXISTS correction_reason TEXT;
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_inspection_records_one_correction
+                  ON inspection_records(supersedes_record_id) WHERE supersedes_record_id IS NOT NULL;
+
+                CREATE TABLE IF NOT EXISTS inspection_scopes (
+                  scope_id TEXT PRIMARY KEY,
+                  scope_type TEXT NOT NULL,
+                  subject_id TEXT NOT NULL,
+                  from_at TIMESTAMPTZ NOT NULL,
+                  to_at TIMESTAMPTZ NOT NULL,
+                  payload JSONB NOT NULL,
+                  updated_at TIMESTAMPTZ NOT NULL,
+                  CHECK (scope_type IN ('analysis-window', 'production-run', 'material-lot')),
+                  CHECK (to_at > from_at)
+                );
+                CREATE INDEX IF NOT EXISTS idx_inspection_scopes_subject_time
+                  ON inspection_scopes(subject_id, to_at DESC);
                 """);
             await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
             _initialized = true;
@@ -85,11 +105,11 @@ public sealed class PostgresInspectionRecordStore : IInspectionRecordStore, IAsy
             INSERT INTO inspection_records(
               record_id, workpiece_id, operation_run_id, definition_code, definition_version,
               measured_at, recorded_at, outcome, submitted_by, submitter_verified, instrument,
-              measurements, attachments, notes, payload_hash)
+              measurements, attachments, notes, supersedes_record_id, correction_reason, payload_hash)
             VALUES (
               @record_id, @workpiece_id, @operation_run_id, @definition_code, @definition_version,
               @measured_at, @recorded_at, @outcome, @submitted_by, @submitter_verified, @instrument,
-              @measurements, @attachments, @notes, @payload_hash)
+              @measurements, @attachments, @notes, @supersedes_record_id, @correction_reason, @payload_hash)
             ON CONFLICT (record_id) DO NOTHING
             RETURNING record_id;
             """);
@@ -109,6 +129,74 @@ public sealed class PostgresInspectionRecordStore : IInspectionRecordStore, IAsy
 
     public async Task<InspectionRecord?> GetAsync(Guid recordId, CancellationToken ct = default)
         => (await GetWithHashAsync(recordId, ct).ConfigureAwait(false))?.Record;
+
+    public async Task<InspectionRecord?> GetCorrectionForAsync(Guid recordId, CancellationToken ct = default)
+    {
+        await InitializeAsync(ct).ConfigureAwait(false);
+        await using var command = _dataSource.CreateCommand(
+            $"{SelectColumns} WHERE supersedes_record_id = @record_id ORDER BY ingested_at DESC LIMIT 1;");
+        command.Parameters.AddWithValue("record_id", recordId);
+        await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
+        return await reader.ReadAsync(ct).ConfigureAwait(false) ? Read(reader).Record : null;
+    }
+
+    public async Task<IReadOnlyList<InspectionScope>> ListScopesAsync(CancellationToken ct = default)
+    {
+        await InitializeAsync(ct).ConfigureAwait(false);
+        await using var command = _dataSource.CreateCommand(
+            "SELECT payload::text FROM inspection_scopes ORDER BY to_at DESC, scope_id;");
+        var values = new List<InspectionScope>();
+        await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
+        while (await reader.ReadAsync(ct).ConfigureAwait(false))
+            values.Add(JsonSerializer.Deserialize<InspectionScope>(reader.GetString(0), JsonOptions)!);
+        return values;
+    }
+
+    public async Task<InspectionScope?> GetScopeAsync(string scopeId, CancellationToken ct = default)
+    {
+        await InitializeAsync(ct).ConfigureAwait(false);
+        await using var command = _dataSource.CreateCommand(
+            "SELECT payload::text FROM inspection_scopes WHERE scope_id = @scope_id;");
+        command.Parameters.AddWithValue("scope_id", scopeId);
+        var payload = await command.ExecuteScalarAsync(ct).ConfigureAwait(false);
+        return payload is null or DBNull
+            ? null
+            : JsonSerializer.Deserialize<InspectionScope>((string)payload, JsonOptions);
+    }
+
+    public async Task<InspectionScope> UpsertScopeAsync(InspectionScope scope, CancellationToken ct = default)
+    {
+        await InitializeAsync(ct).ConfigureAwait(false);
+        await using var command = _dataSource.CreateCommand(
+            """
+            INSERT INTO inspection_scopes(scope_id, scope_type, subject_id, from_at, to_at, payload, updated_at)
+            VALUES (@scope_id, @scope_type, @subject_id, @from_at, @to_at, @payload, now())
+            ON CONFLICT (scope_id) DO UPDATE SET
+              scope_type = EXCLUDED.scope_type,
+              subject_id = EXCLUDED.subject_id,
+              from_at = EXCLUDED.from_at,
+              to_at = EXCLUDED.to_at,
+              payload = EXCLUDED.payload,
+              updated_at = now();
+            """);
+        command.Parameters.AddWithValue("scope_id", scope.ScopeId);
+        command.Parameters.AddWithValue("scope_type", scope.ScopeType);
+        command.Parameters.AddWithValue("subject_id", scope.SubjectId);
+        command.Parameters.AddWithValue("from_at", scope.From.UtcDateTime);
+        command.Parameters.AddWithValue("to_at", scope.To.UtcDateTime);
+        command.Parameters.AddWithValue("payload", NpgsqlDbType.Jsonb, JsonSerializer.Serialize(scope, JsonOptions));
+        await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+        return scope;
+    }
+
+    public async Task<bool> DeleteScopeAsync(string scopeId, CancellationToken ct = default)
+    {
+        await InitializeAsync(ct).ConfigureAwait(false);
+        await using var command = _dataSource.CreateCommand(
+            "DELETE FROM inspection_scopes WHERE scope_id = @scope_id;");
+        command.Parameters.AddWithValue("scope_id", scopeId);
+        return await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false) > 0;
+    }
 
     public async Task<IReadOnlyList<InspectionRecord>> QueryAsync(
         InspectionRecordQuery query,
@@ -139,14 +227,50 @@ public sealed class PostgresInspectionRecordStore : IInspectionRecordStore, IAsy
                               {SelectColumns}
                               {where}
                               ORDER BY measured_at DESC, record_id DESC
-                              LIMIT @limit;
+                              LIMIT @limit OFFSET @offset;
                               """;
         command.Parameters.AddWithValue("limit", query.Limit);
+        command.Parameters.AddWithValue("offset", query.Offset);
         var records = new List<InspectionRecord>();
         await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
         while (await reader.ReadAsync(ct).ConfigureAwait(false))
             records.Add(Read(reader).Record);
         return records;
+    }
+
+    public async Task<InspectionRecordPage> QueryPageAsync(
+        InspectionRecordQuery query,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        await InitializeAsync(ct).ConfigureAwait(false);
+        await using var countCommand = _dataSource.CreateCommand();
+        var predicates = new List<string>();
+        AddEquality(countCommand, predicates, "workpiece_id", "workpiece_id", query.WorkpieceId);
+        AddEquality(countCommand, predicates, "operation_run_id", "operation_run_id", query.OperationRunId);
+        AddEquality(countCommand, predicates, "definition_code", "definition_code", query.DefinitionCode);
+        AddEquality(countCommand, predicates, "outcome", "outcome", query.Outcome?.ToUpperInvariant());
+        if (query.From.HasValue)
+        {
+            predicates.Add("measured_at >= @from");
+            countCommand.Parameters.AddWithValue("from", query.From.Value.UtcDateTime);
+        }
+        if (query.To.HasValue)
+        {
+            predicates.Add("measured_at <= @to");
+            countCommand.Parameters.AddWithValue("to", query.To.Value.UtcDateTime);
+        }
+        var where = predicates.Count == 0 ? string.Empty : $"WHERE {string.Join(" AND ", predicates)}";
+        countCommand.CommandText = $"SELECT COUNT(*) FROM inspection_records {where};";
+        var total = Convert.ToInt32(await countCommand.ExecuteScalarAsync(ct).ConfigureAwait(false));
+        var data = await QueryAsync(query, ct).ConfigureAwait(false);
+        return new InspectionRecordPage
+        {
+            Data = data,
+            Total = total,
+            Offset = query.Offset,
+            Limit = query.Limit
+        };
     }
 
     public async Task<IReadOnlyList<InspectionRecord>> QueryAllByOperationRunIdsAsync(
@@ -226,6 +350,8 @@ public sealed class PostgresInspectionRecordStore : IInspectionRecordStore, IAsy
             NpgsqlDbType.Jsonb,
             JsonSerializer.Serialize(request.Attachments, JsonOptions));
         command.Parameters.AddWithValue("notes", (object?)request.Notes ?? DBNull.Value);
+        command.Parameters.AddWithValue("supersedes_record_id", (object?)request.SupersedesRecordId ?? DBNull.Value);
+        command.Parameters.AddWithValue("correction_reason", (object?)request.CorrectionReason ?? DBNull.Value);
         command.Parameters.AddWithValue("payload_hash", payloadHash);
     }
 
@@ -255,9 +381,11 @@ public sealed class PostgresInspectionRecordStore : IInspectionRecordStore, IAsy
                 Instrument = instrument,
                 Measurements = measurements,
                 Attachments = attachments,
-                Notes = reader.IsDBNull(14) ? null : reader.GetString(14)
+                Notes = reader.IsDBNull(14) ? null : reader.GetString(14),
+                SupersedesRecordId = reader.IsDBNull(15) ? null : reader.GetGuid(15),
+                CorrectionReason = reader.IsDBNull(16) ? null : reader.GetString(16)
             },
-            reader.GetString(15));
+            reader.GetString(17));
     }
 
     private static DateTimeOffset ToUtc(DateTime value)
@@ -285,7 +413,8 @@ public sealed class PostgresInspectionRecordStore : IInspectionRecordStore, IAsy
     private const string SelectColumns = """
         SELECT record_id, workpiece_id, operation_run_id, definition_code, definition_version,
                measured_at, recorded_at, ingested_at, outcome, submitted_by, submitter_verified,
-               instrument::text, measurements::text, attachments::text, notes, payload_hash
+               instrument::text, measurements::text, attachments::text, notes,
+               supersedes_record_id, correction_reason, payload_hash
         FROM inspection_records
         """;
 }

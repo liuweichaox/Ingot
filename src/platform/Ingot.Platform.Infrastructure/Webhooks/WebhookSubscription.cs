@@ -22,6 +22,21 @@ public sealed record CreateWebhookSubscriptionRequest
     public long? StartAfterIngestId { get; init; }
 }
 
+public sealed record UpdateWebhookSubscriptionRequest
+{
+    public string Name { get; init; } = string.Empty;
+    public required string Endpoint { get; init; }
+    public IReadOnlyList<string> EventTypes { get; init; } = [];
+    public string? SubjectType { get; init; }
+    public string? SubjectId { get; init; }
+    public IReadOnlyDictionary<string, string> Context { get; init; }
+        = new Dictionary<string, string>();
+    /// <summary>留空时保留当前密钥；提供新值时替换。</summary>
+    public string? Secret { get; init; }
+    /// <summary>显式清除当前签名密钥。</summary>
+    public bool ClearSecret { get; init; }
+}
+
 public sealed record WebhookSubscription
 {
     public required Guid SubscriptionId { get; init; }

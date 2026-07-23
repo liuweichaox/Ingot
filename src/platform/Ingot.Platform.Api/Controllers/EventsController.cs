@@ -2,6 +2,7 @@ using System.Text.Json;
 using Ingot.Platform.Api.Events;
 using Ingot.Platform.Infrastructure.Events;
 using Ingot.Contracts.Events;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 
@@ -18,6 +19,7 @@ public sealed class EventsController(
     private readonly PlatformEventOptions _eventOptions = eventOptions.Value;
 
     [HttpPost("/api/v1/events:batch")]
+    [AllowAnonymous]
     public async Task<IActionResult> Ingest(
         [FromBody] EventBatchRequest? request,
         CancellationToken ct)
@@ -34,7 +36,14 @@ public sealed class EventsController(
         if (!PlatformIngestWindow.TryValidate(normalized, _eventOptions, DateTimeOffset.UtcNow, out var windowError))
             return BadRequest(new { error = windowError });
 
-        return Ok(await store.IngestAsync(normalized, ct).ConfigureAwait(false));
+        try
+        {
+            return Ok(await store.IngestAsync(normalized, ct).ConfigureAwait(false));
+        }
+        catch (ArgumentException exception)
+        {
+            return BadRequest(new { error = exception.Message });
+        }
     }
 
     [HttpGet]
@@ -47,6 +56,8 @@ public sealed class EventsController(
         [FromQuery] DateTimeOffset? from,
         [FromQuery] DateTimeOffset? to,
         [FromQuery] long? afterIngestId,
+        [FromQuery] long? beforeIngestId,
+        [FromQuery] int offset = 0,
         [FromQuery] int limit = 100,
         CancellationToken ct = default)
     {
@@ -59,18 +70,28 @@ public sealed class EventsController(
             from,
             to,
             afterIngestId,
-            limit);
+            beforeIngestId,
+            limit,
+            offset);
         if (!TryValidateQuery(query, out var error))
             return BadRequest(new { error });
 
-        var events = await store.QueryAsync(query, ct).ConfigureAwait(false);
+        var eventsTask = store.QueryAsync(query, ct);
+        var statsTask = store.GetScopeStatsAsync(query with { Offset = 0 }, ct);
+        await Task.WhenAll(eventsTask, statsTask).ConfigureAwait(false);
+        var events = await eventsTask.ConfigureAwait(false);
+        var stats = await statsTask.ConfigureAwait(false);
         return Ok(new
         {
             data = events,
             count = events.Count,
+            total = stats.Count,
             nextIngestId = events.Count == 0
                 ? afterIngestId
-                : events.Max(static item => item.IngestId)
+                : events.Max(static item => item.IngestId),
+            previousIngestId = events.Count == 0
+                ? beforeIngestId
+                : events.Min(static item => item.IngestId)
         });
     }
 
@@ -83,6 +104,7 @@ public sealed class EventsController(
         [FromQuery] string? correlationId,
         [FromQuery] DateTimeOffset? from,
         [FromQuery] DateTimeOffset? to,
+        [FromQuery] long? afterIngestId,
         CancellationToken ct)
     {
         if (!EventQueryContractValidator.TryParseCursor(
@@ -96,6 +118,15 @@ public sealed class EventsController(
             return;
         }
 
+        if (afterIngestId is < 0)
+        {
+            Response.StatusCode = StatusCodes.Status400BadRequest;
+            await Response.WriteAsJsonAsync(new { error = "afterIngestId 不能小于 0。" }, ct)
+                .ConfigureAwait(false);
+            return;
+        }
+        cursor = Math.Max(cursor ?? 0, afterIngestId ?? 0);
+
         var initialQuery = BuildQuery(
             edgeId,
             eventType,
@@ -105,6 +136,7 @@ public sealed class EventsController(
             from,
             to,
             cursor,
+            null,
             100);
         if (!TryValidateQuery(initialQuery, out var validationError))
         {
@@ -123,7 +155,7 @@ public sealed class EventsController(
         while (!ct.IsCancellationRequested)
         {
             var events = await store.QueryAsync(
-                BuildQuery(edgeId, eventType, subjectType, subjectId, correlationId, from, to, cursor, 100),
+                BuildQuery(edgeId, eventType, subjectType, subjectId, correlationId, from, to, cursor, null, 100),
                 ct).ConfigureAwait(false);
             foreach (var item in events.OrderBy(static item => item.IngestId))
             {
@@ -145,7 +177,7 @@ public sealed class EventsController(
     public async Task<IActionResult> GetCycle(string correlationId, CancellationToken ct)
     {
         var correlated = await QueryAllAsync(
-            BuildQuery(null, null, null, null, correlationId, null, null, null, 500),
+            BuildQuery(null, null, null, null, correlationId, null, null, null, null, 500),
             ct).ConfigureAwait(false);
         var pair = correlated
             .OrderBy(static item => item.Event.OccurredAt)
@@ -174,11 +206,17 @@ public sealed class EventsController(
                     startedAt,
                     windowEnd,
                     null,
+                    null,
                     500),
                 ct)
             .ConfigureAwait(false);
         var ordered = pair
-            .Concat(sameSubjectWindow)
+            .Concat(sameSubjectWindow.Where(item =>
+                string.IsNullOrWhiteSpace(item.Event.CorrelationId) ||
+                string.Equals(
+                    item.Event.CorrelationId,
+                    correlationId,
+                    StringComparison.Ordinal)))
             .DistinctBy(static item => item.Event.EventId)
             .OrderBy(static item => item.Event.OccurredAt)
             .ThenBy(static item => item.IngestId)
@@ -237,7 +275,9 @@ public sealed class EventsController(
         DateTimeOffset? from,
         DateTimeOffset? to,
         long? afterIngestId,
-        int limit)
+        long? beforeIngestId,
+        int limit,
+        int offset = 0)
     {
         var context = Request.Query
             .Where(static pair => pair.Key.StartsWith("ctx.", StringComparison.OrdinalIgnoreCase))
@@ -255,11 +295,30 @@ public sealed class EventsController(
             From = from,
             To = to,
             AfterIngestId = afterIngestId,
+            BeforeIngestId = beforeIngestId,
+            Offset = offset,
             Limit = limit,
             Context = context
         };
     }
 
     private static bool TryValidateQuery(PlatformEventQuery query, out string error)
-        => EventQueryContractValidator.TryValidate(query, query.AfterIngestId, out error);
+    {
+        if (query.Offset < 0)
+        {
+            error = "offset 不能小于 0。";
+            return false;
+        }
+        if (query.BeforeIngestId is <= 0)
+        {
+            error = "beforeIngestId 必须大于 0。";
+            return false;
+        }
+        if (query.AfterIngestId.HasValue && query.BeforeIngestId.HasValue)
+        {
+            error = "afterIngestId 和 beforeIngestId 不能同时使用。";
+            return false;
+        }
+        return EventQueryContractValidator.TryValidate(query, query.AfterIngestId, out error);
+    }
 }

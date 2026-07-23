@@ -35,6 +35,32 @@ public sealed class InspectionMasterDataValidatorTests
     }
 
     [Fact]
+    public void InspectionDefinition_RequiresAndNormalizesSelectOptions()
+    {
+        var ok = InspectionMasterDataValidator.TryValidate(
+            new InspectionDefinition
+            {
+                Code = "surface.appearance",
+                Name = "外观检查",
+                Characteristics =
+                [
+                    new InspectionCharacteristicDefinition
+                    {
+                        Code = "defect",
+                        Name = "缺陷类型",
+                        InputType = "select",
+                        AllowedValues = [" 合格 ", "划伤", "划伤"]
+                    }
+                ]
+            },
+            out var normalized,
+            out var error);
+
+        Assert.True(ok, error);
+        Assert.Equal(["合格", "划伤"], normalized!.Characteristics[0].AllowedValues);
+    }
+
+    [Fact]
     public void FeatureDefinition_DefaultsBoundaryModeByAggregation()
     {
         var ok = InspectionMasterDataValidator.TryValidate(
@@ -73,4 +99,3 @@ public sealed class InspectionMasterDataValidatorTests
         Assert.Equal("rcp-1:3:optical:4", normalized!.MappingId);
     }
 }
-

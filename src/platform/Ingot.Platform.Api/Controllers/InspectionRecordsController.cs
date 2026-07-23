@@ -33,9 +33,27 @@ public sealed class InspectionRecordsController(
             ct).ConfigureAwait(false);
         if (definition is null)
             return BadRequest(new { error = $"检测定义不存在：{normalized.DefinitionCode} v{normalized.DefinitionVersion}。" });
+        if (normalized.SupersedesRecordId.HasValue)
+        {
+            var original = await store.GetAsync(normalized.SupersedesRecordId.Value, ct).ConfigureAwait(false);
+            if (original is null)
+                return BadRequest(new { error = "被更正的检测记录不存在。" });
+            if (original.OperationRunId != normalized.OperationRunId ||
+                original.WorkpieceId != normalized.WorkpieceId ||
+                original.DefinitionCode != normalized.DefinitionCode ||
+                original.DefinitionVersion != normalized.DefinitionVersion)
+            {
+                return BadRequest(new { error = "更正记录必须与原记录属于同一工件、运行和检测定义版本。" });
+            }
+            var existingCorrection = await store.GetCorrectionForAsync(original.RecordId, ct).ConfigureAwait(false);
+            if (existingCorrection is not null)
+                return Conflict(new { error = "该检测记录已经被更正；如需再次更正，请基于当前有效记录创建更正。", existingCorrection });
+        }
+        if (!TryApplyDefinition(normalized, definition, out normalized, out error))
+            return BadRequest(new { error });
         var task = await workflow.GetTaskAsync(normalized.OperationRunId, ct).ConfigureAwait(false);
         if (task is null)
-            return BadRequest(new { error = "生产周期没有匹配的已发布质量方案。" });
+            return BadRequest(new { error = "当前分析范围没有匹配的已发布质量方案。" });
         var planItem = task.RequiredInspections.FirstOrDefault(item =>
             item.DefinitionCode == normalized.DefinitionCode &&
             item.DefinitionVersion == normalized.DefinitionVersion);
@@ -73,6 +91,98 @@ public sealed class InspectionRecordsController(
             : Ok(result.Record);
     }
 
+    private static bool TryApplyDefinition(
+        CreateInspectionRecordRequest request,
+        InspectionDefinition definition,
+        out CreateInspectionRecordRequest normalized,
+        out string error)
+    {
+        normalized = request;
+        var definitions = definition.Characteristics.ToDictionary(item => item.Code, StringComparer.Ordinal);
+        var submitted = request.Measurements.ToDictionary(item => item.CharacteristicCode, StringComparer.Ordinal);
+        var unknown = submitted.Keys.FirstOrDefault(code => !definitions.ContainsKey(code));
+        if (unknown is not null)
+        {
+            error = $"检测特性不属于当前定义版本：{unknown}。";
+            return false;
+        }
+
+        var missing = definition.Characteristics.FirstOrDefault(item => item.Required && !submitted.ContainsKey(item.Code));
+        if (missing is not null)
+        {
+            error = $"必填检测特性尚未录入：{missing.Name}（{missing.Code}）。";
+            return false;
+        }
+
+        var results = new List<InspectionCharacteristicResult>(request.Measurements.Count);
+        foreach (var measurement in request.Measurements)
+        {
+            var characteristic = definitions[measurement.CharacteristicCode];
+            if (characteristic.InputType == "numeric")
+            {
+                if (!measurement.NumericValue.HasValue || measurement.TextValue is not null)
+                {
+                    error = $"检测特性 {characteristic.Name} 必须录入数值。";
+                    return false;
+                }
+                var value = measurement.NumericValue.Value;
+                var outcome = characteristic.LowerLimit.HasValue && value < characteristic.LowerLimit.Value ||
+                              characteristic.UpperLimit.HasValue && value > characteristic.UpperLimit.Value
+                    ? "FAIL"
+                    : "PASS";
+                results.Add(measurement with
+                {
+                    Outcome = outcome,
+                    Unit = characteristic.Unit ?? "1",
+                    LowerLimit = characteristic.LowerLimit,
+                    UpperLimit = characteristic.UpperLimit
+                });
+                continue;
+            }
+
+            if (measurement.NumericValue.HasValue || string.IsNullOrWhiteSpace(measurement.TextValue))
+            {
+                error = $"检测特性 {characteristic.Name} 必须按{InputTypeLabel(characteristic.InputType)}录入。";
+                return false;
+            }
+            var textValue = measurement.TextValue.Trim();
+            if (characteristic.InputType == "select" && !characteristic.AllowedValues.Contains(textValue, StringComparer.Ordinal))
+            {
+                error = $"检测特性 {characteristic.Name} 的值不在定义选项中。";
+                return false;
+            }
+            if (characteristic.InputType == "boolean" && textValue is not ("true" or "false"))
+            {
+                error = $"检测特性 {characteristic.Name} 必须选择是或否。";
+                return false;
+            }
+            results.Add(measurement with
+            {
+                TextValue = textValue,
+                Unit = null,
+                LowerLimit = null,
+                UpperLimit = null
+            });
+        }
+
+        var overallOutcome = results.Any(static item => item.Outcome == "FAIL")
+            ? "FAIL"
+            : results.Any(static item => item.Outcome == "INCONCLUSIVE")
+                ? "INCONCLUSIVE"
+                : "PASS";
+        normalized = request with { Measurements = results, Outcome = overallOutcome };
+        error = string.Empty;
+        return true;
+    }
+
+    private static string InputTypeLabel(string inputType)
+        => inputType switch
+        {
+            "select" => "选择项",
+            "boolean" => "是/否",
+            _ => "文本"
+        };
+
     [HttpGet("{recordId:guid}")]
     public async Task<IActionResult> Get(Guid recordId, CancellationToken ct)
     {
@@ -94,6 +204,7 @@ public sealed class InspectionRecordsController(
         [FromQuery] DateTimeOffset? from,
         [FromQuery] DateTimeOffset? to,
         [FromQuery] int limit = 100,
+        [FromQuery] int offset = 0,
         CancellationToken ct = default)
     {
         var identity = userResolver.ResolveIdentity(User);
@@ -109,13 +220,14 @@ public sealed class InspectionRecordsController(
             Outcome = outcome?.Trim().ToUpperInvariant(),
             From = from?.ToUniversalTime(),
             To = to?.ToUniversalTime(),
-            Limit = limit
+            Limit = limit,
+            Offset = offset
         };
         if (!InspectionRecordValidator.TryValidateQuery(query, out var error))
             return BadRequest(new { error });
 
-        var records = await store.QueryAsync(query, ct).ConfigureAwait(false);
-        return Ok(new { data = records, count = records.Count });
+        var page = await store.QueryPageAsync(query, ct).ConfigureAwait(false);
+        return Ok(new { page.Data, count = page.Data.Count, page.Total, page.Offset, page.Limit });
     }
 }
 

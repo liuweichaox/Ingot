@@ -8,4 +8,9 @@ public interface ICycleComparisonService
         string correlationId,
         int limit,
         CancellationToken ct = default);
+
+    Task<CycleComparisonResult?> CompareSelectedAsync(
+        string baselineCycleId,
+        IReadOnlyList<string> cycleIds,
+        CancellationToken ct = default);
 }

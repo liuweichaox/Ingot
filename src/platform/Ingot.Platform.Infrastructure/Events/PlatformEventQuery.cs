@@ -10,4 +10,6 @@ public sealed record PlatformEventQuery : EventFilter
 {
     public string? EdgeId { get; init; }
     public long? AfterIngestId { get; init; }
+    public long? BeforeIngestId { get; init; }
+    public int Offset { get; init; }
 }

@@ -40,12 +40,26 @@ public static partial class InspectionMasterDataValidator
                 return Fail("Characteristic.LowerLimit 不能大于 UpperLimit。", out error);
             }
 
+            var allowedValues = (characteristic.AllowedValues ?? [])
+                .Select(Normalize)
+                .Where(static item => item is not null)
+                .Cast<string>()
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
+            if (inputType == "select" && allowedValues.Length == 0)
+                return Fail("选择型检测特性必须配置至少一个可选值。", out error);
+            if (allowedValues.Length > 100 || allowedValues.Any(static item => item.Length > 200))
+                return Fail("Characteristic.AllowedValues 最多 100 项，每项最长 200 个字符。", out error);
+
             characteristics.Add(characteristic with
             {
                 Code = characteristicCode!,
                 Name = characteristicName,
                 InputType = inputType,
-                Unit = Normalize(characteristic.Unit)
+                Unit = inputType == "numeric" ? Normalize(characteristic.Unit) : null,
+                LowerLimit = inputType == "numeric" ? characteristic.LowerLimit : null,
+                UpperLimit = inputType == "numeric" ? characteristic.UpperLimit : null,
+                AllowedValues = inputType == "select" ? allowedValues : []
             });
         }
 
@@ -123,6 +137,14 @@ public static partial class InspectionMasterDataValidator
         }
 
         var scope = value.Scope ?? new InspectionPlanScope();
+        var contextSelector = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var pair in scope.ContextSelector ?? new Dictionary<string, string>())
+        {
+            if (!TryCode(pair.Key, "Scope.ContextSelector.Key", out var key, out error) ||
+                string.IsNullOrWhiteSpace(pair.Value))
+                return Fail("质量方案的自定义适用条件必须包含有效的键和值。", out error);
+            contextSelector[key!] = pair.Value.Trim();
+        }
         normalized = value with
         {
             PlanId = planId!.ToLowerInvariant(),
@@ -134,7 +156,8 @@ public static partial class InspectionMasterDataValidator
                 ProductSeries = NormalizeSelector(scope.ProductSeries),
                 ProductCode = NormalizeSelector(scope.ProductCode),
                 RecipeId = NormalizeSelector(scope.RecipeId),
-                MachineId = NormalizeSelector(scope.MachineId)
+                MachineId = NormalizeSelector(scope.MachineId),
+                ContextSelector = contextSelector
             },
             Items = items.OrderBy(static item => item.Sequence)
                 .ThenBy(static item => item.DefinitionCode, StringComparer.Ordinal)

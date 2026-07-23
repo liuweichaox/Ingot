@@ -2,17 +2,13 @@
   <div class="events-view">
     <el-card shadow="never">
       <template #header>
-        <div class="card-header">
-          <div>
-            <el-icon><List /></el-icon>
-            <span class="title">事件查询</span>
-          </div>
+        <div class="card-header live-toolbar">
+          <span class="live-label">更新方式</span>
           <div class="actions">
             <el-tag :type="live ? 'success' : 'info'" effect="plain">
               {{ live ? "实时更新中" : "按条件查询" }}
             </el-tag>
             <el-switch v-model="live" active-text="实时" @change="toggleLive" />
-            <el-button :icon="Refresh" :loading="loading" @click="load">刷新</el-button>
           </div>
         </div>
       </template>
@@ -40,16 +36,16 @@
         </el-form-item>
         <el-form-item>
           <el-button type="primary" :icon="Search" @click="applyFilters">查询</el-button>
-          <el-button :icon="RefreshLeft" @click="resetFilters">重置</el-button>
+          <el-button @click="resetFilters">重置</el-button>
         </el-form-item>
       </el-form>
 
       <el-alert v-if="error" :title="error" type="error" show-icon :closable="false" class="alert" />
 
       <div class="summary">
-        <el-statistic title="当前结果" :value="events.length" />
-        <el-statistic title="最新记录序号" :value="latestIngestId || 0" />
-        <el-statistic title="记录类型数" :value="eventTypeCount" />
+        <el-statistic title="符合条件记录" :value="eventTotal" />
+        <el-statistic title="当前页最新序号" :value="latestIngestId || 0" />
+        <el-statistic title="当前页记录类型" :value="eventTypeCount" />
       </div>
 
       <el-table v-loading="loading" :data="events" stripe max-height="650">
@@ -94,10 +90,19 @@
         <el-table-column prop="ingestId" label="序号" width="90" />
       </el-table>
 
+      <TablePagination
+        :page="eventPage"
+        :page-size="eventPageSize"
+        :total="eventTotal"
+        :page-sizes="[50, 100, 200]"
+        @update:page="changeEventPage"
+        @update:page-size="changeEventPageSize"
+      />
+
       <el-empty v-if="!loading && events.length === 0" description="暂无符合条件的生产记录" />
     </el-card>
 
-    <el-dialog v-model="cycleVisible" title="生产周期过程" width="900px">
+    <el-drawer v-model="cycleVisible" title="生产周期过程" size="900px">
       <el-timeline v-if="cycleEvents.length">
         <el-timeline-item
           v-for="item in cycleEvents"
@@ -120,21 +125,25 @@
           进入质量检验
         </el-button>
       </template>
-    </el-dialog>
+    </el-drawer>
   </div>
 </template>
 
 <script setup>
 import { computed, onMounted, onUnmounted, reactive, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { DocumentChecked, List, Refresh, RefreshLeft, Search } from "@element-plus/icons-vue";
+import { DocumentChecked, Search } from "@element-plus/icons-vue";
 import { getJson } from "../api/http";
 import JsonPopover from "../components/JsonPopover.js";
+import TablePagination from "../components/TablePagination.vue";
 
 const edges = ref([]);
 const route = useRoute();
 const router = useRouter();
 const events = ref([]);
+const eventPage = ref(1);
+const eventPageSize = ref(50);
+const eventTotal = ref(0);
 const loading = ref(false);
 const error = ref("");
 const live = ref(false);
@@ -143,9 +152,9 @@ const cycleVisible = ref(false);
 const cycleEvents = ref([]);
 const cycleContext = ref(null);
 const filters = reactive({
-  edgeId: "",
+  edgeId: String(route.query.edgeId || ""),
   type: "",
-  subjectId: "",
+  subjectId: String(route.query.subjectId || ""),
   correlationId: String(route.query.cycleId || ""),
   contextKey: "",
   contextValue: "",
@@ -175,21 +184,18 @@ const load = async () => {
   error.value = "";
   try {
     const params = buildParams();
-    const allEvents = [];
-    let cursor = 0;
-    while (true) {
-      params.set("afterIngestId", String(cursor));
-      params.set("limit", "500");
-      const result = await getJson(`/api/v1/events?${params}`);
-      const page = result.data || [];
-      if (!page.length) break;
-      allEvents.push(...page);
-      const nextCursor = Math.max(...page.map((item) => Number(item.ingestId || 0)));
-      if (nextCursor <= cursor) throw new Error("生产记录查询游标没有前进。");
-      cursor = nextCursor;
-      if (page.length < 500) break;
+    params.set("limit", String(eventPageSize.value));
+    params.set("offset", String((eventPage.value - 1) * eventPageSize.value));
+    const result = await getJson(`/api/v1/events?${params}`);
+    const page = result.data || [];
+    eventTotal.value = Number(result.total || 0);
+    const pageCount = Math.max(1, Math.ceil(eventTotal.value / eventPageSize.value));
+    if (eventPage.value > pageCount) {
+      eventPage.value = pageCount;
+      await load();
+      return;
     }
-    events.value = allEvents.sort((left, right) => Number(right.ingestId) - Number(left.ingestId));
+    events.value = page.sort((left, right) => Number(right.ingestId) - Number(left.ingestId));
   } catch (e) {
     error.value = e?.message || String(e);
   } finally {
@@ -197,14 +203,35 @@ const load = async () => {
   }
 };
 
+const leaveLiveMode = () => {
+  if (!live.value) return;
+  live.value = false;
+  stopLive();
+};
+
+const changeEventPage = async (page) => {
+  leaveLiveMode();
+  eventPage.value = page;
+  await load();
+};
+
+const changeEventPageSize = async (pageSize) => {
+  leaveLiveMode();
+  eventPageSize.value = pageSize;
+  eventPage.value = 1;
+  await load();
+};
+
 const startLive = () => {
   stopLive();
   const params = buildParams();
+  if (latestIngestId.value) params.set("afterIngestId", String(latestIngestId.value));
   const source = new EventSource(`/api/v1/events/stream?${params}`);
   source.onmessage = (message) => {
     const item = JSON.parse(message.data);
     if (!events.value.some((existing) => existing.ingestId === item.ingestId)) {
-      events.value = [item, ...events.value];
+      events.value = [item, ...events.value].slice(0, eventPageSize.value);
+      eventTotal.value += 1;
     }
   };
   source.onerror = () => {
@@ -222,12 +249,14 @@ const stopLive = () => {
 };
 
 const toggleLive = async () => {
+  stopLive();
+  eventPage.value = 1;
   await load();
   if (live.value) startLive();
-  else stopLive();
 };
 
 const applyFilters = async () => {
+  eventPage.value = 1;
   await load();
   if (live.value) startLive();
 };
@@ -287,10 +316,7 @@ onUnmounted(stopLive);
 .card-header {
   justify-content: space-between;
 }
-.title {
-  margin-left: 8px;
-  font-weight: 600;
-}
+.live-label { color: #7c8797; font-size: 12px; }
 .actions {
   gap: 12px;
 }

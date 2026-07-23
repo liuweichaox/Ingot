@@ -1,0 +1,21 @@
+{
+  "planId": "optical-molding.cycle-quality-comparison",
+  "version": 1,
+  "name": "模压周期质量对比",
+  "description": "按工艺阶段对齐完整周期，并按最终质量结果分组比较。",
+  "status": "published",
+  "dataModelId": "optical-glass-molding",
+  "dataModelVersion": 1,
+  "analysisScope": "production-cycle",
+  "alignmentMode": "stage-relative",
+  "cohortDimension": "quality.outcome",
+  "comparisonKeys": ["product_series"],
+  "contextSelector": {},
+  "signals": [
+    { "dataItemCode": "upper_mold.ir_temperature", "includeTrace": true, "features": ["mean", "min", "max"] },
+    { "dataItemCode": "lower_mold.ir_temperature", "includeTrace": true, "features": ["mean", "min", "max"] },
+    { "dataItemCode": "press.load", "includeTrace": true, "features": ["mean", "min", "max"] },
+    { "dataItemCode": "chamber.vacuum", "includeTrace": true, "features": ["mean", "min", "max"] },
+    { "dataItemCode": "servo.position", "includeTrace": true, "features": ["mean", "min", "max"] }
+  ]
+}

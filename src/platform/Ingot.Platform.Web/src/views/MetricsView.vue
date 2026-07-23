@@ -1,29 +1,7 @@
 <template>
   <div class="metrics-view">
     <el-card shadow="never" class="page-header">
-      <template #header>
-        <div class="card-header">
-          <span>
-            <el-icon><DataAnalysis /></el-icon>
-            <span style="margin-left: 8px">指标监控</span>
-          </span>
-          <el-button type="primary" :icon="Refresh" :loading="loading" :disabled="!edgeId" @click="loadMetrics">
-            刷新
-          </el-button>
-        </div>
-      </template>
-
-      <el-alert
-        type="info"
-        :closable="false"
-        style="margin-bottom: 16px"
-      >
-        <template #default>
-          通过 <code>/api/edges/&lt;edgeId&gt;/metrics/json</code> 代理读取边缘节点的 <code>/metrics</code>
-        </template>
-      </el-alert>
-
-      <el-card shadow="never" style="margin-bottom: 16px">
+      <div class="metrics-toolbar">
         <el-form :inline="true">
           <el-form-item label="选择节点">
             <el-select
@@ -45,7 +23,7 @@
             <el-text v-if="lastUpdate" type="info">最后更新：{{ lastUpdate }}</el-text>
           </el-form-item>
         </el-form>
-      </el-card>
+      </div>
 
       <el-alert
         v-if="error"
@@ -55,6 +33,10 @@
         show-icon
         style="margin-bottom: 16px"
       />
+
+      <el-empty v-if="!edgesLoading && !error && !edges.length" description="尚无可监控的数据接入节点">
+        <el-button type="primary" plain @click="$router.push('/edges')">查看数据接入</el-button>
+      </el-empty>
 
       <div v-if="edgeId && metrics" class="kpi-grid">
         <el-card shadow="hover" class="kpi-card">
@@ -102,7 +84,7 @@
         </template>
 
         <el-table
-          :data="filteredMetricNames.map(name => ({ name, ...metrics[name] }))"
+          :data="pagedMetricRows"
           stripe
           style="width: 100%"
           max-height="600"
@@ -144,6 +126,7 @@
         </el-table>
 
         <el-empty v-if="filteredMetricNames.length === 0" description="暂无匹配的指标" />
+        <TablePagination v-model:page="metricPage" v-model:page-size="metricPageSize" :total="metricTotal" :page-sizes="[50, 100, 200]" />
       </el-card>
 
       <el-empty v-else-if="!loading && !error && edgeId" description="暂无指标数据（或该节点不可达）" />
@@ -152,11 +135,9 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from "vue";
+import { ref, computed, onBeforeUnmount, onMounted, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import {
-  DataAnalysis,
-  Refresh,
   Timer,
   TrendCharts,
   Box,
@@ -165,6 +146,8 @@ import {
 } from "@element-plus/icons-vue";
 import { getJson } from "../api/http";
 import { ElMessage } from "element-plus";
+import TablePagination from "../components/TablePagination.vue";
+import { useClientPagination } from "../composables/useClientPagination";
 
 const route = useRoute();
 const router = useRouter();
@@ -177,6 +160,7 @@ const error = ref("");
 const lastUpdate = ref("");
 const metrics = ref(null);
 const keyword = ref("");
+let pollTimer;
 
 const filteredMetricNames = computed(() => {
   const keys = metrics.value ? Object.keys(metrics.value) : [];
@@ -196,9 +180,9 @@ const loadEdges = async () => {
       }
 };
 
-const loadMetrics = async () => {
+const loadMetrics = async ({ silent = false } = {}) => {
   if (!edgeId.value) return;
-  loading.value = true;
+  if (!silent) loading.value = true;
   error.value = "";
       try {
     const data = await getJson(`/api/edges/${encodeURIComponent(edgeId.value)}/metrics/json`);
@@ -207,14 +191,14 @@ const loadMetrics = async () => {
       } catch (e) {
     metrics.value = null;
     error.value = e?.message || String(e);
-    ElMessage.error("加载指标数据失败");
+    if (!silent) ElMessage.error("加载指标数据失败");
       } finally {
-    loading.value = false;
+    if (!silent) loading.value = false;
       }
 };
 
 const onEdgeChange = async () => {
-  router.replace({ path: "/metrics", query: { edgeId: edgeId.value } }).catch(() => {});
+  router.replace({ path: "/platform-metrics", query: { edgeId: edgeId.value } }).catch(() => {});
   await loadMetrics();
 };
 
@@ -256,7 +240,12 @@ onMounted(async () => {
     edgeId.value = edges.value[0].edgeId;
   }
   if (edgeId.value) await loadMetrics();
+  pollTimer = window.setInterval(() => loadMetrics({ silent: true }), 5000);
 });
+const metricRows = computed(() => filteredMetricNames.value.map(name => ({ name, ...metrics.value[name] })));
+const { page: metricPage, pageSize: metricPageSize, total: metricTotal, pagedItems: pagedMetricRows, resetPage: resetMetricPage } = useClientPagination(metricRows, 50);
+watch(keyword, resetMetricPage);
+onBeforeUnmount(() => window.clearInterval(pollTimer));
 </script>
 
 <style scoped>
@@ -264,9 +253,8 @@ onMounted(async () => {
   width: 100%;
 }
 
-.page-header {
-  border-radius: 8px;
-}
+.page-header { border-radius: 14px; }
+.metrics-toolbar { margin-bottom: 16px; padding: 14px 16px 2px; border: 1px solid #e5eaf0; border-radius: 11px; background: #fafbfd; }
 
 .card-header {
   display: flex;

@@ -2,6 +2,7 @@ using System.Text.Json;
 using Ingot.Agent;
 using Ingot.Platform.Infrastructure.Events;
 using Ingot.Platform.Infrastructure.Inspections;
+using Ingot.Platform.Infrastructure.Cycles;
 using Ingot.Contracts.Agents;
 using Ingot.Contracts.Events;
 using Ingot.Contracts.Inspections;
@@ -10,7 +11,8 @@ namespace Ingot.Platform.Infrastructure.AgentTools;
 
 public sealed class CompareCyclesTool(
     IChatEventReader events,
-    IInspectionRecordStore inspections) : IAnalysisTool
+    IInspectionRecordStore inspections,
+    ICycleComparisonService? cycleComparisons = null) : IAnalysisTool
 {
     public AnalysisToolDefinition Definition { get; } = new()
     {
@@ -52,9 +54,10 @@ public sealed class CompareCyclesTool(
         foreach (var candidateId in candidateIds)
             candidates.Add(await LoadCycleAsync(context.UserId, candidateId, ct).ConfigureAwait(false));
 
-        var allInspections = await inspections.QueryAllByOperationRunIdsAsync(
-            [baselineId, .. candidateIds],
-            ct).ConfigureAwait(false);
+        var allInspections = InspectionRecordSet.Effective(
+            await inspections.QueryAllByOperationRunIdsAsync(
+                [baselineId, .. candidateIds],
+                ct).ConfigureAwait(false));
         var baselineInspections = allInspections
             .Where(record => string.Equals(record.OperationRunId, baselineId, StringComparison.Ordinal))
             .ToArray();
@@ -80,11 +83,19 @@ public sealed class CompareCyclesTool(
         };
         var baselinePassRate = PassRate(baselineInspections);
         var candidatePassRate = PassRate(candidateInspections);
+        var processComparison = cycleComparisons is null
+            ? null
+            : await cycleComparisons.CompareSelectedAsync(
+                baselineId,
+                [baselineId, .. candidateIds],
+                ct).ConfigureAwait(false);
         var limitations = new List<string>();
         if (baseline.Events == 0)
             limitations.Add("基准周期没有生产记录。");
         if (candidates.Any(static item => item.Events == 0))
             limitations.Add("部分同类周期没有生产记录。");
+        if (processComparison is null)
+            limitations.Add("没有匹配的已发布分析方案，未生成工艺信号和配方参数比较。");
 
         return new AnalysisToolResult
         {
@@ -102,6 +113,7 @@ public sealed class CompareCyclesTool(
                     recordTypesOnlyInComparison = onlyCandidates
                 },
                 duration = durationStats,
+                process = processComparison,
                 inspection = new
                 {
                     baselineInspectionCount = baselineInspections.Length,

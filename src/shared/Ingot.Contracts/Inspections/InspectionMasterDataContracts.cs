@@ -28,6 +28,7 @@ public sealed record InspectionCharacteristicDefinition
     public string? Unit { get; init; }
     public decimal? LowerLimit { get; init; }
     public decimal? UpperLimit { get; init; }
+    public IReadOnlyList<string> AllowedValues { get; init; } = [];
     public bool Required { get; init; } = true;
 }
 
@@ -62,6 +63,7 @@ public sealed record InspectionPlanScope
     public string? ProductCode { get; init; }
     public string? RecipeId { get; init; }
     public string? MachineId { get; init; }
+    public IReadOnlyDictionary<string, string> ContextSelector { get; init; } = new Dictionary<string, string>();
 }
 
 public sealed record InspectionPlanItem

@@ -49,17 +49,20 @@ const series = [
   {
     code: 'LENS-A', productCode: 'LENS-A-42', recipeVersion: 7,
     upperTemperature: 620, lowerTemperature: 615, pressure: 120, workPosition: 12.5,
-    upperCore: 'CORE-UP-A023', lowerCore: 'CORE-LOW-A019'
+    upperCore: 'CORE-UP-A023', lowerCore: 'CORE-LOW-A019',
+    upperHolder: 'HOLDER-UP-A006', lowerHolder: 'HOLDER-LOW-A004'
   },
   {
     code: 'LENS-B', productCode: 'LENS-B-35', recipeVersion: 4,
     upperTemperature: 602, lowerTemperature: 597, pressure: 108, workPosition: 13.2,
-    upperCore: 'CORE-UP-B011', lowerCore: 'CORE-LOW-B014'
+    upperCore: 'CORE-UP-B011', lowerCore: 'CORE-LOW-B014',
+    upperHolder: 'HOLDER-UP-B008', lowerHolder: 'HOLDER-LOW-B007'
   },
   {
     code: 'LENS-C', productCode: 'LENS-C-58', recipeVersion: 9,
     upperTemperature: 635, lowerTemperature: 630, pressure: 132, workPosition: 11.8,
-    upperCore: 'CORE-UP-C031', lowerCore: 'CORE-LOW-C027'
+    upperCore: 'CORE-UP-C031', lowerCore: 'CORE-LOW-C027',
+    upperHolder: 'HOLDER-UP-C012', lowerHolder: 'HOLDER-LOW-C010'
   }
 ]
 
@@ -146,8 +149,6 @@ function recipeFor(profile, baseRecipe, seriesOrdinal) {
   derived['work.set_pressure'] = profile.pressure + 8
   derived['hold.pressure'] = profile.pressure
   derived['position.work'] = profile.workPosition
-  derived['upper_mold.core'] = profile.upperCore
-  derived['lower_mold.core'] = profile.lowerCore
   derived['hold.upper_mold.temperature'] = profile.upperTemperature - 15
   derived['hold.lower_mold.temperature'] = profile.lowerTemperature - 15
   derived['work.upper_mold.temperature'] = profile.upperTemperature - 10
@@ -381,7 +382,7 @@ function qualityPlans(date) {
     planId: `optical.${item.code.toLowerCase()}.quality`,
     version: 1,
     name: `${item.code} 光学模压质量方案`,
-    description: '光学玻璃模压演示模板；只对明确配置的产品系列生效。',
+    description: '光学玻璃模压质量方案；只对明确配置的产品系列生效。',
     status: 'published',
     priority: 100,
     effectiveFrom: updatedAt,
@@ -422,9 +423,10 @@ function phaseMappings(phaseMapping, date) {
   })))
 }
 
-function comparisonFeatures(acquisition, date) {
+function comparisonFeatures(acquisition, analysisPlan, date) {
   const updatedAt = `${date}T00:00:00.000Z`
-  return series.flatMap(profile => acquisition.fields.filter(item => item.useInComparison).map((item) => ({
+  const selectedSignals = new Set(analysisPlan.signals.map(item => item.dataItemCode))
+  return series.flatMap(profile => acquisition.fields.filter(item => selectedSignals.has(item.code)).map((item) => ({
     code: `comparison.${profile.code.toLowerCase()}.${item.code}.mean`,
     name: item.sourceField,
     phaseCode: 'cycle',
@@ -442,6 +444,160 @@ function comparisonFeatures(acquisition, date) {
   })))
 }
 
+function processDataModels(acquisition, recipeProfile, phaseMapping, date) {
+  return [{
+    modelId: 'optical-glass-molding',
+    version: 1,
+    name: '光学玻璃模压工艺数据模型',
+    description: '光学玻璃模压工艺数据定义；行业字段通过版本化模型配置，不进入平台固定表结构。',
+    status: 'published',
+    acquisition: {
+      samplePeriodMs: acquisition.samplePeriodMs,
+      stepSourceKey: acquisition.stepContextKey,
+      dataItems: acquisition.fields.map(item => ({
+        code: item.code,
+        sourceField: item.sourceField,
+        dataType: item.dataType ?? acquisition.defaults?.dataType ?? 'double',
+        unit: item.unit ?? null,
+        category: item.category ?? acquisition.defaults?.semanticRole ?? 'process',
+        nullable: item.nullable ?? acquisition.defaults?.nullable ?? true
+      }))
+    },
+    recipeParameters: recipeProfile.parameters.map(item => ({
+      code: item.code,
+      sourceField: item.sourceField,
+      dataType: item.dataType ?? recipeProfile.defaults?.dataType ?? 'double',
+      unit: item.unit ?? null,
+      nullable: item.nullable ?? recipeProfile.defaults?.nullable ?? true
+    })),
+    stages: phaseMapping.mappings.map(item => ({
+      sourceStep: item.sourceStep,
+      code: item.phaseCode,
+      name: item.displayName,
+      expectedDurationSeconds: item.exampleDurationSeconds ?? 0,
+      required: true
+    })),
+    updatedAt: `${date}T00:00:00.000Z`
+  }]
+}
+
+function recipeVersionConfigurations(baseRecipe, date) {
+  return series.flatMap(profile => [
+    recipeFor(profile, baseRecipe, 0),
+    recipeFor(profile, baseRecipe, 4)
+  ].map(recipe => ({
+      recipeId: `rcp-${profile.code.toLowerCase()}`,
+      version: recipe.version,
+      name: `${profile.code} 模压配方`,
+      basedOnVersion: recipe.adjusted ? profile.recipeVersion : profile.recipeVersion - 1,
+      dataModelId: 'optical-glass-molding',
+      dataModelVersion: 1,
+      status: 'published',
+      contextSelector: { 'product.series': profile.code },
+      values: Object.entries(recipe.resolvedParameters).map(([code, value]) => ({ code, value })),
+      updatedAt: `${date}T00:00:00.000Z`
+    })))
+}
+
+function toolingIdentity(profile, date) {
+  const profileIndex = series.findIndex(item => item.code === profile.code)
+  return {
+    moldId: `MOLD-${profile.code}`,
+    assemblyRevisionId: uuidV7(new Date(`${date}T00:00:00.000Z`), 8_000_000 + profileIndex)
+  }
+}
+
+function manufacturingSetup(cycleResults, date) {
+  const componentTypes = [
+    { componentTypeCode: 'mold_core', name: '模芯', status: 'active', attributes: { industry: 'optical-glass-molding' } },
+    { componentTypeCode: 'mold_holder', name: '模架', status: 'active', attributes: { industry: 'optical-glass-molding' } }
+  ]
+  const toolingType = {
+    toolingTypeCode: 'optical-glass-mold',
+    version: 1,
+    name: '光学玻璃模压模具',
+    status: 'active',
+    roles: [
+      { code: 'upper_core', name: '上模芯', required: true, maxCount: 1, sortOrder: 1, acceptedComponentTypeCodes: ['mold_core'] },
+      { code: 'lower_core', name: '下模芯', required: true, maxCount: 1, sortOrder: 2, acceptedComponentTypeCodes: ['mold_core'] },
+      { code: 'upper_holder', name: '上模架', required: true, maxCount: 1, sortOrder: 3, acceptedComponentTypeCodes: ['mold_holder'] },
+      { code: 'lower_holder', name: '下模架', required: true, maxCount: 1, sortOrder: 4, acceptedComponentTypeCodes: ['mold_holder'] }
+    ]
+  }
+  const componentSpecs = profile => [
+    ['upper_core', profile.upperCore],
+    ['lower_core', profile.lowerCore],
+    ['upper_holder', profile.upperHolder],
+    ['lower_holder', profile.lowerHolder]
+  ]
+  const componentTypeForRole = roleCode => roleCode.endsWith('_core')
+    ? { code: 'mold_core', name: '模芯' }
+    : { code: 'mold_holder', name: '模架' }
+  const components = series.flatMap(profile => componentSpecs(profile).map(([roleCode, componentId]) => ({
+    componentId,
+    componentTypeCode: componentTypeForRole(roleCode).code,
+    serialNo: componentId,
+    name: `${profile.code} ${toolingType.roles.find(role => role.code === roleCode).name}`,
+    status: 'available',
+    attributes: { productSeries: profile.code, componentTypeName: componentTypeForRole(roleCode).name }
+  })))
+  const assemblies = series.map(profile => ({
+    moldId: toolingIdentity(profile, date).moldId,
+    toolingTypeCode: toolingType.toolingTypeCode,
+    name: `${profile.code} 模压模具`,
+    status: 'active'
+  }))
+  const revisions = series.map(profile => ({
+    assemblyRevisionId: toolingIdentity(profile, date).assemblyRevisionId,
+    moldId: toolingIdentity(profile, date).moldId,
+    revision: 1,
+    members: componentSpecs(profile).map(([roleCode, componentId]) => ({ roleCode, componentId })),
+    createdBy: 'factory-day-simulator',
+    createdAt: `${date}T00:00:00.000Z`
+  }))
+  const installations = []
+  const productionContexts = []
+  for (let index = 0; index < cycleResults.length; index += 1) {
+    const result = cycleResults[index]
+    const { cycle, profile } = result
+    const tooling = toolingIdentity(profile, date)
+    const installedAt = cycle.startedAt
+    const removedAt = cycle.completedAt
+    const installationId = uuidV7(new Date(installedAt), 9_000_000 + index)
+    installations.push({
+      installationId,
+      machineId: cycle.machineId,
+      assemblyRevisionId: tooling.assemblyRevisionId,
+      installedAt,
+      removedAt,
+      source: 'import',
+      commandId: `factory-day:${date}:install:${cycle.cycleId}`,
+      actor: 'factory-day-simulator'
+    })
+    productionContexts.push({
+      contextId: uuidV7(new Date(installedAt), 10_000_000 + index),
+      machineId: cycle.machineId,
+      productSeries: cycle.productSeries,
+      productCode: cycle.productCode,
+      recipeId: cycle.recipeId,
+      recipeVersion: String(cycle.recipeVersion),
+      toolingInstallationId: installationId,
+      validFrom: installedAt,
+      validTo: removedAt,
+      source: 'import',
+      externalBatchRef: `SIM-${date}`,
+      actor: 'factory-day-simulator'
+    })
+    Object.assign(cycle, {
+      toolingInstallationId: installationId,
+      moldId: tooling.moldId,
+      assemblyRevisionId: tooling.assemblyRevisionId,
+      assemblyRevision: 1
+    })
+  }
+  return { componentTypes, toolingTypes: [toolingType], components, assemblies, revisions, installations, productionContexts }
+}
+
 async function ensureEmptyOutput(outputDir) {
   await mkdir(outputDir, { recursive: true })
   const existing = await readdir(outputDir)
@@ -457,6 +613,7 @@ export async function generateFactoryDay({ date = defaultDate, hours = 8, output
   const recipeProfile = await readJson('recipe-profile.v1.json')
   const baseRecipe = await readJson('recipe-instance.example.json')
   const phaseMapping = await readJson('phase-mapping.v1.json')
+  const analysisPlan = await readJson('process-analysis-plan.v1.json')
   const sensorCodes = acquisition.fields.map(item => item.code)
   if (sensorCodes.length !== 13 || new Set(sensorCodes).size !== 13) throw new Error('采集 Profile 必须包含 13 个唯一字段。')
   if (phaseMapping.mappings.length !== 5) throw new Error('阶段映射必须包含 5 个阶段。')
@@ -528,9 +685,11 @@ export async function generateFactoryDay({ date = defaultDate, hours = 8, output
   await writeFile(join(outputDir, 'inspection-manifest.ndjson'), `${manifests.map(item => JSON.stringify(item)).join('\n')}\n`)
   await writeFile(join(outputDir, 'inspection-definitions.json'), `${JSON.stringify(inspectionDefinitions(date), null, 2)}\n`)
   await writeFile(join(outputDir, 'inspection-plans.json'), `${JSON.stringify(qualityPlans(date), null, 2)}\n`)
-  await writeFile(join(outputDir, 'phase-definitions.json'), `${JSON.stringify(phaseDefinitions(phaseMapping, date), null, 2)}\n`)
-  await writeFile(join(outputDir, 'phase-mappings.json'), `${JSON.stringify(phaseMappings(phaseMapping, date), null, 2)}\n`)
-  await writeFile(join(outputDir, 'feature-definitions.json'), `${JSON.stringify(comparisonFeatures(acquisition, date), null, 2)}\n`)
+  await writeFile(join(outputDir, 'process-data-models.json'), `${JSON.stringify(processDataModels(acquisition, recipeProfile, phaseMapping, date), null, 2)}\n`)
+  await writeFile(join(outputDir, 'recipe-versions.json'), `${JSON.stringify(recipeVersionConfigurations(baseRecipe, date), null, 2)}\n`)
+  await writeFile(join(outputDir, 'process-analysis-plans.json'), `${JSON.stringify([{ ...analysisPlan, updatedAt: `${date}T00:00:00.000Z` }], null, 2)}\n`)
+  const setup = manufacturingSetup(cycleResults, date)
+  await writeFile(join(outputDir, 'manufacturing-setup.json'), `${JSON.stringify(setup, null, 2)}\n`)
   await writeFile(join(outputDir, 'cycles.json'), `${JSON.stringify(cycleResults.map(item => item.cycle), null, 2)}\n`)
   const seriesCycleCounts = Object.fromEntries(series.map(item => [item.code, cycleResults.filter(result => result.cycle.productSeries === item.code).length]))
   const summary = {
@@ -552,6 +711,10 @@ export async function generateFactoryDay({ date = defaultDate, hours = 8, output
     visionInspectionCount: cycleResults.length,
     manualInspectionCount: cycleResults.length,
     originalImageCount: cycleResults.length,
+    toolingComponentCount: setup.components.length,
+    toolingAssemblyCount: setup.assemblies.length,
+    toolingInstallationCount: setup.installations.length,
+    productionContextCount: setup.productionContexts.length,
     outcomeCounts: {
       visionFail: cycleResults.filter(item => item.visionFail).length,
       manualFail: cycleResults.filter(item => item.manualFail).length,

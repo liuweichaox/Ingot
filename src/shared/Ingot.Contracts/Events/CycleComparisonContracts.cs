@@ -1,10 +1,31 @@
+using System.Text.Json;
+
 namespace Ingot.Contracts.Events;
+
+public sealed record CycleSelectionComparisonRequest
+{
+    public required string BaselineCycleId { get; init; }
+
+    public IReadOnlyList<string> CycleIds { get; init; } = [];
+}
 
 public sealed record CycleComparisonResult
 {
     public required string BaselineCycleId { get; init; }
 
     public required string ProductSeries { get; init; }
+
+    public string? AnalysisPlanId { get; init; }
+
+    public int? AnalysisPlanVersion { get; init; }
+
+    public string? DataModelId { get; init; }
+
+    public int? DataModelVersion { get; init; }
+
+    public string AnalysisScope { get; init; } = "production-cycle";
+
+    public string? AlignmentMode { get; init; }
 
     public required CycleComparisonRow Baseline { get; init; }
 
@@ -33,6 +54,16 @@ public sealed record CycleComparisonRow
 
     public string? RecipeVersion { get; init; }
 
+    public string? ToolingInstallationId { get; init; }
+
+    public string? ToolingId { get; init; }
+
+    public string? MoldId { get; init; }
+
+    public string? AssemblyRevisionId { get; init; }
+
+    public string? AssemblyRevision { get; init; }
+
     public int SampleCount { get; init; }
 
     public int ExpectedSampleCount { get; init; }
@@ -50,6 +81,19 @@ public sealed record CycleComparisonRow
     public string? VisualReviewDecision { get; init; }
 
     public IReadOnlyList<CycleSignalStatistic> Signals { get; init; } = [];
+
+    public IReadOnlyList<CycleRecipeParameter> RecipeParameters { get; init; } = [];
+}
+
+public sealed record CycleRecipeParameter
+{
+    public required string Code { get; init; }
+
+    public string? Name { get; init; }
+
+    public string? Unit { get; init; }
+
+    public JsonElement Value { get; init; }
 }
 
 public sealed record CycleSignalStatistic

@@ -26,6 +26,7 @@ For plant-local persistence and an outbox, a team may deploy `Ingot.Edge.Connect
 - `GET /api/v1/cycle-comparisons/{correlationId}` performs deterministic full-sample comparison across historical cycles in the same product series.
 - `GET /api/v1/cycles` powers a cycle-level production workspace that combines production state, complete samples, configured phases, and quality-plan execution. High-frequency samples are read through the ingest cursor without treating a transport page size as a business truncation limit.
 - Platform Web uses Production Cycles as a daily-work entry, groups Data Quality and Historical Comparison under analysis and governance, and keeps raw production events in Event Query for diagnosis and traceability. Inspection entry opens from a pending task in a drawer instead of permanently occupying the left side of the workbench.
+- Event Query loads older records on demand with the `beforeIngestId` cursor and starts live streaming after the latest displayed ID. The page never renders the entire event history at once, while complete-cycle queries and analysis still traverse every page internally.
 - record query, Chat, and SSE are delivered through Platform API.
 - Real-time control, safety interlocks, and equipment writes are outside Ingot.
 

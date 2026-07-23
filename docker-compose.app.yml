@@ -28,12 +28,19 @@ services:
       - "127.0.0.1:8000:8000"
     volumes:
       - ./Data:/app/Data
+      - ingot-inspection-attachments:/app/Data/inspection-attachments
+      - ingot-inspection-archive:/app/Archive/inspection-attachments
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       Urls: http://+:8000
       ConnectionStrings__Events: Host=postgres;Port=5432;Database=ingot;Username=ingot;Password=${INGOT_POSTGRES_PASSWORD:?INGOT_POSTGRES_PASSWORD is required}
       EventIngest__RequireToken: "true"
       EventIngest__EdgeTokens__EDGE-001: ${INGOT_EDGE_TOKEN:?INGOT_EDGE_TOKEN is required}
+      Authentication__Authority: ${INGOT_AUTHORITY:?INGOT_AUTHORITY is required}
+      Authentication__Audience: ${INGOT_AUDIENCE:?INGOT_AUDIENCE is required}
+      Authentication__RequireHttpsMetadata: ${INGOT_AUTH_REQUIRE_HTTPS:-true}
+      InspectionAttachments__RootPath: /app/Data/inspection-attachments
+      InspectionAttachments__ArchiveRootPath: /app/Archive/inspection-attachments
       Chat__Enabled: ${INGOT_CHAT_ENABLED:-false}
       Chat__Provider: ${INGOT_CHAT_PROVIDER:-Deterministic}
       Chat__FastModel: ${INGOT_CHAT_FAST_MODEL:-deterministic-v1}
@@ -92,6 +99,7 @@ services:
       Urls: http://+:8001
       ConnectorHost__IngestToken: ${INGOT_CONNECTOR_TOKEN:?INGOT_CONNECTOR_TOKEN is required}
       Edge__PlatformApiBaseUrl: http://platform-api:8000
+      Edge__PublicBaseUrl: http://connector-host:8001
       Edge__EventIngestToken: ${INGOT_EDGE_TOKEN:?INGOT_EDGE_TOKEN is required}
     depends_on:
       platform-api:
@@ -106,3 +114,5 @@ services:
 
 volumes:
   ingot-postgres-data:
+  ingot-inspection-attachments:
+  ingot-inspection-archive:

@@ -101,7 +101,16 @@ public sealed class HttpEventShipper : IEventShipper
                         JsonOptions,
                         ct)
                     .ConfigureAwait(false);
-                response.EnsureSuccessStatusCode();
+                if (!response.IsSuccessStatusCode)
+                {
+                    var responseBody = await response.Content
+                        .ReadAsStringAsync(ct)
+                        .ConfigureAwait(false);
+                    throw new HttpRequestException(
+                        $"中心拒绝事件批次（HTTP {(int)response.StatusCode}）：{responseBody}",
+                        null,
+                        response.StatusCode);
+                }
                 var result = await response.Content
                     .ReadFromJsonAsync<EventBatchResponse>(JsonOptions, ct)
                     .ConfigureAwait(false)

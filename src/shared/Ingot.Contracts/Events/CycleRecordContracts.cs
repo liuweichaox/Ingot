@@ -14,6 +14,14 @@ public sealed record CycleRecordSummary
     public string? ProductCode { get; init; }
     public string? RecipeId { get; init; }
     public string? RecipeVersion { get; init; }
+    public string? ToolingInstallationId { get; init; }
+    public string? ToolingId { get; init; }
+    public string? MoldId { get; init; }
+    public string? AssemblyRevisionId { get; init; }
+    public string? AssemblyRevision { get; init; }
+    public string? ExternalOrderRef { get; init; }
+    public string? ExternalBatchRef { get; init; }
+    public string? MaterialLotRef { get; init; }
     public int SampleCount { get; init; }
     public int ExpectedSampleCount { get; init; }
     public double? SampleCompleteness { get; init; }
@@ -24,6 +32,10 @@ public sealed record CycleRecordSummary
     public string? InspectionPlanId { get; init; }
     public int? InspectionPlanVersion { get; init; }
     public string? InspectionPlanName { get; init; }
+    public string? AnalysisPlanId { get; init; }
+    public int? AnalysisPlanVersion { get; init; }
+    public string? DataModelId { get; init; }
+    public int? DataModelVersion { get; init; }
     public int InspectionCount { get; init; }
     public int RequiredInspectionCount { get; init; }
     public int CompletedInspectionCount { get; init; }
@@ -63,5 +75,6 @@ public sealed record CycleRecordOverview
 public sealed record CycleRecordQueryResult
 {
     public IReadOnlyList<CycleRecordSummary> Data { get; init; } = [];
+    public int Total { get; init; }
     public CycleRecordOverview Overview { get; init; } = new();
 }

@@ -1,39 +1,18 @@
 <template>
-  <div class="logs-view">
-    <el-card shadow="never" class="page-header">
-      <template #header>
-        <div class="card-header">
-          <span>
-            <el-icon><Document /></el-icon>
-            <span style="margin-left: 8px">日志查看</span>
-          </span>
-          <div>
-            <el-switch
-              v-model="autoRefresh"
-              active-text="自动刷新"
-              inactive-text="手动刷新"
-              style="margin-right: 12px"
-              @change="toggleAutoRefresh"
-            />
-            <el-button type="primary" :icon="Refresh" :loading="loading" :disabled="!edgeId" @click="loadLogs">
-              刷新
-            </el-button>
-          </div>
+  <div class="logs-view page-stack">
+    <div class="logs-shell">
+      <section class="filter-panel">
+        <div class="filter-heading">
+          <strong>日志筛选</strong>
+          <el-switch
+            v-model="autoRefresh"
+            active-text="实时追踪"
+            inactive-text="已暂停"
+            :disabled="!edgeId"
+            @change="toggleAutoRefresh"
+          />
         </div>
-      </template>
-
-      <el-alert
-        type="info"
-        :closable="false"
-        style="margin-bottom: 16px"
-      >
-        <template #default>
-          通过 <code>/api/edges/&lt;edgeId&gt;/logs</code> 代理读取边缘节点日志
-        </template>
-      </el-alert>
-
-      <el-card shadow="never" style="margin-bottom: 16px">
-        <el-form :inline="true" label-width="80px">
+        <el-form :inline="true" label-width="80px" class="filter-form">
           <el-form-item label="选择节点">
             <el-select
               v-model="edgeId"
@@ -82,16 +61,16 @@
             <el-button type="primary" :icon="Search" :disabled="loading || !edgeId" @click="applyFilters">
               搜索
             </el-button>
-            <el-button :icon="RefreshLeft" :disabled="loading || !edgeId" @click="clearFilters">
+            <el-button :disabled="loading || !edgeId" @click="clearFilters">
               清空
             </el-button>
           </el-form-item>
         </el-form>
-        <div style="margin-top: 12px; color: #909399; font-size: 12px">
+        <div v-if="edgeId" class="update-meta">
           <span v-if="lastUpdate">最后更新：{{ lastUpdate }}</span>
           <span v-if="total > 0" style="margin-left: 16px">共 {{ total }} 条</span>
         </div>
-      </el-card>
+      </section>
 
       <el-alert
         v-if="error"
@@ -102,7 +81,13 @@
         style="margin-bottom: 16px"
       />
 
-      <el-row v-if="edgeId && total > 0" :gutter="16" style="margin-bottom: 16px">
+      <el-card v-if="!edgesLoading && edges.length === 0" shadow="never" class="empty-card">
+        <el-empty description="尚无可查询日志的数据接入节点">
+          <el-button type="primary" plain @click="$router.push('/edges')">查看数据接入</el-button>
+        </el-empty>
+      </el-card>
+
+      <el-row v-if="edgeId && total > 0" :gutter="16" class="log-stats">
         <el-col :span="8">
           <el-statistic title="本页 Information" :value="stats.information">
             <template #prefix>
@@ -187,7 +172,7 @@
           />
         </div>
       </el-card>
-    </el-card>
+    </div>
   </div>
 </template>
 
@@ -195,10 +180,7 @@
 import { ref, computed, onMounted, onUnmounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import {
-  Document,
-  Refresh,
   Search,
-  RefreshLeft,
   InfoFilled,
   WarningFilled,
   CircleCloseFilled,
@@ -223,7 +205,7 @@ const totalPages = ref(1);
 const loading = ref(false);
 const error = ref("");
 const lastUpdate = ref("");
-const autoRefresh = ref(false);
+const autoRefresh = ref(true);
 const timer = ref(null);
 const expanded = ref({});
 
@@ -319,7 +301,7 @@ const clearFilters = async () => {
 const toggleAutoRefresh = () => {
   if (autoRefresh.value) {
     if (timer.value) clearInterval(timer.value);
-    timer.value = setInterval(() => loadLogs(), 1000);
+    timer.value = setInterval(() => loadLogs(), 5000);
   } else {
     if (timer.value) clearInterval(timer.value);
     timer.value = null;
@@ -348,6 +330,7 @@ onMounted(async () => {
     await loadLevels();
     await loadLogs();
   }
+  toggleAutoRefresh();
 });
 
 onUnmounted(() => {
@@ -360,10 +343,7 @@ onUnmounted(() => {
   width: 100%;
 }
 
-.page-header {
-  border-radius: 8px;
-}
-
+.filter-heading,
 .card-header {
   display: flex;
   justify-content: space-between;
@@ -371,6 +351,13 @@ onUnmounted(() => {
   font-weight: 600;
   font-size: 16px;
 }
+
+.logs-shell { display: grid; gap: 16px; }
+.filter-panel { padding: 18px 20px 4px; border: 1px solid #e7ebf0; border-radius: 12px; background: #fff; }
+.filter-form { margin-top: 16px; }
+.update-meta { margin: -2px 0 14px 80px; color: #909399; font-size: 12px; }
+.empty-card { min-height: 320px; }
+.log-stats { margin-bottom: 0; padding: 16px 20px; border: 1px solid #e7ebf0; border-radius: 12px; background: #fff; }
 
 .log-item {
   border: 1px solid #e4e7ed;

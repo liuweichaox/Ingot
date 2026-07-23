@@ -1,0 +1,46 @@
+# 生产准备与工装上下文
+
+Ingot 以生产周期作为时序、阶段、视觉检查和人工质检的关联主线，但不把 MES 工单或制造批次建成平台核心主体。影响工艺分析且在一段时间内有效的信息，通过“生产准备”写入。
+
+## 数据主体
+
+- 组件类型：组件台账的可配置分类字典，是工装类型限制可用组件的来源。
+- 工装类型：版本化配置装配位置及每个位置允许的组件类型；平台代码不识别“上模芯”等行业专有名称。
+- 工装组件：可独立更换和复用的物理部件，组件 ID、组件类型和序列号稳定；组件本身不绑定某个工装类型或装配位置。
+- 模具：用户使用的稳定模具编号。
+- 模具组合版本：在这里才把组件分配到工装类型配置的位置，形成不可变成员快照；更换任一组件即创建下一版本。
+- 装模记录：组合版本在设备上的有效时间区间；同一设备同时只能有一条活动记录。
+- 生产上下文：设备在一段时间内使用的产品、配方版本和装模记录，可带 MES 外部引用，但不是工单管理。
+
+任意生产运行开始事件（例如 `cycle.started` 或 `run.started`）摄入时，平台按设备与事件时间解析唯一有效生产上下文，并把产品、配方、装模、工装和组合版本写入不可变运行快照。该快照按 `correlationId` 持久化并传播到跨批次、跨重启的后续事件。设备上报的 `workpiece_id`、阶段和步序等动态字段仍保留。若没有找到有效配置，事件会带 `context_capture_status=configuration_missing`，运行记录显示数据问题。
+
+## MES 边界
+
+- 有 MES：由集成写入生产上下文，`source=mes`；现场不重复录入订单、批次或配方选择。
+- 无 MES：现场只在换型、切换配方或装模时录入一次，后续周期自动继承。
+- 外部订单、批次和物料批号只作为可选查询引用，不驱动 Ingot 内部生命周期。
+
+## API
+
+- `GET|POST /api/v1/tooling-component-types`
+- `GET|POST /api/v1/tooling-types`
+- `GET|POST /api/v1/tooling-components`
+- `GET|POST /api/v1/tooling-assemblies`
+- `GET /api/v1/tooling-assemblies/revisions`
+- `GET|POST /api/v1/tooling-assemblies/{moldId}/revisions`
+- `GET|POST /api/v1/tooling-installations`
+- `POST /api/v1/tooling-installations/{installationId}:remove`
+- `GET|POST /api/v1/production-contexts`
+- `GET /api/v1/production-contexts/current/{machineId}`
+- `POST /api/v1/production-contexts/{contextId}:close`
+
+配置读取沿用平台统一认证和质量只读权限；工装、装模和生产上下文修改仅允许工艺工程师或平台管理员。开发环境仍使用现有统一开发身份，不增加独立用户名或访问密码。
+
+光学玻璃模压示例仅定义“模芯”和“模架”两种组件类型；“上模芯、下模芯、上模架、下模架”属于组合中的装配位置，不是四种组件类型。其他行业可以按自身工装结构配置不同的组件类型和位置。
+
+## 页面与闭环
+
+- 工装配置：组件类型 → 组件台账 → 工装类型 → 工装组合。
+- 现场操作：工装装卸 → 生产切换。
+- 自动固化：生产切换不是工单或批次；它表示某台设备从指定时间开始使用哪个产品、配方和已装工装。新周期开始时自动继承并固化这些引用。
+- 分析反馈：生产周期、质量检验和历史对比读取同一份固化上下文，使工艺参数、工装组成与质量结果可以关联分析。

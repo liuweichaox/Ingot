@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using Ingot.Platform.Api.Agents;
 using Ingot.Platform.Infrastructure.Webhooks;
 using Microsoft.AspNetCore.Mvc;
 
@@ -7,13 +8,17 @@ namespace Ingot.Platform.Api.Controllers;
 [ApiController]
 [Route("api/v1/subscriptions")]
 public sealed partial class SubscriptionsController(
-    IWebhookSubscriptionStore store) : ControllerBase
+    IWebhookSubscriptionStore store,
+    PlatformUserResolver userResolver) : PlatformConfigurationControllerBase(userResolver)
 {
     [HttpPost]
     public async Task<IActionResult> Create(
         [FromBody] CreateWebhookSubscriptionRequest? request,
         CancellationToken ct)
     {
+        var denied = DeniedConfigurationWrite();
+        if (denied is not null)
+            return denied;
         if (request is null)
             return BadRequest(new { error = "请求不能为空。" });
         if (!TryValidateEndpoint(request.Endpoint, out var endpoint, out var endpointError))
@@ -45,6 +50,9 @@ public sealed partial class SubscriptionsController(
     [HttpGet]
     public async Task<IActionResult> List(CancellationToken ct)
     {
+        var denied = DeniedConfigurationRead();
+        if (denied is not null)
+            return denied;
         var items = await store.ListAsync(ct).ConfigureAwait(false);
         return Ok(new
         {
@@ -56,8 +64,39 @@ public sealed partial class SubscriptionsController(
     [HttpGet("{subscriptionId:guid}")]
     public async Task<IActionResult> Get(Guid subscriptionId, CancellationToken ct)
     {
+        var denied = DeniedConfigurationRead();
+        if (denied is not null)
+            return denied;
         var item = await store.GetAsync(subscriptionId, ct).ConfigureAwait(false);
         return item is null ? NotFound() : Ok(WebhookSubscriptionView.From(item));
+    }
+
+    [HttpPut("{subscriptionId:guid}")]
+    public async Task<IActionResult> Update(
+        Guid subscriptionId,
+        [FromBody] UpdateWebhookSubscriptionRequest? request,
+        CancellationToken ct)
+    {
+        var denied = DeniedConfigurationWrite();
+        if (denied is not null)
+            return denied;
+        if (request is null)
+            return BadRequest(new { error = "请求不能为空。" });
+        if (!TryValidateEndpoint(request.Endpoint, out var endpoint, out var endpointError))
+            return BadRequest(new { error = endpointError });
+        if (request.EventTypes is null || request.EventTypes.Any(static value => !EventTypePattern().IsMatch(value)))
+            return BadRequest(new { error = "EventTypes 包含非法事件类型。" });
+        if (request.Context is null || request.Context.Keys.Any(static key => !ContextKeyPattern().IsMatch(key)))
+            return BadRequest(new { error = "Context 包含非法键。" });
+        if (request.ClearSecret && !string.IsNullOrWhiteSpace(request.Secret))
+            return BadRequest(new { error = "不能同时设置新密钥并清除密钥。" });
+
+        var updated = await store.UpdateAsync(subscriptionId, request with
+        {
+            Endpoint = endpoint!.ToString(),
+            Name = string.IsNullOrWhiteSpace(request.Name) ? endpoint.Host : request.Name.Trim()
+        }, ct).ConfigureAwait(false);
+        return updated is null ? NotFound() : Ok(WebhookSubscriptionView.From(updated));
     }
 
     [HttpPut("{subscriptionId:guid}/enabled")]
@@ -66,6 +105,9 @@ public sealed partial class SubscriptionsController(
         [FromBody] SetSubscriptionEnabledRequest? request,
         CancellationToken ct)
     {
+        var denied = DeniedConfigurationWrite();
+        if (denied is not null)
+            return denied;
         if (request is null)
             return BadRequest(new { error = "请求不能为空。" });
         return await store.SetEnabledAsync(subscriptionId, request.Enabled, ct).ConfigureAwait(false)
@@ -75,9 +117,14 @@ public sealed partial class SubscriptionsController(
 
     [HttpDelete("{subscriptionId:guid}")]
     public async Task<IActionResult> Delete(Guid subscriptionId, CancellationToken ct)
-        => await store.DeleteAsync(subscriptionId, ct).ConfigureAwait(false)
+    {
+        var denied = DeniedConfigurationWrite();
+        if (denied is not null)
+            return denied;
+        return await store.DeleteAsync(subscriptionId, ct).ConfigureAwait(false)
             ? NoContent()
             : NotFound();
+    }
 
     private static bool TryValidateEndpoint(
         string? value,

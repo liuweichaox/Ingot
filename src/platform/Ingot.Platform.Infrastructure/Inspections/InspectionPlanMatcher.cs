@@ -27,7 +27,10 @@ public static class InspectionPlanMatcher
         => Matches(scope.ProductSeries, context.GetValueOrDefault("product_series")) &&
            Matches(scope.ProductCode, context.GetValueOrDefault("product_code")) &&
            Matches(scope.RecipeId, context.GetValueOrDefault("recipe_id")) &&
-           Matches(scope.MachineId, machineId);
+           Matches(scope.MachineId, machineId) &&
+           scope.ContextSelector.All(pair => Matches(
+               pair.Value,
+               pair.Key == "machine_id" ? machineId : ContextValue(context, pair.Key)));
 
     private static bool Matches(string? selector, string? value)
         => string.IsNullOrWhiteSpace(selector) ||
@@ -35,5 +38,8 @@ public static class InspectionPlanMatcher
 
     private static int Specificity(InspectionPlanScope scope)
         => new[] { scope.ProductSeries, scope.ProductCode, scope.RecipeId, scope.MachineId }
-            .Count(static value => !string.IsNullOrWhiteSpace(value));
+            .Count(static value => !string.IsNullOrWhiteSpace(value)) + scope.ContextSelector.Count;
+
+    private static string? ContextValue(IReadOnlyDictionary<string, string> context, string key)
+        => context.GetValueOrDefault(key) ?? context.GetValueOrDefault(key.Replace('.', '_'));
 }

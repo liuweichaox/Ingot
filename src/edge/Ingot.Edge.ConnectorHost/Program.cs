@@ -1,5 +1,7 @@
 // Connector Host：接收用户接入程序产生的标准事件并上报中心。
 
+using System.Security.Cryptography;
+using System.Text;
 using Ingot.Edge.Application.Abstractions;
 using Ingot.Edge.Application.Options;
 using Ingot.Edge.Infrastructure.Events;
@@ -11,6 +13,7 @@ using Ingot.Edge.ConnectorHost.BackgroundServices;
 using Ingot.Edge.ConnectorHost.HealthChecks;
 using Ingot.Edge.ConnectorHost.Services;
 using Ingot.Edge.ConnectorHost.Configuration;
+using Ingot.Edge.ConnectorHost.Acquisition;
 using Prometheus;
 using Serilog;
 using Serilog.Events;
@@ -18,7 +21,7 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 var builder = WebApplication.CreateBuilder(args);
 
-if (!builder.Environment.IsDevelopment())
+if (!builder.Environment.IsDevelopment() && !builder.Environment.IsEnvironment("DeviceSimulator"))
     ProductionConfigurationValidator.Validate(builder.Configuration);
 
 var urls = builder.Configuration["Urls"]
@@ -32,6 +35,7 @@ builder.Services.Configure<LogOptions>(builder.Configuration.GetSection("Logging
 
 // 配置 Edge 上报（注册/心跳）
 builder.Services.Configure<EdgeReportingOptions>(builder.Configuration.GetSection("Edge"));
+builder.Services.Configure<HttpPollingAcquisitionOptions>(builder.Configuration.GetSection("Acquisition"));
 builder.Services.AddSingleton<EdgeIdentityService>();
 builder.Services.AddSingleton<IEdgeIdentityProvider>(services => services.GetRequiredService<EdgeIdentityService>());
 builder.Services.AddSingleton<IPlatformReportingClient, PlatformReportingClient>();
@@ -43,12 +47,18 @@ builder.Services.AddSingleton<IEventLog, SqliteEventLog>();
 builder.Services.AddSingleton<IEventPersistenceHealth, EventPersistenceHealth>();
 builder.Services.AddSingleton<IEventSink, EventSink>();
 builder.Services.AddSingleton<IEventShipper, HttpEventShipper>();
+builder.Services.AddSingleton<AcquisitionStatus>();
+builder.Services.AddSingleton<IAcquisitionSecretResolver, EnvironmentAcquisitionSecretResolver>();
+builder.Services.AddSingleton<IAcquisitionProtocolRunner, MqttAcquisitionRunner>();
+builder.Services.AddSingleton<IAcquisitionProtocolRunner, OpcUaAcquisitionRunner>();
+builder.Services.AddSingleton<IAcquisitionProtocolRunner, ModbusTcpAcquisitionRunner>();
 
 // 日志查看服务（使用 SQLite）
 builder.Services.AddSingleton<ILogViewService, SqliteLogViewService>();
 
 builder.Services.AddHostedService<EdgePlatformReporterHostedService>();
 builder.Services.AddHostedService<EventShipperHostedService>();
+builder.Services.AddHostedService<HttpPollingAcquisitionHostedService>();
 
 builder.Services.AddControllers();
 
@@ -85,6 +95,38 @@ var app = builder.Build();
 
 app.UseRouting();
 
+app.Use(async (context, next) =>
+{
+    var path = context.Request.Path;
+    var protectedPath =
+        path.StartsWithSegments("/api/logs") ||
+        path.StartsWithSegments("/api/v1/acquisition") ||
+        path.StartsWithSegments("/api/v1/events") ||
+        path.StartsWithSegments("/api/v1/cycles") ||
+        path.StartsWithSegments("/api/v1/context") ||
+        path.StartsWithSegments("/metrics");
+    if (!protectedPath)
+    {
+        await next(context).ConfigureAwait(false);
+        return;
+    }
+
+    var expected = app.Configuration["Edge:EventIngestToken"];
+    var authorization = context.Request.Headers.Authorization.ToString();
+    var valid = !string.IsNullOrWhiteSpace(expected) &&
+                authorization.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase) &&
+                CryptographicOperations.FixedTimeEquals(
+                    Encoding.UTF8.GetBytes(expected),
+                    Encoding.UTF8.GetBytes(authorization["Bearer ".Length..].Trim()));
+    if (!valid)
+    {
+        context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+        await context.Response.WriteAsJsonAsync(new { error = "采集节点访问凭据无效。" }).ConfigureAwait(false);
+        return;
+    }
+    await next(context).ConfigureAwait(false);
+});
+
 // 添加 Prometheus HTTP 指标收集
 app.UseHttpMetrics();
 
@@ -109,6 +151,7 @@ app.MapGet("/", () => Results.Ok(new
         logs = "/api/logs",
         logLevels = "/api/logs/levels",
         connectorEvents = "/api/v1/connector-events",
+        acquisitionStatus = "/api/v1/acquisition/status",
         events = "/api/v1/events",
         eventStream = "/api/v1/events/stream",
         cycle = "/api/v1/cycles/{correlationId}",

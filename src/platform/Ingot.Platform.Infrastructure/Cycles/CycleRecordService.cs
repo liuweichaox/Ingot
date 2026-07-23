@@ -3,6 +3,7 @@ using Ingot.Contracts.Events;
 using Ingot.Contracts.Inspections;
 using Ingot.Platform.Infrastructure.Events;
 using Ingot.Platform.Infrastructure.Inspections;
+using Ingot.Platform.Infrastructure.ProcessConfiguration;
 
 namespace Ingot.Platform.Infrastructure.Cycles;
 
@@ -10,7 +11,8 @@ public sealed class CycleRecordService(
     IPlatformEventStore events,
     IInspectionRecordStore inspections,
     IInspectionReviewStore reviews,
-    IInspectionMasterDataStore masterData) : ICycleRecordService
+    IInspectionMasterDataStore masterData,
+    ProcessAnalysisResolver analysisResolver) : ICycleRecordService
 {
     public async Task<CycleRecordQueryResult> QueryAsync(
         DateTimeOffset? from,
@@ -23,6 +25,7 @@ public sealed class CycleRecordService(
         string? correlationId,
         string? status,
         int limit,
+        int offset = 0,
         CancellationToken ct = default)
     {
         var context = BuildContext(productSeries, productCode, recipeId, workpieceId);
@@ -45,7 +48,7 @@ public sealed class CycleRecordService(
             lifecycle.AddRange(await QueryAllAsync(baseQuery with { EventType = "cycle.completed" }, ct).ConfigureAwait(false));
         }
 
-        var candidates = lifecycle
+        var allCandidates = lifecycle
             .Where(static row => !string.IsNullOrWhiteSpace(row.Event.CorrelationId))
             .GroupBy(static row => row.Event.CorrelationId!, StringComparer.Ordinal)
             .Select(group => new
@@ -64,43 +67,53 @@ public sealed class CycleRecordService(
                 _ => true
             })
             .OrderByDescending(static item => item.StartedAt)
+            .ToArray();
+        var candidates = allCandidates
+            .Skip(offset)
             .Take(limit)
             .ToArray();
 
-        var cycleEvents = new Dictionary<string, IReadOnlyList<PlatformProductionEvent>>(StringComparer.Ordinal);
-        foreach (var candidate in candidates)
-        {
-            cycleEvents[candidate.Id] = await QueryAllAsync(
-                new PlatformEventQuery { CorrelationId = candidate.Id }, ct).ConfigureAwait(false);
-        }
-
         var ids = candidates.Select(static item => item.Id).ToArray();
-        var records = await inspections.QueryAllByOperationRunIdsAsync(ids, ct).ConfigureAwait(false);
+        var selectedEvents = await events.QueryByCorrelationIdsAsync(ids, ct).ConfigureAwait(false);
+        var cycleEvents = selectedEvents
+            .Where(static row => !string.IsNullOrWhiteSpace(row.Event.CorrelationId))
+            .GroupBy(static row => row.Event.CorrelationId!, StringComparer.Ordinal)
+            .ToDictionary(
+                static group => group.Key,
+                static group => (IReadOnlyList<PlatformProductionEvent>)group.ToArray(),
+                StringComparer.Ordinal);
+        var records = InspectionRecordSet.Effective(
+            await inspections.QueryAllByOperationRunIdsAsync(ids, ct).ConfigureAwait(false));
         var latestReviews = await reviews.GetLatestByInspectionRecordIdsAsync(
             records.Select(static record => record.RecordId).ToArray(), ct).ConfigureAwait(false);
         var plans = await masterData.ListInspectionPlansAsync(ct).ConfigureAwait(false);
-        var phaseDefinitions = await masterData.ListPhaseDefinitionsAsync(ct).ConfigureAwait(false);
-        var phaseMappings = await masterData.ListPhaseMappingsAsync(ct).ConfigureAwait(false);
+        var analysisRows = await analysisResolver.ResolveManyAsync(
+            ids.Select(id => ResolveContext(cycleEvents.GetValueOrDefault(id, []))).ToArray(),
+            "production-cycle",
+            ct).ConfigureAwait(false);
+        var analyses = ids
+            .Select((id, index) => (id, Analysis: analysisRows[index]))
+            .ToDictionary(static pair => pair.id, static pair => pair.Analysis, StringComparer.Ordinal);
         var recordsByCycle = records.GroupBy(static record => record.OperationRunId, StringComparer.Ordinal)
             .ToDictionary(static group => group.Key, static group => group.ToArray(), StringComparer.Ordinal);
 
         var rows = candidates.Select(candidate => BuildSummary(
                 candidate.Id,
-                cycleEvents[candidate.Id],
+                cycleEvents.GetValueOrDefault(candidate.Id, []),
                 recordsByCycle.GetValueOrDefault(candidate.Id, []),
                 latestReviews,
                 plans,
-                phaseDefinitions,
-                phaseMappings))
+                analyses[candidate.Id]))
             .ToArray();
         return new CycleRecordQueryResult
         {
             Data = rows,
+            Total = allCandidates.Length,
             Overview = new CycleRecordOverview
             {
-                CycleCount = rows.Length,
-                CompletedCount = rows.Count(static row => row.Status == "completed"),
-                ActiveCount = rows.Count(static row => row.Status == "active"),
+                CycleCount = allCandidates.Length,
+                CompletedCount = allCandidates.Count(static row => row.Completed),
+                ActiveCount = allCandidates.Count(static row => !row.Completed),
                 SampleCompleteCount = rows.Count(static row => row.SampleCompleteness >= 1d),
                 PhaseCompleteCount = rows.Count(static row => row.PhaseComplete == true),
                 QualityCompleteCount = rows.Count(static row => row.QualityStatus == "COMPLETE"),
@@ -115,8 +128,7 @@ public sealed class CycleRecordService(
         IReadOnlyList<InspectionRecord> inspectionRecords,
         IReadOnlyDictionary<Guid, InspectionReview> latestReviews,
         IReadOnlyList<InspectionPlan> plans,
-        IReadOnlyList<PhaseDefinition> phaseDefinitions,
-        IReadOnlyList<PhaseMapping> phaseMappings)
+        ResolvedProcessAnalysis? analysis)
     {
         var ordered = rows.OrderBy(static row => row.Event.OccurredAt).ThenBy(static row => row.IngestId).ToArray();
         var first = ordered[0];
@@ -124,23 +136,22 @@ public sealed class CycleRecordService(
         var completed = ordered.LastOrDefault(static row => row.Event.EventType == "cycle.completed");
         var samples = ordered.Where(static row => row.Event.EventType == "process.sample").ToArray();
         var startedAt = started?.Event.OccurredAt ?? first.Event.OccurredAt;
-        var context = ordered.Select(static row => row.Event.Context).FirstOrDefault(static value => value.Count > 0)
-                      ?? first.Event.Context;
+        var context = ResolveContext(ordered);
         var expectedSampleCount = started is null ? 0 : ReadInt(started.Event.Data, "expectedSampleCount");
-        var mappings = ApplicableMappings(phaseMappings, context);
         var resolvedSamples = samples.Select(sample => new
         {
             Row = sample,
-            Phase = ResolvePhase(sample.Event.Context, mappings)
+            Phase = analysis is null ? null : ProcessAnalysisResolver.ResolveStage(sample.Event.Context, analysis.DataModel)
         }).ToArray();
-        var requiredCodes = (mappings.Count > 0
-                ? mappings.Where(static mapping => mapping.Required).Select(static mapping => mapping.PhaseCode)
-                : phaseMappings.Count == 0
-                    ? phaseDefinitions.Where(static phase => phase.Required).Select(static phase => phase.Code)
-                    : [])
+        var requiredCodes = (analysis?.DataModel.Stages
+                .Where(static stage => stage.Required)
+                .Select(static stage => stage.Code) ?? [])
             .Distinct(StringComparer.Ordinal)
             .ToArray();
-        var phaseNames = phaseDefinitions.ToDictionary(static phase => phase.Code, static phase => phase.Name, StringComparer.Ordinal);
+        var stageDefinitions = analysis?.DataModel.Stages ?? [];
+        var phaseNames = stageDefinitions.ToDictionary(static phase => phase.Code, static phase => phase.Name, StringComparer.Ordinal);
+        var phaseOrder = stageDefinitions.Select((phase, index) => (phase.Code, index))
+            .ToDictionary(static item => item.Code, static item => item.index, StringComparer.Ordinal);
         var observedCodes = resolvedSamples.Where(static item => !string.IsNullOrWhiteSpace(item.Phase))
             .Select(static item => item.Phase!)
             .ToHashSet(StringComparer.Ordinal);
@@ -155,7 +166,7 @@ public sealed class CycleRecordService(
                 StartedAt = group.Min(static item => item.Row.Event.OccurredAt),
                 EndedAt = group.Max(static item => item.Row.Event.OccurredAt)
             })
-            .OrderBy(row => phaseDefinitions.FirstOrDefault(phase => phase.Code == row.Code)?.SortOrder ?? int.MaxValue)
+            .OrderBy(row => phaseOrder.GetValueOrDefault(row.Code, int.MaxValue))
             .ToArray();
 
         var plan = InspectionPlanMatcher.Resolve(plans, context, first.Event.Subject.Id, startedAt);
@@ -164,9 +175,14 @@ public sealed class CycleRecordService(
             record.DefinitionCode == item.DefinitionCode && record.DefinitionVersion == item.DefinitionVersion));
         var pendingReviews = requiredItems.Where(static item => item.RequiresReview).Count(item =>
         {
-            var matching = inspectionRecords.Where(record => record.DefinitionCode == item.DefinitionCode &&
-                                                             record.DefinitionVersion == item.DefinitionVersion).ToArray();
-            return matching.Length == 0 || matching.All(record => !latestReviews.ContainsKey(record.RecordId));
+            var latestRecord = inspectionRecords
+                .Where(record => record.DefinitionCode == item.DefinitionCode &&
+                                 record.DefinitionVersion == item.DefinitionVersion)
+                .OrderByDescending(static record => record.MeasuredAt)
+                .FirstOrDefault();
+            return latestRecord is null ||
+                   !latestReviews.TryGetValue(latestRecord.RecordId, out var review) ||
+                   review.Decision != InspectionReviewDecisions.Confirmed;
         });
         var qualityStatus = ResolveQualityStatus(plan, requiredItems, completedItems, pendingReviews, inspectionRecords);
         var issues = BuildIssues(
@@ -189,6 +205,14 @@ public sealed class CycleRecordService(
             ProductCode = context.GetValueOrDefault("product_code"),
             RecipeId = context.GetValueOrDefault("recipe_id"),
             RecipeVersion = context.GetValueOrDefault("recipe_version"),
+            ToolingInstallationId = context.GetValueOrDefault("tooling_installation_id"),
+            ToolingId = context.GetValueOrDefault("tooling_id") ?? context.GetValueOrDefault("mold_id"),
+            MoldId = context.GetValueOrDefault("mold_id"),
+            AssemblyRevisionId = context.GetValueOrDefault("assembly_revision_id"),
+            AssemblyRevision = context.GetValueOrDefault("assembly_revision"),
+            ExternalOrderRef = context.GetValueOrDefault("external_order_ref"),
+            ExternalBatchRef = context.GetValueOrDefault("external_batch_ref"),
+            MaterialLotRef = context.GetValueOrDefault("material_lot_ref"),
             SampleCount = samples.Length,
             ExpectedSampleCount = expectedSampleCount,
             SampleCompleteness = expectedSampleCount > 0 ? samples.Length / (double)expectedSampleCount : null,
@@ -199,6 +223,10 @@ public sealed class CycleRecordService(
             InspectionPlanId = plan?.PlanId,
             InspectionPlanVersion = plan?.Version,
             InspectionPlanName = plan?.Name,
+            AnalysisPlanId = analysis?.Plan.PlanId,
+            AnalysisPlanVersion = analysis?.Plan.Version,
+            DataModelId = analysis?.DataModel.ModelId,
+            DataModelVersion = analysis?.DataModel.Version,
             InspectionCount = inspectionRecords.Count,
             RequiredInspectionCount = requiredItems.Length,
             CompletedInspectionCount = completedItems,
@@ -254,40 +282,23 @@ public sealed class CycleRecordService(
             if (!context.TryGetValue(field, out var value) || string.IsNullOrWhiteSpace(value))
                 issues.Add(Issue($"context.{field}.missing", "warning", $"生产信息缺少 {field}。"));
         }
+        if (context.GetValueOrDefault("context_capture_status") == "configuration_missing")
+        {
+            issues.Add(Issue(
+                "context.production_configuration_missing",
+                "error",
+                "周期开始时未找到唯一有效的生产准备和装模记录。"));
+        }
         return issues;
     }
 
     private static CycleDataIssue Issue(string code, string severity, string message)
         => new() { Code = code, Severity = severity, Message = message };
 
-    private static IReadOnlyList<PhaseMapping> ApplicableMappings(
-        IReadOnlyList<PhaseMapping> mappings,
-        IReadOnlyDictionary<string, string> context)
-    {
-        var recipeId = context.GetValueOrDefault("recipe_id");
-        var recipeVersion = context.GetValueOrDefault("recipe_version");
-        return mappings.Where(mapping =>
-                string.Equals(mapping.RecipeId, recipeId, StringComparison.OrdinalIgnoreCase) &&
-                (string.IsNullOrWhiteSpace(mapping.RecipeVersion) ||
-                 string.Equals(mapping.RecipeVersion, recipeVersion, StringComparison.OrdinalIgnoreCase)))
-            .ToArray();
-    }
-
-    private static string? ResolvePhase(
-        IReadOnlyDictionary<string, string> context,
-        IReadOnlyList<PhaseMapping> mappings)
-    {
-        var explicitPhase = context.GetValueOrDefault("process_phase");
-        if (!string.IsNullOrWhiteSpace(explicitPhase))
-            return explicitPhase;
-        var step = context.GetValueOrDefault("recipe_step");
-        return string.IsNullOrWhiteSpace(step)
-            ? null
-            : mappings.Where(mapping => string.Equals(mapping.RecipeStep, step, StringComparison.OrdinalIgnoreCase))
-                .OrderByDescending(static mapping => !string.IsNullOrWhiteSpace(mapping.RecipeVersion))
-                .Select(static mapping => mapping.PhaseCode)
-                .FirstOrDefault() ?? step;
-    }
+    private static IReadOnlyDictionary<string, string> ResolveContext(
+        IReadOnlyList<PlatformProductionEvent> rows)
+        => rows.Select(static row => row.Event.Context).FirstOrDefault(static value => value.Count > 0)
+           ?? new Dictionary<string, string>(StringComparer.Ordinal);
 
     private static IReadOnlyDictionary<string, string> BuildContext(
         string? productSeries,

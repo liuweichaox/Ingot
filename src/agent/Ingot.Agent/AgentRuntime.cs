@@ -224,6 +224,21 @@ public sealed class AgentRuntime : IAgentRuntime
         return true;
     }
 
+    public async Task<bool> DeleteAsync(
+        string entryPoint,
+        string runId,
+        string userId,
+        CancellationToken ct = default)
+    {
+        ValidateEntryPoint(entryPoint);
+        var run = await GetAsync(entryPoint, runId, ct).ConfigureAwait(false);
+        if (run is null || !string.Equals(run.UserId, userId, StringComparison.OrdinalIgnoreCase))
+            return false;
+        if (!AgentRunStatuses.IsTerminal(run.Status))
+            throw new InvalidOperationException("运行中的对话不能删除，请先停止并等待运行结束。");
+        return await _store.DeleteAsync(runId, ct).ConfigureAwait(false);
+    }
+
     private async Task ExecuteAsync(
         AgentRunSnapshot initial,
         CreateChatRunRequest request,

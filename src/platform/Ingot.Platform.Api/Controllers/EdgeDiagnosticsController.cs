@@ -1,4 +1,6 @@
 using Ingot.Platform.Infrastructure.Services;
+using Ingot.Platform.Api.Events;
+using System.Net.Http.Headers;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Ingot.Platform.Api.Controllers;
@@ -9,7 +11,10 @@ namespace Ingot.Platform.Api.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/edges/{edgeId}")]
-public sealed class EdgeDiagnosticsController(EdgeRegistry registry, IHttpClientFactory httpClientFactory) : ControllerBase
+public sealed class EdgeDiagnosticsController(
+    EdgeRegistry registry,
+    EdgeTokenValidator edgeTokenValidator,
+    IHttpClientFactory httpClientFactory) : ControllerBase
 {
     [HttpGet("metrics/raw")]
     public async Task<IActionResult> GetEdgeMetricsRaw([FromRoute] string edgeId, CancellationToken cancellationToken)
@@ -18,7 +23,7 @@ public sealed class EdgeDiagnosticsController(EdgeRegistry registry, IHttpClient
         if (baseUrl == null) return BadRequest(new { error = "该 edge 未上报 HostBaseUrl，无法代理 metrics。" });
 
         var uri = new Uri(new Uri(baseUrl), "/metrics");
-        var client = httpClientFactory.CreateClient();
+        var client = CreateEdgeClient(edgeId);
 
         using var resp = await client.GetAsync(uri, cancellationToken);
         var body = await resp.Content.ReadAsStringAsync(cancellationToken);
@@ -34,7 +39,7 @@ public sealed class EdgeDiagnosticsController(EdgeRegistry registry, IHttpClient
         if (baseUrl == null) return BadRequest(new { error = "该 edge 未上报 HostBaseUrl，无法代理 metrics。" });
 
         var uri = new Uri(new Uri(baseUrl), "/metrics");
-        var client = httpClientFactory.CreateClient();
+        var client = CreateEdgeClient(edgeId);
 
         using var resp = await client.GetAsync(uri, cancellationToken);
         var text = await resp.Content.ReadAsStringAsync(cancellationToken);
@@ -75,7 +80,7 @@ public sealed class EdgeDiagnosticsController(EdgeRegistry registry, IHttpClient
         var path = string.IsNullOrWhiteSpace(qs) ? "/api/logs" : $"/api/logs?{qs}";
         var uri = new Uri(new Uri(baseUrl), path);
 
-        var client = httpClientFactory.CreateClient();
+        var client = CreateEdgeClient(edgeId);
         using var resp = await client.GetAsync(uri, cancellationToken);
         var body = await resp.Content.ReadAsStringAsync(cancellationToken);
         if (!resp.IsSuccessStatusCode) return StatusCode((int)resp.StatusCode, body);
@@ -91,12 +96,37 @@ public sealed class EdgeDiagnosticsController(EdgeRegistry registry, IHttpClient
         if (baseUrl == null) return BadRequest(new { error = "该 edge 未上报 HostBaseUrl，无法代理 logs。" });
 
         var uri = new Uri(new Uri(baseUrl), "/api/logs/levels");
-        var client = httpClientFactory.CreateClient();
+        var client = CreateEdgeClient(edgeId);
         using var resp = await client.GetAsync(uri, cancellationToken);
         var body = await resp.Content.ReadAsStringAsync(cancellationToken);
         if (!resp.IsSuccessStatusCode) return StatusCode((int)resp.StatusCode, body);
 
         return Content(body, "application/json; charset=utf-8");
+    }
+
+    [HttpGet("acquisition/status")]
+    public async Task<IActionResult> GetAcquisitionStatus(
+        [FromRoute] string edgeId,
+        CancellationToken cancellationToken)
+    {
+        var baseUrl = GetEdgeBaseUrlOrNull(edgeId);
+        if (baseUrl is null)
+            return BadRequest(new { error = "该采集节点未上报访问地址，无法查询任务状态。" });
+
+        var uri = new Uri(new Uri(baseUrl), "/api/v1/acquisition/status");
+        var client = CreateEdgeClient(edgeId);
+        try
+        {
+            using var response = await client.GetAsync(uri, cancellationToken).ConfigureAwait(false);
+            var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            return response.IsSuccessStatusCode
+                ? Content(body, "application/json; charset=utf-8")
+                : StatusCode((int)response.StatusCode, body);
+        }
+        catch (HttpRequestException exception)
+        {
+            return StatusCode(StatusCodes.Status502BadGateway, new { error = "采集节点不可访问。", detail = exception.Message });
+        }
     }
 
     private string? GetEdgeBaseUrlOrNull(string edgeId)
@@ -105,5 +135,13 @@ public sealed class EdgeDiagnosticsController(EdgeRegistry registry, IHttpClient
         var baseUrl = state?.HostBaseUrl;
         if (string.IsNullOrWhiteSpace(baseUrl)) return null;
         return baseUrl;
+    }
+
+    private HttpClient CreateEdgeClient(string edgeId)
+    {
+        var client = httpClientFactory.CreateClient();
+        if (edgeTokenValidator.TryGetToken(edgeId, out var token))
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        return client;
     }
 }

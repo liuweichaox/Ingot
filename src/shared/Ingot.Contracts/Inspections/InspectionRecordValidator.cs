@@ -62,6 +62,13 @@ public static partial class InspectionRecordValidator
         var notes = NormalizeOptional(request.Notes);
         if (notes?.Length > 2_000)
             return Fail("Notes 最长为 2000 个字符。", out error);
+        if (request.SupersedesRecordId == request.RecordId)
+            return Fail("检测记录不能更正自身。", out error);
+        var correctionReason = NormalizeOptional(request.CorrectionReason);
+        if (request.SupersedesRecordId.HasValue && string.IsNullOrWhiteSpace(correctionReason))
+            return Fail("更正检测记录时必须填写更正原因。", out error);
+        if (correctionReason?.Length > 500)
+            return Fail("CorrectionReason 最长为 500 个字符。", out error);
 
         normalized = request with
         {
@@ -75,7 +82,8 @@ public static partial class InspectionRecordValidator
             Instrument = instrument,
             Measurements = measurements.OrderBy(static item => item.CharacteristicCode, StringComparer.Ordinal).ToArray(),
             Attachments = attachments.OrderBy(static item => item.AttachmentId).ToArray(),
-            Notes = notes
+            Notes = notes,
+            CorrectionReason = correctionReason
         };
         error = string.Empty;
         return true;
@@ -87,6 +95,8 @@ public static partial class InspectionRecordValidator
             return Fail("From 不能晚于 To。", out error);
         if (query.Limit is < 1 or > 500)
             return Fail("Limit 必须在 1 到 500 之间。", out error);
+        if (query.Offset < 0)
+            return Fail("Offset 不能小于 0。", out error);
         if (query.Outcome is not null && !TryNormalizeOutcome(query.Outcome, out _, out error))
             return false;
         foreach (var (value, name, code) in new[]

@@ -15,5 +15,6 @@ public interface ICycleRecordService
         string? correlationId,
         string? status,
         int limit,
+        int offset = 0,
         CancellationToken ct = default);
 }

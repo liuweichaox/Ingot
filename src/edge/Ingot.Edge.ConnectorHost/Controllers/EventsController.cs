@@ -54,17 +54,16 @@ public sealed class EventsController(IEventLog eventLog) : ControllerBase
     [HttpGet("/api/v1/cycles/{correlationId}")]
     public async Task<IActionResult> GetCycle(
         string correlationId,
-        [FromQuery] int limit = 500,
         CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(correlationId))
             return BadRequest(new { error = "correlationId 不能为空。" });
 
-        var events = await eventLog.QueryAsync(
+        var events = await ReadAllAsync(
+                eventLog,
                 new EventQuery
                 {
-                    CorrelationId = correlationId,
-                    Limit = limit
+                    CorrelationId = correlationId
                 },
                 ct)
             .ConfigureAwait(false);
@@ -83,19 +82,21 @@ public sealed class EventsController(IEventLog eventLog) : ControllerBase
             .LastOrDefault();
         var windowEnd = completedAt ?? pair.Max(static evt => evt.OccurredAt);
         var subject = pair[0].Subject;
-        var sameSubjectWindow = await eventLog.QueryAsync(
+        var sameSubjectWindow = await ReadAllAsync(
+                eventLog,
                 new EventQuery
                 {
                     SubjectType = subject.Type,
                     SubjectId = subject.Id,
                     From = startedAt,
-                    To = windowEnd,
-                    Limit = limit
+                    To = windowEnd
                 },
                 ct)
             .ConfigureAwait(false);
         var ordered = pair
-            .Concat(sameSubjectWindow)
+            .Concat(sameSubjectWindow.Where(evt =>
+                string.IsNullOrWhiteSpace(evt.CorrelationId) ||
+                string.Equals(evt.CorrelationId, correlationId, StringComparison.Ordinal)))
             .DistinctBy(static evt => evt.EventId)
             .OrderBy(static evt => evt.OccurredAt)
             .ThenBy(static evt => evt.Seq)
@@ -112,6 +113,30 @@ public sealed class EventsController(IEventLog eventLog) : ControllerBase
                 : (double?)null,
             events = ordered
         });
+    }
+
+    private static async Task<IReadOnlyList<ProductionEvent>> ReadAllAsync(
+        IEventLog eventLog,
+        EventQuery query,
+        CancellationToken ct)
+    {
+        const int transportPageSize = 500;
+        var result = new List<ProductionEvent>();
+        long afterSeq = 0;
+        while (true)
+        {
+            var page = await eventLog.QueryAsync(
+                    query with { AfterSeq = afterSeq, Limit = transportPageSize },
+                    ct)
+                .ConfigureAwait(false);
+            if (page.Count == 0)
+                break;
+            result.AddRange(page);
+            afterSeq = page.Max(static item => item.Seq);
+            if (page.Count < transportPageSize)
+                break;
+        }
+        return result;
     }
 
     [HttpGet("stream")]

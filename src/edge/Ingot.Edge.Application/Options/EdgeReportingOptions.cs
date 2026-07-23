@@ -27,6 +27,12 @@ public sealed class EdgeReportingOptions
         string.IsNullOrWhiteSpace(PlatformApiBaseUrl) ? CentralApiBaseUrl : PlatformApiBaseUrl;
 
     /// <summary>
+    /// Platform 回访本节点时使用的地址。跨容器、NAT 或反向代理部署时应显式配置，
+    /// 避免把本机回环地址或临时容器 IP 注册到平台。
+    /// </summary>
+    public string? PublicBaseUrl { get; init; }
+
+    /// <summary>
     /// 可选：固定 EdgeId。为空时会从 IdentityFilePath 读取/生成并持久化。
     /// </summary>
     public string? EdgeId { get; init; }

@@ -34,6 +34,12 @@ public interface IAgentRuntime
         string userId,
         string reason,
         CancellationToken ct = default);
+
+    Task<bool> DeleteAsync(
+        string entryPoint,
+        string runId,
+        string userId,
+        CancellationToken ct = default);
 }
 
 public interface IAgentRunStore
@@ -52,6 +58,8 @@ public interface IAgentRunStore
         CancellationToken ct = default);
 
     Task UpdateAsync(AgentRunSnapshot run, CancellationToken ct = default);
+
+    Task<bool> DeleteAsync(string runId, CancellationToken ct = default);
 
     Task<AgentStreamEvent> AppendEventAsync(
         string runId,

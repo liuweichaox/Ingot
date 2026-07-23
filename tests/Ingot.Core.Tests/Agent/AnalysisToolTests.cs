@@ -60,14 +60,16 @@ public sealed class AnalysisToolTests
     }
 
     [Fact]
-    public async Task CheckDataQuality_RejectsAWindowAtTheQueryLimit()
+    public async Task CheckDataQuality_InspectsEveryRowBeyondTransportPageSize()
     {
-        var rows = Enumerable.Range(1, 500)
+        var start = DateTimeOffset.Parse("2026-07-18T10:00:00Z");
+        var rows = Enumerable.Range(1, 1_202)
             .Select(index => Row(
                 index,
                 index,
-                "telemetry.observed",
-                DateTimeOffset.Parse("2026-07-18T10:00:00Z").AddSeconds(index)))
+                index == 1 ? "cycle.started" : index == 1_202 ? "cycle.completed" : "telemetry.observed",
+                start.AddSeconds(index),
+                "cycle-large"))
             .ToArray();
         var tool = new CheckDataQualityTool(new StubEventReader(rows));
 
@@ -75,8 +77,11 @@ public sealed class AnalysisToolTests
             new AnalysisToolCall { Tool = tool.Definition.Name },
             ExecutionContext);
 
-        Assert.Equal(AnalysisToolOutcomes.InsufficientData, result.Outcome);
-        Assert.Contains(result.Limitations, limitation => limitation.Contains("500", StringComparison.Ordinal));
+        Assert.Equal(AnalysisToolOutcomes.Sufficient, result.Outcome);
+        Assert.Equal(1_202, result.Data.GetProperty("eventCount").GetInt32());
+        Assert.Equal(0, result.Data.GetProperty("incompleteCycles").GetInt32());
+        Assert.DoesNotContain(result.Limitations, limitation => limitation.Contains("500", StringComparison.Ordinal));
+        Assert.Contains("已完整检查 1202 条", result.Summary, StringComparison.Ordinal);
     }
 
     [Fact]

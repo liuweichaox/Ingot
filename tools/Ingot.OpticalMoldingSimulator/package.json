@@ -1,0 +1,18 @@
+{
+  "name": "@ingot/optical-molding-simulator",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Open-source multi-protocol optical glass molding device simulator for Ingot.",
+  "scripts": {
+    "start": "node server.mjs",
+    "check": "node --check server.mjs && node --check smoke-test.mjs && node --check platform-configuration.mjs && node --check register-platform.mjs",
+    "smoke": "node smoke-test.mjs"
+  },
+  "dependencies": {
+    "aedes": "1.1.1",
+    "modbus-serial": "8.0.25",
+    "mqtt": "5.15.2",
+    "node-opcua": "2.175.2"
+  }
+}

@@ -32,6 +32,8 @@ public sealed class PostgresInspectionAttachmentStore : IInspectionAttachmentSto
             if (_initialized)
                 return;
             Directory.CreateDirectory(GetRootPath());
+            if (GetArchiveRootPath() is { } archiveRoot)
+                Directory.CreateDirectory(archiveRoot);
             await using var command = _dataSource.CreateCommand(
                 """
                 CREATE TABLE IF NOT EXISTS inspection_attachments (
@@ -75,8 +77,9 @@ public sealed class PostgresInspectionAttachmentStore : IInspectionAttachmentSto
         long size = 0;
         string hash;
         using var sha = SHA256.Create();
-        await using (var temp = File.Create(tempPath))
+        try
         {
+            await using var temp = File.Create(tempPath);
             var buffer = new byte[81920];
             while (true)
             {
@@ -93,6 +96,12 @@ public sealed class PostgresInspectionAttachmentStore : IInspectionAttachmentSto
             sha.TransformFinalBlock([], 0, 0);
             hash = Convert.ToHexStringLower(sha.Hash!);
         }
+        catch
+        {
+            if (File.Exists(tempPath))
+                File.Delete(tempPath);
+            throw;
+        }
 
         if (size <= 0)
             throw new InvalidDataException("附件不能为空。");
@@ -103,6 +112,8 @@ public sealed class PostgresInspectionAttachmentStore : IInspectionAttachmentSto
             File.Move(tempPath, finalPath);
         else
             File.Delete(tempPath);
+        if (GetArchivePath(hash, safeFileName) is { } archivePath)
+            await CopyToArchiveAsync(finalPath, archivePath, ct).ConfigureAwait(false);
         var storageRef = $"attachment://sha256/{hash}/{Uri.EscapeDataString(safeFileName)}";
 
         await using var insert = _dataSource.CreateCommand(
@@ -157,6 +168,8 @@ public sealed class PostgresInspectionAttachmentStore : IInspectionAttachmentSto
         if (attachment is null)
             return null;
         var path = GetAttachmentPath(attachment.Sha256, attachment.FileName);
+        if (!File.Exists(path) && GetArchivePath(attachment.Sha256, attachment.FileName) is { } archivePath)
+            path = archivePath;
         if (!File.Exists(path))
             return null;
         return new FileStream(
@@ -201,6 +214,52 @@ public sealed class PostgresInspectionAttachmentStore : IInspectionAttachmentSto
     private string GetRootPath()
         => Path.GetFullPath(_options.RootPath, AppContext.BaseDirectory);
 
+    private string? GetArchiveRootPath()
+        => string.IsNullOrWhiteSpace(_options.ArchiveRootPath)
+            ? null
+            : Path.GetFullPath(_options.ArchiveRootPath, AppContext.BaseDirectory);
+
     private string GetAttachmentPath(string sha256, string fileName)
         => Path.Combine(GetRootPath(), sha256[..2], sha256, fileName);
+
+    private string? GetArchivePath(string sha256, string fileName)
+        => GetArchiveRootPath() is { } root
+            ? Path.Combine(root, sha256[..2], sha256, fileName)
+            : null;
+
+    private static async Task CopyToArchiveAsync(string sourcePath, string archivePath, CancellationToken ct)
+    {
+        if (File.Exists(archivePath))
+            return;
+        Directory.CreateDirectory(Path.GetDirectoryName(archivePath)!);
+        var tempPath = $"{archivePath}.{Guid.CreateVersion7():N}.archiving";
+        try
+        {
+            await using (var source = new FileStream(
+                             sourcePath,
+                             FileMode.Open,
+                             FileAccess.Read,
+                             FileShare.Read,
+                             81920,
+                             FileOptions.Asynchronous | FileOptions.SequentialScan))
+            await using (var target = new FileStream(
+                             tempPath,
+                             FileMode.CreateNew,
+                             FileAccess.Write,
+                             FileShare.None,
+                             81920,
+                             FileOptions.Asynchronous | FileOptions.WriteThrough))
+            {
+                await source.CopyToAsync(target, ct).ConfigureAwait(false);
+                await target.FlushAsync(ct).ConfigureAwait(false);
+            }
+            if (!File.Exists(archivePath))
+                File.Move(tempPath, archivePath);
+        }
+        finally
+        {
+            if (File.Exists(tempPath))
+                File.Delete(tempPath);
+        }
+    }
 }

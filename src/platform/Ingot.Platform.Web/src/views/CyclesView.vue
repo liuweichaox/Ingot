@@ -27,8 +27,8 @@
           </el-select>
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" :icon="Search" :loading="loading" @click="load">查询</el-button>
-          <el-button :icon="RefreshLeft" @click="reset">重置</el-button>
+          <el-button type="primary" :icon="Search" :loading="loading" @click="search">查询</el-button>
+          <el-button @click="reset">重置</el-button>
         </el-form-item>
       </el-form>
       <el-form :inline="true" class="filters secondary-filters">
@@ -51,29 +51,23 @@
 
     <div class="overview-grid">
       <article class="metric-card">
-        <span>当前结果</span><strong>{{ overview.cycleCount || 0 }}</strong><small>生产周期</small>
+        <span>符合条件</span><strong>{{ overview.cycleCount || 0 }}</strong><small>生产周期总数</small>
       </article>
       <article class="metric-card">
         <span>周期完成</span><strong>{{ overview.completedCount || 0 }}</strong><small>{{ percent(overview.completedCount, overview.cycleCount) }}</small>
       </article>
       <article class="metric-card">
-        <span>采样完整</span><strong>{{ overview.sampleCompleteCount || 0 }}</strong><small>{{ percent(overview.sampleCompleteCount, overview.cycleCount) }}</small>
+        <span>采样完整</span><strong>{{ overview.sampleCompleteCount || 0 }}</strong><small>当前页 {{ percent(overview.sampleCompleteCount, cycles.length) }}</small>
       </article>
       <article class="metric-card">
-        <span>阶段完整</span><strong>{{ overview.phaseCompleteCount || 0 }}</strong><small>按当前阶段配置</small>
+        <span>阶段完整</span><strong>{{ overview.phaseCompleteCount || 0 }}</strong><small>当前页，按阶段配置</small>
       </article>
       <article class="metric-card" :class="{ warning: overview.issueCycleCount }">
-        <span>数据异常</span><strong>{{ overview.issueCycleCount || 0 }}</strong><small>需要核查</small>
+        <span>数据异常</span><strong>{{ overview.issueCycleCount || 0 }}</strong><small>当前页需要核查</small>
       </article>
     </div>
 
     <el-card shadow="never">
-      <template #header>
-        <div class="heading">
-          <div><strong>生产周期</strong><span>每行是一件产品的一次完整生产过程</span></div>
-          <el-button :icon="Refresh" :loading="loading" @click="load">刷新</el-button>
-        </div>
-      </template>
       <el-table v-loading="loading" :data="cycles" stripe @row-click="openDetail">
         <el-table-column label="开始时间" width="180">
           <template #default="{ row }">{{ formatTime(row.startedAt) }}</template>
@@ -86,6 +80,9 @@
           <template #default="{ row }">{{ row.productCode || '-' }}</template>
         </el-table-column>
         <el-table-column prop="workpieceId" label="工件" min-width="150" show-overflow-tooltip />
+        <el-table-column label="模具" min-width="145" show-overflow-tooltip>
+          <template #default="{ row }">{{ toolingText(row) }}</template>
+        </el-table-column>
         <el-table-column label="周期" min-width="190" show-overflow-tooltip>
           <template #default="{ row }"><el-link type="primary">{{ row.correlationId }}</el-link></template>
         </el-table-column>
@@ -119,6 +116,7 @@
         </el-table-column>
       </el-table>
       <el-empty v-if="!loading && !cycles.length" description="当前条件下没有生产周期" />
+      <TablePagination v-model:page="cyclePage" v-model:page-size="cyclePageSize" :total="cycleTotal" />
     </el-card>
 
     <el-drawer v-model="detailVisible" title="生产周期详情" size="min(760px, 92vw)">
@@ -131,6 +129,8 @@
           <el-descriptions-item label="设备">{{ selected.machineId }}</el-descriptions-item>
           <el-descriptions-item label="产品">{{ [selected.productSeries, selected.productCode].filter(Boolean).join(' · ') || '-' }}</el-descriptions-item>
           <el-descriptions-item label="配方">{{ recipeText(selected) }}</el-descriptions-item>
+          <el-descriptions-item label="模具组合">{{ toolingText(selected) }}</el-descriptions-item>
+          <el-descriptions-item label="装模记录">{{ selected.toolingInstallationId || '-' }}</el-descriptions-item>
           <el-descriptions-item label="持续时间">{{ duration(selected.durationMs) }}</el-descriptions-item>
           <el-descriptions-item label="采样完整度">{{ selected.sampleCount }}/{{ selected.expectedSampleCount || '?' }}</el-descriptions-item>
           <el-descriptions-item label="质量方案">{{ planText(selected) }}</el-descriptions-item>
@@ -150,16 +150,13 @@
 
         <section class="detail-block">
           <div class="section-heading"><strong>数据质量</strong><span>由当前配置实时判断</span></div>
-          <el-alert
-            v-for="issue in selected.dataIssues || []"
-            :key="issue.code"
-            :title="issue.message"
-            :type="issueType(issue.severity)"
-            show-icon
-            :closable="false"
-            class="issue-alert"
-          />
-          <el-result v-if="!selected.dataIssues?.length" icon="success" title="周期数据完整" sub-title="未发现采样、阶段或关键生产信息问题" />
+          <div v-if="selected.dataIssues?.length" class="issue-list">
+            <div v-for="issue in selected.dataIssues" :key="issue.code" class="issue-row">
+              <el-tag :type="issueType(issue.severity)" size="small">{{ issue.code }}</el-tag>
+              <span>{{ issue.message }}</span>
+            </div>
+          </div>
+          <div v-else class="quality-ok"><span class="quality-dot" />周期数据完整</div>
         </section>
 
         <div class="drawer-actions">
@@ -173,23 +170,28 @@
 </template>
 
 <script setup>
-import { onMounted, reactive, ref } from "vue";
+import { onMounted, reactive, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { Refresh, RefreshLeft, Search } from "@element-plus/icons-vue";
+import { ElDatePicker, ElDescriptions, ElDescriptionsItem, ElProgress } from "element-plus";
+import { Search } from "@element-plus/icons-vue";
 import { getJson } from "../api/http";
+import TablePagination from "../components/TablePagination.vue";
 
 const route = useRoute();
 const router = useRouter();
 const loading = ref(false);
 const error = ref("");
 const cycles = ref([]);
+const cyclePage = ref(1);
+const cyclePageSize = ref(50);
+const cycleTotal = ref(0);
 const overview = ref({});
 const detailVisible = ref(false);
 const selected = ref(null);
 
 function defaultRange() {
   const end = new Date();
-  const start = new Date(end.getTime() - 24 * 60 * 60 * 1000);
+  const start = new Date(end.getTime() - 7 * 24 * 60 * 60 * 1000);
   return [start.toISOString(), end.toISOString()];
 }
 const filters = reactive({
@@ -197,17 +199,21 @@ const filters = reactive({
   productSeries: "",
   productCode: "",
   recipeId: "",
-  machineId: "",
+  machineId: String(route.query.machineId || ""),
   workpieceId: "",
   correlationId: String(route.query.cycleId || ""),
-  status: "all",
+  status: ["all", "completed", "active"].includes(String(route.query.status || "")) ? String(route.query.status) : "all",
 });
 
 async function load() {
   loading.value = true;
   error.value = "";
   try {
-    const params = new URLSearchParams({ limit: "1000", status: filters.status });
+    const params = new URLSearchParams({
+      limit: String(cyclePageSize.value),
+      offset: String((cyclePage.value - 1) * cyclePageSize.value),
+      status: filters.status,
+    });
     if (!filters.correlationId && filters.range?.length === 2) {
       params.set("from", filters.range[0]);
       params.set("to", filters.range[1]);
@@ -217,6 +223,7 @@ async function load() {
     }
     const result = await getJson(`/api/v1/cycles?${params}`);
     cycles.value = result.data || [];
+    cycleTotal.value = Number(result.total ?? cycles.value.length);
     overview.value = result.overview || {};
     if (filters.correlationId && cycles.value.length === 1) openDetail(cycles.value[0]);
   } catch (requestError) {
@@ -226,12 +233,17 @@ async function load() {
   }
 }
 
+async function search() {
+  if (cyclePage.value !== 1) cyclePage.value = 1;
+  else await load();
+}
+
 function reset() {
   Object.assign(filters, {
     range: defaultRange(), productSeries: "", productCode: "", recipeId: "",
     machineId: "", workpieceId: "", correlationId: "", status: "all",
   });
-  load();
+  search();
 }
 function openDetail(row) { selected.value = row; detailVisible.value = true; }
 function openEvents(row) { router.push({ path: "/events", query: { cycleId: row.correlationId } }); }
@@ -248,6 +260,7 @@ function duration(ms) {
 }
 function formatTime(value) { return value ? new Date(value).toLocaleString("zh-CN") : "-"; }
 function recipeText(row) { return [row.recipeId, row.recipeVersion ? `v${row.recipeVersion}` : ""].filter(Boolean).join(" · ") || "-"; }
+function toolingText(row) { return [row.moldId, row.assemblyRevision ? `v${row.assemblyRevision}` : ""].filter(Boolean).join(" · ") || "-"; }
 function planText(row) { return row.inspectionPlanName ? `${row.inspectionPlanName} · v${row.inspectionPlanVersion}` : "不适用"; }
 function qualityLabel(value) {
   return { NOT_APPLICABLE: "不适用", PENDING: "待检", IN_PROGRESS: "检验中", REVIEW_PENDING: "待复核", COMPLETE: "已完成", FAILED: "不合格", INCONCLUSIVE: "待确认" }[value] || value;
@@ -257,6 +270,7 @@ function qualityTag(value) {
 }
 function issueType(value) { return { error: "error", warning: "warning", info: "info" }[value] || "info"; }
 
+watch([cyclePage, cyclePageSize], load);
 onMounted(load);
 </script>
 
@@ -265,12 +279,13 @@ onMounted(load);
 .filter-card :deep(.el-card__body) { padding-bottom: 6px; }
 .filters { margin: 0; }
 .secondary-filters { padding-top: 2px; border-top: 1px dashed #edf0f4; }
-.overview-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px; }
-.metric-card { display: grid; gap: 5px; padding: 18px 20px; border: 1px solid #e7ebf0; border-radius: 10px; background: #fff; }
+.overview-grid { display: grid; overflow: hidden; grid-template-columns: repeat(5, minmax(0, 1fr)); border: 1px solid var(--ingot-border); border-radius: 13px; background: #fff; }
+.metric-card { display: grid; gap: 4px; padding: 14px 18px; border-right: 1px solid #e9edf2; background: #fff; }
+.metric-card:last-child { border-right: 0; }
 .metric-card span { color: #6f7a8c; font-size: 13px; }
-.metric-card strong { color: #172033; font-size: 28px; line-height: 1.1; }
+.metric-card strong { color: #172033; font-size: 23px; line-height: 1.1; }
 .metric-card small { color: #9aa3b1; }
-.metric-card.warning { border-color: #f4c9c9; background: #fffafa; }
+.metric-card.warning { background: #fffafa; }
 .metric-card.warning strong { color: #d94d4d; }
 .heading, .detail-title, .section-heading, .drawer-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .heading > div, .detail-title > div, .section-heading { gap: 5px; }
@@ -280,9 +295,12 @@ onMounted(load);
 .detail-title strong { font-size: 20px; }
 .detail-block { margin-bottom: 24px; }
 .section-heading { justify-content: flex-start; margin-bottom: 12px; }
-.issue-alert + .issue-alert { margin-top: 9px; }
+.issue-list { display: grid; gap: 8px; }
+.issue-row { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid #eef1f5; color: #4d596b; }
+.quality-ok { display: flex; align-items: center; gap: 9px; padding: 12px 0; color: #4d596b; }
+.quality-dot { width: 8px; height: 8px; border-radius: 50%; background: #67c23a; }
 .drawer-actions { position: sticky; bottom: 0; justify-content: flex-end; padding: 14px 0 4px; background: #fff; }
 code { color: #516277; font-family: ui-monospace, monospace; }
-@media (max-width: 1050px) { .overview-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 1050px) { .overview-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } .metric-card { border-bottom: 1px solid #e9edf2; } }
 @media (max-width: 650px) { .overview-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 </style>

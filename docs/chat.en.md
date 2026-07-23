@@ -6,10 +6,10 @@ Ingot Chat is the main way engineers use Ingot: it helps people query production
 
 - Interpret natural-language questions with an optional equipment ID or production run ID;
 - produce a governed typed query plan;
-- call `check_data_quality` for event completeness, missing context, freshness, and available range;
+- call `check_data_quality` to page through the complete query scope and check event completeness, missing context, freshness, and available range; page size is not an analytical limit;
 - call `get_cycle_trace` for an ordered `correlationId`-scoped cycle event chain;
 - stream the query steps, answer, missing information, and links to related production records;
-- retain user-scoped history with cancellation and SSE resume.
+- retain user-scoped history with cancellation, completed-run deletion, and SSE resume.
 
 The available tools are `check_data_quality` and `get_cycle_trace`.
 
@@ -70,6 +70,7 @@ Development uses the server-owned local platform identity `operator`. Production
 | `GET /api/v1/chat/capabilities` | Discover availability, modes, read-only tools, models, and run limits |
 | `POST /api/v1/chat/runs` | Create a Chat run |
 | `GET /api/v1/chat/runs` | Page through history for the current user |
+| `DELETE /api/v1/chat/runs/{runId}` | Delete a completed conversation owned by the current user, including its analysis trace |
 | `GET /api/v1/chat/runs/{runId}` | Read snapshot, plan, tools, related records, and answer |
 | `GET /api/v1/chat/runs/{runId}/stream` | Stream SSE events and resume with `Last-Event-ID` |
 | `POST /api/v1/chat/runs/{runId}:cancel` | Cancel a run |

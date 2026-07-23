@@ -1,24 +1,6 @@
 <template>
   <div class="edges-view">
     <el-card shadow="never" class="page-header">
-      <template #header>
-        <div class="card-header">
-          <span>
-            <el-icon><Connection /></el-icon>
-            <span style="margin-left: 8px">数据接入节点</span>
-          </span>
-          <el-button type="primary" :icon="Refresh" :loading="loading" @click="load">刷新</el-button>
-        </div>
-      </template>
-
-      <el-alert
-        title="显示用户自行部署的数据适配器接入状态。"
-        type="info"
-        :closable="false"
-        show-icon
-        style="margin-bottom: 16px"
-      />
-
       <el-alert
         v-if="error"
         :title="error"
@@ -33,7 +15,7 @@
       <el-table
         v-if="edges.length"
         v-loading="loading"
-        :data="edges"
+        :data="pagedEdges"
         stripe
         style="width: 100%"
         element-loading-text="加载中..."
@@ -92,7 +74,7 @@
                 type="primary"
                 size="small"
                 :icon="DataAnalysis"
-                @click="$router.push({ path: '/metrics', query: { edgeId: row.edgeId } })"
+                @click="$router.push({ path: '/platform-metrics', query: { edgeId: row.edgeId } })"
               >
                 指标
               </el-button>
@@ -108,19 +90,24 @@
           </template>
         </el-table-column>
       </el-table>
+      <TablePagination v-model:page="edgePage" v-model:page-size="edgePageSize" :total="edgeTotal" />
     </el-card>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from "vue";
-import { Connection, Refresh, DataAnalysis, Document, CircleCheck, List } from "@element-plus/icons-vue";
+import { ref, onBeforeUnmount, onMounted } from "vue";
+import { DataAnalysis, Document, CircleCheck, List } from "@element-plus/icons-vue";
 import { getJson } from "../api/http";
 import { ElMessage } from "element-plus";
+import TablePagination from "../components/TablePagination.vue";
+import { useClientPagination } from "../composables/useClientPagination";
 
 const edges = ref([]);
+const { page: edgePage, pageSize: edgePageSize, total: edgeTotal, pagedItems: pagedEdges } = useClientPagination(edges);
 const loading = ref(false);
 const error = ref("");
+let pollTimer;
 
 const formatTime = (timeStr) => {
   if (!timeStr) return "-";
@@ -132,22 +119,24 @@ const formatTime = (timeStr) => {
   }
 };
 
-const load = async () => {
-  loading.value = true;
+const load = async ({ silent = false } = {}) => {
+  if (!silent) loading.value = true;
   error.value = "";
   try {
     edges.value = await getJson("/api/edges");
   } catch (e) {
     error.value = e?.message || String(e);
-    ElMessage.error("加载边缘节点列表失败");
+    if (!silent) ElMessage.error("加载边缘节点列表失败");
   } finally {
-    loading.value = false;
+    if (!silent) loading.value = false;
   }
 };
 
 onMounted(() => {
   load();
+  pollTimer = window.setInterval(() => load({ silent: true }), 15000);
 });
+onBeforeUnmount(() => window.clearInterval(pollTimer));
 </script>
 
 <style scoped>
@@ -155,15 +144,5 @@ onMounted(() => {
   width: 100%;
 }
 
-.page-header {
-  border-radius: 8px;
-}
-
-.card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-weight: 600;
-  font-size: 16px;
-}
+.page-header { border-radius: 14px; }
 </style>

@@ -146,6 +146,23 @@ public sealed class ChatRunsController(
         });
     }
 
+    [HttpDelete("{runId}")]
+    public async Task<IActionResult> Delete(string runId, CancellationToken ct)
+    {
+        if (!TryAuthorize(out var userId, out var unauthorized))
+            return unauthorized!;
+        try
+        {
+            return await runtime.DeleteAsync(ProductEntryPoints.Chat, runId, userId!, ct).ConfigureAwait(false)
+                ? NoContent()
+                : NotFound();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Conflict(new { error = ex.Message });
+        }
+    }
+
     [HttpGet("/api/v1/chat/capabilities")]
     public IActionResult Capabilities()
     {

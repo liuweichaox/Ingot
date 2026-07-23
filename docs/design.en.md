@@ -27,19 +27,32 @@ Teams choose source protocols, local buffering, retry timing, and process superv
 
 ## Quality-inspection workflow
 
-Quality inspection follows a production cycle; a blank “inspection entry” form is not modeled as a standalone business object:
+Quality inspection follows an analyzed operation; a blank “inspection entry” form is not modeled as a standalone business object:
 
-1. A `cycle.completed` event matches a published `InspectionPlan` by product, recipe, machine, and effective time. No task is invented when no plan matches.
-2. The plan references versioned `InspectionDefinition` records and configures required checks, ordering, original evidence, and review requirements. Selecting a task carries read-only workpiece and operation-run identifiers into the form.
+1. Discrete production may create a cycle quality task from `cycle.completed`. Continuous production, production runs, and material lots use an explicit quality scope that binds an operating object, time range, and published `InspectionPlan`. No task is invented when no plan matches.
+2. The plan references versioned `InspectionDefinition` records and configures required checks, ordering, original evidence, and review requirements. Selecting a task carries read-only quality-object and analysis-scope identifiers into the form.
 3. Upload original images to controlled long-term storage first, compute SHA-256 on the server, and then store their references with the inspection record.
 4. Historical inspection records can reopen the original image and append an immutable review decision. Original access and review actions are audited; derivative thumbnails cannot replace the original.
 5. An inspection result records an observation and is not a QMS release or equipment-control decision.
 
-The global navigation therefore exposes a “Quality Inspection” workbench. “Create inspection record” is an action inside that workbench. Workpiece and operation-run identifiers can only come from pending tasks; manual cycle entry is not available. Inspection submission, original-image access, and review all use the signed-in Platform identity and roles, with no inspection-specific user or access password.
+The global navigation therefore exposes a “Quality Inspection” workbench. “Create inspection record” is an action inside that workbench. Quality-object and analysis-scope identifiers can only come from pending tasks; fabricated manual associations are not available. Inspection submission, original-image access, and review all use the signed-in Platform identity and roles, with no inspection-specific user or access password.
 
 The Quality Plans page maintains inspection definitions and plan versions. Published plan and definition versions cannot be overwritten; changes require a new version. Optical-molding vision and manual checks exist only in the optional sample configuration, never as Platform defaults.
 
 Roles come from unified identity claims: `quality.inspector` submits inspections, `quality.reviewer` reviews originals, `process.engineer` queries records and historical comparisons, and `platform.admin` manages the platform. Development may use a built-in identity for evaluation; production requires host authentication to establish the user identity.
+
+## Operating objects and analysis scopes
+
+Platform does not require every industrial dataset to have a production cycle. The event `subject.type + subject.id` forms the operating-object catalog. An object may be equipment, a line, a station, a sensor, or another caller-defined type. The catalog and data-health view aggregate event count, sample count, correlated operations, first/latest observations, and maximum sample gaps directly from the event store, so a continuous object remains visible even when it has no cycle.
+
+Analysis joins process data and quality through an explicit scope:
+
+- `production-cycle`: a single-piece or cyclic operation with a clear start and end;
+- `production-run`: a bounded run that may cover multiple products;
+- `analysis-window`: an explicit time window over continuous data;
+- `material-lot`: a quality scope organized by material lot.
+
+Inspection records are first-class data linked to an analysis scope, a quality object, and an inspection-definition version. Quality analysis reads effective inspection records instead of inferring quality from cycle status, allowing cycle inspections and continuous-operation windows to be grouped together by product, recipe, operating object, and outcome.
 
 ## Same-series historical cycle comparison
 

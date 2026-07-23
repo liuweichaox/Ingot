@@ -118,6 +118,49 @@ public sealed class PostgresWebhookSubscriptionStore : IWebhookSubscriptionStore
         return subscriptions;
     }
 
+    public async Task<WebhookSubscription?> UpdateAsync(
+        Guid subscriptionId,
+        UpdateWebhookSubscriptionRequest request,
+        CancellationToken ct = default)
+    {
+        await InitializeAsync(ct).ConfigureAwait(false);
+        var replaceSecret = request.ClearSecret || !string.IsNullOrWhiteSpace(request.Secret);
+        await using var command = _dataSource.CreateCommand(
+            """
+            UPDATE webhook_subscriptions
+            SET name = @name,
+                endpoint = @endpoint,
+                event_types = @event_types,
+                subject_type = @subject_type,
+                subject_id = @subject_id,
+                context_filter = @context_filter,
+                secret = CASE WHEN @replace_secret THEN @secret ELSE secret END,
+                updated_at = now()
+            WHERE subscription_id = @subscription_id;
+            """);
+        command.Parameters.AddWithValue("subscription_id", subscriptionId);
+        command.Parameters.AddWithValue("name", request.Name.Trim());
+        command.Parameters.AddWithValue("endpoint", request.Endpoint.Trim());
+        command.Parameters.AddWithValue(
+            "event_types",
+            NpgsqlDbType.Jsonb,
+            JsonSerializer.Serialize(
+                request.EventTypes
+                    .Where(static value => !string.IsNullOrWhiteSpace(value))
+                    .Select(static value => value.Trim())
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToArray(),
+                JsonOptions));
+        command.Parameters.AddWithValue("subject_type", (object?)Normalize(request.SubjectType) ?? DBNull.Value);
+        command.Parameters.AddWithValue("subject_id", (object?)Normalize(request.SubjectId) ?? DBNull.Value);
+        command.Parameters.AddWithValue("context_filter", NpgsqlDbType.Jsonb, JsonSerializer.Serialize(request.Context, JsonOptions));
+        command.Parameters.AddWithValue("replace_secret", replaceSecret);
+        command.Parameters.AddWithValue("secret", request.ClearSecret ? DBNull.Value : (object?)request.Secret ?? DBNull.Value);
+        if (await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false) == 0)
+            return null;
+        return await GetAsync(subscriptionId, ct).ConfigureAwait(false);
+    }
+
     public async Task<WebhookSubscription?> GetAsync(
         Guid subscriptionId,
         CancellationToken ct = default)

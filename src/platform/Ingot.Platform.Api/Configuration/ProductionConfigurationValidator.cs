@@ -11,6 +11,9 @@ public static class ProductionConfigurationValidator
             errors.Add("ConnectionStrings:Events is required.");
 
         RequireProtectedMap(configuration, "EventIngest", "EdgeTokens", errors);
+        RequireValue(configuration, "Authentication:Authority", errors);
+        RequireValue(configuration, "Authentication:Audience", errors);
+        RequireValue(configuration, "InspectionAttachments:ArchiveRootPath", errors);
 
         var origins = configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
         if (origins.Length == 0 || origins.Any(static origin =>

@@ -91,6 +91,28 @@ public sealed class InspectionRecordValidatorTests
             new InspectionRecordQuery { Limit = 501 },
             out var limitError));
         Assert.Contains("Limit", limitError, StringComparison.Ordinal);
+
+        Assert.False(InspectionRecordValidator.TryValidateQuery(
+            new InspectionRecordQuery { Offset = -1 },
+            out var offsetError));
+        Assert.Contains("Offset", offsetError, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TryValidate_ShouldRequireReasonForImmutableCorrection()
+    {
+        var originalId = Guid.CreateVersion7();
+        Assert.False(InspectionRecordValidator.TryValidate(
+            CreateRequest() with { SupersedesRecordId = originalId },
+            out _,
+            out var error));
+        Assert.Contains("更正原因", error, StringComparison.Ordinal);
+
+        Assert.True(InspectionRecordValidator.TryValidate(
+            CreateRequest() with { SupersedesRecordId = originalId, CorrectionReason = " 量具读数录入错误 " },
+            out var normalized,
+            out _));
+        Assert.Equal("量具读数录入错误", normalized!.CorrectionReason);
     }
 
     private static CreateInspectionRecordRequest CreateRequest() => new()

@@ -80,6 +80,18 @@ public sealed class AgentRuntimeTests
         Assert.Equal(AgentRunStatuses.Cancelled, completed.Status);
     }
 
+    [Fact]
+    public async Task ChatRun_CompletedHistoryCanBeDeletedOnlyByItsOwner()
+    {
+        var store = new MemoryRunStore();
+        var runtime = CreateRuntime(store, [new QualityTool()]);
+        await store.CreateAsync(Snapshot("owned", "operator"));
+
+        Assert.False(await runtime.DeleteAsync(ProductEntryPoints.Chat, "owned", "other-user"));
+        Assert.True(await runtime.DeleteAsync(ProductEntryPoints.Chat, "owned", "operator"));
+        Assert.Null(await runtime.GetAsync(ProductEntryPoints.Chat, "owned"));
+    }
+
     private static AgentRuntime CreateRuntime(MemoryRunStore store, IReadOnlyList<IAnalysisTool> tools)
     {
         var options = Options.Create(new ChatOptions
@@ -231,6 +243,12 @@ public sealed class AgentRuntimeTests
         {
             _runs[run.RunId] = run;
             return Task.CompletedTask;
+        }
+
+        public Task<bool> DeleteAsync(string runId, CancellationToken ct = default)
+        {
+            _events.TryRemove(runId, out _);
+            return Task.FromResult(_runs.TryRemove(runId, out _));
         }
 
         public Task<AgentStreamEvent> AppendEventAsync(

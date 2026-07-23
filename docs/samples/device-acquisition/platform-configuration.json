@@ -1,0 +1,85 @@
+{
+  "dataModels": [
+    {
+      "modelId": "continuous-heat-treatment",
+      "version": 1,
+      "name": "连续热处理工艺",
+      "description": "适用于无固定加工周期的连续热处理设备。",
+      "status": "published",
+      "acquisition": {
+        "samplePeriodMs": 1000,
+        "dataItems": [
+          { "code": "furnace.temperature", "sourceField": "炉温℃", "dataType": "double", "unit": "Cel", "category": "process", "nullable": false },
+          { "code": "furnace.temperature_setpoint", "sourceField": "设定温度℃", "dataType": "double", "unit": "Cel", "category": "setpoint", "nullable": false },
+          { "code": "furnace.pressure", "sourceField": "炉压kPa", "dataType": "double", "unit": "kPa", "category": "process", "nullable": false },
+          { "code": "atmosphere.oxygen", "sourceField": "氧含量ppm", "dataType": "double", "unit": "ppm", "category": "process", "nullable": false },
+          { "code": "fan.speed", "sourceField": "风机转速rpm", "dataType": "integer", "unit": "r/min", "category": "process", "nullable": false },
+          { "code": "heater.enabled", "sourceField": "加热器开启", "dataType": "boolean", "category": "state", "nullable": false },
+          { "code": "operation.mode", "sourceField": "运行模式", "dataType": "string", "category": "state", "nullable": false }
+        ]
+      },
+      "recipeParameters": [
+        { "code": "temperature.target", "sourceField": "目标温度℃", "dataType": "double", "unit": "Cel", "nullable": false },
+        { "code": "soak.duration", "sourceField": "保温时间min", "dataType": "integer", "unit": "min", "nullable": false },
+        { "code": "protective_gas.enabled", "sourceField": "保护气启用", "dataType": "boolean", "nullable": false },
+        { "code": "process.mode", "sourceField": "工艺模式", "dataType": "string", "nullable": false }
+      ],
+      "stages": []
+    }
+  ],
+  "recipeVersions": [
+    {
+      "recipeId": "ht-shaft-860",
+      "version": 3,
+      "name": "轴类零件 860℃ 标准工艺",
+      "dataModelId": "continuous-heat-treatment",
+      "dataModelVersion": 1,
+      "status": "published",
+      "contextSelector": { "product_series": "SHAFT-20" },
+      "values": [
+        { "code": "temperature.target", "value": 860.0 },
+        { "code": "soak.duration", "value": 45 },
+        { "code": "protective_gas.enabled", "value": true },
+        { "code": "process.mode", "value": "normalizing" }
+      ]
+    },
+    {
+      "recipeId": "ht-shaft-900",
+      "version": 1,
+      "name": "轴类零件 900℃ 高温工艺",
+      "dataModelId": "continuous-heat-treatment",
+      "dataModelVersion": 1,
+      "status": "published",
+      "contextSelector": { "product_series": "SHAFT-20" },
+      "values": [
+        { "code": "temperature.target", "value": 900.0 },
+        { "code": "soak.duration", "value": 30 },
+        { "code": "protective_gas.enabled", "value": true },
+        { "code": "process.mode", "value": "hardening" }
+      ]
+    }
+  ],
+  "analysisPlans": [
+    {
+      "planId": "continuous-heat-treatment.window-comparison",
+      "version": 1,
+      "name": "连续热处理时间窗口对比",
+      "description": "按产品系列选择连续运行时间窗口并比较主要工艺曲线。",
+      "status": "published",
+      "dataModelId": "continuous-heat-treatment",
+      "dataModelVersion": 1,
+      "analysisScope": "analysis-window",
+      "alignmentMode": "elapsed",
+      "cohortDimension": "product_series",
+      "comparisonKeys": ["product_series"],
+      "contextSelector": {},
+      "signals": [
+        { "dataItemCode": "furnace.temperature", "includeTrace": true, "features": ["min", "max", "mean", "stddev"] },
+        { "dataItemCode": "furnace.temperature_setpoint", "includeTrace": true, "features": ["min", "max", "mean"] },
+        { "dataItemCode": "furnace.pressure", "includeTrace": true, "features": ["min", "max", "mean", "stddev"] },
+        { "dataItemCode": "atmosphere.oxygen", "includeTrace": true, "features": ["min", "max", "mean", "stddev"] },
+        { "dataItemCode": "fan.speed", "includeTrace": true, "features": ["min", "max", "mean", "stddev"] }
+      ]
+    }
+  ]
+}

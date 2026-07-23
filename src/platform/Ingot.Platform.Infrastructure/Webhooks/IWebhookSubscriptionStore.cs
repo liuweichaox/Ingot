@@ -6,6 +6,10 @@ public interface IWebhookSubscriptionStore
     Task<WebhookSubscription> CreateAsync(
         CreateWebhookSubscriptionRequest request,
         CancellationToken ct = default);
+    Task<WebhookSubscription?> UpdateAsync(
+        Guid subscriptionId,
+        UpdateWebhookSubscriptionRequest request,
+        CancellationToken ct = default);
     Task<IReadOnlyList<WebhookSubscription>> ListAsync(CancellationToken ct = default);
     Task<WebhookSubscription?> GetAsync(Guid subscriptionId, CancellationToken ct = default);
     Task<bool> DeleteAsync(Guid subscriptionId, CancellationToken ct = default);

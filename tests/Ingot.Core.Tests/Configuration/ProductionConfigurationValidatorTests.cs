@@ -23,6 +23,9 @@ public sealed class ProductionConfigurationValidatorTests
             ["ConnectionStrings:Events"] = "Host=postgres;Database=ingot",
             ["EventIngest:RequireToken"] = "true",
             ["EventIngest:EdgeTokens:EDGE-001"] = "edge-token-with-at-least-24-characters",
+            ["Authentication:Authority"] = "https://identity.example.com",
+            ["Authentication:Audience"] = "ingot-platform",
+            ["InspectionAttachments:ArchiveRootPath"] = "/archive/inspection-attachments",
             ["Chat:Enabled"] = "false",
             ["Cors:AllowedOrigins:0"] = "https://ingotstack.com"
         });
@@ -38,6 +41,9 @@ public sealed class ProductionConfigurationValidatorTests
             ["ConnectionStrings:Events"] = "Host=postgres;Database=ingot",
             ["EventIngest:RequireToken"] = "true",
             ["EventIngest:EdgeTokens:EDGE-001"] = "edge-token-with-at-least-24-characters",
+            ["Authentication:Authority"] = "https://identity.example.com",
+            ["Authentication:Audience"] = "ingot-platform",
+            ["InspectionAttachments:ArchiveRootPath"] = "/archive/inspection-attachments",
             ["Chat:Enabled"] = "true",
             ["Chat:Provider"] = "OpenAI",
             ["Chat:FastModel"] = "chat-fast-model",
@@ -107,6 +113,39 @@ public sealed class ProductionConfigurationValidatorTests
         });
 
         EdgeValidator.Validate(configuration);
+    }
+
+    [Fact]
+    public void ConnectorHost_RejectsInvalidPublicBaseUrl()
+    {
+        var configuration = Build(new Dictionary<string, string?>
+        {
+            ["ConnectorHost:IngestToken"] = "connector-token-with-at-least-24-characters",
+            ["Edge:EnablePlatformReporting"] = "true",
+            ["Edge:PlatformApiBaseUrl"] = "http://platform-api:8000",
+            ["Edge:PublicBaseUrl"] = "connector-host:8001",
+            ["Edge:EnableEventShipping"] = "true",
+            ["Edge:EventIngestToken"] = "edge-token-with-at-least-24-characters"
+        });
+
+        var error = Assert.Throws<InvalidOperationException>(() => EdgeValidator.Validate(configuration));
+        Assert.Contains("Edge:PublicBaseUrl", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Platform_RejectsMissingUnifiedIdentityProvider()
+    {
+        var configuration = Build(new Dictionary<string, string?>
+        {
+            ["ConnectionStrings:Events"] = "Host=postgres;Database=ingot",
+            ["EventIngest:RequireToken"] = "true",
+            ["EventIngest:EdgeTokens:EDGE-001"] = "edge-token-with-at-least-24-characters",
+            ["Chat:Enabled"] = "false",
+            ["Cors:AllowedOrigins:0"] = "https://ingotstack.com"
+        });
+
+        var error = Assert.Throws<InvalidOperationException>(() => PlatformValidator.Validate(configuration));
+        Assert.Contains("Authentication:Authority", error.Message, StringComparison.Ordinal);
     }
 
     [Fact]

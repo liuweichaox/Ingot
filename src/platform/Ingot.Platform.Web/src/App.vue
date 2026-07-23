@@ -1,339 +1,325 @@
 <template>
   <el-config-provider :locale="zhCn">
-    <el-container class="app-shell" :style="{ '--app-sidebar-width': sidebarWidth }">
-      <button
-        v-if="isMobile && !sidebarCollapsed"
-        type="button"
-        class="sidebar-backdrop"
-        aria-label="关闭导航"
-        @click="sidebarCollapsed = true"
-      />
+    <div class="app-shell">
+      <header class="global-header">
+        <button type="button" class="brand" aria-label="返回工作台" @click="router.push('/workbench')">
+          <span class="brand-icon"><img src="/ingot-mark.svg" alt=""></span>
+          <span class="brand-copy"><strong>Ingot</strong><small>制造数据平台</small></span>
+        </button>
 
-      <el-aside
-        :width="sidebarWidth"
-        class="app-sidebar"
-        :class="{ 'is-collapsed': sidebarCollapsed, 'is-mobile': isMobile }"
-      >
-        <div class="sidebar-brand">
-          <div class="brand-icon"><el-icon :size="22"><Box /></el-icon></div>
-          <div v-show="!sidebarCollapsed" class="brand-copy">
-            <strong>Ingot</strong>
-            <span>制造数据平台</span>
-          </div>
-        </div>
-
-        <nav class="sidebar-nav" aria-label="主导航">
-          <div class="nav-section">
-            <div v-show="!sidebarCollapsed" class="nav-section-label">日常工作</div>
-            <el-menu
-              :default-active="$route.path"
-              :collapse="sidebarCollapsed"
-              :collapse-transition="false"
-              router
-              class="sidebar-menu"
-            >
-              <el-menu-item index="/chat" aria-label="Ingot Chat">
-                <el-icon><ChatDotRound /></el-icon>
-                <template #title>Ingot Chat</template>
-              </el-menu-item>
-              <el-menu-item index="/cycles" aria-label="生产周期">
-                <el-icon><List /></el-icon>
-                <template #title>生产周期</template>
-              </el-menu-item>
-              <el-menu-item index="/inspections" aria-label="质量检验">
-                <el-icon><DocumentChecked /></el-icon>
-                <template #title>质量检验</template>
-              </el-menu-item>
-            </el-menu>
-          </div>
-
-          <div class="nav-section">
-            <div v-show="!sidebarCollapsed" class="nav-section-label">分析与治理</div>
-            <el-menu
-              :default-active="$route.path"
-              :collapse="sidebarCollapsed"
-              :collapse-transition="false"
-              router
-              class="sidebar-menu"
-            >
-              <el-menu-item index="/comparisons" aria-label="历史对比">
-                <el-icon><TrendCharts /></el-icon>
-                <template #title>历史对比</template>
-              </el-menu-item>
-              <el-menu-item index="/data-quality" aria-label="数据质量">
-                <el-icon><CircleCheck /></el-icon>
-                <template #title>数据质量</template>
-              </el-menu-item>
-            </el-menu>
-          </div>
-
-          <div class="nav-section">
-            <div v-show="!sidebarCollapsed" class="nav-section-label">配置管理</div>
-            <el-menu
-              :default-active="$route.path"
-              :collapse="sidebarCollapsed"
-              :collapse-transition="false"
-              router
-              class="sidebar-menu"
-            >
-              <el-menu-item index="/profiles" aria-label="工艺配置">
-                <el-icon><Setting /></el-icon>
-                <template #title>工艺配置</template>
-              </el-menu-item>
-              <el-menu-item index="/quality-plans" aria-label="质量方案">
-                <el-icon><Finished /></el-icon>
-                <template #title>质量方案</template>
-              </el-menu-item>
-              <el-menu-item index="/edges" aria-label="数据接入节点">
-                <el-icon><Connection /></el-icon>
-                <template #title>数据接入节点</template>
-              </el-menu-item>
-            </el-menu>
-          </div>
-
-          <div class="nav-section">
-            <div v-show="!sidebarCollapsed" class="nav-section-label">系统运维</div>
-            <el-menu
-              :default-active="$route.path"
-              :collapse="sidebarCollapsed"
-              :collapse-transition="false"
-              router
-              class="sidebar-menu"
-            >
-              <el-menu-item index="/events" aria-label="事件查询">
-                <el-icon><Tickets /></el-icon>
-                <template #title>事件查询</template>
-              </el-menu-item>
-              <el-menu-item index="/metrics" aria-label="平台指标">
-                <el-icon><DataAnalysis /></el-icon>
-                <template #title>平台指标</template>
-              </el-menu-item>
-              <el-menu-item index="/logs" aria-label="运行日志">
-                <el-icon><Document /></el-icon>
-                <template #title>运行日志</template>
-              </el-menu-item>
-            </el-menu>
-          </div>
+        <nav class="global-nav" aria-label="全局导航">
+          <button
+            v-for="section in navigationSections"
+            :key="section.id"
+            type="button"
+            :class="{ active: currentSection.id === section.id }"
+            :aria-current="currentSection.id === section.id ? 'page' : undefined"
+            @click="openSection(section)"
+          >
+            <el-icon><component :is="section.icon" /></el-icon>
+            <span>{{ section.label }}</span>
+          </button>
         </nav>
 
-        <button type="button" class="raw-metrics-link" aria-label="原始指标" @click="openMetrics">
-          <el-icon><Link /></el-icon>
-          <span v-show="!sidebarCollapsed">原始指标</span>
+        <button type="button" class="global-search" @click="router.push('/explorer')">
+          <el-icon><Search /></el-icon><span>搜索数据</span>
         </button>
-      </el-aside>
+      </header>
 
-      <el-container class="workspace-shell">
-        <el-header class="workspace-header">
-          <div class="page-heading">
-            <el-button
-              text
-              circle
-              :icon="sidebarCollapsed ? Expand : Fold"
-              :aria-label="sidebarCollapsed ? '展开导航' : '收起导航'"
-              @click="sidebarCollapsed = !sidebarCollapsed"
-            />
-            <div>
+      <div class="body-shell" :class="{ 'without-context-nav': !hasContextNavigation }">
+        <button
+          v-if="isMobile && contextNavigationOpen"
+          type="button"
+          class="context-backdrop"
+          aria-label="关闭导航"
+          @click="contextNavigationOpen = false"
+        />
+
+        <aside
+          v-if="hasContextNavigation"
+          class="context-sidebar"
+          :class="{ 'is-open': contextNavigationOpen }"
+        >
+          <div class="context-title">
+            <el-icon><component :is="currentSection.icon" /></el-icon>
+            <strong>{{ currentSection.label }}</strong>
+          </div>
+          <nav aria-label="当前模块导航">
+            <RouterLink
+              v-for="item in currentSection.items"
+              :key="item.path"
+              :to="item.path"
+              :class="{ active: route.path === item.path }"
+              @click="contextNavigationOpen = false"
+            >
+              <span>{{ item.label }}</span>
+            </RouterLink>
+          </nav>
+        </aside>
+
+        <section class="workspace-shell">
+          <header class="workspace-header">
+            <button
+              v-if="isMobile && hasContextNavigation"
+              type="button"
+              class="context-trigger"
+              aria-label="打开当前模块导航"
+              @click="contextNavigationOpen = true"
+            >
+              <el-icon><Menu /></el-icon>
+            </button>
+            <div class="page-heading">
               <strong>{{ currentPage.title }}</strong>
               <span>{{ currentPage.description }}</span>
             </div>
-          </div>
-          <el-tag effect="plain" round>{{ currentPage.badge || "只读分析平台" }}</el-tag>
-        </el-header>
+          </header>
 
-        <el-main class="app-main">
-          <router-view />
-        </el-main>
-      </el-container>
-    </el-container>
+          <main class="app-main">
+            <router-view />
+          </main>
+        </section>
+      </div>
+    </div>
   </el-config-provider>
 </template>
 
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { useRoute } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import {
-  Box,
   ChatDotRound,
-  CircleCheck,
-  Connection,
   DataAnalysis,
-  Document,
   DocumentChecked,
-  Expand,
-  Fold,
-  Finished,
-  Link,
-  List,
+  FolderOpened,
+  Guide,
+  HomeFilled,
+  Menu,
+  Search,
   Setting,
-  TrendCharts,
-  Tickets,
+  Tools,
 } from "@element-plus/icons-vue";
 import zhCn from "element-plus/dist/locale/zh-cn.mjs";
 
 const route = useRoute();
-const isMobile = ref(window.innerWidth <= 800);
-const sidebarCollapsed = ref(window.innerWidth <= 1100);
+const router = useRouter();
+const isMobile = ref(window.innerWidth <= 900);
+const contextNavigationOpen = ref(false);
+
+const navigationSections = [
+  { id: "workbench", label: "工作台", icon: HomeFilled, path: "/workbench", items: [] },
+  { id: "chat", label: "AI 助手", icon: ChatDotRound, path: "/chat", items: [] },
+  {
+    id: "operations", label: "运行与追溯", icon: Guide, path: "/cycles", items: [
+      { path: "/cycles", label: "运行记录" },
+      { path: "/events", label: "生产事件" },
+      { path: "/production/changeover", label: "生产切换" },
+      { path: "/production/tooling-installations", label: "工装装卸" },
+    ],
+  },
+  {
+    id: "quality", label: "质量管理", icon: DocumentChecked, path: "/inspections", items: [
+      { path: "/inspections", label: "质量任务" },
+      { path: "/quality-analysis", label: "质量分析" },
+      { path: "/configuration/inspection-definitions", label: "检测定义" },
+      { path: "/configuration/quality-plans", label: "质量方案" },
+    ],
+  },
+  {
+    id: "analysis", label: "分析中心", icon: DataAnalysis, path: "/comparisons", items: [
+      { path: "/comparisons", label: "历史对比" },
+      { path: "/data-quality", label: "数据健康" },
+      { path: "/configuration/process-analysis-plans", label: "分析方案" },
+    ],
+  },
+  {
+    id: "data", label: "数据资产", icon: FolderOpened, path: "/explorer", items: [
+      { path: "/explorer", label: "对象目录" },
+      { path: "/configuration/process-data-models", label: "工艺数据模型" },
+      { path: "/configuration/recipe-versions", label: "配方版本" },
+      { path: "/configuration/acquisition-profiles", label: "采集任务" },
+      { path: "/edges", label: "采集节点" },
+    ],
+  },
+  {
+    id: "tooling", label: "工装管理", icon: Tools, path: "/configuration/components", items: [
+      { path: "/configuration/component-types", label: "组件类型" },
+      { path: "/configuration/components", label: "组件台账" },
+      { path: "/configuration/tooling-types", label: "工装类型" },
+      { path: "/configuration/tooling-assemblies", label: "工装组合" },
+    ],
+  },
+  {
+    id: "administration", label: "系统管理", icon: Setting, path: "/platform-metrics", items: [
+      { path: "/platform-metrics", label: "平台指标" },
+      { path: "/subscriptions", label: "事件订阅" },
+      { path: "/logs", label: "运行日志" },
+    ],
+  },
+];
 
 const pageDetails = {
+  "/workbench": { title: "工作台", description: "生产、质量与数据状态" },
   "/chat": { title: "Ingot Chat", description: "查询与分析已保存的生产数据" },
-  "/cycles": { title: "生产周期", description: "按周期查看生产、数据质量与质检状态" },
-  "/events": { title: "事件查询", description: "面向诊断与追溯查询原始生产事件" },
-  "/inspections": { title: "质量检验", description: "处理视觉检查、人工质检与原图复核" },
-  "/comparisons": { title: "历史对比", description: "比较同产品系列的完整模压周期" },
-  "/data-quality": { title: "数据质量", description: "检查采样、阶段和生产信息完整性" },
-  "/profiles": { title: "工艺配置", description: "配置采集、配方与阶段模型", badge: "配置管理" },
-  "/quality-plans": { title: "质量方案", description: "配置产品适用的检测项目与复核规则", badge: "配置管理" },
-  "/edges": { title: "数据接入节点", description: "查看现场数据适配器状态" },
-  "/metrics": { title: "平台指标", description: "查看平台运行指标" },
+  "/explorer": { title: "对象目录", description: "从运行对象进入数据、上下文与关联关系" },
+  "/cycles": { title: "运行记录", description: "查看生产周期及其数据、工艺与质量上下文" },
+  "/production/changeover": { title: "生产切换", description: "让设备、产品、配方和已装工装对接下来的周期生效" },
+  "/production/tooling-installations": { title: "工装装卸", description: "记录工装组合版本在设备上的装入与卸下区间" },
+  "/configuration/component-types": { title: "组件类型", description: "配置组件台账的分类来源" },
+  "/configuration/components": { title: "组件台账", description: "登记可更换、复用和追溯的物理组件" },
+  "/configuration/tooling-types": { title: "工装类型", description: "配置装配位置及允许的组件类型" },
+  "/configuration/tooling-assemblies": { title: "工装组合", description: "维护工装身份与不可变组件组合版本" },
+  "/events": { title: "生产事件", description: "查询、追溯并关联运行上下文" },
+  "/inspections": { title: "质量任务", description: "处理视觉检查、人工质检与原图复核" },
+  "/quality-analysis": { title: "质量分析", description: "按产品、配方、运行对象和分析范围查看质量结果" },
+  "/comparisons": { title: "历史对比", description: "比较同类生产周期、运行段或时间窗口" },
+  "/data-quality": { title: "数据健康", description: "检查运行对象的数据范围、采样连续性与周期完整性" },
+  "/configuration/process-data-models": { title: "工艺数据模型", description: "定义采集数据项、配方参数结构和工艺阶段" },
+  "/configuration/recipe-versions": { title: "配方版本", description: "维护引用数据模型的完整配方有效值" },
+  "/configuration/acquisition-profiles": { title: "采集任务", description: "管理数据源连接、采集对象、字段映射与发布版本" },
+  "/configuration/process-analysis-plans": { title: "分析方案", description: "配置分析范围、对齐方式、质量分组和数据项" },
+  "/configuration/inspection-definitions": { title: "检测定义", description: "定义要检测的特性、录入类型和判定规则" },
+  "/configuration/quality-plans": { title: "质量方案", description: "配置产品适用的检测项目与复核规则" },
+  "/edges": { title: "采集节点", description: "查看现场采集节点及运行状态" },
+  "/platform-metrics": { title: "平台指标", description: "查看平台与边缘节点运行指标" },
+  "/subscriptions": { title: "事件订阅", description: "维护向外部系统投递的事件订阅" },
   "/logs": { title: "运行日志", description: "查询平台运行记录" },
 };
 
+const currentSection = computed(() => navigationSections.find(section => (
+  route.path === section.path || section.items.some(item => item.path === route.path)
+)) || navigationSections[0]);
 const currentPage = computed(() => pageDetails[route.path] || { title: "Ingot", description: "制造数据平台" });
-const sidebarWidth = computed(() => {
-  if (isMobile.value && sidebarCollapsed.value) return "0px";
-  return sidebarCollapsed.value ? "72px" : "236px";
-});
+const hasContextNavigation = computed(() => currentSection.value.items.length > 0);
+
+function openSection(section) {
+  contextNavigationOpen.value = false;
+  router.push(section.path);
+}
 
 function handleResize() {
-  const wasMobile = isMobile.value;
-  isMobile.value = window.innerWidth <= 800;
-  if (isMobile.value && !wasMobile) sidebarCollapsed.value = true;
+  isMobile.value = window.innerWidth <= 900;
+  if (!isMobile.value) contextNavigationOpen.value = false;
 }
 
-function openMetrics() {
-  window.open("/metrics", "_blank", "noopener,noreferrer");
-}
-
-watch(() => route.path, () => {
-  if (isMobile.value) sidebarCollapsed.value = true;
-});
-
+watch(() => route.path, () => { contextNavigationOpen.value = false; });
 onMounted(() => window.addEventListener("resize", handleResize));
 onBeforeUnmount(() => window.removeEventListener("resize", handleResize));
 </script>
 
 <style scoped>
-.app-shell {
-  min-height: 100vh;
-  background: #f5f7fa;
-}
-
-.app-sidebar {
+.app-shell { min-height: 100vh; background: #f5f7fa; }
+.global-header {
   position: fixed;
-  z-index: 40;
-  top: 0;
-  bottom: 0;
-  left: 0;
+  z-index: 60;
+  inset: 0 0 auto;
   display: flex;
-  overflow: hidden;
-  flex-direction: column;
-  border-right: 1px solid #e6eaf0;
-  background: #fff;
-  box-shadow: 4px 0 20px rgba(31, 48, 78, .035);
-  transition: width .2s ease, transform .2s ease;
+  height: 60px;
+  align-items: stretch;
+  border-bottom: 1px solid #e5e9ef;
+  background: rgba(255, 255, 255, .97);
+  backdrop-filter: blur(12px);
 }
-
-.sidebar-brand {
+.brand {
   display: flex;
+  width: 216px;
+  flex: 0 0 216px;
   align-items: center;
-  min-height: 72px;
-  gap: 11px;
+  gap: 10px;
   padding: 0 18px;
-  border-bottom: 1px solid #edf0f4;
+  border: 0;
+  border-right: 1px solid #edf0f4;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
 }
-
-.brand-icon {
+.brand-icon { display: inline-flex; width: 34px; height: 34px; align-items: center; justify-content: center; border-radius: 9px; background: #fff7e6; box-shadow: inset 0 0 0 1px rgba(232, 137, 26, .18); }
+.brand-icon img { display: block; width: 27px; height: 27px; }
+.brand-copy { display: grid; gap: 1px; }
+.brand-copy strong { color: #182238; font-size: 17px; }
+.brand-copy small { color: #919bab; font-size: 10px; }
+.global-nav { display: flex; min-width: 0; flex: 1; align-items: stretch; overflow-x: auto; scrollbar-width: none; }
+.global-nav::-webkit-scrollbar { display: none; }
+.global-nav button, .global-search {
+  position: relative;
   display: inline-flex;
-  width: 36px;
-  height: 36px;
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
-  border-radius: 11px;
-  color: #fff;
-  background: linear-gradient(135deg, #409eff, #6878ff);
-}
-
-.brand-copy {
-  display: grid;
-  min-width: 130px;
-  gap: 2px;
-}
-
-.brand-copy strong { color: #182238; font-size: 18px; }
-.brand-copy span { color: #919bab; font-size: 11px; }
-.sidebar-nav { flex: 1; overflow-y: auto; padding: 15px 10px; }
-.nav-section + .nav-section { margin-top: 18px; }
-.nav-section-label { padding: 0 12px 7px; color: #a0a8b5; font-size: 11px; font-weight: 600; letter-spacing: .08em; }
-.sidebar-menu { border-right: 0; background: transparent; }
-.sidebar-menu:not(.el-menu--collapse) { width: 216px; }
-
-:deep(.sidebar-menu .el-menu-item) {
-  height: 44px;
-  margin: 2px 0;
-  border-radius: 10px;
-  color: #596476;
-  line-height: 44px;
-}
-
-:deep(.sidebar-menu .el-menu-item:hover) { color: #2e6fac; background: #f2f7fd; }
-:deep(.sidebar-menu .el-menu-item.is-active) { color: #2878c8; background: #eaf4ff; font-weight: 600; }
-:deep(.sidebar-menu.el-menu--collapse) { width: 52px; }
-:deep(.sidebar-menu.el-menu--collapse .el-menu-item) { justify-content: center; padding: 0 !important; }
-
-.raw-metrics-link {
-  display: flex;
-  min-height: 44px;
-  align-items: center;
-  gap: 12px;
-  margin: 8px 10px 14px;
-  padding: 0 16px;
+  gap: 6px;
+  padding: 0 15px;
   border: 0;
-  border-radius: 10px;
-  color: #7d8796;
   background: transparent;
+  color: #5e697a;
   cursor: pointer;
-  white-space: nowrap;
+  font: inherit;
+  font-size: 13px;
 }
-
-.raw-metrics-link:hover { color: #2e6fac; background: #f2f7fd; }
-.is-collapsed .raw-metrics-link { justify-content: center; padding: 0; }
-.workspace-shell { min-width: 0; margin-left: var(--app-sidebar-width); transition: margin-left .2s ease; }
+.global-nav button::after { position: absolute; right: 16px; bottom: 0; left: 16px; height: 2px; border-radius: 2px 2px 0 0; background: transparent; content: ""; }
+.global-nav button:hover, .global-nav button.active { color: #2878c8; background: #f7faff; }
+.global-nav button.active { font-weight: 600; }
+.global-nav button.active::after { background: #2878c8; }
+.global-search { min-width: 112px; border-left: 1px solid #edf0f4; }
+.global-search:hover { color: #2878c8; background: #f7faff; }
+.body-shell { min-height: 100vh; padding-top: 60px; }
+.context-sidebar {
+  position: fixed;
+  z-index: 40;
+  top: 60px;
+  bottom: 0;
+  left: 0;
+  width: 216px;
+  border-right: 1px solid #e6eaf0;
+  background: #fff;
+}
+.context-title { display: flex; height: 64px; align-items: center; gap: 9px; padding: 0 20px; border-bottom: 1px solid #edf0f4; color: #27344a; }
+.context-title strong { font-size: 14px; }
+.context-sidebar nav { display: grid; gap: 3px; padding: 14px 10px; }
+.context-sidebar a { display: flex; height: 40px; align-items: center; padding: 0 15px; border-radius: 8px; color: #5d6879; font-size: 13px; text-decoration: none; }
+.context-sidebar a:hover { color: #2e6fac; background: #f3f7fc; }
+.context-sidebar a.active { color: #2878c8; background: #eaf4ff; font-weight: 600; }
+.workspace-shell { min-width: 0; margin-left: 216px; }
+.without-context-nav .workspace-shell { margin-left: 0; }
 .workspace-header {
   position: sticky;
   z-index: 25;
-  top: 0;
+  top: 60px;
   display: flex;
-  height: 64px !important;
+  height: 64px;
   align-items: center;
-  justify-content: space-between;
+  gap: 10px;
   padding: 0 24px;
   border-bottom: 1px solid #e5e9ef;
   background: rgba(255, 255, 255, .94);
   backdrop-filter: blur(12px);
 }
-
-.page-heading { display: flex; align-items: center; gap: 10px; }
-.page-heading > div { display: grid; gap: 2px; }
+.page-heading { display: grid; gap: 2px; }
 .page-heading strong { color: #182238; font-size: 16px; }
 .page-heading span { color: #8d97a7; font-size: 11px; }
+.context-trigger { display: none; width: 34px; height: 34px; align-items: center; justify-content: center; border: 0; border-radius: 8px; background: transparent; color: #5e697a; }
 .app-main { width: 100%; max-width: 1600px; margin: 0 auto; padding: 24px; }
-.sidebar-backdrop { display: none; }
+.context-backdrop { display: none; }
 
-@media (max-width: 800px) {
-  .app-sidebar.is-mobile { box-shadow: 10px 0 34px rgba(24, 38, 63, .16); }
-  .app-sidebar.is-mobile.is-collapsed { transform: translateX(-100%); }
+@media (max-width: 1180px) {
+  .brand { width: 176px; flex-basis: 176px; }
+  .global-nav button { padding: 0 11px; }
+  .global-nav button .el-icon { display: none; }
+}
+
+@media (max-width: 900px) {
+  .global-header { height: 56px; }
+  .brand { width: 62px; flex-basis: 62px; justify-content: center; padding: 0; }
+  .brand-copy { display: none; }
+  .global-nav button { padding: 0 12px; }
+  .global-nav button span { white-space: nowrap; }
+  .global-search { min-width: 48px; padding: 0 14px; }
+  .global-search span { display: none; }
+  .body-shell { padding-top: 56px; }
+  .context-sidebar { z-index: 55; top: 56px; transform: translateX(-100%); box-shadow: 10px 0 34px rgba(24, 38, 63, .16); transition: transform .2s ease; }
+  .context-sidebar.is-open { transform: translateX(0); }
   .workspace-shell { margin-left: 0; }
-  .workspace-header { padding: 0 12px; }
-  .workspace-header > .el-tag { display: none; }
+  .workspace-header { top: 56px; height: 60px; padding: 0 12px; }
+  .context-trigger { display: inline-flex; flex: 0 0 auto; }
   .app-main { padding: 14px 10px; }
-  .sidebar-backdrop {
-    position: fixed;
-    z-index: 35;
-    inset: 0;
-    display: block;
-    border: 0;
-    background: rgba(17, 28, 47, .28);
-  }
+  .context-backdrop { position: fixed; z-index: 50; inset: 56px 0 0; display: block; border: 0; background: rgba(17, 28, 47, .28); }
 }
 </style>

@@ -20,6 +20,14 @@ public static class ProductionConfigurationValidator
             {
                 errors.Add("Edge:PlatformApiBaseUrl must be an absolute HTTP or HTTPS URL.");
             }
+
+            var publicBaseUrl = configuration["Edge:PublicBaseUrl"];
+            if (!string.IsNullOrWhiteSpace(publicBaseUrl) &&
+                (!Uri.TryCreate(publicBaseUrl, UriKind.Absolute, out var publicUri) ||
+                 (publicUri.Scheme != Uri.UriSchemeHttp && publicUri.Scheme != Uri.UriSchemeHttps)))
+            {
+                errors.Add("Edge:PublicBaseUrl must be an absolute HTTP or HTTPS URL.");
+            }
         }
 
         if (configuration.GetValue<bool>("Edge:EnableEventShipping"))

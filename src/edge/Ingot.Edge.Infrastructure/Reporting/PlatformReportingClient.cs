@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Threading;
@@ -71,11 +72,16 @@ public sealed class PlatformReportingClient : IPlatformReportingClient
         }
 
         _hostname = Environment.MachineName;
-        _hostBaseUrl = NormalizeHostBaseUrl(listenUrls);
+        _hostBaseUrl = string.IsNullOrWhiteSpace(_options.PublicBaseUrl)
+            ? NormalizeHostBaseUrl(listenUrls)
+            : NormalizeConfiguredBaseUrl(_options.PublicBaseUrl);
 
         var baseUri = new Uri(_options.EffectivePlatformApiBaseUrl.TrimEnd('/') + "/");
         _http = _httpClientFactory.CreateClient(nameof(PlatformReportingClient));
         _http.BaseAddress = baseUri;
+        if (!string.IsNullOrWhiteSpace(_options.EventIngestToken))
+            _http.DefaultRequestHeaders.Authorization =
+                new AuthenticationHeaderValue("Bearer", _options.EventIngestToken);
 
         _logger.LogInformation("Platform 上报启用：EdgeId={EdgeId}, Platform={Platform}, HostBaseUrl={HostBaseUrl}",
             _edgeId, baseUri, _hostBaseUrl);
@@ -171,6 +177,18 @@ public sealed class PlatformReportingClient : IPlatformReportingClient
         }
 
         return firstUrl.TrimEnd('/');
+    }
+
+    private static string NormalizeConfiguredBaseUrl(string value)
+    {
+        var normalized = value.Trim().TrimEnd('/');
+        if (!Uri.TryCreate(normalized, UriKind.Absolute, out var uri) ||
+            uri.Scheme is not ("http" or "https"))
+        {
+            throw new InvalidOperationException("Edge:PublicBaseUrl 必须是 HTTP 或 HTTPS 绝对地址。");
+        }
+
+        return normalized;
     }
 
     /// <summary>获取本机第一个可用的真实 IPv4 出口地址。</summary>

@@ -24,9 +24,9 @@ const resolvedCodes = Object.keys(recipe.resolvedParameters)
 if (acquisition.samplePeriodMs !== 1000) fail('样例要求采样周期为 1000ms。')
 if (acquisition.scanSemantics !== 'atomic-group') fail('传感器必须按同一扫描原子成组。')
 if (acquisitionCodes.length !== 13 || !unique(acquisitionCodes)) fail('采集 Profile 必须包含 13 个唯一传感器代码。')
-if (recipeCodes.length !== 35 || !unique(recipeCodes)) fail('配方 Profile 必须包含 35 个唯一参数代码。')
+if (recipeCodes.length !== 31 || !unique(recipeCodes)) fail('配方 Profile 必须包含 31 个唯一参数代码。')
 if (resolvedCodes.length !== recipeCodes.length || recipeCodes.some(code => !resolvedCodes.includes(code))) {
-  fail('配方实例必须解析为 Profile 定义的 35 个完整参数。')
+  fail('配方实例必须解析为 Profile 定义的 31 个完整参数。')
 }
 if (recipeProfile.changeReasonRequired !== false) fail('本样例不要求配方修改原因。')
 if (phaseMapping.mappings.length !== 5) fail('阶段映射必须包含 5 个阶段。')

@@ -36,6 +36,11 @@ public sealed record CreateInspectionRecordRequest
     public IReadOnlyList<InspectionAttachment> Attachments { get; init; } = [];
 
     public string? Notes { get; init; }
+
+    /// <summary>被本记录更正的原记录；原记录保持不变。</summary>
+    public Guid? SupersedesRecordId { get; init; }
+
+    public string? CorrectionReason { get; init; }
 }
 
 public sealed record InspectionInstrumentRef
@@ -100,6 +105,8 @@ public sealed record InspectionRecord
     public IReadOnlyList<InspectionCharacteristicResult> Measurements { get; init; } = [];
     public IReadOnlyList<InspectionAttachment> Attachments { get; init; } = [];
     public string? Notes { get; init; }
+    public Guid? SupersedesRecordId { get; init; }
+    public string? CorrectionReason { get; init; }
 }
 
 public sealed record InspectionRecordQuery
@@ -111,5 +118,14 @@ public sealed record InspectionRecordQuery
     public DateTimeOffset? From { get; init; }
     public DateTimeOffset? To { get; init; }
     public int Limit { get; init; } = 100;
+    public int Offset { get; init; }
+}
+
+public sealed record InspectionRecordPage
+{
+    public IReadOnlyList<InspectionRecord> Data { get; init; } = [];
+    public int Total { get; init; }
+    public int Offset { get; init; }
+    public int Limit { get; init; }
 }
 

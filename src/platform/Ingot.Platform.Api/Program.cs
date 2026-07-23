@@ -10,6 +10,9 @@ using Ingot.Platform.Infrastructure;
 using Ingot.Platform.Infrastructure.HealthChecks;
 using Serilog;
 using Prometheus;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -22,7 +25,30 @@ builder.WebHost.UseUrls(urls);
 
 builder.Services.AddHttpClient();
 builder.Services.AddControllers();
-builder.Services.AddAuthentication();
+if (builder.Environment.IsDevelopment())
+{
+    builder.Services.AddAuthentication(DevelopmentAuthenticationHandler.SchemeName)
+        .AddScheme<AuthenticationSchemeOptions, DevelopmentAuthenticationHandler>(
+            DevelopmentAuthenticationHandler.SchemeName,
+            static _ => { });
+}
+else
+{
+    builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+        .AddJwtBearer(options =>
+        {
+            options.Authority = builder.Configuration["Authentication:Authority"];
+            options.Audience = builder.Configuration["Authentication:Audience"];
+            options.RequireHttpsMetadata = builder.Configuration.GetValue("Authentication:RequireHttpsMetadata", true);
+            options.MapInboundClaims = true;
+        });
+}
+builder.Services.AddAuthorization(options =>
+{
+    options.FallbackPolicy = new AuthorizationPolicyBuilder()
+        .RequireAuthenticatedUser()
+        .Build();
+});
 
 builder.Services.AddIngotPlatformInfrastructure(builder.Configuration);
 builder.Services.AddIngotAgentCore(builder.Configuration);
@@ -81,10 +107,10 @@ app.UseCors("frontend");
 // Prometheus 指标（中心自身进程）
 app.UseHttpMetrics();
 // Prometheus 原始指标（官方默认端点）
-app.MapMetrics("/metrics");
+app.MapMetrics("/metrics").AllowAnonymous();
 
 // Health checks（官方风格）：统一用 /health
-app.MapHealthChecks("/health");
+app.MapHealthChecks("/health").AllowAnonymous();
 
 // Attribute routing（/api/..）
 app.MapControllers();
@@ -109,11 +135,17 @@ app.MapGet("/", () => Results.Ok(new
         inspectionReviews = "/api/v1/inspection-reviews",
         cycles = "/api/v1/cycles",
         cycleComparisons = "/api/v1/cycle-comparisons/{correlationId}",
+        processWindowComparisons = "/api/v1/process-window-comparisons",
+        toolingTypes = "/api/v1/tooling-types",
+        toolingComponents = "/api/v1/tooling-components",
+        toolingAssemblies = "/api/v1/tooling-assemblies",
+        toolingInstallations = "/api/v1/tooling-installations",
+        productionContexts = "/api/v1/production-contexts",
         subscriptions = "/api/v1/subscriptions",
         chatRuns = "/api/v1/chat/runs",
         chatCapabilities = "/api/v1/chat/capabilities"
     }
-}));
+})).AllowAnonymous();
 
 // 解析并显示所有监听地址
 var addresses = urls.Split(';', ',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
@@ -146,6 +178,11 @@ Log.Logger.Information("    > Quality Tasks: {0}/api/v1/inspection-tasks", baseA
 Log.Logger.Information("    > Reviews:       {0}/api/v1/inspection-reviews", baseAddress);
 Log.Logger.Information("    > Cycles:        {0}/api/v1/cycles", baseAddress);
 Log.Logger.Information("    > Comparisons:   {0}/api/v1/cycle-comparisons/{{correlationId}}", baseAddress);
+Log.Logger.Information("    > Tooling Types: {0}/api/v1/tooling-types", baseAddress);
+Log.Logger.Information("    > Components:    {0}/api/v1/tooling-components", baseAddress);
+Log.Logger.Information("    > Assemblies:    {0}/api/v1/tooling-assemblies", baseAddress);
+Log.Logger.Information("    > Installations: {0}/api/v1/tooling-installations", baseAddress);
+Log.Logger.Information("    > Prod Contexts: {0}/api/v1/production-contexts", baseAddress);
 Log.Logger.Information("    > Subscriptions: {0}/api/v1/subscriptions", baseAddress);
 Log.Logger.Information("    > Chat Runs:     {0}/api/v1/chat/runs", baseAddress);
 Log.Logger.Information("    > Chat Capabilities:{0}/api/v1/chat/capabilities", baseAddress);

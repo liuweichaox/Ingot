@@ -22,6 +22,7 @@ public sealed class CyclesController(
         [FromQuery] string? correlationId,
         [FromQuery] string? status,
         [FromQuery] int limit = 200,
+        [FromQuery] int offset = 0,
         CancellationToken ct = default)
     {
         var identity = userResolver.ResolveIdentity(User);
@@ -35,6 +36,8 @@ public sealed class CyclesController(
             return BadRequest(new { error = "Status 仅支持 all、completed 或 active。" });
         if (limit is < 1 or > 1000)
             return BadRequest(new { error = "Limit 必须在 1 到 1000 之间。" });
+        if (offset < 0)
+            return BadRequest(new { error = "Offset 不能小于 0。" });
 
         var result = await cycles.QueryAsync(
             from,
@@ -47,6 +50,7 @@ public sealed class CyclesController(
             correlationId,
             status,
             limit,
+            offset,
             ct).ConfigureAwait(false);
         return Ok(result);
     }

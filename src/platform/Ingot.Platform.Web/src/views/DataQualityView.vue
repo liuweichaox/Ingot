@@ -1,102 +1,175 @@
 <template>
   <div class="quality-view">
     <el-card shadow="never">
-      <template #header>
-        <div class="heading">
-          <div><strong>周期数据质量</strong><span>检查采样、阶段映射和关键生产信息，不使用行业写死规则</span></div>
-          <el-button :icon="Refresh" :loading="loading" @click="load">重新检查</el-button>
-        </div>
-      </template>
       <el-form :inline="true">
         <el-form-item label="检查范围">
           <el-date-picker v-model="range" type="datetimerange" range-separator="至" value-format="YYYY-MM-DDTHH:mm:ssZ" />
         </el-form-item>
-        <el-form-item label="产品系列"><el-input v-model="productSeries" clearable /></el-form-item>
-        <el-form-item label="设备"><el-input v-model="machineId" clearable /></el-form-item>
-        <el-form-item><el-button type="primary" :icon="Search" @click="load">检查</el-button></el-form-item>
+        <el-form-item label="对象类型"><el-input v-model="subjectType" clearable placeholder="全部类型" /></el-form-item>
+        <el-form-item label="对象 ID"><el-input v-model="subjectId" clearable placeholder="全部对象" /></el-form-item>
+        <el-form-item label="产品系列"><el-input v-model="productSeries" clearable placeholder="用于周期检查" /></el-form-item>
+        <el-form-item><el-button type="primary" :icon="Search" :loading="loading" @click="load">检查</el-button></el-form-item>
       </el-form>
     </el-card>
+
     <el-alert v-if="error" :title="error" type="error" show-icon :closable="false" />
-    <div class="score-row">
-      <el-progress type="dashboard" :percentage="score" :status="score >= 95 ? 'success' : score >= 80 ? 'warning' : 'exception'" />
-      <div><strong>数据健康度</strong><span>{{ healthyCount }}/{{ overview.cycleCount || 0 }} 个周期未发现问题</span></div>
-      <div class="score-stat"><strong>{{ overview.issueCycleCount || 0 }}</strong><span>异常周期</span></div>
-      <div class="score-stat"><strong>{{ issueCount }}</strong><span>问题总数</span></div>
-      <div class="score-stat"><strong>{{ configurationIssueCount }}</strong><span>配置问题</span></div>
-    </div>
-    <el-card shadow="never">
-      <template #header><div class="heading"><strong>待处理问题</strong><el-tag :type="issues.length ? 'danger' : 'success'">{{ issues.length }} 条</el-tag></div></template>
-      <el-table v-loading="loading" :data="issues" stripe>
-        <el-table-column label="严重度" width="100"><template #default="{ row }"><el-tag :type="severityTag(row.issue.severity)">{{ severityLabel(row.issue.severity) }}</el-tag></template></el-table-column>
-        <el-table-column label="发生时间" width="180"><template #default="{ row }">{{ formatTime(row.cycle.startedAt) }}</template></el-table-column>
-        <el-table-column prop="cycle.machineId" label="设备" width="120" />
-        <el-table-column prop="cycle.productSeries" label="产品系列" width="130" />
-        <el-table-column prop="cycle.workpieceId" label="工件" min-width="150" />
-        <el-table-column label="问题" min-width="280"><template #default="{ row }"><strong>{{ row.issue.message }}</strong><small>{{ row.issue.code }}</small></template></el-table-column>
-        <el-table-column label="周期" min-width="190" show-overflow-tooltip><template #default="{ row }">{{ row.cycle.correlationId }}</template></el-table-column>
-        <el-table-column label="操作" width="100" fixed="right"><template #default="{ row }"><el-button text type="primary" @click="openCycle(row.cycle)">查看周期</el-button></template></el-table-column>
-      </el-table>
-      <el-empty v-if="!loading && !issues.length" description="当前范围未发现数据质量问题" />
-    </el-card>
+
+    <section class="summary-strip">
+      <article><small>运行对象</small><strong>{{ objects.length }}</strong></article>
+      <article><small>事件记录</small><strong>{{ compactNumber(objectSummary.events) }}</strong></article>
+      <article><small>采样记录</small><strong>{{ compactNumber(objectSummary.samples) }}</strong></article>
+      <article><small>关联运行</small><strong>{{ compactNumber(objectSummary.operations) }}</strong></article>
+      <article><small>周期问题</small><strong :class="{ danger: issues.length }">{{ issues.length }}</strong></article>
+    </section>
+
+    <el-tabs v-model="activeTab" class="quality-tabs">
+      <el-tab-pane label="运行对象" name="objects">
+        <el-table v-loading="loading" :data="pagedObjects" stripe>
+          <el-table-column label="运行对象" min-width="210">
+            <template #default="{ row }"><strong>{{ row.subjectId }}</strong><small>{{ subjectTypeLabel(row.subjectType) }}</small></template>
+          </el-table-column>
+          <el-table-column prop="eventCount" label="事件" width="100" />
+          <el-table-column prop="sampleCount" label="样本" width="110" />
+          <el-table-column prop="operationCount" label="关联运行" width="110" />
+          <el-table-column label="首次记录" width="180"><template #default="{ row }">{{ formatTime(row.firstObservedAt) }}</template></el-table-column>
+          <el-table-column label="最近记录" width="180"><template #default="{ row }">{{ formatTime(row.lastObservedAt) }}</template></el-table-column>
+          <el-table-column label="最近采样" width="180"><template #default="{ row }">{{ formatTime(row.lastSampleAt) }}</template></el-table-column>
+          <el-table-column label="最大采样间隔" width="140"><template #default="{ row }">{{ formatGap(row.maximumSampleGapSeconds) }}</template></el-table-column>
+          <el-table-column label="操作" width="100" fixed="right">
+            <template #default="{ row }"><el-button text type="primary" @click="openEvents(row)">查看事件</el-button></template>
+          </el-table-column>
+        </el-table>
+        <el-empty v-if="!loading && !objects.length" description="当前范围没有运行对象数据" />
+        <TablePagination v-model:page="objectPage" v-model:page-size="objectPageSize" :total="objectTotal" />
+      </el-tab-pane>
+
+      <el-tab-pane :label="`周期问题 ${issues.length}`" name="cycles">
+        <el-table v-loading="loading" :data="pagedIssues" stripe>
+          <el-table-column label="严重度" width="100"><template #default="{ row }"><el-tag :type="severityTag(row.issue.severity)">{{ severityLabel(row.issue.severity) }}</el-tag></template></el-table-column>
+          <el-table-column label="发生时间" width="180"><template #default="{ row }">{{ formatTime(row.cycle.startedAt) }}</template></el-table-column>
+          <el-table-column prop="cycle.machineId" label="运行对象" width="140" />
+          <el-table-column prop="cycle.productSeries" label="产品系列" width="130" />
+          <el-table-column prop="cycle.workpieceId" label="质量对象" min-width="150" />
+          <el-table-column label="问题" min-width="280"><template #default="{ row }"><strong>{{ row.issue.message }}</strong><small>{{ row.issue.code }}</small></template></el-table-column>
+          <el-table-column label="周期" min-width="190" show-overflow-tooltip><template #default="{ row }">{{ row.cycle.correlationId }}</template></el-table-column>
+          <el-table-column label="操作" width="100" fixed="right"><template #default="{ row }"><el-button text type="primary" @click="openCycle(row.cycle)">查看周期</el-button></template></el-table-column>
+        </el-table>
+        <el-empty v-if="!loading && !issues.length" description="当前范围的生产周期未发现结构化问题" />
+        <TablePagination v-model:page="issuePage" v-model:page-size="issuePageSize" :total="issueTotal" />
+      </el-tab-pane>
+    </el-tabs>
   </div>
 </template>
 
 <script setup>
 import { computed, onMounted, ref } from "vue";
-import { useRouter } from "vue-router";
-import { Refresh, Search } from "@element-plus/icons-vue";
+import { useRoute, useRouter } from "vue-router";
+import { ElDatePicker } from "element-plus";
+import { Search } from "@element-plus/icons-vue";
 import { getJson } from "../api/http";
+import TablePagination from "../components/TablePagination.vue";
+import { useClientPagination } from "../composables/useClientPagination";
 
 const router = useRouter();
+const route = useRoute();
 const end = new Date();
-const range = ref([new Date(end.getTime() - 24 * 60 * 60 * 1000).toISOString(), end.toISOString()]);
+const range = ref([new Date(end.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString(), end.toISOString()]);
+const subjectType = ref(String(route.query.subjectType || ""));
+const subjectId = ref(String(route.query.subjectId || route.query.machineId || ""));
 const productSeries = ref("");
-const machineId = ref("");
+const activeTab = ref("objects");
 const loading = ref(false);
 const error = ref("");
 const cycles = ref([]);
-const overview = ref({});
+const objects = ref([]);
 const issues = computed(() => cycles.value.flatMap((cycle) => (cycle.dataIssues || []).map((issue) => ({ cycle, issue })))
   .sort((a, b) => severityOrder(a.issue.severity) - severityOrder(b.issue.severity)));
-const healthyCount = computed(() => Math.max(0, (overview.value.cycleCount || 0) - (overview.value.issueCycleCount || 0)));
-const score = computed(() => overview.value.cycleCount ? Math.round(healthyCount.value / overview.value.cycleCount * 100) : 100);
-const issueCount = computed(() => issues.value.length);
-const configurationIssueCount = computed(() => issues.value.filter((row) => row.issue.code.includes("not_configured") || row.issue.code.includes("expectation_missing")).length);
+const objectSummary = computed(() => objects.value.reduce((result, row) => {
+  result.events += Number(row.eventCount || 0);
+  result.samples += Number(row.sampleCount || 0);
+  result.operations += Number(row.operationCount || 0);
+  return result;
+}, { events: 0, samples: 0, operations: 0 }));
+const { page: objectPage, pageSize: objectPageSize, total: objectTotal, pagedItems: pagedObjects, resetPage: resetObjectPage } = useClientPagination(objects, 50);
+const { page: issuePage, pageSize: issuePageSize, total: issueTotal, pagedItems: pagedIssues, resetPage: resetIssuePage } = useClientPagination(issues, 50);
 
 async function load() {
+  resetObjectPage();
+  resetIssuePage();
   loading.value = true;
   error.value = "";
   try {
-    const params = new URLSearchParams({ limit: "1000", status: "all" });
-    if (range.value?.length === 2) { params.set("from", range.value[0]); params.set("to", range.value[1]); }
-    if (productSeries.value.trim()) params.set("productSeries", productSeries.value.trim());
-    if (machineId.value.trim()) params.set("machineId", machineId.value.trim());
-    const result = await getJson(`/api/v1/cycles?${params}`);
-    cycles.value = result.data || [];
-    overview.value = result.overview || {};
-  } catch (requestError) { error.value = requestError.message; }
-  finally { loading.value = false; }
+    const common = new URLSearchParams();
+    if (range.value?.length === 2) {
+      common.set("from", range.value[0]);
+      common.set("to", range.value[1]);
+    }
+    if (subjectType.value.trim()) common.set("subjectType", subjectType.value.trim());
+    if (subjectId.value.trim()) common.set("subjectId", subjectId.value.trim());
+    const allObjects = [];
+    let objectOffset = 0;
+    while (true) {
+      const params = new URLSearchParams(common);
+      params.set("limit", "500");
+      params.set("offset", String(objectOffset));
+      const result = await getJson(`/api/v1/data-objects?${params}`);
+      const page = result.data || [];
+      allObjects.push(...page);
+      objectOffset += page.length;
+      if (!page.length || objectOffset >= Number(result.total || 0)) break;
+    }
+    objects.value = allObjects;
+
+    const cycleParams = new URLSearchParams({ limit: "1000", status: "all" });
+    if (range.value?.length === 2) {
+      cycleParams.set("from", range.value[0]);
+      cycleParams.set("to", range.value[1]);
+    }
+    if (productSeries.value.trim()) cycleParams.set("productSeries", productSeries.value.trim());
+    if (subjectId.value.trim() && (!subjectType.value.trim() || ["equipment", "machine"].includes(subjectType.value.trim().toLowerCase()))) {
+      cycleParams.set("machineId", subjectId.value.trim());
+    }
+    const allCycles = [];
+    let cycleOffset = 0;
+    while (true) {
+      cycleParams.set("offset", String(cycleOffset));
+      const result = await getJson(`/api/v1/cycles?${cycleParams}`);
+      const page = result.data || [];
+      allCycles.push(...page);
+      if (page.length < 1000) break;
+      cycleOffset += page.length;
+    }
+    cycles.value = allCycles;
+  } catch (requestError) {
+    error.value = requestError.message;
+  } finally {
+    loading.value = false;
+  }
 }
+
+function openEvents(row) { router.push({ path: "/events", query: { subjectType: row.subjectType, subjectId: row.subjectId } }); }
 function openCycle(cycle) { router.push({ path: "/cycles", query: { cycleId: cycle.correlationId } }); }
+function subjectTypeLabel(value) { return { equipment: "设备", machine: "设备", line: "产线", station: "工位", sensor: "传感器", asset: "资产" }[String(value || "").toLowerCase()] || value || "运行对象"; }
 function severityOrder(value) { return { error: 0, warning: 1, info: 2 }[value] ?? 3; }
 function severityLabel(value) { return { error: "错误", warning: "警告", info: "提示" }[value] || value; }
 function severityTag(value) { return { error: "danger", warning: "warning", info: "info" }[value] || "info"; }
-function formatTime(value) { return value ? new Date(value).toLocaleString("zh-CN") : "-"; }
+function formatTime(value) { return value ? new Date(value).toLocaleString("zh-CN", { hour12: false }) : "-"; }
+function formatGap(value) { return value == null ? "-" : value < 60 ? `${Number(value).toFixed(1)} 秒` : `${(Number(value) / 60).toFixed(1)} 分`; }
+function compactNumber(value) { return new Intl.NumberFormat("zh-CN", { notation: value >= 10000 ? "compact" : "standard", maximumFractionDigits: 1 }).format(value || 0); }
 onMounted(load);
 </script>
 
 <style scoped>
 .quality-view { display: grid; gap: 18px; }
-.heading, .score-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-.heading > div { display: grid; gap: 4px; }
-.heading span, .score-row span { color: #8994a5; font-size: 12px; }
-.score-row { justify-content: flex-start; padding: 22px 28px; border: 1px solid #e7ebf0; border-radius: 10px; background: #fff; }
-.score-row > div { display: grid; gap: 5px; }
-.score-row > div:first-of-type { min-width: 220px; }
-.score-row > div:first-of-type strong { font-size: 20px; }
-.score-stat { min-width: 140px; padding-left: 26px; border-left: 1px solid #e8ebef; }
-.score-stat strong { color: #1d2a3d; font-size: 28px; }
+.summary-strip { display: grid; overflow: hidden; grid-template-columns: repeat(5, minmax(0, 1fr)); border: 1px solid var(--ingot-border); border-radius: 14px; background: #fff; }
+.summary-strip article { display: grid; gap: 5px; padding: 16px 18px; border-right: 1px solid var(--ingot-border); }
+.summary-strip article:last-child { border-right: 0; }
+.summary-strip small { color: #8994a5; font-size: 12px; }
+.summary-strip strong { color: var(--ingot-ink); font-size: 24px; }
+.danger { color: #d25559 !important; }
+.quality-tabs { padding: 0 18px 18px; border: 1px solid var(--ingot-border); border-radius: 14px; background: #fff; }
+.quality-tabs :deep(.el-table) { margin-bottom: 12px; }
 td strong, td small { display: block; }
 td small { margin-top: 3px; color: #9aa3b1; font-family: ui-monospace, monospace; }
-@media (max-width: 800px) { .score-row { flex-wrap: wrap; } .score-stat { border-left: 0; padding-left: 0; } }
+@media (max-width: 800px) { .summary-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 </style>

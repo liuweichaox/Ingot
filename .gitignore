@@ -80,6 +80,7 @@ src/platform/Ingot.Platform.Web/ClientApp/dist/
 src/platform/Ingot.Platform.Web/dist/
 
 # Local runtime data
+/.codex-temp/
 Data/*.db
 Data/*.db-*
 deploy/runtime/

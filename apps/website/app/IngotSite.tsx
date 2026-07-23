@@ -310,8 +310,17 @@ export default function IngotSite({ initialLocale }: { initialLocale: Locale }) 
     return () => io.disconnect();
   }, []);
 
+  // Pointer-tracked spotlight: feed cursor position into CSS custom props.
+  const spot = (e: React.PointerEvent<HTMLElement>) => {
+    const el = e.currentTarget;
+    const r = el.getBoundingClientRect();
+    el.style.setProperty("--mx", `${e.clientX - r.left}px`);
+    el.style.setProperty("--my", `${e.clientY - r.top}px`);
+  };
+
   return (
     <>
+      <div className="scroll-progress" aria-hidden="true" />
       <header className="nav">
         <div className="wrap nav-in">
           <a className="brand" href={locale === "en" ? "/en/" : "/"} aria-label="Ingot">
@@ -428,7 +437,7 @@ export default function IngotSite({ initialLocale }: { initialLocale: Locale }) 
             <em>{t.problem.h2em}</em>
             {t.problem.h2c}
           </h2>
-          <div className="cols">
+          <div className="cols reveal">
             {t.problem.cells.map((c) => (
               <div className="cell" key={c[0]}>
                 <span className="n">{c[0]}</span>
@@ -455,7 +464,7 @@ export default function IngotSite({ initialLocale }: { initialLocale: Locale }) 
           </div>
           <div className="cards3">
             {t.guar.cards.map((card) => (
-              <div className={`gcard${card.v ? " v" : ""}`} key={card.tag}>
+              <div className={`gcard spot reveal${card.v ? " v" : ""}`} key={card.tag} onPointerMove={spot}>
                 <span className="tag">{card.tag}</span>
                 <div className="icn">
                   {card.v ? (
@@ -494,7 +503,7 @@ export default function IngotSite({ initialLocale }: { initialLocale: Locale }) 
           </h2>
           <p className="sub">{t.quest.sub}</p>
           <div className="qgrid">
-            <article className="qhero">
+            <article className="qhero spot reveal" onPointerMove={spot}>
               <span className="rank">{t.quest.rank}</span>
               <h3>{t.quest.heroH}</h3>
               <p>{t.quest.heroP}</p>
@@ -504,7 +513,7 @@ export default function IngotSite({ initialLocale }: { initialLocale: Locale }) 
               </div>
             </article>
             {t.quest.small.map((s) => (
-              <article className="qsmall" key={s[0]}>
+              <article className="qsmall spot reveal" key={s[0]} onPointerMove={spot}>
                 <h4>{s[0]}</h4>
                 <p>{s[1]}</p>
                 <div className="by">{s[2]}</div>
@@ -519,7 +528,7 @@ export default function IngotSite({ initialLocale }: { initialLocale: Locale }) 
         <div className="wrap">
           <span className="eyebrow">{t.how.eyebrow}</span>
           <h2>{t.how.h2}</h2>
-          <div className="steps">
+          <div className="steps reveal">
             {t.how.steps.map((s) => (
               <div className="step" key={s.n}>
                 <span className="s-n">{s.n}</span>
@@ -548,7 +557,7 @@ export default function IngotSite({ initialLocale }: { initialLocale: Locale }) 
         <div className="wrap">
           <span className="eyebrow">{t.bound.eyebrow}</span>
           <h2>{t.bound.h2}</h2>
-          <div className="split">
+          <div className="split reveal">
             <div className="bcol yes">
               <div className="lbl">
                 <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
