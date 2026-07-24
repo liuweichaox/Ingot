@@ -116,13 +116,11 @@ public sealed class CaseLevelEvaluator : IAsyncDisposable
         double? avgCoverage = null;
         await using (var command = _dataSource.CreateCommand($"""
             WITH scope_cycles AS (
-              SELECT correlation_id, max(context ->> @comparison_key) AS group_key
-              FROM production_events
+              SELECT DISTINCT correlation_id FROM production_events
               WHERE correlation_id IS NOT NULL
                 {SubjectPredicate(scope)}
                 AND context @> @filter
                 {WindowPredicate(scope)}
-              GROUP BY correlation_id
             )
             SELECT
               (SELECT count(*) FROM scope_cycles),
@@ -130,19 +128,13 @@ public sealed class CaseLevelEvaluator : IAsyncDisposable
                  FROM cycle_features cf JOIN scope_cycles s USING (correlation_id)),
               (SELECT avg(cf.coverage)
                  FROM cycle_features cf JOIN scope_cycles s USING (correlation_id)),
-              -- 同类可比数 = 最大同 comparison_key 值分组内的 ready 周期数（键为空时退化为范围内 ready 总数）。
-              -- 修正此前把不同 comparison_key 值的周期混算导致高估的缺陷。
-              (SELECT COALESCE(max(cnt), 0) FROM (
-                 SELECT group_key, count(*) AS cnt
+              (SELECT count(*)
                  FROM cycle_analysis_materializations m JOIN scope_cycles s USING (correlation_id)
-                 WHERE m.status = 'ready'
-                 GROUP BY group_key
-               ) grouped);
+                 WHERE m.status = 'ready');
             """))
         {
             AddSubjectParam(command, scope);
             command.Parameters.Add(new NpgsqlParameter("filter", NpgsqlDbType.Jsonb) { Value = filterJson });
-            command.Parameters.AddWithValue("comparison_key", scope.ComparisonKey ?? string.Empty);
             AddWindowParams(command, scope);
             await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
             await reader.ReadAsync(ct).ConfigureAwait(false);
