@@ -139,9 +139,9 @@ export function StatusBadge({ value }) {
   return <Badge tone={tone}>{labels[normalized] ?? String(value ?? "待上报")}</Badge>;
 }
 
-export function Field({ label, hint, error, children }) {
+export function Field({ label, hint, error, className, children }) {
   return (
-    <label className="grid gap-1.5 text-sm font-medium text-slate-700">
+    <label className={cx("grid gap-1.5 text-sm font-medium text-slate-700", className)}>
       <span>{label}</span>
       {children}
       {hint && <span className="text-xs font-normal text-slate-500">{hint}</span>}

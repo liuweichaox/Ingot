@@ -11,8 +11,8 @@ namespace Ingot.Platform.Infrastructure.Migrations;
 ///     - 迁移脚本以嵌入资源形式存放于 Migrations/sql/NNNN_name.sql，按文件名顺序执行；
 ///     - schema_version 表记录已应用版本与内容校验和，已应用脚本内容改变会启动失败（防漂移）；
 ///     - 通过 pg_advisory_lock 串行化多实例启动；
-///     - 0001_baseline 与既有各 Store 启动 DDL 逐字一致且幂等，因此对"已被旧版初始化过的库"
-///       首次执行即完成基线收编，无需特殊 adoption 分支。
+///     - 旧版 cycle_phases / cycle_features 与当前物化表同名但结构不兼容，首次收编基线前会
+///       原样改名保留为 legacy_v1 表，再由 0001 建立当前结构。
 ///     Schema 变更纪律：本文件之后的任何表结构变化，只能通过新增编号迁移脚本表达；
 ///     禁止在迁移中编写无 WHERE 的全表数据修复。
 /// </summary>
@@ -24,6 +24,61 @@ public sealed class MigrationRunner(
     private const long AdvisoryLockKey = 0x496E676F74;
 
     private const string ResourcePrefix = "Ingot.Platform.Infrastructure.Migrations.sql.";
+
+    internal const string LegacySchemaAdoptionSql =
+        """
+        DO $legacy_adoption$
+        BEGIN
+          IF to_regclass('public.cycle_phases') IS NOT NULL
+             AND NOT EXISTS (
+               SELECT 1
+               FROM information_schema.columns
+               WHERE table_schema = 'public'
+                 AND table_name = 'cycle_phases'
+                 AND column_name = 'algorithm_version'
+             )
+          THEN
+            IF to_regclass('public.cycle_phases_legacy_v1') IS NOT NULL THEN
+              RAISE EXCEPTION '无法收编旧版 cycle_phases：cycle_phases_legacy_v1 已存在';
+            END IF;
+            ALTER TABLE public.cycle_phases RENAME TO cycle_phases_legacy_v1;
+            IF EXISTS (
+              SELECT 1
+              FROM pg_constraint
+              WHERE conrelid = 'public.cycle_phases_legacy_v1'::regclass
+                AND conname = 'cycle_phases_pkey'
+            ) THEN
+              ALTER TABLE public.cycle_phases_legacy_v1
+                RENAME CONSTRAINT cycle_phases_pkey TO cycle_phases_legacy_v1_pkey;
+            END IF;
+          END IF;
+
+          IF to_regclass('public.cycle_features') IS NOT NULL
+             AND NOT EXISTS (
+               SELECT 1
+               FROM information_schema.columns
+               WHERE table_schema = 'public'
+                 AND table_name = 'cycle_features'
+                 AND column_name = 'signal_code'
+             )
+          THEN
+            IF to_regclass('public.cycle_features_legacy_v1') IS NOT NULL THEN
+              RAISE EXCEPTION '无法收编旧版 cycle_features：cycle_features_legacy_v1 已存在';
+            END IF;
+            ALTER TABLE public.cycle_features RENAME TO cycle_features_legacy_v1;
+            IF EXISTS (
+              SELECT 1
+              FROM pg_constraint
+              WHERE conrelid = 'public.cycle_features_legacy_v1'::regclass
+                AND conname = 'cycle_features_pkey'
+            ) THEN
+              ALTER TABLE public.cycle_features_legacy_v1
+                RENAME CONSTRAINT cycle_features_pkey TO cycle_features_legacy_v1_pkey;
+            END IF;
+          END IF;
+        END
+        $legacy_adoption$;
+        """;
 
     public async Task RunAsync(CancellationToken ct = default)
     {
@@ -64,6 +119,12 @@ public sealed class MigrationRunner(
                 ct).ConfigureAwait(false);
 
             var applied = await LoadAppliedAsync(connection, ct).ConfigureAwait(false);
+            if (!applied.ContainsKey("0001"))
+            {
+                await ExecuteAsync(connection, LegacySchemaAdoptionSql, ct).ConfigureAwait(false);
+                logger.LogInformation("旧版周期阶段与特征表已完成兼容收编。");
+            }
+
             var pending = 0;
             foreach (var script in scripts)
             {

@@ -28,6 +28,7 @@ test("platform uses React, Tailwind, and Headless UI without Vue or Element Plus
   assert.equal(packageJson.dependencies["element-plus"], undefined);
   assert.match(vite, /@vitejs\/plugin-react/);
   assert.match(vite, /@tailwindcss\/vite/);
+  assert.match(vite, /INGOT_PLATFORM_API_TARGET/);
   assert.match(styles, /@import "tailwindcss"/);
   assert.match(app, /@headlessui\/react/);
   assert.match(pages, /TabGroup/);
@@ -99,4 +100,15 @@ test("forms expose clear labels, edit intent, and required upload fields", () =>
   assert.match(pages, /<Input required value=\{title\}/);
   assert.match(pages, /<Input required type="file"/);
   assert.match(pages, /definition\.upload === "validation" && !file/);
+});
+
+test("production forms use business fields and paginate long histories", () => {
+  assert.match(pages, /function ProductionRecordForm/);
+  assert.match(pages, /function isProductionEditorValid/);
+  assert.match(pages, /machineId: "设备编号"/);
+  assert.match(pages, /recipeId: "配方编号"/);
+  assert.match(pages, /rows\.slice\(\(page - 1\) \* pageSize, page \* pageSize\)/);
+  assert.match(pages, /\["validFrom", "validTo"\]\.includes\(key\)/);
+  assert.match(pages, /total=\{rows\.length\}/);
+  assert.match(pages, /disabled=\{saving \|\| !editorValid\}/);
 });

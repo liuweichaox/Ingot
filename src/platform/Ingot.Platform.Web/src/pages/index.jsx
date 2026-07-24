@@ -395,6 +395,7 @@ const productionResources = {
     columns: [["contextId", "上下文"], ["machineId", "设备"], ["productCode", "产品"], ["recipeId", "配方"], ["validFrom", "生效时间"], ["validTo", "结束时间"]],
     template: { machineId: "", productSeries: "", productCode: "", recipeId: "", recipeVersion: 1, toolingInstallationId: "", source: "manual", materialLotRef: "" },
     createLabel: "启用生产配置",
+    requiredFields: ["machineId", "productCode", "recipeId"],
     prepare: value => ({ ...value, validFrom: new Date().toISOString() }),
     lifecycle: { label: "结束", visible: value => !value.validTo, url: value => `/api/v1/production-contexts/${value.contextId}:close`, body: () => ({ at: new Date().toISOString() }) },
   },
@@ -403,6 +404,7 @@ const productionResources = {
     columns: [["installationId", "记录"], ["machineId", "设备"], ["moldId", "工装"], ["installedAt", "装入"], ["removedAt", "卸下"]],
     template: { machineId: "", assemblyRevisionId: "", source: "manual" },
     createLabel: "装入工装",
+    requiredFields: ["machineId", "assemblyRevisionId"],
     prepare: value => ({ ...value, installedAt: new Date().toISOString(), commandId: crypto.randomUUID() }),
     lifecycle: { label: "卸下", visible: value => !value.removedAt, url: value => `/api/v1/tooling-installations/${value.installationId}:remove`, body: () => ({ at: new Date().toISOString() }) },
   },
@@ -411,6 +413,8 @@ const productionResources = {
     columns: [["componentTypeCode", "代码"], ["name", "名称"], ["status", "状态"], ["attributes", "属性"]],
     template: { componentTypeCode: "", name: "", status: "active", attributes: {} },
     createLabel: "新建组件类型",
+    requiredFields: ["componentTypeCode", "name"],
+    statusOptions: [["active", "启用"], ["inactive", "停用"]],
     deleteUrl: value => `/api/v1/tooling-component-types/${encodeURIComponent(value.componentTypeCode)}`,
   },
   component: {
@@ -418,6 +422,8 @@ const productionResources = {
     columns: [["componentId", "组件"], ["componentTypeCode", "类型"], ["serialNo", "序列号"], ["name", "名称"], ["status", "状态"]],
     template: { componentId: "", componentTypeCode: "", serialNo: "", name: "", status: "available", attributes: {} },
     createLabel: "登记组件",
+    requiredFields: ["componentId", "componentTypeCode", "serialNo", "name"],
+    statusOptions: [["available", "可用"], ["maintenance", "维护中"], ["retired", "已退役"]],
     deleteUrl: value => `/api/v1/tooling-components/${encodeURIComponent(value.componentId)}`,
   },
   type: {
@@ -425,6 +431,8 @@ const productionResources = {
     columns: [["toolingTypeCode", "代码"], ["version", "版本"], ["name", "名称"], ["status", "状态"], ["roles", "装配位置"]],
     template: { toolingTypeCode: "", version: 1, name: "", status: "active", roles: [] },
     createLabel: "新建工装类型",
+    requiredFields: ["toolingTypeCode", "name"],
+    statusOptions: [["active", "启用"], ["inactive", "停用"]],
     deleteUrl: value => `/api/v1/tooling-types/${encodeURIComponent(value.toolingTypeCode)}/${value.version}`,
   },
   assembly: {
@@ -432,19 +440,148 @@ const productionResources = {
     columns: [["moldId", "工装"], ["name", "名称"], ["toolingTypeCode", "类型"], ["status", "状态"]],
     template: { moldId: "", toolingTypeCode: "", name: "", status: "active" },
     createLabel: "新建工装",
+    requiredFields: ["moldId", "toolingTypeCode", "name"],
+    statusOptions: [["active", "启用"], ["inactive", "停用"]],
     deleteUrl: value => `/api/v1/tooling-assemblies/${encodeURIComponent(value.moldId)}`,
   },
 };
+
+const productionFieldLabels = {
+  machineId: "设备编号",
+  productSeries: "产品系列",
+  productCode: "产品编号",
+  recipeId: "配方编号",
+  recipeVersion: "配方版本",
+  toolingInstallationId: "工装装卸记录",
+  source: "记录来源",
+  materialLotRef: "物料批次",
+  assemblyRevisionId: "工装组合版本",
+  componentTypeCode: "组件类型代码",
+  name: "名称",
+  status: "状态",
+  attributes: "扩展属性",
+  componentId: "组件编号",
+  serialNo: "序列号",
+  toolingTypeCode: "工装类型代码",
+  version: "版本",
+  roles: "装配位置",
+  moldId: "工装编号",
+};
+
+function createProductionEditor(resource, value) {
+  return Object.fromEntries(Object.entries(resource.template).map(([key, initial]) => [
+    key,
+    typeof initial === "object"
+      ? JSON.stringify(value[key] ?? initial, null, 2)
+      : value[key] ?? initial,
+  ]));
+}
+
+function parseProductionEditor(resource, editor, base) {
+  const value = { ...base };
+  Object.entries(resource.template).forEach(([key, initial]) => {
+    if (typeof initial === "object") {
+      value[key] = JSON.parse(editor[key]);
+    } else if (typeof initial === "number") {
+      value[key] = Number(editor[key]);
+    } else {
+      value[key] = editor[key];
+    }
+  });
+  return value;
+}
+
+function isProductionEditorValid(resource, editor) {
+  if (resource.requiredFields?.some(key => !String(editor[key] ?? "").trim())) return false;
+  return Object.entries(resource.template).every(([key, initial]) => {
+    if (typeof initial === "number") return Number(editor[key]) >= 1;
+    if (typeof initial !== "object") return true;
+    try {
+      JSON.parse(editor[key]);
+      return true;
+    } catch {
+      return false;
+    }
+  });
+}
+
+function ProductionRecordForm({ resource, editor, onChange }) {
+  return (
+    <div className="grid gap-4 sm:grid-cols-2">
+      {Object.entries(resource.template).map(([key, initial]) => {
+        const required = resource.requiredFields?.includes(key);
+        const label = productionFieldLabels[key] ?? key;
+        const complex = typeof initial === "object";
+        if (complex) {
+          return (
+            <Field key={key} className="sm:col-span-2" label={`${label}（JSON）`}>
+              <Textarea
+                required={required}
+                className="min-h-36 font-mono text-xs leading-6"
+                value={editor[key] ?? ""}
+                onChange={event => onChange(key, event.target.value)}
+                spellCheck={false}
+              />
+            </Field>
+          );
+        }
+        if (key === "status" && resource.statusOptions) {
+          return (
+            <Field key={key} label={label}>
+              <Select required={required} value={editor[key] ?? ""} onChange={event => onChange(key, event.target.value)}>
+                {resource.statusOptions.map(([value, optionLabel]) => <option key={value} value={value}>{optionLabel}</option>)}
+              </Select>
+            </Field>
+          );
+        }
+        if (key === "source") {
+          return (
+            <Field key={key} label={label}>
+              <Select value={editor[key] ?? "manual"} onChange={event => onChange(key, event.target.value)}>
+                <option value="manual">手动操作</option>
+              </Select>
+            </Field>
+          );
+        }
+        return (
+          <Field key={key} label={label}>
+            <Input
+              required={required}
+              type={typeof initial === "number" ? "number" : "text"}
+              min={typeof initial === "number" ? 1 : undefined}
+              value={editor[key] ?? ""}
+              onChange={event => onChange(key, event.target.value)}
+            />
+          </Field>
+        );
+      })}
+    </div>
+  );
+}
 
 export function ProductionSetupPage({ section }) {
   const resource = productionResources[section];
   const { data, loading, error, reload } = useApi(resource.endpoint);
   const rows = extractRows(data);
   const [open, setOpen] = useState(false);
-  const [editor, setEditor] = useState("");
+  const [editor, setEditor] = useState({});
+  const [editorBase, setEditorBase] = useState({});
   const [editorMode, setEditorMode] = useState("create");
   const [actionError, setActionError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const pagedRows = rows.slice((page - 1) * pageSize, page * pageSize);
+  const editorValid = isProductionEditorValid(resource, editor);
+
+  useEffect(() => {
+    setPage(1);
+  }, [section]);
+
+  useEffect(() => {
+    const pageCount = Math.max(1, Math.ceil(rows.length / pageSize));
+    if (page > pageCount) setPage(pageCount);
+  }, [page, pageSize, rows.length]);
 
   function openEditor(row = null) {
     const value = row ? structuredClone(row) : structuredClone(resource.template);
@@ -453,7 +590,8 @@ export function ProductionSetupPage({ section }) {
       value.status = "active";
     }
     setEditorMode(row ? (section === "type" ? "version" : "edit") : "create");
-    setEditor(JSON.stringify(value, null, 2));
+    setEditorBase(value);
+    setEditor(createProductionEditor(resource, value));
     setActionError("");
     setOpen(true);
   }
@@ -462,7 +600,7 @@ export function ProductionSetupPage({ section }) {
     setSaving(true);
     setActionError("");
     try {
-      const value = JSON.parse(editor);
+      const value = parseProductionEditor(resource, editor, editorBase);
       await postJson(resource.endpoint, resource.prepare ? resource.prepare(value) : value);
       setOpen(false);
       await reload();
@@ -497,7 +635,7 @@ export function ProductionSetupPage({ section }) {
     ...resource.columns.map(([key, label]) => ({
       key,
       label,
-      render: key.endsWith("At") || key === "validTo" ? formatTime : key === "status" ? value => <StatusBadge value={value} /> : undefined,
+              render: key.endsWith("At") || ["validFrom", "validTo"].includes(key) ? formatTime : key === "status" ? value => <StatusBadge value={value} /> : undefined,
     })),
     {
       key: "_actions",
@@ -518,10 +656,17 @@ export function ProductionSetupPage({ section }) {
       {loading && !data ? <LoadingCard /> : (
         <Card title={`${resource.title}记录`} description={`共 ${rows.length} 条`}>
           <DataTable
-            rows={rows}
+            rows={pagedRows}
             keyField={resource.key}
             getRowKey={section === "type" ? row => `${row[resource.key]}:${row.version ?? 1}` : undefined}
             columns={columns}
+          />
+          <Pagination
+            page={page}
+            pageSize={pageSize}
+            total={rows.length}
+            onPageChange={setPage}
+            onPageSizeChange={value => { setPageSize(value); setPage(1); }}
           />
         </Card>
       )}
@@ -530,12 +675,14 @@ export function ProductionSetupPage({ section }) {
         onClose={() => setOpen(false)}
         title={editorMode === "create" ? resource.createLabel : editorMode === "version" ? "新版本维护" : `编辑${resource.title}`}
         description="平台会校验设备、配方、组件、组合版本及其历史引用。"
-        footer={<><Button onClick={() => setOpen(false)}>取消</Button><Button variant="primary" onClick={save} disabled={saving}>{saving ? "保存中" : "保存"}</Button></>}
+        footer={<><Button onClick={() => setOpen(false)}>取消</Button><Button variant="primary" onClick={save} disabled={saving || !editorValid}>{saving ? "保存中" : "保存"}</Button></>}
       >
         {actionError && <Alert tone="danger">{actionError}</Alert>}
-        <Field label="记录内容">
-          <Textarea className="min-h-[60vh] font-mono text-xs leading-6" value={editor} onChange={event => setEditor(event.target.value)} spellCheck={false} />
-        </Field>
+        <ProductionRecordForm
+          resource={resource}
+          editor={editor}
+          onChange={(key, value) => setEditor(current => ({ ...current, [key]: value }))}
+        />
       </Drawer>
     </Page>
   );
