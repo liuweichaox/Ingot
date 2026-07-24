@@ -5,6 +5,7 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repo_root"
 
 bash scripts/verify-architecture.sh
+bash scripts/verify-migration-baseline.sh
 bash scripts/verify-product-scope.sh
 bash scripts/verify-product-language.sh
 
