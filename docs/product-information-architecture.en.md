@@ -1,69 +1,62 @@
 # Ingot Product Information Architecture
 
-Ingot organizes its interface around understanding operations, finding problems, analyzing processes, and maintaining configuration. It is not organized around database tables, APIs, or internal services. The platform does not duplicate MES scheduling, inventory, personnel, or work-order execution, and it does not present raw time-series points without operating context.
+Ingot's public content follows one narrative: how plant data becomes a production history, how the production history supports process investigation, and how an investigation returns to original records.
 
-## Design principles
+## Public documentation structure
 
-1. **Work first**: The product opens on the workbench with active operations, pending inspections, data issues, and ingress health. AI is a first-class capability, but it is not the home page.
-2. **Object first**: Equipment and logical operating objects are the entry point to data. Their current context, operating records, events, quality, and relationships are available without repeatedly entering identifiers.
-3. **Immutable operating context**: A record captures the product, recipe, tooling, and quality-plan references effective at that time. Historical analysis does not depend on later master-data edits.
-4. **Quality is first-class data**: Manual inspections, vision results, measurements, original images, and reviews share the analytical context with process data.
-5. **Cyclic and continuous operation coexist**: Cyclic equipment is organized by production cycle. Continuously running equipment uses time windows, state segments, or event segments. Both share objects, events, and analysis rules.
-6. **Centralized configuration, clean operations**: Daily workspaces do not expose configuration forms. Creation and maintenance start from a register, version catalog, or task context and provide create, maintain, retire, and conditionally allowed delete paths.
-7. **State replaces instructions**: Titles, fields, status, empty states, and valid actions communicate meaning. Success feedback is transient; persistent notices are reserved for errors, blockers, and risks.
-8. **Operations are isolated**: Platform metrics and logs belong to administration. Raw metric endpoints are not part of the normal product navigation.
+1. **Documentation home**: establish the complete flow and provide reading paths for different audiences.
+2. **Product overview**: explain value, product components, users, and the path from data to conclusion.
+3. **Use cases**: show value through yield, machine differences, tooling trends, abnormal workpieces, and process adjustments.
+4. **How Ingot works**: explain collection, production context, production history, investigation, and evidence review.
+5. **Ingot Chat**: explain suitable questions, the investigation flow, question patterns, and analysis evidence.
+6. **Rollout**: begin with one plant question and cover the data checklist, connection validation, result review, and expansion.
+7. **FAQ**: answer questions about product scope, users, data preparation, deployment, and analysis definitions.
 
-## Primary navigation
+Public navigation follows “Understand Ingot—Use Ingot—Adopt Ingot.” Search, sitemap, and previous/next navigation cover only these pages.
 
-- Workbench
-- AI Assistant
-- Operations & Traceability
-  - Operating Records
-  - Production Events
-  - Production Changeover
-  - Tooling Installation
-- Quality Management
-  - Quality Tasks
-  - Quality Analysis
-  - Inspection Definitions
-  - Quality Plans
-- Analysis Center
-  - Historical Comparison
-  - Data Health
-  - Analysis Plans
-- Data Assets
-  - Object Catalog
-  - Process Data Models
-  - Recipe Versions
-  - Acquisition Tasks
-  - Acquisition Nodes
-- Tooling Management
-  - Component Types
-  - Component Register
-  - Tooling Types
-  - Tooling Assemblies
-- Administration
-  - Platform Metrics
-  - Event Subscriptions
-  - Runtime Logs
+## Content layers
 
-Navigation follows the proven two-level pattern used by mature industrial data platforms. The top menu switches among Workbench, AI, Operations, Quality, Analysis, Data Assets, Tooling, and Administration; the left sidebar contains only entries in the active domain. Workbench and AI use the full workspace without a sidebar. Page identity stays in the workspace header and global search stays in the top bar, keeping database-oriented terminology away from production and quality users.
+### Public product content
 
-## Page patterns
+The website, README, and public documentation site serve people who want to understand, evaluate, and use Ingot. They use manufacturing language and focus on product value, capabilities, use cases, workflow, and rollout.
 
-- **Workbench**: Key state, actionable items, current production context, and recent operating records.
-- **Object catalog**: Object list on the left and contextual detail on the right; records, quality, events, and relationships are not isolated destinations.
-- **Query workspace**: Compact filters, result grid, and a detail drawer.
-- **Task workspace**: Queue-first layout with processing forms in a drawer.
-- **Configuration workspace**: Object/version catalog on the left and detail/editor on the right. Creation and maintenance do not permanently occupy the primary browsing area.
-- **Analysis workspace**: Scope and alignment controls above full-width charts and findings.
-- **Historical comparison**: The user selects a product series, chooses multiple operating records, and designates a baseline from that selection. A signal matrix presents cross-record differences before contextual record details. The product must not replace user selection with an automatic “latest N” rule.
+### Engineering maintenance material
 
-## Data ingress and operational state
+Architecture notes, design records, data contracts, development guides, configuration references, industry samples, and ADRs remain in the repository for implementation and review. They stay outside public documentation navigation, search, and sitemap.
 
-- **Acquisition nodes**: Summarize registered nodes, online nodes, running tasks, and nodes requiring attention before showing heartbeat, task coverage, collected samples, access address, and the latest problem. Online means a heartbeat within 90 seconds; unreachable diagnostics and degraded execution remain distinct states.
-- **Platform metrics**: Default to the Ingot data pipeline and lead with interpretable values such as acknowledged events, store-and-forward backlog, upload failures, and process memory. Raw runtime and HTTP metrics remain available in a filtered detail table; missing metrics must not appear as misleading zero values.
-- **Runtime logs**: Filters are scoped to a specific acquisition node. Live tracking applies to the newest page and pauses when the user enters history so refreshed results do not shift underneath pagination.
-- **Event subscriptions**: The list presents enabled state, event/object/context scope, signature protection, delivery result, and consecutive failures. Creation and maintenance stay in a drawer.
+## Website structure
 
-These pages separate data sources, tasks, connection nodes, store-and-forward behavior, and runtime metrics while retaining Ingot's acquisition-task, manufacturing-context, and production-event vocabulary.
+The website answers these questions in order:
+
+1. What is Ingot?
+2. Why does a production history matter?
+3. Which core capabilities does the system provide?
+4. Which plant questions can it answer?
+5. How does data become an engineering conclusion?
+6. Which workspaces make up the product?
+7. How does a team start with one plant use case?
+
+The website and public documentation use the same terminology and reading order. Website links lead to the corresponding documentation pages.
+
+## Platform information architecture
+
+Platform is organized around production objects and work:
+
+- Workbench summarizes key state, data coverage, and recent production records.
+- Operations and Traceability connect equipment, batches, workpieces, cycles, and stage curves.
+- Quality connects inspection tasks, outcomes, plant attachments, and reviews.
+- Analysis Center provides historical comparison, data health, and analysis plans.
+- Data Assets maintain objects, recipes, process stages, parameter meaning, and collection tasks.
+- Tooling maintains components, assemblies, installations, and usage history.
+- Ingot Chat starts an investigation from the current object and page context.
+- Administration provides operating metrics, logs, and event subscriptions.
+
+Pages use a consistent “overview—filter—result—detail” hierarchy so users move from business objects into original records.
+
+## Maintenance rules
+
+- Update Chinese and English public pages as pairs.
+- Keep the website, README, and documentation home on the same product position.
+- Add a public page only when it shortens the understanding or rollout path.
+- Maintain implementation material through repository-internal links.
+- Public content states current capabilities, usage, and rollout conditions.

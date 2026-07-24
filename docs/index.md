@@ -1,44 +1,35 @@
 # Ingot 文档
 
-Ingot 是制造数据采集与工艺分析平台：它将不同来源的重要数据整理成统一格式的生产记录，并在 Platform Web 中提供 **Ingot Chat** 作为工程师的主要入口。使用方可以通过公开 API 提交 `ProductionEvent` 或 `InspectionRecord`，也可以配置边缘采集任务直接接入 HTTP、MQTT、OPC UA 和 Modbus TCP。
+Ingot 将分散在设备、仪器、生产系统和检测环节中的数据组织成连续的生产履历，帮助制造团队看清一批产品经历了什么、结果为什么变化，以及下一步应当核对哪些记录。
 
-## 开始使用
+## 从这里开始
 
-1. [快速开始](tutorial-getting-started.md)
-2. [生产记录接入](rfc-production-events.md)
-3. [Ingot Chat](chat.md)
-4. [部署](tutorial-deployment.md)
-5. [配置](tutorial-configuration.md)
+- [项目概览](product-overview.md)：了解 Ingot 的价值、组成和使用角色。
+- [典型场景](use-cases.md)：查看良率、设备差异、工装寿命和异常工件等调查场景。
+- [系统如何工作](how-it-works.md)：了解数据如何成为生产履历和分析结果。
+- [Ingot Chat](ingot-chat.md)：用日常语言发起工艺调查并查看分析依据。
+- [落地实施](rollout.md)：从一个现场问题开始准备数据、验证结果并扩展范围。
+- [常见问题](faq.md)：了解数据、部署、分析口径与日常使用。
 
-## Ingot Chat
+## 一套连贯的生产分析流程
 
-- [Ingot Chat](chat.md)：日常记录问答，以及工艺、质量和复核角色参与的有界综合分析；所有结果都回链到相关记录。
-- [分析能力阶梯](capability-ladder.md)：从生产记录可用到工艺优化建议的长期阶段目标。
+1. **汇集现场数据**：设备参数、状态、批次、工件、配方、工装和检测结果进入同一数据体系。
+2. **建立生产履历**：同一次加工的过程与结果按生产周期关联。
+3. **选择调查问题**：从批次、设备、工件或 Chat 进入分析。
+4. **比较同类过程**：检查数据质量，计算指标，并按设备、批次、阶段和参数寻找差异。
+5. **核对分析依据**：从摘要和图表继续打开周期、曲线和检测记录。
+6. **沉淀分析方法**：把确认过的阶段、指标和比较方式保存为可复用方案。
 
-## 生产记录接入
+## 推荐阅读路径
 
-- [可配置采集](acquisition.md)：版本化任务、四种设备协议、点位映射和边缘凭据。
-- [生产事件规范](rfc-production-events.md)：`ProductionEvent` 批次、认证、去重、查询和扩展规则。
-- [快速开始](tutorial-getting-started.md)：从启动 Platform 到提交第一批事件。
+### 第一次了解 Ingot
 
-## 部署运维
+[项目概览](product-overview.md) → [典型场景](use-cases.md) → [系统如何工作](how-it-works.md)
 
-- [部署](tutorial-deployment.md)
-- [配置](tutorial-configuration.md)
-- [常见问题](faq.md)
+### 准备现场落地
 
-## 架构开发
+[落地实施](rollout.md) → [Ingot Chat](ingot-chat.md) → [常见问题](faq.md)
 
-- [宏观架构](architecture.md)
-- [设计](design.md)
-- [模块](modules.md)
-- [开发指南](tutorial-development.md)
-- [贡献指南](../CONTRIBUTING.md)
-- [产品用语](product-language.md)
+### 开始一次工艺调查
 
-## 参考资料
-
-- [生产事件规范](rfc-production-events.md)
-- [品牌与标识](brand.md)
-- [安全策略](../SECURITY.md)
-- [开源依赖](open-source-dependencies.md)
+[Ingot Chat](ingot-chat.md) → [典型场景](use-cases.md) → [系统如何工作](how-it-works.md)

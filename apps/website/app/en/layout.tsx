@@ -5,8 +5,8 @@ const origin = "https://ingotstack.com";
 
 export const metadata: Metadata = {
   metadataBase: new URL(origin),
-  title: "Ingot — Process Investigation Assistant · verifiable, read-only analysis",
-  description: "Ask why this batch differs from the last, in plain language. Every number traces to real data and opens the original record. Read-only, never touches equipment, never invents a figure.",
+  title: "Ingot — Manufacturing Production Data & Process Analysis",
+  description: "Connect equipment processes, batches, workpieces, recipes, tooling, and inspections into production histories for yield, machine, and workpiece investigations.",
   applicationName: "Ingot",
   keywords: [
     "Ingot", "process investigation", "yield analysis", "Ingot Chat",
@@ -22,19 +22,19 @@ export const metadata: Metadata = {
     apple: "/brand/ingot-mark-dark.svg",
   },
   openGraph: {
-    title: "Ingot — Process Investigation Assistant",
-    description: "Why is this batch different from the last? Ask in plain language — every number opens the original record. Read-only, never invents.",
+    title: "Ingot — Manufacturing Production Data & Process Analysis",
+    description: "Turn every production run into traceable engineering evidence through connected plant data, production histories, and process investigation.",
     url: `${origin}/en/`,
     locale: "en_US",
     alternateLocale: ["zh_CN"],
     siteName: "Ingot",
     type: "website",
-    images: [{ url: "/og.png", width: 1200, height: 630, alt: "Ingot — Process Investigation Assistant" }],
+    images: [{ url: "/og.png", width: 1200, height: 630, alt: "Ingot — Manufacturing Production Data & Process Analysis" }],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Ingot — Process Investigation Assistant",
-    description: "Verifiable, no-hallucination production analysis: ask why this batch differs from the last.",
+    title: "Ingot — Manufacturing Production Data & Process Analysis",
+    description: "Connected plant data, production histories, and process investigation.",
     images: ["/og.png"],
   },
 };

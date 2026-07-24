@@ -16,7 +16,20 @@ export type Doc = { lang: Lang; slug: string; file: string; title: string; sourc
 const docsDir = path.resolve(process.cwd(), "../../docs");
 const repositoryDir = path.resolve(docsDir, "..");
 const repositoryUrl = "https://github.com/liuweichaox/Ingot";
-const files = readdirSync(docsDir).filter((name) => name.endsWith(".md")).sort();
+const publicSlugs = [
+  "index",
+  "product-overview",
+  "use-cases",
+  "how-it-works",
+  "ingot-chat",
+  "rollout",
+  "faq",
+] as const;
+const publicFiles = new Set(publicSlugs.flatMap((slug) =>
+  slug === "index" ? ["index.md", "index.en.md"] : [`${slug}.md`, `${slug}.en.md`]));
+const files = readdirSync(docsDir)
+  .filter((name) => publicFiles.has(name))
+  .sort();
 
 export const docs: Doc[] = files.map((file) => {
   const source = readFileSync(path.join(docsDir, file), "utf8");
@@ -32,12 +45,9 @@ export const docs: Doc[] = files.map((file) => {
 });
 
 export const groups = [
-  { key: "start", zh: "开始使用", en: "Get started", slugs: ["", "tutorial-getting-started"] },
-  { key: "chat", zh: "Ingot Chat", en: "Ingot Chat", slugs: ["chat"] },
-  { key: "ingestion", zh: "事件接入", en: "Event ingestion", slugs: ["rfc-production-events"] },
-  { key: "ops", zh: "部署运维", en: "Deployment & operations", slugs: ["tutorial-deployment", "tutorial-configuration", "faq"] },
-  { key: "architecture", zh: "架构开发", en: "Architecture & development", slugs: ["architecture", "design", "modules", "tutorial-development"] },
-  { key: "reference", zh: "参考资料", en: "References", slugs: ["brand"] },
+  { key: "start", zh: "了解 Ingot", en: "Understand Ingot", slugs: ["", "product-overview", "use-cases"] },
+  { key: "use", zh: "使用 Ingot", en: "Use Ingot", slugs: ["how-it-works", "ingot-chat"] },
+  { key: "adopt", zh: "落地 Ingot", en: "Adopt Ingot", slugs: ["rollout", "faq"] },
 ];
 
 export const routeFor = (lang: Lang, slug: string) => `/${lang}${slug ? `/${slug}` : ""}`;

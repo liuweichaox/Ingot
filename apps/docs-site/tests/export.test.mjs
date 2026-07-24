@@ -6,10 +6,10 @@ import test from "node:test";
 const root = path.resolve(import.meta.dirname, "../../..");
 const out = path.join(root, "apps/docs-site/out");
 
-test("exports bilingual Chat and event-ingestion documentation", async () => {
-  for (const file of ["zh/index.html", "en/index.html", "zh/chat/index.html", "en/chat/index.html", "zh/rfc-production-events/index.html", "en/rfc-production-events/index.html", "search-index.json", "sitemap.xml", "robots.txt"])
+test("exports the bilingual product documentation journey", async () => {
+  for (const file of ["zh/index.html", "en/index.html", "zh/ingot-chat/index.html", "en/ingot-chat/index.html", "zh/rollout/index.html", "en/rollout/index.html", "search-index.json", "sitemap.xml", "robots.txt"])
     assert.ok((await readFile(path.join(out, file))).length > 0, file);
-  for (const slug of ["chat", "capability-ladder", "rfc-production-events", "architecture", "design", "modules", "tutorial-getting-started", "tutorial-configuration", "tutorial-deployment", "faq", "brand"])
+  for (const slug of ["product-overview", "use-cases", "how-it-works", "ingot-chat", "rollout", "faq"])
     for (const lang of ["zh", "en"])
       assert.ok((await readFile(path.join(out, lang, slug, "index.html"))).length > 0, `${lang}/${slug}`);
 
@@ -19,8 +19,6 @@ test("exports bilingual Chat and event-ingestion documentation", async () => {
   assert.match(en, /<html lang="en">/);
   assert.match(zh, /hrefLang="en"/i);
   assert.match(en, /hrefLang="zh"/i);
-  assert.match(zh, /https:\/\/github\.com\/liuweichaox\/Ingot\/blob\/main\/CONTRIBUTING\.md/);
-  assert.match(en, /https:\/\/github\.com\/liuweichaox\/Ingot\/blob\/main\/CONTRIBUTING\.en\.md/);
 });
 
 test("uses the exact official brand assets", async () => {
@@ -33,28 +31,25 @@ test("uses the exact official brand assets", async () => {
   }
 });
 
-test("uses the canonical repository links", async () => {
-  const html = await readFile(path.join(out, "zh", "index.html"), "utf8");
-  const brand = await readFile(path.join(out, "zh", "brand", "index.html"), "utf8");
-  assert.match(html, /https:\/\/github\.com\/liuweichaox\/Ingot/);
-  assert.doesNotMatch(html, /github\.com\/IngotStack\/Ingot/);
-  assert.match(brand, /github\.com\/liuweichaox\/Ingot\/blob\/main\/images\/logo\/ingot-mark\.svg/);
-  assert.match(brand, /github\.com\/liuweichaox\/Ingot\/tree\/main\/images\/logo/);
-});
+test("publishes product guidance without interface or developer documentation", async () => {
+  const search = JSON.parse(await readFile(path.join(out, "search-index.json"), "utf8"));
+  assert.equal(search.length, 14);
+  assert.deepEqual(
+    [...new Set(search.map((item) => item.slug))].sort(),
+    ["", "faq", "how-it-works", "ingot-chat", "product-overview", "rollout", "use-cases"],
+  );
 
-test("publishes only Ingot Chat and the standard event contract as public AI and ingestion entry points", async () => {
   for (const lang of ["zh", "en"]) {
-    const chat = await readFile(path.join(out, lang, "chat", "index.html"), "utf8");
-    const events = await readFile(path.join(out, lang, "rfc-production-events", "index.html"), "utf8");
-    assert.match(chat, /\/api\/v1\/chat\/runs/);
-    assert.match(chat, /check_data_quality/);
-    assert.match(chat, /get_cycle_trace/);
-    assert.match(events, /\/api\/v1\/events:batch/);
-    assert.match(events, /ackSeq/);
-    assert.match(events, /edge\/\{edgeId\}\//);
-    assert.doesNotMatch(chat, /connector-workspaces|awaiting-package-approval|Tauri 2/i);
-    assert.doesNotMatch(events, /connector-workspaces|awaiting-package-approval|Tauri 2/i);
+    const index = await readFile(path.join(out, lang, "index.html"), "utf8");
+    const chat = await readFile(path.join(out, lang, "ingot-chat", "index.html"), "utf8");
+    assert.match(index, lang === "zh" ? /生产履历/ : /production history/i);
+    assert.match(chat, lang === "zh" ? /调查入口/ : /process|investigation/i);
+    assert.doesNotMatch(`${index}${chat}`, /\/api\/|curl|ProductionEvent|InspectionRecord|endpoint|HTTP API/i);
   }
+  assert.doesNotMatch(JSON.stringify(search), /\/api\/|curl|ProductionEvent|InspectionRecord|endpoint|HTTP API/i);
+
+  for (const slug of ["rfc-production-events", "tutorial-development", "architecture", "design", "modules"])
+    await assert.rejects(readFile(path.join(out, "zh", slug, "index.html")));
 });
 
 test("does not publish legacy desktop or code-generation product copy", async () => {

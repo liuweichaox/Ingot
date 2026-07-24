@@ -1,44 +1,35 @@
-# Ingot Documentation
+# Ingot documentation
 
-Ingot is a manufacturing data collection and process analysis platform. It organizes important data from different sources as standard production records and provides **Ingot Chat** as the main workspace for engineers. Teams can submit `ProductionEvent` or `InspectionRecord` records through public APIs, or configure edge acquisition tasks for HTTP, MQTT, OPC UA, and Modbus TCP.
+Ingot organizes data scattered across equipment, instruments, production systems, and inspection activities into a continuous production history. It helps manufacturing teams understand what happened to a batch, why an outcome changed, and which records to review next.
 
-## Get started
+## Start here
 
-1. [Getting started](tutorial-getting-started.en.md)
-2. [Production record ingestion](rfc-production-events.en.md)
-3. [Ingot Chat](chat.en.md)
-4. [Deployment](tutorial-deployment.en.md)
-5. [Configuration](tutorial-configuration.en.md)
+- [Product overview](product-overview.en.md): understand Ingot's value, components, and users.
+- [Use cases](use-cases.en.md): explore investigations for yield, machine differences, tooling life, and abnormal workpieces.
+- [How Ingot works](how-it-works.en.md): see how plant data becomes a production history and an analysis result.
+- [Ingot Chat](ingot-chat.en.md): start an investigation in everyday language and review its evidence.
+- [Rollout](rollout.en.md): begin with one plant question, prepare data, validate the result, and expand.
+- [FAQ](faq.en.md): learn about data, deployment, analysis definitions, and everyday use.
 
-## Ingot Chat
+## One connected production-analysis flow
 
-- [Ingot Chat](chat.en.md): quick queries and bounded combined analysis across process, quality, and review perspectives; every result links to the matching production records.
-- [Analysis capability ladder](capability-ladder.en.md): long-term stages from usable production records to process optimization recommendations.
+1. **Bring plant data together**: equipment parameters, states, batches, workpieces, recipes, tooling, and inspections enter one data system.
+2. **Build the production history**: process and outcome from the same run are linked by production cycle.
+3. **Choose an investigation**: start from a batch, machine, workpiece, or Chat question.
+4. **Compare similar processes**: check data quality, calculate metrics, and find differences across machines, batches, stages, and parameters.
+5. **Review the evidence**: open cycles, curves, and inspections from summaries and charts.
+6. **Preserve the method**: save confirmed stages, metrics, and comparison definitions as reusable plans.
 
-## Production record ingestion
+## Suggested reading paths
 
-- [Configurable acquisition](acquisition.en.md): versioned tasks, four device protocols, point mapping, and edge credentials.
-- [Production event specification](rfc-production-events.en.md): `ProductionEvent` batches, authentication, deduplication, query, and extension rules.
-- [Getting started](tutorial-getting-started.en.md): start Platform and submit the first batch.
+### Understand Ingot for the first time
 
-## Deployment and operations
+[Product overview](product-overview.en.md) → [Use cases](use-cases.en.md) → [How Ingot works](how-it-works.en.md)
 
-- [Deployment](tutorial-deployment.en.md)
-- [Configuration](tutorial-configuration.en.md)
-- [FAQ](faq.en.md)
+### Prepare a site rollout
 
-## Architecture and development
+[Rollout](rollout.en.md) → [Ingot Chat](ingot-chat.en.md) → [FAQ](faq.en.md)
 
-- [Architecture](architecture.en.md)
-- [Design](design.en.md)
-- [Modules](modules.en.md)
-- [Development](tutorial-development.en.md)
-- [Contributing](../CONTRIBUTING.en.md)
-- [Product language](product-language.en.md)
+### Start a process investigation
 
-## References
-
-- [Production event specification](rfc-production-events.en.md)
-- [Brand](brand.en.md)
-- [Security policy](../SECURITY.md)
-- [Open-source dependencies](open-source-dependencies.en.md)
+[Ingot Chat](ingot-chat.en.md) → [Use cases](use-cases.en.md) → [How Ingot works](how-it-works.en.md)

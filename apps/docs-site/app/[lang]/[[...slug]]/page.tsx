@@ -46,7 +46,7 @@ export default async function DocPage({ params }: Props) {
       <header>
         <a className="brand" href={routeFor(lang, "")}><Image src="/brand/ingot-lockup-dark.svg" alt="Ingot" width={142} height={36} priority /></a>
         <Search lang={lang} />
-        <nav><a href="https://ingotstack.com">Website</a><a href="https://github.com/liuweichaox/Ingot">GitHub</a>{alternate && <a href={routeFor(alternate.lang, slug)}>{lang === "zh" ? "English" : "中文"}</a>}</nav>
+        <nav><a href="https://ingotstack.com">{lang === "zh" ? "官网" : "Website"}</a>{alternate && <a href={routeFor(alternate.lang, slug)}>{lang === "zh" ? "English" : "中文"}</a>}</nav>
       </header>
       <aside className="sidebar">
         {groups.map((group) => <section key={group.key}><h2>{group[lang]}</h2>{group.slugs.map((item) => {
@@ -61,7 +61,6 @@ export default async function DocPage({ params }: Props) {
           {previous && <a href={routeFor(lang, previous.slug)}>← {previous.title}</a>}
           {next && <a href={routeFor(lang, next.slug)}>{next.title} →</a>}
         </footer>
-        <a className="source" href={`https://github.com/liuweichaox/Ingot/blob/main/docs/${doc.file}`}>{lang === "zh" ? "在 GitHub 查看源文件" : "View source on GitHub"}</a>
       </main>
       <aside className="toc"><strong>{lang === "zh" ? "本页目录" : "On this page"}</strong>{toc.map((item) => <a className={`depth-${item.depth}`} key={item.id} href={`#${item.id}`}>{item.title}</a>)}</aside>
     </div>

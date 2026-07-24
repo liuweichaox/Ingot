@@ -29,56 +29,56 @@ const retiredTerms = new RegExp([
   "FactoryScene3D",
 ].join("|"), "i");
 
-test("renders the Chinese root around process investigation and trust guarantees", async () => {
+test("renders the Chinese root as a product introduction", async () => {
   const response = await render();
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
 
   const html = await response.text();
-  assert.match(html, /<title>Ingot — 工艺调查与参数分析助手 · 可核对、不编造数字的生产分析<\/title>/i);
-  assert.match(html, /Ingot · 工艺调查与参数分析助手/);
-  assert.match(html, /专家不用再手工对数据/);
-  assert.match(html, /示例 · 只读/);
-  assert.match(html, /和上批不一样/);
-  assert.match(html, /永不编造数字/);
-  assert.match(html, /永不触碰设备/);
-  assert.match(html, /工厂对 AI 的两个恐惧/);
+  assert.match(html, /<title>Ingot — 制造生产数据与工艺分析系统<\/title>/i);
+  assert.match(html, /Ingot · 制造生产数据与工艺分析系统/);
+  assert.match(html, /专家方法可以复用/);
+  assert.match(html, /示例 · 工艺调查/);
+  assert.match(html, /变成可追溯的工程依据/);
+  assert.match(html, /生产履历贯通/);
+  assert.match(html, /分析结果可回查/);
+  assert.match(html, /从生产履历到/);
   assert.match(html, /良率为什么突然下滑/);
-  assert.match(html, /ProductionEvent/);
-  assert.match(html, /https:\/\/docs\.ingotstack\.com\/zh\/rfc-production-events/);
+  assert.match(html, /https:\/\/docs\.ingotstack\.com\/zh\/rollout/);
   assert.match(html, /https:\/\/ingotstack\.com\/og\.png/i);
+  assert.doesNotMatch(html, /ProductionEvent|InspectionRecord|\/api\/|不做这些|接口/);
   assert.doesNotMatch(html, retiredTerms);
   assert.doesNotMatch(html, /untrusted\.invalid|codex-preview|Your site is taking shape/i);
 });
 
-test("renders the stable English route with equivalent scope", async () => {
+test("renders the English route with equivalent product scope", async () => {
   const response = await render("/en/");
   assert.equal(response.status, 200);
   const html = await response.text();
-  assert.match(html, /<title>Ingot — Process Investigation Assistant · verifiable, read-only analysis<\/title>/i);
-  assert.match(html, /Ingot · Process Investigation Assistant/);
-  assert.match(html, /Experts stop hand-joining data/);
-  assert.match(html, /DEMO · READ-ONLY/);
-  assert.match(html, /different from the last/i);
-  assert.match(html, /Never invents a number/i);
+  assert.match(html, /<title>Ingot — Manufacturing Production Data &amp; Process Analysis<\/title>/i);
+  assert.match(html, /Ingot · Manufacturing Production Data &amp; Process Analysis/);
+  assert.match(html, /Expert methods become reusable/);
+  assert.match(html, /DEMO · INVESTIGATION/);
+  assert.match(html, /traceable engineering evidence/i);
+  assert.match(html, /Connected production history/i);
   assert.match(html, /Why did yield suddenly drop/i);
-  assert.match(html, /https:\/\/docs\.ingotstack\.com\/en\/rfc-production-events/);
+  assert.match(html, /https:\/\/docs\.ingotstack\.com\/en\/rollout/);
   assert.match(html, /<html lang="en">/);
   assert.match(html, /rel="canonical" href="https:\/\/ingotstack\.com\/en\/"/i);
   assert.match(html, /hreflang="zh-CN"/i);
+  assert.doesNotMatch(html, /ProductionEvent|InspectionRecord|\/api\/|does not do|public API/i);
   assert.doesNotMatch(html, retiredTerms);
 });
 
-test("keeps the public source aligned with the published boundaries", async () => {
+test("keeps the public source aligned with the product narrative", async () => {
   const pageSource = await readFile(new URL("../app/IngotSite.tsx", import.meta.url), "utf8");
 
   assert.match(pageSource, /Ingot Chat/);
-  assert.match(pageSource, /Number Grounding/);
-  assert.match(pageSource, /永不编造数字/);
-  assert.match(pageSource, /Never invents a number/);
-  assert.match(pageSource, /check_data_quality/);
-  assert.match(pageSource, /get_cycle_trace/);
-  assert.match(pageSource, /永不写 PLC \/ CNC \/ 机器人/);
-  assert.match(pageSource, /it never writes to a PLC \/ CNC \/ robot/i);
+  assert.match(pageSource, /Production History/);
+  assert.match(pageSource, /生产履历贯通/);
+  assert.match(pageSource, /Connected production history/);
+  assert.match(pageSource, /批次覆盖 · LOT-0716/);
+  assert.match(pageSource, /Batch coverage · LOT-0716/);
+  assert.doesNotMatch(pageSource, /ProductionEvent|InspectionRecord|\/api\/|check_data_quality|get_cycle_trace|Ingot 不做这些|Ingot does not do this/i);
   assert.doesNotMatch(pageSource, retiredTerms);
 });

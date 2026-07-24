@@ -1,37 +1,41 @@
 # FAQ
 
-## Does Ingot connect directly to equipment?
+## What problem does Ingot solve?
 
-No. Teams implement source adaptation, map equipment, instrument, or business-system data to `ProductionEvent`, and call `POST /api/v1/events:batch`. This lets each plant choose the language and runtime that meet its safety, network, and operations requirements.
+Ingot organizes equipment processes, batches, workpieces, recipes, tooling, and inspections into a production history. It helps manufacturing teams investigate yield changes, machine differences, tooling trends, abnormal workpieces, and the effect of process adjustments.
 
-For a local SQLite outbox, a team may deploy `Ingot.Edge.ConnectorHost` and submit events to it; it is an optional local ingress, while teams own adaptation implementation and runtime operation.
+## Which teams use Ingot?
 
-## What must a source-adaptation program do?
+Process, quality, equipment, production, and plant IT teams collaborate around the same production records. Each role starts from the objects it cares about while sharing common batch, cycle, and metric definitions.
 
-Use a stable `edgeId`, locally increasing `seq`, globally unique `eventId`, and a `source` that starts with `edge/{edgeId}/`. Retain unacknowledged batches and use `ackSeq` for retries; never put secrets or large objects in `context`.
+## How does plant data enter Ingot?
 
-## What can Chat do?
+Edge connects equipment, instruments, and plant data services, and it can also receive batch imports. The implementation team adds equipment, workpiece, batch, cycle, recipe, and process-stage context. Platform then organizes these records into production histories.
 
-Chat queries recorded production records, checks data completeness, returns cycle event chains, and displays related records. It does not write events, inspection records, configuration, or equipment; it cannot execute arbitrary SQL, scripts, or open network requests.
+## What data is needed?
 
-## How do I enable Chat in production?
+A first use case normally needs the target product and batch, equipment and station, production cycle, key process parameters, recipe version, and corresponding inspection outcomes. Tooling analysis also needs tooling identity and usage relationships.
 
-Default Compose keeps Chat disabled. Enable it with `INGOT_CHAT_ENABLED=true`, `INGOT_CHAT_PROVIDER=OpenAI`, Fast and Reasoning models, `OPENAI_API_KEY`, and `INGOT_CHAT_OPERATOR_ALLOW_ALL`. Development uses the server-owned local platform identity `operator`; production must integrate unified authentication. See [configuration](tutorial-configuration.en.md) for the complete configuration.
+## How does Ingot Chat answer a question?
 
-## Can Chat confirm root cause?
+Chat confirms the target and time range, checks data completeness, selects comparable records, calculates metrics, and organizes the result. The answer includes key numbers, charts, data-coverage notes, and related production records.
 
-Chat shows saved production records, missing information, and next checks, while clearly separating parameter correlation from confirmed causes.
+## How can users review the evidence?
 
-## How is data access scoped?
+Analysis results retain the data scope, sample count, and related records. Users can open the matching batch, cycle, stage curves, and inspection details from metrics or charts.
 
-Configure allowed `EdgeIds` for every Chat user. Event ingestion uses an independent token matching the `edgeId`. Production deployments should rotate tokens and avoid global access.
+## How do teams keep investigation definitions consistent?
 
-## What happens when an event is submitted twice?
+Teams maintain recipe versions, process stages, parameter units, inspection definitions, and analysis plans. Investigations reuse this versioned configuration so results remain comparable across people and time.
 
-Platform detects duplicates by `eventId` and `(edgeId, seq)`. Callers should still retain local acknowledgment state and avoid mixing unacknowledged and new events into an unordered batch.
+## How large should the first rollout be?
 
-## Does the platform control equipment?
+Start with one line, one product family, and one specific question that already affects operations. After confirming the data checklist, plant mapping, result review, and analysis plan, expand to more equipment and metrics.
 
-No. PLCs, CNCs, robots, safety interlocks, equipment authentication, and plant operations remain with existing field systems.
+## How is Ingot deployed?
 
-See the [production event specification](rfc-production-events.en.md), [configuration](tutorial-configuration.en.md), and [Ingot Chat](chat.en.md).
+Edge usually runs in the plant network, while Platform runs in a controlled plant or enterprise environment. The team chooses the exact deployment according to data volume, network conditions, backup requirements, and access scope.
+
+## Are Chinese and English documentation aligned?
+
+Public documentation is maintained as Chinese and English pairs with the same navigation and reading order.

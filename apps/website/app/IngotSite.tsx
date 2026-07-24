@@ -30,55 +30,55 @@ const DOCS = "https://docs.ingotstack.com";
 const COPY = {
   zh: {
     docs: `${DOCS}/zh`,
-    nav: { g1: "两个保证", g2: "能回答什么", g3: "怎么做到", g4: "边界", cta: "开始调查 →", lang: "EN", langHref: "/en/" },
+    nav: { g1: "核心能力", g2: "典型场景", g3: "工作方式", g4: "产品组成", cta: "了解项目 →", lang: "EN", langHref: "/en/" },
     hero: {
-      eyebrow: "Ingot · 工艺调查与参数分析助手",
-      h1a: "为什么这批",
-      h1b: "和上批不一样?",
-      leadA: "用日常语言问,30 秒得到答案。",
-      leadB: "每个数字都来自真实生产数据、点开就是原始曲线;",
-      leadC: "查不到,它会直接告诉你缺什么 —— 绝不圆场。",
-      pill1: "永不编造数字",
-      pill2: "永不触碰设备",
-      ctaPrimary: "给我们两周试试",
-      ctaSecondary: "看它怎么回答",
+      eyebrow: "Ingot · 制造生产数据与工艺分析系统",
+      h1a: "把每次生产过程,",
+      h1b: "变成可追溯的工程依据",
+      leadA: "连接设备过程、批次、工件、配方、工装和检测结果。",
+      leadB: "从一个异常回到对应工位、阶段与原始曲线;",
+      leadC: "再用一致的口径比较批次、设备和生产周期。",
+      pill1: "生产履历贯通",
+      pill2: "分析结果可回查",
+      ctaPrimary: "了解典型场景",
+      ctaSecondary: "查看工作方式",
       cardTtl: "Ingot Chat",
-      ro: "示例 · 只读",
+      ro: "示例 · 工艺调查",
       you: "你",
       q: "LOT-0716 一次通过率掉了,和上一批比,问题出在哪个环节?",
       sparkHead: "一次通过率 / 近 8 批",
       sparkUnit: "%",
     },
     problem: {
-      eyebrow: "现状",
-      h2a: "今天,这个问题",
-      h2b: "只有",
-      h2em: "一个人",
-      h2c: "答得上来。",
+      eyebrow: "生产履历",
+      h2a: "让分散的数据,",
+      h2b: "围绕",
+      h2em: "一次生产过程",
+      h2c: "重新连接。",
       cells: [
-        ["数据 · 两处", "过程和质量,从不在一起", "温度、压力、转速、周期在 historian 里;合格率、关键尺寸、缺陷判定在 MES 里。它们从没在“一个周期”这个粒度上对上过。"],
-        ["分析 · 一个人", "答案活在王工的 Excel 里", "把两边数据对起来、判断“这批为什么不一样”,靠一位资深工艺工程师手工导表、凭经验比对。"],
-        ["风险 · 断档", "他一休假,追因就停摆", "这份能力没有沉淀成系统。人走了、忙了、记错了,工厂就再也说不清废品到底出在哪一步。"],
+        ["过程 · 连续", "设备参数成为完整过程", "温度、压力、转速、状态和周期按工件与生产周期关联,形成可以回看的阶段曲线和过程记录。"],
+        ["质量 · 对齐", "检测结果回到对应现场", "尺寸、缺陷和判定结果与批次、工位、配方和工装关联,从结果可以直接找到过程。"],
+        ["方法 · 复用", "专家经验沉淀为分析方案", "常用指标、比较范围和工艺阶段成为可复用配置,让团队沿用同一套分析口径。"],
       ],
     },
     guar: {
-      eyebrow: "凭什么信它",
-      h2a: "工厂对 AI 的两个恐惧,",
-      h2u: "代码",
-      h2b: "堵死了。",
-      sub: "不是承诺,是机制。“会瞎编”和“会乱动设备”—— 这两颗雷,在架构里就拆掉了。",
+      eyebrow: "核心能力",
+      h2a: "从生产履历到",
+      h2u: "可核对",
+      h2b: "的工艺调查。",
+      sub: "Ingot 把数据组织、指标计算和工程复核放在同一条工作链路上。",
       cards: [
-        { v: true, tag: "Number Grounding", h: "不会瞎编", pa: "回答里", hl: "每一个数字", pb: ",都要在真实查询结果里找到来源,点开就是原始曲线。找不到,它直说缺什么 —— 而不是编一个看着合理的数糊弄过去。", foot: "数字与查询结果核对,非子串匹配" },
-        { v: false, tag: "Read-Only by Design", h: "不碰设备", pa: "只读你的生产数据,", hl: "永不写 PLC / CNC / 机器人", pb: "。责任边界清清楚楚 —— 过工厂安全审查,不用为它单独开会。", foot: "不参与任何实时控制回路" },
-        { v: false, tag: "Expert Knowledge Scales", h: "专家不用再手工对数据", pa: "用日常语言提问,系统完成检索、对齐和计算。", hl: "工艺工程师的知识被沉淀成可复用的阶段、规则和分析方案", pb: ",更多现场人员可以查看同一组原始记录和分析结果,最终判断仍由工程师确认。", foot: "自然语言进,可核对的结果出" },
+        { v: true, tag: "Production History", h: "过程与结果对齐", pa: "把设备、工件、批次、配方、工装和检测记录放进", hl: "同一条生产履历", pb: ",从异常结果可以回到对应工位和工艺阶段。", foot: "按批次 · 工件 · 生产周期组织" },
+        { v: false, tag: "Evidence Trail", h: "每个指标都有依据", pa: "平台完成数据检查、聚合和对比,", hl: "数字与图表保留相关生产记录", pb: ",可以继续打开样本、曲线和检测明细。", foot: "范围 · 样本 · 曲线 · 检测记录" },
+        { v: false, tag: "Reusable Analysis", h: "专家方法可以复用", pa: "用日常语言发起调查,系统完成检索、对齐和计算。", hl: "工艺阶段、特征和比较口径沉淀为分析方案", pb: ",让团队持续沿用经过确认的方法。", foot: "自然语言进入 · 工程依据输出" },
       ],
     },
     quest: {
       eyebrow: "价值在哪",
-      h2a: "它不做泛泛的看板。",
-      h2b: "它死磕最贵的那几个问题。",
-      sub: "工艺分析的价值极度不均匀 —— 同一个平台,不同问题的回报差一到两个数量级。Ingot 只对准能换算成钱的那几类。这些问题,几乎每家工厂都在问,但今天很难系统回答:",
-      rank: "最贵的那一类",
+      h2a: "围绕制造现场",
+      h2b: "最关键的工艺问题。",
+      sub: "从良率、设备差异到工装趋势,Ingot 用同一套生产履历连接问题、指标和原始记录。",
+      rank: "核心场景",
       heroH: "良率为什么突然下滑?",
       heroP: "从哪一批开始、掉在哪个环节、和哪个过程参数一起变的 —— 把“良率分析”从开会拍脑袋,变成一组能定位到工位和批次的可核对记录。少说清一天,就多一天的废品和返工。",
       dim1a: "分组 · ", dim1b: "批次",
@@ -89,97 +89,97 @@ const COPY = {
       ],
     },
     how: {
-      eyebrow: "怎么做到",
-      h2: "四步,从一条事件到一个可核对的答案。",
+      eyebrow: "工作方式",
+      h2: "四步,从现场数据到工程结论。",
       steps: [
-        { n: "01 · 接入", h: "标准事件进来", pa: "把任意来源映射成标准 ", code: "ProductionEvent", pb: ",按批提交。平台负责去重、补序、按周期串联。" },
-        { n: "02 · 成形", h: "拼成生产履历", pa: "同一次加工的过程和质量,用生产周期号对上,还原成一条可回看、可比对的完整履历。", code: "", pb: "" },
-        { n: "03 · 提问", h: "用人话问", pa: "模型只负责听懂和组织语言;真正的查询、聚合、计算,由确定性代码在数据库里完成。", code: "", pb: "" },
-        { n: "04 · 核对", h: "可核对的答案", pa: "每个数字带来源、可下钻;缺数据就写进 ", code: "Limitations", pb: "。结论交工程师确认,平台不替你放行。" },
+        { n: "01 · 汇集", h: "连接现场数据", pa: "持续采集设备过程、状态变化与检测结果,并带上工件、批次、配方和工装上下文。", code: "", pb: "" },
+        { n: "02 · 成形", h: "建立生产履历", pa: "同一次加工的过程和结果按生产周期关联,形成可回看、可比较的阶段曲线与完整履历。", code: "", pb: "" },
+        { n: "03 · 调查", h: "比较同类过程", pa: "从批次、设备、工件或日常问题进入,检查数据质量并按统一口径计算与比较。", code: "", pb: "" },
+        { n: "04 · 复核", h: "回到原始记录", pa: "从摘要和图表打开相关周期、曲线与检测明细,让团队完成工程判断并沉淀分析方案。", code: "", pb: "" },
       ],
     },
     bound: {
-      eyebrow: "边界",
-      h2: "边界画得越清楚,进厂越轻。",
-      yesLbl: "Ingot 做这些",
-      noLbl: "Ingot 不做这些",
+      eyebrow: "产品组成",
+      h2: "采集、履历、配置与分析,形成一套完整工作台。",
+      yesLbl: "生产数据底座",
+      noLbl: "工艺分析工作台",
       yes: [
-        "汇集设备参数、检测结果、业务记录,成一条生产履历",
-        "还原生产周期过程,比较同类周期,列出可能原因",
-        "每个结论对应原始记录,数据不足时直接说明",
-        "把判定权交给你的 QMS(通过通知),而不是替你决定",
+        "Edge 持续采集设备参数、状态与现场记录",
+        "Platform 关联批次、工件、周期、配方与工装",
+        "工艺阶段、参数单位和检测定义按版本维护",
+        "原始数据、阶段曲线和质量结果统一查询",
       ],
       no: [
-        "不写 PLC / CNC / 机器人,不参与安全相关的实时控制",
-        "不做排产、库存、物流",
-        "不做质量放行 / 阻断判定 —— 那是 QMS 的职责",
-        "不改变现场设备、工艺设置或已有记录",
+        "从设备、批次、工件和异常结果进入调查",
+        "检查完整性并比较同类生产周期",
+        "Ingot Chat 组织问题、指标、图表与相关记录",
+        "分析方案保存目标指标、范围和比较口径",
       ],
     },
     cta: {
-      eyebrow: "开始",
-      h2a: "不用先上平台。",
-      h2b: "先让我们",
-      h2g: "把一个问题回答出来",
+      eyebrow: "开始了解",
+      h2a: "从一个现场问题出发,",
+      h2b: "建立第一条",
+      h2g: "可分析的生产履历",
       h2c: "。",
-      p: "给我们两周,拿你现场的数据,挑你现在最说不清的那一个问题,端到端跑通。看到价值,再谈别的。",
-      primary: "预约一次工艺调查",
-      secondary: "读文档",
+      p: "选择一条产线、一个产品族和一个正在影响良率、节拍或维护成本的问题,完成数据准备、结果复核和方法沉淀。",
+      primary: "查看落地实施",
+      secondary: "浏览项目文档",
     },
-    foot: "工艺调查与参数分析助手 · 基于原始记录 · ",
-    footB: "永不编造 · 永不控制",
+    foot: "制造生产数据与工艺分析系统 · ",
+    footB: "生产履历 · 工艺调查 · 结果回查",
   },
   en: {
     docs: `${DOCS}/en`,
-    nav: { g1: "Two guarantees", g2: "What it answers", g3: "How", g4: "Boundary", cta: "Start →", lang: "中文", langHref: "/" },
+    nav: { g1: "Capabilities", g2: "Use cases", g3: "How it works", g4: "Product", cta: "Explore →", lang: "中文", langHref: "/" },
     hero: {
-      eyebrow: "Ingot · Process Investigation Assistant",
-      h1a: "Why is this batch",
-      h1b: "different from the last?",
-      leadA: "Ask in plain language, get an answer in 30 seconds. ",
-      leadB: "Every number comes from real production data and opens to the original curve; ",
-      leadC: "if it can't find the data, it tells you exactly what's missing — no bluffing.",
-      pill1: "Never invents a number",
-      pill2: "Never touches equipment",
-      ctaPrimary: "Try it for two weeks",
-      ctaSecondary: "See how it answers",
+      eyebrow: "Ingot · Manufacturing Production Data & Process Analysis",
+      h1a: "Turn every production run",
+      h1b: "into traceable engineering evidence",
+      leadA: "Connect equipment processes, batches, workpieces, recipes, tooling, and inspections. ",
+      leadB: "Move from an abnormal result to the matching station, stage, and original curve; ",
+      leadC: "then compare batches, machines, and production cycles with consistent definitions.",
+      pill1: "Connected production history",
+      pill2: "Traceable analysis results",
+      ctaPrimary: "Explore use cases",
+      ctaSecondary: "See how it works",
       cardTtl: "Ingot Chat",
-      ro: "DEMO · READ-ONLY",
+      ro: "DEMO · INVESTIGATION",
       you: "You",
       q: "LOT-0716's first-pass yield dropped. Compared to the last batch, which step is it?",
       sparkHead: "First-pass yield / last 8 batches",
       sparkUnit: "%",
     },
     problem: {
-      eyebrow: "The status quo",
-      h2a: "Today, only",
-      h2b: "",
-      h2em: "one person",
-      h2c: "can answer this.",
+      eyebrow: "Production history",
+      h2a: "Reconnect scattered data",
+      h2b: "around ",
+      h2em: "one production process",
+      h2c: ".",
       cells: [
-        ["Data · two places", "Process and quality never meet", "Temperature, pressure, speed, cycle live in the historian; yield, key dimensions, defect calls live in the MES. They've never been joined at the granularity of a single cycle."],
-        ["Analysis · one person", "The answer lives in one engineer's spreadsheet", "Joining the two sides and judging “why this batch differs” relies on one senior process engineer exporting tables and comparing by experience."],
-        ["Risk · single point", "They take leave, and root-cause stops", "This capability was never captured as a system. When they leave, get busy, or misremember, the plant can no longer say where the scrap came from."],
+        ["Process · continuous", "Equipment data becomes a complete process", "Temperature, pressure, speed, states, and cycle time connect by workpiece and production cycle to form reviewable stage curves."],
+        ["Quality · aligned", "Inspections return to the matching operation", "Dimensions, defects, and outcomes connect with the batch, station, recipe, and tooling, linking every result to its process."],
+        ["Method · reusable", "Expert practice becomes an analysis plan", "Common metrics, comparison scopes, and process stages become reusable configuration, keeping the team on consistent definitions."],
       ],
     },
     guar: {
-      eyebrow: "Why trust it",
-      h2a: "The two fears factories have about AI, we closed off in ",
-      h2u: "code",
-      h2b: ".",
-      sub: "Not a promise — a mechanism. “It makes things up” and “it moves my machines” — both defused in the architecture.",
+      eyebrow: "Core capabilities",
+      h2a: "From production history to a ",
+      h2u: "reviewable",
+      h2b: " process investigation.",
+      sub: "Ingot brings data organization, metric calculation, and engineering review into one workflow.",
       cards: [
-        { v: true, tag: "Number Grounding", h: "It won't make things up", pa: "", hl: "Every single number", pb: " in an answer must trace to a real query result; click it to see the original curve. If it can't find one, it says what's missing — instead of inventing a plausible-looking figure.", foot: "Numeric-normalized grounding, not substring matching" },
-        { v: false, tag: "Read-Only by Design", h: "It won't touch equipment", pa: "It only reads your production data; ", hl: "it never writes to a PLC / CNC / robot", pb: ". A clean responsibility boundary — it passes a factory safety review without a special meeting.", foot: "Never in any real-time control loop" },
-        { v: false, tag: "Expert Knowledge Scales", h: "Experts stop hand-joining data", pa: "Ask in plain language and the system handles retrieval, alignment, and calculation. ", hl: "Process knowledge becomes reusable stages, rules, and analysis plans", pb: " so more people can inspect the same original records and results, while engineers retain final judgement.", foot: "Natural language in, verifiable results out" },
+        { v: true, tag: "Production History", h: "Process and outcome align", pa: "Place equipment, workpieces, batches, recipes, tooling, and inspections in ", hl: "one production history", pb: " so an abnormal result opens the matching station and process stage.", foot: "Organized by batch · workpiece · cycle" },
+        { v: false, tag: "Evidence Trail", h: "Every metric has evidence", pa: "Platform checks, aggregates, and compares the data. ", hl: "Metrics and charts retain their production records", pb: " so teams can open samples, curves, and inspection detail.", foot: "Scope · samples · curves · inspections" },
+        { v: false, tag: "Reusable Analysis", h: "Expert methods become reusable", pa: "Start in everyday language and let the system retrieve, align, and calculate. ", hl: "Process stages, features, and comparison definitions become analysis plans", pb: " the team can apply repeatedly.", foot: "Everyday language in · engineering evidence out" },
       ],
     },
     quest: {
       eyebrow: "Where the value is",
-      h2a: "It doesn't do generic dashboards.",
-      h2b: "It goes after the few expensive questions.",
-      sub: "The value of process analysis is extremely uneven — on the same platform, different questions pay back one to two orders of magnitude apart. Ingot aims only at the few that convert to money. Almost every plant asks these, yet can't answer them systematically today:",
-      rank: "The most expensive class",
+      h2a: "Built around the production floor's",
+      h2b: "most important process questions.",
+      sub: "From yield and machine differences to tooling trends, Ingot connects the question, metrics, and original records through the same production history.",
+      rank: "Core use case",
       heroH: "Why did yield suddenly drop?",
       heroP: "From which batch, at which step, and moving together with which process parameter — turning yield analysis from a meeting-room guess into reviewable records that pin the change to a station and a batch. Every day it stays unclear is another day of scrap and rework.",
       dim1a: "Group · ", dim1b: "batch",
@@ -191,44 +191,44 @@ const COPY = {
     },
     how: {
       eyebrow: "How it works",
-      h2: "Four steps, from one event to a verifiable answer.",
+      h2: "Four steps, from plant data to engineering conclusions.",
       steps: [
-        { n: "01 · Ingest", h: "Standard events come in", pa: "Map any source to a standard ", code: "ProductionEvent", pb: " and submit in batches. The platform dedupes, orders, and threads by cycle." },
-        { n: "02 · Assemble", h: "Into a production history", pa: "Process and quality from one run are joined by correlation id, reconstructed into one reviewable, comparable history.", code: "", pb: "" },
-        { n: "03 · Ask", h: "In plain words", pa: "The model only understands and phrases language; the real querying, aggregation, and math run as deterministic code in the database.", code: "", pb: "" },
-        { n: "04 · Verify", h: "A verifiable answer", pa: "Every number carries its source and drills down; missing data goes into ", code: "Limitations", pb: ". Conclusions go to an engineer to confirm — the platform never releases for you." },
+        { n: "01 · Connect", h: "Bring plant data together", pa: "Collect equipment processes, state changes, and inspections with their workpiece, batch, recipe, and tooling context.", code: "", pb: "" },
+        { n: "02 · Assemble", h: "Build the production history", pa: "Link process and outcome from the same run by production cycle into reviewable, comparable stage curves and histories.", code: "", pb: "" },
+        { n: "03 · Investigate", h: "Compare similar processes", pa: "Start from a batch, machine, workpiece, or everyday question, check data quality, and compare with consistent definitions.", code: "", pb: "" },
+        { n: "04 · Review", h: "Return to original records", pa: "Open cycles, curves, and inspections from summaries and charts, complete the engineering review, and preserve the analysis plan.", code: "", pb: "" },
       ],
     },
     bound: {
-      eyebrow: "Boundary",
-      h2: "The clearer the boundary, the lighter the install.",
-      yesLbl: "Ingot does this",
-      noLbl: "Ingot does not do this",
+      eyebrow: "Product",
+      h2: "Collection, history, configuration, and analysis in one workspace.",
+      yesLbl: "Production data foundation",
+      noLbl: "Process analysis workspace",
       yes: [
-        "Bring equipment settings, inspection results, and business records into one production history",
-        "Reconstruct a cycle, compare comparable cycles, and list possible causes",
-        "Every conclusion links to the original record; state clearly when data is insufficient",
-        "Hand the decision to your QMS (via webhook), instead of deciding for you",
+        "Edge continuously collects equipment parameters, states, and plant records",
+        "Platform connects batches, workpieces, cycles, recipes, and tooling",
+        "Process stages, parameter units, and inspection definitions are versioned",
+        "Original data, stage curves, and quality outcomes share one query path",
       ],
       no: [
-        "It never writes to a PLC / CNC / robot; no part in safety-related real-time control",
-        "No scheduling, inventory, or logistics",
-        "No quality release / block decisions — that's the QMS's job",
-        "No changing field equipment, process settings, or existing records",
+        "Start investigations from equipment, batches, workpieces, and abnormal outcomes",
+        "Check completeness and compare similar production cycles",
+        "Ingot Chat organizes questions, metrics, charts, and related records",
+        "Analysis plans preserve target metrics, scope, and comparison definitions",
       ],
     },
     cta: {
-      eyebrow: "Start",
-      h2a: "Don't buy a platform first.",
-      h2b: "Let us ",
-      h2g: "answer one question",
-      h2c: " first.",
-      p: "Give us two weeks with your shop-floor data. Pick the one question you can least explain today, and run it end to end. See the value, then talk about the rest.",
-      primary: "Book a process investigation",
-      secondary: "Read the docs",
+      eyebrow: "Explore Ingot",
+      h2a: "Start from one production question",
+      h2b: "and build the first ",
+      h2g: "analysis-ready production history",
+      h2c: ".",
+      p: "Choose one line, one product family, and one question affecting yield, cycle time, or maintenance cost. Prepare the data, review the result, and preserve the method.",
+      primary: "See the rollout",
+      secondary: "Browse project docs",
     },
-    foot: "Process investigation assistant · grounded in original records · ",
-    footB: "Never invents · Never controls",
+    foot: "Manufacturing production data and process analysis · ",
+    footB: "Production history · Investigation · Evidence",
   },
 } as const;
 
@@ -236,24 +236,24 @@ function AnswerBody({ locale }: { locale: Locale }) {
   if (locale === "en") {
     return (
       <>
-        LOT-0716 first-pass yield <G src="check_data_quality · LOT-0716">96.2%</G>,{" "}
-        <G src="compare_cycles · delta">2.9 pts</G> below the previous batch&apos;s{" "}
-        <G src="compare_cycles · previous batch">99.1%</G>. The gap is concentrated at station 07: this
-        batch&apos;s average cycle <G src="get_cycle_trace · station 07 · LOT-0716">51.3s</G> vs the previous{" "}
-        <G src="get_cycle_trace · station 07 · prev">47.2s</G>,{" "}
-        <G src="compare_cycles · cycle delta">4.1s</G> longer, with{" "}
-        <G src="check_data_quality · over-limit count">12</G> parts crossing the process control limit. Other
+        LOT-0716 first-pass yield <G src="Batch coverage · LOT-0716">96.2%</G>,{" "}
+        <G src="Batch comparison · difference">2.9 pts</G> below the previous batch&apos;s{" "}
+        <G src="Batch comparison · previous batch">99.1%</G>. The gap is concentrated at station 07: this
+        batch&apos;s average cycle <G src="Station 07 history · LOT-0716">51.3s</G> vs the previous{" "}
+        <G src="Station 07 history · previous batch">47.2s</G>,{" "}
+        <G src="Cycle comparison · difference">4.1s</G> longer, with{" "}
+        <G src="Process limit · affected workpieces">12</G> parts crossing the process control limit. Other
         stations match the previous batch.
       </>
     );
   }
   return (
     <>
-      LOT-0716 一次通过率 <G src="check_data_quality · LOT-0716">96.2%</G>,比上批{" "}
-      <G src="compare_cycles · 上一批">99.1%</G> 低 <G src="compare_cycles · 差值">2.9 个点</G>
-      。差异集中在工位 07:该批平均周期 <G src="get_cycle_trace · 工位07 · LOT-0716">51.3s</G>,较上批{" "}
-      <G src="get_cycle_trace · 工位07 · 上批">47.2s</G> 长 <G src="compare_cycles · 周期差">4.1s</G>,同期{" "}
-      <G src="check_data_quality · 越限计数">12</G> 件过程参数越过控制上限。其余工位与上批持平。
+      LOT-0716 一次通过率 <G src="批次覆盖 · LOT-0716">96.2%</G>,比上批{" "}
+      <G src="批次对比 · 上一批">99.1%</G> 低 <G src="批次对比 · 差值">2.9 个点</G>
+      。差异集中在工位 07:该批平均周期 <G src="工位07履历 · LOT-0716">51.3s</G>,较上批{" "}
+      <G src="工位07履历 · 上一批">47.2s</G> 长 <G src="周期对比 · 差值">4.1s</G>,同期{" "}
+      <G src="过程上限 · 影响工件">12</G> 件过程参数越过控制上限。其余工位与上批持平。
     </>
   );
 }
@@ -550,15 +550,6 @@ export default function IngotSite({ initialLocale }: { initialLocale: Locale }) 
                 <h4>{s.h}</h4>
                 <p>
                   {s.pa}
-                  {s.code ? (
-                    s.code === "ProductionEvent" ? (
-                      <a href={`${t.docs}/rfc-production-events`}>
-                        <code>{s.code}</code>
-                      </a>
-                    ) : (
-                      <code>{s.code}</code>
-                    )
-                  ) : null}
                   {s.pb}
                 </p>
               </div>
@@ -617,7 +608,7 @@ export default function IngotSite({ initialLocale }: { initialLocale: Locale }) 
           </h2>
           <p>{t.cta.p}</p>
           <div className="cta-row">
-            <a className="btn btn-primary" href={`${t.docs}/`}>
+            <a className="btn btn-primary" href={`${t.docs}/rollout`}>
               {t.cta.primary} <span className="arr">→</span>
             </a>
             <a className="btn btn-ghost" href={`${t.docs}/`}>{t.cta.secondary}</a>
