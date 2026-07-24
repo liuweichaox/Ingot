@@ -84,21 +84,11 @@ public sealed partial class AcquisitionProfilesController(
                 return Conflict(new { error = "已发布或停用的采集配置不可修改，请创建新版本。", existing });
         }
 
-        if (normalized.Status == ConfigurationStatuses.Published)
-        {
-            var previous = (await store.ListAsync(ct).ConfigureAwait(false))
-                .Where(item => item.ProfileId == normalized.ProfileId &&
-                               item.Version != normalized.Version &&
-                               item.Status == ConfigurationStatuses.Published);
-            foreach (var item in previous)
-                await store.UpsertAsync(item with
-                {
-                    Status = ConfigurationStatuses.Retired,
-                    UpdatedAt = DateTimeOffset.UtcNow
-                }, ct).ConfigureAwait(false);
-        }
-
-        return Ok(await store.UpsertAsync(normalized, ct).ConfigureAwait(false));
+        // 发布走单事务：退役旧 published 版本 + 写入新版本原子完成，
+        // 消除读-改-写循环在并发发布下残留两个 published 版本的竞态。
+        return normalized.Status == ConfigurationStatuses.Published
+            ? Ok(await store.PublishExclusiveAsync(normalized, ct).ConfigureAwait(false))
+            : Ok(await store.UpsertAsync(normalized, ct).ConfigureAwait(false));
     }
 
     [HttpDelete("{profileId}/{version:int}")]

@@ -28,5 +28,6 @@
     <ProjectReference Include="..\..\src\platform\Ingot.Platform.Infrastructure\Ingot.Platform.Infrastructure.csproj" />
     <ProjectReference Include="..\..\src\edge\Ingot.Edge.ConnectorHost\Ingot.Edge.ConnectorHost.csproj" />
     <ProjectReference Include="..\..\src\platform\Ingot.Platform.Api\Ingot.Platform.Api.csproj" />
+    <ProjectReference Include="..\..\tools\Ingot.ImportCli\Ingot.ImportCli.csproj" />
   </ItemGroup>
 </Project>

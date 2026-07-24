@@ -95,6 +95,19 @@ var app = builder.Build();
 
 app.UseRouting();
 
+// 本地查询 API（日志/事件/周期/指标）使用独立令牌 ConnectorHost:LocalApiToken，
+// 与向平台上行的 Edge:EventIngestToken 分离——避免把"能看本地日志"的人
+// 顺带授予"能向平台注入事件"的凭据（跨信任边界复用）。
+// 未配置本地令牌时暂回退旧行为并告警，给现场留出轮换窗口。
+var localApiToken = app.Configuration["ConnectorHost:LocalApiToken"];
+if (string.IsNullOrWhiteSpace(localApiToken))
+{
+    localApiToken = app.Configuration["Edge:EventIngestToken"];
+    Log.Warning(
+        "ConnectorHost:LocalApiToken 未配置，本地查询 API 暂以上行令牌 Edge:EventIngestToken 保护；" +
+        "建议尽快配置独立的本地令牌并轮换。");
+}
+
 app.Use(async (context, next) =>
 {
     var path = context.Request.Path;
@@ -111,7 +124,7 @@ app.Use(async (context, next) =>
         return;
     }
 
-    var expected = app.Configuration["Edge:EventIngestToken"];
+    var expected = localApiToken;
     var authorization = context.Request.Headers.Authorization.ToString();
     var valid = !string.IsNullOrWhiteSpace(expected) &&
                 authorization.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase) &&

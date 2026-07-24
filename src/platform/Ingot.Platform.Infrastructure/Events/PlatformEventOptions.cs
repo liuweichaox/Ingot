@@ -21,4 +21,10 @@ public sealed class PlatformEventOptions
 
     /// <summary>压缩阈值天数：&gt;0 时启用块级列式压缩并注册 add_compression_policy；0 表示不启用。</summary>
     public int CompressAfterDays { get; set; }
+
+    /// <summary>
+    ///     event_ingest_keys 幂等键保留天数：&gt;0 时启用每日修剪（下限 30 天，建议不小于 RetentionDays）；
+    ///     0 表示不清理（键表将随事件量持续增长）。窗口必须覆盖边缘端最大补传跨度，否则超窗重放无法去重。
+    /// </summary>
+    public int KeyRetentionDays { get; set; }
 }

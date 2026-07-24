@@ -37,6 +37,8 @@ services:
       Urls: http://+:8000
       ConnectionStrings__Events: Host=postgres;Port=5432;Database=ingot;Username=ingot;Password=${INGOT_POSTGRES_PASSWORD:?INGOT_POSTGRES_PASSWORD is required}
       EventIngest__RequireToken: "true"
+      EventIngest__KeyRetentionDays: ${INGOT_EVENT_KEY_RETENTION_DAYS:-0}
+      Database__SchemaManagement: ${INGOT_SCHEMA_MANAGEMENT:-Migrations}
       EventIngest__EdgeTokens__EDGE-001: ${INGOT_EDGE_TOKEN:?INGOT_EDGE_TOKEN is required}
       Authentication__Authority: ${INGOT_AUTHORITY:?INGOT_AUTHORITY is required}
       Authentication__Audience: ${INGOT_AUDIENCE:?INGOT_AUDIENCE is required}
@@ -102,6 +104,7 @@ services:
       ASPNETCORE_ENVIRONMENT: Production
       Urls: http://+:8001
       ConnectorHost__IngestToken: ${INGOT_CONNECTOR_TOKEN:?INGOT_CONNECTOR_TOKEN is required}
+      ConnectorHost__LocalApiToken: ${INGOT_CONNECTOR_LOCAL_TOKEN:-}
       Edge__PlatformApiBaseUrl: http://platform-api:8000
       Edge__PublicBaseUrl: http://connector-host:8001
       Edge__EventIngestToken: ${INGOT_EDGE_TOKEN:?INGOT_EDGE_TOKEN is required}

@@ -31,6 +31,11 @@
         <PackageReference Include="prometheus-net" Version="8.2.1" />
     </ItemGroup>
 
+    <!-- 版本化数据库迁移脚本：嵌入程序集，由 MigrationRunner 按文件名顺序执行 -->
+    <ItemGroup>
+        <EmbeddedResource Include="Migrations\sql\*.sql" />
+    </ItemGroup>
+
     <ItemGroup>
         <ProjectReference Include="..\..\agent\Ingot.Agent\Ingot.Agent.csproj" />
         <ProjectReference Include="..\..\shared\Ingot.Contracts\Ingot.Contracts.csproj" />

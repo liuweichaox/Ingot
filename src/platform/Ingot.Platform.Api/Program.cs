@@ -99,10 +99,11 @@ builder.Host.UseSerilog();
 var app = builder.Build();
 
 app.UseRouting();
+// CORS 必须位于 UseRouting 之后、UseAuthentication/UseAuthorization 之前（官方规定顺序）；
+// 否则 401/403 响应不携带 CORS 头，前端只能看到不明网络错误。
+app.UseCors("frontend");
 app.UseAuthentication();
 app.UseAuthorization();
-
-app.UseCors("frontend");
 
 // Prometheus 指标（中心自身进程）
 app.UseHttpMetrics();

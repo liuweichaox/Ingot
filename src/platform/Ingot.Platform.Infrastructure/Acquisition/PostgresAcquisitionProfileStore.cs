@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Ingot.Contracts.Acquisition;
+using Ingot.Contracts.ProcessConfiguration;
 using Npgsql;
 using NpgsqlTypes;
 
@@ -100,6 +101,79 @@ public sealed class PostgresAcquisitionProfileStore : IAcquisitionProfileStore, 
         command.Parameters.AddWithValue("profile_id", profileId);
         command.Parameters.AddWithValue("version", version);
         return await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false) > 0;
+    }
+
+    public async Task<AcquisitionProfile> PublishExclusiveAsync(
+        AcquisitionProfile published,
+        CancellationToken ct = default)
+    {
+        await InitializeAsync(ct).ConfigureAwait(false);
+        await using var connection = await _dataSource.OpenConnectionAsync(ct).ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
+
+        // 锁定并读取同 profile 的其他 published 版本（payload 为真相来源，必须同步改写其中的状态）。
+        var retire = new List<(int Version, AcquisitionProfile Profile)>();
+        await using (var select = new NpgsqlCommand(
+            """
+            SELECT version, payload::text FROM acquisition_profiles
+            WHERE profile_id = @profile_id AND version <> @version AND status = 'published'
+            FOR UPDATE;
+            """,
+            connection,
+            transaction))
+        {
+            select.Parameters.AddWithValue("profile_id", published.ProfileId);
+            select.Parameters.AddWithValue("version", published.Version);
+            await using var reader = await select.ExecuteReaderAsync(ct).ConfigureAwait(false);
+            while (await reader.ReadAsync(ct).ConfigureAwait(false))
+            {
+                var profile = JsonSerializer.Deserialize<AcquisitionProfile>(reader.GetString(1), JsonOptions)!;
+                retire.Add((reader.GetInt32(0), profile));
+            }
+        }
+
+        foreach (var (version, profile) in retire)
+        {
+            var retired = profile with { Status = ConfigurationStatuses.Retired, UpdatedAt = published.UpdatedAt };
+            await using var update = new NpgsqlCommand(
+                """
+                UPDATE acquisition_profiles
+                SET status = 'retired', payload = @payload, updated_at = @updated_at
+                WHERE profile_id = @profile_id AND version = @version;
+                """,
+                connection,
+                transaction);
+            update.Parameters.AddWithValue("profile_id", published.ProfileId);
+            update.Parameters.AddWithValue("version", version);
+            update.Parameters.AddWithValue("payload", NpgsqlDbType.Jsonb, JsonSerializer.Serialize(retired, JsonOptions));
+            update.Parameters.AddWithValue("updated_at", published.UpdatedAt.UtcDateTime);
+            await update.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+        }
+
+        await using (var upsert = new NpgsqlCommand(
+            """
+            INSERT INTO acquisition_profiles(profile_id, version, edge_id, status, payload, updated_at)
+            VALUES (@profile_id, @version, @edge_id, @status, @payload, @updated_at)
+            ON CONFLICT (profile_id, version) DO UPDATE SET
+              edge_id = EXCLUDED.edge_id,
+              status = EXCLUDED.status,
+              payload = EXCLUDED.payload,
+              updated_at = EXCLUDED.updated_at;
+            """,
+            connection,
+            transaction))
+        {
+            upsert.Parameters.AddWithValue("profile_id", published.ProfileId);
+            upsert.Parameters.AddWithValue("version", published.Version);
+            upsert.Parameters.AddWithValue("edge_id", published.EdgeId);
+            upsert.Parameters.AddWithValue("status", published.Status);
+            upsert.Parameters.AddWithValue("payload", NpgsqlDbType.Jsonb, JsonSerializer.Serialize(published, JsonOptions));
+            upsert.Parameters.AddWithValue("updated_at", published.UpdatedAt.UtcDateTime);
+            await upsert.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+        }
+
+        await transaction.CommitAsync(ct).ConfigureAwait(false);
+        return published;
     }
 
     private async Task<IReadOnlyList<AcquisitionProfile>> QueryAsync(

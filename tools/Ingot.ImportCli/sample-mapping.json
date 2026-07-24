@@ -1,0 +1,22 @@
+{
+  "edgeId": "IMPORT-01",
+  "eventType": { "value": "process.sample" },
+  "occurredAt": { "column": "time", "format": "yyyy-MM-dd HH:mm:ss", "utcOffset": "+08:00" },
+  "subjectType": { "value": "asset" },
+  "subjectId": { "column": "machine" },
+  "correlationId": { "column": "cycle_id" },
+  "context": {
+    "product_code": { "column": "product" },
+    "recipe_id": { "column": "recipe" },
+    "recipe_step": { "column": "step" },
+    "mold_id": { "column": "mold" },
+    "mold_shot_count": { "column": "shot_count" },
+    "workpiece_id": { "column": "workpiece" }
+  },
+  "values": {
+    "mold_temp_upper": { "column": "t_upper", "type": "number" },
+    "mold_temp_lower": { "column": "t_lower", "type": "number" },
+    "press_force": { "column": "force", "type": "number" },
+    "position": { "column": "pos", "type": "number" }
+  }
+}

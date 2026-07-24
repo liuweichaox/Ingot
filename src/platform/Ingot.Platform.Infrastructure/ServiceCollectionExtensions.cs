@@ -7,6 +7,7 @@ using Ingot.Platform.Infrastructure.Analytics;
 using Ingot.Platform.Infrastructure.Inspections;
 using Ingot.Platform.Infrastructure.Manufacturing;
 using Ingot.Platform.Infrastructure.ProcessConfiguration;
+using Ingot.Platform.Infrastructure.Migrations;
 using Ingot.Platform.Infrastructure.ProcessImprovement;
 using Ingot.Platform.Infrastructure.Services;
 using Ingot.Platform.Infrastructure.TimeSeries;
@@ -24,6 +25,12 @@ public static class ServiceCollectionExtensions
         this IServiceCollection services,
         IConfiguration configuration)
     {
+        // 版本化数据库迁移：必须是第一个 HostedService——schema 在一切 Store 初始化器
+        // 与业务后台服务之前就绪。各 Store 的启动 DDL 与基线逐字一致（无害冗余），
+        // 作为过渡期保留，后续批次移除。
+        services.AddSingleton<MigrationRunner>();
+        services.AddHostedService<MigrationHostedService>();
+
         // 边缘注册表（SQLite）
         services.AddSingleton<EdgeRegistry>();
 
@@ -46,6 +53,9 @@ public static class ServiceCollectionExtensions
         services.AddHostedService<TimeSeriesStoreInitializerHostedService>();
         services.AddSingleton<IPlatformEventStore, PostgresPlatformEventStore>();
         services.AddHostedService<EventStoreInitializerHostedService>();
+        // 幂等键修剪（EventIngest:KeyRetentionDays > 0 时启用）：
+        // 事件表有保留策略而键表此前无清理机制，会无限增长。
+        services.AddHostedService<EventIngestKeyPruneHostedService>();
 
         // Chat 只能通过显式注册的只读工具访问中心数据。
         services.Configure<ChatDataAccessOptions>(configuration.GetSection("ChatDataAccess"));
