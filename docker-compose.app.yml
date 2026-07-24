@@ -40,9 +40,12 @@ services:
       EventIngest__KeyRetentionDays: ${INGOT_EVENT_KEY_RETENTION_DAYS:-0}
       Database__SchemaManagement: ${INGOT_SCHEMA_MANAGEMENT:-Migrations}
       EventIngest__EdgeTokens__EDGE-001: ${INGOT_EDGE_TOKEN:?INGOT_EDGE_TOKEN is required}
-      Authentication__Authority: ${INGOT_AUTHORITY:?INGOT_AUTHORITY is required}
-      Authentication__Audience: ${INGOT_AUDIENCE:?INGOT_AUDIENCE is required}
+      Authentication__Mode: ${INGOT_AUTH_MODE:-Local}
+      Authentication__Authority: ${INGOT_AUTHORITY:-}
+      Authentication__Audience: ${INGOT_AUDIENCE:-}
       Authentication__RequireHttpsMetadata: ${INGOT_AUTH_REQUIRE_HTTPS:-true}
+      Authentication__Local__SeedAdminUsername: ${INGOT_ADMIN_USERNAME:-}
+      Authentication__Local__SeedAdminPassword: ${INGOT_ADMIN_PASSWORD:-}
       InspectionAttachments__RootPath: /app/Data/inspection-attachments
       InspectionAttachments__ArchiveRootPath: /app/Archive/inspection-attachments
       ProcessKnowledge__RootPath: /app/Data/process-knowledge

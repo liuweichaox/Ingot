@@ -8,6 +8,7 @@ using Ingot.Platform.Api.Events;
 using Ingot.Platform.Api.Configuration;
 using Ingot.Platform.Infrastructure;
 using Ingot.Platform.Infrastructure.HealthChecks;
+using Ingot.Platform.Infrastructure.Identity;
 using Serilog;
 using Prometheus;
 using Microsoft.AspNetCore.Authentication;
@@ -25,6 +26,13 @@ builder.WebHost.UseUrls(urls);
 
 builder.Services.AddHttpClient();
 builder.Services.AddControllers();
+
+// 三种认证模式：
+//   开发环境 → 固定本地身份（不引入第二套登录）；
+//   生产 + Authentication:Mode=Oidc → 外部 JWT 颁发者；
+//   生产 + Authentication:Mode=Local（默认）→ 内置本地账户会话令牌，消除强制 OIDC 依赖。
+var useOidc = !builder.Environment.IsDevelopment()
+    && string.Equals(builder.Configuration["Authentication:Mode"], "Oidc", StringComparison.OrdinalIgnoreCase);
 if (builder.Environment.IsDevelopment())
 {
     builder.Services.AddAuthentication(DevelopmentAuthenticationHandler.SchemeName)
@@ -32,7 +40,7 @@ if (builder.Environment.IsDevelopment())
             DevelopmentAuthenticationHandler.SchemeName,
             static _ => { });
 }
-else
+else if (useOidc)
 {
     builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         .AddJwtBearer(options =>
@@ -43,6 +51,13 @@ else
             options.MapInboundClaims = true;
         });
 }
+else
+{
+    builder.Services.AddAuthentication(LocalTokenAuthenticationHandler.SchemeName)
+        .AddScheme<AuthenticationSchemeOptions, LocalTokenAuthenticationHandler>(
+            LocalTokenAuthenticationHandler.SchemeName,
+            static _ => { });
+}
 builder.Services.AddAuthorization(options =>
 {
     options.FallbackPolicy = new AuthorizationPolicyBuilder()
@@ -51,6 +66,8 @@ builder.Services.AddAuthorization(options =>
 });
 
 builder.Services.AddIngotPlatformInfrastructure(builder.Configuration);
+// 本地账户服务在基础设施（含迁移）之后注册，保证播种晚于建表；播种服务自身仅在 Local 模式生效。
+builder.Services.AddIngotLocalIdentity(builder.Configuration);
 builder.Services.AddIngotAgentCore(builder.Configuration);
 builder.Services.AddIngotAgentProviders(builder.Configuration);
 
@@ -151,6 +168,8 @@ app.MapGet("/", () => Results.Ok(new
         toolingInstallations = "/api/v1/tooling-installations",
         productionContexts = "/api/v1/production-contexts",
         subscriptions = "/api/v1/subscriptions",
+        auth = "/api/v1/auth/login",
+        users = "/api/v1/users",
         chatRuns = "/api/v1/chat/runs",
         chatCapabilities = "/api/v1/chat/capabilities"
     }

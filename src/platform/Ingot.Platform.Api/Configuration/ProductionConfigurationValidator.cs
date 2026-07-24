@@ -11,8 +11,20 @@ public static class ProductionConfigurationValidator
             errors.Add("ConnectionStrings:Events is required.");
 
         RequireProtectedMap(configuration, "EventIngest", "EdgeTokens", errors);
-        RequireValue(configuration, "Authentication:Authority", errors);
-        RequireValue(configuration, "Authentication:Audience", errors);
+
+        // 认证模式：Local（内置账户，默认）或 Oidc（外部 IdP）。仅 Oidc 模式要求 Authority/Audience。
+        var authMode = configuration["Authentication:Mode"] ?? "Local";
+        if (!string.Equals(authMode, "Local", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(authMode, "Oidc", StringComparison.OrdinalIgnoreCase))
+        {
+            errors.Add("Authentication:Mode must be either 'Local' or 'Oidc'.");
+        }
+        if (string.Equals(authMode, "Oidc", StringComparison.OrdinalIgnoreCase))
+        {
+            RequireValue(configuration, "Authentication:Authority", errors);
+            RequireValue(configuration, "Authentication:Audience", errors);
+        }
+
         RequireValue(configuration, "InspectionAttachments:ArchiveRootPath", errors);
         RequireValue(configuration, "ProcessKnowledge:ArchiveRootPath", errors);
 
