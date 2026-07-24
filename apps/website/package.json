@@ -13,20 +13,20 @@
     "lint": "eslint . --ignore-pattern .next"
   },
   "dependencies": {
-    "@headlessui/react": "^2.2.9",
+    "@headlessui/react": "^2.2.10",
     "next": "16.2.11",
-    "react": "19.2.6",
-    "react-dom": "19.2.6"
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "4.2.1",
-    "@types/node": "22.19.19",
-    "@types/react": "19.2.14",
+    "@tailwindcss/postcss": "4.3.3",
+    "@types/node": "26.1.1",
+    "@types/react": "19.2.17",
     "@types/react-dom": "19.2.3",
-    "eslint": "9.39.4",
+    "eslint": "10.7.0",
     "eslint-config-next": "16.2.11",
-    "tailwindcss": "4.2.1",
-    "typescript": "5.9.3"
+    "tailwindcss": "4.3.3",
+    "typescript": "7.0.2"
   },
   "type": "module",
   "overrides": {
