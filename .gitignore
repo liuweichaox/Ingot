@@ -420,3 +420,8 @@ FodyWeavers.xsd
 /.idea
 
 */Data/parquet/*
+
+# Ingot workspace hygiene (v2.2 batch 1)
+.ingot-src-snapshot.tar.gz
+_to_delete/
+.tmp-*.log
