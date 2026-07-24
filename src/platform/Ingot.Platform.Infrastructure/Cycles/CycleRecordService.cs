@@ -287,7 +287,7 @@ public sealed class CycleRecordService(
             issues.Add(Issue(
                 "context.production_configuration_missing",
                 "error",
-                "周期开始时未找到唯一有效的生产准备和装模记录。"));
+                "周期开始时未找到唯一有效的生产准备和工装装卸记录。"));
         }
         return issues;
     }

@@ -557,43 +557,107 @@ function manufacturingSetup(cycleResults, date) {
   }))
   const installations = []
   const productionContexts = []
-  for (let index = 0; index < cycleResults.length; index += 1) {
-    const result = cycleResults[index]
-    const { cycle, profile } = result
-    const tooling = toolingIdentity(profile, date)
-    const installedAt = cycle.startedAt
-    const removedAt = cycle.completedAt
-    const installationId = uuidV7(new Date(installedAt), 9_000_000 + index)
-    installations.push({
-      installationId,
-      machineId: cycle.machineId,
-      assemblyRevisionId: tooling.assemblyRevisionId,
-      installedAt,
-      removedAt,
-      source: 'import',
-      commandId: `factory-day:${date}:install:${cycle.cycleId}`,
-      actor: 'factory-day-simulator'
-    })
-    productionContexts.push({
-      contextId: uuidV7(new Date(installedAt), 10_000_000 + index),
-      machineId: cycle.machineId,
-      productSeries: cycle.productSeries,
-      productCode: cycle.productCode,
-      recipeId: cycle.recipeId,
-      recipeVersion: String(cycle.recipeVersion),
-      toolingInstallationId: installationId,
-      validFrom: installedAt,
-      validTo: removedAt,
-      source: 'import',
-      externalBatchRef: `SIM-${date}`,
-      actor: 'factory-day-simulator'
-    })
-    Object.assign(cycle, {
-      toolingInstallationId: installationId,
-      moldId: tooling.moldId,
-      assemblyRevisionId: tooling.assemblyRevisionId,
-      assemblyRevision: 1
-    })
+  const resultsByMachine = Map.groupBy(
+    [...cycleResults].sort((left, right) => left.cycle.startedAt.localeCompare(right.cycle.startedAt)),
+    result => result.cycle.machineId
+  )
+  let installationIndex = 0
+  let contextIndex = 0
+
+  for (const [machineId, machineResults] of resultsByMachine) {
+    let installationStart = 0
+    while (installationStart < machineResults.length) {
+      const firstResult = machineResults[installationStart]
+      const tooling = toolingIdentity(firstResult.profile, date)
+      let installationEnd = installationStart + 1
+      while (
+        installationEnd < machineResults.length &&
+        toolingIdentity(machineResults[installationEnd].profile, date).assemblyRevisionId === tooling.assemblyRevisionId
+      ) {
+        installationEnd += 1
+      }
+
+      const installationResults = machineResults.slice(installationStart, installationEnd)
+      const installedAt = installationResults[0].cycle.startedAt
+      const removedAt = installationResults.at(-1).cycle.completedAt
+      const installationId = uuidV7(new Date(installedAt), 9_000_000 + installationIndex)
+      installationIndex += 1
+      installations.push({
+        installationId,
+        machineId,
+        assemblyRevisionId: tooling.assemblyRevisionId,
+        installedAt,
+        removedAt,
+        source: 'import',
+        commandId: `factory-day:${date}:install:${machineId}:${installedAt}`,
+        actor: 'factory-day-simulator'
+      })
+
+      let contextStart = 0
+      while (contextStart < installationResults.length) {
+        const firstContextResult = installationResults[contextStart]
+        const firstCycle = firstContextResult.cycle
+        const contextKey = [
+          firstCycle.productSeries,
+          firstCycle.productCode,
+          firstCycle.recipeId,
+          firstCycle.recipeVersion
+        ].join('\u0000')
+        let contextEnd = contextStart + 1
+        while (contextEnd < installationResults.length) {
+          const candidate = installationResults[contextEnd].cycle
+          const candidateKey = [
+            candidate.productSeries,
+            candidate.productCode,
+            candidate.recipeId,
+            candidate.recipeVersion
+          ].join('\u0000')
+          if (candidateKey !== contextKey) break
+          contextEnd += 1
+        }
+
+        const contextResults = installationResults.slice(contextStart, contextEnd)
+        const validFrom = contextResults[0].cycle.startedAt
+        const validTo = contextResults.at(-1).cycle.completedAt
+        const contextId = uuidV7(new Date(validFrom), 10_000_000 + contextIndex)
+        contextIndex += 1
+        productionContexts.push({
+          contextId,
+          machineId,
+          productSeries: firstCycle.productSeries,
+          productCode: firstCycle.productCode,
+          recipeId: firstCycle.recipeId,
+          recipeVersion: String(firstCycle.recipeVersion),
+          toolingInstallationId: installationId,
+          validFrom,
+          validTo,
+          source: 'import',
+          externalBatchRef: `SIM-${date}`,
+          actor: 'factory-day-simulator'
+        })
+
+        for (const result of contextResults) {
+          Object.assign(result.cycle, {
+            productionContextId: contextId,
+            toolingInstallationId: installationId,
+            moldId: tooling.moldId,
+            assemblyRevisionId: tooling.assemblyRevisionId,
+            assemblyRevision: 1
+          })
+          for (const event of result.events) {
+            Object.assign(event.context, {
+              production_context_id: contextId,
+              tooling_installation_id: installationId,
+              mold_id: tooling.moldId,
+              assembly_revision_id: tooling.assemblyRevisionId,
+              assembly_revision: '1'
+            })
+          }
+        }
+        contextStart = contextEnd
+      }
+      installationStart = installationEnd
+    }
   }
   return { componentTypes, toolingTypes: [toolingType], components, assemblies, revisions, installations, productionContexts }
 }
@@ -621,9 +685,10 @@ export async function generateFactoryDay({ date = defaultDate, hours = 8, output
   const events = []
   const cycleResults = []
   const shiftStart = new Date(`${date}T08:00:00.000Z`)
+  const cyclesPerProductRun = Math.max(1, Math.ceil(cyclesPerMachine / series.length))
   for (let machineIndex = 0; machineIndex < machines.length; machineIndex += 1) {
     for (let cycleIndex = 0; cycleIndex < cyclesPerMachine; cycleIndex += 1) {
-      const profileIndex = (cycleIndex + machineIndex) % series.length
+      const profileIndex = (Math.floor(cycleIndex / cyclesPerProductRun) + machineIndex) % series.length
       const result = makeCycle({
         date, machine: machines[machineIndex], machineIndex, cycleIndex,
         profile: series[profileIndex], profileIndex,
@@ -634,6 +699,7 @@ export async function generateFactoryDay({ date = defaultDate, hours = 8, output
       cycleResults.push(result)
     }
   }
+  const setup = manufacturingSetup(cycleResults, date)
   events.sort((a, b) =>
     a.occurredAt - b.occurredAt ||
     a.machine.id.localeCompare(b.machine.id) ||
@@ -688,7 +754,6 @@ export async function generateFactoryDay({ date = defaultDate, hours = 8, output
   await writeFile(join(outputDir, 'process-data-models.json'), `${JSON.stringify(processDataModels(acquisition, recipeProfile, phaseMapping, date), null, 2)}\n`)
   await writeFile(join(outputDir, 'recipe-versions.json'), `${JSON.stringify(recipeVersionConfigurations(baseRecipe, date), null, 2)}\n`)
   await writeFile(join(outputDir, 'process-analysis-plans.json'), `${JSON.stringify([{ ...analysisPlan, updatedAt: `${date}T00:00:00.000Z` }], null, 2)}\n`)
-  const setup = manufacturingSetup(cycleResults, date)
   await writeFile(join(outputDir, 'manufacturing-setup.json'), `${JSON.stringify(setup, null, 2)}\n`)
   await writeFile(join(outputDir, 'cycles.json'), `${JSON.stringify(cycleResults.map(item => item.cycle), null, 2)}\n`)
   const seriesCycleCounts = Object.fromEntries(series.map(item => [item.code, cycleResults.filter(result => result.cycle.productSeries === item.code).length]))

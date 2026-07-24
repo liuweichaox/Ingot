@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.RegularExpressions;
 
 namespace Ingot.Platform.Infrastructure.Services;
@@ -17,33 +18,57 @@ public static class PrometheusTextParser
         string? currentHelp = null;
         var metricData = new List<Dictionary<string, object>>();
 
+        void CommitCurrentMetric()
+        {
+            if (currentMetric is not null && metricData.Count > 0)
+                result[currentMetric] = new { type = currentType, help = currentHelp, data = metricData };
+            metricData = [];
+        }
+
         foreach (var line in lines)
         {
             var trimmed = line.Trim();
-            if (string.IsNullOrWhiteSpace(trimmed) || trimmed.StartsWith('#'))
-            {
-                if (trimmed.StartsWith("# HELP"))
-                {
-                    var match = Regex.Match(trimmed, @"# HELP\s+(\S+)\s+(.+)");
-                    if (match.Success) currentHelp = match.Groups[2].Value;
-                }
-                else if (trimmed.StartsWith("# TYPE"))
-                {
-                    var match = Regex.Match(trimmed, @"# TYPE\s+(\S+)\s+(\S+)");
-                    if (match.Success)
-                    {
-                        if (currentMetric != null && metricData.Count > 0)
-                            result[currentMetric] = new { type = currentType, help = currentHelp, data = metricData };
+            if (string.IsNullOrWhiteSpace(trimmed))
+                continue;
 
-                        currentMetric = match.Groups[1].Value;
-                        currentType = match.Groups[2].Value;
-                        currentHelp = null;
-                        metricData = new List<Dictionary<string, object>>();
+            if (trimmed.StartsWith("# HELP"))
+            {
+                var match = Regex.Match(trimmed, @"# HELP\s+(\S+)\s+(.+)");
+                if (match.Success)
+                {
+                    var metricName = match.Groups[1].Value;
+                    if (!string.Equals(currentMetric, metricName, StringComparison.Ordinal))
+                    {
+                        CommitCurrentMetric();
+                        currentMetric = metricName;
+                        currentType = null;
                     }
+                    currentHelp = match.Groups[2].Value;
                 }
 
                 continue;
             }
+
+            if (trimmed.StartsWith("# TYPE"))
+            {
+                var match = Regex.Match(trimmed, @"# TYPE\s+(\S+)\s+(\S+)");
+                if (match.Success)
+                {
+                    var metricName = match.Groups[1].Value;
+                    if (!string.Equals(currentMetric, metricName, StringComparison.Ordinal))
+                    {
+                        CommitCurrentMetric();
+                        currentMetric = metricName;
+                        currentHelp = null;
+                    }
+                    currentType = match.Groups[2].Value;
+                }
+
+                continue;
+            }
+
+            if (trimmed.StartsWith('#'))
+                continue;
 
             var metricMatch = Regex.Match(trimmed, @"^([^{]+)(?:\{([^}]+)\})?\s+(.+)$");
             if (!metricMatch.Success) continue;
@@ -53,7 +78,9 @@ public static class PrometheusTextParser
 
             var dataPoint = new Dictionary<string, object>
             {
-                ["value"] = double.TryParse(value, out var numValue) ? numValue : value
+                ["value"] = double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var numValue)
+                    ? numValue
+                    : value
             };
 
             if (!string.IsNullOrEmpty(labelsStr))
@@ -71,8 +98,7 @@ public static class PrometheusTextParser
             metricData.Add(dataPoint);
         }
 
-        if (currentMetric != null && metricData.Count > 0)
-            result[currentMetric] = new { type = currentType, help = currentHelp, data = metricData };
+        CommitCurrentMetric();
 
         return result;
     }

@@ -1,7 +1,7 @@
 <template>
   <div class="quality-view">
-    <el-card shadow="never">
-      <el-form :inline="true">
+    <el-card shadow="never" class="filter-card">
+      <el-form class="filter-grid">
         <el-form-item label="检查范围">
           <el-date-picker v-model="range" type="datetimerange" range-separator="至" value-format="YYYY-MM-DDTHH:mm:ssZ" />
         </el-form-item>
@@ -160,16 +160,28 @@ onMounted(load);
 </script>
 
 <style scoped>
-.quality-view { display: grid; gap: 18px; }
+.quality-view { display: grid; width: 100%; min-width: 0; gap: 18px; }
+.filter-card { overflow: hidden; }
+.filter-grid { display: grid; grid-template-columns: minmax(300px, 2fr) repeat(3, minmax(130px, 1fr)) auto; align-items: end; gap: 12px; }
+.filter-grid :deep(.el-form-item) { min-width: 0; margin: 0; }
+.filter-grid :deep(.el-date-editor), .filter-grid :deep(.el-input) { width: 100%; }
 .summary-strip { display: grid; overflow: hidden; grid-template-columns: repeat(5, minmax(0, 1fr)); border: 1px solid var(--ingot-border); border-radius: 14px; background: #fff; }
 .summary-strip article { display: grid; gap: 5px; padding: 16px 18px; border-right: 1px solid var(--ingot-border); }
 .summary-strip article:last-child { border-right: 0; }
 .summary-strip small { color: #8994a5; font-size: 12px; }
 .summary-strip strong { color: var(--ingot-ink); font-size: 24px; }
 .danger { color: #d25559 !important; }
-.quality-tabs { padding: 0 18px 18px; border: 1px solid var(--ingot-border); border-radius: 14px; background: #fff; }
+.quality-tabs { min-width: 0; overflow: hidden; padding: 0 18px 18px; border: 1px solid var(--ingot-border); border-radius: 14px; background: #fff; }
+.quality-tabs :deep(.el-tabs__content), .quality-tabs :deep(.el-tab-pane) { min-width: 0; }
 .quality-tabs :deep(.el-table) { margin-bottom: 12px; }
 td strong, td small { display: block; }
 td small { margin-top: 3px; color: #9aa3b1; font-family: ui-monospace, monospace; }
-@media (max-width: 800px) { .summary-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 1150px) {
+  .filter-grid { grid-template-columns: minmax(280px, 2fr) repeat(2, minmax(150px, 1fr)); }
+}
+@media (max-width: 800px) {
+  .filter-grid { grid-template-columns: 1fr 1fr; }
+  .summary-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 560px) { .filter-grid { grid-template-columns: 1fr; } }
 </style>

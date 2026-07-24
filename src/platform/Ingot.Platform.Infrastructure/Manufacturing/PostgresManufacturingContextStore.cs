@@ -98,6 +98,8 @@ public sealed class PostgresManufacturingContextStore : IManufacturingContextSto
                 );
                 CREATE UNIQUE INDEX IF NOT EXISTS idx_tooling_installations_active_machine
                   ON tooling_installations(machine_id) WHERE removed_at IS NULL;
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_tooling_installations_active_revision
+                  ON tooling_installations(assembly_revision_id) WHERE removed_at IS NULL;
                 CREATE INDEX IF NOT EXISTS idx_tooling_installations_machine_time
                   ON tooling_installations(machine_id, installed_at, removed_at);
 
@@ -385,7 +387,7 @@ public sealed class PostgresManufacturingContextStore : IManufacturingContextSto
                 "SELECT 1 FROM tooling_installations WHERE assembly_revision_id = @id LIMIT 1;",
                 command => command.Parameters.AddWithValue("id", assemblyRevisionId), ct).ConfigureAwait(false))
         {
-            throw new InvalidOperationException("该组合版本已有装模记录，不能删除。");
+            throw new InvalidOperationException("该组合版本已有工装装卸记录，不能删除。");
         }
         return await DeleteAsync(
             "DELETE FROM tooling_assembly_revisions WHERE assembly_revision_id = @id;",
@@ -407,7 +409,7 @@ public sealed class PostgresManufacturingContextStore : IManufacturingContextSto
                 return existing;
         }
 
-        await EnsureRevisionExistsAsync(connection, transaction, value.AssemblyRevisionId, ct).ConfigureAwait(false);
+        await EnsureRevisionInstallableAsync(connection, transaction, value.AssemblyRevisionId, ct).ConfigureAwait(false);
         await EnsureNoInstallationOverlapAsync(connection, transaction, value, ct).ConfigureAwait(false);
         await using var command = new NpgsqlCommand(
             """
@@ -446,7 +448,7 @@ public sealed class PostgresManufacturingContextStore : IManufacturingContextSto
         if (existing.RemovedAt.HasValue)
             return existing;
         if (removedAt <= existing.InstalledAt)
-            throw new InvalidOperationException("卸模时间必须晚于装模时间。");
+            throw new InvalidOperationException("卸下时间必须晚于装入时间。");
 
         var at = removedAt.ToUniversalTime();
         var activeContext = await GetActiveProductionContextAsync(connection, transaction, installationId, ct)
@@ -509,7 +511,7 @@ public sealed class PostgresManufacturingContextStore : IManufacturingContextSto
                 "SELECT 1 FROM production_contexts WHERE tooling_installation_id = @id LIMIT 1;",
                 command => command.Parameters.AddWithValue("id", installationId), ct).ConfigureAwait(false))
         {
-            throw new InvalidOperationException("该装模记录已被生产配置引用，不能删除；错误记录应先结束并保留追溯。");
+            throw new InvalidOperationException("该工装装卸记录已被生产配置引用，不能删除；错误记录应先结束并保留追溯。");
         }
         return await DeleteAsync(
             "DELETE FROM tooling_installations WHERE installation_id = @id;",
@@ -828,17 +830,89 @@ public sealed class PostgresManufacturingContextStore : IManufacturingContextSto
         return value is null or DBNull ? null : Deserialize<ToolingInstallation>((string)value);
     }
 
-    private static async Task EnsureRevisionExistsAsync(
+    private static async Task EnsureRevisionInstallableAsync(
         NpgsqlConnection connection,
         NpgsqlTransaction transaction,
         Guid revisionId,
         CancellationToken ct)
     {
-        await using var command = new NpgsqlCommand(
-            "SELECT 1 FROM tooling_assembly_revisions WHERE assembly_revision_id = @id;", connection, transaction);
-        command.Parameters.AddWithValue("id", revisionId);
-        if (await command.ExecuteScalarAsync(ct).ConfigureAwait(false) is null)
-            throw new InvalidOperationException("模具组合版本不存在。");
+        ToolingAssemblyRevision revision;
+        ToolingAssembly assembly;
+        await using (var command = new NpgsqlCommand(
+            """
+            SELECT revision.payload::text, assembly.payload::text
+            FROM tooling_assembly_revisions revision
+            JOIN tooling_assemblies assembly ON assembly.mold_id = revision.mold_id
+            WHERE revision.assembly_revision_id = @id;
+            """, connection, transaction))
+        {
+            command.Parameters.AddWithValue("id", revisionId);
+            await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
+            if (!await reader.ReadAsync(ct).ConfigureAwait(false))
+                throw new InvalidOperationException("工装组合版本不存在。");
+            revision = Deserialize<ToolingAssemblyRevision>(reader.GetString(0));
+            assembly = Deserialize<ToolingAssembly>(reader.GetString(1));
+        }
+
+        if (!string.Equals(assembly.Status, "active", StringComparison.Ordinal))
+            throw new InvalidOperationException("工装已停用，不能装入设备。");
+
+        var lockKeys = revision.Members
+            .Select(static member => $"component:{member.ComponentId}")
+            .Append($"revision:{revisionId:D}")
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        foreach (var lockKey in lockKeys)
+        {
+            await using var lockCommand = new NpgsqlCommand(
+                "SELECT pg_advisory_xact_lock(hashtextextended(@key, 0));", connection, transaction);
+            lockCommand.Parameters.AddWithValue("key", lockKey);
+            await lockCommand.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+        }
+
+        foreach (var member in revision.Members)
+        {
+            await using var componentCommand = new NpgsqlCommand(
+                "SELECT payload::text FROM tooling_components WHERE component_id = @id;",
+                connection,
+                transaction);
+            componentCommand.Parameters.AddWithValue("id", member.ComponentId);
+            var payload = await componentCommand.ExecuteScalarAsync(ct).ConfigureAwait(false);
+            if (payload is null or DBNull)
+                throw new InvalidOperationException($"组件 {member.ComponentId} 不存在。");
+            var component = Deserialize<ToolingComponent>((string)payload);
+            if (!string.Equals(component.Status, "available", StringComparison.Ordinal))
+                throw new InvalidOperationException($"组件 {member.ComponentId} 当前为 {component.Status}，不能装入设备。");
+        }
+
+        var componentIds = revision.Members.Select(static member => member.ComponentId).Distinct(StringComparer.Ordinal).ToArray();
+        await using var occupiedCommand = new NpgsqlCommand(
+            """
+            SELECT installation.machine_id
+            FROM tooling_installations installation
+            JOIN tooling_assembly_revisions active_revision
+              ON active_revision.assembly_revision_id = installation.assembly_revision_id
+            WHERE installation.removed_at IS NULL
+              AND (
+                installation.assembly_revision_id = @revision_id
+                OR EXISTS (
+                  SELECT 1
+                  FROM jsonb_array_elements(COALESCE(active_revision.payload->'members', '[]'::jsonb)) member
+                  WHERE member->>'componentId' = ANY(@component_ids)
+                )
+              )
+            LIMIT 1;
+            """,
+            connection,
+            transaction);
+        occupiedCommand.Parameters.AddWithValue("revision_id", revisionId);
+        occupiedCommand.Parameters.AddWithValue("component_ids", componentIds);
+        var occupiedMachine = await occupiedCommand.ExecuteScalarAsync(ct).ConfigureAwait(false) as string;
+        if (!string.IsNullOrWhiteSpace(occupiedMachine))
+        {
+            throw new InvalidOperationException(
+                $"该工装或其中的物理组件已装在设备 {occupiedMachine} 上，请先完成卸下。");
+        }
     }
 
     private static async Task EnsureNoInstallationOverlapAsync(
@@ -859,7 +933,7 @@ public sealed class PostgresManufacturingContextStore : IManufacturingContextSto
         command.Parameters.AddWithValue("installed_at", value.InstalledAt.UtcDateTime);
         command.Parameters.AddWithValue("removed_at", (object?)value.RemovedAt?.UtcDateTime ?? DBNull.Value);
         if (await command.ExecuteScalarAsync(ct).ConfigureAwait(false) is not null)
-            throw new InvalidOperationException("该设备在指定时间已经存在装模记录，请先卸模或调整时间区间。");
+            throw new InvalidOperationException("该设备在指定时间已经存在工装装卸记录，请先卸下当前工装或调整时间区间。");
     }
 
     private static async Task EnsureInstallationMatchesAsync(
@@ -878,7 +952,7 @@ public sealed class PostgresManufacturingContextStore : IManufacturingContextSto
         command.Parameters.AddWithValue("machine", value.MachineId);
         command.Parameters.AddWithValue("at", value.ValidFrom.UtcDateTime);
         if (await command.ExecuteScalarAsync(ct).ConfigureAwait(false) is null)
-            throw new InvalidOperationException("生产上下文引用的装模记录在该设备和时间点无效。");
+            throw new InvalidOperationException("生产上下文引用的工装装卸记录在该设备和时间点无效。");
     }
 
     private async Task<IReadOnlyList<T>> ListAsync<T>(

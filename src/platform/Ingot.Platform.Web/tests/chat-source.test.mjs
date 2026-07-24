@@ -104,6 +104,14 @@ test("historical comparison uses the full same-series cycle trace", () => {
   assert.match(comparisons, /postJson\("\/api\/v1\/process-window-comparisons"/);
   assert.match(comparisons, /v-model="selectedCycleIds"/);
   assert.match(comparisons, /multiple/);
+  assert.match(comparisons, /<el-tree-select/);
+  assert.match(comparisons, /:data="cycleTree"/);
+  assert.match(comparisons, /show-checkbox/);
+  assert.match(comparisons, /function buildCycleTree\(cycles\)/);
+  assert.match(comparisons, /type: "machine"/);
+  assert.match(comparisons, /type: "recipe"/);
+  assert.match(comparisons, /type: "date"/);
+  assert.match(comparisons, /type: "cycle"/);
   assert.match(comparisons, /baselineCycleId: baselineCycleId\.value/);
   assert.match(comparisons, /采样完整率/);
   assert.match(comparisons, /阶段完整/);

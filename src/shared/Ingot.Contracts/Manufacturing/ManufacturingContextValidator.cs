@@ -199,7 +199,7 @@ public static partial class ManufacturingContextValidator
     {
         normalized = null;
         if (value is null)
-            return Fail("装模记录不能为空。", out error);
+            return Fail("工装装卸记录不能为空。", out error);
         if (!TryId(value.MachineId, "MachineId", out var machineId, out error))
             return false;
         if (value.AssemblyRevisionId == Guid.Empty)

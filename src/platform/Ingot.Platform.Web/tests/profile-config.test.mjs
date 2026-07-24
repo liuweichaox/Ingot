@@ -85,6 +85,11 @@ test("versioned process configuration is list-first and supports create, maintai
   }
 });
 
+test("recipe versions load as a list without opening the editor drawer", () => {
+  assert.match(recipeView, /onMounted\(load\)/);
+  assert.doesNotMatch(recipeView, /onMounted\(\(\) => \{\s*createNew\(\);\s*load\(\);\s*\}\)/);
+});
+
 test("acquisition is maintained as a versioned task with staged validation", () => {
   assert.match(app, /采集任务/);
   assert.match(app, /采集节点/);

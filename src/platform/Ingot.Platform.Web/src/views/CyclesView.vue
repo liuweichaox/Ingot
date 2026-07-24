@@ -130,7 +130,7 @@
           <el-descriptions-item label="产品">{{ [selected.productSeries, selected.productCode].filter(Boolean).join(' · ') || '-' }}</el-descriptions-item>
           <el-descriptions-item label="配方">{{ recipeText(selected) }}</el-descriptions-item>
           <el-descriptions-item label="模具组合">{{ toolingText(selected) }}</el-descriptions-item>
-          <el-descriptions-item label="装模记录">{{ selected.toolingInstallationId || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="工装装卸记录">{{ selected.toolingInstallationId || '-' }}</el-descriptions-item>
           <el-descriptions-item label="持续时间">{{ duration(selected.durationMs) }}</el-descriptions-item>
           <el-descriptions-item label="采样完整度">{{ selected.sampleCount }}/{{ selected.expectedSampleCount || '?' }}</el-descriptions-item>
           <el-descriptions-item label="质量方案">{{ planText(selected) }}</el-descriptions-item>

@@ -4,8 +4,8 @@
 
     <div v-if="isOperationSection" class="summary-grid">
       <article><span>已生效设备</span><strong>{{ activeContexts.length }}</strong><small>台设备已完成生产切换</small></article>
-      <article><span>活动装模</span><strong>{{ activeInstallations.length }}</strong><small>唯一有效区间</small></article>
-      <article><span>模具</span><strong>{{ assemblies.length }}</strong><small>{{ revisions.length }} 个不可变组合版本</small></article>
+      <article><span>已装工装</span><strong>{{ activeInstallations.length }}</strong><small>当前设备安装状态</small></article>
+      <article><span>工装</span><strong>{{ assemblies.length }}</strong><small>{{ revisions.length }} 个不可变组合版本</small></article>
       <article><span>组件</span><strong>{{ components.length }}</strong><small>可独立更换与复用</small></article>
     </div>
 
@@ -13,9 +13,17 @@
       <el-tabs v-model="activeTab" class="section-tabs">
         <el-tab-pane label="生产切换" name="context">
           <div class="section-heading registry-heading">
-            <div><strong>生产配置历史</strong><span>记录设备当前生效的产品、配方和装模组合</span></div>
-            <el-button type="primary" @click="openContextDrawer">生产切换</el-button>
+            <div><strong>生产配置历史</strong><span>记录设备当前生效的产品、配方和已装工装</span></div>
+            <el-button type="primary" :disabled="!activeInstallations.length" @click="openContextDrawer()">生产切换</el-button>
           </div>
+          <el-alert
+            v-if="!activeInstallations.length"
+            title="当前没有已装工装，请先到“工装装卸”完成装入"
+            type="info"
+            :closable="false"
+            show-icon
+            class="section-alert"
+          />
           <section class="table-panel">
             <el-table :data="pagedContexts" stripe>
               <el-table-column label="生产配置" min-width="300">
@@ -33,10 +41,9 @@
                   </div>
                 </template>
               </el-table-column>
-              <el-table-column label="操作" width="110" fixed="right">
+              <el-table-column label="操作" width="80" fixed="right">
                 <template #default="{ row }">
                   <el-button v-if="!row.validTo" link @click="closeContext(row)">结束</el-button>
-                  <el-button link type="danger" @click="deleteContext(row)">删除</el-button>
                 </template>
               </el-table-column>
             </el-table>
@@ -52,38 +59,74 @@
           </section>
         </el-tab-pane>
 
-        <el-tab-pane label="装模记录" name="installation">
+        <el-tab-pane label="装卸记录" name="installation">
           <div class="section-heading registry-heading">
-            <div><strong>装模历史</strong><span>记录设备上工装组合版本的有效区间</span></div>
-            <el-button type="primary" @click="openInstallationDrawer">新增装模记录</el-button>
+            <div><strong>当前安装</strong><span>每台设备同一时间只允许一套工装处于已装状态</span></div>
+            <el-button type="primary" @click="openInstallationDrawer">装入工装</el-button>
           </div>
           <section class="table-panel">
-            <el-table :data="pagedInstallations" stripe>
+            <el-table :data="activeInstallations" stripe>
               <el-table-column label="设备与工装" min-width="300">
                 <template #default="{ row }">
                   <div class="record-primary">{{ row.machineId }}</div>
                   <div class="record-secondary">{{ revisionLabel(revisionById(row.assemblyRevisionId)) }}</div>
                 </template>
               </el-table-column>
-              <el-table-column label="装模记录" min-width="190">
+              <el-table-column label="装入信息" min-width="210">
                 <template #default="{ row }">
                   <div>{{ formatTime(row.installedAt) }}</div>
-                  <div class="record-tags"><el-tag size="small" :type="row.removedAt ? 'info' : 'success'">{{ row.removedAt ? '已卸模' : '使用中' }}</el-tag></div>
+                  <div class="record-secondary">{{ sourceLabel(row.source) }}{{ row.actor ? ` · ${row.actor}` : "" }}</div>
                 </template>
               </el-table-column>
-              <el-table-column label="操作" width="110" fixed="right">
+              <el-table-column label="生产状态" min-width="220">
                 <template #default="{ row }">
-                  <el-button v-if="!row.removedAt" link @click="removeTooling(row)">卸模</el-button>
-                  <el-button link type="danger" @click="deleteInstallation(row)">删除</el-button>
+                  <template v-if="currentContextFor(row)">
+                    <div class="record-primary">{{ currentContextFor(row).productSeries }} · {{ currentContextFor(row).productCode }}</div>
+                    <div class="record-secondary">{{ currentContextFor(row).recipeId }} · v{{ currentContextFor(row).recipeVersion }}</div>
+                  </template>
+                  <el-tag v-else type="warning" effect="plain">待生产切换</el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column label="操作" width="170" fixed="right">
+                <template #default="{ row }">
+                  <el-button link type="primary" @click="openContextDrawer(row)">生产切换</el-button>
+                  <el-button link type="danger" @click="removeTooling(row)">卸下</el-button>
                 </template>
               </el-table-column>
             </el-table>
-            <el-empty v-if="!installations.length" description="尚无装模记录" />
-            <div v-if="installations.length > installationPageSize" class="table-pagination">
+            <el-empty v-if="!activeInstallations.length" description="当前没有设备安装工装" />
+          </section>
+
+          <div class="section-heading history-heading">
+            <div><strong>装卸历史</strong><span>现场事实只结束有效区间，不从历史中删除</span></div>
+          </div>
+          <section class="table-panel">
+            <el-table :data="pagedInstallationHistory" stripe>
+              <el-table-column label="设备与工装" min-width="280">
+                <template #default="{ row }">
+                  <div class="record-primary">{{ row.machineId }}</div>
+                  <div class="record-secondary">{{ revisionLabel(revisionById(row.assemblyRevisionId)) }}</div>
+                </template>
+              </el-table-column>
+              <el-table-column label="使用区间" min-width="280">
+                <template #default="{ row }">
+                  <div>{{ formatTime(row.installedAt) }} — {{ formatTime(row.removedAt) }}</div>
+                  <div class="record-secondary">使用 {{ durationLabel(row.installedAt, row.removedAt) }}</div>
+                </template>
+              </el-table-column>
+              <el-table-column label="来源与操作人" min-width="170">
+                <template #default="{ row }">
+                  <div>{{ sourceLabel(row.source) }}</div>
+                  <div class="record-secondary">{{ row.actor || "未记录操作人" }}</div>
+                </template>
+              </el-table-column>
+            </el-table>
+            <el-empty v-if="!installationHistory.length" description="尚无已结束的工装装卸记录" />
+            <div v-if="installationHistory.length > installationPageSize" class="table-pagination">
               <el-pagination
                 v-model:current-page="installationPage"
                 :page-size="installationPageSize"
-                :total="installations.length"
+                :total="installationHistory.length"
                 layout="total, prev, pager, next"
               />
             </div>
@@ -176,14 +219,17 @@
 
     <el-drawer v-model="contextDrawerVisible" title="生产切换" size="620px" destroy-on-close>
       <el-form label-position="top" class="drawer-form">
-        <el-form-item label="活动装模记录">
-          <el-select v-model="contextForm.toolingInstallationId" filterable @change="syncContextMachine">
-            <el-option v-for="item in activeInstallations" :key="item.installationId" :label="installationLabel(item)" :value="item.installationId" />
-          </el-select>
-        </el-form-item>
         <div class="form-grid">
-          <el-form-item label="设备"><el-input v-model="contextForm.machineId" disabled /></el-form-item>
-          <el-form-item label="来源"><el-input model-value="现场录入（MES 由接口写入）" disabled /></el-form-item>
+          <el-form-item label="设备">
+            <el-select v-model="contextForm.machineId" filterable @change="syncContextInstallation">
+              <el-option v-for="machineId in activeMachineIds" :key="machineId" :label="machineId" :value="machineId" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="当前工装">
+            <el-input :model-value="selectedContextInstallation ? revisionLabel(revisionById(selectedContextInstallation.assemblyRevisionId)) : ''" disabled />
+          </el-form-item>
+        </div>
+        <div class="form-grid">
           <el-form-item label="产品系列"><el-input v-model="contextForm.productSeries" /></el-form-item>
           <el-form-item label="产品型号"><el-input v-model="contextForm.productCode" /></el-form-item>
           <el-form-item label="配方版本" class="span-two">
@@ -192,24 +238,32 @@
             </el-select>
           </el-form-item>
           <el-form-item label="物料批号（可选）"><el-input v-model="contextForm.materialLotRef" /></el-form-item>
-          <el-form-item label="外部工单（可选）"><el-input v-model="contextForm.externalOrderRef" /></el-form-item>
-          <el-form-item label="外部生产批次（可选）" class="span-two"><el-input v-model="contextForm.externalBatchRef" /></el-form-item>
         </div>
       </el-form>
       <template #footer><div class="drawer-actions"><el-button @click="contextDrawerVisible = false">取消</el-button><el-button type="primary" :loading="saving" @click="startContext">确认切换</el-button></div></template>
     </el-drawer>
 
-    <el-drawer v-model="installationDrawerVisible" title="新增装模记录" size="520px" destroy-on-close>
+    <el-drawer v-model="installationDrawerVisible" title="装入工装" size="520px" destroy-on-close>
       <el-form label-position="top" class="drawer-form">
-        <el-form-item label="设备"><el-input v-model="installationForm.machineId" /></el-form-item>
-        <el-form-item label="模具组合版本">
-          <el-select v-model="installationForm.assemblyRevisionId" filterable>
-            <el-option v-for="item in revisions" :key="item.assemblyRevisionId" :label="revisionLabel(item)" :value="item.assemblyRevisionId" />
+        <el-form-item label="设备">
+          <el-select v-model="installationForm.machineId" filterable allow-create default-first-option placeholder="选择或输入设备 ID">
+            <el-option v-for="machineId in knownMachineIds" :key="machineId" :label="machineId" :value="machineId" />
           </el-select>
         </el-form-item>
-        <el-form-item label="来源"><el-input model-value="现场录入（MES 由接口写入）" disabled /></el-form-item>
+        <el-form-item label="工装组合版本">
+          <el-select v-model="installationForm.assemblyRevisionId" filterable>
+            <el-option v-for="item in installableRevisions" :key="item.assemblyRevisionId" :label="revisionLabel(item)" :value="item.assemblyRevisionId" />
+          </el-select>
+        </el-form-item>
+        <el-alert
+          v-if="!installableRevisions.length"
+          title="当前没有可装入的工装组合版本，请检查工装、组件状态或现有安装"
+          type="warning"
+          :closable="false"
+          show-icon
+        />
       </el-form>
-      <template #footer><div class="drawer-actions"><el-button @click="installationDrawerVisible = false">取消</el-button><el-button type="primary" :loading="saving" @click="installTooling">确认装模</el-button></div></template>
+      <template #footer><div class="drawer-actions"><el-button @click="installationDrawerVisible = false">取消</el-button><el-button type="primary" :loading="saving" :disabled="!installationForm.machineId || !installationForm.assemblyRevisionId" @click="installTooling">确认装入</el-button></div></template>
     </el-drawer>
 
     <el-drawer
@@ -335,20 +389,41 @@ const componentForm = reactive({ componentId: "", componentTypeCode: "", serialN
 const assemblyForm = reactive({ moldId: "", toolingTypeCode: "", name: "", status: "active" });
 const revisionForm = reactive({ moldId: "", revision: 1, members: {} });
 const installationForm = reactive({ machineId: "", assemblyRevisionId: "", source: "manual" });
-const contextForm = reactive({ machineId: "", productSeries: "", productCode: "", recipeId: "", recipeVersion: "", toolingInstallationId: "", source: "manual", externalOrderRef: "", externalBatchRef: "", materialLotRef: "" });
+const contextForm = reactive({ machineId: "", productSeries: "", productCode: "", recipeId: "", recipeVersion: "", toolingInstallationId: "", source: "manual", materialLotRef: "" });
 const editingComponentTypeCode = ref("");
 const editingComponentId = ref("");
 const editingAssemblyId = ref("");
 
 const activeInstallations = computed(() => installations.value.filter(item => !item.removedAt));
+const installationHistory = computed(() => installations.value.filter(item => item.removedAt));
 const activeContexts = computed(() => contexts.value.filter(item => !item.validTo));
+const activeMachineIds = computed(() => [...new Set(activeInstallations.value.map(item => item.machineId))].sort());
+const knownMachineIds = computed(() => [...new Set([
+  ...installations.value.map(item => item.machineId),
+  ...contexts.value.map(item => item.machineId),
+])].sort());
+const selectedContextInstallation = computed(() => activeInstallations.value.find(
+  item => item.installationId === contextForm.toolingInstallationId
+));
+const occupiedComponentIds = computed(() => new Set(activeInstallations.value.flatMap(installation => {
+  const revision = revisions.value.find(item => item.assemblyRevisionId === installation.assemblyRevisionId);
+  return revision?.members?.map(member => member.componentId) || [];
+})));
+const installableRevisions = computed(() => revisions.value.filter(revision => {
+  const assembly = assemblies.value.find(item => item.moldId === revision.moldId);
+  if (!assembly || assembly.status !== "active") return false;
+  return (revision.members || []).every(member => {
+    const component = components.value.find(item => item.componentId === member.componentId);
+    return component?.status === "available" && !occupiedComponentIds.value.has(member.componentId);
+  });
+}));
 const publishedRecipes = computed(() => recipes.value.filter(item => item.status === "published"));
 const selectedRecipeKey = computed(() => contextForm.recipeId ? `${contextForm.recipeId}@${contextForm.recipeVersion}` : "");
 const pagedContexts = computed(() => contexts.value.slice(
   (contextPage.value - 1) * contextPageSize,
   contextPage.value * contextPageSize,
 ));
-const pagedInstallations = computed(() => installations.value.slice(
+const pagedInstallationHistory = computed(() => installationHistory.value.slice(
   (installationPage.value - 1) * installationPageSize,
   installationPage.value * installationPageSize,
 ));
@@ -388,7 +463,7 @@ async function loadAll() {
     contexts.value = contextRows.data || [];
     recipes.value = recipeRows.data || [];
     contextPage.value = Math.min(contextPage.value, Math.max(1, Math.ceil(contexts.value.length / contextPageSize)));
-    installationPage.value = Math.min(installationPage.value, Math.max(1, Math.ceil(installations.value.length / installationPageSize)));
+    installationPage.value = Math.min(installationPage.value, Math.max(1, Math.ceil(installationHistory.value.length / installationPageSize)));
   } catch (requestError) { error.value = requestError.message; }
   finally { loading.value = false; }
 }
@@ -400,8 +475,12 @@ async function runSave(action, message) {
   finally { saving.value = false; }
 }
 
-function openContextDrawer() {
-  Object.assign(contextForm, { machineId: "", productSeries: "", productCode: "", recipeId: "", recipeVersion: "", toolingInstallationId: "", source: "manual", externalOrderRef: "", externalBatchRef: "", materialLotRef: "" });
+function openContextDrawer(installation = null) {
+  Object.assign(contextForm, { machineId: "", productSeries: "", productCode: "", recipeId: "", recipeVersion: "", toolingInstallationId: "", source: "manual", materialLotRef: "" });
+  if (installation) {
+    contextForm.machineId = installation.machineId;
+    contextForm.toolingInstallationId = installation.installationId;
+  }
   contextDrawerVisible.value = true;
 }
 function openInstallationDrawer() {
@@ -436,7 +515,7 @@ function createRevision() {
   return runSave(() => postJson(`/api/v1/tooling-assemblies/${encodeURIComponent(revisionForm.moldId)}/revisions`, payload), "不可变组合版本已创建");
 }
 async function installTooling() {
-  await runSave(() => postJson("/api/v1/tooling-installations", { ...installationForm, installedAt: new Date().toISOString(), commandId: crypto.randomUUID() }), "装模记录已创建");
+  await runSave(() => postJson("/api/v1/tooling-installations", { ...installationForm, installedAt: new Date().toISOString(), commandId: crypto.randomUUID() }), "工装已装入");
   if (!error.value) installationDrawerVisible.value = false;
 }
 async function startContext() {
@@ -444,8 +523,16 @@ async function startContext() {
   if (!error.value) contextDrawerVisible.value = false;
 }
 async function removeTooling(row) {
-  await ElMessageBox.confirm("卸模会结束该安装区间，历史周期仍保留原引用。", "确认卸模", { type: "warning" });
-  return runSave(() => postJson(`/api/v1/tooling-installations/${row.installationId}:remove`, { at: new Date().toISOString() }), "已完成卸模");
+  const activeContext = currentContextFor(row);
+  const consequence = activeContext
+    ? `同时结束 ${activeContext.productSeries} · ${activeContext.productCode} 的当前生产配置。`
+    : "该设备当前没有生效中的生产配置。";
+  await ElMessageBox.confirm(
+    `将卸下 ${row.machineId} 上的 ${revisionLabel(revisionById(row.assemblyRevisionId))}，${consequence}历史生产记录仍保留原引用。`,
+    "确认卸下工装",
+    { type: "warning" }
+  );
+  return runSave(() => postJson(`/api/v1/tooling-installations/${row.installationId}:remove`, { at: new Date().toISOString() }), "工装已卸下");
 }
 async function closeContext(row) {
   await ElMessageBox.confirm("结束后，下一周期必须先启用新的生产上下文。", "结束生产上下文", { type: "warning" });
@@ -461,8 +548,6 @@ function deleteComponent(row) { return runDelete(`/api/v1/tooling-components/${e
 function deleteAssembly(row) { return runDelete(`/api/v1/tooling-assemblies/${encodeURIComponent(row.moldId)}`, "删除工装", "工装已删除"); }
 function deleteRevision(row) { return runDelete(`/api/v1/tooling-assemblies/revisions/${row.assemblyRevisionId}`, "删除组合版本", "组合版本已删除"); }
 function deleteToolingType(row) { return runDelete(`/api/v1/tooling-types/${encodeURIComponent(row.toolingTypeCode)}/${row.version}`, "删除工装类型版本", "工装类型版本已删除"); }
-function deleteInstallation(row) { return runDelete(`/api/v1/tooling-installations/${row.installationId}`, "删除装模记录", "装模记录已删除"); }
-function deleteContext(row) { return runDelete(`/api/v1/production-contexts/${row.contextId}`, "删除生产配置", "生产配置已删除"); }
 
 function typeByCode(code) { return latestTypes.value.find(item => item.toolingTypeCode === code); }
 function componentsForRole(role) {
@@ -471,7 +556,6 @@ function componentsForRole(role) {
 }
 function revisionById(id) { return revisions.value.find(item => item.assemblyRevisionId === id); }
 function revisionLabel(item) { return item ? `${item.moldId} · v${item.revision}` : "未知组合版本"; }
-function installationLabel(item) { return `${item.machineId} · ${revisionLabel(revisionById(item.assemblyRevisionId))}`; }
 function roleName(moldId, code) { const assembly = assemblies.value.find(item => item.moldId === moldId); return typeByCode(assembly?.toolingTypeCode)?.roles.find(role => role.code === code)?.name || code; }
 function componentTypeLabel(component) { return componentTypes.value.find(item => item.componentTypeCode === component.componentTypeCode)?.name || component.attributes?.componentTypeName || component.componentTypeCode; }
 function componentTypeCount(code) { return components.value.filter(item => item.componentTypeCode === code).length; }
@@ -482,7 +566,12 @@ function currentRoleLabels(componentId) {
   return labels.length ? [...new Set(labels)].join("、") : "未装配";
 }
 function resetRevisionMembers() { revisionForm.members = {}; const existing = revisions.value.filter(item => item.moldId === revisionForm.moldId); revisionForm.revision = existing.length ? Math.max(...existing.map(item => item.revision)) + 1 : 1; }
-function syncContextMachine(id) { contextForm.machineId = activeInstallations.value.find(item => item.installationId === id)?.machineId || ""; }
+function syncContextInstallation(machineId) {
+  contextForm.toolingInstallationId = activeInstallations.value.find(item => item.machineId === machineId)?.installationId || "";
+}
+function currentContextFor(installation) {
+  return activeContexts.value.find(item => item.toolingInstallationId === installation.installationId);
+}
 function recipeKey(item) { return `${item.recipeId}@${item.version}`; }
 function selectRecipe(key) {
   const item = recipes.value.find(recipe => recipeKey(recipe) === key);
@@ -495,6 +584,12 @@ function selectRecipe(key) {
 function sourceLabel(value) { return { manual: "现场", mes: "MES", device: "设备", import: "导入" }[value] || value; }
 function statusLabel(value) { return { active: "启用", inactive: "停用", available: "可用", maintenance: "维护中", retired: "已退役" }[value] || value; }
 function formatTime(value) { return value ? new Date(value).toLocaleString("zh-CN") : "-"; }
+function durationLabel(start, end) {
+  const seconds = Math.max(0, Math.round((new Date(end).getTime() - new Date(start).getTime()) / 1000));
+  if (seconds < 3600) return `${Math.max(1, Math.round(seconds / 60))} 分钟`;
+  const hours = seconds / 3600;
+  return hours < 24 ? `${hours.toFixed(hours < 10 ? 1 : 0)} 小时` : `${(hours / 24).toFixed(1)} 天`;
+}
 
 watch(() => props.section, value => {
   activeTab.value = value;
@@ -522,6 +617,9 @@ onMounted(loadAll);
 .assembly-editor { max-width: 720px; }
 .registry-heading { margin-bottom: 16px; }
 .registry-heading > div { display: grid; gap: 4px; }
+.history-heading { margin: 28px 0 14px; }
+.history-heading > div { display: grid; gap: 4px; }
+.section-alert { margin-bottom: 16px; }
 .editor-region { margin-bottom: 18px; }
 .form-panel { padding: 18px; border: 1px solid #e8ecf1; border-radius: 10px; background: #fbfcfe; }
 .form-panel h3 { margin: 0 0 5px; color: #243044; }

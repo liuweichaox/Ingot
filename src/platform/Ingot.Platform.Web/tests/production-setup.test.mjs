@@ -9,6 +9,10 @@ const manufacturingControllers = await readFile(
   new URL("../../Ingot.Platform.Api/Controllers/ManufacturingContextControllers.cs", import.meta.url),
   "utf8",
 );
+const manufacturingStore = await readFile(
+  new URL("../../Ingot.Platform.Infrastructure/Manufacturing/PostgresManufacturingContextStore.cs", import.meta.url),
+  "utf8",
+);
 
 test("production setup is divided into shop-floor and configuration menus", () => {
   assert.match(app, /path: "\/production\/changeover"/);
@@ -28,12 +32,15 @@ test("production setup keeps tooling lifecycle and MES boundary explicit", () =>
   assert.match(view, /工装类型/);
   assert.match(view, /组件台账/);
   assert.match(view, /不可变组合版本/);
-  assert.match(view, /装模记录/);
-  assert.match(view, /MES 由接口写入/);
+  assert.match(view, /装卸记录/);
+  assert.doesNotMatch(view, /<el-form-item label="来源"/);
+  assert.match(view, /source: "manual"/);
   assert.match(view, /\/api\/v1\/production-contexts/);
   assert.match(view, /\/api\/v1\/tooling-installations/);
   assert.match(view, /\/api\/v1\/tooling-component-types/);
-  assert.match(view, /externalOrderRef/);
+  assert.doesNotMatch(view, /外部工单（可选）|外部生产批次（可选）/);
+  assert.match(manufacturingStore, /ExternalOrderRef/);
+  assert.match(manufacturingStore, /ExternalBatchRef/);
 });
 
 test("components are classified independently and receive roles only in assembly revisions", () => {
@@ -68,12 +75,10 @@ test("every tooling master-data creation entry has a maintenance path", () => {
   assert.match(view, /deleteAssembly/);
   assert.match(view, /deleteRevision/);
   assert.match(view, /deleteToolingType/);
-  assert.match(view, /deleteInstallation/);
-  assert.match(view, /deleteContext/);
   assert.match(view, /deleteJson/);
   assert.match(view, /保存修改/);
   assert.match(view, /新版本维护/);
-  assert.match(view, /装模历史/);
+  assert.match(view, /装卸历史/);
   assert.match(view, /生产配置历史/);
   assert.match(view, /v-model="contextDrawerVisible"/);
   assert.match(view, /v-model="installationDrawerVisible"/);
@@ -85,4 +90,21 @@ test("every tooling master-data creation entry has a maintenance path", () => {
   assert.match(manufacturingControllers, /DeleteAssemblyRevisionAsync/);
   assert.match(manufacturingControllers, /DeleteInstallationAsync/);
   assert.match(manufacturingControllers, /DeleteProductionContextAsync/);
+});
+
+test("tooling installation is a physical interval rather than a per-cycle action", () => {
+  const installationPane = view.match(/<el-tab-pane label="装卸记录"[\s\S]*?<el-tab-pane label="模具组合"/)?.[0] || "";
+
+  assert.match(installationPane, /当前安装/);
+  assert.match(installationPane, /装卸历史/);
+  assert.match(installationPane, /使用区间/);
+  assert.match(installationPane, /生产状态/);
+  assert.match(installationPane, /待生产切换/);
+  assert.match(installationPane, /卸下/);
+  assert.doesNotMatch(installationPane, />删除</);
+  assert.match(view, /同时结束.*当前生产配置/);
+  assert.match(view, /installableRevisions/);
+  assert.match(manufacturingStore, /idx_tooling_installations_active_revision/);
+  assert.match(manufacturingStore, /物理组件已装在设备/);
+  assert.match(manufacturingStore, /组件 .*不能装入设备/);
 });

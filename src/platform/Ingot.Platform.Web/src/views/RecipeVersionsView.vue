@@ -167,7 +167,6 @@ async function load() {
       selectedKey.value = keyOf(recipes.value[0]);
       replace(recipes.value[0]);
     }
-    editorVisible.value = false;
   } catch (error) {
     ElMessage.error(error.message);
   } finally {
@@ -206,7 +205,7 @@ async function removeDraft() {
   } catch (error) { ElMessage.error(error.message); }
 }
 
-onMounted(() => { createNew(); load(); });
+onMounted(load);
 </script>
 
 <style scoped>

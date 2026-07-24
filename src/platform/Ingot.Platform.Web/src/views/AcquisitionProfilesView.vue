@@ -273,6 +273,7 @@
 
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
+import { useRoute } from "vue-router";
 import { ElCheckbox, ElMessage, ElMessageBox } from "element-plus";
 import { CircleCheckFilled, Plus } from "@element-plus/icons-vue";
 import { deleteJson, getJson, postJson } from "../api/http";
@@ -288,7 +289,8 @@ const error = ref("");
 const editorVisible = ref(false);
 const isNewIdentity = ref(true);
 const activeStep = ref(0);
-const keyword = ref("");
+const route = useRoute();
+const keyword = ref(typeof route.query.edgeId === "string" ? route.query.edgeId : "");
 const statusFilter = ref("");
 const mappingRows = ref([]);
 const recipeMappingRows = ref([]);

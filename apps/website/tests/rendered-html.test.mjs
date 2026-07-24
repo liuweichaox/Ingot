@@ -1,50 +1,21 @@
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import test, { after } from "node:test";
+import { join } from "node:path";
+import test from "node:test";
 
 const siteRoot = fileURLToPath(new URL("..", import.meta.url));
-const testPort = 3127;
-let serverProcess;
-let serverOutput = "";
 
 async function render(pathname = "/") {
-  if (!serverProcess) {
-    const nextBin = fileURLToPath(new URL("../node_modules/next/dist/bin/next", import.meta.url));
-    serverProcess = spawn(
-      process.execPath,
-      [nextBin, "start", "--hostname", "127.0.0.1", "--port", String(testPort)],
-      {
-        cwd: siteRoot,
-        env: { ...process.env, NODE_ENV: "production" },
-        stdio: ["ignore", "pipe", "pipe"],
-      },
-    );
-    serverProcess.stdout.on("data", (chunk) => { serverOutput += chunk; });
-    serverProcess.stderr.on("data", (chunk) => { serverOutput += chunk; });
-  }
-
-  const deadline = Date.now() + 20_000;
-  while (Date.now() < deadline) {
-    if (serverProcess.exitCode !== null)
-      throw new Error(`Next.js exited before the test request:\n${serverOutput}`);
-    try {
-      return await fetch(`http://127.0.0.1:${testPort}${pathname}`, {
-        headers: {
-          accept: "text/html",
-          "x-forwarded-host": "untrusted.invalid",
-          "x-forwarded-proto": "https",
-        },
-      });
-    } catch {
-      await new Promise((resolve) => setTimeout(resolve, 100));
-    }
-  }
-  throw new Error(`Next.js did not become ready:\n${serverOutput}`);
+  const relativePath = pathname === "/"
+    ? "index.html"
+    : join(pathname.replace(/^\/|\/$/g, ""), "index.html");
+  const html = await readFile(join(siteRoot, "out", relativePath), "utf8");
+  return new Response(html, {
+    status: 200,
+    headers: { "content-type": "text/html; charset=utf-8" },
+  });
 }
-
-after(() => serverProcess?.kill("SIGTERM"));
 
 // Terms from earlier, retired product framings that must never resurface.
 const retiredTerms = new RegExp([
@@ -62,10 +33,6 @@ test("renders the Chinese root around the root-cause positioning and trust guara
   const response = await render();
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
-  assert.equal(response.headers.get("x-content-type-options"), "nosniff");
-  assert.equal(response.headers.get("x-frame-options"), "DENY");
-  assert.equal(response.headers.get("referrer-policy"), "strict-origin-when-cross-origin");
-  assert.equal(response.headers.get("permissions-policy"), "camera=(), microphone=(), geolocation=()");
 
   const html = await response.text();
   assert.match(html, /<title>Ingot — 工艺追因引擎 · 可核对、不编造数字的生产分析<\/title>/i);

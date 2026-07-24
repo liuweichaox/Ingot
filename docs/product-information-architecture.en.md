@@ -35,7 +35,8 @@ Ingot organizes its interface around understanding operations, finding problems,
   - Object Catalog
   - Process Data Models
   - Recipe Versions
-  - Data Ingress
+  - Acquisition Tasks
+  - Acquisition Nodes
 - Tooling Management
   - Component Types
   - Component Register
@@ -43,6 +44,7 @@ Ingot organizes its interface around understanding operations, finding problems,
   - Tooling Assemblies
 - Administration
   - Platform Metrics
+  - Event Subscriptions
   - Runtime Logs
 
 Navigation follows the proven two-level pattern used by mature industrial data platforms. The top menu switches among Workbench, AI, Operations, Quality, Analysis, Data Assets, Tooling, and Administration; the left sidebar contains only entries in the active domain. Workbench and AI use the full workspace without a sidebar. Page identity stays in the workspace header and global search stays in the top bar. This preserves the strength of TDengine IDMP's global-menu-plus-context-sidebar model without copying database-oriented terminology into Ingot.
@@ -56,3 +58,12 @@ Navigation follows the proven two-level pattern used by mature industrial data p
 - **Configuration workspace**: Object/version catalog on the left and detail/editor on the right. Creation and maintenance do not permanently occupy the primary browsing area.
 - **Analysis workspace**: Scope and alignment controls above full-width charts and findings.
 - **Historical comparison**: The user selects a product series, chooses multiple operating records, and designates a baseline from that selection. A signal matrix presents cross-record differences before contextual record details. The product must not replace user selection with an automatic “latest N” rule.
+
+## Data ingress and operational state
+
+- **Acquisition nodes**: Summarize registered nodes, online nodes, running tasks, and nodes requiring attention before showing heartbeat, task coverage, collected samples, access address, and the latest problem. Online means a heartbeat within 90 seconds; unreachable diagnostics and degraded execution remain distinct states.
+- **Platform metrics**: Default to the Ingot data pipeline and lead with interpretable values such as acknowledged events, store-and-forward backlog, upload failures, and process memory. Raw runtime and HTTP metrics remain available in a filtered detail table; missing metrics must not appear as misleading zero values.
+- **Runtime logs**: Filters are scoped to a specific acquisition node. Live tracking applies to the newest page and pauses when the user enters history so refreshed results do not shift underneath pagination.
+- **Event subscriptions**: The list presents enabled state, event/object/context scope, signature protection, delivery result, and consecutive failures. Creation and maintenance stay in a drawer.
+
+These pages adopt TDengine's separation of data sources, tasks, connection nodes, store-and-forward, and runtime metrics while retaining Ingot's acquisition-task, manufacturing-context, and production-event vocabulary.

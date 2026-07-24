@@ -35,7 +35,7 @@ The default simulation date is 2026-07-20. Two machines run in parallel from 08:
 node docs/samples/optical-molding-flexible/generate-factory-day.mjs
 ```
 
-The default `generated/factory-day-2026-07-20/` output contains 96 complete cycles, 48 per machine; 32 historical cycles for each of LENS-A, LENS-B, and LENS-C; 57,600 atomic second samples; 58,368 production events; one vision inspection, one manual inspection, and one reviewable BMP original per cycle; plus deterministic process anomalies and quality failures. It also contains the versioned process data model, all six applied recipe versions, the analysis plan, and inspection configuration. Events remain split into transport pages of at most 500 without imposing an analytical limit.
+The default `generated/factory-day-2026-07-20/` output contains 96 complete cycles, 48 per machine; 32 historical cycles for each of LENS-A, LENS-B, and LENS-C; 57,600 atomic second samples; 58,368 production events; one vision inspection, one manual inspection, and one reviewable BMP original per cycle; plus deterministic process anomalies and quality failures. It also contains the versioned process data model, all six applied recipe versions, the analysis plan, inspection configuration, and physical tooling intervals grouped by real tooling or production changes. Consecutive cycles share the same active installation and production context. Events remain split into transport pages of at most 500 without imposing an analytical limit.
 
 The output directory must be empty so a changed date or duration cannot leave stale batches. Override the defaults with `--date`, `--hours`, and `--out`. To import into a running Platform API:
 

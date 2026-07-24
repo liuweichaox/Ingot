@@ -96,7 +96,7 @@ node docs/samples/optical-molding-flexible/generate-factory-day.mjs
 - `summary.json`、`cycles.json`、500 条一页的事件批次及质检导入清单。
 - `inspection-plans.json` 和 `inspection-definitions.json` 定义质量要求；工艺阶段来自工艺数据模型，历史比较信号来自分析方案，不再维护第二套阶段、映射和特征配置。
 - `process-data-models.json`、6 个完整的 `recipe-versions.json` 配方版本和 `process-analysis-plans.json`，分别保存定义、实际配方值和分析选择。
-- `manufacturing-setup.json`，包含配置化工装类型、12 个物理组件、3 个模具组合版本，以及每个周期对应的装模区间和生产上下文。
+- `manufacturing-setup.json`，包含配置化工装类型、12 个物理组件、3 个模具组合版本，以及按真实换装和生产切换分段的工装装卸区间与生产上下文。多个连续周期共享同一有效区间。
 
 输出目录必须为空，避免改变日期或时长后残留旧批次。可用 `--date`、`--hours` 和 `--out` 覆盖默认值。导入运行中的 Platform API：
 

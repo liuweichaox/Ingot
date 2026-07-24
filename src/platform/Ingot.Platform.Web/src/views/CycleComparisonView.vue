@@ -9,24 +9,30 @@
           </el-select>
         </el-form-item>
         <el-form-item label="比较周期">
-          <el-select
+          <el-tree-select
             v-model="selectedCycleIds"
+            :data="cycleTree"
+            :default-expanded-keys="defaultExpandedCycleKeys"
+            node-key="value"
             multiple
+            show-checkbox
             filterable
             collapse-tags
             collapse-tags-tooltip
             :max-collapse-tags="2"
+            :render-after-expand="false"
             :disabled="!selectedSeries"
+            popper-class="cycle-tree-popper"
             placeholder="选择两个或更多周期"
             class="cycles-input"
           >
-            <el-option
-              v-for="cycle in filteredCycles"
-              :key="cycle.correlationId"
-              :label="cycleOptionLabel(cycle)"
-              :value="cycle.correlationId"
-            />
-          </el-select>
+            <template #default="{ data }">
+              <span :class="['cycle-tree-node', `is-${data.type}`]">
+                <span>{{ data.label }}</span>
+                <small v-if="data.meta">{{ data.meta }}</small>
+              </span>
+            </template>
+          </el-tree-select>
         </el-form-item>
         <el-form-item label="基准周期">
           <el-select v-model="baselineCycleId" :disabled="selectedCycleIds.length < 2" placeholder="从已选周期指定" class="baseline-input">
@@ -191,6 +197,7 @@
 import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { ElDatePicker, ElRadio } from "element-plus";
+import { ElTreeSelect } from "element-plus";
 import { getJson, postJson } from "../api/http";
 import { extractProcessSamples, processSignalTraces } from "../charts/chartAdapters";
 import PlotlyChart from "../components/PlotlyChart.vue";
@@ -229,6 +236,12 @@ const comparisonRows = computed(() => comparison.value ? [
 const activeBaselineId = computed(() => comparisonMode.value === "cycle" ? baselineCycleId.value : baselineWindowId.value);
 const seriesOptions = computed(() => [...new Set(recentCycles.value.map(cycle => cycle.productSeries).filter(Boolean))].sort());
 const filteredCycles = computed(() => recentCycles.value.filter(cycle => cycle.productSeries === selectedSeries.value));
+const cycleTree = computed(() => buildCycleTree(filteredCycles.value));
+const defaultExpandedCycleKeys = computed(() => {
+  const machine = cycleTree.value[0];
+  const recipe = machine?.children[0];
+  return [machine?.value, recipe?.value, recipe?.children[0]?.value].filter(Boolean);
+});
 const selectedCycles = computed(() => selectedCycleIds.value
   .map(id => recentCycles.value.find(cycle => cycle.correlationId === id))
   .filter(Boolean));
@@ -463,9 +476,81 @@ function signalAxisTitle(signal) {
   return unit && !signal.name.includes(unit) ? `${signal.name}（${unit}）` : signal.name;
 }
 function time(value) { return value ? new Date(value).toLocaleString("zh-CN") : "-"; }
-function cycleOptionLabel(cycle) {
-  return [time(cycle.startedAt), cycle.machineId, cycle.recipeId && `配方 ${cycle.recipeId} v${cycle.recipeVersion}`, cycle.correlationId]
-    .filter(Boolean).join(" · ");
+function buildCycleTree(cycles) {
+  const machines = new Map();
+  const sortedCycles = [...cycles].sort((left, right) => new Date(right.startedAt) - new Date(left.startedAt));
+
+  for (const cycle of sortedCycles) {
+    const machineId = cycle.machineId || "未指定设备";
+    const recipeLabel = cycle.recipeId ? `${cycle.recipeId} v${cycle.recipeVersion || "-"}` : "未指定配方";
+    const machineKey = `machine:${machineId}`;
+    const recipeKey = `${machineKey}:recipe:${recipeLabel}`;
+    const dateKey = localDateKey(cycle.startedAt);
+
+    if (!machines.has(machineKey)) {
+      machines.set(machineKey, {
+        value: machineKey,
+        label: machineId,
+        type: "machine",
+        children: new Map(),
+      });
+    }
+    const machine = machines.get(machineKey);
+    if (!machine.children.has(recipeKey)) {
+      machine.children.set(recipeKey, {
+        value: recipeKey,
+        label: `配方 ${recipeLabel}`,
+        type: "recipe",
+        children: new Map(),
+      });
+    }
+    const recipe = machine.children.get(recipeKey);
+    const dayKey = `${recipeKey}:date:${dateKey}`;
+    if (!recipe.children.has(dayKey)) {
+      recipe.children.set(dayKey, {
+        value: dayKey,
+        label: localDateLabel(cycle.startedAt),
+        type: "date",
+        children: [],
+      });
+    }
+    recipe.children.get(dayKey).children.push({
+      value: cycle.correlationId,
+      label: localTimeLabel(cycle.startedAt),
+      meta: cycle.correlationId,
+      type: "cycle",
+    });
+  }
+
+  return [...machines.values()]
+    .sort((left, right) => left.label.localeCompare(right.label, "zh-CN"))
+    .map(machine => ({
+      ...machine,
+      children: [...machine.children.values()]
+        .sort((left, right) => left.label.localeCompare(right.label, "zh-CN"))
+        .map(recipe => ({
+          ...recipe,
+          children: [...recipe.children.values()].map(day => ({
+            ...day,
+            meta: `${day.children.length} 个周期`,
+          })),
+        })),
+    }));
+}
+function localDateKey(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "unknown";
+  return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
+}
+function localDateLabel(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "时间未知";
+  return `${date.getFullYear()}/${date.getMonth() + 1}/${date.getDate()}`;
+}
+function localTimeLabel(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "时间未知";
+  return date.toLocaleTimeString("zh-CN", { hour12: false });
 }
 function shortCycleLabel(cycle) { return `${cycle.machineId || "-"} · ${time(cycle.startedAt)}`; }
 function phaseLabel(cycle) { return cycle.requiredPhaseCount ? `${cycle.phaseCount}/${cycle.requiredPhaseCount}` : `${cycle.phaseCount}/未配置`; }
@@ -519,8 +604,16 @@ watch(signalRows, (rows) => {
 .card-heading { display: flex; align-items: center; justify-content: space-between; }
 .card-heading p { margin: 5px 0 0; color: #8490a3; font-size: 12px; }
 .series-input { width: 160px; }
-.cycles-input { width: 430px; }
+.cycles-input { width: 500px; }
 .baseline-input { width: 230px; }
+.cycle-tree-node { display: flex; min-width: 0; flex: 1; align-items: center; justify-content: space-between; gap: 18px; }
+.cycle-tree-node > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cycle-tree-node small { flex: none; color: #98a2b2; font-size: 11px; }
+.cycle-tree-node.is-machine > span { color: #25324a; font-weight: 600; }
+.cycle-tree-node.is-recipe > span { color: #45536a; font-weight: 600; }
+.cycle-tree-node.is-date > span { color: #697588; font-weight: 600; }
+.cycle-tree-node.is-cycle > span { color: #34445d; font-variant-numeric: tabular-nums; }
+:global(.cycle-tree-popper .el-tree-node__content:has(.cycle-tree-node:not(.is-cycle)) > .el-checkbox) { visibility: hidden; }
 .summary-strip { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); overflow: hidden; border: 1px solid #e7ebf0; border-radius: 12px; background: #fff; }
 .summary-strip article { display: grid; gap: 6px; padding: 16px 18px; border-right: 1px solid #edf0f4; }
 .summary-strip article:last-child { border-right: 0; }
