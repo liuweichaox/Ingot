@@ -83,6 +83,11 @@ public static class ServiceCollectionExtensions
         services.AddHostedService(provider => provider.GetRequiredService<CycleAnalysisBackfillService>());
         services.AddSingleton<IQualityAnalysisService, QualityAnalysisService>();
 
+        // 证据定级主轴：问题档案 + 定级评估（探针 SQL 对绑定范围只读运行）。
+        services.Configure<Insight.CaseLevelThresholds>(configuration.GetSection("CaseLeveling"));
+        services.AddSingleton<Insight.IProblemCaseStore, Insight.PostgresProblemCaseStore>();
+        services.AddSingleton<Insight.CaseLevelEvaluator>();
+
         // 工艺数据模型、配方版本与分析方案使用独立的版本化配置存储。
         services.AddSingleton<IProcessConfigurationStore, PostgresProcessConfigurationStore>();
         services.AddSingleton<ProcessAnalysisResolver>();
