@@ -77,14 +77,66 @@ export function Badge({ tone = "neutral", children }) {
 
 export function StatusBadge({ value }) {
   const normalized = String(value ?? "unknown").toLowerCase();
-  const tone = ["active", "ready", "online", "completed", "pass", "passed", "verified", "healthy"].includes(normalized)
+  const labels = {
+    active: "已启用",
+    ready: "就绪",
+    online: "在线",
+    complete: "已完成",
+    completed: "已完成",
+    pass: "合格",
+    passed: "合格",
+    verified: "已确认",
+    healthy: "正常",
+    published: "已发布",
+    validated: "已验证",
+    indexed: "已索引",
+    reviewed: "已复核",
+    available: "可用",
+    confirmed: "已确认",
+    approved: "已批准",
+    selected: "已选择",
+    fail: "不合格",
+    failed: "不合格",
+    offline: "离线",
+    rejected: "已驳回",
+    error: "异常",
+    suspended: "已暂停",
+    "rollback-required": "需要回滚",
+    unavailable: "不可用",
+    cancelled: "已取消",
+    pending: "待处理",
+    draft: "草稿",
+    running: "运行中",
+    uploaded: "已上传",
+    dirty: "待更新",
+    retired: "已停用",
+    inconclusive: "待确认",
+    degraded: "运行异常",
+    in_progress: "进行中",
+    review_pending: "待复核",
+    reinspection_required: "需要重检",
+    queued: "排队中",
+    completed_with_errors: "完成但有异常",
+    cancelling: "取消中",
+    proposed: "待评估",
+    investigating: "调查中",
+    trialing: "试验中",
+    planned: "已计划",
+    open: "待处理",
+    closed: "已关闭",
+    disabled: "已停用",
+    information: "信息",
+    warning: "警告",
+    unknown: "待上报",
+  };
+  const tone = ["active", "ready", "online", "complete", "completed", "pass", "passed", "verified", "healthy", "published", "validated", "indexed", "reviewed", "available", "confirmed", "approved", "selected"].includes(normalized)
     ? "success"
-    : ["fail", "failed", "offline", "rejected", "error", "suspended", "rollback-required"].includes(normalized)
+    : ["fail", "failed", "offline", "rejected", "error", "suspended", "rollback-required", "unavailable", "cancelled"].includes(normalized)
       ? "danger"
-      : ["pending", "draft", "running", "uploaded", "dirty"].includes(normalized)
+      : ["pending", "draft", "running", "uploaded", "dirty", "degraded", "in_progress", "review_pending", "queued", "completed_with_errors", "cancelling", "proposed", "investigating", "trialing", "planned", "warning"].includes(normalized)
         ? "warning"
         : "neutral";
-  return <Badge tone={tone}>{String(value ?? "—")}</Badge>;
+  return <Badge tone={tone}>{labels[normalized] ?? String(value ?? "待上报")}</Badge>;
 }
 
 export function Field({ label, hint, error, children }) {
@@ -162,27 +214,27 @@ export function Alert({ tone = "info", title, children }) {
   );
 }
 
-export function DataTable({ columns, rows, keyField = "id", onRowClick }) {
+export function DataTable({ columns, rows, keyField = "id", getRowKey, onRowClick }) {
   if (!rows?.length) return <EmptyState />;
   return (
     <div className="-mx-5 overflow-x-auto">
       <table className="min-w-full divide-y divide-slate-200 text-left text-sm">
         <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
           <tr>
-            {columns.map(column => (
-              <th key={column.key} className="whitespace-nowrap px-5 py-3 font-semibold">{column.label}</th>
+            {columns.map((column, columnIndex) => (
+              <th key={column.id ?? `${column.key}:${columnIndex}`} className="whitespace-nowrap px-5 py-3 font-semibold">{column.label}</th>
             ))}
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
           {rows.map((row, index) => (
             <tr
-              key={row[keyField] ?? index}
+              key={getRowKey ? getRowKey(row, index) : row[keyField] ?? index}
               className={cx("text-slate-700", onRowClick && "cursor-pointer hover:bg-blue-50/50")}
               onClick={onRowClick ? () => onRowClick(row) : undefined}
             >
-              {columns.map(column => (
-                <td key={column.key} className="max-w-sm px-5 py-3 align-top">
+              {columns.map((column, columnIndex) => (
+                <td key={column.id ?? `${column.key}:${columnIndex}`} className="max-w-sm px-5 py-3 align-top">
                   {column.render ? column.render(row[column.key], row) : displayValue(row[column.key])}
                 </td>
               ))}

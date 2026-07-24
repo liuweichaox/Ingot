@@ -7,6 +7,9 @@ const http = await readFile(new URL("../src/api/http.js", import.meta.url), "utf
 
 test("operations retain server pagination and resumable live events", () => {
   assert.match(pages, /offset: String\(\(page - 1\) \* pageSize\)/);
+  assert.match(pages, /makeCycleQuery\(appliedFilters, value, pageSize\)/);
+  assert.match(pages, /makeEventQuery\(appliedFilters, value, pageSize\)/);
+  assert.match(pages, /Object\.entries\(appliedFilters\)/);
   assert.match(pages, /afterIngestId/);
   assert.match(pages, /new EventSource\(`\/api\/v1\/events\/stream/);
   assert.match(pages, /<Pagination/);
@@ -49,6 +52,10 @@ test("quality entry supports configured input types, attachments, and human revi
   assert.match(pages, /\/api\/v1\/inspection-records/);
   assert.match(pages, /\/api\/v1\/inspection-reviews/);
   assert.match(pages, /REINSPECTION_REQUIRED/);
+  assert.match(pages, /inspection-tasks\?status=all&limit=\$\{inspectionPageSize\}&offset=\$\{\(taskPage - 1\) \* inspectionPageSize\}/);
+  assert.match(pages, /inspection-records\?limit=\$\{inspectionPageSize\}&offset=\$\{\(recordPage - 1\) \* inspectionPageSize\}/);
+  assert.match(pages, /page=\{taskPage\}/);
+  assert.match(pages, /page=\{recordPage\}/);
 });
 
 test("process improvement exposes mechanism fusion, knowledge extraction, and scientific validation", () => {

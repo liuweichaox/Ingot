@@ -8,7 +8,7 @@ import {
   PaperAirplaneIcon,
 } from "@heroicons/react/24/outline";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { deleteJson, getJson, postForm, postJson, putJson, streamSse } from "../api/http";
 import { qualityOutcomeTraces } from "../charts/chartAdapters";
 import PlotlyChart from "../components/PlotlyChart";
@@ -130,6 +130,7 @@ export function CyclesPage() {
     machineId: params.get("machineId") || "",
     correlationId: params.get("cycleId") || "",
   });
+  const [appliedFilters, setAppliedFilters] = useState(filters);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
   const [query, setQuery] = useState(() => makeCycleQuery(filters, 1, 50));
@@ -138,7 +139,7 @@ export function CyclesPage() {
   return (
     <Page title="运行记录" description="按设备、状态和周期号追溯完整生产运行。">
       <Card title="筛选条件">
-        <form className="grid gap-3 md:grid-cols-[160px_1fr_1fr_auto]" onSubmit={event => { event.preventDefault(); setPage(1); setQuery(makeCycleQuery(filters, 1, pageSize)); }}>
+        <form className="grid gap-3 md:grid-cols-[160px_1fr_1fr_auto]" onSubmit={event => { event.preventDefault(); setAppliedFilters(filters); setPage(1); setQuery(makeCycleQuery(filters, 1, pageSize)); }}>
           <Field label="状态"><Select value={filters.status} onChange={event => setFilters({ ...filters, status: event.target.value })}><option value="all">全部</option><option value="active">进行中</option><option value="completed">已完成</option></Select></Field>
           <Field label="设备"><Input value={filters.machineId} onChange={event => setFilters({ ...filters, machineId: event.target.value })} placeholder="设备编号" /></Field>
           <Field label="周期号"><Input value={filters.correlationId} onChange={event => setFilters({ ...filters, correlationId: event.target.value })} placeholder="精确周期号" /></Field>
@@ -166,8 +167,8 @@ export function CyclesPage() {
             page={page}
             pageSize={pageSize}
             total={data?.total ?? rows.length}
-            onPageChange={value => { setPage(value); setQuery(makeCycleQuery(filters, value, pageSize)); }}
-            onPageSizeChange={value => { setPageSize(value); setPage(1); setQuery(makeCycleQuery(filters, 1, value)); }}
+            onPageChange={value => { setPage(value); setQuery(makeCycleQuery(appliedFilters, value, pageSize)); }}
+            onPageSizeChange={value => { setPageSize(value); setPage(1); setQuery(makeCycleQuery(appliedFilters, 1, value)); }}
           />
         </Card>
       )}
@@ -185,6 +186,7 @@ function makeCycleQuery(filters, page, pageSize) {
 export function EventsPage() {
   const [urlParams] = useSearchParams();
   const [filters, setFilters] = useState({ type: "", edgeId: "", correlationId: urlParams.get("cycleId") || "" });
+  const [appliedFilters, setAppliedFilters] = useState(filters);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
   const [live, setLive] = useState(false);
@@ -196,7 +198,7 @@ export function EventsPage() {
     if (!live) return undefined;
     const newest = rows.reduce((maximum, item) => Math.max(maximum, Number(item.ingestId || 0)), 0);
     const streamParams = new URLSearchParams();
-    Object.entries(filters).forEach(([key, value]) => value.trim() && streamParams.set(key, value.trim()));
+    Object.entries(appliedFilters).forEach(([key, value]) => value.trim() && streamParams.set(key, value.trim()));
     if (newest) streamParams.set("afterIngestId", String(newest));
     const source = new EventSource(`/api/v1/events/stream?${streamParams}`);
     source.onmessage = message => {
@@ -210,7 +212,7 @@ export function EventsPage() {
     source.onopen = () => setStreamError("");
     source.onerror = () => setStreamError("实时事件连接暂时中断，浏览器正在自动重连。");
     return () => source.close();
-  }, [filters, live, pageSize, setData]);
+  }, [appliedFilters, live, pageSize, setData]);
   return (
     <Page
       title="生产事件"
@@ -218,7 +220,7 @@ export function EventsPage() {
       actions={<label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" checked={live} onChange={event => { setPage(1); setLive(event.target.checked); }} />实时追踪</label>}
     >
       <Card title="事件筛选">
-        <form className="grid gap-3 md:grid-cols-[1fr_1fr_1fr_auto]" onSubmit={event => { event.preventDefault(); setLive(false); setPage(1); setQuery(makeEventQuery(filters, 1, pageSize)); }}>
+        <form className="grid gap-3 md:grid-cols-[1fr_1fr_1fr_auto]" onSubmit={event => { event.preventDefault(); setLive(false); setAppliedFilters(filters); setPage(1); setQuery(makeEventQuery(filters, 1, pageSize)); }}>
           <Field label="事件类型"><Input value={filters.type} onChange={event => setFilters({ ...filters, type: event.target.value })} placeholder="process.sample" /></Field>
           <Field label="采集节点"><Input value={filters.edgeId} onChange={event => setFilters({ ...filters, edgeId: event.target.value })} /></Field>
           <Field label="周期号"><Input value={filters.correlationId} onChange={event => setFilters({ ...filters, correlationId: event.target.value })} /></Field>
@@ -244,8 +246,8 @@ export function EventsPage() {
             page={page}
             pageSize={pageSize}
             total={data?.total ?? rows.length}
-            onPageChange={value => { setLive(false); setPage(value); setQuery(makeEventQuery(filters, value, pageSize)); }}
-            onPageSizeChange={value => { setLive(false); setPageSize(value); setPage(1); setQuery(makeEventQuery(filters, 1, value)); }}
+            onPageChange={value => { setLive(false); setPage(value); setQuery(makeEventQuery(appliedFilters, value, pageSize)); }}
+            onPageSizeChange={value => { setLive(false); setPageSize(value); setPage(1); setQuery(makeEventQuery(appliedFilters, 1, value)); }}
           />
         </Card>
       )}
@@ -258,6 +260,11 @@ function makeEventQuery(filters, page, pageSize) {
   Object.entries(filters).forEach(([key, value]) => value.trim() && query.set(key, value.trim()));
   return query.toString();
 }
+
+const chatModeLabels = {
+  quick: "快速分析",
+  combined: "综合分析",
+};
 
 export function ChatPage() {
   const [capabilities, setCapabilities] = useState(null);
@@ -321,11 +328,15 @@ export function ChatPage() {
             )}
           </div>
           <form className="mt-5 flex flex-col gap-3 border-t border-slate-100 pt-4" onSubmit={start}>
-            <Textarea value={question} onChange={event => setQuestion(event.target.value)} placeholder="描述要调查的现象、批次或周期…" />
+            <Field label="调查问题">
+              <Textarea required value={question} onChange={event => setQuestion(event.target.value)} placeholder="描述要调查的现象、批次或周期…" />
+            </Field>
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <Select className="w-auto min-w-36" value={mode} onChange={event => setMode(event.target.value)}>
-                {(capabilities?.modes || ["quick"]).map(item => <option key={item} value={item}>{item}</option>)}
-              </Select>
+              <Field label="分析模式">
+                <Select className="w-auto min-w-36" value={mode} onChange={event => setMode(event.target.value)}>
+                  {(capabilities?.modes || ["quick"]).map(item => <option key={item} value={item}>{chatModeLabels[item] ?? item}</option>)}
+                </Select>
+              </Field>
               <Button variant="primary" type="submit" disabled={!capabilities?.enabled || !question.trim() || submitting}>
                 <PaperAirplaneIcon className="size-4" />{submitting ? "分析中" : "开始分析"}
               </Button>
@@ -346,16 +357,21 @@ export function ChatPage() {
 }
 
 export function ObjectExplorerPage() {
+  const location = useLocation();
   const contexts = useApi("/api/v1/production-contexts");
   const objects = useApi("/api/v1/data-objects?limit=500");
   const rows = extractRows(objects.data);
   const [query, setQuery] = useState("");
+  const searchInput = useRef(null);
   const filtered = useMemo(() => rows.filter(row => JSON.stringify(row).toLowerCase().includes(query.toLowerCase())), [query, rows]);
+  useEffect(() => {
+    if (location.state?.focusSearch) searchInput.current?.focus();
+  }, [location.state]);
   return (
     <Page title="对象目录" description="搜索设备、产品、工装、配方与生产对象。">
       {(objects.error || contexts.error) && <Alert tone="danger">{objects.error || contexts.error}</Alert>}
       <Card>
-        <Field label="搜索对象"><Input value={query} onChange={event => setQuery(event.target.value)} placeholder="输入名称、编号或类型" /></Field>
+        <Field label="搜索对象"><Input ref={searchInput} value={query} onChange={event => setQuery(event.target.value)} placeholder="输入名称、编号或类型" /></Field>
       </Card>
       <Card title="数据对象" description={`显示 ${filtered.length} 个对象`}>
         <DataTable
@@ -426,6 +442,7 @@ export function ProductionSetupPage({ section }) {
   const rows = extractRows(data);
   const [open, setOpen] = useState(false);
   const [editor, setEditor] = useState("");
+  const [editorMode, setEditorMode] = useState("create");
   const [actionError, setActionError] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -435,6 +452,7 @@ export function ProductionSetupPage({ section }) {
       value.version = Number(row.version) + 1;
       value.status = "active";
     }
+    setEditorMode(row ? (section === "type" ? "version" : "edit") : "create");
     setEditor(JSON.stringify(value, null, 2));
     setActionError("");
     setOpen(true);
@@ -499,13 +517,18 @@ export function ProductionSetupPage({ section }) {
       {(error || (!open && actionError)) && <Alert tone="danger">{error || actionError}</Alert>}
       {loading && !data ? <LoadingCard /> : (
         <Card title={`${resource.title}记录`} description={`共 ${rows.length} 条`}>
-          <DataTable rows={rows} keyField={resource.key} columns={columns} />
+          <DataTable
+            rows={rows}
+            keyField={resource.key}
+            getRowKey={section === "type" ? row => `${row[resource.key]}:${row.version ?? 1}` : undefined}
+            columns={columns}
+          />
         </Card>
       )}
       <Drawer
         open={open}
         onClose={() => setOpen(false)}
-        title={resource.createLabel}
+        title={editorMode === "create" ? resource.createLabel : editorMode === "version" ? "新版本维护" : `编辑${resource.title}`}
         description="平台会校验设备、配方、组件、组合版本及其历史引用。"
         footer={<><Button onClick={() => setOpen(false)}>取消</Button><Button variant="primary" onClick={save} disabled={saving}>{saving ? "保存中" : "保存"}</Button></>}
       >
@@ -519,8 +542,11 @@ export function ProductionSetupPage({ section }) {
 }
 
 export function InspectionsPage() {
-  const tasks = useApi("/api/v1/inspection-tasks?status=all&limit=100&offset=0");
-  const records = useApi("/api/v1/inspection-records?limit=100&offset=0");
+  const inspectionPageSize = 50;
+  const [taskPage, setTaskPage] = useState(1);
+  const [recordPage, setRecordPage] = useState(1);
+  const tasks = useApi(`/api/v1/inspection-tasks?status=all&limit=${inspectionPageSize}&offset=${(taskPage - 1) * inspectionPageSize}`);
+  const records = useApi(`/api/v1/inspection-records?limit=${inspectionPageSize}&offset=${(recordPage - 1) * inspectionPageSize}`);
   const definitions = useApi("/api/v1/inspection-definitions");
   const [entryOpen, setEntryOpen] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(false);
@@ -654,6 +680,12 @@ export function InspectionsPage() {
                   { key: "_actions", label: "操作", render: (_value, row) => <Button variant="ghost" onClick={() => openTask(row)}>录入检测</Button> },
                 ]}
               />
+              <Pagination
+                page={taskPage}
+                pageSize={inspectionPageSize}
+                total={tasks.data?.total ?? extractRows(tasks.data).length}
+                onPageChange={setTaskPage}
+              />
             </Card>
           </TabPanel>
           <TabPanel>
@@ -670,6 +702,12 @@ export function InspectionsPage() {
                   { key: "attachmentCount", label: "附件" },
                   { key: "_actions", label: "操作", render: (_value, row) => <Button variant="ghost" onClick={() => openReview(row)}>质量复核</Button> },
                 ]}
+              />
+              <Pagination
+                page={recordPage}
+                pageSize={inspectionPageSize}
+                total={records.data?.total ?? extractRows(records.data).length}
+                onPageChange={setRecordPage}
               />
             </Card>
           </TabPanel>
@@ -948,17 +986,22 @@ const improvementTabs = [
 ];
 
 export function ProcessImprovementPage() {
+  const [selectedTab, setSelectedTab] = useState(0);
   return (
     <Page title="工艺改进" description="从调查、模型、知识到受控参数建议的闭环。">
       <Alert tone="info" title="现场执行边界">平台记录建议、审批与效果，不从此页面直接修改 PLC、CNC 或机器人参数。</Alert>
-      <TabGroup>
+      <TabGroup selectedIndex={selectedTab} onChange={setSelectedTab}>
         <TabList className="flex gap-1 overflow-x-auto rounded-xl bg-slate-200/70 p-1">
           {improvementTabs.map(item => (
             <Tab key={item.label} className="shrink-0 rounded-lg px-4 py-2 text-sm font-medium text-slate-600 outline-none data-selected:bg-white data-selected:text-blue-700 data-selected:shadow-sm">{item.label}</Tab>
           ))}
         </TabList>
         <TabPanels className="mt-4">
-          {improvementTabs.map(tab => <TabPanel key={tab.label}><ImprovementPanel definition={tab} /></TabPanel>)}
+          {improvementTabs.map((tab, index) => (
+            <TabPanel key={tab.label}>
+              {index === selectedTab && <ImprovementPanel definition={tab} />}
+            </TabPanel>
+          ))}
         </TabPanels>
       </TabGroup>
     </Page>
@@ -1124,6 +1167,9 @@ function ImprovementPanel({ definition }) {
         <DataTable
           rows={extractRows(data)}
           keyField={definition.key}
+          getRowKey={definition.columns.some(([key]) => key === "version")
+            ? row => `${row[definition.key]}:${row.version ?? 1}`
+            : undefined}
           onRowClick={supportsDetail ? row => loadDetail(row) : undefined}
           columns={[
             ...definition.columns.map(([key, columnLabel]) => ({
@@ -1171,7 +1217,7 @@ function ImprovementPanel({ definition }) {
         title={definition.upload ? `上传${definition.label}` : `新建${definition.label}`}
         description={definition.upload === "knowledge" ? "上传后自动解析并进入人工复核队列。" : definition.upload === "validation" ? "来源、许可、哈希、字段覆盖和流批一致性会作为硬门禁。" : "保存后由平台执行业务规则和引用校验。"}
         size={definition.upload === "validation" ? "xl" : "lg"}
-        footer={<><Button onClick={() => setOpen(false)}>取消</Button><Button variant="primary" onClick={save} disabled={saving}>{saving ? "处理中" : "提交"}</Button></>}
+        footer={<><Button onClick={() => setOpen(false)}>取消</Button><Button variant="primary" onClick={save} disabled={saving || (definition.upload === "knowledge" && (!file || !title.trim())) || (definition.upload === "validation" && !file)}>{saving ? "处理中" : "提交"}</Button></>}
       >
         {actionError && <Alert tone="danger">{actionError}</Alert>}
         <div className="grid gap-5">
@@ -1187,15 +1233,15 @@ function ImprovementPanel({ definition }) {
           )}
           {definition.upload === "knowledge" ? (
             <>
-              <Field label="来源标题"><Input value={title} onChange={event => setTitle(event.target.value)} /></Field>
+              <Field label="来源标题"><Input required value={title} onChange={event => setTitle(event.target.value)} /></Field>
               <Field label="来源类型"><Select value={sourceKind} onChange={event => setSourceKind(event.target.value)}><option value="document">文档</option><option value="spreadsheet">表格</option><option value="image">图片</option><option value="field-note">现场记录</option></Select></Field>
-              <Field label="原始文件"><Input type="file" accept=".pdf,.xlsx,.xlsm,.csv,.txt,.md,.png,.jpg,.jpeg,.webp,.tif,.tiff" onChange={event => setFile(event.target.files?.[0] || null)} /></Field>
+              <Field label="原始文件"><Input required type="file" accept=".pdf,.xlsx,.xlsm,.csv,.txt,.md,.png,.jpg,.jpeg,.webp,.tif,.tiff" onChange={event => setFile(event.target.files?.[0] || null)} /></Field>
             </>
           ) : (
             <>
-              {definition.upload === "validation" && <Field label="原始科研数据"><Input type="file" accept=".csv,.xlsx,.xlsm,.mat" onChange={event => setFile(event.target.files?.[0] || null)} /></Field>}
+              {definition.upload === "validation" && <Field label="原始科研数据"><Input required type="file" accept=".csv,.xlsx,.xlsm,.mat" onChange={event => setFile(event.target.files?.[0] || null)} /></Field>}
               <Field label={definition.upload === "validation" ? "数据清单 JSON" : "记录内容"}>
-                <Textarea className="min-h-[55vh] font-mono text-xs leading-6" value={editor} onChange={event => setEditor(event.target.value)} spellCheck={false} />
+                <Textarea required className="min-h-[55vh] font-mono text-xs leading-6" value={editor} onChange={event => setEditor(event.target.value)} spellCheck={false} />
               </Field>
             </>
           )}
@@ -1535,7 +1581,12 @@ function RegistryPage({ definition }) {
       {(error || (!open && editorError)) && <Alert tone="danger">{error || editorError}</Alert>}
       {loading && !data ? <LoadingCard /> : (
         <Card title={`${definition.title}列表`} description={`共 ${data?.total ?? rows.length} 条记录`}>
-          <DataTable rows={rows} keyField={definition.key} columns={columns} />
+          <DataTable
+            rows={rows}
+            keyField={definition.key}
+            getRowKey={row => `${row[definition.key]}:${row.version ?? 1}`}
+            columns={columns}
+          />
         </Card>
       )}
       <Drawer
@@ -1592,13 +1643,17 @@ export function EdgesPage() {
 export function MetricsPage() {
   const { data: edges, error } = useApi("/api/edges", { interval: 10000 });
   const rows = extractRows(edges);
+  const online = rows.filter(row => String(row.status).toLowerCase() === "online").length;
+  const offline = rows.filter(row => String(row.status).toLowerCase() === "offline").length;
+  const unknown = Math.max(0, rows.length - online - offline);
   return (
     <Page title="平台指标" description="查看平台和现场节点的运行状态。">
       {error && <Alert tone="danger">{error}</Alert>}
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Metric label="边缘节点" value={rows.length} />
-        <Metric label="在线节点" value={rows.filter(row => String(row.status).toLowerCase() === "online").length} />
-        <Metric label="离线节点" value={rows.filter(row => String(row.status).toLowerCase() === "offline").length} />
+        <Metric label="在线节点" value={online} />
+        <Metric label="离线节点" value={offline} />
+        <Metric label="待上报状态" value={unknown} />
       </div>
       <Card title="节点状态">
         <DataTable rows={rows} keyField="edgeId" columns={[
@@ -1790,7 +1845,7 @@ export function LogsPage() {
       <Card title="查询条件">
         <div className="grid gap-3 md:grid-cols-2">
           <Field label="边缘节点"><Select value={edgeId} onChange={event => setEdgeId(event.target.value)}><option value="">选择节点</option>{edgeRows.map(row => <option key={row.edgeId} value={row.edgeId}>{row.edgeId}</option>)}</Select></Field>
-          <Field label="级别"><Select value={level} onChange={event => setLevel(event.target.value)}><option value="">全部</option><option value="Information">Information</option><option value="Warning">Warning</option><option value="Error">Error</option></Select></Field>
+          <Field label="级别"><Select value={level} onChange={event => setLevel(event.target.value)}><option value="">全部</option><option value="Information">信息</option><option value="Warning">警告</option><option value="Error">错误</option></Select></Field>
         </div>
       </Card>
       {logs.error && <Alert tone="danger">{logs.error}</Alert>}

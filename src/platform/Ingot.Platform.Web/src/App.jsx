@@ -101,7 +101,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
       <header className="fixed inset-x-0 top-0 z-50 flex h-16 items-stretch border-b border-slate-200 bg-white/95 shadow-sm backdrop-blur">
-        <button className="flex w-55 shrink-0 items-center gap-3 border-r border-slate-100 px-5 text-left" onClick={() => navigate("/workbench")}>
+        <button className="flex w-16 shrink-0 items-center gap-3 border-r border-slate-100 px-3 text-left sm:w-55 sm:px-5" onClick={() => navigate("/workbench")}>
           <span className="grid size-9 place-items-center rounded-xl bg-amber-50 ring-1 ring-amber-200">
             <img src="/ingot-mark.svg" alt="" className="size-7" />
           </span>
@@ -110,7 +110,33 @@ export default function App() {
             <small className="text-[10px] text-slate-500">制造数据平台</small>
           </span>
         </button>
-        <nav className="flex min-w-0 flex-1 overflow-x-auto" aria-label="全局导航">
+        <Menu as="div" className="relative flex min-w-0 flex-1 xl:hidden">
+          <MenuButton className="flex min-w-0 flex-1 items-center gap-2 px-3 text-sm font-medium text-slate-700 hover:bg-slate-50 sm:px-4" aria-label="打开全局模块导航">
+            <section.icon className="size-5 shrink-0 text-blue-600" />
+            <span className="truncate">{section.label}</span>
+          </MenuButton>
+          <MenuItems transition anchor="bottom start" className="z-100 mt-2 w-64 origin-top-left rounded-xl border border-slate-200 bg-white p-2 text-sm shadow-xl transition data-closed:scale-95 data-closed:opacity-0">
+            {sections.map(item => {
+              const Icon = item.icon;
+              const active = item.id === section.id;
+              return (
+                <MenuItem key={item.id}>
+                  <Link
+                    to={item.path}
+                    className={cx(
+                      "flex items-center gap-3 rounded-lg px-3 py-2.5 text-slate-700 data-focus:bg-slate-100",
+                      active && "bg-blue-50 font-medium text-blue-700",
+                    )}
+                  >
+                    <Icon className="size-5" />
+                    {item.label}
+                  </Link>
+                </MenuItem>
+              );
+            })}
+          </MenuItems>
+        </Menu>
+        <nav className="hidden min-w-0 flex-1 xl:flex" aria-label="全局导航">
           {sections.map(item => {
             const Icon = item.icon;
             const active = item.id === section.id;
@@ -119,17 +145,17 @@ export default function App() {
                 key={item.id}
                 to={item.path}
                 className={cx(
-                  "relative flex shrink-0 items-center gap-2 px-3 text-xs font-medium transition md:px-4 md:text-sm",
+                  "relative flex min-w-0 flex-1 items-center justify-center gap-2 px-2 text-xs font-medium transition 2xl:px-4 2xl:text-sm",
                   active ? "bg-blue-50/70 text-blue-700 after:absolute after:inset-x-4 after:bottom-0 after:h-0.5 after:bg-blue-600" : "text-slate-600 hover:bg-slate-50 hover:text-slate-950",
                 )}
               >
-                <Icon className="size-4.5" />
-                <span>{item.label}</span>
+                <Icon className="size-4.5 shrink-0" />
+                <span className="whitespace-nowrap">{item.label}</span>
               </Link>
             );
           })}
         </nav>
-        <button className="hidden items-center gap-2 border-l border-slate-100 px-4 text-sm text-slate-600 hover:bg-slate-50 md:flex" onClick={() => navigate("/explorer")}>
+        <button className="hidden items-center gap-2 border-l border-slate-100 px-4 text-sm text-slate-600 hover:bg-slate-50 md:flex" onClick={() => navigate("/explorer", { state: { focusSearch: true } })}>
           <MagnifyingGlassIcon className="size-5" />搜索
         </button>
         <Menu as="div" className="relative flex border-l border-slate-100">
@@ -137,7 +163,7 @@ export default function App() {
             <UserCircleIcon className="size-6" />
           </MenuButton>
           <MenuItems transition anchor="bottom end" className="z-100 mt-2 w-48 origin-top-right rounded-xl border border-slate-200 bg-white p-1 text-sm shadow-xl transition data-closed:scale-95 data-closed:opacity-0">
-            <MenuItem><a href="/health" className="block rounded-lg px-3 py-2 text-slate-700 data-focus:bg-slate-100">服务健康状态</a></MenuItem>
+            <MenuItem><Link to="/platform-metrics" className="block rounded-lg px-3 py-2 text-slate-700 data-focus:bg-slate-100">平台运行状态</Link></MenuItem>
             <MenuItem><a href="https://docs.ingotstack.com/zh" className="block rounded-lg px-3 py-2 text-slate-700 data-focus:bg-slate-100">产品文档</a></MenuItem>
           </MenuItems>
         </Menu>
