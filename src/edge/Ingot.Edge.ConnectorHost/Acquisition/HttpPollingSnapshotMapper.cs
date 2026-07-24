@@ -148,8 +148,8 @@ public static class HttpPollingSnapshotMapper
         }
         if (string.IsNullOrWhiteSpace(options.SnapshotPath))
             throw new InvalidOperationException("Acquisition:SnapshotPath 不能为空。");
-        if (options.PollIntervalMs < 100)
-            throw new InvalidOperationException("Acquisition:PollIntervalMs 不能小于 100ms。");
+        if (options.PollIntervalMs < 1)
+            throw new InvalidOperationException("Acquisition:PollIntervalMs 必须大于 0ms。");
         ValidateMappingOptions(options);
     }
 

@@ -1,5 +1,6 @@
 "use client";
 
+import { Disclosure, DisclosureButton, DisclosurePanel } from "@headlessui/react";
 import { useEffect, useRef } from "react";
 
 type Locale = "zh" | "en";
@@ -29,9 +30,9 @@ const DOCS = "https://docs.ingotstack.com";
 const COPY = {
   zh: {
     docs: `${DOCS}/zh`,
-    nav: { g1: "两个保证", g2: "能回答什么", g3: "怎么做到", g4: "边界", cta: "开始追因 →", lang: "EN", langHref: "/en/" },
+    nav: { g1: "两个保证", g2: "能回答什么", g3: "怎么做到", g4: "边界", cta: "开始调查 →", lang: "EN", langHref: "/en/" },
     hero: {
-      eyebrow: "Ingot · 工艺追因引擎",
+      eyebrow: "Ingot · 工艺调查与参数分析助手",
       h1a: "为什么这批",
       h1b: "和上批不一样?",
       leadA: "用日常语言问,30 秒得到答案。",
@@ -42,7 +43,7 @@ const COPY = {
       ctaPrimary: "给我们两周试试",
       ctaSecondary: "看它怎么回答",
       cardTtl: "Ingot Chat",
-      ro: "只读 · READ-ONLY",
+      ro: "示例 · 只读",
       you: "你",
       q: "LOT-0716 一次通过率掉了,和上一批比,问题出在哪个环节?",
       sparkHead: "一次通过率 / 近 8 批",
@@ -67,9 +68,9 @@ const COPY = {
       h2b: "堵死了。",
       sub: "不是承诺,是机制。“会瞎编”和“会乱动设备”—— 这两颗雷,在架构里就拆掉了。",
       cards: [
-        { v: true, tag: "Number Grounding", h: "不会瞎编", pa: "回答里", hl: "每一个数字", pb: ",都要在真实查询结果里找到来源,点开就是原始曲线。找不到,它直说缺什么 —— 而不是编一个看着合理的数糊弄过去。", foot: "数值归一化溯源,非子串匹配" },
+        { v: true, tag: "Number Grounding", h: "不会瞎编", pa: "回答里", hl: "每一个数字", pb: ",都要在真实查询结果里找到来源,点开就是原始曲线。找不到,它直说缺什么 —— 而不是编一个看着合理的数糊弄过去。", foot: "数字与查询结果核对,非子串匹配" },
         { v: false, tag: "Read-Only by Design", h: "不碰设备", pa: "只读你的生产数据,", hl: "永不写 PLC / CNC / 机器人", pb: "。责任边界清清楚楚 —— 过工厂安全审查,不用为它单独开会。", foot: "不参与任何实时控制回路" },
-        { v: false, tag: "No Specialist Needed", h: "不用请专家", pa: "用日常语言提问就行。", hl: "原本只有资深工艺工程师做得了的分析", pb: ",现在产线上任何人都能问 —— 追因能力不再锁在一个人脑子里。", foot: "自然语言进,可核对的答案出" },
+        { v: false, tag: "Expert Knowledge Scales", h: "专家不用再手工对数据", pa: "用日常语言提问,系统完成检索、对齐和计算。", hl: "工艺工程师的知识被沉淀成可复用的阶段、规则和分析方案", pb: ",更多现场人员可以查看同一组原始记录和分析结果,最终判断仍由工程师确认。", foot: "自然语言进,可核对的结果出" },
       ],
     },
     quest: {
@@ -79,7 +80,7 @@ const COPY = {
       sub: "工艺分析的价值极度不均匀 —— 同一个平台,不同问题的回报差一到两个数量级。Ingot 只对准能换算成钱的那几类。这些问题,几乎每家工厂都在问,但今天很难系统回答:",
       rank: "最贵的那一类",
       heroH: "良率为什么突然下滑?",
-      heroP: "从哪一批开始、掉在哪个环节、和哪个过程参数一起变的 —— 把“良率归因”从开会拍脑袋,变成一条能定位到工位和批次的证据链。少说清一天,就多一天的废品和返工。",
+      heroP: "从哪一批开始、掉在哪个环节、和哪个过程参数一起变的 —— 把“良率分析”从开会拍脑袋,变成一组能定位到工位和批次的可核对记录。少说清一天,就多一天的废品和返工。",
       dim1a: "分组 · ", dim1b: "批次",
       dim2a: "定位 · ", dim2b: "工位 · 过程参数",
       small: [
@@ -122,17 +123,17 @@ const COPY = {
       h2g: "把一个问题回答出来",
       h2c: "。",
       p: "给我们两周,拿你现场的数据,挑你现在最说不清的那一个问题,端到端跑通。看到价值,再谈别的。",
-      primary: "预约一次追因",
+      primary: "预约一次工艺调查",
       secondary: "读文档",
     },
-    foot: "工艺追因引擎 · 基于原始记录 · ",
+    foot: "工艺调查与参数分析助手 · 基于原始记录 · ",
     footB: "永不编造 · 永不控制",
   },
   en: {
     docs: `${DOCS}/en`,
     nav: { g1: "Two guarantees", g2: "What it answers", g3: "How", g4: "Boundary", cta: "Start →", lang: "中文", langHref: "/" },
     hero: {
-      eyebrow: "Ingot · Process Root-Cause Engine",
+      eyebrow: "Ingot · Process Investigation Assistant",
       h1a: "Why is this batch",
       h1b: "different from the last?",
       leadA: "Ask in plain language, get an answer in 30 seconds. ",
@@ -143,7 +144,7 @@ const COPY = {
       ctaPrimary: "Try it for two weeks",
       ctaSecondary: "See how it answers",
       cardTtl: "Ingot Chat",
-      ro: "READ-ONLY",
+      ro: "DEMO · READ-ONLY",
       you: "You",
       q: "LOT-0716's first-pass yield dropped. Compared to the last batch, which step is it?",
       sparkHead: "First-pass yield / last 8 batches",
@@ -170,7 +171,7 @@ const COPY = {
       cards: [
         { v: true, tag: "Number Grounding", h: "It won't make things up", pa: "", hl: "Every single number", pb: " in an answer must trace to a real query result; click it to see the original curve. If it can't find one, it says what's missing — instead of inventing a plausible-looking figure.", foot: "Numeric-normalized grounding, not substring matching" },
         { v: false, tag: "Read-Only by Design", h: "It won't touch equipment", pa: "It only reads your production data; ", hl: "it never writes to a PLC / CNC / robot", pb: ". A clean responsibility boundary — it passes a factory safety review without a special meeting.", foot: "Never in any real-time control loop" },
-        { v: false, tag: "No Specialist Needed", h: "No expert required", pa: "Just ask in plain language. ", hl: "Analysis that used to need a senior process engineer", pb: " is now something anyone on the line can ask — root-cause is no longer locked in one person's head.", foot: "Natural language in, verifiable answers out" },
+        { v: false, tag: "Expert Knowledge Scales", h: "Experts stop hand-joining data", pa: "Ask in plain language and the system handles retrieval, alignment, and calculation. ", hl: "Process knowledge becomes reusable stages, rules, and analysis plans", pb: " so more people can inspect the same original records and results, while engineers retain final judgement.", foot: "Natural language in, verifiable results out" },
       ],
     },
     quest: {
@@ -180,7 +181,7 @@ const COPY = {
       sub: "The value of process analysis is extremely uneven — on the same platform, different questions pay back one to two orders of magnitude apart. Ingot aims only at the few that convert to money. Almost every plant asks these, yet can't answer them systematically today:",
       rank: "The most expensive class",
       heroH: "Why did yield suddenly drop?",
-      heroP: "From which batch, at which step, and moving together with which process parameter — turning “yield attribution” from a meeting-room guess into an evidence chain that pins it to a station and a batch. Every day it stays unclear is another day of scrap and rework.",
+      heroP: "From which batch, at which step, and moving together with which process parameter — turning yield analysis from a meeting-room guess into reviewable records that pin the change to a station and a batch. Every day it stays unclear is another day of scrap and rework.",
       dim1a: "Group · ", dim1b: "batch",
       dim2a: "Locate · ", dim2b: "station · parameter",
       small: [
@@ -223,10 +224,10 @@ const COPY = {
       h2g: "answer one question",
       h2c: " first.",
       p: "Give us two weeks with your shop-floor data. Pick the one question you can least explain today, and run it end to end. See the value, then talk about the rest.",
-      primary: "Book a root-cause session",
+      primary: "Book a process investigation",
       secondary: "Read the docs",
     },
-    foot: "Process root-cause engine · grounded in original records · ",
+    foot: "Process investigation assistant · grounded in original records · ",
     footB: "Never invents · Never controls",
   },
 } as const;
@@ -321,7 +322,7 @@ export default function IngotSite({ initialLocale }: { initialLocale: Locale }) 
   return (
     <>
       <div className="scroll-progress" aria-hidden="true" />
-      <header className="nav">
+      <Disclosure as="header" className="nav">
         <div className="wrap nav-in">
           <a className="brand" href={locale === "en" ? "/en/" : "/"} aria-label="Ingot">
             <Mark />
@@ -334,9 +335,23 @@ export default function IngotSite({ initialLocale }: { initialLocale: Locale }) 
             <a className="hide-sm" href="#bound">{t.nav.g4}</a>
             <a className="nav-lang" href={t.nav.langHref}>{t.nav.lang}</a>
             <a className="nav-cta" href="#cta">{t.nav.cta}</a>
+            <DisclosureButton
+              className="grid size-9 place-items-center rounded-full border border-white/15 text-white md:hidden"
+              aria-label={locale === "en" ? "Open navigation" : "打开导航"}
+            >
+              <span aria-hidden="true">☰</span>
+            </DisclosureButton>
           </nav>
         </div>
-      </header>
+        <DisclosurePanel className="border-t border-white/10 bg-[#0f0d0a] px-5 py-4 md:hidden">
+          <nav className="mx-auto grid max-w-7xl gap-1 text-sm text-[#c6c0b4]" aria-label={locale === "en" ? "Mobile navigation" : "移动导航"}>
+            <DisclosureButton as="a" href="#guar" className="rounded-lg px-3 py-2 hover:bg-white/5">{t.nav.g1}</DisclosureButton>
+            <DisclosureButton as="a" href="#quest" className="rounded-lg px-3 py-2 hover:bg-white/5">{t.nav.g2}</DisclosureButton>
+            <DisclosureButton as="a" href="#how" className="rounded-lg px-3 py-2 hover:bg-white/5">{t.nav.g3}</DisclosureButton>
+            <DisclosureButton as="a" href="#bound" className="rounded-lg px-3 py-2 hover:bg-white/5">{t.nav.g4}</DisclosureButton>
+          </nav>
+        </DisclosurePanel>
+      </Disclosure>
 
       {/* HERO */}
       <section className="hero" id="top">

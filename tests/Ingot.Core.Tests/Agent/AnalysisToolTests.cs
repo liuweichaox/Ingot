@@ -77,9 +77,10 @@ public sealed class AnalysisToolTests
             new AnalysisToolCall { Tool = tool.Definition.Name },
             ExecutionContext);
 
-        Assert.Equal(AnalysisToolOutcomes.Sufficient, result.Outcome);
+        Assert.Equal(AnalysisToolOutcomes.InsufficientData, result.Outcome);
         Assert.Equal(1_202, result.Data.GetProperty("eventCount").GetInt32());
         Assert.Equal(0, result.Data.GetProperty("incompleteCycles").GetInt32());
+        Assert.Equal(1, result.Data.GetProperty("unavailableProcessCycles").GetInt32());
         Assert.DoesNotContain(result.Limitations, limitation => limitation.Contains("500", StringComparison.Ordinal));
         Assert.Contains("已完整检查 1202 条", result.Summary, StringComparison.Ordinal);
     }

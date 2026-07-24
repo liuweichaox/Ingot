@@ -30,7 +30,7 @@ Teams choose source protocols, local buffering, retry timing, and process superv
 Quality inspection follows an analyzed operation; a blank “inspection entry” form is not modeled as a standalone business object:
 
 1. Discrete production may create a cycle quality task from `cycle.completed`. Continuous production, production runs, and material lots use an explicit quality scope that binds an operating object, time range, and published `InspectionPlan`. No task is invented when no plan matches.
-2. The plan references versioned `InspectionDefinition` records and configures required checks, ordering, original evidence, and review requirements. Selecting a task carries read-only quality-object and analysis-scope identifiers into the form.
+2. The plan references versioned `InspectionDefinition` records and configures required checks, ordering, original attachments, and review requirements. Selecting a task carries read-only quality-object and analysis-scope identifiers into the form.
 3. Upload original images to controlled long-term storage first, compute SHA-256 on the server, and then store their references with the inspection record.
 4. Historical inspection records can reopen the original image and append an immutable review decision. Original access and review actions are audited; derivative thumbnails cannot replace the original.
 5. An inspection result records an observation and is not a QMS release or equipment-control decision.
@@ -39,7 +39,7 @@ The global navigation therefore exposes a “Quality Inspection” workbench. �
 
 The Quality Plans page maintains inspection definitions and plan versions. Published plan and definition versions cannot be overwritten; changes require a new version. Optical-molding vision and manual checks exist only in the optional sample configuration, never as Platform defaults.
 
-Roles come from unified identity claims: `quality.inspector` submits inspections, `quality.reviewer` reviews originals, `process.engineer` queries records and historical comparisons, and `platform.admin` manages the platform. Development may use a built-in identity for evaluation; production requires host authentication to establish the user identity.
+Roles come from the signed-in Platform account: `quality.inspector` submits inspections, `quality.reviewer` reviews originals, `process.engineer` queries records and historical comparisons, and `platform.admin` manages the platform. Development may use a built-in identity for evaluation; production requires host authentication to establish the user identity.
 
 ## Operating objects and analysis scopes
 
@@ -56,7 +56,13 @@ Inspection records are first-class data linked to an analysis scope, a quality o
 
 ## Same-series historical cycle comparison
 
-`GET /api/v1/cycle-comparisons/{correlationId}` uses one cycle as the baseline and selects only historical cycles with the same `context.product_series`. The comparison service reads every transport page, computes sample completeness, configured required-phase completeness, and statistics for signals marked `useInComparison`, then joins recipe version, inspection outcomes, and the latest original-image review. Phase count, signal codes, and display names come from published process configuration rather than Platform code. The page's limit of 50 controls the number of historical cycles selected; it is not a per-cycle sample-row limit.
+`GET /api/v1/cycle-comparisons/{correlationId}` uses one cycle as the baseline and selects comparable history according to the published analysis plan. Start and end events determine lifecycle completion; process data is independently classified as available, degraded, or unavailable. The service computes whole-cycle time-weighted features from actual timestamps, never interpolates across a detected acquisition gap, and joins recipe versions, inspection outcomes, and the latest original-image review. Available cycles have weight 1, degraded cycles have weight 0.5, and unavailable cycles do not enter formal statistics.
+
+When an analysis plan uses `stage-relative` alignment, the `stage-relative-v1` calculator forms half-open stage intervals from per-sample `process_phase` / `process_stage` records or the configured `recipe_step` mapping. Adjacent samples in the same stage are merged. Repeated occurrences of a stage remain separate and are never mixed. Every stage feature carries the stage code, occurrence order, attribution source, boundaries, valid duration, and coverage. Unattributed samples, missing required stages, and open boundaries become explicit data-quality limitations.
+
+Cycle comparison also divides cycles by their effective inspection outcome and calculates pass-versus-fail medians, robust effects, and a candidate score for the same signal, stage, stage occurrence, and feature. Candidate scores only prioritize investigation. Results list possible product, machine, recipe, and mold confounders and distinguish insufficient data, exploratory results, and stable results. Historical association is never reported as a confirmed root cause.
+
+The deterministic `stage-relative-v1` calculator now persists completed-cycle results through `cycle_analysis_materializations`, `cycle_phases`, and `cycle_features`. A materialization identity includes the cycle, algorithm version, process-data-model version, and analysis-plan version; both the maximum source ingest ID and source-event count must match before a result can be reused. A newly accepted event immediately marks existing materializations for the same cycle `dirty`, and the next cycle-list or historical-comparison read recomputes from the complete event history. Active cycles remain query-time calculations and do not persist unsealed intermediate features. If materialization is unavailable, the service falls back to the same deterministic calculator without changing the numeric and record-checking rules.
 
 ## Complete records with bounded transport
 

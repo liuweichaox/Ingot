@@ -64,6 +64,32 @@ public sealed class DeterministicModelClient : IModelClient
             });
         }
 
+        if (ContainsAny(
+                question,
+                "文档",
+                "作业",
+                "指导书",
+                "上限",
+                "下限",
+                "规范",
+                "现场",
+                "经验",
+                "参数范围",
+                "怎么调",
+                "如何调") &&
+            available.Contains("search_process_knowledge"))
+        {
+            calls.Add(new AnalysisToolCall
+            {
+                Tool = "search_process_knowledge",
+                Arguments = new Dictionary<string, string?>
+                {
+                    ["query"] = question,
+                    ["limit"] = "8"
+                }
+            });
+        }
+
         if (calls.Count == 0 && available.Contains("check_data_quality"))
         {
             calls.Add(new AnalysisToolCall

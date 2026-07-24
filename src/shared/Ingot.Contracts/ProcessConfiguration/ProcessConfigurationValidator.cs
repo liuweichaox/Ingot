@@ -4,6 +4,11 @@ namespace Ingot.Contracts.ProcessConfiguration;
 
 public static partial class ProcessConfigurationValidator
 {
+    private static readonly HashSet<string> SupportedWholeCycleFeatures = new(
+        ["mean", "average", "min", "minimum", "max", "maximum", "range", "std", "stddev",
+         "median", "p05", "p95", "integral", "slope"],
+        StringComparer.Ordinal);
+
     public static bool TryValidate(ProcessDataModel? value, out ProcessDataModel? normalized, out string error)
     {
         normalized = null;
@@ -111,6 +116,9 @@ public static partial class ProcessConfigurationValidator
             if (!ValidCode(code) || !seen.Add(code))
                 return Fail($"分析数据项编码无效或重复：{signal.DataItemCode}。", out error);
             var features = signal.Features.Select(NormalizeCode).Where(ValidCode).Distinct(StringComparer.Ordinal).ToArray();
+            var unsupported = features.FirstOrDefault(feature => !SupportedWholeCycleFeatures.Contains(feature));
+            if (unsupported is not null)
+                return Fail($"分析特征不受支持：{unsupported}。", out error);
             signals.Add(signal with { DataItemCode = code, Features = features });
         }
         normalized = value with

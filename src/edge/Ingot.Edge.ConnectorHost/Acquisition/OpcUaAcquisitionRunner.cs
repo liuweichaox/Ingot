@@ -25,6 +25,8 @@ public sealed class OpcUaAcquisitionRunner(
     {
         var connection = deployment.Profile.OpcUa
             ?? throw new InvalidOperationException("OPC UA 连接配置不能为空。");
+        string? currentRecipe = null;
+        var lifecycle = new AcquisitionLifecycleTracker();
         while (!ct.IsCancellationRequested)
         {
             try
@@ -78,8 +80,6 @@ public sealed class OpcUaAcquisitionRunner(
                 var required = RequiredSourcePaths(deployment)
                     .ToHashSet(StringComparer.Ordinal);
                 var latestTimestampTicks = DateTimeOffset.UtcNow.UtcTicks;
-                var currentRecipe = (string?)null;
-                var lifecycle = new AcquisitionLifecycleTracker();
                 var subscription = new Subscription(session.DefaultSubscription)
                 {
                     PublishingInterval = connection.PublishingIntervalMs,
@@ -139,7 +139,7 @@ public sealed class OpcUaAcquisitionRunner(
                     foreach (var productionEvent in lifecycle.Track(
                                  mapped,
                                  deployment.Profile.Lifecycle,
-                                 deployment.DataModel.Acquisition.SamplePeriodMs))
+                                 connection.PublishingIntervalMs))
                     {
                         await sink.EmitAsync(productionEvent, ct).ConfigureAwait(false);
                     }

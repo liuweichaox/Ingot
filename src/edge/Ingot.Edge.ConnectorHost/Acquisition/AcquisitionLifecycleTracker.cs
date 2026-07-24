@@ -18,7 +18,7 @@ public sealed class AcquisitionLifecycleTracker
     public IReadOnlyList<ProductionEvent> Track(
         AcquisitionMappingResult mapped,
         AcquisitionLifecycleMapping? lifecycle,
-        int samplePeriodMs)
+        int pollDelayMs)
         => lifecycle is null
             ? WithoutLifecycle(mapped)
             : Track(
@@ -30,12 +30,12 @@ public sealed class AcquisitionLifecycleTracker
                 lifecycle.CompletedEventType,
                 lifecycle.StepChangedEventType,
                 lifecycle.ExpectedDurationMs,
-                samplePeriodMs);
+                pollDelayMs);
 
     public IReadOnlyList<ProductionEvent> Track(
         AcquisitionMappingResult mapped,
         LifecycleFieldMapping? lifecycle,
-        int samplePeriodMs)
+        int pollDelayMs)
         => lifecycle is null
             ? WithoutLifecycle(mapped)
             : Track(
@@ -47,7 +47,7 @@ public sealed class AcquisitionLifecycleTracker
                 lifecycle.CompletedEventType,
                 lifecycle.StepChangedEventType,
                 lifecycle.ExpectedDurationMs,
-                samplePeriodMs);
+                pollDelayMs);
 
     private IReadOnlyList<ProductionEvent> Track(
         AcquisitionMappingResult mapped,
@@ -58,7 +58,7 @@ public sealed class AcquisitionLifecycleTracker
         string completedEventType,
         string stepChangedEventType,
         int? expectedDurationMs,
-        int samplePeriodMs)
+        int pollDelayMs)
     {
         var sample = mapped.Sample;
         var correlationId = sample.CorrelationId;
@@ -95,16 +95,11 @@ public sealed class AcquisitionLifecycleTracker
             _activeContext = sample.Context;
             _activeSubject = sample.Subject;
             _activeSource = sample.Source;
-            var startedData = new Dictionary<string, object?>
-            {
-                ["samplePeriodMs"] = samplePeriodMs
-            };
+            var startedData = new Dictionary<string, object?>();
+            if (pollDelayMs > 0)
+                startedData["pollDelayMs"] = pollDelayMs;
             if (expectedDurationMs is not null)
-            {
                 startedData["expectedDurationMs"] = expectedDurationMs.Value;
-                startedData["expectedSampleCount"] =
-                    expectedDurationMs.Value / Math.Max(1, samplePeriodMs);
-            }
             events.Add(ProductionEvent.Create(
                 startedEventType,
                 sample.OccurredAt,

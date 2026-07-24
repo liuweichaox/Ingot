@@ -44,7 +44,7 @@ public sealed class MqttAcquisitionRunner(
                 foreach (var productionEvent in lifecycle.Track(
                              mapped,
                              deployment.Profile.Lifecycle,
-                             deployment.DataModel.Acquisition.SamplePeriodMs))
+                             0))
                 {
                     await sink.EmitAsync(productionEvent, ct).ConfigureAwait(false);
                 }

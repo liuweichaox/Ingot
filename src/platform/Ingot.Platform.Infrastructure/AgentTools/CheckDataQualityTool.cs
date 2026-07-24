@@ -1,12 +1,18 @@
 using System.Text.Json;
 using Ingot.Agent;
 using Ingot.Platform.Infrastructure.Events;
+using Ingot.Platform.Infrastructure.Cycles;
 using Ingot.Contracts.Agents;
+using Ingot.Contracts.Events;
 
 namespace Ingot.Platform.Infrastructure.AgentTools;
 
-public sealed class CheckDataQualityTool(IChatEventReader events) : IAnalysisTool
+public sealed class CheckDataQualityTool(
+    IChatEventReader events,
+    WholeCycleAnalysisEngine? wholeCycleAnalysis = null) : IAnalysisTool
 {
+    private readonly WholeCycleAnalysisEngine _wholeCycleAnalysis = wholeCycleAnalysis ?? new();
+
     public AnalysisToolDefinition Definition { get; } = new()
     {
         Name = "check_data_quality",
@@ -57,37 +63,18 @@ public sealed class CheckDataQualityTool(IChatEventReader events) : IAnalysisToo
                 row.Event.EventType.EndsWith(".completed", StringComparison.Ordinal) ||
                 row.Event.EventType.EndsWith(".cleared", StringComparison.Ordinal) ||
                 row.Event.EventType.EndsWith(".exited", StringComparison.Ordinal)));
-        var phaseEvents = ordered
-            .Where(static row => row.Event.EventType.StartsWith("phase.", StringComparison.Ordinal))
-            .ToArray();
-        var phaseGroups = phaseEvents
-            .Select(static row => new
-            {
-                Row = row,
-                PhaseCode = TryReadPhaseCode(row.Event.EventType)
-            })
-            .Where(static item => item.PhaseCode is not null)
-            .GroupBy(
-                static item => new { item.Row.Event.CorrelationId, PhaseCode = item.PhaseCode! },
-                item => item.Row)
-            .ToArray();
-        var incompletePhases = phaseGroups.Count(group =>
-            group.Any(static row => row.Event.EventType.EndsWith(".started", StringComparison.Ordinal)) !=
-            group.Any(static row => row.Event.EventType.EndsWith(".completed", StringComparison.Ordinal)));
-        var phaseOrderIssues = phaseGroups.Count(group =>
+        var processQuality = correlations.Select(group =>
         {
-            var phaseStarted = group.FirstOrDefault(static row =>
-                row.Event.EventType.EndsWith(".started", StringComparison.Ordinal))?.Event.OccurredAt;
-            var phaseCompleted = group.LastOrDefault(static row =>
-                row.Event.EventType.EndsWith(".completed", StringComparison.Ordinal))?.Event.OccurredAt;
-            return phaseStarted.HasValue && phaseCompleted.HasValue && phaseCompleted < phaseStarted;
-        });
-        var unknownPhaseAttribution = ordered.Count(static row =>
-            row.Event.Context.TryGetValue("phase_code", out var phase) &&
-            string.Equals(phase, "unknown", StringComparison.OrdinalIgnoreCase));
-        var estimatedPhaseCount = ordered.Count(static row =>
-            row.Event.Context.TryGetValue("phase_source", out var phaseSource) &&
-            string.Equals(phaseSource, "estimated", StringComparison.OrdinalIgnoreCase));
+            var startedAt = group.FirstOrDefault(static row =>
+                row.Event.EventType == "cycle.started")?.Event.OccurredAt;
+            var completedAt = group.LastOrDefault(static row =>
+                row.Event.EventType == "cycle.completed")?.Event.OccurredAt;
+            return _wholeCycleAnalysis.Analyze(group.ToArray(), startedAt, completedAt, null, null).Quality;
+        }).ToArray();
+        var degradedProcessCycles = processQuality.Count(static quality =>
+            quality.Status == ProcessDataStatuses.Degraded);
+        var unavailableProcessCycles = processQuality.Count(static quality =>
+            quality.Status == ProcessDataStatuses.Unavailable);
         var scopedQuery = !string.IsNullOrWhiteSpace(subjectId) || !string.IsNullOrWhiteSpace(correlationId);
         int? sequenceGaps = null;
         if (!scopedQuery)
@@ -109,14 +96,10 @@ public sealed class CheckDataQualityTool(IChatEventReader events) : IAnalysisToo
             limitations.Add("当前范围没有生产记录，无法检查周期是否完整或采集是否中断。");
         else if (scopedQuery)
             limitations.Add("按对象或周期过滤后的事件不是完整 Edge 序列，因此不计算序号连续性。");
-        if (incompletePhases > 0)
-            limitations.Add($"有 {incompletePhases} 个工艺阶段缺少开始或结束记录。");
-        if (phaseOrderIssues > 0)
-            limitations.Add($"发现 {phaseOrderIssues} 个阶段完成时间早于开始时间。");
-        if (unknownPhaseAttribution > 0)
-            limitations.Add($"有 {unknownPhaseAttribution} 条生产记录无法归入工艺阶段。");
-        if (estimatedPhaseCount > 0)
-            limitations.Add($"有 {estimatedPhaseCount} 条记录的工艺阶段由系统估算，分析结果仅作参考。");
+        if (degradedProcessCycles > 0)
+            limitations.Add($"有 {degradedProcessCycles} 个周期存在采样空窗、重复时间戳或源序号间断，比较时需要降级处理。");
+        if (unavailableProcessCycles > 0)
+            limitations.Add($"有 {unavailableProcessCycles} 个周期没有可用的过程数据。");
         var scopeId = $"events:{subjectId ?? "*"}:{correlationId ?? "*"}:{ordered.FirstOrDefault()?.IngestId ?? 0}-{ordered.LastOrDefault()?.IngestId ?? 0}";
         var relatedRecords = new RelatedRecordRef
         {
@@ -140,11 +123,8 @@ public sealed class CheckDataQualityTool(IChatEventReader events) : IAnalysisToo
                 totalEventCount = totalEvents,
                 correlationCount = correlations.Length,
                 incompleteCycles,
-                phaseEventCount = phaseEvents.Length,
-                incompletePhases,
-                phaseOrderIssues,
-                unknownPhaseAttribution,
-                estimatedPhaseCount,
+                degradedProcessCycles,
+                unavailableProcessCycles,
                 sequenceGaps,
                 emptyContext,
                 latestOccurredAt = latest,
@@ -152,7 +132,8 @@ public sealed class CheckDataQualityTool(IChatEventReader events) : IAnalysisToo
             }),
             RelatedRecords = [relatedRecords],
             Limitations = limitations,
-            Outcome = scopeEmpty || incompletePhases > 0 || phaseOrderIssues > 0
+            Outcome = scopeEmpty || incompleteCycles > 0 || unavailableProcessCycles > 0 ||
+                      sequenceGaps is > 0
                 ? AnalysisToolOutcomes.InsufficientData
                 : AnalysisToolOutcomes.Sufficient
         };
@@ -171,9 +152,4 @@ public sealed class CheckDataQualityTool(IChatEventReader events) : IAnalysisToo
         return values.Count == 0 ? "/events" : $"/events?{string.Join('&', values)}";
     }
 
-    private static string? TryReadPhaseCode(string eventType)
-    {
-        var parts = eventType.Split('.');
-        return parts.Length == 3 && parts[0] == "phase" ? parts[1] : null;
-    }
 }

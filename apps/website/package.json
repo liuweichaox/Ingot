@@ -13,7 +13,8 @@
     "lint": "eslint . --ignore-pattern .next"
   },
   "dependencies": {
-    "next": "16.2.6",
+    "@headlessui/react": "^2.2.9",
+    "next": "16.2.11",
     "react": "19.2.6",
     "react-dom": "19.2.6"
   },
@@ -23,10 +24,13 @@
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
     "eslint": "9.39.4",
-    "eslint-config-next": "16.2.6",
+    "eslint-config-next": "16.2.11",
     "tailwindcss": "4.2.1",
     "typescript": "5.9.3"
   },
   "type": "module",
-  "overrides": { "postcss": "8.5.10" }
+  "overrides": {
+    "postcss": "8.5.22",
+    "sharp": "0.35.3"
+  }
 }

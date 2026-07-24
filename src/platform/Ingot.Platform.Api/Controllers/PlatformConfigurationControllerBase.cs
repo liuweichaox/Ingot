@@ -6,6 +6,8 @@ namespace Ingot.Platform.Api.Controllers;
 public abstract class PlatformConfigurationControllerBase(
     PlatformUserResolver userResolver) : ControllerBase
 {
+    protected string? ResolveUserId() => userResolver.Resolve(User);
+
     protected IActionResult? DeniedConfigurationRead()
     {
         var identity = userResolver.ResolveIdentity(User);

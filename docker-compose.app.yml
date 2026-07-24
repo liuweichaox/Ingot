@@ -30,6 +30,8 @@ services:
       - ./Data:/app/Data
       - ingot-inspection-attachments:/app/Data/inspection-attachments
       - ingot-inspection-archive:/app/Archive/inspection-attachments
+      - ingot-process-knowledge:/app/Data/process-knowledge
+      - ingot-process-knowledge-archive:/app/Archive/process-knowledge
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       Urls: http://+:8000
@@ -41,6 +43,8 @@ services:
       Authentication__RequireHttpsMetadata: ${INGOT_AUTH_REQUIRE_HTTPS:-true}
       InspectionAttachments__RootPath: /app/Data/inspection-attachments
       InspectionAttachments__ArchiveRootPath: /app/Archive/inspection-attachments
+      ProcessKnowledge__RootPath: /app/Data/process-knowledge
+      ProcessKnowledge__ArchiveRootPath: /app/Archive/process-knowledge
       Chat__Enabled: ${INGOT_CHAT_ENABLED:-false}
       Chat__Provider: ${INGOT_CHAT_PROVIDER:-Deterministic}
       Chat__FastModel: ${INGOT_CHAT_FAST_MODEL:-deterministic-v1}
@@ -116,3 +120,5 @@ volumes:
   ingot-postgres-data:
   ingot-inspection-attachments:
   ingot-inspection-archive:
+  ingot-process-knowledge:
+  ingot-process-knowledge-archive:

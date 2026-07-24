@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Ingot.Contracts.Manufacturing;
 
 /// <summary>可配置的物理组件分类，例如模芯、模架、刀片或喷嘴。</summary>
@@ -84,6 +86,7 @@ public sealed record ToolingInstallation
     public DateTimeOffset? RemovedAt { get; init; }
     public string Source { get; init; } = "manual";
     public string? CommandId { get; init; }
+    [JsonPropertyName("userId")]
     public string? Actor { get; init; }
     public DateTimeOffset CreatedAt { get; init; }
 }
@@ -108,6 +111,7 @@ public sealed record ProductionContext
     public string? ExternalOrderRef { get; init; }
     public string? ExternalBatchRef { get; init; }
     public string? MaterialLotRef { get; init; }
+    [JsonPropertyName("userId")]
     public string? Actor { get; init; }
     public DateTimeOffset UpdatedAt { get; init; }
 }

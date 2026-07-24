@@ -24,7 +24,9 @@ public sealed record CycleRecordSummary
     public string? MaterialLotRef { get; init; }
     public int SampleCount { get; init; }
     public int ExpectedSampleCount { get; init; }
+    /// <summary>旧接口兼容字段；新分析请使用 ProcessDataQuality。</summary>
     public double? SampleCompleteness { get; init; }
+    public ProcessDataQualitySummary ProcessDataQuality { get; init; } = new();
     public int PhaseCount { get; init; }
     public int RequiredPhaseCount { get; init; }
     public bool? PhaseComplete { get; init; }
@@ -36,6 +38,7 @@ public sealed record CycleRecordSummary
     public int? AnalysisPlanVersion { get; init; }
     public string? DataModelId { get; init; }
     public int? DataModelVersion { get; init; }
+    public CycleAnalysisMaterialization AnalysisMaterialization { get; init; } = new();
     public int InspectionCount { get; init; }
     public int RequiredInspectionCount { get; init; }
     public int CompletedInspectionCount { get; init; }
@@ -48,7 +51,12 @@ public sealed record CyclePhaseSummary
 {
     public required string Code { get; init; }
     public required string Name { get; init; }
+    /// <summary>同一阶段在一个周期内可重复出现，序号从 1 开始。</summary>
+    public int Order { get; init; }
+    /// <summary>event_tag、recipe_step 或 unknown。</summary>
+    public string Source { get; init; } = "unknown";
     public bool Required { get; init; }
+    public bool IsComplete { get; init; }
     public int SampleCount { get; init; }
     public DateTimeOffset? StartedAt { get; init; }
     public DateTimeOffset? EndedAt { get; init; }

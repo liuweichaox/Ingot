@@ -1,6 +1,6 @@
 # Ingot Product Information Architecture
 
-Ingot organizes its interface around understanding operations, finding problems, analyzing processes, and maintaining semantics. It is not organized around database tables, APIs, or internal services. The platform does not duplicate MES scheduling, inventory, personnel, or work-order execution, and it does not present raw time-series points without operating context.
+Ingot organizes its interface around understanding operations, finding problems, analyzing processes, and maintaining configuration. It is not organized around database tables, APIs, or internal services. The platform does not duplicate MES scheduling, inventory, personnel, or work-order execution, and it does not present raw time-series points without operating context.
 
 ## Design principles
 
@@ -8,7 +8,7 @@ Ingot organizes its interface around understanding operations, finding problems,
 2. **Object first**: Equipment and logical operating objects are the entry point to data. Their current context, operating records, events, quality, and relationships are available without repeatedly entering identifiers.
 3. **Immutable operating context**: A record captures the product, recipe, tooling, and quality-plan references effective at that time. Historical analysis does not depend on later master-data edits.
 4. **Quality is first-class data**: Manual inspections, vision results, measurements, original images, and reviews share the analytical context with process data.
-5. **Cyclic and continuous operation coexist**: Cyclic equipment is organized by production cycle. Continuously running equipment uses time windows, state segments, or event segments. Both share object, event, and analysis semantics.
+5. **Cyclic and continuous operation coexist**: Cyclic equipment is organized by production cycle. Continuously running equipment uses time windows, state segments, or event segments. Both share objects, events, and analysis rules.
 6. **Centralized configuration, clean operations**: Daily workspaces do not expose configuration forms. Creation and maintenance start from a register, version catalog, or task context and provide create, maintain, retire, and conditionally allowed delete paths.
 7. **State replaces instructions**: Titles, fields, status, empty states, and valid actions communicate meaning. Success feedback is transient; persistent notices are reserved for errors, blockers, and risks.
 8. **Operations are isolated**: Platform metrics and logs belong to administration. Raw metric endpoints are not part of the normal product navigation.
@@ -47,7 +47,7 @@ Ingot organizes its interface around understanding operations, finding problems,
   - Event Subscriptions
   - Runtime Logs
 
-Navigation follows the proven two-level pattern used by mature industrial data platforms. The top menu switches among Workbench, AI, Operations, Quality, Analysis, Data Assets, Tooling, and Administration; the left sidebar contains only entries in the active domain. Workbench and AI use the full workspace without a sidebar. Page identity stays in the workspace header and global search stays in the top bar. This preserves the strength of TDengine IDMP's global-menu-plus-context-sidebar model without copying database-oriented terminology into Ingot.
+Navigation follows the proven two-level pattern used by mature industrial data platforms. The top menu switches among Workbench, AI, Operations, Quality, Analysis, Data Assets, Tooling, and Administration; the left sidebar contains only entries in the active domain. Workbench and AI use the full workspace without a sidebar. Page identity stays in the workspace header and global search stays in the top bar, keeping database-oriented terminology away from production and quality users.
 
 ## Page patterns
 
@@ -66,4 +66,4 @@ Navigation follows the proven two-level pattern used by mature industrial data p
 - **Runtime logs**: Filters are scoped to a specific acquisition node. Live tracking applies to the newest page and pauses when the user enters history so refreshed results do not shift underneath pagination.
 - **Event subscriptions**: The list presents enabled state, event/object/context scope, signature protection, delivery result, and consecutive failures. Creation and maintenance stay in a drawer.
 
-These pages adopt TDengine's separation of data sources, tasks, connection nodes, store-and-forward, and runtime metrics while retaining Ingot's acquisition-task, manufacturing-context, and production-event vocabulary.
+These pages separate data sources, tasks, connection nodes, store-and-forward behavior, and runtime metrics while retaining Ingot's acquisition-task, manufacturing-context, and production-event vocabulary.

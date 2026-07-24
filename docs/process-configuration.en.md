@@ -33,7 +33,7 @@ An analysis plan references a process data model and independently defines:
 - a cohort dimension such as `quality.outcome`;
 - selected data items, full-trace inclusion, and derived features.
 
-Quality outcomes remain first-class quality data. The analysis plan references a quality cohort dimension without copying or degrading inspection evidence into ordinary tags.
+Quality outcomes remain separate quality records. The analysis plan references a quality cohort dimension without copying or degrading inspection results into ordinary tags.
 
 An empty context selector means “all contexts of the referenced process data model”; it never matches across models or industries. At runtime, the model is resolved from the frozen `data_model_id/data_model_version` context or from the recipe version before a published plan in that model is selected. Every configured comparability key must be present in every candidate context. Missing keys reject comparison instead of treating two null values as equivalent.
 

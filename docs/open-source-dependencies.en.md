@@ -1,6 +1,6 @@
 # Open-source dependencies
 
-The Ingot device acquisition runtime adds only open-source components:
+Ingot device acquisition, document extraction, and research-data ingestion use only open-source components:
 
 | Component | Purpose | Version | License | Upstream |
 | --- | --- | --- | --- | --- |
@@ -11,5 +11,8 @@ The Ingot device acquisition runtime adds only open-source components:
 | MQTT.js | Simulator MQTT publisher | 5.15.2 | MIT | <https://github.com/mqttjs/MQTT.js> |
 | node-opcua | Simulator OPC UA server | 2.175.2 | MIT | <https://github.com/node-opcua/node-opcua> |
 | modbus-serial | Simulator Modbus TCP server | 8.0.25 | ISC | <https://github.com/yaacov/node-modbus-serial> |
+| ClosedXML | XLSX/XLSM extraction and cell references | 0.105.0 | MIT | <https://github.com/ClosedXML/ClosedXML> |
+| PdfPig | PDF text extraction and page references | 0.1.14 | Apache-2.0 | <https://github.com/UglyToad/PdfPig> |
+| MatFileHandler | MATLAB Level 5 MAT research-data reader | 1.3.0 | MIT | <https://github.com/mahalex/MatFileHandler> |
 
-Versions are pinned in the project, NuGet assets, and simulator `package-lock.json`. The protocol implementation does not depend on TDengine Enterprise connectors or closed-source SDKs.
+Versions are pinned in the project, NuGet assets, and simulator `package-lock.json`. The protocol implementation does not depend on commercial connectors or closed-source SDKs.

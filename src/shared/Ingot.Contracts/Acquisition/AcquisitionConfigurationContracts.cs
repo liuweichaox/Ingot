@@ -48,6 +48,7 @@ public sealed record HttpPollingConnection
 {
     public string BaseUrl { get; init; } = string.Empty;
     public string SnapshotPath { get; init; } = "/api/v1/snapshot";
+    /// <summary>一次读取完成后，开始下一次读取前等待的时间；不是固定采样周期。</summary>
     public int PollIntervalMs { get; init; } = 1000;
 }
 
@@ -100,6 +101,7 @@ public sealed record ModbusTcpConnection
     public string Host { get; init; } = string.Empty;
     public int Port { get; init; } = 502;
     public byte UnitId { get; init; } = 1;
+    /// <summary>一次寄存器读取完成后，开始下一次读取前等待的时间；不是固定采样周期。</summary>
     public int PollIntervalMs { get; init; } = 1000;
 }
 

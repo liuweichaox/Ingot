@@ -7,7 +7,8 @@ Ingot 由 Platform API、Platform Web、数据存储和使用方实现的数据�
   → 使用方适配与运行
   → POST /api/v1/events:batch
   → Platform API
- → TimescaleDB（PostgreSQL + 时序扩展）生产数据
+  → 不可变生产事件 + 标准测点时序投影
+  → TimescaleDB（统一中心时序与事务数据存储）
   → 查询、SSE 与 Platform Web · Ingot Chat
 ```
 
@@ -33,6 +34,9 @@ Ingot 由 Platform API、Platform Web、数据存储和使用方实现的数据�
 ## 存储与网络
 
 - TimescaleDB（PostgreSQL + 时序扩展）：中心生产事件、检测记录和查询数据。生产事件表为 hypertable，按 `occurred_at` 自动分块，并可按配置启用块级压缩与保留策略；幂等去重仍由独立的 `event_ingest_keys` 键表承担。本地自托管（Docker 镜像 `timescale/timescaledb`），无需外部托管服务。
+- 标准测点时序层：已发布工艺数据模型中的每个 `process.sample.data.values` 数据项，会与源事件在同一 PostgreSQL 事务内投影为 `time_series_samples`。数值、整数、布尔和文本分列保存；单位、质量码、阶段、数据模型版本、事件时间、记录时间和运行上下文显式保存。`signal_definitions` 管理版本化信号定义，`collection_points` 将静态设备标签与每次运行上下文分开。这一层通过内部 `ITimeSeriesStore` 隔离存储细节，但生产实现统一使用 TimescaleDB。
+- 周期分析物化：`cycle_analysis_materializations` 保存带源事件水位、配置版本和算法版本的完整确定性结果；`cycle_phases` 与 `cycle_features` 保存可供跨周期 SQL 聚合的阶段和特征行。迟到事件只把同周期结果标记为失效，不在接入事务中执行高成本重算；下次读取按完整记录幂等重算。
+- 科研特征计算记录：每个周期特征保存定义版本、定义 SHA-256、实际输入点数量和计算 SHA-256。计算哈希覆盖特征定义、计算窗口、时间戳和值；未注册的特征代码会被拒绝，不能以同名字符串悄悄改变公式。
 - 受控附件目录：视觉检查原图按内容哈希分目录长期保存，元数据写入 PostgreSQL，文件正文落在 Docker 的 `Data` 持久卷。缩略图和标注图只能作为派生文件，不能替代原图。
 - SQLite：部署可选的本地缓存、日志或边缘运行状态；亦作为离线/气隙单机的可选生产记录库形态。其运行方式由使用方选择。
 - Chat 只经 Platform 数据查询服务读取数据；模型配置不会改变数据权限或工具白名单。

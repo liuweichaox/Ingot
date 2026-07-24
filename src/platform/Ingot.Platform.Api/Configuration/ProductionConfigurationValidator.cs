@@ -14,6 +14,7 @@ public static class ProductionConfigurationValidator
         RequireValue(configuration, "Authentication:Authority", errors);
         RequireValue(configuration, "Authentication:Audience", errors);
         RequireValue(configuration, "InspectionAttachments:ArchiveRootPath", errors);
+        RequireValue(configuration, "ProcessKnowledge:ArchiveRootPath", errors);
 
         var origins = configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
         if (origins.Length == 0 || origins.Any(static origin =>

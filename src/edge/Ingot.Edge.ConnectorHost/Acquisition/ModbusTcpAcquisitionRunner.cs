@@ -21,6 +21,8 @@ public sealed class ModbusTcpAcquisitionRunner(
     {
         var connection = deployment.Profile.ModbusTcp
             ?? throw new InvalidOperationException("Modbus TCP 连接配置不能为空。");
+        string? currentRecipe = null;
+        var lifecycle = new AcquisitionLifecycleTracker();
         while (!ct.IsCancellationRequested)
         {
             try
@@ -32,12 +34,9 @@ public sealed class ModbusTcpAcquisitionRunner(
                 logger.LogInformation(
                     "Modbus TCP 采集任务已连接：Configuration={Configuration}, Device={Host}:{Port}, Unit={UnitId}",
                     configurationKey, connection.Host, connection.Port, connection.UnitId);
-                string? currentRecipe = null;
-                var lifecycle = new AcquisitionLifecycleTracker();
-
                 while (!ct.IsCancellationRequested && tcpClient.Connected)
                 {
-                    var pollStarted = System.Diagnostics.Stopwatch.GetTimestamp();
+                    var readStarted = System.Diagnostics.Stopwatch.GetTimestamp();
                     status.RecordAttempt(configurationKey, DateTimeOffset.UtcNow);
                     var selectors = BuildSelectors(deployment);
                     var raw = await ReadSnapshotAsync(master, connection.UnitId, selectors)
@@ -55,16 +54,17 @@ public sealed class ModbusTcpAcquisitionRunner(
                     foreach (var productionEvent in lifecycle.Track(
                                  mapped,
                                  deployment.Profile.Lifecycle,
-                                 deployment.DataModel.Acquisition.SamplePeriodMs))
+                                 connection.PollIntervalMs))
                     {
                         await sink.EmitAsync(productionEvent, ct).ConfigureAwait(false);
                     }
                     currentRecipe = mapped.RecipeIdentity;
-                    status.RecordSuccess(configurationKey, DateTimeOffset.UtcNow, currentRecipe);
-                    var remaining = TimeSpan.FromMilliseconds(connection.PollIntervalMs) -
-                                    System.Diagnostics.Stopwatch.GetElapsedTime(pollStarted);
-                    if (remaining > TimeSpan.Zero)
-                        await Task.Delay(remaining, ct).ConfigureAwait(false);
+                    status.RecordSuccess(
+                        configurationKey,
+                        DateTimeOffset.UtcNow,
+                        currentRecipe,
+                        readDurationMs: System.Diagnostics.Stopwatch.GetElapsedTime(readStarted).TotalMilliseconds);
+                    await Task.Delay(connection.PollIntervalMs, ct).ConfigureAwait(false);
                 }
             }
             catch (Exception exception) when (exception is not OperationCanceledException)

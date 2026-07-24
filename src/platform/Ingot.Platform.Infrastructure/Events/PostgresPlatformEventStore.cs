@@ -4,8 +4,10 @@ using System.Text.RegularExpressions;
 using Ingot.Contracts.Analytics;
 using Ingot.Contracts.Events;
 using Ingot.Domain.Events;
+using Ingot.Platform.Infrastructure.Cycles;
 using Ingot.Platform.Infrastructure.Manufacturing;
 using Ingot.Platform.Infrastructure.ProcessConfiguration;
+using Ingot.Platform.Infrastructure.TimeSeries;
 using Microsoft.Extensions.Options;
 using Npgsql;
 using NpgsqlTypes;
@@ -27,6 +29,9 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, IA
     private readonly PlatformEventOptions _options;
     private readonly IManufacturingContextStore _manufacturingContexts;
     private readonly ProcessAnalysisResolver _analysisResolver;
+    private readonly ICycleAnalysisMaterializationStore _analysisMaterializations;
+    private readonly CycleAnalysisRecomputeQueue _analysisRecomputeQueue;
+    private readonly PostgresTimeSeriesStore _timeSeriesStore;
     private readonly SemaphoreSlim _initializeLock = new(1, 1);
     private volatile bool _initialized;
 
@@ -40,7 +45,10 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, IA
         PlatformEventMetrics metrics,
         IOptions<PlatformEventOptions> options,
         IManufacturingContextStore manufacturingContexts,
-        ProcessAnalysisResolver analysisResolver)
+        ProcessAnalysisResolver analysisResolver,
+        ICycleAnalysisMaterializationStore analysisMaterializations,
+        CycleAnalysisRecomputeQueue analysisRecomputeQueue,
+        PostgresTimeSeriesStore timeSeriesStore)
     {
         var connectionString = configuration.GetConnectionString("Events")
             ?? throw new InvalidOperationException("缺少 ConnectionStrings:Events PostgreSQL 连接字符串。");
@@ -50,6 +58,9 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, IA
         _options = options.Value;
         _manufacturingContexts = manufacturingContexts;
         _analysisResolver = analysisResolver;
+        _analysisMaterializations = analysisMaterializations;
+        _analysisRecomputeQueue = analysisRecomputeQueue;
+        _timeSeriesStore = timeSeriesStore;
     }
 
     public async Task InitializeAsync(CancellationToken ct = default)
@@ -62,6 +73,8 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, IA
         {
             if (_initialized)
                 return;
+
+            await _timeSeriesStore.InitializeAsync(ct).ConfigureAwait(false);
 
             // 注意：production_events 不再使用原生 PARTITION BY，改由 Timescale hypertable 自动分块。
             // 幂等去重仍由独立的 event_ingest_keys（普通表、带唯一约束）承担，不受 hypertable 约束影响。
@@ -161,14 +174,31 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, IA
         var gapDetected = HasSequenceGap(previousMax, ordered);
         var accepted = 0;
         var duplicates = 0;
+        var acceptedMaxIngestByCorrelationId = new Dictionary<string, long>(StringComparer.Ordinal);
 
         foreach (var evt in ordered)
         {
             if (await TryReserveEventAsync(connection, transaction, request.EdgeId, evt, ct)
                     .ConfigureAwait(false))
             {
-                await InsertEventAsync(connection, transaction, request.EdgeId, evt, ct)
+                var ingestId = await InsertEventAsync(connection, transaction, request.EdgeId, evt, ct)
                     .ConfigureAwait(false);
+                var analysisKey = evt.CorrelationId ?? $"{evt.Subject.Type}:{evt.Subject.Id}";
+                analysisConfigurations.TryGetValue(analysisKey, out var analysis);
+                await _timeSeriesStore.ProjectEventAsync(
+                    connection,
+                    transaction,
+                    request.EdgeId,
+                    ingestId,
+                    evt,
+                    analysis,
+                    ct).ConfigureAwait(false);
+                if (!string.IsNullOrWhiteSpace(evt.CorrelationId))
+                {
+                    acceptedMaxIngestByCorrelationId[evt.CorrelationId] = Math.Max(
+                        acceptedMaxIngestByCorrelationId.GetValueOrDefault(evt.CorrelationId),
+                        ingestId);
+                }
                 accepted++;
             }
             else
@@ -185,6 +215,28 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, IA
         }
 
         await transaction.CommitAsync(ct).ConfigureAwait(false);
+        if (acceptedMaxIngestByCorrelationId.Count > 0)
+        {
+            try
+            {
+                foreach (var pair in acceptedMaxIngestByCorrelationId)
+                {
+                    await _analysisMaterializations.MarkDirtyAsync(
+                        [pair.Key],
+                        pair.Value,
+                        "production_event_ingested",
+                        ct).ConfigureAwait(false);
+                }
+                _analysisRecomputeQueue.Enqueue(acceptedMaxIngestByCorrelationId.Keys);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(
+                    ex,
+                    "事件已经提交，但周期分析失效标记失败：CorrelationIds={CorrelationIds}",
+                    string.Join(",", acceptedMaxIngestByCorrelationId.Keys));
+            }
+        }
         var response = new EventBatchResponse
         {
             Accepted = accepted,
@@ -782,7 +834,7 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, IA
         return await command.ExecuteScalarAsync(ct).ConfigureAwait(false) is not null;
     }
 
-    private static async Task InsertEventAsync(
+    private static async Task<long> InsertEventAsync(
         NpgsqlConnection connection,
         NpgsqlTransaction transaction,
         string edgeId,
@@ -796,7 +848,8 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, IA
               source, subject_type, subject_id, correlation_id, context, data)
             VALUES (
               @event_id, @edge_id, @seq, @event_type, @type_version, @occurred_at, @recorded_at,
-              @source, @subject_type, @subject_id, @correlation_id, @context, @data);
+              @source, @subject_type, @subject_id, @correlation_id, @context, @data)
+            RETURNING ingest_id;
             """,
             connection,
             transaction);
@@ -813,7 +866,7 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, IA
         command.Parameters.AddWithValue("correlation_id", (object?)evt.CorrelationId ?? DBNull.Value);
         command.Parameters.AddWithValue("context", NpgsqlDbType.Jsonb, JsonSerializer.Serialize(evt.Context, JsonOptions));
         command.Parameters.AddWithValue("data", NpgsqlDbType.Jsonb, JsonSerializer.Serialize(evt.Data, JsonOptions));
-        await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+        return Convert.ToInt64(await command.ExecuteScalarAsync(ct).ConfigureAwait(false), CultureInfo.InvariantCulture);
     }
 
     private static async Task VerifyDuplicateAsync(

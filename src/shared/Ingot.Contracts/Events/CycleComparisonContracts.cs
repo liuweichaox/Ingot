@@ -27,11 +27,55 @@ public sealed record CycleComparisonResult
 
     public string? AlignmentMode { get; init; }
 
+    public string FeatureAlgorithmVersion { get; init; } = "stage-relative-v1";
+
+    public string EvidenceLevel { get; init; } = "insufficient";
+
     public required CycleComparisonRow Baseline { get; init; }
 
     public IReadOnlyList<CycleComparisonRow> HistoricalCycles { get; init; } = [];
 
+    public IReadOnlyList<CycleSignalComparison> SignalComparisons { get; init; } = [];
+
+    public IReadOnlyList<CycleQualityAssociation> QualityAssociations { get; init; } = [];
+
     public required CycleComparisonAcceptance Acceptance { get; init; }
+}
+
+public sealed record CycleSignalComparison
+{
+    public required string SignalCode { get; init; }
+    public required string FeatureCode { get; init; }
+    public string? PhaseCode { get; init; }
+    public string? PhaseName { get; init; }
+    public int? PhaseOrder { get; init; }
+    public double? BaselineValue { get; init; }
+    public double? HistoricalMedian { get; init; }
+    public double? HistoricalP10 { get; init; }
+    public double? HistoricalP90 { get; init; }
+    public double? BaselinePercentile { get; init; }
+    public double? RobustDeviation { get; init; }
+    public double EffectiveWeight { get; init; }
+}
+
+public sealed record CycleQualityAssociation
+{
+    public required string SignalCode { get; init; }
+    public required string FeatureCode { get; init; }
+    public string? PhaseCode { get; init; }
+    public string? PhaseName { get; init; }
+    public int? PhaseOrder { get; init; }
+    public int PassCycleCount { get; init; }
+    public int FailCycleCount { get; init; }
+    public double PassEffectiveWeight { get; init; }
+    public double FailEffectiveWeight { get; init; }
+    public double? PassMedian { get; init; }
+    public double? FailMedian { get; init; }
+    public double? MedianDifference { get; init; }
+    public double? RobustEffect { get; init; }
+    public double CandidateScore { get; init; }
+    public string EvidenceLevel { get; init; } = "insufficient";
+    public IReadOnlyList<string> PossibleConfounders { get; init; } = [];
 }
 
 public sealed record CycleComparisonRow
@@ -68,7 +112,12 @@ public sealed record CycleComparisonRow
 
     public int ExpectedSampleCount { get; init; }
 
-    public double SampleCompleteness { get; init; }
+    /// <summary>旧接口兼容字段；新分析请使用 ProcessDataQuality。</summary>
+    public double? SampleCompleteness { get; init; }
+
+    public ProcessDataQualitySummary ProcessDataQuality { get; init; } = new();
+
+    public double EvidenceWeight { get; init; }
 
     public int PhaseCount { get; init; }
 
@@ -81,6 +130,10 @@ public sealed record CycleComparisonRow
     public string? VisualReviewDecision { get; init; }
 
     public IReadOnlyList<CycleSignalStatistic> Signals { get; init; } = [];
+
+    public IReadOnlyList<CyclePhaseSummary> Phases { get; init; } = [];
+
+    public CycleAnalysisMaterialization AnalysisMaterialization { get; init; } = new();
 
     public IReadOnlyList<CycleRecipeParameter> RecipeParameters { get; init; } = [];
 }
@@ -111,6 +164,12 @@ public sealed record CycleSignalStatistic
     public double? Minimum { get; init; }
 
     public double? Maximum { get; init; }
+
+    public double ValidDurationMs { get; init; }
+
+    public double Coverage { get; init; }
+
+    public IReadOnlyList<CycleSignalFeature> Features { get; init; } = [];
 }
 
 public sealed record CycleComparisonAcceptance
@@ -124,4 +183,12 @@ public sealed record CycleComparisonAcceptance
     public int QualityLinkedCycleCount { get; init; }
 
     public int VisualReviewCompletedCycleCount { get; init; }
+
+    public int AvailableCycleCount { get; init; }
+
+    public int DegradedCycleCount { get; init; }
+
+    public int UnavailableCycleCount { get; init; }
+
+    public double EffectiveCycleWeight { get; init; }
 }

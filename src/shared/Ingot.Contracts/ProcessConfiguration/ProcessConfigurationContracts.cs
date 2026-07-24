@@ -26,6 +26,7 @@ public sealed record ProcessDataModel
 
 public sealed record AcquisitionModel
 {
+    /// <summary>旧配置兼容字段；运行时采集节奏以采集任务的协议配置为准。</summary>
     public int SamplePeriodMs { get; init; } = 1000;
     public string? StepSourceKey { get; init; }
     public IReadOnlyList<ProcessDataItemDefinition> DataItems { get; init; } = [];

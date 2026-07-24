@@ -26,6 +26,7 @@ public sealed class ProductionConfigurationValidatorTests
             ["Authentication:Authority"] = "https://identity.example.com",
             ["Authentication:Audience"] = "ingot-platform",
             ["InspectionAttachments:ArchiveRootPath"] = "/archive/inspection-attachments",
+            ["ProcessKnowledge:ArchiveRootPath"] = "/archive/process-knowledge",
             ["Chat:Enabled"] = "false",
             ["Cors:AllowedOrigins:0"] = "https://ingotstack.com"
         });
@@ -44,6 +45,7 @@ public sealed class ProductionConfigurationValidatorTests
             ["Authentication:Authority"] = "https://identity.example.com",
             ["Authentication:Audience"] = "ingot-platform",
             ["InspectionAttachments:ArchiveRootPath"] = "/archive/inspection-attachments",
+            ["ProcessKnowledge:ArchiveRootPath"] = "/archive/process-knowledge",
             ["Chat:Enabled"] = "true",
             ["Chat:Provider"] = "OpenAI",
             ["Chat:FastModel"] = "chat-fast-model",

@@ -3,7 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "engines": { "node": ">=22.13.0" },
+  "engines": {
+    "node": ">=22.13.0"
+  },
   "scripts": {
     "prepare-content": "node scripts/prepare-content.mjs",
     "dev": "npm run prepare-content && next dev --webpack",
@@ -12,8 +14,9 @@
     "lint": "eslint . --ignore-pattern .next --ignore-pattern out"
   },
   "dependencies": {
+    "@headlessui/react": "^2.2.9",
     "github-slugger": "2.0.0",
-    "next": "16.2.6",
+    "next": "16.2.11",
     "react": "19.2.6",
     "react-dom": "19.2.6",
     "rehype-autolink-headings": "7.1.0",
@@ -26,12 +29,17 @@
     "unified": "11.0.5"
   },
   "devDependencies": {
+    "@tailwindcss/postcss": "^4.2.1",
     "@types/node": "22.19.19",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
     "eslint": "9.39.4",
-    "eslint-config-next": "16.2.6",
+    "eslint-config-next": "16.2.11",
+    "tailwindcss": "^4.2.1",
     "typescript": "5.9.3"
   },
-  "overrides": { "postcss": "8.5.10" }
+  "overrides": {
+    "postcss": "8.5.22",
+    "sharp": "0.35.3"
+  }
 }

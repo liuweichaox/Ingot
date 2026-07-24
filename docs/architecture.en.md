@@ -7,7 +7,8 @@ equipment, instruments, business systems, or custom data sources
   → team-owned adaptation and runtime
   → POST /api/v1/events:batch
   → Platform API
-  → TimescaleDB (PostgreSQL + time-series extension) production records
+  → immutable production events + canonical signal projection
+  → TimescaleDB (the unified central transactional and time-series store)
   → query, SSE, and Platform Web · Ingot Chat
 ```
 
@@ -33,6 +34,9 @@ For plant-local persistence and an outbox, a team may deploy `Ingot.Edge.Connect
 ## Storage and network
 
 - TimescaleDB (PostgreSQL + time-series extension) stores platform production events, inspection records, and query records. The production-event table is a hypertable auto-chunked by `occurred_at`, with optional chunk compression and retention policies by configuration; idempotent dedup stays in the separate `event_ingest_keys` table. Self-hosted locally (Docker image `timescale/timescaledb`), no managed service required.
+- Canonical signal layer: every published process-data item in `process.sample.data.values` is projected into `time_series_samples` in the same PostgreSQL transaction as its source event. Numeric, integer, Boolean, and text values use separate typed columns. Unit, quality code, phase, data-model version, event time, recorded time, and immutable run context are explicit. `signal_definitions` holds versioned signal definitions, while `collection_points` separates static equipment tags from run context. The internal `ITimeSeriesStore` isolates storage details, while the production implementation remains TimescaleDB.
+- Cycle-analysis materialization: `cycle_analysis_materializations` retains the complete deterministic result together with the source-event watermark, configuration versions, and algorithm version. `cycle_phases` and `cycle_features` retain normalized rows for future cross-cycle SQL aggregation. A late event only invalidates matching cycle results during ingestion; the next read performs an idempotent recomputation from the complete record instead of putting heavy analysis on the ingest transaction.
+- Scientific feature calculation record: each cycle feature stores its definition version, definition SHA-256, actual input-point count, and computation SHA-256. The computation hash covers the definition, window, timestamps, and values. Unregistered feature codes are rejected instead of silently changing a formula behind an existing name.
 - Controlled attachment directory: original vision images are retained by content hash, with metadata in PostgreSQL and file bodies in the Docker `Data` volume. Thumbnails and annotated images are derivatives and cannot replace the original.
 - SQLite can support optional local cache, logs, or edge runtime state, and is the optional record-store form for offline/air-gapped single-box deployments; teams choose its operating model.
 - Chat reads only through Platform record services; model configuration never changes data permissions or the tool allowlist.

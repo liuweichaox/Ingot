@@ -85,6 +85,8 @@ src/platform/
 
 承载 `cycle_phases`、`cycle_features`、SQL 聚合下推和迟到事件重算。它可以依赖数据库计算能力，但不得依赖 HTTP、Agent 或 API 宿主。
 
+当前第一阶段仍位于 `Ingot.Platform.Infrastructure/Cycles`：`CycleAnalysisMaterializer` 复用 `WholeCycleAnalysisEngine` 的确定性结果，`PostgresCycleAnalysisMaterializationStore` 保存版本化物化并处理迟到事件失效。后续拆分项目时应原样迁移该边界，事件存储只保留“按 correlationId 标记失效”的调用，不吸收特征计算逻辑。
+
 ### Persistence
 
 保存不可变生产事件、检测记录和相关记录 metadata。接口与实现按记录类型分目录，不承载跨周期统计逻辑。

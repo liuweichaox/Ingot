@@ -22,7 +22,7 @@ public static class JsonAcquisitionOptionsFactory
             DeviceBaseUrl = profile.Connection.BaseUrl,
             SnapshotPath = profile.Connection.SnapshotPath,
             PollIntervalMs = profile.Connection.PollIntervalMs,
-            SamplePeriodMs = deployment.DataModel.Acquisition.SamplePeriodMs,
+            SamplePeriodMs = profile.Connection.PollIntervalMs,
             Source = profile.Source,
             SubjectType = profile.SubjectType,
             SubjectId = profile.SubjectId,

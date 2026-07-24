@@ -89,7 +89,7 @@ public sealed class RoadmapAgentToolTests
     }
 
     [Fact]
-    public async Task CompareCycles_ComputesInspectionEffectSizeAndRelatedRecordsLinks()
+    public async Task CompareCycles_ReportsRobustInspectionReferenceAndRelatedRecordsLinks()
     {
         var events = Enumerable.Range(1, 502)
             .Select(id => Row(
@@ -122,7 +122,7 @@ public sealed class RoadmapAgentToolTests
             },
             ExecutionContext);
 
-        Assert.Equal(AnalysisToolOutcomes.Sufficient, result.Outcome);
+        Assert.Equal(AnalysisToolOutcomes.InsufficientData, result.Outcome);
         Assert.NotEmpty(result.Details);
         var characteristic = result.Data.GetProperty("inspection")
             .GetProperty("characteristics")
@@ -131,7 +131,8 @@ public sealed class RoadmapAgentToolTests
         Assert.Equal("pv", characteristic.GetProperty("characteristicCode").GetString());
         Assert.Equal(11d, characteristic.GetProperty("baselineAverage").GetDouble());
         Assert.Equal(21d, characteristic.GetProperty("comparisonAverage").GetDouble());
-        Assert.True(characteristic.GetProperty("effectSize").GetDouble() > 0);
+        Assert.Equal(21d, characteristic.GetProperty("comparisonMedian").GetDouble());
+        Assert.True(characteristic.GetProperty("robustDeviation").GetDouble() < 0);
         Assert.Equal(502, result.Data.GetProperty("eventSequence")
             .GetProperty("baselineProductionRecordCount").GetInt32());
         Assert.Equal(501, result.Data.GetProperty("inspection")
@@ -140,7 +141,7 @@ public sealed class RoadmapAgentToolTests
     }
 
     [Fact]
-    public async Task CheckDataQuality_FlagsPhasePairingAndInferredAttribution()
+    public async Task CheckDataQuality_DoesNotTreatPhaseMetadataAsCycleCompleteness()
     {
         var tool = new CheckDataQualityTool(new FilteringEventReader(
         [
@@ -156,8 +157,8 @@ public sealed class RoadmapAgentToolTests
             ExecutionContext);
 
         Assert.Equal(AnalysisToolOutcomes.InsufficientData, result.Outcome);
-        Assert.Contains(result.Limitations, item => item.Contains("阶段", StringComparison.Ordinal));
-        Assert.Equal(1, result.Data.GetProperty("estimatedPhaseCount").GetInt32());
+        Assert.Contains(result.Limitations, item => item.Contains("过程数据", StringComparison.Ordinal));
+        Assert.Equal(1, result.Data.GetProperty("unavailableProcessCycles").GetInt32());
     }
 
     private static PlatformProductionEvent Row(

@@ -7,7 +7,9 @@ using Ingot.Platform.Infrastructure.Analytics;
 using Ingot.Platform.Infrastructure.Inspections;
 using Ingot.Platform.Infrastructure.Manufacturing;
 using Ingot.Platform.Infrastructure.ProcessConfiguration;
+using Ingot.Platform.Infrastructure.ProcessImprovement;
 using Ingot.Platform.Infrastructure.Services;
+using Ingot.Platform.Infrastructure.TimeSeries;
 using Ingot.Platform.Infrastructure.Webhooks;
 using Microsoft.Extensions.Options;
 
@@ -29,8 +31,19 @@ public static class ServiceCollectionExtensions
         // 生产上下文必须先于事件库就绪；cycle.started 会解析并固化当时有效的工装与配方引用。
         services.AddSingleton<IManufacturingContextStore, PostgresManufacturingContextStore>();
         services.AddHostedService<ManufacturingContextInitializerHostedService>();
+        services.AddSingleton<ICycleAnalysisMaterializationStore, PostgresCycleAnalysisMaterializationStore>();
+        services.AddSingleton<CycleAnalysisRecomputeQueue>();
+        services.AddSingleton<IFeatureDefinitionRegistry, BuiltInFeatureDefinitionRegistry>();
+        services.AddSingleton<WholeCycleAnalysisEngine>();
+        services.AddSingleton<PostgresCycleScientificComputeEngine>();
+        services.AddSingleton<CycleAnalysisMaterializer>();
+        services.AddHostedService<CycleAnalysisMaterializationInitializerHostedService>();
         services.Configure<PlatformEventOptions>(configuration.GetSection("EventIngest"));
         services.AddSingleton<PlatformEventMetrics>();
+        services.AddSingleton<PostgresTimeSeriesStore>();
+        services.AddSingleton<ITimeSeriesStore>(
+            provider => provider.GetRequiredService<PostgresTimeSeriesStore>());
+        services.AddHostedService<TimeSeriesStoreInitializerHostedService>();
         services.AddSingleton<IPlatformEventStore, PostgresPlatformEventStore>();
         services.AddHostedService<EventStoreInitializerHostedService>();
 
@@ -42,6 +55,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IAnalysisTool, FindComparableCyclesTool>();
         services.AddSingleton<IAnalysisTool, CompareCyclesTool>();
         services.AddSingleton<IAnalysisTool, CompareProcessWindowsTool>();
+        services.AddSingleton<IAnalysisTool, SearchProcessKnowledgeTool>();
 
         // 人工检测结果记录（PostgreSQL）；与生产事件分表、分 API 建模
         services.Configure<InspectionAttachmentOptions>(configuration.GetSection("InspectionAttachments"));
@@ -54,12 +68,34 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ICycleComparisonService, CycleComparisonService>();
         services.AddSingleton<IProcessWindowComparisonService, ProcessWindowComparisonService>();
         services.AddSingleton<ICycleRecordService, CycleRecordService>();
+        services.AddHostedService<CycleAnalysisRecomputeHostedService>();
+        services.AddSingleton<CycleAnalysisBackfillService>();
+        services.AddHostedService(provider => provider.GetRequiredService<CycleAnalysisBackfillService>());
         services.AddSingleton<IQualityAnalysisService, QualityAnalysisService>();
 
         // 工艺数据模型、配方版本与分析方案使用独立的版本化配置存储。
         services.AddSingleton<IProcessConfigurationStore, PostgresProcessConfigurationStore>();
         services.AddSingleton<ProcessAnalysisResolver>();
         services.AddHostedService<ProcessConfigurationInitializerHostedService>();
+
+        // 模型、工艺调查、受控试验、现场知识和参数建议共享同一条可审计改进链。
+        services.Configure<ProcessKnowledgeOptions>(configuration.GetSection("ProcessKnowledge"));
+        services.AddSingleton<IProcessImprovementStore, PostgresProcessImprovementStore>();
+        services.AddSingleton<ITrialEvidenceSource, PostgresTrialEvidenceSource>();
+        services.AddSingleton<ScientificTrialResultCalculator>();
+        services.AddSingleton<ProcessImprovementWorkflow>();
+        services.AddSingleton<MechanismModelService>();
+        services.AddSingleton<IKnowledgeContentExtractor, PdfKnowledgeExtractor>();
+        services.AddSingleton<IKnowledgeContentExtractor, ExcelKnowledgeExtractor>();
+        services.AddSingleton<IKnowledgeContentExtractor, PlainTextKnowledgeExtractor>();
+        services.AddHttpClient("knowledge-image-ocr");
+        services.AddSingleton<IKnowledgeContentExtractor>(provider =>
+            new ImageKnowledgeExtractor(
+                provider.GetRequiredService<IHttpClientFactory>().CreateClient("knowledge-image-ocr"),
+                configuration));
+        services.AddSingleton<KnowledgeExtractionService>();
+        services.AddSingleton<ScientificValidationRunner>();
+        services.AddHostedService<ProcessImprovementInitializerHostedService>();
 
         // 采集配置由平台统一管理并按边缘节点发布；采集执行器只运行已发布版本。
         services.AddSingleton<IAcquisitionProfileStore, PostgresAcquisitionProfileStore>();

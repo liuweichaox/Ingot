@@ -1,0 +1,49 @@
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import test from "node:test";
+import {
+  agentChartTraces,
+  extractProcessSamples,
+  processSignalTraces,
+  qualityOutcomeTraces,
+  qualityStackTraces,
+} from "../src/charts/chartAdapters.js";
+
+test("agent chart data becomes Plotly traces without losing null samples", () => {
+  const traces = agentChartTraces({
+    type: "line",
+    labels: ["阶段 1", "阶段 2", "阶段 3"],
+    series: [{ name: "温度", values: [510.2, null, "525.7"] }],
+  });
+  assert.equal(traces.length, 1);
+  assert.deepEqual(traces[0].y, [510.2, null, 525.7]);
+});
+
+test("quality charts retain complete, failed, pending, and measured outcomes", () => {
+  const stack = qualityStackTraces([{ name: "系列 A", total: 10, complete: 7, failed: 1 }]);
+  const outcomes = qualityOutcomeTraces([{ name: "系列 A", pass: 7, fail: 2, inconclusive: 1 }]);
+  assert.deepEqual(stack.map(trace => trace.y[0]), [7, 1, 2]);
+  assert.deepEqual(outcomes.map(trace => trace.y[0]), [7, 2, 1]);
+});
+
+test("process traces preserve elapsed time, phase context, and baseline emphasis", () => {
+  const samples = extractProcessSamples([
+    { event: { eventType: "process.sample", occurredAt: "2026-07-23T08:00:00Z", context: { phase: "加热" }, data: { values: { temperature: 500 } } } },
+    { event: { eventType: "process.sample", occurredAt: "2026-07-23T08:00:01Z", context: { phase: "保压" }, data: { values: { temperature: 505 } } } },
+  ]);
+  const traces = processSignalTraces([{ correlationId: "cycle-1", machineId: "PRESS-01", startedAt: "2026-07-23T08:00:00Z", isBaseline: true }], { "cycle-1": samples }, "temperature");
+  assert.deepEqual(traces[0].x, [0, 1]);
+  assert.deepEqual(traces[0].customdata[1], ["2026-07-23T08:00:01Z", "保压"]);
+  assert.equal(traces[0].line.width, 3);
+});
+
+test("React Plotly renderer is responsive, lazy, and used by quality analysis", async () => {
+  const component = await readFile(new URL("../src/components/PlotlyChart.jsx", import.meta.url), "utf8");
+  const pages = await readFile(new URL("../src/pages/index.jsx", import.meta.url), "utf8");
+  assert.match(component, /import\("plotly\.js-basic-dist-min"\)/);
+  assert.match(component, /plotly\.react/);
+  assert.match(component, /responsive: true/);
+  assert.match(component, /ResizeObserver/);
+  assert.match(pages, /<PlotlyChart/);
+  assert.match(pages, /qualityOutcomeTraces/);
+});

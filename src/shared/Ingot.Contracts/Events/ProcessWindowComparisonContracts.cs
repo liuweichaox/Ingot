@@ -40,6 +40,7 @@ public sealed record ProcessWindowComparisonRow
     public required DateTimeOffset To { get; init; }
     public long EventCount { get; init; }
     public int SampleCount { get; init; }
+    public ProcessDataQualitySummary ProcessDataQuality { get; init; } = new();
     public IReadOnlyDictionary<string, string> Context { get; init; } = new Dictionary<string, string>();
     public IReadOnlyList<CycleSignalStatistic> Signals { get; init; } = [];
     public ProcessWindowQualitySummary Quality { get; init; } = new();

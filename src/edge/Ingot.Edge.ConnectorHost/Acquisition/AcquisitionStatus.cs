@@ -6,6 +6,8 @@ public sealed record AcquisitionStatusSnapshot(
     DateTimeOffset? LastAttemptAt,
     DateTimeOffset? LastSuccessAt,
     long SamplesCollected,
+    double? LastReadDurationMs,
+    double? ObservedIntervalMs,
     string? ActiveRecipe,
     string? LastError,
     IReadOnlyList<AcquisitionTaskStatusSnapshot> Tasks);
@@ -17,6 +19,8 @@ public sealed record AcquisitionTaskStatusSnapshot(
     DateTimeOffset? LastAttemptAt,
     DateTimeOffset? LastSuccessAt,
     long SamplesCollected,
+    double? LastReadDurationMs,
+    double? ObservedIntervalMs,
     string? ActiveRecipe,
     string? LastError);
 
@@ -46,6 +50,8 @@ public sealed class AcquisitionStatus
                 tasks.Select(static item => item.LastAttemptAt).Max(),
                 tasks.Select(static item => item.LastSuccessAt).Max(),
                 tasks.Sum(static item => item.SamplesCollected),
+                tasks.OrderByDescending(static item => item.LastSuccessAt).Select(static item => item.LastReadDurationMs).FirstOrDefault(),
+                tasks.OrderByDescending(static item => item.LastSuccessAt).Select(static item => item.ObservedIntervalMs).FirstOrDefault(),
                 tasks.Select(static item => item.ActiveRecipe).FirstOrDefault(static value => value is not null),
                 tasks.Select(static item => item.LastError).FirstOrDefault(static value => value is not null),
                 tasks);
@@ -71,6 +77,8 @@ public sealed class AcquisitionStatus
                     null,
                     0,
                     null,
+                    null,
+                    null,
                     null);
         }
     }
@@ -94,7 +102,8 @@ public sealed class AcquisitionStatus
         string configurationKey,
         DateTimeOffset timestamp,
         string? recipe,
-        bool incrementSample = true)
+        bool incrementSample = true,
+        double? readDurationMs = null)
     {
         lock (_gate)
         {
@@ -105,6 +114,10 @@ public sealed class AcquisitionStatus
                     State = "running",
                     LastSuccessAt = timestamp,
                     SamplesCollected = task.SamplesCollected + (incrementSample ? 1 : 0),
+                    LastReadDurationMs = readDurationMs ?? task.LastReadDurationMs,
+                    ObservedIntervalMs = task.LastSuccessAt.HasValue
+                        ? (timestamp - task.LastSuccessAt.Value).TotalMilliseconds
+                        : task.ObservedIntervalMs,
                     ActiveRecipe = recipe,
                     LastError = null
                 };

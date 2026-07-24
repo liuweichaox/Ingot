@@ -1,0 +1,62 @@
+{
+  "datasetId": "nasa-milling-wear",
+  "version": 1,
+  "industry": "cnc-machining",
+  "process": "milling-tool-wear",
+  "dataKind": "measured-machine-experiment",
+  "isMeasuredData": true,
+  "sourceUri": "https://data.nasa.gov/dataset/milling-wear",
+  "retrievalUri": "https://phm-datasets.s3.amazonaws.com/NASA/3.%20Milling.zip",
+  "archiveMemberPath": "3. Milling/mill.zip!/mill.mat",
+  "license": "United States Government Work",
+  "citation": "NASA Prognostics Center of Excellence, Milling Wear dataset, supplied by UC Berkeley BEST Lab",
+  "expectedSha256": "71486a857939d1416c86c7cf0c469d5e69c7c30495e01ec8a0e13aafd2a313cb",
+  "matVariableName": "mill",
+  "cycleColumn": "case",
+  "signalColumns": [
+    "smcAC",
+    "smcDC",
+    "vib_table",
+    "vib_spindle",
+    "AE_table",
+    "AE_spindle"
+  ],
+  "outcomeColumns": [
+    "VB"
+  ],
+  "units": {
+    "VB": "mm"
+  },
+  "validSignalRanges": {
+    "smcAC": {
+      "minimum": -10,
+      "maximum": 10,
+      "basis": "NASA readme: acquisition signals are constrained by instrument input ranges; this bound retains the observed current signal while rejecting non-physical decoded spikes."
+    },
+    "smcDC": {
+      "minimum": -10,
+      "maximum": 10,
+      "basis": "NASA readme: acquisition signals are constrained by instrument input ranges; this bound retains the observed current signal while rejecting non-physical decoded spikes."
+    },
+    "vib_table": {
+      "minimum": -5,
+      "maximum": 5,
+      "basis": "NASA readme: amplified vibration signals were designed for the +/-5 V maximum-load range."
+    },
+    "vib_spindle": {
+      "minimum": -5,
+      "maximum": 5,
+      "basis": "NASA readme: amplified vibration signals were designed for the +/-5 V maximum-load range."
+    },
+    "AE_table": {
+      "minimum": -5,
+      "maximum": 5,
+      "basis": "NASA readme: amplified acoustic-emission signals were designed for the +/-5 V maximum-load range."
+    },
+    "AE_spindle": {
+      "minimum": -5,
+      "maximum": 5,
+      "basis": "NASA readme: amplified acoustic-emission signals were designed for the +/-5 V maximum-load range."
+    }
+  }
+}

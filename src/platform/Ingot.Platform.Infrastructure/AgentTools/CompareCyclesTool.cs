@@ -17,7 +17,7 @@ public sealed class CompareCyclesTool(
     public AnalysisToolDefinition Definition { get; } = new()
     {
         Name = "compare_cycles",
-        Version = "1.0.0",
+        Version = "1.1.0",
         EntryPoint = ProductEntryPoints.Chat,
         Purpose = RunPurposes.ReadOnlyAnalysis,
         Description = "比较一个生产周期与一组同类周期的过程、检测结果和参数差异。只查询，不修改数据。",
@@ -96,11 +96,46 @@ public sealed class CompareCyclesTool(
             limitations.Add("部分同类周期没有生产记录。");
         if (processComparison is null)
             limitations.Add("没有匹配的已发布分析方案，未生成工艺信号和配方参数比较。");
+        else if (processComparison.EvidenceLevel == "insufficient")
+            limitations.Add("可用过程数据的有效周期权重不足 5，本次比较只能用于查看记录，不能形成工艺结论。");
+        else if (processComparison.EvidenceLevel == "exploratory")
+            limitations.Add("可用过程数据的有效周期权重不足 20，本次结果属于探索性比较。");
+        if (processComparison is not null && processComparison.QualityAssociations.Count == 0)
+            limitations.Add("合格组或不合格组样本不足，未生成质量关联候选因素。");
+        var topCandidate = processComparison?.QualityAssociations
+            .FirstOrDefault(static item => item.CandidateScore > 0);
+        if (topCandidate?.PossibleConfounders.Count > 0)
+            limitations.Add($"首要候选仍可能受 {string.Join("、", topCandidate.PossibleConfounders)} 等分组差异影响。");
+        limitations.Add("过程数据差异仅表示关联，不能据此直接认定原因或给出调参幅度。");
+        var details = new List<ResultDetailLink>
+        {
+            new()
+            {
+                Kind = "event-query",
+                Label = "基准周期生产记录明细（分页）",
+                Url = $"/api/v1/events?correlationId={Uri.EscapeDataString(baselineId)}&limit=500"
+            },
+            new()
+            {
+                Kind = "inspection-query",
+                Label = "基准周期检测记录明细（分页）",
+                Url = $"/api/v1/inspection-records?operationRunId={Uri.EscapeDataString(baselineId)}&limit=500"
+            }
+        };
+        if (topCandidate is not null)
+        {
+            details.Add(new ResultDetailLink
+            {
+                Kind = "cycle-phase-evidence",
+                Label = $"首要候选阶段证据：{topCandidate.SignalCode} / {topCandidate.PhaseName ?? topCandidate.PhaseCode ?? "整周期"} / {topCandidate.FeatureCode}",
+                Url = $"/api/v1/cycles/{Uri.EscapeDataString(baselineId)}"
+            });
+        }
 
         return new AnalysisToolResult
         {
             Tool = Definition.Name,
-            Summary = $"已比较基准周期 {baselineId} 与 {candidateIds.Length} 个对比周期：基准检测合格率 {FormatRate(baselinePassRate)}，对比周期检测合格率 {FormatRate(candidatePassRate)}。",
+            Summary = $"已比较基准周期 {baselineId} 与 {candidateIds.Length} 个对比周期：证据等级 {processComparison?.EvidenceLevel ?? "insufficient"}，基准检测合格率 {FormatRate(baselinePassRate)}，对比周期检测合格率 {FormatRate(candidatePassRate)}。{FormatCandidate(topCandidate)}",
             Data = JsonSerializer.SerializeToElement(new
             {
                 baselineCycleId = baselineId,
@@ -123,24 +158,11 @@ public sealed class CompareCyclesTool(
                     characteristics = comparison
                 }
             }),
-            Details =
-            [
-                new ResultDetailLink
-                {
-                    Kind = "event-query",
-                    Label = "基准周期生产记录明细（分页）",
-                    Url = $"/api/v1/events?correlationId={Uri.EscapeDataString(baselineId)}&limit=500"
-                },
-                new ResultDetailLink
-                {
-                    Kind = "inspection-query",
-                    Label = "基准周期检测记录明细（分页）",
-                    Url = $"/api/v1/inspection-records?operationRunId={Uri.EscapeDataString(baselineId)}&limit=500"
-                }
-            ],
+            Details = details,
             RelatedRecords = BuildRelatedRecords(baselineId, candidateIds),
             Limitations = limitations,
-            Outcome = baseline.Events > 0 && candidates.Any(static item => item.Events > 0)
+            Outcome = baseline.Events > 0 && candidates.Any(static item => item.Events > 0) &&
+                      processComparison?.EvidenceLevel is "exploratory" or "stable"
                 ? AnalysisToolOutcomes.Sufficient
                 : AnalysisToolOutcomes.InsufficientData
         };
@@ -185,6 +207,10 @@ public sealed class CompareCyclesTool(
                 var right = candidateValues.GetValueOrDefault(code, []);
                 var leftMean = left.Count == 0 ? (double?)null : left.Average();
                 var rightMean = right.Count == 0 ? (double?)null : right.Average();
+                var comparisonMedian = Percentile(right, 0.5);
+                var mad = comparisonMedian.HasValue
+                    ? Percentile(right.Select(value => Math.Abs(value - comparisonMedian.Value)).ToArray(), 0.5)
+                    : null;
                 return new
                 {
                     characteristicCode = code,
@@ -193,7 +219,15 @@ public sealed class CompareCyclesTool(
                     baselineAverage = leftMean,
                     comparisonAverage = rightMean,
                     averageDifference = leftMean.HasValue && rightMean.HasValue ? rightMean - leftMean : null,
-                    effectSize = CohenD(left, right)
+                    comparisonMedian,
+                    comparisonP10 = Percentile(right, 0.1),
+                    comparisonP90 = Percentile(right, 0.9),
+                    baselinePercentile = leftMean.HasValue && right.Count > 0
+                        ? right.Count(value => value <= leftMean.Value) / (double)right.Count
+                        : (double?)null,
+                    robustDeviation = leftMean.HasValue && comparisonMedian.HasValue && mad is > 0
+                        ? (leftMean.Value - comparisonMedian.Value) / (1.4826d * mad.Value)
+                        : (double?)null
                 };
             })
             .Cast<object>()
@@ -214,20 +248,6 @@ public sealed class CompareCyclesTool(
         }
 
         return values;
-    }
-
-    private static double? CohenD(IReadOnlyList<double> left, IReadOnlyList<double> right)
-    {
-        if (left.Count < 2 || right.Count < 2)
-            return null;
-        var pooled = Math.Sqrt((Variance(left) + Variance(right)) / 2d);
-        return pooled <= 0 ? null : (right.Average() - left.Average()) / pooled;
-    }
-
-    private static double Variance(IReadOnlyList<double> values)
-    {
-        var mean = values.Average();
-        return values.Sum(value => Math.Pow(value - mean, 2)) / (values.Count - 1);
     }
 
     private static double? Percentile(IReadOnlyList<double> values, double percentile)
@@ -274,6 +294,11 @@ public sealed class CompareCyclesTool(
 
     private static string FormatRate(double? value)
         => value.HasValue ? value.Value.ToString("P1") : "无检测记录";
+
+    private static string FormatCandidate(CycleQualityAssociation? candidate)
+        => candidate is null
+            ? "当前没有可排序的质量关联候选因素。"
+            : $"首要候选为 {candidate.SignalCode} / {candidate.PhaseName ?? candidate.PhaseCode ?? "整周期"} / {candidate.FeatureCode}，候选分数 {candidate.CandidateScore:F3}；该排序不等于已确认根因。";
 
     private sealed record CycleSnapshot(
         string CorrelationId,

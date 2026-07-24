@@ -230,8 +230,8 @@ public sealed partial class AcquisitionProfilesController(
                     uri.Scheme is not ("http" or "https"))
                     return Fail("设备地址必须是 HTTP 或 HTTPS 绝对地址。", out error);
                 if (string.IsNullOrWhiteSpace(value.Connection.SnapshotPath) ||
-                    value.Connection.PollIntervalMs < 100)
-                    return Fail("快照路径不能为空，采集周期不能小于 100ms。", out error);
+                    value.Connection.PollIntervalMs < 1)
+                    return Fail("快照路径不能为空，读取后等待时间必须大于 0ms。", out error);
                 break;
             case AcquisitionProtocols.Mqtt:
                 if (value.Mqtt is null || string.IsNullOrWhiteSpace(value.Mqtt.Host) ||
@@ -251,8 +251,8 @@ public sealed partial class AcquisitionProfilesController(
                     !Uri.TryCreate(value.OpcUa.EndpointUrl, UriKind.Absolute, out var opcUri) ||
                     opcUri.Scheme is not ("opc.tcp" or "https"))
                     return Fail("OPC UA 端点必须是 opc.tcp 或 HTTPS 绝对地址。", out error);
-                if (value.OpcUa.PublishingIntervalMs < 100 || value.OpcUa.SamplingIntervalMs < 100)
-                    return Fail("OPC UA 发布和采样周期不能小于 100ms。", out error);
+                if (value.OpcUa.PublishingIntervalMs < 1 || value.OpcUa.SamplingIntervalMs < 1)
+                    return Fail("OPC UA 发布和采样周期必须大于 0ms。", out error);
                 if (value.OpcUa.AuthenticationType is not ("anonymous" or "username" or "certificate"))
                     return Fail("OPC UA 身份认证类型无效。", out error);
                 if (value.OpcUa.SecurityMode is not ("none" or "sign" or "sign-and-encrypt") ||
@@ -271,8 +271,8 @@ public sealed partial class AcquisitionProfilesController(
                 break;
             case AcquisitionProtocols.ModbusTcp:
                 if (value.ModbusTcp is null || string.IsNullOrWhiteSpace(value.ModbusTcp.Host) ||
-                    value.ModbusTcp.Port is < 1 or > 65535 || value.ModbusTcp.PollIntervalMs < 100)
-                    return Fail("Modbus TCP 主机、端口或采集周期无效。", out error);
+                    value.ModbusTcp.Port is < 1 or > 65535 || value.ModbusTcp.PollIntervalMs < 1)
+                    return Fail("Modbus TCP 主机、端口或读取后等待时间无效。", out error);
                 break;
         }
         error = string.Empty;

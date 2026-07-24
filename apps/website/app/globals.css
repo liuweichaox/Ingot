@@ -1,4 +1,6 @@
-/* Ingot — 工艺追因引擎. Hand-authored, framework-free, modern CSS. */
+@import "tailwindcss";
+
+/* Ingot — 工艺调查与参数分析助手. */
 
 @property --angle { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
 @property --sheen { syntax: "<percentage>"; inherits: false; initial-value: 0%; }

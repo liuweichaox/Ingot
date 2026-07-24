@@ -141,6 +141,8 @@ public sealed class AcquisitionProtocolTests
         Assert.Equal(
             ["cycle.started", "recipe.applied", "recipe.step_changed", "process.sample"],
             firstEvents.Select(item => item.EventType));
+        Assert.Equal(1000, firstEvents[0].Data["pollDelayMs"]);
+        Assert.False(firstEvents[0].Data.ContainsKey("expectedSampleCount"));
 
         var nextCycle = first with
         {

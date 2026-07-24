@@ -190,11 +190,12 @@ public sealed class HttpPollingAcquisitionHostedService(
         var lifecycle = new AcquisitionLifecycleTracker();
 
         logger.LogInformation(
-            "采集配置已运行：Configuration={Configuration}, Device={Device}, Subject={SubjectType}/{SubjectId}, PeriodMs={PeriodMs}, Fields={FieldCount}",
+            "采集配置已运行：Configuration={Configuration}, Device={Device}, Subject={SubjectType}/{SubjectId}, PollDelayMs={PollDelayMs}, Fields={FieldCount}",
             key, client.BaseAddress, options.SubjectType, options.SubjectId, options.PollIntervalMs, options.Fields.Count);
 
         while (!ct.IsCancellationRequested)
         {
+            var readStarted = System.Diagnostics.Stopwatch.GetTimestamp();
             status.RecordAttempt(key, DateTimeOffset.UtcNow);
             try
             {
@@ -203,15 +204,19 @@ public sealed class HttpPollingAcquisitionHostedService(
                 var snapshot = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: ct)
                     .ConfigureAwait(false);
                 var mapped = HttpPollingSnapshotMapper.Map(snapshot, options, source, currentRecipe);
-                foreach (var productionEvent in lifecycle.Track(mapped, options.Lifecycle, options.SamplePeriodMs))
+                foreach (var productionEvent in lifecycle.Track(mapped, options.Lifecycle, options.PollIntervalMs))
                     await sink.EmitAsync(productionEvent, ct).ConfigureAwait(false);
                 currentRecipe = mapped.RecipeIdentity;
-                status.RecordSuccess(key, DateTimeOffset.UtcNow, currentRecipe);
+                status.RecordSuccess(
+                    key,
+                    DateTimeOffset.UtcNow,
+                    currentRecipe,
+                    readDurationMs: System.Diagnostics.Stopwatch.GetElapsedTime(readStarted).TotalMilliseconds);
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
                 status.RecordFailure(key, exception.Message);
-                logger.LogWarning(exception, "采集配置 {Configuration} 读取设备失败；下个采集周期重试", key);
+                logger.LogWarning(exception, "采集配置 {Configuration} 读取设备失败；等待后重试", key);
             }
 
             await Task.Delay(delay, ct).ConfigureAwait(false);

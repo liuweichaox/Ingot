@@ -1,4 +1,3 @@
-using System.Text.Json;
 using Ingot.Contracts.Events;
 using Ingot.Contracts.Inspections;
 using Ingot.Platform.Infrastructure.Events;
@@ -12,8 +11,13 @@ public sealed class CycleRecordService(
     IInspectionRecordStore inspections,
     IInspectionReviewStore reviews,
     IInspectionMasterDataStore masterData,
-    ProcessAnalysisResolver analysisResolver) : ICycleRecordService
+    ProcessAnalysisResolver analysisResolver,
+    WholeCycleAnalysisEngine? wholeCycleAnalysis = null,
+    CycleAnalysisMaterializer? materializer = null) : ICycleRecordService
 {
+    private readonly WholeCycleAnalysisEngine _wholeCycleAnalysis = wholeCycleAnalysis ?? new();
+    private readonly CycleAnalysisMaterializer? _materializer = materializer;
+
     public async Task<CycleRecordQueryResult> QueryAsync(
         DateTimeOffset? from,
         DateTimeOffset? to,
@@ -96,6 +100,15 @@ public sealed class CycleRecordService(
             .ToDictionary(static pair => pair.id, static pair => pair.Analysis, StringComparer.Ordinal);
         var recordsByCycle = records.GroupBy(static record => record.OperationRunId, StringComparer.Ordinal)
             .ToDictionary(static group => group.Key, static group => group.ToArray(), StringComparer.Ordinal);
+        var materializedByCycle = new Dictionary<string, MaterializedCycleAnalysis>(StringComparer.Ordinal);
+        foreach (var id in ids)
+        {
+            materializedByCycle[id] = await AnalyzeAsync(
+                id,
+                cycleEvents.GetValueOrDefault(id, []),
+                analyses[id],
+                ct).ConfigureAwait(false);
+        }
 
         var rows = candidates.Select(candidate => BuildSummary(
                 candidate.Id,
@@ -103,7 +116,8 @@ public sealed class CycleRecordService(
                 recordsByCycle.GetValueOrDefault(candidate.Id, []),
                 latestReviews,
                 plans,
-                analyses[candidate.Id]))
+                analyses[candidate.Id],
+                materializedByCycle[candidate.Id]))
             .ToArray();
         return new CycleRecordQueryResult
         {
@@ -114,7 +128,8 @@ public sealed class CycleRecordService(
                 CycleCount = allCandidates.Length,
                 CompletedCount = allCandidates.Count(static row => row.Completed),
                 ActiveCount = allCandidates.Count(static row => !row.Completed),
-                SampleCompleteCount = rows.Count(static row => row.SampleCompleteness >= 1d),
+                SampleCompleteCount = rows.Count(static row =>
+                    row.ProcessDataQuality.Status != ProcessDataStatuses.Unavailable),
                 PhaseCompleteCount = rows.Count(static row => row.PhaseComplete == true),
                 QualityCompleteCount = rows.Count(static row => row.QualityStatus == "COMPLETE"),
                 IssueCycleCount = rows.Count(static row => row.DataIssues.Count > 0)
@@ -122,13 +137,14 @@ public sealed class CycleRecordService(
         };
     }
 
-    private static CycleRecordSummary BuildSummary(
+    private CycleRecordSummary BuildSummary(
         string correlationId,
         IReadOnlyList<PlatformProductionEvent> rows,
         IReadOnlyList<InspectionRecord> inspectionRecords,
         IReadOnlyDictionary<Guid, InspectionReview> latestReviews,
         IReadOnlyList<InspectionPlan> plans,
-        ResolvedProcessAnalysis? analysis)
+        ResolvedProcessAnalysis? analysis,
+        MaterializedCycleAnalysis materialized)
     {
         var ordered = rows.OrderBy(static row => row.Event.OccurredAt).ThenBy(static row => row.IngestId).ToArray();
         var first = ordered[0];
@@ -137,37 +153,16 @@ public sealed class CycleRecordService(
         var samples = ordered.Where(static row => row.Event.EventType == "process.sample").ToArray();
         var startedAt = started?.Event.OccurredAt ?? first.Event.OccurredAt;
         var context = ResolveContext(ordered);
-        var expectedSampleCount = started is null ? 0 : ReadInt(started.Event.Data, "expectedSampleCount");
-        var resolvedSamples = samples.Select(sample => new
-        {
-            Row = sample,
-            Phase = analysis is null ? null : ProcessAnalysisResolver.ResolveStage(sample.Event.Context, analysis.DataModel)
-        }).ToArray();
+        var processAnalysis = materialized.Analysis;
         var requiredCodes = (analysis?.DataModel.Stages
                 .Where(static stage => stage.Required)
                 .Select(static stage => stage.Code) ?? [])
             .Distinct(StringComparer.Ordinal)
             .ToArray();
-        var stageDefinitions = analysis?.DataModel.Stages ?? [];
-        var phaseNames = stageDefinitions.ToDictionary(static phase => phase.Code, static phase => phase.Name, StringComparer.Ordinal);
-        var phaseOrder = stageDefinitions.Select((phase, index) => (phase.Code, index))
-            .ToDictionary(static item => item.Code, static item => item.index, StringComparer.Ordinal);
-        var observedCodes = resolvedSamples.Where(static item => !string.IsNullOrWhiteSpace(item.Phase))
-            .Select(static item => item.Phase!)
+        var phaseRows = processAnalysis.Phases;
+        var observedCodes = phaseRows.Where(static phase => phase.Code != "unknown")
+            .Select(static phase => phase.Code)
             .ToHashSet(StringComparer.Ordinal);
-        var phaseRows = resolvedSamples.Where(static item => !string.IsNullOrWhiteSpace(item.Phase))
-            .GroupBy(static item => item.Phase!, StringComparer.Ordinal)
-            .Select(group => new CyclePhaseSummary
-            {
-                Code = group.Key,
-                Name = phaseNames.GetValueOrDefault(group.Key, group.Key),
-                Required = requiredCodes.Contains(group.Key, StringComparer.Ordinal),
-                SampleCount = group.Count(),
-                StartedAt = group.Min(static item => item.Row.Event.OccurredAt),
-                EndedAt = group.Max(static item => item.Row.Event.OccurredAt)
-            })
-            .OrderBy(row => phaseOrder.GetValueOrDefault(row.Code, int.MaxValue))
-            .ToArray();
 
         var plan = InspectionPlanMatcher.Resolve(plans, context, first.Event.Subject.Id, startedAt);
         var requiredItems = plan?.Items.Where(static item => item.Required).ToArray() ?? [];
@@ -187,10 +182,7 @@ public sealed class CycleRecordService(
         var qualityStatus = ResolveQualityStatus(plan, requiredItems, completedItems, pendingReviews, inspectionRecords);
         var issues = BuildIssues(
             completed is not null,
-            samples.Length,
-            expectedSampleCount,
-            requiredCodes,
-            observedCodes,
+            processAnalysis.Quality,
             context);
         return new CycleRecordSummary
         {
@@ -214,9 +206,15 @@ public sealed class CycleRecordService(
             ExternalBatchRef = context.GetValueOrDefault("external_batch_ref"),
             MaterialLotRef = context.GetValueOrDefault("material_lot_ref"),
             SampleCount = samples.Length,
-            ExpectedSampleCount = expectedSampleCount,
-            SampleCompleteness = expectedSampleCount > 0 ? samples.Length / (double)expectedSampleCount : null,
-            PhaseCount = observedCodes.Count,
+            ExpectedSampleCount = 0,
+            SampleCompleteness = processAnalysis.Quality.Status switch
+            {
+                ProcessDataStatuses.Available => 1d,
+                ProcessDataStatuses.Degraded => 0.5d,
+                _ => 0d
+            },
+            ProcessDataQuality = processAnalysis.Quality,
+            PhaseCount = phaseRows.Count(static phase => phase.Code != "unknown"),
             RequiredPhaseCount = requiredCodes.Length,
             PhaseComplete = requiredCodes.Length == 0 ? null : requiredCodes.All(observedCodes.Contains),
             QualityStatus = qualityStatus,
@@ -227,6 +225,7 @@ public sealed class CycleRecordService(
             AnalysisPlanVersion = analysis?.Plan.Version,
             DataModelId = analysis?.DataModel.ModelId,
             DataModelVersion = analysis?.DataModel.Version,
+            AnalysisMaterialization = materialized.Materialization,
             InspectionCount = inspectionRecords.Count,
             RequiredInspectionCount = requiredItems.Length,
             CompletedInspectionCount = completedItems,
@@ -234,6 +233,43 @@ public sealed class CycleRecordService(
             Phases = phaseRows,
             DataIssues = issues
         };
+    }
+
+    private async Task<MaterializedCycleAnalysis> AnalyzeAsync(
+        string correlationId,
+        IReadOnlyList<PlatformProductionEvent> rows,
+        ResolvedProcessAnalysis? analysis,
+        CancellationToken ct)
+    {
+        var ordered = rows.OrderBy(static row => row.Event.OccurredAt).ThenBy(static row => row.IngestId).ToArray();
+        var startedAt = ordered.FirstOrDefault(static row => row.Event.EventType == "cycle.started")?.Event.OccurredAt;
+        var completedAt = ordered.LastOrDefault(static row => row.Event.EventType == "cycle.completed")?.Event.OccurredAt;
+        if (_materializer is not null)
+        {
+            return await _materializer.GetOrComputeAsync(
+                correlationId,
+                ordered,
+                startedAt,
+                completedAt,
+                analysis?.DataModel,
+                analysis?.Plan,
+                ct).ConfigureAwait(false);
+        }
+
+        return new MaterializedCycleAnalysis(
+            _wholeCycleAnalysis.Analyze(
+                ordered,
+                startedAt,
+                completedAt,
+                analysis?.DataModel,
+                analysis?.Plan),
+            new CycleAnalysisMaterialization
+            {
+                Status = "query-time",
+                AlgorithmVersion = WholeCycleAnalysisEngine.AlgorithmVersion,
+                SourceMaxIngestId = ordered.Length == 0 ? 0 : ordered.Max(static row => row.IngestId),
+                SourceEventCount = ordered.Length
+            });
     }
 
     private static string ResolveQualityStatus(
@@ -256,27 +292,16 @@ public sealed class CycleRecordService(
 
     private static IReadOnlyList<CycleDataIssue> BuildIssues(
         bool completed,
-        int sampleCount,
-        int expectedSampleCount,
-        IReadOnlyList<string> requiredPhases,
-        IReadOnlySet<string> observedPhases,
+        ProcessDataQualitySummary processData,
         IReadOnlyDictionary<string, string> context)
     {
         var issues = new List<CycleDataIssue>();
         if (!completed)
             issues.Add(Issue("cycle.active", "info", "周期尚未结束。"));
-        if (expectedSampleCount <= 0)
-            issues.Add(Issue("samples.expectation_missing", "warning", "未记录期望采样数，无法判断样本完整度。"));
-        else if (sampleCount < expectedSampleCount)
-            issues.Add(Issue("samples.incomplete", "error", $"样本缺少 {expectedSampleCount - sampleCount} 组。"));
-        if (requiredPhases.Count == 0)
-            issues.Add(Issue("phases.not_configured", "warning", "未配置必需阶段，无法判断阶段完整度。"));
-        else
-        {
-            var missing = requiredPhases.Where(code => !observedPhases.Contains(code)).ToArray();
-            if (missing.Length > 0)
-                issues.Add(Issue("phases.incomplete", "error", $"缺少阶段：{string.Join("、", missing)}。"));
-        }
+        issues.AddRange(processData.Issues.Select(message => Issue(
+            "process_data." + processData.Status,
+            processData.Status == ProcessDataStatuses.Unavailable ? "error" : "warning",
+            message)));
         foreach (var field in new[] { "product_series", "recipe_id", "workpiece_id" })
         {
             if (!context.TryGetValue(field, out var value) || string.IsNullOrWhiteSpace(value))
@@ -321,15 +346,6 @@ public sealed class CycleRecordService(
     }
 
     private static string? Normalize(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
-
-    private static int ReadInt(IReadOnlyDictionary<string, object?> data, string key)
-    {
-        if (!data.TryGetValue(key, out var raw))
-            return 0;
-        if (raw is JsonElement element && element.TryGetInt32(out var value))
-            return value;
-        return int.TryParse(Convert.ToString(raw), out value) ? value : 0;
-    }
 
     private async Task<IReadOnlyList<PlatformProductionEvent>> QueryAllAsync(
         PlatformEventQuery query,

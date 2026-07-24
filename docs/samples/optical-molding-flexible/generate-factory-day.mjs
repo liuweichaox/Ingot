@@ -210,7 +210,7 @@ function makeCycle({ date, machine, machineIndex, cycleIndex, profile, profileIn
       localOrder: localOrder++
     }))
   }
-  add('cycle.started', start, { expectedDurationMs: 600000, expectedSampleCount: 600, samplePeriodMs: 1000 })
+  add('cycle.started', start, { expectedDurationMs: 600000 })
   add('recipe.applied', start, {
     recipeProfileRef: `${recipeProfile.profileId}@${recipeProfile.version}`,
     recipeId: recipe.recipeId,
@@ -590,7 +590,7 @@ function manufacturingSetup(cycleResults, date) {
         removedAt,
         source: 'import',
         commandId: `factory-day:${date}:install:${machineId}:${installedAt}`,
-        actor: 'factory-day-simulator'
+        userId: 'factory-day-simulator'
       })
 
       let contextStart = 0
@@ -633,7 +633,7 @@ function manufacturingSetup(cycleResults, date) {
           validTo,
           source: 'import',
           externalBatchRef: `SIM-${date}`,
-          actor: 'factory-day-simulator'
+          userId: 'factory-day-simulator'
         })
 
         for (const result of contextResults) {

@@ -98,7 +98,8 @@ public sealed class QualityWorkflowTests
         AddCycle(rows, "HISTORY", "LENS-A", "PRESS-02", DateTimeOffset.Parse("2026-07-20T07:00:00Z"), rows.Count + 1);
         AddCycle(rows, "OTHER", "LENS-B", "PRESS-01", DateTimeOffset.Parse("2026-07-20T06:00:00Z"), rows.Count + 1);
         var baselineVisual = Inspection("BASE", "WP-BASE", "optical.appearance.machine", withAttachment: true);
-        var historyManual = Inspection("HISTORY", "WP-HISTORY", "optical.final.manual", withAttachment: false);
+        var historyManual = Inspection("HISTORY", "WP-HISTORY", "optical.final.manual", withAttachment: false)
+            with { Outcome = "FAIL" };
         var review = new InspectionReview
         {
             ReviewId = Guid.CreateVersion7(),
@@ -126,6 +127,11 @@ public sealed class QualityWorkflowTests
         Assert.Single(result.HistoricalCycles);
         Assert.Equal("HISTORY", result.HistoricalCycles[0].CorrelationId);
         Assert.Equal(600, result.Baseline.Signals.Single(item => item.Code == "press.load").SampleCount);
+        Assert.Contains(result.QualityAssociations, item =>
+            item.SignalCode == "press.load" &&
+            item.PhaseCode == "press" &&
+            item.PassCycleCount == 1 &&
+            item.FailCycleCount == 1);
         Assert.Equal(2, result.Acceptance.CompleteCycleCount);
         Assert.Equal(2, result.Acceptance.PhaseCompleteCycleCount);
 

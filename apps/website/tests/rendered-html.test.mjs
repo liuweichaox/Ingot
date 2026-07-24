@@ -29,14 +29,16 @@ const retiredTerms = new RegExp([
   "FactoryScene3D",
 ].join("|"), "i");
 
-test("renders the Chinese root around the root-cause positioning and trust guarantees", async () => {
+test("renders the Chinese root around process investigation and trust guarantees", async () => {
   const response = await render();
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
 
   const html = await response.text();
-  assert.match(html, /<title>Ingot — 工艺追因引擎 · 可核对、不编造数字的生产分析<\/title>/i);
-  assert.match(html, /Ingot · 工艺追因引擎/);
+  assert.match(html, /<title>Ingot — 工艺调查与参数分析助手 · 可核对、不编造数字的生产分析<\/title>/i);
+  assert.match(html, /Ingot · 工艺调查与参数分析助手/);
+  assert.match(html, /专家不用再手工对数据/);
+  assert.match(html, /示例 · 只读/);
   assert.match(html, /和上批不一样/);
   assert.match(html, /永不编造数字/);
   assert.match(html, /永不触碰设备/);
@@ -53,8 +55,10 @@ test("renders the stable English route with equivalent scope", async () => {
   const response = await render("/en/");
   assert.equal(response.status, 200);
   const html = await response.text();
-  assert.match(html, /<title>Ingot — Process Root-Cause Engine · verifiable answers, no hallucinated numbers<\/title>/i);
-  assert.match(html, /Ingot · Process Root-Cause Engine/);
+  assert.match(html, /<title>Ingot — Process Investigation Assistant · verifiable, read-only analysis<\/title>/i);
+  assert.match(html, /Ingot · Process Investigation Assistant/);
+  assert.match(html, /Experts stop hand-joining data/);
+  assert.match(html, /DEMO · READ-ONLY/);
   assert.match(html, /different from the last/i);
   assert.match(html, /Never invents a number/i);
   assert.match(html, /Why did yield suddenly drop/i);

@@ -1,6 +1,3 @@
-using System.Collections;
-using System.Globalization;
-using System.Text.Json;
 using Ingot.Contracts.Events;
 using Ingot.Contracts.Inspections;
 using Ingot.Platform.Infrastructure.Events;
@@ -12,8 +9,11 @@ namespace Ingot.Platform.Infrastructure.Cycles;
 public sealed class ProcessWindowComparisonService(
     IPlatformEventStore events,
     ProcessAnalysisResolver analysisResolver,
-    IInspectionRecordStore inspections) : IProcessWindowComparisonService
+    IInspectionRecordStore inspections,
+    WholeCycleAnalysisEngine? wholeCycleAnalysis = null) : IProcessWindowComparisonService
 {
+    private readonly WholeCycleAnalysisEngine _wholeCycleAnalysis = wholeCycleAnalysis ?? new();
+
     public async Task<ProcessWindowComparisonResult> CompareAsync(
         ProcessWindowComparisonRequest request,
         CancellationToken ct = default)
@@ -103,7 +103,7 @@ public sealed class ProcessWindowComparisonService(
         };
     }
 
-    private static ProcessWindowComparisonRow BuildRow(
+    private ProcessWindowComparisonRow BuildRow(
         ProcessAnalysisWindowSelection window,
         IReadOnlyList<PlatformProductionEvent> rows,
         ResolvedProcessAnalysis analysis,
@@ -111,20 +111,12 @@ public sealed class ProcessWindowComparisonService(
         IReadOnlyList<InspectionRecord> inspectionRecords)
     {
         var samples = rows.Where(static row => row.Event.EventType == "process.sample").ToArray();
-        var items = analysis.DataModel.Acquisition.DataItems.ToDictionary(static item => item.Code, StringComparer.Ordinal);
-        var selected = analysis.Plan.Signals.Where(signal => items.ContainsKey(signal.DataItemCode))
-            .Select(signal => items[signal.DataItemCode]).ToArray();
-        var buckets = selected.ToDictionary(static item => item.Code, static _ => new List<double>(), StringComparer.Ordinal);
-        foreach (var sample in samples)
-        {
-            if (!sample.Event.Data.TryGetValue("values", out var rawValues))
-                continue;
-            foreach (var item in selected)
-            {
-                if (TryReadNumber(rawValues, item.Code, out var value))
-                    buckets[item.Code].Add(value);
-            }
-        }
+        var processAnalysis = _wholeCycleAnalysis.Analyze(
+            rows,
+            window.From.ToUniversalTime(),
+            window.To.ToUniversalTime(),
+            analysis.DataModel,
+            analysis.Plan);
         return new ProcessWindowComparisonRow
         {
             WindowId = window.WindowId,
@@ -135,18 +127,10 @@ public sealed class ProcessWindowComparisonService(
             To = window.To.ToUniversalTime(),
             EventCount = rows.Count,
             SampleCount = samples.Length,
+            ProcessDataQuality = processAnalysis.Quality,
             Context = ResolveContext(rows),
             Quality = BuildQuality(scopes, inspectionRecords),
-            Signals = selected.Select(item => new CycleSignalStatistic
-            {
-                Code = item.Code,
-                Name = item.SourceField,
-                Unit = item.Unit,
-                SampleCount = buckets[item.Code].Count,
-                Average = buckets[item.Code].Count == 0 ? null : buckets[item.Code].Average(),
-                Minimum = buckets[item.Code].Count == 0 ? null : buckets[item.Code].Min(),
-                Maximum = buckets[item.Code].Count == 0 ? null : buckets[item.Code].Max()
-            }).ToArray()
+            Signals = processAnalysis.Signals
         };
     }
 
@@ -235,26 +219,6 @@ public sealed class ProcessWindowComparisonService(
             if (values.Length > 1)
                 throw new ArgumentException($"{source}包含多个 {key} 值，请缩小窗口或调整分析方案的同类比较键。");
         }
-    }
-
-    private static bool TryReadNumber(object? container, string key, out double value)
-    {
-        value = 0;
-        if (container is JsonElement element && element.ValueKind == JsonValueKind.Object &&
-            element.TryGetProperty(key, out var property) && property.TryGetDouble(out value))
-            return true;
-        if (container is IReadOnlyDictionary<string, object?> readOnly &&
-            readOnly.TryGetValue(key, out var raw) && TryConvert(raw, out value))
-            return true;
-        return container is IDictionary dictionary && dictionary.Contains(key) && TryConvert(dictionary[key], out value);
-    }
-
-    private static bool TryConvert(object? raw, out double value)
-    {
-        if (raw is JsonElement element && element.TryGetDouble(out value))
-            return true;
-        return double.TryParse(Convert.ToString(raw, CultureInfo.InvariantCulture), NumberStyles.Float,
-            CultureInfo.InvariantCulture, out value);
     }
 
     private async Task<IReadOnlyList<PlatformProductionEvent>> QueryAllAsync(PlatformEventQuery query, CancellationToken ct)

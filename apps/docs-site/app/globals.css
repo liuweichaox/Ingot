@@ -1,3 +1,4 @@
+@import "tailwindcss";
 @import "highlight.js/styles/github-dark.css";
 
 :root { --bg: #07110f; --panel: #0e1b18; --line: #253a35; --text: #e9f3ef; --muted: #9bb0a9; --accent: #e8ad56; color-scheme: dark; }

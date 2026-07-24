@@ -1,12 +1,13 @@
 # Ingot Platform Web
 
-基于 Vue 3 与 Vite 的 Platform 操作界面，提供数据接入节点、生产事件、指标、日志和 **Ingot Chat**。
+基于 React 19、Tailwind CSS、Headless UI 与 Vite 的 Platform 操作界面，提供工艺调查、机理—数据融合、知识复核、科研验证、数据接入节点、生产事件、指标、日志和 **Ingot Chat**。
 
 ## 产品入口
 
 - **Ingot Chat**：查询生产记录、比较周期差异并分析可能原因；回答可打开相关生产记录，并直接说明缺少的数据。
 - **数据接入节点**：查看用户自行部署的数据适配器接入状态。
 - **生产事件、指标与日志**：查看平台已接入的生产数据和运行状态。
+- **工艺改进**：管理调查、训练数据、机理模型、四种机理—数据融合、知识来源人工复核和科研验证。
 
 Ingot Chat 仅访问当前身份有权读取的生产数据，不提供设备控制、配置修改或数据写入。
 
@@ -38,6 +39,7 @@ npm run dev
 - dev server：`http://localhost:3000`
 - 事件页：`http://localhost:3000/events`
 - Ingot Chat：`http://localhost:3000/chat`
+- 工艺改进：`http://localhost:3000/process-improvement`
 - `vite.config.mjs` 将 `/api`、`/metrics` 和 `/health` 代理到 `http://localhost:8000`
 
 Ingot Chat 服务默认关闭。页面通过 `GET /api/v1/chat/capabilities` 获取当前可用的回答方式；对话、历史、流式结果和取消请求均使用 `/api/v1/chat/*`。

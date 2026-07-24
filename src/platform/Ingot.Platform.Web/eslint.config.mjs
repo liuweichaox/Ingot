@@ -1,17 +1,22 @@
 import js from "@eslint/js";
-import pluginVue from "eslint-plugin-vue";
+import react from "eslint-plugin-react";
 import globals from "globals";
 
 export default [
   { ignores: ["dist/**", "node_modules/**"] },
   js.configs.recommended,
-  ...pluginVue.configs["flat/recommended"],
   {
-    languageOptions: { globals: { ...globals.browser } },
+    files: ["src/**/*.{js,jsx}"],
+    languageOptions: {
+      ecmaVersion: "latest",
+      sourceType: "module",
+      parserOptions: { ecmaFeatures: { jsx: true } },
+      globals: { ...globals.browser },
+    },
+    plugins: { react },
     rules: {
-      "vue/multi-word-component-names": "off",
-      "vue/max-attributes-per-line": "off",
-      "vue/singleline-html-element-content-newline": "off",
+      "no-unused-vars": ["error", { argsIgnorePattern: "^_" }],
+      "react/jsx-uses-vars": "error",
     },
   },
 ];

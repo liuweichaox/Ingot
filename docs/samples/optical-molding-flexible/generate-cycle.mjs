@@ -131,9 +131,7 @@ const canonicalRecipe = JSON.stringify(
 const snapshotSha256 = createHash('sha256').update(canonicalRecipe).digest('hex')
 
 events.push(event('cycle.started', startedAt, {
-  expectedDurationMs: 600000,
-  expectedSampleCount: 600,
-  samplePeriodMs: acquisition.samplePeriodMs
+  expectedDurationMs: 600000
 }))
 events.push(event('recipe.applied', startedAt, {
   recipeProfileRef: recipe.profileRef,

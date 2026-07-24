@@ -1,6 +1,3 @@
-using System.Collections;
-using System.Globalization;
-using System.Text.Json;
 using Ingot.Contracts.Events;
 using Ingot.Contracts.Inspections;
 using Ingot.Contracts.ProcessConfiguration;
@@ -14,8 +11,13 @@ public sealed class CycleComparisonService(
     IPlatformEventStore events,
     IInspectionRecordStore inspections,
     IInspectionReviewStore reviews,
-    ProcessAnalysisResolver analysisResolver) : ICycleComparisonService
+    ProcessAnalysisResolver analysisResolver,
+    WholeCycleAnalysisEngine? wholeCycleAnalysis = null,
+    CycleAnalysisMaterializer? materializer = null) : ICycleComparisonService
 {
+    private readonly WholeCycleAnalysisEngine _wholeCycleAnalysis = wholeCycleAnalysis ?? new();
+    private readonly CycleAnalysisMaterializer? _materializer = materializer;
+
     public async Task<CycleComparisonResult?> CompareWithHistoryAsync(
         string correlationId,
         int limit,
@@ -43,16 +45,8 @@ public sealed class CycleComparisonService(
             .Take(limit)
             .Select(static item => item.Event.CorrelationId!)
             .ToArray();
-        var cycleEvents = new Dictionary<string, IReadOnlyList<PlatformProductionEvent>>(StringComparer.Ordinal)
-        {
-            [correlationId] = baselineEvents
-        };
-        foreach (var candidateId in candidateIds)
-        {
-            cycleEvents[candidateId] = await QueryAllAsync(
-                new PlatformEventQuery { CorrelationId = candidateId }, ct).ConfigureAwait(false);
-        }
         var allIds = new[] { correlationId }.Concat(candidateIds).ToArray();
+        var cycleEvents = await LoadCyclesAsync(allIds, ct).ConfigureAwait(false);
         return await BuildComparisonAsync(correlationId, allIds, cycleEvents, analysis, ct).ConfigureAwait(false);
     }
 
@@ -68,15 +62,9 @@ public sealed class CycleComparisonService(
         if (allIds.Length < 2)
             throw new ArgumentException("请选择至少两个不同的生产周期。", nameof(cycleIds));
 
-        var cycleEvents = new Dictionary<string, IReadOnlyList<PlatformProductionEvent>>(StringComparer.Ordinal);
-        foreach (var cycleId in allIds)
-        {
-            var rows = await QueryAllAsync(
-                new PlatformEventQuery { CorrelationId = cycleId }, ct).ConfigureAwait(false);
-            if (rows.Count == 0)
-                return null;
-            cycleEvents[cycleId] = rows;
-        }
+        var cycleEvents = await LoadCyclesAsync(allIds, ct).ConfigureAwait(false);
+        if (allIds.Any(id => !cycleEvents.TryGetValue(id, out var rows) || rows.Count == 0))
+            return null;
 
         var baselineContext = ResolveContext(cycleEvents[baselineCycleId]);
         var analysis = await analysisResolver.ResolveAsync(baselineContext, "production-cycle", ct)
@@ -119,22 +107,36 @@ public sealed class CycleComparisonService(
         }
         var inspectionsByCycle = allInspections.GroupBy(static record => record.OperationRunId, StringComparer.Ordinal)
             .ToDictionary(static group => group.Key, static group => group.ToArray(), StringComparer.Ordinal);
+        var materializedByCycle = new Dictionary<string, MaterializedCycleAnalysis>(StringComparer.Ordinal);
+        foreach (var id in allIds)
+        {
+            materializedByCycle[id] = await AnalyzeAsync(id, cycleEvents[id], analysis, ct).ConfigureAwait(false);
+        }
         var rows = allIds.Select(id => BuildRow(
                 id,
                 cycleEvents[id],
                 inspectionsByCycle.GetValueOrDefault(id, []),
                 latestReviews,
                 analysis,
-                recipesByCycle[id]))
+                recipesByCycle[id],
+                materializedByCycle[id]))
             .ToArray();
         var acceptance = new CycleComparisonAcceptance
         {
             CycleCount = rows.Length,
-            CompleteCycleCount = rows.Count(static row => row.SampleCompleteness >= 1d && row.CompletedAt.HasValue),
+            CompleteCycleCount = rows.Count(static row => row.CompletedAt.HasValue),
             PhaseCompleteCycleCount = rows.Count(static row => row.PhaseComplete),
             QualityLinkedCycleCount = rows.Count(static row => row.InspectionOutcomes.Count > 0),
-            VisualReviewCompletedCycleCount = rows.Count(static row => !string.IsNullOrWhiteSpace(row.VisualReviewDecision))
+            VisualReviewCompletedCycleCount = rows.Count(static row => !string.IsNullOrWhiteSpace(row.VisualReviewDecision)),
+            AvailableCycleCount = rows.Count(static row =>
+                row.ProcessDataQuality.Status == ProcessDataStatuses.Available),
+            DegradedCycleCount = rows.Count(static row =>
+                row.ProcessDataQuality.Status == ProcessDataStatuses.Degraded),
+            UnavailableCycleCount = rows.Count(static row =>
+                row.ProcessDataQuality.Status == ProcessDataStatuses.Unavailable),
+            EffectiveCycleWeight = rows.Skip(1).Sum(static row => row.EvidenceWeight)
         };
+        var effectiveWeight = acceptance.EffectiveCycleWeight;
         return new CycleComparisonResult
         {
             BaselineCycleId = baselineCycleId,
@@ -145,39 +147,226 @@ public sealed class CycleComparisonService(
             DataModelVersion = analysis?.DataModel.Version,
             AnalysisScope = analysis?.Plan.AnalysisScope ?? "production-cycle",
             AlignmentMode = analysis?.Plan.AlignmentMode,
+            FeatureAlgorithmVersion = WholeCycleAnalysisEngine.AlgorithmVersion,
+            EvidenceLevel = rows[0].ProcessDataQuality.Status == ProcessDataStatuses.Unavailable ||
+                            effectiveWeight < 5
+                ? "insufficient"
+                : effectiveWeight < 20 ? "exploratory" : "stable",
             Baseline = rows[0],
             HistoricalCycles = rows.Skip(1).ToArray(),
+            SignalComparisons = BuildSignalComparisons(rows[0], rows.Skip(1).ToArray()),
+            QualityAssociations = BuildQualityAssociations(rows),
             Acceptance = acceptance
         };
     }
 
-    private static CycleComparisonRow BuildRow(
+    private static IReadOnlyList<CycleQualityAssociation> BuildQualityAssociations(
+        IReadOnlyList<CycleComparisonRow> rows)
+    {
+        var passRows = rows.Where(static row =>
+                row.EvidenceWeight > 0 &&
+                row.InspectionOutcomes.Contains("PASS", StringComparer.Ordinal) &&
+                !row.InspectionOutcomes.Contains("FAIL", StringComparer.Ordinal))
+            .ToArray();
+        var failRows = rows.Where(static row =>
+                row.EvidenceWeight > 0 &&
+                row.InspectionOutcomes.Contains("FAIL", StringComparer.Ordinal))
+            .ToArray();
+        if (passRows.Length == 0 || failRows.Length == 0)
+            return [];
+
+        var confounders = FindPossibleConfounders(passRows, failRows);
+        var keys = rows.SelectMany(row => row.Signals.SelectMany(signal =>
+                signal.Features.Where(static feature => feature.Value.HasValue)
+                    .Select(feature => new FeatureKey(
+                        signal.Code,
+                        feature.Code,
+                        feature.PhaseCode,
+                        feature.PhaseName,
+                        feature.PhaseOrder))))
+            .Distinct()
+            .ToArray();
+        return keys.Select(key =>
+            {
+                var pass = FeatureValues(passRows, key);
+                var fail = FeatureValues(failRows, key);
+                var passMedian = WeightedPercentile(pass, 0.5);
+                var failMedian = WeightedPercentile(fail, 0.5);
+                var combined = pass.Concat(fail).ToArray();
+                var combinedMedian = WeightedPercentile(combined, 0.5);
+                var mad = combinedMedian.HasValue
+                    ? WeightedPercentile(
+                        combined.Select(item =>
+                            new WeightedValue(Math.Abs(item.Value - combinedMedian.Value), item.Weight)).ToArray(),
+                        0.5)
+                    : null;
+                var robustEffect = passMedian.HasValue && failMedian.HasValue && mad is > 0
+                    ? (double?)((failMedian.Value - passMedian.Value) / (1.4826d * mad.Value))
+                    : (double?)null;
+                var relativeDifference = passMedian.HasValue && failMedian.HasValue
+                    ? (double?)((failMedian.Value - passMedian.Value) /
+                      Math.Max(Math.Max(Math.Abs(passMedian.Value), Math.Abs(failMedian.Value)), 1e-9d))
+                    : (double?)null;
+                var passWeight = pass.Sum(static item => item.Weight);
+                var failWeight = fail.Sum(static item => item.Weight);
+                var support = Math.Min(1d, Math.Min(passWeight, failWeight) / 5d);
+                return new CycleQualityAssociation
+                {
+                    SignalCode = key.SignalCode,
+                    FeatureCode = key.FeatureCode,
+                    PhaseCode = key.PhaseCode,
+                    PhaseName = key.PhaseName,
+                    PhaseOrder = key.PhaseOrder,
+                    PassCycleCount = pass.Length,
+                    FailCycleCount = fail.Length,
+                    PassEffectiveWeight = passWeight,
+                    FailEffectiveWeight = failWeight,
+                    PassMedian = passMedian,
+                    FailMedian = failMedian,
+                    MedianDifference = passMedian.HasValue && failMedian.HasValue
+                        ? failMedian.Value - passMedian.Value
+                        : null,
+                    RobustEffect = robustEffect,
+                    CandidateScore = Math.Abs(robustEffect ?? relativeDifference ?? 0) * support,
+                    EvidenceLevel = passWeight >= 5 && failWeight >= 5
+                        ? "stable"
+                        : passWeight >= 2 && failWeight >= 2 ? "exploratory" : "insufficient",
+                    PossibleConfounders = confounders
+                };
+            })
+            .Where(static item => item.PassCycleCount > 0 && item.FailCycleCount > 0)
+            .OrderByDescending(static item => item.CandidateScore)
+            .ThenBy(static item => item.SignalCode, StringComparer.Ordinal)
+            .ThenBy(static item => item.PhaseOrder)
+            .ThenBy(static item => item.FeatureCode, StringComparer.Ordinal)
+            .Take(100)
+            .ToArray();
+    }
+
+    private static WeightedValue[] FeatureValues(
+        IReadOnlyList<CycleComparisonRow> rows,
+        FeatureKey key)
+        => rows.Select(row =>
+            {
+                var feature = row.Signals.FirstOrDefault(signal => signal.Code == key.SignalCode)?
+                    .Features.FirstOrDefault(item =>
+                        item.Code == key.FeatureCode &&
+                        item.PhaseCode == key.PhaseCode &&
+                        item.PhaseOrder == key.PhaseOrder);
+                return feature?.Value is { } value
+                    ? new WeightedValue(value, row.EvidenceWeight)
+                    : null;
+            })
+            .Where(static item => item is not null)
+            .Cast<WeightedValue>()
+            .ToArray();
+
+    private static IReadOnlyList<string> FindPossibleConfounders(
+        IReadOnlyList<CycleComparisonRow> passRows,
+        IReadOnlyList<CycleComparisonRow> failRows)
+    {
+        var result = new List<string>();
+        AddIfDifferent("product_code", static row => row.ProductCode);
+        AddIfDifferent("machine_id", static row => row.MachineId);
+        AddIfDifferent("recipe", static row => $"{row.RecipeId}@{row.RecipeVersion}");
+        AddIfDifferent("mold_id", static row => row.MoldId ?? row.ToolingId);
+        return result;
+
+        void AddIfDifferent(string name, Func<CycleComparisonRow, string?> selector)
+        {
+            var pass = passRows.Select(selector).Where(static value => !string.IsNullOrWhiteSpace(value))
+                .Cast<string>().ToHashSet(StringComparer.Ordinal);
+            var fail = failRows.Select(selector).Where(static value => !string.IsNullOrWhiteSpace(value))
+                .Cast<string>().ToHashSet(StringComparer.Ordinal);
+            if (pass.Count > 0 && fail.Count > 0 && !pass.SetEquals(fail))
+                result.Add(name);
+        }
+    }
+
+    private static IReadOnlyList<CycleSignalComparison> BuildSignalComparisons(
+        CycleComparisonRow baseline,
+        IReadOnlyList<CycleComparisonRow> historical)
+    {
+        var eligible = historical.Where(static row => row.EvidenceWeight > 0).ToArray();
+        return baseline.Signals.SelectMany(signal => signal.Features.Select(feature =>
+        {
+            var weighted = eligible.Select(row =>
+            {
+                var value = row.Signals.FirstOrDefault(item => item.Code == signal.Code)?
+                    .Features.FirstOrDefault(item =>
+                        item.Code == feature.Code &&
+                        item.PhaseCode == feature.PhaseCode &&
+                        item.PhaseOrder == feature.PhaseOrder)?.Value;
+                return value.HasValue ? new WeightedValue(value.Value, row.EvidenceWeight) : null;
+            }).Where(static item => item is not null).Cast<WeightedValue>().ToArray();
+            var median = WeightedPercentile(weighted, 0.5);
+            var deviations = median.HasValue
+                ? weighted.Select(item => new WeightedValue(Math.Abs(item.Value - median.Value), item.Weight)).ToArray()
+                : [];
+            var mad = WeightedPercentile(deviations, 0.5);
+            double? baselinePercentile = feature.Value.HasValue && weighted.Length > 0
+                ? weighted.Where(item => item.Value <= feature.Value.Value).Sum(static item => item.Weight) /
+                  weighted.Sum(static item => item.Weight)
+                : null;
+            return new CycleSignalComparison
+            {
+                SignalCode = signal.Code,
+                FeatureCode = feature.Code,
+                PhaseCode = feature.PhaseCode,
+                PhaseName = feature.PhaseName,
+                PhaseOrder = feature.PhaseOrder,
+                BaselineValue = feature.Value,
+                HistoricalMedian = median,
+                HistoricalP10 = WeightedPercentile(weighted, 0.1),
+                HistoricalP90 = WeightedPercentile(weighted, 0.9),
+                BaselinePercentile = baselinePercentile,
+                RobustDeviation = feature.Value.HasValue && median.HasValue && mad is > 0
+                    ? (feature.Value.Value - median.Value) / (1.4826d * mad.Value)
+                    : null,
+                EffectiveWeight = weighted.Sum(static item => item.Weight)
+            };
+        })).ToArray();
+    }
+
+    private static double? WeightedPercentile(IReadOnlyList<WeightedValue> values, double percentile)
+    {
+        if (values.Count == 0)
+            return null;
+        var ordered = values.OrderBy(static item => item.Value).ToArray();
+        var target = ordered.Sum(static item => item.Weight) * percentile;
+        var cumulative = 0d;
+        foreach (var item in ordered)
+        {
+            cumulative += item.Weight;
+            if (cumulative >= target)
+                return item.Value;
+        }
+        return ordered[^1].Value;
+    }
+
+    private CycleComparisonRow BuildRow(
         string correlationId,
         IReadOnlyList<PlatformProductionEvent> rows,
         IReadOnlyList<InspectionRecord> inspectionRecords,
         IReadOnlyDictionary<Guid, InspectionReview> latestReviews,
         ResolvedProcessAnalysis? analysis,
-        RecipeVersion? recipe)
+        RecipeVersion? recipe,
+        MaterializedCycleAnalysis materialized)
     {
         var ordered = rows.OrderBy(static row => row.Event.OccurredAt).ThenBy(static row => row.IngestId).ToArray();
         var first = ordered[0];
         var started = ordered.FirstOrDefault(static row => row.Event.EventType == "cycle.started");
         var completed = ordered.LastOrDefault(static row => row.Event.EventType == "cycle.completed");
         var samples = ordered.Where(static row => row.Event.EventType == "process.sample").ToArray();
-        var expectedSampleCount = started is null ? 0 : ReadInt(started.Event.Data, "expectedSampleCount");
-        if (expectedSampleCount <= 0)
-            expectedSampleCount = samples.Length;
+        var wholeCycle = materialized.Analysis;
         var visualRecord = inspectionRecords.Where(static record => record.Attachments.Count > 0)
             .OrderByDescending(static record => record.MeasuredAt)
             .FirstOrDefault();
         var visualReview = visualRecord is null ? null : latestReviews.GetValueOrDefault(visualRecord.RecordId);
         var context = ResolveContext(ordered);
-        var phases = samples.Select(row => analysis is null
-                ? null
-                : ProcessAnalysisResolver.ResolveStage(row.Event.Context, analysis.DataModel))
-            .Where(static value => !string.IsNullOrWhiteSpace(value))
-            .Cast<string>()
-            .Distinct(StringComparer.Ordinal)
+        var observedPhases = wholeCycle.Phases
+            .Where(static phase => phase.Code != "unknown")
+            .Select(static phase => phase.Code)
             .ToHashSet(StringComparer.Ordinal);
         var requiredPhases = analysis?.DataModel.Stages
             .Where(static stage => stage.Required)
@@ -203,51 +392,68 @@ public sealed class CycleComparisonService(
             AssemblyRevisionId = ProcessAnalysisResolver.ContextValue(context, "assembly_revision_id"),
             AssemblyRevision = ProcessAnalysisResolver.ContextValue(context, "assembly_revision"),
             SampleCount = samples.Length,
-            ExpectedSampleCount = expectedSampleCount,
-            SampleCompleteness = expectedSampleCount == 0 ? 0 : samples.Length / (double)expectedSampleCount,
-            PhaseCount = phases.Count,
+            ExpectedSampleCount = 0,
+            SampleCompleteness = wholeCycle.Quality.Status switch
+            {
+                ProcessDataStatuses.Available => 1d,
+                ProcessDataStatuses.Degraded => 0.5d,
+                _ => 0d
+            },
+            ProcessDataQuality = wholeCycle.Quality,
+            EvidenceWeight = wholeCycle.Quality.Status switch
+            {
+                ProcessDataStatuses.Available => 1d,
+                ProcessDataStatuses.Degraded => 0.5d,
+                _ => 0d
+            },
+            PhaseCount = wholeCycle.Phases.Count(static phase => phase.Code != "unknown"),
             RequiredPhaseCount = requiredPhases.Length,
-            PhaseComplete = requiredPhases.Length > 0 && requiredPhases.All(phases.Contains),
+            PhaseComplete = requiredPhases.Length > 0 && requiredPhases.All(observedPhases.Contains),
             InspectionOutcomes = inspectionRecords.Select(static record => record.Outcome)
                 .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray(),
             VisualReviewDecision = visualReview?.Decision,
-            Signals = BuildSignalStatistics(samples, analysis),
+            Signals = wholeCycle.Signals,
+            Phases = wholeCycle.Phases,
+            AnalysisMaterialization = materialized.Materialization,
             RecipeParameters = BuildRecipeParameters(recipe, analysis?.DataModel)
         };
     }
 
-    private static IReadOnlyList<CycleSignalStatistic> BuildSignalStatistics(
-        IReadOnlyList<PlatformProductionEvent> samples,
-        ResolvedProcessAnalysis? analysis)
+    private async Task<MaterializedCycleAnalysis> AnalyzeAsync(
+        string correlationId,
+        IReadOnlyList<PlatformProductionEvent> rows,
+        ResolvedProcessAnalysis? analysis,
+        CancellationToken ct)
     {
-        if (analysis is null)
-            return [];
-        var items = analysis.DataModel.Acquisition.DataItems.ToDictionary(static item => item.Code, StringComparer.Ordinal);
-        var comparisonSignals = analysis.Plan.Signals
-            .Where(selection => items.ContainsKey(selection.DataItemCode))
-            .Select(selection => items[selection.DataItemCode])
-            .ToArray();
-        var values = comparisonSignals.ToDictionary(static definition => definition.Code, static _ => new List<double>(), StringComparer.Ordinal);
-        foreach (var sample in samples)
+        var ordered = rows.OrderBy(static row => row.Event.OccurredAt).ThenBy(static row => row.IngestId).ToArray();
+        var startedAt = ordered.FirstOrDefault(static row => row.Event.EventType == "cycle.started")?.Event.OccurredAt;
+        var completedAt = ordered.LastOrDefault(static row => row.Event.EventType == "cycle.completed")?.Event.OccurredAt;
+        if (_materializer is not null)
         {
-            if (!sample.Event.Data.TryGetValue("values", out var rawValues))
-                continue;
-            foreach (var signal in comparisonSignals.Select(static definition => definition.Code))
-            {
-                if (TryReadNumber(rawValues, signal, out var number))
-                    values[signal].Add(number);
-            }
+            return await _materializer.GetOrComputeAsync(
+                correlationId,
+                ordered,
+                startedAt,
+                completedAt,
+                analysis?.DataModel,
+                analysis?.Plan,
+                ct).ConfigureAwait(false);
         }
-        return comparisonSignals.Select(definition => new CycleSignalStatistic
-        {
-            Code = definition.Code,
-            Name = definition.SourceField,
-            Unit = definition.Unit,
-            SampleCount = values[definition.Code].Count,
-            Average = values[definition.Code].Count == 0 ? null : values[definition.Code].Average(),
-            Minimum = values[definition.Code].Count == 0 ? null : values[definition.Code].Min(),
-            Maximum = values[definition.Code].Count == 0 ? null : values[definition.Code].Max()
-        }).ToArray();
+
+        return new MaterializedCycleAnalysis(
+            _wholeCycleAnalysis.Analyze(
+                ordered,
+                startedAt,
+                completedAt,
+                analysis?.DataModel,
+                analysis?.Plan),
+            new CycleAnalysisMaterialization
+            {
+                Status = "query-time",
+                AlgorithmVersion = WholeCycleAnalysisEngine.AlgorithmVersion,
+                SourceMaxIngestId = ordered.Length == 0 ? 0 : ordered.Max(static row => row.IngestId),
+                SourceEventCount = ordered.Length
+            });
     }
 
     private static IReadOnlyList<CycleRecipeParameter> BuildRecipeParameters(
@@ -316,35 +522,6 @@ public sealed class CycleComparisonService(
         => rows.Select(static row => row.Event.Context).FirstOrDefault(static context => context.Count > 0)
            ?? new Dictionary<string, string>(StringComparer.Ordinal);
 
-    private static bool TryReadNumber(object? container, string key, out double value)
-    {
-        value = 0;
-        if (container is JsonElement element && element.ValueKind == JsonValueKind.Object &&
-            element.TryGetProperty(key, out var property) && property.TryGetDouble(out value))
-            return true;
-        if (container is IReadOnlyDictionary<string, object?> readOnly &&
-            readOnly.TryGetValue(key, out var raw) && TryConvert(raw, out value))
-            return true;
-        return container is IDictionary dictionary && dictionary.Contains(key) && TryConvert(dictionary[key], out value);
-    }
-
-    private static bool TryConvert(object? raw, out double value)
-    {
-        if (raw is JsonElement element && element.TryGetDouble(out value))
-            return true;
-        return double.TryParse(Convert.ToString(raw, CultureInfo.InvariantCulture), NumberStyles.Float,
-            CultureInfo.InvariantCulture, out value);
-    }
-
-    private static int ReadInt(IReadOnlyDictionary<string, object?> data, string key)
-    {
-        if (!data.TryGetValue(key, out var raw))
-            return 0;
-        if (raw is JsonElement element && element.TryGetInt32(out var parsed))
-            return parsed;
-        return int.TryParse(Convert.ToString(raw, CultureInfo.InvariantCulture), out parsed) ? parsed : 0;
-    }
-
     private async Task<IReadOnlyList<PlatformProductionEvent>> QueryAllAsync(
         PlatformEventQuery query,
         CancellationToken ct)
@@ -366,4 +543,28 @@ public sealed class CycleComparisonService(
         }
         return result;
     }
+
+    private async Task<IReadOnlyDictionary<string, IReadOnlyList<PlatformProductionEvent>>> LoadCyclesAsync(
+        IReadOnlyCollection<string> correlationIds,
+        CancellationToken ct)
+    {
+        var rows = await events.QueryByCorrelationIdsAsync(correlationIds, ct).ConfigureAwait(false);
+        return rows
+            .Where(static row => !string.IsNullOrWhiteSpace(row.Event.CorrelationId))
+            .GroupBy(static row => row.Event.CorrelationId!, StringComparer.Ordinal)
+            .ToDictionary(
+                static group => group.Key,
+                static group => (IReadOnlyList<PlatformProductionEvent>)group
+                    .OrderBy(static row => row.IngestId)
+                    .ToArray(),
+                StringComparer.Ordinal);
+    }
+
+    private sealed record WeightedValue(double Value, double Weight);
+    private sealed record FeatureKey(
+        string SignalCode,
+        string FeatureCode,
+        string? PhaseCode,
+        string? PhaseName,
+        int? PhaseOrder);
 }
