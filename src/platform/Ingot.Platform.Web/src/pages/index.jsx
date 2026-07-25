@@ -33,6 +33,110 @@ import {
 
 const formatTime = value => value ? new Date(value).toLocaleString("zh-CN") : "—";
 
+const inspectionInputTypeLabels = {
+  numeric: "数值",
+  text: "文本",
+  select: "选项",
+  boolean: "是/否",
+};
+
+function emptyInspectionCharacteristic() {
+  return {
+    code: "",
+    name: "",
+    inputType: "numeric",
+    unit: "",
+    lowerLimit: "",
+    upperLimit: "",
+    allowedValuesText: "",
+    required: true,
+  };
+}
+
+function inspectionDefinitionForm(value = {}, version) {
+  const characteristics = Array.isArray(value.characteristics) && value.characteristics.length > 0
+    ? value.characteristics.map(characteristic => ({
+      code: characteristic.code || "",
+      name: characteristic.name || "",
+      inputType: characteristic.inputType || "numeric",
+      unit: characteristic.unit || "",
+      lowerLimit: characteristic.lowerLimit ?? "",
+      upperLimit: characteristic.upperLimit ?? "",
+      allowedValuesText: (characteristic.allowedValues || []).join("\n"),
+      required: characteristic.required !== false,
+    }))
+    : [emptyInspectionCharacteristic()];
+
+  return {
+    code: value.code || "",
+    version: version ?? value.version ?? 1,
+    name: value.name || "",
+    description: value.description || "",
+    characteristics,
+  };
+}
+
+function inspectionDefinitionPayload(form) {
+  return {
+    code: form.code.trim(),
+    version: Number(form.version),
+    name: form.name.trim(),
+    description: form.description.trim() || null,
+    characteristics: form.characteristics.map(characteristic => ({
+      code: characteristic.code.trim(),
+      name: characteristic.name.trim(),
+      inputType: characteristic.inputType,
+      unit: characteristic.inputType === "numeric" ? characteristic.unit.trim() || null : null,
+      lowerLimit: characteristic.inputType === "numeric" && characteristic.lowerLimit !== ""
+        ? Number(characteristic.lowerLimit)
+        : null,
+      upperLimit: characteristic.inputType === "numeric" && characteristic.upperLimit !== ""
+        ? Number(characteristic.upperLimit)
+        : null,
+      allowedValues: characteristic.inputType === "select"
+        ? characteristic.allowedValuesText.split(/\r?\n|,/).map(value => value.trim()).filter(Boolean)
+        : [],
+      required: characteristic.required,
+    })),
+  };
+}
+
+function inspectionDefinitionValidation(form) {
+  const codePattern = /^[a-z][a-z0-9_-]*(?:\.[a-z0-9][a-z0-9_-]*)*$/;
+  if (!codePattern.test(form.code.trim())) return "定义代码需使用小写点分格式，例如 hardness.final。";
+  if (!Number.isInteger(Number(form.version)) || Number(form.version) < 1) return "版本必须是大于 0 的整数。";
+  if (!form.name.trim()) return "请填写定义名称。";
+  if (form.characteristics.length === 0) return "请至少添加一个检测特性。";
+
+  const codes = new Set();
+  for (const [index, characteristic] of form.characteristics.entries()) {
+    const position = `第 ${index + 1} 个检测特性`;
+    const code = characteristic.code.trim();
+    if (!codePattern.test(code)) return `${position}的代码需使用小写点分格式。`;
+    if (codes.has(code)) return `检测特性代码“${code}”重复。`;
+    codes.add(code);
+    if (!characteristic.name.trim()) return `${position}缺少名称。`;
+    if (characteristic.inputType === "select" &&
+        !characteristic.allowedValuesText.split(/\r?\n|,/).some(value => value.trim())) {
+      return `${position}是选项类型，请至少填写一个可选值。`;
+    }
+    if (characteristic.inputType === "numeric") {
+      const lower = characteristic.lowerLimit === "" ? null : Number(characteristic.lowerLimit);
+      const upper = characteristic.upperLimit === "" ? null : Number(characteristic.upperLimit);
+      if ((lower !== null && !Number.isFinite(lower)) || (upper !== null && !Number.isFinite(upper))) {
+        return `${position}的上下限必须是有效数字。`;
+      }
+      if (lower !== null && upper !== null && lower > upper) return `${position}的下限不能大于上限。`;
+    }
+  }
+  return "";
+}
+
+function inspectionInputTypes(characteristics) {
+  if (!Array.isArray(characteristics) || characteristics.length === 0) return "—";
+  return [...new Set(characteristics.map(item => inspectionInputTypeLabels[item.inputType] || item.inputType))].join("、");
+}
+
 function LoadingCard() {
   return (
     <Card>
@@ -1614,9 +1718,12 @@ const registryPages = {
     deleteUrl: value => `/api/v1/process-analysis-plans/${encodeURIComponent(value.planId)}/${value.version}`,
   },
   definitions: {
-    title: "检测定义", description: "定义特性、录入类型、单位与判定规则。", endpoint: "/api/v1/inspection-definitions", key: "code",
-    columns: [["code", "代码"], ["version", "版本"], ["name", "名称"], ["inputType", "录入类型"], ["status", "状态"]],
-    template: { code: "", version: 1, name: "", description: "", status: "draft", inputType: "number", unit: "", required: true, allowedValues: [], minimum: null, maximum: null },
+    kind: "inspectionDefinition",
+    title: "检测定义", description: "定义检测项目、录入方式、单位和判定范围。", endpoint: "/api/v1/inspection-definitions", key: "code",
+    createLabel: "创建检测定义",
+    columns: [["code", "代码"], ["version", "版本"], ["name", "名称"], ["characteristics", "录入类型"], ["updatedAt", "更新时间"]],
+    render: { characteristics: inspectionInputTypes },
+    template: { code: "", version: 1, name: "", description: "", characteristics: [] },
     deleteUrl: value => `/api/v1/inspection-definitions/${encodeURIComponent(value.code)}/${value.version}`,
   },
   plansQuality: {
@@ -1639,31 +1746,46 @@ function RegistryPage({ definition }) {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState("create");
   const [editor, setEditor] = useState("");
+  const [inspectionForm, setInspectionForm] = useState(() => inspectionDefinitionForm());
   const [editorError, setEditorError] = useState("");
   const [saving, setSaving] = useState(false);
+  const isInspectionDefinition = definition.kind === "inspectionDefinition";
+  const inspectionValidation = isInspectionDefinition ? inspectionDefinitionValidation(inspectionForm) : "";
 
   function openCreate() {
     setMode("create");
-    setEditor(JSON.stringify({ ...definition.template, updatedAt: definition.template.updatedAt !== undefined ? new Date().toISOString() : undefined }, null, 2));
+    if (isInspectionDefinition) {
+      setInspectionForm(inspectionDefinitionForm());
+    } else {
+      setEditor(JSON.stringify({ ...definition.template, updatedAt: definition.template.updatedAt !== undefined ? new Date().toISOString() : undefined }, null, 2));
+    }
     setEditorError("");
     setOpen(true);
   }
 
   function openMaintain(row) {
     setMode("maintain");
-    setEditor(JSON.stringify(row, null, 2));
+    if (isInspectionDefinition) {
+      setInspectionForm(inspectionDefinitionForm(row));
+    } else {
+      setEditor(JSON.stringify(row, null, 2));
+    }
     setEditorError("");
     setOpen(true);
   }
 
   function openNewVersion(row) {
     setMode("version");
-    setEditor(JSON.stringify({
-      ...row,
-      version: Number(row.version || 0) + 1,
-      status: "draft",
-      updatedAt: row.updatedAt !== undefined ? new Date().toISOString() : undefined,
-    }, null, 2));
+    if (isInspectionDefinition) {
+      setInspectionForm(inspectionDefinitionForm(row, Number(row.version || 0) + 1));
+    } else {
+      setEditor(JSON.stringify({
+        ...row,
+        version: Number(row.version || 0) + 1,
+        status: "draft",
+        updatedAt: row.updatedAt !== undefined ? new Date().toISOString() : undefined,
+      }, null, 2));
+    }
     setEditorError("");
     setOpen(true);
   }
@@ -1672,7 +1794,7 @@ function RegistryPage({ definition }) {
     setSaving(true);
     setEditorError("");
     try {
-      const payload = JSON.parse(editor);
+      const payload = isInspectionDefinition ? inspectionDefinitionPayload(inspectionForm) : JSON.parse(editor);
       if (payload.updatedAt !== undefined) payload.updatedAt = new Date().toISOString();
       await postJson(definition.endpoint, payload);
       setOpen(false);
@@ -1707,24 +1829,24 @@ function RegistryPage({ definition }) {
     ...definition.columns.map(([key, label]) => ({
       key,
       label,
-      render: key === "status" ? value => <StatusBadge value={value} /> : key.endsWith("At") ? formatTime : undefined,
+      render: definition.render?.[key] || (key === "status" ? value => <StatusBadge value={value} /> : key.endsWith("At") ? formatTime : undefined),
     })),
     {
       key: "_actions",
       label: "操作",
       render: (_value, row) => (
         <div className="flex min-w-max flex-wrap gap-1" onClick={event => event.stopPropagation()}>
-          <Button variant="ghost" className="px-2" onClick={() => openMaintain(row)}>维护</Button>
+          <Button variant="ghost" className="px-2" onClick={() => openMaintain(row)}>{isInspectionDefinition ? "查看" : "维护"}</Button>
           <Button variant="ghost" className="px-2" onClick={() => openNewVersion(row)}>沿用为新版本</Button>
-          {row.status !== "retired" && <Button variant="ghost" className="px-2 text-amber-700" onClick={() => retire(row)}>停用</Button>}
-          {row.status === "draft" && <Button variant="ghost" className="px-2 text-rose-700" onClick={() => remove(row)}>删除草稿</Button>}
+          {!isInspectionDefinition && row.status !== "retired" && <Button variant="ghost" className="px-2 text-amber-700" onClick={() => retire(row)}>停用</Button>}
+          {!isInspectionDefinition && row.status === "draft" && <Button variant="ghost" className="px-2 text-rose-700" onClick={() => remove(row)}>删除草稿</Button>}
         </div>
       ),
     },
   ];
 
   return (
-    <Page title={definition.title} description={definition.description} actions={<Button variant="primary" onClick={openCreate}>创建新版本</Button>}>
+    <Page title={definition.title} description={definition.description} actions={<Button variant="primary" onClick={openCreate}>{definition.createLabel || "创建新版本"}</Button>}>
       {(error || (!open && editorError)) && <Alert tone="danger">{error || editorError}</Alert>}
       {loading && !data ? <LoadingCard /> : (
         <Card title={`${definition.title}列表`} description={`共 ${data?.total ?? rows.length} 条记录`}>
@@ -1739,25 +1861,142 @@ function RegistryPage({ definition }) {
       <Drawer
         open={open}
         onClose={() => setOpen(false)}
-        title={mode === "create" ? `创建${definition.title}` : mode === "version" ? "沿用为新版本" : `维护${definition.title}`}
-        description="编辑完整版本内容。保存前会由平台执行结构、引用与状态校验。"
-        footer={<><Button onClick={() => setOpen(false)}>取消</Button><Button variant="primary" onClick={save} disabled={saving}>{saving ? "保存中" : "保存"}</Button></>}
+        title={mode === "create" ? `创建${definition.title}` : mode === "version" ? "沿用为新版本" : isInspectionDefinition ? `查看${definition.title}` : `维护${definition.title}`}
+        description={isInspectionDefinition
+          ? mode === "maintain" ? "查看该版本的基本信息和检测特性。" : "填写基本信息并配置一个或多个检测特性。"
+          : "编辑完整版本内容。保存前会由平台执行结构、引用与状态校验。"}
+        footer={mode === "maintain" && isInspectionDefinition
+          ? <Button onClick={() => setOpen(false)}>关闭</Button>
+          : <><Button onClick={() => setOpen(false)}>取消</Button><Button variant="primary" onClick={save} disabled={saving || Boolean(inspectionValidation)}>{saving ? "保存中" : "保存"}</Button></>}
         size="xl"
       >
         {editorError && <Alert tone="danger">{editorError}</Alert>}
-        <Field
-          label="版本定义"
-          hint="数组、范围、字段映射等嵌套配置保持为结构化内容；服务端拒绝无效引用和不合法状态。"
-        >
-          <Textarea
-            className="min-h-[65vh] font-mono text-xs leading-6"
-            value={editor}
-            onChange={event => setEditor(event.target.value)}
-            spellCheck={false}
+        {isInspectionDefinition ? (
+          <InspectionDefinitionEditor
+            form={inspectionForm}
+            onChange={setInspectionForm}
+            readOnly={mode === "maintain"}
+            validation={inspectionValidation}
+            lockIdentity={mode !== "create"}
           />
-        </Field>
+        ) : (
+          <Field
+            label="版本定义"
+            hint="数组、范围、字段映射等嵌套配置保持为结构化内容；服务端拒绝无效引用和不合法状态。"
+          >
+            <Textarea
+              className="min-h-[65vh] font-mono text-xs leading-6"
+              value={editor}
+              onChange={event => setEditor(event.target.value)}
+              spellCheck={false}
+            />
+          </Field>
+        )}
       </Drawer>
     </Page>
+  );
+}
+
+function InspectionDefinitionEditor({ form, onChange, readOnly, validation, lockIdentity }) {
+  function update(field, value) {
+    onChange({ ...form, [field]: value });
+  }
+
+  function updateCharacteristic(index, field, value) {
+    onChange({
+      ...form,
+      characteristics: form.characteristics.map((characteristic, characteristicIndex) =>
+        characteristicIndex === index ? { ...characteristic, [field]: value } : characteristic),
+    });
+  }
+
+  function addCharacteristic() {
+    onChange({ ...form, characteristics: [...form.characteristics, emptyInspectionCharacteristic()] });
+  }
+
+  function removeCharacteristic(index) {
+    onChange({ ...form, characteristics: form.characteristics.filter((_item, characteristicIndex) => characteristicIndex !== index) });
+  }
+
+  return (
+    <div className="grid gap-5">
+      {!readOnly && validation && <Alert tone="warning">{validation}</Alert>}
+      <div className="grid gap-4 md:grid-cols-2">
+        <Field label="定义代码" hint="使用小写字母开头的点分格式，例如 hardness.final。">
+          <Input required value={form.code} disabled={readOnly || lockIdentity} onChange={event => update("code", event.target.value)} placeholder="hardness.final" />
+        </Field>
+        <Field label="版本">
+          <Input required type="number" min="1" step="1" value={form.version} disabled={readOnly || lockIdentity} onChange={event => update("version", event.target.value)} />
+        </Field>
+        <Field label="定义名称">
+          <Input required value={form.name} disabled={readOnly} onChange={event => update("name", event.target.value)} placeholder="成品硬度检测" />
+        </Field>
+        <Field label="说明" className="md:col-span-2">
+          <Textarea className="min-h-20" value={form.description} disabled={readOnly} onChange={event => update("description", event.target.value)} placeholder="说明检测场景和目的" />
+        </Field>
+      </div>
+
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h3 className="font-semibold text-slate-900">检测特性</h3>
+          <p className="mt-1 text-sm text-slate-500">每个特性对应一次具体录入，例如硬度、外观结论或是否合格。</p>
+        </div>
+        {!readOnly && <Button onClick={addCharacteristic}>添加检测特性</Button>}
+      </div>
+
+      <div className="grid gap-4">
+        {form.characteristics.map((characteristic, index) => (
+          <Card
+            key={index}
+            title={`检测特性 ${index + 1}`}
+            actions={!readOnly && form.characteristics.length > 1
+              ? <Button variant="ghost" className="text-rose-700" onClick={() => removeCharacteristic(index)}>移除</Button>
+              : undefined}
+          >
+            <div className="grid gap-4 md:grid-cols-2">
+              <Field label="特性代码" hint="同一定义内不可重复。">
+                <Input required value={characteristic.code} disabled={readOnly} onChange={event => updateCharacteristic(index, "code", event.target.value)} placeholder="hardness.hrc" />
+              </Field>
+              <Field label="特性名称">
+                <Input required value={characteristic.name} disabled={readOnly} onChange={event => updateCharacteristic(index, "name", event.target.value)} placeholder="洛氏硬度" />
+              </Field>
+              <Field label="录入类型">
+                <Select value={characteristic.inputType} disabled={readOnly} onChange={event => updateCharacteristic(index, "inputType", event.target.value)}>
+                  <option value="numeric">数值</option>
+                  <option value="text">文本</option>
+                  <option value="select">选项</option>
+                  <option value="boolean">是/否</option>
+                </Select>
+              </Field>
+              {characteristic.inputType === "numeric" && (
+                <Field label="单位">
+                  <Input value={characteristic.unit} disabled={readOnly} onChange={event => updateCharacteristic(index, "unit", event.target.value)} placeholder="例如 HRC、mm、℃" />
+                </Field>
+              )}
+              {characteristic.inputType === "numeric" && (
+                <>
+                  <Field label="下限" hint="不限制可留空。">
+                    <Input type="number" step="any" value={characteristic.lowerLimit} disabled={readOnly} onChange={event => updateCharacteristic(index, "lowerLimit", event.target.value)} />
+                  </Field>
+                  <Field label="上限" hint="不限制可留空。">
+                    <Input type="number" step="any" value={characteristic.upperLimit} disabled={readOnly} onChange={event => updateCharacteristic(index, "upperLimit", event.target.value)} />
+                  </Field>
+                </>
+              )}
+              {characteristic.inputType === "select" && (
+                <Field label="可选值" hint="每行填写一个选项。" className="md:col-span-2">
+                  <Textarea value={characteristic.allowedValuesText} disabled={readOnly} onChange={event => updateCharacteristic(index, "allowedValuesText", event.target.value)} placeholder={"合格\n不合格"} />
+                </Field>
+              )}
+              <label className="flex items-center gap-2 text-sm font-medium text-slate-700 md:col-span-2">
+                <input type="checkbox" checked={characteristic.required} disabled={readOnly} onChange={event => updateCharacteristic(index, "required", event.target.checked)} />
+                必须录入
+              </label>
+            </div>
+          </Card>
+        ))}
+      </div>
+    </div>
   );
 }
 

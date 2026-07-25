@@ -112,3 +112,17 @@ test("production forms use business fields and paginate long histories", () => {
   assert.match(pages, /total=\{rows\.length\}/);
   assert.match(pages, /disabled=\{saving \|\| !editorValid\}/);
 });
+
+test("inspection definitions use the characteristic contract and business fields", () => {
+  assert.match(pages, /function InspectionDefinitionEditor/);
+  assert.match(pages, /characteristics: form\.characteristics\.map/);
+  assert.match(pages, /inputType: characteristic\.inputType/);
+  assert.match(pages, /lowerLimit:/);
+  assert.match(pages, /upperLimit:/);
+  assert.match(pages, /allowedValues:/);
+  assert.match(pages, /<Field label="定义代码"/);
+  assert.match(pages, /<Field label="录入类型"/);
+  assert.match(pages, /添加检测特性/);
+  assert.match(pages, /render: \{ characteristics: inspectionInputTypes \}/);
+  assert.doesNotMatch(pages, /template: \{ code: "", version: 1, name: "", description: "", status: "draft", inputType:/);
+});
