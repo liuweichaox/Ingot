@@ -17,7 +17,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { getAuthToken, getJson, postJson, setAuthToken } from "./api/http";
 import * as Pages from "./pages";
-import { cx } from "./ui/components";
+import { cx, ToastHost } from "./ui/components";
 
 const sections = [
   { id: "workbench", label: "工作台", icon: Squares2X2Icon, path: "/workbench", items: [] },
@@ -42,7 +42,7 @@ const sections = [
   },
   {
     id: "data", label: "数据资产", icon: CircleStackIcon, path: "/explorer", items: [
-      ["/explorer", "运行对象"], ["/configuration/process-data-models", "工艺数据模型"],
+      ["/explorer", "设备与对象"], ["/configuration/process-data-models", "工艺数据模型"],
       ["/configuration/recipe-versions", "配方版本"], ["/configuration/acquisition-profiles", "设备采集"],
       ["/edges", "现场节点"],
     ],
@@ -55,7 +55,7 @@ const sections = [
   },
   {
     id: "administration", label: "系统管理", icon: Cog6ToothIcon, path: "/platform-metrics", items: [
-      ["/platform-metrics", "平台指标"], ["/users", "用户与权限"], ["/subscriptions", "事件订阅"], ["/logs", "运行日志"],
+      ["/platform-metrics", "平台运行状态"], ["/users", "用户与权限"], ["/subscriptions", "事件订阅"], ["/logs", "运行日志"],
     ],
   },
 ];
@@ -63,7 +63,7 @@ const sections = [
 const pageDetails = {
   "/workbench": ["工作台", "生产、质量与数据状态"],
   "/chat": ["AI 助手", "查询和分析已保存的生产数据"],
-  "/explorer": ["运行对象", "查看已上报生产数据的设备与运行对象"],
+  "/explorer": ["设备与对象", "查找已接入设备及其上报的生产对象"],
   "/cycles": ["运行记录", "查看生产周期及其数据、工艺与质量上下文"],
   "/events": ["生产事件", "查询、追溯并关联运行上下文"],
   "/production/changeover": ["生产切换", "让设备、产品、配方和已装工装对接下来的周期生效"],
@@ -84,7 +84,7 @@ const pageDetails = {
   "/configuration/tooling-types": ["工装类型", "配置装配位置及允许的组件类型"],
   "/configuration/tooling-assemblies": ["工装组合", "维护工装身份与不可变组件组合版本"],
   "/edges": ["现场节点", "查看负责连接设备并上报数据的现场节点"],
-  "/platform-metrics": ["平台指标", "查看平台与边缘节点运行指标"],
+  "/platform-metrics": ["平台运行状态", "确认中心服务、现场节点和数据上行是否正常"],
   "/users": ["用户与权限", "管理本地账户、角色和停用状态"],
   "/subscriptions": ["事件订阅", "维护向外部系统投递的事件订阅"],
   "/logs": ["运行日志", "查询平台运行记录"],
@@ -297,6 +297,7 @@ export default function App() {
           </nav>
         </DialogPanel>
       </Dialog>
+      <ToastHost />
     </div>
   );
 }

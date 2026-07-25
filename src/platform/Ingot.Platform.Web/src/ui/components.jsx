@@ -1,5 +1,6 @@
 import { Dialog, DialogBackdrop, DialogPanel, DialogTitle } from "@headlessui/react";
 import { XMarkIcon } from "@heroicons/react/24/outline";
+import { useEffect, useState } from "react";
 
 export function cx(...values) {
   return values.filter(Boolean).join(" ");
@@ -22,7 +23,7 @@ export function Page({ title, description, actions, children }) {
 
 export function Card({ title, description, actions, className, children }) {
   return (
-    <section className={cx("rounded-2xl border border-slate-200 bg-white shadow-sm", className)}>
+    <section className={cx("min-w-0 rounded-2xl border border-slate-200 bg-white shadow-sm", className)}>
       {(title || actions) && (
         <header className="flex flex-col gap-3 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -141,6 +142,76 @@ export function StatusBadge({ value }) {
         ? "warning"
         : "neutral";
   return <Badge tone={tone}>{labels[normalized] ?? String(value ?? "待上报")}</Badge>;
+}
+
+export function WorkflowGuide({ title = "按步骤完成", description, steps }) {
+  return (
+    <section className="rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50 to-white p-5 shadow-sm">
+      <div>
+        <p className="font-semibold text-slate-950">{title}</p>
+        {description && <p className="mt-1 text-sm leading-6 text-slate-600">{description}</p>}
+      </div>
+      <ol className="mt-4 grid gap-3 md:grid-cols-3">
+        {steps.map((step, index) => {
+          const state = step.state || "upcoming";
+          return (
+            <li
+              key={step.title}
+              className={cx(
+                "flex gap-3 rounded-xl border p-4",
+                state === "done" ? "border-emerald-200 bg-emerald-50/80" :
+                  state === "current" ? "border-blue-300 bg-white shadow-sm" :
+                    "border-slate-200 bg-white/70",
+              )}
+            >
+              <span className={cx(
+                "grid size-7 shrink-0 place-items-center rounded-full text-xs font-semibold",
+                state === "done" ? "bg-emerald-600 text-white" :
+                  state === "current" ? "bg-blue-600 text-white" :
+                    "bg-slate-200 text-slate-600",
+              )}>
+                {state === "done" ? "✓" : index + 1}
+              </span>
+              <div>
+                <p className="text-sm font-semibold text-slate-900">{step.title}</p>
+                <p className="mt-1 text-xs leading-5 text-slate-500">{step.description}</p>
+              </div>
+            </li>
+          );
+        })}
+      </ol>
+    </section>
+  );
+}
+
+export function notify(message, tone = "success") {
+  window.dispatchEvent(new CustomEvent("ingot:notice", { detail: { message, tone } }));
+}
+
+export function ToastHost() {
+  const [notice, setNotice] = useState(null);
+  useEffect(() => {
+    let timer;
+    function handleNotice(event) {
+      setNotice(event.detail);
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => setNotice(null), 3500);
+    }
+    window.addEventListener("ingot:notice", handleNotice);
+    return () => {
+      window.removeEventListener("ingot:notice", handleNotice);
+      window.clearTimeout(timer);
+    };
+  }, []);
+  if (!notice) return null;
+  const tone = notice.tone === "danger"
+    ? "border-rose-200 bg-rose-50 text-rose-800"
+    : "border-emerald-200 bg-emerald-50 text-emerald-800";
+  return (
+    <div className={cx("fixed bottom-5 right-5 z-200 max-w-sm rounded-xl border px-4 py-3 text-sm font-medium shadow-xl", tone)} role="status">
+      {notice.message}
+    </div>
+  );
 }
 
 export function Field({ label, hint, error, className, children }) {

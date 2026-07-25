@@ -33,6 +33,8 @@ import {
   Select,
   StatusBadge,
   Textarea,
+  WorkflowGuide,
+  notify,
 } from "../ui/components";
 
 const formatTime = value => value ? new Date(value).toLocaleString("zh-CN") : "—";
@@ -92,6 +94,20 @@ const objectTypeLabels = {
 };
 
 const objectTypeLabel = value => objectTypeLabels[value] || value || "未分类";
+
+const eventTypeLabels = {
+  "process.started": "生产开始",
+  "process.completed": "生产完成",
+  "process.sample": "过程采样",
+  "cycle.started": "周期开始",
+  "cycle.completed": "周期完成",
+  "recipe/step_changed": "工艺步骤切换",
+  "quality.inspection.completed": "质检完成",
+  "alarm.raised": "设备报警",
+  "alarm.cleared": "报警解除",
+};
+
+const eventTypeLabel = value => eventTypeLabels[value] || value?.split(".").join(" / ") || "生产事件";
 
 function emptyInspectionCharacteristic() {
   return {
@@ -258,16 +274,52 @@ export function WorkbenchPage() {
   const activeCycles = state.cycleOverview.activeCount
     ?? state.cycles.filter(item => item.status === "active" || !item.completedAt).length;
   const onlineEdges = state.edges.filter(item => edgeStatus(item) === "online").length;
+  const pendingInspections = state.summary.pending ?? state.summary.pendingCount ?? 0;
+  const activeContexts = state.contexts.filter(item => !item.validTo).length;
+  const dailyActions = [
+    {
+      title: pendingInspections ? `处理 ${pendingInspections} 个质量待办` : "质量任务已处理",
+      description: pendingInspections ? "优先完成检测录入和复核。" : "当前没有待录入或待复核任务。",
+      to: "/inspections",
+      tone: pendingInspections ? "border-amber-200 bg-amber-50" : "border-emerald-200 bg-emerald-50",
+      action: pendingInspections ? "去处理" : "查看记录",
+    },
+    {
+      title: activeContexts ? `${activeContexts} 台设备已配置生产` : "配置接下来的生产",
+      description: activeContexts ? "确认设备、产品、配方和工装是否正确。" : "生产开始前先启用设备生产配置。",
+      to: "/production/changeover",
+      tone: activeContexts ? "border-blue-200 bg-blue-50" : "border-amber-200 bg-amber-50",
+      action: activeContexts ? "检查配置" : "开始配置",
+    },
+    {
+      title: `${onlineEdges}/${state.edges.length} 个现场节点在线`,
+      description: onlineEdges === state.edges.length && state.edges.length ? "设备采集与数据上行正常。" : "检查离线节点或尚未接入的设备。",
+      to: "/edges",
+      tone: onlineEdges === state.edges.length && state.edges.length ? "border-emerald-200 bg-emerald-50" : "border-rose-200 bg-rose-50",
+      action: "查看状态",
+    },
+  ];
   return (
     <Page title="工作台" description="从生产运行、质量待办和采集状态开始今天的工作。">
       {state.error && <Alert tone="danger">{state.error}</Alert>}
       {state.loading ? <LoadingCard /> : (
         <>
+          <Card title="今天先做这些" description="从需要处理的事项开始，不必逐个模块查找。">
+            <div className="grid gap-3 lg:grid-cols-3">
+              {dailyActions.map(action => (
+                <Link key={action.to} to={action.to} className={`group rounded-xl border p-4 transition hover:-translate-y-0.5 hover:shadow-md ${action.tone}`}>
+                  <p className="font-semibold text-slate-950">{action.title}</p>
+                  <p className="mt-1 min-h-10 text-sm leading-5 text-slate-600">{action.description}</p>
+                  <p className="mt-3 text-sm font-medium text-blue-700 group-hover:text-blue-800">{action.action} →</p>
+                </Link>
+              ))}
+            </div>
+          </Card>
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <Metric label="生产运行" value={state.cycleTotal} hint={`${activeCycles} 个正在进行`} />
-            <Metric label="待处理质检" value={state.summary.pending ?? state.summary.pendingCount ?? 0} hint="来自当前质量任务" />
+            <Metric label="待处理质检" value={pendingInspections} hint="来自当前质量任务" />
             <Metric label="采集节点" value={`${onlineEdges}/${state.edges.length}`} hint="在线 / 全部" />
-            <Metric label="有效生产配置" value={state.contexts.filter(item => !item.validTo).length} hint="当前设备上下文" />
+            <Metric label="有效生产配置" value={activeContexts} hint="当前设备上下文" />
           </div>
           <div className="grid gap-5 xl:grid-cols-[1.3fr_.7fr]">
             <Card title="最近生产运行" actions={<Link className="text-sm font-medium text-blue-600 hover:text-blue-700" to="/cycles">查看全部</Link>}>
@@ -288,7 +340,7 @@ export function WorkbenchPage() {
                 {state.events.slice(0, 7).map(item => (
                   <div key={item.ingestId} className="rounded-xl border border-slate-100 bg-slate-50 p-3">
                     <div className="flex items-center justify-between gap-3">
-                      <Badge tone={item.event?.eventType?.startsWith("alarm.") ? "danger" : "info"}>{item.event?.eventType || "event"}</Badge>
+                      <Badge tone={item.event?.eventType?.startsWith("alarm.") ? "danger" : "info"}>{eventTypeLabel(item.event?.eventType)}</Badge>
                       <span className="text-xs text-slate-400">#{item.ingestId}</span>
                     </div>
                     <p className="mt-2 truncate text-sm text-slate-700">{item.event?.subject?.id || item.event?.correlationId || "—"}</p>
@@ -855,17 +907,26 @@ export function ObjectExplorerPage() {
   }, [location.state]);
   return (
     <Page
-      title="运行对象"
-      description="查看已经上报生产数据的设备与运行对象。"
+      title="设备与对象"
+      description="查找已经接入平台、并持续上报生产数据的设备和业务对象。"
       actions={<Link className="inline-flex min-h-9 items-center rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700" to="/configuration/acquisition-profiles">接入设备</Link>}
     >
-      {objects.error && <Alert tone="danger" title="运行对象暂不可用">{objects.error}</Alert>}
+      {objects.error && <Alert tone="danger" title="设备与对象暂不可用">{objects.error}</Alert>}
+      <WorkflowGuide
+        title="设备为什么会出现在这里"
+        description="这里不需要手工创建目录；设备开始上报数据后，平台会自动建立可追溯对象。"
+        steps={[
+          { title: "接入设备", description: "选择现场节点、通信方式和设备地址。", state: rows.length ? "done" : "current" },
+          { title: "开始采集", description: "现场节点读取数据并持续上报。", state: rows.some(row => Number(row.sampleCount) > 0) ? "done" : rows.length ? "current" : "upcoming" },
+          { title: "自动形成对象", description: "可在这里搜索设备、周期和其他业务对象。", state: rows.length ? "done" : "upcoming" },
+        ]}
+      />
       <Card>
-        <Field label="搜索运行对象"><Input ref={searchInput} value={query} onChange={event => setQuery(event.target.value)} placeholder="输入对象编号、类型或采集节点" /></Field>
+        <Field label="搜索设备与对象"><Input ref={searchInput} value={query} onChange={event => setQuery(event.target.value)} placeholder="输入设备编号、对象编号或现场节点" /></Field>
       </Card>
       {objects.loading && !objects.data ? <LoadingCard /> : (
         <Card
-          title="运行对象"
+          title="已发现的设备与对象"
           description={query.trim()
             ? `找到 ${filtered.length} 个对象 · 共 ${objects.data?.total ?? rows.length} 个`
             : `共 ${objects.data?.total ?? rows.length} 个对象`}
@@ -881,13 +942,13 @@ export function ObjectExplorerPage() {
                 { key: "eventCount", label: "事件数", render: formatInteger },
                 { key: "sampleCount", label: "样本数", render: formatInteger },
                 { key: "lastObservedAt", label: "最后活动", render: formatTime },
-                { key: "latestEventType", label: "最新事件" },
+                { key: "latestEventType", label: "最新活动", render: eventTypeLabel },
               ]}
             />
           ) : (
             <EmptyState
-              title={query ? "没有匹配的运行对象" : "尚未收到生产数据"}
-              description={query ? "请调整搜索条件后重试。" : "采集节点上报生产事件后，运行对象会自动显示在这里。"}
+              title={query ? "没有匹配的设备或对象" : "尚未收到生产数据"}
+              description={query ? "请调整搜索条件后重试。" : "采集节点上报生产事件后，设备与对象会自动显示在这里。"}
             />
           )}
         </Card>
@@ -900,11 +961,11 @@ const productionResources = {
   context: {
     title: "生产切换", endpoint: "/api/v1/production-contexts", key: "contextId",
     description: "为设备选择接下来生产的产品、配方和已装工装，保存后对新周期生效。",
-    drawerDescription: "选择业务对象即可完成切换，平台会保留生效时间和历史记录。",
-    columns: [["contextId", "上下文"], ["machineId", "设备"], ["productCode", "产品"], ["recipeId", "配方"], ["validFrom", "生效时间"], ["validTo", "结束时间"]],
+    drawerDescription: "按顺序确认设备、产品、配方和工装；保存后只影响新开始的生产周期。",
+    columns: [["machineId", "设备"], ["productCode", "产品"], ["recipeId", "配方"], ["validFrom", "生效时间"], ["validTo", "结束时间"]],
     template: { machineId: "", productSeries: "", productCode: "", recipeId: "", recipeVersion: 1, toolingInstallationId: "", source: "manual", materialLotRef: "" },
-    createLabel: "启用生产配置",
-    requiredFields: ["machineId", "productCode", "recipeId"],
+    createLabel: "配置下一批生产",
+    requiredFields: ["machineId", "productSeries", "productCode", "recipeId"],
     prepare: value => ({ ...value, validFrom: new Date().toISOString() }),
     lifecycle: { label: "结束", visible: value => !value.validTo, url: value => `/api/v1/production-contexts/${value.contextId}:close`, body: () => ({ at: new Date().toISOString() }) },
   },
@@ -912,7 +973,7 @@ const productionResources = {
     title: "工装装卸", endpoint: "/api/v1/tooling-installations", key: "installationId",
     description: "记录哪个工装组合版本在何时装入设备，供后续周期自动关联。",
     drawerDescription: "选择设备和已经建立的工装组合版本，装入后会进入该设备的有效工装记录。",
-    columns: [["installationId", "记录"], ["machineId", "设备"], ["moldId", "工装"], ["installedAt", "装入"], ["removedAt", "卸下"]],
+    columns: [["machineId", "设备"], ["moldId", "工装"], ["installedAt", "装入"], ["removedAt", "卸下"]],
     template: { machineId: "", assemblyRevisionId: "", source: "manual" },
     createLabel: "装入工装",
     requiredFields: ["machineId", "assemblyRevisionId"],
@@ -1038,14 +1099,14 @@ function ProductionReferenceField({ fieldKey, value, required, editor, onChange 
       label: "设备",
       filter: row => ["equipment", "machine", "optical-molding-machine"].includes(row.subjectType),
       optionValue: row => row.subjectId,
-      optionLabel: row => `${row.subjectId}${row.edgeId ? ` · ${row.edgeId}` : ""}`,
+      optionLabel: row => `${row.subjectId}${row.edgeId ? ` · 由 ${row.edgeId} 采集` : ""}`,
     },
     toolingInstallationId: {
       endpoint: "/api/v1/tooling-installations?activeOnly=true",
       label: "当前已装工装",
       filter: row => !editor.machineId || row.machineId === editor.machineId,
       optionValue: row => row.installationId,
-      optionLabel: row => `${row.machineId} · ${row.assemblyRevisionId}`,
+      optionLabel: row => `${row.machineId} 当前工装${row.installedAt ? ` · ${formatTime(row.installedAt)}装入` : ""}`,
     },
     assemblyRevisionId: {
       endpoint: "/api/v1/tooling-assemblies/revisions",
@@ -1110,6 +1171,62 @@ function RecipeReferenceField({ editor, onChange, required }) {
 }
 
 function ProductionRecordForm({ resource, editor, onChange }) {
+  if (resource === productionResources.context) {
+    const hasMachine = Boolean(editor.machineId);
+    const hasProduct = Boolean(editor.productCode?.trim() && editor.productSeries?.trim());
+    const hasRecipe = Boolean(editor.recipeId);
+    return (
+      <div className="grid gap-5">
+        <WorkflowGuide
+          title="完成这 3 步即可生效"
+          description="必填内容完成后，底部按钮会自动变为可用。"
+          steps={[
+            { title: "选择生产设备", description: "确定接下来要切换的现场设备。", state: hasMachine ? "done" : "current" },
+            { title: "确认产品与配方", description: "填写产品身份并选择已发布配方。", state: hasProduct && hasRecipe ? "done" : hasMachine ? "current" : "upcoming" },
+            { title: "检查并生效", description: "核对工装和物料批次后保存。", state: hasMachine && hasProduct && hasRecipe ? "current" : "upcoming" },
+          ]}
+        />
+        <Card title="1. 选择生产设备" description="只显示已经通过现场节点上报过数据的设备。">
+          <ProductionReferenceField
+            fieldKey="machineId"
+            value={editor.machineId}
+            editor={editor}
+            required
+            onChange={(key, value) => {
+              onChange(key, value);
+              onChange("toolingInstallationId", "");
+            }}
+          />
+        </Card>
+        <Card title="2. 确认产品与配方" description="产品编号用于追溯实物，产品系列用于同类分析。">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="产品系列" hint="例如 LENS-A、轴类零件">
+              <Input required value={editor.productSeries || ""} onChange={event => onChange("productSeries", event.target.value)} />
+            </Field>
+            <Field label="产品编号" hint="填写现场使用的产品或物料编号">
+              <Input required value={editor.productCode || ""} onChange={event => onChange("productCode", event.target.value)} />
+            </Field>
+            <div className="sm:col-span-2">
+              <RecipeReferenceField editor={editor} onChange={onChange} required />
+            </div>
+          </div>
+        </Card>
+        <Card title="3. 补充现场信息" description="工装和物料批次可选；填写后会自动关联到后续生产周期。">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <ProductionReferenceField fieldKey="toolingInstallationId" value={editor.toolingInstallationId} editor={editor} onChange={onChange} />
+            <Field label="物料批次" hint="没有批次管理时可以留空">
+              <Input value={editor.materialLotRef || ""} onChange={event => onChange("materialLotRef", event.target.value)} />
+            </Field>
+          </div>
+        </Card>
+        {hasMachine && hasProduct && hasRecipe && (
+          <Alert tone="success" title="可以生效">
+            保存后，设备 {editor.machineId} 新开始的周期将使用产品 {editor.productCode} 和配方 {editor.recipeId} v{editor.recipeVersion}。
+          </Alert>
+        )}
+      </div>
+    );
+  }
   return (
     <div className="grid gap-4 sm:grid-cols-2">
       {Object.entries(resource.template).map(([key, initial]) => {
@@ -1247,6 +1364,7 @@ export function ProductionSetupPage({ section }) {
   const [pageSize, setPageSize] = useState(20);
   const pagedRows = rows.slice((page - 1) * pageSize, page * pageSize);
   const editorValid = isProductionEditorValid(resource, editor);
+  const activeRows = rows.filter(row => section === "context" ? !row.validTo : section === "installation" ? !row.removedAt : false);
 
   useEffect(() => {
     setPage(1);
@@ -1278,6 +1396,7 @@ export function ProductionSetupPage({ section }) {
       await postJson(resource.endpoint, resource.prepare ? resource.prepare(value) : value);
       setOpen(false);
       await reload();
+      notify(section === "context" ? "生产配置已生效，新开始的周期会自动关联。" : `${resource.title}已保存。`);
     } catch (requestError) {
       setActionError(requestError.message);
     } finally {
@@ -1290,6 +1409,7 @@ export function ProductionSetupPage({ section }) {
     try {
       await postJson(resource.lifecycle.url(row), resource.lifecycle.body(row));
       await reload();
+      notify(`${resource.lifecycle.label}操作已完成。`);
     } catch (requestError) {
       setActionError(requestError.message);
     }
@@ -1312,6 +1432,8 @@ export function ProductionSetupPage({ section }) {
       render: key.endsWith("At") || ["validFrom", "validTo"].includes(key)
         ? formatTime
         : key === "status" ? value => <StatusBadge value={value} />
+          : key === "recipeId" ? (value, row) => `${value} v${row.recipeVersion}`
+            : key === "productCode" ? (value, row) => <div><p className="font-medium text-slate-800">{value}</p>{row.productSeries && <p className="mt-0.5 text-xs text-slate-500">{row.productSeries}</p>}</div>
           : key === "roles" ? value => value?.length ? value.map(role => role.name).join("、") : "—"
             : key === "attributes" ? value => {
               const entries = Object.entries(value || {});
@@ -1333,24 +1455,72 @@ export function ProductionSetupPage({ section }) {
   ];
 
   return (
-    <Page title={resource.title} description={resource.description} actions={<Button variant="primary" onClick={() => openEditor()}>{resource.createLabel}</Button>}>
+    <Page title={resource.title} description={resource.description} actions={section === "context" ? undefined : <Button variant="primary" onClick={() => openEditor()}>{resource.createLabel}</Button>}>
       {(error || (!open && actionError)) && <Alert tone="danger">{error || actionError}</Alert>}
       {loading && !data ? <LoadingCard /> : (
-        <Card title={`${resource.title}记录`} description={`共 ${rows.length} 条`}>
-          <DataTable
-            rows={pagedRows}
-            keyField={resource.key}
-            getRowKey={section === "type" ? row => `${row[resource.key]}:${row.version ?? 1}` : undefined}
-            columns={columns}
-          />
-          <Pagination
-            page={page}
-            pageSize={pageSize}
-            total={rows.length}
-            onPageChange={setPage}
-            onPageSizeChange={value => { setPageSize(value); setPage(1); }}
-          />
-        </Card>
+        <>
+          {section === "context" && (
+            <>
+              <WorkflowGuide
+                title="生产开始前"
+                description="设备接入和配方发布通常只需配置一次；每次换产品或换配方时更新生产配置。"
+                steps={[
+                  { title: "设备已有数据", description: "在“设备采集”中完成设备接入。", state: rows.length ? "done" : "current" },
+                  { title: "产品与配方就绪", description: "准备产品编号和已发布配方。", state: rows.some(row => row.recipeId) ? "done" : rows.length ? "current" : "upcoming" },
+                  { title: "启用生产配置", description: "确认设备、产品、配方和当前工装。", state: activeRows.length ? "done" : "current" },
+                ]}
+              />
+              <Card
+                title="当前生效配置"
+                description={activeRows.length ? `${activeRows.length} 台设备已准备好开始新周期` : "目前没有正在生效的生产配置"}
+                actions={<Button variant="primary" onClick={() => openEditor()}>{activeRows.length ? "切换产品或配方" : "开始配置"}</Button>}
+              >
+                {activeRows.length ? (
+                  <div className="grid gap-3 lg:grid-cols-2">
+                    {activeRows.map(row => (
+                      <article key={row.contextId} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="font-semibold text-slate-950">{row.machineId}</p>
+                            <p className="mt-1 text-sm text-slate-600">{row.productCode} · {row.productSeries || "未填写系列"}</p>
+                          </div>
+                          <StatusBadge value="active" />
+                        </div>
+                        <p className="mt-3 text-sm text-slate-600">配方：{row.recipeId} v{row.recipeVersion}</p>
+                        <p className="mt-1 text-xs text-slate-400">自 {formatTime(row.validFrom)} 生效</p>
+                      </article>
+                    ))}
+                  </div>
+                ) : <EmptyState title="还没有生效配置" description="点击“开始配置”，完成设备、产品和配方选择。" />}
+              </Card>
+            </>
+          )}
+          {section === "installation" && (
+            <WorkflowGuide
+              title="工装装卸怎么用"
+              steps={[
+                { title: "先建立工装组合", description: "在工装管理中确定工装及其组件版本。", state: rows.length ? "done" : "current" },
+                { title: "选择设备并装入", description: "一台设备可保留当前有效工装记录。", state: activeRows.length ? "done" : "current" },
+                { title: "换装时先卸下", description: "卸下后历史周期仍保留原工装关联。", state: activeRows.length ? "current" : "upcoming" },
+              ]}
+            />
+          )}
+          <Card title={["context", "installation"].includes(section) ? "历史记录" : `${resource.title}记录`} description={`共 ${rows.length} 条`}>
+            <DataTable
+              rows={pagedRows}
+              keyField={resource.key}
+              getRowKey={section === "type" ? row => `${row[resource.key]}:${row.version ?? 1}` : undefined}
+              columns={columns}
+            />
+            <Pagination
+              page={page}
+              pageSize={pageSize}
+              total={rows.length}
+              onPageChange={setPage}
+              onPageSizeChange={value => { setPageSize(value); setPage(1); }}
+            />
+          </Card>
+        </>
       )}
       <Drawer
         open={open}
@@ -1358,7 +1528,7 @@ export function ProductionSetupPage({ section }) {
         closeOnBackdrop={false}
         title={editorMode === "create" ? resource.createLabel : editorMode === "version" ? "新版本维护" : `编辑${resource.title}`}
         description={resource.drawerDescription || "填写业务信息后保存，平台会校验引用并保留历史。"}
-        footer={<><Button onClick={() => setOpen(false)}>取消</Button><Button variant="primary" onClick={save} disabled={saving || !editorValid}>{saving ? "保存中" : "保存"}</Button></>}
+        footer={<><Button onClick={() => setOpen(false)}>取消</Button><Button variant="primary" onClick={save} disabled={saving || !editorValid}>{saving ? "保存中" : section === "context" ? "确认并生效" : "保存"}</Button></>}
       >
         {actionError && <Alert tone="danger">{actionError}</Alert>}
         <ProductionRecordForm
@@ -1392,6 +1562,18 @@ export function InspectionsPage() {
   const [review, setReview] = useState({ decision: "CONFIRMED", notes: "" });
   const definitionRows = extractRows(definitions.data);
   const selectedDefinition = definitionRows.find(item => `${item.code}:${item.version}` === form.definitionKey);
+  const requiredCharacteristics = (selectedDefinition?.characteristics || []).filter(item => item.required);
+  const measurementsComplete = requiredCharacteristics.every(item => {
+    const value = form.measurements[item.code];
+    return value !== undefined && value !== null && value !== "";
+  });
+  const requiresAttachment = Boolean(taskTarget?.requiredInspections?.find(
+    item => `${item.definitionCode}:${item.definitionVersion}` === form.definitionKey,
+  )?.requiresAttachment);
+  const entryReady = Boolean(
+    form.workpieceId.trim() && form.operationRunId.trim() && selectedDefinition &&
+    measurementsComplete && (!requiresAttachment || form.file),
+  );
   const availableDefinitions = taskTarget
     ? definitionRows.filter(item => taskTarget.missingDefinitionCodes?.includes(item.code))
     : definitionRows;
@@ -1479,6 +1661,7 @@ export function InspectionsPage() {
       });
       setEntryOpen(false);
       await Promise.all([records.reload(), tasks.reload(), taskSummary.reload()]);
+      notify("检测记录已保存；需要复核时会自动进入待复核队列。");
     } catch (requestError) {
       setActionError(requestError.message);
     } finally {
@@ -1516,6 +1699,7 @@ export function InspectionsPage() {
       });
       setReviewOpen(false);
       await Promise.all([tasks.reload(), taskSummary.reload()]);
+      notify(review.decision === "CONFIRMED" ? "复核已确认，质量任务已更新。" : "复核意见已保存，任务会按决定继续处理。");
     } catch (requestError) {
       setActionError(requestError.message);
     } finally {
@@ -1524,8 +1708,17 @@ export function InspectionsPage() {
   }
 
   return (
-    <Page title="质量任务" description="在统一任务队列中完成检测、复核和原图追溯。" actions={<Button variant="primary" onClick={() => openTask()}>新建检测记录</Button>}>
+    <Page title="质量任务" description="从待办开始完成检测录入、独立复核和原图追溯。" actions={<Button onClick={() => openTask()}>补录检测记录</Button>}>
       {(tasks.error || taskSummary.error || records.error || definitions.error || (!entryOpen && !reviewOpen && actionError)) && <Alert tone="danger">{tasks.error || taskSummary.error || records.error || definitions.error || actionError}</Alert>}
+      <WorkflowGuide
+        title="质量任务怎么处理"
+        description="正常情况下直接点击任务队列中的操作按钮；只有补录历史结果时才使用右上角“补录检测记录”。"
+        steps={[
+          { title: "选择待办任务", description: "平台已按生产周期生成需要处理的检测项目。", state: Number(taskSummary.data?.pending || 0) > 0 ? "current" : "done" },
+          { title: "录入结果与附件", description: "检测值会按定义自动判定，原图与记录一起保存。", state: Number(taskSummary.data?.pending || 0) > 0 ? "current" : "done" },
+          { title: "由另一人复核", description: "待复核任务进入独立队列，确认或要求重检。", state: Number(taskSummary.data?.reviewPending || 0) > 0 ? "current" : "done" },
+        ]}
+      />
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Metric label="需要处理" value={taskSummary.data?.actionRequired ?? "—"} hint="录入与复核合计" />
         <Metric label="待录入" value={taskSummary.data?.pending ?? "—"} />
@@ -1573,7 +1766,7 @@ export function InspectionsPage() {
                     label: "操作",
                     render: (_value, row) => row.status === "completed"
                       ? <span className="text-sm text-slate-400">已完成</span>
-                      : <Button variant="ghost" disabled={busy} onClick={() => openTaskAction(row)}>
+                      : <Button variant="primary" disabled={busy} onClick={() => openTaskAction(row)}>
                         {row.status === "review_pending" ? "开始复核" : "录入检测"}
                       </Button>,
                   },
@@ -1593,7 +1786,6 @@ export function InspectionsPage() {
                 rows={extractRows(records.data)}
                 keyField="recordId"
                 columns={[
-                  { key: "recordId", label: "记录" },
                   { key: "workpieceId", label: "工件" },
                   { key: "definitionCode", label: "检测定义" },
                   { key: "outcome", label: "结果", render: value => <StatusBadge value={value} /> },
@@ -1625,9 +1817,17 @@ export function InspectionsPage() {
         title="录入检测结果"
         description="检测值、判定规则和原始附件会作为同一条固定质量记录保存。"
         size="lg"
-        footer={<><Button onClick={() => setEntryOpen(false)}>取消</Button><Button variant="primary" type="submit" form="inspection-entry" disabled={busy}>{busy ? "提交中" : "提交检测记录"}</Button></>}
+        footer={<><Button onClick={() => setEntryOpen(false)}>取消</Button><Button variant="primary" type="submit" form="inspection-entry" disabled={busy || !entryReady}>{busy ? "提交中" : "提交检测记录"}</Button></>}
       >
         {actionError && <Alert tone="danger">{actionError}</Alert>}
+        <WorkflowGuide
+          title="录入检测结果"
+          steps={[
+            { title: "确认工件与运行", description: "从任务进入时已自动带入。", state: form.workpieceId && form.operationRunId ? "done" : "current" },
+            { title: "选择检测项目", description: "检测定义决定要填写的字段和判定规则。", state: selectedDefinition ? "done" : form.workpieceId && form.operationRunId ? "current" : "upcoming" },
+            { title: "填写结果并提交", description: "完成必填项，按需要上传原始附件。", state: entryReady ? "current" : "upcoming" },
+          ]}
+        />
         <form id="inspection-entry" className="grid gap-5" onSubmit={submitRecord}>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="工件编号"><Input required value={form.workpieceId} readOnly={Boolean(taskTarget)} onChange={event => setForm({ ...form, workpieceId: event.target.value })} /></Field>
@@ -1658,13 +1858,13 @@ export function InspectionsPage() {
           <Alert title="结果由检测值自动判定">平台会依据检测定义中的范围和规则计算总体结果。</Alert>
           <Field
             label="原始附件"
-            hint={taskTarget?.requiredInspections?.find(item => `${item.definitionCode}:${item.definitionVersion}` === form.definitionKey)?.requiresAttachment
+            hint={requiresAttachment
               ? "当前检测项目必须上传原始附件。"
               : "支持平台允许的图片或文件格式。"}
           >
             <Input
               type="file"
-              required={Boolean(taskTarget?.requiredInspections?.find(item => `${item.definitionCode}:${item.definitionVersion}` === form.definitionKey)?.requiresAttachment)}
+              required={requiresAttachment}
               onChange={event => setForm({ ...form, file: event.target.files?.[0] || null })}
             />
           </Field>
@@ -2078,7 +2278,15 @@ export function ProcessImprovementPage() {
   const [selectedTab, setSelectedTab] = useState(0);
   return (
     <Page title="工艺改进" description="从调查、模型、知识到受控参数建议的闭环。">
-      <Alert tone="info" title="受控改进流程">平台集中记录改进建议、审批结论、试验过程和实际效果。</Alert>
+      <WorkflowGuide
+        title="从问题到可验证改进"
+        description="第一次使用建议从“调查”开始；模型、知识和参数建议是调查过程中逐步沉淀的成果。"
+        steps={[
+          { title: "先建立调查", description: "明确问题、关联周期并记录可能原因。", state: selectedTab === 0 ? "current" : "done" },
+          { title: "用试验或模型验证", description: "通过受控试验、数据模型或机理模型验证判断。", state: [1, 2, 3].includes(selectedTab) ? "current" : selectedTab > 3 ? "done" : "upcoming" },
+          { title: "批准并跟踪效果", description: "形成参数建议，经过审批、执行和实际效果确认。", state: selectedTab === 6 ? "current" : "upcoming" },
+        ]}
+      />
       <TabGroup selectedIndex={selectedTab} onChange={setSelectedTab}>
         <TabList className="flex gap-1 overflow-x-auto rounded-xl bg-slate-200/70 p-1">
           {improvementTabs.map(item => (
@@ -2197,6 +2405,7 @@ function ImprovementPanel({ definition }) {
     try {
       await action();
       await Promise.all([loadDetail(selected, { show: false }), reload()]);
+      notify(`${definition.label}已更新。`);
       return true;
     } catch (requestError) {
       setDetailError(requestError.message);
@@ -2361,6 +2570,7 @@ function ImprovementPanel({ definition }) {
       }
       setOpen(false);
       await reload();
+      notify(`${definition.label}已提交。`);
     } catch (requestError) {
       setActionError(requestError.message);
     } finally {
@@ -2376,7 +2586,7 @@ function ImprovementPanel({ definition }) {
       <Card
         title={definition.label}
         description={`共 ${extractRows(data).length} 条${supportsDetail ? " · 可进入详情完成验证与复核" : ""}`}
-        actions={<Button variant="primary" onClick={start}>{definition.upload ? "上传并验证" : "新建"}</Button>}
+        actions={<Button variant="primary" onClick={start}>{definition.upload ? `上传${definition.label}` : `新建${definition.label}`}</Button>}
       >
         <DataTable
           rows={extractRows(data)}
@@ -3477,6 +3687,7 @@ function RegistryPage({ definition }) {
       await postJson(definition.endpoint, payload);
       setOpen(false);
       await reload();
+      notify(`${definition.title}已保存。`);
     } catch (saveError) {
       setEditorError(saveError.message);
     } finally {
@@ -3493,6 +3704,7 @@ function RegistryPage({ definition }) {
         updatedAt: row.updatedAt !== undefined ? new Date().toISOString() : undefined,
       });
       await reload();
+      notify(`${definition.title}已停用，历史版本仍会保留。`);
     } catch (requestError) {
       setEditorError(requestError.message);
     }
@@ -3541,13 +3753,13 @@ function RegistryPage({ definition }) {
         : <Button variant="primary" onClick={openCreate}>{definition.createLabel || "创建新版本"}</Button>}
     >
       {definition.kind === "acquisitionProfile" && (
-        <Card title="设备接入进度" description="完成采集任务并发布后，设备会自动出现在运行对象和周期记录中。">
+        <Card title="设备接入进度" description="完成采集任务并发布后，设备会自动出现在“设备与对象”和周期记录中。">
           <div className="grid gap-4 md:grid-cols-4">
             {[
               ["1", "现场节点在线", "确认设备所在节点能够正常上报心跳。", "/edges", "查看节点"],
               ["2", "选择数据模型", "数据模型决定要采集哪些工艺量。", "/configuration/process-data-models", "查看模型"],
               ["3", "配置并发布", "选择设备连接方式并映射实际数据项。", null, `${rows.filter(row => row.status === "published").length} 个已发布`],
-              ["4", "确认数据到达", "在运行对象中确认设备、样本和最后活动时间。", "/explorer", "查看设备"],
+              ["4", "确认数据到达", "在设备与对象中确认设备、样本和最后活动时间。", "/explorer", "查看设备与对象"],
             ].map(([number, title, text, path, action]) => (
               <div key={number} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                 <div className="flex items-center gap-2">
@@ -3562,6 +3774,26 @@ function RegistryPage({ definition }) {
             ))}
           </div>
         </Card>
+      )}
+      {definition.kind === "inspectionDefinition" && (
+        <WorkflowGuide
+          title="先定义检测内容，再组成质量方案"
+          steps={[
+            { title: "创建检测定义", description: "设置要填写的检测项、单位、上下限或选项。", state: rows.length ? "done" : "current" },
+            { title: "加入质量方案", description: "决定哪些产品需要使用这些检测项目。", state: rows.length ? "current" : "upcoming" },
+            { title: "按任务录入", description: "生产周期完成后，平台自动生成质量待办。", state: "upcoming" },
+          ]}
+        />
+      )}
+      {definition.kind === "qualityPlan" && (
+        <WorkflowGuide
+          title="质量方案决定什么时候检测什么"
+          steps={[
+            { title: "准备检测定义", description: "先确认需要的检测项目已经建立。", state: rows.length ? "done" : "current" },
+            { title: "配置产品适用范围", description: "选择检测定义并设置原图、复核等要求。", state: rows.length ? "done" : "current" },
+            { title: "发布后自动生成任务", description: "新生产周期会按适用范围进入质量队列。", state: rows.some(row => row.status === "published") ? "done" : "upcoming" },
+          ]}
+        />
       )}
       {(error || (!open && editorError)) && <Alert tone="danger">{error || editorError}</Alert>}
       {loading && !data ? <LoadingCard /> : (
@@ -3896,16 +4128,23 @@ export function UsersPage() {
 
   async function createUser() {
     const saved = await runAction(() => postJson("/api/v1/users", createForm));
-    if (saved) setCreateOpen(false);
+    if (saved) {
+      setCreateOpen(false);
+      notify(`用户 ${createForm.displayName || createForm.username} 已创建。`);
+    }
   }
 
   async function saveRoles() {
-    await runAction(() => postJson(`/api/v1/users/${encodeURIComponent(selected.userId)}:set-roles`, { roles }));
+    const saved = await runAction(() => postJson(`/api/v1/users/${encodeURIComponent(selected.userId)}:set-roles`, { roles }));
+    if (saved) notify("岗位权限已更新。");
   }
 
   async function savePassword() {
     const saved = await runAction(() => postJson(`/api/v1/users/${encodeURIComponent(selected.userId)}:set-password`, { password }));
-    if (saved) setPassword("");
+    if (saved) {
+      setPassword("");
+      notify("密码已更新，该用户的其他会话已退出。");
+    }
   }
 
   async function changeDisabled() {
@@ -3915,6 +4154,7 @@ export function UsersPage() {
     ));
     if (saved) {
       setSelected(current => ({ ...current, disabled: !current.disabled }));
+      notify(selected.disabled ? "账户已恢复。" : "账户已停用。");
     }
   }
 
@@ -4039,7 +4279,7 @@ export function MetricsPage() {
   const error = edgeResponse.error || metricResponse.error || cycleResponse.error || qualityResponse.error || profileResponse.error;
   const healthy = offline === 0 && unknown === 0 && threadQueue === 0;
   return (
-    <Page title="平台指标" description="从业务处理、设备采集和平台资源三个层面查看运行状态。">
+    <Page title="平台运行状态" description="从业务处理、设备采集和平台资源三个层面确认系统是否正常。">
       {error && <Alert tone="danger">{error}</Alert>}
       <Alert tone={healthy ? "success" : "warning"} title={healthy ? "平台运行正常" : "平台存在需要关注的项目"}>
         {healthy ? "中心服务和现场节点均在正常工作。" : `离线节点 ${offline} 个，待确认节点 ${unknown} 个，后台排队 ${formatInteger(threadQueue)} 项。`}

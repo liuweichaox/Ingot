@@ -99,9 +99,9 @@ test("global search focuses the object query and table columns keep stable uniqu
   assert.match(components, /key=\{column\.id \?\? `\$\{column\.key\}:\$\{columnIndex\}`\}/);
 });
 
-test("running object pages use the event summary contract and show an initial loading state", () => {
-  assert.match(app, /\["\/explorer", "运行对象"\]/);
-  assert.match(pages, /title="运行对象"/);
+test("device and object pages use the event summary contract and show an initial loading state", () => {
+  assert.match(app, /\["\/explorer", "设备与对象"\]/);
+  assert.match(pages, /title="设备与对象"/);
   assert.match(pages, /objects\.loading && !objects\.data \? <LoadingCard \/>/);
   assert.match(pages, /key: "subjectType", label: "对象类型"/);
   assert.match(pages, /key: "subjectId", label: "对象编号"/);
@@ -109,6 +109,15 @@ test("running object pages use the event summary contract and show an initial lo
   assert.match(pages, /key: "eventCount", label: "事件数"/);
   assert.match(pages, /key: "sampleCount", label: "样本数"/);
   assert.doesNotMatch(pages, /key: "objectType", label: "对象类型"/);
+});
+
+test("core workflows tell new users what to do next and confirm completed actions", () => {
+  assert.match(components, /export function WorkflowGuide/);
+  assert.match(components, /export function ToastHost/);
+  assert.match(pages, /今天先做这些/);
+  assert.match(pages, /配置下一批生产/);
+  assert.match(pages, /从问题到可验证改进/);
+  assert.match(app, /<ToastHost \/>/);
 });
 
 test("versioned tooling and improvement rows remain unique while hidden tabs stay idle", () => {
