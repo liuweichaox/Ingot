@@ -425,3 +425,9 @@ FodyWeavers.xsd
 .ingot-src-snapshot.tar.gz
 _to_delete/
 .tmp-*.log
+.env
+build-output.log
+Data/connector-host-fx3u/
+Data/connector-host-fx3u-conflict-archive
+Data/fx3u-simulator/
+Data/platform-api/

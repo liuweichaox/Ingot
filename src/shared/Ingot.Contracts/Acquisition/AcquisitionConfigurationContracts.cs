@@ -8,8 +8,9 @@ public static class AcquisitionProtocols
     public const string Mqtt = "mqtt";
     public const string OpcUa = "opc-ua";
     public const string ModbusTcp = "modbus-tcp";
+    public const string MelsecA1E = "melsec-a1e";
 
-    public static bool IsSupported(string? value) => value is HttpPolling or Mqtt or OpcUa or ModbusTcp;
+    public static bool IsSupported(string? value) => value is HttpPolling or Mqtt or OpcUa or ModbusTcp or MelsecA1E;
 }
 
 public sealed record AcquisitionProfile
@@ -30,6 +31,7 @@ public sealed record AcquisitionProfile
     public MqttConnection? Mqtt { get; init; }
     public OpcUaConnection? OpcUa { get; init; }
     public ModbusTcpConnection? ModbusTcp { get; init; }
+    public McA1EConnection? MelsecA1E { get; init; }
     public AcquisitionExecutionOptions Execution { get; init; } = new();
     public string TimestampMode { get; init; } = "source";
     public string TimestampPath { get; init; } = "timestamp";
@@ -103,6 +105,23 @@ public sealed record ModbusTcpConnection
     public byte UnitId { get; init; } = 1;
     /// <summary>一次寄存器读取完成后，开始下一次读取前等待的时间；不是固定采样周期。</summary>
     public int PollIntervalMs { get; init; } = 1000;
+}
+
+/// <summary>
+///     三菱 MC 协议 1E 帧（二进制）连接配置，用于 FX3U-ENET-ADP 等 A 兼容设备。
+///     选择器格式：软元件:地址:类型（如 D:100:int16）。凭据不入库（本协议通常无需认证）。
+/// </summary>
+public sealed record McA1EConnection
+{
+    public string Host { get; init; } = string.Empty;
+    /// <summary>FX3U-ENET-ADP 的 MC 端口（常见 5551，以现场配置为准；≠ MELSOFT 端口）。</summary>
+    public int Port { get; init; } = 5551;
+    /// <summary>一次读取完成后到下一次读取的等待时间；不是固定采样周期。</summary>
+    public int PollIntervalMs { get; init; } = 1000;
+    /// <summary>1E 帧监视定时器，单位 250ms（默认 0x0010=16→约 4s）。</summary>
+    public ushort MonitoringTimer { get; init; } = 0x0010;
+    /// <summary>软元件号/代码字段顺序。FX3U-ENET-ADP A-compatible 1E 固定为 A（号在前）。</summary>
+    public string WordOrderLayout { get; init; } = "A";
 }
 
 public sealed record AcquisitionContextMapping

@@ -24,6 +24,27 @@ public sealed class DeterministicModelClient : IModelClient
         var question = request.Question;
         var context = request.PageContext;
 
+        if (ContainsAny(
+                question,
+                "运行对象",
+                "对象目录",
+                "有哪些对象",
+                "有哪些设备",
+                "设备列表",
+                "最近一次活动",
+                "最后活动") &&
+            available.Contains("list_data_objects"))
+        {
+            calls.Add(new AnalysisToolCall
+            {
+                Tool = "list_data_objects",
+                Arguments = new Dictionary<string, string?>
+                {
+                    ["limit"] = "100"
+                }
+            });
+        }
+
         if (ContainsAny(question, "质量", "完整", "缺失", "缺口", "断网", "健康") &&
             available.Contains("check_data_quality"))
         {
@@ -121,11 +142,17 @@ public sealed class DeterministicModelClient : IModelClient
             .Distinct(StringComparer.Ordinal)
             .ToArray();
         var findings = results.Select(static result => result.Summary).ToArray();
-        var followUps = new[]
-        {
-            "是否需要指定具体设备或生产周期？",
-            "是否需要查看该生产周期的完整记录？"
-        };
+        string[] followUps = results.Any(static result => result.Tool == "list_data_objects")
+            ?
+            [
+                "哪个运行对象的样本数最多？",
+                "查看指定运行对象的数据健康状态。"
+            ]
+            :
+            [
+                "是否需要指定具体设备或生产周期？",
+                "是否需要查看该生产周期的完整记录？"
+            ];
         return Task.FromResult(Result(new AnalysisAnswer
         {
             Summary = findings.Length == 0

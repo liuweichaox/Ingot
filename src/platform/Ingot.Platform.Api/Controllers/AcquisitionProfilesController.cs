@@ -120,7 +120,7 @@ public sealed partial class AcquisitionProfilesController(
         if (!ConfigurationStatuses.IsValid(status))
             return Fail("采集配置状态必须是 draft、published 或 retired。", out error);
         if (!AcquisitionProtocols.IsSupported(protocol))
-            return Fail("采集协议必须是 HTTP 轮询、MQTT、OPC UA 或 Modbus TCP。", out error);
+            return Fail("采集协议必须是 HTTP 轮询、MQTT、OPC UA、Modbus TCP 或 MELSEC 1E。", out error);
         if (string.IsNullOrWhiteSpace(value.EdgeId) || string.IsNullOrWhiteSpace(value.SubjectType) ||
             string.IsNullOrWhiteSpace(value.SubjectId) || string.IsNullOrWhiteSpace(value.Source))
             return Fail("边缘节点、数据对象和事件来源不能为空。", out error);
@@ -196,6 +196,7 @@ public sealed partial class AcquisitionProfilesController(
             Mqtt = NormalizeMqtt(value.Mqtt),
             OpcUa = NormalizeOpcUa(value.OpcUa),
             ModbusTcp = NormalizeModbusTcp(value.ModbusTcp),
+            MelsecA1E = NormalizeMelsecA1E(value.MelsecA1E),
             TimestampMode = value.TimestampMode.Trim().ToLowerInvariant(),
             TimestampPath = value.TimestampPath?.Trim() ?? string.Empty,
             SequencePath = string.IsNullOrWhiteSpace(value.SequencePath) ? null : value.SequencePath.Trim(),
@@ -264,6 +265,13 @@ public sealed partial class AcquisitionProfilesController(
                     value.ModbusTcp.Port is < 1 or > 65535 || value.ModbusTcp.PollIntervalMs < 1)
                     return Fail("Modbus TCP 主机、端口或读取后等待时间无效。", out error);
                 break;
+            case AcquisitionProtocols.MelsecA1E:
+                if (value.MelsecA1E is null || string.IsNullOrWhiteSpace(value.MelsecA1E.Host) ||
+                    value.MelsecA1E.Port is < 1 or > 65535 || value.MelsecA1E.PollIntervalMs < 1)
+                    return Fail("MELSEC 1E 主机、端口或读取后等待时间无效。", out error);
+                if (value.MelsecA1E.WordOrderLayout != "A")
+                    return Fail("MELSEC 1E 软元件字段顺序必须是 A（FX3U-ENET-ADP A-compatible 1E）。", out error);
+                break;
         }
         error = string.Empty;
         return true;
@@ -306,6 +314,13 @@ public sealed partial class AcquisitionProfilesController(
 
     private static ModbusTcpConnection? NormalizeModbusTcp(ModbusTcpConnection? value)
         => value is null ? null : value with { Host = value.Host.Trim() };
+
+    private static McA1EConnection? NormalizeMelsecA1E(McA1EConnection? value)
+        => value is null ? null : value with
+        {
+            Host = value.Host.Trim(),
+            WordOrderLayout = value.WordOrderLayout.Trim().ToUpperInvariant()
+        };
 
     private static string? CleanOptional(string? value)
         => string.IsNullOrWhiteSpace(value) ? null : value.Trim();

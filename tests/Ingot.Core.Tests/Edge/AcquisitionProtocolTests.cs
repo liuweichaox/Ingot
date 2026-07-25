@@ -13,6 +13,7 @@ public sealed class AcquisitionProtocolTests
     [InlineData(AcquisitionProtocols.Mqtt)]
     [InlineData(AcquisitionProtocols.OpcUa)]
     [InlineData(AcquisitionProtocols.ModbusTcp)]
+    [InlineData(AcquisitionProtocols.MelsecA1E)]
     public void SupportedProtocols_AreDeclaredByTheSharedContract(string protocol)
         => Assert.True(AcquisitionProtocols.IsSupported(protocol));
 
@@ -179,6 +180,37 @@ public sealed class AcquisitionProtocolTests
             ModbusQuantity = 5
         });
         Assert.Equal("CYCLE-01", value);
+    }
+
+    [Fact]
+    public void MelsecA1EFrame_MatchesFx3uEnetAdpBinaryExample()
+    {
+        var frame = MelsecA1EAcquisitionRunner.BuildWordReadFrame(
+            " D"u8.ToArray(),
+            address: 0,
+            wordCount: 5,
+            timer: 0x000A,
+            layout: "A");
+
+        Assert.Equal(
+            new byte[] { 0x01, 0xFF, 0x0A, 0x00, 0x00, 0x00, 0x00, 0x00, 0x20, 0x44, 0x05, 0x00 },
+            frame);
+    }
+
+    [Fact]
+    public void MelsecA1EDecoder_ReadsLittleEndianRegisterValues()
+    {
+        var signed = MelsecA1EAcquisitionRunner.Decode(
+            [0x81, 0x00, 0x85, 0xFF],
+            "int16",
+            1);
+        var floating = MelsecA1EAcquisitionRunner.Decode(
+            [0x81, 0x00, 0x00, 0x00, 0x48, 0x42],
+            "float32",
+            2);
+
+        Assert.Equal((short)-123, signed);
+        Assert.Equal(50f, floating);
     }
 
     private static AcquisitionDeployment Deployment()

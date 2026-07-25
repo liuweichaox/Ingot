@@ -21,7 +21,7 @@ public class MetricsController : ControllerBase
     ///     获取格式化的指标数据（JSON 格式）
     /// </summary>
     [HttpGet]
-    public async Task<IActionResult> GetMetricsJson()
+    public async Task<IActionResult> GetMetricsJson([FromQuery] string? names = null)
     {
         try
         {
@@ -30,6 +30,16 @@ public class MetricsController : ControllerBase
             var response = await client.GetStringAsync($"{baseUrl}/metrics");
 
             var metrics = PrometheusTextParser.Parse(response);
+            if (!string.IsNullOrWhiteSpace(names))
+            {
+                var requested = names
+                    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                    .Take(50)
+                    .ToHashSet(StringComparer.Ordinal);
+                metrics = metrics
+                    .Where(item => requested.Contains(item.Key))
+                    .ToDictionary(static item => item.Key, static item => item.Value, StringComparer.Ordinal);
+            }
 
             return Ok(new
             {

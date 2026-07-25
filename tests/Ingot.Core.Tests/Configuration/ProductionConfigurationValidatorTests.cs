@@ -142,12 +142,32 @@ public sealed class ProductionConfigurationValidatorTests
             ["ConnectionStrings:Events"] = "Host=postgres;Database=ingot",
             ["EventIngest:RequireToken"] = "true",
             ["EventIngest:EdgeTokens:EDGE-001"] = "edge-token-with-at-least-24-characters",
+            ["Authentication:Mode"] = "Oidc",     // OIDC 模式下才要求 Authority/Audience
             ["Chat:Enabled"] = "false",
             ["Cors:AllowedOrigins:0"] = "https://ingotstack.com"
         });
 
         var error = Assert.Throws<InvalidOperationException>(() => PlatformValidator.Validate(configuration));
         Assert.Contains("Authentication:Authority", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Platform_AcceptsLocalAuthWithoutIdentityProvider()
+    {
+        // 内置本地认证（默认 Local 模式）不需要外部 OIDC —— 这是消除强制 OIDC 部署摩擦的关键。
+        var configuration = Build(new Dictionary<string, string?>
+        {
+            ["ConnectionStrings:Events"] = "Host=postgres;Database=ingot",
+            ["EventIngest:RequireToken"] = "true",
+            ["EventIngest:EdgeTokens:EDGE-001"] = "edge-token-with-at-least-24-characters",
+            ["InspectionAttachments:ArchiveRootPath"] = "/archive/inspection-attachments",
+            ["ProcessKnowledge:ArchiveRootPath"] = "/archive/process-knowledge",
+            ["Chat:Enabled"] = "false",
+            ["Cors:AllowedOrigins:0"] = "https://ingotstack.com"
+            // 无 Authentication:Mode → 默认 Local；无 Authority/Audience 也应通过校验
+        });
+
+        PlatformValidator.Validate(configuration);
     }
 
     [Fact]

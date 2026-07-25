@@ -2,8 +2,28 @@ function resolveUrl(url) {
   return url;
 }
 
+const authTokenKey = "ingot.auth.token";
+
+export function getAuthToken() {
+  return sessionStorage.getItem(authTokenKey);
+}
+
+export function setAuthToken(token) {
+  if (token) sessionStorage.setItem(authTokenKey, token);
+  else sessionStorage.removeItem(authTokenKey);
+}
+
+function authenticatedHeaders(headers = {}) {
+  const token = getAuthToken();
+  return { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...headers };
+}
+
+function notifyUnauthorized(response) {
+  if (response.status === 401) window.dispatchEvent(new Event("ingot:unauthorized"));
+}
+
 async function jsonRequest(url, options = {}) {
-  const headers = { Accept: "application/json", ...(options.headers || {}) };
+  const headers = authenticatedHeaders({ Accept: "application/json", ...(options.headers || {}) });
   if (options.body && !headers["Content-Type"]) headers["Content-Type"] = "application/json";
   let res;
   try {
@@ -12,23 +32,25 @@ async function jsonRequest(url, options = {}) {
     throw platformRequestError(error);
   }
   if (!res.ok) {
+    notifyUnauthorized(res);
     const text = await res.text().catch(() => "");
     throw responseError(res, text);
   }
+  if (res.status === 204) return null;
   return await res.json();
 }
 
 function responseError(res, text) {
   const detail = parseErrorDetail(text);
   if (res.status >= 500 && !detail) {
-    return new Error("Platform API 暂不可用，请确认后端服务和 PostgreSQL/TimescaleDB 已启动，然后重试。");
+    return new Error("平台服务暂不可用，请稍后重试或联系管理员。");
   }
-  return new Error(detail || `请求失败（HTTP ${res.status} ${res.statusText}）`);
+  return new Error(detail || `操作未完成，请稍后重试（状态 ${res.status}）。`);
 }
 
 function platformRequestError(error) {
   if (error?.name === "AbortError") return error;
-  return new Error("无法连接 Platform API，请确认后端服务已在端口 8000 启动。", { cause: error });
+  return new Error("暂时无法连接平台服务，请稍后重试。", { cause: error });
 }
 
 function parseErrorDetail(text) {
@@ -51,7 +73,7 @@ export function postJson(url, body, options = {}) {
 }
 
 export async function putJson(url, body, options = {}) {
-  const headers = { Accept: "application/json", "Content-Type": "application/json", ...(options.headers || {}) };
+  const headers = authenticatedHeaders({ Accept: "application/json", "Content-Type": "application/json", ...(options.headers || {}) });
   let res;
   try {
     res = await fetch(resolveUrl(url), { ...options, method: "PUT", headers, body: JSON.stringify(body) });
@@ -59,6 +81,7 @@ export async function putJson(url, body, options = {}) {
     throw platformRequestError(error);
   }
   if (!res.ok) {
+    notifyUnauthorized(res);
     const detail = await res.text().catch(() => "");
     throw responseError(res, detail);
   }
@@ -67,7 +90,7 @@ export async function putJson(url, body, options = {}) {
 }
 
 export async function deleteJson(url, options = {}) {
-  const headers = { Accept: "application/json", ...(options.headers || {}) };
+  const headers = authenticatedHeaders({ Accept: "application/json", ...(options.headers || {}) });
   let res;
   try {
     res = await fetch(resolveUrl(url), { ...options, method: "DELETE", headers });
@@ -75,6 +98,7 @@ export async function deleteJson(url, options = {}) {
     throw platformRequestError(error);
   }
   if (!res.ok) {
+    notifyUnauthorized(res);
     const detail = await res.text().catch(() => "");
     throw responseError(res, detail);
   }
@@ -83,7 +107,7 @@ export async function deleteJson(url, options = {}) {
 }
 
 export async function postForm(url, formData, options = {}) {
-  const headers = { Accept: "application/json", ...(options.headers || {}) };
+  const headers = authenticatedHeaders({ Accept: "application/json", ...(options.headers || {}) });
   let res;
   try {
     res = await fetch(resolveUrl(url), { ...options, method: "POST", headers, body: formData });
@@ -91,6 +115,7 @@ export async function postForm(url, formData, options = {}) {
     throw platformRequestError(error);
   }
   if (!res.ok) {
+    notifyUnauthorized(res);
     const text = await res.text().catch(() => "");
     throw responseError(res, text);
   }
@@ -99,14 +124,17 @@ export async function postForm(url, formData, options = {}) {
 
 export async function streamSse(url, { headers = {}, signal, onEvent, lastEventId = 0 }) {
   const res = await fetch(resolveUrl(url), {
-    headers: {
+    headers: authenticatedHeaders({
       Accept: "text/event-stream",
       ...(lastEventId ? { "Last-Event-ID": String(lastEventId) } : {}),
       ...headers,
-    },
+    }),
     signal,
   });
-  if (!res.ok || !res.body) throw new Error(`SSE HTTP ${res.status} ${res.statusText}`);
+  if (!res.ok || !res.body) {
+    notifyUnauthorized(res);
+    throw new Error(`SSE HTTP ${res.status} ${res.statusText}`);
+  }
 
   const reader = res.body.getReader();
   const decoder = new TextDecoder();

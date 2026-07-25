@@ -81,12 +81,21 @@ public sealed class EdgeDiagnosticsController(
         var uri = new Uri(new Uri(baseUrl), path);
 
         var client = CreateEdgeClient(edgeId);
-        using var resp = await client.GetAsync(uri, cancellationToken);
-        var body = await resp.Content.ReadAsStringAsync(cancellationToken);
-        if (!resp.IsSuccessStatusCode) return StatusCode((int)resp.StatusCode, body);
+        try
+        {
+            using var resp = await client.GetAsync(uri, cancellationToken);
+            var body = await resp.Content.ReadAsStringAsync(cancellationToken);
+            if (!resp.IsSuccessStatusCode) return StatusCode((int)resp.StatusCode, body);
 
-        // 透传 edge 返回的 JSON（保持字段命名一致）
-        return Content(body, "application/json; charset=utf-8");
+            // 透传 edge 返回的 JSON（保持字段命名一致）
+            return Content(body, "application/json; charset=utf-8");
+        }
+        catch (HttpRequestException exception)
+        {
+            return StatusCode(
+                StatusCodes.Status502BadGateway,
+                new { error = "采集节点不可访问，请检查节点网络或上报地址。", detail = exception.Message });
+        }
     }
 
     [HttpGet("logs/levels")]

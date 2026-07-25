@@ -4,6 +4,8 @@ import test from "node:test";
 
 const pages = await readFile(new URL("../src/pages/index.jsx", import.meta.url), "utf8");
 const http = await readFile(new URL("../src/api/http.js", import.meta.url), "utf8");
+const ui = await readFile(new URL("../src/ui/components.jsx", import.meta.url), "utf8");
+const businessEditor = await readFile(new URL("../src/components/BusinessObjectEditor.jsx", import.meta.url), "utf8");
 
 test("operations retain server pagination and resumable live events", () => {
   assert.match(pages, /offset: String\(\(page - 1\) \* pageSize\)/);
@@ -14,6 +16,12 @@ test("operations retain server pagination and resumable live events", () => {
   assert.match(pages, /new EventSource\(`\/api\/v1\/events\/stream/);
   assert.match(pages, /<Pagination/);
   assert.doesNotMatch(pages, /加载更早记录|beforeIngestId/);
+  assert.match(pages, /\{ key: "completedAt", label: "结束"/);
+  assert.match(pages, /navigate\(`\/cycles\/\$\{encodeURIComponent\(row\.correlationId\)\}`\)/);
+  assert.match(pages, /export function CycleDetailPage/);
+  assert.match(pages, /processDataQuality/);
+  assert.match(pages, /operationRunId=\$\{encodedId\}/);
+  assert.match(pages, /历史对比/);
 });
 
 test("configuration registries keep create, version, retire, and draft deletion workflows", () => {
@@ -52,21 +60,69 @@ test("quality entry supports configured input types, attachments, and human revi
   assert.match(pages, /\/api\/v1\/inspection-records/);
   assert.match(pages, /\/api\/v1\/inspection-reviews/);
   assert.match(pages, /REINSPECTION_REQUIRED/);
-  assert.match(pages, /inspection-tasks\?status=all&limit=\$\{inspectionPageSize\}&offset=\$\{\(taskPage - 1\) \* inspectionPageSize\}/);
+  assert.match(pages, /inspection-tasks\?status=\$\{taskStatus\}&limit=\$\{inspectionPageSize\}&offset=\$\{\(taskPage - 1\) \* inspectionPageSize\}/);
   assert.match(pages, /inspection-records\?limit=\$\{inspectionPageSize\}&offset=\$\{\(recordPage - 1\) \* inspectionPageSize\}/);
+  assert.match(pages, /\{ key: "inspectionPlanName", label: "质量方案" \}/);
+  assert.match(pages, /\{ key: "attachments", label: "附件"/);
+  assert.match(pages, /title="原始附件"/);
+  assert.match(pages, /title="测量结果"/);
+  assert.match(pages, /inspection-reviews\?inspectionRecordId=/);
   assert.match(pages, /page=\{taskPage\}/);
   assert.match(pages, /page=\{recordPage\}/);
+});
+
+test("edge pages use the registry heartbeat contract for status", () => {
+  assert.match(pages, /const edgeStatus = edge =>/);
+  assert.match(pages, /edge\?\.lastSeen/);
+  assert.match(pages, /edge\.lastError/);
+  assert.match(pages, /\{ key: "lastSeen", label: "最后心跳"/);
+  assert.doesNotMatch(pages, /\{ key: "lastSeenAt", label: "最后心跳"/);
+  assert.match(pages, /state\.edges\.filter\(item => edgeStatus\(item\) === "online"\)/);
+});
+
+test("workbench and logs use current response contracts without misleading placeholders", () => {
+  assert.match(pages, /\/api\/v1\/cycles\?limit=8/);
+  assert.match(pages, /cycleOverview: cycles\.overview/);
+  assert.match(pages, /state\.loading \? <LoadingCard \/>/);
+  assert.match(pages, /logs\?pageSize=200/);
+  assert.match(pages, /\{ key: "source", label: "来源"/);
+  assert.doesNotMatch(pages, /keyField="id" columns=\{\[\s*\{ key: "timestamp"/);
+  assert.match(ui, /not_applicable: "无需质检"/);
+});
+
+test("cycle comparison submits the selection contract and renders business results", () => {
+  assert.match(pages, /cycleIds: \[baselineCycleId, candidate\.trim\(\)\]/);
+  assert.match(pages, /title="周期概况"/);
+  assert.match(pages, /title="信号差异"/);
+  assert.doesNotMatch(pages, /JSON\.stringify\(result, null, 2\)/);
+});
+
+test("mechanism details are presented as business fields instead of raw JSON", () => {
+  assert.match(pages, /title="输入与系数"/);
+  assert.match(pages, /title="输出与依据"/);
+  assert.doesNotMatch(pages, /JSON\.stringify\(resource, null, 2\)/);
 });
 
 test("process improvement exposes mechanism fusion, knowledge extraction, and scientific validation", () => {
   assert.match(pages, /\/api\/v1\/mechanism-models/);
   assert.match(pages, /\/api\/v1\/mechanism-fusions/);
-  assert.match(pages, /mechanism-as-feature/);
+  assert.match(businessEditor, /mechanism-as-feature/);
   assert.match(pages, /\/api\/v1\/process-knowledge/);
   assert.match(pages, /accept="\.pdf,\.xlsx,\.xlsm/);
   assert.match(pages, /\/api\/v1\/scientific-validation/);
   assert.match(pages, /manifestJson/);
   assert.match(pages, /有效范围/);
+  assert.match(pages, /添加可能原因/);
+  assert.match(pages, /创建探索性调整试验/);
+  assert.match(pages, /登记探索性试验结果/);
+  assert.match(pages, /形成调查结论/);
+  assert.match(pages, /\/causes/);
+  assert.match(pages, /\/trials/);
+  assert.match(pages, /\/conclusions/);
+  assert.match(pages, /登记模型评估/);
+  assert.match(pages, /登记漂移观测/);
+  assert.match(pages, /\/evaluations/);
+  assert.match(pages, /\/drift/);
 });
 
 test("event subscriptions retain create, edit, enable, signed-secret, and delete operations", () => {
@@ -78,12 +134,18 @@ test("event subscriptions retain create, edit, enable, signed-secret, and delete
   assert.match(pages, /deleteJson\(`\/api\/v1\/subscriptions/);
 });
 
-test("Chat remains read-only, streams with resume support, and handles API outages clearly", () => {
+test("Chat renders structured answers, exposes progress and cancellation, and keeps recent history", () => {
   assert.match(pages, /\/api\/v1\/chat\/capabilities/);
   assert.match(pages, /\/api\/v1\/chat\/runs/);
   assert.match(pages, /streamSse/);
-  assert.match(pages, /不写 PLC、CNC 或机器人/);
+  assert.match(pages, /function ChatAnswer/);
+  assert.match(pages, /answer\.summary/);
+  assert.match(pages, /取消分析/);
+  assert.match(pages, /最近问答/);
+  assert.match(pages, /capabilitiesLoading/);
+  assert.doesNotMatch(pages, /\{run\.answer\}<\/div>/);
   assert.match(http, /Last-Event-ID/);
-  assert.match(http, /PostgreSQL\/TimescaleDB/);
+  assert.match(http, /平台服务暂不可用/);
+  assert.doesNotMatch(http, /PostgreSQL\/TimescaleDB|端口 8000/);
   assert.doesNotMatch(pages, /\/api\/v1\/agent/);
 });

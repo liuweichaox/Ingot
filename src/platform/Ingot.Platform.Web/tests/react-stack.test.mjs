@@ -5,6 +5,7 @@ import test from "node:test";
 const packageJson = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
 const app = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
 const pages = await readFile(new URL("../src/pages/index.jsx", import.meta.url), "utf8");
+const http = await readFile(new URL("../src/api/http.js", import.meta.url), "utf8");
 const components = await readFile(new URL("../src/ui/components.jsx", import.meta.url), "utf8");
 const registryEditor = await readFile(new URL("../src/components/RegistryBusinessEditor.jsx", import.meta.url), "utf8");
 const businessObjectEditor = await readFile(new URL("../src/components/BusinessObjectEditor.jsx", import.meta.url), "utf8");
@@ -66,9 +67,23 @@ test("navigation and overlays are accessible Headless UI components", () => {
   assert.match(app, /aria-label="打开模块导航"/);
 });
 
+test("production login and local account administration are usable from the web app", () => {
+  assert.match(app, /\/api\/v1\/auth\/me/);
+  assert.match(app, /\/api\/v1\/auth\/login/);
+  assert.match(app, /\/api\/v1\/auth\/logout/);
+  assert.match(app, /function LoginPage/);
+  assert.match(app, /path="\/users"/);
+  assert.match(http, /Authorization: `Bearer \$\{token\}`/);
+  assert.match(http, /ingot:unauthorized/);
+  assert.match(pages, /export function UsersPage/);
+  assert.match(pages, /:set-roles/);
+  assert.match(pages, /:set-password/);
+  assert.match(pages, /:set-disabled/);
+});
+
 test("versioned registries use composite row keys and statuses are localized", () => {
   assert.match(pages, /getRowKey=\{row => `\$\{row\[definition\.key\]\}:\$\{row\.version \?\? 1\}`\}/);
-  assert.match(pages, /label="待上报状态"/);
+  assert.match(pages, /label="待上行事件"/);
   assert.match(app, /section\.label/);
   assert.match(components, /pending: "待处理"/);
   assert.match(components, /published: "已发布"/);
@@ -82,6 +97,18 @@ test("global search focuses the object query and table columns keep stable uniqu
   assert.match(pages, /if \(location\.state\?\.focusSearch\) searchInput\.current\?\.focus\(\)/);
   assert.match(pages, /<Input ref=\{searchInput\}/);
   assert.match(components, /key=\{column\.id \?\? `\$\{column\.key\}:\$\{columnIndex\}`\}/);
+});
+
+test("running object pages use the event summary contract and show an initial loading state", () => {
+  assert.match(app, /\["\/explorer", "运行对象"\]/);
+  assert.match(pages, /title="运行对象"/);
+  assert.match(pages, /objects\.loading && !objects\.data \? <LoadingCard \/>/);
+  assert.match(pages, /key: "subjectType", label: "对象类型"/);
+  assert.match(pages, /key: "subjectId", label: "对象编号"/);
+  assert.match(pages, /key: "edgeId", label: "采集节点"/);
+  assert.match(pages, /key: "eventCount", label: "事件数"/);
+  assert.match(pages, /key: "sampleCount", label: "样本数"/);
+  assert.doesNotMatch(pages, /key: "objectType", label: "对象类型"/);
 });
 
 test("versioned tooling and improvement rows remain unique while hidden tabs stay idle", () => {

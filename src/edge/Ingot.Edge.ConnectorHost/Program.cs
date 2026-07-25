@@ -52,6 +52,7 @@ builder.Services.AddSingleton<IAcquisitionSecretResolver, EnvironmentAcquisition
 builder.Services.AddSingleton<IAcquisitionProtocolRunner, MqttAcquisitionRunner>();
 builder.Services.AddSingleton<IAcquisitionProtocolRunner, OpcUaAcquisitionRunner>();
 builder.Services.AddSingleton<IAcquisitionProtocolRunner, ModbusTcpAcquisitionRunner>();
+builder.Services.AddSingleton<IAcquisitionProtocolRunner, MelsecA1EAcquisitionRunner>();
 
 // 日志查看服务（使用 SQLite）
 builder.Services.AddSingleton<ILogViewService, SqliteLogViewService>();

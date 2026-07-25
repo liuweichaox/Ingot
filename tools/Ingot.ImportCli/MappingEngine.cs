@@ -112,13 +112,23 @@ internal static class MappingEngine
         DateTimeOffset parsed;
         if (!string.IsNullOrWhiteSpace(source.Format))
         {
-            // 先按带时区解析；格式不含时区时按 DateTime 解析再套用 utcOffset。
+            // 显式 utcOffset 优先：把无时区的墙上时间按该偏移解释。
+            // 否则 DateTimeOffset.TryParseExact 会把无时区输入当作【本地时区】，
+            // 在 UTC 机器上会静默吞掉 utcOffset（曾导致 +08:00 被忽略，08:00 被当成 UTC）。
+            if (!string.IsNullOrWhiteSpace(source.UtcOffset))
+            {
+                if (DateTime.TryParseExact(raw, source.Format, CultureInfo.InvariantCulture,
+                        DateTimeStyles.None, out var localWithOffset))
+                    return ApplyOffset(localWithOffset, source.UtcOffset);
+                throw new FormatException($"时间戳 '{raw}' 不符合格式 '{source.Format}'。");
+            }
+            // 无显式偏移：格式自带时区则用之，否则按 UTC 处理。
             if (DateTimeOffset.TryParseExact(raw, source.Format, CultureInfo.InvariantCulture,
-                    DateTimeStyles.None, out parsed))
+                    DateTimeStyles.AssumeUniversal, out parsed))
                 return parsed.ToUniversalTime();
             if (DateTime.TryParseExact(raw, source.Format, CultureInfo.InvariantCulture,
                     DateTimeStyles.None, out var local))
-                return ApplyOffset(local, source.UtcOffset);
+                return new DateTimeOffset(DateTime.SpecifyKind(local, DateTimeKind.Utc));
             throw new FormatException($"时间戳 '{raw}' 不符合格式 '{source.Format}'。");
         }
         if (DateTimeOffset.TryParse(raw, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out parsed))

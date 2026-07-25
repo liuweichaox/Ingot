@@ -791,15 +791,18 @@ function AcquisitionEditor({ form, onChange, readOnly, lockIdentity }) {
       <IdentityFields form={form} onChange={onChange} idField="profileId" idLabel="采集任务代码" readOnly={readOnly} lockIdentity={lockIdentity} description={false} />
       <Card title="采集对象">
         <div className="grid gap-4 md:grid-cols-2">
-          <Field label="边缘节点" hint="可直接填写，也可从已登记节点中选择。">
-            <Input list="registered-edge-options" value={form.edgeId} disabled={readOnly} onChange={event => updateAt(form, onChange, "edgeId", event.target.value)} />
-            <datalist id="registered-edge-options">{edges.map(edge => <option key={edge.edgeId} value={edge.edgeId}>{edge.displayName || edge.edgeId}</option>)}</datalist>
+          <Field label="现场节点" hint="只显示已经登记并上报过心跳的节点。">
+            <Select value={form.edgeId} disabled={readOnly} onChange={event => updateAt(form, onChange, "edgeId", event.target.value)}>
+              <option value="">请选择现场节点</option>
+              {form.edgeId && !edges.some(edge => edge.edgeId === form.edgeId) && <option value={form.edgeId}>{form.edgeId}（历史值）</option>}
+              {edges.map(edge => <option key={edge.edgeId} value={edge.edgeId}>{edge.hostname || edge.displayName || edge.edgeId} · {edge.edgeId}</option>)}
+            </Select>
           </Field>
           <Field label="工艺数据模型"><ModelSelect value={form.dataModel} models={models} disabled={readOnly} onChange={event => updateAt(form, onChange, "dataModel", event.target.value)} /></Field>
           <Field label="协议"><Select value={form.protocol} disabled={readOnly} onChange={event => updateAt(form, onChange, "protocol", event.target.value)}><option value="http-polling">HTTP 轮询</option><option value="mqtt">MQTT</option><option value="opc-ua">OPC UA</option><option value="modbus-tcp">Modbus TCP</option><option value="melsec-a1e">三菱 MELSEC 1E</option></Select></Field>
           <Field label="设备编号"><Input value={form.subjectId} disabled={readOnly} onChange={event => updateAt(form, onChange, "subjectId", event.target.value)} /></Field>
-          <Field label="对象类型"><Input value={form.subjectType} disabled={readOnly} onChange={event => updateAt(form, onChange, "subjectType", event.target.value)} /></Field>
-          <Field label="事件来源"><Input value={form.source} disabled={readOnly} onChange={event => updateAt(form, onChange, "source", event.target.value)} placeholder="connector/http/device-01" /></Field>
+          <Field label="对象类型"><Select value={form.subjectType} disabled={readOnly} onChange={event => updateAt(form, onChange, "subjectType", event.target.value)}><option value="equipment">生产设备</option><option value="machine">设备</option></Select></Field>
+          <Field label="事件来源"><Input value={form.source} disabled={readOnly} onChange={event => updateAt(form, onChange, "source", event.target.value)} placeholder={`connector/${form.protocol || "http-polling"}/device-01`} /></Field>
         </div>
       </Card>
       <ConnectionFields form={form} onChange={onChange} readOnly={readOnly} />
@@ -882,7 +885,7 @@ function ConnectionFields({ form, onChange, readOnly }) {
           <Field label="MC 端口"><Input type="number" min="1" max="65535" value={form.melsecA1E.port} disabled={readOnly} onChange={event => update("port", event.target.value)} /></Field>
           <Field label="读取间隔（毫秒）"><Input type="number" min="1" value={form.melsecA1E.pollIntervalMs} disabled={readOnly} onChange={event => update("pollIntervalMs", event.target.value)} /></Field>
           <Field label="监视定时器"><Input type="number" min="0" max="65535" value={form.melsecA1E.monitoringTimer} disabled={readOnly} onChange={event => update("monitoringTimer", event.target.value)} /></Field>
-          <Field label="软元件字段顺序"><Select value={form.melsecA1E.wordOrderLayout} disabled={readOnly} onChange={event => update("wordOrderLayout", event.target.value)}><option value="A">A（号在前）</option><option value="B">B（代码在前）</option></Select></Field>
+          <Field label="软元件字段顺序"><Select value={form.melsecA1E.wordOrderLayout} disabled><option value="A">A（FX3U 标准）</option></Select></Field>
         </>}
       </div>
     </Card>

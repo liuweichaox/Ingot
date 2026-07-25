@@ -119,6 +119,30 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, IA
                   context           JSONB NOT NULL
                 );
 
+                CREATE TABLE IF NOT EXISTS data_object_summaries (
+                  subject_type              TEXT NOT NULL,
+                  subject_id                TEXT NOT NULL,
+                  edge_id                   TEXT,
+                  event_count               BIGINT NOT NULL DEFAULT 0,
+                  sample_count              BIGINT NOT NULL DEFAULT 0,
+                  operation_count           BIGINT NOT NULL DEFAULT 0,
+                  first_observed_at          TIMESTAMPTZ,
+                  last_observed_at           TIMESTAMPTZ,
+                  last_sample_at             TIMESTAMPTZ,
+                  maximum_sample_gap_seconds DOUBLE PRECISION,
+                  latest_event_type          TEXT,
+                  context                    JSONB NOT NULL DEFAULT '{}'::jsonb,
+                  latest_ingest_id           BIGINT NOT NULL DEFAULT 0,
+                  PRIMARY KEY (subject_type, subject_id)
+                );
+
+                CREATE TABLE IF NOT EXISTS data_object_operation_keys (
+                  subject_type  TEXT NOT NULL,
+                  subject_id    TEXT NOT NULL,
+                  correlation_id TEXT NOT NULL,
+                  PRIMARY KEY (subject_type, subject_id, correlation_id)
+                );
+
                 CREATE INDEX IF NOT EXISTS idx_production_events_ingest
                   ON production_events (ingest_id);
                 CREATE INDEX IF NOT EXISTS idx_production_events_type_time
@@ -129,6 +153,64 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, IA
                   ON production_events (correlation_id, occurred_at);
                 CREATE INDEX IF NOT EXISTS idx_production_events_context
                   ON production_events USING GIN (context);
+
+                DO $$
+                BEGIN
+                  IF COALESCE((SELECT max(latest_ingest_id) FROM data_object_summaries), 0) <>
+                     COALESCE((SELECT max(ingest_id) FROM production_events), 0) THEN
+                    TRUNCATE data_object_operation_keys, data_object_summaries;
+
+                    INSERT INTO data_object_operation_keys(subject_type, subject_id, correlation_id)
+                    SELECT DISTINCT subject_type, subject_id, correlation_id
+                    FROM production_events
+                    WHERE correlation_id IS NOT NULL
+                    ON CONFLICT DO NOTHING;
+
+                    WITH aggregate_rows AS (
+                      SELECT subject_type, subject_id,
+                             count(*) AS event_count,
+                             count(*) FILTER (WHERE event_type = 'process.sample') AS sample_count,
+                             count(DISTINCT correlation_id) AS operation_count,
+                             min(occurred_at) AS first_observed_at,
+                             max(occurred_at) AS last_observed_at,
+                             max(occurred_at) FILTER (WHERE event_type = 'process.sample') AS last_sample_at
+                      FROM production_events
+                      GROUP BY subject_type, subject_id
+                    ),
+                    latest_rows AS (
+                      SELECT DISTINCT ON (subject_type, subject_id)
+                             subject_type, subject_id, edge_id, event_type, context, ingest_id
+                      FROM production_events
+                      ORDER BY subject_type, subject_id, occurred_at DESC, ingest_id DESC
+                    ),
+                    sample_intervals AS (
+                      SELECT subject_type, subject_id,
+                             EXTRACT(EPOCH FROM occurred_at - lag(occurred_at) OVER (
+                               PARTITION BY subject_type, subject_id ORDER BY occurred_at, ingest_id
+                             )) AS gap_seconds
+                      FROM production_events
+                      WHERE event_type = 'process.sample'
+                    ),
+                    gap_rows AS (
+                      SELECT subject_type, subject_id, max(gap_seconds) AS maximum_sample_gap_seconds
+                      FROM sample_intervals
+                      GROUP BY subject_type, subject_id
+                    )
+                    INSERT INTO data_object_summaries(
+                      subject_type, subject_id, edge_id, event_count, sample_count, operation_count,
+                      first_observed_at, last_observed_at, last_sample_at, maximum_sample_gap_seconds,
+                      latest_event_type, context, latest_ingest_id)
+                    SELECT aggregate_rows.subject_type, aggregate_rows.subject_id, latest_rows.edge_id,
+                           aggregate_rows.event_count, aggregate_rows.sample_count, aggregate_rows.operation_count,
+                           aggregate_rows.first_observed_at, aggregate_rows.last_observed_at,
+                           aggregate_rows.last_sample_at, gap_rows.maximum_sample_gap_seconds,
+                           latest_rows.event_type, latest_rows.context, latest_rows.ingest_id
+                    FROM aggregate_rows
+                    JOIN latest_rows USING (subject_type, subject_id)
+                    LEFT JOIN gap_rows USING (subject_type, subject_id);
+                  END IF;
+                END
+                $$;
                 """);
             await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
 
@@ -183,6 +265,13 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, IA
             {
                 var ingestId = await InsertEventAsync(connection, transaction, request.EdgeId, evt, ct)
                     .ConfigureAwait(false);
+                await ProjectDataObjectSummaryAsync(
+                    connection,
+                    transaction,
+                    request.EdgeId,
+                    ingestId,
+                    evt,
+                    ct).ConfigureAwait(false);
                 var analysisKey = evt.CorrelationId ?? $"{evt.Subject.Type}:{evt.Subject.Id}";
                 analysisConfigurations.TryGetValue(analysisKey, out var analysis);
                 await _timeSeriesStore.ProjectEventAsync(
@@ -561,6 +650,7 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, IA
         var offset = Math.Max(0, query.Offset);
         await using var command = _dataSource.CreateCommand();
         var predicates = new List<string>();
+        AddEquality(command, predicates, "edge_id", "edge_id", query.EdgeId);
         AddEquality(command, predicates, "subject_type", "subject_type", query.SubjectType);
         AddEquality(command, predicates, "subject_id", "subject_id", query.SubjectId);
         if (query.From.HasValue)
@@ -574,7 +664,17 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, IA
             command.Parameters.AddWithValue("to", query.To.Value.UtcDateTime);
         }
         var where = predicates.Count == 0 ? string.Empty : $"WHERE {string.Join(" AND ", predicates)}";
-        command.CommandText = $"""
+        command.CommandText = string.IsNullOrWhiteSpace(query.EdgeId) && !query.From.HasValue && !query.To.HasValue
+            ? $"""
+               SELECT subject_type, subject_id, edge_id, event_count, sample_count, operation_count,
+                      first_observed_at, last_observed_at, last_sample_at, maximum_sample_gap_seconds,
+                      latest_event_type, context::text, count(*) OVER() AS total_count
+               FROM data_object_summaries
+               {where}
+               ORDER BY last_observed_at DESC, subject_type, subject_id
+               LIMIT @limit OFFSET @offset;
+               """
+            : $"""
                               WITH filtered AS (
                                 SELECT ingest_id, edge_id, event_type, occurred_at, subject_type,
                                        subject_id, correlation_id, context
@@ -867,6 +967,94 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, IA
         command.Parameters.AddWithValue("context", NpgsqlDbType.Jsonb, JsonSerializer.Serialize(evt.Context, JsonOptions));
         command.Parameters.AddWithValue("data", NpgsqlDbType.Jsonb, JsonSerializer.Serialize(evt.Data, JsonOptions));
         return Convert.ToInt64(await command.ExecuteScalarAsync(ct).ConfigureAwait(false), CultureInfo.InvariantCulture);
+    }
+
+    private static async Task ProjectDataObjectSummaryAsync(
+        NpgsqlConnection connection,
+        NpgsqlTransaction transaction,
+        string edgeId,
+        long ingestId,
+        ProductionEvent evt,
+        CancellationToken ct)
+    {
+        var operationIncrement = 0;
+        if (!string.IsNullOrWhiteSpace(evt.CorrelationId))
+        {
+            await using var operationCommand = new NpgsqlCommand(
+                """
+                INSERT INTO data_object_operation_keys(subject_type, subject_id, correlation_id)
+                VALUES (@subject_type, @subject_id, @correlation_id)
+                ON CONFLICT DO NOTHING
+                RETURNING correlation_id;
+                """,
+                connection,
+                transaction);
+            operationCommand.Parameters.AddWithValue("subject_type", evt.Subject.Type);
+            operationCommand.Parameters.AddWithValue("subject_id", evt.Subject.Id);
+            operationCommand.Parameters.AddWithValue("correlation_id", evt.CorrelationId);
+            operationIncrement = await operationCommand.ExecuteScalarAsync(ct).ConfigureAwait(false) is null ? 0 : 1;
+        }
+
+        await using var command = new NpgsqlCommand(
+            """
+            INSERT INTO data_object_summaries(
+              subject_type, subject_id, edge_id, event_count, sample_count, operation_count,
+              first_observed_at, last_observed_at, last_sample_at, maximum_sample_gap_seconds,
+              latest_event_type, context, latest_ingest_id)
+            VALUES (
+              @subject_type, @subject_id, @edge_id, 1, @sample_count, @operation_count,
+              @occurred_at, @occurred_at, @last_sample_at, NULL,
+              @event_type, @context, @ingest_id)
+            ON CONFLICT (subject_type, subject_id) DO UPDATE SET
+              event_count = data_object_summaries.event_count + 1,
+              sample_count = data_object_summaries.sample_count + EXCLUDED.sample_count,
+              operation_count = data_object_summaries.operation_count + EXCLUDED.operation_count,
+              first_observed_at = LEAST(data_object_summaries.first_observed_at, EXCLUDED.first_observed_at),
+              last_observed_at = GREATEST(data_object_summaries.last_observed_at, EXCLUDED.last_observed_at),
+              maximum_sample_gap_seconds = CASE
+                WHEN EXCLUDED.last_sample_at IS NULL THEN data_object_summaries.maximum_sample_gap_seconds
+                WHEN data_object_summaries.last_sample_at IS NULL THEN data_object_summaries.maximum_sample_gap_seconds
+                WHEN EXCLUDED.last_sample_at >= data_object_summaries.last_sample_at THEN GREATEST(
+                  COALESCE(data_object_summaries.maximum_sample_gap_seconds, 0),
+                  EXTRACT(EPOCH FROM EXCLUDED.last_sample_at - data_object_summaries.last_sample_at))
+                ELSE data_object_summaries.maximum_sample_gap_seconds
+              END,
+              last_sample_at = CASE
+                WHEN EXCLUDED.last_sample_at IS NULL THEN data_object_summaries.last_sample_at
+                ELSE GREATEST(data_object_summaries.last_sample_at, EXCLUDED.last_sample_at)
+              END,
+              edge_id = CASE
+                WHEN (EXCLUDED.last_observed_at, EXCLUDED.latest_ingest_id) >=
+                     (data_object_summaries.last_observed_at, data_object_summaries.latest_ingest_id)
+                THEN EXCLUDED.edge_id ELSE data_object_summaries.edge_id
+              END,
+              latest_event_type = CASE
+                WHEN (EXCLUDED.last_observed_at, EXCLUDED.latest_ingest_id) >=
+                     (data_object_summaries.last_observed_at, data_object_summaries.latest_ingest_id)
+                THEN EXCLUDED.latest_event_type ELSE data_object_summaries.latest_event_type
+              END,
+              context = CASE
+                WHEN (EXCLUDED.last_observed_at, EXCLUDED.latest_ingest_id) >=
+                     (data_object_summaries.last_observed_at, data_object_summaries.latest_ingest_id)
+                THEN EXCLUDED.context ELSE data_object_summaries.context
+              END,
+              latest_ingest_id = GREATEST(data_object_summaries.latest_ingest_id, EXCLUDED.latest_ingest_id);
+            """,
+            connection,
+            transaction);
+        command.Parameters.AddWithValue("subject_type", evt.Subject.Type);
+        command.Parameters.AddWithValue("subject_id", evt.Subject.Id);
+        command.Parameters.AddWithValue("edge_id", edgeId);
+        command.Parameters.AddWithValue("sample_count", evt.EventType == "process.sample" ? 1 : 0);
+        command.Parameters.AddWithValue("operation_count", operationIncrement);
+        command.Parameters.AddWithValue("occurred_at", evt.OccurredAt.UtcDateTime);
+        command.Parameters.AddWithValue(
+            "last_sample_at",
+            evt.EventType == "process.sample" ? evt.OccurredAt.UtcDateTime : DBNull.Value);
+        command.Parameters.AddWithValue("event_type", evt.EventType);
+        command.Parameters.AddWithValue("context", NpgsqlDbType.Jsonb, JsonSerializer.Serialize(evt.Context, JsonOptions));
+        command.Parameters.AddWithValue("ingest_id", ingestId);
+        await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
     }
 
     private static async Task VerifyDuplicateAsync(

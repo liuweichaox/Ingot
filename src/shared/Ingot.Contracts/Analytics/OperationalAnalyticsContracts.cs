@@ -22,6 +22,8 @@ public sealed record DataObjectSummary
 
 public sealed record DataObjectQuery
 {
+    public string? EdgeId { get; init; }
+
     public string? SubjectType { get; init; }
     public string? SubjectId { get; init; }
     public DateTimeOffset? From { get; init; }

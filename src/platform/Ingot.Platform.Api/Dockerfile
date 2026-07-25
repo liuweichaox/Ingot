@@ -2,7 +2,10 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
+# 根级 MSBuild 约定（ImplicitUsings/Nullable/LangVersion 等）—— 必须先于 restore/build 拷入，
+# 否则各项目缺失隐式 using System，会报 CS0246: DateTimeOffset/IReadOnlyDictionary 找不到。
 COPY Directory.Build.props ./
+
 COPY src/shared/Ingot.Contracts/Ingot.Contracts.csproj src/shared/Ingot.Contracts/
 COPY src/shared/Ingot.Domain/Ingot.Domain.csproj src/shared/Ingot.Domain/
 COPY src/agent/Ingot.Agent/Ingot.Agent.csproj src/agent/Ingot.Agent/
@@ -28,7 +31,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=build /app/publish .
 
-ENV Urls=http://+:8000
+ENV ASPNETCORE_URLS=http://+:8000
 EXPOSE 8000
 
 ENTRYPOINT ["dotnet", "Ingot.Platform.Api.dll"]

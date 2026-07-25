@@ -13,8 +13,9 @@ import {
   WrenchScrewdriverIcon,
   XMarkIcon,
 } from "@heroicons/react/24/outline";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
+import { getAuthToken, getJson, postJson, setAuthToken } from "./api/http";
 import * as Pages from "./pages";
 import { cx } from "./ui/components";
 
@@ -41,9 +42,9 @@ const sections = [
   },
   {
     id: "data", label: "数据资产", icon: CircleStackIcon, path: "/explorer", items: [
-      ["/explorer", "对象目录"], ["/configuration/process-data-models", "工艺数据模型"],
-      ["/configuration/recipe-versions", "配方版本"], ["/configuration/acquisition-profiles", "采集任务"],
-      ["/edges", "采集节点"],
+      ["/explorer", "运行对象"], ["/configuration/process-data-models", "工艺数据模型"],
+      ["/configuration/recipe-versions", "配方版本"], ["/configuration/acquisition-profiles", "设备采集"],
+      ["/edges", "现场节点"],
     ],
   },
   {
@@ -54,15 +55,15 @@ const sections = [
   },
   {
     id: "administration", label: "系统管理", icon: Cog6ToothIcon, path: "/platform-metrics", items: [
-      ["/platform-metrics", "平台指标"], ["/subscriptions", "事件订阅"], ["/logs", "运行日志"],
+      ["/platform-metrics", "平台指标"], ["/users", "用户与权限"], ["/subscriptions", "事件订阅"], ["/logs", "运行日志"],
     ],
   },
 ];
 
 const pageDetails = {
   "/workbench": ["工作台", "生产、质量与数据状态"],
-  "/chat": ["Ingot Chat", "查询与分析已保存的生产数据"],
-  "/explorer": ["对象目录", "从运行对象进入数据、上下文与关联关系"],
+  "/chat": ["AI 助手", "查询和分析已保存的生产数据"],
+  "/explorer": ["运行对象", "查看已上报生产数据的设备与运行对象"],
   "/cycles": ["运行记录", "查看生产周期及其数据、工艺与质量上下文"],
   "/events": ["生产事件", "查询、追溯并关联运行上下文"],
   "/production/changeover": ["生产切换", "让设备、产品、配方和已装工装对接下来的周期生效"],
@@ -75,28 +76,96 @@ const pageDetails = {
   "/configuration/process-analysis-plans": ["分析方案", "配置分析范围、对齐方式、质量分组和数据项"],
   "/configuration/process-data-models": ["工艺数据模型", "定义采集数据项、配方参数结构和工艺阶段"],
   "/configuration/recipe-versions": ["配方版本", "维护引用数据模型的完整配方有效值"],
-  "/configuration/acquisition-profiles": ["采集任务", "管理数据源连接、采集对象、字段映射与发布版本"],
+  "/configuration/acquisition-profiles": ["设备采集", "选择现场节点、设备和采集方式，让数据持续进入平台"],
   "/configuration/inspection-definitions": ["检测定义", "定义要检测的特性、录入类型和判定规则"],
   "/configuration/quality-plans": ["质量方案", "配置产品适用的检测项目与复核规则"],
   "/configuration/component-types": ["组件类型", "配置组件台账的分类来源"],
   "/configuration/components": ["组件台账", "登记可更换、复用和追溯的物理组件"],
   "/configuration/tooling-types": ["工装类型", "配置装配位置及允许的组件类型"],
   "/configuration/tooling-assemblies": ["工装组合", "维护工装身份与不可变组件组合版本"],
-  "/edges": ["采集节点", "查看现场采集节点及运行状态"],
+  "/edges": ["现场节点", "查看负责连接设备并上报数据的现场节点"],
   "/platform-metrics": ["平台指标", "查看平台与边缘节点运行指标"],
+  "/users": ["用户与权限", "管理本地账户、角色和停用状态"],
   "/subscriptions": ["事件订阅", "维护向外部系统投递的事件订阅"],
   "/logs": ["运行日志", "查询平台运行记录"],
+};
+
+const roleLabels = {
+  "platform.admin": "平台管理员",
+  "quality.inspector": "质量检验员",
+  "quality.reviewer": "质量复核员",
+  "process.engineer": "工艺工程师",
 };
 
 export default function App() {
   const location = useLocation();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const section = useMemo(
-    () => sections.find(item => item.path === location.pathname || item.items.some(([path]) => path === location.pathname)) ?? sections[0],
-    [location.pathname],
+  const [authState, setAuthState] = useState("checking");
+  const [identity, setIdentity] = useState(null);
+
+  useEffect(() => {
+    let alive = true;
+    async function loadIdentity() {
+      try {
+        const current = await getJson("/api/v1/auth/me");
+        if (alive) {
+          setIdentity(current);
+          setAuthState("ready");
+        }
+      } catch {
+        if (alive) {
+          setIdentity(null);
+          setAuthState("required");
+        }
+      }
+    }
+    function handleUnauthorized() {
+      setAuthToken("");
+      setIdentity(null);
+      setAuthState("required");
+    }
+    window.addEventListener("ingot:unauthorized", handleUnauthorized);
+    loadIdentity();
+    return () => {
+      alive = false;
+      window.removeEventListener("ingot:unauthorized", handleUnauthorized);
+    };
+  }, []);
+
+  async function logout() {
+    try {
+      await postJson("/api/v1/auth/logout", {});
+    } finally {
+      setAuthToken("");
+      setIdentity(null);
+      setAuthState("required");
+    }
+  }
+
+  const visibleSections = useMemo(
+    () => sections.map(item => item.id === "administration" && !(identity?.roles || []).includes("platform.admin")
+      ? { ...item, items: item.items.filter(([path]) => path !== "/users") }
+      : item),
+    [identity],
   );
-  const page = pageDetails[location.pathname] ?? ["Ingot", "制造数据平台"];
+  const section = useMemo(
+    () => visibleSections.find(item => item.path === location.pathname || item.items.some(([path]) => location.pathname === path || location.pathname.startsWith(`${path}/`))) ?? visibleSections[0],
+    [location.pathname, visibleSections],
+  );
+  const page = location.pathname.startsWith("/cycles/")
+    ? ["周期详情", "查看单次生产运行的过程、质量和数据完整性"]
+    : location.pathname.startsWith("/edges/")
+      ? ["节点诊断", "查看现场节点的连接、采集、上行和最近日志"]
+    : pageDetails[location.pathname] ?? ["Ingot", "制造数据平台"];
+
+  if (authState === "checking") return <AuthenticationLoading />;
+  if (authState === "required") {
+    return <LoginPage onAuthenticated={current => {
+      setIdentity(current);
+      setAuthState("ready");
+    }} />;
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
@@ -116,7 +185,7 @@ export default function App() {
             <span className="truncate">{section.label}</span>
           </MenuButton>
           <MenuItems transition anchor="bottom start" className="z-100 mt-2 w-64 origin-top-left rounded-xl border border-slate-200 bg-white p-2 text-sm shadow-xl transition data-closed:scale-95 data-closed:opacity-0">
-            {sections.map(item => {
+            {visibleSections.map(item => {
               const Icon = item.icon;
               const active = item.id === section.id;
               return (
@@ -137,7 +206,7 @@ export default function App() {
           </MenuItems>
         </Menu>
         <nav className="hidden min-w-0 flex-1 xl:flex" aria-label="全局导航">
-          {sections.map(item => {
+          {visibleSections.map(item => {
             const Icon = item.icon;
             const active = item.id === section.id;
             return (
@@ -163,8 +232,14 @@ export default function App() {
             <UserCircleIcon className="size-6" />
           </MenuButton>
           <MenuItems transition anchor="bottom end" className="z-100 mt-2 w-48 origin-top-right rounded-xl border border-slate-200 bg-white p-1 text-sm shadow-xl transition data-closed:scale-95 data-closed:opacity-0">
+            <div className="border-b border-slate-100 px-3 py-2">
+              <p className="truncate font-medium text-slate-900">{identity?.username || "当前用户"}</p>
+              <p className="mt-0.5 truncate text-xs text-slate-500">{(identity?.roles || []).map(role => roleLabels[role] || role).join("、") || "已登录"}</p>
+            </div>
             <MenuItem><Link to="/platform-metrics" className="block rounded-lg px-3 py-2 text-slate-700 data-focus:bg-slate-100">平台运行状态</Link></MenuItem>
+            {(identity?.roles || []).includes("platform.admin") && <MenuItem><Link to="/users" className="block rounded-lg px-3 py-2 text-slate-700 data-focus:bg-slate-100">用户与权限</Link></MenuItem>}
             <MenuItem><a href="https://docs.ingotstack.com/zh" className="block rounded-lg px-3 py-2 text-slate-700 data-focus:bg-slate-100">产品文档</a></MenuItem>
+            {getAuthToken() && <MenuItem><button type="button" className="block w-full rounded-lg px-3 py-2 text-left text-rose-700 data-focus:bg-rose-50" onClick={logout}>退出登录</button></MenuItem>}
           </MenuItems>
         </Menu>
       </header>
@@ -178,7 +253,7 @@ export default function App() {
             </div>
             <nav className="grid gap-1 p-3" aria-label={`${section.label}导航`}>
               {section.items.map(([path, label]) => (
-                <Link key={path} to={path} className={cx("rounded-lg px-3 py-2.5 text-sm", path === location.pathname ? "bg-blue-50 font-medium text-blue-700" : "text-slate-600 hover:bg-slate-50 hover:text-slate-950")}>
+                <Link key={path} to={path} className={cx("rounded-lg px-3 py-2.5 text-sm", (path === location.pathname || location.pathname.startsWith(`${path}/`)) ? "bg-blue-50 font-medium text-blue-700" : "text-slate-600 hover:bg-slate-50 hover:text-slate-950")}>
                   {label}
                 </Link>
               ))}
@@ -215,7 +290,7 @@ export default function App() {
           </div>
           <nav className="grid gap-1 p-3">
             {section.items.map(([path, label]) => (
-              <Link key={path} to={path} onClick={() => setMobileOpen(false)} className={cx("rounded-lg px-3 py-3 text-sm", path === location.pathname ? "bg-blue-50 font-medium text-blue-700" : "text-slate-700 hover:bg-slate-50")}>
+              <Link key={path} to={path} onClick={() => setMobileOpen(false)} className={cx("rounded-lg px-3 py-3 text-sm", (path === location.pathname || location.pathname.startsWith(`${path}/`)) ? "bg-blue-50 font-medium text-blue-700" : "text-slate-700 hover:bg-slate-50")}>
                 {label}
               </Link>
             ))}
@@ -234,6 +309,7 @@ function AppRoutes() {
       <Route path="/chat" element={<Pages.ChatPage />} />
       <Route path="/explorer" element={<Pages.ObjectExplorerPage />} />
       <Route path="/cycles" element={<Pages.CyclesPage />} />
+      <Route path="/cycles/:correlationId" element={<Pages.CycleDetailPage />} />
       <Route path="/events" element={<Pages.EventsPage />} />
       <Route path="/production/changeover" element={<Pages.ProductionSetupPage section="context" />} />
       <Route path="/production/tooling-installations" element={<Pages.ProductionSetupPage section="installation" />} />
@@ -256,10 +332,84 @@ function AppRoutes() {
       <Route path="/configuration/recipe-versions" element={<Pages.RecipeVersionsPage />} />
       <Route path="/configuration/acquisition-profiles" element={<Pages.AcquisitionProfilesPage />} />
       <Route path="/edges" element={<Pages.EdgesPage />} />
+      <Route path="/edges/:edgeId" element={<Pages.EdgeDetailPage />} />
       <Route path="/platform-metrics" element={<Pages.MetricsPage />} />
+      <Route path="/users" element={<Pages.UsersPage />} />
       <Route path="/subscriptions" element={<Pages.SubscriptionsPage />} />
       <Route path="/logs" element={<Pages.LogsPage />} />
       <Route path="*" element={<Pages.NotFoundPage />} />
     </Routes>
+  );
+}
+
+function AuthenticationLoading() {
+  return (
+    <div className="grid min-h-screen place-items-center bg-slate-50">
+      <div className="text-center">
+        <img src="/ingot-mark.svg" alt="" className="mx-auto size-12" />
+        <p className="mt-4 text-sm text-slate-500">正在确认登录状态…</p>
+      </div>
+    </div>
+  );
+}
+
+function LoginPage({ onAuthenticated }) {
+  const [form, setForm] = useState({ username: "", password: "" });
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function submit(event) {
+    event.preventDefault();
+    setBusy(true);
+    setError("");
+    try {
+      const session = await postJson("/api/v1/auth/login", form);
+      setAuthToken(session.token);
+      onAuthenticated({
+        userId: session.userId,
+        username: session.displayName || session.username,
+        roles: session.roles || [],
+      });
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="grid min-h-screen bg-slate-100 lg:grid-cols-[minmax(0,1fr)_minmax(420px,0.72fr)]">
+      <section className="hidden items-end bg-slate-950 p-12 text-white lg:flex">
+        <div className="max-w-xl">
+          <div className="mb-8 flex items-center gap-3">
+            <span className="grid size-12 place-items-center rounded-2xl bg-amber-50"><img src="/ingot-mark.svg" alt="" className="size-9" /></span>
+            <div><strong className="text-2xl">Ingot</strong><p className="text-sm text-slate-400">制造数据平台</p></div>
+          </div>
+          <h1 className="text-4xl font-semibold leading-tight">让生产过程、质量结果和改进决策保持同一条追溯链。</h1>
+          <p className="mt-5 leading-7 text-slate-300">登录后可按岗位权限查看运行、处理质检、管理配置和执行受控改进。</p>
+        </div>
+      </section>
+      <main className="grid place-items-center p-6 sm:p-10">
+        <form className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-7 shadow-xl shadow-slate-200/60 sm:p-9" onSubmit={submit}>
+          <div className="mb-7 lg:hidden">
+            <img src="/ingot-mark.svg" alt="" className="size-11" />
+          </div>
+          <h1 className="text-2xl font-semibold text-slate-950">登录平台</h1>
+          <p className="mt-2 text-sm leading-6 text-slate-500">使用管理员分配的本地账户进入系统。</p>
+          {error && <div role="alert" className="mt-5 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>}
+          <label className="mt-6 block text-sm font-medium text-slate-700">
+            用户名
+            <input autoComplete="username" required className="mt-2 min-h-11 w-full rounded-xl border border-slate-300 px-3 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" value={form.username} onChange={event => setForm({ ...form, username: event.target.value })} />
+          </label>
+          <label className="mt-4 block text-sm font-medium text-slate-700">
+            密码
+            <input type="password" autoComplete="current-password" required className="mt-2 min-h-11 w-full rounded-xl border border-slate-300 px-3 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" value={form.password} onChange={event => setForm({ ...form, password: event.target.value })} />
+          </label>
+          <button type="submit" disabled={busy || !form.username.trim() || !form.password} className="mt-6 min-h-11 w-full rounded-xl bg-blue-600 px-4 font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50">
+            {busy ? "正在登录…" : "登录"}
+          </button>
+        </form>
+      </main>
+    </div>
   );
 }

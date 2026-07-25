@@ -59,7 +59,12 @@ public static class ServiceCollectionExtensions
 
         // Chat 只能通过显式注册的只读工具访问中心数据。
         services.Configure<ChatDataAccessOptions>(configuration.GetSection("ChatDataAccess"));
-        services.AddSingleton<IChatEventReader, ChatEventReader>();
+        services.AddSingleton<ChatEventReader>();
+        services.AddSingleton<IChatEventReader>(
+            provider => provider.GetRequiredService<ChatEventReader>());
+        services.AddSingleton<IChatDataObjectReader>(
+            provider => provider.GetRequiredService<ChatEventReader>());
+        services.AddSingleton<IAnalysisTool, ListDataObjectsTool>();
         services.AddSingleton<IAnalysisTool, CheckDataQualityTool>();
         services.AddSingleton<IAnalysisTool, GetCycleTraceTool>();
         services.AddSingleton<IAnalysisTool, FindComparableCyclesTool>();

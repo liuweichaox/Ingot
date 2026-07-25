@@ -1,4 +1,5 @@
 using Ingot.Platform.Infrastructure.Events;
+using Ingot.Contracts.Analytics;
 using Ingot.Contracts.Events;
 using Microsoft.Extensions.Options;
 
@@ -36,11 +37,20 @@ public interface IChatEventReader
         string userId,
         PlatformEventQuery query,
         CancellationToken ct = default);
+
+}
+
+public interface IChatDataObjectReader
+{
+    Task<DataObjectPage> QueryDataObjectsAsync(
+        string userId,
+        DataObjectQuery query,
+        CancellationToken ct = default);
 }
 
 public sealed class ChatEventReader(
     IPlatformEventStore events,
-    IOptions<ChatDataAccessOptions> options) : IChatEventReader
+    IOptions<ChatDataAccessOptions> options) : IChatEventReader, IChatDataObjectReader
 {
     private readonly ChatDataAccessOptions _options = options.Value;
 
@@ -117,6 +127,37 @@ public sealed class ChatEventReader(
         return Combine(parts);
     }
 
+    public async Task<DataObjectPage> QueryDataObjectsAsync(
+        string userId,
+        DataObjectQuery query,
+        CancellationToken ct = default)
+    {
+        var edgeIds = ResolveEdgeScope(userId);
+        if (edgeIds is null)
+            return await events.QueryDataObjectsAsync(query, ct).ConfigureAwait(false);
+
+        var pages = await Task.WhenAll(edgeIds.Select(edgeId =>
+            events.QueryDataObjectsAsync(
+                query with { EdgeId = edgeId, Limit = 500, Offset = 0 },
+                ct))).ConfigureAwait(false);
+        var merged = pages.SelectMany(static page => page.Data)
+            .GroupBy(static row => (row.SubjectType, row.SubjectId))
+            .Select(MergeDataObjects)
+            .OrderByDescending(static row => row.LastObservedAt)
+            .ThenBy(static row => row.SubjectType, StringComparer.Ordinal)
+            .ThenBy(static row => row.SubjectId, StringComparer.Ordinal)
+            .ToArray();
+        var limit = Math.Clamp(query.Limit, 1, 500);
+        var offset = Math.Max(0, query.Offset);
+        return new DataObjectPage
+        {
+            Data = merged.Skip(offset).Take(limit).ToArray(),
+            Total = merged.Length,
+            Limit = limit,
+            Offset = offset
+        };
+    }
+
     // null 表示 AllowAll（不按 Edge 收窄）；否则返回该用户 被授权的 Edge 集合。
     private string[]? ResolveEdgeScope(string userId)
     {
@@ -152,6 +193,29 @@ public sealed class ChatEventReader(
             Count = parts.Sum(static part => part.Count),
             LatestOccurredAt = latests.Length == 0 ? null : latests.Max(),
             EarliestOccurredAt = earliests.Length == 0 ? null : earliests.Min()
+        };
+    }
+
+    private static DataObjectSummary MergeDataObjects(
+        IGrouping<(string SubjectType, string SubjectId), DataObjectSummary> group)
+    {
+        var rows = group.ToArray();
+        var latest = rows.OrderByDescending(static row => row.LastObservedAt).First();
+        return latest with
+        {
+            EdgeId = rows.Select(static row => row.EdgeId)
+                .Where(static value => !string.IsNullOrWhiteSpace(value))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Count() == 1
+                ? latest.EdgeId
+                : "多个采集节点",
+            EventCount = rows.Sum(static row => row.EventCount),
+            SampleCount = rows.Sum(static row => row.SampleCount),
+            OperationCount = rows.Sum(static row => row.OperationCount),
+            FirstObservedAt = rows.Min(static row => row.FirstObservedAt),
+            LastObservedAt = rows.Max(static row => row.LastObservedAt),
+            LastSampleAt = rows.Max(static row => row.LastSampleAt),
+            MaximumSampleGapSeconds = rows.Max(static row => row.MaximumSampleGapSeconds)
         };
     }
 }

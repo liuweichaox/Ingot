@@ -49,7 +49,7 @@ export function Button({ variant = "secondary", className, type = "button", chil
     <button
       type={type}
       className={cx(
-        "inline-flex min-h-9 items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition focus-visible:outline-2 focus-visible:outline-offset-2 disabled:pointer-events-none disabled:opacity-50",
+        "inline-flex min-h-9 items-center justify-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-sm font-medium transition focus-visible:outline-2 focus-visible:outline-offset-2 disabled:pointer-events-none disabled:opacity-50",
         buttonStyles[variant],
         className,
       )}
@@ -69,7 +69,7 @@ export function Badge({ tone = "neutral", children }) {
     info: "bg-blue-50 text-blue-700 ring-blue-600/20",
   };
   return (
-    <span className={cx("inline-flex rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset", tones[tone])}>
+    <span className={cx("inline-flex whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset", tones[tone])}>
       {children}
     </span>
   );
@@ -103,6 +103,7 @@ export function StatusBadge({ value }) {
     suspended: "已暂停",
     "rollback-required": "需要回滚",
     unavailable: "不可用",
+    not_applicable: "无需质检",
     cancelled: "已取消",
     pending: "待处理",
     draft: "草稿",
@@ -124,7 +125,10 @@ export function StatusBadge({ value }) {
     planned: "已计划",
     open: "待处理",
     closed: "已关闭",
+    concluded: "已形成结论",
     disabled: "已停用",
+    withdrawn: "已撤回",
+    "rolled-back": "已回退",
     information: "信息",
     warning: "警告",
     unknown: "待上报",
@@ -133,7 +137,7 @@ export function StatusBadge({ value }) {
     ? "success"
     : ["fail", "failed", "offline", "rejected", "error", "suspended", "rollback-required", "unavailable", "cancelled"].includes(normalized)
       ? "danger"
-      : ["pending", "draft", "running", "uploaded", "dirty", "degraded", "in_progress", "review_pending", "queued", "completed_with_errors", "cancelling", "proposed", "investigating", "trialing", "planned", "warning"].includes(normalized)
+      : ["pending", "draft", "running", "uploaded", "dirty", "degraded", "in_progress", "review_pending", "queued", "completed_with_errors", "cancelling", "proposed", "investigating", "trialing", "planned", "warning", "concluded", "withdrawn", "rolled-back"].includes(normalized)
         ? "warning"
         : "neutral";
   return <Badge tone={tone}>{labels[normalized] ?? String(value ?? "待上报")}</Badge>;
@@ -246,10 +250,10 @@ export function DataTable({ columns, rows, keyField = "id", getRowKey, onRowClic
   );
 }
 
-export function Drawer({ open, onClose, title, description, children, footer, size = "lg" }) {
+export function Drawer({ open, onClose, title, description, children, footer, size = "lg", closeOnBackdrop = true }) {
   const sizes = { md: "max-w-xl", lg: "max-w-3xl", xl: "max-w-5xl" };
   return (
-    <Dialog open={open} onClose={onClose} className="relative z-100">
+    <Dialog open={open} onClose={closeOnBackdrop ? onClose : () => {}} className="relative z-100">
       <DialogBackdrop transition className="fixed inset-0 bg-slate-950/30 backdrop-blur-sm transition data-closed:opacity-0" />
       <div className="fixed inset-0 overflow-hidden">
         <div className="absolute inset-0 overflow-hidden">
@@ -312,6 +316,14 @@ export function Pagination({ page, pageSize, total, onPageChange, onPageSizeChan
 function displayValue(value) {
   if (value === null || value === undefined || value === "") return "—";
   if (typeof value === "boolean") return value ? "是" : "否";
-  if (typeof value === "object") return JSON.stringify(value);
+  if (Array.isArray(value)) {
+    if (!value.length) return "—";
+    return value.map(item => typeof item === "object" ? `${Object.keys(item || {}).length} 项信息` : displayValue(item)).join("、");
+  }
+  if (typeof value === "object") {
+    const entries = Object.entries(value);
+    if (!entries.length) return "—";
+    return entries.map(([key, item]) => `${key}：${typeof item === "object" ? `${Object.keys(item || {}).length} 项` : displayValue(item)}`).join("；");
+  }
   return String(value);
 }
