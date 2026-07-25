@@ -38,6 +38,7 @@ import {
 } from "../ui/components";
 
 export { ResearchProjectsPage } from "./ResearchProjectsPage";
+export { ResearchAssetsPage } from "./ResearchAssetsPage";
 
 const formatTime = value => value ? new Date(value).toLocaleString("zh-CN") : "—";
 const formatInteger = value => Number.isFinite(Number(value)) ? Number(value).toLocaleString("zh-CN") : "—";
@@ -2264,7 +2265,7 @@ const improvementTabs = [
     template: { investigationId: "", conclusionId: "", modelId: "", modelVersion: 1, title: "", applicableContext: {}, parameterSettings: [], constraints: [], expectedOutcomes: [], valueEstimate: { currency: "CNY", expectedAnnualValue: 0, trialCost: 0, implementationCost: 0, downsideAtRisk: 0 }, riskSummary: "", stopRule: "", rollbackPlan: "" },
   },
   {
-    label: "科研验证", endpoint: "/api/v1/scientific-validation", key: "reportId",
+    label: "数据集质量", endpoint: "/api/v1/dataset-quality-validations", key: "reportId",
     columns: [["datasetId", "数据集"], ["industry", "行业"], ["process", "工艺"], ["status", "状态"], ["rowCount", "数据行"]],
     upload: "validation",
     template: { datasetId: "", version: 1, industry: "", process: "", dataKind: "measured-experiment", isMeasuredData: true, sourceUri: "https://", retrievalUri: "https://", archiveMemberPath: "", license: "", citation: "", doi: "", expectedSha256: "", sheetName: "", headerRowCount: 1, matVariableName: "", cycleColumn: "", timestampColumn: "", phaseColumn: "", signalColumns: [], outcomeColumns: [], minimumSignalNumericCoverage: 0.8, minimumOutcomeNumericCoverage: 0.3, units: {}, validSignalRanges: {} },

@@ -6,7 +6,12 @@ public interface IProcessResearchStore
 {
     Task<ResearchProject?> GetProjectAsync(Guid projectId, CancellationToken ct = default);
     Task<ResearchProject?> GetProjectByCodeAsync(string code, CancellationToken ct = default);
-    Task<IReadOnlyList<ResearchProject>> ListProjectsAsync(CancellationToken ct = default);
+    Task<IReadOnlyList<ResearchProject>> ListProjectsAsync(
+        string userId,
+        bool includeAll,
+        int limit,
+        int offset,
+        CancellationToken ct = default);
     Task<ResearchProject> SaveProjectAsync(ResearchProject value, CancellationToken ct = default);
 
     Task<ResearchHypothesis?> GetHypothesisAsync(Guid hypothesisId, CancellationToken ct = default);
@@ -24,6 +29,15 @@ public interface IProcessResearchStore
     Task<ResearchExperiment> SaveExperimentAsync(
         ResearchExperiment value,
         CancellationToken ct = default);
+    Task<ResearchExperimentResult?> GetExperimentResultAsync(
+        Guid resultId,
+        CancellationToken ct = default);
+    Task<IReadOnlyList<ResearchExperimentResult>> ListExperimentResultsAsync(
+        Guid projectId,
+        CancellationToken ct = default);
+    Task<ResearchExperimentResult> SaveExperimentResultAsync(
+        ResearchExperimentResult value,
+        CancellationToken ct = default);
 
     Task<ResearchProcessWindow?> GetProcessWindowAsync(Guid windowId, CancellationToken ct = default);
     Task<IReadOnlyList<ResearchProcessWindow>> ListProcessWindowsAsync(
@@ -39,6 +53,11 @@ public interface IProcessResearchStore
         CancellationToken ct = default);
     Task<ResearchKnowledgeClaim> SaveKnowledgeClaimAsync(
         ResearchKnowledgeClaim value,
+        CancellationToken ct = default);
+
+    Task AddAuditEntryAsync(ResearchAuditEntry value, CancellationToken ct = default);
+    Task<IReadOnlyList<ResearchAuditEntry>> ListAuditEntriesAsync(
+        Guid projectId,
         CancellationToken ct = default);
 }
 

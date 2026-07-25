@@ -6,7 +6,8 @@ using Ingot.Platform.Infrastructure.ProcessResearch;
 namespace Ingot.Platform.Infrastructure.AgentTools;
 
 public sealed class GetResearchProjectTool(
-    ProcessResearchWorkflow workflow) : IAnalysisTool
+    ProcessResearchWorkflow workflow,
+    IProcessResearchStore store) : IAnalysisTool
 {
     public AnalysisToolDefinition Definition { get; } = new()
     {
@@ -44,6 +45,12 @@ public sealed class GetResearchProjectTool(
 
         try
         {
+            var project = await store.GetProjectAsync(projectId, ct).ConfigureAwait(false);
+            var userId = context.UserId.Trim().ToLowerInvariant();
+            if (project is null ||
+                !(string.Equals(project.OwnerUserId, userId, StringComparison.Ordinal) ||
+                  project.MemberUserIds.Contains(userId, StringComparer.Ordinal)))
+                throw new ProcessResearchRuleException("研发项目不存在或当前用户无权访问。");
             var workspace = await workflow.GetWorkspaceAsync(projectId, ct).ConfigureAwait(false);
             var validatedWindows = workspace.ProcessWindows.Count(
                 static value => value.Status == "validated");

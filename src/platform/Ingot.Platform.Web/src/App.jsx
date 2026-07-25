@@ -21,7 +21,7 @@ import { cx, ToastHost } from "./ui/components";
 const sections = [
   {
     id: "research", label: "工艺研发", icon: BeakerIcon, path: "/research-projects", items: [
-      ["/research-projects", "研发项目"], ["/chat", "AI 研发助手"], ["/process-improvement", "分析、模型与知识"],
+      ["/research-projects", "研发项目"], ["/chat", "AI 研发助手"], ["/research-assets", "研发资产"],
     ],
   },
   {
@@ -66,6 +66,7 @@ const pageDetails = {
   "/research-projects": ["工艺研发项目", "从目标、假设和实验推进到经过验证的工艺窗口"],
   "/workbench": ["运行工作台", "生产、质量与数据状态"],
   "/chat": ["AI 研发助手", "结合实验、过程数据、机理和知识推进研发任务"],
+  "/research-assets": ["研发资产", "查看项目可复用的数据集、模型、机理和知识"],
   "/explorer": ["设备与对象", "查找已接入设备及其上报的生产对象"],
   "/cycles": ["运行记录", "查看生产周期及其数据、工艺与质量上下文"],
   "/events": ["生产事件", "查询、追溯并关联运行上下文"],
@@ -75,7 +76,6 @@ const pageDetails = {
   "/quality-analysis": ["质量分析", "按产品、配方、运行对象和分析范围查看质量结果"],
   "/comparisons": ["历史对比", "比较同类生产周期、运行段或时间窗口"],
   "/data-quality": ["数据健康", "检查运行对象的数据范围、采样连续性与周期完整性"],
-  "/process-improvement": ["分析、模型与知识", "管理研发分析、机理模型、实验结果和工艺知识"],
   "/configuration/process-analysis-plans": ["分析方案", "配置分析范围、对齐方式、质量分组和数据项"],
   "/configuration/process-data-models": ["工艺数据模型", "定义采集数据项、配方参数结构和工艺阶段"],
   "/configuration/recipe-versions": ["配方版本", "维护引用数据模型的完整配方有效值"],
@@ -312,6 +312,7 @@ function AppRoutes() {
       <Route path="/research-projects" element={<Pages.ResearchProjectsPage />} />
       <Route path="/workbench" element={<Pages.WorkbenchPage />} />
       <Route path="/chat" element={<Pages.ChatPage />} />
+      <Route path="/research-assets" element={<Pages.ResearchAssetsPage />} />
       <Route path="/explorer" element={<Pages.ObjectExplorerPage />} />
       <Route path="/cycles" element={<Pages.CyclesPage />} />
       <Route path="/cycles/:correlationId" element={<Pages.CycleDetailPage />} />
@@ -330,7 +331,7 @@ function AppRoutes() {
       <Route path="/configuration/quality-plans" element={<Pages.QualityPlansPage />} />
       <Route path="/comparisons" element={<Pages.CycleComparisonPage />} />
       <Route path="/data-quality" element={<Pages.DataQualityPage />} />
-      <Route path="/process-improvement" element={<Pages.ProcessImprovementPage />} />
+      <Route path="/process-improvement" element={<Navigate to="/research-projects" replace />} />
       <Route path="/configuration/process-analysis-plans" element={<Pages.ProcessAnalysisPlansPage />} />
       <Route path="/profiles" element={<Navigate to="/configuration/process-data-models" replace />} />
       <Route path="/configuration/process-data-models" element={<Pages.ProcessDataModelsPage />} />

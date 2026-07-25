@@ -209,6 +209,12 @@ erDiagram
 
 Projects define scope and lifecycle. Experiments describe research design; runs describe real execution. Dataset snapshots are immutable and preserve scope, variables, targets, exclusions, quality gates, feature definitions, and hashes. Analysis artifacts and model versions preserve computation and evaluation context. Process windows preserve bounds, objectives, constraints, applicability, evidence, and uncertainty. Knowledge claims preserve reviewed laws and their evidence.
 
+### 8.1 Integrity constraints for formal research records
+
+The platform keeps one formal research aggregate rooted at the research project. An experiment must have a versioned run plan with at least two distinct conditions; it cannot complete without a source snapshot, computed objective results, and safety checks. A candidate process window must reference completed experiment results and a traceable analysis run with a SHA-256 digest, and a person other than its creator must validate it. A knowledge claim can only be promoted from a validated process window and verifiable evidence.
+
+Project membership, experiment runs, experiment results, window-to-result links, evidence references, and audit events are represented by relational tables with foreign-key constraints. JSON payloads retain immutable object snapshots but are not the sole source for critical identities, authorization, or evidence relationships. Project lists and research assets are member-scoped and bounded.
+
 ## 9. Intelligent R&D Engine
 
 ### 9.1 Data quality and features

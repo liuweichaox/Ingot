@@ -10,148 +10,265 @@ namespace Ingot.Platform.Api.Controllers;
 public sealed class ResearchProjectsController(
     IProcessResearchStore store,
     ProcessResearchWorkflow workflow,
-    PlatformUserResolver userResolver) : PlatformConfigurationControllerBase(userResolver)
+    PlatformUserResolver userResolver) : ControllerBase
 {
     [HttpGet]
-    public async Task<IActionResult> List(CancellationToken ct)
-        => DeniedConfigurationRead() ??
-           Ok(new { data = await store.ListProjectsAsync(ct).ConfigureAwait(false) });
+    public async Task<IActionResult> List(
+        [FromQuery] int limit = 50,
+        [FromQuery] int offset = 0,
+        CancellationToken ct = default)
+    {
+        var identity = ResolveResearchIdentity();
+        if (identity.Result is not null)
+            return identity.Result;
+        limit = Math.Clamp(limit, 1, 100);
+        offset = Math.Max(offset, 0);
+        return Ok(new
+        {
+            data = await store.ListProjectsAsync(
+                identity.Identity!.UserId,
+                identity.Identity.HasAnyRole(PlatformRoles.PlatformAdministrator),
+                limit,
+                offset,
+                ct).ConfigureAwait(false),
+            limit,
+            offset
+        });
+    }
 
     [HttpGet("{projectId:guid}")]
     public async Task<IActionResult> Get(Guid projectId, CancellationToken ct)
-    {
-        var denied = DeniedConfigurationRead();
-        if (denied is not null)
-            return denied;
-        try
-        {
-            return Ok(await workflow.GetWorkspaceAsync(projectId, ct).ConfigureAwait(false));
-        }
-        catch (ProcessResearchRuleException exception)
-        {
-            return NotFound(new { error = exception.Message });
-        }
-    }
+        => await ExecuteForProjectAsync(
+            projectId,
+            false,
+            async () => Ok(await workflow.GetWorkspaceAsync(projectId, ct).ConfigureAwait(false)),
+            ct).ConfigureAwait(false);
 
     [HttpPost]
-    public Task<IActionResult> Create(
+    public async Task<IActionResult> Create(
         [FromBody] ResearchProject request,
         CancellationToken ct)
-        => ExecuteWriteAsync(
-            () => workflow.CreateProjectAsync(request, ResolveUserId()!, ct));
+    {
+        var identity = ResolveResearchIdentity();
+        if (identity.Result is not null)
+            return identity.Result;
+        return await ExecuteRuleAsync(
+            async () => Ok(await workflow.CreateProjectAsync(
+                request,
+                identity.Identity!.UserId,
+                ct).ConfigureAwait(false))).ConfigureAwait(false);
+    }
 
     [HttpPut("{projectId:guid}")]
     public Task<IActionResult> Update(
         Guid projectId,
         [FromBody] ResearchProject request,
         CancellationToken ct)
-        => ExecuteWriteAsync(
-            () => workflow.UpdateProjectAsync(projectId, request, ResolveUserId()!, ct));
+        => ExecuteForProjectAsync(
+            projectId,
+            true,
+            async () => Ok(await workflow.UpdateProjectAsync(
+                projectId,
+                request,
+                ResolveResearchIdentity().Identity!.UserId,
+                ct).ConfigureAwait(false)),
+            ct);
 
     [HttpPost("{projectId:guid}/status")]
     public Task<IActionResult> ChangeStatus(
         Guid projectId,
         [FromBody] ResearchStatusChangeRequest request,
         CancellationToken ct)
-        => ExecuteWriteAsync(
-            () => workflow.ChangeProjectStatusAsync(
+        => ExecuteForProjectAsync(
+            projectId,
+            true,
+            async () => Ok(await workflow.ChangeProjectStatusAsync(
                 projectId,
                 request.TargetStatus,
-                ResolveUserId()!,
-                ct));
+                ResolveResearchIdentity().Identity!.UserId,
+                ct).ConfigureAwait(false)),
+            ct);
 
     [HttpPost("{projectId:guid}/hypotheses")]
     public Task<IActionResult> SaveHypothesis(
         Guid projectId,
         [FromBody] ResearchHypothesis request,
         CancellationToken ct)
-        => ExecuteWriteAsync(
-            () => workflow.SaveHypothesisAsync(
+        => ExecuteForProjectAsync(
+            projectId,
+            true,
+            async () => Ok(await workflow.SaveHypothesisAsync(
                 projectId,
                 request,
-                ResolveUserId()!,
-                ct));
+                ResolveResearchIdentity().Identity!.UserId,
+                ct).ConfigureAwait(false)),
+            ct);
 
     [HttpPost("{projectId:guid}/experiments")]
     public Task<IActionResult> CreateExperiment(
         Guid projectId,
         [FromBody] ResearchExperiment request,
         CancellationToken ct)
-        => ExecuteWriteAsync(
-            () => workflow.CreateExperimentAsync(
+        => ExecuteForProjectAsync(
+            projectId,
+            true,
+            async () => Ok(await workflow.CreateExperimentAsync(
                 projectId,
                 request,
-                ResolveUserId()!,
-                ct));
+                ResolveResearchIdentity().Identity!.UserId,
+                ct).ConfigureAwait(false)),
+            ct);
 
     [HttpPost("experiments/{experimentId:guid}/status")]
-    public Task<IActionResult> ChangeExperimentStatus(
+    public async Task<IActionResult> ChangeExperimentStatus(
         Guid experimentId,
         [FromBody] ResearchStatusChangeRequest request,
         CancellationToken ct)
-        => ExecuteWriteAsync(
-            () => workflow.ChangeExperimentStatusAsync(
+    {
+        var experiment = await store.GetExperimentAsync(experimentId, ct).ConfigureAwait(false);
+        if (experiment is null)
+            return NotFound(new { error = "实验不存在。" });
+        return await ExecuteForProjectAsync(
+            experiment.ProjectId,
+            true,
+            async () => Ok(await workflow.ChangeExperimentStatusAsync(
                 experimentId,
                 request.TargetStatus,
-                ResolveUserId()!,
-                ct));
+                ResolveResearchIdentity().Identity!.UserId,
+                ct).ConfigureAwait(false)),
+            ct).ConfigureAwait(false);
+    }
+
+    [HttpPost("experiments/{experimentId:guid}/results")]
+    public async Task<IActionResult> RecordExperimentResult(
+        Guid experimentId,
+        [FromBody] ResearchExperimentResult request,
+        CancellationToken ct)
+    {
+        var experiment = await store.GetExperimentAsync(experimentId, ct).ConfigureAwait(false);
+        if (experiment is null)
+            return NotFound(new { error = "实验不存在。" });
+        return await ExecuteForProjectAsync(
+            experiment.ProjectId,
+            true,
+            async () => Ok(await workflow.RecordExperimentResultAsync(
+                experimentId,
+                request,
+                ResolveResearchIdentity().Identity!.UserId,
+                ct).ConfigureAwait(false)),
+            ct).ConfigureAwait(false);
+    }
 
     [HttpPost("{projectId:guid}/process-windows")]
     public Task<IActionResult> SaveProcessWindow(
         Guid projectId,
         [FromBody] ResearchProcessWindow request,
         CancellationToken ct)
-        => ExecuteWriteAsync(
-            () => workflow.SaveProcessWindowAsync(
+        => ExecuteForProjectAsync(
+            projectId,
+            true,
+            async () => Ok(await workflow.SaveProcessWindowAsync(
                 projectId,
                 request,
-                ResolveUserId()!,
-                ct));
+                ResolveResearchIdentity().Identity!.UserId,
+                ct).ConfigureAwait(false)),
+            ct);
 
     [HttpPost("process-windows/{windowId:guid}/validate")]
-    public Task<IActionResult> ValidateProcessWindow(
-        Guid windowId,
-        CancellationToken ct)
-        => ExecuteWriteAsync(
-            () => workflow.ValidateProcessWindowAsync(
+    public async Task<IActionResult> ValidateProcessWindow(Guid windowId, CancellationToken ct)
+    {
+        var window = await store.GetProcessWindowAsync(windowId, ct).ConfigureAwait(false);
+        if (window is null)
+            return NotFound(new { error = "工艺窗口不存在。" });
+        return await ExecuteForProjectAsync(
+            window.ProjectId,
+            true,
+            async () => Ok(await workflow.ValidateProcessWindowAsync(
                 windowId,
-                ResolveUserId()!,
-                ct));
+                ResolveResearchIdentity().Identity!.UserId,
+                ct).ConfigureAwait(false)),
+            ct).ConfigureAwait(false);
+    }
 
     [HttpPost("{projectId:guid}/knowledge-claims")]
     public Task<IActionResult> SaveKnowledgeClaim(
         Guid projectId,
         [FromBody] ResearchKnowledgeClaim request,
         CancellationToken ct)
-        => ExecuteWriteAsync(
-            () => workflow.SaveKnowledgeClaimAsync(
+        => ExecuteForProjectAsync(
+            projectId,
+            true,
+            async () => Ok(await workflow.SaveKnowledgeClaimAsync(
                 projectId,
                 request,
-                ResolveUserId()!,
-                ct));
+                ResolveResearchIdentity().Identity!.UserId,
+                ct).ConfigureAwait(false)),
+            ct);
 
     [HttpPost("knowledge-claims/{claimId:guid}/review")]
-    public Task<IActionResult> ReviewKnowledgeClaim(
-        Guid claimId,
-        CancellationToken ct)
-        => ExecuteWriteAsync(
-            () => workflow.ReviewKnowledgeClaimAsync(
-                claimId,
-                ResolveUserId()!,
-                ct));
-
-    private async Task<IActionResult> ExecuteWriteAsync<T>(Func<Task<T>> operation)
+    public async Task<IActionResult> ReviewKnowledgeClaim(Guid claimId, CancellationToken ct)
     {
-        var denied = DeniedConfigurationWrite();
-        if (denied is not null)
-            return denied;
+        var claim = await store.GetKnowledgeClaimAsync(claimId, ct).ConfigureAwait(false);
+        if (claim is null)
+            return NotFound(new { error = "知识声明不存在。" });
+        return await ExecuteForProjectAsync(
+            claim.ProjectId,
+            true,
+            async () => Ok(await workflow.ReviewKnowledgeClaimAsync(
+                claimId,
+                ResolveResearchIdentity().Identity!.UserId,
+                ct).ConfigureAwait(false)),
+            ct).ConfigureAwait(false);
+    }
+
+    private async Task<IActionResult> ExecuteForProjectAsync(
+        Guid projectId,
+        bool requireWrite,
+        Func<Task<IActionResult>> operation,
+        CancellationToken ct)
+    {
+        var identity = ResolveResearchIdentity();
+        if (identity.Result is not null)
+            return identity.Result;
+        var project = await store.GetProjectAsync(projectId, ct).ConfigureAwait(false);
+        if (project is null)
+            return NotFound(new { error = "研发项目不存在。" });
+        if (!CanAccess(project, identity.Identity!, requireWrite))
+            return Forbid();
+        return await ExecuteRuleAsync(operation).ConfigureAwait(false);
+    }
+
+    private (PlatformIdentity? Identity, IActionResult? Result) ResolveResearchIdentity()
+    {
+        var identity = userResolver.ResolveIdentity(User);
+        if (identity is null)
+            return (null, Unauthorized(new { error = "需要平台统一认证。" }));
+        if (!identity.HasAnyRole(PlatformRoles.ProcessEngineer, PlatformRoles.PlatformAdministrator))
+            return (null, Forbid());
+        return (identity, null);
+    }
+
+    private static bool CanAccess(
+        ResearchProject project,
+        PlatformIdentity identity,
+        bool requireWrite)
+    {
+        if (identity.HasAnyRole(PlatformRoles.PlatformAdministrator))
+            return true;
+        var isMember = string.Equals(project.OwnerUserId, identity.UserId, StringComparison.Ordinal) ||
+                       project.MemberUserIds.Contains(identity.UserId, StringComparer.Ordinal);
+        return isMember && (!requireWrite || project.Status != ResearchProjectStatuses.Archived);
+    }
+
+    private static async Task<IActionResult> ExecuteRuleAsync(Func<Task<IActionResult>> operation)
+    {
         try
         {
-            return Ok(await operation().ConfigureAwait(false));
+            return await operation().ConfigureAwait(false);
         }
         catch (ProcessResearchRuleException exception)
         {
-            return Conflict(new { error = exception.Message });
+            return new ConflictObjectResult(new { error = exception.Message });
         }
     }
 }

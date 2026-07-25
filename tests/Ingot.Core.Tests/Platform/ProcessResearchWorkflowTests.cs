@@ -34,7 +34,7 @@ public sealed class ProcessResearchWorkflowTests
             {
                 HypothesisId = hypothesis.HypothesisId,
                 Name = "保压温度与压力验证实验",
-                DesignMethod = "factorial",
+                DesignMethod = ResearchDesignMethods.FullFactorial,
                 Factors =
                 [
                     new ExperimentFactorSetting
@@ -50,6 +50,11 @@ public sealed class ProcessResearchWorkflowTests
                         Unit = "kN"
                     }
                 ],
+                RunPlan =
+                [
+                    Run("low-low", 1, 510, 10),
+                    Run("high-high", 2, 530, 14)
+                ],
                 ObjectiveCodes = ["form-error"],
                 StopRule = "安全约束触发时停止。",
                 RollbackPlan = "恢复已验证基线配方。"
@@ -62,6 +67,35 @@ public sealed class ProcessResearchWorkflowTests
         experiment = await workflow.ChangeExperimentStatusAsync(
             experiment.ExperimentId,
             ResearchExperimentStatuses.Running,
+            "engineer-a");
+        var result = await workflow.RecordExperimentResultAsync(
+            experiment.ExperimentId,
+            new ResearchExperimentResult
+            {
+                DatasetSnapshotId = "snapshot-2026-07-25",
+                Metrics =
+                [
+                    new ExperimentMetricResult
+                    {
+                        ObjectiveCode = "form-error",
+                        BaselineValue = 0.8,
+                        ObservedValue = 0.35,
+                        EffectValue = -0.45,
+                        LowerConfidenceBound = -0.55,
+                        UpperConfidenceBound = -0.35,
+                        Unit = "um",
+                        BaselineSampleCount = 12,
+                        ExperimentSampleCount = 12,
+                        ComputationMethod = "bootstrap difference"
+                    }
+                ],
+                RunCount = 4,
+                ReplicateCount = 2,
+                DistinctMaterialLotCount = 2,
+                DistinctEquipmentCount = 1,
+                SafetyPassed = true,
+                CalculatedFromSource = true
+            },
             "engineer-a");
         experiment = await workflow.ChangeExperimentStatusAsync(
             experiment.ExperimentId,
@@ -92,25 +126,20 @@ public sealed class ProcessResearchWorkflowTests
                 ],
                 ObjectiveCodes = ["form-error"],
                 SupportingExperimentIds = [experiment.ExperimentId],
-                Evidence =
-                [
-                    new EvidenceReference
-                    {
-                        Kind = "experiment-result",
-                        ReferenceId = experiment.ExperimentId.ToString(),
-                        Summary = "重复实验满足面形误差目标和全部安全约束。"
-                    }
-                ],
+                SupportingResultIds = [result.ResultId],
                 Confidence = 0.9,
+                ConfidenceMethod = ResearchConfidenceMethods.Bootstrap,
+                AnalysisRunId = result.AnalysisRunId,
+                AnalysisHash = result.AnalysisHash,
                 Applicability = "材料批次 A，设备 PRESS-01。"
             },
             "engineer-a");
-        window = await workflow.ValidateProcessWindowAsync(window.WindowId, "engineer-b");
 
         project = await workflow.ChangeProjectStatusAsync(
             project.ProjectId,
             ResearchProjectStatuses.Validating,
             "engineer-a");
+        window = await workflow.ValidateProcessWindowAsync(window.WindowId, "engineer-b");
         project = await workflow.ChangeProjectStatusAsync(
             project.ProjectId,
             ResearchProjectStatuses.Completed,
@@ -148,6 +177,11 @@ public sealed class ProcessResearchWorkflowTests
                         Unit = "Cel"
                     }
                 ],
+                RunPlan =
+                [
+                    Run("low", 1, 500, 10),
+                    Run("high", 2, 530, 10)
+                ],
                 ObjectiveCodes = ["form-error"],
                 StopRule = "安全约束触发时停止。",
                 RollbackPlan = "恢复基线配方。"
@@ -162,6 +196,75 @@ public sealed class ProcessResearchWorkflowTests
 
         Assert.Contains("创建人和批准人必须分离", error.Message);
     }
+
+    [Fact]
+    public async Task Experiment_CannotCompleteWithoutCalculatedResult()
+    {
+        var store = new MemoryStore();
+        var workflow = new ProcessResearchWorkflow(store);
+        var project = await workflow.CreateProjectAsync(ProjectDraft(), "engineer-a");
+        await workflow.ChangeProjectStatusAsync(
+            project.ProjectId,
+            ResearchProjectStatuses.Active,
+            "engineer-a");
+        var experiment = await workflow.CreateExperimentAsync(
+            project.ProjectId,
+            new ResearchExperiment
+            {
+                Name = "结果门禁验证",
+                RunPlan =
+                [
+                    Run("low", 1, 500, 10),
+                    Run("high", 2, 530, 10)
+                ],
+                ObjectiveCodes = ["form-error"],
+                StopRule = "安全约束触发时停止。",
+                RollbackPlan = "恢复基线配方。"
+            },
+            "engineer-a");
+        await workflow.ChangeExperimentStatusAsync(
+            experiment.ExperimentId,
+            ResearchExperimentStatuses.Approved,
+            "engineer-b");
+        await workflow.ChangeExperimentStatusAsync(
+            experiment.ExperimentId,
+            ResearchExperimentStatuses.Running,
+            "engineer-a");
+
+        var error = await Assert.ThrowsAsync<ProcessResearchRuleException>(
+            () => workflow.ChangeExperimentStatusAsync(
+                experiment.ExperimentId,
+                ResearchExperimentStatuses.Completed,
+                "engineer-a"));
+
+        Assert.Contains("必须记录由源数据计算得到的结果", error.Message);
+    }
+
+    private static ExperimentRunPlan Run(
+        string key,
+        int sequence,
+        double temperature,
+        double force)
+        => new()
+        {
+            RunKey = key,
+            Sequence = sequence,
+            Factors =
+            [
+                new ExperimentFactorSetting
+                {
+                    VariableCode = "holding-temperature",
+                    Value = temperature,
+                    Unit = "Cel"
+                },
+                new ExperimentFactorSetting
+                {
+                    VariableCode = "press-force",
+                    Value = force,
+                    Unit = "kN"
+                }
+            ]
+        };
 
     private static ResearchProject ProjectDraft()
         => new()
@@ -221,8 +324,10 @@ public sealed class ProcessResearchWorkflowTests
         private readonly Dictionary<Guid, ResearchProject> _projects = [];
         private readonly Dictionary<Guid, ResearchHypothesis> _hypotheses = [];
         private readonly Dictionary<Guid, ResearchExperiment> _experiments = [];
+        private readonly Dictionary<Guid, ResearchExperimentResult> _results = [];
         private readonly Dictionary<Guid, ResearchProcessWindow> _windows = [];
         private readonly Dictionary<Guid, ResearchKnowledgeClaim> _claims = [];
+        private readonly List<ResearchAuditEntry> _audit = [];
 
         public Task<ResearchProject?> GetProjectAsync(Guid projectId, CancellationToken ct = default)
             => Task.FromResult(_projects.GetValueOrDefault(projectId));
@@ -233,8 +338,18 @@ public sealed class ProcessResearchWorkflowTests
             => Task.FromResult(_projects.Values.SingleOrDefault(
                 value => string.Equals(value.Code, code, StringComparison.Ordinal)));
 
-        public Task<IReadOnlyList<ResearchProject>> ListProjectsAsync(CancellationToken ct = default)
-            => Task.FromResult<IReadOnlyList<ResearchProject>>(_projects.Values.ToArray());
+        public Task<IReadOnlyList<ResearchProject>> ListProjectsAsync(
+            string userId,
+            bool includeAll,
+            int limit,
+            int offset,
+            CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<ResearchProject>>(
+                _projects.Values
+                    .Where(value => includeAll || value.MemberUserIds.Contains(userId))
+                    .Skip(offset)
+                    .Take(limit)
+                    .ToArray());
 
         public Task<ResearchProject> SaveProjectAsync(
             ResearchProject value,
@@ -282,6 +397,25 @@ public sealed class ProcessResearchWorkflowTests
             return Task.FromResult(value);
         }
 
+        public Task<ResearchExperimentResult?> GetExperimentResultAsync(
+            Guid resultId,
+            CancellationToken ct = default)
+            => Task.FromResult(_results.GetValueOrDefault(resultId));
+
+        public Task<IReadOnlyList<ResearchExperimentResult>> ListExperimentResultsAsync(
+            Guid projectId,
+            CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<ResearchExperimentResult>>(
+                _results.Values.Where(value => value.ProjectId == projectId).ToArray());
+
+        public Task<ResearchExperimentResult> SaveExperimentResultAsync(
+            ResearchExperimentResult value,
+            CancellationToken ct = default)
+        {
+            _results[value.ResultId] = value;
+            return Task.FromResult(value);
+        }
+
         public Task<ResearchProcessWindow?> GetProcessWindowAsync(
             Guid windowId,
             CancellationToken ct = default)
@@ -319,5 +453,19 @@ public sealed class ProcessResearchWorkflowTests
             _claims[value.ClaimId] = value;
             return Task.FromResult(value);
         }
+
+        public Task AddAuditEntryAsync(
+            ResearchAuditEntry value,
+            CancellationToken ct = default)
+        {
+            _audit.Add(value);
+            return Task.CompletedTask;
+        }
+
+        public Task<IReadOnlyList<ResearchAuditEntry>> ListAuditEntriesAsync(
+            Guid projectId,
+            CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<ResearchAuditEntry>>(
+                _audit.Where(value => value.ProjectId == projectId).ToArray());
     }
 }

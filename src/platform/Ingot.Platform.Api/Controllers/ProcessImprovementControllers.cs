@@ -1,7 +1,7 @@
-using System.Text.Json;
 using Ingot.Contracts.ProcessImprovement;
 using Ingot.Platform.Api.Agents;
 using Ingot.Platform.Infrastructure.ProcessImprovement;
+using Ingot.Platform.Infrastructure.ProcessResearch;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Ingot.Platform.Api.Controllers;
@@ -165,6 +165,7 @@ public sealed class ProcessModelsController(
 
 [ApiController]
 [Route("api/v1/process-investigations")]
+[NonController]
 public sealed class ProcessInvestigationsController(
     IProcessImprovementStore store,
     ProcessImprovementWorkflow workflow,
@@ -288,6 +289,7 @@ public sealed class ProcessInvestigationsController(
 [Route("api/v1/process-knowledge")]
 public sealed class ProcessKnowledgeController(
     IProcessImprovementStore store,
+    IProcessResearchStore researchStore,
     ProcessImprovementWorkflow workflow,
     KnowledgeExtractionService extractionService,
     PlatformUserResolver userResolver) : PlatformConfigurationControllerBase(userResolver)
@@ -338,9 +340,9 @@ public sealed class ProcessKnowledgeController(
     [RequestSizeLimit(52_428_800)]
     public async Task<IActionResult> Upload(
         IFormFile file,
+        [FromForm] Guid projectId,
         [FromForm] string title,
         [FromForm] string sourceKind = "document",
-        [FromForm] string? contextSelectorJson = null,
         CancellationToken ct = default)
     {
         var denied = DeniedConfigurationWrite();
@@ -351,18 +353,21 @@ public sealed class ProcessKnowledgeController(
         sourceKind = sourceKind?.Trim().ToLowerInvariant() ?? "";
         if (!AllowedSourceKinds.Contains(sourceKind))
             return BadRequest(new { error = "来源类型仅支持 document、spreadsheet、image 或 field-note。" });
-        IReadOnlyDictionary<string, string> contextSelector;
-        try
-        {
-            contextSelector = string.IsNullOrWhiteSpace(contextSelectorJson)
-                ? new Dictionary<string, string>()
-                : JsonSerializer.Deserialize<Dictionary<string, string>>(contextSelectorJson)
-                  ?? new Dictionary<string, string>();
-        }
-        catch (JsonException)
-        {
-            return BadRequest(new { error = "适用范围必须是字符串键值 JSON。" });
-        }
+        var project = await researchStore.GetProjectAsync(projectId, ct).ConfigureAwait(false);
+        var currentUser = ResolveUserId()!;
+        if (project is null ||
+            !(string.Equals(project.OwnerUserId, currentUser, StringComparison.Ordinal) ||
+              project.MemberUserIds.Contains(currentUser, StringComparer.Ordinal)))
+            return Forbid();
+        IReadOnlyDictionary<string, string> contextSelector =
+            new Dictionary<string, string>(project.Context, StringComparer.Ordinal)
+            {
+                ["research-project-id"] = project.ProjectId.ToString(),
+                ["process-name"] = project.ProcessName,
+                ["product-name"] = project.ProductName ?? "",
+                ["material-name"] = project.MaterialName ?? "",
+                ["site-code"] = project.SiteCode ?? ""
+            };
         if (string.IsNullOrWhiteSpace(title) || title.Trim().Length > 240)
             return BadRequest(new { error = "知识来源标题不能为空且最长 240 个字符。" });
         try
@@ -461,6 +466,7 @@ public sealed class ProcessKnowledgeController(
 
 [ApiController]
 [Route("api/v1/parameter-recommendations")]
+[NonController]
 public sealed class ParameterRecommendationsController(
     IProcessImprovementStore store,
     ProcessImprovementWorkflow workflow,

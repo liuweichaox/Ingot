@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace Ingot.Platform.Api.Controllers;
 
 [ApiController]
-[Route("api/v1/scientific-validation")]
+[Route("api/v1/dataset-quality-validations")]
 public sealed class ScientificValidationController(
     IProcessImprovementStore store,
     ScientificValidationRunner runner,

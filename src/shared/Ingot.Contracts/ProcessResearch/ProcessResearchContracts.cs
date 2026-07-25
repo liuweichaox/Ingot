@@ -69,6 +69,42 @@ public static class ResearchKnowledgeStatuses
         => value is Draft or Reviewed or Published or Retired;
 }
 
+public static class ResearchDesignMethods
+{
+    public const string EngineerDefined = "engineer-defined";
+    public const string FullFactorial = "full-factorial";
+    public const string FractionalFactorial = "fractional-factorial";
+    public const string ResponseSurface = "response-surface";
+
+    public static bool IsValid(string? value)
+        => value is EngineerDefined or FullFactorial or FractionalFactorial or ResponseSurface;
+}
+
+public static class ResearchConfidenceMethods
+{
+    public const string Bootstrap = "bootstrap";
+    public const string Conformal = "conformal";
+    public const string Bayesian = "bayesian";
+    public const string Frequentist = "frequentist";
+
+    public static bool IsValid(string? value)
+        => value is Bootstrap or Conformal or Bayesian or Frequentist;
+}
+
+public static class EvidenceKinds
+{
+    public const string DatasetSnapshot = "dataset-snapshot";
+    public const string ExperimentResult = "experiment-result";
+    public const string AnalysisRun = "analysis-run";
+    public const string MechanismModel = "mechanism-model";
+    public const string KnowledgeSource = "knowledge-source";
+    public const string ProcessWindow = "process-window";
+
+    public static bool IsValid(string? value)
+        => value is DatasetSnapshot or ExperimentResult or AnalysisRun or
+            MechanismModel or KnowledgeSource or ProcessWindow;
+}
+
 public sealed record ResearchObjective
 {
     public required string Code { get; init; }
@@ -120,6 +156,8 @@ public sealed record ResearchProject
     public IReadOnlyDictionary<string, string> Context { get; init; } =
         new Dictionary<string, string>();
     public string OwnerUserId { get; init; } = "";
+    public IReadOnlyList<string> MemberUserIds { get; init; } = [];
+    public string? SiteCode { get; init; }
     public DateTimeOffset? TargetCompletionAt { get; init; }
     public DateTimeOffset CreatedAt { get; init; }
     public DateTimeOffset UpdatedAt { get; init; }
@@ -128,10 +166,13 @@ public sealed record ResearchProject
 
 public sealed record EvidenceReference
 {
+    public Guid EvidenceId { get; init; }
+    public Guid ProjectId { get; init; }
     public required string Kind { get; init; }
     public required string ReferenceId { get; init; }
     public required string Summary { get; init; }
-    public string? ContentHash { get; init; }
+    public required string ContentHash { get; init; }
+    public DateTimeOffset CreatedAt { get; init; }
 }
 
 public sealed record ResearchHypothesis
@@ -157,6 +198,15 @@ public sealed record ExperimentFactorSetting
     public required string Unit { get; init; }
 }
 
+public sealed record ExperimentRunPlan
+{
+    public required string RunKey { get; init; }
+    public int Sequence { get; init; }
+    public string? BlockKey { get; init; }
+    public string? ReplicateKey { get; init; }
+    public IReadOnlyList<ExperimentFactorSetting> Factors { get; init; } = [];
+}
+
 public sealed record ResearchExperiment
 {
     public Guid ExperimentId { get; init; }
@@ -164,10 +214,16 @@ public sealed record ResearchExperiment
     public Guid? HypothesisId { get; init; }
     public required string Name { get; init; }
     public string DesignMethod { get; init; } = "engineer-defined";
+    public int PlanVersion { get; init; } = 1;
+    public int ProjectRevision { get; init; }
+    public int RandomizationSeed { get; init; }
+    public IReadOnlyList<string> BlockingKeys { get; init; } = [];
     public string Status { get; init; } = ResearchExperimentStatuses.Planned;
     public IReadOnlyList<ExperimentFactorSetting> Factors { get; init; } = [];
+    public IReadOnlyList<ExperimentRunPlan> RunPlan { get; init; } = [];
     public IReadOnlyList<string> ObjectiveCodes { get; init; } = [];
     public IReadOnlyList<string> ReplicateKeys { get; init; } = [];
+    public IReadOnlyList<Guid> ResultIds { get; init; } = [];
     public required string StopRule { get; init; }
     public required string RollbackPlan { get; init; }
     public string CreatedBy { get; init; } = "";
@@ -175,6 +231,41 @@ public sealed record ResearchExperiment
     public DateTimeOffset? ApprovedAt { get; init; }
     public DateTimeOffset CreatedAt { get; init; }
     public DateTimeOffset UpdatedAt { get; init; }
+}
+
+public sealed record ExperimentMetricResult
+{
+    public required string ObjectiveCode { get; init; }
+    public double BaselineValue { get; init; }
+    public double ObservedValue { get; init; }
+    public double EffectValue { get; init; }
+    public double? LowerConfidenceBound { get; init; }
+    public double? UpperConfidenceBound { get; init; }
+    public required string Unit { get; init; }
+    public int BaselineSampleCount { get; init; }
+    public int ExperimentSampleCount { get; init; }
+    public required string ComputationMethod { get; init; }
+}
+
+public sealed record ResearchExperimentResult
+{
+    public Guid ResultId { get; init; }
+    public Guid ProjectId { get; init; }
+    public Guid ExperimentId { get; init; }
+    public required string DatasetSnapshotId { get; init; }
+    public Guid AnalysisRunId { get; init; }
+    public string AnalysisHash { get; init; } = "";
+    public IReadOnlyList<ExperimentMetricResult> Metrics { get; init; } = [];
+    public int RunCount { get; init; }
+    public int ReplicateCount { get; init; }
+    public int DistinctMaterialLotCount { get; init; }
+    public int DistinctEquipmentCount { get; init; }
+    public bool SafetyPassed { get; init; }
+    public bool CalculatedFromSource { get; init; }
+    public IReadOnlyList<string> ExcludedRunKeys { get; init; } = [];
+    public IReadOnlyList<EvidenceReference> Evidence { get; init; } = [];
+    public string RecordedBy { get; init; } = "";
+    public DateTimeOffset RecordedAt { get; init; }
 }
 
 public sealed record ProcessWindowVariable
@@ -194,9 +285,14 @@ public sealed record ResearchProcessWindow
     public IReadOnlyList<ProcessWindowVariable> Variables { get; init; } = [];
     public IReadOnlyList<string> ObjectiveCodes { get; init; } = [];
     public IReadOnlyList<Guid> SupportingExperimentIds { get; init; } = [];
+    public IReadOnlyList<Guid> SupportingResultIds { get; init; } = [];
     public IReadOnlyList<EvidenceReference> Evidence { get; init; } = [];
     public double Confidence { get; init; }
+    public required string ConfidenceMethod { get; init; }
+    public Guid AnalysisRunId { get; init; }
+    public required string AnalysisHash { get; init; }
     public required string Applicability { get; init; }
+    public string? ValidationNotes { get; init; }
     public string? ValidatedBy { get; init; }
     public DateTimeOffset? ValidatedAt { get; init; }
     public string CreatedBy { get; init; } = "";
@@ -225,6 +321,21 @@ public sealed record ResearchProjectWorkspace
     public required ResearchProject Project { get; init; }
     public IReadOnlyList<ResearchHypothesis> Hypotheses { get; init; } = [];
     public IReadOnlyList<ResearchExperiment> Experiments { get; init; } = [];
+    public IReadOnlyList<ResearchExperimentResult> ExperimentResults { get; init; } = [];
     public IReadOnlyList<ResearchProcessWindow> ProcessWindows { get; init; } = [];
     public IReadOnlyList<ResearchKnowledgeClaim> KnowledgeClaims { get; init; } = [];
+    public IReadOnlyList<ResearchAuditEntry> Audit { get; init; } = [];
+}
+
+public sealed record ResearchAuditEntry
+{
+    public Guid EntryId { get; init; }
+    public Guid ProjectId { get; init; }
+    public required string ResourceType { get; init; }
+    public required string ResourceId { get; init; }
+    public required string Action { get; init; }
+    public string? FromStatus { get; init; }
+    public string? ToStatus { get; init; }
+    public string UserId { get; init; } = "";
+    public DateTimeOffset CreatedAt { get; init; }
 }

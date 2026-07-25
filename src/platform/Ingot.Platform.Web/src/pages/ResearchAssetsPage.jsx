@@ -1,0 +1,155 @@
+import { useCallback, useEffect, useState } from "react";
+import { getJson } from "../api/http";
+import {
+  Alert,
+  Card,
+  DataTable,
+  EmptyState,
+  Page,
+  StatusBadge,
+} from "../ui/components";
+
+const assetDefinitions = [
+  {
+    key: "datasets",
+    title: "数据集快照",
+    description: "用于复算实验结果和模型训练的版本化输入。",
+    endpoint: "/api/v1/training-datasets",
+    rowKey: row => `${row.datasetId}:${row.version}`,
+    columns: [
+      { key: "name", label: "数据集" },
+      { key: "version", label: "版本" },
+      { key: "rowCount", label: "样本量" },
+      { key: "createdAt", label: "创建时间", render: formatTime },
+    ],
+  },
+  {
+    key: "models",
+    title: "数据模型",
+    description: "由研发数据训练、评估并保留适用范围的模型版本。",
+    endpoint: "/api/v1/process-models",
+    rowKey: row => `${row.modelId}:${row.version}`,
+    columns: [
+      { key: "name", label: "模型", render: (value, row) => value || row.modelId },
+      { key: "version", label: "版本" },
+      { key: "status", label: "状态", render: status },
+      { key: "outputCode", label: "目标输出" },
+    ],
+  },
+  {
+    key: "mechanisms",
+    title: "机理模型",
+    description: "表达物理规律、边界和工程约束的版本化模型。",
+    endpoint: "/api/v1/mechanism-models",
+    rowKey: row => `${row.modelId}:${row.version}`,
+    columns: [
+      { key: "name", label: "机理模型", render: (value, row) => value || row.modelId },
+      { key: "version", label: "版本" },
+      { key: "status", label: "状态", render: status },
+      { key: "outputCode", label: "输出" },
+    ],
+  },
+  {
+    key: "fusions",
+    title: "融合定义",
+    description: "说明机理模型如何参与数据分析和模型输出。",
+    endpoint: "/api/v1/mechanism-fusions",
+    rowKey: row => `${row.fusionId}:${row.version}`,
+    columns: [
+      { key: "name", label: "融合定义", render: (value, row) => value || row.fusionId },
+      { key: "version", label: "版本" },
+      { key: "mode", label: "融合方式" },
+      { key: "status", label: "状态", render: status },
+    ],
+  },
+  {
+    key: "knowledge",
+    title: "知识来源",
+    description: "绑定研发项目范围的文档、表格、现场图片和专家记录。",
+    endpoint: "/api/v1/process-knowledge",
+    rowKey: row => row.sourceId,
+    columns: [
+      { key: "title", label: "来源" },
+      { key: "sourceKind", label: "类型" },
+      { key: "status", label: "状态", render: status },
+      { key: "updatedAt", label: "最近更新", render: formatTime },
+    ],
+  },
+  {
+    key: "quality",
+    title: "数据集质量",
+    description: "检查数据快照的完整性、单位、范围和复算条件。",
+    endpoint: "/api/v1/dataset-quality-validations",
+    rowKey: row => row.reportId,
+    columns: [
+      { key: "datasetId", label: "数据集" },
+      { key: "datasetVersion", label: "版本" },
+      { key: "status", label: "结果", render: status },
+      { key: "createdAt", label: "检查时间", render: formatTime },
+    ],
+  },
+];
+
+export function ResearchAssetsPage() {
+  const [assets, setAssets] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const results = await Promise.all(assetDefinitions.map(async definition => {
+        const response = await getJson(definition.endpoint);
+        return [definition.key, response?.data || []];
+      }));
+      setAssets(Object.fromEntries(results));
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  return (
+    <Page
+      title="研发资产"
+      description="集中查看项目可复用的数据集、模型、机理和知识；正式研发结论仍在研发项目中形成。"
+    >
+      {error && <Alert tone="danger">{error}</Alert>}
+      {loading ? (
+        <Card><p className="py-8 text-center text-sm text-slate-500">正在读取研发资产…</p></Card>
+      ) : (
+        <div className="grid gap-5 xl:grid-cols-2">
+          {assetDefinitions.map(definition => (
+            <Card
+              key={definition.key}
+              title={definition.title}
+              description={definition.description}
+            >
+              {(assets[definition.key] || []).length === 0 ? (
+                <EmptyState title={`暂无${definition.title}`} description="资产会在对应研发任务完成后进入这里。" />
+              ) : (
+                <DataTable
+                  rows={assets[definition.key]}
+                  getRowKey={definition.rowKey}
+                  columns={definition.columns}
+                />
+              )}
+            </Card>
+          ))}
+        </div>
+      )}
+    </Page>
+  );
+}
+
+function formatTime(value) {
+  return value ? new Date(value).toLocaleString("zh-CN") : "—";
+}
+
+function status(value) {
+  return <StatusBadge value={value || "unknown"} />;
+}

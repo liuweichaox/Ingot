@@ -139,58 +139,6 @@ public sealed class PostgresProcessImprovementStore : IProcessImprovementStore, 
                 CREATE INDEX IF NOT EXISTS idx_scientific_validation_dataset
                   ON scientific_validation_reports(dataset_id, dataset_version, created_at DESC);
 
-                CREATE TABLE IF NOT EXISTS process_investigations (
-                  investigation_id UUID PRIMARY KEY,
-                  status TEXT NOT NULL,
-                  problem_code TEXT NOT NULL,
-                  payload JSONB NOT NULL,
-                  updated_at TIMESTAMPTZ NOT NULL,
-                  CHECK (status IN ('open', 'investigating', 'trialing', 'concluded', 'closed'))
-                );
-
-                CREATE TABLE IF NOT EXISTS process_possible_causes (
-                  cause_id UUID PRIMARY KEY,
-                  investigation_id UUID NOT NULL REFERENCES process_investigations(investigation_id),
-                  status TEXT NOT NULL,
-                  payload JSONB NOT NULL,
-                  updated_at TIMESTAMPTZ NOT NULL,
-                  CHECK (status IN ('proposed', 'selected', 'rejected', 'confirmed', 'inconclusive'))
-                );
-                CREATE INDEX IF NOT EXISTS idx_process_possible_causes_investigation
-                  ON process_possible_causes(investigation_id, updated_at DESC);
-
-                CREATE TABLE IF NOT EXISTS process_trials (
-                  trial_id UUID PRIMARY KEY,
-                  investigation_id UUID NOT NULL REFERENCES process_investigations(investigation_id),
-                  cause_id UUID NOT NULL REFERENCES process_possible_causes(cause_id),
-                  status TEXT NOT NULL,
-                  payload JSONB NOT NULL,
-                  updated_at TIMESTAMPTZ NOT NULL,
-                  CHECK (status IN ('planned', 'approved', 'running', 'completed', 'cancelled'))
-                );
-                CREATE INDEX IF NOT EXISTS idx_process_trials_investigation
-                  ON process_trials(investigation_id, updated_at DESC);
-
-                CREATE TABLE IF NOT EXISTS process_trial_results (
-                  result_id UUID PRIMARY KEY,
-                  trial_id UUID NOT NULL REFERENCES process_trials(trial_id),
-                  payload JSONB NOT NULL,
-                  created_at TIMESTAMPTZ NOT NULL
-                );
-                CREATE INDEX IF NOT EXISTS idx_process_trial_results_trial
-                  ON process_trial_results(trial_id, created_at);
-
-                CREATE TABLE IF NOT EXISTS process_investigation_conclusions (
-                  conclusion_id UUID PRIMARY KEY,
-                  investigation_id UUID NOT NULL REFERENCES process_investigations(investigation_id),
-                  cause_id UUID NOT NULL REFERENCES process_possible_causes(cause_id),
-                  trial_id UUID NOT NULL REFERENCES process_trials(trial_id),
-                  payload JSONB NOT NULL,
-                  created_at TIMESTAMPTZ NOT NULL
-                );
-                CREATE INDEX IF NOT EXISTS idx_process_conclusions_investigation
-                  ON process_investigation_conclusions(investigation_id, created_at DESC);
-
                 CREATE TABLE IF NOT EXISTS process_knowledge_sources (
                   source_id UUID PRIMARY KEY,
                   status TEXT NOT NULL,
@@ -211,37 +159,6 @@ public sealed class PostgresProcessImprovementStore : IProcessImprovementStore, 
                 );
                 CREATE INDEX IF NOT EXISTS idx_process_knowledge_records_source
                   ON process_knowledge_records(source_id, updated_at DESC);
-
-                CREATE TABLE IF NOT EXISTS parameter_recommendations (
-                  recommendation_id UUID PRIMARY KEY,
-                  investigation_id UUID NOT NULL REFERENCES process_investigations(investigation_id),
-                  conclusion_id UUID NOT NULL REFERENCES process_investigation_conclusions(conclusion_id),
-                  status TEXT NOT NULL,
-                  payload JSONB NOT NULL,
-                  updated_at TIMESTAMPTZ NOT NULL,
-                  CHECK (status IN ('draft', 'reviewed', 'approved', 'rejected', 'executed', 'verified', 'rollback-required', 'rolled-back', 'withdrawn'))
-                );
-                DO $migration$
-                BEGIN
-                  IF EXISTS (
-                    SELECT 1
-                    FROM pg_constraint
-                    WHERE conrelid = 'parameter_recommendations'::regclass
-                      AND conname = 'parameter_recommendations_status_check'
-                      AND pg_get_constraintdef(oid) NOT LIKE '%rollback-required%'
-                  ) THEN
-                    ALTER TABLE parameter_recommendations
-                      DROP CONSTRAINT parameter_recommendations_status_check;
-                    ALTER TABLE parameter_recommendations
-                      ADD CONSTRAINT parameter_recommendations_status_check
-                      CHECK (status IN (
-                        'draft', 'reviewed', 'approved', 'rejected', 'executed',
-                        'verified', 'rollback-required', 'rolled-back', 'withdrawn'));
-                  END IF;
-                END
-                $migration$;
-                CREATE INDEX IF NOT EXISTS idx_parameter_recommendations_status
-                  ON parameter_recommendations(status, updated_at DESC);
 
                 CREATE TABLE IF NOT EXISTS process_improvement_audit (
                   entry_id UUID PRIMARY KEY,
@@ -296,7 +213,7 @@ public sealed class PostgresProcessImprovementStore : IProcessImprovementStore, 
 
     public Task<IReadOnlyList<TrainingDatasetVersion>> ListDatasetsAsync(CancellationToken ct = default)
         => ListAsync<TrainingDatasetVersion>(
-            "SELECT payload::text FROM training_dataset_versions ORDER BY created_at DESC;",
+            "SELECT payload::text FROM training_dataset_versions ORDER BY created_at DESC LIMIT 200;",
             null,
             ct);
 
@@ -343,7 +260,7 @@ public sealed class PostgresProcessImprovementStore : IProcessImprovementStore, 
 
     public Task<IReadOnlyList<ProcessModelVersion>> ListModelsAsync(CancellationToken ct = default)
         => ListAsync<ProcessModelVersion>(
-            "SELECT payload::text FROM process_model_versions ORDER BY updated_at DESC;",
+            "SELECT payload::text FROM process_model_versions ORDER BY updated_at DESC LIMIT 200;",
             null,
             ct);
 
@@ -376,7 +293,8 @@ public sealed class PostgresProcessImprovementStore : IProcessImprovementStore, 
             """
             SELECT payload::text FROM model_evaluations
             WHERE model_id = @id AND model_version = @version
-            ORDER BY created_at DESC;
+            ORDER BY created_at DESC
+            LIMIT 200;
             """,
             command =>
             {
@@ -415,7 +333,8 @@ public sealed class PostgresProcessImprovementStore : IProcessImprovementStore, 
             """
             SELECT payload::text FROM model_drift_readings
             WHERE model_id = @id AND model_version = @version
-            ORDER BY created_at DESC;
+            ORDER BY created_at DESC
+            LIMIT 200;
             """,
             command =>
             {
@@ -469,7 +388,7 @@ public sealed class PostgresProcessImprovementStore : IProcessImprovementStore, 
     public Task<IReadOnlyList<MechanismModelVersion>> ListMechanismModelsAsync(
         CancellationToken ct = default)
         => ListAsync<MechanismModelVersion>(
-            "SELECT payload::text FROM mechanism_model_versions ORDER BY updated_at DESC;",
+            "SELECT payload::text FROM mechanism_model_versions ORDER BY updated_at DESC LIMIT 200;",
             null,
             ct);
 
@@ -527,7 +446,7 @@ public sealed class PostgresProcessImprovementStore : IProcessImprovementStore, 
     public Task<IReadOnlyList<MechanismFusionDefinition>> ListMechanismFusionsAsync(
         CancellationToken ct = default)
         => ListAsync<MechanismFusionDefinition>(
-            "SELECT payload::text FROM mechanism_fusion_definitions ORDER BY updated_at DESC;",
+            "SELECT payload::text FROM mechanism_fusion_definitions ORDER BY updated_at DESC LIMIT 200;",
             null,
             ct);
 
@@ -563,7 +482,7 @@ public sealed class PostgresProcessImprovementStore : IProcessImprovementStore, 
     public Task<IReadOnlyList<ScientificValidationReport>> ListScientificValidationReportsAsync(
         CancellationToken ct = default)
         => ListAsync<ScientificValidationReport>(
-            "SELECT payload::text FROM scientific_validation_reports ORDER BY created_at DESC;",
+            "SELECT payload::text FROM scientific_validation_reports ORDER BY created_at DESC LIMIT 200;",
             null,
             ct);
 
@@ -856,7 +775,7 @@ public sealed class PostgresProcessImprovementStore : IProcessImprovementStore, 
 
     public Task<IReadOnlyList<KnowledgeSource>> ListKnowledgeSourcesAsync(CancellationToken ct = default)
         => ListAsync<KnowledgeSource>(
-            "SELECT payload::text FROM process_knowledge_sources ORDER BY updated_at DESC;",
+            "SELECT payload::text FROM process_knowledge_sources ORDER BY updated_at DESC LIMIT 200;",
             null,
             ct);
 
@@ -929,7 +848,8 @@ public sealed class PostgresProcessImprovementStore : IProcessImprovementStore, 
         => ListByGuidAsync<KnowledgeRecord>(
             """
             SELECT payload::text FROM process_knowledge_records
-            WHERE source_id = @id ORDER BY updated_at DESC;
+            WHERE source_id = @id ORDER BY updated_at DESC
+            LIMIT 500;
             """,
             sourceId,
             ct);

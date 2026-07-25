@@ -1,3 +1,6 @@
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using Ingot.Contracts.ProcessResearch;
 
@@ -27,7 +30,10 @@ public sealed partial class ProcessResearchWorkflow(IProcessResearchStore store)
         if (await store.GetProjectByCodeAsync(value.Code, ct).ConfigureAwait(false) is not null)
             throw new ProcessResearchRuleException("研发项目代码已经存在。");
 
-        return await store.SaveProjectAsync(value, ct).ConfigureAwait(false);
+        var saved = await store.SaveProjectAsync(value, ct).ConfigureAwait(false);
+        await AuditAsync(saved.ProjectId, "project", saved.ProjectId.ToString(), "created",
+            userId, null, saved.Status, ct).ConfigureAwait(false);
+        return saved;
     }
 
     public async Task<ResearchProject> UpdateProjectAsync(
@@ -49,14 +55,15 @@ public sealed partial class ProcessResearchWorkflow(IProcessResearchStore store)
                 ProjectId = existing.ProjectId,
                 Code = existing.Code,
                 Status = existing.Status,
-                OwnerUserId = string.IsNullOrWhiteSpace(request.OwnerUserId)
-                    ? existing.OwnerUserId
-                    : NormalizeUser(request.OwnerUserId),
+                OwnerUserId = existing.OwnerUserId,
                 CreatedAt = existing.CreatedAt,
                 UpdatedAt = DateTimeOffset.UtcNow,
                 Revision = existing.Revision + 1
             });
-        return await store.SaveProjectAsync(value, ct).ConfigureAwait(false);
+        var saved = await store.SaveProjectAsync(value, ct).ConfigureAwait(false);
+        await AuditAsync(projectId, "project", projectId.ToString(), "updated",
+            userId, existing.Status, saved.Status, ct).ConfigureAwait(false);
+        return saved;
     }
 
     public async Task<ResearchProject> ChangeProjectStatusAsync(
@@ -91,7 +98,7 @@ public sealed partial class ProcessResearchWorkflow(IProcessResearchStore store)
                 throw new ProcessResearchRuleException("研发项目完成前必须形成经过验证的工艺窗口。");
         }
 
-        return await store.SaveProjectAsync(
+        var saved = await store.SaveProjectAsync(
             project with
             {
                 Status = targetStatus,
@@ -99,6 +106,9 @@ public sealed partial class ProcessResearchWorkflow(IProcessResearchStore store)
                 Revision = project.Revision + 1
             },
             ct).ConfigureAwait(false);
+        await AuditAsync(projectId, "project", projectId.ToString(), "status-changed",
+            userId, project.Status, saved.Status, ct).ConfigureAwait(false);
+        return saved;
     }
 
     public async Task<ResearchHypothesis> SaveHypothesisAsync(
@@ -137,13 +147,17 @@ public sealed partial class ProcessResearchWorkflow(IProcessResearchStore store)
             Statement = statement,
             Rationale = rationale,
             VariableCodes = variableCodes,
-            SupportingEvidence = NormalizeEvidence(request.SupportingEvidence),
-            OpposingEvidence = NormalizeEvidence(request.OpposingEvidence),
+            SupportingEvidence = NormalizeEvidence(projectId, request.SupportingEvidence),
+            OpposingEvidence = NormalizeEvidence(projectId, request.OpposingEvidence),
             CreatedBy = existing?.CreatedBy ?? NormalizeUser(userId),
             CreatedAt = existing?.CreatedAt ?? now,
             UpdatedAt = now
         };
-        return await store.SaveHypothesisAsync(value, ct).ConfigureAwait(false);
+        var saved = await store.SaveHypothesisAsync(value, ct).ConfigureAwait(false);
+        await AuditAsync(projectId, "hypothesis", saved.HypothesisId.ToString(),
+            existing is null ? "created" : "updated", userId, existing?.Status, saved.Status, ct)
+            .ConfigureAwait(false);
+        return saved;
     }
 
     public async Task<ResearchExperiment> CreateExperimentAsync(
@@ -163,9 +177,14 @@ public sealed partial class ProcessResearchWorkflow(IProcessResearchStore store)
         var knownVariables = project.Variables
             .Where(static value => value.Role == ResearchVariableRoles.Control)
             .ToDictionary(static value => value.Code, StringComparer.Ordinal);
-        if (request.Factors.Count == 0)
-            throw new ProcessResearchRuleException("实验必须包含至少一个可控变量设置。");
-        var factors = request.Factors.Select(value =>
+        var designMethod = RequiredText(request.DesignMethod, "实验设计方法", 120)
+            .ToLowerInvariant();
+        if (!ResearchDesignMethods.IsValid(designMethod))
+            throw new ProcessResearchRuleException("实验设计方法无效。");
+        if (request.RunPlan.Count < 2)
+            throw new ProcessResearchRuleException("实验计划必须至少包含两个运行条件，不能用单点设置代替实验设计。");
+
+        ExperimentFactorSetting NormalizeFactor(ExperimentFactorSetting value)
         {
             var code = NormalizeCode(value.VariableCode, "实验变量");
             if (!knownVariables.TryGetValue(code, out var variable))
@@ -174,8 +193,47 @@ public sealed partial class ProcessResearchWorkflow(IProcessResearchStore store)
                 variable.LowerLimit is { } lower && value.Value < lower ||
                 variable.UpperLimit is { } upper && value.Value > upper)
                 throw new ProcessResearchRuleException($"实验变量 {code} 超出允许范围。");
-            return value with { VariableCode = code, Unit = RequiredText(value.Unit, "实验变量单位", 40) };
+            var unit = RequiredText(value.Unit, "实验变量单位", 40);
+            if (!string.Equals(unit, variable.Unit, StringComparison.OrdinalIgnoreCase))
+                throw new ProcessResearchRuleException($"实验变量 {code} 的单位必须与项目变量一致。");
+            return value with { VariableCode = code, Unit = unit };
+        }
+
+        var runPlan = request.RunPlan.Select((run, index) =>
+        {
+            var factors = run.Factors.Select(NormalizeFactor).ToArray();
+            if (factors.Length == 0 ||
+                factors.Select(static value => value.VariableCode)
+                    .Distinct(StringComparer.Ordinal).Count() != factors.Length)
+                throw new ProcessResearchRuleException("每个实验运行必须包含不重复的可控变量设置。");
+            return run with
+            {
+                RunKey = RequiredText(run.RunKey, "实验运行标识", 120),
+                Sequence = run.Sequence > 0 ? run.Sequence : index + 1,
+                BlockKey = OptionalText(run.BlockKey, 120),
+                ReplicateKey = OptionalText(run.ReplicateKey, 120),
+                Factors = factors
+            };
         }).ToArray();
+        if (runPlan.Select(static value => value.RunKey).Distinct(StringComparer.Ordinal).Count() !=
+            runPlan.Length ||
+            runPlan.Select(static value => value.Sequence).Distinct().Count() != runPlan.Length)
+            throw new ProcessResearchRuleException("实验运行标识和执行顺序必须唯一。");
+        var distinctConditions = runPlan
+            .Select(run => string.Join("|", run.Factors
+                .OrderBy(static factor => factor.VariableCode)
+                .Select(static factor => $"{factor.VariableCode}:{factor.Value:R}")))
+            .Distinct(StringComparer.Ordinal)
+            .Count();
+        if (distinctConditions < 2)
+            throw new ProcessResearchRuleException("实验至少需要两个不同的变量组合。");
+
+        var factors = (request.Factors.Count > 0
+                ? request.Factors.Select(NormalizeFactor)
+                : runPlan.SelectMany(static run => run.Factors)
+                    .GroupBy(static factor => factor.VariableCode, StringComparer.Ordinal)
+                    .Select(static group => group.First()))
+            .ToArray();
         if (factors.Select(static value => value.VariableCode).Distinct(StringComparer.Ordinal).Count() !=
             factors.Length)
             throw new ProcessResearchRuleException("同一实验变量只能设置一次。");
@@ -194,14 +252,25 @@ public sealed partial class ProcessResearchWorkflow(IProcessResearchStore store)
                 : request.ExperimentId,
             ProjectId = projectId,
             Name = RequiredText(request.Name, "实验名称", 240),
-            DesignMethod = RequiredText(request.DesignMethod, "实验设计方法", 120).ToLowerInvariant(),
+            DesignMethod = designMethod,
+            PlanVersion = 1,
+            ProjectRevision = project.Revision,
+            RandomizationSeed = request.RandomizationSeed == 0
+                ? RandomNumberGenerator.GetInt32(1, int.MaxValue)
+                : request.RandomizationSeed,
+            BlockingKeys = request.BlockingKeys.Select(static value => value.Trim())
+                .Where(static value => value.Length > 0)
+                .Distinct(StringComparer.Ordinal)
+                .ToArray(),
             Status = ResearchExperimentStatuses.Planned,
             Factors = factors,
+            RunPlan = runPlan,
             ObjectiveCodes = objectiveCodes,
             ReplicateKeys = request.ReplicateKeys.Select(static value => value.Trim())
                 .Where(static value => value.Length > 0)
                 .Distinct(StringComparer.Ordinal)
                 .ToArray(),
+            ResultIds = [],
             StopRule = RequiredText(request.StopRule, "停止规则", 4000),
             RollbackPlan = RequiredText(request.RollbackPlan, "回退方案", 4000),
             CreatedBy = NormalizeUser(userId),
@@ -212,7 +281,10 @@ public sealed partial class ProcessResearchWorkflow(IProcessResearchStore store)
         };
         if (await store.GetExperimentAsync(value.ExperimentId, ct).ConfigureAwait(false) is not null)
             throw new ProcessResearchRuleException("实验标识已经存在。");
-        return await store.SaveExperimentAsync(value, ct).ConfigureAwait(false);
+        var saved = await store.SaveExperimentAsync(value, ct).ConfigureAwait(false);
+        await AuditAsync(projectId, "experiment", saved.ExperimentId.ToString(), "planned",
+            userId, null, saved.Status, ct).ConfigureAwait(false);
+        return saved;
     }
 
     public async Task<ResearchExperiment> ChangeExperimentStatusAsync(
@@ -243,8 +315,28 @@ public sealed partial class ProcessResearchWorkflow(IProcessResearchStore store)
         if (targetStatus == ResearchExperimentStatuses.Approved &&
             string.Equals(experiment.CreatedBy, actor, StringComparison.Ordinal))
             throw new ProcessResearchRuleException("实验创建人和批准人必须分离。");
+        if (targetStatus == ResearchExperimentStatuses.Running &&
+            experiment.ProjectRevision !=
+            (await RequireProjectAsync(experiment.ProjectId, ct).ConfigureAwait(false)).Revision)
+            throw new ProcessResearchRuleException("项目定义已变化，请基于最新变量和目标重新制定实验计划。");
+        if (targetStatus == ResearchExperimentStatuses.Completed)
+        {
+            var results = (await store.ListExperimentResultsAsync(experiment.ProjectId, ct)
+                    .ConfigureAwait(false))
+                .Where(value => value.ExperimentId == experimentId)
+                .ToArray();
+            if (results.Length == 0)
+                throw new ProcessResearchRuleException("实验完成前必须记录由源数据计算得到的结果。");
+            if (results.Any(static value => !value.CalculatedFromSource || !value.SafetyPassed))
+                throw new ProcessResearchRuleException("实验结果必须来自源数据计算且通过安全约束检查。");
+            var coveredObjectives = results.SelectMany(static value => value.Metrics)
+                .Select(static value => value.ObjectiveCode)
+                .ToHashSet(StringComparer.Ordinal);
+            if (experiment.ObjectiveCodes.Any(code => !coveredObjectives.Contains(code)))
+                throw new ProcessResearchRuleException("实验结果尚未覆盖全部实验目标。");
+        }
 
-        return await store.SaveExperimentAsync(
+        var saved = await store.SaveExperimentAsync(
             experiment with
             {
                 Status = targetStatus,
@@ -257,6 +349,131 @@ public sealed partial class ProcessResearchWorkflow(IProcessResearchStore store)
                 UpdatedAt = DateTimeOffset.UtcNow
             },
             ct).ConfigureAwait(false);
+        await AuditAsync(experiment.ProjectId, "experiment", experimentId.ToString(),
+            "status-changed", userId, experiment.Status, saved.Status, ct).ConfigureAwait(false);
+        return saved;
+    }
+
+    public async Task<ResearchExperimentResult> RecordExperimentResultAsync(
+        Guid experimentId,
+        ResearchExperimentResult request,
+        string userId,
+        CancellationToken ct = default)
+    {
+        var experiment = await store.GetExperimentAsync(experimentId, ct).ConfigureAwait(false)
+            ?? throw new ProcessResearchRuleException("实验不存在。");
+        var project = await RequireMutableProjectAsync(experiment.ProjectId, ct).ConfigureAwait(false);
+        if (experiment.Status != ResearchExperimentStatuses.Running)
+            throw new ProcessResearchRuleException("只有执行中的实验可以记录结果。");
+        if (request.Metrics.Count == 0)
+            throw new ProcessResearchRuleException("实验结果必须包含目标指标的计算结果。");
+        if (!request.CalculatedFromSource)
+            throw new ProcessResearchRuleException("实验结果必须由不可变的数据快照计算，不能手工填报结论。");
+        if (request.RunCount < 2 || request.ReplicateCount < 1)
+            throw new ProcessResearchRuleException("实验结果至少需要两个运行记录和一个重复组。");
+
+        var objectives = project.Objectives.ToDictionary(static value => value.Code, StringComparer.Ordinal);
+        var metrics = request.Metrics.Select(metric =>
+        {
+            var code = NormalizeCode(metric.ObjectiveCode, "结果指标");
+            if (!experiment.ObjectiveCodes.Contains(code, StringComparer.Ordinal) ||
+                !objectives.TryGetValue(code, out var objective))
+                throw new ProcessResearchRuleException($"结果指标 {code} 不属于当前实验目标。");
+            if (!double.IsFinite(metric.BaselineValue) || !double.IsFinite(metric.ObservedValue) ||
+                !double.IsFinite(metric.EffectValue) ||
+                metric.LowerConfidenceBound is { } lower && !double.IsFinite(lower) ||
+                metric.UpperConfidenceBound is { } upper && !double.IsFinite(upper) ||
+                metric.LowerConfidenceBound is { } min &&
+                metric.UpperConfidenceBound is { } max && min > max ||
+                metric.BaselineSampleCount < 1 || metric.ExperimentSampleCount < 1)
+                throw new ProcessResearchRuleException($"结果指标 {code} 的数值或样本量无效。");
+            var unit = RequiredText(metric.Unit, "结果指标单位", 40);
+            if (!string.Equals(unit, objective.Unit, StringComparison.OrdinalIgnoreCase))
+                throw new ProcessResearchRuleException($"结果指标 {code} 的单位必须与研发目标一致。");
+            return metric with
+            {
+                ObjectiveCode = code,
+                Unit = unit,
+                ComputationMethod = RequiredText(metric.ComputationMethod, "计算方法", 240)
+            };
+        }).ToArray();
+        if (metrics.Select(static value => value.ObjectiveCode).Distinct(StringComparer.Ordinal).Count() !=
+            metrics.Length)
+            throw new ProcessResearchRuleException("同一实验结果中的目标指标不能重复。");
+        if (experiment.ObjectiveCodes.Any(code =>
+                metrics.All(metric => metric.ObjectiveCode != code)))
+            throw new ProcessResearchRuleException("单次结果记录必须覆盖实验的全部目标。");
+
+        var resultId = request.ResultId == Guid.Empty ? Guid.CreateVersion7() : request.ResultId;
+        if (await store.GetExperimentResultAsync(resultId, ct).ConfigureAwait(false) is not null)
+            throw new ProcessResearchRuleException("实验结果标识已经存在。");
+        var analysisRunId = request.AnalysisRunId == Guid.Empty
+            ? Guid.CreateVersion7()
+            : request.AnalysisRunId;
+        var datasetSnapshotId = RequiredText(request.DatasetSnapshotId, "数据快照", 500);
+        var now = DateTimeOffset.UtcNow;
+        var hashPayload = JsonSerializer.Serialize(new
+        {
+            experiment.ProjectId,
+            experimentId,
+            resultId,
+            datasetSnapshotId,
+            analysisRunId,
+            metrics,
+            request.RunCount,
+            request.ReplicateCount,
+            request.DistinctMaterialLotCount,
+            request.DistinctEquipmentCount,
+            request.SafetyPassed,
+            request.ExcludedRunKeys
+        });
+        var analysisHash = Convert.ToHexStringLower(
+            SHA256.HashData(Encoding.UTF8.GetBytes(hashPayload)));
+        var evidence = NormalizeEvidence(experiment.ProjectId, request.Evidence).ToList();
+        evidence.Add(CreateEvidence(
+            experiment.ProjectId,
+            EvidenceKinds.DatasetSnapshot,
+            datasetSnapshotId,
+            "实验结果使用的数据快照。",
+            Sha256(datasetSnapshotId),
+            now));
+        evidence.Add(CreateEvidence(
+            experiment.ProjectId,
+            EvidenceKinds.AnalysisRun,
+            analysisRunId.ToString(),
+            "由实验数据计算得到的分析运行。",
+            analysisHash,
+            now));
+
+        var value = request with
+        {
+            ResultId = resultId,
+            ProjectId = experiment.ProjectId,
+            ExperimentId = experimentId,
+            DatasetSnapshotId = datasetSnapshotId,
+            AnalysisRunId = analysisRunId,
+            AnalysisHash = analysisHash,
+            Metrics = metrics,
+            Evidence = evidence,
+            ExcludedRunKeys = request.ExcludedRunKeys.Select(static value => value.Trim())
+                .Where(static value => value.Length > 0)
+                .Distinct(StringComparer.Ordinal)
+                .ToArray(),
+            RecordedBy = NormalizeUser(userId),
+            RecordedAt = now
+        };
+        var saved = await store.SaveExperimentResultAsync(value, ct).ConfigureAwait(false);
+        await store.SaveExperimentAsync(
+            experiment with
+            {
+                ResultIds = experiment.ResultIds.Append(resultId).Distinct().ToArray(),
+                UpdatedAt = now
+            },
+            ct).ConfigureAwait(false);
+        await AuditAsync(experiment.ProjectId, "experiment-result", resultId.ToString(),
+            "recorded", userId, null, request.SafetyPassed ? "passed" : "failed", ct)
+            .ConfigureAwait(false);
+        return saved;
     }
 
     public async Task<ResearchProcessWindow> SaveProcessWindowAsync(
@@ -299,8 +516,43 @@ public sealed partial class ProcessResearchWorkflow(IProcessResearchStore store)
                 experiment.Status != ResearchExperimentStatuses.Completed)
                 throw new ProcessResearchRuleException("工艺窗口只能引用当前项目中已完成的实验。");
         }
-        if (request.Confidence is < 0 or > 1 || !double.IsFinite(request.Confidence))
-            throw new ProcessResearchRuleException("工艺窗口置信度必须位于 0 到 1 之间。");
+        if (request.SupportingResultIds.Count == 0)
+            throw new ProcessResearchRuleException("候选工艺窗口必须关联实验计算结果。");
+        var supportingResults = new List<ResearchExperimentResult>();
+        foreach (var resultId in request.SupportingResultIds.Distinct())
+        {
+            var result = await store.GetExperimentResultAsync(resultId, ct).ConfigureAwait(false);
+            if (result is null || result.ProjectId != projectId ||
+                !request.SupportingExperimentIds.Contains(result.ExperimentId) ||
+                !result.CalculatedFromSource || !result.SafetyPassed)
+                throw new ProcessResearchRuleException("工艺窗口只能引用当前项目中通过安全检查的源数据计算结果。");
+            supportingResults.Add(result);
+        }
+        var objectiveCodes = NormalizeCodes(request.ObjectiveCodes, "工艺窗口目标");
+        var knownObjectives = project.Objectives.Select(static value => value.Code)
+            .ToHashSet(StringComparer.Ordinal);
+        if (objectiveCodes.Count == 0 || objectiveCodes.Any(code => !knownObjectives.Contains(code)))
+            throw new ProcessResearchRuleException("工艺窗口必须引用项目中已经定义的目标。");
+        var coveredObjectives = supportingResults.SelectMany(static value => value.Metrics)
+            .Select(static value => value.ObjectiveCode)
+            .ToHashSet(StringComparer.Ordinal);
+        if (objectiveCodes.Any(code => !coveredObjectives.Contains(code)))
+            throw new ProcessResearchRuleException("工艺窗口的计算结果尚未覆盖全部目标。");
+        if (request.Confidence is <= 0 or > 1 || !double.IsFinite(request.Confidence))
+            throw new ProcessResearchRuleException("工艺窗口置信度必须大于 0 且不超过 1。");
+        var confidenceMethod = RequiredText(request.ConfidenceMethod, "置信度计算方法", 120)
+            .ToLowerInvariant();
+        if (!ResearchConfidenceMethods.IsValid(confidenceMethod))
+            throw new ProcessResearchRuleException("工艺窗口置信度计算方法无效。");
+        if (request.AnalysisRunId == Guid.Empty || !HashPattern().IsMatch(request.AnalysisHash))
+            throw new ProcessResearchRuleException("工艺窗口必须关联可追溯的分析运行和 SHA-256 摘要。");
+        if (supportingResults.All(result =>
+                result.AnalysisRunId != request.AnalysisRunId ||
+                !string.Equals(
+                    result.AnalysisHash,
+                    request.AnalysisHash,
+                    StringComparison.OrdinalIgnoreCase)))
+            throw new ProcessResearchRuleException("工艺窗口的分析运行必须来自所关联的实验结果。");
 
         var now = DateTimeOffset.UtcNow;
         var existing = request.WindowId == Guid.Empty
@@ -311,7 +563,26 @@ public sealed partial class ProcessResearchWorkflow(IProcessResearchStore store)
         if (existing?.Status == ProcessWindowStatuses.Validated)
             throw new ProcessResearchRuleException("经过验证的工艺窗口保持不可变。");
 
-        return await store.SaveProcessWindowAsync(
+        var evidence = NormalizeEvidence(projectId, request.Evidence).ToList();
+        foreach (var result in supportingResults)
+        {
+            evidence.Add(CreateEvidence(
+                projectId,
+                EvidenceKinds.ExperimentResult,
+                result.ResultId.ToString(),
+                "支持该工艺窗口的实验结果。",
+                result.AnalysisHash,
+                now));
+        }
+        evidence.Add(CreateEvidence(
+            projectId,
+            EvidenceKinds.AnalysisRun,
+            request.AnalysisRunId.ToString(),
+            "生成候选工艺窗口的分析运行。",
+            request.AnalysisHash.ToLowerInvariant(),
+            now));
+
+        var saved = await store.SaveProcessWindowAsync(
             request with
             {
                 WindowId = existing?.WindowId ??
@@ -320,10 +591,17 @@ public sealed partial class ProcessResearchWorkflow(IProcessResearchStore store)
                 Name = RequiredText(request.Name, "工艺窗口名称", 240),
                 Status = ProcessWindowStatuses.Candidate,
                 Variables = variables,
-                ObjectiveCodes = NormalizeCodes(request.ObjectiveCodes, "工艺窗口目标"),
+                ObjectiveCodes = objectiveCodes,
                 SupportingExperimentIds = request.SupportingExperimentIds.Distinct().ToArray(),
-                Evidence = NormalizeEvidence(request.Evidence),
+                SupportingResultIds = request.SupportingResultIds.Distinct().ToArray(),
+                Evidence = evidence
+                    .GroupBy(static value => (value.Kind, value.ReferenceId))
+                    .Select(static group => group.First())
+                    .ToArray(),
+                ConfidenceMethod = confidenceMethod,
+                AnalysisHash = request.AnalysisHash.ToLowerInvariant(),
                 Applicability = RequiredText(request.Applicability, "工艺窗口适用范围", 8000),
+                ValidationNotes = null,
                 ValidatedBy = null,
                 ValidatedAt = null,
                 CreatedBy = existing?.CreatedBy ?? NormalizeUser(userId),
@@ -331,6 +609,10 @@ public sealed partial class ProcessResearchWorkflow(IProcessResearchStore store)
                 UpdatedAt = now
             },
             ct).ConfigureAwait(false);
+        await AuditAsync(projectId, "process-window", saved.WindowId.ToString(),
+            existing is null ? "candidate-created" : "candidate-updated",
+            userId, existing?.Status, saved.Status, ct).ConfigureAwait(false);
+        return saved;
     }
 
     public async Task<ResearchProcessWindow> ValidateProcessWindowAsync(
@@ -340,21 +622,38 @@ public sealed partial class ProcessResearchWorkflow(IProcessResearchStore store)
     {
         var value = await store.GetProcessWindowAsync(windowId, ct).ConfigureAwait(false)
             ?? throw new ProcessResearchRuleException("工艺窗口不存在。");
-        await RequireMutableProjectAsync(value.ProjectId, ct).ConfigureAwait(false);
+        var project = await RequireMutableProjectAsync(value.ProjectId, ct).ConfigureAwait(false);
         if (value.Status != ProcessWindowStatuses.Candidate)
             throw new ProcessResearchRuleException("只有候选工艺窗口可以进入验证状态。");
-        if (value.Evidence.Count == 0 || value.Confidence <= 0)
-            throw new ProcessResearchRuleException("工艺窗口验证需要证据和置信度。");
+        if (project.Status != ResearchProjectStatuses.Validating)
+            throw new ProcessResearchRuleException("项目进入验证阶段后才能批准工艺窗口。");
+        var actor = NormalizeUser(userId);
+        if (string.Equals(value.CreatedBy, actor, StringComparison.Ordinal))
+            throw new ProcessResearchRuleException("工艺窗口创建人和验证人必须分离。");
+        if (value.Evidence.Count == 0 || value.Confidence <= 0 ||
+            value.SupportingResultIds.Count == 0)
+            throw new ProcessResearchRuleException("工艺窗口验证需要可追溯实验结果和统计置信度。");
+        foreach (var resultId in value.SupportingResultIds)
+        {
+            var result = await store.GetExperimentResultAsync(resultId, ct).ConfigureAwait(false);
+            if (result is null || result.ProjectId != value.ProjectId ||
+                !result.CalculatedFromSource || !result.SafetyPassed)
+                throw new ProcessResearchRuleException("工艺窗口的支持结果已失效，不能通过验证。");
+        }
 
-        return await store.SaveProcessWindowAsync(
+        var saved = await store.SaveProcessWindowAsync(
             value with
             {
                 Status = ProcessWindowStatuses.Validated,
-                ValidatedBy = NormalizeUser(userId),
+                ValidationNotes = $"由 {actor} 独立复核实验结果、适用范围与安全约束。",
+                ValidatedBy = actor,
                 ValidatedAt = DateTimeOffset.UtcNow,
                 UpdatedAt = DateTimeOffset.UtcNow
             },
             ct).ConfigureAwait(false);
+        await AuditAsync(value.ProjectId, "process-window", windowId.ToString(), "validated",
+            userId, value.Status, saved.Status, ct).ConfigureAwait(false);
+        return saved;
     }
 
     public async Task<ResearchKnowledgeClaim> SaveKnowledgeClaimAsync(
@@ -364,11 +663,12 @@ public sealed partial class ProcessResearchWorkflow(IProcessResearchStore store)
         CancellationToken ct = default)
     {
         await RequireMutableProjectAsync(projectId, ct).ConfigureAwait(false);
+        ResearchProcessWindow? referencedWindow = null;
         if (request.ProcessWindowId is { } windowId)
         {
-            var window = await store.GetProcessWindowAsync(windowId, ct).ConfigureAwait(false);
-            if (window is null || window.ProjectId != projectId ||
-                window.Status != ProcessWindowStatuses.Validated)
+            referencedWindow = await store.GetProcessWindowAsync(windowId, ct).ConfigureAwait(false);
+            if (referencedWindow is null || referencedWindow.ProjectId != projectId ||
+                referencedWindow.Status != ProcessWindowStatuses.Validated)
                 throw new ProcessResearchRuleException("知识声明只能引用当前项目中经过验证的工艺窗口。");
         }
         var now = DateTimeOffset.UtcNow;
@@ -380,7 +680,18 @@ public sealed partial class ProcessResearchWorkflow(IProcessResearchStore store)
         if (existing?.Status is ResearchKnowledgeStatuses.Published or ResearchKnowledgeStatuses.Retired)
             throw new ProcessResearchRuleException("已发布或已停用的知识声明保持不可变。");
 
-        return await store.SaveKnowledgeClaimAsync(
+        var evidence = NormalizeEvidence(projectId, request.Evidence).ToList();
+        if (referencedWindow is not null)
+        {
+            evidence.Add(CreateEvidence(
+                projectId,
+                EvidenceKinds.ProcessWindow,
+                referencedWindow.WindowId.ToString(),
+                "知识声明引用的已验证工艺窗口。",
+                referencedWindow.AnalysisHash,
+                now));
+        }
+        var saved = await store.SaveKnowledgeClaimAsync(
             request with
             {
                 ClaimId = existing?.ClaimId ??
@@ -389,7 +700,10 @@ public sealed partial class ProcessResearchWorkflow(IProcessResearchStore store)
                 Statement = RequiredText(request.Statement, "知识声明", 8000),
                 Applicability = RequiredText(request.Applicability, "知识适用范围", 8000),
                 Status = ResearchKnowledgeStatuses.Draft,
-                Evidence = NormalizeEvidence(request.Evidence),
+                Evidence = evidence
+                    .GroupBy(static value => (value.Kind, value.ReferenceId))
+                    .Select(static group => group.First())
+                    .ToArray(),
                 CreatedBy = existing?.CreatedBy ?? NormalizeUser(userId),
                 ReviewedBy = null,
                 ReviewedAt = null,
@@ -397,6 +711,10 @@ public sealed partial class ProcessResearchWorkflow(IProcessResearchStore store)
                 UpdatedAt = now
             },
             ct).ConfigureAwait(false);
+        await AuditAsync(projectId, "knowledge-claim", saved.ClaimId.ToString(),
+            existing is null ? "created" : "updated",
+            userId, existing?.Status, saved.Status, ct).ConfigureAwait(false);
+        return saved;
     }
 
     public async Task<ResearchKnowledgeClaim> ReviewKnowledgeClaimAsync(
@@ -415,7 +733,7 @@ public sealed partial class ProcessResearchWorkflow(IProcessResearchStore store)
         if (value.Evidence.Count == 0)
             throw new ProcessResearchRuleException("知识声明审核前必须关联证据。");
 
-        return await store.SaveKnowledgeClaimAsync(
+        var saved = await store.SaveKnowledgeClaimAsync(
             value with
             {
                 Status = ResearchKnowledgeStatuses.Reviewed,
@@ -424,6 +742,9 @@ public sealed partial class ProcessResearchWorkflow(IProcessResearchStore store)
                 UpdatedAt = DateTimeOffset.UtcNow
             },
             ct).ConfigureAwait(false);
+        await AuditAsync(value.ProjectId, "knowledge-claim", claimId.ToString(), "reviewed",
+            userId, value.Status, saved.Status, ct).ConfigureAwait(false);
+        return saved;
     }
 
     public async Task<ResearchProjectWorkspace> GetWorkspaceAsync(
@@ -431,13 +752,28 @@ public sealed partial class ProcessResearchWorkflow(IProcessResearchStore store)
         CancellationToken ct = default)
     {
         var project = await RequireProjectAsync(projectId, ct).ConfigureAwait(false);
+        var hypothesesTask = store.ListHypothesesAsync(projectId, ct);
+        var experimentsTask = store.ListExperimentsAsync(projectId, ct);
+        var resultsTask = store.ListExperimentResultsAsync(projectId, ct);
+        var windowsTask = store.ListProcessWindowsAsync(projectId, ct);
+        var claimsTask = store.ListKnowledgeClaimsAsync(projectId, ct);
+        var auditTask = store.ListAuditEntriesAsync(projectId, ct);
+        await Task.WhenAll(
+            hypothesesTask,
+            experimentsTask,
+            resultsTask,
+            windowsTask,
+            claimsTask,
+            auditTask).ConfigureAwait(false);
         return new ResearchProjectWorkspace
         {
             Project = project,
-            Hypotheses = await store.ListHypothesesAsync(projectId, ct).ConfigureAwait(false),
-            Experiments = await store.ListExperimentsAsync(projectId, ct).ConfigureAwait(false),
-            ProcessWindows = await store.ListProcessWindowsAsync(projectId, ct).ConfigureAwait(false),
-            KnowledgeClaims = await store.ListKnowledgeClaimsAsync(projectId, ct).ConfigureAwait(false)
+            Hypotheses = await hypothesesTask.ConfigureAwait(false),
+            Experiments = await experimentsTask.ConfigureAwait(false),
+            ExperimentResults = await resultsTask.ConfigureAwait(false),
+            ProcessWindows = await windowsTask.ConfigureAwait(false),
+            KnowledgeClaims = await claimsTask.ConfigureAwait(false),
+            Audit = await auditTask.ConfigureAwait(false)
         };
     }
 
@@ -500,6 +836,13 @@ public sealed partial class ProcessResearchWorkflow(IProcessResearchStore store)
             Objectives = objectives,
             Variables = variables,
             Constraints = constraints,
+            OwnerUserId = NormalizeUser(value.OwnerUserId),
+            MemberUserIds = value.MemberUserIds
+                .Append(value.OwnerUserId)
+                .Select(NormalizeUser)
+                .Distinct(StringComparer.Ordinal)
+                .ToArray(),
+            SiteCode = OptionalText(value.SiteCode, 120)?.ToLowerInvariant(),
             Context = value.Context
                 .Where(static pair => !string.IsNullOrWhiteSpace(pair.Key) &&
                                       !string.IsNullOrWhiteSpace(pair.Value))
@@ -549,14 +892,74 @@ public sealed partial class ProcessResearchWorkflow(IProcessResearchStore store)
     }
 
     private static IReadOnlyList<EvidenceReference> NormalizeEvidence(
+        Guid projectId,
         IReadOnlyList<EvidenceReference> source)
-        => source.Select(value => value with
+        => source.Select(value =>
         {
-            Kind = RequiredText(value.Kind, "证据类型", 80).ToLowerInvariant(),
-            ReferenceId = RequiredText(value.ReferenceId, "证据标识", 500),
-            Summary = RequiredText(value.Summary, "证据摘要", 2000),
-            ContentHash = OptionalText(value.ContentHash, 128)
+            var kind = RequiredText(value.Kind, "证据类型", 80).ToLowerInvariant();
+            var hash = RequiredText(value.ContentHash, "证据内容摘要", 64).ToLowerInvariant();
+            if (!EvidenceKinds.IsValid(kind))
+                throw new ProcessResearchRuleException("证据类型必须是系统定义的可验证类型。");
+            if (!HashPattern().IsMatch(hash))
+                throw new ProcessResearchRuleException("证据内容摘要必须是 64 位 SHA-256。");
+            if (value.ProjectId != Guid.Empty && value.ProjectId != projectId)
+                throw new ProcessResearchRuleException("证据不属于当前研发项目。");
+            return value with
+            {
+                EvidenceId = value.EvidenceId == Guid.Empty ? Guid.CreateVersion7() : value.EvidenceId,
+                ProjectId = projectId,
+                Kind = kind,
+                ReferenceId = RequiredText(value.ReferenceId, "证据标识", 500),
+                Summary = RequiredText(value.Summary, "证据摘要", 2000),
+                ContentHash = hash,
+                CreatedAt = value.CreatedAt == default ? DateTimeOffset.UtcNow : value.CreatedAt
+            };
         }).ToArray();
+
+    private static EvidenceReference CreateEvidence(
+        Guid projectId,
+        string kind,
+        string referenceId,
+        string summary,
+        string contentHash,
+        DateTimeOffset createdAt)
+        => new()
+        {
+            EvidenceId = Guid.CreateVersion7(),
+            ProjectId = projectId,
+            Kind = kind,
+            ReferenceId = referenceId,
+            Summary = summary,
+            ContentHash = contentHash.ToLowerInvariant(),
+            CreatedAt = createdAt
+        };
+
+    private async Task AuditAsync(
+        Guid projectId,
+        string resourceType,
+        string resourceId,
+        string action,
+        string userId,
+        string? fromStatus,
+        string? toStatus,
+        CancellationToken ct)
+        => await store.AddAuditEntryAsync(
+            new ResearchAuditEntry
+            {
+                EntryId = Guid.CreateVersion7(),
+                ProjectId = projectId,
+                ResourceType = resourceType,
+                ResourceId = resourceId,
+                Action = action,
+                FromStatus = fromStatus,
+                ToStatus = toStatus,
+                UserId = NormalizeUser(userId),
+                CreatedAt = DateTimeOffset.UtcNow
+            },
+            ct).ConfigureAwait(false);
+
+    private static string Sha256(string value)
+        => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
 
     private static IReadOnlyList<string> NormalizeCodes(
         IReadOnlyList<string> source,
@@ -608,4 +1011,7 @@ public sealed partial class ProcessResearchWorkflow(IProcessResearchStore store)
 
     [GeneratedRegex("^[a-z][a-z0-9._-]*$", RegexOptions.CultureInvariant)]
     private static partial Regex CodePattern();
+
+    [GeneratedRegex("^[a-fA-F0-9]{64}$", RegexOptions.CultureInvariant)]
+    private static partial Regex HashPattern();
 }

@@ -6,6 +6,7 @@ const pages = await readFile(new URL("../src/pages/index.jsx", import.meta.url),
 const http = await readFile(new URL("../src/api/http.js", import.meta.url), "utf8");
 const ui = await readFile(new URL("../src/ui/components.jsx", import.meta.url), "utf8");
 const businessEditor = await readFile(new URL("../src/components/BusinessObjectEditor.jsx", import.meta.url), "utf8");
+const researchProjects = await readFile(new URL("../src/pages/ResearchProjectsPage.jsx", import.meta.url), "utf8");
 
 test("operations retain server pagination and resumable live events", () => {
   assert.match(pages, /offset: String\(\(page - 1\) \* pageSize\)/);
@@ -103,22 +104,26 @@ test("mechanism details are presented as business fields instead of raw JSON", (
   assert.doesNotMatch(pages, /JSON\.stringify\(resource, null, 2\)/);
 });
 
-test("process improvement exposes mechanism fusion, knowledge extraction, and scientific validation", () => {
+test("research projects expose the evidence-backed experiment and process-window workflow", () => {
+  assert.match(researchProjects, /提出研发假设/);
+  assert.match(researchProjects, /设计验证实验/);
+  assert.match(researchProjects, /记录实验计算结果/);
+  assert.match(researchProjects, /calculatedFromSource: true/);
+  assert.match(researchProjects, /supportingResultIds/);
+  assert.match(researchProjects, /独立验证/);
+  assert.match(researchProjects, /等待其他成员批准/);
+  assert.doesNotMatch(researchProjects, /项目代码|指标代码|变量代码|AnalysisHash|GUID/);
+});
+
+test("research assets retain mechanism fusion, knowledge extraction, and dataset quality checks", () => {
   assert.match(pages, /\/api\/v1\/mechanism-models/);
   assert.match(pages, /\/api\/v1\/mechanism-fusions/);
   assert.match(businessEditor, /mechanism-as-feature/);
   assert.match(pages, /\/api\/v1\/process-knowledge/);
   assert.match(pages, /accept="\.pdf,\.xlsx,\.xlsm/);
-  assert.match(pages, /\/api\/v1\/scientific-validation/);
+  assert.match(pages, /\/api\/v1\/dataset-quality-validations/);
   assert.match(pages, /manifestJson/);
   assert.match(pages, /有效范围/);
-  assert.match(pages, /添加可能原因/);
-  assert.match(pages, /创建探索性调整试验/);
-  assert.match(pages, /登记探索性试验结果/);
-  assert.match(pages, /形成调查结论/);
-  assert.match(pages, /\/causes/);
-  assert.match(pages, /\/trials/);
-  assert.match(pages, /\/conclusions/);
   assert.match(pages, /登记模型评估/);
   assert.match(pages, /登记漂移观测/);
   assert.match(pages, /\/evaluations/);
