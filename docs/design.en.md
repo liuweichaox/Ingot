@@ -245,7 +245,7 @@ Numerical computation, permissions, data scope, model execution, and state trans
 
 ## 11. Security and Audit
 
-Permissions follow project scope and separation of duties. Equipment configuration, experiment creation, review, result confirmation, model activation, recommendation review, and knowledge publication have explicit roles. Credentials use controlled secret storage. Critical changes, approvals, execution, rollback, and exports enter the audit log. Edge and Platform use separate, least-privilege, rotatable identities.
+Permissions follow project scope and separation of duties. Equipment configuration, experiment creation, review, result confirmation, model activation, independent process-window validation, and knowledge publication have explicit roles. Credentials use controlled secret storage. Critical changes, approvals, execution, rollback, and exports enter the audit log. Edge and Platform use separate, least-privilege, rotatable identities.
 
 ## 12. Reliability and Performance
 

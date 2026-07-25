@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { getJson, postJson, putJson } from "../api/http";
 import {
   Alert,
@@ -105,6 +106,7 @@ function createTaskForm(task, workspace) {
 }
 
 export function ResearchProjectsPage() {
+  const navigate = useNavigate();
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -419,6 +421,7 @@ export function ResearchProjectsPage() {
         onExperimentStatus={changeExperimentStatus}
         onValidateWindow={validateWindow}
         onReviewClaim={reviewClaim}
+        onAskAi={projectId => navigate(`/chat?projectId=${encodeURIComponent(projectId)}`)}
         currentUserId={identity?.username || identity?.userId || ""}
       />
 
@@ -486,6 +489,7 @@ function WorkspaceDrawer({
   onExperimentStatus,
   onValidateWindow,
   onReviewClaim,
+  onAskAi,
   currentUserId,
 }) {
   if (!workspace) return null;
@@ -514,6 +518,7 @@ function WorkspaceDrawer({
 
         <Card title="下一步" description="进度由项目真实记录决定，不由页面切换决定。">
           <div className="flex flex-wrap gap-2">
+            <Button onClick={() => onAskAi(project.projectId)}>让 AI 协助分析</Button>
             {canEdit && <Button onClick={() => onTask("member")}>添加协作成员</Button>}
             {canEdit && <Button onClick={() => onTask("hypothesis")}>提出假设</Button>}
             {project.status !== "draft" && canEdit && hypotheses.length > 0 && <Button onClick={() => onTask("experiment")}>设计实验</Button>}

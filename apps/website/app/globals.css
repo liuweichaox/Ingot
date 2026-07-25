@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-/* Ingot — 工艺调查与参数分析助手. */
+/* Ingot — AI 工艺研发系统. */
 
 @property --angle { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
 @property --sheen { syntax: "<percentage>"; inherits: false; initial-value: 0%; }

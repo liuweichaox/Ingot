@@ -1,11 +1,11 @@
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
-using Ingot.Contracts.ProcessImprovement;
+using Ingot.Contracts.ResearchAssets;
 
-namespace Ingot.Platform.Infrastructure.ProcessImprovement;
+namespace Ingot.Platform.Infrastructure.ResearchAssets;
 
-public sealed class MechanismModelService(IProcessImprovementStore store)
+public sealed class MechanismModelService(IResearchAssetStore store)
 {
     public async Task<MechanismModelVersion> SaveModelDraftAsync(
         MechanismModelVersion request,
@@ -16,7 +16,7 @@ public sealed class MechanismModelService(IProcessImprovementStore store)
         var id = NormalizeId(request.ModelId);
         var existing = await store.GetMechanismModelAsync(id, request.Version, ct).ConfigureAwait(false);
         if (existing is not null && existing.Status != MechanismModelStatuses.Draft)
-            throw new ProcessImprovementRuleException("只有草稿机理模型版本可以修改。");
+            throw new ResearchAssetRuleException("只有草稿机理模型版本可以修改。");
         var now = DateTimeOffset.UtcNow;
         var normalized = request with
         {
@@ -58,7 +58,7 @@ public sealed class MechanismModelService(IProcessImprovementStore store)
     {
         var model = await store.GetMechanismModelAsync(NormalizeId(modelId), version, ct)
             .ConfigureAwait(false)
-            ?? throw new ProcessImprovementRuleException("机理模型不存在。");
+            ?? throw new ResearchAssetRuleException("机理模型不存在。");
         targetStatus = targetStatus.Trim().ToLowerInvariant();
         var allowed = model.Status switch
         {
@@ -68,7 +68,7 @@ public sealed class MechanismModelService(IProcessImprovementStore store)
             _ => false
         };
         if (!allowed)
-            throw new ProcessImprovementRuleException($"不允许从 {model.Status} 转换到 {targetStatus}。");
+            throw new ResearchAssetRuleException($"不允许从 {model.Status} 转换到 {targetStatus}。");
         var now = DateTimeOffset.UtcNow;
         var updated = model with
         {
@@ -97,12 +97,12 @@ public sealed class MechanismModelService(IProcessImprovementStore store)
         var modelId = NormalizeId(request.MechanismModelId);
         var model = await store.GetMechanismModelAsync(modelId, request.MechanismModelVersion, ct)
             .ConfigureAwait(false)
-            ?? throw new ProcessImprovementRuleException("融合定义引用的机理模型不存在。");
+            ?? throw new ResearchAssetRuleException("融合定义引用的机理模型不存在。");
         if (model.Status is not (MechanismModelStatuses.Validated or MechanismModelStatuses.Active))
-            throw new ProcessImprovementRuleException("融合定义只能引用已经验证的机理模型。");
+            throw new ResearchAssetRuleException("融合定义只能引用已经验证的机理模型。");
         var existing = await store.GetMechanismFusionAsync(fusionId, request.Version, ct).ConfigureAwait(false);
         if (existing is not null && existing.Status != MechanismModelStatuses.Draft)
-            throw new ProcessImprovementRuleException("只有草稿融合定义可以修改。");
+            throw new ResearchAssetRuleException("只有草稿融合定义可以修改。");
         var now = DateTimeOffset.UtcNow;
         var normalized = request with
         {
@@ -138,7 +138,7 @@ public sealed class MechanismModelService(IProcessImprovementStore store)
     {
         var fusion = await store.GetMechanismFusionAsync(NormalizeId(fusionId), version, ct)
             .ConfigureAwait(false)
-            ?? throw new ProcessImprovementRuleException("机理融合定义不存在。");
+            ?? throw new ResearchAssetRuleException("机理融合定义不存在。");
         targetStatus = targetStatus.Trim().ToLowerInvariant();
         var allowed = fusion.Status switch
         {
@@ -148,7 +148,7 @@ public sealed class MechanismModelService(IProcessImprovementStore store)
             _ => false
         };
         if (!allowed)
-            throw new ProcessImprovementRuleException($"不允许从 {fusion.Status} 转换到 {targetStatus}。");
+            throw new ResearchAssetRuleException($"不允许从 {fusion.Status} 转换到 {targetStatus}。");
         var updated = fusion with { Status = targetStatus, UpdatedAt = DateTimeOffset.UtcNow };
         await store.SaveMechanismFusionAsync(updated, ct).ConfigureAwait(false);
         await AuditAsync(
@@ -168,20 +168,20 @@ public sealed class MechanismModelService(IProcessImprovementStore store)
                 NormalizeId(request.FusionId),
                 request.FusionVersion,
                 ct).ConfigureAwait(false)
-            ?? throw new ProcessImprovementRuleException("机理融合定义不存在。");
+            ?? throw new ResearchAssetRuleException("机理融合定义不存在。");
         if (fusion.Status != MechanismModelStatuses.Active)
-            throw new ProcessImprovementRuleException("只有已启用的机理融合定义可以执行。");
+            throw new ResearchAssetRuleException("只有已启用的机理融合定义可以执行。");
         var model = await store.GetMechanismModelAsync(
                 fusion.MechanismModelId,
                 fusion.MechanismModelVersion,
                 ct).ConfigureAwait(false)
-            ?? throw new ProcessImprovementRuleException("融合定义引用的机理模型不存在。");
+            ?? throw new ResearchAssetRuleException("融合定义引用的机理模型不存在。");
         if (model.Status != MechanismModelStatuses.Active)
-            throw new ProcessImprovementRuleException("融合定义引用的机理模型未启用。");
+            throw new ResearchAssetRuleException("融合定义引用的机理模型未启用。");
         if (!Matches(model.ApplicabilityContext, request.OperatingContext) ||
             !Matches(fusion.ApplicabilityContext, request.OperatingContext))
         {
-            throw new ProcessImprovementRuleException("当前运行信息不在机理模型或融合定义的适用范围内。");
+            throw new ResearchAssetRuleException("当前运行信息不在机理模型或融合定义的适用范围内。");
         }
         var mechanism = EvaluateModel(model, request.MechanismInputs);
         var features = new Dictionary<string, double>(StringComparer.Ordinal);
@@ -197,7 +197,7 @@ public sealed class MechanismModelService(IProcessImprovementStore store)
             MechanismFusionModes.Ensemble =>
                 fusion.MechanismWeight * mechanism +
                 (1 - fusion.MechanismWeight) * RequireDataPrediction(request),
-            _ => throw new ProcessImprovementRuleException("未知的机理融合方式。")
+            _ => throw new ResearchAssetRuleException("未知的机理融合方式。")
         };
         if (fused.HasValue)
             EnsureRange(model.Output, fused.Value, "融合输出");
@@ -227,12 +227,12 @@ public sealed class MechanismModelService(IProcessImprovementStore store)
         foreach (var input in model.Inputs)
         {
             if (!inputs.TryGetValue(input.Code, out var observed) || !double.IsFinite(observed))
-                throw new ProcessImprovementRuleException($"缺少有效机理输入：{input.Code}。");
+                throw new ResearchAssetRuleException($"缺少有效机理输入：{input.Code}。");
             EnsureRange(input, observed, $"机理输入 {input.Code}");
             value += model.Coefficients[input.Code] * observed;
         }
         if (!double.IsFinite(value))
-            throw new ProcessImprovementRuleException("机理模型输出不是有限数值。");
+            throw new ResearchAssetRuleException("机理模型输出不是有限数值。");
         EnsureRange(model.Output, value, "机理模型输出");
         return value;
     }
@@ -250,14 +250,14 @@ public sealed class MechanismModelService(IProcessImprovementStore store)
     private static double RequireDataPrediction(MechanismFusionExecutionRequest request)
         => request.DataPrediction is { } value && double.IsFinite(value)
             ? value
-            : throw new ProcessImprovementRuleException("当前融合方式需要有效的数据模型预测值。");
+            : throw new ResearchAssetRuleException("当前融合方式需要有效的数据模型预测值。");
 
     private static void EnsureRange(MechanismVariableDefinition definition, double value, string field)
     {
         if (definition.ValidMinimum is { } minimum && value < minimum ||
             definition.ValidMaximum is { } maximum && value > maximum)
         {
-            throw new ProcessImprovementRuleException($"{field} 超出机理模型适用范围。");
+            throw new ResearchAssetRuleException($"{field} 超出机理模型适用范围。");
         }
     }
 
@@ -271,17 +271,17 @@ public sealed class MechanismModelService(IProcessImprovementStore store)
     {
         if (value.Version <= 0 || string.IsNullOrWhiteSpace(value.ModelId) ||
             string.IsNullOrWhiteSpace(value.Name) || string.IsNullOrWhiteSpace(value.ScientificBasis))
-            throw new ProcessImprovementRuleException("机理模型标识、名称、版本和科学说明不能为空。");
+            throw new ResearchAssetRuleException("机理模型标识、名称、版本和科学说明不能为空。");
         if (!string.Equals(value.EquationKind, "affine", StringComparison.OrdinalIgnoreCase))
-            throw new ProcessImprovementRuleException("当前只允许可审计的 affine 机理方程。");
+            throw new ResearchAssetRuleException("当前只允许可审计的 affine 机理方程。");
         if (value.Inputs.Count == 0 || value.Inputs.Select(static item => item.Code)
                 .Distinct(StringComparer.OrdinalIgnoreCase).Count() != value.Inputs.Count)
-            throw new ProcessImprovementRuleException("机理模型必须包含不重复的输入变量。");
+            throw new ResearchAssetRuleException("机理模型必须包含不重复的输入变量。");
         foreach (var variable in value.Inputs.Append(value.Output))
         {
             if (string.IsNullOrWhiteSpace(variable.Code) || string.IsNullOrWhiteSpace(variable.Unit) ||
                 variable.ValidMinimum > variable.ValidMaximum)
-                throw new ProcessImprovementRuleException("机理变量编码、单位或有效范围无效。");
+                throw new ResearchAssetRuleException("机理变量编码、单位或有效范围无效。");
         }
         var inputCodes = value.Inputs.Select(static item => item.Code.Trim().ToLowerInvariant())
             .ToHashSet(StringComparer.Ordinal);
@@ -290,7 +290,7 @@ public sealed class MechanismModelService(IProcessImprovementStore store)
         if (!inputCodes.SetEquals(coefficientCodes) ||
             !double.IsFinite(value.Intercept) ||
             value.Coefficients.Values.Any(static coefficient => !double.IsFinite(coefficient)))
-            throw new ProcessImprovementRuleException("机理模型系数必须与输入变量一一对应且为有限数值。");
+            throw new ResearchAssetRuleException("机理模型系数必须与输入变量一一对应且为有限数值。");
     }
 
     private static void ValidateFusion(MechanismFusionDefinition value)
@@ -300,14 +300,14 @@ public sealed class MechanismModelService(IProcessImprovementStore store)
             string.IsNullOrWhiteSpace(value.Name) ||
             string.IsNullOrWhiteSpace(value.OutputCode) ||
             !MechanismFusionModes.IsValid(value.Mode))
-            throw new ProcessImprovementRuleException("机理融合定义无效。");
+            throw new ResearchAssetRuleException("机理融合定义无效。");
         if (!double.IsFinite(value.CalibrationScale) ||
             !double.IsFinite(value.CalibrationOffset) ||
             !double.IsFinite(value.PostProcessingGain) ||
             !double.IsFinite(value.MechanismReference) ||
             !double.IsFinite(value.MechanismWeight) ||
             value.MechanismWeight is < 0 or > 1)
-            throw new ProcessImprovementRuleException("机理融合参数无效。");
+            throw new ResearchAssetRuleException("机理融合参数无效。");
     }
 
     private static MechanismVariableDefinition NormalizeVariable(MechanismVariableDefinition value)
@@ -382,7 +382,7 @@ public sealed class MechanismModelService(IProcessImprovementStore store)
         string action,
         string userId,
         CancellationToken ct)
-        => await store.AddAuditEntryAsync(new ImprovementAuditEntry
+        => await store.AddAuditEntryAsync(new ResearchAssetAuditEntry
         {
             EntryId = Guid.CreateVersion7(),
             ResourceType = resourceType,

@@ -8,7 +8,8 @@ const pages = await readFile(new URL("../src/pages/index.jsx", import.meta.url),
 const http = await readFile(new URL("../src/api/http.js", import.meta.url), "utf8");
 const components = await readFile(new URL("../src/ui/components.jsx", import.meta.url), "utf8");
 const registryEditor = await readFile(new URL("../src/components/RegistryBusinessEditor.jsx", import.meta.url), "utf8");
-const businessObjectEditor = await readFile(new URL("../src/components/BusinessObjectEditor.jsx", import.meta.url), "utf8");
+const researchProjects = await readFile(new URL("../src/pages/ResearchProjectsPage.jsx", import.meta.url), "utf8");
+const researchAssets = await readFile(new URL("../src/pages/ResearchAssetsPage.jsx", import.meta.url), "utf8");
 const styles = await readFile(new URL("../src/styles/global.css", import.meta.url), "utf8");
 const vite = await readFile(new URL("../vite.config.mjs", import.meta.url), "utf8");
 const html = await readFile(new URL("../index.html", import.meta.url), "utf8");
@@ -123,16 +124,15 @@ test("core workflows tell new users what to do next and confirm completed action
   assert.match(components, /export function ToastHost/);
   assert.match(pages, /今天先做这些/);
   assert.match(pages, /配置下一批生产/);
-  assert.match(pages, /从问题到可验证改进/);
+  assert.match(researchProjects, /以目标、假设、实验结果和工艺窗口组织完整研发证据链/);
   assert.match(app, /<ToastHost \/>/);
 });
 
-test("versioned tooling and improvement rows remain unique while hidden tabs stay idle", () => {
+test("versioned tooling remains unique and the legacy improvement workspace is absent", () => {
   assert.match(pages, /getRowKey=\{section === "type" \? row => `\$\{row\[resource\.key\]\}:\$\{row\.version \?\? 1\}` : undefined\}/);
-  assert.match(pages, /<TabGroup selectedIndex=\{selectedTab\} onChange=\{setSelectedTab\}>/);
-  assert.match(pages, /index === selectedTab && <ImprovementPanel definition=\{tab\} \/>/);
-  assert.match(pages, /definition\.columns\.some\(\(\[key\]\) => key === "version"\)/);
   assert.match(pages, /<option value="Information">信息<\/option>/);
+  assert.doesNotMatch(pages, /ImprovementPanel|process-investigations|parameter-recommendations/);
+  assert.match(researchProjects, /supportingResultIds/);
 });
 
 test("forms expose clear labels, edit intent, and required upload fields", () => {
@@ -142,9 +142,10 @@ test("forms expose clear labels, edit intent, and required upload fields", () =>
   assert.match(pages, /<Field label="分析模式">/);
   assert.match(pages, /setEditorMode\(row \? \(section === "type" \? "version" : "edit"\) : "create"\)/);
   assert.match(pages, /editorMode === "create" \? resource\.createLabel/);
-  assert.match(pages, /<Input required value=\{title\}/);
-  assert.match(pages, /<Input required type="file"/);
-  assert.match(pages, /definition\.upload === "validation" && !file/);
+  assert.match(researchProjects, /<Field label="项目名称">/);
+  assert.match(researchProjects, /<Field label="实验名称">/);
+  assert.match(researchAssets, /<Field label="当前研发项目">/);
+  assert.match(researchAssets, /\$\{definition\.endpoint\}\?projectId=/);
 });
 
 test("production forms use business fields and paginate long histories", () => {
@@ -186,12 +187,11 @@ test("all versioned configuration registries use business forms instead of JSON 
   assert.doesNotMatch(pages, /label="版本定义"/);
 });
 
-test("tooling, subscriptions, and improvement workflows avoid editable JSON fields", () => {
+test("tooling, subscriptions, and research workflows avoid editable JSON fields", () => {
   assert.match(pages, /function AttributeFields/);
   assert.match(pages, /function ToolingRoleFields/);
   assert.match(pages, /function SubscriptionContextFields/);
-  assert.match(pages, /<BusinessObjectEditor value=\{editor\} onChange=\{setEditor\}/);
-  assert.match(businessObjectEditor, /function ObjectList/);
-  assert.match(businessObjectEditor, /function MapFields/);
+  assert.doesNotMatch(pages, /BusinessObjectEditor|ImprovementPanel/);
+  assert.doesNotMatch(researchProjects, /JSON\.stringify|JSON\.parse|manifestJson/);
   assert.doesNotMatch(pages, /数据清单 JSON|执行请求 JSON|上下文过滤" hint="JSON|（JSON）/);
 });

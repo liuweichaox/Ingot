@@ -1,13 +1,13 @@
 using System.Security.Cryptography;
 using System.Text.Json;
-using Ingot.Contracts.ProcessImprovement;
+using Ingot.Contracts.ResearchAssets;
 using Microsoft.Extensions.Options;
 using Npgsql;
 using NpgsqlTypes;
 
-namespace Ingot.Platform.Infrastructure.ProcessImprovement;
+namespace Ingot.Platform.Infrastructure.ResearchAssets;
 
-public sealed class PostgresProcessImprovementStore : IProcessImprovementStore, IAsyncDisposable
+public sealed class PostgresResearchAssetStore : IResearchAssetStore, IAsyncDisposable
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private readonly NpgsqlDataSource _dataSource;
@@ -15,7 +15,7 @@ public sealed class PostgresProcessImprovementStore : IProcessImprovementStore, 
     private readonly SemaphoreSlim _initializeLock = new(1, 1);
     private volatile bool _initialized;
 
-    public PostgresProcessImprovementStore(
+    public PostgresResearchAssetStore(
         IConfiguration configuration,
         IOptions<ProcessKnowledgeOptions> options)
     {
@@ -124,7 +124,7 @@ public sealed class PostgresProcessImprovementStore : IProcessImprovementStore, 
                 CREATE UNIQUE INDEX IF NOT EXISTS uq_mechanism_fusion_active
                   ON mechanism_fusion_definitions(fusion_id) WHERE status = 'active';
 
-                CREATE TABLE IF NOT EXISTS scientific_validation_reports (
+                CREATE TABLE IF NOT EXISTS dataset_quality_validation_reports (
                   report_id UUID PRIMARY KEY,
                   dataset_id TEXT NOT NULL,
                   dataset_version INTEGER NOT NULL,
@@ -136,8 +136,8 @@ public sealed class PostgresProcessImprovementStore : IProcessImprovementStore, 
                   CHECK (dataset_version > 0),
                   CHECK (status IN ('passed', 'rejected'))
                 );
-                CREATE INDEX IF NOT EXISTS idx_scientific_validation_dataset
-                  ON scientific_validation_reports(dataset_id, dataset_version, created_at DESC);
+                CREATE INDEX IF NOT EXISTS idx_dataset_quality_validation_dataset
+                  ON dataset_quality_validation_reports(dataset_id, dataset_version, created_at DESC);
 
                 CREATE TABLE IF NOT EXISTS process_knowledge_sources (
                   source_id UUID PRIMARY KEY,
@@ -160,7 +160,7 @@ public sealed class PostgresProcessImprovementStore : IProcessImprovementStore, 
                 CREATE INDEX IF NOT EXISTS idx_process_knowledge_records_source
                   ON process_knowledge_records(source_id, updated_at DESC);
 
-                CREATE TABLE IF NOT EXISTS process_improvement_audit (
+                CREATE TABLE IF NOT EXISTS research_asset_audit (
                   entry_id UUID PRIMARY KEY,
                   resource_type TEXT NOT NULL,
                   resource_id TEXT NOT NULL,
@@ -168,8 +168,8 @@ public sealed class PostgresProcessImprovementStore : IProcessImprovementStore, 
                   payload JSONB NOT NULL,
                   created_at TIMESTAMPTZ NOT NULL
                 );
-                CREATE INDEX IF NOT EXISTS idx_process_improvement_audit_resource
-                  ON process_improvement_audit(resource_type, resource_id, created_at);
+                CREATE INDEX IF NOT EXISTS idx_research_asset_audit_resource
+                  ON research_asset_audit(resource_type, resource_id, created_at);
                 """);
             await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
             _initialized = true;
@@ -450,14 +450,14 @@ public sealed class PostgresProcessImprovementStore : IProcessImprovementStore, 
             null,
             ct);
 
-    public async Task<ScientificValidationReport> SaveScientificValidationReportAsync(
-        ScientificValidationReport value,
+    public async Task<DatasetQualityValidationReport> SaveDatasetQualityValidationReportAsync(
+        DatasetQualityValidationReport value,
         CancellationToken ct = default)
     {
         await InitializeAsync(ct).ConfigureAwait(false);
         await using var command = _dataSource.CreateCommand(
             """
-            INSERT INTO scientific_validation_reports(
+            INSERT INTO dataset_quality_validation_reports(
               report_id, dataset_id, dataset_version, industry, status,
               source_sha256, payload, created_at)
             VALUES (
@@ -479,196 +479,11 @@ public sealed class PostgresProcessImprovementStore : IProcessImprovementStore, 
         return value;
     }
 
-    public Task<IReadOnlyList<ScientificValidationReport>> ListScientificValidationReportsAsync(
+    public Task<IReadOnlyList<DatasetQualityValidationReport>> ListDatasetQualityValidationReportsAsync(
         CancellationToken ct = default)
-        => ListAsync<ScientificValidationReport>(
-            "SELECT payload::text FROM scientific_validation_reports ORDER BY created_at DESC LIMIT 200;",
+        => ListAsync<DatasetQualityValidationReport>(
+            "SELECT payload::text FROM dataset_quality_validation_reports ORDER BY created_at DESC LIMIT 200;",
             null,
-            ct);
-
-    public async Task<InvestigationCase> SaveInvestigationAsync(
-        InvestigationCase value,
-        CancellationToken ct = default)
-    {
-        await InitializeAsync(ct).ConfigureAwait(false);
-        await using var command = _dataSource.CreateCommand(
-            """
-            INSERT INTO process_investigations(
-              investigation_id, status, problem_code, payload, updated_at)
-            VALUES (@id, @status, @problem_code, @payload, @updated_at)
-            ON CONFLICT (investigation_id) DO UPDATE SET
-              status = EXCLUDED.status,
-              problem_code = EXCLUDED.problem_code,
-              payload = EXCLUDED.payload,
-              updated_at = EXCLUDED.updated_at;
-            """);
-        command.Parameters.AddWithValue("id", value.InvestigationId);
-        command.Parameters.AddWithValue("status", value.Status);
-        command.Parameters.AddWithValue("problem_code", value.ProblemCode);
-        AddJson(command, value);
-        command.Parameters.AddWithValue("updated_at", value.UpdatedAt);
-        await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
-        return value;
-    }
-
-    public Task<InvestigationCase?> GetInvestigationAsync(
-        Guid investigationId,
-        CancellationToken ct = default)
-        => GetByGuidAsync<InvestigationCase>(
-            "SELECT payload::text FROM process_investigations WHERE investigation_id = @id;",
-            investigationId,
-            ct);
-
-    public Task<IReadOnlyList<InvestigationCase>> ListInvestigationsAsync(CancellationToken ct = default)
-        => ListAsync<InvestigationCase>(
-            "SELECT payload::text FROM process_investigations ORDER BY updated_at DESC;",
-            null,
-            ct);
-
-    public async Task<PossibleCause> SaveCauseAsync(PossibleCause value, CancellationToken ct = default)
-    {
-        await InitializeAsync(ct).ConfigureAwait(false);
-        await using var command = _dataSource.CreateCommand(
-            """
-            INSERT INTO process_possible_causes(
-              cause_id, investigation_id, status, payload, updated_at)
-            VALUES (@id, @investigation_id, @status, @payload, @updated_at)
-            ON CONFLICT (cause_id) DO UPDATE SET
-              status = EXCLUDED.status,
-              payload = EXCLUDED.payload,
-              updated_at = EXCLUDED.updated_at;
-            """);
-        command.Parameters.AddWithValue("id", value.CauseId);
-        command.Parameters.AddWithValue("investigation_id", value.InvestigationId);
-        command.Parameters.AddWithValue("status", value.Status);
-        AddJson(command, value);
-        command.Parameters.AddWithValue("updated_at", value.UpdatedAt);
-        await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
-        return value;
-    }
-
-    public Task<PossibleCause?> GetCauseAsync(Guid causeId, CancellationToken ct = default)
-        => GetByGuidAsync<PossibleCause>(
-            "SELECT payload::text FROM process_possible_causes WHERE cause_id = @id;",
-            causeId,
-            ct);
-
-    public Task<IReadOnlyList<PossibleCause>> ListCausesAsync(
-        Guid investigationId,
-        CancellationToken ct = default)
-        => ListByGuidAsync<PossibleCause>(
-            """
-            SELECT payload::text FROM process_possible_causes
-            WHERE investigation_id = @id ORDER BY updated_at DESC;
-            """,
-            investigationId,
-            ct);
-
-    public async Task<ProcessTrial> SaveTrialAsync(ProcessTrial value, CancellationToken ct = default)
-    {
-        await InitializeAsync(ct).ConfigureAwait(false);
-        await using var command = _dataSource.CreateCommand(
-            """
-            INSERT INTO process_trials(
-              trial_id, investigation_id, cause_id, status, payload, updated_at)
-            VALUES (@id, @investigation_id, @cause_id, @status, @payload, @updated_at)
-            ON CONFLICT (trial_id) DO UPDATE SET
-              status = EXCLUDED.status,
-              payload = EXCLUDED.payload,
-              updated_at = EXCLUDED.updated_at;
-            """);
-        command.Parameters.AddWithValue("id", value.TrialId);
-        command.Parameters.AddWithValue("investigation_id", value.InvestigationId);
-        command.Parameters.AddWithValue("cause_id", value.CauseId);
-        command.Parameters.AddWithValue("status", value.Status);
-        AddJson(command, value);
-        command.Parameters.AddWithValue("updated_at", value.UpdatedAt);
-        await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
-        return value;
-    }
-
-    public Task<ProcessTrial?> GetTrialAsync(Guid trialId, CancellationToken ct = default)
-        => GetByGuidAsync<ProcessTrial>(
-            "SELECT payload::text FROM process_trials WHERE trial_id = @id;",
-            trialId,
-            ct);
-
-    public Task<IReadOnlyList<ProcessTrial>> ListTrialsAsync(
-        Guid investigationId,
-        CancellationToken ct = default)
-        => ListByGuidAsync<ProcessTrial>(
-            """
-            SELECT payload::text FROM process_trials
-            WHERE investigation_id = @id ORDER BY updated_at DESC;
-            """,
-            investigationId,
-            ct);
-
-    public async Task<TrialResult> AddTrialResultAsync(TrialResult value, CancellationToken ct = default)
-    {
-        await InitializeAsync(ct).ConfigureAwait(false);
-        await using var command = _dataSource.CreateCommand(
-            """
-            INSERT INTO process_trial_results(result_id, trial_id, payload, created_at)
-            VALUES (@id, @trial_id, @payload, @created_at);
-            """);
-        command.Parameters.AddWithValue("id", value.ResultId);
-        command.Parameters.AddWithValue("trial_id", value.TrialId);
-        AddJson(command, value);
-        command.Parameters.AddWithValue("created_at", value.RecordedAt);
-        await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
-        return value;
-    }
-
-    public Task<IReadOnlyList<TrialResult>> ListTrialResultsAsync(
-        Guid trialId,
-        CancellationToken ct = default)
-        => ListByGuidAsync<TrialResult>(
-            """
-            SELECT payload::text FROM process_trial_results
-            WHERE trial_id = @id ORDER BY created_at;
-            """,
-            trialId,
-            ct);
-
-    public async Task<InvestigationConclusion> AddConclusionAsync(
-        InvestigationConclusion value,
-        CancellationToken ct = default)
-    {
-        await InitializeAsync(ct).ConfigureAwait(false);
-        await using var command = _dataSource.CreateCommand(
-            """
-            INSERT INTO process_investigation_conclusions(
-              conclusion_id, investigation_id, cause_id, trial_id, payload, created_at)
-            VALUES (@id, @investigation_id, @cause_id, @trial_id, @payload, @created_at);
-            """);
-        command.Parameters.AddWithValue("id", value.ConclusionId);
-        command.Parameters.AddWithValue("investigation_id", value.InvestigationId);
-        command.Parameters.AddWithValue("cause_id", value.CauseId);
-        command.Parameters.AddWithValue("trial_id", value.TrialId);
-        AddJson(command, value);
-        command.Parameters.AddWithValue("created_at", value.ReviewedAt);
-        await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
-        return value;
-    }
-
-    public Task<InvestigationConclusion?> GetConclusionAsync(
-        Guid conclusionId,
-        CancellationToken ct = default)
-        => GetByGuidAsync<InvestigationConclusion>(
-            "SELECT payload::text FROM process_investigation_conclusions WHERE conclusion_id = @id;",
-            conclusionId,
-            ct);
-
-    public Task<IReadOnlyList<InvestigationConclusion>> ListConclusionsAsync(
-        Guid investigationId,
-        CancellationToken ct = default)
-        => ListByGuidAsync<InvestigationConclusion>(
-            """
-            SELECT payload::text FROM process_investigation_conclusions
-            WHERE investigation_id = @id ORDER BY created_at DESC;
-            """,
-            investigationId,
             ct);
 
     public async Task<KnowledgeSource> AddKnowledgeSourceAsync(
@@ -854,51 +669,12 @@ public sealed class PostgresProcessImprovementStore : IProcessImprovementStore, 
             sourceId,
             ct);
 
-    public async Task<ParameterRecommendation> SaveRecommendationAsync(
-        ParameterRecommendation value,
-        CancellationToken ct = default)
+    public async Task AddAuditEntryAsync(ResearchAssetAuditEntry value, CancellationToken ct = default)
     {
         await InitializeAsync(ct).ConfigureAwait(false);
         await using var command = _dataSource.CreateCommand(
             """
-            INSERT INTO parameter_recommendations(
-              recommendation_id, investigation_id, conclusion_id, status, payload, updated_at)
-            VALUES (@id, @investigation_id, @conclusion_id, @status, @payload, @updated_at)
-            ON CONFLICT (recommendation_id) DO UPDATE SET
-              status = EXCLUDED.status,
-              payload = EXCLUDED.payload,
-              updated_at = EXCLUDED.updated_at;
-            """);
-        command.Parameters.AddWithValue("id", value.RecommendationId);
-        command.Parameters.AddWithValue("investigation_id", value.InvestigationId);
-        command.Parameters.AddWithValue("conclusion_id", value.ConclusionId);
-        command.Parameters.AddWithValue("status", value.Status);
-        AddJson(command, value);
-        command.Parameters.AddWithValue("updated_at", value.UpdatedAt);
-        await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
-        return value;
-    }
-
-    public Task<ParameterRecommendation?> GetRecommendationAsync(
-        Guid recommendationId,
-        CancellationToken ct = default)
-        => GetByGuidAsync<ParameterRecommendation>(
-            "SELECT payload::text FROM parameter_recommendations WHERE recommendation_id = @id;",
-            recommendationId,
-            ct);
-
-    public Task<IReadOnlyList<ParameterRecommendation>> ListRecommendationsAsync(CancellationToken ct = default)
-        => ListAsync<ParameterRecommendation>(
-            "SELECT payload::text FROM parameter_recommendations ORDER BY updated_at DESC;",
-            null,
-            ct);
-
-    public async Task AddAuditEntryAsync(ImprovementAuditEntry value, CancellationToken ct = default)
-    {
-        await InitializeAsync(ct).ConfigureAwait(false);
-        await using var command = _dataSource.CreateCommand(
-            """
-            INSERT INTO process_improvement_audit(
+            INSERT INTO research_asset_audit(
               entry_id, resource_type, resource_id, action, payload, created_at)
             VALUES (@id, @resource_type, @resource_id, @action, @payload, @created_at);
             """);
@@ -911,13 +687,13 @@ public sealed class PostgresProcessImprovementStore : IProcessImprovementStore, 
         await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
     }
 
-    public Task<IReadOnlyList<ImprovementAuditEntry>> ListAuditEntriesAsync(
+    public Task<IReadOnlyList<ResearchAssetAuditEntry>> ListAuditEntriesAsync(
         string resourceType,
         string resourceId,
         CancellationToken ct = default)
-        => ListAsync<ImprovementAuditEntry>(
+        => ListAsync<ResearchAssetAuditEntry>(
             """
-            SELECT payload::text FROM process_improvement_audit
+            SELECT payload::text FROM research_asset_audit
             WHERE resource_type = @resource_type AND resource_id = @resource_id
             ORDER BY created_at;
             """,

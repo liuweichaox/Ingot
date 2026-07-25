@@ -1,8 +1,8 @@
 using System.Net;
 using System.Text;
 using ClosedXML.Excel;
-using Ingot.Contracts.ProcessImprovement;
-using Ingot.Platform.Infrastructure.ProcessImprovement;
+using Ingot.Contracts.ResearchAssets;
+using Ingot.Platform.Infrastructure.ResearchAssets;
 using Microsoft.Extensions.Configuration;
 using Xunit;
 

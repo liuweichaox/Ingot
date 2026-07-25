@@ -2,6 +2,7 @@ using System.Text.Json;
 using Ingot.Agent;
 using Ingot.Platform.Api.Agents;
 using Ingot.Contracts.Agents;
+using Ingot.Platform.Infrastructure.ProcessResearch;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Ingot.Platform.Api.Controllers;
@@ -10,6 +11,7 @@ namespace Ingot.Platform.Api.Controllers;
 [Route("api/v1/chat/runs")]
 public sealed class ChatRunsController(
     IAgentRuntime runtime,
+    IProcessResearchStore researchStore,
     PlatformUserResolver userResolver) : ControllerBase
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
@@ -21,6 +23,19 @@ public sealed class ChatRunsController(
             return BadRequest(new { error });
         if (!TryAuthorize(out var userId, out var unauthorized))
             return unauthorized!;
+        if (normalized!.PageContext is { Kind: "research-project" } pageContext)
+        {
+            if (!Guid.TryParse(pageContext.Id, out var projectId))
+                return BadRequest(new { error = "研发项目上下文标识无效。" });
+            var project = await researchStore.GetProjectAsync(projectId, ct).ConfigureAwait(false);
+            var identity = userResolver.ResolveIdentity(User)!;
+            var canAccess = project is not null &&
+                            (identity.HasAnyRole(PlatformRoles.PlatformAdministrator) ||
+                             string.Equals(project.OwnerUserId, identity.UserId, StringComparison.Ordinal) ||
+                             project.MemberUserIds.Contains(identity.UserId, StringComparer.Ordinal));
+            if (!canAccess)
+                return Forbid();
+        }
 
         try
         {

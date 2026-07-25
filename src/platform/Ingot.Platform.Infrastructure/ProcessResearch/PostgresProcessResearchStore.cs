@@ -152,7 +152,11 @@ public sealed class PostgresProcessResearchStore : IProcessResearchStore, IAsync
         ResearchHypothesis value,
         CancellationToken ct = default)
     {
-        var saved = await SaveChildAsync(
+        await using var connection = await _dataSource.OpenConnectionAsync(ct).ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
+        await SaveChildAsync(
+            connection,
+            transaction,
             """
             INSERT INTO research_hypotheses
               (hypothesis_id, project_id, status, payload, created_at, updated_at)
@@ -170,11 +174,14 @@ public sealed class PostgresProcessResearchStore : IProcessResearchStore, IAsync
             value.UpdatedAt,
             ct).ConfigureAwait(false);
         await SyncEvidenceAsync(
+            connection,
+            transaction,
             "hypothesis",
             value.HypothesisId.ToString(),
             value.SupportingEvidence.Concat(value.OpposingEvidence).ToArray(),
             ct).ConfigureAwait(false);
-        return saved;
+        await transaction.CommitAsync(ct).ConfigureAwait(false);
+        return value;
     }
 
     public Task<ResearchExperiment?> GetExperimentAsync(
@@ -273,13 +280,17 @@ public sealed class PostgresProcessResearchStore : IProcessResearchStore, IAsync
         ResearchExperimentResult value,
         CancellationToken ct = default)
     {
-        await using var command = _dataSource.CreateCommand(
+        await using var connection = await _dataSource.OpenConnectionAsync(ct).ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText =
             """
             INSERT INTO research_experiment_results
               (result_id, project_id, experiment_id, analysis_run_id, analysis_hash,
                safety_passed, payload, recorded_at)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-            """);
+            """;
         command.Parameters.AddWithValue(value.ResultId);
         command.Parameters.AddWithValue(value.ProjectId);
         command.Parameters.AddWithValue(value.ExperimentId);
@@ -292,10 +303,13 @@ public sealed class PostgresProcessResearchStore : IProcessResearchStore, IAsync
         {
             await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
             await SyncEvidenceAsync(
+                connection,
+                transaction,
                 "experiment-result",
                 value.ResultId.ToString(),
                 value.Evidence,
                 ct).ConfigureAwait(false);
+            await transaction.CommitAsync(ct).ConfigureAwait(false);
             return value;
         }
         catch (PostgresException exception) when (exception.SqlState == PostgresErrorCodes.UniqueViolation)
@@ -368,12 +382,14 @@ public sealed class PostgresProcessResearchStore : IProcessResearchStore, IAsync
             addLink.Parameters.AddWithValue(resultId);
             await addLink.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
         }
-        await transaction.CommitAsync(ct).ConfigureAwait(false);
         await SyncEvidenceAsync(
+            connection,
+            transaction,
             "process-window",
             value.WindowId.ToString(),
             value.Evidence,
             ct).ConfigureAwait(false);
+        await transaction.CommitAsync(ct).ConfigureAwait(false);
         return value;
     }
 
@@ -402,7 +418,11 @@ public sealed class PostgresProcessResearchStore : IProcessResearchStore, IAsync
         ResearchKnowledgeClaim value,
         CancellationToken ct = default)
     {
-        var saved = await SaveChildAsync(
+        await using var connection = await _dataSource.OpenConnectionAsync(ct).ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
+        await SaveChildAsync(
+            connection,
+            transaction,
             """
             INSERT INTO research_knowledge_claims
               (claim_id, project_id, status, payload, created_at, updated_at)
@@ -420,11 +440,14 @@ public sealed class PostgresProcessResearchStore : IProcessResearchStore, IAsync
             value.UpdatedAt,
             ct).ConfigureAwait(false);
         await SyncEvidenceAsync(
+            connection,
+            transaction,
             "knowledge-claim",
             value.ClaimId.ToString(),
             value.Evidence,
             ct).ConfigureAwait(false);
-        return saved;
+        await transaction.CommitAsync(ct).ConfigureAwait(false);
+        return value;
     }
 
     public async Task AddAuditEntryAsync(
@@ -488,7 +511,9 @@ public sealed class PostgresProcessResearchStore : IProcessResearchStore, IAsync
         return values;
     }
 
-    private async Task<T> SaveChildAsync<T>(
+    private static async Task SaveChildAsync<T>(
+        NpgsqlConnection connection,
+        NpgsqlTransaction transaction,
         string sql,
         Guid id,
         Guid projectId,
@@ -498,7 +523,9 @@ public sealed class PostgresProcessResearchStore : IProcessResearchStore, IAsync
         DateTimeOffset updatedAt,
         CancellationToken ct)
     {
-        await using var command = _dataSource.CreateCommand(sql);
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = sql;
         command.Parameters.AddWithValue(id);
         command.Parameters.AddWithValue(projectId);
         command.Parameters.AddWithValue(status);
@@ -506,17 +533,16 @@ public sealed class PostgresProcessResearchStore : IProcessResearchStore, IAsync
         command.Parameters.AddWithValue(createdAt);
         command.Parameters.AddWithValue(updatedAt);
         await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
-        return value;
     }
 
-    private async Task SyncEvidenceAsync(
+    private static async Task SyncEvidenceAsync(
+        NpgsqlConnection connection,
+        NpgsqlTransaction transaction,
         string resourceType,
         string resourceId,
         IReadOnlyList<EvidenceReference> evidence,
         CancellationToken ct)
     {
-        await using var connection = await _dataSource.OpenConnectionAsync(ct).ConfigureAwait(false);
-        await using var transaction = await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
         await using var delete = connection.CreateCommand();
         delete.Transaction = transaction;
         delete.CommandText =
@@ -548,7 +574,6 @@ public sealed class PostgresProcessResearchStore : IProcessResearchStore, IAsync
             insert.Parameters.AddWithValue(item.CreatedAt);
             await insert.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
         }
-        await transaction.CommitAsync(ct).ConfigureAwait(false);
     }
 
     private static void AddJson<T>(NpgsqlCommand command, T value)

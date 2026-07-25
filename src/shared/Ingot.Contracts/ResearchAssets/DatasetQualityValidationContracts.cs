@@ -1,12 +1,12 @@
-namespace Ingot.Contracts.ProcessImprovement;
+namespace Ingot.Contracts.ResearchAssets;
 
-public static class ScientificValidationStatuses
+public static class DatasetQualityValidationStatuses
 {
     public const string Passed = "passed";
     public const string Rejected = "rejected";
 }
 
-public sealed record ScientificValidationDatasetManifest
+public sealed record DatasetQualityValidationDatasetManifest
 {
     public required string DatasetId { get; init; }
     public int Version { get; init; } = 1;
@@ -54,7 +54,7 @@ public sealed record ScientificColumnProfile
     public double? Mean { get; init; }
 }
 
-public sealed record ScientificValidationReport
+public sealed record DatasetQualityValidationReport
 {
     public Guid ReportId { get; init; }
     public required string DatasetId { get; init; }

@@ -1,6 +1,7 @@
-using Ingot.Contracts.ProcessImprovement;
+using Ingot.Contracts.ResearchAssets;
+using Ingot.Contracts.ProcessResearch;
 using Ingot.Platform.Api.Agents;
-using Ingot.Platform.Infrastructure.ProcessImprovement;
+using Ingot.Platform.Infrastructure.ResearchAssets;
 using Ingot.Platform.Infrastructure.ProcessResearch;
 using Microsoft.AspNetCore.Mvc;
 
@@ -9,19 +10,19 @@ namespace Ingot.Platform.Api.Controllers;
 [ApiController]
 [Route("api/v1/training-datasets")]
 public sealed class TrainingDatasetsController(
-    IProcessImprovementStore store,
-    ProcessImprovementWorkflow workflow,
+    IResearchAssetStore store,
+    ResearchAssetWorkflow workflow,
     PlatformUserResolver userResolver) : PlatformConfigurationControllerBase(userResolver)
 {
     [HttpGet]
     public async Task<IActionResult> List(CancellationToken ct)
-        => DeniedConfigurationRead() ??
+        => DeniedResearchAssetRead() ??
            Ok(new { data = await store.ListDatasetsAsync(ct).ConfigureAwait(false) });
 
     [HttpGet("{datasetId}/{version:int}")]
     public async Task<IActionResult> Get(string datasetId, int version, CancellationToken ct)
     {
-        var denied = DeniedConfigurationRead();
+        var denied = DeniedResearchAssetRead();
         if (denied is not null)
             return denied;
         var value = await store.GetDatasetAsync(datasetId.Trim().ToLowerInvariant(), version, ct)
@@ -42,7 +43,7 @@ public sealed class TrainingDatasetsController(
                 ResolveUserId()!,
                 ct).ConfigureAwait(false));
         }
-        catch (ProcessImprovementRuleException exception)
+        catch (ResearchAssetRuleException exception)
         {
             return Conflict(new { error = exception.Message });
         }
@@ -52,19 +53,19 @@ public sealed class TrainingDatasetsController(
 [ApiController]
 [Route("api/v1/process-models")]
 public sealed class ProcessModelsController(
-    IProcessImprovementStore store,
-    ProcessImprovementWorkflow workflow,
+    IResearchAssetStore store,
+    ResearchAssetWorkflow workflow,
     PlatformUserResolver userResolver) : PlatformConfigurationControllerBase(userResolver)
 {
     [HttpGet]
     public async Task<IActionResult> List(CancellationToken ct)
-        => DeniedConfigurationRead() ??
+        => DeniedResearchAssetRead() ??
            Ok(new { data = await store.ListModelsAsync(ct).ConfigureAwait(false) });
 
     [HttpGet("{modelId}/{version:int}")]
     public async Task<IActionResult> Get(string modelId, int version, CancellationToken ct)
     {
-        var denied = DeniedConfigurationRead();
+        var denied = DeniedResearchAssetRead();
         if (denied is not null)
             return denied;
         var normalizedId = modelId.Trim().ToLowerInvariant();
@@ -156,129 +157,7 @@ public sealed class ProcessModelsController(
         {
             return Ok(await operation().ConfigureAwait(false));
         }
-        catch (ProcessImprovementRuleException exception)
-        {
-            return Conflict(new { error = exception.Message });
-        }
-    }
-}
-
-[ApiController]
-[Route("api/v1/process-investigations")]
-[NonController]
-public sealed class ProcessInvestigationsController(
-    IProcessImprovementStore store,
-    ProcessImprovementWorkflow workflow,
-    PlatformUserResolver userResolver) : PlatformConfigurationControllerBase(userResolver)
-{
-    [HttpGet]
-    public async Task<IActionResult> List(CancellationToken ct)
-        => DeniedConfigurationRead() ??
-           Ok(new { data = await store.ListInvestigationsAsync(ct).ConfigureAwait(false) });
-
-    [HttpGet("{investigationId:guid}")]
-    public async Task<IActionResult> Get(Guid investigationId, CancellationToken ct)
-    {
-        var denied = DeniedConfigurationRead();
-        if (denied is not null)
-            return denied;
-        var investigation = await store.GetInvestigationAsync(investigationId, ct).ConfigureAwait(false);
-        if (investigation is null)
-            return NotFound();
-        var causes = await store.ListCausesAsync(investigationId, ct).ConfigureAwait(false);
-        var trials = await store.ListTrialsAsync(investigationId, ct).ConfigureAwait(false);
-        var conclusions = await store.ListConclusionsAsync(investigationId, ct).ConfigureAwait(false);
-        var results = new Dictionary<Guid, IReadOnlyList<TrialResult>>();
-        foreach (var trial in trials)
-            results[trial.TrialId] = await store.ListTrialResultsAsync(trial.TrialId, ct).ConfigureAwait(false);
-        var audit = await store.ListAuditEntriesAsync(
-            "investigation",
-            investigationId.ToString(),
-            ct).ConfigureAwait(false);
-        return Ok(new { investigation, causes, trials, results, conclusions, audit });
-    }
-
-    [HttpPost]
-    public Task<IActionResult> Create([FromBody] InvestigationCase request, CancellationToken ct)
-        => ExecuteWriteAsync(
-            () => workflow.CreateInvestigationAsync(request, ResolveUserId()!, ct));
-
-    [HttpPost("{investigationId:guid}/causes")]
-    public Task<IActionResult> AddCause(
-        Guid investigationId,
-        [FromBody] PossibleCause request,
-        CancellationToken ct)
-        => ExecuteWriteAsync(
-            () => workflow.AddCauseAsync(
-                request with { InvestigationId = investigationId },
-                ResolveUserId()!,
-                ct));
-
-    [HttpPost("{investigationId:guid}/trials")]
-    public Task<IActionResult> CreateTrial(
-        Guid investigationId,
-        [FromBody] ProcessTrial request,
-        CancellationToken ct)
-        => ExecuteWriteAsync(
-            () => workflow.CreateTrialAsync(
-                request with { InvestigationId = investigationId },
-                ResolveUserId()!,
-                ct));
-
-    [HttpPost("trials/{trialId:guid}/status")]
-    public Task<IActionResult> ChangeTrialStatus(
-        Guid trialId,
-        [FromBody] StatusChangeRequest request,
-        CancellationToken ct)
-        => ExecuteWriteAsync(
-            () => workflow.ChangeTrialStatusAsync(
-                trialId,
-                request.TargetStatus,
-                ResolveUserId()!,
-                ct));
-
-    [HttpPost("trials/{trialId:guid}/results")]
-    public Task<IActionResult> AddTrialResult(
-        Guid trialId,
-        [FromBody] TrialResult request,
-        CancellationToken ct)
-        => ExecuteWriteAsync(
-            () => workflow.AddTrialResultAsync(
-                request with { TrialId = trialId },
-                ResolveUserId()!,
-                ct));
-
-    [HttpPost("trials/{trialId:guid}/results/calculate")]
-    public Task<IActionResult> CalculateTrialResult(
-        Guid trialId,
-        CancellationToken ct)
-        => ExecuteWriteAsync(
-            () => workflow.CalculateTrialResultAsync(
-                trialId,
-                ResolveUserId()!,
-                ct));
-
-    [HttpPost("{investigationId:guid}/conclusions")]
-    public Task<IActionResult> AddConclusion(
-        Guid investigationId,
-        [FromBody] InvestigationConclusion request,
-        CancellationToken ct)
-        => ExecuteWriteAsync(
-            () => workflow.AddConclusionAsync(
-                request with { InvestigationId = investigationId },
-                ResolveUserId()!,
-                ct));
-
-    private async Task<IActionResult> ExecuteWriteAsync<T>(Func<Task<T>> operation)
-    {
-        var denied = DeniedConfigurationWrite();
-        if (denied is not null)
-            return denied;
-        try
-        {
-            return Ok(await operation().ConfigureAwait(false));
-        }
-        catch (ProcessImprovementRuleException exception)
+        catch (ResearchAssetRuleException exception)
         {
             return Conflict(new { error = exception.Message });
         }
@@ -288,9 +167,9 @@ public sealed class ProcessInvestigationsController(
 [ApiController]
 [Route("api/v1/process-knowledge")]
 public sealed class ProcessKnowledgeController(
-    IProcessImprovementStore store,
+    IResearchAssetStore store,
     IProcessResearchStore researchStore,
-    ProcessImprovementWorkflow workflow,
+    ResearchAssetWorkflow workflow,
     KnowledgeExtractionService extractionService,
     PlatformUserResolver userResolver) : PlatformConfigurationControllerBase(userResolver)
 {
@@ -302,38 +181,42 @@ public sealed class ProcessKnowledgeController(
         StringComparer.Ordinal);
 
     [HttpGet]
-    public async Task<IActionResult> List(CancellationToken ct)
-        => DeniedConfigurationRead() ??
-           Ok(new { data = await store.ListKnowledgeSourcesAsync(ct).ConfigureAwait(false) });
+    public async Task<IActionResult> List([FromQuery] Guid projectId, CancellationToken ct)
+    {
+        var access = await ResolveProjectAccessAsync(projectId, false, ct).ConfigureAwait(false);
+        if (access.Result is not null)
+            return access.Result;
+        var projectKey = projectId.ToString();
+        var sources = (await store.ListKnowledgeSourcesAsync(ct).ConfigureAwait(false))
+            .Where(source =>
+                source.ContextSelector.TryGetValue("research-project-id", out var value) &&
+                string.Equals(value, projectKey, StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        return Ok(new { data = sources });
+    }
 
     [HttpGet("{sourceId:guid}")]
     public async Task<IActionResult> Get(Guid sourceId, CancellationToken ct)
     {
-        var denied = DeniedConfigurationRead();
-        if (denied is not null)
-            return denied;
-        var source = await store.GetKnowledgeSourceAsync(sourceId, ct).ConfigureAwait(false);
-        if (source is null)
-            return NotFound();
+        var access = await ResolveSourceAccessAsync(sourceId, false, ct).ConfigureAwait(false);
+        if (access.Result is not null)
+            return access.Result;
         var records = await store.ListKnowledgeRecordsAsync(sourceId, ct).ConfigureAwait(false);
         var audit = await store.ListAuditEntriesAsync("knowledge-source", sourceId.ToString(), ct)
             .ConfigureAwait(false);
-        return Ok(new { source, records, audit });
+        return Ok(new { source = access.Source, records, audit });
     }
 
     [HttpGet("{sourceId:guid}/content")]
     public async Task<IActionResult> Download(Guid sourceId, CancellationToken ct)
     {
-        var denied = DeniedConfigurationRead();
-        if (denied is not null)
-            return denied;
-        var source = await store.GetKnowledgeSourceAsync(sourceId, ct).ConfigureAwait(false);
-        if (source is null)
-            return NotFound();
+        var access = await ResolveSourceAccessAsync(sourceId, false, ct).ConfigureAwait(false);
+        if (access.Result is not null)
+            return access.Result;
         var content = await store.OpenKnowledgeSourceAsync(sourceId, ct).ConfigureAwait(false);
         return content is null
             ? NotFound(new { error = "知识来源文件不可用。" })
-            : File(content, source.MediaType, source.FileName, enableRangeProcessing: true);
+            : File(content, access.Source!.MediaType, access.Source.FileName, enableRangeProcessing: true);
     }
 
     [HttpPost]
@@ -345,20 +228,16 @@ public sealed class ProcessKnowledgeController(
         [FromForm] string sourceKind = "document",
         CancellationToken ct = default)
     {
-        var denied = DeniedConfigurationWrite();
-        if (denied is not null)
-            return denied;
+        var access = await ResolveProjectAccessAsync(projectId, true, ct).ConfigureAwait(false);
+        if (access.Result is not null)
+            return access.Result;
         if (file.Length <= 0 || !AllowedExtensions.Contains(Path.GetExtension(file.FileName)))
             return BadRequest(new { error = "仅支持文档、表格、文本和常见现场图片格式。" });
         sourceKind = sourceKind?.Trim().ToLowerInvariant() ?? "";
         if (!AllowedSourceKinds.Contains(sourceKind))
             return BadRequest(new { error = "来源类型仅支持 document、spreadsheet、image 或 field-note。" });
-        var project = await researchStore.GetProjectAsync(projectId, ct).ConfigureAwait(false);
-        var currentUser = ResolveUserId()!;
-        if (project is null ||
-            !(string.Equals(project.OwnerUserId, currentUser, StringComparison.Ordinal) ||
-              project.MemberUserIds.Contains(currentUser, StringComparer.Ordinal)))
-            return Forbid();
+        var project = access.Project!;
+        var currentUser = access.Identity!.UserId;
         IReadOnlyDictionary<string, string> contextSelector =
             new Dictionary<string, string>(project.Context, StringComparer.Ordinal)
             {
@@ -380,23 +259,23 @@ public sealed class ProcessKnowledgeController(
                 file.FileName,
                 file.ContentType,
                 contextSelector,
-                ResolveUserId()!,
+                currentUser,
                 ct).ConfigureAwait(false);
             await store.AddAuditEntryAsync(
-                new ImprovementAuditEntry
+                new ResearchAssetAuditEntry
                 {
                     EntryId = Guid.CreateVersion7(),
                     ResourceType = "knowledge-source",
                     ResourceId = saved.SourceId.ToString(),
                     Action = "uploaded",
                     ToStatus = saved.Status,
-                    UserId = ResolveUserId()!,
+                    UserId = currentUser,
                     CreatedAt = DateTimeOffset.UtcNow
                 },
                 ct).ConfigureAwait(false);
             var indexed = await extractionService.ExtractAsync(
                 saved.SourceId,
-                ResolveUserId()!,
+                currentUser,
                 ct).ConfigureAwait(false);
             return Ok(indexed);
         }
@@ -409,17 +288,17 @@ public sealed class ProcessKnowledgeController(
     [HttpPost("{sourceId:guid}/extract")]
     public async Task<IActionResult> Extract(Guid sourceId, CancellationToken ct)
     {
-        var denied = DeniedConfigurationWrite();
-        if (denied is not null)
-            return denied;
+        var access = await ResolveSourceAccessAsync(sourceId, true, ct).ConfigureAwait(false);
+        if (access.Result is not null)
+            return access.Result;
         try
         {
             return Ok(await extractionService.ExtractAsync(
                 sourceId,
-                ResolveUserId()!,
+                access.Identity!.UserId,
                 ct).ConfigureAwait(false));
         }
-        catch (ProcessImprovementRuleException exception)
+        catch (ResearchAssetRuleException exception)
         {
             return Conflict(new { error = exception.Message });
         }
@@ -430,23 +309,33 @@ public sealed class ProcessKnowledgeController(
         Guid sourceId,
         [FromBody] KnowledgeRecord request,
         CancellationToken ct)
-        => await ExecuteWriteAsync(
+    {
+        var access = await ResolveSourceAccessAsync(sourceId, true, ct).ConfigureAwait(false);
+        if (access.Result is not null)
+            return access.Result;
+        return await ExecuteWriteAsync(
             () => workflow.SaveKnowledgeRecordAsync(
                 request with { SourceId = sourceId },
-                ResolveUserId()!,
+                access.Identity!.UserId,
                 ct)).ConfigureAwait(false);
+    }
 
     [HttpPost("{sourceId:guid}/status")]
     public async Task<IActionResult> ChangeStatus(
         Guid sourceId,
         [FromBody] StatusChangeRequest request,
         CancellationToken ct)
-        => await ExecuteWriteAsync(
+    {
+        var access = await ResolveSourceAccessAsync(sourceId, true, ct).ConfigureAwait(false);
+        if (access.Result is not null)
+            return access.Result;
+        return await ExecuteWriteAsync(
             () => workflow.ChangeKnowledgeSourceStatusAsync(
                 sourceId,
                 request.TargetStatus,
-                ResolveUserId()!,
+                access.Identity!.UserId,
                 ct)).ConfigureAwait(false);
+    }
 
     private async Task<IActionResult> ExecuteWriteAsync<T>(Func<Task<T>> operation)
     {
@@ -457,80 +346,48 @@ public sealed class ProcessKnowledgeController(
         {
             return Ok(await operation().ConfigureAwait(false));
         }
-        catch (ProcessImprovementRuleException exception)
+        catch (ResearchAssetRuleException exception)
         {
             return Conflict(new { error = exception.Message });
         }
     }
-}
 
-[ApiController]
-[Route("api/v1/parameter-recommendations")]
-[NonController]
-public sealed class ParameterRecommendationsController(
-    IProcessImprovementStore store,
-    ProcessImprovementWorkflow workflow,
-    PlatformUserResolver userResolver) : PlatformConfigurationControllerBase(userResolver)
-{
-    [HttpGet]
-    public async Task<IActionResult> List(CancellationToken ct)
-        => DeniedConfigurationRead() ??
-           Ok(new { data = await store.ListRecommendationsAsync(ct).ConfigureAwait(false) });
-
-    [HttpGet("{recommendationId:guid}")]
-    public async Task<IActionResult> Get(Guid recommendationId, CancellationToken ct)
+    private async Task<(KnowledgeSource? Source, PlatformIdentity? Identity, IActionResult? Result)>
+        ResolveSourceAccessAsync(Guid sourceId, bool requireWrite, CancellationToken ct)
     {
-        var denied = DeniedConfigurationRead();
-        if (denied is not null)
-            return denied;
-        var recommendation = await store.GetRecommendationAsync(recommendationId, ct).ConfigureAwait(false);
-        if (recommendation is null)
-            return NotFound();
-        var audit = await store.ListAuditEntriesAsync(
-            "recommendation",
-            recommendationId.ToString(),
-            ct).ConfigureAwait(false);
-        return Ok(new { recommendation, audit });
+        var source = await store.GetKnowledgeSourceAsync(sourceId, ct).ConfigureAwait(false);
+        if (source is null)
+            return (null, null, NotFound(new { error = "知识来源不存在。" }));
+        if (!source.ContextSelector.TryGetValue("research-project-id", out var projectIdText) ||
+            !Guid.TryParse(projectIdText, out var projectId))
+            return (null, null, Forbid());
+        var access = await ResolveProjectAccessAsync(projectId, requireWrite, ct).ConfigureAwait(false);
+        return access.Result is null
+            ? (source, access.Identity, null)
+            : (null, null, access.Result);
     }
 
-    [HttpPost]
-    public Task<IActionResult> Create([FromBody] ParameterRecommendation request, CancellationToken ct)
-        => ExecuteWriteAsync(
-            () => workflow.CreateRecommendationAsync(request, ResolveUserId()!, ct));
-
-    [HttpPost("{recommendationId:guid}/status")]
-    public Task<IActionResult> ChangeStatus(
-        Guid recommendationId,
-        [FromBody] RecommendationStatusRequest request,
-        CancellationToken ct)
-        => ExecuteWriteAsync(
-            () => workflow.ChangeRecommendationStatusAsync(
-                recommendationId,
-                request.TargetStatus,
-                ResolveUserId()!,
-                request.ExecutionReference,
-                request.Verification,
-                ct));
-
-    private async Task<IActionResult> ExecuteWriteAsync<T>(Func<Task<T>> operation)
+    private async Task<(ResearchProject? Project, PlatformIdentity? Identity, IActionResult? Result)>
+        ResolveProjectAccessAsync(Guid projectId, bool requireWrite, CancellationToken ct)
     {
-        var denied = DeniedConfigurationWrite();
-        if (denied is not null)
-            return denied;
-        try
-        {
-            return Ok(await operation().ConfigureAwait(false));
-        }
-        catch (ProcessImprovementRuleException exception)
-        {
-            return Conflict(new { error = exception.Message });
-        }
+        var identity = ResolveIdentity();
+        if (identity is null)
+            return (null, null, Unauthorized(new { error = "需要平台统一认证。" }));
+        if (!identity.HasAnyRole(PlatformRoles.ProcessEngineer, PlatformRoles.PlatformAdministrator))
+            return (null, null, Forbid());
+        if (projectId == Guid.Empty)
+            return (null, null, BadRequest(new { error = "必须指定研发项目。" }));
+        var project = await researchStore.GetProjectAsync(projectId, ct).ConfigureAwait(false);
+        if (project is null)
+            return (null, null, NotFound(new { error = "研发项目不存在。" }));
+        var canAccess = identity.HasAnyRole(PlatformRoles.PlatformAdministrator) ||
+                        string.Equals(project.OwnerUserId, identity.UserId, StringComparison.Ordinal) ||
+                        project.MemberUserIds.Contains(identity.UserId, StringComparer.Ordinal);
+        if (!canAccess || requireWrite && project.Status == ResearchProjectStatuses.Archived)
+            return (null, null, Forbid());
+        return (project, identity, null);
     }
 }
 
 public sealed record StatusChangeRequest(string TargetStatus);
 public sealed record ModelRollbackRequest(int CurrentVersion, int TargetVersion);
-public sealed record RecommendationStatusRequest(
-    string TargetStatus,
-    string? ExecutionReference,
-    RecommendationVerification? Verification);

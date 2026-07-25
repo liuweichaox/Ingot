@@ -5,7 +5,9 @@ import {
   Card,
   DataTable,
   EmptyState,
+  Field,
   Page,
+  Select,
   StatusBadge,
 } from "../ui/components";
 
@@ -92,15 +94,32 @@ const assetDefinitions = [
 
 export function ResearchAssetsPage() {
   const [assets, setAssets] = useState({});
+  const [projects, setProjects] = useState([]);
+  const [projectId, setProjectId] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    getJson("/api/v1/research-projects?limit=100")
+      .then(response => {
+        const values = response?.data || [];
+        setProjects(values);
+        setProjectId(current => current || values[0]?.projectId || "");
+      })
+      .catch(requestError => setError(requestError.message));
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
       const results = await Promise.all(assetDefinitions.map(async definition => {
-        const response = await getJson(definition.endpoint);
+        if (definition.key === "knowledge" && !projectId)
+          return [definition.key, []];
+        const endpoint = definition.key === "knowledge"
+          ? `${definition.endpoint}?projectId=${encodeURIComponent(projectId)}`
+          : definition.endpoint;
+        const response = await getJson(endpoint);
         return [definition.key, response?.data || []];
       }));
       setAssets(Object.fromEntries(results));
@@ -109,7 +128,7 @@ export function ResearchAssetsPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [projectId]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -119,6 +138,16 @@ export function ResearchAssetsPage() {
       description="集中查看项目可复用的数据集、模型、机理和知识；正式研发结论仍在研发项目中形成。"
     >
       {error && <Alert tone="danger">{error}</Alert>}
+      <Card title="项目范围" description="知识来源严格按研发项目隔离；其他版本化资产可被授权项目复用。">
+        <Field label="当前研发项目">
+          <Select value={projectId} onChange={event => setProjectId(event.target.value)}>
+            {projects.length === 0 && <option value="">暂无可访问项目</option>}
+            {projects.map(project => (
+              <option key={project.projectId} value={project.projectId}>{project.name}</option>
+            ))}
+          </Select>
+        </Field>
+      </Card>
       {loading ? (
         <Card><p className="py-8 text-center text-sm text-slate-500">正在读取研发资产…</p></Card>
       ) : (

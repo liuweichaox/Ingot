@@ -1,7 +1,7 @@
-namespace Ingot.Platform.Infrastructure.ProcessImprovement;
+namespace Ingot.Platform.Infrastructure.ResearchAssets;
 
-public sealed class ProcessImprovementInitializerHostedService(
-    IProcessImprovementStore store) : IHostedService
+public sealed class ResearchAssetInitializerHostedService(
+    IResearchAssetStore store) : IHostedService
 {
     public Task StartAsync(CancellationToken cancellationToken)
         => store.InitializeAsync(cancellationToken);

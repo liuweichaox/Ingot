@@ -157,11 +157,11 @@ app.MapGet("/", () => Results.Ok(new
         processWindowComparisons = "/api/v1/process-window-comparisons",
         cycleAnalysisBackfills = "/api/v1/cycle-analysis-backfills",
         cycleFeatureAggregates = "/api/v1/cycle-feature-aggregates",
-        processInvestigations = "/api/v1/process-investigations",
         processModels = "/api/v1/process-models",
         trainingDatasets = "/api/v1/training-datasets",
         processKnowledge = "/api/v1/process-knowledge",
-        parameterRecommendations = "/api/v1/parameter-recommendations",
+        researchProjects = "/api/v1/research-projects",
+        researchAssets = "/api/v1/dataset-quality-validations",
         toolingTypes = "/api/v1/tooling-types",
         toolingComponents = "/api/v1/tooling-components",
         toolingAssemblies = "/api/v1/tooling-assemblies",
@@ -206,10 +206,10 @@ Log.Logger.Information("    > Quality Tasks: {0}/api/v1/inspection-tasks", baseA
 Log.Logger.Information("    > Reviews:       {0}/api/v1/inspection-reviews", baseAddress);
 Log.Logger.Information("    > Cycles:        {0}/api/v1/cycles", baseAddress);
 Log.Logger.Information("    > Comparisons:   {0}/api/v1/cycle-comparisons/{{correlationId}}", baseAddress);
-Log.Logger.Information("    > Improvement:   {0}/api/v1/process-investigations", baseAddress);
+Log.Logger.Information("    > Research:      {0}/api/v1/research-projects", baseAddress);
 Log.Logger.Information("    > Models:        {0}/api/v1/process-models", baseAddress);
 Log.Logger.Information("    > Knowledge:     {0}/api/v1/process-knowledge", baseAddress);
-Log.Logger.Information("    > Recommendations:{0}/api/v1/parameter-recommendations", baseAddress);
+Log.Logger.Information("    > Dataset Quality:{0}/api/v1/dataset-quality-validations", baseAddress);
 Log.Logger.Information("    > Tooling Types: {0}/api/v1/tooling-types", baseAddress);
 Log.Logger.Information("    > Components:    {0}/api/v1/tooling-components", baseAddress);
 Log.Logger.Information("    > Assemblies:    {0}/api/v1/tooling-assemblies", baseAddress);

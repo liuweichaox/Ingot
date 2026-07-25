@@ -8,7 +8,7 @@ using Ingot.Platform.Infrastructure.Inspections;
 using Ingot.Platform.Infrastructure.Manufacturing;
 using Ingot.Platform.Infrastructure.ProcessConfiguration;
 using Ingot.Platform.Infrastructure.Migrations;
-using Ingot.Platform.Infrastructure.ProcessImprovement;
+using Ingot.Platform.Infrastructure.ResearchAssets;
 using Ingot.Platform.Infrastructure.ProcessResearch;
 using Ingot.Platform.Infrastructure.Services;
 using Ingot.Platform.Infrastructure.TimeSeries;
@@ -100,12 +100,10 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ProcessAnalysisResolver>();
         services.AddHostedService<ProcessConfigurationInitializerHostedService>();
 
-        // 模型、工艺调查、受控试验、现场知识和参数建议共享同一条可审计改进链。
+        // 研发资产保存版本化数据集、模型、机理模型和项目知识来源。
         services.Configure<ProcessKnowledgeOptions>(configuration.GetSection("ProcessKnowledge"));
-        services.AddSingleton<IProcessImprovementStore, PostgresProcessImprovementStore>();
-        services.AddSingleton<ITrialEvidenceSource, PostgresTrialEvidenceSource>();
-        services.AddSingleton<ScientificTrialResultCalculator>();
-        services.AddSingleton<ProcessImprovementWorkflow>();
+        services.AddSingleton<IResearchAssetStore, PostgresResearchAssetStore>();
+        services.AddSingleton<ResearchAssetWorkflow>();
         services.AddSingleton<MechanismModelService>();
         services.AddSingleton<IKnowledgeContentExtractor, PdfKnowledgeExtractor>();
         services.AddSingleton<IKnowledgeContentExtractor, ExcelKnowledgeExtractor>();
@@ -116,8 +114,8 @@ public static class ServiceCollectionExtensions
                 provider.GetRequiredService<IHttpClientFactory>().CreateClient("knowledge-image-ocr"),
                 configuration));
         services.AddSingleton<KnowledgeExtractionService>();
-        services.AddSingleton<ScientificValidationRunner>();
-        services.AddHostedService<ProcessImprovementInitializerHostedService>();
+        services.AddSingleton<DatasetQualityValidationRunner>();
+        services.AddHostedService<ResearchAssetInitializerHostedService>();
 
         // 工艺研发项目是实验、假设、工艺窗口与知识沉淀的产品主对象。
         services.AddSingleton<IProcessResearchStore, PostgresProcessResearchStore>();

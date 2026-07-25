@@ -41,7 +41,7 @@ public sealed class ResearchProjectsController(
         => await ExecuteForProjectAsync(
             projectId,
             false,
-            async () => Ok(await workflow.GetWorkspaceAsync(projectId, ct).ConfigureAwait(false)),
+            async _ => Ok(await workflow.GetWorkspaceAsync(projectId, ct).ConfigureAwait(false)),
             ct).ConfigureAwait(false);
 
     [HttpPost]
@@ -67,10 +67,10 @@ public sealed class ResearchProjectsController(
         => ExecuteForProjectAsync(
             projectId,
             true,
-            async () => Ok(await workflow.UpdateProjectAsync(
+            async identity => Ok(await workflow.UpdateProjectAsync(
                 projectId,
                 request,
-                ResolveResearchIdentity().Identity!.UserId,
+                identity.UserId,
                 ct).ConfigureAwait(false)),
             ct);
 
@@ -82,10 +82,10 @@ public sealed class ResearchProjectsController(
         => ExecuteForProjectAsync(
             projectId,
             true,
-            async () => Ok(await workflow.ChangeProjectStatusAsync(
+            async identity => Ok(await workflow.ChangeProjectStatusAsync(
                 projectId,
                 request.TargetStatus,
-                ResolveResearchIdentity().Identity!.UserId,
+                identity.UserId,
                 ct).ConfigureAwait(false)),
             ct);
 
@@ -97,10 +97,10 @@ public sealed class ResearchProjectsController(
         => ExecuteForProjectAsync(
             projectId,
             true,
-            async () => Ok(await workflow.SaveHypothesisAsync(
+            async identity => Ok(await workflow.SaveHypothesisAsync(
                 projectId,
                 request,
-                ResolveResearchIdentity().Identity!.UserId,
+                identity.UserId,
                 ct).ConfigureAwait(false)),
             ct);
 
@@ -112,10 +112,10 @@ public sealed class ResearchProjectsController(
         => ExecuteForProjectAsync(
             projectId,
             true,
-            async () => Ok(await workflow.CreateExperimentAsync(
+            async identity => Ok(await workflow.CreateExperimentAsync(
                 projectId,
                 request,
-                ResolveResearchIdentity().Identity!.UserId,
+                identity.UserId,
                 ct).ConfigureAwait(false)),
             ct);
 
@@ -131,10 +131,10 @@ public sealed class ResearchProjectsController(
         return await ExecuteForProjectAsync(
             experiment.ProjectId,
             true,
-            async () => Ok(await workflow.ChangeExperimentStatusAsync(
+            async identity => Ok(await workflow.ChangeExperimentStatusAsync(
                 experimentId,
                 request.TargetStatus,
-                ResolveResearchIdentity().Identity!.UserId,
+                identity.UserId,
                 ct).ConfigureAwait(false)),
             ct).ConfigureAwait(false);
     }
@@ -151,10 +151,10 @@ public sealed class ResearchProjectsController(
         return await ExecuteForProjectAsync(
             experiment.ProjectId,
             true,
-            async () => Ok(await workflow.RecordExperimentResultAsync(
+            async identity => Ok(await workflow.RecordExperimentResultAsync(
                 experimentId,
                 request,
-                ResolveResearchIdentity().Identity!.UserId,
+                identity.UserId,
                 ct).ConfigureAwait(false)),
             ct).ConfigureAwait(false);
     }
@@ -167,10 +167,10 @@ public sealed class ResearchProjectsController(
         => ExecuteForProjectAsync(
             projectId,
             true,
-            async () => Ok(await workflow.SaveProcessWindowAsync(
+            async identity => Ok(await workflow.SaveProcessWindowAsync(
                 projectId,
                 request,
-                ResolveResearchIdentity().Identity!.UserId,
+                identity.UserId,
                 ct).ConfigureAwait(false)),
             ct);
 
@@ -183,9 +183,9 @@ public sealed class ResearchProjectsController(
         return await ExecuteForProjectAsync(
             window.ProjectId,
             true,
-            async () => Ok(await workflow.ValidateProcessWindowAsync(
+            async identity => Ok(await workflow.ValidateProcessWindowAsync(
                 windowId,
-                ResolveResearchIdentity().Identity!.UserId,
+                identity.UserId,
                 ct).ConfigureAwait(false)),
             ct).ConfigureAwait(false);
     }
@@ -198,10 +198,10 @@ public sealed class ResearchProjectsController(
         => ExecuteForProjectAsync(
             projectId,
             true,
-            async () => Ok(await workflow.SaveKnowledgeClaimAsync(
+            async identity => Ok(await workflow.SaveKnowledgeClaimAsync(
                 projectId,
                 request,
-                ResolveResearchIdentity().Identity!.UserId,
+                identity.UserId,
                 ct).ConfigureAwait(false)),
             ct);
 
@@ -214,9 +214,9 @@ public sealed class ResearchProjectsController(
         return await ExecuteForProjectAsync(
             claim.ProjectId,
             true,
-            async () => Ok(await workflow.ReviewKnowledgeClaimAsync(
+            async identity => Ok(await workflow.ReviewKnowledgeClaimAsync(
                 claimId,
-                ResolveResearchIdentity().Identity!.UserId,
+                identity.UserId,
                 ct).ConfigureAwait(false)),
             ct).ConfigureAwait(false);
     }
@@ -224,7 +224,7 @@ public sealed class ResearchProjectsController(
     private async Task<IActionResult> ExecuteForProjectAsync(
         Guid projectId,
         bool requireWrite,
-        Func<Task<IActionResult>> operation,
+        Func<PlatformIdentity, Task<IActionResult>> operation,
         CancellationToken ct)
     {
         var identity = ResolveResearchIdentity();
@@ -235,7 +235,7 @@ public sealed class ResearchProjectsController(
             return NotFound(new { error = "研发项目不存在。" });
         if (!CanAccess(project, identity.Identity!, requireWrite))
             return Forbid();
-        return await ExecuteRuleAsync(operation).ConfigureAwait(false);
+        return await ExecuteRuleAsync(() => operation(identity.Identity!)).ConfigureAwait(false);
     }
 
     private (PlatformIdentity? Identity, IActionResult? Result) ResolveResearchIdentity()

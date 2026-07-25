@@ -5,8 +5,8 @@ import test from "node:test";
 const pages = await readFile(new URL("../src/pages/index.jsx", import.meta.url), "utf8");
 const http = await readFile(new URL("../src/api/http.js", import.meta.url), "utf8");
 const ui = await readFile(new URL("../src/ui/components.jsx", import.meta.url), "utf8");
-const businessEditor = await readFile(new URL("../src/components/BusinessObjectEditor.jsx", import.meta.url), "utf8");
 const researchProjects = await readFile(new URL("../src/pages/ResearchProjectsPage.jsx", import.meta.url), "utf8");
+const researchAssets = await readFile(new URL("../src/pages/ResearchAssetsPage.jsx", import.meta.url), "utf8");
 
 test("operations retain server pagination and resumable live events", () => {
   assert.match(pages, /offset: String\(\(page - 1\) \* pageSize\)/);
@@ -98,10 +98,12 @@ test("cycle comparison submits the selection contract and renders business resul
   assert.doesNotMatch(pages, /JSON\.stringify\(result, null, 2\)/);
 });
 
-test("mechanism details are presented as business fields instead of raw JSON", () => {
-  assert.match(pages, /title="输入与系数"/);
-  assert.match(pages, /title="输出与依据"/);
-  assert.doesNotMatch(pages, /JSON\.stringify\(resource, null, 2\)/);
+test("mechanism assets are presented as business fields instead of raw JSON", () => {
+  assert.match(researchAssets, /title: "机理模型"/);
+  assert.match(researchAssets, /key: "outputCode", label: "输出"/);
+  assert.match(researchAssets, /title: "融合定义"/);
+  assert.match(researchAssets, /key: "mode", label: "融合方式"/);
+  assert.doesNotMatch(researchAssets, /JSON\.stringify|JSON\.parse/);
 });
 
 test("research projects expose the evidence-backed experiment and process-window workflow", () => {
@@ -115,19 +117,16 @@ test("research projects expose the evidence-backed experiment and process-window
   assert.doesNotMatch(researchProjects, /项目代码|指标代码|变量代码|AnalysisHash|GUID/);
 });
 
-test("research assets retain mechanism fusion, knowledge extraction, and dataset quality checks", () => {
-  assert.match(pages, /\/api\/v1\/mechanism-models/);
-  assert.match(pages, /\/api\/v1\/mechanism-fusions/);
-  assert.match(businessEditor, /mechanism-as-feature/);
-  assert.match(pages, /\/api\/v1\/process-knowledge/);
-  assert.match(pages, /accept="\.pdf,\.xlsx,\.xlsm/);
-  assert.match(pages, /\/api\/v1\/dataset-quality-validations/);
-  assert.match(pages, /manifestJson/);
-  assert.match(pages, /有效范围/);
-  assert.match(pages, /登记模型评估/);
-  assert.match(pages, /登记漂移观测/);
-  assert.match(pages, /\/evaluations/);
-  assert.match(pages, /\/drift/);
+test("research assets retain mechanism fusion, project-scoped knowledge, and dataset quality results", () => {
+  assert.match(researchAssets, /\/api\/v1\/mechanism-models/);
+  assert.match(researchAssets, /\/api\/v1\/mechanism-fusions/);
+  assert.match(researchAssets, /\/api\/v1\/process-knowledge/);
+  assert.match(researchAssets, /\/api\/v1\/dataset-quality-validations/);
+  assert.match(researchAssets, /\/api\/v1\/training-datasets/);
+  assert.match(researchAssets, /\/api\/v1\/process-models/);
+  assert.match(researchAssets, /\/api\/v1\/research-projects\?limit=100/);
+  assert.match(researchAssets, /encodeURIComponent\(projectId\)/);
+  assert.match(researchAssets, /知识来源严格按研发项目隔离/);
 });
 
 test("event subscriptions retain create, edit, enable, signed-secret, and delete operations", () => {

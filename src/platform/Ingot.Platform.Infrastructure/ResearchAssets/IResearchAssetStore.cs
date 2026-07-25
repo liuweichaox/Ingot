@@ -1,8 +1,8 @@
-using Ingot.Contracts.ProcessImprovement;
+using Ingot.Contracts.ResearchAssets;
 
-namespace Ingot.Platform.Infrastructure.ProcessImprovement;
+namespace Ingot.Platform.Infrastructure.ResearchAssets;
 
-public interface IProcessImprovementStore
+public interface IResearchAssetStore
 {
     Task InitializeAsync(CancellationToken ct = default);
 
@@ -48,32 +48,13 @@ public interface IProcessImprovementStore
     Task<IReadOnlyList<MechanismFusionDefinition>> ListMechanismFusionsAsync(
         CancellationToken ct = default)
         => Task.FromResult<IReadOnlyList<MechanismFusionDefinition>>([]);
-    Task<ScientificValidationReport> SaveScientificValidationReportAsync(
-        ScientificValidationReport value,
+    Task<DatasetQualityValidationReport> SaveDatasetQualityValidationReportAsync(
+        DatasetQualityValidationReport value,
         CancellationToken ct = default)
         => throw new NotSupportedException("This store does not support scientific validation reports.");
-    Task<IReadOnlyList<ScientificValidationReport>> ListScientificValidationReportsAsync(
+    Task<IReadOnlyList<DatasetQualityValidationReport>> ListDatasetQualityValidationReportsAsync(
         CancellationToken ct = default)
-        => Task.FromResult<IReadOnlyList<ScientificValidationReport>>([]);
-
-    Task<InvestigationCase> SaveInvestigationAsync(InvestigationCase value, CancellationToken ct = default);
-    Task<InvestigationCase?> GetInvestigationAsync(Guid investigationId, CancellationToken ct = default);
-    Task<IReadOnlyList<InvestigationCase>> ListInvestigationsAsync(CancellationToken ct = default);
-    Task<PossibleCause> SaveCauseAsync(PossibleCause value, CancellationToken ct = default);
-    Task<PossibleCause?> GetCauseAsync(Guid causeId, CancellationToken ct = default);
-    Task<IReadOnlyList<PossibleCause>> ListCausesAsync(Guid investigationId, CancellationToken ct = default);
-    Task<ProcessTrial> SaveTrialAsync(ProcessTrial value, CancellationToken ct = default);
-    Task<ProcessTrial?> GetTrialAsync(Guid trialId, CancellationToken ct = default);
-    Task<IReadOnlyList<ProcessTrial>> ListTrialsAsync(Guid investigationId, CancellationToken ct = default);
-    Task<TrialResult> AddTrialResultAsync(TrialResult value, CancellationToken ct = default);
-    Task<IReadOnlyList<TrialResult>> ListTrialResultsAsync(Guid trialId, CancellationToken ct = default);
-    Task<InvestigationConclusion> AddConclusionAsync(
-        InvestigationConclusion value,
-        CancellationToken ct = default);
-    Task<InvestigationConclusion?> GetConclusionAsync(Guid conclusionId, CancellationToken ct = default);
-    Task<IReadOnlyList<InvestigationConclusion>> ListConclusionsAsync(
-        Guid investigationId,
-        CancellationToken ct = default);
+        => Task.FromResult<IReadOnlyList<DatasetQualityValidationReport>>([]);
 
     Task<KnowledgeSource> AddKnowledgeSourceAsync(
         Stream content,
@@ -93,16 +74,8 @@ public interface IProcessImprovementStore
         Guid sourceId,
         CancellationToken ct = default);
 
-    Task<ParameterRecommendation> SaveRecommendationAsync(
-        ParameterRecommendation value,
-        CancellationToken ct = default);
-    Task<ParameterRecommendation?> GetRecommendationAsync(
-        Guid recommendationId,
-        CancellationToken ct = default);
-    Task<IReadOnlyList<ParameterRecommendation>> ListRecommendationsAsync(CancellationToken ct = default);
-
-    Task AddAuditEntryAsync(ImprovementAuditEntry value, CancellationToken ct = default);
-    Task<IReadOnlyList<ImprovementAuditEntry>> ListAuditEntriesAsync(
+    Task AddAuditEntryAsync(ResearchAssetAuditEntry value, CancellationToken ct = default);
+    Task<IReadOnlyList<ResearchAssetAuditEntry>> ListAuditEntriesAsync(
         string resourceType,
         string resourceId,
         CancellationToken ct = default);

@@ -2,13 +2,13 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using Ingot.Agent;
 using Ingot.Contracts.Agents;
-using Ingot.Contracts.ProcessImprovement;
-using Ingot.Platform.Infrastructure.ProcessImprovement;
+using Ingot.Contracts.ResearchAssets;
+using Ingot.Platform.Infrastructure.ResearchAssets;
 
 namespace Ingot.Platform.Infrastructure.AgentTools;
 
 public sealed partial class SearchProcessKnowledgeTool(
-    IProcessImprovementStore store) : IAnalysisTool
+    IResearchAssetStore store) : IAnalysisTool
 {
     public AnalysisToolDefinition Definition { get; } = new()
     {
@@ -46,7 +46,15 @@ public sealed partial class SearchProcessKnowledgeTool(
             ? Math.Clamp(parsedLimit, 1, 20)
             : 8;
         var terms = BuildTerms(query);
+        var projectId = context.Request.PageContext is { Kind: "research-project" } pageContext &&
+                        Guid.TryParse(pageContext.Id, out var parsedProjectId)
+            ? parsedProjectId.ToString()
+            : null;
         var sources = (await store.ListKnowledgeSourcesAsync(ct).ConfigureAwait(false))
+            .Where(source =>
+                projectId is not null &&
+                source.ContextSelector.TryGetValue("research-project-id", out var value) &&
+                string.Equals(value, projectId, StringComparison.OrdinalIgnoreCase))
             .Where(static source => source.Status == KnowledgeSourceStatuses.Reviewed)
             .Where(source => MatchesContext(source.ContextSelector, "product_series", productSeries))
             .Where(source => MatchesContext(source.ContextSelector, "machine_id", machineId))
@@ -81,7 +89,9 @@ public sealed partial class SearchProcessKnowledgeTool(
                 Kind = "process-knowledge",
                 Id = source.SourceId.ToString(),
                 Label = source.Title,
-                Url = $"/process-improvement?sourceId={source.SourceId}"
+                Url = source.ContextSelector.TryGetValue("research-project-id", out var sourceProjectId)
+                    ? $"/research-projects?projectId={sourceProjectId}&sourceId={source.SourceId}"
+                    : "/research-projects"
             })
             .ToArray();
         return new AnalysisToolResult
@@ -95,6 +105,7 @@ public sealed partial class SearchProcessKnowledgeTool(
                 query = query.Trim(),
                 appliedContext = new
                 {
+                    researchProjectId = projectId,
                     productSeries = NullIfBlank(productSeries),
                     machineId = NullIfBlank(machineId)
                 },

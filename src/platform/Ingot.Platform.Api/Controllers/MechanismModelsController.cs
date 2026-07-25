@@ -1,6 +1,6 @@
-using Ingot.Contracts.ProcessImprovement;
+using Ingot.Contracts.ResearchAssets;
 using Ingot.Platform.Api.Agents;
-using Ingot.Platform.Infrastructure.ProcessImprovement;
+using Ingot.Platform.Infrastructure.ResearchAssets;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Ingot.Platform.Api.Controllers;
@@ -8,19 +8,19 @@ namespace Ingot.Platform.Api.Controllers;
 [ApiController]
 [Route("api/v1/mechanism-models")]
 public sealed class MechanismModelsController(
-    IProcessImprovementStore store,
+    IResearchAssetStore store,
     MechanismModelService service,
     PlatformUserResolver userResolver) : PlatformConfigurationControllerBase(userResolver)
 {
     [HttpGet]
     public async Task<IActionResult> List(CancellationToken ct)
-        => DeniedConfigurationRead() ??
+        => DeniedResearchAssetRead() ??
            Ok(new { data = await store.ListMechanismModelsAsync(ct).ConfigureAwait(false) });
 
     [HttpGet("{modelId}/{version:int}")]
     public async Task<IActionResult> Get(string modelId, int version, CancellationToken ct)
     {
-        var denied = DeniedConfigurationRead();
+        var denied = DeniedResearchAssetRead();
         if (denied is not null)
             return denied;
         var normalizedId = modelId.Trim().ToLowerInvariant();
@@ -64,7 +64,7 @@ public sealed class MechanismModelsController(
         {
             return Ok(await operation().ConfigureAwait(false));
         }
-        catch (ProcessImprovementRuleException exception)
+        catch (ResearchAssetRuleException exception)
         {
             return Conflict(new { error = exception.Message });
         }
@@ -74,19 +74,19 @@ public sealed class MechanismModelsController(
 [ApiController]
 [Route("api/v1/mechanism-fusions")]
 public sealed class MechanismFusionsController(
-    IProcessImprovementStore store,
+    IResearchAssetStore store,
     MechanismModelService service,
     PlatformUserResolver userResolver) : PlatformConfigurationControllerBase(userResolver)
 {
     [HttpGet]
     public async Task<IActionResult> List(CancellationToken ct)
-        => DeniedConfigurationRead() ??
+        => DeniedResearchAssetRead() ??
            Ok(new { data = await store.ListMechanismFusionsAsync(ct).ConfigureAwait(false) });
 
     [HttpGet("{fusionId}/{version:int}")]
     public async Task<IActionResult> Get(string fusionId, int version, CancellationToken ct)
     {
-        var denied = DeniedConfigurationRead();
+        var denied = DeniedResearchAssetRead();
         if (denied is not null)
             return denied;
         var normalizedId = fusionId.Trim().ToLowerInvariant();
@@ -126,14 +126,14 @@ public sealed class MechanismFusionsController(
         [FromBody] MechanismFusionExecutionRequest request,
         CancellationToken ct)
     {
-        var denied = DeniedConfigurationRead();
+        var denied = DeniedResearchAssetRead();
         if (denied is not null)
             return denied;
         try
         {
             return Ok(await service.ExecuteAsync(request, ct).ConfigureAwait(false));
         }
-        catch (ProcessImprovementRuleException exception)
+        catch (ResearchAssetRuleException exception)
         {
             return Conflict(new { error = exception.Message });
         }
@@ -148,7 +148,7 @@ public sealed class MechanismFusionsController(
         {
             return Ok(await operation().ConfigureAwait(false));
         }
-        catch (ProcessImprovementRuleException exception)
+        catch (ResearchAssetRuleException exception)
         {
             return Conflict(new { error = exception.Message });
         }

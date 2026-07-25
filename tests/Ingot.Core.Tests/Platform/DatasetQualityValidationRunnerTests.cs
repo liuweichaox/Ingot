@@ -1,12 +1,12 @@
 using System.Security.Cryptography;
 using System.Text;
-using Ingot.Contracts.ProcessImprovement;
-using Ingot.Platform.Infrastructure.ProcessImprovement;
+using Ingot.Contracts.ResearchAssets;
+using Ingot.Platform.Infrastructure.ResearchAssets;
 using Xunit;
 
 namespace Ingot.Core.Tests.Platform;
 
-public sealed class ScientificValidationRunnerTests
+public sealed class DatasetQualityValidationRunnerTests
 {
     [Fact]
     public async Task EvaluateAsync_AcceptsMeasuredDataset_WhenProvenanceAndStreamBatchAgree()
@@ -17,13 +17,13 @@ public sealed class ScientificValidationRunnerTests
                 .Select(index => $"{index % 2},{300 + index},{40 + index * 0.5}")));
         var manifest = Manifest(Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant());
 
-        var report = await ScientificValidationRunner.EvaluateAsync(
+        var report = await DatasetQualityValidationRunner.EvaluateAsync(
             new MemoryStream(bytes),
             "heat-treatment.csv",
             manifest,
             "test");
 
-        Assert.Equal(ScientificValidationStatuses.Passed, report.Status);
+        Assert.Equal(DatasetQualityValidationStatuses.Passed, report.Status);
         Assert.True(report.ResearchClaimsAllowed);
         Assert.Equal(10, report.RowCount);
         Assert.Equal(2, report.CycleCount);
@@ -39,13 +39,13 @@ public sealed class ScientificValidationRunnerTests
             string.Join("\n", Enumerable.Range(1, 10)
                 .Select(index => $"{index},{300 + index},{40 + index}")));
 
-        var report = await ScientificValidationRunner.EvaluateAsync(
+        var report = await DatasetQualityValidationRunner.EvaluateAsync(
             new MemoryStream(bytes),
             "heat-treatment.csv",
             Manifest(new string('0', 64)),
             "test");
 
-        Assert.Equal(ScientificValidationStatuses.Rejected, report.Status);
+        Assert.Equal(DatasetQualityValidationStatuses.Rejected, report.Status);
         Assert.False(report.ResearchClaimsAllowed);
         Assert.Contains(report.Issues, issue => issue.Contains("SHA-256", StringComparison.Ordinal));
     }
@@ -70,15 +70,15 @@ public sealed class ScientificValidationRunnerTests
             }
         };
 
-        await Assert.ThrowsAsync<ProcessImprovementRuleException>(() =>
-            ScientificValidationRunner.EvaluateAsync(
+        await Assert.ThrowsAsync<ResearchAssetRuleException>(() =>
+            DatasetQualityValidationRunner.EvaluateAsync(
                 new MemoryStream(bytes),
                 "heat-treatment.csv",
                 manifest,
                 "test"));
     }
 
-    private static ScientificValidationDatasetManifest Manifest(string expectedSha256)
+    private static DatasetQualityValidationDatasetManifest Manifest(string expectedSha256)
         => new()
         {
             DatasetId = "test-heat-treatment",

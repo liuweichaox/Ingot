@@ -1,4 +1,4 @@
-namespace Ingot.Contracts.ProcessImprovement;
+namespace Ingot.Contracts.ResearchAssets;
 
 public static class MechanismModelStatuses
 {

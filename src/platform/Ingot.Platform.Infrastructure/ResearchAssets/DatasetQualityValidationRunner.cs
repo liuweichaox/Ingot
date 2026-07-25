@@ -3,21 +3,21 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using ClosedXML.Excel;
-using Ingot.Contracts.ProcessImprovement;
+using Ingot.Contracts.ResearchAssets;
 using MatFileHandler;
 using Microsoft.VisualBasic.FileIO;
 
-namespace Ingot.Platform.Infrastructure.ProcessImprovement;
+namespace Ingot.Platform.Infrastructure.ResearchAssets;
 
-public sealed class ScientificValidationRunner(IProcessImprovementStore store)
+public sealed class DatasetQualityValidationRunner(IResearchAssetStore store)
 {
     public const string Version = "cross-industry-validation-v1";
     private const int MaximumRows = 1_000_000;
 
-    public async Task<ScientificValidationReport> RunAsync(
+    public async Task<DatasetQualityValidationReport> RunAsync(
         Stream content,
         string fileName,
-        ScientificValidationDatasetManifest manifest,
+        DatasetQualityValidationDatasetManifest manifest,
         string userId,
         CancellationToken ct = default)
     {
@@ -27,13 +27,13 @@ public sealed class ScientificValidationRunner(IProcessImprovementStore store)
             manifest,
             userId,
             ct).ConfigureAwait(false);
-        return await store.SaveScientificValidationReportAsync(report, ct).ConfigureAwait(false);
+        return await store.SaveDatasetQualityValidationReportAsync(report, ct).ConfigureAwait(false);
     }
 
-    public static async Task<ScientificValidationReport> EvaluateAsync(
+    public static async Task<DatasetQualityValidationReport> EvaluateAsync(
         Stream content,
         string fileName,
-        ScientificValidationDatasetManifest manifest,
+        DatasetQualityValidationDatasetManifest manifest,
         string userId,
         CancellationToken ct = default)
     {
@@ -56,7 +56,7 @@ public sealed class ScientificValidationRunner(IProcessImprovementStore store)
             dataQualityNotes,
             ct);
         if (rows.Count < 10)
-            issues.Add("有效数据行少于 10，不能形成科研验证证据。");
+            issues.Add("有效数据行少于 10，不能形成数据集质量验证证据。");
         var requiredColumns = manifest.SignalColumns
             .Concat(manifest.OutcomeColumns)
             .Append(manifest.CycleColumn)
@@ -88,7 +88,7 @@ public sealed class ScientificValidationRunner(IProcessImprovementStore store)
             issues.Add($"流式与批式统计不一致，最大绝对差为 {maximumDifference:R}。");
         if (!manifest.IsMeasuredData)
             issues.Add("数据清单未声明为真实测量数据。");
-        var report = new ScientificValidationReport
+        var report = new DatasetQualityValidationReport
         {
             ReportId = Guid.CreateVersion7(),
             DatasetId = NormalizeId(manifest.DatasetId),
@@ -96,8 +96,8 @@ public sealed class ScientificValidationRunner(IProcessImprovementStore store)
             Industry = manifest.Industry.Trim(),
             Process = manifest.Process.Trim(),
             Status = issues.Count == 0
-                ? ScientificValidationStatuses.Passed
-                : ScientificValidationStatuses.Rejected,
+                ? DatasetQualityValidationStatuses.Passed
+                : DatasetQualityValidationStatuses.Rejected,
             ResearchClaimsAllowed = issues.Count == 0 && manifest.IsMeasuredData,
             SourceSha256 = sourceHash,
             ManifestSha256 = ManifestHash(manifest),
@@ -120,7 +120,7 @@ public sealed class ScientificValidationRunner(IProcessImprovementStore store)
     private static List<IReadOnlyDictionary<string, string>> ReadRows(
         byte[] bytes,
         string fileName,
-        ScientificValidationDatasetManifest manifest,
+        DatasetQualityValidationDatasetManifest manifest,
         IDictionary<string, long> excludedSampleCounts,
         ICollection<string> dataQualityNotes,
         CancellationToken ct)
@@ -133,7 +133,7 @@ public sealed class ScientificValidationRunner(IProcessImprovementStore store)
             return ReadWorkbook(bytes, manifest.SheetName, manifest.HeaderRowCount, ct);
         if (extension.Equals(".mat", StringComparison.OrdinalIgnoreCase))
             return ReadMat(bytes, manifest, excludedSampleCounts, dataQualityNotes, ct);
-        throw new ProcessImprovementRuleException("科研验证当前只接收 CSV、XLSX、XLSM 或 MATLAB Level 5 MAT 原始数据。");
+        throw new ResearchAssetRuleException("数据集质量验证当前只接收 CSV、XLSX、XLSM 或 MATLAB Level 5 MAT 原始数据。");
     }
 
     private static List<IReadOnlyDictionary<string, string>> ReadCsv(
@@ -243,7 +243,7 @@ public sealed class ScientificValidationRunner(IProcessImprovementStore store)
 
     private static List<IReadOnlyDictionary<string, string>> ReadMat(
         byte[] bytes,
-        ScientificValidationDatasetManifest manifest,
+        DatasetQualityValidationDatasetManifest manifest,
         IDictionary<string, long> excludedSampleCounts,
         ICollection<string> dataQualityNotes,
         CancellationToken ct)
@@ -347,7 +347,7 @@ public sealed class ScientificValidationRunner(IProcessImprovementStore store)
 
     private static long CountChronologyViolations(
         IReadOnlyList<IReadOnlyDictionary<string, string>> rows,
-        ScientificValidationDatasetManifest manifest)
+        DatasetQualityValidationDatasetManifest manifest)
     {
         if (string.IsNullOrWhiteSpace(manifest.TimestampColumn))
             return 0;
@@ -374,7 +374,7 @@ public sealed class ScientificValidationRunner(IProcessImprovementStore store)
 
     private static double CompareStreamAndBatch(
         IReadOnlyList<IReadOnlyDictionary<string, string>> rows,
-        ScientificValidationDatasetManifest manifest)
+        DatasetQualityValidationDatasetManifest manifest)
     {
         var streams = new Dictionary<(string Cycle, string Signal), OnlineMean>();
         var batches = new Dictionary<(string Cycle, string Signal), List<double>>();
@@ -414,7 +414,7 @@ public sealed class ScientificValidationRunner(IProcessImprovementStore store)
                 : null;
     }
 
-    private static void ValidateManifest(ScientificValidationDatasetManifest value)
+    private static void ValidateManifest(DatasetQualityValidationDatasetManifest value)
     {
         if (string.IsNullOrWhiteSpace(value.DatasetId) || value.Version <= 0 ||
             value.HeaderRowCount <= 0 ||
@@ -427,27 +427,27 @@ public sealed class ScientificValidationRunner(IProcessImprovementStore store)
             string.IsNullOrWhiteSpace(value.License) ||
             string.IsNullOrWhiteSpace(value.Citation) ||
             value.SignalColumns.Count == 0)
-            throw new ProcessImprovementRuleException("科研验证清单缺少数据标识、来源、许可、引用或信号列。");
+            throw new ResearchAssetRuleException("数据集质量验证清单缺少数据标识、来源、许可、引用或信号列。");
         if (!Uri.TryCreate(value.SourceUri, UriKind.Absolute, out var uri) ||
             uri.Scheme is not ("http" or "https"))
-            throw new ProcessImprovementRuleException("科研验证来源必须是可追溯的 HTTP(S) 地址。");
+            throw new ResearchAssetRuleException("数据集质量验证来源必须是可追溯的 HTTP(S) 地址。");
         if (!string.IsNullOrWhiteSpace(value.RetrievalUri) &&
             (!Uri.TryCreate(value.RetrievalUri, UriKind.Absolute, out var retrievalUri) ||
              retrievalUri.Scheme is not ("http" or "https")))
-            throw new ProcessImprovementRuleException("科研验证下载地址必须是可追溯的 HTTP(S) 地址。");
+            throw new ResearchAssetRuleException("数据集质量验证下载地址必须是可追溯的 HTTP(S) 地址。");
         if (value.ExpectedSha256 is { Length: > 0 and not 64 })
-            throw new ProcessImprovementRuleException("期望 SHA-256 必须是 64 位十六进制字符串。");
+            throw new ResearchAssetRuleException("期望 SHA-256 必须是 64 位十六进制字符串。");
         foreach (var (column, range) in value.ValidSignalRanges)
         {
             if (!value.SignalColumns.Contains(column, StringComparer.OrdinalIgnoreCase) ||
                 string.IsNullOrWhiteSpace(range.Basis) ||
                 range.Minimum.HasValue && range.Maximum.HasValue &&
                 range.Minimum.Value >= range.Maximum.Value)
-                throw new ProcessImprovementRuleException("信号有效范围必须对应已声明信号，并包含依据和合法上下界。");
+                throw new ResearchAssetRuleException("信号有效范围必须对应已声明信号，并包含依据和合法上下界。");
         }
     }
 
-    private static string ManifestHash(ScientificValidationDatasetManifest value)
+    private static string ManifestHash(DatasetQualityValidationDatasetManifest value)
         => Hash(JsonSerializer.SerializeToUtf8Bytes(value, new JsonSerializerOptions
         {
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase

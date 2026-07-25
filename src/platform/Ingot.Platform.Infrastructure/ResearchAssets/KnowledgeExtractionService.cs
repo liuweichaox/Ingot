@@ -3,10 +3,10 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using ClosedXML.Excel;
-using Ingot.Contracts.ProcessImprovement;
+using Ingot.Contracts.ResearchAssets;
 using UglyToad.PdfPig;
 
-namespace Ingot.Platform.Infrastructure.ProcessImprovement;
+namespace Ingot.Platform.Infrastructure.ResearchAssets;
 
 public sealed record ExtractedKnowledgeFragment
 {
@@ -29,7 +29,7 @@ public interface IKnowledgeContentExtractor
 }
 
 public sealed class KnowledgeExtractionService(
-    IProcessImprovementStore store,
+    IResearchAssetStore store,
     IEnumerable<IKnowledgeContentExtractor> extractors)
 {
     public const string PipelineVersion = "knowledge-extraction-v1";
@@ -40,15 +40,15 @@ public sealed class KnowledgeExtractionService(
         CancellationToken ct = default)
     {
         var source = await store.GetKnowledgeSourceAsync(sourceId, ct).ConfigureAwait(false)
-            ?? throw new ProcessImprovementRuleException("知识来源不存在。");
+            ?? throw new ResearchAssetRuleException("知识来源不存在。");
         var extractor = extractors.FirstOrDefault(item => item.Supports(source))
-            ?? throw new ProcessImprovementRuleException($"暂不支持自动解析 {source.FileName}。");
+            ?? throw new ResearchAssetRuleException($"暂不支持自动解析 {source.FileName}。");
         var pipelineVersion = $"{PipelineVersion}/{extractor.Version}";
         if (source.ExtractionStatus == "completed" &&
             string.Equals(source.ExtractorVersion, pipelineVersion, StringComparison.Ordinal))
             return source;
         var stream = await store.OpenKnowledgeSourceAsync(sourceId, ct).ConfigureAwait(false)
-            ?? throw new ProcessImprovementRuleException("知识来源文件不可用。");
+            ?? throw new ResearchAssetRuleException("知识来源文件不可用。");
         await using (stream.ConfigureAwait(false))
         {
             try
@@ -100,7 +100,7 @@ public sealed class KnowledgeExtractionService(
                 await store.SaveKnowledgeSourceMetadataAsync(failed, ct).ConfigureAwait(false);
                 await AddAuditAsync(failed, "automatic-index-failed", userId, 0, ct)
                     .ConfigureAwait(false);
-                throw new ProcessImprovementRuleException($"自动解析失败：{exception.Message}");
+                throw new ResearchAssetRuleException($"自动解析失败：{exception.Message}");
             }
         }
     }
@@ -111,7 +111,7 @@ public sealed class KnowledgeExtractionService(
         string userId,
         int recordCount,
         CancellationToken ct)
-        => store.AddAuditEntryAsync(new ImprovementAuditEntry
+        => store.AddAuditEntryAsync(new ResearchAssetAuditEntry
         {
             EntryId = Guid.CreateVersion7(),
             ResourceType = "knowledge-source",
