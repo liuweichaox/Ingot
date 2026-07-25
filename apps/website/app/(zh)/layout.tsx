@@ -9,12 +9,12 @@ export const metadata: Metadata = {
     canonical: "/",
     languages: { "zh-CN": "/", en: "/en/" },
   },
-  title: "Ingot — 制造生产数据与工艺分析系统",
-  description: "连接设备过程、批次、工件、配方、工装和检测结果，建立连续生产履历，帮助工程师调查良率变化、设备差异与异常工件。",
+  title: "Ingot — AI 工艺研发系统",
+  description: "融合实验数据、实时过程数据、物理机理和专家知识，辅助工艺工程师设计实验、优化参数并验证工艺窗口，缩短工艺研发周期。",
   applicationName: "Ingot",
   keywords: [
-    "Ingot", "工艺调查", "良率分析", "Ingot Chat",
-    "生产履历", "工艺分析", "质量分析", "可核对分析",
+    "Ingot", "AI 工艺研发", "实验设计", "工艺优化",
+    "工艺窗口", "机理融合", "贝叶斯优化", "工艺知识",
   ],
   icons: {
     icon: "/brand/ingot-mark-dark.svg",
@@ -22,19 +22,17 @@ export const metadata: Metadata = {
     apple: "/brand/ingot-mark-dark.svg",
   },
   openGraph: {
-    title: "Ingot — 制造生产数据与工艺分析系统",
-    description: "把每次生产过程变成可追溯的工程依据：连接现场数据、建立生产履历、完成工艺调查。",
+    title: "Ingot — AI 工艺研发系统",
+    description: "用更少的实验，更快找到并验证可靠工艺。",
     url: origin,
     type: "website",
     locale: "zh_CN",
     siteName: "Ingot",
-    images: [{ url: "/og.png", width: 1200, height: 630, alt: "Ingot — 制造生产数据与工艺分析系统" }],
   },
   twitter: {
-    card: "summary_large_image",
-    title: "Ingot — 制造生产数据与工艺分析系统",
-    description: "连接现场数据、建立生产履历、完成工艺调查。",
-    images: ["/og.png"],
+    card: "summary",
+    title: "Ingot — AI 工艺研发系统",
+    description: "融合实验数据、实时过程数据、物理机理和专家知识，缩短工艺研发周期。",
   },
 };
 

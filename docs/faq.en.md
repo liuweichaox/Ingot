@@ -2,40 +2,48 @@
 
 ## What problem does Ingot solve?
 
-Ingot organizes equipment processes, batches, workpieces, recipes, tooling, and inspections into a production history. It helps manufacturing teams investigate yield changes, machine differences, tooling trends, abnormal workpieces, and the effect of process adjustments.
+Ingot helps process engineers develop processes that meet target specifications with fewer experiments and less time. It organizes objectives, experimental data, real-time process data, inspection outcomes, physical mechanisms, and expert knowledge into an iterative R&D loop.
 
-## Which teams use Ingot?
+## What role does data acquisition play?
 
-Process, quality, equipment, production, and plant IT teams collaborate around the same production records. Each role starts from the objects it cares about while sharing common batch, cycle, and metric definitions.
+Acquisition is a native Ingot capability. Mainstream industrial protocols and equipment-specific adaptations provide real process data with time, quality, version, and R&D context. The data directly supports experiment analysis, model updates, and process-window validation.
 
-## How does plant data enter Ingot?
+## How does Ingot support different equipment?
 
-Edge connects equipment, instruments, and plant data services, and it can also receive batch imports. The implementation team adds equipment, workpiece, batch, cycle, recipe, and process-stage context. Platform then organizes these records into production histories.
+Acquisition separates protocol drivers, equipment profiles, site point configurations, and process-variable mappings. Protocol capabilities are reused while model, firmware, and site differences are expressed through adaptations and project configuration.
 
-## What data is needed?
+## What does a development project contain?
 
-A first use case normally needs the target product and batch, equipment and station, production cycle, key process parameters, recipe version, and corresponding inspection outcomes. Tooling analysis also needs tooling identity and usage relationships.
+A project includes target specifications, baseline, process variables, outcomes, equipment and material scope, constraints, hypotheses, experiments, process data, inspections, datasets, models, mechanisms, process windows, validations, and process knowledge.
 
-## How does Ingot Chat answer a question?
+## How does Ingot help design experiments?
 
-Chat confirms the target and time range, checks data completeness, selects comparable records, calculates metrics, and organizes the result. The answer includes key numbers, charts, data-coverage notes, and related production records.
+The system combines prior experiments, target gaps, variable ranges, process features, physical mechanisms, model uncertainty, safety constraints, cost, and information gain to propose candidate next experiments and explain their rationale for engineering review.
 
-## How can users review the evidence?
+## What does AI do?
 
-Analysis results retain the data scope, sample count, and related records. Users can open the matching batch, cycle, stage curves, and inspection details from metrics or charts.
+AI structures development questions, retrieves evidence, invokes analysis and experiment-design tools, forms hypotheses, explains results, and drafts experiments. Numerical computation, data scope, constraint checks, model execution, and state transitions remain deterministic and reproducible.
 
-## How do teams keep investigation definitions consistent?
+## How are physical mechanisms and data models fused?
 
-Teams maintain recipe versions, process stages, parameter units, inspection definitions, and analysis plans. Investigations reuse this versioned configuration so results remain comparable across people and time.
+Mechanisms provide variable relationships, valid ranges, and constraints. Data models learn differences between observed experiments and mechanisms. Expert knowledge supplies site conditions and applicability. Fused results preserve source, version, uncertainty, and computation rationale.
 
-## How large should the first rollout be?
+## What is a process window?
 
-Start with one line, one product family, and one specific question that already affects operations. After confirming the data checklist, plant mapping, result review, and analysis plan, expand to more equipment and metrics.
+A process window is an evidence-supported parameter range together with its applicable product, material, equipment, tooling, and conditions, target outcome, safety constraints, uncertainty, and validation state.
 
-## How is Ingot deployed?
+## How are results kept trustworthy?
 
-Edge usually runs in the plant network, while Platform runs in a controlled plant or enterprise environment. The team chooses the exact deployment according to data volume, network conditions, backup requirements, and access scope.
+Results bind input datasets, filtering rules, feature definitions, algorithm and model versions, and computation hashes. Engineers can move from a conclusion to its experiments, traces, inspections, mechanisms, and knowledge sources.
 
-## Are Chinese and English documentation aligned?
+## How does process knowledge mature?
 
-Public documentation is maintained as Chinese and English pairs with the same navigation and reading order.
+Candidate patterns move through historical evidence, exploratory experiments, confirmatory experiments, and engineering review. Formal knowledge preserves applicability, limitations, sources, versions, and revalidation results.
+
+## Who uses Ingot?
+
+Process R&D engineers are the primary users. Process experts, quality engineers, equipment and automation engineers, R&D leads, and delivery teams collaborate in the same development project.
+
+## How is value measured?
+
+The primary metrics are experiments and calendar time required to reach target specifications, together with experiment cost, valid-experiment ratio, process-window validation, recommendation adoption, and knowledge reuse.

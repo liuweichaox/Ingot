@@ -2,7 +2,7 @@
 
 ## Project Structure & Module Organization
 
-Ingot is a .NET 10 monorepo with three web applications. Backend code lives under `src/`: `edge/` contains shop-floor services, `platform/` contains the central API and Vue UI, `agent/` contains read-only investigation logic, and `shared/` holds domain models and contracts. The xUnit suite is centralized in `tests/Ingot.Core.Tests`, mirroring those areas. `apps/website` and `apps/docs-site` are Next.js applications; `src/platform/Ingot.Platform.Web` is Vue/Vite. Deployment files are in `deploy/`, verification utilities in `scripts/`, benchmarks in `tools/`, documentation in `docs/`, and brand assets in `images/`.
+Ingot is a .NET 10 monorepo with three web applications. Backend code lives under `src/`: `edge/` contains shop-floor services, `platform/` contains the central API and React UI, `agent/` contains AI investigation logic, and `shared/` holds domain models and contracts. The xUnit suite is centralized in `tests/Ingot.Core.Tests`, mirroring those areas. `apps/website` and `apps/docs-site` are Next.js applications; `src/platform/Ingot.Platform.Web` is React/Vite. Deployment files are in `deploy/`, verification utilities in `scripts/`, benchmarks in `tools/`, documentation in `docs/`, and the canonical brand assets are in `apps/website/public/brand/`.
 
 ## Build, Test, and Development Commands
 

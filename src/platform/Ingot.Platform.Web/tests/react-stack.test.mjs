@@ -11,6 +11,7 @@ const registryEditor = await readFile(new URL("../src/components/RegistryBusines
 const businessObjectEditor = await readFile(new URL("../src/components/BusinessObjectEditor.jsx", import.meta.url), "utf8");
 const styles = await readFile(new URL("../src/styles/global.css", import.meta.url), "utf8");
 const vite = await readFile(new URL("../vite.config.mjs", import.meta.url), "utf8");
+const html = await readFile(new URL("../index.html", import.meta.url), "utf8");
 
 async function sourceFiles(directory) {
   const entries = await readdir(directory, { withFileTypes: true });
@@ -41,7 +42,7 @@ test("platform uses React, Tailwind, and Headless UI without Vue or Element Plus
 
 test("all platform routes remain available after the React migration", () => {
   for (const route of [
-    "/workbench", "/chat", "/explorer", "/cycles", "/events", "/production/changeover",
+    "/research-projects", "/workbench", "/chat", "/explorer", "/cycles", "/events", "/production/changeover",
     "/production/tooling-installations", "/configuration/component-types", "/configuration/components",
     "/configuration/tooling-types", "/configuration/tooling-assemblies", "/inspections",
     "/quality-analysis", "/configuration/inspection-definitions", "/configuration/quality-plans",
@@ -52,8 +53,14 @@ test("all platform routes remain available after the React migration", () => {
   ]) {
     assert.match(app, new RegExp(route.replaceAll("/", "\\/")));
   }
-  assert.match(app, /Navigate to="\/workbench"/);
+  assert.match(app, /Navigate to="\/research-projects"/);
   assert.match(app, /Navigate to="\/configuration\/process-data-models"/);
+});
+
+test("platform identity presents Ingot as an AI process research system", () => {
+  assert.match(html, /Ingot · AI 工艺研发系统/);
+  assert.match(html, /实验数据、实时过程数据、物理机理和专家知识/);
+  assert.doesNotMatch(html, /制造数据采集与工艺分析平台/);
 });
 
 test("navigation and overlays are accessible Headless UI components", () => {

@@ -5,12 +5,12 @@ const origin = "https://ingotstack.com";
 
 export const metadata: Metadata = {
   metadataBase: new URL(origin),
-  title: "Ingot — Manufacturing Production Data & Process Analysis",
-  description: "Connect equipment processes, batches, workpieces, recipes, tooling, and inspections into production histories for yield, machine, and workpiece investigations.",
+  title: "Ingot — AI Process R&D for Manufacturing",
+  description: "Fuse experimental data, real-time process data, physical mechanisms, and expert knowledge to design experiments, optimize parameters, validate process windows, and shorten development cycles.",
   applicationName: "Ingot",
   keywords: [
-    "Ingot", "process investigation", "yield analysis", "Ingot Chat",
-    "production history", "process analysis", "quality analysis", "verifiable analytics",
+    "Ingot", "AI process R&D", "experiment design", "process optimization",
+    "process window", "mechanism fusion", "Bayesian optimization", "process knowledge",
   ],
   alternates: {
     canonical: "/en/",
@@ -22,20 +22,18 @@ export const metadata: Metadata = {
     apple: "/brand/ingot-mark-dark.svg",
   },
   openGraph: {
-    title: "Ingot — Manufacturing Production Data & Process Analysis",
-    description: "Turn every production run into traceable engineering evidence through connected plant data, production histories, and process investigation.",
+    title: "Ingot — AI Process R&D for Manufacturing",
+    description: "Use fewer experiments to find and validate reliable processes faster.",
     url: `${origin}/en/`,
     locale: "en_US",
     alternateLocale: ["zh_CN"],
     siteName: "Ingot",
     type: "website",
-    images: [{ url: "/og.png", width: 1200, height: 630, alt: "Ingot — Manufacturing Production Data & Process Analysis" }],
   },
   twitter: {
-    card: "summary_large_image",
-    title: "Ingot — Manufacturing Production Data & Process Analysis",
-    description: "Connected plant data, production histories, and process investigation.",
-    images: ["/og.png"],
+    card: "summary",
+    title: "Ingot — AI Process R&D for Manufacturing",
+    description: "Fuse data, physical mechanisms, and expert knowledge to shorten process-development cycles.",
   },
 };
 

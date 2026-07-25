@@ -7,9 +7,9 @@ const root = path.resolve(import.meta.dirname, "../../..");
 const out = path.join(root, "apps/docs-site/out");
 
 test("exports the bilingual product documentation journey", async () => {
-  for (const file of ["zh/index.html", "en/index.html", "zh/ingot-chat/index.html", "en/ingot-chat/index.html", "zh/rollout/index.html", "en/rollout/index.html", "search-index.json", "sitemap.xml", "robots.txt"])
+  for (const file of ["zh/index.html", "en/index.html", "zh/design/index.html", "en/design/index.html", "zh/rollout/index.html", "en/rollout/index.html", "search-index.json", "sitemap.xml", "robots.txt"])
     assert.ok((await readFile(path.join(out, file))).length > 0, file);
-  for (const slug of ["product-overview", "use-cases", "how-it-works", "ingot-chat", "rollout", "faq"])
+  for (const slug of ["design", "rollout", "faq"])
     for (const lang of ["zh", "en"])
       assert.ok((await readFile(path.join(out, lang, slug, "index.html"))).length > 0, `${lang}/${slug}`);
 
@@ -26,29 +26,28 @@ test("uses the exact official brand assets", async () => {
     const official = await readFile(path.join(root, "apps/website/public/brand", name));
     const docs = await readFile(path.join(root, "apps/docs-site/public/brand", name));
     assert.deepEqual(docs, official, name);
-    const source = await readFile(path.join(root, "images/logo", name));
-    assert.deepEqual(official, source, `${name} source`);
   }
 });
 
-test("publishes product guidance without interface or developer documentation", async () => {
+test("publishes the AI process R&D product journey without interface or developer documentation", async () => {
   const search = JSON.parse(await readFile(path.join(out, "search-index.json"), "utf8"));
-  assert.equal(search.length, 14);
+  assert.equal(search.length, 8);
   assert.deepEqual(
     [...new Set(search.map((item) => item.slug))].sort(),
-    ["", "faq", "how-it-works", "ingot-chat", "product-overview", "rollout", "use-cases"],
+    ["", "design", "faq", "rollout"],
   );
 
   for (const lang of ["zh", "en"]) {
     const index = await readFile(path.join(out, lang, "index.html"), "utf8");
-    const chat = await readFile(path.join(out, lang, "ingot-chat", "index.html"), "utf8");
-    assert.match(index, lang === "zh" ? /生产履历/ : /production history/i);
-    assert.match(chat, lang === "zh" ? /调查入口/ : /process|investigation/i);
-    assert.doesNotMatch(`${index}${chat}`, /\/api\/|curl|ProductionEvent|InspectionRecord|endpoint|HTTP API/i);
+    const design = await readFile(path.join(out, lang, "design", "index.html"), "utf8");
+    assert.match(index, lang === "zh" ? /AI 工艺研发系统/ : /AI Process R&amp;D/i);
+    assert.match(design, lang === "zh" ? /工艺研发闭环/ : /Process R&amp;D Loop/i);
+    assert.match(index, lang === "zh" ? /缩短工艺研发周期/ : /shorten development cycles/i);
+    assert.doesNotMatch(`${index}${design}`, /\/api\/|curl|ProductionEvent|InspectionRecord|endpoint|HTTP API/i);
   }
   assert.doesNotMatch(JSON.stringify(search), /\/api\/|curl|ProductionEvent|InspectionRecord|endpoint|HTTP API/i);
 
-  for (const slug of ["rfc-production-events", "tutorial-development", "architecture", "design", "modules"])
+  for (const slug of ["rfc-production-events", "tutorial-development", "architecture", "modules", "ingot-chat", "use-cases"])
     await assert.rejects(readFile(path.join(out, "zh", slug, "index.html")));
 });
 

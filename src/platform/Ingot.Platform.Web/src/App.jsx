@@ -1,14 +1,13 @@
 import { Dialog, DialogBackdrop, DialogPanel, Menu, MenuButton, MenuItem, MenuItems } from "@headlessui/react";
 import {
   BoltIcon,
+  BeakerIcon,
   ChartBarIcon,
-  ChatBubbleLeftRightIcon,
   CircleStackIcon,
   ClipboardDocumentCheckIcon,
   Cog6ToothIcon,
   MagnifyingGlassIcon,
   RectangleGroupIcon,
-  Squares2X2Icon,
   UserCircleIcon,
   WrenchScrewdriverIcon,
   XMarkIcon,
@@ -20,8 +19,11 @@ import * as Pages from "./pages";
 import { cx, ToastHost } from "./ui/components";
 
 const sections = [
-  { id: "workbench", label: "工作台", icon: Squares2X2Icon, path: "/workbench", items: [] },
-  { id: "chat", label: "AI 助手", icon: ChatBubbleLeftRightIcon, path: "/chat", items: [] },
+  {
+    id: "research", label: "工艺研发", icon: BeakerIcon, path: "/research-projects", items: [
+      ["/research-projects", "研发项目"], ["/chat", "AI 研发助手"], ["/process-improvement", "分析、模型与知识"],
+    ],
+  },
   {
     id: "operations", label: "运行与追溯", icon: BoltIcon, path: "/cycles", items: [
       ["/cycles", "运行记录"], ["/events", "生产事件"], ["/production/changeover", "生产切换"],
@@ -36,7 +38,7 @@ const sections = [
   },
   {
     id: "analysis", label: "分析中心", icon: ChartBarIcon, path: "/comparisons", items: [
-      ["/comparisons", "历史对比"], ["/data-quality", "数据健康"], ["/process-improvement", "工艺改进"],
+      ["/comparisons", "历史对比"], ["/data-quality", "数据健康"],
       ["/configuration/process-analysis-plans", "分析方案"],
     ],
   },
@@ -61,8 +63,9 @@ const sections = [
 ];
 
 const pageDetails = {
-  "/workbench": ["工作台", "生产、质量与数据状态"],
-  "/chat": ["AI 助手", "查询和分析已保存的生产数据"],
+  "/research-projects": ["工艺研发项目", "从目标、假设和实验推进到经过验证的工艺窗口"],
+  "/workbench": ["运行工作台", "生产、质量与数据状态"],
+  "/chat": ["AI 研发助手", "结合实验、过程数据、机理和知识推进研发任务"],
   "/explorer": ["设备与对象", "查找已接入设备及其上报的生产对象"],
   "/cycles": ["运行记录", "查看生产周期及其数据、工艺与质量上下文"],
   "/events": ["生产事件", "查询、追溯并关联运行上下文"],
@@ -72,7 +75,7 @@ const pageDetails = {
   "/quality-analysis": ["质量分析", "按产品、配方、运行对象和分析范围查看质量结果"],
   "/comparisons": ["历史对比", "比较同类生产周期、运行段或时间窗口"],
   "/data-quality": ["数据健康", "检查运行对象的数据范围、采样连续性与周期完整性"],
-  "/process-improvement": ["工艺改进", "管理模型、调查试验、现场知识与参数建议闭环"],
+  "/process-improvement": ["分析、模型与知识", "管理研发分析、机理模型、实验结果和工艺知识"],
   "/configuration/process-analysis-plans": ["分析方案", "配置分析范围、对齐方式、质量分组和数据项"],
   "/configuration/process-data-models": ["工艺数据模型", "定义采集数据项、配方参数结构和工艺阶段"],
   "/configuration/recipe-versions": ["配方版本", "维护引用数据模型的完整配方有效值"],
@@ -157,7 +160,7 @@ export default function App() {
     ? ["周期详情", "查看单次生产运行的过程、质量和数据完整性"]
     : location.pathname.startsWith("/edges/")
       ? ["节点诊断", "查看现场节点的连接、采集、上行和最近日志"]
-    : pageDetails[location.pathname] ?? ["Ingot", "制造数据平台"];
+    : pageDetails[location.pathname] ?? ["Ingot", "AI 工艺研发系统"];
 
   if (authState === "checking") return <AuthenticationLoading />;
   if (authState === "required") {
@@ -170,13 +173,13 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
       <header className="fixed inset-x-0 top-0 z-50 flex h-16 items-stretch border-b border-slate-200 bg-white/95 shadow-sm backdrop-blur">
-        <button className="flex w-16 shrink-0 items-center gap-3 border-r border-slate-100 px-3 text-left sm:w-55 sm:px-5" onClick={() => navigate("/workbench")}>
+        <button className="flex w-16 shrink-0 items-center gap-3 border-r border-slate-100 px-3 text-left sm:w-55 sm:px-5" onClick={() => navigate("/research-projects")}>
           <span className="grid size-9 place-items-center rounded-xl bg-amber-50 ring-1 ring-amber-200">
             <img src="/ingot-mark.svg" alt="" className="size-7" />
           </span>
           <span className="hidden sm:grid">
             <strong className="text-base leading-5 text-slate-950">Ingot</strong>
-            <small className="text-[10px] text-slate-500">制造数据平台</small>
+            <small className="text-[10px] text-slate-500">AI 工艺研发系统</small>
           </span>
         </button>
         <Menu as="div" className="relative flex min-w-0 flex-1 xl:hidden">
@@ -305,7 +308,8 @@ export default function App() {
 function AppRoutes() {
   return (
     <Routes>
-      <Route path="/" element={<Navigate to="/workbench" replace />} />
+      <Route path="/" element={<Navigate to="/research-projects" replace />} />
+      <Route path="/research-projects" element={<Pages.ResearchProjectsPage />} />
       <Route path="/workbench" element={<Pages.WorkbenchPage />} />
       <Route path="/chat" element={<Pages.ChatPage />} />
       <Route path="/explorer" element={<Pages.ObjectExplorerPage />} />
@@ -384,10 +388,10 @@ function LoginPage({ onAuthenticated }) {
         <div className="max-w-xl">
           <div className="mb-8 flex items-center gap-3">
             <span className="grid size-12 place-items-center rounded-2xl bg-amber-50"><img src="/ingot-mark.svg" alt="" className="size-9" /></span>
-            <div><strong className="text-2xl">Ingot</strong><p className="text-sm text-slate-400">制造数据平台</p></div>
+            <div><strong className="text-2xl">Ingot</strong><p className="text-sm text-slate-400">AI 工艺研发系统</p></div>
           </div>
-          <h1 className="text-4xl font-semibold leading-tight">让生产过程、质量结果和改进决策保持同一条追溯链。</h1>
-          <p className="mt-5 leading-7 text-slate-300">登录后可按岗位权限查看运行、处理质检、管理配置和执行受控改进。</p>
+          <h1 className="text-4xl font-semibold leading-tight">让每一轮实验都更接近经过验证的工艺窗口。</h1>
+          <p className="mt-5 leading-7 text-slate-300">融合实验数据、实时过程数据、物理机理和专家知识，帮助工艺工程师更快完成工艺研发。</p>
         </div>
       </section>
       <main className="grid place-items-center p-6 sm:p-10">

@@ -30,205 +30,205 @@ const DOCS = "https://docs.ingotstack.com";
 const COPY = {
   zh: {
     docs: `${DOCS}/zh`,
-    nav: { g1: "核心能力", g2: "典型场景", g3: "工作方式", g4: "产品组成", cta: "了解项目 →", lang: "EN", langHref: "/en/" },
+    nav: { g1: "核心能力", g2: "研发场景", g3: "研发闭环", g4: "系统组成", cta: "了解 Ingot →", lang: "EN", langHref: "/en/" },
     hero: {
-      eyebrow: "Ingot · 制造生产数据与工艺分析系统",
-      h1a: "把每次生产过程,",
-      h1b: "变成可追溯的工程依据",
-      leadA: "连接设备过程、批次、工件、配方、工装和检测结果。",
-      leadB: "从一个异常回到对应工位、阶段与原始曲线;",
-      leadC: "再用一致的口径比较批次、设备和生产周期。",
-      pill1: "生产履历贯通",
-      pill2: "分析结果可回查",
-      ctaPrimary: "了解典型场景",
-      ctaSecondary: "查看工作方式",
-      cardTtl: "Ingot Chat",
-      ro: "示例 · 工艺调查",
+      eyebrow: "Ingot · AI 工艺研发系统",
+      h1a: "用更少的实验,",
+      h1b: "加速工艺研发",
+      leadA: "融合实验数据、实时过程数据、物理机理和专家知识。",
+      leadB: "辅助工艺工程师设计实验、发现规律、优化参数并验证工艺窗口,",
+      leadC: "缩短工艺研发周期。",
+      pill1: "数据 · 机理 · 知识融合",
+      pill2: "实验建议可验证",
+      ctaPrimary: "了解研发闭环",
+      ctaSecondary: "查看核心能力",
+      cardTtl: "Ingot 研发助手",
+      ro: "示例 · 研发项目",
       you: "你",
-      q: "LOT-0716 一次通过率掉了,和上一批比,问题出在哪个环节?",
-      sparkHead: "一次通过率 / 近 8 批",
-      sparkUnit: "%",
+      q: "已经完成 12 次模压实验。下一组参数怎么选,才能更快达到面形规格?",
+      sparkHead: "面形误差 / 连续实验",
+      sparkUnit: "μm",
     },
     problem: {
-      eyebrow: "生产履历",
-      h2a: "让分散的数据,",
-      h2b: "围绕",
-      h2em: "一次生产过程",
-      h2c: "重新连接。",
+      eyebrow: "工艺研发",
+      h2a: "让每一次实验,",
+      h2b: "都推动",
+      h2em: "工艺认知",
+      h2c: "向前。",
       cells: [
-        ["过程 · 连续", "设备参数成为完整过程", "温度、压力、转速、状态和周期按工件与生产周期关联,形成可以回看的阶段曲线和过程记录。"],
-        ["质量 · 对齐", "检测结果回到对应现场", "尺寸、缺陷和判定结果与批次、工位、配方和工装关联,从结果可以直接找到过程。"],
-        ["方法 · 复用", "专家经验沉淀为分析方案", "常用指标、比较范围和工艺阶段成为可复用配置,让团队沿用同一套分析口径。"],
+        ["数据 · 真实", "计划、过程和结果完整关联", "区分计划参数、实际设置、真实过程曲线和检测结果,让每次实验都有完整、可复算的证据。"],
+        ["机理 · 融合", "数据与物理规律共同判断", "把时序特征、统计证据、物理机理和专家边界放进同一分析,提高小样本研发效率。"],
+        ["实验 · 迭代", "下一次试验有明确价值", "根据目标差距、信息增益、不确定性和安全约束推荐候选实验,持续收紧工艺窗口。"],
       ],
     },
     guar: {
       eyebrow: "核心能力",
-      h2a: "从生产履历到",
-      h2u: "可核对",
-      h2b: "的工艺调查。",
-      sub: "Ingot 把数据组织、指标计算和工程复核放在同一条工作链路上。",
+      h2a: "从研发证据到",
+      h2u: "下一组最值得做",
+      h2b: "的实验。",
+      sub: "Ingot 把数据采集、工艺语义、实验设计、模型机理和工程审核连接成一个研发闭环。",
       cards: [
-        { v: true, tag: "Production History", h: "过程与结果对齐", pa: "把设备、工件、批次、配方、工装和检测记录放进", hl: "同一条生产履历", pb: ",从异常结果可以回到对应工位和工艺阶段。", foot: "按批次 · 工件 · 生产周期组织" },
-        { v: false, tag: "Evidence Trail", h: "每个指标都有依据", pa: "平台完成数据检查、聚合和对比,", hl: "数字与图表保留相关生产记录", pb: ",可以继续打开样本、曲线和检测明细。", foot: "范围 · 样本 · 曲线 · 检测记录" },
-        { v: false, tag: "Reusable Analysis", h: "专家方法可以复用", pa: "用日常语言发起调查,系统完成检索、对齐和计算。", hl: "工艺阶段、特征和比较口径沉淀为分析方案", pb: ",让团队持续沿用经过确认的方法。", foot: "自然语言进入 · 工程依据输出" },
+        { v: true, tag: "R&D Context", h: "围绕研发目标组织一切", pa: "把目标、变量、约束、材料、设备、实验和检测结果放进", hl: "同一个工艺研发项目", pb: ",让数据始终具有明确研发含义。", foot: "目标 · 变量 · 约束 · 实验" },
+        { v: false, tag: "Reproducible Evidence", h: "每个结论都能复算", pa: "数据集、特征、模型和机理全部版本化,", hl: "分析结果保留完整证据链", pb: ",工程师可以回到真实实验和过程曲线。", foot: "数据集 · 特征 · 模型 · 机理" },
+        { v: false, tag: "Sequential Optimization", h: "每轮实验都更新认知", pa: "系统结合已有结果和不确定性提出候选实验。", hl: "实验结果继续更新假设、模型和参数窗口", pb: ",直到达到并验证目标规格。", foot: "建议 · 执行 · 更新 · 验证" },
       ],
     },
     quest: {
-      eyebrow: "价值在哪",
-      h2a: "围绕制造现场",
-      h2b: "最关键的工艺问题。",
-      sub: "从良率、设备差异到工装趋势,Ingot 用同一套生产履历连接问题、指标和原始记录。",
-      rank: "核心场景",
-      heroH: "良率为什么突然下滑?",
-      heroP: "从哪一批开始、掉在哪个环节、和哪个过程参数一起变的 —— 把“良率分析”从开会拍脑袋,变成一组能定位到工位和批次的可核对记录。少说清一天,就多一天的废品和返工。",
-      dim1a: "分组 · ", dim1b: "批次",
-      dim2a: "定位 · ", dim2b: "工位 · 过程参数",
+      eyebrow: "核心研发场景",
+      h2a: "围绕工艺工程师",
+      h2b: "真正要完成的研发目标。",
+      sub: "Ingot 不止解释已有结果,还帮助工程师决定下一步怎样实验,并把验证过的结论沉淀为工艺知识。",
+      rank: "北极星场景",
+      heroH: "怎样更快找到满足规格的工艺窗口?",
+      heroP: "在设备、安全、材料和实验预算约束下,融合历史实验、实时过程、物理机理和专家经验,识别最有价值的下一组实验。每次结果都更新对工艺空间的理解,直到目标规格得到稳定验证。",
+      dim1a: "目标 · ", dim1b: "达到规格",
+      dim2a: "优化 · ", dim2b: "实验次数 · 时间",
       small: [
-        ["工装 / 刀具到寿命了吗?", "固定一件工装,看关键指标随使用次数怎么走,预测该维护或更换的时点。修早了浪费,修晚了报废。", "趋势 · 设备 · 使用次数"],
-        ["同配方,为什么这台不一样?", "同一套参数,不同设备做出的结果有系统性差异。按设备分层对比,把问题定位到具体那一台。", "分层 · 设备"],
+        ["新产品怎样从历史工艺开始?", "按材料、几何、设备和模具检索相似研发项目,复用经过验证的知识和参数窗口,从接近可行解的位置开始。", "知识迁移 · 暖启动"],
+        ["多个指标和约束怎样同时满足?", "同时考虑质量、效率、能耗和安全边界,用带不确定性的多目标实验建议探索可行工艺空间。", "多目标 · 约束 · 不确定性"],
       ],
     },
     how: {
-      eyebrow: "工作方式",
-      h2: "四步,从现场数据到工程结论。",
+      eyebrow: "研发闭环",
+      h2: "四步,从研发目标到验证知识。",
       steps: [
-        { n: "01 · 汇集", h: "连接现场数据", pa: "持续采集设备过程、状态变化与检测结果,并带上工件、批次、配方和工装上下文。", code: "", pb: "" },
-        { n: "02 · 成形", h: "建立生产履历", pa: "同一次加工的过程和结果按生产周期关联,形成可回看、可比较的阶段曲线与完整履历。", code: "", pb: "" },
-        { n: "03 · 调查", h: "比较同类过程", pa: "从批次、设备、工件或日常问题进入,检查数据质量并按统一口径计算与比较。", code: "", pb: "" },
-        { n: "04 · 复核", h: "回到原始记录", pa: "从摘要和图表打开相关周期、曲线与检测明细,让团队完成工程判断并沉淀分析方案。", code: "", pb: "" },
+        { n: "01 · 定义", h: "明确目标与约束", pa: "定义目标规格、评价指标、可控变量、设备能力、安全边界和项目预算。", code: "", pb: "" },
+        { n: "02 · 融合", h: "建立研发证据", pa: "采集真实过程和检测结果,结合历史实验、物理机理与专家知识形成可复算数据集。", code: "", pb: "" },
+        { n: "03 · 实验", h: "设计下一组实验", pa: "分析变量、阶段、交互和不确定性,提出带理由、预期结果和安全检查的候选实验。", code: "", pb: "" },
+        { n: "04 · 验证", h: "收紧窗口并沉淀知识", pa: "用实验结果更新模型和假设,验证工艺窗口,把审核后的结论保存为可复用知识。", code: "", pb: "" },
       ],
     },
     bound: {
-      eyebrow: "产品组成",
-      h2: "采集、履历、配置与分析,形成一套完整工作台。",
-      yesLbl: "生产数据底座",
-      noLbl: "工艺分析工作台",
+      eyebrow: "系统组成",
+      h2: "从真实数据到研发决策,形成一套完整系统。",
+      yesLbl: "数据与研发基础",
+      noLbl: "智能研发闭环",
       yes: [
-        "Edge 持续采集设备参数、状态与现场记录",
-        "Platform 关联批次、工件、周期、配方与工装",
-        "工艺阶段、参数单位和检测定义按版本维护",
-        "原始数据、阶段曲线和质量结果统一查询",
+        "Edge 通过主流协议和设备适配采集真实过程",
+        "项目统一管理目标、变量、约束、实验和检测",
+        "工艺阶段、特征、数据集和模型按版本维护",
+        "原始数据、计算结果和知识来源完整追溯",
       ],
       no: [
-        "从设备、批次、工件和异常结果进入调查",
-        "检查完整性并比较同类生产周期",
-        "Ingot Chat 组织问题、指标、图表与相关记录",
-        "分析方案保存目标指标、范围和比较口径",
+        "识别关键变量、工艺阶段和候选规律",
+        "融合数据模型、物理机理和专家知识",
+        "设计带约束和不确定性的下一组实验",
+        "验证参数窗口并沉淀可复用工艺知识",
       ],
     },
     cta: {
-      eyebrow: "开始了解",
-      h2a: "从一个现场问题出发,",
+      eyebrow: "开始一个真实项目",
+      h2a: "从一个工艺目标出发,",
       h2b: "建立第一条",
-      h2g: "可分析的生产履历",
+      h2g: "可验证的研发闭环",
       h2c: "。",
-      p: "选择一条产线、一个产品族和一个正在影响良率、节拍或维护成本的问题,完成数据准备、结果复核和方法沉淀。",
-      primary: "查看落地实施",
+      p: "选择一个有明确规格、可控参数、真实设备和检测条件的研发项目,用实验次数、研发时间和资源成本验证价值。",
+      primary: "查看落地验证",
       secondary: "浏览项目文档",
     },
-    foot: "制造生产数据与工艺分析系统 · ",
-    footB: "生产履历 · 工艺调查 · 结果回查",
+    foot: "AI 工艺研发系统 · ",
+    footB: "实验设计 · 机理融合 · 工艺窗口",
   },
   en: {
     docs: `${DOCS}/en`,
-    nav: { g1: "Capabilities", g2: "Use cases", g3: "How it works", g4: "Product", cta: "Explore →", lang: "中文", langHref: "/" },
+    nav: { g1: "Capabilities", g2: "R&D scenarios", g3: "R&D loop", g4: "System", cta: "Explore Ingot →", lang: "中文", langHref: "/" },
     hero: {
-      eyebrow: "Ingot · Manufacturing Production Data & Process Analysis",
-      h1a: "Turn every production run",
-      h1b: "into traceable engineering evidence",
-      leadA: "Connect equipment processes, batches, workpieces, recipes, tooling, and inspections. ",
-      leadB: "Move from an abnormal result to the matching station, stage, and original curve; ",
-      leadC: "then compare batches, machines, and production cycles with consistent definitions.",
-      pill1: "Connected production history",
-      pill2: "Traceable analysis results",
-      ctaPrimary: "Explore use cases",
-      ctaSecondary: "See how it works",
-      cardTtl: "Ingot Chat",
-      ro: "DEMO · INVESTIGATION",
+      eyebrow: "Ingot · AI Process R&D for Manufacturing",
+      h1a: "Use fewer experiments",
+      h1b: "to find reliable processes faster",
+      leadA: "Fuse experimental data, real-time process data, physical mechanisms, and expert knowledge. ",
+      leadB: "Help process engineers design experiments, discover patterns, optimize parameters, and validate process windows ",
+      leadC: "to shorten development cycles.",
+      pill1: "Data · mechanisms · knowledge",
+      pill2: "Verifiable experiment guidance",
+      ctaPrimary: "Explore the R&D loop",
+      ctaSecondary: "See capabilities",
+      cardTtl: "Ingot R&D Assistant",
+      ro: "DEMO · R&D PROJECT",
       you: "You",
-      q: "LOT-0716's first-pass yield dropped. Compared to the last batch, which step is it?",
-      sparkHead: "First-pass yield / last 8 batches",
-      sparkUnit: "%",
+      q: "We have completed 12 molding experiments. Which parameters should we try next to reach the form specification faster?",
+      sparkHead: "Form error / sequential experiments",
+      sparkUnit: "μm",
     },
     problem: {
-      eyebrow: "Production history",
-      h2a: "Reconnect scattered data",
-      h2b: "around ",
-      h2em: "one production process",
+      eyebrow: "Process R&D",
+      h2a: "Make every experiment",
+      h2b: "advance ",
+      h2em: "process understanding",
       h2c: ".",
       cells: [
-        ["Process · continuous", "Equipment data becomes a complete process", "Temperature, pressure, speed, states, and cycle time connect by workpiece and production cycle to form reviewable stage curves."],
-        ["Quality · aligned", "Inspections return to the matching operation", "Dimensions, defects, and outcomes connect with the batch, station, recipe, and tooling, linking every result to its process."],
-        ["Method · reusable", "Expert practice becomes an analysis plan", "Common metrics, comparison scopes, and process stages become reusable configuration, keeping the team on consistent definitions."],
+        ["Data · real", "Plan, process, and outcome stay connected", "Separate planned parameters, actual settings, real process traces, and inspections so every experiment has complete, reproducible evidence."],
+        ["Mechanisms · fused", "Data and physical laws work together", "Combine time-series features, statistical evidence, physical mechanisms, and expert boundaries for sample-efficient R&D."],
+        ["Experiments · iterative", "Every next trial has explicit value", "Recommend candidates from target gaps, information gain, uncertainty, and safety constraints to tighten the process window."],
       ],
     },
     guar: {
       eyebrow: "Core capabilities",
-      h2a: "From production history to a ",
-      h2u: "reviewable",
-      h2b: " process investigation.",
-      sub: "Ingot brings data organization, metric calculation, and engineering review into one workflow.",
+      h2a: "From R&D evidence to the ",
+      h2u: "next most valuable",
+      h2b: " experiment.",
+      sub: "Ingot connects acquisition, process semantics, experiment design, models, mechanisms, and engineering review in one loop.",
       cards: [
-        { v: true, tag: "Production History", h: "Process and outcome align", pa: "Place equipment, workpieces, batches, recipes, tooling, and inspections in ", hl: "one production history", pb: " so an abnormal result opens the matching station and process stage.", foot: "Organized by batch · workpiece · cycle" },
-        { v: false, tag: "Evidence Trail", h: "Every metric has evidence", pa: "Platform checks, aggregates, and compares the data. ", hl: "Metrics and charts retain their production records", pb: " so teams can open samples, curves, and inspection detail.", foot: "Scope · samples · curves · inspections" },
-        { v: false, tag: "Reusable Analysis", h: "Expert methods become reusable", pa: "Start in everyday language and let the system retrieve, align, and calculate. ", hl: "Process stages, features, and comparison definitions become analysis plans", pb: " the team can apply repeatedly.", foot: "Everyday language in · engineering evidence out" },
+        { v: true, tag: "R&D Context", h: "Everything follows the objective", pa: "Place objectives, variables, constraints, materials, equipment, experiments, and outcomes in ", hl: "one process-development project", pb: " so every record has clear R&D meaning.", foot: "Objectives · variables · constraints · experiments" },
+        { v: false, tag: "Reproducible Evidence", h: "Every conclusion can be reproduced", pa: "Version datasets, features, models, and mechanisms. ", hl: "Results retain a complete evidence trail", pb: " back to real experiments and process traces.", foot: "Datasets · features · models · mechanisms" },
+        { v: false, tag: "Sequential Optimization", h: "Every experiment updates understanding", pa: "Use results and uncertainty to propose candidates. ", hl: "New outcomes update hypotheses, models, and process windows", pb: " until the target specification is validated.", foot: "Recommend · execute · update · validate" },
       ],
     },
     quest: {
-      eyebrow: "Where the value is",
-      h2a: "Built around the production floor's",
-      h2b: "most important process questions.",
-      sub: "From yield and machine differences to tooling trends, Ingot connects the question, metrics, and original records through the same production history.",
-      rank: "Core use case",
-      heroH: "Why did yield suddenly drop?",
-      heroP: "From which batch, at which step, and moving together with which process parameter — turning yield analysis from a meeting-room guess into reviewable records that pin the change to a station and a batch. Every day it stays unclear is another day of scrap and rework.",
-      dim1a: "Group · ", dim1b: "batch",
-      dim2a: "Locate · ", dim2b: "station · parameter",
+      eyebrow: "Core R&D scenarios",
+      h2a: "Built around what process engineers",
+      h2b: "must achieve in development.",
+      sub: "Ingot goes beyond explaining past outcomes: it helps engineers decide what to try next and preserve validated conclusions as process knowledge.",
+      rank: "North-star scenario",
+      heroH: "How can we reach a process window that meets specification faster?",
+      heroP: "Under equipment, safety, material, and budget constraints, combine historical experiments, real-time processes, physical mechanisms, and expert knowledge to select the next most valuable experiments. Every outcome updates the process space until the target is repeatedly validated.",
+      dim1a: "Objective · ", dim1b: "reach specification",
+      dim2a: "Optimize · ", dim2b: "experiments · time",
       small: [
-        ["Is the tooling / cutter at end of life?", "Fix one tool, watch a key metric drift with usage count, predict when to service or replace. Too early wastes it; too late scraps parts.", "Trend · asset · usage count"],
-        ["Same recipe — why is this machine different?", "Same parameters, systematic differences across machines. Compare stratified by asset to pin it to the specific one.", "Stratify · asset"],
+        ["How can a new product start from prior process knowledge?", "Find similar projects by material, geometry, equipment, and tooling, then reuse validated knowledge and process windows as a warm start.", "Knowledge transfer · warm start"],
+        ["How can multiple objectives and constraints be met together?", "Balance quality, efficiency, energy, and safety with uncertainty-aware multi-objective experiment recommendations.", "Multi-objective · constraints · uncertainty"],
       ],
     },
     how: {
-      eyebrow: "How it works",
-      h2: "Four steps, from plant data to engineering conclusions.",
+      eyebrow: "R&D loop",
+      h2: "Four steps, from objective to validated knowledge.",
       steps: [
-        { n: "01 · Connect", h: "Bring plant data together", pa: "Collect equipment processes, state changes, and inspections with their workpiece, batch, recipe, and tooling context.", code: "", pb: "" },
-        { n: "02 · Assemble", h: "Build the production history", pa: "Link process and outcome from the same run by production cycle into reviewable, comparable stage curves and histories.", code: "", pb: "" },
-        { n: "03 · Investigate", h: "Compare similar processes", pa: "Start from a batch, machine, workpiece, or everyday question, check data quality, and compare with consistent definitions.", code: "", pb: "" },
-        { n: "04 · Review", h: "Return to original records", pa: "Open cycles, curves, and inspections from summaries and charts, complete the engineering review, and preserve the analysis plan.", code: "", pb: "" },
+        { n: "01 · Define", h: "Set objectives and constraints", pa: "Define target specifications, metrics, controllable variables, equipment capability, safety boundaries, and budget.", code: "", pb: "" },
+        { n: "02 · Fuse", h: "Build R&D evidence", pa: "Acquire real processes and outcomes, then combine them with history, physical mechanisms, and expert knowledge.", code: "", pb: "" },
+        { n: "03 · Experiment", h: "Design the next experiments", pa: "Analyze variables, phases, interactions, and uncertainty to propose candidates with rationale, outcomes, and safety checks.", code: "", pb: "" },
+        { n: "04 · Validate", h: "Tighten windows and preserve knowledge", pa: "Update models and hypotheses, validate process windows, and save reviewed conclusions as reusable knowledge.", code: "", pb: "" },
       ],
     },
     bound: {
-      eyebrow: "Product",
-      h2: "Collection, history, configuration, and analysis in one workspace.",
-      yesLbl: "Production data foundation",
-      noLbl: "Process analysis workspace",
+      eyebrow: "System",
+      h2: "One system from real data to R&D decisions.",
+      yesLbl: "Data and R&D foundation",
+      noLbl: "Intelligent R&D loop",
       yes: [
-        "Edge continuously collects equipment parameters, states, and plant records",
-        "Platform connects batches, workpieces, cycles, recipes, and tooling",
-        "Process stages, parameter units, and inspection definitions are versioned",
-        "Original data, stage curves, and quality outcomes share one query path",
+        "Edge acquires real processes through mainstream protocols and equipment adaptations",
+        "Projects manage objectives, variables, constraints, experiments, and inspections",
+        "Phases, features, datasets, and models remain versioned",
+        "Raw data, computations, and knowledge sources remain traceable",
       ],
       no: [
-        "Start investigations from equipment, batches, workpieces, and abnormal outcomes",
-        "Check completeness and compare similar production cycles",
-        "Ingot Chat organizes questions, metrics, charts, and related records",
-        "Analysis plans preserve target metrics, scope, and comparison definitions",
+        "Identify critical variables, phases, and candidate process laws",
+        "Fuse data models, physical mechanisms, and expert knowledge",
+        "Design constraint- and uncertainty-aware next experiments",
+        "Validate process windows and preserve reusable process knowledge",
       ],
     },
     cta: {
-      eyebrow: "Explore Ingot",
-      h2a: "Start from one production question",
+      eyebrow: "Start a real project",
+      h2a: "Begin with one process objective",
       h2b: "and build the first ",
-      h2g: "analysis-ready production history",
+      h2g: "verifiable R&D loop",
       h2c: ".",
-      p: "Choose one line, one product family, and one question affecting yield, cycle time, or maintenance cost. Prepare the data, review the result, and preserve the method.",
-      primary: "See the rollout",
+      p: "Choose a project with a target specification, controllable parameters, real equipment, and inspection conditions. Validate value through experiments, time, and resource cost.",
+      primary: "See rollout and validation",
       secondary: "Browse project docs",
     },
-    foot: "Manufacturing production data and process analysis · ",
-    footB: "Production history · Investigation · Evidence",
+    foot: "AI Process R&D for Manufacturing · ",
+    footB: "Experiment design · Mechanism fusion · Process windows",
   },
 } as const;
 
@@ -236,24 +236,23 @@ function AnswerBody({ locale }: { locale: Locale }) {
   if (locale === "en") {
     return (
       <>
-        LOT-0716 first-pass yield <G src="Batch coverage · LOT-0716">96.2%</G>,{" "}
-        <G src="Batch comparison · difference">2.9 pts</G> below the previous batch&apos;s{" "}
-        <G src="Batch comparison · previous batch">99.1%</G>. The gap is concentrated at station 07: this
-        batch&apos;s average cycle <G src="Station 07 history · LOT-0716">51.3s</G> vs the previous{" "}
-        <G src="Station 07 history · previous batch">47.2s</G>,{" "}
-        <G src="Cycle comparison · difference">4.1s</G> longer, with{" "}
-        <G src="Process limit · affected workpieces">12</G> parts crossing the process control limit. Other
-        stations match the previous batch.
+        The current project contains <G src="Experiment set · valid runs">12 valid experiments</G>. The
+        strongest candidate interaction is holding temperature × pressing speed. The next candidate increases
+        holding temperature by <G src="Candidate experiment · temperature">8°C</G> and reduces pressing speed by{" "}
+        <G src="Candidate experiment · speed">10%</G>. Predicted form error is{" "}
+        <G src="Surrogate model · prediction">0.90 ± 0.20 μm</G>, with an estimated{" "}
+        <G src="Constraint evaluation · feasibility">82% feasibility</G> under the recorded equipment and safety
+        constraints.
       </>
     );
   }
   return (
     <>
-      LOT-0716 一次通过率 <G src="批次覆盖 · LOT-0716">96.2%</G>,比上批{" "}
-      <G src="批次对比 · 上一批">99.1%</G> 低 <G src="批次对比 · 差值">2.9 个点</G>
-      。差异集中在工位 07:该批平均周期 <G src="工位07履历 · LOT-0716">51.3s</G>,较上批{" "}
-      <G src="工位07履历 · 上一批">47.2s</G> 长 <G src="周期对比 · 差值">4.1s</G>,同期{" "}
-      <G src="过程上限 · 影响工件">12</G> 件过程参数越过控制上限。其余工位与上批持平。
+      当前项目包含 <G src="实验集 · 有效运行">12 次有效实验</G>。现有证据中最强的候选交互是保温温度 ×
+      压制速度。下一组候选将保温温度提高 <G src="候选实验 · 温度">8℃</G>,压制速度降低{" "}
+      <G src="候选实验 · 速度">10%</G>。模型预测面形误差为{" "}
+      <G src="代理模型 · 预测">0.90 ± 0.20 μm</G>,在已登记的设备与安全约束下,预计可行概率为{" "}
+      <G src="约束检查 · 可行性">82%</G>。
     </>
   );
 }
@@ -388,10 +387,10 @@ export default function IngotSite({ initialLocale }: { initialLocale: Locale }) 
             </div>
 
             <div className="cta-row">
-              <a className="btn btn-primary" href="#cta">
+              <a className="btn btn-primary" href="#how">
                 {t.hero.ctaPrimary} <span className="arr">→</span>
               </a>
-              <a className="btn btn-ghost" href="#how">{t.hero.ctaSecondary}</a>
+              <a className="btn btn-ghost" href="#guar">{t.hero.ctaSecondary}</a>
             </div>
           </div>
 
@@ -413,12 +412,12 @@ export default function IngotSite({ initialLocale }: { initialLocale: Locale }) 
                 <div className="limitation">
                   {locale === "en" ? (
                     <>
-                      <b>8 parts missing</b> · 8 parts lack inspection records, excluded from this comparison and listed
-                      separately.
+                      <b>Evidence note</b> · Uncertainty remains moderate outside the explored region. This candidate
+                      is intended to improve both the objective and the information available for the next iteration.
                     </>
                   ) : (
                     <>
-                      <b>缺 8 件</b> · 有 8 件缺检测记录,未纳入本次对比,已单列说明。
+                      <b>证据说明</b> · 未探索区域的不确定性仍为中等。本次候选同时兼顾接近目标与增加下一轮可用信息。
                     </>
                   )}
                 </div>

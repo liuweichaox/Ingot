@@ -1,16 +1,16 @@
 <div align="center">
-  <a href="https://ingotstack.com">
+  <a href="https://ingotstack.com/en/">
     <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="images/logo/ingot-lockup-dark.svg">
-      <img src="images/logo/ingot-lockup.svg" alt="Ingot" width="360">
+      <source media="(prefers-color-scheme: dark)" srcset="apps/website/public/brand/ingot-lockup-dark.svg">
+      <img src="apps/website/public/brand/ingot-lockup-dark.svg" alt="Ingot" width="360">
     </picture>
   </a>
 
-  <h3>Production data and process analysis for manufacturing operations</h3>
+  <h3>AI Process R&amp;D for Manufacturing</h3>
 
   <p>
-    Connect equipment processes, batches, workpieces, recipes, tooling, and inspections into a continuous production history,<br>
-    helping engineers investigate yield changes, machine differences, tooling trends, and abnormal workpieces.
+    Fuse experimental data, real-time process data, physical mechanisms, and expert knowledge<br>
+    to help process engineers design experiments, discover patterns, optimize parameters, validate process windows, and shorten development cycles.
   </p>
 
   <p>
@@ -26,74 +26,87 @@
 
 ## What is Ingot?
 
-Manufacturing data is often scattered across equipment, instruments, production systems, inspection systems, and engineering spreadsheets. Ingot links these records around the production cycle to create a production history that teams can query, compare, and trace.
+Ingot helps process engineers answer three critical questions within limited time and experiment budgets:
 
-An engineer can start from a batch, an abnormal workpiece, or an everyday-language question and review the matching equipment, recipe, tooling, process stages, parameters, and inspection outcomes. Metrics and charts in an analysis open the related production records.
+1. which process variables and phases truly affect the target outcome;
+2. which next experiment will create the highest information value;
+3. when the evidence is sufficient to confirm a process window and preserve reusable knowledge.
+
+Ingot organizes objectives, variables, experiments, equipment processes, inspection outcomes, models, mechanisms, and expert judgment into a continuously updated evidence loop.
 
 ## Core capabilities
 
-| Capability | Outcome |
+| Capability | R&D outcome |
 |---|---|
-| Plant data collection | Continuously collect equipment parameters, state changes, and inspection data with production context |
-| Production history | Link process and outcome from the same run across batches, workpieces, and production cycles |
-| Process configuration | Maintain recipe versions, process stages, parameter units, tooling, and quality plans |
-| Cycle and batch analysis | Compare similar cycles and locate differences across batches, machines, stages, and parameters |
-| Ingot Chat | Start investigations in everyday language and receive summaries, metrics, charts, and related records |
-| Analysis plans | Preserve target metrics, comparison dimensions, and filters as reusable investigation methods |
+| Native data acquisition | Acquire real process data through mainstream industrial protocols and equipment-specific adaptations |
+| R&D project management | Manage objectives, variables, constraints, experiments, cost, and progress together |
+| Process semantics | Connect signals, phases, materials, tooling, and quality metrics to development meaning |
+| Experiment design | Design high-value next experiments from existing evidence, constraints, and uncertainty |
+| Intelligent analysis | Identify critical variables, phases, interactions, and candidate process laws |
+| Mechanism fusion | Combine physical mechanisms, data models, and expert knowledge for sample-efficient development |
+| Process-window validation | Validate parameter ranges, expected outcomes, safety constraints, and applicability |
+| Process knowledge | Preserve reviewed conclusions as traceable, reusable, continuously verifiable knowledge |
 
-## Use cases
-
-### Why did yield change?
-
-Compare a target batch with a historical baseline to see where the change began, which station or process stage concentrates the difference, and which process parameters changed with it.
-
-### Why do machines differ on the same recipe?
-
-Compare cycle time, key parameters, inspection distributions, and anomaly frequency across machines running the same product and recipe.
-
-### When should tooling be serviced?
-
-Follow process features and quality metrics across usage count or accumulated operating time to support maintenance planning.
-
-### What happened to one abnormal workpiece?
-
-Move from an inspection outcome to the matching batch, equipment, recipe version, tooling, and complete process curve, then compare it with normal workpieces from the same batch.
-
-## How the product works
+## Process R&D loop
 
 ```text
-equipment, instruments, and plant data
-                 │
-                 ▼
-      Edge · collection and buffering
-                 │
-                 ▼
- Platform · production history and process configuration
-                 │
-                 ├── batch, cycle, workpiece, and inspection views
-                 ├── stages, recipes, tooling, and analysis plans
-                 └── Ingot Chat · process investigation and drill-down
+define the development objective
+    ↓
+establish variables, metrics, and constraints
+    ↓
+combine historical experiments, real-time process data, mechanisms, and expert knowledge
+    ↓
+discover patterns and form hypotheses
+    ↓
+design and review the next experiments
+    ↓
+execute experiments, acquire processes, and link inspections
+    ↓
+update models, process windows, and next-step recommendations
+    ↓
+validate conclusions and preserve process knowledge
 ```
 
-An investigation normally follows five steps:
+Every experiment increases process understanding and becomes evidence that future projects can reuse.
 
-1. bring equipment processes, production objects, and inspections together;
-2. establish the business meaning of recipes, tooling, stages, and parameters;
-3. organize data from the same run into a production history;
-4. check data quality and compare similar production cycles;
-5. move from the analysis summary into curves, inspections, and production context for review.
+## Product components
 
-## Learn about the project
+### Edge
 
-- [Product overview](docs/product-overview.en.md)
-- [Use cases](docs/use-cases.en.md)
-- [How Ingot works](docs/how-it-works.en.md)
-- [Ingot Chat](docs/ingot-chat.en.md)
-- [Rollout](docs/rollout.en.md)
+Edge runs near equipment and experiments. It handles protocol communication, equipment adaptation, sampling, quality, offline persistence, and recovery forwarding. Drivers, equipment profiles, site points, and process-variable mappings are managed as separate layers.
+
+### Platform
+
+Platform manages R&D projects, experiments, variables, process data, quality outcomes, datasets, models, mechanisms, process windows, validation records, and process knowledge.
+
+### Intelligent R&D engine
+
+The engine performs quality checks, time-series feature computation, statistical analysis, experiment design, sequential optimization, model evaluation, mechanism fusion, and uncertainty estimation to provide evidence-backed next-step guidance.
+
+### Ingot Chat
+
+Ingot Chat works within an R&D project. It structures questions, retrieves evidence, invokes deterministic tools, drafts hypotheses and experiments, and links every result back to data, experiments, models, and knowledge sources.
+
+## Measuring value
+
+Ingot measures success through development outcomes:
+
+- experiments required to reach target specifications;
+- calendar time to find and validate a process window;
+- material, equipment, and labor cost per project;
+- valid-experiment ratio and recommendation adoption;
+- process-window validation rate;
+- reuse of process knowledge across future projects.
+
+## Learn about Ingot
+
+- [Project introduction](docs/index.en.md)
+- [Product and system design](docs/design.en.md)
+- [Rollout and validation](docs/rollout.en.md)
 - [FAQ](docs/faq.en.md)
 
 ## Participate
 
-Use Issues to share plant problems, product feedback, and improvement ideas. For code contributions, see the [contributing guide](CONTRIBUTING.en.md). Report security concerns through the [security policy](SECURITY.md).
+Use Issues to share real process-development problems and product feedback. For code contributions, see the [contributing guide](CONTRIBUTING.en.md). Report security concerns through the [security policy](SECURITY.md).
 
 Ingot is available under the [MIT License](LICENSE).

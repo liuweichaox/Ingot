@@ -10,7 +10,7 @@ await mkdir(brandDir, { recursive: true });
 for (const name of ["ingot-mark-dark.svg", "ingot-lockup-dark.svg"])
   await cp(path.join(root, "apps/website/public/brand", name), path.join(brandDir, name));
 
-const publicSlugs = ["index", "product-overview", "use-cases", "how-it-works", "ingot-chat", "rollout", "faq"];
+const publicSlugs = ["index", "design", "rollout", "faq"];
 const publicFiles = new Set(publicSlugs.flatMap((slug) =>
   slug === "index" ? ["index.md", "index.en.md"] : [`${slug}.md`, `${slug}.en.md`]));
 const files = (await readdir(docsDir)).filter((name) => publicFiles.has(name)).sort();

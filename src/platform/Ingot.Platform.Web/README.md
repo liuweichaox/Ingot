@@ -1,21 +1,24 @@
 # Ingot Platform Web
 
-基于 React 19、Tailwind CSS、Headless UI 与 Vite 的 Platform 操作界面，提供工艺调查、机理—数据融合、知识复核、科研验证、数据接入节点、生产事件、指标、日志和 **Ingot Chat**。
+Ingot Platform Web 是面向工艺工程师的 AI 工艺研发工作界面，基于 React 19、Tailwind CSS、Headless UI 与 Vite 构建。
 
-## 产品入口
+界面围绕工艺研发闭环组织：
 
-- **Ingot Chat**：查询生产记录、比较周期差异并分析可能原因；回答可打开相关生产记录，并直接说明缺少的数据。
-- **数据接入节点**：查看用户自行部署的数据适配器接入状态。
-- **生产事件、指标与日志**：查看平台已接入的生产数据和运行状态。
-- **工艺改进**：管理调查、训练数据、机理模型、四种机理—数据融合、知识来源人工复核和科研验证。
+- **工作台**：查看研发项目、待办任务、近期实验与验证状态。
+- **AI 助手**：基于当前项目的数据、机理和知识组织分析，给出带依据的下一步建议。
+- **运行与追溯**：查看实验或生产周期、过程事件、配方、设备和工装上下文。
+- **质量管理**：维护检测定义与质量方案，录入并分析质量结果。
+- **分析中心**：比较实验和周期、检查数据质量、研究参数与结果之间的关系。
+- **数据资产**：管理工艺数据模型、配方版本、分析方案、采集配置和边缘节点。
+- **系统管理**：查看系统状态、用户、订阅和日志。
 
-Ingot Chat 仅访问当前身份有权读取的生产数据，不提供设备控制、配置修改或数据写入。
+页面应让工艺工程师随时看清当前目标、已有证据、下一步实验、验证状态和可复用结论。底层协议、存储和服务结构不应成为用户完成任务的前提。
 
 ## 本地开发
 
 要求 Node.js `>=22.13.0`。
 
-### 1. 启动 PostgreSQL 与 Platform API
+先启动 PostgreSQL 与 Platform API：
 
 ```bash
 export INGOT_POSTGRES_PASSWORD="development-postgres-password"
@@ -26,7 +29,7 @@ docker compose -f docker-compose.app.yml up -d postgres
 dotnet run --project src/platform/Ingot.Platform.Api
 ```
 
-### 2. 启动前端
+再启动前端：
 
 ```bash
 cd src/platform/Ingot.Platform.Web
@@ -34,15 +37,7 @@ npm ci
 npm run dev
 ```
 
-## 运行地址
-
-- dev server：`http://localhost:3000`
-- 事件页：`http://localhost:3000/events`
-- Ingot Chat：`http://localhost:3000/chat`
-- 工艺改进：`http://localhost:3000/process-improvement`
-- `vite.config.mjs` 将 `/api`、`/metrics` 和 `/health` 代理到 `http://localhost:8000`
-
-Ingot Chat 服务默认关闭。页面通过 `GET /api/v1/chat/capabilities` 获取当前可用的回答方式；对话、历史、流式结果和取消请求均使用 `/api/v1/chat/*`。
+开发地址为 `http://localhost:3000`。
 
 ## 验证
 

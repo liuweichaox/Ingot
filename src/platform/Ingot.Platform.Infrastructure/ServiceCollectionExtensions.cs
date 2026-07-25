@@ -9,6 +9,7 @@ using Ingot.Platform.Infrastructure.Manufacturing;
 using Ingot.Platform.Infrastructure.ProcessConfiguration;
 using Ingot.Platform.Infrastructure.Migrations;
 using Ingot.Platform.Infrastructure.ProcessImprovement;
+using Ingot.Platform.Infrastructure.ProcessResearch;
 using Ingot.Platform.Infrastructure.Services;
 using Ingot.Platform.Infrastructure.TimeSeries;
 using Ingot.Platform.Infrastructure.Webhooks;
@@ -71,6 +72,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IAnalysisTool, CompareCyclesTool>();
         services.AddSingleton<IAnalysisTool, CompareProcessWindowsTool>();
         services.AddSingleton<IAnalysisTool, SearchProcessKnowledgeTool>();
+        services.AddSingleton<IAnalysisTool, GetResearchProjectTool>();
 
         // 人工检测结果记录（PostgreSQL）；与生产事件分表、分 API 建模
         services.Configure<InspectionAttachmentOptions>(configuration.GetSection("InspectionAttachments"));
@@ -116,6 +118,10 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<KnowledgeExtractionService>();
         services.AddSingleton<ScientificValidationRunner>();
         services.AddHostedService<ProcessImprovementInitializerHostedService>();
+
+        // 工艺研发项目是实验、假设、工艺窗口与知识沉淀的产品主对象。
+        services.AddSingleton<IProcessResearchStore, PostgresProcessResearchStore>();
+        services.AddSingleton<ProcessResearchWorkflow>();
 
         // 采集配置由平台统一管理并按边缘节点发布；采集执行器只运行已发布版本。
         services.AddSingleton<IAcquisitionProfileStore, PostgresAcquisitionProfileStore>();

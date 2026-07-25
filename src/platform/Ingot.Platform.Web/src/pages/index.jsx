@@ -37,6 +37,8 @@ import {
   notify,
 } from "../ui/components";
 
+export { ResearchProjectsPage } from "./ResearchProjectsPage";
+
 const formatTime = value => value ? new Date(value).toLocaleString("zh-CN") : "—";
 const formatInteger = value => Number.isFinite(Number(value)) ? Number(value).toLocaleString("zh-CN") : "—";
 const formatBytes = value => {
