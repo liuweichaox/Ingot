@@ -6,6 +6,8 @@ const packageJson = JSON.parse(await readFile(new URL("../package.json", import.
 const app = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
 const pages = await readFile(new URL("../src/pages/index.jsx", import.meta.url), "utf8");
 const components = await readFile(new URL("../src/ui/components.jsx", import.meta.url), "utf8");
+const registryEditor = await readFile(new URL("../src/components/RegistryBusinessEditor.jsx", import.meta.url), "utf8");
+const businessObjectEditor = await readFile(new URL("../src/components/BusinessObjectEditor.jsx", import.meta.url), "utf8");
 const styles = await readFile(new URL("../src/styles/global.css", import.meta.url), "utf8");
 const vite = await readFile(new URL("../vite.config.mjs", import.meta.url), "utf8");
 
@@ -125,4 +127,28 @@ test("inspection definitions use the characteristic contract and business fields
   assert.match(pages, /添加检测特性/);
   assert.match(pages, /render: \{ characteristics: inspectionInputTypes \}/);
   assert.doesNotMatch(pages, /template: \{ code: "", version: 1, name: "", description: "", status: "draft", inputType:/);
+});
+
+test("all versioned configuration registries use business forms instead of JSON editors", () => {
+  for (const kind of ["processModel", "recipeVersion", "analysisPlan", "qualityPlan", "acquisitionProfile"]) {
+    assert.match(pages, new RegExp(`kind: "${kind}"`));
+    assert.match(registryEditor, new RegExp(`kind === "${kind}"`));
+  }
+  assert.match(registryEditor, /function QualityPlanEditor/);
+  assert.match(registryEditor, /function ProcessModelEditor/);
+  assert.match(registryEditor, /function RecipeEditor/);
+  assert.match(registryEditor, /function AnalysisPlanEditor/);
+  assert.match(registryEditor, /function AcquisitionEditor/);
+  assert.match(registryEditor, /requiresAttachment: item\.requiresAttachment \|\| item\.requiresReview/);
+  assert.doesNotMatch(pages, /label="版本定义"/);
+});
+
+test("tooling, subscriptions, and improvement workflows avoid editable JSON fields", () => {
+  assert.match(pages, /function AttributeFields/);
+  assert.match(pages, /function ToolingRoleFields/);
+  assert.match(pages, /function SubscriptionContextFields/);
+  assert.match(pages, /<BusinessObjectEditor value=\{editor\} onChange=\{setEditor\}/);
+  assert.match(businessObjectEditor, /function ObjectList/);
+  assert.match(businessObjectEditor, /function MapFields/);
+  assert.doesNotMatch(pages, /数据清单 JSON|执行请求 JSON|上下文过滤" hint="JSON|（JSON）/);
 });

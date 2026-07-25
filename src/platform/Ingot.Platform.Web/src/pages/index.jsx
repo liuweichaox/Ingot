@@ -11,7 +11,14 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { deleteJson, getJson, postForm, postJson, putJson, streamSse } from "../api/http";
 import { qualityOutcomeTraces } from "../charts/chartAdapters";
+import { BusinessObjectEditor } from "../components/BusinessObjectEditor";
 import PlotlyChart from "../components/PlotlyChart";
+import {
+  createRegistryBusinessForm,
+  RegistryBusinessEditor,
+  registryBusinessPayload,
+  registryBusinessValidation,
+} from "../components/RegistryBusinessEditor";
 import { extractRows, useApi } from "../hooks/useApi";
 import {
   Alert,
@@ -38,6 +45,14 @@ const inspectionInputTypeLabels = {
   text: "文本",
   select: "选项",
   boolean: "是/否",
+};
+
+const acquisitionProtocolLabels = {
+  "http-polling": "HTTP 轮询",
+  mqtt: "MQTT",
+  "opc-ua": "OPC UA",
+  "modbus-tcp": "Modbus TCP",
+  "melsec-a1e": "三菱 MELSEC 1E",
 };
 
 function emptyInspectionCharacteristic() {
@@ -575,8 +590,10 @@ const productionFieldLabels = {
 function createProductionEditor(resource, value) {
   return Object.fromEntries(Object.entries(resource.template).map(([key, initial]) => [
     key,
-    typeof initial === "object"
-      ? JSON.stringify(value[key] ?? initial, null, 2)
+    key === "attributes"
+      ? Object.entries(value[key] ?? initial).map(([attribute, attributeValue]) => ({ attribute, value: attributeValue }))
+      : key === "roles"
+        ? (value[key] ?? initial).map(role => ({ ...role, acceptedComponentTypeCodes: role.acceptedComponentTypeCodes || [] }))
       : value[key] ?? initial,
   ]));
 }
@@ -584,8 +601,18 @@ function createProductionEditor(resource, value) {
 function parseProductionEditor(resource, editor, base) {
   const value = { ...base };
   Object.entries(resource.template).forEach(([key, initial]) => {
-    if (typeof initial === "object") {
-      value[key] = JSON.parse(editor[key]);
+    if (key === "attributes") {
+      value[key] = Object.fromEntries((editor[key] || [])
+        .filter(item => item.attribute.trim() && item.value.trim())
+        .map(item => [item.attribute.trim(), item.value.trim()]));
+    } else if (key === "roles") {
+      value[key] = editor[key].map(role => ({
+        ...role,
+        code: role.code.trim(),
+        name: role.name.trim(),
+        maxCount: Number(role.maxCount),
+        sortOrder: Number(role.sortOrder),
+      }));
     } else if (typeof initial === "number") {
       value[key] = Number(editor[key]);
     } else {
@@ -599,13 +626,12 @@ function isProductionEditorValid(resource, editor) {
   if (resource.requiredFields?.some(key => !String(editor[key] ?? "").trim())) return false;
   return Object.entries(resource.template).every(([key, initial]) => {
     if (typeof initial === "number") return Number(editor[key]) >= 1;
-    if (typeof initial !== "object") return true;
-    try {
-      JSON.parse(editor[key]);
-      return true;
-    } catch {
-      return false;
-    }
+    if (key === "attributes") return (editor[key] || []).every(item =>
+      (!item.attribute.trim() && !item.value.trim()) || (item.attribute.trim() && item.value.trim()));
+    if (key === "roles") return editor[key].length > 0 && editor[key].every(role =>
+      role.code.trim() && role.name.trim() && Number(role.maxCount) >= 1 && Number(role.sortOrder) >= 0 &&
+      role.acceptedComponentTypeCodes.length > 0);
+    return true;
   });
 }
 
@@ -615,20 +641,8 @@ function ProductionRecordForm({ resource, editor, onChange }) {
       {Object.entries(resource.template).map(([key, initial]) => {
         const required = resource.requiredFields?.includes(key);
         const label = productionFieldLabels[key] ?? key;
-        const complex = typeof initial === "object";
-        if (complex) {
-          return (
-            <Field key={key} className="sm:col-span-2" label={`${label}（JSON）`}>
-              <Textarea
-                required={required}
-                className="min-h-36 font-mono text-xs leading-6"
-                value={editor[key] ?? ""}
-                onChange={event => onChange(key, event.target.value)}
-                spellCheck={false}
-              />
-            </Field>
-          );
-        }
+        if (key === "attributes") return <AttributeFields key={key} value={editor[key] || []} onChange={value => onChange(key, value)} />;
+        if (key === "roles") return <ToolingRoleFields key={key} value={editor[key] || []} onChange={value => onChange(key, value)} />;
         if (key === "status" && resource.statusOptions) {
           return (
             <Field key={key} label={label}>
@@ -660,6 +674,80 @@ function ProductionRecordForm({ resource, editor, onChange }) {
         );
       })}
     </div>
+  );
+}
+
+function AttributeFields({ value, onChange }) {
+  const rows = value.length ? value : [{ attribute: "", value: "" }];
+  function update(index, field, nextValue) {
+    const source = value.length ? value : [{ attribute: "", value: "" }];
+    onChange(source.map((item, rowIndex) => rowIndex === index ? { ...item, [field]: nextValue } : item));
+  }
+  return (
+    <Card
+      className="sm:col-span-2"
+      title="扩展属性"
+      description="登记需要在台账中查询的业务属性。"
+      actions={<Button onClick={() => onChange([...value, { attribute: "", value: "" }])}>添加属性</Button>}
+    >
+      <div className="grid gap-2">
+        {rows.map((item, index) => (
+          <div key={index} className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
+            <Input aria-label={`属性名称 ${index + 1}`} value={item.attribute} placeholder="属性名称" onChange={event => update(index, "attribute", event.target.value)} />
+            <Input aria-label={`属性内容 ${index + 1}`} value={item.value} placeholder="属性内容" onChange={event => update(index, "value", event.target.value)} />
+            {value.length > 0 && <Button variant="ghost" className="text-rose-700" onClick={() => onChange(value.filter((_item, rowIndex) => rowIndex !== index))}>移除</Button>}
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+function ToolingRoleFields({ value, onChange }) {
+  const { data, error } = useApi("/api/v1/tooling-component-types");
+  const componentTypes = extractRows(data);
+  function update(index, patch) {
+    onChange(value.map((role, rowIndex) => rowIndex === index ? { ...role, ...patch } : role));
+  }
+  function add() {
+    onChange([...value, { code: "", name: "", required: true, maxCount: 1, sortOrder: value.length + 1, acceptedComponentTypeCodes: [] }]);
+  }
+  return (
+    <Card className="sm:col-span-2" title="装配位置" description="定义工装由哪些组件位置组成。" actions={<Button onClick={add}>添加装配位置</Button>}>
+      {error && <Alert tone="danger">{error}</Alert>}
+      <div className="grid gap-4">
+        {value.length === 0 && <p className="text-sm text-slate-500">请至少添加一个装配位置。</p>}
+        {value.map((role, index) => (
+          <div key={index} className="grid gap-3 rounded-xl border border-slate-200 p-4 sm:grid-cols-2">
+            <Field label="位置代码"><Input value={role.code} onChange={event => update(index, { code: event.target.value })} /></Field>
+            <Field label="位置名称"><Input value={role.name} onChange={event => update(index, { name: event.target.value })} /></Field>
+            <Field label="最大组件数"><Input type="number" min="1" value={role.maxCount} onChange={event => update(index, { maxCount: event.target.value })} /></Field>
+            <Field label="显示顺序"><Input type="number" min="0" value={role.sortOrder} onChange={event => update(index, { sortOrder: event.target.value })} /></Field>
+            <div className="sm:col-span-2">
+              <p className="mb-2 text-sm font-medium text-slate-700">允许的组件类型</p>
+              <div className="flex flex-wrap gap-3">
+                {componentTypes.map(type => (
+                  <label key={type.componentTypeCode} className="flex items-center gap-1.5 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={role.acceptedComponentTypeCodes.includes(type.componentTypeCode)}
+                      onChange={event => update(index, {
+                        acceptedComponentTypeCodes: event.target.checked
+                          ? [...role.acceptedComponentTypeCodes, type.componentTypeCode]
+                          : role.acceptedComponentTypeCodes.filter(code => code !== type.componentTypeCode),
+                      })}
+                    />
+                    {type.name}
+                  </label>
+                ))}
+              </div>
+            </div>
+            <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={role.required} onChange={event => update(index, { required: event.target.checked })} />必须装配</label>
+            <Button variant="ghost" className="justify-self-start text-rose-700" onClick={() => onChange(value.filter((_item, rowIndex) => rowIndex !== index))}>移除</Button>
+          </div>
+        ))}
+      </div>
+    </Card>
   );
 }
 
@@ -709,7 +797,7 @@ export function ProductionSetupPage({ section }) {
       setOpen(false);
       await reload();
     } catch (requestError) {
-      setActionError(requestError instanceof SyntaxError ? `JSON 格式错误：${requestError.message}` : requestError.message);
+      setActionError(requestError.message);
     } finally {
       setSaving(false);
     }
@@ -739,7 +827,15 @@ export function ProductionSetupPage({ section }) {
     ...resource.columns.map(([key, label]) => ({
       key,
       label,
-              render: key.endsWith("At") || ["validFrom", "validTo"].includes(key) ? formatTime : key === "status" ? value => <StatusBadge value={value} /> : undefined,
+      render: key.endsWith("At") || ["validFrom", "validTo"].includes(key)
+        ? formatTime
+        : key === "status" ? value => <StatusBadge value={value} />
+          : key === "roles" ? value => value?.length ? value.map(role => role.name).join("、") : "—"
+            : key === "attributes" ? value => {
+              const entries = Object.entries(value || {});
+              return entries.length ? entries.map(([attribute, attributeValue]) => `${attribute}：${attributeValue}`).join("、") : "—";
+            }
+              : undefined,
     })),
     {
       key: "_actions",
@@ -1191,12 +1287,12 @@ const improvementTabs = [
   {
     label: "调查", endpoint: "/api/v1/process-investigations", key: "investigationId",
     columns: [["title", "问题"], ["status", "状态"], ["createdAt", "创建时间"]],
-    template: { title: "", problemStatement: "", contextSelector: {}, cycleIds: [] },
+    template: { title: "", problemCode: "", description: "", contextSelector: {}, cycleIds: [] },
   },
   {
     label: "数据模型", endpoint: "/api/v1/process-models", key: "modelId",
     columns: [["modelId", "模型"], ["version", "版本"], ["status", "状态"], ["outputCode", "输出"]],
-    template: { modelId: "", version: 1, name: "", status: "draft", datasetId: "", datasetVersion: 1, modelKind: "regression", inputFeatureCodes: [], outputCode: "", artifactUri: "", artifactSha256: "", contextSelector: {} },
+    template: { modelId: "", version: 1, name: "", modelKind: "quality-risk", problemCode: "", status: "draft", algorithm: "", datasetId: "", datasetVersion: 1, artifactRef: "", artifactSha256: "", contextSelector: {}, inputFeatureCodes: [], outputCode: "", uncertaintyMethod: "none", changeNote: "" },
   },
   {
     label: "机理模型", endpoint: "/api/v1/mechanism-models", key: "modelId",
@@ -1211,7 +1307,7 @@ const improvementTabs = [
   {
     label: "训练数据", endpoint: "/api/v1/training-datasets", key: "datasetId",
     columns: [["datasetId", "数据集"], ["version", "版本"], ["rowCount", "行数"], ["createdAt", "创建时间"]],
-    template: { datasetId: "", version: 1, name: "", analysisPlanId: "", analysisPlanVersion: 1, dataModelId: "", dataModelVersion: 1, windowStart: "", windowEnd: "", cycleIds: [], featureCodes: [], targetCode: "", rowCount: 0, contextSelector: {} },
+    template: { datasetId: "", version: 1, name: "", analysisPlanId: "", analysisPlanVersion: 1, dataModelId: "", dataModelVersion: 1, contextSelector: {}, cycleIds: [], featureCodes: [], targetCode: "", windowStart: "", windowEnd: "", rowCount: 0, contentHash: "" },
   },
   {
     label: "知识", endpoint: "/api/v1/process-knowledge", key: "sourceId",
@@ -1221,13 +1317,13 @@ const improvementTabs = [
   {
     label: "参数建议", endpoint: "/api/v1/parameter-recommendations", key: "recommendationId",
     columns: [["title", "建议"], ["status", "状态"], ["expectedAnnualValue", "预期年价值"]],
-    template: { title: "", conclusionId: "", contextSelector: {}, parameters: [], operatingConstraints: [], expectedOutcomes: [], expectedAnnualValue: 0, trialCost: 0, implementationCost: 0, downsideRisk: 0, valueMethod: "", risk: "", stopRule: "", rollbackPlan: "" },
+    template: { investigationId: "", conclusionId: "", modelId: "", modelVersion: 1, title: "", applicableContext: {}, parameterSettings: [], constraints: [], expectedOutcomes: [], valueEstimate: { currency: "CNY", expectedAnnualValue: 0, trialCost: 0, implementationCost: 0, downsideAtRisk: 0 }, riskSummary: "", stopRule: "", rollbackPlan: "" },
   },
   {
     label: "科研验证", endpoint: "/api/v1/scientific-validation", key: "reportId",
     columns: [["datasetId", "数据集"], ["industry", "行业"], ["process", "工艺"], ["status", "状态"], ["rowCount", "数据行"]],
     upload: "validation",
-    template: { datasetId: "", version: 1, industry: "", process: "", dataKind: "measured-experiment", isMeasuredData: true, sourceUri: "https://", retrievalUri: "https://", license: "", citation: "", expectedSha256: "", headerRowCount: 1, cycleColumn: "", signalColumns: [], outcomeColumns: [], minimumSignalNumericCoverage: 0.8, minimumOutcomeNumericCoverage: 0.3, units: {}, validSignalRanges: {} },
+    template: { datasetId: "", version: 1, industry: "", process: "", dataKind: "measured-experiment", isMeasuredData: true, sourceUri: "https://", retrievalUri: "https://", archiveMemberPath: "", license: "", citation: "", doi: "", expectedSha256: "", sheetName: "", headerRowCount: 1, matVariableName: "", cycleColumn: "", timestampColumn: "", phaseColumn: "", signalColumns: [], outcomeColumns: [], minimumSignalNumericCoverage: 0.8, minimumOutcomeNumericCoverage: 0.3, units: {}, validSignalRanges: {} },
   },
   {
     label: "历史回填", endpoint: "/api/v1/cycle-analysis-backfills", key: "jobId",
@@ -1240,7 +1336,7 @@ export function ProcessImprovementPage() {
   const [selectedTab, setSelectedTab] = useState(0);
   return (
     <Page title="工艺改进" description="从调查、模型、知识到受控参数建议的闭环。">
-      <Alert tone="info" title="现场执行边界">平台记录建议、审批与效果，不从此页面直接修改 PLC、CNC 或机器人参数。</Alert>
+      <Alert tone="info" title="受控改进流程">平台集中记录改进建议、审批结论、试验过程和实际效果。</Alert>
       <TabGroup selectedIndex={selectedTab} onChange={setSelectedTab}>
         <TabList className="flex gap-1 overflow-x-auto rounded-xl bg-slate-200/70 p-1">
           {improvementTabs.map(item => (
@@ -1268,9 +1364,9 @@ function ImprovementPanel({ definition }) {
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState("");
   const [detailBusy, setDetailBusy] = useState(false);
-  const [executionEditor, setExecutionEditor] = useState("");
+  const [executionEditor, setExecutionEditor] = useState({});
   const [executionResult, setExecutionResult] = useState(null);
-  const [editor, setEditor] = useState("");
+  const [editor, setEditor] = useState(() => structuredClone(definition.template || {}));
   const [file, setFile] = useState(null);
   const [title, setTitle] = useState("");
   const [sourceKind, setSourceKind] = useState("document");
@@ -1299,13 +1395,13 @@ function ImprovementPanel({ definition }) {
       setDetailOpen(true);
       setExecutionResult(null);
       if (definition.label === "融合执行") {
-        setExecutionEditor(JSON.stringify({
+        setExecutionEditor({
           fusionId: row.fusionId,
           fusionVersion: row.version,
           mechanismInputs: {},
-          dataPrediction: null,
+          dataPrediction: "",
           operatingContext: {},
-        }, null, 2));
+        });
       }
     }
     setDetailLoading(true);
@@ -1326,7 +1422,7 @@ function ImprovementPanel({ definition }) {
       await action();
       await Promise.all([loadDetail(selected, { show: false }), reload()]);
     } catch (requestError) {
-      setDetailError(requestError instanceof SyntaxError ? `JSON 格式错误：${requestError.message}` : requestError.message);
+      setDetailError(requestError.message);
     } finally {
       setDetailBusy(false);
     }
@@ -1356,17 +1452,20 @@ function ImprovementPanel({ definition }) {
     setDetailError("");
     setExecutionResult(null);
     try {
-      const result = await postJson("/api/v1/mechanism-fusions/execute", JSON.parse(executionEditor));
+      const result = await postJson("/api/v1/mechanism-fusions/execute", {
+        ...executionEditor,
+        dataPrediction: executionEditor.dataPrediction === "" ? null : Number(executionEditor.dataPrediction),
+      });
       setExecutionResult(result);
     } catch (requestError) {
-      setDetailError(requestError instanceof SyntaxError ? `JSON 格式错误：${requestError.message}` : requestError.message);
+      setDetailError(requestError.message);
     } finally {
       setDetailBusy(false);
     }
   }
 
   function start() {
-    setEditor(JSON.stringify(definition.template || {}, null, 2));
+    setEditor(structuredClone(definition.template || {}));
     setFile(null);
     setTitle("");
     setSourceKind("document");
@@ -1388,18 +1487,17 @@ function ImprovementPanel({ definition }) {
         await postForm(definition.endpoint, form);
       } else if (definition.upload === "validation") {
         if (!file) throw new Error("请选择科研原始数据文件。");
-        JSON.parse(editor);
         const form = new FormData();
         form.append("file", file);
-        form.append("manifestJson", editor);
+        form.append("manifestJson", JSON.stringify(editor));
         await postForm(definition.endpoint, form);
       } else {
-        await postJson(definition.endpoint, JSON.parse(editor));
+        await postJson(definition.endpoint, editor);
       }
       setOpen(false);
       await reload();
     } catch (requestError) {
-      setActionError(requestError instanceof SyntaxError ? `JSON 格式错误：${requestError.message}` : requestError.message);
+      setActionError(requestError.message);
     } finally {
       setSaving(false);
     }
@@ -1491,9 +1589,7 @@ function ImprovementPanel({ definition }) {
           ) : (
             <>
               {definition.upload === "validation" && <Field label="原始科研数据"><Input required type="file" accept=".csv,.xlsx,.xlsm,.mat" onChange={event => setFile(event.target.files?.[0] || null)} /></Field>}
-              <Field label={definition.upload === "validation" ? "数据清单 JSON" : "记录内容"}>
-                <Textarea required className="min-h-[55vh] font-mono text-xs leading-6" value={editor} onChange={event => setEditor(event.target.value)} spellCheck={false} />
-              </Field>
+              <BusinessObjectEditor value={editor} onChange={setEditor} />
             </>
           )}
         </div>
@@ -1643,9 +1739,7 @@ function ImprovementDetailDrawer({
           {definition.label === "融合执行" && (
             <Card title="受控执行" description="使用已启用定义执行一次可重放计算，不会向现场设备写入参数。">
               <div className="grid gap-4">
-                <Field label="执行请求 JSON" hint="填写机理输入、数据模型预测和适用范围。">
-                  <Textarea className="min-h-56 font-mono text-xs leading-6" value={executionEditor} onChange={event => setExecutionEditor(event.target.value)} spellCheck={false} />
-                </Field>
+                <BusinessObjectEditor value={executionEditor} onChange={setExecutionEditor} />
                 <div><Button variant="primary" disabled={busy || status !== "active"} onClick={onExecute}>执行融合计算</Button></div>
                 {status !== "active" && <Alert tone="warning">融合定义和引用的机理模型都启用后才能执行。</Alert>}
                 {executionResult && (
@@ -1700,21 +1794,27 @@ function knowledgeLocation(record) {
 
 const registryPages = {
   processModels: {
+    kind: "processModel",
     title: "工艺数据模型", description: "版本化管理数据项、参数和工艺阶段。", endpoint: "/api/v1/process-data-models", key: "modelId",
     columns: [["modelId", "模型"], ["version", "版本"], ["name", "名称"], ["status", "状态"], ["updatedAt", "更新时间"]],
-    template: { modelId: "", version: 1, name: "", description: "", status: "draft", dataItems: [], recipeParameters: [], phases: [], updatedAt: "" },
+    createLabel: "创建工艺数据模型",
+    template: { modelId: "", version: 1, name: "", description: "", status: "draft", acquisition: { samplePeriodMs: 1000, stepSourceKey: null, dataItems: [] }, recipeParameters: [], stages: [], updatedAt: "" },
     deleteUrl: value => `/api/v1/process-data-models/${encodeURIComponent(value.modelId)}/${value.version}`,
   },
   recipes: {
+    kind: "recipeVersion",
     title: "配方版本", description: "维护引用工艺数据模型的完整参数值。", endpoint: "/api/v1/recipe-versions", key: "recipeId",
     columns: [["recipeId", "配方"], ["version", "版本"], ["name", "名称"], ["status", "状态"], ["updatedAt", "更新时间"]],
-    template: { recipeId: "", version: 1, name: "", description: "", status: "draft", modelId: "", modelVersion: 1, contextSelector: {}, values: {}, updatedAt: "" },
+    createLabel: "创建配方版本",
+    template: { recipeId: "", version: 1, name: "", basedOnVersion: null, dataModelId: "", dataModelVersion: 1, status: "draft", contextSelector: {}, values: [], updatedAt: "" },
     deleteUrl: value => `/api/v1/recipe-versions/${encodeURIComponent(value.recipeId)}/${value.version}`,
   },
   plans: {
+    kind: "analysisPlan",
     title: "分析方案", description: "配置分析范围、阶段对齐和质量分组。", endpoint: "/api/v1/process-analysis-plans", key: "planId",
     columns: [["planId", "方案"], ["version", "版本"], ["name", "名称"], ["status", "状态"], ["updatedAt", "更新时间"]],
-    template: { planId: "", version: 1, name: "", description: "", status: "draft", modelId: "", modelVersion: 1, cohortDimension: "quality.outcome", alignmentMode: "phase", contextSelector: {}, signals: [], updatedAt: "" },
+    createLabel: "创建分析方案",
+    template: { planId: "", version: 1, name: "", description: "", status: "draft", dataModelId: "", dataModelVersion: 1, analysisScope: "production-cycle", alignmentMode: "stage-relative", cohortDimension: "", comparisonKeys: ["product_series"], contextSelector: {}, signals: [], updatedAt: "" },
     deleteUrl: value => `/api/v1/process-analysis-plans/${encodeURIComponent(value.planId)}/${value.version}`,
   },
   definitions: {
@@ -1727,15 +1827,20 @@ const registryPages = {
     deleteUrl: value => `/api/v1/inspection-definitions/${encodeURIComponent(value.code)}/${value.version}`,
   },
   plansQuality: {
+    kind: "qualityPlan",
     title: "质量方案", description: "将检测定义组成适用于产品的版本化质量方案。", endpoint: "/api/v1/inspection-plans", key: "planId",
     columns: [["planId", "方案"], ["version", "版本"], ["name", "名称"], ["status", "状态"], ["updatedAt", "更新时间"]],
-    template: { planId: "", version: 1, name: "", description: "", status: "draft", contextSelector: {}, characteristics: [], updatedAt: "" },
+    createLabel: "创建质量方案",
+    template: { planId: "", version: 1, name: "", description: "", status: "draft", priority: 0, effectiveFrom: null, effectiveTo: null, scope: {}, items: [], updatedAt: "" },
     deleteUrl: value => `/api/v1/inspection-plans/${encodeURIComponent(value.planId)}/${value.version}`,
   },
   acquisition: {
+    kind: "acquisitionProfile",
     title: "采集任务", description: "管理 HTTP、MQTT、OPC UA 与 Modbus TCP 采集版本。", endpoint: "/api/v1/acquisition-profiles", key: "profileId",
     columns: [["profileId", "任务"], ["version", "版本"], ["name", "名称"], ["protocol", "协议"], ["status", "状态"]],
-    template: { profileId: "", version: 1, name: "", description: "", status: "draft", protocol: "http", edgeId: "", modelId: "", modelVersion: 1, samplePeriodMs: 1000, source: {}, fields: [] },
+    render: { protocol: value => acquisitionProtocolLabels[value] || value },
+    createLabel: "创建采集任务",
+    template: { profileId: "", version: 1, name: "", status: "draft", protocol: "http-polling", edgeId: "", dataModelId: "", dataModelVersion: 1, source: "", subjectType: "equipment", subjectId: "", valueMappings: [] },
     deleteUrl: value => `/api/v1/acquisition-profiles/${encodeURIComponent(value.profileId)}/${value.version}`,
   },
 };
@@ -1745,19 +1850,22 @@ function RegistryPage({ definition }) {
   const rows = extractRows(data);
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState("create");
-  const [editor, setEditor] = useState("");
   const [inspectionForm, setInspectionForm] = useState(() => inspectionDefinitionForm());
+  const [businessForm, setBusinessForm] = useState(() => createRegistryBusinessForm(definition.kind));
   const [editorError, setEditorError] = useState("");
   const [saving, setSaving] = useState(false);
   const isInspectionDefinition = definition.kind === "inspectionDefinition";
+  const hasBusinessEditor = Boolean(definition.kind) && !isInspectionDefinition;
   const inspectionValidation = isInspectionDefinition ? inspectionDefinitionValidation(inspectionForm) : "";
+  const businessValidation = hasBusinessEditor ? registryBusinessValidation(definition.kind, businessForm) : "";
+  const editorValidation = inspectionValidation || businessValidation;
 
   function openCreate() {
     setMode("create");
     if (isInspectionDefinition) {
       setInspectionForm(inspectionDefinitionForm());
     } else {
-      setEditor(JSON.stringify({ ...definition.template, updatedAt: definition.template.updatedAt !== undefined ? new Date().toISOString() : undefined }, null, 2));
+      setBusinessForm(createRegistryBusinessForm(definition.kind));
     }
     setEditorError("");
     setOpen(true);
@@ -1768,7 +1876,7 @@ function RegistryPage({ definition }) {
     if (isInspectionDefinition) {
       setInspectionForm(inspectionDefinitionForm(row));
     } else {
-      setEditor(JSON.stringify(row, null, 2));
+      setBusinessForm(createRegistryBusinessForm(definition.kind, row));
     }
     setEditorError("");
     setOpen(true);
@@ -1779,12 +1887,7 @@ function RegistryPage({ definition }) {
     if (isInspectionDefinition) {
       setInspectionForm(inspectionDefinitionForm(row, Number(row.version || 0) + 1));
     } else {
-      setEditor(JSON.stringify({
-        ...row,
-        version: Number(row.version || 0) + 1,
-        status: "draft",
-        updatedAt: row.updatedAt !== undefined ? new Date().toISOString() : undefined,
-      }, null, 2));
+      setBusinessForm(createRegistryBusinessForm(definition.kind, row, Number(row.version || 0) + 1));
     }
     setEditorError("");
     setOpen(true);
@@ -1794,13 +1897,15 @@ function RegistryPage({ definition }) {
     setSaving(true);
     setEditorError("");
     try {
-      const payload = isInspectionDefinition ? inspectionDefinitionPayload(inspectionForm) : JSON.parse(editor);
+      const payload = isInspectionDefinition
+        ? inspectionDefinitionPayload(inspectionForm)
+        : registryBusinessPayload(definition.kind, businessForm);
       if (payload.updatedAt !== undefined) payload.updatedAt = new Date().toISOString();
       await postJson(definition.endpoint, payload);
       setOpen(false);
       await reload();
     } catch (saveError) {
-      setEditorError(saveError instanceof SyntaxError ? `JSON 格式错误：${saveError.message}` : saveError.message);
+      setEditorError(saveError.message);
     } finally {
       setSaving(false);
     }
@@ -1808,7 +1913,12 @@ function RegistryPage({ definition }) {
 
   async function retire(row) {
     try {
-      await postJson(definition.endpoint, { ...row, status: "retired", updatedAt: row.updatedAt !== undefined ? new Date().toISOString() : undefined });
+      await postJson(definition.endpoint, {
+        ...row,
+        status: "retired",
+        effectiveTo: definition.kind === "qualityPlan" ? new Date().toISOString() : row.effectiveTo,
+        updatedAt: row.updatedAt !== undefined ? new Date().toISOString() : undefined,
+      });
       await reload();
     } catch (requestError) {
       setEditorError(requestError.message);
@@ -1836,7 +1946,9 @@ function RegistryPage({ definition }) {
       label: "操作",
       render: (_value, row) => (
         <div className="flex min-w-max flex-wrap gap-1" onClick={event => event.stopPropagation()}>
-          <Button variant="ghost" className="px-2" onClick={() => openMaintain(row)}>{isInspectionDefinition ? "查看" : "维护"}</Button>
+          <Button variant="ghost" className="px-2" onClick={() => openMaintain(row)}>
+            {isInspectionDefinition || (hasBusinessEditor && row.status !== "draft") ? "查看" : "维护"}
+          </Button>
           <Button variant="ghost" className="px-2" onClick={() => openNewVersion(row)}>沿用为新版本</Button>
           {!isInspectionDefinition && row.status !== "retired" && <Button variant="ghost" className="px-2 text-amber-700" onClick={() => retire(row)}>停用</Button>}
           {!isInspectionDefinition && row.status === "draft" && <Button variant="ghost" className="px-2 text-rose-700" onClick={() => remove(row)}>删除草稿</Button>}
@@ -1844,6 +1956,8 @@ function RegistryPage({ definition }) {
       ),
     },
   ];
+  const businessReadOnly = hasBusinessEditor && mode === "maintain" && businessForm.status !== "draft";
+  const editorReadOnly = mode === "maintain" && (isInspectionDefinition || businessReadOnly);
 
   return (
     <Page title={definition.title} description={definition.description} actions={<Button variant="primary" onClick={openCreate}>{definition.createLabel || "创建新版本"}</Button>}>
@@ -1861,13 +1975,18 @@ function RegistryPage({ definition }) {
       <Drawer
         open={open}
         onClose={() => setOpen(false)}
-        title={mode === "create" ? `创建${definition.title}` : mode === "version" ? "沿用为新版本" : isInspectionDefinition ? `查看${definition.title}` : `维护${definition.title}`}
+        title={mode === "create"
+          ? `创建${definition.title}`
+          : mode === "version" ? "沿用为新版本"
+            : editorReadOnly ? `查看${definition.title}` : `维护${definition.title}`}
         description={isInspectionDefinition
           ? mode === "maintain" ? "查看该版本的基本信息和检测特性。" : "填写基本信息并配置一个或多个检测特性。"
+          : hasBusinessEditor
+            ? editorReadOnly ? "查看该版本的业务配置。" : "按业务字段完成配置，保存前会检查必填项和引用。"
           : "编辑完整版本内容。保存前会由平台执行结构、引用与状态校验。"}
-        footer={mode === "maintain" && isInspectionDefinition
+        footer={editorReadOnly
           ? <Button onClick={() => setOpen(false)}>关闭</Button>
-          : <><Button onClick={() => setOpen(false)}>取消</Button><Button variant="primary" onClick={save} disabled={saving || Boolean(inspectionValidation)}>{saving ? "保存中" : "保存"}</Button></>}
+          : <><Button onClick={() => setOpen(false)}>取消</Button><Button variant="primary" onClick={save} disabled={saving || Boolean(editorValidation)}>{saving ? "保存中" : "保存"}</Button></>}
         size="xl"
       >
         {editorError && <Alert tone="danger">{editorError}</Alert>}
@@ -1880,17 +1999,14 @@ function RegistryPage({ definition }) {
             lockIdentity={mode !== "create"}
           />
         ) : (
-          <Field
-            label="版本定义"
-            hint="数组、范围、字段映射等嵌套配置保持为结构化内容；服务端拒绝无效引用和不合法状态。"
-          >
-            <Textarea
-              className="min-h-[65vh] font-mono text-xs leading-6"
-              value={editor}
-              onChange={event => setEditor(event.target.value)}
-              spellCheck={false}
-            />
-          </Field>
+          <RegistryBusinessEditor
+            kind={definition.kind}
+            form={businessForm}
+            onChange={setBusinessForm}
+            readOnly={editorReadOnly}
+            validation={businessValidation}
+            lockIdentity={mode !== "create"}
+          />
         )}
       </Drawer>
     </Page>
@@ -2076,7 +2192,7 @@ export function SubscriptionsPage() {
       eventTypes: (row.eventTypes || []).join(", "),
       subjectType: row.subjectType || "",
       subjectId: row.subjectId || "",
-      context: JSON.stringify(row.context || {}, null, 2),
+      contextPairs: Object.entries(row.context || {}).map(([key, value]) => ({ key, value })),
       secret: "",
       clearSecret: false,
       startMode: "new",
@@ -2100,7 +2216,9 @@ export function SubscriptionsPage() {
         eventTypes: form.eventTypes.split(",").map(value => value.trim()).filter(Boolean),
         subjectType: form.subjectType.trim() || null,
         subjectId: form.subjectId.trim() || null,
-        context: JSON.parse(form.context || "{}"),
+        context: Object.fromEntries(form.contextPairs
+          .filter(item => item.key.trim() && item.value.trim())
+          .map(item => [item.key.trim(), item.value.trim()])),
         secret: form.secret || null,
         clearSecret: form.secret ? false : form.clearSecret,
         startAfterIngestId: form.startMode === "history" ? 0 : null,
@@ -2110,7 +2228,7 @@ export function SubscriptionsPage() {
       setOpen(false);
       await reload();
     } catch (requestError) {
-      setActionError(requestError instanceof SyntaxError ? `上下文 JSON 格式错误：${requestError.message}` : requestError.message);
+      setActionError(requestError.message);
     } finally {
       setSaving(false);
     }
@@ -2197,11 +2315,36 @@ export function SubscriptionsPage() {
             <Field label="对象类型"><Input value={form.subjectType} onChange={event => update("subjectType", event.target.value)} placeholder="留空表示全部" /></Field>
             <Field label="对象 ID"><Input value={form.subjectId} onChange={event => update("subjectId", event.target.value)} placeholder="留空表示全部" /></Field>
           </div>
-          <Field label="上下文过滤" hint="JSON 键值对象，例如 { &quot;machine_id&quot;: &quot;PRESS-01&quot; }"><Textarea className="font-mono text-xs" value={form.context} onChange={event => update("context", event.target.value)} spellCheck={false} /></Field>
+          <SubscriptionContextFields value={form.contextPairs} onChange={value => update("contextPairs", value)} />
           {!editing && <Field label="首次启用"><Select value={form.startMode} onChange={event => update("startMode", event.target.value)}><option value="new">仅投递创建后的新事件</option><option value="history">从最早记录开始回放</option></Select></Field>}
         </form>
       </Drawer>
     </Page>
+  );
+}
+
+function SubscriptionContextFields({ value, onChange }) {
+  const rows = value.length ? value : [{ key: "", value: "" }];
+  function update(index, field, nextValue) {
+    const source = value.length ? value : [{ key: "", value: "" }];
+    onChange(source.map((item, rowIndex) => rowIndex === index ? { ...item, [field]: nextValue } : item));
+  }
+  return (
+    <Card
+      title="上下文过滤"
+      description="例如只投递指定设备或产品系列的事件。"
+      actions={<Button onClick={() => onChange([...value, { key: "", value: "" }])}>添加条件</Button>}
+    >
+      <div className="grid gap-2">
+        {rows.map((item, index) => (
+          <div key={index} className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
+            <Input aria-label={`过滤字段 ${index + 1}`} value={item.key} placeholder="例如 machine_id" onChange={event => update(index, "key", event.target.value)} />
+            <Input aria-label={`过滤内容 ${index + 1}`} value={item.value} placeholder="例如 PRESS-01" onChange={event => update(index, "value", event.target.value)} />
+            {value.length > 0 && <Button variant="ghost" className="text-rose-700" onClick={() => onChange(value.filter((_item, rowIndex) => rowIndex !== index))}>移除</Button>}
+          </div>
+        ))}
+      </div>
+    </Card>
   );
 }
 
@@ -2212,7 +2355,7 @@ function emptySubscription() {
     eventTypes: "",
     subjectType: "",
     subjectId: "",
-    context: "{}",
+    contextPairs: [],
     secret: "",
     clearSecret: false,
     startMode: "new",
