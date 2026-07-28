@@ -5,8 +5,8 @@ const origin = "https://ingotstack.com";
 
 export const metadata: Metadata = {
   metadataBase: new URL(origin),
-  title: "Ingot — AI Process R&D for Manufacturing",
-  description: "Fuse experimental data, real-time process data, physical mechanisms, and expert knowledge to design experiments, optimize parameters, validate process windows, and shorten development cycles.",
+  title: "Ingot — Closed-loop AI Process Optimization",
+  description: "Continuously learn from trajectories, actual recipes, and quality outcomes to choose the next manufacturing experiment.",
   applicationName: "Ingot",
   keywords: [
     "Ingot", "AI process R&D", "experiment design", "process optimization",
@@ -22,18 +22,20 @@ export const metadata: Metadata = {
     apple: "/brand/ingot-mark-dark.svg",
   },
   openGraph: {
-    title: "Ingot — AI Process R&D for Manufacturing",
-    description: "Use fewer experiments to find and validate reliable processes faster.",
+    title: "Ingot — Make every experiment converge on a better process",
+    description: "Closed-loop process optimization for expensive, small-data manufacturing experiments.",
     url: `${origin}/en/`,
     locale: "en_US",
     alternateLocale: ["zh_CN"],
     siteName: "Ingot",
     type: "website",
+    images: [{ url: "/og.png", width: 1734, height: 909, alt: "Ingot — The next run, optimized." }],
   },
   twitter: {
-    card: "summary",
-    title: "Ingot — AI Process R&D for Manufacturing",
-    description: "Fuse data, physical mechanisms, and expert knowledge to shorten process-development cycles.",
+    card: "summary_large_image",
+    title: "Ingot — Closed-loop AI Process Optimization",
+    description: "Turn real process evidence into the next verifiable recipe.",
+    images: ["/og.png"],
   },
 };
 

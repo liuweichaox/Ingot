@@ -10,14 +10,16 @@ public_files=(
   src/platform/Ingot.Platform.Web/src
 )
 
+# Guard against obsolete product narratives. Evidence, hypotheses, provenance,
+# and uncertainty are intentional terms in the current AI process R&D product.
 if grep -RInE --exclude='package-lock.json' \
-  '证据|事实|溯源|语义|候选解释|反证|假设|主张|依据|产品面|深度调查|深度分析' "${public_files[@]}"; then
-  echo "Public copy contains internal terminology. Use factory-language terms from docs/product-language.md." >&2
+  '制造生产数据与工艺分析系统|生产事件平台|工艺改进工作台|候选解释|产品面|深度调查' "${public_files[@]}"; then
+  echo "Public copy contains obsolete product terminology. Follow docs/design.md and docs/brand.md." >&2
   exit 1
 fi
 
 if grep -RIniE --exclude='package-lock.json' \
-  '\<(evidence|facts?|provenance|semantics?|artifacts?|actors?|hypotheses?|claims?)\>|deep[- ]investigation|verified records' "${public_files[@]}"; then
-  echo "Public copy contains internal English terminology. Use docs/product-language.en.md." >&2
+  'manufacturing production data and process analysis system|production event platform|process improvement workspace|candidate explanation|deep investigation' "${public_files[@]}"; then
+  echo "Public copy contains obsolete English product terminology. Follow docs/design.en.md and docs/brand.en.md." >&2
   exit 1
 fi

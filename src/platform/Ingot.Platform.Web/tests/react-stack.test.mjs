@@ -99,17 +99,20 @@ test("versioned registries use composite row keys and statuses are localized", (
   assert.match(components, /unknown: "待上报"/);
 });
 
-test("global search focuses the object query and table columns keep stable unique keys", () => {
-  assert.match(app, /navigate\("\/explorer", \{ state: \{ focusSearch: true \} \}\)/);
+test("global search opens a cross-product command palette and table columns keep stable unique keys", () => {
+  assert.match(app, /<GlobalSearchDialog/);
+  assert.match(app, /setGlobalSearchOpen\(true\)/);
+  assert.match(app, /event\.key\.toLowerCase\(\) === "k"/);
+  assert.match(app, /全局搜索/);
+  assert.doesNotMatch(app, /navigate\("\/explorer", \{ state: \{ focusSearch: true \} \}\)/);
   assert.match(app, /to="\/platform-metrics"[^>]*>平台运行状态/);
-  assert.match(pages, /if \(location\.state\?\.focusSearch\) searchInput\.current\?\.focus\(\)/);
-  assert.match(pages, /<Input ref=\{searchInput\}/);
   assert.match(components, /key=\{column\.id \?\? `\$\{column\.key\}:\$\{columnIndex\}`\}/);
 });
 
-test("device and object pages use the event summary contract and show an initial loading state", () => {
-  assert.match(app, /\["\/explorer", "设备与对象"\]/);
-  assert.match(pages, /title="设备与对象"/);
+test("industrial object pages use the event summary contract and show an initial loading state", () => {
+  assert.match(app, /\["\/explorer", "工业对象"\]/);
+  assert.match(app, /工业上下文/);
+  assert.match(pages, /title="工业对象"/);
   assert.match(pages, /objects\.loading && !objects\.data \? <LoadingCard \/>/);
   assert.match(pages, /key: "subjectType", label: "对象类型"/);
   assert.match(pages, /key: "subjectId", label: "对象编号"/);
@@ -124,7 +127,8 @@ test("core workflows tell new users what to do next and confirm completed action
   assert.match(components, /export function ToastHost/);
   assert.match(pages, /今天先做这些/);
   assert.match(pages, /配置下一批生产/);
-  assert.match(researchProjects, /以目标、假设、实验结果和工艺窗口组织完整研发证据链/);
+  assert.match(researchProjects, /发现偏差 → 找到原因 → 设计最有价值的下一组实验 → 验证并固化窗口/);
+  assert.match(researchProjects, /优化模型准备度/);
   assert.match(app, /<ToastHost \/>/);
 });
 

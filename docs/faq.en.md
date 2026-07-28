@@ -1,49 +1,49 @@
-# FAQ
+# Frequently Asked Questions
 
-## What problem does Ingot solve?
+## Is Ingot a data-acquisition system?
 
-Ingot helps process engineers develop processes that meet target specifications with fewer experiments and less time. It organizes objectives, experimental data, real-time process data, inspection outcomes, physical mechanisms, and expert knowledge into an iterative R&D loop.
+No. Acquisition is foundational; the product goal is to recommend the next process experiment from real evidence.
 
-## What role does data acquisition play?
+## Why do the docs mention FX3U optical-lens molding?
 
-Acquisition is a native Ingot capability. Mainstream industrial protocols and equipment-specific adaptations provide real process data with time, quality, version, and R&D context. The data directly supports experiment analysis, model updates, and process-window validation.
+It is one real validation scenario, not Ingot's product positioning or capability boundary. Ingot addresses any discrete or process operation that can form a loop of actual conditions, process evidence, and inspected outcomes; a new scenario supplies its data sources, variables, objectives, constraints, and features.
 
-## How does Ingot support different equipment?
+## Does another machine require another optimizer?
 
-Acquisition separates protocol drivers, equipment profiles, site point configurations, and process-variable mappings. Protocol capabilities are reused while model, firmware, and site differences are expressed through adaptations and project configuration.
+Usually not. A machine needs protocol, point, cycle, and variable mappings. A process needs objectives, constraints, features, and optional priors. The optimizer protocol stays stable.
 
-## What does a development project contain?
+## Why not ask an LLM for the recipe?
 
-A project includes target specifications, baseline, process variables, outcomes, equipment and material scope, constraints, hypotheses, experiments, process data, inspections, datasets, models, mechanisms, process windows, validations, and process knowledge.
+LLMs lack calibrated numerical uncertainty and reliable constrained optimization. GP/BoTorch chooses settings; an LLM may assist explanation and structuring.
 
-## How does Ingot help design experiments?
+## Why are actual recipes required?
 
-The system combines prior experiments, target gaps, variable ranges, process features, physical mechanisms, model uncertainty, safety constraints, cost, and information gain to propose candidate next experiments and explain their rationale for engineering review.
+Equipment can introduce bias, clipping, and dynamics. When a `recipe:` or `signal:` mapping is explicit, missing actual data excludes the run instead of contaminating training.
 
-## What does AI do?
+## Why model process traces?
 
-AI structures development questions, retrieves evidence, invokes analysis and experiment-design tools, forms hypotheses, explains results, and drafts experiments. Numerical computation, data scope, constraint checks, model execution, and state transitions remain deterministic and reproducible.
+The same setpoint may produce different heating rates, overshoot, pressure hold, and cooling. Quality depends on the realized process, so the two-stage surrogate includes trajectory features.
 
-## How are physical mechanisms and data models fused?
+## How does cold start work?
 
-Mechanisms provide variable relationships, valid ranges, and constraints. Data models learn differences between observed experiments and mechanisms. Expert knowledge supplies site conditions and applicability. Fused results preserve source, version, uncertainty, and computation rationale.
+Without safety outcomes, use a Sobol space-filling design. With safety outcomes, begin from a verified safe baseline and explore nearby. The BoTorch GP engine starts after three valid observations.
 
-## What is a process window?
+## Can it recommend a batch?
 
-A process window is an evidence-supported parameter range together with its applicable product, material, equipment, tooling, and conditions, target outcome, safety constraints, uncertainty, and validation state.
+Yes. The API supports 1–8 points and accounts for `X_pending`. The UI defaults to one run because the primary KPI is experiment count; parallel equipment can use larger batches.
 
-## How are results kept trustworthy?
+## Does a recommendation write directly to a field control system?
 
-Results bind input datasets, filtering rules, feature definitions, algorithm and model versions, and computation hashes. Engineers can move from a conclusion to its experiments, traces, inspections, mechanisms, and knowledge sources.
+No. It becomes a normal experiment for engineering review. Automatic writeback is a higher-risk control capability requiring separate safety engineering.
 
-## How does process knowledge mature?
+## Does optimizer failure stop acquisition?
 
-Candidate patterns move through historical evidence, exploratory experiments, confirmatory experiments, and engineering review. Formal knowledge preserves applicability, limitations, sources, versions, and revalidation results.
+No. Platform and Edge continue collecting and inspecting; only new recommendations are unavailable.
 
-## Who uses Ingot?
+## Has Ingot already proven fewer experiments?
 
-Process R&D engineers are the primary users. Process experts, quality engineers, equipment and automation engineers, R&D leads, and delivery teams collaborate in the same development project.
+Not publicly. The code loop and automated tests exist, but historical replay and controlled prospective campaigns must establish impact.
 
-## How is value measured?
+## Does an internal deployment need permissions?
 
-The primary metrics are experiments and calendar time required to reach target specifications, together with experiment cost, valid-experiment ratio, process-window validation, recommendation adoption, and knowledge reuse.
+Permissions are not the current capability priority. Internal deployments should still replace sample secrets, limit database and equipment-network exposure, back up data, and require experiment approval.

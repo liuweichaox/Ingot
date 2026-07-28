@@ -132,6 +132,28 @@ public sealed partial class ProcessResearchWorkflow(IProcessResearchStore store)
             .ToHashSet(StringComparer.Ordinal);
         if (variableCodes.Any(code => !knownVariables.Contains(code)))
             throw new ProcessResearchRuleException("研发假设引用了项目中未定义的变量。");
+        var objectiveCodes = project.Objectives.Select(static value => value.Code)
+            .ToHashSet(StringComparer.Ordinal);
+        var validationOutcomeCode = request.ValidationOutcomeCode is null
+            ? null
+            : NormalizeCode(request.ValidationOutcomeCode, "假设验证目标");
+        var expectedEffectDirection = request.ExpectedEffectDirection is null
+            ? null
+            : RequiredText(request.ExpectedEffectDirection, "预期效应方向", 40)
+                .ToLowerInvariant();
+        var hasValidationCriterion = validationOutcomeCode is not null ||
+                                   expectedEffectDirection is not null ||
+                                   request.MinimumEffect is not null;
+        if (hasValidationCriterion &&
+            (validationOutcomeCode is null || expectedEffectDirection is null ||
+             request.MinimumEffect is not { } minimumEffect ||
+             !objectiveCodes.Contains(validationOutcomeCode) ||
+             !ResearchHypothesisEffectDirections.IsValid(expectedEffectDirection) ||
+             !double.IsFinite(minimumEffect) || minimumEffect <= 0))
+        {
+            throw new ProcessResearchRuleException(
+                "假设验证必须同时定义项目目标、预期效应方向和正的最小效应。");
+        }
         if (!ResearchHypothesisStatuses.IsValid(request.Status))
             throw new ProcessResearchRuleException("研发假设状态无效。");
         if (request.Confidence is < 0 or > 1 || !double.IsFinite(request.Confidence))
@@ -147,8 +169,14 @@ public sealed partial class ProcessResearchWorkflow(IProcessResearchStore store)
             Statement = statement,
             Rationale = rationale,
             VariableCodes = variableCodes,
+            ValidationOutcomeCode = validationOutcomeCode,
+            ExpectedEffectDirection = expectedEffectDirection,
+            MinimumEffect = request.MinimumEffect,
+            PossibleConfounders = NormalizeTextList(request.PossibleConfounders, "可能混杂因素", 240),
+            Applicability = OptionalText(request.Applicability, 8000),
             SupportingEvidence = NormalizeEvidence(projectId, request.SupportingEvidence),
             OpposingEvidence = NormalizeEvidence(projectId, request.OpposingEvidence),
+            ValidationEvidence = NormalizeEvidence(projectId, request.ValidationEvidence),
             CreatedBy = existing?.CreatedBy ?? NormalizeUser(userId),
             CreatedAt = existing?.CreatedAt ?? now,
             UpdatedAt = now
@@ -243,6 +271,21 @@ public sealed partial class ProcessResearchWorkflow(IProcessResearchStore store)
             .ToHashSet(StringComparer.Ordinal);
         if (objectiveCodes.Count == 0 || objectiveCodes.Any(code => !knownObjectives.Contains(code)))
             throw new ProcessResearchRuleException("实验必须引用项目中已经定义的目标。");
+        if (request.Optimization is not null)
+        {
+            if (designMethod != ResearchDesignMethods.BayesianOptimization)
+                throw new ProcessResearchRuleException("优化元数据只能附加到贝叶斯优化实验。");
+            if (!Regex.IsMatch(
+                    request.Optimization.InputHash,
+                    "^[a-f0-9]{64}$",
+                    RegexOptions.CultureInvariant) ||
+                string.IsNullOrWhiteSpace(request.Optimization.ModelVersion) ||
+                request.Optimization.RunPredictions.Count != runPlan.Length ||
+                !request.Optimization.RunPredictions.Select(static value => value.RunKey)
+                    .ToHashSet(StringComparer.Ordinal)
+                    .SetEquals(runPlan.Select(static value => value.RunKey)))
+                throw new ProcessResearchRuleException("优化实验的模型版本、输入摘要或运行预测无效。");
+        }
 
         var now = DateTimeOffset.UtcNow;
         var value = request with
@@ -404,6 +447,50 @@ public sealed partial class ProcessResearchWorkflow(IProcessResearchStore store)
                 metrics.All(metric => metric.ObjectiveCode != code)))
             throw new ProcessResearchRuleException("单次结果记录必须覆盖实验的全部目标。");
 
+        var controlVariables = project.Variables
+            .Where(static value => value.Role == ResearchVariableRoles.Control)
+            .ToDictionary(static value => value.Code, StringComparer.Ordinal);
+        var runObservations = request.RunObservations.Select(observation =>
+        {
+            var factors = observation.ActualFactors.Select(factor =>
+            {
+                var code = NormalizeCode(factor.VariableCode, "实际工艺变量");
+                if (!controlVariables.TryGetValue(code, out var variable) ||
+                    !double.IsFinite(factor.Value) ||
+                    !string.Equals(factor.Unit, variable.Unit, StringComparison.OrdinalIgnoreCase))
+                    throw new ProcessResearchRuleException($"运行观察中的工艺变量 {code} 无效。");
+                return factor with { VariableCode = code, Unit = variable.Unit };
+            }).ToArray();
+            if (!factors.Select(static value => value.VariableCode)
+                    .ToHashSet(StringComparer.Ordinal)
+                    .SetEquals(controlVariables.Keys))
+                throw new ProcessResearchRuleException("每条运行观察必须包含全部可控工艺变量。");
+            if (!observation.Outcomes.Keys.ToHashSet(StringComparer.Ordinal)
+                    .SetEquals(experiment.ObjectiveCodes) ||
+                !observation.ConstraintOutcomes.Keys.ToHashSet(StringComparer.Ordinal)
+                    .SetEquals(project.OutcomeConstraints.Select(static value => value.Code)) ||
+                observation.Outcomes.Values.Any(static value => !double.IsFinite(value)) ||
+                observation.ConstraintOutcomes.Values.Any(static value => !double.IsFinite(value)) ||
+                observation.ProcessFeatures.Values.Any(static value => !double.IsFinite(value)))
+                throw new ProcessResearchRuleException(
+                    "运行观察必须完整包含实验目标、结果约束且所有特征均为有限数值。");
+            var sourceHash = observation.SourceContentHash.Trim().ToLowerInvariant();
+            if (!Regex.IsMatch(sourceHash, "^[a-f0-9]{64}$", RegexOptions.CultureInvariant))
+                throw new ProcessResearchRuleException("运行观察来源摘要必须是 64 位 SHA-256。");
+            if (!observation.ValidForOptimization && string.IsNullOrWhiteSpace(observation.ExclusionReason))
+                throw new ProcessResearchRuleException("排除运行观察时必须说明原因。");
+            return observation with
+            {
+                RunKey = RequiredText(observation.RunKey, "运行观察标识", 240),
+                ActualFactors = factors,
+                SourceContentHash = sourceHash,
+                ExclusionReason = OptionalText(observation.ExclusionReason, 1000)
+            };
+        }).ToArray();
+        if (runObservations.Select(static value => value.RunKey)
+                .Distinct(StringComparer.Ordinal).Count() != runObservations.Length)
+            throw new ProcessResearchRuleException("同一结果中的运行观察标识不能重复。");
+
         var resultId = request.ResultId == Guid.Empty ? Guid.CreateVersion7() : request.ResultId;
         if (await store.GetExperimentResultAsync(resultId, ct).ConfigureAwait(false) is not null)
             throw new ProcessResearchRuleException("实验结果标识已经存在。");
@@ -420,6 +507,7 @@ public sealed partial class ProcessResearchWorkflow(IProcessResearchStore store)
             datasetSnapshotId,
             analysisRunId,
             metrics,
+            runObservations,
             request.RunCount,
             request.ReplicateCount,
             request.DistinctMaterialLotCount,
@@ -454,6 +542,7 @@ public sealed partial class ProcessResearchWorkflow(IProcessResearchStore store)
             AnalysisRunId = analysisRunId,
             AnalysisHash = analysisHash,
             Metrics = metrics,
+            RunObservations = runObservations,
             Evidence = evidence,
             ExcludedRunKeys = request.ExcludedRunKeys.Select(static value => value.Trim())
                 .Where(static value => value.Length > 0)
@@ -462,18 +551,30 @@ public sealed partial class ProcessResearchWorkflow(IProcessResearchStore store)
             RecordedBy = NormalizeUser(userId),
             RecordedAt = now
         };
-        var saved = await store.SaveExperimentResultAsync(value, ct).ConfigureAwait(false);
-        await store.SaveExperimentAsync(
-            experiment with
+        var updatedExperiment = experiment with
+        {
+            ResultIds = experiment.ResultIds.Append(resultId).Distinct().ToArray(),
+            UpdatedAt = now
+        };
+        var savedResult = await store.SaveExperimentResultTransactionAsync(
+            value,
+            updatedExperiment,
+            new ResearchAuditEntry
             {
-                ResultIds = experiment.ResultIds.Append(resultId).Distinct().ToArray(),
-                UpdatedAt = now
+                EntryId = Guid.CreateVersion7(),
+                ProjectId = experiment.ProjectId,
+                ResourceType = "experiment-result",
+                ResourceId = resultId.ToString(),
+                Action = "recorded",
+                FromStatus = null,
+                ToStatus = request.SafetyPassed ? "passed" : "failed",
+                UserId = NormalizeUser(userId),
+                CreatedAt = now
             },
             ct).ConfigureAwait(false);
-        await AuditAsync(experiment.ProjectId, "experiment-result", resultId.ToString(),
-            "recorded", userId, null, request.SafetyPassed ? "passed" : "failed", ct)
+        await UpdateHypothesisAfterResultAsync(experiment, savedResult, userId, ct)
             .ConfigureAwait(false);
-        return saved;
+        return savedResult;
     }
 
     public async Task<ResearchProcessWindow> SaveProcessWindowAsync(
@@ -812,18 +913,46 @@ public sealed partial class ProcessResearchWorkflow(IProcessResearchStore store)
                 throw new ProcessResearchRuleException($"约束引用了未定义变量 {variableCode}。");
             if (!double.IsFinite(item.Limit))
                 throw new ProcessResearchRuleException("约束限值必须是有限数值。");
+            var constraintOperator = item.Operator.Trim();
+            if (constraintOperator is not ("<=" or ">="))
+                throw new ProcessResearchRuleException("参数约束操作符必须是 <= 或 >=。");
             return item with
             {
                 Code = NormalizeCode(item.Code, "约束代码"),
                 Description = RequiredText(item.Description, "约束说明", 1000),
                 VariableCode = variableCode,
-                Operator = item.Operator.Trim(),
+                Operator = constraintOperator,
                 Unit = RequiredText(item.Unit, "约束单位", 40)
             };
         }).ToArray();
         if (constraints.Select(static item => item.Code).Distinct(StringComparer.Ordinal).Count() !=
             constraints.Length)
             throw new ProcessResearchRuleException("约束代码不能重复。");
+        var outcomeConstraints = value.OutcomeConstraints.Select(item =>
+        {
+            if (!double.IsFinite(item.Limit) ||
+                !double.IsFinite(item.MinimumProbability) ||
+                item.MinimumProbability is <= 0 or > 1)
+                throw new ProcessResearchRuleException("结果约束限值或最低可行概率无效。");
+            var constraintOperator = item.Operator.Trim();
+            if (constraintOperator is not ("<=" or ">="))
+                throw new ProcessResearchRuleException("结果约束操作符必须是 <= 或 >=。");
+            return item with
+            {
+                Code = NormalizeCode(item.Code, "结果约束代码"),
+                Description = RequiredText(item.Description, "结果约束说明", 1000),
+                OutcomeCode = NormalizeCode(item.OutcomeCode, "结果约束指标"),
+                Operator = constraintOperator,
+                Unit = RequiredText(item.Unit, "结果约束单位", 40),
+                DataSource = OptionalText(item.DataSource, 500)
+            };
+        }).ToArray();
+        if (outcomeConstraints.Select(static item => item.Code)
+                .Distinct(StringComparer.Ordinal).Count() != outcomeConstraints.Length)
+            throw new ProcessResearchRuleException("结果约束代码不能重复。");
+        if (outcomeConstraints.Select(static item => item.Code)
+            .Intersect(objectives.Select(static item => item.Code), StringComparer.Ordinal).Any())
+            throw new ProcessResearchRuleException("研发目标代码与结果约束代码不能重复。");
 
         return value with
         {
@@ -836,6 +965,7 @@ public sealed partial class ProcessResearchWorkflow(IProcessResearchStore store)
             Objectives = objectives,
             Variables = variables,
             Constraints = constraints,
+            OutcomeConstraints = outcomeConstraints,
             OwnerUserId = NormalizeUser(value.OwnerUserId),
             MemberUserIds = value.MemberUserIds
                 .Append(value.OwnerUserId)
@@ -869,7 +999,8 @@ public sealed partial class ProcessResearchWorkflow(IProcessResearchStore store)
             Code = NormalizeCode(value.Code, "研发目标代码"),
             Name = RequiredText(value.Name, "研发目标名称", 240),
             Unit = RequiredText(value.Unit, "研发目标单位", 40),
-            Direction = direction
+            Direction = direction,
+            DataSource = OptionalText(value.DataSource, 500)
         };
     }
 
@@ -967,6 +1098,106 @@ public sealed partial class ProcessResearchWorkflow(IProcessResearchStore store)
         => source.Select(value => NormalizeCode(value, field))
             .Distinct(StringComparer.Ordinal)
             .ToArray();
+
+    private static IReadOnlyList<string> NormalizeTextList(
+        IReadOnlyList<string> source,
+        string field,
+        int maximumLength)
+        => source.Select(value => RequiredText(value, field, maximumLength))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+    private async Task UpdateHypothesisAfterResultAsync(
+        ResearchExperiment experiment,
+        ResearchExperimentResult result,
+        string userId,
+        CancellationToken ct)
+    {
+        if (experiment.HypothesisId is not { } hypothesisId)
+            return;
+        var hypothesis = await store.GetHypothesisAsync(hypothesisId, ct).ConfigureAwait(false);
+        if (hypothesis is null || hypothesis.ProjectId != experiment.ProjectId)
+            return;
+        if (hypothesis.ValidationOutcomeCode is null ||
+            hypothesis.ExpectedEffectDirection is null || hypothesis.MinimumEffect is null)
+            return;
+
+        var now = DateTimeOffset.UtcNow;
+        var evidence = CreateEvidence(
+            experiment.ProjectId,
+            EvidenceKinds.ExperimentResult,
+            result.ResultId.ToString(),
+            "用于验证研发假设的实验结果。",
+            result.AnalysisHash,
+            now);
+        var validationEvidence = hypothesis.ValidationEvidence
+            .Append(evidence)
+            .GroupBy(static value => (value.Kind, value.ReferenceId))
+            .Select(static group => group.First())
+            .ToArray();
+        var status = EvaluateHypothesis(hypothesis, result);
+        var supporting = status == ResearchHypothesisStatuses.Supported
+            ? hypothesis.SupportingEvidence.Append(evidence)
+                .GroupBy(static value => (value.Kind, value.ReferenceId))
+                .Select(static group => group.First()).ToArray()
+            : hypothesis.SupportingEvidence;
+        var opposing = status == ResearchHypothesisStatuses.Rejected
+            ? hypothesis.OpposingEvidence.Append(evidence)
+                .GroupBy(static value => (value.Kind, value.ReferenceId))
+                .Select(static group => group.First()).ToArray()
+            : hypothesis.OpposingEvidence;
+        var saved = await store.SaveHypothesisAsync(
+            hypothesis with
+            {
+                Status = status,
+                SupportingEvidence = supporting,
+                OpposingEvidence = opposing,
+                ValidationEvidence = validationEvidence,
+                UpdatedAt = now
+            },
+            ct).ConfigureAwait(false);
+        await AuditAsync(
+            experiment.ProjectId,
+            "hypothesis",
+            saved.HypothesisId.ToString(),
+            "validation-result-recorded",
+            userId,
+            hypothesis.Status,
+            saved.Status,
+            ct).ConfigureAwait(false);
+    }
+
+    private static string EvaluateHypothesis(
+        ResearchHypothesis hypothesis,
+        ResearchExperimentResult result)
+    {
+        if (!result.SafetyPassed || hypothesis.ValidationOutcomeCode is null ||
+            hypothesis.ExpectedEffectDirection is null || hypothesis.MinimumEffect is null)
+            return ResearchHypothesisStatuses.Inconclusive;
+        var metric = result.Metrics.FirstOrDefault(value =>
+            string.Equals(value.ObjectiveCode, hypothesis.ValidationOutcomeCode,
+                StringComparison.Ordinal));
+        if (metric is null || metric.LowerConfidenceBound is null ||
+            metric.UpperConfidenceBound is null)
+            return ResearchHypothesisStatuses.Inconclusive;
+        var minimumEffect = hypothesis.MinimumEffect.Value;
+        return hypothesis.ExpectedEffectDirection switch
+        {
+            ResearchHypothesisEffectDirections.Increase
+                when metric.LowerConfidenceBound >= minimumEffect =>
+                ResearchHypothesisStatuses.Supported,
+            ResearchHypothesisEffectDirections.Increase
+                when metric.UpperConfidenceBound <= -minimumEffect =>
+                ResearchHypothesisStatuses.Rejected,
+            ResearchHypothesisEffectDirections.Decrease
+                when metric.UpperConfidenceBound <= -minimumEffect =>
+                ResearchHypothesisStatuses.Supported,
+            ResearchHypothesisEffectDirections.Decrease
+                when metric.LowerConfidenceBound >= minimumEffect =>
+                ResearchHypothesisStatuses.Rejected,
+            _ => ResearchHypothesisStatuses.Inconclusive
+        };
+    }
 
     private static string NormalizeCode(string? value, string field)
     {

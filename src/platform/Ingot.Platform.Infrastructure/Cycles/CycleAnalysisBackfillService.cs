@@ -86,6 +86,7 @@ public sealed class CycleAnalysisBackfillService(
                     "completed",
                     job.Request.PageSize,
                     offset,
+                    null,
                     ct).ConfigureAwait(false);
                 if (page.Data.Count == 0)
                     break;

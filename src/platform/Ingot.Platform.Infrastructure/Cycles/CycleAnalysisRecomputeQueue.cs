@@ -82,6 +82,7 @@ public sealed class CycleAnalysisRecomputeHostedService(
                     "completed",
                     1,
                     0,
+                    null,
                     ct).ConfigureAwait(false);
                 if (result.Data.Count == 0 ||
                     result.Data[0].AnalysisMaterialization.Status is "materialized" or "cached")

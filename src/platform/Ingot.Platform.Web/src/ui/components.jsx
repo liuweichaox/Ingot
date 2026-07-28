@@ -144,14 +144,14 @@ export function StatusBadge({ value }) {
   return <Badge tone={tone}>{labels[normalized] ?? String(value ?? "待上报")}</Badge>;
 }
 
-export function WorkflowGuide({ title = "按步骤完成", description, steps }) {
+export function WorkflowGuide({ title = "按步骤完成", description, steps, compact = false }) {
   return (
     <section className="rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50 to-white p-5 shadow-sm">
       <div>
         <p className="font-semibold text-slate-950">{title}</p>
         {description && <p className="mt-1 text-sm leading-6 text-slate-600">{description}</p>}
       </div>
-      <ol className="mt-4 grid gap-3 md:grid-cols-3">
+      <ol className={cx("mt-4 grid gap-3", !compact && "md:grid-cols-3")}>
         {steps.map((step, index) => {
           const state = step.state || "upcoming";
           return (

@@ -9,8 +9,8 @@ export const metadata: Metadata = {
     canonical: "/",
     languages: { "zh-CN": "/", en: "/en/" },
   },
-  title: "Ingot — AI 工艺研发系统",
-  description: "融合实验数据、实时过程数据、物理机理和专家知识，辅助工艺工程师设计实验、优化参数并验证工艺窗口，缩短工艺研发周期。",
+  title: "Ingot — AI 闭环工艺优化系统",
+  description: "让设备轨迹、实际配方和质量结果持续学习，用物理先验与贝叶斯优化决定下一次工艺实验。",
   applicationName: "Ingot",
   keywords: [
     "Ingot", "AI 工艺研发", "实验设计", "工艺优化",
@@ -22,17 +22,19 @@ export const metadata: Metadata = {
     apple: "/brand/ingot-mark-dark.svg",
   },
   openGraph: {
-    title: "Ingot — AI 工艺研发系统",
-    description: "用更少的实验，更快找到并验证可靠工艺。",
+    title: "Ingot — 让每一次试验都逼近最优工艺",
+    description: "面向昂贵、小样本制造实验的闭环工艺优化系统。",
     url: origin,
     type: "website",
     locale: "zh_CN",
     siteName: "Ingot",
+    images: [{ url: "/og.png", width: 1734, height: 909, alt: "Ingot — The next run, optimized." }],
   },
   twitter: {
-    card: "summary",
-    title: "Ingot — AI 工艺研发系统",
-    description: "融合实验数据、实时过程数据、物理机理和专家知识，缩短工艺研发周期。",
+    card: "summary_large_image",
+    title: "Ingot — AI 闭环工艺优化系统",
+    description: "从真实过程证据到下一炉可验证的工艺参数。",
+    images: ["/og.png"],
   },
 };
 

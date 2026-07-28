@@ -38,6 +38,17 @@ public interface IProcessResearchStore
     Task<ResearchExperimentResult> SaveExperimentResultAsync(
         ResearchExperimentResult value,
         CancellationToken ct = default);
+    async Task<ResearchExperimentResult> SaveExperimentResultTransactionAsync(
+        ResearchExperimentResult result,
+        ResearchExperiment updatedExperiment,
+        ResearchAuditEntry audit,
+        CancellationToken ct = default)
+    {
+        var saved = await SaveExperimentResultAsync(result, ct).ConfigureAwait(false);
+        await SaveExperimentAsync(updatedExperiment, ct).ConfigureAwait(false);
+        await AddAuditEntryAsync(audit, ct).ConfigureAwait(false);
+        return saved;
+    }
 
     Task<ResearchProcessWindow?> GetProcessWindowAsync(Guid windowId, CancellationToken ct = default);
     Task<IReadOnlyList<ResearchProcessWindow>> ListProcessWindowsAsync(

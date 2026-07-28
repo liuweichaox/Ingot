@@ -404,7 +404,14 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, IA
         else
         {
             context["context_captured_at"] = evt.OccurredAt.ToString("O", CultureInfo.InvariantCulture);
-            context["context_capture_status"] = "configuration_missing";
+            // Historical imports already carry the immutable product/recipe/workpiece
+            // context from their source system.  Do not turn a usable historical
+            // replay into a configuration error merely because it did not pass
+            // through this deployment's live preparation and tooling workflow.
+            // This remains distinct from a locally resolved live context.
+            context["context_capture_status"] = HasSourceProvidedContext(context)
+                ? "source_provided"
+                : "configuration_missing";
         }
 
         var recipe = await _analysisResolver.ResolveRecipeAsync(context, ct).ConfigureAwait(false);
@@ -491,6 +498,10 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, IA
         }
         return result;
     }
+
+    private static bool HasSourceProvidedContext(IReadOnlyDictionary<string, string> context)
+        => new[] { "product_series", "product_code", "recipe_id", "recipe_version", "workpiece_id" }
+            .All(key => context.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value));
 
     private async Task ValidateProcessSampleAsync(
         ProductionEvent evt,
@@ -800,6 +811,20 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, IA
         AddEquality(command, predicates, "subject_type", "subject_type", query.SubjectType);
         AddEquality(command, predicates, "subject_id", "subject_id", query.SubjectId);
         AddEquality(command, predicates, "correlation_id", "correlation_id", query.CorrelationId);
+        if (!string.IsNullOrWhiteSpace(query.SearchText))
+        {
+            var search = query.SearchText.Trim();
+            if (search.Length > 128)
+                throw new ArgumentException("运行搜索词不能超过 128 个字符。", nameof(query));
+            predicates.Add("""
+                           (correlation_id ILIKE @search ESCAPE '~'
+                            OR subject_id ILIKE @search ESCAPE '~'
+                            OR context ->> 'product_series' ILIKE @search ESCAPE '~'
+                            OR context ->> 'product_code' ILIKE @search ESCAPE '~'
+                            OR context ->> 'recipe_id' ILIKE @search ESCAPE '~')
+                           """);
+            command.Parameters.AddWithValue("search", $"%{EscapeLike(search)}%");
+        }
 
         if (query.From.HasValue)
         {
@@ -837,6 +862,11 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, IA
 
         return predicates.Count == 0 ? string.Empty : $"WHERE {string.Join(" AND ", predicates)}";
     }
+
+    private static string EscapeLike(string value)
+        => value.Replace("~", "~~", StringComparison.Ordinal)
+            .Replace("%", "~%", StringComparison.Ordinal)
+            .Replace("_", "~_", StringComparison.Ordinal);
 
     public async Task<bool> CanConnectAsync(CancellationToken ct = default)
     {

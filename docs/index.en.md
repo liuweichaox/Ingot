@@ -1,65 +1,44 @@
-# Ingot: AI Process R&D for Manufacturing
+# Ingot Documentation
 
-Ingot is an AI process R&D system for manufacturing. It fuses experimental data, real-time process data, physical mechanisms, and expert knowledge to help process engineers design experiments, discover patterns, optimize parameters, validate process windows, and shorten development cycles.
+Ingot is an open-source process-optimization system for expensive, small-data manufacturing experiments. It connects control systems, instruments, vision, inspection, and business data into observations of real runs, then recommends the next experiment with constrained Bayesian optimization.
 
-## The core problem
+## Start here
 
-Process R&D is constrained by expensive experiments, interacting variables, limited samples, fragmented process and outcome data, and expert knowledge that is difficult to reuse. Engineers must find parameter ranges that meet target specifications with as few experiments as possible while respecting equipment, safety, material, and time constraints.
+| Goal | Read |
+|---|---|
+| Run the complete stack locally | [Install and run a first experiment](getting-started.en.md) |
+| Understand components and boundaries | [Architecture](design.en.md) |
+| Understand GPs, qLogNEI/qLogNEHVI, and constraints | [Optimizer](optimization.en.md) |
+| Connect control systems, instruments, inspections, and run data | [Equipment and data wiring](data-connection.en.md) |
+| Prove whether the system reduces experiments | [Real-world validation](rollout.en.md) |
+| Deploy inside a factory network | [Deployment and operations](deployment.en.md) |
+| Find common answers | [FAQ](faq.en.md) |
 
-Ingot organizes every project into an evolving evidence chain:
-
-1. define objectives, metrics, variables, and constraints;
-2. acquire real data from experimental and production equipment and inspection instruments;
-3. link process data, materials, tooling, recipes, and outcomes to individual experiments;
-4. combine history, physical mechanisms, and expert knowledge into hypotheses;
-5. analyze critical variables, phases, interactions, and uncertainty;
-6. design the next experiments with higher information value;
-7. update models, process windows, and understanding from new results;
-8. validate conclusions and preserve traceable, reusable process knowledge.
-
-## Product capabilities
-
-### Native data acquisition
-
-Ingot connects PLCs, controllers, sensors, experimental equipment, and inspection instruments through mainstream industrial protocols, with adaptations for actual models and site point maps. Edge performs sampling, quality assessment, offline persistence, and recovery forwarding.
-
-### Process R&D management
-
-Projects manage objectives, variables, constraints, hypotheses, experiments, outcomes, cost, progress, and review in one context.
-
-### Intelligent experiment design
-
-The system combines existing experiments, process constraints, model uncertainty, and information gain to help engineers choose the next experiments that are most worth running.
-
-### Data and mechanism fusion
-
-Time-series features, statistical evidence, data models, physical mechanisms, and expert rules work together to support explainable decisions under limited samples.
-
-### Process-window validation
-
-Candidate windows preserve applicable products, materials, equipment, tooling, and conditions, and are confirmed through controlled experiments for target outcomes, safety, stability, and reproducibility.
-
-### Process knowledge
-
-Reviewed conclusions preserve evidence, applicability, limitations, versions, and revalidation results for reuse across future products, materials, and equipment.
-
-## One connected R&D path
+## One product loop
 
 ```text
-objective
-  → variables and constraints
-  → data and knowledge
-  → hypotheses and analysis
-  → experiment design
-  → field execution and acquisition
-  → inspection and outcomes
-  → model and mechanism updates
-  → process-window validation
-  → process knowledge
+define controls, objectives, and safety constraints
+→ acquire actual recipes and cycle trajectories
+→ join inspection outcomes
+→ assemble experimental observations
+→ fit trajectory and quality surrogates
+→ recommend the next settings
+→ engineer review and execution
+→ update from new evidence
 ```
 
-## Suggested reading
+Acquisition, inspection, features, experiments, and knowledge all serve this loop. A new process usually changes variables, mappings, objectives, safety limits, features, and optional physical priors—not the system architecture.
 
-- [Product and system design](design.en.md): product principles, the R&D loop, acquisition, data model, and intelligent R&D engine.
-- [Rollout and validation](rollout.en.md): start with one real process-development project.
-- [FAQ](faq.en.md): acquisition, experiments, AI, mechanisms, validation, and value.
+## Current status
+
+The code-level loop is implemented and covered by automated tests. A real optical-molding historical replay has not yet been published. Ingot distinguishes “the software runs” from “the software has proven fewer factory experiments”; the latter requires run-by-run replay and prospective evidence.
+
+## Public commitments
+
+- Never present planned settings as actual run values.
+- Never present a model mean as certainty.
+- Never use an LLM to invent numerical recipes.
+- Never claim real-process benefit from simulation alone.
+- Retain snapshot, model version, intervals, and provenance for every recommendation.
+
+Chinese documentation starts at [index.md](index.md).

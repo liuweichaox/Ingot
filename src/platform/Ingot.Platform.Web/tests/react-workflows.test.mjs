@@ -83,6 +83,8 @@ test("edge pages use the registry heartbeat contract for status", () => {
 
 test("workbench and logs use current response contracts without misleading placeholders", () => {
   assert.match(pages, /\/api\/v1\/cycles\?limit=8/);
+  assert.match(pages, /\/api\/v1\/research-projects\?limit=100/);
+  assert.match(pages, /工业数据不是终点，决策才是/);
   assert.match(pages, /cycleOverview: cycles\.overview/);
   assert.match(pages, /state\.loading \? <LoadingCard \/>/);
   assert.match(pages, /logs\?pageSize=200/);
@@ -92,7 +94,12 @@ test("workbench and logs use current response contracts without misleading place
 });
 
 test("cycle comparison submits the selection contract and renders business results", () => {
-  assert.match(pages, /cycleIds: \[baselineCycleId, candidate\.trim\(\)\]/);
+  assert.match(pages, /new URLSearchParams\(\{ status: "completed", limit: "200" \}\)/);
+  assert.match(pages, /query\.set\("search", search\)/);
+  assert.match(pages, /exploratory: "探索性证据"/);
+  assert.match(pages, /label="基准运行"/);
+  assert.match(pages, /label="对比运行"/);
+  assert.match(pages, /cycleIds: \[baselineCycleId, candidate\]/);
   assert.match(pages, /title="周期概况"/);
   assert.match(pages, /title="信号差异"/);
   assert.doesNotMatch(pages, /JSON\.stringify\(result, null, 2\)/);
@@ -115,6 +122,22 @@ test("research projects expose the evidence-backed experiment and process-window
   assert.match(researchProjects, /独立验证/);
   assert.match(researchProjects, /等待其他成员批准/);
   assert.doesNotMatch(researchProjects, /项目代码|指标代码|变量代码|AnalysisHash|GUID/);
+});
+
+test("research project setup reuses configured industrial definitions instead of retyping identifiers", () => {
+  assert.match(researchProjects, /\/api\/v1\/inspection-definitions/);
+  assert.match(researchProjects, /\/api\/v1\/process-data-models/);
+  assert.match(researchProjects, /label="质量指标"/);
+  assert.match(researchProjects, /label="可控配方参数"/);
+  assert.match(researchProjects, /选择质量指标后自动带入/);
+  assert.match(researchProjects, /选择配方参数后自动带入/);
+});
+
+test("research projects turn optimization into the existing experiment workflow", () => {
+  assert.match(researchProjects, /\/optimize/);
+  assert.match(researchProjects, /智能设计下一组实验/);
+  assert.match(researchProjects, /现有流程审核后执行/);
+  assert.doesNotMatch(researchProjects, /optimization-observations|optimization-suggestions/);
 });
 
 test("research assets retain mechanism fusion, project-scoped knowledge, and dataset quality results", () => {

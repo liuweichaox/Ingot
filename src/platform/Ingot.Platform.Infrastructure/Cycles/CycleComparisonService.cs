@@ -18,6 +18,39 @@ public sealed class CycleComparisonService(
     private readonly WholeCycleAnalysisEngine _wholeCycleAnalysis = wholeCycleAnalysis ?? new();
     private readonly CycleAnalysisMaterializer? _materializer = materializer;
 
+    public async Task<CycleComparisonRow?> GetCycleAsync(
+        string correlationId,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(correlationId))
+            throw new ArgumentException("周期标识不能为空。", nameof(correlationId));
+        correlationId = correlationId.Trim();
+        var cycleEvents = await QueryAllAsync(
+            new PlatformEventQuery { CorrelationId = correlationId }, ct).ConfigureAwait(false);
+        if (cycleEvents.Count == 0)
+            return null;
+        var context = ResolveContext(cycleEvents);
+        var analysis = await analysisResolver.ResolveAsync(context, "production-cycle", ct)
+            .ConfigureAwait(false);
+        var recipe = await analysisResolver.ResolveRecipeAsync(context, ct).ConfigureAwait(false);
+        var inspectionRecords = InspectionRecordSet.Effective(
+            await inspections.QueryAllByOperationRunIdsAsync([correlationId], ct)
+                .ConfigureAwait(false));
+        var latestReviews = await reviews.GetLatestByInspectionRecordIdsAsync(
+            inspectionRecords.Select(static value => value.RecordId).ToArray(), ct)
+            .ConfigureAwait(false);
+        var materialized = await AnalyzeAsync(
+            correlationId, cycleEvents, analysis, ct).ConfigureAwait(false);
+        return BuildRow(
+            correlationId,
+            cycleEvents,
+            inspectionRecords,
+            latestReviews,
+            analysis,
+            recipe,
+            materialized);
+    }
+
     public async Task<CycleComparisonResult?> CompareWithHistoryAsync(
         string correlationId,
         int limit,

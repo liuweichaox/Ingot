@@ -19,6 +19,25 @@ services:
       retries: 20
     restart: unless-stopped
 
+  optimizer:
+    build:
+      context: .
+      dockerfile: optimizer/Dockerfile
+    container_name: ingot-optimizer
+    ports:
+      - "127.0.0.1:8100:8100"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8100/ready', timeout=2)"
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    restart: unless-stopped
+
   platform-api:
     build:
       context: .
@@ -50,6 +69,9 @@ services:
       InspectionAttachments__ArchiveRootPath: /app/Archive/inspection-attachments
       ProcessKnowledge__RootPath: /app/Data/process-knowledge
       ProcessKnowledge__ArchiveRootPath: /app/Archive/process-knowledge
+      ProcessOptimizer__Enabled: ${INGOT_OPTIMIZER_ENABLED:-true}
+      ProcessOptimizer__BaseUrl: http://optimizer:8100
+      ProcessOptimizer__RequestTimeoutSeconds: ${INGOT_OPTIMIZER_TIMEOUT_SECONDS:-30}
       Chat__Enabled: ${INGOT_CHAT_ENABLED:-false}
       Chat__Provider: ${INGOT_CHAT_PROVIDER:-Deterministic}
       Chat__FastModel: ${INGOT_CHAT_FAST_MODEL:-deterministic-v1}

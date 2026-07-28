@@ -30,6 +30,7 @@ public sealed class CycleRecordService(
         string? status,
         int limit,
         int offset = 0,
+        string? search = null,
         CancellationToken ct = default)
     {
         var context = BuildContext(productSeries, productCode, recipeId, workpieceId);
@@ -46,6 +47,7 @@ public sealed class CycleRecordService(
                 SubjectId = Normalize(machineId),
                 From = from,
                 To = to,
+                SearchText = Normalize(search),
                 Context = context
             };
             lifecycle.AddRange(await QueryAllAsync(baseQuery with { EventType = "cycle.started" }, ct).ConfigureAwait(false));

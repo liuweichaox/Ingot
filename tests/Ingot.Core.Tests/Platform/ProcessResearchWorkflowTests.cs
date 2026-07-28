@@ -24,6 +24,9 @@ public sealed class ProcessResearchWorkflowTests
                 Statement = "保压温度和压力共同影响面形误差。",
                 Rationale = "历史周期、物理机理和专家经验均指向该交互关系。",
                 VariableCodes = ["holding-temperature", "press-force"],
+                ValidationOutcomeCode = "form-error",
+                ExpectedEffectDirection = ResearchHypothesisEffectDirections.Decrease,
+                MinimumEffect = 0.2,
                 Confidence = 0.6
             },
             "engineer-a");
@@ -89,6 +92,67 @@ public sealed class ProcessResearchWorkflowTests
                         ComputationMethod = "bootstrap difference"
                     }
                 ],
+                RunObservations =
+                [
+                    new ExperimentRunObservation
+                    {
+                        RunKey = "cycle-001",
+                        ActualFactors =
+                        [
+                            new ExperimentFactorSetting
+                            {
+                                VariableCode = "holding-temperature",
+                                Value = 510,
+                                Unit = "Cel"
+                            },
+                            new ExperimentFactorSetting
+                            {
+                                VariableCode = "press-force",
+                                Value = 10,
+                                Unit = "kN"
+                            }
+                        ],
+                        ProcessFeatures = new Dictionary<string, double>
+                        {
+                            ["temperature-overshoot"] = 1.2,
+                            ["force-impulse"] = 42.0
+                        },
+                        Outcomes = new Dictionary<string, double>
+                        {
+                            ["form-error"] = 0.43
+                        },
+                        SourceContentHash = new string('a', 64)
+                    },
+                    new ExperimentRunObservation
+                    {
+                        RunKey = "cycle-002",
+                        ActualFactors =
+                        [
+                            new ExperimentFactorSetting
+                            {
+                                VariableCode = "holding-temperature",
+                                Value = 530,
+                                Unit = "Cel"
+                            },
+                            new ExperimentFactorSetting
+                            {
+                                VariableCode = "press-force",
+                                Value = 14,
+                                Unit = "kN"
+                            }
+                        ],
+                        ProcessFeatures = new Dictionary<string, double>
+                        {
+                            ["temperature-overshoot"] = 0.8,
+                            ["force-impulse"] = 48.0
+                        },
+                        Outcomes = new Dictionary<string, double>
+                        {
+                            ["form-error"] = 0.35
+                        },
+                        SourceContentHash = new string('b', 64)
+                    }
+                ],
                 RunCount = 4,
                 ReplicateCount = 2,
                 DistinctMaterialLotCount = 2,
@@ -147,8 +211,11 @@ public sealed class ProcessResearchWorkflowTests
 
         Assert.Equal(ProcessWindowStatuses.Validated, window.Status);
         Assert.Equal(ResearchProjectStatuses.Completed, project.Status);
+        Assert.Equal(2, result.RunObservations.Count);
         var workspace = await workflow.GetWorkspaceAsync(project.ProjectId);
         Assert.Single(workspace.Hypotheses);
+        Assert.Equal(ResearchHypothesisStatuses.Supported, workspace.Hypotheses[0].Status);
+        Assert.Single(workspace.Hypotheses[0].ValidationEvidence);
         Assert.Single(workspace.Experiments);
         Assert.Single(workspace.ProcessWindows);
     }
@@ -240,6 +307,150 @@ public sealed class ProcessResearchWorkflowTests
         Assert.Contains("必须记录由源数据计算得到的结果", error.Message);
     }
 
+    [Fact]
+    public async Task ResultMaterializer_PersistsCompleteCycleObservationsAsFormalResult()
+    {
+        var store = new MemoryStore();
+        var workflow = new ProcessResearchWorkflow(store);
+        var project = await workflow.CreateProjectAsync(ProjectDraft(), "engineer-a");
+        var experiment = await workflow.CreateExperimentAsync(
+            project.ProjectId,
+            new ResearchExperiment
+            {
+                Name = "自动回灌实验",
+                RunPlan =
+                [
+                    Run("auto-cycle-1", 1, 510, 10),
+                    Run("auto-cycle-2", 2, 530, 14)
+                ],
+                ObjectiveCodes = ["form-error"],
+                StopRule = "完成全部运行。",
+                RollbackPlan = "恢复基线。"
+            },
+            "engineer-a");
+        experiment = await workflow.ChangeExperimentStatusAsync(
+            experiment.ExperimentId,
+            ResearchExperimentStatuses.Approved,
+            "engineer-b");
+        experiment = await workflow.ChangeExperimentStatusAsync(
+            experiment.ExperimentId,
+            ResearchExperimentStatuses.Running,
+            "engineer-a");
+        ExperimentRunObservation Observation(
+            string runKey,
+            double temperature,
+            double force,
+            double outcome,
+            char hash)
+            => new()
+            {
+                RunKey = runKey,
+                ActualFactors =
+                [
+                    new ExperimentFactorSetting
+                    {
+                        VariableCode = "holding-temperature",
+                        Value = temperature,
+                        Unit = "Cel"
+                    },
+                    new ExperimentFactorSetting
+                    {
+                        VariableCode = "press-force",
+                        Value = force,
+                        Unit = "kN"
+                    }
+                ],
+                ProcessFeatures = new Dictionary<string, double>
+                {
+                    ["mold-temperature.cycle.average"] = temperature
+                },
+                Outcomes = new Dictionary<string, double> { ["form-error"] = outcome },
+                SourceContentHash = new string(hash, 64)
+            };
+        var assembly = new ResearchObservationAssembly(
+        [
+            Observation("auto-cycle-1", 510, 10, 0.52, 'd'),
+            Observation("auto-cycle-2", 530, 14, 0.37, 'e')
+        ], 2);
+        var materializer = new ResearchExperimentResultMaterializer(workflow);
+
+        var results = await materializer.MaterializeCompletedAsync(
+            project,
+            [experiment],
+            [],
+            assembly,
+            "system-cycle-materializer");
+
+        var result = Assert.Single(results);
+        Assert.Equal(2, result.RunObservations.Count);
+        Assert.True(result.CalculatedFromSource);
+        Assert.StartsWith("cycle-observation-snapshot:", result.DatasetSnapshotId);
+        var savedExperiment = await store.GetExperimentAsync(experiment.ExperimentId);
+        Assert.Contains(result.ResultId, savedExperiment!.ResultIds);
+        Assert.Contains(
+            await store.ListAuditEntriesAsync(project.ProjectId),
+            value => value.ResourceType == "experiment-result" &&
+                     value.ResourceId == result.ResultId.ToString());
+    }
+
+    [Fact]
+    public async Task Optimizer_CreatesAnOrdinaryExperimentFromPerRunObservations()
+    {
+        var store = new MemoryStore();
+        var workflow = new ProcessResearchWorkflow(store);
+        var project = await workflow.CreateProjectAsync(ProjectDraft(), "engineer-a");
+        await store.SaveExperimentResultAsync(new ResearchExperimentResult
+        {
+            ResultId = Guid.CreateVersion7(),
+            ProjectId = project.ProjectId,
+            ExperimentId = Guid.CreateVersion7(),
+            DatasetSnapshotId = "fx3u-cycle-snapshot",
+            RunObservations =
+            [
+                new ExperimentRunObservation
+                {
+                    RunKey = "fx3u-cycle-1",
+                    ActualFactors =
+                    [
+                        new ExperimentFactorSetting
+                        {
+                            VariableCode = "holding-temperature", Value = 510, Unit = "Cel"
+                        },
+                        new ExperimentFactorSetting
+                        {
+                            VariableCode = "press-force", Value = 10, Unit = "kN"
+                        }
+                    ],
+                    Outcomes = new Dictionary<string, double> { ["form-error"] = 0.8 },
+                    SourceContentHash = new string('c', 64)
+                }
+            ]
+        });
+        var optimizer = new ResearchExperimentOptimizer(
+            store,
+            new StubOptimizerClient(),
+            new EmptyObservationAssembler(),
+            new ResearchExperimentResultMaterializer(workflow),
+            workflow);
+
+        var experiment = await optimizer.CreateNextExperimentAsync(
+            project.ProjectId,
+            new ResearchOptimizationRequest { BatchSize = 2, Seed = 7 },
+            "engineer-a");
+        var repeated = await optimizer.CreateNextExperimentAsync(
+            project.ProjectId,
+            new ResearchOptimizationRequest { BatchSize = 2, Seed = 7 },
+            "engineer-a");
+
+        Assert.Equal(ResearchDesignMethods.BayesianOptimization, experiment.DesignMethod);
+        Assert.Equal(experiment.ExperimentId, repeated.ExperimentId);
+        Assert.Equal(ResearchExperimentStatuses.Planned, experiment.Status);
+        Assert.Equal(2, experiment.RunPlan.Count);
+        Assert.NotNull(experiment.Optimization);
+        Assert.Equal(1, experiment.Optimization.ObservationCount);
+        Assert.Equal("botorch-qlogbo-test", experiment.Optimization.ModelVersion);
+    }
+
     private static ExperimentRunPlan Run(
         string key,
         int sequence,
@@ -318,6 +529,64 @@ public sealed class ProcessResearchWorkflowTests
                 }
             ]
         };
+
+    private sealed class StubOptimizerClient : IProcessOptimizerClient
+    {
+        public Task<OptimizerSuggestionResponse> SuggestAsync(
+            OptimizerSuggestionCall request,
+            CancellationToken ct = default)
+        {
+            Assert.Single(request.Observations);
+            var suggestions = new[]
+            {
+                Suggest(515, 11, 0.55),
+                Suggest(525, 13, 0.42)
+            };
+            return Task.FromResult(new OptimizerSuggestionResponse
+            {
+                ModelVersion = "botorch-qlogbo-test",
+                ObservationCount = request.Observations.Count,
+                Suggestions = suggestions
+            });
+        }
+
+        private static OptimizerSuggestionOutput Suggest(
+            double temperature,
+            double force,
+            double predictedFormError)
+            => new()
+            {
+                RecommendedParameters = new Dictionary<string, double>
+                {
+                    ["holding-temperature"] = temperature,
+                    ["press-force"] = force
+                },
+                Predictions = new Dictionary<string, OptimizerObjectivePrediction>
+                {
+                    ["form-error"] = new()
+                    {
+                        Mean = predictedFormError,
+                        StandardDeviation = 0.08,
+                        Lower95 = predictedFormError - 0.16,
+                        Upper95 = predictedFormError + 0.16,
+                        Unit = "um"
+                    }
+                },
+                FeasibilityProbability = 0.7,
+                AcquisitionValue = 0.2,
+                ModelVersion = "botorch-qlogbo-test",
+                Rationale = "测试优化建议"
+            };
+    }
+
+    private sealed class EmptyObservationAssembler : IResearchObservationAssembler
+    {
+        public Task<ResearchObservationAssembly> AssembleAsync(
+            ResearchProject project,
+            IReadOnlyList<ResearchExperiment> experiments,
+            CancellationToken ct = default)
+            => Task.FromResult(new ResearchObservationAssembly([], 0));
+    }
 
     private sealed class MemoryStore : IProcessResearchStore
     {

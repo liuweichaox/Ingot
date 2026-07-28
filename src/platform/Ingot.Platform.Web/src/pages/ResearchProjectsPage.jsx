@@ -15,23 +15,40 @@ import {
   Select,
   StatusBadge,
   Textarea,
+  WorkflowGuide,
   notify,
 } from "../ui/components";
 
 const projectFormInitial = {
   name: "",
+  referenceCycleId: "",
+  dataModelKey: "",
   processName: "",
   productName: "",
   materialName: "",
   description: "",
+  objectiveKey: "",
+  objectiveCode: "",
   objectiveName: "",
   objectiveUnit: "",
   objectiveDirection: "minimize",
   objectiveTarget: "",
+  objectiveWeight: "1",
+  objectiveDataSource: "",
+  variableCode: "",
   variableName: "",
   variableUnit: "",
   variableLower: "",
   variableUpper: "",
+  variableDataSource: "",
+  outcomeConstraintKey: "",
+  outcomeConstraintCode: "",
+  outcomeConstraintName: "",
+  outcomeConstraintMetric: "",
+  outcomeConstraintOperator: "<=",
+  outcomeConstraintLimit: "",
+  outcomeConstraintUnit: "",
+  outcomeConstraintProbability: "0.95",
 };
 
 const statusLabels = {
@@ -80,6 +97,9 @@ function createTaskForm(task, workspace) {
     statement: "",
     rationale: "",
     variableCode: variable?.code || "",
+    validationOutcomeCode: "",
+    expectedEffectDirection: "",
+    minimumEffect: "",
     hypothesisId: workspace?.hypotheses?.[0]?.hypothesisId || "",
     experimentId: experiment?.experimentId || "",
     name: "",
@@ -148,8 +168,11 @@ export function ResearchProjectsPage() {
     if (!projectId) return;
     setDetailLoading(true);
     try {
-      const next = await getJson(`/api/v1/research-projects/${projectId}`);
-      setWorkspace(next);
+      const [next, observationSummary] = await Promise.all([
+        getJson(`/api/v1/research-projects/${projectId}`),
+        getJson(`/api/v1/research-projects/${projectId}/experiment-readiness`),
+      ]);
+      setWorkspace({ ...next, optimizationObservationSummary: observationSummary });
       setProjects(current => current.map(item =>
         item.projectId === next.project.projectId ? next.project : item));
     } catch (requestError) {
@@ -168,6 +191,7 @@ export function ResearchProjectsPage() {
       processWindows: [],
       knowledgeClaims: [],
       audit: [],
+      optimizationObservationSummary: null,
     });
     await refreshWorkspace(project.projectId);
   }
@@ -185,21 +209,35 @@ export function ResearchProjectsPage() {
         materialName: projectForm.materialName || null,
         description: projectForm.description || null,
         objectives: [{
-          code: "objective-1",
+          code: projectForm.objectiveCode,
           name: projectForm.objectiveName,
           unit: projectForm.objectiveUnit,
           direction: projectForm.objectiveDirection,
           target: Number(projectForm.objectiveTarget),
+          weight: Number(projectForm.objectiveWeight),
+          dataSource: projectForm.objectiveDataSource || null,
         }],
         variables: [{
-          code: "control-1",
+          code: projectForm.variableCode,
           name: projectForm.variableName,
           role: "control",
           unit: projectForm.variableUnit,
           lowerLimit: Number(projectForm.variableLower),
           upperLimit: Number(projectForm.variableUpper),
+          dataSource: projectForm.variableDataSource || null,
         }],
         constraints: [],
+        outcomeConstraints: projectForm.outcomeConstraintCode.trim() ? [{
+          code: projectForm.outcomeConstraintCode,
+          description: projectForm.outcomeConstraintName,
+          outcomeCode: projectForm.outcomeConstraintMetric,
+          operator: projectForm.outcomeConstraintOperator,
+          limit: Number(projectForm.outcomeConstraintLimit),
+          unit: projectForm.outcomeConstraintUnit,
+          safetyCritical: true,
+          minimumProbability: Number(projectForm.outcomeConstraintProbability),
+          dataSource: `inspection:${projectForm.outcomeConstraintMetric}`,
+        }] : [],
       });
       setProjects(current => [project, ...current]);
       setProjectForm(projectFormInitial);
@@ -259,6 +297,36 @@ export function ResearchProjectsPage() {
     }
   }
 
+  async function generateOptimizationSuggestions(intent = "reach-specification", hypothesisId = null) {
+    try {
+      const experiment = await postJson(
+        `/api/v1/research-projects/${workspace.project.projectId}/optimize`,
+        {
+          batchSize: 1,
+          seed: 0,
+          processProfile: "generic",
+          intent,
+          hypothesisId,
+          autoAssembleObservations: true,
+        },
+      );
+      const alreadyActive = workspace.experiments.some(
+        item => item.experimentId === experiment.experimentId,
+      );
+      await refreshWorkspace();
+      notify(
+        alreadyActive
+          ? "上一批优化实验尚未形成完整观察，已返回原实验，系统没有重复生成配方。"
+          : intent === "validate-hypothesis"
+            ? "已设计安全的假设验证实验；完成检验后，证据和假设状态会自动更新。"
+            : "已用真实运行和检验结果生成下一组优化实验，请按现有流程审核后执行。",
+        "success",
+      );
+    } catch (requestError) {
+      notify(requestError.message, "danger");
+    }
+  }
+
   function startTask(name) {
     setTask(name);
     setTaskForm(createTaskForm(name, workspace));
@@ -282,6 +350,10 @@ export function ResearchProjectsPage() {
           statement: taskForm.statement,
           rationale: taskForm.rationale,
           variableCodes: [taskForm.variableCode],
+          validationOutcomeCode: taskForm.validationOutcomeCode || null,
+          expectedEffectDirection: taskForm.expectedEffectDirection || null,
+          minimumEffect: taskForm.minimumEffect ? Number(taskForm.minimumEffect) : null,
+          applicability: taskForm.applicability || null,
           confidence: 0,
         });
       } else if (task === "experiment") {
@@ -370,38 +442,79 @@ export function ResearchProjectsPage() {
 
   return (
     <Page
-      title="工艺研发项目"
-      description="以目标、假设、实验结果和工艺窗口组织完整研发证据链。"
-      actions={<Button variant="primary" onClick={() => setCreateOpen(true)}>创建研发项目</Button>}
+      title="工艺优化工作台"
+      description="用最少的有效实验，把生产问题追溯为可验证证据，再形成可复用的工艺窗口。"
+      actions={<Button variant="primary" onClick={() => setCreateOpen(true)}>新建优化项目</Button>}
     >
       {error && <Alert tone="danger">{error}</Alert>}
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Metric label="全部项目" value={projects.length} hint="当前可访问项目" />
-        <Metric label="研发中" value={metrics.active} hint="正在设计和执行实验" />
-        <Metric label="验证中" value={metrics.validating} hint="独立复核工艺窗口" />
-        <Metric label="已完成" value={metrics.completed} hint="已形成验证结论" />
-      </div>
-      <Card title="研发项目" description="打开项目后，系统会根据真实数据状态提示下一步。">
-        {loading ? (
-          <p className="py-8 text-center text-sm text-slate-500">正在读取研发项目…</p>
-        ) : projects.length === 0 ? (
-          <EmptyState title="还没有研发项目" description="从一个清晰的目标和可控变量开始。" />
-        ) : (
-          <DataTable
-            rows={projects}
-            keyField="projectId"
-            onRowClick={openProject}
-            columns={[
-              { key: "name", label: "研发项目" },
-              { key: "processName", label: "工艺" },
-              { key: "productName", label: "产品", render: value => value || "—" },
-              { key: "status", label: "阶段", render: value => <StatusBadge value={statusLabels[value] || value} /> },
-              { key: "objectives", label: "目标", render: value => `${value?.length || 0} 项` },
-              { key: "updatedAt", label: "最近更新", render: value => value ? new Date(value).toLocaleString("zh-CN") : "—" },
+      <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
+        <div className="rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50 via-white to-white p-5 shadow-sm sm:p-6">
+          <p className="text-sm font-semibold text-blue-700">以问题为起点，而不是以数据录入为起点</p>
+          <h2 className="mt-2 text-xl font-semibold tracking-tight text-slate-950">发现偏差 → 找到原因 → 设计最有价值的下一组实验 → 验证并固化窗口</h2>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">这里承载优化闭环。运行、质量和设备数据仍然是证据来源，但不会替代工程判断；系统会明确告诉你当前证据是否足以推荐下一步。</p>
+          <div className="mt-5 flex flex-wrap gap-2">
+            <Button onClick={() => navigate("/comparisons")}>从周期对比开始</Button>
+            <Button onClick={() => navigate("/quality-analysis")}>查看质量偏差</Button>
+            <Button variant="primary" onClick={() => setCreateOpen(true)}>围绕问题创建项目</Button>
+          </div>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
+          <Metric label="进行中的优化" value={metrics.active + metrics.validating} hint="需要工程决策或独立验证" />
+          <Metric label="已验证结论" value={metrics.completed} hint="已完成项目" />
+          <Metric label="项目组合" value={projects.length} hint="当前可访问项目" />
+        </div>
+      </section>
+
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_20rem]">
+        <Card
+          title="优化项目"
+          description="每个项目对应一个明确问题、受控变量、证据链和可验证的工艺窗口。"
+          actions={<Button variant="ghost" onClick={() => setCreateOpen(true)}>新建项目</Button>}
+        >
+          {loading ? (
+            <p className="py-12 text-center text-sm text-slate-500">正在读取优化项目…</p>
+          ) : projects.length === 0 ? (
+            <EmptyState title="从一个待解决的工艺问题开始" description="填写目标、首个可控变量和安全边界；其余证据会在推进过程中逐步补齐。" />
+          ) : (
+            <DataTable
+              rows={projects}
+              keyField="projectId"
+              onRowClick={openProject}
+              columns={[
+                { key: "name", label: "优化项目" },
+                { key: "processName", label: "工艺" },
+                { key: "productName", label: "产品", render: value => value || "—" },
+                { key: "status", label: "阶段", render: value => <StatusBadge value={statusLabels[value] || value} /> },
+                { key: "objectives", label: "目标", render: value => `${value?.length || 0} 项` },
+                { key: "updatedAt", label: "最近更新", render: value => value ? new Date(value).toLocaleString("zh-CN") : "—" },
+                { key: "open", label: "操作", render: (_, project) => <Button onClick={event => { event.stopPropagation(); openProject(project); }}>进入工作区</Button> },
+              ]}
+            />
+          )}
+        </Card>
+
+        <aside className="space-y-4">
+          <WorkflowGuide
+            title="第一次使用：只需走完这四步"
+            description="不需要先配置所有数据和模型；先围绕一个真实问题建立闭环。"
+            compact
+            steps={[
+              { title: "明确偏差", description: "从质量分析或历史对比确认问题和范围。", state: projects.length ? "done" : "current" },
+              { title: "设定边界", description: "写下优化目标、一个可控变量和安全限制。", state: projects.length ? "current" : "upcoming" },
+              { title: "执行建议", description: "系统依据已有观察推荐下一组实验。", state: "upcoming" },
+              { title: "验证窗口", description: "独立验证后才成为可复用结论。", state: "upcoming" },
             ]}
           />
-        )}
-      </Card>
+          <Card title="不同角色如何进入" description="同一闭环，不同视角。">
+            <div className="space-y-3 text-sm leading-5">
+              <p><strong className="text-slate-900">工艺工程师：</strong><span className="text-slate-600">创建项目，审核建议，决定实验与窗口。</span></p>
+              <p><strong className="text-slate-900">质量人员：</strong><span className="text-slate-600">确认检测定义和结果，参与独立验证。</span></p>
+              <p><strong className="text-slate-900">生产人员：</strong><span className="text-slate-600">按批准计划执行，保证运行上下文完整。</span></p>
+              <p><strong className="text-slate-900">管理者：</strong><span className="text-slate-600">关注进行中项目、验证状态和已固化窗口。</span></p>
+            </div>
+          </Card>
+        </aside>
+      </div>
 
       <CreateProjectDrawer
         open={createOpen}
@@ -421,6 +534,7 @@ export function ResearchProjectsPage() {
         onExperimentStatus={changeExperimentStatus}
         onValidateWindow={validateWindow}
         onReviewClaim={reviewClaim}
+        onGenerateOptimizationSuggestions={generateOptimizationSuggestions}
         onAskAi={projectId => navigate(`/chat?projectId=${encodeURIComponent(projectId)}`)}
         currentUserId={identity?.username || identity?.userId || ""}
       />
@@ -439,7 +553,119 @@ export function ResearchProjectsPage() {
 }
 
 function CreateProjectDrawer({ open, saving, form, setForm, onClose, onSubmit }) {
+  const [catalog, setCatalog] = useState({ cycles: [], definitions: [], models: [] });
+  const [catalogLoading, setCatalogLoading] = useState(false);
+  const [catalogError, setCatalogError] = useState("");
+
+  useEffect(() => {
+    if (!open) return;
+    let mounted = true;
+    setCatalogLoading(true);
+    setCatalogError("");
+    Promise.all([
+      getJson("/api/v1/cycles?status=completed&limit=200"),
+      getJson("/api/v1/inspection-definitions"),
+      getJson("/api/v1/process-data-models"),
+    ]).then(([cycles, definitions, models]) => {
+      if (!mounted) return;
+      setCatalog({
+        cycles: cycles?.data || [],
+        definitions: definitions?.data || [],
+        models: models?.data || [],
+      });
+    }).catch(requestError => {
+      if (!mounted) return;
+      setCatalogError(requestError.message || "无法读取可选的工艺和质量定义。");
+    }).finally(() => {
+      if (mounted) setCatalogLoading(false);
+    });
+    return () => { mounted = false; };
+  }, [open]);
+
   const field = (name, value) => event => setForm({ ...form, [name]: event.target[value || "value"] });
+  const selectableModels = catalog.models.filter(item => item.status !== "retired");
+  const selectedModel = selectableModels.find(item => `${item.modelId}:${item.version}` === form.dataModelKey);
+  const objectiveOptions = catalog.definitions.flatMap(definition =>
+    (definition.characteristics || [])
+      .filter(item => ["numeric", "number"].includes(String(item.inputType).toLowerCase()))
+      .map(item => ({
+        key: `${definition.code}:${definition.version}:${item.code}`,
+        definition,
+        characteristic: item,
+      })),
+  );
+  const selectedObjective = objectiveOptions.find(item => item.key === form.objectiveKey);
+
+  function updateForm(values) {
+    setForm(current => ({ ...current, ...values }));
+  }
+
+  function chooseReferenceCycle(correlationId) {
+    const cycle = catalog.cycles.find(item => item.correlationId === correlationId);
+    updateForm({
+      referenceCycleId: correlationId,
+      productName: cycle?.productCode || form.productName,
+    });
+  }
+
+  function chooseDataModel(key) {
+    const model = selectableModels.find(item => `${item.modelId}:${item.version}` === key);
+    updateForm({
+      dataModelKey: key,
+      processName: model?.name || "",
+      variableCode: "",
+      variableName: "",
+      variableUnit: "",
+      variableDataSource: "",
+    });
+  }
+
+  function chooseObjective(key) {
+    const option = objectiveOptions.find(item => item.key === key);
+    const characteristic = option?.characteristic;
+    const target = form.objectiveTarget || (
+      form.objectiveDirection === "maximize" ? characteristic?.lowerLimit : characteristic?.upperLimit
+    );
+    updateForm({
+      objectiveKey: key,
+      objectiveCode: characteristic?.code || "",
+      objectiveName: characteristic?.name || "",
+      objectiveUnit: characteristic?.unit || "",
+      objectiveDataSource: characteristic ? `inspection:${characteristic.code}` : "",
+      objectiveTarget: target ?? "",
+    });
+  }
+
+  function chooseVariable(code) {
+    const parameter = (selectedModel?.recipeParameters || []).find(item => item.code === code);
+    updateForm({
+      variableCode: parameter?.code || "",
+      variableName: parameter?.sourceField || parameter?.code || "",
+      variableUnit: parameter?.unit || "",
+      variableDataSource: parameter ? `recipe:${parameter.code}` : "",
+    });
+  }
+
+  function chooseConstraint(key) {
+    const option = objectiveOptions.find(item => item.key === key);
+    const characteristic = option?.characteristic;
+    updateForm({
+      outcomeConstraintKey: key,
+      outcomeConstraintCode: characteristic ? `${characteristic.code}-safety` : "",
+      outcomeConstraintName: characteristic?.name ? `${characteristic.name} 安全边界` : "",
+      outcomeConstraintMetric: characteristic?.code || "",
+      outcomeConstraintUnit: characteristic?.unit || "",
+      outcomeConstraintLimit: characteristic?.upperLimit ?? "",
+    });
+  }
+
+  const cycleLabel = cycle => [
+    cycle.correlationId,
+    cycle.productSeries || cycle.productCode || "未标注产品",
+    cycle.machineId || "未标注设备",
+    cycle.completedAt ? new Date(cycle.completedAt).toLocaleString("zh-CN") : "",
+  ].filter(Boolean).join(" · ");
+
   return (
     <Drawer
       open={open}
@@ -450,29 +676,45 @@ function CreateProjectDrawer({ open, saving, form, setForm, onClose, onSubmit })
       footer={<><Button disabled={saving} onClick={onClose}>取消</Button><Button variant="primary" disabled={saving} type="submit" form="research-project-form">{saving ? "正在创建…" : "创建项目"}</Button></>}
     >
       <form id="research-project-form" className="space-y-6" onSubmit={onSubmit}>
+        {catalogError && <Alert tone="warning" title="部分选项暂不可用">{catalogError}</Alert>}
+        {catalogLoading && <Alert tone="info">正在读取已完成运行、检测定义和工艺数据模型…</Alert>}
         <Card title="项目范围">
           <div className="grid gap-4 md:grid-cols-2">
             <Field label="项目名称"><Input required value={form.name} onChange={field("name")} placeholder="光学模压工艺窗口研发" /></Field>
-            <Field label="工艺名称"><Input required value={form.processName} onChange={field("processName")} /></Field>
-            <Field label="目标产品"><Input value={form.productName} onChange={field("productName")} /></Field>
+            <Field label="参考运行" hint="选择后自动带入产品范围；不影响后续用更多运行形成证据。"><Select value={form.referenceCycleId} onChange={event => chooseReferenceCycle(event.target.value)}><option value="">暂不关联历史运行</option>{catalog.cycles.map(cycle => <option key={cycle.correlationId} value={cycle.correlationId}>{cycleLabel(cycle)}</option>)}</Select></Field>
+            <Field label="工艺数据模型" hint="决定可选的配方参数与实际数据来源。"><Select required value={form.dataModelKey} onChange={event => chooseDataModel(event.target.value)}><option value="">选择已配置的工艺数据模型</option>{selectableModels.map(model => <option key={`${model.modelId}:${model.version}`} value={`${model.modelId}:${model.version}`}>{model.name} · v{model.version}</option>)}</Select></Field>
+            <Field label="目标产品" hint="来自参考运行；未关联时可补充产品编号。"><Input value={form.productName} onChange={field("productName")} placeholder="产品编号（可选）" /></Field>
             <Field label="材料"><Input value={form.materialName} onChange={field("materialName")} /></Field>
             <Field label="项目说明" className="md:col-span-2"><Textarea value={form.description} onChange={field("description")} rows={3} /></Field>
           </div>
         </Card>
         <Card title="首要研发目标">
           <div className="grid gap-4 md:grid-cols-2">
-            <Field label="指标名称"><Input required value={form.objectiveName} onChange={field("objectiveName")} placeholder="面形误差" /></Field>
+            <Field label="质量指标" hint="从已发布的检测定义中选择，代码、单位和数据来源会自动带入。"><Select required value={form.objectiveKey} onChange={event => chooseObjective(event.target.value)}><option value="">选择数值型检测指标</option>{objectiveOptions.map(option => <option key={option.key} value={option.key}>{option.definition.name} · {option.characteristic.name}{option.characteristic.unit ? ` (${option.characteristic.unit})` : ""}</option>)}</Select></Field>
+            <Field label="数据来源"><Input readOnly value={form.objectiveDataSource} placeholder="选择质量指标后自动带入" className="bg-slate-50 text-slate-600" /></Field>
             <Field label="优化方向"><Select value={form.objectiveDirection} onChange={field("objectiveDirection")}><option value="minimize">越低越好</option><option value="maximize">越高越好</option><option value="target">接近目标</option><option value="range">保持范围</option></Select></Field>
-            <Field label="指标单位"><Input required value={form.objectiveUnit} onChange={field("objectiveUnit")} /></Field>
-            <Field label="目标值"><Input required type="number" step="any" value={form.objectiveTarget} onChange={field("objectiveTarget")} /></Field>
+            <Field label="指标单位"><Input readOnly required value={form.objectiveUnit} placeholder="自动带入" className="bg-slate-50 text-slate-600" /></Field>
+            <Field label="目标值" hint="来自检测上下限的建议值，可按研发规格调整。"><Input required type="number" step="any" value={form.objectiveTarget} onChange={field("objectiveTarget")} /></Field>
+            <Field label="目标权重"><Input required type="number" min="0.01" step="any" value={form.objectiveWeight} onChange={field("objectiveWeight")} /></Field>
           </div>
         </Card>
         <Card title="首个可控变量">
           <div className="grid gap-4 md:grid-cols-2">
-            <Field label="变量名称"><Input required value={form.variableName} onChange={field("variableName")} placeholder="保压温度" /></Field>
-            <Field label="变量单位"><Input required value={form.variableUnit} onChange={field("variableUnit")} /></Field>
-            <Field label="允许下限"><Input required type="number" step="any" value={form.variableLower} onChange={field("variableLower")} /></Field>
-            <Field label="允许上限"><Input required type="number" step="any" value={form.variableUpper} onChange={field("variableUpper")} /></Field>
+            <Field label="可控配方参数" hint={selectedModel ? "从所选工艺数据模型中选择。" : "请先选择工艺数据模型。"}><Select required disabled={!selectedModel} value={form.variableCode} onChange={event => chooseVariable(event.target.value)}><option value="">选择可控配方参数</option>{(selectedModel?.recipeParameters || []).map(parameter => <option key={parameter.code} value={parameter.code}>{parameter.sourceField || parameter.code}{parameter.unit ? ` (${parameter.unit})` : ""}</option>)}</Select></Field>
+            <Field label="实际数据来源"><Input readOnly value={form.variableDataSource} placeholder="选择配方参数后自动带入" className="bg-slate-50 text-slate-600" /></Field>
+            <Field label="变量单位"><Input readOnly required value={form.variableUnit} placeholder="自动带入" className="bg-slate-50 text-slate-600" /></Field>
+            <Field label="允许下限" hint="这是实验允许范围，请按设备/安全规范确认。"><Input required type="number" step="any" value={form.variableLower} onChange={field("variableLower")} /></Field>
+            <Field label="允许上限" hint="这是实验允许范围，请按设备/安全规范确认。"><Input required type="number" step="any" value={form.variableUpper} onChange={field("variableUpper")} /></Field>
+          </div>
+        </Card>
+        <Card title="结果安全边界（可选）" description="例如裂纹率、破损率或粘模指标；优化器只推荐达到最低安全概率的配方。">
+          <div className="grid gap-4 md:grid-cols-2">
+            <Field label="安全指标" hint="选择后自动带入检测特性、单位和建议安全限值。"><Select value={form.outcomeConstraintKey} onChange={event => chooseConstraint(event.target.value)}><option value="">不设置额外结果安全边界</option>{objectiveOptions.filter(item => item.key !== selectedObjective?.key).map(option => <option key={option.key} value={option.key}>{option.definition.name} · {option.characteristic.name}</option>)}</Select></Field>
+            <Field label="安全约束说明"><Input readOnly value={form.outcomeConstraintName} placeholder="选择安全指标后自动带入" className="bg-slate-50 text-slate-600" /></Field>
+            <Field label="操作符"><Select value={form.outcomeConstraintOperator} onChange={field("outcomeConstraintOperator")}><option value="<=">不高于</option><option value=">=">不低于</option></Select></Field>
+            <Field label="安全限值"><Input type="number" step="any" value={form.outcomeConstraintLimit} onChange={field("outcomeConstraintLimit")} /></Field>
+            <Field label="单位"><Input readOnly value={form.outcomeConstraintUnit} placeholder="自动带入" className="bg-slate-50 text-slate-600" /></Field>
+            <Field label="最低安全概率"><Input type="number" min="0.01" max="1" step="0.01" value={form.outcomeConstraintProbability} onChange={field("outcomeConstraintProbability")} /></Field>
           </div>
         </Card>
       </form>
@@ -489,15 +731,48 @@ function WorkspaceDrawer({
   onExperimentStatus,
   onValidateWindow,
   onReviewClaim,
+  onGenerateOptimizationSuggestions,
   onAskAi,
   currentUserId,
 }) {
   if (!workspace) return null;
-  const { project, hypotheses = [], experiments = [], experimentResults = [], processWindows = [], knowledgeClaims = [] } = workspace;
+  const {
+    project,
+    hypotheses = [],
+    experiments = [],
+    experimentResults = [],
+    processWindows = [],
+    knowledgeClaims = [],
+  } = workspace;
   const projectAction = nextProjectAction(project.status);
   const completedExperiments = experiments.filter(item => item.status === "completed");
   const validatedWindows = processWindows.filter(item => item.status === "validated");
+  const observationSummary = workspace.optimizationObservationSummary;
   const canEdit = !["completed", "archived"].includes(project.status);
+  const hasObservation = Number(observationSummary?.validObservationCount || 0) > 0;
+  const hasRunningExperiment = experiments.some(item => item.status === "running");
+  const currentStage = project.status === "draft"
+    ? ["定义问题", "先明确目标、可控变量和安全边界。"]
+    : hypotheses.length === 0
+      ? ["建立假设", "把经验或异常转为可验证的因果判断。"]
+      : experiments.length === 0
+        ? ["设计实验", "优先使用智能建议，以最少实验获取最大信息量。"]
+        : hasRunningExperiment
+          ? ["收集证据", "等待运行和检验完成，再让系统更新模型。"]
+          : experimentResults.length === 0
+            ? ["计算结果", "把冻结的数据快照转成可追溯的实验结果。"]
+            : processWindows.length === 0
+              ? ["形成窗口", "将有证据支持的范围提交为候选工艺窗口。"]
+              : validatedWindows.length === 0
+                ? ["独立验证", "由其他成员验证窗口，避免把偶然结果当作规律。"]
+                : ["沉淀知识", "已具备可复用结论，可复核后服务下一个项目。"];
+  const workflowSteps = [
+    { title: "定义", description: "目标、变量与安全边界", state: project.status === "draft" ? "current" : "done" },
+    { title: "追因", description: "假设与历史证据", state: hypotheses.length ? "done" : project.status === "draft" ? "upcoming" : "current" },
+    { title: "实验", description: "建议、批准与执行", state: experiments.length ? "done" : hypotheses.length ? "current" : "upcoming" },
+    { title: "验证", description: "结果与候选窗口", state: validatedWindows.length ? "done" : experimentResults.length ? "current" : "upcoming" },
+    { title: "复用", description: "知识与下一项目", state: knowledgeClaims.some(item => item.status === "reviewed") ? "done" : validatedWindows.length ? "current" : "upcoming" },
+  ];
   return (
     <Drawer
       open
@@ -508,25 +783,49 @@ function WorkspaceDrawer({
       footer={<><Button onClick={onClose}>关闭</Button>{projectAction && <Button variant="primary" disabled={loading} onClick={() => onProjectStatus(projectAction[1])}>{projectAction[0]}</Button>}</>}
     >
       <div className="space-y-5">
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-          <Metric label="研发假设" value={hypotheses.length} hint="明确要验证的规律" />
-          <Metric label="实验计划" value={experiments.length} hint="含审批与运行计划" />
-          <Metric label="计算结果" value={experimentResults.length} hint="来自数据快照" />
-          <Metric label="候选窗口" value={processWindows.length} hint="统计边界与适用范围" />
-          <Metric label="已验证窗口" value={validatedWindows.length} hint="独立复核通过" />
-        </div>
-
-        <Card title="下一步" description="进度由项目真实记录决定，不由页面切换决定。">
-          <div className="flex flex-wrap gap-2">
-            <Button onClick={() => onAskAi(project.projectId)}>让 AI 协助分析</Button>
-            {canEdit && <Button onClick={() => onTask("member")}>添加协作成员</Button>}
-            {canEdit && <Button onClick={() => onTask("hypothesis")}>提出假设</Button>}
-            {project.status !== "draft" && canEdit && hypotheses.length > 0 && <Button onClick={() => onTask("experiment")}>设计实验</Button>}
-            {project.status !== "draft" && canEdit && experiments.some(item => item.status === "running") && <Button onClick={() => onTask("result")}>记录计算结果</Button>}
-            {project.status !== "draft" && canEdit && completedExperiments.length > 0 && experimentResults.length > 0 && <Button onClick={() => onTask("window")}>形成候选窗口</Button>}
-            {canEdit && validatedWindows.length > 0 && <Button onClick={() => onTask("claim")}>沉淀工艺知识</Button>}
+        <section className="rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50 to-white p-5">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p className="text-xs font-semibold tracking-wide text-blue-700">当前决策</p>
+              <h3 className="mt-1 text-xl font-semibold text-slate-950">{currentStage[0]}</h3>
+              <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-600">{currentStage[1]}</p>
+            </div>
+            <StatusBadge value={statusLabels[project.status] || project.status} />
           </div>
-        </Card>
+          <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,1fr)_18rem]">
+            <div className="flex flex-wrap content-start gap-2">
+              <Button onClick={() => onAskAi(project.projectId)}>让 AI 协助分析</Button>
+              {canEdit && <Button onClick={() => onTask("member")}>添加协作成员</Button>}
+              {canEdit && hypotheses.length === 0 && <Button variant="primary" onClick={() => onTask("hypothesis")}>提出第一个假设</Button>}
+              {project.status !== "draft" && canEdit && hypotheses.length > 0 && !hasRunningExperiment && <Button variant="primary" onClick={onGenerateOptimizationSuggestions}>智能设计下一组实验</Button>}
+              {project.status !== "draft" && canEdit && hypotheses.length > 0 && <Button onClick={() => onTask("experiment")}>手动设计实验</Button>}
+              {project.status !== "draft" && canEdit && hasRunningExperiment && <Button variant="primary" onClick={() => onTask("result")}>记录计算结果</Button>}
+              {project.status !== "draft" && canEdit && completedExperiments.length > 0 && experimentResults.length > 0 && <Button variant="primary" onClick={() => onTask("window")}>形成候选窗口</Button>}
+              {canEdit && validatedWindows.length > 0 && <Button variant="primary" onClick={() => onTask("claim")}>沉淀工艺知识</Button>}
+            </div>
+            <div className="rounded-xl border border-white/80 bg-white/80 p-4">
+              <p className="text-sm font-semibold text-slate-900">优化模型准备度</p>
+              <p className="mt-1 text-2xl font-semibold text-slate-950">{observationSummary?.validObservationCount ?? 0}<span className="ml-1 text-sm font-normal text-slate-500">条有效观察</span></p>
+              <p className="mt-1 text-xs leading-5 text-slate-500">{hasObservation ? `已匹配 ${observationSummary?.candidateRunCount ?? 0} 个实验运行，可用于生成下一组建议。` : "尚无可用观察；完成运行、过程特征和检验结果的关联后自动具备条件。"}</p>
+            </div>
+          </div>
+        </section>
+
+        <WorkflowGuide title="项目推进路径" description="每一步都基于真实研发事实推进；不需要为了“走流程”填无价值的数据。" steps={workflowSteps} />
+
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
+          <Metric label="研发假设" value={hypotheses.length} hint="待验证的规律" />
+          <Metric label="实验计划" value={experiments.length} hint="设计与执行记录" />
+          <Metric label="计算结果" value={experimentResults.length} hint="冻结快照得出" />
+          <Metric label="候选窗口" value={processWindows.length} hint="有证据支持的范围" />
+          <Metric label="已验证窗口" value={validatedWindows.length} hint="独立复核通过" />
+          <Metric label="可用于优化" value={observationSummary?.validObservationCount ?? 0} hint="参数、过程与结果已关联" />
+        </div>
+        {observationSummary?.excludedObservationCount > 0 && (
+          <Alert tone="warning">
+            有 {observationSummary.excludedObservationCount} 个周期因缺少检验值、过程特征或完整周期边界而未进入优化模型。
+          </Alert>
+        )}
 
         <Card title="研发目标与变量">
           <div className="grid gap-5 lg:grid-cols-2">
@@ -550,6 +849,13 @@ function WorkspaceDrawer({
               { key: "statement", label: "假设" },
               { key: "rationale", label: "依据" },
               { key: "status", label: "状态", render: value => <StatusBadge value={statusLabels[value] || value} /> },
+              {
+                key: "actions",
+                label: "下一步",
+                render: (_, row) => row.validationOutcomeCode && row.expectedEffectDirection && row.minimumEffect > 0 && canEdit && project.status !== "draft"
+                  ? <Button onClick={event => { event.stopPropagation(); onGenerateOptimizationSuggestions("validate-hypothesis", row.hypothesisId); }}>用优化器验证</Button>
+                  : "补充验证标准后可自动设计实验",
+              },
             ]} />
           )}
         </Card>
@@ -560,6 +866,24 @@ function WorkspaceDrawer({
               { key: "name", label: "实验" },
               { key: "designMethod", label: "设计" },
               { key: "runPlan", label: "运行", render: value => `${value?.length || 0} 个条件` },
+              {
+                key: "runKeys",
+                label: "运行标识",
+                render: (_, row) => (
+                  <div className="space-y-1">
+                    {(row.runPlan || []).map(run => (
+                      <code key={run.runKey} className="block text-xs">{run.runKey}</code>
+                    ))}
+                  </div>
+                ),
+              },
+              {
+                key: "optimization",
+                label: "设计依据",
+                render: value => value
+                  ? `智能优化 · ${value.observationCount} 条观察，其中自动装配 ${value.autoAssembledObservationCount || 0} 条，使用 ${value.processFeatureCount || 0} 个共同轨迹特征`
+                  : "—",
+              },
               { key: "resultIds", label: "结果", render: value => `${value?.length || 0} 份` },
               { key: "status", label: "状态", render: value => <StatusBadge value={statusLabels[value] || value} /> },
               {
@@ -574,6 +898,18 @@ function WorkspaceDrawer({
                   </div>
                 ),
               },
+            ]} />
+          )}
+        </Card>
+
+        <Card title="实验结果" description="只接受由冻结数据快照计算的结果；它们是追因结论和优化建议的共同证据。">
+          {experimentResults.length === 0 ? <EmptyState title="尚无可用结果" description="运行完成后，关联过程数据与检验结果并记录计算结果。" /> : (
+            <DataTable rows={experimentResults} keyField="resultId" columns={[
+              { key: "experimentId", label: "来源实验" },
+              { key: "runCount", label: "运行数" },
+              { key: "replicateCount", label: "重复组" },
+              { key: "safetyPassed", label: "安全约束", render: value => <StatusBadge value={value ? "passed" : "failed"} /> },
+              { key: "analysisHash", label: "分析快照", render: value => value ? <code className="text-xs text-slate-600">{String(value).slice(0, 12)}…</code> : "—" },
             ]} />
           )}
         </Card>
@@ -639,6 +975,12 @@ function TaskDrawer({ task, form, setForm, workspace, saving, onClose, onSubmit 
           <Field label="假设"><Textarea required rows={4} value={form.statement} onChange={update("statement")} placeholder="说明哪个变量通过什么机制影响目标。" /></Field>
           <Field label="提出依据"><Textarea required rows={4} value={form.rationale} onChange={update("rationale")} placeholder="填写历史数据、物理机理或专家经验。" /></Field>
           <VariableSelect variables={variables} value={form.variableCode} onChange={update("variableCode")} />
+          <Field label="验证目标（可选）" hint="定义后可让优化器设计最有信息量的验证实验。"><Select value={form.validationOutcomeCode} onChange={update("validationOutcomeCode")}><option value="">暂不定义</option>{workspace.project.objectives.map(item => <option key={item.code} value={item.code}>{item.name}</option>)}</Select></Field>
+          {form.validationOutcomeCode && <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="预期效应方向"><Select required value={form.expectedEffectDirection} onChange={update("expectedEffectDirection")}><option value="">请选择</option><option value="increase">指标增加</option><option value="decrease">指标降低</option></Select></Field>
+            <Field label="最小可辨别效应"><Input required type="number" min="0.0000001" step="any" value={form.minimumEffect} onChange={update("minimumEffect")} /></Field>
+          </div>}
+          <Field label="适用范围（可选）"><Textarea rows={3} value={form.applicability} onChange={update("applicability")} placeholder="说明产品、材料、设备或环境边界。" /></Field>
         </>}
         {task === "experiment" && <>
           <Field label="实验名称"><Input required value={form.name} onChange={update("name")} /></Field>

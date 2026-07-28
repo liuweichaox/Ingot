@@ -1,0 +1,33 @@
+name: Feature request
+description: Propose an evidence-backed capability
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: scenario
+    attributes:
+      label: Real process scenario
+      description: What process, equipment, experiment, or engineering decision needs support?
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired outcome
+      description: How should this reduce experiments-to-specification or improve trust?
+    validations:
+      required: true
+  - type: textarea
+    id: contract
+    attributes:
+      label: Inputs, outputs, and constraints
+      description: Include variables, outcomes, safety limits, and available evidence.
+    validations:
+      required: true
+  - type: textarea
+    id: validation
+    attributes:
+      label: Validation method
+      description: How can the project prove the capability works?
+    validations:
+      required: true

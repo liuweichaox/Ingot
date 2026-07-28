@@ -69,15 +69,35 @@ public static class ResearchKnowledgeStatuses
         => value is Draft or Reviewed or Published or Retired;
 }
 
+public static class ResearchHypothesisEffectDirections
+{
+    public const string Increase = "increase";
+    public const string Decrease = "decrease";
+
+    public static bool IsValid(string? value)
+        => value is Increase or Decrease;
+}
+
+public static class ResearchOptimizationIntents
+{
+    public const string ReachSpecification = "reach-specification";
+    public const string ValidateHypothesis = "validate-hypothesis";
+
+    public static bool IsValid(string? value)
+        => value is ReachSpecification or ValidateHypothesis;
+}
+
 public static class ResearchDesignMethods
 {
     public const string EngineerDefined = "engineer-defined";
     public const string FullFactorial = "full-factorial";
     public const string FractionalFactorial = "fractional-factorial";
     public const string ResponseSurface = "response-surface";
+    public const string BayesianOptimization = "bayesian-optimization";
 
     public static bool IsValid(string? value)
-        => value is EngineerDefined or FullFactorial or FractionalFactorial or ResponseSurface;
+        => value is EngineerDefined or FullFactorial or FractionalFactorial or ResponseSurface
+            or BayesianOptimization;
 }
 
 public static class ResearchConfidenceMethods
@@ -96,12 +116,13 @@ public static class EvidenceKinds
     public const string DatasetSnapshot = "dataset-snapshot";
     public const string ExperimentResult = "experiment-result";
     public const string AnalysisRun = "analysis-run";
+    public const string CycleComparison = "cycle-comparison";
     public const string MechanismModel = "mechanism-model";
     public const string KnowledgeSource = "knowledge-source";
     public const string ProcessWindow = "process-window";
 
     public static bool IsValid(string? value)
-        => value is DatasetSnapshot or ExperimentResult or AnalysisRun or
+        => value is DatasetSnapshot or ExperimentResult or AnalysisRun or CycleComparison or
             MechanismModel or KnowledgeSource or ProcessWindow;
 }
 
@@ -116,6 +137,11 @@ public sealed record ResearchObjective
     public double? LowerLimit { get; init; }
     public double? UpperLimit { get; init; }
     public double Weight { get; init; } = 1;
+    /// <summary>
+    ///     结果来源。默认使用同名检验特性；也可显式写成
+    ///     inspection:&lt;characteristic-code&gt;。
+    /// </summary>
+    public string? DataSource { get; init; }
 }
 
 public sealed record ResearchVariable
@@ -140,6 +166,23 @@ public sealed record ResearchConstraint
     public bool SafetyCritical { get; init; }
 }
 
+/// <summary>
+///     由实测结果定义的可行性边界。它与控制参数硬边界分开建模，
+///     供受约束贝叶斯优化计算候选配方的安全/质量可行概率。
+/// </summary>
+public sealed record ResearchOutcomeConstraint
+{
+    public required string Code { get; init; }
+    public required string Description { get; init; }
+    public required string OutcomeCode { get; init; }
+    public string Operator { get; init; } = "<=";
+    public required double Limit { get; init; }
+    public required string Unit { get; init; }
+    public bool SafetyCritical { get; init; } = true;
+    public double MinimumProbability { get; init; } = 0.95;
+    public string? DataSource { get; init; }
+}
+
 public sealed record ResearchProject
 {
     public Guid ProjectId { get; init; }
@@ -153,6 +196,7 @@ public sealed record ResearchProject
     public IReadOnlyList<ResearchObjective> Objectives { get; init; } = [];
     public IReadOnlyList<ResearchVariable> Variables { get; init; } = [];
     public IReadOnlyList<ResearchConstraint> Constraints { get; init; } = [];
+    public IReadOnlyList<ResearchOutcomeConstraint> OutcomeConstraints { get; init; } = [];
     public IReadOnlyDictionary<string, string> Context { get; init; } =
         new Dictionary<string, string>();
     public string OwnerUserId { get; init; } = "";
@@ -183,8 +227,14 @@ public sealed record ResearchHypothesis
     public required string Rationale { get; init; }
     public string Status { get; init; } = ResearchHypothesisStatuses.Proposed;
     public IReadOnlyList<string> VariableCodes { get; init; } = [];
+    public string? ValidationOutcomeCode { get; init; }
+    public string? ExpectedEffectDirection { get; init; }
+    public double? MinimumEffect { get; init; }
+    public IReadOnlyList<string> PossibleConfounders { get; init; } = [];
+    public string? Applicability { get; init; }
     public IReadOnlyList<EvidenceReference> SupportingEvidence { get; init; } = [];
     public IReadOnlyList<EvidenceReference> OpposingEvidence { get; init; } = [];
+    public IReadOnlyList<EvidenceReference> ValidationEvidence { get; init; } = [];
     public double Confidence { get; init; }
     public string CreatedBy { get; init; } = "";
     public DateTimeOffset CreatedAt { get; init; }
@@ -198,6 +248,13 @@ public sealed record ExperimentFactorSetting
     public required string Unit { get; init; }
 }
 
+public sealed record ResearchHypothesisFromCycleComparisonRequest
+{
+    public required string BaselineCycleId { get; init; }
+    public IReadOnlyList<string> CycleIds { get; init; } = [];
+    public int MaximumHypotheses { get; init; } = 3;
+}
+
 public sealed record ExperimentRunPlan
 {
     public required string RunKey { get; init; }
@@ -205,6 +262,43 @@ public sealed record ExperimentRunPlan
     public string? BlockKey { get; init; }
     public string? ReplicateKey { get; init; }
     public IReadOnlyList<ExperimentFactorSetting> Factors { get; init; } = [];
+}
+
+public sealed record OptimizationMetricPrediction
+{
+    public double Mean { get; init; }
+    public double StandardDeviation { get; init; }
+    public double Lower95 { get; init; }
+    public double Upper95 { get; init; }
+    public required string Unit { get; init; }
+}
+
+public sealed record OptimizationRunPrediction
+{
+    public required string RunKey { get; init; }
+    public IReadOnlyDictionary<string, OptimizationMetricPrediction> Objectives { get; init; } =
+        new Dictionary<string, OptimizationMetricPrediction>();
+    public IReadOnlyDictionary<string, OptimizationMetricPrediction> Constraints { get; init; } =
+        new Dictionary<string, OptimizationMetricPrediction>();
+    public double? FeasibilityProbability { get; init; }
+    public double? AcquisitionValue { get; init; }
+    public bool ColdStart { get; init; }
+    public required string Rationale { get; init; }
+}
+
+public sealed record ResearchOptimizationMetadata
+{
+    public required string ModelVersion { get; init; }
+    public required string InputHash { get; init; }
+    public int ObservationCount { get; init; }
+    public int AutoAssembledObservationCount { get; init; }
+    public int PendingExperimentCount { get; init; }
+    public int ProcessFeatureCount { get; init; }
+    public required string ProcessProfile { get; init; }
+    public string Intent { get; init; } = ResearchOptimizationIntents.ReachSpecification;
+    public Guid? HypothesisId { get; init; }
+    public IReadOnlyList<OptimizationRunPrediction> RunPredictions { get; init; } = [];
+    public DateTimeOffset GeneratedAt { get; init; }
 }
 
 public sealed record ResearchExperiment
@@ -224,6 +318,7 @@ public sealed record ResearchExperiment
     public IReadOnlyList<string> ObjectiveCodes { get; init; } = [];
     public IReadOnlyList<string> ReplicateKeys { get; init; } = [];
     public IReadOnlyList<Guid> ResultIds { get; init; } = [];
+    public ResearchOptimizationMetadata? Optimization { get; init; }
     public required string StopRule { get; init; }
     public required string RollbackPlan { get; init; }
     public string CreatedBy { get; init; } = "";
@@ -247,6 +342,21 @@ public sealed record ExperimentMetricResult
     public required string ComputationMethod { get; init; }
 }
 
+public sealed record ExperimentRunObservation
+{
+    public required string RunKey { get; init; }
+    public IReadOnlyList<ExperimentFactorSetting> ActualFactors { get; init; } = [];
+    public IReadOnlyDictionary<string, double> ProcessFeatures { get; init; } =
+        new Dictionary<string, double>();
+    public IReadOnlyDictionary<string, double> Outcomes { get; init; } =
+        new Dictionary<string, double>();
+    public IReadOnlyDictionary<string, double> ConstraintOutcomes { get; init; } =
+        new Dictionary<string, double>();
+    public bool ValidForOptimization { get; init; } = true;
+    public string? ExclusionReason { get; init; }
+    public required string SourceContentHash { get; init; }
+}
+
 public sealed record ResearchExperimentResult
 {
     public Guid ResultId { get; init; }
@@ -256,6 +366,7 @@ public sealed record ResearchExperimentResult
     public Guid AnalysisRunId { get; init; }
     public string AnalysisHash { get; init; } = "";
     public IReadOnlyList<ExperimentMetricResult> Metrics { get; init; } = [];
+    public IReadOnlyList<ExperimentRunObservation> RunObservations { get; init; } = [];
     public int RunCount { get; init; }
     public int ReplicateCount { get; init; }
     public int DistinctMaterialLotCount { get; init; }
@@ -325,6 +436,16 @@ public sealed record ResearchProjectWorkspace
     public IReadOnlyList<ResearchProcessWindow> ProcessWindows { get; init; } = [];
     public IReadOnlyList<ResearchKnowledgeClaim> KnowledgeClaims { get; init; } = [];
     public IReadOnlyList<ResearchAuditEntry> Audit { get; init; } = [];
+}
+
+public sealed record ResearchOptimizationRequest
+{
+    public int BatchSize { get; init; } = 3;
+    public int Seed { get; init; }
+    public string ProcessProfile { get; init; } = "generic";
+    public string Intent { get; init; } = ResearchOptimizationIntents.ReachSpecification;
+    public Guid? HypothesisId { get; init; }
+    public bool AutoAssembleObservations { get; init; } = true;
 }
 
 public sealed record ResearchAuditEntry

@@ -318,6 +318,98 @@ public sealed class PostgresProcessResearchStore : IProcessResearchStore, IAsync
         }
     }
 
+    public async Task<ResearchExperimentResult> SaveExperimentResultTransactionAsync(
+        ResearchExperimentResult result,
+        ResearchExperiment updatedExperiment,
+        ResearchAuditEntry audit,
+        CancellationToken ct = default)
+    {
+        await using var connection = await _dataSource.OpenConnectionAsync(ct).ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
+        try
+        {
+            await using (var insertResult = connection.CreateCommand())
+            {
+                insertResult.Transaction = transaction;
+                insertResult.CommandText =
+                    """
+                    INSERT INTO research_experiment_results
+                      (result_id, project_id, experiment_id, analysis_run_id, analysis_hash,
+                       safety_passed, payload, recorded_at)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                    """;
+                insertResult.Parameters.AddWithValue(result.ResultId);
+                insertResult.Parameters.AddWithValue(result.ProjectId);
+                insertResult.Parameters.AddWithValue(result.ExperimentId);
+                insertResult.Parameters.AddWithValue(result.AnalysisRunId);
+                insertResult.Parameters.AddWithValue(result.AnalysisHash);
+                insertResult.Parameters.AddWithValue(result.SafetyPassed);
+                AddJson(insertResult, result);
+                insertResult.Parameters.AddWithValue(result.RecordedAt);
+                await insertResult.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+            }
+            await SyncEvidenceAsync(
+                connection,
+                transaction,
+                "experiment-result",
+                result.ResultId.ToString(),
+                result.Evidence,
+                ct).ConfigureAwait(false);
+
+            await using (var updateExperiment = connection.CreateCommand())
+            {
+                updateExperiment.Transaction = transaction;
+                updateExperiment.CommandText =
+                    """
+                    UPDATE research_experiments
+                    SET payload = jsonb_set(
+                          jsonb_set(
+                            payload,
+                            '{resultIds}',
+                            coalesce(payload -> 'resultIds', '[]'::jsonb)
+                              || to_jsonb(ARRAY[$2::text]),
+                            true),
+                          '{updatedAt}',
+                          to_jsonb($3::text),
+                          true),
+                        updated_at = $3
+                    WHERE experiment_id = $1
+                    """;
+                updateExperiment.Parameters.AddWithValue(updatedExperiment.ExperimentId);
+                updateExperiment.Parameters.AddWithValue(result.ResultId);
+                updateExperiment.Parameters.AddWithValue(updatedExperiment.UpdatedAt);
+                if (await updateExperiment.ExecuteNonQueryAsync(ct).ConfigureAwait(false) != 1)
+                    throw new ProcessResearchRuleException("实验不存在。");
+            }
+
+            await using (var insertAudit = connection.CreateCommand())
+            {
+                insertAudit.Transaction = transaction;
+                insertAudit.CommandText =
+                    """
+                    INSERT INTO process_research_audit
+                      (entry_id, project_id, resource_type, resource_id, action, payload, created_at)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7)
+                    """;
+                insertAudit.Parameters.AddWithValue(audit.EntryId);
+                insertAudit.Parameters.AddWithValue(audit.ProjectId);
+                insertAudit.Parameters.AddWithValue(audit.ResourceType);
+                insertAudit.Parameters.AddWithValue(audit.ResourceId);
+                insertAudit.Parameters.AddWithValue(audit.Action);
+                AddJson(insertAudit, audit);
+                insertAudit.Parameters.AddWithValue(audit.CreatedAt);
+                await insertAudit.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+            }
+            await transaction.CommitAsync(ct).ConfigureAwait(false);
+            return result;
+        }
+        catch (PostgresException exception) when (
+            exception.SqlState == PostgresErrorCodes.UniqueViolation)
+        {
+            throw new ProcessResearchRuleException("实验结果已经存在。");
+        }
+    }
+
     public Task<ResearchProcessWindow?> GetProcessWindowAsync(
         Guid windowId,
         CancellationToken ct = default)

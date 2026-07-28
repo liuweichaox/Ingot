@@ -120,6 +120,22 @@ public static class ServiceCollectionExtensions
         // 工艺研发项目是实验、假设、工艺窗口与知识沉淀的产品主对象。
         services.AddSingleton<IProcessResearchStore, PostgresProcessResearchStore>();
         services.AddSingleton<ProcessResearchWorkflow>();
+        services.AddSingleton<IResearchObservationAssembler, ResearchObservationAssembler>();
+        services.AddSingleton<ResearchExperimentResultMaterializer>();
+        services.Configure<ProcessOptimizerOptions>(configuration.GetSection("ProcessOptimizer"));
+        services.AddHttpClient<IProcessOptimizerClient, ProcessOptimizerClient>((provider, client) =>
+        {
+            var optimizerOptions = provider.GetRequiredService<IOptions<ProcessOptimizerOptions>>().Value;
+            if (!Uri.TryCreate(optimizerOptions.BaseUrl, UriKind.Absolute, out var baseAddress))
+                throw new InvalidOperationException("ProcessOptimizer:BaseUrl 必须是绝对 URL。");
+            client.BaseAddress = new Uri(
+                baseAddress.AbsoluteUri.EndsWith("/", StringComparison.Ordinal)
+                    ? baseAddress.AbsoluteUri
+                    : $"{baseAddress.AbsoluteUri}/");
+            client.Timeout = TimeSpan.FromSeconds(
+                Math.Clamp(optimizerOptions.RequestTimeoutSeconds, 1, 300));
+        });
+        services.AddSingleton<ResearchExperimentOptimizer>();
 
         // 采集配置由平台统一管理并按边缘节点发布；采集执行器只运行已发布版本。
         services.AddSingleton<IAcquisitionProfileStore, PostgresAcquisitionProfileStore>();

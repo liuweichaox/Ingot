@@ -1,112 +1,186 @@
 <div align="center">
   <a href="https://ingotstack.com">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="apps/website/public/brand/ingot-lockup-dark.svg">
-      <img src="apps/website/public/brand/ingot-lockup-dark.svg" alt="Ingot" width="360">
-    </picture>
+    <img src="apps/website/public/brand/ingot-lockup-dark.svg" alt="Ingot" width="340">
   </a>
 
-  <h3>面向制造业的 AI 工艺研发系统</h3>
+  <p><strong>面向高成本、小样本制造实验的开源工艺优化系统</strong></p>
+  <p>把 PLC 周期、真实过程轨迹和检验结果转化为下一组值得执行的工艺参数。</p>
 
-  <p>
-    融合实验数据、实时过程数据、物理机理和专家知识，<br>
-    辅助工艺工程师设计实验、发现规律、优化参数并验证工艺窗口，缩短工艺研发周期。
-  </p>
+  [![CI](https://github.com/liuweichaox/Ingot/actions/workflows/ci.yml/badge.svg)](https://github.com/liuweichaox/Ingot/actions/workflows/ci.yml)
+  [![License: MIT](https://img.shields.io/badge/license-MIT-E8AD56.svg)](LICENSE)
+  [![.NET 10](https://img.shields.io/badge/.NET-10-512BD4.svg)](https://dotnet.microsoft.com/)
+  [![Python 3.12](https://img.shields.io/badge/Python-3.12-3776AB.svg)](https://www.python.org/)
+  [![BoTorch](https://img.shields.io/badge/optimizer-BoTorch-5FD4C8.svg)](https://botorch.org/)
 
-  <p>
-    <a href="https://ingotstack.com"><strong>访问官网</strong></a>
-    ·
-    <a href="https://docs.ingotstack.com/zh"><strong>浏览文档</strong></a>
-    ·
-    <a href="https://github.com/liuweichaox/Ingot/issues">反馈问题</a>
-  </p>
+  [官网](https://ingotstack.com) · [文档](https://docs.ingotstack.com/zh) · [快速开始](docs/getting-started.md) · [报告问题](https://github.com/liuweichaox/Ingot/issues)
 
-  <p><a href="README.en.md">English</a> · 简体中文</p>
+  简体中文 · [English](README.en.md)
 </div>
 
-## Ingot 是什么
+## 关于 Ingot
 
-Ingot 帮助工艺工程师在有限时间和实验预算内回答三个关键问题：
+Ingot 解决的不是“怎样多采一些数据”，而是采集之后最关键的问题：
 
-1. 哪些工艺变量和阶段真正影响目标结果；
-2. 下一组实验怎样设计才能获得更高的信息价值；
-3. 什么时候已有足够证据确认参数窗口并形成可复用工艺知识。
+> 在实验昂贵、噪声存在、样本很少且有安全边界的情况下，下一炉应该怎样设置，才能用尽可能少的实验达到规格？
 
-Ingot 以工艺研发项目为主线，把研发目标、工艺变量、实验计划、设备过程、检测结果、模型、机理和专家判断组织成持续更新的证据闭环。
+项目当前以**光学镜片精密模压 + 三菱 FX3U PLC**为首个真实场景。Edge 采集实际配方与周期曲线，Platform 将周期和检验结果组成可追溯实验样本，Python 优化服务使用高斯过程和受约束贝叶斯优化推荐下一炉参数。换工艺时，核心闭环不变，只替换变量、结果、安全约束、数据映射和领域特征。
 
-## 核心能力
+## 为什么是 Ingot
 
-| 能力 | 为工艺研发带来的结果 |
-|---|---|
-| 自有数据采集 | 通过主流工业协议和具体设备适配，持续获得真实过程数据 |
-| 研发项目管理 | 统一管理目标、变量、约束、实验、成本和项目进展 |
-| 工艺数据建模 | 将设备信号、工艺阶段、材料、模具和质量指标建立研发语义 |
-| 实验设计 | 结合已有证据、约束和不确定性设计下一组高价值实验 |
-| 智能分析 | 识别关键变量、阶段、交互关系和候选工艺规律 |
-| 机理融合 | 融合物理机理、数据模型和专家知识，提高小样本研发效率 |
-| 工艺窗口验证 | 用受控实验验证参数范围、预期结果、安全约束和适用条件 |
-| 工艺知识沉淀 | 将经过审核的结论保存为可追溯、可复用、可持续验证的知识 |
+- **优化优先**：采集、特征、检验和实验管理都服务于“推荐下一次实验”。
+- **适合小样本**：使用校准不确定性的高斯过程，而不是依赖大量数据的深度网络。
+- **使用真实轨迹**：先学习设定参数如何形成过程轨迹，再学习轨迹如何影响质量。
+- **把安全写进优化器**：参数硬约束、质量结果约束和最低可行概率共同限制候选点。
+- **人在闭环内**：程序提出带预测区间的实验，工程师批准后执行。
+- **可追溯**：每条观察绑定周期、检验记录、特征版本、模型版本和内容哈希。
 
-## 工艺研发闭环
+## 已实现的闭环
 
-```text
-定义研发目标
-    ↓
-建立变量、指标和约束
-    ↓
-汇集历史实验、实时过程数据、机理与专家知识
-    ↓
-发现规律并形成研发假设
-    ↓
-设计和审核下一组实验
-    ↓
-执行实验、采集过程并关联检测结果
-    ↓
-更新模型、参数窗口和下一步建议
-    ↓
-验证结论并沉淀工艺知识
+```mermaid
+flowchart LR
+    A["FX3U / 设备信号"] --> B["周期与阶段特征"]
+    C["检验结果"] --> D["实验观察"]
+    B --> D
+    D --> E["轨迹代理模型"]
+    E --> F["质量与约束代理模型"]
+    F --> G["qLogNEI / qLogNEHVI"]
+    G --> H["下一炉参数 + 预测区间"]
+    H --> I["工程师审核与执行"]
+    I --> A
 ```
 
-每一轮实验都会增加对工艺的理解，并成为后续项目可以复用的证据。
+当前可用能力：
 
-## 产品组成
+- MELSEC A1E、Modbus TCP、OPC UA、MQTT 和 HTTP 采集边界；
+- 断网缓存、幂等上送、周期物化和版本化阶段特征；
+- 实验运行、实际配方、过程轨迹和检验结果自动关联；
+- 单目标与多目标优化、目标权重、参数约束、结果安全约束；
+- qLogNEI / qLogNEHVI、批量建议、待执行点避让和安全冷启动；
+- 相同数据快照幂等推荐，实验结果原子持久化；
+- 中英文官网、文档站和 React 工艺研发工作台。
 
-### Edge
+项目不会把尚未验证的算法效果写成产品结论。真实价值需要使用历史项目回放和新项目在线实验分别验证。
 
-Edge 运行在设备和实验现场，负责协议通信、设备适配、采样调度、数据质量、断网缓存和恢复补传。协议驱动、设备模板、现场点位和工艺变量映射分层管理。
+## 系统架构
 
-### Platform
+| 组件 | 职责 | 技术 |
+|---|---|---|
+| Edge | PLC/设备连接、采样、断网缓存与补传 | .NET 10、SQLite |
+| Platform API | 实验、周期、检验、证据和业务事务 | ASP.NET Core、PostgreSQL/TimescaleDB |
+| Optimizer | 无状态代理模型训练与下一实验推荐 | Python、PyTorch、GPyTorch、BoTorch |
+| Platform Web | 面向工艺工程师的研发闭环 | React、Vite |
+| Website / Docs | 开源项目介绍和产品文档 | Next.js |
 
-Platform 管理研发项目、实验、工艺变量、过程数据、质量结果、数据集、模型、机理、参数窗口、验证记录和工艺知识。
+中心平台保持模块化单体；数值优化作为独立无状态计算服务。平台是唯一业务记录源，优化器不私存实验状态。
 
-### 智能研发引擎
+## 快速开始
 
-智能研发引擎完成数据质量检查、时序特征计算、统计分析、实验设计、序贯优化、模型评估、机理融合和不确定性估计，为工程师提供带证据的下一步研发建议。
+### 前置条件
 
-### Ingot Chat
+- Docker 与 Docker Compose
+- Git
 
-Ingot Chat 以研发项目为上下文，帮助工程师整理问题、检索证据、调用确定性分析工具、形成假设和实验草案，并把结果关联回具体数据、实验、模型和知识来源。
+### 启动完整环境
 
-## 衡量产品价值
+```bash
+git clone https://github.com/liuweichaox/Ingot.git
+cd Ingot
+cp .env.example .env
+docker compose -f docker-compose.app.yml up -d --build
+```
 
-Ingot 以研发结果衡量成功：
+启动后：
 
-- 达到目标规格所需的实验次数；
-- 找到并验证工艺窗口所需的日历时间；
-- 单个研发项目的材料、设备和人工成本；
-- 有效实验比例和推荐实验采用率；
-- 参数窗口验证通过率；
-- 工艺知识在后续项目中的复用效果。
+- 工艺研发界面：<http://localhost:3000>
+- Platform API 健康检查：<http://localhost:8000/health>
+- 优化器就绪检查：<http://localhost:8100/ready>
 
-## 了解项目
+默认 Compose 不启动现场连接器。接入 FX3U 或其他设备前，请先阅读[设备与数据接线](docs/data-connection.md)。
 
-- [项目介绍](docs/index.md)
-- [产品与系统设计](docs/design.md)
-- [落地验证](docs/rollout.md)
+### 本地开发
+
+```bash
+dotnet restore Ingot.sln
+dotnet build Ingot.sln
+dotnet test tests/Ingot.Core.Tests/Ingot.Core.Tests.csproj
+
+npm --prefix src/platform/Ingot.Platform.Web ci
+npm --prefix src/platform/Ingot.Platform.Web run dev
+
+python -m pip install -e "optimizer[service]"
+uvicorn service:app --app-dir optimizer --port 8100
+```
+
+完整验证：
+
+```bash
+./scripts/verify.sh
+```
+
+## 第一个真实项目
+
+1. 定义可控参数、目标、单位、范围、权重和安全结果约束。
+2. 为变量声明实际来源，例如 `recipe:holding-temperature`。
+3. 让实验 `RunKey` 与 PLC 周期相关标识、检验 `OperationRunId` 使用同一个值。
+4. 执行安全基线实验并完成检验。
+5. 在研发项目中生成下一炉实验，审核后执行。
+6. 新周期和检验完成后再次优化，直到达到停止规则。
+
+不要用计划值冒充实际值。显式配置的数据源缺失时，该运行会被排除并显示原因。
+
+完整过程见[快速开始](docs/getting-started.md)和[真实场景验证](docs/rollout.md)。
+
+## 仓库结构
+
+```text
+src/edge/          现场采集与可靠上送
+src/platform/      中心 API、业务模块与 React 工作台
+src/agent/         AI 调查与解释能力
+src/shared/        领域模型与公共契约
+optimizer/         GP / 贝叶斯优化服务
+tests/             .NET 核心测试
+apps/website/      官方网站
+apps/docs-site/    文档站
+docs/              中英文项目文档
+deploy/            部署资产
+scripts/           验证与运维脚本
+```
+
+## 文档
+
+- [从这里开始](docs/index.md)
+- [安装与第一个实验](docs/getting-started.md)
+- [系统架构](docs/design.md)
+- [优化器原理与边界](docs/optimization.md)
+- [设备与数据接线](docs/data-connection.md)
+- [真实场景回放与在线验证](docs/rollout.md)
+- [部署与运行](docs/deployment.md)
 - [常见问题](docs/faq.md)
 
-## 参与项目
+## 路线图
 
-欢迎通过 Issue 分享真实工艺研发问题和使用反馈。代码贡献请阅读[贡献指南](CONTRIBUTING.md)，安全问题请按照[安全策略](SECURITY.md)提交。
+- [x] 真实周期、配方、过程特征与检验结果自动组成优化观察
+- [x] 两阶段轨迹/质量 GP 与受约束 qLogNEI/qLogNEHVI
+- [x] 实验幂等、待执行点避让和安全冷启动
+- [ ] 使用真实光学模压历史项目公布逐炉回放基准
+- [ ] 加入经过标定的光学模压机理先验和跨产品迁移
+- [ ] 在线校准不确定性、漂移检测和自动停止规则
+- [ ] 发布可复用的场景配置包与匿名示例数据
 
-Ingot 基于 [MIT License](LICENSE) 发布。
+路线图以可复现实验为准；功能建议和已知问题在 [Issues](https://github.com/liuweichaox/Ingot/issues) 中跟踪。
+
+## 参与贡献
+
+欢迎贡献设备适配、优化算法、回放数据、测试、文档和工艺领域知识。开始前请阅读：
+
+- [贡献指南](CONTRIBUTING.md)
+- [行为准则](CODE_OF_CONDUCT.md)
+- [安全策略](SECURITY.md)
+
+## 许可证
+
+Ingot 使用 [MIT License](LICENSE)。
+
+## 致谢
+
+项目的优化内核建立在 [PyTorch](https://pytorch.org/)、[GPyTorch](https://gpytorch.ai/) 和 [BoTorch](https://botorch.org/) 之上；README 信息结构参考 [Best-README-Template](https://github.com/othneildrew/Best-README-Template)。

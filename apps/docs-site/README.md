@@ -1,19 +1,14 @@
 # Ingot Documentation Site
 
-The bilingual public documentation site for Ingot, an AI process R&D system for manufacturing.
+Static bilingual documentation generated from paired Markdown files in `docs/`.
 
-It publishes one concise product journey:
-
-- project introduction;
-- product and system design;
-- rollout and validation;
-- frequently asked questions.
-
-The site reads paired Chinese and English Markdown from `docs`, creates navigation and search data, and exports static pages for `docs.ingotstack.com`.
+`lib/docs.ts` and `scripts/prepare-content.mjs` contain the explicit public-document allowlist. Every public page needs both Chinese and English versions.
 
 ```bash
-npm install
+npm ci
 npm run build
 npm test
 npm run lint
 ```
+
+The build produces navigation, search data, sitemap, robots, and static pages in `out/`. Tests verify language alternates, internal links, assets, and retired product terminology.

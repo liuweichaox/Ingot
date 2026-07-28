@@ -1,19 +1,20 @@
-# Ingot Product Website
+# Ingot Website
 
-The bilingual public website for Ingot, an AI process R&D system for manufacturing.
+Bilingual static website for Ingot, the open-source closed-loop process-optimization platform.
 
-The product narrative is fixed:
+The home page must:
 
-- fuse experimental data, real-time process data, physical mechanisms, and expert knowledge;
-- help process engineers design experiments, discover patterns, optimize parameters, and validate process windows;
-- measure value through experiments, development time, resource cost, and reusable process knowledge;
-- present native industrial data acquisition as the foundation of the R&D loop.
+- lead with the product’s general capability: define experiments, connect observations, learn process response, recommend safely, verify, and transfer knowledge;
+- remain independent of any specific equipment, production asset, material, or manufacturing process;
+- link to documentation, source, quickstart, and contributing guide;
+- use canonical assets from `public/brand`;
+- remain statically exportable.
 
 ```bash
-npm install
+npm ci
 npm run build
 npm test
 npm run lint
 ```
 
-The site is statically exported and links to the bilingual product documentation at `docs.ingotstack.com`.
+Production output is written to `out/`.

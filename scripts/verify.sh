@@ -12,6 +12,7 @@ for required_file in \
   src/platform/Ingot.Platform.Api/Dockerfile \
   src/platform/Ingot.Platform.Web/Dockerfile \
   src/edge/Ingot.Edge.ConnectorHost/Dockerfile \
+  optimizer/Dockerfile \
   deploy/docker/site.Dockerfile \
   deploy/docker/docs.Dockerfile; do
   test -f "$required_file"
@@ -36,6 +37,11 @@ npm --prefix apps/docs-site run build
 node --test apps/docs-site/tests/export.test.mjs
 npm --prefix apps/docs-site run lint
 npm --prefix apps/docs-site audit --omit=dev
+
+python3 -m venv .codex-temp/optimizer-verify
+.codex-temp/optimizer-verify/bin/python -m pip install --disable-pip-version-check --quiet \
+  -e "./optimizer[service]" "pytest>=8" "httpx>=0.27"
+PYTHONPATH=optimizer .codex-temp/optimizer-verify/bin/python -m pytest optimizer
 
 for script in scripts/*.sh deploy/*.sh; do
   bash -n "$script"

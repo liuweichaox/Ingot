@@ -21,6 +21,7 @@ public sealed class CyclesController(
         [FromQuery] string? workpieceId,
         [FromQuery] string? correlationId,
         [FromQuery] string? status,
+        [FromQuery] string? search,
         [FromQuery] int limit = 200,
         [FromQuery] int offset = 0,
         CancellationToken ct = default)
@@ -38,6 +39,8 @@ public sealed class CyclesController(
             return BadRequest(new { error = "Limit 必须在 1 到 1000 之间。" });
         if (offset < 0)
             return BadRequest(new { error = "Offset 不能小于 0。" });
+        if (search?.Length > 128)
+            return BadRequest(new { error = "搜索词不能超过 128 个字符。" });
 
         var result = await cycles.QueryAsync(
             from,
@@ -51,6 +54,7 @@ public sealed class CyclesController(
             status,
             limit,
             offset,
+            search,
             ct).ConfigureAwait(false);
         return Ok(result);
     }

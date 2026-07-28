@@ -1,112 +1,182 @@
 <div align="center">
   <a href="https://ingotstack.com/en/">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="apps/website/public/brand/ingot-lockup-dark.svg">
-      <img src="apps/website/public/brand/ingot-lockup-dark.svg" alt="Ingot" width="360">
-    </picture>
+    <img src="apps/website/public/brand/ingot-lockup-dark.svg" alt="Ingot" width="340">
   </a>
 
-  <h3>AI Process R&amp;D for Manufacturing</h3>
+  <p><strong>Open-source process optimization for expensive, small-data manufacturing experiments</strong></p>
+  <p>Turn PLC cycles, realized process trajectories, and inspection outcomes into the next experiment worth running.</p>
 
-  <p>
-    Fuse experimental data, real-time process data, physical mechanisms, and expert knowledge<br>
-    to help process engineers design experiments, discover patterns, optimize parameters, validate process windows, and shorten development cycles.
-  </p>
+  [![CI](https://github.com/liuweichaox/Ingot/actions/workflows/ci.yml/badge.svg)](https://github.com/liuweichaox/Ingot/actions/workflows/ci.yml)
+  [![License: MIT](https://img.shields.io/badge/license-MIT-E8AD56.svg)](LICENSE)
+  [![.NET 10](https://img.shields.io/badge/.NET-10-512BD4.svg)](https://dotnet.microsoft.com/)
+  [![Python 3.12](https://img.shields.io/badge/Python-3.12-3776AB.svg)](https://www.python.org/)
+  [![BoTorch](https://img.shields.io/badge/optimizer-BoTorch-5FD4C8.svg)](https://botorch.org/)
 
-  <p>
-    <a href="https://ingotstack.com/en/"><strong>Website</strong></a>
-    ·
-    <a href="https://docs.ingotstack.com/en"><strong>Documentation</strong></a>
-    ·
-    <a href="https://github.com/liuweichaox/Ingot/issues">Feedback</a>
-  </p>
+  [Website](https://ingotstack.com/en/) · [Documentation](https://docs.ingotstack.com/en) · [Quickstart](docs/getting-started.en.md) · [Issues](https://github.com/liuweichaox/Ingot/issues)
 
-  <p>English · <a href="README.md">简体中文</a></p>
+  [简体中文](README.md) · English
 </div>
 
-## What is Ingot?
+## About Ingot
 
-Ingot helps process engineers answer three critical questions within limited time and experiment budgets:
+Ingot is built around the question that matters after data collection:
 
-1. which process variables and phases truly affect the target outcome;
-2. which next experiment will create the highest information value;
-3. when the evidence is sufficient to confirm a process window and preserve reusable knowledge.
+> When experiments are expensive, noisy, constrained, and scarce, what settings should the next run use to reach specification in as few experiments as possible?
 
-Ingot organizes objectives, variables, experiments, equipment processes, inspection outcomes, models, mechanisms, and expert judgment into a continuously updated evidence loop.
+The first real target is **precision optical-lens molding with a Mitsubishi FX3U PLC**. Edge captures actual recipes and cycle traces. Platform turns cycles and inspections into traceable experimental observations. A Python service uses Gaussian processes and constrained Bayesian optimization to recommend the next settings. A new process changes the variables, outcomes, constraints, mappings, and domain features—not the closed-loop architecture.
 
-## Core capabilities
+## Why Ingot
 
-| Capability | R&D outcome |
-|---|---|
-| Native data acquisition | Acquire real process data through mainstream industrial protocols and equipment-specific adaptations |
-| R&D project management | Manage objectives, variables, constraints, experiments, cost, and progress together |
-| Process semantics | Connect signals, phases, materials, tooling, and quality metrics to development meaning |
-| Experiment design | Design high-value next experiments from existing evidence, constraints, and uncertainty |
-| Intelligent analysis | Identify critical variables, phases, interactions, and candidate process laws |
-| Mechanism fusion | Combine physical mechanisms, data models, and expert knowledge for sample-efficient development |
-| Process-window validation | Validate parameter ranges, expected outcomes, safety constraints, and applicability |
-| Process knowledge | Preserve reviewed conclusions as traceable, reusable, continuously verifiable knowledge |
+- **Optimization first** — acquisition and workflow exist to improve the next experiment.
+- **Small-data native** — calibrated GP uncertainty instead of data-hungry deep networks.
+- **Trajectory aware** — model setpoint-to-trajectory and trajectory-to-quality separately.
+- **Safety in the optimizer** — hard parameter bounds, outcome constraints, and minimum feasibility probabilities.
+- **Human reviewed** — software proposes experiments with intervals; engineers approve execution.
+- **Traceable** — observations retain cycle, inspection, feature, model, and content-hash provenance.
 
-## Process R&D loop
+## Working closed loop
 
-```text
-define the development objective
-    ↓
-establish variables, metrics, and constraints
-    ↓
-combine historical experiments, real-time process data, mechanisms, and expert knowledge
-    ↓
-discover patterns and form hypotheses
-    ↓
-design and review the next experiments
-    ↓
-execute experiments, acquire processes, and link inspections
-    ↓
-update models, process windows, and next-step recommendations
-    ↓
-validate conclusions and preserve process knowledge
+```mermaid
+flowchart LR
+    A["FX3U / equipment signals"] --> B["Cycle and phase features"]
+    C["Inspection outcomes"] --> D["Experimental observation"]
+    B --> D
+    D --> E["Trajectory surrogate"]
+    E --> F["Quality and constraint surrogate"]
+    F --> G["qLogNEI / qLogNEHVI"]
+    G --> H["Next settings + intervals"]
+    H --> I["Engineer review and execution"]
+    I --> A
 ```
 
-Every experiment increases process understanding and becomes evidence that future projects can reuse.
+Implemented today:
 
-## Product components
+- MELSEC A1E, Modbus TCP, OPC UA, MQTT, and HTTP acquisition boundaries;
+- offline buffering, idempotent shipping, cycle materialization, and versioned phase features;
+- automatic joining of runs, actual recipes, trajectories, and inspections;
+- single/multi-objective optimization, weights, parameter constraints, and safety outcomes;
+- qLogNEI/qLogNEHVI, batch suggestions, pending-point avoidance, and safe cold starts;
+- idempotent recommendations and atomic experiment-result persistence;
+- bilingual website, documentation, and a React process-R&D workbench.
 
-### Edge
+The project does not present unvalidated algorithm performance as a product result. Historical replay and prospective experiments must establish real impact.
 
-Edge runs near equipment and experiments. It handles protocol communication, equipment adaptation, sampling, quality, offline persistence, and recovery forwarding. Drivers, equipment profiles, site points, and process-variable mappings are managed as separate layers.
+## Architecture
 
-### Platform
+| Component | Responsibility | Stack |
+|---|---|---|
+| Edge | Equipment connection, acquisition, offline buffer, forwarding | .NET 10, SQLite |
+| Platform API | Experiments, cycles, inspections, evidence, transactions | ASP.NET Core, PostgreSQL/TimescaleDB |
+| Optimizer | Stateless surrogate fitting and experiment recommendation | Python, PyTorch, GPyTorch, BoTorch |
+| Platform Web | Process-engineering workflow | React, Vite |
+| Website / Docs | Open-source project and product documentation | Next.js |
 
-Platform manages R&D projects, experiments, variables, process data, quality outcomes, datasets, models, mechanisms, process windows, validation records, and process knowledge.
+The central platform is a modular monolith. Numerical optimization is a stateless service. Platform remains the only system of record.
 
-### Intelligent R&D engine
+## Quick start
 
-The engine performs quality checks, time-series feature computation, statistical analysis, experiment design, sequential optimization, model evaluation, mechanism fusion, and uncertainty estimation to provide evidence-backed next-step guidance.
+### Prerequisites
 
-### Ingot Chat
+- Docker and Docker Compose
+- Git
 
-Ingot Chat works within an R&D project. It structures questions, retrieves evidence, invokes deterministic tools, drafts hypotheses and experiments, and links every result back to data, experiments, models, and knowledge sources.
+### Run the complete stack
 
-## Measuring value
+```bash
+git clone https://github.com/liuweichaox/Ingot.git
+cd Ingot
+cp .env.example .env
+docker compose -f docker-compose.app.yml up -d --build
+```
 
-Ingot measures success through development outcomes:
+Then open:
 
-- experiments required to reach target specifications;
-- calendar time to find and validate a process window;
-- material, equipment, and labor cost per project;
-- valid-experiment ratio and recommendation adoption;
-- process-window validation rate;
-- reuse of process knowledge across future projects.
+- R&D workbench: <http://localhost:3000>
+- Platform health: <http://localhost:8000/health>
+- Optimizer readiness: <http://localhost:8100/ready>
 
-## Learn about Ingot
+The field connector is opt-in. Read [Equipment and data wiring](docs/data-connection.en.md) before connecting an FX3U or another device.
 
-- [Project introduction](docs/index.en.md)
-- [Product and system design](docs/design.en.md)
-- [Rollout and validation](docs/rollout.en.md)
+### Local development
+
+```bash
+dotnet restore Ingot.sln
+dotnet build Ingot.sln
+dotnet test tests/Ingot.Core.Tests/Ingot.Core.Tests.csproj
+
+npm --prefix src/platform/Ingot.Platform.Web ci
+npm --prefix src/platform/Ingot.Platform.Web run dev
+
+python -m pip install -e "optimizer[service]"
+uvicorn service:app --app-dir optimizer --port 8100
+```
+
+Run the complete gate with `./scripts/verify.sh`.
+
+## First real campaign
+
+1. Define controls, objectives, units, ranges, weights, and safety outcomes.
+2. Map each control to an actual source such as `recipe:holding-temperature`.
+3. Use the same value for experiment `RunKey`, PLC cycle correlation, and inspection `OperationRunId`.
+4. Run and inspect a verified safe baseline.
+5. Generate, review, and execute the next recommended experiment.
+6. Repeat after each completed cycle and inspection until the stop rule is met.
+
+Explicit mappings never silently fall back to planned values. Missing actual data excludes the run with a visible reason.
+
+See [Quickstart](docs/getting-started.en.md) and [Real-world validation](docs/rollout.en.md).
+
+## Repository layout
+
+```text
+src/edge/          field acquisition and reliable shipping
+src/platform/      central API, business modules, React workbench
+src/agent/         AI investigation and explanation
+src/shared/        domain models and contracts
+optimizer/         GP and Bayesian optimization service
+tests/             .NET core tests
+apps/website/      official website
+apps/docs-site/    documentation site
+docs/              bilingual project documentation
+deploy/            deployment assets
+scripts/           verification and operations
+```
+
+## Documentation
+
+- [Start here](docs/index.en.md)
+- [Install and run a first experiment](docs/getting-started.en.md)
+- [Architecture](docs/design.en.md)
+- [Optimizer design and limits](docs/optimization.en.md)
+- [Equipment and data wiring](docs/data-connection.en.md)
+- [Historical replay and online validation](docs/rollout.en.md)
+- [Deployment and operations](docs/deployment.en.md)
 - [FAQ](docs/faq.en.md)
 
-## Participate
+## Roadmap
 
-Use Issues to share real process-development problems and product feedback. For code contributions, see the [contributing guide](CONTRIBUTING.en.md). Report security concerns through the [security policy](SECURITY.md).
+- [x] Assemble real cycles, recipes, features, and inspections into observations
+- [x] Two-stage trajectory/quality GP with constrained qLogNEI/qLogNEHVI
+- [x] Idempotent experiments, pending-point avoidance, and safe cold starts
+- [ ] Publish run-by-run replay benchmarks on real optical-molding history
+- [ ] Add calibrated optical-molding priors and cross-product transfer
+- [ ] Add online uncertainty calibration, drift detection, and automatic stopping
+- [ ] Publish reusable scenario packages and anonymized sample data
+
+Track proposals and known issues in [GitHub Issues](https://github.com/liuweichaox/Ingot/issues).
+
+## Contributing
+
+Contributions are welcome across device adapters, optimization methods, replay data, tests, documentation, and process-domain knowledge:
+
+- [Contributing guide](CONTRIBUTING.en.md)
+- [Code of Conduct](CODE_OF_CONDUCT.md)
+- [Security policy](SECURITY.md)
+
+## License
 
 Ingot is available under the [MIT License](LICENSE).
+
+## Acknowledgments
+
+The optimization core builds on [PyTorch](https://pytorch.org/), [GPyTorch](https://gpytorch.ai/), and [BoTorch](https://botorch.org/). README organization is inspired by [Best-README-Template](https://github.com/othneildrew/Best-README-Template).

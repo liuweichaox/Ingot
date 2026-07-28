@@ -1,0 +1,463 @@
+using System.Security.Cryptography;
+using System.Text.Json;
+using Ingot.Contracts.ProcessResearch;
+
+namespace Ingot.Platform.Infrastructure.ProcessResearch;
+
+/// <summary>
+/// Turns the immutable observations already attached to experiment results into
+/// the next ordinary experiment plan. The existing experiment approval and
+/// execution state machine remains the only business workflow.
+/// </summary>
+public sealed class ResearchExperimentOptimizer(
+    IProcessResearchStore store,
+    IProcessOptimizerClient optimizerClient,
+    IResearchObservationAssembler observationAssembler,
+    ResearchExperimentResultMaterializer resultMaterializer,
+    ProcessResearchWorkflow workflow)
+{
+    public async Task<ResearchExperiment> CreateNextExperimentAsync(
+        Guid projectId,
+        ResearchOptimizationRequest request,
+        string userId,
+        CancellationToken ct = default)
+    {
+        if (request.BatchSize is < 1 or > 8)
+            throw new ProcessResearchRuleException("每批优化实验数量必须在 1 到 8 之间。");
+        var project = await store.GetProjectAsync(projectId, ct).ConfigureAwait(false)
+            ?? throw new ProcessResearchRuleException("研发项目不存在。");
+        if (project.Status is ResearchProjectStatuses.Completed or ResearchProjectStatuses.Archived)
+            throw new ProcessResearchRuleException("已完成或已归档的研发项目保持只读。");
+        var intent = NormalizeIntent(request.Intent);
+        var processProfile = NormalizeProcessProfile(request.ProcessProfile);
+        ResearchHypothesis? hypothesis = null;
+        if (intent == ResearchOptimizationIntents.ValidateHypothesis)
+        {
+            if (request.HypothesisId is not { } hypothesisId)
+                throw new ProcessResearchRuleException("验证假设的优化必须指定研发假设。");
+            hypothesis = await store.GetHypothesisAsync(hypothesisId, ct).ConfigureAwait(false);
+            if (hypothesis is null || hypothesis.ProjectId != projectId)
+                throw new ProcessResearchRuleException("待验证的研发假设不属于当前项目。");
+            if (hypothesis.ValidationOutcomeCode is null ||
+                hypothesis.ExpectedEffectDirection is null || hypothesis.MinimumEffect is null)
+            {
+                throw new ProcessResearchRuleException(
+                    "验证假设前必须定义验证目标、预期效应方向和最小效应。");
+            }
+        }
+        else if (request.HypothesisId is not null)
+        {
+            throw new ProcessResearchRuleException("逼近规格的优化不能附带研发假设。");
+        }
+
+        var objectiveCodes = project.Objectives.Select(static value => value.Code)
+            .ToHashSet(StringComparer.Ordinal);
+        var constraintCodes = project.OutcomeConstraints.Select(static value => value.Code)
+            .ToHashSet(StringComparer.Ordinal);
+        var experiments = await store.ListExperimentsAsync(projectId, ct).ConfigureAwait(false);
+        var experimentResults = await store.ListExperimentResultsAsync(projectId, ct)
+            .ConfigureAwait(false);
+        var assembled = request.AutoAssembleObservations
+            ? await observationAssembler.AssembleAsync(project, experiments, ct).ConfigureAwait(false)
+            : new ResearchObservationAssembly([], 0);
+        if (request.AutoAssembleObservations)
+        {
+            var materialized = await resultMaterializer.MaterializeCompletedAsync(
+                project,
+                experiments,
+                experimentResults,
+                assembled,
+                userId,
+                ct).ConfigureAwait(false);
+            if (materialized.Count > 0)
+                experimentResults = experimentResults.Concat(materialized).ToArray();
+        }
+        var persisted = experimentResults
+            .SelectMany(static result => result.RunObservations)
+            .Where(value => value.ValidForOptimization &&
+                            value.Outcomes.Keys.ToHashSet(StringComparer.Ordinal)
+                                .SetEquals(objectiveCodes) &&
+                            value.ConstraintOutcomes.Keys.ToHashSet(StringComparer.Ordinal)
+                                .SetEquals(constraintCodes))
+            .ToArray();
+        var validAuto = assembled.Observations
+            .Where(value => value.ValidForOptimization &&
+                            value.Outcomes.Keys.ToHashSet(StringComparer.Ordinal)
+                                .SetEquals(objectiveCodes) &&
+                            value.ConstraintOutcomes.Keys.ToHashSet(StringComparer.Ordinal)
+                                .SetEquals(constraintCodes))
+            .ToArray();
+        var sourceObservations = persisted
+            .Concat(validAuto)
+            .GroupBy(static value => value.RunKey, StringComparer.Ordinal)
+            .Select(static group => group.Last())
+            .OrderBy(static value => value.RunKey, StringComparer.Ordinal)
+            .ToArray();
+        var observedRunKeys = sourceObservations.Select(static value => value.RunKey)
+            .ToHashSet(StringComparer.Ordinal);
+        var activeOptimization = experiments
+            .Where(experiment =>
+                experiment.Optimization is { } optimization &&
+                string.Equals(optimization.Intent, intent, StringComparison.Ordinal) &&
+                optimization.HypothesisId == hypothesis?.HypothesisId &&
+                (experiment.Status is ResearchExperimentStatuses.Planned
+                    or ResearchExperimentStatuses.Approved
+                    or ResearchExperimentStatuses.Running) &&
+                experiment.RunPlan.Any(run => !observedRunKeys.Contains(run.RunKey)))
+            .OrderByDescending(static value => value.CreatedAt)
+            .FirstOrDefault();
+        if (activeOptimization is not null)
+            return activeOptimization;
+
+        var controls = project.Variables
+            .Where(static value => value.Role == ResearchVariableRoles.Control)
+            .ToDictionary(static value => value.Code, StringComparer.Ordinal);
+        if (hypothesis is not null && !hypothesis.VariableCodes.Any(controls.ContainsKey))
+        {
+            throw new ProcessResearchRuleException(
+                "待验证的研发假设必须至少关联一个可控变量，才能设计安全的验证实验。");
+        }
+        var observations = sourceObservations
+            .Where(value => value.ActualFactors.Select(static factor => factor.VariableCode)
+                .ToHashSet(StringComparer.Ordinal).SetEquals(controls.Keys))
+            .Select(static value => new OptimizerObservationInput
+            {
+                Params = value.ActualFactors.ToDictionary(
+                    static factor => factor.VariableCode,
+                    static factor => factor.Value,
+                    StringComparer.Ordinal),
+                Outcomes = value.Outcomes,
+                ConstraintOutcomes = value.ConstraintOutcomes,
+                ProcessFeatures = value.ProcessFeatures
+            })
+            .ToArray();
+        var pendingPoints = experiments
+            .Where(static experiment => experiment.Status is ResearchExperimentStatuses.Planned
+                or ResearchExperimentStatuses.Approved
+                or ResearchExperimentStatuses.Running)
+            .SelectMany(static experiment => experiment.RunPlan)
+            .Where(run => !observedRunKeys.Contains(run.RunKey) &&
+                          run.Factors.Select(static value => value.VariableCode)
+                              .ToHashSet(StringComparer.Ordinal).SetEquals(controls.Keys))
+            .Select(run => (IReadOnlyDictionary<string, double>)run.Factors
+                .OrderBy(static value => value.VariableCode, StringComparer.Ordinal)
+                .ToDictionary(
+                    static value => value.VariableCode,
+                    static value => value.Value,
+                    StringComparer.Ordinal))
+            .Distinct(DictionaryValueComparer.Instance)
+            .ToArray();
+        var call = new OptimizerSuggestionCall
+        {
+            Campaign = BuildCampaign(project, processProfile, intent, hypothesis),
+            Observations = observations,
+            PendingPoints = pendingPoints,
+            TopK = request.BatchSize,
+            Seed = request.Seed
+        };
+        var inputHash = Convert.ToHexStringLower(
+            SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(call)));
+        var existing = experiments
+            .Where(experiment => string.Equals(
+                experiment.Optimization?.InputHash,
+                inputHash,
+                StringComparison.Ordinal))
+            .OrderByDescending(static value => value.CreatedAt)
+            .FirstOrDefault();
+        if (existing is not null)
+            return existing;
+        var response = await optimizerClient.SuggestAsync(call, ct).ConfigureAwait(false);
+        if (response.ObservationCount != observations.Length ||
+            response.Suggestions.Count != request.BatchSize)
+            throw new ProcessResearchRuleException("优化服务使用的数据快照或返回的实验数量不一致。");
+
+        var experimentId = CreateDeterministicExperimentId(projectId, inputHash);
+        var runPlan = new List<ExperimentRunPlan>();
+        var predictions = new List<OptimizationRunPrediction>();
+        for (var index = 0; index < response.Suggestions.Count; index++)
+        {
+            var suggestion = response.Suggestions[index];
+            ValidateSuggestion(project, response.ModelVersion, suggestion);
+            var runKey = $"bo-{experimentId:N}"[..15] + $"-{index + 1:D2}";
+            runPlan.Add(new ExperimentRunPlan
+            {
+                RunKey = runKey,
+                Sequence = index + 1,
+                Factors = suggestion.RecommendedParameters.Select(pair =>
+                    new ExperimentFactorSetting
+                    {
+                        VariableCode = pair.Key,
+                        Value = pair.Value,
+                        Unit = controls[pair.Key].Unit
+                    }).ToArray()
+            });
+            predictions.Add(new OptimizationRunPrediction
+            {
+                RunKey = runKey,
+                Objectives = suggestion.Predictions.ToDictionary(
+                    static pair => pair.Key,
+                    static pair => new OptimizationMetricPrediction
+                    {
+                        Mean = pair.Value.Mean,
+                        StandardDeviation = pair.Value.StandardDeviation,
+                        Lower95 = pair.Value.Lower95,
+                        Upper95 = pair.Value.Upper95,
+                        Unit = pair.Value.Unit
+                    },
+                    StringComparer.Ordinal),
+                Constraints = suggestion.ConstraintPredictions.ToDictionary(
+                    static pair => pair.Key,
+                    static pair => new OptimizationMetricPrediction
+                    {
+                        Mean = pair.Value.Mean,
+                        StandardDeviation = pair.Value.StandardDeviation,
+                        Lower95 = pair.Value.Lower95,
+                        Upper95 = pair.Value.Upper95,
+                        Unit = pair.Value.Unit
+                    },
+                    StringComparer.Ordinal),
+                FeasibilityProbability = suggestion.FeasibilityProbability,
+                AcquisitionValue = suggestion.AcquisitionValue,
+                ColdStart = suggestion.ColdStart,
+                Rationale = suggestion.Rationale
+            });
+        }
+
+        var generatedExperiment = new ResearchExperiment
+        {
+            ExperimentId = experimentId,
+            HypothesisId = hypothesis?.HypothesisId,
+            Name = intent == ResearchOptimizationIntents.ValidateHypothesis
+                ? $"假设验证实验 {DateTimeOffset.UtcNow:yyyy-MM-dd HH:mm}"
+                : $"智能优化实验 {DateTimeOffset.UtcNow:yyyy-MM-dd HH:mm}",
+            DesignMethod = ResearchDesignMethods.BayesianOptimization,
+            RunPlan = runPlan,
+            ObjectiveCodes = project.Objectives.Select(static value => value.Code).ToArray(),
+            StopRule = intent == ResearchOptimizationIntents.ValidateHypothesis
+                ? "获得足以支持、推翻或保留该假设的置信区间，或工程师因安全边界终止。"
+                : "达到项目目标并完成重复性确认，或工程师因安全边界终止。",
+            RollbackPlan = "任何安全约束触发时立即停止，并恢复上一组已批准工艺参数。",
+            Optimization = new ResearchOptimizationMetadata
+            {
+                ModelVersion = response.ModelVersion,
+                InputHash = inputHash,
+                ObservationCount = observations.Length,
+                AutoAssembledObservationCount = validAuto.Length,
+                PendingExperimentCount = pendingPoints.Length,
+                ProcessFeatureCount = CommonProcessFeatureCount(observations),
+                ProcessProfile = processProfile,
+                Intent = intent,
+                HypothesisId = hypothesis?.HypothesisId,
+                RunPredictions = predictions,
+                GeneratedAt = DateTimeOffset.UtcNow
+            }
+        };
+        try
+        {
+            var saved = await workflow.CreateExperimentAsync(
+                projectId,
+                generatedExperiment,
+                userId,
+                ct).ConfigureAwait(false);
+            if (hypothesis is not null && hypothesis.Status == ResearchHypothesisStatuses.Proposed)
+            {
+                await workflow.SaveHypothesisAsync(
+                    projectId,
+                    hypothesis with { Status = ResearchHypothesisStatuses.Selected },
+                    userId,
+                    ct).ConfigureAwait(false);
+            }
+            return saved;
+        }
+        catch (ProcessResearchRuleException)
+        {
+            // 两个并发请求会得到相同快照哈希和确定性 ID；后写者返回先写结果。
+            var concurrent = await store.GetExperimentAsync(experimentId, ct).ConfigureAwait(false);
+            if (concurrent?.Optimization?.InputHash is { } concurrentInputHash &&
+                string.Equals(concurrentInputHash, inputHash, StringComparison.Ordinal))
+                return concurrent;
+            throw;
+        }
+    }
+
+    private static OptimizerCampaignInput BuildCampaign(
+        ResearchProject project,
+        string processProfile,
+        string intent,
+        ResearchHypothesis? hypothesis)
+    {
+        var controls = project.Variables
+            .Where(static value => value.Role == ResearchVariableRoles.Control)
+            .ToArray();
+        if (controls.Length == 0 ||
+            controls.Any(static value => value.LowerLimit is null || value.UpperLimit is null))
+            throw new ProcessResearchRuleException("优化要求全部可控变量都定义上下界。");
+        return new OptimizerCampaignInput
+        {
+            Name = project.Name,
+            ProcessProfile = string.IsNullOrWhiteSpace(processProfile)
+                ? "generic"
+                : processProfile.Trim(),
+            DecisionIntent = intent,
+            HypothesisVariables = hypothesis?.VariableCodes
+                .Intersect(controls.Select(static value => value.Code), StringComparer.Ordinal)
+                .OrderBy(static value => value, StringComparer.Ordinal)
+                .ToArray() ?? [],
+            Variables = controls.Select(value => new OptimizerVariableInput(
+                value.Code,
+                value.LowerLimit!.Value,
+                value.UpperLimit!.Value,
+                value.Unit)).ToArray(),
+            Objectives = project.Objectives.Select(MapObjective).ToArray(),
+            Constraints = project.Constraints.Select(value =>
+            {
+                if (!controls.Any(control =>
+                        control.Code == value.VariableCode))
+                    throw new ProcessResearchRuleException(
+                        $"优化约束 {value.Code} 必须引用可控变量。");
+                return new OptimizerConstraintInput
+                {
+                    Variable = value.VariableCode,
+                    Operator = value.Operator,
+                    Limit = value.Limit,
+                    SafetyCritical = value.SafetyCritical
+                };
+            }).ToArray(),
+            OutcomeConstraints = project.OutcomeConstraints.Select(value =>
+                new OptimizerOutcomeConstraintInput
+                {
+                    Name = value.Code,
+                    Operator = value.Operator,
+                    Limit = value.Limit,
+                    Unit = value.Unit,
+                    SafetyCritical = value.SafetyCritical,
+                    MinimumProbability = value.MinimumProbability
+                }).ToArray(),
+            Context = project.Context
+        };
+    }
+
+    private static string NormalizeIntent(string? value)
+    {
+        var intent = string.IsNullOrWhiteSpace(value)
+            ? ResearchOptimizationIntents.ReachSpecification
+            : value.Trim().ToLowerInvariant();
+        if (!ResearchOptimizationIntents.IsValid(intent))
+            throw new ProcessResearchRuleException("优化意图无效。");
+        return intent;
+    }
+
+    private static string NormalizeProcessProfile(string? value)
+    {
+        var profile = string.IsNullOrWhiteSpace(value) ? "generic" : value.Trim();
+        if (profile.Length > 120)
+            throw new ProcessResearchRuleException("优化画像最长 120 个字符。");
+        return profile;
+    }
+
+    private static OptimizerObjectiveInput MapObjective(ResearchObjective objective)
+        => objective.Direction switch
+        {
+            "minimize" => new()
+            {
+                Name = objective.Code, Kind = "le",
+                Threshold = objective.UpperLimit ?? objective.Target,
+                Weight = objective.Weight, Unit = objective.Unit
+            },
+            "maximize" => new()
+            {
+                Name = objective.Code, Kind = "ge",
+                Threshold = objective.LowerLimit ?? objective.Target,
+                Weight = objective.Weight, Unit = objective.Unit
+            },
+            "range" when objective.LowerLimit is { } lower && objective.UpperLimit is { } upper =>
+                new()
+                {
+                    Name = objective.Code, Kind = "range", Lower = lower, Upper = upper,
+                    Weight = objective.Weight, Unit = objective.Unit
+                },
+            "target" when objective.LowerLimit is { } lower && objective.UpperLimit is { } upper =>
+                new()
+                {
+                    Name = objective.Code, Kind = "target", Target = objective.Target,
+                    Tol = Math.Min(objective.Target - lower, upper - objective.Target),
+                    Weight = objective.Weight, Unit = objective.Unit
+                },
+            _ => throw new ProcessResearchRuleException($"目标 {objective.Code} 的方向或规格定义不支持优化。")
+        };
+
+    private static void ValidateSuggestion(
+        ResearchProject project,
+        string modelVersion,
+        OptimizerSuggestionOutput output)
+    {
+        var controls = project.Variables
+            .Where(static value => value.Role == ResearchVariableRoles.Control)
+            .ToDictionary(static value => value.Code, StringComparer.Ordinal);
+        if (!string.Equals(modelVersion, output.ModelVersion, StringComparison.Ordinal) ||
+            !output.RecommendedParameters.Keys.ToHashSet(StringComparer.Ordinal).SetEquals(controls.Keys))
+            throw new ProcessResearchRuleException("优化建议的模型版本或变量集合无效。");
+        foreach (var (code, value) in output.RecommendedParameters)
+        {
+            var variable = controls[code];
+            if (!double.IsFinite(value) ||
+                value < variable.LowerLimit || value > variable.UpperLimit)
+                throw new ProcessResearchRuleException($"优化变量 {code} 超出项目范围。");
+        }
+        if (!output.ColdStart &&
+            !output.Predictions.Keys.ToHashSet(StringComparer.Ordinal)
+                .SetEquals(project.Objectives.Select(static value => value.Code)))
+            throw new ProcessResearchRuleException("优化建议没有覆盖全部目标预测。");
+        if (!output.ColdStart &&
+            !output.ConstraintPredictions.Keys.ToHashSet(StringComparer.Ordinal)
+                .SetEquals(project.OutcomeConstraints.Select(static value => value.Code)))
+            throw new ProcessResearchRuleException("优化建议没有覆盖全部结果约束预测。");
+    }
+
+    private static int CommonProcessFeatureCount(
+        IReadOnlyList<OptimizerObservationInput> observations)
+    {
+        if (observations.Count == 0)
+            return 0;
+        var common = observations[0].ProcessFeatures.Keys.ToHashSet(StringComparer.Ordinal);
+        foreach (var observation in observations.Skip(1))
+            common.IntersectWith(observation.ProcessFeatures.Keys);
+        return common.Count;
+    }
+
+    private static Guid CreateDeterministicExperimentId(Guid projectId, string inputHash)
+    {
+        var bytes = SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new
+        {
+            ProjectId = projectId,
+            InputHash = inputHash
+        }));
+        return new Guid(bytes.AsSpan(0, 16));
+    }
+
+    private sealed class DictionaryValueComparer :
+        IEqualityComparer<IReadOnlyDictionary<string, double>>
+    {
+        public static DictionaryValueComparer Instance { get; } = new();
+
+        public bool Equals(
+            IReadOnlyDictionary<string, double>? left,
+            IReadOnlyDictionary<string, double>? right)
+            => ReferenceEquals(left, right) ||
+               left is not null && right is not null &&
+               left.Count == right.Count &&
+               left.All(pair => right.TryGetValue(pair.Key, out var value) &&
+                                value.Equals(pair.Value));
+
+        public int GetHashCode(IReadOnlyDictionary<string, double> value)
+        {
+            var hash = new HashCode();
+            foreach (var pair in value.OrderBy(static item => item.Key, StringComparer.Ordinal))
+            {
+                hash.Add(pair.Key, StringComparer.Ordinal);
+                hash.Add(pair.Value);
+            }
+            return hash.ToHashCode();
+        }
+    }
+}

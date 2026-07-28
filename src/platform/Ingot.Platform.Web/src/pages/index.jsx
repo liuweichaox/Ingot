@@ -5,7 +5,7 @@ import {
   PaperAirplaneIcon,
 } from "@heroicons/react/24/outline";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { deleteJson, getJson, postForm, postJson, putJson, streamSse } from "../api/http";
 import { qualityOutcomeTraces } from "../charts/chartAdapters";
 import PlotlyChart from "../components/PlotlyChart";
@@ -246,6 +246,7 @@ export function WorkbenchPage() {
     events: [],
     edges: [],
     contexts: [],
+    researchProjects: [],
   });
   useEffect(() => {
     let alive = true;
@@ -255,7 +256,8 @@ export function WorkbenchPage() {
       getJson("/api/v1/events?limit=20"),
       getJson("/api/edges"),
       getJson("/api/v1/production-contexts"),
-    ]).then(([cycles, summary, events, edges, contexts]) => {
+      getJson("/api/v1/research-projects?limit=100"),
+    ]).then(([cycles, summary, events, edges, contexts, researchProjects]) => {
       if (alive) setState({
         loading: false,
         error: "",
@@ -266,6 +268,7 @@ export function WorkbenchPage() {
         events: extractRows(events),
         edges: extractRows(edges),
         contexts: extractRows(contexts),
+        researchProjects: extractRows(researchProjects),
       });
     }).catch(error => {
       if (alive) setState(current => ({ ...current, loading: false, error: error.message }));
@@ -278,6 +281,8 @@ export function WorkbenchPage() {
   const onlineEdges = state.edges.filter(item => edgeStatus(item) === "online").length;
   const pendingInspections = state.summary.pending ?? state.summary.pendingCount ?? 0;
   const activeContexts = state.contexts.filter(item => !item.validTo).length;
+  const activeOptimizationProjects = state.researchProjects.filter(item =>
+    item.status === "active" || item.status === "validating").length;
   const dailyActions = [
     {
       title: pendingInspections ? `处理 ${pendingInspections} 个质量待办` : "质量任务已处理",
@@ -287,11 +292,11 @@ export function WorkbenchPage() {
       action: pendingInspections ? "去处理" : "查看记录",
     },
     {
-      title: activeContexts ? `${activeContexts} 台设备已配置生产` : "配置接下来的生产",
-      description: activeContexts ? "确认设备、产品、配方和工装是否正确。" : "生产开始前先启用设备生产配置。",
-      to: "/production/changeover",
-      tone: activeContexts ? "border-blue-200 bg-blue-50" : "border-amber-200 bg-amber-50",
-      action: activeContexts ? "检查配置" : "开始配置",
+      title: activeOptimizationProjects ? `${activeOptimizationProjects} 个优化项目正在推进` : "从一个真实问题开始优化",
+      description: activeOptimizationProjects ? "查看证据缺口、待审核实验或需要独立验证的工艺窗口。" : "将质量偏差或运行异常转为可验证的优化项目。",
+      to: "/research-projects",
+      tone: activeOptimizationProjects ? "border-blue-200 bg-blue-50" : "border-amber-200 bg-amber-50",
+      action: activeOptimizationProjects ? "进入优化" : "创建项目",
     },
     {
       title: `${onlineEdges}/${state.edges.length} 个现场节点在线`,
@@ -302,11 +307,26 @@ export function WorkbenchPage() {
     },
   ];
   return (
-    <Page title="工作台" description="从生产运行、质量待办和采集状态开始今天的工作。">
+    <Page title="工业决策工作台" description="在一个入口理解现场运行、质量结果、数据可信度，以及下一项最有价值的工艺行动。">
       {state.error && <Alert tone="danger">{state.error}</Alert>}
       {state.loading ? <LoadingCard /> : (
         <>
-          <Card title="今天先做这些" description="从需要处理的事项开始，不必逐个模块查找。">
+          <section className="grid gap-4 rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50 via-white to-white p-5 shadow-sm lg:grid-cols-[minmax(0,1fr)_20rem] sm:p-6">
+            <div>
+              <p className="text-sm font-semibold text-blue-700">工业数据不是终点，决策才是</p>
+              <h2 className="mt-2 max-w-3xl text-2xl font-semibold tracking-tight text-slate-950">让每一次运行都能支持追因、验证和下一次更好的工艺决策。</h2>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">Ingot 将设备、配方、过程、质量和实验放到同一业务上下文中。异常先成为可解释的证据，再成为可验证的优化行动。</p>
+              <div className="mt-5 flex flex-wrap gap-2">
+                <Link to="/comparisons" className="inline-flex min-h-9 items-center rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">开始周期对比</Link>
+                <Link to="/research-projects" className="inline-flex min-h-9 items-center rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700">进入优化工作台</Link>
+              </div>
+            </div>
+            <div className="grid content-start gap-3">
+              <div className="rounded-xl border border-white bg-white/80 p-4"><p className="text-xs font-medium text-slate-500">现场数据贯通</p><p className="mt-1 text-lg font-semibold text-slate-950">{onlineEdges}/{state.edges.length} 个节点在线</p><p className="mt-1 text-xs leading-5 text-slate-500">数据连接、对象和上下文由实施层维护。</p></div>
+              <div className="rounded-xl border border-white bg-white/80 p-4"><p className="text-xs font-medium text-slate-500">优化闭环</p><p className="mt-1 text-lg font-semibold text-slate-950">{activeOptimizationProjects} 个项目推进中</p><p className="mt-1 text-xs leading-5 text-slate-500">建议必须经过工程审核，并由真实运行结果更新。</p></div>
+            </div>
+          </section>
+          <Card title="今天先做这些" description="系统按决策优先级聚合待办，不需要逐个后台模块查找。">
             <div className="grid gap-3 lg:grid-cols-3">
               {dailyActions.map(action => (
                 <Link key={action.to} to={action.to} className={`group rounded-xl border p-4 transition hover:-translate-y-0.5 hover:shadow-md ${action.tone}`}>
@@ -321,7 +341,7 @@ export function WorkbenchPage() {
             <Metric label="生产运行" value={state.cycleTotal} hint={`${activeCycles} 个正在进行`} />
             <Metric label="待处理质检" value={pendingInspections} hint="来自当前质量任务" />
             <Metric label="采集节点" value={`${onlineEdges}/${state.edges.length}`} hint="在线 / 全部" />
-            <Metric label="有效生产配置" value={activeContexts} hint="当前设备上下文" />
+            <Metric label="优化项目" value={activeOptimizationProjects} hint={`${activeContexts} 个有效生产上下文`} />
           </div>
           <div className="grid gap-5 xl:grid-cols-[1.3fr_.7fr]">
             <Card title="最近生产运行" actions={<Link className="text-sm font-medium text-blue-600 hover:text-blue-700" to="/cycles">查看全部</Link>}>
@@ -905,22 +925,17 @@ export function ChatPage() {
 }
 
 export function ObjectExplorerPage() {
-  const location = useLocation();
   const objects = useApi("/api/v1/data-objects?limit=500");
   const rows = extractRows(objects.data);
   const [query, setQuery] = useState("");
-  const searchInput = useRef(null);
   const filtered = useMemo(() => rows.filter(row => JSON.stringify(row).toLowerCase().includes(query.toLowerCase())), [query, rows]);
-  useEffect(() => {
-    if (location.state?.focusSearch) searchInput.current?.focus();
-  }, [location.state]);
   return (
     <Page
-      title="设备与对象"
-      description="查找已经接入平台、并持续上报生产数据的设备和业务对象。"
+      title="工业对象"
+      description="以设备和生产对象组织现场数据，查看它们持续上报的运行、事件与样本。"
       actions={<Link className="inline-flex min-h-9 items-center rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700" to="/configuration/acquisition-profiles">接入设备</Link>}
     >
-      {objects.error && <Alert tone="danger" title="设备与对象暂不可用">{objects.error}</Alert>}
+      {objects.error && <Alert tone="danger" title="工业对象暂不可用">{objects.error}</Alert>}
       <WorkflowGuide
         title="设备为什么会出现在这里"
         description="这里不需要手工创建目录；设备开始上报数据后，平台会自动建立可追溯对象。"
@@ -931,11 +946,11 @@ export function ObjectExplorerPage() {
         ]}
       />
       <Card>
-        <Field label="搜索设备与对象"><Input ref={searchInput} value={query} onChange={event => setQuery(event.target.value)} placeholder="输入设备编号、对象编号或现场节点" /></Field>
+        <Field label="筛选工业对象"><Input value={query} onChange={event => setQuery(event.target.value)} placeholder="输入设备编号、对象编号或现场节点" /></Field>
       </Card>
       {objects.loading && !objects.data ? <LoadingCard /> : (
         <Card
-          title="已发现的设备与对象"
+          title="已发现的工业对象"
           description={query.trim()
             ? `找到 ${filtered.length} 个对象 · 共 ${objects.data?.total ?? rows.length} 个`
             : `共 ${objects.data?.total ?? rows.length} 个对象`}
@@ -957,7 +972,7 @@ export function ObjectExplorerPage() {
           ) : (
             <EmptyState
               title={query ? "没有匹配的设备或对象" : "尚未收到生产数据"}
-              description={query ? "请调整搜索条件后重试。" : "采集节点上报生产事件后，设备与对象会自动显示在这里。"}
+              description={query ? "请调整搜索条件后重试。" : "采集节点上报生产事件后，设备和生产对象会自动显示在这里。"}
             />
           )}
         </Card>
@@ -2105,6 +2120,8 @@ const comparisonFeatureLabels = {
 };
 
 const evidenceLevelLabels = {
+  stable: "证据稳定",
+  exploratory: "探索性证据",
   sufficient: "证据充分",
   limited: "证据有限",
   insufficient: "证据不足",
@@ -2122,6 +2139,75 @@ export function CycleComparisonPage() {
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [cycles, setCycles] = useState([]);
+  const [catalogLoading, setCatalogLoading] = useState(true);
+  const [cycleFilter, setCycleFilter] = useState("");
+  const [researchProjects, setResearchProjects] = useState([]);
+  const [researchProjectId, setResearchProjectId] = useState("");
+  useEffect(() => {
+    let mounted = true;
+    getJson("/api/v1/research-projects?limit=100").then(projectPayload => {
+      if (mounted) setResearchProjects(projectPayload?.data || []);
+    }).catch(() => {
+      if (mounted) setResearchProjects([]);
+    });
+    return () => { mounted = false; };
+  }, []);
+  useEffect(() => {
+    let mounted = true;
+    const search = cycleFilter.trim();
+    const query = new URLSearchParams({ status: "completed", limit: "200" });
+    if (search) query.set("search", search);
+    setCatalogLoading(true);
+    getJson(`/api/v1/cycles?${query}`).then(cyclePayload => {
+      if (!mounted) return;
+      setCycles(extractRows(cyclePayload));
+    }).catch(requestError => {
+      if (!mounted) return;
+      setCycles([]);
+      setError(requestError.message || "无法读取可比较的生产运行。");
+    }).finally(() => {
+      if (mounted) setCatalogLoading(false);
+    });
+    return () => { mounted = false; };
+  }, [cycleFilter]);
+
+  const baselineCycle = cycles.find(item => item.correlationId === baseline);
+  const normalizedCycleFilter = cycleFilter.trim().toLowerCase();
+  const visibleCycles = cycles.filter(item => !normalizedCycleFilter || [
+    item.correlationId,
+    item.productSeries,
+    item.productCode,
+    item.machineId,
+    item.recipeId,
+  ].some(value => String(value || "").toLowerCase().includes(normalizedCycleFilter)));
+  const comparableCycles = cycles.filter(item =>
+    item.correlationId !== baseline &&
+    (!baselineCycle?.productSeries
+      ? item.machineId === baselineCycle?.machineId
+      : item.productSeries === baselineCycle.productSeries) &&
+    (!normalizedCycleFilter || [
+      item.correlationId,
+      item.productSeries,
+      item.productCode,
+      item.machineId,
+      item.recipeId,
+    ].some(value => String(value || "").toLowerCase().includes(normalizedCycleFilter))),
+  );
+
+  useEffect(() => {
+    if (candidate && !comparableCycles.some(item => item.correlationId === candidate)) {
+      setCandidate("");
+    }
+  }, [candidate, comparableCycles]);
+
+  const cycleLabel = cycle => [
+    cycle.correlationId,
+    cycle.productSeries || cycle.productCode || "未标注产品",
+    cycle.machineId || "未标注设备",
+    cycle.completedAt ? new Date(cycle.completedAt).toLocaleString("zh-CN") : "",
+  ].filter(Boolean).join(" · ");
+
   async function compare(event) {
     event.preventDefault();
     setBusy(true);
@@ -2130,10 +2216,29 @@ export function CycleComparisonPage() {
       const baselineCycleId = baseline.trim();
       setResult(await postJson("/api/v1/cycle-comparisons", {
         baselineCycleId,
-        cycleIds: [baselineCycleId, candidate.trim()],
+        cycleIds: [baselineCycleId, candidate],
       }));
     } catch (requestError) {
       setResult(null);
+      setError(requestError.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function createHypotheses() {
+    if (!researchProjectId || !result) return;
+    setBusy(true);
+    try {
+      const created = await postJson(
+        `/api/v1/research-projects/${researchProjectId}/hypotheses/from-cycle-comparison`,
+        {
+          baselineCycleId: result.baselineCycleId,
+          cycleIds: comparedCycles.map(item => item.correlationId),
+          maximumHypotheses: 3,
+        },
+      );
+      notify(`已将周期比较转为 ${created.length} 条候选假设；请补充验证标准后再让优化器设计实验。`);
+    } catch (requestError) {
       setError(requestError.message);
     } finally {
       setBusy(false);
@@ -2159,14 +2264,20 @@ export function CycleComparisonPage() {
     })
     .slice(0, 30), [result]);
   return (
-    <Page title="历史对比" description="把同类运行按阶段对齐，检查参数与结果差异。">
+    <Page title="周期对比与候选原因" description="从已完成的同类运行中选择基准和对比对象，按阶段对齐后形成待验证的原因假设。">
       {error && <Alert tone="danger">{error}</Alert>}
-      <Card title="选择周期">
+      <Card title="选择可比较的生产运行" description="先选择基准运行；系统会优先列出同一产品系列的已完成运行，避免把不相干的批次放在一起比较。">
+        <div className="mb-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+          <Field label="筛选运行" hint="可按运行号、产品、设备或配方筛选；这是查找，不是录入周期编号。"><Input value={cycleFilter} onChange={event => setCycleFilter(event.target.value)} placeholder="例如：产品系列、设备编号或运行号" /></Field>
+          <p className="pb-2 text-sm text-slate-500">显示 {visibleCycles.length} / {cycles.length} 条已完成运行</p>
+        </div>
         <form className="grid gap-3 md:grid-cols-[1fr_1fr_auto]" onSubmit={compare}>
-          <Field label="基准周期"><Input value={baseline} onChange={event => setBaseline(event.target.value)} required /></Field>
-          <Field label="对比周期"><Input value={candidate} onChange={event => setCandidate(event.target.value)} required /></Field>
-          <Button variant="primary" type="submit" className="self-end" disabled={busy}>{busy ? "正在对比…" : "开始对比"}</Button>
+          <Field label="基准运行" hint="通常选择质量异常、规格偏离或需要解释的一次运行。"><Select value={baseline} onChange={event => setBaseline(event.target.value)} required disabled={catalogLoading || !cycles.length}><option value="">选择已完成运行</option>{baseline && !cycles.some(item => item.correlationId === baseline) && <option value={baseline}>{baseline}（来自当前页面链接）</option>}{visibleCycles.map(cycle => <option key={cycle.correlationId} value={cycle.correlationId}>{cycleLabel(cycle)}</option>)}</Select></Field>
+          <Field label="对比运行" hint={baselineCycle?.productSeries ? `仅显示产品系列“${baselineCycle.productSeries}”的运行。` : baselineCycle ? `该运行未标注产品系列，暂按设备“${baselineCycle.machineId || "未标注"}”筛选。` : "请选择基准运行后再选择对比对象。"}><Select value={candidate} onChange={event => setCandidate(event.target.value)} required disabled={!baseline || catalogLoading}><option value="">选择同类运行</option>{comparableCycles.map(cycle => <option key={cycle.correlationId} value={cycle.correlationId}>{cycleLabel(cycle)}</option>)}</Select></Field>
+          <Button variant="primary" type="submit" className="self-end" disabled={busy || !baseline || !candidate}>{busy ? "正在对比…" : "开始周期对比"}</Button>
         </form>
+        {catalogLoading && <p className="mt-3 text-sm text-slate-500">正在读取可比较的已完成运行…</p>}
+        {!catalogLoading && cycles.length === 0 && <Alert tone="warning" title="暂无可选择的运行">需要至少两条已完成且上下文完整的生产运行，才能开始周期对比。</Alert>}
       </Card>
       {result ? (
         <>
@@ -2193,6 +2304,12 @@ export function CycleComparisonPage() {
               ]}
             />
           </Card>
+          <Card title="将追因结果带入研发" description="系统只把有证据的关联转为候选假设；因果关系仍需后续受控实验验证。">
+            <div className="grid gap-3 md:grid-cols-[1fr_auto]">
+              <Field label="研发项目"><Select value={researchProjectId} onChange={event => setResearchProjectId(event.target.value)}><option value="">选择研发项目</option>{researchProjects.filter(item => !["completed", "archived"].includes(item.status)).map(item => <option key={item.projectId} value={item.projectId}>{item.name}</option>)}</Select></Field>
+              <Button className="self-end" disabled={!researchProjectId || busy} onClick={createHypotheses}>生成候选假设</Button>
+            </div>
+          </Card>
           <Card title="信号差异" description="按变化幅度列出前 30 项，便于快速定位阶段和参数差异。">
             {signalRows.length ? (
               <DataTable
@@ -2211,7 +2328,7 @@ export function CycleComparisonPage() {
             ) : <EmptyState title="暂无可比信号" description="所选周期还没有可用于阶段对比的信号特征。" />}
           </Card>
         </>
-      ) : <EmptyState title="尚未执行对比" description="填写基准周期和对比周期后开始。" />}
+      ) : <EmptyState title="尚未执行周期对比" description="从下拉列表选择基准运行和同类对比运行后开始；系统会保留数据可用性和阶段完整性证据。" />}
     </Page>
   );
 }
@@ -2411,13 +2528,13 @@ function RegistryPage({ definition }) {
         : <Button variant="primary" onClick={openCreate}>{definition.createLabel || "创建新版本"}</Button>}
     >
       {definition.kind === "acquisitionProfile" && (
-        <Card title="设备接入进度" description="完成采集任务并发布后，设备会自动出现在“设备与对象”和周期记录中。">
+        <Card title="设备接入进度" description="完成采集任务并发布后，设备会自动出现在“工业对象”和运行记录中。">
           <div className="grid gap-4 md:grid-cols-4">
             {[
               ["1", "现场节点在线", "确认设备所在节点能够正常上报心跳。", "/edges", "查看节点"],
               ["2", "选择数据模型", "数据模型决定要采集哪些工艺量。", "/configuration/process-data-models", "查看模型"],
               ["3", "配置并发布", "选择设备连接方式并映射实际数据项。", null, `${rows.filter(row => row.status === "published").length} 个已发布`],
-              ["4", "确认数据到达", "在设备与对象中确认设备、样本和最后活动时间。", "/explorer", "查看设备与对象"],
+              ["4", "确认数据到达", "在工业对象中确认设备、样本和最后活动时间。", "/explorer", "查看工业对象"],
             ].map(([number, title, text, path, action]) => (
               <div key={number} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                 <div className="flex items-center gap-2">

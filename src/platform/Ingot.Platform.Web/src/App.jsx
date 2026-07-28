@@ -2,9 +2,7 @@ import { Dialog, DialogBackdrop, DialogPanel, Menu, MenuButton, MenuItem, MenuIt
 import {
   BoltIcon,
   BeakerIcon,
-  ChartBarIcon,
   CircleStackIcon,
-  ClipboardDocumentCheckIcon,
   Cog6ToothIcon,
   MagnifyingGlassIcon,
   RectangleGroupIcon,
@@ -12,7 +10,7 @@ import {
   WrenchScrewdriverIcon,
   XMarkIcon,
 } from "@heroicons/react/24/outline";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { getAuthToken, getJson, postJson, setAuthToken } from "./api/http";
 import * as Pages from "./pages";
@@ -20,73 +18,65 @@ import { cx, ToastHost } from "./ui/components";
 
 const sections = [
   {
-    id: "research", label: "工艺研发", icon: BeakerIcon, path: "/research-projects", items: [
-      ["/research-projects", "研发项目"], ["/chat", "AI 研发助手"], ["/research-assets", "研发资产"],
+    id: "workbench", label: "决策工作台", icon: BoltIcon, path: "/workbench", items: [
+      ["/workbench", "运行概览"], ["/cycles", "运行记录"],
+      ["/inspections", "质量任务"], ["/events", "生产事件"],
     ],
   },
   {
-    id: "operations", label: "运行与追溯", icon: BoltIcon, path: "/cycles", items: [
-      ["/cycles", "运行记录"], ["/events", "生产事件"], ["/production/changeover", "生产切换"],
-      ["/production/tooling-installations", "工装装卸"],
+    id: "research", label: "洞察与优化", icon: BeakerIcon, path: "/research-projects", items: [
+      ["/research-projects", "优化项目"], ["/comparisons", "周期对比与验证"],
+      ["/quality-analysis", "质量洞察"], ["/chat", "AI 研发助手"],
     ],
   },
   {
-    id: "quality", label: "质量管理", icon: ClipboardDocumentCheckIcon, path: "/inspections", items: [
-      ["/inspections", "质量任务"], ["/quality-analysis", "质量分析"],
-      ["/configuration/inspection-definitions", "检测定义"], ["/configuration/quality-plans", "质量方案"],
+    id: "context", label: "工业上下文", icon: CircleStackIcon, path: "/explorer", items: [
+      ["/explorer", "工业对象"], ["/data-quality", "数据可信度"],
+      ["/configuration/process-analysis-plans", "分析语义"], ["/configuration/process-data-models", "工艺数据模型"],
+      ["/configuration/recipe-versions", "配方版本"], ["/configuration/inspection-definitions", "检测定义"],
+      ["/configuration/quality-plans", "质量方案"],
     ],
   },
   {
-    id: "analysis", label: "分析中心", icon: ChartBarIcon, path: "/comparisons", items: [
-      ["/comparisons", "历史对比"], ["/data-quality", "数据健康"],
-      ["/configuration/process-analysis-plans", "分析方案"],
-    ],
-  },
-  {
-    id: "data", label: "数据资产", icon: CircleStackIcon, path: "/explorer", items: [
-      ["/explorer", "设备与对象"], ["/configuration/process-data-models", "工艺数据模型"],
-      ["/configuration/recipe-versions", "配方版本"], ["/configuration/acquisition-profiles", "设备采集"],
-      ["/edges", "现场节点"],
-    ],
-  },
-  {
-    id: "tooling", label: "工装管理", icon: WrenchScrewdriverIcon, path: "/configuration/components", items: [
+    id: "implementation", label: "连接与实施", icon: WrenchScrewdriverIcon, path: "/edges", items: [
+      ["/edges", "现场节点"], ["/configuration/acquisition-profiles", "数据连接"],
+      ["/production/changeover", "生产上下文"], ["/production/tooling-installations", "工装装卸"],
       ["/configuration/component-types", "组件类型"], ["/configuration/components", "组件台账"],
       ["/configuration/tooling-types", "工装类型"], ["/configuration/tooling-assemblies", "工装组合"],
     ],
   },
   {
-    id: "administration", label: "系统管理", icon: Cog6ToothIcon, path: "/platform-metrics", items: [
+    id: "administration", label: "系统", icon: Cog6ToothIcon, path: "/platform-metrics", items: [
       ["/platform-metrics", "平台运行状态"], ["/users", "用户与权限"], ["/subscriptions", "事件订阅"], ["/logs", "运行日志"],
     ],
   },
 ];
 
 const pageDetails = {
-  "/research-projects": ["工艺研发项目", "从目标、假设和实验推进到经过验证的工艺窗口"],
-  "/workbench": ["运行工作台", "生产、质量与数据状态"],
+  "/research-projects": ["工艺优化工作台", "从问题、证据与实验推进到经过验证的工艺窗口"],
+  "/workbench": ["工业决策工作台", "实时运行、质量、数据可信度与优化行动的统一入口"],
   "/chat": ["AI 研发助手", "结合实验、过程数据、机理和知识推进研发任务"],
   "/research-assets": ["研发资产", "查看项目可复用的数据集、模型、机理和知识"],
-  "/explorer": ["设备与对象", "查找已接入设备及其上报的生产对象"],
+  "/explorer": ["工业对象", "以设备、工件和运行对象组织有业务语义的工业数据"],
   "/cycles": ["运行记录", "查看生产周期及其数据、工艺与质量上下文"],
   "/events": ["生产事件", "查询、追溯并关联运行上下文"],
-  "/production/changeover": ["生产切换", "让设备、产品、配方和已装工装对接下来的周期生效"],
+  "/production/changeover": ["生产上下文", "让设备、产品、配方和已装工装对接下来的周期生效"],
   "/production/tooling-installations": ["工装装卸", "记录工装组合版本在设备上的装入与卸下区间"],
   "/inspections": ["质量任务", "处理视觉检查、人工质检与原图复核"],
-  "/quality-analysis": ["质量分析", "按产品、配方、运行对象和分析范围查看质量结果"],
-  "/comparisons": ["历史对比", "比较同类生产周期、运行段或时间窗口"],
-  "/data-quality": ["数据健康", "检查运行对象的数据范围、采样连续性与周期完整性"],
-  "/configuration/process-analysis-plans": ["分析方案", "配置分析范围、对齐方式、质量分组和数据项"],
+  "/quality-analysis": ["质量洞察", "按产品、配方、运行对象和分析范围查看质量结果"],
+  "/comparisons": ["周期对比与验证", "比较同类生产周期、运行段或时间窗口，生成待验证的候选原因"],
+  "/data-quality": ["数据可信度", "检查运行对象的数据范围、采样连续性与周期完整性"],
+  "/configuration/process-analysis-plans": ["分析语义", "配置分析范围、对齐方式、质量分组和数据项"],
   "/configuration/process-data-models": ["工艺数据模型", "定义采集数据项、配方参数结构和工艺阶段"],
   "/configuration/recipe-versions": ["配方版本", "维护引用数据模型的完整配方有效值"],
-  "/configuration/acquisition-profiles": ["设备采集", "选择现场节点、设备和采集方式，让数据持续进入平台"],
+  "/configuration/acquisition-profiles": ["数据连接", "选择现场节点、设备和采集方式，让数据持续进入平台"],
   "/configuration/inspection-definitions": ["检测定义", "定义要检测的特性、录入类型和判定规则"],
   "/configuration/quality-plans": ["质量方案", "配置产品适用的检测项目与复核规则"],
   "/configuration/component-types": ["组件类型", "配置组件台账的分类来源"],
   "/configuration/components": ["组件台账", "登记可更换、复用和追溯的物理组件"],
   "/configuration/tooling-types": ["工装类型", "配置装配位置及允许的组件类型"],
   "/configuration/tooling-assemblies": ["工装组合", "维护工装身份与不可变组件组合版本"],
-  "/edges": ["现场节点", "查看负责连接设备并上报数据的现场节点"],
+  "/edges": ["现场节点", "查看负责连接设备、仪器、系统并上报数据的现场节点"],
   "/platform-metrics": ["平台运行状态", "确认中心服务、现场节点和数据上行是否正常"],
   "/users": ["用户与权限", "管理本地账户、角色和停用状态"],
   "/subscriptions": ["事件订阅", "维护向外部系统投递的事件订阅"],
@@ -100,10 +90,18 @@ const roleLabels = {
   "process.engineer": "工艺工程师",
 };
 
+const globalSearchEntries = sections.flatMap(section => section.items.map(([path, label]) => ({
+  path,
+  label,
+  section: section.label,
+  description: pageDetails[path]?.[1] || "打开功能页面",
+})));
+
 export default function App() {
   const location = useLocation();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [globalSearchOpen, setGlobalSearchOpen] = useState(false);
   const [authState, setAuthState] = useState("checking");
   const [identity, setIdentity] = useState(null);
 
@@ -134,6 +132,17 @@ export default function App() {
       alive = false;
       window.removeEventListener("ingot:unauthorized", handleUnauthorized);
     };
+  }, []);
+
+  useEffect(() => {
+    function handleShortcut(event) {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setGlobalSearchOpen(true);
+      }
+    }
+    window.addEventListener("keydown", handleShortcut);
+    return () => window.removeEventListener("keydown", handleShortcut);
   }, []);
 
   async function logout() {
@@ -173,13 +182,13 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
       <header className="fixed inset-x-0 top-0 z-50 flex h-16 items-stretch border-b border-slate-200 bg-white/95 shadow-sm backdrop-blur">
-        <button className="flex w-16 shrink-0 items-center gap-3 border-r border-slate-100 px-3 text-left sm:w-55 sm:px-5" onClick={() => navigate("/research-projects")}>
+        <button className="flex w-16 shrink-0 items-center gap-3 border-r border-slate-100 px-3 text-left sm:w-55 sm:px-5" onClick={() => navigate("/workbench")}>
           <span className="grid size-9 place-items-center rounded-xl bg-amber-50 ring-1 ring-amber-200">
             <img src="/ingot-mark.svg" alt="" className="size-7" />
           </span>
           <span className="hidden sm:grid">
             <strong className="text-base leading-5 text-slate-950">Ingot</strong>
-            <small className="text-[10px] text-slate-500">AI 工艺研发系统</small>
+            <small className="text-[10px] text-slate-500">工业数据与工艺决策平台</small>
           </span>
         </button>
         <Menu as="div" className="relative flex min-w-0 flex-1 xl:hidden">
@@ -227,8 +236,8 @@ export default function App() {
             );
           })}
         </nav>
-        <button className="hidden items-center gap-2 border-l border-slate-100 px-4 text-sm text-slate-600 hover:bg-slate-50 md:flex" onClick={() => navigate("/explorer", { state: { focusSearch: true } })}>
-          <MagnifyingGlassIcon className="size-5" />搜索
+        <button className="flex items-center gap-2 border-l border-slate-100 px-3 text-sm text-slate-600 hover:bg-slate-50 sm:px-4" onClick={() => setGlobalSearchOpen(true)} aria-label="打开全局搜索" aria-keyshortcuts="Control+K Meta+K">
+          <MagnifyingGlassIcon className="size-5" /><span className="hidden lg:inline">全局搜索</span><kbd className="hidden rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] text-slate-400 2xl:inline">⌘K</kbd>
         </button>
         <Menu as="div" className="relative flex border-l border-slate-100">
           <MenuButton className="grid w-14 place-items-center text-slate-600 hover:bg-slate-50" aria-label="用户菜单">
@@ -300,15 +309,68 @@ export default function App() {
           </nav>
         </DialogPanel>
       </Dialog>
+      <GlobalSearchDialog
+        open={globalSearchOpen}
+        onClose={() => setGlobalSearchOpen(false)}
+        navigate={navigate}
+      />
       <ToastHost />
     </div>
+  );
+}
+
+function GlobalSearchDialog({ open, onClose, navigate }) {
+  const [query, setQuery] = useState("");
+  const inputRef = useRef(null);
+  useEffect(() => {
+    if (!open) return;
+    setQuery("");
+    window.setTimeout(() => inputRef.current?.focus(), 0);
+  }, [open]);
+  const results = useMemo(() => {
+    const keyword = query.trim().toLowerCase();
+    if (!keyword) return globalSearchEntries;
+    return globalSearchEntries.filter(item => `${item.label} ${item.section} ${item.description}`.toLowerCase().includes(keyword));
+  }, [query]);
+  function select(path) {
+    onClose();
+    navigate(path);
+  }
+  return (
+    <Dialog open={open} onClose={onClose} className="relative z-100">
+      <DialogBackdrop className="fixed inset-0 bg-slate-950/35 backdrop-blur-sm" />
+      <div className="fixed inset-0 overflow-y-auto p-4 pt-[12vh] sm:p-6 sm:pt-[14vh]">
+        <DialogPanel className="mx-auto w-full max-w-2xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+          <div className="border-b border-slate-100 p-4 sm:p-5">
+            <p className="text-sm font-semibold text-slate-950">全局搜索</p>
+            <p className="mt-1 text-xs text-slate-500">查找研发、追因、生产、质量、接入和系统功能。</p>
+            <input
+              ref={inputRef}
+              value={query}
+              onChange={event => setQuery(event.target.value)}
+              placeholder="例如：研发项目、历史对比、设备采集、运行记录"
+              className="mt-4 min-h-11 w-full rounded-xl border border-slate-300 bg-slate-50 px-4 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-3 focus:ring-blue-100"
+            />
+          </div>
+          <div className="max-h-[55vh] overflow-y-auto p-2">
+            {results.length ? results.map(item => (
+              <button key={item.path} type="button" onClick={() => select(item.path)} className="flex w-full items-start gap-3 rounded-xl px-3 py-3 text-left hover:bg-blue-50 focus:bg-blue-50 focus:outline-none">
+                <span className="mt-0.5 rounded-md bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-600">{item.section}</span>
+                <span className="min-w-0"><span className="block text-sm font-medium text-slate-900">{item.label}</span><span className="mt-0.5 block text-xs leading-5 text-slate-500">{item.description}</span></span>
+              </button>
+            )) : <div className="px-4 py-10 text-center text-sm text-slate-500">没有匹配的功能。请换一个关键词。</div>}
+          </div>
+          <div className="flex items-center justify-between border-t border-slate-100 px-5 py-3 text-xs text-slate-500"><span>搜索用于定位产品功能，不会把你直接带到某个数据资产。</span><span>Esc 关闭</span></div>
+        </DialogPanel>
+      </div>
+    </Dialog>
   );
 }
 
 function AppRoutes() {
   return (
     <Routes>
-      <Route path="/" element={<Navigate to="/research-projects" replace />} />
+      <Route path="/" element={<Navigate to="/workbench" replace />} />
       <Route path="/research-projects" element={<Pages.ResearchProjectsPage />} />
       <Route path="/workbench" element={<Pages.WorkbenchPage />} />
       <Route path="/chat" element={<Pages.ChatPage />} />

@@ -18,8 +18,12 @@ const repositoryDir = path.resolve(docsDir, "..");
 const repositoryUrl = "https://github.com/liuweichaox/Ingot";
 const publicSlugs = [
   "index",
+  "getting-started",
   "design",
+  "optimization",
+  "data-connection",
   "rollout",
+  "deployment",
   "faq",
 ] as const;
 const publicFiles = new Set(publicSlugs.flatMap((slug) =>
@@ -42,8 +46,9 @@ export const docs: Doc[] = files.map((file) => {
 });
 
 export const groups = [
-  { key: "start", zh: "了解 Ingot", en: "Understand Ingot", slugs: ["", "design"] },
-  { key: "adopt", zh: "落地与验证", en: "Rollout and validation", slugs: ["rollout", "faq"] },
+  { key: "start", zh: "开始使用", en: "Get started", slugs: ["", "getting-started"] },
+  { key: "core", zh: "核心设计", en: "Core design", slugs: ["design", "optimization", "data-connection"] },
+  { key: "operate", zh: "验证与运行", en: "Validate and operate", slugs: ["rollout", "deployment", "faq"] },
 ];
 
 export const routeFor = (lang: Lang, slug: string) => `/${lang}${slug ? `/${slug}` : ""}`;

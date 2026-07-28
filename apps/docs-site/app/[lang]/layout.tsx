@@ -17,8 +17,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       template: lang === "zh" ? "%s · Ingot 文档" : "%s · Ingot Documentation",
     },
     description: lang === "zh"
-      ? "了解 Ingot 如何融合实验数据、实时过程数据、物理机理和专家知识，辅助工艺工程师缩短工艺研发周期"
-      : "Learn how Ingot fuses experimental data, real-time process data, physical mechanisms, and expert knowledge to shorten process R&D cycles",
+      ? "了解 Ingot 如何把 PLC 周期、真实过程轨迹和检验结果转化为下一组可验证的工艺参数"
+      : "Learn how Ingot turns PLC cycles, realized trajectories, and inspections into the next verifiable process experiment",
     robots: { index: true, follow: true },
   };
 }

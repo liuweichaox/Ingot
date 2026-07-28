@@ -1,7 +1,11 @@
 using Ingot.Contracts.ProcessResearch;
+using Ingot.Contracts.Events;
 using Ingot.Platform.Api.Agents;
+using Ingot.Platform.Infrastructure.Cycles;
 using Ingot.Platform.Infrastructure.ProcessResearch;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Cryptography;
+using System.Text.Json;
 
 namespace Ingot.Platform.Api.Controllers;
 
@@ -10,6 +14,9 @@ namespace Ingot.Platform.Api.Controllers;
 public sealed class ResearchProjectsController(
     IProcessResearchStore store,
     ProcessResearchWorkflow workflow,
+    ResearchExperimentOptimizer experimentOptimizer,
+    IResearchObservationAssembler observationAssembler,
+    ICycleComparisonService cycleComparisonService,
     PlatformUserResolver userResolver) : ControllerBase
 {
     [HttpGet]
@@ -104,6 +111,83 @@ public sealed class ResearchProjectsController(
                 ct).ConfigureAwait(false)),
             ct);
 
+    [HttpPost("{projectId:guid}/hypotheses/from-cycle-comparison")]
+    public Task<IActionResult> ProposeHypothesesFromCycleComparison(
+        Guid projectId,
+        [FromBody] ResearchHypothesisFromCycleComparisonRequest request,
+        CancellationToken ct)
+        => ExecuteForProjectAsync(
+            projectId,
+            true,
+            async identity =>
+            {
+                var baselineCycleId = request.BaselineCycleId?.Trim();
+                var cycleIds = request.CycleIds
+                    .Where(static value => !string.IsNullOrWhiteSpace(value))
+                    .Select(static value => value.Trim())
+                    .Distinct(StringComparer.Ordinal)
+                    .ToArray();
+                if (string.IsNullOrWhiteSpace(baselineCycleId) || cycleIds.Length < 2 ||
+                    !cycleIds.Contains(baselineCycleId, StringComparer.Ordinal) ||
+                    request.MaximumHypotheses is < 1 or > 10)
+                {
+                    throw new ProcessResearchRuleException(
+                        "请选择包含基准周期的至少两个周期，并指定 1 到 10 条候选假设。");
+                }
+                var comparison = await cycleComparisonService.CompareSelectedAsync(
+                    baselineCycleId,
+                    cycleIds,
+                    ct).ConfigureAwait(false)
+                    ?? throw new ProcessResearchRuleException("所选周期不存在，无法形成追因证据。");
+                var project = await store.GetProjectAsync(projectId, ct).ConfigureAwait(false)
+                    ?? throw new ProcessResearchRuleException("研发项目不存在。");
+                var contentHash = Convert.ToHexStringLower(SHA256.HashData(
+                    JsonSerializer.SerializeToUtf8Bytes(comparison)));
+                var evidence = new EvidenceReference
+                {
+                    EvidenceId = Guid.CreateVersion7(),
+                    ProjectId = projectId,
+                    Kind = EvidenceKinds.CycleComparison,
+                    ReferenceId = $"{comparison.BaselineCycleId}:{contentHash[..16]}",
+                    Summary = $"周期比较：{comparison.BaselineCycleId} 与 {comparison.HistoricalCycles.Count} 条历史周期。",
+                    ContentHash = contentHash,
+                    CreatedAt = DateTimeOffset.UtcNow
+                };
+                var candidates = comparison.QualityAssociations
+                    .Where(static value => value.EvidenceLevel is "stable" or "exploratory")
+                    .OrderByDescending(static value => value.CandidateScore)
+                    .Take(request.MaximumHypotheses)
+                    .ToArray();
+                if (candidates.Length == 0)
+                    throw new ProcessResearchRuleException("比较结果证据不足，不能自动提出候选原因。");
+                var knownVariables = project.Variables.Select(static value => value.Code)
+                    .ToHashSet(StringComparer.Ordinal);
+                var created = new List<ResearchHypothesis>();
+                foreach (var candidate in candidates)
+                {
+                    var variableCodes = new[] { candidate.SignalCode, candidate.FeatureCode }
+                        .Where(knownVariables.Contains)
+                        .Distinct(StringComparer.Ordinal)
+                        .ToArray();
+                    created.Add(await workflow.SaveHypothesisAsync(
+                        projectId,
+                        new ResearchHypothesis
+                        {
+                            Statement = $"{candidate.SignalCode}.{candidate.FeatureCode} 的过程差异可能影响项目质量目标。",
+                            Rationale = $"周期比较给出 {candidate.EvidenceLevel} 证据，候选分数 {candidate.CandidateScore:F3}；通过受控实验验证，不能将该关联直接当作因果结论。",
+                            VariableCodes = variableCodes,
+                            PossibleConfounders = candidate.PossibleConfounders,
+                            Confidence = candidate.EvidenceLevel == "stable" ? 0.65 : 0.35,
+                            SupportingEvidence = [evidence with { EvidenceId = Guid.CreateVersion7() }],
+                            Applicability = $"产品系列：{comparison.ProductSeries}；分析范围：{comparison.AnalysisScope}。"
+                        },
+                        identity.UserId,
+                        ct).ConfigureAwait(false));
+                }
+                return Ok(created);
+            },
+            ct);
+
     [HttpPost("{projectId:guid}/experiments")]
     public Task<IActionResult> CreateExperiment(
         Guid projectId,
@@ -158,6 +242,47 @@ public sealed class ResearchProjectsController(
                 ct).ConfigureAwait(false)),
             ct).ConfigureAwait(false);
     }
+
+    [HttpPost("{projectId:guid}/optimize")]
+    public Task<IActionResult> CreateOptimizedExperiment(
+        Guid projectId,
+        [FromBody] ResearchOptimizationRequest request,
+        CancellationToken ct)
+        => ExecuteForProjectAsync(
+            projectId,
+            true,
+            async identity => Ok(await experimentOptimizer.CreateNextExperimentAsync(
+                projectId,
+                request,
+                identity.UserId,
+                ct).ConfigureAwait(false)),
+            ct);
+
+    [HttpGet("{projectId:guid}/experiment-readiness")]
+    public Task<IActionResult> GetExperimentReadiness(
+        Guid projectId,
+        CancellationToken ct)
+        => ExecuteForProjectAsync(
+            projectId,
+            false,
+            async _ =>
+            {
+                var project = await store.GetProjectAsync(projectId, ct).ConfigureAwait(false)
+                    ?? throw new ProcessResearchRuleException("研发项目不存在。");
+                var experiments = await store.ListExperimentsAsync(projectId, ct)
+                    .ConfigureAwait(false);
+                var assembly = await observationAssembler.AssembleAsync(
+                    project, experiments, ct).ConfigureAwait(false);
+                return Ok(new
+                {
+                    assembly.CandidateRunCount,
+                    assembly.ValidObservationCount,
+                    excludedObservationCount =
+                        assembly.Observations.Count - assembly.ValidObservationCount,
+                    observations = assembly.Observations
+                });
+            },
+            ct);
 
     [HttpPost("{projectId:guid}/process-windows")]
     public Task<IActionResult> SaveProcessWindow(
@@ -269,6 +394,13 @@ public sealed class ResearchProjectsController(
         catch (ProcessResearchRuleException exception)
         {
             return new ConflictObjectResult(new { error = exception.Message });
+        }
+        catch (ProcessOptimizerUnavailableException exception)
+        {
+            return new ObjectResult(new { error = exception.Message })
+            {
+                StatusCode = StatusCodes.Status503ServiceUnavailable
+            };
         }
     }
 }

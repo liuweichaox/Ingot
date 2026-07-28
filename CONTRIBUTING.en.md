@@ -2,109 +2,91 @@
 
 [简体中文](CONTRIBUTING.md)
 
-Thank you for contributing code, tests, documentation, or design feedback. Ingot combines experimental data, real-time process data, physical mechanisms, and expert knowledge to help process engineers design experiments, discover relationships, optimize parameters, and validate process windows faster.
+Thank you for helping Ingot optimize manufacturing processes with fewer real experiments. Contributions are welcome across code, equipment adapters, algorithms, anonymized replay data, tests, documentation, and process knowledge.
 
-Every change should advance that goal and keep the Chinese and English documentation synchronized.
+Participation follows the [Code of Conduct](CODE_OF_CONDUCT.md).
 
-## Engineering principles
+## Before starting
 
-- Organize objectives, experiments, process data, analysis findings, validation results, and reusable knowledge around process R&D projects.
-- Keep source data, calculations, model versions, and supporting evidence traceable and reproducible.
-- Treat data acquisition as a native foundation. Edge drivers implement common protocols; versioned device contracts and adapters handle equipment-specific differences.
-- Keep `Ingot.Domain`, `Ingot.Edge.Application`, and `Ingot.Agent` independent of databases, model providers, and equipment protocols.
-- Connect physical mechanisms, statistical analysis, optimization algorithms, and expert rules through stable contracts instead of hard-coding one method into the core workflow.
-- AI interprets tasks, organizes analysis, and explains results. Deterministic code owns validation, authorization, execution, operating limits, and evidence links.
-- Process engineers retain approval authority for experiments, parameter releases, and process-window confirmation.
-- Public contracts use explicit types, units, time semantics, quality states, and versions rather than implicit compatibility.
+1. Search Issues for duplicates.
+2. For a substantial feature, open an Issue describing scenario, input, output, and validation.
+3. Report vulnerabilities privately under the [security policy](SECURITY.md).
+4. Never upload factory credentials, device addresses, customer data, or unauthorized experimental data.
 
-## Local environment
+## Development environment
 
 Requirements:
 
-- .NET SDK 10
-- Node.js 22.13 or later
-- Docker and Docker Compose
-
-Install dependencies:
+- .NET SDK 10;
+- Node.js 22.13+;
+- Python 3.11+;
+- Docker and Docker Compose.
 
 ```bash
 dotnet restore Ingot.sln
 npm --prefix src/platform/Ingot.Platform.Web ci
 npm --prefix apps/website ci
 npm --prefix apps/docs-site ci
+python -m pip install -e "optimizer[service]" pytest httpx
 ```
 
-See the repository-root `AGENTS.md` and each application's README for startup commands.
+## Engineering principles
 
-## Change requirements
+- Explain how a capability reduces experiments-to-specification or improves trust.
+- Keep one formal record for acquisition, inspection, experiments, and optimization.
+- Distinguish planned values, actual values, trajectories, and outcomes.
+- Retain model version, uncertainty, and provenance.
+- Never let an LLM generate numerical process settings.
+- Keep equipment protocols outside the core domain.
+- Never present simulation as real-process benefit.
+- Update bilingual README, documentation, and website for public capability changes.
 
-### Process R&D domain
+## Change workflow
 
-- Every new capability explains which stage of the process R&D loop it serves, along with its inputs, outputs, and validation method.
-- Use stable identifiers to relate experiments, samples, equipment, materials, recipes, process parameters, quality results, and analysis runs.
-- Key numbers and conclusions link to real data, calculation methods, run versions, and applicability conditions.
-- A process window expresses objectives, constraints, feasible regions, confidence, and validation status together.
+```bash
+git checkout -b feature/short-description
+```
 
-### Data acquisition and equipment adaptation
+During implementation:
 
-- Common protocol drivers own connection, reading, writing, subscription, reconnection, and error classification.
-- Device contracts own address maps, data types, units, scaling, timestamps, quality states, and semantic names.
-- The acquisition runtime owns buffering, deduplication, ordering, checkpoint recovery, observability, and safety boundaries.
-- New protocol or device support includes contract examples, simulation tests, recovery tests, and site-acceptance criteria.
-- Protocol- and vendor-specific models remain inside adapter boundaries and do not enter the process R&D domain model.
+- reproduce a bug with a test first;
+- cover success, rejection, and boundary paths;
+- include migration and recovery for database changes;
+- include deterministic seeds, baselines, and reproducible evaluation for algorithms;
+- keep UI in process-engineering language and avoid raw JSON editors.
 
-### AI, algorithms, and mechanisms
-
-- The core depends on `IModelClient`, `IAnalysisTool`, and other stable interfaces.
-- Model output is typed and deterministically validated before execution.
-- Analysis tools declare versions, input and output structures, unit requirements, timeouts, cancellation, resource limits, and provenance.
-- New algorithms include baseline comparisons, applicability assumptions, failure conditions, and reproducible experiments.
-- AI recommendations distinguish data facts, model inferences, and hypotheses that still require validation.
-
-### APIs and storage
-
-- API inputs are type-, tenant-, and authorization-validated at the boundary.
-- Database changes include migrations, indexes, concurrency rules, failure handling, and integration tests.
-- Experimental data, real-time process data, analysis artifacts, and knowledge entries retain source, time, version, and quality information.
-- Logs, metrics, and traces exclude secrets, full prompts, and sensitive business data.
-
-### Web and documentation
-
-- Organize pages around process-engineering workflows, not internal services or database structures.
-- Critical tasks have a clear entry point, current state, next action, completion feedback, and recovery path.
-- The website, README, and public documentation explain project value, core capabilities, operating model, and rollout validation; they are not API manuals.
-- Changes to public capabilities, terminology, or core workflows update the README, bilingual `docs/`, product website, and docs site together.
-- The product website describes implemented capabilities or clearly labels validation-stage capabilities, and it identifies sample data explicitly.
-
-## Testing
-
-Run the complete gate before submitting:
+Before submitting:
 
 ```bash
 ./scripts/verify.sh
 ```
 
-It covers:
-
-- .NET builds, unit tests, and integration tests;
-- Platform Web builds, tests, lint, and production dependency audits;
-- product and documentation site static builds, link tests, lint, and production dependency audits;
-- architecture dependencies, shell syntax, Compose configuration, and diff formatting.
-
-New behavior includes success, rejection, and authorization-boundary tests. Bug fixes first add a test that reproduces the defect.
+State checks not run when Docker or another runtime is unavailable.
 
 ## Pull requests
 
-1. Fork the repository and branch from the latest `main`.
-2. Keep the change focused and exclude unrelated formatting or refactors.
-3. Update implementation, tests, and affected bilingual documentation.
-4. Run `./scripts/verify.sh`.
-5. Open a pull request that states:
-   - the problem and objective;
-   - the effect on the process R&D workflow;
-   - public contract or data-model changes;
-   - security and authorization impact;
-   - verification results;
-   - deployment or configuration requirements.
+Include:
 
-Use [GitHub Issues](https://github.com/liuweichaox/Ingot/issues) for regular defects and feature requests. Do not open a public issue for a vulnerability; follow [SECURITY.md](SECURITY.md).
+- problem and real scenario;
+- solution and rejected alternatives;
+- public contract or data-model changes;
+- algorithm, equipment, and safety impact;
+- tests and replay results;
+- deployment or migration requirements;
+- screenshots for UI changes.
+
+Use concise imperative commits:
+
+```text
+feat(optimizer): add calibrated outcome constraints
+fix(edge): preserve FX3U cycle correlation after reconnect
+docs: document historical replay protocol
+```
+
+## High-value contribution areas
+
+- FX3U/MELSEC and other real equipment adapters;
+- optical-molding features and physical priors;
+- Bayesian optimization, transfer, and calibration;
+- anonymized real replay datasets and benchmarks;
+- field usability, diagnostics, and documentation.
