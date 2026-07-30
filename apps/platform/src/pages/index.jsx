@@ -725,7 +725,12 @@ function makeCycleQuery(filters, page, pageSize) {
 
 export function EventsPage() {
   const [urlParams] = useSearchParams();
-  const [filters, setFilters] = useState({ type: "", edgeId: "", correlationId: urlParams.get("cycleId") || "" });
+  const [filters, setFilters] = useState({
+    type: "",
+    edgeId: "",
+    subjectId: urlParams.get("subjectId") || "",
+    correlationId: urlParams.get("cycleId") || "",
+  });
   const [appliedFilters, setAppliedFilters] = useState(filters);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
@@ -760,9 +765,10 @@ export function EventsPage() {
       actions={<label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" checked={live} onChange={event => { setPage(1); setLive(event.target.checked); }} />实时追踪</label>}
     >
       <Card title="事件筛选">
-        <form className="grid gap-3 md:grid-cols-[1fr_1fr_1fr_auto]" onSubmit={event => { event.preventDefault(); setLive(false); setAppliedFilters(filters); setPage(1); setQuery(makeEventQuery(filters, 1, pageSize)); }}>
+        <form className="grid gap-3 md:grid-cols-2 xl:grid-cols-[1fr_1fr_1fr_1fr_auto]" onSubmit={event => { event.preventDefault(); setLive(false); setAppliedFilters(filters); setPage(1); setQuery(makeEventQuery(filters, 1, pageSize)); }}>
           <Field label="事件类型"><Input value={filters.type} onChange={event => setFilters({ ...filters, type: event.target.value })} placeholder="process.sample" /></Field>
           <Field label="采集节点"><Input value={filters.edgeId} onChange={event => setFilters({ ...filters, edgeId: event.target.value })} /></Field>
+          <Field label="工业对象"><Input value={filters.subjectId} onChange={event => setFilters({ ...filters, subjectId: event.target.value })} placeholder="设备或对象编号" /></Field>
           <Field label="周期号"><Input value={filters.correlationId} onChange={event => setFilters({ ...filters, correlationId: event.target.value })} /></Field>
           <Button variant="primary" type="submit" className="self-end"><MagnifyingGlassIcon className="size-4" />查询</Button>
         </form>
@@ -1062,54 +1068,146 @@ export function ObjectExplorerPage() {
   const objects = useApi("/api/v1/data-objects?limit=500");
   const rows = extractRows(objects.data);
   const [query, setQuery] = useState("");
+  const [selectedKey, setSelectedKey] = useState("");
   const filtered = useMemo(() => rows.filter(row => JSON.stringify(row).toLowerCase().includes(query.toLowerCase())), [query, rows]);
+  const rowKey = row => `${row.subjectType}:${row.subjectId}`;
+  const selected = filtered.find(row => rowKey(row) === selectedKey) || filtered[0] || null;
+  const objectTypeCount = new Set(rows.map(row => row.subjectType).filter(Boolean)).size;
+  const eventTotal = rows.reduce((total, row) => total + Number(row.eventCount || 0), 0);
+  const sampleTotal = rows.reduce((total, row) => total + Number(row.sampleCount || 0), 0);
+
+  useEffect(() => {
+    if (!selectedKey && rows.length) setSelectedKey(rowKey(rows[0]));
+  }, [rows, selectedKey]);
+
   return (
     <Page
       title="工业对象"
-      description="以设备和生产对象组织现场数据，查看它们持续上报的运行、事件与样本。"
+      description="从真实设备和生产对象出发，连续查看它的运行、事件、质量与数据健康。"
       actions={<Link className="inline-flex min-h-9 items-center rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700" to="/configuration/acquisition-profiles">接入设备</Link>}
     >
       {objects.error && <Alert tone="danger" title="工业对象暂不可用">{objects.error}</Alert>}
-      <WorkflowGuide
-        title="设备为什么会出现在这里"
-        description="这里不需要手工创建目录；设备开始上报数据后，平台会自动建立可追溯对象。"
-        steps={[
-          { title: "接入设备", description: "选择现场节点、通信方式和设备地址。", state: rows.length ? "done" : "current" },
-          { title: "开始采集", description: "现场节点读取数据并持续上报。", state: rows.some(row => Number(row.sampleCount) > 0) ? "done" : rows.length ? "current" : "upcoming" },
-          { title: "自动形成对象", description: "可在这里搜索设备、周期和其他业务对象。", state: rows.length ? "done" : "upcoming" },
-        ]}
-      />
-      <Card>
-        <Field label="筛选工业对象"><Input value={query} onChange={event => setQuery(event.target.value)} placeholder="输入设备编号、对象编号或现场节点" /></Field>
-      </Card>
       {objects.loading && !objects.data ? <LoadingCard /> : (
-        <Card
-          title="已发现的工业对象"
-          description={query.trim()
-            ? `找到 ${filtered.length} 个对象 · 共 ${objects.data?.total ?? rows.length} 个`
-            : `共 ${objects.data?.total ?? rows.length} 个对象`}
-        >
-          {filtered.length ? (
-            <DataTable
-              rows={filtered}
-              getRowKey={row => `${row.subjectType}:${row.subjectId}`}
-              columns={[
-                { key: "subjectType", label: "对象类型", render: value => <Badge tone="info">{objectTypeLabel(value)}</Badge> },
-                { key: "subjectId", label: "对象编号" },
-                { key: "edgeId", label: "采集节点" },
-                { key: "eventCount", label: "事件数", render: formatInteger },
-                { key: "sampleCount", label: "样本数", render: formatInteger },
-                { key: "lastObservedAt", label: "最后活动", render: formatTime },
-                { key: "latestEventType", label: "最新活动", render: eventTypeLabel },
+        rows.length ? (
+          <>
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              <Metric label="工业对象" value={objects.data?.total ?? rows.length} hint="已从现场数据自动识别" />
+              <Metric label="对象类型" value={objectTypeCount} hint="统一业务语义下的分类" />
+              <Metric label="累计事件" value={formatInteger(eventTotal)} hint="可追溯的运行与状态变化" />
+              <Metric label="累计样本" value={formatInteger(sampleTotal)} hint="已归属到对象的过程数据" />
+            </div>
+            <Card
+              title="对象目录"
+              description="选择一个对象，右侧会保留它的身份和业务入口。"
+            >
+              <div className="grid min-h-[520px] gap-5 xl:grid-cols-[minmax(280px,0.78fr)_minmax(0,1.5fr)]">
+                <section className="min-w-0 rounded-xl border border-slate-200 bg-slate-50/70 p-3" aria-label="工业对象列表">
+                  <Field label="搜索对象">
+                    <Input value={query} onChange={event => setQuery(event.target.value)} placeholder="设备编号、对象类型或采集节点" />
+                  </Field>
+                  <p className="mt-3 px-1 text-xs text-slate-500">
+                    {query.trim() ? `找到 ${filtered.length} 个对象` : `共 ${rows.length} 个对象`}
+                  </p>
+                  <div className="mt-2 grid max-h-[420px] gap-2 overflow-y-auto pr-1">
+                    {filtered.map(row => {
+                      const active = selected && rowKey(row) === rowKey(selected);
+                      return (
+                        <button
+                          key={rowKey(row)}
+                          type="button"
+                          aria-pressed={active}
+                          onClick={() => setSelectedKey(rowKey(row))}
+                          className={`rounded-xl border px-3 py-3 text-left transition ${active
+                            ? "border-blue-300 bg-white shadow-sm ring-2 ring-blue-100"
+                            : "border-transparent bg-white/70 hover:border-slate-200 hover:bg-white"}`}
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <Badge tone={active ? "info" : "neutral"}>{objectTypeLabel(row.subjectType)}</Badge>
+                            <span className="text-xs text-slate-400">{formatInteger(row.sampleCount)} 样本</span>
+                          </div>
+                          <p className="mt-2 truncate text-sm font-semibold text-slate-900">{row.subjectId}</p>
+                          <p className="mt-1 truncate text-xs text-slate-500">{row.edgeId || "未关联采集节点"}</p>
+                        </button>
+                      );
+                    })}
+                    {!filtered.length && (
+                      <EmptyState title="没有匹配的对象" description="请调整搜索条件后重试。" />
+                    )}
+                  </div>
+                </section>
+
+                {selected && (
+                  <section className="min-w-0 rounded-xl border border-slate-200 bg-white p-5" aria-live="polite">
+                    <div className="flex flex-col gap-3 border-b border-slate-100 pb-5 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0">
+                        <Badge tone="info">{objectTypeLabel(selected.subjectType)}</Badge>
+                        <h2 className="mt-3 break-words text-xl font-semibold text-slate-950">{selected.subjectId}</h2>
+                        <p className="mt-1 text-sm text-slate-500">对象详情与相关工作入口</p>
+                      </div>
+                      <span className="shrink-0 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700">
+                        已接收现场数据
+                      </span>
+                    </div>
+
+                    <div className="grid gap-3 py-5 sm:grid-cols-3">
+                      {[
+                        ["事件", formatInteger(selected.eventCount)],
+                        ["过程样本", formatInteger(selected.sampleCount)],
+                        ["最新活动", eventTypeLabel(selected.latestEventType)],
+                      ].map(([label, value]) => (
+                        <div key={label} className="rounded-xl bg-slate-50 p-4">
+                          <p className="text-xs font-medium text-slate-500">{label}</p>
+                          <p className="mt-2 break-words text-lg font-semibold text-slate-900">{value}</p>
+                        </div>
+                      ))}
+                    </div>
+
+                    <dl className="grid gap-x-6 gap-y-4 border-y border-slate-100 py-5 sm:grid-cols-2">
+                      <div><dt className="text-xs font-medium text-slate-500">对象类型</dt><dd className="mt-1 text-sm font-medium text-slate-800">{objectTypeLabel(selected.subjectType)}</dd></div>
+                      <div><dt className="text-xs font-medium text-slate-500">采集节点</dt><dd className="mt-1 break-words text-sm font-medium text-slate-800">{selected.edgeId || "未关联"}</dd></div>
+                      <div><dt className="text-xs font-medium text-slate-500">最后活动</dt><dd className="mt-1 text-sm font-medium text-slate-800">{formatTime(selected.lastObservedAt)}</dd></div>
+                      <div><dt className="text-xs font-medium text-slate-500">最后样本</dt><dd className="mt-1 text-sm font-medium text-slate-800">{formatTime(selected.lastSampleAt)}</dd></div>
+                    </dl>
+
+                    <div className="pt-5">
+                      <h3 className="text-sm font-semibold text-slate-900">在这个对象中继续工作</h3>
+                      <p className="mt-1 text-xs leading-5 text-slate-500">进入其他页面时保留当前对象，避免重新查找和填写编号。</p>
+                      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                        {[
+                          [`/cycles?machineId=${encodeURIComponent(selected.subjectId)}`, "运行记录", "查看该对象的生产周期与上下文"],
+                          [`/events?subjectId=${encodeURIComponent(selected.subjectId)}`, "事件时间线", "追溯该对象上报的事件与状态变化"],
+                          [`/quality-analysis?subjectType=${encodeURIComponent(selected.subjectType)}&subjectId=${encodeURIComponent(selected.subjectId)}`, "质量分析", "查看与该对象关联的检测结果"],
+                          [`/data-quality?subjectType=${encodeURIComponent(selected.subjectType)}&subjectId=${encodeURIComponent(selected.subjectId)}`, "数据健康", "确认样本范围、连续性和更新时间"],
+                        ].map(([to, label, description]) => (
+                          <Link key={label} to={to} className="rounded-xl border border-slate-200 p-4 transition hover:border-blue-300 hover:bg-blue-50/50">
+                            <p className="text-sm font-semibold text-blue-700">{label} →</p>
+                            <p className="mt-1 text-xs leading-5 text-slate-500">{description}</p>
+                          </Link>
+                        ))}
+                      </div>
+                    </div>
+                  </section>
+                )}
+              </div>
+            </Card>
+          </>
+        ) : (
+          <>
+            <WorkflowGuide
+              title="建立第一个工业对象"
+              description="这里不需要手工维护目录；设备开始上报数据后，平台会自动建立可追溯对象。"
+              steps={[
+                { title: "接入设备", description: "选择现场节点、通信方式和设备地址。", state: "current" },
+                { title: "开始采集", description: "现场节点读取数据并持续上报。", state: "upcoming" },
+                { title: "形成对象", description: "运行、事件和样本会归集到统一对象。", state: "upcoming" },
               ]}
             />
-          ) : (
             <EmptyState
-              title={query ? "没有匹配的设备或对象" : "尚未收到生产数据"}
-              description={query ? "请调整搜索条件后重试。" : "采集节点上报生产事件后，设备和生产对象会自动显示在这里。"}
+              title="尚未收到生产数据"
+              description="完成设备接入并开始采集后，对象会自动显示在这里。"
             />
-          )}
-        </Card>
+          </>
+        )
       )}
     </Page>
   );
@@ -2146,8 +2244,18 @@ function evaluateMeasurement(value, characteristic) {
 }
 
 export function QualityAnalysisPage() {
-  const [filters, setFilters] = useState({ productSeries: "", subjectType: "", subjectId: "" });
-  const [query, setQuery] = useState("limit=1000&offset=0");
+  const [searchParams] = useSearchParams();
+  const [filters, setFilters] = useState({
+    productSeries: "",
+    subjectType: searchParams.get("subjectType") || "",
+    subjectId: searchParams.get("subjectId") || "",
+  });
+  const [query, setQuery] = useState(() => {
+    const params = new URLSearchParams({ limit: "1000", offset: "0" });
+    if (searchParams.get("subjectType")) params.set("subjectType", searchParams.get("subjectType"));
+    if (searchParams.get("subjectId")) params.set("subjectId", searchParams.get("subjectId"));
+    return params.toString();
+  });
   const { data, loading, error } = useApi(`/api/v1/quality-analysis?${query}`);
   const records = extractRows(data);
   const summary = records.reduce((result, row) => {
@@ -2554,11 +2662,17 @@ export function CycleComparisonPage() {
 }
 
 export function DataQualityPage() {
+  const [params] = useSearchParams();
+  const query = new URLSearchParams({ limit: "200" });
+  if (params.get("subjectType")) query.set("subjectType", params.get("subjectType"));
+  if (params.get("subjectId")) query.set("subjectId", params.get("subjectId"));
   return (
     <ResourcePage
       title="数据健康"
-      description="检查对象数据范围、采样连续性和周期完整性。"
-      endpoint="/api/v1/data-objects?limit=200"
+      description={params.get("subjectId")
+        ? `检查对象 ${params.get("subjectId")} 的数据范围、采样连续性和周期完整性。`
+        : "检查对象数据范围、采样连续性和周期完整性。"}
+      endpoint={`/api/v1/data-objects?${query}`}
       getRowKey={row => `${row.subjectType}:${row.subjectId}`}
       columns={[
         { key: "subjectType", label: "对象类型", render: objectTypeLabel },

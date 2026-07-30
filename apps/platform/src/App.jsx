@@ -18,35 +18,35 @@ import { cx, ToastHost } from "./ui/components";
 
 const sections = [
   {
-    id: "workbench", label: "决策工作台", icon: BoltIcon, path: "/workbench", items: [
+    id: "workbench", label: "运营工作台", icon: BoltIcon, path: "/workbench", items: [
       ["/workbench", "运行概览"], ["/cycles", "运行记录"],
       ["/inspections", "质量任务"], ["/events", "生产事件"],
       ["/production/changeover", "生产上下文"], ["/production/tooling-installations", "工装装卸"],
     ],
   },
   {
-    id: "research", label: "洞察与优化", icon: BeakerIcon, path: "/research-projects", items: [
+    id: "research", label: "调查与优化", icon: BeakerIcon, path: "/research-projects", items: [
       ["/research-projects", "优化项目"], ["/comparisons", "周期对比与验证"],
       ["/quality-analysis", "质量洞察"], ["/chat", "AI 研发助手"],
     ],
   },
   {
-    id: "context", label: "工业上下文", icon: CircleStackIcon, path: "/explorer", items: [
-      ["/explorer", "工业对象"], ["/data-quality", "数据可信度"],
+    id: "context", label: "对象与模型", icon: CircleStackIcon, path: "/explorer", items: [
+      ["/explorer", "工业对象"], ["/data-quality", "数据健康"],
       ["/configuration/process-analysis-plans", "分析语义"], ["/configuration/process-data-models", "工艺数据模型"],
       ["/configuration/recipe-versions", "配方版本"], ["/configuration/inspection-definitions", "检测定义"],
       ["/configuration/quality-plans", "质量方案"],
     ],
   },
   {
-    id: "implementation", label: "连接与实施", icon: WrenchScrewdriverIcon, path: "/edges", items: [
+    id: "implementation", label: "接入与配置", icon: WrenchScrewdriverIcon, path: "/edges", items: [
       ["/edges", "现场节点"], ["/configuration/acquisition-profiles", "数据连接"],
       ["/configuration/component-types", "组件类型"], ["/configuration/components", "组件台账"],
       ["/configuration/tooling-types", "工装类型"], ["/configuration/tooling-assemblies", "工装组合"],
     ],
   },
   {
-    id: "administration", label: "系统", icon: Cog6ToothIcon, path: "/platform-metrics", items: [
+    id: "administration", label: "平台管理", icon: Cog6ToothIcon, path: "/platform-metrics", items: [
       ["/platform-metrics", "平台运行状态"], ["/users", "用户与权限"], ["/subscriptions", "事件订阅"], ["/logs", "运行日志"],
     ],
   },
@@ -57,7 +57,7 @@ const pageDetails = {
   "/workbench": ["工业决策工作台", "实时运行、质量、数据可信度与优化行动的统一入口"],
   "/chat": ["AI 研发助手", "结合实验、过程数据、机理和知识推进研发任务"],
   "/research-assets": ["研发资产", "查看项目可复用的数据集、模型、机理和知识"],
-  "/explorer": ["工业对象", "以设备、工件和运行对象组织有业务语义的工业数据"],
+  "/explorer": ["工业对象", "选择真实业务对象，再进入它的运行、事件、质量与数据健康视图"],
   "/cycles": ["运行记录", "查看生产周期及其数据、工艺与质量上下文"],
   "/events": ["生产事件", "查询、追溯并关联运行上下文"],
   "/production/changeover": ["生产上下文", "让设备、产品、配方和已装工装对接下来的周期生效"],

@@ -113,14 +113,15 @@ test("global search opens a cross-product command palette and table columns keep
 
 test("industrial object pages use the event summary contract and show an initial loading state", () => {
   assert.match(app, /\["\/explorer", "工业对象"\]/);
-  assert.match(app, /工业上下文/);
+  assert.match(app, /对象与模型/);
   assert.match(pages, /title="工业对象"/);
   assert.match(pages, /objects\.loading && !objects\.data \? <LoadingCard \/>/);
-  assert.match(pages, /key: "subjectType", label: "对象类型"/);
-  assert.match(pages, /key: "subjectId", label: "对象编号"/);
-  assert.match(pages, /key: "edgeId", label: "采集节点"/);
-  assert.match(pages, /key: "eventCount", label: "事件数"/);
-  assert.match(pages, /key: "sampleCount", label: "样本数"/);
+  assert.match(pages, /title="对象目录"/);
+  assert.match(pages, /在这个对象中继续工作/);
+  assert.match(pages, /\/cycles\?machineId=/);
+  assert.match(pages, /\/events\?subjectId=/);
+  assert.match(pages, /\/quality-analysis\?subjectType=/);
+  assert.match(pages, /\/data-quality\?subjectType=/);
   assert.doesNotMatch(pages, /key: "objectType", label: "对象类型"/);
 });
 
