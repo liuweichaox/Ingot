@@ -175,11 +175,103 @@ public sealed record OptimizerSuggestionResponse
     public bool StatePersisted { get; init; }
 }
 
+public sealed record ProcessDiagnosticFeatureInput
+{
+    [JsonPropertyName("data_source")]
+    public required string DataSource { get; init; }
+
+    [JsonPropertyName("source_kind")]
+    public required string SourceKind { get; init; }
+
+    public required string Actionability { get; init; }
+}
+
+public sealed record ProcessDiagnosticObservationInput
+{
+    [JsonPropertyName("run_key")]
+    public required string RunKey { get; init; }
+
+    public double Outcome { get; init; }
+    public double Weight { get; init; } = 1;
+    public IReadOnlyDictionary<string, double> Values { get; init; } =
+        new Dictionary<string, double>();
+    public IReadOnlyDictionary<string, string> Context { get; init; } =
+        new Dictionary<string, string>();
+
+    [JsonPropertyName("occurred_at")]
+    public double OccurredAt { get; init; }
+}
+
+public sealed record ProcessDiagnosisCall
+{
+    [JsonPropertyName("outcome_kind")]
+    public string OutcomeKind { get; init; } = "binary";
+    public IReadOnlyList<ProcessDiagnosticFeatureInput> Features { get; init; } = [];
+    public IReadOnlyList<ProcessDiagnosticObservationInput> Observations { get; init; } = [];
+    public int Seed { get; init; }
+}
+
+public sealed record ProcessDiagnosticCandidateOutput
+{
+    [JsonPropertyName("data_source")]
+    public required string DataSource { get; init; }
+    [JsonPropertyName("adjusted_effect")]
+    public double AdjustedEffect { get; init; }
+    [JsonPropertyName("model_importance")]
+    public double ModelImportance { get; init; }
+    [JsonPropertyName("stability_selection_rate")]
+    public double StabilitySelectionRate { get; init; }
+    [JsonPropertyName("sign_stability")]
+    public double SignStability { get; init; }
+    [JsonPropertyName("rank_score")]
+    public double RankScore { get; init; }
+}
+
+public sealed record ProcessDiagnosticInteractionOutput
+{
+    [JsonPropertyName("left_data_source")]
+    public required string LeftDataSource { get; init; }
+    [JsonPropertyName("right_data_source")]
+    public required string RightDataSource { get; init; }
+    [JsonPropertyName("adjusted_effect")]
+    public double AdjustedEffect { get; init; }
+    [JsonPropertyName("stability_selection_rate")]
+    public double StabilitySelectionRate { get; init; }
+    [JsonPropertyName("rank_score")]
+    public double RankScore { get; init; }
+}
+
+public sealed record ProcessDiagnosisResponse
+{
+    [JsonPropertyName("algorithm_version")]
+    public required string AlgorithmVersion { get; init; }
+    [JsonPropertyName("model_family")]
+    public required string ModelFamily { get; init; }
+    [JsonPropertyName("adjustment_method")]
+    public required string AdjustmentMethod { get; init; }
+    [JsonPropertyName("cross_validation_score")]
+    public double? CrossValidationScore { get; init; }
+    [JsonPropertyName("fold_count")]
+    public int FoldCount { get; init; }
+    [JsonPropertyName("stability_runs")]
+    public int StabilityRuns { get; init; }
+    [JsonPropertyName("context_variables")]
+    public IReadOnlyList<string> ContextVariables { get; init; } = [];
+    public IReadOnlyList<ProcessDiagnosticCandidateOutput> Candidates { get; init; } = [];
+    public IReadOnlyList<ProcessDiagnosticInteractionOutput> Interactions { get; init; } = [];
+    public IReadOnlyList<string> Limitations { get; init; } = [];
+}
+
 public interface IProcessOptimizerClient
 {
     Task<OptimizerSuggestionResponse> SuggestAsync(
         OptimizerSuggestionCall request,
         CancellationToken ct = default);
+
+    Task<ProcessDiagnosisResponse> DiagnoseAsync(
+        ProcessDiagnosisCall request,
+        CancellationToken ct = default)
+        => throw new NotSupportedException("当前优化客户端不支持多变量诊断。");
 }
 
 public sealed class ProcessOptimizerUnavailableException(
@@ -236,6 +328,48 @@ public sealed class ProcessOptimizerClient(
             if (result.Suggestions.Count == 0 || string.IsNullOrWhiteSpace(result.ModelVersion))
                 throw new ProcessResearchRuleException("优化服务响应缺少模型版本或建议。");
             return result;
+        }
+    }
+
+    public async Task<ProcessDiagnosisResponse> DiagnoseAsync(
+        ProcessDiagnosisCall request,
+        CancellationToken ct = default)
+    {
+        if (!_options.Enabled)
+            throw new ProcessResearchRuleException("数值分析服务未启用。");
+        HttpResponseMessage response;
+        try
+        {
+            response = await httpClient.PostAsJsonAsync(
+                "v1/diagnosis",
+                request,
+                ct).ConfigureAwait(false);
+        }
+        catch (HttpRequestException exception)
+        {
+            throw new ProcessOptimizerUnavailableException("数值分析服务暂时不可用。", exception);
+        }
+        catch (TaskCanceledException exception) when (!ct.IsCancellationRequested)
+        {
+            throw new ProcessOptimizerUnavailableException("数值分析服务请求超时。", exception);
+        }
+        using (response)
+        {
+            if ((int)response.StatusCode >= 500)
+                throw new ProcessOptimizerUnavailableException(
+                    $"数值分析服务暂时不可用（{(int)response.StatusCode}）。");
+            if (!response.IsSuccessStatusCode)
+            {
+                var detail = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+                if (detail.Length > 1000)
+                    detail = detail[..1000];
+                throw new ProcessResearchRuleException(
+                    $"数值分析服务拒绝诊断请求（{(int)response.StatusCode}）：{detail}");
+            }
+            return await response.Content.ReadFromJsonAsync<ProcessDiagnosisResponse>(
+                    cancellationToken: ct)
+                .ConfigureAwait(false)
+                ?? throw new ProcessResearchRuleException("数值分析服务返回了空诊断响应。");
         }
     }
 }

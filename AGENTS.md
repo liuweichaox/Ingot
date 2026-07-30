@@ -2,17 +2,18 @@
 
 ## Project Structure & Module Organization
 
-Ingot is a .NET 10 monorepo with three web applications. Backend code lives under `src/`: `edge/` contains shop-floor services, `platform/` contains the central API and React UI, `agent/` contains AI investigation logic, and `shared/` holds domain models and contracts. The xUnit suite is centralized in `tests/Ingot.Core.Tests`, mirroring those areas. `apps/website` and `apps/docs-site` are Next.js applications; `src/platform/Ingot.Platform.Web` is React/Vite. Deployment files are in `deploy/`, verification utilities in `scripts/`, benchmarks in `tools/`, documentation in `docs/`, and the canonical brand assets are in `apps/website/public/brand/`.
+Ingot is a .NET 10 monorepo with three web applications. Backend code lives under `src/`: `edge/` contains shop-floor services, `platform/` contains the central API, `agent/` contains AI investigation logic, and `shared/` holds domain models and contracts. The xUnit suite is centralized in `tests/Ingot.Core.Tests`, mirroring those areas. User-facing applications live under `apps/`: `platform` is the React/Vite product UI, while `website` and `docs-site` are Next.js applications. Deployment files are in `deploy/`, verification utilities in `scripts/`, benchmarks in `tools/`, documentation in `docs/`, and the canonical brand assets are in `apps/website/public/brand/`.
 
 ## Build, Test, and Development Commands
 
-Use .NET SDK 10, Node.js 22.13+, Docker, and Docker Compose.
+Use .NET SDK 10, Node.js 22.13+, uv 0.11.32, Docker, and Docker Compose.
 
 - `dotnet restore Ingot.sln` installs .NET dependencies.
 - `dotnet build Ingot.sln` builds all C# projects.
 - `dotnet test tests/Ingot.Core.Tests/Ingot.Core.Tests.csproj` runs xUnit tests.
-- `npm --prefix src/platform/Ingot.Platform.Web ci` installs UI dependencies; replace the prefix with `apps/website` or `apps/docs-site` for those apps.
-- `npm --prefix src/platform/Ingot.Platform.Web run dev` starts the Vue UI on port 3000.
+- `npm --prefix apps/platform ci` installs the product UI dependencies; replace the prefix with `apps/website` or `apps/docs-site` for those apps.
+- `npm --prefix apps/platform run dev` starts the React product UI on port 3000.
+- `uv sync --project optimizer --extra service --group dev --locked` creates the locked Python environment; use `uv run --project optimizer --locked ...` for all optimizer commands.
 - `docker compose -f docker-compose.app.yml up -d --build` launches the application stack.
 - `./scripts/verify.sh` runs the full CI gate: builds, tests, ESLint, audits, architecture checks, Compose validation, and `git diff --check`.
 

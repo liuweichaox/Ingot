@@ -17,6 +17,15 @@ public sealed class ResearchProcessWindowMaterializer(
         string userId,
         CancellationToken ct = default)
     {
+        if (experiment.ValidationWindowId is { } validationWindowId)
+        {
+            return await workflow.AttachProcessWindowValidationResultAsync(
+                validationWindowId,
+                experiment,
+                result,
+                userId,
+                ct).ConfigureAwait(false);
+        }
         if (experiment.DesignMethod != ResearchDesignMethods.BayesianOptimization ||
             experiment.Optimization is null || !result.SafetyPassed)
             return null;
@@ -27,43 +36,64 @@ public sealed class ResearchProcessWindowMaterializer(
 
         var predictions = experiment.Optimization.RunPredictions
             .ToDictionary(static value => value.RunKey, StringComparer.Ordinal);
-        var accepted = result.RunObservations
+        var runPlan = experiment.RunPlan.ToDictionary(
+            static value => value.RunKey,
+            StringComparer.Ordinal);
+        var acceptedGroups = result.RunObservations
             .Where(static value => value.ValidForOptimization)
             .Where(value => MeetsMeasuredSpecification(project, value))
             .Where(value => !predictions.TryGetValue(value.RunKey, out var prediction) ||
                             MeetsPredictedSpecification(project, prediction))
+            .Where(value => runPlan.ContainsKey(value.RunKey))
+            .GroupBy(
+                value => runPlan[value.RunKey].ReplicateKey ?? runPlan[value.RunKey].RunKey,
+                StringComparer.Ordinal)
+            .Where(static group => group.Count() >= 2)
+            .Select(group => new
+            {
+                Observations = group.ToArray(),
+                ConservativePrediction = group
+                    .Select(value => predictions.GetValueOrDefault(value.RunKey)?.FeasibilityProbability)
+                    .Where(static value => value.HasValue)
+                    .Select(static value => value!.Value)
+                    .DefaultIfEmpty(0)
+                    .Min()
+            })
+            .OrderByDescending(static value => value.ConservativePrediction)
+            .ThenByDescending(static value => value.Observations.Length)
             .ToArray();
-        if (accepted.Length < 2)
+        var accepted = acceptedGroups.FirstOrDefault();
+        if (accepted is null)
             return null;
 
         var variables = new List<ProcessWindowVariable>();
         foreach (var control in project.Variables.Where(
                      static value => value.Role == ResearchVariableRoles.Control))
         {
-            var values = accepted
+            var values = accepted.Observations
                 .SelectMany(static value => value.ActualFactors)
                 .Where(value => value.VariableCode == control.Code)
                 .Select(static value => value.Value)
-                .Distinct()
                 .Order()
                 .ToArray();
-            if (values.Length < 2 || values[0] >= values[^1])
+            if (values.Length != accepted.Observations.Length)
                 return null;
+            var centre = Median(values);
             variables.Add(new ProcessWindowVariable
             {
                 VariableCode = control.Code,
-                LowerBound = values[0],
-                UpperBound = values[^1],
+                LowerBound = centre,
+                UpperBound = centre,
                 Unit = control.Unit
             });
         }
 
-        var posteriorConfidence = accepted
-            .Select(value => predictions.GetValueOrDefault(value.RunKey)?.FeasibilityProbability)
-            .Where(static value => value is not null)
-            .Select(static value => value!.Value)
-            .DefaultIfEmpty(WilsonLowerBound(accepted.Length, result.RunObservations.Count))
-            .Min();
+        var empiricalConfidence = WilsonLowerBound(
+            accepted.Observations.Length,
+            accepted.Observations.Length);
+        var posteriorConfidence = accepted.ConservativePrediction > 0
+            ? Math.Min(empiricalConfidence, accepted.ConservativePrediction)
+            : empiricalConfidence;
         return await workflow.SaveProcessWindowAsync(
             project.ProjectId,
             new ResearchProcessWindow
@@ -74,10 +104,10 @@ public sealed class ResearchProcessWindowMaterializer(
                 SupportingExperimentIds = [experiment.ExperimentId],
                 SupportingResultIds = [result.ResultId],
                 Confidence = Math.Clamp(posteriorConfidence, 0.01, 0.999),
-                ConfidenceMethod = ResearchConfidenceMethods.Bayesian,
+                ConfidenceMethod = ResearchConfidenceMethods.Frequentist,
                 AnalysisRunId = result.AnalysisRunId,
                 AnalysisHash = result.AnalysisHash,
-                Applicability = BuildApplicability(project, accepted.Length, result.RunCount)
+                Applicability = BuildApplicability(project, accepted.Observations.Length, result.RunCount)
             },
             userId,
             ct).ConfigureAwait(false);
@@ -116,9 +146,17 @@ public sealed class ResearchProcessWindowMaterializer(
                        lower >= min && upper <= max,
             "target" when objective.LowerLimit is { } min && objective.UpperLimit is { } max =>
                 lower >= min && upper <= max,
-            "target" => lower <= objective.Target && upper >= objective.Target,
+            "target" => false,
             _ => false
         };
+
+    private static double Median(IReadOnlyList<double> ordered)
+    {
+        var middle = ordered.Count / 2;
+        return ordered.Count % 2 == 0
+            ? (ordered[middle - 1] + ordered[middle]) / 2
+            : ordered[middle];
+    }
 
     private static double WilsonLowerBound(int successCount, int totalCount)
     {
@@ -145,7 +183,7 @@ public sealed class ResearchProcessWindowMaterializer(
             project.ProductName,
             project.MaterialName
         }.Where(static value => !string.IsNullOrWhiteSpace(value));
-        return $"{string.Join(" / ", scope)}；依据 {acceptedRuns}/{totalRuns} 个已执行且达标运行形成。" +
-               "当前范围仅是模型推荐并经实测覆盖的候选区间，投入生产前必须完成独立重复验证。";
+        return $"{string.Join(" / ", scope)}；依据同一候选条件下 {acceptedRuns}/{totalRuns} 个已执行且达标运行形成。" +
+               "当前仅代表一个经重复实测的候选设置，不外推为连续安全区域；投入生产前必须完成独立跨区组验证。";
     }
 }

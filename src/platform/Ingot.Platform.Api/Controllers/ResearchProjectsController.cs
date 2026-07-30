@@ -155,33 +155,63 @@ public sealed class ResearchProjectsController(
                     ContentHash = contentHash,
                     CreatedAt = DateTimeOffset.UtcNow
                 };
-                var candidates = comparison.QualityAssociations
+                var candidates = comparison.Diagnosis.Candidates
                     .Where(static value => value.EvidenceLevel is "stable" or "exploratory")
-                    .OrderByDescending(static value => value.CandidateScore)
+                    .Select(candidate => new
+                    {
+                        Candidate = candidate,
+                        VariableCodes = ResolveControllableVariables(project, candidate)
+                    })
+                    .Where(static value => value.VariableCodes.Count > 0)
+                    .OrderByDescending(static value => value.Candidate.CandidateScore)
                     .Take(request.MaximumHypotheses)
                     .ToArray();
                 if (candidates.Length == 0)
-                    throw new ProcessResearchRuleException("比较结果证据不足，不能自动提出候选原因。");
-                var knownVariables = project.Variables.Select(static value => value.Code)
-                    .ToHashSet(StringComparer.Ordinal);
-                var created = new List<ResearchHypothesis>();
-                foreach (var candidate in candidates)
                 {
-                    var variableCodes = new[] { candidate.SignalCode, candidate.FeatureCode }
-                        .Where(knownVariables.Contains)
-                        .Distinct(StringComparer.Ordinal)
-                        .ToArray();
+                    throw new ProcessResearchRuleException(
+                        "比较结果没有与项目可控变量数据来源匹配的候选原因；请检查项目变量的实际数据来源映射。");
+                }
+                var validationObjective = project.Objectives
+                    .OrderByDescending(static objective => objective.Weight)
+                    .ThenBy(static objective => objective.Code, StringComparer.Ordinal)
+                    .FirstOrDefault();
+                var created = new List<ResearchHypothesis>();
+                foreach (var resolved in candidates)
+                {
+                    var candidate = resolved.Candidate;
+                    var sourceLabel = candidate.SourceKind == CycleCauseSourceKinds.RecipeParameter
+                        ? "实际配方参数"
+                        : "过程轨迹特征";
+                    var direction = candidate.MedianDifference is > 0
+                        ? "不合格组更高"
+                        : candidate.MedianDifference is < 0 ? "不合格组更低" : "组间存在差异";
+                    var confoundingPenalty = candidate.PossibleConfounders.Count == 0 ? 0d : 0.15d;
                     created.Add(await workflow.SaveHypothesisAsync(
                         projectId,
                         new ResearchHypothesis
                         {
-                            Statement = $"{candidate.SignalCode}.{candidate.FeatureCode} 的过程差异可能影响项目质量目标。",
-                            Rationale = $"周期比较给出 {candidate.EvidenceLevel} 证据，候选分数 {candidate.CandidateScore:F3}；通过受控实验验证，不能将该关联直接当作因果结论。",
-                            VariableCodes = variableCodes,
+                            Statement = $"{candidate.DisplayName} 的差异可能影响项目质量目标。",
+                            Rationale =
+                                $"{sourceLabel}在合格与不合格周期间表现为“{direction}”，" +
+                                $"诊断证据为 {candidate.EvidenceLevel}，候选分数 {candidate.CandidateScore:F3}。" +
+                                "该结论只是观察性关联，必须通过受控实验验证。",
+                            VariableCodes = resolved.VariableCodes,
+                            ValidationOutcomeCode = validationObjective?.Code,
+                            ExpectedEffectDirection = validationObjective is null
+                                ? null
+                                : ResolveValidationDirection(validationObjective),
+                            MinimumEffect = validationObjective is null
+                                ? null
+                                : ResolveMinimumEffect(validationObjective),
                             PossibleConfounders = candidate.PossibleConfounders,
-                            Confidence = candidate.EvidenceLevel == "stable" ? 0.65 : 0.35,
+                            Confidence = Math.Max(
+                                0.2d,
+                                (candidate.EvidenceLevel == "stable" ? 0.65d : 0.4d) -
+                                confoundingPenalty),
                             SupportingEvidence = [evidence with { EvidenceId = Guid.CreateVersion7() }],
-                            Applicability = $"产品系列：{comparison.ProductSeries}；分析范围：{comparison.AnalysisScope}。"
+                            Applicability =
+                                $"产品系列：{comparison.ProductSeries}；分析范围：{comparison.AnalysisScope}；" +
+                                $"数据来源：{candidate.DataSource}。"
                         },
                         identity.UserId,
                         ct).ConfigureAwait(false));
@@ -442,6 +472,24 @@ public sealed class ResearchProjectsController(
             ct).ConfigureAwait(false);
     }
 
+    [HttpPost("process-windows/{windowId:guid}/design-validation")]
+    public async Task<IActionResult> DesignProcessWindowValidation(
+        Guid windowId,
+        CancellationToken ct)
+    {
+        var window = await store.GetProcessWindowAsync(windowId, ct).ConfigureAwait(false);
+        if (window is null)
+            return NotFound(new { error = "工艺窗口不存在。" });
+        return await ExecuteForProjectAsync(
+            window.ProjectId,
+            true,
+            async identity => Ok(await workflow.CreateProcessWindowValidationExperimentAsync(
+                windowId,
+                identity.UserId,
+                ct).ConfigureAwait(false)),
+            ct).ConfigureAwait(false);
+    }
+
     [HttpPost("process-windows/{windowId:guid}/release")]
     public async Task<IActionResult> ReleaseProcessWindow(Guid windowId, CancellationToken ct)
     {
@@ -544,6 +592,52 @@ public sealed class ResearchProjectsController(
             return true;
         number = default;
         return false;
+    }
+
+    private static IReadOnlyList<string> ResolveControllableVariables(
+        ResearchProject project,
+        CycleCauseCandidate candidate)
+        => project.Variables
+            .Where(static variable => variable.Role == ResearchVariableRoles.Control)
+            .Where(variable =>
+            {
+                var source = variable.DataSource?.Trim();
+                if (!string.IsNullOrWhiteSpace(source))
+                {
+                    return string.Equals(
+                        source,
+                        candidate.DataSource,
+                        StringComparison.OrdinalIgnoreCase);
+                }
+                return candidate.SourceKind == CycleCauseSourceKinds.RecipeParameter &&
+                       string.Equals(
+                           variable.Code,
+                           candidate.VariableCode,
+                           StringComparison.Ordinal);
+            })
+            .Select(static variable => variable.Code)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+    private static string ResolveValidationDirection(ResearchObjective objective)
+        => objective.Direction.ToLowerInvariant() switch
+        {
+            "maximize" or "max" or "increase" => ResearchHypothesisEffectDirections.Increase,
+            "minimize" or "min" or "decrease" => ResearchHypothesisEffectDirections.Decrease,
+            _ when objective.Baseline is { } baseline && baseline < objective.Target =>
+                ResearchHypothesisEffectDirections.Increase,
+            _ => ResearchHypothesisEffectDirections.Decrease
+        };
+
+    private static double ResolveMinimumEffect(ResearchObjective objective)
+    {
+        if (objective.Baseline is { } baseline &&
+            Math.Abs(baseline - objective.Target) > 1e-12)
+            return Math.Max(Math.Abs(baseline - objective.Target) * 0.1, 1e-9);
+        if (objective.LowerLimit is { } lower && objective.UpperLimit is { } upper &&
+            upper > lower)
+            return Math.Max((upper - lower) * 0.01, 1e-9);
+        return Math.Max(Math.Abs(objective.Target) * 0.01, 0.001);
     }
 
     private static bool CanAccess(

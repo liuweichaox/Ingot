@@ -54,6 +54,7 @@ test("all platform routes remain available after the React migration", () => {
   ]) {
     assert.match(app, new RegExp(route.replaceAll("/", "\\/")));
   }
+  assert.match(app, /\/research-projects\/:projectId/);
   assert.match(app, /Navigate to="\/research-projects"/);
   assert.match(app, /Navigate to="\/configuration\/process-data-models"/);
 });
@@ -128,7 +129,7 @@ test("core workflows tell new users what to do next and confirm completed action
   assert.match(components, /export function ToastHost/);
   assert.match(pages, /今天先做这些/);
   assert.match(pages, /配置下一批生产/);
-  assert.match(researchProjects, /发现偏差 → 找到原因 → 设计最有价值的下一组实验 → 验证并固化窗口/);
+  assert.match(researchProjects, /发现偏差 → 找到原因 → 设计实验 → 验证并固化窗口/);
   assert.match(researchProjects, /优化模型准备度/);
   assert.match(app, /<ToastHost \/>/);
 });
@@ -137,7 +138,8 @@ test("versioned tooling remains unique and the legacy improvement workspace is a
   assert.match(pages, /getRowKey=\{section === "type" \? row => `\$\{row\[resource\.key\]\}:\$\{row\.version \?\? 1\}` : undefined\}/);
   assert.match(pages, /<option value="Information">信息<\/option>/);
   assert.doesNotMatch(pages, /ImprovementPanel|process-investigations|parameter-recommendations/);
-  assert.match(researchProjects, /supportingResultIds/);
+  assert.match(researchProjects, /design-validation/);
+  assert.doesNotMatch(researchProjects, /记录实验计算结果/);
 });
 
 test("forms expose clear labels, edit intent, and required upload fields", () => {

@@ -150,3 +150,102 @@ def test_service_runs_batch_multiobjective_qlognehvi_for_optical_molding():
         set(item["constraint_predictions"]) == {"crack_rate"}
         for item in payload["suggestions"]
     )
+
+
+def test_diagnosis_adjusts_context_and_reports_stability_and_interactions():
+    observations = []
+    for index in range(60):
+        temperature = 500.0 + (index % 10) * 2.0
+        pressure = 8.0 + ((index * 3) % 11) * 0.4
+        machine = "PRESS-A" if index < 30 else "PRESS-B"
+        failed = int(
+            temperature > 512.0
+            and pressure > 10.0
+            or (index % 17 == 0)
+        )
+        observations.append(
+            {
+                "run_key": f"run-{index:03d}",
+                "outcome": failed,
+                "weight": 1.0,
+                "values": {
+                    "recipe:temperature": temperature,
+                    "recipe:pressure": pressure,
+                    "signal:mold-temperature:overshoot": max(0.0, temperature - 510.0),
+                },
+                "context": {
+                    "product_code": "LENS-A",
+                    "machine_id": machine,
+                    "material_lot": f"LOT-{index // 10}",
+                },
+                "occurred_at": float(index),
+            }
+        )
+    response = client.post(
+        "/v1/diagnosis",
+        json={
+            "outcome_kind": "binary",
+            "features": [
+                {
+                    "data_source": "recipe:temperature",
+                    "source_kind": "recipe-parameter",
+                    "actionability": "controllable",
+                },
+                {
+                    "data_source": "recipe:pressure",
+                    "source_kind": "recipe-parameter",
+                    "actionability": "controllable",
+                },
+                {
+                    "data_source": "signal:mold-temperature:overshoot",
+                    "source_kind": "process-feature",
+                    "actionability": "observable",
+                },
+            ],
+            "observations": observations,
+            "seed": 19,
+        },
+    )
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["algorithm_version"] == "adaptive-context-diagnosis-v1"
+    assert payload["model_family"].startswith("regularized-additive-logistic")
+    assert payload["fold_count"] >= 2
+    assert payload["stability_runs"] == 24
+    assert "context:machine_id=PRESS-B" in payload["context_variables"]
+    assert payload["candidates"][0]["stability_selection_rate"] >= 0
+    assert all("verified" not in item for item in payload["limitations"])
+
+
+def test_continuous_diagnosis_selects_gp_when_nonlinearity_is_supported():
+    observations = []
+    for index in range(48):
+        value = -3.0 + index * 6.0 / 47.0
+        observations.append(
+            {
+                "run_key": f"continuous-{index:03d}",
+                "outcome": float(__import__("math").sin(value * 2.2)),
+                "values": {"recipe:x": value},
+                "context": {"machine_id": "PRESS-A" if index % 2 else "PRESS-B"},
+                "occurred_at": float(index),
+            }
+        )
+    response = client.post(
+        "/v1/diagnosis",
+        json={
+            "outcome_kind": "continuous",
+            "features": [
+                {
+                    "data_source": "recipe:x",
+                    "source_kind": "recipe-parameter",
+                    "actionability": "controllable",
+                }
+            ],
+            "observations": observations,
+            "seed": 5,
+        },
+    )
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["model_family"].startswith("gaussian-process-regression")
+    assert payload["cross_validation_score"] > 0

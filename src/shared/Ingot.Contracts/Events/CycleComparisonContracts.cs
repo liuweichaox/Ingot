@@ -39,7 +39,84 @@ public sealed record CycleComparisonResult
 
     public IReadOnlyList<CycleQualityAssociation> QualityAssociations { get; init; } = [];
 
+    /// <summary>
+    ///     将实际配方参数和过程轨迹特征放在同一证据口径下形成的诊断结果。
+    ///     候选原因仍是观察性关联，必须经过受控实验才能升级为因果结论。
+    /// </summary>
+    public CycleDiagnosisSummary Diagnosis { get; init; } = new();
+
     public required CycleComparisonAcceptance Acceptance { get; init; }
+}
+
+public static class CycleCauseSourceKinds
+{
+    public const string RecipeParameter = "recipe-parameter";
+    public const string ProcessFeature = "process-feature";
+}
+
+public static class CycleCauseActionability
+{
+    public const string Controllable = "controllable";
+    public const string Observable = "observable";
+}
+
+public sealed record CycleDiagnosisSummary
+{
+    public string AlgorithmVersion { get; init; } = "robust-stratified-v1";
+    public string ModelFamily { get; init; } = "robust-screening-only";
+    public string AdjustmentMethod { get; init; } = "none";
+    public double? CrossValidationScore { get; init; }
+    public int FoldCount { get; init; }
+    public int StabilityRuns { get; init; }
+    public IReadOnlyList<string> ContextVariables { get; init; } = [];
+    public string EvidenceLevel { get; init; } = "insufficient";
+    public int PassCycleCount { get; init; }
+    public int FailCycleCount { get; init; }
+    public double PassEffectiveWeight { get; init; }
+    public double FailEffectiveWeight { get; init; }
+    public IReadOnlyList<CycleCauseCandidate> Candidates { get; init; } = [];
+    public IReadOnlyList<CycleCauseInteraction> Interactions { get; init; } = [];
+    public IReadOnlyList<string> Limitations { get; init; } = [];
+}
+
+public sealed record CycleCauseCandidate
+{
+    public required string CandidateId { get; init; }
+    public required string SourceKind { get; init; }
+    public required string Actionability { get; init; }
+    public required string VariableCode { get; init; }
+    public required string DataSource { get; init; }
+    public required string DisplayName { get; init; }
+    public string? Unit { get; init; }
+    public string? SignalCode { get; init; }
+    public string? FeatureCode { get; init; }
+    public string? PhaseCode { get; init; }
+    public string? PhaseName { get; init; }
+    public int? PhaseOrder { get; init; }
+    public int PassCycleCount { get; init; }
+    public int FailCycleCount { get; init; }
+    public double PassEffectiveWeight { get; init; }
+    public double FailEffectiveWeight { get; init; }
+    public double? PassMedian { get; init; }
+    public double? FailMedian { get; init; }
+    public double? MedianDifference { get; init; }
+    public double? RobustEffect { get; init; }
+    public double? AdjustedEffect { get; init; }
+    public double? ModelImportance { get; init; }
+    public double? StabilitySelectionRate { get; init; }
+    public double? SignStability { get; init; }
+    public double CandidateScore { get; init; }
+    public string EvidenceLevel { get; init; } = "insufficient";
+    public IReadOnlyList<string> PossibleConfounders { get; init; } = [];
+}
+
+public sealed record CycleCauseInteraction
+{
+    public required string LeftDataSource { get; init; }
+    public required string RightDataSource { get; init; }
+    public double AdjustedEffect { get; init; }
+    public double StabilitySelectionRate { get; init; }
+    public double RankScore { get; init; }
 }
 
 public sealed record CycleSignalComparison
@@ -83,6 +160,9 @@ public sealed record CycleComparisonRow
     public required string CorrelationId { get; init; }
 
     public required string MachineId { get; init; }
+
+    public IReadOnlyDictionary<string, string> Context { get; init; } =
+        new Dictionary<string, string>();
 
     public required DateTimeOffset StartedAt { get; init; }
 

@@ -19,15 +19,16 @@
 
 - .NET SDK 10；
 - Node.js 22.13+；
-- Python 3.11+；
+- uv 0.11.32（由 uv 管理 Python 3.11+ 环境）；
 - Docker 与 Docker Compose。
 
 ```bash
 dotnet restore Ingot.sln
-npm --prefix src/platform/Ingot.Platform.Web ci
+npm --prefix apps/platform ci
 npm --prefix apps/website ci
 npm --prefix apps/docs-site ci
-python -m pip install -e "optimizer[service]" pytest httpx
+uv sync --project optimizer --extra service --group dev --locked
+uv run --project optimizer --locked pytest
 ```
 
 ## 工程原则

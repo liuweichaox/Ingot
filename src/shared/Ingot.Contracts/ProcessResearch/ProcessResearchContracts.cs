@@ -29,11 +29,12 @@ public static class ResearchHypothesisStatuses
     public const string Proposed = "proposed";
     public const string Selected = "selected";
     public const string Supported = "supported";
+    public const string Validated = "validated";
     public const string Rejected = "rejected";
     public const string Inconclusive = "inconclusive";
 
     public static bool IsValid(string? value)
-        => value is Proposed or Selected or Supported or Rejected or Inconclusive;
+        => value is Proposed or Selected or Supported or Validated or Rejected or Inconclusive;
 }
 
 public static class ResearchExperimentStatuses
@@ -368,6 +369,11 @@ public sealed record ResearchExperiment
     public Guid ExperimentId { get; init; }
     public Guid ProjectId { get; init; }
     public Guid? HypothesisId { get; init; }
+    /// <summary>
+    ///     非空时表示该实验是针对指定候选工艺窗口设计的独立验证实验。
+    ///     验证实验必须与生成候选窗口的实验分离。
+    /// </summary>
+    public Guid? ValidationWindowId { get; init; }
     public required string Name { get; init; }
     public string DesignMethod { get; init; } = "engineer-defined";
     public int PlanVersion { get; init; } = 1;
@@ -408,6 +414,12 @@ public sealed record ExperimentMetricResult
 public sealed record ExperimentRunObservation
 {
     public required string RunKey { get; init; }
+    /// <summary>
+    ///     运行发生时的设备、模具、材料批次、产品和配方等上下文。
+    ///     这些字段用于区组、分层、迁移边界和混杂因素判断，不能由计划值替代。
+    /// </summary>
+    public IReadOnlyDictionary<string, string> Context { get; init; } =
+        new Dictionary<string, string>();
     public IReadOnlyList<ExperimentFactorSetting> ActualFactors { get; init; } = [];
     public IReadOnlyDictionary<string, double> ProcessFeatures { get; init; } =
         new Dictionary<string, double>();

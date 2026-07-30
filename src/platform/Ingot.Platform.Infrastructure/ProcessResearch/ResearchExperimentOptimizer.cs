@@ -32,6 +32,12 @@ public sealed class ResearchExperimentOptimizer(
         if (project.Status is ResearchProjectStatuses.Completed or ResearchProjectStatuses.Archived)
             throw new ProcessResearchRuleException("已完成或已归档的研发项目保持只读。");
         var intent = NormalizeIntent(request.Intent);
+        if (intent == ResearchOptimizationIntents.ValidateHypothesis &&
+            (request.BatchSize < 2 || request.ReplicatesPerCondition < 2))
+        {
+            throw new ProcessResearchRuleException(
+                "假设验证至少需要两个干预条件，并在两个区组中重复，不能用单点运行升级原因证据。");
+        }
         var processProfile = NormalizeProcessProfile(request.ProcessProfile);
         ResearchHypothesis? hypothesis = null;
         if (intent == ResearchOptimizationIntents.ValidateHypothesis)

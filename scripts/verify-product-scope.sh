@@ -6,7 +6,7 @@ cd "$repo_root"
 
 if grep -rEni --exclude-dir=dist --exclude-dir=node_modules \
   '/api/v1/agent|connector-workspaces|approve-package|AgentView|桌面 Agent|代码生成' \
-  src/platform/Ingot.Platform.Web/src; then
+  apps/platform/src; then
   echo "Platform Web must remain Chat-only." >&2
   exit 1
 fi

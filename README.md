@@ -104,11 +104,11 @@ dotnet restore Ingot.sln
 dotnet build Ingot.sln
 dotnet test tests/Ingot.Core.Tests/Ingot.Core.Tests.csproj
 
-npm --prefix src/platform/Ingot.Platform.Web ci
-npm --prefix src/platform/Ingot.Platform.Web run dev
+npm --prefix apps/platform ci
+npm --prefix apps/platform run dev
 
-python -m pip install -e "optimizer[service]"
-uvicorn service:app --app-dir optimizer --port 8100
+uv sync --project optimizer --extra service --group dev --locked
+uv run --project optimizer --locked uvicorn service:app --app-dir optimizer --port 8110
 ```
 
 完整验证：

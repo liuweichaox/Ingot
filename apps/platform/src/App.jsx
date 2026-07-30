@@ -21,6 +21,7 @@ const sections = [
     id: "workbench", label: "决策工作台", icon: BoltIcon, path: "/workbench", items: [
       ["/workbench", "运行概览"], ["/cycles", "运行记录"],
       ["/inspections", "质量任务"], ["/events", "生产事件"],
+      ["/production/changeover", "生产上下文"], ["/production/tooling-installations", "工装装卸"],
     ],
   },
   {
@@ -40,7 +41,6 @@ const sections = [
   {
     id: "implementation", label: "连接与实施", icon: WrenchScrewdriverIcon, path: "/edges", items: [
       ["/edges", "现场节点"], ["/configuration/acquisition-profiles", "数据连接"],
-      ["/production/changeover", "生产上下文"], ["/production/tooling-installations", "工装装卸"],
       ["/configuration/component-types", "组件类型"], ["/configuration/components", "组件台账"],
       ["/configuration/tooling-types", "工装类型"], ["/configuration/tooling-assemblies", "工装组合"],
     ],
@@ -169,6 +169,8 @@ export default function App() {
     ? ["周期详情", "查看单次生产运行的过程、质量和数据完整性"]
     : location.pathname.startsWith("/edges/")
       ? ["节点诊断", "查看现场节点的连接、采集、上行和最近日志"]
+      : location.pathname.startsWith("/research-projects/")
+        ? ["优化项目工作区", "围绕当前问题推进假设、实验、验证和知识复用"]
     : pageDetails[location.pathname] ?? ["Ingot", "AI 工艺研发系统"];
 
   if (authState === "checking") return <AuthenticationLoading />;
@@ -372,6 +374,7 @@ function AppRoutes() {
     <Routes>
       <Route path="/" element={<Navigate to="/workbench" replace />} />
       <Route path="/research-projects" element={<Pages.ResearchProjectsPage />} />
+      <Route path="/research-projects/:projectId" element={<Pages.ResearchProjectsPage />} />
       <Route path="/workbench" element={<Pages.WorkbenchPage />} />
       <Route path="/chat" element={<Pages.ChatPage />} />
       <Route path="/research-assets" element={<Pages.ResearchAssetsPage />} />

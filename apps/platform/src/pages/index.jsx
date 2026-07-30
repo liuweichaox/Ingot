@@ -321,23 +321,23 @@ export function WorkbenchPage() {
     <Page title="工业决策工作台" description="在一个入口理解现场运行、质量结果、数据可信度，以及下一项最有价值的工艺行动。">
       {state.error && <Alert tone="danger">{state.error}</Alert>}
       {state.loading ? <LoadingCard /> : (
-        <>
-          <section className="grid gap-4 rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50 via-white to-white p-5 shadow-sm lg:grid-cols-[minmax(0,1fr)_20rem] sm:p-6">
+        <div className="flex flex-col gap-5">
+          <section className="order-3 grid gap-4 rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50 via-white to-white p-5 shadow-sm lg:grid-cols-[minmax(0,1fr)_20rem]">
             <div>
-              <p className="text-sm font-semibold text-blue-700">工业数据不是终点，决策才是</p>
-              <h2 className="mt-2 max-w-3xl text-2xl font-semibold tracking-tight text-slate-950">让每一次运行都能支持追因、验证和下一次更好的工艺决策。</h2>
-              <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">Ingot 将设备、配方、过程、质量和实验放到同一业务上下文中。异常先成为可解释的证据，再成为可验证的优化行动。</p>
-              <div className="mt-5 flex flex-wrap gap-2">
+              <p className="text-sm font-semibold text-blue-700">从现场问题进入可验证决策</p>
+              <h2 className="mt-2 max-w-3xl text-xl font-semibold tracking-tight text-slate-950">运行、质量、数据可信度和优化行动使用同一业务上下文。</h2>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">异常先成为可解释的证据，再成为需要工程审核的实验与优化行动。</p>
+              <div className="mt-4 flex flex-wrap gap-2">
                 <Link to="/comparisons" className="inline-flex min-h-9 items-center rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">开始周期对比</Link>
                 <Link to="/research-projects" className="inline-flex min-h-9 items-center rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700">进入优化工作台</Link>
               </div>
             </div>
-            <div className="grid content-start gap-3">
-              <div className="rounded-xl border border-white bg-white/80 p-4"><p className="text-xs font-medium text-slate-500">现场数据贯通</p><p className="mt-1 text-lg font-semibold text-slate-950">{onlineEdges}/{state.edges.length} 个节点在线</p><p className="mt-1 text-xs leading-5 text-slate-500">数据连接、对象和上下文由实施层维护。</p></div>
-              <div className="rounded-xl border border-white bg-white/80 p-4"><p className="text-xs font-medium text-slate-500">优化闭环</p><p className="mt-1 text-lg font-semibold text-slate-950">{activeOptimizationProjects} 个项目推进中</p><p className="mt-1 text-xs leading-5 text-slate-500">建议必须经过工程审核，并由真实运行结果更新。</p></div>
+            <div className="grid content-start gap-3 sm:grid-cols-2 lg:grid-cols-1">
+              <div className="rounded-xl border border-white bg-white/80 p-4"><p className="text-xs font-medium text-slate-500">现场数据贯通</p><p className="mt-1 text-lg font-semibold text-slate-950">{onlineEdges}/{state.edges.length} 个节点在线</p></div>
+              <div className="rounded-xl border border-white bg-white/80 p-4"><p className="text-xs font-medium text-slate-500">优化闭环</p><p className="mt-1 text-lg font-semibold text-slate-950">{activeOptimizationProjects} 个项目推进中</p></div>
             </div>
           </section>
-          <Card title="今天先做这些" description="系统按决策优先级聚合待办，不需要逐个后台模块查找。">
+          <Card className="order-1" title="今天先做这些" description="系统按决策优先级聚合待办，不需要逐个后台模块查找。">
             <div className="grid gap-3 lg:grid-cols-3">
               {dailyActions.map(action => (
                 <Link key={action.to} to={action.to} className={`group rounded-xl border p-4 transition hover:-translate-y-0.5 hover:shadow-md ${action.tone}`}>
@@ -348,13 +348,13 @@ export function WorkbenchPage() {
               ))}
             </div>
           </Card>
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="order-2 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <Metric label="生产运行" value={state.cycleTotal} hint={`${activeCycles} 个正在进行`} />
             <Metric label="待处理质检" value={pendingInspections} hint="来自当前质量任务" />
             <Metric label="采集节点" value={`${onlineEdges}/${state.edges.length}`} hint="在线 / 全部" />
             <Metric label="优化项目" value={activeOptimizationProjects} hint={`${activeContexts} 个有效生产上下文`} />
           </div>
-          <div className="grid gap-5 xl:grid-cols-[1.3fr_.7fr]">
+          <div className="order-4 grid gap-5 xl:grid-cols-[1.3fr_.7fr]">
             <Card title="最近生产运行" actions={<Link className="text-sm font-medium text-blue-600 hover:text-blue-700" to="/cycles">查看全部</Link>}>
               <DataTable
                 rows={state.cycles}
@@ -383,7 +383,7 @@ export function WorkbenchPage() {
               </div>
             </Card>
           </div>
-        </>
+        </div>
       )}
     </Page>
   );
@@ -2256,6 +2256,7 @@ const comparisonFeatureLabels = {
 const evidenceLevelLabels = {
   stable: "证据稳定",
   exploratory: "探索性证据",
+  screening: "仅稳健筛选",
   sufficient: "证据充分",
   limited: "证据有限",
   insufficient: "证据不足",
@@ -2419,6 +2420,17 @@ export function CycleComparisonPage() {
       return rightScore - leftScore;
     })
     .slice(0, 30), [result]);
+  const causeRows = useMemo(() => (result?.diagnosis?.candidates || [])
+    .map(candidate => ({
+      ...candidate,
+      sourceLabel: candidate.sourceKind === "recipe-parameter" ? "实际配方" : "过程轨迹",
+      actionabilityLabel: candidate.actionability === "controllable" ? "可直接实验" : "需映射控制量",
+      stabilityLabel: Number.isFinite(Number(candidate.stabilitySelectionRate))
+        ? `${Math.round(Number(candidate.stabilitySelectionRate) * 100)}%`
+        : "样本不足",
+      confoundersLabel: (candidate.possibleConfounders || []).join("、") || "未发现明显差异",
+    }))
+    .slice(0, 30), [result]);
   return (
     <Page title="周期对比与候选原因" description="从已完成的同类运行中选择基准和对比对象，按阶段对齐后形成待验证的原因假设。">
       {error && <Alert tone="danger">{error}</Alert>}
@@ -2466,6 +2478,57 @@ export function CycleComparisonPage() {
               <Field label="研发项目"><Select value={researchProjectId} onChange={event => setResearchProjectId(event.target.value)}><option value="">选择研发项目</option>{researchProjects.filter(item => !["completed", "archived"].includes(item.status)).map(item => <option key={item.projectId} value={item.projectId}>{item.name}</option>)}</Select></Field>
               <Button className="self-end" disabled={!researchProjectId || busy} onClick={createHypotheses}>生成候选假设</Button>
             </div>
+          </Card>
+          <Card title="质量候选原因" description="同时比较实际配方参数与过程轨迹特征；优先选择能直接映射到可控变量的候选原因。">
+            {causeRows.length ? (
+              <>
+                <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                  <Metric label="诊断模型" value={result.diagnosis?.modelFamily || "稳健筛选"} hint="按样本规模自动选择" />
+                  <Metric label="上下文校正" value={result.diagnosis?.adjustmentMethod || "未启用"} hint={`${result.diagnosis?.contextVariables?.length || 0} 个校正项`} />
+                  <Metric label="交叉验证" value={Number.isFinite(Number(result.diagnosis?.crossValidationScore)) ? formatDecimal(result.diagnosis.crossValidationScore) : "样本不足"} hint={`${result.diagnosis?.foldCount || 0} 折样本外验证`} />
+                  <Metric label="稳定性重采样" value={result.diagnosis?.stabilityRuns || 0} hint="次 bootstrap 选择" />
+                </div>
+                <DataTable
+                  rows={causeRows}
+                  keyField="candidateId"
+                  columns={[
+                    { key: "displayName", label: "候选原因" },
+                    { key: "sourceLabel", label: "来源" },
+                    { key: "actionabilityLabel", label: "可操作性", render: (value, row) => <Badge tone={row.actionability === "controllable" ? "success" : "warning"}>{value}</Badge> },
+                    { key: "passMedian", label: "合格组中位数", render: formatDecimal },
+                    { key: "failMedian", label: "不合格组中位数", render: formatDecimal },
+                    { key: "robustEffect", label: "稳健效应", render: formatDecimal },
+                    { key: "adjustedEffect", label: "校正后效应", render: formatDecimal },
+                    { key: "stabilityLabel", label: "稳定入选率" },
+                    { key: "candidateScore", label: "候选分数", render: formatDecimal },
+                    { key: "evidenceLevel", label: "证据", render: value => <Badge tone={value === "stable" ? "success" : value === "exploratory" ? "warning" : "neutral"}>{evidenceLevelLabels[value] || value}</Badge> },
+                    { key: "confoundersLabel", label: "可能混杂" },
+                  ]}
+                />
+                {(result.diagnosis?.interactions || []).length > 0 && (
+                  <div className="mt-4">
+                    <h4 className="mb-2 text-sm font-semibold text-slate-900">变量交互候选</h4>
+                    <DataTable
+                      rows={result.diagnosis.interactions}
+                      getRowKey={(row, index) => `${row.leftDataSource}-${row.rightDataSource}-${index}`}
+                      columns={[
+                        { key: "leftDataSource", label: "变量 A" },
+                        { key: "rightDataSource", label: "变量 B" },
+                        { key: "adjustedEffect", label: "交互效应", render: formatDecimal },
+                        { key: "stabilitySelectionRate", label: "稳定入选率", render: value => `${Math.round(Number(value) * 100)}%` },
+                      ]}
+                    />
+                  </div>
+                )}
+                {(result.diagnosis?.limitations || []).length > 0 && (
+                  <Alert tone="warning" title="诊断边界">
+                    <ul className="list-disc space-y-1 pl-5">
+                      {result.diagnosis.limitations.map(item => <li key={item}>{item}</li>)}
+                    </ul>
+                  </Alert>
+                )}
+              </>
+            ) : <EmptyState title="尚无质量候选原因" description="至少需要合格与不合格周期，并且配方或过程特征具有可比较差异。" />}
           </Card>
           <Card title="信号差异" description="按变化幅度列出前 30 项，便于快速定位阶段和参数差异。">
             {signalRows.length ? (

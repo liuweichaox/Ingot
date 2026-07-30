@@ -32,9 +32,16 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: |
-            src/platform/Ingot.Platform.Web/package-lock.json
+            apps/platform/package-lock.json
             apps/website/package-lock.json
             apps/docs-site/package-lock.json
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          version: "0.11.32"
+          enable-cache: true
+          cache-dependency-glob: optimizer/uv.lock
 
       - name: Verify repository
         run: ./scripts/verify.sh

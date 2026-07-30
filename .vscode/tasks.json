@@ -46,7 +46,7 @@
                 "serve"
             ],
             "options": {
-                "cwd": "${workspaceFolder}/src/platform/Ingot.Platform.Web"
+                "cwd": "${workspaceFolder}/apps/platform"
             }
         },
         {

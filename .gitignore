@@ -77,8 +77,7 @@ StyleCopReport.xml
 
 # Frontend
 node_modules/
-src/platform/Ingot.Platform.Web/ClientApp/dist/
-src/platform/Ingot.Platform.Web/dist/
+apps/platform/dist/
 
 # Local runtime data
 /.codex-temp/

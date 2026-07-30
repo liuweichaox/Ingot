@@ -19,6 +19,11 @@ public sealed class ResearchObservationAssemblerTests
         {
             CorrelationId = runKey,
             MachineId = "FX3U-01",
+            Context = new Dictionary<string, string>
+            {
+                ["material_lot"] = "GLASS-LOT-07",
+                ["mold_id"] = "MOLD-A"
+            },
             StartedAt = DateTimeOffset.UtcNow.AddMinutes(-2),
             CompletedAt = DateTimeOffset.UtcNow,
             ProductSeries = "lens-a",
@@ -175,6 +180,9 @@ public sealed class ResearchObservationAssemblerTests
         Assert.Equal(0.38, observation.Outcomes["form"], 6);
         Assert.Equal(0.01, observation.ConstraintOutcomes["crack-safety"], 6);
         Assert.Equal(2.4, observation.ProcessFeatures["mold-temperature.cycle.overshoot"], 6);
+        Assert.Equal("FX3U-01", observation.Context["machine_id"]);
+        Assert.Equal("GLASS-LOT-07", observation.Context["material_lot"]);
+        Assert.Equal("MOLD-A", observation.Context["mold_id"]);
         Assert.Matches("^[a-f0-9]{64}$", observation.SourceContentHash);
 
         var strictProject = project with

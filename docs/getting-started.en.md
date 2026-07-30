@@ -92,7 +92,7 @@ After engineering approval:
 4. execute the process run;
 5. complete quality and safety inspections.
 
-Once all planned runs have valid observations, Platform materializes the result, closes the experiment, and creates an evidence-backed candidate window when possible. Window maturity then progresses through replay review, laboratory replicate validation, and production release.
+Once all planned runs have valid observations, Platform materializes the result, closes the experiment, and may create a candidate setting backed by repeats of the same condition. In validation, choose “design independent validation,” complete at least three repeats across two execution blocks, and let Platform verify actual settings, quality objectives, and safety constraints. A different engineer may then approve and release it. A continuous range requires separate boundary and interaction experiments; repeats at one point cannot approve the whole range.
 
 ## 7. Troubleshooting
 

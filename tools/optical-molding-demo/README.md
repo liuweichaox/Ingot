@@ -10,7 +10,7 @@
 `submit_quality.py` 模拟检验站按同一运行号提交测量结果，故意不由设备采集端伪造质量数据。
 
 ```powershell
-py -3 tools/optical-molding-demo/replay.py `
+uv run --project optimizer --locked python tools/optical-molding-demo/replay.py `
   --output .codex-temp/optical-molding-demo `
   --api http://127.0.0.1:8000 `
   --token development-device-simulator-token-0001

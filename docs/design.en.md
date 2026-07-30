@@ -98,13 +98,17 @@ cycle/batch comparison → candidate association → testable hypothesis → nex
                          validated process window ← supported / rejected / inconclusive hypothesis
 ```
 
-- A cycle comparison creates only **candidate hypotheses**. It preserves features, effect sizes, confounders, and the comparison snapshot; it never turns an association into a causal claim.
-- Once an engineer defines an outcome, expected direction, and minimum meaningful effect, the optimizer can use the `validate-hypothesis` intent. Among safe candidates, it favors combinations that are uncertain for the outcome and sufficiently separated from prior observations on the hypothesis variables.
+- Cycle diagnosis evaluates actual recipe parameters and stage-level process features in one candidate space. The first layer retains pass/fail medians, MAD robust effects, and effective sample weights. Once sample size permits, the second layer selects Elastic Net, a regularized additive model, or a continuous-outcome GP and reports out-of-fold cross-validation, bootstrap selection stability, and candidate interactions.
+- The multivariable model adjusts product, material, machine, mold, and lot as fixed effects and includes a run-time trend. It can only adjust recorded confounders with overlapping support and never converts an observational conditional effect into a causal claim.
+- The system creates an experimentally testable hypothesis only when the candidate data source matches a project control through its `recipe:` or `signal:` mapping. It never creates an empty hypothesis without a controllable variable.
+- A candidate that maps to a control is bound to the project's highest-weight objective; the objective direction, baseline, and specification produce an editable minimum-effect default. The optimizer then uses the `validate-hypothesis` intent and favors safe combinations that are uncertain for the outcome and sufficiently separated from prior observations.
 - The `reach-specification` intent continues to use qLogNEI/qLogNEHVI to approach specification under safety constraints.
 - The product workbench schedules two distinct candidates twice by default, splits them across two execution blocks, and rotates their order. This separates treatment differences from single-run noise; API callers may explicitly change the replicate count.
-- Results must be derived from source snapshots. Their confidence intervals automatically mark a hypothesis inconclusive when they cross the threshold, supported when they fully exceed it in the expected direction, or rejected when they fully exceed it in the opposite direction; traceable evidence is written with the decision.
+- A single point or block can at most mark a hypothesis as intervention-supported. The system promotes it to a verified cause only when at least two intervention conditions repeat across two blocks, the confidence interval clears the minimum meaningful effect, and safety constraints pass.
+- Results must be derived from source snapshots. Hypothesis decisions use a Welch interval for the effect (experiment mean minus an independent historical-control mean), never an interval around the observed mean. With fewer than two independent control or experiment observations, no interval is fabricated and the decision stays inconclusive.
 - Approval creates an ordered, equipment-neutral execution package. A PLC gateway, MES, recipe system, or operator station applies the parameters and preserves the `RunKey`; once actual recipes, trajectories, and inspections are complete, the background workflow materializes the result and closes the experiment.
-- Process-window maturity is explicit: evidence candidate, replay-reviewed, laboratory replicate-validated, and production-released. A human review cannot promote replay-only evidence into a production window.
+- An optimization batch may create a candidate setting only from repeats of the same condition. It must not join the minima and maxima of scattered successful points into an untested hyper-rectangle.
+- A separate validation experiment must run the candidate at least three times across two execution blocks. Only when actual settings, quality objectives, and safety constraints all pass may a different engineer approve laboratory validation. A continuous process window additionally requires boundary and interaction experiments; repeats at one point cannot validate an entire range.
 - Research assets remain reusable project context for mechanisms, knowledge, and data quality, rather than a separate daily-workbench module.
 
 The default scenario profile is `generic`; the optical-lens molding grey-box profile is `optical-lens-molding-v1`. PLC models belong to acquisition adapters and must not appear in process-physics profiles or change this business contract.
@@ -114,6 +118,11 @@ The default scenario profile is `generic`; the optical-lens molding grey-box pro
 ```json
 {
   "runKey": "bo-7d2f6a3e1c2d-01",
+  "context": {
+    "machine_id": "PRESS-01",
+    "mold_id": "MOLD-A",
+    "material_lot": "GLASS-LOT-07"
+  },
   "actualFactors": { "holding-temperature": 512.0 },
   "processFeatures": {
     "mold-temperature.hold.mean": 510.8,
@@ -131,6 +140,7 @@ When a `recipe:` or `signal:` source is explicit, missing actual data excludes t
 
 - The same input snapshot produces the same hash and deterministic experiment ID.
 - A repeated request returns the unfinished optimized experiment.
+- The database allows at most one formal result per experiment, including under multi-instance concurrency.
 - Running settings are passed as pending points.
 - Concurrent creators converge on the same experiment.
 - Platform and Edge still start and collect when the optimizer is unavailable.
@@ -151,6 +161,7 @@ The experiment workflow, data spine, and optimizer protocol remain unchanged.
 
 ## Advanced work not yet complete
 
+- Random-effects estimation, serial autocorrelation, and missing-not-at-random mechanisms; context adjustment currently uses fixed effects and a time trend;
 - Calibrated physical priors for real production scenarios;
 - multi-task transfer across products, materials, tooling, and machines;
 - online uncertainty calibration and drift detection;

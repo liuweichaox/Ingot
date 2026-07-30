@@ -161,6 +161,9 @@ public sealed partial class ProcessResearchWorkflow(IProcessResearchStore store)
         }
         if (!ResearchHypothesisStatuses.IsValid(request.Status))
             throw new ProcessResearchRuleException("研发假设状态无效。");
+        if (request.Status == ResearchHypothesisStatuses.Validated &&
+            existing?.Status != ResearchHypothesisStatuses.Validated)
+            throw new ProcessResearchRuleException("已验证原因只能由跨区组重复干预实验自动确认。");
         if (request.Confidence is < 0 or > 1 || !double.IsFinite(request.Confidence))
             throw new ProcessResearchRuleException("研发假设置信度必须位于 0 到 1 之间。");
 
@@ -200,6 +203,16 @@ public sealed partial class ProcessResearchWorkflow(IProcessResearchStore store)
         CancellationToken ct = default)
     {
         var project = await RequireMutableProjectAsync(projectId, ct).ConfigureAwait(false);
+        ResearchProcessWindow? validationWindow = null;
+        if (request.ValidationWindowId is { } validationWindowId)
+        {
+            validationWindow = await store.GetProcessWindowAsync(validationWindowId, ct)
+                .ConfigureAwait(false);
+            if (validationWindow is null ||
+                validationWindow.ProjectId != projectId ||
+                validationWindow.Status != ProcessWindowStatuses.Candidate)
+                throw new ProcessResearchRuleException("独立验证实验必须引用当前项目中的候选工艺窗口。");
+        }
         if (request.HypothesisId is { } hypothesisId)
         {
             var hypothesis = await store.GetHypothesisAsync(hypothesisId, ct).ConfigureAwait(false);
@@ -214,8 +227,11 @@ public sealed partial class ProcessResearchWorkflow(IProcessResearchStore store)
             .ToLowerInvariant();
         if (!ResearchDesignMethods.IsValid(designMethod))
             throw new ProcessResearchRuleException("实验设计方法无效。");
-        if (request.RunPlan.Count < 2)
-            throw new ProcessResearchRuleException("实验计划必须至少包含两个运行条件，不能用单点设置代替实验设计。");
+        if (request.RunPlan.Count < (validationWindow is null ? 2 : 3))
+            throw new ProcessResearchRuleException(
+                validationWindow is null
+                    ? "实验计划必须至少包含两个运行条件，不能用单点设置代替实验设计。"
+                    : "独立验证实验至少需要三个重复运行。");
 
         ExperimentFactorSetting NormalizeFactor(ExperimentFactorSetting value)
         {
@@ -258,8 +274,10 @@ public sealed partial class ProcessResearchWorkflow(IProcessResearchStore store)
                 .Select(static factor => $"{factor.VariableCode}:{factor.Value:R}")))
             .Distinct(StringComparer.Ordinal)
             .Count();
-        if (distinctConditions < 2)
+        if (distinctConditions < 2 && validationWindow is null)
             throw new ProcessResearchRuleException("实验至少需要两个不同的变量组合。");
+        if (validationWindow is not null && distinctConditions != 1)
+            throw new ProcessResearchRuleException("独立验证实验必须重复验证同一个候选设置，不能同时改变条件。");
 
         var factors = (request.Factors.Count > 0
                 ? request.Factors.Select(NormalizeFactor)
@@ -299,6 +317,7 @@ public sealed partial class ProcessResearchWorkflow(IProcessResearchStore store)
                 ? Guid.CreateVersion7()
                 : request.ExperimentId,
             ProjectId = projectId,
+            ValidationWindowId = validationWindow?.WindowId,
             Name = RequiredText(request.Name, "实验名称", 240),
             DesignMethod = designMethod,
             PlanVersion = 1,
@@ -434,9 +453,6 @@ public sealed partial class ProcessResearchWorkflow(IProcessResearchStore store)
             throw new ProcessResearchRuleException("实验结果必须包含目标指标的计算结果。");
         if (!request.CalculatedFromSource)
             throw new ProcessResearchRuleException("实验结果必须由不可变的数据快照计算，不能手工填报结论。");
-        if (request.RunCount < 2 || request.ReplicateCount < 1)
-            throw new ProcessResearchRuleException("实验结果至少需要两个运行记录和一个重复组。");
-
         var objectives = project.Objectives.ToDictionary(static value => value.Code, StringComparer.Ordinal);
         var metrics = request.Metrics.Select(metric =>
         {
@@ -512,6 +528,42 @@ public sealed partial class ProcessResearchWorkflow(IProcessResearchStore store)
         if (runObservations.Select(static value => value.RunKey)
                 .Distinct(StringComparer.Ordinal).Count() != runObservations.Length)
             throw new ProcessResearchRuleException("同一结果中的运行观察标识不能重复。");
+        if (!runObservations.Select(static value => value.RunKey)
+                .ToHashSet(StringComparer.Ordinal)
+                .SetEquals(experiment.RunPlan.Select(static value => value.RunKey)))
+            throw new ProcessResearchRuleException("实验结果必须包含计划中每个 RunKey 的逐运行源数据观察。");
+
+        var replicateCount = experiment.RunPlan
+            .Where(static value => !string.IsNullOrWhiteSpace(value.ReplicateKey))
+            .GroupBy(static value => value.ReplicateKey!, StringComparer.Ordinal)
+            .Select(static group => group.Count())
+            .DefaultIfEmpty(1)
+            .Min();
+        var distinctBlockCount = Math.Max(
+            1,
+            experiment.RunPlan
+                .Select(static value => value.BlockKey)
+                .Where(static value => !string.IsNullOrWhiteSpace(value))
+                .Distinct(StringComparer.Ordinal)
+                .Count());
+        var distinctMaterialLotCount = CountDistinctContext(
+            runObservations,
+            "material_lot",
+            "material_lot_id",
+            "material_batch",
+            "batch_id");
+        var distinctEquipmentCount = CountDistinctContext(runObservations, "machine_id");
+        var safetyPassed = project.OutcomeConstraints.All(constraint =>
+            runObservations.All(observation =>
+                observation.ConstraintOutcomes.TryGetValue(constraint.Code, out var outcome) &&
+                (constraint.Operator == "<="
+                    ? outcome <= constraint.Limit
+                    : outcome >= constraint.Limit)));
+        var excludedRunKeys = runObservations
+            .Where(static value => !value.ValidForOptimization)
+            .Select(static value => value.RunKey)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
 
         var resultId = request.ResultId == Guid.Empty ? Guid.CreateVersion7() : request.ResultId;
         if (await store.GetExperimentResultAsync(resultId, ct).ConfigureAwait(false) is not null)
@@ -530,12 +582,13 @@ public sealed partial class ProcessResearchWorkflow(IProcessResearchStore store)
             analysisRunId,
             metrics,
             runObservations,
-            request.RunCount,
-            request.ReplicateCount,
-            request.DistinctMaterialLotCount,
-            request.DistinctEquipmentCount,
-            request.SafetyPassed,
-            request.ExcludedRunKeys
+            RunCount = runObservations.Length,
+            ReplicateCount = replicateCount,
+            DistinctBlockCount = distinctBlockCount,
+            DistinctMaterialLotCount = distinctMaterialLotCount,
+            DistinctEquipmentCount = distinctEquipmentCount,
+            SafetyPassed = safetyPassed,
+            ExcludedRunKeys = excludedRunKeys
         });
         var analysisHash = Convert.ToHexStringLower(
             SHA256.HashData(Encoding.UTF8.GetBytes(hashPayload)));
@@ -565,11 +618,14 @@ public sealed partial class ProcessResearchWorkflow(IProcessResearchStore store)
             AnalysisHash = analysisHash,
             Metrics = metrics,
             RunObservations = runObservations,
+            RunCount = runObservations.Length,
+            ReplicateCount = replicateCount,
+            DistinctBlockCount = distinctBlockCount,
+            DistinctMaterialLotCount = distinctMaterialLotCount,
+            DistinctEquipmentCount = distinctEquipmentCount,
+            SafetyPassed = safetyPassed,
             Evidence = evidence,
-            ExcludedRunKeys = request.ExcludedRunKeys.Select(static value => value.Trim())
-                .Where(static value => value.Length > 0)
-                .Distinct(StringComparer.Ordinal)
-                .ToArray(),
+            ExcludedRunKeys = excludedRunKeys,
             RecordedBy = NormalizeUser(userId),
             RecordedAt = now
         };
@@ -623,14 +679,17 @@ public sealed partial class ProcessResearchWorkflow(IProcessResearchStore store)
             if (!knownVariables.TryGetValue(code, out var variable))
                 throw new ProcessResearchRuleException($"工艺窗口变量 {code} 不是项目中的可控变量。");
             if (!double.IsFinite(value.LowerBound) || !double.IsFinite(value.UpperBound) ||
-                value.LowerBound >= value.UpperBound ||
+                value.LowerBound > value.UpperBound ||
                 variable.LowerLimit is { } lower && value.LowerBound < lower ||
                 variable.UpperLimit is { } upper && value.UpperBound > upper)
                 throw new ProcessResearchRuleException($"工艺窗口变量 {code} 的范围无效。");
+            var unit = RequiredText(value.Unit, "工艺窗口变量单位", 40);
+            if (!string.Equals(unit, variable.Unit, StringComparison.OrdinalIgnoreCase))
+                throw new ProcessResearchRuleException($"工艺窗口变量 {code} 的单位必须与项目变量一致。");
             return value with
             {
                 VariableCode = code,
-                Unit = RequiredText(value.Unit, "工艺窗口变量单位", 40)
+                Unit = unit
             };
         }).ToArray();
         if (variables.Select(static value => value.VariableCode).Distinct(StringComparer.Ordinal).Count() !=
@@ -745,6 +804,141 @@ public sealed partial class ProcessResearchWorkflow(IProcessResearchStore store)
         return saved;
     }
 
+    public async Task<ResearchExperiment> CreateProcessWindowValidationExperimentAsync(
+        Guid windowId,
+        string userId,
+        CancellationToken ct = default)
+    {
+        var window = await store.GetProcessWindowAsync(windowId, ct).ConfigureAwait(false)
+            ?? throw new ProcessResearchRuleException("工艺窗口不存在。");
+        var project = await RequireMutableProjectAsync(window.ProjectId, ct).ConfigureAwait(false);
+        if (window.Status != ProcessWindowStatuses.Candidate)
+            throw new ProcessResearchRuleException("只有候选工艺窗口可以设计独立验证实验。");
+        if (project.Status != ResearchProjectStatuses.Validating)
+            throw new ProcessResearchRuleException("项目进入验证阶段后才能设计独立验证实验。");
+        if (window.Variables.Any(static value => value.LowerBound != value.UpperBound))
+            throw new ProcessResearchRuleException(
+                "当前自动验证只支持候选设置点；连续工艺窗口必须先完成覆盖边界和交互作用的扩展实验。");
+
+        var experiments = await store.ListExperimentsAsync(project.ProjectId, ct)
+            .ConfigureAwait(false);
+        var existing = experiments
+            .Where(value => value.ValidationWindowId == windowId &&
+                            value.Status != ResearchExperimentStatuses.Cancelled)
+            .OrderByDescending(static value => value.CreatedAt)
+            .FirstOrDefault();
+        if (existing is not null)
+            return existing;
+
+        var experimentId = Guid.CreateVersion7();
+        var shortId = experimentId.ToString("N")[..8];
+        var factors = window.Variables
+            .Select(variable => new ExperimentFactorSetting
+            {
+                VariableCode = variable.VariableCode,
+                Value = (variable.LowerBound + variable.UpperBound) / 2,
+                Unit = variable.Unit
+            })
+            .ToArray();
+        var runs = Enumerable.Range(1, 3)
+            .Select(index => new ExperimentRunPlan
+            {
+                RunKey = $"validation-{shortId}-r{index:00}",
+                Sequence = index,
+                BlockKey = $"validation-block-{index:00}",
+                ReplicateKey = "candidate-setting",
+                Factors = factors
+            })
+            .ToArray();
+        return await CreateExperimentAsync(
+            project.ProjectId,
+            new ResearchExperiment
+            {
+                ExperimentId = experimentId,
+                ValidationWindowId = windowId,
+                Name = $"独立验证 · {window.Name}",
+                DesignMethod = ResearchDesignMethods.EngineerDefined,
+                Factors = factors,
+                RunPlan = runs,
+                BlockingKeys = runs.Select(static value => value.BlockKey!)
+                    .Distinct(StringComparer.Ordinal)
+                    .ToArray(),
+                ReplicateKeys = ["candidate-setting"],
+                ObjectiveCodes = window.ObjectiveCodes,
+                StopRule = "任一安全约束失败立即停止；三个跨区组重复全部完成后结束。",
+                RollbackPlan = "停止验证并恢复验证前已批准的生产配方；候选窗口保持未验证状态。"
+            },
+            userId,
+            ct).ConfigureAwait(false);
+    }
+
+    public async Task<ResearchProcessWindow> AttachProcessWindowValidationResultAsync(
+        Guid windowId,
+        ResearchExperiment experiment,
+        ResearchExperimentResult result,
+        string userId,
+        CancellationToken ct = default)
+    {
+        var window = await store.GetProcessWindowAsync(windowId, ct).ConfigureAwait(false)
+            ?? throw new ProcessResearchRuleException("工艺窗口不存在。");
+        var project = await RequireMutableProjectAsync(window.ProjectId, ct).ConfigureAwait(false);
+        var persistedExperiment = await store.GetExperimentAsync(experiment.ExperimentId, ct)
+            .ConfigureAwait(false)
+            ?? throw new ProcessResearchRuleException("独立验证实验不存在。");
+        if (window.Status != ProcessWindowStatuses.Candidate ||
+            persistedExperiment.ValidationWindowId != windowId ||
+            persistedExperiment.ProjectId != window.ProjectId ||
+            persistedExperiment.Status != ResearchExperimentStatuses.Completed ||
+            result.ExperimentId != persistedExperiment.ExperimentId ||
+            result.ProjectId != window.ProjectId)
+            throw new ProcessResearchRuleException("验证结果与候选工艺窗口不匹配。");
+        if (!result.CalculatedFromSource || !result.SafetyPassed ||
+            result.RunCount < 3 || result.ReplicateCount < 3 ||
+            result.DistinctBlockCount < 2 || result.RunObservations.Count < 3)
+            throw new ProcessResearchRuleException("独立验证至少需要三个源数据重复运行、两个区组且全部通过安全约束。");
+        if (window.Variables.Any(static value => value.LowerBound != value.UpperBound))
+            throw new ProcessResearchRuleException(
+                "单点重复结果不能验证连续工艺窗口；请先完成覆盖边界和交互作用的扩展实验。");
+        if (result.RunObservations.Any(observation =>
+                !observation.ValidForOptimization ||
+                !IsInsideWindow(window, observation) ||
+                !MeetsMeasuredSpecification(project, observation)))
+            throw new ProcessResearchRuleException("独立验证运行未全部位于候选设置内并满足目标与安全约束。");
+
+        if (window.SupportingResultIds.Contains(result.ResultId))
+            return window;
+        var now = DateTimeOffset.UtcNow;
+        var evidence = window.Evidence.Append(CreateEvidence(
+                window.ProjectId,
+                EvidenceKinds.ExperimentResult,
+                result.ResultId.ToString(),
+                "候选工艺窗口的独立跨区组重复验证结果。",
+                result.AnalysisHash,
+                now))
+            .GroupBy(static value => (value.Kind, value.ReferenceId))
+            .Select(static group => group.First())
+            .ToArray();
+        var validationConfidence = WilsonLowerBound(result.RunCount, result.RunCount);
+        var saved = await store.SaveProcessWindowAsync(
+            window with
+            {
+                SupportingExperimentIds = window.SupportingExperimentIds
+                    .Append(persistedExperiment.ExperimentId).Distinct().ToArray(),
+                SupportingResultIds = window.SupportingResultIds
+                    .Append(result.ResultId).Distinct().ToArray(),
+                Evidence = evidence,
+                Confidence = Math.Min(window.Confidence, validationConfidence),
+                ConfidenceMethod = ResearchConfidenceMethods.Frequentist,
+                ValidationNotes = "已完成独立跨区组重复实验，等待与候选窗口创建人分离的工程师复核。",
+                UpdatedAt = now
+            },
+            ct).ConfigureAwait(false);
+        await AuditAsync(window.ProjectId, "process-window", windowId.ToString(),
+            "validation-result-attached", userId, window.Status, saved.Status, ct)
+            .ConfigureAwait(false);
+        return saved;
+    }
+
     public async Task<ResearchProcessWindow> ValidateProcessWindowAsync(
         Guid windowId,
         string userId,
@@ -763,32 +957,39 @@ public sealed partial class ProcessResearchWorkflow(IProcessResearchStore store)
         if (value.Evidence.Count == 0 || value.Confidence <= 0 ||
             value.SupportingResultIds.Count == 0)
             throw new ProcessResearchRuleException("工艺窗口验证需要可追溯实验结果和统计置信度。");
+        if (value.Variables.Any(static variable => variable.LowerBound != variable.UpperBound))
+            throw new ProcessResearchRuleException(
+                "连续工艺窗口不能由单点重复验证直接批准；请先完成覆盖边界和交互作用的扩展实验。");
+        var experiments = await store.ListExperimentsAsync(value.ProjectId, ct)
+            .ConfigureAwait(false);
+        var validationExperimentIds = experiments
+            .Where(experiment =>
+                experiment.ValidationWindowId == windowId &&
+                experiment.Status == ResearchExperimentStatuses.Completed)
+            .Select(static experiment => experiment.ExperimentId)
+            .ToHashSet();
+        var validationResults = new List<ResearchExperimentResult>();
         foreach (var resultId in value.SupportingResultIds)
         {
             var result = await store.GetExperimentResultAsync(resultId, ct).ConfigureAwait(false);
             if (result is null || result.ProjectId != value.ProjectId ||
                 !result.CalculatedFromSource || !result.SafetyPassed)
                 throw new ProcessResearchRuleException("工艺窗口的支持结果已失效，不能通过验证。");
+            if (validationExperimentIds.Contains(result.ExperimentId))
+                validationResults.Add(result);
         }
-
-        var laboratoryEvidence = true;
-        foreach (var resultId in value.SupportingResultIds)
-        {
-            var result = await store.GetExperimentResultAsync(resultId, ct).ConfigureAwait(false);
-            if (result is null || result.ReplicateCount < 2 || result.DistinctBlockCount < 2)
-                laboratoryEvidence = false;
-        }
-        var validationLevel = laboratoryEvidence
-            ? ProcessWindowValidationLevels.Laboratory
-            : ProcessWindowValidationLevels.Replay;
+        if (validationResults.Count == 0 ||
+            validationResults.Any(result =>
+                result.RunCount < 3 ||
+                result.ReplicateCount < 3 ||
+                result.DistinctBlockCount < 2))
+            throw new ProcessResearchRuleException("请先完成独立验证实验；同一批候选生成数据不能替代验证证据。");
         var saved = await store.SaveProcessWindowAsync(
             value with
             {
                 Status = ProcessWindowStatuses.Validated,
-                ValidationLevel = validationLevel,
-                ValidationNotes = laboratoryEvidence
-                    ? $"由 {actor} 独立复核跨区组重复实验、适用范围与安全约束。"
-                    : $"由 {actor} 完成证据回放复核；投入生产前仍需跨区组重复实验。",
+                ValidationLevel = ProcessWindowValidationLevels.Laboratory,
+                ValidationNotes = $"由 {actor} 独立复核跨区组重复实验、适用范围与安全约束。",
                 ValidatedBy = actor,
                 ValidatedAt = DateTimeOffset.UtcNow,
                 UpdatedAt = DateTimeOffset.UtcNow
@@ -1209,8 +1410,9 @@ public sealed partial class ProcessResearchWorkflow(IProcessResearchStore store)
             .GroupBy(static value => (value.Kind, value.ReferenceId))
             .Select(static group => group.First())
             .ToArray();
-        var status = EvaluateHypothesis(hypothesis, result);
-        var supporting = status == ResearchHypothesisStatuses.Supported
+        var status = EvaluateHypothesis(hypothesis, experiment, result);
+        var supporting = status is ResearchHypothesisStatuses.Supported or
+            ResearchHypothesisStatuses.Validated
             ? hypothesis.SupportingEvidence.Append(evidence)
                 .GroupBy(static value => (value.Kind, value.ReferenceId))
                 .Select(static group => group.First()).ToArray()
@@ -1243,6 +1445,7 @@ public sealed partial class ProcessResearchWorkflow(IProcessResearchStore store)
 
     private static string EvaluateHypothesis(
         ResearchHypothesis hypothesis,
+        ResearchExperiment experiment,
         ResearchExperimentResult result)
     {
         if (!result.SafetyPassed || hypothesis.ValidationOutcomeCode is null ||
@@ -1255,7 +1458,7 @@ public sealed partial class ProcessResearchWorkflow(IProcessResearchStore store)
             metric.UpperConfidenceBound is null)
             return ResearchHypothesisStatuses.Inconclusive;
         var minimumEffect = hypothesis.MinimumEffect.Value;
-        return hypothesis.ExpectedEffectDirection switch
+        var directionalResult = hypothesis.ExpectedEffectDirection switch
         {
             ResearchHypothesisEffectDirections.Increase
                 when metric.LowerConfidenceBound >= minimumEffect =>
@@ -1271,6 +1474,80 @@ public sealed partial class ProcessResearchWorkflow(IProcessResearchStore store)
                 ResearchHypothesisStatuses.Rejected,
             _ => ResearchHypothesisStatuses.Inconclusive
         };
+        if (directionalResult != ResearchHypothesisStatuses.Supported)
+            return directionalResult;
+        var isRepeatedIntervention =
+            experiment.DesignMethod == ResearchDesignMethods.BayesianOptimization &&
+            experiment.Optimization?.Intent == ResearchOptimizationIntents.ValidateHypothesis &&
+            experiment.Optimization.ReplicatesPerCondition >= 2 &&
+            experiment.Optimization.BlockCount >= 2 &&
+            result.RunCount >= experiment.Optimization.DistinctConditionCount * 2 &&
+            result.DistinctBlockCount >= 2;
+        return isRepeatedIntervention
+            ? ResearchHypothesisStatuses.Validated
+            : ResearchHypothesisStatuses.Supported;
+    }
+
+    private static bool IsInsideWindow(
+        ResearchProcessWindow window,
+        ExperimentRunObservation observation)
+    {
+        var factors = observation.ActualFactors.ToDictionary(
+            static value => value.VariableCode,
+            static value => value.Value,
+            StringComparer.Ordinal);
+        return window.Variables.All(variable =>
+            factors.TryGetValue(variable.VariableCode, out var value) &&
+            value >= variable.LowerBound &&
+            value <= variable.UpperBound);
+    }
+
+    private static int CountDistinctContext(
+        IReadOnlyList<ExperimentRunObservation> observations,
+        params string[] keys)
+        => observations
+            .Select(observation => keys
+                .Select(key => observation.Context.GetValueOrDefault(key))
+                .FirstOrDefault(static value => !string.IsNullOrWhiteSpace(value)))
+            .Where(static value => !string.IsNullOrWhiteSpace(value))
+            .Distinct(StringComparer.Ordinal)
+            .Count();
+
+    private static bool MeetsMeasuredSpecification(
+        ResearchProject project,
+        ExperimentRunObservation observation)
+        => project.Objectives.All(objective =>
+               observation.Outcomes.TryGetValue(objective.Code, out var value) &&
+               MeetsObjective(objective, value)) &&
+           project.OutcomeConstraints.All(constraint =>
+               observation.ConstraintOutcomes.TryGetValue(constraint.Code, out var value) &&
+               (constraint.Operator == "<=" ? value <= constraint.Limit : value >= constraint.Limit));
+
+    private static bool MeetsObjective(ResearchObjective objective, double value)
+        => objective.Direction switch
+        {
+            "minimize" => value <= (objective.UpperLimit ?? objective.Target),
+            "maximize" => value >= (objective.LowerLimit ?? objective.Target),
+            "range" or "target"
+                when objective.LowerLimit is { } min && objective.UpperLimit is { } max =>
+                value >= min && value <= max,
+            // 只有目标点而没有公差时，系统无法诚实判断“达到规格”。
+            "target" => false,
+            _ => false
+        };
+
+    private static double WilsonLowerBound(int successCount, int totalCount)
+    {
+        if (totalCount <= 0)
+            return 0.01;
+        const double z = 1.96;
+        var proportion = (double)successCount / totalCount;
+        var denominator = 1 + z * z / totalCount;
+        var centre = proportion + z * z / (2 * totalCount);
+        var margin = z * Math.Sqrt(
+            proportion * (1 - proportion) / totalCount +
+            z * z / (4 * totalCount * totalCount));
+        return Math.Max(0.01, (centre - margin) / denominator);
     }
 
     private static ResearchExperimentExecution UpdateExecution(

@@ -7,7 +7,7 @@ cd "$repo_root"
 public_files=(
   README.md README.en.md CONTRIBUTING.md CONTRIBUTING.en.md SECURITY.md
   docs apps/website/app apps/docs-site/app
-  src/platform/Ingot.Platform.Web/src
+  apps/platform/src
 )
 
 # Guard against obsolete product narratives. Evidence, hypotheses, provenance,

@@ -21,6 +21,8 @@ from ingot_optimizer import (
     Variable,
 )
 from ingot_optimizer.botorch_engine import MODEL_VERSION
+from ingot_optimizer.diagnosis import FeatureSpec, diagnose
+import numpy as np
 
 
 app = FastAPI(title="Ingot Process Optimizer", version="0.4.0")
@@ -97,6 +99,28 @@ class SuggestionRequest(StrictModel):
     seed: int = Field(default=0, ge=0, le=2_147_483_647)
     n_random: int = Field(default=4000, ge=1, le=100_000)
     n_samples: int = Field(default=256, ge=32, le=10_000)
+
+
+class DiagnosticFeatureIn(StrictModel):
+    data_source: str = Field(min_length=1, max_length=300)
+    source_kind: Literal["recipe-parameter", "process-feature"]
+    actionability: Literal["controllable", "observable"]
+
+
+class DiagnosticObservationIn(StrictModel):
+    run_key: str = Field(min_length=1, max_length=240)
+    outcome: float
+    weight: float = Field(default=1.0, gt=0, le=1)
+    values: dict[str, float]
+    context: dict[str, str] = Field(default_factory=dict)
+    occurred_at: float = 0.0
+
+
+class DiagnosisRequest(StrictModel):
+    outcome_kind: Literal["binary", "continuous"] = "binary"
+    features: list[DiagnosticFeatureIn] = Field(min_length=1, max_length=500)
+    observations: list[DiagnosticObservationIn] = Field(min_length=4, max_length=10_000)
+    seed: int = Field(default=0, ge=0, le=2_147_483_647)
 
 
 def _campaign_from_input(spec: CampaignIn) -> Campaign:
@@ -197,3 +221,54 @@ def create_suggestions(request: SuggestionRequest) -> dict:
         "suggestions": [suggestion.to_dict() for suggestion in suggestions],
         "state_persisted": False,
     }
+
+
+@app.post("/v1/diagnosis")
+def create_diagnosis(request: DiagnosisRequest) -> dict:
+    feature_names = [feature.data_source for feature in request.features]
+    if len(set(feature_names)) != len(feature_names):
+        raise HTTPException(status_code=422, detail="diagnostic feature keys must be unique")
+    rows = []
+    for observation in request.observations:
+        unknown = set(observation.values).difference(feature_names)
+        if unknown:
+            raise HTTPException(
+                status_code=422,
+                detail=f"observation contains unknown diagnostic features: {sorted(unknown)}",
+            )
+        rows.append(
+            [observation.values.get(name, float("nan")) for name in feature_names]
+        )
+    target = np.asarray(
+        [observation.outcome for observation in request.observations], dtype=float
+    )
+    if request.outcome_kind == "binary" and not set(np.unique(target)).issubset(
+        {0.0, 1.0}
+    ):
+        raise HTTPException(status_code=422, detail="binary outcomes must be 0 or 1")
+    try:
+        return diagnose(
+            [
+                FeatureSpec(
+                    feature.data_source,
+                    feature.source_kind,
+                    feature.actionability,
+                )
+                for feature in request.features
+            ],
+            np.asarray(rows, dtype=float),
+            target,
+            np.asarray(
+                [observation.weight for observation in request.observations],
+                dtype=float,
+            ),
+            [observation.context for observation in request.observations],
+            np.asarray(
+                [observation.occurred_at for observation in request.observations],
+                dtype=float,
+            ),
+            request.outcome_kind,
+            request.seed,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error

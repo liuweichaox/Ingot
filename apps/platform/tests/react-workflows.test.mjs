@@ -91,7 +91,7 @@ test("edge pages use the registry heartbeat contract for status", () => {
 test("workbench and logs use current response contracts without misleading placeholders", () => {
   assert.match(pages, /\/api\/v1\/cycles\?limit=8/);
   assert.match(pages, /\/api\/v1\/research-projects\?limit=100/);
-  assert.match(pages, /工业数据不是终点，决策才是/);
+  assert.match(pages, /从现场问题进入可验证决策/);
   assert.match(pages, /cycleOverview: cycles\.overview/);
   assert.match(pages, /state\.loading \? <LoadingCard \/>/);
   assert.match(pages, /logs\?pageSize=200/);
@@ -112,6 +112,11 @@ test("cycle comparison submits the selection contract and renders business resul
   assert.match(pages, /cycleIds: \[baselineCycleId, candidate\]/);
   assert.match(pages, /correlationId=\$\{encodeURIComponent\(baseline\)\}&limit=1/);
   assert.match(pages, /title="周期概况"/);
+  assert.match(pages, /title="质量候选原因"/);
+  assert.match(pages, /result\?\.diagnosis\?\.candidates/);
+  assert.match(pages, /实际配方/);
+  assert.match(pages, /可直接实验/);
+  assert.match(pages, /诊断边界/);
   assert.match(pages, /title="信号差异"/);
   assert.doesNotMatch(pages, /JSON\.stringify\(result, null, 2\)/);
 });
@@ -136,6 +141,9 @@ test("mechanism assets are presented as business fields instead of raw JSON", ()
 });
 
 test("research projects expose the evidence-backed experiment and process-window workflow", () => {
+  assert.match(researchProjects, /project-definition/);
+  assert.match(researchProjects, /project-validation/);
+  assert.match(researchProjects, /返回项目列表/);
   assert.match(researchProjects, /提出研发假设/);
   assert.match(researchProjects, /设计验证实验/);
   assert.match(researchProjects, /导入历史运行/);
@@ -147,10 +155,12 @@ test("research projects expose the evidence-backed experiment and process-window
   assert.match(researchProjects, /replicatesPerCondition: 2/);
   assert.match(researchProjects, /设备无关执行指令/);
   assert.match(researchProjects, /onClick=\{\(\) => onGenerateOptimizationSuggestions\(\)\}/);
-  assert.match(researchProjects, /记录实验计算结果/);
-  assert.match(researchProjects, /calculatedFromSource: true/);
-  assert.match(researchProjects, /supportingResultIds/);
-  assert.match(researchProjects, /独立复核/);
+  assert.match(researchProjects, /design-validation/);
+  assert.match(researchProjects, /设计独立验证实验/);
+  assert.match(researchProjects, /95% 效果区间/);
+  assert.doesNotMatch(researchProjects, /calculatedFromSource: true/);
+  assert.doesNotMatch(researchProjects, /记录实验计算结果/);
+  assert.match(researchProjects, /审核独立验证结果/);
   assert.match(researchProjects, /发布生产/);
   assert.match(researchProjects, /等待其他成员批准/);
   assert.doesNotMatch(researchProjects, /项目代码|指标代码|变量代码|AnalysisHash|GUID/);

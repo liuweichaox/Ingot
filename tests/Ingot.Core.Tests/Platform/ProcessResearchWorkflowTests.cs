@@ -96,7 +96,7 @@ public sealed class ProcessResearchWorkflowTests
                 [
                     new ExperimentRunObservation
                     {
-                        RunKey = "cycle-001",
+                        RunKey = "low-low",
                         ActualFactors =
                         [
                             new ExperimentFactorSetting
@@ -125,7 +125,7 @@ public sealed class ProcessResearchWorkflowTests
                     },
                     new ExperimentRunObservation
                     {
-                        RunKey = "cycle-002",
+                        RunKey = "high-high",
                         ActualFactors =
                         [
                             new ExperimentFactorSetting
@@ -153,11 +153,12 @@ public sealed class ProcessResearchWorkflowTests
                         SourceContentHash = new string('b', 64)
                     }
                 ],
-                RunCount = 4,
-                ReplicateCount = 2,
-                DistinctBlockCount = 2,
-                DistinctMaterialLotCount = 2,
-                DistinctEquipmentCount = 1,
+                // 调用方传入的汇总计数不可信，工作流必须从计划和观察重新计算。
+                RunCount = 99,
+                ReplicateCount = 99,
+                DistinctBlockCount = 99,
+                DistinctMaterialLotCount = 99,
+                DistinctEquipmentCount = 99,
                 SafetyPassed = true,
                 CalculatedFromSource = true
             },
@@ -177,15 +178,15 @@ public sealed class ProcessResearchWorkflowTests
                     new ProcessWindowVariable
                     {
                         VariableCode = "holding-temperature",
-                        LowerBound = 510,
-                        UpperBound = 530,
+                        LowerBound = 520,
+                        UpperBound = 520,
                         Unit = "Cel"
                     },
                     new ProcessWindowVariable
                     {
                         VariableCode = "press-force",
-                        LowerBound = 10,
-                        UpperBound = 14,
+                        LowerBound = 12,
+                        UpperBound = 12,
                         Unit = "kN"
                     }
                 ],
@@ -204,6 +205,10 @@ public sealed class ProcessResearchWorkflowTests
             project.ProjectId,
             ResearchProjectStatuses.Validating,
             "engineer-a");
+        var prematureValidation = await Assert.ThrowsAsync<ProcessResearchRuleException>(
+            () => workflow.ValidateProcessWindowAsync(window.WindowId, "engineer-b"));
+        Assert.Contains("独立验证实验", prematureValidation.Message);
+        await CompleteIndependentValidationAsync(workflow, window);
         window = await workflow.ValidateProcessWindowAsync(window.WindowId, "engineer-b");
         Assert.Equal(ProcessWindowValidationLevels.Laboratory, window.ValidationLevel);
         window = await workflow.ReleaseProcessWindowAsync(window.WindowId, "engineer-c");
@@ -216,11 +221,16 @@ public sealed class ProcessResearchWorkflowTests
         Assert.Equal(ProcessWindowValidationLevels.Production, window.ValidationLevel);
         Assert.Equal(ResearchProjectStatuses.Completed, project.Status);
         Assert.Equal(2, result.RunObservations.Count);
+        Assert.Equal(2, result.RunCount);
+        Assert.Equal(1, result.ReplicateCount);
+        Assert.Equal(1, result.DistinctBlockCount);
+        Assert.Equal(0, result.DistinctMaterialLotCount);
+        Assert.Equal(0, result.DistinctEquipmentCount);
         var workspace = await workflow.GetWorkspaceAsync(project.ProjectId);
         Assert.Single(workspace.Hypotheses);
         Assert.Equal(ResearchHypothesisStatuses.Supported, workspace.Hypotheses[0].Status);
         Assert.Single(workspace.Hypotheses[0].ValidationEvidence);
-        Assert.Single(workspace.Experiments);
+        Assert.Equal(2, workspace.Experiments.Count);
         Assert.Single(workspace.ProcessWindows);
     }
 
@@ -410,6 +420,12 @@ public sealed class ProcessResearchWorkflowTests
         var metric = Assert.Single(result.Metrics);
         Assert.Equal(0.8d, metric.BaselineValue, 6);
         Assert.Equal(0.445d, metric.ObservedValue, 6);
+        Assert.Equal(-0.355d, metric.EffectValue, 6);
+        Assert.Equal(
+            metric.EffectValue,
+            (metric.LowerConfidenceBound!.Value + metric.UpperConfidenceBound!.Value) / 2,
+            6);
+        Assert.Equal("two-sample-welch-effect-95ci-v2", metric.ComputationMethod);
         var savedExperiment = await store.GetExperimentAsync(experiment.ExperimentId);
         Assert.Contains(result.ResultId, savedExperiment!.ResultIds);
         Assert.Equal(ResearchExperimentStatuses.Completed, savedExperiment.Status);
@@ -531,6 +547,8 @@ public sealed class ProcessResearchWorkflowTests
         var candidate = Assert.Single(await store.ListProcessWindowsAsync(project.ProjectId));
         Assert.Equal(ProcessWindowStatuses.Candidate, candidate.Status);
         Assert.Equal(ProcessWindowValidationLevels.Evidence, candidate.ValidationLevel);
+        Assert.All(candidate.Variables, static variable =>
+            Assert.Equal(variable.LowerBound, variable.UpperBound));
 
         await workflow.ChangeProjectStatusAsync(
             project.ProjectId,
@@ -540,10 +558,75 @@ public sealed class ProcessResearchWorkflowTests
             project.ProjectId,
             ResearchProjectStatuses.Validating,
             "engineer-a");
+        await CompleteIndependentValidationAsync(workflow, candidate);
         var validated = await workflow.ValidateProcessWindowAsync(
             candidate.WindowId,
             "engineer-b");
         Assert.Equal(ProcessWindowValidationLevels.Laboratory, validated.ValidationLevel);
+    }
+
+    private static async Task CompleteIndependentValidationAsync(
+        ProcessResearchWorkflow workflow,
+        ResearchProcessWindow window)
+    {
+        var experiment = await workflow.CreateProcessWindowValidationExperimentAsync(
+            window.WindowId,
+            "engineer-a");
+        experiment = await workflow.ChangeExperimentStatusAsync(
+            experiment.ExperimentId,
+            ResearchExperimentStatuses.Approved,
+            "engineer-b");
+        experiment = await workflow.ChangeExperimentStatusAsync(
+            experiment.ExperimentId,
+            ResearchExperimentStatuses.Running,
+            "engineer-a");
+        var observations = experiment.RunPlan.Select((run, index) =>
+            new ExperimentRunObservation
+            {
+                RunKey = run.RunKey,
+                ActualFactors = run.Factors,
+                Outcomes = new Dictionary<string, double>
+                {
+                    ["form-error"] = 0.28 + index * 0.01
+                },
+                SourceContentHash = new string("abc"[index], 64)
+            }).ToArray();
+        var result = await workflow.RecordExperimentResultAsync(
+            experiment.ExperimentId,
+            new ResearchExperimentResult
+            {
+                DatasetSnapshotId = $"validation:{experiment.ExperimentId:N}",
+                Metrics =
+                [
+                    new ExperimentMetricResult
+                    {
+                        ObjectiveCode = "form-error",
+                        BaselineValue = 0.4,
+                        ObservedValue = 0.29,
+                        EffectValue = -0.11,
+                        LowerConfidenceBound = -0.15,
+                        UpperConfidenceBound = -0.07,
+                        Unit = "um",
+                        BaselineSampleCount = 3,
+                        ExperimentSampleCount = 3,
+                        ComputationMethod = "independent-validation-test"
+                    }
+                ],
+                RunObservations = observations,
+                RunCount = 3,
+                ReplicateCount = 3,
+                DistinctBlockCount = 3,
+                DistinctMaterialLotCount = 1,
+                DistinctEquipmentCount = 1,
+                SafetyPassed = true,
+                CalculatedFromSource = true
+            },
+            "engineer-a");
+        await workflow.AttachProcessWindowValidationResultAsync(
+            window.WindowId,
+            experiment,
+            result,
+            "system-research-automation");
     }
 
     private static ExperimentRunPlan Run(

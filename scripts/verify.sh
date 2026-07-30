@@ -10,7 +10,7 @@ bash scripts/verify-product-language.sh
 
 for required_file in \
   src/platform/Ingot.Platform.Api/Dockerfile \
-  src/platform/Ingot.Platform.Web/Dockerfile \
+  apps/platform/Dockerfile \
   src/edge/Ingot.Edge.ConnectorHost/Dockerfile \
   optimizer/Dockerfile \
   deploy/docker/site.Dockerfile \
@@ -20,11 +20,11 @@ done
 
 dotnet build Ingot.sln --disable-build-servers -m:1
 dotnet test tests/Ingot.Core.Tests/Ingot.Core.Tests.csproj --no-build --disable-build-servers -m:1
-npm --prefix src/platform/Ingot.Platform.Web ci
-npm --prefix src/platform/Ingot.Platform.Web run build
-npm --prefix src/platform/Ingot.Platform.Web run test
-npm --prefix src/platform/Ingot.Platform.Web run lint
-npm --prefix src/platform/Ingot.Platform.Web audit --omit=dev
+npm --prefix apps/platform ci
+npm --prefix apps/platform run build
+npm --prefix apps/platform run test
+npm --prefix apps/platform run lint
+npm --prefix apps/platform audit --omit=dev
 
 npm --prefix apps/website ci
 npm --prefix apps/website run build
@@ -38,10 +38,8 @@ node --test apps/docs-site/tests/export.test.mjs
 npm --prefix apps/docs-site run lint
 npm --prefix apps/docs-site audit --omit=dev
 
-python3 -m venv .codex-temp/optimizer-verify
-.codex-temp/optimizer-verify/bin/python -m pip install --disable-pip-version-check --quiet \
-  -e "./optimizer[service]" "pytest>=8" "httpx>=0.27"
-PYTHONPATH=optimizer .codex-temp/optimizer-verify/bin/python -m pytest optimizer
+uv sync --project optimizer --extra service --group dev --locked
+uv run --project optimizer --locked pytest
 
 for script in scripts/*.sh deploy/*.sh; do
   bash -n "$script"

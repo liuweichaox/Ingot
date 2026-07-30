@@ -9,7 +9,7 @@ updates:
         patterns: ["*"]
 
   - package-ecosystem: npm
-    directory: /src/platform/Ingot.Platform.Web
+    directory: /apps/platform
     schedule:
       interval: weekly
     groups:

@@ -19,21 +19,26 @@ The NumPy/SciPy GP remains a cold-start and regression baseline. The production 
 
 ## Local validation
 
+Python environments are managed exclusively with `uv 0.11.32`; do not create a
+project venv or install project dependencies with pip:
+
 ```bash
 cd optimizer
-uv sync --extra service --extra viz --group dev
-uv run pytest
-uv run python demo.py
-uv run uvicorn service:app --port 8110
+uv sync --extra service --extra viz --group dev --locked
+uv run --locked pytest
+uv run --locked python demo.py
+uv run --locked uvicorn service:app --port 8110
 ```
 
-On Windows, explicitly select a modern Python when the default command points to an older environment:
+If a compatible Python is not installed, let `uv` install and select Python 3.12:
 
-```powershell
-py -3.12 -m venv .venv
-.\.venv\Scripts\python -m pip install -e ".[service,viz]" pytest httpx2
-.\.venv\Scripts\python -m pytest
+```bash
+uv python install 3.12
+uv sync --python 3.12 --extra service --extra viz --group dev --locked
 ```
+
+`uv.lock` is authoritative. After changing `pyproject.toml`, run `uv lock` and
+commit both files; CI and container builds reject an out-of-date lock.
 
 The synthetic demo tests mechanics only. Its result can vary with numerical-library versions and is not evidence of real process savings.
 

@@ -97,17 +97,6 @@ public sealed class ResearchExperimentResultMaterializer(
                         value.RunKey,
                         value.SourceContentHash
                     }))));
-            var replicateCount = experiment.RunPlan
-                .Where(static value => !string.IsNullOrWhiteSpace(value.ReplicateKey))
-                .GroupBy(static value => value.ReplicateKey!, StringComparer.Ordinal)
-                .Select(static group => group.Count())
-                .DefaultIfEmpty(1)
-                .Min();
-            var distinctBlockCount = experiment.RunPlan
-                .Select(static value => value.BlockKey)
-                .Where(static value => !string.IsNullOrWhiteSpace(value))
-                .Distinct(StringComparer.Ordinal)
-                .Count();
             var result = await workflow.RecordExperimentResultAsync(
                 experiment.ExperimentId,
                 new ResearchExperimentResult
@@ -115,11 +104,6 @@ public sealed class ResearchExperimentResultMaterializer(
                     DatasetSnapshotId = $"cycle-observation-snapshot:{snapshotHash}",
                     Metrics = BuildMetrics(project, resolved, priorObservations),
                     RunObservations = resolved,
-                    RunCount = resolved.Length,
-                    ReplicateCount = replicateCount,
-                    DistinctBlockCount = Math.Max(1, distinctBlockCount),
-                    DistinctMaterialLotCount = 1,
-                    DistinctEquipmentCount = 1,
                     SafetyPassed = SatisfiesOutcomeConstraints(project, resolved),
                     CalculatedFromSource = true
                 },
@@ -155,21 +139,33 @@ public sealed class ResearchExperimentResultMaterializer(
             var baseline = previous.Length > 0
                 ? previous.Average()
                 : objective.Baseline ?? observed;
-            var standardError = values.Length < 2
-                ? 0
-                : StandardDeviation(values) / Math.Sqrt(values.Length);
+            var hasIndependentSamples = values.Length >= 2 && previous.Length >= 2;
+            var effect = observed - baseline;
+            var standardError = hasIndependentSamples
+                ? Math.Sqrt(
+                    Math.Pow(StandardDeviation(values), 2) / values.Length +
+                    Math.Pow(StandardDeviation(previous), 2) / previous.Length)
+                : double.NaN;
+            var degreesOfFreedom = hasIndependentSamples
+                ? WelchDegreesOfFreedom(values, previous)
+                : double.NaN;
+            var margin = hasIndependentSamples
+                ? StudentT95Critical(degreesOfFreedom) * standardError
+                : double.NaN;
             return new ExperimentMetricResult
             {
                 ObjectiveCode = objective.Code,
                 BaselineValue = baseline,
                 ObservedValue = observed,
-                EffectValue = observed - baseline,
-                LowerConfidenceBound = observed - 1.96 * standardError,
-                UpperConfidenceBound = observed + 1.96 * standardError,
+                EffectValue = effect,
+                LowerConfidenceBound = hasIndependentSamples ? effect - margin : null,
+                UpperConfidenceBound = hasIndependentSamples ? effect + margin : null,
                 Unit = objective.Unit,
                 BaselineSampleCount = Math.Max(1, previous.Length),
                 ExperimentSampleCount = values.Length,
-                ComputationMethod = "cycle-observation-mean-and-normal-95ci-v1"
+                ComputationMethod = hasIndependentSamples
+                    ? "two-sample-welch-effect-95ci-v2"
+                    : "descriptive-effect-no-independent-control-v2"
             };
         }).ToArray();
 
@@ -178,6 +174,45 @@ public sealed class ResearchExperimentResultMaterializer(
         var mean = values.Average();
         return Math.Sqrt(
             values.Sum(value => Math.Pow(value - mean, 2)) / (values.Count - 1));
+    }
+
+    private static double WelchDegreesOfFreedom(
+        IReadOnlyList<double> experiment,
+        IReadOnlyList<double> baseline)
+    {
+        var experimentTerm = Math.Pow(StandardDeviation(experiment), 2) / experiment.Count;
+        var baselineTerm = Math.Pow(StandardDeviation(baseline), 2) / baseline.Count;
+        var denominator =
+            Math.Pow(experimentTerm, 2) / (experiment.Count - 1) +
+            Math.Pow(baselineTerm, 2) / (baseline.Count - 1);
+        return denominator <= 0
+            ? experiment.Count + baseline.Count - 2
+            : Math.Pow(experimentTerm + baselineTerm, 2) / denominator;
+    }
+
+    // 小样本使用双侧 95% t 临界值表，并向下取整自由度以保持保守；
+    // 30 以上才使用收敛良好的 Cornish-Fisher 近似。
+    private static double StudentT95Critical(double degreesOfFreedom)
+    {
+        if (!double.IsFinite(degreesOfFreedom) || degreesOfFreedom <= 0)
+            return double.PositiveInfinity;
+        double[] smallSampleCriticalValues =
+        [
+            12.706, 4.303, 3.182, 2.776, 2.571, 2.447, 2.365, 2.306, 2.262, 2.228,
+            2.201, 2.179, 2.160, 2.145, 2.131, 2.120, 2.110, 2.101, 2.093, 2.086,
+            2.080, 2.074, 2.069, 2.064, 2.060, 2.056, 2.052, 2.048, 2.045, 2.042
+        ];
+        if (degreesOfFreedom <= smallSampleCriticalValues.Length)
+        {
+            var index = Math.Max(1, (int)Math.Floor(degreesOfFreedom)) - 1;
+            return smallSampleCriticalValues[index];
+        }
+        const double z = 1.959963984540054;
+        var df = degreesOfFreedom;
+        return z +
+               (Math.Pow(z, 3) + z) / (4 * df) +
+               (5 * Math.Pow(z, 5) + 16 * Math.Pow(z, 3) + 3 * z) /
+               (96 * df * df);
     }
 
     private static bool SatisfiesOutcomeConstraints(

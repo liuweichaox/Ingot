@@ -124,6 +124,19 @@ public sealed class ResearchObservationAssembler(
         }
 
         var processFeatures = FlattenFeatures(cycle);
+        var context = new Dictionary<string, string>(cycle.Context, StringComparer.Ordinal)
+        {
+            ["machine_id"] = cycle.MachineId
+        };
+        AddContext(context, "product_series", cycle.ProductSeries);
+        AddContext(context, "product_code", cycle.ProductCode);
+        AddContext(context, "recipe_id", cycle.RecipeId);
+        AddContext(context, "recipe_version", cycle.RecipeVersion);
+        AddContext(context, "tooling_installation_id", cycle.ToolingInstallationId);
+        AddContext(context, "tooling_id", cycle.ToolingId);
+        AddContext(context, "mold_id", cycle.MoldId);
+        AddContext(context, "assembly_revision_id", cycle.AssemblyRevisionId);
+        AddContext(context, "assembly_revision", cycle.AssemblyRevision);
         if (cycle.CompletedAt is null)
             missing.Add("周期未完成");
         if (cycle.ProcessDataQuality.Status == ProcessDataStatuses.Unavailable)
@@ -142,6 +155,7 @@ public sealed class ResearchObservationAssembler(
             ProcessFeatures = processFeatures,
             Outcomes = outcomes,
             ConstraintOutcomes = constraintOutcomes,
+            Context = context,
             Inspections = records
                 .OrderBy(static value => value.RecordId)
                 .Select(static value => new
@@ -158,6 +172,7 @@ public sealed class ResearchObservationAssembler(
         return new ExperimentRunObservation
         {
             RunKey = run.RunKey,
+            Context = context,
             ActualFactors = factors,
             ProcessFeatures = processFeatures,
             Outcomes = outcomes,
@@ -166,6 +181,15 @@ public sealed class ResearchObservationAssembler(
             ExclusionReason = valid ? null : string.Join("；", missing),
             SourceContentHash = contentHash
         };
+    }
+
+    private static void AddContext(
+        IDictionary<string, string> context,
+        string key,
+        string? value)
+    {
+        if (!string.IsNullOrWhiteSpace(value))
+            context[key] = value;
     }
 
     private static bool TryResolveControlValue(

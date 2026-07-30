@@ -4,6 +4,7 @@ using Ingot.Contracts.ProcessConfiguration;
 using Ingot.Platform.Infrastructure.Events;
 using Ingot.Platform.Infrastructure.Inspections;
 using Ingot.Platform.Infrastructure.ProcessConfiguration;
+using Ingot.Platform.Infrastructure.ProcessResearch;
 using System.Globalization;
 using System.Text.Json;
 
@@ -15,10 +16,12 @@ public sealed class CycleComparisonService(
     IInspectionReviewStore reviews,
     ProcessAnalysisResolver analysisResolver,
     WholeCycleAnalysisEngine? wholeCycleAnalysis = null,
-    CycleAnalysisMaterializer? materializer = null) : ICycleComparisonService
+    CycleAnalysisMaterializer? materializer = null,
+    IProcessOptimizerClient? optimizerClient = null) : ICycleComparisonService
 {
     private readonly WholeCycleAnalysisEngine _wholeCycleAnalysis = wholeCycleAnalysis ?? new();
     private readonly CycleAnalysisMaterializer? _materializer = materializer;
+    private readonly CycleDiagnosisEngine _diagnosisEngine = new();
 
     public async Task<CycleComparisonRow?> GetCycleAsync(
         string correlationId,
@@ -172,6 +175,11 @@ public sealed class CycleComparisonService(
             EffectiveCycleWeight = rows.Skip(1).Sum(static row => row.EvidenceWeight)
         };
         var effectiveWeight = acceptance.EffectiveCycleWeight;
+        var diagnosis = await EnrichDiagnosisAsync(
+            rows,
+            _diagnosisEngine.Analyze(rows),
+            optimizerClient,
+            ct).ConfigureAwait(false);
         return new CycleComparisonResult
         {
             BaselineCycleId = baselineCycleId,
@@ -191,8 +199,173 @@ public sealed class CycleComparisonService(
             HistoricalCycles = rows.Skip(1).ToArray(),
             SignalComparisons = BuildSignalComparisons(rows[0], rows.Skip(1).ToArray()),
             QualityAssociations = BuildQualityAssociations(rows),
+            Diagnosis = diagnosis,
             Acceptance = acceptance
         };
+    }
+
+    private static async Task<CycleDiagnosisSummary> EnrichDiagnosisAsync(
+        IReadOnlyList<CycleComparisonRow> rows,
+        CycleDiagnosisSummary robust,
+        IProcessOptimizerClient? optimizerClient,
+        CancellationToken ct)
+    {
+        if (optimizerClient is null || robust.Candidates.Count == 0)
+            return robust;
+        var observations = rows
+            .Where(static row =>
+                row.EvidenceWeight > 0 &&
+                (row.InspectionOutcomes.Contains("FAIL", StringComparer.Ordinal) ||
+                 row.InspectionOutcomes.Contains("PASS", StringComparer.Ordinal)))
+            .Select(row => new ProcessDiagnosticObservationInput
+            {
+                RunKey = row.CorrelationId,
+                Outcome = row.InspectionOutcomes.Contains("FAIL", StringComparer.Ordinal) ? 1 : 0,
+                Weight = Math.Clamp(row.EvidenceWeight, 0.01, 1),
+                OccurredAt = row.StartedAt.ToUnixTimeSeconds(),
+                Context = BuildDiagnosticContext(row),
+                Values = robust.Candidates
+                    .Select(candidate => (candidate.DataSource, Value: ReadCandidateValue(row, candidate)))
+                    .Where(static pair => pair.Value.HasValue)
+                    .ToDictionary(
+                        static pair => pair.DataSource,
+                        static pair => pair.Value!.Value,
+                        StringComparer.Ordinal)
+            })
+            .ToArray();
+        if (observations.Length < 4)
+            return robust;
+        try
+        {
+            var advanced = await optimizerClient.DiagnoseAsync(
+                new ProcessDiagnosisCall
+                {
+                    Features = robust.Candidates.Select(candidate =>
+                        new ProcessDiagnosticFeatureInput
+                        {
+                            DataSource = candidate.DataSource,
+                            SourceKind = candidate.SourceKind,
+                            Actionability = candidate.Actionability
+                        }).ToArray(),
+                    Observations = observations,
+                    Seed = 17
+                },
+                ct).ConfigureAwait(false);
+            var adjusted = advanced.Candidates.ToDictionary(
+                static candidate => candidate.DataSource,
+                StringComparer.Ordinal);
+            var candidates = robust.Candidates.Select(candidate =>
+                adjusted.TryGetValue(candidate.DataSource, out var model)
+                    ? candidate with
+                    {
+                        AdjustedEffect = model.AdjustedEffect,
+                        ModelImportance = model.ModelImportance,
+                        StabilitySelectionRate = model.StabilitySelectionRate,
+                        SignStability = model.SignStability,
+                        CandidateScore = 0.4 * candidate.CandidateScore + 0.6 * model.RankScore,
+                        EvidenceLevel = advanced.CrossValidationScore <= 0
+                            ? "exploratory"
+                            : model.StabilitySelectionRate >= 0.6
+                                ? "stable"
+                                : model.StabilitySelectionRate >= 0.25
+                                    ? "exploratory"
+                                    : "screening"
+                    }
+                    : advanced.CrossValidationScore > 0 &&
+                      advanced.ModelFamily != "robust-screening-only"
+                        ? candidate with { EvidenceLevel = "screening" }
+                        : candidate)
+                .OrderByDescending(static candidate => candidate.CandidateScore)
+                .ThenBy(static candidate => candidate.CandidateId, StringComparer.Ordinal)
+                .ToArray();
+            return robust with
+            {
+                AlgorithmVersion = $"{CycleDiagnosisEngine.AlgorithmVersion}+{advanced.AlgorithmVersion}",
+                ModelFamily = advanced.ModelFamily,
+                AdjustmentMethod = advanced.AdjustmentMethod,
+                CrossValidationScore = advanced.CrossValidationScore,
+                FoldCount = advanced.FoldCount,
+                StabilityRuns = advanced.StabilityRuns,
+                ContextVariables = advanced.ContextVariables,
+                Candidates = candidates,
+                Interactions = advanced.Interactions.Select(static interaction =>
+                    new CycleCauseInteraction
+                    {
+                        LeftDataSource = interaction.LeftDataSource,
+                        RightDataSource = interaction.RightDataSource,
+                        AdjustedEffect = interaction.AdjustedEffect,
+                        StabilitySelectionRate = interaction.StabilitySelectionRate,
+                        RankScore = interaction.RankScore
+                    }).ToArray(),
+                Limitations = robust.Limitations.Concat(advanced.Limitations)
+                    .Distinct(StringComparer.Ordinal).ToArray()
+            };
+        }
+        catch (Exception exception) when (
+            exception is ProcessOptimizerUnavailableException or
+                ProcessResearchRuleException or
+                NotSupportedException)
+        {
+            return robust with
+            {
+                Limitations = robust.Limitations
+                    .Append("多变量数值分析当前不可用，本次仍保留稳健筛选结果。")
+                    .Distinct(StringComparer.Ordinal).ToArray()
+            };
+        }
+    }
+
+    private static IReadOnlyDictionary<string, string> BuildDiagnosticContext(
+        CycleComparisonRow row)
+    {
+        var context = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["product_series"] = row.ProductSeries,
+            ["machine_id"] = row.MachineId
+        };
+        foreach (var key in new[]
+                 {
+                     "product_code", "material", "material_code", "material_lot",
+                     "material_batch", "equipment_id", "mold_id", "tooling_id",
+                     "batch_id", "lot_id", "recipe_id", "recipe_version"
+                 })
+        {
+            var source = row.Context.FirstOrDefault(pair =>
+                string.Equals(pair.Key, key, StringComparison.OrdinalIgnoreCase));
+            if (!string.IsNullOrWhiteSpace(source.Value))
+                context[key] = source.Value;
+        }
+        Add("product_code", row.ProductCode);
+        Add("recipe", row.RecipeId is null ? null : $"{row.RecipeId}@{row.RecipeVersion}");
+        Add("mold_id", row.MoldId ?? row.ToolingId);
+        Add("tooling_installation_id", row.ToolingInstallationId);
+        return context;
+
+        void Add(string key, string? value)
+        {
+            if (!string.IsNullOrWhiteSpace(value))
+                context[key] = value;
+        }
+    }
+
+    private static double? ReadCandidateValue(
+        CycleComparisonRow row,
+        CycleCauseCandidate candidate)
+    {
+        if (candidate.SourceKind == CycleCauseSourceKinds.RecipeParameter)
+        {
+            var parameter = row.RecipeParameters.FirstOrDefault(value =>
+                string.Equals(value.Code, candidate.VariableCode, StringComparison.Ordinal));
+            return parameter is not null && TryReadDouble(parameter.Value, out var value)
+                ? value
+                : null;
+        }
+        var signal = row.Signals.FirstOrDefault(value =>
+            string.Equals(value.Code, candidate.SignalCode, StringComparison.Ordinal));
+        return signal?.Features.FirstOrDefault(value =>
+            string.Equals(value.Code, candidate.FeatureCode, StringComparison.Ordinal) &&
+            string.Equals(value.PhaseCode, candidate.PhaseCode, StringComparison.Ordinal) &&
+            value.PhaseOrder == candidate.PhaseOrder)?.Value;
     }
 
     private static IReadOnlyList<CycleQualityAssociation> BuildQualityAssociations(
@@ -412,6 +585,7 @@ public sealed class CycleComparisonService(
         {
             CorrelationId = correlationId,
             MachineId = first.Event.Subject.Id,
+            Context = context,
             StartedAt = started?.Event.OccurredAt ?? first.Event.OccurredAt,
             CompletedAt = completed?.Event.OccurredAt,
             DurationMs = completed is null ? null :

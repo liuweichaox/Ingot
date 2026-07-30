@@ -22,6 +22,19 @@ viz = ["matplotlib>=3.8"]
 [dependency-groups]
 dev = ["pytest>=8", "httpx2>=0.1"]
 
+[tool.uv]
+required-version = "==0.11.32"
+
+[tool.uv.sources]
+torch = [
+    { index = "pytorch-cpu" },
+]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"

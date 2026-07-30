@@ -21,23 +21,24 @@ NumPy/SciPy GP 只保留为冷启动与回归基线；三个有效观察后，�
 
 ## 本地验证
 
-使用 Python 3.11 或更高版本。推荐使用 `uv`：
+Python 环境统一由 `uv 0.11.32` 管理，不使用手工创建的 venv 或 pip 安装项目依赖：
 
 ```bash
 cd optimizer
-uv sync --extra service --extra viz --group dev
-uv run pytest
-uv run python demo.py
-uv run uvicorn service:app --port 8110
+uv sync --extra service --extra viz --group dev --locked
+uv run --locked pytest
+uv run --locked python demo.py
+uv run --locked uvicorn service:app --port 8110
 ```
 
-Windows 如果默认 `python` 指向旧版环境，可显式使用 Python Launcher：
+如果本机还没有符合要求的 Python，交给 `uv` 安装并选择 3.12：
 
-```powershell
-py -3.12 -m venv .venv
-.\.venv\Scripts\python -m pip install -e ".[service,viz]" pytest httpx2
-.\.venv\Scripts\python -m pytest
+```bash
+uv python install 3.12
+uv sync --python 3.12 --extra service --extra viz --group dev --locked
 ```
+
+依赖版本以 `uv.lock` 为准。修改 `pyproject.toml` 后运行 `uv lock` 并同时提交锁文件；CI 和容器均拒绝未同步的锁文件。
 
 `demo.py` 只验证优化机制，不代表真实工艺效果。运行结果可能随数值库版本变化，不在文档中固化成功率或节省炉数。
 

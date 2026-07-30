@@ -1,5 +1,5 @@
 {
-  "name": "ingot-platform-web",
+  "name": "@ingot/platform",
   "version": "0.1.0",
   "private": true,
   "type": "module",

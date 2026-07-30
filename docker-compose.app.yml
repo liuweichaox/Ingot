@@ -98,7 +98,7 @@ services:
 
   platform-web:
     build:
-      context: src/platform/Ingot.Platform.Web
+      context: apps/platform
       dockerfile: Dockerfile
     container_name: ingot-platform-web
     ports:
