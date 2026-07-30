@@ -7,7 +7,7 @@ const docsDir = path.join(root, "docs");
 const publicDir = path.join(root, "apps/docs-site/public");
 const brandDir = path.join(publicDir, "brand");
 await mkdir(brandDir, { recursive: true });
-for (const name of ["ingot-mark-dark.svg", "ingot-lockup-dark.svg"])
+for (const name of ["ingot-mark-dark.svg", "ingot-lockup-dark.svg", "ingot-lockup.svg"])
   await cp(path.join(root, "apps/website/public/brand", name), path.join(brandDir, name));
 
 const publicSlugs = [

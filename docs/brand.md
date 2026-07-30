@@ -43,6 +43,7 @@ Ingot 的名称与标识共享同一个隐喻：**真实周期、检验结果和
 
 | 文件 | 用途 |
 |---|---|
+| [`ingot-lockup.svg`](../apps/website/public/brand/ingot-lockup.svg) | 浅色背景横排标识 |
 | [`ingot-lockup-dark.svg`](../apps/website/public/brand/ingot-lockup-dark.svg) | 深色背景横排标识 |
 | [`ingot-mark-dark.svg`](../apps/website/public/brand/ingot-mark-dark.svg) | 深色背景图标源文件 |
 

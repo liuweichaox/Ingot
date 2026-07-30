@@ -1,6 +1,6 @@
 <div align="center">
   <a href="https://ingotstack.com">
-    <img src="apps/website/public/brand/ingot-lockup-dark.svg" alt="Ingot" width="340">
+    <img src="apps/website/public/brand/ingot-lockup.svg" alt="Ingot" width="340">
   </a>
 
   <p><strong>面向高成本、小样本制造实验的开源工艺优化系统</strong></p>

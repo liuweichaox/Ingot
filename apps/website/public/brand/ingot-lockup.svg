@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 344 128" role="img" aria-label="Ingot logo">
+  <defs>
+    <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFC94A"/>
+      <stop offset="1" stop-color="#E8891A"/>
+    </linearGradient>
+    <linearGradient id="steel" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#33414F"/>
+      <stop offset="1" stop-color="#1F2933"/>
+    </linearGradient>
+  </defs>
+  <g stroke-linejoin="round">
+    <path d="M43.5 30 H84.5 L91.5 64 H36.5 Z" fill="url(#gold)" stroke="url(#gold)" stroke-width="4"/>
+    <path d="M47 36 H81" fill="none" stroke="#FFE9B0" stroke-width="3" stroke-linecap="round" opacity="0.75"/>
+    <path d="M13 70 H54 L61 104 H6 Z" fill="url(#steel)" stroke="url(#steel)" stroke-width="4"/>
+    <path d="M74 70 H115 L122 104 H67 Z" fill="url(#steel)" stroke="url(#steel)" stroke-width="4"/>
+  </g>
+  <text x="144" y="89" font-family="Inter, 'Segoe UI', system-ui, -apple-system, sans-serif" font-size="62" font-weight="700" letter-spacing="-1.5" fill="#1F2933">Ingot</text>
+</svg>

@@ -1,6 +1,6 @@
 <div align="center">
   <a href="https://ingotstack.com/en/">
-    <img src="apps/website/public/brand/ingot-lockup-dark.svg" alt="Ingot" width="340">
+    <img src="apps/website/public/brand/ingot-lockup.svg" alt="Ingot" width="340">
   </a>
 
   <p><strong>Open-source process optimization for expensive, small-data manufacturing experiments</strong></p>
