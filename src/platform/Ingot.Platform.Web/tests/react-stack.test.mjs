@@ -91,12 +91,13 @@ test("production login and local account administration are usable from the web 
 
 test("versioned registries use composite row keys and statuses are localized", () => {
   assert.match(pages, /getRowKey=\{row => `\$\{row\[definition\.key\]\}:\$\{row\.version \?\? 1\}`\}/);
-  assert.match(pages, /label="待上行事件"/);
+  assert.match(pages, /label="数据上行"/);
   assert.match(app, /section\.label/);
   assert.match(components, /pending: "待处理"/);
   assert.match(components, /published: "已发布"/);
   assert.match(components, /review_pending: "待复核"/);
   assert.match(components, /unknown: "待上报"/);
+  assert.match(components, /starting: "启动中"/);
 });
 
 test("global search opens a cross-product command palette and table columns keep stable unique keys", () => {

@@ -59,7 +59,7 @@ const statusLabels = {
   proposed: "待选择",
   selected: "已选择",
   supported: "已支持",
-  rejected: "已否定",
+  rejected: "本轮未支持",
   inconclusive: "无定论",
   planned: "待批准",
   approved: "已批准",
@@ -67,6 +67,13 @@ const statusLabels = {
   cancelled: "已取消",
   candidate: "候选",
   validated: "已验证",
+  evidence: "候选证据",
+  replay: "回放已复核",
+  laboratory: "实验室重复验证",
+  production: "已发布生产",
+  "awaiting-approval": "等待批准",
+  ready: "待执行",
+  dispatched: "已下发",
   draft: "草稿",
   reviewed: "已复核",
 };
@@ -75,10 +82,32 @@ const taskTitles = {
   member: "添加项目成员",
   hypothesis: "提出研发假设",
   experiment: "设计验证实验",
+  history: "导入历史运行",
   result: "记录实验计算结果",
   window: "形成候选工艺窗口",
   claim: "沉淀工艺知识",
 };
+
+function formatResearchNumber(value) {
+  if (!Number.isFinite(Number(value))) return "—";
+  return Number(value).toLocaleString("zh-CN", { maximumFractionDigits: 4 });
+}
+
+function experimentScale(experiment) {
+  const runs = experiment.runPlan || [];
+  const signatures = new Set(runs.map(run =>
+    (run.factors || [])
+      .map(factor => `${factor.variableCode}:${Number(factor.value)}`)
+      .sort()
+      .join("|")));
+  const distinctConditions = experiment.optimization?.distinctConditionCount ||
+    Math.max(1, signatures.size);
+  return {
+    distinctConditions,
+    replicates: experiment.optimization?.replicatesPerCondition ||
+      Math.max(1, Math.floor(runs.length / distinctConditions)),
+  };
+}
 
 function nextProjectAction(status) {
   if (status === "draft") return ["开始研发", "active"];
@@ -101,6 +130,7 @@ function createTaskForm(task, workspace) {
     expectedEffectDirection: "",
     minimumEffect: "",
     hypothesisId: workspace?.hypotheses?.[0]?.hypothesisId || "",
+    cycleIds: [],
     experimentId: experiment?.experimentId || "",
     name: "",
     low: variable?.lowerLimit ?? "",
@@ -121,7 +151,9 @@ function createTaskForm(task, workspace) {
     confidence: "0.95",
     confidenceMethod: "bootstrap",
     applicability: "",
-    processWindowId: workspace?.processWindows?.find(item => item.status === "validated")?.windowId || "",
+    processWindowId: workspace?.processWindows?.find(item =>
+      item.status === "validated" &&
+      ["laboratory", "production"].includes(item.validationLevel))?.windowId || "",
   };
 }
 
@@ -277,11 +309,31 @@ export function ResearchProjectsPage() {
     }
   }
 
+  async function materializeExperimentResult(experiment) {
+    try {
+      await postJson(`/api/v1/research-projects/experiments/${experiment.experimentId}/materialize-result`, {});
+      await refreshWorkspace();
+      notify("已从冻结的配方、过程与检验数据自动计算实验结果。", "success");
+    } catch (requestError) {
+      notify(requestError.message, "danger");
+    }
+  }
+
   async function validateWindow(window) {
     try {
       await postJson(`/api/v1/research-projects/process-windows/${window.windowId}/validate`, {});
       await refreshWorkspace();
-      notify("工艺窗口已通过独立验证。", "success");
+      notify("已完成独立复核；系统已按重复组和区组证据判定验证等级。", "success");
+    } catch (requestError) {
+      notify(requestError.message, "danger");
+    }
+  }
+
+  async function releaseWindow(window) {
+    try {
+      await postJson(`/api/v1/research-projects/process-windows/${window.windowId}/release`, {});
+      await refreshWorkspace();
+      notify("工艺窗口已审核并发布生产。", "success");
     } catch (requestError) {
       notify(requestError.message, "danger");
     }
@@ -302,12 +354,17 @@ export function ResearchProjectsPage() {
       const experiment = await postJson(
         `/api/v1/research-projects/${workspace.project.projectId}/optimize`,
         {
-          batchSize: 1,
+          // A single point cannot distinguish a process effect from run noise.
+          // Keep the smallest useful industrial experiment as a two-condition batch.
+          batchSize: 2,
           seed: 0,
-          processProfile: "generic",
+          processProfile: /光学|镜片|lens|molding|模压/i.test(workspace.project.processName || "")
+            ? "optical-lens-molding-v1"
+            : "generic",
           intent,
           hypothesisId,
           autoAssembleObservations: true,
+          replicatesPerCondition: 2,
         },
       );
       const alreadyActive = workspace.experiments.some(
@@ -382,6 +439,10 @@ export function ResearchProjectsPage() {
           replicateKeys: ["replicate-1"],
           stopRule: taskForm.stopRule,
           rollbackPlan: taskForm.rollbackPlan,
+        });
+      } else if (task === "history") {
+        await postJson(`/api/v1/research-projects/${project.projectId}/experiments/import-history`, {
+          cycleIds: taskForm.cycleIds,
         });
       } else if (task === "result") {
         const experiment = workspace.experiments.find(item => item.experimentId === taskForm.experimentId);
@@ -532,7 +593,9 @@ export function ResearchProjectsPage() {
         onTask={startTask}
         onProjectStatus={changeProjectStatus}
         onExperimentStatus={changeExperimentStatus}
+        onMaterializeExperimentResult={materializeExperimentResult}
         onValidateWindow={validateWindow}
+        onReleaseWindow={releaseWindow}
         onReviewClaim={reviewClaim}
         onGenerateOptimizationSuggestions={generateOptimizationSuggestions}
         onAskAi={projectId => navigate(`/chat?projectId=${encodeURIComponent(projectId)}`)}
@@ -729,7 +792,9 @@ function WorkspaceDrawer({
   onTask,
   onProjectStatus,
   onExperimentStatus,
+  onMaterializeExperimentResult,
   onValidateWindow,
+  onReleaseWindow,
   onReviewClaim,
   onGenerateOptimizationSuggestions,
   onAskAi,
@@ -746,12 +811,26 @@ function WorkspaceDrawer({
   } = workspace;
   const projectAction = nextProjectAction(project.status);
   const completedExperiments = experiments.filter(item => item.status === "completed");
-  const validatedWindows = processWindows.filter(item => item.status === "validated");
+  const reviewedWindows = processWindows.filter(item => item.status === "validated");
+  const validatedWindows = reviewedWindows.filter(item =>
+    ["laboratory", "production"].includes(item.validationLevel));
   const observationSummary = workspace.optimizationObservationSummary;
   const canEdit = !["completed", "archived"].includes(project.status);
   const hasObservation = Number(observationSummary?.validObservationCount || 0) > 0;
   const hasRunningExperiment = experiments.some(item => item.status === "running");
-  const currentStage = project.status === "draft"
+  const observedRunKeys = new Set(
+    (observationSummary?.observations || []).map(item => item.runKey),
+  );
+  const variableByCode = new Map(project.variables.map(item => [item.code, item]));
+  const objectiveByCode = new Map(project.objectives.map(item => [item.code, item]));
+  const constraintByCode = new Map(
+    (project.outcomeConstraints || []).map(item => [item.code, item]),
+  );
+  const currentStage = project.status === "completed" && validatedWindows.length === 0
+    ? ["历史项目待复验", "该项目按旧规则完成，但工艺窗口缺少跨区组重复证据；请新建复现实验完成实验室验证后再发布生产。"]
+    : project.status === "completed"
+      ? ["研究已闭环", "工艺窗口已完成实验室验证或生产发布，可沉淀并复用于相似工艺。"]
+      : project.status === "draft"
     ? ["定义问题", "先明确目标、可控变量和安全边界。"]
     : hypotheses.length === 0
       ? ["建立假设", "把经验或异常转为可验证的因果判断。"]
@@ -797,9 +876,10 @@ function WorkspaceDrawer({
               <Button onClick={() => onAskAi(project.projectId)}>让 AI 协助分析</Button>
               {canEdit && <Button onClick={() => onTask("member")}>添加协作成员</Button>}
               {canEdit && hypotheses.length === 0 && <Button variant="primary" onClick={() => onTask("hypothesis")}>提出第一个假设</Button>}
-              {project.status !== "draft" && canEdit && hypotheses.length > 0 && !hasRunningExperiment && <Button variant="primary" onClick={onGenerateOptimizationSuggestions}>智能设计下一组实验</Button>}
+              {project.status !== "draft" && canEdit && <Button onClick={() => onTask("history")}>导入历史运行</Button>}
+              {project.status !== "draft" && canEdit && hypotheses.length > 0 && !hasRunningExperiment && <Button variant="primary" onClick={() => onGenerateOptimizationSuggestions()}>智能设计下一组实验</Button>}
               {project.status !== "draft" && canEdit && hypotheses.length > 0 && <Button onClick={() => onTask("experiment")}>手动设计实验</Button>}
-              {project.status !== "draft" && canEdit && hasRunningExperiment && <Button variant="primary" onClick={() => onTask("result")}>记录计算结果</Button>}
+              {project.status !== "draft" && canEdit && hasRunningExperiment && <Button onClick={() => onMaterializeExperimentResult(experiments.find(item => item.status === "running"))}>立即检查数据回收</Button>}
               {project.status !== "draft" && canEdit && completedExperiments.length > 0 && experimentResults.length > 0 && <Button variant="primary" onClick={() => onTask("window")}>形成候选窗口</Button>}
               {canEdit && validatedWindows.length > 0 && <Button variant="primary" onClick={() => onTask("claim")}>沉淀工艺知识</Button>}
             </div>
@@ -813,12 +893,13 @@ function WorkspaceDrawer({
 
         <WorkflowGuide title="项目推进路径" description="每一步都基于真实研发事实推进；不需要为了“走流程”填无价值的数据。" steps={workflowSteps} />
 
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-7">
           <Metric label="研发假设" value={hypotheses.length} hint="待验证的规律" />
           <Metric label="实验计划" value={experiments.length} hint="设计与执行记录" />
           <Metric label="计算结果" value={experimentResults.length} hint="冻结快照得出" />
           <Metric label="候选窗口" value={processWindows.length} hint="有证据支持的范围" />
-          <Metric label="已验证窗口" value={validatedWindows.length} hint="独立复核通过" />
+          <Metric label="已复核窗口" value={reviewedWindows.length} hint="包含回放证据复核" />
+          <Metric label="实验室验证" value={validatedWindows.length} hint="跨区组重复实验通过" />
           <Metric label="可用于优化" value={observationSummary?.validObservationCount ?? 0} hint="参数、过程与结果已关联" />
         </div>
         {observationSummary?.excludedObservationCount > 0 && (
@@ -865,36 +946,154 @@ function WorkspaceDrawer({
             <DataTable rows={experiments} keyField="experimentId" columns={[
               { key: "name", label: "实验" },
               { key: "designMethod", label: "设计" },
-              { key: "runPlan", label: "运行", render: value => `${value?.length || 0} 个条件` },
+              {
+                key: "runPlan",
+                label: "实验规模",
+                render: (value, row) => {
+                  if (!row.optimization) return `${value?.length || 0} 次运行`;
+                  const scale = experimentScale(row);
+                  return `${scale.distinctConditions} 个条件 × ${scale.replicates} 次重复`;
+                },
+              },
               {
                 key: "runKeys",
-                label: "运行标识",
-                render: (_, row) => (
-                  <div className="space-y-1">
-                    {(row.runPlan || []).map(run => (
-                      <code key={run.runKey} className="block text-xs">{run.runKey}</code>
+                label: "建议执行条件",
+                render: (_, row) => {
+                  const isHistorical = row.designMethod === "historical-observation";
+                  const runs = isHistorical ? (row.runPlan || []).slice(0, 3) : row.runPlan || [];
+                  return (
+                    <div className="space-y-2">
+                    {runs.map(run => (
+                      <div key={run.runKey} className="rounded-lg border border-slate-200 bg-slate-50 p-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <code className="block text-xs font-semibold text-slate-700">{run.runKey}</code>
+                          {!isHistorical && (
+                            <StatusBadge value={observedRunKeys.has(run.runKey) ? "数据已回收" : "等待运行"} />
+                          )}
+                        </div>
+                        {(run.blockKey || run.replicateKey) && (
+                          <div className="mt-1 text-[11px] text-slate-500">
+                            {run.blockKey ? `区组 ${run.blockKey}` : ""}
+                            {run.blockKey && run.replicateKey ? " · " : ""}
+                            {run.replicateKey ? `重复条件 ${run.replicateKey}` : ""}
+                          </div>
+                        )}
+                        {(run.factors || []).map(factor => {
+                          const variable = variableByCode.get(factor.variableCode);
+                          return (
+                            <div key={factor.variableCode} className="mt-1 text-xs text-slate-600">
+                              {variable?.name || factor.variableCode}：
+                              <strong className="ml-1 text-slate-900">
+                                {formatResearchNumber(factor.value)} {factor.unit || variable?.unit || ""}
+                              </strong>
+                            </div>
+                          );
+                        })}
+                      </div>
                     ))}
+                    {isHistorical && row.runPlan.length > runs.length && (
+                      <div className="text-xs text-slate-500">
+                        另有 {row.runPlan.length - runs.length} 条只读历史运行
+                      </div>
+                    )}
                   </div>
-                ),
+                  );
+                },
+              },
+              {
+                key: "execution",
+                label: "执行交接",
+                render: (value, row) => row.designMethod === "historical-observation"
+                  ? "—"
+                  : (
+                    <div className="space-y-1 text-xs">
+                      <StatusBadge value={
+                        statusLabels[value?.state] ||
+                        statusLabels[row.status] ||
+                        value?.state ||
+                        row.status
+                      } />
+                      <div className="text-slate-500">
+                        {value?.commands?.length || row.runPlan?.length || 0} 条设备无关执行指令
+                      </div>
+                    </div>
+                  ),
               },
               {
                 key: "optimization",
-                label: "设计依据",
-                render: value => value
-                  ? `智能优化 · ${value.observationCount} 条观察，其中自动装配 ${value.autoAssembledObservationCount || 0} 条，使用 ${value.processFeatureCount || 0} 个共同轨迹特征`
-                  : "—",
+                label: "预测与可信度",
+                render: value => {
+                  if (!value) return "—";
+                  return (
+                    <div className="min-w-72 space-y-2 text-xs text-slate-600">
+                      <div>
+                        贝叶斯优化基于 <strong className="text-slate-900">{value.observationCount}</strong> 条观察和{" "}
+                        <strong className="text-slate-900">{value.processFeatureCount || 0}</strong> 个共同轨迹特征
+                      </div>
+                      {(value.runPredictions || []).map(prediction => (
+                        <div key={prediction.runKey} className="rounded-lg border border-slate-200 bg-white p-2">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <code>{prediction.runKey}</code>
+                            <span>
+                              安全可行概率{" "}
+                              <strong className="text-slate-900">
+                                {Math.round(Number(prediction.feasibilityProbability || 0) * 100)}%
+                              </strong>
+                            </span>
+                          </div>
+                          {Object.entries(prediction.objectives || {}).map(([code, estimate]) => {
+                            const objective = objectiveByCode.get(code);
+                            return (
+                              <div key={code} className="mt-1">
+                                {objective?.name || code}预测：
+                                <strong className="ml-1 text-slate-900">
+                                  {formatResearchNumber(estimate.mean)} {estimate.unit || objective?.unit || ""}
+                                </strong>
+                                <span className="ml-1 text-slate-500">
+                                  （95% 区间 {formatResearchNumber(estimate.lower95)} ～ {formatResearchNumber(estimate.upper95)}）
+                                </span>
+                              </div>
+                            );
+                          })}
+                          {Object.entries(prediction.constraints || {}).map(([code, estimate]) => {
+                            const constraint = constraintByCode.get(code);
+                            return (
+                              <div key={code} className="mt-1">
+                                {constraint?.description || code}预测：
+                                <strong className="ml-1 text-slate-900">
+                                  {formatResearchNumber(estimate.mean)} {estimate.unit || constraint?.unit || ""}
+                                </strong>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ))}
+                    </div>
+                  );
+                },
               },
               { key: "resultIds", label: "结果", render: value => `${value?.length || 0} 份` },
-              { key: "status", label: "状态", render: value => <StatusBadge value={statusLabels[value] || value} /> },
+              {
+                key: "status",
+                label: "状态",
+                render: (value, row) => (
+                  <StatusBadge value={row.designMethod === "historical-observation" ? "已导入" : statusLabels[value] || value} />
+                ),
+              },
               {
                 key: "actions",
                 label: "操作",
                 render: (_, row) => (
                   <div className="flex gap-2">
-                    {row.status === "planned" && row.createdBy !== currentUserId && <Button onClick={event => { event.stopPropagation(); onExperimentStatus(row, "approved"); }}>批准</Button>}
-                    {row.status === "planned" && row.createdBy === currentUserId && <span className="text-xs text-slate-500">等待其他成员批准</span>}
-                    {row.status === "approved" && <Button onClick={event => { event.stopPropagation(); onExperimentStatus(row, "running"); }}>开始</Button>}
-                    {row.status === "running" && <Button onClick={event => { event.stopPropagation(); onExperimentStatus(row, "completed"); }}>完成</Button>}
+                    {row.designMethod === "historical-observation" && <span className="text-xs text-slate-500">只读证据</span>}
+                    {row.designMethod !== "historical-observation" && row.status === "planned" && row.createdBy !== currentUserId && <Button onClick={event => { event.stopPropagation(); onExperimentStatus(row, "approved"); }}>批准</Button>}
+                    {row.designMethod !== "historical-observation" && row.status === "planned" && row.createdBy === currentUserId && <span className="text-xs text-slate-500">等待其他成员批准</span>}
+                    {row.designMethod !== "historical-observation" && row.status === "approved" && <Button onClick={event => { event.stopPropagation(); onExperimentStatus(row, "running"); }}>下发并开始</Button>}
+                    {row.designMethod !== "historical-observation" && row.status === "running" && (
+                      <span className="text-xs text-slate-500">
+                        采集和检验齐全后自动完成
+                      </span>
+                    )}
                   </div>
                 ),
               },
@@ -905,9 +1104,56 @@ function WorkspaceDrawer({
         <Card title="实验结果" description="只接受由冻结数据快照计算的结果；它们是追因结论和优化建议的共同证据。">
           {experimentResults.length === 0 ? <EmptyState title="尚无可用结果" description="运行完成后，关联过程数据与检验结果并记录计算结果。" /> : (
             <DataTable rows={experimentResults} keyField="resultId" columns={[
-              { key: "experimentId", label: "来源实验" },
+              {
+                key: "experimentId",
+                label: "来源实验",
+                render: value => experiments.find(item => item.experimentId === value)?.name || value,
+              },
               { key: "runCount", label: "运行数" },
-              { key: "replicateCount", label: "重复组" },
+              { key: "replicateCount", label: "每条件重复" },
+              {
+                key: "distinctBlockCount",
+                label: "独立区组",
+                render: value => Number(value) > 0 ? value : "未记录",
+              },
+              {
+                key: "metrics",
+                label: "目标结果",
+                render: value => (
+                  <div className="min-w-72 space-y-2">
+                    {(value || []).map(metric => {
+                      const objective = objectiveByCode.get(metric.objectiveCode);
+                      const target = objective?.target;
+                      const reached = Number.isFinite(Number(target)) &&
+                        (objective?.direction === "maximize"
+                          ? metric.lowerConfidenceBound >= target
+                          : metric.upperConfidenceBound <= target);
+                      return (
+                        <div key={metric.objectiveCode} className="rounded-lg border border-slate-200 bg-slate-50 p-2 text-xs">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <strong>{objective?.name || metric.objectiveCode}</strong>
+                            {Number.isFinite(Number(target)) && (
+                              <StatusBadge value={reached ? "达到目标" : "需继续验证"} />
+                            )}
+                          </div>
+                          <div className="mt-1 text-slate-600">
+                            实测均值{" "}
+                            <strong className="text-slate-900">
+                              {formatResearchNumber(metric.observedValue)} {metric.unit || objective?.unit || ""}
+                            </strong>
+                            <span className="ml-1">
+                              （95% 区间 {formatResearchNumber(metric.lowerConfidenceBound)} ～ {formatResearchNumber(metric.upperConfidenceBound)}）
+                            </span>
+                          </div>
+                          <div className="mt-1 text-slate-500">
+                            历史基线 {formatResearchNumber(metric.baselineValue)}，变化 {formatResearchNumber(metric.effectValue)}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ),
+              },
               { key: "safetyPassed", label: "安全约束", render: value => <StatusBadge value={value ? "passed" : "failed"} /> },
               { key: "analysisHash", label: "分析快照", render: value => value ? <code className="text-xs text-slate-600">{String(value).slice(0, 12)}…</code> : "—" },
             ]} />
@@ -918,16 +1164,57 @@ function WorkspaceDrawer({
           {processWindows.length === 0 ? <EmptyState title="尚未形成工艺窗口" description="先完成实验并记录由源数据计算的结果。" /> : (
             <DataTable rows={processWindows} keyField="windowId" columns={[
               { key: "name", label: "窗口" },
+              {
+                key: "variables",
+                label: "变量范围",
+                render: value => (
+                  <div className="space-y-1">
+                    {(value || []).map(variable => {
+                      const definition = variableByCode.get(variable.variableCode);
+                      return (
+                        <div key={variable.variableCode} className="text-xs">
+                          {definition?.name || variable.variableCode}：
+                          <strong className="ml-1">
+                            {formatResearchNumber(variable.lowerBound)} ～ {formatResearchNumber(variable.upperBound)} {variable.unit || definition?.unit || ""}
+                          </strong>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ),
+              },
               { key: "confidence", label: "置信度", render: value => `${Math.round(value * 100)}%` },
               { key: "confidenceMethod", label: "方法" },
               { key: "applicability", label: "适用范围" },
-              { key: "status", label: "状态", render: value => <StatusBadge value={statusLabels[value] || value} /> },
+              {
+                key: "validationLevel",
+                label: "验证等级",
+                render: (value, row) => (
+                  <StatusBadge value={
+                    row.status === "validated" && (!value || value === "evidence")
+                      ? "历史复核（等级未记录）"
+                      : statusLabels[value] || value || "候选证据"
+                  } />
+                ),
+              },
               {
                 key: "actions",
-                label: "操作",
-                render: (_, row) => row.status === "candidate" && row.createdBy !== currentUserId
-                  ? <Button onClick={event => { event.stopPropagation(); onValidateWindow(row); }}>独立验证</Button>
-                  : row.status === "candidate" ? <span className="text-xs text-slate-500">等待其他成员验证</span> : "—",
+                label: "下一步",
+                render: (_, row) => {
+                  if (row.status === "candidate" && row.createdBy !== currentUserId) {
+                    return <Button onClick={event => { event.stopPropagation(); onValidateWindow(row); }}>独立复核</Button>;
+                  }
+                  if (row.status === "candidate") {
+                    return <span className="text-xs text-slate-500">等待其他成员复核</span>;
+                  }
+                  if (row.validationLevel === "laboratory" && row.validatedBy !== currentUserId) {
+                    return <Button onClick={event => { event.stopPropagation(); onReleaseWindow(row); }}>发布生产</Button>;
+                  }
+                  if (row.validationLevel === "replay") {
+                    return <span className="text-xs text-amber-700">需跨区组重复实验</span>;
+                  }
+                  return "—";
+                },
               },
             ]} />
           )}
@@ -959,7 +1246,40 @@ function TaskDrawer({ task, form, setForm, workspace, saving, onClose, onSubmit 
   const update = name => event => setForm({ ...form, [name]: event.target.value });
   const variables = workspace.project.variables.filter(item => item.role === "control");
   const runningExperiments = workspace.experiments.filter(item => item.status === "running");
-  const validatedWindows = workspace.processWindows.filter(item => item.status === "validated");
+  const validatedWindows = workspace.processWindows.filter(item =>
+    item.status === "validated" &&
+    ["laboratory", "production"].includes(item.validationLevel));
+  const [historicalCycles, setHistoricalCycles] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState("");
+
+  useEffect(() => {
+    if (task !== "history") return;
+    let mounted = true;
+    setHistoryLoading(true);
+    setHistoryError("");
+    const productCode = workspace.project.productName ? `&productCode=${encodeURIComponent(workspace.project.productName)}` : "";
+    getJson(`/api/v1/cycles?status=completed&limit=200${productCode}`)
+      .then(response => {
+        if (!mounted) return;
+        const values = response?.data || [];
+        setHistoricalCycles(values);
+        setForm(current => ({ ...current, cycleIds: values.map(item => item.correlationId) }));
+      })
+      .catch(requestError => {
+        if (!mounted) return;
+        setHistoryError(requestError.message || "无法读取已完成运行。");
+      })
+      .finally(() => { if (mounted) setHistoryLoading(false); });
+    return () => { mounted = false; };
+  }, [task, workspace.project.productName, setForm]);
+
+  const historicalCycleLabel = cycle => [
+    cycle.correlationId,
+    cycle.productSeries || cycle.productCode || "未标注产品",
+    cycle.recipeId ? `配方 ${cycle.recipeId}` : "",
+    cycle.completedAt ? new Date(cycle.completedAt).toLocaleString("zh-CN") : "",
+  ].filter(Boolean).join(" · ");
   return (
     <Drawer
       open
@@ -992,6 +1312,19 @@ function TaskDrawer({ task, form, setForm, workspace, saving, onClose, onSubmit 
           </div>
           <Field label="停止规则"><Textarea required rows={3} value={form.stopRule} onChange={update("stopRule")} /></Field>
           <Field label="回退方案"><Textarea required rows={3} value={form.rollbackPlan} onChange={update("rollbackPlan")} /></Field>
+        </>}
+        {task === "history" && <>
+          <Alert tone="info" title="把已有数据变成优化观察">
+            系统只读取已完成运行的实际配方回读、过程特征和检验记录；不会向设备写入参数。至少选择两种实际配方条件，导入后优化器才能使用这些观察。
+          </Alert>
+          {historyError && <Alert tone="danger">{historyError}</Alert>}
+          {historyLoading ? <Alert tone="info">正在读取可导入的已完成运行…</Alert> : (
+            <Field label="已完成运行" hint={`已默认选中 ${form.cycleIds?.length || 0} 个与项目产品匹配的运行；可按 Ctrl 或 Shift 调整。`}>
+              <Select multiple required size="12" value={form.cycleIds || []} onChange={event => setForm({ ...form, cycleIds: Array.from(event.target.selectedOptions, option => option.value) })}>
+                {historicalCycles.map(cycle => <option key={cycle.correlationId} value={cycle.correlationId}>{historicalCycleLabel(cycle)}</option>)}
+              </Select>
+            </Field>
+          )}
         </>}
         {task === "result" && <>
           <Field label="执行中的实验"><Select required value={form.experimentId} onChange={update("experimentId")}>{runningExperiments.map(item => <option key={item.experimentId} value={item.experimentId}>{item.name}</option>)}</Select></Field>

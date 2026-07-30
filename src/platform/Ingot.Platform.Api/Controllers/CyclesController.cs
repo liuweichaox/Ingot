@@ -8,6 +8,7 @@ namespace Ingot.Platform.Api.Controllers;
 [Route("api/v1/cycles")]
 public sealed class CyclesController(
     ICycleRecordService cycles,
+    ICycleComparisonService comparisons,
     PlatformUserResolver userResolver) : ControllerBase
 {
     [HttpGet]
@@ -57,5 +58,24 @@ public sealed class CyclesController(
             search,
             ct).ConfigureAwait(false);
         return Ok(result);
+    }
+
+    [HttpGet("{correlationId}/analysis")]
+    public async Task<IActionResult> GetAnalysis(
+        string correlationId,
+        CancellationToken ct = default)
+    {
+        var identity = userResolver.ResolveIdentity(User);
+        if (identity is null)
+            return Unauthorized(new { error = "需要平台统一认证。" });
+        if (!identity.HasAnyRole(PlatformRoles.QualityRead))
+            return Forbid();
+        if (string.IsNullOrWhiteSpace(correlationId) || correlationId.Length > 200)
+            return BadRequest(new { error = "运行编号格式不正确。" });
+
+        var result = await comparisons.GetCycleAsync(correlationId.Trim(), ct).ConfigureAwait(false);
+        return result is null
+            ? NotFound(new { error = "未找到对应运行的分析记录。" })
+            : Ok(result);
     }
 }

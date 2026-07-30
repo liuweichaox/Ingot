@@ -163,6 +163,12 @@ public sealed record AcquisitionLifecycleMapping
 {
     public string Mode { get; init; } = "discrete-cycle";
     public string CorrelationIdContextKey { get; init; } = "correlation_id";
+    /// <summary>
+    /// 可选的运行激活上下文键。配置后，值不等于 ActiveValue 的快照只用于结束当前运行，
+    /// 不会生成新的过程采样或虚假占位周期。
+    /// </summary>
+    public string? ActiveContextKey { get; init; }
+    public string ActiveValue { get; init; } = "true";
     public string? StepContextKey { get; init; } = "recipe_step";
     public string? StepNameContextKey { get; init; } = "recipe_step_name";
     public string StartedEventType { get; init; } = "cycle.started";

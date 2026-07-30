@@ -155,6 +155,7 @@ public sealed class ProcessResearchWorkflowTests
                 ],
                 RunCount = 4,
                 ReplicateCount = 2,
+                DistinctBlockCount = 2,
                 DistinctMaterialLotCount = 2,
                 DistinctEquipmentCount = 1,
                 SafetyPassed = true,
@@ -204,12 +205,15 @@ public sealed class ProcessResearchWorkflowTests
             ResearchProjectStatuses.Validating,
             "engineer-a");
         window = await workflow.ValidateProcessWindowAsync(window.WindowId, "engineer-b");
+        Assert.Equal(ProcessWindowValidationLevels.Laboratory, window.ValidationLevel);
+        window = await workflow.ReleaseProcessWindowAsync(window.WindowId, "engineer-c");
         project = await workflow.ChangeProjectStatusAsync(
             project.ProjectId,
             ResearchProjectStatuses.Completed,
             "engineer-a");
 
         Assert.Equal(ProcessWindowStatuses.Validated, window.Status);
+        Assert.Equal(ProcessWindowValidationLevels.Production, window.ValidationLevel);
         Assert.Equal(ResearchProjectStatuses.Completed, project.Status);
         Assert.Equal(2, result.RunObservations.Count);
         var workspace = await workflow.GetWorkspaceAsync(project.ProjectId);
@@ -313,6 +317,22 @@ public sealed class ProcessResearchWorkflowTests
         var store = new MemoryStore();
         var workflow = new ProcessResearchWorkflow(store);
         var project = await workflow.CreateProjectAsync(ProjectDraft(), "engineer-a");
+        var historical = await workflow.CreateExperimentAsync(
+            project.ProjectId,
+            new ResearchExperiment
+            {
+                Name = "历史观察",
+                DesignMethod = ResearchDesignMethods.HistoricalObservation,
+                RunPlan =
+                [
+                    Run("history-cycle-1", 1, 490, 8),
+                    Run("history-cycle-2", 2, 500, 9)
+                ],
+                ObjectiveCodes = ["form-error"],
+                StopRule = "只读取历史证据。",
+                RollbackPlan = "不写入设备。"
+            },
+            "engineer-a");
         var experiment = await workflow.CreateExperimentAsync(
             project.ProjectId,
             new ResearchExperiment
@@ -369,14 +389,16 @@ public sealed class ProcessResearchWorkflowTests
             };
         var assembly = new ResearchObservationAssembly(
         [
+            Observation("history-cycle-1", 490, 8, 0.9, 'b'),
+            Observation("history-cycle-2", 500, 9, 0.7, 'c'),
             Observation("auto-cycle-1", 510, 10, 0.52, 'd'),
             Observation("auto-cycle-2", 530, 14, 0.37, 'e')
-        ], 2);
+        ], 4);
         var materializer = new ResearchExperimentResultMaterializer(workflow);
 
         var results = await materializer.MaterializeCompletedAsync(
             project,
-            [experiment],
+            [historical, experiment],
             [],
             assembly,
             "system-cycle-materializer");
@@ -385,8 +407,15 @@ public sealed class ProcessResearchWorkflowTests
         Assert.Equal(2, result.RunObservations.Count);
         Assert.True(result.CalculatedFromSource);
         Assert.StartsWith("cycle-observation-snapshot:", result.DatasetSnapshotId);
+        var metric = Assert.Single(result.Metrics);
+        Assert.Equal(0.8d, metric.BaselineValue, 6);
+        Assert.Equal(0.445d, metric.ObservedValue, 6);
         var savedExperiment = await store.GetExperimentAsync(experiment.ExperimentId);
         Assert.Contains(result.ResultId, savedExperiment!.ResultIds);
+        Assert.Equal(ResearchExperimentStatuses.Completed, savedExperiment.Status);
+        Assert.Equal(
+            ResearchExperimentExecutionStates.Completed,
+            savedExperiment.Execution?.State);
         Assert.Contains(
             await store.ListAuditEntriesAsync(project.ProjectId),
             value => value.ResourceType == "experiment-result" &&
@@ -435,20 +464,86 @@ public sealed class ProcessResearchWorkflowTests
 
         var experiment = await optimizer.CreateNextExperimentAsync(
             project.ProjectId,
-            new ResearchOptimizationRequest { BatchSize = 2, Seed = 7 },
+            new ResearchOptimizationRequest
+            {
+                BatchSize = 2,
+                ReplicatesPerCondition = 2,
+                Seed = 7
+            },
             "engineer-a");
         var repeated = await optimizer.CreateNextExperimentAsync(
             project.ProjectId,
-            new ResearchOptimizationRequest { BatchSize = 2, Seed = 7 },
+            new ResearchOptimizationRequest
+            {
+                BatchSize = 2,
+                ReplicatesPerCondition = 2,
+                Seed = 7
+            },
             "engineer-a");
 
         Assert.Equal(ResearchDesignMethods.BayesianOptimization, experiment.DesignMethod);
         Assert.Equal(experiment.ExperimentId, repeated.ExperimentId);
         Assert.Equal(ResearchExperimentStatuses.Planned, experiment.Status);
-        Assert.Equal(2, experiment.RunPlan.Count);
+        Assert.Equal(4, experiment.RunPlan.Count);
+        Assert.Equal(2, experiment.RunPlan.Select(static value => value.BlockKey).Distinct().Count());
+        Assert.All(
+            experiment.RunPlan.GroupBy(static value => value.ReplicateKey),
+            static group => Assert.Equal(2, group.Count()));
+        Assert.Equal(4, experiment.Execution?.Commands.Count);
         Assert.NotNull(experiment.Optimization);
         Assert.Equal(1, experiment.Optimization.ObservationCount);
         Assert.Equal("botorch-qlogbo-test", experiment.Optimization.ModelVersion);
+
+        experiment = await workflow.ChangeExperimentStatusAsync(
+            experiment.ExperimentId,
+            ResearchExperimentStatuses.Approved,
+            "engineer-b");
+        experiment = await workflow.ChangeExperimentStatusAsync(
+            experiment.ExperimentId,
+            ResearchExperimentStatuses.Running,
+            "engineer-a");
+        var assembly = new ResearchObservationAssembly(
+            experiment.RunPlan.Select((run, index) => new ExperimentRunObservation
+            {
+                RunKey = run.RunKey,
+                ActualFactors = run.Factors,
+                Outcomes = new Dictionary<string, double>
+                {
+                    ["form-error"] = index % 2 == 0 ? 0.22 : 0.24
+                },
+                SourceContentHash = new string("defa"[index], 64)
+            }).ToArray(),
+            experiment.RunPlan.Count);
+        var windowMaterializer = new ResearchProcessWindowMaterializer(store, workflow);
+        var resultMaterializer = new ResearchExperimentResultMaterializer(
+            workflow,
+            windowMaterializer,
+            store);
+        var results = await resultMaterializer.MaterializeCompletedAsync(
+            project,
+            [experiment],
+            await store.ListExperimentResultsAsync(project.ProjectId),
+            assembly,
+            "system-research-automation");
+        var result = Assert.Single(results);
+        Assert.Equal(2, result.ReplicateCount);
+        Assert.Equal(2, result.DistinctBlockCount);
+        var candidate = Assert.Single(await store.ListProcessWindowsAsync(project.ProjectId));
+        Assert.Equal(ProcessWindowStatuses.Candidate, candidate.Status);
+        Assert.Equal(ProcessWindowValidationLevels.Evidence, candidate.ValidationLevel);
+
+        await workflow.ChangeProjectStatusAsync(
+            project.ProjectId,
+            ResearchProjectStatuses.Active,
+            "engineer-a");
+        await workflow.ChangeProjectStatusAsync(
+            project.ProjectId,
+            ResearchProjectStatuses.Validating,
+            "engineer-a");
+        var validated = await workflow.ValidateProcessWindowAsync(
+            candidate.WindowId,
+            "engineer-b");
+        Assert.Equal(ProcessWindowValidationLevels.Laboratory, validated.ValidationLevel);
     }
 
     private static ExperimentRunPlan Run(
@@ -539,8 +634,8 @@ public sealed class ProcessResearchWorkflowTests
             Assert.Single(request.Observations);
             var suggestions = new[]
             {
-                Suggest(515, 11, 0.55),
-                Suggest(525, 13, 0.42)
+                Suggest(515, 11, 0.20),
+                Suggest(525, 13, 0.18)
             };
             return Task.FromResult(new OptimizerSuggestionResponse
             {

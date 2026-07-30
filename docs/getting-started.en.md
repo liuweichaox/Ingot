@@ -71,7 +71,7 @@ The baseline needs:
 
 ## 5. Generate the next run
 
-Choose “generate optimized experiment.” The default is one run, prioritizing minimum experiment count. The result includes:
+Choose “generate optimized experiment.” The product UI defaults to two distinct conditions, two replicates per condition, and two execution blocks with rotated order. The result includes:
 
 - recommended settings;
 - means and 95% intervals;
@@ -86,13 +86,13 @@ Repeating the action before the current batch finishes returns the existing expe
 
 After engineering approval:
 
-1. apply the recommended settings;
-2. associate the RunKey with the field run identifier;
-3. execute the process run;
-4. complete quality and safety inspections;
-5. request the next experiment.
+1. choose “dispatch and start” to create an ordered, equipment-neutral execution package;
+2. let a PLC/MES/recipe integration or operator apply the recommended settings;
+3. associate the RunKey with the field run identifier;
+4. execute the process run;
+5. complete quality and safety inspections.
 
-Once all planned runs have valid observations, Platform materializes the experiment result automatically.
+Once all planned runs have valid observations, Platform materializes the result, closes the experiment, and creates an evidence-backed candidate window when possible. Window maturity then progresses through replay review, laboratory replicate validation, and production release.
 
 ## 7. Troubleshooting
 

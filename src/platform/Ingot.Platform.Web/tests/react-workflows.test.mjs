@@ -79,6 +79,13 @@ test("edge pages use the registry heartbeat contract for status", () => {
   assert.match(pages, /\{ key: "lastSeen", label: "最后心跳"/);
   assert.doesNotMatch(pages, /\{ key: "lastSeenAt", label: "最后心跳"/);
   assert.match(pages, /state\.edges\.filter\(item => edgeStatus\(item\) === "online"\)/);
+  assert.match(pages, /数据源交付情况/);
+  assert.match(pages, /从设备数据到工艺证据/);
+  assert.match(pages, /\/api\/v1\/acquisition-profiles/);
+  assert.match(pages, /配方参数回读/);
+  assert.match(pages, /周期边界映射/);
+  assert.match(pages, /节点诊断日志/);
+  assert.match(pages, /数据源尚未具备工艺闭环条件/);
 });
 
 test("workbench and logs use current response contracts without misleading placeholders", () => {
@@ -98,11 +105,26 @@ test("cycle comparison submits the selection contract and renders business resul
   assert.match(pages, /query\.set\("search", search\)/);
   assert.match(pages, /exploratory: "探索性证据"/);
   assert.match(pages, /label="基准运行"/);
+  assert.match(pages, /label="对比范围"/);
   assert.match(pages, /label="对比运行"/);
+  assert.match(pages, /comparisonScope === "cohort"/);
+  assert.match(pages, /cycle-comparisons\/\$\{encodeURIComponent\(baselineCycleId\)\}\?limit=24/);
   assert.match(pages, /cycleIds: \[baselineCycleId, candidate\]/);
+  assert.match(pages, /correlationId=\$\{encodeURIComponent\(baseline\)\}&limit=1/);
   assert.match(pages, /title="周期概况"/);
   assert.match(pages, /title="信号差异"/);
   assert.doesNotMatch(pages, /JSON\.stringify\(result, null, 2\)/);
+});
+
+test("cycle detail presents actual recipe, source curves, phase features, and inspection measurements", () => {
+  assert.match(pages, /\/api\/v1\/cycles\/\$\{encodedId\}\/analysis/);
+  assert.match(pages, /title="实际执行配方"/);
+  assert.match(pages, /title="全过程曲线"/);
+  assert.match(pages, /processSignalTraces\(chartRun, samplesByRun, signal\.code\)/);
+  assert.match(pages, /title="阶段特征"/);
+  assert.match(pages, /keyField="recordId"/);
+  assert.match(pages, /\{ key: "outcome", label: "判定"/);
+  assert.match(pages, /测量值与规格/);
 });
 
 test("mechanism assets are presented as business fields instead of raw JSON", () => {
@@ -116,10 +138,20 @@ test("mechanism assets are presented as business fields instead of raw JSON", ()
 test("research projects expose the evidence-backed experiment and process-window workflow", () => {
   assert.match(researchProjects, /提出研发假设/);
   assert.match(researchProjects, /设计验证实验/);
+  assert.match(researchProjects, /导入历史运行/);
+  assert.match(researchProjects, /experiments\/import-history/);
+  assert.match(researchProjects, /实际配方回读、过程特征和检验记录/);
+  assert.match(researchProjects, /materialize-result/);
+  assert.match(researchProjects, /立即检查数据回收/);
+  assert.match(researchProjects, /采集和检验齐全后自动完成/);
+  assert.match(researchProjects, /replicatesPerCondition: 2/);
+  assert.match(researchProjects, /设备无关执行指令/);
+  assert.match(researchProjects, /onClick=\{\(\) => onGenerateOptimizationSuggestions\(\)\}/);
   assert.match(researchProjects, /记录实验计算结果/);
   assert.match(researchProjects, /calculatedFromSource: true/);
   assert.match(researchProjects, /supportingResultIds/);
-  assert.match(researchProjects, /独立验证/);
+  assert.match(researchProjects, /独立复核/);
+  assert.match(researchProjects, /发布生产/);
   assert.match(researchProjects, /等待其他成员批准/);
   assert.doesNotMatch(researchProjects, /项目代码|指标代码|变量代码|AnalysisHash|GUID/);
 });
@@ -135,6 +167,7 @@ test("research project setup reuses configured industrial definitions instead of
 
 test("research projects turn optimization into the existing experiment workflow", () => {
   assert.match(researchProjects, /\/optimize/);
+  assert.match(researchProjects, /batchSize:\s*2/);
   assert.match(researchProjects, /智能设计下一组实验/);
   assert.match(researchProjects, /现有流程审核后执行/);
   assert.doesNotMatch(researchProjects, /optimization-observations|optimization-suggestions/);

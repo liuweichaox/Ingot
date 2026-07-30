@@ -350,6 +350,10 @@ public sealed partial class AcquisitionProfilesController(
         {
             Mode = value.Mode.Trim().ToLowerInvariant(),
             CorrelationIdContextKey = NormalizeCode(value.CorrelationIdContextKey),
+            ActiveContextKey = string.IsNullOrWhiteSpace(value.ActiveContextKey)
+                ? null
+                : NormalizeCode(value.ActiveContextKey),
+            ActiveValue = value.ActiveValue.Trim(),
             StepContextKey = string.IsNullOrWhiteSpace(value.StepContextKey)
                 ? null
                 : NormalizeCode(value.StepContextKey),
@@ -410,6 +414,15 @@ public sealed partial class AcquisitionProfilesController(
                 profile.ContextMappings.All(item => item.ContextKey != lifecycle.StepContextKey))
             {
                 return Fail($"周期边界缺少步序上下文映射：{lifecycle.StepContextKey}。", out error);
+            }
+            if (!string.IsNullOrWhiteSpace(lifecycle.ActiveContextKey) &&
+                (string.IsNullOrWhiteSpace(lifecycle.ActiveValue) ||
+                 profile.ContextMappings.All(item =>
+                     item.ContextKey != lifecycle.ActiveContextKey)))
+            {
+                return Fail(
+                    $"周期边界缺少运行激活状态上下文映射：{lifecycle.ActiveContextKey}。",
+                    out error);
             }
         }
         error = string.Empty;

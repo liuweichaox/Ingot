@@ -167,6 +167,63 @@ public sealed class AcquisitionProtocolTests
     }
 
     [Fact]
+    public void LifecycleTracker_ExplicitInactiveSnapshot_ClosesRunWithoutCreatingPlaceholderCycle()
+    {
+        var deployment = Deployment();
+        var lifecycle = deployment.Profile.Lifecycle! with
+        {
+            ActiveContextKey = "run_active",
+            ActiveValue = "true"
+        };
+        var tracker = new AcquisitionLifecycleTracker();
+        var first = ProtocolAcquisitionSnapshotMapper.Map(
+            deployment with { Profile = deployment.Profile with { Lifecycle = lifecycle } },
+            new Dictionary<string, object?>
+            {
+                ["holding-register:0"] = 25d,
+                ["holding-register:100:string:24"] = "CYCLE-0001",
+                ["holding-register:112:uint16"] = (ushort)10,
+                ["holding-register:120:string:16"] = "lens-a-std",
+                ["holding-register:128:uint16"] = (ushort)4,
+                ["holding-register:160"] = 25d,
+                ["run-active"] = true
+            },
+            "edge/EDGE-001/connector/modbus-tcp",
+            null,
+            DateTimeOffset.Parse("2026-07-23T08:00:00Z"));
+        first = first with
+        {
+            Sample = first.Sample with
+            {
+                Context = new Dictionary<string, string>(first.Sample.Context)
+                {
+                    ["run_active"] = "true"
+                }
+            }
+        };
+        tracker.Track(first, lifecycle, 1000);
+
+        var inactive = first with
+        {
+            Sample = first.Sample with
+            {
+                EventId = Guid.CreateVersion7().ToString(),
+                OccurredAt = DateTimeOffset.Parse("2026-07-23T08:00:10Z"),
+                Context = new Dictionary<string, string>(first.Sample.Context)
+                {
+                    ["run_active"] = "false"
+                }
+            },
+            RecipeApplied = null
+        };
+
+        var completed = tracker.Track(inactive, lifecycle, 1000);
+        Assert.Equal(["cycle.completed"], completed.Select(item => item.EventType));
+        Assert.Equal("CYCLE-0001", completed[0].CorrelationId);
+        Assert.Empty(tracker.Track(inactive, lifecycle, 1000));
+    }
+
+    [Fact]
     public void ModbusDecoder_ReadsUtf8RegisterStrings()
     {
         var registers = new ushort[] { 0x4359, 0x434C, 0x452D, 0x3031, 0x0000 };

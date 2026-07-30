@@ -1,8 +1,11 @@
-"""Deterministic grey-box features for FX3U optical-lens molding.
+"""Deterministic grey-box features for precision optical-lens molding.
 
 The optimizer must be able to calculate the same features before a recipe is
 executed. Therefore these are derived from set-points, while measured trajectory
 features remain attached to observations for execution-quality checks.
+
+The process profile deliberately does not name a PLC model. Acquisition hardware
+is independent from process physics.
 """
 from __future__ import annotations
 
@@ -56,7 +59,10 @@ def optical_molding_features(x: np.ndarray, names: list[str]) -> np.ndarray:
 
 def expand_inputs(x: np.ndarray, names: list[str], process_profile: str) -> np.ndarray:
     values = np.atleast_2d(np.asarray(x, dtype=float))
-    if process_profile == "fx3u-optical-molding":
+    if process_profile in {
+        "optical-lens-molding-v1",
+        "fx3u-optical-molding",  # backward-compatible alias
+    }:
         features = optical_molding_features(values, names)
         # Inputs are already normalized to [0, 1]. These fixed physical scales
         # keep training and candidate transforms identical.

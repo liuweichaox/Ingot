@@ -1,4 +1,6 @@
+using System.Globalization;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Ingot.Contracts.ProcessResearch;
 using Npgsql;
 using NpgsqlTypes;
@@ -7,7 +9,7 @@ namespace Ingot.Platform.Infrastructure.ProcessResearch;
 
 public sealed class PostgresProcessResearchStore : IProcessResearchStore, IAsyncDisposable
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions JsonOptions = CreateJsonOptions();
     private readonly NpgsqlDataSource _dataSource;
 
     public PostgresProcessResearchStore(IConfiguration configuration)
@@ -370,7 +372,7 @@ public sealed class PostgresProcessResearchStore : IProcessResearchStore, IAsync
                               || to_jsonb(ARRAY[$2::text]),
                             true),
                           '{updatedAt}',
-                          to_jsonb($3::text),
+                          to_jsonb($4::text),
                           true),
                         updated_at = $3
                     WHERE experiment_id = $1
@@ -378,6 +380,8 @@ public sealed class PostgresProcessResearchStore : IProcessResearchStore, IAsync
                 updateExperiment.Parameters.AddWithValue(updatedExperiment.ExperimentId);
                 updateExperiment.Parameters.AddWithValue(result.ResultId);
                 updateExperiment.Parameters.AddWithValue(updatedExperiment.UpdatedAt);
+                updateExperiment.Parameters.AddWithValue(
+                    updatedExperiment.UpdatedAt.ToString("O", CultureInfo.InvariantCulture));
                 if (await updateExperiment.ExecuteNonQueryAsync(ct).ConfigureAwait(false) != 1)
                     throw new ProcessResearchRuleException("实验不存在。");
             }
@@ -676,6 +680,43 @@ public sealed class PostgresProcessResearchStore : IProcessResearchStore, IAsync
     private static T Deserialize<T>(string payload)
         => JsonSerializer.Deserialize<T>(payload, JsonOptions)
            ?? throw new InvalidDataException($"无法解析 {typeof(T).Name}。");
+
+    private static JsonSerializerOptions CreateJsonOptions()
+    {
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        options.Converters.Add(new CompatibleDateTimeOffsetConverter());
+        return options;
+    }
+
+    private sealed class CompatibleDateTimeOffsetConverter : JsonConverter<DateTimeOffset>
+    {
+        public override DateTimeOffset Read(
+            ref Utf8JsonReader reader,
+            Type typeToConvert,
+            JsonSerializerOptions options)
+        {
+            if (reader.TokenType != JsonTokenType.String)
+                throw new JsonException("DateTimeOffset 必须是字符串。");
+            if (reader.TryGetDateTimeOffset(out var parsed))
+                return parsed;
+            var raw = reader.GetString();
+            if (DateTimeOffset.TryParse(
+                    raw,
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.AllowWhiteSpaces | DateTimeStyles.AssumeUniversal,
+                    out parsed))
+            {
+                return parsed;
+            }
+            throw new JsonException($"无法解析 DateTimeOffset：{raw}");
+        }
+
+        public override void Write(
+            Utf8JsonWriter writer,
+            DateTimeOffset value,
+            JsonSerializerOptions options)
+            => writer.WriteStringValue(value.ToString("O", CultureInfo.InvariantCulture));
+    }
 
     public async ValueTask DisposeAsync()
         => await _dataSource.DisposeAsync().ConfigureAwait(false);

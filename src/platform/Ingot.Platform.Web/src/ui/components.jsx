@@ -128,6 +128,7 @@ export function StatusBadge({ value }) {
     closed: "已关闭",
     concluded: "已形成结论",
     disabled: "已停用",
+    starting: "启动中",
     withdrawn: "已撤回",
     "rolled-back": "已回退",
     information: "信息",
@@ -138,7 +139,7 @@ export function StatusBadge({ value }) {
     ? "success"
     : ["fail", "failed", "offline", "rejected", "error", "suspended", "rollback-required", "unavailable", "cancelled"].includes(normalized)
       ? "danger"
-      : ["pending", "draft", "running", "uploaded", "dirty", "degraded", "in_progress", "review_pending", "queued", "completed_with_errors", "cancelling", "proposed", "investigating", "trialing", "planned", "warning", "concluded", "withdrawn", "rolled-back"].includes(normalized)
+      : ["pending", "draft", "starting", "running", "uploaded", "dirty", "degraded", "in_progress", "review_pending", "queued", "completed_with_errors", "cancelling", "proposed", "investigating", "trialing", "planned", "warning", "concluded", "withdrawn", "rolled-back"].includes(normalized)
         ? "warning"
         : "neutral";
   return <Badge tone={tone}>{labels[normalized] ?? String(value ?? "待上报")}</Badge>;

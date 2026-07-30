@@ -16,13 +16,16 @@ public sealed class DevelopmentAuthenticationHandler(
     : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
 {
     public const string SchemeName = "IngotDevelopment";
+    public const string UserHeaderName = "X-Ingot-Development-User";
 
     protected override Task<AuthenticateResult> HandleAuthenticateAsync()
     {
+        var requestedUser = Request.Headers[UserHeaderName].FirstOrDefault()?.Trim();
+        var userId = IsSafeDevelopmentUser(requestedUser) ? requestedUser! : "operator";
         Claim[] claims =
         [
-            new(ClaimTypes.NameIdentifier, "operator"),
-            new(ClaimTypes.Name, "operator"),
+            new(ClaimTypes.NameIdentifier, userId),
+            new(ClaimTypes.Name, userId),
             new(ClaimTypes.Role, PlatformRoles.QualityInspector),
             new(ClaimTypes.Role, PlatformRoles.QualityReviewer),
             new(ClaimTypes.Role, PlatformRoles.ProcessEngineer),
@@ -32,4 +35,10 @@ public sealed class DevelopmentAuthenticationHandler(
         return Task.FromResult(AuthenticateResult.Success(
             new AuthenticationTicket(principal, SchemeName)));
     }
+
+    private static bool IsSafeDevelopmentUser(string? value)
+        => !string.IsNullOrWhiteSpace(value) &&
+           value.Length <= 64 &&
+           value.All(static character =>
+               char.IsLetterOrDigit(character) || character is '-' or '_' or '.');
 }

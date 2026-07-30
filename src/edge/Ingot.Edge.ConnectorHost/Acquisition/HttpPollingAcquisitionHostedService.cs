@@ -34,6 +34,8 @@ public sealed class HttpPollingAcquisitionHostedService(
         status.SetEnabled(_localOptions.Enabled || CanLoadPlatformProfiles());
         var edgeId = identity.GetEdgeId();
         var platformAvailable = CanLoadPlatformProfiles();
+        var canUseLocalFallback = _localOptions.Enabled &&
+                                  (!platformAvailable || _localOptions.AllowLocalFallbackWhenPlatformAvailable);
 
         if (!platformAvailable && !_localOptions.Enabled)
         {
@@ -60,9 +62,9 @@ public sealed class HttpPollingAcquisitionHostedService(
                     }
                 }
 
-                if (!receivedPlatformConfiguration && _workers.Count == 0 && _localOptions.Enabled)
+                if (!receivedPlatformConfiguration && _workers.Count == 0 && canUseLocalFallback)
                     StartWorker("local", _localOptions, edgeId, stoppingToken);
-                else if (receivedPlatformConfiguration)
+                else if (receivedPlatformConfiguration || !canUseLocalFallback)
                     StopWorker("local");
 
                 await Task.Delay(TimeSpan.FromSeconds(15), stoppingToken).ConfigureAwait(false);

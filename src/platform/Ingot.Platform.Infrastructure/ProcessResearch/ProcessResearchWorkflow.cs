@@ -94,8 +94,13 @@ public sealed partial class ProcessResearchWorkflow(IProcessResearchStore store)
         if (targetStatus == ResearchProjectStatuses.Completed)
         {
             var windows = await store.ListProcessWindowsAsync(projectId, ct).ConfigureAwait(false);
-            if (windows.All(static value => value.Status != ProcessWindowStatuses.Validated))
-                throw new ProcessResearchRuleException("研发项目完成前必须形成经过验证的工艺窗口。");
+            if (windows.All(static value =>
+                    value.Status != ProcessWindowStatuses.Validated ||
+                    value.ValidationLevel is not (
+                        ProcessWindowValidationLevels.Laboratory or
+                        ProcessWindowValidationLevels.Production)))
+                throw new ProcessResearchRuleException(
+                    "研发项目完成前必须形成经过跨区组重复实验验证的工艺窗口。");
         }
 
         var saved = await store.SaveProjectAsync(
@@ -314,6 +319,20 @@ public sealed partial class ProcessResearchWorkflow(IProcessResearchStore store)
                 .Distinct(StringComparer.Ordinal)
                 .ToArray(),
             ResultIds = [],
+            Execution = new ResearchExperimentExecution
+            {
+                DispatchId = Guid.CreateVersion7(),
+                State = ResearchExperimentExecutionStates.AwaitingApproval,
+                Commands = runPlan.Select(run => new ExperimentExecutionCommand
+                {
+                    CommandId = Guid.CreateVersion7(),
+                    RunKey = run.RunKey,
+                    Sequence = run.Sequence,
+                    BlockKey = run.BlockKey,
+                    ReplicateKey = run.ReplicateKey,
+                    RequestedFactors = run.Factors
+                }).ToArray()
+            },
             StopRule = RequiredText(request.StopRule, "停止规则", 4000),
             RollbackPlan = RequiredText(request.RollbackPlan, "回退方案", 4000),
             CreatedBy = NormalizeUser(userId),
@@ -341,6 +360,8 @@ public sealed partial class ProcessResearchWorkflow(IProcessResearchStore store)
         await RequireMutableProjectAsync(experiment.ProjectId, ct).ConfigureAwait(false);
         var actor = NormalizeUser(userId);
         targetStatus = NormalizeStatus(targetStatus, ResearchExperimentStatuses.IsValid, "实验状态");
+        if (experiment.Status == targetStatus)
+            return experiment;
         var allowed = (experiment.Status, targetStatus) switch
         {
             (ResearchExperimentStatuses.Planned, ResearchExperimentStatuses.Approved) => true,
@@ -383,6 +404,7 @@ public sealed partial class ProcessResearchWorkflow(IProcessResearchStore store)
             experiment with
             {
                 Status = targetStatus,
+                Execution = UpdateExecution(experiment, targetStatus, actor),
                 ApprovedBy = targetStatus == ResearchExperimentStatuses.Approved
                     ? actor
                     : experiment.ApprovedBy,
@@ -554,6 +576,12 @@ public sealed partial class ProcessResearchWorkflow(IProcessResearchStore store)
         var updatedExperiment = experiment with
         {
             ResultIds = experiment.ResultIds.Append(resultId).Distinct().ToArray(),
+            Status = ResearchExperimentStatuses.Completed,
+            Execution = (experiment.Execution ?? BuildExecution(experiment)) with
+            {
+                State = ResearchExperimentExecutionStates.Completed,
+                CompletedAt = now
+            },
             UpdatedAt = now
         };
         var savedResult = await store.SaveExperimentResultTransactionAsync(
@@ -702,6 +730,7 @@ public sealed partial class ProcessResearchWorkflow(IProcessResearchStore store)
                 ConfidenceMethod = confidenceMethod,
                 AnalysisHash = request.AnalysisHash.ToLowerInvariant(),
                 Applicability = RequiredText(request.Applicability, "工艺窗口适用范围", 8000),
+                ValidationLevel = ProcessWindowValidationLevels.Evidence,
                 ValidationNotes = null,
                 ValidatedBy = null,
                 ValidatedAt = null,
@@ -742,11 +771,24 @@ public sealed partial class ProcessResearchWorkflow(IProcessResearchStore store)
                 throw new ProcessResearchRuleException("工艺窗口的支持结果已失效，不能通过验证。");
         }
 
+        var laboratoryEvidence = true;
+        foreach (var resultId in value.SupportingResultIds)
+        {
+            var result = await store.GetExperimentResultAsync(resultId, ct).ConfigureAwait(false);
+            if (result is null || result.ReplicateCount < 2 || result.DistinctBlockCount < 2)
+                laboratoryEvidence = false;
+        }
+        var validationLevel = laboratoryEvidence
+            ? ProcessWindowValidationLevels.Laboratory
+            : ProcessWindowValidationLevels.Replay;
         var saved = await store.SaveProcessWindowAsync(
             value with
             {
                 Status = ProcessWindowStatuses.Validated,
-                ValidationNotes = $"由 {actor} 独立复核实验结果、适用范围与安全约束。",
+                ValidationLevel = validationLevel,
+                ValidationNotes = laboratoryEvidence
+                    ? $"由 {actor} 独立复核跨区组重复实验、适用范围与安全约束。"
+                    : $"由 {actor} 完成证据回放复核；投入生产前仍需跨区组重复实验。",
                 ValidatedBy = actor,
                 ValidatedAt = DateTimeOffset.UtcNow,
                 UpdatedAt = DateTimeOffset.UtcNow
@@ -754,6 +796,34 @@ public sealed partial class ProcessResearchWorkflow(IProcessResearchStore store)
             ct).ConfigureAwait(false);
         await AuditAsync(value.ProjectId, "process-window", windowId.ToString(), "validated",
             userId, value.Status, saved.Status, ct).ConfigureAwait(false);
+        return saved;
+    }
+
+    public async Task<ResearchProcessWindow> ReleaseProcessWindowAsync(
+        Guid windowId,
+        string userId,
+        CancellationToken ct = default)
+    {
+        var value = await store.GetProcessWindowAsync(windowId, ct).ConfigureAwait(false)
+            ?? throw new ProcessResearchRuleException("工艺窗口不存在。");
+        await RequireMutableProjectAsync(value.ProjectId, ct).ConfigureAwait(false);
+        if (value.Status != ProcessWindowStatuses.Validated ||
+            value.ValidationLevel != ProcessWindowValidationLevels.Laboratory)
+            throw new ProcessResearchRuleException("只有通过跨区组重复实验验证的工艺窗口才能发布生产。");
+        var actor = NormalizeUser(userId);
+        if (string.Equals(value.ValidatedBy, actor, StringComparison.Ordinal))
+            throw new ProcessResearchRuleException("实验室验证人与生产发布人必须分离。");
+        var saved = await store.SaveProcessWindowAsync(
+            value with
+            {
+                ValidationLevel = ProcessWindowValidationLevels.Production,
+                ValidationNotes = $"{value.ValidationNotes} 由 {actor} 审核并发布生产。",
+                UpdatedAt = DateTimeOffset.UtcNow
+            },
+            ct).ConfigureAwait(false);
+        await AuditAsync(value.ProjectId, "process-window", windowId.ToString(),
+            "production-released", userId, value.ValidationLevel, saved.ValidationLevel, ct)
+            .ConfigureAwait(false);
         return saved;
     }
 
@@ -769,8 +839,12 @@ public sealed partial class ProcessResearchWorkflow(IProcessResearchStore store)
         {
             referencedWindow = await store.GetProcessWindowAsync(windowId, ct).ConfigureAwait(false);
             if (referencedWindow is null || referencedWindow.ProjectId != projectId ||
-                referencedWindow.Status != ProcessWindowStatuses.Validated)
-                throw new ProcessResearchRuleException("知识声明只能引用当前项目中经过验证的工艺窗口。");
+                referencedWindow.Status != ProcessWindowStatuses.Validated ||
+                referencedWindow.ValidationLevel is not (
+                    ProcessWindowValidationLevels.Laboratory or
+                    ProcessWindowValidationLevels.Production))
+                throw new ProcessResearchRuleException(
+                    "知识声明只能引用经过跨区组重复实验验证的工艺窗口。");
         }
         var now = DateTimeOffset.UtcNow;
         var existing = request.ClaimId == Guid.Empty
@@ -1198,6 +1272,52 @@ public sealed partial class ProcessResearchWorkflow(IProcessResearchStore store)
             _ => ResearchHypothesisStatuses.Inconclusive
         };
     }
+
+    private static ResearchExperimentExecution UpdateExecution(
+        ResearchExperiment experiment,
+        string targetStatus,
+        string actor)
+    {
+        var execution = experiment.Execution ?? BuildExecution(experiment);
+        return targetStatus switch
+        {
+            ResearchExperimentStatuses.Approved => execution with
+            {
+                State = ResearchExperimentExecutionStates.Ready
+            },
+            ResearchExperimentStatuses.Running => execution with
+            {
+                State = ResearchExperimentExecutionStates.Dispatched,
+                DispatchedBy = actor,
+                DispatchedAt = DateTimeOffset.UtcNow
+            },
+            ResearchExperimentStatuses.Completed => execution with
+            {
+                State = ResearchExperimentExecutionStates.Completed,
+                CompletedAt = DateTimeOffset.UtcNow
+            },
+            ResearchExperimentStatuses.Cancelled => execution with
+            {
+                State = ResearchExperimentExecutionStates.Cancelled
+            },
+            _ => execution
+        };
+    }
+
+    private static ResearchExperimentExecution BuildExecution(ResearchExperiment experiment)
+        => new()
+        {
+            DispatchId = Guid.CreateVersion7(),
+            Commands = experiment.RunPlan.Select(run => new ExperimentExecutionCommand
+            {
+                CommandId = Guid.CreateVersion7(),
+                RunKey = run.RunKey,
+                Sequence = run.Sequence,
+                BlockKey = run.BlockKey,
+                ReplicateKey = run.ReplicateKey,
+                RequestedFactors = run.Factors
+            }).ToArray()
+        };
 
     private static string NormalizeCode(string? value, string field)
     {

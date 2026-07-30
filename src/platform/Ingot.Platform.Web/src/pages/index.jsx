@@ -7,7 +7,11 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { deleteJson, getJson, postForm, postJson, putJson, streamSse } from "../api/http";
-import { qualityOutcomeTraces } from "../charts/chartAdapters";
+import {
+  extractProcessSamples,
+  processSignalTraces,
+  qualityOutcomeTraces,
+} from "../charts/chartAdapters";
 import PlotlyChart from "../components/PlotlyChart";
 import {
   createRegistryBusinessForm,
@@ -41,6 +45,13 @@ export { ResearchAssetsPage } from "./ResearchAssetsPage";
 
 const formatTime = value => value ? new Date(value).toLocaleString("zh-CN") : "—";
 const formatInteger = value => Number.isFinite(Number(value)) ? Number(value).toLocaleString("zh-CN") : "—";
+const formatMeasurementValue = value => {
+  if (value == null || value === "") return "—";
+  const numeric = Number(value);
+  return Number.isFinite(numeric)
+    ? numeric.toLocaleString("zh-CN", { maximumFractionDigits: 6 })
+    : String(value);
+};
 const formatBytes = value => {
   const bytes = Number(value);
   if (!Number.isFinite(bytes)) return "—";
@@ -441,13 +452,42 @@ export function CycleDetailPage() {
   const { correlationId = "" } = useParams();
   const encodedId = encodeURIComponent(correlationId);
   const cycleResponse = useApi(`/api/v1/cycles?correlationId=${encodedId}&limit=1`);
+  const analysisResponse = useApi(`/api/v1/cycles/${encodedId}/analysis`);
+  const evidenceResponse = useApi(`/api/v1/cycles/${encodedId}`);
   const eventResponse = useApi(`/api/v1/events?correlationId=${encodedId}&limit=30`);
   const inspectionResponse = useApi(`/api/v1/inspection-records?operationRunId=${encodedId}&limit=50`);
   const cycle = extractRows(cycleResponse.data)[0];
+  const analysis = analysisResponse.data;
   const events = extractRows(eventResponse.data);
   const inspections = extractRows(inspectionResponse.data);
-  const loading = cycleResponse.loading || eventResponse.loading || inspectionResponse.loading;
-  const error = cycleResponse.error || eventResponse.error || inspectionResponse.error;
+  const processSamples = extractProcessSamples(evidenceResponse.data?.events || []);
+  const samplesByRun = { [correlationId]: processSamples };
+  const chartRun = cycle ? [{
+    correlationId,
+    machineId: cycle.machineId,
+    startedAt: cycle.startedAt,
+    isBaseline: true,
+  }] : [];
+  const stageFeatureRows = (analysis?.signals || []).flatMap(signal =>
+    (signal.features || [])
+      .filter(feature => feature.phaseCode && ["mean", "max", "slope", "integral"].includes(feature.code))
+      .map(feature => ({
+        id: `${signal.code}:${feature.phaseCode}:${feature.phaseOrder}:${feature.code}`,
+        signalName: signal.name || signal.code,
+        phaseName: feature.phaseName || feature.phaseCode,
+        featureCode: feature.code,
+        value: feature.value,
+        unit: signal.unit,
+      })));
+  const measurementRows = inspections.flatMap(inspection =>
+    (inspection.measurements || []).map(measurement => ({
+      id: `${inspection.recordId}:${measurement.characteristicCode}`,
+      ...measurement,
+    })));
+  const loading = cycleResponse.loading || analysisResponse.loading ||
+    evidenceResponse.loading || eventResponse.loading || inspectionResponse.loading;
+  const error = cycleResponse.error || analysisResponse.error ||
+    evidenceResponse.error || eventResponse.error || inspectionResponse.error;
   const dataQuality = cycle?.processDataQuality;
   const completion = cycle?.expectedSampleCount
     ? `${Math.round(Number(cycle.sampleCompleteness || 0) * 100)}%`
@@ -535,6 +575,72 @@ export function CycleDetailPage() {
             />
           </Card>
 
+          <Card
+            title="实际执行配方"
+            description="显示周期开始时从设备或控制系统回读的真实参数；优化建模使用这些值，不使用人工猜测值。"
+          >
+            {(analysis?.recipeParameters || []).length ? (
+              <DataTable
+                rows={analysis.recipeParameters}
+                keyField="code"
+                columns={[
+                  { key: "name", label: "参数", render: (value, row) => value || row.code },
+                  { key: "code", label: "稳定代码" },
+                  { key: "value", label: "实际值", render: formatMeasurementValue },
+                  { key: "unit", label: "单位" },
+                ]}
+              />
+            ) : <EmptyState title="尚无实际配方回读" description="没有实际参数的运行不能进入优化模型。" />}
+          </Card>
+
+          <Card
+            title="全过程曲线"
+            description={`${processSamples.length} 个采样时刻；横轴为本次运行开始后的相对时间，阶段来自设备工艺步序。`}
+          >
+            {(analysis?.signals || []).length && processSamples.length ? (
+              <div className="grid gap-4 xl:grid-cols-2">
+                {analysis.signals.map(signal => (
+                  <section key={signal.code} className="rounded-xl border border-slate-200 bg-white p-3">
+                    <div className="mb-2 flex items-baseline justify-between gap-3">
+                      <h3 className="text-sm font-semibold text-slate-900">{signal.name || signal.code}</h3>
+                      <span className="text-xs text-slate-500">{signal.unit || "无单位"}</span>
+                    </div>
+                    <PlotlyChart
+                      traces={processSignalTraces(chartRun, samplesByRun, signal.code)}
+                      layout={{
+                        hovermode: "x unified",
+                        margin: { l: 55, r: 20, t: 10, b: 45 },
+                        xaxis: { title: { text: "运行相对时间（秒）" } },
+                        yaxis: { title: { text: signal.unit || "" } },
+                        showlegend: false,
+                      }}
+                      height={260}
+                    />
+                  </section>
+                ))}
+              </div>
+            ) : <EmptyState title="尚无可绘制曲线" description="需要至少一个有效过程采样和信号定义。" />}
+          </Card>
+
+          <Card
+            title="阶段特征"
+            description="由冻结的过程曲线按工艺阶段计算，是周期对比、追因和优化器轨迹代理的正式输入。"
+          >
+            {stageFeatureRows.length ? (
+              <DataTable
+                rows={stageFeatureRows}
+                keyField="id"
+                columns={[
+                  { key: "signalName", label: "信号" },
+                  { key: "phaseName", label: "阶段" },
+                  { key: "featureCode", label: "特征" },
+                  { key: "value", label: "数值", render: formatMeasurementValue },
+                  { key: "unit", label: "单位" },
+                ]}
+              />
+            ) : <EmptyState title="尚无阶段特征" description="阶段完整并完成分析物化后自动生成。" />}
+          </Card>
+
           <div className="grid gap-5 xl:grid-cols-[1.1fr_.9fr]">
             <Card
               title="质量记录"
@@ -544,15 +650,43 @@ export function CycleDetailPage() {
               {inspectionResponse.loading && !inspectionResponse.data ? <LoadingCard /> : inspections.length ? (
                 <DataTable
                   rows={inspections}
-                  keyField="id"
+                  keyField="recordId"
                   columns={[
-                    { key: "inspectionDefinitionName", label: "检测项目" },
-                    { key: "overallOutcome", label: "判定", render: value => <StatusBadge value={value} /> },
-                    { key: "inspectedAt", label: "检测时间", render: formatTime },
+                    { key: "definitionCode", label: "检测项目" },
+                    { key: "outcome", label: "判定", render: value => <StatusBadge value={value} /> },
+                    { key: "measuredAt", label: "检测时间", render: formatTime },
                     { key: "attachments", label: "附件", render: value => `${value?.length || 0} 个` },
                   ]}
                 />
               ) : <EmptyState title="暂无质量记录" description="完成质量任务后，检测结果会自动归集到本周期。" />}
+              {measurementRows.length > 0 && (
+                <div className="mt-4 border-t border-slate-100 pt-4">
+                  <h3 className="mb-3 text-sm font-semibold text-slate-900">测量值与规格</h3>
+                  <DataTable
+                    rows={measurementRows}
+                    keyField="id"
+                    columns={[
+                      { key: "characteristicCode", label: "质量特性" },
+                      {
+                        key: "numericValue",
+                        label: "实测值",
+                        render: (value, row) => `${formatMeasurementValue(value ?? row.textValue)}${row.unit ? ` ${row.unit}` : ""}`,
+                      },
+                      {
+                        key: "lowerLimit",
+                        label: "规格下限",
+                        render: (value, row) => value == null ? "—" : `${formatMeasurementValue(value)}${row.unit ? ` ${row.unit}` : ""}`,
+                      },
+                      {
+                        key: "upperLimit",
+                        label: "规格上限",
+                        render: (value, row) => value == null ? "—" : `${formatMeasurementValue(value)}${row.unit ? ` ${row.unit}` : ""}`,
+                      },
+                      { key: "outcome", label: "判定", render: value => <StatusBadge value={value} /> },
+                    ]}
+                  />
+                </div>
+              )}
             </Card>
 
             <Card
@@ -2136,10 +2270,12 @@ export function CycleComparisonPage() {
   const [params] = useSearchParams();
   const [baseline, setBaseline] = useState(params.get("cycleId") || "");
   const [candidate, setCandidate] = useState("");
+  const [comparisonScope, setComparisonScope] = useState("cohort");
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [cycles, setCycles] = useState([]);
+  const [linkedBaseline, setLinkedBaseline] = useState(null);
   const [catalogLoading, setCatalogLoading] = useState(true);
   const [cycleFilter, setCycleFilter] = useState("");
   const [researchProjects, setResearchProjects] = useState([]);
@@ -2172,7 +2308,23 @@ export function CycleComparisonPage() {
     return () => { mounted = false; };
   }, [cycleFilter]);
 
-  const baselineCycle = cycles.find(item => item.correlationId === baseline);
+  useEffect(() => {
+    let mounted = true;
+    if (!baseline || cycles.some(item => item.correlationId === baseline)) {
+      setLinkedBaseline(null);
+      return () => { mounted = false; };
+    }
+    getJson(`/api/v1/cycles?correlationId=${encodeURIComponent(baseline)}&limit=1`)
+      .then(payload => {
+        if (mounted) setLinkedBaseline(extractRows(payload)[0] || null);
+      })
+      .catch(() => {
+        if (mounted) setLinkedBaseline(null);
+      });
+    return () => { mounted = false; };
+  }, [baseline, cycles]);
+
+  const baselineCycle = cycles.find(item => item.correlationId === baseline) || linkedBaseline;
   const normalizedCycleFilter = cycleFilter.trim().toLowerCase();
   const visibleCycles = cycles.filter(item => !normalizedCycleFilter || [
     item.correlationId,
@@ -2196,10 +2348,10 @@ export function CycleComparisonPage() {
   );
 
   useEffect(() => {
-    if (candidate && !comparableCycles.some(item => item.correlationId === candidate)) {
+    if (comparisonScope === "single" && candidate && !comparableCycles.some(item => item.correlationId === candidate)) {
       setCandidate("");
     }
-  }, [candidate, comparableCycles]);
+  }, [candidate, comparableCycles, comparisonScope]);
 
   const cycleLabel = cycle => [
     cycle.correlationId,
@@ -2214,10 +2366,14 @@ export function CycleComparisonPage() {
     setError("");
     try {
       const baselineCycleId = baseline.trim();
-      setResult(await postJson("/api/v1/cycle-comparisons", {
-        baselineCycleId,
-        cycleIds: [baselineCycleId, candidate],
-      }));
+      if (comparisonScope === "cohort") {
+        setResult(await getJson(`/api/v1/cycle-comparisons/${encodeURIComponent(baselineCycleId)}?limit=24`));
+      } else {
+        setResult(await postJson("/api/v1/cycle-comparisons", {
+          baselineCycleId,
+          cycleIds: [baselineCycleId, candidate],
+        }));
+      }
     } catch (requestError) {
       setResult(null);
       setError(requestError.message);
@@ -2266,15 +2422,16 @@ export function CycleComparisonPage() {
   return (
     <Page title="周期对比与候选原因" description="从已完成的同类运行中选择基准和对比对象，按阶段对齐后形成待验证的原因假设。">
       {error && <Alert tone="danger">{error}</Alert>}
-      <Card title="选择可比较的生产运行" description="先选择基准运行；系统会优先列出同一产品系列的已完成运行，避免把不相干的批次放在一起比较。">
+      <Card title="选择可比较的生产运行" description="先选择需要解释的异常运行；默认与同产品的完整样本组比较，避免从单个偶然样本得出结论。">
         <div className="mb-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
           <Field label="筛选运行" hint="可按运行号、产品、设备或配方筛选；这是查找，不是录入周期编号。"><Input value={cycleFilter} onChange={event => setCycleFilter(event.target.value)} placeholder="例如：产品系列、设备编号或运行号" /></Field>
           <p className="pb-2 text-sm text-slate-500">显示 {visibleCycles.length} / {cycles.length} 条已完成运行</p>
         </div>
-        <form className="grid gap-3 md:grid-cols-[1fr_1fr_auto]" onSubmit={compare}>
+        <form className="grid gap-3 md:grid-cols-[1fr_1fr_1fr_auto]" onSubmit={compare}>
           <Field label="基准运行" hint="通常选择质量异常、规格偏离或需要解释的一次运行。"><Select value={baseline} onChange={event => setBaseline(event.target.value)} required disabled={catalogLoading || !cycles.length}><option value="">选择已完成运行</option>{baseline && !cycles.some(item => item.correlationId === baseline) && <option value={baseline}>{baseline}（来自当前页面链接）</option>}{visibleCycles.map(cycle => <option key={cycle.correlationId} value={cycle.correlationId}>{cycleLabel(cycle)}</option>)}</Select></Field>
-          <Field label="对比运行" hint={baselineCycle?.productSeries ? `仅显示产品系列“${baselineCycle.productSeries}”的运行。` : baselineCycle ? `该运行未标注产品系列，暂按设备“${baselineCycle.machineId || "未标注"}”筛选。` : "请选择基准运行后再选择对比对象。"}><Select value={candidate} onChange={event => setCandidate(event.target.value)} required disabled={!baseline || catalogLoading}><option value="">选择同类运行</option>{comparableCycles.map(cycle => <option key={cycle.correlationId} value={cycle.correlationId}>{cycleLabel(cycle)}</option>)}</Select></Field>
-          <Button variant="primary" type="submit" className="self-end" disabled={busy || !baseline || !candidate}>{busy ? "正在对比…" : "开始周期对比"}</Button>
+          <Field label="对比范围" hint="历史样本组由服务端按产品、时间、质量和数据完整性筛选。"><Select value={comparisonScope} onChange={event => setComparisonScope(event.target.value)} disabled={!baseline}><option value="cohort">同产品历史样本组</option><option value="single">指定一个同类运行</option></Select></Field>
+          {comparisonScope === "single" ? <Field label="对比运行" hint={baselineCycle?.productSeries ? `仅显示产品系列“${baselineCycle.productSeries}”的运行。` : baselineCycle ? `该运行未标注产品系列，暂按设备“${baselineCycle.machineId || "未标注"}”筛选。` : "正在读取基准运行。"}><Select value={candidate} onChange={event => setCandidate(event.target.value)} required disabled={!baselineCycle || catalogLoading}><option value="">选择同类运行</option>{comparableCycles.map(cycle => <option key={cycle.correlationId} value={cycle.correlationId}>{cycleLabel(cycle)}</option>)}</Select></Field> : <div className="self-end rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">系统最多选择 24 个同产品历史运行，并保留质量覆盖和数据完整性证据。</div>}
+          <Button variant="primary" type="submit" className="self-end" disabled={busy || !baseline || (comparisonScope === "single" && !candidate)}>{busy ? "正在对比…" : "开始周期对比"}</Button>
         </form>
         {catalogLoading && <p className="mt-3 text-sm text-slate-500">正在读取可比较的已完成运行…</p>}
         {!catalogLoading && cycles.length === 0 && <Alert tone="warning" title="暂无可选择的运行">需要至少两条已完成且上下文完整的生产运行，才能开始周期对比。</Alert>}
@@ -2395,10 +2552,10 @@ const registryPages = {
   },
   acquisition: {
     kind: "acquisitionProfile",
-    title: "设备采集", description: "选择现场节点、设备和采集方式，让设备数据持续进入平台。", endpoint: "/api/v1/acquisition-profiles", key: "profileId",
-    columns: [["subjectId", "设备"], ["edgeId", "现场节点"], ["name", "采集任务"], ["protocol", "采集方式"], ["status", "状态"]],
+    title: "数据源配置", description: "将现场设备或系统数据映射为带工艺语义的过程、配方和周期事件。", endpoint: "/api/v1/acquisition-profiles", key: "profileId",
+    columns: [["subjectId", "数据源对象"], ["edgeId", "现场节点"], ["name", "数据源配置"], ["protocol", "接入协议"], ["status", "状态"]],
     render: { protocol: value => acquisitionProtocolLabels[value] || value },
-    createLabel: "接入设备",
+    createLabel: "配置数据源",
     template: { profileId: "", version: 1, name: "", status: "draft", protocol: "http-polling", edgeId: "", dataModelId: "", dataModelVersion: 1, source: "", subjectType: "equipment", subjectId: "", valueMappings: [] },
     deleteUrl: value => `/api/v1/acquisition-profiles/${encodeURIComponent(value.profileId)}/${value.version}`,
   },
@@ -2741,7 +2898,7 @@ export function EdgesPage() {
     <Page
       title="现场节点"
       description="查看部署在现场、负责连接设备并上报数据的节点。"
-      actions={<Link className="inline-flex min-h-9 items-center rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700" to="/configuration/acquisition-profiles">接入设备</Link>}
+      actions={<Link className="inline-flex min-h-9 items-center rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700" to="/configuration/acquisition-profiles">配置数据源</Link>}
     >
       {error && <Alert tone="danger" title="现场节点暂不可用">{error}</Alert>}
       <div className="grid gap-4 sm:grid-cols-3">
@@ -2750,7 +2907,7 @@ export function EdgesPage() {
         <Metric label="需要处理" value={rows.filter(row => edgeStatus(row) !== "online").length} hint="离线或运行异常" />
       </div>
       {loading && !data ? <LoadingCard /> : (
-        <Card title="节点状态" description="节点在线后即可承载设备采集任务。">
+        <Card title="节点状态" description="节点在线后即可承载一个或多个数据源采集任务。">
           <DataTable
             rows={rows}
             keyField="edgeId"
@@ -2777,31 +2934,42 @@ export function EdgeDetailPage() {
   const acquisition = useApi(`/api/edges/${encodedId}/acquisition/status`, { interval: 5000 });
   const metrics = useApi(`/api/edges/${encodedId}/metrics/json`, { interval: 10000 });
   const logs = useApi(`/api/edges/${encodedId}/logs?page=1&pageSize=50`, { interval: 10000 });
+  const profiles = useApi("/api/v1/acquisition-profiles", { interval: 10000 });
   const edge = extractRows(edges.data).find(row => row.edgeId === edgeId);
   const tasks = acquisition.data?.tasks || [];
-  const error = edges.error || acquisition.error || metrics.error || logs.error;
+  const edgeProfiles = extractRows(profiles.data).filter(profile => profile.edgeId === edgeId);
+  const profilesByTaskKey = new Map(edgeProfiles.map(profile => [`${profile.profileId}@${profile.version}`, profile]));
+  const taskRows = tasks.map(task => ({ ...task, profile: profilesByTaskKey.get(task.configurationKey) }));
+  const runningTasks = tasks.filter(task => task.state === "running").length;
+  const publishedProfiles = edgeProfiles.filter(profile => profile.status === "published");
+  const processSignalCount = publishedProfiles.reduce((total, profile) => total + (profile.valueMappings?.length || 0), 0);
+  const recipeMappingCount = publishedProfiles.reduce((total, profile) => total + (profile.recipe?.parameterMappings?.length || 0), 0);
+  const lifecycleProfileCount = publishedProfiles.filter(profile => profile.lifecycle).length;
+  const allTaskProfilesResolved = tasks.length > 0 && taskRows.every(task => task.profile);
+  const error = edges.error || acquisition.error || metrics.error || logs.error || profiles.error;
   const outboxBacklog = metricTotal(metrics.data, "event_outbox_backlog");
   const shipped = metricTotal(metrics.data, "event_shipped_total");
   const emitted = metricTotal(metrics.data, "event_emitted_total");
   const recentLogs = extractRows(logs.data);
+  const deliveryReady = runningTasks > 0 && processSignalCount > 0 && recipeMappingCount > 0 && lifecycleProfileCount > 0 && outboxBacklog === 0;
 
   return (
     <Page
-      title={edgeId || "节点诊断"}
-      description="从连接、采集、上行和最近日志判断现场节点是否正常。"
+      title={edge?.hostname || edgeId || "数据源节点"}
+      description="确认现场数据是否已从设备连接、采集和上行，交付为可用于工艺追因与优化的过程证据。"
       actions={(
         <>
           <Link className="inline-flex min-h-9 items-center rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50" to="/edges">返回现场节点</Link>
-          <Link className="inline-flex min-h-9 items-center rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700" to="/configuration/acquisition-profiles">配置设备</Link>
+          <Link className="inline-flex min-h-9 items-center rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700" to="/configuration/acquisition-profiles">配置数据源</Link>
         </>
       )}
     >
       {error && <Alert tone="danger" title="部分诊断信息暂不可用">{error}</Alert>}
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Metric label="节点连接" value={<StatusBadge value={edgeStatus(edge)} />} hint={edge?.lastSeen ? `最后心跳 ${formatTime(edge.lastSeen)}` : "尚未收到心跳"} />
-        <Metric label="采集运行" value={<StatusBadge value={acquisition.data?.state || "unknown"} />} hint={`${tasks.length} 个任务`} />
-        <Metric label="已采集样本" value={formatInteger(acquisition.data?.samplesCollected)} hint={acquisition.data?.lastSuccessAt ? `最近成功 ${formatTime(acquisition.data.lastSuccessAt)}` : "尚无成功记录"} />
-        <Metric label="待上行事件" value={formatInteger(outboxBacklog)} hint={`已确认 ${formatInteger(shipped)} / 已产生 ${formatInteger(emitted)}`} />
+        <Metric label="设备连接" value={<StatusBadge value={edgeStatus(edge)} />} hint={edge?.lastSeen ? `最后心跳 ${formatTime(edge.lastSeen)}` : "尚未收到心跳"} />
+        <Metric label="采集任务" value={<StatusBadge value={acquisition.data?.state || "unknown"} />} hint={`${runningTasks} 个运行中 / ${tasks.length} 个已加载`} />
+        <Metric label="数据上行" value={outboxBacklog > 0 ? `${formatInteger(outboxBacklog)} 待处理` : "已同步"} hint={`已确认 ${formatInteger(shipped)} / 已产生 ${formatInteger(emitted)}`} />
+        <Metric label="工艺建模" value={recipeMappingCount > 0 ? "配方已映射" : "待映射"} hint={`${processSignalCount} 条过程信号 · ${recipeMappingCount} 个配方参数`} />
       </div>
       {(edge?.lastError || acquisition.data?.lastError || outboxBacklog > 0) ? (
         <Alert tone="warning" title="节点需要关注">
@@ -2811,13 +2979,52 @@ export function EdgeDetailPage() {
             {outboxBacklog > 0 && <li>仍有 {formatInteger(outboxBacklog)} 条事件等待上行。</li>}
           </ul>
         </Alert>
-      ) : <Alert tone="success" title="节点运行正常">心跳、设备采集和事件上行均未发现待处理问题。</Alert>}
-      <Card title="采集任务" description="每个任务对应一台设备或一套设备数据来源。">
+      ) : !deliveryReady ? (
+        <Alert tone="warning" title="数据源尚未具备工艺闭环条件">
+          <ul className="list-disc space-y-1 pl-5">
+            {runningTasks === 0 && <li>尚无运行中的采集任务，请先发布并下发数据源配置。</li>}
+            {processSignalCount === 0 && <li>尚未映射过程信号，无法形成可分析的过程曲线。</li>}
+            {recipeMappingCount === 0 && <li>尚未回读实际配方参数，无法区分真实执行条件。</li>}
+            {lifecycleProfileCount === 0 && <li>尚未映射周期边界，连续数据无法自动归属到一次运行。</li>}
+          </ul>
+        </Alert>
+      ) : <Alert tone="success" title="采集端已具备交付条件">过程信号、实际配方、周期边界与数据上行均已就绪；请继续确认质检结果已关联到相同运行。</Alert>}
+      <WorkflowGuide
+        title="从设备数据到工艺证据"
+        description="节点只负责可靠交付数据；完整闭环还必须在平台把周期、实际配方、过程曲线与质量结果关联起来。"
+        compact
+        steps={[
+          { title: "连接数据源", description: edgeStatus(edge) === "online" ? "现场节点持续在线。" : "等待节点恢复心跳。", state: edgeStatus(edge) === "online" ? "done" : "current" },
+          { title: "采集并上行", description: runningTasks > 0 ? `${runningTasks} 个任务正在采集，${outboxBacklog > 0 ? `${formatInteger(outboxBacklog)} 条事件等待上行。` : "当前没有积压事件。"}` : "尚无运行中的采集任务。", state: runningTasks > 0 && outboxBacklog === 0 ? "done" : "current" },
+          { title: "映射工艺语义", description: `${processSignalCount} 条过程信号、${recipeMappingCount} 个配方参数${lifecycleProfileCount > 0 ? "，已配置周期边界。" : "；尚未配置周期边界。"}`, state: processSignalCount > 0 && recipeMappingCount > 0 && lifecycleProfileCount > 0 ? "done" : "current" },
+          { title: "验证闭环证据", description: deliveryReady ? "采集端条件已具备；请在周期与质检页面确认实际关联，再进入追因和实验。" : "补齐当前步骤后，再用周期与质检数据验证证据是否完整。", state: deliveryReady ? "current" : "upcoming" },
+        ]}
+      />
+      <Card
+        title="数据源交付情况"
+        description="这里显示已发布配置所承诺的工艺语义，不把节点运行指标误当成已经完成的质量或追因结论。"
+        actions={<Link className="text-sm font-medium text-blue-600 hover:text-blue-700" to="/configuration/acquisition-profiles">查看数据源配置</Link>}
+      >
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <Metric label="已发布数据源" value={publishedProfiles.length} hint={allTaskProfilesResolved ? "运行任务已关联配置版本" : tasks.length ? "有运行任务尚未匹配配置版本" : "尚未加载运行任务"} />
+          <Metric label="过程信号映射" value={processSignalCount} hint="用于形成过程曲线和特征" />
+          <Metric label="配方参数回读" value={recipeMappingCount} hint={recipeMappingCount ? "用于区分实际执行条件" : "追因与优化需要实际配方回读"} />
+          <Metric label="周期边界映射" value={lifecycleProfileCount} hint={lifecycleProfileCount ? "可生成离散运行周期" : "连续数据尚不能自动形成周期"} />
+        </div>
+        <p className="mt-5 rounded-xl bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-600">
+          {deliveryReady
+            ? "采集端已满足过程信号、实际配方与周期边界的交付条件。下一步在“周期”和“质检”中确认同一运行的曲线与结果已关联，随后再发起追因或优化实验。"
+            : "这不是追因结论。请先补齐运行任务、过程信号、实际配方回读和周期边界；质量结果由质检流程关联后，才形成可用于追因和优化的完整证据。"}
+        </p>
+      </Card>
+      <Card title="运行中的数据源" description="每行对应一份已下发到节点的不可变数据源配置版本。">
         <DataTable
-          rows={tasks}
+          rows={taskRows}
           keyField="configurationKey"
           columns={[
-            { key: "configurationKey", label: "任务版本" },
+            { key: "profile", label: "数据源", render: (_value, row) => row.profile ? <div><p className="font-medium text-slate-900">{row.profile.name}</p><p className="text-xs text-slate-500">{objectTypeLabel(row.profile.subjectType)} · {row.profile.subjectId}</p></div> : <span className="text-slate-500">{row.configurationKey}</span> },
+            { key: "_protocol", label: "接入协议", render: (_value, row) => row.profile ? acquisitionProtocolLabels[row.profile.protocol] || row.profile.protocol : "配置未匹配" },
+            { key: "_coverage", label: "采集内容", render: (_value, row) => row.profile ? `${row.profile.valueMappings?.length || 0} 信号 · ${row.profile.recipe?.parameterMappings?.length || 0} 配方参数${row.profile.lifecycle ? " · 周期" : ""}` : "—" },
             { key: "state", label: "状态", render: value => <StatusBadge value={value} /> },
             { key: "samplesCollected", label: "已采样", render: formatInteger },
             { key: "observedIntervalMs", label: "实际间隔", render: value => formatDuration(value) },
@@ -2827,7 +3034,7 @@ export function EdgeDetailPage() {
           ]}
         />
       </Card>
-      <Card title="最近日志" description={`最近 ${recentLogs.length} 条 · 共 ${logs.data?.total ?? recentLogs.length} 条`}>
+      <Card title="节点诊断日志" description={`仅在排查连接、协议或上行问题时使用 · 最近 ${recentLogs.length} 条 / 共 ${logs.data?.total ?? recentLogs.length} 条`}>
         <DataTable
           rows={recentLogs}
           getRowKey={(row, index) => `${row.timestamp}:${index}`}

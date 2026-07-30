@@ -146,6 +146,53 @@ public sealed class QualityWorkflowTests
     }
 
     [Fact]
+    public async Task CycleUsesActuallyAppliedRecipeParametersBeforeRecipeMasterData()
+    {
+        var startedAt = DateTimeOffset.Parse("2026-07-20T08:00:00Z");
+        var applied = Event(
+            "recipe.applied",
+            "OPTIMIZED-RUN-01",
+            "WP-OPTIMIZED-RUN-01",
+            "LENS-A",
+            startedAt,
+            data: new Dictionary<string, object?>
+            {
+                ["resolvedParameters"] = new Dictionary<string, object?>
+                {
+                    ["recipe.upper_heat_compensation"] = 2.888943d
+                }
+            });
+        var rows = new[]
+        {
+            Row(1, Event(
+                "cycle.started",
+                "OPTIMIZED-RUN-01",
+                "WP-OPTIMIZED-RUN-01",
+                "LENS-A",
+                startedAt)),
+            Row(2, applied),
+            Row(3, Event(
+                "cycle.completed",
+                "OPTIMIZED-RUN-01",
+                "WP-OPTIMIZED-RUN-01",
+                "LENS-A",
+                startedAt.AddMinutes(1)))
+        };
+        var service = new CycleComparisonService(
+            new FakeEventStore(rows),
+            new FakeInspectionStore([]),
+            new FakeReviewStore(),
+            new ProcessAnalysisResolver(new FakeProcessConfigurationStore()));
+
+        var cycle = await service.GetCycleAsync("OPTIMIZED-RUN-01");
+
+        Assert.NotNull(cycle);
+        var parameter = Assert.Single(cycle.RecipeParameters);
+        Assert.Equal("recipe.upper_heat_compensation", parameter.Code);
+        Assert.Equal(2.888943d, parameter.Value.GetDouble());
+    }
+
+    [Fact]
     public async Task CycleRecordsKeepAllSamplesAndUseConfiguredPhaseAndQualityRules()
     {
         var rows = new List<PlatformProductionEvent>();

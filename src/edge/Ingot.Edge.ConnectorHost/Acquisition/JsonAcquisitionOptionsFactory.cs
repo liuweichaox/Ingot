@@ -67,6 +67,8 @@ public static class JsonAcquisitionOptionsFactory
             {
                 Mode = profile.Lifecycle.Mode,
                 CorrelationIdContextKey = profile.Lifecycle.CorrelationIdContextKey,
+                ActiveContextKey = profile.Lifecycle.ActiveContextKey,
+                ActiveValue = profile.Lifecycle.ActiveValue,
                 StepContextKey = profile.Lifecycle.StepContextKey,
                 StepNameContextKey = profile.Lifecycle.StepNameContextKey,
                 StartedEventType = profile.Lifecycle.StartedEventType,

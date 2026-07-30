@@ -24,6 +24,9 @@ public sealed class ResearchExperimentOptimizer(
     {
         if (request.BatchSize is < 1 or > 8)
             throw new ProcessResearchRuleException("每批优化实验数量必须在 1 到 8 之间。");
+        if (request.ReplicatesPerCondition is < 1 or > 5 ||
+            request.BatchSize * request.ReplicatesPerCondition > 40)
+            throw new ProcessResearchRuleException("每个条件的重复次数必须在 1 到 5 之间，单批总运行数不能超过 40。");
         var project = await store.GetProjectAsync(projectId, ct).ConfigureAwait(false)
             ?? throw new ProcessResearchRuleException("研发项目不存在。");
         if (project.Status is ResearchProjectStatuses.Completed or ResearchProjectStatuses.Archived)
@@ -156,7 +159,11 @@ public sealed class ResearchExperimentOptimizer(
             Seed = request.Seed
         };
         var inputHash = Convert.ToHexStringLower(
-            SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(call)));
+            SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new
+            {
+                optimizerCall = call,
+                request.ReplicatesPerCondition
+            })));
         var existing = experiments
             .Where(experiment => string.Equals(
                 experiment.Optimization?.InputHash,
@@ -174,53 +181,33 @@ public sealed class ResearchExperimentOptimizer(
         var experimentId = CreateDeterministicExperimentId(projectId, inputHash);
         var runPlan = new List<ExperimentRunPlan>();
         var predictions = new List<OptimizationRunPrediction>();
-        for (var index = 0; index < response.Suggestions.Count; index++)
+        var sequence = 1;
+        for (var replicate = 0; replicate < request.ReplicatesPerCondition; replicate++)
         {
-            var suggestion = response.Suggestions[index];
-            ValidateSuggestion(project, response.ModelVersion, suggestion);
-            var runKey = $"bo-{experimentId:N}"[..15] + $"-{index + 1:D2}";
-            runPlan.Add(new ExperimentRunPlan
+            // 让同一候选条件在不同区组中的顺序轮换，避免固定执行顺序与条件混杂。
+            for (var position = 0; position < response.Suggestions.Count; position++)
             {
-                RunKey = runKey,
-                Sequence = index + 1,
-                Factors = suggestion.RecommendedParameters.Select(pair =>
-                    new ExperimentFactorSetting
-                    {
-                        VariableCode = pair.Key,
-                        Value = pair.Value,
-                        Unit = controls[pair.Key].Unit
-                    }).ToArray()
-            });
-            predictions.Add(new OptimizationRunPrediction
-            {
-                RunKey = runKey,
-                Objectives = suggestion.Predictions.ToDictionary(
-                    static pair => pair.Key,
-                    static pair => new OptimizationMetricPrediction
-                    {
-                        Mean = pair.Value.Mean,
-                        StandardDeviation = pair.Value.StandardDeviation,
-                        Lower95 = pair.Value.Lower95,
-                        Upper95 = pair.Value.Upper95,
-                        Unit = pair.Value.Unit
-                    },
-                    StringComparer.Ordinal),
-                Constraints = suggestion.ConstraintPredictions.ToDictionary(
-                    static pair => pair.Key,
-                    static pair => new OptimizationMetricPrediction
-                    {
-                        Mean = pair.Value.Mean,
-                        StandardDeviation = pair.Value.StandardDeviation,
-                        Lower95 = pair.Value.Lower95,
-                        Upper95 = pair.Value.Upper95,
-                        Unit = pair.Value.Unit
-                    },
-                    StringComparer.Ordinal),
-                FeasibilityProbability = suggestion.FeasibilityProbability,
-                AcquisitionValue = suggestion.AcquisitionValue,
-                ColdStart = suggestion.ColdStart,
-                Rationale = suggestion.Rationale
-            });
+                var index = (position + replicate) % response.Suggestions.Count;
+                var suggestion = response.Suggestions[index];
+                ValidateSuggestion(project, response.ModelVersion, suggestion);
+                var runKey = $"bo-{experimentId:N}"[..15] +
+                             $"-{index + 1:D2}-r{replicate + 1:D2}";
+                runPlan.Add(new ExperimentRunPlan
+                {
+                    RunKey = runKey,
+                    Sequence = sequence++,
+                    BlockKey = $"block-{replicate + 1:D2}",
+                    ReplicateKey = $"condition-{index + 1:D2}",
+                    Factors = suggestion.RecommendedParameters.Select(pair =>
+                        new ExperimentFactorSetting
+                        {
+                            VariableCode = pair.Key,
+                            Value = pair.Value,
+                            Unit = controls[pair.Key].Unit
+                        }).ToArray()
+                });
+                predictions.Add(MapPrediction(runKey, suggestion));
+            }
         }
 
         var generatedExperiment = new ResearchExperiment
@@ -231,6 +218,10 @@ public sealed class ResearchExperimentOptimizer(
                 ? $"假设验证实验 {DateTimeOffset.UtcNow:yyyy-MM-dd HH:mm}"
                 : $"智能优化实验 {DateTimeOffset.UtcNow:yyyy-MM-dd HH:mm}",
             DesignMethod = ResearchDesignMethods.BayesianOptimization,
+            BlockingKeys = runPlan.Select(static value => value.BlockKey!)
+                .Distinct(StringComparer.Ordinal).ToArray(),
+            ReplicateKeys = runPlan.Select(static value => value.ReplicateKey!)
+                .Distinct(StringComparer.Ordinal).ToArray(),
             RunPlan = runPlan,
             ObjectiveCodes = project.Objectives.Select(static value => value.Code).ToArray(),
             StopRule = intent == ResearchOptimizationIntents.ValidateHypothesis
@@ -248,6 +239,9 @@ public sealed class ResearchExperimentOptimizer(
                 ProcessProfile = processProfile,
                 Intent = intent,
                 HypothesisId = hypothesis?.HypothesisId,
+                DistinctConditionCount = response.Suggestions.Count,
+                ReplicatesPerCondition = request.ReplicatesPerCondition,
+                BlockCount = request.ReplicatesPerCondition,
                 RunPredictions = predictions,
                 GeneratedAt = DateTimeOffset.UtcNow
             }
@@ -350,10 +344,46 @@ public sealed class ResearchExperimentOptimizer(
     private static string NormalizeProcessProfile(string? value)
     {
         var profile = string.IsNullOrWhiteSpace(value) ? "generic" : value.Trim();
+        if (string.Equals(profile, "fx3u-optical-molding", StringComparison.OrdinalIgnoreCase))
+            profile = "optical-lens-molding-v1";
         if (profile.Length > 120)
             throw new ProcessResearchRuleException("优化画像最长 120 个字符。");
         return profile;
     }
+
+    private static OptimizationRunPrediction MapPrediction(
+        string runKey,
+        OptimizerSuggestionOutput suggestion)
+        => new()
+        {
+            RunKey = runKey,
+            Objectives = suggestion.Predictions.ToDictionary(
+                static pair => pair.Key,
+                static pair => new OptimizationMetricPrediction
+                {
+                    Mean = pair.Value.Mean,
+                    StandardDeviation = pair.Value.StandardDeviation,
+                    Lower95 = pair.Value.Lower95,
+                    Upper95 = pair.Value.Upper95,
+                    Unit = pair.Value.Unit
+                },
+                StringComparer.Ordinal),
+            Constraints = suggestion.ConstraintPredictions.ToDictionary(
+                static pair => pair.Key,
+                static pair => new OptimizationMetricPrediction
+                {
+                    Mean = pair.Value.Mean,
+                    StandardDeviation = pair.Value.StandardDeviation,
+                    Lower95 = pair.Value.Lower95,
+                    Upper95 = pair.Value.Upper95,
+                    Unit = pair.Value.Unit
+                },
+                StringComparer.Ordinal),
+            FeasibilityProbability = suggestion.FeasibilityProbability,
+            AcquisitionValue = suggestion.AcquisitionValue,
+            ColdStart = suggestion.ColdStart,
+            Rationale = suggestion.Rationale
+        };
 
     private static OptimizerObjectiveInput MapObjective(ResearchObjective objective)
         => objective.Direction switch

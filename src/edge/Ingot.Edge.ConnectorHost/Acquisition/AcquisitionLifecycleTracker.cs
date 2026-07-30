@@ -24,6 +24,8 @@ public sealed class AcquisitionLifecycleTracker
             : Track(
                 mapped,
                 lifecycle.CorrelationIdContextKey,
+                lifecycle.ActiveContextKey,
+                lifecycle.ActiveValue,
                 lifecycle.StepContextKey,
                 lifecycle.StepNameContextKey,
                 lifecycle.StartedEventType,
@@ -41,6 +43,8 @@ public sealed class AcquisitionLifecycleTracker
             : Track(
                 mapped,
                 lifecycle.CorrelationIdContextKey,
+                lifecycle.ActiveContextKey,
+                lifecycle.ActiveValue,
                 lifecycle.StepContextKey,
                 lifecycle.StepNameContextKey,
                 lifecycle.StartedEventType,
@@ -52,6 +56,8 @@ public sealed class AcquisitionLifecycleTracker
     private IReadOnlyList<ProductionEvent> Track(
         AcquisitionMappingResult mapped,
         string correlationIdContextKey,
+        string? activeContextKey,
+        string activeValue,
         string? stepContextKey,
         string? stepNameContextKey,
         string startedEventType,
@@ -69,24 +75,34 @@ public sealed class AcquisitionLifecycleTracker
         }
 
         var events = new List<ProductionEvent>(5);
+        if (!string.IsNullOrWhiteSpace(activeContextKey))
+        {
+            if (!sample.Context.TryGetValue(activeContextKey, out var currentActiveValue))
+            {
+                throw new InvalidDataException(
+                    $"离散运行采样缺少运行激活状态；请检查上下文映射 {activeContextKey}。");
+            }
+
+            var isActive = string.Equals(
+                currentActiveValue,
+                activeValue,
+                StringComparison.OrdinalIgnoreCase);
+            if (!isActive)
+            {
+                if (_activeCorrelationId is not null)
+                {
+                    events.Add(CompleteActiveRun(completedEventType, sample.OccurredAt));
+                    ResetActiveRun();
+                }
+                return events;
+            }
+        }
+
         if (_activeCorrelationId is not null &&
             !string.Equals(_activeCorrelationId, correlationId, StringComparison.Ordinal))
         {
-            events.Add(ProductionEvent.Create(
-                completedEventType,
-                sample.OccurredAt,
-                _activeSource!,
-                _activeSubject!,
-                _activeCorrelationId,
-                _activeContext,
-                new Dictionary<string, object?>
-                {
-                    ["sampleCount"] = _sampleCount,
-                    ["completionStatus"] = "completed"
-                }));
-            _activeCorrelationId = null;
-            _activeStep = null;
-            _sampleCount = 0;
+            events.Add(CompleteActiveRun(completedEventType, sample.OccurredAt));
+            ResetActiveRun();
         }
 
         if (_activeCorrelationId is null)
@@ -138,6 +154,32 @@ public sealed class AcquisitionLifecycleTracker
         _activeContext = sample.Context;
         _sampleCount++;
         return events;
+    }
+
+    private ProductionEvent CompleteActiveRun(
+        string completedEventType,
+        DateTimeOffset occurredAt)
+        => ProductionEvent.Create(
+            completedEventType,
+            occurredAt,
+            _activeSource!,
+            _activeSubject!,
+            _activeCorrelationId,
+            _activeContext,
+            new Dictionary<string, object?>
+            {
+                ["sampleCount"] = _sampleCount,
+                ["completionStatus"] = "completed"
+            });
+
+    private void ResetActiveRun()
+    {
+        _activeCorrelationId = null;
+        _activeStep = null;
+        _activeContext = new Dictionary<string, string>();
+        _activeSubject = null;
+        _activeSource = null;
+        _sampleCount = 0;
     }
 
     private static IReadOnlyList<ProductionEvent> WithoutLifecycle(AcquisitionMappingResult mapped)

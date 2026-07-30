@@ -121,6 +121,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IProcessResearchStore, PostgresProcessResearchStore>();
         services.AddSingleton<ProcessResearchWorkflow>();
         services.AddSingleton<IResearchObservationAssembler, ResearchObservationAssembler>();
+        services.AddSingleton<ResearchProcessWindowMaterializer>();
         services.AddSingleton<ResearchExperimentResultMaterializer>();
         services.Configure<ProcessOptimizerOptions>(configuration.GetSection("ProcessOptimizer"));
         services.AddHttpClient<IProcessOptimizerClient, ProcessOptimizerClient>((provider, client) =>
@@ -136,6 +137,7 @@ public static class ServiceCollectionExtensions
                 Math.Clamp(optimizerOptions.RequestTimeoutSeconds, 1, 300));
         });
         services.AddSingleton<ResearchExperimentOptimizer>();
+        services.AddHostedService<ResearchExperimentAutomationHostedService>();
 
         // 采集配置由平台统一管理并按边缘节点发布；采集执行器只运行已发布版本。
         services.AddSingleton<IAcquisitionProfileStore, PostgresAcquisitionProfileStore>();

@@ -69,6 +69,29 @@ public static class ResearchKnowledgeStatuses
         => value is Draft or Reviewed or Published or Retired;
 }
 
+public static class ProcessWindowValidationLevels
+{
+    public const string Evidence = "evidence";
+    public const string Replay = "replay";
+    public const string Laboratory = "laboratory";
+    public const string Production = "production";
+
+    public static bool IsValid(string? value)
+        => value is Evidence or Replay or Laboratory or Production;
+}
+
+public static class ResearchExperimentExecutionStates
+{
+    public const string AwaitingApproval = "awaiting-approval";
+    public const string Ready = "ready";
+    public const string Dispatched = "dispatched";
+    public const string Completed = "completed";
+    public const string Cancelled = "cancelled";
+
+    public static bool IsValid(string? value)
+        => value is AwaitingApproval or Ready or Dispatched or Completed or Cancelled;
+}
+
 public static class ResearchHypothesisEffectDirections
 {
     public const string Increase = "increase";
@@ -90,13 +113,14 @@ public static class ResearchOptimizationIntents
 public static class ResearchDesignMethods
 {
     public const string EngineerDefined = "engineer-defined";
+    public const string HistoricalObservation = "historical-observation";
     public const string FullFactorial = "full-factorial";
     public const string FractionalFactorial = "fractional-factorial";
     public const string ResponseSurface = "response-surface";
     public const string BayesianOptimization = "bayesian-optimization";
 
     public static bool IsValid(string? value)
-        => value is EngineerDefined or FullFactorial or FractionalFactorial or ResponseSurface
+        => value is EngineerDefined or HistoricalObservation or FullFactorial or FractionalFactorial or ResponseSurface
             or BayesianOptimization;
 }
 
@@ -255,6 +279,15 @@ public sealed record ResearchHypothesisFromCycleComparisonRequest
     public int MaximumHypotheses { get; init; } = 3;
 }
 
+/// <summary>
+///     将已完成的生产周期作为历史证据纳入研发项目。周期标识同时是实验运行标识，
+///     因而不会复制过程、配方或检验数据。
+/// </summary>
+public sealed record ResearchHistoricalRunImportRequest
+{
+    public IReadOnlyList<string> CycleIds { get; init; } = [];
+}
+
 public sealed record ExperimentRunPlan
 {
     public required string RunKey { get; init; }
@@ -262,6 +295,32 @@ public sealed record ExperimentRunPlan
     public string? BlockKey { get; init; }
     public string? ReplicateKey { get; init; }
     public IReadOnlyList<ExperimentFactorSetting> Factors { get; init; } = [];
+}
+
+public sealed record ExperimentExecutionCommand
+{
+    public Guid CommandId { get; init; }
+    public required string RunKey { get; init; }
+    public int Sequence { get; init; }
+    public string? BlockKey { get; init; }
+    public string? ReplicateKey { get; init; }
+    public IReadOnlyList<ExperimentFactorSetting> RequestedFactors { get; init; } = [];
+}
+
+/// <summary>
+///     设备无关的实验执行交接单。PLC、MES、配方系统或人工操作站只需要消费
+///     这组有序命令，并在实际运行中沿用 RunKey；采集侧随后会自动把实际配方、
+///     过程轨迹和检验结果关联回同一运行。
+/// </summary>
+public sealed record ResearchExperimentExecution
+{
+    public Guid DispatchId { get; init; }
+    public string Mode { get; init; } = "operator-confirmed";
+    public string State { get; init; } = ResearchExperimentExecutionStates.AwaitingApproval;
+    public IReadOnlyList<ExperimentExecutionCommand> Commands { get; init; } = [];
+    public string? DispatchedBy { get; init; }
+    public DateTimeOffset? DispatchedAt { get; init; }
+    public DateTimeOffset? CompletedAt { get; init; }
 }
 
 public sealed record OptimizationMetricPrediction
@@ -297,6 +356,9 @@ public sealed record ResearchOptimizationMetadata
     public required string ProcessProfile { get; init; }
     public string Intent { get; init; } = ResearchOptimizationIntents.ReachSpecification;
     public Guid? HypothesisId { get; init; }
+    public int DistinctConditionCount { get; init; }
+    public int ReplicatesPerCondition { get; init; } = 1;
+    public int BlockCount { get; init; } = 1;
     public IReadOnlyList<OptimizationRunPrediction> RunPredictions { get; init; } = [];
     public DateTimeOffset GeneratedAt { get; init; }
 }
@@ -319,6 +381,7 @@ public sealed record ResearchExperiment
     public IReadOnlyList<string> ReplicateKeys { get; init; } = [];
     public IReadOnlyList<Guid> ResultIds { get; init; } = [];
     public ResearchOptimizationMetadata? Optimization { get; init; }
+    public ResearchExperimentExecution? Execution { get; init; }
     public required string StopRule { get; init; }
     public required string RollbackPlan { get; init; }
     public string CreatedBy { get; init; } = "";
@@ -369,6 +432,7 @@ public sealed record ResearchExperimentResult
     public IReadOnlyList<ExperimentRunObservation> RunObservations { get; init; } = [];
     public int RunCount { get; init; }
     public int ReplicateCount { get; init; }
+    public int DistinctBlockCount { get; init; }
     public int DistinctMaterialLotCount { get; init; }
     public int DistinctEquipmentCount { get; init; }
     public bool SafetyPassed { get; init; }
@@ -403,6 +467,7 @@ public sealed record ResearchProcessWindow
     public Guid AnalysisRunId { get; init; }
     public required string AnalysisHash { get; init; }
     public required string Applicability { get; init; }
+    public string ValidationLevel { get; init; } = ProcessWindowValidationLevels.Evidence;
     public string? ValidationNotes { get; init; }
     public string? ValidatedBy { get; init; }
     public DateTimeOffset? ValidatedAt { get; init; }
@@ -446,6 +511,7 @@ public sealed record ResearchOptimizationRequest
     public string Intent { get; init; } = ResearchOptimizationIntents.ReachSpecification;
     public Guid? HypothesisId { get; init; }
     public bool AutoAssembleObservations { get; init; } = true;
+    public int ReplicatesPerCondition { get; init; } = 1;
 }
 
 public sealed record ResearchAuditEntry

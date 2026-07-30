@@ -101,10 +101,13 @@ cycle/batch comparison → candidate association → testable hypothesis → nex
 - A cycle comparison creates only **candidate hypotheses**. It preserves features, effect sizes, confounders, and the comparison snapshot; it never turns an association into a causal claim.
 - Once an engineer defines an outcome, expected direction, and minimum meaningful effect, the optimizer can use the `validate-hypothesis` intent. Among safe candidates, it favors combinations that are uncertain for the outcome and sufficiently separated from prior observations on the hypothesis variables.
 - The `reach-specification` intent continues to use qLogNEI/qLogNEHVI to approach specification under safety constraints.
+- The product workbench schedules two distinct candidates twice by default, splits them across two execution blocks, and rotates their order. This separates treatment differences from single-run noise; API callers may explicitly change the replicate count.
 - Results must be derived from source snapshots. Their confidence intervals automatically mark a hypothesis inconclusive when they cross the threshold, supported when they fully exceed it in the expected direction, or rejected when they fully exceed it in the opposite direction; traceable evidence is written with the decision.
+- Approval creates an ordered, equipment-neutral execution package. A PLC gateway, MES, recipe system, or operator station applies the parameters and preserves the `RunKey`; once actual recipes, trajectories, and inspections are complete, the background workflow materializes the result and closes the experiment.
+- Process-window maturity is explicit: evidence candidate, replay-reviewed, laboratory replicate-validated, and production-released. A human review cannot promote replay-only evidence into a production window.
 - Research assets remain reusable project context for mechanisms, knowledge, and data quality, rather than a separate daily-workbench module.
 
-The default scenario profile is `generic`. A particular PLC or process profile is only an adapter or example and cannot change this business contract.
+The default scenario profile is `generic`; the optical-lens molding grey-box profile is `optical-lens-molding-v1`. PLC models belong to acquisition adapters and must not appear in process-physics profiles or change this business contract.
 
 ## Observation contract
 

@@ -3,6 +3,11 @@ namespace Ingot.Edge.ConnectorHost.Acquisition;
 public sealed class HttpPollingAcquisitionOptions
 {
     public bool Enabled { get; init; }
+    /// <summary>
+    ///     平台已接管采集配置时，是否允许继续使用本地回退配置。默认关闭，避免未经版本化和语义校验的
+    ///     本地采集任务持续向平台写入无法用于追因的数据。仅离线调试或明确隔离的模拟环境可开启。
+    /// </summary>
+    public bool AllowLocalFallbackWhenPlatformAvailable { get; init; }
     public string DeviceBaseUrl { get; init; } = string.Empty;
     public string SnapshotPath { get; init; } = "/api/v1/snapshot";
     public int PollIntervalMs { get; init; } = 1000;
@@ -53,6 +58,8 @@ public sealed class LifecycleFieldMapping
 {
     public string Mode { get; init; } = "discrete-cycle";
     public string CorrelationIdContextKey { get; init; } = "correlation_id";
+    public string? ActiveContextKey { get; init; }
+    public string ActiveValue { get; init; } = "true";
     public string? StepContextKey { get; init; } = "recipe_step";
     public string? StepNameContextKey { get; init; } = "recipe_step_name";
     public string StartedEventType { get; init; } = "cycle.started";

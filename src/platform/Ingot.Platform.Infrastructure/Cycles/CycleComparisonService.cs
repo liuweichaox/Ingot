@@ -4,6 +4,8 @@ using Ingot.Contracts.ProcessConfiguration;
 using Ingot.Platform.Infrastructure.Events;
 using Ingot.Platform.Infrastructure.Inspections;
 using Ingot.Platform.Infrastructure.ProcessConfiguration;
+using System.Globalization;
+using System.Text.Json;
 
 namespace Ingot.Platform.Infrastructure.Cycles;
 
@@ -448,7 +450,7 @@ public sealed class CycleComparisonService(
             Signals = wholeCycle.Signals,
             Phases = wholeCycle.Phases,
             AnalysisMaterialization = materialized.Materialization,
-            RecipeParameters = BuildRecipeParameters(recipe, analysis?.DataModel)
+            RecipeParameters = BuildRecipeParameters(recipe, analysis?.DataModel, ordered)
         };
     }
 
@@ -491,12 +493,43 @@ public sealed class CycleComparisonService(
 
     private static IReadOnlyList<CycleRecipeParameter> BuildRecipeParameters(
         RecipeVersion? recipe,
-        ProcessDataModel? model)
+        ProcessDataModel? model,
+        IReadOnlyList<PlatformProductionEvent> rows)
     {
-        if (recipe is null)
-            return [];
         var definitions = model?.RecipeParameters.ToDictionary(static item => item.Code, StringComparer.Ordinal)
                           ?? new Dictionary<string, RecipeParameterDefinition>(StringComparer.Ordinal);
+        var applied = rows
+            .Where(static row => row.Event.EventType == "recipe.applied")
+            .OrderByDescending(static row => row.Event.OccurredAt)
+            .ThenByDescending(static row => row.IngestId)
+            .FirstOrDefault();
+        if (applied is not null &&
+            applied.Event.Data.TryGetValue("resolvedParameters", out var raw) &&
+            TryReadObject(raw, out var actual))
+        {
+            var captured = actual
+                .Select(pair =>
+                {
+                    definitions.TryGetValue(pair.Key, out var definition);
+                    return TryReadDouble(pair.Value, out var value)
+                        ? new CycleRecipeParameter
+                        {
+                            Code = pair.Key,
+                            Name = definition?.SourceField,
+                            Unit = definition?.Unit,
+                            Value = JsonSerializer.SerializeToElement(value)
+                        }
+                        : null;
+                })
+                .Where(static value => value is not null)
+                .Select(static value => value!)
+                .OrderBy(static value => value.Code, StringComparer.Ordinal)
+                .ToArray();
+            if (captured.Length > 0)
+                return captured;
+        }
+        if (recipe is null)
+            return [];
         return recipe.Values.Select(value =>
         {
             definitions.TryGetValue(value.Code, out var definition);
@@ -508,6 +541,57 @@ public sealed class CycleComparisonService(
                 Value = value.Value
             };
         }).ToArray();
+    }
+
+    private static bool TryReadObject(
+        object? raw,
+        out IReadOnlyDictionary<string, object?> values)
+    {
+        if (raw is JsonElement { ValueKind: JsonValueKind.Object } element)
+        {
+            values = element.EnumerateObject().ToDictionary(
+                static property => property.Name,
+                static property => (object?)property.Value,
+                StringComparer.Ordinal);
+            return true;
+        }
+        if (raw is IReadOnlyDictionary<string, object?> readOnly)
+        {
+            values = readOnly;
+            return true;
+        }
+        if (raw is IDictionary<string, object?> dictionary)
+        {
+            values = dictionary.ToDictionary(
+                static pair => pair.Key,
+                static pair => pair.Value,
+                StringComparer.Ordinal);
+            return true;
+        }
+        values = new Dictionary<string, object?>();
+        return false;
+    }
+
+    private static bool TryReadDouble(object? raw, out double value)
+    {
+        if (raw is JsonElement element)
+        {
+            value = default;
+            return element.ValueKind == JsonValueKind.Number &&
+                   element.TryGetDouble(out value) &&
+                   double.IsFinite(value);
+        }
+        try
+        {
+            value = Convert.ToDouble(raw, CultureInfo.InvariantCulture);
+            return double.IsFinite(value);
+        }
+        catch (Exception exception) when (
+            exception is FormatException or InvalidCastException or OverflowException)
+        {
+            value = default;
+            return false;
+        }
     }
 
     private static IReadOnlyDictionary<string, string> BuildComparisonContext(

@@ -9,8 +9,12 @@ namespace Ingot.Platform.Infrastructure.ProcessResearch;
 ///     尚无结果且全部计划运行均已形成有效观察的实验，因此不会替代工程师的启动审批。
 /// </summary>
 public sealed class ResearchExperimentResultMaterializer(
-    ProcessResearchWorkflow workflow)
+    ProcessResearchWorkflow workflow,
+    ResearchProcessWindowMaterializer? processWindowMaterializer = null,
+    IProcessResearchStore? store = null)
 {
+    private readonly SemaphoreSlim _gate = new(1, 1);
+
     public async Task<IReadOnlyList<ResearchExperimentResult>> MaterializeCompletedAsync(
         ResearchProject project,
         IReadOnlyList<ResearchExperiment> experiments,
@@ -19,15 +23,59 @@ public sealed class ResearchExperimentResultMaterializer(
         string userId,
         CancellationToken ct = default)
     {
+        await _gate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            return await MaterializeCoreAsync(
+                project,
+                experiments,
+                existingResults,
+                assembly,
+                userId,
+                ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    private async Task<IReadOnlyList<ResearchExperimentResult>> MaterializeCoreAsync(
+        ResearchProject project,
+        IReadOnlyList<ResearchExperiment> experiments,
+        IReadOnlyList<ResearchExperimentResult> existingResults,
+        ResearchObservationAssembly assembly,
+        string userId,
+        CancellationToken ct)
+    {
+        if (store is not null)
+        {
+            experiments = await store.ListExperimentsAsync(project.ProjectId, ct)
+                .ConfigureAwait(false);
+            existingResults = await store.ListExperimentResultsAsync(project.ProjectId, ct)
+                .ConfigureAwait(false);
+        }
         var existingExperimentIds = existingResults
             .Select(static value => value.ExperimentId)
             .ToHashSet();
         var observationsByRun = assembly.Observations
             .Where(static value => value.ValidForOptimization)
             .ToDictionary(static value => value.RunKey, StringComparer.Ordinal);
-        var priorObservations = existingResults
+        var historicalOrCompletedRunKeys = experiments
+            .Where(static value =>
+                value.DesignMethod == ResearchDesignMethods.HistoricalObservation ||
+                value.Status == ResearchExperimentStatuses.Completed)
+            .SelectMany(static value => value.RunPlan)
+            .Select(static value => value.RunKey)
+            .ToHashSet(StringComparer.Ordinal);
+        var priorObservations = assembly.Observations
+            .Where(value =>
+                value.ValidForOptimization &&
+                historicalOrCompletedRunKeys.Contains(value.RunKey))
+            .Concat(existingResults
             .SelectMany(static value => value.RunObservations)
-            .Where(static value => value.ValidForOptimization)
+            .Where(static value => value.ValidForOptimization))
+            .DistinctBy(static value => value.RunKey, StringComparer.Ordinal)
             .ToArray();
         var created = new List<ResearchExperimentResult>();
         foreach (var experiment in experiments
@@ -49,6 +97,17 @@ public sealed class ResearchExperimentResultMaterializer(
                         value.RunKey,
                         value.SourceContentHash
                     }))));
+            var replicateCount = experiment.RunPlan
+                .Where(static value => !string.IsNullOrWhiteSpace(value.ReplicateKey))
+                .GroupBy(static value => value.ReplicateKey!, StringComparer.Ordinal)
+                .Select(static group => group.Count())
+                .DefaultIfEmpty(1)
+                .Min();
+            var distinctBlockCount = experiment.RunPlan
+                .Select(static value => value.BlockKey)
+                .Where(static value => !string.IsNullOrWhiteSpace(value))
+                .Distinct(StringComparer.Ordinal)
+                .Count();
             var result = await workflow.RecordExperimentResultAsync(
                 experiment.ExperimentId,
                 new ResearchExperimentResult
@@ -57,13 +116,8 @@ public sealed class ResearchExperimentResultMaterializer(
                     Metrics = BuildMetrics(project, resolved, priorObservations),
                     RunObservations = resolved,
                     RunCount = resolved.Length,
-                    ReplicateCount = Math.Max(
-                        1,
-                        experiment.RunPlan
-                            .Select(static value => value.ReplicateKey)
-                            .Where(static value => !string.IsNullOrWhiteSpace(value))
-                            .Distinct(StringComparer.Ordinal)
-                            .Count()),
+                    ReplicateCount = replicateCount,
+                    DistinctBlockCount = Math.Max(1, distinctBlockCount),
                     DistinctMaterialLotCount = 1,
                     DistinctEquipmentCount = 1,
                     SafetyPassed = SatisfiesOutcomeConstraints(project, resolved),
@@ -72,6 +126,15 @@ public sealed class ResearchExperimentResultMaterializer(
                 userId,
                 ct).ConfigureAwait(false);
             created.Add(result);
+            if (processWindowMaterializer is not null)
+            {
+                await processWindowMaterializer.MaterializeCandidateAsync(
+                    project,
+                    experiment,
+                    result,
+                    userId,
+                    ct).ConfigureAwait(false);
+            }
             priorObservations = priorObservations.Concat(resolved).ToArray();
         }
         return created;

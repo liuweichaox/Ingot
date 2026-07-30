@@ -194,6 +194,13 @@ public static class HttpPollingSnapshotMapper
                 throw new InvalidOperationException(
                     $"周期运行缺少关联号上下文映射：{options.Lifecycle.CorrelationIdContextKey}。");
             }
+            if (!string.IsNullOrWhiteSpace(options.Lifecycle.ActiveContextKey) &&
+                !options.ContextFields.Any(item =>
+                    item.Key == options.Lifecycle.ActiveContextKey))
+            {
+                throw new InvalidOperationException(
+                    $"周期运行缺少激活状态上下文映射：{options.Lifecycle.ActiveContextKey}。");
+            }
         }
     }
 

@@ -4,6 +4,7 @@ using Ingot.Platform.Api.Agents;
 using Ingot.Platform.Infrastructure.Cycles;
 using Ingot.Platform.Infrastructure.ProcessResearch;
 using Microsoft.AspNetCore.Mvc;
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text.Json;
 
@@ -16,6 +17,7 @@ public sealed class ResearchProjectsController(
     ProcessResearchWorkflow workflow,
     ResearchExperimentOptimizer experimentOptimizer,
     IResearchObservationAssembler observationAssembler,
+    ResearchExperimentResultMaterializer resultMaterializer,
     ICycleComparisonService cycleComparisonService,
     PlatformUserResolver userResolver) : ControllerBase
 {
@@ -203,6 +205,99 @@ public sealed class ResearchProjectsController(
                 ct).ConfigureAwait(false)),
             ct);
 
+    [HttpPost("{projectId:guid}/experiments/import-history")]
+    public Task<IActionResult> ImportHistoricalRuns(
+        Guid projectId,
+        [FromBody] ResearchHistoricalRunImportRequest request,
+        CancellationToken ct)
+        => ExecuteForProjectAsync(
+            projectId,
+            true,
+            async identity =>
+            {
+                var cycleIds = request.CycleIds
+                    .Where(static value => !string.IsNullOrWhiteSpace(value))
+                    .Select(static value => value.Trim())
+                    .Distinct(StringComparer.Ordinal)
+                    .Take(2000)
+                    .ToArray();
+                if (cycleIds.Length < 2)
+                    throw new ProcessResearchRuleException("至少选择两个已完成运行，才能作为历史实验观察。");
+                if (request.CycleIds.Count > cycleIds.Length && request.CycleIds.Count > 2000)
+                    throw new ProcessResearchRuleException("一次最多导入 2000 个历史运行。");
+
+                var project = await store.GetProjectAsync(projectId, ct).ConfigureAwait(false)
+                    ?? throw new ProcessResearchRuleException("研发项目不存在。");
+                var controls = project.Variables
+                    .Where(static value => value.Role == ResearchVariableRoles.Control)
+                    .ToArray();
+                if (controls.Length == 0)
+                    throw new ProcessResearchRuleException("项目没有定义可控变量，不能导入历史运行。");
+
+                var cycles = new List<CycleComparisonRow>(cycleIds.Length);
+                foreach (var cycleId in cycleIds)
+                {
+                    var cycle = await cycleComparisonService.GetCycleAsync(cycleId, ct).ConfigureAwait(false)
+                        ?? throw new ProcessResearchRuleException($"运行 {cycleId} 不存在。");
+                    if (cycle.CompletedAt is null)
+                        throw new ProcessResearchRuleException($"运行 {cycleId} 尚未完成，不能作为历史观察。");
+                    cycles.Add(cycle);
+                }
+                var productSeries = cycles[0].ProductSeries;
+                if (cycles.Any(cycle => !string.Equals(
+                        cycle.ProductSeries, productSeries, StringComparison.Ordinal)))
+                {
+                    throw new ProcessResearchRuleException("历史运行必须属于同一产品系列，避免把不可比数据混入优化模型。");
+                }
+
+                var runs = cycles.Select((cycle, index) => new ExperimentRunPlan
+                {
+                    RunKey = cycle.CorrelationId,
+                    Sequence = index + 1,
+                    Factors = controls.Select(variable => new ExperimentFactorSetting
+                    {
+                        VariableCode = variable.Code,
+                        Value = ReadHistoricalRecipeValue(cycle, variable),
+                        Unit = variable.Unit
+                    }).ToArray()
+                }).ToArray();
+                var distinctConditions = runs
+                    .Select(run => string.Join("|", run.Factors
+                        .OrderBy(static factor => factor.VariableCode, StringComparer.Ordinal)
+                        .Select(static factor => $"{factor.VariableCode}:{factor.Value:R}")))
+                    .Distinct(StringComparer.Ordinal)
+                    .Count();
+                if (distinctConditions < 2)
+                    throw new ProcessResearchRuleException(
+                        "所选历史运行没有至少两种不同的实际配方条件，不能作为比较实验。请选择包含不同配方水平的运行。");
+
+                var existing = (await store.ListExperimentsAsync(projectId, ct).ConfigureAwait(false))
+                    .FirstOrDefault(experiment =>
+                        experiment.DesignMethod == ResearchDesignMethods.HistoricalObservation &&
+                        experiment.RunPlan.Select(static run => run.RunKey)
+                            .OrderBy(static key => key, StringComparer.Ordinal)
+                            .SequenceEqual(runs.Select(static run => run.RunKey)
+                                .OrderBy(static key => key, StringComparer.Ordinal), StringComparer.Ordinal));
+                if (existing is not null)
+                    return Ok(existing);
+
+                var experiment = await workflow.CreateExperimentAsync(
+                    projectId,
+                    new ResearchExperiment
+                    {
+                        Name = $"历史运行证据集 {DateTimeOffset.UtcNow:yyyy-MM-dd HH:mm}",
+                        DesignMethod = ResearchDesignMethods.HistoricalObservation,
+                        RunPlan = runs,
+                        ObjectiveCodes = project.Objectives.Select(static value => value.Code).ToArray(),
+                        StopRule = "仅导入已经完成且数据冻结的历史运行；不据此直接下达生产配方。",
+                        RollbackPlan = "历史证据导入不向设备写入任何参数；后续验证实验须经工程师批准。"
+                    },
+                    identity.UserId,
+                    ct).ConfigureAwait(false);
+                return Ok(experiment);
+            },
+            ct);
+
     [HttpPost("experiments/{experimentId:guid}/status")]
     public async Task<IActionResult> ChangeExperimentStatus(
         Guid experimentId,
@@ -240,6 +335,38 @@ public sealed class ResearchProjectsController(
                 request,
                 identity.UserId,
                 ct).ConfigureAwait(false)),
+            ct).ConfigureAwait(false);
+    }
+
+    [HttpPost("experiments/{experimentId:guid}/materialize-result")]
+    public async Task<IActionResult> MaterializeExperimentResult(
+        Guid experimentId,
+        CancellationToken ct)
+    {
+        var experiment = await store.GetExperimentAsync(experimentId, ct).ConfigureAwait(false);
+        if (experiment is null)
+            return NotFound(new { error = "实验不存在。" });
+        return await ExecuteForProjectAsync(
+            experiment.ProjectId,
+            true,
+            async identity =>
+            {
+                var workspace = await workflow.GetWorkspaceAsync(experiment.ProjectId, ct)
+                    .ConfigureAwait(false);
+                var assembly = await observationAssembler.AssembleAsync(
+                    workspace.Project, workspace.Experiments, ct).ConfigureAwait(false);
+                var materialized = await resultMaterializer.MaterializeCompletedAsync(
+                    workspace.Project,
+                    workspace.Experiments,
+                    workspace.ExperimentResults,
+                    assembly,
+                    identity.UserId,
+                    ct).ConfigureAwait(false);
+                var result = materialized.FirstOrDefault(value => value.ExperimentId == experimentId)
+                    ?? throw new ProcessResearchRuleException(
+                        "尚未找到全部计划运行的完整配方、过程和检验数据，不能自动计算结果。");
+                return Ok(result);
+            },
             ct).ConfigureAwait(false);
     }
 
@@ -315,6 +442,22 @@ public sealed class ResearchProjectsController(
             ct).ConfigureAwait(false);
     }
 
+    [HttpPost("process-windows/{windowId:guid}/release")]
+    public async Task<IActionResult> ReleaseProcessWindow(Guid windowId, CancellationToken ct)
+    {
+        var window = await store.GetProcessWindowAsync(windowId, ct).ConfigureAwait(false);
+        if (window is null)
+            return NotFound(new { error = "工艺窗口不存在。" });
+        return await ExecuteForProjectAsync(
+            window.ProjectId,
+            true,
+            async identity => Ok(await workflow.ReleaseProcessWindowAsync(
+                windowId,
+                identity.UserId,
+                ct).ConfigureAwait(false)),
+            ct).ConfigureAwait(false);
+    }
+
     [HttpPost("{projectId:guid}/knowledge-claims")]
     public Task<IActionResult> SaveKnowledgeClaim(
         Guid projectId,
@@ -371,6 +514,36 @@ public sealed class ResearchProjectsController(
         if (!identity.HasAnyRole(PlatformRoles.ProcessEngineer, PlatformRoles.PlatformAdministrator))
             return (null, Forbid());
         return (identity, null);
+    }
+
+    private static double ReadHistoricalRecipeValue(CycleComparisonRow cycle, ResearchVariable variable)
+    {
+        var source = variable.DataSource?.Trim();
+        var recipeCode = !string.IsNullOrWhiteSpace(source) &&
+                         source.StartsWith("recipe:", StringComparison.OrdinalIgnoreCase)
+            ? source["recipe:".Length..].Trim()
+            : variable.Code;
+        var value = cycle.RecipeParameters.FirstOrDefault(parameter =>
+            string.Equals(parameter.Code, recipeCode, StringComparison.Ordinal));
+        if (value is null || !TryReadNumber(value.Value, out var number))
+        {
+            throw new ProcessResearchRuleException(
+                $"运行 {cycle.CorrelationId} 缺少可控变量 {variable.Code} 的实际配方回读，不能作为优化观察。");
+        }
+        return number;
+    }
+
+    private static bool TryReadNumber(JsonElement value, out double number)
+    {
+        if (value.ValueKind == JsonValueKind.Number && value.TryGetDouble(out number) &&
+            double.IsFinite(number))
+            return true;
+        if (value.ValueKind == JsonValueKind.String &&
+            double.TryParse(value.GetString(), NumberStyles.Float, CultureInfo.InvariantCulture,
+                out number) && double.IsFinite(number))
+            return true;
+        number = default;
+        return false;
     }
 
     private static bool CanAccess(
