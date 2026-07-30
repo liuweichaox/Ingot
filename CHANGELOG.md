@@ -6,6 +6,9 @@ All notable project changes will be documented here. The format follows [Keep a 
 
 ### Added
 
+- Industrial-object-centered Platform Web workflow for operations, investigation, context, connection, and administration.
+- Cycle diagnosis, controllable hypotheses, hypothesis-validation experiments, independent process-window validation, and reusable research assets.
+- Embedded Agent chat, investigation tools, data-quality explanations, and deterministic/OpenAI provider boundaries inside Platform API.
 - Stateless BoTorch optimization service with qLogNEI and qLogNEHVI.
 - Two-stage surrogate modeling for setpoint-to-trajectory and trajectory-to-quality behavior.
 - Weighted objectives, parameter constraints, safety outcome constraints, and pending-point avoidance.
@@ -15,5 +18,7 @@ All notable project changes will be documented here. The format follows [Keep a 
 
 ### Changed
 
+- Platform is now documented as a modular monolith: `Platform API` hosts Platform Infrastructure and Agent capabilities, while `Edge ConnectorHost` and `Optimizer` remain separate runtime services.
+- Website and Docs are documented as a separate public-site deployment, apart from the factory application Compose stack.
 - Product positioning now centers on reducing experiments required to reach process specification.
 - The optical-lens molding and Mitsubishi FX3U workflow is the first concrete validation scenario.

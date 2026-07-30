@@ -21,8 +21,9 @@ define controls, objectives, and safety constraints
 → acquire actual recipes and cycle trajectories
 → join inspection outcomes
 → assemble experimental observations
+→ diagnose candidate variables and propose an R&D hypothesis
 → fit trajectory and quality surrogates
-→ recommend the next settings
+→ recommend and validate the next settings
 → engineer review and execution
 → update from new evidence
 ```
@@ -31,7 +32,7 @@ Acquisition, inspection, features, experiments, and knowledge all serve this loo
 
 ## Current status
 
-The code-level loop is implemented and covered by automated tests. A real optical-molding historical replay has not yet been published. Ingot distinguishes “the software runs” from “the software has proven fewer factory experiments”; the latter requires run-by-run replay and prospective evidence.
+The current implementation consists of Edge ConnectorHost, a modular Platform API monolith, embedded Agent capabilities, a separate Optimizer, and a separate Web frontend. The code-level loop is implemented and covered by automated tests. A real optical-molding historical replay has not yet been published. Ingot distinguishes “the software runs” from “the software has proven fewer factory experiments”; the latter requires run-by-run replay and prospective evidence.
 
 ## Public commitments
 

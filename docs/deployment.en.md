@@ -3,15 +3,19 @@
 ## Recommended topology
 
 ```text
-field data sources            factory server
-control systems / instruments / vision / inspection / business systems
-                └─ Edge or data adapter ──────→ Platform API
-                                 ├─ PostgreSQL / TimescaleDB
-                                 ├─ Optimizer
-                                 └─ Platform Web
+field data sources                         factory server
+control systems / instruments / vision / inspection / MES
+                └─ Edge ConnectorHost ─────→ Platform API (modular monolith)
+                                             ├─ PostgreSQL / TimescaleDB
+                                             ├─ attachments + process knowledge
+                                             ├─ embedded Agent / Chat / data tools
+                                             ├─ Optimizer (separate stateless service)
+                                             └─ Platform Web (standalone React frontend)
 ```
 
-Deploy Edge near equipment. Platform, database, optimizer, and Web may share one factory server through Compose or be separated behind the same contracts.
+Deploy Edge ConnectorHost near equipment. Platform API, database, Optimizer, and Platform Web may share one factory server through Compose or be separated behind the same contracts. `Edge.Application`, `Edge.Infrastructure`, `Platform.Infrastructure`, and Agent are code-level libraries, not separate Compose services.
+
+Website and Docs are not part of the factory runtime. Deploy them separately in the public-site topology defined by `deploy/compose.yml`.
 
 ## Configuration
 
@@ -51,7 +55,7 @@ Configure addresses or interfaces, tokens, and mappings before connecting a real
 | Web | `/health` |
 | PostgreSQL | `pg_isready` |
 
-Optimizer `/ready` verifies the PyTorch, GPyTorch, and BoTorch runtime. Platform starts without Optimizer; acquisition and inspection continue while new recommendations remain unavailable.
+Optimizer `/health` only indicates that its HTTP process is alive; Optimizer `/ready` verifies the PyTorch, GPyTorch, and BoTorch runtime. Platform, Connector, and Web health checks cover their own process and configured dependencies. Platform starts without Optimizer; acquisition and inspection continue while new recommendations remain unavailable.
 
 ## Data and backup
 

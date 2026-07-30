@@ -54,9 +54,11 @@ Implemented today:
 - MELSEC A1E, Modbus TCP, OPC UA, MQTT, and HTTP acquisition boundaries;
 - offline buffering, idempotent shipping, cycle materialization, and versioned phase features;
 - automatic joining of runs, actual recipes, trajectories, and inspections;
+- cycle diagnosis, R&D hypotheses, hypothesis-validation experiments, and process-window review;
 - single/multi-objective optimization, weights, parameter constraints, and safety outcomes;
 - qLogNEI/qLogNEHVI, batch suggestions, pending-point avoidance, and safe cold starts;
 - idempotent recommendations and atomic experiment-result persistence;
+- embedded Agent investigation, chat, and data tools in Platform, with numerical decisions kept in the separate Optimizer;
 - bilingual website, documentation, and a React process-R&D workbench.
 
 The project does not present unvalidated algorithm performance as a product result. Historical replay and prospective experiments must establish real impact.
@@ -66,12 +68,13 @@ The project does not present unvalidated algorithm performance as a product resu
 | Component | Responsibility | Stack |
 |---|---|---|
 | Edge | Equipment connection, acquisition, offline buffer, forwarding | .NET 10, SQLite |
-| Platform API | Experiments, cycles, inspections, evidence, transactions | ASP.NET Core, PostgreSQL/TimescaleDB |
+| Platform API | Modular monolith for industrial objects, experiments, cycles, inspections, evidence, Agent, and transactions | ASP.NET Core, PostgreSQL/TimescaleDB |
+| Agent | Embedded investigation, chat, and data tools | .NET, deterministic/OpenAI providers |
 | Optimizer | Stateless surrogate fitting and experiment recommendation | Python, PyTorch, GPyTorch, BoTorch |
-| Platform Web | Process-engineering workflow | React, Vite |
+| Platform Web | Standalone object, diagnosis, R&D, and execution workflow | React, Vite |
 | Website / Docs | Open-source project and product documentation | Next.js |
 
-The central platform is a modular monolith. Numerical optimization is a stateless service. Platform remains the only system of record.
+The central platform is a modular monolith with Agent embedded in Platform API. Numerical optimization is a separate stateless service. Edge deploys as ConnectorHost, Platform deploys as Platform API, and Platform remains the only system of record. Website and Docs use a separate public-site topology.
 
 ## Quick start
 
@@ -119,8 +122,9 @@ Run the complete gate with `./scripts/verify.sh`.
 2. Map each control to an actual source such as `recipe:holding-temperature`.
 3. Use the same value for experiment `RunKey`, PLC cycle correlation, and inspection `OperationRunId`.
 4. Run and inspect a verified safe baseline.
-5. Generate, review, and execute the next recommended experiment.
-6. Repeat after each completed cycle and inspection until the stop rule is met.
+5. Add a hypothesis and start the R&D project.
+6. Generate, review, and execute the next recommended experiment.
+7. Repeat after each completed cycle and inspection until the stop rule is met.
 
 Explicit mappings never silently fall back to planned values. Missing actual data excludes the run with a visible reason.
 
@@ -130,11 +134,12 @@ See [Quickstart](docs/getting-started.en.md) and [Real-world validation](docs/ro
 
 ```text
 src/edge/          field acquisition and reliable shipping
-src/platform/      central API, business modules, React workbench
+src/platform/      central API and business modules
 src/agent/         AI investigation and explanation
 src/shared/        domain models and contracts
 optimizer/         GP and Bayesian optimization service
 tests/             .NET core tests
+apps/platform/     React process-R&D workbench
 apps/website/      official website
 apps/docs-site/    documentation site
 docs/              bilingual project documentation

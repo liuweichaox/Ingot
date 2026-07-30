@@ -14,49 +14,41 @@ That leads to three choices:
 
 Ingot is an industrial data and process-decision platform—not another PLC configuration tool, generic dashboard, MES, or data warehouse. It turns field data into contextualized industrial facts, then turns those facts into explainable, verifiable, and executable process decisions.
 
-The product surface has five domains only:
+The current Web UI is organized into five product domains:
 
-1. **Decision workbench** — the highest-value actions across runs, quality, data trust, and optimization projects;
-2. **Insight and optimization** — root-cause analysis produces candidate hypotheses, while optimization projects turn hypotheses or specifications into the next safe experiments;
-3. **Industrial context** — equipment, workpieces, recipes, phases, inspections, and analysis semantics give raw signals business meaning;
-4. **Connection and implementation** — field nodes, data connections, and production context are configured by implementers to support, rather than distract from, daily decisions;
-5. **System** — health, logs, and integration operations.
+1. **Operations workbench** — the highest-value actions across runs, quality, data trust, and R&D projects;
+2. **Investigation and optimization** — cycle diagnosis produces candidate hypotheses, while R&D projects turn hypotheses or specifications into the next safe experiments;
+3. **Objects and models** — equipment, production context, recipes, phases, inspections, and analysis models give raw signals business meaning;
+4. **Connection and configuration** — field nodes, data connections, process data models, and quality configuration are maintained by implementers;
+5. **Platform administration** — health, logs, users, subscriptions, and integration operations.
 
 Mechanisms, knowledge, datasets, and models are reusable context for optimization projects, not a separate daily workbench. A PLC, instrument, database, or file is only a connector; the platform contract remains centered on runs, process, quality, and experiments.
 
 ## System map
 
 ```mermaid
-flowchart TB
-    subgraph Edge["Edge · field"]
-        Sources["Control systems / instruments / vision / inspection / business data"]
-        Driver["Protocol and equipment mapping"]
-        Buffer["Local event log and forwarding"]
-        Sources --> Driver --> Buffer
+flowchart LR
+    Sources["PLC / instruments / vision / MES / inspection"] --> Connector["Edge ConnectorHost\nprotocols + SQLite buffer"]
+
+    subgraph Platform["Platform API · modular monolith / system of record"]
+        API["ASP.NET Core API"]
+        Business["Platform Infrastructure\ncycles, inspections, objects, R&D, quality, files"]
+        Agent["Agent Core + Providers\nchat, investigation, data tools"]
+        API --> Business
+        API --> Agent
     end
 
-    subgraph Platform["Platform · system of record"]
-        Ingest["Event ingestion"]
-        Cycle["Cycles, phases, versioned features"]
-        Inspection["Inspection and review"]
-        Research["Campaign and experiment workflow"]
-        Observation["Observation assembly"]
-        Ingest --> Cycle --> Observation
-        Inspection --> Observation
-        Research --> Observation
-    end
+    Connector --> API
+    Web["Platform Web\nReact / Vite"] --> API
+    Business --> DB["PostgreSQL + TimescaleDB"]
+    Business --> Files["Attachments + process knowledge"]
+    Business --> Optimizer["Optimizer\nPython / BoTorch\nsuggestions + diagnosis"]
+    Optimizer --> Business
 
-    subgraph Optimizer["Optimizer · stateless compute"]
-        Trajectory["Setpoints → trajectory GP"]
-        Quality["Setpoints + trajectory → quality/constraint GP"]
-        Acquisition["qLogNEI / qLogNEHVI"]
-        Trajectory --> Quality --> Acquisition
-    end
-
-    Buffer --> Ingest
-    Observation --> Optimizer
-    Acquisition --> Research
+    Public["Website / Docs\nseparate public deployment"]
 ```
+
+Repository project boundaries are not deployment boundaries: `Edge.Application`, `Edge.Infrastructure`, `Platform.Infrastructure`, and `Agent` are libraries. The actual central deployment unit is `Platform API`, and the actual field deployment unit is `Edge ConnectorHost`. Optimizer runs as a separate stateless HTTP service. Website and Docs are deployed separately from the factory application stack through `deploy/compose.yml`.
 
 ## Responsibilities
 
@@ -76,17 +68,31 @@ flowchart TB
 - Review, execute, and complete experiments.
 - Save result, evidence, experiment linkage, and audit in one transaction.
 
+Platform API is a modular monolith that composes Platform Infrastructure, Agent Core, and Agent Providers. Agent has no separate business database and never bypasses Platform to write field or business records.
+
+### Agent
+
+- Read authorized data tools and structured business context from Platform;
+- provide chat, investigation, cycle comparison, data-quality explanations, and research assistance;
+- use a deterministic local/test fallback or a configured OpenAI Provider;
+- never make the final numerical recipe decision; Optimizer computes numerical suggestions and an engineer reviews them.
+
 ### Optimizer
 
 - Receive the complete campaign and observation snapshot on every request.
 - Rebuild models per request and retain no business state.
 - Generate safe exploration points during cold start.
 - Fit two-stage GPs once enough evidence exists.
+- Expose `/v1/suggestions` for specification or hypothesis-validation suggestions and `/v1/diagnosis` for diagnostic candidates;
 - Return parameters, objective and constraint predictions, intervals, feasibility, and acquisition value.
 
 ### Web
 
-The UI organizes goals, observations, suggestions, execution, and results inside one R&D project. It does not create a parallel optimization workflow.
+Web is a standalone React/Vite frontend that accesses business data through Platform API. It organizes industrial objects, R&D projects, goals, experiments, observation readiness, suggestions, execution, and results without creating a parallel optimization workflow.
+
+### Website / Docs
+
+Website and Docs are public Next.js static sites. They are not part of the factory runtime loop and do not own Platform business state.
 
 ## Root-cause and optimization loop
 

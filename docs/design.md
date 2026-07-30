@@ -14,49 +14,41 @@
 
 Ingot 是工业数据与工艺决策平台，不是另一个 PLC 组态工具、通用数据大屏、MES 或数据仓库。它把现场数据转为有工业上下文的运行事实，再将事实转为可解释、可验证、可执行的工艺决策。
 
-产品界面只有五个产品域：
+当前 Web 界面按五个产品域组织：
 
-1. **决策工作台**：跨运行、质量、数据可信度和优化项目汇总当前最有价值的行动；
-2. **洞察与优化**：根因分析产生候选假设，优化项目把假设或规格转成下一组安全实验；
-3. **工业上下文**：设备、工件、配方、阶段、检测和分析语义定义原始信号的业务含义；
-4. **连接与实施**：现场节点、数据连接和生产上下文由实施人员配置，支撑而不干扰日常决策；
-5. **系统**：健康、日志和集成运维。
+1. **运营工作台**：跨运行、质量、数据可信度和研发项目汇总当前最有价值的行动；
+2. **调查与优化**：周期诊断产生候选假设，研发项目把假设或规格转成下一组安全实验；
+3. **对象与模型**：设备、生产上下文、配方、阶段、检测和分析模型定义原始信号的业务含义；
+4. **接入与配置**：现场节点、数据连接、工艺数据模型和质量配置由实施人员维护；
+5. **平台管理**：健康、日志、用户、订阅和集成运维。
 
 机理、知识、数据集和模型是优化项目的可复用上下文，不是普通用户的独立日常工作台。具体 PLC、仪器、数据库或文件只是连接器；平台契约始终围绕运行、过程、质量和实验。
 
 ## 总体结构
 
 ```mermaid
-flowchart TB
-    subgraph Edge["Edge · 现场"]
-        Sources["控制系统 / 仪器 / 视觉 / 检验 / 业务数据源"]
-        Driver["协议驱动与设备映射"]
-        Buffer["本地事件日志与补传"]
-        Sources --> Driver --> Buffer
+flowchart LR
+    Sources["PLC / 仪器 / 视觉 / MES / 检验"] --> Connector["Edge ConnectorHost\n协议驱动 + SQLite 缓存"]
+
+    subgraph Platform["Platform API · 模块化单体 / 业务记录源"]
+        API["ASP.NET Core API"]
+        Business["Platform Infrastructure\n周期、检验、对象、研发、质量与文件"]
+        Agent["Agent Core + Providers\nChat、调查与数据工具"]
+        API --> Business
+        API --> Agent
     end
 
-    subgraph Platform["Platform · 业务记录源"]
-        Ingest["事件接入"]
-        Cycle["周期、阶段和版本化特征"]
-        Inspection["检验与复核"]
-        Research["研发项目与实验状态机"]
-        Observation["观察自动装配"]
-        Ingest --> Cycle --> Observation
-        Inspection --> Observation
-        Research --> Observation
-    end
+    Connector --> API
+    Web["Platform Web\nReact / Vite"] --> API
+    Business --> DB["PostgreSQL + TimescaleDB"]
+    Business --> Files["附件与工艺知识文件"]
+    Business --> Optimizer["Optimizer\nPython / BoTorch\n建议 + 诊断"]
+    Optimizer --> Business
 
-    subgraph Optimizer["Optimizer · 无状态计算"]
-        Trajectory["设定值 → 真实轨迹 GP"]
-        Quality["设定值 + 轨迹 → 质量/约束 GP"]
-        Acquisition["qLogNEI / qLogNEHVI"]
-        Trajectory --> Quality --> Acquisition
-    end
-
-    Buffer --> Ingest
-    Observation --> Optimizer
-    Acquisition --> Research
+    Public["Website / Docs\n独立公开站点部署"]
 ```
+
+仓库中的项目边界不等于部署边界：`Edge.Application`、`Edge.Infrastructure`、`Platform.Infrastructure` 和 `Agent` 是类库，实际中心部署单元是 `Platform API`，实际现场部署单元是 `Edge ConnectorHost`。Optimizer 单独作为无状态 HTTP 服务部署；Website 和 Docs 通过 `deploy/compose.yml` 与工厂应用栈分开部署。
 
 ## 组件职责
 
@@ -76,17 +68,31 @@ flowchart TB
 - 审核、执行和结束实验；
 - 以单事务保存结果、证据关系、实验关联和审计。
 
+Platform API 是模块化单体，内部组合 Platform Infrastructure、Agent Core 和 Agent Providers。Agent 不拥有独立业务数据库，也不绕过 Platform 直接写入现场或业务记录。
+
+### Agent
+
+- 读取 Platform 授权的数据工具和结构化业务上下文；
+- 提供聊天、调查、周期比较、数据质量解释和研究辅助；
+- 可使用确定性模型作为本地/测试回退，也可配置 OpenAI Provider；
+- 不负责最终数值配方决策，数值建议仍由 Optimizer 计算并由工程师审核。
+
 ### Optimizer
 
 - 每次请求接收完整 campaign 和观察快照；
 - 请求内重建模型，不保存业务状态；
 - 冷启动时生成安全探索点；
 - 数据足够后训练两阶段 GP；
+- 通过 `/v1/suggestions` 生成规格逼近或假设验证建议，通过 `/v1/diagnosis` 生成诊断候选；
 - 返回参数、目标预测、约束预测、置信区间、可行概率和采集值。
 
 ### Web
 
-Web 界面围绕一个研发项目组织目标、实验、观察可用性、建议、执行和结果。系统不会再建立平行的“优化任务”或“优化观察”模块。
+Web 是独立的 React/Vite 静态前端，通过 Platform API 访问业务数据。界面围绕工业对象、研发项目、目标、实验、观察可用性、建议、执行和结果组织，不再建立平行的“优化任务”或“优化观察”模块。
+
+### Website / Docs
+
+Website 和 Docs 是面向公众的 Next.js 静态站点，不参与工厂运行时闭环，也不承载 Platform 的业务状态。
 
 ## 追因与优化闭环
 

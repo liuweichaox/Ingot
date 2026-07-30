@@ -3,15 +3,19 @@
 ## 推荐拓扑
 
 ```text
-现场数据源                  工厂服务器
-控制系统 / 仪器 / 视觉 / 检验 / 业务系统
-          └─ Edge 或数据适配器 ───→ Platform API
-                              ├─ PostgreSQL / TimescaleDB
-                              ├─ Optimizer
-                              └─ Platform Web
+现场数据源                         工厂服务器
+控制系统 / 仪器 / 视觉 / 检验 / MES
+          └─ Edge ConnectorHost ───→ Platform API（模块化单体）
+                                      ├─ PostgreSQL / TimescaleDB
+                                      ├─ 附件与工艺知识文件
+                                      ├─ 内嵌 Agent / Chat / 数据工具
+                                      ├─ Optimizer（独立无状态服务）
+                                      └─ Platform Web（独立 React 前端）
 ```
 
-Edge 靠近设备部署。Platform、数据库、优化器和 Web 可在同一台工厂服务器使用 Compose 部署，也可按相同网络契约拆分。
+Edge ConnectorHost 靠近设备部署。Platform API、数据库、Optimizer 和 Platform Web 可在同一台工厂服务器使用 Compose 部署，也可按相同网络契约拆分。`Edge.Application`、`Edge.Infrastructure`、`Platform.Infrastructure` 和 Agent 是代码层类库，不是独立 Compose 服务。
+
+Website 和 Docs 不属于工厂运行时，使用 `deploy/compose.yml` 单独部署到公开站点拓扑。
 
 ## 配置
 
@@ -53,7 +57,7 @@ docker compose -f docker-compose.app.yml --profile connector-host up -d --build
 | Web | `/health` |
 | PostgreSQL | `pg_isready` |
 
-`/health` 只表示优化 HTTP 进程存活；`/ready` 会验证 PyTorch、GPyTorch 和 BoTorch 数值运行时。
+Optimizer 的 `/health` 只表示其 HTTP 进程存活；Optimizer 的 `/ready` 会验证 PyTorch、GPyTorch 和 BoTorch 数值运行时。Platform、Connector 和 Web 的 `/health` 分别检查各自进程及其配置的依赖。
 
 Platform 不依赖 Optimizer 才能启动。优化器故障期间仍可采集和检验，但不能生成新建议。
 

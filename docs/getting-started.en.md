@@ -45,6 +45,8 @@ Define at least:
 
 Variable codes, inspection characteristic codes, and units must remain stable.
 
+After creating the project, choose “start R&D,” then choose “propose the first hypothesis.” The current R&D flow requires at least one hypothesis tied to a controllable variable; the intelligent experiment-design action appears only when the project is no longer a draft and a hypothesis exists. Historical runs can also be imported to build observation and diagnosis evidence.
+
 ## 3. Wire a real run
 
 One identifier crosses three boundaries:
@@ -71,7 +73,7 @@ The baseline needs:
 
 ## 5. Generate the next run
 
-Choose “generate optimized experiment.” The product UI defaults to two distinct conditions, two replicates per condition, and two execution blocks with rotated order. The result includes:
+In a project with an R&D hypothesis, choose “design the next experiment.” The product UI defaults to two distinct conditions, two replicates per condition, and two execution blocks with rotated order. The result includes:
 
 - recommended settings;
 - means and 95% intervals;

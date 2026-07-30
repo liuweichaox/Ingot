@@ -54,9 +54,11 @@ flowchart LR
 - MELSEC A1E、Modbus TCP、OPC UA、MQTT 和 HTTP 采集边界；
 - 断网缓存、幂等上送、周期物化和版本化阶段特征；
 - 实验运行、实际配方、过程轨迹和检验结果自动关联；
+- 周期诊断、研发假设、假设验证实验和工艺窗口复核；
 - 单目标与多目标优化、目标权重、参数约束、结果安全约束；
 - qLogNEI / qLogNEHVI、批量建议、待执行点避让和安全冷启动；
 - 相同数据快照幂等推荐，实验结果原子持久化；
+- Platform 内嵌 Agent 调查、聊天和数据工具，数值决策仍由独立 Optimizer 负责；
 - 中英文官网、文档站和 React 工艺研发工作台。
 
 项目不会把尚未验证的算法效果写成产品结论。真实价值需要使用历史项目回放和新项目在线实验分别验证。
@@ -66,12 +68,13 @@ flowchart LR
 | 组件 | 职责 | 技术 |
 |---|---|---|
 | Edge | PLC/设备连接、采样、断网缓存与补传 | .NET 10、SQLite |
-| Platform API | 实验、周期、检验、证据和业务事务 | ASP.NET Core、PostgreSQL/TimescaleDB |
+| Platform API | 模块化单体；工业对象、实验、周期、检验、证据、Agent 和业务事务 | ASP.NET Core、PostgreSQL/TimescaleDB |
+| Agent | Platform 内嵌的调查、聊天和数据工具 | .NET、Deterministic/OpenAI Provider |
 | Optimizer | 无状态代理模型训练与下一实验推荐 | Python、PyTorch、GPyTorch、BoTorch |
-| Platform Web | 面向工艺工程师的研发闭环 | React、Vite |
+| Platform Web | 独立前端；对象、诊断、研发和执行工作流 | React、Vite |
 | Website / Docs | 开源项目介绍和产品文档 | Next.js |
 
-中心平台保持模块化单体；数值优化作为独立无状态计算服务。平台是唯一业务记录源，优化器不私存实验状态。
+中心平台保持模块化单体，Agent 作为平台内嵌能力运行；数值优化作为独立无状态计算服务。现场部署单元是 Edge ConnectorHost，平台部署单元是 Platform API，平台是唯一业务记录源，优化器不私存实验状态。Website 和 Docs 使用独立公开站点拓扑。
 
 ## 快速开始
 
@@ -123,8 +126,9 @@ uv run --project optimizer --locked uvicorn service:app --app-dir optimizer --po
 2. 为变量声明实际来源，例如 `recipe:holding-temperature`。
 3. 让实验 `RunKey` 与 PLC 周期相关标识、检验 `OperationRunId` 使用同一个值。
 4. 执行安全基线实验并完成检验。
-5. 在研发项目中生成下一炉实验，审核后执行。
-6. 新周期和检验完成后再次优化，直到达到停止规则。
+5. 在研发项目中提出假设并开始研发；
+6. 生成下一炉实验，审核后执行；
+7. 新周期和检验完成后再次优化，直到达到停止规则。
 
 不要用计划值冒充实际值。显式配置的数据源缺失时，该运行会被排除并显示原因。
 
@@ -134,11 +138,12 @@ uv run --project optimizer --locked uvicorn service:app --app-dir optimizer --po
 
 ```text
 src/edge/          现场采集与可靠上送
-src/platform/      中心 API、业务模块与 React 工作台
+src/platform/      中心 API 与业务模块
 src/agent/         AI 调查与解释能力
 src/shared/        领域模型与公共契约
 optimizer/         GP / 贝叶斯优化服务
 tests/             .NET 核心测试
+apps/platform/     React 工艺研发工作台
 apps/website/      官方网站
 apps/docs-site/    文档站
 docs/              中英文项目文档
