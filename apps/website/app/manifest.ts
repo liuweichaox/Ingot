@@ -6,7 +6,7 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "Ingot",
     short_name: "Ingot",
-    description: "让每一次试验都逼近最优工艺的开源闭环优化系统",
+    description: "面向真实制造实验的开源工艺追因与优化系统",
     start_url: "/",
     display: "standalone",
     background_color: "#10161c",

@@ -1,6 +1,6 @@
 # Ingot Website
 
-Bilingual static website for Ingot, the open-source closed-loop process-optimization platform.
+Bilingual static website for Ingot, the open-source process diagnosis and optimization system.
 
 The home page must:
 

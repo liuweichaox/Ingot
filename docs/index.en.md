@@ -1,6 +1,6 @@
 # Ingot Documentation
 
-Ingot is an open-source process-optimization system for expensive, small-data manufacturing experiments. It connects control systems, instruments, vision, inspection, and business data into observations of real runs, then recommends the next experiment with constrained Bayesian optimization.
+Ingot is an open-source process diagnosis and optimization system for expensive, small-data manufacturing experiments. It connects control systems, instruments, vision, inspection, and business data into traceable evidence for real runs, uses that evidence to explain which variable or trajectory segment made a run miss specification, and recommends the next experiment with constrained Bayesian optimization.
 
 ## Start here
 
@@ -28,7 +28,7 @@ define controls, objectives, and safety constraints
 → update from new evidence
 ```
 
-Acquisition, inspection, features, experiments, and knowledge all serve this loop. A new process usually changes variables, mappings, objectives, safety limits, features, and optional physical priors—not the system architecture.
+Diagnosis and optimization share one loop: the evidence read to explain a past result is the evidence read to choose the next experiment. Acquisition, inspection, features, experiments, and knowledge all serve this loop. A new process usually changes variables, mappings, objectives, safety limits, features, and optional physical priors—not the system architecture.
 
 ## Current status
 

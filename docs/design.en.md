@@ -10,9 +10,11 @@ That leads to three choices:
 2. experiments, cycles, and inspections have one formal system of record;
 3. numerical optimization uses Python scientific computing while .NET owns business transactions.
 
-## Product shape: industrial data and process decision platform
+## Product shape: process diagnosis and optimization system
 
-Ingot is an industrial data and process-decision platform—not another PLC configuration tool, generic dashboard, MES, or data warehouse. It turns field data into contextualized industrial facts, then turns those facts into explainable, verifiable, and executable process decisions.
+Ingot is an open-source process diagnosis and optimization system carried on an industrial data platform—not another PLC configuration tool, generic dashboard, MES, or data warehouse. It turns field data into contextualized industrial facts, uses those facts to explain quality deviations that already happened, and turns the explanation into a verifiable, executable next experiment.
+
+Diagnosis and optimization are not two modules but two ends of one evidence chain: without traceable run facts, attribution is guesswork; without attribution, optimization searches the full parameter space blind.
 
 The current Web UI is organized into five product domains:
 

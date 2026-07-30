@@ -3,8 +3,8 @@
     <img src="apps/website/public/brand/ingot-lockup.svg" alt="Ingot" width="340">
   </a>
 
-  <p><strong>Open-source process optimization for expensive, small-data manufacturing experiments</strong></p>
-  <p>Turn PLC cycles, realized process trajectories, and inspection outcomes into the next experiment worth running.</p>
+  <p><strong>Open-source process diagnosis and optimization for expensive, small-data manufacturing experiments</strong></p>
+  <p>Link real cycles, realized trajectories, and inspection outcomes into traceable evidence: explain this run, optimize the next.</p>
 
   [![CI](https://github.com/liuweichaox/Ingot/actions/workflows/ci.yml/badge.svg)](https://github.com/liuweichaox/Ingot/actions/workflows/ci.yml)
   [![License: MIT](https://img.shields.io/badge/license-MIT-E8AD56.svg)](LICENSE)
@@ -19,17 +19,21 @@
 
 ## About Ingot
 
-Ingot is built around the question that matters after data collection:
+Ingot is built around the two questions that matter after data collection:
 
-> When experiments are expensive, noisy, constrained, and scarce, what settings should the next run use to reach specification in as few experiments as possible?
+> **Diagnose** — why did this run miss specification, and which variable or trajectory segment caused it?
+>
+> **Optimize** — when experiments are expensive, noisy, constrained, and scarce, what settings should the next run use to reach specification in as few experiments as possible?
 
-The first real target is **precision optical-lens molding with a Mitsubishi FX3U PLC**. Edge captures actual recipes and cycle traces. Platform turns cycles and inspections into traceable experimental observations. A Python service uses Gaussian processes and constrained Bayesian optimization to recommend the next settings. A new process changes the variables, outcomes, constraints, mappings, and domain features—not the closed-loop architecture.
+Both questions read the same evidence: real cycles, actual recipes, versioned process features, and inspection outcomes. One explains a result that already happened; the other chooses an experiment that has not run yet.
+
+The first real target is **precision optical-lens molding with a Mitsubishi FX3U PLC**. Edge captures actual recipes and cycle traces. Platform turns cycles and inspections into traceable experimental observations. Cycle diagnosis locates deviation sources and candidate variables. A Python service uses Gaussian processes and constrained Bayesian optimization to recommend the next settings. A new process changes the variables, outcomes, constraints, mappings, and domain features—not the closed-loop architecture.
 
 ## Why Ingot
 
-- **Optimization first** — acquisition and workflow exist to improve the next experiment.
+- **Diagnosis and optimization in one loop** — the same evidence explains past deviations and drives the next experiment.
 - **Small-data native** — calibrated GP uncertainty instead of data-hungry deep networks.
-- **Trajectory aware** — model setpoint-to-trajectory and trajectory-to-quality separately.
+- **Trajectory aware** — model setpoint-to-trajectory and trajectory-to-quality separately; that two-stage structure is also what makes attribution possible down to a specific variable and trajectory segment.
 - **Safety in the optimizer** — hard parameter bounds, outcome constraints, and minimum feasibility probabilities.
 - **Human reviewed** — software proposes experiments with intervals; engineers approve execution.
 - **Traceable** — observations retain cycle, inspection, feature, model, and content-hash provenance.
@@ -41,7 +45,9 @@ flowchart LR
     A["FX3U / equipment signals"] --> B["Cycle and phase features"]
     C["Inspection outcomes"] --> D["Experimental observation"]
     B --> D
-    D --> E["Trajectory surrogate"]
+    D --> J["Cycle diagnosis · attribution"]
+    J --> E["Trajectory surrogate"]
+    D --> E
     E --> F["Quality and constraint surrogate"]
     F --> G["qLogNEI / qLogNEHVI"]
     G --> H["Next settings + intervals"]
@@ -54,7 +60,7 @@ Implemented today:
 - MELSEC A1E, Modbus TCP, OPC UA, MQTT, and HTTP acquisition boundaries;
 - offline buffering, idempotent shipping, cycle materialization, and versioned phase features;
 - automatic joining of runs, actual recipes, trajectories, and inspections;
-- cycle diagnosis, R&D hypotheses, hypothesis-validation experiments, and process-window review;
+- cycle diagnosis, deviation attribution, R&D hypotheses, hypothesis-validation experiments, and process-window review;
 - single/multi-objective optimization, weights, parameter constraints, and safety outcomes;
 - qLogNEI/qLogNEHVI, batch suggestions, pending-point avoidance, and safe cold starts;
 - idempotent recommendations and atomic experiment-result persistence;
