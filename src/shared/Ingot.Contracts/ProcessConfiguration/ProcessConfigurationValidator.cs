@@ -16,13 +16,10 @@ public static partial class ProcessConfigurationValidator
             return Fail("工艺数据模型不能为空。", out error);
         if (!TryIdentity(value.ModelId, value.Version, value.Name, value.Status, out var id, out var name, out error))
             return false;
-        if (value.Acquisition.SamplePeriodMs < 1)
-            return Fail("采样周期必须大于 0ms。", out error);
         if (value.Acquisition.DataItems.Count == 0)
             return Fail("工艺数据模型至少需要一个采集数据项。", out error);
         if (!TryNormalizeDataItems(value.Acquisition.DataItems, out var items, out error) ||
-            !TryNormalizeParameters(value.RecipeParameters, out var parameters, out error) ||
-            !TryNormalizeStages(value.Stages, out var stages, out error))
+            !TryNormalizeParameters(value.RecipeParameters, out var parameters, out error))
             return false;
         normalized = value with
         {
@@ -32,11 +29,9 @@ public static partial class ProcessConfigurationValidator
             Status = value.Status.Trim().ToLowerInvariant(),
             Acquisition = value.Acquisition with
             {
-                StepSourceKey = Clean(value.Acquisition.StepSourceKey),
                 DataItems = items
             },
             RecipeParameters = parameters,
-            Stages = stages,
             UpdatedAt = value.UpdatedAt == default ? DateTimeOffset.UtcNow : value.UpdatedAt
         };
         error = string.Empty;
@@ -185,6 +180,17 @@ public static partial class ProcessConfigurationValidator
                 Category = string.IsNullOrWhiteSpace(item.Category) ? "process" : item.Category.Trim().ToLowerInvariant()
             });
         }
+        var stageNumbers = values.Where(static item => item.Category == "stage").ToArray();
+        if (stageNumbers.Length > 1)
+        {
+            result = [];
+            return Fail("采集数据项最多只能有一个阶段号。", out error);
+        }
+        if (stageNumbers is [{ DataType: not "integer" }])
+        {
+            result = [];
+            return Fail("阶段号采集数据项必须使用整数类型。", out error);
+        }
         result = values;
         error = string.Empty;
         return true;
@@ -212,31 +218,6 @@ public static partial class ProcessConfigurationValidator
                 DataType = NormalizeDataType(item.DataType),
                 Unit = Clean(item.Unit)
             });
-        }
-        result = values;
-        error = string.Empty;
-        return true;
-    }
-
-    private static bool TryNormalizeStages(
-        IReadOnlyList<ProcessStageDefinition> source,
-        out IReadOnlyList<ProcessStageDefinition> result,
-        out string error)
-    {
-        var values = new List<ProcessStageDefinition>();
-        var codes = new HashSet<string>(StringComparer.Ordinal);
-        var steps = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var item in source)
-        {
-            var code = NormalizeCode(item.Code);
-            var step = item.SourceStep?.Trim() ?? string.Empty;
-            if (!ValidCode(code) || !codes.Add(code) || string.IsNullOrWhiteSpace(step) || !steps.Add(step) ||
-                string.IsNullOrWhiteSpace(item.Name) || item.ExpectedDurationSeconds < 0)
-            {
-                result = [];
-                return Fail($"工艺阶段编码、来源步序或名称无效或重复：{item.Code}。", out error);
-            }
-            values.Add(item with { Code = code, SourceStep = step, Name = item.Name.Trim() });
         }
         result = values;
         error = string.Empty;

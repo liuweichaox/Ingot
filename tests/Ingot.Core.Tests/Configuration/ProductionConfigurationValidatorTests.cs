@@ -109,9 +109,11 @@ public sealed class ProductionConfigurationValidatorTests
         {
             ["ConnectorHost:IngestToken"] = "connector-token-with-at-least-24-characters",
             ["Edge:EnablePlatformReporting"] = "true",
+            ["Edge:EdgeId"] = "EDGE-001",
             ["Edge:PlatformApiBaseUrl"] = "http://platform-api:8000",
             ["Edge:EnableEventShipping"] = "true",
-            ["Edge:EventIngestToken"] = "edge-token-with-at-least-24-characters"
+            ["Edge:EventIngestToken"] = "edge-token-with-at-least-24-characters",
+            ["Acquisition:DeploymentCachePath"] = "/data/acquisition-deployments.json"
         });
 
         EdgeValidator.Validate(configuration);
@@ -177,12 +179,33 @@ public sealed class ProductionConfigurationValidatorTests
         {
             ["ConnectorHost:IngestToken"] = "connector-token-with-at-least-24-characters",
             ["Edge:EnableCentralReporting"] = "true",
+            ["Edge:EdgeId"] = "EDGE-001",
             ["Edge:CentralApiBaseUrl"] = "http://platform-api:8000",
             ["Edge:EnableEventShipping"] = "true",
-            ["Edge:EventIngestToken"] = "edge-token-with-at-least-24-characters"
+            ["Edge:EventIngestToken"] = "edge-token-with-at-least-24-characters",
+            ["Acquisition:DeploymentCachePath"] = "/data/acquisition-deployments.json"
         });
 
         EdgeValidator.Validate(configuration);
+    }
+
+    [Fact]
+    public void ConnectorHost_RejectsSilentLocalFallbackInProduction()
+    {
+        var configuration = Build(new Dictionary<string, string?>
+        {
+            ["ConnectorHost:IngestToken"] = "connector-token-with-at-least-24-characters",
+            ["Edge:EnablePlatformReporting"] = "true",
+            ["Edge:EdgeId"] = "EDGE-001",
+            ["Edge:PlatformApiBaseUrl"] = "http://platform-api:8000",
+            ["Edge:EnableEventShipping"] = "true",
+            ["Edge:EventIngestToken"] = "edge-token-with-at-least-24-characters",
+            ["Acquisition:DeploymentCachePath"] = "/data/acquisition-deployments.json",
+            ["Acquisition:AllowLocalFallbackWhenPlatformAvailable"] = "true"
+        });
+
+        var error = Assert.Throws<InvalidOperationException>(() => EdgeValidator.Validate(configuration));
+        Assert.Contains("AllowLocalFallbackWhenPlatformAvailable must be false", error.Message);
     }
 
     [Fact]

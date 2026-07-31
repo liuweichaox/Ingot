@@ -1,11 +1,14 @@
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
 using Ingot.Contracts.Acquisition;
 using Ingot.Contracts.ProcessConfiguration;
 using Ingot.Platform.Api.Agents;
 using Ingot.Platform.Api.Events;
 using Ingot.Platform.Infrastructure.Acquisition;
 using Ingot.Platform.Infrastructure.ProcessConfiguration;
+using Ingot.Platform.Infrastructure.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -17,7 +20,9 @@ public sealed partial class AcquisitionProfilesController(
     IAcquisitionProfileStore store,
     IProcessConfigurationStore processStore,
     PlatformUserResolver userResolver,
-    EdgeTokenValidator edgeTokenValidator) : PlatformConfigurationControllerBase(userResolver)
+    EdgeTokenValidator edgeTokenValidator,
+    EdgeRegistry edgeRegistry,
+    IHttpClientFactory httpClientFactory) : PlatformConfigurationControllerBase(userResolver)
 {
     [HttpGet]
     public async Task<IActionResult> List(CancellationToken ct)
@@ -72,6 +77,20 @@ public sealed partial class AcquisitionProfilesController(
             return BadRequest(new { error });
         if (normalized.Status == ConfigurationStatuses.Published && model.Status != ConfigurationStatuses.Published)
             return BadRequest(new { error = "发布采集配置前，引用的工艺数据模型必须已经发布。" });
+        if (normalized.Status == ConfigurationStatuses.Published)
+        {
+            var probe = await ProbeEdgeAsync(
+                new AcquisitionDeployment { Profile = normalized, DataModel = model },
+                ct).ConfigureAwait(false);
+            if (!probe.Success)
+                return StatusCode(probe.StatusCode, new { error = probe.Error, validation = probe.Result });
+            if (probe.Result is not { Success: true, MappingsValidated: true })
+                return BadRequest(new
+                {
+                    error = probe.Result?.Message ?? "设备连接与映射验证未通过，不能发布采集配置。",
+                    validation = probe.Result
+                });
+        }
 
         var existing = await store.GetAsync(normalized.ProfileId, normalized.Version, ct).ConfigureAwait(false);
         if (existing is not null && existing.Status != ConfigurationStatuses.Draft)
@@ -89,6 +108,132 @@ public sealed partial class AcquisitionProfilesController(
         return normalized.Status == ConfigurationStatuses.Published
             ? Ok(await store.PublishExclusiveAsync(normalized, ct).ConfigureAwait(false))
             : Ok(await store.UpsertAsync(normalized, ct).ConfigureAwait(false));
+    }
+
+    [HttpPost("probe")]
+    public async Task<IActionResult> Probe([FromBody] AcquisitionProfile? request, CancellationToken ct)
+    {
+        var denied = DeniedConfigurationWrite();
+        if (denied is not null) return denied;
+        if (request is null)
+            return BadRequest(new { error = "采集配置不能为空。" });
+        var model = await processStore.GetDataModelAsync(
+            NormalizeCode(request.DataModelId),
+            request.DataModelVersion,
+            ct).ConfigureAwait(false);
+        if (model is null)
+            return BadRequest(new { error = "引用的工艺数据模型版本不存在。" });
+
+        const string placeholderCode = "__probe_only__";
+        var needsDiscoveryPlaceholder =
+            request.Protocol is AcquisitionProtocols.HttpPolling or AcquisitionProtocols.Mqtt or AcquisitionProtocols.OpcUa &&
+            request.ValueMappings.All(item => string.IsNullOrWhiteSpace(item.DataItemCode) ||
+                                              string.IsNullOrWhiteSpace(item.SourcePath));
+        var probeRequest = needsDiscoveryPlaceholder
+            ? request with
+            {
+                ValueMappings =
+                [
+                    new AcquisitionValueMapping
+                    {
+                        DataItemCode = model.Acquisition.DataItems.First().Code,
+                        SourcePath = placeholderCode,
+                        Required = false
+                    }
+                ]
+            }
+            : request;
+        if (!TryNormalize(probeRequest, out var normalized, out var error))
+            return BadRequest(new { error });
+
+        if (!ValidateMappings(normalized!, model, out error))
+            return BadRequest(new { error });
+
+        var probe = await ProbeEdgeAsync(
+            new AcquisitionDeployment { Profile = normalized!, DataModel = model },
+            ct).ConfigureAwait(false);
+        if (!probe.Success)
+            return StatusCode(probe.StatusCode, new { error = probe.Error });
+        return needsDiscoveryPlaceholder && probe.Result is { } result
+            ? Ok(result with
+            {
+                Message = $"连接成功，读取到 {result.Points.Count} 个设备点位；请选择点位并完成映射后再次验证。",
+                MappingsValidated = false,
+                Mappings = []
+            })
+            : Ok(probe.Result);
+    }
+
+    private async Task<EdgeProbeResponse> ProbeEdgeAsync(
+        AcquisitionDeployment deployment,
+        CancellationToken cancellationToken)
+    {
+        var state = edgeRegistry.Find(deployment.Profile.EdgeId);
+        if (string.IsNullOrWhiteSpace(state?.HostBaseUrl))
+            return EdgeProbeResponse.Failure(
+                StatusCodes.Status400BadRequest,
+                "该现场节点未上报访问地址，无法测试设备连接。");
+
+        var client = httpClientFactory.CreateClient();
+        if (edgeTokenValidator.TryGetToken(deployment.Profile.EdgeId, out var token))
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        try
+        {
+            using var response = await client.PostAsJsonAsync(
+                new Uri(new Uri(state.HostBaseUrl), "/api/v1/acquisition/probe"),
+                new AcquisitionProbeRequest { Deployment = deployment },
+                cancellationToken).ConfigureAwait(false);
+            var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode)
+            {
+                var detail = TryReadError(body);
+                return EdgeProbeResponse.Failure((int)response.StatusCode, detail);
+            }
+            var result = JsonSerializer.Deserialize<AcquisitionProbeResult>(
+                body,
+                new JsonSerializerOptions(JsonSerializerDefaults.Web));
+            return result is null
+                ? EdgeProbeResponse.Failure(StatusCodes.Status502BadGateway, "现场节点返回了无效的验证结果。")
+                : EdgeProbeResponse.Succeeded(result);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return EdgeProbeResponse.Failure(StatusCodes.Status504GatewayTimeout, "现场节点设备验证超时。");
+        }
+        catch (HttpRequestException exception)
+        {
+            return EdgeProbeResponse.Failure(
+                StatusCodes.Status502BadGateway,
+                $"现场节点不可访问：{exception.Message}");
+        }
+    }
+
+    private static string TryReadError(string body)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(body);
+            return document.RootElement.TryGetProperty("error", out var error)
+                ? error.GetString() ?? "设备验证失败。"
+                : body;
+        }
+        catch (JsonException)
+        {
+            return string.IsNullOrWhiteSpace(body) ? "设备验证失败。" : body;
+        }
+    }
+
+    private sealed record EdgeProbeResponse(
+        bool Success,
+        int StatusCode,
+        string? Error,
+        AcquisitionProbeResult? Result)
+    {
+        public static EdgeProbeResponse Succeeded(AcquisitionProbeResult result)
+            => new(true, StatusCodes.Status200OK, null, result);
+
+        public static EdgeProbeResponse Failure(int statusCode, string error)
+            => new(false, statusCode, error, null);
     }
 
     [HttpDelete("{profileId}/{version:int}")]
@@ -121,9 +266,9 @@ public sealed partial class AcquisitionProfilesController(
             return Fail("采集配置状态必须是 draft、published 或 retired。", out error);
         if (!AcquisitionProtocols.IsSupported(protocol))
             return Fail("采集协议必须是 HTTP 轮询、MQTT、OPC UA、Modbus TCP 或 MELSEC 1E。", out error);
-        if (string.IsNullOrWhiteSpace(value.EdgeId) || string.IsNullOrWhiteSpace(value.SubjectType) ||
+        if (string.IsNullOrWhiteSpace(value.EdgeId) ||
             string.IsNullOrWhiteSpace(value.SubjectId) || string.IsNullOrWhiteSpace(value.Source))
-            return Fail("边缘节点、数据对象和事件来源不能为空。", out error);
+            return Fail("现场节点、设备编号和内部事件来源不能为空。", out error);
         if (!ValidateConnection(value, protocol!, out error))
             return false;
         if (value.Execution.TimeoutMs < 100 || value.Execution.ReconnectDelayMs < 100)
@@ -151,7 +296,9 @@ public sealed partial class AcquisitionProfilesController(
         var valueMappings = value.ValueMappings.Select(item => item with
         {
             DataItemCode = NormalizeCode(item.DataItemCode),
-            SourcePath = item.SourcePath?.Trim() ?? string.Empty
+            SourcePath = protocol == AcquisitionProtocols.ModbusTcp && item.ModbusAddress.HasValue
+                ? $"{item.ModbusArea}:{item.ModbusAddress.Value}:{item.SourceDataType}"
+                : item.SourcePath?.Trim() ?? string.Empty
         }).ToArray();
         if (valueMappings.Count(item => HasSourceSelector(protocol!, item)) == 0)
             return Fail("至少需要启用一个采集数据项。", out error);
@@ -186,7 +333,8 @@ public sealed partial class AcquisitionProfilesController(
             Protocol = protocol!,
             DataModelId = NormalizeCode(value.DataModelId),
             Source = value.Source.Trim().TrimStart('/'),
-            SubjectType = NormalizeCode(value.SubjectType),
+            // 接入页面只面向一个清晰概念：设备。SubjectType 是事件契约内部字段，不让用户选择。
+            SubjectType = "equipment",
             SubjectId = value.SubjectId.Trim(),
             Connection = value.Connection with
             {
@@ -264,6 +412,8 @@ public sealed partial class AcquisitionProfilesController(
                 if (value.ModbusTcp is null || string.IsNullOrWhiteSpace(value.ModbusTcp.Host) ||
                     value.ModbusTcp.Port is < 1 or > 65535 || value.ModbusTcp.PollIntervalMs < 1)
                     return Fail("Modbus TCP 主机、端口或读取后等待时间无效。", out error);
+                if (value.ModbusTcp.AddressBase is not ("zero-based" or "one-based"))
+                    return Fail("Modbus 地址起点必须是 0 基地址或 1 基地址。", out error);
                 break;
             case AcquisitionProtocols.MelsecA1E:
                 if (value.MelsecA1E is null || string.IsNullOrWhiteSpace(value.MelsecA1E.Host) ||
@@ -271,6 +421,8 @@ public sealed partial class AcquisitionProfilesController(
                     return Fail("MELSEC 1E 主机、端口或读取后等待时间无效。", out error);
                 if (value.MelsecA1E.WordOrderLayout != "A")
                     return Fail("MELSEC 1E 软元件字段顺序必须是 A（FX3U-ENET-ADP A-compatible 1E）。", out error);
+                if (value.MelsecA1E.DataCode is not ("binary" or "ascii"))
+                    return Fail("MELSEC 1E 通信数据码必须是二进制或 ASCII。", out error);
                 break;
         }
         error = string.Empty;
@@ -313,12 +465,17 @@ public sealed partial class AcquisitionProfilesController(
         };
 
     private static ModbusTcpConnection? NormalizeModbusTcp(ModbusTcpConnection? value)
-        => value is null ? null : value with { Host = value.Host.Trim() };
+        => value is null ? null : value with
+        {
+            Host = value.Host.Trim(),
+            AddressBase = value.AddressBase.Trim().ToLowerInvariant()
+        };
 
     private static McA1EConnection? NormalizeMelsecA1E(McA1EConnection? value)
         => value is null ? null : value with
         {
             Host = value.Host.Trim(),
+            DataCode = value.DataCode.Trim().ToLowerInvariant(),
             WordOrderLayout = value.WordOrderLayout.Trim().ToUpperInvariant()
         };
 
@@ -349,17 +506,13 @@ public sealed partial class AcquisitionProfilesController(
         return value with
         {
             Mode = value.Mode.Trim().ToLowerInvariant(),
-            CorrelationIdContextKey = NormalizeCode(value.CorrelationIdContextKey),
+            CorrelationIdContextKey = string.IsNullOrWhiteSpace(value.CorrelationIdContextKey)
+                ? null
+                : NormalizeCode(value.CorrelationIdContextKey),
             ActiveContextKey = string.IsNullOrWhiteSpace(value.ActiveContextKey)
                 ? null
                 : NormalizeCode(value.ActiveContextKey),
             ActiveValue = value.ActiveValue.Trim(),
-            StepContextKey = string.IsNullOrWhiteSpace(value.StepContextKey)
-                ? null
-                : NormalizeCode(value.StepContextKey),
-            StepNameContextKey = string.IsNullOrWhiteSpace(value.StepNameContextKey)
-                ? null
-                : NormalizeCode(value.StepNameContextKey),
             StartedEventType = value.StartedEventType.Trim().ToLowerInvariant(),
             CompletedEventType = value.CompletedEventType.Trim().ToLowerInvariant(),
             StepChangedEventType = value.StepChangedEventType.Trim().ToLowerInvariant()
@@ -397,23 +550,24 @@ public sealed partial class AcquisitionProfilesController(
         {
             var lifecycle = profile.Lifecycle;
             if (lifecycle.Mode != "discrete-cycle" ||
-                !CodePattern().IsMatch(lifecycle.CorrelationIdContextKey) ||
+                (!string.IsNullOrWhiteSpace(lifecycle.CorrelationIdContextKey) &&
+                 !CodePattern().IsMatch(lifecycle.CorrelationIdContextKey)) ||
                 !EventTypePattern().IsMatch(lifecycle.StartedEventType) ||
                 !EventTypePattern().IsMatch(lifecycle.CompletedEventType) ||
-                !EventTypePattern().IsMatch(lifecycle.StepChangedEventType) ||
-                lifecycle.ExpectedDurationMs is <= 0)
+                !EventTypePattern().IsMatch(lifecycle.StepChangedEventType))
             {
                 return Fail("周期边界配置无效。", out error);
             }
-            if (profile.ContextMappings.All(item =>
+            if (!string.IsNullOrWhiteSpace(lifecycle.CorrelationIdContextKey) &&
+                profile.ContextMappings.All(item =>
                     item.ContextKey != lifecycle.CorrelationIdContextKey))
             {
                 return Fail($"周期边界缺少关联号上下文映射：{lifecycle.CorrelationIdContextKey}。", out error);
             }
-            if (!string.IsNullOrWhiteSpace(lifecycle.StepContextKey) &&
-                profile.ContextMappings.All(item => item.ContextKey != lifecycle.StepContextKey))
+            if (string.IsNullOrWhiteSpace(lifecycle.CorrelationIdContextKey) &&
+                string.IsNullOrWhiteSpace(lifecycle.ActiveContextKey))
             {
-                return Fail($"周期边界缺少步序上下文映射：{lifecycle.StepContextKey}。", out error);
+                return Fail("周期边界必须配置生产状态上下文映射，由 Edge 自动生成周期关联号。", out error);
             }
             if (!string.IsNullOrWhiteSpace(lifecycle.ActiveContextKey) &&
                 (string.IsNullOrWhiteSpace(lifecycle.ActiveValue) ||

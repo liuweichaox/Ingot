@@ -54,7 +54,7 @@ public sealed class KnowledgeExtractionTests
     {
         const string response =
             """
-            {"readResult":{"blocks":[{"lines":[{"text":"炉温 850 C","boundingPolygon":[{"x":1,"y":2},{"x":3,"y":2},{"x":3,"y":4},{"x":1,"y":4}],"words":[{"text":"炉温","confidence":0.98},{"text":"850","confidence":0.96}]}]}]}}
+            {"readResult":{"blocks":[{"lines":[{"text":"设备温度 850 C","boundingPolygon":[{"x":1,"y":2},{"x":3,"y":2},{"x":3,"y":4},{"x":1,"y":4}],"words":[{"text":"设备温度","confidence":0.98},{"text":"850","confidence":0.96}]}]}]}}
             """;
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(
             new Dictionary<string, string?>
@@ -70,7 +70,7 @@ public sealed class KnowledgeExtractionTests
             Source("furnace.png", "image/png"));
 
         var fragment = Assert.Single(fragments);
-        Assert.Equal("炉温 850 C", fragment.Content);
+        Assert.Equal("设备温度 850 C", fragment.Content);
         Assert.NotNull(fragment.Confidence);
         Assert.Equal(0.97, fragment.Confidence.Value, 12);
         Assert.Equal("image-region", fragment.Citation.LocationKind);

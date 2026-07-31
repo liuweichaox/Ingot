@@ -27,7 +27,7 @@ Ingot is built around the two questions that matter after data collection:
 
 Both questions read the same evidence: real cycles, actual recipes, versioned process features, and inspection outcomes. One explains a result that already happened; the other chooses an experiment that has not run yet.
 
-The first real target is **precision optical-lens molding with a Mitsubishi FX3U PLC**. Edge captures actual recipes and cycle traces. Platform turns cycles and inspections into traceable experimental observations. Cycle diagnosis locates deviation sources and candidate variables. A Python service uses Gaussian processes and constrained Bayesian optimization to recommend the next settings. A new process changes the variables, outcomes, constraints, mappings, and domain features—not the closed-loop architecture.
+The system is not bound to a specific process, equipment vendor, or controller model. Edge captures actual recipes and production trajectories. Platform turns runs and inspections into traceable experimental observations. Cycle diagnosis locates deviation sources and candidate variables. A Python service uses Gaussian processes and constrained Bayesian optimization to recommend the next settings. A new process changes the variables, outcomes, constraints, mappings, and domain features—not the closed-loop architecture.
 
 ## Why Ingot
 
@@ -40,9 +40,17 @@ The first real target is **precision optical-lens molding with a Mitsubishi FX3U
 
 ## Working closed loop
 
+The product follows six business stages:
+
+```text
+define process → connect equipment → collect production data → close the data loop → diagnose → process optimization
+```
+
+The diagram below shows the data and model relationships inside that product loop:
+
 ```mermaid
 flowchart LR
-    A["FX3U / equipment signals"] --> B["Cycle and phase features"]
+    A["Control systems / equipment signals"] --> B["Cycle and phase features"]
     C["Inspection outcomes"] --> D["Experimental observation"]
     B --> D
     D --> J["Cycle diagnosis · attribution"]
@@ -104,7 +112,7 @@ Then open:
 - Platform health: <http://localhost:8000/health>
 - Optimizer readiness: <http://localhost:8100/ready>
 
-The field connector is opt-in. Read [Equipment and data wiring](docs/data-connection.en.md) before connecting an FX3U or another device.
+The field connector is opt-in. Read [Equipment and data wiring](docs/data-connection.en.md) before connecting real equipment or business systems.
 
 ### Local development
 
@@ -169,8 +177,8 @@ scripts/           verification and operations
 - [x] Assemble real cycles, recipes, features, and inspections into observations
 - [x] Two-stage trajectory/quality GP with constrained qLogNEI/qLogNEHVI
 - [x] Idempotent experiments, pending-point avoidance, and safe cold starts
-- [ ] Publish run-by-run replay benchmarks on real optical-molding history
-- [ ] Add calibrated optical-molding priors and cross-product transfer
+- [ ] Publish run-by-run replay benchmarks on real manufacturing history
+- [ ] Add calibrated domain priors and cross-product transfer
 - [ ] Add online uncertainty calibration, drift detection, and automatic stopping
 - [ ] Publish reusable scenario packages and anonymized sample data
 

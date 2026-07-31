@@ -15,14 +15,14 @@ const retired = /Ingot Agent|desktop Agent|connector-workspaces|awaiting-package
 
 test("Chinese home presents the final closed-loop product capability", async () => {
   const source = await html();
-  assert.match(source, /<title>Ingot — AI 闭环工艺优化系统<\/title>/i);
-  assert.match(source, /让每一次试验/);
+  assert.match(source, /<title>Ingot — 开源工艺追因与优化系统<\/title>/i);
+  assert.match(source, /看清这次运行/);
   assert.match(source, /MANUFACTURING R&amp;D · CAMPAIGN-042/);
   assert.match(source, /qLogNEI/);
-  assert.match(source, /工艺追因/);
-  assert.match(source, /工艺优化/);
-  assert.match(source, /换场景，不换优化系统/);
-  assert.match(source, /知识迁移/);
+  for (const stage of ["工艺定义", "设备接入", "生产采集", "数据闭环", "工艺追因", "工艺优化"]) {
+    assert.match(source, new RegExp(stage));
+  }
+  assert.match(source, /换场景，不换追因与优化内核/);
   assert.doesNotMatch(source, /待真实证明|现在能做什么|FX3U|光学镜片|模压/);
   assert.match(source, /docker compose -f docker-compose\.app\.yml/);
   assert.match(source, /https:\/\/docs\.ingotstack\.com\/zh\/getting-started/);
@@ -32,11 +32,14 @@ test("Chinese home presents the final closed-loop product capability", async () 
 test("English home carries the same final-product vision", async () => {
   const source = await html("/en/");
   assert.match(source, /<html lang="en">/);
-  assert.match(source, /Make every experiment/);
-  assert.match(source, /physical priors with Bayesian optimization/);
+  assert.match(source, /<title>Ingot — Open-source Process Diagnosis &amp; Optimization<\/title>/i);
+  assert.match(source, /Explain this run/);
+  assert.match(source, /physical priors and Bayesian optimization/);
   assert.match(source, /optimization brain built for expensive, small-data experiments/);
-  assert.match(source, /Change the scenario, not the optimization system/);
-  assert.match(source, /Knowledge transfer/);
+  for (const stage of ["Define the process", "Connect equipment", "Collect production data", "Close the data loop", "Diagnose the process", "Process optimization"]) {
+    assert.match(source, new RegExp(stage));
+  }
+  assert.match(source, /Change the scenario, not the diagnosis and optimization core/);
   assert.doesNotMatch(source, /Not yet proven|What works now|FX3U|Optical lens|molding|one real lens/i);
   assert.match(source, /rel="canonical" href="https:\/\/ingotstack\.com\/en\/"/i);
   assert.doesNotMatch(source, retired);

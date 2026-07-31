@@ -716,6 +716,8 @@ public sealed class ProcessResearchWorkflowTests
         Assert.NotNull(experiment.Optimization);
         Assert.Equal(1, experiment.Optimization.ObservationCount);
         Assert.Equal("botorch-qlogbo-test", experiment.Optimization.ModelVersion);
+        Assert.Equal("declared-test-features", experiment.Optimization.FeatureSetId);
+        Assert.Equal(1, experiment.Optimization.DerivedFeatureCount);
 
         experiment = await workflow.ChangeExperimentStatusAsync(
             experiment.ExperimentId,
@@ -770,6 +772,34 @@ public sealed class ProcessResearchWorkflowTests
             candidate.WindowId,
             "engineer-b");
         Assert.Equal(ProcessWindowValidationLevels.Laboratory, validated.ValidationLevel);
+    }
+
+    [Fact]
+    public async Task Project_RejectsHiddenOrInvalidDerivedFeatureLogic()
+    {
+        var workflow = new ProcessResearchWorkflow(new MemoryStore());
+        var invalid = ProjectDraft() with
+        {
+            Code = "invalid-derived-feature",
+            OptimizationFeatures = new ResearchOptimizationFeatureSet
+            {
+                FeatureSetId = "invalid-feature-set",
+                DerivedFeatures =
+                [
+                    new ResearchDerivedFeature
+                    {
+                        Name = "hidden-domain-rule",
+                        Operator = ResearchDerivedFeatureOperators.Identity,
+                        Inputs = ["variable-guessed-from-name"]
+                    }
+                ]
+            }
+        };
+
+        var error = await Assert.ThrowsAsync<ProcessResearchRuleException>(
+            () => workflow.CreateProjectAsync(invalid, "engineer-a"));
+
+        Assert.Contains("未知或尚未定义", error.Message, StringComparison.Ordinal);
     }
 
     private static async Task CompleteIndependentValidationAsync(
@@ -912,7 +942,22 @@ public sealed class ProcessResearchWorkflowTests
                     Unit = "Cel",
                     SafetyCritical = true
                 }
-            ]
+            ],
+            OptimizationFeatures = new ResearchOptimizationFeatureSet
+            {
+                FeatureSetId = "declared-test-features",
+                Version = 1,
+                DerivedFeatures =
+                [
+                    new ResearchDerivedFeature
+                    {
+                        Name = "temperature-force-ratio",
+                        Operator = ResearchDerivedFeatureOperators.Ratio,
+                        Inputs = ["holding-temperature", "press-force"],
+                        NormalizationScale = 100
+                    }
+                ]
+            }
         };
 
     private sealed class StubOptimizerClient : IProcessOptimizerClient
@@ -922,6 +967,12 @@ public sealed class ProcessResearchWorkflowTests
             CancellationToken ct = default)
         {
             Assert.Single(request.Observations);
+            Assert.Equal("declared-test-features", request.Campaign.FeatureSetId);
+            var feature = Assert.Single(request.Campaign.DerivedFeatures);
+            Assert.Equal("ratio", feature.Operator);
+            Assert.Equal(
+                ["holding-temperature", "press-force"],
+                feature.Inputs);
             var suggestions = new[]
             {
                 Suggest(515, 11, 0.20),

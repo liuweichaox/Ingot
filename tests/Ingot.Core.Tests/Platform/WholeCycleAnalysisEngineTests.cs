@@ -126,7 +126,7 @@ public sealed class WholeCycleAnalysisEngineTests
             rows,
             Start,
             Start.AddMilliseconds(400),
-            ModelWithStages(),
+            ModelWithStageNumber(),
             Plan("min", "max", "slope"));
 
         Assert.Equal(ProcessDataStatuses.Available, result.Quality.Status);
@@ -134,34 +134,34 @@ public sealed class WholeCycleAnalysisEngineTests
             result.Phases,
             phase =>
             {
-                Assert.Equal("preheat", phase.Code);
+                Assert.Equal("10", phase.Code);
                 Assert.Equal(1, phase.Order);
-                Assert.Equal("recipe_step", phase.Source);
+                Assert.Equal("stage_number", phase.Source);
                 Assert.Equal(Start, phase.StartedAt);
                 Assert.Equal(Start.AddMilliseconds(200), phase.EndedAt);
             },
             phase =>
             {
-                Assert.Equal("press", phase.Code);
+                Assert.Equal("20", phase.Code);
                 Assert.Equal(2, phase.Order);
-                Assert.True(phase.IsComplete);
+                Assert.Equal(Start.AddMilliseconds(400), phase.EndedAt);
             });
         var features = result.Signals[0].Features;
         Assert.Equal(1, features.Single(item =>
-            item.Code == "min" && item.PhaseCode == "preheat" && item.PhaseOrder == 1).Value);
+            item.Code == "min" && item.PhaseCode == "10" && item.PhaseOrder == 1).Value);
         Assert.Equal(12, features.Single(item =>
-            item.Code == "max" && item.PhaseCode == "press" && item.PhaseOrder == 2).Value);
+            item.Code == "max" && item.PhaseCode == "20" && item.PhaseOrder == 2).Value);
         Assert.All(features.Where(static item => item.PhaseCode is not null),
-            feature => Assert.Equal("recipe_step", feature.PhaseSource));
+            feature => Assert.Equal("stage_number", feature.PhaseSource));
     }
 
     [Fact]
-    public void Analyze_DegradesWhenARequiredStageIsMissing()
+    public void Analyze_DoesNotUseStageNumberCoverageAsCycleCompleteness()
     {
         var rows = new[]
         {
             Sample(1, 0, 1, "10"),
-            Sample(2, 100, 2, "10"),
+            Sample(2, 100, 2),
             Sample(3, 200, 3, "10")
         };
 
@@ -169,11 +169,12 @@ public sealed class WholeCycleAnalysisEngineTests
             rows,
             Start,
             Start.AddMilliseconds(200),
-            ModelWithStages(),
+            ModelWithStageNumber(),
             Plan("mean"));
 
-        Assert.Equal(ProcessDataStatuses.Degraded, result.Quality.Status);
-        Assert.Contains("缺少必需工艺阶段 press。", result.Quality.Issues);
+        Assert.Equal(ProcessDataStatuses.Available, result.Quality.Status);
+        Assert.DoesNotContain(result.Quality.Issues, issue => issue.Contains("阶段", StringComparison.Ordinal));
+        Assert.Contains(result.Phases, phase => phase.Code == "unknown");
     }
 
     [Fact]
@@ -191,11 +192,11 @@ public sealed class WholeCycleAnalysisEngineTests
             rows,
             Start,
             Start.AddMilliseconds(300),
-            ModelWithStages(),
+            ModelWithStageNumber(),
             Plan("max"));
 
         Assert.Equal(4, result.Phases.Count);
-        Assert.Equal([1, 3], result.Phases.Where(static phase => phase.Code == "preheat")
+        Assert.Equal([1, 3], result.Phases.Where(static phase => phase.Code == "10")
             .Select(static phase => phase.Order).ToArray());
         Assert.Equal(4, result.Signals[0].Features.Count(item => item.PhaseCode is not null));
     }
@@ -216,8 +217,12 @@ public sealed class WholeCycleAnalysisEngineTests
         Assert.Contains("未注册的科研特征定义", error.Message, StringComparison.Ordinal);
     }
 
-    private static PlatformProductionEvent Sample(long ingestId, int offsetMs, double value, string? recipeStep = null)
-        => new()
+    private static PlatformProductionEvent Sample(long ingestId, int offsetMs, double value, string? stageNumber = null)
+    {
+        var values = new Dictionary<string, object?> { ["temperature"] = value };
+        if (stageNumber is not null)
+            values["process.stage_number"] = long.Parse(stageNumber);
+        return new PlatformProductionEvent
         {
             IngestId = ingestId,
             EdgeId = "EDGE-1",
@@ -228,34 +233,31 @@ public sealed class WholeCycleAnalysisEngineTests
                 "edge/EDGE-1/plc",
                 new ObjectRef("equipment", "PLC-1"),
                 "cycle-1",
-                context: recipeStep is null
-                    ? null
-                    : new Dictionary<string, string> { ["recipe_step"] = recipeStep },
                 data: new Dictionary<string, object?>
                 {
-                    ["values"] = new Dictionary<string, object?> { ["temperature"] = value }
+                    ["values"] = values
                 })
         };
+    }
 
-    private static ProcessDataModel ModelWithStages()
+    private static ProcessDataModel ModelWithStageNumber()
         => Model() with
         {
-            Acquisition = Model().Acquisition with { StepSourceKey = "recipe_step" },
-            Stages =
-            [
-                new ProcessStageDefinition
-                {
-                    SourceStep = "10",
-                    Code = "preheat",
-                    Name = "预热"
-                },
-                new ProcessStageDefinition
-                {
-                    SourceStep = "20",
-                    Code = "press",
-                    Name = "压制"
-                }
-            ]
+            Acquisition = Model().Acquisition with
+            {
+                DataItems =
+                [
+                    Model().Acquisition.DataItems[0],
+                    new ProcessDataItemDefinition
+                    {
+                        Code = "process.stage_number",
+                        SourceField = "阶段号",
+                        DataType = "integer",
+                        Category = "stage",
+                        Nullable = false
+                    }
+                ]
+            }
         };
 
     private static ProcessDataModel Model()

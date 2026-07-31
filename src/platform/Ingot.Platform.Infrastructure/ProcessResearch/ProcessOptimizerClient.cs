@@ -54,11 +54,34 @@ public sealed record OptimizerOutcomeConstraintInput
     public double MinimumProbability { get; init; } = 0.95;
 }
 
+public sealed record OptimizerDerivedFeatureInput
+{
+    public required string Name { get; init; }
+    public required string Operator { get; init; }
+    public IReadOnlyList<string> Inputs { get; init; } = [];
+
+    [JsonPropertyName("normalization_offset")]
+    public double NormalizationOffset { get; init; }
+
+    [JsonPropertyName("normalization_scale")]
+    public double NormalizationScale { get; init; } = 1;
+
+    public double Epsilon { get; init; } = 1e-9;
+}
+
 public sealed record OptimizerCampaignInput
 {
     public required string Name { get; init; }
-    [JsonPropertyName("process_profile")]
-    public string ProcessProfile { get; init; } = "generic";
+
+    [JsonPropertyName("feature_set_id")]
+    public string FeatureSetId { get; init; } = "generic";
+
+    [JsonPropertyName("feature_set_version")]
+    public int FeatureSetVersion { get; init; } = 1;
+
+    [JsonPropertyName("derived_features")]
+    public IReadOnlyList<OptimizerDerivedFeatureInput> DerivedFeatures { get; init; } = [];
+
     [JsonPropertyName("decision_intent")]
     public string DecisionIntent { get; init; } = "reach-specification";
     [JsonPropertyName("hypothesis_variables")]

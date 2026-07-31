@@ -40,4 +40,18 @@ public sealed class AcquisitionStatusTests
         Assert.Empty(snapshot.Tasks);
         Assert.Equal("starting", snapshot.State);
     }
+
+    [Fact]
+    public void ConfigurationError_ShouldBeVisibleWhenNoDeploymentCanRun()
+    {
+        var status = new AcquisitionStatus();
+        status.SetEnabled(true);
+
+        status.SetConfigurationError("没有已发布配置。");
+
+        var snapshot = status.Get();
+        Assert.Equal("degraded", snapshot.State);
+        Assert.Equal("没有已发布配置。", snapshot.LastError);
+        Assert.Empty(snapshot.Tasks);
+    }
 }

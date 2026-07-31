@@ -28,7 +28,10 @@ cp .env.example .env
 必须修改：
 
 - `INGOT_POSTGRES_PASSWORD`
+- `INGOT_EDGE_ID`（安装后保持不变，每台 Edge 唯一）
 - `INGOT_EDGE_TOKEN`
+- `INGOT_CONNECTOR_TOKEN`
+- `INGOT_CONNECTOR_LOCAL_TOKEN`
 - `INGOT_ADMIN_PASSWORD`
 
 仓库中的 `.env` 被忽略，不能提交真实凭据。
@@ -46,6 +49,17 @@ docker compose -f docker-compose.app.yml --profile connector-host up -d --build
 ```
 
 连接真实数据源前，应先配置地址或接口、采集令牌和数据映射，不要直接使用示例值。
+
+采集配置由 Platform 按 `EdgeId` 发布，Edge 主动拉取并把最后一次成功版本保存到
+`Data/acquisition-deployments.json`。Platform 暂时不可用或 Edge 重启时继续运行该缓存版本；
+正式环境禁止静默切换到未版本化的本地 fallback。Platform 明确返回零配置时，Edge 停止采集并在
+采集状态中报告错误。
+
+数据源配置在发布前必须通过一次真实设备验证。Platform 把待验证配置代理到设备所在 Edge：
+HTTP/MQTT 读取一份 JSON 样本并返回字段树；OPC UA 浏览并读取变量节点；Modbus TCP 和
+MELSEC 只读取用户明确填写的寄存器，不执行可能影响 PLC 的地址盲扫。页面展示原始值、按
+`换算值 = 原始值 × 倍率 + 偏移` 得到的值、类型和平台单位。发布请求会在服务端再次执行验证；
+连接失败、必需点位缺失或换算失败时不会发布。
 
 ## 健康检查
 
@@ -69,6 +83,7 @@ Platform 不依赖 Optimizer 才能启动。优化器故障期间仍可采集和
 - 检验附件；
 - 工艺知识文件；
 - Edge 本地事件数据库，直到确认全部上送。
+- Edge 的 `acquisition-deployments.json` 最后成功配置缓存。
 
 恢复演练必须检查实验、周期、检验和证据关联，而不只检查数据库能启动。
 

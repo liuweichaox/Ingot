@@ -45,6 +45,26 @@ Define at least:
 
 Variable codes, inspection characteristic codes, and units must remain stable.
 
+The bundled optical-lens molding simulator uses a separate demo contract. Its
+14 acquired values include an integer stage number on every sample, plus
+upper/lower mold infrared temperature, current, voltage, power, pressure,
+grating position, servo speed, vacuum, and servo position. Its 12 recipe
+parameters cover HEAT/WORK/HOST positions,
+temperature settings and limits, nitrogen temperature, preheat delay, and
+pressure settings and limits. The simulated device exposes an FX3U-ENET-ADP
+A-compatible MC 1E binary endpoint on port 5551. Its data-source profile uses
+`melsec-a1e` to read scaled D registers rather than HTTP JSON. Moving to a real
+PLC keeps the register map and changes only the PLC address and site MC port.
+The process data model does not maintain a
+separate stage catalog; cycle analysis segments traces from the acquired stage
+number. This contract validates the local closed loop; it does not represent
+real device addresses or a production process window.
+The stage number is used only for trace alignment and stage-level feature
+calculation, not for production-cycle completeness. A cycle is complete only
+when the same `CorrelationId` has both `cycle.started` and `cycle.completed`;
+variable-duration, repeated, or skipped stage numbers do not make the cycle
+incomplete.
+
 After creating the project, choose “start R&D,” then choose “propose the first hypothesis.” The current R&D flow requires at least one hypothesis tied to a controllable variable; the intelligent experiment-design action appears only when the project is no longer a draft and a hypothesis exists. Historical runs can also be imported to build observation and diagnosis evidence.
 
 ## 3. Wire a real run

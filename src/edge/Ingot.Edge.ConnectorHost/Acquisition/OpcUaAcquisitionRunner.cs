@@ -188,7 +188,7 @@ public sealed class OpcUaAcquisitionRunner(
             yield return mapping.SourcePath;
     }
 
-    private static IUserIdentity CreateIdentity(
+    internal static IUserIdentity CreateIdentity(
         OpcUaConnection connection,
         IAcquisitionSecretResolver secrets)
         => connection.AuthenticationType switch
@@ -209,7 +209,7 @@ public sealed class OpcUaAcquisitionRunner(
         return X509CertificateLoader.LoadPkcs12FromFile(path, password);
     }
 
-    private static async Task<ApplicationConfiguration> CreateConfigurationAsync(
+    internal static async Task<ApplicationConfiguration> CreateConfigurationAsync(
         OpcUaConnection connection,
         IAcquisitionSecretResolver secrets,
         CancellationToken ct)

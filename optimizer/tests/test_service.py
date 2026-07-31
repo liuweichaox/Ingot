@@ -68,11 +68,28 @@ def test_service_has_health_endpoint_and_no_process_memory_campaign_api():
     assert client.post("/campaigns", json={}).status_code == 404
 
 
-def test_service_runs_batch_multiobjective_qlognehvi_for_optical_molding():
+def test_service_runs_batch_multiobjective_qlognehvi_with_declared_features():
     body = {
         "campaign": {
             "name": "lens-molding",
-            "process_profile": "fx3u-optical-molding",
+            "feature_set_id": "optical-lens-molding-demo",
+            "feature_set_version": 1,
+            "derived_features": [
+                {
+                    "name": "normalized_temperature",
+                    "operator": "identity",
+                    "inputs": ["soak_temp"],
+                    "normalization_offset": 320.0,
+                    "normalization_scale": 40.0,
+                },
+                {
+                    "name": "compression_exposure",
+                    "operator": "ratio",
+                    "inputs": ["press_force", "press_speed"],
+                    "normalization_scale": 20.0,
+                    "epsilon": 0.05,
+                },
+            ],
             "variables": [
                 {"name": "soak_temp", "low": 320.0, "high": 360.0, "unit": "C"},
                 {"name": "press_force", "low": 1.0, "high": 5.0, "unit": "kN"},
@@ -136,7 +153,9 @@ def test_service_runs_batch_multiobjective_qlognehvi_for_optical_molding():
     response = client.post("/v1/suggestions", json=body)
     assert response.status_code == 200, response.text
     payload = response.json()
-    assert payload["model_version"] == "botorch-qlogbo-v2"
+    assert payload["model_version"] == "botorch-qlogbo-v3"
+    assert payload["feature_set_id"] == "optical-lens-molding-demo"
+    assert payload["derived_feature_count"] == 2
     assert len(payload["suggestions"]) == 2
     assert all(
         item["recommended_params"]["soak_temp"] <= 355.0
@@ -150,6 +169,26 @@ def test_service_runs_batch_multiobjective_qlognehvi_for_optical_molding():
         set(item["constraint_predictions"]) == {"crack_rate"}
         for item in payload["suggestions"]
     )
+
+
+def test_service_rejects_hidden_process_profiles_and_invalid_feature_graphs():
+    legacy = request_body()
+    legacy["campaign"]["process_profile"] = "fx3u-optical-molding"
+    response = client.post("/v1/suggestions", json=legacy)
+    assert response.status_code == 422
+    assert "process_profile" in response.text
+
+    invalid = request_body()
+    invalid["campaign"]["derived_features"] = [
+        {
+            "name": "unknown-input-feature",
+            "operator": "identity",
+            "inputs": ["not-a-variable"],
+        }
+    ]
+    response = client.post("/v1/suggestions", json=invalid)
+    assert response.status_code == 422
+    assert "unknown or forward" in response.json()["detail"]
 
 
 def test_diagnosis_adjusts_context_and_reports_stability_and_interactions():

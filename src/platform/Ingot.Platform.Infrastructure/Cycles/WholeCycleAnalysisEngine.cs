@@ -12,7 +12,7 @@ namespace Ingot.Platform.Infrastructure.Cycles;
 public sealed class WholeCycleAnalysisEngine(
     IFeatureDefinitionRegistry? featureDefinitions = null)
 {
-    public const string AlgorithmVersion = "stage-relative-v2";
+    public const string AlgorithmVersion = "stage-relative-v4";
     private readonly IFeatureDefinitionRegistry _featureDefinitions =
         featureDefinitions ?? new BuiltInFeatureDefinitionRegistry();
 
@@ -291,47 +291,41 @@ public sealed class WholeCycleAnalysisEngine(
         ProcessAnalysisPlan? plan)
     {
         if (dataModel is null ||
-            dataModel.Stages.Count == 0 ||
             !string.Equals(plan?.AlignmentMode, "stage-relative", StringComparison.Ordinal))
             return new PhaseAnalysisResult([], []);
 
-        var stageByCode = dataModel.Stages
-            .GroupBy(static stage => stage.Code, StringComparer.Ordinal)
-            .ToDictionary(static group => group.Key, static group => group.First(), StringComparer.Ordinal);
-        var stepKey = string.IsNullOrWhiteSpace(dataModel.Acquisition.StepSourceKey)
-            ? "recipe_step"
-            : dataModel.Acquisition.StepSourceKey;
+        var stageNumberItem = dataModel.Acquisition.DataItems
+            .SingleOrDefault(static item => item.Category == "stage");
+        if (stageNumberItem is null)
+            return new PhaseAnalysisResult([], []);
+
         var resolved = samples.Select(sample =>
         {
-            var explicitPhase = ProcessAnalysisResolver.ContextValue(sample.Event.Context, "process_phase")
-                                ?? ProcessAnalysisResolver.ContextValue(sample.Event.Context, "process_stage");
-            if (!string.IsNullOrWhiteSpace(explicitPhase))
+            var stageNumber = ProcessAnalysisResolver.ResolveStage(
+                sample.Event.Context,
+                sample.Event.Data,
+                dataModel);
+            if (string.IsNullOrWhiteSpace(stageNumber))
             {
-                var stage = stageByCode.GetValueOrDefault(explicitPhase);
                 return new ResolvedPhaseSample(
                     sample.Event.OccurredAt,
-                    stage?.Code ?? explicitPhase,
-                    stage?.Name ?? explicitPhase,
-                    "event_tag",
-                    stage?.Required ?? false);
+                    "unknown",
+                    "阶段号缺失",
+                    "unknown");
             }
-
-            var sourceStep = ProcessAnalysisResolver.ContextValue(sample.Event.Context, stepKey);
-            var mapped = string.IsNullOrWhiteSpace(sourceStep)
-                ? null
-                : dataModel.Stages.FirstOrDefault(stage =>
-                    string.Equals(stage.SourceStep, sourceStep, StringComparison.OrdinalIgnoreCase));
-            return mapped is null
-                ? new ResolvedPhaseSample(sample.Event.OccurredAt, "unknown", "未归属", "unknown", false)
+            var stageName = ProcessAnalysisResolver.ContextValue(sample.Event.Context, "process_stage_name")
+                            ?? ProcessAnalysisResolver.ContextValue(sample.Event.Context, "recipe_step_name")
+                            ?? $"阶段 {stageNumber}";
+            return stageNumber == "unknown"
+                ? new ResolvedPhaseSample(sample.Event.OccurredAt, "unknown", "未归属", "unknown")
                 : new ResolvedPhaseSample(
                     sample.Event.OccurredAt,
-                    mapped.Code,
-                    mapped.Name,
-                    "recipe_step",
-                    mapped.Required);
+                    stageNumber,
+                    stageName,
+                    "stage_number");
         }).ToArray();
         if (resolved.Length == 0)
-            return new PhaseAnalysisResult([], ["阶段相对分析没有可用于阶段归属的过程采样。"]);
+            return new PhaseAnalysisResult([], []);
 
         var groups = new List<List<ResolvedPhaseSample>>();
         foreach (var item in resolved)
@@ -352,30 +346,12 @@ public sealed class WholeCycleAnalysisEngine(
                 Name = group[0].Name,
                 Order = index + 1,
                 Source = group[0].Source,
-                Required = group[0].Required,
-                IsComplete = nextStartedAt.HasValue && nextStartedAt > group[0].At,
                 SampleCount = group.Count,
                 StartedAt = group[0].At,
                 EndedAt = nextStartedAt
             };
         }).ToArray();
-        var issues = new List<string>();
-        var observed = phases.Where(static phase => phase.Code != "unknown")
-            .Select(static phase => phase.Code)
-            .ToHashSet(StringComparer.Ordinal);
-        foreach (var missing in dataModel.Stages
-                     .Where(static stage => stage.Required)
-                     .Select(static stage => stage.Code)
-                     .Distinct(StringComparer.Ordinal)
-                     .Where(code => !observed.Contains(code)))
-            issues.Add($"缺少必需工艺阶段 {missing}。");
-        var unknownSamples = phases.Where(static phase => phase.Source == "unknown")
-            .Sum(static phase => phase.SampleCount);
-        if (unknownSamples > 0)
-            issues.Add($"有 {unknownSamples} 个过程采样无法归属到已配置工艺阶段。");
-        if (phases.Any(static phase => !phase.IsComplete))
-            issues.Add("至少一个工艺阶段没有可确认的结束边界。");
-        return new PhaseAnalysisResult(phases, issues);
+        return new PhaseAnalysisResult(phases, []);
     }
 
     private static string Degrade(string current)
@@ -546,8 +522,7 @@ public sealed class WholeCycleAnalysisEngine(
         DateTimeOffset At,
         string Code,
         string Name,
-        string Source,
-        bool Required);
+        string Source);
     private sealed record PhaseAnalysisResult(
         IReadOnlyList<CyclePhaseSummary> Phases,
         IReadOnlyList<string> Issues);

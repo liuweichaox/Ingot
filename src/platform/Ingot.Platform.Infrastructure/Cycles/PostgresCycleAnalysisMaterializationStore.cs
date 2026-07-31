@@ -530,8 +530,6 @@ public sealed class PostgresCycleAnalysisMaterializationStore : ICycleAnalysisMa
             ["phase_name"] = phase.Name,
             ["phase_order"] = phase.Order,
             ["phase_source"] = phase.Source,
-            ["required"] = phase.Required,
-            ["is_complete"] = phase.IsComplete,
             ["sample_count"] = phase.SampleCount,
             ["started_at"] = phase.StartedAt,
             ["ended_at"] = phase.EndedAt
@@ -549,14 +547,12 @@ public sealed class PostgresCycleAnalysisMaterializationStore : ICycleAnalysisMa
               @data_model_id, @data_model_version,
               @analysis_plan_id, @analysis_plan_version,
               row.phase_code, row.phase_name, row.phase_order, row.phase_source,
-              row.required, row.is_complete, row.sample_count, row.started_at, row.ended_at
+              FALSE, TRUE, row.sample_count, row.started_at, row.ended_at
             FROM jsonb_to_recordset(@rows) AS row(
               phase_code TEXT,
               phase_name TEXT,
               phase_order INTEGER,
               phase_source TEXT,
-              required BOOLEAN,
-              is_complete BOOLEAN,
               sample_count INTEGER,
               started_at TIMESTAMPTZ,
               ended_at TIMESTAMPTZ);

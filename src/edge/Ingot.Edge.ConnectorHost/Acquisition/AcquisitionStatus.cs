@@ -29,6 +29,7 @@ public sealed class AcquisitionStatus
     private readonly object _gate = new();
     private readonly Dictionary<string, AcquisitionTaskStatusSnapshot> _tasks = new(StringComparer.Ordinal);
     private bool _enabled;
+    private string? _configurationError;
 
     public AcquisitionStatusSnapshot Get()
     {
@@ -37,6 +38,8 @@ public sealed class AcquisitionStatus
             var tasks = _tasks.Values.OrderBy(static item => item.ConfigurationKey, StringComparer.Ordinal).ToArray();
             var state = !_enabled
                 ? "disabled"
+                : _configurationError is not null
+                    ? "degraded"
                 : tasks.Length == 0
                     ? "starting"
                     : tasks.Any(static item => item.State == "degraded")
@@ -53,6 +56,7 @@ public sealed class AcquisitionStatus
                 tasks.OrderByDescending(static item => item.LastSuccessAt).Select(static item => item.LastReadDurationMs).FirstOrDefault(),
                 tasks.OrderByDescending(static item => item.LastSuccessAt).Select(static item => item.ObservedIntervalMs).FirstOrDefault(),
                 tasks.Select(static item => item.ActiveRecipe).FirstOrDefault(static value => value is not null),
+                _configurationError ??
                 tasks.Select(static item => item.LastError).FirstOrDefault(static value => value is not null),
                 tasks);
         }
@@ -62,6 +66,12 @@ public sealed class AcquisitionStatus
     {
         lock (_gate)
             _enabled = enabled;
+    }
+
+    public void SetConfigurationError(string? error)
+    {
+        lock (_gate)
+            _configurationError = string.IsNullOrWhiteSpace(error) ? null : error.Trim();
     }
 
     public void RegisterTask(string configurationKey)

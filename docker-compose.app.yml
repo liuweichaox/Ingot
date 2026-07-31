@@ -130,9 +130,13 @@ services:
       Urls: http://+:8001
       ConnectorHost__IngestToken: ${INGOT_CONNECTOR_TOKEN:?INGOT_CONNECTOR_TOKEN is required}
       ConnectorHost__LocalApiToken: ${INGOT_CONNECTOR_LOCAL_TOKEN:-}
+      Edge__EdgeId: ${INGOT_EDGE_ID:?INGOT_EDGE_ID is required}
       Edge__PlatformApiBaseUrl: http://platform-api:8000
       Edge__PublicBaseUrl: http://connector-host:8001
       Edge__EventIngestToken: ${INGOT_EDGE_TOKEN:?INGOT_EDGE_TOKEN is required}
+      Acquisition__Enabled: "false"
+      Acquisition__AllowLocalFallbackWhenPlatformAvailable: "false"
+      Acquisition__DeploymentCachePath: /app/Data/acquisition-deployments.json
     depends_on:
       platform-api:
         condition: service_healthy

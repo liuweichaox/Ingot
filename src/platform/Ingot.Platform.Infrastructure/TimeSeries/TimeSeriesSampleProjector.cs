@@ -23,7 +23,7 @@ public static class TimeSeriesSampleProjector
         }
 
         var quality = ReadQualityCodes(evt.Data);
-        var phaseCode = ProcessAnalysisResolver.ResolveStage(evt.Context, analysis.DataModel);
+        var phaseCode = ProcessAnalysisResolver.ResolveStage(evt.Context, evt.Data, analysis.DataModel);
         var definitions = analysis.DataModel.Acquisition.DataItems
             .ToDictionary(static item => item.Code, StringComparer.Ordinal);
         var result = new List<SignalSample>(values.Count);

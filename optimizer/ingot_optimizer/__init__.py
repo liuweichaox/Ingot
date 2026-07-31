@@ -9,10 +9,12 @@ from .campaign import (
 )
 from .loop import ObjectivePrediction, SequentialOptimizer, Suggestion
 from .botorch_engine import BotorchOptimizer
+from .feature_transforms import DerivedFeature
 
 __all__ = [
     "Campaign",
     "BotorchOptimizer",
+    "DerivedFeature",
     "GaussianProcess",
     "Objective",
     "OutcomeConstraint",

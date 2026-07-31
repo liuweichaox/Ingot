@@ -14,19 +14,20 @@ Ingot is an open-source process diagnosis and optimization system for expensive,
 | Deploy inside a factory network | [Deployment and operations](deployment.en.md) |
 | Find common answers | [FAQ](faq.en.md) |
 
-## One product loop
+## Six-step product loop
 
 ```text
-define controls, objectives, and safety constraints
-→ acquire actual recipes and cycle trajectories
-→ join inspection outcomes
-→ assemble experimental observations
-→ diagnose candidate variables and propose an R&D hypothesis
-→ fit trajectory and quality surrogates
-→ recommend and validate the next settings
-→ engineer review and execution
-→ update from new evidence
+define process → connect equipment → collect production data → close the data loop → diagnose → process optimization
+       ↑                                                                                         ↓
+       └──────── validated recipes, process windows, and knowledge return to production ─────────┘
 ```
+
+1. **Define the process**: define equipment, products, process variables, standard units, recipe parameters, and quality objectives.
+2. **Connect equipment**: select a communication driver, test the live connection, and map equipment points to stable process variables.
+3. **Collect production data**: form runs from actual start and end signals while recording trajectories, stages, actual recipes, and context.
+4. **Close the data loop**: check timestamps, gaps, and anomalies, then associate inspections with the same production run.
+5. **Diagnose the process**: compare passing and failing runs and retain source, controllability, and confounding boundaries for every candidate cause.
+6. **Process optimization**: verify safe candidates through controlled experiments and publish validated recipes, process windows, and reusable knowledge.
 
 Diagnosis and optimization share one loop: the evidence read to explain a past result is the evidence read to choose the next experiment. Acquisition, inspection, features, experiments, and knowledge all serve this loop. A new process usually changes variables, mappings, objectives, safety limits, features, and optional physical priors—not the system architecture.
 

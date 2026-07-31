@@ -533,7 +533,6 @@ export function ResearchProjectsPage() {
       <Card
         title="优化项目"
         description="先处理需要决策或验证的项目；每个工作区保留完整证据链。"
-        actions={<Button variant="ghost" onClick={() => setCreateOpen(true)}>新建项目</Button>}
       >
         {loading ? (
           <p className="py-12 text-center text-sm text-slate-500">正在读取优化项目…</p>
@@ -577,7 +576,7 @@ export function ResearchProjectsPage() {
             description={projects.length ? "当前项目会沿同一证据路径推进。" : "不需要先配置所有数据和模型；先围绕一个真实问题建立闭环。"}
             compact
             steps={[
-              { title: "明确偏差", description: "从质量分析或历史对比确认问题和范围。", state: projects.length ? "done" : "current" },
+              { title: "明确偏差", description: "从质量追因或历史对比确认问题和范围。", state: projects.length ? "done" : "current" },
               { title: "设定边界", description: "写下优化目标、一个可控变量和安全限制。", state: projects.length ? "current" : "upcoming" },
               { title: "执行建议", description: "系统依据已有观察推荐下一组实验。", state: "upcoming" },
               { title: "验证窗口", description: "独立验证后才成为可复用结论。", state: "upcoming" },

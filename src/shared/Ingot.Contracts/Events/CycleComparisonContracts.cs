@@ -164,6 +164,12 @@ public sealed record CycleComparisonRow
     public IReadOnlyDictionary<string, string> Context { get; init; } =
         new Dictionary<string, string>();
 
+    public bool HasStarted { get; init; }
+
+    public bool HasCompleted { get; init; }
+
+    public bool LifecycleComplete { get; init; }
+
     public required DateTimeOffset StartedAt { get; init; }
 
     public DateTimeOffset? CompletedAt { get; init; }
@@ -200,10 +206,6 @@ public sealed record CycleComparisonRow
     public double EvidenceWeight { get; init; }
 
     public int PhaseCount { get; init; }
-
-    public int RequiredPhaseCount { get; init; }
-
-    public bool PhaseComplete { get; init; }
 
     public IReadOnlyList<string> InspectionOutcomes { get; init; } = [];
 
@@ -257,8 +259,6 @@ public sealed record CycleComparisonAcceptance
     public int CycleCount { get; init; }
 
     public int CompleteCycleCount { get; init; }
-
-    public int PhaseCompleteCycleCount { get; init; }
 
     public int QualityLinkedCycleCount { get; init; }
 

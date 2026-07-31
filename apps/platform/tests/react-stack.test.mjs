@@ -69,11 +69,18 @@ test("navigation and overlays are accessible Headless UI components", () => {
   assert.match(app, /DialogBackdrop/);
   assert.match(app, /DialogPanel/);
   assert.match(app, /MenuButton/);
+  for (const domain of ["生产运行", "工艺研发", "数据资产", "业务配置", "系统管理"]) {
+    assert.match(app, new RegExp(domain));
+  }
+  assert.match(app, /\["\/chat", "AI助手"\]/);
   assert.match(app, /aria-label="全局导航"/);
+  assert.match(app, /aria-label="面包屑"/);
   assert.match(app, /aria-label="打开全局模块导航"/);
   assert.match(app, /xl:hidden/);
   assert.match(app, /xl:flex/);
   assert.match(app, /aria-label="打开模块导航"/);
+  assert.doesNotMatch(app, /label: "运营工作台"/);
+  assert.doesNotMatch(researchProjects, />新建项目</);
 });
 
 test("production login and local account administration are usable from the web app", () => {
@@ -113,7 +120,7 @@ test("global search opens a cross-product command palette and table columns keep
 
 test("industrial object pages use the event summary contract and show an initial loading state", () => {
   assert.match(app, /\["\/explorer", "工业对象"\]/);
-  assert.match(app, /对象与模型/);
+  assert.match(app, /id: "context", label: "数据资产"/);
   assert.match(pages, /title="工业对象"/);
   assert.match(pages, /objects\.loading && !objects\.data \? <LoadingCard \/>/);
   assert.match(pages, /title="对象目录"/);
@@ -193,6 +200,17 @@ test("all versioned configuration registries use business forms instead of JSON 
   assert.match(registryEditor, /function AcquisitionEditor/);
   assert.match(registryEditor, /requiresAttachment: item\.requiresAttachment \|\| item\.requiresReview/);
   assert.doesNotMatch(pages, /label="版本定义"/);
+});
+
+test("acquisition profiles probe real device points before publishing", () => {
+  assert.match(registryEditor, /测试连接并读取样本/);
+  assert.match(registryEditor, /\/api\/v1\/acquisition-profiles\/probe/);
+  assert.match(registryEditor, /JSON 字段树/);
+  assert.match(registryEditor, /节点浏览器/);
+  assert.match(registryEditor, /寄存器读取结果/);
+  for (const label of ["原始值", "换算值", "类型", "单位"]) {
+    assert.match(registryEditor, new RegExp(label));
+  }
 });
 
 test("tooling, subscriptions, and research workflows avoid editable JSON fields", () => {

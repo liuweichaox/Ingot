@@ -64,12 +64,14 @@ public sealed class CycleRecordService(
                     .Select(static row => row.Event.OccurredAt)
                     .DefaultIfEmpty(group.Min(static row => row.Event.OccurredAt))
                     .Min(),
-                Completed = group.Any(static row => row.Event.EventType == "cycle.completed")
+                HasStarted = group.Any(static row => row.Event.EventType == "cycle.started"),
+                HasCompleted = group.Any(static row => row.Event.EventType == "cycle.completed")
             })
             .Where(item => status switch
             {
-                "completed" => item.Completed,
-                "active" => !item.Completed,
+                "completed" => item.HasStarted && item.HasCompleted,
+                "active" => item.HasStarted && !item.HasCompleted,
+                "incomplete" => !item.HasStarted,
                 _ => true
             })
             .OrderByDescending(static item => item.StartedAt)
@@ -128,11 +130,11 @@ public sealed class CycleRecordService(
             Overview = new CycleRecordOverview
             {
                 CycleCount = allCandidates.Length,
-                CompletedCount = allCandidates.Count(static row => row.Completed),
-                ActiveCount = allCandidates.Count(static row => !row.Completed),
+                CompletedCount = allCandidates.Count(static row => row.HasStarted && row.HasCompleted),
+                ActiveCount = allCandidates.Count(static row => row.HasStarted && !row.HasCompleted),
+                IncompleteCount = allCandidates.Count(static row => !row.HasStarted),
                 SampleCompleteCount = rows.Count(static row =>
                     row.ProcessDataQuality.Status != ProcessDataStatuses.Unavailable),
-                PhaseCompleteCount = rows.Count(static row => row.PhaseComplete == true),
                 QualityCompleteCount = rows.Count(static row => row.QualityStatus == "COMPLETE"),
                 IssueCycleCount = rows.Count(static row => row.DataIssues.Count > 0)
             }
@@ -156,15 +158,8 @@ public sealed class CycleRecordService(
         var startedAt = started?.Event.OccurredAt ?? first.Event.OccurredAt;
         var context = ResolveContext(ordered);
         var processAnalysis = materialized.Analysis;
-        var requiredCodes = (analysis?.DataModel.Stages
-                .Where(static stage => stage.Required)
-                .Select(static stage => stage.Code) ?? [])
-            .Distinct(StringComparer.Ordinal)
-            .ToArray();
         var phaseRows = processAnalysis.Phases;
-        var observedCodes = phaseRows.Where(static phase => phase.Code != "unknown")
-            .Select(static phase => phase.Code)
-            .ToHashSet(StringComparer.Ordinal);
+        var lifecycleComplete = started is not null && completed is not null;
 
         var plan = InspectionPlanMatcher.Resolve(plans, context, first.Event.Subject.Id, startedAt);
         var requiredItems = plan?.Items.Where(static item => item.Required).ToArray() ?? [];
@@ -183,6 +178,7 @@ public sealed class CycleRecordService(
         });
         var qualityStatus = ResolveQualityStatus(plan, requiredItems, completedItems, pendingReviews, inspectionRecords);
         var issues = BuildIssues(
+            started is not null,
             completed is not null,
             processAnalysis.Quality,
             context);
@@ -190,10 +186,15 @@ public sealed class CycleRecordService(
         {
             CorrelationId = correlationId,
             MachineId = first.Event.Subject.Id,
-            Status = completed is null ? "active" : "completed",
+            Status = lifecycleComplete ? "completed" : started is not null ? "active" : "incomplete",
+            HasStarted = started is not null,
+            HasCompleted = completed is not null,
+            LifecycleComplete = lifecycleComplete,
             StartedAt = startedAt,
             CompletedAt = completed?.Event.OccurredAt,
-            DurationMs = completed is null ? null : (completed.Event.OccurredAt - startedAt).TotalMilliseconds,
+            DurationMs = lifecycleComplete
+                ? (completed!.Event.OccurredAt - started!.Event.OccurredAt).TotalMilliseconds
+                : null,
             WorkpieceId = context.GetValueOrDefault("workpiece_id"),
             ProductSeries = context.GetValueOrDefault("product_series"),
             ProductCode = context.GetValueOrDefault("product_code"),
@@ -217,8 +218,6 @@ public sealed class CycleRecordService(
             },
             ProcessDataQuality = processAnalysis.Quality,
             PhaseCount = phaseRows.Count(static phase => phase.Code != "unknown"),
-            RequiredPhaseCount = requiredCodes.Length,
-            PhaseComplete = requiredCodes.Length == 0 ? null : requiredCodes.All(observedCodes.Contains),
             QualityStatus = qualityStatus,
             InspectionPlanId = plan?.PlanId,
             InspectionPlanVersion = plan?.Version,
@@ -293,13 +292,19 @@ public sealed class CycleRecordService(
     }
 
     private static IReadOnlyList<CycleDataIssue> BuildIssues(
-        bool completed,
+        bool hasStarted,
+        bool hasCompleted,
         ProcessDataQualitySummary processData,
         IReadOnlyDictionary<string, string> context)
     {
         var issues = new List<CycleDataIssue>();
-        if (!completed)
-            issues.Add(Issue("cycle.active", "info", "周期尚未结束。"));
+        if (!hasStarted)
+            issues.Add(Issue("cycle.start.missing", "error", "未找到生产开始事件。"));
+        if (!hasCompleted)
+            issues.Add(Issue(
+                "cycle.end.missing",
+                hasStarted ? "info" : "error",
+                hasStarted ? "生产已开始，尚未收到生产结束事件。" : "未找到生产结束事件。"));
         issues.AddRange(processData.Issues.Select(message => Issue(
             "process_data." + processData.Status,
             processData.Status == ProcessDataStatuses.Unavailable ? "error" : "warning",

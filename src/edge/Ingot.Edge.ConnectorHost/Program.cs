@@ -48,7 +48,9 @@ builder.Services.AddSingleton<IEventPersistenceHealth, EventPersistenceHealth>()
 builder.Services.AddSingleton<IEventSink, EventSink>();
 builder.Services.AddSingleton<IEventShipper, HttpEventShipper>();
 builder.Services.AddSingleton<AcquisitionStatus>();
+builder.Services.AddSingleton<IAcquisitionDeploymentCache, JsonAcquisitionDeploymentCache>();
 builder.Services.AddSingleton<IAcquisitionSecretResolver, EnvironmentAcquisitionSecretResolver>();
+builder.Services.AddSingleton<AcquisitionProbeService>();
 builder.Services.AddSingleton<IAcquisitionProtocolRunner, MqttAcquisitionRunner>();
 builder.Services.AddSingleton<IAcquisitionProtocolRunner, OpcUaAcquisitionRunner>();
 builder.Services.AddSingleton<IAcquisitionProtocolRunner, ModbusTcpAcquisitionRunner>();

@@ -21,7 +21,7 @@ public sealed class HttpPollingSnapshotMapperTests
                 "parameters": { "目标温度℃": 860, "保护气启用": true }
               },
               "sensors": {
-                "炉温℃": 852.5,
+                "温度℃": 852.5,
                 "风机转速rpm": 1450,
                 "加热器开启": true,
                 "运行模式": "normalizing"
@@ -81,7 +81,7 @@ public sealed class HttpPollingSnapshotMapperTests
             "edge/EDGE-001/connector/furnace",
             null));
 
-        Assert.Contains("sensors.炉温℃", error.Message, StringComparison.Ordinal);
+        Assert.Contains("sensors.温度℃", error.Message, StringComparison.Ordinal);
     }
 
     private static HttpPollingAcquisitionOptions Options() => new()
@@ -95,7 +95,7 @@ public sealed class HttpPollingSnapshotMapperTests
         ],
         Fields =
         [
-            new ValueFieldMapping { SourcePath = "sensors.炉温℃", Code = "furnace.temperature" },
+            new ValueFieldMapping { SourcePath = "sensors.温度℃", Code = "furnace.temperature" },
             new ValueFieldMapping { SourcePath = "sensors.风机转速rpm", Code = "fan.speed", DataType = "integer" },
             new ValueFieldMapping { SourcePath = "sensors.加热器开启", Code = "heater.enabled", DataType = "boolean" },
             new ValueFieldMapping { SourcePath = "sensors.运行模式", Code = "operation.mode", DataType = "string" }

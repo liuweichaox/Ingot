@@ -90,7 +90,7 @@ public sealed class AcquisitionProtocolTests
     }
 
     [Fact]
-    public void ProtocolMapper_MapsContextRecipeAndCorrelationForRegisterProtocols()
+    public void ProtocolMapper_DoesNotTreatDeviceRegistersAsCorrelationIdByDefault()
     {
         var deployment = Deployment();
         var raw = new Dictionary<string, object?>
@@ -110,9 +110,9 @@ public sealed class AcquisitionProtocolTests
             null,
             DateTimeOffset.Parse("2026-07-23T08:00:00Z"));
 
-        Assert.Equal("CYCLE-0001", mapped.Sample.CorrelationId);
-        Assert.Equal("30", mapped.Sample.Context["recipe_step"]);
-        Assert.Equal("lens-a-std@4|CYCLE-0001", mapped.RecipeIdentity);
+        Assert.Null(mapped.Sample.CorrelationId);
+        Assert.Equal("30", mapped.Sample.Context["stage_number"]);
+        Assert.Equal("lens-a-std@4", mapped.RecipeIdentity);
         Assert.NotNull(mapped.RecipeApplied);
         var values = Assert.IsAssignableFrom<IReadOnlyDictionary<string, object?>>(
             mapped.Sample.Data["values"]);
@@ -120,7 +120,7 @@ public sealed class AcquisitionProtocolTests
     }
 
     [Fact]
-    public void LifecycleTracker_EmitsCycleAndStepBoundariesFromConfiguredContext()
+    public void LifecycleTracker_GeneratesAndReusesCorrelationIdInsideActiveRun()
     {
         var deployment = Deployment();
         var tracker = new AcquisitionLifecycleTracker();
@@ -140,30 +140,26 @@ public sealed class AcquisitionProtocolTests
             DateTimeOffset.Parse("2026-07-23T08:00:00Z"));
         var firstEvents = tracker.Track(first, deployment.Profile.Lifecycle, 1000);
         Assert.Equal(
-            ["cycle.started", "recipe.applied", "recipe.step_changed", "process.sample"],
+            ["cycle.started", "recipe.applied", "process.stage_changed", "process.sample"],
             firstEvents.Select(item => item.EventType));
+        var generatedCorrelationId = firstEvents[0].CorrelationId;
+        Assert.True(Guid.TryParse(generatedCorrelationId, out _));
+        Assert.All(firstEvents, item => Assert.Equal(generatedCorrelationId, item.CorrelationId));
         Assert.Equal(1000, firstEvents[0].Data["pollDelayMs"]);
         Assert.False(firstEvents[0].Data.ContainsKey("expectedSampleCount"));
 
-        var nextCycle = first with
+        var nextSample = first with
         {
             Sample = first.Sample with
             {
                 EventId = Guid.CreateVersion7().ToString(),
-                CorrelationId = "CYCLE-0002",
-                Context = new Dictionary<string, string>(first.Sample.Context)
-                {
-                    ["correlation_id"] = "CYCLE-0002"
-                }
+                CorrelationId = null
             },
             RecipeApplied = null
         };
-        var boundaryEvents = tracker.Track(nextCycle, deployment.Profile.Lifecycle, 1000);
-        Assert.Equal(
-            ["cycle.completed", "cycle.started", "recipe.step_changed", "process.sample"],
-            boundaryEvents.Select(item => item.EventType));
-        Assert.Equal("CYCLE-0001", boundaryEvents[0].CorrelationId);
-        Assert.Equal(1L, boundaryEvents[0].Data["sampleCount"]);
+        var continuedEvents = tracker.Track(nextSample, deployment.Profile.Lifecycle, 1000);
+        Assert.Equal(["process.sample"], continuedEvents.Select(item => item.EventType));
+        Assert.Equal(generatedCorrelationId, continuedEvents[0].CorrelationId);
     }
 
     [Fact]
@@ -201,7 +197,8 @@ public sealed class AcquisitionProtocolTests
                 }
             }
         };
-        tracker.Track(first, lifecycle, 1000);
+        var started = tracker.Track(first, lifecycle, 1000);
+        var generatedCorrelationId = started[0].CorrelationId;
 
         var inactive = first with
         {
@@ -219,8 +216,24 @@ public sealed class AcquisitionProtocolTests
 
         var completed = tracker.Track(inactive, lifecycle, 1000);
         Assert.Equal(["cycle.completed"], completed.Select(item => item.EventType));
-        Assert.Equal("CYCLE-0001", completed[0].CorrelationId);
+        Assert.Equal(generatedCorrelationId, completed[0].CorrelationId);
         Assert.Empty(tracker.Track(inactive, lifecycle, 1000));
+
+        var restarted = first with
+        {
+            Sample = first.Sample with
+            {
+                EventId = Guid.CreateVersion7().ToString(),
+                OccurredAt = DateTimeOffset.Parse("2026-07-23T08:00:20Z"),
+                CorrelationId = null
+            },
+            RecipeApplied = null
+        };
+        var restartedEvents = tracker.Track(restarted, lifecycle, 1000);
+        Assert.Equal(
+            ["cycle.started", "recipe.applied", "process.stage_changed", "process.sample"],
+            restartedEvents.Select(item => item.EventType));
+        Assert.NotEqual(generatedCorrelationId, restartedEvents[0].CorrelationId);
     }
 
     [Fact]
@@ -240,6 +253,33 @@ public sealed class AcquisitionProtocolTests
     }
 
     [Fact]
+    public void ModbusSelectors_TranslateOneBasedManualAddressesToWireAddresses()
+    {
+        var deployment = Deployment();
+        var mapping = new AcquisitionValueMapping
+        {
+            DataItemCode = "upper_mold.ir_temperature",
+            SourcePath = "holding-register:1:int16",
+            SourceDataType = "int16",
+            ModbusArea = "holding-register",
+            ModbusAddress = 1
+        };
+        deployment = deployment with
+        {
+            Profile = deployment.Profile with
+            {
+                ValueMappings = [mapping],
+                Recipe = null,
+                TimestampMode = "edge-received"
+            }
+        };
+
+        var selectors = ModbusTcpAcquisitionRunner.BuildSelectors(deployment, "one-based");
+
+        Assert.Equal((ushort)0, selectors[mapping.SourcePath].ModbusAddress);
+    }
+
+    [Fact]
     public void MelsecA1EFrame_MatchesFx3uEnetAdpBinaryExample()
     {
         var frame = MelsecA1EAcquisitionRunner.BuildWordReadFrame(
@@ -255,6 +295,21 @@ public sealed class AcquisitionProtocolTests
     }
 
     [Fact]
+    public void MelsecA1EFrame_UsesHighToLowHexFieldsForAsciiMode()
+    {
+        var frame = MelsecA1EAcquisitionRunner.BuildWordReadFrame(
+            " D"u8.ToArray(),
+            address: 100,
+            wordCount: 1,
+            timer: 0x0010,
+            layout: "A",
+            pcNumber: 0xFF,
+            dataCode: "ascii");
+
+        Assert.Equal("01FF00100000006444200001", System.Text.Encoding.ASCII.GetString(frame));
+    }
+
+    [Fact]
     public void MelsecA1EDecoder_ReadsLittleEndianRegisterValues()
     {
         var signed = MelsecA1EAcquisitionRunner.Decode(
@@ -265,9 +320,14 @@ public sealed class AcquisitionProtocolTests
             [0x81, 0x00, 0x00, 0x00, 0x48, 0x42],
             "float32",
             2);
+        var text = MelsecA1EAcquisitionRunner.Decode(
+            [0x81, 0x00, 0x4C, 0x45, 0x4E, 0x53, 0x00, 0x00],
+            "string",
+            3);
 
         Assert.Equal((short)-123, signed);
         Assert.Equal(50f, floating);
+        Assert.Equal("LENS", text);
     }
 
     private static AcquisitionDeployment Deployment()
@@ -287,21 +347,11 @@ public sealed class AcquisitionProtocolTests
                 {
                     DataItemCode = "upper_mold.ir_temperature",
                     SourcePath = "holding-register:0"
-                }
-            ],
-            ContextMappings =
-            [
-                new AcquisitionContextMapping
-                {
-                    ContextKey = "correlation_id",
-                    SourcePath = "holding-register:100:string:24",
-                    Required = true
                 },
-                new AcquisitionContextMapping
+                new AcquisitionValueMapping
                 {
-                    ContextKey = "recipe_step",
-                    SourcePath = "holding-register:112:uint16",
-                    Required = true
+                    DataItemCode = "process.stage_number",
+                    SourcePath = "holding-register:112:uint16"
                 }
             ],
             Recipe = new AcquisitionRecipeMapping
@@ -320,9 +370,6 @@ public sealed class AcquisitionProtocolTests
             },
             Lifecycle = new AcquisitionLifecycleMapping
             {
-                CorrelationIdContextKey = "correlation_id",
-                StepContextKey = "recipe_step",
-                ExpectedDurationMs = 600000
             }
         };
         return new AcquisitionDeployment
@@ -334,7 +381,6 @@ public sealed class AcquisitionProtocolTests
                 Name = "Optical",
                 Acquisition = new AcquisitionModel
                 {
-                    SamplePeriodMs = 1000,
                     DataItems =
                     [
                         new ProcessDataItemDefinition
@@ -342,6 +388,13 @@ public sealed class AcquisitionProtocolTests
                             Code = "upper_mold.ir_temperature",
                             SourceField = "Temperature",
                             DataType = "double"
+                        },
+                        new ProcessDataItemDefinition
+                        {
+                            Code = "process.stage_number",
+                            SourceField = "Stage number",
+                            DataType = "integer",
+                            Category = "stage"
                         }
                     ]
                 },

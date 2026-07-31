@@ -26,7 +26,10 @@ cp .env.example .env
 Change at least:
 
 - `INGOT_POSTGRES_PASSWORD`
+- `INGOT_EDGE_ID` (unique per Edge and stable for the lifetime of the installation)
 - `INGOT_EDGE_TOKEN`
+- `INGOT_CONNECTOR_TOKEN`
+- `INGOT_CONNECTOR_LOCAL_TOKEN`
 - `INGOT_ADMIN_PASSWORD`
 
 The repository ignores `.env`; never commit real credentials.
@@ -44,6 +47,20 @@ docker compose -f docker-compose.app.yml --profile connector-host up -d --build
 ```
 
 Configure addresses or interfaces, tokens, and mappings before connecting a real data source.
+
+Platform publishes acquisition deployments by `EdgeId`. Edge pulls them and persists the last
+successful version in `Data/acquisition-deployments.json`. A temporary Platform outage or Edge
+restart continues from that cached version; production cannot silently switch to an unversioned
+local fallback. When Platform authoritatively returns no deployments, Edge stops acquisition and
+reports the missing configuration in its acquisition status.
+
+Every data-source profile must pass a real device probe before publication. Platform proxies the
+draft to the Edge that can reach the device. HTTP and MQTT read one JSON sample and return its field
+tree; OPC UA browses and reads variable nodes; Modbus TCP and MELSEC read only explicitly configured
+registers and never scan PLC addresses blindly. The UI shows the raw value,
+`converted = raw × scale + offset`, data type, and platform unit. The server repeats the probe for a
+publication request and rejects publication when the connection fails, a required point is missing,
+or conversion fails.
 
 ## Health
 
@@ -65,6 +82,7 @@ Back up at least:
 - inspection attachments;
 - process-knowledge files;
 - Edge event databases until forwarding is confirmed.
+- the Edge `acquisition-deployments.json` last-known-good deployment cache.
 
 A restore drill must verify experiment, cycle, inspection, and evidence relationships—not merely database startup.
 

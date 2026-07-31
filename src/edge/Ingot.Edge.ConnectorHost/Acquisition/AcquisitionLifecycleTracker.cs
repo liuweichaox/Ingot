@@ -4,15 +4,18 @@ using Ingot.Domain.Events;
 namespace Ingot.Edge.ConnectorHost.Acquisition;
 
 /// <summary>
-/// 将可配置的关联号和控制器步序转换为离散运行边界事件。没有生命周期配置时保持连续采集语义。
+/// 将生产状态和控制器步序转换为离散运行边界事件。
+/// 默认在生产开始时由 Edge 生成 CorrelationId；外部周期号仅作为向后兼容的可选输入。
 /// </summary>
 public sealed class AcquisitionLifecycleTracker
 {
+    private const string StageContextKey = "stage_number";
     private string? _activeCorrelationId;
     private string? _activeStep;
     private IReadOnlyDictionary<string, string> _activeContext = new Dictionary<string, string>();
     private ObjectRef? _activeSubject;
     private string? _activeSource;
+    private ProductionEvent? _latestRecipeApplied;
     private long _sampleCount;
 
     public IReadOnlyList<ProductionEvent> Track(
@@ -23,15 +26,11 @@ public sealed class AcquisitionLifecycleTracker
             ? WithoutLifecycle(mapped)
             : Track(
                 mapped,
-                lifecycle.CorrelationIdContextKey,
                 lifecycle.ActiveContextKey,
                 lifecycle.ActiveValue,
-                lifecycle.StepContextKey,
-                lifecycle.StepNameContextKey,
                 lifecycle.StartedEventType,
                 lifecycle.CompletedEventType,
                 lifecycle.StepChangedEventType,
-                lifecycle.ExpectedDurationMs,
                 pollDelayMs);
 
     public IReadOnlyList<ProductionEvent> Track(
@@ -42,37 +41,25 @@ public sealed class AcquisitionLifecycleTracker
             ? WithoutLifecycle(mapped)
             : Track(
                 mapped,
-                lifecycle.CorrelationIdContextKey,
                 lifecycle.ActiveContextKey,
                 lifecycle.ActiveValue,
-                lifecycle.StepContextKey,
-                lifecycle.StepNameContextKey,
                 lifecycle.StartedEventType,
                 lifecycle.CompletedEventType,
                 lifecycle.StepChangedEventType,
-                lifecycle.ExpectedDurationMs,
                 pollDelayMs);
 
     private IReadOnlyList<ProductionEvent> Track(
         AcquisitionMappingResult mapped,
-        string correlationIdContextKey,
         string? activeContextKey,
         string activeValue,
-        string? stepContextKey,
-        string? stepNameContextKey,
         string startedEventType,
         string completedEventType,
         string stepChangedEventType,
-        int? expectedDurationMs,
         int pollDelayMs)
     {
         var sample = mapped.Sample;
-        var correlationId = sample.CorrelationId;
-        if (string.IsNullOrWhiteSpace(correlationId))
-        {
-            throw new InvalidDataException(
-                $"离散运行采样缺少关联号；请检查上下文映射 {correlationIdContextKey}。");
-        }
+        if (mapped.RecipeApplied is not null)
+            _latestRecipeApplied = mapped.RecipeApplied;
 
         var events = new List<ProductionEvent>(5);
         if (!string.IsNullOrWhiteSpace(activeContextKey))
@@ -98,53 +85,61 @@ public sealed class AcquisitionLifecycleTracker
             }
         }
 
+        var incomingCorrelationId = string.IsNullOrWhiteSpace(sample.CorrelationId)
+            ? null
+            : sample.CorrelationId.Trim();
         if (_activeCorrelationId is not null &&
-            !string.Equals(_activeCorrelationId, correlationId, StringComparison.Ordinal))
+            incomingCorrelationId is not null &&
+            !string.Equals(_activeCorrelationId, incomingCorrelationId, StringComparison.Ordinal))
         {
             events.Add(CompleteActiveRun(completedEventType, sample.OccurredAt));
             ResetActiveRun();
         }
 
+        var startedNewRun = false;
         if (_activeCorrelationId is null)
         {
-            _activeCorrelationId = correlationId;
+            _activeCorrelationId = incomingCorrelationId ?? Guid.CreateVersion7().ToString();
             _activeContext = sample.Context;
             _activeSubject = sample.Subject;
             _activeSource = sample.Source;
+            startedNewRun = true;
             var startedData = new Dictionary<string, object?>();
             if (pollDelayMs > 0)
                 startedData["pollDelayMs"] = pollDelayMs;
-            if (expectedDurationMs is not null)
-                startedData["expectedDurationMs"] = expectedDurationMs.Value;
             events.Add(ProductionEvent.Create(
                 startedEventType,
                 sample.OccurredAt,
                 sample.Source,
                 sample.Subject,
-                correlationId,
+                _activeCorrelationId,
                 sample.Context,
                 startedData));
         }
 
-        if (mapped.RecipeApplied is not null)
-            events.Add(mapped.RecipeApplied);
+        sample = sample with { CorrelationId = _activeCorrelationId };
+        var recipeApplied = mapped.RecipeApplied ?? (startedNewRun ? _latestRecipeApplied : null);
+        if (recipeApplied is not null)
+        {
+            events.Add(recipeApplied with
+            {
+                EventId = Guid.CreateVersion7().ToString(),
+                RecordedAt = DateTimeOffset.UtcNow,
+                CorrelationId = _activeCorrelationId,
+                Context = sample.Context
+            });
+        }
 
-        if (!string.IsNullOrWhiteSpace(stepContextKey) &&
-            sample.Context.TryGetValue(stepContextKey, out var step) &&
+        if (sample.Context.TryGetValue(StageContextKey, out var step) &&
             !string.Equals(step, _activeStep, StringComparison.Ordinal))
         {
             var data = new Dictionary<string, object?> { ["sourceStep"] = step };
-            if (!string.IsNullOrWhiteSpace(stepNameContextKey) &&
-                sample.Context.TryGetValue(stepNameContextKey, out var stepName))
-            {
-                data["sourceStepName"] = stepName;
-            }
             events.Add(ProductionEvent.Create(
                 stepChangedEventType,
                 sample.OccurredAt,
                 sample.Source,
                 sample.Subject,
-                correlationId,
+                _activeCorrelationId,
                 sample.Context,
                 data));
             _activeStep = step;

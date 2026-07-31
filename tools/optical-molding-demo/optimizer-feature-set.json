@@ -1,0 +1,13 @@
+{
+  "featureSetId": "optical-lens-molding-demo",
+  "version": 1,
+  "derivedFeatures": [
+    {
+      "name": "normalized_upper_temperature_setpoint",
+      "operator": "identity",
+      "inputs": ["recipe.upper_temperature_setpoint"],
+      "normalizationOffset": 620,
+      "normalizationScale": 6
+    }
+  ]
+}

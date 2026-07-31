@@ -110,7 +110,8 @@ export function extractProcessSamples(records) {
     .filter(event => event?.eventType === "process.sample")
     .map(event => ({
       occurredAt: event.occurredAt,
-      phase: event.context?.recipe_step_name || event.context?.recipe_step ||
+      phase: event.context?.process_stage_name || event.context?.stage_number ||
+        event.context?.recipe_step_name || event.context?.recipe_step ||
         event.context?.phase || event.context?.stage || event.context?.process_stage || "",
       values: event.data?.values || event.data || {},
     }));

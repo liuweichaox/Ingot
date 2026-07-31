@@ -1,16 +1,16 @@
-"""FX3U 光学模压 数字孪生(过程仿真源)。
+"""FX3U 光学模压数字孪生（仅用于演示，不属于生产优化器内核）。
 
 目的:在没有真机的情况下,把**整条价值链**跑通,并做到**与真机无缝切换**——
-仿真源产出与真实 FX3U 完全一致的寄存器格式(D100.. 缩放整数),采集/特征/优化路径不变;
+仿真源产出与真实 FX3U 完全一致的寄存器格式(D1/D101.. 缩放整数),采集/特征/优化路径不变;
 上线时把 SimulatedFx3u 换成读真机 MC 1E 的 Fx3uMcSource 即可,上层一行不用改。
 
 真实寄存器映射(来自珲场采集配置 fx3u-molding):
-    D100 int16  mold_temp_upper  ×0.1  ℃
-    D101 int16  mold_temp_lower  ×0.1  ℃
-    D102 int32  press_force      ×0.1  kN
-    D104 int16  position         ×0.01 mm
-    D200 int16  recipe_step      (10 预热/20 保温/30 压制/40 退火/50 冷却)
-    D210 int32  cycle_id
+    D1   uint16 stage_number
+    D101 int16  mold_temp_upper  ×0.1  ℃
+    D104 int16  mold_temp_lower  ×0.1  ℃
+    D107 int16  press_force      ×0.1  kg
+    D108 int16  position         ×0.001 mm
+    D2   uint32 source_cycle_no
 质量结果(面形误差/缺陷率)来自检测,不在 PLC 寄存器里 —— 对应 Inspection 录入。
 """
 from __future__ import annotations
@@ -22,12 +22,12 @@ import numpy as np
 
 # 寄存器映射(与真机一致);scale 把 PLC 放大整数还原为工程量
 REGISTERS = {
-    "mold_temp_upper": ("D100", "int16", 0.1),
-    "mold_temp_lower": ("D101", "int16", 0.1),
-    "press_force":     ("D102", "int32", 0.1),
-    "position":        ("D104", "int16", 0.01),
-    "recipe_step":     ("D200", "int16", 1),
-    "cycle_id":        ("D210", "int32", 1),
+    "mold_temp_upper": ("D101", "int16", 0.1),
+    "mold_temp_lower": ("D104", "int16", 0.1),
+    "press_force":     ("D107", "int16", 0.1),
+    "position":        ("D108", "int16", 0.001),
+    "stage_number":    ("D1", "uint16", 1),
+    "source_cycle_no": ("D2", "uint32", 1),
 }
 PHASES = [("preheat", 10, 4), ("soak", 20, 3), ("press", 30, 3), ("anneal", 40, 3), ("cool", 50, 3)]
 
@@ -35,7 +35,7 @@ PHASES = [("preheat", 10, 4), ("soak", 20, 3), ("press", 30, 3), ("anneal", 40, 
 @dataclass
 class CycleResult:
     cycle_id: int
-    recipe: dict                 # 本炉所用配方(工程师设定的 setpoint)
+    recipe: dict                 # 本次运行所用配方(工程师设定的 setpoint)
     samples: list                # 每次轮询的原始寄存器读数(与真机同格式)
     outcomes: dict               # 检测得到的质量结果(面形/缺陷…)
 
@@ -64,7 +64,7 @@ def _norm(recipe: dict) -> np.ndarray:
 
 class SimulatedFx3u(MoldingSource):
     """FX3U 光学模压数字孪生。够真:仿真的过程信号与质量响应都贴合模压物理,
-    且以真实寄存器格式产出;换真机只需把 run_cycle 换成写 setpoint→触发→轮询 D100.. 。"""
+    且以真实寄存器格式产出;换真机只需把 run_cycle 换成写 setpoint→触发→轮询 D1/D101.. 。"""
 
     def __init__(self, seed: int = 0, poll_hz: float = 1.0):
         if not math.isfinite(poll_hz) or poll_hz <= 0:
@@ -111,12 +111,12 @@ class SimulatedFx3u(MoldingSource):
                 force += self.rng.normal(0, force_sp * 0.01)
                 pos += (speed if name == "press" else 0.4) * (1.0 / self.poll_hz)
                 samples.append({
-                    "D100": self._emit("mold_temp_upper", t_upper),
-                    "D101": self._emit("mold_temp_lower", t_lower),
-                    "D102": self._emit("press_force", max(force, 0)),
-                    "D104": self._emit("position", pos),
-                    "D200": step,
-                    "D210": self._cycle,
+                    "D101": self._emit("mold_temp_upper", t_upper),
+                    "D104": self._emit("mold_temp_lower", t_lower),
+                    "D107": self._emit("press_force", max(force, 0)),
+                    "D108": self._emit("position", pos),
+                    "D1": step,
+                    "D2": self._cycle,
                 })
         return CycleResult(self._cycle, dict(recipe), samples, self._outcomes(recipe))
 
@@ -126,6 +126,6 @@ class SimulatedFx3u(MoldingSource):
 #     def run_cycle(self, recipe):
 #         write_setpoints(recipe)          # 把配方写进 PLC setpoint 寄存器
 #         trigger_cycle(); wait_complete()  # 触发一次运行、等 cycle.completed
-#         samples = poll_registers("D100","D101","D102","D104","D200","D210")  # MC 1E 轮询
+#         samples = poll_registers("D2","D1","D101","D104","D107","D108")  # MC 1E 轮询
 #         outcomes = read_inspection(self.cycle_id)  # 检测结果(面形/缺陷)由检验录入
 #         return CycleResult(...)

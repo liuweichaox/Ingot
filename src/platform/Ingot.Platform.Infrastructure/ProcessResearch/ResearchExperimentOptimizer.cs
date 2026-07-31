@@ -38,7 +38,6 @@ public sealed class ResearchExperimentOptimizer(
             throw new ProcessResearchRuleException(
                 "假设验证至少需要两个干预条件，并在两个区组中重复，不能用单点运行升级原因证据。");
         }
-        var processProfile = NormalizeProcessProfile(request.ProcessProfile);
         ResearchHypothesis? hypothesis = null;
         if (intent == ResearchOptimizationIntents.ValidateHypothesis)
         {
@@ -158,7 +157,7 @@ public sealed class ResearchExperimentOptimizer(
             .ToArray();
         var call = new OptimizerSuggestionCall
         {
-            Campaign = BuildCampaign(project, processProfile, intent, hypothesis),
+            Campaign = BuildCampaign(project, intent, hypothesis),
             Observations = observations,
             PendingPoints = pendingPoints,
             TopK = request.BatchSize,
@@ -242,7 +241,9 @@ public sealed class ResearchExperimentOptimizer(
                 AutoAssembledObservationCount = validAuto.Length,
                 PendingExperimentCount = pendingPoints.Length,
                 ProcessFeatureCount = CommonProcessFeatureCount(observations),
-                ProcessProfile = processProfile,
+                FeatureSetId = project.OptimizationFeatures.FeatureSetId,
+                FeatureSetVersion = project.OptimizationFeatures.Version,
+                DerivedFeatureCount = project.OptimizationFeatures.DerivedFeatures.Count,
                 Intent = intent,
                 HypothesisId = hypothesis?.HypothesisId,
                 DistinctConditionCount = response.Suggestions.Count,
@@ -282,7 +283,6 @@ public sealed class ResearchExperimentOptimizer(
 
     private static OptimizerCampaignInput BuildCampaign(
         ResearchProject project,
-        string processProfile,
         string intent,
         ResearchHypothesis? hypothesis)
     {
@@ -295,9 +295,18 @@ public sealed class ResearchExperimentOptimizer(
         return new OptimizerCampaignInput
         {
             Name = project.Name,
-            ProcessProfile = string.IsNullOrWhiteSpace(processProfile)
-                ? "generic"
-                : processProfile.Trim(),
+            FeatureSetId = project.OptimizationFeatures.FeatureSetId,
+            FeatureSetVersion = project.OptimizationFeatures.Version,
+            DerivedFeatures = project.OptimizationFeatures.DerivedFeatures.Select(value =>
+                new OptimizerDerivedFeatureInput
+                {
+                    Name = value.Name,
+                    Operator = value.Operator,
+                    Inputs = value.Inputs,
+                    NormalizationOffset = value.NormalizationOffset,
+                    NormalizationScale = value.NormalizationScale,
+                    Epsilon = value.Epsilon
+                }).ToArray(),
             DecisionIntent = intent,
             HypothesisVariables = hypothesis?.VariableCodes
                 .Intersect(controls.Select(static value => value.Code), StringComparer.Ordinal)
@@ -345,16 +354,6 @@ public sealed class ResearchExperimentOptimizer(
         if (!ResearchOptimizationIntents.IsValid(intent))
             throw new ProcessResearchRuleException("优化意图无效。");
         return intent;
-    }
-
-    private static string NormalizeProcessProfile(string? value)
-    {
-        var profile = string.IsNullOrWhiteSpace(value) ? "generic" : value.Trim();
-        if (string.Equals(profile, "fx3u-optical-molding", StringComparison.OrdinalIgnoreCase))
-            profile = "optical-lens-molding-v1";
-        if (profile.Length > 120)
-            throw new ProcessResearchRuleException("优化画像最长 120 个字符。");
-        return profile;
     }
 
     private static OptimizationRunPrediction MapPrediction(

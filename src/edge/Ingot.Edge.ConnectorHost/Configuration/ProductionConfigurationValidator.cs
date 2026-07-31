@@ -13,6 +13,9 @@ public static class ProductionConfigurationValidator
             ?? configuration.GetValue<bool>("Edge:EnableCentralReporting");
         if (platformReportingEnabled)
         {
+            if (string.IsNullOrWhiteSpace(configuration["Edge:EdgeId"]))
+                errors.Add("Edge:EdgeId is required and must remain stable for the lifetime of the installed node.");
+
             var platformApiBaseUrl = configuration["Edge:PlatformApiBaseUrl"]
                 ?? configuration["Edge:CentralApiBaseUrl"];
             if (!Uri.TryCreate(platformApiBaseUrl, UriKind.Absolute, out var uri) ||
@@ -29,6 +32,15 @@ public static class ProductionConfigurationValidator
                 errors.Add("Edge:PublicBaseUrl must be an absolute HTTP or HTTPS URL.");
             }
         }
+
+        if (configuration.GetValue<bool>("Acquisition:AllowLocalFallbackWhenPlatformAvailable"))
+        {
+            errors.Add(
+                "Acquisition:AllowLocalFallbackWhenPlatformAvailable must be false in production; " +
+                "use the persisted last-known-good platform deployment instead.");
+        }
+        if (string.IsNullOrWhiteSpace(configuration["Acquisition:DeploymentCachePath"]))
+            errors.Add("Acquisition:DeploymentCachePath is required in production.");
 
         if (configuration.GetValue<bool>("Edge:EnableEventShipping"))
             RequireSecret(configuration["Edge:EventIngestToken"], "Edge:EventIngestToken", errors);

@@ -6,7 +6,7 @@ using Ingot.Edge.Application.Abstractions;
 namespace Ingot.Edge.ConnectorHost.Acquisition;
 
 /// <summary>
-///     三菱 MC 协议 1E 帧（二进制）采集器 —— 用于 FX3U-ENET-ADP 等 A 兼容 1E 帧设备。
+///     三菱 MC 协议 A 兼容 1E 帧采集器 —— 用于 FX3U-ENET(-L/-ADP) 等设备。
 ///     不依赖 HslCommunication（商业授权）；MC/SLMP 是公开协议，本类直接构造 1E 帧字节。
 ///
 ///     帧字节布局按 FX3U-ENET-ADP User's Manual 的 A-compatible 1E binary frame：
@@ -81,7 +81,7 @@ public sealed class MelsecA1EAcquisitionRunner(
         }
     }
 
-    private static IReadOnlyDictionary<string, McSelector> BuildSelectors(AcquisitionDeployment deployment)
+    internal static IReadOnlyDictionary<string, McSelector> BuildSelectors(AcquisitionDeployment deployment)
     {
         var result = new Dictionary<string, McSelector>(StringComparer.Ordinal);
         void Add(string path) => result[path] = ParseSelector(path);
@@ -113,12 +113,16 @@ public sealed class MelsecA1EAcquisitionRunner(
             "int16" or "uint16" => 1,
             "int32" or "uint32" or "float32" => 2,
             "int64" or "uint64" or "float64" => 4,
+            "string" when parts.Length > 3 &&
+                          ushort.TryParse(parts[3], out var length) &&
+                          length is > 0 and <= 128
+                => (length + 1) / 2,
             _ => throw new InvalidOperationException($"MELSEC 暂不支持的数据类型：{type}。")
         };
         return new McSelector(selector, parts[0].ToUpperInvariant(), code, address, type, words);
     }
 
-    private static async Task<Dictionary<string, object?>> ReadSnapshotAsync(
+    internal static async Task<Dictionary<string, object?>> ReadSnapshotAsync(
         NetworkStream stream, McA1EConnection connection,
         IReadOnlyDictionary<string, McSelector> selectors, CancellationToken ct)
     {
@@ -126,45 +130,97 @@ public sealed class MelsecA1EAcquisitionRunner(
         foreach (var (path, sel) in selectors)
         {
             var request = BuildWordReadFrame(sel.DeviceCode, sel.Address, sel.WordCount,
-                connection.MonitoringTimer, connection.WordOrderLayout);
+                connection.MonitoringTimer, connection.WordOrderLayout,
+                connection.PcNumber, connection.DataCode);
             await stream.WriteAsync(request, ct).ConfigureAwait(false);
-            var response = await ReadResponseAsync(stream, sel.WordCount, ct).ConfigureAwait(false);
+            var response = await ReadResponseAsync(stream, sel.WordCount, connection.DataCode, ct)
+                .ConfigureAwait(false);
             snapshot[path] = Decode(response, sel.Type, sel.WordCount);
         }
         return snapshot;
     }
 
     /// <summary>1E 帧字批量读取请求（命令 0x01）。</summary>
-    internal static byte[] BuildWordReadFrame(byte[] deviceCode, uint address, int wordCount, ushort timer, string layout)
+    internal static byte[] BuildWordReadFrame(
+        byte[] deviceCode,
+        uint address,
+        int wordCount,
+        ushort timer,
+        string layout,
+        byte pcNumber = 0xFF,
+        string dataCode = "binary")
     {
+        if (!string.Equals(layout, "A", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("FX3U-ENET-ADP 的 A-compatible 1E 帧只支持软元件号在前的布局 A。");
+        if (dataCode == "ascii")
+        {
+            // ASCII 码的各数值按 H→L 发送；设备代码 D 的逻辑值为 4420H。
+            // 例如 D100/1 word: 01 FF 0010 00000064 4420 0001。
+            var ascii = $"01{pcNumber:X2}{timer:X4}{address:X8}" +
+                        $"{deviceCode[1]:X2}{deviceCode[0]:X2}{wordCount:X4}";
+            return System.Text.Encoding.ASCII.GetBytes(ascii);
+        }
+        if (dataCode != "binary")
+            throw new InvalidOperationException($"MELSEC 1E 通信数据码无效：{dataCode}。");
+
         var head = new byte[4];
         BinaryPrimitives.WriteUInt32LittleEndian(head, address);
         var timerBytes = new byte[2];
         BinaryPrimitives.WriteUInt16LittleEndian(timerBytes, timer);
-        if (!string.Equals(layout, "A", StringComparison.OrdinalIgnoreCase))
-            throw new InvalidOperationException("FX3U-ENET-ADP 的 A-compatible 1E 帧只支持软元件号在前的布局 A。");
         var body = head.Concat(deviceCode);
-        return new byte[] { 0x01, 0xFF }
+        return new byte[] { 0x01, pcNumber }
             .Concat(timerBytes)
             .Concat(body)
             .Concat(new byte[] { (byte)(wordCount == 256 ? 0 : wordCount), 0x00 })
             .ToArray();
     }
 
-    private static async Task<byte[]> ReadResponseAsync(NetworkStream stream, int wordCount, CancellationToken ct)
+    private static async Task<byte[]> ReadResponseAsync(
+        NetworkStream stream,
+        int wordCount,
+        string dataCode,
+        CancellationToken ct)
     {
+        if (dataCode == "ascii")
+        {
+            var asciiLength = 4 + wordCount * 4;
+            var ascii = await ReadExactAsync(stream, asciiLength, ct).ConfigureAwait(false);
+            var text = System.Text.Encoding.ASCII.GetString(ascii);
+            if (!byte.TryParse(text.AsSpan(2, 2), System.Globalization.NumberStyles.HexNumber,
+                    System.Globalization.CultureInfo.InvariantCulture, out var completeCode))
+                throw new InvalidDataException("MELSEC PLC 返回了无效的 ASCII 完成码。");
+            if (completeCode != 0)
+                throw new InvalidOperationException($"MELSEC PLC 返回错误：结束码=0x{completeCode:X2}");
+            var binary = new byte[2 + wordCount * 2];
+            binary[0] = 0x81;
+            for (var index = 0; index < wordCount; index++)
+            {
+                if (!ushort.TryParse(text.AsSpan(4 + index * 4, 4),
+                        System.Globalization.NumberStyles.HexNumber,
+                        System.Globalization.CultureInfo.InvariantCulture, out var word))
+                    throw new InvalidDataException("MELSEC PLC 返回了无效的 ASCII 字数据。");
+                BinaryPrimitives.WriteUInt16LittleEndian(binary.AsSpan(2 + index * 2, 2), word);
+            }
+            return binary;
+        }
+
         // 成功响应：[0]=0x81 [1]=结束码0x00 + wordCount*2 字节数据；错误：[1]!=0 (+异常码)
         var expected = 2 + wordCount * 2;
-        var buffer = new byte[Math.Max(expected, 4)];
-        var read = 0;
-        while (read < 2)
-            read += await stream.ReadAsync(buffer.AsMemory(read), ct).ConfigureAwait(false);
+        var buffer = await ReadExactAsync(stream, expected, ct).ConfigureAwait(false);
         if (buffer[1] != 0x00)
             throw new InvalidOperationException($"MELSEC PLC 返回错误：结束码=0x{buffer[1]:X2}");
+        return buffer;
+    }
+
+    private static async Task<byte[]> ReadExactAsync(NetworkStream stream, int expected, CancellationToken ct)
+    {
+        var buffer = new byte[expected];
+        var read = 0;
         while (read < expected)
         {
             var n = await stream.ReadAsync(buffer.AsMemory(read, expected - read), ct).ConfigureAwait(false);
-            if (n <= 0) break;
+            if (n <= 0)
+                throw new EndOfStreamException($"MELSEC PLC 响应提前结束：期望 {expected} 字节，实际 {read} 字节。");
             read += n;
         }
         return buffer;
@@ -187,10 +243,11 @@ public sealed class MelsecA1EAcquisitionRunner(
             "int64" => BinaryPrimitives.ReadInt64LittleEndian(data),
             "uint64" => BinaryPrimitives.ReadUInt64LittleEndian(data),
             "float64" => BitConverter.Int64BitsToDouble(BinaryPrimitives.ReadInt64LittleEndian(data)),
+            "string" => System.Text.Encoding.ASCII.GetString(data).TrimEnd('\0'),
             _ => null
         };
     }
 
-    private sealed record McSelector(
+    internal sealed record McSelector(
         string SourcePath, string Device, byte[] DeviceCode, uint Address, string Type, int WordCount);
 }

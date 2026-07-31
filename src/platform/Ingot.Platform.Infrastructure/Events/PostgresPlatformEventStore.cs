@@ -492,7 +492,8 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, IA
         var result = new Dictionary<string, string>(captured, StringComparer.Ordinal);
         foreach (var pair in current)
         {
-            if (pair.Key is "recipe_step" or "recipe_step_name" or "process_phase" or "process_stage" ||
+            if (pair.Key is "stage_number" or "process_stage_name" or
+                "recipe_step" or "recipe_step_name" or "process_phase" or "process_stage" ||
                 !result.ContainsKey(pair.Key))
                 result[pair.Key] = pair.Value;
         }

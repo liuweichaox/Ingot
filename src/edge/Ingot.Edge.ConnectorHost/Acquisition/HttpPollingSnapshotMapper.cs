@@ -52,6 +52,14 @@ public static class HttpPollingSnapshotMapper
                 field.Scale,
                 field.Offset);
         }
+        var stageField = options.Fields.SingleOrDefault(item => item.Category == "stage");
+        if (stageField is not null &&
+            values.TryGetValue(stageField.Code, out var stageValue) &&
+            stageValue is not null)
+        {
+            context["stage_number"] =
+                Convert.ToString(stageValue, CultureInfo.InvariantCulture) ?? string.Empty;
+        }
 
         var sampleData = new Dictionary<string, object?>(StringComparer.Ordinal)
         {
@@ -186,13 +194,17 @@ public static class HttpPollingSnapshotMapper
         {
             if (options.Lifecycle.Mode != "discrete-cycle")
                 throw new InvalidOperationException($"不支持的运行边界模式：{options.Lifecycle.Mode}。");
-            if (string.IsNullOrWhiteSpace(options.Lifecycle.CorrelationIdContextKey))
-                throw new InvalidOperationException("周期运行必须配置关联号上下文键。");
-            if (!options.ContextFields.Any(item =>
+            if (!string.IsNullOrWhiteSpace(options.Lifecycle.CorrelationIdContextKey) &&
+                !options.ContextFields.Any(item =>
                     item.Key == options.Lifecycle.CorrelationIdContextKey))
             {
                 throw new InvalidOperationException(
                     $"周期运行缺少关联号上下文映射：{options.Lifecycle.CorrelationIdContextKey}。");
+            }
+            if (string.IsNullOrWhiteSpace(options.Lifecycle.CorrelationIdContextKey) &&
+                string.IsNullOrWhiteSpace(options.Lifecycle.ActiveContextKey))
+            {
+                throw new InvalidOperationException("周期运行必须配置生产状态上下文键，由 Edge 自动生成周期关联号。");
             }
             if (!string.IsNullOrWhiteSpace(options.Lifecycle.ActiveContextKey) &&
                 !options.ContextFields.Any(item =>
@@ -291,6 +303,7 @@ public static class HttpPollingSnapshotMapper
         LifecycleFieldMapping? lifecycle)
     {
         if (lifecycle is null ||
+            string.IsNullOrWhiteSpace(lifecycle.CorrelationIdContextKey) ||
             !context.TryGetValue(lifecycle.CorrelationIdContextKey, out var value) ||
             string.IsNullOrWhiteSpace(value))
         {

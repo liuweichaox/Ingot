@@ -1,10 +1,10 @@
-"""演示:在一个"合成的光学模压响应面"上,证明优化大脑比试错/随机搜索少调多少炉。
+"""光学模压专用演示：在合成响应面上验证优化机制。
 
 真值(工程师看不到)藏着一个最优工艺窗口。优化器只能通过"做实验→测量"逐步逼近。
-对比:序贯贝叶斯优化 vs 随机搜索,报告到达规格所需的试验炉数(trials-to-spec)。
+对比:序贯贝叶斯优化 vs 随机搜索,报告到达规格所需的试验次数(trials-to-spec)。
 
 真实历史验证使用 README 中的 replay_history_pool；优化器只能选择历史中实际存在且
-尚未使用的配方，不能把本合成真值函数替换成最近邻后宣称节省真实炉数。
+尚未使用的配方，不能把本合成真值函数替换成最近邻后宣称节省真实试验次数。
 """
 import numpy as np
 import matplotlib
@@ -42,7 +42,7 @@ def truth_fn(params: dict) -> dict:
 
 
 def run_bo(budget, seed):
-    """序贯BO:命中规格即停;返回(best-so-far 轨迹, 到达炉数或None)。"""
+    """序贯BO:命中规格即停;返回(best-so-far 轨迹, 达标所需次数或None)。"""
     opt = SequentialOptimizer(campaign, seed=seed)
     rng = np.random.default_rng(seed)
     curve, hit = [], None
@@ -85,7 +85,7 @@ def main():
     print("=" * 64)
     print("Ingot 优化大脑 —— 合成光学模压响应面 回放验证")
     print(f"决策变量 {campaign.dim} 个;目标:面形≤0.5µm 且 缺陷≤2.0%")
-    print(f"预算 {budget} 炉,{n_seeds} 个随机种子")
+    print(f"预算 {budget} 次试验,{n_seeds} 个随机种子")
     print("=" * 64)
 
     bo_curves, bo_hits, rd_curves, rd_hits = [], [], [], []
@@ -98,14 +98,14 @@ def main():
         return float(np.mean([h if h is not None else budget for h in hits]))
     bo_pen, rd_pen = penalized(bo_hits), penalized(rd_hits)
 
-    print(f"{'方法':<16}{'达标成功率':<12}{'达标者中位炉数':<14}{'期望炉数(未达标计满预算)':<12}")
+    print(f"{'方法':<16}{'达标成功率':<12}{'达标者中位次数':<14}{'期望次数(未达标计满预算)':<12}")
     print(f"{'序贯BO(大脑)':<16}{bo['rate']*100:>5.0f}%       {bo['median']:>6.1f}         {bo_pen:>6.1f}")
     print(f"{'随机搜索(试错)':<16}{rd['rate']*100:>5.0f}%       {rd['median']:>6.1f}         {rd_pen:>6.1f}")
     n_bo_ok = sum(h is not None for h in bo_hits)
     n_rd_ok = sum(h is not None for h in rd_hits)
-    print(f"\n>> 大脑:{n_bo_ok}/{n_seeds} 次达标,中位 {bo['median']:.0f} 炉。"
-          f"\n>> 试错:{n_rd_ok}/{n_seeds} 次达标——{n_seeds-n_rd_ok} 次在 {budget} 炉预算内**根本没碰到规格**。"
-          f"\n>> 惩罚化期望:大脑 {bo_pen:.0f} 炉 vs 试错 {rd_pen:.0f} 炉,"
+    print(f"\n>> 大脑:{n_bo_ok}/{n_seeds} 次达标,中位 {bo['median']:.0f} 次试验。"
+          f"\n>> 试错:{n_rd_ok}/{n_seeds} 次达标——{n_seeds-n_rd_ok} 次在 {budget} 次试验预算内**根本没碰到规格**。"
+          f"\n>> 惩罚化期望:大脑 {bo_pen:.0f} 次 vs 试错 {rd_pen:.0f} 次,"
           f"实际快约 {(1-bo_pen/rd_pen)*100:.0f}%(试错的慢主要来自大量'调不出来')。")
 
     x = np.arange(1, budget + 1)

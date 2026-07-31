@@ -22,7 +22,6 @@ public static class JsonAcquisitionOptionsFactory
             DeviceBaseUrl = profile.Connection.BaseUrl,
             SnapshotPath = profile.Connection.SnapshotPath,
             PollIntervalMs = profile.Connection.PollIntervalMs,
-            SamplePeriodMs = profile.Connection.PollIntervalMs,
             Source = profile.Source,
             SubjectType = profile.SubjectType,
             SubjectId = profile.SubjectId,
@@ -42,6 +41,7 @@ public static class JsonAcquisitionOptionsFactory
                 Code = item.DataItemCode,
                 SourcePath = item.SourcePath,
                 DataType = dataItems[item.DataItemCode].DataType,
+                Category = dataItems[item.DataItemCode].Category,
                 Required = item.Required,
                 Scale = item.Scale,
                 Offset = item.Offset
@@ -69,12 +69,9 @@ public static class JsonAcquisitionOptionsFactory
                 CorrelationIdContextKey = profile.Lifecycle.CorrelationIdContextKey,
                 ActiveContextKey = profile.Lifecycle.ActiveContextKey,
                 ActiveValue = profile.Lifecycle.ActiveValue,
-                StepContextKey = profile.Lifecycle.StepContextKey,
-                StepNameContextKey = profile.Lifecycle.StepNameContextKey,
                 StartedEventType = profile.Lifecycle.StartedEventType,
                 CompletedEventType = profile.Lifecycle.CompletedEventType,
-                StepChangedEventType = profile.Lifecycle.StepChangedEventType,
-                ExpectedDurationMs = profile.Lifecycle.ExpectedDurationMs
+                StepChangedEventType = profile.Lifecycle.StepChangedEventType
             }
         };
     }

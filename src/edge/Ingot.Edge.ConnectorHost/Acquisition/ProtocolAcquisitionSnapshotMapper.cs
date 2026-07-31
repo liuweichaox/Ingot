@@ -54,9 +54,18 @@ public static class ProtocolAcquisitionSnapshotMapper
                 mapping.Scale,
                 mapping.Offset);
         }
+        var stageDefinition = dataItems.Values.SingleOrDefault(item => item.Category == "stage");
+        if (stageDefinition is not null &&
+            values.TryGetValue(stageDefinition.Code, out var stageValue) &&
+            stageValue is not null)
+        {
+            context["stage_number"] =
+                Convert.ToString(stageValue, CultureInfo.InvariantCulture) ?? string.Empty;
+        }
 
         string? correlationId = null;
         if (profile.Lifecycle is not null &&
+            !string.IsNullOrWhiteSpace(profile.Lifecycle.CorrelationIdContextKey) &&
             context.TryGetValue(profile.Lifecycle.CorrelationIdContextKey, out var rawCorrelationId) &&
             !string.IsNullOrWhiteSpace(rawCorrelationId))
         {

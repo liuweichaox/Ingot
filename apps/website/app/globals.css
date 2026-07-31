@@ -192,7 +192,7 @@ button { font: inherit; }
 .product-grid p, .reusable-grid p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.65; }
 
 .closed-loop { overflow: hidden; background: #08120f; }
-.loop-rail { display: grid; grid-template-columns: repeat(5, 1fr); margin-top: 62px; position: relative; }
+.loop-rail { display: grid; grid-template-columns: repeat(6, 1fr); margin-top: 62px; position: relative; }
 .loop-rail::before { content: ""; position: absolute; top: 19px; left: 5%; right: 5%; height: 1px; background: linear-gradient(90deg, var(--gold), var(--cyan)); opacity: .42; }
 .loop-rail article { position: relative; padding-right: 24px; }
 .loop-rail span {

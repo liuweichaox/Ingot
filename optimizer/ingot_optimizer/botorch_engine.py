@@ -8,17 +8,23 @@ import numpy as np
 from scipy.stats import norm
 
 from .campaign import Campaign, Objective
+from .feature_transforms import DerivedFeature, expand_inputs
 from .loop import ObjectivePrediction, Suggestion
-from .optical_molding import expand_inputs
 
 
-MODEL_VERSION = "botorch-qlogbo-v2"
+MODEL_VERSION = "botorch-qlogbo-v3"
 
 
 class BotorchOptimizer:
-    def __init__(self, campaign: Campaign, *, process_profile: str = "generic", seed: int = 0):
+    def __init__(
+        self,
+        campaign: Campaign,
+        *,
+        derived_features: Sequence[DerivedFeature] | None = None,
+        seed: int = 0,
+    ):
         self.campaign = campaign
-        self.process_profile = process_profile
+        self.derived_features = tuple(derived_features or ())
         self.seed = seed
         self.x: list[np.ndarray] = []
         self.y: list[list[float]] = []
@@ -173,10 +179,30 @@ class BotorchOptimizer:
             if pending_units.size
             else None
         )
-        train_x_np = expand_inputs(train_unit, names, self.process_profile)
-        choices_np = expand_inputs(candidates, names, self.process_profile)
+        lows = [value.low for value in self.campaign.variables]
+        highs = [value.high for value in self.campaign.variables]
+        train_x_np = expand_inputs(
+            train_unit,
+            names,
+            lows,
+            highs,
+            self.derived_features,
+        )
+        choices_np = expand_inputs(
+            candidates,
+            names,
+            lows,
+            highs,
+            self.derived_features,
+        )
         pending_np = (
-            expand_inputs(pending_units, names, self.process_profile)
+            expand_inputs(
+                pending_units,
+                names,
+                lows,
+                highs,
+                self.derived_features,
+            )
             if pending_units.size
             else None
         )

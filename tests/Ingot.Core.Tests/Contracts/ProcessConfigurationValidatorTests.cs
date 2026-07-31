@@ -33,10 +33,6 @@ public sealed class ProcessConfigurationValidatorTests
                     SourceField = "上模设置温度℃",
                     Unit = "Cel"
                 }
-            ],
-            Stages =
-            [
-                new ProcessStageDefinition { SourceStep = "10", Code = "Preheat", Name = "预热" }
             ]
         };
 
@@ -44,6 +40,56 @@ public sealed class ProcessConfigurationValidatorTests
         Assert.Equal("optical-molding.demo", normalized!.ModelId);
         Assert.Equal("upper_mold.temperature", normalized.Acquisition.DataItems[0].Code);
         Assert.Equal("upper_mold.set_temperature", normalized.RecipeParameters[0].Code);
+    }
+
+    [Fact]
+    public void DataModel_AcceptsOneIntegerStageNumberDataItem()
+    {
+        var value = DataModel() with
+        {
+            Acquisition = new AcquisitionModel
+            {
+                DataItems =
+                [
+                    new ProcessDataItemDefinition { Code = "temperature", SourceField = "温度" },
+                    new ProcessDataItemDefinition
+                    {
+                        Code = "process.stage_number",
+                        SourceField = "阶段号",
+                        DataType = "integer",
+                        Category = "stage",
+                        Nullable = false
+                    }
+                ]
+            }
+        };
+
+        Assert.True(ProcessConfigurationValidator.TryValidate(value, out var normalized, out var error), error);
+        Assert.Equal("process.stage_number", normalized!.Acquisition.DataItems[1].Code);
+    }
+
+    [Fact]
+    public void DataModel_RejectsNonIntegerStageNumber()
+    {
+        var value = DataModel() with
+        {
+            Acquisition = new AcquisitionModel
+            {
+                DataItems =
+                [
+                    new ProcessDataItemDefinition
+                    {
+                        Code = "process.stage_number",
+                        SourceField = "阶段号",
+                        DataType = "double",
+                        Category = "stage"
+                    }
+                ]
+            }
+        };
+
+        Assert.False(ProcessConfigurationValidator.TryValidate(value, out _, out var error));
+        Assert.Contains("整数类型", error);
     }
 
     [Fact]

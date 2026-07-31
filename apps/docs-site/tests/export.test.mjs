@@ -40,9 +40,10 @@ test("publishes the AI process R&D product journey without interface or develope
   for (const lang of ["zh", "en"]) {
     const index = await readFile(path.join(out, lang, "index.html"), "utf8");
     const design = await readFile(path.join(out, lang, "design", "index.html"), "utf8");
-    assert.match(index, lang === "zh" ? /开源工艺优化系统/ : /open-source process-optimization system/i);
+    assert.match(index, lang === "zh" ? /开源工艺追因与优化系统/ : /open-source process diagnosis and optimization system/i);
     assert.match(design, lang === "zh" ? /设计目标/ : /Design objective/i);
-    assert.match(index, lang === "zh" ? /下一次实验/ : /next experiment/i);
+    assert.match(index, lang === "zh" ? /下一次运行/ : /next experiment/i);
+    assert.match(index, lang === "zh" ? /工艺定义.*设备接入.*生产采集.*数据闭环.*工艺追因.*工艺优化/s : /define process.*connect equipment.*collect production data.*close the data loop.*diagnose.*process optimization/is);
     assert.doesNotMatch(`${index}${design}`, /\/api\/|curl|ProductionEvent|InspectionRecord|endpoint|HTTP API/i);
   }
   assert.doesNotMatch(JSON.stringify(search), /\/api\/|curl|ProductionEvent|InspectionRecord|endpoint|HTTP API/i);

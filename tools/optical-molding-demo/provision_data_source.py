@@ -7,88 +7,100 @@ import argparse
 import json
 import urllib.request
 
+from demo_contract import DATA_ITEMS, RECIPE_PARAMETERS
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--api", default="http://127.0.0.1:8000")
     parser.add_argument("--edge-id", default="EDGE-FX3U-SIM-001")
-    parser.add_argument("--device-url", default="http://127.0.0.1:8102")
-    parser.add_argument("--profile-version", type=int, default=2)
+    parser.add_argument("--device-host", default="127.0.0.1")
+    parser.add_argument("--device-port", type=int, default=5551)
+    parser.add_argument("--profile-version", type=int, default=8)
+    parser.add_argument("--data-model-version", type=int, default=1)
     return parser.parse_args()
 
 
-def mapping(code: str, path: str) -> dict[str, object]:
-    return {"dataItemCode": code, "sourcePath": path, "required": True}
+def mapping(item: dict[str, object]) -> dict[str, object]:
+    return {
+        "dataItemCode": item["code"],
+        "sourcePath": item["register"],
+        "required": True,
+        "sourceDataType": str(item["register"]).rsplit(":", 1)[1],
+        "scale": item["scale"],
+        "offset": 0,
+    }
 
 
-def main() -> None:
-    args = parse_args()
-    payload = {
+def build_payload(args: argparse.Namespace) -> dict[str, object]:
+    return {
         "profileId": "optical-lens-molding-simulator",
         "version": args.profile_version,
         "name": "光学镜片模压模拟数据源",
         "status": "published",
         "edgeId": args.edge_id,
-        "protocol": "http-polling",
+        "protocol": "melsec-a1e",
         "dataModelId": "optical-lens-molding-demo",
-        "dataModelVersion": 1,
-        "source": "connector/http-polling/optical-lens-molding-simulator",
-        "subjectType": "optical-molding-machine",
+        "dataModelVersion": args.data_model_version,
+        "source": "connector/melsec-a1e/fx3u-optical-lens-molding-simulator",
+        "subjectType": "equipment",
         "subjectId": "OPTICAL-MOLD-SIM-01",
-        "connection": {"baseUrl": args.device_url.rstrip("/"), "snapshotPath": "/api/v1/snapshot", "pollIntervalMs": 1000},
+        "connection": {"baseUrl": "", "snapshotPath": "/api/v1/snapshot", "pollIntervalMs": 1000},
+        "melsecA1E": {
+            "host": args.device_host,
+            "port": args.device_port,
+            "dataCode": "binary",
+            "pcNumber": 255,
+            "pollIntervalMs": 1000,
+            "monitoringTimer": 16,
+            "wordOrderLayout": "A",
+        },
         "execution": {"timeoutMs": 10000, "reconnectDelayMs": 5000},
-        "timestampMode": "source",
-        "timestampPath": "timestamp",
-        "sequencePath": "sequence",
+        "timestampMode": "edge-received",
+        "timestampPath": "",
+        "sequencePath": None,
         "sampleEventType": "process.sample",
-        "staticContext": {"demo_replay": "true", "data_classification": "simulated"},
+        "staticContext": {
+            "demo_replay": "true",
+            "data_classification": "simulated",
+        },
         "contextMappings": [
-            {"contextKey": "correlation_id", "sourcePath": "runId", "required": True},
-            {"contextKey": "run_active", "sourcePath": "runActive", "required": True},
-            {"contextKey": "recipe_step", "sourcePath": "step.code", "required": True},
-            {"contextKey": "recipe_step_name", "sourcePath": "step.name", "required": True},
-            {"contextKey": "product_series", "sourcePath": "productSeries", "required": True},
-            {"contextKey": "product_code", "sourcePath": "productCode", "required": True},
-            {"contextKey": "workpiece_id", "sourcePath": "workpieceId", "required": True},
-            {"contextKey": "machine_id", "sourcePath": "machineId", "required": True},
-            {"contextKey": "mold_id", "sourcePath": "moldId", "required": True},
-            {"contextKey": "material_lot_ref", "sourcePath": "materialLotRef", "required": True},
+            {"contextKey": "run_active", "sourcePath": "D:0:uint16", "required": True},
+            {"contextKey": "source_cycle_no", "sourcePath": "D:2:uint32", "required": False},
+            {"contextKey": "product_code", "sourcePath": "D:30:string:20", "required": True},
+            {"contextKey": "product_series", "sourcePath": "D:40:string:20", "required": True},
+            {"contextKey": "mold_id", "sourcePath": "D:50:string:20", "required": True},
+            {"contextKey": "material_lot_ref", "sourcePath": "D:60:string:20", "required": True},
         ],
         "valueMappings": [
-            mapping("mold.upper_temperature", "signals.mold.upperTemperature"),
-            mapping("mold.lower_temperature", "signals.mold.lowerTemperature"),
-            mapping("molding.pressure", "signals.molding.pressure"),
-            mapping("mold.displacement", "signals.mold.displacement"),
-            mapping("vacuum.pressure", "signals.vacuum.pressure"),
-            mapping("heater.upper_output", "signals.heater.upperOutput"),
+            mapping(item)
+            for item in DATA_ITEMS
         ],
         "recipe": {
             "eventType": "recipe.applied",
-            "idPath": "activeRecipe.id",
-            "versionPath": "activeRecipe.version",
-            "namePath": "activeRecipe.name",
-            "parametersPath": "activeRecipe.parameters",
+            "idPath": "D:10:string:20",
+            "versionPath": "D:5:uint16",
+            "namePath": None,
+            "parametersPath": "D",
             "parameterMappings": [
-                mapping("recipe.upper_temperature_target", "upperTemperatureTarget"),
-                mapping("recipe.lower_temperature_target", "lowerTemperatureTarget"),
-                mapping("recipe.pressure_target", "pressureTarget"),
-                mapping("recipe.dwell_seconds", "dwellSeconds"),
-                mapping("recipe.upper_heat_compensation", "upperHeatCompensation"),
+                mapping(item)
+                for item in RECIPE_PARAMETERS
             ],
         },
         "lifecycle": {
             "mode": "discrete-cycle",
-            "correlationIdContextKey": "correlation_id",
             "activeContextKey": "run_active",
-            "activeValue": "true",
-            "stepContextKey": "recipe_step",
-            "stepNameContextKey": "recipe_step_name",
+            "activeValue": "1",
             "startedEventType": "cycle.started",
             "completedEventType": "cycle.completed",
-            "stepChangedEventType": "recipe.step_changed",
-            "expectedDurationMs": 8000,
+            "stepChangedEventType": "process.stage_changed",
         },
     }
+
+
+def main() -> None:
+    args = parse_args()
+    payload = build_payload(args)
     request = urllib.request.Request(
         f"{args.api.rstrip('/')}/api/v1/acquisition-profiles",
         data=json.dumps(payload).encode("utf-8"),

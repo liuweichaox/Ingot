@@ -17,6 +17,8 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from demo_contract import platform_recipe_values
+
 
 EDGE_ID = "EDGE-DEMO-001"
 MACHINE_ID = "OPTICAL-MOLD-SIM-01"
@@ -74,58 +76,77 @@ def event(
 
 def recipe_parameters(version: int) -> dict[str, object]:
     return {
-        "recipe.upper_temperature_target": 620.0,
-        "recipe.lower_temperature_target": 618.0,
-        "recipe.pressure_target": 1.20,
-        "recipe.dwell_seconds": 120,
-        "recipe.upper_heat_compensation": 0.0 if version == 1 else 5.0,
+        item["code"]: item["value"]
+        for item in platform_recipe_values(version)
     }
 
 
-def process_values(cohort: str, seconds: int) -> dict[str, float]:
+def process_values(cohort: str, seconds: int) -> dict[str, float | int]:
     phase = "preheat" if seconds < 100 else "molding" if seconds < 220 else "cooling"
+    stage_number = 10 if phase == "preheat" else 20 if phase == "molding" else 30
     wave = math.sin(seconds / 17.0)
     if phase == "preheat":
         upper = 440.0 + seconds * 1.72 + 0.8 * wave
         lower = 438.0 + seconds * 1.70 + 0.7 * wave
-        pressure = 0.08 + seconds * 0.001
-        displacement = seconds * 0.002
+        pressure = 80.0 + seconds
+        grating_position = seconds * 0.002
+        servo_position = seconds * 0.085
+        servo_speed = 2.2
         vacuum = -72.0 + 0.7 * wave
-        output = 92.0
+        upper_output = 92.0
+        lower_output = 90.0
     elif phase == "molding":
         upper = 620.0 + 0.7 * wave
         lower = 618.0 + 0.5 * wave
-        pressure = 1.20 + 0.018 * wave
-        displacement = 2.41 + 0.006 * wave
+        pressure = 1200.0 + 18.0 * wave
+        grating_position = 2.41 + 0.006 * wave
+        servo_position = 8.5 + 0.02 * wave
+        servo_speed = 0.35 + 0.02 * wave
         vacuum = -78.0 + 0.5 * wave
-        output = 58.0 + 2.0 * wave
+        upper_output = 58.0 + 2.0 * wave
+        lower_output = 56.0 + 1.6 * wave
         if cohort == "heater_drift":
             # Same version-1 setpoint, but degraded physical response.  This is
             # intentionally a process observation, not an asserted root cause.
             upper = 611.3 + 0.9 * wave
-            output = 96.0 + 1.5 * wave
-            pressure = 1.17 + 0.025 * wave
+            upper_output = 96.0 + 1.5 * wave
+            pressure = 1170.0 + 25.0 * wave
         elif cohort == "verification":
-            upper = 619.4 + 0.55 * wave
-            output = 66.0 + 1.5 * wave
+            upper = 624.4 + 0.55 * wave
+            upper_output = 66.0 + 1.5 * wave
     else:
         cooling_seconds = seconds - 220
         upper = 620.0 - cooling_seconds * 3.55 + 0.7 * wave
         lower = 618.0 - cooling_seconds * 3.50 + 0.6 * wave
-        pressure = max(0.03, 1.18 - cooling_seconds * 0.014)
-        displacement = 2.41 - cooling_seconds * 0.018
+        pressure = max(30.0, 1180.0 - cooling_seconds * 14.0)
+        grating_position = 2.41 - cooling_seconds * 0.018
+        servo_position = 8.5 + cooling_seconds * 0.20625
+        servo_speed = 3.5
         vacuum = -74.0 + 0.8 * wave
-        output = max(0.0, 50.0 - cooling_seconds * 0.6)
+        upper_output = max(0.0, 50.0 - cooling_seconds * 0.6)
+        lower_output = max(0.0, 48.0 - cooling_seconds * 0.58)
         if cohort == "heater_drift":
             upper -= 5.5
-            output = min(100.0, output + 22.0)
+            upper_output = min(100.0, upper_output + 22.0)
+    upper_voltage = 220.0 + 0.8 * wave
+    lower_voltage = 220.0 + 0.6 * wave
+    upper_current = max(0.0, upper_output * 0.28)
+    lower_current = max(0.0, lower_output * 0.27)
     return {
-        "mold.upper_temperature": round(upper, 4),
-        "mold.lower_temperature": round(lower, 4),
-        "molding.pressure": round(pressure, 4),
-        "mold.displacement": round(displacement, 4),
+        "process.stage_number": stage_number,
+        "mold.upper_infrared_temperature": round(upper, 4),
+        "heater.upper_current": round(upper_current, 4),
+        "heater.upper_voltage": round(upper_voltage, 4),
+        "mold.lower_infrared_temperature": round(lower, 4),
+        "heater.lower_current": round(lower_current, 4),
+        "heater.lower_voltage": round(lower_voltage, 4),
+        "molding.pressure_load": round(pressure, 4),
+        "grating.position": round(grating_position, 4),
+        "servo.speed": round(servo_speed, 4),
         "vacuum.pressure": round(vacuum, 4),
-        "heater.upper_output": round(output, 4),
+        "servo.position": round(servo_position, 4),
+        "heater.upper_power": round(upper_voltage * upper_current, 4),
+        "heater.lower_power": round(lower_voltage * lower_current, 4),
     }
 
 
@@ -161,23 +182,26 @@ def build_replay(replay_id: str) -> tuple[list[dict[str, object]], list[dict[str
             events.append(event(
                 f"{cycle_id}:recipe", sequence, "recipe.applied", cycle_start, cycle_id, context,
                 {"recipeId": RECIPE_ID, "recipeVersion": recipe_version,
-                 "recipeName": "LENS-DEMO 基线模压配方" if recipe_version == 1 else "LENS-DEMO 验证配方（上模补偿）",
+                 "recipeName": "LENS-DEMO 基线模压配方" if recipe_version == 1 else "LENS-DEMO 验证配方（上模温度调整）",
                  "resolvedParameters": parameters},
             ))
             sequence += 1
             events.append(event(f"{cycle_id}:start", sequence, "cycle.started", cycle_start, cycle_id,
-                                {**context, "recipe_step": "preheat"}))
+                                {**context, "stage_number": "10", "process_stage_name": "预热"}))
             sequence += 1
             for seconds in range(0, 301, 10):
                 step = "preheat" if seconds < 100 else "molding" if seconds < 220 else "cooling"
+                stage_number = "10" if step == "preheat" else "20" if step == "molding" else "30"
+                stage_name = {"preheat": "预热", "molding": "模压保压", "cooling": "冷却脱模"}[step]
                 events.append(event(
                     f"{cycle_id}:sample:{seconds}", sequence, "process.sample",
                     cycle_start + timedelta(seconds=seconds), cycle_id,
-                    {**context, "recipe_step": step}, {"values": process_values(cohort, seconds)},
+                    {**context, "stage_number": stage_number, "process_stage_name": stage_name},
+                    {"values": process_values(cohort, seconds)},
                 ))
                 sequence += 1
             events.append(event(f"{cycle_id}:completed", sequence, "cycle.completed", cycle_end, cycle_id,
-                                {**context, "recipe_step": "cooling"}))
+                                {**context, "stage_number": "30", "process_stage_name": "冷却脱模"}))
             sequence += 1
             failed = cohort == "heater_drift"
             thickness = 0.026 if failed else (0.004 if cohort == "baseline" else 0.003)

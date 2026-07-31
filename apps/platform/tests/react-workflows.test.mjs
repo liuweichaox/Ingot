@@ -118,6 +118,10 @@ test("cycle comparison submits the selection contract and renders business resul
   assert.match(pages, /可直接实验/);
   assert.match(pages, /诊断边界/);
   assert.match(pages, /title="信号差异"/);
+  assert.match(pages, /label="周期完整"/);
+  assert.match(pages, /同时具有生产开始与结束事件/);
+  assert.match(pages, /key: "lifecycleComplete", label: "周期边界"/);
+  assert.doesNotMatch(pages, /label="阶段完整"|phaseCompleteCycleCount/);
   assert.doesNotMatch(pages, /JSON\.stringify\(result, null, 2\)/);
 });
 
@@ -127,6 +131,9 @@ test("cycle detail presents actual recipe, source curves, phase features, and in
   assert.match(pages, /title="全过程曲线"/);
   assert.match(pages, /processSignalTraces\(chartRun, samplesByRun, signal\.code\)/);
   assert.match(pages, /title="阶段特征"/);
+  assert.match(pages, /阶段号用于过程对齐，不参与周期完整性判定/);
+  assert.match(pages, /cycle\.lifecycleComplete/);
+  assert.doesNotMatch(pages, /cycle\.phaseComplete|key: "isComplete", label: "状态"/);
   assert.match(pages, /keyField="recordId"/);
   assert.match(pages, /\{ key: "outcome", label: "判定"/);
   assert.match(pages, /测量值与规格/);

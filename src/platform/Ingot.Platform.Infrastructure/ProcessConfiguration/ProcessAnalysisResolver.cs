@@ -1,3 +1,6 @@
+using System.Collections;
+using System.Globalization;
+using System.Text.Json;
 using Ingot.Contracts.ProcessConfiguration;
 
 namespace Ingot.Platform.Infrastructure.ProcessConfiguration;
@@ -119,21 +122,15 @@ public sealed class ProcessAnalysisResolver(IProcessConfigurationStore store)
 
     public static string? ResolveStage(
         IReadOnlyDictionary<string, string> context,
+        IReadOnlyDictionary<string, object?> data,
         ProcessDataModel model)
     {
-        var explicitStage = ContextValue(context, "process_phase") ?? ContextValue(context, "process_stage");
-        if (!string.IsNullOrWhiteSpace(explicitStage))
-            return explicitStage;
-
-        var stepKey = string.IsNullOrWhiteSpace(model.Acquisition.StepSourceKey)
-            ? "recipe_step"
-            : model.Acquisition.StepSourceKey;
-        var sourceStep = ContextValue(context, stepKey);
-        if (string.IsNullOrWhiteSpace(sourceStep))
+        var stageNumberItem = model.Acquisition.DataItems
+            .SingleOrDefault(static item => item.Category == "stage");
+        if (stageNumberItem is null ||
+            !TryReadInteger(data, stageNumberItem.Code, out var stageNumber))
             return null;
-        return model.Stages.FirstOrDefault(stage =>
-                   string.Equals(stage.SourceStep, sourceStep, StringComparison.OrdinalIgnoreCase))?.Code
-               ?? sourceStep;
+        return stageNumber.ToString(CultureInfo.InvariantCulture);
     }
 
     public static string? ContextValue(IReadOnlyDictionary<string, string> context, string key)
@@ -145,5 +142,42 @@ public sealed class ProcessAnalysisResolver(IProcessConfigurationStore store)
             return value;
         var dotted = key.Replace('_', '.');
         return context.TryGetValue(dotted, out value) ? value : null;
+    }
+
+    private static bool TryReadInteger(
+        IReadOnlyDictionary<string, object?> data,
+        string key,
+        out long value)
+    {
+        value = default;
+        if (!data.TryGetValue("values", out var container))
+            return false;
+        object? raw = null;
+        if (container is JsonElement { ValueKind: JsonValueKind.Object } element &&
+            element.TryGetProperty(key, out var property))
+        {
+            raw = property;
+        }
+        else if (container is IReadOnlyDictionary<string, object?> readOnly &&
+                 readOnly.TryGetValue(key, out var readOnlyValue))
+        {
+            raw = readOnlyValue;
+        }
+        else if (container is IDictionary dictionary && dictionary.Contains(key))
+        {
+            raw = dictionary[key];
+        }
+        if (raw is JsonElement json)
+            return json.ValueKind == JsonValueKind.Number && json.TryGetInt64(out value);
+        try
+        {
+            value = Convert.ToInt64(raw, CultureInfo.InvariantCulture);
+            return raw is not null;
+        }
+        catch (Exception exception) when (
+            exception is FormatException or InvalidCastException or OverflowException)
+        {
+            return false;
+        }
     }
 }

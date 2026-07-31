@@ -1,6 +1,6 @@
 [project]
 name = "ingot-optimizer"
-version = "0.3.0"
+version = "0.4.0"
 description = "Ingot 工艺研发优化大脑:序贯实验优化(高斯过程 + 贝叶斯优化 + 物理先验)"
 readme = "README.md"
 requires-python = ">=3.11"

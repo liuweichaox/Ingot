@@ -38,7 +38,7 @@ public sealed class ModbusTcpAcquisitionRunner(
                 {
                     var readStarted = System.Diagnostics.Stopwatch.GetTimestamp();
                     status.RecordAttempt(configurationKey, DateTimeOffset.UtcNow);
-                    var selectors = BuildSelectors(deployment);
+                    var selectors = BuildSelectors(deployment, connection.AddressBase);
                     var raw = await ReadSnapshotAsync(master, connection.UnitId, selectors)
                         .ConfigureAwait(false);
                     var occurredAt = DateTimeOffset.UtcNow;
@@ -76,29 +76,45 @@ public sealed class ModbusTcpAcquisitionRunner(
         }
     }
 
-    private static IReadOnlyDictionary<string, AcquisitionValueMapping> BuildSelectors(
-        AcquisitionDeployment deployment)
+    internal static IReadOnlyDictionary<string, AcquisitionValueMapping> BuildSelectors(
+        AcquisitionDeployment deployment,
+        string addressBase = "zero-based")
     {
         var result = new Dictionary<string, AcquisitionValueMapping>(StringComparer.Ordinal);
         foreach (var mapping in deployment.Profile.ValueMappings)
-            result[mapping.SourcePath] = mapping;
+            result[mapping.SourcePath] = NormalizeAddress(mapping, addressBase);
         foreach (var mapping in deployment.Profile.ContextMappings)
-            result[mapping.SourcePath] = ParseSelector(mapping.SourcePath);
+            result[mapping.SourcePath] = NormalizeAddress(ParseSelector(mapping.SourcePath), addressBase);
         if (deployment.Profile.TimestampMode == "source" &&
             !string.IsNullOrWhiteSpace(deployment.Profile.TimestampPath))
         {
-            result[deployment.Profile.TimestampPath] = ParseSelector(deployment.Profile.TimestampPath);
+            result[deployment.Profile.TimestampPath] = NormalizeAddress(
+                ParseSelector(deployment.Profile.TimestampPath), addressBase);
         }
         if (deployment.Profile.Recipe is { } recipe)
         {
-            result[recipe.IdPath] = ParseSelector(recipe.IdPath);
-            result[recipe.VersionPath] = ParseSelector(recipe.VersionPath);
+            result[recipe.IdPath] = NormalizeAddress(ParseSelector(recipe.IdPath), addressBase);
+            result[recipe.VersionPath] = NormalizeAddress(ParseSelector(recipe.VersionPath), addressBase);
             if (!string.IsNullOrWhiteSpace(recipe.NamePath))
-                result[recipe.NamePath] = ParseSelector(recipe.NamePath);
+                result[recipe.NamePath] = NormalizeAddress(ParseSelector(recipe.NamePath), addressBase);
             foreach (var mapping in recipe.ParameterMappings)
-                result[mapping.SourcePath] = mapping;
+                result[mapping.SourcePath] = NormalizeAddress(mapping, addressBase);
         }
         return result;
+    }
+
+    private static AcquisitionValueMapping NormalizeAddress(
+        AcquisitionValueMapping mapping,
+        string addressBase)
+    {
+        if (addressBase == "zero-based") return mapping;
+        if (addressBase != "one-based")
+            throw new InvalidOperationException($"Modbus 地址起点无效：{addressBase}。");
+        var address = mapping.ModbusAddress
+            ?? throw new InvalidOperationException($"Modbus 选择器缺少地址：{mapping.SourcePath}。");
+        if (address == 0)
+            throw new InvalidOperationException("使用 1 基地址时，寄存器地址必须大于 0。");
+        return mapping with { ModbusAddress = checked((ushort)(address - 1)) };
     }
 
     private static AcquisitionValueMapping ParseSelector(string selector)
@@ -138,7 +154,7 @@ public sealed class ModbusTcpAcquisitionRunner(
         };
     }
 
-    private static async Task<Dictionary<string, object?>> ReadSnapshotAsync(
+    internal static async Task<Dictionary<string, object?>> ReadSnapshotAsync(
         IModbusMaster master,
         byte unitId,
         IReadOnlyDictionary<string, AcquisitionValueMapping> selectors)

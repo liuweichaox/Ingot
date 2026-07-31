@@ -78,9 +78,11 @@ StyleCopReport.xml
 # Frontend
 node_modules/
 apps/platform/dist/
+apps/platform/.vite/
 
 # Local runtime data
 /.codex-temp/
+/.codex-tmp/
 Data/*.db
 Data/*.db-*
 deploy/runtime/

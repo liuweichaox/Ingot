@@ -43,7 +43,7 @@ public sealed record CycleSignalFeature
     public string? PhaseName { get; init; }
     /// <summary>同一阶段在一个周期内可重复出现，序号从 1 开始。</summary>
     public int? PhaseOrder { get; init; }
-    /// <summary>cycle、event_tag、recipe_step 或 unknown。</summary>
+    /// <summary>cycle、stage_number 或 unknown。</summary>
     public string PhaseSource { get; init; } = "cycle";
     public DateTimeOffset? StartedAt { get; init; }
     public DateTimeOffset? EndedAt { get; init; }

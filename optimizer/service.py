@@ -14,6 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from ingot_optimizer import (
     Campaign,
     BotorchOptimizer,
+    DerivedFeature,
     Objective,
     OutcomeConstraint,
     ParameterConstraint,
@@ -22,10 +23,11 @@ from ingot_optimizer import (
 )
 from ingot_optimizer.botorch_engine import MODEL_VERSION
 from ingot_optimizer.diagnosis import FeatureSpec, diagnose
+from ingot_optimizer.feature_transforms import expand_inputs
 import numpy as np
 
 
-app = FastAPI(title="Ingot Process Optimizer", version="0.4.0")
+app = FastAPI(title="Ingot Process Optimizer", version="0.5.0")
 
 
 class StrictModel(BaseModel):
@@ -67,9 +69,35 @@ class OutcomeConstraintIn(StrictModel):
     minimum_probability: float = Field(default=0.95, gt=0, le=1)
 
 
+class DerivedFeatureIn(StrictModel):
+    name: str = Field(min_length=1, max_length=120)
+    operator: Literal[
+        "identity",
+        "absolute",
+        "sum",
+        "mean",
+        "product",
+        "difference",
+        "absolute_difference",
+        "ratio",
+        "minimum",
+        "maximum",
+        "standard_deviation",
+    ]
+    inputs: list[str] = Field(min_length=1, max_length=100)
+    normalization_offset: float = 0.0
+    normalization_scale: float = Field(default=1.0, gt=0)
+    epsilon: float = Field(default=1e-9, gt=0)
+
+
 class CampaignIn(StrictModel):
     name: str = Field(min_length=1, max_length=240)
-    process_profile: str = Field(default="generic", min_length=1, max_length=120)
+    feature_set_id: str = Field(default="generic", min_length=1, max_length=120)
+    feature_set_version: int = Field(default=1, ge=1)
+    derived_features: list[DerivedFeatureIn] = Field(
+        default_factory=list,
+        max_length=100,
+    )
     decision_intent: Literal["reach-specification", "validate-hypothesis"] = (
         "reach-specification"
     )
@@ -131,7 +159,11 @@ def _campaign_from_input(spec: CampaignIn) -> Campaign:
         constraints=[
             ParameterConstraint(**value.model_dump()) for value in spec.constraints
         ],
-        context={**spec.context, "process_profile": spec.process_profile},
+        context={
+            **spec.context,
+            "feature_set_id": spec.feature_set_id,
+            "feature_set_version": str(spec.feature_set_version),
+        },
         outcome_constraints=[
             OutcomeConstraint(**value.model_dump())
             for value in spec.outcome_constraints
@@ -167,6 +199,24 @@ def ready() -> dict[str, str]:
 def create_suggestions(request: SuggestionRequest) -> dict:
     try:
         campaign = _campaign_from_input(request.campaign)
+        derived_features = [
+            DerivedFeature(
+                name=value.name,
+                operator=value.operator,
+                inputs=tuple(value.inputs),
+                normalization_offset=value.normalization_offset,
+                normalization_scale=value.normalization_scale,
+                epsilon=value.epsilon,
+            )
+            for value in request.campaign.derived_features
+        ]
+        expand_inputs(
+            np.full((1, campaign.dim), 0.5),
+            [value.name for value in campaign.variables],
+            [value.low for value in campaign.variables],
+            [value.high for value in campaign.variables],
+            derived_features,
+        )
         if request.campaign.decision_intent == "validate-hypothesis":
             if len(request.observations) < 3:
                 raise ValueError(
@@ -186,7 +236,7 @@ def create_suggestions(request: SuggestionRequest) -> dict:
         optimizer = (
             BotorchOptimizer(
                 campaign,
-                process_profile=request.campaign.process_profile,
+                derived_features=derived_features,
                 seed=request.seed,
             )
             if len(request.observations) >= 3
@@ -219,6 +269,9 @@ def create_suggestions(request: SuggestionRequest) -> dict:
         "model_version": model_version,
         "observation_count": len(request.observations),
         "suggestions": [suggestion.to_dict() for suggestion in suggestions],
+        "feature_set_id": request.campaign.feature_set_id,
+        "feature_set_version": request.campaign.feature_set_version,
+        "derived_feature_count": len(request.campaign.derived_features),
         "state_persisted": False,
     }
 

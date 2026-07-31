@@ -10,6 +10,7 @@ This directory implements the surrogate and sequential-recommendation kernel des
 - Outcome-constrained batch `qLogNEHVI` and `qLogNEI`
 - Two decision intents: `reach-specification` for specification seeking, and `validate-hypothesis` for safely maximizing identifiable information in hypothesis variables
 - A two-stage set-point-to-trajectory-to-quality surrogate
+- Safe derived features declared by versioned project configuration, with no hidden behavior selected by industry, equipment, or variable names
 - Safe-baseline local cold start, pending experiments, and idempotent batches
 - Historical pool replay that can select only real, unconsumed recipes
 - Stateless `POST /v1/suggestions` HTTP contract
@@ -26,7 +27,7 @@ project venv or install project dependencies with pip:
 cd optimizer
 uv sync --extra service --extra viz --group dev --locked
 uv run --locked pytest
-uv run --locked python demo.py
+uv run --locked python ../tools/optical-molding-demo/optimizer_demo.py
 uv run --locked uvicorn service:app --port 8110
 ```
 
@@ -49,12 +50,20 @@ Local development uses `8110` by default to avoid the common `8100` port used by
 `POST /v1/suggestions` accepts:
 
 - a campaign with variables, weighted objectives, parameter and outcome constraints;
+- an optional versioned `derived_features` DAG using only bounded numeric operators;
 - the complete immutable observation snapshot;
 - measured process features, outcome-constraint measurements, and pending recipes;
 - optional candidate recipes;
 - top-k, seed, candidate-count, and posterior-sample settings.
 
 It returns recommended parameters, objective means and 95% intervals, predicted distance to specification, feasibility probability, acquisition value, model version, and rationale.
+
+Derived operators run on engineering-unit controls and are normalized with the
+declared offset and scale. Inputs may reference campaign controls or an earlier
+derived feature. Arbitrary Python expressions, unknown inputs, forward
+references, and legacy hidden `process_profile` switches are rejected. Industry
+examples live under `tools/` and are not part of the production optimizer
+package.
 
 For `validate-hypothesis`, the campaign must also provide `hypothesis_variables`. The platform sends this intent only after an engineer defines the outcome, expected direction, and minimum meaningful effect; the service never treats an association as a causal conclusion.
 

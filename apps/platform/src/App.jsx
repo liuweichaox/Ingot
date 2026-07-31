@@ -2,6 +2,7 @@ import { Dialog, DialogBackdrop, DialogPanel, Menu, MenuButton, MenuItem, MenuIt
 import {
   BoltIcon,
   BeakerIcon,
+  ChevronRightIcon,
   CircleStackIcon,
   Cog6ToothIcon,
   MagnifyingGlassIcon,
@@ -18,36 +19,37 @@ import { cx, ToastHost } from "./ui/components";
 
 const sections = [
   {
-    id: "workbench", label: "运营工作台", icon: BoltIcon, path: "/workbench", items: [
+    id: "workbench", label: "生产运行", icon: BoltIcon, path: "/workbench", items: [
       ["/workbench", "运行概览"], ["/cycles", "运行记录"],
       ["/inspections", "质量任务"], ["/events", "生产事件"],
-      ["/production/changeover", "生产上下文"], ["/production/tooling-installations", "工装装卸"],
+      ["/production/changeover", "生产切换"], ["/production/tooling-installations", "工装装卸"],
     ],
   },
   {
-    id: "research", label: "调查与优化", icon: BeakerIcon, path: "/research-projects", items: [
-      ["/research-projects", "优化项目"], ["/comparisons", "周期对比与验证"],
-      ["/quality-analysis", "质量洞察"], ["/chat", "AI 研发助手"],
+    id: "research", label: "工艺研发", icon: BeakerIcon, path: "/research-projects", items: [
+      ["/research-projects", "工艺优化"], ["/comparisons", "周期对比"],
+      ["/quality-analysis", "质量追因"], ["/chat", "AI助手"],
     ],
   },
   {
-    id: "context", label: "对象与模型", icon: CircleStackIcon, path: "/explorer", items: [
-      ["/explorer", "工业对象"], ["/data-quality", "数据健康"],
-      ["/configuration/process-analysis-plans", "分析语义"], ["/configuration/process-data-models", "工艺数据模型"],
-      ["/configuration/recipe-versions", "配方版本"], ["/configuration/inspection-definitions", "检测定义"],
-      ["/configuration/quality-plans", "质量方案"],
+    id: "context", label: "数据资产", icon: CircleStackIcon, path: "/explorer", items: [
+      ["/explorer", "工业对象"], ["/data-quality", "数据质量"],
+      ["/configuration/process-analysis-plans", "分析模型"],
+      ["/configuration/recipe-versions", "配方版本"],
     ],
   },
   {
-    id: "implementation", label: "接入与配置", icon: WrenchScrewdriverIcon, path: "/edges", items: [
-      ["/edges", "现场节点"], ["/configuration/acquisition-profiles", "数据连接"],
+    id: "implementation", label: "业务配置", icon: WrenchScrewdriverIcon, path: "/edges", items: [
+      ["/edges", "现场节点"], ["/configuration/process-data-models", "工艺模型"],
+      ["/configuration/acquisition-profiles", "设备接入"],
+      ["/configuration/inspection-definitions", "检测定义"], ["/configuration/quality-plans", "质量方案"],
       ["/configuration/component-types", "组件类型"], ["/configuration/components", "组件台账"],
       ["/configuration/tooling-types", "工装类型"], ["/configuration/tooling-assemblies", "工装组合"],
     ],
   },
   {
-    id: "administration", label: "平台管理", icon: Cog6ToothIcon, path: "/platform-metrics", items: [
-      ["/platform-metrics", "平台运行状态"], ["/users", "用户与权限"], ["/subscriptions", "事件订阅"], ["/logs", "运行日志"],
+    id: "administration", label: "系统管理", icon: Cog6ToothIcon, path: "/platform-metrics", items: [
+      ["/platform-metrics", "平台状态"], ["/users", "用户权限"], ["/subscriptions", "事件订阅"], ["/logs", "运行日志"],
     ],
   },
 ];
@@ -63,13 +65,13 @@ const pageDetails = {
   "/production/changeover": ["生产上下文", "让设备、产品、配方和已装工装对接下来的周期生效"],
   "/production/tooling-installations": ["工装装卸", "记录工装组合版本在设备上的装入与卸下区间"],
   "/inspections": ["质量任务", "处理视觉检查、人工质检与原图复核"],
-  "/quality-analysis": ["质量洞察", "按产品、配方、运行对象和分析范围查看质量结果"],
+  "/quality-analysis": ["质量追因", "按产品、配方和运行上下文定位质量偏差并追溯证据"],
   "/comparisons": ["周期对比与验证", "比较同类生产周期、运行段或时间窗口，生成待验证的候选原因"],
   "/data-quality": ["数据可信度", "检查运行对象的数据范围、采样连续性与周期完整性"],
-  "/configuration/process-analysis-plans": ["分析语义", "配置分析范围、对齐方式、质量分组和数据项"],
-  "/configuration/process-data-models": ["工艺数据模型", "定义采集数据项、配方参数结构和工艺阶段"],
+  "/configuration/process-analysis-plans": ["分析模型", "版本化定义分析范围、对齐方式、质量分组和数据项"],
+  "/configuration/process-data-models": ["工艺模型", "定义工艺变量、阶段号和配方参数，供设备点位统一映射"],
   "/configuration/recipe-versions": ["配方版本", "维护引用数据模型的完整配方有效值"],
-  "/configuration/acquisition-profiles": ["数据连接", "选择现场节点、设备和采集方式，让数据持续进入平台"],
+  "/configuration/acquisition-profiles": ["设备接入", "选择采集节点和通信驱动，将设备点位映射到工艺变量"],
   "/configuration/inspection-definitions": ["检测定义", "定义要检测的特性、录入类型和判定规则"],
   "/configuration/quality-plans": ["质量方案", "配置产品适用的检测项目与复核规则"],
   "/configuration/component-types": ["组件类型", "配置组件台账的分类来源"],
@@ -282,9 +284,13 @@ export default function App() {
                 <RectangleGroupIcon className="size-5" />
               </button>
             )}
-            <div>
-              <p className="font-semibold text-slate-950">{page[0]}</p>
-              <p className="text-xs text-slate-500">{page[1]}</p>
+            <div className="min-w-0">
+              <nav aria-label="面包屑" className="flex items-center gap-1.5 text-xs text-slate-500">
+                <Link to={section.path} className="shrink-0 hover:text-blue-700">{section.label}</Link>
+                <ChevronRightIcon className="size-3.5 shrink-0" aria-hidden="true" />
+                <span className="truncate font-medium text-slate-700">{page[0]}</span>
+              </nav>
+              <p className="mt-1 truncate text-xs text-slate-500">{page[1]}</p>
             </div>
           </div>
           <main className="mx-auto w-full max-w-[1600px] p-4 sm:p-6">

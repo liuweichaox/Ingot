@@ -62,12 +62,12 @@ def load_experiment_runs(api: str, project_id: str, experiment_id: str) -> dict[
             (
                 item
                 for item in run.get("factors", [])
-                if item.get("variableCode") == "recipe.upper_heat_compensation"
+                if item.get("variableCode") == "recipe.upper_temperature_setpoint"
             ),
             None,
         )
         if factor is None:
-            raise ValueError(f"run {run.get('runKey')} has no compensation factor")
+            raise ValueError(f"run {run.get('runKey')} has no upper-temperature setpoint")
         runs[run["runKey"]] = float(factor["value"])
     return runs
 
@@ -100,9 +100,10 @@ def main() -> None:
             continue
         run_id = cycle["correlationId"]
         if experiment_runs:
-            compensation = experiment_runs[run_id]
-            center_deviation = round(max(0.0035, 0.026 - 0.0044 * compensation), 6)
-            surface_form_error = round(max(0.065, 0.23 - 0.031 * compensation), 6)
+            setpoint = experiment_runs[run_id]
+            adjustment = max(0.0, min(6.0, setpoint - 620.0))
+            center_deviation = round(max(0.0035, 0.026 - 0.0044 * adjustment), 6)
+            surface_form_error = round(max(0.065, 0.23 - 0.031 * adjustment), 6)
             failed = center_deviation > 0.015 or surface_form_error > 0.15
         else:
             try:

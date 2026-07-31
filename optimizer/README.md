@@ -12,6 +12,7 @@
 - 带结果可行性约束的批量 `qLogNEHVI` / `qLogNEI`；
 - 两种决策意图：`reach-specification` 用于逼近规格，`validate-hypothesis` 用于安全地最大化假设关键变量的可辨识信息；
 - “设定参数→实际轨迹→质量结果”两级 GP；
+- 由项目版本化配置声明的安全派生特征，不根据行业、设备或变量名称触发隐藏逻辑；
 - 安全基线局部冷启动、pending experiments 和幂等批次；
 - 只能从真实历史配方池中选择的离线回放；
 - 无状态 `POST /v1/suggestions` HTTP 契约；
@@ -27,7 +28,7 @@ Python 环境统一由 `uv 0.11.32` 管理，不使用手工创建的 venv 或 p
 cd optimizer
 uv sync --extra service --extra viz --group dev --locked
 uv run --locked pytest
-uv run --locked python demo.py
+uv run --locked python ../tools/optical-molding-demo/optimizer_demo.py
 uv run --locked uvicorn service:app --port 8110
 ```
 
@@ -40,7 +41,7 @@ uv sync --python 3.12 --extra service --extra viz --group dev --locked
 
 依赖版本以 `uv.lock` 为准。修改 `pyproject.toml` 后运行 `uv lock` 并同时提交锁文件；CI 和容器均拒绝未同步的锁文件。
 
-`demo.py` 只验证优化机制，不代表真实工艺效果。运行结果可能随数值库版本变化，不在文档中固化成功率或节省炉数。
+`tools/optical-molding-demo/optimizer_demo.py` 只验证优化机制，不代表真实工艺效果。运行结果可能随数值库版本变化，不在文档中固化成功率或节省试验次数。
 
 本地开发默认使用 `8110`，避免与设备采集示例常用的 `8100` 冲突。Docker Compose 内部的优化服务仍使用 `8100`。
 
@@ -54,20 +55,31 @@ Content-Type: application/json
 ```json
 {
   "campaign": {
-    "name": "LENS-A",
-    "process_profile": "generic",
+    "name": "PROCESS-A",
+    "feature_set_id": "project-a-features",
+    "feature_set_version": 1,
+    "derived_features": [
+      {
+        "name": "control_balance",
+        "operator": "absolute_difference",
+        "inputs": ["control_a", "control_b"],
+        "normalization_offset": 0,
+        "normalization_scale": 20
+      }
+    ],
     "decision_intent": "reach-specification",
     "variables": [
-      {"name": "soak_temp", "low": 320, "high": 360, "unit": "C"}
+      {"name": "control_a", "low": 100, "high": 140, "unit": "unit"},
+      {"name": "control_b", "low": 100, "high": 140, "unit": "unit"}
     ],
     "objectives": [
-      {"name": "form_error", "kind": "le", "threshold": 0.5, "weight": 2, "unit": "um"}
+      {"name": "deviation", "kind": "le", "threshold": 0.5, "weight": 2, "unit": "unit"}
     ],
     "constraints": [
       {
-        "variable": "soak_temp",
+        "variable": "control_a",
         "operator": "<=",
-        "limit": 355,
+        "limit": 135,
         "safety_critical": true
       }
     ],
@@ -83,19 +95,21 @@ Content-Type: application/json
   },
   "observations": [
     {
-      "params": {"soak_temp": 340},
-      "outcomes": {"form_error": 0.8},
+      "params": {"control_a": 120, "control_b": 115},
+      "outcomes": {"deviation": 0.8},
       "constraint_outcomes": {"crack_rate": 0.005},
-      "process_features": {"mold_temp.cycle.overshoot": 2.1}
+      "process_features": {"measured_response.overshoot": 2.1}
     }
   ],
-  "pending_points": [{"soak_temp": 342}],
+  "pending_points": [{"control_a": 122, "control_b": 116}],
   "top_k": 3,
   "seed": 7
 }
 ```
 
 响应包含推荐参数、每项目标的均值与 95% 区间、预计距规格距离、可行概率、采集值、模型版本和推荐理由。平台把整批结果直接创建为普通实验计划。
+
+`derived_features` 只能使用固定的数值运算符，并按声明顺序引用控制变量或此前的派生特征。运算在工程单位中进行，再由 `normalization_offset` 和 `normalization_scale` 归一化。服务拒绝任意 Python 表达式、未知输入、前向引用和旧式隐藏 `process_profile`。行业示例配置属于 `tools/`，不会进入生产优化器包。
 
 当 `decision_intent` 为 `validate-hypothesis` 时，还必须提供 `hypothesis_variables`。平台只会在假设已经定义目标、预期方向和最小有效效应后发起该请求；服务不会把相关性当作因果结论。
 
@@ -123,7 +137,7 @@ history = [
 print(replay_history_pool(campaign, history))
 ```
 
-历史池回放只回答“在已经做过的配方里，模型能否更早排到达标点”。它不为未做过的配方伪造结果，也不能单独证明上线后一定节省多少炉。重复配方应先按既定统计方法聚合。
+历史池回放只回答“在已经做过的配方里，模型能否更早排到达标点”。它不为未做过的配方伪造结果，也不能单独证明上线后一定节省多少试验次数。重复配方应先按既定统计方法聚合。
 
 ## 产品接线
 

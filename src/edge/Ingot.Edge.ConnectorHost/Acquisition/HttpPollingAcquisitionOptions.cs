@@ -8,10 +8,14 @@ public sealed class HttpPollingAcquisitionOptions
     ///     本地采集任务持续向平台写入无法用于追因的数据。仅离线调试或明确隔离的模拟环境可开启。
     /// </summary>
     public bool AllowLocalFallbackWhenPlatformAvailable { get; init; }
+    /// <summary>
+    ///     平台最后一次成功下发配置的本地缓存。相对路径以 ConnectorHost 程序目录为基准。
+    ///     平台暂时不可用或 Edge 重启时优先恢复此版本，不会静默切换到另一套本地采集定义。
+    /// </summary>
+    public string DeploymentCachePath { get; init; } = "Data/acquisition-deployments.json";
     public string DeviceBaseUrl { get; init; } = string.Empty;
     public string SnapshotPath { get; init; } = "/api/v1/snapshot";
     public int PollIntervalMs { get; init; } = 1000;
-    public int SamplePeriodMs { get; init; } = 1000;
     public string Source { get; init; } = "connector/http-polling";
     public string SubjectType { get; init; } = "equipment";
     public string SubjectId { get; init; } = string.Empty;
@@ -32,6 +36,7 @@ public sealed class ValueFieldMapping
     public required string SourcePath { get; init; }
     public required string Code { get; init; }
     public string DataType { get; init; } = "double";
+    public string Category { get; init; } = "process";
     public bool Required { get; init; } = true;
     public double Scale { get; init; } = 1;
     public double Offset { get; init; }
@@ -57,13 +62,10 @@ public sealed class RecipeFieldMapping
 public sealed class LifecycleFieldMapping
 {
     public string Mode { get; init; } = "discrete-cycle";
-    public string CorrelationIdContextKey { get; init; } = "correlation_id";
+    public string? CorrelationIdContextKey { get; init; }
     public string? ActiveContextKey { get; init; }
     public string ActiveValue { get; init; } = "true";
-    public string? StepContextKey { get; init; } = "recipe_step";
-    public string? StepNameContextKey { get; init; } = "recipe_step_name";
     public string StartedEventType { get; init; } = "cycle.started";
     public string CompletedEventType { get; init; } = "cycle.completed";
-    public string StepChangedEventType { get; init; } = "recipe.step_changed";
-    public int? ExpectedDurationMs { get; init; }
+    public string StepChangedEventType { get; init; } = "process.stage_changed";
 }

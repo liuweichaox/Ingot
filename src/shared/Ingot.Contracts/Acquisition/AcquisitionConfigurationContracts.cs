@@ -72,6 +72,10 @@ public sealed record MqttConnection
     public string? CaCertificatePath { get; init; }
     public string? ClientCertificatePath { get; init; }
     public string? ClientCertificatePasswordSecretRef { get; init; }
+    /// <summary>
+    /// MQTT 3.1.1 的 Clean Session；在 MQTT 5.0 中等价作为 Clean Start 使用。
+    /// 字段名为兼容已保存配置保留，产品界面按所选协议版本显示正确术语。
+    /// </summary>
     public bool CleanSession { get; init; } = true;
     public int KeepAliveSeconds { get; init; } = 30;
     public IReadOnlyList<MqttTopicSubscription> Topics { get; init; } = [];
@@ -103,12 +107,17 @@ public sealed record ModbusTcpConnection
     public string Host { get; init; } = string.Empty;
     public int Port { get; init; } = 502;
     public byte UnitId { get; init; } = 1;
+    /// <summary>
+    /// 工程地址的输入方式。zero-based 表示用户填写的就是线缆地址；one-based 表示按设备手册
+    /// 从 1 开始编号，采集器发送请求前自动减 1。
+    /// </summary>
+    public string AddressBase { get; init; } = "zero-based";
     /// <summary>一次寄存器读取完成后，开始下一次读取前等待的时间；不是固定采样周期。</summary>
     public int PollIntervalMs { get; init; } = 1000;
 }
 
 /// <summary>
-///     三菱 MC 协议 1E 帧（二进制）连接配置，用于 FX3U-ENET-ADP 等 A 兼容设备。
+///     三菱 MC 协议 A 兼容 1E 帧连接配置，用于 FX3U-ENET(-L/-ADP) 等设备。
 ///     选择器格式：软元件:地址:类型（如 D:100:int16）。凭据不入库（本协议通常无需认证）。
 /// </summary>
 public sealed record McA1EConnection
@@ -118,6 +127,10 @@ public sealed record McA1EConnection
     public int Port { get; init; } = 5551;
     /// <summary>一次读取完成后到下一次读取的等待时间；不是固定采样周期。</summary>
     public int PollIntervalMs { get; init; } = 1000;
+    /// <summary>PLC 侧开放设置中的通信数据码：binary 或 ascii，必须与模块设置一致。</summary>
+    public string DataCode { get; init; } = "binary";
+    /// <summary>1E 帧目标 PC 号；直连 FX3U/FX3UC 通常为 FFH。</summary>
+    public byte PcNumber { get; init; } = 0xFF;
     /// <summary>1E 帧监视定时器，单位 250ms（默认 0x0010=16→约 4s）。</summary>
     public ushort MonitoringTimer { get; init; } = 0x0010;
     /// <summary>软元件号/代码字段顺序。FX3U-ENET-ADP A-compatible 1E 固定为 A（号在前）。</summary>
@@ -157,24 +170,22 @@ public sealed record AcquisitionRecipeMapping
 }
 
 /// <summary>
-/// 可选的离散运行边界映射。连续设备不配置此项；周期设备由采集值中的关联号变化生成运行边界事件。
+/// 可选的离散运行边界映射。连续设备不配置此项；周期设备通常由运行状态变化生成边界，
+/// CorrelationId 由 Edge 在周期开始时生成。CorrelationIdContextKey 仅用于兼容确实提供外部周期号的旧设备。
 /// </summary>
 public sealed record AcquisitionLifecycleMapping
 {
     public string Mode { get; init; } = "discrete-cycle";
-    public string CorrelationIdContextKey { get; init; } = "correlation_id";
+    public string? CorrelationIdContextKey { get; init; }
     /// <summary>
     /// 可选的运行激活上下文键。配置后，值不等于 ActiveValue 的快照只用于结束当前运行，
     /// 不会生成新的过程采样或虚假占位周期。
     /// </summary>
     public string? ActiveContextKey { get; init; }
     public string ActiveValue { get; init; } = "true";
-    public string? StepContextKey { get; init; } = "recipe_step";
-    public string? StepNameContextKey { get; init; } = "recipe_step_name";
     public string StartedEventType { get; init; } = "cycle.started";
     public string CompletedEventType { get; init; } = "cycle.completed";
-    public string StepChangedEventType { get; init; } = "recipe.step_changed";
-    public int? ExpectedDurationMs { get; init; }
+    public string StepChangedEventType { get; init; } = "process.stage_changed";
 }
 
 /// <summary>平台下发给采集执行器的不可变配置及其数据语义。</summary>
@@ -182,4 +193,44 @@ public sealed record AcquisitionDeployment
 {
     public required AcquisitionProfile Profile { get; init; }
     public required ProcessDataModel DataModel { get; init; }
+}
+
+/// <summary>平台要求指定 Edge 对一份尚未发布的采集配置执行一次真实设备探查。</summary>
+public sealed record AcquisitionProbeRequest
+{
+    public required AcquisitionDeployment Deployment { get; init; }
+}
+
+public sealed record AcquisitionProbeResult
+{
+    public bool Success { get; init; }
+    public bool MappingsValidated { get; init; }
+    public required string Protocol { get; init; }
+    public required string Message { get; init; }
+    public DateTimeOffset TestedAt { get; init; }
+    public IReadOnlyList<AcquisitionProbePoint> Points { get; init; } = [];
+    public IReadOnlyList<AcquisitionMappingPreview> Mappings { get; init; } = [];
+}
+
+/// <summary>设备暴露的一个可选择点位。Path 是写入映射的稳定设备路径或寄存器选择器。</summary>
+public sealed record AcquisitionProbePoint
+{
+    public required string Path { get; init; }
+    public required string Name { get; init; }
+    public required string Kind { get; init; }
+    public required string DataType { get; init; }
+    public string? RawValue { get; init; }
+}
+
+/// <summary>一次设备原始值到平台语义项的换算预览。</summary>
+public sealed record AcquisitionMappingPreview
+{
+    public required string DataItemCode { get; init; }
+    public required string SourcePath { get; init; }
+    public bool Found { get; init; }
+    public string? RawValue { get; init; }
+    public string? ConvertedValue { get; init; }
+    public string? DataType { get; init; }
+    public string? Unit { get; init; }
+    public string? Error { get; init; }
 }

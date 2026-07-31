@@ -162,8 +162,7 @@ public sealed class CycleComparisonService(
         var acceptance = new CycleComparisonAcceptance
         {
             CycleCount = rows.Length,
-            CompleteCycleCount = rows.Count(static row => row.CompletedAt.HasValue),
-            PhaseCompleteCycleCount = rows.Count(static row => row.PhaseComplete),
+            CompleteCycleCount = rows.Count(static row => row.LifecycleComplete),
             QualityLinkedCycleCount = rows.Count(static row => row.InspectionOutcomes.Count > 0),
             VisualReviewCompletedCycleCount = rows.Count(static row => !string.IsNullOrWhiteSpace(row.VisualReviewDecision)),
             AvailableCycleCount = rows.Count(static row =>
@@ -572,24 +571,20 @@ public sealed class CycleComparisonService(
             .FirstOrDefault();
         var visualReview = visualRecord is null ? null : latestReviews.GetValueOrDefault(visualRecord.RecordId);
         var context = ResolveContext(ordered);
-        var observedPhases = wholeCycle.Phases
-            .Where(static phase => phase.Code != "unknown")
-            .Select(static phase => phase.Code)
-            .ToHashSet(StringComparer.Ordinal);
-        var requiredPhases = analysis?.DataModel.Stages
-            .Where(static stage => stage.Required)
-            .Select(static stage => stage.Code)
-            .Distinct(StringComparer.Ordinal)
-            .ToArray() ?? [];
+        var lifecycleComplete = started is not null && completed is not null;
         return new CycleComparisonRow
         {
             CorrelationId = correlationId,
             MachineId = first.Event.Subject.Id,
             Context = context,
+            HasStarted = started is not null,
+            HasCompleted = completed is not null,
+            LifecycleComplete = lifecycleComplete,
             StartedAt = started?.Event.OccurredAt ?? first.Event.OccurredAt,
             CompletedAt = completed?.Event.OccurredAt,
-            DurationMs = completed is null ? null :
-                (completed.Event.OccurredAt - (started?.Event.OccurredAt ?? first.Event.OccurredAt)).TotalMilliseconds,
+            DurationMs = lifecycleComplete
+                ? (completed!.Event.OccurredAt - started!.Event.OccurredAt).TotalMilliseconds
+                : null,
             ProductSeries = ProcessAnalysisResolver.ContextValue(context, "product_series") ?? "unknown",
             ProductCode = ProcessAnalysisResolver.ContextValue(context, "product_code"),
             RecipeId = ProcessAnalysisResolver.ContextValue(context, "recipe_id"),
@@ -616,8 +611,6 @@ public sealed class CycleComparisonService(
                 _ => 0d
             },
             PhaseCount = wholeCycle.Phases.Count(static phase => phase.Code != "unknown"),
-            RequiredPhaseCount = requiredPhases.Length,
-            PhaseComplete = requiredPhases.Length > 0 && requiredPhases.All(observedPhases.Contains),
             InspectionOutcomes = inspectionRecords.Select(static record => record.Outcome)
                 .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray(),
             VisualReviewDecision = visualReview?.Decision,

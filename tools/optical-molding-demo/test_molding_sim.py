@@ -1,6 +1,6 @@
 import pytest
 
-from ingot_optimizer.molding_sim import REGISTERS, SimulatedFx3u
+from molding_sim import REGISTERS, SimulatedFx3u
 
 
 def recipe():

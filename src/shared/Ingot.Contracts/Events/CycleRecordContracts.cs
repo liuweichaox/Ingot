@@ -6,6 +6,9 @@ public sealed record CycleRecordSummary
     public required string CorrelationId { get; init; }
     public required string MachineId { get; init; }
     public required string Status { get; init; }
+    public bool HasStarted { get; init; }
+    public bool HasCompleted { get; init; }
+    public bool LifecycleComplete { get; init; }
     public required DateTimeOffset StartedAt { get; init; }
     public DateTimeOffset? CompletedAt { get; init; }
     public double? DurationMs { get; init; }
@@ -28,8 +31,6 @@ public sealed record CycleRecordSummary
     public double? SampleCompleteness { get; init; }
     public ProcessDataQualitySummary ProcessDataQuality { get; init; } = new();
     public int PhaseCount { get; init; }
-    public int RequiredPhaseCount { get; init; }
-    public bool? PhaseComplete { get; init; }
     public string QualityStatus { get; init; } = "NOT_APPLICABLE";
     public string? InspectionPlanId { get; init; }
     public int? InspectionPlanVersion { get; init; }
@@ -53,10 +54,8 @@ public sealed record CyclePhaseSummary
     public required string Name { get; init; }
     /// <summary>同一阶段在一个周期内可重复出现，序号从 1 开始。</summary>
     public int Order { get; init; }
-    /// <summary>event_tag、recipe_step 或 unknown。</summary>
+    /// <summary>stage_number 或 unknown。</summary>
     public string Source { get; init; } = "unknown";
-    public bool Required { get; init; }
-    public bool IsComplete { get; init; }
     public int SampleCount { get; init; }
     public DateTimeOffset? StartedAt { get; init; }
     public DateTimeOffset? EndedAt { get; init; }
@@ -74,8 +73,8 @@ public sealed record CycleRecordOverview
     public int CycleCount { get; init; }
     public int CompletedCount { get; init; }
     public int ActiveCount { get; init; }
+    public int IncompleteCount { get; init; }
     public int SampleCompleteCount { get; init; }
-    public int PhaseCompleteCount { get; init; }
     public int QualityCompleteCount { get; init; }
     public int IssueCycleCount { get; init; }
 }

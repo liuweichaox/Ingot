@@ -18,13 +18,13 @@ Diagnosis and optimization are not two modules but two ends of one evidence chai
 
 The current Web UI is organized into five product domains:
 
-1. **Operations workbench** — the highest-value actions across runs, quality, data trust, and R&D projects;
-2. **Investigation and optimization** — cycle diagnosis produces candidate hypotheses, while R&D projects turn hypotheses or specifications into the next safe experiments;
-3. **Objects and models** — equipment, production context, recipes, phases, inspections, and analysis models give raw signals business meaning;
-4. **Connection and configuration** — field nodes, data connections, process data models, and quality configuration are maintained by implementers;
+1. **Operations and quality** — current runs, quality tasks, production events, and context help frontline roles act on what is happening now;
+2. **Diagnosis and optimization** — quality attribution and cycle comparison produce candidate causes, while optimization projects turn evidence into the next safe experiments;
+3. **Objects and data** — industrial objects connect recipes, process data models, analysis models, and data health into consistent business semantics;
+4. **Engineering configuration** — implementers maintain field nodes, data connections, inspection and quality definitions, components, and tooling;
 5. **Platform administration** — health, logs, users, subscriptions, and integration operations.
 
-Mechanisms, knowledge, datasets, and models are reusable context for optimization projects, not a separate daily workbench. A PLC, instrument, database, or file is only a connector; the platform contract remains centered on runs, process, quality, and experiments.
+Product domains organize task entry points without breaking the evidence chain; a selected object, project, or cycle should persist as cross-page context. Mechanisms, knowledge, datasets, and models are reusable context for optimization projects, not a separate daily workbench. A PLC, instrument, database, or file is only a connector; the platform contract remains centered on runs, process, quality, and experiments.
 
 ## System map
 
@@ -98,6 +98,14 @@ Website and Docs are public Next.js static sites. They are not part of the facto
 
 ## Root-cause and optimization loop
 
+The complete user-facing path has six stages:
+
+```text
+define process → connect equipment → collect production data → close the data loop → diagnose → process optimization
+```
+
+The first four stages turn field facts into trustworthy evidence. The final two form testable conclusions and return validated settings to production. The flow below describes the internal loop after diagnosis enters experimental validation.
+
 Root-cause work is not a separate dashboard. It is the entry point for the next falsifiable experiment:
 
 ```text
@@ -119,7 +127,15 @@ cycle/batch comparison → candidate association → testable hypothesis → nex
 - A separate validation experiment must run the candidate at least three times across two execution blocks. Only when actual settings, quality objectives, and safety constraints all pass may a different engineer approve laboratory validation. A continuous process window additionally requires boundary and interaction experiments; repeats at one point cannot validate an entire range.
 - Research assets remain reusable project context for mechanisms, knowledge, and data quality, rather than a separate daily-workbench module.
 
-The default scenario profile is `generic`; the optical-lens molding grey-box profile is `optical-lens-molding-v1`. PLC models belong to acquisition adapters and must not appear in process-physics profiles or change this business contract.
+By default, the optimizer uses only the controls declared by the project.
+Optional derived features are a versioned `OptimizationFeatures` configuration
+on the research project. They may use only bounded numeric operators, declared
+controls, and earlier derived features. The optimizer core must not select
+hidden behavior from an industry, equipment model, or variable name. The
+optical-lens molding configuration exists only as the
+`tools/optical-molding-demo/optimizer-feature-set.json` demo asset. PLC models
+belong to acquisition adapters and must not enter process-physics features or
+change this business contract.
 
 ## Observation contract
 

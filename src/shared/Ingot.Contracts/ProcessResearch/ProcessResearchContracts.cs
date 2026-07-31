@@ -208,6 +208,46 @@ public sealed record ResearchOutcomeConstraint
     public string? DataSource { get; init; }
 }
 
+public static class ResearchDerivedFeatureOperators
+{
+    public const string Identity = "identity";
+    public const string Absolute = "absolute";
+    public const string Sum = "sum";
+    public const string Mean = "mean";
+    public const string Product = "product";
+    public const string Difference = "difference";
+    public const string AbsoluteDifference = "absolute_difference";
+    public const string Ratio = "ratio";
+    public const string Minimum = "minimum";
+    public const string Maximum = "maximum";
+    public const string StandardDeviation = "standard_deviation";
+
+    public static bool IsValid(string? value)
+        => value is Identity or Absolute or Sum or Mean or Product or Difference
+            or AbsoluteDifference or Ratio or Minimum or Maximum or StandardDeviation;
+}
+
+/// <summary>
+///     安全的声明式候选特征。输入只能引用项目可控变量或排在此前的派生特征；
+///     优化服务不执行任意表达式，也不根据变量名称猜测工艺含义。
+/// </summary>
+public sealed record ResearchDerivedFeature
+{
+    public required string Name { get; init; }
+    public required string Operator { get; init; }
+    public IReadOnlyList<string> Inputs { get; init; } = [];
+    public double NormalizationOffset { get; init; }
+    public double NormalizationScale { get; init; } = 1;
+    public double Epsilon { get; init; } = 1e-9;
+}
+
+public sealed record ResearchOptimizationFeatureSet
+{
+    public string FeatureSetId { get; init; } = "generic";
+    public int Version { get; init; } = 1;
+    public IReadOnlyList<ResearchDerivedFeature> DerivedFeatures { get; init; } = [];
+}
+
 public sealed record ResearchProject
 {
     public Guid ProjectId { get; init; }
@@ -222,6 +262,7 @@ public sealed record ResearchProject
     public IReadOnlyList<ResearchVariable> Variables { get; init; } = [];
     public IReadOnlyList<ResearchConstraint> Constraints { get; init; } = [];
     public IReadOnlyList<ResearchOutcomeConstraint> OutcomeConstraints { get; init; } = [];
+    public ResearchOptimizationFeatureSet OptimizationFeatures { get; init; } = new();
     public IReadOnlyDictionary<string, string> Context { get; init; } =
         new Dictionary<string, string>();
     public string OwnerUserId { get; init; } = "";
@@ -354,7 +395,9 @@ public sealed record ResearchOptimizationMetadata
     public int AutoAssembledObservationCount { get; init; }
     public int PendingExperimentCount { get; init; }
     public int ProcessFeatureCount { get; init; }
-    public required string ProcessProfile { get; init; }
+    public string FeatureSetId { get; init; } = "generic";
+    public int FeatureSetVersion { get; init; } = 1;
+    public int DerivedFeatureCount { get; init; }
     public string Intent { get; init; } = ResearchOptimizationIntents.ReachSpecification;
     public Guid? HypothesisId { get; init; }
     public int DistinctConditionCount { get; init; }
@@ -524,7 +567,6 @@ public sealed record ResearchOptimizationRequest
 {
     public int BatchSize { get; init; } = 3;
     public int Seed { get; init; }
-    public string ProcessProfile { get; init; } = "generic";
     public string Intent { get; init; } = ResearchOptimizationIntents.ReachSpecification;
     public Guid? HypothesisId { get; init; }
     public bool AutoAssembleObservations { get; init; } = true;

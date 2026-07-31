@@ -12,12 +12,13 @@ namespace Ingot.Edge.ConnectorHost.Acquisition;
 /// <summary>
 ///     执行平台发布给当前边缘节点的采集配置。配置版本不可变，发布新版本时平滑替换对应工作器。
 /// </summary>
-public sealed class HttpPollingAcquisitionHostedService(
+internal sealed class HttpPollingAcquisitionHostedService(
     IHttpClientFactory httpClientFactory,
     IEventSink sink,
     IEdgeIdentityProvider identity,
     IOptions<HttpPollingAcquisitionOptions> configuredOptions,
     IOptions<EdgeReportingOptions> edgeOptions,
+    IAcquisitionDeploymentCache deploymentCache,
     IEnumerable<IAcquisitionProtocolRunner> protocolRunners,
     AcquisitionStatus status,
     ILogger<HttpPollingAcquisitionHostedService> logger) : BackgroundService
@@ -37,35 +38,84 @@ public sealed class HttpPollingAcquisitionHostedService(
         var canUseLocalFallback = _localOptions.Enabled &&
                                   (!platformAvailable || _localOptions.AllowLocalFallbackWhenPlatformAvailable);
 
-        if (!platformAvailable && !_localOptions.Enabled)
-        {
-            logger.LogInformation("当前边缘节点没有启用采集，也未配置平台采集配置地址");
-            return;
-        }
-
         try
         {
             while (!stoppingToken.IsCancellationRequested)
             {
-                var receivedPlatformConfiguration = false;
+                var platformConfigurationLoaded = false;
+                var cachedConfigurationLoaded = false;
                 if (platformAvailable)
                 {
                     try
                     {
                         var deployments = await LoadDeploymentsAsync(edgeId, stoppingToken).ConfigureAwait(false);
-                        receivedPlatformConfiguration = deployments.Count > 0;
                         SynchronizeWorkers(deployments, edgeId, stoppingToken);
+                        platformConfigurationLoaded = true;
+                        status.SetEnabled(true);
+                        status.SetConfigurationError(
+                            deployments.Count == 0
+                                ? "平台没有为当前 Edge 发布采集配置，采集已停止。"
+                                : null);
+                        try
+                        {
+                            await deploymentCache.SaveAsync(edgeId, deployments, stoppingToken)
+                                .ConfigureAwait(false);
+                        }
+                        catch (Exception exception) when (exception is not OperationCanceledException)
+                        {
+                            logger.LogWarning(exception, "保存平台采集配置缓存失败，当前已加载的任务继续运行");
+                        }
                     }
                     catch (Exception exception) when (exception is not OperationCanceledException)
                     {
                         logger.LogWarning(exception, "读取平台采集配置失败，继续运行上一次成功加载的版本");
+                        status.SetConfigurationError("读取平台采集配置失败，正在使用最后一次成功版本。");
                     }
                 }
 
-                if (!receivedPlatformConfiguration && _workers.Count == 0 && canUseLocalFallback)
+                if (!platformConfigurationLoaded && _workers.Count == 0)
+                {
+                    var cached = await deploymentCache.LoadAsync(edgeId, stoppingToken)
+                        .ConfigureAwait(false);
+                    if (cached is not null)
+                    {
+                        SynchronizeWorkers(cached, edgeId, stoppingToken);
+                        cachedConfigurationLoaded = true;
+                        status.SetEnabled(true);
+                        status.SetConfigurationError(
+                            platformAvailable
+                                ? "平台暂时不可用，正在使用本地缓存的最后一次成功配置。"
+                                : null);
+                        logger.LogInformation(
+                            "已从本地缓存恢复采集配置：EdgeId={EdgeId}, DeploymentCount={DeploymentCount}",
+                            edgeId,
+                            cached.Count);
+                    }
+                }
+
+                if (!platformConfigurationLoaded &&
+                    !cachedConfigurationLoaded &&
+                    _workers.Count == 0 &&
+                    canUseLocalFallback)
+                {
                     StartWorker("local", _localOptions, edgeId, stoppingToken);
-                else if (receivedPlatformConfiguration || !canUseLocalFallback)
+                    status.SetEnabled(true);
+                    status.SetConfigurationError(null);
+                    logger.LogWarning(
+                        "当前 Edge 使用未版本化的本地采集配置；该模式仅适用于明确隔离的调试环境");
+                }
+                else if (platformConfigurationLoaded || cachedConfigurationLoaded || !canUseLocalFallback)
                     StopWorker("local");
+
+                if (_workers.Count == 0 &&
+                    !platformConfigurationLoaded &&
+                    !cachedConfigurationLoaded &&
+                    !canUseLocalFallback)
+                {
+                    status.SetEnabled(true);
+                    status.SetConfigurationError(
+                        "没有平台已发布配置或本地缓存，采集已停止；请为当前 Edge 发布数据连接配置。");
+                }
 
                 await Task.Delay(TimeSpan.FromSeconds(15), stoppingToken).ConfigureAwait(false);
             }

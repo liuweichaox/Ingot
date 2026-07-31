@@ -15,7 +15,7 @@ public sealed class TimeSeriesSampleProjectorTests
             new Dictionary<string, object?>
             {
                 ["temperature"] = 618.5,
-                ["recipe_step"] = 20L,
+                ["process.stage_number"] = 20L,
                 ["heater_enabled"] = true,
                 ["mode"] = "soak"
             },
@@ -30,11 +30,11 @@ public sealed class TimeSeriesSampleProjectorTests
         var temperature = Assert.Single(samples, sample => sample.SignalCode == "temperature");
         Assert.Equal(618.5, temperature.NumericValue);
         Assert.Equal("°C", temperature.Unit);
-        Assert.Equal("soak", temperature.PhaseCode);
+        Assert.Equal("20", temperature.PhaseCode);
         Assert.Equal(SignalQualityCodes.Uncertain, temperature.QualityCode);
         Assert.Equal("series-a", temperature.RunContext["product_series"]);
         Assert.Equal("edge-01/device/furnace-01/temperature", temperature.CollectionPointId);
-        Assert.Equal(20, Assert.Single(samples, sample => sample.SignalCode == "recipe_step").IntegerValue);
+        Assert.Equal(20, Assert.Single(samples, sample => sample.SignalCode == "process.stage_number").IntegerValue);
         Assert.True(Assert.Single(samples, sample => sample.SignalCode == "heater_enabled").BooleanValue);
         Assert.Equal("soak", Assert.Single(samples, sample => sample.SignalCode == "mode").TextValue);
     }
@@ -45,7 +45,7 @@ public sealed class TimeSeriesSampleProjectorTests
         var evt = CreateEvent(new Dictionary<string, object?>
         {
             ["temperature"] = null,
-            ["recipe_step"] = 30L,
+            ["process.stage_number"] = 30L,
             ["heater_enabled"] = false,
             ["mode"] = "press"
         });
@@ -90,7 +90,7 @@ public sealed class TimeSeriesSampleProjectorTests
                 ["data_model_id"] = "heat-treatment",
                 ["data_model_version"] = "2",
                 ["product_series"] = "series-a",
-                ["recipe_step"] = "20"
+                ["stage_number"] = "20"
             },
             Data = new Dictionary<string, object?>
             {
@@ -110,7 +110,6 @@ public sealed class TimeSeriesSampleProjectorTests
                 Status = ConfigurationStatuses.Published,
                 Acquisition = new AcquisitionModel
                 {
-                    StepSourceKey = "recipe_step",
                     DataItems =
                     [
                         new ProcessDataItemDefinition
@@ -122,10 +121,10 @@ public sealed class TimeSeriesSampleProjectorTests
                         },
                         new ProcessDataItemDefinition
                         {
-                            Code = "recipe_step",
-                            SourceField = "步骤",
+                            Code = "process.stage_number",
+                            SourceField = "阶段号",
                             DataType = "integer",
-                            Category = "state"
+                            Category = "stage"
                         },
                         new ProcessDataItemDefinition
                         {
@@ -142,16 +141,7 @@ public sealed class TimeSeriesSampleProjectorTests
                             Category = "state"
                         }
                     ]
-                },
-                Stages =
-                [
-                    new ProcessStageDefinition
-                    {
-                        SourceStep = "20",
-                        Code = "soak",
-                        Name = "保温"
-                    }
-                ]
+                }
             },
             Plan = new ProcessAnalysisPlan
             {

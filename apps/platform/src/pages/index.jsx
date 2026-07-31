@@ -92,11 +92,11 @@ const inspectionInputTypeLabels = {
 };
 
 const acquisitionProtocolLabels = {
-  "http-polling": "HTTP 轮询",
+  "http-polling": "HTTP 接口",
   mqtt: "MQTT",
   "opc-ua": "OPC UA",
   "modbus-tcp": "Modbus TCP",
-  "melsec-a1e": "三菱 MELSEC 1E",
+  "melsec-a1e": "三菱 MC 1E",
 };
 
 const objectTypeLabels = {
@@ -115,6 +115,7 @@ const eventTypeLabels = {
   "cycle.started": "周期开始",
   "cycle.completed": "周期完成",
   "recipe/step_changed": "工艺步骤切换",
+  "process/stage_changed": "工艺阶段切换",
   "quality.inspection.completed": "质检完成",
   "alarm.raised": "设备报警",
   "alarm.cleared": "报警解除",
@@ -511,8 +512,22 @@ export function CycleDetailPage() {
       ) : (
         <>
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <Metric label="运行状态" value={<StatusBadge value={cycle.status} />} hint={`${formatTime(cycle.startedAt)} 开始`} />
-            <Metric label="运行时长" value={formatDuration(cycle.durationMs)} hint={cycle.completedAt ? `结束于 ${formatTime(cycle.completedAt)}` : "仍在运行"} />
+            <Metric
+              label="运行状态"
+              value={<StatusBadge value={cycle.status} />}
+              hint={cycle.hasStarted ? `${formatTime(cycle.startedAt)} 开始` : "缺少生产开始事件"}
+            />
+            <Metric
+              label="周期边界"
+              value={<StatusBadge value={cycle.lifecycleComplete ? "complete" : "incomplete"} />}
+              hint={cycle.lifecycleComplete
+                ? `结束于 ${formatTime(cycle.completedAt)}`
+                : cycle.hasStarted
+                  ? "尚未收到生产结束事件"
+                  : cycle.hasCompleted
+                    ? "已收到结束事件，但缺少开始事件"
+                    : "未收到生产开始和结束事件"}
+            />
             <Metric label="过程数据" value={completion} hint={`${formatInteger(dataQuality?.sampleCount ?? cycle.sampleCount)} 个有效采样时刻`} />
             <Metric label="质量状态" value={<StatusBadge value={cycle.qualityStatus} />} hint={inspections.length ? `${inspections.length} 条检测记录` : "暂无检测记录"} />
           </div>
@@ -560,14 +575,16 @@ export function CycleDetailPage() {
             </Card>
           </div>
 
-          <Card title="工艺阶段" description={`${cycle.phaseCount ?? cycle.phases?.length ?? 0} 个阶段，${cycle.phaseComplete ? "阶段记录完整" : "存在缺失阶段"}`}>
+          <Card
+            title="工艺阶段"
+            description={`${cycle.phaseCount ?? cycle.phases?.length ?? 0} 个已识别阶段；阶段号用于过程对齐，不参与周期完整性判定。`}
+          >
             <DataTable
               rows={cycle.phases || []}
               keyField="code"
               columns={[
                 { key: "order", label: "顺序" },
                 { key: "name", label: "阶段" },
-                { key: "isComplete", label: "状态", render: value => <StatusBadge value={value ? "complete" : "pending"} /> },
                 { key: "sampleCount", label: "有效采样", render: formatInteger },
                 { key: "startedAt", label: "开始", render: formatTime },
                 { key: "endedAt", label: "结束", render: formatTime },
@@ -638,7 +655,7 @@ export function CycleDetailPage() {
                   { key: "unit", label: "单位" },
                 ]}
               />
-            ) : <EmptyState title="尚无阶段特征" description="阶段完整并完成分析物化后自动生成。" />}
+            ) : <EmptyState title="尚无阶段特征" description="采集到阶段号并完成分析物化后自动生成。" />}
           </Card>
 
           <div className="grid gap-5 xl:grid-cols-[1.1fr_.9fr]">
@@ -1176,7 +1193,7 @@ export function ObjectExplorerPage() {
                         {[
                           [`/cycles?machineId=${encodeURIComponent(selected.subjectId)}`, "运行记录", "查看该对象的生产周期与上下文"],
                           [`/events?subjectId=${encodeURIComponent(selected.subjectId)}`, "事件时间线", "追溯该对象上报的事件与状态变化"],
-                          [`/quality-analysis?subjectType=${encodeURIComponent(selected.subjectType)}&subjectId=${encodeURIComponent(selected.subjectId)}`, "质量分析", "查看与该对象关联的检测结果"],
+                          [`/quality-analysis?subjectType=${encodeURIComponent(selected.subjectType)}&subjectId=${encodeURIComponent(selected.subjectId)}`, "质量追因", "查看与该对象关联的检测结果并追溯运行证据"],
                           [`/data-quality?subjectType=${encodeURIComponent(selected.subjectType)}&subjectId=${encodeURIComponent(selected.subjectId)}`, "数据健康", "确认样本范围、连续性和更新时间"],
                         ].map(([to, label, description]) => (
                           <Link key={label} to={to} className="rounded-xl border border-slate-200 p-4 transition hover:border-blue-300 hover:bg-blue-50/50">
@@ -2283,7 +2300,7 @@ export function QualityAnalysisPage() {
   }
 
   return (
-    <Page title="质量分析" description="按产品和生产上下文查看质量结果、合格率与原始附件覆盖。">
+    <Page title="质量追因" description="按产品、配方和生产上下文识别质量偏差，并追溯到运行证据。">
       <Card title="分析范围">
         <form className="grid gap-3 md:grid-cols-[1fr_1fr_1fr_auto]" onSubmit={search}>
           <Field label="产品系列"><Input value={filters.productSeries} onChange={event => setFilters({ ...filters, productSeries: event.target.value })} /></Field>
@@ -2562,7 +2579,7 @@ export function CycleComparisonPage() {
             <Metric label="产品系列" value={result.productSeries || "—"} />
             <Metric label="参与对比" value={result.acceptance?.cycleCount ?? comparedCycles.length} hint="个生产周期" />
             <Metric label="数据可用" value={result.acceptance?.availableCycleCount ?? 0} hint={`异常 ${result.acceptance?.degradedCycleCount ?? 0} 个`} />
-            <Metric label="阶段完整" value={result.acceptance?.phaseCompleteCycleCount ?? 0} hint={`共 ${result.acceptance?.completeCycleCount ?? 0} 个完整周期`} />
+            <Metric label="周期完整" value={result.acceptance?.completeCycleCount ?? 0} hint="同时具有生产开始与结束事件" />
             <Metric label="分析证据" value={evidenceLevelLabels[result.evidenceLevel] || result.evidenceLevel || "—"} />
           </div>
           <Card title="周期概况">
@@ -2576,7 +2593,7 @@ export function CycleComparisonPage() {
                 { key: "completedAt", label: "结束时间", render: formatTime },
                 { key: "durationMs", label: "时长（秒）", render: value => formatDecimal(Number(value) / 1000) },
                 { key: "sampleCount", label: "样本数", render: formatInteger },
-                { key: "phaseComplete", label: "阶段完整", render: value => value ? <Badge tone="success">完整</Badge> : <Badge tone="warning">不完整</Badge> },
+                { key: "lifecycleComplete", label: "周期边界", render: value => value ? <Badge tone="success">完整</Badge> : <Badge tone="warning">缺少开始或结束</Badge> },
                 { key: "processDataQuality", label: "数据状态", render: value => <StatusBadge value={value?.status} /> },
               ]}
             />
@@ -2656,7 +2673,7 @@ export function CycleComparisonPage() {
             ) : <EmptyState title="暂无可比信号" description="所选周期还没有可用于阶段对比的信号特征。" />}
           </Card>
         </>
-      ) : <EmptyState title="尚未执行周期对比" description="从下拉列表选择基准运行和同类对比运行后开始；系统会保留数据可用性和阶段完整性证据。" />}
+      ) : <EmptyState title="尚未执行周期对比" description="从下拉列表选择基准运行和同类对比运行后开始；系统会保留数据可用性和生产开始/结束边界证据。" />}
     </Page>
   );
 }
@@ -2688,10 +2705,10 @@ export function DataQualityPage() {
 const registryPages = {
   processModels: {
     kind: "processModel",
-    title: "工艺数据模型", description: "版本化管理数据项、参数和工艺阶段。", endpoint: "/api/v1/process-data-models", key: "modelId",
+    title: "工艺模型", description: "定义工艺变量、阶段号和配方参数结构，不包含 PLC 地址和采集频率。", endpoint: "/api/v1/process-data-models", key: "modelId",
     columns: [["modelId", "模型"], ["version", "版本"], ["name", "名称"], ["status", "状态"], ["updatedAt", "更新时间"]],
-    createLabel: "创建工艺数据模型",
-    template: { modelId: "", version: 1, name: "", description: "", status: "draft", acquisition: { samplePeriodMs: 1000, stepSourceKey: null, dataItems: [] }, recipeParameters: [], stages: [], updatedAt: "" },
+    createLabel: "创建工艺模型",
+    template: { modelId: "", version: 1, name: "", description: "", status: "draft", acquisition: { dataItems: [] }, recipeParameters: [], updatedAt: "" },
     deleteUrl: value => `/api/v1/process-data-models/${encodeURIComponent(value.modelId)}/${value.version}`,
   },
   recipes: {
@@ -2704,9 +2721,9 @@ const registryPages = {
   },
   plans: {
     kind: "analysisPlan",
-    title: "分析方案", description: "配置分析范围、阶段对齐和质量分组。", endpoint: "/api/v1/process-analysis-plans", key: "planId",
-    columns: [["planId", "方案"], ["version", "版本"], ["name", "名称"], ["status", "状态"], ["updatedAt", "更新时间"]],
-    createLabel: "创建分析方案",
+    title: "分析模型", description: "版本化定义分析范围、阶段对齐、质量分组和数据项。", endpoint: "/api/v1/process-analysis-plans", key: "planId",
+    columns: [["planId", "模型"], ["version", "版本"], ["name", "名称"], ["status", "状态"], ["updatedAt", "更新时间"]],
+    createLabel: "创建分析模型",
     template: { planId: "", version: 1, name: "", description: "", status: "draft", dataModelId: "", dataModelVersion: 1, analysisScope: "production-cycle", alignmentMode: "stage-relative", cohortDimension: "", comparisonKeys: ["product_series"], contextSelector: {}, signals: [], updatedAt: "" },
     deleteUrl: value => `/api/v1/process-analysis-plans/${encodeURIComponent(value.planId)}/${value.version}`,
   },
@@ -2729,8 +2746,8 @@ const registryPages = {
   },
   acquisition: {
     kind: "acquisitionProfile",
-    title: "数据源配置", description: "将现场设备或系统数据映射为带工艺语义的过程、配方和周期事件。", endpoint: "/api/v1/acquisition-profiles", key: "profileId",
-    columns: [["subjectId", "数据源对象"], ["edgeId", "现场节点"], ["name", "数据源配置"], ["protocol", "接入协议"], ["status", "状态"]],
+    title: "设备接入", description: "选择通信驱动，连接现场设备，并把点位映射到工艺变量。", endpoint: "/api/v1/acquisition-profiles", key: "profileId",
+    columns: [["subjectId", "设备"], ["edgeId", "采集节点"], ["name", "配置名称"], ["protocol", "通信驱动"], ["status", "状态"]],
     render: { protocol: value => acquisitionProtocolLabels[value] || value },
     createLabel: "配置数据源",
     template: { profileId: "", version: 1, name: "", status: "draft", protocol: "http-polling", edgeId: "", dataModelId: "", dataModelVersion: 1, source: "", subjectType: "equipment", subjectId: "", valueMappings: [] },
@@ -2745,6 +2762,7 @@ function RegistryPage({ definition }) {
   const [mode, setMode] = useState("create");
   const [inspectionForm, setInspectionForm] = useState(() => inspectionDefinitionForm());
   const [businessForm, setBusinessForm] = useState(() => createRegistryBusinessForm(definition.kind));
+  const [acquisitionProbeValid, setAcquisitionProbeValid] = useState(false);
   const [editorError, setEditorError] = useState("");
   const [saving, setSaving] = useState(false);
   const isInspectionDefinition = definition.kind === "inspectionDefinition";
@@ -2761,6 +2779,7 @@ function RegistryPage({ definition }) {
       setBusinessForm(createRegistryBusinessForm(definition.kind));
     }
     setEditorError("");
+    setAcquisitionProbeValid(false);
     setOpen(true);
   }
   function openMaintain(row) {
@@ -2771,6 +2790,7 @@ function RegistryPage({ definition }) {
       setBusinessForm(createRegistryBusinessForm(definition.kind, row));
     }
     setEditorError("");
+    setAcquisitionProbeValid(false);
     setOpen(true);
   }
 
@@ -2782,6 +2802,7 @@ function RegistryPage({ definition }) {
       setBusinessForm(createRegistryBusinessForm(definition.kind, row, Number(row.version || 0) + 1));
     }
     setEditorError("");
+    setAcquisitionProbeValid(false);
     setOpen(true);
   }
 
@@ -2866,7 +2887,7 @@ function RegistryPage({ definition }) {
           <div className="grid gap-4 md:grid-cols-4">
             {[
               ["1", "现场节点在线", "确认设备所在节点能够正常上报心跳。", "/edges", "查看节点"],
-              ["2", "选择数据模型", "数据模型决定要采集哪些工艺量。", "/configuration/process-data-models", "查看模型"],
+              ["2", "选择工艺模型", "工艺模型决定平台需要哪些变量，不包含设备地址。", "/configuration/process-data-models", "查看模型"],
               ["3", "配置并发布", "选择设备连接方式并映射实际数据项。", null, `${rows.filter(row => row.status === "published").length} 个已发布`],
               ["4", "确认数据到达", "在工业对象中确认设备、样本和最后活动时间。", "/explorer", "查看工业对象"],
             ].map(([number, title, text, path, action]) => (
@@ -2930,7 +2951,7 @@ function RegistryPage({ definition }) {
           : "编辑完整版本内容。保存前会由平台执行结构、引用与状态校验。"}
         footer={editorReadOnly
           ? <Button onClick={() => setOpen(false)}>关闭</Button>
-          : <><Button onClick={() => setOpen(false)}>取消</Button><Button variant="primary" onClick={save} disabled={saving || Boolean(editorValidation)}>{saving ? "保存中" : "保存"}</Button></>}
+          : <><Button onClick={() => setOpen(false)}>取消</Button><Button variant="primary" onClick={save} disabled={saving || Boolean(editorValidation) || (definition.kind === "acquisitionProfile" && businessForm.status === "published" && !acquisitionProbeValid)}>{saving ? "保存中" : definition.kind === "acquisitionProfile" && businessForm.status === "published" && !acquisitionProbeValid ? "请先验证再发布" : "保存"}</Button></>}
         size="xl"
       >
         {editorError && <Alert tone="danger">{editorError}</Alert>}
@@ -2950,6 +2971,7 @@ function RegistryPage({ definition }) {
             readOnly={editorReadOnly}
             validation={businessValidation}
             lockIdentity={mode !== "create"}
+            onAcquisitionProbeStateChange={setAcquisitionProbeValid}
           />
         )}
       </Drawer>

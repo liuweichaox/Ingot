@@ -20,21 +20,18 @@ public sealed record ProcessDataModel
     public string Status { get; init; } = ConfigurationStatuses.Draft;
     public AcquisitionModel Acquisition { get; init; } = new();
     public IReadOnlyList<RecipeParameterDefinition> RecipeParameters { get; init; } = [];
-    public IReadOnlyList<ProcessStageDefinition> Stages { get; init; } = [];
     public DateTimeOffset UpdatedAt { get; init; }
 }
 
 public sealed record AcquisitionModel
 {
-    /// <summary>旧配置兼容字段；运行时采集节奏以采集任务的协议配置为准。</summary>
-    public int SamplePeriodMs { get; init; } = 1000;
-    public string? StepSourceKey { get; init; }
     public IReadOnlyList<ProcessDataItemDefinition> DataItems { get; init; } = [];
 }
 
 public sealed record ProcessDataItemDefinition
 {
     public required string Code { get; init; }
+    /// <summary>面向用户的业务名称。保留 SourceField 属性名以兼容历史配置；它不表示设备点位。</summary>
     public required string SourceField { get; init; }
     public string DataType { get; init; } = "double";
     public string? Unit { get; init; }
@@ -45,19 +42,11 @@ public sealed record ProcessDataItemDefinition
 public sealed record RecipeParameterDefinition
 {
     public required string Code { get; init; }
+    /// <summary>面向用户的业务名称。保留 SourceField 属性名以兼容历史配置；它不表示设备点位。</summary>
     public required string SourceField { get; init; }
     public string DataType { get; init; } = "double";
     public string? Unit { get; init; }
     public bool Nullable { get; init; } = true;
-}
-
-public sealed record ProcessStageDefinition
-{
-    public required string SourceStep { get; init; }
-    public required string Code { get; init; }
-    public required string Name { get; init; }
-    public int ExpectedDurationSeconds { get; init; }
-    public bool Required { get; init; } = true;
 }
 
 public sealed record RecipeVersion

@@ -1219,6 +1219,10 @@ public sealed partial class ProcessResearchWorkflow(IProcessResearchStore store)
             variables.Length)
             throw new ProcessResearchRuleException("工艺变量代码不能重复。");
         var knownVariables = variables.Select(static item => item.Code).ToHashSet(StringComparer.Ordinal);
+        var optimizationFeatures = NormalizeOptimizationFeatures(
+            value.OptimizationFeatures,
+            variables.Where(static item => item.Role == ResearchVariableRoles.Control)
+                .Select(static item => item.Code));
         var constraints = value.Constraints.Select(item =>
         {
             var variableCode = NormalizeCode(item.VariableCode, "约束变量");
@@ -1279,6 +1283,7 @@ public sealed partial class ProcessResearchWorkflow(IProcessResearchStore store)
             Variables = variables,
             Constraints = constraints,
             OutcomeConstraints = outcomeConstraints,
+            OptimizationFeatures = optimizationFeatures,
             OwnerUserId = NormalizeUser(value.OwnerUserId),
             MemberUserIds = value.MemberUserIds
                 .Append(value.OwnerUserId)
@@ -1293,6 +1298,75 @@ public sealed partial class ProcessResearchWorkflow(IProcessResearchStore store)
                     static pair => pair.Key.Trim().ToLowerInvariant(),
                     static pair => pair.Value.Trim(),
                     StringComparer.Ordinal)
+        };
+    }
+
+    private static ResearchOptimizationFeatureSet NormalizeOptimizationFeatures(
+        ResearchOptimizationFeatureSet? value,
+        IEnumerable<string> controlVariableCodes)
+    {
+        value ??= new ResearchOptimizationFeatureSet();
+        if (value.Version < 1)
+            throw new ProcessResearchRuleException("优化特征集版本必须大于 0。");
+        if (value.DerivedFeatures.Count > 100)
+            throw new ProcessResearchRuleException("单个优化特征集最多包含 100 个派生特征。");
+
+        var availableInputs = controlVariableCodes.ToHashSet(StringComparer.Ordinal);
+        var normalized = new List<ResearchDerivedFeature>(value.DerivedFeatures.Count);
+        foreach (var feature in value.DerivedFeatures)
+        {
+            var name = NormalizeCode(feature.Name, "派生特征名称");
+            if (!availableInputs.Add(name))
+                throw new ProcessResearchRuleException($"派生特征名称重复或与控制变量冲突：{name}。");
+            var featureOperator = feature.Operator.Trim().ToLowerInvariant();
+            if (!ResearchDerivedFeatureOperators.IsValid(featureOperator))
+                throw new ProcessResearchRuleException($"派生特征 {name} 的运算符无效。");
+            var inputs = feature.Inputs.Select(input =>
+                NormalizeCode(input, $"派生特征 {name} 的输入")).ToArray();
+            if (inputs.Length == 0)
+                throw new ProcessResearchRuleException($"派生特征 {name} 至少需要一个输入。");
+            var exactArity = featureOperator switch
+            {
+                ResearchDerivedFeatureOperators.Identity or
+                    ResearchDerivedFeatureOperators.Absolute => 1,
+                ResearchDerivedFeatureOperators.Difference or
+                    ResearchDerivedFeatureOperators.AbsoluteDifference or
+                    ResearchDerivedFeatureOperators.Ratio => 2,
+                _ => 0
+            };
+            if (exactArity > 0 && inputs.Length != exactArity)
+            {
+                throw new ProcessResearchRuleException(
+                    $"派生特征 {name} 的运算符 {featureOperator} 必须恰好有 {exactArity} 个输入。");
+            }
+            var unavailable = inputs.FirstOrDefault(input =>
+                !availableInputs.Contains(input) || string.Equals(input, name, StringComparison.Ordinal));
+            if (unavailable is not null)
+            {
+                throw new ProcessResearchRuleException(
+                    $"派生特征 {name} 引用了未知或尚未定义的输入 {unavailable}。");
+            }
+            if (!double.IsFinite(feature.NormalizationOffset) ||
+                !double.IsFinite(feature.NormalizationScale) ||
+                feature.NormalizationScale <= 0 ||
+                !double.IsFinite(feature.Epsilon) ||
+                feature.Epsilon <= 0)
+            {
+                throw new ProcessResearchRuleException(
+                    $"派生特征 {name} 的归一化参数或 epsilon 无效。");
+            }
+            normalized.Add(feature with
+            {
+                Name = name,
+                Operator = featureOperator,
+                Inputs = inputs
+            });
+        }
+
+        return value with
+        {
+            FeatureSetId = NormalizeCode(value.FeatureSetId, "优化特征集标识"),
+            DerivedFeatures = normalized
         };
     }
 

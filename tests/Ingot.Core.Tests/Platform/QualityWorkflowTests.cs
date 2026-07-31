@@ -129,11 +129,10 @@ public sealed class QualityWorkflowTests
         Assert.Equal(600, result.Baseline.Signals.Single(item => item.Code == "press.load").SampleCount);
         Assert.Contains(result.QualityAssociations, item =>
             item.SignalCode == "press.load" &&
-            item.PhaseCode == "press" &&
+            item.PhaseCode == "30" &&
             item.PassCycleCount == 1 &&
             item.FailCycleCount == 1);
         Assert.Equal(2, result.Acceptance.CompleteCycleCount);
-        Assert.Equal(2, result.Acceptance.PhaseCompleteCycleCount);
 
         var selected = await service.CompareSelectedAsync("HISTORY", ["BASE", "HISTORY"]);
         Assert.NotNull(selected);
@@ -210,13 +209,51 @@ public sealed class QualityWorkflowTests
         var cycle = Assert.Single(result.Data);
         Assert.Equal(600, cycle.SampleCount);
         Assert.Equal(1d, cycle.SampleCompleteness);
-        Assert.True(cycle.PhaseComplete);
+        Assert.True(cycle.HasStarted);
+        Assert.True(cycle.HasCompleted);
+        Assert.True(cycle.LifecycleComplete);
         Assert.Equal(5, cycle.Phases.Count);
         Assert.Equal("PENDING", cycle.QualityStatus);
         Assert.Equal(2, cycle.RequiredInspectionCount);
         Assert.Empty(cycle.DataIssues);
         Assert.Equal(1, result.Total);
         Assert.Equal(1, result.Overview.SampleCompleteCount);
+    }
+
+    [Fact]
+    public async Task CycleRecordRequiresBothStartAndEndEventsForLifecycleCompleteness()
+    {
+        var cycleId = "MISSING-START";
+        var completedAt = DateTimeOffset.Parse("2026-07-20T08:10:00Z");
+        var rows = new[]
+        {
+            Row(1, Event(
+                "cycle.completed",
+                cycleId,
+                "WP-MISSING-START",
+                "LENS-A",
+                completedAt,
+                "PRESS-01"))
+        };
+        var service = new CycleRecordService(
+            new FakeEventStore(rows),
+            new FakeInspectionStore([]),
+            new FakeReviewStore(),
+            new FakeMasterDataStore(),
+            new ProcessAnalysisResolver(new FakeProcessConfigurationStore()));
+
+        var result = await service.QueryAsync(
+            null, null, null, null, null, null, null, cycleId, null, 100);
+
+        var cycle = Assert.Single(result.Data);
+        Assert.False(cycle.HasStarted);
+        Assert.True(cycle.HasCompleted);
+        Assert.False(cycle.LifecycleComplete);
+        Assert.Equal("incomplete", cycle.Status);
+        Assert.Null(cycle.DurationMs);
+        Assert.Contains(cycle.DataIssues, issue => issue.Code == "cycle.start.missing");
+        Assert.Equal(1, result.Overview.IncompleteCount);
+        Assert.Equal(0, result.Overview.CompletedCount);
     }
 
     [Fact]
@@ -364,10 +401,10 @@ public sealed class QualityWorkflowTests
                         ["lower_mold.ir_temperature"] = 595d + second / 100d,
                         ["press.load"] = 120d,
                         ["chamber.vacuum"] = 12d,
-                        ["servo.position"] = 12.5d
+                        ["servo.position"] = 12.5d,
+                        ["process.stage_number"] = long.Parse(phase)
                     }
                 });
-            evt = evt with { Context = new Dictionary<string, string>(evt.Context) { ["recipe_step"] = phase } };
             rows.Add(Row(ingestId++, evt));
         }
         rows.Add(Row(ingestId, Event(
@@ -563,24 +600,16 @@ public sealed class QualityWorkflowTests
             Status = ConfigurationStatuses.Published,
             Acquisition = new AcquisitionModel
             {
-                StepSourceKey = "recipe_step",
                 DataItems =
                 [
                     new() { Code = "upper_mold.ir_temperature", SourceField = "上模温度", Unit = "Cel" },
                     new() { Code = "lower_mold.ir_temperature", SourceField = "下模温度", Unit = "Cel" },
                     new() { Code = "press.load", SourceField = "压力", Unit = "kg" },
                     new() { Code = "chamber.vacuum", SourceField = "真空度", Unit = "kPa" },
-                    new() { Code = "servo.position", SourceField = "伺服位置", Unit = "mm" }
+                    new() { Code = "servo.position", SourceField = "伺服位置", Unit = "mm" },
+                    new() { Code = "process.stage_number", SourceField = "阶段号", DataType = "integer", Category = "stage", Nullable = false }
                 ]
-            },
-            Stages =
-            [
-                new() { SourceStep = "10", Code = "preheat", Name = "预热" },
-                new() { SourceStep = "20", Code = "soak", Name = "均热" },
-                new() { SourceStep = "30", Code = "press", Name = "压制" },
-                new() { SourceStep = "40", Code = "anneal", Name = "退火" },
-                new() { SourceStep = "50", Code = "cool", Name = "冷却" }
-            ]
+            }
         };
 
         private static readonly ProcessAnalysisPlan Plan = new()
@@ -592,7 +621,7 @@ public sealed class QualityWorkflowTests
             DataModelId = Model.ModelId,
             DataModelVersion = Model.Version,
             ComparisonKeys = ["product_series"],
-            Signals = Model.Acquisition.DataItems.Select(static item =>
+            Signals = Model.Acquisition.DataItems.Where(static item => item.Category != "stage").Select(static item =>
                 new AnalysisSignalSelection { DataItemCode = item.Code, Features = ["mean", "min", "max"] }).ToArray()
         };
 
