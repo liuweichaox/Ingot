@@ -14,11 +14,11 @@
     "lint": "eslint . --ignore-pattern .next --ignore-pattern out"
   },
   "dependencies": {
-    "@headlessui/react": "^2.2.9",
+    "@headlessui/react": "^2.2.10",
     "github-slugger": "2.0.0",
-    "next": "16.2.11",
-    "react": "19.2.6",
-    "react-dom": "19.2.6",
+    "next": "16.2.12",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
     "rehype-autolink-headings": "7.1.0",
     "rehype-highlight": "7.0.2",
     "rehype-slug": "6.0.0",
@@ -29,14 +29,14 @@
     "unified": "11.0.5"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4.2.1",
-    "@types/node": "22.19.19",
-    "@types/react": "19.2.14",
+    "@tailwindcss/postcss": "^4.3.3",
+    "@types/node": "26.1.2",
+    "@types/react": "19.2.17",
     "@types/react-dom": "19.2.3",
-    "eslint": "9.39.4",
-    "eslint-config-next": "16.2.11",
+    "eslint": "10.8.0",
+    "eslint-config-next": "16.2.12",
     "tailwindcss": "^4.2.1",
-    "typescript": "5.9.3"
+    "typescript": "7.0.2"
   },
   "overrides": {
     "postcss": "8.5.22",
