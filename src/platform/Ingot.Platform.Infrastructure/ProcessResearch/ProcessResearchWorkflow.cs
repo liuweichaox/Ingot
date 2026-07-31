@@ -268,6 +268,33 @@ public sealed partial class ProcessResearchWorkflow(IProcessResearchStore store)
             runPlan.Length ||
             runPlan.Select(static value => value.Sequence).Distinct().Count() != runPlan.Length)
             throw new ProcessResearchRuleException("实验运行标识和执行顺序必须唯一。");
+        var baselineRunKeys = request.BaselineRunKeys
+            .Select(value => RequiredText(value, "对照运行标识", 120))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        if (baselineRunKeys.Length != request.BaselineRunKeys.Count)
+            throw new ProcessResearchRuleException("对照运行标识不能重复。");
+        if (baselineRunKeys.Length == 1)
+            throw new ProcessResearchRuleException("生成独立对照置信区间至少需要两个对照运行。");
+        if (baselineRunKeys.Length > 0)
+        {
+            var currentRunKeys = runPlan.Select(static value => value.RunKey)
+                .ToHashSet(StringComparer.Ordinal);
+            if (currentRunKeys.All(baselineRunKeys.Contains))
+                throw new ProcessResearchRuleException("实验必须至少保留一个非对照运行用于效果比较。");
+            var eligiblePriorRunKeys = (await store.ListExperimentsAsync(projectId, ct)
+                    .ConfigureAwait(false))
+                .Where(static value =>
+                    value.DesignMethod == ResearchDesignMethods.HistoricalObservation ||
+                    value.Status == ResearchExperimentStatuses.Completed)
+                .SelectMany(static value => value.RunPlan)
+                .Select(static value => value.RunKey)
+                .ToHashSet(StringComparer.Ordinal);
+            if (baselineRunKeys.Any(key =>
+                    !currentRunKeys.Contains(key) && !eligiblePriorRunKeys.Contains(key)))
+                throw new ProcessResearchRuleException(
+                    "对照运行必须来自本实验、已导入的历史观察或已完成实验。");
+        }
         var distinctConditions = runPlan
             .Select(run => string.Join("|", run.Factors
                 .OrderBy(static factor => factor.VariableCode)
@@ -332,6 +359,7 @@ public sealed partial class ProcessResearchWorkflow(IProcessResearchStore store)
             Status = ResearchExperimentStatuses.Planned,
             Factors = factors,
             RunPlan = runPlan,
+            BaselineRunKeys = baselineRunKeys,
             ObjectiveCodes = objectiveCodes,
             ReplicateKeys = request.ReplicateKeys.Select(static value => value.Trim())
                 .Where(static value => value.Length > 0)
@@ -438,7 +466,7 @@ public sealed partial class ProcessResearchWorkflow(IProcessResearchStore store)
         return saved;
     }
 
-    public async Task<ResearchExperimentResult> RecordExperimentResultAsync(
+    internal async Task<ResearchExperimentResult> RecordMaterializedExperimentResultAsync(
         Guid experimentId,
         ResearchExperimentResult request,
         string userId,
@@ -460,13 +488,23 @@ public sealed partial class ProcessResearchWorkflow(IProcessResearchStore store)
             if (!experiment.ObjectiveCodes.Contains(code, StringComparer.Ordinal) ||
                 !objectives.TryGetValue(code, out var objective))
                 throw new ProcessResearchRuleException($"结果指标 {code} 不属于当前实验目标。");
+            var hasLowerBound = metric.LowerConfidenceBound is not null;
+            var hasUpperBound = metric.UpperConfidenceBound is not null;
+            var effectTolerance = Math.Max(
+                1e-9,
+                1e-9 * Math.Max(Math.Abs(metric.ObservedValue), Math.Abs(metric.BaselineValue)));
             if (!double.IsFinite(metric.BaselineValue) || !double.IsFinite(metric.ObservedValue) ||
                 !double.IsFinite(metric.EffectValue) ||
                 metric.LowerConfidenceBound is { } lower && !double.IsFinite(lower) ||
                 metric.UpperConfidenceBound is { } upper && !double.IsFinite(upper) ||
                 metric.LowerConfidenceBound is { } min &&
                 metric.UpperConfidenceBound is { } max && min > max ||
-                metric.BaselineSampleCount < 1 || metric.ExperimentSampleCount < 1)
+                hasLowerBound != hasUpperBound ||
+                hasLowerBound &&
+                (metric.BaselineSampleCount < 2 || metric.ExperimentSampleCount < 2) ||
+                metric.BaselineSampleCount < 0 || metric.ExperimentSampleCount < 1 ||
+                Math.Abs(metric.EffectValue -
+                         (metric.ObservedValue - metric.BaselineValue)) > effectTolerance)
                 throw new ProcessResearchRuleException($"结果指标 {code} 的数值或样本量无效。");
             var unit = RequiredText(metric.Unit, "结果指标单位", 40);
             if (!string.Equals(unit, objective.Unit, StringComparison.OrdinalIgnoreCase))
@@ -651,7 +689,7 @@ public sealed partial class ProcessResearchWorkflow(IProcessResearchStore store)
                 ResourceId = resultId.ToString(),
                 Action = "recorded",
                 FromStatus = null,
-                ToStatus = request.SafetyPassed ? "passed" : "failed",
+                ToStatus = safetyPassed ? "passed" : "failed",
                 UserId = NormalizeUser(userId),
                 CreatedAt = now
             },

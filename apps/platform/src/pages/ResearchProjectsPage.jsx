@@ -126,6 +126,7 @@ function createTaskForm(task, workspace) {
     minimumEffect: "",
     hypothesisId: workspace?.hypotheses?.[0]?.hypothesisId || "",
     cycleIds: [],
+    baselineRunKeys: [],
     name: "",
     low: variable?.lowerLimit ?? "",
     high: variable?.upperLimit ?? "",
@@ -431,6 +432,7 @@ export function ResearchProjectsPage() {
               factors: [{ variableCode: variable.code, value: high, unit: variable.unit }],
             },
           ],
+          baselineRunKeys: taskForm.baselineRunKeys,
           objectiveCodes: [objective.code],
           replicateKeys: ["replicate-1"],
           stopRule: taskForm.stopRule,
@@ -1145,10 +1147,10 @@ function WorkspaceContent({
                             </strong>
                           </div>
                           <div className="mt-1 text-slate-500">
-                            历史基线 {formatResearchNumber(metric.baselineValue)}，效果量 {formatResearchNumber(metric.effectValue)}
+                            基线 {formatResearchNumber(metric.baselineValue)}，效果量 {formatResearchNumber(metric.effectValue)}
                             {metric.lowerConfidenceBound != null && metric.upperConfidenceBound != null
                               ? `（95% 效果区间 ${formatResearchNumber(metric.lowerConfidenceBound)} ～ ${formatResearchNumber(metric.upperConfidenceBound)}）`
-                              : "（历史对照不足，暂不计算效果区间）"}
+                              : "（未声明至少两个独立对照运行，暂不计算效果区间）"}
                           </div>
                         </div>
                       );
@@ -1294,6 +1296,12 @@ function TaskDrawer({ task, form, setForm, workspace, saving, onClose, onSubmit 
   const validatedWindows = workspace.processWindows.filter(item =>
     item.status === "validated" &&
     ["laboratory", "production"].includes(item.validationLevel));
+  const baselineRuns = workspace.experiments
+    .filter(item => item.designMethod === "historical-observation" || item.status === "completed")
+    .flatMap(experiment => (experiment.runPlan || []).map(run => ({
+      ...run,
+      experimentName: experiment.name,
+    })));
   const [historicalCycles, setHistoricalCycles] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState("");
@@ -1355,6 +1363,31 @@ function TaskDrawer({ task, form, setForm, workspace, saving, onClose, onSubmit 
             <Field label="低水平"><Input required type="number" step="any" value={form.low} onChange={update("low")} /></Field>
             <Field label="高水平"><Input required type="number" step="any" value={form.high} onChange={update("high")} /></Field>
           </div>
+          {baselineRuns.length > 0 && (
+            <Field
+              label="独立对照运行（可选）"
+              hint="按 Ctrl 或 Shift 选择至少两个同条件重复运行；不选择时只计算描述性差值，不生成效果置信区间。"
+            >
+              <Select
+                multiple
+                size={Math.min(8, Math.max(3, baselineRuns.length))}
+                value={form.baselineRunKeys || []}
+                onChange={event => setForm({
+                  ...form,
+                  baselineRunKeys: Array.from(
+                    event.target.selectedOptions,
+                    option => option.value,
+                  ),
+                })}
+              >
+                {baselineRuns.map(run => (
+                  <option key={`${run.experimentName}:${run.runKey}`} value={run.runKey}>
+                    {run.experimentName} · {run.runKey}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          )}
           <Field label="停止规则"><Textarea required rows={3} value={form.stopRule} onChange={update("stopRule")} /></Field>
           <Field label="回退方案"><Textarea required rows={3} value={form.rollbackPlan} onChange={update("rollbackPlan")} /></Field>
         </>}

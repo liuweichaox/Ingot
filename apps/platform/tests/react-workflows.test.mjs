@@ -158,6 +158,8 @@ test("research projects expose the evidence-backed experiment and process-window
   assert.match(researchProjects, /design-validation/);
   assert.match(researchProjects, /设计独立验证实验/);
   assert.match(researchProjects, /95% 效果区间/);
+  assert.match(researchProjects, /baselineRunKeys/);
+  assert.match(researchProjects, /独立对照运行（可选）/);
   assert.doesNotMatch(researchProjects, /calculatedFromSource: true/);
   assert.doesNotMatch(researchProjects, /记录实验计算结果/);
   assert.match(researchProjects, /审核独立验证结果/);

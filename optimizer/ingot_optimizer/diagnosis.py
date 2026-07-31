@@ -311,15 +311,23 @@ def diagnose(
         process_design, design_names, owners = process, retained_names, list(range(len(retained)))
         model_family = "elastic-net-logistic" if outcome_kind == "binary" else "elastic-net-regression"
 
-    ranked_local = sorted(range(len(retained)), key=lambda index: -associations[retained[index]])
-    interaction_matrix, interaction_names, interaction_pairs = _interaction_basis(
-        process, retained_names, ranked_local
-    )
-    if row_count >= 30 and interaction_matrix.shape[1]:
-        process_design = np.column_stack([process_design, interaction_matrix])
-        design_names.extend(interaction_names)
-        owners.extend([-1] * len(interaction_names))
-        model_family += "+interactions"
+    interaction_names: list[str] = []
+    interaction_pairs: list[tuple[int, int]] = []
+    interaction_offset: int | None = None
+    if row_count >= 30:
+        ranked_local = sorted(
+            range(len(retained)),
+            key=lambda index: -associations[retained[index]],
+        )
+        interaction_matrix, interaction_names, interaction_pairs = _interaction_basis(
+            process, retained_names, ranked_local
+        )
+        if interaction_matrix.shape[1]:
+            interaction_offset = process_design.shape[1]
+            process_design = np.column_stack([process_design, interaction_matrix])
+            design_names.extend(interaction_names)
+            owners.extend([-1] * len(interaction_names))
+            model_family += "+interactions"
 
     design = np.column_stack([process_design, context_design])
     process_column_count = process_design.shape[1]
@@ -443,25 +451,25 @@ def diagnose(
     candidates.sort(key=lambda value: (-value["rank_score"], value["data_source"]))
 
     interactions = []
-    interaction_offset = len(design_names) - len(interaction_names)
-    for offset, name in enumerate(interaction_names):
-        index = interaction_offset + offset
-        if index >= len(process_coefficients):
-            continue
-        importance = abs(float(process_coefficients[index]))
-        selection = float(stability[index])
-        if importance <= 1e-5 or selection < 0.25:
-            continue
-        left, right = interaction_pairs[offset]
-        interactions.append(
-            {
-                "left_data_source": retained_names[left],
-                "right_data_source": retained_names[right],
-                "adjusted_effect": float(process_coefficients[index]),
-                "stability_selection_rate": selection,
-                "rank_score": importance * selection,
-            }
-        )
+    if interaction_offset is not None:
+        for offset, _ in enumerate(interaction_names):
+            index = interaction_offset + offset
+            if index >= len(process_coefficients):
+                continue
+            importance = abs(float(process_coefficients[index]))
+            selection = float(stability[index])
+            if importance <= 1e-5 or selection < 0.25:
+                continue
+            left, right = interaction_pairs[offset]
+            interactions.append(
+                {
+                    "left_data_source": retained_names[left],
+                    "right_data_source": retained_names[right],
+                    "adjusted_effect": float(process_coefficients[index]),
+                    "stability_selection_rate": selection,
+                    "rank_score": importance * selection,
+                }
+            )
     interactions.sort(key=lambda value: -value["rank_score"])
 
     limitations = [

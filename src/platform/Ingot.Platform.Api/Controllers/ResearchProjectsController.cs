@@ -348,26 +348,6 @@ public sealed class ResearchProjectsController(
             ct).ConfigureAwait(false);
     }
 
-    [HttpPost("experiments/{experimentId:guid}/results")]
-    public async Task<IActionResult> RecordExperimentResult(
-        Guid experimentId,
-        [FromBody] ResearchExperimentResult request,
-        CancellationToken ct)
-    {
-        var experiment = await store.GetExperimentAsync(experimentId, ct).ConfigureAwait(false);
-        if (experiment is null)
-            return NotFound(new { error = "实验不存在。" });
-        return await ExecuteForProjectAsync(
-            experiment.ProjectId,
-            true,
-            async identity => Ok(await workflow.RecordExperimentResultAsync(
-                experimentId,
-                request,
-                identity.UserId,
-                ct).ConfigureAwait(false)),
-            ct).ConfigureAwait(false);
-    }
-
     [HttpPost("experiments/{experimentId:guid}/materialize-result")]
     public async Task<IActionResult> MaterializeExperimentResult(
         Guid experimentId,

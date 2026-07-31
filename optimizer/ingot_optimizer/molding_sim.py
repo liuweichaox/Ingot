@@ -125,7 +125,7 @@ class SimulatedFx3u(MoldingSource):
 # class Fx3uMcSource(MoldingSource):
 #     def run_cycle(self, recipe):
 #         write_setpoints(recipe)          # 把配方写进 PLC setpoint 寄存器
-#         trigger_cycle(); wait_complete()  # 触发一炉、等 cycle.completed
+#         trigger_cycle(); wait_complete()  # 触发一次运行、等 cycle.completed
 #         samples = poll_registers("D100","D101","D102","D104","D200","D210")  # MC 1E 轮询
 #         outcomes = read_inspection(self.cycle_id)  # 检测结果(面形/缺陷)由检验录入
 #         return CycleResult(...)

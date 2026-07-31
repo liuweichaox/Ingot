@@ -16,7 +16,7 @@ The silhouette remains recognizable at 16px and is suitable for favicons, termin
 
 Tagline:
 
-> **Ingot — Explain this run, optimize the next.** 看清这一炉，算准下一炉。
+> **Ingot — Explain this run, optimize the next.** 看清这次运行，优化下一次运行。
 
 ## Brand position
 
@@ -39,7 +39,7 @@ Public wording leads with shorter R&D cycles, fewer experiments, traceable evide
 | Product name | **Ingot** (the domain does not alter the product name) |
 | Category line (EN) | Open-source Process Diagnosis & Optimization |
 | Category line (ZH) | 开源工艺追因与优化系统 |
-| Tagline | Explain this run, optimize the next. / 看清这一炉，算准下一炉。 |
+| Tagline | Explain this run, optimize the next. / 看清这次运行，优化下一次运行。 |
 | Official domain | [ingotstack.com](https://ingotstack.com) |
 | Repository | [github.com/liuweichaox/Ingot](https://github.com/liuweichaox/Ingot) |
 | .NET namespaces | `Ingot.*` |

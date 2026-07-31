@@ -383,6 +383,11 @@ public sealed record ResearchExperiment
     public string Status { get; init; } = ResearchExperimentStatuses.Planned;
     public IReadOnlyList<ExperimentFactorSetting> Factors { get; init; } = [];
     public IReadOnlyList<ExperimentRunPlan> RunPlan { get; init; } = [];
+    /// <summary>
+    ///     明确作为对照组的运行标识。可以引用本实验中的对照运行，或当前项目中
+    ///     已导入的历史运行/已完成实验运行；未声明时不得从项目历史中自动拼接对照。
+    /// </summary>
+    public IReadOnlyList<string> BaselineRunKeys { get; init; } = [];
     public IReadOnlyList<string> ObjectiveCodes { get; init; } = [];
     public IReadOnlyList<string> ReplicateKeys { get; init; } = [];
     public IReadOnlyList<Guid> ResultIds { get; init; } = [];

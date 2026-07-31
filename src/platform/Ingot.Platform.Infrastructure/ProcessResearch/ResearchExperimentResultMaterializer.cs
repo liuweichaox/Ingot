@@ -61,22 +61,12 @@ public sealed class ResearchExperimentResultMaterializer(
         var observationsByRun = assembly.Observations
             .Where(static value => value.ValidForOptimization)
             .ToDictionary(static value => value.RunKey, StringComparer.Ordinal);
-        var historicalOrCompletedRunKeys = experiments
-            .Where(static value =>
-                value.DesignMethod == ResearchDesignMethods.HistoricalObservation ||
-                value.Status == ResearchExperimentStatuses.Completed)
-            .SelectMany(static value => value.RunPlan)
-            .Select(static value => value.RunKey)
-            .ToHashSet(StringComparer.Ordinal);
-        var priorObservations = assembly.Observations
-            .Where(value =>
-                value.ValidForOptimization &&
-                historicalOrCompletedRunKeys.Contains(value.RunKey))
-            .Concat(existingResults
+        var sourceObservationsByRun = existingResults
             .SelectMany(static value => value.RunObservations)
-            .Where(static value => value.ValidForOptimization))
-            .DistinctBy(static value => value.RunKey, StringComparer.Ordinal)
-            .ToArray();
+            .Concat(assembly.Observations)
+            .Where(static value => value.ValidForOptimization)
+            .GroupBy(static value => value.RunKey, StringComparer.Ordinal)
+            .ToDictionary(static group => group.Key, static group => group.Last(), StringComparer.Ordinal);
         var created = new List<ResearchExperimentResult>();
         foreach (var experiment in experiments
                      .Where(value =>
@@ -90,19 +80,35 @@ public sealed class ResearchExperimentResultMaterializer(
             if (observations.Any(static value => value is null))
                 continue;
             var resolved = observations.Select(static value => value!).ToArray();
+            var baseline = experiment.BaselineRunKeys
+                .Select(key => sourceObservationsByRun.GetValueOrDefault(key))
+                .ToArray();
+            if (baseline.Any(static value => value is null))
+                continue;
+            var baselineRunKeys = experiment.BaselineRunKeys.ToHashSet(StringComparer.Ordinal);
+            var experimental = resolved
+                .Where(value => !baselineRunKeys.Contains(value.RunKey))
+                .ToArray();
+            if (experimental.Length == 0)
+                continue;
+            var baselineObservations = baseline.Select(static value => value!).ToArray();
+            var snapshotObservations = resolved.Concat(baselineObservations)
+                .DistinctBy(static value => value.RunKey, StringComparer.Ordinal)
+                .OrderBy(static value => value.RunKey, StringComparer.Ordinal)
+                .ToArray();
             var snapshotHash = Convert.ToHexStringLower(
                 SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(
-                    resolved.Select(static value => new
+                    snapshotObservations.Select(static value => new
                     {
                         value.RunKey,
                         value.SourceContentHash
                     }))));
-            var result = await workflow.RecordExperimentResultAsync(
+            var result = await workflow.RecordMaterializedExperimentResultAsync(
                 experiment.ExperimentId,
                 new ResearchExperimentResult
                 {
                     DatasetSnapshotId = $"cycle-observation-snapshot:{snapshotHash}",
-                    Metrics = BuildMetrics(project, resolved, priorObservations),
+                    Metrics = BuildMetrics(project, experimental, baselineObservations),
                     RunObservations = resolved,
                     SafetyPassed = SatisfiesOutcomeConstraints(project, resolved),
                     CalculatedFromSource = true
@@ -119,7 +125,6 @@ public sealed class ResearchExperimentResultMaterializer(
                     userId,
                     ct).ConfigureAwait(false);
             }
-            priorObservations = priorObservations.Concat(resolved).ToArray();
         }
         return created;
     }
@@ -127,27 +132,27 @@ public sealed class ResearchExperimentResultMaterializer(
     private static IReadOnlyList<ExperimentMetricResult> BuildMetrics(
         ResearchProject project,
         IReadOnlyList<ExperimentRunObservation> observations,
-        IReadOnlyList<ExperimentRunObservation> prior)
+        IReadOnlyList<ExperimentRunObservation> baselineObservations)
         => project.Objectives.Select(objective =>
         {
             var values = observations.Select(value => value.Outcomes[objective.Code]).ToArray();
-            var previous = prior
+            var baselineValues = baselineObservations
                 .Where(value => value.Outcomes.ContainsKey(objective.Code))
                 .Select(value => value.Outcomes[objective.Code])
                 .ToArray();
             var observed = values.Average();
-            var baseline = previous.Length > 0
-                ? previous.Average()
+            var baseline = baselineValues.Length > 0
+                ? baselineValues.Average()
                 : objective.Baseline ?? observed;
-            var hasIndependentSamples = values.Length >= 2 && previous.Length >= 2;
+            var hasIndependentSamples = values.Length >= 2 && baselineValues.Length >= 2;
             var effect = observed - baseline;
             var standardError = hasIndependentSamples
                 ? Math.Sqrt(
                     Math.Pow(StandardDeviation(values), 2) / values.Length +
-                    Math.Pow(StandardDeviation(previous), 2) / previous.Length)
+                    Math.Pow(StandardDeviation(baselineValues), 2) / baselineValues.Length)
                 : double.NaN;
             var degreesOfFreedom = hasIndependentSamples
-                ? WelchDegreesOfFreedom(values, previous)
+                ? WelchDegreesOfFreedom(values, baselineValues)
                 : double.NaN;
             var margin = hasIndependentSamples
                 ? StudentT95Critical(degreesOfFreedom) * standardError
@@ -161,7 +166,7 @@ public sealed class ResearchExperimentResultMaterializer(
                 LowerConfidenceBound = hasIndependentSamples ? effect - margin : null,
                 UpperConfidenceBound = hasIndependentSamples ? effect + margin : null,
                 Unit = objective.Unit,
-                BaselineSampleCount = Math.Max(1, previous.Length),
+                BaselineSampleCount = baselineValues.Length,
                 ExperimentSampleCount = values.Length,
                 ComputationMethod = hasIndependentSamples
                     ? "two-sample-welch-effect-95ci-v2"

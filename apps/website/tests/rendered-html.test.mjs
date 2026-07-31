@@ -19,7 +19,8 @@ test("Chinese home presents the final closed-loop product capability", async () 
   assert.match(source, /让每一次试验/);
   assert.match(source, /MANUFACTURING R&amp;D · CAMPAIGN-042/);
   assert.match(source, /qLogNEI/);
-  assert.match(source, /下一炉推荐/);
+  assert.match(source, /工艺追因/);
+  assert.match(source, /工艺优化/);
   assert.match(source, /换场景，不换优化系统/);
   assert.match(source, /知识迁移/);
   assert.doesNotMatch(source, /待真实证明|现在能做什么|FX3U|光学镜片|模压/);
