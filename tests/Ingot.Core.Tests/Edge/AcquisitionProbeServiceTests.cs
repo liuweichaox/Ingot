@@ -69,6 +69,7 @@ public sealed class AcquisitionProbeServiceTests
                 Source = "connector/http/device",
                 SubjectId = "device",
                 Protocol = AcquisitionProtocols.HttpPolling,
+                TimestampMode = "edge-received",
                 Connection = new HttpPollingConnection
                 {
                     BaseUrl = "http://device.local",

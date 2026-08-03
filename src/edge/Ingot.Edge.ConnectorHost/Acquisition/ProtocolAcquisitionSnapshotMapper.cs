@@ -127,6 +127,10 @@ public static class ProtocolAcquisitionSnapshotMapper
             }
         }
 
+        var sampleData = AcquisitionSampleMetadata.CreateQuality(values, DateTimeOffset.UtcNow);
+        sampleData["values"] = values;
+        if (profile.TimestampMode == "source")
+            sampleData["sourceTimestamp"] = occurredAt.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture);
         var sample = ProductionEvent.Create(
             profile.SampleEventType,
             occurredAt,
@@ -134,7 +138,7 @@ public static class ProtocolAcquisitionSnapshotMapper
             new ObjectRef(profile.SubjectType, profile.SubjectId),
             correlationId,
             context,
-            new Dictionary<string, object?> { ["values"] = values });
+            sampleData);
         return new AcquisitionMappingResult(sample, recipeApplied, recipeIdentity);
     }
 

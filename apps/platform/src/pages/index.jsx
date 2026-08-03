@@ -2744,15 +2744,6 @@ const registryPages = {
     template: { planId: "", version: 1, name: "", description: "", status: "draft", priority: 0, effectiveFrom: null, effectiveTo: null, scope: {}, items: [], updatedAt: "" },
     deleteUrl: value => `/api/v1/inspection-plans/${encodeURIComponent(value.planId)}/${value.version}`,
   },
-  acquisition: {
-    kind: "acquisitionProfile",
-    title: "设备接入", description: "选择通信驱动，连接现场设备，并把点位映射到工艺变量。", endpoint: "/api/v1/acquisition-profiles", key: "profileId",
-    columns: [["subjectId", "设备"], ["edgeId", "采集节点"], ["name", "配置名称"], ["protocol", "通信驱动"], ["status", "状态"]],
-    render: { protocol: value => acquisitionProtocolLabels[value] || value },
-    createLabel: "配置数据源",
-    template: { profileId: "", version: 1, name: "", status: "draft", protocol: "http-polling", edgeId: "", dataModelId: "", dataModelVersion: 1, source: "", subjectType: "equipment", subjectId: "", valueMappings: [] },
-    deleteUrl: value => `/api/v1/acquisition-profiles/${encodeURIComponent(value.profileId)}/${value.version}`,
-  },
 };
 
 function RegistryPage({ definition }) {
@@ -2762,7 +2753,6 @@ function RegistryPage({ definition }) {
   const [mode, setMode] = useState("create");
   const [inspectionForm, setInspectionForm] = useState(() => inspectionDefinitionForm());
   const [businessForm, setBusinessForm] = useState(() => createRegistryBusinessForm(definition.kind));
-  const [acquisitionProbeValid, setAcquisitionProbeValid] = useState(false);
   const [editorError, setEditorError] = useState("");
   const [saving, setSaving] = useState(false);
   const isInspectionDefinition = definition.kind === "inspectionDefinition";
@@ -2779,7 +2769,6 @@ function RegistryPage({ definition }) {
       setBusinessForm(createRegistryBusinessForm(definition.kind));
     }
     setEditorError("");
-    setAcquisitionProbeValid(false);
     setOpen(true);
   }
   function openMaintain(row) {
@@ -2790,7 +2779,6 @@ function RegistryPage({ definition }) {
       setBusinessForm(createRegistryBusinessForm(definition.kind, row));
     }
     setEditorError("");
-    setAcquisitionProbeValid(false);
     setOpen(true);
   }
 
@@ -2802,7 +2790,6 @@ function RegistryPage({ definition }) {
       setBusinessForm(createRegistryBusinessForm(definition.kind, row, Number(row.version || 0) + 1));
     }
     setEditorError("");
-    setAcquisitionProbeValid(false);
     setOpen(true);
   }
 
@@ -2878,33 +2865,8 @@ function RegistryPage({ definition }) {
     <Page
       title={definition.title}
       description={definition.description}
-      actions={definition.kind === "acquisitionProfile"
-        ? <><Link className="inline-flex min-h-9 items-center rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50" to="/edges">查看现场节点</Link><Button variant="primary" onClick={openCreate}>{definition.createLabel}</Button></>
-        : <Button variant="primary" onClick={openCreate}>{definition.createLabel || "创建新版本"}</Button>}
+      actions={<Button variant="primary" onClick={openCreate}>{definition.createLabel || "创建新版本"}</Button>}
     >
-      {definition.kind === "acquisitionProfile" && (
-        <Card title="设备接入进度" description="完成采集任务并发布后，设备会自动出现在“工业对象”和运行记录中。">
-          <div className="grid gap-4 md:grid-cols-4">
-            {[
-              ["1", "现场节点在线", "确认设备所在节点能够正常上报心跳。", "/edges", "查看节点"],
-              ["2", "选择工艺模型", "工艺模型决定平台需要哪些变量，不包含设备地址。", "/configuration/process-data-models", "查看模型"],
-              ["3", "配置并发布", "选择设备连接方式并映射实际数据项。", null, `${rows.filter(row => row.status === "published").length} 个已发布`],
-              ["4", "确认数据到达", "在工业对象中确认设备、样本和最后活动时间。", "/explorer", "查看工业对象"],
-            ].map(([number, title, text, path, action]) => (
-              <div key={number} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <div className="flex items-center gap-2">
-                  <span className="grid size-7 place-items-center rounded-full bg-blue-600 text-xs font-semibold text-white">{number}</span>
-                  <h3 className="font-semibold text-slate-800">{title}</h3>
-                </div>
-                <p className="mt-3 text-sm leading-6 text-slate-500">{text}</p>
-                {path
-                  ? <Link className="mt-3 inline-block text-sm font-medium text-blue-600 hover:text-blue-700" to={path}>{action}</Link>
-                  : <p className="mt-3 text-sm font-medium text-slate-700">{action}</p>}
-              </div>
-            ))}
-          </div>
-        </Card>
-      )}
       {definition.kind === "inspectionDefinition" && (
         <WorkflowGuide
           title="先定义检测内容，再组成质量方案"
@@ -2951,7 +2913,7 @@ function RegistryPage({ definition }) {
           : "编辑完整版本内容。保存前会由平台执行结构、引用与状态校验。"}
         footer={editorReadOnly
           ? <Button onClick={() => setOpen(false)}>关闭</Button>
-          : <><Button onClick={() => setOpen(false)}>取消</Button><Button variant="primary" onClick={save} disabled={saving || Boolean(editorValidation) || (definition.kind === "acquisitionProfile" && businessForm.status === "published" && !acquisitionProbeValid)}>{saving ? "保存中" : definition.kind === "acquisitionProfile" && businessForm.status === "published" && !acquisitionProbeValid ? "请先验证再发布" : "保存"}</Button></>}
+          : <><Button onClick={() => setOpen(false)}>取消</Button><Button variant="primary" onClick={save} disabled={saving || Boolean(editorValidation)}>{saving ? "保存中" : "保存"}</Button></>}
         size="xl"
       >
         {editorError && <Alert tone="danger">{editorError}</Alert>}
@@ -2971,7 +2933,6 @@ function RegistryPage({ definition }) {
             readOnly={editorReadOnly}
             validation={businessValidation}
             lockIdentity={mode !== "create"}
-            onAcquisitionProbeStateChange={setAcquisitionProbeValid}
           />
         )}
       </Drawer>
@@ -3087,7 +3048,8 @@ export const RecipeVersionsPage = () => <RegistryPage definition={registryPages.
 export const ProcessAnalysisPlansPage = () => <RegistryPage definition={registryPages.plans} />;
 export const InspectionDefinitionsPage = () => <RegistryPage definition={registryPages.definitions} />;
 export const QualityPlansPage = () => <RegistryPage definition={registryPages.plansQuality} />;
-export const AcquisitionProfilesPage = () => <RegistryPage definition={registryPages.acquisition} />;
+// 设备接入已迁移到 src/acquisition/AcquisitionProfilePage.jsx：
+// 协议差异由描述符注册表承载，配置页是独立的左右分栏页面而不是通用注册表抽屉。
 
 export function EdgesPage() {
   const { data, loading, error } = useApi("/api/edges", { interval: 10000 });

@@ -12,7 +12,7 @@ namespace Ingot.Edge.Infrastructure.Events;
 /// <summary>
 ///     SQLite outbox：边缘生产数据的本地不可变日志。
 /// </summary>
-public sealed class SqliteEventLog : IEventLog
+public sealed class SqliteEventLog : IEventLog, IBatchedEventLog
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private static readonly Regex ContextKeyPattern = new(
@@ -127,6 +127,82 @@ public sealed class SqliteEventLog : IEventLog
             }
 
             return seq;
+        }
+        finally
+        {
+            _writeLock.Release();
+        }
+    }
+
+    public async Task<IReadOnlyList<long>> AppendBatchAsync(
+        IReadOnlyList<ProductionEvent> events,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(events);
+        if (events.Count == 0)
+            return [];
+
+        await _writeLock.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            await using var connection = await OpenAsync(ct).ConfigureAwait(false);
+            await using var transaction = (SqliteTransaction)await connection
+                .BeginTransactionAsync(ct)
+                .ConfigureAwait(false);
+            var sequences = new List<long>(events.Count);
+            foreach (var evt in events)
+            {
+                ArgumentNullException.ThrowIfNull(evt);
+                await using var command = connection.CreateCommand();
+                command.Transaction = transaction;
+                command.CommandText = """
+                                      INSERT INTO events(
+                                        event_id, event_type, type_version, occurred_at, recorded_at,
+                                        source, subject_type, subject_id, correlation_id,
+                                        context_json, data_json, ship_state, ship_attempts)
+                                      VALUES (
+                                        $event_id, $event_type, $type_version, $occurred_at, $recorded_at,
+                                        $source, $subject_type, $subject_id, $correlation_id,
+                                        $context_json, $data_json, 0, 0);
+                                      SELECT last_insert_rowid();
+                                      """;
+                command.Parameters.AddWithValue("$event_id", evt.EventId);
+                command.Parameters.AddWithValue("$event_type", evt.EventType);
+                command.Parameters.AddWithValue("$type_version", evt.EventTypeVersion);
+                command.Parameters.AddWithValue("$occurred_at", evt.OccurredAt.ToUniversalTime().ToString("O"));
+                command.Parameters.AddWithValue("$recorded_at", evt.RecordedAt.ToUniversalTime().ToString("O"));
+                command.Parameters.AddWithValue("$source", evt.Source);
+                command.Parameters.AddWithValue("$subject_type", evt.Subject.Type);
+                command.Parameters.AddWithValue("$subject_id", evt.Subject.Id);
+                command.Parameters.AddWithValue("$correlation_id", (object?)evt.CorrelationId ?? DBNull.Value);
+                command.Parameters.AddWithValue("$context_json", JsonSerializer.Serialize(evt.Context, JsonOptions));
+                command.Parameters.AddWithValue("$data_json", JsonSerializer.Serialize(evt.Data, JsonOptions));
+                var seq = Convert.ToInt64(
+                    await command.ExecuteScalarAsync(ct).ConfigureAwait(false),
+                    CultureInfo.InvariantCulture);
+                await InsertContextIndexAsync(connection, transaction, seq, evt.Context, ct)
+                    .ConfigureAwait(false);
+                sequences.Add(seq);
+            }
+
+            var backlogDrop = await EnforceBacklogLimitAsync(
+                    connection,
+                    transaction,
+                    events[^1],
+                    ct)
+                .ConfigureAwait(false);
+            await transaction.CommitAsync(ct).ConfigureAwait(false);
+            if (backlogDrop is not null)
+            {
+                RecordBacklogDropMetrics(backlogDrop.DroppedCount);
+                _logger.LogCritical(
+                    "事件 outbox 达到硬上限 {MaxBacklogRows}，已显式丢弃最旧的 {Dropped} 条未上行事件，Seq={FirstSeq}-{LastSeq}；审计事件 diagnostic.backlog_dropped 已写入。",
+                    _options.MaxBacklogRows,
+                    backlogDrop.DroppedCount,
+                    backlogDrop.FirstSeq,
+                    backlogDrop.LastSeq);
+            }
+            return sequences;
         }
         finally
         {

@@ -27,35 +27,75 @@ public sealed class MqttAcquisitionRunner(
         var jsonOptions = JsonAcquisitionOptionsFactory.Create(deployment);
         var factory = new MqttClientFactory();
         using var client = factory.CreateMqttClient();
+        using var messageGate = new SemaphoreSlim(1, 1);
+        var snapshots = new MqttSnapshotAccumulator(connection.Topics);
         string? currentRecipe = null;
+        string? currentSnapshotFingerprint = null;
         var lifecycle = new AcquisitionLifecycleTracker();
 
         client.ApplicationMessageReceivedAsync += async message =>
         {
+            await messageGate.WaitAsync(ct).ConfigureAwait(false);
             status.RecordAttempt(configurationKey, DateTimeOffset.UtcNow);
             try
             {
-                using var document = JsonDocument.Parse(message.ApplicationMessage.Payload);
+                using var snapshot = snapshots.Add(
+                    message.ApplicationMessage.Topic,
+                    message.ApplicationMessage.Payload,
+                    DateTimeOffset.UtcNow,
+                    connection.SnapshotMaxAgeSeconds,
+                    connection.SnapshotMaxSkewSeconds);
+                if (!snapshot.IsComplete || !snapshot.IsCoherent)
+                {
+                    logger.LogDebug(
+                        "MQTT 采集任务 {Configuration} 尚未形成新鲜一致快照：Complete={Complete}, Coherent={Coherent}, Oldest={Oldest}, Newest={Newest}",
+                        configurationKey,
+                        snapshot.IsComplete,
+                        snapshot.IsCoherent,
+                        snapshot.OldestTopicAt,
+                        snapshot.NewestTopicAt);
+                    return;
+                }
                 var mapped = HttpPollingSnapshotMapper.Map(
-                    document.RootElement,
+                    snapshot.Aggregate.RootElement,
                     jsonOptions,
                     normalizedSource,
-                    currentRecipe);
-                foreach (var productionEvent in lifecycle.Track(
-                             mapped,
-                             deployment.Profile.Lifecycle,
-                             0))
+                    currentRecipe,
+                    snapshot.TopicSnapshots);
+                if (snapshot.Fingerprint == currentSnapshotFingerprint)
                 {
-                    await sink.EmitAsync(productionEvent, ct).ConfigureAwait(false);
+                    status.RecordSuccess(
+                        configurationKey,
+                        DateTimeOffset.UtcNow,
+                        currentRecipe,
+                        incrementSample: false);
+                    return;
                 }
+                await sink.EmitBatchAsync(
+                    lifecycle.Track(mapped, deployment.Profile.Lifecycle, 0),
+                    ct).ConfigureAwait(false);
                 currentRecipe = mapped.RecipeIdentity;
+                currentSnapshotFingerprint = snapshot.Fingerprint;
                 status.RecordSuccess(configurationKey, DateTimeOffset.UtcNow, currentRecipe);
+            }
+            catch (InvalidDataException exception) when (IsIncompleteSnapshot(exception))
+            {
+                // 多主题 MQTT 在收到第一部分报文时尚未形成完整快照，这是正常等待状态，
+                // 不能把它记录成采集失败。
+                logger.LogDebug(
+                    "MQTT 采集任务 {Configuration} 尚未收到完整快照：{Reason}",
+                    configurationKey,
+                    exception.Message);
             }
             catch (Exception exception)
             {
                 status.RecordFailure(configurationKey, exception.Message);
                 logger.LogWarning(exception, "MQTT 采集任务 {Configuration} 无法处理主题 {Topic} 的消息",
                     configurationKey, message.ApplicationMessage.Topic);
+            }
+            finally
+            {
+                messageGate.Release();
             }
         };
 
@@ -123,4 +163,7 @@ public sealed class MqttAcquisitionRunner(
             }
         }
     }
+
+    private static bool IsIncompleteSnapshot(InvalidDataException exception)
+        => exception.Message.Contains("缺少必填", StringComparison.Ordinal);
 }

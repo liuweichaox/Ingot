@@ -61,6 +61,68 @@ public sealed class EventSink : IEventSink
         return persisted;
     }
 
+    public async ValueTask<IReadOnlyList<ProductionEvent>> EmitBatchAsync(
+        IReadOnlyList<ProductionEvent> events,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(events);
+        if (events.Count == 0)
+            return [];
+
+        foreach (var evt in events)
+        {
+            if (!ProductionEventValidator.TryValidate(
+                    evt,
+                    requirePersistedSequence: false,
+                    out var validationError))
+            {
+                throw new ArgumentException(validationError, nameof(events));
+            }
+        }
+
+        var stopwatch = Stopwatch.StartNew();
+        var recorded = events
+            .Select(evt => evt with { RecordedAt = DateTimeOffset.UtcNow })
+            .ToArray();
+        IReadOnlyList<long> sequences;
+        try
+        {
+            sequences = _eventLog is IBatchedEventLog batchedLog
+                ? await batchedLog.AppendBatchAsync(recorded, ct).ConfigureAwait(false)
+                : await AppendOneByOneAsync(recorded, ct).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            foreach (var evt in recorded)
+                RecordPersistenceFailureMetric(evt.EventType);
+            _health.ReportFailure(DateTimeOffset.UtcNow, ex);
+            throw;
+        }
+
+        if (sequences.Count != recorded.Length)
+            throw new InvalidOperationException("事件批量落盘返回的序号数量与事件数量不一致。");
+
+        var persisted = recorded
+            .Select((evt, index) => evt with { Seq = sequences[index] })
+            .ToArray();
+        _health.ReportSuccess(persisted[^1].RecordedAt);
+        stopwatch.Stop();
+        foreach (var evt in persisted)
+            RecordEmittedMetric(evt.EventType, stopwatch.Elapsed.TotalMilliseconds / persisted.Length);
+        await RecordBacklogMetricAsync(ct).ConfigureAwait(false);
+        return persisted;
+    }
+
+    private async Task<IReadOnlyList<long>> AppendOneByOneAsync(
+        IReadOnlyList<ProductionEvent> events,
+        CancellationToken ct)
+    {
+        var sequences = new List<long>(events.Count);
+        foreach (var evt in events)
+            sequences.Add(await _eventLog.AppendAsync(evt, ct).ConfigureAwait(false));
+        return sequences;
+    }
+
     private void RecordEmittedMetric(string eventType, double latencyMs)
     {
         try

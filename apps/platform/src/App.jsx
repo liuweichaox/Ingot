@@ -15,6 +15,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { getAuthToken, getJson, postJson, setAuthToken } from "./api/http";
 import * as Pages from "./pages";
+import { AcquisitionProfilePage, AcquisitionProfilesPage } from "./acquisition/AcquisitionProfilePage";
 import { cx, ToastHost } from "./ui/components";
 
 const sections = [
@@ -407,7 +408,8 @@ function AppRoutes() {
       <Route path="/profiles" element={<Navigate to="/configuration/process-data-models" replace />} />
       <Route path="/configuration/process-data-models" element={<Pages.ProcessDataModelsPage />} />
       <Route path="/configuration/recipe-versions" element={<Pages.RecipeVersionsPage />} />
-      <Route path="/configuration/acquisition-profiles" element={<Pages.AcquisitionProfilesPage />} />
+      <Route path="/configuration/acquisition-profiles" element={<AcquisitionProfilesPage />} />
+      <Route path="/configuration/acquisition-profiles/:profileId" element={<AcquisitionProfilePage />} />
       <Route path="/edges" element={<Pages.EdgesPage />} />
       <Route path="/edges/:edgeId" element={<Pages.EdgeDetailPage />} />
       <Route path="/platform-metrics" element={<Pages.MetricsPage />} />

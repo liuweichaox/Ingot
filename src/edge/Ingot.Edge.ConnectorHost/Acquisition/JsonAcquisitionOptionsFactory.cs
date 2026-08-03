@@ -22,6 +22,7 @@ public static class JsonAcquisitionOptionsFactory
             DeviceBaseUrl = profile.Connection.BaseUrl,
             SnapshotPath = profile.Connection.SnapshotPath,
             PollIntervalMs = profile.Connection.PollIntervalMs,
+            TimeoutMs = profile.Execution.TimeoutMs,
             Source = profile.Source,
             SubjectType = profile.SubjectType,
             SubjectId = profile.SubjectId,
@@ -34,7 +35,8 @@ public static class JsonAcquisitionOptionsFactory
             {
                 Key = item.ContextKey,
                 SourcePath = item.SourcePath,
-                Required = item.Required
+                Required = item.Required,
+                Topic = item.Topic
             }).ToArray(),
             Fields = profile.ValueMappings.Select(item => new ValueFieldMapping
             {
@@ -44,7 +46,8 @@ public static class JsonAcquisitionOptionsFactory
                 Category = dataItems[item.DataItemCode].Category,
                 Required = item.Required,
                 Scale = item.Scale,
-                Offset = item.Offset
+                Offset = item.Offset,
+                Topic = item.Topic
             }).ToArray(),
             Recipe = profile.Recipe is null ? null : new RecipeFieldMapping
             {
@@ -60,7 +63,8 @@ public static class JsonAcquisitionOptionsFactory
                     DataType = parameters[item.DataItemCode].DataType,
                     Required = item.Required,
                     Scale = item.Scale,
-                    Offset = item.Offset
+                    Offset = item.Offset,
+                    Topic = item.Topic
                 }).ToArray()
             },
             Lifecycle = profile.Lifecycle is null ? null : new LifecycleFieldMapping

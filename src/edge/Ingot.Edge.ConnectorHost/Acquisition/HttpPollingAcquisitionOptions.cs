@@ -16,6 +16,7 @@ public sealed class HttpPollingAcquisitionOptions
     public string DeviceBaseUrl { get; init; } = string.Empty;
     public string SnapshotPath { get; init; } = "/api/v1/snapshot";
     public int PollIntervalMs { get; init; } = 1000;
+    public int TimeoutMs { get; init; } = 10000;
     public string Source { get; init; } = "connector/http-polling";
     public string SubjectType { get; init; } = "equipment";
     public string SubjectId { get; init; } = string.Empty;
@@ -40,6 +41,8 @@ public sealed class ValueFieldMapping
     public bool Required { get; init; } = true;
     public double Scale { get; init; } = 1;
     public double Offset { get; init; }
+    /// <summary>MQTT 多主题订阅时，该字段来自哪个订阅主题；留空表示合并快照。</summary>
+    public string? Topic { get; init; }
 }
 
 public sealed class ContextFieldMapping
@@ -47,6 +50,8 @@ public sealed class ContextFieldMapping
     public required string SourcePath { get; init; }
     public required string Key { get; init; }
     public bool Required { get; init; }
+    /// <summary>MQTT 多主题订阅时，该上下文来自哪个订阅主题；留空表示合并快照。</summary>
+    public string? Topic { get; init; }
 }
 
 public sealed class RecipeFieldMapping

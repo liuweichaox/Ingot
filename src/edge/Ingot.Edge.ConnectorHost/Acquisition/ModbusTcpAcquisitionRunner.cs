@@ -23,12 +23,13 @@ public sealed class ModbusTcpAcquisitionRunner(
             ?? throw new InvalidOperationException("Modbus TCP 连接配置不能为空。");
         string? currentRecipe = null;
         var lifecycle = new AcquisitionLifecycleTracker();
+        var sourceDeduplicator = new AcquisitionSourceDeduplicator();
         while (!ct.IsCancellationRequested)
         {
             try
             {
                 using var tcpClient = new TcpClient();
-                await tcpClient.ConnectAsync(connection.Host, connection.Port, ct).ConfigureAwait(false);
+                await ConnectAsync(tcpClient, connection, deployment.Profile.Execution, ct).ConfigureAwait(false);
                 var factory = new ModbusFactory();
                 using var master = factory.CreateMaster(tcpClient);
                 logger.LogInformation(
@@ -38,9 +39,20 @@ public sealed class ModbusTcpAcquisitionRunner(
                 {
                     var readStarted = System.Diagnostics.Stopwatch.GetTimestamp();
                     status.RecordAttempt(configurationKey, DateTimeOffset.UtcNow);
+                    using var readTimeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                    readTimeout.CancelAfter(Math.Max(1000, deployment.Profile.Execution.TimeoutMs));
                     var selectors = BuildSelectors(deployment, connection.AddressBase);
-                    var raw = await ReadSnapshotAsync(master, connection.UnitId, selectors)
-                        .ConfigureAwait(false);
+                    Dictionary<string, object?> raw;
+                    try
+                    {
+                        raw = await ReadSnapshotAsync(master, connection.UnitId, selectors, readTimeout.Token)
+                            .ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+                    {
+                        throw new TimeoutException(
+                            $"读取 Modbus 设备 {connection.Host}:{connection.Port} 超过 {deployment.Profile.Execution.TimeoutMs}ms 未完成。");
+                    }
                     var occurredAt = DateTimeOffset.UtcNow;
                     if (deployment.Profile.TimestampMode == "source" &&
                         !string.IsNullOrWhiteSpace(deployment.Profile.TimestampPath))
@@ -51,13 +63,21 @@ public sealed class ModbusTcpAcquisitionRunner(
                     }
                     var mapped = ProtocolAcquisitionSnapshotMapper.Map(
                         deployment, raw, normalizedSource, currentRecipe, occurredAt);
-                    foreach (var productionEvent in lifecycle.Track(
-                                 mapped,
-                                 deployment.Profile.Lifecycle,
-                                 connection.PollIntervalMs))
+                    if (!sourceDeduplicator.ShouldEmit(mapped.Sample))
                     {
-                        await sink.EmitAsync(productionEvent, ct).ConfigureAwait(false);
+                        currentRecipe = mapped.RecipeIdentity;
+                        status.RecordSuccess(
+                            configurationKey,
+                            DateTimeOffset.UtcNow,
+                            currentRecipe,
+                            incrementSample: false,
+                            readDurationMs: System.Diagnostics.Stopwatch.GetElapsedTime(readStarted).TotalMilliseconds);
+                        await Task.Delay(connection.PollIntervalMs, ct).ConfigureAwait(false);
+                        continue;
                     }
+                    await sink.EmitBatchAsync(
+                        lifecycle.Track(mapped, deployment.Profile.Lifecycle, connection.PollIntervalMs),
+                        ct).ConfigureAwait(false);
                     currentRecipe = mapped.RecipeIdentity;
                     status.RecordSuccess(
                         configurationKey,
@@ -117,47 +137,55 @@ public sealed class ModbusTcpAcquisitionRunner(
         return mapping with { ModbusAddress = checked((ushort)(address - 1)) };
     }
 
+    /// <summary>
+    ///     标量选择器（上下文、配方、时间戳来源）的解析交给公共契约中的
+    ///     <see cref="AcquisitionSelectors"/>，与平台保存配置时使用的是同一份规则。
+    /// </summary>
     private static AcquisitionValueMapping ParseSelector(string selector)
     {
-        var parts = selector.Split(':', StringSplitOptions.TrimEntries);
-        if (parts.Length < 3 ||
-            !ushort.TryParse(parts[1], out var address))
-        {
-            throw new InvalidOperationException(
-                $"Modbus 标量选择器无效：{selector}。应使用 area:address:type 格式。");
-        }
-        var dataType = parts[2];
-        var quantity = dataType switch
-        {
-            "int16" or "uint16" => 1,
-            "int32" or "uint32" or "float32" => 2,
-            "int64" or "uint64" or "float64" => 4,
-            "boolean" => 1,
-            "string" when parts.Length > 3 && ushort.TryParse(parts[3], out var length)
-                => (length + 1) / 2,
-            _ => throw new InvalidOperationException($"Modbus 标量选择器类型无效：{dataType}。")
-        };
+        if (!AcquisitionSelectors.TryParseModbus(selector, out var point, out var error))
+            throw new InvalidOperationException(error);
         return new AcquisitionValueMapping
         {
             DataItemCode = selector,
             SourcePath = selector,
-            ModbusArea = parts[0],
-            ModbusAddress = address,
-            ModbusQuantity = (ushort)quantity,
-            SourceDataType = dataType == "boolean" ? "uint16" : dataType,
-            ByteOrder = dataType == "string"
-                ? "big-endian"
-                : parts.Length > 3 ? parts[3] : "big-endian",
-            WordOrder = dataType == "string"
-                ? "high-low"
-                : parts.Length > 4 ? parts[4] : "high-low"
+            ModbusArea = point.Area,
+            ModbusAddress = point.Address,
+            ModbusQuantity = point.Quantity,
+            SourceDataType = point.DataType,
+            ByteOrder = point.ByteOrder,
+            WordOrder = point.WordOrder,
+            BitIndex = point.BitIndex
         };
+    }
+
+    /// <summary>建立连接时应用配置的超时；以前依赖操作系统默认值，半开连接会长时间挂起。</summary>
+    private static async Task ConnectAsync(
+        TcpClient client,
+        ModbusTcpConnection connection,
+        AcquisitionExecutionOptions execution,
+        CancellationToken ct)
+    {
+        var timeout = Math.Max(1000, execution.TimeoutMs);
+        client.ReceiveTimeout = timeout;
+        client.SendTimeout = timeout;
+        using var attempt = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        attempt.CancelAfter(timeout);
+        try
+        {
+            await client.ConnectAsync(connection.Host, connection.Port, attempt.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            throw new TimeoutException($"连接 Modbus 设备 {connection.Host}:{connection.Port} 超过 {timeout}ms 未完成。");
+        }
     }
 
     internal static async Task<Dictionary<string, object?>> ReadSnapshotAsync(
         IModbusMaster master,
         byte unitId,
-        IReadOnlyDictionary<string, AcquisitionValueMapping> selectors)
+        IReadOnlyDictionary<string, AcquisitionValueMapping> selectors,
+        CancellationToken ct = default)
     {
         var result = new Dictionary<string, object?>(StringComparer.Ordinal);
         foreach (var area in selectors.GroupBy(item => item.Value.ModbusArea, StringComparer.Ordinal))
@@ -181,8 +209,8 @@ public sealed class ModbusTcpAcquisitionRunner(
                 if (area.Key is "coil" or "discrete-input")
                 {
                     var block = area.Key == "coil"
-                        ? await master.ReadCoilsAsync(unitId, start, quantity).ConfigureAwait(false)
-                        : await master.ReadInputsAsync(unitId, start, quantity).ConfigureAwait(false);
+                        ? await master.ReadCoilsAsync(unitId, start, quantity).WaitAsync(ct).ConfigureAwait(false)
+                        : await master.ReadInputsAsync(unitId, start, quantity).WaitAsync(ct).ConfigureAwait(false);
                     foreach (var item in included)
                     {
                         var offset = item.Value.ModbusAddress!.Value - start;
@@ -193,9 +221,9 @@ public sealed class ModbusTcpAcquisitionRunner(
                 {
                     var block = area.Key switch
                     {
-                        "holding-register" => await master.ReadHoldingRegistersAsync(unitId, start, quantity)
+                        "holding-register" => await master.ReadHoldingRegistersAsync(unitId, start, quantity).WaitAsync(ct)
                             .ConfigureAwait(false),
-                        "input-register" => await master.ReadInputRegistersAsync(unitId, start, quantity)
+                        "input-register" => await master.ReadInputRegistersAsync(unitId, start, quantity).WaitAsync(ct)
                             .ConfigureAwait(false),
                         _ => throw new InvalidOperationException($"Modbus 寄存器区无效：{area.Key}。")
                     };
@@ -213,32 +241,6 @@ public sealed class ModbusTcpAcquisitionRunner(
             }
         }
         return result;
-    }
-
-    private static async Task<object> ReadAsync(
-        IModbusMaster master,
-        byte unitId,
-        AcquisitionValueMapping mapping)
-    {
-        var address = mapping.ModbusAddress
-            ?? throw new InvalidOperationException($"数据项 {mapping.DataItemCode} 缺少 Modbus 地址。");
-        return mapping.ModbusArea switch
-        {
-            "coil" => (await master.ReadCoilsAsync(unitId, address, mapping.ModbusQuantity)
-                .ConfigureAwait(false))[0],
-            "discrete-input" => (await master.ReadInputsAsync(unitId, address, mapping.ModbusQuantity)
-                .ConfigureAwait(false))[0],
-            "input-register" => Decode(
-                await master.ReadInputRegistersAsync(unitId, address, mapping.ModbusQuantity)
-                    .ConfigureAwait(false),
-                mapping),
-            "holding-register" => Decode(
-                await master.ReadHoldingRegistersAsync(unitId, address, mapping.ModbusQuantity)
-                    .ConfigureAwait(false),
-                mapping),
-            _ => throw new InvalidOperationException(
-                $"数据项 {mapping.DataItemCode} 的 Modbus 寄存器区无效：{mapping.ModbusArea}。")
-        };
     }
 
     internal static object Decode(ushort[] registers, AcquisitionValueMapping mapping)
@@ -260,6 +262,16 @@ public sealed class ModbusTcpAcquisitionRunner(
         var type = mapping.SourceDataType == "auto"
             ? registers.Length == 1 ? "uint16" : "float32"
             : mapping.SourceDataType;
+        if (type == AcquisitionSelectors.BooleanDataType)
+        {
+            // 保持/输入寄存器取单个位。线圈与离散输入区不会走到这里，
+            // 它们在 ReadSnapshotAsync 中直接返回布尔值。
+            var bit = mapping.BitIndex
+                ?? throw new InvalidOperationException(
+                    $"数据项 {mapping.DataItemCode} 从寄存器读取布尔值时必须指定位偏移。");
+            return (ReadUInt16(bytes, mapping.ByteOrder) & (1 << bit)) != 0;
+        }
+
         return type switch
         {
             "int16" => ReadInt16(bytes, mapping.ByteOrder),

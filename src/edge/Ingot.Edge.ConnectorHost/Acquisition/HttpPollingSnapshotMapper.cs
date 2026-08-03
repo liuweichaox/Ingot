@@ -15,7 +15,8 @@ public static class HttpPollingSnapshotMapper
         JsonElement snapshot,
         HttpPollingAcquisitionOptions options,
         string normalizedSource,
-        string? previousRecipeIdentity)
+        string? previousRecipeIdentity,
+        IReadOnlyDictionary<string, JsonElement>? topicSnapshots = null)
     {
         ArgumentNullException.ThrowIfNull(options);
         ValidateMappingOptions(options);
@@ -26,7 +27,8 @@ public static class HttpPollingSnapshotMapper
         var context = new Dictionary<string, string>(options.StaticContext, StringComparer.Ordinal);
         foreach (var mapping in options.ContextFields)
         {
-            if (!TryResolve(snapshot, mapping.SourcePath, out var value) ||
+            var source = SourceRoot(snapshot, mapping.Topic, topicSnapshots);
+            if (!TryResolve(source, mapping.SourcePath, out var value) ||
                 value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
             {
                 if (mapping.Required)
@@ -39,7 +41,8 @@ public static class HttpPollingSnapshotMapper
         var values = new Dictionary<string, object?>(StringComparer.Ordinal);
         foreach (var field in options.Fields)
         {
-            if (!TryResolve(snapshot, field.SourcePath, out var raw) ||
+            var source = SourceRoot(snapshot, field.Topic, topicSnapshots);
+            if (!TryResolve(source, field.SourcePath, out var raw) ||
                 raw.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
             {
                 if (field.Required)
@@ -61,16 +64,16 @@ public static class HttpPollingSnapshotMapper
                 Convert.ToString(stageValue, CultureInfo.InvariantCulture) ?? string.Empty;
         }
 
-        var sampleData = new Dictionary<string, object?>(StringComparer.Ordinal)
-        {
-            ["values"] = values
-        };
+        var sampleData = AcquisitionSampleMetadata.CreateQuality(values, DateTimeOffset.UtcNow);
+        sampleData["values"] = values;
         if (!string.IsNullOrWhiteSpace(options.SequencePath) &&
             TryResolve(snapshot, options.SequencePath, out var sequence) &&
             sequence.ValueKind is not (JsonValueKind.Null or JsonValueKind.Undefined))
         {
             sampleData["sourceSequence"] = ConvertValue(sequence, "integer", options.SequencePath);
         }
+        if (options.TimestampMode == "source")
+            sampleData["sourceTimestamp"] = occurredAt.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture);
 
         string? recipeIdentity = null;
         ProductionEvent? recipeEvent = null;
@@ -87,8 +90,8 @@ public static class HttpPollingSnapshotMapper
 
             if (!string.Equals(recipeIdentity, previousRecipeIdentity, StringComparison.Ordinal))
             {
-                if (!TryResolve(snapshot, options.Recipe.ParametersPath, out var parameters) ||
-                    parameters.ValueKind != JsonValueKind.Object)
+                if (!TryResolve(snapshot, options.Recipe.ParametersPath, out var aggregateParameters) ||
+                    aggregateParameters.ValueKind != JsonValueKind.Object)
                 {
                     throw new InvalidDataException(
                         $"设备快照中的配方参数必须是对象：{options.Recipe.ParametersPath}。");
@@ -96,6 +99,19 @@ public static class HttpPollingSnapshotMapper
                 var resolvedParameters = new Dictionary<string, object?>(StringComparer.Ordinal);
                 foreach (var field in options.Recipe.ParameterFields)
                 {
+                    var parameters = aggregateParameters;
+                    if (!string.IsNullOrWhiteSpace(field.Topic))
+                    {
+                        if (!TryResolve(
+                                SourceRoot(snapshot, field.Topic, topicSnapshots),
+                                options.Recipe.ParametersPath,
+                                out parameters) ||
+                            parameters.ValueKind != JsonValueKind.Object)
+                        {
+                            parameters = default;
+                        }
+                    }
+
                     if (!TryResolve(parameters, field.SourcePath, out var raw) ||
                         raw.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
                     {
@@ -297,6 +313,16 @@ public static class HttpPollingSnapshotMapper
         }
         return true;
     }
+
+    private static JsonElement SourceRoot(
+        JsonElement aggregate,
+        string? topic,
+        IReadOnlyDictionary<string, JsonElement>? topicSnapshots)
+        => string.IsNullOrWhiteSpace(topic) ||
+           topicSnapshots is null ||
+           !topicSnapshots.TryGetValue(topic, out var topicRoot)
+            ? string.IsNullOrWhiteSpace(topic) ? aggregate : default
+            : topicRoot;
 
     private static string? ResolveCorrelationId(
         IReadOnlyDictionary<string, string> context,

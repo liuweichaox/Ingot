@@ -56,7 +56,13 @@ public sealed record HttpPollingConnection
 
 public sealed record AcquisitionExecutionOptions
 {
+    /// <summary>
+    ///     建立连接与等待单次响应的上限。是否生效由
+    ///     <see cref="AcquisitionProtocolCapability.SupportsConnectTimeout"/> 决定。
+    /// </summary>
     public int TimeoutMs { get; init; } = 10000;
+
+    /// <summary>连接断开后重新建立连接前的等待时间。</summary>
     public int ReconnectDelayMs { get; init; } = 5000;
 }
 
@@ -78,6 +84,10 @@ public sealed record MqttConnection
     /// </summary>
     public bool CleanSession { get; init; } = true;
     public int KeepAliveSeconds { get; init; } = 30;
+    /// <summary>跨主题快照中，单个主题数据允许距离当前时间的最大秒数。</summary>
+    public int SnapshotMaxAgeSeconds { get; init; } = 30;
+    /// <summary>跨主题快照中，最早与最晚主题数据允许相差的最大秒数。</summary>
+    public int SnapshotMaxSkewSeconds { get; init; } = 5;
     public IReadOnlyList<MqttTopicSubscription> Topics { get; init; } = [];
 }
 
@@ -85,6 +95,12 @@ public sealed record MqttTopicSubscription
 {
     public required string Topic { get; init; }
     public int Qos { get; init; }
+
+    /// <summary>
+    ///     该主题报文中承载数据的 JSON 子对象路径。留空表示报文根即数据对象。
+    ///     用于网关把设备数据包在 <c>payload</c>、<c>d</c> 之类的信封里的情况。
+    /// </summary>
+    public string? PayloadRoot { get; init; }
 }
 
 public sealed record OpcUaConnection
@@ -118,7 +134,8 @@ public sealed record ModbusTcpConnection
 
 /// <summary>
 ///     三菱 MC 协议 A 兼容 1E 帧连接配置，用于 FX3U-ENET(-L/-ADP) 等设备。
-///     选择器格式：软元件:地址:类型（如 D:100:int16）。凭据不入库（本协议通常无需认证）。
+///     选择器格式：软元件:编号:类型（如 D:100:int16、M:20:boolean、D:100.3:boolean）。
+///     凭据不入库（本协议通常无需认证）。
 /// </summary>
 public sealed record McA1EConnection
 {
@@ -135,6 +152,12 @@ public sealed record McA1EConnection
     public ushort MonitoringTimer { get; init; } = 0x0010;
     /// <summary>软元件号/代码字段顺序。FX3U-ENET-ADP A-compatible 1E 固定为 A（号在前）。</summary>
     public string WordOrderLayout { get; init; } = "A";
+
+    /// <summary>
+    ///     相邻点位之间允许合并读取的最大编号间隔。设为 0 表示逐点读取。
+    ///     合并可以把 N 个点位的 N 次往返压缩成少数几次，代价是会读取到用不上的中间软元件。
+    /// </summary>
+    public int MaxMergeGap { get; init; } = 8;
 }
 
 public sealed record AcquisitionContextMapping
@@ -142,6 +165,9 @@ public sealed record AcquisitionContextMapping
     public required string ContextKey { get; init; }
     public required string SourcePath { get; init; }
     public bool Required { get; init; }
+
+    /// <summary>MQTT 多主题订阅时，该上下文来自哪个主题；留空表示任意主题。</summary>
+    public string? Topic { get; init; }
 }
 
 public sealed record AcquisitionValueMapping
@@ -152,11 +178,37 @@ public sealed record AcquisitionValueMapping
     public string SourceDataType { get; init; } = "auto";
     public double Scale { get; init; } = 1;
     public double Offset { get; init; }
+
+    // ---- Modbus 结构化寻址 ----
     public string? ModbusArea { get; init; }
     public ushort? ModbusAddress { get; init; }
     public ushort ModbusQuantity { get; init; } = 1;
     public string ByteOrder { get; init; } = "big-endian";
     public string WordOrder { get; init; } = "high-low";
+
+    // ---- MELSEC 结构化寻址 ----
+    /// <summary>MELSEC 软元件代码，例如 D / M / X。</summary>
+    public string? MelsecDevice { get; init; }
+
+    /// <summary>
+    ///     MELSEC 软元件编号，按该软元件在手册中的进制书写（X/Y 八进制、B/W 十六进制、其余十进制）。
+    ///     保留字符串形式，避免十六进制与八进制在往返中丢失原始写法。
+    /// </summary>
+    public string? MelsecAddress { get; init; }
+
+    // ---- 位寻址 ----
+    /// <summary>
+    ///     从一个 16 位字中提取的位序号（0-15）。仅在 <see cref="SourceDataType"/> 为
+    ///     <c>boolean</c> 且目标是字寄存器/字软元件时有意义。
+    /// </summary>
+    public int? BitIndex { get; init; }
+
+    // ---- MQTT 多主题 ----
+    /// <summary>
+    ///     该点位来自哪个 MQTT 主题。留空表示任意主题的报文都可以提供该值。
+    ///     配置多主题时显式绑定，才能让不同主题各自携带一部分字段。
+    /// </summary>
+    public string? Topic { get; init; }
 }
 
 public sealed record AcquisitionRecipeMapping
@@ -165,7 +217,14 @@ public sealed record AcquisitionRecipeMapping
     public required string IdPath { get; init; }
     public required string VersionPath { get; init; }
     public string? NamePath { get; init; }
-    public required string ParametersPath { get; init; }
+
+    /// <summary>
+    ///     配方参数所在的 JSON 子对象路径，参数映射的路径相对于它；"." 表示报文根。
+    ///     只有文档类协议（HTTP / MQTT）真正使用；寄存器类协议的参数直接用点位选择器寻址，
+    ///     校验器对这些协议不再强制填写。
+    /// </summary>
+    public string ParametersPath { get; init; } = ".";
+
     public IReadOnlyList<AcquisitionValueMapping> ParameterMappings { get; init; } = [];
 }
 
@@ -220,6 +279,9 @@ public sealed record AcquisitionProbePoint
     public required string Kind { get; init; }
     public required string DataType { get; init; }
     public string? RawValue { get; init; }
+
+    /// <summary>MQTT 探查时，该点位来自哪个主题。</summary>
+    public string? Topic { get; init; }
 }
 
 /// <summary>一次设备原始值到平台语义项的换算预览。</summary>

@@ -45,13 +45,15 @@ public sealed class AcquisitionProbeService(
         var missing = previews.Where(item => !item.Found && Required(deployment, item.DataItemCode)).ToArray();
         return new AcquisitionProbeResult
         {
-            Success = missing.Length == 0,
-            MappingsValidated = true,
+            Success = missing.Length == 0 && raw.MappingsValidated,
+            MappingsValidated = missing.Length == 0 && raw.MappingsValidated,
             Protocol = deployment.Profile.Protocol,
             TestedAt = DateTimeOffset.UtcNow,
-            Message = missing.Length == 0
+            Message = missing.Length == 0 && raw.MappingsValidated
                 ? $"连接成功，读取到 {raw.Points.Count} 个设备点位，映射验证通过。"
-                : $"连接成功，但有 {missing.Length} 个必需映射未读取到值。",
+                : missing.Length > 0
+                    ? $"连接成功，但有 {missing.Length} 个必需映射未读取到值。"
+                    : "连接成功，但设备报文未通过映射验证。",
             Points = raw.Points,
             Mappings = previews
         };
@@ -70,10 +72,26 @@ public sealed class AcquisitionProbeService(
             stream,
             new JsonDocumentOptions { MaxDepth = 64 },
             ct).ConfigureAwait(false);
+        var mappingsValidated = true;
+        if (!IsDiscoveryProbe(deployment))
+        {
+            try
+            {
+                HttpPollingSnapshotMapper.Map(
+                    document.RootElement,
+                    JsonAcquisitionOptionsFactory.Create(deployment),
+                    deployment.Profile.Source,
+                    previousRecipeIdentity: null);
+            }
+            catch (InvalidDataException)
+            {
+                mappingsValidated = false;
+            }
+        }
         var values = new Dictionary<string, object?>(StringComparer.Ordinal);
         var points = new List<AcquisitionProbePoint>();
         FlattenJson(document.RootElement, string.Empty, values, points);
-        return new ProbeSnapshot(values, points);
+        return new ProbeSnapshot(values, points, mappingsValidated);
     }
 
     private async Task<ProbeSnapshot> ProbeMqttAsync(AcquisitionDeployment deployment, CancellationToken ct)
@@ -85,10 +103,53 @@ public sealed class AcquisitionProbeService(
 
         var factory = new MqttClientFactory();
         using var client = factory.CreateMqttClient();
-        var sample = new TaskCompletionSource<byte[]>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var snapshots = new MqttSnapshotAccumulator(connection.Topics);
+        var jsonOptions = JsonAcquisitionOptionsFactory.Create(deployment);
+        var sample = new TaskCompletionSource<ProbeSnapshot>(TaskCreationOptions.RunContinuationsAsynchronously);
         client.ApplicationMessageReceivedAsync += message =>
         {
-            sample.TrySetResult(message.ApplicationMessage.Payload.ToArray());
+            try
+            {
+                using var snapshot = snapshots.Add(
+                    message.ApplicationMessage.Topic,
+                    message.ApplicationMessage.Payload,
+                    DateTimeOffset.UtcNow,
+                    connection.SnapshotMaxAgeSeconds,
+                    connection.SnapshotMaxSkewSeconds);
+                if (!snapshot.IsComplete || !snapshot.IsCoherent)
+                    return Task.CompletedTask;
+                var values = new Dictionary<string, object?>(StringComparer.Ordinal);
+                var points = new List<AcquisitionProbePoint>();
+                FlattenJson(snapshot.Aggregate.RootElement, string.Empty, values, points);
+                var mappingsValidated = true;
+                try
+                {
+                    HttpPollingSnapshotMapper.Map(
+                        snapshot.Aggregate.RootElement,
+                        jsonOptions,
+                        deployment.Profile.Source,
+                        previousRecipeIdentity: null,
+                        snapshot.TopicSnapshots);
+                }
+                catch (InvalidDataException exception) when (
+                    connection.Topics.Count > 1 && IsIncompleteSnapshot(exception))
+                {
+                    // 尚未收到所有主题的必填字段，继续等待下一条消息。
+                    return Task.CompletedTask;
+                }
+                catch (InvalidDataException) when (connection.Topics.Count == 1)
+                {
+                    mappingsValidated = false;
+                }
+
+                if (connection.Topics.Count == 1 || mappingsValidated)
+                    sample.TrySetResult(new ProbeSnapshot(values, points, mappingsValidated));
+            }
+            catch (Exception exception)
+            {
+                sample.TrySetException(exception);
+            }
+
             return Task.CompletedTask;
         };
         var optionsBuilder = new MqttClientOptionsBuilder()
@@ -132,14 +193,13 @@ public sealed class AcquisitionProbeService(
                 .Build();
             await client.SubscribeAsync(subscription, ct).ConfigureAwait(false);
         }
-        var payload = await sample.Task.WaitAsync(ct).ConfigureAwait(false);
+        var result = await sample.Task.WaitAsync(ct).ConfigureAwait(false);
         await client.DisconnectAsync(cancellationToken: CancellationToken.None).ConfigureAwait(false);
-        using var document = JsonDocument.Parse(payload);
-        var values = new Dictionary<string, object?>(StringComparer.Ordinal);
-        var points = new List<AcquisitionProbePoint>();
-        FlattenJson(document.RootElement, string.Empty, values, points);
-        return new ProbeSnapshot(values, points);
+        return result;
     }
+
+    private static bool IsIncompleteSnapshot(InvalidDataException exception)
+        => exception.Message.Contains("缺少必填", StringComparison.Ordinal);
 
     private async Task<ProbeSnapshot> ProbeModbusAsync(AcquisitionDeployment deployment, CancellationToken ct)
     {
@@ -153,7 +213,8 @@ public sealed class AcquisitionProbeService(
             master,
             connection.UnitId,
             ModbusTcpAcquisitionRunner.BuildSelectors(deployment, connection.AddressBase)).ConfigureAwait(false);
-        return FromRegisterValues(values, "register");
+        var mappingsValidated = ValidateProtocolMapping(deployment, values);
+        return FromRegisterValues(values, "register", mappingsValidated);
     }
 
     private static async Task<ProbeSnapshot> ProbeMelsecAsync(
@@ -165,12 +226,17 @@ public sealed class AcquisitionProbeService(
         using var client = new TcpClient();
         await client.ConnectAsync(connection.Host, connection.Port, ct).ConfigureAwait(false);
         await using var stream = client.GetStream();
+        var selectors = MelsecA1EAcquisitionRunner.BuildSelectors(deployment);
+        var plan = MelsecA1EAcquisitionRunner.BuildReadPlan(
+            selectors,
+            connection.MaxMergeGap);
         var values = await MelsecA1EAcquisitionRunner.ReadSnapshotAsync(
             stream,
             connection,
-            MelsecA1EAcquisitionRunner.BuildSelectors(deployment),
+            plan,
             ct).ConfigureAwait(false);
-        return FromRegisterValues(values, "register");
+        var mappingsValidated = ValidateProtocolMapping(deployment, values);
+        return FromRegisterValues(values, "register", mappingsValidated);
     }
 
     private async Task<ProbeSnapshot> ProbeOpcUaAsync(AcquisitionDeployment deployment, CancellationToken ct)
@@ -230,7 +296,50 @@ public sealed class AcquisitionProbeService(
             }
         }
 #pragma warning restore CS0618
-        return new ProbeSnapshot(values, points);
+        var mappingsValidated = ValidateProtocolMapping(deployment, values);
+        return new ProbeSnapshot(values, points, mappingsValidated);
+    }
+
+    private static bool IsDiscoveryProbe(AcquisitionDeployment deployment)
+        => deployment.Profile.ValueMappings.Any(item =>
+            item.SourcePath == "__probe_only__" && !item.Required);
+
+    private static bool ValidateProtocolMapping(
+        AcquisitionDeployment deployment,
+        IReadOnlyDictionary<string, object?> values)
+    {
+        if (IsDiscoveryProbe(deployment))
+            return true;
+
+        try
+        {
+            var occurredAt = DateTimeOffset.UtcNow;
+            if (deployment.Profile.TimestampMode == "source" &&
+                !string.IsNullOrWhiteSpace(deployment.Profile.TimestampPath))
+            {
+                if (!values.TryGetValue(deployment.Profile.TimestampPath, out var rawTimestamp) ||
+                    rawTimestamp is null)
+                {
+                    throw new InvalidDataException(
+                        $"配置的时间来源没有读到值：{deployment.Profile.TimestampPath}。");
+                }
+                occurredAt = DateTimeOffset.FromUnixTimeMilliseconds(
+                    Convert.ToInt64(rawTimestamp, CultureInfo.InvariantCulture));
+            }
+
+            ProtocolAcquisitionSnapshotMapper.Map(
+                deployment,
+                values,
+                deployment.Profile.Source,
+                previousRecipeIdentity: null,
+                occurredAt: occurredAt);
+            return true;
+        }
+        catch (Exception exception) when (
+            exception is InvalidDataException or FormatException or InvalidCastException or OverflowException)
+        {
+            return false;
+        }
     }
 
 #pragma warning disable CS0618 // See ProbeOpcUaAsync: the bounded compatibility browse API is used for one-shot discovery.
@@ -356,7 +465,8 @@ public sealed class AcquisitionProbeService(
 
     private static ProbeSnapshot FromRegisterValues(
         Dictionary<string, object?> values,
-        string kind)
+        string kind,
+        bool mappingsValidated = true)
         => new(
             values,
             values.Select(item => new AcquisitionProbePoint
@@ -366,7 +476,8 @@ public sealed class AcquisitionProbeService(
                 Kind = kind,
                 DataType = item.Value?.GetType().Name ?? "null",
                 RawValue = Format(item.Value)
-            }).ToArray());
+            }).ToArray(),
+            mappingsValidated);
 
     private static void AddPoint(
         ICollection<AcquisitionProbePoint> points,
@@ -416,5 +527,6 @@ public sealed class AcquisitionProbeService(
 
     private sealed record ProbeSnapshot(
         Dictionary<string, object?> Values,
-        IReadOnlyList<AcquisitionProbePoint> Points);
+        IReadOnlyList<AcquisitionProbePoint> Points,
+        bool MappingsValidated = true);
 }

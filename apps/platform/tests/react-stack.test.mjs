@@ -8,6 +8,14 @@ const pages = await readFile(new URL("../src/pages/index.jsx", import.meta.url),
 const http = await readFile(new URL("../src/api/http.js", import.meta.url), "utf8");
 const components = await readFile(new URL("../src/ui/components.jsx", import.meta.url), "utf8");
 const registryEditor = await readFile(new URL("../src/components/RegistryBusinessEditor.jsx", import.meta.url), "utf8");
+const acquisitionRegistry = await readFile(new URL("../src/acquisition/protocolRegistry.js", import.meta.url), "utf8");
+const acquisitionPage = await readFile(new URL("../src/acquisition/AcquisitionProfilePage.jsx", import.meta.url), "utf8");
+const acquisitionForm = await readFile(new URL("../src/acquisition/profileForm.js", import.meta.url), "utf8");
+const acquisitionPanels = {
+  connection: await readFile(new URL("../src/acquisition/panels/ConnectionPanel.jsx", import.meta.url), "utf8"),
+  mapping: await readFile(new URL("../src/acquisition/panels/PointMappingPanel.jsx", import.meta.url), "utf8"),
+  points: await readFile(new URL("../src/acquisition/panels/DevicePointsPanel.jsx", import.meta.url), "utf8"),
+};
 const researchProjects = await readFile(new URL("../src/pages/ResearchProjectsPage.jsx", import.meta.url), "utf8");
 const researchAssets = await readFile(new URL("../src/pages/ResearchAssetsPage.jsx", import.meta.url), "utf8");
 const styles = await readFile(new URL("../src/styles/global.css", import.meta.url), "utf8");
@@ -189,7 +197,7 @@ test("inspection definitions use the characteristic contract and business fields
 });
 
 test("all versioned configuration registries use business forms instead of JSON editors", () => {
-  for (const kind of ["processModel", "recipeVersion", "analysisPlan", "qualityPlan", "acquisitionProfile"]) {
+  for (const kind of ["processModel", "recipeVersion", "analysisPlan", "qualityPlan"]) {
     assert.match(pages, new RegExp(`kind: "${kind}"`));
     assert.match(registryEditor, new RegExp(`kind === "${kind}"`));
   }
@@ -197,20 +205,62 @@ test("all versioned configuration registries use business forms instead of JSON 
   assert.match(registryEditor, /function ProcessModelEditor/);
   assert.match(registryEditor, /function RecipeEditor/);
   assert.match(registryEditor, /function AnalysisPlanEditor/);
-  assert.match(registryEditor, /function AcquisitionEditor/);
   assert.match(registryEditor, /requiresAttachment: item\.requiresAttachment \|\| item\.requiresReview/);
   assert.doesNotMatch(pages, /label="版本定义"/);
 });
 
-test("acquisition profiles probe real device points before publishing", () => {
-  assert.match(registryEditor, /测试连接并读取样本/);
-  assert.match(registryEditor, /\/api\/v1\/acquisition-profiles\/probe/);
-  assert.match(registryEditor, /JSON 字段树/);
-  assert.match(registryEditor, /节点浏览器/);
-  assert.match(registryEditor, /寄存器读取结果/);
-  for (const label of ["原始值", "换算值", "类型", "单位"]) {
-    assert.match(registryEditor, new RegExp(label));
+test("device acquisition has its own page instead of a generic registry drawer", () => {
+  // 采集配置的工作流是"改一处 → 看设备返回什么 → 再改"，通用注册表抽屉支撑不了这个循环。
+  assert.doesNotMatch(pages, /kind: "acquisitionProfile"/);
+  assert.match(app, /acquisition\/AcquisitionProfilePage/);
+  assert.match(app, /path="\/configuration\/acquisition-profiles\/:profileId"/);
+  assert.match(acquisitionPage, /export function AcquisitionProfilePage/);
+  assert.match(acquisitionPage, /export function AcquisitionProfilesPage/);
+  // 左右分栏：左侧配置、右侧常驻设备面板
+  assert.match(acquisitionPage, /xl:grid-cols-\[minmax\(0,1\.55fr\)_minmax\(22rem,1fr\)\]/);
+  assert.match(acquisitionPage, /<DevicePointsPanel/);
+});
+
+test("protocol differences live in one descriptor registry", () => {
+  for (const protocol of ["http-polling", "mqtt", "opc-ua", "modbus-tcp", "melsec-a1e"]) {
+    assert.match(acquisitionRegistry, new RegExp(`id: "${protocol}"`));
   }
+  // 每个描述符都要声明连接字段、能力开关与点位校验，界面据此渲染
+  for (const key of ["connectionFieldsAreDeclarative", "capabilities", "validateConnection", "validatePoint", "probeReadiness"]) {
+    if (key === "connectionFieldsAreDeclarative") continue;
+    assert.match(acquisitionRegistry, new RegExp(key));
+  }
+  // 能力矩阵以后端 Runner 的真实行为为准
+  assert.match(acquisitionRegistry, /mergeServerCapabilities/);
+  assert.match(acquisitionPage, /\/api\/v1\/acquisition-protocols/);
+  // MELSEC 软元件带进制与位/字区分，X\/Y 八进制换算对工程师可见
+  assert.match(acquisitionRegistry, /melsecWireAddress/);
+  assert.match(acquisitionPanels.mapping, /软元件号/);
+  for (const device of ["W", "B", "L"]) {
+    assert.match(acquisitionRegistry, new RegExp(`code: "${device}"`));
+  }
+});
+
+test("acquisition validation reports errors per field", () => {
+  assert.match(acquisitionForm, /export function validateProfile/);
+  assert.match(acquisitionForm, /const set = \(path, message\)/);
+  assert.match(acquisitionPanels.connection, /error=\{errors\[/);
+  assert.match(acquisitionPanels.mapping, /const error = field => errors\[/);
+});
+
+test("acquisition profiles probe real device points before publishing", () => {
+  assert.match(acquisitionPage, /const ENDPOINT = "\/api\/v1\/acquisition-profiles"/);
+  assert.match(acquisitionPage, /postJson\(`\$\{ENDPOINT\}\/probe`/);
+  assert.match(acquisitionPanels.points, /验证连接/);
+  assert.match(acquisitionRegistry, /probeViewLabel: "JSON 字段树"/);
+  assert.match(acquisitionRegistry, /probeViewLabel: "节点浏览器"/);
+  assert.match(acquisitionRegistry, /probeViewLabel: "寄存器读取结果"/);
+  for (const label of ["原始值", "换算值", "设备类型", "单位"]) {
+    assert.match(acquisitionPanels.mapping, new RegExp(label));
+  }
+  // 发布仍然以探查通过为硬闸门
+  assert.match(acquisitionPage, /disabled=\{saving \|\| !probeValid\}/);
+  assert.match(acquisitionPage, /发布前必须先验证连接/);
 });
 
 test("tooling, subscriptions, and research workflows avoid editable JSON fields", () => {

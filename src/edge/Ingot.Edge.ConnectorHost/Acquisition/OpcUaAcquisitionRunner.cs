@@ -27,6 +27,7 @@ public sealed class OpcUaAcquisitionRunner(
             ?? throw new InvalidOperationException("OPC UA 连接配置不能为空。");
         string? currentRecipe = null;
         var lifecycle = new AcquisitionLifecycleTracker();
+        var sourceDeduplicator = new AcquisitionSourceDeduplicator();
         while (!ct.IsCancellationRequested)
         {
             try
@@ -80,6 +81,7 @@ public sealed class OpcUaAcquisitionRunner(
                 var required = RequiredSourcePaths(deployment)
                     .ToHashSet(StringComparer.Ordinal);
                 var latestTimestampTicks = DateTimeOffset.UtcNow.UtcTicks;
+                long notificationVersion = 0;
                 var subscription = new Subscription(session.DefaultSubscription)
                 {
                     PublishingInterval = connection.PublishingIntervalMs,
@@ -109,6 +111,7 @@ public sealed class OpcUaAcquisitionRunner(
                                 continue;
                             }
                             raw[sourcePath] = dataValue.Value;
+                            Interlocked.Increment(ref notificationVersion);
                             var sourceTimestamp = dataValue.SourceTimestamp == DateTime.MinValue
                                 ? DateTimeOffset.UtcNow
                                 : new DateTimeOffset(
@@ -125,9 +128,13 @@ public sealed class OpcUaAcquisitionRunner(
                     configurationKey, connection.EndpointUrl, sourcePaths.Length);
                 status.RecordSuccess(configurationKey, DateTimeOffset.UtcNow, null, incrementSample: false);
 
+                var emittedNotificationVersion = Interlocked.Read(ref notificationVersion);
                 while (!ct.IsCancellationRequested && session.Connected)
                 {
                     await Task.Delay(connection.PublishingIntervalMs, ct).ConfigureAwait(false);
+                    var currentNotificationVersion = Interlocked.Read(ref notificationVersion);
+                    if (currentNotificationVersion == emittedNotificationVersion)
+                        continue;
                     if (required.Any(path => !raw.ContainsKey(path)))
                         continue;
                     var mapped = ProtocolAcquisitionSnapshotMapper.Map(
@@ -136,14 +143,18 @@ public sealed class OpcUaAcquisitionRunner(
                         normalizedSource,
                         currentRecipe,
                         new DateTimeOffset(Interlocked.Read(ref latestTimestampTicks), TimeSpan.Zero));
-                    foreach (var productionEvent in lifecycle.Track(
-                                 mapped,
-                                 deployment.Profile.Lifecycle,
-                                 connection.PublishingIntervalMs))
+                    if (!sourceDeduplicator.ShouldEmit(mapped.Sample))
                     {
-                        await sink.EmitAsync(productionEvent, ct).ConfigureAwait(false);
+                        currentRecipe = mapped.RecipeIdentity;
+                        emittedNotificationVersion = currentNotificationVersion;
+                        status.RecordSuccess(configurationKey, DateTimeOffset.UtcNow, null, incrementSample: false);
+                        continue;
                     }
+                    await sink.EmitBatchAsync(
+                        lifecycle.Track(mapped, deployment.Profile.Lifecycle, connection.PublishingIntervalMs),
+                        ct).ConfigureAwait(false);
                     currentRecipe = mapped.RecipeIdentity;
+                    emittedNotificationVersion = currentNotificationVersion;
                     status.RecordSuccess(configurationKey, DateTimeOffset.UtcNow, null);
                 }
                 if (!ct.IsCancellationRequested)

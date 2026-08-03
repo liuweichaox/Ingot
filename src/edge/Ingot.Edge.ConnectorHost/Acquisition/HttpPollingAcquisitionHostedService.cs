@@ -49,7 +49,7 @@ internal sealed class HttpPollingAcquisitionHostedService(
                     try
                     {
                         var deployments = await LoadDeploymentsAsync(edgeId, stoppingToken).ConfigureAwait(false);
-                        SynchronizeWorkers(deployments, edgeId, stoppingToken);
+                        await SynchronizeWorkersAsync(deployments, edgeId, stoppingToken).ConfigureAwait(false);
                         platformConfigurationLoaded = true;
                         status.SetEnabled(true);
                         status.SetConfigurationError(
@@ -79,7 +79,7 @@ internal sealed class HttpPollingAcquisitionHostedService(
                         .ConfigureAwait(false);
                     if (cached is not null)
                     {
-                        SynchronizeWorkers(cached, edgeId, stoppingToken);
+                        await SynchronizeWorkersAsync(cached, edgeId, stoppingToken).ConfigureAwait(false);
                         cachedConfigurationLoaded = true;
                         status.SetEnabled(true);
                         status.SetConfigurationError(
@@ -105,7 +105,7 @@ internal sealed class HttpPollingAcquisitionHostedService(
                         "当前 Edge 使用未版本化的本地采集配置；该模式仅适用于明确隔离的调试环境");
                 }
                 else if (platformConfigurationLoaded || cachedConfigurationLoaded || !canUseLocalFallback)
-                    StopWorker("local");
+                    await StopWorkerAsync("local").ConfigureAwait(false);
 
                 if (_workers.Count == 0 &&
                     !platformConfigurationLoaded &&
@@ -151,7 +151,7 @@ internal sealed class HttpPollingAcquisitionHostedService(
         return payload?.Data ?? [];
     }
 
-    private void SynchronizeWorkers(
+    private async Task SynchronizeWorkersAsync(
         IReadOnlyList<AcquisitionDeployment> deployments,
         string edgeId,
         CancellationToken stoppingToken)
@@ -160,13 +160,29 @@ internal sealed class HttpPollingAcquisitionHostedService(
             .Select(item => DeploymentKey(item.Profile))
             .ToHashSet(StringComparer.Ordinal);
         foreach (var key in _workers.Keys.Where(key => key != "local" && !activeKeys.Contains(key)).ToArray())
-            StopWorker(key);
+            await StopWorkerAsync(key).ConfigureAwait(false);
 
         foreach (var deployment in deployments)
         {
             var key = DeploymentKey(deployment.Profile);
+            foreach (var previousKey in _workers.Keys
+                         .Where(item => item != key &&
+                                        item.StartsWith($"{deployment.Profile.ProfileId}@", StringComparison.Ordinal))
+                         .ToArray())
+            {
+                await StopWorkerAsync(previousKey).ConfigureAwait(false);
+            }
             if (_workers.ContainsKey(key)) continue;
-            StartWorker(key, deployment, edgeId, stoppingToken);
+            try
+            {
+                StartWorker(key, deployment, edgeId, stoppingToken);
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                status.RegisterTask(key);
+                status.RecordFailure(key, exception.Message);
+                logger.LogError(exception, "采集配置 {Configuration} 启动失败；其他采集任务继续运行", key);
+            }
         }
     }
 
@@ -177,29 +193,76 @@ internal sealed class HttpPollingAcquisitionHostedService(
         CancellationToken stoppingToken)
     {
         var cancellation = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
-        status.RegisterTask(key);
-        Task task;
-        if (deployment.Profile.Protocol == AcquisitionProtocols.HttpPolling)
+        try
         {
-            var options = JsonAcquisitionOptionsFactory.Create(deployment);
-            HttpPollingSnapshotMapper.ValidateOptions(options);
-            task = RunWorkerAsync(key, options, edgeId, cancellation.Token);
+            status.RegisterTask(key);
+            Task task;
+            if (deployment.Profile.Protocol == AcquisitionProtocols.HttpPolling)
+            {
+                var options = JsonAcquisitionOptionsFactory.Create(deployment);
+                HttpPollingSnapshotMapper.ValidateOptions(options);
+                task = RunWorkerAsync(key, options, edgeId, cancellation.Token);
+            }
+            else if (_protocolRunners.TryGetValue(deployment.Profile.Protocol, out var runner))
+            {
+                task = RunProtocolWorkerAsync(
+                    runner,
+                    key,
+                    deployment,
+                    NormalizeSource(edgeId, deployment.Profile.Source),
+                    cancellation.Token);
+            }
+            else
+            {
+                throw new InvalidOperationException($"没有注册采集协议执行器：{deployment.Profile.Protocol}。");
+            }
+            _workers.Add(key, new Worker(cancellation, task));
         }
-        else if (_protocolRunners.TryGetValue(deployment.Profile.Protocol, out var runner))
+        catch
         {
-            task = runner.RunAsync(
-                key,
-                deployment,
-                NormalizeSource(edgeId, deployment.Profile.Source),
-                cancellation.Token);
-        }
-        else
-        {
-            cancellation.Dispose();
             status.RemoveTask(key);
-            throw new InvalidOperationException($"没有注册采集协议执行器：{deployment.Profile.Protocol}。");
+            cancellation.Dispose();
+            throw;
         }
-        _workers.Add(key, new Worker(cancellation, task));
+    }
+
+    private async Task RunProtocolWorkerAsync(
+        IAcquisitionProtocolRunner runner,
+        string key,
+        AcquisitionDeployment deployment,
+        string normalizedSource,
+        CancellationToken ct)
+    {
+        while (!ct.IsCancellationRequested)
+        {
+            try
+            {
+                await runner.RunAsync(key, deployment, normalizedSource, ct).ConfigureAwait(false);
+                if (!ct.IsCancellationRequested)
+                    throw new IOException($"采集协议执行器 {deployment.Profile.Protocol} 意外结束。");
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                return;
+            }
+            catch (Exception exception)
+            {
+                status.RecordFailure(key, exception.Message);
+                logger.LogError(
+                    exception,
+                    "采集配置 {Configuration} 执行器异常退出；将在重连间隔后重试",
+                    key);
+                try
+                {
+                    await Task.Delay(deployment.Profile.Execution.ReconnectDelayMs, ct)
+                        .ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    return;
+                }
+            }
+        }
     }
 
     private void StartWorker(
@@ -215,16 +278,27 @@ internal sealed class HttpPollingAcquisitionHostedService(
         _workers.Add(key, new Worker(cancellation, task));
     }
 
-    private void StopWorker(string key)
+    private async Task StopWorkerAsync(string key)
     {
         if (!_workers.Remove(key, out var worker)) return;
         worker.Cancellation.Cancel();
-        status.RemoveTask(key);
-        _ = worker.Task.ContinueWith(
-            _ => worker.Cancellation.Dispose(),
-            CancellationToken.None,
-            TaskContinuationOptions.ExecuteSynchronously,
-            TaskScheduler.Default);
+        try
+        {
+            await worker.Task.ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            // 正常停止。
+        }
+        catch (Exception exception)
+        {
+            logger.LogWarning(exception, "采集配置 {Configuration} 停止时发生异常", key);
+        }
+        finally
+        {
+            status.RemoveTask(key);
+            worker.Cancellation.Dispose();
+        }
     }
 
     private async Task RunWorkerAsync(
@@ -236,10 +310,11 @@ internal sealed class HttpPollingAcquisitionHostedService(
         var source = NormalizeSource(edgeId, options.Source);
         var client = httpClientFactory.CreateClient($"acquisition:{key}");
         client.BaseAddress = new Uri(options.DeviceBaseUrl.TrimEnd('/') + "/");
-        client.Timeout = TimeSpan.FromMilliseconds(Math.Max(1000, options.PollIntervalMs * 3));
+        client.Timeout = TimeSpan.FromMilliseconds(Math.Max(1000, options.TimeoutMs));
         var delay = TimeSpan.FromMilliseconds(options.PollIntervalMs);
         string? currentRecipe = null;
         var lifecycle = new AcquisitionLifecycleTracker();
+        var sourceDeduplicator = new AcquisitionSourceDeduplicator();
 
         logger.LogInformation(
             "采集配置已运行：Configuration={Configuration}, Device={Device}, Subject={SubjectType}/{SubjectId}, PollDelayMs={PollDelayMs}, Fields={FieldCount}",
@@ -256,8 +331,21 @@ internal sealed class HttpPollingAcquisitionHostedService(
                 var snapshot = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: ct)
                     .ConfigureAwait(false);
                 var mapped = HttpPollingSnapshotMapper.Map(snapshot, options, source, currentRecipe);
-                foreach (var productionEvent in lifecycle.Track(mapped, options.Lifecycle, options.PollIntervalMs))
-                    await sink.EmitAsync(productionEvent, ct).ConfigureAwait(false);
+                if (!sourceDeduplicator.ShouldEmit(mapped.Sample))
+                {
+                    currentRecipe = mapped.RecipeIdentity;
+                    status.RecordSuccess(
+                        key,
+                        DateTimeOffset.UtcNow,
+                        currentRecipe,
+                        incrementSample: false,
+                        readDurationMs: System.Diagnostics.Stopwatch.GetElapsedTime(readStarted).TotalMilliseconds);
+                    await Task.Delay(delay, ct).ConfigureAwait(false);
+                    continue;
+                }
+                await sink.EmitBatchAsync(
+                    lifecycle.Track(mapped, options.Lifecycle, options.PollIntervalMs),
+                    ct).ConfigureAwait(false);
                 currentRecipe = mapped.RecipeIdentity;
                 status.RecordSuccess(
                     key,
