@@ -7,6 +7,8 @@ public sealed class AcquisitionStatus
     private readonly object _gate = new();
     private readonly Dictionary<string, AcquisitionTaskRuntimeStatus> _tasks = new(StringComparer.Ordinal);
     private readonly Dictionary<string, TaskIdentity> _taskIdentities = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, TaskCompletionSource<DateTimeOffset>> _firstSuccessSignals =
+        new(StringComparer.Ordinal);
     private readonly Dictionary<string, AcquisitionDeploymentApplicationStatus> _deployments =
         new(StringComparer.Ordinal);
     private bool _enabled;
@@ -153,6 +155,38 @@ public sealed class AcquisitionStatus
         {
             _tasks.Remove(configurationKey);
             _taskIdentities.Remove(configurationKey);
+            if (_firstSuccessSignals.Remove(configurationKey, out var signal))
+                signal.TrySetCanceled();
+        }
+    }
+
+    public async Task<bool> WaitForFirstSuccessAsync(
+        string configurationKey,
+        TimeSpan timeout,
+        CancellationToken ct)
+    {
+        Task<DateTimeOffset> signal;
+        lock (_gate)
+        {
+            if (_tasks.TryGetValue(configurationKey, out var task) && task.LastSuccessAt.HasValue)
+                return true;
+            if (!_firstSuccessSignals.TryGetValue(configurationKey, out var source))
+                return false;
+            signal = source.Task;
+        }
+
+        try
+        {
+            await signal.WaitAsync(timeout, ct).ConfigureAwait(false);
+            return true;
+        }
+        catch (TimeoutException)
+        {
+            return false;
+        }
+        catch (TaskCanceledException) when (!ct.IsCancellationRequested)
+        {
+            return false;
         }
     }
 
@@ -228,6 +262,8 @@ public sealed class AcquisitionStatus
                 ActiveRecipe = recipe,
                 LastError = null
             };
+            if (_firstSuccessSignals.TryGetValue(configurationKey, out var signal))
+                signal.TrySetResult(timestamp);
 
             if (_taskIdentities.TryGetValue(configurationKey, out var identity) &&
                 _deployments.TryGetValue(identity.ProfileId, out var deployment))
@@ -288,6 +324,8 @@ public sealed class AcquisitionStatus
                 null,
                 null,
                 false);
+            _firstSuccessSignals[configurationKey] =
+                new TaskCompletionSource<DateTimeOffset>(TaskCreationOptions.RunContinuationsAsynchronously);
         }
         if (deployment is not null)
         {

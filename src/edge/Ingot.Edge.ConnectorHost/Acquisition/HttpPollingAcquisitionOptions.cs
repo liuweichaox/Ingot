@@ -17,6 +17,11 @@ public sealed class HttpPollingAcquisitionOptions
     public string SnapshotPath { get; init; } = "/api/v1/snapshot";
     public int PollIntervalMs { get; init; } = 1000;
     public int TimeoutMs { get; init; } = 10000;
+    /// <summary>
+    ///     已有配置升级时，候选工作器必须在该时间内产生首个成功采样；否则停止候选并恢复旧版本。
+    ///     这是 Edge 本地的切换保护参数，不属于设备采集配置版本。
+    /// </summary>
+    public int StartupHealthTimeoutMs { get; init; } = 30000;
     public string Source { get; init; } = "connector/http-polling";
     public string SubjectType { get; init; } = "equipment";
     public string SubjectId { get; init; } = string.Empty;

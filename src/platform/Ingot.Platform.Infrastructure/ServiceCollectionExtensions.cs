@@ -89,6 +89,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<CycleAnalysisBackfillService>();
         services.AddHostedService(provider => provider.GetRequiredService<CycleAnalysisBackfillService>());
         services.AddSingleton<IQualityAnalysisService, QualityAnalysisService>();
+        services.AddSingleton<IDataReliabilityBaselineService, DataReliabilityBaselineService>();
 
         // 证据定级主轴：问题档案 + 定级评估（探针 SQL 对绑定范围只读运行）。
         services.Configure<Insight.CaseLevelThresholds>(configuration.GetSection("CaseLeveling"));

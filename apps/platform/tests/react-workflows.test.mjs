@@ -25,6 +25,17 @@ test("operations retain server pagination and resumable live events", () => {
   assert.match(pages, /历史对比/);
 });
 
+test("data health exposes reproducible reliability baselines and strict admission", () => {
+  assert.match(pages, /\/api\/v1\/data-reliability\/baseline/);
+  assert.match(pages, /process_data_completeness/);
+  assert.match(pages, /actual_parameter_coverage/);
+  assert.match(pages, /minimal_context_coverage/);
+  assert.match(pages, /run_quality_association/);
+  assert.match(pages, /analysis_admission/);
+  assert.match(pages, /只认设备回读，不使用计划值/);
+  assert.match(pages, /排除原因/);
+});
+
 test("configuration registries keep create, version, retire, and draft deletion workflows", () => {
   for (const endpoint of [
     "/api/v1/process-data-models", "/api/v1/recipe-versions",

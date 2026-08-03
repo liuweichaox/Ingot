@@ -227,6 +227,25 @@ public sealed class ProductionConfigurationValidatorTests
     }
 
     [Fact]
+    public void ConnectorHost_RejectsUnsafeAcquisitionStartupHealthTimeout()
+    {
+        var configuration = Build(new Dictionary<string, string?>
+        {
+            ["ConnectorHost:IngestToken"] = "connector-token-with-at-least-24-characters",
+            ["Edge:EnablePlatformReporting"] = "true",
+            ["Edge:EdgeId"] = "EDGE-001",
+            ["Edge:PlatformApiBaseUrl"] = "http://platform-api:8000",
+            ["Edge:EnableEventShipping"] = "true",
+            ["Edge:EventIngestToken"] = "edge-token-with-at-least-24-characters",
+            ["Acquisition:DeploymentCachePath"] = "/data/acquisition-deployments.json",
+            ["Acquisition:StartupHealthTimeoutMs"] = "500"
+        });
+
+        var error = Assert.Throws<InvalidOperationException>(() => EdgeValidator.Validate(configuration));
+        Assert.Contains("Acquisition:StartupHealthTimeoutMs", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void DisabledChat_DoesNotConstructProviderClient()
     {
         var configuration = Build(new Dictionary<string, string?>

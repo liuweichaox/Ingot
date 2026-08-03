@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import {
   Alert, Badge, Button, Card, Field, Input, Page, Select, StatusBadge, notify,
 } from "../ui/components";

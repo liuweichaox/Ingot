@@ -1,6 +1,7 @@
 using System.Threading;
 using System.Threading.Tasks;
 using Ingot.Contracts.Acquisition;
+using Ingot.Contracts.Edge;
 
 namespace Ingot.Edge.Application.Abstractions;
 
@@ -24,6 +25,7 @@ public interface IPlatformReportingClient
     /// <summary>发送一次心跳（在线状态、错误摘要）。失败不抛出，仅记录。</summary>
     Task SendHeartbeatAsync(
         EdgeAcquisitionRuntimeStatus? acquisitionStatus,
+        EdgeDeliveryRuntimeStatus? deliveryStatus,
         CancellationToken ct = default);
 
     /// <summary>心跳间隔（秒），已做下限保护。</summary>

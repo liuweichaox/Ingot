@@ -25,5 +25,8 @@ public sealed record EdgeHeartbeatRequest
     /// </summary>
     public EdgeAcquisitionRuntimeStatus? Acquisition { get; init; }
 
+    /// <summary>Edge outbox 积压、确认、失败与恢复状态。</summary>
+    public EdgeDeliveryRuntimeStatus? Delivery { get; init; }
+
     public DateTimeOffset Timestamp { get; init; } = DateTimeOffset.UtcNow;
 }

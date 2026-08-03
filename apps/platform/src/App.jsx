@@ -11,7 +11,7 @@ import {
   XMarkIcon,
 } from "@heroicons/react/24/outline";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
+import { Link, Navigate, Route, Routes, useLocation, useNavigate } from "react-router";
 import * as Pages from "./pages";
 import { AcquisitionProfilePage, AcquisitionProfilesPage } from "./acquisition/AcquisitionProfilePage";
 import { cx, ToastHost } from "./ui/components";

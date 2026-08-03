@@ -41,6 +41,11 @@ public static class ProductionConfigurationValidator
         }
         if (string.IsNullOrWhiteSpace(configuration["Acquisition:DeploymentCachePath"]))
             errors.Add("Acquisition:DeploymentCachePath is required in production.");
+        var startupHealthTimeoutMs = configuration.GetValue(
+            "Acquisition:StartupHealthTimeoutMs",
+            30000);
+        if (startupHealthTimeoutMs is < 1000 or > 300000)
+            errors.Add("Acquisition:StartupHealthTimeoutMs must be between 1000 and 300000 milliseconds.");
 
         if (configuration.GetValue<bool>("Edge:EnableEventShipping"))
             RequireSecret(configuration["Edge:EventIngestToken"], "Edge:EventIngestToken", errors);

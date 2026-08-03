@@ -99,17 +99,40 @@ public sealed class ProcessAnalysisResolver(IProcessConfigurationStore store)
         IReadOnlyDictionary<string, string> context,
         CancellationToken ct = default)
     {
+        var values = await ResolveRecipesAsync([context], ct).ConfigureAwait(false);
+        return values[0];
+    }
+
+    public async Task<IReadOnlyList<RecipeVersion?>> ResolveRecipesAsync(
+        IReadOnlyList<IReadOnlyDictionary<string, string>> contexts,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(contexts);
+        var cache = new Dictionary<(string Id, int Version), RecipeVersion?>();
+        var result = new List<RecipeVersion?>(contexts.Count);
+        foreach (var context in contexts)
+        {
+            ct.ThrowIfCancellationRequested();
         var recipeId = ContextValue(context, "recipe_id");
         var versionText = ContextValue(context, "recipe_version");
         if (string.IsNullOrWhiteSpace(recipeId) ||
             !int.TryParse(versionText, out var version) ||
             version < 1)
         {
-            return null;
+                result.Add(null);
+                continue;
         }
 
-        return await store.GetRecipeVersionAsync(recipeId.Trim().ToLowerInvariant(), version, ct)
-            .ConfigureAwait(false);
+            var key = (recipeId.Trim().ToLowerInvariant(), version);
+            if (!cache.TryGetValue(key, out var recipe))
+            {
+                recipe = await store.GetRecipeVersionAsync(key.Item1, key.version, ct)
+                    .ConfigureAwait(false);
+                cache[key] = recipe;
+            }
+            result.Add(recipe);
+        }
+        return result;
     }
 
     public static bool MatchesSelector(

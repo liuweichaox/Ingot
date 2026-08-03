@@ -5,7 +5,7 @@ import {
   PaperAirplaneIcon,
 } from "@heroicons/react/24/outline";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { deleteJson, getJson, postForm, postJson, putJson, streamSse } from "../api/http";
 import {
   extractProcessSamples,
@@ -80,7 +80,7 @@ const formatDuration = value => {
 };
 const edgeStatus = edge => {
   if (!edge?.lastSeen) return "unknown";
-  if (edge.lastError || ["degraded", "failed"].includes(edge.acquisition?.state)) return "degraded";
+  if (edge.lastError || ["degraded", "failed"].includes(edge.acquisition?.state) || edge.delivery?.state === "degraded") return "degraded";
   return Date.now() - new Date(edge.lastSeen).getTime() <= 30000 ? "online" : "offline";
 };
 
@@ -227,23 +227,6 @@ function LoadingCard() {
         <span className="inline-flex items-center gap-2"><ArrowPathIcon className="size-5 animate-spin" />正在读取数据</span>
       </div>
     </Card>
-  );
-}
-
-function ResourcePage({ title, description, endpoint, columns, keyField, getRowKey, emptyDescription, interval = 0, actions }) {
-  const { data, loading, error } = useApi(endpoint, { interval });
-  const rows = extractRows(data);
-  return (
-    <Page title={title} description={description} actions={actions}>
-      {error && <Alert tone="danger" title="数据暂不可用">{error}</Alert>}
-      {loading && !data ? <LoadingCard /> : (
-        <Card title={`${title}列表`} description={`共 ${data?.total ?? rows.length} 条记录`}>
-          {rows.length
-            ? <DataTable columns={columns} rows={rows} keyField={keyField} getRowKey={getRowKey} />
-            : <EmptyState description={emptyDescription} />}
-        </Card>
-      )}
-    </Page>
   );
 }
 
@@ -2680,25 +2663,102 @@ export function CycleComparisonPage() {
 
 export function DataQualityPage() {
   const [params] = useSearchParams();
-  const query = new URLSearchParams({ limit: "200" });
-  if (params.get("subjectType")) query.set("subjectType", params.get("subjectType"));
-  if (params.get("subjectId")) query.set("subjectId", params.get("subjectId"));
+  const objectQuery = new URLSearchParams({ limit: "200" });
+  if (params.get("subjectType")) objectQuery.set("subjectType", params.get("subjectType"));
+  if (params.get("subjectId")) objectQuery.set("subjectId", params.get("subjectId"));
+  const baselineQuery = new URLSearchParams({ maximumRuns: "2000" });
+  if ((!params.get("subjectType") || params.get("subjectType") === "equipment") && params.get("subjectId")) {
+    baselineQuery.set("equipmentId", params.get("subjectId"));
+  }
+  const baseline = useApi(`/api/v1/data-reliability/baseline?${baselineQuery}`);
+  const objects = useApi(`/api/v1/data-objects?${objectQuery}`);
+  const rates = baseline.data?.rates || [];
+  const contexts = baseline.data?.contextFields || [];
+  const exclusions = baseline.data?.exclusions || [];
+  const objectRows = extractRows(objects.data);
+  const rate = code => rates.find(item => item.code === code);
+  const rateValue = code => {
+    const value = rate(code)?.rate;
+    return value == null ? "—" : `${Math.round(Number(value) * 100)}%`;
+  };
+  const loading = baseline.loading || objects.loading;
+  const error = baseline.error || objects.error;
   return (
-    <ResourcePage
+    <Page
       title="数据健康"
       description={params.get("subjectId")
-        ? `检查对象 ${params.get("subjectId")} 的数据范围、采样连续性和周期完整性。`
-        : "检查对象数据范围、采样连续性和周期完整性。"}
-      endpoint={`/api/v1/data-objects?${query}`}
-      getRowKey={row => `${row.subjectType}:${row.subjectId}`}
-      columns={[
-        { key: "subjectType", label: "对象类型", render: objectTypeLabel },
-        { key: "subjectId", label: "对象" },
-        { key: "sampleCount", label: "样本数" },
-        { key: "maximumSampleGapSeconds", label: "最大采样间隔（秒）", render: value => value == null ? "—" : Number(value).toLocaleString("zh-CN") },
-        { key: "lastSampleAt", label: "最后样本", render: formatTime },
-      ]}
-    />
+        ? `检查对象 ${params.get("subjectId")} 的证据完整性、实际参数、上下文和质量关联。`
+        : "用明确分子、分母和排除原因建立可重复的数据可靠性基线。"}
+    >
+      {error && <Alert tone="danger">{error}</Alert>}
+      {loading ? <LoadingCard /> : (
+        <div className="space-y-5">
+          {baseline.data?.truncated && (
+            <Alert tone="warning">匹配运行超过本次上限；当前基线只分析最近 {formatInteger(baseline.data.analyzedRunCount)} 次运行。</Alert>
+          )}
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <Metric label="过程数据完整率" value={rateValue("process_data_completeness")} hint={`${rate("process_data_completeness")?.numerator ?? 0} / ${rate("process_data_completeness")?.denominator ?? 0} 次运行`} />
+            <Metric label="实际参数覆盖率" value={rateValue("actual_parameter_coverage")} hint="只认设备回读，不使用计划值" />
+            <Metric label="最小上下文覆盖率" value={rateValue("minimal_context_coverage")} hint="设备身份与运行身份同时存在" />
+            <Metric label="运行—质量关联率" value={rateValue("run_quality_association")} hint="至少关联一条有效检验结果" />
+          </div>
+          <div className="grid gap-5 xl:grid-cols-[1.4fr_.6fr]">
+            <Card title="正式分析准入" description="只有全部准入条件通过的运行才进入追因、实验分析和优化。">
+              <div className="mb-4 grid gap-4 sm:grid-cols-3">
+                <Metric label="准入率" value={rateValue("analysis_admission")} hint={`${rate("analysis_admission")?.numerator ?? 0} / ${rate("analysis_admission")?.denominator ?? 0} 次运行`} />
+                <Metric label="序列缺口" value={formatInteger(baseline.data?.sequenceGapCount)} hint="已分析运行累计" />
+                <Metric label="最大采样空窗" value={baseline.data?.maximumSampleGapMs == null ? "—" : formatDuration(baseline.data.maximumSampleGapMs)} />
+              </div>
+              <DataTable
+                rows={rates}
+                keyField="code"
+                columns={[
+                  { key: "name", label: "指标" },
+                  { key: "rate", label: "结果", render: (value, row) => value == null ? "—" : `${Math.round(Number(value) * 100)}%（${row.numerator}/${row.denominator}）` },
+                  { key: "definition", label: "计算定义" },
+                ]}
+              />
+            </Card>
+            <Card title="排除原因" description="同一次运行可能同时命中多个原因。">
+              {exclusions.length ? (
+                <DataTable
+                  rows={exclusions}
+                  keyField="code"
+                  columns={[
+                    { key: "name", label: "原因" },
+                    { key: "runCount", label: "运行数", render: formatInteger },
+                  ]}
+                />
+              ) : <EmptyState title="没有准入缺口" description="当前分析范围内的运行全部满足正式准入规则。" />}
+            </Card>
+          </div>
+          <Card title="上下文字段覆盖" description="设备与运行身份是准入必需字段；材料、工装和维护校准字段先用于追溯与分层。">
+            <DataTable
+              rows={contexts}
+              keyField="field"
+              columns={[
+                { key: "field", label: "字段" },
+                { key: "requiredForAdmission", label: "准入要求", render: value => value ? <Badge tone="blue">必需</Badge> : <Badge>可选追溯</Badge> },
+                { key: "coverage", label: "覆盖率", render: (value, row) => value == null ? "—" : `${Math.round(Number(value) * 100)}%（${row.presentRunCount}/${row.runCount}）` },
+              ]}
+            />
+          </Card>
+          <Card title="工业对象采样范围" description="用于定位具体设备的数据量、最近采样和最大间隔。">
+            <DataTable
+              rows={objectRows}
+              getRowKey={row => `${row.subjectType}:${row.subjectId}`}
+              columns={[
+                { key: "subjectType", label: "对象类型", render: objectTypeLabel },
+                { key: "subjectId", label: "对象" },
+                { key: "sampleCount", label: "样本数", render: formatInteger },
+                { key: "maximumSampleGapSeconds", label: "最大采样间隔（秒）", render: value => value == null ? "—" : Number(value).toLocaleString("zh-CN") },
+                { key: "lastSampleAt", label: "最后样本", render: formatTime },
+              ]}
+            />
+          </Card>
+        </div>
+      )}
+    </Page>
   );
 }
 
@@ -3093,7 +3153,6 @@ export function EdgeDetailPage() {
   const encodedId = encodeURIComponent(edgeId);
   const edges = useApi("/api/edges", { interval: 10000 });
   const acquisition = useApi(`/api/edges/${encodedId}/acquisition/status`, { interval: 5000 });
-  const metrics = useApi(`/api/edges/${encodedId}/metrics/json`, { interval: 10000 });
   const logs = useApi(`/api/edges/${encodedId}/logs?page=1&pageSize=50`, { interval: 10000 });
   const profiles = useApi("/api/v1/acquisition-profiles", { interval: 10000 });
   const edge = extractRows(edges.data).find(row => row.edgeId === edgeId);
@@ -3117,10 +3176,10 @@ export function EdgeDetailPage() {
   const recipeMappingCount = publishedProfiles.reduce((total, profile) => total + (profile.recipe?.parameterMappings?.length || 0), 0);
   const lifecycleProfileCount = publishedProfiles.filter(profile => profile.lifecycle).length;
   const allTaskProfilesResolved = tasks.length > 0 && taskRows.every(task => task.profile);
-  const error = edges.error || acquisition.error || metrics.error || logs.error || profiles.error;
-  const outboxBacklog = metricTotal(metrics.data, "event_outbox_backlog");
-  const shipped = metricTotal(metrics.data, "event_shipped_total");
-  const emitted = metricTotal(metrics.data, "event_emitted_total");
+  const error = edges.error || acquisition.error || logs.error || profiles.error;
+  const delivery = edge?.delivery;
+  const outboxBacklog = Number(delivery?.pendingEventCount || 0);
+  const shipped = Number(delivery?.eventsShipped || 0);
   const recentLogs = extractRows(logs.data);
   const deliveryReady = runningTasks > 0 && processSignalCount > 0 && recipeMappingCount > 0 && lifecycleProfileCount > 0 && outboxBacklog === 0;
 
@@ -3139,7 +3198,7 @@ export function EdgeDetailPage() {
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Metric label="设备连接" value={<StatusBadge value={edgeStatus(edge)} />} hint={edge?.lastSeen ? `最后心跳 ${formatTime(edge.lastSeen)}` : "尚未收到心跳"} />
         <Metric label="配置收敛" value={<StatusBadge value={acquisition.data?.state || "unknown"} />} hint={`${convergedDeployments} 个已应用 / ${deploymentStates.length} 个期望配置`} />
-        <Metric label="数据上行" value={outboxBacklog > 0 ? `${formatInteger(outboxBacklog)} 待处理` : "已同步"} hint={`已确认 ${formatInteger(shipped)} / 已产生 ${formatInteger(emitted)}`} />
+        <Metric label="数据上行" value={<StatusBadge value={delivery?.state || "unknown"} />} hint={delivery ? `积压 ${formatInteger(outboxBacklog)} · ACK ${formatInteger(delivery.lastAcknowledgedSequence)}` : "等待节点主动上报"} />
         <Metric label="工艺建模" value={recipeMappingCount > 0 ? "配方已映射" : "待映射"} hint={`${processSignalCount} 条过程信号 · ${recipeMappingCount} 个配方参数`} />
       </div>
       {(edge?.lastError || acquisition.data?.lastError || outboxBacklog > 0) ? (
@@ -3187,6 +3246,15 @@ export function EdgeDetailPage() {
             ? "采集端已满足过程信号、实际配方与周期边界的交付条件。下一步在“周期”和“质检”中确认同一运行的曲线与结果已关联，随后再发起追因或优化实验。"
             : "这不是追因结论。请先补齐运行任务、过程信号、实际配方回读和周期边界；质量结果由质检流程关联后，才形成可用于追因和优化的完整证据。"}
         </p>
+      </Card>
+      <Card title="上送恢复基线" description="状态由 Edge 随心跳主动上报，不要求 Platform 反向访问 OT 网络。">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <Metric label="当前积压" value={formatInteger(outboxBacklog)} hint="未收到平台确认的事件" />
+          <Metric label="累计已确认" value={formatInteger(shipped)} hint={`最后 ACK ${formatInteger(delivery?.lastAcknowledgedSequence)}`} />
+          <Metric label="恢复次数" value={formatInteger(delivery?.recoveryCount)} hint={`${formatInteger(delivery?.consecutiveFailures)} 次连续失败`} />
+          <Metric label="最近恢复耗时" value={delivery?.lastRecoveryDurationMs == null ? "—" : formatDuration(delivery.lastRecoveryDurationMs)} hint={delivery?.lastSuccessfulShipmentAt ? `恢复于 ${formatTime(delivery.lastSuccessfulShipmentAt)}` : "尚无恢复记录"} />
+        </div>
+        {delivery?.lastError && <Alert tone="warning">{delivery.lastError}</Alert>}
       </Card>
       <Card title="采集配置应用状态" description="Platform 发布期望版本，Edge 主动拉取、验证并在安全周期边界应用；失败时保留上一成功版本。">
         <DataTable

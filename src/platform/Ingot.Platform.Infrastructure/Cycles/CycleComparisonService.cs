@@ -55,15 +55,18 @@ public sealed class CycleComparisonService(
             .ToDictionary(static group => group.Key, static group => group.ToArray(), StringComparer.Ordinal);
         var latestReviews = await reviews.GetLatestByInspectionRecordIdsAsync(
             allInspections.Select(static value => value.RecordId).ToArray(), ct).ConfigureAwait(false);
+        var contexts = ids
+            .Select(id => ResolveContext(cycleEvents.GetValueOrDefault(id, [])))
+            .ToArray();
+        var analyses = await analysisResolver.ResolveManyAsync(contexts, "production-cycle", ct)
+            .ConfigureAwait(false);
         var result = new Dictionary<string, CycleComparisonRow>(StringComparer.Ordinal);
-        foreach (var id in ids)
+        for (var index = 0; index < ids.Length; index++)
         {
+            var id = ids[index];
             if (!cycleEvents.TryGetValue(id, out var rows) || rows.Count == 0)
                 continue;
-            var context = ResolveContext(rows);
-            var analysis = await analysisResolver.ResolveAsync(context, "production-cycle", ct)
-                .ConfigureAwait(false);
-            var recipe = await analysisResolver.ResolveRecipeAsync(context, ct).ConfigureAwait(false);
+            var analysis = analyses[index];
             var materialized = await AnalyzeAsync(id, rows, analysis, ct).ConfigureAwait(false);
             result[id] = BuildRow(
                 id,
@@ -71,7 +74,6 @@ public sealed class CycleComparisonService(
                 inspectionsByCycle.GetValueOrDefault(id, []),
                 latestReviews,
                 analysis,
-                recipe,
                 materialized);
         }
         return result;
@@ -158,12 +160,6 @@ public sealed class CycleComparisonService(
             await inspections.QueryAllByOperationRunIdsAsync(allIds, ct).ConfigureAwait(false));
         var latestReviews = await reviews.GetLatestByInspectionRecordIdsAsync(
             allInspections.Select(static record => record.RecordId).ToArray(), ct).ConfigureAwait(false);
-        var recipesByCycle = new Dictionary<string, RecipeVersion?>(StringComparer.Ordinal);
-        foreach (var id in allIds)
-        {
-            recipesByCycle[id] = await analysisResolver.ResolveRecipeAsync(ResolveContext(cycleEvents[id]), ct)
-                .ConfigureAwait(false);
-        }
         var inspectionsByCycle = allInspections.GroupBy(static record => record.OperationRunId, StringComparer.Ordinal)
             .ToDictionary(static group => group.Key, static group => group.ToArray(), StringComparer.Ordinal);
         var materializedByCycle = new Dictionary<string, MaterializedCycleAnalysis>(StringComparer.Ordinal);
@@ -177,7 +173,6 @@ public sealed class CycleComparisonService(
                 inspectionsByCycle.GetValueOrDefault(id, []),
                 latestReviews,
                 analysis,
-                recipesByCycle[id],
                 materializedByCycle[id]))
             .ToArray();
         var acceptance = new CycleComparisonAcceptance
@@ -578,7 +573,6 @@ public sealed class CycleComparisonService(
         IReadOnlyList<InspectionRecord> inspectionRecords,
         IReadOnlyDictionary<Guid, InspectionReview> latestReviews,
         ResolvedProcessAnalysis? analysis,
-        RecipeVersion? recipe,
         MaterializedCycleAnalysis materialized)
     {
         var ordered = rows.OrderBy(static row => row.Event.OccurredAt).ThenBy(static row => row.IngestId).ToArray();
@@ -638,7 +632,7 @@ public sealed class CycleComparisonService(
             Signals = wholeCycle.Signals,
             Phases = wholeCycle.Phases,
             AnalysisMaterialization = materialized.Materialization,
-            RecipeParameters = BuildRecipeParameters(recipe, analysis?.DataModel, ordered)
+            RecipeParameters = BuildRecipeParameters(analysis?.DataModel, ordered)
         };
     }
 
@@ -680,7 +674,6 @@ public sealed class CycleComparisonService(
     }
 
     private static IReadOnlyList<CycleRecipeParameter> BuildRecipeParameters(
-        RecipeVersion? recipe,
         ProcessDataModel? model,
         IReadOnlyList<PlatformProductionEvent> rows)
     {
@@ -716,19 +709,7 @@ public sealed class CycleComparisonService(
             if (captured.Length > 0)
                 return captured;
         }
-        if (recipe is null)
-            return [];
-        return recipe.Values.Select(value =>
-        {
-            definitions.TryGetValue(value.Code, out var definition);
-            return new CycleRecipeParameter
-            {
-                Code = value.Code,
-                Name = definition?.SourceField,
-                Unit = definition?.Unit,
-                Value = value.Value
-            };
-        }).ToArray();
+        return [];
     }
 
     private static bool TryReadObject(

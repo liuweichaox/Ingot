@@ -83,24 +83,20 @@ public sealed class ResearchObservationAssembler(
         IReadOnlyList<InspectionRecord> records)
     {
         var recipeValues = cycle.RecipeParameters
-            .Select(static value => (value.Code, Value: ReadNumber(value.Value)))
+            .Select(static value => (value.Code, Value: ReadNumber(value.Value), value.Unit))
             .Where(static value => value.Value.HasValue)
             .ToDictionary(
                 static value => value.Code,
-                static value => value.Value!.Value,
+                static value => new ActualValue(value.Value!.Value, value.Unit),
                 StringComparer.Ordinal);
-        var plannedValues = run.Factors.ToDictionary(
-            static value => value.VariableCode,
-            static value => value.Value,
-            StringComparer.Ordinal);
         var factors = new List<ExperimentFactorSetting>();
         var missing = new List<string>();
         foreach (var variable in project.Variables.Where(
                      static value => value.Role == ResearchVariableRoles.Control))
         {
-            if (!TryResolveControlValue(variable, cycle, recipeValues, plannedValues, out var value))
+            if (!TryResolveControlValue(variable, cycle, recipeValues, out var value, out var reason))
             {
-                missing.Add($"控制变量:{variable.Code}");
+                missing.Add($"控制变量:{variable.Code}（{reason}）");
                 continue;
             }
             factors.Add(new ExperimentFactorSetting
@@ -115,19 +111,19 @@ public sealed class ResearchObservationAssembler(
         foreach (var objective in project.Objectives)
         {
             var sourceCode = ResolveInspectionCode(objective.Code, objective.DataSource);
-            if (TryResolveMeasurement(records, sourceCode, objective.Unit, out var value))
+            if (TryResolveMeasurement(records, sourceCode, objective.Unit, out var value, out var reason))
                 outcomes[objective.Code] = value;
             else
-                missing.Add($"目标:{objective.Code}");
+                missing.Add($"目标:{objective.Code}（{reason}）");
         }
         var constraintOutcomes = new Dictionary<string, double>(StringComparer.Ordinal);
         foreach (var constraint in project.OutcomeConstraints)
         {
             var sourceCode = ResolveInspectionCode(constraint.OutcomeCode, constraint.DataSource);
-            if (TryResolveMeasurement(records, sourceCode, constraint.Unit, out var value))
+            if (TryResolveMeasurement(records, sourceCode, constraint.Unit, out var value, out var reason))
                 constraintOutcomes[constraint.Code] = value;
             else
-                missing.Add($"结果约束:{constraint.Code}");
+                missing.Add($"结果约束:{constraint.Code}（{reason}）");
         }
 
         var processFeatures = FlattenFeatures(cycle);
@@ -202,41 +198,78 @@ public sealed class ResearchObservationAssembler(
     private static bool TryResolveControlValue(
         ResearchVariable variable,
         CycleComparisonRow cycle,
-        IReadOnlyDictionary<string, double> recipeValues,
-        IReadOnlyDictionary<string, double> plannedValues,
-        out double value)
+        IReadOnlyDictionary<string, ActualValue> recipeValues,
+        out double value,
+        out string reason)
     {
+        value = default;
         var source = variable.DataSource?.Trim();
         if (!string.IsNullOrWhiteSpace(source) &&
             source.StartsWith("signal:", StringComparison.OrdinalIgnoreCase))
-            return TryResolveSignalFeature(cycle, source, out value);
+            return TryResolveSignalFeature(cycle, source, variable.Unit, out value, out reason);
         if (!string.IsNullOrWhiteSpace(source) &&
             source.StartsWith("recipe:", StringComparison.OrdinalIgnoreCase))
         {
             var configuredRecipeCode = source["recipe:".Length..].Trim();
-            return recipeValues.TryGetValue(configuredRecipeCode, out value) &&
-                   double.IsFinite(value);
+            return TryResolveRecipeValue(recipeValues, configuredRecipeCode, variable.Unit, out value, out reason);
         }
-        var recipeCode = variable.Code;
-        if (recipeValues.TryGetValue(recipeCode, out value) && double.IsFinite(value))
-            return true;
-        // 仅为未声明数据映射的历史项目保留计划值兼容；显式 recipe/signal 映射绝不降级。
-        return plannedValues.TryGetValue(variable.Code, out value) && double.IsFinite(value);
+        if (!string.IsNullOrWhiteSpace(source))
+        {
+            reason = "数据来源必须是 recipe:<code> 或 signal:<code>:<feature>[:<phase>]";
+            return false;
+        }
+        return TryResolveRecipeValue(recipeValues, variable.Code, variable.Unit, out value, out reason);
+    }
+
+    private static bool TryResolveRecipeValue(
+        IReadOnlyDictionary<string, ActualValue> recipeValues,
+        string code,
+        string expectedUnit,
+        out double value,
+        out string reason)
+    {
+        value = default;
+        if (!recipeValues.TryGetValue(code, out var actual) || !double.IsFinite(actual.Value))
+        {
+            reason = "缺少设备实际参数回读";
+            return false;
+        }
+        if (!UnitsMatch(actual.Unit, expectedUnit))
+        {
+            reason = UnitConflict(expectedUnit, actual.Unit);
+            return false;
+        }
+        value = actual.Value;
+        reason = string.Empty;
+        return true;
     }
 
     private static bool TryResolveSignalFeature(
         CycleComparisonRow cycle,
         string source,
-        out double value)
+        string expectedUnit,
+        out double value,
+        out string reason)
     {
         value = default;
         var parts = source.Split(':', StringSplitOptions.TrimEntries);
         if (parts.Length is < 3 or > 4)
+        {
+            reason = "过程信号来源格式无效";
             return false;
+        }
         var signal = cycle.Signals.FirstOrDefault(
             item => string.Equals(item.Code, parts[1], StringComparison.Ordinal));
         if (signal is null)
+        {
+            reason = "缺少实际过程信号";
             return false;
+        }
+        if (!UnitsMatch(signal.Unit, expectedUnit))
+        {
+            reason = UnitConflict(expectedUnit, signal.Unit);
+            return false;
+        }
         var matches = signal.Features.Where(feature =>
             string.Equals(feature.Code, parts[2], StringComparison.Ordinal) &&
             (parts.Length == 3
@@ -246,8 +279,12 @@ public sealed class ResearchObservationAssembler(
             .OrderBy(static item => item.PhaseOrder ?? 0)
             .FirstOrDefault(static item => item.Value.HasValue);
         if (feature?.Value is not { } resolved || !double.IsFinite(resolved))
+        {
+            reason = "缺少有效过程特征";
             return false;
+        }
         value = resolved;
+        reason = string.Empty;
         return true;
     }
 
@@ -289,7 +326,8 @@ public sealed class ResearchObservationAssembler(
         IReadOnlyList<InspectionRecord> records,
         string characteristicCode,
         string expectedUnit,
-        out double value)
+        out double value,
+        out string reason)
     {
         value = default;
         var match = records
@@ -300,15 +338,36 @@ public sealed class ResearchObservationAssembler(
                 string.Equals(
                     item.measurement.CharacteristicCode,
                     characteristicCode,
-                    StringComparison.Ordinal) &&
-                item.measurement.NumericValue.HasValue &&
-                (string.IsNullOrWhiteSpace(item.measurement.Unit) ||
-                 string.Equals(item.measurement.Unit, expectedUnit, StringComparison.OrdinalIgnoreCase)));
+                    StringComparison.Ordinal));
         if (match.measurement?.NumericValue is not { } numeric)
+        {
+            reason = "缺少有效检验数值";
             return false;
+        }
+        if (!UnitsMatch(match.measurement.Unit, expectedUnit))
+        {
+            reason = UnitConflict(expectedUnit, match.measurement.Unit);
+            return false;
+        }
         value = decimal.ToDouble(numeric);
-        return double.IsFinite(value);
+        if (!double.IsFinite(value))
+        {
+            reason = "检验数值不是有限数";
+            return false;
+        }
+        reason = string.Empty;
+        return true;
     }
+
+    private static bool UnitsMatch(string? actual, string expected)
+        => !string.IsNullOrWhiteSpace(actual) &&
+           !string.IsNullOrWhiteSpace(expected) &&
+           string.Equals(actual.Trim(), expected.Trim(), StringComparison.OrdinalIgnoreCase);
+
+    private static string UnitConflict(string expected, string? actual)
+        => string.IsNullOrWhiteSpace(actual)
+            ? $"单位缺失，期望 {expected}"
+            : $"单位冲突，期望 {expected}，实际 {actual.Trim()}";
 
     private static double? ReadNumber(JsonElement value)
     {
@@ -329,4 +388,6 @@ public sealed class ResearchObservationAssembler(
     private sealed record CandidateRun(
         ResearchExperiment Experiment,
         ExperimentRunPlan Run);
+
+    private sealed record ActualValue(double Value, string? Unit);
 }

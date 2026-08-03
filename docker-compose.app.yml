@@ -51,40 +51,42 @@ services:
       - ingot-inspection-archive:/app/Archive/inspection-attachments
       - ingot-process-knowledge:/app/Data/process-knowledge
       - ingot-process-knowledge-archive:/app/Archive/process-knowledge
+    # 列表形式允许 Compose 在配置键中展开 EdgeId；映射形式只会展开值，
+    # 会把令牌错误地固定到某个示例 Edge。
     environment:
-      ASPNETCORE_ENVIRONMENT: Production
-      Urls: http://+:8000
-      ConnectionStrings__Events: Host=postgres;Port=5432;Database=ingot;Username=ingot;Password=${INGOT_POSTGRES_PASSWORD:?INGOT_POSTGRES_PASSWORD is required}
-      EventIngest__RequireToken: "true"
-      EventIngest__KeyRetentionDays: ${INGOT_EVENT_KEY_RETENTION_DAYS:-0}
-      Database__SchemaManagement: ${INGOT_SCHEMA_MANAGEMENT:-Migrations}
-      EventIngest__EdgeTokens__EDGE-001: ${INGOT_EDGE_TOKEN:?INGOT_EDGE_TOKEN is required}
-      Authentication__Mode: ${INGOT_AUTH_MODE:-Local}
-      Authentication__Authority: ${INGOT_AUTHORITY:-}
-      Authentication__Audience: ${INGOT_AUDIENCE:-}
-      Authentication__RequireHttpsMetadata: ${INGOT_AUTH_REQUIRE_HTTPS:-true}
-      Authentication__Local__SeedAdminUsername: ${INGOT_ADMIN_USERNAME:-}
-      Authentication__Local__SeedAdminPassword: ${INGOT_ADMIN_PASSWORD:-}
-      InspectionAttachments__RootPath: /app/Data/inspection-attachments
-      InspectionAttachments__ArchiveRootPath: /app/Archive/inspection-attachments
-      ProcessKnowledge__RootPath: /app/Data/process-knowledge
-      ProcessKnowledge__ArchiveRootPath: /app/Archive/process-knowledge
-      ProcessOptimizer__Enabled: ${INGOT_OPTIMIZER_ENABLED:-true}
-      ProcessOptimizer__BaseUrl: http://optimizer:8100
-      ProcessOptimizer__RequestTimeoutSeconds: ${INGOT_OPTIMIZER_TIMEOUT_SECONDS:-30}
-      Chat__Enabled: ${INGOT_CHAT_ENABLED:-false}
-      Chat__Provider: ${INGOT_CHAT_PROVIDER:-Deterministic}
-      Chat__FastModel: ${INGOT_CHAT_FAST_MODEL:-deterministic-v1}
-      Chat__ReasoningModel: ${INGOT_CHAT_REASONING_MODEL:-deterministic-v1}
-      Chat__EnableCombinedAnalysis: ${INGOT_CHAT_ENABLE_COMBINED_ANALYSIS:-false}
-      Chat__MaxToolCalls: ${INGOT_CHAT_MAX_TOOL_CALLS:-8}
-      Chat__MaxRunSeconds: ${INGOT_CHAT_MAX_RUN_SECONDS:-60}
-      Chat__MaxDiscussionRounds: ${INGOT_CHAT_MAX_DISCUSSION_ROUNDS:-3}
-      Chat__MaxDiscussionTurns: ${INGOT_CHAT_MAX_DISCUSSION_TURNS:-9}
-      ChatDataAccess__Users__operator__AllowAll: ${INGOT_CHAT_OPERATOR_ALLOW_ALL:-true}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      Cors__AllowedOrigins__0: http://localhost:3000
-      Webhook__Enabled: "true"
+      - ASPNETCORE_ENVIRONMENT=Production
+      - Urls=http://+:8000
+      - ConnectionStrings__Events=Host=postgres;Port=5432;Database=ingot;Username=ingot;Password=${INGOT_POSTGRES_PASSWORD:?INGOT_POSTGRES_PASSWORD is required}
+      - EventIngest__RequireToken=true
+      - EventIngest__KeyRetentionDays=${INGOT_EVENT_KEY_RETENTION_DAYS:-0}
+      - Database__SchemaManagement=${INGOT_SCHEMA_MANAGEMENT:-Migrations}
+      - EventIngest__EdgeTokens__${INGOT_EDGE_ID:?INGOT_EDGE_ID is required}=${INGOT_EDGE_TOKEN:?INGOT_EDGE_TOKEN is required}
+      - Authentication__Mode=${INGOT_AUTH_MODE:-Local}
+      - Authentication__Authority=${INGOT_AUTHORITY:-}
+      - Authentication__Audience=${INGOT_AUDIENCE:-}
+      - Authentication__RequireHttpsMetadata=${INGOT_AUTH_REQUIRE_HTTPS:-true}
+      - Authentication__Local__SeedAdminUsername=${INGOT_ADMIN_USERNAME:-}
+      - Authentication__Local__SeedAdminPassword=${INGOT_ADMIN_PASSWORD:-}
+      - InspectionAttachments__RootPath=/app/Data/inspection-attachments
+      - InspectionAttachments__ArchiveRootPath=/app/Archive/inspection-attachments
+      - ProcessKnowledge__RootPath=/app/Data/process-knowledge
+      - ProcessKnowledge__ArchiveRootPath=/app/Archive/process-knowledge
+      - ProcessOptimizer__Enabled=${INGOT_OPTIMIZER_ENABLED:-true}
+      - ProcessOptimizer__BaseUrl=http://optimizer:8100
+      - ProcessOptimizer__RequestTimeoutSeconds=${INGOT_OPTIMIZER_TIMEOUT_SECONDS:-30}
+      - Chat__Enabled=${INGOT_CHAT_ENABLED:-false}
+      - Chat__Provider=${INGOT_CHAT_PROVIDER:-Deterministic}
+      - Chat__FastModel=${INGOT_CHAT_FAST_MODEL:-deterministic-v1}
+      - Chat__ReasoningModel=${INGOT_CHAT_REASONING_MODEL:-deterministic-v1}
+      - Chat__EnableCombinedAnalysis=${INGOT_CHAT_ENABLE_COMBINED_ANALYSIS:-false}
+      - Chat__MaxToolCalls=${INGOT_CHAT_MAX_TOOL_CALLS:-8}
+      - Chat__MaxRunSeconds=${INGOT_CHAT_MAX_RUN_SECONDS:-60}
+      - Chat__MaxDiscussionRounds=${INGOT_CHAT_MAX_DISCUSSION_ROUNDS:-3}
+      - Chat__MaxDiscussionTurns=${INGOT_CHAT_MAX_DISCUSSION_TURNS:-9}
+      - ChatDataAccess__Users__operator__AllowAll=${INGOT_CHAT_OPERATOR_ALLOW_ALL:-true}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - Cors__AllowedOrigins__0=http://localhost:3000
+      - Webhook__Enabled=true
     depends_on:
       postgres:
         condition: service_healthy
@@ -124,7 +126,9 @@ services:
     ports:
       - "127.0.0.1:8001:8001"
     volumes:
-      - ./Data/connector-host:/app/Data
+      # 每个 Edge 实例必须使用独立持久目录；更换目录或丢失 outbox 时也必须更换 EdgeId，
+      # 否则 Platform 会正确拒绝从 1 重新开始的 (EdgeId, Seq)。
+      - ${INGOT_EDGE_DATA_PATH:-./Data/connector-host}:/app/Data
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       Urls: http://+:8001
@@ -137,6 +141,7 @@ services:
       Acquisition__Enabled: "false"
       Acquisition__AllowLocalFallbackWhenPlatformAvailable: "false"
       Acquisition__DeploymentCachePath: /app/Data/acquisition-deployments.json
+      Acquisition__StartupHealthTimeoutMs: "30000"
     depends_on:
       platform-api:
         condition: service_healthy

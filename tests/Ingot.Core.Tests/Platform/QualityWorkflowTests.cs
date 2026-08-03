@@ -192,6 +192,52 @@ public sealed class QualityWorkflowTests
     }
 
     [Fact]
+    public async Task CycleWithoutAppliedRecipeEvent_DoesNotExposePlannedRecipeAsActual()
+    {
+        var startedAt = DateTimeOffset.Parse("2026-07-20T08:00:00Z");
+        var rows = new[]
+        {
+            Row(1, Event(
+                "cycle.started",
+                "NO-ACTUAL-RECIPE",
+                "WP-NO-ACTUAL-RECIPE",
+                "LENS-A",
+                startedAt)),
+            Row(2, Event(
+                "cycle.completed",
+                "NO-ACTUAL-RECIPE",
+                "WP-NO-ACTUAL-RECIPE",
+                "LENS-A",
+                startedAt.AddMinutes(1)))
+        };
+        var plannedRecipe = new RecipeVersion
+        {
+            RecipeId = "RCP-LENS-A",
+            Name = "Planned recipe",
+            Status = ConfigurationStatuses.Published,
+            DataModelId = "optical-lens-molding",
+            Values =
+            [
+                new RecipeParameterValue
+                {
+                    Code = "recipe.upper_heat_compensation",
+                    Value = System.Text.Json.JsonSerializer.SerializeToElement(9.9d)
+                }
+            ]
+        };
+        var service = new CycleComparisonService(
+            new FakeEventStore(rows),
+            new FakeInspectionStore([]),
+            new FakeReviewStore(),
+            new ProcessAnalysisResolver(new FakeProcessConfigurationStore(plannedRecipe)));
+
+        var cycle = await service.GetCycleAsync("NO-ACTUAL-RECIPE");
+
+        Assert.NotNull(cycle);
+        Assert.Empty(cycle.RecipeParameters);
+    }
+
+    [Fact]
     public async Task CycleRecordsKeepAllSamplesAndUseConfiguredPhaseAndQualityRules()
     {
         var rows = new List<PlatformProductionEvent>();
@@ -590,7 +636,7 @@ public sealed class QualityWorkflowTests
         public Task<bool> DeleteFeatureDefinitionAsync(string code, CancellationToken ct = default) => throw new NotSupportedException();
     }
 
-    private sealed class FakeProcessConfigurationStore : IProcessConfigurationStore
+    private sealed class FakeProcessConfigurationStore(RecipeVersion? recipe = null) : IProcessConfigurationStore
     {
         private static readonly ProcessDataModel Model = new()
         {
@@ -639,7 +685,8 @@ public sealed class QualityWorkflowTests
         public Task<bool> DeleteDataModelAsync(string modelId, int version, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<RecipeVersion> UpsertRecipeVersionAsync(RecipeVersion value, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<IReadOnlyList<RecipeVersion>> ListRecipeVersionsAsync(CancellationToken ct = default) => Task.FromResult<IReadOnlyList<RecipeVersion>>([]);
-        public Task<RecipeVersion?> GetRecipeVersionAsync(string recipeId, int version, CancellationToken ct = default) => Task.FromResult<RecipeVersion?>(null);
+        public Task<RecipeVersion?> GetRecipeVersionAsync(string recipeId, int version, CancellationToken ct = default)
+            => Task.FromResult(recipe);
         public Task<bool> DeleteRecipeVersionAsync(string recipeId, int version, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<ProcessAnalysisPlan> UpsertAnalysisPlanAsync(ProcessAnalysisPlan value, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<IReadOnlyList<ProcessAnalysisPlan>> ListAnalysisPlansAsync(CancellationToken ct = default) => Task.FromResult<IReadOnlyList<ProcessAnalysisPlan>>([Plan, WindowPlan]);

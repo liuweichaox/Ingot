@@ -133,10 +133,7 @@ internal sealed class HttpPollingAcquisitionHostedService(
         }
         finally
         {
-            foreach (var worker in _workers.Values) worker.Cancellation.Cancel();
-            await Task.WhenAll(_workers.Values.Select(worker => worker.Task)).ConfigureAwait(false);
-            foreach (var worker in _workers.Values) worker.Cancellation.Dispose();
-            _workers.Clear();
+            await StopAllWorkersAsync().ConfigureAwait(false);
         }
     }
 
@@ -162,7 +159,7 @@ internal sealed class HttpPollingAcquisitionHostedService(
         return payload?.Data ?? [];
     }
 
-    private async Task SynchronizeWorkersAsync(
+    internal async Task SynchronizeWorkersAsync(
         IReadOnlyList<AcquisitionDeployment> deployments,
         string edgeId,
         string configurationSource,
@@ -221,9 +218,25 @@ internal sealed class HttpPollingAcquisitionHostedService(
                 foreach (var previousWorker in previous)
                     await StopWorkerAsync(previousWorker.Key).ConfigureAwait(false);
                 StartWorker(key, deployment, edgeId, stoppingToken);
+                if (previous.Length > 0 &&
+                    !await status.WaitForFirstSuccessAsync(
+                        key,
+                        TimeSpan.FromMilliseconds(Math.Clamp(
+                            _localOptions.StartupHealthTimeoutMs,
+                            1000,
+                            300_000)),
+                        stoppingToken).ConfigureAwait(false))
+                {
+                    var runtime = status.Get().Tasks.FirstOrDefault(item => item.ConfigurationKey == key);
+                    throw new IOException(
+                        runtime?.LastError is { Length: > 0 } error
+                            ? $"候选采集配置未在启动健康期限内成功：{error}"
+                            : "候选采集配置未在启动健康期限内产生成功采样。");
+                }
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
+                await StopWorkerAsync(key).ConfigureAwait(false);
                 status.RecordApplicationState(
                     deployment.Profile.ProfileId,
                     previous.Length > 0
@@ -368,6 +381,12 @@ internal sealed class HttpPollingAcquisitionHostedService(
             status.RemoveTask(key);
             worker.Cancellation.Dispose();
         }
+    }
+
+    internal async Task StopAllWorkersAsync()
+    {
+        foreach (var key in _workers.Keys.ToArray())
+            await StopWorkerAsync(key).ConfigureAwait(false);
     }
 
     private async Task RunWorkerAsync(

@@ -1,4 +1,6 @@
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging.Abstractions;
+using Ingot.Platform.Infrastructure.Migrations;
 using Testcontainers.PostgreSql;
 using Xunit;
 
@@ -13,6 +15,8 @@ public sealed class PostgresIntegrationCollection : ICollectionFixture<PostgresI
 public sealed class PostgresIntegrationFixture : IAsyncLifetime
 {
     private PostgreSqlContainer? _container;
+    private readonly SemaphoreSlim _migrationLock = new(1, 1);
+    private bool _schemaReady;
 
     public string ConnectionString => (_container ??
         throw new InvalidOperationException("The PostgreSQL integration fixture is not running."))
@@ -42,6 +46,25 @@ public sealed class PostgresIntegrationFixture : IAsyncLifetime
     {
         if (_container is not null)
             await _container.DisposeAsync().ConfigureAwait(false);
+    }
+
+    public async Task EnsureSchemaAsync()
+    {
+        if (_schemaReady)
+            return;
+        await _migrationLock.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            if (_schemaReady)
+                return;
+            await new MigrationRunner(Configuration, NullLogger<MigrationRunner>.Instance)
+                .RunAsync().ConfigureAwait(false);
+            _schemaReady = true;
+        }
+        finally
+        {
+            _migrationLock.Release();
+        }
     }
 }
 

@@ -127,6 +127,7 @@ public sealed class PlatformReportingClient : IPlatformReportingClient
 
     public async Task SendHeartbeatAsync(
         EdgeAcquisitionRuntimeStatus? acquisitionStatus,
+        EdgeDeliveryRuntimeStatus? deliveryStatus,
         CancellationToken ct = default)
     {
         var http = _http ?? throw new InvalidOperationException("必须先调用 TryInitialize。");
@@ -138,6 +139,7 @@ public sealed class PlatformReportingClient : IPlatformReportingClient
                 HostBaseUrl = _hostBaseUrl,
                 LastError = _lastError,
                 Acquisition = acquisitionStatus,
+                Delivery = deliveryStatus,
                 Timestamp = DateTimeOffset.UtcNow
             };
 

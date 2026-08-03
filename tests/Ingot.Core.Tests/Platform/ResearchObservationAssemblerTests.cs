@@ -199,6 +199,29 @@ public sealed class ResearchObservationAssemblerTests
         Assert.False(excluded.ValidForOptimization);
         Assert.Empty(excluded.ActualFactors);
         Assert.Contains("控制变量:temperature", excluded.ExclusionReason);
+
+        var unmappedProject = project with
+        {
+            Variables = [project.Variables[0] with { DataSource = null }]
+        };
+        var unmappedResult = await assembler.AssembleAsync(unmappedProject, [experiment]);
+        var plannedOnly = Assert.Single(unmappedResult.Observations);
+        Assert.False(plannedOnly.ValidForOptimization);
+        Assert.Empty(plannedOnly.ActualFactors);
+        Assert.Contains("缺少设备实际参数回读", plannedOnly.ExclusionReason);
+
+        var wrongUnitCycle = cycle with
+        {
+            RecipeParameters = [cycle.RecipeParameters[0] with { Unit = "K" }]
+        };
+        var wrongUnitAssembler = new ResearchObservationAssembler(
+            new FakeCycleService(wrongUnitCycle),
+            inspections);
+        var wrongUnitResult = await wrongUnitAssembler.AssembleAsync(project, [experiment]);
+        var unitConflict = Assert.Single(wrongUnitResult.Observations);
+        Assert.False(unitConflict.ValidForOptimization);
+        Assert.Empty(unitConflict.ActualFactors);
+        Assert.Contains("单位冲突", unitConflict.ExclusionReason);
     }
 
     private sealed class FakeCycleService(CycleComparisonRow cycle) : ICycleComparisonService

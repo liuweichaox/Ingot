@@ -47,6 +47,7 @@ public sealed class HttpEventShipperTests
             factory,
             reportingOptions,
             new FakeMetrics { ThrowOnEventMetrics = eventMetricsThrow },
+            new EdgeDeliveryStatus(),
             NullLogger<HttpEventShipper>.Instance);
 
         await shipper.RunAsync(cancellation.Token);
@@ -56,6 +57,48 @@ public sealed class HttpEventShipperTests
         Assert.NotNull(handler.Request);
         Assert.Equal("EDGE-001", handler.Request!.EdgeId);
         Assert.Equal([1L, 2L], handler.Request.Events.Select(static evt => evt.Seq));
+    }
+
+    [Fact]
+    public async Task RunAsync_ShouldKeepAndReplayBatchAfterPlatformRecovers()
+    {
+        using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        var pending = new[] { CreateEvent(7), CreateEvent(8) };
+        var eventLog = new FakeEventLog(pending, () => cancellation.Cancel());
+        var handler = new RecoveringHandler();
+        var options = Options.Create(new EdgeReportingOptions
+        {
+            EdgeId = "EDGE-001",
+            PlatformApiBaseUrl = "http://platform/",
+            EnableEventShipping = true,
+            EventIngestToken = "secret",
+            EventBatchSize = 100,
+            EventIdleDelayMs = 100,
+            EventRetryMaxSeconds = 1
+        });
+        var identity = new EdgeIdentityService(options, NullLogger<EdgeIdentityService>.Instance);
+        var delivery = new EdgeDeliveryStatus();
+        var shipper = new HttpEventShipper(
+            eventLog,
+            identity,
+            new SingleClientFactory(new HttpClient(handler)),
+            options,
+            new FakeMetrics(),
+            delivery,
+            NullLogger<HttpEventShipper>.Instance);
+
+        await shipper.RunAsync(cancellation.Token);
+
+        Assert.Equal(2, handler.Requests.Count);
+        Assert.All(handler.Requests, request => Assert.Equal([7L, 8L], request.Events.Select(evt => evt.Seq)));
+        Assert.Equal(1, eventLog.ShipAttempts);
+        Assert.Equal(8, eventLog.AckSeq);
+        var runtime = delivery.Get();
+        Assert.Equal("synchronized", runtime.State);
+        Assert.Equal(1, runtime.RecoveryCount);
+        Assert.Equal(8, runtime.LastAcknowledgedSequence);
+        Assert.Equal(2, runtime.EventsShipped);
+        Assert.NotNull(runtime.LastRecoveryDurationMs);
     }
 
     private static ProductionEvent CreateEvent(long seq) =>
@@ -92,6 +135,32 @@ public sealed class HttpEventShipperTests
         }
     }
 
+    private sealed class RecoveringHandler : HttpMessageHandler
+    {
+        public List<EventBatchRequest> Requests { get; } = [];
+
+        protected override async Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken)
+        {
+            Requests.Add((await request.Content!.ReadFromJsonAsync<EventBatchRequest>(
+                cancellationToken: cancellationToken))!);
+            if (Requests.Count == 1)
+                return new HttpResponseMessage(HttpStatusCode.ServiceUnavailable)
+                {
+                    Content = JsonContent.Create(new { error = "platform unavailable" })
+                };
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = JsonContent.Create(new EventBatchResponse
+                {
+                    Accepted = 2,
+                    AckSeq = 8
+                })
+            };
+        }
+    }
+
     private sealed class SingleClientFactory(HttpClient client) : IHttpClientFactory
     {
         public HttpClient CreateClient(string name) => client;
@@ -102,6 +171,7 @@ public sealed class HttpEventShipperTests
         Action onAck) : IEventLog
     {
         public long? AckSeq { get; private set; }
+        public int ShipAttempts { get; private set; }
 
         public Task<long> AppendAsync(ProductionEvent evt, CancellationToken ct = default)
             => throw new NotSupportedException();
@@ -125,7 +195,10 @@ public sealed class HttpEventShipperTests
         }
 
         public Task IncrementShipAttemptsAsync(long fromSeq, long toSeq, CancellationToken ct = default)
-            => Task.CompletedTask;
+        {
+            ShipAttempts++;
+            return Task.CompletedTask;
+        }
 
         public Task<long> CountPendingAsync(CancellationToken ct = default)
             => Task.FromResult(AckSeq.HasValue ? 0L : (long)pending.Count);

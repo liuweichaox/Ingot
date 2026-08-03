@@ -122,6 +122,10 @@ public sealed class EdgeDiagnosticsController(
         [FromRoute] string edgeId,
         CancellationToken cancellationToken)
     {
+        var reported = registry.Find(edgeId)?.Acquisition;
+        if (reported is not null)
+            return Ok(reported);
+
         var baseUrl = GetEdgeBaseUrlOrNull(edgeId);
         if (baseUrl is null)
             return BadRequest(new { error = "该采集节点未上报访问地址，无法查询任务状态。" });
@@ -140,6 +144,17 @@ public sealed class EdgeDiagnosticsController(
         {
             return StatusCode(StatusCodes.Status502BadGateway, new { error = "采集节点不可访问。", detail = exception.Message });
         }
+    }
+
+    [HttpGet("delivery/status")]
+    public IActionResult GetDeliveryStatus([FromRoute] string edgeId)
+    {
+        var state = registry.Find(edgeId);
+        if (state is null)
+            return NotFound(new { error = "采集节点不存在。" });
+        return state.Delivery is null
+            ? NotFound(new { error = "采集节点尚未上报数据上送状态。" })
+            : Ok(state.Delivery);
     }
 
     private string? GetEdgeBaseUrlOrNull(string edgeId)

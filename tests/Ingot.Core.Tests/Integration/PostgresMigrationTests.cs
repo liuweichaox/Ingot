@@ -1,0 +1,30 @@
+using Ingot.Platform.Infrastructure.Migrations;
+using Microsoft.Extensions.Logging.Abstractions;
+using Npgsql;
+using Xunit;
+
+namespace Ingot.Core.Tests.Integration;
+
+[Collection(PostgresIntegrationCollection.Name)]
+public sealed class PostgresMigrationTests(PostgresIntegrationFixture postgres)
+{
+    [LinuxDockerFact]
+    public async Task ConcurrentRunners_ShouldApplyEveryMigrationExactlyOnce()
+    {
+        var first = new MigrationRunner(postgres.Configuration, NullLogger<MigrationRunner>.Instance);
+        var second = new MigrationRunner(postgres.Configuration, NullLogger<MigrationRunner>.Instance);
+
+        await Task.WhenAll(first.RunAsync(), second.RunAsync());
+        await first.RunAsync();
+
+        await using var connection = new NpgsqlConnection(postgres.ConnectionString);
+        await connection.OpenAsync();
+        await using var command = new NpgsqlCommand(
+            "SELECT count(*), count(DISTINCT version) FROM schema_version;",
+            connection);
+        await using var reader = await command.ExecuteReaderAsync();
+        Assert.True(await reader.ReadAsync());
+        Assert.Equal(9, reader.GetInt64(0));
+        Assert.Equal(reader.GetInt64(0), reader.GetInt64(1));
+    }
+}

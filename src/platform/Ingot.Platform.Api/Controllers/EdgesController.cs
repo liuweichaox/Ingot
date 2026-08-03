@@ -39,14 +39,16 @@ public class EdgesController(EdgeRegistry registry, EdgeTokenValidator edgeToken
             request.HostBaseUrl,
             request.LastError,
             request.Acquisition,
-            now);
+            now,
+            request.Delivery);
         return Ok(new
         {
             state.EdgeId,
             state.HostBaseUrl,
             state.LastSeen,
             state.LastError,
-            state.Acquisition
+            state.Acquisition,
+            state.Delivery
         });
     }
 }

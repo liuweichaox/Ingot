@@ -41,6 +41,7 @@ builder.Services.AddSingleton<IEdgeIdentityProvider>(services => services.GetReq
 builder.Services.AddSingleton<IPlatformReportingClient, PlatformReportingClient>();
 
 builder.Services.AddSingleton<IMetricsCollector, MetricsCollector>();
+builder.Services.AddSingleton<EdgeDeliveryStatus>();
 builder.Services.AddSingleton<MetricsBridge>();
 builder.Services.AddSingleton<IEdgeContextStore, ContextStore>();
 builder.Services.AddSingleton<IEventLog, SqliteEventLog>();

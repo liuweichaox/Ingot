@@ -97,6 +97,7 @@ export function StatusBadge({ value }) {
     approved: "已批准",
     selected: "已选择",
     applied: "已应用",
+    synchronized: "已同步",
     fail: "不合格",
     failed: "不合格",
     offline: "离线",
@@ -108,6 +109,7 @@ export function StatusBadge({ value }) {
     not_applicable: "无需质检",
     cancelled: "已取消",
     pending: "待处理",
+    buffering: "本地缓存中",
     validating: "验证中",
     "waiting-cycle-boundary": "等待周期边界",
     applying: "应用中",
@@ -141,11 +143,11 @@ export function StatusBadge({ value }) {
     warning: "警告",
     unknown: "待上报",
   };
-  const tone = ["active", "ready", "online", "complete", "completed", "pass", "passed", "verified", "healthy", "published", "validated", "indexed", "reviewed", "available", "confirmed", "approved", "selected", "applied"].includes(normalized)
+  const tone = ["active", "ready", "online", "complete", "completed", "pass", "passed", "verified", "healthy", "published", "validated", "indexed", "reviewed", "available", "confirmed", "approved", "selected", "applied", "synchronized"].includes(normalized)
     ? "success"
     : ["fail", "failed", "offline", "rejected", "error", "suspended", "rollback-required", "unavailable", "cancelled"].includes(normalized)
       ? "danger"
-      : ["pending", "validating", "waiting-cycle-boundary", "applying", "rollback", "draft", "starting", "running", "uploaded", "dirty", "degraded", "in_progress", "review_pending", "queued", "completed_with_errors", "incomplete", "cancelling", "proposed", "investigating", "trialing", "planned", "warning", "concluded", "withdrawn", "rolled-back"].includes(normalized)
+      : ["pending", "buffering", "validating", "waiting-cycle-boundary", "applying", "rollback", "draft", "starting", "running", "uploaded", "dirty", "degraded", "in_progress", "review_pending", "queued", "completed_with_errors", "incomplete", "cancelling", "proposed", "investigating", "trialing", "planned", "warning", "concluded", "withdrawn", "rolled-back"].includes(normalized)
         ? "warning"
         : "neutral";
   return <Badge tone={tone}>{labels[normalized] ?? String(value ?? "待上报")}</Badge>;

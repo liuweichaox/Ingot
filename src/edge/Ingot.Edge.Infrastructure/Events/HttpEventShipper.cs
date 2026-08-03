@@ -29,6 +29,7 @@ public sealed class HttpEventShipper : IEventShipper
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger<HttpEventShipper> _logger;
     private readonly IMetricsCollector _metrics;
+    private readonly EdgeDeliveryStatus _deliveryStatus;
     private readonly EdgeReportingOptions _options;
 
     public HttpEventShipper(
@@ -37,12 +38,14 @@ public sealed class HttpEventShipper : IEventShipper
         IHttpClientFactory httpClientFactory,
         IOptions<EdgeReportingOptions> options,
         IMetricsCollector metrics,
+        EdgeDeliveryStatus deliveryStatus,
         ILogger<HttpEventShipper> logger)
     {
         _eventLog = eventLog;
         _identity = identity;
         _httpClientFactory = httpClientFactory;
         _metrics = metrics;
+        _deliveryStatus = deliveryStatus;
         _logger = logger;
         _options = options.Value;
     }
@@ -125,6 +128,7 @@ public sealed class HttpEventShipper : IEventShipper
                 await _eventLog.MarkShippedAsync(result.AckSeq, ct).ConfigureAwait(false);
                 stopwatch.Stop();
                 var confirmed = pending.Count(evt => evt.Seq <= result.AckSeq);
+                _deliveryStatus.RecordSuccess(result.AckSeq, confirmed, DateTimeOffset.UtcNow);
                 RecordEventsShippedMetric(
                     edgeId,
                     confirmed,
@@ -141,6 +145,7 @@ public sealed class HttpEventShipper : IEventShipper
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
+                _deliveryStatus.RecordFailure(ex.Message, DateTimeOffset.UtcNow);
                 await _eventLog
                     .IncrementShipAttemptsAsync(pending[0].Seq, pending[^1].Seq, ct)
                     .ConfigureAwait(false);
@@ -159,8 +164,9 @@ public sealed class HttpEventShipper : IEventShipper
     {
         try
         {
-            _metrics.RecordEventOutboxBacklog(
-                await _eventLog.CountPendingAsync(ct).ConfigureAwait(false));
+            var count = await _eventLog.CountPendingAsync(ct).ConfigureAwait(false);
+            _deliveryStatus.RecordBacklog(count);
+            _metrics.RecordEventOutboxBacklog(count);
         }
         catch (Exception ex)
         {

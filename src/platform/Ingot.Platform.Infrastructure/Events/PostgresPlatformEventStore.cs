@@ -424,9 +424,33 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, IA
         var analysis = await _analysisResolver.ResolveAsync(context, analysisScope, ct).ConfigureAwait(false);
         if (recipe is not null)
         {
-            context["data_model_id"] = recipe.DataModelId;
-            context["data_model_version"] = recipe.DataModelVersion.ToString(CultureInfo.InvariantCulture);
-            context["recipe_snapshot_status"] = "resolved";
+            var sourceModelId = ProcessAnalysisResolver.ContextValue(context, "data_model_id")?.Trim();
+            var hasSourceModelVersion = int.TryParse(
+                ProcessAnalysisResolver.ContextValue(context, "data_model_version"),
+                NumberStyles.None,
+                CultureInfo.InvariantCulture,
+                out var sourceModelVersion) && sourceModelVersion > 0;
+            var hasSourceModel = !string.IsNullOrWhiteSpace(sourceModelId) && hasSourceModelVersion;
+
+            // 采集配置声明的是本次原始轨迹实际采用的数据模型，不能被配方主数据的
+            // 历史模型版本覆盖。配方模型单独留痕；不一致时显式标记，交给数据质量
+            // 和配置治理处理，但仍按采集模型校验并保存真实设备数据。
+            context["recipe_data_model_id"] = recipe.DataModelId;
+            context["recipe_data_model_version"] = recipe.DataModelVersion.ToString(CultureInfo.InvariantCulture);
+            if (!hasSourceModel)
+            {
+                context["data_model_id"] = recipe.DataModelId;
+                context["data_model_version"] = recipe.DataModelVersion.ToString(CultureInfo.InvariantCulture);
+                context["recipe_snapshot_status"] = "resolved";
+            }
+            else
+            {
+                context["recipe_snapshot_status"] =
+                    string.Equals(sourceModelId, recipe.DataModelId, StringComparison.Ordinal) &&
+                    sourceModelVersion == recipe.DataModelVersion
+                        ? "resolved"
+                        : "model_mismatch";
+            }
         }
         if (analysis is not null)
         {
@@ -437,7 +461,7 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, IA
         var data = new Dictionary<string, object?>(evt.Data, StringComparer.Ordinal);
         if (recipe is not null)
         {
-            data["recipeParameters"] = recipe.Values.ToDictionary(
+            data["plannedRecipeParameters"] = recipe.Values.ToDictionary(
                 static item => item.Code,
                 static item => (object?)item.Value,
                 StringComparer.Ordinal);

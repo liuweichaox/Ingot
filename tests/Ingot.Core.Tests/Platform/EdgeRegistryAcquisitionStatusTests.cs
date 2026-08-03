@@ -1,4 +1,5 @@
 using Ingot.Contracts.Acquisition;
+using Ingot.Contracts.Edge;
 using Ingot.Platform.Infrastructure.Services;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Configuration;
@@ -47,13 +48,30 @@ public sealed class EdgeRegistryAcquisitionStatusTests
                 ]);
 
             var first = new EdgeRegistry(configuration);
-            first.Heartbeat("EDGE-001", null, null, report, DateTimeOffset.UtcNow);
+            first.Heartbeat(
+                "EDGE-001",
+                null,
+                null,
+                report,
+                DateTimeOffset.UtcNow,
+                new EdgeDeliveryRuntimeStatus
+                {
+                    State = "synchronized",
+                    PendingEventCount = 3,
+                    LastAcknowledgedSequence = 41,
+                    RecoveryCount = 2,
+                    LastRecoveryDurationMs = 1250
+                });
 
             var restored = new EdgeRegistry(configuration).Find("EDGE-001");
             Assert.NotNull(restored?.Acquisition);
             Assert.Equal("desired-hash", restored.Acquisition.DesiredConfigurationSetHash);
             Assert.Equal(42, restored.Acquisition.SamplesCollected);
             Assert.Equal(2, Assert.Single(restored.Acquisition.Deployments).AppliedVersion);
+            Assert.NotNull(restored.Delivery);
+            Assert.Equal(3, restored.Delivery.PendingEventCount);
+            Assert.Equal(41, restored.Delivery.LastAcknowledgedSequence);
+            Assert.Equal(2, restored.Delivery.RecoveryCount);
         }
         finally
         {

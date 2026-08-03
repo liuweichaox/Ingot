@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Ingot.Contracts.Acquisition;
+using Ingot.Contracts.Edge;
 using Microsoft.Data.Sqlite;
 
 namespace Ingot.Platform.Infrastructure.Services;
@@ -35,7 +36,7 @@ public sealed class EdgeRegistry
         using var cmd = conn.CreateCommand();
         cmd.CommandText = """
                           SELECT edge_id, host_base_url, hostname, version, last_seen_utc, last_error,
-                                 acquisition_status_json
+                                 acquisition_status_json, delivery_status_json
                           FROM edges
                           ORDER BY last_seen_utc DESC;
                           """;
@@ -51,7 +52,8 @@ public sealed class EdgeRegistry
                 Version = reader.IsDBNull(3) ? null : reader.GetString(3),
                 LastSeen = ParseStoredTimestamp(reader.IsDBNull(4) ? null : reader.GetString(4)),
                 LastError = reader.IsDBNull(5) ? null : reader.GetString(5),
-                Acquisition = DeserializeAcquisitionStatus(reader.IsDBNull(6) ? null : reader.GetString(6))
+                Acquisition = DeserializeAcquisitionStatus(reader.IsDBNull(6) ? null : reader.GetString(6)),
+                Delivery = DeserializeDeliveryStatus(reader.IsDBNull(7) ? null : reader.GetString(7))
             });
         }
 
@@ -98,24 +100,28 @@ public sealed class EdgeRegistry
         string? hostBaseUrl,
         string? lastError,
         EdgeAcquisitionRuntimeStatus? acquisition,
-        DateTimeOffset now)
+        DateTimeOffset now,
+        EdgeDeliveryRuntimeStatus? delivery = null)
     {
         using var conn = Open();
         using var cmd = conn.CreateCommand();
         cmd.CommandText = """
                           INSERT INTO edges(
                             edge_id, host_base_url, hostname, version, last_seen_utc, last_error,
-                            acquisition_status_json)
+                            acquisition_status_json, delivery_status_json)
                           VALUES (
                             $edge_id, $host_base_url, NULL, NULL, $last_seen_utc, $last_error,
-                            $acquisition_status_json)
+                            $acquisition_status_json, $delivery_status_json)
                           ON CONFLICT(edge_id) DO UPDATE SET
                             last_seen_utc  = excluded.last_seen_utc,
                             host_base_url = COALESCE(excluded.host_base_url, edges.host_base_url),
                             last_error     = excluded.last_error,
                             acquisition_status_json = COALESCE(
                               excluded.acquisition_status_json,
-                              edges.acquisition_status_json);
+                              edges.acquisition_status_json),
+                            delivery_status_json = COALESCE(
+                              excluded.delivery_status_json,
+                              edges.delivery_status_json);
                           """;
         cmd.Parameters.AddWithValue("$edge_id", edgeId);
         cmd.Parameters.AddWithValue("$host_base_url", (object?)NormalizeBaseUrl(hostBaseUrl) ?? DBNull.Value);
@@ -124,6 +130,9 @@ public sealed class EdgeRegistry
         cmd.Parameters.AddWithValue(
             "$acquisition_status_json",
             acquisition is null ? DBNull.Value : JsonSerializer.Serialize(acquisition, JsonOptions));
+        cmd.Parameters.AddWithValue(
+            "$delivery_status_json",
+            delivery is null ? DBNull.Value : JsonSerializer.Serialize(delivery, JsonOptions));
         cmd.ExecuteNonQuery();
 
         return Get(edgeId) ?? new EdgeState(edgeId)
@@ -156,7 +165,7 @@ public sealed class EdgeRegistry
         using var cmd = conn.CreateCommand();
         cmd.CommandText = """
                           SELECT edge_id, host_base_url, hostname, version, last_seen_utc, last_error,
-                                 acquisition_status_json
+                                 acquisition_status_json, delivery_status_json
                           FROM edges
                           WHERE edge_id = $edge_id;
                           """;
@@ -172,7 +181,8 @@ public sealed class EdgeRegistry
             Version = reader.IsDBNull(3) ? null : reader.GetString(3),
             LastSeen = ParseStoredTimestamp(reader.IsDBNull(4) ? null : reader.GetString(4)),
             LastError = reader.IsDBNull(5) ? null : reader.GetString(5),
-            Acquisition = DeserializeAcquisitionStatus(reader.IsDBNull(6) ? null : reader.GetString(6))
+            Acquisition = DeserializeAcquisitionStatus(reader.IsDBNull(6) ? null : reader.GetString(6)),
+            Delivery = DeserializeDeliveryStatus(reader.IsDBNull(7) ? null : reader.GetString(7))
         };
     }
 
@@ -196,6 +206,7 @@ public sealed class EdgeRegistry
         public DateTimeOffset LastSeen { get; set; } = DateTimeOffset.UtcNow;
         public string? LastError { get; set; }
         public EdgeAcquisitionRuntimeStatus? Acquisition { get; set; }
+        public EdgeDeliveryRuntimeStatus? Delivery { get; set; }
     }
 
     private static void CreateTable(SqliteConnection conn)
@@ -209,11 +220,13 @@ public sealed class EdgeRegistry
                             version        TEXT NULL,
                             last_seen_utc  TEXT NOT NULL,
                             last_error     TEXT NULL,
-                            acquisition_status_json TEXT NULL
+                            acquisition_status_json TEXT NULL,
+                            delivery_status_json TEXT NULL
                           );
                           """;
         cmd.ExecuteNonQuery();
         EnsureColumn(conn, "edges", "acquisition_status_json", "TEXT NULL");
+        EnsureColumn(conn, "edges", "delivery_status_json", "TEXT NULL");
     }
 
     private static void EnsureColumn(SqliteConnection connection, string table, string column, string definition)
@@ -239,6 +252,20 @@ public sealed class EdgeRegistry
         try
         {
             return JsonSerializer.Deserialize<EdgeAcquisitionRuntimeStatus>(value, JsonOptions);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    private static EdgeDeliveryRuntimeStatus? DeserializeDeliveryStatus(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return null;
+        try
+        {
+            return JsonSerializer.Deserialize<EdgeDeliveryRuntimeStatus>(value, JsonOptions);
         }
         catch (JsonException)
         {
