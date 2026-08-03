@@ -27,6 +27,8 @@ public static class ProtocolAcquisitionSnapshotMapper
             ["data_model_id"] = profile.DataModelId,
             ["data_model_version"] = profile.DataModelVersion.ToString(CultureInfo.InvariantCulture)
         };
+        if (string.Equals(profile.SubjectType, "equipment", StringComparison.OrdinalIgnoreCase))
+            context["equipment_id"] = profile.SubjectId;
         foreach (var mapping in profile.ContextMappings)
         {
             if (!raw.TryGetValue(mapping.SourcePath, out var value) || value is null)

@@ -11,6 +11,7 @@ Ingot is an open-source process diagnosis and optimization system for expensive,
 | Understand GPs, qLogNEI/qLogNEHVI, and constraints | [Optimizer](optimization.en.md) |
 | Connect control systems, instruments, inspections, and run data | [Equipment and data wiring](data-connection.en.md) |
 | Prove whether the system reduces experiments | [Real-world validation](rollout.en.md) |
+| Review long-term phases, priorities, and acceptance gates | [Long-term project plan](project-plan.en.md) |
 | Deploy inside a factory network | [Deployment and operations](deployment.en.md) |
 | Find common answers | [FAQ](faq.en.md) |
 

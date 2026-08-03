@@ -4,6 +4,86 @@ using System.Globalization;
 namespace Ingot.Contracts.Acquisition;
 
 /// <summary>
+///     MQTT 主题过滤器的语法校验与匹配。
+///     校验器用它拒绝非法过滤器，采集节点用它判断一条报文属于哪个订阅——
+///     两边必须是同一份规则，否则界面上能配的绑定在现场不生效。
+/// </summary>
+public static class MqttTopicFilter
+{
+    /// <summary>+ 必须独占一层，# 只能出现在最后一层。</summary>
+    public static bool IsValid(string? filter, out string error)
+    {
+        error = string.Empty;
+        if (string.IsNullOrEmpty(filter))
+        {
+            error = "主题不能为空。";
+            return false;
+        }
+
+        if (filter.Contains('\0'))
+        {
+            error = "主题不能包含空字符。";
+            return false;
+        }
+
+        var levels = filter.Split('/');
+        for (var index = 0; index < levels.Length; index++)
+        {
+            var level = levels[index];
+            if (level.Contains('+') && level != "+")
+            {
+                error = "通配符 + 必须独占一个层级，例如 plant/+/line。";
+                return false;
+            }
+
+            if (!level.Contains('#')) continue;
+            if (level != "#")
+            {
+                error = "通配符 # 必须独占一个层级。";
+                return false;
+            }
+
+            if (index != levels.Length - 1)
+            {
+                error = "通配符 # 只能出现在主题的最后一个层级。";
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>判断一条具体主题的报文是否命中该过滤器。</summary>
+    public static bool Matches(string? filter, string? topic)
+    {
+        if (filter is null || topic is null) return false;
+        if (string.Equals(filter, topic, StringComparison.Ordinal)) return true;
+        var filterLevels = filter.Split('/');
+        var topicLevels = topic.Split('/');
+        for (var index = 0; index < filterLevels.Length; index++)
+        {
+            var level = filterLevels[index];
+            if (level == "#")
+            {
+                // # 匹配剩余所有层级，但按 MQTT 规范不匹配以 $ 开头的系统主题。
+                return index != 0 || !topicLevels[0].StartsWith('$');
+            }
+
+            if (index >= topicLevels.Length) return false;
+            if (level == "+")
+            {
+                if (index == 0 && topicLevels[0].StartsWith('$')) return false;
+                continue;
+            }
+
+            if (!string.Equals(level, topicLevels[index], StringComparison.Ordinal)) return false;
+        }
+
+        return filterLevels.Length == topicLevels.Length;
+    }
+}
+
+/// <summary>
 ///     寄存器类协议的点位选择器解析。
 ///
 ///     这些语法以前分别写在 <c>ModbusTcpAcquisitionRunner</c> 与

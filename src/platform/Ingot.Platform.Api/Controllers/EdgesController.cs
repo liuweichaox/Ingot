@@ -34,7 +34,19 @@ public class EdgesController(EdgeRegistry registry, EdgeTokenValidator edgeToken
         if (!edgeTokenValidator.IsAuthorized(request.EdgeId, Request.Headers.Authorization.ToString()))
             return Unauthorized(new { error = "边缘节点认证失败。" });
         var now = request.Timestamp == default ? DateTimeOffset.UtcNow : request.Timestamp.ToUniversalTime();
-        var state = registry.Heartbeat(request.EdgeId, request.HostBaseUrl, request.LastError, now);
-        return Ok(new { state.EdgeId, state.HostBaseUrl, state.LastSeen, state.LastError });
+        var state = registry.Heartbeat(
+            request.EdgeId,
+            request.HostBaseUrl,
+            request.LastError,
+            request.Acquisition,
+            now);
+        return Ok(new
+        {
+            state.EdgeId,
+            state.HostBaseUrl,
+            state.LastSeen,
+            state.LastError,
+            state.Acquisition
+        });
     }
 }

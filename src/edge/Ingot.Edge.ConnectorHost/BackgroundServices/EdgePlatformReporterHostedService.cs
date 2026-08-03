@@ -1,4 +1,5 @@
 using Ingot.Edge.Application.Abstractions;
+using Ingot.Edge.ConnectorHost.Acquisition;
 
 namespace Ingot.Edge.ConnectorHost.BackgroundServices;
 
@@ -8,6 +9,7 @@ namespace Ingot.Edge.ConnectorHost.BackgroundServices;
 /// </summary>
 public sealed class EdgePlatformReporterHostedService(
     IPlatformReportingClient client,
+    AcquisitionStatus acquisitionStatus,
     IConfiguration configuration,
     ILogger<EdgePlatformReporterHostedService> logger) : BackgroundService
 {
@@ -27,7 +29,7 @@ public sealed class EdgePlatformReporterHostedService(
         while (!stoppingToken.IsCancellationRequested &&
                await timer.WaitForNextTickAsync(stoppingToken).ConfigureAwait(false))
         {
-            await client.SendHeartbeatAsync(stoppingToken).ConfigureAwait(false);
+            await client.SendHeartbeatAsync(acquisitionStatus.Get(), stoppingToken).ConfigureAwait(false);
         }
     }
 }

@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using Ingot.Edge.Application.Abstractions;
 using Ingot.Edge.Application.Options;
 using Ingot.Contracts.Edge;
+using Ingot.Contracts.Acquisition;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -124,7 +125,9 @@ public sealed class PlatformReportingClient : IPlatformReportingClient
         }
     }
 
-    public async Task SendHeartbeatAsync(CancellationToken ct = default)
+    public async Task SendHeartbeatAsync(
+        EdgeAcquisitionRuntimeStatus? acquisitionStatus,
+        CancellationToken ct = default)
     {
         var http = _http ?? throw new InvalidOperationException("必须先调用 TryInitialize。");
         try
@@ -134,6 +137,7 @@ public sealed class PlatformReportingClient : IPlatformReportingClient
                 EdgeId = _edgeId!,
                 HostBaseUrl = _hostBaseUrl,
                 LastError = _lastError,
+                Acquisition = acquisitionStatus,
                 Timestamp = DateTimeOffset.UtcNow
             };
 

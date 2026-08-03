@@ -6,6 +6,7 @@
         <RootNamespace>Ingot.Edge.Application</RootNamespace>
     </PropertyGroup>
     <ItemGroup>
+        <ProjectReference Include="..\..\shared\Ingot.Contracts\Ingot.Contracts.csproj"/>
         <ProjectReference Include="..\..\shared\Ingot.Domain\Ingot.Domain.csproj"/>
     </ItemGroup>
 </Project>

@@ -112,6 +112,8 @@ docker compose -f docker-compose.app.yml up -d --build
 - Platform API 健康检查：<http://localhost:8000/health>
 - 优化器就绪检查：<http://localhost:8100/ready>
 
+生产部署将 `INGOT_AUTH_MODE` 设置为 `Local` 或 `Oidc`，并更换示例凭据。
+
 默认 Compose 不启动现场连接器。连接真实设备或业务系统前，请先阅读[设备与数据接线](docs/data-connection.md)。
 
 ### 本地开发
@@ -173,6 +175,7 @@ scripts/           验证与运维脚本
 - [优化器原理与边界](docs/optimization.md)
 - [设备与数据接线](docs/data-connection.md)
 - [真实场景回放与在线验证](docs/rollout.md)
+- [长期项目规划](docs/project-plan.md)
 - [部署与运行](docs/deployment.md)
 - [常见问题](docs/faq.md)
 

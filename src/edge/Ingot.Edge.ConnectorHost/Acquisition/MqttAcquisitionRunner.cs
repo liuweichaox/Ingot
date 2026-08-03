@@ -8,6 +8,14 @@ using MQTTnet.Protocol;
 
 namespace Ingot.Edge.ConnectorHost.Acquisition;
 
+/// <summary>
+///     MQTT 订阅采集器。
+///
+///     订阅多个主题时，每个点位可以绑定自己的来源主题，跨主题的值由
+///     <see cref="MqttSnapshotAssembler"/> 合并成一份等价快照后再走统一的映射管线。
+///     以前所有主题共用一套映射，等价于要求每条报文都是完整快照——界面允许配多个主题，
+///     但多主题分别携带部分字段的场景实际上无法工作。
+/// </summary>
 public sealed class MqttAcquisitionRunner(
     IEventSink sink,
     IAcquisitionSecretResolver secrets,
@@ -25,77 +33,93 @@ public sealed class MqttAcquisitionRunner(
         var connection = deployment.Profile.Mqtt
             ?? throw new InvalidOperationException("MQTT 连接配置不能为空。");
         var jsonOptions = JsonAcquisitionOptionsFactory.Create(deployment);
+        var assembler = new MqttSnapshotAssembler(
+            MqttSnapshotAssembler.SlotsFor(deployment.Profile),
+            connection.SnapshotMaxAgeSeconds);
         var factory = new MqttClientFactory();
         using var client = factory.CreateMqttClient();
-        using var messageGate = new SemaphoreSlim(1, 1);
-        var snapshots = new MqttSnapshotAccumulator(connection.Topics);
         string? currentRecipe = null;
         string? currentSnapshotFingerprint = null;
+        string? lastIncompleteReason = null;
         var lifecycle = new AcquisitionLifecycleTracker();
+        // 消息回调可能并发进入；合并快照是共享状态，必须串行化。
+        using var gate = new SemaphoreSlim(1, 1);
 
         client.ApplicationMessageReceivedAsync += async message =>
         {
-            await messageGate.WaitAsync(ct).ConfigureAwait(false);
+            var topic = message.ApplicationMessage.Topic;
             status.RecordAttempt(configurationKey, DateTimeOffset.UtcNow);
+            await gate.WaitAsync(ct).ConfigureAwait(false);
             try
             {
-                using var snapshot = snapshots.Add(
-                    message.ApplicationMessage.Topic,
-                    message.ApplicationMessage.Payload,
-                    DateTimeOffset.UtcNow,
-                    connection.SnapshotMaxAgeSeconds,
-                    connection.SnapshotMaxSkewSeconds);
-                if (!snapshot.IsComplete || !snapshot.IsCoherent)
+                var subscription = MqttSnapshotAssembler.SubscriptionFor(connection.Topics, topic);
+                using var document = JsonDocument.Parse(message.ApplicationMessage.Payload);
+                var payload = MqttSnapshotAssembler.Unwrap(document.RootElement, subscription?.PayloadRoot);
+                var receivedAt = DateTimeOffset.UtcNow;
+                var carriedValue = assembler.Ingest(topic, payload, receivedAt);
+                if (!carriedValue)
                 {
+                    // 只携带上下文的主题更新状态但不触发采样，
+                    // 否则采样率会被与工艺变量无关的主题放大。
                     logger.LogDebug(
-                        "MQTT 采集任务 {Configuration} 尚未形成新鲜一致快照：Complete={Complete}, Coherent={Coherent}, Oldest={Oldest}, Newest={Newest}",
-                        configurationKey,
-                        snapshot.IsComplete,
-                        snapshot.IsCoherent,
-                        snapshot.OldestTopicAt,
-                        snapshot.NewestTopicAt);
+                        "MQTT 采集任务 {Configuration} 收到主题 {Topic} 的上下文报文，已并入合并快照",
+                        configurationKey, topic);
                     return;
                 }
-                var mapped = HttpPollingSnapshotMapper.Map(
-                    snapshot.Aggregate.RootElement,
-                    jsonOptions,
-                    normalizedSource,
-                    currentRecipe,
-                    snapshot.TopicSnapshots);
-                if (snapshot.Fingerprint == currentSnapshotFingerprint)
+
+                if (!assembler.TryBuildSnapshot(receivedAt, out var snapshot, out var missing))
                 {
-                    status.RecordSuccess(
-                        configurationKey,
-                        DateTimeOffset.UtcNow,
-                        currentRecipe,
-                        incrementSample: false);
+                    if (!string.Equals(missing, lastIncompleteReason, StringComparison.Ordinal))
+                    {
+                        lastIncompleteReason = missing;
+                        status.RecordFailure(configurationKey, $"合并快照尚未完整：{missing}。");
+                        logger.LogInformation(
+                            "MQTT 采集任务 {Configuration} 等待其余主题：{Reason}", configurationKey, missing);
+                    }
+
                     return;
                 }
-                await sink.EmitBatchAsync(
-                    lifecycle.Track(mapped, deployment.Profile.Lifecycle, 0),
-                    ct).ConfigureAwait(false);
-                currentRecipe = mapped.RecipeIdentity;
-                currentSnapshotFingerprint = snapshot.Fingerprint;
+
+                lastIncompleteReason = null;
+                using (snapshot)
+                {
+                    var topicSnapshots = assembler.BuildTopicSnapshots(receivedAt);
+                    var fingerprint = MqttSnapshotAssembler.Fingerprint(snapshot!, topicSnapshots);
+                    if (string.Equals(fingerprint, currentSnapshotFingerprint, StringComparison.Ordinal))
+                    {
+                        status.RecordSuccess(
+                            configurationKey,
+                            DateTimeOffset.UtcNow,
+                            currentRecipe,
+                            incrementSample: false);
+                        return;
+                    }
+
+                    var mapped = HttpPollingSnapshotMapper.Map(
+                        snapshot!.RootElement,
+                        jsonOptions,
+                        normalizedSource,
+                        currentRecipe,
+                        topicSnapshots);
+                    // MQTT 由设备推送，没有固定采样周期，因此不向周期跟踪器提供轮询间隔。
+                    var events = lifecycle.Track(mapped, deployment.Profile.Lifecycle, 0);
+                    await sink.EmitBatchAsync(events, ct).ConfigureAwait(false);
+                    status.RecordCycleState(configurationKey, lifecycle.IsRunActive);
+                    currentRecipe = mapped.RecipeIdentity;
+                    currentSnapshotFingerprint = fingerprint;
+                }
+
                 status.RecordSuccess(configurationKey, DateTimeOffset.UtcNow, currentRecipe);
             }
-            catch (InvalidDataException exception) when (IsIncompleteSnapshot(exception))
-            {
-                // 多主题 MQTT 在收到第一部分报文时尚未形成完整快照，这是正常等待状态，
-                // 不能把它记录成采集失败。
-                logger.LogDebug(
-                    "MQTT 采集任务 {Configuration} 尚未收到完整快照：{Reason}",
-                    configurationKey,
-                    exception.Message);
-            }
-            catch (Exception exception)
+            catch (Exception exception) when (exception is not OperationCanceledException)
             {
                 status.RecordFailure(configurationKey, exception.Message);
                 logger.LogWarning(exception, "MQTT 采集任务 {Configuration} 无法处理主题 {Topic} 的消息",
-                    configurationKey, message.ApplicationMessage.Topic);
+                    configurationKey, topic);
             }
             finally
             {
-                messageGate.Release();
+                gate.Release();
             }
         };
 
@@ -150,8 +174,9 @@ public sealed class MqttAcquisitionRunner(
                             .Build();
                         await client.SubscribeAsync(subscribeOptions, ct).ConfigureAwait(false);
                     }
-                    logger.LogInformation("MQTT 采集任务已连接：Configuration={Configuration}, Broker={Host}:{Port}",
-                        configurationKey, connection.Host, connection.Port);
+                    logger.LogInformation(
+                        "MQTT 采集任务已连接：Configuration={Configuration}, Broker={Host}:{Port}, Topics={TopicCount}",
+                        configurationKey, connection.Host, connection.Port, connection.Topics.Count);
                 }
                 await Task.Delay(TimeSpan.FromSeconds(1), ct).ConfigureAwait(false);
             }
@@ -163,7 +188,4 @@ public sealed class MqttAcquisitionRunner(
             }
         }
     }
-
-    private static bool IsIncompleteSnapshot(InvalidDataException exception)
-        => exception.Message.Contains("缺少必填", StringComparison.Ordinal);
 }

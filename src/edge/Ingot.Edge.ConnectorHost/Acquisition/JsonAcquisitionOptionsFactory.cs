@@ -16,6 +16,8 @@ public static class JsonAcquisitionOptionsFactory
             ["data_model_id"] = profile.DataModelId,
             ["data_model_version"] = profile.DataModelVersion.ToString()
         };
+        if (string.Equals(profile.SubjectType, "equipment", StringComparison.OrdinalIgnoreCase))
+            context["equipment_id"] = profile.SubjectId;
         return new HttpPollingAcquisitionOptions
         {
             Enabled = true,

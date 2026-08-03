@@ -33,7 +33,7 @@ INGOT_OPERATOR_TOKEN=$(gen)
 INGOT_CONNECTOR_TOKEN=$(gen)
 INGOT_ADMIN_USERNAME=admin
 INGOT_ADMIN_PASSWORD=$(gen)
-INGOT_AUTH_MODE=Local
+INGOT_AUTH_MODE=Disabled
 INGOT_AUTH_REQUIRE_HTTPS=false
 EOF
 else
@@ -57,15 +57,9 @@ for i in $(seq 1 60); do
   sleep 3
 done
 
-echo; echo "===== 登录信息 ====="
-ADMIN_USER="$(grep '^INGOT_ADMIN_USERNAME=' "$ENV_FILE" | cut -d= -f2-)"
-ADMIN_PASS="$(grep '^INGOT_ADMIN_PASSWORD=' "$ENV_FILE" | cut -d= -f2-)"
+echo; echo "===== 平台已启动（原型模式） ====="
 echo "  Web:      http://localhost:3000"
 echo "  API:      http://localhost:8000/health"
-echo "  用户名:   ${ADMIN_USER}"
-echo "  口令:     ${ADMIN_PASS}"
+echo "  认证:     Disabled（固定 operator 身份）"
 echo
-echo "（若日志里另有随机初始管理员，以下为参考）"
-$COMPOSE logs platform-api 2>/dev/null | grep -i '初始管理员\|admin' | tail -5 || true
-
-echo; echo ">> 打开 http://localhost:3000 登录。停止：$COMPOSE down（加 -v 连数据卷一起删）"
+echo ">> 打开 http://localhost:3000 直接进入。停止：$COMPOSE down（加 -v 连数据卷一起删）"

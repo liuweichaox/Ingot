@@ -112,6 +112,8 @@ Then open:
 - Platform health: <http://localhost:8000/health>
 - Optimizer readiness: <http://localhost:8100/ready>
 
+Production deployments set `INGOT_AUTH_MODE` to `Local` or `Oidc` and replace sample credentials.
+
 The field connector is opt-in. Read [Equipment and data wiring](docs/data-connection.en.md) before connecting real equipment or business systems.
 
 ### Local development
@@ -169,6 +171,7 @@ scripts/           verification and operations
 - [Optimizer design and limits](docs/optimization.en.md)
 - [Equipment and data wiring](docs/data-connection.en.md)
 - [Historical replay and online validation](docs/rollout.en.md)
+- [Long-term project plan](docs/project-plan.en.md)
 - [Deployment and operations](docs/deployment.en.md)
 - [FAQ](docs/faq.en.md)
 

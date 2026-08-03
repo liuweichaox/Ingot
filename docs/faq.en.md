@@ -44,6 +44,6 @@ No. Platform and Edge continue collecting and inspecting; only new recommendatio
 
 Not publicly. The code loop and automated tests exist, but historical replay and controlled prospective campaigns must establish impact.
 
-## Does an internal deployment need permissions?
+## What is the security baseline for an on-premises deployment?
 
-Permissions are not the current capability priority. Internal deployments should still replace sample secrets, limit database and equipment-network exposure, back up data, and require experiment approval.
+Production deployments replace sample secrets, limit database and equipment-network exposure, configure data backups, and require engineer confirmation before experiment execution.

@@ -84,10 +84,14 @@ public sealed record MqttConnection
     /// </summary>
     public bool CleanSession { get; init; } = true;
     public int KeepAliveSeconds { get; init; } = 30;
-    /// <summary>跨主题快照中，单个主题数据允许距离当前时间的最大秒数。</summary>
-    public int SnapshotMaxAgeSeconds { get; init; } = 30;
-    /// <summary>跨主题快照中，最早与最晚主题数据允许相差的最大秒数。</summary>
-    public int SnapshotMaxSkewSeconds { get; init; } = 5;
+
+    /// <summary>
+    ///     跨主题合并快照时，单个值允许的最大陈旧时间（秒）。0 表示不限制。
+    ///     订阅多个主题时，某个主题停止发布会让合并快照里一直保留它最后一次的值；
+    ///     配置该上限后，超时的值视为缺失，必需点位缺失即不再产生采样。
+    /// </summary>
+    public int SnapshotMaxAgeSeconds { get; init; }
+
     public IReadOnlyList<MqttTopicSubscription> Topics { get; init; } = [];
 }
 
@@ -258,6 +262,24 @@ public sealed record AcquisitionDeployment
 public sealed record AcquisitionProbeRequest
 {
     public required AcquisitionDeployment Deployment { get; init; }
+}
+
+/// <summary>由 Edge 主动拉取的一次临时设备探查任务。</summary>
+public sealed record AcquisitionProbeTask
+{
+    public required string TaskId { get; init; }
+    public required string EdgeId { get; init; }
+    public required AcquisitionDeployment Deployment { get; init; }
+    public DateTimeOffset CreatedAt { get; init; }
+    public DateTimeOffset ExpiresAt { get; init; }
+}
+
+/// <summary>Edge 完成主动拉取的探查任务后回报的结果。</summary>
+public sealed record AcquisitionProbeTaskCompletion
+{
+    public required string TaskId { get; init; }
+    public required string EdgeId { get; init; }
+    public required AcquisitionProbeResult Result { get; init; }
 }
 
 public sealed record AcquisitionProbeResult

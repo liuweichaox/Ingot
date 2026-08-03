@@ -60,6 +60,7 @@ builder.Services.AddSingleton<IAcquisitionProtocolRunner, MelsecA1EAcquisitionRu
 builder.Services.AddSingleton<ILogViewService, SqliteLogViewService>();
 
 builder.Services.AddHostedService<EdgePlatformReporterHostedService>();
+builder.Services.AddHostedService<AcquisitionProbeTaskHostedService>();
 builder.Services.AddHostedService<EventShipperHostedService>();
 builder.Services.AddHostedService<HttpPollingAcquisitionHostedService>();
 

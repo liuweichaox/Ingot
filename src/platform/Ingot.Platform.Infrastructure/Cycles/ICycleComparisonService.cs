@@ -12,6 +12,20 @@ public interface ICycleComparisonService
         string correlationId,
         CancellationToken ct = default);
 
+    async Task<IReadOnlyDictionary<string, CycleComparisonRow>> GetCyclesAsync(
+        IReadOnlyCollection<string> correlationIds,
+        CancellationToken ct = default)
+    {
+        var rows = new Dictionary<string, CycleComparisonRow>(StringComparer.Ordinal);
+        foreach (var correlationId in correlationIds.Distinct(StringComparer.Ordinal))
+        {
+            var row = await GetCycleAsync(correlationId, ct).ConfigureAwait(false);
+            if (row is not null)
+                rows[correlationId] = row;
+        }
+        return rows;
+    }
+
     Task<CycleComparisonResult?> CompareWithHistoryAsync(
         string correlationId,
         int limit,

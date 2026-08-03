@@ -1,14 +1,11 @@
 using System.Text.Json;
 using System.Text.RegularExpressions;
-using System.Net.Http.Headers;
-using System.Net.Http.Json;
 using Ingot.Contracts.Acquisition;
 using Ingot.Contracts.ProcessConfiguration;
 using Ingot.Platform.Api.Agents;
 using Ingot.Platform.Api.Events;
 using Ingot.Platform.Infrastructure.Acquisition;
 using Ingot.Platform.Infrastructure.ProcessConfiguration;
-using Ingot.Platform.Infrastructure.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -21,8 +18,7 @@ public sealed partial class AcquisitionProfilesController(
     IProcessConfigurationStore processStore,
     PlatformUserResolver userResolver,
     EdgeTokenValidator edgeTokenValidator,
-    EdgeRegistry edgeRegistry,
-    IHttpClientFactory httpClientFactory) : PlatformConfigurationControllerBase(userResolver)
+    AcquisitionProbeTaskCoordinator probeTasks) : PlatformConfigurationControllerBase(userResolver)
 {
     [HttpGet]
     public async Task<IActionResult> List(CancellationToken ct)
@@ -168,59 +164,55 @@ public sealed partial class AcquisitionProfilesController(
         AcquisitionDeployment deployment,
         CancellationToken cancellationToken)
     {
-        var state = edgeRegistry.Find(deployment.Profile.EdgeId);
-        if (string.IsNullOrWhiteSpace(state?.HostBaseUrl))
-            return EdgeProbeResponse.Failure(
-                StatusCodes.Status400BadRequest,
-                "该现场节点未上报访问地址，无法测试设备连接。");
-
-        var client = httpClientFactory.CreateClient();
-        if (edgeTokenValidator.TryGetToken(deployment.Profile.EdgeId, out var token))
-            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
         try
         {
-            using var response = await client.PostAsJsonAsync(
-                new Uri(new Uri(state.HostBaseUrl), "/api/v1/acquisition/probe"),
-                new AcquisitionProbeRequest { Deployment = deployment },
+            var timeout = TimeSpan.FromMilliseconds(Math.Clamp(
+                deployment.Profile.Execution.TimeoutMs + 15_000,
+                15_000,
+                120_000));
+            var result = await probeTasks.QueueAndWaitAsync(
+                deployment,
+                timeout,
                 cancellationToken).ConfigureAwait(false);
-            var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-            if (!response.IsSuccessStatusCode)
-            {
-                var detail = TryReadError(body);
-                return EdgeProbeResponse.Failure((int)response.StatusCode, detail);
-            }
-            var result = JsonSerializer.Deserialize<AcquisitionProbeResult>(
-                body,
-                new JsonSerializerOptions(JsonSerializerDefaults.Web));
-            return result is null
-                ? EdgeProbeResponse.Failure(StatusCodes.Status502BadGateway, "现场节点返回了无效的验证结果。")
-                : EdgeProbeResponse.Succeeded(result);
+            return EdgeProbeResponse.Succeeded(result);
+        }
+        catch (TimeoutException)
+        {
+            return EdgeProbeResponse.Failure(StatusCodes.Status504GatewayTimeout, "现场节点设备验证超时。");
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
             return EdgeProbeResponse.Failure(StatusCodes.Status504GatewayTimeout, "现场节点设备验证超时。");
         }
-        catch (HttpRequestException exception)
-        {
-            return EdgeProbeResponse.Failure(
-                StatusCodes.Status502BadGateway,
-                $"现场节点不可访问：{exception.Message}");
-        }
     }
 
-    private static string TryReadError(string body)
+    [HttpGet("probe-tasks/next")]
+    [AllowAnonymous]
+    public IActionResult NextProbeTask([FromQuery] string edgeId)
     {
-        try
-        {
-            using var document = JsonDocument.Parse(body);
-            return document.RootElement.TryGetProperty("error", out var error)
-                ? error.GetString() ?? "设备验证失败。"
-                : body;
-        }
-        catch (JsonException)
-        {
-            return string.IsNullOrWhiteSpace(body) ? "设备验证失败。" : body;
-        }
+        var normalizedEdgeId = edgeId?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(normalizedEdgeId))
+            return BadRequest(new { error = "edgeId 不能为空。" });
+        if (!edgeTokenValidator.IsAuthorized(normalizedEdgeId, Request.Headers.Authorization.ToString()))
+            return Unauthorized(new { error = "边缘节点认证失败。" });
+        var task = probeTasks.ClaimNext(normalizedEdgeId);
+        return task is null ? NoContent() : Ok(task);
+    }
+
+    [HttpPost("probe-tasks/{taskId}/result")]
+    [AllowAnonymous]
+    public IActionResult CompleteProbeTask(
+        string taskId,
+        [FromBody] AcquisitionProbeTaskCompletion? completion)
+    {
+        if (completion is null ||
+            !string.Equals(taskId, completion.TaskId, StringComparison.Ordinal))
+            return BadRequest(new { error = "探查任务结果与路由不匹配。" });
+        if (!edgeTokenValidator.IsAuthorized(completion.EdgeId, Request.Headers.Authorization.ToString()))
+            return Unauthorized(new { error = "边缘节点认证失败。" });
+        return probeTasks.Complete(completion)
+            ? NoContent()
+            : NotFound(new { error = "探查任务不存在、已过期或不属于当前 Edge。" });
     }
 
     private sealed record EdgeProbeResponse(

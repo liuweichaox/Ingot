@@ -19,6 +19,10 @@ public sealed class EdgeDiagnosticsController(
     [HttpGet("metrics/raw")]
     public async Task<IActionResult> GetEdgeMetricsRaw([FromRoute] string edgeId, CancellationToken cancellationToken)
     {
+        var reported = registry.Find(edgeId)?.Acquisition;
+        if (reported is not null)
+            return Ok(reported);
+
         var baseUrl = GetEdgeBaseUrlOrNull(edgeId);
         if (baseUrl == null) return BadRequest(new { error = "该 edge 未上报 HostBaseUrl，无法代理 metrics。" });
 

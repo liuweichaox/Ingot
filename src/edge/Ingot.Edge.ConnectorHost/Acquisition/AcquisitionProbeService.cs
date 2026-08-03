@@ -103,54 +103,77 @@ public sealed class AcquisitionProbeService(
 
         var factory = new MqttClientFactory();
         using var client = factory.CreateMqttClient();
-        var snapshots = new MqttSnapshotAccumulator(connection.Topics);
+        var discoveryProbe = IsDiscoveryProbe(deployment);
+        var discoverySnapshots = discoveryProbe ? new MqttSnapshotAccumulator(connection.Topics) : null;
+        var assembler = discoveryProbe
+            ? null
+            : new MqttSnapshotAssembler(
+                MqttSnapshotAssembler.SlotsFor(deployment.Profile),
+                connection.SnapshotMaxAgeSeconds);
         var jsonOptions = JsonAcquisitionOptionsFactory.Create(deployment);
         var sample = new TaskCompletionSource<ProbeSnapshot>(TaskCreationOptions.RunContinuationsAsynchronously);
-        client.ApplicationMessageReceivedAsync += message =>
+        using var gate = new SemaphoreSlim(1, 1);
+        client.ApplicationMessageReceivedAsync += async message =>
         {
+            await gate.WaitAsync(ct).ConfigureAwait(false);
             try
             {
-                using var snapshot = snapshots.Add(
-                    message.ApplicationMessage.Topic,
-                    message.ApplicationMessage.Payload,
-                    DateTimeOffset.UtcNow,
-                    connection.SnapshotMaxAgeSeconds,
-                    connection.SnapshotMaxSkewSeconds);
-                if (!snapshot.IsComplete || !snapshot.IsCoherent)
-                    return Task.CompletedTask;
-                var values = new Dictionary<string, object?>(StringComparer.Ordinal);
-                var points = new List<AcquisitionProbePoint>();
-                FlattenJson(snapshot.Aggregate.RootElement, string.Empty, values, points);
-                var mappingsValidated = true;
-                try
+                var topic = message.ApplicationMessage.Topic;
+                var receivedAt = DateTimeOffset.UtcNow;
+                if (discoverySnapshots is not null)
                 {
-                    HttpPollingSnapshotMapper.Map(
-                        snapshot.Aggregate.RootElement,
-                        jsonOptions,
-                        deployment.Profile.Source,
-                        previousRecipeIdentity: null,
-                        snapshot.TopicSnapshots);
-                }
-                catch (InvalidDataException exception) when (
-                    connection.Topics.Count > 1 && IsIncompleteSnapshot(exception))
-                {
-                    // 尚未收到所有主题的必填字段，继续等待下一条消息。
-                    return Task.CompletedTask;
-                }
-                catch (InvalidDataException) when (connection.Topics.Count == 1)
-                {
-                    mappingsValidated = false;
+                    using var discovered = discoverySnapshots.Add(
+                        topic,
+                        message.ApplicationMessage.Payload,
+                        receivedAt,
+                        connection.SnapshotMaxAgeSeconds,
+                        connection.SnapshotMaxAgeSeconds);
+                    if (!discovered.IsComplete || !discovered.IsCoherent)
+                        return;
+                    var discoveredValues = new Dictionary<string, object?>(StringComparer.Ordinal);
+                    var discoveredPoints = new List<AcquisitionProbePoint>();
+                    FlattenJson(discovered.Aggregate.RootElement, string.Empty, discoveredValues, discoveredPoints);
+                    sample.TrySetResult(new ProbeSnapshot(discoveredValues, discoveredPoints));
+                    return;
                 }
 
-                if (connection.Topics.Count == 1 || mappingsValidated)
+                var subscription = MqttSnapshotAssembler.SubscriptionFor(connection.Topics, topic);
+                using var document = JsonDocument.Parse(message.ApplicationMessage.Payload);
+                var payload = MqttSnapshotAssembler.Unwrap(document.RootElement, subscription?.PayloadRoot);
+                assembler!.Ingest(topic, payload, receivedAt);
+                if (!assembler.TryBuildSnapshot(receivedAt, out var snapshot, out _))
+                    return;
+                using (snapshot)
+                {
+                    var values = new Dictionary<string, object?>(StringComparer.Ordinal);
+                    var points = new List<AcquisitionProbePoint>();
+                    FlattenJson(snapshot!.RootElement, string.Empty, values, points);
+                    var mappingsValidated = true;
+                    try
+                    {
+                        HttpPollingSnapshotMapper.Map(
+                            snapshot.RootElement,
+                            jsonOptions,
+                            deployment.Profile.Source,
+                            previousRecipeIdentity: null,
+                            assembler.BuildTopicSnapshots(receivedAt));
+                    }
+                    catch (InvalidDataException)
+                    {
+                        mappingsValidated = false;
+                    }
+
                     sample.TrySetResult(new ProbeSnapshot(values, points, mappingsValidated));
+                }
             }
             catch (Exception exception)
             {
                 sample.TrySetException(exception);
             }
-
-            return Task.CompletedTask;
+            finally
+            {
+                gate.Release();
+            }
         };
         var optionsBuilder = new MqttClientOptionsBuilder()
             .WithTcpServer(connection.Host, connection.Port)
@@ -197,9 +220,6 @@ public sealed class AcquisitionProbeService(
         await client.DisconnectAsync(cancellationToken: CancellationToken.None).ConfigureAwait(false);
         return result;
     }
-
-    private static bool IsIncompleteSnapshot(InvalidDataException exception)
-        => exception.Message.Contains("缺少必填", StringComparison.Ordinal);
 
     private async Task<ProbeSnapshot> ProbeModbusAsync(AcquisitionDeployment deployment, CancellationToken ct)
     {

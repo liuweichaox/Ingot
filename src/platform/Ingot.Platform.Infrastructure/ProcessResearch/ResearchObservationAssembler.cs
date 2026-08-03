@@ -54,17 +54,24 @@ public sealed class ResearchObservationAssembler(
             throw new ProcessResearchRuleException(
                 $"单次优化最多自动装配 {MaximumRunsPerAssembly} 个实验运行，请先归档历史项目。");
 
+        var runKeys = candidates.Select(static item => item.Run.RunKey).ToArray();
+        var cyclesByRun = await cycles.GetCyclesAsync(runKeys, ct).ConfigureAwait(false);
+        var allRecords = InspectionRecordSet.Effective(
+            await inspections.QueryAllByOperationRunIdsAsync(runKeys, ct).ConfigureAwait(false));
+        var recordsByRun = allRecords
+            .GroupBy(static item => item.OperationRunId, StringComparer.Ordinal)
+            .ToDictionary(static group => group.Key, static group => group.ToArray(), StringComparer.Ordinal);
         var observations = new List<ExperimentRunObservation>(candidates.Length);
         foreach (var candidate in candidates)
         {
             ct.ThrowIfCancellationRequested();
-            var cycle = await cycles.GetCycleAsync(candidate.Run.RunKey, ct).ConfigureAwait(false);
-            if (cycle is null)
+            if (!cyclesByRun.TryGetValue(candidate.Run.RunKey, out var cycle))
                 continue;
-            var records = InspectionRecordSet.Effective(
-                await inspections.QueryAllByOperationRunIdsAsync([candidate.Run.RunKey], ct)
-                    .ConfigureAwait(false));
-            observations.Add(BuildObservation(project, candidate.Run, cycle, records));
+            observations.Add(BuildObservation(
+                project,
+                candidate.Run,
+                cycle,
+                recordsByRun.GetValueOrDefault(candidate.Run.RunKey, [])));
         }
         return new ResearchObservationAssembly(observations, candidates.Length);
     }

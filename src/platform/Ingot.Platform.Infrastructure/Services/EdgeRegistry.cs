@@ -1,9 +1,12 @@
+using System.Text.Json;
+using Ingot.Contracts.Acquisition;
 using Microsoft.Data.Sqlite;
 
 namespace Ingot.Platform.Infrastructure.Services;
 
 public sealed class EdgeRegistry
 {
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private readonly string _connectionString;
 
     public EdgeRegistry(IConfiguration configuration)
@@ -31,7 +34,8 @@ public sealed class EdgeRegistry
         using var conn = Open();
         using var cmd = conn.CreateCommand();
         cmd.CommandText = """
-                          SELECT edge_id, host_base_url, hostname, version, last_seen_utc, last_error
+                          SELECT edge_id, host_base_url, hostname, version, last_seen_utc, last_error,
+                                 acquisition_status_json
                           FROM edges
                           ORDER BY last_seen_utc DESC;
                           """;
@@ -46,7 +50,8 @@ public sealed class EdgeRegistry
                 Hostname = reader.IsDBNull(2) ? null : reader.GetString(2),
                 Version = reader.IsDBNull(3) ? null : reader.GetString(3),
                 LastSeen = ParseStoredTimestamp(reader.IsDBNull(4) ? null : reader.GetString(4)),
-                LastError = reader.IsDBNull(5) ? null : reader.GetString(5)
+                LastError = reader.IsDBNull(5) ? null : reader.GetString(5),
+                Acquisition = DeserializeAcquisitionStatus(reader.IsDBNull(6) ? null : reader.GetString(6))
             });
         }
 
@@ -88,22 +93,37 @@ public sealed class EdgeRegistry
         };
     }
 
-    public EdgeState Heartbeat(string edgeId, string? hostBaseUrl, string? lastError, DateTimeOffset now)
+    public EdgeState Heartbeat(
+        string edgeId,
+        string? hostBaseUrl,
+        string? lastError,
+        EdgeAcquisitionRuntimeStatus? acquisition,
+        DateTimeOffset now)
     {
         using var conn = Open();
         using var cmd = conn.CreateCommand();
         cmd.CommandText = """
-                          INSERT INTO edges(edge_id, host_base_url, hostname, version, last_seen_utc, last_error)
-                          VALUES ($edge_id, $host_base_url, NULL, NULL, $last_seen_utc, $last_error)
+                          INSERT INTO edges(
+                            edge_id, host_base_url, hostname, version, last_seen_utc, last_error,
+                            acquisition_status_json)
+                          VALUES (
+                            $edge_id, $host_base_url, NULL, NULL, $last_seen_utc, $last_error,
+                            $acquisition_status_json)
                           ON CONFLICT(edge_id) DO UPDATE SET
                             last_seen_utc  = excluded.last_seen_utc,
                             host_base_url = COALESCE(excluded.host_base_url, edges.host_base_url),
-                            last_error     = excluded.last_error;
+                            last_error     = excluded.last_error,
+                            acquisition_status_json = COALESCE(
+                              excluded.acquisition_status_json,
+                              edges.acquisition_status_json);
                           """;
         cmd.Parameters.AddWithValue("$edge_id", edgeId);
         cmd.Parameters.AddWithValue("$host_base_url", (object?)NormalizeBaseUrl(hostBaseUrl) ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$last_seen_utc", now.ToString("O"));
         cmd.Parameters.AddWithValue("$last_error", (object?)lastError ?? DBNull.Value);
+        cmd.Parameters.AddWithValue(
+            "$acquisition_status_json",
+            acquisition is null ? DBNull.Value : JsonSerializer.Serialize(acquisition, JsonOptions));
         cmd.ExecuteNonQuery();
 
         return Get(edgeId) ?? new EdgeState(edgeId)
@@ -135,7 +155,8 @@ public sealed class EdgeRegistry
         using var conn = Open();
         using var cmd = conn.CreateCommand();
         cmd.CommandText = """
-                          SELECT edge_id, host_base_url, hostname, version, last_seen_utc, last_error
+                          SELECT edge_id, host_base_url, hostname, version, last_seen_utc, last_error,
+                                 acquisition_status_json
                           FROM edges
                           WHERE edge_id = $edge_id;
                           """;
@@ -150,7 +171,8 @@ public sealed class EdgeRegistry
             Hostname = reader.IsDBNull(2) ? null : reader.GetString(2),
             Version = reader.IsDBNull(3) ? null : reader.GetString(3),
             LastSeen = ParseStoredTimestamp(reader.IsDBNull(4) ? null : reader.GetString(4)),
-            LastError = reader.IsDBNull(5) ? null : reader.GetString(5)
+            LastError = reader.IsDBNull(5) ? null : reader.GetString(5),
+            Acquisition = DeserializeAcquisitionStatus(reader.IsDBNull(6) ? null : reader.GetString(6))
         };
     }
 
@@ -173,6 +195,7 @@ public sealed class EdgeRegistry
         public string? Version { get; set; }
         public DateTimeOffset LastSeen { get; set; } = DateTimeOffset.UtcNow;
         public string? LastError { get; set; }
+        public EdgeAcquisitionRuntimeStatus? Acquisition { get; set; }
     }
 
     private static void CreateTable(SqliteConnection conn)
@@ -185,10 +208,42 @@ public sealed class EdgeRegistry
                             hostname       TEXT NULL,
                             version        TEXT NULL,
                             last_seen_utc  TEXT NOT NULL,
-                            last_error     TEXT NULL
+                            last_error     TEXT NULL,
+                            acquisition_status_json TEXT NULL
                           );
                           """;
         cmd.ExecuteNonQuery();
+        EnsureColumn(conn, "edges", "acquisition_status_json", "TEXT NULL");
+    }
+
+    private static void EnsureColumn(SqliteConnection connection, string table, string column, string definition)
+    {
+        using var inspect = connection.CreateCommand();
+        inspect.CommandText = $"PRAGMA table_info({table});";
+        using var reader = inspect.ExecuteReader();
+        while (reader.Read())
+        {
+            if (string.Equals(reader.GetString(1), column, StringComparison.OrdinalIgnoreCase))
+                return;
+        }
+        reader.Close();
+        using var alter = connection.CreateCommand();
+        alter.CommandText = $"ALTER TABLE {table} ADD COLUMN {column} {definition};";
+        alter.ExecuteNonQuery();
+    }
+
+    private static EdgeAcquisitionRuntimeStatus? DeserializeAcquisitionStatus(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return null;
+        try
+        {
+            return JsonSerializer.Deserialize<EdgeAcquisitionRuntimeStatus>(value, JsonOptions);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 
     private static string? NormalizeBaseUrl(string? url)

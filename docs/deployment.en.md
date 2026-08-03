@@ -13,7 +13,14 @@ control systems / instruments / vision / inspection / MES
                                              └─ Platform Web (standalone React frontend)
 ```
 
-Deploy Edge ConnectorHost near equipment. Platform API, database, Optimizer, and Platform Web may share one factory server through Compose or be separated behind the same contracts. `Edge.Application`, `Edge.Infrastructure`, `Platform.Infrastructure`, and Agent are code-level libraries, not separate Compose services.
+Edge ConnectorHost always runs as an independent instance with its own `EdgeId`, process or container, data volume, and lifecycle. A small site may place ConnectorHost and Platform on the same physical server, while still running and recovering them separately; larger sites place ConnectorHost near the equipment. Platform API, database, Optimizer, and Platform Web may share one factory server through Compose or be separated behind the same contracts. `Edge.Application`, `Edge.Infrastructure`, `Platform.Infrastructure`, and Agent are code-level libraries, not separate Compose services.
+
+### Edge placement
+
+- One Edge executes multiple independent acquisition deployments for devices in the same OT subnet or security zone when it can reach them directly and reliably and their simultaneous interruption is acceptable.
+- Devices across VLANs, security zones, or physically isolated networks use separate Edge instances that can directly reach their respective equipment.
+- Critical equipment that must not stop with other devices, and equipment with materially higher event rate, CPU, memory, or local-backlog demand, uses a dedicated Edge.
+- Instance boundaries follow shared hosts, power, switches, network links, and maintenance windows, with instance count determined by acceptable acquisition interruption and recovery time.
 
 Website and Docs are not part of the factory runtime. Deploy them separately in the public-site topology defined by `deploy/compose.yml`.
 
@@ -45,6 +52,8 @@ Enable the field connector profile with:
 ```bash
 docker compose -f docker-compose.app.yml --profile connector-host up -d --build
 ```
+
+Co-location combines only the physical server, not the service instances. ConnectorHost and Platform retain separate data volumes, health checks, and restart policies so either one can stop or upgrade while the other continues to run.
 
 Configure addresses or interfaces, tokens, and mappings before connecting a real data source.
 

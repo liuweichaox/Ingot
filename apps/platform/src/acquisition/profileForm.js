@@ -122,8 +122,7 @@ export function createProfileForm(value = {}, version) {
       clientCertificatePasswordSecretRef: value.mqtt?.clientCertificatePasswordSecretRef || "",
       cleanSession: value.mqtt?.cleanSession !== false,
       keepAliveSeconds: value.mqtt?.keepAliveSeconds ?? 30,
-      snapshotMaxAgeSeconds: value.mqtt?.snapshotMaxAgeSeconds ?? 30,
-      snapshotMaxSkewSeconds: value.mqtt?.snapshotMaxSkewSeconds ?? 5,
+      snapshotMaxAgeSeconds: value.mqtt?.snapshotMaxAgeSeconds ?? 0,
       topics: (value.mqtt?.topics || []).length
         ? value.mqtt.topics.map(item => ({ topic: item.topic, qos: item.qos ?? 0, payloadRoot: item.payloadRoot || "" }))
         : [{ topic: "", qos: 0, payloadRoot: "" }],
@@ -297,8 +296,7 @@ export function toPayload(form) {
       ...form.mqtt,
       port: Number(form.mqtt.port),
       keepAliveSeconds: Number(form.mqtt.keepAliveSeconds),
-      snapshotMaxAgeSeconds: Number(form.mqtt.snapshotMaxAgeSeconds),
-      snapshotMaxSkewSeconds: Number(form.mqtt.snapshotMaxSkewSeconds),
+      snapshotMaxAgeSeconds: Number(form.mqtt.snapshotMaxAgeSeconds) || 0,
       username: form.mqtt.username.trim() || null,
       passwordSecretRef: form.mqtt.passwordSecretRef.trim() || null,
       caCertificatePath: form.mqtt.caCertificatePath.trim() || null,

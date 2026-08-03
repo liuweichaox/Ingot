@@ -29,11 +29,15 @@ builder.Services.AddControllers();
 
 // 三种认证模式：
 //   开发环境 → 固定本地身份（不引入第二套登录）；
+//   Authentication:Mode=Disabled → 本地原型固定 operator 身份；
 //   生产 + Authentication:Mode=Oidc → 外部 JWT 颁发者；
 //   生产 + Authentication:Mode=Local（默认）→ 内置本地账户会话令牌，消除强制 OIDC 依赖。
-var useOidc = !builder.Environment.IsDevelopment()
-    && string.Equals(builder.Configuration["Authentication:Mode"], "Oidc", StringComparison.OrdinalIgnoreCase);
-if (builder.Environment.IsDevelopment())
+var authenticationMode = builder.Configuration["Authentication:Mode"] ?? "Local";
+var useAnonymousDevelopmentIdentity = builder.Environment.IsDevelopment()
+    || string.Equals(authenticationMode, "Disabled", StringComparison.OrdinalIgnoreCase);
+var useOidc = !useAnonymousDevelopmentIdentity
+    && string.Equals(authenticationMode, "Oidc", StringComparison.OrdinalIgnoreCase);
+if (useAnonymousDevelopmentIdentity)
 {
     builder.Services.AddAuthentication(DevelopmentAuthenticationHandler.SchemeName)
         .AddScheme<AuthenticationSchemeOptions, DevelopmentAuthenticationHandler>(
@@ -60,9 +64,12 @@ else
 }
 builder.Services.AddAuthorization(options =>
 {
-    options.FallbackPolicy = new AuthorizationPolicyBuilder()
-        .RequireAuthenticatedUser()
-        .Build();
+    if (!useAnonymousDevelopmentIdentity)
+    {
+        options.FallbackPolicy = new AuthorizationPolicyBuilder()
+            .RequireAuthenticatedUser()
+            .Build();
+    }
 });
 
 builder.Services.AddIngotPlatformInfrastructure(builder.Configuration);

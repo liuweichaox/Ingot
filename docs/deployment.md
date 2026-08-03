@@ -13,7 +13,14 @@
                                       └─ Platform Web（独立 React 前端）
 ```
 
-Edge ConnectorHost 靠近设备部署。Platform API、数据库、Optimizer 和 Platform Web 可在同一台工厂服务器使用 Compose 部署，也可按相同网络契约拆分。`Edge.Application`、`Edge.Infrastructure`、`Platform.Infrastructure` 和 Agent 是代码层类库，不是独立 Compose 服务。
+Edge ConnectorHost 始终作为独立实例运行，拥有独立的 `EdgeId`、进程或容器、数据卷和启停生命周期。小型现场可把 ConnectorHost 与 Platform 放在同一台物理服务器，但仍分别运行和恢复；较大现场把 ConnectorHost 部署到设备附近。Platform API、数据库、Optimizer 和 Platform Web 可在同一台工厂服务器使用 Compose 部署，也可按相同网络契约拆分。`Edge.Application`、`Edge.Infrastructure`、`Platform.Infrastructure` 和 Agent 是代码层类库，不是独立 Compose 服务。
+
+### Edge 划分
+
+- 同一 OT 网段或安全区内、可直接稳定访问且允许共同中断的多台设备，由一个 Edge 执行多份独立采集配置；
+- 跨 VLAN、安全区或物理隔离网络的设备，分别部署能够直接访问对应设备的 Edge；
+- 不能接受与其他设备同时停采的关键设备，以及事件率、CPU、内存或本地积压显著较高的设备，使用独立 Edge；
+- 划分时按共享主机、电源、交换机、网络链路和维护窗口判断共同故障范围，并以可接受的停采范围和恢复时间确定实例数量。
 
 Website 和 Docs 不属于工厂运行时，使用 `deploy/compose.yml` 单独部署到公开站点拓扑。
 
@@ -47,6 +54,8 @@ docker compose -f docker-compose.app.yml up -d --build
 ```bash
 docker compose -f docker-compose.app.yml --profile connector-host up -d --build
 ```
+
+同机部署只合并物理服务器，不合并服务实例。ConnectorHost 与 Platform 使用各自的数据卷、健康检查和重启策略；停止或升级其中一个时，另一个仍可独立运行。
 
 连接真实数据源前，应先配置地址或接口、采集令牌和数据映射，不要直接使用示例值。
 

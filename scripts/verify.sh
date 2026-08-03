@@ -4,6 +4,9 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repo_root"
 
+dotnet_artifacts="$(mktemp -d)"
+trap 'rm -rf -- "$dotnet_artifacts"' EXIT
+
 bash scripts/verify-architecture.sh
 bash scripts/verify-product-scope.sh
 bash scripts/verify-product-language.sh
@@ -18,8 +21,9 @@ for required_file in \
   test -f "$required_file"
 done
 
-dotnet build Ingot.sln --disable-build-servers -m:1
-dotnet test tests/Ingot.Core.Tests/Ingot.Core.Tests.csproj --no-build --disable-build-servers -m:1
+dotnet build Ingot.sln --artifacts-path "$dotnet_artifacts" --disable-build-servers -m:1
+dotnet test tests/Ingot.Core.Tests/Ingot.Core.Tests.csproj --no-build \
+  --artifacts-path "$dotnet_artifacts" --disable-build-servers -m:1
 npm --prefix apps/platform ci
 npm --prefix apps/platform run build
 npm --prefix apps/platform run test
@@ -53,6 +57,7 @@ PY
 
 for compose_file in docker-compose.app.yml; do
   INGOT_POSTGRES_PASSWORD=verification-postgres-password \
+  INGOT_EDGE_ID=verification-edge-0001 \
   INGOT_EDGE_TOKEN=verification-edge-token-0001 \
   INGOT_OPERATOR_TOKEN=verification-operator-token-0001 \
   INGOT_CONNECTOR_TOKEN=verification-connector-token-0001 \

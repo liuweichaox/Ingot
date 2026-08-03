@@ -11,6 +11,7 @@ Ingot 是面向高成本、小样本制造实验的开源工艺追因与优化�
 | 理解 GP、qLogNEI/qLogNEHVI 和安全约束 | [优化器](optimization.md) |
 | 接入控制系统、仪器、检验和运行数据 | [设备与数据接线](data-connection.md) |
 | 用历史项目证明是否减少实验 | [真实场景验证](rollout.md) |
+| 查看长期建设阶段、优先级和验收闸门 | [长期项目规划](project-plan.md) |
 | 部署到工厂内部网络 | [部署与运行](deployment.md) |
 | 查找常见问题 | [FAQ](faq.md) |
 

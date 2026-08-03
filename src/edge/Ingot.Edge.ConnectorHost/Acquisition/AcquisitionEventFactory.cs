@@ -40,6 +40,8 @@ public static class AcquisitionEventFactory
             ["data_model_id"] = profile.DataModelId,
             ["data_model_version"] = profile.DataModelVersion.ToString(CultureInfo.InvariantCulture)
         };
+        if (string.Equals(profile.SubjectType, "equipment", StringComparison.OrdinalIgnoreCase))
+            context["equipment_id"] = profile.SubjectId;
         return ProductionEvent.Create(
             profile.SampleEventType,
             occurredAt,

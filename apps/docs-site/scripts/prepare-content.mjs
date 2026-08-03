@@ -16,6 +16,7 @@ const publicSlugs = [
   "design",
   "optimization",
   "data-connection",
+  "project-plan",
   "rollout",
   "deployment",
   "faq",

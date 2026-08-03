@@ -12,12 +12,13 @@ public static class ProductionConfigurationValidator
 
         RequireProtectedMap(configuration, "EventIngest", "EdgeTokens", errors);
 
-        // 认证模式：Local（内置账户，默认）或 Oidc（外部 IdP）。仅 Oidc 模式要求 Authority/Audience。
+        // 认证模式：Local（内置账户）、Oidc（外部 IdP）或 Disabled（本地演示固定 operator 身份）。
         var authMode = configuration["Authentication:Mode"] ?? "Local";
         if (!string.Equals(authMode, "Local", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(authMode, "Oidc", StringComparison.OrdinalIgnoreCase))
+            !string.Equals(authMode, "Oidc", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(authMode, "Disabled", StringComparison.OrdinalIgnoreCase))
         {
-            errors.Add("Authentication:Mode must be either 'Local' or 'Oidc'.");
+            errors.Add("Authentication:Mode must be 'Local', 'Oidc', or 'Disabled'.");
         }
         if (string.Equals(authMode, "Oidc", StringComparison.OrdinalIgnoreCase))
         {

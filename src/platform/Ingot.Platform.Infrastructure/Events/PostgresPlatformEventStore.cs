@@ -383,6 +383,9 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, IA
         var resolved = await _manufacturingContexts.ResolveAsync(evt.Subject.Id, evt.OccurredAt, ct)
             .ConfigureAwait(false);
         var context = new Dictionary<string, string>(evt.Context, StringComparer.Ordinal);
+        context["operation_run_id"] = correlationId;
+        if (string.Equals(evt.Subject.Type, "equipment", StringComparison.OrdinalIgnoreCase))
+            context["equipment_id"] = evt.Subject.Id;
         if (resolved is not null)
         {
             context["production_context_id"] = resolved.Production.ContextId.ToString("D");

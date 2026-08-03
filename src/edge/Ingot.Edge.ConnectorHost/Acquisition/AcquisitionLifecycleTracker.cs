@@ -18,6 +18,8 @@ public sealed class AcquisitionLifecycleTracker
     private ProductionEvent? _latestRecipeApplied;
     private long _sampleCount;
 
+    public bool IsRunActive => _activeCorrelationId is not null;
+
     public IReadOnlyList<ProductionEvent> Track(
         AcquisitionMappingResult mapped,
         AcquisitionLifecycleMapping? lifecycle,

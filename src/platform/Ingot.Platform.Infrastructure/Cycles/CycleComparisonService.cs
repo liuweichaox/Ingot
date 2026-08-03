@@ -30,30 +30,51 @@ public sealed class CycleComparisonService(
         if (string.IsNullOrWhiteSpace(correlationId))
             throw new ArgumentException("周期标识不能为空。", nameof(correlationId));
         correlationId = correlationId.Trim();
-        var cycleEvents = await QueryAllAsync(
-            new PlatformEventQuery { CorrelationId = correlationId }, ct).ConfigureAwait(false);
-        if (cycleEvents.Count == 0)
-            return null;
-        var context = ResolveContext(cycleEvents);
-        var analysis = await analysisResolver.ResolveAsync(context, "production-cycle", ct)
-            .ConfigureAwait(false);
-        var recipe = await analysisResolver.ResolveRecipeAsync(context, ct).ConfigureAwait(false);
-        var inspectionRecords = InspectionRecordSet.Effective(
-            await inspections.QueryAllByOperationRunIdsAsync([correlationId], ct)
-                .ConfigureAwait(false));
+        var rows = await GetCyclesAsync([correlationId], ct).ConfigureAwait(false);
+        return rows.GetValueOrDefault(correlationId);
+    }
+
+    public async Task<IReadOnlyDictionary<string, CycleComparisonRow>> GetCyclesAsync(
+        IReadOnlyCollection<string> correlationIds,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(correlationIds);
+        var ids = correlationIds
+            .Where(static id => !string.IsNullOrWhiteSpace(id))
+            .Select(static id => id.Trim())
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        if (ids.Length == 0)
+            return new Dictionary<string, CycleComparisonRow>(StringComparer.Ordinal);
+
+        var cycleEvents = await LoadCyclesAsync(ids, ct).ConfigureAwait(false);
+        var allInspections = InspectionRecordSet.Effective(
+            await inspections.QueryAllByOperationRunIdsAsync(ids, ct).ConfigureAwait(false));
+        var inspectionsByCycle = allInspections
+            .GroupBy(static item => item.OperationRunId, StringComparer.Ordinal)
+            .ToDictionary(static group => group.Key, static group => group.ToArray(), StringComparer.Ordinal);
         var latestReviews = await reviews.GetLatestByInspectionRecordIdsAsync(
-            inspectionRecords.Select(static value => value.RecordId).ToArray(), ct)
-            .ConfigureAwait(false);
-        var materialized = await AnalyzeAsync(
-            correlationId, cycleEvents, analysis, ct).ConfigureAwait(false);
-        return BuildRow(
-            correlationId,
-            cycleEvents,
-            inspectionRecords,
-            latestReviews,
-            analysis,
-            recipe,
-            materialized);
+            allInspections.Select(static value => value.RecordId).ToArray(), ct).ConfigureAwait(false);
+        var result = new Dictionary<string, CycleComparisonRow>(StringComparer.Ordinal);
+        foreach (var id in ids)
+        {
+            if (!cycleEvents.TryGetValue(id, out var rows) || rows.Count == 0)
+                continue;
+            var context = ResolveContext(rows);
+            var analysis = await analysisResolver.ResolveAsync(context, "production-cycle", ct)
+                .ConfigureAwait(false);
+            var recipe = await analysisResolver.ResolveRecipeAsync(context, ct).ConfigureAwait(false);
+            var materialized = await AnalyzeAsync(id, rows, analysis, ct).ConfigureAwait(false);
+            result[id] = BuildRow(
+                id,
+                rows,
+                inspectionsByCycle.GetValueOrDefault(id, []),
+                latestReviews,
+                analysis,
+                recipe,
+                materialized);
+        }
+        return result;
     }
 
     public async Task<CycleComparisonResult?> CompareWithHistoryAsync(

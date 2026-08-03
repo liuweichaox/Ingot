@@ -75,9 +75,12 @@ public sealed class ModbusTcpAcquisitionRunner(
                         await Task.Delay(connection.PollIntervalMs, ct).ConfigureAwait(false);
                         continue;
                     }
-                    await sink.EmitBatchAsync(
-                        lifecycle.Track(mapped, deployment.Profile.Lifecycle, connection.PollIntervalMs),
-                        ct).ConfigureAwait(false);
+                    var events = lifecycle.Track(
+                        mapped,
+                        deployment.Profile.Lifecycle,
+                        connection.PollIntervalMs);
+                    await sink.EmitBatchAsync(events, ct).ConfigureAwait(false);
+                    status.RecordCycleState(configurationKey, lifecycle.IsRunActive);
                     currentRecipe = mapped.RecipeIdentity;
                     status.RecordSuccess(
                         configurationKey,

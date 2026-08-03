@@ -141,6 +141,7 @@ public static class ServiceCollectionExtensions
 
         // 采集配置由平台统一管理并按边缘节点发布；采集执行器只运行已发布版本。
         services.AddSingleton<IAcquisitionProfileStore, PostgresAcquisitionProfileStore>();
+        services.AddSingleton<AcquisitionProbeTaskCoordinator>();
         services.AddHostedService<AcquisitionProfileInitializerHostedService>();
 
         // Webhook 订阅与投递（PostgreSQL + CloudEvents）

@@ -102,9 +102,8 @@ public sealed class ResearchObservationAssemblerTests
                 ]
             }
         ]);
-        var assembler = new ResearchObservationAssembler(
-            new FakeCycleService(cycle),
-            inspections);
+        var cycleService = new FakeCycleService(cycle);
+        var assembler = new ResearchObservationAssembler(cycleService, inspections);
         var project = new ResearchProject
         {
             Code = "lens-a",
@@ -174,6 +173,9 @@ public sealed class ResearchObservationAssemblerTests
 
         var result = await assembler.AssembleAsync(project, [experiment]);
 
+        Assert.Equal(1, cycleService.BatchQueryCount);
+        Assert.Equal(1, inspections.BatchQueryCount);
+
         var observation = Assert.Single(result.Observations);
         Assert.True(observation.ValidForOptimization);
         Assert.Equal(512, Assert.Single(observation.ActualFactors).Value);
@@ -201,6 +203,8 @@ public sealed class ResearchObservationAssemblerTests
 
     private sealed class FakeCycleService(CycleComparisonRow cycle) : ICycleComparisonService
     {
+        public int BatchQueryCount { get; private set; }
+
         public Task<CycleComparisonRow?> GetCycleAsync(
             string correlationId,
             CancellationToken ct = default)
@@ -208,6 +212,18 @@ public sealed class ResearchObservationAssemblerTests
                 string.Equals(correlationId, cycle.CorrelationId, StringComparison.Ordinal)
                     ? cycle
                     : null);
+
+        public Task<IReadOnlyDictionary<string, CycleComparisonRow>> GetCyclesAsync(
+            IReadOnlyCollection<string> correlationIds,
+            CancellationToken ct = default)
+        {
+            BatchQueryCount++;
+            IReadOnlyDictionary<string, CycleComparisonRow> result = correlationIds
+                .Where(id => string.Equals(id, cycle.CorrelationId, StringComparison.Ordinal))
+                .Distinct(StringComparer.Ordinal)
+                .ToDictionary(static id => id, _ => cycle, StringComparer.Ordinal);
+            return Task.FromResult(result);
+        }
 
         public Task<CycleComparisonResult?> CompareWithHistoryAsync(
             string correlationId,
@@ -225,6 +241,8 @@ public sealed class ResearchObservationAssemblerTests
     private sealed class FakeInspectionStore(IReadOnlyList<InspectionRecord> records) :
         IInspectionRecordStore
     {
+        public int BatchQueryCount { get; private set; }
+
         public Task InitializeAsync(CancellationToken ct = default) => Task.CompletedTask;
 
         public Task<StoreInspectionRecordResult> CreateAsync(
@@ -246,7 +264,10 @@ public sealed class ResearchObservationAssemblerTests
         public Task<IReadOnlyList<InspectionRecord>> QueryAllByOperationRunIdsAsync(
             IReadOnlyCollection<string> operationRunIds,
             CancellationToken ct = default)
-            => Task.FromResult<IReadOnlyList<InspectionRecord>>(
+        {
+            BatchQueryCount++;
+            return Task.FromResult<IReadOnlyList<InspectionRecord>>(
                 records.Where(value => operationRunIds.Contains(value.OperationRunId)).ToArray());
+        }
     }
 }

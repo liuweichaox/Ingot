@@ -70,6 +70,7 @@ public sealed class AcquisitionProtocolTests
         var values = Assert.IsAssignableFrom<IReadOnlyDictionary<string, object?>>(sample.Data["values"]);
         Assert.Equal(80d, values["temperature"]);
         Assert.Equal("temperature", sample.Context["acquisition_profile_id"]);
+        Assert.Equal("FURNACE-001", sample.Context["equipment_id"]);
     }
 
     [Fact]

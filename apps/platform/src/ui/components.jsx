@@ -96,6 +96,7 @@ export function StatusBadge({ value }) {
     confirmed: "已确认",
     approved: "已批准",
     selected: "已选择",
+    applied: "已应用",
     fail: "不合格",
     failed: "不合格",
     offline: "离线",
@@ -107,6 +108,10 @@ export function StatusBadge({ value }) {
     not_applicable: "无需质检",
     cancelled: "已取消",
     pending: "待处理",
+    validating: "验证中",
+    "waiting-cycle-boundary": "等待周期边界",
+    applying: "应用中",
+    rollback: "已保留旧版本",
     draft: "草稿",
     running: "运行中",
     uploaded: "已上传",
@@ -136,11 +141,11 @@ export function StatusBadge({ value }) {
     warning: "警告",
     unknown: "待上报",
   };
-  const tone = ["active", "ready", "online", "complete", "completed", "pass", "passed", "verified", "healthy", "published", "validated", "indexed", "reviewed", "available", "confirmed", "approved", "selected"].includes(normalized)
+  const tone = ["active", "ready", "online", "complete", "completed", "pass", "passed", "verified", "healthy", "published", "validated", "indexed", "reviewed", "available", "confirmed", "approved", "selected", "applied"].includes(normalized)
     ? "success"
     : ["fail", "failed", "offline", "rejected", "error", "suspended", "rollback-required", "unavailable", "cancelled"].includes(normalized)
       ? "danger"
-      : ["pending", "draft", "starting", "running", "uploaded", "dirty", "degraded", "in_progress", "review_pending", "queued", "completed_with_errors", "incomplete", "cancelling", "proposed", "investigating", "trialing", "planned", "warning", "concluded", "withdrawn", "rolled-back"].includes(normalized)
+      : ["pending", "validating", "waiting-cycle-boundary", "applying", "rollback", "draft", "starting", "running", "uploaded", "dirty", "degraded", "in_progress", "review_pending", "queued", "completed_with_errors", "incomplete", "cancelling", "proposed", "investigating", "trialing", "planned", "warning", "concluded", "withdrawn", "rolled-back"].includes(normalized)
         ? "warning"
         : "neutral";
   return <Badge tone={tone}>{labels[normalized] ?? String(value ?? "待上报")}</Badge>;

@@ -91,18 +91,13 @@ test("navigation and overlays are accessible Headless UI components", () => {
   assert.doesNotMatch(researchProjects, />新建项目</);
 });
 
-test("production login and local account administration are usable from the web app", () => {
-  assert.match(app, /\/api\/v1\/auth\/me/);
-  assert.match(app, /\/api\/v1\/auth\/login/);
-  assert.match(app, /\/api\/v1\/auth\/logout/);
-  assert.match(app, /function LoginPage/);
-  assert.match(app, /path="\/users"/);
-  assert.match(http, /Authorization: `Bearer \$\{token\}`/);
-  assert.match(http, /ingot:unauthorized/);
-  assert.match(pages, /export function UsersPage/);
-  assert.match(pages, /:set-roles/);
-  assert.match(pages, /:set-password/);
-  assert.match(pages, /:set-disabled/);
+test("prototype enters directly without a permissions system", () => {
+  assert.match(app, /username: "operator"/);
+  assert.match(app, /开发模式 · operator/);
+  assert.doesNotMatch(app, /function LoginPage/);
+  assert.doesNotMatch(app, /\/api\/v1\/auth\/login/);
+  assert.doesNotMatch(app, /用户与权限/);
+  assert.doesNotMatch(researchProjects, /\/api\/v1\/auth\/me/);
 });
 
 test("versioned registries use composite row keys and statuses are localized", () => {
@@ -114,6 +109,11 @@ test("versioned registries use composite row keys and statuses are localized", (
   assert.match(components, /review_pending: "待复核"/);
   assert.match(components, /unknown: "待上报"/);
   assert.match(components, /starting: "启动中"/);
+  assert.match(components, /applied: "已应用"/);
+  assert.match(components, /"waiting-cycle-boundary": "等待周期边界"/);
+  assert.match(pages, /title="采集配置应用状态"/);
+  assert.match(pages, /desiredConfigurationSetHash/);
+  assert.match(pages, /appliedConfigurationSetHash/);
 });
 
 test("global search opens a cross-product command palette and table columns keep stable unique keys", () => {

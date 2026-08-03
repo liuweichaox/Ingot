@@ -145,7 +145,7 @@ export function ResearchProjectsPage() {
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [identity, setIdentity] = useState(null);
+  const identity = { username: "operator", userId: "operator" };
   const [createOpen, setCreateOpen] = useState(false);
   const [projectForm, setProjectForm] = useState(projectFormInitial);
   const [workspace, setWorkspace] = useState(null);
@@ -158,12 +158,8 @@ export function ResearchProjectsPage() {
     setLoading(true);
     setError("");
     try {
-      const [response, currentIdentity] = await Promise.all([
-        getJson("/api/v1/research-projects?limit=100"),
-        getJson("/api/v1/auth/me"),
-      ]);
+      const response = await getJson("/api/v1/research-projects?limit=100");
       setProjects(response?.data || []);
-      setIdentity(currentIdentity);
     } catch (requestError) {
       setError(requestError.message);
     } finally {

@@ -15,9 +15,22 @@ Choose a completed process-development campaign. Optical-lens molding can be the
 - planned settings and actual run settings for every run;
 - complete process traces or versioned process features;
 - relevant quality and safety inspections;
-- material, tooling, equipment, and lot context;
+- stable equipment identity plus available tooling revision, tooling cycle count, material lot, calibration, and maintenance context;
+- a report of context-field missingness, sample coverage, and factor overlap;
 - historical experiment order;
 - explicit specification and safety limits.
+
+### Context assessment rules
+
+Equipment, tooling, and material lots begin as run-provenance fields and candidate blocking factors. Assess every context factor in this order:
+
+1. Count samples by level and summarize missingness, quality, and time distributions.
+2. Check overlap within the same product, recipe, and main-control range.
+3. Estimate effects and variance contributions with matched comparisons, variance components, or mixed-effects models.
+4. Schedule blocked and crossed experiments across equipment, tooling, or lots for stable associations.
+5. Add repeatedly supported factors to diagnosis models, optimization features, or process applicability scopes.
+
+Analysis reports label conclusions as stable association, confounded association, or insufficient evidence and state the grouping, replication, and randomized order needed for the next identifiable experiment.
 
 ### Replay protocol
 
@@ -42,7 +55,8 @@ Generate recommendations on a new campaign without changing the actual experimen
 - engineer choice;
 - predictions and outcomes for both;
 - reason for rejecting a recommendation;
-- unmodeled factory constraints.
+- unmodeled factory constraints;
+- the immutable context snapshot for the recommendation and actual run.
 
 Shadow mode finds missing constraints and bad mappings.
 
@@ -54,6 +68,7 @@ Proceed only after:
 - safety constraints and baseline are confirmed;
 - interval calibration is reviewed;
 - settings can be applied and captured accurately;
+- identified context factors have a blocking, randomization, and replication plan;
 - engineers can review and reject;
 - stop and rollback rules are rehearsed.
 
@@ -67,7 +82,8 @@ Pre-register:
 - guardrail: zero safety-limit violations;
 - credibility: 95% interval coverage and calibration;
 - efficiency: saved runs, material, equipment time, and inspection cost;
-- usability: adoption rate and rejection reasons.
+- usability: adoption rate and rejection reasons;
+- context evidence: engineer review of stable-association, confounded-association, and insufficient-evidence conclusions.
 
 Include consecutive eligible campaigns rather than selecting only successes.
 

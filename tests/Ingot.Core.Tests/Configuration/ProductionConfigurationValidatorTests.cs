@@ -173,6 +173,24 @@ public sealed class ProductionConfigurationValidatorTests
     }
 
     [Fact]
+    public void Platform_AcceptsDisabledAuthForPrototypeDeployments()
+    {
+        var configuration = Build(new Dictionary<string, string?>
+        {
+            ["ConnectionStrings:Events"] = "Host=postgres;Database=ingot",
+            ["EventIngest:RequireToken"] = "true",
+            ["EventIngest:EdgeTokens:EDGE-001"] = "edge-token-with-at-least-24-characters",
+            ["Authentication:Mode"] = "Disabled",
+            ["InspectionAttachments:ArchiveRootPath"] = "/archive/inspection-attachments",
+            ["ProcessKnowledge:ArchiveRootPath"] = "/archive/process-knowledge",
+            ["Chat:Enabled"] = "false",
+            ["Cors:AllowedOrigins:0"] = "https://ingotstack.com"
+        });
+
+        PlatformValidator.Validate(configuration);
+    }
+
+    [Fact]
     public void ConnectorHost_AcceptsLegacyCentralApiConfiguration()
     {
         var configuration = Build(new Dictionary<string, string?>

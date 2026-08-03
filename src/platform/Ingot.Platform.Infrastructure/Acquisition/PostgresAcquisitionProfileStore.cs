@@ -111,6 +111,17 @@ public sealed class PostgresAcquisitionProfileStore : IAcquisitionProfileStore, 
         await using var connection = await _dataSource.OpenConnectionAsync(ct).ConfigureAwait(false);
         await using var transaction = await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
 
+        // Serialize publication per logical profile. Row locks alone are insufficient when two
+        // versions are published concurrently before either transaction has inserted a row.
+        await using (var publicationLock = new NpgsqlCommand(
+                         "SELECT pg_advisory_xact_lock(hashtextextended(@profile_id, 0));",
+                         connection,
+                         transaction))
+        {
+            publicationLock.Parameters.AddWithValue("profile_id", published.ProfileId);
+            await publicationLock.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+        }
+
         // 锁定并读取同 profile 的其他 published 版本（payload 为真相来源，必须同步改写其中的状态）。
         var retire = new List<(int Version, AcquisitionProfile Profile)>();
         await using (var select = new NpgsqlCommand(

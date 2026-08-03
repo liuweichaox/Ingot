@@ -80,11 +80,10 @@ public static partial class AcquisitionProfileValidator
         var recipe = NormalizeRecipe(value.Recipe, protocol!, capability, found);
         var staticContext = NormalizeStaticContext(value, found);
 
-        if (protocol == AcquisitionProtocols.Mqtt && value.Mqtt is not null)
-            ValidateMqttTopicBindings(value.Mqtt, contextMappings, valueMappings, recipe, found);
-
         if (valueMappings.Count == 0)
             found.Add(new AcquisitionValidationError("valueMappings", "至少需要配置一个采集数据项。"));
+
+        ValidateTopicBindings(value, capability, valueMappings, contextMappings, recipe, found);
 
         if (model is not null)
             ValidateAgainstModel(value, valueMappings, recipe, model, found);
@@ -194,14 +193,9 @@ public static partial class AcquisitionProfileValidator
                     found.Add(new AcquisitionValidationError($"{section}.protocolVersion", "协议版本必须是 3.1.1 或 5.0。"));
                 if (value.Mqtt.KeepAliveSeconds < 1)
                     found.Add(new AcquisitionValidationError($"{section}.keepAliveSeconds", "保活时间必须大于 0 秒。"));
-                if (value.Mqtt.SnapshotMaxAgeSeconds < 1)
+                if (value.Mqtt.SnapshotMaxAgeSeconds < 0)
                     found.Add(new AcquisitionValidationError(
-                        $"{section}.snapshotMaxAgeSeconds",
-                        "跨主题快照最大数据年龄必须大于 0 秒。"));
-                if (value.Mqtt.SnapshotMaxSkewSeconds < 0)
-                    found.Add(new AcquisitionValidationError(
-                        $"{section}.snapshotMaxSkewSeconds",
-                        "跨主题快照最大时间偏差不能小于 0 秒。"));
+                        $"{section}.snapshotMaxAgeSeconds", "快照最大陈旧时间不能为负数。"));
                 if (value.Mqtt.UseTls && string.IsNullOrWhiteSpace(value.Mqtt.CaCertificatePath) &&
                     string.IsNullOrWhiteSpace(value.Mqtt.ClientCertificatePath))
                     found.Add(new AcquisitionValidationError(
@@ -224,15 +218,14 @@ public static partial class AcquisitionProfileValidator
                         found.Add(new AcquisitionValidationError($"{path}.topic", topicError));
                     else if (!seenTopics.Add(topic.Topic.Trim()))
                         found.Add(new AcquisitionValidationError($"{path}.topic", "订阅主题不能重复。"));
-                    if (!string.IsNullOrWhiteSpace(topic.PayloadRoot) &&
-                        !IsValidJsonPath(topic.PayloadRoot.Trim()))
-                    {
-                        found.Add(new AcquisitionValidationError(
-                            $"{path}.payloadRoot",
-                            "报文根路径不能以点开头或结尾，也不能包含连续的点。"));
-                    }
                     if (topic.Qos is < 0 or > 2)
                         found.Add(new AcquisitionValidationError($"{path}.qos", "QoS 必须是 0、1 或 2。"));
+                    if (!string.IsNullOrWhiteSpace(topic.PayloadRoot) && topic.PayloadRoot.Trim() != ".")
+                        ValidateSelectorSyntax(
+                            capability,
+                            topic.PayloadRoot.Trim(),
+                            $"{path}.payloadRoot",
+                            found);
                 }
 
                 break;
@@ -312,6 +305,53 @@ public static partial class AcquisitionProfileValidator
                 if (value.MelsecA1E.MaxMergeGap is < 0 or > 256)
                     found.Add(new AcquisitionValidationError($"{section}.maxMergeGap", "合并读取间隔必须在 0-256 之间。"));
                 break;
+        }
+    }
+
+    /// <summary>
+    ///     点位绑定的主题必须是本配置真正订阅了的过滤器之一。
+    ///     绑定到没订阅的主题不会报错、也永远收不到数据，是最难排查的一类误配。
+    /// </summary>
+    private static void ValidateTopicBindings(
+        AcquisitionProfile value,
+        AcquisitionProtocolCapability capability,
+        IReadOnlyList<AcquisitionValueMapping> valueMappings,
+        IReadOnlyList<AcquisitionContextMapping> contextMappings,
+        AcquisitionRecipeMapping? recipe,
+        List<AcquisitionValidationError> found)
+    {
+        if (!capability.SupportsPerTopicMapping) return;
+        var subscribed = (value.Mqtt?.Topics ?? [])
+            .Select(static item => item.Topic?.Trim())
+            .Where(static item => !string.IsNullOrEmpty(item))
+            .ToHashSet(StringComparer.Ordinal);
+        if (subscribed.Count == 0) return;
+        for (var index = 0; index < valueMappings.Count; index++)
+        {
+            var topic = valueMappings[index].Topic;
+            if (!string.IsNullOrEmpty(topic) && !subscribed.Contains(topic))
+                found.Add(new AcquisitionValidationError(
+                    $"valueMappings[{index}].topic",
+                    $"点位绑定的主题 {topic} 不在订阅列表中，永远收不到数据。"));
+        }
+
+        for (var index = 0; index < contextMappings.Count; index++)
+        {
+            var topic = contextMappings[index].Topic;
+            if (!string.IsNullOrEmpty(topic) && !subscribed.Contains(topic))
+                found.Add(new AcquisitionValidationError(
+                    $"contextMappings[{index}].topic",
+                    $"上下文绑定的主题 {topic} 不在订阅列表中，永远收不到数据。"));
+        }
+
+        if (recipe is null) return;
+        for (var index = 0; index < recipe.ParameterMappings.Count; index++)
+        {
+            var topic = recipe.ParameterMappings[index].Topic;
+            if (!string.IsNullOrEmpty(topic) && !subscribed.Contains(topic))
+                found.Add(new AcquisitionValidationError(
+                    $"recipe.parameterMappings[{index}].topic",
+                    $"配方参数绑定的主题 {topic} 不在订阅列表中，永远收不到数据。"));
         }
     }
 
@@ -631,45 +671,6 @@ public static partial class AcquisitionProfileValidator
         return result;
     }
 
-    private static void ValidateMqttTopicBindings(
-        MqttConnection connection,
-        IReadOnlyList<AcquisitionContextMapping> contextMappings,
-        IReadOnlyList<AcquisitionValueMapping> valueMappings,
-        AcquisitionRecipeMapping? recipe,
-        List<AcquisitionValidationError> found)
-    {
-        var topics = connection.Topics
-            .Where(static item => !string.IsNullOrWhiteSpace(item.Topic))
-            .Select(static item => item.Topic.Trim())
-            .ToHashSet(StringComparer.Ordinal);
-
-        void Check(string? topic, string path)
-        {
-            if (!string.IsNullOrWhiteSpace(topic) && !topics.Contains(topic.Trim()))
-            {
-                found.Add(new AcquisitionValidationError(
-                    path,
-                    "来源主题必须引用已配置的 MQTT 订阅主题。"));
-            }
-        }
-
-        for (var index = 0; index < contextMappings.Count; index++)
-            Check(contextMappings[index].Topic, $"contextMappings[{index}].topic");
-        for (var index = 0; index < valueMappings.Count; index++)
-            Check(valueMappings[index].Topic, $"valueMappings[{index}].topic");
-        if (recipe is not null)
-        {
-            for (var index = 0; index < recipe.ParameterMappings.Count; index++)
-                Check(recipe.ParameterMappings[index].Topic, $"recipe.parameterMappings[{index}].topic");
-        }
-    }
-
-    private static bool IsValidJsonPath(string value)
-        => value == "." ||
-           (!value.StartsWith('.') &&
-            !value.EndsWith('.') &&
-            !value.Contains("..", StringComparison.Ordinal));
-
     private static void ValidateAgainstModel(
         AcquisitionProfile value,
         IReadOnlyList<AcquisitionValueMapping> valueMappings,
@@ -716,48 +717,9 @@ public static partial class AcquisitionProfileValidator
            mapping.ModbusAddress.HasValue ||
            !string.IsNullOrWhiteSpace(mapping.MelsecAddress);
 
-    /// <summary>MQTT 主题过滤器语法：+ 必须独占一层，# 只能出现在最后一层。</summary>
+    /// <summary>MQTT 主题过滤器语法。规则由 <see cref="MqttTopicFilter"/> 统一提供。</summary>
     public static bool IsValidMqttTopicFilter(string topic, out string error)
-    {
-        error = string.Empty;
-        if (topic.Length == 0)
-        {
-            error = "主题不能为空。";
-            return false;
-        }
-
-        if (topic.Contains('\0'))
-        {
-            error = "主题不能包含空字符。";
-            return false;
-        }
-
-        var levels = topic.Split('/');
-        for (var index = 0; index < levels.Length; index++)
-        {
-            var level = levels[index];
-            if (level.Contains('+') && level != "+")
-            {
-                error = "通配符 + 必须独占一个层级，例如 plant/+/line。";
-                return false;
-            }
-
-            if (!level.Contains('#')) continue;
-            if (level != "#")
-            {
-                error = "通配符 # 必须独占一个层级。";
-                return false;
-            }
-
-            if (index != levels.Length - 1)
-            {
-                error = "通配符 # 只能出现在主题的最后一个层级。";
-                return false;
-            }
-        }
-
-        return true;
-    }
+        => MqttTopicFilter.IsValid(topic, out error);
 
     /// <summary>
     ///     OPC UA NodeId 文本形式的结构检查。真正的合法性由服务器裁决，

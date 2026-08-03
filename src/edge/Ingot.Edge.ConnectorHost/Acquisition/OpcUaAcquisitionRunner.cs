@@ -150,9 +150,12 @@ public sealed class OpcUaAcquisitionRunner(
                         status.RecordSuccess(configurationKey, DateTimeOffset.UtcNow, null, incrementSample: false);
                         continue;
                     }
-                    await sink.EmitBatchAsync(
-                        lifecycle.Track(mapped, deployment.Profile.Lifecycle, connection.PublishingIntervalMs),
-                        ct).ConfigureAwait(false);
+                    var events = lifecycle.Track(
+                        mapped,
+                        deployment.Profile.Lifecycle,
+                        connection.PublishingIntervalMs);
+                    await sink.EmitBatchAsync(events, ct).ConfigureAwait(false);
+                    status.RecordCycleState(configurationKey, lifecycle.IsRunActive);
                     currentRecipe = mapped.RecipeIdentity;
                     emittedNotificationVersion = currentNotificationVersion;
                     status.RecordSuccess(configurationKey, DateTimeOffset.UtcNow, null);

@@ -80,7 +80,7 @@ const formatDuration = value => {
 };
 const edgeStatus = edge => {
   if (!edge?.lastSeen) return "unknown";
-  if (edge.lastError) return "degraded";
+  if (edge.lastError || ["degraded", "failed"].includes(edge.acquisition?.state)) return "degraded";
   return Date.now() - new Date(edge.lastSeen).getTime() <= 30000 ? "online" : "offline";
 };
 
@@ -3098,10 +3098,20 @@ export function EdgeDetailPage() {
   const profiles = useApi("/api/v1/acquisition-profiles", { interval: 10000 });
   const edge = extractRows(edges.data).find(row => row.edgeId === edgeId);
   const tasks = acquisition.data?.tasks || [];
+  const deploymentStates = acquisition.data?.deployments || [];
   const edgeProfiles = extractRows(profiles.data).filter(profile => profile.edgeId === edgeId);
   const profilesByTaskKey = new Map(edgeProfiles.map(profile => [`${profile.profileId}@${profile.version}`, profile]));
+  const profilesByVersion = new Map(edgeProfiles.map(profile => [`${profile.profileId}@${profile.version}`, profile]));
   const taskRows = tasks.map(task => ({ ...task, profile: profilesByTaskKey.get(task.configurationKey) }));
+  const deploymentRows = deploymentStates.map(deployment => ({
+    ...deployment,
+    profile: profilesByVersion.get(`${deployment.profileId}@${deployment.desiredVersion}`),
+  }));
   const runningTasks = tasks.filter(task => task.state === "running").length;
+  const convergedDeployments = deploymentStates.filter(deployment =>
+    deployment.state === "applied" &&
+    deployment.desiredVersion === deployment.appliedVersion &&
+    deployment.desiredConfigurationHash === deployment.appliedConfigurationHash).length;
   const publishedProfiles = edgeProfiles.filter(profile => profile.status === "published");
   const processSignalCount = publishedProfiles.reduce((total, profile) => total + (profile.valueMappings?.length || 0), 0);
   const recipeMappingCount = publishedProfiles.reduce((total, profile) => total + (profile.recipe?.parameterMappings?.length || 0), 0);
@@ -3128,7 +3138,7 @@ export function EdgeDetailPage() {
       {error && <Alert tone="danger" title="部分诊断信息暂不可用">{error}</Alert>}
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Metric label="设备连接" value={<StatusBadge value={edgeStatus(edge)} />} hint={edge?.lastSeen ? `最后心跳 ${formatTime(edge.lastSeen)}` : "尚未收到心跳"} />
-        <Metric label="采集任务" value={<StatusBadge value={acquisition.data?.state || "unknown"} />} hint={`${runningTasks} 个运行中 / ${tasks.length} 个已加载`} />
+        <Metric label="配置收敛" value={<StatusBadge value={acquisition.data?.state || "unknown"} />} hint={`${convergedDeployments} 个已应用 / ${deploymentStates.length} 个期望配置`} />
         <Metric label="数据上行" value={outboxBacklog > 0 ? `${formatInteger(outboxBacklog)} 待处理` : "已同步"} hint={`已确认 ${formatInteger(shipped)} / 已产生 ${formatInteger(emitted)}`} />
         <Metric label="工艺建模" value={recipeMappingCount > 0 ? "配方已映射" : "待映射"} hint={`${processSignalCount} 条过程信号 · ${recipeMappingCount} 个配方参数`} />
       </div>
@@ -3176,6 +3186,24 @@ export function EdgeDetailPage() {
           {deliveryReady
             ? "采集端已满足过程信号、实际配方与周期边界的交付条件。下一步在“周期”和“质检”中确认同一运行的曲线与结果已关联，随后再发起追因或优化实验。"
             : "这不是追因结论。请先补齐运行任务、过程信号、实际配方回读和周期边界；质量结果由质检流程关联后，才形成可用于追因和优化的完整证据。"}
+        </p>
+      </Card>
+      <Card title="采集配置应用状态" description="Platform 发布期望版本，Edge 主动拉取、验证并在安全周期边界应用；失败时保留上一成功版本。">
+        <DataTable
+          rows={deploymentRows}
+          keyField="profileId"
+          columns={[
+            { key: "profile", label: "数据源", render: (_value, row) => row.profile?.name || row.profileId },
+            { key: "desiredVersion", label: "期望版本", render: value => `v${value}` },
+            { key: "appliedVersion", label: "应用版本", render: value => value ? `v${value}` : "尚未应用" },
+            { key: "state", label: "应用状态", render: value => <StatusBadge value={value} /> },
+            { key: "desiredConfigurationHash", label: "配置指纹", render: value => value ? <code title={value}>{String(value).slice(0, 12)}</code> : "—" },
+            { key: "appliedAt", label: "应用时间", render: formatTime },
+            { key: "lastError", label: "应用问题", render: value => value || "无" },
+          ]}
+        />
+        <p className="mt-4 text-xs text-slate-500">
+          配置来源：{acquisition.data?.configurationSource || "尚未上报"} · 期望集合 {acquisition.data?.desiredConfigurationSetHash?.slice(0, 12) || "—"} · 已应用集合 {acquisition.data?.appliedConfigurationSetHash?.slice(0, 12) || "—"}
         </p>
       </Card>
       <Card title="运行中的数据源" description="每行对应一份已下发到节点的不可变数据源配置版本。">

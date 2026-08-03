@@ -160,12 +160,12 @@ const mqtt = {
   },
   constraints: [
     "订阅多个主题时，请为每个点位指定来源主题；未指定的点位按任意主题的报文解析。",
-    "跨主题的值会合并成一份快照；主题数据超过最大年龄或时间偏差过大时不会产生采样。",
+    "跨主题的值会合并成一份快照，只有全部必需点位都收到过报文后才会产生采样。",
   ],
   defaults: () => ({
     host: "", port: 1883, protocolVersion: "5.0", clientId: "", username: "", passwordSecretRef: "",
     useTls: false, caCertificatePath: "", clientCertificatePath: "", clientCertificatePasswordSecretRef: "",
-    cleanSession: true, keepAliveSeconds: 30, snapshotMaxAgeSeconds: 30, snapshotMaxSkewSeconds: 5,
+    cleanSession: true, keepAliveSeconds: 30, snapshotMaxAgeSeconds: 0,
     topics: [{ topic: "", qos: 0, payloadRoot: "" }],
   }),
   fields: [
@@ -175,10 +175,8 @@ const mqtt = {
       options: [["5.0", "MQTT 5.0"], ["3.1.1", "MQTT 3.1.1"]] },
     { name: "clientId", label: "客户端编号", type: "text", hint: "留空时由采集节点生成唯一编号。" },
     { name: "keepAliveSeconds", label: "保活时间（秒）", type: "number", min: 1 },
-    { name: "snapshotMaxAgeSeconds", label: "快照最大年龄（秒）", type: "number", min: 1,
-      hint: "多主题数据超过此年龄仍未更新时，禁止继续拼接旧值。" },
-    { name: "snapshotMaxSkewSeconds", label: "主题最大时间偏差（秒）", type: "number", min: 0,
-      hint: "多主题数据最早与最晚到达时间超过此值时，等待重新形成快照。" },
+    { name: "snapshotMaxAgeSeconds", label: "值的最大陈旧时间（秒）", type: "number", min: 0,
+      hint: "跨主题合并时，超过该时间未更新的值视为缺失。0 表示不限制；订阅多个主题时建议设置。" },
     { name: "cleanSession", label: form => form.protocolVersion === "5.0" ? "重新开始会话（Clean Start）" : "清理旧会话（Clean Session）",
       type: "checkbox" },
     { name: "username", label: "用户名", type: "text", group: "认证" },
@@ -198,10 +196,9 @@ const mqtt = {
     const port = Number(connection.port);
     if (!(port >= 1 && port <= 65535)) errors.port = "端口必须在 1-65535 之间。";
     if (!(Number(connection.keepAliveSeconds) >= 1)) errors.keepAliveSeconds = "保活时间必须大于 0 秒。";
-    if (!(Number(connection.snapshotMaxAgeSeconds) >= 1)) errors.snapshotMaxAgeSeconds = "快照最大年龄必须大于 0 秒。";
-    if (!(Number(connection.snapshotMaxSkewSeconds) >= 0)) errors.snapshotMaxSkewSeconds = "主题最大时间偏差不能小于 0 秒。";
     if (connection.useTls && !(connection.caCertificatePath || "").trim() && !(connection.clientCertificatePath || "").trim())
       errors.caCertificatePath = "启用 TLS 时至少需要一个证书路径。";
+    if (Number(connection.snapshotMaxAgeSeconds) < 0) errors.snapshotMaxAgeSeconds = "不能为负数。";
     const topics = connection.topics || [];
     if (!topics.some(item => (item.topic || "").trim())) errors.topics = "至少需要一个订阅主题。";
     const seen = new Set();
@@ -222,16 +219,33 @@ const mqtt = {
       ? "" : "请填写消息服务器地址和至少一个订阅主题。";
   },
   advisories(form) {
+    const notes = [];
     const topics = (form.mqtt?.topics || []).filter(item => (item.topic || "").trim());
-    const unbound = (form.valueMappings || []).filter(item => item.dataItemCode && !(item.topic || "").trim());
+    const points = (form.valueMappings || []).filter(item => item.dataItemCode);
+    const unbound = points.filter(item => !(item.topic || "").trim());
     if (topics.length > 1 && unbound.length > 0) {
-      return [{
+      notes.push({
         tone: "warning",
         message: `订阅了 ${topics.length} 个主题，但有 ${unbound.length} 个点位没有绑定来源主题。` +
           "未绑定的点位会接受任意主题的报文，主题之间字段重名时会互相覆盖。",
-      }];
+      });
     }
-    return [];
+    if (topics.length > 1 && !(Number(form.mqtt?.snapshotMaxAgeSeconds) > 0)) {
+      notes.push({
+        tone: "warning",
+        message: "订阅了多个主题但没有设置值的最大陈旧时间。某个主题停止发布时，" +
+          "合并快照会一直沿用它最后一次的值并继续产生采样——这会把过期数据当成当前状态。",
+      });
+    }
+    if (topics.length > 1 && points.length > 0) {
+      const bound = points.length - unbound.length;
+      notes.push({
+        tone: "info",
+        message: `跨主题合并：${bound} 个点位已绑定来源主题。只有全部必需点位都收到过报文后才会产生采样；` +
+          "只携带上下文的主题会更新快照但不触发采样。",
+      });
+    }
+    return notes;
   },
 };
 
