@@ -132,6 +132,31 @@ public sealed record AgentToolInvocation
     public IReadOnlyList<RelatedRecordRef> RelatedRecords { get; init; } = [];
 }
 
+/// <summary>
+///     已通过运行时校验的只读工具结果快照。完整数据与内容哈希用于黄金评测和事后审计，
+///     不允许由模型补写。
+/// </summary>
+public sealed record AgentToolResultSnapshot
+{
+    public required string Tool { get; init; }
+
+    public required string Version { get; init; }
+
+    public required string Summary { get; init; }
+
+    public required JsonElement Data { get; init; }
+
+    public IReadOnlyList<RelatedRecordRef> RelatedRecords { get; init; } = [];
+
+    public IReadOnlyList<string> Limitations { get; init; } = [];
+
+    public required string Outcome { get; init; }
+
+    public required string ContentHash { get; init; }
+
+    public required DateTimeOffset VerifiedAt { get; init; }
+}
+
 public sealed record AgentRunSnapshot
 {
     public required string RunId { get; init; }
@@ -171,6 +196,8 @@ public sealed record AgentRunSnapshot
     public int Iteration { get; init; }
 
     public IReadOnlyList<AgentToolInvocation> ToolInvocations { get; init; } = [];
+
+    public IReadOnlyList<AgentToolResultSnapshot> ToolResults { get; init; } = [];
 
     public AnalysisAnswer? Answer { get; init; }
 

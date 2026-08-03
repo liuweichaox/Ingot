@@ -42,6 +42,8 @@ public sealed class ResearchObservationAssembler(
     {
         var candidates = experiments
             .Where(static experiment => experiment.Status != ResearchExperimentStatuses.Cancelled)
+            .Where(static experiment =>
+                experiment.Optimization?.Mode != ResearchOptimizationModes.Shadow)
             .SelectMany(experiment => experiment.RunPlan.Select(run => new CandidateRun(experiment, run)))
             .GroupBy(static value => value.Run.RunKey, StringComparer.Ordinal)
             .Select(static group => group
@@ -106,6 +108,17 @@ public sealed class ResearchObservationAssembler(
                 Unit = variable.Unit
             });
         }
+        var actualByCode = factors.ToDictionary(
+            static value => value.VariableCode, static value => value.Value, StringComparer.Ordinal);
+        var settingDeviation = run.Factors
+            .Where(value => actualByCode.ContainsKey(value.VariableCode))
+            .ToDictionary(
+                static value => value.VariableCode,
+                value => actualByCode[value.VariableCode] - value.Value,
+                StringComparer.Ordinal);
+        var hasSettingDeviation = run.Factors.Any(value =>
+            !actualByCode.TryGetValue(value.VariableCode, out var actual) ||
+            Math.Abs(actual - value.Value) > 1e-6 * Math.Max(1, Math.Abs(value.Value)));
 
         var outcomes = new Dictionary<string, double>(StringComparer.Ordinal);
         foreach (var objective in project.Objectives)
@@ -131,6 +144,8 @@ public sealed class ResearchObservationAssembler(
         {
             ["machine_id"] = cycle.MachineId
         };
+        if (cycle.EdgeIds.Count > 0)
+            context["edge_ids"] = string.Join(',', cycle.EdgeIds.Order(StringComparer.Ordinal));
         AddContext(context, "product_series", cycle.ProductSeries);
         AddContext(context, "product_code", cycle.ProductCode);
         AddContext(context, "recipe_id", cycle.RecipeId);
@@ -140,6 +155,9 @@ public sealed class ResearchObservationAssembler(
         AddContext(context, "mold_id", cycle.MoldId);
         AddContext(context, "assembly_revision_id", cycle.AssemblyRevisionId);
         AddContext(context, "assembly_revision", cycle.AssemblyRevision);
+        AddContext(context, "workpiece_id", cycle.WorkpieceId);
+        AddContext(context, "external_batch_ref", cycle.ExternalBatchRef);
+        AddContext(context, "material_lot_ref", cycle.MaterialLotRef);
         if (cycle.CompletedAt is null)
             missing.Add("周期未完成");
         if (cycle.ProcessDataQuality.Status == ProcessDataStatuses.Unavailable)
@@ -152,9 +170,13 @@ public sealed class ResearchObservationAssembler(
             cycle.CorrelationId,
             cycle.CompletedAt,
             cycle.AnalysisMaterialization.AlgorithmVersion,
+            cycle.AnalysisMaterialization.SourceMinIngestId,
             cycle.AnalysisMaterialization.SourceMaxIngestId,
             cycle.AnalysisMaterialization.SourceEventCount,
+            cycle.AnalysisMaterialization.SourceContentHash,
             Factors = factors,
+            SettingDeviationFromPlan = settingDeviation,
+            HasSettingDeviation = hasSettingDeviation,
             ProcessFeatures = processFeatures,
             Outcomes = outcomes,
             ConstraintOutcomes = constraintOutcomes,
@@ -177,6 +199,8 @@ public sealed class ResearchObservationAssembler(
             RunKey = run.RunKey,
             Context = context,
             ActualFactors = factors,
+            SettingDeviationFromPlan = settingDeviation,
+            HasSettingDeviation = hasSettingDeviation,
             ProcessFeatures = processFeatures,
             Outcomes = outcomes,
             ConstraintOutcomes = constraintOutcomes,

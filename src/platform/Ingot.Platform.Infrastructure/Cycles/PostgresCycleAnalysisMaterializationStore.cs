@@ -44,8 +44,10 @@ public sealed class PostgresCycleAnalysisMaterializationStore : ICycleAnalysisMa
                   data_model_version               INTEGER NOT NULL,
                   analysis_plan_id                 TEXT NOT NULL,
                   analysis_plan_version            INTEGER NOT NULL,
+                  source_min_ingest_id              BIGINT NOT NULL DEFAULT 0,
                   source_max_ingest_id              BIGINT NOT NULL,
                   source_event_count                INTEGER NOT NULL,
+                  source_content_hash               TEXT NOT NULL DEFAULT '',
                   status                            TEXT NOT NULL,
                   computed_at                       TIMESTAMPTZ NOT NULL,
                   invalidated_at                    TIMESTAMPTZ,
@@ -60,6 +62,11 @@ public sealed class PostgresCycleAnalysisMaterializationStore : ICycleAnalysisMa
 
                 CREATE INDEX IF NOT EXISTS idx_cycle_analysis_materializations_status
                   ON cycle_analysis_materializations (status, computed_at);
+
+                ALTER TABLE cycle_analysis_materializations
+                  ADD COLUMN IF NOT EXISTS source_min_ingest_id BIGINT NOT NULL DEFAULT 0;
+                ALTER TABLE cycle_analysis_materializations
+                  ADD COLUMN IF NOT EXISTS source_content_hash TEXT NOT NULL DEFAULT '';
 
                 CREATE TABLE IF NOT EXISTS cycle_phases (
                   correlation_id          TEXT NOT NULL,
@@ -154,8 +161,7 @@ public sealed class PostgresCycleAnalysisMaterializationStore : ICycleAnalysisMa
 
     public async Task<CycleAnalysisSnapshot?> TryLoadAsync(
         CycleAnalysisMaterializationKey key,
-        long sourceMaxIngestId,
-        int sourceEventCount,
+        CycleAnalysisSourceFingerprint source,
         CancellationToken ct = default)
     {
         await InitializeAsync(ct).ConfigureAwait(false);
@@ -169,13 +175,14 @@ public sealed class PostgresCycleAnalysisMaterializationStore : ICycleAnalysisMa
               AND data_model_version = @data_model_version
               AND analysis_plan_id = @analysis_plan_id
               AND analysis_plan_version = @analysis_plan_version
+              AND source_min_ingest_id = @source_min_ingest_id
               AND source_max_ingest_id = @source_max_ingest_id
               AND source_event_count = @source_event_count
+              AND source_content_hash = @source_content_hash
               AND status = 'ready';
             """);
         AddKeyParameters(command, key);
-        command.Parameters.AddWithValue("source_max_ingest_id", sourceMaxIngestId);
-        command.Parameters.AddWithValue("source_event_count", sourceEventCount);
+        AddSourceParameters(command, source);
 
         await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
         if (!await reader.ReadAsync(ct).ConfigureAwait(false))
@@ -185,14 +192,12 @@ public sealed class PostgresCycleAnalysisMaterializationStore : ICycleAnalysisMa
         return new CycleAnalysisSnapshot(
             result,
             reader.GetFieldValue<DateTimeOffset>(1),
-            sourceMaxIngestId,
-            sourceEventCount);
+            source);
     }
 
     public async Task<CycleAnalysisSnapshot> SaveAsync(
         CycleAnalysisMaterializationKey key,
-        long sourceMaxIngestId,
-        int sourceEventCount,
+        CycleAnalysisSourceFingerprint source,
         WholeCycleAnalysisResult analysis,
         CancellationToken ct = default)
     {
@@ -202,14 +207,14 @@ public sealed class PostgresCycleAnalysisMaterializationStore : ICycleAnalysisMa
         await using var transaction = await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
 
         await UpsertMaterializationAsync(
-            connection, transaction, key, sourceMaxIngestId, sourceEventCount, computedAt, analysis, ct)
+            connection, transaction, key, source, computedAt, analysis, ct)
             .ConfigureAwait(false);
         await DeleteDetailsAsync(connection, transaction, key, ct).ConfigureAwait(false);
         await InsertPhasesAsync(connection, transaction, key, analysis, ct).ConfigureAwait(false);
         await InsertFeaturesAsync(connection, transaction, key, analysis, ct).ConfigureAwait(false);
 
         await transaction.CommitAsync(ct).ConfigureAwait(false);
-        return new CycleAnalysisSnapshot(analysis, computedAt, sourceMaxIngestId, sourceEventCount);
+        return new CycleAnalysisSnapshot(analysis, computedAt, source);
     }
 
     public async Task MarkDirtyAsync(
@@ -429,8 +434,7 @@ public sealed class PostgresCycleAnalysisMaterializationStore : ICycleAnalysisMa
         NpgsqlConnection connection,
         NpgsqlTransaction transaction,
         CycleAnalysisMaterializationKey key,
-        long sourceMaxIngestId,
-        int sourceEventCount,
+        CycleAnalysisSourceFingerprint source,
         DateTimeOffset computedAt,
         WholeCycleAnalysisResult analysis,
         CancellationToken ct)
@@ -441,21 +445,23 @@ public sealed class PostgresCycleAnalysisMaterializationStore : ICycleAnalysisMa
               correlation_id, algorithm_version,
               data_model_id, data_model_version,
               analysis_plan_id, analysis_plan_version,
-              source_max_ingest_id, source_event_count,
+              source_min_ingest_id, source_max_ingest_id, source_event_count, source_content_hash,
               status, computed_at, result)
             VALUES (
               @correlation_id, @algorithm_version,
               @data_model_id, @data_model_version,
               @analysis_plan_id, @analysis_plan_version,
-              @source_max_ingest_id, @source_event_count,
+              @source_min_ingest_id, @source_max_ingest_id, @source_event_count, @source_content_hash,
               'ready', @computed_at, @result)
             ON CONFLICT (
               correlation_id, algorithm_version,
               data_model_id, data_model_version,
               analysis_plan_id, analysis_plan_version)
             DO UPDATE SET
+              source_min_ingest_id = EXCLUDED.source_min_ingest_id,
               source_max_ingest_id = EXCLUDED.source_max_ingest_id,
               source_event_count = EXCLUDED.source_event_count,
+              source_content_hash = EXCLUDED.source_content_hash,
               status = CASE
                 WHEN cycle_analysis_materializations.invalidated_source_max_ingest_id >
                      EXCLUDED.source_max_ingest_id
@@ -480,8 +486,7 @@ public sealed class PostgresCycleAnalysisMaterializationStore : ICycleAnalysisMa
             connection,
             transaction);
         AddKeyParameters(command, key);
-        command.Parameters.AddWithValue("source_max_ingest_id", sourceMaxIngestId);
-        command.Parameters.AddWithValue("source_event_count", sourceEventCount);
+        AddSourceParameters(command, source);
         command.Parameters.AddWithValue("computed_at", computedAt);
         command.Parameters.AddWithValue(
             "result",
@@ -652,6 +657,14 @@ public sealed class PostgresCycleAnalysisMaterializationStore : ICycleAnalysisMa
         command.Parameters.AddWithValue("data_model_version", key.DataModelVersion);
         command.Parameters.AddWithValue("analysis_plan_id", key.AnalysisPlanId);
         command.Parameters.AddWithValue("analysis_plan_version", key.AnalysisPlanVersion);
+    }
+
+    private static void AddSourceParameters(NpgsqlCommand command, CycleAnalysisSourceFingerprint source)
+    {
+        command.Parameters.AddWithValue("source_min_ingest_id", source.MinIngestId);
+        command.Parameters.AddWithValue("source_max_ingest_id", source.MaxIngestId);
+        command.Parameters.AddWithValue("source_event_count", source.EventCount);
+        command.Parameters.AddWithValue("source_content_hash", source.ContentHash);
     }
 
     public async ValueTask DisposeAsync()

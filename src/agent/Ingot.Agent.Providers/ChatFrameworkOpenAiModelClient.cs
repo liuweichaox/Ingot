@@ -5,6 +5,7 @@ using Microsoft.Agents.AI;
 using Microsoft.Extensions.Options;
 using OpenAI;
 using OpenAI.Responses;
+using System.ClientModel;
 
 #pragma warning disable OPENAI001
 
@@ -24,7 +25,15 @@ public sealed class ChatFrameworkOpenAiModelClient : IModelClient
         if (string.IsNullOrWhiteSpace(apiKey))
             throw new InvalidOperationException("Chat Provider=OpenAI 时必须设置 OPENAI_API_KEY。");
 
-        var client = new OpenAIClient(apiKey);
+        var clientOptions = new OpenAIClientOptions();
+        if (!string.IsNullOrWhiteSpace(_options.BaseUrl))
+        {
+            if (!Uri.TryCreate(_options.BaseUrl.Trim(), UriKind.Absolute, out var endpoint) ||
+                (endpoint.Scheme != Uri.UriSchemeHttp && endpoint.Scheme != Uri.UriSchemeHttps))
+                throw new InvalidOperationException("Chat:BaseUrl 必须是绝对 HTTP 或 HTTPS 地址。");
+            clientOptions.Endpoint = endpoint;
+        }
+        var client = new OpenAIClient(new ApiKeyCredential(apiKey), clientOptions);
         _fastAgent = client.GetResponsesClient().AsAIAgent(
             model: _options.FastModel,
             instructions: SystemInstructions,
@@ -40,6 +49,9 @@ public sealed class ChatFrameworkOpenAiModelClient : IModelClient
     public string Provider => "OpenAI";
 
     public string Model => $"{_options.FastModel}/{_options.ReasoningModel}";
+
+    public string ModelFor(ModelRole role)
+        => role == ModelRole.Reasoning ? _options.ReasoningModel : _options.FastModel;
 
     public async Task<ModelCallResult<AnalysisPlan>> ResolveIntentAsync(
         CreateChatRunRequest request,

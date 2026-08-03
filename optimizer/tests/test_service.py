@@ -288,3 +288,60 @@ def test_continuous_diagnosis_selects_gp_when_nonlinearity_is_supported():
     payload = response.json()
     assert payload["model_family"].startswith("gaussian-process-regression")
     assert payload["cross_validation_score"] > 0
+
+
+def test_historical_replay_endpoint_is_production_equivalent_and_auditable():
+    body = {
+        "campaign": {
+            "name": "historical-project",
+            "variables": [{"name": "x", "low": 0.0, "high": 1.0}],
+            "objectives": [{"name": "loss", "kind": "le", "threshold": 0.1}],
+        },
+        "history": [
+            {
+                "params": {"x": value},
+                "outcomes": {"loss": (value - 0.8) ** 2},
+                "run_id": f"run-{index}",
+                "occurred_at": float(index),
+            }
+            for index, value in enumerate([0.0, 0.2, 0.4, 0.6, 0.8, 1.0])
+        ],
+        "budget": 6,
+        "n_seeds": 3,
+        "initial_observation_count": 3,
+    }
+
+    response = client.post("/v1/historical-replay", json=body)
+
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["engine_policy"].startswith("production-equivalent")
+    assert payload["evidence_kind"] == "historical-pool-ranking"
+    assert payload["state_persisted"] is False
+    assert len(payload["step_traces"]) == 3
+    assert all(
+        step["revealed_history_index"]
+        not in step.get("visible_observation_indices_before", [])
+        for trace in payload["step_traces"]
+        for step in trace
+    )
+    assert "does not prove online" in payload["limitations"]
+
+
+def test_historical_replay_rejects_duplicate_recipes_and_unknown_fields():
+    body = {
+        "campaign": {
+            "name": "duplicate-history",
+            "variables": [{"name": "x", "low": 0.0, "high": 1.0}],
+            "objectives": [{"name": "loss", "kind": "le", "threshold": 0.1}],
+        },
+        "history": [
+            {"params": {"x": 0.1}, "outcomes": {"loss": 0.5}},
+            {"params": {"x": 0.1}, "outcomes": {"loss": 0.4}},
+            {"params": {"x": 0.8}, "outcomes": {"loss": 0.0}},
+        ],
+    }
+    assert client.post("/v1/historical-replay", json=body).status_code == 422
+    body["history"][1]["params"] = {"x": 0.2}
+    body["history"][0]["future_outcome"] = 0.0
+    assert client.post("/v1/historical-replay", json=body).status_code == 422

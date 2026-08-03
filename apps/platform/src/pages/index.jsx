@@ -42,6 +42,7 @@ import {
 
 export { ResearchProjectsPage } from "./ResearchProjectsPage";
 export { ResearchAssetsPage } from "./ResearchAssetsPage";
+export { GoldenQuestionsPage } from "./GoldenQuestionsPage";
 
 const formatTime = value => value ? new Date(value).toLocaleString("zh-CN") : "—";
 const formatInteger = value => Number.isFinite(Number(value)) ? Number(value).toLocaleString("zh-CN") : "—";
@@ -379,6 +380,9 @@ export function CyclesPage() {
   const [filters, setFilters] = useState({
     status: "all",
     machineId: params.get("machineId") || "",
+    edgeId: params.get("edgeId") || "",
+    externalBatchRef: params.get("externalBatchRef") || "",
+    workpieceId: params.get("workpieceId") || "",
     correlationId: params.get("cycleId") || "",
   });
   const [appliedFilters, setAppliedFilters] = useState(filters);
@@ -388,11 +392,14 @@ export function CyclesPage() {
   const { data, loading, error } = useApi(`/api/v1/cycles?${query}`);
   const rows = extractRows(data);
   return (
-    <Page title="运行记录" description="按设备、状态和周期号追溯完整生产运行。">
+    <Page title="运行记录" description="按 Edge、设备、批次、工件和运行号追溯跨设备生产过程。">
       <Card title="筛选条件">
-        <form className="grid gap-3 md:grid-cols-[160px_1fr_1fr_auto]" onSubmit={event => { event.preventDefault(); setAppliedFilters(filters); setPage(1); setQuery(makeCycleQuery(filters, 1, pageSize)); }}>
+        <form className="grid gap-3 md:grid-cols-2 xl:grid-cols-[140px_repeat(5,minmax(0,1fr))_auto]" onSubmit={event => { event.preventDefault(); setAppliedFilters(filters); setPage(1); setQuery(makeCycleQuery(filters, 1, pageSize)); }}>
           <Field label="状态"><Select value={filters.status} onChange={event => setFilters({ ...filters, status: event.target.value })}><option value="all">全部</option><option value="active">进行中</option><option value="completed">已完成</option></Select></Field>
+          <Field label="Edge"><Input value={filters.edgeId} onChange={event => setFilters({ ...filters, edgeId: event.target.value })} placeholder="现场节点编号" /></Field>
           <Field label="设备"><Input value={filters.machineId} onChange={event => setFilters({ ...filters, machineId: event.target.value })} placeholder="设备编号" /></Field>
+          <Field label="生产批次"><Input value={filters.externalBatchRef} onChange={event => setFilters({ ...filters, externalBatchRef: event.target.value })} placeholder="跨设备批次编号" /></Field>
+          <Field label="工件"><Input value={filters.workpieceId} onChange={event => setFilters({ ...filters, workpieceId: event.target.value })} placeholder="跨工序工件编号" /></Field>
           <Field label="周期号"><Input value={filters.correlationId} onChange={event => setFilters({ ...filters, correlationId: event.target.value })} placeholder="精确周期号" /></Field>
           <Button className="self-end" variant="primary" type="submit"><MagnifyingGlassIcon className="size-4" />查询</Button>
         </form>
@@ -406,8 +413,9 @@ export function CyclesPage() {
             onRowClick={row => navigate(`/cycles/${encodeURIComponent(row.correlationId)}`)}
             columns={[
               { key: "correlationId", label: "周期号" },
-              { key: "machineId", label: "设备" },
+              { key: "machineId", label: "来源", render: (value, row) => <div><p className="font-medium text-slate-800">{value}</p><p className="text-xs text-slate-500">{row.edgeIds?.join("、") || "Edge 未记录"}</p></div> },
               { key: "productCode", label: "产品" },
+              { key: "externalBatchRef", label: "批次 / 工件", render: (value, row) => <div><p>{value || "批次未记录"}</p><p className="text-xs text-slate-500">{row.workpieceId || "工件未记录"}</p></div> },
               { key: "recipeId", label: "配方" },
               { key: "qualityStatus", label: "质量", render: value => <StatusBadge value={value} /> },
               { key: "startedAt", label: "开始", render: formatTime },
@@ -528,9 +536,13 @@ export function CycleDetailPage() {
               <dl className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
                 {[
                   ["设备", cycle.machineId],
+                  ["Edge", cycle.edgeIds?.join("、")],
                   ["产品系列", cycle.productSeries],
                   ["产品", cycle.productCode],
                   ["配方", cycle.recipeId && `${cycle.recipeId}${cycle.recipeVersion ? ` / v${cycle.recipeVersion}` : ""}`],
+                  ["生产批次", cycle.externalBatchRef],
+                  ["工件", cycle.workpieceId],
+                  ["材料批次", cycle.materialLotRef],
                   ["工装", cycle.toolingId],
                   ["模具", cycle.moldId],
                 ].map(([label, value]) => (
@@ -719,6 +731,9 @@ export function CycleDetailPage() {
 function makeCycleQuery(filters, page, pageSize) {
   const query = new URLSearchParams({ limit: String(pageSize), offset: String((page - 1) * pageSize), status: filters.status });
   if (filters.machineId.trim()) query.set("machineId", filters.machineId.trim());
+  if (filters.edgeId.trim()) query.set("edgeId", filters.edgeId.trim());
+  if (filters.externalBatchRef.trim()) query.set("externalBatchRef", filters.externalBatchRef.trim());
+  if (filters.workpieceId.trim()) query.set("workpieceId", filters.workpieceId.trim());
   if (filters.correlationId.trim()) query.set("correlationId", filters.correlationId.trim());
   return query.toString();
 }
@@ -1219,10 +1234,16 @@ const productionResources = {
     description: "为设备选择接下来生产的产品、配方和已装工装，保存后对新周期生效。",
     drawerDescription: "按顺序确认设备、产品、配方和工装；保存后只影响新开始的生产周期。",
     columns: [["machineId", "设备"], ["productCode", "产品"], ["recipeId", "配方"], ["validFrom", "生效时间"], ["validTo", "结束时间"]],
-    template: { machineId: "", productSeries: "", productCode: "", recipeId: "", recipeVersion: 1, toolingInstallationId: "", source: "manual", materialLotRef: "" },
+    template: { machineId: "", productSeries: "", productCode: "", recipeId: "", recipeVersion: 1, toolingInstallationId: "", source: "manual", externalOrderRef: "", externalBatchRef: "", materialLotRef: "", materialSpecification: "", maintenanceStatus: "", calibrationStatus: "", calibrationRef: "", calibrationValidUntil: "" },
     createLabel: "配置下一批生产",
     requiredFields: ["machineId", "productSeries", "productCode", "recipeId"],
-    prepare: value => ({ ...value, validFrom: new Date().toISOString() }),
+    prepare: value => ({
+      ...value,
+      validFrom: new Date().toISOString(),
+      calibrationValidUntil: value.calibrationValidUntil
+        ? new Date(value.calibrationValidUntil).toISOString()
+        : null,
+    }),
     lifecycle: { label: "结束", visible: value => !value.validTo, url: value => `/api/v1/production-contexts/${value.contextId}:close`, body: () => ({ at: new Date().toISOString() }) },
   },
   installation: {
@@ -1287,6 +1308,13 @@ const productionFieldLabels = {
   toolingInstallationId: "工装装卸记录",
   source: "记录来源",
   materialLotRef: "物料批次",
+  externalOrderRef: "外部工单",
+  externalBatchRef: "生产批次",
+  materialSpecification: "材料规格",
+  maintenanceStatus: "维护状态",
+  calibrationStatus: "校准状态",
+  calibrationRef: "校准记录",
+  calibrationValidUntil: "校准有效期",
   assemblyRevisionId: "工装组合版本",
   componentTypeCode: "组件类型代码",
   name: "名称",
@@ -1467,12 +1495,29 @@ function ProductionRecordForm({ resource, editor, onChange }) {
             </div>
           </div>
         </Card>
-        <Card title="3. 补充现场信息" description="工装和物料批次可选；填写后会自动关联到后续生产周期。">
+        <Card title="3. 补充现场信息" description="多个设备填写相同生产批次或工件编号后，可以跨设备追溯；这些字段会固化到后续运行。">
           <div className="grid gap-4 sm:grid-cols-2">
             <ProductionReferenceField fieldKey="toolingInstallationId" value={editor.toolingInstallationId} editor={editor} onChange={onChange} />
+            <Field label="外部工单" hint="来自 MES、ERP 或现场工单，可选">
+              <Input value={editor.externalOrderRef || ""} onChange={event => onChange("externalOrderRef", event.target.value)} />
+            </Field>
+            <Field label="生产批次" hint="同一批产品经过多台设备时，各设备填写相同批次号">
+              <Input value={editor.externalBatchRef || ""} onChange={event => onChange("externalBatchRef", event.target.value)} />
+            </Field>
             <Field label="物料批次" hint="没有批次管理时可以留空">
               <Input value={editor.materialLotRef || ""} onChange={event => onChange("materialLotRef", event.target.value)} />
             </Field>
+            <Field label="材料规格" hint="例如牌号、等级或供应规格，可选">
+              <Input value={editor.materialSpecification || ""} onChange={event => onChange("materialSpecification", event.target.value)} />
+            </Field>
+            <Field label="设备维护状态" hint="例如 available、due 或 maintenance">
+              <Input value={editor.maintenanceStatus || ""} onChange={event => onChange("maintenanceStatus", event.target.value)} />
+            </Field>
+            <Field label="校准状态" hint="例如 valid、due；到期后运行快照会强制标记 expired">
+              <Input value={editor.calibrationStatus || ""} onChange={event => onChange("calibrationStatus", event.target.value)} />
+            </Field>
+            <Field label="校准记录"><Input value={editor.calibrationRef || ""} onChange={event => onChange("calibrationRef", event.target.value)} /></Field>
+            <Field label="校准有效期"><Input type="datetime-local" value={editor.calibrationValidUntil || ""} onChange={event => onChange("calibrationValidUntil", event.target.value)} /></Field>
           </div>
         </Card>
         {hasMachine && hasProduct && hasRecipe && (
@@ -1827,7 +1872,7 @@ export function InspectionsPage() {
     item => `${item.definitionCode}:${item.definitionVersion}` === form.definitionKey,
   )?.requiresAttachment);
   const entryReady = Boolean(
-    form.workpieceId.trim() && form.operationRunId.trim() && selectedDefinition &&
+    form.operationRunId.trim() && selectedDefinition &&
     measurementsComplete && (!requiresAttachment || form.file),
   );
   const availableDefinitions = taskTarget
@@ -1904,7 +1949,7 @@ export function InspectionsPage() {
       const now = new Date().toISOString();
       await postJson("/api/v1/inspection-records", {
         recordId: uuidv7(),
-        workpieceId: form.workpieceId.trim(),
+        workpieceId: form.workpieceId.trim() || null,
         operationRunId: form.operationRunId.trim(),
         definitionCode: selectedDefinition.code,
         definitionVersion: selectedDefinition.version,
@@ -2539,6 +2584,16 @@ export function CycleComparisonPage() {
       confoundersLabel: (candidate.possibleConfounders || []).join("、") || "未发现明显差异",
     }))
     .slice(0, 30), [result]);
+  const investigation = result?.investigation;
+  const firstDeviationRows = (investigation?.firstDeviations || []).map(item => ({
+    ...item,
+    phaseLabel: item.phaseName || item.phaseCode || "全周期",
+  }));
+  const experimentRows = (investigation?.nextExperiments || []).map(item => ({
+    ...item,
+    blockingLabel: (item.blockingFactors || []).join("、") || "无已识别区组因素",
+    designLabel: `${item.minimumLevels} 水平 × ${item.minimumBlocks} 区组 × 每条件 ${item.repeatsPerCondition} 次`,
+  }));
   return (
     <Page title="周期对比与候选原因" description="从已完成的同类运行中选择基准和对比对象，按阶段对齐后形成待验证的原因假设。">
       {error && <Alert tone="danger">{error}</Alert>}
@@ -2565,6 +2620,54 @@ export function CycleComparisonPage() {
             <Metric label="周期完整" value={result.acceptance?.completeCycleCount ?? 0} hint="同时具有生产开始与结束事件" />
             <Metric label="分析证据" value={evidenceLevelLabels[result.evidenceLevel] || result.evidenceLevel || "—"} />
           </div>
+          <Card title="确定性调查报告" description="以下事实由系统查询和计算生成；本地模型只能组织解释，不能补写数字或把观察性候选说成根因。">
+            <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <Metric label="调查状态" value={investigation?.status === "ready" ? "可进入验证" : investigation?.status === "exploratory" ? "探索性" : "数据不足"} />
+              <Metric label="目标数据" value={investigation?.dataQuality?.targetStatus || "—"} hint={`证据权重 ${formatDecimal(investigation?.dataQuality?.targetEvidenceWeight)}`} />
+              <Metric label="基线有效权重" value={formatDecimal(investigation?.comparisonBaseline?.effectiveCycleWeight)} hint={`${investigation?.comparisonBaseline?.comparisonCycleIds?.length || 0} 个对比周期`} />
+              <Metric label="匹配条件" value={Object.entries(investigation?.comparisonBaseline?.matchingContext || {}).map(([key, value]) => `${key}=${value}`).join("；") || "未记录"} />
+            </div>
+            {firstDeviationRows.length ? (
+              <div className="mb-4">
+                <h4 className="mb-2 text-sm font-semibold text-slate-900">首次阶段偏离</h4>
+                <DataTable
+                  rows={firstDeviationRows}
+                  getRowKey={(row, index) => `${row.signalCode}-${row.phaseCode || "cycle"}-${row.featureCode}-${index}`}
+                  columns={[
+                    { key: "phaseLabel", label: "阶段" },
+                    { key: "signalCode", label: "信号" },
+                    { key: "featureCode", label: "特征" },
+                    { key: "startedAt", label: "首次时间", render: formatTime },
+                    { key: "targetValue", label: "目标运行值", render: formatDecimal },
+                    { key: "historicalMedian", label: "历史中位数", render: formatDecimal },
+                    { key: "robustDeviation", label: "稳健偏离", render: formatDecimal },
+                  ]}
+                />
+              </div>
+            ) : <Alert tone="warning" title="尚不能定位首次偏离">需要具有阶段时间和足够历史分布的过程特征。</Alert>}
+            <div className="grid gap-4 xl:grid-cols-2">
+              <div>
+                <h4 className="mb-2 text-sm font-semibold text-slate-900">反证与边界</h4>
+                {(investigation?.counterEvidence || []).length ? <ul className="list-disc space-y-1 pl-5 text-sm text-slate-700">{investigation.counterEvidence.map((item, index) => <li key={`${item.candidateId}-${item.kind}-${index}`}>{item.statement}</li>)}</ul> : <p className="text-sm text-slate-500">尚无候选原因可进行反证检查。</p>}
+              </div>
+              <div>
+                <h4 className="mb-2 text-sm font-semibold text-slate-900">缺失数据</h4>
+                {(investigation?.missingData || []).length ? <ul className="list-disc space-y-1 pl-5 text-sm text-slate-700">{investigation.missingData.map(item => <li key={item}>{item}</li>)}</ul> : <p className="text-sm text-emerald-700">当前调查所需的关键数据项已覆盖。</p>}
+              </div>
+            </div>
+            {experimentRows.length > 0 && (
+              <div className="mt-4">
+                <h4 className="mb-2 text-sm font-semibold text-slate-900">下一步验证实验</h4>
+                <DataTable rows={experimentRows} keyField="candidateId" columns={[
+                  { key: "variableCode", label: "可控变量" },
+                  { key: "designLabel", label: "最低设计" },
+                  { key: "blockingLabel", label: "区组因素" },
+                  { key: "rationale", label: "验证方法" },
+                ]} />
+              </div>
+            )}
+            <Alert tone="warning" title="结论边界">{investigation?.conclusionGuardrail || "当前结果只能作为待验证假设。"}</Alert>
+          </Card>
           <Card title="周期概况">
             <DataTable
               rows={comparedCycles}
@@ -2674,6 +2777,8 @@ export function DataQualityPage() {
   const objects = useApi(`/api/v1/data-objects?${objectQuery}`);
   const rates = baseline.data?.rates || [];
   const contexts = baseline.data?.contextFields || [];
+  const contextFactors = baseline.data?.contextFactors || [];
+  const factorOverlaps = baseline.data?.contextFactorOverlaps || [];
   const exclusions = baseline.data?.exclusions || [];
   const objectRows = extractRows(objects.data);
   const rate = code => rates.find(item => item.code === code);
@@ -2681,6 +2786,19 @@ export function DataQualityPage() {
     const value = rate(code)?.rate;
     return value == null ? "—" : `${Math.round(Number(value) * 100)}%`;
   };
+  const factorNames = Object.fromEntries(contextFactors.map(item => [item.field, item.name]));
+  const factorRows = contextFactors.flatMap(factor => (factor.levels || []).map(level => ({
+    ...level,
+    field: factor.field,
+    factorName: factor.name,
+    distinctLevelCount: factor.distinctLevelCount,
+  })));
+  const overlapLabel = value => ({
+    overlapping: "可比较",
+    limited: "有限重叠",
+    confounded: "完全混杂",
+    insufficient_levels: "水平不足",
+  }[value] || value || "未知");
   const loading = baseline.loading || objects.loading;
   const error = baseline.error || objects.error;
   return (
@@ -2732,6 +2850,18 @@ export function DataQualityPage() {
               ) : <EmptyState title="没有准入缺口" description="当前分析范围内的运行全部满足正式准入规则。" />}
             </Card>
           </div>
+          <Card title="时间、顺序与上送质量" description="时钟偏差按设备源时间与 Edge 记录时间计算；上送延迟按 Edge 记录到 Platform 摄入计算，因此会真实包含断网积压。">
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              <Metric label="重复时间戳" value={formatInteger(baseline.data?.duplicateTimestampCount)} hint="累计被去重的采样" />
+              <Metric label="晚到或乱序" value={formatInteger(baseline.data?.outOfOrderCount)} hint="按摄入顺序检测" />
+              <Metric label="源序列缺口" value={formatInteger(baseline.data?.sequenceGapCount)} hint="设备源序号不连续" />
+              <Metric label="最大采样空窗" value={baseline.data?.maximumSampleGapMs == null ? "—" : formatDuration(baseline.data.maximumSampleGapMs)} />
+              <Metric label="最大设备时钟偏差" value={baseline.data?.maximumAbsoluteSourceClockOffsetMs == null ? "—" : formatDuration(baseline.data.maximumAbsoluteSourceClockOffsetMs)} hint="源时间与 Edge 记录时间的绝对差" />
+              <Metric label="最差运行 P95 上送延迟" value={baseline.data?.worstRunP95PlatformIngestLatencyMs == null ? "—" : formatDuration(baseline.data.worstRunP95PlatformIngestLatencyMs)} hint="包含离线缓存后的补传" />
+              <Metric label="最大上送延迟" value={baseline.data?.maximumPlatformIngestLatencyMs == null ? "—" : formatDuration(baseline.data.maximumPlatformIngestLatencyMs)} />
+              <Metric label="负上送延迟异常" value={formatInteger(baseline.data?.negativePlatformIngestLatencyCount)} hint="Platform 时间早于 Edge 超过 1 秒" />
+            </div>
+          </Card>
           <Card title="上下文字段覆盖" description="设备与运行身份是准入必需字段；材料、工装和维护校准字段先用于追溯与分层。">
             <DataTable
               rows={contexts}
@@ -2743,6 +2873,42 @@ export function DataQualityPage() {
               ]}
             />
           </Card>
+          <div className="grid gap-5 xl:grid-cols-2">
+            <Card title="上下文分层统计" description="按设备、工装和材料批次展示运行、过程完整性和质量结果；这里只描述观察事实，不直接宣称因果。">
+              {factorRows.length ? (
+                <DataTable
+                  rows={factorRows}
+                  getRowKey={row => `${row.field}:${row.value}`}
+                  columns={[
+                    { key: "factorName", label: "因素" },
+                    { key: "value", label: "水平" },
+                    { key: "runCount", label: "运行", render: formatInteger },
+                    { key: "processCompleteRunCount", label: "过程完整", render: formatInteger },
+                    { key: "qualityLinkedRunCount", label: "已质检", render: formatInteger },
+                    { key: "quality", label: "质量结果", render: (_, row) => `合格 ${row.passRunCount} · 不合格 ${row.failRunCount} · 不确定 ${row.inconclusiveRunCount}` },
+                    { key: "meanDurationMs", label: "平均周期", render: value => value == null ? "—" : formatDuration(value) },
+                  ]}
+                />
+              ) : <EmptyState title="暂无可分层上下文" description="采集到设备、工装或材料批次后，这里会按实际水平汇总。" />}
+            </Card>
+            <Card title="因素重叠与混杂" description="重叠度表示实际出现的因素组合占理论组合的比例；完全绑定的因素无法仅凭观察数据拆分影响。">
+              <div className="mb-4">
+                <Metric label="不可辨识混杂" value={formatInteger(baseline.data?.unidentifiableConfoundingCount)} hint="标记为完全混杂的因素对" />
+              </div>
+              <DataTable
+                rows={factorOverlaps}
+                getRowKey={row => `${row.leftField}:${row.rightField}`}
+                columns={[
+                  { key: "leftField", label: "因素 A", render: value => factorNames[value] || value },
+                  { key: "rightField", label: "因素 B", render: value => factorNames[value] || value },
+                  { key: "levels", label: "水平数", render: (_, row) => `${row.leftLevelCount} × ${row.rightLevelCount}` },
+                  { key: "combinations", label: "组合覆盖", render: (_, row) => `${row.observedCombinationCount}/${row.possibleCombinationCount}` },
+                  { key: "overlapRate", label: "重叠度", render: value => value == null ? "—" : `${Math.round(Number(value) * 100)}%` },
+                  { key: "identifiability", label: "可辨识性", render: value => <Badge tone={value === "overlapping" ? "green" : value === "confounded" ? "red" : "yellow"}>{overlapLabel(value)}</Badge> },
+                ]}
+              />
+            </Card>
+          </div>
           <Card title="工业对象采样范围" description="用于定位具体设备的数据量、最近采样和最大间隔。">
             <DataTable
               rows={objectRows}
@@ -2763,6 +2929,14 @@ export function DataQualityPage() {
 }
 
 const registryPages = {
+  scenarios: {
+    kind: "scenarioPackage",
+    title: "场景包", description: "版本化组合工艺模型、设备映射、分析、质量、上下文策略和场景规则。", endpoint: "/api/v1/scenario-packages", key: "packageId",
+    columns: [["packageId", "场景"], ["version", "版本"], ["name", "名称"], ["status", "状态"], ["updatedAt", "更新时间"]],
+    createLabel: "创建场景包",
+    template: { packageId: "", version: 1, name: "", description: "", status: "draft", dataModelId: "", dataModelVersion: 1, analysisPlanId: "", analysisPlanVersion: 1, acquisitionProfiles: [], qualityPlan: null, contextFields: [], constraints: [], knowledgeAssets: [], terminology: {}, updatedAt: "" },
+    deleteUrl: value => `/api/v1/scenario-packages/${encodeURIComponent(value.packageId)}/${value.version}`,
+  },
   processModels: {
     kind: "processModel",
     title: "工艺模型", description: "定义工艺变量、阶段号和配方参数结构，不包含 PLC 地址和采集频率。", endpoint: "/api/v1/process-data-models", key: "modelId",
@@ -3104,6 +3278,7 @@ function InspectionDefinitionEditor({ form, onChange, readOnly, validation, lock
 }
 
 export const ProcessDataModelsPage = () => <RegistryPage definition={registryPages.processModels} />;
+export const ScenarioPackagesPage = () => <RegistryPage definition={registryPages.scenarios} />;
 export const RecipeVersionsPage = () => <RegistryPage definition={registryPages.recipes} />;
 export const ProcessAnalysisPlansPage = () => <RegistryPage definition={registryPages.plans} />;
 export const InspectionDefinitionsPage = () => <RegistryPage definition={registryPages.definitions} />;
@@ -3180,6 +3355,7 @@ export function EdgeDetailPage() {
   const delivery = edge?.delivery;
   const outboxBacklog = Number(delivery?.pendingEventCount || 0);
   const shipped = Number(delivery?.eventsShipped || 0);
+  const staleSnapshotRejections = Number(acquisition.data?.staleSnapshotRejectionCount || 0);
   const recentLogs = extractRows(logs.data);
   const deliveryReady = runningTasks > 0 && processSignalCount > 0 && recipeMappingCount > 0 && lifecycleProfileCount > 0 && outboxBacklog === 0;
 
@@ -3248,11 +3424,12 @@ export function EdgeDetailPage() {
         </p>
       </Card>
       <Card title="上送恢复基线" description="状态由 Edge 随心跳主动上报，不要求 Platform 反向访问 OT 网络。">
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
           <Metric label="当前积压" value={formatInteger(outboxBacklog)} hint="未收到平台确认的事件" />
           <Metric label="累计已确认" value={formatInteger(shipped)} hint={`最后 ACK ${formatInteger(delivery?.lastAcknowledgedSequence)}`} />
           <Metric label="恢复次数" value={formatInteger(delivery?.recoveryCount)} hint={`${formatInteger(delivery?.consecutiveFailures)} 次连续失败`} />
           <Metric label="最近恢复耗时" value={delivery?.lastRecoveryDurationMs == null ? "—" : formatDuration(delivery.lastRecoveryDurationMs)} hint={delivery?.lastSuccessfulShipmentAt ? `恢复于 ${formatTime(delivery.lastSuccessfulShipmentAt)}` : "尚无恢复记录"} />
+          <Metric label="陈旧快照拒绝" value={formatInteger(staleSnapshotRejections)} hint={`${formatInteger(acquisition.data?.staleValueRejectionCount)} 个必填字段命中过期`} />
         </div>
         {delivery?.lastError && <Alert tone="warning">{delivery.lastError}</Alert>}
       </Card>
@@ -3284,6 +3461,7 @@ export function EdgeDetailPage() {
             { key: "_coverage", label: "采集内容", render: (_value, row) => row.profile ? `${row.profile.valueMappings?.length || 0} 信号 · ${row.profile.recipe?.parameterMappings?.length || 0} 配方参数${row.profile.lifecycle ? " · 周期" : ""}` : "—" },
             { key: "state", label: "状态", render: value => <StatusBadge value={value} /> },
             { key: "samplesCollected", label: "已采样", render: formatInteger },
+            { key: "staleSnapshotRejectionCount", label: "陈旧拒绝", render: (value, row) => `${formatInteger(value)} 次 · ${formatInteger(row.staleValueRejectionCount)} 字段` },
             { key: "observedIntervalMs", label: "实际间隔", render: value => formatDuration(value) },
             { key: "lastReadDurationMs", label: "最近读取耗时", render: value => formatDuration(value) },
             { key: "lastSuccessAt", label: "最近成功", render: formatTime },

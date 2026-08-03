@@ -122,6 +122,25 @@ public sealed class AcquisitionStatusTests
         Assert.True(status.IsSafeToReplace("furnace-a@1"));
     }
 
+    [Fact]
+    public void StaleSnapshotRejections_ShouldRemainVisiblePerTaskAndInAggregate()
+    {
+        var status = new AcquisitionStatus();
+        status.SetEnabled(true);
+        status.RegisterTask("furnace-a@1");
+
+        status.RecordStaleSnapshotRejection("furnace-a@1", 2, "snapshot stale");
+        status.RecordStaleSnapshotRejection("furnace-a@1", 1, "snapshot stale");
+
+        var snapshot = status.Get();
+        var task = Assert.Single(snapshot.Tasks);
+        Assert.Equal("degraded", task.State);
+        Assert.Equal(2, task.StaleSnapshotRejectionCount);
+        Assert.Equal(3, task.StaleValueRejectionCount);
+        Assert.Equal(2, snapshot.StaleSnapshotRejectionCount);
+        Assert.Equal(3, snapshot.StaleValueRejectionCount);
+    }
+
     private static AcquisitionDeployment Deployment(int version)
         => new()
         {

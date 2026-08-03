@@ -19,6 +19,7 @@ public sealed class ResearchObservationAssemblerTests
         {
             CorrelationId = runKey,
             MachineId = "FX3U-01",
+            EdgeIds = ["EDGE-WORKSHOP-A"],
             Context = new Dictionary<string, string>
             {
                 ["material_lot"] = "GLASS-LOT-07",
@@ -27,6 +28,9 @@ public sealed class ResearchObservationAssemblerTests
             StartedAt = DateTimeOffset.UtcNow.AddMinutes(-2),
             CompletedAt = DateTimeOffset.UtcNow,
             ProductSeries = "lens-a",
+            WorkpieceId = "lens-001",
+            ExternalBatchRef = "BATCH-07",
+            MaterialLotRef = "GLASS-LOT-07",
             ProcessDataQuality = new ProcessDataQualitySummary
             {
                 Status = ProcessDataStatuses.Available,
@@ -179,10 +183,16 @@ public sealed class ResearchObservationAssemblerTests
         var observation = Assert.Single(result.Observations);
         Assert.True(observation.ValidForOptimization);
         Assert.Equal(512, Assert.Single(observation.ActualFactors).Value);
+        Assert.True(observation.HasSettingDeviation);
+        Assert.Equal(7, observation.SettingDeviationFromPlan["temperature"]);
         Assert.Equal(0.38, observation.Outcomes["form"], 6);
         Assert.Equal(0.01, observation.ConstraintOutcomes["crack-safety"], 6);
         Assert.Equal(2.4, observation.ProcessFeatures["mold-temperature.cycle.overshoot"], 6);
         Assert.Equal("FX3U-01", observation.Context["machine_id"]);
+        Assert.Equal("EDGE-WORKSHOP-A", observation.Context["edge_ids"]);
+        Assert.Equal("BATCH-07", observation.Context["external_batch_ref"]);
+        Assert.Equal("lens-001", observation.Context["workpiece_id"]);
+        Assert.Equal("GLASS-LOT-07", observation.Context["material_lot_ref"]);
         Assert.Equal("GLASS-LOT-07", observation.Context["material_lot"]);
         Assert.Equal("MOLD-A", observation.Context["mold_id"]);
         Assert.Matches("^[a-f0-9]{64}$", observation.SourceContentHash);

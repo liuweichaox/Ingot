@@ -10,6 +10,16 @@ public sealed class ChatOptions
 
     public string ReasoningModel { get; set; } = "deterministic-v1";
 
+    /// <summary>
+    ///     OpenAI-compatible API root, for example http://model-host:8000/v1.
+    ///     Empty uses the provider SDK default endpoint.
+    /// </summary>
+    public string? BaseUrl { get; set; }
+
+    public bool ProbeOnStartup { get; set; } = true;
+
+    public int ProbeTimeoutSeconds { get; set; } = 10;
+
     public int MaxToolCalls { get; set; } = 8;
 
     public int MaxRunSeconds { get; set; } = 60;

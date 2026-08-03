@@ -7,6 +7,7 @@ const http = await readFile(new URL("../src/api/http.js", import.meta.url), "utf
 const ui = await readFile(new URL("../src/ui/components.jsx", import.meta.url), "utf8");
 const researchProjects = await readFile(new URL("../src/pages/ResearchProjectsPage.jsx", import.meta.url), "utf8");
 const researchAssets = await readFile(new URL("../src/pages/ResearchAssetsPage.jsx", import.meta.url), "utf8");
+const goldenQuestions = await readFile(new URL("../src/pages/GoldenQuestionsPage.jsx", import.meta.url), "utf8");
 
 test("operations retain server pagination and resumable live events", () => {
   assert.match(pages, /offset: String\(\(page - 1\) \* pageSize\)/);
@@ -34,6 +35,19 @@ test("data health exposes reproducible reliability baselines and strict admissio
   assert.match(pages, /analysis_admission/);
   assert.match(pages, /只认设备回读，不使用计划值/);
   assert.match(pages, /排除原因/);
+  assert.match(pages, /上下文分层统计/);
+  assert.match(pages, /因素重叠与混杂/);
+  assert.match(pages, /unidentifiableConfoundingCount/);
+  assert.match(pages, /完全混杂/);
+  assert.match(pages, /时间、顺序与上送质量/);
+  assert.match(pages, /maximumAbsoluteSourceClockOffsetMs/);
+  assert.match(pages, /worstRunP95PlatformIngestLatencyMs/);
+  assert.match(pages, /陈旧快照拒绝/);
+  assert.match(pages, /跨设备批次编号/);
+  assert.match(pages, /externalBatchRef/);
+  assert.match(pages, /多个设备填写相同生产批次/);
+  assert.match(researchProjects, /可跨节点多选/);
+  assert.match(researchProjects, /cycle\.edgeIds/);
 });
 
 test("configuration registries keep create, version, retire, and draft deletion workflows", () => {
@@ -124,6 +138,10 @@ test("cycle comparison submits the selection contract and renders business resul
   assert.match(pages, /correlationId=\$\{encodeURIComponent\(baseline\)\}&limit=1/);
   assert.match(pages, /title="周期概况"/);
   assert.match(pages, /title="质量候选原因"/);
+  assert.match(pages, /title="确定性调查报告"/);
+  assert.match(pages, /首次阶段偏离/);
+  assert.match(pages, /反证与边界/);
+  assert.match(pages, /下一步验证实验/);
   assert.match(pages, /result\?\.diagnosis\?\.candidates/);
   assert.match(pages, /实际配方/);
   assert.match(pages, /可直接实验/);
@@ -189,6 +207,8 @@ test("research projects expose the evidence-backed experiment and process-window
 test("research project setup reuses configured industrial definitions instead of retyping identifiers", () => {
   assert.match(researchProjects, /\/api\/v1\/inspection-definitions/);
   assert.match(researchProjects, /\/api\/v1\/process-data-models/);
+  assert.match(researchProjects, /\/api\/v1\/scenario-packages/);
+  assert.match(researchProjects, /scenario_package/);
   assert.match(researchProjects, /label="质量指标"/);
   assert.match(researchProjects, /label="可控配方参数"/);
   assert.match(researchProjects, /选择质量指标后自动带入/);
@@ -200,6 +220,7 @@ test("research projects turn optimization into the existing experiment workflow"
   assert.match(researchProjects, /batchSize:\s*2/);
   assert.match(researchProjects, /智能设计下一组实验/);
   assert.match(researchProjects, /现有流程审核后执行/);
+  assert.doesNotMatch(researchProjects, /processProfile|optical-lens-molding-v1/);
   assert.doesNotMatch(researchProjects, /optimization-observations|optimization-suggestions/);
 });
 
@@ -213,6 +234,77 @@ test("research assets retain mechanism fusion, project-scoped knowledge, and dat
   assert.match(researchAssets, /\/api\/v1\/research-projects\?limit=100/);
   assert.match(researchAssets, /encodeURIComponent\(projectId\)/);
   assert.match(researchAssets, /知识来源严格按研发项目隔离/);
+});
+
+test("shadow recommendations preregister engineer choices and freeze source outcomes", () => {
+  assert.match(researchProjects, /登记影子选择/);
+  assert.match(researchProjects, /shadow-decision/);
+  assert.match(researchProjects, /actualRunKey/);
+  assert.match(researchProjects, /engineerSelectedFactors/);
+  assert.match(researchProjects, /rejectionReason/);
+  assert.match(researchProjects, /siteLimitations/);
+  assert.match(researchProjects, /contextSnapshot/);
+  assert.match(researchProjects, /materialize-outcome/);
+  assert.match(researchProjects, /模型建议不会下发设备/);
+  assert.match(researchProjects, /实际设置偏差/);
+  assert.match(researchProjects, /影子评估触发停止信号/);
+  assert.match(researchProjects, /预测区间覆盖/);
+  assert.match(researchProjects, /上下文变化/);
+  assert.match(researchProjects, /参数外推/);
+  assert.match(researchProjects, /安全事件/);
+});
+
+test("historical replay reports preserve production-equivalent comparisons and failures", () => {
+  assert.match(researchProjects, /运行历史回放/);
+  assert.match(researchProjects, /historical-replays/);
+  assert.match(researchProjects, /生产等价历史回放/);
+  assert.match(researchProjects, /历史原顺序/);
+  assert.match(researchProjects, /优化器中位数/);
+  assert.match(researchProjects, /随机中位数/);
+  assert.match(researchProjects, /优化器安全违规/);
+  assert.match(researchProjects, /失败与限制/);
+  assert.match(researchProjects, /审核完整报告/);
+});
+
+test("controlled online suggestions fail closed and require a frozen engineer decision", () => {
+  assert.match(researchProjects, /\/online-admission/);
+  assert.match(researchProjects, /mode === "controlled"/);
+  assert.match(researchProjects, /batchSize: 1, replicatesPerCondition: 1/);
+  assert.match(researchProjects, /controlled-decision/);
+  assert.match(researchProjects, /接受 \/ 修改 \/ 拒绝/);
+  assert.match(researchProjects, /这不是自动控制命令/);
+  assert.match(researchProjects, /任何门禁失败均按失败关闭/);
+  assert.match(researchProjects, /建议值和工程师批准值均已保留/);
+  assert.match(researchProjects, /rollback-drills/);
+  assert.match(researchProjects, /纸面回退方案不能放行受控在线/);
+  assert.match(researchProjects, /证据 SHA-256/);
+  assert.match(researchProjects, /停止与回退演练已由另一名工程师复核并冻结/);
+  assert.match(researchProjects, /受控在线监控/);
+  assert.match(researchProjects, /已停止生成下一条建议/);
+  assert.match(researchProjects, /在线与影子残差的差异只作为停止与复核信号/);
+});
+
+test("transfer evaluation compares target evidence with a cold-start control and exposes negative transfer", () => {
+  assert.match(researchProjects, /\/transfer-sources/);
+  assert.match(researchProjects, /\/transfer-assessments/);
+  assert.match(researchProjects, /迁移组实测结果/);
+  assert.match(researchProjects, /从零对照组实测结果/);
+  assert.match(researchProjects, /相对从零收益/);
+  assert.match(researchProjects, /检测到负迁移/);
+  assert.match(researchProjects, /不会向设备下发源参数/);
+  assert.match(researchProjects, /单次有收益也不能直接沉淀为通用知识/);
+  assert.match(researchProjects, /transferAssessmentId/);
+});
+
+test("engineer golden questions freeze reviewed evidence and evaluate actual agent runs", () => {
+  const page = goldenQuestions;
+  assert.match(page, /录入真实问题/);
+  assert.match(page, /expectedFacts/);
+  assert.match(page, /expectedRecordReferences/);
+  assert.match(page, /:review/);
+  assert.match(page, /:evaluate/);
+  assert.match(page, /Agent 运行 ID/);
+  assert.doesNotMatch(page, /JSON\.stringify\(form/);
 });
 
 test("event subscriptions retain create, edit, enable, signed-secret, and delete operations", () => {

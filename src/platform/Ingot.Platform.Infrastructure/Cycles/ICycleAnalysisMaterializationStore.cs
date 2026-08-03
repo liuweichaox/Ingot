@@ -8,14 +8,12 @@ public interface ICycleAnalysisMaterializationStore
 
     Task<CycleAnalysisSnapshot?> TryLoadAsync(
         CycleAnalysisMaterializationKey key,
-        long sourceMaxIngestId,
-        int sourceEventCount,
+        CycleAnalysisSourceFingerprint source,
         CancellationToken ct = default);
 
     Task<CycleAnalysisSnapshot> SaveAsync(
         CycleAnalysisMaterializationKey key,
-        long sourceMaxIngestId,
-        int sourceEventCount,
+        CycleAnalysisSourceFingerprint source,
         WholeCycleAnalysisResult analysis,
         CancellationToken ct = default);
 
@@ -68,8 +66,13 @@ public sealed record CycleAnalysisMaterializationKey(
     string AnalysisPlanId,
     int AnalysisPlanVersion);
 
+public sealed record CycleAnalysisSourceFingerprint(
+    long MinIngestId,
+    long MaxIngestId,
+    int EventCount,
+    string ContentHash);
+
 public sealed record CycleAnalysisSnapshot(
     WholeCycleAnalysisResult Analysis,
     DateTimeOffset ComputedAt,
-    long SourceMaxIngestId,
-    int SourceEventCount);
+    CycleAnalysisSourceFingerprint Source);

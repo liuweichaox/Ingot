@@ -41,6 +41,14 @@ Change at least:
 
 The repository ignores `.env`; never commit real credentials.
 
+### On-premises model service
+
+When Chat is enabled, the model server must expose an OpenAI-compatible `/v1` API. Configure
+`INGOT_CHAT_BASE_URL`, `INGOT_CHAT_FAST_MODEL`, `INGOT_CHAT_REASONING_MODEL`, and
+`OPENAI_API_KEY`; the token may be an internal token issued by the local service. Platform probes
+`/v1/models` during startup and becomes ready only when both configured model IDs are present. The
+model receives only validated read-only tool results whose content hashes are retained for audit.
+
 ## Start
 
 ```bash

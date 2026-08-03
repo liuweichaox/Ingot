@@ -53,7 +53,9 @@ public sealed class AcquisitionStatus
                 deployments.Select(static item => item.LastError).FirstOrDefault(static value => value is not null) ??
                 tasks.Select(static item => item.LastError).FirstOrDefault(static value => value is not null),
                 tasks,
-                deployments);
+                deployments,
+                tasks.Sum(static item => item.StaleSnapshotRejectionCount),
+                tasks.Sum(static item => item.StaleValueRejectionCount));
         }
     }
 
@@ -305,6 +307,25 @@ public sealed class AcquisitionStatus
                     LastError = error
                 };
             }
+        }
+    }
+
+    public void RecordStaleSnapshotRejection(
+        string configurationKey,
+        int staleValueCount,
+        string error)
+    {
+        lock (_gate)
+        {
+            if (!_tasks.TryGetValue(configurationKey, out var task))
+                return;
+            _tasks[configurationKey] = task with
+            {
+                State = "degraded",
+                LastError = error,
+                StaleSnapshotRejectionCount = task.StaleSnapshotRejectionCount + 1,
+                StaleValueRejectionCount = task.StaleValueRejectionCount + Math.Max(0, staleValueCount)
+            };
         }
     }
 

@@ -93,6 +93,8 @@ public interface IModelClient
 
     string Model { get; }
 
+    string ModelFor(ModelRole role) => Model;
+
     Task<ModelCallResult<AnalysisPlan>> ResolveIntentAsync(
         CreateChatRunRequest request,
         IReadOnlyCollection<AnalysisToolDefinition> tools,

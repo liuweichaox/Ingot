@@ -167,8 +167,13 @@ public class MqttSnapshotAssemblerTests
         Assert.True(assembler.TryBuildSnapshot(Now.AddSeconds(20), out _, out _));
 
         assembler.Ingest("topic/a", Json("""{"a":3}"""), Now.AddSeconds(40));
-        Assert.False(assembler.TryBuildSnapshot(Now.AddSeconds(40), out _, out var missing));
+        Assert.False(assembler.TryBuildSnapshot(
+            Now.AddSeconds(40),
+            out _,
+            out var missing,
+            out var staleValueCount));
         Assert.Contains("已超过 30 秒未更新", missing);
+        Assert.Equal(1, staleValueCount);
     }
 
     [Fact]

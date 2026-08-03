@@ -26,6 +26,10 @@ public sealed class AgentRuntimeTests
         Assert.Equal(RunPurposes.ReadOnlyAnalysis, completed.Purpose);
         Assert.NotNull(completed.Answer);
         Assert.Equal("check_data_quality", Assert.Single(completed.ToolInvocations).Tool);
+        var toolResult = Assert.Single(completed.ToolResults);
+        Assert.Equal("check_data_quality", toolResult.Tool);
+        Assert.Equal(64, toolResult.ContentHash.Length);
+        Assert.NotEqual(default, toolResult.VerifiedAt);
         Assert.Single(completed.Answer!.RelatedRecords);
         var events = await store.ReadEventsAsync(created.RunId, 0, 100);
         Assert.Contains(events, item => item.Type == AgentStreamEventTypes.PlanCreated);

@@ -19,7 +19,9 @@ public sealed class CyclesController(
         [FromQuery] string? productCode,
         [FromQuery] string? recipeId,
         [FromQuery] string? machineId,
+        [FromQuery] string? edgeId,
         [FromQuery] string? workpieceId,
+        [FromQuery] string? externalBatchRef,
         [FromQuery] string? correlationId,
         [FromQuery] string? status,
         [FromQuery] string? search,
@@ -56,7 +58,9 @@ public sealed class CyclesController(
             limit,
             offset,
             search,
-            ct).ConfigureAwait(false);
+            ct,
+            edgeId,
+            externalBatchRef).ConfigureAwait(false);
         return Ok(result);
     }
 

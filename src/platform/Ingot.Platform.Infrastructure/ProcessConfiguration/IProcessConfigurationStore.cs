@@ -20,4 +20,13 @@ public interface IProcessConfigurationStore
     Task<IReadOnlyList<ProcessAnalysisPlan>> ListAnalysisPlansAsync(CancellationToken ct = default);
     Task<ProcessAnalysisPlan?> GetAnalysisPlanAsync(string planId, int version, CancellationToken ct = default);
     Task<bool> DeleteAnalysisPlanAsync(string planId, int version, CancellationToken ct = default);
+
+    Task<ScenarioPackage> UpsertScenarioPackageAsync(ScenarioPackage value, CancellationToken ct = default)
+        => throw new NotSupportedException("当前配置存储不支持场景包。");
+    Task<IReadOnlyList<ScenarioPackage>> ListScenarioPackagesAsync(CancellationToken ct = default)
+        => Task.FromResult<IReadOnlyList<ScenarioPackage>>([]);
+    Task<ScenarioPackage?> GetScenarioPackageAsync(string packageId, int version, CancellationToken ct = default)
+        => Task.FromResult<ScenarioPackage?>(null);
+    Task<bool> DeleteScenarioPackageAsync(string packageId, int version, CancellationToken ct = default)
+        => Task.FromResult(false);
 }

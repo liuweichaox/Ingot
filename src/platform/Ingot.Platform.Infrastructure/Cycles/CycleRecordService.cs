@@ -31,9 +31,11 @@ public sealed class CycleRecordService(
         int limit,
         int offset = 0,
         string? search = null,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        string? edgeId = null,
+        string? externalBatchRef = null)
     {
-        var context = BuildContext(productSeries, productCode, recipeId, workpieceId);
+        var context = BuildContext(productSeries, productCode, recipeId, workpieceId, externalBatchRef);
         var lifecycle = new List<PlatformProductionEvent>();
         if (!string.IsNullOrWhiteSpace(correlationId))
         {
@@ -44,6 +46,7 @@ public sealed class CycleRecordService(
         {
             var baseQuery = new PlatformEventQuery
             {
+                EdgeId = Normalize(edgeId),
                 SubjectId = Normalize(machineId),
                 From = from,
                 To = to,
@@ -186,6 +189,10 @@ public sealed class CycleRecordService(
         {
             CorrelationId = correlationId,
             MachineId = first.Event.Subject.Id,
+            EdgeIds = ordered.Select(static row => row.EdgeId)
+                .Distinct(StringComparer.Ordinal)
+                .Order(StringComparer.Ordinal)
+                .ToArray(),
             Status = lifecycleComplete ? "completed" : started is not null ? "active" : "incomplete",
             HasStarted = started is not null,
             HasCompleted = completed is not null,
@@ -257,6 +264,7 @@ public sealed class CycleRecordService(
                 ct).ConfigureAwait(false);
         }
 
+        var source = CycleAnalysisMaterializer.CreateSourceFingerprint(ordered);
         return new MaterializedCycleAnalysis(
             _wholeCycleAnalysis.Analyze(
                 ordered,
@@ -268,8 +276,10 @@ public sealed class CycleRecordService(
             {
                 Status = "query-time",
                 AlgorithmVersion = WholeCycleAnalysisEngine.AlgorithmVersion,
-                SourceMaxIngestId = ordered.Length == 0 ? 0 : ordered.Max(static row => row.IngestId),
-                SourceEventCount = ordered.Length
+                SourceMinIngestId = source.MinIngestId,
+                SourceMaxIngestId = source.MaxIngestId,
+                SourceEventCount = source.EventCount,
+                SourceContentHash = source.ContentHash
             });
     }
 
@@ -336,13 +346,15 @@ public sealed class CycleRecordService(
         string? productSeries,
         string? productCode,
         string? recipeId,
-        string? workpieceId)
+        string? workpieceId,
+        string? externalBatchRef)
     {
         var result = new Dictionary<string, string>(StringComparer.Ordinal);
         Add(result, "product_series", productSeries);
         Add(result, "product_code", productCode);
         Add(result, "recipe_id", recipeId);
         Add(result, "workpiece_id", workpieceId);
+        Add(result, "external_batch_ref", externalBatchRef);
         return result;
     }
 

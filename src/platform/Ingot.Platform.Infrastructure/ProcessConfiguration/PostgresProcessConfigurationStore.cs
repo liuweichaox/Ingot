@@ -69,6 +69,21 @@ public sealed class PostgresProcessConfigurationStore : IProcessConfigurationSto
                 );
                 CREATE INDEX IF NOT EXISTS idx_process_analysis_plans_model
                   ON process_analysis_plans(data_model_id, data_model_version);
+
+                CREATE TABLE IF NOT EXISTS scenario_packages (
+                  package_id TEXT NOT NULL,
+                  version INTEGER NOT NULL,
+                  data_model_id TEXT NOT NULL,
+                  data_model_version INTEGER NOT NULL,
+                  status TEXT NOT NULL,
+                  payload JSONB NOT NULL,
+                  updated_at TIMESTAMPTZ NOT NULL,
+                  PRIMARY KEY (package_id, version),
+                  CHECK (version > 0),
+                  CHECK (data_model_version > 0)
+                );
+                CREATE INDEX IF NOT EXISTS idx_scenario_packages_model
+                  ON scenario_packages(data_model_id, data_model_version);
                 """);
             await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
             _initialized = true;
@@ -120,6 +135,20 @@ public sealed class PostgresProcessConfigurationStore : IProcessConfigurationSto
 
     public Task<bool> DeleteAnalysisPlanAsync(string planId, int version, CancellationToken ct = default)
         => DeleteAsync("process_analysis_plans", "plan_id", planId, version, ct);
+
+    public Task<ScenarioPackage> UpsertScenarioPackageAsync(ScenarioPackage value, CancellationToken ct = default)
+        => UpsertAsync(
+            "scenario_packages", "package_id", value.PackageId, value.Version, value.Status,
+            value.DataModelId, value.DataModelVersion, value, value.UpdatedAt, ct);
+
+    public Task<IReadOnlyList<ScenarioPackage>> ListScenarioPackagesAsync(CancellationToken ct = default)
+        => ListAsync<ScenarioPackage>("scenario_packages", "ORDER BY package_id, version DESC", ct);
+
+    public Task<ScenarioPackage?> GetScenarioPackageAsync(string packageId, int version, CancellationToken ct = default)
+        => GetAsync<ScenarioPackage>("scenario_packages", "package_id", packageId, version, ct);
+
+    public Task<bool> DeleteScenarioPackageAsync(string packageId, int version, CancellationToken ct = default)
+        => DeleteAsync("scenario_packages", "package_id", packageId, version, ct);
 
     private async Task<T> UpsertAsync<T>(
         string table,

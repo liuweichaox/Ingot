@@ -12,6 +12,7 @@ import json
 import os
 import uuid
 import urllib.parse
+import urllib.error
 import urllib.request
 from datetime import datetime, timezone
 
@@ -19,7 +20,11 @@ from datetime import datetime, timezone
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--api", default="http://127.0.0.1:8000")
-    parser.add_argument("--run-prefix", default="lens-source-demo")
+    parser.add_argument("--machine-id", default="OPTICAL-MOLD-SIM-01")
+    parser.add_argument(
+        "--operation-run-id",
+        help="Submit the inspection for one immutable operation run, as a real station would.",
+    )
     parser.add_argument("--maximum-run", type=int, default=24)
     parser.add_argument("--project-id")
     parser.add_argument("--experiment-id")
@@ -31,8 +36,14 @@ def request(url: str, payload: object | None = None) -> object:
     call = urllib.request.Request(url, data=body, method="POST" if body else "GET")
     if body:
         call.add_header("Content-Type", "application/json")
-    with urllib.request.urlopen(call, timeout=30) as response:
-        return json.loads(response.read().decode("utf-8"))
+    try:
+        with urllib.request.urlopen(call, timeout=30) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as error:
+        detail = error.read().decode("utf-8", errors="replace")
+        raise RuntimeError(
+            f"platform request failed with HTTP {error.code}: {detail}"
+        ) from error
 
 
 def uuid7() -> str:
@@ -42,6 +53,19 @@ def uuid7() -> str:
     raw = (timestamp_ms << 80) | (0x7 << 76) | ((entropy >> 68) & 0xFFF) << 64
     raw |= (0b10 << 62) | (entropy & ((1 << 62) - 1))
     return str(uuid.UUID(int=raw))
+
+
+def read_source_cycle_number(detail: dict[str, object]) -> int | None:
+    for item in detail.get("events", []):
+        context = item.get("event", {}).get("context", {})
+        raw = context.get("source_cycle_no")
+        if raw is None:
+            continue
+        try:
+            return int(raw)
+        except (TypeError, ValueError):
+            return None
+    return None
 
 
 def load_experiment_runs(api: str, project_id: str, experiment_id: str) -> dict[str, float]:
@@ -89,9 +113,14 @@ def main() -> None:
             matches = request(f"{api}/api/v1/cycles?{query}").get("data", [])
             if matches and matches[0].get("status") == "completed":
                 cycles.append(matches[0])
+    elif args.operation_run_id:
+        query = urllib.parse.urlencode(
+            {"correlationId": args.operation_run_id, "limit": "1"}
+        )
+        cycles = request(f"{api}/api/v1/cycles?{query}").get("data", [])
     else:
         query = urllib.parse.urlencode(
-            {"status": "completed", "limit": "200", "search": args.run_prefix}
+            {"status": "completed", "limit": "200", "machineId": args.machine_id}
         )
         cycles = request(f"{api}/api/v1/cycles?{query}").get("data", [])
     submitted = 0
@@ -106,9 +135,9 @@ def main() -> None:
             surface_form_error = round(max(0.065, 0.23 - 0.031 * adjustment), 6)
             failed = center_deviation > 0.015 or surface_form_error > 0.15
         else:
-            try:
-                ordinal = int(run_id.rsplit("-", 1)[1])
-            except (ValueError, IndexError):
+            detail = request(f"{api}/api/v1/cycles/{urllib.parse.quote(run_id)}")
+            ordinal = read_source_cycle_number(detail)
+            if ordinal is None:
                 continue
             if ordinal > args.maximum_run:
                 continue

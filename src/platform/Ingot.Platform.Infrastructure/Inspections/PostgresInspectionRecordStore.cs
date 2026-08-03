@@ -35,7 +35,7 @@ public sealed class PostgresInspectionRecordStore : IInspectionRecordStore, IAsy
                 """
                 CREATE TABLE IF NOT EXISTS inspection_records (
                   record_id           UUID PRIMARY KEY,
-                  workpiece_id        TEXT NOT NULL,
+                  workpiece_id        TEXT,
                   operation_run_id    TEXT NOT NULL,
                   definition_code     TEXT NOT NULL,
                   definition_version  INTEGER NOT NULL,
@@ -65,6 +65,7 @@ public sealed class PostgresInspectionRecordStore : IInspectionRecordStore, IAsy
                   ON inspection_records(outcome, measured_at DESC);
                 ALTER TABLE inspection_records ADD COLUMN IF NOT EXISTS supersedes_record_id UUID;
                 ALTER TABLE inspection_records ADD COLUMN IF NOT EXISTS correction_reason TEXT;
+                ALTER TABLE inspection_records ALTER COLUMN workpiece_id DROP NOT NULL;
                 CREATE UNIQUE INDEX IF NOT EXISTS idx_inspection_records_one_correction
                   ON inspection_records(supersedes_record_id) WHERE supersedes_record_id IS NOT NULL;
 
@@ -326,7 +327,10 @@ public sealed class PostgresInspectionRecordStore : IInspectionRecordStore, IAsy
         string payloadHash)
     {
         command.Parameters.AddWithValue("record_id", request.RecordId);
-        command.Parameters.AddWithValue("workpiece_id", request.WorkpieceId);
+        command.Parameters.AddWithValue(
+            "workpiece_id",
+            NpgsqlDbType.Text,
+            (object?)request.WorkpieceId ?? DBNull.Value);
         command.Parameters.AddWithValue("operation_run_id", request.OperationRunId);
         command.Parameters.AddWithValue("definition_code", request.DefinitionCode);
         command.Parameters.AddWithValue("definition_version", request.DefinitionVersion);
@@ -368,7 +372,7 @@ public sealed class PostgresInspectionRecordStore : IInspectionRecordStore, IAsy
             new InspectionRecord
             {
                 RecordId = reader.GetGuid(0),
-                WorkpieceId = reader.GetString(1),
+                WorkpieceId = reader.IsDBNull(1) ? null : reader.GetString(1),
                 OperationRunId = reader.GetString(2),
                 DefinitionCode = reader.GetString(3),
                 DefinitionVersion = reader.GetInt32(4),

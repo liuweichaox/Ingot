@@ -44,6 +44,18 @@ public static class ProductionConfigurationValidator
             RequireValue(configuration, "Chat:FastModel", errors);
             RequireValue(configuration, "Chat:ReasoningModel", errors);
             RequireValue(configuration, "OPENAI_API_KEY", errors);
+            var baseUrl = configuration["Chat:BaseUrl"];
+            if (!string.IsNullOrWhiteSpace(baseUrl))
+            {
+                try
+                {
+                    _ = Ingot.Agent.Providers.OpenAiCompatibleCapabilityProbe.BuildModelsUri(baseUrl);
+                }
+                catch (InvalidOperationException exception)
+                {
+                    errors.Add(exception.Message);
+                }
+            }
             RequireChatDataScopes(configuration, errors);
         }
 

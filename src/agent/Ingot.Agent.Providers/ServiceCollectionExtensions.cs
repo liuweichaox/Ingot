@@ -15,7 +15,11 @@ public static class ServiceCollectionExtensions
         var chatProvider = configuration["Chat:Provider"];
         if (configuration.GetValue<bool>("Chat:Enabled") &&
             string.Equals(chatProvider, "OpenAI", StringComparison.OrdinalIgnoreCase))
+        {
             services.AddSingleton<IModelClient, ChatFrameworkOpenAiModelClient>();
+            services.AddHttpClient(nameof(OpenAiCompatibleCapabilityProbe));
+            services.AddHostedService<OpenAiCompatibleCapabilityProbe>();
+        }
         return services;
     }
 }

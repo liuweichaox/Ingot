@@ -14,7 +14,7 @@ public static partial class InspectionRecordValidator
             return Fail("请求不能为空。", out error);
         if (request.RecordId == Guid.Empty || request.RecordId.Version != 7)
             return Fail("RecordId 必须是 UUIDv7。", out error);
-        if (!TryNormalizeId(request.WorkpieceId, "WorkpieceId", out var workpieceId, out error) ||
+        if (!TryNormalizeOptionalId(request.WorkpieceId, "WorkpieceId", out var workpieceId, out error) ||
             !TryNormalizeId(request.OperationRunId, "OperationRunId", out var operationRunId, out error) ||
             !TryNormalizeCode(request.DefinitionCode, "DefinitionCode", out var definitionCode, out error) ||
             !TryNormalizeId(request.SubmittedBy, "SubmittedBy", out var submittedBy, out error))
@@ -72,7 +72,7 @@ public static partial class InspectionRecordValidator
 
         normalized = request with
         {
-            WorkpieceId = workpieceId!,
+            WorkpieceId = workpieceId,
             OperationRunId = operationRunId!,
             DefinitionCode = definitionCode!,
             MeasuredAt = request.MeasuredAt.ToUniversalTime(),
@@ -234,6 +234,18 @@ public static partial class InspectionRecordValidator
         if (normalized is null || !IdPattern().IsMatch(normalized))
             return Fail($"{name} 只能包含字母、数字、点、下划线、斜杠和连字符，长度为 1 到 128。", out error);
         return Succeed(out error);
+    }
+
+    private static bool TryNormalizeOptionalId(
+        string? value,
+        string name,
+        out string? normalized,
+        out string error)
+    {
+        normalized = NormalizeOptional(value);
+        return normalized is null || IdPattern().IsMatch(normalized)
+            ? Succeed(out error)
+            : Fail($"{name} 只能包含字母、数字、点、下划线、斜杠和连字符，长度为 1 到 128。", out error);
     }
 
     private static bool TryNormalizeCode(string? value, string name, out string? normalized, out string error)

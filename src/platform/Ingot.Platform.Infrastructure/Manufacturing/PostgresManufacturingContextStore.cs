@@ -815,7 +815,12 @@ public sealed class PostgresManufacturingContextStore : IManufacturingContextSto
            string.Equals(left.Source, right.Source, StringComparison.Ordinal) &&
            string.Equals(left.ExternalOrderRef, right.ExternalOrderRef, StringComparison.Ordinal) &&
            string.Equals(left.ExternalBatchRef, right.ExternalBatchRef, StringComparison.Ordinal) &&
-           string.Equals(left.MaterialLotRef, right.MaterialLotRef, StringComparison.Ordinal);
+           string.Equals(left.MaterialLotRef, right.MaterialLotRef, StringComparison.Ordinal) &&
+           string.Equals(left.MaterialSpecification, right.MaterialSpecification, StringComparison.Ordinal) &&
+           string.Equals(left.MaintenanceStatus, right.MaintenanceStatus, StringComparison.Ordinal) &&
+           string.Equals(left.CalibrationStatus, right.CalibrationStatus, StringComparison.Ordinal) &&
+           string.Equals(left.CalibrationRef, right.CalibrationRef, StringComparison.Ordinal) &&
+           left.CalibrationValidUntil == right.CalibrationValidUntil;
 
     private static async Task<ToolingInstallation?> GetByCommandIdAsync(
         NpgsqlConnection connection,

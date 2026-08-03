@@ -24,6 +24,7 @@ from ingot_optimizer import (
 from ingot_optimizer.botorch_engine import MODEL_VERSION
 from ingot_optimizer.diagnosis import FeatureSpec, diagnose
 from ingot_optimizer.feature_transforms import expand_inputs
+from ingot_optimizer.replay import replay_history_pool
 import numpy as np
 
 
@@ -149,6 +150,19 @@ class DiagnosisRequest(StrictModel):
     features: list[DiagnosticFeatureIn] = Field(min_length=1, max_length=500)
     observations: list[DiagnosticObservationIn] = Field(min_length=4, max_length=10_000)
     seed: int = Field(default=0, ge=0, le=2_147_483_647)
+
+
+class HistoricalReplayObservationIn(ObservationIn):
+    run_id: str | None = Field(default=None, max_length=240)
+    occurred_at: float | None = None
+
+
+class HistoricalReplayRequest(StrictModel):
+    campaign: CampaignIn
+    history: list[HistoricalReplayObservationIn] = Field(min_length=3, max_length=10_000)
+    budget: int | None = Field(default=None, ge=1, le=10_000)
+    n_seeds: int = Field(default=30, ge=1, le=100)
+    initial_observation_count: int = Field(default=3, ge=0, le=10_000)
 
 
 def _campaign_from_input(spec: CampaignIn) -> Campaign:
@@ -325,3 +339,45 @@ def create_diagnosis(request: DiagnosisRequest) -> dict:
         )
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
+
+
+@app.post("/v1/historical-replay")
+def create_historical_replay(request: HistoricalReplayRequest) -> dict:
+    try:
+        campaign = _campaign_from_input(request.campaign)
+        derived_features = [
+            DerivedFeature(
+                name=value.name,
+                operator=value.operator,
+                inputs=tuple(value.inputs),
+                normalization_offset=value.normalization_offset,
+                normalization_scale=value.normalization_scale,
+                epsilon=value.epsilon,
+            )
+            for value in request.campaign.derived_features
+        ]
+        expand_inputs(
+            np.full((1, campaign.dim), 0.5),
+            [value.name for value in campaign.variables],
+            [value.low for value in campaign.variables],
+            [value.high for value in campaign.variables],
+            derived_features,
+        )
+        history = [value.model_dump(exclude_none=True) for value in request.history]
+        result = replay_history_pool(
+            campaign,
+            history,
+            budget=request.budget,
+            n_seeds=request.n_seeds,
+            initial_observation_count=request.initial_observation_count,
+            derived_features=derived_features,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    return {
+        **result,
+        "feature_set_id": request.campaign.feature_set_id,
+        "feature_set_version": request.campaign.feature_set_version,
+        "derived_feature_count": len(request.campaign.derived_features),
+        "state_persisted": False,
+    }

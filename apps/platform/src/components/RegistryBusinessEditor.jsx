@@ -83,6 +83,31 @@ function analysisSignal(value = {}) {
   };
 }
 
+function versionedReference(value = {}) {
+  return { reference: modelValue(value.id, value.version) };
+}
+
+function scenarioContextField(value = {}) {
+  return {
+    fieldCode: value.fieldCode || "",
+    name: value.name || "",
+    mode: value.mode || "record-when-available",
+    minimumCoverage: value.minimumCoverage ?? "",
+    minimumFactorOverlap: value.minimumFactorOverlap ?? "",
+  };
+}
+
+function scenarioConstraint(value = {}) {
+  return {
+    code: value.code || "",
+    name: value.name || "",
+    severity: value.severity || "hard",
+    unit: value.unit || "",
+    minimum: value.minimum ?? "",
+    maximum: value.maximum ?? "",
+  };
+}
+
 export function createRegistryBusinessForm(kind, value = {}, version) {
   switch (kind) {
     case "qualityPlan":
@@ -139,6 +164,22 @@ export function createRegistryBusinessForm(kind, value = {}, version) {
         comparisonKeys: (value.comparisonKeys || ["product_series"]).join(", "),
         contextPairs: pairsFromObject(value.contextSelector),
         signals: (value.signals || []).length ? value.signals.map(analysisSignal) : [analysisSignal()],
+      };
+    case "scenarioPackage":
+      return {
+        packageId: value.packageId || "",
+        version: version ?? value.version ?? 1,
+        name: value.name || "",
+        description: value.description || "",
+        status: versionedStatus(value, version),
+        dataModel: modelValue(value.dataModelId, value.dataModelVersion),
+        analysisPlan: modelValue(value.analysisPlanId, value.analysisPlanVersion),
+        acquisitionProfiles: (value.acquisitionProfiles || []).map(versionedReference),
+        qualityPlan: value.qualityPlan ? modelValue(value.qualityPlan.id, value.qualityPlan.version) : "",
+        contextFields: (value.contextFields || []).map(scenarioContextField),
+        constraints: (value.constraints || []).map(scenarioConstraint),
+        knowledgeAssets: (value.knowledgeAssets || []).map(versionedReference),
+        terminologyPairs: pairsFromObject(value.terminology),
       };
     default:
       return {};
@@ -240,13 +281,53 @@ export function registryBusinessPayload(kind, form) {
       })),
     };
   }
+  if (kind === "scenarioPackage") {
+    const dataModel = parseModelValue(form.dataModel);
+    const analysisPlan = parseModelValue(form.analysisPlan);
+    const qualityPlan = parseModelValue(form.qualityPlan);
+    const references = rows => rows.filter(item => item.reference).map(item => {
+      const parsed = parseModelValue(item.reference);
+      return { id: parsed.id, version: parsed.version };
+    });
+    return {
+      packageId: form.packageId.trim(),
+      version: Number(form.version),
+      name: form.name.trim(),
+      description: form.description.trim() || null,
+      status: form.status,
+      dataModelId: dataModel.id,
+      dataModelVersion: dataModel.version,
+      analysisPlanId: analysisPlan.id,
+      analysisPlanVersion: analysisPlan.version,
+      acquisitionProfiles: references(form.acquisitionProfiles),
+      qualityPlan: qualityPlan.id ? { id: qualityPlan.id, version: qualityPlan.version } : null,
+      contextFields: form.contextFields.map(item => ({
+        fieldCode: item.fieldCode.trim(),
+        name: item.name.trim(),
+        mode: item.mode,
+        minimumCoverage: numberOrNull(item.minimumCoverage),
+        minimumFactorOverlap: numberOrNull(item.minimumFactorOverlap),
+      })),
+      constraints: form.constraints.map(item => ({
+        code: item.code.trim(),
+        name: item.name.trim(),
+        severity: item.severity,
+        unit: item.unit.trim() || null,
+        minimum: numberOrNull(item.minimum),
+        maximum: numberOrNull(item.maximum),
+      })),
+      knowledgeAssets: references(form.knowledgeAssets),
+      terminology: objectFromPairs(form.terminologyPairs),
+    };
+  }
   throw new Error(`未知的配置类型：${kind}`);
 }
 
 export function registryBusinessValidation(kind, form) {
   const identity = kind === "processModel" ? form.modelId
     : kind === "recipeVersion" ? form.recipeId
-      : form.planId;
+      : kind === "scenarioPackage" ? form.packageId
+        : form.planId;
   if (!codePattern.test(identity.trim())) return "代码只能使用小写字母、数字、点、下划线和连字符。";
   if (!Number.isInteger(Number(form.version)) || Number(form.version) < 1) return "版本必须是大于 0 的整数。";
   if (!form.name.trim()) return "请填写名称。";
@@ -269,6 +350,12 @@ export function registryBusinessValidation(kind, form) {
     if (!form.dataModel) return "请选择工艺数据模型。";
     if (!form.comparisonKeys.trim()) return "请至少填写一个同类比较字段。";
     if (form.signals.length === 0 || form.signals.some(item => !item.dataItemCode)) return "请至少选择一个分析数据项。";
+  }
+  if (kind === "scenarioPackage") {
+    if (!form.dataModel || !form.analysisPlan) return "请选择工艺数据模型和分析方案。";
+    if (form.contextFields.some(item => !codePattern.test(item.fieldCode.trim()) || !item.name.trim())) return "上下文字段需填写有效代码和名称。";
+    if (form.contextFields.some(item => item.mode !== "record-when-available" && item.minimumCoverage === "")) return "进入分析或建模的上下文字段必须填写最低覆盖率。";
+    if (form.constraints.some(item => !codePattern.test(item.code.trim()) || !item.name.trim() || (item.minimum === "" && item.maximum === ""))) return "安全约束需填写有效代码、名称和至少一个边界。";
   }
   return "";
 }
@@ -525,6 +612,78 @@ function AnalysisPlanEditor({ form, onChange, readOnly, lockIdentity }) {
   );
 }
 
+function ReferenceSelect({ value, options, idKey, label, disabled, onChange }) {
+  return (
+    <Select value={value} disabled={disabled} onChange={onChange}>
+      <option value="">请选择{label}</option>
+      {options.map(item => <option key={`${item[idKey]}:${item.version}`} value={modelValue(item[idKey], item.version)}>{item.name || item[idKey]}（v{item.version}）</option>)}
+    </Select>
+  );
+}
+
+function ScenarioPackageEditor({ form, onChange, readOnly, lockIdentity }) {
+  const { data: modelData, error: modelError } = useApi("/api/v1/process-data-models");
+  const { data: planData, error: planError } = useApi("/api/v1/process-analysis-plans");
+  const { data: profileData, error: profileError } = useApi("/api/v1/acquisition-profiles");
+  const { data: qualityData, error: qualityError } = useApi("/api/v1/inspection-plans");
+  const models = extractRows(modelData);
+  const plans = extractRows(planData);
+  const profiles = extractRows(profileData);
+  const qualityPlans = extractRows(qualityData);
+  const selectedModel = parseModelValue(form.dataModel);
+  const matchingPlans = plans.filter(item => !selectedModel.id || (item.dataModelId === selectedModel.id && item.dataModelVersion === selectedModel.version));
+  const matchingProfiles = profiles.filter(item => !selectedModel.id || (item.dataModelId === selectedModel.id && item.dataModelVersion === selectedModel.version));
+  const referenceError = modelError || planError || profileError || qualityError;
+
+  return (
+    <div className="grid gap-5">
+      {referenceError && <Alert tone="danger">场景依赖配置读取失败：{referenceError}</Alert>}
+      <IdentityFields form={form} onChange={onChange} idField="packageId" idLabel="场景包代码" readOnly={readOnly} lockIdentity={lockIdentity} />
+      <Card title="版本化配置组合" description="场景包只引用已定义资产；设备地址和业务数据仍由各自配置管理。">
+        <div className="grid gap-4 md:grid-cols-2">
+          <Field label="工艺数据模型"><ModelSelect value={form.dataModel} models={models} disabled={readOnly} onChange={event => updateAt(form, onChange, "dataModel", event.target.value)} /></Field>
+          <Field label="分析方案"><ReferenceSelect value={form.analysisPlan} options={matchingPlans} idKey="planId" label="分析方案" disabled={readOnly} onChange={event => updateAt(form, onChange, "analysisPlan", event.target.value)} /></Field>
+          <Field label="质量方案（可选）"><ReferenceSelect value={form.qualityPlan} options={qualityPlans} idKey="planId" label="质量方案" disabled={readOnly} onChange={event => updateAt(form, onChange, "qualityPlan", event.target.value)} /></Field>
+        </div>
+      </Card>
+      <Card title="设备采集配置" description="一个场景可以组合多设备、多 Edge 的已发布采集版本。" actions={!readOnly ? <Button onClick={() => addRow(form, onChange, "acquisitionProfiles", versionedReference())}>添加采集配置</Button> : undefined}>
+        <div className="grid gap-3">
+          {form.acquisitionProfiles.length === 0 && <p className="text-sm text-slate-500">尚未绑定设备采集配置。</p>}
+          {form.acquisitionProfiles.map((item, index) => <div key={index} className="grid gap-2 md:grid-cols-[1fr_auto]"><ReferenceSelect value={item.reference} options={matchingProfiles} idKey="profileId" label="采集配置" disabled={readOnly} onChange={event => updateRow(form, onChange, "acquisitionProfiles", index, { reference: event.target.value })} />{!readOnly && <Button variant="ghost" className="text-rose-700" onClick={() => removeRow(form, onChange, "acquisitionProfiles", index)}>移除</Button>}</div>)}
+        </div>
+      </Card>
+      <Card title="运行上下文字段策略" description="先追溯，再用现场覆盖率和因素重叠决定是否进入分析或建模。" actions={!readOnly ? <Button onClick={() => addRow(form, onChange, "contextFields", scenarioContextField())}>添加字段</Button> : undefined}>
+        <div className="grid gap-4">
+          {form.contextFields.length === 0 && <p className="text-sm text-slate-500">尚未配置场景上下文字段。</p>}
+          {form.contextFields.map((item, index) => <div key={index} className="grid gap-3 rounded-xl border border-slate-200 p-4 md:grid-cols-2 xl:grid-cols-3">
+            <Field label="字段代码"><Input value={item.fieldCode} disabled={readOnly} onChange={event => updateRow(form, onChange, "contextFields", index, { fieldCode: event.target.value })} /></Field>
+            <Field label="业务名称"><Input value={item.name} disabled={readOnly} onChange={event => updateRow(form, onChange, "contextFields", index, { name: event.target.value })} /></Field>
+            <Field label="证据状态"><Select value={item.mode} disabled={readOnly} onChange={event => updateRow(form, onChange, "contextFields", index, { mode: event.target.value })}><option value="record-when-available">有则记录</option><option value="required-for-analysis">分析必需</option><option value="validated-for-modeling">已验证进入建模</option></Select></Field>
+            <Field label="最低覆盖率"><Input type="number" min="0" max="1" step="0.01" value={item.minimumCoverage} disabled={readOnly} onChange={event => updateRow(form, onChange, "contextFields", index, { minimumCoverage: event.target.value })} placeholder="0–1" /></Field>
+            <Field label="最低因素重叠"><Input type="number" min="0" max="1" step="0.01" value={item.minimumFactorOverlap} disabled={readOnly} onChange={event => updateRow(form, onChange, "contextFields", index, { minimumFactorOverlap: event.target.value })} placeholder="0–1，可选" /></Field>
+            {!readOnly && <Button variant="ghost" className="justify-self-start text-rose-700" onClick={() => removeRow(form, onChange, "contextFields", index)}>移除</Button>}
+          </div>)}
+        </div>
+      </Card>
+      <Card title="场景安全约束" description="这里只记录场景默认边界；项目和实验仍需工程师确认。" actions={!readOnly ? <Button onClick={() => addRow(form, onChange, "constraints", scenarioConstraint())}>添加约束</Button> : undefined}>
+        <div className="grid gap-4">
+          {form.constraints.length === 0 && <p className="text-sm text-slate-500">尚未配置默认约束。</p>}
+          {form.constraints.map((item, index) => <div key={index} className="grid gap-3 rounded-xl border border-slate-200 p-4 md:grid-cols-2 xl:grid-cols-3">
+            <Field label="约束代码"><Input value={item.code} disabled={readOnly} onChange={event => updateRow(form, onChange, "constraints", index, { code: event.target.value })} /></Field>
+            <Field label="名称"><Input value={item.name} disabled={readOnly} onChange={event => updateRow(form, onChange, "constraints", index, { name: event.target.value })} /></Field>
+            <Field label="级别"><Select value={item.severity} disabled={readOnly} onChange={event => updateRow(form, onChange, "constraints", index, { severity: event.target.value })}><option value="hard">硬约束</option><option value="soft">软约束</option></Select></Field>
+            <Field label="下限"><Input type="number" step="any" value={item.minimum} disabled={readOnly} onChange={event => updateRow(form, onChange, "constraints", index, { minimum: event.target.value })} /></Field>
+            <Field label="上限"><Input type="number" step="any" value={item.maximum} disabled={readOnly} onChange={event => updateRow(form, onChange, "constraints", index, { maximum: event.target.value })} /></Field>
+            <Field label="单位"><Input value={item.unit} disabled={readOnly} onChange={event => updateRow(form, onChange, "constraints", index, { unit: event.target.value })} /></Field>
+            {!readOnly && <Button variant="ghost" className="justify-self-start text-rose-700" onClick={() => removeRow(form, onChange, "constraints", index)}>移除</Button>}
+          </div>)}
+        </div>
+      </Card>
+      <PairEditor title="场景术语" description="只覆盖该场景需要不同显示名称的通用概念。" pairs={form.terminologyPairs} readOnly={readOnly} onChange={value => updateAt(form, onChange, "terminologyPairs", value)} />
+    </div>
+  );
+}
+
 export function RegistryBusinessEditor({ kind, form, onChange, readOnly, lockIdentity, validation }) {
   return (
     <div className="grid gap-5">
@@ -533,6 +692,7 @@ export function RegistryBusinessEditor({ kind, form, onChange, readOnly, lockIde
       {kind === "processModel" && <ProcessModelEditor form={form} onChange={onChange} readOnly={readOnly} lockIdentity={lockIdentity} />}
       {kind === "recipeVersion" && <RecipeEditor form={form} onChange={onChange} readOnly={readOnly} lockIdentity={lockIdentity} />}
       {kind === "analysisPlan" && <AnalysisPlanEditor form={form} onChange={onChange} readOnly={readOnly} lockIdentity={lockIdentity} />}
+      {kind === "scenarioPackage" && <ScenarioPackageEditor form={form} onChange={onChange} readOnly={readOnly} lockIdentity={lockIdentity} />}
     </div>
   );
 }

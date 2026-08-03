@@ -5,6 +5,8 @@ public sealed record CycleRecordSummary
 {
     public required string CorrelationId { get; init; }
     public required string MachineId { get; init; }
+    /// <summary>该运行实际收到事件的 Edge；正常运行通常只有一个，迁移或补传时可能有多个。</summary>
+    public IReadOnlyList<string> EdgeIds { get; init; } = [];
     public required string Status { get; init; }
     public bool HasStarted { get; init; }
     public bool HasCompleted { get; init; }

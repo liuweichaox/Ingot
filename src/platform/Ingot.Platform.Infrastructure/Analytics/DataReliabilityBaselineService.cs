@@ -20,16 +20,28 @@ public sealed class DataReliabilityBaselineService(
     [
         "equipment_id",
         "operation_run_id",
-        "material_lot",
+        "material_lot_ref",
         "material_specification",
         "tooling_id",
         "mold_id",
         "assembly_revision_id",
+        "tooling_usage_count",
         "maintenance_status",
-        "calibration_status"
+        "calibration_status",
+        "calibration_ref",
+        "calibration_valid_until"
     ];
 
     private static readonly string[] RequiredContextFields = ["equipment_id", "operation_run_id"];
+
+    private static readonly (string Field, string Name)[] ContextFactors =
+    [
+        ("equipment_id", "设备"),
+        ("tooling_id", "工装"),
+        ("material_lot_ref", "材料批次")
+    ];
+
+    private const int MaximumFactorLevels = 50;
 
     public async Task<DataReliabilityBaseline> CalculateAsync(
         DataReliabilityBaselineQuery query,
@@ -89,6 +101,8 @@ public sealed class DataReliabilityBaselineService(
             Exclusion("quality_unlinked", "没有关联有效质量结果", denominator - qualityLinked)
         }.Where(static item => item.RunCount > 0).ToArray();
 
+        var factorSummaries = BuildFactorSummaries(rows);
+        var factorOverlaps = BuildFactorOverlaps(rows);
         return new DataReliabilityBaseline
         {
             GeneratedAt = DateTimeOffset.UtcNow,
@@ -130,12 +144,32 @@ public sealed class DataReliabilityBaselineService(
                     RequiredForAdmission = RequiredContextFields.Contains(field, StringComparer.Ordinal)
                 };
             }).ToArray(),
+            ContextFactors = factorSummaries,
+            ContextFactorOverlaps = factorOverlaps,
+            UnidentifiableConfoundingCount = factorOverlaps.Count(static item =>
+                item.Identifiability == "confounded"),
             Exclusions = exclusions,
             DuplicateTimestampCount = rows.Sum(static row => row.ProcessDataQuality.DuplicateTimestampCount),
             OutOfOrderCount = rows.Sum(static row => row.ProcessDataQuality.OutOfOrderCount),
             SequenceGapCount = rows.Sum(static row => row.ProcessDataQuality.SequenceGapCount),
-            MaximumSampleGapMs = rows.Select(static row => row.ProcessDataQuality.MaximumGapMs).Max()
+            MaximumSampleGapMs = Maximum(rows.Select(static row => row.ProcessDataQuality.MaximumGapMs)),
+            MaximumAbsoluteSourceClockOffsetMs = Maximum(rows.Select(static row =>
+                row.ProcessDataQuality.MaximumAbsoluteSourceClockOffsetMs)),
+            WorstRunP95PlatformIngestLatencyMs = Maximum(rows.Select(static row =>
+                row.ProcessDataQuality.P95PlatformIngestLatencyMs)),
+            MaximumPlatformIngestLatencyMs = Maximum(rows.Select(static row =>
+                row.ProcessDataQuality.MaximumPlatformIngestLatencyMs)),
+            NegativePlatformIngestLatencyCount = rows.Sum(static row =>
+                row.ProcessDataQuality.NegativePlatformIngestLatencyCount)
         };
+    }
+
+    private static double? Maximum(IEnumerable<double?> values)
+    {
+        var present = values.Where(static value => value.HasValue)
+            .Select(static value => value!.Value)
+            .ToArray();
+        return present.Length == 0 ? null : present.Max();
     }
 
     private async Task<IReadOnlyList<PlatformProductionEvent>> QueryAllAsync(
@@ -172,7 +206,144 @@ public sealed class DataReliabilityBaselineService(
         => RequiredContextFields.All(field => HasContext(row, field));
 
     private static bool HasContext(CycleComparisonRow row, string field)
-        => !string.IsNullOrWhiteSpace(ProcessConfiguration.ProcessAnalysisResolver.ContextValue(row.Context, field));
+    {
+        if (string.Equals(field, "material_lot_ref", StringComparison.Ordinal))
+        {
+            return !string.IsNullOrWhiteSpace(
+                       ProcessConfiguration.ProcessAnalysisResolver.ContextValue(row.Context, field)) ||
+                   !string.IsNullOrWhiteSpace(
+                       ProcessConfiguration.ProcessAnalysisResolver.ContextValue(row.Context, "material_lot"));
+        }
+        return !string.IsNullOrWhiteSpace(
+            ProcessConfiguration.ProcessAnalysisResolver.ContextValue(row.Context, field));
+    }
+
+    private static IReadOnlyList<ContextFactorSummary> BuildFactorSummaries(
+        IReadOnlyList<CycleComparisonRow> rows)
+        => ContextFactors.Select(factor =>
+        {
+            var populated = rows
+                .Select(row => (Row: row, Value: ResolveFactor(row, factor.Field)))
+                .Where(static item => item.Value is not null)
+                .ToArray();
+            var levels = populated
+                .GroupBy(static item => item.Value!, StringComparer.Ordinal)
+                .Select(group => BuildFactorLevel(group.Key, group.Select(static item => item.Row).ToArray()))
+                .OrderByDescending(static item => item.RunCount)
+                .ThenBy(static item => item.Value, StringComparer.Ordinal)
+                .ToArray();
+            return new ContextFactorSummary
+            {
+                Field = factor.Field,
+                Name = factor.Name,
+                PresentRunCount = populated.Length,
+                MissingRunCount = rows.Count - populated.Length,
+                DistinctLevelCount = levels.Length,
+                Coverage = Divide(populated.Length, rows.Count),
+                LevelsTruncated = levels.Length > MaximumFactorLevels,
+                Levels = levels.Take(MaximumFactorLevels).ToArray()
+            };
+        }).ToArray();
+
+    private static ContextFactorLevelSummary BuildFactorLevel(
+        string value,
+        IReadOnlyList<CycleComparisonRow> rows)
+    {
+        var durations = rows
+            .Where(static row => row.CompletedAt.HasValue && row.CompletedAt > row.StartedAt)
+            .Select(static row => (row.CompletedAt!.Value - row.StartedAt).TotalMilliseconds)
+            .ToArray();
+        return new ContextFactorLevelSummary
+        {
+            Value = value,
+            RunCount = rows.Count,
+            ProcessCompleteRunCount = rows.Count(static row =>
+                row.ProcessDataQuality.Status == ProcessDataStatuses.Available),
+            QualityLinkedRunCount = rows.Count(static row => row.InspectionOutcomes.Count > 0),
+            PassRunCount = rows.Count(static row => QualityOutcome(row) == "PASS"),
+            FailRunCount = rows.Count(static row => QualityOutcome(row) == "FAIL"),
+            InconclusiveRunCount = rows.Count(static row => QualityOutcome(row) == "INCONCLUSIVE"),
+            MeanDurationMs = durations.Length == 0 ? null : durations.Average()
+        };
+    }
+
+    private static IReadOnlyList<ContextFactorOverlap> BuildFactorOverlaps(
+        IReadOnlyList<CycleComparisonRow> rows)
+    {
+        var result = new List<ContextFactorOverlap>();
+        for (var leftIndex = 0; leftIndex < ContextFactors.Length; leftIndex++)
+        {
+            for (var rightIndex = leftIndex + 1; rightIndex < ContextFactors.Length; rightIndex++)
+            {
+                var left = ContextFactors[leftIndex].Field;
+                var right = ContextFactors[rightIndex].Field;
+                var pairs = rows.Select(row => (
+                        Left: ResolveFactor(row, left),
+                        Right: ResolveFactor(row, right)))
+                    .Where(static pair => pair.Left is not null && pair.Right is not null)
+                    .Select(static pair => (Left: pair.Left!, Right: pair.Right!))
+                    .ToArray();
+                var leftLevels = pairs.Select(static pair => pair.Left).Distinct(StringComparer.Ordinal).ToArray();
+                var rightLevels = pairs.Select(static pair => pair.Right).Distinct(StringComparer.Ordinal).ToArray();
+                var observed = pairs.Distinct().ToArray();
+                var possible = leftLevels.Length * rightLevels.Length;
+                var leftNested = leftLevels.Length > 0 && pairs
+                    .GroupBy(static pair => pair.Left, StringComparer.Ordinal)
+                    .All(static group => group.Select(static pair => pair.Right)
+                        .Distinct(StringComparer.Ordinal).Count() == 1);
+                var rightNested = rightLevels.Length > 0 && pairs
+                    .GroupBy(static pair => pair.Right, StringComparer.Ordinal)
+                    .All(static group => group.Select(static pair => pair.Left)
+                        .Distinct(StringComparer.Ordinal).Count() == 1);
+                var identifiability = leftLevels.Length < 2 || rightLevels.Length < 2
+                    ? "insufficient_levels"
+                    : leftNested || rightNested
+                        ? "confounded"
+                        : observed.Length == possible
+                            ? "overlapping"
+                            : "limited";
+                result.Add(new ContextFactorOverlap
+                {
+                    LeftField = left,
+                    RightField = right,
+                    JointRunCount = pairs.Length,
+                    LeftLevelCount = leftLevels.Length,
+                    RightLevelCount = rightLevels.Length,
+                    ObservedCombinationCount = observed.Length,
+                    PossibleCombinationCount = possible,
+                    OverlapRate = Divide(observed.Length, possible),
+                    Identifiability = identifiability
+                });
+            }
+        }
+        return result;
+    }
+
+    private static string? ResolveFactor(CycleComparisonRow row, string field)
+    {
+        string? value = field switch
+        {
+            "equipment_id" => ProcessConfiguration.ProcessAnalysisResolver.ContextValue(
+                                  row.Context, "equipment_id") ?? row.MachineId,
+            "tooling_id" => ProcessConfiguration.ProcessAnalysisResolver.ContextValue(
+                                row.Context, "tooling_id") ??
+                            ProcessConfiguration.ProcessAnalysisResolver.ContextValue(row.Context, "mold_id"),
+            "material_lot_ref" => ProcessConfiguration.ProcessAnalysisResolver.ContextValue(
+                                      row.Context, "material_lot_ref") ??
+                                  ProcessConfiguration.ProcessAnalysisResolver.ContextValue(row.Context, "material_lot"),
+            _ => ProcessConfiguration.ProcessAnalysisResolver.ContextValue(row.Context, field)
+        };
+        return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    }
+
+    private static string? QualityOutcome(CycleComparisonRow row)
+        => row.InspectionOutcomes.Contains("FAIL", StringComparer.OrdinalIgnoreCase)
+            ? "FAIL"
+            : row.InspectionOutcomes.Contains("INCONCLUSIVE", StringComparer.OrdinalIgnoreCase)
+                ? "INCONCLUSIVE"
+                : row.InspectionOutcomes.Contains("PASS", StringComparer.OrdinalIgnoreCase)
+                    ? "PASS"
+                    : null;
 
     private static ReliabilityRate Rate(
         string code,

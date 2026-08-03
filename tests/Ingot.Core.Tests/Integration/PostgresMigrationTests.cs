@@ -24,7 +24,11 @@ public sealed class PostgresMigrationTests(PostgresIntegrationFixture postgres)
             connection);
         await using var reader = await command.ExecuteReaderAsync();
         Assert.True(await reader.ReadAsync());
-        Assert.Equal(9, reader.GetInt64(0));
+        var expected = typeof(MigrationRunner).Assembly.GetManifestResourceNames().LongCount(name =>
+            name.Contains(".Migrations.sql.", StringComparison.Ordinal) &&
+            name.EndsWith(".sql", StringComparison.OrdinalIgnoreCase));
+        Assert.True(expected > 0);
+        Assert.Equal(expected, reader.GetInt64(0));
         Assert.Equal(reader.GetInt64(0), reader.GetInt64(1));
     }
 }

@@ -1,6 +1,8 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using System.Security.Cryptography;
+using System.Text.Json;
 using Ingot.Contracts.Agents;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -58,7 +60,8 @@ public sealed class AgentRuntime : IAgentRuntime
         if (tools.Count == 0)
             throw new InvalidOperationException($"{entryPoint} 没有已注册工具。");
 
-        var model = _models.GetClient(entryPoint, request.Mode == "combined" ? ModelRole.Reasoning : ModelRole.Fast);
+        var modelRole = request.Mode == "combined" ? ModelRole.Reasoning : ModelRole.Fast;
+        var model = _models.GetClient(entryPoint, modelRole);
         if (!string.Equals(model.Provider, settings.Provider, StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException($"{entryPoint} 配置的模型 Provider 没有对应客户端。");
         var run = new AgentRunSnapshot
@@ -72,7 +75,7 @@ public sealed class AgentRuntime : IAgentRuntime
             Mode = request.Mode,
             Status = AgentRunStatuses.Queued,
             ModelProvider = model.Provider,
-            Model = model.Model,
+            Model = model.ModelFor(modelRole),
             PromptVersion = ChatPromptVersion,
             ToolsetVersion = ChatToolsetVersion,
             CreatedAt = DateTimeOffset.UtcNow,
@@ -377,6 +380,13 @@ public sealed class AgentRuntime : IAgentRuntime
 
             if (!_relatedRecordsVerifier.TryVerify(results, out var relatedRecords, out var relatedRecordsError))
                 throw new InvalidOperationException(relatedRecordsError);
+            run = run with
+            {
+                ToolResults = results.Select((result, index) => Snapshot(
+                    result,
+                    invocations[index].Version)).ToArray()
+            };
+            await _store.UpdateAsync(run, CancellationToken.None).ConfigureAwait(false);
             await EmitAsync(run.RunId, AgentStreamEventTypes.RelatedRecordsChecked,
                     new { count = relatedRecords.Count, relatedRecords }, ct)
                 .ConfigureAwait(false);
@@ -497,6 +507,32 @@ public sealed class AgentRuntime : IAgentRuntime
             if (_active.TryRemove(run.RunId, out var source))
                 source.Dispose();
         }
+    }
+
+    private static AgentToolResultSnapshot Snapshot(AnalysisToolResult result, string version)
+    {
+        var content = JsonSerializer.SerializeToUtf8Bytes(new
+        {
+            result.Tool,
+            Version = version,
+            result.Summary,
+            result.Data,
+            result.RelatedRecords,
+            result.Limitations,
+            result.Outcome
+        });
+        return new AgentToolResultSnapshot
+        {
+            Tool = result.Tool,
+            Version = version,
+            Summary = result.Summary,
+            Data = result.Data.Clone(),
+            RelatedRecords = result.RelatedRecords,
+            Limitations = result.Limitations,
+            Outcome = result.Outcome,
+            ContentHash = Convert.ToHexStringLower(SHA256.HashData(content)),
+            VerifiedAt = DateTimeOffset.UtcNow
+        };
     }
 
     private async Task EmitAsync(string runId, string type, object? data, CancellationToken ct)

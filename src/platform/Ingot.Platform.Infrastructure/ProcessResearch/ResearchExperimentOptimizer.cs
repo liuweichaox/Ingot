@@ -14,7 +14,8 @@ public sealed class ResearchExperimentOptimizer(
     IProcessOptimizerClient optimizerClient,
     IResearchObservationAssembler observationAssembler,
     ResearchExperimentResultMaterializer resultMaterializer,
-    ProcessResearchWorkflow workflow)
+    ProcessResearchWorkflow workflow,
+    ResearchOnlineAdmissionService? onlineAdmission = null)
 {
     public async Task<ResearchExperiment> CreateNextExperimentAsync(
         Guid projectId,
@@ -32,6 +33,19 @@ public sealed class ResearchExperimentOptimizer(
         if (project.Status is ResearchProjectStatuses.Completed or ResearchProjectStatuses.Archived)
             throw new ProcessResearchRuleException("已完成或已归档的研发项目保持只读。");
         var intent = NormalizeIntent(request.Intent);
+        var mode = NormalizeMode(request.Mode);
+        ResearchOnlineAdmissionEvidence? onlineAdmissionEvidence = null;
+        if (mode == ResearchOptimizationModes.Controlled)
+        {
+            if (request.BatchSize != 1 || request.ReplicatesPerCondition != 1)
+                throw new ProcessResearchRuleException("受控在线每次只能生成一条建议和一次运行。");
+            if (intent != ResearchOptimizationIntents.ReachSpecification || request.HypothesisId is not null)
+                throw new ProcessResearchRuleException("受控在线只执行已经过影子验证的逼近规格建议；假设验证仍使用离线实验设计。");
+            if (onlineAdmission is null)
+                throw new ProcessResearchRuleException("受控在线准入服务不可用，按失败关闭处理。");
+            onlineAdmissionEvidence = await onlineAdmission.RequireAsync(projectId, ct)
+                .ConfigureAwait(false);
+        }
         if (intent == ResearchOptimizationIntents.ValidateHypothesis &&
             (request.BatchSize < 2 || request.ReplicatesPerCondition < 2))
         {
@@ -63,6 +77,8 @@ public sealed class ResearchExperimentOptimizer(
         var constraintCodes = project.OutcomeConstraints.Select(static value => value.Code)
             .ToHashSet(StringComparer.Ordinal);
         var experiments = await store.ListExperimentsAsync(projectId, ct).ConfigureAwait(false);
+        var shadowRecommendations = await store.ListShadowRecommendationsAsync(projectId, ct)
+            .ConfigureAwait(false);
         var experimentResults = await store.ListExperimentResultsAsync(projectId, ct)
             .ConfigureAwait(false);
         var assembled = request.AutoAssembleObservations
@@ -103,15 +119,21 @@ public sealed class ResearchExperimentOptimizer(
             .ToArray();
         var observedRunKeys = sourceObservations.Select(static value => value.RunKey)
             .ToHashSet(StringComparer.Ordinal);
+        var decidedShadowRuns = shadowRecommendations
+            .Select(static value => value.SuggestionRunKey)
+            .ToHashSet(StringComparer.Ordinal);
         var activeOptimization = experiments
             .Where(experiment =>
                 experiment.Optimization is { } optimization &&
                 string.Equals(optimization.Intent, intent, StringComparison.Ordinal) &&
+                string.Equals(optimization.Mode, mode, StringComparison.Ordinal) &&
                 optimization.HypothesisId == hypothesis?.HypothesisId &&
                 (experiment.Status is ResearchExperimentStatuses.Planned
                     or ResearchExperimentStatuses.Approved
                     or ResearchExperimentStatuses.Running) &&
-                experiment.RunPlan.Any(run => !observedRunKeys.Contains(run.RunKey)))
+                experiment.RunPlan.Any(run => mode == ResearchOptimizationModes.Shadow
+                    ? !decidedShadowRuns.Contains(run.RunKey)
+                    : !observedRunKeys.Contains(run.RunKey)))
             .OrderByDescending(static value => value.CreatedAt)
             .FirstOrDefault();
         if (activeOptimization is not null)
@@ -143,6 +165,8 @@ public sealed class ResearchExperimentOptimizer(
             .Where(static experiment => experiment.Status is ResearchExperimentStatuses.Planned
                 or ResearchExperimentStatuses.Approved
                 or ResearchExperimentStatuses.Running)
+            .Where(static experiment =>
+                experiment.Optimization?.Mode != ResearchOptimizationModes.Shadow)
             .SelectMany(static experiment => experiment.RunPlan)
             .Where(run => !observedRunKeys.Contains(run.RunKey) &&
                           run.Factors.Select(static value => value.VariableCode)
@@ -167,7 +191,11 @@ public sealed class ResearchExperimentOptimizer(
             SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new
             {
                 optimizerCall = call,
-                request.ReplicatesPerCondition
+                request.ReplicatesPerCondition,
+                mode,
+                OnlineReplayHash = onlineAdmissionEvidence?.HistoricalReplayReportHash,
+                OnlineShadowHash = onlineAdmissionEvidence?.ShadowReportHash,
+                OnlineRollbackHash = onlineAdmissionEvidence?.RollbackDrillRecordHash
             })));
         var existing = experiments
             .Where(experiment => string.Equals(
@@ -195,6 +223,8 @@ public sealed class ResearchExperimentOptimizer(
                 var index = (position + replicate) % response.Suggestions.Count;
                 var suggestion = response.Suggestions[index];
                 ValidateSuggestion(project, response.ModelVersion, suggestion);
+                if (mode == ResearchOptimizationModes.Controlled)
+                    ValidateControlledSuggestionInObservedEnvelope(suggestion, observations);
                 var runKey = $"bo-{experimentId:N}"[..15] +
                              $"-{index + 1:D2}-r{replicate + 1:D2}";
                 runPlan.Add(new ExperimentRunPlan
@@ -219,7 +249,11 @@ public sealed class ResearchExperimentOptimizer(
         {
             ExperimentId = experimentId,
             HypothesisId = hypothesis?.HypothesisId,
-            Name = intent == ResearchOptimizationIntents.ValidateHypothesis
+            Name = mode == ResearchOptimizationModes.Shadow
+                ? $"影子优化建议 {DateTimeOffset.UtcNow:yyyy-MM-dd HH:mm}"
+                : mode == ResearchOptimizationModes.Controlled
+                ? $"受控在线建议 {DateTimeOffset.UtcNow:yyyy-MM-dd HH:mm}"
+                : intent == ResearchOptimizationIntents.ValidateHypothesis
                 ? $"假设验证实验 {DateTimeOffset.UtcNow:yyyy-MM-dd HH:mm}"
                 : $"智能优化实验 {DateTimeOffset.UtcNow:yyyy-MM-dd HH:mm}",
             DesignMethod = ResearchDesignMethods.BayesianOptimization,
@@ -229,10 +263,18 @@ public sealed class ResearchExperimentOptimizer(
                 .Distinct(StringComparer.Ordinal).ToArray(),
             RunPlan = runPlan,
             ObjectiveCodes = project.Objectives.Select(static value => value.Code).ToArray(),
-            StopRule = intent == ResearchOptimizationIntents.ValidateHypothesis
+            StopRule = mode == ResearchOptimizationModes.Shadow
+                ? "只记录旁路建议和工程师实际选择，不批准、不下发、不改变现场实验顺序。"
+                : mode == ResearchOptimizationModes.Controlled
+                ? "一次只执行一条经工程师确认的建议；任一安全约束、数据失效、设置偏差或现场异常立即停止。"
+                : intent == ResearchOptimizationIntents.ValidateHypothesis
                 ? "获得足以支持、推翻或保留该假设的置信区间，或工程师因安全边界终止。"
                 : "达到项目目标并完成重复性确认，或工程师因安全边界终止。",
-            RollbackPlan = "任何安全约束触发时立即停止，并恢复上一组已批准工艺参数。",
+            RollbackPlan = mode == ResearchOptimizationModes.Shadow
+                ? "影子建议不下发设备，因此不触发现场回退。"
+                : mode == ResearchOptimizationModes.Controlled
+                ? "停止后不生成下一条建议，恢复上一组经现场确认的安全参数，并由工程师复核数据与设备状态。"
+                : "任何安全约束触发时立即停止，并恢复上一组已批准工艺参数。",
             Optimization = new ResearchOptimizationMetadata
             {
                 ModelVersion = response.ModelVersion,
@@ -245,11 +287,13 @@ public sealed class ResearchExperimentOptimizer(
                 FeatureSetVersion = project.OptimizationFeatures.Version,
                 DerivedFeatureCount = project.OptimizationFeatures.DerivedFeatures.Count,
                 Intent = intent,
+                Mode = mode,
                 HypothesisId = hypothesis?.HypothesisId,
                 DistinctConditionCount = response.Suggestions.Count,
                 ReplicatesPerCondition = request.ReplicatesPerCondition,
                 BlockCount = request.ReplicatesPerCondition,
                 RunPredictions = predictions,
+                OnlineAdmission = onlineAdmissionEvidence,
                 GeneratedAt = DateTimeOffset.UtcNow
             }
         };
@@ -281,7 +325,7 @@ public sealed class ResearchExperimentOptimizer(
         }
     }
 
-    private static OptimizerCampaignInput BuildCampaign(
+    internal static OptimizerCampaignInput BuildCampaign(
         ResearchProject project,
         string intent,
         ResearchHypothesis? hypothesis)
@@ -354,6 +398,16 @@ public sealed class ResearchExperimentOptimizer(
         if (!ResearchOptimizationIntents.IsValid(intent))
             throw new ProcessResearchRuleException("优化意图无效。");
         return intent;
+    }
+
+    private static string NormalizeMode(string? value)
+    {
+        var mode = string.IsNullOrWhiteSpace(value)
+            ? ResearchOptimizationModes.Experiment
+            : value.Trim().ToLowerInvariant();
+        if (!ResearchOptimizationModes.IsValid(mode))
+            throw new ProcessResearchRuleException("优化模式无效。");
+        return mode;
     }
 
     private static OptimizationRunPrediction MapPrediction(
@@ -493,6 +547,24 @@ public sealed class ResearchExperimentOptimizer(
                 hash.Add(pair.Value);
             }
             return hash.ToHashCode();
+        }
+    }
+
+    private static void ValidateControlledSuggestionInObservedEnvelope(
+        OptimizerSuggestionOutput suggestion,
+        IReadOnlyList<OptimizerObservationInput> observations)
+    {
+        if (observations.Count == 0)
+            throw new ProcessResearchRuleException("受控在线必须有可重放的真实历史观察。");
+        foreach (var (code, value) in suggestion.RecommendedParameters)
+        {
+            var observed = observations
+                .Where(item => item.Params.ContainsKey(code))
+                .Select(item => item.Params[code])
+                .ToArray();
+            if (observed.Length == 0 || value < observed.Min() || value > observed.Max())
+                throw new ProcessResearchRuleException(
+                    $"受控在线建议 {code}={value:R} 超出历史实测参数包络，必须退回影子模式验证。");
         }
     }
 }

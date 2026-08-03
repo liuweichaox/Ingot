@@ -55,7 +55,7 @@ test("all platform routes remain available after the React migration", () => {
     "/production/tooling-installations", "/configuration/component-types", "/configuration/components",
     "/configuration/tooling-types", "/configuration/tooling-assemblies", "/inspections",
     "/quality-analysis", "/configuration/inspection-definitions", "/configuration/quality-plans",
-    "/comparisons", "/data-quality", "/process-improvement",
+    "/comparisons", "/golden-questions", "/data-quality", "/process-improvement", "/configuration/scenario-packages",
     "/configuration/process-analysis-plans", "/configuration/process-data-models",
     "/configuration/recipe-versions", "/configuration/acquisition-profiles", "/edges",
     "/platform-metrics", "/subscriptions", "/logs",
@@ -197,7 +197,7 @@ test("inspection definitions use the characteristic contract and business fields
 });
 
 test("all versioned configuration registries use business forms instead of JSON editors", () => {
-  for (const kind of ["processModel", "recipeVersion", "analysisPlan", "qualityPlan"]) {
+  for (const kind of ["processModel", "recipeVersion", "analysisPlan", "qualityPlan", "scenarioPackage"]) {
     assert.match(pages, new RegExp(`kind: "${kind}"`));
     assert.match(registryEditor, new RegExp(`kind === "${kind}"`));
   }
@@ -205,6 +205,7 @@ test("all versioned configuration registries use business forms instead of JSON 
   assert.match(registryEditor, /function ProcessModelEditor/);
   assert.match(registryEditor, /function RecipeEditor/);
   assert.match(registryEditor, /function AnalysisPlanEditor/);
+  assert.match(registryEditor, /function ScenarioPackageEditor/);
   assert.match(registryEditor, /requiresAttachment: item\.requiresAttachment \|\| item\.requiresReview/);
   assert.doesNotMatch(pages, /label="版本定义"/);
 });

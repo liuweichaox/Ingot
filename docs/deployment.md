@@ -43,6 +43,13 @@ cp .env.example .env
 
 仓库中的 `.env` 被忽略，不能提交真实凭据。
 
+### 内网模型服务
+
+启用 Chat 时，模型服务必须提供 OpenAI-compatible `/v1` API。设置
+`INGOT_CHAT_BASE_URL`、`INGOT_CHAT_FAST_MODEL`、`INGOT_CHAT_REASONING_MODEL` 和
+`OPENAI_API_KEY`；令牌可以是本地服务签发的内部令牌。Platform 启动时调用 `/v1/models`，
+只有快速和推理两个模型标识都存在才进入服务。模型只接收已经验证并留存内容哈希的只读工具结果。
+
 ## 启动
 
 ```bash

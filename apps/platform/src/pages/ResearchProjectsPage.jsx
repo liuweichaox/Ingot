@@ -22,6 +22,7 @@ import {
 const projectFormInitial = {
   name: "",
   referenceCycleId: "",
+  scenarioPackageKey: "",
   dataModelKey: "",
   processName: "",
   productName: "",
@@ -76,6 +77,13 @@ const statusLabels = {
   dispatched: "已下发",
   draft: "草稿",
   reviewed: "已复核",
+  accepted: "采用建议",
+  modified: "修改建议",
+  beneficial: "迁移有收益",
+  neutral: "迁移无实质收益",
+  "negative-transfer": "检测到负迁移",
+  "insufficient-evidence": "迁移证据不足",
+  recorded: "待复核",
 };
 
 const taskTitles = {
@@ -84,6 +92,14 @@ const taskTitles = {
   experiment: "设计验证实验",
   history: "导入历史运行",
   claim: "沉淀工艺知识",
+  "rollback-drill": "记录停止与回退演练",
+  transfer: "评估工艺知识迁移",
+};
+
+const shadowDecisionLabels = {
+  accepted: "采用建议",
+  modified: "修改建议",
+  rejected: "不采用建议",
 };
 
 function formatResearchNumber(value) {
@@ -136,6 +152,22 @@ function createTaskForm(task, workspace) {
     processWindowId: workspace?.processWindows?.find(item =>
       item.status === "validated" &&
       ["laboratory", "production"].includes(item.validationLevel))?.windowId || "",
+    knowledgeSourceType: "window",
+    transferAssessmentId: workspace?.transferAssessments?.find(item =>
+      item.status === "reviewed" && item.outcome === "beneficial")?.assessmentId || "",
+    drillName: "受控在线停止与回退演练",
+    drillScenario: "模拟安全约束触发或优化器不可用",
+    drillStopTrigger: "安全约束触发、数据失效或优化器不可用时停止下一条建议",
+    drillRollbackTarget: "恢复上一组经现场确认的安全参数",
+    drillExpectedActions: "停止下一条建议\n恢复安全参数\n保留运行与操作日志",
+    drillObservedActions: "",
+    drillPassed: "false",
+    drillEvidenceReference: "",
+    drillEvidenceContentHash: "",
+    sourceWindowId: workspace?.transferSources?.[0]?.windowId || "",
+    transferResultId: workspace?.experimentResults?.[0]?.resultId || "",
+    coldStartResultId: workspace?.experimentResults?.[1]?.resultId || "",
+    transferNotes: "",
   };
 }
 
@@ -153,6 +185,10 @@ export function ResearchProjectsPage() {
   const [saving, setSaving] = useState(false);
   const [task, setTask] = useState("");
   const [taskForm, setTaskForm] = useState({});
+  const [shadowTarget, setShadowTarget] = useState(null);
+  const [shadowForm, setShadowForm] = useState({});
+  const [controlledTarget, setControlledTarget] = useState(null);
+  const [controlledForm, setControlledForm] = useState({});
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -189,11 +225,18 @@ export function ResearchProjectsPage() {
     setDetailLoading(true);
     setError("");
     try {
-      const [next, observationSummary] = await Promise.all([
+      const [next, observationSummary, onlineAdmission, transferSources] = await Promise.all([
         getJson(`/api/v1/research-projects/${projectId}`),
         getJson(`/api/v1/research-projects/${projectId}/experiment-readiness`),
+        getJson(`/api/v1/research-projects/${projectId}/online-admission`),
+        getJson(`/api/v1/research-projects/${projectId}/transfer-sources`),
       ]);
-      setWorkspace({ ...next, optimizationObservationSummary: observationSummary });
+      setWorkspace({
+        ...next,
+        optimizationObservationSummary: observationSummary,
+        onlineAdmission,
+        transferSources: transferSources?.data || [],
+      });
       setProjects(current => current.map(item =>
         item.projectId === next.project.projectId ? next.project : item));
     } catch (requestError) {
@@ -250,6 +293,10 @@ export function ResearchProjectsPage() {
           minimumProbability: Number(projectForm.outcomeConstraintProbability),
           dataSource: `inspection:${projectForm.outcomeConstraintMetric}`,
         }] : [],
+        context: {
+          data_model: projectForm.dataModelKey,
+          ...(projectForm.scenarioPackageKey ? { scenario_package: projectForm.scenarioPackageKey } : {}),
+        },
       });
       setProjects(current => [project, ...current]);
       setProjectForm(projectFormInitial);
@@ -299,6 +346,162 @@ export function ResearchProjectsPage() {
     }
   }
 
+  function startShadowDecision(experiment, run) {
+    setShadowTarget({ experiment, run });
+    setShadowForm({
+      decision: "accepted",
+      actualRunKey: "",
+      factors: Object.fromEntries((run.factors || []).map(factor => [factor.variableCode, factor.value])),
+      rejectionReason: "",
+      siteLimitations: "",
+      contextSnapshot: "machine_id=\nmaterial_lot_ref=\ntooling_id=",
+    });
+  }
+
+  async function submitShadowDecision(event) {
+    event.preventDefault();
+    if (!shadowTarget) return;
+    setSaving(true);
+    try {
+      const contextSnapshot = Object.fromEntries(
+        shadowForm.contextSnapshot.split("\n")
+          .map(line => line.trim())
+          .filter(Boolean)
+          .map(line => {
+            const separator = line.indexOf("=");
+            if (separator < 1 || !line.slice(separator + 1).trim()) {
+              throw new Error("上下文必须逐行填写为 key=value，且值不能为空。");
+            }
+            return [line.slice(0, separator).trim(), line.slice(separator + 1).trim()];
+          }),
+      );
+      await postJson(
+        `/api/v1/research-projects/experiments/${shadowTarget.experiment.experimentId}/runs/${encodeURIComponent(shadowTarget.run.runKey)}/shadow-decision`,
+        {
+          decision: shadowForm.decision,
+          actualRunKey: shadowForm.actualRunKey,
+          engineerSelectedFactors: shadowTarget.run.factors.map(factor => ({
+            ...factor,
+            value: Number(shadowForm.factors[factor.variableCode]),
+          })),
+          rejectionReason: shadowForm.rejectionReason || null,
+          siteLimitations: shadowForm.siteLimitations.split("\n").map(value => value.trim()).filter(Boolean),
+          contextSnapshot,
+        },
+      );
+      setShadowTarget(null);
+      await refreshWorkspace();
+      notify("影子决策已预登记；模型建议不会下发设备。", "success");
+    } catch (requestError) {
+      notify(requestError.message, "danger");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function materializeShadowOutcome(recommendation) {
+    try {
+      await postJson(
+        `/api/v1/research-projects/shadow-recommendations/${recommendation.recommendationId}/materialize-outcome`,
+        {},
+      );
+      await refreshWorkspace();
+      notify("已从实际周期、参数回读和检验记录冻结影子结果。", "success");
+    } catch (requestError) {
+      notify(requestError.message, "danger");
+    }
+  }
+
+  function startControlledDecision(experiment) {
+    const run = experiment.runPlan?.[0];
+    if (!run) return;
+    setControlledTarget({ experiment, run });
+    setControlledForm({
+      decision: "accepted",
+      reason: "",
+      factors: Object.fromEntries((run.factors || []).map(factor => [factor.variableCode, factor.value])),
+    });
+  }
+
+  async function submitControlledDecision(event) {
+    event.preventDefault();
+    if (!controlledTarget) return;
+    setSaving(true);
+    try {
+      await postJson(
+        `/api/v1/research-projects/experiments/${controlledTarget.experiment.experimentId}/controlled-decision`,
+        {
+          decision: controlledForm.decision,
+          approvedFactors: controlledForm.decision === "rejected" ? [] :
+            controlledTarget.run.factors.map(factor => ({
+              ...factor,
+              value: Number(controlledForm.factors[factor.variableCode]),
+            })),
+          reason: controlledForm.reason || null,
+        },
+      );
+      setControlledTarget(null);
+      await refreshWorkspace();
+      notify("受控在线决策已冻结；建议值和工程师批准值均已保留。", "success");
+    } catch (requestError) {
+      notify(requestError.message, "danger");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function runHistoricalReplay() {
+    try {
+      await postJson(
+        `/api/v1/research-projects/${workspace.project.projectId}/historical-replays`,
+        { seedCount: 30, initialObservationCount: 3 },
+      );
+      await refreshWorkspace();
+      notify("历史项目已按生产等价模型路径完成逐次回放，报告等待独立审核。", "success");
+    } catch (requestError) {
+      notify(requestError.message, "danger");
+    }
+  }
+
+  async function reviewHistoricalReplay(report) {
+    try {
+      await postJson(
+        `/api/v1/research-projects/historical-replays/${report.reportId}/review`,
+        {},
+      );
+      await refreshWorkspace();
+      notify("历史回放原始轨迹、失败项和闸门结论已完成独立审核。", "success");
+    } catch (requestError) {
+      notify(requestError.message, "danger");
+    }
+  }
+
+  async function reviewRollbackDrill(drill) {
+    try {
+      await postJson(
+        `/api/v1/research-projects/rollback-drills/${drill.drillId}/review`,
+        {},
+      );
+      await refreshWorkspace();
+      notify("停止与回退演练已由另一名工程师复核并冻结。", "success");
+    } catch (requestError) {
+      notify(requestError.message, "danger");
+    }
+  }
+
+  async function reviewTransferAssessment(assessment) {
+    try {
+      await postJson(
+        `/api/v1/research-projects/transfer-assessments/${assessment.assessmentId}/review`,
+        {},
+      );
+      await refreshWorkspace();
+      notify("迁移评估已由另一名工程师复核；复核不等于允许自动套用源参数。", "success");
+    } catch (requestError) {
+      notify(requestError.message, "danger");
+    }
+  }
+
   async function validateWindow(window) {
     try {
       await postJson(`/api/v1/research-projects/process-windows/${window.windowId}/validate`, {});
@@ -342,22 +545,22 @@ export function ResearchProjectsPage() {
     }
   }
 
-  async function generateOptimizationSuggestions(intent = "reach-specification", hypothesisId = null) {
+  async function generateOptimizationSuggestions(intent = "reach-specification", hypothesisId = null, mode = "experiment") {
     try {
+      const optimizationShape = mode === "controlled"
+        ? { batchSize: 1, replicatesPerCondition: 1 }
+        : { batchSize: 2, replicatesPerCondition: 2 };
       const experiment = await postJson(
         `/api/v1/research-projects/${workspace.project.projectId}/optimize`,
         {
           // A single point cannot distinguish a process effect from run noise.
           // Keep the smallest useful industrial experiment as a two-condition batch.
-          batchSize: 2,
+          ...optimizationShape,
           seed: 0,
-          processProfile: /光学|镜片|lens|molding|模压/i.test(workspace.project.processName || "")
-            ? "optical-lens-molding-v1"
-            : "generic",
           intent,
+          mode,
           hypothesisId,
           autoAssembleObservations: true,
-          replicatesPerCondition: 2,
         },
       );
       const alreadyActive = workspace.experiments.some(
@@ -366,7 +569,15 @@ export function ResearchProjectsPage() {
       await refreshWorkspace();
       notify(
         alreadyActive
-          ? "上一批优化实验尚未形成完整观察，已返回原实验，系统没有重复生成配方。"
+          ? mode === "shadow"
+            ? "已返回尚未登记完的影子建议，系统没有重复生成建议。"
+            : mode === "controlled"
+              ? "已返回尚未决策的受控在线建议，没有生成第二条。"
+            : "上一批优化实验尚未形成完整观察，已返回原实验，系统没有重复生成配方。"
+          : mode === "shadow"
+            ? "已生成旁路影子建议；它不能批准或下发，请登记工程师实际选择。"
+            : mode === "controlled"
+              ? "已生成一条受控在线建议；必须先由现场工程师接受、修改或拒绝。"
           : intent === "validate-hypothesis"
             ? "已设计安全的假设验证实验；完成检验后，证据和假设状态会自动更新。"
             : "已用真实运行和检验结果生成下一组优化实验，请按现有流程审核后执行。",
@@ -440,9 +651,30 @@ export function ResearchProjectsPage() {
         });
       } else if (task === "claim") {
         await postJson(`/api/v1/research-projects/${project.projectId}/knowledge-claims`, {
-          processWindowId: taskForm.processWindowId,
+          processWindowId: taskForm.knowledgeSourceType === "window" ? taskForm.processWindowId : null,
+          transferAssessmentId: taskForm.knowledgeSourceType === "transfer" ? taskForm.transferAssessmentId : null,
           statement: taskForm.statement,
           applicability: taskForm.applicability,
+        });
+      } else if (task === "rollback-drill") {
+        await postJson(`/api/v1/research-projects/${project.projectId}/rollback-drills`, {
+          name: taskForm.drillName,
+          scenario: taskForm.drillScenario,
+          stopTrigger: taskForm.drillStopTrigger,
+          rollbackTarget: taskForm.drillRollbackTarget,
+          expectedActions: taskForm.drillExpectedActions.split("\n").map(value => value.trim()).filter(Boolean),
+          observedActions: taskForm.drillObservedActions.split("\n").map(value => value.trim()).filter(Boolean),
+          passed: taskForm.drillPassed === "true",
+          evidenceReference: taskForm.drillEvidenceReference,
+          evidenceContentHash: taskForm.drillEvidenceContentHash,
+          conductedAt: new Date().toISOString(),
+        });
+      } else if (task === "transfer") {
+        await postJson(`/api/v1/research-projects/${project.projectId}/transfer-assessments`, {
+          sourceWindowId: taskForm.sourceWindowId,
+          transferResultId: taskForm.transferResultId,
+          coldStartResultId: taskForm.coldStartResultId,
+          notes: taskForm.transferNotes || null,
         });
       }
       setTask("");
@@ -496,6 +728,13 @@ export function ResearchProjectsPage() {
             onReleaseWindow={releaseWindow}
             onReviewClaim={reviewClaim}
             onGenerateOptimizationSuggestions={generateOptimizationSuggestions}
+            onShadowDecision={startShadowDecision}
+            onControlledDecision={startControlledDecision}
+            onMaterializeShadowOutcome={materializeShadowOutcome}
+            onRunHistoricalReplay={runHistoricalReplay}
+            onReviewHistoricalReplay={reviewHistoricalReplay}
+            onReviewRollbackDrill={reviewRollbackDrill}
+            onReviewTransferAssessment={reviewTransferAssessment}
             onAskAi={currentProjectId => navigate(`/chat?projectId=${encodeURIComponent(currentProjectId)}`)}
             currentUserId={identity?.username || identity?.userId || ""}
           />
@@ -508,6 +747,24 @@ export function ResearchProjectsPage() {
           saving={saving}
           onClose={() => !saving && setTask("")}
           onSubmit={submitTask}
+        />
+        <ShadowDecisionDrawer
+          target={shadowTarget}
+          form={shadowForm}
+          setForm={setShadowForm}
+          saving={saving}
+          variables={workspace?.project?.variables || []}
+          onClose={() => !saving && setShadowTarget(null)}
+          onSubmit={submitShadowDecision}
+        />
+        <ControlledDecisionDrawer
+          target={controlledTarget}
+          form={controlledForm}
+          setForm={setControlledForm}
+          saving={saving}
+          variables={workspace?.project?.variables || []}
+          onClose={() => !saving && setControlledTarget(null)}
+          onSubmit={submitControlledDecision}
         />
       </Page>
     );
@@ -595,7 +852,7 @@ export function ResearchProjectsPage() {
 }
 
 function CreateProjectDrawer({ open, saving, form, setForm, onClose, onSubmit }) {
-  const [catalog, setCatalog] = useState({ cycles: [], definitions: [], models: [] });
+  const [catalog, setCatalog] = useState({ cycles: [], definitions: [], models: [], scenarios: [] });
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [catalogError, setCatalogError] = useState("");
 
@@ -608,12 +865,14 @@ function CreateProjectDrawer({ open, saving, form, setForm, onClose, onSubmit })
       getJson("/api/v1/cycles?status=completed&limit=200"),
       getJson("/api/v1/inspection-definitions"),
       getJson("/api/v1/process-data-models"),
-    ]).then(([cycles, definitions, models]) => {
+      getJson("/api/v1/scenario-packages"),
+    ]).then(([cycles, definitions, models, scenarios]) => {
       if (!mounted) return;
       setCatalog({
         cycles: cycles?.data || [],
         definitions: definitions?.data || [],
         models: models?.data || [],
+        scenarios: scenarios?.data || [],
       });
     }).catch(requestError => {
       if (!mounted) return;
@@ -626,6 +885,7 @@ function CreateProjectDrawer({ open, saving, form, setForm, onClose, onSubmit })
 
   const field = (name, value) => event => setForm({ ...form, [name]: event.target[value || "value"] });
   const selectableModels = catalog.models.filter(item => item.status !== "retired");
+  const selectableScenarios = catalog.scenarios.filter(item => item.status !== "retired");
   const selectedModel = selectableModels.find(item => `${item.modelId}:${item.version}` === form.dataModelKey);
   const objectiveOptions = catalog.definitions.flatMap(definition =>
     (definition.characteristics || [])
@@ -654,7 +914,27 @@ function CreateProjectDrawer({ open, saving, form, setForm, onClose, onSubmit })
     const model = selectableModels.find(item => `${item.modelId}:${item.version}` === key);
     updateForm({
       dataModelKey: key,
+      scenarioPackageKey: catalog.scenarios.some(item => `${item.packageId}:${item.version}` === form.scenarioPackageKey && `${item.dataModelId}:${item.dataModelVersion}` === key) ? form.scenarioPackageKey : "",
       processName: model?.name || "",
+      variableCode: "",
+      variableName: "",
+      variableUnit: "",
+      variableDataSource: "",
+    });
+  }
+
+  function chooseScenarioPackage(key) {
+    const scenario = selectableScenarios.find(item => `${item.packageId}:${item.version}` === key);
+    if (!scenario) {
+      updateForm({ scenarioPackageKey: "" });
+      return;
+    }
+    const modelKey = `${scenario.dataModelId}:${scenario.dataModelVersion}`;
+    const model = selectableModels.find(item => `${item.modelId}:${item.version}` === modelKey);
+    updateForm({
+      scenarioPackageKey: key,
+      dataModelKey: modelKey,
+      processName: model?.name || scenario.name,
       variableCode: "",
       variableName: "",
       variableUnit: "",
@@ -719,11 +999,12 @@ function CreateProjectDrawer({ open, saving, form, setForm, onClose, onSubmit })
     >
       <form id="research-project-form" className="space-y-6" onSubmit={onSubmit}>
         {catalogError && <Alert tone="warning" title="部分选项暂不可用">{catalogError}</Alert>}
-        {catalogLoading && <Alert tone="info">正在读取已完成运行、检测定义和工艺数据模型…</Alert>}
+        {catalogLoading && <Alert tone="info">正在读取已完成运行、场景包、检测定义和工艺数据模型…</Alert>}
         <Card title="1. 项目范围" description="先确定问题属于哪个工艺和产品范围。">
           <div className="grid gap-4 md:grid-cols-2">
             <Field label="项目名称"><Input required value={form.name} onChange={field("name")} placeholder="光学模压工艺窗口研发" /></Field>
             <Field label="参考运行" hint="选择后自动带入产品范围；不影响后续用更多运行形成证据。"><Select value={form.referenceCycleId} onChange={event => chooseReferenceCycle(event.target.value)}><option value="">暂不关联历史运行</option>{catalog.cycles.map(cycle => <option key={cycle.correlationId} value={cycle.correlationId}>{cycleLabel(cycle)}</option>)}</Select></Field>
+            <Field label="场景包（推荐）" hint="组合该场景已验证的数据、采集、分析、质量和上下文策略；也可以暂不选择。"><Select value={form.scenarioPackageKey} onChange={event => chooseScenarioPackage(event.target.value)}><option value="">暂不使用场景包</option>{selectableScenarios.map(item => <option key={`${item.packageId}:${item.version}`} value={`${item.packageId}:${item.version}`}>{item.name} · v{item.version}</option>)}</Select></Field>
             <Field label="工艺数据模型" hint="决定可选的配方参数与实际数据来源。"><Select required value={form.dataModelKey} onChange={event => chooseDataModel(event.target.value)}><option value="">选择已配置的工艺数据模型</option>{selectableModels.map(model => <option key={`${model.modelId}:${model.version}`} value={`${model.modelId}:${model.version}`}>{model.name} · v{model.version}</option>)}</Select></Field>
             <Field label="目标产品" hint="来自参考运行；未关联时可补充产品编号。"><Input value={form.productName} onChange={field("productName")} placeholder="产品编号（可选）" /></Field>
             <Field label="材料"><Input value={form.materialName} onChange={field("materialName")} /></Field>
@@ -775,6 +1056,13 @@ function WorkspaceContent({
   onReleaseWindow,
   onReviewClaim,
   onGenerateOptimizationSuggestions,
+  onShadowDecision,
+  onControlledDecision,
+  onMaterializeShadowOutcome,
+  onRunHistoricalReplay,
+  onReviewHistoricalReplay,
+  onReviewRollbackDrill,
+  onReviewTransferAssessment,
   onAskAi,
   currentUserId,
 }) {
@@ -784,9 +1072,16 @@ function WorkspaceContent({
     hypotheses = [],
     experiments = [],
     experimentResults = [],
+    shadowRecommendations = [],
+    shadowReport,
+    historicalReplayReports = [],
+    rollbackDrills = [],
+    onlineReport,
     processWindows = [],
     knowledgeClaims = [],
+    transferAssessments = [],
   } = workspace;
+  const onlineAdmission = workspace.onlineAdmission;
   const reviewedWindows = processWindows.filter(item => item.status === "validated");
   const validatedWindows = reviewedWindows.filter(item =>
     ["laboratory", "production"].includes(item.validationLevel));
@@ -847,6 +1142,18 @@ function WorkspaceContent({
               {canEdit && hypotheses.length === 0 && <Button variant="primary" onClick={() => onTask("hypothesis")}>提出第一个假设</Button>}
               {project.status !== "draft" && canEdit && <Button onClick={() => onTask("history")}>导入历史运行</Button>}
               {project.status !== "draft" && canEdit && hypotheses.length > 0 && !hasRunningExperiment && <Button variant="primary" onClick={() => onGenerateOptimizationSuggestions()}>智能设计下一组实验</Button>}
+              {project.status !== "draft" && canEdit && hypotheses.length > 0 && <Button onClick={() => onGenerateOptimizationSuggestions("reach-specification", null, "shadow")}>生成影子建议</Button>}
+              {project.status !== "draft" && canEdit && hypotheses.length > 0 && (
+                <Button
+                  variant="primary"
+                  disabled={!onlineAdmission?.eligible || hasRunningExperiment}
+                  title={!onlineAdmission?.eligible ? (onlineAdmission?.failures || []).join("；") : "每次只生成一条，仍需工程师逐条确认"}
+                  onClick={() => onGenerateOptimizationSuggestions("reach-specification", null, "controlled")}
+                >生成一条受控在线建议</Button>
+              )}
+              {project.status !== "draft" && canEdit && Number(observationSummary?.validObservationCount || 0) >= 3 && <Button onClick={onRunHistoricalReplay}>运行历史回放</Button>}
+              {project.status !== "draft" && canEdit && <Button onClick={() => onTask("rollback-drill")}>记录停止与回退演练</Button>}
+              {project.status !== "draft" && canEdit && (workspace.transferSources || []).length > 0 && experimentResults.length >= 2 && <Button onClick={() => onTask("transfer")}>评估迁移收益</Button>}
               {project.status !== "draft" && canEdit && hypotheses.length > 0 && <Button onClick={() => onTask("experiment")}>手动设计实验</Button>}
               {project.status !== "draft" && canEdit && hasRunningExperiment && <Button onClick={() => onMaterializeExperimentResult(experiments.find(item => item.status === "running"))}>立即检查数据回收</Button>}
               {canEdit && validatedWindows.length > 0 && <Button variant="primary" onClick={() => onTask("claim")}>沉淀工艺知识</Button>}
@@ -990,6 +1297,19 @@ function WorkspaceContent({
                             </div>
                           );
                         })}
+                        {row.optimization?.mode === "shadow" && !shadowRecommendations.some(item =>
+                          item.experimentId === row.experimentId && item.suggestionRunKey === run.runKey) && canEdit && (
+                          <Button onClick={event => { event.stopPropagation(); onShadowDecision(row, run); }}>
+                            登记影子选择
+                          </Button>
+                        )}
+                        {shadowRecommendations.some(item =>
+                          item.experimentId === row.experimentId && item.suggestionRunKey === run.runKey) && (
+                          <div className="mt-2">
+                            <StatusBadge value={shadowDecisionLabels[shadowRecommendations.find(item =>
+                              item.experimentId === row.experimentId && item.suggestionRunKey === run.runKey)?.decision] || "已登记影子决策"} />
+                          </div>
+                        )}
                       </div>
                     ))}
                     {isHistorical && row.runPlan.length > runs.length && (
@@ -1078,8 +1398,13 @@ function WorkspaceContent({
                 render: (_, row) => (
                   <div className="flex gap-2">
                     {row.designMethod === "historical-observation" && <span className="text-xs text-slate-500">只读证据</span>}
-                    {row.designMethod !== "historical-observation" && row.status === "planned" && row.createdBy !== currentUserId && <Button onClick={event => { event.stopPropagation(); onExperimentStatus(row, "approved"); }}>批准</Button>}
-                    {row.designMethod !== "historical-observation" && row.status === "planned" && row.createdBy === currentUserId && <span className="text-xs text-slate-500">等待其他成员批准</span>}
+                    {row.optimization?.mode === "shadow" && <span className="text-xs text-slate-500">旁路评估，不可下发</span>}
+                    {row.optimization?.mode === "controlled" && row.status === "planned" && !row.controlledDecision && row.createdBy !== currentUserId && <Button onClick={event => { event.stopPropagation(); onControlledDecision(row); }}>接受 / 修改 / 拒绝</Button>}
+                    {row.optimization?.mode === "controlled" && row.status === "planned" && !row.controlledDecision && row.createdBy === currentUserId && <span className="text-xs text-slate-500">等待现场工程师决策</span>}
+                    {row.designMethod !== "historical-observation" && row.optimization?.mode !== "shadow" && row.optimization?.mode !== "controlled" && row.status === "planned" && row.createdBy !== currentUserId && <Button onClick={event => { event.stopPropagation(); onExperimentStatus(row, "approved"); }}>批准</Button>}
+                    {row.designMethod !== "historical-observation" && row.optimization?.mode !== "shadow" && row.optimization?.mode !== "controlled" && row.status === "planned" && row.createdBy === currentUserId && <span className="text-xs text-slate-500">等待其他成员批准</span>}
+                    {row.optimization?.mode === "controlled" && row.status === "planned" && row.controlledDecision && row.createdBy !== currentUserId && <Button onClick={event => { event.stopPropagation(); onExperimentStatus(row, "approved"); }}>批准本次运行</Button>}
+                    {row.optimization?.mode === "controlled" && row.controlledDecision && <span className="text-xs text-slate-500">{row.controlledDecision.decision === "modified" ? "已修改" : row.controlledDecision.decision === "rejected" ? "已拒绝" : "已接受"}，决策已冻结</span>}
                     {row.designMethod !== "historical-observation" && row.status === "approved" && <Button onClick={event => { event.stopPropagation(); onExperimentStatus(row, "running"); }}>下发并开始</Button>}
                     {row.designMethod !== "historical-observation" && row.status === "running" && (
                       <span className="text-xs text-slate-500">
@@ -1092,6 +1417,25 @@ function WorkspaceContent({
             ]} />
           )}
         </Card>
+        <ShadowEvidenceCard
+          recommendations={shadowRecommendations}
+          report={shadowReport}
+          variableByCode={variableByCode}
+          objectiveByCode={objectiveByCode}
+          onMaterialize={onMaterializeShadowOutcome}
+        />
+        <HistoricalReplayCard
+          reports={historicalReplayReports}
+          currentUserId={currentUserId}
+          onReview={onReviewHistoricalReplay}
+        />
+        <OnlineAdmissionCard evidence={onlineAdmission} />
+        <OnlineCampaignCard report={onlineReport} objectiveByCode={objectiveByCode} />
+        <RollbackDrillCard
+          drills={rollbackDrills}
+          currentUserId={currentUserId}
+          onReview={onReviewRollbackDrill}
+        />
         </div>
 
         <section id="project-validation" className="scroll-mt-60 space-y-5">
@@ -1262,7 +1606,50 @@ function WorkspaceContent({
         </Card>
         </section>
 
-        <div id="project-reuse" className="scroll-mt-60">
+        <div id="project-reuse" className="scroll-mt-60 space-y-5">
+        <Card
+          title="跨条件迁移评估"
+          description="将源工艺窗口在当前项目的实测结果，与当前项目从零建立的独立对照比较；这里只形成证据，不自动套用参数。"
+        >
+          {transferAssessments.length === 0 ? (
+            <EmptyState title="尚未评估迁移" description="先在目标项目中完成迁移组和从零对照组，且每组至少三个重复、两个区组。" />
+          ) : (
+            <DataTable rows={transferAssessments} keyField="assessmentId" columns={[
+              {
+                key: "outcome",
+                label: "结论",
+                render: (value, row) => <div className="space-y-1"><StatusBadge value={statusLabels[value] || value} /><div className="text-xs text-slate-500">{statusLabels[row.status] || row.status}</div></div>,
+              },
+              {
+                key: "relativeGain",
+                label: "相对从零收益",
+                render: value => value == null ? "—" : `${formatResearchNumber(Number(value) * 100)}%`,
+              },
+              {
+                key: "evidence",
+                label: "证据门禁",
+                render: (_, row) => <div className="text-xs leading-5">结构与单位：{row.schemaCompatible ? "通过" : "失败"}<br />重复与区组：{row.evidenceSufficient ? "通过" : "不足"}<br />安全：{row.safetyPassed ? "通过" : "失败"}</div>,
+              },
+              {
+                key: "contextDifferences",
+                label: "变化条件",
+                render: value => <div className="max-w-72 text-xs leading-5">{(value || []).map(item => <div key={item.field}>{item.field}：{item.sourceValue || "未声明"} → {item.targetValue || "未声明"}</div>)}</div>,
+              },
+              {
+                key: "failures",
+                label: "失败与边界",
+                render: (value, row) => <div className="max-w-96 text-xs leading-5 text-slate-600">{(value || []).map(item => <div key={item}>失败：{item}</div>)}{(row.warnings || []).map(item => <div key={item}>提示：{item}</div>)}</div>,
+              },
+              {
+                key: "actions",
+                label: "操作",
+                render: (_, row) => row.status === "recorded" && row.createdBy !== currentUserId
+                  ? <Button onClick={event => { event.stopPropagation(); onReviewTransferAssessment(row); }}>独立复核</Button>
+                  : row.status === "recorded" ? <span className="text-xs text-slate-500">等待其他成员复核</span> : "—",
+              },
+            ]} />
+          )}
+        </Card>
         <Card title="可复用工艺知识">
           {knowledgeClaims.length === 0 ? <EmptyState title="尚未沉淀知识" description="只有经过验证的工艺窗口才能转化为工艺知识。" /> : (
             <DataTable rows={knowledgeClaims} keyField="claimId" columns={[
@@ -1284,6 +1671,279 @@ function WorkspaceContent({
   );
 }
 
+function HistoricalReplayCard({ reports, currentUserId, onReview }) {
+  return (
+    <Card
+      title="生产等价历史回放"
+      description="只在真实跑过的唯一配方候选池内逐次选择；完整保留原顺序、优化器、随机对照、校准、安全事件和失败闸门。"
+    >
+      {reports.length === 0 ? (
+        <EmptyState title="尚未生成历史回放报告" description="至少积累 3 种不同的完整实际配方条件；5 种以上才具备通过探索性闸门的可能。" />
+      ) : (
+        <DataTable rows={reports} keyField="reportId" columns={[
+          {
+            key: "status",
+            label: "状态",
+            render: (value, row) => <div className="space-y-2 text-xs"><StatusBadge value={value === "reviewed" ? "已独立审核" : "待独立审核"} /><StatusBadge value={row.gatePassed ? "回放闸门通过" : "回放闸门未通过"} /><code title={row.reportHash}>{String(row.reportHash).slice(0, 12)}…</code></div>,
+          },
+          {
+            key: "conditions",
+            label: "冻结数据",
+            render: (_, row) => <div className="text-xs leading-5">{row.sourceRunCount} 条运行<br />{row.uniqueConditionCount} 种唯一条件<br />预算 {row.budget} · {row.seedCount} 个随机种子</div>,
+          },
+          {
+            key: "comparison",
+            label: "达到规格试验数",
+            render: (_, row) => <div className="min-w-52 text-xs leading-5">历史原顺序：<strong>{row.originalOrderTrials ?? "未达到"}</strong><br />优化器中位数：<strong>{row.optimizer?.medianTrials ?? "未达到"}</strong>（成功率 {Math.round(Number(row.optimizer?.successRate || 0) * 100)}%）<br />随机中位数：<strong>{row.random?.medianTrials ?? "未达到"}</strong>（成功率 {Math.round(Number(row.random?.successRate || 0) * 100)}%）</div>,
+          },
+          {
+            key: "calibration",
+            label: "校准 / 安全",
+            render: (_, row) => <div className="text-xs leading-5">区间覆盖：<strong>{row.predictionIntervalChecks ? `${Math.round(Number(row.predictionIntervalCoverage || 0) * 100)}%` : "无检查"}</strong><br />覆盖检查：{row.predictionIntervalChecks}<br />优化器安全违规：<strong>{row.optimizerSafetyViolationCount}</strong></div>,
+          },
+          {
+            key: "gateFailures",
+            label: "失败与限制",
+            render: (value, row) => <div className="max-w-96 text-xs leading-5 text-slate-600">{(value || []).map(item => <div key={item}>失败：{item}</div>)}<div>限制：{row.limitations}</div></div>,
+          },
+          {
+            key: "actions",
+            label: "操作",
+            render: (_, row) => row.status === "generated" && row.generatedBy !== currentUserId
+              ? <Button onClick={event => { event.stopPropagation(); onReview(row); }}>审核完整报告</Button>
+              : row.status === "generated" ? <span className="text-xs text-slate-500">等待其他工程师审核</span> : "已冻结",
+          },
+        ]} />
+      )}
+    </Card>
+  );
+}
+
+function OnlineAdmissionCard({ evidence }) {
+  if (!evidence) return null;
+  return (
+    <Card
+      title="受控在线准入"
+      description="通过只代表系统可以提出一条候选建议；它不授权自动写设备，仍须现场工程师逐条确认。"
+    >
+      <div className="grid gap-3 sm:grid-cols-3">
+        <Metric label="当前结论" value={evidence.eligible ? "允许单条建议" : "禁止进入在线"} hint="任何门禁失败均按失败关闭" />
+        <Metric label="有效影子结果" value={evidence.validShadowOutcomeCount || 0} hint={`共 ${evidence.shadowRecommendationCount || 0} 条影子建议，最低要求 5 条有效结果`} />
+        <Metric label="证据快照" value={evidence.historicalReplayReportId && evidence.rollbackDrillId ? "回放与演练已审核" : "前置证据未通过"} hint={evidence.shadowReportHash ? `影子报告 ${String(evidence.shadowReportHash).slice(0, 12)}…` : "尚无影子报告"} />
+      </div>
+      {(evidence.failures || []).length > 0 && (
+        <Alert tone="danger" title="在线门禁未通过">
+          {(evidence.failures || []).map(item => <div key={item}>{item}</div>)}
+        </Alert>
+      )}
+      {(evidence.warnings || []).length > 0 && (
+        <Alert tone="warning" title="运行前必须确认">
+          {(evidence.warnings || []).map(item => <div key={item}>{item}</div>)}
+        </Alert>
+      )}
+    </Card>
+  );
+}
+
+function RollbackDrillCard({ drills, currentUserId, onReview }) {
+  return (
+    <Card
+      title="停止与回退演练"
+      description="受控在线前必须实际演练停止建议、恢复安全参数和保留证据；提交后不可修改，并由另一名工程师复核。"
+    >
+      {drills.length === 0 ? (
+        <EmptyState title="尚无回退演练证据" description="纸面回退方案不能放行受控在线；请执行一次可复核的现场或等价环境演练。" />
+      ) : (
+        <DataTable rows={drills} keyField="drillId" columns={[
+          { key: "name", label: "演练", render: (value, row) => <div className="max-w-72 text-xs leading-5"><strong>{value}</strong><div>{row.scenario}</div><code>{String(row.recordHash).slice(0, 12)}…</code></div> },
+          { key: "trigger", label: "停止 / 回退", render: (_, row) => <div className="max-w-80 text-xs leading-5">触发：{row.stopTrigger}<br />回退：{row.rollbackTarget}</div> },
+          { key: "evidence", label: "实际证据", render: (_, row) => <div className="max-w-72 text-xs leading-5">{(row.observedActions || []).map(value => <div key={value}>· {value}</div>)}<div>{row.evidenceReference}</div></div> },
+          { key: "status", label: "结论", render: (value, row) => <div className="space-y-1 text-xs"><StatusBadge value={row.passed ? "演练通过" : "演练失败"} /><StatusBadge value={value === "reviewed" ? "已独立复核" : "待独立复核"} /></div> },
+          { key: "actions", label: "操作", render: (_, row) => row.status === "recorded" && row.conductedBy !== currentUserId ? <Button onClick={event => { event.stopPropagation(); onReview(row); }}>复核演练证据</Button> : row.status === "recorded" ? <span className="text-xs text-slate-500">等待其他工程师复核</span> : "已冻结" },
+        ]} />
+      )}
+    </Card>
+  );
+}
+
+function OnlineCampaignCard({ report, objectiveByCode }) {
+  if (!report || report.totalSuggestions === 0) return null;
+  return (
+    <Card
+      title="受控在线监控"
+      description="持续比较建议、批准值、实际设置和实测结果；在线与影子残差的差异只作为停止与复核信号，不解释为因果。"
+    >
+      {report.stopRecommended && (
+        <Alert tone="danger" title="已停止生成下一条建议">
+          {(report.stopSignals || []).filter(item => item.severity === "stop").map(item => <div key={item.code}>{item.reason}</div>)}
+        </Alert>
+      )}
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <Metric label="在线建议" value={report.totalSuggestions} hint={`${report.acceptedCount} 接受 / ${report.modifiedCount} 修改 / ${report.rejectedCount} 拒绝`} />
+        <Metric label="有效结果" value={report.validOutcomeCount} hint={`${report.completedResultCount} 份结果 · ${report.runningCount} 条执行中`} />
+        <Metric label="安全违规" value={report.safetyViolationCount} hint="任何一次都会阻止下一条建议" />
+        <Metric label="实际设置偏差" value={report.settingDeviationCount} hint={`报告 ${String(report.reportHash).slice(0, 12)}…`} />
+      </div>
+      <DataTable rows={report.shadowComparisons || []} keyField="objectiveCode" columns={[
+        { key: "objectiveCode", label: "目标", render: value => objectiveByCode.get(value)?.name || value },
+        { key: "shadow", label: "影子残差", render: (_, row) => <span className="text-xs">n={row.shadowCount} · 均值 {formatResearchNumber(row.shadowMeanResidual)}</span> },
+        { key: "online", label: "在线残差", render: (_, row) => <span className="text-xs">n={row.onlineCount} · 均值 {formatResearchNumber(row.onlineMeanResidual)}</span> },
+        { key: "shift", label: "残差均值变化", render: (_, row) => <div className="text-xs"><strong>{formatResearchNumber(row.meanResidualShift)}</strong><div>95% 区间 {formatResearchNumber(row.shiftLower95)} ～ {formatResearchNumber(row.shiftUpper95)}</div><StatusBadge value={row.systematicShiftDetected ? "系统性偏移" : row.onlineCount >= 5 && row.shadowCount >= 5 ? "未检出系统性偏移" : "样本不足"} /></div> },
+      ]} />
+    </Card>
+  );
+}
+
+function ShadowEvidenceCard({ recommendations, report, variableByCode, objectiveByCode, onMaterialize }) {
+  return (
+    <Card
+      title="影子推荐证据"
+      description="建议不下发设备；工程师选择在结果产生前冻结，随后只从实际周期、参数回读和检验记录补齐结果。"
+    >
+      {report?.stopRecommended && (
+        <Alert tone="danger" title="影子评估触发停止信号">
+          {(report.stopSignals || []).filter(item => item.severity === "stop").map(item => item.reason).join("；")}
+        </Alert>
+      )}
+      {report && report.totalRecommendations > 0 && (
+        <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <Metric label="建议采用率" value={`${Math.round(Number(report.adoptionRate || 0) * 100)}%`} hint={`${report.acceptedCount} 采用 / ${report.modifiedCount} 修改 / ${report.rejectedCount} 拒绝`} />
+          <Metric label="结果回收" value={`${report.completedOutcomeCount}/${report.totalRecommendations}`} hint={`${report.invalidOutcomeCount} 条数据不可用`} />
+          <Metric label="适用域变化" value={report.contextShiftCount + report.parameterExtrapolationCount} hint="上下文新组合与参数外推" />
+          <Metric label="安全事件" value={report.safetyEvents?.length || 0} hint={`${report.settingDeviationCount} 次实际设置偏差`} />
+        </div>
+      )}
+      {(report?.calibration || []).some(item => item.checkedCount > 0) && (
+        <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
+          预测区间覆盖：{report.calibration.filter(item => item.checkedCount > 0).map(item => `${objectiveByCode.get(item.objectiveCode)?.name || item.objectiveCode} ${item.coveredCount}/${item.checkedCount}`).join("；")}。报告哈希 <code>{String(report.reportHash).slice(0, 12)}…</code>
+        </div>
+      )}
+      {recommendations.length === 0 ? (
+        <EmptyState title="尚无影子决策" description="在优化建议的运行条件中登记工程师实际选择，开始旁路评估。" />
+      ) : (
+        <DataTable rows={recommendations} keyField="recommendationId" columns={[
+          {
+            key: "suggestionRunKey",
+            label: "模型建议 / 实际运行",
+            render: (value, row) => <div className="space-y-1 text-xs"><code>{value}</code><div>实际：<code>{row.actualRunKey}</code></div><div>模型：{row.modelVersion}</div><StatusBadge value={row.applicability?.status === "in-domain" ? "适用域内" : row.applicability?.status === "context-shift" ? "上下文变化" : row.applicability?.status === "parameter-extrapolation" ? "参数外推" : "历史不足"} /><div className="max-w-64 text-slate-500">{row.applicability?.summary}</div></div>,
+          },
+          {
+            key: "decision",
+            label: "工程师选择",
+            render: (value, row) => <div className="space-y-2 text-xs"><StatusBadge value={shadowDecisionLabels[value] || value} />{(row.engineerSelectedFactors || []).map(factor => <div key={factor.variableCode}>{variableByCode.get(factor.variableCode)?.name || factor.variableCode}：<strong>{formatResearchNumber(factor.value)} {factor.unit}</strong></div>)}</div>,
+          },
+          {
+            key: "reason",
+            label: "拒绝原因 / 现场限制",
+            render: (_, row) => <div className="max-w-72 text-xs leading-5 text-slate-600"><div>{row.rejectionReason || "采用建议，无拒绝原因"}</div>{(row.siteLimitations || []).map(value => <div key={value}>限制：{value}</div>)}</div>,
+          },
+          {
+            key: "outcome",
+            label: "源数据结果",
+            render: value => value ? <div className="space-y-1 text-xs"><StatusBadge value={value.validForOptimization ? "数据完整" : "数据不足"} />{Object.entries(value.outcomes || {}).map(([code, number]) => <div key={code}>{objectiveByCode.get(code)?.name || code}：<strong>{formatResearchNumber(number)}</strong></div>)}{Object.entries(value.settingDeviationFromEngineerSelection || {}).map(([code, number]) => <div key={code}>实际设置偏差 {variableByCode.get(code)?.name || code}：<strong>{formatResearchNumber(number)}</strong></div>)}<code title={value.sourceContentHash}>{String(value.sourceContentHash).slice(0, 12)}…</code></div> : <span className="text-xs text-slate-500">等待实际运行与检验</span>,
+          },
+          {
+            key: "actions",
+            label: "操作",
+            render: (_, row) => row.outcome ? "已冻结" : <Button onClick={event => { event.stopPropagation(); onMaterialize(row); }}>检查结果</Button>,
+          },
+        ]} />
+      )}
+    </Card>
+  );
+}
+
+function ShadowDecisionDrawer({ target, form, setForm, saving, variables, onClose, onSubmit }) {
+  if (!target) return null;
+  const variableByCode = new Map(variables.map(item => [item.code, item]));
+  const update = name => event => setForm({ ...form, [name]: event.target.value });
+  const updateDecision = event => setForm({
+    ...form,
+    decision: event.target.value,
+    factors: event.target.value === "accepted"
+      ? Object.fromEntries((target.run.factors || []).map(factor => [factor.variableCode, factor.value]))
+      : form.factors,
+  });
+  return (
+    <Drawer
+      open
+      onClose={onClose}
+      title="登记影子选择"
+      description="该记录只用于旁路比较，不批准实验，也不向设备写入参数。保存后不能修改。"
+      size="lg"
+      footer={<><Button disabled={saving} onClick={onClose}>取消</Button><Button variant="primary" disabled={saving} type="submit" form="shadow-decision-form">{saving ? "正在冻结…" : "冻结影子决策"}</Button></>}
+    >
+      <form id="shadow-decision-form" className="space-y-4" onSubmit={onSubmit}>
+        <Alert tone="info">模型建议 <code>{target.run.runKey}</code>；请在知道检验结果之前登记实际选择。</Alert>
+        <Field label="决策"><Select value={form.decision} onChange={updateDecision}><option value="accepted">采用模型建议</option><option value="modified">修改后采用</option><option value="rejected">不采用建议</option></Select></Field>
+        <Field label="实际生产运行号" hint="必须与采集周期 CorrelationId 完全一致，结果将通过它自动关联。"><Input required value={form.actualRunKey} onChange={update("actualRunKey")} /></Field>
+        <div className="grid gap-4 sm:grid-cols-2">
+          {(target.run.factors || []).map(factor => (
+            <Field key={factor.variableCode} label={variableByCode.get(factor.variableCode)?.name || factor.variableCode} hint={`模型建议 ${formatResearchNumber(factor.value)} ${factor.unit}`}>
+              <Input
+                required
+                disabled={form.decision === "accepted"}
+                type="number"
+                step="any"
+                value={form.factors?.[factor.variableCode] ?? ""}
+                onChange={event => setForm({ ...form, factors: { ...form.factors, [factor.variableCode]: event.target.value } })}
+              />
+            </Field>
+          ))}
+        </div>
+        {form.decision !== "accepted" && <Field label="修改或拒绝原因"><Textarea required rows={3} value={form.rejectionReason} onChange={update("rejectionReason")} placeholder="例如：夹具干涉、材料批次限制、设备升温能力不足。" /></Field>}
+        <Field label="现场限制（每行一条，可选）"><Textarea rows={3} value={form.siteLimitations} onChange={update("siteLimitations")} /></Field>
+        <Field label="决策时上下文快照" hint="每行 key=value；至少填写一个当时已知的设备、材料、工装或生产上下文。"><Textarea required rows={5} value={form.contextSnapshot} onChange={update("contextSnapshot")} /></Field>
+      </form>
+    </Drawer>
+  );
+}
+
+function ControlledDecisionDrawer({ target, form, setForm, saving, variables, onClose, onSubmit }) {
+  if (!target) return null;
+  const variableByCode = new Map(variables.map(item => [item.code, item]));
+  const update = name => event => setForm({ ...form, [name]: event.target.value });
+  const updateDecision = event => setForm({
+    ...form,
+    decision: event.target.value,
+    factors: event.target.value === "accepted"
+      ? Object.fromEntries((target.run.factors || []).map(factor => [factor.variableCode, factor.value]))
+      : form.factors,
+  });
+  return (
+    <Drawer
+      open
+      onClose={onClose}
+      title="受控在线工程师决策"
+      description="本次只处理一条建议。建议值、修改后的批准值、理由和决策人保存后均不可覆盖。"
+      size="lg"
+      footer={<><Button disabled={saving} onClick={onClose}>取消</Button><Button variant="primary" disabled={saving} type="submit" form="controlled-decision-form">{saving ? "正在冻结…" : "冻结本次决策"}</Button></>}
+    >
+      <form id="controlled-decision-form" className="space-y-4" onSubmit={onSubmit}>
+        <Alert tone="warning">这不是自动控制命令。确认后仍需独立批准，Platform 只生成设备无关的执行交接单。</Alert>
+        <Field label="决策"><Select value={form.decision} onChange={updateDecision}><option value="accepted">接受原建议</option><option value="modified">修改后接受</option><option value="rejected">拒绝并停止本次建议</option></Select></Field>
+        {form.decision !== "rejected" && (
+          <div className="grid gap-4 sm:grid-cols-2">
+            {(target.run.factors || []).map(factor => (
+              <Field key={factor.variableCode} label={variableByCode.get(factor.variableCode)?.name || factor.variableCode} hint={`模型建议 ${formatResearchNumber(factor.value)} ${factor.unit}`}>
+                <Input
+                  required
+                  disabled={form.decision === "accepted"}
+                  type="number"
+                  step="any"
+                  value={form.factors?.[factor.variableCode] ?? ""}
+                  onChange={event => setForm({ ...form, factors: { ...form.factors, [factor.variableCode]: event.target.value } })}
+                />
+              </Field>
+            ))}
+          </div>
+        )}
+        {form.decision !== "accepted" && <Field label="修改或拒绝原因"><Textarea required rows={4} value={form.reason} onChange={update("reason")} placeholder="例如：当前工装热负荷限制、材料批次不在适用范围、设备状态不允许。" /></Field>}
+      </form>
+    </Drawer>
+  );
+}
+
 function TaskDrawer({ task, form, setForm, workspace, saving, onClose, onSubmit }) {
   if (!task || !workspace) return null;
   const update = name => event => setForm({ ...form, [name]: event.target.value });
@@ -1291,6 +1951,8 @@ function TaskDrawer({ task, form, setForm, workspace, saving, onClose, onSubmit 
   const validatedWindows = workspace.processWindows.filter(item =>
     item.status === "validated" &&
     ["laboratory", "production"].includes(item.validationLevel));
+  const beneficialTransfers = (workspace.transferAssessments || []).filter(item =>
+    item.status === "reviewed" && item.outcome === "beneficial");
   const baselineRuns = workspace.experiments
     .filter(item => item.designMethod === "historical-observation" || item.status === "completed")
     .flatMap(experiment => (experiment.runPlan || []).map(run => ({
@@ -1325,9 +1987,19 @@ function TaskDrawer({ task, form, setForm, workspace, saving, onClose, onSubmit 
   const historicalCycleLabel = cycle => [
     cycle.correlationId,
     cycle.productSeries || cycle.productCode || "未标注产品",
+    cycle.machineId ? `设备 ${cycle.machineId}` : "",
+    cycle.edgeIds?.length ? `Edge ${cycle.edgeIds.join("/")}` : "",
+    cycle.externalBatchRef ? `批次 ${cycle.externalBatchRef}` : "",
+    cycle.workpieceId ? `工件 ${cycle.workpieceId}` : "",
     cycle.recipeId ? `配方 ${cycle.recipeId}` : "",
     cycle.completedAt ? new Date(cycle.completedAt).toLocaleString("zh-CN") : "",
   ].filter(Boolean).join(" · ");
+  const resultLabel = result => {
+    const experiment = workspace.experiments.find(item => item.experimentId === result.experimentId);
+    const metrics = (result.metrics || []).map(item =>
+      `${item.objectiveCode} ${formatResearchNumber(item.observedValue)} ${item.unit}`).join("；");
+    return `${experiment?.name || "已计算实验"} · ${result.runCount || 0} 个运行${metrics ? ` · ${metrics}` : ""}`;
+  };
   return (
     <Drawer
       open
@@ -1392,7 +2064,7 @@ function TaskDrawer({ task, form, setForm, workspace, saving, onClose, onSubmit 
           </Alert>
           {historyError && <Alert tone="danger">{historyError}</Alert>}
           {historyLoading ? <Alert tone="info">正在读取可导入的已完成运行…</Alert> : (
-            <Field label="已完成运行" hint={`已默认选中 ${form.cycleIds?.length || 0} 个与项目产品匹配的运行；可按 Ctrl 或 Shift 调整。`}>
+            <Field label="已完成运行" hint={`已默认选中 ${form.cycleIds?.length || 0} 个与项目产品匹配的运行；列表明确显示设备与 Edge，可跨节点多选。`}>
               <Select multiple required size="12" value={form.cycleIds || []} onChange={event => setForm({ ...form, cycleIds: Array.from(event.target.selectedOptions, option => option.value) })}>
                 {historicalCycles.map(cycle => <option key={cycle.correlationId} value={cycle.correlationId}>{historicalCycleLabel(cycle)}</option>)}
               </Select>
@@ -1400,9 +2072,51 @@ function TaskDrawer({ task, form, setForm, workspace, saving, onClose, onSubmit 
           )}
         </>}
         {task === "claim" && <>
-          <Field label="来源工艺窗口"><Select required value={form.processWindowId} onChange={update("processWindowId")}>{validatedWindows.map(item => <option key={item.windowId} value={item.windowId}>{item.name}</option>)}</Select></Field>
+          {beneficialTransfers.length > 0 && <Field label="知识证据类型"><Select value={form.knowledgeSourceType} onChange={update("knowledgeSourceType")}><option value="window">当前项目已验证工艺窗口</option><option value="transfer">经复核的迁移收益</option></Select></Field>}
+          {form.knowledgeSourceType !== "transfer" ? (
+            <Field label="来源工艺窗口"><Select required value={form.processWindowId} onChange={update("processWindowId")}>{validatedWindows.map(item => <option key={item.windowId} value={item.windowId}>{item.name}</option>)}</Select></Field>
+          ) : (
+            <Field label="来源迁移评估" hint="系统还会校验同一源窗口是否至少两次相对从零对照取得经复核收益。"><Select required value={form.transferAssessmentId} onChange={update("transferAssessmentId")}>{beneficialTransfers.map(item => <option key={item.assessmentId} value={item.assessmentId}>相对从零收益 {formatResearchNumber(Number(item.relativeGain) * 100)}% · {item.contextDifferences?.length || 0} 项条件变化</option>)}</Select></Field>
+          )}
           <Field label="知识声明"><Textarea required rows={4} value={form.statement} onChange={update("statement")} /></Field>
           <Field label="适用范围"><Textarea required rows={4} value={form.applicability} onChange={update("applicability")} /></Field>
+        </>}
+        {task === "rollback-drill" && <>
+          <Alert tone="warning">请填写已经执行的演练，不要把计划动作当成实际结果。失败演练同样应如实保存，但不会通过在线门禁。</Alert>
+          <Field label="演练名称"><Input required value={form.drillName} onChange={update("drillName")} /></Field>
+          <Field label="演练场景"><Textarea required rows={3} value={form.drillScenario} onChange={update("drillScenario")} /></Field>
+          <Field label="停止触发条件"><Textarea required rows={3} value={form.drillStopTrigger} onChange={update("drillStopTrigger")} /></Field>
+          <Field label="回退目标"><Textarea required rows={3} value={form.drillRollbackTarget} onChange={update("drillRollbackTarget")} /></Field>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="预期动作（每行一项）"><Textarea required rows={5} value={form.drillExpectedActions} onChange={update("drillExpectedActions")} /></Field>
+            <Field label="实际完成动作（每行一项）"><Textarea required rows={5} value={form.drillObservedActions} onChange={update("drillObservedActions")} /></Field>
+          </div>
+          <Field label="演练结论"><Select value={form.drillPassed} onChange={update("drillPassed")}><option value="false">未通过</option><option value="true">通过</option></Select></Field>
+          <Field label="证据引用" hint="填写运行号、日志归档号、演练记录编号或其他可定位引用。"><Input required value={form.drillEvidenceReference} onChange={update("drillEvidenceReference")} /></Field>
+          <Field label="证据 SHA-256" hint="对原始演练日志或记录文件计算 SHA-256，防止复核后内容被替换。"><Input required minLength="64" maxLength="64" pattern="[a-fA-F0-9]{64}" value={form.drillEvidenceContentHash} onChange={update("drillEvidenceContentHash")} /></Field>
+        </>}
+        {task === "transfer" && <>
+          <Alert tone="warning" title="迁移不是复制配方">
+            这里只比较已经完成的两组目标现场实测：一组按源窗口执行，一组从目标条件独立起步。系统不会向设备下发源参数；单次有收益也不能直接沉淀为通用知识。
+          </Alert>
+          <Field label="源生产工艺窗口" hint="仅列出当前用户可访问且已经生产发布的窗口。">
+            <Select required value={form.sourceWindowId} onChange={update("sourceWindowId")}>
+              {(workspace.transferSources || []).map(item => <option key={item.windowId} value={item.windowId}>{item.sourceProjectName} · {item.windowName} · {item.sourceMaterialName || "材料未声明"}</option>)}
+            </Select>
+          </Field>
+          <Field label="迁移组实测结果" hint="实际设置必须全部位于源窗口内，且至少三个重复、两个区组。">
+            <Select required value={form.transferResultId} onChange={update("transferResultId")}>
+              {workspace.experimentResults.map(item => <option key={item.resultId} value={item.resultId}>{resultLabel(item)}</option>)}
+            </Select>
+          </Field>
+          <Field label="从零对照组实测结果" hint="必须是当前目标项目中的另一组独立结果，不能与迁移组相同。">
+            <Select required value={form.coldStartResultId} onChange={update("coldStartResultId")}>
+              {workspace.experimentResults.map(item => <option key={item.resultId} value={item.resultId}>{resultLabel(item)}</option>)}
+            </Select>
+          </Field>
+          <Field label="现场说明（可选）" hint="记录设备、材料、工装、产品或环境差异以及未纳入模型的边界。">
+            <Textarea rows={4} value={form.transferNotes} onChange={update("transferNotes")} />
+          </Field>
         </>}
       </form>
     </Drawer>

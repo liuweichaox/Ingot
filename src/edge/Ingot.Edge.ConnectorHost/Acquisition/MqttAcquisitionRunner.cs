@@ -67,12 +67,24 @@ public sealed class MqttAcquisitionRunner(
                     return;
                 }
 
-                if (!assembler.TryBuildSnapshot(receivedAt, out var snapshot, out var missing))
+                if (!assembler.TryBuildSnapshot(
+                        receivedAt,
+                        out var snapshot,
+                        out var missing,
+                        out var staleValueCount))
                 {
+                    if (staleValueCount > 0)
+                    {
+                        status.RecordStaleSnapshotRejection(
+                            configurationKey,
+                            staleValueCount,
+                            $"合并快照已拒绝：{missing}。");
+                    }
                     if (!string.Equals(missing, lastIncompleteReason, StringComparison.Ordinal))
                     {
                         lastIncompleteReason = missing;
-                        status.RecordFailure(configurationKey, $"合并快照尚未完整：{missing}。");
+                        if (staleValueCount == 0)
+                            status.RecordFailure(configurationKey, $"合并快照尚未完整：{missing}。");
                         logger.LogInformation(
                             "MQTT 采集任务 {Configuration} 等待其余主题：{Reason}", configurationKey, missing);
                     }

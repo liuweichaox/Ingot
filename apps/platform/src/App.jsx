@@ -28,11 +28,13 @@ const sections = [
     id: "research", label: "工艺研发", icon: BeakerIcon, path: "/research-projects", items: [
       ["/research-projects", "工艺优化"], ["/comparisons", "周期对比"],
       ["/quality-analysis", "质量追因"], ["/chat", "AI助手"],
+      ["/golden-questions", "黄金问题集"],
     ],
   },
   {
     id: "context", label: "数据资产", icon: CircleStackIcon, path: "/explorer", items: [
       ["/explorer", "工业对象"], ["/data-quality", "数据质量"],
+      ["/configuration/scenario-packages", "场景包"],
       ["/configuration/process-analysis-plans", "分析模型"],
       ["/configuration/recipe-versions", "配方版本"],
     ],
@@ -66,7 +68,9 @@ const pageDetails = {
   "/inspections": ["质量任务", "处理视觉检查、人工质检与原图复核"],
   "/quality-analysis": ["质量追因", "按产品、配方和运行上下文定位质量偏差并追溯证据"],
   "/comparisons": ["周期对比与验证", "比较同类生产周期、运行段或时间窗口，生成待验证的候选原因"],
+  "/golden-questions": ["工程师黄金问题集", "用真实问题持续核对事实、记录引用、正确拒绝和因果边界"],
   "/data-quality": ["数据可信度", "检查运行对象的数据范围、采样连续性与周期完整性"],
+  "/configuration/scenario-packages": ["场景包", "版本化组合场景的数据、采集、分析、质量和上下文规则"],
   "/configuration/process-analysis-plans": ["分析模型", "版本化定义分析范围、对齐方式、质量分组和数据项"],
   "/configuration/process-data-models": ["工艺模型", "定义工艺变量、阶段号和配方参数，供设备点位统一映射"],
   "/configuration/recipe-versions": ["配方版本", "维护引用数据模型的完整配方有效值"],
@@ -336,8 +340,10 @@ function AppRoutes() {
       <Route path="/configuration/inspection-definitions" element={<Pages.InspectionDefinitionsPage />} />
       <Route path="/configuration/quality-plans" element={<Pages.QualityPlansPage />} />
       <Route path="/comparisons" element={<Pages.CycleComparisonPage />} />
+      <Route path="/golden-questions" element={<Pages.GoldenQuestionsPage />} />
       <Route path="/data-quality" element={<Pages.DataQualityPage />} />
       <Route path="/process-improvement" element={<Navigate to="/research-projects" replace />} />
+      <Route path="/configuration/scenario-packages" element={<Pages.ScenarioPackagesPage />} />
       <Route path="/configuration/process-analysis-plans" element={<Pages.ProcessAnalysisPlansPage />} />
       <Route path="/profiles" element={<Navigate to="/configuration/process-data-models" replace />} />
       <Route path="/configuration/process-data-models" element={<Pages.ProcessDataModelsPage />} />

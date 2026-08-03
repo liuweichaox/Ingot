@@ -232,10 +232,18 @@ public sealed class PostgresCycleScientificComputeEngine : IAsyncDisposable
               SELECT
                 COALESCE(SUM(duration_ms), 0.0) AS valid_duration_ms,
                 SUM((value + next_value) * 0.5 * duration_ms) AS area_ms,
-                SUM((value * value + value * next_value + next_value * next_value)
-                    / 3.0 * duration_ms) AS square_area_ms,
                 SUM((value + next_value) * 0.5 * duration_ms / 1000.0) AS integral
               FROM segments
+            ),
+            centered_variance AS (
+              SELECT SUM((
+                  POWER(value - segment_totals.area_ms / segment_totals.valid_duration_ms, 2) +
+                  (value - segment_totals.area_ms / segment_totals.valid_duration_ms) *
+                    (next_value - segment_totals.area_ms / segment_totals.valid_duration_ms) +
+                  POWER(next_value - segment_totals.area_ms / segment_totals.valid_duration_ms, 2)
+                ) / 3.0 * duration_ms) AS centered_square_area_ms
+              FROM segments CROSS JOIN segment_totals
+              WHERE segment_totals.valid_duration_ms > 0
             ),
             endpoint_weights AS (
               SELECT occurred_at, value, duration_ms / 2.0 AS weight FROM segments
@@ -272,8 +280,8 @@ public sealed class PostgresCycleScientificComputeEngine : IAsyncDisposable
                 (SELECT MAX(value) FROM strict_points) AS maximum,
                 segment_totals.valid_duration_ms,
                 segment_totals.area_ms,
-                segment_totals.square_area_ms,
                 segment_totals.integral,
+                centered_variance.centered_square_area_ms,
                 COALESCE(
                   (SELECT MIN(value) FROM weighted_order
                     WHERE cumulative_weight >= total_weight * 0.05),
@@ -294,7 +302,7 @@ public sealed class PostgresCycleScientificComputeEngine : IAsyncDisposable
                 weighted_moments.sum_wy,
                 weighted_moments.sum_wxx,
                 weighted_moments.sum_wxy
-              FROM segment_totals CROSS JOIN weighted_moments
+              FROM segment_totals CROSS JOIN centered_variance CROSS JOIN weighted_moments
             )
             SELECT
               input_point_count,
@@ -303,9 +311,7 @@ public sealed class PostgresCycleScientificComputeEngine : IAsyncDisposable
               valid_duration_ms,
               CASE WHEN valid_duration_ms > 0 THEN area_ms / valid_duration_ms END AS mean,
               CASE WHEN valid_duration_ms > 0 THEN
-                SQRT(GREATEST(0.0,
-                  square_area_ms / valid_duration_ms -
-                  POWER(area_ms / valid_duration_ms, 2)))
+                SQRT(GREATEST(0.0, centered_square_area_ms / valid_duration_ms))
               END AS stddev,
               p05,
               median,
@@ -358,9 +364,16 @@ public sealed class PostgresCycleScientificComputeEngine : IAsyncDisposable
             reference.InputPointCount != database.InputPointCount)
         {
             throw new ScientificComputeMismatchException(
-                $"信号 {signalCode} 特征 {reference.Code} 的数据库结果与批处理基准不一致。");
+                $"信号 {signalCode} 特征 {reference.Code} 的数据库结果与批处理基准不一致：" +
+                $"value={Format(reference.Value)}/{Format(databaseValue)}, " +
+                $"duration={Format(reference.ValidDurationMs)}/{Format(database.ValidDurationMs)}, " +
+                $"coverage={Format(reference.Coverage)}/{Format(database.Coverage)}, " +
+                $"points={reference.InputPointCount}/{database.InputPointCount}。");
         }
     }
+
+    private static string Format(double? value)
+        => value?.ToString("R", System.Globalization.CultureInfo.InvariantCulture) ?? "null";
 
     private static bool Equivalent(double? expected, double? actual)
         => expected is null && actual is null ||

@@ -325,6 +325,64 @@ public sealed class QualityWorkflowTests
     }
 
     [Fact]
+    public async Task CycleRecordsLinkSameBatchAcrossEquipmentAndCanNarrowByEdge()
+    {
+        static PlatformProductionEvent TaggedRow(
+            long id,
+            string type,
+            string cycleId,
+            string workpieceId,
+            string machineId,
+            string edgeId,
+            string batch,
+            DateTimeOffset at)
+        {
+            var productionEvent = Event(type, cycleId, workpieceId, "LENS-A", at, machineId);
+            productionEvent = productionEvent with
+            {
+                Context = new Dictionary<string, string>(productionEvent.Context, StringComparer.Ordinal)
+                {
+                    ["external_batch_ref"] = batch
+                }
+            };
+            return Row(id, productionEvent) with { EdgeId = edgeId };
+        }
+
+        var at = DateTimeOffset.Parse("2026-07-20T08:00:00Z");
+        var rows = new[]
+        {
+            TaggedRow(1, "cycle.started", "RUN-A", "WP-SHARED", "PRESS-01", "EDGE-A", "BATCH-42", at),
+            TaggedRow(2, "cycle.completed", "RUN-A", "WP-SHARED", "PRESS-01", "EDGE-A", "BATCH-42", at.AddMinutes(1)),
+            TaggedRow(3, "cycle.started", "RUN-B", "WP-SHARED", "PRESS-02", "EDGE-B", "BATCH-42", at.AddMinutes(2)),
+            TaggedRow(4, "cycle.completed", "RUN-B", "WP-SHARED", "PRESS-02", "EDGE-B", "BATCH-42", at.AddMinutes(3)),
+            TaggedRow(5, "cycle.started", "RUN-C", "WP-OTHER", "PRESS-03", "EDGE-B", "BATCH-OTHER", at.AddMinutes(4)),
+            TaggedRow(6, "cycle.completed", "RUN-C", "WP-OTHER", "PRESS-03", "EDGE-B", "BATCH-OTHER", at.AddMinutes(5))
+        };
+        var service = new CycleRecordService(
+            new FakeEventStore(rows),
+            new FakeInspectionStore([]),
+            new FakeReviewStore(),
+            new FakeMasterDataStore(),
+            new ProcessAnalysisResolver(new FakeProcessConfigurationStore()));
+
+        var batch = await service.QueryAsync(
+            null, null, null, null, null, null, null, null, "completed", 100,
+            externalBatchRef: "BATCH-42");
+
+        Assert.Equal(2, batch.Total);
+        Assert.Equal(["PRESS-02", "PRESS-01"], batch.Data.Select(static row => row.MachineId).ToArray());
+        Assert.All(batch.Data, static row => Assert.Equal("BATCH-42", row.ExternalBatchRef));
+        Assert.Equal(["EDGE-A", "EDGE-B"], batch.Data.SelectMany(static row => row.EdgeIds)
+            .Order(StringComparer.Ordinal).ToArray());
+
+        var edge = await service.QueryAsync(
+            null, null, null, null, null, null, null, null, "completed", 100,
+            externalBatchRef: "BATCH-42",
+            edgeId: "EDGE-B");
+        Assert.Equal("RUN-B", Assert.Single(edge.Data).CorrelationId);
+    }
+
+    [Fact]
     public async Task ContinuousProcessWindowsCompareWithoutCycleCorrelationSemantics()
     {
         var rows = new List<PlatformProductionEvent>();
@@ -534,6 +592,7 @@ public sealed class QualityWorkflowTests
         public Task<IReadOnlyList<PlatformProductionEvent>> QueryAsync(PlatformEventQuery query, CancellationToken ct = default)
         {
             IEnumerable<PlatformProductionEvent> filtered = rows;
+            if (!string.IsNullOrWhiteSpace(query.EdgeId)) filtered = filtered.Where(item => item.EdgeId == query.EdgeId);
             if (!string.IsNullOrWhiteSpace(query.EventType)) filtered = filtered.Where(item => item.Event.EventType == query.EventType);
             if (!string.IsNullOrWhiteSpace(query.SubjectType)) filtered = filtered.Where(item => item.Event.Subject.Type == query.SubjectType);
             if (!string.IsNullOrWhiteSpace(query.SubjectId)) filtered = filtered.Where(item => item.Event.Subject.Id == query.SubjectId);

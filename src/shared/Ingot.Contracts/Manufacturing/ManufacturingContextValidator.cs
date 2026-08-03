@@ -246,6 +246,15 @@ public static partial class ManufacturingContextValidator
             return false;
         if (source == "mes" && string.IsNullOrWhiteSpace(value.CommandId))
             return Fail("MES 写入生产上下文时必须提供 CommandId，以保证重复同步不会重复建档。", out error);
+        var materialSpecification = Normalize(value.MaterialSpecification);
+        var maintenanceStatus = Normalize(value.MaintenanceStatus)?.ToLowerInvariant();
+        var calibrationStatus = Normalize(value.CalibrationStatus)?.ToLowerInvariant();
+        var calibrationRef = Normalize(value.CalibrationRef);
+        if (materialSpecification?.Length > 256 || calibrationRef?.Length > 256 ||
+            maintenanceStatus?.Length > 128 || calibrationStatus?.Length > 128)
+        {
+            return Fail("材料规格和校准引用最长 256 个字符，维护与校准状态最长 128 个字符。", out error);
+        }
         normalized = value with
         {
             ContextId = value.ContextId == Guid.Empty ? Guid.NewGuid() : value.ContextId,
@@ -261,6 +270,11 @@ public static partial class ManufacturingContextValidator
             ExternalOrderRef = Normalize(value.ExternalOrderRef),
             ExternalBatchRef = Normalize(value.ExternalBatchRef),
             MaterialLotRef = Normalize(value.MaterialLotRef),
+            MaterialSpecification = materialSpecification,
+            MaintenanceStatus = maintenanceStatus,
+            CalibrationStatus = calibrationStatus,
+            CalibrationRef = calibrationRef,
+            CalibrationValidUntil = value.CalibrationValidUntil?.ToUniversalTime(),
             Actor = Normalize(value.Actor),
             UpdatedAt = DateTimeOffset.UtcNow
         };

@@ -171,7 +171,7 @@ public sealed class InspectionWorkflowService(
         {
             ScopeType = "production-cycle",
             OperationRunId = completed.Event.CorrelationId!,
-            WorkpieceId = context.GetValueOrDefault("workpiece_id", completed.Event.Subject.Id),
+            WorkpieceId = context.GetValueOrDefault("workpiece_id"),
             MachineId = completed.Event.Subject.Id,
             ProductSeries = context.GetValueOrDefault("product_series", "unknown"),
             InspectionPlanId = plan.PlanId,

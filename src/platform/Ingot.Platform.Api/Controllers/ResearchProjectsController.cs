@@ -16,6 +16,12 @@ public sealed class ResearchProjectsController(
     IProcessResearchStore store,
     ProcessResearchWorkflow workflow,
     ResearchExperimentOptimizer experimentOptimizer,
+    ResearchShadowRecommendationService shadowRecommendations,
+    ResearchHistoricalReplayService historicalReplay,
+    ResearchOnlineAdmissionService onlineAdmission,
+    ResearchRollbackDrillService rollbackDrills,
+    ResearchOnlineCampaignService onlineCampaign,
+    ResearchTransferAssessmentService transferAssessments,
     IResearchObservationAssembler observationAssembler,
     ResearchExperimentResultMaterializer resultMaterializer,
     ICycleComparisonService cycleComparisonService,
@@ -50,8 +56,98 @@ public sealed class ResearchProjectsController(
         => await ExecuteForProjectAsync(
             projectId,
             false,
-            async _ => Ok(await workflow.GetWorkspaceAsync(projectId, ct).ConfigureAwait(false)),
+            async _ =>
+            {
+                var workspace = await workflow.GetWorkspaceAsync(projectId, ct).ConfigureAwait(false);
+                var report = await shadowRecommendations.BuildReportAsync(projectId, ct)
+                    .ConfigureAwait(false);
+                var onlineReport = await onlineCampaign.BuildReportAsync(projectId, ct)
+                    .ConfigureAwait(false);
+                return Ok(workspace with { ShadowReport = report, OnlineReport = onlineReport });
+            },
             ct).ConfigureAwait(false);
+
+    [HttpGet("{projectId:guid}/shadow-report")]
+    public Task<IActionResult> GetShadowReport(Guid projectId, CancellationToken ct)
+        => ExecuteForProjectAsync(
+            projectId,
+            false,
+            async _ => Ok(await shadowRecommendations.BuildReportAsync(projectId, ct)
+                .ConfigureAwait(false)),
+            ct);
+
+    [HttpGet("{projectId:guid}/online-admission")]
+    public Task<IActionResult> GetOnlineAdmission(Guid projectId, CancellationToken ct)
+        => ExecuteForProjectAsync(
+            projectId,
+            false,
+            async _ => Ok(await onlineAdmission.AssessAsync(projectId, ct).ConfigureAwait(false)),
+            ct);
+
+    [HttpGet("{projectId:guid}/online-report")]
+    public Task<IActionResult> GetOnlineReport(Guid projectId, CancellationToken ct)
+        => ExecuteForProjectAsync(
+            projectId,
+            false,
+            async _ => Ok(await onlineCampaign.BuildReportAsync(projectId, ct).ConfigureAwait(false)),
+            ct);
+
+    [HttpPost("{projectId:guid}/historical-replays")]
+    public Task<IActionResult> RunHistoricalReplay(
+        Guid projectId,
+        [FromBody] ResearchHistoricalReplayRequest request,
+        CancellationToken ct)
+        => ExecuteForProjectAsync(
+            projectId,
+            true,
+            async identity => Ok(await historicalReplay.RunAsync(
+                projectId, request, identity.UserId, ct).ConfigureAwait(false)),
+            ct);
+
+    [HttpPost("historical-replays/{reportId:guid}/review")]
+    public async Task<IActionResult> ReviewHistoricalReplay(
+        Guid reportId,
+        CancellationToken ct)
+    {
+        var report = await store.GetHistoricalReplayReportAsync(reportId, ct)
+            .ConfigureAwait(false);
+        if (report is null)
+            return NotFound(new { error = "历史回放报告不存在。" });
+        return await ExecuteForProjectAsync(
+            report.ProjectId,
+            true,
+            async identity => Ok(await historicalReplay.ReviewAsync(
+                reportId, identity.UserId, ct).ConfigureAwait(false)),
+            ct).ConfigureAwait(false);
+    }
+
+    [HttpPost("{projectId:guid}/rollback-drills")]
+    public Task<IActionResult> RecordRollbackDrill(
+        Guid projectId,
+        [FromBody] ResearchRollbackDrillRequest request,
+        CancellationToken ct)
+        => ExecuteForProjectAsync(
+            projectId,
+            true,
+            async identity => Ok(await rollbackDrills.RecordAsync(
+                projectId, request, identity.UserId, ct).ConfigureAwait(false)),
+            ct);
+
+    [HttpPost("rollback-drills/{drillId:guid}/review")]
+    public async Task<IActionResult> ReviewRollbackDrill(
+        Guid drillId,
+        CancellationToken ct)
+    {
+        var drill = await store.GetRollbackDrillAsync(drillId, ct).ConfigureAwait(false);
+        if (drill is null)
+            return NotFound(new { error = "停止与回退演练不存在。" });
+        return await ExecuteForProjectAsync(
+            drill.ProjectId,
+            true,
+            async identity => Ok(await rollbackDrills.ReviewAsync(
+                drillId, identity.UserId, ct).ConfigureAwait(false)),
+            ct).ConfigureAwait(false);
+    }
 
     [HttpPost]
     public async Task<IActionResult> Create(
@@ -395,6 +491,64 @@ public sealed class ResearchProjectsController(
                 ct).ConfigureAwait(false)),
             ct);
 
+    [HttpPost("experiments/{experimentId:guid}/runs/{suggestionRunKey}/shadow-decision")]
+    public async Task<IActionResult> RecordShadowDecision(
+        Guid experimentId,
+        string suggestionRunKey,
+        [FromBody] ResearchShadowDecisionRequest request,
+        CancellationToken ct)
+    {
+        var experiment = await store.GetExperimentAsync(experimentId, ct).ConfigureAwait(false);
+        if (experiment is null)
+            return NotFound(new { error = "优化实验不存在。" });
+        return await ExecuteForProjectAsync(
+            experiment.ProjectId,
+            true,
+            async identity => Ok(await shadowRecommendations.RecordDecisionAsync(
+                experimentId,
+                suggestionRunKey,
+                request,
+                identity.UserId,
+                ct).ConfigureAwait(false)),
+            ct).ConfigureAwait(false);
+    }
+
+    [HttpPost("experiments/{experimentId:guid}/controlled-decision")]
+    public async Task<IActionResult> DecideControlledExperiment(
+        Guid experimentId,
+        [FromBody] ResearchControlledDecisionRequest request,
+        CancellationToken ct)
+    {
+        var experiment = await store.GetExperimentAsync(experimentId, ct).ConfigureAwait(false);
+        if (experiment is null)
+            return NotFound(new { error = "受控在线建议不存在。" });
+        return await ExecuteForProjectAsync(
+            experiment.ProjectId,
+            true,
+            async identity => Ok(await workflow.DecideControlledExperimentAsync(
+                experimentId, request, identity.UserId, ct).ConfigureAwait(false)),
+            ct).ConfigureAwait(false);
+    }
+
+    [HttpPost("shadow-recommendations/{recommendationId:guid}/materialize-outcome")]
+    public async Task<IActionResult> MaterializeShadowOutcome(
+        Guid recommendationId,
+        CancellationToken ct)
+    {
+        var recommendation = await store.GetShadowRecommendationAsync(recommendationId, ct)
+            .ConfigureAwait(false);
+        if (recommendation is null)
+            return NotFound(new { error = "影子建议不存在。" });
+        return await ExecuteForProjectAsync(
+            recommendation.ProjectId,
+            true,
+            async identity => Ok(await shadowRecommendations.MaterializeOutcomeAsync(
+                recommendationId,
+                identity.UserId,
+                ct).ConfigureAwait(false)),
+            ct).ConfigureAwait(false);
+    }
+
     [HttpGet("{projectId:guid}/experiment-readiness")]
     public Task<IActionResult> GetExperimentReadiness(
         Guid projectId,
@@ -512,6 +666,91 @@ public sealed class ResearchProjectsController(
             true,
             async identity => Ok(await workflow.ReviewKnowledgeClaimAsync(
                 claimId,
+                identity.UserId,
+                ct).ConfigureAwait(false)),
+            ct).ConfigureAwait(false);
+    }
+
+    [HttpPost("{projectId:guid}/transfer-assessments")]
+    public Task<IActionResult> AssessTransfer(
+        Guid projectId,
+        [FromBody] ResearchTransferAssessmentRequest request,
+        CancellationToken ct)
+        => ExecuteForProjectAsync(
+            projectId,
+            true,
+            async identity =>
+            {
+                var window = await store.GetProcessWindowAsync(request.SourceWindowId, ct)
+                    .ConfigureAwait(false);
+                var source = window is null
+                    ? null
+                    : await store.GetProjectAsync(window.ProjectId, ct).ConfigureAwait(false);
+                if (source is not null && !CanAccess(source, identity, false))
+                    return Forbid();
+                return Ok(await transferAssessments.AssessAsync(
+                    projectId,
+                    request,
+                    identity.UserId,
+                    ct).ConfigureAwait(false));
+            },
+            ct);
+
+    [HttpGet("{projectId:guid}/transfer-sources")]
+    public Task<IActionResult> GetTransferSources(Guid projectId, CancellationToken ct)
+        => ExecuteForProjectAsync(
+            projectId,
+            false,
+            async identity =>
+            {
+                var projects = await store.ListProjectsAsync(
+                    identity.UserId,
+                    identity.HasAnyRole(PlatformRoles.PlatformAdministrator),
+                    100,
+                    0,
+                    ct).ConfigureAwait(false);
+                var rows = await Task.WhenAll(projects.Select(async project => new
+                {
+                    project,
+                    windows = await store.ListProcessWindowsAsync(project.ProjectId, ct)
+                        .ConfigureAwait(false)
+                })).ConfigureAwait(false);
+                return Ok(new
+                {
+                    data = rows.SelectMany(row => row.windows
+                        .Where(window => window.Status == ProcessWindowStatuses.Validated &&
+                                         window.ValidationLevel == ProcessWindowValidationLevels.Production)
+                        .Select(window => new
+                        {
+                            sourceProjectId = row.project.ProjectId,
+                            sourceProjectName = row.project.Name,
+                            sourceProcessName = row.project.ProcessName,
+                            sourceProductName = row.project.ProductName,
+                            sourceMaterialName = row.project.MaterialName,
+                            sourceSiteCode = row.project.SiteCode,
+                            windowId = window.WindowId,
+                            windowName = window.Name,
+                            window.Applicability,
+                            window.AnalysisHash
+                        }))
+                });
+            },
+            ct);
+
+    [HttpPost("transfer-assessments/{assessmentId:guid}/review")]
+    public async Task<IActionResult> ReviewTransferAssessment(
+        Guid assessmentId,
+        CancellationToken ct)
+    {
+        var assessment = await store.GetTransferAssessmentAsync(assessmentId, ct)
+            .ConfigureAwait(false);
+        if (assessment is null)
+            return NotFound(new { error = "迁移评估不存在。" });
+        return await ExecuteForProjectAsync(
+            assessment.ProjectId,
+            true,
+            async identity => Ok(await transferAssessments.ReviewAsync(
+                assessmentId,
                 identity.UserId,
                 ct).ConfigureAwait(false)),
             ct).ConfigureAwait(false);

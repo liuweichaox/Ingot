@@ -120,7 +120,12 @@ public sealed class ManufacturingContextValidatorTests
                 RecipeVersion = "7",
                 ToolingInstallationId = Guid.NewGuid(),
                 Source = "MES",
-                CommandId = "MES-CMD-001"
+                CommandId = "MES-CMD-001",
+                MaterialSpecification = " GLASS-X ",
+                MaintenanceStatus = " AVAILABLE ",
+                CalibrationStatus = " VALID ",
+                CalibrationRef = " CAL-2026-07 ",
+                CalibrationValidUntil = DateTimeOffset.Parse("2027-01-01T00:00:00+08:00")
             },
             out ProductionContext? normalized,
             out var error);
@@ -129,6 +134,11 @@ public sealed class ManufacturingContextValidatorTests
         Assert.NotEqual(Guid.Empty, normalized!.ContextId);
         Assert.Equal("mes", normalized.Source);
         Assert.Equal("MES-CMD-001", normalized.CommandId);
+        Assert.Equal("GLASS-X", normalized.MaterialSpecification);
+        Assert.Equal("available", normalized.MaintenanceStatus);
+        Assert.Equal("valid", normalized.CalibrationStatus);
+        Assert.Equal("CAL-2026-07", normalized.CalibrationRef);
+        Assert.Equal(TimeSpan.Zero, normalized.CalibrationValidUntil!.Value.Offset);
         Assert.Null(normalized.ExternalBatchRef);
     }
 

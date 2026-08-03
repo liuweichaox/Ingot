@@ -111,6 +111,13 @@ public sealed record ProductionContext
     public string? ExternalOrderRef { get; init; }
     public string? ExternalBatchRef { get; init; }
     public string? MaterialLotRef { get; init; }
+    public string? MaterialSpecification { get; init; }
+    /// <summary>现场在本生产区间确认的设备维护状态，例如 available、due 或 maintenance。</summary>
+    public string? MaintenanceStatus { get; init; }
+    /// <summary>设备或关键传感器在本生产区间的校准状态；有效期过期时采集快照会强制标记 expired。</summary>
+    public string? CalibrationStatus { get; init; }
+    public string? CalibrationRef { get; init; }
+    public DateTimeOffset? CalibrationValidUntil { get; init; }
     [JsonPropertyName("userId")]
     public string? Actor { get; init; }
     public DateTimeOffset UpdatedAt { get; init; }

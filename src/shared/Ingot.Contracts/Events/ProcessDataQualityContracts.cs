@@ -17,6 +17,16 @@ public sealed record ProcessDataQualitySummary
     public int DuplicateTimestampCount { get; init; }
     public int OutOfOrderCount { get; init; }
     public int SequenceGapCount { get; init; }
+    /// <summary>设备源时间与 Edge 持久化时间之差的中位数；正值表示设备时间落后。</summary>
+    public double? MedianSourceClockOffsetMs { get; init; }
+    /// <summary>设备源时间与 Edge 持久化时间之间最大的绝对偏差。</summary>
+    public double? MaximumAbsoluteSourceClockOffsetMs { get; init; }
+    /// <summary>Edge 本地持久化到 Platform 摄入的中位延迟，包含断网上送积压时间。</summary>
+    public double? MedianPlatformIngestLatencyMs { get; init; }
+    public double? P95PlatformIngestLatencyMs { get; init; }
+    public double? MaximumPlatformIngestLatencyMs { get; init; }
+    /// <summary>Platform 摄入时间早于 Edge 持久化时间超过一秒的样本数，通常表示节点时钟异常。</summary>
+    public int NegativePlatformIngestLatencyCount { get; init; }
     public IReadOnlyList<SignalDataCoverage> Signals { get; init; } = [];
     public IReadOnlyList<string> Issues { get; init; } = [];
 }
@@ -64,9 +74,14 @@ public sealed record CycleAnalysisMaterialization
 
     public DateTimeOffset? ComputedAt { get; init; }
 
+    public long SourceMinIngestId { get; init; }
+
     public long SourceMaxIngestId { get; init; }
 
     public int SourceEventCount { get; init; }
+
+    /// <summary>参与本次计算的规范化原始事件集合 SHA-256，用于复算时核对精确输入。</summary>
+    public string SourceContentHash { get; init; } = "";
 }
 
 public sealed record CycleAnalysisBackfillRequest

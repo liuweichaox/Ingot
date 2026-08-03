@@ -33,7 +33,9 @@ public sealed record AcquisitionTaskRuntimeStatus(
     double? ObservedIntervalMs,
     string? ActiveRecipe,
     string? LastError,
-    bool CycleActive);
+    bool CycleActive,
+    long StaleSnapshotRejectionCount = 0,
+    long StaleValueRejectionCount = 0);
 
 public sealed record AcquisitionDeploymentApplicationStatus(
     string ProfileId,
@@ -61,7 +63,9 @@ public sealed record EdgeAcquisitionRuntimeStatus(
     string? ActiveRecipe,
     string? LastError,
     IReadOnlyList<AcquisitionTaskRuntimeStatus> Tasks,
-    IReadOnlyList<AcquisitionDeploymentApplicationStatus> Deployments);
+    IReadOnlyList<AcquisitionDeploymentApplicationStatus> Deployments,
+    long StaleSnapshotRejectionCount = 0,
+    long StaleValueRejectionCount = 0);
 
 /// <summary>
 ///     Produces a stable SHA-256 fingerprint for immutable acquisition deployments.

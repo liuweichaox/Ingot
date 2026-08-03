@@ -6,7 +6,9 @@ using Ingot.Contracts.ProcessResearch;
 
 namespace Ingot.Platform.Infrastructure.ProcessResearch;
 
-public sealed partial class ProcessResearchWorkflow(IProcessResearchStore store)
+public sealed partial class ProcessResearchWorkflow(
+    IProcessResearchStore store,
+    ResearchOnlineAdmissionService? onlineAdmission = null)
 {
     public async Task<ResearchProject> CreateProjectAsync(
         ResearchProject draft,
@@ -227,7 +229,26 @@ public sealed partial class ProcessResearchWorkflow(IProcessResearchStore store)
             .ToLowerInvariant();
         if (!ResearchDesignMethods.IsValid(designMethod))
             throw new ProcessResearchRuleException("实验设计方法无效。");
-        if (request.RunPlan.Count < (validationWindow is null ? 2 : 3))
+        var controlledOnline = request.Optimization?.Mode == ResearchOptimizationModes.Controlled;
+        if (controlledOnline)
+        {
+            if (request.RunPlan.Count != 1)
+                throw new ProcessResearchRuleException("受控在线实验必须且只能包含一条运行建议。");
+            if (onlineAdmission is null)
+                throw new ProcessResearchRuleException("受控在线准入服务不可用，按失败关闭处理。");
+            var admission = await onlineAdmission.RequireAsync(projectId, ct).ConfigureAwait(false);
+            if (request.Optimization?.OnlineAdmission is not { Eligible: true } frozenAdmission ||
+                frozenAdmission.HistoricalReplayReportId != admission.HistoricalReplayReportId ||
+                !string.Equals(frozenAdmission.HistoricalReplayReportHash,
+                    admission.HistoricalReplayReportHash, StringComparison.Ordinal) ||
+                !string.Equals(frozenAdmission.ShadowReportHash,
+                    admission.ShadowReportHash, StringComparison.Ordinal) ||
+                frozenAdmission.RollbackDrillId != admission.RollbackDrillId ||
+                !string.Equals(frozenAdmission.RollbackDrillRecordHash,
+                    admission.RollbackDrillRecordHash, StringComparison.Ordinal))
+                throw new ProcessResearchRuleException("受控在线建议没有冻结当前有效的回放与影子准入证据。");
+        }
+        else if (request.RunPlan.Count < (validationWindow is null ? 2 : 3))
             throw new ProcessResearchRuleException(
                 validationWindow is null
                     ? "实验计划必须至少包含两个运行条件，不能用单点设置代替实验设计。"
@@ -301,7 +322,7 @@ public sealed partial class ProcessResearchWorkflow(IProcessResearchStore store)
                 .Select(static factor => $"{factor.VariableCode}:{factor.Value:R}")))
             .Distinct(StringComparer.Ordinal)
             .Count();
-        if (distinctConditions < 2 && validationWindow is null)
+        if (distinctConditions < 2 && validationWindow is null && !controlledOnline)
             throw new ProcessResearchRuleException("实验至少需要两个不同的变量组合。");
         if (validationWindow is not null && distinctConditions != 1)
             throw new ProcessResearchRuleException("独立验证实验必须重复验证同一个候选设置，不能同时改变条件。");
@@ -331,6 +352,7 @@ public sealed partial class ProcessResearchWorkflow(IProcessResearchStore store)
                     RegexOptions.CultureInvariant) ||
                 string.IsNullOrWhiteSpace(request.Optimization.ModelVersion) ||
                 request.Optimization.RunPredictions.Count != runPlan.Length ||
+                !ResearchOptimizationModes.IsValid(request.Optimization.Mode) ||
                 !request.Optimization.RunPredictions.Select(static value => value.RunKey)
                     .ToHashSet(StringComparer.Ordinal)
                     .SetEquals(runPlan.Select(static value => value.RunKey)))
@@ -426,6 +448,19 @@ public sealed partial class ProcessResearchWorkflow(IProcessResearchStore store)
         if (targetStatus == ResearchExperimentStatuses.Approved &&
             string.Equals(experiment.CreatedBy, actor, StringComparison.Ordinal))
             throw new ProcessResearchRuleException("实验创建人和批准人必须分离。");
+        if (targetStatus == ResearchExperimentStatuses.Approved &&
+            experiment.Optimization?.Mode == ResearchOptimizationModes.Shadow)
+            throw new ProcessResearchRuleException("影子建议只用于旁路评估，不能批准或下发设备。");
+        if (targetStatus == ResearchExperimentStatuses.Approved &&
+            experiment.Optimization?.Mode == ResearchOptimizationModes.Controlled)
+        {
+            if (experiment.ControlledDecision?.Decision is not
+                (ResearchControlledDecisionStatuses.Accepted or ResearchControlledDecisionStatuses.Modified))
+                throw new ProcessResearchRuleException("受控在线建议必须先由工程师明确接受或修改，才能批准。");
+            if (onlineAdmission is null)
+                throw new ProcessResearchRuleException("受控在线准入服务不可用，按失败关闭处理。");
+            await onlineAdmission.RequireAsync(experiment.ProjectId, ct).ConfigureAwait(false);
+        }
         if (targetStatus == ResearchExperimentStatuses.Running &&
             experiment.ProjectRevision !=
             (await RequireProjectAsync(experiment.ProjectId, ct).ConfigureAwait(false)).Revision)
@@ -463,6 +498,137 @@ public sealed partial class ProcessResearchWorkflow(IProcessResearchStore store)
             ct).ConfigureAwait(false);
         await AuditAsync(experiment.ProjectId, "experiment", experimentId.ToString(),
             "status-changed", userId, experiment.Status, saved.Status, ct).ConfigureAwait(false);
+        return saved;
+    }
+
+    public async Task<ResearchExperiment> DecideControlledExperimentAsync(
+        Guid experimentId,
+        ResearchControlledDecisionRequest request,
+        string userId,
+        CancellationToken ct = default)
+    {
+        var experiment = await store.GetExperimentAsync(experimentId, ct).ConfigureAwait(false)
+            ?? throw new ProcessResearchRuleException("实验不存在。");
+        var project = await RequireMutableProjectAsync(experiment.ProjectId, ct).ConfigureAwait(false);
+        if (experiment.Optimization?.Mode != ResearchOptimizationModes.Controlled ||
+            experiment.RunPlan.Count != 1)
+            throw new ProcessResearchRuleException("只有单条受控在线建议可以记录人工决策。");
+        if (experiment.Status != ResearchExperimentStatuses.Planned)
+            throw new ProcessResearchRuleException("只有尚未批准的受控在线建议可以决策。");
+        if (experiment.ControlledDecision is not null)
+            return experiment;
+        var actor = NormalizeUser(userId);
+        if (string.Equals(experiment.CreatedBy, actor, StringComparison.Ordinal))
+            throw new ProcessResearchRuleException("受控建议生成者不能替代现场工程师作出执行决策。");
+        var decisionStatus = NormalizeStatus(
+            request.Decision, ResearchControlledDecisionStatuses.IsValid, "受控在线决策");
+        var reason = OptionalText(request.Reason, 4000);
+        var suggested = experiment.RunPlan[0].Factors
+            .OrderBy(static value => value.VariableCode, StringComparer.Ordinal).ToArray();
+        var controls = project.Variables
+            .Where(static value => value.Role == ResearchVariableRoles.Control)
+            .ToDictionary(static value => value.Code, StringComparer.Ordinal);
+
+        ExperimentFactorSetting NormalizeApproved(ExperimentFactorSetting factor)
+        {
+            var code = NormalizeCode(factor.VariableCode, "批准变量");
+            if (!controls.TryGetValue(code, out var variable) ||
+                !double.IsFinite(factor.Value) ||
+                variable.LowerLimit is { } lower && factor.Value < lower ||
+                variable.UpperLimit is { } upper && factor.Value > upper)
+                throw new ProcessResearchRuleException($"批准变量 {code} 超出项目硬边界。");
+            var unit = RequiredText(factor.Unit, "批准变量单位", 40);
+            if (!string.Equals(unit, variable.Unit, StringComparison.OrdinalIgnoreCase))
+                throw new ProcessResearchRuleException($"批准变量 {code} 的单位必须与项目定义一致。");
+            return factor with { VariableCode = code, Unit = variable.Unit };
+        }
+
+        IReadOnlyList<ExperimentFactorSetting> approved;
+        if (decisionStatus == ResearchControlledDecisionStatuses.Rejected)
+        {
+            if (reason is null)
+                throw new ProcessResearchRuleException("拒绝受控在线建议必须记录原因，以便转化为约束或适用范围。");
+            approved = [];
+        }
+        else
+        {
+            approved = (request.ApprovedFactors.Count == 0 &&
+                        decisionStatus == ResearchControlledDecisionStatuses.Accepted
+                    ? suggested
+                    : request.ApprovedFactors.Select(NormalizeApproved)
+                        .OrderBy(static value => value.VariableCode, StringComparer.Ordinal).ToArray());
+            if (approved.Count != controls.Count ||
+                !approved.Select(static value => value.VariableCode)
+                    .ToHashSet(StringComparer.Ordinal).SetEquals(controls.Keys))
+                throw new ProcessResearchRuleException("工程师批准值必须包含且仅包含全部可控变量。");
+            var changed = approved.Zip(suggested).Any(pair =>
+                pair.First.VariableCode != pair.Second.VariableCode ||
+                Math.Abs(pair.First.Value - pair.Second.Value) > 1e-12);
+            if (decisionStatus == ResearchControlledDecisionStatuses.Accepted && changed)
+                throw new ProcessResearchRuleException("接受建议时批准值必须等于模型建议；需要改值请使用 modified。");
+            if (decisionStatus == ResearchControlledDecisionStatuses.Modified && (!changed || reason is null))
+                throw new ProcessResearchRuleException("修改建议必须提供不同的完整批准值并说明原因。");
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        var decisionHash = Convert.ToHexStringLower(SHA256.HashData(
+            JsonSerializer.SerializeToUtf8Bytes(new
+            {
+                experiment.ExperimentId,
+                Decision = decisionStatus,
+                Suggested = suggested,
+                Approved = approved,
+                Reason = reason,
+                Actor = actor,
+                DecidedAt = now
+            })));
+        var decision = new ResearchControlledDecision
+        {
+            Decision = decisionStatus,
+            SuggestedFactors = suggested,
+            ApprovedFactors = approved,
+            Reason = reason,
+            DecisionSnapshotHash = decisionHash,
+            DecidedBy = actor,
+            DecidedAt = now
+        };
+        var execution = experiment.Execution ?? BuildExecution(experiment);
+        var updated = experiment with
+            {
+                ControlledDecision = decision,
+                Factors = approved.Count > 0 ? approved : experiment.Factors,
+                RunPlan = approved.Count > 0
+                    ? [experiment.RunPlan[0] with { Factors = approved }]
+                    : experiment.RunPlan,
+                Status = decisionStatus == ResearchControlledDecisionStatuses.Rejected
+                    ? ResearchExperimentStatuses.Cancelled
+                    : experiment.Status,
+                Execution = decisionStatus == ResearchControlledDecisionStatuses.Rejected
+                    ? execution with { State = ResearchExperimentExecutionStates.Cancelled }
+                    : execution with
+                    {
+                        Commands =
+                        [
+                            execution.Commands[0] with { RequestedFactors = approved }
+                        ]
+                },
+                UpdatedAt = now
+            };
+        var saved = await store.SaveControlledDecisionTransactionAsync(
+            updated,
+            new ResearchAuditEntry
+            {
+                EntryId = Guid.CreateVersion7(),
+                ProjectId = experiment.ProjectId,
+                ResourceType = "controlled-online-decision",
+                ResourceId = experiment.ExperimentId.ToString(),
+                Action = $"controlled-{decisionStatus}",
+                FromStatus = experiment.Status,
+                ToStatus = updated.Status,
+                UserId = actor,
+                CreatedAt = now
+            },
+            ct).ConfigureAwait(false);
         return saved;
     }
 
@@ -1072,7 +1238,7 @@ public sealed partial class ProcessResearchWorkflow(IProcessResearchStore store)
         string userId,
         CancellationToken ct = default)
     {
-        await RequireMutableProjectAsync(projectId, ct).ConfigureAwait(false);
+        var project = await RequireMutableProjectAsync(projectId, ct).ConfigureAwait(false);
         ResearchProcessWindow? referencedWindow = null;
         if (request.ProcessWindowId is { } windowId)
         {
@@ -1084,6 +1250,36 @@ public sealed partial class ProcessResearchWorkflow(IProcessResearchStore store)
                     ProcessWindowValidationLevels.Production))
                 throw new ProcessResearchRuleException(
                     "知识声明只能引用经过跨区组重复实验验证的工艺窗口。");
+        }
+        ResearchTransferAssessment? referencedTransfer = null;
+        if (request.TransferAssessmentId is { } assessmentId)
+        {
+            referencedTransfer = await store.GetTransferAssessmentAsync(assessmentId, ct)
+                .ConfigureAwait(false);
+            if (referencedTransfer is null || referencedTransfer.ProjectId != projectId ||
+                referencedTransfer.Status != ResearchTransferAssessmentStatuses.Reviewed ||
+                referencedTransfer.Outcome != ResearchTransferOutcomes.Beneficial ||
+                referencedTransfer.TargetProjectRevision != project.Revision)
+                throw new ProcessResearchRuleException(
+                    "知识声明只能引用目标项目当前版本中经过独立复核且有收益的迁移评估。");
+            var sourceWindow = await store.GetProcessWindowAsync(
+                referencedTransfer.SourceWindowId, ct).ConfigureAwait(false);
+            if (sourceWindow?.Status != ProcessWindowStatuses.Validated ||
+                sourceWindow.ValidationLevel != ProcessWindowValidationLevels.Production ||
+                sourceWindow.AnalysisHash != referencedTransfer.SourceWindowAnalysisHash)
+                throw new ProcessResearchRuleException("迁移评估引用的源工艺窗口已经失效。");
+            var repeated = (await store.ListTransferAssessmentsAsync(projectId, ct)
+                    .ConfigureAwait(false))
+                .Where(value => value.SourceWindowId == referencedTransfer.SourceWindowId &&
+                                value.Status == ResearchTransferAssessmentStatuses.Reviewed &&
+                                value.Outcome == ResearchTransferOutcomes.Beneficial &&
+                                value.TargetProjectRevision == project.Revision)
+                .Select(static value => value.TransferResultId)
+                .Distinct()
+                .Count();
+            if (repeated < 2)
+                throw new ProcessResearchRuleException(
+                    "迁移知识至少需要两次不同实测结果相对从零对照取得经复核收益。");
         }
         var now = DateTimeOffset.UtcNow;
         var existing = request.ClaimId == Guid.Empty
@@ -1105,12 +1301,23 @@ public sealed partial class ProcessResearchWorkflow(IProcessResearchStore store)
                 referencedWindow.AnalysisHash,
                 now));
         }
+        if (referencedTransfer is not null)
+        {
+            evidence.Add(CreateEvidence(
+                projectId,
+                EvidenceKinds.TransferAssessment,
+                referencedTransfer.AssessmentId.ToString(),
+                "知识声明引用的重复收益迁移评估。",
+                referencedTransfer.RecordHash,
+                now));
+        }
         var saved = await store.SaveKnowledgeClaimAsync(
             request with
             {
                 ClaimId = existing?.ClaimId ??
                           (request.ClaimId == Guid.Empty ? Guid.CreateVersion7() : request.ClaimId),
                 ProjectId = projectId,
+                TransferAssessmentId = referencedTransfer?.AssessmentId,
                 Statement = RequiredText(request.Statement, "知识声明", 8000),
                 Applicability = RequiredText(request.Applicability, "知识适用范围", 8000),
                 Status = ResearchKnowledgeStatuses.Draft,
@@ -1169,15 +1376,23 @@ public sealed partial class ProcessResearchWorkflow(IProcessResearchStore store)
         var hypothesesTask = store.ListHypothesesAsync(projectId, ct);
         var experimentsTask = store.ListExperimentsAsync(projectId, ct);
         var resultsTask = store.ListExperimentResultsAsync(projectId, ct);
+        var shadowTask = store.ListShadowRecommendationsAsync(projectId, ct);
+        var replayTask = store.ListHistoricalReplayReportsAsync(projectId, ct);
+        var rollbackTask = store.ListRollbackDrillsAsync(projectId, ct);
         var windowsTask = store.ListProcessWindowsAsync(projectId, ct);
         var claimsTask = store.ListKnowledgeClaimsAsync(projectId, ct);
+        var transfersTask = store.ListTransferAssessmentsAsync(projectId, ct);
         var auditTask = store.ListAuditEntriesAsync(projectId, ct);
         await Task.WhenAll(
             hypothesesTask,
             experimentsTask,
             resultsTask,
+            shadowTask,
+            replayTask,
+            rollbackTask,
             windowsTask,
             claimsTask,
+            transfersTask,
             auditTask).ConfigureAwait(false);
         return new ResearchProjectWorkspace
         {
@@ -1185,8 +1400,12 @@ public sealed partial class ProcessResearchWorkflow(IProcessResearchStore store)
             Hypotheses = await hypothesesTask.ConfigureAwait(false),
             Experiments = await experimentsTask.ConfigureAwait(false),
             ExperimentResults = await resultsTask.ConfigureAwait(false),
+            ShadowRecommendations = await shadowTask.ConfigureAwait(false),
+            HistoricalReplayReports = await replayTask.ConfigureAwait(false),
+            RollbackDrills = await rollbackTask.ConfigureAwait(false),
             ProcessWindows = await windowsTask.ConfigureAwait(false),
             KnowledgeClaims = await claimsTask.ConfigureAwait(false),
+            TransferAssessments = await transfersTask.ConfigureAwait(false),
             Audit = await auditTask.ConfigureAwait(false)
         };
     }

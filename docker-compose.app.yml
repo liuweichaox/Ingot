@@ -73,11 +73,14 @@ services:
       - ProcessKnowledge__ArchiveRootPath=/app/Archive/process-knowledge
       - ProcessOptimizer__Enabled=${INGOT_OPTIMIZER_ENABLED:-true}
       - ProcessOptimizer__BaseUrl=http://optimizer:8100
-      - ProcessOptimizer__RequestTimeoutSeconds=${INGOT_OPTIMIZER_TIMEOUT_SECONDS:-30}
+      - ProcessOptimizer__RequestTimeoutSeconds=${INGOT_OPTIMIZER_TIMEOUT_SECONDS:-300}
       - Chat__Enabled=${INGOT_CHAT_ENABLED:-false}
       - Chat__Provider=${INGOT_CHAT_PROVIDER:-Deterministic}
       - Chat__FastModel=${INGOT_CHAT_FAST_MODEL:-deterministic-v1}
       - Chat__ReasoningModel=${INGOT_CHAT_REASONING_MODEL:-deterministic-v1}
+      - Chat__BaseUrl=${INGOT_CHAT_BASE_URL:-}
+      - Chat__ProbeOnStartup=${INGOT_CHAT_PROBE_ON_STARTUP:-true}
+      - Chat__ProbeTimeoutSeconds=${INGOT_CHAT_PROBE_TIMEOUT_SECONDS:-10}
       - Chat__EnableCombinedAnalysis=${INGOT_CHAT_ENABLE_COMBINED_ANALYSIS:-false}
       - Chat__MaxToolCalls=${INGOT_CHAT_MAX_TOOL_CALLS:-8}
       - Chat__MaxRunSeconds=${INGOT_CHAT_MAX_RUN_SECONDS:-60}

@@ -45,6 +45,12 @@ public sealed record CycleComparisonResult
     /// </summary>
     public CycleDiagnosisSummary Diagnosis { get; init; } = new();
 
+    /// <summary>
+    ///     由确定性工具生成的统一调查报告。本地模型只能组织和解释这些字段，
+    ///     不能自行补写数值、记录标识或把候选关联升级为根因。
+    /// </summary>
+    public CycleInvestigationReport Investigation { get; init; } = new();
+
     public required CycleComparisonAcceptance Acceptance { get; init; }
 }
 
@@ -77,6 +83,75 @@ public sealed record CycleDiagnosisSummary
     public IReadOnlyList<CycleCauseCandidate> Candidates { get; init; } = [];
     public IReadOnlyList<CycleCauseInteraction> Interactions { get; init; } = [];
     public IReadOnlyList<string> Limitations { get; init; } = [];
+}
+
+public sealed record CycleInvestigationReport
+{
+    public string Status { get; init; } = "insufficient";
+    public string TargetCycleId { get; init; } = "";
+    public CycleInvestigationDataQuality DataQuality { get; init; } = new();
+    public CycleInvestigationBaseline ComparisonBaseline { get; init; } = new();
+    public IReadOnlyList<CycleFirstDeviation> FirstDeviations { get; init; } = [];
+    public IReadOnlyList<CycleCauseCandidate> CandidateCauses { get; init; } = [];
+    public IReadOnlyList<CycleCounterEvidence> CounterEvidence { get; init; } = [];
+    public IReadOnlyList<string> Confounders { get; init; } = [];
+    public IReadOnlyList<string> MissingData { get; init; } = [];
+    public IReadOnlyList<CycleValidationExperiment> NextExperiments { get; init; } = [];
+    public string ConclusionGuardrail { get; init; } =
+        "当前结果是观察性候选，必须经过受控重复实验才能升级为已验证原因。";
+}
+
+public sealed record CycleInvestigationDataQuality
+{
+    public string TargetStatus { get; init; } = ProcessDataStatuses.Unavailable;
+    public double TargetEvidenceWeight { get; init; }
+    public int AvailableComparisonCycles { get; init; }
+    public int DegradedComparisonCycles { get; init; }
+    public int UnavailableComparisonCycles { get; init; }
+    public IReadOnlyList<string> Issues { get; init; } = [];
+}
+
+public sealed record CycleInvestigationBaseline
+{
+    public IReadOnlyList<string> ComparisonCycleIds { get; init; } = [];
+    public IReadOnlyDictionary<string, string> MatchingContext { get; init; } =
+        new Dictionary<string, string>();
+    public int CompleteCycleCount { get; init; }
+    public int QualityLinkedCycleCount { get; init; }
+    public double EffectiveCycleWeight { get; init; }
+}
+
+public sealed record CycleFirstDeviation
+{
+    public required string SignalCode { get; init; }
+    public required string FeatureCode { get; init; }
+    public string? PhaseCode { get; init; }
+    public string? PhaseName { get; init; }
+    public int? PhaseOrder { get; init; }
+    public DateTimeOffset? StartedAt { get; init; }
+    public double? TargetValue { get; init; }
+    public double? HistoricalMedian { get; init; }
+    public double? RobustDeviation { get; init; }
+}
+
+public sealed record CycleCounterEvidence
+{
+    public required string CandidateId { get; init; }
+    public required string Kind { get; init; }
+    public required string Statement { get; init; }
+}
+
+public sealed record CycleValidationExperiment
+{
+    public required string CandidateId { get; init; }
+    public required string VariableCode { get; init; }
+    public required string DataSource { get; init; }
+    public string Design { get; init; } = "two-level-repeated-blocked";
+    public int MinimumLevels { get; init; } = 2;
+    public int MinimumBlocks { get; init; } = 2;
+    public int RepeatsPerCondition { get; init; } = 2;
+    public IReadOnlyList<string> BlockingFactors { get; init; } = [];
+    public required string Rationale { get; init; }
 }
 
 public sealed record CycleCauseCandidate
@@ -161,6 +236,8 @@ public sealed record CycleComparisonRow
 
     public required string MachineId { get; init; }
 
+    public IReadOnlyList<string> EdgeIds { get; init; } = [];
+
     public IReadOnlyDictionary<string, string> Context { get; init; } =
         new Dictionary<string, string>();
 
@@ -193,6 +270,12 @@ public sealed record CycleComparisonRow
     public string? AssemblyRevisionId { get; init; }
 
     public string? AssemblyRevision { get; init; }
+
+    public string? WorkpieceId { get; init; }
+
+    public string? ExternalBatchRef { get; init; }
+
+    public string? MaterialLotRef { get; init; }
 
     public int SampleCount { get; init; }
 

@@ -112,6 +112,43 @@ public sealed class WholeCycleAnalysisEngineTests
     }
 
     [Fact]
+    public void Analyze_ReportsSourceClockOffsetAndPlatformIngestLatency()
+    {
+        var rows = new[]
+        {
+            Sample(1, 0, 1, recordedDelayMs: 100, ingestDelayMs: 50),
+            Sample(2, 100, 2, recordedDelayMs: 200, ingestDelayMs: 100)
+        };
+
+        var result = new WholeCycleAnalysisEngine().Analyze(
+            rows,
+            Start,
+            Start.AddMilliseconds(100),
+            Model(),
+            Plan("mean"));
+
+        Assert.Equal(150, result.Quality.MedianSourceClockOffsetMs);
+        Assert.Equal(200, result.Quality.MaximumAbsoluteSourceClockOffsetMs);
+        Assert.Equal(75, result.Quality.MedianPlatformIngestLatencyMs);
+        Assert.Equal(97.5, result.Quality.P95PlatformIngestLatencyMs);
+        Assert.Equal(100, result.Quality.MaximumPlatformIngestLatencyMs);
+        Assert.Equal(0, result.Quality.NegativePlatformIngestLatencyCount);
+    }
+
+    [Fact]
+    public void Analyze_CountsMaterialNegativeIngestLatencyAsClockAnomaly()
+    {
+        var result = new WholeCycleAnalysisEngine().Analyze(
+            [Sample(1, 0, 1, recordedDelayMs: 0, ingestDelayMs: -1501)],
+            Start,
+            Start.AddMilliseconds(1),
+            Model(),
+            Plan("mean"));
+
+        Assert.Equal(1, result.Quality.NegativePlatformIngestLatencyCount);
+    }
+
+    [Fact]
     public void Analyze_ComputesFeaturesForConfiguredStageIntervals()
     {
         var rows = new[]
@@ -217,26 +254,37 @@ public sealed class WholeCycleAnalysisEngineTests
         Assert.Contains("未注册的科研特征定义", error.Message, StringComparison.Ordinal);
     }
 
-    private static PlatformProductionEvent Sample(long ingestId, int offsetMs, double value, string? stageNumber = null)
+    private static PlatformProductionEvent Sample(
+        long ingestId,
+        int offsetMs,
+        double value,
+        string? stageNumber = null,
+        int recordedDelayMs = 2,
+        int ingestDelayMs = 3)
     {
         var values = new Dictionary<string, object?> { ["temperature"] = value };
         if (stageNumber is not null)
             values["process.stage_number"] = long.Parse(stageNumber);
+        var occurredAt = Start.AddMilliseconds(offsetMs);
+        var recordedAt = occurredAt.AddMilliseconds(recordedDelayMs);
         return new PlatformProductionEvent
         {
             IngestId = ingestId,
             EdgeId = "EDGE-1",
-            IngestedAt = Start.AddMilliseconds(offsetMs + 5),
+            IngestedAt = recordedAt.AddMilliseconds(ingestDelayMs),
             Event = ProductionEvent.Create(
                 "process.sample",
-                Start.AddMilliseconds(offsetMs),
+                occurredAt,
                 "edge/EDGE-1/plc",
                 new ObjectRef("equipment", "PLC-1"),
                 "cycle-1",
                 data: new Dictionary<string, object?>
                 {
                     ["values"] = values
-                })
+                }) with
+            {
+                RecordedAt = recordedAt
+            }
         };
     }
 

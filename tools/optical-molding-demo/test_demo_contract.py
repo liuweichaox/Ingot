@@ -2,10 +2,11 @@ from argparse import Namespace
 import socket
 import threading
 
-from bootstrap_demo import data_model, recipe
+from bootstrap_demo import analysis_plan, data_model, recipe, scenario_package
 from demo_contract import DATA_ITEMS, RECIPE_PARAMETERS, device_recipe_values
 from device_simulator import Fx3uRegisterBank, Fx3uServer, Simulator, handler, values
 from provision_data_source import build_payload
+from submit_quality import read_source_cycle_number
 
 
 def test_sensor_and_recipe_contract_matches_reference_parameter_lists():
@@ -95,6 +96,25 @@ def test_device_snapshot_and_acquisition_profile_cover_every_declared_field():
     assert snapshot_values["pressure"]["load"] > 0
 
 
+def test_acquisition_profile_can_identify_an_independent_second_device():
+    profile = build_payload(
+        Namespace(
+            edge_id="EDGE-01",
+            profile_id="second-device",
+            subject_id="PRESS-02",
+            source="connector/melsec-a1e/press-02",
+            device_host="press-02.internal",
+            device_port=5552,
+            profile_version=1,
+            data_model_version=1,
+        )
+    )
+
+    assert profile["profileId"] == "second-device"
+    assert profile["subjectId"] == "PRESS-02"
+    assert profile["source"] == "connector/melsec-a1e/press-02"
+
+
 def test_device_can_offset_recipe_versions_for_a_new_data_model_generation():
     simulator = Simulator(
         cycle_seconds=60,
@@ -104,6 +124,41 @@ def test_device_can_offset_recipe_versions_for_a_new_data_model_generation():
     )
 
     assert simulator.snapshot()["activeRecipe"]["version"] == 3
+
+
+def test_bootstrap_keeps_model_recipe_and_analysis_versions_aligned():
+    assert data_model(3)["version"] == 3
+    assert recipe(5, 3, variant=1)["dataModelVersion"] == 3
+    assert recipe(6, 3, based_on_version=5, variant=2)["basedOnVersion"] == 5
+    assert analysis_plan(3, 3)["version"] == 3
+    assert analysis_plan(3, 3)["dataModelVersion"] == 3
+    package = scenario_package(3, 2)
+    assert package["version"] == 3
+    assert package["dataModelVersion"] == 3
+    assert package["analysisPlanVersion"] == 3
+    assert package["acquisitionProfiles"] == [
+        {"id": "optical-lens-molding-simulator", "version": 2}
+    ]
+    assert any(
+        field["fieldCode"] == "calibration_status"
+        and field["mode"] == "required-for-analysis"
+        for field in package["contextFields"]
+    )
+
+
+def test_quality_station_uses_source_cycle_context_not_operation_run_id_shape():
+    detail = {
+        "events": [
+            {
+                "event": {
+                    "correlationId": "019fc719-a02f-7e19-8971-5c24033d7f69",
+                    "context": {"source_cycle_no": "12"},
+                }
+            }
+        ]
+    }
+
+    assert read_source_cycle_number(detail) == 12
 
 
 def test_fx3u_run_active_register_has_a_real_boundary_between_molding_cycles():

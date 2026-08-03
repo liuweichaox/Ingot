@@ -17,5 +17,7 @@ public interface ICycleRecordService
         int limit,
         int offset = 0,
         string? search = null,
-        CancellationToken ct = default);
+        CancellationToken ct = default,
+        string? edgeId = null,
+        string? externalBatchRef = null);
 }

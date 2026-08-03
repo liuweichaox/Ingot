@@ -12,7 +12,7 @@ namespace Ingot.Platform.Infrastructure.Cycles;
 public sealed class WholeCycleAnalysisEngine(
     IFeatureDefinitionRegistry? featureDefinitions = null)
 {
-    public const string AlgorithmVersion = "stage-relative-v4";
+    public const string AlgorithmVersion = "stage-relative-v5";
     private readonly IFeatureDefinitionRegistry _featureDefinitions =
         featureDefinitions ?? new BuiltInFeatureDefinitionRegistry();
 
@@ -49,6 +49,24 @@ public sealed class WholeCycleAnalysisEngine(
         double? maximumGap = intervals.Length == 0 ? null : intervals.Max();
         var interruptionThreshold = medianInterval is > 0 ? medianInterval.Value * 5d : double.PositiveInfinity;
         var sequenceGapCount = CountSourceSequenceGaps(samples);
+        var sourceClockOffsets = samplesByIngest
+            .Select(static row => (row.Event.RecordedAt - row.Event.OccurredAt).TotalMilliseconds)
+            .Where(double.IsFinite)
+            .ToArray();
+        var platformIngestLatencies = samplesByIngest
+            .Select(static row => (row.IngestedAt - row.Event.RecordedAt).TotalMilliseconds)
+            .Where(double.IsFinite)
+            .ToArray();
+        var medianSourceClockOffset = Percentile(sourceClockOffsets, 0.5);
+        double? maximumAbsoluteSourceClockOffset = sourceClockOffsets.Length == 0
+            ? null
+            : sourceClockOffsets.Max(static value => Math.Abs(value));
+        var medianPlatformIngestLatency = Percentile(platformIngestLatencies, 0.5);
+        var p95PlatformIngestLatency = Percentile(platformIngestLatencies, 0.95);
+        double? maximumPlatformIngestLatency = platformIngestLatencies.Length == 0
+            ? null
+            : platformIngestLatencies.Max();
+        var negativePlatformIngestLatencyCount = platformIngestLatencies.Count(static value => value < -1000d);
         var phaseAnalysis = BuildPhases(samples, completedAt, dataModel, plan);
 
         var definitions = dataModel?.Acquisition.DataItems
@@ -123,6 +141,12 @@ public sealed class WholeCycleAnalysisEngine(
             DuplicateTimestampCount = duplicateTimestampCount,
             OutOfOrderCount = outOfOrderCount,
             SequenceGapCount = sequenceGapCount,
+            MedianSourceClockOffsetMs = medianSourceClockOffset,
+            MaximumAbsoluteSourceClockOffsetMs = maximumAbsoluteSourceClockOffset,
+            MedianPlatformIngestLatencyMs = medianPlatformIngestLatency,
+            P95PlatformIngestLatencyMs = p95PlatformIngestLatency,
+            MaximumPlatformIngestLatencyMs = maximumPlatformIngestLatency,
+            NegativePlatformIngestLatencyCount = negativePlatformIngestLatencyCount,
             Signals = signalCoverage,
             Issues = issues
         };
@@ -394,11 +418,18 @@ public sealed class WholeCycleAnalysisEngine(
         var duration = segments.Sum(static item => item.DurationMs);
         if (duration <= 0)
             return null;
-        var squaredIntegral = segments.Sum(static item =>
-            (Math.Pow(item.Start.Value, 2) +
-             item.Start.Value * item.End.Value +
-             Math.Pow(item.End.Value, 2)) / 3d * item.DurationMs);
-        return Math.Sqrt(Math.Max(0, squaredIntegral / duration - Math.Pow(mean.Value, 2)));
+        // Integrate the squared distance from the already-computed mean instead of
+        // subtracting E[x]^2 from E[x^2]. The latter loses most significant digits
+        // for common industrial signals with a large offset and small variation,
+        // and made the C# and PostgreSQL implementations disagree solely because
+        // their aggregate summation order differs.
+        var centeredSquaredIntegral = segments.Sum(item =>
+        {
+            var start = item.Start.Value - mean.Value;
+            var end = item.End.Value - mean.Value;
+            return (start * start + start * end + end * end) / 3d * item.DurationMs;
+        });
+        return Math.Sqrt(Math.Max(0, centeredSquaredIntegral / duration));
     }
 
     private static double? WeightedPercentile(

@@ -22,6 +22,7 @@ public sealed class CycleComparisonService(
     private readonly WholeCycleAnalysisEngine _wholeCycleAnalysis = wholeCycleAnalysis ?? new();
     private readonly CycleAnalysisMaterializer? _materializer = materializer;
     private readonly CycleDiagnosisEngine _diagnosisEngine = new();
+    private readonly CycleInvestigationReportBuilder _investigationBuilder = new();
 
     public async Task<CycleComparisonRow?> GetCycleAsync(
         string correlationId,
@@ -195,6 +196,15 @@ public sealed class CycleComparisonService(
             _diagnosisEngine.Analyze(rows),
             optimizerClient,
             ct).ConfigureAwait(false);
+        var signalComparisons = BuildSignalComparisons(rows[0], rows.Skip(1).ToArray());
+        var qualityAssociations = BuildQualityAssociations(rows);
+        var investigation = _investigationBuilder.Build(
+            rows[0],
+            rows.Skip(1).ToArray(),
+            signalComparisons,
+            diagnosis,
+            acceptance,
+            ResolveComparisonKeys(analysis?.Plan));
         return new CycleComparisonResult
         {
             BaselineCycleId = baselineCycleId,
@@ -212,9 +222,10 @@ public sealed class CycleComparisonService(
                 : effectiveWeight < 20 ? "exploratory" : "stable",
             Baseline = rows[0],
             HistoricalCycles = rows.Skip(1).ToArray(),
-            SignalComparisons = BuildSignalComparisons(rows[0], rows.Skip(1).ToArray()),
-            QualityAssociations = BuildQualityAssociations(rows),
+            SignalComparisons = signalComparisons,
+            QualityAssociations = qualityAssociations,
             Diagnosis = diagnosis,
+            Investigation = investigation,
             Acceptance = acceptance
         };
     }
@@ -340,7 +351,7 @@ public sealed class CycleComparisonService(
         };
         foreach (var key in new[]
                  {
-                     "product_code", "material", "material_code", "material_lot",
+                     "product_code", "material", "material_code", "material_lot", "material_lot_ref",
                      "material_batch", "equipment_id", "mold_id", "tooling_id",
                      "batch_id", "lot_id", "recipe_id", "recipe_version"
                  })
@@ -591,6 +602,10 @@ public sealed class CycleComparisonService(
         {
             CorrelationId = correlationId,
             MachineId = first.Event.Subject.Id,
+            EdgeIds = ordered.Select(static row => row.EdgeId)
+                .Distinct(StringComparer.Ordinal)
+                .Order(StringComparer.Ordinal)
+                .ToArray(),
             Context = context,
             HasStarted = started is not null,
             HasCompleted = completed is not null,
@@ -610,6 +625,10 @@ public sealed class CycleComparisonService(
             MoldId = ProcessAnalysisResolver.ContextValue(context, "mold_id"),
             AssemblyRevisionId = ProcessAnalysisResolver.ContextValue(context, "assembly_revision_id"),
             AssemblyRevision = ProcessAnalysisResolver.ContextValue(context, "assembly_revision"),
+            WorkpieceId = ProcessAnalysisResolver.ContextValue(context, "workpiece_id"),
+            ExternalBatchRef = ProcessAnalysisResolver.ContextValue(context, "external_batch_ref"),
+            MaterialLotRef = ProcessAnalysisResolver.ContextValue(context, "material_lot_ref") ??
+                             ProcessAnalysisResolver.ContextValue(context, "material_lot"),
             SampleCount = samples.Length,
             ExpectedSampleCount = 0,
             SampleCompleteness = wholeCycle.Quality.Status switch
@@ -657,6 +676,7 @@ public sealed class CycleComparisonService(
                 ct).ConfigureAwait(false);
         }
 
+        var source = CycleAnalysisMaterializer.CreateSourceFingerprint(ordered);
         return new MaterializedCycleAnalysis(
             _wholeCycleAnalysis.Analyze(
                 ordered,
@@ -668,8 +688,10 @@ public sealed class CycleComparisonService(
             {
                 Status = "query-time",
                 AlgorithmVersion = WholeCycleAnalysisEngine.AlgorithmVersion,
-                SourceMaxIngestId = ordered.Length == 0 ? 0 : ordered.Max(static row => row.IngestId),
-                SourceEventCount = ordered.Length
+                SourceMinIngestId = source.MinIngestId,
+                SourceMaxIngestId = source.MaxIngestId,
+                SourceEventCount = source.EventCount,
+                SourceContentHash = source.ContentHash
             });
     }
 

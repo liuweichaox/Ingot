@@ -44,6 +44,16 @@ public sealed class InspectionRecordValidatorTests
     }
 
     [Fact]
+    public void TryValidate_ShouldAllowRunLinkedInspectionWithoutWorkpieceIdentity()
+    {
+        var request = CreateRequest() with { WorkpieceId = null };
+
+        Assert.True(InspectionRecordValidator.TryValidate(request, out var normalized, out var error), error);
+        Assert.Null(normalized!.WorkpieceId);
+        Assert.Equal("RUN-2026-0001", normalized.OperationRunId);
+    }
+
+    [Fact]
     public void TryValidate_ShouldRejectNonV7IdAndDuplicateCharacteristics()
     {
         Assert.False(InspectionRecordValidator.TryValidate(

@@ -119,6 +119,20 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, IA
                   context           JSONB NOT NULL
                 );
 
+                CREATE TABLE IF NOT EXISTS tooling_usage_counters (
+                  tooling_installation_id UUID PRIMARY KEY,
+                  started_run_count BIGINT NOT NULL CHECK (started_run_count >= 0),
+                  updated_at TIMESTAMPTZ NOT NULL
+                );
+
+                INSERT INTO tooling_usage_counters(tooling_installation_id, started_run_count, updated_at)
+                SELECT (context->>'tooling_installation_id')::uuid, count(*), now()
+                FROM operation_context_snapshots
+                WHERE context->>'tooling_installation_id' ~*
+                      '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+                GROUP BY (context->>'tooling_installation_id')::uuid
+                ON CONFLICT (tooling_installation_id) DO NOTHING;
+
                 CREATE TABLE IF NOT EXISTS data_object_summaries (
                   subject_type              TEXT NOT NULL,
                   subject_id                TEXT NOT NULL,
@@ -257,36 +271,60 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, IA
         var accepted = 0;
         var duplicates = 0;
         var acceptedMaxIngestByCorrelationId = new Dictionary<string, long>(StringComparer.Ordinal);
+        var transactionContexts = new Dictionary<string, IReadOnlyDictionary<string, string>>(StringComparer.Ordinal);
 
         foreach (var evt in ordered)
         {
             if (await TryReserveEventAsync(connection, transaction, request.EdgeId, evt, ct)
                     .ConfigureAwait(false))
             {
-                var ingestId = await InsertEventAsync(connection, transaction, request.EdgeId, evt, ct)
+                var effectiveEvent = evt;
+                if (evt.EventType.EndsWith(".started", StringComparison.Ordinal))
+                {
+                    effectiveEvent = await AttachToolingUsageOrdinalAsync(
+                        connection,
+                        transaction,
+                        evt,
+                        ct).ConfigureAwait(false);
+                    if (!string.IsNullOrWhiteSpace(effectiveEvent.CorrelationId))
+                        transactionContexts[effectiveEvent.CorrelationId] = effectiveEvent.Context;
+                }
+                else if (!string.IsNullOrWhiteSpace(evt.CorrelationId) &&
+                         transactionContexts.TryGetValue(evt.CorrelationId, out var captured))
+                {
+                    effectiveEvent = evt with { Context = MergeCapturedContext(captured, evt.Context) };
+                }
+
+                var ingestId = await InsertEventAsync(connection, transaction, request.EdgeId, effectiveEvent, ct)
                     .ConfigureAwait(false);
                 await ProjectDataObjectSummaryAsync(
                     connection,
                     transaction,
                     request.EdgeId,
                     ingestId,
-                    evt,
+                    effectiveEvent,
                     ct).ConfigureAwait(false);
-                var analysisKey = evt.CorrelationId ?? $"{evt.Subject.Type}:{evt.Subject.Id}";
+                var analysisKey = effectiveEvent.CorrelationId ??
+                                  $"{effectiveEvent.Subject.Type}:{effectiveEvent.Subject.Id}";
                 analysisConfigurations.TryGetValue(analysisKey, out var analysis);
                 await _timeSeriesStore.ProjectEventAsync(
                     connection,
                     transaction,
                     request.EdgeId,
                     ingestId,
-                    evt,
+                    effectiveEvent,
                     analysis,
                     ct).ConfigureAwait(false);
-                if (!string.IsNullOrWhiteSpace(evt.CorrelationId))
+                if (!string.IsNullOrWhiteSpace(effectiveEvent.CorrelationId))
                 {
-                    acceptedMaxIngestByCorrelationId[evt.CorrelationId] = Math.Max(
-                        acceptedMaxIngestByCorrelationId.GetValueOrDefault(evt.CorrelationId),
+                    acceptedMaxIngestByCorrelationId[effectiveEvent.CorrelationId] = Math.Max(
+                        acceptedMaxIngestByCorrelationId.GetValueOrDefault(effectiveEvent.CorrelationId),
                         ingestId);
+                }
+                if (effectiveEvent.EventType.EndsWith(".started", StringComparison.Ordinal))
+                {
+                    await UpsertOperationContextSnapshotAsync(connection, transaction, effectiveEvent, ct)
+                        .ConfigureAwait(false);
                 }
                 accepted++;
             }
@@ -295,11 +333,6 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, IA
                 await VerifyDuplicateAsync(connection, transaction, request.EdgeId, evt, ct)
                     .ConfigureAwait(false);
                 duplicates++;
-            }
-            if (evt.EventType.EndsWith(".started", StringComparison.Ordinal))
-            {
-                await UpsertOperationContextSnapshotAsync(connection, transaction, evt, ct)
-                    .ConfigureAwait(false);
             }
         }
 
@@ -403,6 +436,20 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, IA
             AddContext(context, "external_order_ref", resolved.Production.ExternalOrderRef);
             AddContext(context, "external_batch_ref", resolved.Production.ExternalBatchRef);
             AddContext(context, "material_lot_ref", resolved.Production.MaterialLotRef);
+            AddContext(context, "material_specification", resolved.Production.MaterialSpecification);
+            AddContext(context, "maintenance_status", resolved.Production.MaintenanceStatus);
+            AddContext(context, "calibration_ref", resolved.Production.CalibrationRef);
+            if (resolved.Production.CalibrationValidUntil is { } calibrationValidUntil)
+            {
+                context["calibration_valid_until"] = calibrationValidUntil
+                    .ToUniversalTime().ToString("O", CultureInfo.InvariantCulture);
+            }
+            var calibrationStatus = resolved.Production.CalibrationValidUntil is { } validUntil &&
+                                    validUntil < evt.OccurredAt
+                ? "expired"
+                : resolved.Production.CalibrationStatus ??
+                  (resolved.Production.CalibrationValidUntil.HasValue ? "valid" : null);
+            AddContext(context, "calibration_status", calibrationStatus);
         }
         else
         {
@@ -510,6 +557,40 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, IA
         command.Parameters.AddWithValue("captured_at", evt.OccurredAt.UtcDateTime);
         command.Parameters.AddWithValue("context", NpgsqlDbType.Jsonb, JsonSerializer.Serialize(evt.Context, JsonOptions));
         await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+    }
+
+    private static async Task<ProductionEvent> AttachToolingUsageOrdinalAsync(
+        NpgsqlConnection connection,
+        NpgsqlTransaction transaction,
+        ProductionEvent evt,
+        CancellationToken ct)
+    {
+        if (!evt.Context.TryGetValue("tooling_installation_id", out var rawInstallationId) ||
+            !Guid.TryParse(rawInstallationId, out var installationId))
+        {
+            return evt;
+        }
+
+        await using var command = new NpgsqlCommand(
+            """
+            INSERT INTO tooling_usage_counters(tooling_installation_id, started_run_count, updated_at)
+            VALUES (@installation_id, 1, now())
+            ON CONFLICT (tooling_installation_id) DO UPDATE SET
+              started_run_count = tooling_usage_counters.started_run_count + 1,
+              updated_at = EXCLUDED.updated_at
+            RETURNING started_run_count;
+            """,
+            connection,
+            transaction);
+        command.Parameters.AddWithValue("installation_id", installationId);
+        var ordinal = Convert.ToInt64(await command.ExecuteScalarAsync(ct).ConfigureAwait(false),
+            CultureInfo.InvariantCulture);
+        var context = new Dictionary<string, string>(evt.Context, StringComparer.Ordinal)
+        {
+            ["tooling_usage_count"] = ordinal.ToString(CultureInfo.InvariantCulture),
+            ["tooling_usage_unit"] = "started_runs"
+        };
+        return evt with { Context = context };
     }
 
     private static IReadOnlyDictionary<string, string> MergeCapturedContext(

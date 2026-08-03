@@ -119,9 +119,21 @@ public sealed class MqttSnapshotAssembler
     ///     <paramref name="missing"/> 说明缺哪一条，便于把"还在等哪个主题"直接显示给工程师。
     /// </summary>
     public bool TryBuildSnapshot(DateTimeOffset now, out JsonDocument? snapshot, out string? missing)
+        => TryBuildSnapshot(now, out snapshot, out missing, out _);
+
+    /// <summary>
+    ///     拼装合并快照并返回本次因陈旧而拒绝的必填字段数，使运行状态能够区分
+    ///     “从未收到字段”和“曾经收到、但设备已经停止更新”。
+    /// </summary>
+    public bool TryBuildSnapshot(
+        DateTimeOffset now,
+        out JsonDocument? snapshot,
+        out string? missing,
+        out int staleValueCount)
     {
         snapshot = null;
         missing = null;
+        staleValueCount = 0;
         foreach (var slot in _slots.Where(static item => item.Required))
         {
             if (!_values.TryGetValue(slot, out var entry))
@@ -134,10 +146,12 @@ public sealed class MqttSnapshotAssembler
 
             if (_maxAge > TimeSpan.Zero && now - entry.At > _maxAge)
             {
-                missing = $"字段 {slot.Path} 的值已超过 {_maxAge.TotalSeconds:0} 秒未更新";
-                return false;
+                staleValueCount++;
+                missing ??= $"字段 {slot.Path} 的值已超过 {_maxAge.TotalSeconds:0} 秒未更新";
             }
         }
+        if (staleValueCount > 0)
+            return false;
 
         var tree = new Dictionary<string, object?>(StringComparer.Ordinal);
         foreach (var slot in _slots)

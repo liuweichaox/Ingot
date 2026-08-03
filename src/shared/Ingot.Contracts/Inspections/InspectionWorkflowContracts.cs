@@ -60,7 +60,7 @@ public sealed record InspectionTask
     public string ScopeType { get; init; } = "production-cycle";
     public required string OperationRunId { get; init; }
 
-    public required string WorkpieceId { get; init; }
+    public string? WorkpieceId { get; init; }
 
     public required string MachineId { get; init; }
 

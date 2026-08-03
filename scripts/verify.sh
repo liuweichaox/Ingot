@@ -18,6 +18,15 @@ if ! dotnet --list-sdks 2>/dev/null | grep -qE '^10\.'; then
   exit 1
 fi
 
+# uv 的官方用户级安装目录同样可能不在非交互式 WSL/CI PATH 中。
+if ! command -v uv >/dev/null 2>&1 && [[ -x "$HOME/.local/bin/uv" ]]; then
+  export PATH="$HOME/.local/bin:$PATH"
+fi
+if ! command -v uv >/dev/null 2>&1; then
+  echo "需要 uv 才能执行 optimizer 与现场模拟器测试。" >&2
+  exit 1
+fi
+
 verification_temp="$(mktemp -d)"
 dotnet_artifacts="$verification_temp/dotnet-artifacts"
 frontend_workspace="$verification_temp/frontend-workspace"
@@ -81,6 +90,10 @@ UV_PROJECT_ENVIRONMENT="$optimizer_environment" \
   uv sync --project optimizer --extra service --group dev --locked
 UV_PROJECT_ENVIRONMENT="$optimizer_environment" \
   uv run --project optimizer --locked pytest
+UV_PROJECT_ENVIRONMENT="$optimizer_environment" \
+  uv run --project optimizer --locked pytest tools/optical-molding-demo
+UV_PROJECT_ENVIRONMENT="$optimizer_environment" \
+  uv run --project optimizer --locked pytest tools/thermal-curing-demo
 
 for script in scripts/*.sh deploy/*.sh; do
   bash -n "$script"

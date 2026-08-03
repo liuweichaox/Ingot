@@ -1,6 +1,7 @@
 using Ingot.Contracts.ProcessResearch;
 using Ingot.Platform.Api.Controllers;
 using Ingot.Platform.Infrastructure.ProcessResearch;
+using System.Text.Json;
 using Xunit;
 
 namespace Ingot.Core.Tests.Platform;
@@ -21,6 +22,12 @@ public sealed class ProcessResearchWorkflowTests
 
         Assert.Contains(
             "experiments/{experimentId:guid}/materialize-result",
+            postRoutes);
+        Assert.Contains(
+            "experiments/{experimentId:guid}/runs/{suggestionRunKey}/shadow-decision",
+            postRoutes);
+        Assert.Contains(
+            "shadow-recommendations/{recommendationId:guid}/materialize-outcome",
             postRoutes);
         Assert.DoesNotContain(
             "experiments/{experimentId:guid}/results",
@@ -802,6 +809,884 @@ public sealed class ProcessResearchWorkflowTests
         Assert.Contains("未知或尚未定义", error.Message, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task TransferAssessment_ComparesColdStartAndDetectsNegativeTransfer()
+    {
+        var store = new MemoryStore();
+        var now = DateTimeOffset.UtcNow;
+        var source = TransferProject("source", "material-a", now);
+        var target = TransferProject("target", "material-b", now) with
+        {
+            ProjectId = Guid.CreateVersion7(),
+            Code = "target-transfer"
+        };
+        await store.SaveProjectAsync(source);
+        await store.SaveProjectAsync(target);
+        var window = new ResearchProcessWindow
+        {
+            WindowId = Guid.CreateVersion7(),
+            ProjectId = source.ProjectId,
+            Name = "Released source window",
+            Status = ProcessWindowStatuses.Validated,
+            ValidationLevel = ProcessWindowValidationLevels.Production,
+            Variables =
+            [
+                new ProcessWindowVariable
+                {
+                    VariableCode = "temperature",
+                    LowerBound = 500,
+                    UpperBound = 540,
+                    Unit = "Cel"
+                }
+            ],
+            ObjectiveCodes = ["error"],
+            Confidence = 0.9,
+            ConfidenceMethod = ResearchConfidenceMethods.Frequentist,
+            AnalysisHash = new string('a', 64),
+            Applicability = "same process, measured target context",
+            CreatedBy = "engineer-a",
+            CreatedAt = now,
+            UpdatedAt = now
+        };
+        await store.SaveProcessWindowAsync(window);
+        var coldStart = TransferResult(target.ProjectId, 0.8, true, 'b', now);
+        var transferred = TransferResult(target.ProjectId, 0.3, true, 'c', now);
+        await store.SaveExperimentResultAsync(coldStart);
+        await store.SaveExperimentResultAsync(transferred);
+
+        var service = new ResearchTransferAssessmentService(store);
+        var beneficial = await service.AssessAsync(
+            target.ProjectId,
+            new ResearchTransferAssessmentRequest
+            {
+                SourceWindowId = window.WindowId,
+                TransferResultId = transferred.ResultId,
+                ColdStartResultId = coldStart.ResultId
+            },
+            "engineer-a");
+
+        Assert.Equal(ResearchTransferOutcomes.Beneficial, beneficial.Outcome);
+        Assert.True(beneficial.EvidenceSufficient);
+        Assert.True(beneficial.SchemaCompatible);
+        Assert.True(beneficial.RelativeGain > 0.05);
+        Assert.Contains(beneficial.ContextDifferences, item => item.Field == "material");
+        await Assert.ThrowsAsync<ProcessResearchRuleException>(
+            () => service.ReviewAsync(beneficial.AssessmentId, "engineer-a"));
+        var reviewed = await service.ReviewAsync(beneficial.AssessmentId, "engineer-b");
+        Assert.Equal(ResearchTransferAssessmentStatuses.Reviewed, reviewed.Status);
+
+        var workflow = new ProcessResearchWorkflow(store);
+        await Assert.ThrowsAsync<ProcessResearchRuleException>(() =>
+            workflow.SaveKnowledgeClaimAsync(
+                target.ProjectId,
+                new ResearchKnowledgeClaim
+                {
+                    TransferAssessmentId = reviewed.AssessmentId,
+                    Statement = "源窗口可迁移到目标材料条件。",
+                    Applicability = "当前生产线和已验证材料条件。"
+                },
+                "engineer-a"));
+        var secondTransferred = TransferResult(target.ProjectId, 0.25, true, 'e', now);
+        await store.SaveExperimentResultAsync(secondTransferred);
+        var secondAssessment = await service.AssessAsync(
+            target.ProjectId,
+            new ResearchTransferAssessmentRequest
+            {
+                SourceWindowId = window.WindowId,
+                TransferResultId = secondTransferred.ResultId,
+                ColdStartResultId = coldStart.ResultId
+            },
+            "engineer-a");
+        secondAssessment = await service.ReviewAsync(secondAssessment.AssessmentId, "engineer-b");
+        var claim = await workflow.SaveKnowledgeClaimAsync(
+            target.ProjectId,
+            new ResearchKnowledgeClaim
+            {
+                TransferAssessmentId = secondAssessment.AssessmentId,
+                Statement = "源窗口在目标材料条件下相对从零建立有重复收益。",
+                Applicability = "当前生产线和已验证材料条件。"
+            },
+            "engineer-a");
+        Assert.Contains(claim.Evidence,
+            item => item.Kind == EvidenceKinds.TransferAssessment &&
+                    item.ReferenceId == secondAssessment.AssessmentId.ToString());
+
+        var regressed = TransferResult(target.ProjectId, 1.1, true, 'd', now);
+        await store.SaveExperimentResultAsync(regressed);
+        var negative = await service.AssessAsync(
+            target.ProjectId,
+            new ResearchTransferAssessmentRequest
+            {
+                SourceWindowId = window.WindowId,
+                TransferResultId = regressed.ResultId,
+                ColdStartResultId = coldStart.ResultId
+            },
+            "engineer-a");
+        Assert.Equal(ResearchTransferOutcomes.NegativeTransfer, negative.Outcome);
+        Assert.True(negative.NegativeTransferDetected);
+    }
+
+    private static ResearchProject TransferProject(string code, string material, DateTimeOffset now)
+        => new()
+        {
+            ProjectId = Guid.CreateVersion7(),
+            Code = code,
+            Name = code,
+            ProcessName = "precision forming",
+            MaterialName = material,
+            SiteCode = "plant-a",
+            Status = ResearchProjectStatuses.Active,
+            Objectives =
+            [
+                new ResearchObjective
+                {
+                    Code = "error",
+                    Name = "Error",
+                    Unit = "um",
+                    Direction = "minimize",
+                    Baseline = 0.8,
+                    Target = 0.2,
+                    UpperLimit = 0.4
+                }
+            ],
+            Variables =
+            [
+                new ResearchVariable
+                {
+                    Code = "temperature",
+                    Name = "Temperature",
+                    Role = ResearchVariableRoles.Control,
+                    Unit = "Cel",
+                    LowerLimit = 480,
+                    UpperLimit = 560
+                }
+            ],
+            OwnerUserId = "engineer-a",
+            MemberUserIds = ["engineer-a", "engineer-b"],
+            CreatedAt = now,
+            UpdatedAt = now,
+            Revision = 1
+        };
+
+    private static ResearchExperimentResult TransferResult(
+        Guid projectId,
+        double observed,
+        bool safetyPassed,
+        char hashCharacter,
+        DateTimeOffset now)
+    {
+        var observations = Enumerable.Range(1, 3).Select(index => new ExperimentRunObservation
+        {
+            RunKey = $"transfer-{hashCharacter}-{index}",
+            ActualFactors =
+            [
+                new ExperimentFactorSetting
+                {
+                    VariableCode = "temperature",
+                    Value = 520,
+                    Unit = "Cel"
+                }
+            ],
+            Outcomes = new Dictionary<string, double> { ["error"] = observed },
+            SourceContentHash = new string(hashCharacter, 64)
+        }).ToArray();
+        return new ResearchExperimentResult
+        {
+            ResultId = Guid.CreateVersion7(),
+            ProjectId = projectId,
+            ExperimentId = Guid.CreateVersion7(),
+            DatasetSnapshotId = $"snapshot-{hashCharacter}",
+            AnalysisRunId = Guid.CreateVersion7(),
+            AnalysisHash = new string(hashCharacter, 64),
+            Metrics =
+            [
+                new ExperimentMetricResult
+                {
+                    ObjectiveCode = "error",
+                    BaselineValue = 0.8,
+                    ObservedValue = observed,
+                    EffectValue = observed - 0.8,
+                    Unit = "um",
+                    BaselineSampleCount = 3,
+                    ExperimentSampleCount = 3,
+                    ComputationMethod = "source mean"
+                }
+            ],
+            RunObservations = observations,
+            RunCount = 3,
+            ReplicateCount = 3,
+            DistinctBlockCount = 2,
+            SafetyPassed = safetyPassed,
+            CalculatedFromSource = true,
+            RecordedBy = "system",
+            RecordedAt = now
+        };
+    }
+
+    [Fact]
+    public async Task ShadowRecommendation_PreregistersDecision_ThenFreezesSourceOutcome()
+    {
+        var store = new MemoryStore();
+        var workflow = new ProcessResearchWorkflow(store);
+        var project = await workflow.CreateProjectAsync(ProjectDraft(), "engineer-a");
+        await workflow.ChangeProjectStatusAsync(
+            project.ProjectId, ResearchProjectStatuses.Active, "engineer-a");
+        var experiment = await CreateOptimizationExperimentAsync(workflow, project.ProjectId);
+        var dispatchError = await Assert.ThrowsAsync<ProcessResearchRuleException>(() =>
+            workflow.ChangeExperimentStatusAsync(
+                experiment.ExperimentId, ResearchExperimentStatuses.Approved, "engineer-b"));
+        Assert.Contains("不能批准", dispatchError.Message, StringComparison.Ordinal);
+        var assembler = new StubShadowObservationAssembler(new ExperimentRunObservation
+        {
+            RunKey = "production-cycle-001",
+            Context = new Dictionary<string, string>
+            {
+                ["machine_id"] = "press-01",
+                ["material_lot_ref"] = "lot-b"
+            },
+            ActualFactors =
+            [
+                new ExperimentFactorSetting
+                    { VariableCode = "holding-temperature", Value = 521, Unit = "Cel" },
+                new ExperimentFactorSetting
+                    { VariableCode = "press-force", Value = 12.2, Unit = "kN" }
+            ],
+            ProcessFeatures = new Dictionary<string, double> { ["temperature.average"] = 520.4 },
+            Outcomes = new Dictionary<string, double> { ["form-error"] = 0.31 },
+            SourceContentHash = new string('a', 64)
+        });
+        await store.SaveExperimentResultAsync(new ResearchExperimentResult
+        {
+            ResultId = Guid.CreateVersion7(),
+            ProjectId = project.ProjectId,
+            ExperimentId = experiment.ExperimentId,
+            DatasetSnapshotId = "historical-applicability",
+            RunObservations =
+            [
+                new ExperimentRunObservation
+                {
+                    RunKey = "historical-1",
+                    Context = new Dictionary<string, string> { ["machine_id"] = "press-00" },
+                    ActualFactors = experiment.RunPlan[0].Factors,
+                    SourceContentHash = new string('1', 64)
+                },
+                new ExperimentRunObservation
+                {
+                    RunKey = "historical-2",
+                    Context = new Dictionary<string, string> { ["machine_id"] = "press-00" },
+                    ActualFactors = experiment.RunPlan[1].Factors,
+                    SourceContentHash = new string('2', 64)
+                }
+            ]
+        });
+        var service = new ResearchShadowRecommendationService(store, assembler);
+
+        var recorded = await service.RecordDecisionAsync(
+            experiment.ExperimentId,
+            experiment.RunPlan[0].RunKey,
+            new ResearchShadowDecisionRequest
+            {
+                Decision = ResearchShadowDecisionStatuses.Modified,
+                ActualRunKey = "production-cycle-001",
+                EngineerSelectedFactors =
+                [
+                    new ExperimentFactorSetting
+                        { VariableCode = "holding-temperature", Value = 520, Unit = "Cel" },
+                    new ExperimentFactorSetting
+                        { VariableCode = "press-force", Value = 12, Unit = "kN" }
+                ],
+                RejectionReason = "当前材料批次要求降低升温幅度。",
+                SiteLimitations = ["材料批次升温速率限制"],
+                ContextSnapshot = new Dictionary<string, string>
+                {
+                    ["machine_id"] = "press-01",
+                    ["material_lot_ref"] = "lot-b"
+                }
+            },
+            "engineer-b");
+
+        Assert.Equal(64, recorded.DecisionSnapshotHash.Length);
+        Assert.Equal("botorch-test", recorded.ModelVersion);
+        Assert.Null(recorded.Outcome);
+        Assert.Equal("optical-molding-window", recorded.ContextSnapshot["project_code"]);
+        Assert.Equal(ResearchApplicabilityStatuses.ContextShift, recorded.Applicability.Status);
+        Assert.Contains("machine_id=press-01", recorded.Applicability.UnseenContextValues);
+        var completed = await service.MaterializeOutcomeAsync(
+            recorded.RecommendationId, "engineer-b");
+        Assert.NotNull(completed.Outcome);
+        Assert.Equal(6, completed.Outcome.SettingDeviationFromSuggestion["holding-temperature"]);
+        Assert.Equal(1, completed.Outcome.SettingDeviationFromEngineerSelection["holding-temperature"]);
+        Assert.Equal(0.31, completed.Outcome.Outcomes["form-error"]);
+        Assert.Equal(new string('a', 64), completed.Outcome.SourceContentHash);
+        Assert.Equal("production-cycle-001", assembler.RequestedRunKey);
+        var report = await service.BuildReportAsync(project.ProjectId);
+        Assert.Equal(1, report.TotalRecommendations);
+        Assert.Equal(1, report.ModifiedCount);
+        Assert.Equal(1, report.CompletedOutcomeCount);
+        Assert.Equal(1, report.ContextShiftCount);
+        Assert.Equal(1, report.SettingDeviationCount);
+        Assert.Equal(1, Assert.Single(report.Calibration).CoveredCount);
+        Assert.Empty(report.SafetyEvents);
+        Assert.False(report.StopRecommended);
+        Assert.Equal(64, report.ReportHash.Length);
+
+        var frozen = await service.MaterializeOutcomeAsync(
+            recorded.RecommendationId, "engineer-c");
+        Assert.Equal(completed.Outcome.CapturedAt, frozen.Outcome!.CapturedAt);
+    }
+
+    [Fact]
+    public async Task ShadowRecommendation_RejectsDecisionWithoutContextOrConsistentFactors()
+    {
+        var store = new MemoryStore();
+        var workflow = new ProcessResearchWorkflow(store);
+        var project = await workflow.CreateProjectAsync(ProjectDraft(), "engineer-a");
+        await workflow.ChangeProjectStatusAsync(
+            project.ProjectId, ResearchProjectStatuses.Active, "engineer-a");
+        var experiment = await CreateOptimizationExperimentAsync(workflow, project.ProjectId);
+        var service = new ResearchShadowRecommendationService(
+            store, new StubShadowObservationAssembler(null));
+        var request = new ResearchShadowDecisionRequest
+        {
+            Decision = ResearchShadowDecisionStatuses.Accepted,
+            ActualRunKey = "production-cycle-002",
+            EngineerSelectedFactors = experiment.RunPlan[0].Factors,
+            ContextSnapshot = new Dictionary<string, string>()
+        };
+
+        var noContext = await Assert.ThrowsAsync<ProcessResearchRuleException>(() =>
+            service.RecordDecisionAsync(
+                experiment.ExperimentId, experiment.RunPlan[0].RunKey,
+                request, "engineer-b"));
+        Assert.Contains("上下文", noContext.Message, StringComparison.Ordinal);
+
+        var inconsistent = await Assert.ThrowsAsync<ProcessResearchRuleException>(() =>
+            service.RecordDecisionAsync(
+                experiment.ExperimentId,
+                experiment.RunPlan[0].RunKey,
+                request with
+                {
+                    EngineerSelectedFactors =
+                    [
+                        new ExperimentFactorSetting
+                            { VariableCode = "holding-temperature", Value = 520, Unit = "Cel" },
+                        new ExperimentFactorSetting
+                            { VariableCode = "press-force", Value = 12, Unit = "kN" }
+                    ],
+                    ContextSnapshot = new Dictionary<string, string> { ["machine_id"] = "press-01" }
+                },
+                "engineer-b"));
+        Assert.Contains("一致", inconsistent.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ShadowReport_StopsOnMeasuredSafetyViolation()
+    {
+        var store = new MemoryStore();
+        var workflow = new ProcessResearchWorkflow(store);
+        var draft = ProjectDraft() with
+        {
+            Code = "shadow-safety-report",
+            OutcomeConstraints =
+            [
+                new ResearchOutcomeConstraint
+                {
+                    Code = "form-error-safety",
+                    Description = "面形误差安全守门",
+                    OutcomeCode = "form-error",
+                    Operator = "<=",
+                    Limit = 0.4,
+                    Unit = "um",
+                    SafetyCritical = true
+                }
+            ]
+        };
+        var project = await workflow.CreateProjectAsync(draft, "engineer-a");
+        await workflow.ChangeProjectStatusAsync(
+            project.ProjectId, ResearchProjectStatuses.Active, "engineer-a");
+        var experiment = await CreateOptimizationExperimentAsync(workflow, project.ProjectId);
+        var service = new ResearchShadowRecommendationService(
+            store,
+            new StubShadowObservationAssembler(new ExperimentRunObservation
+            {
+                RunKey = "unsafe-run",
+                ActualFactors = experiment.RunPlan[0].Factors,
+                Outcomes = new Dictionary<string, double> { ["form-error"] = 0.52 },
+                ConstraintOutcomes = new Dictionary<string, double>
+                    { ["form-error-safety"] = 0.52 },
+                SourceContentHash = new string('e', 64)
+            }));
+        var decision = await service.RecordDecisionAsync(
+            experiment.ExperimentId,
+            experiment.RunPlan[0].RunKey,
+            new ResearchShadowDecisionRequest
+            {
+                Decision = ResearchShadowDecisionStatuses.Accepted,
+                ActualRunKey = "unsafe-run",
+                EngineerSelectedFactors = experiment.RunPlan[0].Factors,
+                ContextSnapshot = new Dictionary<string, string> { ["machine_id"] = "press-01" }
+            },
+            "engineer-b");
+        await service.MaterializeOutcomeAsync(decision.RecommendationId, "engineer-b");
+
+        var report = await service.BuildReportAsync(project.ProjectId);
+
+        Assert.True(report.StopRecommended);
+        Assert.Single(report.SafetyEvents);
+        Assert.Contains(report.StopSignals, value =>
+            value.Code == "safety-boundary-violation" && value.Severity == "stop");
+    }
+
+    [Fact]
+    public async Task HistoricalReplay_FreezesCompleteRawEvidence_AndRequiresIndependentReview()
+    {
+        var store = new MemoryStore();
+        var workflow = new ProcessResearchWorkflow(store);
+        var project = await workflow.CreateProjectAsync(
+            ProjectDraft() with { Code = "historical-replay-proof" }, "engineer-a");
+        await workflow.ChangeProjectStatusAsync(
+            project.ProjectId, ResearchProjectStatuses.Active, "engineer-a");
+        var observations = Enumerable.Range(0, 5).Select(index =>
+            new ExperimentRunObservation
+            {
+                RunKey = $"historical-{index + 1}",
+                ActualFactors =
+                [
+                    new ExperimentFactorSetting
+                    {
+                        VariableCode = "holding-temperature",
+                        Value = 500 + index * 5,
+                        Unit = "Cel"
+                    },
+                    new ExperimentFactorSetting
+                    {
+                        VariableCode = "press-force",
+                        Value = 8 + index,
+                        Unit = "kN"
+                    }
+                ],
+                ProcessFeatures = new Dictionary<string, double>
+                    { ["temperature.average"] = 500 + index * 5 },
+                Outcomes = new Dictionary<string, double>
+                    { ["form-error"] = 0.8 - index * 0.12 },
+                SourceContentHash = new string((char)('a' + index), 64)
+            }).ToArray();
+        await store.SaveExperimentResultAsync(new ResearchExperimentResult
+        {
+            ResultId = Guid.CreateVersion7(),
+            ProjectId = project.ProjectId,
+            ExperimentId = Guid.CreateVersion7(),
+            DatasetSnapshotId = "five-real-conditions",
+            RunObservations = observations,
+            RecordedAt = DateTimeOffset.UtcNow
+        });
+        var optimizer = new StubReplayOptimizerClient();
+        var service = new ResearchHistoricalReplayService(store, optimizer);
+
+        var report = await service.RunAsync(
+            project.ProjectId,
+            new ResearchHistoricalReplayRequest
+            {
+                SeedCount = 2,
+                Budget = 5,
+                InitialObservationCount = 3
+            },
+            "engineer-a");
+
+        Assert.True(report.GatePassed);
+        Assert.Equal(5, report.UniqueConditionCount);
+        Assert.Equal(5, report.SourceRunCount);
+        Assert.Equal(1, report.PredictionIntervalCoverage);
+        Assert.Equal(4, report.PredictionIntervalChecks);
+        Assert.Equal(64, report.DatasetSnapshotHash.Length);
+        Assert.Equal(64, report.ReportHash.Length);
+        Assert.Equal(JsonValueKind.Array, report.RawResult.GetProperty("step_traces").ValueKind);
+        Assert.Equal(5, optimizer.LastCall!.History.Count);
+        Assert.All(optimizer.LastCall.History, value =>
+            Assert.Contains("temperature.average", value.ProcessFeatures));
+        await Assert.ThrowsAsync<ProcessResearchRuleException>(() =>
+            service.ReviewAsync(report.ReportId, "engineer-a"));
+
+        var reviewed = await service.ReviewAsync(report.ReportId, "engineer-b");
+
+        Assert.Equal(ResearchHistoricalReplayStatuses.Reviewed, reviewed.Status);
+        Assert.Equal("engineer-b", reviewed.ReviewedBy);
+        Assert.Equal(reviewed.ReviewedAt,
+            (await service.ReviewAsync(report.ReportId, "engineer-c")).ReviewedAt);
+    }
+
+    [Fact]
+    public async Task ControlledOnline_FailsClosedWithoutReviewedReplayAndShadowCalibration()
+    {
+        var store = new MemoryStore();
+        var workflow = new ProcessResearchWorkflow(store);
+        var project = await workflow.CreateProjectAsync(
+            ProjectDraft() with { Code = "controlled-gate-blocked" }, "engineer-a");
+        await workflow.ChangeProjectStatusAsync(
+            project.ProjectId, ResearchProjectStatuses.Active, "engineer-a");
+        var shadow = new ResearchShadowRecommendationService(
+            store, new EmptyObservationAssembler());
+        var gate = new ResearchOnlineAdmissionService(
+            store, shadow, new ResearchOnlineCampaignService(store));
+
+        var evidence = await gate.AssessAsync(project.ProjectId);
+
+        Assert.False(evidence.Eligible);
+        Assert.Contains(evidence.Failures, value => value.Contains("历史回放", StringComparison.Ordinal));
+        Assert.Contains(evidence.Failures, value => value.Contains("回退演练", StringComparison.Ordinal));
+        Assert.Contains(evidence.Failures, value => value.Contains("有效影子结果", StringComparison.Ordinal));
+        await Assert.ThrowsAsync<ProcessResearchRuleException>(
+            () => gate.RequireAsync(project.ProjectId));
+    }
+
+    [Fact]
+    public async Task RollbackDrill_FreezesEvidenceAndRequiresIndependentReview()
+    {
+        var store = new MemoryStore();
+        var workflow = new ProcessResearchWorkflow(store);
+        var project = await workflow.CreateProjectAsync(
+            ProjectDraft() with { Code = "rollback-drill-proof" }, "engineer-a");
+        await workflow.ChangeProjectStatusAsync(
+            project.ProjectId, ResearchProjectStatuses.Active, "engineer-a");
+        var service = new ResearchRollbackDrillService(store);
+
+        var drill = await service.RecordAsync(
+            project.ProjectId,
+            new ResearchRollbackDrillRequest
+            {
+                Name = "优化器失效与安全回退",
+                Scenario = "模拟优化器不可用并触发安全上限",
+                StopTrigger = "安全上限触发或优化器无响应",
+                RollbackTarget = "恢复上一组已确认安全参数",
+                ExpectedActions = ["停止建议", "恢复安全参数", "保存日志"],
+                ObservedActions = ["停止建议", "恢复安全参数", "保存日志"],
+                Passed = true,
+                EvidenceReference = "operation-run:drill-001",
+                EvidenceContentHash = new string('a', 64),
+                ConductedAt = DateTimeOffset.UtcNow.AddMinutes(-10)
+            },
+            "engineer-a");
+
+        Assert.Equal(64, drill.RecordHash.Length);
+        await Assert.ThrowsAsync<ProcessResearchRuleException>(
+            () => service.ReviewAsync(drill.DrillId, "engineer-a"));
+        var reviewed = await service.ReviewAsync(drill.DrillId, "engineer-b");
+        Assert.Equal(ResearchRollbackDrillStatuses.Reviewed, reviewed.Status);
+        Assert.Equal(reviewed.ReviewedAt,
+            (await service.ReviewAsync(drill.DrillId, "engineer-c")).ReviewedAt);
+    }
+
+    [Fact]
+    public async Task ControlledOnline_RequiresOneEngineerDecision_AndPreservesSuggestedAndApprovedValues()
+    {
+        var store = new MemoryStore();
+        var bootstrapWorkflow = new ProcessResearchWorkflow(store);
+        var project = await bootstrapWorkflow.CreateProjectAsync(
+            ProjectDraft() with { Code = "controlled-online-proof" }, "engineer-a");
+        await bootstrapWorkflow.ChangeProjectStatusAsync(
+            project.ProjectId, ResearchProjectStatuses.Active, "engineer-a");
+        await SeedOnlineAdmissionEvidenceAsync(store, project);
+        await store.SaveExperimentResultAsync(new ResearchExperimentResult
+        {
+            ResultId = Guid.CreateVersion7(),
+            ProjectId = project.ProjectId,
+            ExperimentId = Guid.CreateVersion7(),
+            DatasetSnapshotId = "controlled-history",
+            SafetyPassed = true,
+            CalculatedFromSource = true,
+            RunObservations = Enumerable.Range(0, 5).Select(index =>
+                new ExperimentRunObservation
+                {
+                    RunKey = $"controlled-history-{index}",
+                    ActualFactors = Run("unused", 1, 500 + index * 10, 8 + index).Factors,
+                    ProcessFeatures = new Dictionary<string, double>
+                        { ["temperature.average"] = 500 + index * 10 },
+                    Outcomes = new Dictionary<string, double>
+                        { ["form-error"] = 0.55 - index * 0.05 },
+                    SourceContentHash = new string((char)('f' + index), 64)
+                }).ToArray()
+        });
+        var shadow = new ResearchShadowRecommendationService(
+            store, new EmptyObservationAssembler());
+        var gate = new ResearchOnlineAdmissionService(
+            store, shadow, new ResearchOnlineCampaignService(store));
+        var workflow = new ProcessResearchWorkflow(store, gate);
+        var optimizer = new ResearchExperimentOptimizer(
+            store,
+            new ControlledOptimizerClient(),
+            new EmptyObservationAssembler(),
+            new ResearchExperimentResultMaterializer(workflow),
+            workflow,
+            gate);
+
+        var experiment = await optimizer.CreateNextExperimentAsync(
+            project.ProjectId,
+            new ResearchOptimizationRequest
+            {
+                Mode = ResearchOptimizationModes.Controlled,
+                BatchSize = 1,
+                ReplicatesPerCondition = 1,
+                Seed = 19
+            },
+            "engineer-a");
+
+        Assert.Single(experiment.RunPlan);
+        Assert.True(experiment.Optimization!.OnlineAdmission!.Eligible);
+        await Assert.ThrowsAsync<ProcessResearchRuleException>(() =>
+            workflow.ChangeExperimentStatusAsync(
+                experiment.ExperimentId, ResearchExperimentStatuses.Approved, "engineer-b"));
+
+        var approved = Run("approved", 1, 522, 11).Factors;
+        experiment = await workflow.DecideControlledExperimentAsync(
+            experiment.ExperimentId,
+            new ResearchControlledDecisionRequest
+            {
+                Decision = ResearchControlledDecisionStatuses.Modified,
+                ApprovedFactors = approved,
+                Reason = "现场夹具热负荷限制"
+            },
+            "engineer-b");
+
+        Assert.Equal(520, experiment.ControlledDecision!.SuggestedFactors
+            .Single(value => value.VariableCode == "holding-temperature").Value);
+        Assert.Equal(522, experiment.ControlledDecision.ApprovedFactors
+            .Single(value => value.VariableCode == "holding-temperature").Value);
+        Assert.Equal(64, experiment.ControlledDecision.DecisionSnapshotHash.Length);
+        Assert.Equal(522, experiment.Execution!.Commands[0].RequestedFactors
+            .Single(value => value.VariableCode == "holding-temperature").Value);
+        experiment = await workflow.ChangeExperimentStatusAsync(
+            experiment.ExperimentId, ResearchExperimentStatuses.Approved, "engineer-b");
+        Assert.Equal(ResearchExperimentExecutionStates.Ready, experiment.Execution!.State);
+    }
+
+    [Fact]
+    public async Task OnlineCampaign_StopsNextSuggestionOnSystematicShadowShift()
+    {
+        var store = new MemoryStore();
+        var workflow = new ProcessResearchWorkflow(store);
+        var project = await workflow.CreateProjectAsync(
+            ProjectDraft() with { Code = "online-shift-stop" }, "engineer-a");
+        await workflow.ChangeProjectStatusAsync(
+            project.ProjectId, ResearchProjectStatuses.Active, "engineer-a");
+        await SeedOnlineAdmissionEvidenceAsync(store, project);
+        for (var index = 0; index < 5; index++)
+        {
+            var runKey = $"online-shift-{index}";
+            var experiment = new ResearchExperiment
+            {
+                ExperimentId = Guid.CreateVersion7(),
+                ProjectId = project.ProjectId,
+                Name = $"Online {index}",
+                Status = ResearchExperimentStatuses.Completed,
+                StopRule = "stop",
+                RollbackPlan = "rollback",
+                RunPlan = [Run(runKey, 1, 510 + index, 10)],
+                Optimization = new ResearchOptimizationMetadata
+                {
+                    ModelVersion = "online-shift-test",
+                    InputHash = new string((char)('a' + index), 64),
+                    Mode = ResearchOptimizationModes.Controlled,
+                    RunPredictions = [Prediction(runKey, 0.3)]
+                },
+                ControlledDecision = new ResearchControlledDecision
+                {
+                    Decision = ResearchControlledDecisionStatuses.Accepted,
+                    SuggestedFactors = Run(runKey, 1, 510 + index, 10).Factors,
+                    ApprovedFactors = Run(runKey, 1, 510 + index, 10).Factors,
+                    DecisionSnapshotHash = new string('f', 64),
+                    DecidedBy = "engineer-b",
+                    DecidedAt = DateTimeOffset.UtcNow
+                },
+                CreatedAt = DateTimeOffset.UtcNow,
+                UpdatedAt = DateTimeOffset.UtcNow
+            };
+            await store.SaveExperimentAsync(experiment);
+            await store.SaveExperimentResultAsync(new ResearchExperimentResult
+            {
+                ResultId = Guid.CreateVersion7(),
+                ProjectId = project.ProjectId,
+                ExperimentId = experiment.ExperimentId,
+                DatasetSnapshotId = $"online-shift-{index}",
+                SafetyPassed = true,
+                CalculatedFromSource = true,
+                RunObservations =
+                [
+                    new ExperimentRunObservation
+                    {
+                        RunKey = runKey,
+                        ActualFactors = experiment.RunPlan[0].Factors,
+                        Outcomes = new Dictionary<string, double> { ["form-error"] = 1.3 },
+                        ValidForOptimization = true,
+                        SourceContentHash = new string((char)('0' + index), 64)
+                    }
+                ]
+            });
+        }
+        var online = new ResearchOnlineCampaignService(store);
+        var report = await online.BuildReportAsync(project.ProjectId);
+
+        Assert.True(report.StopRecommended);
+        Assert.True(Assert.Single(report.ShadowComparisons).SystematicShiftDetected);
+        Assert.Contains(report.StopSignals, value =>
+            value.Code == "shadow-online-systematic-shift" && value.Severity == "stop");
+        var gate = new ResearchOnlineAdmissionService(
+            store,
+            new ResearchShadowRecommendationService(store, new EmptyObservationAssembler()),
+            online);
+        var admission = await gate.AssessAsync(project.ProjectId);
+        Assert.False(admission.Eligible);
+        Assert.Contains(admission.Failures, value => value.Contains("在线监控", StringComparison.Ordinal));
+    }
+
+    private static async Task SeedOnlineAdmissionEvidenceAsync(
+        MemoryStore store,
+        ResearchProject project)
+    {
+        var currentProject = (await store.GetProjectAsync(project.ProjectId))!;
+        await store.CreateHistoricalReplayReportAsync(new ResearchHistoricalReplayReport
+        {
+            ReportId = Guid.CreateVersion7(),
+            ProjectId = project.ProjectId,
+            Status = ResearchHistoricalReplayStatuses.Reviewed,
+            DatasetSnapshotHash = new string('1', 64),
+            UniqueConditionCount = 5,
+            SourceRunCount = 5,
+            Budget = 5,
+            SeedCount = 30,
+            InitialObservationCount = 3,
+            Optimizer = new ResearchReplayMethodSummary { SuccessRate = 1, Runs = 30 },
+            Random = new ResearchReplayMethodSummary { SuccessRate = 0.5, Runs = 30 },
+            PredictionIntervalCoverage = 1,
+            PredictionIntervalChecks = 5,
+            EnginePolicy = "production-equivalent:sequential-suggest",
+            EvidenceKind = "real-history-candidate-pool",
+            Limitations = "candidate pool only",
+            GatePassed = true,
+            ReportHash = new string('2', 64),
+            GeneratedBy = "engineer-a",
+            GeneratedAt = DateTimeOffset.UtcNow.AddMinutes(-2),
+            ReviewedBy = "engineer-b",
+            ReviewedAt = DateTimeOffset.UtcNow.AddMinutes(-1)
+        });
+        var drill = new ResearchRollbackDrill
+        {
+            DrillId = Guid.CreateVersion7(),
+            ProjectId = project.ProjectId,
+            ProjectRevision = currentProject.Revision,
+            Name = "安全约束触发回退演练",
+            Scenario = "模拟质量安全约束触发",
+            StopTrigger = "检测到安全结果超限",
+            RollbackTarget = "恢复上一组现场确认的安全参数",
+            ExpectedActions = ["停止下一条建议", "恢复安全参数", "保留证据"],
+            ObservedActions = ["停止下一条建议", "恢复安全参数", "保留证据"],
+            Passed = true,
+            EvidenceReference = "drill-log:test",
+            EvidenceContentHash = new string('6', 64),
+            RecordHash = new string('7', 64),
+            ConductedBy = "engineer-a",
+            ConductedAt = DateTimeOffset.UtcNow.AddMinutes(-4),
+            RecordedAt = DateTimeOffset.UtcNow.AddMinutes(-3)
+        };
+        await store.CreateRollbackDrillAsync(drill);
+        await store.ReviewRollbackDrillAsync(drill with
+        {
+            Status = ResearchRollbackDrillStatuses.Reviewed,
+            ReviewedBy = "engineer-b",
+            ReviewedAt = DateTimeOffset.UtcNow.AddMinutes(-2)
+        });
+        for (var index = 0; index < 5; index++)
+        {
+            var factors = Run($"shadow-{index}", index + 1, 500 + index * 5, 8 + index).Factors;
+            await store.CreateShadowRecommendationAsync(new ResearchShadowRecommendation
+            {
+                RecommendationId = Guid.CreateVersion7(),
+                ProjectId = project.ProjectId,
+                ExperimentId = Guid.CreateVersion7(),
+                SuggestionRunKey = $"shadow-suggestion-{index}",
+                ActualRunKey = $"shadow-actual-{index}",
+                Decision = ResearchShadowDecisionStatuses.Accepted,
+                ModelVersion = "botorch-test",
+                ModelInputHash = new string('3', 64),
+                ProjectRevision = project.Revision,
+                SuggestedFactors = factors,
+                EngineerSelectedFactors = factors,
+                Prediction = Prediction($"shadow-suggestion-{index}", 0.3),
+                Applicability = new ResearchShadowApplicabilityAssessment
+                {
+                    Status = ResearchApplicabilityStatuses.InDomain,
+                    HistoricalObservationCount = 5,
+                    Summary = "inside measured envelope"
+                },
+                ContextSnapshot = new Dictionary<string, string> { ["machine_id"] = "press-01" },
+                DecisionSnapshotHash = new string('4', 64),
+                DecidedBy = "engineer-b",
+                DecidedAt = DateTimeOffset.UtcNow.AddDays(-1),
+                Outcome = new ResearchShadowOutcome
+                {
+                    ActualRunKey = $"shadow-actual-{index}",
+                    ActualFactors = factors,
+                    Outcomes = new Dictionary<string, double> { ["form-error"] = 0.3 },
+                    ActualContextSnapshot = new Dictionary<string, string>
+                        { ["machine_id"] = "press-01" },
+                    ValidForOptimization = true,
+                    SourceContentHash = new string('5', 64),
+                    CapturedAt = DateTimeOffset.UtcNow
+                }
+            });
+        }
+    }
+
+    private static Task<ResearchExperiment> CreateOptimizationExperimentAsync(
+        ProcessResearchWorkflow workflow,
+        Guid projectId)
+        => workflow.CreateExperimentAsync(
+            projectId,
+            new ResearchExperiment
+            {
+                Name = "冻结的影子建议",
+                DesignMethod = ResearchDesignMethods.BayesianOptimization,
+                RunPlan =
+                [
+                    Run("shadow-run-01", 1, 515, 11),
+                    Run("shadow-run-02", 2, 525, 13)
+                ],
+                ObjectiveCodes = ["form-error"],
+                StopRule = "影子评估不下发设备。",
+                RollbackPlan = "影子评估不改变现场参数。",
+                Optimization = new ResearchOptimizationMetadata
+                {
+                    ModelVersion = "botorch-test",
+                    InputHash = new string('b', 64),
+                    Mode = ResearchOptimizationModes.Shadow,
+                    DistinctConditionCount = 2,
+                    RunPredictions =
+                    [
+                        Prediction("shadow-run-01", 0.25),
+                        Prediction("shadow-run-02", 0.22)
+                    ]
+                }
+            },
+            "engineer-a");
+
+    private static OptimizationRunPrediction Prediction(string runKey, double mean)
+        => new()
+        {
+            RunKey = runKey,
+            Objectives = new Dictionary<string, OptimizationMetricPrediction>
+            {
+                ["form-error"] = new()
+                {
+                    Mean = mean,
+                    StandardDeviation = 0.05,
+                    Lower95 = mean - 0.1,
+                    Upper95 = mean + 0.1,
+                    Unit = "um"
+                }
+            },
+            FeasibilityProbability = 0.98,
+            Rationale = "测试影子建议"
+        };
+
     private static async Task CompleteIndependentValidationAsync(
         ProcessResearchWorkflow workflow,
         ResearchProcessWindow window)
@@ -1024,14 +1909,130 @@ public sealed class ProcessResearchWorkflowTests
             => Task.FromResult(new ResearchObservationAssembly([], 0));
     }
 
+    private sealed class ControlledOptimizerClient : IProcessOptimizerClient
+    {
+        public Task<OptimizerSuggestionResponse> SuggestAsync(
+            OptimizerSuggestionCall request,
+            CancellationToken ct = default)
+        {
+            Assert.Equal(1, request.TopK);
+            Assert.Equal(5, request.Observations.Count);
+            return Task.FromResult(new OptimizerSuggestionResponse
+            {
+                ModelVersion = "botorch-controlled-test",
+                ObservationCount = request.Observations.Count,
+                Suggestions =
+                [
+                    new OptimizerSuggestionOutput
+                    {
+                        RecommendedParameters = new Dictionary<string, double>
+                        {
+                            ["holding-temperature"] = 520,
+                            ["press-force"] = 10
+                        },
+                        Predictions = new Dictionary<string, OptimizerObjectivePrediction>
+                        {
+                            ["form-error"] = new()
+                            {
+                                Mean = 0.3,
+                                StandardDeviation = 0.05,
+                                Lower95 = 0.2,
+                                Upper95 = 0.4,
+                                Unit = "um"
+                            }
+                        },
+                        FeasibilityProbability = 0.95,
+                        AcquisitionValue = 0.1,
+                        ModelVersion = "botorch-controlled-test",
+                        Rationale = "inside measured envelope"
+                    }
+                ]
+            });
+        }
+    }
+
+    private sealed class StubReplayOptimizerClient : IProcessOptimizerClient
+    {
+        public OptimizerHistoricalReplayCall? LastCall { get; private set; }
+
+        public Task<OptimizerSuggestionResponse> SuggestAsync(
+            OptimizerSuggestionCall request,
+            CancellationToken ct = default)
+            => throw new NotSupportedException();
+
+        public Task<JsonElement> ReplayHistoryAsync(
+            OptimizerHistoricalReplayCall request,
+            CancellationToken ct = default)
+        {
+            LastCall = request;
+            using var document = JsonDocument.Parse(
+                """
+                {
+                  "original_order_trials": 5,
+                  "optimizer": {"success_rate": 1.0, "median_trials": 4.0, "mean_trials": 4.0, "runs": 2},
+                  "random": {"success_rate": 0.5, "median_trials": 5.0, "mean_trials": 5.0, "runs": 2},
+                  "raw_optimizer": [4, 4],
+                  "raw_random": [5, null],
+                  "selected_history_indices": [[0,1,2,3],[0,1,2,3]],
+                  "step_traces": [
+                    [
+                      {"step":1,"kind":"preregistered-initial-observation","visible_observation_indices_before":[],"revealed_history_index":0},
+                      {"step":2,"kind":"preregistered-initial-observation","visible_observation_indices_before":[0],"revealed_history_index":1},
+                      {"step":3,"kind":"preregistered-initial-observation","visible_observation_indices_before":[0,1],"revealed_history_index":2},
+                      {"step":4,"kind":"optimizer-selection","visible_observation_indices_before":[0,1,2],"revealed_history_index":3}
+                    ],
+                    [
+                      {"step":1,"kind":"preregistered-initial-observation","visible_observation_indices_before":[],"revealed_history_index":0},
+                      {"step":2,"kind":"preregistered-initial-observation","visible_observation_indices_before":[0],"revealed_history_index":1},
+                      {"step":3,"kind":"preregistered-initial-observation","visible_observation_indices_before":[0,1],"revealed_history_index":2},
+                      {"step":4,"kind":"optimizer-selection","visible_observation_indices_before":[0,1,2],"revealed_history_index":3}
+                    ]
+                  ],
+                  "calibration": [
+                    {"prediction_interval_checks":2,"prediction_interval_covered":2,"prediction_interval_coverage":1.0,"safety_violations":0},
+                    {"prediction_interval_checks":2,"prediction_interval_covered":2,"prediction_interval_coverage":1.0,"safety_violations":0}
+                  ],
+                  "safety_violations": {"original_order":0,"optimizer":[0,0],"random":[0,0]},
+                  "budget": 5,
+                  "initial_observation_count": 3,
+                  "engine_policy": "production-equivalent: sequential below 3 observations, BoTorch at 3 or more",
+                  "evidence_kind": "historical-pool-ranking",
+                  "limitations": "Ranks only observed recipes; does not prove online savings.",
+                  "state_persisted": false
+                }
+                """);
+            return Task.FromResult(document.RootElement.Clone());
+        }
+    }
+
+    private sealed class StubShadowObservationAssembler(ExperimentRunObservation? observation)
+        : IResearchObservationAssembler
+    {
+        public string? RequestedRunKey { get; private set; }
+
+        public Task<ResearchObservationAssembly> AssembleAsync(
+            ResearchProject project,
+            IReadOnlyList<ResearchExperiment> experiments,
+            CancellationToken ct = default)
+        {
+            RequestedRunKey = Assert.Single(Assert.Single(experiments).RunPlan).RunKey;
+            return Task.FromResult(new ResearchObservationAssembly(
+                observation is null ? [] : [observation], 1));
+        }
+    }
+
     private sealed class MemoryStore : IProcessResearchStore
     {
         private readonly Dictionary<Guid, ResearchProject> _projects = [];
         private readonly Dictionary<Guid, ResearchHypothesis> _hypotheses = [];
         private readonly Dictionary<Guid, ResearchExperiment> _experiments = [];
+        private readonly Dictionary<Guid, ResearchShadowRecommendation> _shadowRecommendations = [];
+        private readonly Dictionary<Guid, ResearchHistoricalReplayReport> _replayReports = [];
+        private readonly Dictionary<Guid, ResearchRollbackDrill> _rollbackDrills = [];
         private readonly Dictionary<Guid, ResearchExperimentResult> _results = [];
         private readonly Dictionary<Guid, ResearchProcessWindow> _windows = [];
         private readonly Dictionary<Guid, ResearchKnowledgeClaim> _claims = [];
+        private readonly Dictionary<Guid, ResearchTransferAssessment> _transferAssessments = [];
         private readonly List<ResearchAuditEntry> _audit = [];
 
         public Task<ResearchProject?> GetProjectAsync(Guid projectId, CancellationToken ct = default)
@@ -1102,6 +2103,110 @@ public sealed class ProcessResearchWorkflowTests
             return Task.FromResult(value);
         }
 
+        public Task<ResearchShadowRecommendation?> GetShadowRecommendationAsync(
+            Guid recommendationId,
+            CancellationToken ct = default)
+            => Task.FromResult(_shadowRecommendations.GetValueOrDefault(recommendationId));
+
+        public Task<ResearchShadowRecommendation?> GetShadowRecommendationBySuggestionAsync(
+            Guid experimentId,
+            string suggestionRunKey,
+            CancellationToken ct = default)
+            => Task.FromResult(_shadowRecommendations.Values.SingleOrDefault(value =>
+                value.ExperimentId == experimentId &&
+                value.SuggestionRunKey == suggestionRunKey));
+
+        public Task<IReadOnlyList<ResearchShadowRecommendation>> ListShadowRecommendationsAsync(
+            Guid projectId,
+            CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<ResearchShadowRecommendation>>(
+                _shadowRecommendations.Values.Where(value => value.ProjectId == projectId).ToArray());
+
+        public Task<ResearchShadowRecommendation> CreateShadowRecommendationAsync(
+            ResearchShadowRecommendation value,
+            CancellationToken ct = default)
+        {
+            _shadowRecommendations.Add(value.RecommendationId, value);
+            return Task.FromResult(value);
+        }
+
+        public Task<ResearchShadowRecommendation> AttachShadowOutcomeAsync(
+            ResearchShadowRecommendation value,
+            CancellationToken ct = default)
+        {
+            if (!_shadowRecommendations.TryGetValue(value.RecommendationId, out var current) ||
+                current.Outcome is not null)
+                throw new ProcessResearchRuleException("影子建议不存在，或结果已经冻结。");
+            _shadowRecommendations[value.RecommendationId] = value;
+            return Task.FromResult(value);
+        }
+
+        public Task<ResearchHistoricalReplayReport?> GetHistoricalReplayReportAsync(
+            Guid reportId,
+            CancellationToken ct = default)
+            => Task.FromResult(_replayReports.GetValueOrDefault(reportId));
+
+        public Task<IReadOnlyList<ResearchHistoricalReplayReport>> ListHistoricalReplayReportsAsync(
+            Guid projectId,
+            CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<ResearchHistoricalReplayReport>>(
+                _replayReports.Values.Where(value => value.ProjectId == projectId).ToArray());
+
+        public Task<ResearchHistoricalReplayReport> CreateHistoricalReplayReportAsync(
+            ResearchHistoricalReplayReport value,
+            CancellationToken ct = default)
+        {
+            var existing = _replayReports.Values.FirstOrDefault(item =>
+                item.ProjectId == value.ProjectId &&
+                item.DatasetSnapshotHash == value.DatasetSnapshotHash &&
+                item.ReportHash == value.ReportHash);
+            if (existing is not null)
+                return Task.FromResult(existing);
+            _replayReports.Add(value.ReportId, value);
+            return Task.FromResult(value);
+        }
+
+        public Task<ResearchHistoricalReplayReport> ReviewHistoricalReplayReportAsync(
+            ResearchHistoricalReplayReport value,
+            CancellationToken ct = default)
+        {
+            if (!_replayReports.TryGetValue(value.ReportId, out var current) ||
+                current.Status != ResearchHistoricalReplayStatuses.Generated)
+                throw new ProcessResearchRuleException("历史回放报告不存在或已经审核。");
+            _replayReports[value.ReportId] = value;
+            return Task.FromResult(value);
+        }
+
+        public Task<ResearchRollbackDrill?> GetRollbackDrillAsync(
+            Guid drillId,
+            CancellationToken ct = default)
+            => Task.FromResult(_rollbackDrills.GetValueOrDefault(drillId));
+
+        public Task<IReadOnlyList<ResearchRollbackDrill>> ListRollbackDrillsAsync(
+            Guid projectId,
+            CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<ResearchRollbackDrill>>(
+                _rollbackDrills.Values.Where(value => value.ProjectId == projectId).ToArray());
+
+        public Task<ResearchRollbackDrill> CreateRollbackDrillAsync(
+            ResearchRollbackDrill value,
+            CancellationToken ct = default)
+        {
+            _rollbackDrills.Add(value.DrillId, value);
+            return Task.FromResult(value);
+        }
+
+        public Task<ResearchRollbackDrill> ReviewRollbackDrillAsync(
+            ResearchRollbackDrill value,
+            CancellationToken ct = default)
+        {
+            if (!_rollbackDrills.TryGetValue(value.DrillId, out var current) ||
+                current.Status != ResearchRollbackDrillStatuses.Recorded)
+                throw new ProcessResearchRuleException("回退演练不存在或已经复核。");
+            _rollbackDrills[value.DrillId] = value;
+            return Task.FromResult(value);
+        }
+
         public Task<ResearchExperimentResult?> GetExperimentResultAsync(
             Guid resultId,
             CancellationToken ct = default)
@@ -1156,6 +2261,41 @@ public sealed class ProcessResearchWorkflowTests
             CancellationToken ct = default)
         {
             _claims[value.ClaimId] = value;
+            return Task.FromResult(value);
+        }
+
+        public Task<ResearchTransferAssessment?> GetTransferAssessmentAsync(
+            Guid assessmentId,
+            CancellationToken ct = default)
+            => Task.FromResult(_transferAssessments.GetValueOrDefault(assessmentId));
+
+        public Task<IReadOnlyList<ResearchTransferAssessment>> ListTransferAssessmentsAsync(
+            Guid projectId,
+            CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<ResearchTransferAssessment>>(
+                _transferAssessments.Values.Where(value => value.ProjectId == projectId).ToArray());
+
+        public Task<ResearchTransferAssessment> CreateTransferAssessmentAsync(
+            ResearchTransferAssessment value,
+            CancellationToken ct = default)
+        {
+            var existing = _transferAssessments.Values.FirstOrDefault(item =>
+                item.ProjectId == value.ProjectId && item.SourceWindowId == value.SourceWindowId &&
+                item.RecordHash == value.RecordHash);
+            if (existing is not null)
+                return Task.FromResult(existing);
+            _transferAssessments[value.AssessmentId] = value;
+            return Task.FromResult(value);
+        }
+
+        public Task<ResearchTransferAssessment> ReviewTransferAssessmentAsync(
+            ResearchTransferAssessment value,
+            CancellationToken ct = default)
+        {
+            if (!_transferAssessments.TryGetValue(value.AssessmentId, out var current) ||
+                current.Status != ResearchTransferAssessmentStatuses.Recorded)
+                throw new ProcessResearchRuleException("迁移评估不存在或已经复核。");
+            _transferAssessments[value.AssessmentId] = value;
             return Task.FromResult(value);
         }
 

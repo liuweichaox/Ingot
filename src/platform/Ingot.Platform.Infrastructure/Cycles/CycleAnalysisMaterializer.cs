@@ -1,5 +1,8 @@
 using Ingot.Contracts.Events;
 using Ingot.Contracts.ProcessConfiguration;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
 
 namespace Ingot.Platform.Infrastructure.Cycles;
 
@@ -22,14 +25,12 @@ public sealed class CycleAnalysisMaterializer(
         ProcessAnalysisPlan? plan,
         CancellationToken ct = default)
     {
-        var sourceMaxIngestId = rows.Count == 0 ? 0 : rows.Max(static row => row.IngestId);
-        var sourceEventCount = rows.Count;
+        var source = CreateSourceFingerprint(rows);
         if (!completedAt.HasValue)
         {
             return QueryTime(
                 engine.Analyze(rows, startedAt, completedAt, dataModel, plan),
-                sourceMaxIngestId,
-                sourceEventCount);
+                source);
         }
 
         var key = new CycleAnalysisMaterializationKey(
@@ -46,7 +47,7 @@ public sealed class CycleAnalysisMaterializer(
         {
             try
             {
-                var cached = await store.TryLoadAsync(key, sourceMaxIngestId, sourceEventCount, ct)
+                var cached = await store.TryLoadAsync(key, source, ct)
                     .ConfigureAwait(false);
                 if (cached is not null)
                     return FromSnapshot(cached, "cached");
@@ -66,15 +67,15 @@ public sealed class CycleAnalysisMaterializer(
                         ct).ConfigureAwait(false);
                 }
                 var saved = await store.SaveAsync(
-                    key, sourceMaxIngestId, sourceEventCount, analysis, ct).ConfigureAwait(false);
-                var verified = await store.TryLoadAsync(key, sourceMaxIngestId, sourceEventCount, ct)
+                    key, source, analysis, ct).ConfigureAwait(false);
+                var verified = await store.TryLoadAsync(key, source, ct)
                     .ConfigureAwait(false);
                 if (verified is null)
                 {
                     logger.LogInformation(
                         "周期 {CorrelationId} 在物化期间收到更新，当前请求使用本次确定性计算结果并等待下次重算",
                         correlationId);
-                    return QueryTime(analysis, sourceMaxIngestId, sourceEventCount);
+                    return QueryTime(analysis, source);
                 }
                 return FromSnapshot(saved, "materialized");
             }
@@ -90,8 +91,7 @@ public sealed class CycleAnalysisMaterializer(
                     correlationId);
                 return QueryTime(
                     engine.Analyze(rows, startedAt, completedAt, dataModel, plan),
-                    sourceMaxIngestId,
-                    sourceEventCount);
+                    source);
             }
         }
         finally
@@ -108,23 +108,44 @@ public sealed class CycleAnalysisMaterializer(
                 Status = status,
                 AlgorithmVersion = WholeCycleAnalysisEngine.AlgorithmVersion,
                 ComputedAt = snapshot.ComputedAt,
-                SourceMaxIngestId = snapshot.SourceMaxIngestId,
-                SourceEventCount = snapshot.SourceEventCount
+                SourceMinIngestId = snapshot.Source.MinIngestId,
+                SourceMaxIngestId = snapshot.Source.MaxIngestId,
+                SourceEventCount = snapshot.Source.EventCount,
+                SourceContentHash = snapshot.Source.ContentHash
             });
 
     private static MaterializedCycleAnalysis QueryTime(
         WholeCycleAnalysisResult analysis,
-        long sourceMaxIngestId,
-        int sourceEventCount)
+        CycleAnalysisSourceFingerprint source)
         => new(
             analysis,
             new CycleAnalysisMaterialization
             {
                 Status = "query-time",
                 AlgorithmVersion = WholeCycleAnalysisEngine.AlgorithmVersion,
-                SourceMaxIngestId = sourceMaxIngestId,
-                SourceEventCount = sourceEventCount
+                SourceMinIngestId = source.MinIngestId,
+                SourceMaxIngestId = source.MaxIngestId,
+                SourceEventCount = source.EventCount,
+                SourceContentHash = source.ContentHash
             });
+
+    public static CycleAnalysisSourceFingerprint CreateSourceFingerprint(IReadOnlyList<PlatformProductionEvent> rows)
+    {
+        if (rows.Count == 0)
+            return new CycleAnalysisSourceFingerprint(0, 0, 0, Convert.ToHexString(SHA256.HashData([])).ToLowerInvariant());
+
+        var ordered = rows
+            .OrderBy(static row => row.IngestId)
+            .ThenBy(static row => row.Event.EventId)
+            .ToArray();
+        var canonical = JsonSerializer.Serialize(ordered, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(canonical))).ToLowerInvariant();
+        return new CycleAnalysisSourceFingerprint(
+            ordered[0].IngestId,
+            ordered[^1].IngestId,
+            ordered.Length,
+            hash);
+    }
 }
 
 public sealed record MaterializedCycleAnalysis(

@@ -27,7 +27,9 @@ public sealed class CycleAnalysisMaterializerTests
         Assert.Equal("cached", second.Materialization.Status);
         Assert.Equal(1, store.SaveCount);
         Assert.Equal(rows.Count, second.Materialization.SourceEventCount);
+        Assert.Equal(rows.Min(static row => row.IngestId), second.Materialization.SourceMinIngestId);
         Assert.Equal(rows.Max(static row => row.IngestId), second.Materialization.SourceMaxIngestId);
+        Assert.Matches("^[a-f0-9]{64}$", second.Materialization.SourceContentHash);
     }
 
     [Fact]
@@ -53,6 +55,22 @@ public sealed class CycleAnalysisMaterializerTests
             "cycle-1", rows, Start, Start.AddSeconds(2), Model(1), Plan(1));
         var changed = await materializer.GetOrComputeAsync(
             "cycle-1", rows, Start, Start.AddSeconds(2), Model(2), Plan(2));
+
+        Assert.Equal("materialized", changed.Materialization.Status);
+        Assert.Equal(2, store.SaveCount);
+    }
+
+    [Fact]
+    public async Task ChangedSourceContent_WithSameWatermarkAndCount_IsRecomputed()
+    {
+        var store = new FakeStore();
+        var materializer = Create(store);
+        await materializer.GetOrComputeAsync(
+            "cycle-1", Rows(), Start, Start.AddSeconds(2), Model(), Plan());
+        var changedRows = new[] { Row(1, 0, 1), Row(2, 1000, 20), Row(3, 2000, 3) };
+
+        var changed = await materializer.GetOrComputeAsync(
+            "cycle-1", changedRows, Start, Start.AddSeconds(2), Model(), Plan());
 
         Assert.Equal("materialized", changed.Materialization.Status);
         Assert.Equal(2, store.SaveCount);
@@ -154,22 +172,19 @@ public sealed class CycleAnalysisMaterializerTests
 
         public Task<CycleAnalysisSnapshot?> TryLoadAsync(
             CycleAnalysisMaterializationKey key,
-            long sourceMaxIngestId,
-            int sourceEventCount,
+            CycleAnalysisSourceFingerprint source,
             CancellationToken ct = default)
         {
             LoadCount++;
             if (_snapshots.TryGetValue(key, out var snapshot) &&
-                snapshot.SourceMaxIngestId == sourceMaxIngestId &&
-                snapshot.SourceEventCount == sourceEventCount)
+                snapshot.Source == source)
                 return Task.FromResult<CycleAnalysisSnapshot?>(snapshot);
             return Task.FromResult<CycleAnalysisSnapshot?>(null);
         }
 
         public Task<CycleAnalysisSnapshot> SaveAsync(
             CycleAnalysisMaterializationKey key,
-            long sourceMaxIngestId,
-            int sourceEventCount,
+            CycleAnalysisSourceFingerprint source,
             WholeCycleAnalysisResult analysis,
             CancellationToken ct = default)
         {
@@ -177,8 +192,7 @@ public sealed class CycleAnalysisMaterializerTests
             var snapshot = new CycleAnalysisSnapshot(
                 analysis,
                 Start.AddMinutes(SaveCount),
-                sourceMaxIngestId,
-                sourceEventCount);
+                source);
             if (!InvalidateDuringSave)
                 _snapshots[key] = snapshot;
             return Task.FromResult(snapshot);

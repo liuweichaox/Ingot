@@ -14,6 +14,12 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--api", default="http://127.0.0.1:8000")
     parser.add_argument("--edge-id", default="EDGE-FX3U-SIM-001")
+    parser.add_argument("--profile-id", default="optical-lens-molding-simulator")
+    parser.add_argument("--subject-id", default="OPTICAL-MOLD-SIM-01")
+    parser.add_argument(
+        "--source",
+        default="connector/melsec-a1e/fx3u-optical-lens-molding-simulator",
+    )
     parser.add_argument("--device-host", default="127.0.0.1")
     parser.add_argument("--device-port", type=int, default=5551)
     parser.add_argument("--profile-version", type=int, default=8)
@@ -34,7 +40,7 @@ def mapping(item: dict[str, object]) -> dict[str, object]:
 
 def build_payload(args: argparse.Namespace) -> dict[str, object]:
     return {
-        "profileId": "optical-lens-molding-simulator",
+        "profileId": getattr(args, "profile_id", "optical-lens-molding-simulator"),
         "version": args.profile_version,
         "name": "光学镜片模压模拟数据源",
         "status": "published",
@@ -42,9 +48,13 @@ def build_payload(args: argparse.Namespace) -> dict[str, object]:
         "protocol": "melsec-a1e",
         "dataModelId": "optical-lens-molding-demo",
         "dataModelVersion": args.data_model_version,
-        "source": "connector/melsec-a1e/fx3u-optical-lens-molding-simulator",
+        "source": getattr(
+            args,
+            "source",
+            "connector/melsec-a1e/fx3u-optical-lens-molding-simulator",
+        ),
         "subjectType": "equipment",
-        "subjectId": "OPTICAL-MOLD-SIM-01",
+        "subjectId": getattr(args, "subject_id", "OPTICAL-MOLD-SIM-01"),
         "connection": {"baseUrl": "", "snapshotPath": "/api/v1/snapshot", "pollIntervalMs": 1000},
         "melsecA1E": {
             "host": args.device_host,

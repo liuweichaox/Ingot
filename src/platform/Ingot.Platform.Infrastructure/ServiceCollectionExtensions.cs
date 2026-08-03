@@ -95,6 +95,8 @@ public static class ServiceCollectionExtensions
         services.Configure<Insight.CaseLevelThresholds>(configuration.GetSection("CaseLeveling"));
         services.AddSingleton<Insight.IProblemCaseStore, Insight.PostgresProblemCaseStore>();
         services.AddSingleton<Insight.CaseLevelEvaluator>();
+        services.AddSingleton<Insight.IGoldenQuestionStore, Insight.PostgresGoldenQuestionStore>();
+        services.AddSingleton<Insight.GoldenQuestionEvaluator>();
 
         // 工艺数据模型、配方版本与分析方案使用独立的版本化配置存储。
         services.AddSingleton<IProcessConfigurationStore, PostgresProcessConfigurationStore>();
@@ -138,6 +140,12 @@ public static class ServiceCollectionExtensions
                 Math.Clamp(optimizerOptions.RequestTimeoutSeconds, 1, 300));
         });
         services.AddSingleton<ResearchExperimentOptimizer>();
+        services.AddSingleton<ResearchShadowRecommendationService>();
+        services.AddSingleton<ResearchHistoricalReplayService>();
+        services.AddSingleton<ResearchOnlineAdmissionService>();
+        services.AddSingleton<ResearchOnlineCampaignService>();
+        services.AddSingleton<ResearchRollbackDrillService>();
+        services.AddSingleton<ResearchTransferAssessmentService>();
         services.AddHostedService<ResearchExperimentAutomationHostedService>();
 
         // 采集配置由平台统一管理并按边缘节点发布；采集执行器只运行已发布版本。

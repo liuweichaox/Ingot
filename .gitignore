@@ -438,5 +438,6 @@ _to_delete/
 build-output.log
 Data/connector-host-fx3u/
 Data/connector-host-fx3u-conflict-archive
+Data/connector-host-*/
 Data/fx3u-simulator/
 Data/platform-api/
