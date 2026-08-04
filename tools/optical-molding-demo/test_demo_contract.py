@@ -2,7 +2,16 @@ from argparse import Namespace
 import socket
 import threading
 
-from bootstrap_demo import analysis_plan, data_model, recipe, scenario_package
+from bootstrap_demo import (
+    TOOLING_COMPONENTS,
+    TOOLING_COMPONENT_TYPES,
+    TOOLING_MEMBERS,
+    TOOLING_ROLES,
+    analysis_plan,
+    data_model,
+    recipe,
+    scenario_package,
+)
 from demo_contract import DATA_ITEMS, RECIPE_PARAMETERS, device_recipe_values
 from device_simulator import Fx3uRegisterBank, Fx3uServer, Simulator, handler, values
 from provision_data_source import build_payload
@@ -46,6 +55,27 @@ def test_sensor_and_recipe_contract_matches_reference_parameter_lists():
     assert len(recipe(1)["values"]) == 12
 
 
+def test_demo_tooling_separates_asset_classification_from_assembly_position():
+    assert TOOLING_COMPONENT_TYPES == [
+        ("mold.core", "模芯"),
+        ("mold.frame", "模架"),
+    ]
+    roles = {item["code"]: item for item in TOOLING_ROLES}
+    assert roles["upper.core"]["acceptedComponentTypeCodes"] == ["mold.core"]
+    assert roles["lower.core"]["acceptedComponentTypeCodes"] == ["mold.core"]
+    assert roles["upper.frame"]["acceptedComponentTypeCodes"] == ["mold.frame"]
+    assert roles["lower.frame"]["acceptedComponentTypeCodes"] == ["mold.frame"]
+    components = {item["componentId"]: item for item in TOOLING_COMPONENTS}
+    assert len(components) == 4
+    assert {item["componentTypeCode"] for item in components.values()} == {
+        "mold.core",
+        "mold.frame",
+    }
+    assert all("lifecycleCount" not in item["attributes"] for item in components.values())
+    assert {item["roleCode"] for item in TOOLING_MEMBERS} == set(roles)
+    assert {item["componentId"] for item in TOOLING_MEMBERS} == set(components)
+
+
 def test_device_snapshot_and_acquisition_profile_cover_every_declared_field():
     snapshot_values = values("baseline", 0.5)
     profile = build_payload(
@@ -84,6 +114,7 @@ def test_device_snapshot_and_acquisition_profile_cover_every_declared_field():
         "product_series": "D:40:string:20",
         "mold_id": "D:50:string:20",
         "material_lot_ref": "D:60:string:20",
+        "workpiece_id": "D:70:string:40",
     }.items() <= {
         item["contextKey"]: item["sourcePath"]
         for item in profile["contextMappings"]

@@ -32,8 +32,8 @@ const sections = [
   {
     id: "manufacturing", label: "生产上下文", icon: WrenchScrewdriverIcon, path: "/production/changeover", items: [
       ["/production/changeover", "生产切换"], ["/production/tooling-installations", "工装装卸"],
-      ["/configuration/component-types", "组件类型"], ["/configuration/components", "组件台账"],
-      ["/configuration/tooling-types", "工装类型"], ["/configuration/tooling-assemblies", "工装组合"],
+      ["/configuration/tooling-assemblies", "模具资产"], ["/configuration/components", "组件资产"],
+      ["/configuration/tooling-types", "装配模板"], ["/configuration/component-types", "组件分类"],
     ],
   },
   {
@@ -86,10 +86,10 @@ const pageDetails = {
   "/configuration/acquisition-profiles": ["设备接入", "选择采集节点和通信驱动，将设备点位映射到工艺变量"],
   "/configuration/inspection-definitions": ["检测定义", "定义要检测的特性、录入类型和判定规则"],
   "/configuration/quality-plans": ["质量方案", "配置产品适用的检测项目与复核规则"],
-  "/configuration/component-types": ["组件类型", "配置组件台账的分类来源"],
-  "/configuration/components": ["组件台账", "登记可更换、复用和追溯的物理组件"],
-  "/configuration/tooling-types": ["工装类型", "配置装配位置及允许的组件类型"],
-  "/configuration/tooling-assemblies": ["工装组合", "维护工装身份与不可变组件组合版本"],
+  "/configuration/component-types": ["组件分类", "维护模芯、模架等物理资产类别；上模和下模由装配位置决定"],
+  "/configuration/components": ["组件资产", "登记具有独立资产编号和序列号的可更换物理组件"],
+  "/configuration/tooling-types": ["装配模板", "定义模具结构、装配位置和各位置允许的组件分类"],
+  "/configuration/tooling-assemblies": ["模具资产", "查看模具身份、不可变配置版本及每个位置的实际成员"],
   "/edges": ["现场节点", "查看负责连接设备、仪器、系统并上报数据的现场节点"],
   "/platform-metrics": ["平台运行状态", "确认中心服务、现场节点和数据上行是否正常"],
   "/logs": ["运行日志", "查询平台运行记录"],

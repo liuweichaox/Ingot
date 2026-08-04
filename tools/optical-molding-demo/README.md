@@ -18,6 +18,10 @@ PLC 地址和 MC 端口。该配置将运行号、实际配方、过程信号、
 
 重建空数据库后，先发布完整演示主数据：
 
+演示模具按真实组合关系拆成四个必装、各一件的组件：上模芯、上模架、下模芯和下模架；
+组件身份、序列号、制造商、型号、材料、装配修订、设备安装和生产上下文分别留痕。
+组件分类只有“模芯”和“模架”；“上/下”属于不可变配置版本中的装配位置，不重复充当资产分类。
+
 ```powershell
 uv run --project optimizer --locked python tools/optical-molding-demo/bootstrap_demo.py `
   --api http://127.0.0.1:8000 `
@@ -31,6 +35,7 @@ uv run --project optimizer --locked python tools/optical-molding-demo/bootstrap_
 不再另外维护阶段清单。配方包含 12 个设定参数：HEAT、WORK、HOST
 位置，上/下模设置温度，充氮气温度，预热保温延时，压力差上限，上/下模温度上限，
 压力上限和 WORK 位设定压力。名称与单位分别建模，平台编码保持稳定。
+设备上下文同时回读周期号、产品、模具、材料批次和工件号，避免实时周期出现无法关联工件的缺口。
 
 启动 FX3U 模拟设备：
 

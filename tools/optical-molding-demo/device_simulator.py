@@ -317,6 +317,7 @@ class Fx3uRegisterBank:
         self._write(words, "D:40:string:20", "optical-lens-demo")
         self._write(words, "D:50:string:20", "MOLD-DEMO-A01")
         self._write(words, "D:60:string:20", "GLASS-DEMO-01")
+        self._write(words, "D:70:string:40", snapshot["workpieceId"])
         for item in DATA_ITEMS:
             self._write(
                 words,

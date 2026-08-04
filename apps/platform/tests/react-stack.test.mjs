@@ -269,6 +269,12 @@ test("acquisition profiles probe real device points before publishing", () => {
 test("tooling and research workflows avoid editable JSON fields", () => {
   assert.match(pages, /function AttributeFields/);
   assert.match(pages, /function ToolingRoleFields/);
+  assert.match(pages, /function ToolingAssembliesPage/);
+  assert.match(pages, /function ToolingRevisionComposition/);
+  assert.match(pages, /更换组件并创建新版本/);
+  assert.match(pages, /每个装配位置选择一件具体组件资产/);
+  assert.match(pages, /\/api\/v1\/tooling-assemblies\/revisions/);
+  assert.match(pages, /assemblyRevisionId/);
   assert.doesNotMatch(pages, /BusinessObjectEditor|ImprovementPanel/);
   assert.doesNotMatch(researchProjects, /JSON\.stringify|JSON\.parse|manifestJson/);
   assert.doesNotMatch(pages, /数据清单 JSON|执行请求 JSON|上下文过滤" hint="JSON|（JSON）/);

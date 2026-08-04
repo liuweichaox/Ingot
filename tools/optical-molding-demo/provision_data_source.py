@@ -81,6 +81,7 @@ def build_payload(args: argparse.Namespace) -> dict[str, object]:
             {"contextKey": "product_series", "sourcePath": "D:40:string:20", "required": True},
             {"contextKey": "mold_id", "sourcePath": "D:50:string:20", "required": True},
             {"contextKey": "material_lot_ref", "sourcePath": "D:60:string:20", "required": True},
+            {"contextKey": "workpiece_id", "sourcePath": "D:70:string:40", "required": True},
         ],
         "valueMappings": [
             mapping(item)

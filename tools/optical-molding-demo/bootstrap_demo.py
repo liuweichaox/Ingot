@@ -20,6 +20,117 @@ from demo_contract import (
 from provision_data_source import build_payload
 
 
+TOOLING_COMPONENT_TYPES = [
+    ("mold.core", "模芯"),
+    ("mold.frame", "模架"),
+]
+
+TOOLING_ROLES = [
+    {
+        "code": "upper.core",
+        "name": "上模芯",
+        "required": True,
+        "maxCount": 1,
+        "sortOrder": 1,
+        "acceptedComponentTypeCodes": ["mold.core"],
+    },
+    {
+        "code": "upper.frame",
+        "name": "上模架",
+        "required": True,
+        "maxCount": 1,
+        "sortOrder": 2,
+        "acceptedComponentTypeCodes": ["mold.frame"],
+    },
+    {
+        "code": "lower.core",
+        "name": "下模芯",
+        "required": True,
+        "maxCount": 1,
+        "sortOrder": 3,
+        "acceptedComponentTypeCodes": ["mold.core"],
+    },
+    {
+        "code": "lower.frame",
+        "name": "下模架",
+        "required": True,
+        "maxCount": 1,
+        "sortOrder": 4,
+        "acceptedComponentTypeCodes": ["mold.frame"],
+    },
+]
+
+TOOLING_COMPONENTS = [
+    {
+        "componentId": "CORE-UC-A01",
+        "componentTypeCode": "mold.core",
+        "serialNo": "SIM-UC-A01",
+        "name": "光学上模芯 UC-A01",
+        "status": "available",
+        "attributes": {
+            "manufacturer": "Ingot Demo Tooling",
+            "productCode": "OC-50-UPPER-CORE",
+            "model": "50mm Aspheric Core",
+            "designRevision": "A",
+            "material": "SUS440C",
+            "dataClassification": "simulated",
+        },
+    },
+    {
+        "componentId": "FRAME-UF-A01",
+        "componentTypeCode": "mold.frame",
+        "serialNo": "SIM-UF-A01",
+        "name": "光学上模架 UF-A01",
+        "status": "available",
+        "attributes": {
+            "manufacturer": "Ingot Demo Tooling",
+            "productCode": "OC-50-UPPER-FRAME",
+            "model": "50mm Upper Frame",
+            "designRevision": "A",
+            "material": "H13",
+            "dataClassification": "simulated",
+        },
+    },
+    {
+        "componentId": "CORE-LC-A01",
+        "componentTypeCode": "mold.core",
+        "serialNo": "SIM-LC-A01",
+        "name": "光学下模芯 LC-A01",
+        "status": "available",
+        "attributes": {
+            "manufacturer": "Ingot Demo Tooling",
+            "productCode": "OC-50-LOWER-CORE",
+            "model": "50mm Aspheric Core",
+            "designRevision": "A",
+            "material": "SUS440C",
+            "dataClassification": "simulated",
+        },
+    },
+    {
+        "componentId": "FRAME-LF-A01",
+        "componentTypeCode": "mold.frame",
+        "serialNo": "SIM-LF-A01",
+        "name": "光学下模架 LF-A01",
+        "status": "available",
+        "attributes": {
+            "manufacturer": "Ingot Demo Tooling",
+            "productCode": "OC-50-LOWER-FRAME",
+            "model": "50mm Lower Frame",
+            "designRevision": "A",
+            "material": "H13",
+            "dataClassification": "simulated",
+        },
+    },
+]
+
+TOOLING_MEMBERS = [
+    {"roleCode": "upper.core", "componentId": "CORE-UC-A01"},
+    {"roleCode": "upper.frame", "componentId": "FRAME-UF-A01"},
+    {"roleCode": "lower.core", "componentId": "CORE-LC-A01"},
+    {"roleCode": "lower.frame", "componentId": "FRAME-LF-A01"},
+]
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--api", default="http://127.0.0.1:8000")
@@ -222,60 +333,43 @@ def provision_manufacturing_context(
     Master data uses upsert endpoints. Immutable revisions and active intervals are
     looked up and reused, so rerunning the demo does not create overlapping facts.
     """
-    post_json(
-        api,
-        "/api/v1/tooling-component-types",
-        {
-            "componentTypeCode": "mold.insert",
-            "name": "模具组件（模拟）",
-            "status": "active",
-            "attributes": {"dataClassification": "simulated"},
-        },
-    )
+    for component_type_code, name in TOOLING_COMPONENT_TYPES:
+        post_json(
+            api,
+            "/api/v1/tooling-component-types",
+            {
+                "componentTypeCode": component_type_code,
+                "name": f"{name}（模拟）",
+                "status": "active",
+                "attributes": {"dataClassification": "simulated"},
+            },
+        )
     tooling_types = get_json(api, "/api/v1/tooling-types").get("data", [])
     if not any(
-        item.get("toolingTypeCode") == "molding.tool" and item.get("version") == 1
+        item.get("toolingTypeCode") == "optical-molding.four-part-mold"
+        and item.get("version") == 1
         for item in tooling_types
     ):
         post_json(
             api,
             "/api/v1/tooling-types",
             {
-                "toolingTypeCode": "molding.tool",
+                "toolingTypeCode": "optical-molding.four-part-mold",
                 "version": 1,
-                "name": "通用模压工装（模拟）",
+                "name": "光学模压四件式模具装配模板（模拟）",
                 "status": "active",
-                "roles": [
-                    {
-                        "code": "forming.insert",
-                        "name": "成形组件",
-                        "required": True,
-                        "maxCount": 1,
-                        "sortOrder": 1,
-                        "acceptedComponentTypeCodes": ["mold.insert"],
-                    }
-                ],
+                "roles": TOOLING_ROLES,
             },
         )
-    post_json(
-        api,
-        "/api/v1/tooling-components",
-        {
-            "componentId": "MOLD-DEMO-A01-INSERT",
-            "componentTypeCode": "mold.insert",
-            "serialNo": "SIM-MOLD-A01",
-            "name": "模拟成形组件 A01",
-            "status": "available",
-            "attributes": {"lifecycleCount": "0"},
-        },
-    )
+    for component in TOOLING_COMPONENTS:
+        post_json(api, "/api/v1/tooling-components", component)
     post_json(
         api,
         "/api/v1/tooling-assemblies",
         {
             "moldId": "MOLD-DEMO-A01",
-            "toolingTypeCode": "molding.tool",
-            "name": "模拟工装 A01",
+            "toolingTypeCode": "optical-molding.four-part-mold",
+            "name": "光学模压模具 A01（模拟）",
             "status": "active",
         },
     )
@@ -291,12 +385,7 @@ def provision_manufacturing_context(
                 "assemblyRevisionId": "bd1a0a54-54c1-4d03-8b6a-8ff25934dcf1",
                 "moldId": "MOLD-DEMO-A01",
                 "revision": 1,
-                "members": [
-                    {
-                        "roleCode": "forming.insert",
-                        "componentId": "MOLD-DEMO-A01-INSERT",
-                    }
-                ],
+                "members": TOOLING_MEMBERS,
                 "createdBy": "optical-molding-demo",
                 "createdAt": "2020-01-01T00:00:00Z",
             },
@@ -344,6 +433,7 @@ def provision_manufacturing_context(
     )
     if context is None:
         switched_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        valid_from = switched_at if contexts else "2020-01-01T00:00:00Z"
         for active in contexts:
             post_json(
                 api,
@@ -367,7 +457,7 @@ def provision_manufacturing_context(
                 "recipeId": "lens-molding-demo",
                 "recipeVersion": str(recipe_version),
                 "toolingInstallationId": installation["installationId"],
-                "validFrom": switched_at,
+                "validFrom": valid_from,
                 "source": "import",
                 "commandId": f"optical-molding-demo-production-v{recipe_version}",
                 "externalOrderRef": "DEMO-ORDER-001",
