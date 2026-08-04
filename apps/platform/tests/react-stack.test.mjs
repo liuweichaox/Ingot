@@ -77,7 +77,7 @@ test("navigation and overlays are accessible Headless UI components", () => {
   assert.match(app, /DialogBackdrop/);
   assert.match(app, /DialogPanel/);
   assert.match(app, /MenuButton/);
-  for (const domain of ["全局总览", "生产周期", "生产上下文", "质量检验", "工艺研发", "数据与接入", "身份与系统"]) {
+  for (const domain of ["工作台", "生产运行", "质量管理", "工艺研发", "数据与配置", "系统管理"]) {
     assert.match(app, new RegExp(domain));
   }
   assert.match(app, /\["\/chat", "AI助手"\]/);
@@ -130,7 +130,7 @@ test("global search opens a cross-product command palette and table columns keep
 
 test("industrial object pages use the event summary contract and show an initial loading state", () => {
   assert.match(app, /\["\/explorer", "工业对象"\]/);
-  assert.match(app, /id: "data", label: "数据与接入"/);
+  assert.match(app, /id: "data", label: "数据与配置"/);
   assert.match(pages, /title="工业对象"/);
   assert.match(pages, /objects\.loading && !objects\.data \? <LoadingCard \/>/);
   assert.match(pages, /title="对象目录"/);

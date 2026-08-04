@@ -24,15 +24,16 @@ Define process → Connect equipment → Collect production data → Close the d
 
 The first four steps organize field activity into trustworthy run facts. The last two use those facts to support engineering decisions. Diagnosis and optimization are not parallel products: one explains an observed result and the other selects an unexecuted experiment, so both must read the same evidence.
 
-The current Web information architecture exposes seven product domains:
+The current Web information architecture exposes six engineering-task domains:
 
-1. **Global overview**: operations, quality, data trust, and next actions;
-2. **Cycles**: real runs, production events, and cycle comparison;
-3. **Manufacturing context**: changeover, recipes, materials, components, and tooling state;
-4. **Inspections**: tasks, results, definitions, quality plans, and review;
-5. **Process R&D**: problems, candidate causes, hypotheses, experiments, results, and process windows;
-6. **Data and connectivity**: industrial objects, variable models, scenario configuration, edge nodes, and data quality;
-7. **Identity and system**: users, role permissions, platform status, and runtime logs.
+1. **Workbench**: operations, quality, data trust, and next actions;
+2. **Production operations**: real runs, production events, cycle comparison, changeover, and tooling assets;
+3. **Quality management**: inspection tasks, diagnosis, definitions, quality plans, and review;
+4. **Process R&D**: problems, candidate causes, hypotheses, experiments, results, and process windows;
+5. **Data and configuration**: industrial objects, data quality, scenario configuration, variable models, recipes, edge nodes, and equipment connectivity;
+6. **System administration**: users, role permissions, platform status, and runtime logs.
+
+Production operations and data/configuration use grouped secondary navigation so tracing, manufacturing context, tooling assets, process configuration, and connectivity are not presented as one flat list.
 
 Menus may change, but these business facts must not be hidden, duplicated into parallel records, or buried inside algorithm state.
 

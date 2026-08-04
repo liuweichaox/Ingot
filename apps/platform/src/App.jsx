@@ -9,7 +9,6 @@ import {
   MagnifyingGlassIcon,
   RectangleGroupIcon,
   UserGroupIcon,
-  WrenchScrewdriverIcon,
   XMarkIcon,
 } from "@heroicons/react/24/outline";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -20,49 +19,43 @@ import { cx, ToastHost } from "./ui/components";
 
 const sections = [
   {
-    id: "overview", label: "全局总览", icon: BoltIcon, path: "/workbench", items: [
-      ["/workbench", "工业决策工作台"],
+    id: "overview", label: "工作台", icon: BoltIcon, path: "/workbench", groups: [
+      { items: [["/workbench", "工业决策工作台"]] },
     ],
   },
   {
-    id: "cycles", label: "生产周期", icon: ArrowPathRoundedSquareIcon, path: "/cycles", items: [
-      ["/cycles", "周期记录"], ["/events", "生产事件"], ["/comparisons", "周期对比"],
+    id: "production", label: "生产运行", icon: ArrowPathRoundedSquareIcon, path: "/cycles", groups: [
+      { label: "运行与追溯", items: [["/cycles", "周期记录"], ["/events", "生产事件"], ["/comparisons", "周期对比"]] },
+      { label: "现场上下文", items: [["/production/changeover", "生产切换"], ["/production/tooling-installations", "工装装卸"]] },
+      { label: "工装资产", items: [["/configuration/tooling-assemblies", "模具资产"], ["/configuration/components", "组件资产"], ["/configuration/tooling-types", "装配模板"], ["/configuration/component-types", "组件分类"]] },
     ],
   },
   {
-    id: "manufacturing", label: "生产上下文", icon: WrenchScrewdriverIcon, path: "/production/changeover", items: [
-      ["/production/changeover", "生产切换"], ["/production/tooling-installations", "工装装卸"],
-      ["/configuration/tooling-assemblies", "模具资产"], ["/configuration/components", "组件资产"],
-      ["/configuration/tooling-types", "装配模板"], ["/configuration/component-types", "组件分类"],
+    id: "quality", label: "质量管理", icon: ClipboardDocumentCheckIcon, path: "/inspections", groups: [
+      { label: "质量执行", items: [["/inspections", "检验任务"], ["/quality-analysis", "质量追因"]] },
+      { label: "质量规则", items: [["/configuration/inspection-definitions", "检测定义"], ["/configuration/quality-plans", "质量方案"]] },
     ],
   },
   {
-    id: "inspections", label: "质量检验", icon: ClipboardDocumentCheckIcon, path: "/inspections", items: [
-      ["/inspections", "检验任务"], ["/quality-analysis", "质量追因"],
-      ["/configuration/inspection-definitions", "检测定义"], ["/configuration/quality-plans", "质量方案"],
+    id: "research", label: "工艺研发", icon: BeakerIcon, path: "/research-projects", groups: [
+      { items: [["/research-projects", "工艺优化"], ["/chat", "AI助手"], ["/golden-questions", "黄金问题集"]] },
     ],
   },
   {
-    id: "research", label: "工艺研发", icon: BeakerIcon, path: "/research-projects", items: [
-      ["/research-projects", "工艺优化"], ["/chat", "AI助手"], ["/golden-questions", "黄金问题集"],
+    id: "data", label: "数据与配置", icon: CircleStackIcon, path: "/explorer", groups: [
+      { label: "数据可信度", items: [["/explorer", "工业对象"], ["/data-quality", "数据质量"]] },
+      { label: "工艺配置", items: [["/configuration/scenario-packages", "工艺场景配置"], ["/configuration/process-data-models", "工艺模型"], ["/configuration/process-analysis-plans", "分析模型"], ["/configuration/recipe-versions", "配方版本"]] },
+      { label: "现场接入", items: [["/edges", "现场节点"], ["/configuration/acquisition-profiles", "设备接入"]] },
     ],
   },
   {
-    id: "data", label: "数据与接入", icon: CircleStackIcon, path: "/explorer", items: [
-      ["/explorer", "工业对象"], ["/data-quality", "数据质量"],
-      ["/configuration/scenario-packages", "场景包"],
-      ["/configuration/process-analysis-plans", "分析模型"],
-      ["/configuration/recipe-versions", "配方版本"],
-      ["/edges", "现场节点"], ["/configuration/process-data-models", "工艺模型"],
-      ["/configuration/acquisition-profiles", "设备接入"],
-    ],
-  },
-  {
-    id: "identity", label: "身份与系统", icon: UserGroupIcon, path: "/identity/users", items: [
-      ["/identity/users", "用户与权限"], ["/platform-metrics", "平台状态"], ["/logs", "运行日志"],
+    id: "system", label: "系统管理", icon: UserGroupIcon, path: "/identity/users", groups: [
+      { items: [["/identity/users", "用户与权限"], ["/platform-metrics", "平台状态"], ["/logs", "运行日志"]] },
     ],
   },
 ];
+
+const sectionItems = section => section.groups.flatMap(group => group.items);
 
 const pageDetails = {
   "/research-projects": ["工艺优化工作台", "从问题、证据与实验推进到经过验证的工艺窗口"],
@@ -96,7 +89,7 @@ const pageDetails = {
   "/identity/users": ["用户与权限", "管理本地账户、岗位权限、密码和启停状态"],
 };
 
-const globalSearchEntries = sections.flatMap(section => section.items.map(([path, label]) => ({
+const globalSearchEntries = sections.flatMap(section => sectionItems(section).map(([path, label]) => ({
   path,
   label,
   section: section.label,
@@ -122,7 +115,7 @@ export default function App() {
   }, []);
 
   const section = useMemo(
-    () => sections.find(item => item.path === location.pathname || item.items.some(([path]) => location.pathname === path || location.pathname.startsWith(`${path}/`))) ?? sections[0],
+    () => sections.find(item => item.path === location.pathname || sectionItems(item).some(([path]) => location.pathname === path || location.pathname.startsWith(`${path}/`))) ?? sections[0],
     [location.pathname],
   );
   const page = location.pathname.startsWith("/cycles/")
@@ -132,7 +125,7 @@ export default function App() {
       : location.pathname.startsWith("/research-projects/")
          ? ["优化项目工作区", "围绕当前问题推进假设、实验、验证和知识复用"]
      : pageDetails[location.pathname] ?? ["Ingot", "AI 工艺研发系统"];
-  const showSectionNavigation = section.items.length > 1;
+  const showSectionNavigation = sectionItems(section).length > 1;
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
@@ -217,11 +210,16 @@ export default function App() {
               <section.icon className="size-5 text-blue-600" />
               <strong className="text-sm">{section.label}</strong>
             </div>
-            <nav className="grid gap-1 p-3" aria-label={`${section.label}导航`}>
-              {section.items.map(([path, label]) => (
-                <Link key={path} to={path} className={cx("rounded-lg px-3 py-2.5 text-sm", (path === location.pathname || location.pathname.startsWith(`${path}/`)) ? "bg-blue-50 font-medium text-blue-700" : "text-slate-600 hover:bg-slate-50 hover:text-slate-950")}>
-                  {label}
-                </Link>
+            <nav className="grid gap-4 p-3" aria-label={`${section.label}导航`}>
+              {section.groups.map((group, groupIndex) => (
+                <div key={group.label || groupIndex} className="grid gap-1">
+                  {section.groups.length > 1 && <p className="px-3 pt-1 text-[11px] font-semibold tracking-wide text-slate-400">{group.label}</p>}
+                  {group.items.map(([path, label]) => (
+                    <Link key={path} to={path} className={cx("rounded-lg px-3 py-2.5 text-sm", (path === location.pathname || location.pathname.startsWith(`${path}/`)) ? "bg-blue-50 font-medium text-blue-700" : "text-slate-600 hover:bg-slate-50 hover:text-slate-950")}>
+                      {label}
+                    </Link>
+                  ))}
+                </div>
               ))}
             </nav>
           </aside>
@@ -258,11 +256,16 @@ export default function App() {
               <XMarkIcon className="size-5" />
             </button>
           </div>
-          <nav className="grid gap-1 p-3">
-            {section.items.map(([path, label]) => (
-              <Link key={path} to={path} onClick={() => setMobileOpen(false)} className={cx("rounded-lg px-3 py-3 text-sm", (path === location.pathname || location.pathname.startsWith(`${path}/`)) ? "bg-blue-50 font-medium text-blue-700" : "text-slate-700 hover:bg-slate-50")}>
-                {label}
-              </Link>
+          <nav className="grid gap-4 p-3">
+            {section.groups.map((group, groupIndex) => (
+              <div key={group.label || groupIndex} className="grid gap-1">
+                {section.groups.length > 1 && <p className="px-3 pt-1 text-[11px] font-semibold tracking-wide text-slate-400">{group.label}</p>}
+                {group.items.map(([path, label]) => (
+                  <Link key={path} to={path} onClick={() => setMobileOpen(false)} className={cx("rounded-lg px-3 py-3 text-sm", (path === location.pathname || location.pathname.startsWith(`${path}/`)) ? "bg-blue-50 font-medium text-blue-700" : "text-slate-700 hover:bg-slate-50")}>
+                    {label}
+                  </Link>
+                ))}
+              </div>
             ))}
           </nav>
         </DialogPanel>
