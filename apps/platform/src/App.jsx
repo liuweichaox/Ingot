@@ -1,12 +1,14 @@
 import { Dialog, DialogBackdrop, DialogPanel, Menu, MenuButton, MenuItem, MenuItems } from "@headlessui/react";
 import {
+  ArrowPathRoundedSquareIcon,
   BoltIcon,
   BeakerIcon,
   ChevronRightIcon,
   CircleStackIcon,
-  Cog6ToothIcon,
+  ClipboardDocumentCheckIcon,
   MagnifyingGlassIcon,
   RectangleGroupIcon,
+  UserGroupIcon,
   WrenchScrewdriverIcon,
   XMarkIcon,
 } from "@heroicons/react/24/outline";
@@ -18,39 +20,46 @@ import { cx, ToastHost } from "./ui/components";
 
 const sections = [
   {
-    id: "workbench", label: "生产运行", icon: BoltIcon, path: "/workbench", items: [
-      ["/workbench", "运行概览"], ["/cycles", "运行记录"],
-      ["/inspections", "质量任务"], ["/events", "生产事件"],
+    id: "overview", label: "全局总览", icon: BoltIcon, path: "/workbench", items: [
+      ["/workbench", "工业决策工作台"],
+    ],
+  },
+  {
+    id: "cycles", label: "生产周期", icon: ArrowPathRoundedSquareIcon, path: "/cycles", items: [
+      ["/cycles", "周期记录"], ["/events", "生产事件"], ["/comparisons", "周期对比"],
+    ],
+  },
+  {
+    id: "manufacturing", label: "生产上下文", icon: WrenchScrewdriverIcon, path: "/production/changeover", items: [
       ["/production/changeover", "生产切换"], ["/production/tooling-installations", "工装装卸"],
-    ],
-  },
-  {
-    id: "research", label: "工艺研发", icon: BeakerIcon, path: "/research-projects", items: [
-      ["/research-projects", "工艺优化"], ["/comparisons", "周期对比"],
-      ["/quality-analysis", "质量追因"], ["/chat", "AI助手"],
-      ["/golden-questions", "黄金问题集"],
-    ],
-  },
-  {
-    id: "context", label: "数据资产", icon: CircleStackIcon, path: "/explorer", items: [
-      ["/explorer", "工业对象"], ["/data-quality", "数据质量"],
-      ["/configuration/scenario-packages", "场景包"],
-      ["/configuration/process-analysis-plans", "分析模型"],
-      ["/configuration/recipe-versions", "配方版本"],
-    ],
-  },
-  {
-    id: "implementation", label: "业务配置", icon: WrenchScrewdriverIcon, path: "/edges", items: [
-      ["/edges", "现场节点"], ["/configuration/process-data-models", "工艺模型"],
-      ["/configuration/acquisition-profiles", "设备接入"],
-      ["/configuration/inspection-definitions", "检测定义"], ["/configuration/quality-plans", "质量方案"],
       ["/configuration/component-types", "组件类型"], ["/configuration/components", "组件台账"],
       ["/configuration/tooling-types", "工装类型"], ["/configuration/tooling-assemblies", "工装组合"],
     ],
   },
   {
-    id: "administration", label: "系统管理", icon: Cog6ToothIcon, path: "/platform-metrics", items: [
-      ["/platform-metrics", "平台状态"], ["/subscriptions", "事件订阅"], ["/logs", "运行日志"],
+    id: "inspections", label: "质量检验", icon: ClipboardDocumentCheckIcon, path: "/inspections", items: [
+      ["/inspections", "检验任务"], ["/quality-analysis", "质量追因"],
+      ["/configuration/inspection-definitions", "检测定义"], ["/configuration/quality-plans", "质量方案"],
+    ],
+  },
+  {
+    id: "research", label: "工艺研发", icon: BeakerIcon, path: "/research-projects", items: [
+      ["/research-projects", "工艺优化"], ["/chat", "AI助手"], ["/golden-questions", "黄金问题集"],
+    ],
+  },
+  {
+    id: "data", label: "数据与接入", icon: CircleStackIcon, path: "/explorer", items: [
+      ["/explorer", "工业对象"], ["/data-quality", "数据质量"],
+      ["/configuration/scenario-packages", "场景包"],
+      ["/configuration/process-analysis-plans", "分析模型"],
+      ["/configuration/recipe-versions", "配方版本"],
+      ["/edges", "现场节点"], ["/configuration/process-data-models", "工艺模型"],
+      ["/configuration/acquisition-profiles", "设备接入"],
+    ],
+  },
+  {
+    id: "identity", label: "身份与系统", icon: UserGroupIcon, path: "/identity/users", items: [
+      ["/identity/users", "用户与权限"], ["/platform-metrics", "平台状态"], ["/logs", "运行日志"],
     ],
   },
 ];
@@ -83,8 +92,8 @@ const pageDetails = {
   "/configuration/tooling-assemblies": ["工装组合", "维护工装身份与不可变组件组合版本"],
   "/edges": ["现场节点", "查看负责连接设备、仪器、系统并上报数据的现场节点"],
   "/platform-metrics": ["平台运行状态", "确认中心服务、现场节点和数据上行是否正常"],
-  "/subscriptions": ["事件订阅", "维护向外部系统投递的事件订阅"],
   "/logs": ["运行日志", "查询平台运行记录"],
+  "/identity/users": ["用户与权限", "管理本地账户、岗位权限、密码和启停状态"],
 };
 
 const globalSearchEntries = sections.flatMap(section => section.items.map(([path, label]) => ({
@@ -121,8 +130,9 @@ export default function App() {
     : location.pathname.startsWith("/edges/")
       ? ["节点诊断", "查看现场节点的连接、采集、上行和最近日志"]
       : location.pathname.startsWith("/research-projects/")
-        ? ["优化项目工作区", "围绕当前问题推进假设、实验、验证和知识复用"]
-    : pageDetails[location.pathname] ?? ["Ingot", "AI 工艺研发系统"];
+         ? ["优化项目工作区", "围绕当前问题推进假设、实验、验证和知识复用"]
+     : pageDetails[location.pathname] ?? ["Ingot", "AI 工艺研发系统"];
+  const showSectionNavigation = section.items.length > 1;
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
@@ -193,6 +203,7 @@ export default function App() {
               <p className="truncate font-medium text-slate-900">{identity.displayName}</p>
               <p className="mt-0.5 truncate text-xs text-slate-500">开发模式 · operator</p>
             </div>
+            <MenuItem><Link to="/identity/users" className="block rounded-lg px-3 py-2 text-slate-700 data-focus:bg-slate-100">用户与权限</Link></MenuItem>
             <MenuItem><Link to="/platform-metrics" className="block rounded-lg px-3 py-2 text-slate-700 data-focus:bg-slate-100">平台运行状态</Link></MenuItem>
             <MenuItem><a href="https://docs.ingotstack.com/zh" className="block rounded-lg px-3 py-2 text-slate-700 data-focus:bg-slate-100">产品文档</a></MenuItem>
           </MenuItems>
@@ -200,7 +211,7 @@ export default function App() {
       </header>
 
       <div className="pt-16">
-        {section.items.length > 0 && (
+        {showSectionNavigation && (
           <aside className="fixed inset-y-16 left-0 z-30 hidden w-55 border-r border-slate-200 bg-white lg:block">
             <div className="flex h-16 items-center gap-2 border-b border-slate-100 px-5">
               <section.icon className="size-5 text-blue-600" />
@@ -216,9 +227,9 @@ export default function App() {
           </aside>
         )}
 
-        <div className={cx(section.items.length > 0 && "lg:ml-55")}>
+        <div className={cx(showSectionNavigation && "lg:ml-55")}>
           <div className="sticky top-16 z-20 flex min-h-16 items-center gap-3 border-b border-slate-200 bg-white/90 px-4 backdrop-blur sm:px-6">
-            {section.items.length > 0 && (
+            {showSectionNavigation && (
               <button className="grid size-9 place-items-center rounded-lg text-slate-600 hover:bg-slate-100 lg:hidden" onClick={() => setMobileOpen(true)} aria-label="打开模块导航">
                 <RectangleGroupIcon className="size-5" />
               </button>
@@ -353,8 +364,9 @@ function AppRoutes() {
       <Route path="/edges" element={<Pages.EdgesPage />} />
       <Route path="/edges/:edgeId" element={<Pages.EdgeDetailPage />} />
       <Route path="/platform-metrics" element={<Pages.MetricsPage />} />
-      <Route path="/subscriptions" element={<Pages.SubscriptionsPage />} />
       <Route path="/logs" element={<Pages.LogsPage />} />
+      <Route path="/identity/users" element={<Pages.UsersPage />} />
+      <Route path="/users" element={<Navigate to="/identity/users" replace />} />
       <Route path="*" element={<Pages.NotFoundPage />} />
     </Routes>
   );

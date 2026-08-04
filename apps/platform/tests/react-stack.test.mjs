@@ -58,7 +58,7 @@ test("all platform routes remain available after the React migration", () => {
     "/comparisons", "/golden-questions", "/data-quality", "/process-improvement", "/configuration/scenario-packages",
     "/configuration/process-analysis-plans", "/configuration/process-data-models",
     "/configuration/recipe-versions", "/configuration/acquisition-profiles", "/edges",
-    "/platform-metrics", "/subscriptions", "/logs",
+    "/platform-metrics", "/logs", "/identity/users",
   ]) {
     assert.match(app, new RegExp(route.replaceAll("/", "\\/")));
   }
@@ -77,7 +77,7 @@ test("navigation and overlays are accessible Headless UI components", () => {
   assert.match(app, /DialogBackdrop/);
   assert.match(app, /DialogPanel/);
   assert.match(app, /MenuButton/);
-  for (const domain of ["生产运行", "工艺研发", "数据资产", "业务配置", "系统管理"]) {
+  for (const domain of ["全局总览", "生产周期", "生产上下文", "质量检验", "工艺研发", "数据与接入", "身份与系统"]) {
     assert.match(app, new RegExp(domain));
   }
   assert.match(app, /\["\/chat", "AI助手"\]/);
@@ -91,12 +91,14 @@ test("navigation and overlays are accessible Headless UI components", () => {
   assert.doesNotMatch(researchProjects, />新建项目</);
 });
 
-test("prototype enters directly without a permissions system", () => {
+test("direct-entry prototype exposes the implemented identity administration surface", () => {
   assert.match(app, /username: "operator"/);
   assert.match(app, /开发模式 · operator/);
   assert.doesNotMatch(app, /function LoginPage/);
   assert.doesNotMatch(app, /\/api\/v1\/auth\/login/);
-  assert.doesNotMatch(app, /用户与权限/);
+  assert.match(app, /\["\/identity\/users", "用户与权限"\]/);
+  assert.match(app, /path="\/identity\/users" element=\{<Pages\.UsersPage \/>\}/);
+  assert.match(pages, /export function UsersPage\(\)/);
   assert.doesNotMatch(researchProjects, /\/api\/v1\/auth\/me/);
 });
 
@@ -128,7 +130,7 @@ test("global search opens a cross-product command palette and table columns keep
 
 test("industrial object pages use the event summary contract and show an initial loading state", () => {
   assert.match(app, /\["\/explorer", "工业对象"\]/);
-  assert.match(app, /id: "context", label: "数据资产"/);
+  assert.match(app, /id: "data", label: "数据与接入"/);
   assert.match(pages, /title="工业对象"/);
   assert.match(pages, /objects\.loading && !objects\.data \? <LoadingCard \/>/);
   assert.match(pages, /title="对象目录"/);
@@ -264,10 +266,9 @@ test("acquisition profiles probe real device points before publishing", () => {
   assert.match(acquisitionPage, /发布前必须先验证连接/);
 });
 
-test("tooling, subscriptions, and research workflows avoid editable JSON fields", () => {
+test("tooling and research workflows avoid editable JSON fields", () => {
   assert.match(pages, /function AttributeFields/);
   assert.match(pages, /function ToolingRoleFields/);
-  assert.match(pages, /function SubscriptionContextFields/);
   assert.doesNotMatch(pages, /BusinessObjectEditor|ImprovementPanel/);
   assert.doesNotMatch(researchProjects, /JSON\.stringify|JSON\.parse|manifestJson/);
   assert.doesNotMatch(pages, /数据清单 JSON|执行请求 JSON|上下文过滤" hint="JSON|（JSON）/);

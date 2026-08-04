@@ -1,47 +1,62 @@
-# Ingot Documentation
+# Ingot documentation
 
-Ingot is an open-source process diagnosis and optimization system for expensive, small-data manufacturing experiments. It connects control systems, instruments, vision, inspection, and business data into traceable evidence for real runs, uses that evidence to explain which variable or trajectory segment made a run miss specification, and recommends the next experiment with constrained Bayesian optimization.
+> **Core value**: Move process R&D from decisions without data support to decisions supported by real data, so computers can genuinely help process engineers choose what to do next using the most effective computational methods for the problem.
 
-## Start here
+Ingot is an open-source process diagnosis and optimization system. It connects the production conditions, process trajectory, and inspection result of a real run into traceable evidence, helping engineers understand what happened, what deserves validation, and what is most valuable to do next.
+
+The computer organizes evidence, compares runs, analyzes data, and proposes experiments. Process engineers frame the problem, review data and constraints, approve experiments, and make the final judgment. The system does not present observational correlation as a definitive cause or a model recommendation as a field guarantee.
+
+## Product loop
+
+```text
+Define process → Connect equipment → Collect production data → Close the data loop → Diagnose → Optimize
+      ↑                                                                                       ↓
+      └──────────── validated recipes, process windows, and knowledge return to production ───┘
+```
+
+1. **Define the process**: define equipment, products, variables, units, recipe parameters, quality measures, and safety boundaries.
+2. **Connect equipment**: connect controls, instruments, vision, inspection, and business systems to stable business semantics.
+3. **Collect production data**: record actual conditions, stages, and trajectories for each real run.
+4. **Close the data loop**: check time, missingness, provenance, and units, then link inspections to the same run.
+5. **Diagnose the process**: compare like-for-like runs and form candidate causes with evidence, counterevidence, and confounding limits.
+6. **Process optimization**: validate candidates through controlled experiments and choose more valuable next experiments within safety boundaries.
+
+These are one evidence chain, not six unrelated products. Acquisition makes facts trustworthy; analysis makes them useful; experiments determine whether a candidate survives.
+
+## Where to start
 
 | Goal | Read |
 |---|---|
-| Run the complete stack locally | [Install and run a first experiment](getting-started.en.md) |
-| Understand components and boundaries | [Architecture](design.en.md) |
-| Understand GPs, qLogNEI/qLogNEHVI, and constraints | [Optimizer](optimization.en.md) |
-| Connect control systems, instruments, inspections, and run data | [Equipment and data wiring](data-connection.en.md) |
-| Prove whether the system reduces experiments | [Real-world validation](rollout.en.md) |
-| Review long-term phases, priorities, and acceptance gates | [Long-term project plan](project-plan.en.md) |
-| Deploy inside a factory network | [Deployment and operations](deployment.en.md) |
-| Find common answers | [FAQ](faq.en.md) |
+| Start the system and complete the first data loop | [Installation and the first data loop](getting-started.en.md) |
+| Understand stable product and architecture boundaries | [System design](design.en.md) |
+| Understand how analysis, experiment, and optimization methods are selected | [Analysis and optimization methods](optimization.en.md) |
+| Connect equipment, instruments, inspections, and business data | [Equipment and data connection](data-connection.en.md) |
+| Review long-term stages, priorities, and acceptance gates | [Project plan](project-plan.en.md) |
+| Validate whether the product helps engineers on real projects | [Real-scenario validation](rollout.en.md) |
+| Deploy on a factory network | [Deployment and operations](deployment.en.md) |
+| Check product and technical boundaries | [FAQ](faq.en.md) |
+| Review the normative public product language | [Brand and product language](brand.en.md) |
+| Review dependency principles and audit boundaries | [Open-source dependencies](open-source-dependencies.en.md) |
 
-## Six-step product loop
+## Document status
 
-```text
-define process → connect equipment → collect production data → close the data loop → diagnose → process optimization
-       ↑                                                                                         ↓
-       └──────── validated recipes, process windows, and knowledge return to production ─────────┘
-```
+- **Normative baseline**: core value, product boundaries, evidence principles, and stable architecture. Changes require explicit product evidence or an ADR.
+- **Current strategy**: today's analysis methods, default experiment designs, and information architecture. These may evolve without changing the core value.
+- **Rolling status**: roadmap, implementation status, known limits, and validation results. These must track project facts.
 
-1. **Define the process**: define equipment, products, process variables, standard units, recipe parameters, and quality objectives.
-2. **Connect equipment**: select a communication driver, test the live connection, and map equipment points to stable process variables.
-3. **Collect production data**: form runs from actual start and end signals while recording trajectories, stages, actual recipes, and context.
-4. **Close the data loop**: check timestamps, gaps, and anomalies, then associate inspections with the same production run.
-5. **Diagnose the process**: compare passing and failing runs and retain source, controllability, and confounding boundaries for every candidate cause.
-6. **Process optimization**: verify safe candidates through controlled experiments and publish validated recipes, process windows, and reusable knowledge.
+[Brand and product language](brand.en.md) is the single source of truth for public wording; technical documents must not create another core value.
 
-Diagnosis and optimization share one loop: the evidence read to explain a past result is the evidence read to choose the next experiment. Acquisition, inspection, features, experiments, and knowledge all serve this loop. A new process usually changes variables, mappings, objectives, safety limits, features, and optional physical priors—not the system architecture.
+## Current facts
 
-## Current status
-
-The current implementation consists of Edge ConnectorHost, a modular Platform API monolith, embedded Agent capabilities, a separate Optimizer, and a separate Web frontend. The code-level loop is implemented and covered by automated tests. A real optical-molding historical replay has not yet been published. Ingot distinguishes “the software runs” from “the software has proven fewer factory experiments”; the latter requires run-by-run replay and prospective evidence.
+The code covers the main business path across acquisition, cycles, context, inspections, R&D experiments, analysis, and optimization, with automated tests. Public historical replay and prospective results for real optical molding projects are not complete, so the project describes system capabilities but does not claim a measured reduction in experiments or development time.
 
 ## Public commitments
 
-- Never present planned settings as actual run values.
-- Never present a model mean as certainty.
-- Never use an LLM to invent numerical recipes.
-- Never claim real-process benefit from simulation alone.
-- Retain snapshot, model version, intervals, and provenance for every recommendation.
+- Never hide missing actual values with planned values.
+- Never silently discard runs that fail analysis admission.
+- Never present correlation directly as a definitive cause.
+- Never let a language model generate numerical process recipes.
+- Never use simulated data to claim real process benefit.
+- Preserve inputs, provenance, versions, uncertainty, and applicability for every recommendation.
 
-Chinese documentation starts at [index.md](index.md).
+中文文档从 [index.md](index.md) 开始。

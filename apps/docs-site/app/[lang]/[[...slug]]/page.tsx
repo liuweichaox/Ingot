@@ -47,6 +47,16 @@ export default async function DocPage({ params }: Props) {
         <a className="brand" href={routeFor(lang, "")}><Image src="/brand/ingot-lockup-dark.svg" alt="Ingot" width={142} height={36} priority /></a>
         <Search lang={lang} />
         <nav><a href="https://ingotstack.com">{lang === "zh" ? "官网" : "Website"}</a>{alternate && <a href={routeFor(alternate.lang, slug)}>{lang === "zh" ? "English" : "中文"}</a>}</nav>
+        <details className="mobile-doc-nav">
+          <summary>{lang === "zh" ? "目录" : "Menu"}</summary>
+          <div>
+            {groups.map((group) => <section key={group.key}><h2>{group[lang]}</h2>{group.slugs.map((item) => {
+              const target = getDoc(lang, item) || (lang === "en" ? getDoc("zh", item) : undefined);
+              if (!target) return null;
+              return <a className={item === slug ? "active" : ""} key={item} href={routeFor(target.lang, item)}>{target.title}</a>;
+            })}</section>)}
+          </div>
+        </details>
       </header>
       <aside className="sidebar">
         {groups.map((group) => <section key={group.key}><h2>{group[lang]}</h2>{group.slugs.map((item) => {

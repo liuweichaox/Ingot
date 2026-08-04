@@ -45,6 +45,7 @@ header {
 .brand img { display: block; width: 138px; }
 header nav { display: flex; justify-content: flex-end; gap: 20px; color: var(--muted); font-size: 13px; }
 header nav a:hover { color: var(--text); }
+.mobile-doc-nav { display: none; }
 
 .shell { min-height: 100vh; }
 .sidebar {
@@ -149,12 +150,61 @@ article pre code { padding: 0; background: transparent; color: inherit; }
   main { width: calc(100vw - 300px); margin-left: 285px; }
 }
 @media (max-width: 760px) {
-  header { grid-template-columns: 1fr auto; padding: 0 16px; }
-  header .search { grid-row: 2; }
-  header nav { gap: 12px; }
+  header {
+    height: 118px;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: 58px 44px;
+    gap: 0 12px;
+    padding: 0 16px 12px;
+  }
+  header .brand { grid-column: 1; grid-row: 1; }
+  header .search { grid-column: 1; grid-row: 2; }
+  header nav { grid-column: 2; grid-row: 1; gap: 12px; }
   .brand img { width: 116px; }
-  .sidebar { position: static; width: auto; padding: 98px 18px 20px; border-right: 0; }
-  main { width: 100%; margin: 0; padding: 44px 20px 70px; }
+  .mobile-doc-nav { position: relative; display: block; grid-column: 2; grid-row: 2; }
+  .mobile-doc-nav summary {
+    min-width: 72px;
+    cursor: pointer;
+    list-style: none;
+    border: 1px solid var(--line-strong);
+    border-radius: 8px;
+    padding: 8px 12px;
+    color: var(--body);
+    text-align: center;
+  }
+  .mobile-doc-nav summary::-webkit-details-marker { display: none; }
+  .mobile-doc-nav > div {
+    position: absolute;
+    z-index: 30;
+    top: 43px;
+    right: 0;
+    width: min(310px, calc(100vw - 32px));
+    max-height: calc(100vh - 138px);
+    overflow: auto;
+    border: 1px solid var(--line-strong);
+    border-radius: 10px;
+    padding: 16px;
+    background: var(--sidebar);
+    box-shadow: 0 22px 60px #000b;
+  }
+  .mobile-doc-nav section + section { margin-top: 18px; }
+  .mobile-doc-nav h2 {
+    margin: 0 8px 6px;
+    color: #637a72;
+    font: 650 10px ui-monospace, SFMono-Regular, Consolas, monospace;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+  }
+  .mobile-doc-nav a {
+    display: block;
+    border-radius: 7px;
+    padding: 6px 8px;
+    color: var(--muted);
+    line-height: 1.45;
+  }
+  .mobile-doc-nav a.active { color: var(--text); background: rgba(95, 212, 200, .075); box-shadow: inset 2px 0 var(--cyan); }
+  .sidebar { display: none; }
+  main { width: 100%; margin: 0; padding: 154px 20px 70px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -1,146 +1,197 @@
-# Equipment and Data Wiring
+# Equipment and data connection
 
-## Position in the product loop
+> Status: **current technical guide**. The purpose of connectivity is not to accumulate more points, but to make one real run useful for engineering judgment.
 
-Equipment connectivity is not the first step. Define the platform variables, types, and normalized units in the process model first; then select a protocol and map live equipment points to those variables:
+## Definition of a complete connection
 
-```text
-define process → connect equipment → collect production data → close the data loop → diagnose → process optimization
-```
+A qualified data chain answers:
 
-Equipment onboarding is complete only when required points have been read, converted, and validated; production start and end can form a run; and actual recipes and process signals enter the same run context. A successful socket connection alone is not completion.
+- Which equipment, product, and run is this?
+- What did the engineer plan, and what did the equipment actually use?
+- How did the process evolve through its stages?
+- Which material, tooling, lot, calibration, and maintenance state applied?
+- What were the final quality and safety outcomes?
+- Where did each value come from, in which unit and configuration version?
 
-## Goal
+Data acquisition enters process R&D only when these facts can be linked reliably.
 
-The optimizer needs a coherent run, not isolated tags:
+## Data sources
 
-- What was planned?
-- What settings and conditions were actually used?
-- What trajectory occurred?
-- What quality and safety outcomes resulted?
+Ingot does not treat a PLC as the only source. One run may combine:
 
-## Data sources and adapters
+- recipes, state, stages, and process signals from a control system;
+- measurements from instruments, sensors, vision, or edge gateways;
+- laboratory, inline, or manual inspection results;
+- MES, QMS, work orders, barcodes, and lot traceability;
+- tooling, material, calibration, and maintenance records.
 
-Ingot does not treat PLCs as the only source of evidence. A run may combine any of:
+Adapters map raw values to stable business codes, standard units, quality state, time, and provenance. R&D projects reference those semantics rather than vendor addresses or protocols.
 
-- recipes, state, and process signals from control systems;
-- measurements from instruments, sensors, or edge gateways;
-- machine-vision, laboratory, or inline-inspection results;
-- run context from MES, QMS, genealogy, or other business systems.
+## Identity and linkage
 
-An adapter maps raw inputs to stable business codes, units, quality state, and `RunKey`; a research project never binds to a vendor address or protocol.
+Three identifiers have distinct responsibilities:
 
-## Boundary between process semantics and device connectivity
+- `OperationRunId`: the real run identity in Platform;
+- `CorrelationId`: correlation for field events and production cycles;
+- `RunKey`: association between an R&D experiment plan and real execution.
 
-A process semantic model defines only the platform variable code, display name, normalized type, normalized unit, role, and requiredness. It does not contain device addresses, registers, or sampling frequency. A device connection references one semantic-model version and supplies the protocol, point selector, raw type, and conversion. The same semantic model can therefore be reused by FX3U, OPC UA, or other equipment.
+They may share one value or use a deterministic mapping. Generate the RunKey before execution and map it to a PLC register, MES work order, barcode, or instrument sample ID. Inspection records use the same relationship.
 
-The stage number is a regular process variable whose role is `stage`; it is mapped once, and Edge derives stage-change events from it. Production start/end is a device control signal configured separately in the connection.
+If a controller stores numbers only, Edge maintains a deterministic mapping between short numbers and RunKeys. Never guess run-to-inspection linkage after the fact from time proximity alone.
 
-## Driver-specific configuration, not a generic address
+## Configuration lifecycle
 
-Device onboarding starts by selecting a communication driver. The UI then shows only the settings that the selected driver actually requires:
-
-| Driver | Connection settings | Point settings | Discovery or validation |
-| --- | --- | --- | --- |
-| HTTP API | base URL, JSON path, polling delay | JSON field path, raw type, conversion | read one JSON document and show its field tree |
-| MQTT | broker, port, version, client, credentials, TLS, topics, QoS, session behavior | JSON field path, raw type, conversion | wait for a real message and show its field tree |
-| OPC UA | endpoint, security mode and policy, identity, certificates, publishing/sampling intervals | NodeId and conversion | discover endpoints, browse nodes, and read current values |
-| Modbus TCP | host, port, Unit ID, zero/one-based addressing, polling delay | area, address, type, byte order, word order | test only configured addresses; never blind-scan registers |
-| Mitsubishi MC 1E | PLC address, open port, binary/ASCII data code, target station, monitoring timer | device type, number, type, text length | test only configured devices; never blind-scan the PLC |
-
-Connection and point interpretation are separate layers. A profile cannot be published until a real connection and every required mapping have been validated.
-
-## FX3U connection example
-
-FX3U is one supported field-controller example, using the Edge MELSEC A1E runner. It is not the product boundary. This scenario includes:
-
-- PLC address and port;
-- A-compatible 1E framing, TCP transport, and the binary/ASCII data code matching the PLC open settings;
-- target station and monitoring timer;
-- poll interval;
-- production start/end state and an optional controller cycle counter;
-- recipe registers;
-- temperature, pressure, position, and other process points;
-- device type, address, data type, scaling, and unit.
-
-Do not put equipment addresses in research projects. Equipment profiles own addresses; research variables reference stable business codes.
-
-## Cycle correlation
-
-Platform generates a RunKey such as:
+Acquisition configuration progresses through:
 
 ```text
-bo-7d2f6a3e1c2d-01
+draft → target-Edge probe → real-value validation → publish → local validation → safe application → state confirmation
 ```
 
-The PLC does not need to provide a `CorrelationId`. Edge generates one when the production state changes from stopped to active and closes that cycle when the state returns to stopped. This internal identifier joins cycle start, process samples, phase changes, recipe snapshots, and cycle completion events.
+Before publishing, verify:
 
-Controller cycle counters, workpiece IDs, work orders, and batch IDs are collected as business context such as `source_cycle_no` or `workpiece_id`; they do not masquerade as `CorrelationId`. MES, barcode, or inspection records can use that context to associate the cycle with an experiment `RunKey`.
+- address, port, authentication, and network reachability;
+- real point readability;
+- data type, byte order, scale, and offset;
+- raw and converted values are physically plausible;
+- required points, run boundaries, and context sources exist;
+- standard units match the process model.
 
-## Source expressions
+Edge retains the last successful version. A failed version leaves the old one running and reports failure rather than silently switching to unversioned local configuration.
 
-### Controls
+## Driver capabilities
+
+Protocols support different configuration. One capability matrix drives both the UI and publication validation so a field cannot be accepted and then ignored by a driver.
+
+| Capability | HTTP polling | MQTT | OPC UA | Modbus TCP | Mitsubishi 1E |
+|---|---|---|---|---|---|
+| Device-provided sample time | yes | yes | server SourceTimestamp | yes | yes |
+| Sequence field | yes | yes | no | no | no |
+| Connection timeout | yes | no | yes | yes | yes |
+| Reconnect interval | yes | yes | yes | yes | yes |
+| Recipe-collection path | yes | yes | no | no | no |
+| Bind point to topic | no | yes | no | no | no |
+| Byte / word order | no | no | no | yes | no |
+| Bit addressing | no | no | no | yes | yes |
+| Probe enumerates points | yes | yes | yes | configured registers only | configured devices only |
+
+Modbus and MELSEC never blind-scan addresses that the user did not declare.
+
+## Point selectors
+
+### Modbus TCP
+
+```text
+<register-area>:<address>:<type>[:<byte-order>:<word-order>]
+<register-area>:<address>.<bit>:boolean
+```
+
+Register areas are `holding-register`, `input-register`, `coil`, and `discrete-input`. Coils and discrete inputs can only be `boolean`. A bit inside a holding or input register requires an explicit offset.
+
+The fourth string segment is byte length. Connection configuration defines address origin; when manuals use one-based addresses, Edge converts them before the protocol request.
+
+### Mitsubishi MC A-compatible 1E
+
+```text
+<device>:<number>:<type>[:<byte-length>]
+<word-device>:<number>.<bit>:boolean
+```
+
+- X / Y numbers are octal.
+- B / W numbers are hexadecimal.
+- Other common devices are decimal.
+- M / X / Y / B / S / L use bit-unit reads for `boolean`.
+- Reading a bit device as `int16` returns a packed word of consecutive bits.
+
+Adjacent points may be merged into contiguous reads to reduce network round trips. Set merge distance to zero when diagnosing an individual address.
+
+## MQTT with multiple topics
+
+A gateway may split one equipment snapshot across topics:
+
+- each subscription declares a topic and optional payload root;
+- a point may bind to its source topic;
+- values merge into an equivalent sample snapshot;
+- a sample is emitted only after every required point has appeared;
+- context-only topics update the snapshot without emitting samples alone;
+- configuration referencing an unsubscribed topic is rejected.
+
+Set a reasonable maximum age for cross-topic values. When a topic stops, stale values must become missing rather than remaining current indefinitely.
+
+## Business mappings
+
+### Controlled variables
 
 ```text
 recipe:<recipe-code>
 signal:<signal-code>:<feature-code>
-signal:<signal-code>:<feature-code>:<phase-code>
+signal:<signal-code>:<feature-code>:<stage-code>
 ```
 
-Examples:
+For example:
 
 ```text
 recipe:holding-temperature
 signal:mold-temperature:mean:holding
 ```
 
-### Objectives and safety outcomes
+### Objectives and outcome constraints
 
 ```text
 inspection:<characteristic-code>
 ```
 
-Examples:
+For example:
 
 ```text
 inspection:form-error
 inspection:crack-rate
 ```
 
-## Process features
+After an explicit mapping exists, a missing actual value excludes the run. The system never fills model training with planned values.
 
-Versioned cycle analysis emits signal- and phase-level features:
+## Runs and stages
 
-- mean, minimum, maximum, and deviation;
-- slope, integral, peak, and overshoot;
-- arrival time, dwell time, and phase coverage;
-- realized heating rate and pressure stability.
+Run boundaries and stages have different responsibilities:
 
-Training uses only features common to every valid observation. Feature-definition changes produce a new version and content hash.
+- start and completion events determine run completeness;
+- stage numbers align trajectories and calculate stage features;
+- stages may vary in length, repeat, or jump and do not alone determine completeness.
 
-## Valid observation
+Process features may include mean, extrema, standard deviation, slope, integral, peak, overshoot, arrival time, dwell time, and coverage. Feature definitions are versioned; changing a definition changes its version and content hash.
 
-A run enters the model only when:
+## Manufacturing context
 
-- the cycle is complete;
-- process status is not unavailable;
-- at least one process feature exists;
-- every control has an actual value;
-- every objective has a numeric inspection;
-- every outcome constraint has a numeric inspection;
-- units match;
-- values are finite.
+Context resolves from field signals, business systems, or time-effective registries. At run start, the system freezes a snapshot and capture status:
 
-Excluded runs retain a reason and source hash for wiring repair.
+- supplied and resolved by the source;
+- resolved from versioned manufacturing context;
+- missing configuration or unresolved.
 
-## Adapting another process
+If a scenario-required field cannot resolve, the run does not enter that analysis. Other fields remain available for traceability and coverage assessment.
 
-Prefer configuration over duplicated code:
+## Data quality and analysis admission
 
-1. choose or implement a protocol driver;
-2. define equipment profile and points;
-3. define cycle and phases;
-4. map research variables;
-5. define inspection characteristics;
-6. provide a safe baseline;
-7. verify one complete end-to-end run.
+Before analysis, verify at least:
+
+- the run is complete;
+- actual settings exist;
+- process data and required features are available;
+- objective and outcome-constraint inspections are complete;
+- required context has resolved;
+- units, time, and configuration versions agree;
+- numbers are finite;
+- run-to-inspection linkage is unique.
+
+Excluded runs retain raw records, source hashes, and reasons. The data-quality view should answer what is missing, why, which analysis is affected, and how to repair it.
+
+## New-scenario connection order
+
+1. Define the engineering problem, run boundary, and stable equipment identity.
+2. Select or implement a protocol driver.
+3. Build equipment templates and point mappings.
+4. Define actual recipes, signals, stages, and units.
+5. Configure manufacturing context and inspection characteristics.
+6. Validate real values through the target Edge and publish.
+7. Complete one run–trajectory–inspection loop.
+8. Review data quality and analysis admission.
+9. Enter comparison, diagnosis, and optimization only after engineer review.

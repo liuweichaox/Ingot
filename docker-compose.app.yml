@@ -89,7 +89,6 @@ services:
       - ChatDataAccess__Users__operator__AllowAll=${INGOT_CHAT_OPERATOR_ALLOW_ALL:-true}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - Cors__AllowedOrigins__0=http://localhost:3000
-      - Webhook__Enabled=true
     depends_on:
       postgres:
         condition: service_healthy

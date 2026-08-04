@@ -1,5 +1,7 @@
 # Ubuntu Docker 公网部署
 
+> 文档状态：当前官网与文档站部署指南。该拓扑只承载公开内容，不属于工厂运行时。
+
 本目录用于部署 Ingot 官网和文档站：
 
 - `ingotstack.com` 与 `www.ingotstack.com`：官网；

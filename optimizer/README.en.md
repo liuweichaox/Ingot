@@ -1,6 +1,10 @@
 # Ingot Process Optimizer
 
-This directory implements the surrogate and sequential-recommendation kernel described in the [system design](../docs/design.en.md). It receives a complete project snapshot and valid observations from the platform, then returns experiments for **engineer review**. It stores no business state and never controls equipment.
+> Status: current numerical-service development guide.
+
+This directory implements surrogate modeling and sequential experiment recommendation within Ingot's method toolbox. It receives a complete project snapshot and valid observations from Platform, then returns experiments for **engineer review**. It stores no business state and never controls equipment. GP/BO is a current method for expensive small-data sequential experiments, not the only answer to every process question and not a replacement product value.
+
+See the [system design](../docs/design.en.md) for boundaries and [analysis and optimization methods](../docs/optimization.en.md) for method-selection principles.
 
 ## Current capabilities
 

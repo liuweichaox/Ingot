@@ -1,14 +1,10 @@
-# Install and Run a First Experiment
+# Installation and the first data loop
+
+> Status: **current operating guide**. The goal is not to run an optimizer immediately, but to complete one traceable record linking actual conditions, process behavior, and inspection results.
 
 ## 1. Prepare the environment
 
-The recommended path is Docker Compose.
-
-Requirements:
-
-- Git;
-- Docker Engine or Docker Desktop;
-- Docker Compose v2.
+Docker Compose is the recommended way to start the full system. You need Git, Docker Engine or Docker Desktop, and Docker Compose v2.
 
 ```bash
 git clone https://github.com/liuweichaox/Ingot.git
@@ -16,115 +12,156 @@ cd Ingot
 cp .env.example .env
 ```
 
-Set database, Edge token, and admin secrets in `.env`, then run:
+Change the database password, Edge upload token, and administrator password in `.env`, then start:
 
 ```bash
 docker compose -f docker-compose.app.yml up -d --build
 ```
 
-Open:
+Check:
 
 ```text
-http://localhost:3000       process R&D workbench
+http://localhost:3000       Process R&D workbench
 http://localhost:8000/health
 http://localhost:8100/ready
 ```
 
-## 2. Create an optical-molding campaign
+Simulated data are suitable for evaluating documentation and software flow. Product value must ultimately be validated with real or representative field runs.
 
-Define at least:
+## 2. Define the engineering problem first
 
-| Type | Example |
+Start with one bounded problem rather than handing an entire factory to a model. At minimum, define:
+
+| Item | Question |
 |---|---|
-| Control | holding temperature, 480–550 °C |
-| Objective | form error, minimize, weight 1 |
-| Safety outcome | crack rate ≤ 0.05, minimum probability 0.95 |
-| Actual source | `recipe:holding-temperature` |
-| Objective source | `inspection:form-error` |
-| Safety source | `inspection:crack-rate` |
+| Industrial object | Which product, process, or R&D object? |
+| Equipment scope | Which machine or comparable group? |
+| Run boundary | Where does one run start and end? |
+| Controlled variables | What can the engineer actually change? |
+| Quality objective | Which inspection determines success, in which direction, specification, and unit? |
+| Safety boundary | Which parameter or outcome must never cross its boundary? |
+| Context | Which material, tooling, lot, calibration, or maintenance facts require traceability? |
 
-Variable codes, inspection characteristic codes, and units must remain stable.
+Variables, inspection characteristics, and units use stable codes. Display names may change; historical semantics must not drift casually.
 
-The bundled optical-lens molding simulator uses a separate demo contract. Its
-14 acquired values include an integer stage number on every sample, plus
-upper/lower mold infrared temperature, current, voltage, power, pressure,
-grating position, servo speed, vacuum, and servo position. Its 12 recipe
-parameters cover HEAT/WORK/HOST positions,
-temperature settings and limits, nitrogen temperature, preheat delay, and
-pressure settings and limits. The simulated device exposes an FX3U-ENET-ADP
-A-compatible MC 1E binary endpoint on port 5551. Its data-source profile uses
-`melsec-a1e` to read scaled D registers rather than HTTP JSON. Moving to a real
-PLC keeps the register map and changes only the PLC address and site MC port.
-The process data model does not maintain a
-separate stage catalog; cycle analysis segments traces from the acquired stage
-number. This contract validates the local closed loop; it does not represent
-real device addresses or a production process window.
-The stage number is used only for trace alignment and stage-level feature
-calculation, not for production-cycle completeness. A cycle is complete only
-when the same `CorrelationId` has both `cycle.started` and `cycle.completed`;
-variable-duration, repeated, or skipped stage numbers do not make the cycle
-incomplete.
+## 3. Build scenario configuration
 
-After creating the project, choose “start R&D,” then choose “propose the first hypothesis.” The current R&D flow requires at least one hypothesis tied to a controllable variable; the intelligent experiment-design action appears only when the project is no longer a draft and a hypothesis exists. Historical runs can also be imported to build observation and diagnosis evidence.
+A scenario package versions the process's data and analysis rules together:
 
-## 3. Wire a real run
+- process data model and standard units;
+- acquisition profile and equipment-point mapping;
+- run boundaries, stages, and process features;
+- inspection definitions and quality plan;
+- recipe variables, allowed ranges, objectives, and constraints;
+- context fields required for analysis or recorded when available.
 
-One identifier crosses three boundaries:
+Publish a scenario-package version before assigning it to an R&D project. Once execution starts, freeze the package and context policy so historical observations remain interpretable.
+
+## 4. Connect data sources
+
+Under Data and connectivity:
+
+1. Register the edge node and equipment identity.
+2. Select a protocol and enter connection details.
+3. Map raw points to stable process variables.
+4. Probe and read real values through the target Edge.
+5. Check data type, scale, offset, and unit.
+6. Publish the configuration and confirm the Edge actually applied it.
+7. Configure inspection entry, instruments, or quality-system sources.
+
+Do not put PLC addresses in an R&D project. Equipment connectivity owns addresses and protocols; research references stable business codes.
+
+See [Equipment and data connection](data-connection.en.md) for protocol semantics.
+
+## 5. Establish manufacturing context
+
+For the current equipment, confirm:
+
+- product or process object;
+- published recipe version;
+- installed tooling and assembly revision;
+- material lot, components, calibration, or maintenance facts required by the scenario.
+
+These facts freeze into a snapshot when the run starts. Do not wait for a quality problem and then manually guess which mold was probably used.
+
+## 6. Complete one run
+
+A stable identity must span the research plan, field cycle, and inspection record:
 
 ```text
-experiment RunKey
-    = run or cycle CorrelationId (when present)
-    = inspection OperationRunId
+R&D RunKey ←→ field CorrelationId ←→ Platform OperationRunId
 ```
 
-Let Platform generate the RunKey, then have a field adapter write it to a control-system correlation field or map it to a MES order, barcode, sample ID, or other run identifier; select or scan the same value during inspection.
+They may share one value or use a deterministic mapping, but the relationship must exist before execution and remain traceable. An MES work order, barcode, instrument sample ID, or equipment register can carry the mapping.
 
-## 4. Establish a safe baseline
+After the run, confirm in cycle detail that:
 
-When safety outcome constraints exist, cold start requires at least one inspected baseline inside every safety boundary. The optimizer will not invent an arbitrary recipe without safe evidence.
+- start and completion events are present;
+- actual parameters were collected;
+- process curves and stages are available;
+- run context resolved successfully;
+- configuration and provenance versions are explicit.
 
-The baseline needs:
+## 7. Link inspection results
 
-- a completed run or cycle record;
-- actual run settings and conditions;
-- usable process features;
-- every objective outcome;
-- every safety outcome.
+Enter or receive quality and safety results for the run. Each result includes at least:
 
-## 5. Generate the next run
+- inspection characteristic code and version;
+- value, disposition, and unit;
+- sample or run identity;
+- time, provenance, and required attachments;
+- review state when applicable.
 
-In a project with an R&D hypothesis, choose “design the next experiment.” The product UI defaults to two distinct conditions, two replicates per condition, and two execution blocks with rotated order. The result includes:
+The result must link to the same real run. If linkage is not unique, retain a pending state instead of guessing by time proximity.
 
-- recommended settings;
-- means and 95% intervals;
-- safety outcome predictions;
-- combined feasibility;
-- rationale;
-- observation count, process-feature count, and model version.
+## 8. Review data trust
 
-Repeating the action before the current batch finishes returns the existing experiment.
+In Data quality and the project's Experiment data readiness view, review:
 
-## 6. Execute and feed back
+- run completeness;
+- actual-setting coverage;
+- process-feature coverage;
+- run-to-inspection linkage;
+- context required for analysis;
+- unit, time, configuration-version, and provenance anomalies;
+- the specific reason for every excluded run.
 
-After engineering approval:
+Common reasons include incomplete runs, missing actual settings, unavailable process data, missing inspections, unit mismatches, or missing context configuration. Never hide these with planned values or manual guesses.
 
-1. choose “dispatch and start” to create an ordered, equipment-neutral execution package;
-2. let a PLC/MES/recipe integration or operator apply the recommended settings;
-3. associate the RunKey with the field run identifier;
-4. execute the process run;
-5. complete quality and safety inspections.
+At this point the system has moved from “data were collected” to “data can support engineering judgment.”
 
-Once all planned runs have valid observations, Platform materializes the result, closes the experiment, and may create a candidate setting backed by repeats of the same condition. In validation, choose “design independent validation,” complete at least three repeats across two execution blocks, and let Platform verify actual settings, quality objectives, and safety constraints. A different engineer may then approve and release it. A continuous range requires separate boundary and interaction experiments; repeats at one point cannot approve the whole range.
+## 9. Compare runs and form candidates
 
-## 7. Troubleshooting
+Select a run that missed its objective and a qualified historical or conforming baseline with explicit matching conditions. The system can help inspect:
 
-Use experiment readiness to inspect exclusions:
+- the stage where deviation first appeared;
+- planned-versus-actual settings;
+- the largest trajectory-feature differences;
+- coverage and confounding across material, tooling, equipment, or time;
+- candidates that the next experiment could identify.
 
-- RunKey and run ID do not match;
-- the run or cycle is incomplete;
-- process data is unavailable or has no features;
-- actual run settings are missing;
-- inspection result or unit is missing;
-- safety outcome is incomplete.
+Observational analysis forms candidate causes only. The engineer reviews candidates, counterevidence, field limits, and missing data before creating an R&D hypothesis.
 
-Do not hide missing actual data by entering planned values.
+## 10. Design a validation experiment
+
+An experiment draft defines at least:
+
+- the candidate cause being tested;
+- controlled variables and candidate conditions;
+- controls, repetitions, blocks, and run order;
+- objective, minimum meaningful effect, and safety boundaries;
+- stopping and fallback conditions.
+
+The engineer approves execution. Once all runs and inspections are complete, the system calculates the result from source data and marks the hypothesis supported, rejected, or inconclusive.
+
+## 11. Enter optimization when appropriate
+
+When the project has trustworthy observations, explicit controlled variables, and a safe baseline, it can generate the next experiment set. The system shows settings, objective intervals, safety outcomes, joint feasibility, data scope, model version, and rationale.
+
+Pending points prevent duplicate recommendations while a batch remains incomplete. One successful point is only a candidate setting; a process window requires independent repetition, boundary or interaction validation, and review by another engineer.
+
+## 12. Demo scenario
+
+The optical-lens molding simulator validates the complete data path; it is not a real equipment address map or production process window. It exposes a Mitsubishi A-compatible MC 1E binary interface together with stage, temperature, pressure, position, and recipe values. A real machine requires fresh validation of addresses, ranges, units, run boundaries, and safety conditions.
+
+Simulation can prove that the software path runs. It cannot prove shorter development time in a real process.

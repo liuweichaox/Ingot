@@ -9,7 +9,7 @@ const out = path.join(root, "apps/docs-site/out");
 test("exports the bilingual product documentation journey", async () => {
   for (const file of ["zh/index.html", "en/index.html", "zh/design/index.html", "en/design/index.html", "zh/optimization/index.html", "en/optimization/index.html", "zh/rollout/index.html", "en/rollout/index.html", "search-index.json", "sitemap.xml", "robots.txt"])
     assert.ok((await readFile(path.join(out, file))).length > 0, file);
-  for (const slug of ["getting-started", "design", "optimization", "data-connection", "project-plan", "rollout", "deployment", "faq"])
+  for (const slug of ["getting-started", "design", "optimization", "data-connection", "project-plan", "rollout", "deployment", "faq", "brand", "open-source-dependencies"])
     for (const lang of ["zh", "en"])
       assert.ok((await readFile(path.join(out, lang, slug, "index.html"))).length > 0, `${lang}/${slug}`);
 
@@ -29,20 +29,20 @@ test("uses the exact official brand assets", async () => {
   }
 });
 
-test("publishes the AI process R&D product journey without interface or developer documentation", async () => {
+test("publishes the data-supported process R&D journey and public references without interface documentation", async () => {
   const search = JSON.parse(await readFile(path.join(out, "search-index.json"), "utf8"));
-  assert.equal(search.length, 18);
+  assert.equal(search.length, 22);
   assert.deepEqual(
     [...new Set(search.map((item) => item.slug))].sort(),
-    ["", "data-connection", "deployment", "design", "faq", "getting-started", "optimization", "project-plan", "rollout"],
+    ["", "brand", "data-connection", "deployment", "design", "faq", "getting-started", "open-source-dependencies", "optimization", "project-plan", "rollout"],
   );
 
   for (const lang of ["zh", "en"]) {
     const index = await readFile(path.join(out, lang, "index.html"), "utf8");
     const design = await readFile(path.join(out, lang, "design", "index.html"), "utf8");
-    assert.match(index, lang === "zh" ? /开源工艺追因与优化系统/ : /open-source process diagnosis and optimization system/i);
+    assert.match(index, lang === "zh" ? /让工艺研发从没有数据支撑走向有数据支撑/ : /Move process R(?:&amp;|&#x26;)D from decisions without data support/i);
     assert.match(design, lang === "zh" ? /设计目标/ : /Design objective/i);
-    assert.match(index, lang === "zh" ? /下一次运行/ : /next experiment/i);
+    assert.match(index, lang === "zh" ? /帮助工艺工程师抉择/ : /help process engineers choose what to do next/i);
     assert.match(index, lang === "zh" ? /工艺定义.*设备接入.*生产采集.*数据闭环.*工艺追因.*工艺优化/s : /define process.*connect equipment.*collect production data.*close the data loop.*diagnose.*process optimization/is);
     assert.doesNotMatch(`${index}${design}`, /\/api\/|curl|ProductionEvent|InspectionRecord|endpoint|HTTP API/i);
   }

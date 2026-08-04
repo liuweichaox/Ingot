@@ -1,9 +1,11 @@
 using System.Text.Json;
 using Ingot.Contracts.Events;
 using Ingot.Contracts.Inspections;
+using Ingot.Contracts.ProcessConfiguration;
 using Ingot.Contracts.ProcessResearch;
 using Ingot.Platform.Infrastructure.Cycles;
 using Ingot.Platform.Infrastructure.Inspections;
+using Ingot.Platform.Infrastructure.ProcessConfiguration;
 using Ingot.Platform.Infrastructure.ProcessResearch;
 using Xunit;
 
@@ -22,7 +24,14 @@ public sealed class ResearchObservationAssemblerTests
             EdgeIds = ["EDGE-WORKSHOP-A"],
             Context = new Dictionary<string, string>
             {
+                ["context_capture_status"] = "resolved",
+                ["equipment_id"] = "FX3U-01",
+                ["operation_run_id"] = runKey,
+                ["recipe_id"] = "LENS-A",
+                ["recipe_version"] = "3",
+                ["tooling_installation_id"] = Guid.NewGuid().ToString("D"),
                 ["material_lot"] = "GLASS-LOT-07",
+                ["material_lot_ref"] = "GLASS-LOT-07",
                 ["mold_id"] = "MOLD-A"
             },
             StartedAt = DateTimeOffset.UtcNow.AddMinutes(-2),
@@ -107,7 +116,11 @@ public sealed class ResearchObservationAssemblerTests
             }
         ]);
         var cycleService = new FakeCycleService(cycle);
-        var assembler = new ResearchObservationAssembler(cycleService, inspections);
+        var scenario = ResearchContextAdmissionEvaluatorTests.OpticalScenario();
+        var assembler = new ResearchObservationAssembler(
+            cycleService,
+            inspections,
+            new FakeProcessConfigurationStore(scenario));
         var project = new ResearchProject
         {
             Code = "lens-a",
@@ -138,6 +151,11 @@ public sealed class ResearchObservationAssemblerTests
                     DataSource = "recipe:holding-temperature"
                 }
             ],
+            Context = new Dictionary<string, string>
+            {
+                [ResearchContextAdmissionEvaluator.ScenarioPackageContextKey] =
+                    $"{scenario.PackageId}:{scenario.Version}"
+            },
             OutcomeConstraints =
             [
                 new ResearchOutcomeConstraint
@@ -195,7 +213,25 @@ public sealed class ResearchObservationAssemblerTests
         Assert.Equal("GLASS-LOT-07", observation.Context["material_lot_ref"]);
         Assert.Equal("GLASS-LOT-07", observation.Context["material_lot"]);
         Assert.Equal("MOLD-A", observation.Context["mold_id"]);
+        Assert.Equal(
+            ResearchContextAdmissionEvaluator.ComputePolicyHash(scenario),
+            observation.Context[ResearchContextAdmissionEvaluator.ObservationPolicyHashContextKey]);
         Assert.Matches("^[a-f0-9]{64}$", observation.SourceContentHash);
+
+        var missingMoldCycle = cycle with
+        {
+            Context = cycle.Context
+                .Where(static pair => pair.Key != "mold_id")
+                .ToDictionary(static pair => pair.Key, static pair => pair.Value, StringComparer.Ordinal)
+        };
+        var missingMoldResult = await new ResearchObservationAssembler(
+                new FakeCycleService(missingMoldCycle),
+                inspections,
+                new FakeProcessConfigurationStore(scenario))
+            .AssembleAsync(project, [experiment]);
+        var missingMold = Assert.Single(missingMoldResult.Observations);
+        Assert.False(missingMold.ValidForOptimization);
+        Assert.Contains("mold_id", missingMold.ExclusionReason);
 
         var strictProject = project with
         {
@@ -226,7 +262,8 @@ public sealed class ResearchObservationAssemblerTests
         };
         var wrongUnitAssembler = new ResearchObservationAssembler(
             new FakeCycleService(wrongUnitCycle),
-            inspections);
+            inspections,
+            new FakeProcessConfigurationStore(scenario));
         var wrongUnitResult = await wrongUnitAssembler.AssembleAsync(project, [experiment]);
         var unitConflict = Assert.Single(wrongUnitResult.Observations);
         Assert.False(unitConflict.ValidForOptimization);
@@ -269,6 +306,41 @@ public sealed class ResearchObservationAssemblerTests
             IReadOnlyList<string> cycleIds,
             CancellationToken ct = default)
             => throw new NotSupportedException();
+    }
+
+    private sealed class FakeProcessConfigurationStore(ScenarioPackage scenario) : IProcessConfigurationStore
+    {
+        public Task InitializeAsync(CancellationToken ct = default) => Task.CompletedTask;
+        public Task<ProcessDataModel> UpsertDataModelAsync(ProcessDataModel value, CancellationToken ct = default)
+            => throw new NotSupportedException();
+        public Task<IReadOnlyList<ProcessDataModel>> ListDataModelsAsync(CancellationToken ct = default)
+            => throw new NotSupportedException();
+        public Task<ProcessDataModel?> GetDataModelAsync(string modelId, int version, CancellationToken ct = default)
+            => throw new NotSupportedException();
+        public Task<bool> DeleteDataModelAsync(string modelId, int version, CancellationToken ct = default)
+            => throw new NotSupportedException();
+        public Task<RecipeVersion> UpsertRecipeVersionAsync(RecipeVersion value, CancellationToken ct = default)
+            => throw new NotSupportedException();
+        public Task<IReadOnlyList<RecipeVersion>> ListRecipeVersionsAsync(CancellationToken ct = default)
+            => throw new NotSupportedException();
+        public Task<RecipeVersion?> GetRecipeVersionAsync(string recipeId, int version, CancellationToken ct = default)
+            => throw new NotSupportedException();
+        public Task<bool> DeleteRecipeVersionAsync(string recipeId, int version, CancellationToken ct = default)
+            => throw new NotSupportedException();
+        public Task<ProcessAnalysisPlan> UpsertAnalysisPlanAsync(ProcessAnalysisPlan value, CancellationToken ct = default)
+            => throw new NotSupportedException();
+        public Task<IReadOnlyList<ProcessAnalysisPlan>> ListAnalysisPlansAsync(CancellationToken ct = default)
+            => throw new NotSupportedException();
+        public Task<ProcessAnalysisPlan?> GetAnalysisPlanAsync(string planId, int version, CancellationToken ct = default)
+            => throw new NotSupportedException();
+        public Task<bool> DeleteAnalysisPlanAsync(string planId, int version, CancellationToken ct = default)
+            => throw new NotSupportedException();
+        public Task<ScenarioPackage?> GetScenarioPackageAsync(
+            string packageId,
+            int version,
+            CancellationToken ct = default)
+            => Task.FromResult<ScenarioPackage?>(
+                packageId == scenario.PackageId && version == scenario.Version ? scenario : null);
     }
 
     private sealed class FakeInspectionStore(IReadOnlyList<InspectionRecord> records) :

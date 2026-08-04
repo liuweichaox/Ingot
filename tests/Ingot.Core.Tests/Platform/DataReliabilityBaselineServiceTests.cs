@@ -32,6 +32,7 @@ public sealed class DataReliabilityBaselineServiceTests
             LifecycleComplete = true,
             Context = new Dictionary<string, string>
             {
+                ["context_capture_status"] = "resolved",
                 ["equipment_id"] = "PRESS-01",
                 ["operation_run_id"] = "RUN-GOOD",
                 ["material_lot"] = "LOT-01"
@@ -64,7 +65,11 @@ public sealed class DataReliabilityBaselineServiceTests
             ProductSeries = "lens",
             StartedAt = now.AddMinutes(-1),
             HasCompleted = true,
-            Context = new Dictionary<string, string> { ["equipment_id"] = "PRESS-02" },
+            Context = new Dictionary<string, string>
+            {
+                ["context_capture_status"] = "configuration_missing",
+                ["equipment_id"] = "PRESS-02"
+            },
             ProcessDataQuality = new ProcessDataQualitySummary
             {
                 Status = ProcessDataStatuses.Unavailable,
@@ -86,6 +91,7 @@ public sealed class DataReliabilityBaselineServiceTests
         Assert.False(baseline.Truncated);
         Assert.Equal(0.5, Rate(baseline, "process_data_completeness"));
         Assert.Equal(0.5, Rate(baseline, "actual_parameter_coverage"));
+        Assert.Equal(0.5, Rate(baseline, "context_capture_integrity"));
         Assert.Equal(0.5, Rate(baseline, "minimal_context_coverage"));
         Assert.Equal(0.5, Rate(baseline, "run_quality_association"));
         Assert.Equal(0.5, Rate(baseline, "analysis_admission"));
@@ -102,6 +108,8 @@ public sealed class DataReliabilityBaselineServiceTests
             item => item.Field == "material_lot_ref").Coverage);
         Assert.Contains(baseline.Exclusions, item =>
             item.Code == "actual_parameters_missing" && item.RunCount == 1);
+        Assert.Contains(baseline.Exclusions, item =>
+            item.Code == "context_capture_invalid" && item.RunCount == 1);
         Assert.Contains(
             "不使用配方计划值",
             Assert.Single(baseline.Rates, item => item.Code == "actual_parameter_coverage").Definition);

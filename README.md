@@ -3,8 +3,8 @@
     <img src="apps/website/public/brand/ingot-lockup.svg" alt="Ingot" width="340">
   </a>
 
-  <p><strong>面向高成本、小样本制造实验的开源工艺追因与优化系统</strong></p>
-  <p>把真实周期、过程轨迹和检验结果连成可追溯证据：看清这次运行，优化下一次运行。</p>
+  <p><strong>开源工艺追因与优化系统</strong></p>
+  <p>让真实数据帮助工艺工程师抉择。</p>
 
   [![CI](https://github.com/liuweichaox/Ingot/actions/workflows/ci.yml/badge.svg)](https://github.com/liuweichaox/Ingot/actions/workflows/ci.yml)
   [![License: MIT](https://img.shields.io/badge/license-MIT-E8AD56.svg)](LICENSE)
@@ -17,87 +17,102 @@
   简体中文 · [English](README.en.md)
 </div>
 
-## 关于 Ingot
+## 为什么做 Ingot
 
-Ingot 解决的不是“怎样多采一些数据”，而是采集之后的两个关键问题：
+Ingot 的核心价值保持不变：
 
-> **工艺追因**：这次运行为什么没达到规格，偏差来自哪个变量、哪段轨迹？
->
-> **工艺优化**：在实验昂贵、噪声存在、样本很少且有安全边界的情况下，下一次运行应该怎样设置，才能用尽可能少的试验达到规格？
+> **让工艺研发从没有数据支撑走向有数据支撑，让计算机基于真实数据帮助工艺工程师抉择，并采用适合问题的有效计算方法分析数据。**
 
-两个问题共用同一套证据：真实周期、实际配方、版本化过程特征和检验结果。区别只在于一个解释已发生的结果，一个决定还没做的实验。
+传统工艺研发中，大量判断依赖个人记忆、零散表格和不可复现的试验顺序。即使设备已经产生数据，生产条件、过程曲线和质量结果也常常无法对应到同一次真实运行，计算机因此无法可靠地参与工程判断。
 
-系统不绑定特定工艺、设备厂商或控制器型号。Edge 采集实际配方与生产轨迹，Platform 将运行周期和检验结果组成可追溯实验样本，周期诊断定位偏差来源与候选变量，Python 优化服务使用高斯过程和受约束贝叶斯优化推荐下一次运行参数。换工艺时，核心闭环不变，只替换变量、结果、安全约束、数据映射和领域特征。
+Ingot 先建立可信的数据闭环，再帮助工程师：
 
-## 为什么是 Ingot
+- 找到一次运行实际用了什么设备、产品、配方、材料和工装；
+- 把实际设定、过程轨迹和检验结果关联到同一次运行；
+- 比较可比运行，发现差异发生在哪个变量、阶段或上下文；
+- 区分候选原因、混杂因素和证据不足；
+- 把工程判断转成可证伪、可审核的实验；
+- 在安全边界内选择更有价值的下一步实验；
+- 保存经过验证的结论、适用范围和失效条件。
 
-- **工艺追因与优化一体**：同一套证据既解释已发生的偏差，也推荐下一次实验；采集、特征、检验和实验管理都服务于这条闭环。
-- **适合小样本**：使用校准不确定性的高斯过程，而不是依赖大量数据的深度网络。
-- **使用真实轨迹**：先学习设定参数如何形成过程轨迹，再学习轨迹如何影响质量；这个两阶段结构同时是追因的依据——偏差可以落到具体变量和具体轨迹段。
-- **把安全写进优化器**：参数硬约束、质量结果约束和最低可行概率共同限制候选点。
-- **人在闭环内**：程序提出带预测区间的实验，工程师批准后执行。
-- **可追溯**：每条观察绑定周期、检验记录、特征版本、模型版本和内容哈希。
+计算机负责整理证据、计算和提出建议；工艺工程师负责定义问题、审核约束、批准实验并作出最终判断。
 
-## 已实现的闭环
-
-产品按六个业务阶段推进：
+## 一条完整闭环
 
 ```text
 工艺定义 → 设备接入 → 生产采集 → 数据闭环 → 工艺追因 → 工艺优化
+    ↑                                                        ↓
+    └──────────── 已验证配方、工艺窗口与知识返回生产 ────────────┘
 ```
 
-下面是这条业务路径在系统内部的数据与模型关系：
+| 阶段 | 解决的问题 |
+|---|---|
+| 工艺定义 | 平台应理解哪些变量、单位、目标和安全边界？ |
+| 设备接入 | 原始寄存器、节点、报文和检验如何映射成稳定业务语义？ |
+| 生产采集 | 这次真实运行发生了什么？ |
+| 数据闭环 | 生产条件、过程轨迹和质量结果是否完整、可追溯、可比较？ |
+| 工艺追因 | 哪些差异值得工程师验证，哪些结论仍受混杂或数据不足限制？ |
+| 工艺优化 | 下一步做什么实验最有价值，并且没有越过已声明的安全边界？ |
 
-```mermaid
-flowchart LR
-    A["控制系统 / 设备信号"] --> B["周期与阶段特征"]
-    C["检验结果"] --> D["实验观察"]
-    B --> D
-    D --> J["周期诊断 · 偏差归因"]
-    J --> E["轨迹代理模型"]
-    D --> E
-    E --> F["质量与约束代理模型"]
-    F --> G["qLogNEI / qLogNEHVI"]
-    G --> H["下一次运行参数 + 预测区间"]
-    H --> I["工程师审核与执行"]
-    I --> A
-```
+采集不是终点，优化算法也不是起点。可信运行事实是所有分析和建议的共同地基。
 
-当前可用能力：
+## 按问题选择计算方法
 
-- MELSEC A1E、Modbus TCP、OPC UA、MQTT 和 HTTP 采集边界；
-- 断网缓存、幂等上送、周期物化和版本化阶段特征；
-- 实验运行、实际配方、过程轨迹和检验结果自动关联；
-- 周期诊断、偏差归因、研发假设、假设验证实验和工艺窗口复核；
-- 单目标与多目标优化、目标权重、参数约束、结果安全约束；
-- qLogNEI / qLogNEHVI、批量建议、待执行点避让和安全冷启动；
-- 相同数据快照幂等推荐，实验结果原子持久化；
-- Platform 内嵌 Agent 调查、聊天和数据工具，数值决策仍由独立 Optimizer 负责；
-- 中英文官网、文档站和 React 工艺研发工作台。
+Ingot 不把某一种“先进算法”固定成所有问题的答案：
 
-项目不会把尚未验证的算法效果写成产品结论。真实价值需要使用历史项目回放和新项目在线实验分别验证。
+- 数据覆盖、缺失和漂移使用数据质量统计；
+- 正常/异常差异使用稳健统计、匹配比较和阶段分析；
+- 设备、材料、工装等上下文使用分层统计、方差分量或混合效应模型；
+- 原因判断使用对照、重复、区组、随机化和干预实验；
+- 昂贵的小样本参数搜索使用高斯过程和受约束贝叶斯优化；
+- 机理明确而数据较少时融合物理特征或先验；
+- LLM 用于理解问题、调用只读工具和解释证据，不直接生成数值配方。
+
+详细方法边界见[分析与优化方法](docs/optimization.md)。
+
+## 产品组成
+
+- **Edge**：连接 PLC、仪器、网关和业务数据源，完成映射、周期采集、断网缓存与补传。
+- **Cycles**：把连续信号组织成可追溯的真实运行和阶段轨迹。
+- **Manufacturing**：记录产品、配方、设备、材料、组件和工装等运行上下文。
+- **Inspections**：保存质量目标、安全结果、附件和人工复核。
+- **Research**：组织问题、候选原因、假设、实验、结果和工艺窗口。
+- **Optimizer**：执行可重复的数值建模、约束判断和序贯实验建议。
+- **Agent**：帮助工程师查询、组织和解释经过验证的系统事实。
+
+这些模块围绕同一条证据链工作，不建立互相冲突的平行业务记录。
+
+## 当前状态与证据边界
+
+仓库已经实现采集、周期、上下文、检验、研发实验、诊断候选和数值建议的主要代码路径，并有自动化测试。当前事实与产品收益必须分开：
+
+- **已实现**表示代码、契约和测试存在；
+- **历史回放通过**表示没有未来数据泄漏，并在已知候选中得到可复现结果；
+- **影子验证通过**表示建议能够在新项目中接受现场约束检验；
+- **在线验证通过**才表示系统在真实项目中帮助工程师减少实验或时间。
+
+真实光学模压历史回放和前瞻项目的公开结果尚未完成。因此本项目不声称已经减少某个比例的实验或研发周期。
 
 ## 系统架构
 
-| 组件 | 职责 | 技术 |
-|---|---|---|
-| Edge | PLC/设备连接、采样、断网缓存与补传 | .NET 10、SQLite |
-| Platform API | 模块化单体；工业对象、实验、周期、检验、证据、Agent 和业务事务 | ASP.NET Core、PostgreSQL/TimescaleDB |
-| Agent | Platform 内嵌的调查、聊天和数据工具 | .NET、Deterministic/OpenAI Provider |
-| Optimizer | 无状态代理模型训练与下一实验推荐 | Python、PyTorch、GPyTorch、BoTorch |
-| Platform Web | 独立前端；对象、诊断、研发和执行工作流 | React、Vite |
-| Website / Docs | 开源项目介绍和产品文档 | Next.js |
+```mermaid
+flowchart LR
+    Sources["控制系统 / 仪器 / 视觉 / 检验 / MES"] --> Edge["Edge ConnectorHost\n映射 · 周期 · 缓存"]
+    Edge --> Platform["Platform API\n运行 · 上下文 · 检验 · 研发 · 证据"]
+    Platform --> Web["Platform Web\n工程师工作台"]
+    Platform --> Optimizer["Optimizer\n统计 · GP · 约束 · 实验建议"]
+    Platform --> Agent["Agent\n查询 · 组织 · 解释"]
+    Engineer["工艺工程师"] --> Web
+    Web --> Platform
+    Optimizer --> Platform
+    Agent --> Platform
+```
 
-中心平台保持模块化单体，Agent 作为平台内嵌能力运行；数值优化作为独立无状态计算服务。现场部署单元是 Edge ConnectorHost，平台部署单元是 Platform API，平台是唯一业务记录源，优化器不私存实验状态。Website 和 Docs 使用独立公开站点拓扑。
+Platform 是厂内业务记录源；Optimizer 是无状态数值服务；Agent 只能使用授权工具访问结构化事实。Edge 与 Platform 即使部署在同一台机器，也保持独立进程、存储和故障恢复。
 
 ## 快速开始
 
-### 前置条件
-
-- Docker 与 Docker Compose
-- Git
-
-### 启动完整环境
+要求：.NET SDK 10、Node.js 22.13+、uv 0.11.32、Docker 和 Docker Compose。
 
 ```bash
 git clone https://github.com/liuweichaox/Ingot.git
@@ -106,58 +121,43 @@ cp .env.example .env
 docker compose -f docker-compose.app.yml up -d --build
 ```
 
-启动后：
+启动后访问：
 
-- 工艺研发界面：<http://localhost:3000>
-- Platform API 健康检查：<http://localhost:8000/health>
-- 优化器就绪检查：<http://localhost:8100/ready>
+```text
+http://localhost:3000       工艺研发界面
+http://localhost:8000/health
+http://localhost:8100/ready
+```
 
-生产部署将 `INGOT_AUTH_MODE` 设置为 `Local` 或 `Oidc`，并更换示例凭据。
+首次使用应先完成一条真实或代表性的数据闭环，再进入诊断和优化：定义变量与结果 → 接入数据 → 完成一次运行 → 关联检验 → 检查数据质量 → 比较运行 → 设计验证实验。
 
-默认 Compose 不启动现场连接器。连接真实设备或业务系统前，请先阅读[设备与数据接线](docs/data-connection.md)。
+完整步骤见[安装与第一个数据闭环](docs/getting-started.md)。
 
-### 本地开发
+## 开发验证
 
 ```bash
 dotnet restore Ingot.sln
 dotnet build Ingot.sln
 dotnet test tests/Ingot.Core.Tests/Ingot.Core.Tests.csproj
-
 npm --prefix apps/platform ci
-npm --prefix apps/platform run dev
-
+npm --prefix apps/platform test
 uv sync --project optimizer --extra service --group dev --locked
-uv run --project optimizer --locked uvicorn service:app --app-dir optimizer --port 8110
 ```
 
-完整验证：
+完整 CI 门禁：
 
 ```bash
 ./scripts/verify.sh
 ```
-
-## 第一个真实项目
-
-1. 定义可控参数、目标、单位、范围、权重和安全结果约束。
-2. 为变量声明实际来源，例如 `recipe:holding-temperature`。
-3. 让实验 `RunKey` 与 PLC 周期相关标识、检验 `OperationRunId` 使用同一个值。
-4. 执行安全基线实验并完成检验。
-5. 在研发项目中提出假设并开始研发；
-6. 生成下一次运行方案，审核后执行；
-7. 新周期和检验完成后再次优化，直到达到停止规则。
-
-不要用计划值冒充实际值。显式配置的数据源缺失时，该运行会被排除并显示原因。
-
-完整过程见[快速开始](docs/getting-started.md)和[真实场景验证](docs/rollout.md)。
 
 ## 仓库结构
 
 ```text
 src/edge/          现场采集与可靠上送
 src/platform/      中心 API 与业务模块
-src/agent/         AI 调查与解释能力
+src/agent/         AI 查询与解释能力
 src/shared/        领域模型与公共契约
-optimizer/         GP / 贝叶斯优化服务
+optimizer/         数值分析与贝叶斯优化服务
 tests/             .NET 核心测试
 apps/platform/     React 工艺研发工作台
 apps/website/      官方网站
@@ -169,40 +169,32 @@ scripts/           验证与运维脚本
 
 ## 文档
 
-- [从这里开始](docs/index.md)
-- [安装与第一个实验](docs/getting-started.md)
-- [系统架构](docs/design.md)
-- [优化器原理与边界](docs/optimization.md)
+- [文档首页](docs/index.md)
+- [安装与第一个数据闭环](docs/getting-started.md)
+- [系统设计](docs/design.md)
+- [分析与优化方法](docs/optimization.md)
 - [设备与数据接线](docs/data-connection.md)
-- [真实场景回放与在线验证](docs/rollout.md)
-- [长期项目规划](docs/project-plan.md)
+- [真实场景验证](docs/rollout.md)
+- [项目规划](docs/project-plan.md)
 - [部署与运行](docs/deployment.md)
 - [常见问题](docs/faq.md)
+- [品牌与产品表述](docs/brand.md)
+- [开源依赖](docs/open-source-dependencies.md)
 
 ## 路线图
 
-- [x] 真实周期、配方、过程特征与检验结果自动组成优化观察
-- [x] 两阶段轨迹/质量 GP 与受约束 qLogNEI/qLogNEHVI
-- [x] 实验幂等、待执行点避让和安全冷启动
-- [ ] 使用真实制造历史项目公布逐次运行回放基准
-- [ ] 加入经过标定的领域机理先验和跨产品迁移
-- [ ] 在线校准不确定性、漂移检测和自动停止规则
-- [ ] 发布可复用的场景配置包与匿名示例数据
+- [x] 真实运行、实际条件、过程特征与检验结果形成可追溯观察
+- [x] 候选原因、假设、实验和工艺窗口使用同一研发记录主线
+- [x] 受约束 GP/BO 建议、待执行点避让和安全冷启动
+- [ ] 公布真实制造历史项目的无泄漏逐次回放
+- [ ] 完成新项目影子建议和工程师拒绝原因分析
+- [ ] 完成受控在线实验并公布预注册结果
+- [ ] 用第二个明显不同的工艺验证核心契约的通用性
 
-路线图以可复现实验为准；功能建议和已知问题在 [Issues](https://github.com/liuweichaox/Ingot/issues) 中跟踪。
+路线图以真实证据和验收闸门为准，详细顺序见[项目规划](docs/project-plan.md)。
 
 ## 参与贡献
 
-欢迎贡献设备适配、优化算法、回放数据、测试、文档和工艺领域知识。开始前请阅读：
-
-- [贡献指南](CONTRIBUTING.md)
-- [行为准则](CODE_OF_CONDUCT.md)
-- [安全策略](SECURITY.md)
-
-## 许可证
+欢迎贡献设备适配、统计方法、实验设计、优化算法、真实回放、测试、文档和工艺知识。开始前请阅读[贡献指南](CONTRIBUTING.md)、[行为准则](CODE_OF_CONDUCT.md)和[安全策略](SECURITY.md)。
 
 Ingot 使用 [MIT License](LICENSE)。
-
-## 致谢
-
-项目的优化内核建立在 [PyTorch](https://pytorch.org/)、[GPyTorch](https://gpytorch.ai/) 和 [BoTorch](https://botorch.org/) 之上；README 信息结构参考 [Best-README-Template](https://github.com/othneildrew/Best-README-Template)。

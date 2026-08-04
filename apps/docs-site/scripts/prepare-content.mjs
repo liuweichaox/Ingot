@@ -20,6 +20,8 @@ const publicSlugs = [
   "rollout",
   "deployment",
   "faq",
+  "brand",
+  "open-source-dependencies",
 ];
 const publicFiles = new Set(publicSlugs.flatMap((slug) =>
   slug === "index" ? ["index.md", "index.en.md"] : [`${slug}.md`, `${slug}.en.md`]));

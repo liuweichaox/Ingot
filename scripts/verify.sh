@@ -98,13 +98,6 @@ UV_PROJECT_ENVIRONMENT="$optimizer_environment" \
 for script in scripts/*.sh deploy/*.sh; do
   bash -n "$script"
 done
-python3 - <<'PY'
-import ast
-from pathlib import Path
-
-ast.parse(Path("tools/webhook_receiver.py").read_text(encoding="utf-8"))
-PY
-
 for compose_file in docker-compose.app.yml; do
   compose_config="$(
     INGOT_POSTGRES_PASSWORD=verification-postgres-password \

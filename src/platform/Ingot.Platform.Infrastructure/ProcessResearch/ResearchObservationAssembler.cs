@@ -2,9 +2,11 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using Ingot.Contracts.Events;
 using Ingot.Contracts.Inspections;
+using Ingot.Contracts.ProcessConfiguration;
 using Ingot.Contracts.ProcessResearch;
 using Ingot.Platform.Infrastructure.Cycles;
 using Ingot.Platform.Infrastructure.Inspections;
+using Ingot.Platform.Infrastructure.ProcessConfiguration;
 
 namespace Ingot.Platform.Infrastructure.ProcessResearch;
 
@@ -31,15 +33,20 @@ public interface IResearchObservationAssembler
 /// </summary>
 public sealed class ResearchObservationAssembler(
     ICycleComparisonService cycles,
-    IInspectionRecordStore inspections) : IResearchObservationAssembler
+    IInspectionRecordStore inspections,
+    IProcessConfigurationStore? processConfigurations = null,
+    ResearchContextAdmissionEvaluator? contextAdmission = null) : IResearchObservationAssembler
 {
     private const int MaximumRunsPerAssembly = 2000;
+    private readonly ResearchContextAdmissionEvaluator _contextAdmission =
+        contextAdmission ?? new ResearchContextAdmissionEvaluator();
 
     public async Task<ResearchObservationAssembly> AssembleAsync(
         ResearchProject project,
         IReadOnlyList<ResearchExperiment> experiments,
         CancellationToken ct = default)
     {
+        var scenarioPackage = await ResolveContextPolicyAsync(project, ct).ConfigureAwait(false);
         var candidates = experiments
             .Where(static experiment => experiment.Status != ResearchExperimentStatuses.Cancelled)
             .Where(static experiment =>
@@ -73,16 +80,18 @@ public sealed class ResearchObservationAssembler(
                 project,
                 candidate.Run,
                 cycle,
-                recordsByRun.GetValueOrDefault(candidate.Run.RunKey, [])));
+                recordsByRun.GetValueOrDefault(candidate.Run.RunKey, []),
+                scenarioPackage));
         }
         return new ResearchObservationAssembly(observations, candidates.Length);
     }
 
-    private static ExperimentRunObservation BuildObservation(
+    private ExperimentRunObservation BuildObservation(
         ResearchProject project,
         ExperimentRunPlan run,
         CycleComparisonRow cycle,
-        IReadOnlyList<InspectionRecord> records)
+        IReadOnlyList<InspectionRecord> records,
+        ScenarioPackage? scenarioPackage)
     {
         var recipeValues = cycle.RecipeParameters
             .Select(static value => (value.Code, Value: ReadNumber(value.Value), value.Unit))
@@ -158,12 +167,21 @@ public sealed class ResearchObservationAssembler(
         AddContext(context, "workpiece_id", cycle.WorkpieceId);
         AddContext(context, "external_batch_ref", cycle.ExternalBatchRef);
         AddContext(context, "material_lot_ref", cycle.MaterialLotRef);
+        if (scenarioPackage is not null)
+        {
+            context[ResearchContextAdmissionEvaluator.ObservationScenarioContextKey] =
+                $"{scenarioPackage.PackageId}:{scenarioPackage.Version}";
+            context[ResearchContextAdmissionEvaluator.ObservationPolicyHashContextKey] =
+                ResearchContextAdmissionEvaluator.ComputePolicyHash(scenarioPackage);
+        }
         if (cycle.CompletedAt is null)
             missing.Add("周期未完成");
         if (cycle.ProcessDataQuality.Status == ProcessDataStatuses.Unavailable)
             missing.Add("过程数据不可用");
         if (processFeatures.Count == 0)
             missing.Add("没有可用过程特征");
+        var contextAdmission = _contextAdmission.Evaluate(context, scenarioPackage);
+        missing.AddRange(contextAdmission.ExclusionReasons);
         var valid = missing.Count == 0;
         var hashPayload = new
         {
@@ -208,6 +226,31 @@ public sealed class ResearchObservationAssembler(
             ExclusionReason = valid ? null : string.Join("；", missing),
             SourceContentHash = contentHash
         };
+    }
+
+    private async Task<ScenarioPackage?> ResolveContextPolicyAsync(
+        ResearchProject project,
+        CancellationToken ct)
+    {
+        if (!ResearchContextAdmissionEvaluator.TryParseScenarioPackageReference(
+                project.Context,
+                out var packageId,
+                out var version))
+            return null;
+        if (processConfigurations is null)
+            throw new ProcessResearchRuleException("当前运行时无法解析研发项目引用的场景包。");
+        var package = await processConfigurations.GetScenarioPackageAsync(packageId, version, ct)
+            .ConfigureAwait(false)
+            ?? throw new ProcessResearchRuleException($"研发项目引用的场景包不存在：{packageId} v{version}。");
+        if (package.Status == ConfigurationStatuses.Draft)
+            throw new ProcessResearchRuleException("研发项目不能使用仍可修改的草稿场景包进行正式分析。");
+        var policyHash = ResearchContextAdmissionEvaluator.ComputePolicyHash(package);
+        if (project.Context.TryGetValue(
+                ResearchContextAdmissionEvaluator.PolicyHashContextKey,
+                out var expectedHash) &&
+            !string.Equals(expectedHash, policyHash, StringComparison.Ordinal))
+            throw new ProcessResearchRuleException("研发项目冻结的上下文策略哈希与场景包不一致。");
+        return package;
     }
 
     private static void AddContext(

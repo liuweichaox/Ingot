@@ -31,4 +31,18 @@ public sealed class PostgresMigrationTests(PostgresIntegrationFixture postgres)
         Assert.Equal(expected, reader.GetInt64(0));
         Assert.Equal(reader.GetInt64(0), reader.GetInt64(1));
     }
+
+    [LinuxDockerFact]
+    public async Task RemovedWebhookSchema_ShouldNotRemainAfterMigrations()
+    {
+        var runner = new MigrationRunner(postgres.Configuration, NullLogger<MigrationRunner>.Instance);
+        await runner.RunAsync();
+
+        await using var connection = new NpgsqlConnection(postgres.ConnectionString);
+        await connection.OpenAsync();
+        await using var command = new NpgsqlCommand(
+            "SELECT to_regclass('public.webhook_subscriptions') IS NULL;",
+            connection);
+        Assert.True((bool)(await command.ExecuteScalarAsync())!);
+    }
 }

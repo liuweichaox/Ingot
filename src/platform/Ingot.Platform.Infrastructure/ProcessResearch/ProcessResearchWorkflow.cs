@@ -2,13 +2,16 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using Ingot.Contracts.ProcessConfiguration;
 using Ingot.Contracts.ProcessResearch;
+using Ingot.Platform.Infrastructure.ProcessConfiguration;
 
 namespace Ingot.Platform.Infrastructure.ProcessResearch;
 
 public sealed partial class ProcessResearchWorkflow(
     IProcessResearchStore store,
-    ResearchOnlineAdmissionService? onlineAdmission = null)
+    ResearchOnlineAdmissionService? onlineAdmission = null,
+    IProcessConfigurationStore? processConfigurations = null)
 {
     public async Task<ResearchProject> CreateProjectAsync(
         ResearchProject draft,
@@ -22,6 +25,7 @@ public sealed partial class ProcessResearchWorkflow(
                 ProjectId = draft.ProjectId == Guid.Empty ? Guid.CreateVersion7() : draft.ProjectId,
                 Status = ResearchProjectStatuses.Draft,
                 OwnerUserId = NormalizeUser(userId),
+                Context = WithoutClientPolicyHash(draft.Context),
                 CreatedAt = now,
                 UpdatedAt = now,
                 Revision = 1
@@ -51,6 +55,18 @@ public sealed partial class ProcessResearchWorkflow(
         if (existing.Status is ResearchProjectStatuses.Completed or ResearchProjectStatuses.Archived)
             throw new ProcessResearchRuleException("已完成或已归档的研发项目保持只读。");
 
+        var updatedContext = WithoutClientPolicyHash(request.Context);
+        if (existing.Status != ResearchProjectStatuses.Draft &&
+            !string.Equals(
+                ContextValue(existing.Context, ResearchContextAdmissionEvaluator.ScenarioPackageContextKey),
+                ContextValue(updatedContext, ResearchContextAdmissionEvaluator.ScenarioPackageContextKey),
+                StringComparison.OrdinalIgnoreCase))
+            throw new ProcessResearchRuleException("研发项目进入执行阶段后不能更换场景包版本。");
+        if (existing.Context.TryGetValue(
+                ResearchContextAdmissionEvaluator.PolicyHashContextKey,
+                out var frozenPolicyHash))
+            updatedContext[ResearchContextAdmissionEvaluator.PolicyHashContextKey] = frozenPolicyHash;
+
         var value = NormalizeProject(
             request with
             {
@@ -58,6 +74,7 @@ public sealed partial class ProcessResearchWorkflow(
                 Code = existing.Code,
                 Status = existing.Status,
                 OwnerUserId = existing.OwnerUserId,
+                Context = updatedContext,
                 CreatedAt = existing.CreatedAt,
                 UpdatedAt = DateTimeOffset.UtcNow,
                 Revision = existing.Revision + 1
@@ -93,6 +110,9 @@ public sealed partial class ProcessResearchWorkflow(
         if (targetStatus == ResearchProjectStatuses.Active &&
             (project.Objectives.Count == 0 || project.Variables.Count == 0))
             throw new ProcessResearchRuleException("研发项目进入执行阶段前必须定义目标和变量。");
+        var projectContext = targetStatus == ResearchProjectStatuses.Active
+            ? await FreezeContextPolicyAsync(project, ct).ConfigureAwait(false)
+            : project.Context;
         if (targetStatus == ResearchProjectStatuses.Completed)
         {
             var windows = await store.ListProcessWindowsAsync(projectId, ct).ConfigureAwait(false);
@@ -109,6 +129,7 @@ public sealed partial class ProcessResearchWorkflow(
             project with
             {
                 Status = targetStatus,
+                Context = projectContext,
                 UpdatedAt = DateTimeOffset.UtcNow,
                 Revision = project.Revision + 1
             },
@@ -1519,6 +1540,51 @@ public sealed partial class ProcessResearchWorkflow(
                     StringComparer.Ordinal)
         };
     }
+
+    private async Task<IReadOnlyDictionary<string, string>> FreezeContextPolicyAsync(
+        ResearchProject project,
+        CancellationToken ct)
+    {
+        if (!ResearchContextAdmissionEvaluator.TryParseScenarioPackageReference(
+                project.Context,
+                out var packageId,
+                out var version))
+            return project.Context;
+        if (processConfigurations is null)
+            throw new ProcessResearchRuleException("当前运行时无法验证研发项目引用的场景包。");
+        var package = await processConfigurations.GetScenarioPackageAsync(packageId, version, ct)
+            .ConfigureAwait(false)
+            ?? throw new ProcessResearchRuleException($"研发项目引用的场景包不存在：{packageId} v{version}。");
+        if (package.Status == ConfigurationStatuses.Draft)
+            throw new ProcessResearchRuleException("研发项目进入执行阶段前必须使用已发布的场景包版本。");
+        var policyHash = ResearchContextAdmissionEvaluator.ComputePolicyHash(package);
+        if (project.Context.TryGetValue(
+                ResearchContextAdmissionEvaluator.PolicyHashContextKey,
+                out var existingHash) &&
+            !string.Equals(existingHash, policyHash, StringComparison.Ordinal))
+            throw new ProcessResearchRuleException("研发项目冻结的上下文策略哈希与场景包不一致。");
+        return new Dictionary<string, string>(project.Context, StringComparer.Ordinal)
+        {
+            [ResearchContextAdmissionEvaluator.ScenarioPackageContextKey] =
+                $"{package.PackageId}:{package.Version}",
+            [ResearchContextAdmissionEvaluator.PolicyHashContextKey] = policyHash
+        };
+    }
+
+    private static Dictionary<string, string> WithoutClientPolicyHash(
+        IReadOnlyDictionary<string, string> context)
+        => context
+            .Where(static pair => !string.Equals(
+                pair.Key,
+                ResearchContextAdmissionEvaluator.PolicyHashContextKey,
+                StringComparison.OrdinalIgnoreCase))
+            .ToDictionary(static pair => pair.Key, static pair => pair.Value, StringComparer.Ordinal);
+
+    private static string? ContextValue(
+        IReadOnlyDictionary<string, string> context,
+        string key)
+        => context.FirstOrDefault(pair =>
+            string.Equals(pair.Key, key, StringComparison.OrdinalIgnoreCase)).Value?.Trim();
 
     private static ResearchOptimizationFeatureSet NormalizeOptimizationFeatures(
         ResearchOptimizationFeatureSet? value,

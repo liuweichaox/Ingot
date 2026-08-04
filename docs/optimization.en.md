@@ -1,86 +1,167 @@
-# Optimizer
+# Analysis and optimization methods
 
-## Target problem
+> Status: **current scientific strategy**. This document explains how methods are selected by the engineering question and describes the limits of today's numerical implementation. Algorithms may evolve without changing the core value or evidence principles.
 
-Ingot targets expensive, noisy, small-data, multi-objective, constrained sequential experiments. Optical-lens molding fits this problem: every run consumes equipment, material, and inspection capacity; process variation exists; parameter dimension is limited; objectives and safety outcomes are measurable.
+## Method-selection principle
 
-## Why not an LLM or a deep network
+Ingot starts from the engineer's decision, not from an algorithm:
 
-- An LLM has no calibrated numerical uncertainty and does not generate recipes.
-- Deep networks usually need more data than one campaign can provide.
-- A GP provides both a mean and uncertainty in small data.
-- Bayesian optimization balances exploration and exploitation with that uncertainty.
+| Engineering question | Preferred methods | Required output |
+|---|---|---|
+| Can the data be used? | completeness, units, time, provenance, and drift checks | admitted or excluded with a specific reason |
+| Where did this run differ? | like-for-like matching, robust statistics, stage-trajectory comparison | difference, effect, uncertainty, and comparison baseline |
+| Which factors deserve validation? | screening, stratification, variance components, mixed effects, or stable feature selection | candidate causes, counterevidence, confounding, and coverage limits |
+| Is a factor causal? | controls, repetition, blocking, randomization, or intervention | supported, rejected, or inconclusive |
+| What should the next experiment be? | DOE, response surfaces, active learning, or Bayesian optimization | settings, expected information, risk, and rationale |
+| How should it be explained? | deterministic result templates plus LLM-assisted language | readable explanation with source citations |
 
-LLMs may explain, retrieve, or draft structured intent. Deterministic numerical code makes recommendations.
+A complex method is not inherently better than a simple one. With few samples, poor coverage, or confounded variables, the right action may be to collect data, run an identifying experiment, or refuse to answer rather than fit a more elaborate model.
 
-## Two-stage surrogate
+## Analysis admission
 
-Quality depends on the realized trajectory, not only the setpoint:
+Before any model, confirm that a run has trustworthy evidence:
+
+- the run is complete;
+- actual controls exist and are not silently replaced by planned values;
+- process data and required features are available;
+- objectives and safety outcomes have values, units, and provenance;
+- scenario-required context has resolved;
+- configuration, feature, and inspection versions are explicit;
+- numbers are finite and run-to-quality linkage is unique.
+
+Runs that fail remain in the data-quality report. Exclusion reasons are themselves evidence for improving wiring and workflow.
+
+## Description and comparison
+
+The first analytical layer favors reviewable methods:
+
+- median, MAD, quantiles, and sample size;
+- matched comparison under the same product, recipe, equipment, or tooling conditions;
+- stage-aligned trajectory differences, first deviation, and planned-versus-actual gaps;
+- missingness, anomaly, coverage, and temporal drift;
+- effect size and intervals rather than only significance labels.
+
+This layer answers “where is it different?” but not directly “what caused it?”
+
+## Context and candidate causes
+
+Equipment, material, tooling, lot, and maintenance state begin as traceability and stratification variables. Estimate their influence only when the data permit it:
+
+1. Check sample count, missingness, and time distribution for every level.
+2. Check factor overlap inside the main controlled conditions.
+3. Use matching, variance components, mixed effects, time trends, or regularized models as appropriate.
+4. Test stability with resampling, out-of-time validation, or selection frequency.
+5. Label the result as stable association, confounded association, or insufficient evidence.
+6. Design the next experiment to identify important candidates.
+
+A model cannot separate factors that never overlap. If every mold A run uses only material A, history alone cannot distinguish mold effect from material effect.
+
+## Causal validation and experimental design
+
+Candidate causes require appropriate intervention before promotion. Experiment design considers:
+
+- a declared hypothesis, objective, and minimum meaningful effect;
+- controls and actually controllable variables;
+- repeated runs to estimate process noise;
+- blocks for equipment, tooling, material lot, or time period;
+- randomization or rotated order where the field allows it;
+- stopping, failure, and safety fallback conditions;
+- independent confirmation runs.
+
+A single point or single block can provide intervention support at most. A continuous process window also requires boundary, repetition, and relevant interaction validation.
+
+## Selecting the next experiment
+
+Choose methods by scale and data conditions:
+
+- Prefer classical DOE or response surfaces when factors are few and main effects or interactions must be estimated clearly.
+- Use constrained candidate ranking or optimal design for discrete choices and complex field restrictions.
+- Use Gaussian processes and Bayesian optimization when experiments are expensive, responses noisy, dimensions limited, and decisions sequential.
+- Add physical features, feasible regions, or calibrated priors when mechanisms are known.
+- Screen with engineering knowledge before optimization when variables greatly outnumber useful observations.
+
+The system supports two intentions:
+
+- **validate a hypothesis** by selecting conditions that distinguish candidate causes;
+- **reach specification** by searching promising settings inside objectives and safety constraints.
+
+## Current GP and Bayesian-optimization strategy
+
+The current Optimizer targets expensive, noisy, small-data, multi-objective, constrained sequential experiments.
+
+Quality depends on both settings and the trajectory the equipment actually realizes, so the current implementation supports a two-stage surrogate:
 
 ```text
 control settings x
   ├─ GP₁: x → realized process features z
-  └─ GP₂: [x, z] → objectives y and safety outcomes c
+  └─ GP₂: [x, z] → quality objectives y and safety outcomes c
 ```
 
-GP₂ trains on measured features. For a new recipe, GP₁ predicts trajectory features before GP₂ evaluates quality.
+Training uses measured process features. A new setting first predicts process features and then evaluates quality and safety. Only features with sufficient shared coverage across valid observations enter the model.
 
-Only process features common to all training observations enter the current model, avoiding implicit missing-value fabrication.
+Current objective strategies include:
 
-## Objectives
+- less-than or greater-than specifications;
+- target values with tolerance;
+- acceptable intervals;
+- multiple objectives and weights;
+- hard parameter bounds and linear constraints;
+- modeled quality or safety outcome constraints.
 
-Supported shapes:
+Multi-objective cases may use qLogNEHVI, while single-objective cases may use qLogNEI. The acquisition function is a current implementation strategy, not a product principle.
 
-- less than or equal to specification;
-- greater than or equal to specification;
-- target ± tolerance;
-- acceptable range;
-- objective weights.
+## Safety and cold start
 
-For multiple objectives, normalized specification utility enters qLogNEHVI to improve the constrained Pareto front.
+Model constraints never replace equipment interlocks or engineering safety rules.
 
-## Constraints
+- Hard parameter bounds are checked before and after candidate generation.
+- Safety-critical outcomes declare a minimum feasibility probability.
+- A verified safe baseline is required before cold start with outcome constraints.
+- Initial exploration stays in an approved candidate region or near the safe baseline.
+- Engineers can reject recommendations and record unmodeled constraints.
+- Recommendation failure, unavailable models, or excessive drift triggers an approved fallback.
 
-### Parameter constraints
+Parameters in Planned, Approved, and Running experiments become pending points so the system does not repeat conditions whose outcomes are not yet known.
 
-Bounds and linear `<=` / `>=` rules filter candidate generation.
+## Uncertainty and stopping
 
-### Outcome constraints
+The system shows prediction intervals, feasibility, model version, and data scope. Intervals must be checked for coverage in replay and online results; a “95%” label does not make them calibrated.
 
-Crack rate, residual stress, and similar constraints are additional GP outputs and acquisition constraints. Safety-critical outcomes also require:
+Stopping may follow when:
 
-```text
-P(outcome satisfies limit | current evidence) ≥ minimum safety probability
-```
+- the objective is met and independently confirmed;
+- expected improvement or information value falls below an approved threshold;
+- no safe candidate remains;
+- drift or model mismatch makes recommendations unreliable;
+- the engineer judges further experimentation to cost more than its expected value.
 
-Candidates below the threshold are not returned.
+## Role of the LLM
 
-## Cold start
+An LLM is suitable for:
 
-- Without safety outcomes, use Sobol space-filling points.
-- With safety outcomes, require a verified safe baseline.
-- Keep initial exploration inside a trust region around that baseline.
-- Switch to the BoTorch GP engine after three observations.
+- understanding engineer questions and page context;
+- calling structured, authorized system tools;
+- summarizing records, explaining statistical results, and drafting experiment text;
+- clearly stating missing data and conclusion boundaries.
 
-## Pending experiments
+An LLM does not:
 
-Unobserved Planned, Approved, and Running settings become `X_pending` and are removed from the candidate set. Repeated clicks and parallel execution do not duplicate experiments.
+- generate numerical recipes directly;
+- replace deterministic statistics or constraint calculations;
+- invent facts absent from source records;
+- promote candidate associations to definitive causes.
 
-## Stateless protocol
+## Reproducibility
 
-The optimizer stores no campaign. Every request supplies:
+Optimizer remains free of business state. Variables, objectives, constraints, valid observations, pending points, strategy version, and random seed fully define each calculation. Platform preserves the input snapshot, content hash, output, approval record, and final result.
 
-- variables, objectives, and constraints;
-- all valid observations;
-- pending points;
-- batch size and seed.
+Historical replay reveals outcomes sequentially in time; future runs are never visible early. Every algorithm change is compared with the historical engineer sequence, applicable traditional DOE, and simple baselines.
 
-The response includes settings, objective and constraint predictions, feasibility, acquisition value, model version, and rationale. Platform persists the snapshot and result.
+## Current limitations
 
-## Current limits
-
-- The trajectory surrogate currently feeds posterior means, not the full trajectory posterior, into the quality model.
-- GP 95% intervals are approximate and are not a factory guarantee.
-- Cross-product multi-task GP is not complete.
-- Physical features exist, but a calibrated grey-box prior mean is not complete.
-- Real replay must measure calibration, regret, and experiments-to-specification.
+- Public real-manufacturing replay and prospective online value evidence are not complete.
+- Prediction intervals still require continuous calibration on real projects.
+- Physical features exist, while real-data-calibrated grey-box priors continue to evolve.
+- Cross-product, equipment, and scenario transfer must wait for explicit applicability and second-scenario validation.
+- High-dimensional, strongly drifting processes, slow quality feedback, or dominant unmeasured causes may not suit direct BO.
+- Without controlled experiments, the system can help form cause candidates but cannot prove root cause.

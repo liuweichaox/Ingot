@@ -1,52 +1,83 @@
-# Brand and Identity
+# Brand and product language
 
-The Ingot name and identity share one metaphor: **real cycles, inspection outcomes, and process knowledge are ore; Ingot smelts them into two things—an explanation of this run, and a recommendation for the next.**
+> Status: **v1 normative baseline**. This file is the single source of truth for product positioning, core value, and public language. Do not redefine the core value unless the product direction actually changes.
 
-This document defines Ingot brand positioning, naming assets, and identity-use rules.
+## Core value
+
+> **Move process R&D from decisions without data support to decisions supported by real data, so computers can genuinely help process engineers choose what to do next using the most effective computational methods for the problem.**
+
+This is Ingot's stable starting point. Data acquisition, process diagnosis, experiment design, numerical optimization, mechanism fusion, and AI interaction serve it; none creates a new core value.
+
+## Product position
+
+- **Category**: Open-source Process Diagnosis & Optimization / 开源工艺追因与优化系统
+- **Primary users**: process, quality, equipment, and R&D engineers developing new products, materials, and processes
+- **Unit of work**: the conditions, trajectory, quality result, engineering judgment, and next experiment for a real run
+- **Product responsibility**: organize trustworthy facts, compare runs, form testable candidates, help select the next experiment, and preserve the limits of every conclusion
+- **Engineer responsibility**: frame the problem, review data and constraints, judge executability, approve experiments, and interpret field context
+- **System boundary**: Ingot does not replace engineers or bypass safety constraints, approvals, or equipment control systems
+
+Ingot is not built merely to collect more points or showcase one algorithm. It turns collected data into usable engineering evidence and then selects robust statistics, controlled comparison, experimental design, causal validation, machine learning, Bayesian optimization, physical models, or language models according to the problem.
+
+## Public commitments
+
+Public material may state that the system can:
+
+- link actual production conditions, process trajectories, and inspection results;
+- expose missingness, provenance, versions, and uncertainty;
+- help engineers compare runs and narrow candidate causes;
+- turn candidate causes into falsifiable experiments;
+- recommend the next experiment within declared variables and safety boundaries;
+- preserve validated conclusions as process knowledge with an explicit scope.
+
+Without evidence from real projects, public material must not claim that:
+
+- the system has automatically discovered a definitive root cause;
+- it has already reduced experiments or development time by a stated percentage;
+- a model recommendation is a field guarantee;
+- one successful setting proves a complete process window;
+- results from one scenario transfer unconditionally to another.
+
+Observational data can support candidate causes, stable associations, confounded associations, or insufficient-evidence judgments. Causal conclusions require engineering review and appropriate controls, repetitions, blocks, or interventions.
+
+## Canonical language
+
+| Use | Chinese | English |
+|---|---|---|
+| Product category | 开源工艺追因与优化系统 | Open-source Process Diagnosis & Optimization |
+| Core value | 让真实数据帮助工艺工程师抉择 | Help process engineers make decisions with real data |
+| Short tagline | 看清这次运行，优化下一次运行。 | Explain this run, optimize the next. |
+| Data unit | 运行 / 生产周期 | run / production cycle |
+| Observational conclusion | 候选原因、稳定关联、混杂关联、证据不足 | candidate cause, stable association, confounded association, insufficient evidence |
+| Experimental conclusion | 支持、否决、不确定、已验证原因 | supported, rejected, inconclusive, validated cause |
+| Optimization result | 下一步实验建议、候选设置、已验证工艺窗口 | next-experiment recommendation, candidate setting, validated process window |
+
+Use *root cause* only when the validating evidence is stated. *AI process R&D* may describe the interaction model but does not replace the product category. Algorithm names belong in technical explanations, not in the product value itself.
+
+The short tagline is a communication shorthand for the core value, not a separate product definition.
 
 ## Mark meaning
 
-The mark stacks three **ingot** cross-sections:
+The Ingot mark stacks three ingot cross-sections:
 
-- two **steel ingots** represent accumulated process data, experiments, and engineering knowledge—the basis for diagnosis;
-- one **gold ingot** represents the latest conclusion smelted from evidence: the attributed cause and the next recommended run;
-- equal **gaps** keep every record and conclusion independently traceable and reviewable.
-
-The silhouette remains recognizable at 16px and is suitable for favicons, terminal marks, and ecosystem icons.
-
-Tagline:
-
-> **Ingot — Explain this run, optimize the next.** 看清这次运行，优化下一次运行。
-
-## Brand position
-
-- **Category**: Open-source Process Diagnosis & Optimization / 开源工艺追因与优化系统
-- **One-line definition**: Ingot is an open-source process diagnosis and optimization system for expensive, small-data manufacturing experiments; it links real cycles, realized trajectories, and inspection outcomes into traceable evidence, explains why a run missed specification, and recommends what to set next
-- **Two core questions**: why did this run miss specification, and which variable or trajectory segment caused it; what settings should the next run use to reach specification in as few experiments as possible
-- **Primary users**: Process, quality, equipment, and R&D engineers developing new products, materials, and processes
-- **Product architecture**: The campaign is the formal record; Platform owns business truth; Optimizer performs deterministic numerical computation
-- **Value chain**: Define objectives and constraints → join real cycles and inspections → diagnose deviation sources and candidate variables → recommend the next experiment → engineer review and execution → update the model
-- **System boundary**: Ingot assists engineers without bypassing safety constraints, approval duties, or equipment control systems; MES can be a source or integration target but is not a runtime prerequisite
-
-Diagnosis and optimization are two uses of one evidence chain, not two products: diagnosis explains the deviation, optimization proposes the next action, and both read the same real cycles, actual recipes, versioned process features, and inspection outcomes.
-
-Public wording leads with shorter R&D cycles, fewer experiments, traceable evidence, and explicit uncertainty. It does not use performance figures that have not been validated on real projects.
+- the two steel ingots represent accumulated run data, experiment records, and engineering knowledge;
+- the gold ingot represents the current judgment refined from evidence and still open to review;
+- equal spacing keeps facts, analysis, and conclusions independently traceable.
 
 ## Naming assets
 
 | Asset | Value |
 |---|---|
-| Product name | **Ingot** (the domain does not alter the product name) |
-| Category line (EN) | Open-source Process Diagnosis & Optimization |
-| Category line (ZH) | 开源工艺追因与优化系统 |
-| Tagline | Explain this run, optimize the next. / 看清这次运行，优化下一次运行。 |
+| Product name | **Ingot** |
 | Official domain | [ingotstack.com](https://ingotstack.com) |
 | Repository | [github.com/liuweichaox/Ingot](https://github.com/liuweichaox/Ingot) |
-| .NET namespaces | `Ingot.*` |
+| .NET namespace | `Ingot.*` |
 
-## Asset inventory
+The domain does not rename the product; do not use “IngotStack” as the product name.
 
-`apps/website/public/brand/` is the canonical location for brand source files:
+## Assets and palette
+
+`apps/website/public/brand/` is the canonical source directory:
 
 | File | Use |
 |---|---|
@@ -54,29 +85,25 @@ Public wording leads with shorter R&D cycles, fewer experiments, traceable evide
 | [`ingot-lockup-dark.svg`](../apps/website/public/brand/ingot-lockup-dark.svg) | Horizontal lockup for dark backgrounds |
 | [`ingot-mark-dark.svg`](../apps/website/public/brand/ingot-mark-dark.svg) | Mark source for dark backgrounds |
 
-When light, bitmap, or docs-site exports are added, derive them from canonical SVG sources and register them here.
-
-## Palette
-
-| Name | Value | Use |
+| Color | Value | Use |
 |---|---|---|
-| Molten Gold | `#E8AD56` | Recommendations, actions, primary emphasis |
-| Trajectory Cyan | `#5FD4C8` | Process, connections, implemented state |
-| Deep Coal | `#07100E` | Main background |
-| Process Panel | `#0E1D19` | Cards and data panels |
-| Fog | `#EEF5F1` | Text on dark backgrounds |
+| Evidence Gold | `#E8AD56` | recommendations, actions, primary emphasis |
+| Trajectory Cyan | `#5FD4C8` | process, connectivity, trustworthy state |
+| Deep Coal | `#07100E` | primary background |
+| Process Panel | `#0E1D19` | cards and data panels |
+| Fog | `#EEF5F1` | text on dark backgrounds |
 
-## Use rules
+## Usage rules
 
-- Current canonical assets are for dark backgrounds; do not create temporary light variants with filters.
-- Minimum display size is 16px; maintain clear space of at least half an ingot height.
-- Preserve the three-ingot proportions, positions, and palette; do not add outlines, shadows, or skew.
-- The wordmark font is `Inter` / `Segoe UI` Bold fallback.
-- Product claims must distinguish synthetic demonstrations, historical replay, and real online experiments.
-- This document is the single source of truth for the category line and tagline; README, docs site, and website metadata sync from here rather than rewording independently.
-- Terminology: 追因 is rendered as *diagnosis* in the category line, tagline, and metadata. *Cycle diagnosis* and *deviation attribution* remain valid names for the specific features, but do not replace the category term. *Root-cause attribution* stays available inside technical documents such as the architecture loop section.
+- Minimum display size is 16px; clear space is at least half one ingot's height.
+- Do not change the proportions, layout, or colors, and do not add outlines, shadows, or skew.
+- The wordmark uses an `Inter` / `Segoe UI` Bold fallback stack.
+- Public visuals center on equipment signals, stage trajectories, inspection records, and engineering decisions; avoid flames, molten material, heated containers, and mystical imagery.
+- Product-effect language must distinguish simulation, historical replay, shadow recommendations, and real online experiments.
+- README files, documentation, website metadata, and product introductions must follow this file's core value, category, and claim boundaries.
 
 ## Related documents
 
-- [System design](design.en.md)
 - [Documentation home](index.en.md)
+- [System design](design.en.md)
+- [Real-scenario validation](rollout.en.md)

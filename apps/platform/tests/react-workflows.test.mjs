@@ -307,15 +307,6 @@ test("engineer golden questions freeze reviewed evidence and evaluate actual age
   assert.doesNotMatch(page, /JSON\.stringify\(form/);
 });
 
-test("event subscriptions retain create, edit, enable, signed-secret, and delete operations", () => {
-  assert.match(pages, /新建订阅/);
-  assert.match(pages, /putJson\(`\/api\/v1\/subscriptions\/\$\{editing\.subscriptionId\}`/);
-  assert.match(pages, /\/enabled/);
-  assert.match(pages, /clearSecret/);
-  assert.match(pages, /HMAC-SHA256/);
-  assert.match(pages, /deleteJson\(`\/api\/v1\/subscriptions/);
-});
-
 test("Chat renders structured answers, exposes progress and cancellation, and keeps recent history", () => {
   assert.match(pages, /\/api\/v1\/chat\/capabilities/);
   assert.match(pages, /\/api\/v1\/chat\/runs/);

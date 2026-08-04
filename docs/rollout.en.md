@@ -1,103 +1,161 @@
-# Real-world Validation
+# Real-scenario validation
 
-## Objective
+> Status: **rolling validation protocol**. This document defines how to prove that Ingot genuinely helps process engineers, not how to prove that one algorithm looks advanced.
 
-The question is not whether data can be collected:
+## Validation questions
 
-> Under the same safety boundaries and candidate space, does Ingot reach specification earlier than the historical sequence, with credible uncertainty?
+A real project answers four questions in order:
 
-The primary metric is **valid experiments required to reach specification**. Also record safety violations, failed experiments, calendar time, and cost.
+1. **Is the data more trustworthy?** Can an engineer find the actual conditions, trajectory, context, and quality outcome of a run?
+2. **Is judgment more efficient?** Is the path from anomaly to executable hypothesis faster, more complete, and less dependent on manual data gathering?
+3. **Can causes be validated?** Do candidate causes include evidence, counterevidence, and confounding limits, and can they become effective experiments?
+4. **Are experiments more effective?** Under the same safety boundaries and candidate range, does the process reach and confirm the objective with fewer valid experiments?
 
-## Phase 1: run-by-run historical replay
+Failure of an earlier question cannot be hidden by a later one. A successful model recommendation does not repair incorrect run-to-quality linkage.
 
-Choose a completed process-development campaign. Optical-lens molding can be the first validation scenario, but it is not the method boundary. Include:
+## Select the first project
 
-- planned settings and actual run settings for every run;
-- complete process traces or versioned process features;
-- relevant quality and safety inspections;
-- stable equipment identity plus available tooling revision, tooling cycle count, material lot, calibration, and maintenance context;
-- a report of context-field missingness, sample coverage, and factor overlap;
-- historical experiment order;
-- explicit specification and safety limits.
+The first validation project has:
 
-### Context assessment rules
+- a bounded problem, product, and equipment scope;
+- measurable controlled variables and quality objectives;
+- linkable run identity, actual settings, process data, and inspections;
+- traceable material, tooling, lot, and equipment context;
+- documented safety boundaries and current engineer decision workflow;
+- a comparable historical sequence or permission for prospective experiments.
 
-Equipment, tooling, and material lots begin as run-provenance fields and candidate blocking factors. Assess every context factor in this order:
+Optical-lens molding may be the first scenario, but it does not prove applicability elsewhere. A second, materially different process tests the generality of stable contracts.
 
-1. Count samples by level and summarize missingness, quality, and time distributions.
-2. Check overlap within the same product, recipe, and main-control range.
-3. Estimate effects and variance contributions with matched comparisons, variance components, or mixed-effects models.
-4. Schedule blocked and crossed experiments across equipment, tooling, or lots for stable associations.
-5. Add repeatedly supported factors to diagnosis models, optimization features, or process applicability scopes.
+## Phase 0: preregistration and data baseline
 
-Analysis reports label conclusions as stable association, confounded association, or insufficient evidence and state the grouping, replication, and randomized order needed for the next identifiable experiment.
+Before seeing results, record:
 
-### Replay protocol
+- data and time range and project-inclusion method;
+- primary question, variables, objectives, constraints, and context fields;
+- comparison baseline and matching rules;
+- data-exclusion rules;
+- primary measures, guardrails, and stopping conditions;
+- engineer workflow, traditional methods, and computational methods to compare;
+- results that would falsify the claim that the system helped engineers.
 
-At step `t`, the optimizer sees only the first `t` historical runs. It recommends from a predeclared candidate pool, then the corresponding historical outcome is revealed. Future data must remain hidden.
+First calculate:
 
-Compare:
+- run completeness;
+- actual-setting and process-feature coverage;
+- unique run-to-inspection linkage;
+- context required for analysis;
+- unit, clock, configuration-version, and provenance anomalies;
+- current engineer time and steps for gathering data, analysis, and experimentation.
 
-- historical runs to specification;
-- Ingot runs to first specification;
-- runs to specification plus replicate confirmation;
-- cumulative safety violations;
-- interval coverage;
-- distance from each recommendation to the nearest historical candidate.
+When analysis conditions fail, the result is “repair the data chain first,” not “fit the model anyway.”
 
-Narrow historical coverage evaluates selection inside that pool, not continuous-space optimization.
+## Phase 1: replay historical engineering questions
 
-## Phase 2: shadow recommendations
+Reconstruct real past problems using only information available at the time. The system may not see later inspections, conclusions, or the final successful recipe in advance.
 
-Generate recommendations on a new campaign without changing the actual experimental sequence. Record:
+For each question, compare:
 
-- optimizer recommendation;
-- engineer choice;
-- predictions and outcomes for both;
-- reason for rejecting a recommendation;
-- unmodeled factory constraints;
-- the immutable context snapshot for the recommendation and actual run.
+- the engineer's original data-gathering and baseline-selection steps;
+- whether Ingot automatically assembles facts for the same run;
+- whether candidates cover important factors later supported by evidence;
+- whether candidates cite correct records and state counterevidence, confounding, and missingness;
+- whether the system refuses correctly when evidence is insufficient;
+- time from problem start to the first executable validation experiment.
 
-Shadow mode finds missing constraints and bad mappings.
+Engineers review the golden-question set; developers cannot author the standard answers alone.
 
-## Phase 3: controlled online loop
+## Phase 2: production-equivalent sequential replay
 
-Proceed only after:
+For historical projects suited to sequential optimization, round `t` exposes only facts from rounds up to `t`. The method proposes a point from a preregistered candidate pool or approved range before revealing its result.
 
-- replay is free from leakage;
-- safety constraints and baseline are confirmed;
-- interval calibration is reviewed;
-- settings can be applied and captured accurately;
-- identified context factors have a blocking, randomization, and replication plan;
-- engineers can review and reject;
-- stop and rollback rules are rehearsed.
+Compare at least:
 
-Start with one recommendation per run. Complete inspection before updating the model.
+- the historical engineer sequence;
+- applicable traditional DOE or response-surface methods;
+- simple random or space-filling baselines;
+- the current Ingot strategy.
 
-## Success criteria
+Record:
 
-Pre-register:
+- valid experiments to first specification attainment;
+- experiments to attainment plus repeated confirmation;
+- safety violations and failed experiments;
+- prediction-interval coverage and feasibility calibration;
+- distance from a recommendation to the nearest real candidate;
+- material, equipment, inspection, and calendar cost.
 
-- primary: experiments to specification with replicate confirmation;
-- guardrail: zero safety-limit violations;
-- credibility: 95% interval coverage and calibration;
-- efficiency: saved runs, material, equipment time, and inspection cost;
-- usability: adoption rate and rejection reasons;
-- context evidence: engineer review of stable-association, confounded-association, and insufficient-evidence conclusions.
+When history covers only a narrow region, results evaluate candidate-pool ranking only, not continuous-space optimization.
 
-Include consecutive eligible campaigns rather than selecting only successes.
+## Phase 3: shadow recommendations on a new project
+
+Generate recommendations without changing the engineer's original experiment order. Before the outcome, freeze:
+
+- the data and context snapshot visible to the system;
+- system recommendation, prediction, risk, and rationale;
+- independent engineer choice and rationale;
+- field constraints behind any rejection;
+- later outcomes for both choices where observable.
+
+Shadow mode discovers unmodeled constraints, incorrect mappings, unexecutable settings, and explanations engineers actually need. Recommendations cannot be edited after the fact to look closer to the outcome.
+
+## Phase 4: controlled online experiments
+
+Enter only when:
+
+- the data chain and analysis admission have field acceptance;
+- historical replay has no future-data leakage;
+- hard bounds, safe baseline, and fallback have been rehearsed;
+- recommendations can be set accurately and actual values captured;
+- intervals and feasibility passed basic calibration checks;
+- important context has blocking, randomization, or repetition plans;
+- an engineer can review, modify, or reject every recommendation.
+
+Begin with one recommendation at a time. Update only after its quality outcome is complete. Any safety anomaly, data drift, or run-linkage failure pauses recommendations.
+
+## Measures
+
+### Data trust
+
+- percentage of complete, traceable runs;
+- actual-setting, trajectory, context, and inspection coverage;
+- automatic linkage success and manual repair time;
+- percentage of exclusion causes repaired.
+
+### Engineering-decision value
+
+- time from anomaly to first executable hypothesis;
+- candidate usefulness rated useful, partly useful, or not useful by engineers;
+- source-citation coverage for important claims;
+- unsupported causal-claim rate and correct-refusal rate;
+- repeat analyses reproducing the same facts and results.
+
+### Experiment and optimization value
+
+- valid experiments to attain and repeatedly confirm specification;
+- candidate causes supported, rejected, or left inconclusive;
+- recommendation acceptance and rejection reasons;
+- calibration, failed experiments, and zero known safety violations;
+- material, equipment, inspection, and calendar time relative to baselines.
+
+Do not assume one universal percentage target. Phase 0 records a baseline before a scenario approves its targets.
+
+## Failure and falsification conditions
+
+The project cannot use feature count as evidence of success when:
+
+- runs, context, and inspections cannot link reliably;
+- candidates regularly omit major field factors or cite incorrect evidence;
+- the system cannot refuse under insufficient evidence;
+- engineers cannot convert output into executable experiments;
+- sequential recommendations do not beat applicable simple baselines or traditional DOE;
+- uncertainty remains miscalibrated;
+- recommendations fail to reproduce in confirmation runs;
+- a known safety boundary is violated.
+
+These findings trigger data repair, workflow changes, method downgrade, or an optimization pause rather than automatic progression to a more complex phase.
 
 ## Publishing results
 
-A public report should include:
+A public report includes data scope, anonymization, inclusion rules, variables, objectives, constraints, context coverage, exclusions, comparison baselines, random seeds, every failure, safety event, engineer rejection reason, and non-generalizable limitation.
 
-- scope and anonymization;
-- variables, objectives, and constraints;
-- candidate pool or continuous range;
-- exclusion rules;
-- model and seeds;
-- historical and optimized sequences;
-- every failure and safety event;
-- limits on generalization.
-
-Until this evidence exists, public copy says that the system can recommend experiments—not that it has already reduced them by a specific percentage.
+Until real validation is complete, the website describes what the system can do without claiming unproven quantitative benefit.

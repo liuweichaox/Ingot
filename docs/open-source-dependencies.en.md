@@ -1,21 +1,35 @@
-# Open-source Dependencies
+# Open-source dependencies
 
-Ingot uses open-source components for equipment connectivity, business workflows, numerical optimization, and public sites. Project files and lockfiles are authoritative for exact versions.
+> Status: **rolling dependency overview**. Exact versions, transitive dependencies, and licenses are determined by project files, lockfiles, image manifests, and automated audit results.
 
-| Area | Primary components | Licenses |
+Ingot selects dependencies the same way it selects analytical methods: start from the engineering problem and choose an appropriate tool rather than turning a popular technology into an irreplaceable product boundary.
+
+| Capability | Main components | Typical licenses |
 |---|---|---|
-| Numerical optimization | PyTorch, GPyTorch, BoTorch, NumPy, SciPy | BSD / Apache-2.0 |
-| Equipment acquisition | MQTTnet, OPC Foundation UA .NET Standard, NModbus | MIT |
-| Platform | .NET / ASP.NET Core, Npgsql, SQLitePCLRaw | MIT |
-| Frontend | React, Vite, Headless UI, Plotly.js | MIT |
-| Website and docs | Next.js, remark/rehype, Tailwind CSS | MIT |
+| .NET platform and services | .NET, ASP.NET Core, Npgsql, SQLitePCLRaw | MIT / PostgreSQL |
+| Field protocols and acquisition | MQTTnet, OPC Foundation UA .NET Standard, NModbus | MIT |
+| Numerical computation and optimization | Python, PyTorch, GPyTorch, BoTorch, NumPy, SciPy | PSF / BSD / Apache-2.0 |
+| Product frontend | React, Vite, Headless UI, Plotly.js | MIT |
+| Website and documentation | Next.js, remark, rehype, Tailwind CSS | MIT |
 | Data import | ClosedXML, PdfPig, MatFileHandler | MIT / Apache-2.0 |
-| Database and time series | PostgreSQL, TimescaleDB | PostgreSQL / Apache-2.0 |
+| Data and time-series storage | PostgreSQL, TimescaleDB | PostgreSQL / Apache-2.0 |
 
-New runtime dependencies must:
+## Introduction requirements
 
-- use an acceptable open-source license;
-- pin or constrain versions;
-- enter dependency audit and build validation;
-- preserve license obligations in images or releases;
-- avoid making a proprietary cloud service mandatory for the core loop.
+Every new runtime dependency must:
+
+- directly improve data trust, engineering judgment, experiment efficiency, or system reliability;
+- have a project-compatible open-source license;
+- use a pinned version or controlled range;
+- enter build, vulnerability, license, and supply-chain audits;
+- preserve required license notices in images and releases;
+- run locally in the factory or have a local replacement that keeps the core loop intact;
+- avoid making a proprietary cloud service mandatory for acquisition, records, inspections, or numerical analysis.
+
+## Change and audit
+
+- Review lockfile changes with the code that uses the dependency.
+- Run full verification and relevant historical replay before a major-version upgrade.
+- Remove dependencies that are no longer used.
+- Resolve license or maintenance-status changes before release.
+- Publish a generated SBOM or dependency inventory rather than treating this page as the release manifest.

@@ -1,5 +1,7 @@
+using Ingot.Contracts.ProcessConfiguration;
 using Ingot.Contracts.ProcessResearch;
 using Ingot.Platform.Api.Controllers;
+using Ingot.Platform.Infrastructure.ProcessConfiguration;
 using Ingot.Platform.Infrastructure.ProcessResearch;
 using System.Text.Json;
 using Xunit;
@@ -32,6 +34,74 @@ public sealed class ProcessResearchWorkflowTests
         Assert.DoesNotContain(
             "experiments/{experimentId:guid}/results",
             postRoutes);
+    }
+
+    [Fact]
+    public async Task ActivatingProject_ShouldFreezePublishedScenarioContextPolicy()
+    {
+        var scenario = ResearchContextAdmissionEvaluatorTests.OpticalScenario();
+        var workflow = new ProcessResearchWorkflow(
+            new MemoryStore(),
+            processConfigurations: new ScenarioOnlyConfigurationStore(scenario));
+        var draft = await workflow.CreateProjectAsync(
+            ProjectDraft() with
+            {
+                Context = new Dictionary<string, string>
+                {
+                    [ResearchContextAdmissionEvaluator.ScenarioPackageContextKey] =
+                        $"{scenario.PackageId}:{scenario.Version}",
+                    [ResearchContextAdmissionEvaluator.PolicyHashContextKey] = "client-supplied-value"
+                }
+            },
+            "engineer-a");
+        Assert.False(draft.Context.ContainsKey(ResearchContextAdmissionEvaluator.PolicyHashContextKey));
+
+        var active = await workflow.ChangeProjectStatusAsync(
+            draft.ProjectId,
+            ResearchProjectStatuses.Active,
+            "engineer-a");
+
+        Assert.Equal(
+            ResearchContextAdmissionEvaluator.ComputePolicyHash(scenario),
+            active.Context[ResearchContextAdmissionEvaluator.PolicyHashContextKey]);
+        var changedContext = new Dictionary<string, string>(active.Context, StringComparer.Ordinal)
+        {
+            [ResearchContextAdmissionEvaluator.ScenarioPackageContextKey] = "another-package:1"
+        };
+        await Assert.ThrowsAsync<ProcessResearchRuleException>(() =>
+            workflow.UpdateProjectAsync(
+                active.ProjectId,
+                active with { Context = changedContext },
+                "engineer-a"));
+    }
+
+    [Fact]
+    public async Task ActivatingProject_ShouldRejectMutableDraftScenarioPackage()
+    {
+        var scenario = ResearchContextAdmissionEvaluatorTests.OpticalScenario() with
+        {
+            Status = ConfigurationStatuses.Draft
+        };
+        var workflow = new ProcessResearchWorkflow(
+            new MemoryStore(),
+            processConfigurations: new ScenarioOnlyConfigurationStore(scenario));
+        var project = await workflow.CreateProjectAsync(
+            ProjectDraft() with
+            {
+                Context = new Dictionary<string, string>
+                {
+                    [ResearchContextAdmissionEvaluator.ScenarioPackageContextKey] =
+                        $"{scenario.PackageId}:{scenario.Version}"
+                }
+            },
+            "engineer-a");
+
+        var error = await Assert.ThrowsAsync<ProcessResearchRuleException>(() =>
+            workflow.ChangeProjectStatusAsync(
+                project.ProjectId,
+                ResearchProjectStatuses.Active,
+                "engineer-a"));
+        Assert.Contains("已发布", error.Message);
     }
 
     [Fact]
@@ -682,6 +752,25 @@ public sealed class ProcessResearchWorkflowTests
                     ],
                     Outcomes = new Dictionary<string, double> { ["form-error"] = 0.8 },
                     SourceContentHash = new string('c', 64)
+                },
+                new ExperimentRunObservation
+                {
+                    RunKey = "fx3u-cycle-context-missing",
+                    ActualFactors =
+                    [
+                        new ExperimentFactorSetting
+                        {
+                            VariableCode = "holding-temperature", Value = 520, Unit = "Cel"
+                        },
+                        new ExperimentFactorSetting
+                        {
+                            VariableCode = "press-force", Value = 12, Unit = "kN"
+                        }
+                    ],
+                    Outcomes = new Dictionary<string, double> { ["form-error"] = 0.7 },
+                    ValidForOptimization = false,
+                    ExclusionReason = "缺少分析必需上下文：mold_id",
+                    SourceContentHash = new string('d', 64)
                 }
             ]
         });
@@ -2019,6 +2108,41 @@ public sealed class ProcessResearchWorkflowTests
             return Task.FromResult(new ResearchObservationAssembly(
                 observation is null ? [] : [observation], 1));
         }
+    }
+
+    private sealed class ScenarioOnlyConfigurationStore(ScenarioPackage scenario) : IProcessConfigurationStore
+    {
+        public Task InitializeAsync(CancellationToken ct = default) => Task.CompletedTask;
+        public Task<ProcessDataModel> UpsertDataModelAsync(ProcessDataModel value, CancellationToken ct = default)
+            => throw new NotSupportedException();
+        public Task<IReadOnlyList<ProcessDataModel>> ListDataModelsAsync(CancellationToken ct = default)
+            => throw new NotSupportedException();
+        public Task<ProcessDataModel?> GetDataModelAsync(string modelId, int version, CancellationToken ct = default)
+            => throw new NotSupportedException();
+        public Task<bool> DeleteDataModelAsync(string modelId, int version, CancellationToken ct = default)
+            => throw new NotSupportedException();
+        public Task<RecipeVersion> UpsertRecipeVersionAsync(RecipeVersion value, CancellationToken ct = default)
+            => throw new NotSupportedException();
+        public Task<IReadOnlyList<RecipeVersion>> ListRecipeVersionsAsync(CancellationToken ct = default)
+            => throw new NotSupportedException();
+        public Task<RecipeVersion?> GetRecipeVersionAsync(string recipeId, int version, CancellationToken ct = default)
+            => throw new NotSupportedException();
+        public Task<bool> DeleteRecipeVersionAsync(string recipeId, int version, CancellationToken ct = default)
+            => throw new NotSupportedException();
+        public Task<ProcessAnalysisPlan> UpsertAnalysisPlanAsync(ProcessAnalysisPlan value, CancellationToken ct = default)
+            => throw new NotSupportedException();
+        public Task<IReadOnlyList<ProcessAnalysisPlan>> ListAnalysisPlansAsync(CancellationToken ct = default)
+            => throw new NotSupportedException();
+        public Task<ProcessAnalysisPlan?> GetAnalysisPlanAsync(string planId, int version, CancellationToken ct = default)
+            => throw new NotSupportedException();
+        public Task<bool> DeleteAnalysisPlanAsync(string planId, int version, CancellationToken ct = default)
+            => throw new NotSupportedException();
+        public Task<ScenarioPackage?> GetScenarioPackageAsync(
+            string packageId,
+            int version,
+            CancellationToken ct = default)
+            => Task.FromResult<ScenarioPackage?>(
+                packageId == scenario.PackageId && version == scenario.Version ? scenario : null);
     }
 
     private sealed class MemoryStore : IProcessResearchStore

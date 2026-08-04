@@ -1,210 +1,205 @@
-# Architecture
+# System design
+
+> Status: **v1 architecture baseline**. This document fixes product principles, business-record boundaries, and stable component responsibilities. Algorithms, default experiment parameters, page layouts, and implementation sequence remain evolvable strategies.
 
 ## Design objective
 
-The system exists to **reach process specification with as few safe, real experiments as possible and preserve the validated process window as reusable evidence.**
+Ingot's core value is fixed by [Brand and product language](brand.en.md): move process R&D from decisions without data support to decisions supported by real data, so computers can genuinely help process engineers choose what to do next using the most effective computational methods for the problem.
 
-That leads to three choices:
+The architecture must therefore:
 
-1. acquisition must be reliable, but it is not the product center;
-2. experiments, cycles, and inspections have one formal system of record;
-3. numerical optimization uses Python scientific computing while .NET owns business transactions.
+1. **Establish trustworthy facts first**: every analysis traces to a real run, actual conditions, process data, and quality outcomes.
+2. **Support engineering judgment next**: show differences, evidence, counterevidence, confounding, and uncertainty rather than only a score.
+3. **Make conclusions testable**: observational analysis forms candidates; controlled experiments determine support, rejection, or uncertainty.
+4. **Select methods by the problem**: statistics, experimental design, machine learning, Bayesian optimization, physical models, and LLMs are replaceable tools.
+5. **Keep engineers in control**: engineers define objectives and safety boundaries, review recommendations, and approve real experiments.
 
-The system is designed for one-company, on-premises deployment on the factory network and is shared by that company's process, quality, equipment, and R&D teams. Edge is deployed by OT network and failure domain, while Platform is the factory system of record.
+The system is designed for one company on its factory network, shared by process, quality, equipment, and R&D teams.
 
-## Product shape: process diagnosis and optimization system
+## Product model
 
-Ingot is an open-source process diagnosis and optimization system carried on an industrial data platform. It turns field data into contextualized industrial facts, uses those facts to explain quality deviations that already happened, and turns the explanation into a verifiable, executable next experiment.
+```text
+Define process → Connect equipment → Collect production data → Close the data loop → Diagnose → Optimize
+```
 
-Diagnosis and optimization are not two modules but two ends of one evidence chain: without traceable run facts, attribution is guesswork; without attribution, optimization searches the full parameter space blind.
+The first four steps organize field activity into trustworthy run facts. The last two use those facts to support engineering decisions. Diagnosis and optimization are not parallel products: one explains an observed result and the other selects an unexecuted experiment, so both must read the same evidence.
 
-The current Web UI is organized into five product domains:
+The current Web information architecture exposes seven product domains:
 
-1. **Operations and quality** — current runs, quality tasks, production events, and context help frontline roles act on what is happening now;
-2. **Diagnosis and optimization** — quality attribution and cycle comparison produce candidate causes, while optimization projects turn evidence into the next safe experiments;
-3. **Objects and data** — industrial objects connect recipes, process data models, analysis models, and data health into consistent business semantics;
-4. **Engineering configuration** — implementers maintain field nodes, data connections, inspection and quality definitions, components, and tooling;
-5. **Platform operations** — health, logs, integration status, backups, and service configuration.
+1. **Global overview**: operations, quality, data trust, and next actions;
+2. **Cycles**: real runs, production events, and cycle comparison;
+3. **Manufacturing context**: changeover, recipes, materials, components, and tooling state;
+4. **Inspections**: tasks, results, definitions, quality plans, and review;
+5. **Process R&D**: problems, candidate causes, hypotheses, experiments, results, and process windows;
+6. **Data and connectivity**: industrial objects, variable models, scenario configuration, edge nodes, and data quality;
+7. **Identity and system**: users, role permissions, platform status, and runtime logs.
 
-Product domains organize task entry points without breaking the evidence chain; a selected object, project, or cycle should persist as cross-page context. Mechanisms, knowledge, datasets, and models are reusable context for optimization projects, not a separate daily workbench. A PLC, instrument, database, or file is only a connector; the platform contract remains centered on runs, process, quality, and experiments.
+Menus may change, but these business facts must not be hidden, duplicated into parallel records, or buried inside algorithm state.
 
 ## System map
 
 ```mermaid
 flowchart LR
-    Sources["PLC / instruments / vision / MES / inspection"] --> Connector["Edge ConnectorHost\nprotocols + SQLite buffer"]
-
-    subgraph Platform["Platform API · modular monolith / system of record"]
-        API["ASP.NET Core API"]
-        Business["Platform Infrastructure\ncycles, inspections, objects, R&D, quality, files"]
-        Agent["Agent Core + Providers\nchat, investigation, data tools"]
-        API --> Business
-        API --> Agent
-    end
-
-    API -->|"versioned acquisition configuration / probe tasks"| Connector
-    Connector -->|"run events / applied state"| API
-    Web["Platform Web\nReact / Vite"] --> API
-    Business --> DB["PostgreSQL + TimescaleDB"]
-    Business --> Files["Attachments + process knowledge"]
-    Business --> Optimizer["Optimizer\nPython / BoTorch\nsuggestions + diagnosis"]
-    Optimizer --> Business
-
-    Public["Website / Docs\nseparate public deployment"]
+    Sources["PLC / instruments / vision / inspection / MES"] --> Edge["Edge ConnectorHost\nprotocols · mapping · cycles · buffering"]
+    Edge --> Platform["Platform API\nfactory system of record"]
+    Platform --> DB["PostgreSQL + TimescaleDB"]
+    Platform --> Files["attachments and process knowledge"]
+    Platform --> Web["Platform Web\nengineering workbench"]
+    Platform --> Analysis["deterministic analysis\nquality · comparison · features · statistics"]
+    Platform --> Optimizer["Optimizer\nmodels · constraints · experiment proposals"]
+    Platform --> Agent["Agent\nquestion understanding · tools · explanation"]
+    Engineer["Process engineer"] --> Web
+    Web --> Platform
 ```
 
-Repository project boundaries are not deployment boundaries: `Edge.Application`, `Edge.Infrastructure`, `Platform.Infrastructure`, and `Agent` are libraries. The actual central deployment unit is `Platform API`, and the actual field deployment unit is an independent `Edge ConnectorHost` instance. A small installation may place ConnectorHost and Platform on the same physical server while retaining separate processes, containers, data volumes, `EdgeId`, and start/stop lifecycles. Optimizer runs as a separate stateless HTTP service. Website and Docs are deployed separately from the factory application stack through `deploy/compose.yml`.
+Code-project boundaries are not deployment boundaries. Factory runtime units are Platform API, independent Edge ConnectorHost instances, the database, Optimizer, and Web. A small site may share a physical server, while Edge and Platform retain independent processes, storage, identity, and recovery lifecycles.
 
-## Responsibilities
+## Stable component responsibilities
 
 ### Edge
 
-- Ingest control-system, instrument, vision, inspection, and business-system data through protocol, API, or file adapters.
-- Independently execute versioned Platform-published acquisition configurations for multiple devices so one task failure preserves continuity for the others.
-- Produce or map a stable correlation identifier for every run.
-- Persist before shipping, then reconnect and forward idempotently.
-- Never fit a model or choose the next recipe.
+- Actively connect to controls, instruments, gateways, and approved business sources.
+- Map vendor addresses, protocol types, and raw units to stable business codes.
+- Detect run boundaries and report actual settings, process samples, events, and context provenance.
+- Use a durable local queue for outages, platform restarts, and short backpressure.
+- Pull versioned acquisition configuration, validate it locally, and report applied state.
+
+Edge does not decide process causes, run product-level optimization, or become the formal record for experiments and quality outcomes.
 
 ### Platform
 
-- Own projects, experiments, cycles, inspections, model inputs, and conclusions.
-- Centrally manage and publish process data models, device-connection mappings, and acquisition-configuration versions.
-- Join each real run to its process record and inspection with `RunKey`; map it to `Cycle CorrelationId` where a control cycle exists.
-- Materialize versioned process features.
-- Assemble immutable optimizer snapshots.
-- Review, execute, and complete experiments.
-- Save result, evidence, experiment linkage, and audit in one transaction.
+- Store industrial objects, equipment, manufacturing context, runs, cycles, inspections, R&D projects, experiments, evidence, and knowledge.
+- Maintain versioned configuration, provenance, units, permissions, audit, and business state machines.
+- Assemble the conditions, trajectory, and result of a real run into an immutable analytical observation.
+- Execute data-quality, matching, comparison, feature, and reviewable statistical calculations.
+- Preserve inputs sent to numerical services and their returned results.
 
-Platform API is a modular monolith that composes Platform Infrastructure, Agent Core, and Agent Providers. Agent has no separate business database and never bypasses Platform to write field or business records.
-
-### Acquisition-configuration control flow
-
-The target control flow uses Edge-initiated network connections. ConnectorHost bootstraps with its local `EdgeId`, Platform address, communication tokens, certificates, and device-credential references, then pulls desired acquisition configurations and probe tasks and performs device-access and mapping validation locally. Configuration progresses through draft, target-Edge probe, publication, local validation, cycle-boundary application, and state confirmation. Edge continuously reports desired version, applied version, configuration hash, applied time, task state, and errors and retains the last successful version for continued acquisition during Platform outages. A healthy new version replaces the previous version; a failed application retains the previous version.
-
-### Agent
-
-- Read structured business context through read-only data tools exposed by Platform;
-- provide chat, investigation, cycle comparison, data-quality explanations, and research assistance;
-- use a deterministic local/test fallback or a configured OpenAI Provider;
-- never make the final numerical recipe decision; Optimizer computes numerical suggestions and an engineer reviews them.
+Platform is the formal business system of record. Experiment state or conclusions must not exist only in Optimizer, Agent, or a browser.
 
 ### Optimizer
 
-- Receive the complete campaign and observation snapshot on every request.
-- Rebuild models per request and retain no business state.
-- Generate safe exploration points during cold start.
-- Fit two-stage GPs once enough evidence exists.
-- Expose `/v1/suggestions` for specification or hypothesis-validation suggestions and `/v1/diagnosis` for diagnostic candidates;
-- Return parameters, objective and constraint predictions, intervals, feasibility, and acquisition value.
+- Receive the complete problem definition, valid observations, pending points, and random seed.
+- Execute reproducible numerical modeling, constraint checks, and candidate selection.
+- Return predictions, uncertainty, feasibility, parameters, rationale, and model version.
+- Remain free of business state, never access equipment directly, and never approve experiments.
+
+### Agent
+
+- Understand the engineer's question and current business context.
+- Call authorized read-only or controlled business tools.
+- Organize facts, cite sources, explain limits, and suggest next steps.
+- Never compute or invent numerical recipes itself and never turn language probability into an engineering conclusion.
 
 ### Web
 
-Web is a standalone React/Vite frontend that accesses business data through Platform API. It organizes industrial objects, R&D projects, goals, experiments, observation readiness, suggestions, execution, and results without creating a parallel optimization workflow.
+- Organize engineering work around business objects, runs, inspections, and R&D projects.
+- Present facts, data quality, evidence, and actionable steps together.
+- Avoid browser-local business state that conflicts with Platform.
 
-### Website / Docs
+## Evidence spine
 
-Website and Docs are public Next.js static sites. They are not part of the factory runtime loop and do not own Platform business state.
-
-## Root-cause and optimization loop
-
-The complete user-facing path has six stages:
+An analyzable run must answer:
 
 ```text
-define process → connect equipment → collect production data → close the data loop → diagnose → process optimization
+who / which equipment / which product
+        + actual recipe and controlled conditions
+        + process trajectory and stages
+        + material, tooling, lot, and other context
+        + quality and safety outcomes
+        + provenance, time, units, and versions
 ```
 
-The first four stages turn field facts into trustworthy evidence. The final two form testable conclusions and return validated settings to production. The flow below describes the internal loop after diagnosis enters experimental validation.
+Stable identifiers connect these facts:
 
-Root-cause work is not a separate dashboard. It is the entry point for the next falsifiable experiment:
+- `OperationRunId`: the real run identity in Platform;
+- `CorrelationId`: the correlation identity for field events or cycles;
+- `RunKey`: the association between an R&D experiment plan and real execution;
+- `EquipmentId`, product/process object, and recipe version: minimum run identity;
+- content hash: the fixed analytical input and its provenance.
+
+Identifiers may be mapped but never inferred after the fact. Unlinked runs remain visible with a reason rather than disappearing silently.
+
+## Manufacturing context
+
+Equipment, material, tooling, lot, calibration, and maintenance state may be important causes or may only be useful for traceability. The system does not assume their effect in advance.
+
+Every run preserves an immutable context snapshot. Versioned scenario configuration classifies fields as:
+
+- **required for analysis**: absence excludes the run from a specified analysis;
+- **record when available**: retain for traceability, stratification, and later coverage assessment;
+- **validated for modeling**: repeated data or experiments support use in diagnosis, optimization, or applicability scope.
+
+The system must expose coverage, missingness, sample counts per level, and factor overlap. Data without overlap cannot pretend to separate equipment, mold, or material effects.
+
+## From observation to cause
 
 ```text
-cycle/batch comparison → candidate association → testable hypothesis → next experiment → source-derived result
-                                                                  ↓
-                         validated process window ← supported / rejected / inconclusive hypothesis
+comparable runs → differences and first deviation → candidate cause
+                                                     ↓
+                                  counterevidence / confounding / missing data
+                                                     ↓
+                                  falsifiable experiment → support / reject / inconclusive
 ```
 
-- Cycle diagnosis evaluates actual recipe parameters and stage-level process features in one candidate space. The first layer retains pass/fail medians, MAD robust effects, and effective sample weights. Once sample size permits, the second layer selects Elastic Net, a regularized additive model, or a continuous-outcome GP and reports out-of-fold cross-validation, bootstrap selection stability, and candidate interactions.
-- Product, equipment, tooling, and material lot begin as provenance fields and candidate blocking factors. The system checks missingness, sample coverage, and factor overlap, then uses matched comparisons, variance components, mixed-effects models, or time trends as the data permits. Observational results are labeled stable association, confounded association, or insufficient evidence; controlled blocked experiments test causal hypotheses.
-- The system creates an experimentally testable hypothesis only when the candidate data source matches a project control through its `recipe:` or `signal:` mapping. It never creates an empty hypothesis without a controllable variable.
-- A candidate that maps to a control is bound to the project's highest-weight objective; the objective direction, baseline, and specification produce an editable minimum-effect default. The optimizer then uses the `validate-hypothesis` intent and favors safe combinations that are uncertain for the outcome and sufficiently separated from prior observations.
-- The `reach-specification` intent continues to use qLogNEI/qLogNEHVI to approach specification under safety constraints.
-- The product workbench schedules two distinct candidates twice by default, splits them across two execution blocks, and rotates their order. This separates treatment differences from single-run noise; API callers may explicitly change the replicate count.
-- A single point or block can at most mark a hypothesis as intervention-supported. The system promotes it to a verified cause only when at least two intervention conditions repeat across two blocks, the confidence interval clears the minimum meaningful effect, and safety constraints pass.
-- Results must be derived from source snapshots. Hypothesis decisions use a Welch interval for the effect (experiment mean minus the mean of same-condition repeated runs explicitly named by the plan's `BaselineRunKeys`). Controls may be in the current experiment, imported history, or a completed experiment, but the project history is never pooled automatically. With fewer than two independent control or experiment observations, no interval is fabricated and the decision stays inconclusive.
-- Approval creates an ordered, equipment-neutral execution package. A PLC gateway, MES, recipe system, or operator station applies the parameters and preserves the `RunKey`; once actual recipes, trajectories, and inspections are complete, the background workflow materializes the result and closes the experiment.
-- An optimization batch may create a candidate setting only from repeats of the same condition. It must not join the minima and maxima of scattered successful points into an untested hyper-rectangle.
-- A separate validation experiment must run the candidate at least three times across two execution blocks. Only when actual settings, quality objectives, and safety constraints all pass may a different engineer approve laboratory validation. A continuous process window additionally requires boundary and interaction experiments; repeats at one point cannot validate an entire range.
-- Research assets remain reusable project context for mechanisms, knowledge, and data quality, rather than a separate daily-workbench module.
+- Observational analysis may report differences, associations, and candidate causes.
+- Every candidate cites source runs, comparison baseline, analysis version, and limitations.
+- Only controllable or blockable candidates can automatically become experiment drafts.
+- Causal promotion requires appropriate controls, repetition, blocking, randomization, or intervention evidence.
+- When identification conditions are absent, “insufficient evidence” is the correct result.
 
-By default, the optimizer uses only the controls declared by the project.
-Optional derived features are a versioned `OptimizationFeatures` configuration
-on the research project. They may use only bounded numeric operators, declared
-controls, and earlier derived features. The optimizer core must not select
-hidden behavior from an industry, equipment model, or variable name. The
-optical-lens molding configuration exists only as the
-`tools/optical-molding-demo/optimizer-feature-set.json` demo asset. PLC models
-belong to acquisition adapters and must not enter process-physics features or
-change this business contract.
+Specific statistics and models are described in [Analysis and optimization methods](optimization.en.md) and are not immutable architecture.
 
-## Observation contract
+## From candidate to next experiment
 
-```json
-{
-  "runKey": "bo-7d2f6a3e1c2d-01",
-  "context": {
-    "machine_id": "PRESS-01",
-    "product_code": "LENS-01",
-    "recipe_version": "12",
-    "tooling_id": "MOLD-A",
-    "assembly_revision": "3",
-    "material_lot_ref": "GLASS-LOT-07",
-    "context_capture_status": "resolved"
-  },
-  "actualFactors": { "holding-temperature": 512.0 },
-  "processFeatures": {
-    "mold-temperature.hold.mean": 510.8,
-    "mold-temperature.cycle.overshoot": 2.4
-  },
-  "outcomes": { "form-error": 0.38 },
-  "constraintOutcomes": { "crack-rate": 0.01 },
-  "sourceContentHash": "sha256..."
-}
-```
+The system supports two distinct decisions:
 
-`OperationRunId`, `EquipmentId`, the product or process object, recipe version, and run times form the minimum run identity. Scenario configuration marks tooling, material, accumulated use, calibration, and maintenance fields as required for analysis or record when available and freezes them in an immutable run-context snapshot. Actual settings, process trajectories, and quality outcomes retain independent source and version metadata. Repeated evidence or blocked experiments promote a context field into a diagnosis feature, optimization feature, or applicability scope.
+1. **Validate a hypothesis** by selecting conditions that best distinguish candidate causes.
+2. **Reach specification** by searching promising settings inside declared objectives and safety boundaries.
 
-When a `recipe:` or `signal:` source is explicit, missing actual data excludes the observation. Planned-value fallback exists only for legacy projects without a mapping.
+Both must:
 
-## Consistency and idempotency
+- use only actually controllable variables;
+- declare hard bounds and outcome constraints;
+- account for experiments in progress but not yet observed;
+- show uncertainty and rationale;
+- require engineer approval before execution;
+- update evidence from actual run results.
 
-- The same input snapshot produces the same hash and deterministic experiment ID.
-- A repeated request returns the unfinished optimized experiment.
-- The database allows at most one formal result per experiment, including under multi-instance concurrency.
-- Running settings are passed as pending points.
-- Concurrent creators converge on the same experiment.
-- Platform and Edge still start and collect when the optimizer is unavailable.
+One successful point is only a candidate setting. A process window requires independent confirmation, repeatability, boundary or interaction validation, and an explicit applicability scope.
 
-## Adapting another process
+## Consistency and replay
 
-Provide:
+- The same analytical input produces a stable content hash.
+- Data, features, analysis methods, models, and scenario configuration carry versions.
+- Experiment results are calculated from source data rather than accepted as trustworthy self-assertions.
+- Each experiment has at most one formal result.
+- Concurrent requests and retries do not create duplicate business experiments.
+- Historical data remain interpretable under their original versions and recomputable under new versions.
+- Optimizer or Agent failure does not stop acquisition, run records, or inspections.
 
-- controls and bounds;
-- objectives, directions, weights, and units;
-- hard parameter and safety outcome constraints;
-- mappings for actual values, trajectories, and inspections;
-- cycle/phase feature definitions;
-- a verified safe baseline;
-- optional physical features or prior means.
+## Scenario replacement boundary
 
-The experiment workflow, data spine, and optimizer protocol remain unchanged.
+A new process scenario provides:
 
-## Subsequent design work
+- industrial objects, equipment, and run boundaries;
+- controlled variables, actual-value sources, units, and allowed ranges;
+- process signals, stages, and versioned features;
+- quality objectives, inspection mappings, and safety constraints;
+- required and optional context fields;
+- a safe baseline, default experiment policy, and optional mechanism knowledge.
 
-- Context-effect assessment with variance components, mixed effects, serial autocorrelation, and missingness mechanisms;
-- Calibrated physical priors for real production scenarios;
-- multi-task transfer across products, materials, tooling, and machines;
-- online uncertainty calibration and drift detection;
-- repeatability-driven automatic stopping;
-- a public end-to-end benchmark across PostgreSQL/TimescaleDB, Docker, and field data sources.
+It should not rewrite run identity, evidence relationships, experiment state machines, audit principles, or the stateless Optimizer protocol. Generality is supported only after a second, materially different real scenario works without changing those contracts.
 
-These capabilities are implemented and validated in the order established by field evidence and phase gates in the project plan.
+## Evolvable strategies
+
+The following record current choices but do not define the product core:
+
+- Web navigation and page layout;
+- protocol drivers and equipment templates;
+- feature algorithms, statistical tests, and surrogate models;
+- default repetitions, blocks, and stopping rules;
+- GP variants, acquisition functions, physical priors, and transfer methods;
+- LLM providers, model roles, and prompts;
+- phase dates and implementation priorities.
+
+These strategies follow real data, engineer feedback, and field validation. Stable-boundary changes are recorded through ADRs.

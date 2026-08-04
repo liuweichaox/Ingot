@@ -176,7 +176,6 @@ app.MapGet("/", () => Results.Ok(new
         toolingAssemblies = "/api/v1/tooling-assemblies",
         toolingInstallations = "/api/v1/tooling-installations",
         productionContexts = "/api/v1/production-contexts",
-        subscriptions = "/api/v1/subscriptions",
         auth = "/api/v1/auth/login",
         users = "/api/v1/users",
         chatRuns = "/api/v1/chat/runs",
@@ -224,7 +223,6 @@ Log.Logger.Information("    > Components:    {0}/api/v1/tooling-components", bas
 Log.Logger.Information("    > Assemblies:    {0}/api/v1/tooling-assemblies", baseAddress);
 Log.Logger.Information("    > Installations: {0}/api/v1/tooling-installations", baseAddress);
 Log.Logger.Information("    > Prod Contexts: {0}/api/v1/production-contexts", baseAddress);
-Log.Logger.Information("    > Subscriptions: {0}/api/v1/subscriptions", baseAddress);
 Log.Logger.Information("    > Chat Runs:     {0}/api/v1/chat/runs", baseAddress);
 Log.Logger.Information("    > Chat Capabilities:{0}/api/v1/chat/capabilities", baseAddress);
 Log.Logger.Information("==================================================================");

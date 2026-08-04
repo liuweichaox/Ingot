@@ -2,6 +2,7 @@ using Ingot.Contracts.Analytics;
 using Ingot.Contracts.Events;
 using Ingot.Platform.Infrastructure.Cycles;
 using Ingot.Platform.Infrastructure.Events;
+using Ingot.Platform.Infrastructure.ProcessResearch;
 
 namespace Ingot.Platform.Infrastructure.Analytics;
 
@@ -14,10 +15,15 @@ public interface IDataReliabilityBaselineService
 
 public sealed class DataReliabilityBaselineService(
     IPlatformEventStore events,
-    ICycleComparisonService cycles) : IDataReliabilityBaselineService
+    ICycleComparisonService cycles,
+    ResearchContextAdmissionEvaluator? contextAdmission = null) : IDataReliabilityBaselineService
 {
+    private readonly ResearchContextAdmissionEvaluator _contextAdmission =
+        contextAdmission ?? new ResearchContextAdmissionEvaluator();
+
     private static readonly string[] ContextFieldsToTrack =
     [
+        "context_capture_status",
         "equipment_id",
         "operation_run_id",
         "material_lot_ref",
@@ -81,6 +87,8 @@ public sealed class DataReliabilityBaselineService(
             row.ProcessDataQuality.Status != ProcessDataStatuses.Unavailable);
         var actualParameters = rows.Count(HasActualParameters);
         var parameterUnits = rows.Count(HasCompleteActualParameterUnits);
+        var contextIntegrity = rows.Count(row =>
+            _contextAdmission.Evaluate(row.Context, null).Admitted);
         var minimalContext = rows.Count(HasMinimalContext);
         var qualityLinked = rows.Count(static row => row.InspectionOutcomes.Count > 0);
         var eligible = rows.Count(row =>
@@ -97,6 +105,7 @@ public sealed class DataReliabilityBaselineService(
             Exclusion("process_data_incomplete", "过程数据未达到完整标准", denominator - processComplete),
             Exclusion("actual_parameters_missing", "缺少设备实际参数回读", denominator - actualParameters),
             Exclusion("parameter_unit_missing", "实际参数单位不完整", denominator - parameterUnits),
+            Exclusion("context_capture_invalid", "生产上下文捕获失败", denominator - contextIntegrity),
             Exclusion("minimal_context_missing", "最小上下文快照不完整", denominator - minimalContext),
             Exclusion("quality_unlinked", "没有关联有效质量结果", denominator - qualityLinked)
         }.Where(static item => item.RunCount > 0).ToArray();
@@ -125,8 +134,10 @@ public sealed class DataReliabilityBaselineService(
                     "存在 recipe.applied 现场实际参数回读的运行 / 已分析运行；不使用配方计划值。"),
                 Rate("actual_parameter_unit_completeness", "实际参数单位完整率", parameterUnits, denominator,
                     "全部实际参数具有明确单位的运行 / 已分析运行。"),
+                Rate("context_capture_integrity", "生产上下文捕获可信率", contextIntegrity, denominator,
+                    "上下文未标记为 configuration_missing 或其他无效捕获状态的运行 / 已分析运行。"),
                 Rate("minimal_context_coverage", "最小上下文覆盖率", minimalContext, denominator,
-                    "上下文同时包含 equipment_id 与 operation_run_id 的运行 / 已分析运行。"),
+                    "上下文捕获有效且同时包含 equipment_id 与 operation_run_id 的运行 / 已分析运行。"),
                 Rate("run_quality_association", "运行—质量关联率", qualityLinked, denominator,
                     "至少关联一条有效检验结果的运行 / 已分析运行。"),
                 Rate("analysis_admission", "正式分析准入率", eligible, denominator,
@@ -202,8 +213,9 @@ public sealed class DataReliabilityBaselineService(
         => HasActualParameters(row) &&
            row.RecipeParameters.All(static value => !string.IsNullOrWhiteSpace(value.Unit));
 
-    private static bool HasMinimalContext(CycleComparisonRow row)
-        => RequiredContextFields.All(field => HasContext(row, field));
+    private bool HasMinimalContext(CycleComparisonRow row)
+        => _contextAdmission.Evaluate(row.Context, null).Admitted &&
+           RequiredContextFields.All(field => HasContext(row, field));
 
     private static bool HasContext(CycleComparisonRow row, string field)
     {

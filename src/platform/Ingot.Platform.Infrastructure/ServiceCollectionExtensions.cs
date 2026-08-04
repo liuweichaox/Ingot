@@ -12,7 +12,6 @@ using Ingot.Platform.Infrastructure.ResearchAssets;
 using Ingot.Platform.Infrastructure.ProcessResearch;
 using Ingot.Platform.Infrastructure.Services;
 using Ingot.Platform.Infrastructure.TimeSeries;
-using Ingot.Platform.Infrastructure.Webhooks;
 using Microsoft.Extensions.Options;
 
 namespace Ingot.Platform.Infrastructure;
@@ -89,6 +88,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<CycleAnalysisBackfillService>();
         services.AddHostedService(provider => provider.GetRequiredService<CycleAnalysisBackfillService>());
         services.AddSingleton<IQualityAnalysisService, QualityAnalysisService>();
+        services.AddSingleton<ResearchContextAdmissionEvaluator>();
         services.AddSingleton<IDataReliabilityBaselineService, DataReliabilityBaselineService>();
 
         // 证据定级主轴：问题档案 + 定级评估（探针 SQL 对绑定范围只读运行）。
@@ -152,19 +152,6 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IAcquisitionProfileStore, PostgresAcquisitionProfileStore>();
         services.AddSingleton<AcquisitionProbeTaskCoordinator>();
         services.AddHostedService<AcquisitionProfileInitializerHostedService>();
-
-        // Webhook 订阅与投递（PostgreSQL + CloudEvents）
-        services.Configure<WebhookOptions>(configuration.GetSection("Webhook"));
-        services.AddHttpClient("webhook", (provider, client) =>
-        {
-            var webhookOptions = provider.GetRequiredService<IOptions<WebhookOptions>>().Value;
-            client.Timeout = TimeSpan.FromSeconds(Math.Clamp(webhookOptions.RequestTimeoutSeconds, 1, 300));
-        });
-        services.AddSingleton<IWebhookSubscriptionStore, PostgresWebhookSubscriptionStore>();
-        services.AddSingleton<WebhookDispatcher>();
-        services.AddSingleton<WebhookMetrics>();
-        services.AddHostedService<WebhookStoreInitializerHostedService>();
-        services.AddHostedService<WebhookDeliveryHostedService>();
 
         return services;
     }
