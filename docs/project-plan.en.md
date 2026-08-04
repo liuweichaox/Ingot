@@ -1,6 +1,6 @@
 # Ingot project plan
 
-> Status: **v1 product baseline plus rolling roadmap**. Sections 1–4 fix the long-term direction. Sections 5–9 evolve with real data, engineer feedback, and acceptance results. Baseline date: 2026-08-04. Phase durations guide resourcing; gates decide progression.
+> Status: **v1 product baseline plus rolling roadmap**. Sections 1–4 fix the long-term direction. Sections 5–9 evolve with real data, engineer feedback, and acceptance results. Every phase advances through acceptance gates.
 
 ## 1. Stable long-term direction
 
@@ -92,7 +92,7 @@ Maintain three controlled work lines:
 
 In principle, keep one product milestone, one scientific-validation task, and one engineering-assurance task active at a time.
 
-### Phase 0: establish a reproducible baseline (0–3 months)
+### Phase 0: establish a reproducible baseline
 
 Objective: prove that the system records one real or representative run–context–trajectory–inspection evidence chain reliably.
 
@@ -107,7 +107,7 @@ Work:
 
 Gate: at least one run traces from conclusion to raw provenance; Edge continues during a Platform outage and replays without duplication; failed configuration does not break old acquisition; silent loss, planned-for-actual substitution, and cross-project evidence leakage are detected.
 
-### Phase 1: form a trusted data loop (3–6 months)
+### Phase 1: form a trusted data loop
 
 Objective: let process engineers find, filter, and compare real runs in daily work.
 
@@ -121,7 +121,7 @@ Work:
 
 Gate: consecutive samples meet scenario-approved completeness and linkage targets; exclusions are explainable and repairable; engineers can independently find runs and select comparison baselines.
 
-### Phase 2: evidence-backed process diagnosis (6–12 months)
+### Phase 2: evidence-backed process diagnosis
 
 Objective: when an engineer asks why a run missed its objective, return reviewable candidates and a next validation plan.
 
@@ -135,7 +135,7 @@ Work:
 
 Gate: important claims trace to source records; engineers can act on the output; observational results are never written as definitive root causes.
 
-### Phase 3: replay and shadow optimization (12–18 months)
+### Phase 3: replay and shadow optimization
 
 Objective: measure whether computational methods improve on current sequencing without influencing field decisions.
 
@@ -149,7 +149,7 @@ Work:
 
 Gate: preregistered measures show reproducible value; recommendations stay inside declared boundaries; uncertainty meets scenario-approved calibration targets.
 
-### Phase 4: controlled online loop (18–24 months)
+### Phase 4: controlled online loop
 
 Objective: allow recommendations into real experiments under engineer review, explicit fallback, and independent hard boundaries.
 
@@ -163,7 +163,7 @@ Work:
 
 Gate: zero known safety violations; recommendations execute accurately and reproduce; online and shadow outcomes have no unexplained systematic gap.
 
-### Phase 5: knowledge reuse and generality validation (24–36 months)
+### Phase 5: knowledge reuse and generality validation
 
 Objective: reuse validated conclusions on new products, equipment, and a second scenario while preserving applicability.
 
@@ -192,7 +192,7 @@ Gate: transfer beats cold start without hidden negative transfer; the second sce
 
 ## 7. Long-term measures
 
-Each quarter answers three groups of questions.
+Each roadmap review answers three groups of questions.
 
 ### Is data more trustworthy?
 

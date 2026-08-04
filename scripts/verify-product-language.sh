@@ -22,6 +22,13 @@ if grep -RIniE --exclude='package-lock.json' \
   exit 1
 fi
 
+if grep -RInE \
+  '^#{1,6} .*[0-9]+[[:space:]]*[–—-][[:space:]]*[0-9]+[[:space:]]*(天|周|月|年|days?|weeks?|months?|years?)' \
+  docs; then
+  echo "Documentation phase headings must use acceptance gates instead of calendar estimates." >&2
+  exit 1
+fi
+
 # Guard the stable product baseline. Algorithms, interface labels, and roadmap
 # phases may evolve; the core value and public claim boundaries do not drift with them.
 if grep -RInE --exclude='package-lock.json' \

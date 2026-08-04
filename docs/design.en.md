@@ -200,6 +200,6 @@ The following record current choices but do not define the product core:
 - default repetitions, blocks, and stopping rules;
 - GP variants, acquisition functions, physical priors, and transfer methods;
 - LLM providers, model roles, and prompts;
-- phase dates and implementation priorities.
+- implementation sequence and priorities.
 
 These strategies follow real data, engineer feedback, and field validation. Stable-boundary changes are recorded through ADRs.
