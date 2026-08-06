@@ -51,7 +51,7 @@ test("platform uses React, Tailwind, and Headless UI without Vue or Element Plus
 
 test("all platform routes remain available after the React migration", () => {
   for (const route of [
-    "/research-projects", "/workbench", "/chat", "/explorer", "/cycles", "/events", "/production/changeover",
+    "/research-projects", "/research-assets", "/workbench", "/chat", "/explorer", "/cycles", "/events", "/production/changeover",
     "/production/tooling-installations", "/configuration/component-types", "/configuration/components",
     "/configuration/tooling-types", "/configuration/tooling-assemblies", "/inspections",
     "/quality-analysis", "/configuration/inspection-definitions", "/configuration/quality-plans",
@@ -77,17 +77,25 @@ test("navigation and overlays are accessible Headless UI components", () => {
   assert.match(app, /DialogBackdrop/);
   assert.match(app, /DialogPanel/);
   assert.match(app, /MenuButton/);
-  for (const domain of ["工作台", "生产运行", "质量管理", "工艺研发", "数据与配置", "系统管理"]) {
+  for (const domain of ["总览", "运行证据", "工艺追因", "工艺优化", "配置"]) {
     assert.match(app, new RegExp(domain));
   }
-  assert.match(app, /\["\/chat", "AI助手"\]/);
+  assert.match(app, /const systemSection = \{/);
+  assert.match(app, /aria-label="打开系统管理"/);
+  assert.match(app, /\["\/chat", "分析助手"\]/);
+  assert.match(app, /\["\/research-assets", "研发资产"\]/);
   assert.match(app, /aria-label="全局导航"/);
   assert.match(app, /aria-label="面包屑"/);
   assert.match(app, /aria-label="打开全局模块导航"/);
   assert.match(app, /xl:hidden/);
   assert.match(app, /xl:flex/);
   assert.match(app, /aria-label="打开模块导航"/);
+  assert.match(app, /<div className="lg:ml-55">/);
+  assert.doesNotMatch(app, /showSectionNavigation/);
   assert.doesNotMatch(app, /label: "运营工作台"/);
+  for (const obsoleteLabel of ["周期记录", "周期对比", "生产切换", "检验任务", "数据质量", "AI助手", "黄金问题集"]) {
+    assert.doesNotMatch(app, new RegExp(obsoleteLabel));
+  }
   assert.doesNotMatch(researchProjects, />新建项目</);
 });
 
@@ -130,7 +138,7 @@ test("global search opens a cross-product command palette and table columns keep
 
 test("industrial object pages use the event summary contract and show an initial loading state", () => {
   assert.match(app, /\["\/explorer", "工业对象"\]/);
-  assert.match(app, /id: "data", label: "数据与配置"/);
+  assert.match(app, /id: "evidence", label: "运行证据"/);
   assert.match(pages, /title="工业对象"/);
   assert.match(pages, /objects\.loading && !objects\.data \? <LoadingCard \/>/);
   assert.match(pages, /title="对象目录"/);

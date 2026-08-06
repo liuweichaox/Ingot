@@ -113,8 +113,8 @@ const eventTypeLabels = {
   "process.started": "生产开始",
   "process.completed": "生产完成",
   "process.sample": "过程采样",
-  "cycle.started": "周期开始",
-  "cycle.completed": "周期完成",
+  "cycle.started": "运行开始",
+  "cycle.completed": "运行完成",
   "recipe/step_changed": "工艺步骤切换",
   "process/stage_changed": "工艺阶段切换",
   "quality.inspection.completed": "质检完成",
@@ -303,7 +303,7 @@ export function WorkbenchPage() {
     },
   ];
   return (
-    <Page title="工业决策工作台" description="在一个入口理解现场运行、质量结果、数据可信度，以及下一项最有价值的工艺行动。">
+    <Page title="决策总览" description="在一个入口理解现场运行、质量结果、数据可信度，以及下一项最有价值的工艺行动。">
       {state.error && <Alert tone="danger">{state.error}</Alert>}
       {state.loading ? <LoadingCard /> : (
         <div className="flex flex-col gap-5">
@@ -313,7 +313,7 @@ export function WorkbenchPage() {
               <h2 className="mt-2 max-w-3xl text-xl font-semibold tracking-tight text-slate-950">运行、质量、数据可信度和优化行动使用同一业务上下文。</h2>
               <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">异常先成为可解释的证据，再成为需要工程审核的实验与优化行动。</p>
               <div className="mt-4 flex flex-wrap gap-2">
-                <Link to="/comparisons" className="inline-flex min-h-9 items-center rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">开始周期对比</Link>
+                <Link to="/comparisons" className="inline-flex min-h-9 items-center rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">开始运行对比</Link>
                 <Link to="/research-projects" className="inline-flex min-h-9 items-center rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700">进入优化工作台</Link>
               </div>
             </div>
@@ -345,7 +345,7 @@ export function WorkbenchPage() {
                 rows={state.cycles}
                 keyField="correlationId"
                 columns={[
-                  { key: "correlationId", label: "周期号" },
+                  { key: "correlationId", label: "运行号" },
                   { key: "machineId", label: "设备" },
                   { key: "productCode", label: "产品" },
                   { key: "qualityStatus", label: "质量", render: value => <StatusBadge value={value} /> },
@@ -400,19 +400,19 @@ export function CyclesPage() {
           <Field label="设备"><Input value={filters.machineId} onChange={event => setFilters({ ...filters, machineId: event.target.value })} placeholder="设备编号" /></Field>
           <Field label="生产批次"><Input value={filters.externalBatchRef} onChange={event => setFilters({ ...filters, externalBatchRef: event.target.value })} placeholder="跨设备批次编号" /></Field>
           <Field label="工件"><Input value={filters.workpieceId} onChange={event => setFilters({ ...filters, workpieceId: event.target.value })} placeholder="跨工序工件编号" /></Field>
-          <Field label="周期号"><Input value={filters.correlationId} onChange={event => setFilters({ ...filters, correlationId: event.target.value })} placeholder="精确周期号" /></Field>
+          <Field label="运行号"><Input value={filters.correlationId} onChange={event => setFilters({ ...filters, correlationId: event.target.value })} placeholder="精确运行号" /></Field>
           <Button className="self-end" variant="primary" type="submit"><MagnifyingGlassIcon className="size-4" />查询</Button>
         </form>
       </Card>
       {error && <Alert tone="danger">{error}</Alert>}
       {loading && !data ? <LoadingCard /> : (
-        <Card title="生产周期" description={`共 ${data?.total ?? rows.length} 条`}>
+        <Card title="生产运行" description={`共 ${data?.total ?? rows.length} 条`}>
           <DataTable
             rows={rows}
             keyField="correlationId"
             onRowClick={row => navigate(`/cycles/${encodeURIComponent(row.correlationId)}`)}
             columns={[
-              { key: "correlationId", label: "周期号" },
+              { key: "correlationId", label: "运行号" },
               { key: "machineId", label: "来源", render: (value, row) => <div><p className="font-medium text-slate-800">{value}</p><p className="text-xs text-slate-500">{row.edgeIds?.join("、") || "Edge 未记录"}</p></div> },
               { key: "productCode", label: "产品" },
               { key: "externalBatchRef", label: "批次 / 工件", render: (value, row) => <div><p>{value || "批次未记录"}</p><p className="text-xs text-slate-500">{row.workpieceId || "工件未记录"}</p></div> },
@@ -487,7 +487,7 @@ export function CycleDetailPage() {
 
   return (
     <Page
-      title={cycle?.correlationId || "生产周期详情"}
+      title={cycle?.correlationId || "生产运行详情"}
       description="在一个页面查看生产身份、过程完整性、质量结果和关键事件。"
       actions={(
         <>
@@ -497,9 +497,9 @@ export function CycleDetailPage() {
         </>
       )}
     >
-      {error && <Alert tone="danger" title="周期详情暂不可用">{error}</Alert>}
+      {error && <Alert tone="danger" title="运行详情暂不可用">{error}</Alert>}
       {loading && !cycleResponse.data ? <LoadingCard /> : !cycle ? (
-        <EmptyState title="未找到生产周期" description="该周期可能尚未同步，或周期号已经失效。" />
+        <EmptyState title="未找到生产运行" description="该运行可能尚未同步，或运行号已经失效。" />
       ) : (
         <>
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -524,7 +524,7 @@ export function CycleDetailPage() {
           </div>
 
           {cycle.dataIssues?.length > 0 && (
-            <Alert tone={cycle.dataIssues.some(issue => issue.severity === "error") ? "danger" : "warning"} title="本周期需要关注">
+            <Alert tone={cycle.dataIssues.some(issue => issue.severity === "error") ? "danger" : "warning"} title="本次运行需要关注">
               <ul className="list-disc space-y-1 pl-5">
                 {cycle.dataIssues.map(issue => <li key={`${issue.code}:${issue.message}`}>{issue.message}</li>)}
               </ul>
@@ -532,7 +532,7 @@ export function CycleDetailPage() {
           )}
 
           <div className="grid gap-5 xl:grid-cols-2">
-            <Card title="生产身份" description="周期开始时固化的生产上下文">
+            <Card title="生产身份" description="运行开始时固化的生产上下文">
               <dl className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
                 {[
                   ["设备", cycle.machineId],
@@ -554,7 +554,7 @@ export function CycleDetailPage() {
               </dl>
             </Card>
 
-            <Card title="过程数据健康" description="判断本周期数据是否适合继续分析">
+            <Card title="过程数据健康" description="判断本次运行数据是否适合继续分析">
               <div className="grid gap-4 sm:grid-cols-3">
                 <Metric label="健康状态" value={<StatusBadge value={dataQuality?.status || "unknown"} />} />
                 <Metric label="采样中位间隔" value={dataQuality?.medianIntervalMs == null ? "—" : formatDuration(dataQuality.medianIntervalMs)} />
@@ -572,7 +572,7 @@ export function CycleDetailPage() {
 
           <Card
             title="工艺阶段"
-            description={`${cycle.phaseCount ?? cycle.phases?.length ?? 0} 个已识别阶段；阶段号用于过程对齐，不参与周期完整性判定。`}
+            description={`${cycle.phaseCount ?? cycle.phases?.length ?? 0} 个已识别阶段；阶段号用于过程对齐，不参与运行完整性判定。`}
           >
             <DataTable
               rows={cycle.phases || []}
@@ -589,7 +589,7 @@ export function CycleDetailPage() {
 
           <Card
             title="实际执行配方"
-            description="显示周期开始时从设备或控制系统回读的真实参数；优化建模使用这些值，不使用人工猜测值。"
+            description="显示运行开始时从设备或控制系统回读的真实参数；优化建模使用这些值，不使用人工猜测值。"
           >
             {(analysis?.recipeParameters || []).length ? (
               <DataTable
@@ -636,7 +636,7 @@ export function CycleDetailPage() {
 
           <Card
             title="阶段特征"
-            description="由冻结的过程曲线按工艺阶段计算，是周期对比、追因和优化器轨迹代理的正式输入。"
+            description="由冻结的过程曲线按工艺阶段计算，是运行对比、追因和优化器轨迹代理的正式输入。"
           >
             {stageFeatureRows.length ? (
               <DataTable
@@ -656,7 +656,7 @@ export function CycleDetailPage() {
           <div className="grid gap-5 xl:grid-cols-[1.1fr_.9fr]">
             <Card
               title="质量记录"
-              description={inspections.length ? `已关联 ${inspections.length} 条检测记录` : "尚未产生与本周期关联的检测记录"}
+              description={inspections.length ? `已关联 ${inspections.length} 条检测记录` : "尚未产生与本次运行关联的检测记录"}
               actions={<Link className="text-sm font-medium text-blue-600 hover:text-blue-700" to="/inspections">进入质量任务</Link>}
             >
               {inspectionResponse.loading && !inspectionResponse.data ? <LoadingCard /> : inspections.length ? (
@@ -670,7 +670,7 @@ export function CycleDetailPage() {
                     { key: "attachments", label: "附件", render: value => `${value?.length || 0} 个` },
                   ]}
                 />
-              ) : <EmptyState title="暂无质量记录" description="完成质量任务后，检测结果会自动归集到本周期。" />}
+              ) : <EmptyState title="暂无质量记录" description="完成质量任务后，检测结果会自动归集到本次运行。" />}
               {measurementRows.length > 0 && (
                 <div className="mt-4 border-t border-slate-100 pt-4">
                   <h3 className="mb-3 text-sm font-semibold text-slate-900">测量值与规格</h3>
@@ -718,7 +718,7 @@ export function CycleDetailPage() {
                     <time className="shrink-0 text-xs text-slate-500">{formatTime(item.event?.occurredAt)}</time>
                   </div>
                 ))}
-                {!events.length && <EmptyState title="暂无事件" description="该周期尚未接收到生产事件。" />}
+                {!events.length && <EmptyState title="暂无事件" description="该运行尚未接收到生产事件。" />}
               </div>
             </Card>
           </div>
@@ -775,8 +775,8 @@ export function EventsPage() {
   }, [appliedFilters, live, pageSize, setData]);
   return (
     <Page
-      title="生产事件"
-      description="检索标准事件并回到所属周期。"
+      title="运行事件"
+      description="检索标准事件并回到所属生产运行。"
       actions={<label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" checked={live} onChange={event => { setPage(1); setLive(event.target.checked); }} />实时追踪</label>}
     >
       <Card title="事件筛选">
@@ -784,7 +784,7 @@ export function EventsPage() {
           <Field label="事件类型"><Input value={filters.type} onChange={event => setFilters({ ...filters, type: event.target.value })} placeholder="process.sample" /></Field>
           <Field label="采集节点"><Input value={filters.edgeId} onChange={event => setFilters({ ...filters, edgeId: event.target.value })} /></Field>
           <Field label="工业对象"><Input value={filters.subjectId} onChange={event => setFilters({ ...filters, subjectId: event.target.value })} placeholder="设备或对象编号" /></Field>
-          <Field label="周期号"><Input value={filters.correlationId} onChange={event => setFilters({ ...filters, correlationId: event.target.value })} /></Field>
+          <Field label="运行号"><Input value={filters.correlationId} onChange={event => setFilters({ ...filters, correlationId: event.target.value })} /></Field>
           <Button variant="primary" type="submit" className="self-end"><MagnifyingGlassIcon className="size-4" />查询</Button>
         </form>
       </Card>
@@ -799,7 +799,7 @@ export function EventsPage() {
               { key: "ingestId", label: "摄入序号" },
               { key: "event", label: "类型", render: value => <Badge tone="info">{value?.eventType || "—"}</Badge> },
               { key: "event", label: "对象", render: value => value?.subject?.id || "—" },
-              { key: "event", label: "周期号", render: value => value?.correlationId || "—" },
+              { key: "event", label: "运行号", render: value => value?.correlationId || "—" },
               { key: "event", label: "发生时间", render: value => formatTime(value?.occurredAt) },
             ]}
           />
@@ -1010,7 +1010,7 @@ export function ChatPage() {
     .slice(-4);
 
   return (
-    <Page title="AI 工艺研发助手" description="围绕当前研发项目查询证据、分析数据并说明结论边界。">
+    <Page title="分析助手" description="围绕当前优化项目查询证据、分析数据并说明结论边界。">
       {capabilitiesLoading && <Alert title="正在连接 AI 助手">正在读取可用的分析能力。</Alert>}
       {!capabilitiesLoading && capabilities && !capabilities.enabled && <Alert tone="warning" title="AI 助手当前未启用">请联系管理员启用分析服务。</Alert>}
       {projectId && <Alert title="已绑定研发项目">本次问答只使用该项目可访问的研发记录和知识来源。</Alert>}
@@ -1018,7 +1018,7 @@ export function ChatPage() {
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
         <Card title="分析问答">
           <div className="min-h-[420px] space-y-4">
-            {!run && <EmptyState title="从一个生产问题开始" description="例如：当前有哪些运行对象？最近哪些周期数据不完整？" />}
+            {!run && <EmptyState title="从一个生产问题开始" description="例如：当前有哪些运行对象？最近哪些运行数据不完整？" />}
             {run && (
               <div className="space-y-4">
                 <div className="ml-auto max-w-2xl rounded-2xl rounded-br-md bg-blue-600 px-4 py-3 text-sm text-white">{run.question || question}</div>
@@ -1040,7 +1040,7 @@ export function ChatPage() {
           </div>
           <form className="mt-5 flex flex-col gap-3 border-t border-slate-100 pt-4" onSubmit={start}>
             <Field label="调查问题">
-              <Textarea required value={question} onChange={event => setQuestion(event.target.value)} placeholder="描述要调查的现象、批次或周期…" />
+              <Textarea required value={question} onChange={event => setQuestion(event.target.value)} placeholder="描述要调查的现象、批次或运行…" />
             </Field>
             <div className="flex flex-wrap items-center justify-between gap-3">
               <Field label="分析模式">
@@ -1189,9 +1189,9 @@ export function ObjectExplorerPage() {
                       <p className="mt-1 text-xs leading-5 text-slate-500">进入其他页面时保留当前对象，避免重新查找和填写编号。</p>
                       <div className="mt-3 grid gap-3 sm:grid-cols-2">
                         {[
-                          [`/cycles?machineId=${encodeURIComponent(selected.subjectId)}`, "运行记录", "查看该对象的生产周期与上下文"],
+                          [`/cycles?machineId=${encodeURIComponent(selected.subjectId)}`, "运行记录", "查看该对象的生产运行与上下文"],
                           [`/events?subjectId=${encodeURIComponent(selected.subjectId)}`, "事件时间线", "追溯该对象上报的事件与状态变化"],
-                          [`/quality-analysis?subjectType=${encodeURIComponent(selected.subjectType)}&subjectId=${encodeURIComponent(selected.subjectId)}`, "质量追因", "查看与该对象关联的检测结果并追溯运行证据"],
+                          [`/quality-analysis?subjectType=${encodeURIComponent(selected.subjectType)}&subjectId=${encodeURIComponent(selected.subjectId)}`, "质量偏差分析", "查看与该对象关联的检测结果并追溯运行证据"],
                           [`/data-quality?subjectType=${encodeURIComponent(selected.subjectType)}&subjectId=${encodeURIComponent(selected.subjectId)}`, "数据健康", "确认样本范围、连续性和更新时间"],
                         ].map(([to, label, description]) => (
                           <Link key={label} to={to} className="rounded-xl border border-slate-200 p-4 transition hover:border-blue-300 hover:bg-blue-50/50">
@@ -1230,9 +1230,9 @@ export function ObjectExplorerPage() {
 
 const productionResources = {
   context: {
-    title: "生产切换", endpoint: "/api/v1/production-contexts", key: "contextId",
-    description: "为设备选择接下来生产的产品、配方和已装工装，保存后对新周期生效。",
-    drawerDescription: "按顺序确认设备、产品、配方和工装；保存后只影响新开始的生产周期。",
+    title: "运行准备", endpoint: "/api/v1/production-contexts", key: "contextId",
+    description: "为设备选择接下来生产的产品、配方和已装工装，保存后对新运行生效。",
+    drawerDescription: "按顺序确认设备、产品、配方和工装；保存后只影响新开始的生产运行。",
     columns: [["machineId", "设备"], ["productCode", "产品"], ["recipeId", "配方"], ["validFrom", "生效时间"], ["validTo", "结束时间"]],
     template: { machineId: "", productSeries: "", productCode: "", recipeId: "", recipeVersion: 1, toolingInstallationId: "", source: "manual", externalOrderRef: "", externalBatchRef: "", materialLotRef: "", materialSpecification: "", maintenanceStatus: "", calibrationStatus: "", calibrationRef: "", calibrationValidUntil: "" },
     createLabel: "配置下一批生产",
@@ -1248,7 +1248,7 @@ const productionResources = {
   },
   installation: {
     title: "工装装卸", endpoint: "/api/v1/tooling-installations", key: "installationId",
-    description: "记录哪个工装组合版本在何时装入设备，供后续周期自动关联。",
+    description: "记录哪个工装组合版本在何时装入设备，供后续运行自动关联。",
     drawerDescription: "选择设备和已经建立的工装组合版本，装入后会进入该设备的有效工装记录。",
     columns: [["machineId", "设备"], ["moldId", "工装"], ["installedAt", "装入"], ["removedAt", "卸下"]],
     template: { machineId: "", assemblyRevisionId: "", source: "manual" },
@@ -1522,7 +1522,7 @@ function ProductionRecordForm({ resource, editor, onChange }) {
         </Card>
         {hasMachine && hasProduct && hasRecipe && (
           <Alert tone="success" title="可以生效">
-            保存后，设备 {editor.machineId} 新开始的周期将使用产品 {editor.productCode} 和配方 {editor.recipeId} v{editor.recipeVersion}。
+            保存后，设备 {editor.machineId} 新开始的运行将使用产品 {editor.productCode} 和配方 {editor.recipeId} v{editor.recipeVersion}。
           </Alert>
         )}
       </div>
@@ -1657,7 +1657,7 @@ function ToolingRevisionComposition({ revision, template, components, componentT
   const typeByCode = new Map(componentTypes.map(type => [type.componentTypeCode, type]));
   const roles = template?.roles || [];
   if (!revision) {
-    return <EmptyState title="尚未建立配置版本" description="为模具的每个装配位置选择具体组件资产后，才能用于设备装卸和周期追溯。" />;
+    return <EmptyState title="尚未建立配置版本" description="为模具的每个装配位置选择具体组件资产后，才能用于设备装卸和运行追溯。" />;
   }
   return (
     <div className="space-y-4">
@@ -1802,7 +1802,7 @@ function ToolingAssembliesPage() {
   return (
     <Page
       title="模具资产"
-      description="一个模具资产拥有稳定身份；每次组件更换形成新的不可变配置版本，生产周期自动保留当时的真实组成。"
+      description="一个模具资产拥有稳定身份；每次组件更换形成新的不可变配置版本，生产运行自动保留当时的真实组成。"
       actions={<Button variant="primary" onClick={() => { setActionError(""); setAssetOpen(true); }}>新建模具资产</Button>}
     >
       {(errors.length > 0 || actionError) && <Alert tone="danger">{errors[0] || actionError}</Alert>}
@@ -1812,7 +1812,7 @@ function ToolingAssembliesPage() {
         steps={[
           { title: "登记组件资产", description: "每个模芯、模架使用独立资产编号和序列号。", state: components.length ? "done" : "current" },
           { title: "建立模具配置", description: "按装配位置选择实际组件，形成不可变版本。", state: revisions.length ? "done" : components.length ? "current" : "upcoming" },
-          { title: "装入生产设备", description: "安装后新周期自动关联模具及全部成员。", state: installations.length ? "done" : revisions.length ? "current" : "upcoming" },
+          { title: "装入生产设备", description: "安装后新运行自动关联模具及全部成员。", state: installations.length ? "done" : revisions.length ? "current" : "upcoming" },
         ]}
       />
       {loading ? <LoadingCard /> : assemblies.length === 0 ? (
@@ -1961,7 +1961,7 @@ function ProductionRecordsPage({ section }) {
       await postJson(resource.endpoint, resource.prepare ? resource.prepare(value) : value);
       setOpen(false);
       await reload();
-      notify(section === "context" ? "生产配置已生效，新开始的周期会自动关联。" : `${resource.title}已保存。`);
+      notify(section === "context" ? "生产配置已生效，新开始的运行会自动关联。" : `${resource.title}已保存。`);
     } catch (requestError) {
       setActionError(requestError.message);
     } finally {
@@ -2037,7 +2037,7 @@ function ProductionRecordsPage({ section }) {
               />
               <Card
                 title="当前生效配置"
-                description={activeRows.length ? `${activeRows.length} 台设备已准备好开始新周期` : "目前没有正在生效的生产配置"}
+                description={activeRows.length ? `${activeRows.length} 台设备已准备好开始新运行` : "目前没有正在生效的生产配置"}
                 actions={<Button variant="primary" onClick={() => openEditor()}>{activeRows.length ? "切换产品或配方" : "开始配置"}</Button>}
               >
                 {activeRows.length ? (
@@ -2066,7 +2066,7 @@ function ProductionRecordsPage({ section }) {
               steps={[
                 { title: "先建立工装组合", description: "在工装管理中确定工装及其组件版本。", state: rows.length ? "done" : "current" },
                 { title: "选择设备并装入", description: "一台设备可保留当前有效工装记录。", state: activeRows.length ? "done" : "current" },
-                { title: "换装时先卸下", description: "卸下后历史周期仍保留原工装关联。", state: activeRows.length ? "current" : "upcoming" },
+                { title: "换装时先卸下", description: "卸下后历史运行仍保留原工装关联。", state: activeRows.length ? "current" : "upcoming" },
               ]}
             />
           )}
@@ -2279,7 +2279,7 @@ export function InspectionsPage() {
         title="质量任务怎么处理"
         description="正常情况下直接点击任务队列中的操作按钮；只有补录历史结果时才使用右上角“补录检测记录”。"
         steps={[
-          { title: "选择待办任务", description: "平台已按生产周期生成需要处理的检测项目。", state: Number(taskSummary.data?.pending || 0) > 0 ? "current" : "done" },
+          { title: "选择待办任务", description: "平台已按生产运行生成需要处理的检测项目。", state: Number(taskSummary.data?.pending || 0) > 0 ? "current" : "done" },
           { title: "录入结果与附件", description: "检测值会按定义自动判定，原图与记录一起保存。", state: Number(taskSummary.data?.pending || 0) > 0 ? "current" : "done" },
           { title: "由另一人复核", description: "待复核任务进入独立队列，确认或要求重检。", state: Number(taskSummary.data?.reviewPending || 0) > 0 ? "current" : "done" },
         ]}
@@ -2325,7 +2325,7 @@ export function InspectionsPage() {
                   { key: "workpieceId", label: "工件" },
                   { key: "inspectionPlanName", label: "质量方案" },
                   { key: "status", label: "状态", render: value => <StatusBadge value={value} /> },
-                  { key: "completedAt", label: "周期完成", render: formatTime },
+                  { key: "completedAt", label: "运行完成", render: formatTime },
                   {
                     key: "_actions",
                     label: "操作",
@@ -2592,7 +2592,7 @@ export function QualityAnalysisPage() {
   }
 
   return (
-    <Page title="质量追因" description="按产品、配方和生产上下文识别质量偏差，并追溯到运行证据。">
+    <Page title="质量偏差分析" description="按产品、配方和生产上下文识别质量偏差，并追溯到运行证据。">
       <Card title="分析范围">
         <form className="grid gap-3 md:grid-cols-[1fr_1fr_1fr_auto]" onSubmit={search}>
           <Field label="产品系列"><Input value={filters.productSeries} onChange={event => setFilters({ ...filters, productSeries: event.target.value })} /></Field>
@@ -2811,7 +2811,7 @@ export function CycleComparisonPage() {
           maximumHypotheses: 3,
         },
       );
-      notify(`已将周期比较转为 ${created.length} 条候选假设；请补充验证标准后再让优化器设计实验。`);
+      notify(`已将运行对比转为 ${created.length} 条候选假设；请补充验证标准后再让优化器设计实验。`);
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -2825,7 +2825,7 @@ export function CycleComparisonPage() {
   const signalRows = useMemo(() => (result?.signalComparisons || [])
     .map(signal => ({
       ...signal,
-      phaseLabel: signal.phaseName || "全周期",
+      phaseLabel: signal.phaseName || "全运行",
       featureLabel: comparisonFeatureLabels[signal.featureCode] || signal.featureCode,
       difference: Number.isFinite(Number(signal.baselineValue)) && Number.isFinite(Number(signal.historicalMedian))
         ? Number(signal.baselineValue) - Number(signal.historicalMedian)
@@ -2851,7 +2851,7 @@ export function CycleComparisonPage() {
   const investigation = result?.investigation;
   const firstDeviationRows = (investigation?.firstDeviations || []).map(item => ({
     ...item,
-    phaseLabel: item.phaseName || item.phaseCode || "全周期",
+    phaseLabel: item.phaseName || item.phaseCode || "全运行",
   }));
   const experimentRows = (investigation?.nextExperiments || []).map(item => ({
     ...item,
@@ -2859,36 +2859,36 @@ export function CycleComparisonPage() {
     designLabel: `${item.minimumLevels} 水平 × ${item.minimumBlocks} 区组 × 每条件 ${item.repeatsPerCondition} 次`,
   }));
   return (
-    <Page title="周期对比与候选原因" description="从已完成的同类运行中选择基准和对比对象，按阶段对齐后形成待验证的原因假设。">
+    <Page title="运行对比" description="从已完成的同类运行中选择基准和对比对象，按阶段对齐后形成待验证的原因假设。">
       {error && <Alert tone="danger">{error}</Alert>}
       <Card title="选择可比较的生产运行" description="先选择需要解释的异常运行；默认与同产品的完整样本组比较，避免从单个偶然样本得出结论。">
         <div className="mb-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
-          <Field label="筛选运行" hint="可按运行号、产品、设备或配方筛选；这是查找，不是录入周期编号。"><Input value={cycleFilter} onChange={event => setCycleFilter(event.target.value)} placeholder="例如：产品系列、设备编号或运行号" /></Field>
+          <Field label="筛选运行" hint="可按运行号、产品、设备或配方筛选；这是查找，不是录入运行编号。"><Input value={cycleFilter} onChange={event => setCycleFilter(event.target.value)} placeholder="例如：产品系列、设备编号或运行号" /></Field>
           <p className="pb-2 text-sm text-slate-500">显示 {visibleCycles.length} / {cycles.length} 条已完成运行</p>
         </div>
         <form className="grid gap-3 md:grid-cols-[1fr_1fr_1fr_auto]" onSubmit={compare}>
           <Field label="基准运行" hint="通常选择质量异常、规格偏离或需要解释的一次运行。"><Select value={baseline} onChange={event => setBaseline(event.target.value)} required disabled={catalogLoading || !cycles.length}><option value="">选择已完成运行</option>{baseline && !cycles.some(item => item.correlationId === baseline) && <option value={baseline}>{baseline}（来自当前页面链接）</option>}{visibleCycles.map(cycle => <option key={cycle.correlationId} value={cycle.correlationId}>{cycleLabel(cycle)}</option>)}</Select></Field>
           <Field label="对比范围" hint="历史样本组由服务端按产品、时间、质量和数据完整性筛选。"><Select value={comparisonScope} onChange={event => setComparisonScope(event.target.value)} disabled={!baseline}><option value="cohort">同产品历史样本组</option><option value="single">指定一个同类运行</option></Select></Field>
           {comparisonScope === "single" ? <Field label="对比运行" hint={baselineCycle?.productSeries ? `仅显示产品系列“${baselineCycle.productSeries}”的运行。` : baselineCycle ? `该运行未标注产品系列，暂按设备“${baselineCycle.machineId || "未标注"}”筛选。` : "正在读取基准运行。"}><Select value={candidate} onChange={event => setCandidate(event.target.value)} required disabled={!baselineCycle || catalogLoading}><option value="">选择同类运行</option>{comparableCycles.map(cycle => <option key={cycle.correlationId} value={cycle.correlationId}>{cycleLabel(cycle)}</option>)}</Select></Field> : <div className="self-end rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">系统最多选择 24 个同产品历史运行，并保留质量覆盖和数据完整性证据。</div>}
-          <Button variant="primary" type="submit" className="self-end" disabled={busy || !baseline || (comparisonScope === "single" && !candidate)}>{busy ? "正在对比…" : "开始周期对比"}</Button>
+          <Button variant="primary" type="submit" className="self-end" disabled={busy || !baseline || (comparisonScope === "single" && !candidate)}>{busy ? "正在对比…" : "开始运行对比"}</Button>
         </form>
         {catalogLoading && <p className="mt-3 text-sm text-slate-500">正在读取可比较的已完成运行…</p>}
-        {!catalogLoading && cycles.length === 0 && <Alert tone="warning" title="暂无可选择的运行">需要至少两条已完成且上下文完整的生产运行，才能开始周期对比。</Alert>}
+        {!catalogLoading && cycles.length === 0 && <Alert tone="warning" title="暂无可选择的运行">需要至少两条已完成且上下文完整的生产运行，才能开始运行对比。</Alert>}
       </Card>
       {result ? (
         <>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
             <Metric label="产品系列" value={result.productSeries || "—"} />
-            <Metric label="参与对比" value={result.acceptance?.cycleCount ?? comparedCycles.length} hint="个生产周期" />
+            <Metric label="参与对比" value={result.acceptance?.cycleCount ?? comparedCycles.length} hint="条生产运行" />
             <Metric label="数据可用" value={result.acceptance?.availableCycleCount ?? 0} hint={`异常 ${result.acceptance?.degradedCycleCount ?? 0} 个`} />
-            <Metric label="周期完整" value={result.acceptance?.completeCycleCount ?? 0} hint="同时具有生产开始与结束事件" />
+            <Metric label="运行完整" value={result.acceptance?.completeCycleCount ?? 0} hint="同时具有生产开始与结束事件" />
             <Metric label="分析证据" value={evidenceLevelLabels[result.evidenceLevel] || result.evidenceLevel || "—"} />
           </div>
           <Card title="确定性调查报告" description="以下事实由系统查询和计算生成；本地模型只能组织解释，不能补写数字或把观察性候选说成根因。">
             <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               <Metric label="调查状态" value={investigation?.status === "ready" ? "可进入验证" : investigation?.status === "exploratory" ? "探索性" : "数据不足"} />
               <Metric label="目标数据" value={investigation?.dataQuality?.targetStatus || "—"} hint={`证据权重 ${formatDecimal(investigation?.dataQuality?.targetEvidenceWeight)}`} />
-              <Metric label="基线有效权重" value={formatDecimal(investigation?.comparisonBaseline?.effectiveCycleWeight)} hint={`${investigation?.comparisonBaseline?.comparisonCycleIds?.length || 0} 个对比周期`} />
+              <Metric label="基线有效权重" value={formatDecimal(investigation?.comparisonBaseline?.effectiveCycleWeight)} hint={`${investigation?.comparisonBaseline?.comparisonCycleIds?.length || 0} 条对比运行`} />
               <Metric label="匹配条件" value={Object.entries(investigation?.comparisonBaseline?.matchingContext || {}).map(([key, value]) => `${key}=${value}`).join("；") || "未记录"} />
             </div>
             {firstDeviationRows.length ? (
@@ -2932,13 +2932,13 @@ export function CycleComparisonPage() {
             )}
             <Alert tone="warning" title="结论边界">{investigation?.conclusionGuardrail || "当前结果只能作为待验证假设。"}</Alert>
           </Card>
-          <Card title="周期概况">
+          <Card title="运行概况">
             <DataTable
               rows={comparedCycles}
               getRowKey={row => `${row.comparisonRole}-${row.correlationId}`}
               columns={[
                 { key: "comparisonRole", label: "角色", render: value => <Badge tone={value === "基准" ? "info" : "neutral"}>{value}</Badge> },
-                { key: "correlationId", label: "周期" },
+                { key: "correlationId", label: "运行" },
                 { key: "machineId", label: "设备" },
                 { key: "completedAt", label: "结束时间", render: formatTime },
                 { key: "durationMs", label: "时长（秒）", render: value => formatDecimal(Number(value) / 1000) },
@@ -3003,7 +3003,7 @@ export function CycleComparisonPage() {
                   </Alert>
                 )}
               </>
-            ) : <EmptyState title="尚无质量候选原因" description="至少需要合格与不合格周期，并且配方或过程特征具有可比较差异。" />}
+            ) : <EmptyState title="尚无质量候选原因" description="至少需要合格与不合格运行，并且配方或过程特征具有可比较差异。" />}
           </Card>
           <Card title="信号差异" description="按变化幅度列出前 30 项，便于快速定位阶段和参数差异。">
             {signalRows.length ? (
@@ -3020,10 +3020,10 @@ export function CycleComparisonPage() {
                   { key: "baselinePercentile", label: "所处分位", render: value => Number.isFinite(Number(value)) ? `${Math.round(Number(value) * 100)}%` : "—" },
                 ]}
               />
-            ) : <EmptyState title="暂无可比信号" description="所选周期还没有可用于阶段对比的信号特征。" />}
+            ) : <EmptyState title="暂无可比信号" description="所选运行还没有可用于阶段对比的信号特征。" />}
           </Card>
         </>
-      ) : <EmptyState title="尚未执行周期对比" description="从下拉列表选择基准运行和同类对比运行后开始；系统会保留数据可用性和生产开始/结束边界证据。" />}
+      ) : <EmptyState title="尚未执行运行对比" description="从下拉列表选择基准运行和同类对比运行后开始；系统会保留数据可用性和生产开始/结束边界证据。" />}
     </Page>
   );
 }
@@ -3150,7 +3150,7 @@ export function DataQualityPage() {
                     { key: "processCompleteRunCount", label: "过程完整", render: formatInteger },
                     { key: "qualityLinkedRunCount", label: "已质检", render: formatInteger },
                     { key: "quality", label: "质量结果", render: (_, row) => `合格 ${row.passRunCount} · 不合格 ${row.failRunCount} · 不确定 ${row.inconclusiveRunCount}` },
-                    { key: "meanDurationMs", label: "平均周期", render: value => value == null ? "—" : formatDuration(value) },
+                    { key: "meanDurationMs", label: "平均运行时长", render: value => value == null ? "—" : formatDuration(value) },
                   ]}
                 />
               ) : <EmptyState title="暂无可分层上下文" description="采集到设备、工装或材料批次后，这里会按实际水平汇总。" />}
@@ -3371,7 +3371,7 @@ function RegistryPage({ definition }) {
           steps={[
             { title: "创建检测定义", description: "设置要填写的检测项、单位、上下限或选项。", state: rows.length ? "done" : "current" },
             { title: "加入质量方案", description: "决定哪些产品需要使用这些检测项目。", state: rows.length ? "current" : "upcoming" },
-            { title: "按任务录入", description: "生产周期完成后，平台自动生成质量待办。", state: "upcoming" },
+            { title: "按任务录入", description: "生产运行完成后，平台自动生成质量待办。", state: "upcoming" },
           ]}
         />
       )}
@@ -3381,7 +3381,7 @@ function RegistryPage({ definition }) {
           steps={[
             { title: "准备检测定义", description: "先确认需要的检测项目已经建立。", state: rows.length ? "done" : "current" },
             { title: "配置产品适用范围", description: "选择检测定义并设置原图、复核等要求。", state: rows.length ? "done" : "current" },
-            { title: "发布后自动生成任务", description: "新生产周期会按适用范围进入质量队列。", state: rows.some(row => row.status === "published") ? "done" : "upcoming" },
+            { title: "发布后自动生成任务", description: "新生产运行会按适用范围进入质量队列。", state: rows.some(row => row.status === "published") ? "done" : "upcoming" },
           ]}
         />
       )}
@@ -3661,13 +3661,13 @@ export function EdgeDetailPage() {
       ) : <Alert tone="success" title="采集端已具备交付条件">过程信号、实际配方、周期边界与数据上行均已就绪；请继续确认质检结果已关联到相同运行。</Alert>}
       <WorkflowGuide
         title="从设备数据到工艺证据"
-        description="节点只负责可靠交付数据；完整闭环还必须在平台把周期、实际配方、过程曲线与质量结果关联起来。"
+        description="节点只负责可靠交付数据；完整闭环还必须在平台把生产运行、实际配方、过程曲线与质量结果关联起来。"
         compact
         steps={[
           { title: "连接数据源", description: edgeStatus(edge) === "online" ? "现场节点持续在线。" : "等待节点恢复心跳。", state: edgeStatus(edge) === "online" ? "done" : "current" },
           { title: "采集并上行", description: runningTasks > 0 ? `${runningTasks} 个任务正在采集，${outboxBacklog > 0 ? `${formatInteger(outboxBacklog)} 条事件等待上行。` : "当前没有积压事件。"}` : "尚无运行中的采集任务。", state: runningTasks > 0 && outboxBacklog === 0 ? "done" : "current" },
           { title: "映射工艺语义", description: `${processSignalCount} 条过程信号、${recipeMappingCount} 个配方参数${lifecycleProfileCount > 0 ? "，已配置周期边界。" : "；尚未配置周期边界。"}`, state: processSignalCount > 0 && recipeMappingCount > 0 && lifecycleProfileCount > 0 ? "done" : "current" },
-          { title: "验证闭环证据", description: deliveryReady ? "采集端条件已具备；请在周期与质检页面确认实际关联，再进入追因和实验。" : "补齐当前步骤后，再用周期与质检数据验证证据是否完整。", state: deliveryReady ? "current" : "upcoming" },
+          { title: "验证闭环证据", description: deliveryReady ? "采集端条件已具备；请在运行记录与质量任务中确认实际关联，再进入追因和实验。" : "补齐当前步骤后，再用运行记录与质量任务验证证据是否完整。", state: deliveryReady ? "current" : "upcoming" },
         ]}
       />
       <Card
@@ -3683,7 +3683,7 @@ export function EdgeDetailPage() {
         </div>
         <p className="mt-5 rounded-xl bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-600">
           {deliveryReady
-            ? "采集端已满足过程信号、实际配方与周期边界的交付条件。下一步在“周期”和“质检”中确认同一运行的曲线与结果已关联，随后再发起追因或优化实验。"
+            ? "采集端已满足过程信号、实际配方与周期边界的交付条件。下一步在“运行记录”和“质量任务”中确认同一运行的曲线与结果已关联，随后再发起追因或优化实验。"
             : "这不是追因结论。请先补齐运行任务、过程信号、实际配方回读和周期边界；质量结果由质检流程关联后，才形成可用于追因和优化的完整证据。"}
         </p>
       </Card>
@@ -3966,7 +3966,7 @@ export function MetricsPage() {
         {healthy ? "中心服务和现场节点均在正常工作。" : `离线节点 ${offline} 个，待确认节点 ${unknown} 个，后台排队 ${formatInteger(threadQueue)} 项。`}
       </Alert>
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Metric label="已保存周期" value={formatInteger(cycleResponse.data?.total)} hint="可追溯生产运行" />
+        <Metric label="已保存运行" value={formatInteger(cycleResponse.data?.total)} hint="可追溯生产运行" />
         <Metric label="待处理质量任务" value={formatInteger(actionRequired)} hint="录入与复核合计" />
         <Metric label="已发布采集任务" value={formatInteger(publishedProfiles)} hint="正在向现场下发" />
         <Metric label="已摄入事件" value={formatInteger(ingested)} hint="本次平台运行累计" />

@@ -1,14 +1,14 @@
 import { Dialog, DialogBackdrop, DialogPanel, Menu, MenuButton, MenuItem, MenuItems } from "@headlessui/react";
 import {
-  ArrowPathRoundedSquareIcon,
+  AdjustmentsHorizontalIcon,
   BoltIcon,
   BeakerIcon,
   ChevronRightIcon,
   CircleStackIcon,
-  ClipboardDocumentCheckIcon,
+  Cog6ToothIcon,
   MagnifyingGlassIcon,
+  MagnifyingGlassCircleIcon,
   RectangleGroupIcon,
-  UserGroupIcon,
   XMarkIcon,
 } from "@heroicons/react/24/outline";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -19,59 +19,63 @@ import { cx, ToastHost } from "./ui/components";
 
 const sections = [
   {
-    id: "overview", label: "工作台", icon: BoltIcon, path: "/workbench", groups: [
-      { items: [["/workbench", "工业决策工作台"]] },
+    id: "overview", label: "总览", icon: BoltIcon, path: "/workbench", groups: [
+      { items: [["/workbench", "决策总览"]] },
     ],
   },
   {
-    id: "production", label: "生产运行", icon: ArrowPathRoundedSquareIcon, path: "/cycles", groups: [
-      { label: "运行与追溯", items: [["/cycles", "周期记录"], ["/events", "生产事件"], ["/comparisons", "周期对比"]] },
-      { label: "现场上下文", items: [["/production/changeover", "生产切换"], ["/production/tooling-installations", "工装装卸"]] },
-      { label: "工装资产", items: [["/configuration/tooling-assemblies", "模具资产"], ["/configuration/components", "组件资产"], ["/configuration/tooling-types", "装配模板"], ["/configuration/component-types", "组件分类"]] },
+    id: "evidence", label: "运行证据", icon: CircleStackIcon, path: "/explorer", groups: [
+      { label: "对象与运行", items: [["/explorer", "工业对象"], ["/cycles", "运行记录"], ["/inspections", "质量任务"]] },
+      { label: "现场上下文", items: [["/events", "运行事件"], ["/production/changeover", "运行准备"], ["/production/tooling-installations", "工装装卸"]] },
     ],
   },
   {
-    id: "quality", label: "质量管理", icon: ClipboardDocumentCheckIcon, path: "/inspections", groups: [
-      { label: "质量执行", items: [["/inspections", "检验任务"], ["/quality-analysis", "质量追因"]] },
+    id: "diagnosis", label: "工艺追因", icon: MagnifyingGlassCircleIcon, path: "/comparisons", groups: [
+      { label: "分析准备", items: [["/data-quality", "数据可信度"]] },
+      { label: "分析与核对", items: [["/comparisons", "运行对比"], ["/quality-analysis", "质量偏差分析"], ["/chat", "分析助手"], ["/golden-questions", "评测问题集"]] },
+    ],
+  },
+  {
+    id: "optimization", label: "工艺优化", icon: BeakerIcon, path: "/research-projects", groups: [
+      { label: "优化工作", items: [["/research-projects", "优化项目"]] },
+      { label: "复用资产", items: [["/research-assets", "研发资产"]] },
+    ],
+  },
+  {
+    id: "configuration", label: "配置", icon: AdjustmentsHorizontalIcon, path: "/configuration/scenario-packages", groups: [
+      { label: "工艺定义", items: [["/configuration/scenario-packages", "工艺配置"], ["/configuration/process-data-models", "工艺模型"], ["/configuration/recipe-versions", "配方版本"], ["/configuration/process-analysis-plans", "分析模型"]] },
       { label: "质量规则", items: [["/configuration/inspection-definitions", "检测定义"], ["/configuration/quality-plans", "质量方案"]] },
-    ],
-  },
-  {
-    id: "research", label: "工艺研发", icon: BeakerIcon, path: "/research-projects", groups: [
-      { items: [["/research-projects", "工艺优化"], ["/chat", "AI助手"], ["/golden-questions", "黄金问题集"]] },
-    ],
-  },
-  {
-    id: "data", label: "数据与配置", icon: CircleStackIcon, path: "/explorer", groups: [
-      { label: "数据可信度", items: [["/explorer", "工业对象"], ["/data-quality", "数据质量"]] },
-      { label: "工艺定义", items: [["/configuration/scenario-packages", "工艺配置"], ["/configuration/process-data-models", "工艺模型"], ["/configuration/process-analysis-plans", "分析模型"], ["/configuration/recipe-versions", "配方版本"]] },
+      { label: "工装资产", items: [["/configuration/tooling-types", "装配模板"], ["/configuration/component-types", "组件分类"], ["/configuration/components", "组件资产"], ["/configuration/tooling-assemblies", "模具资产"]] },
       { label: "现场接入", items: [["/edges", "现场节点"], ["/configuration/acquisition-profiles", "设备接入"]] },
-    ],
-  },
-  {
-    id: "system", label: "系统管理", icon: UserGroupIcon, path: "/identity/users", groups: [
-      { items: [["/identity/users", "用户与权限"], ["/platform-metrics", "平台状态"], ["/logs", "运行日志"]] },
     ],
   },
 ];
 
+const systemSection = {
+  id: "system", label: "系统管理", icon: Cog6ToothIcon, path: "/identity/users", groups: [
+    { items: [["/identity/users", "用户与权限"], ["/platform-metrics", "平台运行状态"], ["/logs", "运行日志"]] },
+  ],
+};
+
+const allSections = [...sections, systemSection];
+
 const sectionItems = section => section.groups.flatMap(group => group.items);
 
 const pageDetails = {
-  "/research-projects": ["工艺优化工作台", "从问题、证据与实验推进到经过验证的工艺窗口"],
-  "/workbench": ["工业决策工作台", "实时运行、质量、数据可信度与优化行动的统一入口"],
-  "/chat": ["AI 研发助手", "结合实验、过程数据、机理和知识推进研发任务"],
+  "/research-projects": ["优化项目", "从问题、证据与实验推进到经过验证的工艺窗口"],
+  "/workbench": ["决策总览", "实时运行、质量、数据可信度与优化行动的统一入口"],
+  "/chat": ["分析助手", "结合实验、过程数据、机理和知识推进追因任务"],
   "/research-assets": ["研发资产", "查看项目可复用的数据集、模型、机理和知识"],
   "/explorer": ["工业对象", "选择真实业务对象，再进入它的运行、事件、质量与数据健康视图"],
-  "/cycles": ["运行记录", "查看生产周期及其数据、工艺与质量上下文"],
-  "/events": ["生产事件", "查询、追溯并关联运行上下文"],
-  "/production/changeover": ["生产上下文", "让设备、产品、配方和已装工装对接下来的周期生效"],
+  "/cycles": ["运行记录", "查看生产运行及其数据、工艺与质量上下文"],
+  "/events": ["运行事件", "查询、追溯并关联运行上下文"],
+  "/production/changeover": ["运行准备", "让设备、产品、配方和已装工装对接下来的运行生效"],
   "/production/tooling-installations": ["工装装卸", "记录工装组合版本在设备上的装入与卸下区间"],
   "/inspections": ["质量任务", "处理视觉检查、人工质检与原图复核"],
-  "/quality-analysis": ["质量追因", "按产品、配方和运行上下文定位质量偏差并追溯证据"],
-  "/comparisons": ["周期对比与验证", "比较同类生产周期、运行段或时间窗口，生成待验证的候选原因"],
-  "/golden-questions": ["工程师黄金问题集", "用真实问题持续核对事实、记录引用、正确拒绝和因果边界"],
-  "/data-quality": ["数据可信度", "检查运行对象的数据范围、采样连续性与周期完整性"],
+  "/quality-analysis": ["质量偏差分析", "按产品、配方和运行上下文定位质量偏差并追溯证据"],
+  "/comparisons": ["运行对比", "比较同类生产运行、运行段或时间窗口，生成待验证的候选原因"],
+  "/golden-questions": ["评测问题集", "用真实问题持续核对事实、记录引用、正确拒绝和因果边界"],
+  "/data-quality": ["数据可信度", "检查运行对象的数据范围、采样连续性与运行完整性"],
   "/configuration/scenario-packages": ["工艺配置", "版本化组合工艺数据、采集、分析、质量、上下文和约束"],
   "/configuration/process-analysis-plans": ["分析模型", "版本化定义分析范围、对齐方式、质量分组和数据项"],
   "/configuration/process-data-models": ["工艺模型", "定义工艺变量、阶段号和配方参数，供设备点位统一映射"],
@@ -89,7 +93,7 @@ const pageDetails = {
   "/identity/users": ["用户与权限", "管理本地账户、岗位权限、密码和启停状态"],
 };
 
-const globalSearchEntries = sections.flatMap(section => sectionItems(section).map(([path, label]) => ({
+const globalSearchEntries = allSections.flatMap(section => sectionItems(section).map(([path, label]) => ({
   path,
   label,
   section: section.label,
@@ -115,18 +119,16 @@ export default function App() {
   }, []);
 
   const section = useMemo(
-    () => sections.find(item => item.path === location.pathname || sectionItems(item).some(([path]) => location.pathname === path || location.pathname.startsWith(`${path}/`))) ?? sections[0],
+    () => allSections.find(item => item.path === location.pathname || sectionItems(item).some(([path]) => location.pathname === path || location.pathname.startsWith(`${path}/`))) ?? sections[0],
     [location.pathname],
   );
   const page = location.pathname.startsWith("/cycles/")
-    ? ["周期详情", "查看单次生产运行的过程、质量和数据完整性"]
+    ? ["运行详情", "查看单次生产运行的过程、质量和数据完整性"]
     : location.pathname.startsWith("/edges/")
       ? ["节点诊断", "查看现场节点的连接、采集、上行和最近日志"]
       : location.pathname.startsWith("/research-projects/")
          ? ["优化项目工作区", "围绕当前问题推进假设、实验、验证和知识复用"]
      : pageDetails[location.pathname] ?? ["Ingot", "AI 工艺研发系统"];
-  const showSectionNavigation = sectionItems(section).length > 1;
-
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
       <header className="fixed inset-x-0 top-0 z-50 flex h-16 items-stretch border-b border-slate-200 bg-white/95 shadow-sm backdrop-blur">
@@ -145,7 +147,7 @@ export default function App() {
             <span className="truncate">{section.label}</span>
           </MenuButton>
           <MenuItems transition anchor="bottom start" className="z-100 mt-2 w-64 origin-top-left rounded-xl border border-slate-200 bg-white p-2 text-sm shadow-xl transition data-closed:scale-95 data-closed:opacity-0">
-            {sections.map(item => {
+            {allSections.map(item => {
               const Icon = item.icon;
               const active = item.id === section.id;
               return (
@@ -187,6 +189,17 @@ export default function App() {
         <button className="flex items-center gap-2 border-l border-slate-100 px-3 text-sm text-slate-600 hover:bg-slate-50 sm:px-4" onClick={() => setGlobalSearchOpen(true)} aria-label="打开全局搜索" aria-keyshortcuts="Control+K Meta+K">
           <MagnifyingGlassIcon className="size-5" /><span className="hidden lg:inline">全局搜索</span><kbd className="hidden rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] text-slate-400 2xl:inline">⌘K</kbd>
         </button>
+        <Menu as="div" className="relative hidden border-l border-slate-100 sm:flex">
+          <MenuButton className="grid w-12 place-items-center text-slate-600 hover:bg-slate-50" aria-label="打开系统管理">
+            <Cog6ToothIcon className="size-5" />
+          </MenuButton>
+          <MenuItems transition anchor="bottom end" className="z-100 mt-2 w-52 origin-top-right rounded-xl border border-slate-200 bg-white p-1 text-sm shadow-xl transition data-closed:scale-95 data-closed:opacity-0">
+            <p className="px-3 py-2 text-xs font-semibold text-slate-400">系统管理</p>
+            {sectionItems(systemSection).map(([path, label]) => (
+              <MenuItem key={path}><Link to={path} className="block rounded-lg px-3 py-2 text-slate-700 data-focus:bg-slate-100">{label}</Link></MenuItem>
+            ))}
+          </MenuItems>
+        </Menu>
         <Menu as="div" className="relative flex border-l border-slate-100">
           <MenuButton className="grid w-14 place-items-center text-slate-600 hover:bg-slate-50" aria-label="用户菜单">
             <span className="text-xs font-semibold">OP</span>
@@ -198,13 +211,13 @@ export default function App() {
             </div>
             <MenuItem><Link to="/identity/users" className="block rounded-lg px-3 py-2 text-slate-700 data-focus:bg-slate-100">用户与权限</Link></MenuItem>
             <MenuItem><Link to="/platform-metrics" className="block rounded-lg px-3 py-2 text-slate-700 data-focus:bg-slate-100">平台运行状态</Link></MenuItem>
+            <MenuItem><Link to="/logs" className="block rounded-lg px-3 py-2 text-slate-700 data-focus:bg-slate-100">运行日志</Link></MenuItem>
             <MenuItem><a href="https://docs.ingotstack.com/zh" className="block rounded-lg px-3 py-2 text-slate-700 data-focus:bg-slate-100">产品文档</a></MenuItem>
           </MenuItems>
         </Menu>
       </header>
 
       <div className="pt-16">
-        {showSectionNavigation && (
           <aside className="fixed inset-y-16 left-0 z-30 hidden w-55 border-r border-slate-200 bg-white lg:block">
             <div className="flex h-16 items-center gap-2 border-b border-slate-100 px-5">
               <section.icon className="size-5 text-blue-600" />
@@ -223,15 +236,12 @@ export default function App() {
               ))}
             </nav>
           </aside>
-        )}
 
-        <div className={cx(showSectionNavigation && "lg:ml-55")}>
+        <div className="lg:ml-55">
           <div className="sticky top-16 z-20 flex min-h-16 items-center gap-3 border-b border-slate-200 bg-white/90 px-4 backdrop-blur sm:px-6">
-            {showSectionNavigation && (
               <button className="grid size-9 place-items-center rounded-lg text-slate-600 hover:bg-slate-100 lg:hidden" onClick={() => setMobileOpen(true)} aria-label="打开模块导航">
                 <RectangleGroupIcon className="size-5" />
               </button>
-            )}
             <div className="min-w-0">
               <nav aria-label="面包屑" className="flex items-center gap-1.5 text-xs text-slate-500">
                 <Link to={section.path} className="shrink-0 hover:text-blue-700">{section.label}</Link>
@@ -304,12 +314,12 @@ function GlobalSearchDialog({ open, onClose, navigate }) {
         <DialogPanel className="mx-auto w-full max-w-2xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
           <div className="border-b border-slate-100 p-4 sm:p-5">
             <p className="text-sm font-semibold text-slate-950">全局搜索</p>
-            <p className="mt-1 text-xs text-slate-500">查找研发、追因、生产、质量、接入和系统功能。</p>
+            <p className="mt-1 text-xs text-slate-500">查找运行证据、工艺追因、工艺优化、配置和系统功能。</p>
             <input
               ref={inputRef}
               value={query}
               onChange={event => setQuery(event.target.value)}
-              placeholder="例如：研发项目、历史对比、设备采集、运行记录"
+              placeholder="例如：优化项目、运行对比、设备接入、运行记录"
               className="mt-4 min-h-11 w-full rounded-xl border border-slate-300 bg-slate-50 px-4 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-3 focus:ring-blue-100"
             />
           </div>

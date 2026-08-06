@@ -406,7 +406,7 @@ export function ResearchProjectsPage() {
         {},
       );
       await refreshWorkspace();
-      notify("已从实际周期、参数回读和检验记录冻结影子结果。", "success");
+      notify("已从实际运行、参数回读和检验记录冻结影子结果。", "success");
     } catch (requestError) {
       notify(requestError.message, "danger");
     }
@@ -772,7 +772,7 @@ export function ResearchProjectsPage() {
 
   return (
     <Page
-      title="工艺优化工作台"
+      title="优化项目"
       description="用最少的有效实验，把生产问题追溯为可验证证据，再形成可复用的工艺窗口。"
       actions={<Button variant="primary" onClick={() => setCreateOpen(true)}>新建优化项目</Button>}
     >
@@ -819,7 +819,7 @@ export function ResearchProjectsPage() {
             运行、质量和设备数据是证据来源；系统负责整理证据与下一步，工程人员负责审核和决策。
           </p>
           <div className="mt-4 flex flex-wrap gap-2">
-            <Button onClick={() => navigate("/comparisons")}>从周期对比开始</Button>
+            <Button onClick={() => navigate("/comparisons")}>从运行对比开始</Button>
             <Button onClick={() => navigate("/quality-analysis")}>查看质量偏差</Button>
           </div>
         </div>
@@ -1202,7 +1202,7 @@ function WorkspaceContent({
         </div>
         {observationSummary?.excludedObservationCount > 0 && (
           <Alert tone="warning">
-            有 {observationSummary.excludedObservationCount} 个周期因缺少检验值、过程特征或完整周期边界而未进入优化模型。
+            有 {observationSummary.excludedObservationCount} 条运行因缺少检验值、过程特征或完整运行边界而未进入优化模型。
           </Alert>
         )}
 
@@ -1798,7 +1798,7 @@ function ShadowEvidenceCard({ recommendations, report, variableByCode, objective
   return (
     <Card
       title="影子推荐证据"
-      description="建议不下发设备；工程师选择在结果产生前冻结，随后只从实际周期、参数回读和检验记录补齐结果。"
+      description="建议不下发设备；工程师选择在结果产生前冻结，随后只从实际运行、参数回读和检验记录补齐结果。"
     >
       {report?.stopRecommended && (
         <Alert tone="danger" title="影子评估触发停止信号">

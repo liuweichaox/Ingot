@@ -24,16 +24,15 @@ Define process → Connect equipment → Collect production data → Close the d
 
 The first four steps organize field activity into trustworthy run facts. The last two use those facts to support engineering decisions. Diagnosis and optimization are not parallel products: one explains an observed result and the other selects an unexecuted experiment, so both must read the same evidence.
 
-The current Web information architecture exposes six engineering-task domains:
+The current Web information architecture follows the core decision chain through five business domains:
 
-1. **Workbench**: operations, quality, data trust, and next actions;
-2. **Production operations**: real runs, production events, cycle comparison, changeover, and tooling assets;
-3. **Quality management**: inspection tasks, diagnosis, definitions, quality plans, and review;
-4. **Process R&D**: problems, candidate causes, hypotheses, experiments, results, and process windows;
-5. **Data and configuration**: industrial objects, data quality, scenario configuration, variable models, recipes, edge nodes, and equipment connectivity;
-6. **System administration**: users, role permissions, platform status, and runtime logs.
+1. **Overview**: operations, quality, data trust, and next actions;
+2. **Run evidence**: industrial objects, real runs, quality tasks, run events, run preparation, and tooling installation;
+3. **Process diagnosis**: data trust, run comparison, quality-deviation analysis, the analysis assistant, and evaluation cases;
+4. **Process optimization**: optimization projects and their reusable research assets;
+5. **Configuration**: process, recipe, analysis, quality, tooling, edge-node, and equipment-connectivity definitions.
 
-Production operations and data/configuration use grouped secondary navigation so tracing, manufacturing context, tooling assets, process configuration, and connectivity are not presented as one flat list.
+System administration has a separate entry for users, role permissions, platform status, and runtime logs, so it does not compete with the business decision chain. Secondary navigation is grouped by task. Existing URLs and data contracts remain stable; only the way engineers discover capabilities changes.
 
 Menus may change, but these business facts must not be hidden, duplicated into parallel records, or buried inside algorithm state.
 
