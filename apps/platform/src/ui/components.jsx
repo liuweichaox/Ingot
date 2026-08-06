@@ -63,7 +63,7 @@ export function Button({ variant = "secondary", className, type = "button", chil
 
 export function Badge({ tone = "neutral", children }) {
   const tones = {
-    neutral: "bg-slate-100 text-slate-700",
+    neutral: "bg-slate-100 text-slate-700 ring-slate-600/20",
     success: "bg-emerald-50 text-emerald-700 ring-emerald-600/20",
     warning: "bg-amber-50 text-amber-700 ring-amber-600/20",
     danger: "bg-rose-50 text-rose-700 ring-rose-600/20",
@@ -175,7 +175,8 @@ export function WorkflowGuide({ title = "按步骤完成", description, steps, c
             >
               <span className={cx(
                 "grid size-7 shrink-0 place-items-center rounded-full text-xs font-semibold",
-                state === "done" ? "bg-emerald-600 text-white" :
+                // emerald-600 上的白字只有 3.65:1，不达 AA；emerald-700 为 5.36:1
+                state === "done" ? "bg-emerald-700 text-white" :
                   state === "current" ? "bg-blue-600 text-white" :
                     "bg-slate-200 text-slate-600",
               )}>
@@ -238,7 +239,7 @@ export function Input({ className, ...props }) {
   return (
     <input
       className={cx(
-        "min-h-10 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-3 focus:ring-blue-100",
+        "min-h-10 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus-visible:ring-3 focus-visible:ring-blue-500/35",
         className,
       )}
       {...props}
@@ -250,7 +251,7 @@ export function Select({ className, children, ...props }) {
   return (
     <select
       className={cx(
-        "min-h-10 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-3 focus:ring-blue-100",
+        "min-h-10 w-full rounded-lg border border-slate-300 bg-white px-3 pr-8 py-2 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus-visible:ring-3 focus-visible:ring-blue-500/35",
         className,
       )}
       {...props}
@@ -264,7 +265,7 @@ export function Textarea({ className, ...props }) {
   return (
     <textarea
       className={cx(
-        "min-h-28 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-3 focus:ring-blue-100",
+        "min-h-28 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus-visible:ring-3 focus-visible:ring-blue-500/35",
         className,
       )}
       {...props}
@@ -302,7 +303,7 @@ export function DataTable({ columns, rows, keyField = "id", getRowKey, onRowClic
   if (!rows?.length) return <EmptyState />;
   return (
     <div className="-mx-5 overflow-x-auto">
-      <table className="min-w-full divide-y divide-slate-200 text-left text-sm">
+      <table className="min-w-full divide-y divide-slate-200 text-left text-sm tabular-nums">
         <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
           <tr>
             {columns.map((column, columnIndex) => (
@@ -314,8 +315,20 @@ export function DataTable({ columns, rows, keyField = "id", getRowKey, onRowClic
           {rows.map((row, index) => (
             <tr
               key={getRowKey ? getRowKey(row, index) : row[keyField] ?? index}
-              className={cx("text-slate-700", onRowClick && "cursor-pointer hover:bg-blue-50/50")}
+              className={cx(
+                "text-slate-700",
+                onRowClick && "cursor-pointer hover:bg-blue-50/50 focus-visible:bg-blue-50 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-blue-600",
+              )}
               onClick={onRowClick ? () => onRowClick(row) : undefined}
+              // 可点击的行必须能用键盘到达并触发；保留 <tr> 原生 row 语义，
+              // 不改 role，以免破坏屏幕阅读器对表格结构的解读
+              tabIndex={onRowClick ? 0 : undefined}
+              onKeyDown={onRowClick ? event => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  onRowClick(row);
+                }
+              } : undefined}
             >
               {columns.map((column, columnIndex) => (
                 <td key={column.id ?? `${column.key}:${columnIndex}`} className="max-w-sm px-5 py-3 align-top">
@@ -368,7 +381,7 @@ export function Metric({ label, value, hint }) {
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
       <p className="text-sm text-slate-500">{label}</p>
-      <p className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">{value ?? "—"}</p>
+      <p className="mt-2 text-3xl font-semibold tracking-tight text-slate-950 tabular-nums">{value ?? "—"}</p>
       {hint && <p className="mt-1 text-xs text-slate-400">{hint}</p>}
     </div>
   );
@@ -379,7 +392,7 @@ export function Pagination({ page, pageSize, total, onPageChange, onPageSizeChan
   if (!total) return null;
   return (
     <div className="mt-4 flex flex-col gap-3 border-t border-slate-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
-      <p className="text-sm text-slate-500">共 {total} 条 · 第 {page}/{pageCount} 页</p>
+      <p className="text-sm text-slate-500 tabular-nums">共 {total} 条 · 第 {page}/{pageCount} 页</p>
       <div className="flex items-center gap-2">
         {onPageSizeChange && (
           <Select className="w-24" value={pageSize} onChange={event => onPageSizeChange(Number(event.target.value))} aria-label="每页数量">

@@ -1,8 +1,37 @@
 @import "tailwindcss";
 
+/* ============================================================================
+   Ingot 平台设计令牌
+   ---------------------------------------------------------------------------
+   本文件是全站样式的唯一杠杆点：页面里的样式都是行内 Tailwind utility，
+   在 @theme 里重定义色阶即可一处生效、无需改动任何 JSX。
+   ========================================================================== */
+
 @theme {
   --font-sans: Inter, "Noto Sans SC", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;
   --color-ingot: #e8891a;
+
+  /* --------------------------------------------------------------------------
+     slate 文字色阶按 WCAG AA 重新标定
+     --------------------------------------------------------------------------
+     Tailwind 默认值在本站实际用到的三种底色上的实测对比度（AA 正文需 4.5:1）：
+
+       前景             white      slate-50    slate-100
+       slate-400        2.56 ✗      2.45 ✗       2.34 ✗
+       slate-500        4.76 ✓      4.55 ✓       4.34 ✗
+       slate-600        7.58 ✓      7.24 ✓       6.92 ✓
+
+     slate-400 在任何底色上都不达标（全站 17 处，含 placeholder）；
+     slate-500 用了 101 处，在 slate-100 底上也差一点。
+     二者在本项目中【只用作文字色】，从未用于背景、边框或 ring，
+     因此压暗不会影响任何分隔线或填充 —— 这一点已全量核对过。
+
+     标定基准取 slate-100（三种底色里最苛刻的一层），保证同一个灰
+     放在任何 surface 上都达标；色相与饱和度不变，只压明度。
+     600 及以上本就达标，保持 Tailwind 原值不动。
+   */
+  --color-slate-400: #5d708c;   /* 原 #94a3b8 · 三底 5.05 / 4.82 / 4.61 */
+  --color-slate-500: #556376;   /* 原 #64748b · 三底 6.12 / 5.85 / 5.58 */
 }
 
 @layer base {
@@ -23,6 +52,7 @@
     color: #0f172a;
     font-family: var(--font-sans);
     text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
   }
 
   button,
@@ -30,6 +60,51 @@
   select,
   textarea {
     font: inherit;
+  }
+
+  /* --------------------------------------------------------------------------
+     键盘焦点
+     --------------------------------------------------------------------------
+     此前只有 Button 有 focus-visible，输入类控件用的是 focus:ring-blue-100 ——
+     ring-blue-100 (#dbeafe) 在白底上约 1.2:1，作为焦点指示器几乎不可见，
+     不满足 WCAG 2.4.11「焦点外观」要求的 3:1。且 focus: 会在鼠标点击时也亮起。
+     这里给链接/按钮/自定义可聚焦元素一个统一的、够对比度的兜底焦点环；
+     输入类控件在 components.jsx 里有自己的聚焦样式，不纳入本规则以免焦点环叠加。
+   */
+  :where(a, button, summary, [tabindex]:not([tabindex="-1"])):focus-visible {
+    outline: 2px solid var(--color-blue-600);
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
+  }
+
+  /* 原生 select 的系统箭头与设计系统对不齐，统一接管。
+     注意：这里的 padding-right 只对裸 <select> 生效 —— @layer base 优先级低于
+     @layer utilities，用了 Tailwind px-* 的元素会覆盖它，所以 <Select> 组件
+     另行加了 pr-8 给箭头让位。 */
+  select:not([multiple]):not([size]) {
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23556376' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.75rem center;
+    padding-right: 2rem;
+  }
+
+  /* 文本选中色跟随品牌，而不是系统默认蓝 */
+  ::selection {
+    background: #dbeafe;
+    color: #1e3a8a;
+  }
+
+  /* 前庭功能障碍用户 / 系统级「减少动态效果」 */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
   }
 }
 
