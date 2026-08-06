@@ -309,9 +309,9 @@ def scenario_package(
         "qualityPlan": {"id": "optical-lens-molding-demo-quality", "version": 1},
         "contextFields": [
             {"fieldCode": "equipment_id", "name": "设备", "mode": "required-for-analysis", "minimumCoverage": 1.0, "minimumFactorOverlap": 0.5},
-            {"fieldCode": "tooling_revision", "name": "工装版本", "mode": "record-when-available", "minimumCoverage": None, "minimumFactorOverlap": None},
+            {"fieldCode": "assembly_revision", "name": "工装版本", "mode": "record-when-available", "minimumCoverage": None, "minimumFactorOverlap": None},
             {"fieldCode": "tooling_usage_count", "name": "工装累计运行次数", "mode": "record-when-available", "minimumCoverage": None, "minimumFactorOverlap": None},
-            {"fieldCode": "material_lot", "name": "材料批次", "mode": "record-when-available", "minimumCoverage": None, "minimumFactorOverlap": None},
+            {"fieldCode": "material_lot_ref", "name": "材料批次", "mode": "record-when-available", "minimumCoverage": None, "minimumFactorOverlap": None},
             {"fieldCode": "calibration_status", "name": "校准状态", "mode": "required-for-analysis", "minimumCoverage": 0.95, "minimumFactorOverlap": None},
             {"fieldCode": "maintenance_status", "name": "维护状态", "mode": "record-when-available", "minimumCoverage": None, "minimumFactorOverlap": None},
         ],
@@ -481,7 +481,6 @@ def provision_manufacturing_context(
 def main() -> None:
     args = parse_args()
     baseline_recipe_version = (args.data_model_version - 1) * 2 + 1
-    validation_recipe_version = baseline_recipe_version + 1
     resources = [
         (
             "process_data_model",
@@ -495,16 +494,6 @@ def main() -> None:
                 baseline_recipe_version,
                 args.data_model_version,
                 variant=1,
-            ),
-        ),
-        (
-            "recipe_v2",
-            "/api/v1/recipe-versions",
-            recipe(
-                validation_recipe_version,
-                args.data_model_version,
-                based_on_version=baseline_recipe_version,
-                variant=2,
             ),
         ),
         (

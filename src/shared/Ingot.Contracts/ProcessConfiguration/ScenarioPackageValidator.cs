@@ -8,19 +8,19 @@ public static partial class ScenarioPackageValidator
     {
         normalized = null;
         if (value is null)
-            return Fail("场景包不能为空。", out error);
+            return Fail("工艺配置不能为空。", out error);
         var packageId = Code(value.PackageId);
         var dataModelId = Code(value.DataModelId);
         var analysisPlanId = Code(value.AnalysisPlanId);
         var name = value.Name?.Trim() ?? string.Empty;
         var status = value.Status?.Trim().ToLowerInvariant() ?? string.Empty;
         if (!ValidCode(packageId) || value.Version < 1 || string.IsNullOrWhiteSpace(name))
-            return Fail("场景包编码、版本或名称无效。", out error);
+            return Fail("工艺配置编码、版本或名称无效。", out error);
         if (!ConfigurationStatuses.IsValid(status))
-            return Fail("场景包状态必须是 draft、published 或 retired。", out error);
+            return Fail("工艺配置状态必须是 draft、published 或 retired。", out error);
         if (!ValidCode(dataModelId) || value.DataModelVersion < 1 ||
             !ValidCode(analysisPlanId) || value.AnalysisPlanVersion < 1)
-            return Fail("场景包必须引用有效的工艺数据模型和分析方案版本。", out error);
+            return Fail("工艺配置必须引用有效的工艺数据模型和分析方案版本。", out error);
         if (!TryReferences(value.AcquisitionProfiles, "采集配置", out var profiles, out error) ||
             !TryReferences(value.KnowledgeAssets, "知识资产", out var knowledge, out error))
             return false;

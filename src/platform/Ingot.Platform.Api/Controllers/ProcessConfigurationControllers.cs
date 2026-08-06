@@ -63,7 +63,7 @@ public sealed class ProcessDataModelsController(
             plans.Any(item => item.DataModelId == existing.ModelId && item.DataModelVersion == existing.Version) ||
             packages.Any(item => item.DataModelId == existing.ModelId && item.DataModelVersion == existing.Version))
         {
-            return Conflict(new { error = "工艺数据模型仍被配方版本、分析方案或场景包引用，不能删除。" });
+            return Conflict(new { error = "工艺数据模型仍被配方版本、分析方案或工艺配置引用，不能删除。" });
         }
         return await store.DeleteDataModelAsync(existing.ModelId, version, ct).ConfigureAwait(false) ? NoContent() : NotFound();
     }
@@ -236,7 +236,7 @@ public sealed class ProcessAnalysisPlansController(
             return Conflict(new { error = "只有草稿分析方案可以删除。" });
         var packages = await store.ListScenarioPackagesAsync(ct).ConfigureAwait(false);
         if (packages.Any(item => item.AnalysisPlanId == existing.PlanId && item.AnalysisPlanVersion == existing.Version))
-            return Conflict(new { error = "分析方案仍被场景包引用，不能删除。" });
+            return Conflict(new { error = "分析方案仍被工艺配置引用，不能删除。" });
         return await store.DeleteAnalysisPlanAsync(existing.PlanId, version, ct).ConfigureAwait(false) ? NoContent() : NotFound();
     }
 

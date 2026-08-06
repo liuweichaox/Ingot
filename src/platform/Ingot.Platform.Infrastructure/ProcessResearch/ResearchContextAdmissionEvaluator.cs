@@ -64,10 +64,10 @@ public sealed class ResearchContextAdmissionEvaluator
         if (separator <= 0 || separator == reference.Length - 1 ||
             !int.TryParse(reference[(separator + 1)..], out version) || version < 1)
             throw new ProcessResearchRuleException(
-                "研发项目的场景包引用必须使用 <package-id>:<version> 格式。");
+                "研发项目的工艺配置引用必须使用 <package-id>:<version> 格式。");
         packageId = reference[..separator].Trim().ToLowerInvariant();
         if (string.IsNullOrWhiteSpace(packageId))
-            throw new ProcessResearchRuleException("研发项目的场景包标识不能为空。");
+            throw new ProcessResearchRuleException("研发项目的工艺配置标识不能为空。");
         return true;
     }
 

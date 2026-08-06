@@ -238,18 +238,18 @@ public sealed class ResearchObservationAssembler(
                 out var version))
             return null;
         if (processConfigurations is null)
-            throw new ProcessResearchRuleException("当前运行时无法解析研发项目引用的场景包。");
+            throw new ProcessResearchRuleException("当前运行时无法解析研发项目引用的工艺配置。");
         var package = await processConfigurations.GetScenarioPackageAsync(packageId, version, ct)
             .ConfigureAwait(false)
-            ?? throw new ProcessResearchRuleException($"研发项目引用的场景包不存在：{packageId} v{version}。");
+            ?? throw new ProcessResearchRuleException($"研发项目引用的工艺配置不存在：{packageId} v{version}。");
         if (package.Status == ConfigurationStatuses.Draft)
-            throw new ProcessResearchRuleException("研发项目不能使用仍可修改的草稿场景包进行正式分析。");
+            throw new ProcessResearchRuleException("研发项目不能使用仍可修改的草稿工艺配置进行正式分析。");
         var policyHash = ResearchContextAdmissionEvaluator.ComputePolicyHash(package);
         if (project.Context.TryGetValue(
                 ResearchContextAdmissionEvaluator.PolicyHashContextKey,
                 out var expectedHash) &&
             !string.Equals(expectedHash, policyHash, StringComparison.Ordinal))
-            throw new ProcessResearchRuleException("研发项目冻结的上下文策略哈希与场景包不一致。");
+            throw new ProcessResearchRuleException("研发项目冻结的上下文策略哈希与工艺配置不一致。");
         return package;
     }
 

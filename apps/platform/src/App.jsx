@@ -44,7 +44,7 @@ const sections = [
   {
     id: "data", label: "数据与配置", icon: CircleStackIcon, path: "/explorer", groups: [
       { label: "数据可信度", items: [["/explorer", "工业对象"], ["/data-quality", "数据质量"]] },
-      { label: "工艺配置", items: [["/configuration/scenario-packages", "工艺场景配置"], ["/configuration/process-data-models", "工艺模型"], ["/configuration/process-analysis-plans", "分析模型"], ["/configuration/recipe-versions", "配方版本"]] },
+      { label: "工艺定义", items: [["/configuration/scenario-packages", "工艺配置"], ["/configuration/process-data-models", "工艺模型"], ["/configuration/process-analysis-plans", "分析模型"], ["/configuration/recipe-versions", "配方版本"]] },
       { label: "现场接入", items: [["/edges", "现场节点"], ["/configuration/acquisition-profiles", "设备接入"]] },
     ],
   },
@@ -72,7 +72,7 @@ const pageDetails = {
   "/comparisons": ["周期对比与验证", "比较同类生产周期、运行段或时间窗口，生成待验证的候选原因"],
   "/golden-questions": ["工程师黄金问题集", "用真实问题持续核对事实、记录引用、正确拒绝和因果边界"],
   "/data-quality": ["数据可信度", "检查运行对象的数据范围、采样连续性与周期完整性"],
-  "/configuration/scenario-packages": ["场景包", "版本化组合场景的数据、采集、分析、质量和上下文规则"],
+  "/configuration/scenario-packages": ["工艺配置", "版本化组合工艺数据、采集、分析、质量、上下文和约束"],
   "/configuration/process-analysis-plans": ["分析模型", "版本化定义分析范围、对齐方式、质量分组和数据项"],
   "/configuration/process-data-models": ["工艺模型", "定义工艺变量、阶段号和配方参数，供设备点位统一映射"],
   "/configuration/recipe-versions": ["配方版本", "维护引用数据模型的完整配方有效值"],

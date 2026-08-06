@@ -47,10 +47,12 @@ Ingot 不是为了“多采一些点位”，也不是为了展示某一种算�
 | 产品类别 | 开源工艺追因与优化系统 | Open-source Process Diagnosis & Optimization |
 | 核心价值 | 让真实数据帮助工艺工程师抉择 | Help process engineers make decisions with real data |
 | 简短标语 | 看清这次运行，优化下一次运行。 | Explain this run, optimize the next. |
-| 数据单位 | 运行 / 生产周期 | run / production cycle |
+| 数据单位 | 运行 | run |
 | 观察结论 | 候选原因、稳定关联、混杂关联、证据不足 | candidate cause, stable association, confounded association, insufficient evidence |
 | 实验结论 | 支持、否决、不确定、已验证原因 | supported, rejected, inconclusive, validated cause |
 | 优化结果 | 下一步实验建议、候选设置、已验证工艺窗口 | next-experiment recommendation, candidate setting, validated process window |
+
+“运行”是数据单位的唯一说法；“周期”在光学模压场景中与“运行”指同一件事，已不再作为并列术语使用，界面与文档均只用“运行”。
 
 “根因”只在已经说明验证证据时使用。“AI 工艺研发”可以描述交互方式，但不能替代产品类别。具体算法名只出现在技术说明中，不作为产品价值本身。
 

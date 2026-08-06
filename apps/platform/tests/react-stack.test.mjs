@@ -212,6 +212,18 @@ test("all versioned configuration registries use business forms instead of JSON 
   assert.doesNotMatch(pages, /label="版本定义"/);
 });
 
+test("user-facing terminology presents scenario packages as process configurations", () => {
+  assert.match(app, /\["\/configuration\/scenario-packages", "工艺配置"\]/);
+  assert.match(app, /"\/configuration\/scenario-packages": \["工艺配置"/);
+  assert.match(pages, /title: "工艺配置"/);
+  assert.match(pages, /createLabel: "创建工艺配置"/);
+  assert.match(registryEditor, /idLabel="工艺配置代码"/);
+  assert.match(researchProjects, /label="工艺配置（推荐）"/);
+  for (const source of [app, pages, registryEditor, researchProjects]) {
+    assert.doesNotMatch(source, /场景包|工艺场景配置/);
+  }
+});
+
 test("device acquisition has its own page instead of a generic registry drawer", () => {
   // 采集配置的工作流是"改一处 → 看设备返回什么 → 再改"，通用注册表抽屉支撑不了这个循环。
   assert.doesNotMatch(pages, /kind: "acquisitionProfile"/);

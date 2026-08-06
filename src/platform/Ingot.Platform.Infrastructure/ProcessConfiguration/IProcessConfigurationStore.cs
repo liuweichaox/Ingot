@@ -22,7 +22,7 @@ public interface IProcessConfigurationStore
     Task<bool> DeleteAnalysisPlanAsync(string planId, int version, CancellationToken ct = default);
 
     Task<ScenarioPackage> UpsertScenarioPackageAsync(ScenarioPackage value, CancellationToken ct = default)
-        => throw new NotSupportedException("当前配置存储不支持场景包。");
+        => throw new NotSupportedException("当前配置存储不支持工艺配置。");
     Task<IReadOnlyList<ScenarioPackage>> ListScenarioPackagesAsync(CancellationToken ct = default)
         => Task.FromResult<IReadOnlyList<ScenarioPackage>>([]);
     Task<ScenarioPackage?> GetScenarioPackageAsync(string packageId, int version, CancellationToken ct = default)

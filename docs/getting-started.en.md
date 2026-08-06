@@ -44,9 +44,9 @@ Start with one bounded problem rather than handing an entire factory to a model.
 
 Variables, inspection characteristics, and units use stable codes. Display names may change; historical semantics must not drift casually.
 
-## 3. Build scenario configuration
+## 3. Build a process configuration
 
-A scenario package versions the process's data and analysis rules together:
+A process configuration versions the process's data and analysis rules together:
 
 - process data model and standard units;
 - acquisition profile and equipment-point mapping;
@@ -55,7 +55,7 @@ A scenario package versions the process's data and analysis rules together:
 - recipe variables, allowed ranges, objectives, and constraints;
 - context fields required for analysis or recorded when available.
 
-Publish a scenario-package version before assigning it to an R&D project. Once execution starts, freeze the package and context policy so historical observations remain interpretable.
+Publish a process-configuration version before assigning it to an R&D project. Once execution starts, freeze the configuration and context policy so historical observations remain interpretable. The UI consistently uses “process configuration”; the API and code contracts retain the technical name `ScenarioPackage`.
 
 ## 4. Connect data sources
 

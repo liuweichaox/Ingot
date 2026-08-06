@@ -61,7 +61,7 @@ public sealed partial class ProcessResearchWorkflow(
                 ContextValue(existing.Context, ResearchContextAdmissionEvaluator.ScenarioPackageContextKey),
                 ContextValue(updatedContext, ResearchContextAdmissionEvaluator.ScenarioPackageContextKey),
                 StringComparison.OrdinalIgnoreCase))
-            throw new ProcessResearchRuleException("研发项目进入执行阶段后不能更换场景包版本。");
+            throw new ProcessResearchRuleException("研发项目进入执行阶段后不能更换工艺配置版本。");
         if (existing.Context.TryGetValue(
                 ResearchContextAdmissionEvaluator.PolicyHashContextKey,
                 out var frozenPolicyHash))
@@ -1551,18 +1551,18 @@ public sealed partial class ProcessResearchWorkflow(
                 out var version))
             return project.Context;
         if (processConfigurations is null)
-            throw new ProcessResearchRuleException("当前运行时无法验证研发项目引用的场景包。");
+            throw new ProcessResearchRuleException("当前运行时无法验证研发项目引用的工艺配置。");
         var package = await processConfigurations.GetScenarioPackageAsync(packageId, version, ct)
             .ConfigureAwait(false)
-            ?? throw new ProcessResearchRuleException($"研发项目引用的场景包不存在：{packageId} v{version}。");
+            ?? throw new ProcessResearchRuleException($"研发项目引用的工艺配置不存在：{packageId} v{version}。");
         if (package.Status == ConfigurationStatuses.Draft)
-            throw new ProcessResearchRuleException("研发项目进入执行阶段前必须使用已发布的场景包版本。");
+            throw new ProcessResearchRuleException("研发项目进入执行阶段前必须使用已发布的工艺配置版本。");
         var policyHash = ResearchContextAdmissionEvaluator.ComputePolicyHash(package);
         if (project.Context.TryGetValue(
                 ResearchContextAdmissionEvaluator.PolicyHashContextKey,
                 out var existingHash) &&
             !string.Equals(existingHash, policyHash, StringComparison.Ordinal))
-            throw new ProcessResearchRuleException("研发项目冻结的上下文策略哈希与场景包不一致。");
+            throw new ProcessResearchRuleException("研发项目冻结的上下文策略哈希与工艺配置不一致。");
         return new Dictionary<string, string>(project.Context, StringComparer.Ordinal)
         {
             [ResearchContextAdmissionEvaluator.ScenarioPackageContextKey] =

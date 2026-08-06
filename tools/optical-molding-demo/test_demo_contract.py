@@ -175,6 +175,10 @@ def test_bootstrap_keeps_model_recipe_and_analysis_versions_aligned():
         and field["mode"] == "required-for-analysis"
         for field in package["contextFields"]
     )
+    assert {field["fieldCode"] for field in package["contextFields"]} >= {
+        "assembly_revision",
+        "material_lot_ref",
+    }
 
 
 def test_quality_station_uses_source_cycle_context_not_operation_run_id_shape():

@@ -638,8 +638,8 @@ function ScenarioPackageEditor({ form, onChange, readOnly, lockIdentity }) {
   return (
     <div className="grid gap-5">
       {referenceError && <Alert tone="danger">场景依赖配置读取失败：{referenceError}</Alert>}
-      <IdentityFields form={form} onChange={onChange} idField="packageId" idLabel="场景包代码" readOnly={readOnly} lockIdentity={lockIdentity} />
-      <Card title="版本化配置组合" description="场景包只引用已定义资产；设备地址和业务数据仍由各自配置管理。">
+      <IdentityFields form={form} onChange={onChange} idField="packageId" idLabel="工艺配置代码" readOnly={readOnly} lockIdentity={lockIdentity} />
+      <Card title="版本化配置组合" description="工艺配置只引用已定义资产；设备地址和业务数据仍由各自配置管理。">
         <div className="grid gap-4 md:grid-cols-2">
           <Field label="工艺数据模型"><ModelSelect value={form.dataModel} models={models} disabled={readOnly} onChange={event => updateAt(form, onChange, "dataModel", event.target.value)} /></Field>
           <Field label="分析方案"><ReferenceSelect value={form.analysisPlan} options={matchingPlans} idKey="planId" label="分析方案" disabled={readOnly} onChange={event => updateAt(form, onChange, "analysisPlan", event.target.value)} /></Field>

@@ -3195,9 +3195,9 @@ export function DataQualityPage() {
 const registryPages = {
   scenarios: {
     kind: "scenarioPackage",
-    title: "场景包", description: "版本化组合工艺模型、设备映射、分析、质量、上下文策略和场景规则。", endpoint: "/api/v1/scenario-packages", key: "packageId",
+    title: "工艺配置", description: "版本化组合工艺模型、设备映射、分析、质量、上下文策略和约束。", endpoint: "/api/v1/scenario-packages", key: "packageId",
     columns: [["packageId", "场景"], ["version", "版本"], ["name", "名称"], ["status", "状态"], ["updatedAt", "更新时间"]],
-    createLabel: "创建场景包",
+    createLabel: "创建工艺配置",
     template: { packageId: "", version: 1, name: "", description: "", status: "draft", dataModelId: "", dataModelVersion: 1, analysisPlanId: "", analysisPlanVersion: 1, acquisitionProfiles: [], qualityPlan: null, contextFields: [], constraints: [], knowledgeAssets: [], terminology: {}, updatedAt: "" },
     deleteUrl: value => `/api/v1/scenario-packages/${encodeURIComponent(value.packageId)}/${value.version}`,
   },

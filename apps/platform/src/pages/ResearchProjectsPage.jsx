@@ -999,12 +999,12 @@ function CreateProjectDrawer({ open, saving, form, setForm, onClose, onSubmit })
     >
       <form id="research-project-form" className="space-y-6" onSubmit={onSubmit}>
         {catalogError && <Alert tone="warning" title="部分选项暂不可用">{catalogError}</Alert>}
-        {catalogLoading && <Alert tone="info">正在读取已完成运行、场景包、检测定义和工艺数据模型…</Alert>}
+        {catalogLoading && <Alert tone="info">正在读取已完成运行、工艺配置、检测定义和工艺数据模型…</Alert>}
         <Card title="1. 项目范围" description="先确定问题属于哪个工艺和产品范围。">
           <div className="grid gap-4 md:grid-cols-2">
             <Field label="项目名称"><Input required value={form.name} onChange={field("name")} placeholder="光学模压工艺窗口研发" /></Field>
             <Field label="参考运行" hint="选择后自动带入产品范围；不影响后续用更多运行形成证据。"><Select value={form.referenceCycleId} onChange={event => chooseReferenceCycle(event.target.value)}><option value="">暂不关联历史运行</option>{catalog.cycles.map(cycle => <option key={cycle.correlationId} value={cycle.correlationId}>{cycleLabel(cycle)}</option>)}</Select></Field>
-            <Field label="场景包（推荐）" hint="只允许选择不可变的已发布版本；其中 required-for-analysis 字段会成为优化准入条件。"><Select value={form.scenarioPackageKey} onChange={event => chooseScenarioPackage(event.target.value)}><option value="">暂不使用场景包</option>{selectableScenarios.map(item => <option key={`${item.packageId}:${item.version}`} value={`${item.packageId}:${item.version}`}>{item.name} · v{item.version}</option>)}</Select></Field>
+            <Field label="工艺配置（推荐）" hint="只允许选择不可变的已发布版本；其中 required-for-analysis 字段会成为优化准入条件。"><Select value={form.scenarioPackageKey} onChange={event => chooseScenarioPackage(event.target.value)}><option value="">暂不使用工艺配置</option>{selectableScenarios.map(item => <option key={`${item.packageId}:${item.version}`} value={`${item.packageId}:${item.version}`}>{item.name} · v{item.version}</option>)}</Select></Field>
             <Field label="工艺数据模型" hint="决定可选的配方参数与实际数据来源。"><Select required value={form.dataModelKey} onChange={event => chooseDataModel(event.target.value)}><option value="">选择已配置的工艺数据模型</option>{selectableModels.map(model => <option key={`${model.modelId}:${model.version}`} value={`${model.modelId}:${model.version}`}>{model.name} · v{model.version}</option>)}</Select></Field>
             <Field label="目标产品" hint="来自参考运行；未关联时可补充产品编号。"><Input value={form.productName} onChange={field("productName")} placeholder="产品编号（可选）" /></Field>
             <Field label="材料"><Input value={form.materialName} onChange={field("materialName")} /></Field>

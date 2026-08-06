@@ -55,7 +55,7 @@ public sealed class ScenarioPackagesController(
             else if (SamePayload(existing with { UpdatedAt = default }, package with { UpdatedAt = default }))
                 return Ok(existing);
             else
-                return Conflict(new { error = "已发布或停用的场景包不可修改，请创建新版本。", existing });
+                return Conflict(new { error = "已发布或停用的工艺配置不可修改，请创建新版本。", existing });
         }
         return Ok(await store.UpsertScenarioPackageAsync(package, ct).ConfigureAwait(false));
     }
@@ -70,7 +70,7 @@ public sealed class ScenarioPackagesController(
         if (existing is null)
             return NotFound();
         if (existing.Status != ConfigurationStatuses.Draft)
-            return Conflict(new { error = "只有草稿场景包可以删除。" });
+            return Conflict(new { error = "只有草稿工艺配置可以删除。" });
         return await store.DeleteScenarioPackageAsync(existing.PackageId, version, ct).ConfigureAwait(false)
             ? NoContent()
             : NotFound();
@@ -87,7 +87,7 @@ public sealed class ScenarioPackagesController(
         if (plan is null)
             return "引用的分析方案版本不存在。";
         if (plan.DataModelId != model.ModelId || plan.DataModelVersion != model.Version)
-            return "分析方案与场景包引用的工艺数据模型版本不一致。";
+            return "分析方案与工艺配置引用的工艺数据模型版本不一致。";
 
         foreach (var reference in package.AcquisitionProfiles)
         {
@@ -97,7 +97,7 @@ public sealed class ScenarioPackagesController(
             if (profile.DataModelId != model.ModelId || profile.DataModelVersion != model.Version)
                 return $"采集配置 {reference.Id} v{reference.Version} 使用了不同的工艺数据模型。";
             if (package.Status == ConfigurationStatuses.Published && profile.Status != ConfigurationStatuses.Published)
-                return $"发布场景包前，采集配置 {reference.Id} v{reference.Version} 必须已经发布。";
+                return $"发布工艺配置前，采集配置 {reference.Id} v{reference.Version} 必须已经发布。";
         }
 
         if (package.QualityPlan is not null)
@@ -107,11 +107,11 @@ public sealed class ScenarioPackagesController(
             if (qualityPlan is null)
                 return "引用的质量方案版本不存在。";
             if (package.Status == ConfigurationStatuses.Published && qualityPlan.Status != InspectionPlanStatuses.Published)
-                return "发布场景包前，引用的质量方案必须已经发布。";
+                return "发布工艺配置前，引用的质量方案必须已经发布。";
         }
         if (package.Status == ConfigurationStatuses.Published &&
             (model.Status != ConfigurationStatuses.Published || plan.Status != ConfigurationStatuses.Published))
-            return "发布场景包前，引用的工艺数据模型和分析方案必须已经发布。";
+            return "发布工艺配置前，引用的工艺数据模型和分析方案必须已经发布。";
         return null;
     }
 

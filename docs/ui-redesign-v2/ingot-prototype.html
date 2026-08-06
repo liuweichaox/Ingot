@@ -1,0 +1,1972 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ingot 工程工作台 · 前端重构原型 v2.1</title>
+<style>
+/* ============================================================
+   Ingot Design Tokens v2.1 —— 依据 docs/brand.md 色板释义
+   Evidence Gold  = 建议与待你决定（不是通用交互色）
+   Trajectory Cyan = 过程、连接与可信状态
+   Deep Coal / Process Panel / Fog = 深色主题的品牌底色
+   ============================================================ */
+:root{
+  color-scheme: light;
+  --bg:#f2f5f5; --surface:#ffffff; --surface-2:#f7faf9; --surface-3:#eaeeee;
+  --line:#dfe5e4; --line-2:#c6cfce;
+  --ink-1:#0d1613; --ink-2:#48544f; --ink-3:#7a8783; --ink-4:#a3aead;
+
+  /* 金 = 需要人做决定。一屏上金色出现几次 = 有几件事等你 */
+  --decide:#E8AD56; --decide-ink:#7a5307; --decide-wash:#fdf4e4; --decide-line:#f0cf96;
+  --decide-on:#2a1c05;                     /* 金底上的文字 */
+  /* 青 = 过程轨迹与可信状态（数据语义，不是交互） */
+  --trace:#0f9c90; --trace-ink:#0a7168; --trace-wash:#e4f6f4; --trace-line:#a8ded8;
+  /* 蓝 = 交互：链接、导航选中、通用主按钮 */
+  --accent:#2a78d6; --accent-ink:#1c5cab; --accent-wash:#eaf2fd; --accent-line:#bcd8f8;
+
+  /* 五态语义 */
+  --good:#0ca30c;     --good-wash:#e7f6e7;     --good-ink:#0a7a0a;
+  --caution:#e2703a;  --caution-wash:#fdefe8;  --caution-ink:#a24a1e;
+  --critical:#d03b3b; --critical-wash:#fceded; --critical-ink:#a52a2a;
+  --unknown:#8b97a3;  --unknown-wash:#eef1f3;  --unknown-ink:#5a6672;
+
+  /* 图表分类色（validate_palette.js 全通过 · 底色 #ffffff） */
+  --s1:#0f9c90; --s2:#eb6834; --s3:#2a78d6; --s4:#eda100; --s5:#e87ba4; --s6:#4a3aa7;
+  --grid:#e6eae9; --axis:#c6cfce; --chart-surface:#ffffff;
+
+  --shadow:0 1px 2px rgba(13,22,19,.05),0 4px 14px rgba(13,22,19,.06);
+  --shadow-lg:0 8px 40px rgba(13,22,19,.18);
+  --r:5px; --r-lg:8px;
+}
+:root[data-theme="dark"]{
+  color-scheme: dark;
+  --bg:#07100E; --surface:#0E1D19; --surface-2:#132621; --surface-3:#1b332c;
+  --line:#1e352f; --line-2:#2c4840;
+  --ink-1:#EEF5F1; --ink-2:#a3b5ae; --ink-3:#7a8b85; --ink-4:#5b6a65;
+
+  --decide:#E8AD56; --decide-ink:#F0C784; --decide-wash:#2b2114; --decide-line:#5a4620;
+  --decide-on:#2a1c05;
+  --trace:#5FD4C8; --trace-ink:#8fe3da; --trace-wash:#0d2b27; --trace-line:#1d4a44;
+  --accent:#4a94f0; --accent-ink:#8bbcf7; --accent-wash:#132437; --accent-line:#27466b;
+
+  --good:#22b322;     --good-wash:#10240f;     --good-ink:#4fc94f;
+  --caution:#ef8a55;  --caution-wash:#2c1a11;  --caution-ink:#f0996f;
+  --critical:#e05252; --critical-wash:#2e1616; --critical-ink:#f07171;
+  --unknown:#7d8b85;  --unknown-wash:#16211e;  --unknown-ink:#98a8a2;
+
+  /* 深色分类色（validate_palette.js 全通过 · 底色 #0E1D19 = Process Panel） */
+  --s1:#2da096; --s2:#d95926; --s3:#3987e5; --s4:#c98500; --s5:#d55181; --s6:#9085e9;
+  --grid:#182b26; --axis:#2c4840; --chart-surface:#0E1D19;
+
+  --shadow:0 1px 2px rgba(0,0,0,.5),0 4px 16px rgba(0,0,0,.4);
+  --shadow-lg:0 8px 40px rgba(0,0,0,.6);
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink-1);overflow:hidden;
+  font:400 13px/1.45 Inter,"Noto Sans SC","PingFang SC","Microsoft YaHei",system-ui,-apple-system,sans-serif;
+  -webkit-font-smoothing:antialiased}
+button,input,select,textarea{font:inherit;color:inherit}
+button{background:none;border:0;padding:0;cursor:pointer}
+a{color:var(--accent-ink);text-decoration:none}
+.scroll{overflow:auto;scrollbar-width:thin;scrollbar-color:var(--line-2) transparent}
+.scroll::-webkit-scrollbar{width:9px;height:9px}
+.scroll::-webkit-scrollbar-thumb{background:var(--line-2);border-radius:9px;border:2px solid transparent;background-clip:content-box}
+.tnum{font-variant-numeric:tabular-nums}
+.mut{color:var(--ink-3)} .tiny{font-size:11px}
+.row{display:flex;align-items:center;gap:8px} .wrap{flex-wrap:wrap}
+.stack{display:flex;flex-direction:column;gap:12px}
+.grid{display:grid;gap:12px}
+.g2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.g3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.g4{grid-template-columns:repeat(4,minmax(0,1fr))}
+.g5{grid-template-columns:repeat(5,minmax(0,1fr))}
+@media(max-width:1500px){.g5{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:1200px){.g4,.g3{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.split{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:12px}
+@media(max-width:1400px){.split{grid-template-columns:1fr}}
+
+/* ---------- shell ---------- */
+.shell{display:grid;grid-template-rows:52px 1fr 28px;height:100vh}
+.topbar{display:flex;align-items:stretch;background:var(--surface);border-bottom:1px solid var(--line);z-index:40}
+.brand{display:flex;align-items:center;width:56px;justify-content:center;flex:0 0 auto}
+.mark{width:26px;height:26px;border-radius:7px;background:linear-gradient(160deg,var(--decide),#c98a2e);display:grid;place-items:center;
+  color:var(--decide-on);font-weight:800;font-size:12px}
+.brandtext{display:flex;flex-direction:column;justify-content:center;padding-right:14px;border-right:1px solid var(--line);flex:0 0 auto}
+.brandtext b{font-size:13px;line-height:1.1}
+.brandtext small{font-size:10px;color:var(--ink-3);line-height:1.3}
+.ctx{display:flex;align-items:center;padding:0 8px;flex:1 1 auto;min-width:0;overflow:hidden}
+.ctxlabel{font-size:10px;text-transform:uppercase;letter-spacing:.7px;color:var(--ink-4);padding:0 8px 0 6px;white-space:nowrap}
+.ctxchip{display:flex;align-items:center;gap:6px;height:28px;padding:0 9px;border:1px solid var(--line);border-radius:var(--r);
+  background:var(--surface-2);white-space:nowrap;max-width:220px}
+.ctxchip:hover{border-color:var(--line-2);background:var(--surface-3)}
+.ctxchip .k{font-size:10px;color:var(--ink-4)}
+.ctxchip .v{font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis}
+.ctxsep{width:1px;height:16px;background:var(--line);margin:0 6px;flex:0 0 auto}
+.topact{display:flex;align-items:center;gap:2px;padding:0 8px;border-left:1px solid var(--line);flex:0 0 auto}
+.iconbtn{width:30px;height:30px;border-radius:var(--r);display:grid;place-items:center;color:var(--ink-2);position:relative}
+.iconbtn:hover{background:var(--surface-3);color:var(--ink-1)}
+.iconbtn .dot{position:absolute;top:5px;right:5px;width:6px;height:6px;border-radius:50%;background:var(--decide);border:1.5px solid var(--surface)}
+.searchbtn{display:flex;align-items:center;gap:7px;height:28px;padding:0 8px;border:1px solid var(--line);border-radius:var(--r);
+  background:var(--surface-2);color:var(--ink-3);font-size:12px;min-width:170px}
+.searchbtn:hover{border-color:var(--line-2)}
+kbd{font:500 10px/1 ui-monospace,Menlo,monospace;border:1px solid var(--line);border-bottom-width:2px;border-radius:3px;padding:3px 4px;color:var(--ink-4);background:var(--surface)}
+.avatar{width:26px;height:26px;border-radius:50%;background:var(--accent-wash);color:var(--accent-ink);display:grid;place-items:center;font-size:10px;font-weight:700;border:1px solid var(--accent-line)}
+
+.body{display:flex;min-height:0;overflow:hidden}
+.rail{width:56px;flex:0 0 auto;background:var(--surface);border-right:1px solid var(--line);display:flex;flex-direction:column;align-items:center;padding:8px 0;gap:2px;z-index:30}
+.railbtn{width:40px;height:40px;border-radius:var(--r-lg);display:grid;place-items:center;color:var(--ink-3);position:relative}
+.railbtn:hover{background:var(--surface-3);color:var(--ink-1)}
+.railbtn.on{background:var(--accent-wash);color:var(--accent-ink)}
+.railbtn.on::before{content:"";position:absolute;left:-8px;top:9px;bottom:9px;width:3px;border-radius:0 3px 3px 0;background:var(--accent)}
+.railbtn .n{position:absolute;top:3px;right:3px;min-width:15px;height:15px;padding:0 3px;border-radius:9px;background:var(--decide);
+  color:var(--decide-on);font-size:9.5px;font-weight:700;display:grid;place-items:center;font-variant-numeric:tabular-nums}
+.railtip{position:absolute;left:52px;background:var(--ink-1);color:var(--surface);padding:4px 8px;border-radius:var(--r);font-size:11px;
+  white-space:nowrap;opacity:0;pointer-events:none;transition:.12s;z-index:60}
+.railbtn:hover .railtip{opacity:1}
+.railspacer{flex:1}
+
+.subnav{width:228px;flex:0 0 auto;background:var(--surface);border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+.subnav.collapsed{display:none}
+.subhead{height:38px;display:flex;align-items:center;justify-content:space-between;padding:0 8px 0 14px;border-bottom:1px solid var(--line)}
+.subhead b{font-size:12px}
+.subbody{padding:8px 8px 16px;min-height:0}
+.navgroup{margin-bottom:10px}
+.navgroup .gl{font-size:10px;font-weight:600;letter-spacing:.6px;color:var(--ink-4);padding:6px 8px 4px}
+.navitem{display:flex;align-items:center;gap:8px;height:28px;padding:0 8px;border-radius:var(--r);color:var(--ink-2);font-size:12.5px;width:100%;text-align:left}
+.navitem:hover{background:var(--surface-3);color:var(--ink-1)}
+.navitem.on{background:var(--accent-wash);color:var(--accent-ink);font-weight:600}
+.navitem .badge{margin-left:auto;font-size:10px;font-weight:600;padding:1px 5px;border-radius:20px;background:var(--surface-3);color:var(--ink-3);font-variant-numeric:tabular-nums}
+.navitem .badge.gold{background:var(--decide);color:var(--decide-on)}
+.navitem .new{margin-left:auto;font-size:9px;padding:1px 4px;border-radius:3px;background:var(--surface-3);color:var(--ink-3);font-weight:600}
+
+.content{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;background:var(--bg)}
+.pagehead{background:var(--surface);border-bottom:1px solid var(--line);padding:10px 16px 0;flex:0 0 auto}
+.crumb{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--ink-3);margin-bottom:3px}
+.ptitle{display:flex;align-items:flex-start;gap:12px}
+.ptitle h1{margin:0;font-size:17px;font-weight:650;letter-spacing:-.2px;line-height:1.3}
+.ptitle p{margin:2px 0 0;font-size:11.5px;color:var(--ink-3);max-width:72ch}
+.pacts{margin-left:auto;display:flex;align-items:center;gap:6px;flex:0 0 auto}
+.tabs{display:flex;gap:2px;margin-top:9px}
+.tab{height:31px;padding:0 10px;border-radius:var(--r) var(--r) 0 0;font-size:12.5px;color:var(--ink-3);position:relative;display:flex;align-items:center;gap:6px}
+.tab:hover{color:var(--ink-1);background:var(--surface-2)}
+.tab.on{color:var(--ink-1);font-weight:600}
+.tab.on::after{content:"";position:absolute;left:8px;right:8px;bottom:0;height:2px;background:var(--accent);border-radius:2px 2px 0 0}
+.tab .n{font-size:10px;padding:0 4px;border-radius:20px;background:var(--surface-3);color:var(--ink-3);line-height:15px;font-variant-numeric:tabular-nums}
+.pagebody{flex:1 1 auto;min-height:0;padding:14px 16px 24px}
+
+.inspector{width:376px;flex:0 0 auto;background:var(--surface);border-left:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+.inspector.collapsed{display:none}
+.insphead{height:38px;display:flex;align-items:center;gap:8px;padding:0 8px 0 14px;border-bottom:1px solid var(--line);flex:0 0 auto}
+.inspbody{padding:12px 14px 24px;min-height:0}
+
+.statusbar{display:flex;align-items:center;background:var(--surface);border-top:1px solid var(--line);padding:0 8px;font-size:11px;color:var(--ink-3);z-index:40}
+.sitem{display:flex;align-items:center;gap:6px;padding:0 9px;height:28px;white-space:nowrap}
+button.sitem:hover{background:var(--surface-3);color:var(--ink-1)}
+.sdiv{width:1px;height:13px;background:var(--line)}
+.pulse{width:6px;height:6px;border-radius:50%;background:var(--good);animation:p 2.4s infinite}
+@keyframes p{0%{box-shadow:0 0 0 0 rgba(12,163,12,.45)}70%{box-shadow:0 0 0 5px rgba(12,163,12,0)}100%{box-shadow:0 0 0 0 rgba(12,163,12,0)}}
+/* ---------- 按钮：金色只给"决定"，其余一律中性 ---------- */
+.btn{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;border-radius:var(--r);
+  border:1px solid var(--line-2);background:var(--surface);color:var(--ink-1);font-size:12.5px;font-weight:500;white-space:nowrap;transition:.12s}
+.btn:hover{background:var(--surface-3);border-color:var(--ink-4)}
+.btn.ghost{border-color:transparent;background:transparent;color:var(--ink-2)}
+.btn.ghost:hover{background:var(--surface-3);color:var(--ink-1)}
+.btn.sm{height:24px;padding:0 8px;font-size:12px}
+.btn[disabled]{opacity:.45;pointer-events:none}
+/* 决定按钮：批准 / 采纳 / 发布 —— 一屏最多一个 */
+.btn.decide{background:var(--decide);border-color:var(--decide);color:var(--decide-on);font-weight:650}
+.btn.decide:hover{filter:brightness(1.06)}
+/* 通用主按钮（蓝）：新建 / 开始 / 打开 —— 不是"决定" */
+.btn.pri{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.pri:hover{background:var(--accent-ink);border-color:var(--accent-ink)}
+.btn.danger{color:var(--critical-ink);border-color:var(--critical-wash);background:var(--critical-wash)}
+.btn.danger:hover{background:var(--critical);border-color:var(--critical);color:#fff}
+.btngroup{display:inline-flex}
+.btngroup .btn{border-radius:0;margin-left:-1px}
+.btngroup .btn:first-child{border-radius:var(--r) 0 0 var(--r);margin-left:0}
+.btngroup .btn:last-child{border-radius:0 var(--r) var(--r) 0}
+.btngroup .btn.on{background:var(--accent-wash);border-color:var(--accent-line);color:var(--accent-ink);z-index:1}
+
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);box-shadow:var(--shadow)}
+.card.gold{border-color:var(--decide-line);box-shadow:var(--shadow),0 0 0 3px var(--decide-wash)}
+.card>.hd{display:flex;align-items:center;gap:8px;padding:9px 12px;border-bottom:1px solid var(--line);min-height:38px}
+.card>.hd h3{margin:0;font-size:12.5px;font-weight:650}
+.card>.hd .sub{font-size:11px;color:var(--ink-3)}
+.card>.hd .r{margin-left:auto;display:flex;align-items:center;gap:6px}
+.card>.bd{padding:12px}
+.card>.bd.flush{padding:0}
+.card>.ft{padding:8px 12px;border-top:1px solid var(--line);display:flex;align-items:center;gap:8px;font-size:11px;color:var(--ink-3)}
+
+/* ---------- 状态标签：五态 + 决策色 + 溯源标 ---------- */
+.tag{display:inline-flex;align-items:center;gap:4px;height:19px;padding:0 6px;border-radius:4px;font-size:11px;font-weight:600;white-space:nowrap;line-height:1}
+.tag svg{width:11px;height:11px}
+.tag.good{background:var(--good-wash);color:var(--good-ink)}
+.tag.caution{background:var(--caution-wash);color:var(--caution-ink)}
+.tag.critical{background:var(--critical-wash);color:var(--critical-ink)}
+.tag.unknown{background:var(--unknown-wash);color:var(--unknown-ink);
+  background-image:repeating-linear-gradient(135deg,transparent 0 4px,rgba(139,151,163,.2) 4px 5px)}
+.tag.decide{background:var(--decide-wash);color:var(--decide-ink);border:1px solid var(--decide-line)}
+.tag.trace{background:var(--trace-wash);color:var(--trace-ink)}
+.tag.plain{background:var(--surface-3);color:var(--ink-2)}
+/* 机器提议 vs 人的决定 —— 虚线 vs 实线 */
+.tag.machine{background:transparent;color:var(--decide-ink);border:1px dashed var(--decide-line)}
+.tag.human{background:var(--decide-wash);color:var(--decide-ink);border:1px solid var(--decide);font-weight:700}
+.dotm{width:7px;height:7px;border-radius:50%;flex:0 0 auto;display:inline-block}
+
+table.dt{width:100%;border-collapse:separate;border-spacing:0;font-size:12.5px}
+table.dt th{position:sticky;top:0;background:var(--surface-2);text-align:left;font-weight:600;font-size:11px;letter-spacing:.3px;
+  color:var(--ink-3);padding:0 10px;height:30px;border-bottom:1px solid var(--line);white-space:nowrap;z-index:2}
+table.dt td{padding:0 10px;height:32px;border-bottom:1px solid var(--line);white-space:nowrap;vertical-align:middle}
+table.dt tbody tr:hover td{background:var(--surface-2)}
+table.dt tbody tr.sel td{background:var(--accent-wash)}
+table.dt tbody tr.sel td:first-child{box-shadow:inset 2px 0 0 var(--accent)}
+table.dt tbody tr.gold td{background:var(--decide-wash)}
+table.dt tbody tr.gold td:first-child{box-shadow:inset 2px 0 0 var(--decide)}
+table.dt td.num,table.dt th.num{text-align:right;font-variant-numeric:tabular-nums}
+table.dt.compact td{height:28px}
+.linkcell{color:var(--accent-ink);font-weight:500}
+.linkcell:hover{text-decoration:underline}
+
+.kv{display:grid;grid-template-columns:auto 1fr;gap:5px 12px;font-size:12px;align-items:baseline}
+.kv dt{color:var(--ink-3);white-space:nowrap}
+.kv dd{margin:0;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+
+.inp,select.inp,textarea.inp{height:28px;padding:0 8px;border:1px solid var(--line-2);border-radius:var(--r);background:var(--surface);font-size:12.5px;outline:none;min-width:0}
+textarea.inp{height:auto;padding:6px 8px}
+.inp:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-wash)}
+.field{display:flex;flex-direction:column;gap:4px}
+.field label{font-size:11px;color:var(--ink-3);font-weight:500}
+.filterbar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:8px 12px;background:var(--surface);
+  border:1px solid var(--line);border-radius:var(--r-lg);margin-bottom:12px;box-shadow:var(--shadow)}
+.filterbar .sp{flex:1}
+
+.alert{display:flex;gap:9px;padding:9px 11px;border-radius:var(--r);font-size:12px;line-height:1.55;border:1px solid}
+.alert .ic{flex:0 0 auto;margin-top:1px}
+.alert .ic svg{width:14px;height:14px}
+.alert.trace{background:var(--trace-wash);border-color:var(--trace-line);color:var(--trace-ink)}
+.alert.decide{background:var(--decide-wash);border-color:var(--decide-line);color:var(--decide-ink)}
+.alert.caution{background:var(--caution-wash);border-color:rgba(226,112,58,.35);color:var(--caution-ink)}
+.alert.critical{background:var(--critical-wash);border-color:rgba(208,59,59,.3);color:var(--critical-ink)}
+.alert.unknown{background:var(--unknown-wash);border-color:var(--line-2);color:var(--unknown-ink)}
+.alert b{font-weight:650}
+
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);padding:10px 12px;display:flex;flex-direction:column;gap:2px;box-shadow:var(--shadow);min-width:0}
+.stat .l{font-size:11px;color:var(--ink-3)}
+.stat .v{font-size:22px;font-weight:650;letter-spacing:-.5px;line-height:1.25}
+.stat .v .u{font-size:12px;font-weight:500;color:var(--ink-3);margin-left:2px}
+.stat .d{font-size:11px;color:var(--ink-3)}
+.stat .d .up{color:var(--good-ink);font-weight:600}
+.stat .d .dn{color:var(--critical-ink);font-weight:600}
+.stat .sp{margin-top:4px;height:22px}
+/* Hero：唯一的大数字，永远是"等你决定的件数" */
+.hero{background:linear-gradient(180deg,var(--decide-wash),var(--surface) 80%);border-color:var(--decide-line)}
+.hero .v{font-size:42px;line-height:1.05;color:var(--decide-ink)}
+
+.aq{display:flex;flex-direction:column}
+.aqrow{display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid var(--line)}
+.aqrow:last-child{border-bottom:0}
+.aqrow:hover{background:var(--surface-2)}
+.aqrow .txt{min-width:0;flex:1}
+.aqrow .txt .t{font-size:12.5px;font-weight:550;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.aqrow .txt .m{font-size:11px;color:var(--ink-3);margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.aqrow .acts{display:flex;gap:6px;flex:0 0 auto;opacity:.75}
+.aqrow:hover .acts{opacity:1}
+
+.stepper{display:flex;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);overflow:hidden;box-shadow:var(--shadow)}
+.step{flex:1;padding:8px 10px 8px 22px;position:relative;min-width:0;border-right:1px solid var(--line);text-align:left}
+.step:last-child{border-right:0}
+.step:not(:first-child)::before{content:"";position:absolute;left:0;top:0;bottom:0;width:12px;background:var(--surface);clip-path:polygon(0 0,100% 50%,0 100%);border-right:1px solid var(--line)}
+.step .n{font-size:9.5px;color:var(--ink-4);letter-spacing:.5px;font-weight:600}
+.step .t{font-size:12px;font-weight:550;margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.step .s{font-size:10.5px;color:var(--ink-3);margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.step.done{background:var(--surface-2)} .step.done:not(:first-child)::before{background:var(--surface-2)}
+.step.done .n{color:var(--good-ink)}
+.step.cur{background:var(--decide-wash)} .step.cur:not(:first-child)::before{background:var(--decide-wash)}
+.step.cur .n,.step.cur .t{color:var(--decide-ink)} .step.cur .t{font-weight:700}
+
+.ev{border:1px solid var(--line);border-radius:var(--r);padding:9px 10px;background:var(--surface-2);font-size:11.5px;line-height:1.55}
+.ev+.ev{margin-top:8px}
+.ev .h{display:flex;align-items:center;gap:6px;font-weight:600;margin-bottom:4px}
+.ev .h svg{width:13px;height:13px;flex:0 0 auto}
+.aqrow .tag svg,.card .hd .tag svg{width:11px;height:11px}
+.btn svg{width:13px;height:13px;flex:0 0 auto}
+.ev code,code{font:500 10.5px/1.4 ui-monospace,Menlo,monospace;background:var(--surface-3);padding:1px 4px;border-radius:3px;color:var(--ink-2)}
+
+.cand{border:1px solid var(--line);border-radius:var(--r-lg);background:var(--surface);overflow:hidden}
+.cand+.cand{margin-top:10px}
+.cand .ch{display:flex;align-items:center;gap:8px;padding:9px 12px;background:var(--surface-2);border-bottom:1px solid var(--line)}
+.cand .ch .t{font-size:13px;font-weight:600}
+.cand .ch .r{margin-left:auto;display:flex;gap:6px}
+.cand .cb{padding:10px 12px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.cand .col .cl{font-size:10px;font-weight:600;letter-spacing:.4px;color:var(--ink-4);margin-bottom:4px;display:flex;align-items:center;gap:4px}
+.cand .col ul{margin:0;padding-left:15px;font-size:11.5px;line-height:1.6;color:var(--ink-2)}
+.cand .cf{padding:8px 12px;border-top:1px solid var(--line);display:flex;align-items:center;gap:8px;font-size:11px;color:var(--ink-3)}
+
+.meter{height:6px;border-radius:6px;background:var(--surface-3);overflow:hidden;display:flex}
+.meter i{display:block;height:100%}
+.meter i+i{box-shadow:-2px 0 0 var(--surface)}
+
+.overlay{position:fixed;inset:0;background:rgba(7,16,14,.45);backdrop-filter:blur(3px);z-index:200;display:none;align-items:flex-start;justify-content:center;padding-top:11vh}
+.overlay.on{display:flex}
+.cmd{width:660px;max-width:92vw;background:var(--surface);border:1px solid var(--line-2);border-radius:12px;box-shadow:var(--shadow-lg);overflow:hidden}
+.cmd .top{display:flex;align-items:center;gap:9px;padding:11px 14px;border-bottom:1px solid var(--line)}
+.cmd input{flex:1;border:0;outline:0;background:none;font-size:15px}
+.cmd .list{max-height:52vh;overflow:auto;padding:6px}
+.cmd .gl{font-size:10px;font-weight:600;letter-spacing:.6px;color:var(--ink-4);padding:8px 9px 4px}
+.cmdrow{display:flex;align-items:center;gap:10px;width:100%;padding:7px 9px;border-radius:var(--r);text-align:left}
+.cmdrow.on{background:var(--accent-wash)}
+.cmdrow .t{font-size:13px;flex:0 0 auto}
+.cmdrow .d{font-size:11px;color:var(--ink-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cmd .ft{padding:7px 14px;border-top:1px solid var(--line);display:flex;gap:14px;font-size:10.5px;color:var(--ink-4)}
+.drawer{position:fixed;right:14px;bottom:38px;width:340px;background:var(--surface);border:1px solid var(--line-2);border-radius:var(--r-lg);box-shadow:var(--shadow-lg);z-index:150;display:none;overflow:hidden}
+.drawer.on{display:block}
+
+.chartwrap{position:relative}
+svg.chart{display:block;width:100%;overflow:visible}
+.legend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:11px;color:var(--ink-2);padding:0 2px 6px}
+.legend span{display:inline-flex;align-items:center;gap:5px}
+.legend i{width:11px;height:2.5px;border-radius:2px;display:block}
+.tip{position:absolute;pointer-events:none;background:var(--ink-1);color:var(--surface);border-radius:var(--r);padding:6px 8px;
+  font-size:11px;line-height:1.5;box-shadow:var(--shadow-lg);opacity:0;transition:opacity .1s;z-index:20;white-space:nowrap}
+.tip.on{opacity:1}
+.tip .r{display:flex;align-items:center;gap:6px;font-variant-numeric:tabular-nums}
+.tip .r i{width:8px;height:8px;border-radius:2px}
+.axl{font-size:10px;fill:var(--ink-3);font-variant-numeric:tabular-nums}
+.axt{font-size:10px;fill:var(--ink-4)}
+.empty{padding:34px 20px;text-align:center;color:var(--ink-3);font-size:12.5px}
+.empty b{display:block;color:var(--ink-1);font-size:13.5px;margin-bottom:4px}
+.sectitle{font-size:11px;font-weight:650;letter-spacing:.5px;color:var(--ink-3);margin:0 0 8px;display:flex;align-items:center;gap:7px}
+.sectitle::after{content:"";flex:1;height:1px;background:var(--line)}
+.toast{position:fixed;bottom:40px;left:50%;transform:translateX(-50%) translateY(8px);background:var(--ink-1);color:var(--surface);
+  padding:8px 14px;border-radius:var(--r);font-size:12.5px;box-shadow:var(--shadow-lg);opacity:0;transition:.18s;z-index:300;pointer-events:none}
+.toast.on{opacity:1;transform:translateX(-50%)}
+</style>
+</head>
+<body>
+<div class="shell">
+  <header class="topbar">
+    <div class="brand"><span class="mark">In</span></div>
+    <div class="brandtext"><b>Ingot</b><small>工艺追因与优化</small></div>
+    <div class="ctx">
+      <span class="ctxlabel">分析范围</span>
+      <button class="ctxchip" onclick="toast('打开对象选择器：设备 / 产品 / 工艺对象')"><span class="k">对象</span><span class="v">非球面镜片 L28-A</span><span class="k">▾</span></button>
+      <span class="ctxsep"></span>
+      <button class="ctxchip" onclick="toast('打开设备选择器')"><span class="k">设备</span><span class="v">MP-03 模压机</span><span class="k">▾</span></button>
+      <span class="ctxsep"></span>
+      <button class="ctxchip" onclick="toast('打开配方版本选择器')"><span class="k">配方</span><span class="v">R-2024.7 · v12</span><span class="k">▾</span></button>
+      <span class="ctxsep"></span>
+      <button class="ctxchip" onclick="toast('打开时间范围选择器')"><span class="k">时间</span><span class="v">近 30 天</span><span class="k">▾</span></button>
+      <button class="iconbtn" style="width:auto;height:26px;padding:0 8px;gap:5px;font-size:11px;color:var(--ink-3);white-space:nowrap;flex:0 0 auto" onclick="toast('已锁定分析范围：切换页面时保持不变')">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/></svg>已锁定</button>
+    </div>
+    <div class="topact">
+      <button class="searchbtn" onclick="openCmd()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.4-4.4"/></svg>
+        <span>搜索对象、运行、动作</span><kbd style="margin-left:auto">⌘K</kbd></button>
+      <button class="iconbtn" onclick="go('/overview/tasks')" title="3 件事等你决定"><span class="dot"></span>
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M18 8.5a6 6 0 1 0-12 0c0 6-2.5 7.5-2.5 7.5h17S18 14.5 18 8.5Z"/><path d="M13.7 19.5a2 2 0 0 1-3.4 0"/></svg></button>
+      <button class="iconbtn" onclick="toggleTheme()" title="切换主题">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="4"/><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M19.1 4.9l-1.8 1.8M6.7 17.3l-1.8 1.8"/></svg></button>
+      <button class="iconbtn" onclick="go('/system/users')" title="系统管理">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><circle cx="12" cy="12" r="2.9"/><path d="M19.1 14.4a1.6 1.6 0 0 0 .32 1.76l.06.06a1.9 1.9 0 1 1-2.7 2.7l-.05-.06a1.6 1.6 0 0 0-1.77-.32 1.6 1.6 0 0 0-.97 1.47v.17a1.9 1.9 0 1 1-3.8 0v-.09a1.6 1.6 0 0 0-1.05-1.46 1.6 1.6 0 0 0-1.76.32l-.06.06a1.9 1.9 0 1 1-2.7-2.7l.06-.06a1.6 1.6 0 0 0 .32-1.76 1.6 1.6 0 0 0-1.47-.98h-.17a1.9 1.9 0 1 1 0-3.8h.09a1.6 1.6 0 0 0 1.46-1.04 1.6 1.6 0 0 0-.32-1.77l-.06-.06a1.9 1.9 0 1 1 2.7-2.7l.06.06a1.6 1.6 0 0 0 1.76.32h.08a1.6 1.6 0 0 0 .97-1.47v-.17a1.9 1.9 0 1 1 3.8 0v.09a1.6 1.6 0 0 0 .98 1.46 1.6 1.6 0 0 0 1.76-.32l.06-.06a1.9 1.9 0 1 1 2.7 2.7l-.06.06a1.6 1.6 0 0 0-.32 1.76v.08a1.6 1.6 0 0 0 1.47.97h.17a1.9 1.9 0 1 1 0 3.8h-.09a1.6 1.6 0 0 0-1.46.98Z"/></svg></button>
+      <button class="iconbtn" style="width:auto;padding:0 4px" onclick="toast('张工 · 工艺工程师 · 可单人批准实验')"><span class="avatar">ZG</span></button>
+    </div>
+  </header>
+
+  <div class="body">
+    <nav class="rail" id="rail"></nav>
+    <nav class="subnav" id="subnav">
+      <div class="subhead"><b id="subtitle"></b>
+        <button class="iconbtn" style="width:24px;height:24px" onclick="toggleSub()" title="收起二级导航（⌘B）">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M15 6l-6 6 6 6"/></svg></button>
+      </div>
+      <div class="subbody scroll" id="subbody"></div>
+    </nav>
+    <main class="content">
+      <div class="pagehead" id="pagehead"></div>
+      <div class="pagebody scroll" id="pagebody"></div>
+    </main>
+    <aside class="inspector collapsed" id="inspector">
+      <div class="insphead">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="color:var(--accent)"><path d="M12 3l7.5 4.2v8.6L12 20l-7.5-4.2V7.2L12 3Z"/><path d="M12 12l7.5-4.2M12 12v8M12 12L4.5 7.8"/></svg>
+        <b style="font-size:12px">证据面板</b>
+        <div style="margin-left:auto;display:flex;gap:2px">
+          <button class="iconbtn" style="width:24px;height:24px" onclick="toast('已复制引用：run:OR-24083-0102 @ v3.2')" title="复制引用">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg></button>
+          <button class="iconbtn" style="width:24px;height:24px" onclick="closeInsp()" title="关闭（⌘I）">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+        </div>
+      </div>
+      <div class="inspbody scroll" id="inspbody"></div>
+    </aside>
+  </div>
+
+  <footer class="statusbar">
+    <button class="sitem" onclick="go('/system/health')"><span class="pulse"></span>平台正常</button>
+    <span class="sdiv"></span>
+    <button class="sitem" onclick="go('/configure/edges')">现场节点 <b class="tnum" style="color:var(--ink-1)">7/8</b> 在线 <span class="dotm" style="background:var(--caution)"></span></button>
+    <span class="sdiv"></span>
+    <button class="sitem" onclick="toast('最近一次数据上行：18 秒前 · 队列积压 0')">数据上行 <b class="tnum" style="color:var(--ink-1)">18s</b> 前</button>
+    <span class="sdiv"></span>
+    <button class="sitem" onclick="go('/diagnose/data-health')">进入分析 <b class="tnum" style="color:var(--caution-ink)">88.5%</b></button>
+    <span style="flex:1"></span>
+    <button class="sitem" onclick="go('/overview/tasks')" style="color:var(--decide-ink);font-weight:600">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2.6 20.5 7v10L12 21.4 3.5 17V7L12 2.6Z"/><path d="M8.6 12.2l2.4 2.4 4.4-4.8"/></svg>
+      3 件等你决定</button>
+    <span class="sdiv"></span>
+    <button class="sitem" onclick="toggleBasket()">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16l-1.6 11.2a2 2 0 0 1-2 1.8H7.6a2 2 0 0 1-2-1.8L4 7Z"/><path d="M9 7V5a3 3 0 0 1 6 0v2"/></svg>
+      对比暂存区 <b class="tnum" style="color:var(--accent-ink)">2</b></button>
+    <span class="sdiv"></span><span class="sitem">v2.1-design</span>
+  </footer>
+</div>
+
+<div class="drawer" id="basket">
+  <div class="card" style="border:0;box-shadow:none">
+    <div class="hd"><h3>对比暂存区</h3><span class="sub">跨页面保留</span>
+      <div class="r"><button class="iconbtn" style="width:22px;height:22px" onclick="toggleBasket()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div></div>
+    <div class="bd flush">
+      <div class="aqrow"><span class="tag trace">基线</span><div class="txt"><div class="t">OR-24081-0417</div><div class="m">MP-03 · C-104 · 面型 PV 0.118λ</div></div>
+        <div class="acts"><button class="btn sm ghost" onclick="toast('已移出')">移出</button></div></div>
+      <div class="aqrow"><span class="tag critical">对照</span><div class="txt"><div class="t">OR-24083-0102</div><div class="m">MP-03 · C-118 · 面型 PV 0.243λ</div></div>
+        <div class="acts"><button class="btn sm ghost" onclick="toast('已移出')">移出</button></div></div>
+    </div>
+    <div class="ft"><span>两组均满足分析准入</span>
+      <button class="btn sm ghost" style="margin-left:auto" onclick="toast('已清空')">清空</button>
+      <button class="btn sm pri" onclick="toggleBasket();go('/diagnose/compare')">开始对比</button></div>
+  </div>
+</div>
+
+<div class="overlay" id="overlay" onclick="if(event.target===this)closeCmd()">
+  <div class="cmd">
+    <div class="top">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--ink-3)"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.4-4.4"/></svg>
+      <input id="cmdInput" placeholder="搜索页面、对象、运行，或输入动作" autocomplete="off"><kbd>Esc</kbd>
+    </div>
+    <div class="list scroll" id="cmdList"></div>
+    <div class="ft"><span>↑↓ 选择</span><span>↵ 打开</span><span>⌘K 呼出</span><span style="margin-left:auto">动作会说明是否需要你批准</span></div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+<script>
+/* ==========================================================
+   信息架构 v2.1 —— 5 个一级模块
+   总览 · 运行(事实层) · 追因 · 优化(判断层) · 配置
+   「追因 · 优化」= 产品类别「工艺追因与优化系统」本身
+   系统管理挂顶栏齿轮，不占一级导航
+   ========================================================== */
+const IC = {
+  overview:'<rect x="3.5" y="3.5" width="7" height="7" rx="1.6"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.6"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.6"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.6"/>',
+  evidence:'<path d="M12 3.2 21 7.6 12 12 3 7.6l9-4.4Z"/><path d="M3.6 12 12 16.2 20.4 12"/><path d="M3.6 16.4 12 20.6l8.4-4.2"/>',
+  diagnose:'<circle cx="10.8" cy="10.8" r="6.4"/><path d="M20 20l-4.6-4.6"/><path d="M8.4 11.6l1.8 1.8 3.4-4"/>',
+  topic:'<path d="M9.6 3.2v6.3L4.8 17.8A2 2 0 0 0 6.5 20.8h11a2 2 0 0 0 1.7-3L14.4 9.5V3.2"/><path d="M8.2 3.2h7.6"/><path d="M7.4 14.6h9.2"/>',
+  configure:'<path d="M4 7.2h8M17.2 7.2H20M4 16.8h3.2M12.4 16.8H20"/><circle cx="14.6" cy="7.2" r="2.4"/><circle cx="9.8" cy="16.8" r="2.4"/>',
+};
+const NAV = [
+  {id:'overview', name:'总览', desc:'现在怎么样，我该先做什么', pending:3, groups:[
+    {items:[
+      {p:'/overview',       n:'决策工作台'},
+      {p:'/overview/live',  n:'实时运行'},
+      {p:'/overview/tasks', n:'我的任务', badge:'3', gold:true},
+    ]},
+  ]},
+  {id:'topic', name:'课题', desc:'主线：问题 → 假设 → 实验 → 结论 → 工艺窗口', pending:2, groups:[
+    {g:'推进中', items:[
+      {p:'/research/projects',    n:'课题列表', badge:'3'},
+      {p:'/research/experiments', n:'实验排程', badge:'2', gold:true},
+    ]},
+    {g:'结论沉淀', items:[
+      {p:'/research/windows', n:'工艺窗口'},
+      {p:'/research/assets',  n:'研发资产'},
+    ]},
+  ]},
+  {id:'evidence', name:'证据', desc:'看清这次运行：条件、轨迹、结果、上下文', groups:[
+    {g:'运行与结果', items:[
+      {p:'/runs',             n:'运行记录'},
+      {p:'/runs/inspections', n:'检测任务', badge:'12'},
+      {p:'/runs/events',      n:'运行事件'},
+    ]},
+    {g:'现场上下文', items:[
+      {p:'/runs/setup',   n:'运行准备'},
+      {p:'/runs/tooling', n:'工装装卸'},
+    ]},
+  ]},
+  {id:'diagnose', name:'追因', desc:'差异出在哪，证据够不够', groups:[
+    {g:'证据准备', items:[
+      {p:'/diagnose/data-health', n:'数据可信度'},
+      {p:'/diagnose/basket',      n:'对比暂存区', badge:'2'},
+    ]},
+    {g:'差异分析', items:[
+      {p:'/diagnose/compare',      n:'运行对比'},
+      {p:'/diagnose/distribution', n:'结果分布'},
+      {p:'/diagnose/candidates',   n:'候选原因', badge:'5'},
+    ]},
+    {g:'提问与核对', items:[
+      {p:'/diagnose/assistant', n:'分析助手'},
+      {p:'/diagnose/checkset',  n:'回答核对集'},
+    ]},
+  ]},
+  {id:'configure', name:'配置', desc:'系统应该理解哪些变量、规则和设备', groups:[
+    {g:'工艺定义', items:[
+      {p:'/configure/objects',        n:'对象台账'},
+      {p:'/configure/scenarios',      n:'场景包'},
+      {p:'/configure/process-models', n:'工艺模型'},
+      {p:'/configure/recipes',        n:'配方版本'},
+      {p:'/configure/analysis-plans', n:'分析模型'},
+    ]},
+    {g:'检测规则', items:[
+      {p:'/configure/inspection-definitions', n:'检测定义'},
+      {p:'/configure/quality-plans',          n:'检测方案'},
+    ]},
+    {g:'工装与资产', items:[
+      {p:'/configure/tooling-types',      n:'装配模板'},
+      {p:'/configure/component-types',    n:'组件分类'},
+      {p:'/configure/components',         n:'组件资产'},
+      {p:'/configure/tooling-assemblies', n:'模具资产'},
+    ]},
+    {g:'现场接入', items:[
+      {p:'/configure/edges',       n:'现场节点'},
+      {p:'/configure/acquisition', n:'设备接入'},
+    ]},
+  ]},
+];
+const SYSTEM = {id:'system', name:'系统管理', desc:'平台自身的账号、健康与留痕', groups:[
+  {items:[
+    {p:'/system/users',  n:'用户与权限'},
+    {p:'/system/health', n:'平台状态'},
+    {p:'/system/logs',   n:'运行日志'},
+    {p:'/system/audit',  n:'审计追踪'},
+  ]},
+]};
+
+const PAGE = {
+  '/overview':        ['决策工作台','按“需要你决定什么”排序，而不是按数据表排序'],
+  '/overview/live':   ['实时运行','正在跑的运行、设备占用与现场节点心跳'],
+  '/overview/tasks':  ['我的任务','等着你批准、复核或确认的事'],
+
+  '/runs':             ['运行记录','一次真实运行的条件、轨迹与结果'],
+  '/runs/OR-24083-0102':['运行 OR-24083-0102','MP-03 · 非球面镜片 L28-A · R-2024.7 v12 · 面型 PV 0.243λ'],
+  '/runs/inspections': ['检测任务','录入检测值、复核判定与原图核对'],
+  '/runs/events':      ['运行事件','设备与工艺事件，可关联到运行上下文'],
+  '/runs/setup':       ['运行准备','声明接下来的运行用哪台设备、哪个产品、哪版配方与哪套工装'],
+  '/runs/tooling':     ['工装装卸','记录工装组合版本在设备上的装入与卸下区间'],
+
+  '/diagnose/data-health':  ['数据可信度','这些运行够不够格进入正式分析'],
+  '/diagnose/basket':       ['对比暂存区','跨页面攒下的待比较运行'],
+  '/diagnose/compare':      ['运行对比','比较可比运行，定位首次偏离与差异变量'],
+  '/diagnose/distribution': ['结果分布','按产品、配方与上下文查看结果分布与分层差异'],
+  '/diagnose/candidates':   ['候选原因','所有待验证的原因及其证据强度'],
+  '/diagnose/assistant':    ['分析助手','用只读工具回答问题并给出引用，不生成数值配方'],
+  '/diagnose/checkset':     ['回答核对集','用真实问题持续核对事实、引用与正确拒绝'],
+
+  '/research/projects':     ['课题列表','一个工艺问题从证据、假设、实验推进到工艺窗口'],
+  '/research/projects/P-0142':['P-0142 面型 PV 收敛','非球面镜片 L28-A · MP-03 · 阶段 4/7'],
+  '/research/experiments':  ['实验排程','跨课题的待批准、待执行与执行中实验'],
+  '/research/windows':      ['工艺窗口','已验证结论、适用范围与失效条件 —— 系统的最终产出'],
+  '/research/assets':       ['研发资产','可复用的数据集、模型、机理与知识'],
+
+  '/configure/objects':        ['对象台账','工业对象的身份、层级与分析单元定义'],
+  '/configure/scenarios':      ['场景包','声明这个工艺场景需要哪些变量、上下文字段与规则'],
+  '/configure/process-models': ['工艺模型','定义工艺变量、阶段号与配方参数'],
+  '/configure/recipes':        ['配方版本','维护引用工艺模型的完整配方有效值'],
+  '/configure/analysis-plans': ['分析模型','版本化定义分析范围、对齐方式与分组'],
+  '/configure/inspection-definitions':['检测定义','要检测的特性、录入类型与判定规则'],
+  '/configure/quality-plans':  ['检测方案','产品适用的检测项目与复核规则'],
+  '/configure/tooling-types':  ['装配模板','模具结构、装配位置与各位置允许的组件分类'],
+  '/configure/component-types':['组件分类','模芯、模架等物理资产类别'],
+  '/configure/components':     ['组件资产','具有资产编号与序列号的可更换物理组件'],
+  '/configure/tooling-assemblies':['模具资产','模具身份、不可变配置版本与实际成员'],
+  '/configure/edges':          ['现场节点','连接设备、仪器与系统并上报数据的节点'],
+  '/configure/acquisition':    ['设备接入','采集节点、通信驱动与点位到工艺变量的映射'],
+
+  '/system/users':  ['用户与权限','本地账户、岗位权限与启停状态'],
+  '/system/health': ['平台状态','中心服务、现场节点与数据上行是否正常'],
+  '/system/logs':   ['运行日志','平台运行记录查询'],
+  '/system/audit':  ['审计追踪','谁在什么时候批准了什么、改了什么'],
+};
+/* ==================== Shell ==================== */
+let route='/overview', subCollapsed=false, inspOpen=false;
+const AFTER={}, VIEW={}, HEAD_ACTS={}, TABS={};
+
+function sectionOf(p){
+  if(p.startsWith('/system')) return SYSTEM;
+  return NAV.find(s=>s.groups.some(g=>g.items.some(i=>p===i.p||p.startsWith(i.p+'/')))) || NAV[0];
+}
+const itemsOf = s => s.groups.flatMap(g=>g.items);
+
+function renderRail(){
+  const cur=sectionOf(route);
+  document.getElementById('rail').innerHTML =
+    NAV.map(s=>`<button class="railbtn ${s.id===cur.id?'on':''}" onclick="go('${itemsOf(s)[0].p}')">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${IC[s.id]}</svg>
+      ${s.pending?`<span class="n">${s.pending}</span>`:''}
+      <span class="railtip"><b>${s.name}</b> · ${s.desc}${s.pending?` · ${s.pending} 件等你决定`:''}</span></button>`).join('')
+    + `<div class="railspacer"></div>
+       <button class="railbtn" onclick="toast('帮助与文档')"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="9"/><path d="M9.4 9.2a2.7 2.7 0 0 1 5.2.9c0 1.8-2.6 2.3-2.6 3.9"/><circle cx="12" cy="17.4" r=".9" fill="currentColor" stroke="none"/></svg><span class="railtip">帮助与文档</span></button>`;
+}
+function renderSub(){
+  const s=sectionOf(route);
+  document.getElementById('subtitle').textContent=s.name;
+  document.getElementById('subnav').className='subnav'+(subCollapsed?' collapsed':'');
+  document.getElementById('subbody').innerHTML=s.groups.map(g=>`
+    <div class="navgroup">${g.g?`<div class="gl">${g.g}</div>`:''}
+      ${g.items.map(i=>`<button class="navitem ${route===i.p||route.startsWith(i.p+'/')?'on':''}" onclick="go('${i.p}')">
+        <span>${i.n}</span>${i.badge?`<span class="badge ${i.gold?'gold':''}">${i.badge}</span>`:''}
+      </button>`).join('')}
+    </div>`).join('');
+}
+function renderHead(){
+  const s=sectionOf(route), d=PAGE[route]||['页面','—'];
+  document.getElementById('pagehead').innerHTML=`
+    <div class="crumb">
+      ${subCollapsed?`<button class="iconbtn" style="width:22px;height:22px;margin-left:-4px" onclick="toggleSub()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>`:''}
+      <span>${s.name}</span><span style="color:var(--ink-4)">/</span><span style="color:var(--ink-2)">${d[0]}</span>
+    </div>
+    <div class="ptitle"><div><h1>${d[0]}</h1><p>${d[1]}</p></div><div class="pacts">${HEAD_ACTS[route]||''}</div></div>
+    ${TABS[route]?`<div class="tabs">${TABS[route]}</div>`:'<div style="height:10px"></div>'}`;
+}
+function render(){
+  renderRail(); renderSub(); renderHead();
+  document.getElementById('pagebody').innerHTML=(VIEW[route]||VIEW._stub)();
+  document.getElementById('pagebody').scrollTop=0;
+  document.getElementById('inspector').className='inspector'+(inspOpen?'':' collapsed');
+  requestAnimationFrame(()=>{ (AFTER[route]||function(){})(); });
+}
+function go(p){ route=p; render(); }
+function toggleSub(){ subCollapsed=!subCollapsed; render(); }
+function openInsp(html){ inspOpen=true; document.getElementById('inspbody').innerHTML=html; render(); }
+function closeInsp(){ inspOpen=false; render(); }
+function toggleTheme(){ const r=document.documentElement; r.dataset.theme=r.dataset.theme==='dark'?'light':'dark'; render(); }
+let tT; function toast(m){ const t=document.getElementById('toast'); t.textContent=m; t.classList.add('on'); clearTimeout(tT); tT=setTimeout(()=>t.classList.remove('on'),2400); }
+function toggleBasket(){ document.getElementById('basket').classList.toggle('on'); }
+function tabHTML(list,cur){ return list.map((t,i)=>`<button class="tab ${i===cur?'on':''}" onclick="toast('切换到「${t[0]}」页签')">${t[0]}${t[1]?`<span class="n">${t[1]}</span>`:''}</button>`).join(''); }
+
+/* 五态图标 + 决策/溯源 */
+function icon(k){
+  const p={
+    good:'<path d="M4 12.5l5 5 11-11"/>',
+    caution:'<path d="M12 3.5 22 20H2L12 3.5Z"/><path d="M12 10v4.2M12 17.2v.2"/>',
+    critical:'<circle cx="12" cy="12" r="9"/><path d="M8.5 8.5l7 7M15.5 8.5l-7 7"/>',
+    unknown:'<circle cx="12" cy="12" r="9"/><path d="M9.4 9.4a2.7 2.7 0 0 1 5.2.9c0 1.8-2.6 2.3-2.6 3.9M12 17.6v.2"/>',
+    decide:'<path d="M12 2.6 20.5 7v10L12 21.4 3.5 17V7L12 2.6Z"/><path d="M8.6 12.2l2.4 2.4 4.4-4.8"/>',
+    trace:'<path d="M3 17c3-8 6 4 9-4s6 2 9-4"/>',
+    info:'<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.6v.2"/>',
+  };
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">${p[k]||p.info}</svg>`;
+}
+function chk(k,t,m){
+  return `<div class="row" style="gap:8px;align-items:flex-start"><span class="tag ${k}" style="flex:0 0 auto;margin-top:1px">${icon(k)}</span>
+    <div style="min-width:0"><div style="font-size:12.5px;font-weight:500">${t}</div><div class="tiny mut">${m}</div></div></div>`;
+}
+function aqRow(kind,label,title,meta,btn,fn){
+  return `<div class="aqrow"><span class="tag ${kind}">${icon(kind)}${label}</span>
+    <div class="txt"><div class="t">${title}</div><div class="m">${meta}</div></div>
+    <div class="acts"><button class="btn sm ghost" onclick="openEvidence()">证据</button>
+      <button class="btn sm ${kind==='decide'?'decide':''}" onclick="${fn}">${btn}</button></div></div>`;
+}
+/* ==================== 图表构件（dataviz 规范） ==================== */
+const sv = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const fmt = (v,d=2)=> (Number(v).toFixed(d).replace(/\.?0+$/,'') || '0');
+
+function niceTicks(lo,hi,count){
+  const raw=(hi-lo)/count, mag=Math.pow(10,Math.floor(Math.log10(raw))), n=raw/mag;
+  const step=(n<=1?1:n<=2?2:n<=2.5?2.5:n<=5?5:10)*mag;
+  const a=Math.floor(lo/step)*step, b=Math.ceil(hi/step)*step;
+  const out=[]; for(let v=a;v<=b+step/2;v+=step) out.push(+v.toFixed(10));
+  return {ticks:out, lo:a, hi:b, dec:Math.max(0,-Math.floor(Math.log10(step)))};
+}
+function lineChart(id,cfg){
+  const W=cfg.w||760,H=cfg.h||220,m={t:12,r:cfg.mr??52,b:24,l:cfg.ml??40};
+  const iw=W-m.l-m.r, ih=H-m.t-m.b;
+  const all=cfg.series.flatMap(s=>s.d).concat((cfg.rules||[]).map(r=>r.v));
+  const pad=(Math.max(...all)-Math.min(...all))*0.02||1;
+  const nt=niceTicks(Math.min(...all)-pad,Math.max(...all)+pad,4);
+  const lo=nt.lo,hi=nt.hi,tv=nt.ticks,tdec=nt.dec,n=cfg.series[0].d.length;
+  const X=i=>m.l+(iw*i)/(n-1), Y=v=>m.t+ih-((v-lo)/(hi-lo))*ih;
+  let g='';
+  (cfg.bands||[]).forEach((b,bi)=>{
+    if(bi%2===0) g+=`<rect x="${X(b.a)}" y="${m.t}" width="${X(b.b)-X(b.a)}" height="${ih}" fill="${sv('--surface-3')}" opacity=".6"/>`;
+    if(bi) g+=`<line x1="${X(b.a)}" x2="${X(b.a)}" y1="${m.t}" y2="${m.t+ih}" stroke="${sv('--axis')}"/>`;
+    g+=`<text x="${(X(b.a)+X(b.b))/2}" y="${m.t+11}" text-anchor="middle" class="axt">${b.n}</text>`;
+  });
+  tv.forEach(v=>{ g+=`<line x1="${m.l}" x2="${m.l+iw}" y1="${Y(v)}" y2="${Y(v)}" stroke="${sv('--grid')}"/>
+    <text x="${m.l-7}" y="${Y(v)+3.5}" text-anchor="end" class="axl">${v.toFixed(tdec)}</text>`; });
+  (cfg.rules||[]).forEach(r=>{ g+=`<line x1="${m.l}" x2="${m.l+iw}" y1="${Y(r.v)}" y2="${Y(r.v)}" stroke="${sv(r.c||'--critical')}" stroke-width="1.5" stroke-dasharray="5 3" opacity=".85"/>
+    <text x="${m.l+iw+5}" y="${Y(r.v)+3.5}" class="axl" fill="${sv(r.c||'--critical')}">${r.n}</text>`; });
+  const endY=cfg.series.map(s=>Y(s.d[s.d.length-1]));
+  let collide=false;
+  for(let a=0;a<endY.length;a++) for(let b=a+1;b<endY.length;b++) if(Math.abs(endY[a]-endY[b])<14) collide=true;
+  cfg.series.forEach(s=>{
+    const dd=s.d.map((v,i)=>`${i?'L':'M'}${X(i).toFixed(1)} ${Y(v).toFixed(1)}`).join(' ');
+    g+=`<path d="${dd}" fill="none" stroke="${sv(s.c)}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"${s.dash?' stroke-dasharray="6 4"':''}/>`;
+    const li=s.d.length-1;
+    g+=`<circle cx="${X(li)}" cy="${Y(s.d[li])}" r="4" fill="${sv(s.c)}" stroke="${sv('--chart-surface')}" stroke-width="2"/>`;
+    if(!collide) g+=`<text x="${X(li)+8}" y="${Y(s.d[li])+3.5}" class="axl" style="font-weight:600;fill:${sv('--ink-2')}">${fmt(s.d[li],cfg.dec??1)}</text>`;
+  });
+  g+=`<line x1="${m.l}" x2="${m.l+iw}" y1="${m.t+ih}" y2="${m.t+ih}" stroke="${sv('--axis')}"/>`;
+  (cfg.xt||[]).forEach(t=>{ g+=`<text x="${X(t.i)}" y="${H-7}" text-anchor="middle" class="axl">${t.n}</text>`; });
+  g+=`<g id="${id}-cross" style="display:none"><line stroke="${sv('--ink-4')}" stroke-dasharray="3 3" y1="${m.t}" y2="${m.t+ih}"/></g>
+      <rect x="${m.l}" y="${m.t}" width="${iw}" height="${ih}" fill="transparent" id="${id}-hit"/>`;
+  const legend = cfg.series.length>1
+    ? `<div class="legend">${cfg.series.map(s=>`<span><i style="background:${sv(s.c)}"></i>${s.n}</span>`).join('')}${(cfg.rules||[]).map(r=>`<span><i style="height:2px;background-image:repeating-linear-gradient(90deg,${sv(r.c||'--critical')} 0 4px,transparent 4px 7px)"></i>${r.n}</span>`).join('')}</div>` : '';
+  return {html:`${legend}<div class="chartwrap" id="${id}-wrap"><svg class="chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="height:${H}px">${g}</svg><div class="tip" id="${id}-tip"></div></div>`,
+    bind(){
+      const wrap=document.getElementById(id+'-wrap'); if(!wrap) return;
+      const hit=document.getElementById(id+'-hit'),cross=document.getElementById(id+'-cross'),tip=document.getElementById(id+'-tip'),svg=wrap.querySelector('svg');
+      hit.addEventListener('mousemove',e=>{
+        const r=svg.getBoundingClientRect(), sx=W/r.width;
+        let i=Math.round((((e.clientX-r.left)*sx-m.l)/iw)*(n-1)); i=Math.max(0,Math.min(n-1,i));
+        cross.style.display=''; cross.querySelector('line').setAttribute('x1',X(i)); cross.querySelector('line').setAttribute('x2',X(i));
+        tip.classList.add('on');
+        tip.innerHTML=`<b>${(cfg.xlab||(k=>'点 '+(k+1)))(i)}</b>`+cfg.series.map(s=>`<div class="r"><i style="background:${sv(s.c)}"></i>${s.n} <b>${fmt(s.d[i],cfg.dec??2)}</b>${cfg.unit?' '+cfg.unit:''}</div>`).join('');
+        tip.style.left=Math.min((X(i)/sx)+12, r.width-tip.offsetWidth-8)+'px';
+        tip.style.top=Math.max(4,(e.clientY-r.top)-30)+'px';
+      });
+      hit.addEventListener('mouseleave',()=>{ cross.style.display='none'; tip.classList.remove('on'); });
+    }};
+}
+function barsH(items,opts={}){
+  const max=Math.max(...items.map(i=>i.v),opts.max||0)||1;
+  return `<div style="display:grid;grid-template-columns:auto 1fr auto;gap:5px 10px;align-items:center;font-size:12px">
+    ${items.map(i=>`<div class="mut" style="white-space:nowrap">${i.n}</div>
+      <div style="height:12px;background:var(--surface-3);border-radius:0 3px 3px 0;position:relative">
+        <div style="position:absolute;inset:0 auto 0 0;width:${(i.v/max)*100}%;background:${sv(i.c||'--s1')};border-radius:0 4px 4px 0"></div>
+      </div>
+      <div class="tnum" style="font-weight:600;min-width:46px;text-align:right">${i.t??(i.v+'%')}</div>`).join('')}
+  </div>`;
+}
+function heat(rows,cols,cells){
+  const dark=document.documentElement.dataset.theme==='dark';
+  const steps=dark?['#0d2b27','#14453e','#1b6156','#237f71','#2da096','#5FD4C8']
+                 :['#d6f0ec','#a9e0d9','#6ec9bf','#35ac9f','#1c8a7e','#0e6459'];
+  const mx=Math.max(...cells.flat());
+  return `<div style="display:grid;grid-template-columns:auto repeat(${cols.length},1fr);gap:2px;font-size:11px">
+    <div></div>${cols.map(c=>`<div style="text-align:center;font-size:10px;color:var(--ink-3);padding-bottom:2px">${c}</div>`).join('')}
+    ${rows.map((r,ri)=>`<div class="mut" style="white-space:nowrap;padding-right:6px;display:flex;align-items:center;justify-content:flex-end">${r}</div>
+      ${cells[ri].map((v,ci)=>{
+        const k=v===0?-1:Math.min(steps.length-1,Math.floor((v/mx)*steps.length));
+        const bg=v===0?'var(--unknown-wash)':steps[k], fg=v===0?'var(--unknown-ink)':(dark?(k>=4?'#07231f':'#EEF5F1'):(k>=3?'#fff':'#07231f'));
+        const tex=v===0?'background-image:repeating-linear-gradient(135deg,transparent 0 4px,rgba(139,151,163,.28) 4px 5px);':'';
+        return `<div title="${rows[ri]} × ${cols[ci]}：${v} 次运行" style="height:26px;display:grid;place-items:center;border-radius:3px;background:${bg};${tex}color:${fg};font-variant-numeric:tabular-nums;font-weight:600">${v||'—'}</div>`;
+      }).join('')}`).join('')}
+  </div>
+  <div class="row" style="margin-top:8px;gap:6px;font-size:10.5px;color:var(--ink-3)">
+    <span>运行数</span>${steps.map(s=>`<i style="width:16px;height:9px;border-radius:2px;background:${s};display:inline-block"></i>`).join('')}<span>多</span>
+    <span style="margin-left:auto;display:inline-flex;align-items:center;gap:5px"><i style="width:11px;height:11px;border-radius:2px;background:var(--unknown-wash);background-image:repeating-linear-gradient(135deg,transparent 0 4px,rgba(139,151,163,.35) 4px 5px);display:inline-block"></i>无重叠 · 不能分离该因素</span>
+  </div>`;
+}
+function spark(vals,c='--s1'){
+  const W=110,H=22,mn=Math.min(...vals),mx=Math.max(...vals),r=(mx-mn)||1;
+  const p=vals.map((v,i)=>`${i?'L':'M'}${(i/(vals.length-1)*W).toFixed(1)} ${(H-2-((v-mn)/r)*(H-5)).toFixed(1)}`).join(' ');
+  return `<svg viewBox="0 0 ${W+4} ${H}" style="width:100%;height:${H}px;overflow:visible"><path d="${p}" fill="none" stroke="${sv('--ink-4')}" stroke-width="1.6" stroke-linejoin="round"/><circle cx="${W}" cy="${(H-2-((vals[vals.length-1]-mn)/r)*(H-5)).toFixed(1)}" r="3" fill="${sv(c)}" stroke="${sv('--surface')}" stroke-width="2"/></svg>`;
+}
+const meter = segs => `<div class="meter">${segs.map(s=>`<i style="width:${s.w}%;background:${sv(s.c)}"></i>`).join('')}</div>`;
+
+function predBand(items){
+  const W=680,H=Math.max(90,items.length*30+26),m={l:126,r:62,t:8,b:20},iw=W-m.l-m.r;
+  const lo=Math.min(...items.map(i=>i.lo)),hi=Math.max(...items.map(i=>i.hi));
+  const pad=(hi-lo)*.12,a=lo-pad,b=hi+pad,X=v=>m.l+((v-a)/(b-a))*iw;
+  let g='';
+  [0,.25,.5,.75,1].forEach(f=>{const v=a+(b-a)*f;g+=`<line x1="${X(v)}" x2="${X(v)}" y1="${m.t}" y2="${H-m.b}" stroke="${sv('--grid')}"/><text x="${X(v)}" y="${H-6}" text-anchor="middle" class="axl">${fmt(v,2)}</text>`;});
+  items.forEach((it,i)=>{
+    const y=m.t+14+i*30,c=sv(it.c||'--s1');
+    g+=`<text x="${m.l-9}" y="${y+4}" text-anchor="end" class="axl" style="fill:${sv('--ink-2')}">${it.n}</text>`
+     +`<line x1="${X(it.lo)}" x2="${X(it.hi)}" y1="${y}" y2="${y}" stroke="${c}" stroke-width="2" opacity=".28" stroke-linecap="round"/>`
+     +`<line x1="${X(it.lo)}" x2="${X(it.lo)}" y1="${y-5}" y2="${y+5}" stroke="${c}" stroke-width="2" opacity=".5"/>`
+     +`<line x1="${X(it.hi)}" x2="${X(it.hi)}" y1="${y-5}" y2="${y+5}" stroke="${c}" stroke-width="2" opacity=".5"/>`
+     +`<circle cx="${X(it.v)}" cy="${y}" r="4.5" fill="${c}" stroke="${sv('--chart-surface')}" stroke-width="2"><title>${it.n}：预测 ${it.v}，90% 区间 ${it.lo}–${it.hi}</title></circle>`
+     +`<text x="${X(it.hi)+8}" y="${y+4}" class="axl" style="fill:${sv('--ink-2')};font-weight:600">${fmt(it.v,3)}</text>`;
+  });
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" style="height:${H}px">${g}</svg>`;
+}
+/* 分层点图：每个水平一行，点=单次运行，用于结果分布 */
+function stripPlot(groups,opts={}){
+  const W=680,rowH=30,H=groups.length*rowH+34,m={l:132,r:24,t:6},iw=W-m.l-m.r;
+  const all=groups.flatMap(g=>g.v);
+  const nt=niceTicks(Math.min(...all),Math.max(...all),4);
+  const X=v=>m.l+((v-nt.lo)/(nt.hi-nt.lo))*iw;
+  let g='';
+  nt.ticks.forEach(v=>{g+=`<line x1="${X(v)}" x2="${X(v)}" y1="${m.t}" y2="${H-24}" stroke="${sv('--grid')}"/><text x="${X(v)}" y="${H-8}" text-anchor="middle" class="axl">${v.toFixed(nt.dec)}</text>`;});
+  if(opts.rule!=null) g+=`<line x1="${X(opts.rule)}" x2="${X(opts.rule)}" y1="${m.t}" y2="${H-24}" stroke="${sv('--critical')}" stroke-width="1.5" stroke-dasharray="5 3"/>`;
+  groups.forEach((grp,i)=>{
+    const y=m.t+15+i*rowH;
+    g+=`<text x="${m.l-9}" y="${y+4}" text-anchor="end" class="axl" style="fill:${sv('--ink-2')}">${grp.n}</text>`;
+    g+=`<text x="${m.l-9}" y="${y+15}" text-anchor="end" class="axt">n=${grp.v.length}</text>`;
+    const mean=grp.v.reduce((a,b)=>a+b,0)/grp.v.length;
+    g+=`<line x1="${X(mean)}" x2="${X(mean)}" y1="${y-8}" y2="${y+8}" stroke="${sv(grp.c||'--s1')}" stroke-width="2"/>`;
+    grp.v.forEach(v=>{ g+=`<circle cx="${X(v)}" cy="${y}" r="4" fill="${sv(grp.c||'--s1')}" fill-opacity=".55" stroke="${sv('--chart-surface')}" stroke-width="1.5"><title>${grp.n}：${v}</title></circle>`; });
+  });
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" style="height:${H}px">${g}</svg>`;
+}
+/* ==================== 总览 ==================== */
+HEAD_ACTS['/overview'] = `<button class="btn" onclick="toast('已导出今日进展纪要')">导出今日纪要</button>
+  <button class="btn decide" onclick="go('/overview/tasks')">${icon('decide')}处理待决事项 · 3</button>`;
+HEAD_ACTS['/overview/tasks'] = `<button class="btn" onclick="toast('已按课题分组')">按课题分组</button>`;
+HEAD_ACTS['/overview/live'] = `<button class="btn" onclick="toast('已开启 5 秒自动刷新')">自动刷新</button>`;
+
+VIEW['/overview'] = () => {
+  const c=lineChart('ov',{h:170,w:700,dec:3,unit:'λ',ml:44,mr:60,
+    series:[{n:'面型 PV 日均值',d:[.121,.118,.126,.119,.131,.128,.142,.137,.155,.149,.168,.181],c:'--s1'}],
+    rules:[{v:.15,n:'规格上限 0.15λ'}],
+    xt:[{i:0,n:'7-06'},{i:3,n:'7-15'},{i:6,n:'7-24'},{i:9,n:'8-01'},{i:11,n:'8-04'}],
+    xlab:i=>['7-06','7-09','7-12','7-15','7-18','7-21','7-24','7-27','7-30','8-01','8-03','8-04'][i]});
+  AFTER['/overview']=()=>c.bind();
+  return `
+  <div class="grid g5" style="margin-bottom:12px">
+    <div class="stat hero"><div class="l">等你决定</div><div class="v">3</div><div class="d">1 实验建议 · 1 复核 · 1 结论升级</div></div>
+    <div class="stat"><div class="l">在跑的运行</div><div class="v">2<span class="u">台设备</span></div><div class="d">MP-03 试制中 · MP-04 空闲</div><div class="sp">${spark([1,2,2,1,3,2,2,3,2,2,1,2])}</div></div>
+    <div class="stat"><div class="l">近 7 天运行</div><div class="v">63</div><div class="d">其中 20 次属于实验 E-0142-09</div><div class="sp">${spark([4,9,12,7,11,8,12,6,9,14,10,8])}</div></div>
+    <div class="stat"><div class="l">进入分析的比例</div><div class="v">88.5<span class="u">%</span></div><div class="d"><span class="dn">↓ 3.1pt</span> · 16 次被挡在门外</div><div class="sp">${spark([94,93,94,92,93,91,92,90,91,89,89,88.5])}</div></div>
+    <div class="stat"><div class="l">已验证工艺窗口</div><div class="v">4</div><div class="d">本月新增 1 条 · 2 条待复现</div><div class="sp">${spark([2,2,2,3,3,3,3,3,3,4,4,4])}</div></div>
+  </div>
+
+  <div class="split">
+    <div class="stack">
+      <div class="card gold">
+        <div class="hd"><h3>等你决定</h3><span class="sub">金色 = 需要人做判断；其余是可以自己看的</span>
+          <div class="r"><button class="btn sm" onclick="go('/overview/tasks')">全部 3 项</button></div></div>
+        <div class="bd flush"><div class="aq">
+          ${aqRow('decide','待你批准','课题 P-0142 返回 1 个实验建议：模压温度 612 ℃ / 保压 1.85 MPa','可行概率 0.86 · 未越过安全边界 · 优化服务 v2.4 · 种子 41','审阅建议',"go('/research/projects/P-0142')")}
+          ${aqRow('decide','待你复核','非球面镜片 L28-A 面型 PV 连续 3 件超差（0.24λ / 上限 0.15λ）','MP-03 · 08-04 09:12 起 · 检测值已锁定，复核只改处置','进入复核',"go('/runs/inspections')")}
+          ${aqRow('decide','待你确认','假设 H-06 已被 20 次实验支持，是否升级为工艺窗口？','需要确认适用范围与失效条件，发布后进入知识库','查看结论',"go('/research/windows')")}
+        </div></div>
+        <div class="ft"><span>系统整理证据、执行计算、提出候选；最终判断由你做出。</span></div>
+      </div>
+
+      <div class="card">
+        <div class="hd"><h3>可以自己看的</h3><span class="sub">不需要你决定，但值得知道</span></div>
+        <div class="bd flush"><div class="aq">
+          ${aqRow('caution','数据缺口','MP-03 昨日 14:20–15:05 无过程数据，2 次运行不能进入正式分析','现场节点 EDGE-03 断连 45 分钟，补传队列已清空但窗口丢失','查看缺口',"go('/diagnose/data-health')")}
+          ${aqRow('trace','对比已完成','运行对比 CMP-2291 生成 2 个候选原因，其中 1 个可控可区组','首次偏离出现在保压阶段第 3.2 s · 分析模型 v3.2','查看候选',"go('/diagnose/candidates')")}
+          ${aqRow('unknown','证据不足','“下模芯更换是否导致面型漂移”暂时无法判定','更换前后无重叠区组，样本 3 vs 41，不能分离模芯与温度效应','设计验证实验',"go('/research/projects/P-0142')")}
+        </div></div>
+      </div>
+
+      <div class="card">
+        <div class="hd"><h3>面型 PV 走向</h3><span class="sub">当前分析范围 · 近 30 天日均</span>
+          <div class="r"><button class="btn sm ghost" onclick="openEvidence()">查看证据</button></div></div>
+        <div class="bd">${c.html}
+          <div class="alert caution" style="margin-top:10px"><span class="ic">${icon('caution')}</span>
+          <div><b>连续 5 天上行。</b>这只是趋势观察，尚未构成原因结论。要判断原因需要可比运行与受控实验 ——
+          <a href="#" onclick="go('/diagnose/compare');return false">发起运行对比</a>。</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="stack">
+      <div class="card">
+        <div class="hd"><h3>证据链完整度</h3><span class="sub">字段来自场景包 SP-L28A v7</span></div>
+        <div class="bd">${barsH([
+          {n:'运行身份',v:100,t:'100%',c:'--good'},
+          {n:'实际配方回读',v:97,t:'97%',c:'--good'},
+          {n:'过程轨迹',v:88,t:'88%',c:'--caution'},
+          {n:'检测结果',v:94,t:'94%',c:'--good'},
+          {n:'工装上下文',v:71,t:'71%',c:'--caution'},
+          {n:'执行人',v:96,t:'96%',c:'--good'},
+          {n:'材料批次',v:43,t:'43%',c:'--critical'},
+        ])}
+        <div class="alert unknown" style="margin-top:10px"><span class="ic">${icon('unknown')}</span>
+        <div>材料批次覆盖 43%，<b>不足以做分层比较</b>。系统不会用它排序原因，也不会把它当作已排除因素。</div></div></div>
+        <div class="ft"><button class="btn sm ghost" style="margin-left:auto" onclick="go('/diagnose/data-health')">打开数据可信度</button></div>
+      </div>
+
+      <div class="card">
+        <div class="hd"><h3>课题进展</h3><div class="r"><button class="btn sm ghost" onclick="go('/research/projects')">全部</button></div></div>
+        <div class="bd flush"><table class="dt compact"><tbody>
+          ${[['P-0142','面型 PV 收敛','4/7','decide','待批准实验'],
+             ['P-0139','中心厚度一致性','6/7','good','待发布窗口'],
+             ['P-0151','崩边率下降','2/7','trace','收集证据中']]
+            .map(r=>`<tr style="cursor:pointer" onclick="go('/research/projects/P-0142')">
+              <td style="font-weight:500">${r[0]}</td><td class="mut">${r[1]}</td>
+              <td class="tnum mut">${r[2]}</td><td style="text-align:right"><span class="tag ${r[3]}">${r[4]}</span></td></tr>`).join('')}
+        </tbody></table></div>
+      </div>
+
+      <div class="card">
+        <div class="hd"><h3>现场节点</h3><div class="r"><span class="tag caution">1 项需关注</span></div></div>
+        <div class="bd flush"><table class="dt compact"><tbody>
+          ${[['EDGE-01','MP-01 / MP-02','good','正常'],['EDGE-02','MP-03 / MP-04','good','正常'],
+             ['EDGE-03','MP-05','caution','昨日断连 45 min'],['EDGE-04','三坐标 / 干涉仪','good','正常']]
+            .map(r=>`<tr style="cursor:pointer" onclick="go('/configure/edges')">
+              <td><span class="dotm" style="background:var(--${r[2]});margin-right:6px"></span>${r[0]}</td>
+              <td class="mut">${r[1]}</td><td class="mut" style="text-align:right">${r[3]}</td></tr>`).join('')}
+        </tbody></table></div>
+      </div>
+    </div>
+  </div>`;
+};
+
+VIEW['/overview/tasks'] = () => `
+  <div class="alert decide" style="margin-bottom:12px"><span class="ic">${icon('decide')}</span>
+    <div><b>这一页只放需要你做判断的事。</b>不需要判断的信息在决策工作台的下半屏，不会挤到这里。</div></div>
+  <div class="stack">
+    ${[
+      {t:'批准实验 E-0142-11',s:'课题 P-0142 · 优化服务建议模压温度 612 ℃ / 保压 1.85 MPa',
+       w:'满足安全约束概率 0.86 · 相对当前设定期望增益 +0.021λ · 已避让 2 个待执行点',
+       a:'审阅并批准',f:"go('/research/projects/P-0142')",age:'2 小时前'},
+      {t:'复核 IT-8841 面型 PV 超差',s:'运行 OR-24084-0512 · 检测值 0.243λ（上限 0.150λ）',
+       w:'检测值由干涉仪自动判定，复核只改变处置，不改写原始检测值。需填写判定理由。',
+       a:'进入复核',f:"go('/runs/inspections')",age:'4 小时前'},
+      {t:'确认 H-06 是否升级为工艺窗口',s:'冷却前 2 s 速率快于 −15 ℃/s 时中心厚度收缩超差',
+       w:'20 次实验支持、MP-04 独立复现。升级前需你确认适用范围与失效条件。',
+       a:'查看结论',f:"go('/research/windows')",age:'昨天'},
+    ].map(x=>`<div class="card gold"><div class="hd">
+        <span class="tag decide">${icon('decide')}待你决定</span><h3>${x.t}</h3>
+        <div class="r"><span class="tiny mut">${x.age}</span></div></div>
+      <div class="bd"><div style="font-size:12.5px;margin-bottom:6px">${x.s}</div>
+        <div class="tiny mut" style="line-height:1.6">${x.w}</div></div>
+      <div class="ft"><button class="btn sm ghost" onclick="openEvidence()">查看证据</button>
+        <button class="btn sm ghost" onclick="toast('已转交李工，并记录转交理由')">转交他人</button>
+        <button class="btn sm decide" style="margin-left:auto" onclick="${x.f}">${x.a}</button></div>
+    </div>`).join('')}
+  </div>
+  <div class="card" style="margin-top:12px"><div class="bd"><div class="empty" style="padding:20px">
+    没有更多待决事项。<br><span class="tiny">已处理的决定连同理由与当时的证据快照保存在
+    <a href="#" onclick="go('/system/audit');return false">审计追踪</a>。</span></div></div></div>`;
+
+VIEW['/overview/live'] = () => {
+  const c=lineChart('lv',{h:190,w:720,dec:0,unit:'℃',ml:44,mr:56,
+    bands:[{a:0,b:5,n:'升温'},{a:5,b:9,n:'保压'},{a:9,b:19,n:'冷却'}],
+    series:[{n:'MP-03 当前运行 模具温度',d:[596,603,610,615,618,619,618,617,614,610,603,592,580,566,552,540,529,519,512,506],c:'--s1'}],
+    xt:[{i:0,n:'0s'},{i:5,n:'2.5s'},{i:9,n:'4.5s'},{i:14,n:'7.0s'},{i:19,n:'9.5s'}],
+    xlab:i=>`t = ${(i*0.5).toFixed(1)} s`});
+  AFTER['/overview/live']=()=>c.bind();
+  return `
+  <div class="grid g4" style="margin-bottom:12px">
+    ${[['MP-03','运行中','good','OR-24084-0517 · 第 3.2 s · 保压'],
+       ['MP-04','空闲','plain','上次运行 08-03 20:41'],
+       ['MP-05','换模中','caution','工装 F-12 → F-15 · 已卸下 18 min'],
+       ['干涉仪 ZYGO-02','测量中','good','IT-8843 · 队列 2 件']]
+      .map(r=>`<div class="stat"><div class="l">${r[0]}</div>
+        <div class="row" style="margin:2px 0 3px"><span class="tag ${r[1]==='运行中'?'good':r[1]==='换模中'?'caution':'plain'}">${r[1]}</span></div>
+        <div class="d">${r[3]}</div></div>`).join('')}
+  </div>
+  <div class="split">
+    <div class="card"><div class="hd"><h3>MP-03 当前运行</h3><span class="sub">OR-24084-0517 · 实时回读 · 100 ms 采样</span>
+      <div class="r"><span class="tag trace">${icon('trace')}数据在线</span></div></div>
+      <div class="bd">${c.html}
+        <div class="grid g4" style="margin-top:10px">
+          ${[['模具温度','618.4','℃','608.0'],['保压压力','1.842','MPa','1.840'],['保压时间','2.00','s','2.00'],['冷却速率','−14.1','℃/s','−14.0']]
+            .map(k=>`<div class="ev"><div class="h"><span class="dotm" style="background:var(--s1)"></span>${k[0]}</div>
+              <b style="font-size:15px" class="tnum">${k[1]}</b> <span class="mut">${k[2]}</span><br>
+              <span class="mut tiny">设定 ${k[3]} · 实际回读</span></div>`).join('')}
+        </div></div>
+    </div>
+    <div class="stack">
+      <div class="card"><div class="hd"><h3>本次运行归属</h3></div><div class="bd">
+        <dl class="kv"><dt>课题</dt><dd>P-0142</dd><dt>实验</dt><dd>E-0142-10（3/10 次）</dd>
+        <dt>产品</dt><dd>非球面镜片 L28-A</dd><dt>配方</dt><dd>R-2024.7 v12</dd>
+        <dt>下模芯</dt><dd>C-118</dd><dt>执行人</dt><dd>陈师傅</dd></dl>
+        <div class="alert trace" style="margin-top:10px"><span class="ic">${icon('trace')}</span>
+        <div>这次运行属于实验 E-0142-10，结果会自动计入该实验，不需要手工录入。</div></div></div>
+      </div>
+      <div class="card"><div class="hd"><h3>节点心跳</h3></div><div class="bd stack" style="gap:9px">
+        ${chk('good','EDGE-02 → 平台','延迟 18 ms · 队列积压 0 · 最近上行 2 秒前')}
+        ${chk('good','EDGE-04 → 平台','延迟 22 ms · 队列积压 0')}
+        ${chk('caution','EDGE-03 → 平台','昨日断连 45 min 已恢复，窗口内数据无法补齐')}
+      </div></div>
+    </div>
+  </div>`;
+};
+/* ==================== 运行（事实层） ==================== */
+HEAD_ACTS['/runs'] = `<button class="btn" onclick="toast('已导出证据包 evidence-runs-2026-08-04.zip（含来源、版本、哈希与限制说明）')">导出证据包</button>
+  <button class="btn" onclick="toggleBasket()">对比暂存区 · 2</button>
+  <button class="btn pri" onclick="go('/diagnose/compare')">发起运行对比</button>`;
+HEAD_ACTS['/runs/inspections'] = `<button class="btn" onclick="toast('已按检测方案 QP-19 重建任务')">重建任务</button>
+  <button class="btn pri" onclick="toast('进入录入：判定由检测值与规格自动得出')">录入检测值</button>`;
+HEAD_ACTS['/runs/setup'] = `<button class="btn pri" onclick="toast('已生效：下一次运行将按此上下文记录')">让配置生效</button>`;
+TABS['/runs'] = tabHTML([['全部运行','63'],['今日','8'],['属于实验','20'],['结果异常','9'],['未进入分析','6']],0);
+TABS['/runs/inspections'] = tabHTML([['待录入','12'],['待复核','3'],['已完成','86'],['全部','']],0);
+
+const RUNS=[
+  ['OR-24084-0517','MP-03','R-2024.7 v12','08-04 11:02','运行中','—','trace','进行中',100,'C-118','E-0142-10'],
+  ['OR-24084-0512','MP-03','R-2024.7 v12','08-04 10:42','4 分 12 秒','0.243λ','critical','超差',68,'C-118','—'],
+  ['OR-24084-0511','MP-03','R-2024.7 v12','08-04 10:36','4 分 09 秒','0.238λ','critical','超差',68,'C-118','—'],
+  ['OR-24084-0510','MP-03','R-2024.7 v12','08-04 10:31','4 分 11 秒','0.151λ','caution','临界',72,'C-118','—'],
+  ['OR-24084-0508','MP-03','R-2024.7 v12','08-04 10:19','4 分 08 秒','0.126λ','good','合格',100,'C-118','—'],
+  ['OR-24083-0102','MP-03','R-2024.7 v12','08-03 21:14','4 分 14 秒','0.243λ','critical','超差',100,'C-118','—'],
+  ['OR-24083-0098','MP-04','R-2024.7 v12','08-03 20:41','4 分 07 秒','0.117λ','good','合格',100,'C-092','E-0142-09'],
+  ['OR-24083-0071','MP-03','R-2024.7 v11','08-03 14:32','4 分 12 秒','—','unknown','数据不足',12,'C-118','—'],
+  ['OR-24083-0070','MP-03','R-2024.7 v11','08-03 14:26','4 分 11 秒','—','unknown','数据不足',0,'C-118','—'],
+  ['OR-24081-0417','MP-03','R-2024.7 v12','08-01 08:05','4 分 09 秒','0.118λ','good','合格',100,'C-104','E-0142-09'],
+  ['OR-24081-0416','MP-03','R-2024.7 v12','08-01 07:59','4 分 10 秒','0.121λ','good','合格',100,'C-104','E-0142-09'],
+];
+VIEW['/runs'] = () => `
+  <div class="filterbar">
+    <select class="inp" style="width:120px"><option>全部设备</option><option selected>MP-03</option></select>
+    <select class="inp" style="width:140px"><option selected>R-2024.7 v12</option><option>全部配方版本</option></select>
+    <select class="inp" style="width:130px"><option selected>全部实验</option><option>E-0142-09</option></select>
+    <input class="inp" style="width:170px" placeholder="运行号">
+    <label class="row tiny mut" style="gap:5px"><input type="checkbox" checked> 仅显示满足分析准入</label>
+    <div class="sp"></div><span class="tiny mut">63 条 · 已选 2 条</span>
+    <button class="btn sm" onclick="toggleBasket()">加入对比暂存区</button>
+  </div>
+  <div class="card"><div class="bd flush scroll" style="max-height:calc(100vh - 300px);overflow:auto">
+    <table class="dt"><thead><tr>
+      <th style="width:30px"><input type="checkbox"></th><th>运行号</th><th>设备</th><th>配方版本</th>
+      <th>开始</th><th>时长</th><th>面型 PV</th><th class="num">数据完整度</th><th>结果</th><th>下模芯</th><th>所属实验</th><th style="width:90px"></th>
+    </tr></thead><tbody>
+    ${RUNS.map((r,i)=>`<tr class="${i===5?'sel':''}">
+      <td><input type="checkbox" ${i===5||i===9?'checked':''}></td>
+      <td><button class="linkcell" onclick="go('/runs/OR-24083-0102')">${r[0]}</button></td>
+      <td>${r[1]}</td><td class="mut">${r[2]}</td><td class="mut tnum">${r[3]}</td><td class="mut tnum">${r[4]}</td>
+      <td class="tnum" style="font-weight:${r[6]==='critical'?600:400};color:var(--${r[6]==='critical'?'critical-ink':'ink-1'})">${r[5]}</td>
+      <td class="num">${r[8]===100?'<span class="mut">100%</span>':`<b style="color:var(--${r[8]<50?'critical':'caution'}-ink)">${r[8]}%</b>`}</td>
+      <td><span class="tag ${r[6]}">${icon(r[6])}${r[7]}</span></td>
+      <td class="mut">${r[9]}</td><td class="mut">${r[10]==='—'?'<span class="mut">—</span>':`<span class="tag plain">${r[10]}</span>`}</td>
+      <td style="text-align:right"><button class="btn sm ghost" onclick="toast('已加入对比暂存区')">加入对比</button></td>
+    </tr>`).join('')}
+    </tbody></table></div>
+    <div class="ft"><span>数据不足的运行保留并显示原因，不会被静默丢弃。</span>
+      <span style="margin-left:auto">第 1–11 条，共 63 条</span></div>
+  </div>`;
+
+/* ---- 运行详情：证据主干的完整展开 ---- */
+VIEW['/runs/OR-24083-0102'] = () => {
+  const c=lineChart('rd',{h:220,w:760,dec:1,unit:'℃',ml:44,mr:60,
+    bands:[{a:0,b:5,n:'升温'},{a:5,b:9,n:'保压'},{a:9,b:19,n:'冷却'}],
+    series:[{n:'本次运行',d:[597,603,609,613,615,615,614,612,609,604,596,585,572,558,545,533,523,515,509,504],c:'--s2'},
+            {n:'同配方合格运行均值（n=8）',d:[598,604,611,616,619,620,620,619,617,613,606,596,584,570,556,543,531,521,513,507],c:'--s1',dash:true}],
+    xt:[{i:0,n:'0s'},{i:5,n:'2.5s'},{i:9,n:'4.5s'},{i:14,n:'7.0s'},{i:19,n:'9.5s'}],
+    xlab:i=>`t = ${(i*0.5).toFixed(1)} s`});
+  AFTER['/runs/OR-24083-0102']=()=>c.bind();
+  return `
+  <div class="row wrap" style="gap:8px;margin-bottom:12px">
+    <span class="tag critical">${icon('critical')}面型 PV 超差 0.243λ</span>
+    <span class="tag good">${icon('good')}满足分析准入</span>
+    <span class="tag plain">已进入对比 CMP-2291</span>
+    <span style="flex:1"></span>
+    <button class="btn sm" onclick="toast('已加入对比暂存区')">加入对比</button>
+    <button class="btn sm" onclick="openEvidence()">证据面板</button>
+    <button class="btn sm" onclick="toast('已导出证据包')">导出证据包</button>
+  </div>
+  <div class="split">
+    <div class="stack">
+      <div class="card"><div class="hd"><h3>过程轨迹</h3><span class="sub">模具温度 · 对齐到运行起点 · 阶段带来自工艺模型 PM-L28A v12</span>
+        <div class="r"><div class="btngroup"><button class="btn sm on">模具温度</button><button class="btn sm" onclick="toast('切换到保压压力')">保压压力</button><button class="btn sm" onclick="toast('切换到合模位移')">合模位移</button></div></div></div>
+        <div class="bd">${c.html}
+          <div class="row tiny mut" style="margin-top:8px;gap:6px"><span class="tag caution">保压段低 3.8 ℃</span>
+            <span>与同配方合格运行相比，保压段均值低 3.8 ℃，冷却前 2 s 更快 1.8 ℃/s。</span></div></div>
+      </div>
+      <div class="card"><div class="hd"><h3>实际执行条件</h3><span class="sub">回读值，不是配方设定值</span></div>
+        <div class="bd flush"><table class="dt compact">
+          <thead><tr><th>可控变量</th><th class="num">设定值</th><th class="num">实际回读</th><th class="num">偏差</th><th>来源</th></tr></thead><tbody>
+          ${[['保压段模温','608.0 ℃','613.4 ℃','+5.4','PLC DB21.DBD8 · 100 ms'],
+             ['保压压力','1.840 MPa','1.836 MPa','−0.004','PLC DB21.DBD16 · 100 ms'],
+             ['保压时间','2.00 s','2.00 s','0','配方设定 + 实测'],
+             ['冷却速率','−14.0 ℃/s','−15.9 ℃/s','−1.9','由模温派生']]
+            .map(r=>`<tr><td style="font-weight:500">${r[0]}</td><td class="num mut">${r[1]}</td>
+              <td class="num" style="font-weight:600">${r[2]}</td><td class="num mut">${r[3]}</td><td class="mut">${r[4]}</td></tr>`).join('')}
+        </tbody></table></div>
+      </div>
+      <div class="card"><div class="hd"><h3>检测结果</h3><div class="r"><span class="tag critical">1 项超差</span></div></div>
+        <div class="bd flush"><table class="dt compact">
+          <thead><tr><th>特性</th><th>方式</th><th class="num">检测值</th><th class="num">规格</th><th>判定</th><th>复核</th></tr></thead><tbody>
+          ${[['面型 PV','干涉仪 ZYGO-02','0.243 λ','≤0.150','critical','已复核 · 判废'],
+             ['中心厚度','三坐标','2.4012 mm','2.400±0.003','good','—'],
+             ['外观崩边','视觉检查','无','无崩边','good','—']]
+            .map(r=>`<tr><td>${r[0]}</td><td class="mut">${r[1]}</td><td class="num" style="font-weight:${r[4]==='critical'?600:400}">${r[2]}</td>
+              <td class="num mut">${r[3]}</td><td><span class="tag ${r[4]}">${icon(r[4])}${r[4]==='critical'?'超差':'合格'}</span></td>
+              <td class="mut">${r[5]}</td></tr>`).join('')}
+        </tbody></table></div>
+      </div>
+    </div>
+    <div class="stack">
+      <div class="card"><div class="hd"><h3>运行身份</h3></div><div class="bd">
+        <dl class="kv"><dt>运行号</dt><dd><b>OR-24083-0102</b></dd>
+          <dt>设备</dt><dd>MP-03 模压机</dd><dt>产品</dt><dd>非球面镜片 L28-A</dd>
+          <dt>配方版本</dt><dd>R-2024.7 v12</dd><dt>起止</dt><dd>08-03 21:14:07 → 21:18:21</dd>
+          <dt>执行人</dt><dd>陈师傅</dd><dt>所属实验</dt><dd class="mut">不属于任何实验</dd></dl></div>
+      </div>
+      <div class="card"><div class="hd"><h3>上下文快照</h3><span class="sub">字段由场景包声明，不硬编码</span>
+        <div class="r"><button class="btn sm ghost" onclick="go('/configure/scenarios')">场景包</button></div></div>
+        <div class="bd stack" style="gap:8px">
+          <div class="tiny mut">分析必需</div>
+          <dl class="kv"><dt>工装组合</dt><dd>F-12 v3</dd><dt>下模芯</dt><dd>C-118（08-03 装机）</dd>
+            <dt>上模芯</dt><dd>C-051</dd><dt>模架</dt><dd>F-12</dd></dl>
+          <div class="tiny mut" style="margin-top:4px">有则记录</div>
+          <dl class="kv"><dt>执行人</dt><dd>陈师傅</dd>
+            <dt>材料批次</dt><dd><span class="tag unknown">未记录</span></dd>
+            <dt>环境湿度</dt><dd><span class="tag unknown">未接入</span></dd></dl>
+          <div class="alert unknown"><span class="ic">${icon('unknown')}</span>
+            <div>两个字段是<b>未知</b>，不是"已排除"。任何涉及它们的结论都要标注证据不足。</div></div>
+        </div>
+      </div>
+      <div class="card"><div class="hd"><h3>可复现</h3></div><div class="bd">
+        <dl class="kv"><dt>关联号</dt><dd><code>CY-77120</code></dd>
+          <dt>工艺模型</dt><dd>PM-L28A v12</dd><dt>场景包</dt><dd>SP-L28A v7</dd>
+          <dt>分析模型</dt><dd>v3.2</dd><dt>内容哈希</dt><dd><code>8f3a2c91b7e4c71d</code></dd></dl></div>
+        <div class="ft"><button class="btn sm ghost" style="margin-left:auto" onclick="toast('已复制引用：run:OR-24083-0102#8f3a2c')">复制引用</button></div>
+      </div>
+    </div>
+  </div>`;
+};
+
+VIEW['/runs/inspections'] = () => `
+  <div class="filterbar">
+    <select class="inp" style="width:150px"><option selected>全部检测方式</option><option>干涉仪</option><option>三坐标</option><option>视觉检查</option></select>
+    <input class="inp" style="width:180px" placeholder="任务号 / 运行号">
+    <div class="sp"></div><span class="tiny mut">12 项待录入 · 3 项待复核</span>
+  </div>
+  <div class="split">
+    <div class="card"><div class="bd flush"><table class="dt">
+      <thead><tr><th>任务号</th><th>运行号</th><th>特性</th><th>方式</th><th class="num">检测值</th><th class="num">规格</th><th>判定</th><th style="width:96px"></th></tr></thead><tbody>
+      ${[['IT-8841','OR-24084-0512','面型 PV','干涉仪','0.243','≤0.150','critical','复核'],
+         ['IT-8840','OR-24084-0511','面型 PV','干涉仪','0.238','≤0.150','critical','复核'],
+         ['IT-8839','OR-24084-0510','面型 PV','干涉仪','0.151','≤0.150','caution','复核'],
+         ['IT-8838','OR-24084-0510','中心厚度','三坐标','2.4012','2.400±0.003','good',''],
+         ['IT-8837','OR-24084-0508','面型 PV','干涉仪','0.126','≤0.150','good',''],
+         ['IT-8835','OR-24084-0505','外观崩边','视觉检查','—','无崩边','unknown','录入']]
+        .map((r,i)=>`<tr class="${i===0?'gold':''}">
+          <td><button class="linkcell" onclick="openEvidence()">${r[0]}</button></td>
+          <td class="mut">${r[1]}</td><td>${r[2]}</td><td class="mut">${r[3]}</td>
+          <td class="num" style="font-weight:${r[6]==='critical'?600:400}">${r[4]}</td><td class="num mut">${r[5]}</td>
+          <td><span class="tag ${r[6]}">${icon(r[6])}${({good:'合格',caution:'临界',critical:'超差',unknown:'未录入'})[r[6]]}</span></td>
+          <td style="text-align:right">${r[7]?`<button class="btn sm ${r[7]==='复核'?'decide':''}" onclick="toast('${r[7]==='复核'?'进入复核：需填写判定理由':'进入录入'}')">${r[7]}</button>`:''}</td>
+        </tr>`).join('')}
+    </tbody></table></div>
+      <div class="ft"><span>判定由检测值与规格自动得出；复核只改变<b>处置</b>，不改写原始检测值。</span></div>
+    </div>
+    <div class="card gold"><div class="hd"><span class="tag decide">${icon('decide')}待你复核</span><h3>IT-8841</h3>
+      <span class="sub">面型 PV 0.243λ</span></div>
+      <div class="bd stack" style="gap:10px">
+        <div style="height:110px;border-radius:var(--r);background:var(--surface-3);display:grid;place-items:center;color:var(--ink-4);font-size:11.5px;border:1px solid var(--line)">干涉图原图 · 点击放大</div>
+        <dl class="kv"><dt>检测时间</dt><dd>08-04 10:51</dd><dt>设备</dt><dd>干涉仪 ZYGO-02</dd>
+          <dt>检测员</dt><dd>王工</dd><dt>规格来源</dt><dd>检测定义 ID-114 v4</dd></dl>
+        <div class="field"><label>复核判定</label><select class="inp">
+          <option>确认超差 · 判废</option><option>确认超差 · 返工</option><option>测量异常 · 重新测量</option><option>放行（需理由）</option></select></div>
+        <div class="field"><label>判定理由（必填，进入审计追踪）</label>
+          <textarea class="inp" rows="3" placeholder="例如：干涉图显示中心区域规则形变，与模具型面偏差一致，非测量误差。"></textarea></div>
+      </div>
+      <div class="ft"><button class="btn sm ghost" onclick="toast('已转交李工')">转交他人</button>
+        <button class="btn sm decide" style="margin-left:auto" onclick="toast('已提交复核，判定与理由已留痕')">提交复核</button></div>
+    </div>
+  </div>`;
+
+VIEW['/runs/events'] = () => `
+  <div class="filterbar">
+    <select class="inp" style="width:130px"><option selected>全部类型</option><option>设备报警</option><option>人工干预</option><option>阶段跳变</option></select>
+    <select class="inp" style="width:120px"><option selected>MP-03</option></select>
+    <input class="inp" style="width:200px" placeholder="关键词 / 运行号">
+    <div class="sp"></div><span class="tiny mut">近 7 天 47 条</span>
+  </div>
+  <div class="card"><div class="bd flush"><table class="dt">
+    <thead><tr><th>时间</th><th>类型</th><th>来源</th><th>描述</th><th>关联运行</th><th style="width:80px"></th></tr></thead><tbody>
+    ${[['08-04 10:31:04','人工干预','caution','MP-03','操作员将模温设定由 612 → 608 ℃','OR-24084-0510'],
+       ['08-04 09:12:47','设备报警','critical','MP-03','加热区 2 偏差报警，持续 6 s 后自动恢复','OR-24084-0505'],
+       ['08-03 21:18:21','阶段跳变','trace','MP-03','冷却阶段结束，运行边界写入','OR-24083-0102'],
+       ['08-03 15:05:12','连接恢复','good','EDGE-03','断连 45 min 后恢复，补传队列已清空','—'],
+       ['08-03 14:20:31','连接中断','critical','EDGE-03','与平台失联','—'],
+       ['08-03 09:40:02','工装装入','trace','MP-03','下模芯 C-104 → C-118','—']]
+      .map(r=>`<tr><td class="mut tnum">${r[0]}</td><td><span class="tag ${r[2]}">${r[1]}</span></td>
+        <td>${r[3]}</td><td>${r[4]}</td>
+        <td>${r[5]==='—'?'<span class="mut">—</span>':`<button class="linkcell" onclick="go('/runs/OR-24083-0102')">${r[5]}</button>`}</td>
+        <td style="text-align:right"><button class="btn sm ghost" onclick="openEvidence()">证据</button></td></tr>`).join('')}
+  </tbody></table></div>
+    <div class="ft"><span>事件不改写运行事实，只作为解释运行差异时的上下文线索。</span></div>
+  </div>`;
+
+VIEW['/runs/setup'] = () => `
+  <div class="alert trace" style="margin-bottom:12px"><span class="ic">${icon('trace')}</span>
+    <div><b>这一页决定"接下来的运行会被记成什么"。</b>生效后，MP-03 上的每一次运行都会自动带上这些上下文，不需要人工填。</div></div>
+  <div class="split">
+    <div class="stack">
+      ${[['1. 选择设备','good','MP-03 模压机 · 当前空闲'],
+         ['2. 确认产品与配方','good','非球面镜片 L28-A · R-2024.7 v12'],
+         ['3. 确认已装工装','good','F-12 v3 · 下模芯 C-118 · 上模芯 C-051'],
+         ['4. 补充有则记录字段','caution','材料批次未填 —— 可以不填，但会限制后续分层分析']]
+        .map(s=>`<div class="card"><div class="hd"><span class="tag ${s[1]}">${icon(s[1])}</span><h3>${s[0]}</h3>
+          <div class="r"><button class="btn sm ghost" onclick="toast('打开选择器')">修改</button></div></div>
+          <div class="bd" style="padding:9px 12px;font-size:12.5px">${s[2]}</div></div>`).join('')}
+      <div class="card"><div class="hd"><h3>生效后的上下文快照预览</h3><span class="sub">下一次运行将按此记录</span></div>
+        <div class="bd"><dl class="kv">
+          <dt>设备</dt><dd>MP-03</dd><dt>产品</dt><dd>非球面镜片 L28-A</dd>
+          <dt>配方版本</dt><dd>R-2024.7 v12</dd><dt>工装组合</dt><dd>F-12 v3（C-118 / C-051）</dd>
+          <dt>执行人</dt><dd>陈师傅</dd><dt>材料批次</dt><dd><span class="tag unknown">未填</span></dd>
+          <dt>所属实验</dt><dd>E-0142-10（剩余 7 次）</dd></dl></div>
+        <div class="ft"><span>生效时间将记入审计追踪。</span>
+          <button class="btn sm decide" style="margin-left:auto" onclick="toast('已生效：下一次运行将按此上下文记录')">让配置生效</button></div>
+      </div>
+    </div>
+    <div class="card"><div class="hd"><h3>为什么要先做这一步</h3></div><div class="bd" style="font-size:12px;line-height:1.7">
+      系统不会在事后猜测一次运行用了什么模具、什么配方。<br><br>
+      <b>先声明，再运行</b>：条件在运行发生之前就固定下来，运行结束时直接生成不可变快照。<br><br>
+      如果跳过这一步，运行仍会被记录，但上下文字段缺失，会在
+      <a href="#" onclick="go('/diagnose/data-health');return false">数据可信度</a> 里被挡在分析门外，并显示原因。
+      <div class="alert caution" style="margin-top:10px"><span class="ic">${icon('caution')}</span>
+        <div>上次跳过这一步是 08-03 14:26，导致 2 次运行至今无法进入分析。</div></div>
+    </div></div>
+  </div>`;
+/* ==================== 追因 ==================== */
+HEAD_ACTS['/diagnose/compare'] = `<button class="btn" onclick="toast('已保存对比方案 CMP-2291，可复现')">保存对比方案</button>
+  <button class="btn" onclick="toast('正在按分析模型 v3.2 重算…')">重算对比</button>
+  <button class="btn pri" onclick="go('/diagnose/candidates')">查看候选原因 · 2</button>`;
+HEAD_ACTS['/diagnose/data-health'] = `<button class="btn" onclick="toast('已导出缺口清单 CSV')">导出缺口清单</button>
+  <button class="btn pri" onclick="toast('已冻结数据集 DS-2291（哈希 8f3a…c71），后续分析可复现')">冻结分析数据集</button>`;
+HEAD_ACTS['/diagnose/candidates'] = `<button class="btn" onclick="toast('已按可干预性排序')">按可干预性排序</button>`;
+TABS['/diagnose/compare'] = tabHTML([['差异排序',''],['过程曲线',''],['阶段特征',''],['上下文差异',''],['结论边界','']],0);
+TABS['/diagnose/data-health'] = tabHTML([['准入门禁',''],['时间与连续性',''],['上下文覆盖',''],['因素重叠','']],0);
+TABS['/diagnose/candidates'] = tabHTML([['待验证','5'],['已转为假设','3'],['已驳回','2'],['证据不足','4']],0);
+
+function cand(title,kind,cap,sup,ref,conf,gap,exp){
+  const col=(l,c,items)=>`<div class="col"><div class="cl"><span class="dotm" style="background:var(--${c})"></span>${l}</div><ul>${items.map(i=>`<li>${i}</li>`).join('')}</ul></div>`;
+  return `<div class="cand">
+    <div class="ch"><span class="tag machine">机器提出</span><span class="t">${title}</span>
+      <div class="r"><span class="tag ${kind}">${cap}</span></div></div>
+    <div class="cb">
+      ${col('支持证据','good',sup)}${col('反证','critical',ref)}
+      ${col('混杂因素','caution',conf)}${col('数据不足','unknown',gap)}
+    </div>
+    <div class="cf"><b style="color:var(--ink-2)">建议实验</b><span>${exp}</span>
+      <button class="btn sm ghost" style="margin-left:auto" onclick="toast('已标记为证据不足，保留在候选列表并记录理由')">标记为证据不足</button>
+      <button class="btn sm ghost" onclick="toast('已驳回，理由必填并留痕')">驳回候选</button>
+      <button class="btn sm decide" onclick="toast('已转为假设 H-07 并生成实验草案，等你批准后才会执行')">转为假设并起草实验</button></div>
+  </div>`;
+}
+
+VIEW['/diagnose/compare'] = () => {
+  const base=[598,604,611,616,619,620,620,619,617,613,606,596,584,570,556,543,531,521,513,507];
+  const test=[597,603,609,613,615,615,614,612,609,604,596,585,572,558,545,533,523,515,509,504];
+  const c=lineChart('cmp',{h:250,w:820,dec:1,unit:'℃',ml:44,mr:70,
+    bands:[{a:0,b:5,n:'升温'},{a:5,b:9,n:'保压'},{a:9,b:19,n:'冷却'}],
+    series:[{n:'基线组均值（8 次合格）',d:base,c:'--s1'},{n:'对照组均值（3 次超差）',d:test,c:'--s2'}],
+    xt:[{i:0,n:'0s'},{i:5,n:'2.5s'},{i:9,n:'4.5s'},{i:14,n:'7.0s'},{i:19,n:'9.5s'}],
+    xlab:i=>`t = ${(i*0.5).toFixed(1)} s`});
+  AFTER['/diagnose/compare']=()=>c.bind();
+  const diffs=[
+    ['保压段模具温度','℃','617.2','613.4','−3.8','1.42','p=0.004','可控','critical'],
+    ['首次偏离时刻','s','—','3.2','—','—','—','观察量','caution'],
+    ['冷却速率（前 2s）','℃/s','−14.1','−15.9','−1.8','0.98','p=0.021','可控','caution'],
+    ['保压压力峰值','MPa','1.842','1.836','−0.006','0.21','p=0.41','可控','unknown'],
+    ['下模芯序列号','—','C-104','C-118','变更','—','不可检验','可区组','unknown'],
+    ['执行人','—','陈师傅 6 / 李工 2','陈师傅 3','不平衡','—','样本不足','可区组','unknown'],
+    ['材料批次','—','LOT-2287','未记录','—','—','数据不足','不适用','unknown'],
+  ];
+  return `
+  <div class="row wrap" style="margin-bottom:12px;gap:8px">
+    <div class="card" style="flex:1;min-width:280px"><div class="bd" style="padding:9px 12px">
+      <div class="row" style="gap:8px;min-width:0"><span class="tag trace" style="flex:0 0 auto">基线组</span>
+        <b style="font-size:12.5px;white-space:nowrap;flex:0 0 auto">8 次合格运行</b>
+        <span class="tiny mut" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">08-01 → 08-02 · PV 0.117–0.126λ</span>
+        <button class="btn sm ghost" style="margin-left:auto" onclick="toast('已打开基线组成员列表')">成员</button></div></div></div>
+    <div class="card" style="flex:1;min-width:280px"><div class="bd" style="padding:9px 12px">
+      <div class="row" style="gap:8px;min-width:0"><span class="tag critical" style="flex:0 0 auto">对照组</span>
+        <b style="font-size:12.5px;white-space:nowrap;flex:0 0 auto">3 次超差运行</b>
+        <span class="tiny mut" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">08-03 → 08-04 · PV 0.238–0.243λ</span>
+        <button class="btn sm ghost" style="margin-left:auto" onclick="toast('已打开对照组成员列表')">成员</button></div></div></div>
+    <div class="card" style="flex:0 0 auto"><div class="bd" style="padding:9px 12px">
+      <div class="row tiny" style="gap:10px"><span class="mut">配对</span><b>同设备 · 同配方版本</b>
+        <button class="btn sm ghost" onclick="toast('配对规则来自分析模型 v3.2')">调整</button></div></div></div>
+  </div>
+
+  <div class="alert caution" style="margin-bottom:12px"><span class="ic">${icon('caution')}</span>
+    <div><b>结论边界：</b>对照组 3 次运行全部发生在下模芯由 C-104 更换为 C-118 之后，两个因素<b>完全重叠</b>，
+    观察数据不能分离"模芯更换"与"保压温度下降"。系统给出候选，不给出根因排序。</div></div>
+
+  <div class="split">
+    <div class="stack">
+      <div class="card"><div class="hd"><h3>过程曲线叠加</h3><span class="sub">模具温度 · 对齐到运行起点</span>
+        <div class="r"><div class="btngroup"><button class="btn sm on">模具温度</button><button class="btn sm" onclick="toast('切换到保压压力')">保压压力</button><button class="btn sm" onclick="toast('切换到合模位移')">合模位移</button></div>
+        <button class="btn sm ghost" onclick="openEvidence()">证据</button></div></div>
+        <div class="bd">${c.html}
+          <div class="row tiny mut" style="margin-top:8px;gap:6px"><span class="tag plain">首次偏离 t = 3.2 s</span>
+            <span>保压段起始后 0.7 s，两组均值差首次超过 2σ 并持续 6 个采样点。</span></div></div>
+      </div>
+      <div class="card"><div class="hd"><h3>差异排序</h3><span class="sub">按效应量排序 · 只对可控或可区组的变量提供实验入口</span>
+        <div class="r"><button class="btn sm ghost" onclick="toast('已隐藏不显著项')">隐藏不显著</button></div></div>
+        <div class="bd flush"><table class="dt">
+          <thead><tr><th>变量</th><th>单位</th><th class="num">基线组</th><th class="num">对照组</th><th class="num">差异</th><th class="num">效应量 d</th><th>显著性</th><th>可干预性</th><th style="width:110px"></th></tr></thead><tbody>
+          ${diffs.map(d=>`<tr>
+            <td style="font-weight:500">${d[0]}</td><td class="mut">${d[1]}</td>
+            <td class="num mut">${d[2]}</td><td class="num">${d[3]}</td>
+            <td class="num" style="font-weight:600;color:var(--${d[8]==='critical'?'critical-ink':d[8]==='caution'?'caution-ink':'ink-3'})">${d[4]}</td>
+            <td class="num">${d[5]}</td><td class="mut">${d[6]}</td>
+            <td>${d[7]==='可控'?'<span class="tag good">可控</span>':d[7]==='可区组'?'<span class="tag trace">可区组</span>':`<span class="tag unknown">${d[7]}</span>`}</td>
+            <td style="text-align:right">${['可控','可区组'].includes(d[7])?`<button class="btn sm ghost" onclick="toast('已转为假设，进入课题 P-0142')">转为假设</button>`:'<span class="tiny mut">不可直接实验</span>'}</td>
+          </tr>`).join('')}
+        </tbody></table></div>
+      </div>
+      <div><div class="sectitle">候选原因 · 2 项</div>
+        ${cand('保压段模具温度下降 3.8 ℃ 导致面型 PV 上升','critical','可控 · 可实验',
+          ['两组保压均温差 3.8 ℃，d = 1.42，p = 0.004','首次偏离 t = 3.2 s 与保压开始重合','机理先验：模温下降 → 黏度上升 → 复形不足'],
+          ['基线组内部温度波动 ±1.9 ℃ 时 PV 无明显变化','MP-04 同期低 2.1 ℃ 但结果合格'],
+          ['与下模芯更换完全重叠（3/3 次）','执行人分布不平衡'],
+          ['无"同一模芯下改变模温"的历史运行'],
+          'E-0142-11：固定模芯 C-118，在 608 / 612 / 616 ℃ 三水平各 5 次重复，随机化顺序')}
+        ${cand('下模芯 C-118 的实际型面偏差导致 PV 上升','unknown','可区组 · 需拆装',
+          ['更换后 3/3 次超差，更换前 41 次仅 1 次临界'],
+          ['C-118 装机前三坐标复检合格（08-02 报告）'],
+          ['与保压温度下降完全重叠'],
+          ['无"C-118 + 原温度"或"C-104 + 新温度"的运行，因素不可分离'],
+          'E-0142-12：换回 C-104 保持当前温度运行 5 次，构成交叉区组')}
+      </div>
+    </div>
+    <div class="stack">
+      <div class="card"><div class="hd"><h3>可比性检查</h3><span class="sub">对比开始前的准入</span></div>
+        <div class="bd stack" style="gap:9px">
+          ${chk('good','同一设备','两组均为 MP-03')}
+          ${chk('good','同一配方版本','R-2024.7 v12')}
+          ${chk('good','过程数据完整','11/11 次运行采样连续')}
+          ${chk('caution','执行人不平衡','基线组 陈 6 / 李 2，对照组 陈 3')}
+          ${chk('critical','因素完全重叠','模芯更换与温度下降不可分离')}
+          ${chk('unknown','材料批次未知','对照组 3 次均未记录批次')}
+        </div>
+        <div class="ft"><span>3 项通过 · 3 项限制结论</span>
+          <button class="btn sm ghost" style="margin-left:auto" onclick="go('/diagnose/data-health')">数据可信度</button></div>
+      </div>
+      <div class="card"><div class="hd"><h3>因素重叠矩阵</h3><span class="sub">运行数 · 空格 = 不可分离</span></div>
+        <div class="bd">${heat(['C-104','C-118'],['608–612℃','613–616℃','617–620℃'],[[0,6,35],[3,0,0]])}
+          <div class="alert unknown" style="margin-top:10px"><span class="ic">${icon('unknown')}</span>
+          <div>需要 <b>C-118 × 617–620 ℃</b> 或 <b>C-104 × 608–612 ℃</b> 的运行才能拆开这两个因素。这正是 E-0142-11/12 要补的格子。</div></div></div>
+      </div>
+      <div class="card"><div class="hd"><h3>可复现性</h3></div><div class="bd"><dl class="kv">
+        <dt>对比方案</dt><dd>CMP-2291</dd><dt>分析模型</dt><dd>v3.2（2026-06-18）</dd>
+        <dt>输入哈希</dt><dd><code>8f3a2c…c71d</code></dd><dt>冻结数据集</dt><dd>DS-2291 · 11 次运行</dd>
+        <dt>执行者</dt><dd>张工 · 08-04 11:02</dd></dl></div>
+        <div class="ft"><button class="btn sm ghost" style="margin-left:auto" onclick="toast('已复制引用：cmp:CMP-2291@v3.2#8f3a2c')">复制引用</button></div>
+      </div>
+    </div>
+  </div>`;
+};
+
+VIEW['/diagnose/data-health'] = () => `
+  <div class="grid g4" style="margin-bottom:12px">
+    <div class="stat"><div class="l">分析范围内的运行</div><div class="v">142</div><div class="d">近 30 天</div></div>
+    <div class="stat"><div class="l">通过分析准入</div><div class="v">126<span class="u">/142</span></div>
+      <div class="d"><span class="dn">88.5%</span> · 低于门槛 92%</div>
+      <div class="sp" style="padding-top:6px">${meter([{w:88.5,c:'--good'},{w:4.2,c:'--caution'},{w:7.3,c:'--unknown'}])}</div></div>
+    <div class="stat"><div class="l">采样连续性</div><div class="v">99.1<span class="u">%</span></div><div class="d">1 段缺失 · EDGE-03 断连 45 min</div></div>
+    <div class="stat"><div class="l">最弱上下文字段</div><div class="v">43<span class="u">%</span></div><div class="d">材料批次 · 场景包声明为"有则记录"</div></div>
+  </div>
+  <div class="split">
+    <div class="stack">
+      <div class="card"><div class="hd"><h3>准入门禁</h3><span class="sub">不满足任意一条即不进入正式分析，并保留原因</span>
+        <div class="r"><button class="btn sm ghost" onclick="go('/configure/analysis-plans')">查看规则</button></div></div>
+        <div class="bd flush"><table class="dt">
+          <thead><tr><th>门禁项</th><th>要求</th><th class="num">通过</th><th class="num">未通过</th><th>影响</th><th style="width:100px"></th></tr></thead><tbody>
+          ${[['运行身份完整','设备 + 产品 + 配方版本 + 时间边界','142','0','—','good'],
+             ['实际配方回读','全部可控变量有实际值','138','4','4 次不能进入对比','caution'],
+             ['过程轨迹连续','采样间隔 ≤ 200 ms 且无 >2 s 空洞','136','6','6 次不能做阶段特征','caution'],
+             ['检测结果关联','至少 1 项目标特性有结果','133','9','9 次不能做因果分析','caution'],
+             ['分析必需上下文','场景包声明的必需字段齐全','126','16','16 次被挡在门外','critical'],
+             ['单位与版本一致','单位换算与模型版本可解释','142','0','—','good']]
+            .map(r=>`<tr><td style="font-weight:500">${r[0]}</td><td class="mut">${r[1]}</td>
+              <td class="num">${r[2]}</td><td class="num" style="font-weight:600;color:var(--${r[5]==='good'?'ink-3':r[5]+'-ink'})">${r[3]}</td>
+              <td class="mut">${r[4]}</td>
+              <td style="text-align:right">${r[3]==='0'?'':`<button class="btn sm ghost" onclick="go('/runs')">查看运行</button>`}</td></tr>`).join('')}
+        </tbody></table></div>
+        <div class="ft"><span>16 次运行未进入分析。它们保留在运行记录中并显示原因，不会被静默丢弃。</span></div>
+      </div>
+      <div class="card"><div class="hd"><h3>因素重叠与混杂</h3><span class="sub">下模芯 × 保压温度区间</span>
+        <div class="r"><select class="inp sm" style="height:24px;font-size:12px" onchange="toast('已换一组因素')"><option>下模芯 × 温度</option><option>执行人 × 设备</option><option>工装组合 × 配方版本</option></select></div></div>
+        <div class="bd">${heat(['C-077','C-092','C-104','C-118'],['608–612℃','613–616℃','617–620℃'],[[0,4,9],[2,11,7],[0,6,35],[3,0,0]])}
+          <div class="alert caution" style="margin-top:10px"><span class="ic">${icon('caution')}</span>
+          <div><b>C-118 只出现在 608–612 ℃。</b>在补齐其他格子之前，任何关于"模芯影响面型"的结论都同时包含温度效应。</div></div></div>
+      </div>
+    </div>
+    <div class="stack">
+      <div class="card"><div class="hd"><h3>上下文字段覆盖</h3><span class="sub">字段与分级都来自场景包 SP-L28A v7</span>
+        <div class="r"><button class="btn sm ghost" onclick="go('/configure/scenarios')">场景包</button></div></div>
+        <div class="bd">
+          <div class="tiny mut" style="margin-bottom:6px">分析必需 —— 缺失即挡在门外</div>
+          ${barsH([{n:'设备',v:100,t:'100%',c:'--good'},{n:'产品',v:100,t:'100%',c:'--good'},
+                   {n:'配方版本',v:100,t:'100%',c:'--good'},{n:'工装组合',v:89,t:'89%',c:'--caution'}])}
+          <div class="tiny mut" style="margin:12px 0 6px">有则记录 —— 影响能不能分层</div>
+          ${barsH([{n:'执行人',v:96,t:'96%',c:'--s1'},{n:'材料批次',v:43,t:'43%',c:'--critical'},{n:'环境湿度',v:0,t:'0%',c:'--unknown'}])}
+          <div class="alert unknown" style="margin-top:10px"><span class="ic">${icon('unknown')}</span>
+          <div>环境湿度 0%：字段已在场景包中声明但从未上报。这是<b>未知</b>，不是"已排除"。</div></div>
+        </div>
+        <div class="ft"><button class="btn sm ghost" style="margin-left:auto" onclick="go('/configure/scenarios')">调整场景包字段声明</button></div>
+      </div>
+      <div class="card"><div class="hd"><h3>数据缺口</h3><div class="r"><span class="tag caution">1 段未恢复</span></div></div>
+        <div class="bd stack" style="gap:9px">
+          ${chk('caution','08-03 14:20 – 15:05','EDGE-03 断连 45 min，本地队列已回传但窗口内无采样。影响 2 次运行。')}
+          ${chk('caution','08-02 03:11 – 03:14','平台重启，3 分钟采样延迟到达，已按事件时间归位。')}
+          ${chk('good','其余时段','采样连续，无空洞。')}
+        </div>
+        <div class="ft"><button class="btn sm" style="margin-left:auto" onclick="go('/configure/edges')">查看节点诊断</button></div>
+      </div>
+    </div>
+  </div>`;
+
+VIEW['/diagnose/candidates'] = () => `
+  <div class="alert unknown" style="margin-bottom:12px"><span class="ic">${icon('unknown')}</span>
+    <div><b>候选不是根因。</b>观察数据只能形成候选原因、稳定关联、混杂关联或证据不足。
+    升级为原因需要对照、重复、区组或干预实验。</div></div>
+  <div class="card"><div class="bd flush"><table class="dt">
+    <thead><tr><th>候选</th><th>来源对比</th><th class="num">效应量</th><th>证据强度</th><th>限制</th><th>可干预性</th><th style="width:150px"></th></tr></thead><tbody>
+    ${[['保压段模温下降 3.8 ℃ → PV 上升','CMP-2291','1.42','critical','与模芯更换完全重叠','可控'],
+       ['下模芯 C-118 型面偏差 → PV 上升','CMP-2291','—','unknown','因素不可分离','可区组'],
+       ['冷却速率快于 −15 ℃/s → 中心厚度收缩','CMP-2280','1.18','good','已由 E-0142-09 支持','可控'],
+       ['保压压力峰值差异 → PV','CMP-2291','0.21','unknown','不显著','可控'],
+       ['材料批次差异 → 崩边率','CMP-2265','—','unknown','43% 覆盖，样本不足','不适用']]
+      .map(r=>`<tr><td style="font-weight:500">${r[0]}</td>
+        <td><button class="linkcell" onclick="go('/diagnose/compare')">${r[1]}</button></td>
+        <td class="num">${r[2]}</td>
+        <td><span class="tag ${r[3]}">${icon(r[3])}${({critical:'强关联',good:'实验已支持',unknown:'证据不足'})[r[3]]}</span></td>
+        <td class="mut">${r[4]}</td>
+        <td>${r[5]==='可控'?'<span class="tag good">可控</span>':r[5]==='可区组'?'<span class="tag trace">可区组</span>':'<span class="tag unknown">不适用</span>'}</td>
+        <td style="text-align:right">
+          <button class="btn sm ghost" onclick="openEvidence()">证据</button>
+          ${r[5]!=='不适用'?`<button class="btn sm decide" onclick="toast('已转为假设并起草实验，等你批准后才会执行')">转为假设</button>`:''}
+        </td></tr>`).join('')}
+  </tbody></table></div>
+    <div class="ft"><span>被驳回或标为证据不足的候选不会消失，连同理由保留，避免同一条候选反复被提出。</span></div>
+  </div>`;
+
+VIEW['/diagnose/distribution'] = () => `
+  <div class="filterbar">
+    <span class="tiny mut">分层维度</span>
+    <div class="btngroup"><button class="btn sm on">下模芯</button><button class="btn sm" onclick="toast('按配方版本分层')">配方版本</button>
+      <button class="btn sm" onclick="toast('按设备分层')">设备</button><button class="btn sm" onclick="toast('按执行人分层')">执行人</button></div>
+    <span class="sdiv" style="height:18px"></span>
+    <select class="inp" style="width:150px"><option selected>面型 PV</option><option>中心厚度偏差</option><option>崩边率</option></select>
+    <div class="sp"></div><span class="tiny mut">63 次运行 · 4 个水平</span>
+  </div>
+  <div class="split">
+    <div class="stack">
+      <div class="card"><div class="hd"><h3>面型 PV 按下模芯分层</h3><span class="sub">每个点是一次运行，竖线为组均值</span>
+        <div class="r"><button class="btn sm ghost" onclick="openEvidence()">证据</button></div></div>
+        <div class="bd">${stripPlot([
+          {n:'C-077',v:[0.108,0.112,0.119,0.104],c:'--s1'},
+          {n:'C-092',v:[0.117,0.121,0.113,0.126,0.109,0.118],c:'--s3'},
+          {n:'C-104',v:[0.118,0.121,0.126,0.119,0.114,0.123,0.117,0.131,0.116],c:'--s6'},
+          {n:'C-118',v:[0.238,0.243,0.243,0.151],c:'--s2'},
+        ],{rule:0.15})}
+        <div class="row tiny mut" style="margin-top:6px;gap:6px"><span class="tag critical">红虚线 = 规格上限 0.150λ</span>
+          <span>C-118 组 4 次运行中 3 次超差。</span></div>
+        <div class="alert caution" style="margin-top:10px"><span class="ic">${icon('caution')}</span>
+          <div><b>这是描述，不是解释。</b>C-118 的 4 次运行全部发生在温度下调之后，本图不能区分是模芯还是温度。
+          要区分需要 <a href="#" onclick="go('/diagnose/compare');return false">运行对比</a> 与交叉区组实验。</div></div></div>
+      </div>
+      <div class="card"><div class="hd"><h3>分层统计</h3></div><div class="bd flush"><table class="dt">
+        <thead><tr><th>水平</th><th class="num">n</th><th class="num">均值</th><th class="num">标准差</th><th class="num">超差数</th><th class="num">超差率</th><th>样本是否够</th></tr></thead><tbody>
+        ${[['C-077','4','0.111','0.006','0','0%','unknown','偏少'],
+           ['C-092','6','0.117','0.006','0','0%','caution','勉强'],
+           ['C-104','9','0.121','0.005','0','0%','good','够'],
+           ['C-118','4','0.219','0.045','3','75%','unknown','偏少']]
+          .map(r=>`<tr><td style="font-weight:500">${r[0]}</td><td class="num">${r[1]}</td><td class="num">${r[2]}</td>
+            <td class="num mut">${r[3]}</td><td class="num">${r[4]}</td>
+            <td class="num" style="font-weight:${r[5]!=='0%'?600:400};color:var(--${r[5]!=='0%'?'critical-ink':'ink-1'})">${r[5]}</td>
+            <td><span class="tag ${r[6]}">${icon(r[6])}${r[7]}</span></td></tr>`).join('')}
+      </tbody></table></div></div>
+    </div>
+    <div class="card"><div class="hd"><h3>能读出什么 / 不能读出什么</h3></div><div class="bd stack" style="gap:10px">
+      <div><div class="tiny mut" style="margin-bottom:5px">可以说</div>
+        <div class="ev">C-118 组的面型 PV 明显高于其他三组，且组内离散更大（σ 0.045 vs 0.005–0.006）。</div></div>
+      <div><div class="tiny mut" style="margin:2px 0 5px">不能说</div>
+        <div class="ev" style="border-color:var(--unknown);background:var(--unknown-wash)">
+          "C-118 导致 PV 上升" —— 温度同期下调，两者不可分离。<br>
+          "C-077 最好" —— n=4，且全部来自单一时间窗口。</div></div>
+      <div class="alert unknown"><span class="ic">${icon('unknown')}</span>
+        <div>本页只做<b>描述性分层</b>。它的作用是帮你挑出值得进对比的组，不是给结论。</div></div>
+      <button class="btn pri" style="justify-content:center" onclick="go('/diagnose/compare')">把 C-104 与 C-118 带入运行对比</button>
+    </div></div>
+  </div>`;
+
+VIEW['/diagnose/basket'] = () => `
+  <div class="split">
+    <div class="card"><div class="hd"><h3>暂存区成员</h3><span class="sub">跨页面保留，随时开始对比</span>
+      <div class="r"><button class="btn sm ghost" onclick="toast('已清空')">清空</button><button class="btn sm pri" onclick="go('/diagnose/compare')">开始对比</button></div></div>
+      <div class="bd flush"><table class="dt">
+        <thead><tr><th style="width:90px">分组</th><th>运行号</th><th>设备</th><th>配方版本</th><th>面型 PV</th><th>下模芯</th><th>准入</th><th style="width:70px"></th></tr></thead><tbody>
+        ${[['基线','OR-24081-0417','MP-03','R-2024.7 v12','0.118λ','C-104','good'],
+           ['对照','OR-24083-0102','MP-03','R-2024.7 v12','0.243λ','C-118','good']]
+          .map(r=>`<tr><td><select class="inp" style="height:22px;font-size:11px;width:70px"><option ${r[0]==='基线'?'selected':''}>基线</option><option ${r[0]==='对照'?'selected':''}>对照</option></select></td>
+            <td><button class="linkcell" onclick="go('/runs/OR-24083-0102')">${r[1]}</button></td>
+            <td>${r[2]}</td><td class="mut">${r[3]}</td><td class="tnum">${r[4]}</td><td class="mut">${r[5]}</td>
+            <td><span class="tag good">${icon('good')}通过</span></td>
+            <td style="text-align:right"><button class="btn sm ghost" onclick="toast('已移出')">移出</button></td></tr>`).join('')}
+      </tbody></table></div>
+      <div class="ft"><span>成员可标为基线组或对照组；加入时即时校验是否满足分析准入。</span></div>
+    </div>
+    <div class="card"><div class="hd"><h3>现在能不能比</h3></div><div class="bd stack" style="gap:9px">
+      ${chk('good','两组均满足分析准入','数据完整度 100%')}
+      ${chk('good','同设备同配方版本','MP-03 · R-2024.7 v12')}
+      ${chk('caution','每组样本量偏少','建议每组 ≥5 次，当前 1 vs 1')}
+      ${chk('unknown','模芯与温度重叠','两次运行的模芯与温度同时不同，无法归因')}
+      <div class="alert caution"><span class="ic">${icon('caution')}</span>
+        <div>1 对 1 的对比只能提出<b>线索</b>，不足以形成候选原因。建议先把同期同类运行一起加进来。</div></div>
+      <button class="btn" style="justify-content:center" onclick="go('/runs')">回运行记录继续挑选</button>
+    </div></div>
+  </div>`;
+
+VIEW['/diagnose/assistant'] = () => `
+  <div class="split">
+    <div class="stack">
+      <div class="card"><div class="hd"><h3>分析问答</h3><span class="sub">只读工具 · 必带引用 · 不生成数值配方</span>
+        <div class="r"><span class="tag machine">机器回答</span></div></div>
+        <div class="bd stack" style="gap:12px">
+          <div style="align-self:flex-end;max-width:80%;background:var(--trace-wash);color:var(--trace-ink);padding:8px 11px;border-radius:10px 10px 2px 10px;font-size:12.5px">
+            08-03 之后 MP-03 的面型 PV 为什么变差了？</div>
+          <div style="max-width:92%;background:var(--surface-2);border:1px solid var(--line);padding:10px 12px;border-radius:10px 10px 10px 2px;font-size:12.5px;line-height:1.7">
+            我只能给你目前能从数据里读出的东西：<br><br>
+            08-03 21:14 之后 MP-03 上共 4 次运行，其中 3 次面型 PV 超差（0.238–0.243λ，上限 0.150λ）。
+            与同配方的 8 次合格运行相比，保压段模具温度低 3.8 ℃（d = 1.42，p = 0.004），首次偏离出现在 t = 3.2 s。<br><br>
+            <b>但我不能说这是原因。</b>同一时间下模芯由 C-104 换成了 C-118，两个因素在现有数据里完全重叠
+            （C-118 只出现在 608–612 ℃ 区间），观察数据无法分离。<br><br>
+            要区分，需要补上 <code>C-118 × 617–620 ℃</code> 或 <code>C-104 × 608–612 ℃</code> 的运行。
+            课题 P-0142 里已有对应的实验草案 E-0142-11 / E-0142-12。
+            <div class="row wrap" style="gap:6px;margin-top:10px">
+              <span class="tag plain">引用 cmp:CMP-2291</span><span class="tag plain">引用 ds:DS-2291</span>
+              <span class="tag plain">分析模型 v3.2</span><span class="tag unknown">${icon('unknown')}未给出数值配方</span></div>
+            <div class="row" style="gap:6px;margin-top:10px">
+              <button class="btn sm" onclick="go('/diagnose/compare')">打开对比 CMP-2291</button>
+              <button class="btn sm" onclick="go('/research/projects/P-0142')">打开课题 P-0142</button>
+              <button class="btn sm ghost" onclick="openEvidence()">逐条核对引用</button></div>
+          </div>
+        </div>
+        <div class="ft"><input class="inp" style="flex:1" placeholder="继续提问，例如：哪些运行没进入分析，为什么？">
+          <button class="btn pri" onclick="toast('已提交问题，助手将调用只读工具')">提问</button></div>
+      </div>
+    </div>
+    <div class="stack">
+      <div class="card"><div class="hd"><h3>助手能做什么</h3></div><div class="bd stack" style="gap:8px">
+        ${chk('good','查询与组织事实','运行、条件、轨迹、检测结果、上下文')}
+        ${chk('good','解释已有分析','对比结果、数据缺口、因素重叠')}
+        ${chk('good','给出引用与限制','每条结论都带来源与版本')}
+        ${chk('critical','不生成数值配方','参数建议只能来自优化服务，并需你批准')}
+        ${chk('critical','不补造事实','没有来源时直接说不知道')}
+      </div></div>
+      <div class="card"><div class="hd"><h3>最近问答</h3><div class="r"><button class="btn sm ghost" onclick="go('/diagnose/checkset')">核对集</button></div></div>
+        <div class="bd flush"><table class="dt compact"><tbody>
+          ${[['08-04 11:14','面型 PV 为什么变差','good','引用完整'],
+             ['08-04 09:02','给我一个能达标的配方','unknown','正确拒绝'],
+             ['08-03 16:40','哪些运行没进入分析','good','引用完整'],
+             ['08-02 10:22','C-118 是不是坏了','unknown','答证据不足']]
+            .map(r=>`<tr><td class="mut tnum">${r[0]}</td><td>${r[1]}</td>
+              <td style="text-align:right"><span class="tag ${r[2]}">${r[3]}</span></td></tr>`).join('')}
+        </tbody></table></div>
+      </div>
+    </div>
+  </div>`;
+/* ==================== 优化（判断层） ==================== */
+HEAD_ACTS['/research/projects'] = `<button class="btn pri" onclick="toast('新建课题：先声明问题、目标与安全边界')">新建课题</button>`;
+HEAD_ACTS['/research/projects/P-0142'] = `<button class="btn" onclick="toast('已生成课题周报草稿')">生成周报</button>
+  <button class="btn" onclick="toast('已请求建议：约束已声明，待优化服务返回')">请求实验建议</button>
+  <button class="btn decide" onclick="toast('已批准实验 E-0142-11 · 5 次重复 · 2 区组，进入排程')">${icon('decide')}批准实验</button>`;
+HEAD_ACTS['/research/experiments'] = `<button class="btn" onclick="toast('已导出本周执行单')">导出执行单</button>`;
+HEAD_ACTS['/research/windows'] = `<button class="btn decide" onclick="toast('发布前需确认：重复性、边界、适用范围与失效条件')">${icon('decide')}发布工艺窗口</button>`;
+TABS['/research/projects/P-0142'] = tabHTML([['问题与目标',''],['证据',''],['假设','4'],['实验','11'],['结论',''],['工艺窗口','']],2);
+TABS['/research/experiments'] = tabHTML([['待批准','2'],['已批准待执行','1'],['执行中','1'],['已结束','7'],['草案','2']],0);
+
+VIEW['/research/projects'] = () => `
+  <div class="grid g3" style="margin-bottom:12px">
+    ${[['进行中的课题','3','1 个有待批准实验'],['本月新增结论','1','H-06 已被 20 次实验支持'],['已验证工艺窗口','4','2 条待独立复现']]
+      .map(s=>`<div class="stat"><div class="l">${s[0]}</div><div class="v">${s[1]}</div><div class="d">${s[2]}</div></div>`).join('')}
+  </div>
+  <div class="card"><div class="bd flush"><table class="dt">
+    <thead><tr><th>课题号</th><th>问题</th><th>产品 / 设备</th><th>阶段</th><th class="num">有效运行</th><th class="num">实验</th><th>当前卡在哪</th><th style="width:110px"></th></tr></thead><tbody>
+    ${[['P-0142','面型 PV 收敛到 ≤0.13λ','L28-A / MP-03','4 / 7 设计实验','126','11','decide','待你批准 E-0142-11'],
+       ['P-0139','中心厚度一致性','L28-A / MP-03·04','6 / 7 形成结论','208','14','decide','待确认是否升级窗口'],
+       ['P-0151','崩边率下降到 ≤0.3%','L28-B / MP-02','2 / 7 收集证据','41','0','unknown','材料批次覆盖不足'],
+       ['P-0128','镀膜均匀性','COAT-A / CT-01','7 / 7 已完成','312','22','good','已发布工艺窗口 PW-004']]
+      .map(r=>`<tr class="${r[6]==='decide'?'gold':''}">
+        <td><button class="linkcell" onclick="go('/research/projects/P-0142')">${r[0]}</button></td>
+        <td style="font-weight:500">${r[1]}</td><td class="mut">${r[2]}</td><td class="mut">${r[3]}</td>
+        <td class="num">${r[4]}</td><td class="num">${r[5]}</td>
+        <td><span class="tag ${r[6]}">${icon(r[6])}${r[7]}</span></td>
+        <td style="text-align:right"><button class="btn sm ${r[6]==='decide'?'decide':''}" onclick="go('/research/projects/P-0142')">进入工作区</button></td>
+      </tr>`).join('')}
+  </tbody></table></div>
+    <div class="ft"><span>课题是这套系统的主线：一个工艺问题从证据、假设、实验一路推到有适用范围的工艺窗口。</span></div>
+  </div>`;
+
+function hyp(id,text,kind,state,why,src){
+  return `<div class="aqrow" style="align-items:flex-start;padding:11px 12px">
+    <span class="tag ${kind}" style="flex:0 0 auto;margin-top:1px">${icon(kind)}${state}</span>
+    <div class="txt"><div class="t" style="white-space:normal"><span class="mut tnum" style="margin-right:6px">${id}</span>${text}</div>
+      <div class="m" style="white-space:normal;margin-top:3px">${why}</div>
+      <div class="tiny mut" style="margin-top:4px">${src}</div></div>
+    <div class="acts"><button class="btn sm ghost" onclick="openEvidence()">证据</button></div></div>`;
+}
+VIEW['/research/projects/P-0142'] = () => {
+  const steps=[['01','定义问题','面型 PV ≤0.13λ','done'],['02','收集证据','126 次有效运行','done'],
+    ['03','形成假设','4 个 · 1 待验证','done'],['04','设计实验','E-0142-11 待你批准','cur'],
+    ['05','执行与记录','—',''],['06','形成结论','—',''],['07','发布工艺窗口','—','']];
+  return `
+  <div class="stepper" style="margin-bottom:12px">
+    ${steps.map(s=>`<button class="step ${s[3]}" onclick="toast('跳到阶段：${s[1]}')"><div class="n">${s[0]}${s[3]==='done'?' ✓':''}</div><div class="t">${s[1]}</div><div class="s">${s[2]}</div></button>`).join('')}
+  </div>
+  <div class="split">
+    <div class="stack">
+      <div class="card"><div class="hd"><h3>假设</h3><span class="sub">每条假设都必须可证伪，并说明失败会看到什么</span>
+        <div class="r"><button class="btn sm" onclick="toast('新建假设：需填写可证伪判据')">新建假设</button></div></div>
+        <div class="bd flush">
+          ${hyp('H-05','保压段模温每下降 4 ℃，面型 PV 上升 ≥0.04λ','critical','已否决',
+            '3 水平 × 5 重复实验中效应量仅 0.21，未达预设阈值 0.8。','实验 E-0142-08 · 15 次运行 · 08-02 结束')}
+          ${hyp('H-06','冷却前 2 s 速率快于 −15 ℃/s 时中心厚度收缩超差','good','已支持',
+            '随机化区组实验中 5/5 复现，效应量 1.18，且在 MP-04 上独立复现。','实验 E-0142-09 · 20 次运行 · 08-03 结束')}
+          ${hyp('H-07','下模芯 C-118 的实际型面偏差导致 PV 上升','unknown','证据不足',
+            '与保压温度完全重叠，观察数据不能分离。需要交叉区组实验补齐格子。','来自对比 CMP-2291 · 待实验 E-0142-12')}
+          ${hyp('H-08','模温 612 ℃ 附近存在使 PV 与中心厚度同时达标的窗口','decide','待验证',
+            '由优化服务在已声明安全边界内提出，尚未执行。','建议点 E-0142-11 · 待你批准')}
+        </div>
+      </div>
+      <div class="card gold"><div class="hd"><h3>建议执行条件</h3><span class="sub">优化服务 v2.4 · 种子 41 · 已避让 2 个待执行点</span>
+        <div class="r"><span class="tag machine">机器建议 · 未生效</span></div></div>
+        <div class="bd">
+          <table class="dt compact" style="margin-bottom:12px">
+            <thead><tr><th>可控变量</th><th class="num">当前设定</th><th class="num">建议值</th><th class="num">允许范围</th><th>理由</th></tr></thead><tbody>
+              <tr><td>保压段模温</td><td class="num mut">608.0 ℃</td><td class="num" style="font-weight:650;color:var(--decide-ink)">612.0 ℃</td><td class="num mut">600 – 625</td><td class="mut">后验均值最优，距安全边界 13 ℃</td></tr>
+              <tr><td>保压压力</td><td class="num mut">1.840 MPa</td><td class="num" style="font-weight:650;color:var(--decide-ink)">1.850 MPa</td><td class="num mut">1.60 – 2.05</td><td class="mut">与温度弱交互，小幅同向调整</td></tr>
+              <tr><td>保压时间</td><td class="num mut">2.00 s</td><td class="num mut">2.00 s（不变）</td><td class="num mut">1.50 – 3.00</td><td class="mut">当前不确定度下调整无增益</td></tr>
+              <tr><td>冷却速率</td><td class="num mut">−14.0 ℃/s</td><td class="num mut">−14.0 ℃/s（不变）</td><td class="num mut">−18 – −10</td><td class="mut">已由 H-06 锁定，作为固定条件</td></tr>
+            </tbody></table>
+          <div class="sectitle">预测与不确定度（90% 区间）</div>
+          ${predBand([{n:'面型 PV (λ)',v:0.124,lo:0.104,hi:0.149,c:'--s1'},
+                      {n:'中心厚度偏差 (µm)',v:0.131,lo:0.092,hi:0.178,c:'--s3'},
+                      {n:'崩边率 (%)',v:0.115,lo:0.061,hi:0.203,c:'--s4'}])}
+          <div class="row wrap" style="gap:8px;margin-top:10px">
+            <span class="tag good">${icon('good')}满足安全约束概率 0.86</span>
+            <span class="tag plain">期望增益 +0.021λ</span><span class="tag plain">建议重复 5 次</span><span class="tag plain">建议区组 2</span></div>
+          <div class="alert decide" style="margin-top:10px"><span class="ic">${icon('decide')}</span>
+            <div><b>这是建议，不是决定。</b>批准后才会写入实验排程；执行结果将从源数据重新计算，不接受人工声明的结果。
+            批准动作会连同当时的建议值、约束、模型版本、种子与输入哈希一起冻结进审计追踪。</div></div>
+        </div>
+        <div class="ft">
+          <button class="btn sm ghost" onclick="toast('理由必填，将用于建议质量分析')">拒绝并说明理由</button>
+          <button class="btn sm ghost" onclick="toast('已请求换一批候选点')">换一批候选</button>
+          <button class="btn sm" onclick="toast('已导出实验执行单 PDF')">导出执行单</button>
+          <button class="btn sm decide" style="margin-left:auto" onclick="toast('已批准 E-0142-11 · 5 次重复 · 2 区组，进入排程')">${icon('decide')}批准并排入实验</button></div>
+      </div>
+    </div>
+    <div class="stack">
+      <div class="card"><div class="hd"><h3>目标与安全边界</h3><div class="r"><button class="btn sm ghost" onclick="toast('修改需二次确认并留痕')">修改</button></div></div>
+        <div class="bd stack" style="gap:10px">
+          <div><div class="tiny mut" style="margin-bottom:5px">优化目标</div>
+            <dl class="kv"><dt>面型 PV</dt><dd>越低越好 · 目标 ≤0.130 λ · 权重 0.6</dd>
+            <dt>中心厚度偏差</dt><dd>接近 0 µm · 容差 ±0.25 · 权重 0.4</dd></dl></div>
+          <div><div class="tiny mut" style="margin:2px 0 5px">硬安全边界</div>
+            <dl class="kv"><dt>模具温度</dt><dd>不高于 625 ℃</dd><dt>保压压力</dt><dd>不高于 2.05 MPa</dd>
+            <dt>崩边率</dt><dd>不高于 0.5 %</dd><dt>最低安全概率</dt><dd>0.80</dd></dl></div>
+          <div class="alert caution"><span class="ic">${icon('caution')}</span>
+            <div>安全边界由<b>你</b>声明，优化服务只在边界内搜索，不会为了目标突破边界。</div></div>
+        </div>
+      </div>
+      <div class="card"><div class="hd"><h3>本课题实验</h3></div><div class="bd flush"><table class="dt compact"><tbody>
+        ${[['E-0142-08','已结束','good','15 次 · 假设否决'],['E-0142-09','已结束','good','20 次 · 假设支持'],
+           ['E-0142-10','执行中','trace','3/10 次 · MP-03'],['E-0142-11','待批准','decide','5 次 · 待你批准'],
+           ['E-0142-12','草案','unknown','交叉区组 · 待设计']]
+          .map(r=>`<tr style="cursor:pointer" onclick="go('/research/experiments')"><td style="font-weight:500">${r[0]}</td>
+            <td><span class="tag ${r[2]}">${r[1]}</span></td><td class="mut" style="text-align:right">${r[3]}</td></tr>`).join('')}
+      </tbody></table></div>
+        <div class="ft"><button class="btn sm ghost" style="margin-left:auto" onclick="go('/research/experiments')">全部实验排程</button></div>
+      </div>
+      <div class="card"><div class="hd"><h3>已验证结论</h3><div class="r"><span class="tag good">1 条</span></div></div>
+        <div class="bd">
+          <div class="ev"><div class="h"><span class="tag human">${icon('good')}人已确认</span>H-06 · 冷却速率上限</div>
+            冷却前 2 s 速率快于 −15 ℃/s 时中心厚度收缩超差。<br>
+            <span class="mut">适用范围：L28-A · R-2024.7 v12 · MP-03 / MP-04 · 模温 605–620 ℃</span><br>
+            <span class="mut">失效条件：更换材料牌号或模芯型面重加工后需重新验证</span><br>
+            <span class="mut">证据：E-0142-09 · 20 次运行 · <code>ds:DS-2210#4c9f</code></span></div>
+          <button class="btn decide" style="width:100%;justify-content:center;margin-top:10px" onclick="go('/research/windows')">${icon('decide')}升级为工艺窗口</button>
+        </div>
+      </div>
+    </div>
+  </div>`;
+};
+
+VIEW['/research/experiments'] = () => `
+  <div class="alert decide" style="margin-bottom:12px"><span class="ic">${icon('decide')}</span>
+    <div><b>2 个实验等你批准。</b>单人批准即可生效，因此批准动作会冻结当时的证据快照并写入审计追踪。</div></div>
+  <div class="card"><div class="bd flush"><table class="dt">
+    <thead><tr><th>实验号</th><th>课题</th><th>验证什么</th><th>设计</th><th class="num">次数</th><th>状态</th><th>设备</th><th style="width:130px"></th></tr></thead><tbody>
+    ${[['E-0142-11','P-0142','模温 612 ℃ 附近是否存在达标窗口','3 水平 × 5 重复 · 随机化','15','decide','待批准','MP-03'],
+       ['E-0151-03','P-0151','材料批次是否影响崩边率','2 批次 × 6 重复 · 区组','12','decide','待批准','MP-02'],
+       ['E-0139-14','P-0139','MP-04 上复现冷却速率结论','5 重复 · 单水平','5','trace','已批准待执行','MP-04'],
+       ['E-0142-10','P-0142','当前设定基线复现','10 重复','10','trace','执行中 3/10','MP-03'],
+       ['E-0142-09','P-0142','冷却速率上限','4 水平 × 5 重复 · 区组','20','good','已结束 · 支持','MP-03/04'],
+       ['E-0142-08','P-0142','模温对 PV 的敏感度','3 水平 × 5 重复','15','good','已结束 · 否决','MP-03'],
+       ['E-0142-12','P-0142','模芯与温度交叉区组','2×2 交叉 · 待设计','—','unknown','草案','—']]
+      .map(r=>`<tr class="${r[5]==='decide'?'gold':''}">
+        <td style="font-weight:500">${r[0]}</td>
+        <td><button class="linkcell" onclick="go('/research/projects/P-0142')">${r[1]}</button></td>
+        <td>${r[2]}</td><td class="mut">${r[3]}</td><td class="num">${r[4]}</td>
+        <td><span class="tag ${r[5]}">${icon(r[5])}${r[6]}</span></td><td class="mut">${r[7]}</td>
+        <td style="text-align:right">${r[5]==='decide'
+          ? `<button class="btn sm ghost" onclick="toast('理由必填')">拒绝</button><button class="btn sm decide" onclick="toast('已批准并冻结证据快照')">批准</button>`
+          : `<button class="btn sm ghost" onclick="go('/research/projects/P-0142')">查看</button>`}</td>
+      </tr>`).join('')}
+  </tbody></table></div>
+    <div class="ft"><span>状态机：草案 → 待批准 → 已批准待执行 → 执行中 → 已结束（旁路：已作废）。没有"待他人审批"。</span></div>
+  </div>`;
+
+VIEW['/research/windows'] = () => `
+  <div class="alert trace" style="margin-bottom:12px"><span class="ic">${icon('trace')}</span>
+    <div><b>这是整套系统的最终产出。</b>不是"最优参数"，而是<b>经过验证、写明适用范围和失效条件的工艺窗口</b>。
+    一个成功参数点只能算候选设置，不能算窗口。</div></div>
+  <div class="grid g2" style="margin-bottom:12px">
+    ${[{id:'PW-004',t:'镀膜均匀性工艺窗口',st:'good',stt:'已发布',
+        scope:'COAT-A · 镀膜配方 C-3.2 · CT-01',range:'靶功率 4.2–4.8 kW · 基片温度 168–182 ℃ · 转速 6–8 rpm',
+        ev:'312 次运行 · 22 次实验 · 双设备复现',fail:'更换靶材批次或腔体大修后需重新验证'},
+       {id:'PW-003',t:'冷却速率上限',st:'decide',stt:'待你确认发布',
+        scope:'L28-A · R-2024.7 v12 · MP-03 / MP-04',range:'冷却前 2 s 速率不快于 −15 ℃/s',
+        ev:'E-0142-09 · 20 次运行 · MP-04 独立复现',fail:'更换材料牌号或模芯型面重加工后需重新验证'},
+       {id:'PW-002',t:'保压时间下限',st:'caution',stt:'待独立复现',
+        scope:'L28-B · R-2024.9 v3 · MP-02',range:'保压时间不短于 1.8 s',
+        ev:'E-0151-01 · 12 次运行 · 仅单设备',fail:'仅在 MP-02 上验证过，迁到其他设备前必须复现'},
+       {id:'PW-001',t:'模温工作区间',st:'unknown',stt:'已失效',
+        scope:'L28-A · R-2024.5 v8 · MP-03',range:'模温 615–622 ℃',
+        ev:'历史 41 次运行 · 无受控实验',fail:'配方升级到 v12 后不再适用，保留供历史解释'}]
+      .map(w=>`<div class="card ${w.st==='decide'?'gold':''}">
+        <div class="hd"><span class="tag ${w.st}">${icon(w.st)}${w.stt}</span><h3>${w.id} · ${w.t}</h3></div>
+        <div class="bd stack" style="gap:8px">
+          <div><div class="tiny mut">窗口</div><div style="font-size:12.5px;font-weight:550">${w.range}</div></div>
+          <div><div class="tiny mut">适用范围</div><div style="font-size:12px">${w.scope}</div></div>
+          <div><div class="tiny mut">证据</div><div style="font-size:12px">${w.ev}</div></div>
+          <div><div class="tiny mut">失效条件</div><div style="font-size:12px;color:var(--caution-ink)">${w.fail}</div></div>
+        </div>
+        <div class="ft"><button class="btn sm ghost" onclick="openEvidence()">证据</button>
+          ${w.st==='decide'
+            ? `<button class="btn sm decide" style="margin-left:auto" onclick="toast('发布前确认：重复性 ✓ 边界 ✓ 适用范围 ✓ 失效条件 ✓')">${icon('decide')}确认并发布</button>`
+            : `<button class="btn sm ghost" style="margin-left:auto" onclick="toast('已复制引用')">复制引用</button>`}</div>
+      </div>`).join('')}
+  </div>
+  <div class="card"><div class="hd"><h3>发布工艺窗口需要满足什么</h3><span class="sub">四项全部满足才允许发布，缺一项按"候选设置"保存</span></div>
+    <div class="bd grid g4">
+      ${[['独立确认','结论在提出它的那批数据之外被再次验证'],
+         ['重复性','同条件重复运行结果稳定，离散度在声明范围内'],
+         ['边界或交互验证','窗口边缘和主要交互项被实验触及，不是外推'],
+         ['明确适用范围','产品、配方版本、设备、上下文条件与失效条件都写清楚']]
+        .map(x=>`<div class="ev"><div class="h">${icon('good')}${x[0]}</div>${x[1]}</div>`).join('')}
+    </div>
+  </div>`;
+/* ==================== 配置 / 系统 / 证据面板 / 命令面板 ==================== */
+HEAD_ACTS['/configure/process-models'] = `<button class="btn" onclick="toast('已打开版本对比：v12 → v13')">对比版本</button>
+  <button class="btn pri" onclick="toast('新建工艺模型：先声明变量、单位与阶段')">新建工艺模型</button>`;
+HEAD_ACTS['/configure/scenarios'] = `<button class="btn" onclick="toast('已导出场景包 JSON，可迁到另一条产线')">导出场景包</button>
+  <button class="btn pri" onclick="toast('新建场景包：从声明变量与上下文字段开始')">新建场景包</button>`;
+
+/* ---- 场景包：上下文维度不硬编码的证明 ---- */
+VIEW['/configure/scenarios'] = () => `
+  <div class="alert trace" style="margin-bottom:12px"><span class="ic">${icon('trace')}</span>
+    <div><b>界面上不硬编码任何上下文维度。</b>数据可信度、证据面板、因素重叠矩阵里出现哪些字段，
+    完全由这里的声明决定。研发阶段不声明"班次"，界面上就不存在这个概念；将来上量产线要按班次分层，
+    在这里加一个字段即可，前端不用改一行。</div></div>
+  <div class="split">
+    <div class="stack">
+      <div class="card"><div class="hd"><h3>SP-L28A v7 · 上下文字段声明</h3>
+        <span class="sub">三种分级决定字段在分析里的待遇</span>
+        <div class="r"><button class="btn sm" onclick="toast('新建版本草稿，v7 保持不变')">新建版本</button></div></div>
+        <div class="bd flush"><table class="dt">
+          <thead><tr><th>字段</th><th>来源</th><th>分级</th><th class="num">当前覆盖</th><th>在分析里的待遇</th><th style="width:70px"></th></tr></thead><tbody>
+          ${[['设备','运行准备','必需','100%','good','缺失即挡在分析门外'],
+             ['产品','运行准备','必需','100%','good','缺失即挡在分析门外'],
+             ['配方版本','运行准备','必需','100%','good','缺失即挡在分析门外'],
+             ['工装组合版本','工装装卸','必需','89%','caution','缺失即挡在分析门外'],
+             ['执行人','运行准备','有则记录','96%','good','可分层、可作为混杂因素报警'],
+             ['材料批次','人工录入','有则记录','43%','critical','覆盖不足，不参与分层'],
+             ['环境湿度','未接入','有则记录','0%','unknown','声明了但从未上报 —— 未知，不是已排除'],
+             ['冷却速率上限','E-0142-09','已验证建模','—','good','可进入诊断与优化，并带适用范围']]
+            .map(r=>`<tr><td style="font-weight:500">${r[0]}</td><td class="mut">${r[1]}</td>
+              <td><span class="tag ${r[2]==='必需'?'trace':r[2]==='已验证建模'?'good':'plain'}">${r[2]}</span></td>
+              <td class="num" style="color:var(--${r[4]}-ink);font-weight:${r[4]==='good'?400:600}">${r[3]}</td>
+              <td class="mut">${r[5]}</td>
+              <td style="text-align:right"><button class="btn sm ghost" onclick="toast('修改字段声明将生成新版本')">改</button></td></tr>`).join('')}
+        </tbody></table></div>
+        <div class="ft"><span>没有"班次"字段 —— 研发试制阶段它是常数，不提供信息量。上量产线时在这里加即可。</span></div>
+      </div>
+      <div class="card"><div class="hd"><h3>场景包清单</h3></div><div class="bd flush"><table class="dt compact">
+        <thead><tr><th>编码</th><th>名称</th><th>版本</th><th class="num">变量</th><th class="num">上下文字段</th><th>状态</th><th>更新</th></tr></thead><tbody>
+        ${[['SP-L28A','非球面镜片模压','v7','24','8','good','已发布'],
+           ['SP-L28B','非球面镜片模压（大口径）','v2','24','8','good','已发布'],
+           ['SP-COAT','镀膜','v3','18','6','good','已发布'],
+           ['SP-L28A','非球面镜片模压','v8','26','10','caution','草稿']]
+          .map(r=>`<tr><td style="font-weight:500">${r[0]}</td><td>${r[1]}</td>
+            <td><span class="tag plain">${r[2]}</span></td><td class="num">${r[3]}</td><td class="num">${r[4]}</td>
+            <td><span class="tag ${r[5]}">${r[6]}</span></td><td class="mut tnum">2026-08-01</td></tr>`).join('')}
+      </tbody></table></div></div>
+    </div>
+    <div class="stack">
+      <div class="card"><div class="hd"><h3>三种分级的区别</h3></div><div class="bd stack" style="gap:9px">
+        ${chk('trace','分析必需','缺失时该运行不能进入指定分析。少而精，加一个就会挡掉一批运行。')}
+        ${chk('good','有则记录','用于追溯、分层与覆盖评估。缺失不挡门，但会限制能做的分层。')}
+        ${chk('good','已验证建模','经重复数据或实验支持，才可进入诊断、优化或适用范围声明。')}
+        <div class="alert caution"><span class="ic">${icon('caution')}</span>
+          <div>字段存在 ≠ 可以建模。系统先检查覆盖率与因素重叠，再决定能否估计影响。</div></div>
+      </div></div>
+      <div class="card"><div class="hd"><h3>换一个工艺场景需要提供什么</h3></div><div class="bd" style="font-size:12px;line-height:1.8">
+        工业对象、设备与运行边界<br>可控变量、实际值来源、单位与允许范围<br>
+        过程信号、阶段与版本化特征<br>目标结果、检测映射与安全约束<br>
+        必需与可选上下文字段<br>安全基线、默认实验策略与可选机理知识
+        <div class="alert trace" style="margin-top:10px"><span class="ic">${icon('trace')}</span>
+          <div>不应重写运行身份、证据关系、实验状态机或优化服务的无状态协议 —— 那些是核心契约。</div></div>
+      </div></div>
+    </div>
+  </div>`;
+
+VIEW['/configure/process-models'] = () => `
+  <div class="filterbar">
+    <input class="inp" style="width:200px" placeholder="搜索模型编码或名称">
+    <select class="inp" style="width:130px"><option>全部状态</option><option>已发布</option><option>草稿</option></select>
+    <div class="sp"></div><span class="tiny mut">6 个模型 · 3 个被场景包引用</span>
+  </div>
+  <div class="card"><div class="bd flush"><table class="dt">
+    <thead><tr><th>模型编码</th><th>名称</th><th>版本</th><th class="num">变量</th><th class="num">阶段</th><th class="num">配方参数</th><th>被引用</th><th>状态</th><th>更新</th><th style="width:140px"></th></tr></thead><tbody>
+    ${[['PM-L28A','非球面模压工艺模型','v12','24','3','9','SP-L28A v7 · 2 个分析模型','good','已发布','08-01 张工'],
+       ['PM-L28B','非球面模压（大口径）','v3','24','3','9','SP-L28B v2','good','已发布','07-22 张工'],
+       ['PM-COAT','镀膜工艺模型','v5','18','4','6','SP-COAT v3','good','已发布','06-30 李工'],
+       ['PM-L28A','非球面模压工艺模型','v13','26','3','10','—','caution','草稿','08-04 张工'],
+       ['PM-ANNEAL','退火工艺模型','v2','11','2','4','—','unknown','未引用','05-14 李工'],
+       ['PM-LEGACY','旧模压模型（2024）','v9','16','2','7','历史运行 3,142 次','plain','已停用','2025-11-02']]
+      .map(r=>`<tr><td><button class="linkcell" onclick="toast('打开 ${r[0]} ${r[2]}')">${r[0]}</button></td>
+        <td>${r[1]}</td><td><span class="tag plain">${r[2]}</span></td>
+        <td class="num">${r[3]}</td><td class="num">${r[4]}</td><td class="num">${r[5]}</td>
+        <td class="mut">${r[6]}</td><td><span class="tag ${r[7]}">${r[8]}</span></td><td class="mut tnum">${r[9]}</td>
+        <td style="text-align:right"><button class="btn sm ghost" onclick="toast('打开版本历史')">版本</button>
+          <button class="btn sm ghost" onclick="toast('已创建新版本草稿，原版本保持不变')">新建版本</button></td></tr>`).join('')}
+  </tbody></table></div>
+    <div class="ft"><span>已发布版本不可修改。任何变更都生成新版本，历史运行仍按旧版本解释。</span></div>
+  </div>
+  <div class="grid g2" style="margin-top:12px">
+    <div class="card"><div class="hd"><h3>PM-L28A v12 · 工艺变量</h3><span class="sub">节选 6 / 24</span>
+      <div class="r"><button class="btn sm ghost" onclick="go('/configure/acquisition')">点位映射</button></div></div>
+      <div class="bd flush"><table class="dt compact">
+        <thead><tr><th>变量编码</th><th>名称</th><th>单位</th><th>阶段</th><th>可控</th><th>实际值来源</th></tr></thead><tbody>
+        ${[['mold_temp','模具温度','℃','1–3','是','PLC DB21.DBD8'],
+           ['hold_pressure','保压压力','MPa','2','是','PLC DB21.DBD16'],
+           ['hold_time','保压时间','s','2','是','配方设定 + 实测'],
+           ['cool_rate','冷却速率','℃/s','3','是','由 mold_temp 派生'],
+           ['pv_surface','面型 PV','λ','—','否','干涉仪导入'],
+           ['ambient_rh','环境湿度','%RH','—','否','未接入']]
+          .map(r=>`<tr><td><code>${r[0]}</code></td><td>${r[1]}</td><td class="mut">${r[2]}</td><td class="mut">${r[3]}</td>
+            <td>${r[4]==='是'?'<span class="tag good">可控</span>':'<span class="tag plain">观察</span>'}</td>
+            <td class="mut">${r[5]==='未接入'?'<span class="tag unknown">未接入</span>':r[5]}</td></tr>`).join('')}
+      </tbody></table></div></div>
+    <div class="card"><div class="hd"><h3>v12 → v13 变更</h3><span class="sub">草稿版本，尚未发布</span></div>
+      <div class="bd stack" style="gap:8px">
+        ${chk('good','新增 2 个变量','ambient_rh_2、die_wear_index')}
+        ${chk('caution','单位变更','cool_rate 由 ℃/min 改为 ℃/s —— 历史运行将按旧版本解释')}
+        ${chk('critical','删除变量','purge_time 被删除，2 个分析模型引用它，发布前必须处理')}
+        <div class="alert critical"><span class="ic">${icon('critical')}</span>
+          <div><b>发布被阻止：</b>2 个分析模型仍引用 <code>purge_time</code>。请先更新分析模型，或在 v13 中保留该变量。</div></div>
+      </div>
+      <div class="ft"><button class="btn sm ghost" onclick="toast('已丢弃草稿')">丢弃草稿</button>
+        <button class="btn sm pri" style="margin-left:auto" disabled>发布 v13</button></div>
+    </div>
+  </div>`;
+
+VIEW['/system/audit'] = () => `
+  <div class="alert decide" style="margin-bottom:12px"><span class="ic">${icon('decide')}</span>
+    <div><b>单人批准模式下，留痕是唯一的控制手段。</b>每一次批准都连同当时的建议值、约束、模型版本、种子与输入哈希一起冻结，
+    后续模型升级不会改写这条记录。</div></div>
+  <div class="filterbar">
+    <select class="inp" style="width:140px"><option selected>全部动作</option><option>批准实验</option><option>拒绝建议</option><option>复核判定</option><option>修改安全边界</option><option>发布工艺窗口</option></select>
+    <select class="inp" style="width:120px"><option selected>全部人员</option><option>张工</option><option>王工</option></select>
+    <input class="inp" style="width:160px" placeholder="课题 / 实验 / 运行号">
+    <div class="sp"></div><span class="tiny mut">近 30 天 87 条</span>
+  </div>
+  <div class="card"><div class="bd flush"><table class="dt">
+    <thead><tr><th>时间</th><th>人</th><th>动作</th><th>对象</th><th>理由</th><th>冻结快照</th><th style="width:70px"></th></tr></thead><tbody>
+    ${[['08-04 11:20','张工','批准实验','E-0142-11','建议点在安全边界内，且能补上交叉区组缺口','decide','sug:v2.4#seed41#8f3a2c'],
+       ['08-04 10:58','王工','复核判定','IT-8841 · 判废','干涉图中心区域规则形变，与型面偏差一致，非测量误差','critical','ins:IT-8841#a41b'],
+       ['08-04 09:31','张工','拒绝建议','P-0142 建议 #3','建议点 623 ℃ 距硬边界仅 2 ℃，现场热惯性下不安全','caution','sug:v2.4#seed39'],
+       ['08-03 17:02','张工','修改安全边界','P-0142 模温上限 630→625 ℃','设备厂商更新了加热区耐温说明','caution','cfg:P-0142#v4'],
+       ['08-03 16:40','李工','发布工艺窗口','PW-004 镀膜均匀性','312 次运行 + 22 次实验 + 双设备复现，四项条件全满足','good','pw:PW-004#c771'],
+       ['08-02 14:12','张工','否决假设','H-05','效应量 0.21 未达预设阈值 0.8，实验 E-0142-08 结束','good','exp:E-0142-08#d90f']]
+      .map(r=>`<tr><td class="mut tnum">${r[0]}</td><td>${r[1]}</td>
+        <td><span class="tag ${r[5]}">${r[2]}</span></td><td style="font-weight:500">${r[3]}</td>
+        <td class="mut" style="max-width:340px;overflow:hidden;text-overflow:ellipsis">${r[4]}</td>
+        <td><code>${r[6]}</code></td>
+        <td style="text-align:right"><button class="btn sm ghost" onclick="openEvidence()">还原</button></td></tr>`).join('')}
+  </tbody></table></div>
+    <div class="ft"><span>"还原"会把当时的证据快照重新装配出来，用于复盘一个决定当时看到的是什么。</span></div>
+  </div>`;
+
+/* ---- 通用占位 ---- */
+VIEW._stub = () => {
+  const d=PAGE[route]||['页面','—'];
+  return `<div class="card"><div class="bd"><div class="empty">
+    <b>${d[0]}</b>${d[1]}
+    <div style="margin-top:14px;font-size:11.5px">本页在原型中未展开。它在新信息架构中的位置、命名与主操作已在规格文档中定义。</div>
+    <div class="row" style="justify-content:center;gap:8px;margin-top:14px">
+      <button class="btn sm" onclick="go('/overview')">回到决策工作台</button>
+      <button class="btn sm" onclick="openCmd()">用 ⌘K 找别的页面</button></div>
+  </div></div></div>`;
+};
+
+/* ---- 证据面板 ---- */
+function openEvidence(){
+  openInsp(`<div class="stack" style="gap:12px">
+    <div><div class="sectitle">这条结果从哪来</div>
+      <div class="ev"><div class="h"><span class="dotm" style="background:var(--s1)"></span>真实运行</div>
+        <code>run:OR-24083-0102</code><br>MP-03 · 非球面镜片 L28-A · R-2024.7 v12<br>
+        <span class="mut">08-03 21:14:07 – 21:18:21 · 关联号 CY-77120</span></div>
+      <div class="ev"><div class="h"><span class="dotm" style="background:var(--s3)"></span>实际条件（回读，非设定）</div>
+        模具温度 613.4 ℃ · 保压 1.836 MPa · 保压 2.00 s<br>
+        <span class="mut">来源：PLC 回读 · EDGE-02 · 采样 100 ms</span></div>
+      <div class="ev"><div class="h"><span class="dotm" style="background:var(--s4)"></span>检测结果</div>
+        面型 PV 0.243 λ（超差，上限 0.150）<br>
+        <span class="mut">干涉仪 ZYGO-02 · 检测定义 ID-114 v4 · 已人工复核</span></div>
+      <div class="ev"><div class="h"><span class="dotm" style="background:var(--s5)"></span>上下文快照</div>
+        工装 F-12 v3 · 下模芯 C-118 · 上模芯 C-051<br>执行人 陈师傅<br>
+        <span class="mut">材料批次：<b>未记录</b>（场景包声明为"有则记录"）</span></div></div>
+    <div><div class="sectitle">版本与可复现</div>
+      <dl class="kv"><dt>场景包</dt><dd>SP-L28A v7</dd><dt>工艺模型</dt><dd>PM-L28A v12</dd>
+        <dt>分析模型</dt><dd>v3.2</dd><dt>输入哈希</dt><dd><code>8f3a2c91b7e4c71d</code></dd>
+        <dt>冻结数据集</dt><dd>DS-2291</dd></dl></div>
+    <div><div class="sectitle">这条证据不能说明什么</div>
+      <div class="alert unknown"><span class="ic">${icon('unknown')}</span>
+        <div>单次运行不能建立因果。该运行与模芯更换同时发生，两者在观察数据中不可分离。</div></div></div>
+    <div class="row" style="gap:6px">
+      <button class="btn sm" style="flex:1;justify-content:center" onclick="toast('已导出证据包（含来源、版本、哈希与限制说明）')">导出证据包</button>
+      <button class="btn sm" style="flex:1;justify-content:center" onclick="toast('已复制引用')">复制引用</button></div>
+  </div>`);
+}
+
+/* ---- 命令面板 ---- */
+const ACTIONS=[
+  {t:'发起运行对比',d:'用对比暂存区里的运行开始',k:'对比 compare',run:()=>go('/diagnose/compare')},
+  {t:'批准待决实验',d:'2 个实验等你批准 · 需要你决定',k:'批准 实验 决定',run:()=>go('/research/experiments')},
+  {t:'请求实验建议',d:'在已声明边界内求下一个实验点 · 需你批准后执行',k:'建议 优化',run:()=>go('/research/projects/P-0142')},
+  {t:'冻结分析数据集',d:'固定输入并生成内容哈希，使分析可复现',k:'冻结 数据集',run:()=>toast('已冻结数据集 DS-2291')},
+  {t:'导出证据包',d:'含来源、版本、哈希与限制说明',k:'导出 证据',run:()=>toast('已导出证据包')},
+  {t:'查看已验证工艺窗口',d:'系统的最终产出',k:'窗口 结论',run:()=>go('/research/windows')},
+  {t:'切换浅色 / 深色主题',d:'办公室分析用浅色，车间与大屏用品牌深色',k:'主题 dark',run:()=>toggleTheme()},
+];
+const OBJECTS=[
+  {t:'OR-24083-0102',d:'运行 · MP-03 · 面型 PV 0.243λ 超差',k:'运行',run:()=>go('/runs/OR-24083-0102')},
+  {t:'P-0142',d:'课题 · 面型 PV 收敛 · 阶段 4/7 · 有待批准实验',k:'课题 项目',run:()=>go('/research/projects/P-0142')},
+  {t:'E-0142-11',d:'实验 · 待你批准 · 3 水平 × 5 重复',k:'实验',run:()=>go('/research/experiments')},
+  {t:'SP-L28A v7',d:'场景包 · 24 变量 · 8 个上下文字段',k:'场景包',run:()=>go('/configure/scenarios')},
+  {t:'C-118',d:'组件资产 · 下模芯 · 08-03 装机',k:'模芯 组件',run:()=>go('/configure/components')},
+];
+let cmdSel=0, cmdRows=[];
+function openCmd(){ document.getElementById('overlay').classList.add('on'); const i=document.getElementById('cmdInput'); i.value=''; buildCmd(''); setTimeout(()=>i.focus(),0); }
+function closeCmd(){ document.getElementById('overlay').classList.remove('on'); }
+function buildCmd(q){
+  q=q.trim().toLowerCase();
+  const navs=[...NAV,SYSTEM].flatMap(s=>s.groups.flatMap(g=>g.items.map(i=>({t:i.n,d:`${s.name}${g.g?' · '+g.g:''} — ${(PAGE[i.p]||['',''])[1]}`,k:i.p,run:()=>go(i.p)}))));
+  const m=a=>a.filter(x=>!q||(x.t+' '+x.d+' '+(x.k||'')).toLowerCase().includes(q));
+  const groups=[['动作',m(ACTIONS)],['对象与运行',m(OBJECTS)],['页面',m(navs)]].filter(g=>g[1].length);
+  cmdRows=groups.flatMap(g=>g[1]); cmdSel=0;
+  document.getElementById('cmdList').innerHTML = groups.length
+    ? groups.map(g=>`<div class="gl">${g[0]}</div>`+g[1].map(r=>{const i=cmdRows.indexOf(r);
+        return `<button class="cmdrow ${i===0?'on':''}" data-i="${i}" onmousemove="selCmd(${i})" onclick="runCmd(${i})">
+          <span class="t">${r.t}</span><span class="d">${r.d}</span></button>`;}).join('')).join('')
+    : `<div class="empty" style="padding:26px"><b>没有匹配项</b>试试「对比」「实验」「窗口」「场景包」</div>`;
+}
+function selCmd(i){ cmdSel=i; document.querySelectorAll('.cmdrow').forEach(el=>el.classList.toggle('on',+el.dataset.i===i)); }
+function runCmd(i){ const r=cmdRows[i]; if(!r) return; closeCmd(); r.run(); }
+/* ---- 键盘 ---- */
+document.getElementById('cmdInput').addEventListener('input',e=>buildCmd(e.target.value));
+document.addEventListener('keydown',e=>{
+  const open=document.getElementById('overlay').classList.contains('on');
+  if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='k'){ e.preventDefault(); open?closeCmd():openCmd(); return; }
+  if(!open){
+    if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='b'){ e.preventDefault(); toggleSub(); }
+    if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='i'){ e.preventDefault(); inspOpen?closeInsp():openEvidence(); }
+    return;
+  }
+  if(e.key==='Escape') closeCmd();
+  if(e.key==='ArrowDown'){ e.preventDefault(); selCmd(Math.min(cmdRows.length-1,cmdSel+1)); document.querySelector('.cmdrow.on')?.scrollIntoView({block:'nearest'}); }
+  if(e.key==='ArrowUp'){ e.preventDefault(); selCmd(Math.max(0,cmdSel-1)); document.querySelector('.cmdrow.on')?.scrollIntoView({block:'nearest'}); }
+  if(e.key==='Enter') runCmd(cmdSel);
+});
+render();
+</script>
+</body>
+</html>
