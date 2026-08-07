@@ -7,6 +7,7 @@ const app = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
 const pages = await readFile(new URL("../src/pages/index.jsx", import.meta.url), "utf8");
 const http = await readFile(new URL("../src/api/http.js", import.meta.url), "utf8");
 const components = await readFile(new URL("../src/ui/components.jsx", import.meta.url), "utf8");
+const apiHook = await readFile(new URL("../src/hooks/useApi.js", import.meta.url), "utf8");
 const registryEditor = await readFile(new URL("../src/components/RegistryBusinessEditor.jsx", import.meta.url), "utf8");
 const acquisitionRegistry = await readFile(new URL("../src/acquisition/protocolRegistry.js", import.meta.url), "utf8");
 const acquisitionPage = await readFile(new URL("../src/acquisition/AcquisitionProfilePage.jsx", import.meta.url), "utf8");
@@ -124,6 +125,14 @@ test("versioned registries use composite row keys and statuses are localized", (
   assert.match(pages, /title="采集配置应用状态"/);
   assert.match(pages, /desiredConfigurationSetHash/);
   assert.match(pages, /appliedConfigurationSetHash/);
+});
+
+test("route changes cannot display stale registry rows under new columns", () => {
+  assert.match(apiHook, /requestIdRef/);
+  assert.match(apiHook, /requestId === requestIdRef\.current/);
+  assert.match(apiHook, /dataRef\.current = null/);
+  assert.match(pages, /<ProductionRecordsPage key=\{section\} section=\{section\}/);
+  assert.match(pages, /<DataTable\s+key=\{resource\.endpoint\}/);
 });
 
 test("global search opens a cross-product command palette and table columns keep stable unique keys", () => {

@@ -7,7 +7,8 @@ export function useApi(url, { enabled = true, interval = 0, transform = identity
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(enabled);
   const [error, setError] = useState("");
-  const mounted = useRef(true);
+  const mounted = useRef(false);
+  const requestIdRef = useRef(0);
   const dataRef = useRef(data);
   const transformRef = useRef(transform);
 
@@ -17,31 +18,41 @@ export function useApi(url, { enabled = true, interval = 0, transform = identity
   }, [data, transform]);
 
   const load = useCallback(async () => {
-    if (!enabled || !url) return;
+    if (!enabled || !url) {
+      setLoading(false);
+      return;
+    }
+    const requestId = ++requestIdRef.current;
     setLoading(current => dataRef.current === null ? true : current);
     try {
       const result = transformRef.current(await getJson(url));
-      if (mounted.current) {
+      if (mounted.current && requestId === requestIdRef.current) {
+        dataRef.current = result;
         setData(result);
         setError("");
       }
     } catch (requestError) {
-      if (mounted.current) setError(requestError.message);
+      if (mounted.current && requestId === requestIdRef.current) setError(requestError.message);
     } finally {
-      if (mounted.current) setLoading(false);
+      if (mounted.current && requestId === requestIdRef.current) setLoading(false);
     }
   }, [enabled, url]);
 
   useEffect(() => {
     mounted.current = true;
+    requestIdRef.current += 1;
+    dataRef.current = null;
+    setData(null);
+    setError("");
+    setLoading(Boolean(enabled && url));
     void load();
-    if (!interval) return () => { mounted.current = false; };
-    const timer = window.setInterval(load, interval);
+    const timer = interval && enabled && url ? window.setInterval(load, interval) : null;
     return () => {
       mounted.current = false;
-      window.clearInterval(timer);
+      requestIdRef.current += 1;
+      if (timer) window.clearInterval(timer);
     };
-  }, [interval, load]);
+  }, [enabled, interval, load, url]);
 
   return { data, setData, loading, error, reload: load };
 }

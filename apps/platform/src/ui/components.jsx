@@ -6,15 +6,15 @@ export function cx(...values) {
   return values.filter(Boolean).join(" ");
 }
 
-export function Page({ title, description, actions, children }) {
+export function Page({ title, description, actions, className, children }) {
   return (
-    <div className="space-y-5">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-950">{title}</h1>
+    <div className={cx("space-y-6", className)}>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-950 sm:text-[1.7rem]">{title}</h1>
           {description && <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-500">{description}</p>}
         </div>
-        {actions && <div className="flex shrink-0 flex-wrap gap-2">{actions}</div>}
+        {actions && <div className="flex shrink-0 flex-wrap gap-2 sm:pt-0.5">{actions}</div>}
       </div>
       {children}
     </div>
@@ -301,13 +301,20 @@ export function Alert({ tone = "info", title, children }) {
 
 export function DataTable({ columns, rows, keyField = "id", getRowKey, onRowClick }) {
   if (!rows?.length) return <EmptyState />;
+  const minimumWidth = columns.length >= 8 ? "min-w-[1080px]" : columns.length >= 5 ? "min-w-[760px]" : "min-w-full";
   return (
-    <div className="-mx-5 overflow-x-auto">
-      <table className="min-w-full divide-y divide-slate-200 text-left text-sm tabular-nums">
-        <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+    <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white scrollbar-thin">
+      <table className={cx("w-full divide-y divide-slate-200 text-left text-sm tabular-nums", minimumWidth)}>
+        <thead className="bg-slate-50/90 text-xs tracking-wide text-slate-600">
           <tr>
             {columns.map((column, columnIndex) => (
-              <th key={column.id ?? `${column.key}:${columnIndex}`} className="whitespace-nowrap px-5 py-3 font-semibold">{column.label}</th>
+              <th
+                key={column.id ?? `${column.key}:${columnIndex}`}
+                scope="col"
+                className={cx("whitespace-nowrap px-4 py-3 font-semibold sm:px-5", column.align === "right" && "text-right")}
+              >
+                {column.label}
+              </th>
             ))}
           </tr>
         </thead>
@@ -316,7 +323,7 @@ export function DataTable({ columns, rows, keyField = "id", getRowKey, onRowClic
             <tr
               key={getRowKey ? getRowKey(row, index) : row[keyField] ?? index}
               className={cx(
-                "text-slate-700",
+                "text-slate-700 transition-colors hover:bg-slate-50/80",
                 onRowClick && "cursor-pointer hover:bg-blue-50/50 focus-visible:bg-blue-50 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-blue-600",
               )}
               onClick={onRowClick ? () => onRowClick(row) : undefined}
@@ -331,7 +338,14 @@ export function DataTable({ columns, rows, keyField = "id", getRowKey, onRowClic
               } : undefined}
             >
               {columns.map((column, columnIndex) => (
-                <td key={column.id ?? `${column.key}:${columnIndex}`} className="max-w-sm px-5 py-3 align-top">
+                <td
+                  key={column.id ?? `${column.key}:${columnIndex}`}
+                  className={cx(
+                    "max-w-sm px-4 py-3.5 align-middle leading-5 sm:px-5",
+                    (column.primary || columnIndex === 0) && "font-medium text-slate-900",
+                    column.align === "right" && "text-right",
+                  )}
+                >
                   {column.render ? column.render(row[column.key], row) : displayValue(row[column.key])}
                 </td>
               ))}
@@ -389,7 +403,7 @@ export function Metric({ label, value, hint }) {
 
 export function Pagination({ page, pageSize, total, onPageChange, onPageSizeChange }) {
   const pageCount = Math.max(1, Math.ceil(Number(total || 0) / pageSize));
-  if (!total) return null;
+  if (!total || total <= 20) return null;
   return (
     <div className="mt-4 flex flex-col gap-3 border-t border-slate-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
       <p className="text-sm text-slate-500 tabular-nums">共 {total} 条 · 第 {page}/{pageCount} 页</p>

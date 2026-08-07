@@ -1912,7 +1912,32 @@ function ToolingAssembliesPage() {
 export function ProductionSetupPage({ section }) {
   return section === "assembly"
     ? <ToolingAssembliesPage />
-    : <ProductionRecordsPage section={section} />;
+    : <ProductionRecordsPage key={section} section={section} />;
+}
+
+const productionAttributeLabels = {
+  dataClassification: "数据类型",
+  model: "型号",
+  productCode: "零件号",
+};
+
+const productionAttributeValueLabels = {
+  simulated: "模拟数据",
+};
+
+function ProductionAttributeSummary({ value }) {
+  const entries = Object.entries(value || {});
+  if (!entries.length) return <span className="text-slate-400">—</span>;
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {entries.map(([attribute, attributeValue]) => (
+        <span key={attribute} className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-1 text-xs text-slate-600 ring-1 ring-inset ring-slate-200">
+          <span>{productionAttributeLabels[attribute] || attribute}</span>
+          <strong className="font-medium text-slate-800">{productionAttributeValueLabels[attributeValue] || String(attributeValue)}</strong>
+        </span>
+      ))}
+    </div>
+  );
 }
 
 function ProductionRecordsPage({ section }) {
@@ -1994,23 +2019,24 @@ function ProductionRecordsPage({ section }) {
     ...resource.columns.map(([key, label]) => ({
       key,
       label,
+      primary: key === resource.key,
       render: key.endsWith("At") || ["validFrom", "validTo"].includes(key)
         ? formatTime
         : key === "status" ? value => <StatusBadge value={value} />
-          : key === "recipeId" ? (value, row) => `${value} v${row.recipeVersion}`
-            : key === "productCode" ? (value, row) => <div><p className="font-medium text-slate-800">{value}</p>{row.productSeries && <p className="mt-0.5 text-xs text-slate-500">{row.productSeries}</p>}</div>
-          : key === "roles" ? value => value?.length ? value.map(role => role.name).join("、") : "—"
-            : key === "attributes" ? value => {
-              const entries = Object.entries(value || {});
-              return entries.length ? entries.map(([attribute, attributeValue]) => `${attribute}：${attributeValue}`).join("、") : "—";
-            }
+          : key === resource.key ? value => <span className="font-mono text-xs font-semibold tracking-tight text-slate-800">{value || "—"}</span>
+            : key === "name" ? value => <span className="font-medium text-slate-900">{value || "—"}</span>
+              : key === "recipeId" ? (value, row) => `${value} v${row.recipeVersion}`
+                : key === "productCode" ? (value, row) => <div><p className="font-medium text-slate-800">{value}</p>{row.productSeries && <p className="mt-0.5 text-xs text-slate-500">{row.productSeries}</p>}</div>
+                  : key === "roles" ? value => value?.length ? value.map(role => role.name).join("、") : "—"
+                    : key === "attributes" ? value => <ProductionAttributeSummary value={value} />
               : undefined,
     })),
     {
       key: "_actions",
       label: "操作",
+      align: "right",
       render: (_value, row) => (
-        <div className="flex min-w-max gap-1">
+        <div className="flex min-w-max justify-end gap-1">
           {!["context", "installation"].includes(section) && <Button variant="ghost" className="px-2" onClick={() => openEditor(row)}>{section === "type" ? "新版本维护" : "编辑"}</Button>}
           {resource.lifecycle?.visible(row) && <Button variant="ghost" className="px-2 text-amber-700" onClick={() => lifecycle(row)}>{resource.lifecycle.label}</Button>}
           {resource.deleteUrl && <Button variant="ghost" className="px-2 text-rose-700" onClick={() => remove(row)}>删除</Button>}
@@ -2020,7 +2046,7 @@ function ProductionRecordsPage({ section }) {
   ];
 
   return (
-    <Page title={resource.title} description={resource.description} actions={section === "context" ? undefined : <Button variant="primary" onClick={() => openEditor()}>{resource.createLabel}</Button>}>
+    <Page className="mx-auto max-w-7xl" title={resource.title} description={resource.description} actions={section === "context" ? undefined : <Button variant="primary" onClick={() => openEditor()}>{resource.createLabel}</Button>}>
       {(error || (!open && actionError)) && <Alert tone="danger">{error || actionError}</Alert>}
       {loading && !data ? <LoadingCard /> : (
         <>
@@ -2070,8 +2096,9 @@ function ProductionRecordsPage({ section }) {
               ]}
             />
           )}
-          <Card title={["context", "installation"].includes(section) ? "历史记录" : `${resource.title}记录`} description={`共 ${rows.length} 条`}>
+          <Card title={["context", "installation"].includes(section) ? "历史记录" : `${resource.title}列表`} description={`已登记 ${rows.length} 条`}>
             <DataTable
+              key={resource.endpoint}
               rows={pagedRows}
               keyField={resource.key}
               getRowKey={section === "type" ? row => `${row[resource.key]}:${row.version ?? 1}` : undefined}
