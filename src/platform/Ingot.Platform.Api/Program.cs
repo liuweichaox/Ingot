@@ -64,12 +64,14 @@ else
 }
 builder.Services.AddAuthorization(options =>
 {
-    if (!useAnonymousDevelopmentIdentity)
-    {
-        options.FallbackPolicy = new AuthorizationPolicyBuilder()
-            .RequireAuthenticatedUser()
-            .Build();
-    }
+    options.FallbackPolicy = new AuthorizationPolicyBuilder()
+        .RequireAuthenticatedUser()
+        .RequireRole(
+            PlatformRoles.QualityInspector,
+            PlatformRoles.QualityReviewer,
+            PlatformRoles.ProcessEngineer,
+            PlatformRoles.PlatformAdministrator)
+        .Build();
 });
 
 builder.Services.AddIngotPlatformInfrastructure(builder.Configuration);
@@ -121,6 +123,14 @@ Log.Logger = new LoggerConfiguration()
 builder.Host.UseSerilog();
 
 var app = builder.Build();
+
+if (!app.Environment.IsDevelopment() &&
+    string.Equals(authenticationMode, "Disabled", StringComparison.OrdinalIgnoreCase))
+{
+    app.Logger.LogCritical(
+        "INSECURE DEMO AUTHENTICATION IS ENABLED IN PRODUCTION. " +
+        "All authenticated requests use the fixed development identity; isolate this deployment.");
+}
 
 app.UseRouting();
 // CORS 必须位于 UseRouting 之后、UseAuthentication/UseAuthorization 之前（官方规定顺序）；

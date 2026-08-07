@@ -46,6 +46,10 @@ cp .env.example .env
 - `INGOT_CONNECTOR_LOCAL_TOKEN`
 - `INGOT_ADMIN_PASSWORD`
 
+生产环境必须使用 `INGOT_AUTH_MODE=Local` 或 `INGOT_AUTH_MODE=Oidc`。`INGOT_AUTH_MODE=Disabled`
+只允许在明确隔离的演示环境使用，并且必须同时设置 `INGOT_ALLOW_INSECURE_DEMO=true`；该模式会把
+所有请求映射到固定的开发身份，不能暴露到厂内网络或反向代理之后。
+
 不要提交 `.env` 或真实设备凭据。设备密码和证书应使用现场允许的密钥管理方式注入。
 
 ### 本地模型服务
@@ -59,6 +63,15 @@ cp .env.example .env
 ```bash
 docker compose -f docker-compose.app.yml up -d --build
 ```
+
+### Edge 到 Platform 的传输安全
+
+Edge 通常运行在独立车间主机上。生产部署必须在 Edge 与 Platform API 之间提供 TLS 终结，
+例如使用 nginx 或 Caddy 配置内部 CA 证书，并让 Edge 的 `Edge:PlatformApiBaseUrl`
+（环境变量形式为 `Edge__PlatformApiBaseUrl`）使用 `https://`。不要在跨主机或不可信厂内网段上以 HTTP 传输 Bearer token。
+
+Platform、Optimizer 和数据库不应直接暴露给非必要网段；反向代理只公开必要的 Web/API 入口，
+并单独保护 `/metrics`。
 
 需要独立现场连接器时：
 

@@ -62,6 +62,7 @@ services:
       - Database__SchemaManagement=${INGOT_SCHEMA_MANAGEMENT:-Migrations}
       - EventIngest__EdgeTokens__${INGOT_EDGE_ID:?INGOT_EDGE_ID is required}=${INGOT_EDGE_TOKEN:?INGOT_EDGE_TOKEN is required}
       - Authentication__Mode=${INGOT_AUTH_MODE:-Local}
+      - Authentication__AllowInsecureDemo=${INGOT_ALLOW_INSECURE_DEMO:-false}
       - Authentication__Authority=${INGOT_AUTHORITY:-}
       - Authentication__Audience=${INGOT_AUDIENCE:-}
       - Authentication__RequireHttpsMetadata=${INGOT_AUTH_REQUIRE_HTTPS:-true}

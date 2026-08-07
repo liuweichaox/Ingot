@@ -20,6 +20,18 @@ public static class ProductionConfigurationValidator
         {
             errors.Add("Authentication:Mode must be 'Local', 'Oidc', or 'Disabled'.");
         }
+        if (string.Equals(authMode, "Disabled", StringComparison.OrdinalIgnoreCase) &&
+            !IsInsecureDemoAllowed(configuration))
+        {
+            errors.Add(
+                "Authentication:Mode 'Disabled' is forbidden in production unless " +
+                "Authentication:AllowInsecureDemo=true is explicitly set for an isolated demo.");
+        }
+        var seedAdminPassword = configuration["Authentication:Local:SeedAdminPassword"];
+        if (IsPlaceholder(seedAdminPassword))
+            errors.Add("Authentication:Local:SeedAdminPassword must not use a placeholder value.");
+        if (IsPlaceholder(configuration.GetConnectionString("Events")))
+            errors.Add("ConnectionStrings:Events must not contain a placeholder password.");
         if (string.Equals(authMode, "Oidc", StringComparison.OrdinalIgnoreCase))
         {
             RequireValue(configuration, "Authentication:Authority", errors);
@@ -44,6 +56,8 @@ public static class ProductionConfigurationValidator
             RequireValue(configuration, "Chat:FastModel", errors);
             RequireValue(configuration, "Chat:ReasoningModel", errors);
             RequireValue(configuration, "OPENAI_API_KEY", errors);
+            if (IsPlaceholder(configuration["OPENAI_API_KEY"]))
+                errors.Add("OPENAI_API_KEY must not use a placeholder value.");
             var baseUrl = configuration["Chat:BaseUrl"];
             if (!string.IsNullOrWhiteSpace(baseUrl))
             {
@@ -83,12 +97,28 @@ public static class ProductionConfigurationValidator
         }
 
         if (entries.Any(static entry => !IsStrongSecret(entry.Value)))
-            errors.Add($"Every {sectionName}:{mapName} credential must contain at least {MinimumSecretLength} characters.");
+            errors.Add($"Every {sectionName}:{mapName} credential must contain at least {MinimumSecretLength} characters and must not be a placeholder.");
     }
 
     private static bool IsStrongSecret(string? value) =>
         !string.IsNullOrWhiteSpace(value) &&
-        value.Length >= MinimumSecretLength;
+        value.Length >= MinimumSecretLength &&
+        !IsPlaceholder(value);
+
+    private static bool IsInsecureDemoAllowed(IConfiguration configuration) =>
+        configuration.GetValue<bool>("Authentication:AllowInsecureDemo") ||
+        configuration.GetValue<bool>("INGOT_ALLOW_INSECURE_DEMO");
+
+    private static bool IsPlaceholder(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return false;
+
+        var normalized = value.Trim();
+        return normalized.Contains("change-this-", StringComparison.OrdinalIgnoreCase) ||
+               normalized.Contains("verification-", StringComparison.OrdinalIgnoreCase) ||
+               normalized.Contains("replace-with-", StringComparison.OrdinalIgnoreCase);
+    }
 
     private static void RequireChatDataScopes(IConfiguration configuration, ICollection<string> errors)
     {

@@ -173,7 +173,7 @@ public sealed class ProductionConfigurationValidatorTests
     }
 
     [Fact]
-    public void Platform_AcceptsDisabledAuthForPrototypeDeployments()
+    public void Platform_RejectsDisabledAuthUnlessExplicitlyAllowed()
     {
         var configuration = Build(new Dictionary<string, string?>
         {
@@ -187,7 +187,45 @@ public sealed class ProductionConfigurationValidatorTests
             ["Cors:AllowedOrigins:0"] = "https://ingotstack.com"
         });
 
+        var error = Assert.Throws<InvalidOperationException>(() => PlatformValidator.Validate(configuration));
+        Assert.Contains("Authentication:Mode 'Disabled'", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Platform_AcceptsDisabledAuthOnlyWhenExplicitlyAllowed()
+    {
+        var configuration = Build(new Dictionary<string, string?>
+        {
+            ["ConnectionStrings:Events"] = "Host=postgres;Database=ingot;Password=random-production-secret",
+            ["EventIngest:RequireToken"] = "true",
+            ["EventIngest:EdgeTokens:EDGE-001"] = "edge-token-with-at-least-24-characters",
+            ["Authentication:Mode"] = "Disabled",
+            ["Authentication:AllowInsecureDemo"] = "true",
+            ["InspectionAttachments:ArchiveRootPath"] = "/archive/inspection-attachments",
+            ["ProcessKnowledge:ArchiveRootPath"] = "/archive/process-knowledge",
+            ["Chat:Enabled"] = "false",
+            ["Cors:AllowedOrigins:0"] = "https://ingotstack.com"
+        });
+
         PlatformValidator.Validate(configuration);
+    }
+
+    [Fact]
+    public void Platform_RejectsPlaceholderCredentials()
+    {
+        var configuration = Build(new Dictionary<string, string?>
+        {
+            ["ConnectionStrings:Events"] = "Host=postgres;Database=ingot;Password=change-this-database-password",
+            ["EventIngest:RequireToken"] = "true",
+            ["EventIngest:EdgeTokens:EDGE-001"] = "change-this-edge-ingest-token",
+            ["InspectionAttachments:ArchiveRootPath"] = "/archive/inspection-attachments",
+            ["ProcessKnowledge:ArchiveRootPath"] = "/archive/process-knowledge",
+            ["Chat:Enabled"] = "false",
+            ["Cors:AllowedOrigins:0"] = "https://ingotstack.com"
+        });
+
+        var error = Assert.Throws<InvalidOperationException>(() => PlatformValidator.Validate(configuration));
+        Assert.Contains("placeholder", error.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

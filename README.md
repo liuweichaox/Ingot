@@ -114,6 +114,10 @@ Platform 是厂内业务记录源；Optimizer 是无状态数值服务；Agent �
 
 要求：.NET SDK 10、Node.js 22.13+、uv 0.11.32、Docker 和 Docker Compose。
 
+首次启动前请修改 `.env` 中的数据库密码、Edge 令牌和管理员配置。默认认证模式为 `Local`；
+生产环境不要使用 `Disabled`，除非这是明确隔离的演示部署并同时设置了
+`INGOT_ALLOW_INSECURE_DEMO=true`。
+
 ```bash
 git clone https://github.com/liuweichaox/Ingot.git
 cd Ingot

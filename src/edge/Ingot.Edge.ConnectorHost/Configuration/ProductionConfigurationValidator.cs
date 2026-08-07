@@ -8,6 +8,7 @@ public static class ProductionConfigurationValidator
     {
         var errors = new List<string>();
         RequireSecret(configuration["ConnectorHost:IngestToken"], "ConnectorHost:IngestToken", errors);
+        RequireOptionalSecret(configuration["ConnectorHost:LocalApiToken"], "ConnectorHost:LocalApiToken", errors);
 
         var platformReportingEnabled = configuration.GetValue<bool?>("Edge:EnablePlatformReporting")
             ?? configuration.GetValue<bool>("Edge:EnableCentralReporting");
@@ -56,9 +57,23 @@ public static class ProductionConfigurationValidator
 
     private static void RequireSecret(string? value, string key, ICollection<string> errors)
     {
-        if (string.IsNullOrWhiteSpace(value) || value.Length < MinimumSecretLength)
+        if (string.IsNullOrWhiteSpace(value) || value.Length < MinimumSecretLength || IsPlaceholder(value))
         {
-            errors.Add($"{key} must contain at least {MinimumSecretLength} characters.");
+            errors.Add($"{key} must contain at least {MinimumSecretLength} characters and must not be a placeholder.");
+        }
+    }
+
+    private static bool IsPlaceholder(string value) =>
+        value.Contains("change-this-", StringComparison.OrdinalIgnoreCase) ||
+        value.Contains("verification-", StringComparison.OrdinalIgnoreCase) ||
+        value.Contains("replace-with-", StringComparison.OrdinalIgnoreCase);
+
+    private static void RequireOptionalSecret(string? value, string key, ICollection<string> errors)
+    {
+        if (!string.IsNullOrWhiteSpace(value) &&
+            (value.Length < MinimumSecretLength || IsPlaceholder(value)))
+        {
+            errors.Add($"{key} must contain at least {MinimumSecretLength} characters and must not be a placeholder when configured.");
         }
     }
 }
