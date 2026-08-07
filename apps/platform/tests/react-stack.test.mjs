@@ -130,6 +130,10 @@ test("global search opens a cross-product command palette and table columns keep
   assert.match(app, /<GlobalSearchDialog/);
   assert.match(app, /setGlobalSearchOpen\(true\)/);
   assert.match(app, /event\.key\.toLowerCase\(\) === "k"/);
+  assert.match(app, /function isApplePlatform\(\)/);
+  assert.match(app, /usesAppleShortcut \? event\.metaKey : event\.ctrlKey/);
+  assert.match(app, /usesAppleShortcut \? "⌘ K" : "Ctrl K"/);
+  assert.match(app, /aria-keyshortcuts=\{usesAppleShortcut \? "Meta\+K" : "Control\+K"\}/);
   assert.match(app, /全局搜索/);
   assert.doesNotMatch(app, /navigate\("\/explorer", \{ state: \{ focusSearch: true \} \}\)/);
   assert.match(app, /to="\/platform-metrics"[^>]*>平台运行状态/);

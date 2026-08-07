@@ -100,23 +100,32 @@ const globalSearchEntries = allSections.flatMap(section => sectionItems(section)
   description: pageDetails[path]?.[1] || "打开功能页面",
 })));
 
+function isApplePlatform() {
+  if (typeof navigator === "undefined") return false;
+  const platform = navigator.userAgentData?.platform || navigator.platform || navigator.userAgent;
+  return /mac|iphone|ipad|ipod|ios/i.test(platform);
+}
+
 export default function App() {
   const location = useLocation();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [globalSearchOpen, setGlobalSearchOpen] = useState(false);
   const identity = { username: "operator", displayName: "当前操作员" };
+  const usesAppleShortcut = useMemo(isApplePlatform, []);
+  const searchShortcutLabel = usesAppleShortcut ? "⌘ K" : "Ctrl K";
 
   useEffect(() => {
     function handleShortcut(event) {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+      const modifierPressed = usesAppleShortcut ? event.metaKey : event.ctrlKey;
+      if (modifierPressed && event.key.toLowerCase() === "k") {
         event.preventDefault();
         setGlobalSearchOpen(true);
       }
     }
     window.addEventListener("keydown", handleShortcut);
     return () => window.removeEventListener("keydown", handleShortcut);
-  }, []);
+  }, [usesAppleShortcut]);
 
   const section = useMemo(
     () => allSections.find(item => item.path === location.pathname || sectionItems(item).some(([path]) => location.pathname === path || location.pathname.startsWith(`${path}/`))) ?? sections[0],
@@ -186,8 +195,8 @@ export default function App() {
             );
           })}
         </nav>
-        <button className="flex items-center gap-2 border-l border-slate-100 px-3 text-sm text-slate-600 hover:bg-slate-50 sm:px-4" onClick={() => setGlobalSearchOpen(true)} aria-label="打开全局搜索" aria-keyshortcuts="Control+K Meta+K">
-          <MagnifyingGlassIcon className="size-5" /><span className="hidden lg:inline">全局搜索</span><kbd className="hidden rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] text-slate-400 2xl:inline">⌘K</kbd>
+        <button className="flex items-center gap-2 border-l border-slate-100 px-3 text-sm text-slate-600 hover:bg-slate-50 sm:px-4" onClick={() => setGlobalSearchOpen(true)} aria-label="打开全局搜索" aria-keyshortcuts={usesAppleShortcut ? "Meta+K" : "Control+K"}>
+          <MagnifyingGlassIcon className="size-5" /><span className="hidden lg:inline">全局搜索</span><kbd className="hidden rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] text-slate-400 2xl:inline">{searchShortcutLabel}</kbd>
         </button>
         <Menu as="div" className="relative hidden border-l border-slate-100 sm:flex">
           <MenuButton className="grid w-12 place-items-center text-slate-600 hover:bg-slate-50" aria-label="打开系统管理">
