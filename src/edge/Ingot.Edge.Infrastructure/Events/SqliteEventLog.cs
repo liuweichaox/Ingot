@@ -105,6 +105,7 @@ public sealed class SqliteEventLog : IEventLog, IBatchedEventLog
                     evt.Context,
                     ct)
                 .ConfigureAwait(false);
+            await AdjustPendingCountAsync(connection, transaction, 1, ct).ConfigureAwait(false);
 
             var backlogDrop = await EnforceBacklogLimitAsync(
                     connection,
@@ -184,6 +185,7 @@ public sealed class SqliteEventLog : IEventLog, IBatchedEventLog
                     .ConfigureAwait(false);
                 sequences.Add(seq);
             }
+            await AdjustPendingCountAsync(connection, transaction, events.Count, ct).ConfigureAwait(false);
 
             var backlogDrop = await EnforceBacklogLimitAsync(
                     connection,
@@ -310,14 +312,20 @@ public sealed class SqliteEventLog : IEventLog, IBatchedEventLog
         try
         {
             await using var connection = await OpenAsync(ct).ConfigureAwait(false);
+            await using var transaction = (SqliteTransaction)await connection
+                .BeginTransactionAsync(ct)
+                .ConfigureAwait(false);
             await using var command = connection.CreateCommand();
+            command.Transaction = transaction;
             command.CommandText = """
                                   UPDATE events
                                   SET ship_state = 1
                                   WHERE seq <= $seq AND ship_state = 0;
                                   """;
             command.Parameters.AddWithValue("$seq", upToSeq);
-            await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+            var shipped = await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+            await AdjustPendingCountAsync(connection, transaction, -shipped, ct).ConfigureAwait(false);
+            await transaction.CommitAsync(ct).ConfigureAwait(false);
             await CleanupAcknowledgedIfDueAsync(connection, ct).ConfigureAwait(false);
         }
         finally
@@ -359,7 +367,7 @@ public sealed class SqliteEventLog : IEventLog, IBatchedEventLog
     {
         await using var connection = await OpenAsync(ct).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
-        command.CommandText = "SELECT COUNT(*) FROM events WHERE ship_state = 0;";
+        command.CommandText = "SELECT pending_count FROM event_log_state WHERE singleton_id = 1;";
         return Convert.ToInt64(
             await command.ExecuteScalarAsync(ct).ConfigureAwait(false),
             CultureInfo.InvariantCulture);
@@ -395,12 +403,7 @@ public sealed class SqliteEventLog : IEventLog, IBatchedEventLog
         if (_options.MaxBacklogRows <= 0)
             return null;
 
-        await using var countCommand = connection.CreateCommand();
-        countCommand.Transaction = transaction;
-        countCommand.CommandText = "SELECT COUNT(*) FROM events WHERE ship_state = 0;";
-        var count = Convert.ToInt64(
-            await countCommand.ExecuteScalarAsync(ct).ConfigureAwait(false),
-            CultureInfo.InvariantCulture);
+        var count = await ReadPendingCountAsync(connection, transaction, ct).ConfigureAwait(false);
         var excess = count - _options.MaxBacklogRows;
         if (excess <= 0)
             return null;
@@ -470,6 +473,7 @@ public sealed class SqliteEventLog : IEventLog, IBatchedEventLog
             "$data_json",
             JsonSerializer.Serialize(diagnosticData, JsonOptions));
         await diagnosticCommand.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+        await AdjustPendingCountAsync(connection, transaction, 1L - dropped, ct).ConfigureAwait(false);
 
         return new BacklogDrop(dropped, firstSeq, lastSeq);
     }
@@ -512,11 +516,53 @@ public sealed class SqliteEventLog : IEventLog, IBatchedEventLog
                               );
                               CREATE INDEX IF NOT EXISTS idx_event_context_lookup
                                 ON event_context(ctx_key, ctx_value, event_seq);
+                              CREATE TABLE IF NOT EXISTS event_log_state (
+                                singleton_id INTEGER PRIMARY KEY CHECK(singleton_id = 1),
+                                pending_count INTEGER NOT NULL CHECK(pending_count >= 0)
+                              );
+                              INSERT INTO event_log_state(singleton_id, pending_count)
+                              VALUES (1, (SELECT COUNT(*) FROM events WHERE ship_state = 0))
+                              ON CONFLICT(singleton_id) DO UPDATE
+                              SET pending_count = excluded.pending_count;
                               INSERT OR IGNORE INTO event_context(event_seq, ctx_key, ctx_value)
                               SELECT events.seq, json_each.key, CAST(json_each.value AS TEXT)
                               FROM events, json_each(events.context_json);
                               """;
         command.ExecuteNonQuery();
+    }
+
+    private static async Task<long> ReadPendingCountAsync(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        CancellationToken ct)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = "SELECT pending_count FROM event_log_state WHERE singleton_id = 1;";
+        return Convert.ToInt64(
+            await command.ExecuteScalarAsync(ct).ConfigureAwait(false),
+            CultureInfo.InvariantCulture);
+    }
+
+    private static async Task AdjustPendingCountAsync(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        long delta,
+        CancellationToken ct)
+    {
+        if (delta == 0)
+            return;
+
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = """
+                              UPDATE event_log_state
+                              SET pending_count = pending_count + $delta
+                              WHERE singleton_id = 1;
+                              """;
+        command.Parameters.AddWithValue("$delta", delta);
+        if (await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false) != 1)
+            throw new InvalidOperationException("事件 outbox pending 计数状态不存在。");
     }
 
     private void CleanupAcknowledged()

@@ -10,9 +10,6 @@ public sealed class PostgresCycleAnalysisMaterializationStore : ICycleAnalysisMa
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     private readonly NpgsqlDataSource _dataSource;
-    private readonly ILogger<PostgresCycleAnalysisMaterializationStore> _logger;
-    private readonly SemaphoreSlim _initializeLock = new(1, 1);
-    private volatile bool _initialized;
 
     public PostgresCycleAnalysisMaterializationStore(
         IConfiguration configuration,
@@ -21,143 +18,10 @@ public sealed class PostgresCycleAnalysisMaterializationStore : ICycleAnalysisMa
         var connectionString = configuration.GetConnectionString("Events")
             ?? throw new InvalidOperationException("缺少 ConnectionStrings:Events PostgreSQL 连接字符串。");
         _dataSource = NpgsqlDataSource.Create(connectionString);
-        _logger = logger;
+        _ = logger;
     }
 
-    public async Task InitializeAsync(CancellationToken ct = default)
-    {
-        if (_initialized)
-            return;
-
-        await _initializeLock.WaitAsync(ct).ConfigureAwait(false);
-        try
-        {
-            if (_initialized)
-                return;
-
-            await using var command = _dataSource.CreateCommand(
-                """
-                CREATE TABLE IF NOT EXISTS cycle_analysis_materializations (
-                  correlation_id                   TEXT NOT NULL,
-                  algorithm_version                TEXT NOT NULL,
-                  data_model_id                    TEXT NOT NULL,
-                  data_model_version               INTEGER NOT NULL,
-                  analysis_plan_id                 TEXT NOT NULL,
-                  analysis_plan_version            INTEGER NOT NULL,
-                  source_min_ingest_id              BIGINT NOT NULL DEFAULT 0,
-                  source_max_ingest_id              BIGINT NOT NULL,
-                  source_event_count                INTEGER NOT NULL,
-                  source_content_hash               TEXT NOT NULL DEFAULT '',
-                  status                            TEXT NOT NULL,
-                  computed_at                       TIMESTAMPTZ NOT NULL,
-                  invalidated_at                    TIMESTAMPTZ,
-                  invalidated_source_max_ingest_id  BIGINT NOT NULL DEFAULT 0,
-                  invalidation_reason               TEXT,
-                  result                            JSONB NOT NULL,
-                  PRIMARY KEY (
-                    correlation_id, algorithm_version,
-                    data_model_id, data_model_version,
-                    analysis_plan_id, analysis_plan_version)
-                );
-
-                CREATE INDEX IF NOT EXISTS idx_cycle_analysis_materializations_status
-                  ON cycle_analysis_materializations (status, computed_at);
-
-                ALTER TABLE cycle_analysis_materializations
-                  ADD COLUMN IF NOT EXISTS source_min_ingest_id BIGINT NOT NULL DEFAULT 0;
-                ALTER TABLE cycle_analysis_materializations
-                  ADD COLUMN IF NOT EXISTS source_content_hash TEXT NOT NULL DEFAULT '';
-
-                CREATE TABLE IF NOT EXISTS cycle_phases (
-                  correlation_id          TEXT NOT NULL,
-                  algorithm_version       TEXT NOT NULL,
-                  data_model_id           TEXT NOT NULL,
-                  data_model_version      INTEGER NOT NULL,
-                  analysis_plan_id        TEXT NOT NULL,
-                  analysis_plan_version   INTEGER NOT NULL,
-                  phase_code              TEXT NOT NULL,
-                  phase_name              TEXT NOT NULL,
-                  phase_order             INTEGER NOT NULL,
-                  phase_source            TEXT NOT NULL,
-                  required                BOOLEAN NOT NULL,
-                  is_complete             BOOLEAN NOT NULL,
-                  sample_count            INTEGER NOT NULL,
-                  started_at              TIMESTAMPTZ,
-                  ended_at                TIMESTAMPTZ,
-                  PRIMARY KEY (
-                    correlation_id, algorithm_version,
-                    data_model_id, data_model_version,
-                    analysis_plan_id, analysis_plan_version,
-                    phase_order)
-                );
-
-                CREATE INDEX IF NOT EXISTS idx_cycle_phases_code_time
-                  ON cycle_phases (phase_code, started_at);
-
-                CREATE TABLE IF NOT EXISTS cycle_features (
-                  correlation_id          TEXT NOT NULL,
-                  algorithm_version       TEXT NOT NULL,
-                  data_model_id           TEXT NOT NULL,
-                  data_model_version      INTEGER NOT NULL,
-                  analysis_plan_id        TEXT NOT NULL,
-                  analysis_plan_version   INTEGER NOT NULL,
-                  signal_code             TEXT NOT NULL,
-                  signal_name             TEXT NOT NULL,
-                  signal_unit             TEXT,
-                  signal_sample_count     INTEGER NOT NULL,
-                  phase_code              TEXT NOT NULL,
-                  phase_name              TEXT,
-                  phase_order             INTEGER NOT NULL,
-                  phase_source            TEXT NOT NULL,
-                  feature_code            TEXT NOT NULL,
-                  feature_definition_version INTEGER NOT NULL DEFAULT 1,
-                  feature_definition_hash TEXT NOT NULL DEFAULT '',
-                  computation_hash        TEXT NOT NULL DEFAULT '',
-                  input_point_count       INTEGER NOT NULL DEFAULT 0,
-                  feature_value           DOUBLE PRECISION,
-                  valid_duration_ms       DOUBLE PRECISION NOT NULL,
-                  coverage                DOUBLE PRECISION NOT NULL,
-                  started_at              TIMESTAMPTZ,
-                  ended_at                TIMESTAMPTZ,
-                  PRIMARY KEY (
-                    correlation_id, algorithm_version,
-                    data_model_id, data_model_version,
-                    analysis_plan_id, analysis_plan_version,
-                    signal_code, phase_code, phase_order, feature_code)
-                );
-
-                ALTER TABLE cycle_features
-                  ADD COLUMN IF NOT EXISTS feature_definition_version INTEGER NOT NULL DEFAULT 1;
-                ALTER TABLE cycle_features
-                  ADD COLUMN IF NOT EXISTS feature_definition_hash TEXT NOT NULL DEFAULT '';
-                ALTER TABLE cycle_features
-                  ADD COLUMN IF NOT EXISTS computation_hash TEXT NOT NULL DEFAULT '';
-                ALTER TABLE cycle_features
-                  ADD COLUMN IF NOT EXISTS input_point_count INTEGER NOT NULL DEFAULT 0;
-
-                CREATE INDEX IF NOT EXISTS idx_cycle_features_lookup
-                  ON cycle_features (signal_code, phase_code, feature_code, correlation_id);
-
-                CREATE TABLE IF NOT EXISTS cycle_analysis_backfill_jobs (
-                  job_id UUID PRIMARY KEY,
-                  status TEXT NOT NULL,
-                  payload JSONB NOT NULL,
-                  created_at TIMESTAMPTZ NOT NULL,
-                  updated_at TIMESTAMPTZ NOT NULL,
-                  CHECK (status IN ('queued', 'running', 'completed', 'completed_with_errors', 'failed'))
-                );
-                CREATE INDEX IF NOT EXISTS idx_cycle_analysis_backfill_jobs_status
-                  ON cycle_analysis_backfill_jobs(status, created_at);
-                """);
-            await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
-            _initialized = true;
-            _logger.LogInformation("周期阶段与特征物化表已就绪");
-        }
-        finally
-        {
-            _initializeLock.Release();
-        }
-    }
+    public Task InitializeAsync(CancellationToken ct = default) => Task.CompletedTask;
 
     public async Task<CycleAnalysisSnapshot?> TryLoadAsync(
         CycleAnalysisMaterializationKey key,
@@ -670,6 +534,5 @@ public sealed class PostgresCycleAnalysisMaterializationStore : ICycleAnalysisMa
     public async ValueTask DisposeAsync()
     {
         await _dataSource.DisposeAsync().ConfigureAwait(false);
-        _initializeLock.Dispose();
     }
 }

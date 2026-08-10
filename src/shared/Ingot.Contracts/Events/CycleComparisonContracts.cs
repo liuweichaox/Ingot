@@ -27,6 +27,10 @@ public sealed record CycleComparisonResult
 
     public string? AlignmentMode { get; init; }
 
+    /// <summary>
+    ///     Historical payloads without this field predate explicit algorithm versioning and are
+    ///     interpreted as v1. Current comparison paths always assign their fingerprinted version.
+    /// </summary>
     public string FeatureAlgorithmVersion { get; init; } = "stage-relative-v1";
 
     public string EvidenceLevel { get; init; } = "insufficient";

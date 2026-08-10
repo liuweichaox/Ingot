@@ -9,8 +9,6 @@ public sealed class PostgresInspectionMasterDataStore : IInspectionMasterDataSto
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private readonly NpgsqlDataSource _dataSource;
-    private readonly SemaphoreSlim _initializeLock = new(1, 1);
-    private volatile bool _initialized;
 
     public PostgresInspectionMasterDataStore(IConfiguration configuration)
     {
@@ -19,73 +17,7 @@ public sealed class PostgresInspectionMasterDataStore : IInspectionMasterDataSto
         _dataSource = NpgsqlDataSource.Create(connectionString);
     }
 
-    public async Task InitializeAsync(CancellationToken ct = default)
-    {
-        if (_initialized)
-            return;
-        await _initializeLock.WaitAsync(ct).ConfigureAwait(false);
-        try
-        {
-            if (_initialized)
-                return;
-            await using var command = _dataSource.CreateCommand(
-                """
-                CREATE TABLE IF NOT EXISTS inspection_definitions (
-                  code TEXT NOT NULL,
-                  version INTEGER NOT NULL,
-                  payload JSONB NOT NULL,
-                  updated_at TIMESTAMPTZ NOT NULL,
-                  PRIMARY KEY (code, version),
-                  CHECK (version > 0)
-                );
-
-                CREATE TABLE IF NOT EXISTS inspection_plans (
-                  plan_id TEXT NOT NULL,
-                  version INTEGER NOT NULL,
-                  payload JSONB NOT NULL,
-                  updated_at TIMESTAMPTZ NOT NULL,
-                  PRIMARY KEY (plan_id, version),
-                  CHECK (version > 0)
-                );
-
-                CREATE TABLE IF NOT EXISTS phase_definitions (
-                  code TEXT PRIMARY KEY,
-                  payload JSONB NOT NULL,
-                  updated_at TIMESTAMPTZ NOT NULL
-                );
-
-                CREATE TABLE IF NOT EXISTS phase_mappings (
-                  mapping_id TEXT PRIMARY KEY,
-                  recipe_id TEXT NOT NULL,
-                  recipe_version TEXT,
-                  recipe_template TEXT,
-                  recipe_step TEXT NOT NULL,
-                  phase_code TEXT NOT NULL,
-                  payload JSONB NOT NULL,
-                  updated_at TIMESTAMPTZ NOT NULL
-                );
-                CREATE INDEX IF NOT EXISTS idx_phase_mappings_lookup
-                  ON phase_mappings(recipe_id, recipe_version, recipe_template, recipe_step);
-
-                CREATE TABLE IF NOT EXISTS feature_definitions (
-                  code TEXT PRIMARY KEY,
-                  phase_code TEXT NOT NULL,
-                  signal TEXT NOT NULL,
-                  aggregation TEXT NOT NULL,
-                  payload JSONB NOT NULL,
-                  updated_at TIMESTAMPTZ NOT NULL
-                );
-                CREATE INDEX IF NOT EXISTS idx_feature_definitions_phase
-                  ON feature_definitions(phase_code);
-                """);
-            await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
-            _initialized = true;
-        }
-        finally
-        {
-            _initializeLock.Release();
-        }
-    }
+    public Task InitializeAsync(CancellationToken ct = default) => Task.CompletedTask;
 
     public async Task<InspectionDefinition> UpsertInspectionDefinitionAsync(InspectionDefinition definition, CancellationToken ct = default)
     {
@@ -260,7 +192,6 @@ public sealed class PostgresInspectionMasterDataStore : IInspectionMasterDataSto
 
     public async ValueTask DisposeAsync()
     {
-        _initializeLock.Dispose();
         await _dataSource.DisposeAsync().ConfigureAwait(false);
     }
 

@@ -25,9 +25,8 @@ public static class ServiceCollectionExtensions
         this IServiceCollection services,
         IConfiguration configuration)
     {
-        // 版本化数据库迁移：必须是第一个 HostedService——schema 在一切 Store 初始化器
-        // 与业务后台服务之前就绪。各 Store 的启动 DDL 与基线逐字一致（无害冗余），
-        // 作为过渡期保留，后续批次移除。
+        // 版本化数据库迁移是 PostgreSQL user schema 的唯一真相源，且必须先于
+        // Timescale 拓扑、文件存储目录和业务后台服务初始化。
         services.AddSingleton<MigrationRunner>();
         services.AddHostedService<MigrationHostedService>();
 
@@ -37,14 +36,12 @@ public static class ServiceCollectionExtensions
         // 事件生产记录库（PostgreSQL）
         // 生产上下文必须先于事件库就绪；cycle.started 会解析并固化当时有效的工装与配方引用。
         services.AddSingleton<IManufacturingContextStore, PostgresManufacturingContextStore>();
-        services.AddHostedService<ManufacturingContextInitializerHostedService>();
         services.AddSingleton<ICycleAnalysisMaterializationStore, PostgresCycleAnalysisMaterializationStore>();
         services.AddSingleton<CycleAnalysisRecomputeQueue>();
         services.AddSingleton<IFeatureDefinitionRegistry, BuiltInFeatureDefinitionRegistry>();
         services.AddSingleton<WholeCycleAnalysisEngine>();
         services.AddSingleton<PostgresCycleScientificComputeEngine>();
         services.AddSingleton<CycleAnalysisMaterializer>();
-        services.AddHostedService<CycleAnalysisMaterializationInitializerHostedService>();
         services.Configure<PlatformEventOptions>(configuration.GetSection("EventIngest"));
         services.AddSingleton<PlatformEventMetrics>();
         services.AddSingleton<PostgresTimeSeriesStore>();
@@ -97,7 +94,6 @@ public static class ServiceCollectionExtensions
         // 工艺数据模型、配方版本与分析方案使用独立的版本化配置存储。
         services.AddSingleton<IProcessConfigurationStore, PostgresProcessConfigurationStore>();
         services.AddSingleton<ProcessAnalysisResolver>();
-        services.AddHostedService<ProcessConfigurationInitializerHostedService>();
 
         // 研发资产保存版本化数据集、模型、机理模型和项目知识来源。
         services.Configure<ProcessKnowledgeOptions>(configuration.GetSection("ProcessKnowledge"));
@@ -147,7 +143,6 @@ public static class ServiceCollectionExtensions
         // 采集配置由平台统一管理并按边缘节点发布；采集执行器只运行已发布版本。
         services.AddSingleton<IAcquisitionProfileStore, PostgresAcquisitionProfileStore>();
         services.AddSingleton<AcquisitionProbeTaskCoordinator>();
-        services.AddHostedService<AcquisitionProfileInitializerHostedService>();
 
         return services;
     }

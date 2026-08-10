@@ -55,79 +55,6 @@ public sealed class PostgresTimeSeriesStore : ITimeSeriesStore, IAsyncDisposable
         {
             if (_initialized)
                 return;
-            await using var command = _dataSource.CreateCommand(
-                """
-                CREATE EXTENSION IF NOT EXISTS timescaledb;
-
-                CREATE TABLE IF NOT EXISTS signal_definitions (
-                  data_model_id      TEXT NOT NULL,
-                  data_model_version INTEGER NOT NULL,
-                  signal_code        TEXT NOT NULL,
-                  source_field       TEXT NOT NULL,
-                  data_type          TEXT NOT NULL,
-                  unit               TEXT,
-                  category           TEXT NOT NULL,
-                  definition_hash    TEXT NOT NULL,
-                  first_seen_at      TIMESTAMPTZ NOT NULL,
-                  last_seen_at       TIMESTAMPTZ NOT NULL,
-                  PRIMARY KEY (data_model_id, data_model_version, signal_code)
-                );
-
-                CREATE TABLE IF NOT EXISTS collection_points (
-                  collection_point_id TEXT PRIMARY KEY,
-                  edge_id              TEXT NOT NULL,
-                  subject_type         TEXT NOT NULL,
-                  subject_id           TEXT NOT NULL,
-                  signal_code          TEXT NOT NULL,
-                  static_tags          JSONB NOT NULL DEFAULT '{}'::jsonb,
-                  first_seen_at        TIMESTAMPTZ NOT NULL,
-                  last_seen_at         TIMESTAMPTZ NOT NULL
-                );
-
-                CREATE TABLE IF NOT EXISTS time_series_samples (
-                  occurred_at          TIMESTAMPTZ NOT NULL,
-                  collection_point_id  TEXT NOT NULL,
-                  signal_code          TEXT NOT NULL,
-                  data_type            TEXT NOT NULL,
-                  unit                 TEXT,
-                  category             TEXT NOT NULL,
-                  numeric_value        DOUBLE PRECISION,
-                  integer_value        BIGINT,
-                  boolean_value        BOOLEAN,
-                  text_value           TEXT,
-                  quality_code         TEXT NOT NULL,
-                  event_id             TEXT NOT NULL,
-                  ingest_id            BIGINT NOT NULL,
-                  recorded_at          TIMESTAMPTZ NOT NULL,
-                  edge_id              TEXT NOT NULL,
-                  source               TEXT NOT NULL,
-                  subject_type         TEXT NOT NULL,
-                  subject_id           TEXT NOT NULL,
-                  correlation_id       TEXT,
-                  phase_code           TEXT,
-                  data_model_id        TEXT NOT NULL,
-                  data_model_version   INTEGER NOT NULL,
-                  run_context          JSONB NOT NULL DEFAULT '{}'::jsonb,
-                  CONSTRAINT ck_time_series_samples_one_value CHECK (
-                    num_nonnulls(numeric_value, integer_value, boolean_value, text_value) = 1
-                  ),
-                  CONSTRAINT ck_time_series_samples_quality CHECK (
-                    quality_code IN ('good', 'uncertain', 'bad')
-                  )
-                );
-
-                CREATE UNIQUE INDEX IF NOT EXISTS ux_time_series_samples_source
-                  ON time_series_samples (event_id, signal_code, occurred_at);
-                CREATE INDEX IF NOT EXISTS ix_time_series_samples_point_time
-                  ON time_series_samples (collection_point_id, occurred_at DESC);
-                CREATE INDEX IF NOT EXISTS ix_time_series_samples_signal_time
-                  ON time_series_samples (signal_code, occurred_at DESC);
-                CREATE INDEX IF NOT EXISTS ix_time_series_samples_correlation
-                  ON time_series_samples (correlation_id, signal_code, occurred_at);
-                CREATE INDEX IF NOT EXISTS ix_time_series_samples_context
-                  ON time_series_samples USING GIN (run_context);
-                """);
-            await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
 
             var chunkInterval = NormalizeInterval(_options.ChunkTimeInterval);
             await using (var hypertable = _dataSource.CreateCommand(
@@ -156,14 +83,13 @@ public sealed class PostgresTimeSeriesStore : ITimeSeriesStore, IAsyncDisposable
                 await retention.ExecuteScalarAsync(ct).ConfigureAwait(false);
             }
             _initialized = true;
-            _logger.LogInformation("标准测点时序存储结构已就绪");
+            _logger.LogInformation("标准测点时序存储拓扑已就绪");
         }
         finally
         {
             _initializeLock.Release();
         }
     }
-
     internal async Task ProjectEventAsync(
         NpgsqlConnection connection,
         NpgsqlTransaction transaction,

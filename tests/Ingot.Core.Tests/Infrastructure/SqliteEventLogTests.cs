@@ -164,6 +164,70 @@ public sealed class SqliteEventLogTests
     }
 
     [Fact]
+    public async Task PendingCount_AfterBatchShipAndBacklogDrop_ShouldMatchOutboxRows()
+    {
+        var dbPath = CreateTempDbPath();
+        try
+        {
+            var log = new SqliteEventLog(
+                Options.Create(new EventOptions
+                {
+                    DatabasePath = dbPath,
+                    MaxBacklogRows = 3
+                }),
+                NullLogger<SqliteEventLog>.Instance);
+
+            await log.AppendBatchAsync([
+                CreateEvent("cycle.started", "cycle-01", "LOT-A"),
+                CreateEvent("cycle.completed", "cycle-01", "LOT-A"),
+                CreateEvent("cycle.started", "cycle-02", "LOT-A")
+            ]);
+            await log.MarkShippedAsync(1);
+            await log.AppendBatchAsync([
+                CreateEvent("cycle.completed", "cycle-02", "LOT-A"),
+                CreateEvent("cycle.started", "cycle-03", "LOT-A")
+            ]);
+
+            Assert.Equal(3, await log.CountPendingAsync());
+            Assert.Equal(3, await CountPendingRowsAsync(dbPath));
+        }
+        finally
+        {
+            DeleteSqliteFiles(dbPath);
+        }
+    }
+
+    [Fact]
+    public async Task DuplicateAppendRollback_ShouldNotChangePendingCount()
+    {
+        var dbPath = CreateTempDbPath();
+        try
+        {
+            var log = new SqliteEventLog(
+                Options.Create(new EventOptions
+                {
+                    DatabasePath = dbPath,
+                    MaxBacklogRows = 100
+                }),
+                NullLogger<SqliteEventLog>.Instance);
+            var evt = CreateEvent("cycle.started", "cycle-01", "LOT-A") with
+            {
+                EventId = "duplicate-event-id"
+            };
+
+            await log.AppendAsync(evt);
+            await Assert.ThrowsAsync<SqliteException>(() => log.AppendAsync(evt));
+
+            Assert.Equal(1, await log.CountPendingAsync());
+            Assert.Equal(1, await CountPendingRowsAsync(dbPath));
+        }
+        finally
+        {
+            DeleteSqliteFiles(dbPath);
+        }
+    }
+
+    [Fact]
     public async Task IncrementShipAttempts_ShouldPersistRetryAudit()
     {
         var dbPath = CreateTempDbPath();
@@ -238,6 +302,15 @@ public sealed class SqliteEventLogTests
 
     private static string CreateTempDbPath()
         => Path.Combine(Path.GetTempPath(), $"ingot-events-{Guid.NewGuid():N}.db");
+
+    private static async Task<long> CountPendingRowsAsync(string dbPath)
+    {
+        await using var connection = new SqliteConnection($"Data Source={dbPath}");
+        await connection.OpenAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT COUNT(*) FROM events WHERE ship_state = 0;";
+        return (long)(await command.ExecuteScalarAsync())!;
+    }
 
     private static void DeleteSqliteFiles(string dbPath)
     {

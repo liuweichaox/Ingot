@@ -12,8 +12,8 @@ public sealed class ResearchOnlineAdmissionService(
     ResearchShadowRecommendationService shadowRecommendations,
     ResearchOnlineCampaignService onlineCampaign)
 {
-    public const int MinimumValidShadowOutcomes = 5;
-    public const double MinimumPredictionCoverage = 0.80;
+    public const int MinimumValidShadowOutcomes = ValidationThresholds.MinimumCalibrationCheckCount;
+    public const double MinimumPredictionCoverage = ValidationThresholds.MinimumCalibrationCoverage;
 
     public async Task<ResearchOnlineAdmissionEvidence> AssessAsync(
         Guid projectId,
@@ -94,6 +94,7 @@ public sealed class ResearchOnlineAdmissionService(
 
         return new ResearchOnlineAdmissionEvidence
         {
+            ValidationPolicyVersion = ValidationThresholds.PolicyVersion,
             Eligible = failures.Count == 0,
             Failures = failures,
             Warnings = warnings,

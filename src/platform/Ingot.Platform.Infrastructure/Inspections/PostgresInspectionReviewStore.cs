@@ -9,8 +9,6 @@ public sealed class PostgresInspectionReviewStore : IInspectionReviewStore, IAsy
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private readonly NpgsqlDataSource _dataSource;
-    private readonly SemaphoreSlim _initializeLock = new(1, 1);
-    private volatile bool _initialized;
 
     public PostgresInspectionReviewStore(IConfiguration configuration)
     {
@@ -19,55 +17,7 @@ public sealed class PostgresInspectionReviewStore : IInspectionReviewStore, IAsy
         _dataSource = NpgsqlDataSource.Create(connectionString);
     }
 
-    public async Task InitializeAsync(CancellationToken ct = default)
-    {
-        if (_initialized)
-            return;
-        await _initializeLock.WaitAsync(ct).ConfigureAwait(false);
-        try
-        {
-            if (_initialized)
-                return;
-            await using var command = _dataSource.CreateCommand(
-                """
-                CREATE TABLE IF NOT EXISTS inspection_reviews (
-                  review_id            UUID PRIMARY KEY,
-                  inspection_record_id UUID NOT NULL,
-                  operation_run_id     TEXT NOT NULL,
-                  decision             TEXT NOT NULL,
-                  reviewed_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
-                  reviewed_by          TEXT NOT NULL,
-                  notes                TEXT,
-                  payload_hash         TEXT NOT NULL,
-                  CHECK (decision IN ('CONFIRMED', 'REJECTED', 'REINSPECTION_REQUIRED'))
-                );
-                CREATE INDEX IF NOT EXISTS idx_inspection_reviews_record_time
-                  ON inspection_reviews(inspection_record_id, reviewed_at DESC);
-                CREATE INDEX IF NOT EXISTS idx_inspection_reviews_operation_time
-                  ON inspection_reviews(operation_run_id, reviewed_at DESC);
-
-                CREATE TABLE IF NOT EXISTS inspection_audit_log (
-                  audit_id             BIGSERIAL PRIMARY KEY,
-                  inspection_record_id UUID,
-                  attachment_id        UUID,
-                  action               TEXT NOT NULL,
-                  occurred_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
-                  actor                TEXT NOT NULL,
-                  detail               TEXT
-                );
-                CREATE INDEX IF NOT EXISTS idx_inspection_audit_record_time
-                  ON inspection_audit_log(inspection_record_id, occurred_at DESC);
-                CREATE INDEX IF NOT EXISTS idx_inspection_audit_attachment_time
-                  ON inspection_audit_log(attachment_id, occurred_at DESC);
-                """);
-            await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
-            _initialized = true;
-        }
-        finally
-        {
-            _initializeLock.Release();
-        }
-    }
+    public Task InitializeAsync(CancellationToken ct = default) => Task.CompletedTask;
 
     public async Task<StoreInspectionReviewResult> CreateAsync(
         CreateInspectionReviewRequest request,
@@ -249,7 +199,6 @@ public sealed class PostgresInspectionReviewStore : IInspectionReviewStore, IAsy
 
     public async ValueTask DisposeAsync()
     {
-        _initializeLock.Dispose();
         await _dataSource.DisposeAsync().ConfigureAwait(false);
     }
 

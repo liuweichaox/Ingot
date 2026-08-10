@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 namespace Ingot.Agent.Providers;
 
 public static class ServiceCollectionExtensions
@@ -12,14 +13,23 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IAgentRunStore>(provider => provider.GetRequiredService<SqliteAgentStore>());
         services.AddHostedService<AgentRunStoreInitializerHostedService>();
 
-        var chatProvider = configuration["Chat:Provider"];
-        if (configuration.GetValue<bool>("Chat:Enabled") &&
-            string.Equals(chatProvider, "OpenAI", StringComparison.OrdinalIgnoreCase))
+        var useOpenAi = configuration.GetValue<bool>("Chat:Enabled") &&
+                        string.Equals(
+                            configuration["Chat:Provider"],
+                            "OpenAI",
+                            StringComparison.OrdinalIgnoreCase);
+        services.TryAddSingleton<DeterministicModelClient>();
+        if (useOpenAi)
         {
-            services.AddSingleton<IModelClient, ChatFrameworkOpenAiModelClient>();
+            services.TryAddSingleton<ChatFrameworkOpenAiModelClient>();
             services.AddHttpClient(nameof(OpenAiCompatibleCapabilityProbe));
             services.AddHostedService<OpenAiCompatibleCapabilityProbe>();
         }
+
+        // Replace makes provider selection explicit and stable even when host registration order changes.
+        services.Replace(ServiceDescriptor.Singleton<IModelClient>(provider => useOpenAi
+            ? provider.GetRequiredService<ChatFrameworkOpenAiModelClient>()
+            : provider.GetRequiredService<DeterministicModelClient>()));
         return services;
     }
 }

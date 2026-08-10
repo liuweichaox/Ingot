@@ -9,8 +9,6 @@ public sealed class PostgresInspectionAttachmentStore : IInspectionAttachmentSto
 {
     private readonly NpgsqlDataSource _dataSource;
     private readonly InspectionAttachmentOptions _options;
-    private readonly SemaphoreSlim _initializeLock = new(1, 1);
-    private volatile bool _initialized;
 
     public PostgresInspectionAttachmentStore(
         IConfiguration configuration,
@@ -22,42 +20,13 @@ public sealed class PostgresInspectionAttachmentStore : IInspectionAttachmentSto
         _options = options.Value;
     }
 
-    public async Task InitializeAsync(CancellationToken ct = default)
+    public Task InitializeAsync(CancellationToken ct = default)
     {
-        if (_initialized)
-            return;
-        await _initializeLock.WaitAsync(ct).ConfigureAwait(false);
-        try
-        {
-            if (_initialized)
-                return;
-            Directory.CreateDirectory(GetRootPath());
-            if (GetArchiveRootPath() is { } archiveRoot)
-                Directory.CreateDirectory(archiveRoot);
-            await using var command = _dataSource.CreateCommand(
-                """
-                CREATE TABLE IF NOT EXISTS inspection_attachments (
-                  attachment_id UUID PRIMARY KEY,
-                  storage_ref TEXT NOT NULL,
-                  sha256 TEXT NOT NULL UNIQUE,
-                  media_type TEXT NOT NULL,
-                  file_name TEXT NOT NULL,
-                  size_bytes BIGINT NOT NULL,
-                  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-                  CHECK (size_bytes > 0)
-                );
-                CREATE INDEX IF NOT EXISTS idx_inspection_attachments_sha256
-                  ON inspection_attachments(sha256);
-                """);
-            await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
-            _initialized = true;
-        }
-        finally
-        {
-            _initializeLock.Release();
-        }
+        Directory.CreateDirectory(GetRootPath());
+        if (GetArchiveRootPath() is { } archiveRoot)
+            Directory.CreateDirectory(archiveRoot);
+        return Task.CompletedTask;
     }
-
     public async Task<AttachmentUploadResponse> SaveAsync(
         Stream content,
         string fileName,
@@ -183,7 +152,6 @@ public sealed class PostgresInspectionAttachmentStore : IInspectionAttachmentSto
 
     public async ValueTask DisposeAsync()
     {
-        _initializeLock.Dispose();
         await _dataSource.DisposeAsync().ConfigureAwait(false);
     }
 

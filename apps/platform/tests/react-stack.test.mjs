@@ -4,7 +4,12 @@ import test from "node:test";
 
 const packageJson = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
 const app = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
-const pages = await readFile(new URL("../src/pages/index.jsx", import.meta.url), "utf8");
+const pageDirectory = new URL("../src/pages/", import.meta.url);
+const pages = (await Promise.all(
+  (await readdir(pageDirectory, { withFileTypes: true }))
+    .filter(entry => entry.isFile() && entry.name.endsWith(".jsx"))
+    .map(entry => readFile(new URL(entry.name, pageDirectory), "utf8")),
+)).join("\n");
 const http = await readFile(new URL("../src/api/http.js", import.meta.url), "utf8");
 const components = await readFile(new URL("../src/ui/components.jsx", import.meta.url), "utf8");
 const apiHook = await readFile(new URL("../src/hooks/useApi.js", import.meta.url), "utf8");

@@ -9,8 +9,6 @@ public sealed class PostgresManufacturingContextStore : IManufacturingContextSto
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private readonly NpgsqlDataSource _dataSource;
-    private readonly SemaphoreSlim _initializeLock = new(1, 1);
-    private volatile bool _initialized;
 
     public PostgresManufacturingContextStore(IConfiguration configuration)
     {
@@ -19,118 +17,7 @@ public sealed class PostgresManufacturingContextStore : IManufacturingContextSto
         _dataSource = NpgsqlDataSource.Create(connectionString);
     }
 
-    public async Task InitializeAsync(CancellationToken ct = default)
-    {
-        if (_initialized)
-            return;
-        await _initializeLock.WaitAsync(ct).ConfigureAwait(false);
-        try
-        {
-            if (_initialized)
-                return;
-            await using var command = _dataSource.CreateCommand(
-                """
-                CREATE TABLE IF NOT EXISTS tooling_types (
-                  tooling_type_code TEXT NOT NULL,
-                  version INTEGER NOT NULL,
-                  payload JSONB NOT NULL,
-                  updated_at TIMESTAMPTZ NOT NULL,
-                  PRIMARY KEY (tooling_type_code, version),
-                  CHECK (version > 0)
-                );
-
-                CREATE TABLE IF NOT EXISTS tooling_component_types (
-                  component_type_code TEXT PRIMARY KEY,
-                  payload JSONB NOT NULL,
-                  updated_at TIMESTAMPTZ NOT NULL
-                );
-
-                CREATE TABLE IF NOT EXISTS tooling_components (
-                  component_id TEXT PRIMARY KEY,
-                  component_type_code TEXT NOT NULL,
-                  tooling_type_code TEXT,
-                  role_code TEXT,
-                  serial_no TEXT NOT NULL UNIQUE,
-                  payload JSONB NOT NULL,
-                  updated_at TIMESTAMPTZ NOT NULL
-                );
-                ALTER TABLE tooling_components ADD COLUMN IF NOT EXISTS component_type_code TEXT;
-                ALTER TABLE tooling_components ALTER COLUMN tooling_type_code DROP NOT NULL;
-                ALTER TABLE tooling_components ALTER COLUMN role_code DROP NOT NULL;
-                UPDATE tooling_components
-                  SET component_type_code = COALESCE(NULLIF(component_type_code, ''), NULLIF(role_code, ''), 'uncategorized')
-                  WHERE component_type_code IS NULL OR component_type_code = '';
-                UPDATE tooling_components
-                  SET payload = (payload - 'toolingTypeCode' - 'roleCode') || jsonb_build_object('componentTypeCode', component_type_code)
-                  WHERE NOT payload ? 'componentTypeCode';
-                ALTER TABLE tooling_components ALTER COLUMN component_type_code SET NOT NULL;
-                CREATE INDEX IF NOT EXISTS idx_tooling_components_component_type
-                  ON tooling_components(component_type_code);
-
-                CREATE TABLE IF NOT EXISTS tooling_assemblies (
-                  mold_id TEXT PRIMARY KEY,
-                  tooling_type_code TEXT NOT NULL,
-                  payload JSONB NOT NULL,
-                  updated_at TIMESTAMPTZ NOT NULL
-                );
-
-                CREATE TABLE IF NOT EXISTS tooling_assembly_revisions (
-                  assembly_revision_id UUID PRIMARY KEY,
-                  mold_id TEXT NOT NULL REFERENCES tooling_assemblies(mold_id),
-                  revision INTEGER NOT NULL,
-                  payload JSONB NOT NULL,
-                  created_at TIMESTAMPTZ NOT NULL,
-                  UNIQUE (mold_id, revision),
-                  CHECK (revision > 0)
-                );
-
-                CREATE TABLE IF NOT EXISTS tooling_installations (
-                  installation_id UUID PRIMARY KEY,
-                  machine_id TEXT NOT NULL,
-                  assembly_revision_id UUID NOT NULL REFERENCES tooling_assembly_revisions(assembly_revision_id),
-                  installed_at TIMESTAMPTZ NOT NULL,
-                  removed_at TIMESTAMPTZ,
-                  source TEXT NOT NULL,
-                  command_id TEXT UNIQUE,
-                  payload JSONB NOT NULL,
-                  created_at TIMESTAMPTZ NOT NULL,
-                  CHECK (removed_at IS NULL OR removed_at > installed_at)
-                );
-                CREATE UNIQUE INDEX IF NOT EXISTS idx_tooling_installations_active_machine
-                  ON tooling_installations(machine_id) WHERE removed_at IS NULL;
-                CREATE UNIQUE INDEX IF NOT EXISTS idx_tooling_installations_active_revision
-                  ON tooling_installations(assembly_revision_id) WHERE removed_at IS NULL;
-                CREATE INDEX IF NOT EXISTS idx_tooling_installations_machine_time
-                  ON tooling_installations(machine_id, installed_at, removed_at);
-
-                CREATE TABLE IF NOT EXISTS production_contexts (
-                  context_id UUID PRIMARY KEY,
-                  machine_id TEXT NOT NULL,
-                  tooling_installation_id UUID NOT NULL REFERENCES tooling_installations(installation_id),
-                  valid_from TIMESTAMPTZ NOT NULL,
-                  valid_to TIMESTAMPTZ,
-                  source TEXT NOT NULL,
-                  command_id TEXT UNIQUE,
-                  payload JSONB NOT NULL,
-                  updated_at TIMESTAMPTZ NOT NULL,
-                  CHECK (valid_to IS NULL OR valid_to > valid_from)
-                );
-                CREATE UNIQUE INDEX IF NOT EXISTS idx_production_contexts_active_machine
-                  ON production_contexts(machine_id) WHERE valid_to IS NULL;
-                CREATE INDEX IF NOT EXISTS idx_production_contexts_machine_time
-                  ON production_contexts(machine_id, valid_from, valid_to);
-                ALTER TABLE production_contexts ADD COLUMN IF NOT EXISTS command_id TEXT;
-                CREATE UNIQUE INDEX IF NOT EXISTS idx_production_contexts_command_id
-                  ON production_contexts(command_id) WHERE command_id IS NOT NULL;
-                """);
-            await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
-            _initialized = true;
-        }
-        finally
-        {
-            _initializeLock.Release();
-        }
-    }
+    public Task InitializeAsync(CancellationToken ct = default) => Task.CompletedTask;
 
     public async Task<ToolingTypeDefinition> CreateToolingTypeAsync(
         ToolingTypeDefinition value,
@@ -699,7 +586,6 @@ public sealed class PostgresManufacturingContextStore : IManufacturingContextSto
 
     public async ValueTask DisposeAsync()
     {
-        _initializeLock.Dispose();
         await _dataSource.DisposeAsync().ConfigureAwait(false);
     }
 

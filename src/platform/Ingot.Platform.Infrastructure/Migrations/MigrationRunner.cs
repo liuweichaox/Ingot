@@ -82,13 +82,6 @@ public sealed class MigrationRunner(
 
     public async Task RunAsync(CancellationToken ct = default)
     {
-        var mode = configuration["Database:SchemaManagement"] ?? "Migrations";
-        if (string.Equals(mode, "Initializers", StringComparison.OrdinalIgnoreCase))
-        {
-            logger.LogWarning("Database:SchemaManagement=Initializers：跳过迁移执行（兼容逃生口，不建议长期使用）。");
-            return;
-        }
-
         var connectionString = configuration.GetConnectionString("Events")
             ?? throw new InvalidOperationException("缺少 ConnectionStrings:Events PostgreSQL 连接字符串。");
 

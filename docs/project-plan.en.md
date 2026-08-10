@@ -87,10 +87,20 @@ No level may use a higher-level demonstration to bypass lower-level evidence.
 Maintain three controlled work lines:
 
 - **Product line**: trustworthy data → comparison and diagnosis → experiment → optimization → reuse.
-- **Scientific-validation line**: historical-question replay → production-equivalent replay → shadow recommendations → controlled online experiments.
+- **Scientific-validation line**: historical replay, shadow validation, and controlled online validation advance as separate falsifiable work lines.
 - **Engineering-assurance line**: real-database tests, recovery exercises, performance baselines, security, and observability.
 
 In principle, keep one product milestone, one scientific-validation task, and one engineering-assurance task active at a time.
+
+The three scientific-validation work lines must not be collapsed into one global status:
+
+| Work line | Independent evidence artifact | Scope of conclusion |
+|---|---|---|
+| Historical replay | frozen dataset, sequential traces, baseline comparisons, gates, and review hash | only whether the method is leakage-free and beats preregistered baselines on existing history |
+| Shadow validation | recommendation snapshot, independent engineer choice, actual outcome, rejection reasons, and calibration report | only whether recommendations are applicable, executable, and calibrated on a new project |
+| Controlled online validation | per-run approval, rollback exercise, actual settings, outcomes, and stop records | only whether prospective value is produced safely inside declared boundaries |
+
+Each work line separately preregisters data scope, baselines, measures, versioned thresholds, acceptance, and falsification. Its own reviewable report expresses whether it passed; implementation of an API is not validation evidence and does not raise a global "maturity" state.
 
 ### Phase 0: establish a reproducible baseline
 
@@ -240,3 +250,5 @@ Phase 0 records baselines before approving scenario-specific targets; it does no
 8. **First-scenario shadow preparation**: freeze versioned variables, mappings, context, constraints, and experiment policy.
 
 These batches are the current sequence, not an immutable product definition. Reorder them after each batch according to real results.
+
+Engineering discipline: historical replay, shadow validation, and controlled online validation each maintain an independent preregistration and result. Passing one may not substitute for another, and a global API status may not flatten their different evidence levels into one conclusion.

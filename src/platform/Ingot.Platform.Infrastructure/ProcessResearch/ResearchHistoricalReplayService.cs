@@ -161,18 +161,25 @@ public sealed class ResearchHistoricalReplayService(
             gateFailures.Add("唯一历史条件少于 5 个，只能形成探索性回放证据。");
         if (optimizerSafetyViolations > 0)
             gateFailures.Add($"优化器回放累计触发 {optimizerSafetyViolations} 次安全结果约束违规。");
-        if (predictionChecks == 0 || coverage < 0.8)
+        if (predictionChecks == 0 ||
+            coverage < ValidationThresholds.MinimumCalibrationCoverage)
             gateFailures.Add("预测区间没有可校准检查，或聚合覆盖率低于预注册的 80% 最低门槛。");
         if (optimizer.SuccessRate < random.SuccessRate)
             gateFailures.Add("优化器达到规格的成功率低于随机候选顺序。");
         if (originalTrials is not null && optimizer.MedianTrials is not null &&
             optimizer.MedianTrials > originalTrials)
             gateFailures.Add("优化器达到规格的中位试验数劣于历史工程师原顺序。");
-        var reportHash = Hash(new { datasetHash, Raw = raw });
+        var reportHash = Hash(new
+        {
+            datasetHash,
+            Raw = raw,
+            ValidationThresholds.PolicyVersion
+        });
         var report = new ResearchHistoricalReplayReport
         {
             ReportId = Guid.CreateVersion7(),
             ProjectId = projectId,
+            ValidationPolicyVersion = ValidationThresholds.PolicyVersion,
             DatasetSnapshotHash = datasetHash,
             UniqueConditionCount = grouped.Length,
             SourceRunCount = grouped.Sum(static value => value.SourceCount),

@@ -14,7 +14,7 @@
 
 ## 配置
 
-- `Database:SchemaManagement`：`Migrations`（默认）或 `Initializers`（兼容逃生口：跳过 runner，退回旧行为）。
+- PostgreSQL schema 始终由版本化迁移管理；Store 初始化仅负责配置驱动的 Timescale 拓扑、存储目录和派生数据校正。
 
 ## 对已有数据库
 

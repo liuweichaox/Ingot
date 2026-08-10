@@ -10,8 +10,6 @@ public sealed class PostgresAcquisitionProfileStore : IAcquisitionProfileStore, 
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private readonly NpgsqlDataSource _dataSource;
-    private readonly SemaphoreSlim _initializeLock = new(1, 1);
-    private volatile bool _initialized;
 
     public PostgresAcquisitionProfileStore(IConfiguration configuration)
     {
@@ -20,36 +18,7 @@ public sealed class PostgresAcquisitionProfileStore : IAcquisitionProfileStore, 
         _dataSource = NpgsqlDataSource.Create(connectionString);
     }
 
-    public async Task InitializeAsync(CancellationToken ct = default)
-    {
-        if (_initialized) return;
-        await _initializeLock.WaitAsync(ct).ConfigureAwait(false);
-        try
-        {
-            if (_initialized) return;
-            await using var command = _dataSource.CreateCommand(
-                """
-                CREATE TABLE IF NOT EXISTS acquisition_profiles (
-                  profile_id TEXT NOT NULL,
-                  version INTEGER NOT NULL,
-                  edge_id TEXT NOT NULL,
-                  status TEXT NOT NULL,
-                  payload JSONB NOT NULL,
-                  updated_at TIMESTAMPTZ NOT NULL,
-                  PRIMARY KEY (profile_id, version),
-                  CHECK (version > 0)
-                );
-                CREATE INDEX IF NOT EXISTS idx_acquisition_profiles_edge_status
-                  ON acquisition_profiles(edge_id, status);
-                """);
-            await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
-            _initialized = true;
-        }
-        finally
-        {
-            _initializeLock.Release();
-        }
-    }
+    public Task InitializeAsync(CancellationToken ct = default) => Task.CompletedTask;
 
     public Task<IReadOnlyList<AcquisitionProfile>> ListAsync(CancellationToken ct = default)
         => QueryAsync("ORDER BY profile_id, version DESC", null, ct);
@@ -204,7 +173,6 @@ public sealed class PostgresAcquisitionProfileStore : IAcquisitionProfileStore, 
 
     public async ValueTask DisposeAsync()
     {
-        _initializeLock.Dispose();
         await _dataSource.DisposeAsync().ConfigureAwait(false);
     }
 }

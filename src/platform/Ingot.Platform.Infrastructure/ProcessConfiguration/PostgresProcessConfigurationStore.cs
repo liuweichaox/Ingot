@@ -9,8 +9,6 @@ public sealed class PostgresProcessConfigurationStore : IProcessConfigurationSto
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private readonly NpgsqlDataSource _dataSource;
-    private readonly SemaphoreSlim _initializeLock = new(1, 1);
-    private volatile bool _initialized;
 
     public PostgresProcessConfigurationStore(IConfiguration configuration)
     {
@@ -19,80 +17,7 @@ public sealed class PostgresProcessConfigurationStore : IProcessConfigurationSto
         _dataSource = NpgsqlDataSource.Create(connectionString);
     }
 
-    public async Task InitializeAsync(CancellationToken ct = default)
-    {
-        if (_initialized)
-            return;
-        await _initializeLock.WaitAsync(ct).ConfigureAwait(false);
-        try
-        {
-            if (_initialized)
-                return;
-            await using var command = _dataSource.CreateCommand(
-                """
-                CREATE TABLE IF NOT EXISTS process_data_models (
-                  model_id TEXT NOT NULL,
-                  version INTEGER NOT NULL,
-                  status TEXT NOT NULL,
-                  payload JSONB NOT NULL,
-                  updated_at TIMESTAMPTZ NOT NULL,
-                  PRIMARY KEY (model_id, version),
-                  CHECK (version > 0)
-                );
-
-                CREATE TABLE IF NOT EXISTS recipe_versions (
-                  recipe_id TEXT NOT NULL,
-                  version INTEGER NOT NULL,
-                  data_model_id TEXT NOT NULL,
-                  data_model_version INTEGER NOT NULL,
-                  status TEXT NOT NULL,
-                  payload JSONB NOT NULL,
-                  updated_at TIMESTAMPTZ NOT NULL,
-                  PRIMARY KEY (recipe_id, version),
-                  CHECK (version > 0),
-                  CHECK (data_model_version > 0)
-                );
-                CREATE INDEX IF NOT EXISTS idx_recipe_versions_model
-                  ON recipe_versions(data_model_id, data_model_version);
-
-                CREATE TABLE IF NOT EXISTS process_analysis_plans (
-                  plan_id TEXT NOT NULL,
-                  version INTEGER NOT NULL,
-                  data_model_id TEXT NOT NULL,
-                  data_model_version INTEGER NOT NULL,
-                  status TEXT NOT NULL,
-                  payload JSONB NOT NULL,
-                  updated_at TIMESTAMPTZ NOT NULL,
-                  PRIMARY KEY (plan_id, version),
-                  CHECK (version > 0),
-                  CHECK (data_model_version > 0)
-                );
-                CREATE INDEX IF NOT EXISTS idx_process_analysis_plans_model
-                  ON process_analysis_plans(data_model_id, data_model_version);
-
-                CREATE TABLE IF NOT EXISTS scenario_packages (
-                  package_id TEXT NOT NULL,
-                  version INTEGER NOT NULL,
-                  data_model_id TEXT NOT NULL,
-                  data_model_version INTEGER NOT NULL,
-                  status TEXT NOT NULL,
-                  payload JSONB NOT NULL,
-                  updated_at TIMESTAMPTZ NOT NULL,
-                  PRIMARY KEY (package_id, version),
-                  CHECK (version > 0),
-                  CHECK (data_model_version > 0)
-                );
-                CREATE INDEX IF NOT EXISTS idx_scenario_packages_model
-                  ON scenario_packages(data_model_id, data_model_version);
-                """);
-            await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
-            _initialized = true;
-        }
-        finally
-        {
-            _initializeLock.Release();
-        }
-    }
+    public Task InitializeAsync(CancellationToken ct = default) => Task.CompletedTask;
 
     public Task<ProcessDataModel> UpsertDataModelAsync(ProcessDataModel value, CancellationToken ct = default)
         => UpsertAsync(
@@ -223,7 +148,6 @@ public sealed class PostgresProcessConfigurationStore : IProcessConfigurationSto
 
     public async ValueTask DisposeAsync()
     {
-        _initializeLock.Dispose();
         await _dataSource.DisposeAsync().ConfigureAwait(false);
     }
 }

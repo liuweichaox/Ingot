@@ -59,7 +59,6 @@ services:
       - ConnectionStrings__Events=Host=postgres;Port=5432;Database=ingot;Username=ingot;Password=${INGOT_POSTGRES_PASSWORD:?INGOT_POSTGRES_PASSWORD is required}
       - EventIngest__RequireToken=true
       - EventIngest__KeyRetentionDays=${INGOT_EVENT_KEY_RETENTION_DAYS:-0}
-      - Database__SchemaManagement=${INGOT_SCHEMA_MANAGEMENT:-Migrations}
       - EventIngest__EdgeTokens__${INGOT_EDGE_ID:?INGOT_EDGE_ID is required}=${INGOT_EDGE_TOKEN:?INGOT_EDGE_TOKEN is required}
       - Authentication__Mode=${INGOT_AUTH_MODE:-Local}
       - Authentication__AllowInsecureDemo=${INGOT_ALLOW_INSECURE_DEMO:-false}

@@ -65,6 +65,18 @@ check "platform-infrastructure" src/platform/Ingot.Platform.Infrastructure \
   'using Ingot\.Platform\.Api' \
   "Platform Infrastructure 必须独立于 API 宿主"
 
+store_schema_ddl=$(grep -rnE \
+  '(CREATE TABLE|CREATE (UNIQUE )?INDEX|ALTER TABLE[^;]*ADD COLUMN)' \
+  src/platform/Ingot.Platform.Infrastructure \
+  --include='Postgres*Store.cs' --exclude-dir=bin --exclude-dir=obj 2>/dev/null || true)
+if [[ -n "$store_schema_ddl" ]]; then
+  echo "✗ [postgres-schema-ownership] PostgreSQL user schema 只能由版本化迁移定义"
+  echo "$store_schema_ddl" | sed 's/^/    /'
+  fail=1
+else
+  echo "✓ [postgres-schema-ownership]"
+fi
+
 check "agent-core" src/agent/Ingot.Agent \
   'using (Ingot\.Platform|Npgsql|Microsoft\.Agents|OpenAI)' \
   "Agent 核心必须保持模型和存储中立"

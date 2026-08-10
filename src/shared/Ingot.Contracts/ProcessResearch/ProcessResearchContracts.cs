@@ -575,6 +575,8 @@ public sealed record ResearchShadowStopSignal
 public sealed record ResearchShadowCampaignReport
 {
     public Guid ProjectId { get; init; }
+    /// <summary>Missing in historical payloads means the thresholds predated policy versioning.</summary>
+    public string ValidationPolicyVersion { get; init; } = "legacy-unversioned";
     public int TotalRecommendations { get; init; }
     public int AcceptedCount { get; init; }
     public int ModifiedCount { get; init; }
@@ -666,6 +668,8 @@ public sealed record ResearchHistoricalReplayReport
 {
     public Guid ReportId { get; init; }
     public Guid ProjectId { get; init; }
+    /// <summary>Missing in historical payloads means the thresholds predated policy versioning.</summary>
+    public string ValidationPolicyVersion { get; init; } = "legacy-unversioned";
     public string Status { get; init; } = ResearchHistoricalReplayStatuses.Generated;
     public required string DatasetSnapshotHash { get; init; }
     public int UniqueConditionCount { get; init; }
@@ -698,6 +702,8 @@ public sealed record ResearchHistoricalReplayReport
 /// </summary>
 public sealed record ResearchOnlineAdmissionEvidence
 {
+    /// <summary>Missing in historical payloads means the thresholds predated policy versioning.</summary>
+    public string ValidationPolicyVersion { get; init; } = "legacy-unversioned";
     public bool Eligible { get; init; }
     public IReadOnlyList<string> Failures { get; init; } = [];
     public IReadOnlyList<string> Warnings { get; init; } = [];

@@ -12,8 +12,6 @@ public sealed class PostgresResearchAssetStore : IResearchAssetStore, IAsyncDisp
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private readonly NpgsqlDataSource _dataSource;
     private readonly ProcessKnowledgeOptions _options;
-    private readonly SemaphoreSlim _initializeLock = new(1, 1);
-    private volatile bool _initialized;
 
     public PostgresResearchAssetStore(
         IConfiguration configuration,
@@ -25,161 +23,13 @@ public sealed class PostgresResearchAssetStore : IResearchAssetStore, IAsyncDisp
         _options = options.Value;
     }
 
-    public async Task InitializeAsync(CancellationToken ct = default)
+    public Task InitializeAsync(CancellationToken ct = default)
     {
-        if (_initialized)
-            return;
-        await _initializeLock.WaitAsync(ct).ConfigureAwait(false);
-        try
-        {
-            if (_initialized)
-                return;
-            Directory.CreateDirectory(GetRootPath());
-            if (GetArchiveRootPath() is { } archiveRoot)
-                Directory.CreateDirectory(archiveRoot);
-            await using var command = _dataSource.CreateCommand(
-                """
-                CREATE TABLE IF NOT EXISTS training_dataset_versions (
-                  dataset_id TEXT NOT NULL,
-                  version INTEGER NOT NULL,
-                  payload JSONB NOT NULL,
-                  created_at TIMESTAMPTZ NOT NULL,
-                  PRIMARY KEY (dataset_id, version),
-                  CHECK (version > 0)
-                );
-
-                CREATE TABLE IF NOT EXISTS process_model_versions (
-                  model_id TEXT NOT NULL,
-                  version INTEGER NOT NULL,
-                  status TEXT NOT NULL,
-                  dataset_id TEXT NOT NULL,
-                  dataset_version INTEGER NOT NULL,
-                  payload JSONB NOT NULL,
-                  updated_at TIMESTAMPTZ NOT NULL,
-                  PRIMARY KEY (model_id, version),
-                  FOREIGN KEY (dataset_id, dataset_version)
-                    REFERENCES training_dataset_versions(dataset_id, version),
-                  CHECK (version > 0),
-                  CHECK (status IN ('draft', 'validated', 'active', 'suspended', 'retired'))
-                );
-                CREATE UNIQUE INDEX IF NOT EXISTS uq_process_model_active
-                  ON process_model_versions(model_id) WHERE status = 'active';
-
-                CREATE TABLE IF NOT EXISTS model_evaluations (
-                  evaluation_id UUID PRIMARY KEY,
-                  model_id TEXT NOT NULL,
-                  model_version INTEGER NOT NULL,
-                  passed BOOLEAN NOT NULL,
-                  payload JSONB NOT NULL,
-                  created_at TIMESTAMPTZ NOT NULL,
-                  FOREIGN KEY (model_id, model_version)
-                    REFERENCES process_model_versions(model_id, version)
-                );
-
-                CREATE TABLE IF NOT EXISTS model_drift_readings (
-                  reading_id UUID PRIMARY KEY,
-                  model_id TEXT NOT NULL,
-                  model_version INTEGER NOT NULL,
-                  value DOUBLE PRECISION NOT NULL,
-                  stop_threshold DOUBLE PRECISION NOT NULL,
-                  payload JSONB NOT NULL,
-                  created_at TIMESTAMPTZ NOT NULL,
-                  FOREIGN KEY (model_id, model_version)
-                    REFERENCES process_model_versions(model_id, version)
-                );
-                CREATE INDEX IF NOT EXISTS idx_model_drift_readings_model
-                  ON model_drift_readings(model_id, model_version, created_at DESC);
-
-                CREATE TABLE IF NOT EXISTS mechanism_model_versions (
-                  model_id TEXT NOT NULL,
-                  version INTEGER NOT NULL,
-                  status TEXT NOT NULL,
-                  content_hash TEXT NOT NULL,
-                  payload JSONB NOT NULL,
-                  updated_at TIMESTAMPTZ NOT NULL,
-                  PRIMARY KEY (model_id, version),
-                  CHECK (version > 0),
-                  CHECK (status IN ('draft', 'validated', 'active', 'retired'))
-                );
-                CREATE UNIQUE INDEX IF NOT EXISTS uq_mechanism_model_active
-                  ON mechanism_model_versions(model_id) WHERE status = 'active';
-
-                CREATE TABLE IF NOT EXISTS mechanism_fusion_definitions (
-                  fusion_id TEXT NOT NULL,
-                  version INTEGER NOT NULL,
-                  status TEXT NOT NULL,
-                  mode TEXT NOT NULL,
-                  mechanism_model_id TEXT NOT NULL,
-                  mechanism_model_version INTEGER NOT NULL,
-                  content_hash TEXT NOT NULL,
-                  payload JSONB NOT NULL,
-                  updated_at TIMESTAMPTZ NOT NULL,
-                  PRIMARY KEY (fusion_id, version),
-                  FOREIGN KEY (mechanism_model_id, mechanism_model_version)
-                    REFERENCES mechanism_model_versions(model_id, version),
-                  CHECK (version > 0),
-                  CHECK (status IN ('draft', 'validated', 'active', 'retired')),
-                  CHECK (mode IN ('calibration', 'post-processing', 'mechanism-as-feature', 'ensemble'))
-                );
-                CREATE UNIQUE INDEX IF NOT EXISTS uq_mechanism_fusion_active
-                  ON mechanism_fusion_definitions(fusion_id) WHERE status = 'active';
-
-                CREATE TABLE IF NOT EXISTS dataset_quality_validation_reports (
-                  report_id UUID PRIMARY KEY,
-                  dataset_id TEXT NOT NULL,
-                  dataset_version INTEGER NOT NULL,
-                  industry TEXT NOT NULL,
-                  status TEXT NOT NULL,
-                  source_sha256 TEXT NOT NULL,
-                  payload JSONB NOT NULL,
-                  created_at TIMESTAMPTZ NOT NULL,
-                  CHECK (dataset_version > 0),
-                  CHECK (status IN ('passed', 'rejected'))
-                );
-                CREATE INDEX IF NOT EXISTS idx_dataset_quality_validation_dataset
-                  ON dataset_quality_validation_reports(dataset_id, dataset_version, created_at DESC);
-
-                CREATE TABLE IF NOT EXISTS process_knowledge_sources (
-                  source_id UUID PRIMARY KEY,
-                  status TEXT NOT NULL,
-                  storage_ref TEXT NOT NULL,
-                  sha256 TEXT NOT NULL UNIQUE,
-                  file_name TEXT NOT NULL,
-                  payload JSONB NOT NULL,
-                  updated_at TIMESTAMPTZ NOT NULL,
-                  CHECK (status IN ('uploaded', 'indexed', 'reviewed', 'retired'))
-                );
-
-                CREATE TABLE IF NOT EXISTS process_knowledge_records (
-                  record_id UUID PRIMARY KEY,
-                  source_id UUID NOT NULL REFERENCES process_knowledge_sources(source_id),
-                  human_reviewed BOOLEAN NOT NULL,
-                  payload JSONB NOT NULL,
-                  updated_at TIMESTAMPTZ NOT NULL
-                );
-                CREATE INDEX IF NOT EXISTS idx_process_knowledge_records_source
-                  ON process_knowledge_records(source_id, updated_at DESC);
-
-                CREATE TABLE IF NOT EXISTS research_asset_audit (
-                  entry_id UUID PRIMARY KEY,
-                  resource_type TEXT NOT NULL,
-                  resource_id TEXT NOT NULL,
-                  action TEXT NOT NULL,
-                  payload JSONB NOT NULL,
-                  created_at TIMESTAMPTZ NOT NULL
-                );
-                CREATE INDEX IF NOT EXISTS idx_research_asset_audit_resource
-                  ON research_asset_audit(resource_type, resource_id, created_at);
-                """);
-            await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
-            _initialized = true;
-        }
-        finally
-        {
-            _initializeLock.Release();
-        }
+        Directory.CreateDirectory(GetRootPath());
+        if (GetArchiveRootPath() is { } archiveRoot)
+            Directory.CreateDirectory(archiveRoot);
+        return Task.CompletedTask;
     }
-
     public async Task<TrainingDatasetVersion> AddDatasetAsync(
         TrainingDatasetVersion value,
         CancellationToken ct = default)
@@ -706,7 +556,6 @@ public sealed class PostgresResearchAssetStore : IResearchAssetStore, IAsyncDisp
 
     public async ValueTask DisposeAsync()
     {
-        _initializeLock.Dispose();
         await _dataSource.DisposeAsync().ConfigureAwait(false);
     }
 

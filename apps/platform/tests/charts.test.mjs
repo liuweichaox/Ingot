@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import test from "node:test";
 import {
   extractProcessSamples,
@@ -25,7 +25,12 @@ test("process traces preserve elapsed time, phase context, and baseline emphasis
 
 test("React Plotly renderer is responsive, lazy, and used by quality analysis", async () => {
   const component = await readFile(new URL("../src/components/PlotlyChart.jsx", import.meta.url), "utf8");
-  const pages = await readFile(new URL("../src/pages/index.jsx", import.meta.url), "utf8");
+  const pageDirectory = new URL("../src/pages/", import.meta.url);
+  const pages = (await Promise.all(
+    (await readdir(pageDirectory, { withFileTypes: true }))
+      .filter(entry => entry.isFile() && entry.name.endsWith(".jsx"))
+      .map(entry => readFile(new URL(entry.name, pageDirectory), "utf8")),
+  )).join("\n");
   assert.match(component, /import\("plotly\.js-basic-dist-min"\)/);
   assert.match(component, /plotly\.react/);
   assert.match(component, /responsive: true/);

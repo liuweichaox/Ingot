@@ -10,8 +10,6 @@ public sealed class PostgresInspectionRecordStore : IInspectionRecordStore, IAsy
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private readonly NpgsqlDataSource _dataSource;
-    private readonly SemaphoreSlim _initializeLock = new(1, 1);
-    private volatile bool _initialized;
 
     public PostgresInspectionRecordStore(IConfiguration configuration)
     {
@@ -20,77 +18,7 @@ public sealed class PostgresInspectionRecordStore : IInspectionRecordStore, IAsy
         _dataSource = NpgsqlDataSource.Create(connectionString);
     }
 
-    public async Task InitializeAsync(CancellationToken ct = default)
-    {
-        if (_initialized)
-            return;
-
-        await _initializeLock.WaitAsync(ct).ConfigureAwait(false);
-        try
-        {
-            if (_initialized)
-                return;
-
-            await using var command = _dataSource.CreateCommand(
-                """
-                CREATE TABLE IF NOT EXISTS inspection_records (
-                  record_id           UUID PRIMARY KEY,
-                  workpiece_id        TEXT,
-                  operation_run_id    TEXT NOT NULL,
-                  definition_code     TEXT NOT NULL,
-                  definition_version  INTEGER NOT NULL,
-                  measured_at         TIMESTAMPTZ NOT NULL,
-                  recorded_at         TIMESTAMPTZ NOT NULL,
-                  ingested_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
-                  outcome             TEXT NOT NULL,
-                  submitted_by        TEXT NOT NULL,
-                  submitter_verified  BOOLEAN NOT NULL,
-                  instrument          JSONB,
-                  measurements        JSONB NOT NULL DEFAULT '[]'::jsonb,
-                  attachments            JSONB NOT NULL DEFAULT '[]'::jsonb,
-                  notes               TEXT,
-                  supersedes_record_id UUID,
-                  correction_reason   TEXT,
-                  payload_hash        TEXT NOT NULL,
-                  CHECK (definition_version > 0),
-                  CHECK (outcome IN ('PASS', 'FAIL', 'INCONCLUSIVE'))
-                );
-                CREATE INDEX IF NOT EXISTS idx_inspection_records_workpiece_time
-                  ON inspection_records(workpiece_id, measured_at DESC);
-                CREATE INDEX IF NOT EXISTS idx_inspection_records_operation_time
-                  ON inspection_records(operation_run_id, measured_at DESC);
-                CREATE INDEX IF NOT EXISTS idx_inspection_records_definition_time
-                  ON inspection_records(definition_code, measured_at DESC);
-                CREATE INDEX IF NOT EXISTS idx_inspection_records_outcome_time
-                  ON inspection_records(outcome, measured_at DESC);
-                ALTER TABLE inspection_records ADD COLUMN IF NOT EXISTS supersedes_record_id UUID;
-                ALTER TABLE inspection_records ADD COLUMN IF NOT EXISTS correction_reason TEXT;
-                ALTER TABLE inspection_records ALTER COLUMN workpiece_id DROP NOT NULL;
-                CREATE UNIQUE INDEX IF NOT EXISTS idx_inspection_records_one_correction
-                  ON inspection_records(supersedes_record_id) WHERE supersedes_record_id IS NOT NULL;
-
-                CREATE TABLE IF NOT EXISTS inspection_scopes (
-                  scope_id TEXT PRIMARY KEY,
-                  scope_type TEXT NOT NULL,
-                  subject_id TEXT NOT NULL,
-                  from_at TIMESTAMPTZ NOT NULL,
-                  to_at TIMESTAMPTZ NOT NULL,
-                  payload JSONB NOT NULL,
-                  updated_at TIMESTAMPTZ NOT NULL,
-                  CHECK (scope_type IN ('analysis-window', 'production-run', 'material-lot')),
-                  CHECK (to_at > from_at)
-                );
-                CREATE INDEX IF NOT EXISTS idx_inspection_scopes_subject_time
-                  ON inspection_scopes(subject_id, to_at DESC);
-                """);
-            await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
-            _initialized = true;
-        }
-        finally
-        {
-            _initializeLock.Release();
-        }
-    }
+    public Task InitializeAsync(CancellationToken ct = default) => Task.CompletedTask;
 
     public async Task<StoreInspectionRecordResult> CreateAsync(
         CreateInspectionRecordRequest request,
@@ -304,7 +232,6 @@ public sealed class PostgresInspectionRecordStore : IInspectionRecordStore, IAsy
 
     public async ValueTask DisposeAsync()
     {
-        _initializeLock.Dispose();
         await _dataSource.DisposeAsync().ConfigureAwait(false);
     }
 

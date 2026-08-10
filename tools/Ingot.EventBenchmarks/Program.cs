@@ -15,20 +15,26 @@ try
     Console.WriteLine($"Database: {databasePath}");
     Console.WriteLine($"Rows: {settings.Rows:N0}, query samples: {settings.QuerySamples}, append samples: {settings.AppendSamples}");
 
-    var eventLog = new SqliteEventLog(
-        Options.Create(new EventOptions
-        {
-            DatabasePath = databasePath,
-            RetentionDays = 0,
-            MaxBacklogRows = checked(settings.Rows + settings.AppendSamples + 100)
-        }),
+    var eventOptions = Options.Create(new EventOptions
+    {
+        DatabasePath = databasePath,
+        RetentionDays = 0,
+        MaxBacklogRows = checked(settings.Rows + settings.AppendSamples + 100)
+    });
+    _ = new SqliteEventLog(
+        eventOptions,
         NullLogger<SqliteEventLog>.Instance);
     var baselineMemory = CaptureMemory();
 
     var seedStopwatch = Stopwatch.StartNew();
-    await SeedAsync(databasePath, settings.Rows);
+    await SeedAsync(databasePath, settings.Rows, settings.PendingSeed);
     seedStopwatch.Stop();
     Console.WriteLine($"Seed: {seedStopwatch.Elapsed.TotalSeconds:F2}s ({settings.Rows / seedStopwatch.Elapsed.TotalSeconds:N0} rows/s)");
+
+    // Reopen after direct SQL seeding so constructor-time state reflects the benchmark database.
+    var eventLog = new SqliteEventLog(
+        eventOptions,
+        NullLogger<SqliteEventLog>.Instance);
 
     var appendLatencies = await MeasureAppendAsync(eventLog, settings.AppendSamples);
     var queryLatencies = await MeasureQueriesAsync(eventLog, settings.QuerySamples);
@@ -71,7 +77,7 @@ finally
         DeleteSqliteFiles(databasePath);
 }
 
-static async Task SeedAsync(string databasePath, int rows)
+static async Task SeedAsync(string databasePath, int rows, bool pending)
 {
     if (rows <= 0)
         return;
@@ -99,7 +105,7 @@ static async Task SeedAsync(string databasePath, int rows)
                                    VALUES (
                                      $event_id, $event_type, 1, $occurred_at, $recorded_at,
                                      $source, 'equipment', $subject_id, $correlation_id,
-                                     $context_json, $data_json, 1, 0);
+                                     $context_json, $data_json, $ship_state, 0);
                                    SELECT last_insert_rowid();
                                    """;
         var eventId = eventCommand.Parameters.Add("$event_id", SqliteType.Text);
@@ -111,6 +117,8 @@ static async Task SeedAsync(string databasePath, int rows)
         var correlationId = eventCommand.Parameters.Add("$correlation_id", SqliteType.Text);
         var contextJson = eventCommand.Parameters.Add("$context_json", SqliteType.Text);
         var dataJson = eventCommand.Parameters.Add("$data_json", SqliteType.Text);
+        var shipState = eventCommand.Parameters.Add("$ship_state", SqliteType.Integer);
+        shipState.Value = pending ? 0 : 1;
 
         await using var contextCommand = connection.CreateCommand();
         contextCommand.Transaction = (SqliteTransaction)transaction;
@@ -227,6 +235,7 @@ static MemorySnapshot CaptureMemory()
 
 static void DeleteSqliteFiles(string path)
 {
+    SqliteConnection.ClearAllPools();
     foreach (var candidate in new[] { path, $"{path}-wal", $"{path}-shm" })
     {
         if (File.Exists(candidate))
@@ -243,6 +252,7 @@ internal sealed record BenchmarkSettings
     public string? DatabasePath { get; init; }
     public bool KeepDatabase { get; init; }
     public bool Enforce { get; init; }
+    public bool PendingSeed { get; init; }
 
     public static BenchmarkSettings Parse(string[] args)
     {
@@ -267,6 +277,7 @@ internal sealed record BenchmarkSettings
                 "--database" => settings with { DatabasePath = ReadValue(args, ref index, "--database") },
                 "--keep" => settings with { KeepDatabase = true },
                 "--enforce" => settings with { Enforce = true },
+                "--pending-seed" => settings with { PendingSeed = true },
                 _ => throw new ArgumentException($"Unknown option: {args[index]}")
             };
         }

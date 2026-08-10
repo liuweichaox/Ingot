@@ -70,6 +70,10 @@ public sealed record CycleAnalysisMaterialization
     /// <summary>query-time、materialized 或 cached。</summary>
     public string Status { get; init; } = "query-time";
 
+    /// <summary>
+    ///     Historical payloads without this field predate explicit algorithm versioning and are
+    ///     interpreted as v1. Current computation paths always assign their fingerprinted version.
+    /// </summary>
     public string AlgorithmVersion { get; init; } = "stage-relative-v1";
 
     public DateTimeOffset? ComputedAt { get; init; }

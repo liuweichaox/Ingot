@@ -12,7 +12,8 @@ namespace Ingot.Platform.Infrastructure.Cycles;
 public sealed class WholeCycleAnalysisEngine(
     IFeatureDefinitionRegistry? featureDefinitions = null)
 {
-    public const string AlgorithmVersion = "stage-relative-v5";
+    public static readonly string AlgorithmVersion =
+        $"stage-relative-v5+{CycleAnalysisThresholds.ComputeFingerprint()}";
     private readonly IFeatureDefinitionRegistry _featureDefinitions =
         featureDefinitions ?? new BuiltInFeatureDefinitionRegistry();
 
@@ -120,7 +121,8 @@ public sealed class WholeCycleAnalysisEngine(
             status = Degrade(status);
             issues.Add($"最大采样空窗 {maximumGap.Value:F1}ms，超过常态间隔的 5 倍。");
         }
-        foreach (var signal in signalCoverage.Where(static item => item.Coverage < 0.95))
+        foreach (var signal in signalCoverage.Where(static item =>
+                     item.Coverage < CycleAnalysisThresholds.MinimumSignalCoverage))
         {
             status = Degrade(status);
             issues.Add($"信号 {signal.Code} 有效覆盖率为 {signal.Coverage:P1}。");

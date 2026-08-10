@@ -205,7 +205,8 @@ public sealed class ResearchShadowRecommendationService(
                 Reason = $"已有 {invalidCount} 条影子结果因数据不完整不可用于优化，应先修复数据链。"
             });
         var poorCalibration = calibration.Where(static value =>
-            value.CheckedCount >= 5 && value.CoverageRate < 0.8).ToArray();
+            value.CheckedCount >= ValidationThresholds.MinimumCalibrationCheckCount &&
+            value.CoverageRate < ValidationThresholds.MinimumCalibrationCoverage).ToArray();
         if (poorCalibration.Length > 0)
             signals.Add(new ResearchShadowStopSignal
             {
@@ -242,6 +243,7 @@ public sealed class ResearchShadowRecommendationService(
         var reportBody = new
         {
             ProjectId = projectId,
+            ValidationThresholds.PolicyVersion,
             Total = records.Count,
             accepted,
             modified,
@@ -259,6 +261,7 @@ public sealed class ResearchShadowRecommendationService(
         return new ResearchShadowCampaignReport
         {
             ProjectId = projectId,
+            ValidationPolicyVersion = ValidationThresholds.PolicyVersion,
             TotalRecommendations = records.Count,
             AcceptedCount = accepted,
             ModifiedCount = modified,

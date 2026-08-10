@@ -288,12 +288,14 @@ public sealed class CycleComparisonService(
                         ModelImportance = model.ModelImportance,
                         StabilitySelectionRate = model.StabilitySelectionRate,
                         SignStability = model.SignStability,
-                        CandidateScore = 0.4 * candidate.CandidateScore + 0.6 * model.RankScore,
+                        CandidateScore =
+                            CycleAnalysisThresholds.CandidateScoreWeight * candidate.CandidateScore +
+                            CycleAnalysisThresholds.ModelRankScoreWeight * model.RankScore,
                         EvidenceLevel = advanced.CrossValidationScore <= 0
                             ? "exploratory"
-                            : model.StabilitySelectionRate >= 0.6
+                            : model.StabilitySelectionRate >= CycleAnalysisThresholds.HighStabilitySelectionRate
                                 ? "stable"
-                                : model.StabilitySelectionRate >= 0.25
+                                : model.StabilitySelectionRate >= CycleAnalysisThresholds.ModerateStabilitySelectionRate
                                     ? "exploratory"
                                     : "screening"
                     }

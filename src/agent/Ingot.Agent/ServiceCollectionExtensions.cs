@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Ingot.Agent;
 
@@ -10,8 +11,8 @@ public static class ServiceCollectionExtensions
         IConfiguration configuration)
     {
         services.Configure<ChatOptions>(configuration.GetSection("Chat"));
-        services.AddSingleton<DeterministicModelClient>();
-        services.AddSingleton<IModelClient>(static provider =>
+        services.TryAddSingleton<DeterministicModelClient>();
+        services.TryAddSingleton<IModelClient>(static provider =>
             provider.GetRequiredService<DeterministicModelClient>());
         services.AddSingleton<IModelRouter, DefaultModelRouter>();
         services.AddSingleton<IPlanValidator, DefaultPlanValidator>();

@@ -142,7 +142,7 @@ public sealed class CycleInvestigationReportBuilder
                     Statement = "该变量是过程响应，不是可直接设定的工艺变量。"
                 });
             }
-            if (candidate.StabilitySelectionRate is < 0.6)
+            if (candidate.StabilitySelectionRate is < CycleAnalysisThresholds.HighStabilitySelectionRate)
             {
                 result.Add(new CycleCounterEvidence
                 {

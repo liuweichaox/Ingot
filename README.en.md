@@ -93,6 +93,8 @@ The repository implements the main code path across acquisition, cycles, context
 
 Public replay and prospective results for real optical molding projects are not complete. The project therefore does not claim a measured reduction in experiments or development time.
 
+Historical replay, shadow validation, and controlled online validation are three independent scientific-validation work lines. Each preregisters its own data, baselines, measures, threshold version, acceptance, and falsification criteria and publishes its own evidence artifact. Passing one does not pass the others, and the results are not compressed into a global API "maturity" field. Existing endpoints show that experimental infrastructure is implemented; engineering decisions must use the corresponding reviewed, hashed, and versioned report rather than infer validity from feature presence.
+
 ## Architecture
 
 ```mermaid
