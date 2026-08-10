@@ -31,7 +31,6 @@ public sealed record GoldenQuestionCase
     public string EntryPoint { get; init; } = ProductEntryPoints.Chat;
     public string Mode { get; init; } = "quick";
     public PageContextRef? PageContext { get; init; }
-    public Guid? SourceProblemCaseId { get; init; }
     public IReadOnlyList<GoldenExpectedFact> ExpectedFacts { get; init; } = [];
     public IReadOnlyList<RelatedRecordRef> ExpectedRecordReferences { get; init; } = [];
     public bool ExpectRefusal { get; init; }

@@ -91,10 +91,6 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ResearchContextAdmissionEvaluator>();
         services.AddSingleton<IDataReliabilityBaselineService, DataReliabilityBaselineService>();
 
-        // 证据定级主轴：问题档案 + 定级评估（探针 SQL 对绑定范围只读运行）。
-        services.Configure<Insight.CaseLevelThresholds>(configuration.GetSection("CaseLeveling"));
-        services.AddSingleton<Insight.IProblemCaseStore, Insight.PostgresProblemCaseStore>();
-        services.AddSingleton<Insight.CaseLevelEvaluator>();
         services.AddSingleton<Insight.IGoldenQuestionStore, Insight.PostgresGoldenQuestionStore>();
         services.AddSingleton<Insight.GoldenQuestionEvaluator>();
 

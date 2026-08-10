@@ -169,7 +169,6 @@ app.MapGet("/", () => Results.Ok(new
         inspectionTasks = "/api/v1/inspection-tasks",
         inspectionReviews = "/api/v1/inspection-reviews",
         cycles = "/api/v1/cycles",
-        problemCases = "/api/v1/problem-cases",
         cycleComparisons = "/api/v1/cycle-comparisons/{correlationId}",
         processWindowComparisons = "/api/v1/process-window-comparisons",
         cycleAnalysisBackfills = "/api/v1/cycle-analysis-backfills",
