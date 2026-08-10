@@ -2,21 +2,10 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import {
-  agentChartTraces,
   extractProcessSamples,
   processSignalTraces,
   qualityOutcomeTraces,
 } from "../src/charts/chartAdapters.js";
-
-test("agent chart data becomes Plotly traces without losing null samples", () => {
-  const traces = agentChartTraces({
-    type: "line",
-    labels: ["阶段 1", "阶段 2", "阶段 3"],
-    series: [{ name: "温度", values: [510.2, null, "525.7"] }],
-  });
-  assert.equal(traces.length, 1);
-  assert.deepEqual(traces[0].y, [510.2, null, 525.7]);
-});
 
 test("quality charts retain measured outcomes", () => {
   const outcomes = qualityOutcomeTraces([{ name: "系列 A", pass: 7, fail: 2, inconclusive: 1 }]);

@@ -1,41 +1,5 @@
 export const chartPalette = ["#3478c9", "#2f9d78", "#e09b3d", "#8a63c7", "#d45f65", "#4b98a7"];
 
-export function agentChartTraces(chart) {
-  const type = String(chart?.type || "line").toLowerCase();
-  return (chart?.series || []).map((series, index) => {
-    const values = (series.values || []).map(numberOrNull);
-    const common = {
-      name: series.name,
-      marker: { color: chartPalette[index % chartPalette.length] },
-    };
-    if (type === "histogram")
-      return { ...common, type: "histogram", x: values.filter(value => value != null), opacity: 0.78 };
-    if (type === "boxplot")
-      return { ...common, type: "box", y: values.filter(value => value != null), boxpoints: "outliers" };
-    if (type === "bar")
-      return { ...common, type: "bar", x: chart.labels || [], y: values, hovertemplate: "%{x}<br>%{y}<extra>%{fullData.name}</extra>" };
-    return {
-      ...common,
-      type: "scatter",
-      mode: type === "scatter" ? "markers" : "lines+markers",
-      x: chart.labels || [],
-      y: values,
-      line: { color: chartPalette[index % chartPalette.length], width: 2 },
-      hovertemplate: "%{x}<br>%{y}<extra>%{fullData.name}</extra>",
-    };
-  });
-}
-
-export function agentChartLayout(chart) {
-  const type = String(chart?.type || "line").toLowerCase();
-  return {
-    barmode: type === "histogram" ? "overlay" : "group",
-    hovermode: type === "scatter" || type === "boxplot" || type === "histogram" ? "closest" : "x unified",
-    xaxis: { title: { text: type === "histogram" ? "数值区间" : "" } },
-    yaxis: { title: { text: type === "histogram" ? "频数" : "" } },
-  };
-}
-
 export function qualityOutcomeTraces(groups) {
   const rows = groups || [];
   return [

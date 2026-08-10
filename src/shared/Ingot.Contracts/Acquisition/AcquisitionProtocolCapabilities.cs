@@ -114,16 +114,9 @@ public static class AcquisitionProtocolCapabilities
         "int64", "uint64", "float64", "string", "boolean"
     ];
 
-    /// <summary>结构化字段与选择器共用的数值类型集合。</summary>
-    public static IReadOnlyList<string> RegisterDataTypes => RegisterTypes;
-
     /// <summary>该数据类型是否可用于寄存器类协议。</summary>
     public static bool IsRegisterDataType(string? value)
         => value is not null && Array.IndexOf(RegisterTypes, value) >= 0;
-
-    /// <summary>该数据类型是否可用于文档类协议（HTTP / MQTT / OPC UA）。</summary>
-    public static bool IsDocumentDataType(string? value)
-        => value is not null && Array.IndexOf(DocumentTypes, value) >= 0;
 
     private static readonly Dictionary<string, AcquisitionProtocolCapability> Registry =
         new(StringComparer.Ordinal)
@@ -232,14 +225,6 @@ public static class AcquisitionProtocolCapabilities
     public static IReadOnlyList<AcquisitionProtocolCapability> All { get; } =
         Registry.Values.OrderBy(static value => value.Protocol, StringComparer.Ordinal).ToArray();
 
-    public static AcquisitionProtocolCapability For(string protocol)
-        => TryGet(protocol, out var capability)
-            ? capability
-            : throw new ArgumentOutOfRangeException(
-                nameof(protocol),
-                protocol,
-                "未登记的采集协议无法参与配置校验。");
-
     public static bool TryGet(string? protocol, out AcquisitionProtocolCapability capability)
     {
         if (protocol is not null && Registry.TryGetValue(protocol, out var found))
@@ -251,12 +236,6 @@ public static class AcquisitionProtocolCapabilities
         capability = null!;
         return false;
     }
-
-    /// <summary>寄存器类协议（Modbus / MELSEC）在界面上共用寄存器点位编辑器。</summary>
-    public static bool IsRegisterAddressing(string? protocol)
-        => TryGet(protocol, out var capability) &&
-           capability.Addressing is AcquisitionAddressingKinds.ModbusRegister
-               or AcquisitionAddressingKinds.MelsecDevice;
 
     /// <summary>该数据类型占用几个 16 位字。string 由调用方按字节长度另行计算。</summary>
     public static int WordCountFor(string dataType) => dataType switch

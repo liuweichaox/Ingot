@@ -216,20 +216,6 @@ public sealed class AcquisitionStatus
             return !_tasks.TryGetValue(configurationKey, out var task) || !task.CycleActive;
     }
 
-    public bool IsApplied(string configurationKey)
-    {
-        lock (_gate)
-        {
-            if (!_taskIdentities.TryGetValue(configurationKey, out var identity) ||
-                !_deployments.TryGetValue(identity.ProfileId, out var deployment))
-                return string.Equals(configurationKey, "local", StringComparison.Ordinal) &&
-                       _tasks.TryGetValue(configurationKey, out var local) &&
-                       local.LastSuccessAt.HasValue;
-            return deployment.AppliedVersion == identity.Version &&
-                   string.Equals(deployment.AppliedConfigurationHash, identity.Hash, StringComparison.Ordinal);
-        }
-    }
-
     public bool AreDesiredDeploymentsApplied()
     {
         lock (_gate)

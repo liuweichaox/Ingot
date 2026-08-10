@@ -11,7 +11,6 @@ namespace Ingot.Platform.Infrastructure.Cycles;
 /// </summary>
 public sealed class PostgresCycleScientificComputeEngine : IAsyncDisposable
 {
-    public const string SqlEngineVersion = "timescale-window-v1";
     private const double RelativeTolerance = 1e-9;
     private readonly NpgsqlDataSource _dataSource;
 
