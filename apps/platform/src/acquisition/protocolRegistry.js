@@ -614,6 +614,3 @@ export function mergeServerCapabilities(serverCapabilities) {
       descriptor.constraints = entry.constraints;
   });
 }
-
-export const isRegisterAddressing = protocol =>
-  [ADDRESSING.modbusRegister, ADDRESSING.melsecDevice].includes(protocolDescriptor(protocol).addressing);

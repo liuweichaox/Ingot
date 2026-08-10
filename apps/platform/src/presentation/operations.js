@@ -38,20 +38,3 @@ export function latestMetricValue(metrics, names) {
   }
   return null;
 }
-
-export function metricScope(name) {
-  if (/^(ingot_|event_)/.test(name)) return "ingot";
-  if (/^(process_|system_runtime_|dotnet_)/.test(name)) return "runtime";
-  if (/^(http_|microsoft_aspnetcore_)/.test(name)) return "http";
-  return "other";
-}
-
-export function metricScopeLabel(scope) {
-  return ({
-    all: "全部范围",
-    ingot: "Ingot 数据链路",
-    runtime: ".NET 运行时",
-    http: "HTTP 服务",
-    other: "其他",
-  })[scope] || scope;
-}

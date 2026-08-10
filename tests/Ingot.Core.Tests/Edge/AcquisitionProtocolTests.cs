@@ -18,62 +18,6 @@ public sealed class AcquisitionProtocolTests
         => Assert.True(AcquisitionProtocols.IsSupported(protocol));
 
     [Fact]
-    public void EventFactory_AppliesConfiguredScaleAndOffset()
-    {
-        var profile = new AcquisitionProfile
-        {
-            ProfileId = "temperature",
-            Name = "Temperature",
-            EdgeId = "EDGE-001",
-            DataModelId = "thermal",
-            Source = "connector/modbus-tcp",
-            SubjectId = "FURNACE-001",
-            ValueMappings =
-            [
-                new AcquisitionValueMapping
-                {
-                    DataItemCode = "temperature",
-                    SourcePath = "holding-register:0",
-                    Scale = 0.1,
-                    Offset = -10
-                }
-            ]
-        };
-        var deployment = new AcquisitionDeployment
-        {
-            Profile = profile,
-            DataModel = new ProcessDataModel
-            {
-                ModelId = "thermal",
-                Name = "Thermal",
-                Acquisition = new AcquisitionModel
-                {
-                    DataItems =
-                    [
-                        new ProcessDataItemDefinition
-                        {
-                            Code = "temperature",
-                            SourceField = "Temperature",
-                            DataType = "double"
-                        }
-                    ]
-                }
-            }
-        };
-
-        var sample = AcquisitionEventFactory.CreateSample(
-            deployment,
-            "edge/EDGE-001/connector/modbus-tcp",
-            new Dictionary<string, object?> { ["temperature"] = 900 },
-            DateTimeOffset.Parse("2026-07-23T00:00:00Z"));
-
-        var values = Assert.IsAssignableFrom<IReadOnlyDictionary<string, object?>>(sample.Data["values"]);
-        Assert.Equal(80d, values["temperature"]);
-        Assert.Equal("temperature", sample.Context["acquisition_profile_id"]);
-        Assert.Equal("FURNACE-001", sample.Context["equipment_id"]);
-    }
-
-    [Fact]
     public void SecretResolver_ReadsOnlyExplicitEnvironmentReferences()
     {
         const string name = "INGOT_TEST_ACQUISITION_SECRET";

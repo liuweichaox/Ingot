@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { edgeHealth, latestMetricValue, metricScope, summarizeRuntime } from "../src/presentation/operations.js";
+import { edgeHealth, latestMetricValue, summarizeRuntime } from "../src/presentation/operations.js";
 
 test("edge health separates connectivity from runtime degradation", () => {
   const now = Date.parse("2026-07-23T08:40:00Z");
@@ -21,6 +21,4 @@ test("runtime summary reports task coverage and collected samples", () => {
 test("metric presentation prioritizes business pipeline values over histogram buckets", () => {
   const metrics = { event_outbox_backlog: { data: [{ value: 7 }, { value: 99, labels: { le: "+Inf" } }] } };
   assert.equal(latestMetricValue(metrics, ["event_outbox_backlog"]), 7);
-  assert.equal(metricScope("event_shipped_total"), "ingot");
-  assert.equal(metricScope("process_working_set_bytes"), "runtime");
 });

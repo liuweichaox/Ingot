@@ -36,36 +36,6 @@ export function agentChartLayout(chart) {
   };
 }
 
-export function qualityStackTraces(groups) {
-  const rows = groups || [];
-  return [
-    {
-      type: "bar",
-      name: "已完成",
-      x: rows.map(row => row.name),
-      y: rows.map(row => row.complete || 0),
-      marker: { color: "#2f9d78" },
-    },
-    {
-      type: "bar",
-      name: "不合格",
-      x: rows.map(row => row.name),
-      y: rows.map(row => row.failed || 0),
-      marker: { color: "#d45f65" },
-    },
-    {
-      type: "bar",
-      name: "待处理",
-      x: rows.map(row => row.name),
-      y: rows.map(row => Math.max(0, (row.total || 0) - (row.complete || 0) - (row.failed || 0))),
-      marker: { color: "#d7dde6" },
-    },
-  ].map(trace => ({
-    ...trace,
-    hovertemplate: "%{x}<br>%{y} 条<extra>%{fullData.name}</extra>",
-  }));
-}
-
 export function qualityOutcomeTraces(groups) {
   const rows = groups || [];
   return [

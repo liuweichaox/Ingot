@@ -6,7 +6,6 @@ import {
   extractProcessSamples,
   processSignalTraces,
   qualityOutcomeTraces,
-  qualityStackTraces,
 } from "../src/charts/chartAdapters.js";
 
 test("agent chart data becomes Plotly traces without losing null samples", () => {
@@ -19,10 +18,8 @@ test("agent chart data becomes Plotly traces without losing null samples", () =>
   assert.deepEqual(traces[0].y, [510.2, null, 525.7]);
 });
 
-test("quality charts retain complete, failed, pending, and measured outcomes", () => {
-  const stack = qualityStackTraces([{ name: "系列 A", total: 10, complete: 7, failed: 1 }]);
+test("quality charts retain measured outcomes", () => {
   const outcomes = qualityOutcomeTraces([{ name: "系列 A", pass: 7, fail: 2, inconclusive: 1 }]);
-  assert.deepEqual(stack.map(trace => trace.y[0]), [7, 1, 2]);
   assert.deepEqual(outcomes.map(trace => trace.y[0]), [7, 2, 1]);
 });
 
