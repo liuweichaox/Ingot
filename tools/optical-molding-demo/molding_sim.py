@@ -10,7 +10,7 @@
     D104 int16  mold_temp_lower  ×0.1  ℃
     D107 int16  press_force      ×0.1  kg
     D108 int16  position         ×0.001 mm
-    D2   uint32 source_cycle_no
+    D2   uint32 source_execution_no
 质量结果(面形误差/缺陷率)来自检测,不在 PLC 寄存器里 —— 对应 Inspection 录入。
 """
 from __future__ import annotations
@@ -27,14 +27,14 @@ REGISTERS = {
     "press_force":     ("D107", "int16", 0.1),
     "position":        ("D108", "int16", 0.001),
     "stage_number":    ("D1", "uint16", 1),
-    "source_cycle_no": ("D2", "uint32", 1),
+    "source_execution_no": ("D2", "uint32", 1),
 }
 PHASES = [("preheat", 10, 4), ("soak", 20, 3), ("press", 30, 3), ("anneal", 40, 3), ("cool", 50, 3)]
 
 
 @dataclass
-class CycleResult:
-    cycle_id: int
+class ProcessExecutionResult:
+    execution_id: int
     recipe: dict                 # 本次运行所用配方(工程师设定的 setpoint)
     samples: list                # 每次轮询的原始寄存器读数(与真机同格式)
     outcomes: dict               # 检测得到的质量结果(面形/缺陷…)
@@ -43,7 +43,7 @@ class CycleResult:
 class MoldingSource(ABC):
     """模压过程源。真机与仿真共用此接口 —— 换源即换实现,上层不变。"""
     @abstractmethod
-    def run_cycle(self, recipe: dict) -> CycleResult: ...
+    def run_execution(self, recipe: dict) -> ProcessExecutionResult: ...
 
 
 # ---- 隐藏真值(工程师看不到):配方 -> 质量结果。含最优窗口、交互、噪声 ----
@@ -64,13 +64,13 @@ def _norm(recipe: dict) -> np.ndarray:
 
 class SimulatedFx3u(MoldingSource):
     """FX3U 光学模压数字孪生。够真:仿真的过程信号与质量响应都贴合模压物理,
-    且以真实寄存器格式产出;换真机只需把 run_cycle 换成写 setpoint→触发→轮询 D1/D101.. 。"""
+    且以真实寄存器格式产出;换真机只需把 run_execution 换成写 setpoint→触发→轮询 D1/D101.. 。"""
 
     def __init__(self, seed: int = 0, poll_hz: float = 1.0):
         if not math.isfinite(poll_hz) or poll_hz <= 0:
             raise ValueError("poll_hz must be positive and finite")
         self.rng = np.random.default_rng(seed)
-        self._cycle = 0
+        self._execution = 0
         self.poll_hz = poll_hz
 
     def _outcomes(self, recipe: dict) -> dict:
@@ -89,14 +89,14 @@ class SimulatedFx3u(MoldingSource):
         scale = REGISTERS[code][2]
         return int(round(value / scale))
 
-    def run_cycle(self, recipe: dict) -> CycleResult:
+    def run_execution(self, recipe: dict) -> ProcessExecutionResult:
         if set(recipe) != set(_ORDER):
             raise ValueError(f"recipe must contain exactly {_ORDER}")
         for code, (low, high) in _BOUNDS.items():
             value = recipe[code]
             if not math.isfinite(value) or value < low or value > high:
                 raise ValueError(f"{code} must be within [{low}, {high}]")
-        self._cycle += 1
+        self._execution += 1
         soak_t = recipe["soak_temp"]; force_sp = recipe["press_force"]
         speed = recipe["press_speed"]; anneal = recipe["anneal_rate"]
         samples, t_upper, pos = [], 60.0, 0.0
@@ -116,16 +116,16 @@ class SimulatedFx3u(MoldingSource):
                     "D107": self._emit("press_force", max(force, 0)),
                     "D108": self._emit("position", pos),
                     "D1": step,
-                    "D2": self._cycle,
+                    "D2": self._execution,
                 })
-        return CycleResult(self._cycle, dict(recipe), samples, self._outcomes(recipe))
+        return ProcessExecutionResult(self._execution, dict(recipe), samples, self._outcomes(recipe))
 
 
 # 换真机时的骨架(接口不变,上层零改动):
 # class Fx3uMcSource(MoldingSource):
-#     def run_cycle(self, recipe):
+#     def run_execution(self, recipe):
 #         write_setpoints(recipe)          # 把配方写进 PLC setpoint 寄存器
-#         trigger_cycle(); wait_complete()  # 触发一次运行、等 cycle.completed
+#         trigger_execution(); wait_complete()  # 触发一次运行、等 process.execution.completed
 #         samples = poll_registers("D2","D1","D101","D104","D107","D108")  # MC 1E 轮询
-#         outcomes = read_inspection(self.cycle_id)  # 检测结果(面形/缺陷)由检验录入
-#         return CycleResult(...)
+#         outcomes = read_inspection(self.execution_id)  # 检测结果(面形/缺陷)由检验录入
+#         return ProcessExecutionResult(...)

@@ -111,7 +111,7 @@ export function DevicePointsPanel({
                             <option value="">选择变量</option>
                             {dataItems.map(item => (
                               <option key={item.code} value={item.code}>
-                                {item.sourceField || item.code}{item.unit ? `（${item.unit}）` : ""}
+                                {item.displayName || item.code}{item.unit ? `（${item.unit}）` : ""}
                               </option>
                             ))}
                           </Select>

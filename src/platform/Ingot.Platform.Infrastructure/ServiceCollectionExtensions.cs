@@ -1,5 +1,5 @@
 using Ingot.Agent;
-using Ingot.Platform.Infrastructure.Cycles;
+using Ingot.Platform.Infrastructure.ProcessExecutions;
 using Ingot.Platform.Infrastructure.Events;
 using Ingot.Platform.Infrastructure.AgentTools;
 using Ingot.Platform.Infrastructure.Acquisition;
@@ -34,14 +34,14 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<EdgeRegistry>();
 
         // 事件生产记录库（PostgreSQL）
-        // 生产上下文必须先于事件库就绪；cycle.started 会解析并固化当时有效的工装与配方引用。
+        // 生产上下文必须先于事件库就绪；process.execution.started 会解析并固化当时有效的工装与工艺规范引用。
         services.AddSingleton<IManufacturingContextStore, PostgresManufacturingContextStore>();
-        services.AddSingleton<ICycleAnalysisMaterializationStore, PostgresCycleAnalysisMaterializationStore>();
-        services.AddSingleton<CycleAnalysisRecomputeQueue>();
+        services.AddSingleton<IProcessExecutionAnalysisMaterializationStore, PostgresProcessExecutionAnalysisMaterializationStore>();
+        services.AddSingleton<ProcessExecutionAnalysisRecomputeQueue>();
         services.AddSingleton<IFeatureDefinitionRegistry, BuiltInFeatureDefinitionRegistry>();
-        services.AddSingleton<WholeCycleAnalysisEngine>();
-        services.AddSingleton<PostgresCycleScientificComputeEngine>();
-        services.AddSingleton<CycleAnalysisMaterializer>();
+        services.AddSingleton<ProcessExecutionAnalysisEngine>();
+        services.AddSingleton<PostgresProcessExecutionScientificComputeEngine>();
+        services.AddSingleton<ProcessExecutionAnalysisMaterializer>();
         services.Configure<PlatformEventOptions>(configuration.GetSection("EventIngest"));
         services.AddSingleton<PlatformEventMetrics>();
         services.AddSingleton<PostgresTimeSeriesStore>();
@@ -63,10 +63,10 @@ public static class ServiceCollectionExtensions
             provider => provider.GetRequiredService<ChatEventReader>());
         services.AddSingleton<IAnalysisTool, ListDataObjectsTool>();
         services.AddSingleton<IAnalysisTool, CheckDataQualityTool>();
-        services.AddSingleton<IAnalysisTool, GetCycleTraceTool>();
-        services.AddSingleton<IAnalysisTool, FindComparableCyclesTool>();
-        services.AddSingleton<IAnalysisTool, CompareCyclesTool>();
-        services.AddSingleton<IAnalysisTool, CompareProcessWindowsTool>();
+        services.AddSingleton<IAnalysisTool, GetProcessExecutionTraceTool>();
+        services.AddSingleton<IAnalysisTool, FindComparableExecutionsTool>();
+        services.AddSingleton<IAnalysisTool, CompareExecutionsTool>();
+        services.AddSingleton<IAnalysisTool, CompareTimeWindowsTool>();
         services.AddSingleton<IAnalysisTool, SearchProcessKnowledgeTool>();
         services.AddSingleton<IAnalysisTool, GetResearchProjectTool>();
 
@@ -78,12 +78,12 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IInspectionReviewStore, PostgresInspectionReviewStore>();
         services.AddSingleton<IInspectionWorkflowService, InspectionWorkflowService>();
         services.AddHostedService<InspectionStoreInitializerHostedService>();
-        services.AddSingleton<ICycleComparisonService, CycleComparisonService>();
-        services.AddSingleton<IProcessWindowComparisonService, ProcessWindowComparisonService>();
-        services.AddSingleton<ICycleRecordService, CycleRecordService>();
-        services.AddHostedService<CycleAnalysisRecomputeHostedService>();
-        services.AddSingleton<CycleAnalysisBackfillService>();
-        services.AddHostedService(provider => provider.GetRequiredService<CycleAnalysisBackfillService>());
+        services.AddSingleton<IExecutionComparisonService, ExecutionComparisonService>();
+        services.AddSingleton<ITimeWindowComparisonService, TimeWindowComparisonService>();
+        services.AddSingleton<IProcessExecutionService, ProcessExecutionService>();
+        services.AddHostedService<ProcessExecutionAnalysisRecomputeHostedService>();
+        services.AddSingleton<ProcessExecutionAnalysisBackfillService>();
+        services.AddHostedService(provider => provider.GetRequiredService<ProcessExecutionAnalysisBackfillService>());
         services.AddSingleton<IQualityAnalysisService, QualityAnalysisService>();
         services.AddSingleton<ResearchContextAdmissionEvaluator>();
         services.AddSingleton<IDataReliabilityBaselineService, DataReliabilityBaselineService>();
@@ -91,7 +91,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<Insight.IGoldenQuestionStore, Insight.PostgresGoldenQuestionStore>();
         services.AddSingleton<Insight.GoldenQuestionEvaluator>();
 
-        // 工艺数据模型、配方版本与分析方案使用独立的版本化配置存储。
+        // 工艺数据模型、工艺规范版本与分析方案使用独立的版本化配置存储。
         services.AddSingleton<IProcessConfigurationStore, PostgresProcessConfigurationStore>();
         services.AddSingleton<ProcessAnalysisResolver>();
 
@@ -116,7 +116,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IProcessResearchStore, PostgresProcessResearchStore>();
         services.AddSingleton<ProcessResearchWorkflow>();
         services.AddSingleton<IResearchObservationAssembler, ResearchObservationAssembler>();
-        services.AddSingleton<ResearchProcessWindowMaterializer>();
+        services.AddSingleton<ResearchOperatingRegionMaterializer>();
         services.AddSingleton<ResearchExperimentResultMaterializer>();
         services.Configure<ProcessOptimizerOptions>(configuration.GetSection("ProcessOptimizer"));
         services.AddHttpClient<IProcessOptimizerClient, ProcessOptimizerClient>((provider, client) =>

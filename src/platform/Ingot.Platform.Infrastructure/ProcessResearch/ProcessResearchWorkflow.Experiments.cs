@@ -17,15 +17,15 @@ public sealed partial class ProcessResearchWorkflow
         CancellationToken ct = default)
     {
         var project = await RequireMutableProjectAsync(projectId, ct).ConfigureAwait(false);
-        ResearchProcessWindow? validationWindow = null;
-        if (request.ValidationWindowId is { } validationWindowId)
+        ResearchOperatingRegion? validationWindow = null;
+        if (request.ValidationOperatingRegionId is { } validationOperatingRegionId)
         {
-            validationWindow = await store.GetProcessWindowAsync(validationWindowId, ct)
+            validationWindow = await store.GetOperatingRegionAsync(validationOperatingRegionId, ct)
                 .ConfigureAwait(false);
             if (validationWindow is null ||
                 validationWindow.ProjectId != projectId ||
-                validationWindow.Status != ProcessWindowStatuses.Candidate)
-                throw new ProcessResearchRuleException("独立验证实验必须引用当前项目中的候选工艺窗口。");
+                validationWindow.Status != OperatingRegionStatuses.Candidate)
+                throw new ProcessResearchRuleException("独立验证实验必须引用当前项目中的候选工艺操作域。");
         }
         if (request.HypothesisId is { } hypothesisId)
         {
@@ -90,41 +90,41 @@ public sealed partial class ProcessResearchWorkflow
                 throw new ProcessResearchRuleException("每个实验运行必须包含不重复的可控变量设置。");
             return run with
             {
-                RunKey = RequiredText(run.RunKey, "实验运行标识", 120),
+                ExecutionKey = RequiredText(run.ExecutionKey, "实验运行标识", 120),
                 Sequence = run.Sequence > 0 ? run.Sequence : index + 1,
                 BlockKey = OptionalText(run.BlockKey, 120),
                 ReplicateKey = OptionalText(run.ReplicateKey, 120),
                 Factors = factors
             };
         }).ToArray();
-        if (runPlan.Select(static value => value.RunKey).Distinct(StringComparer.Ordinal).Count() !=
+        if (runPlan.Select(static value => value.ExecutionKey).Distinct(StringComparer.Ordinal).Count() !=
             runPlan.Length ||
             runPlan.Select(static value => value.Sequence).Distinct().Count() != runPlan.Length)
             throw new ProcessResearchRuleException("实验运行标识和执行顺序必须唯一。");
-        var baselineRunKeys = request.BaselineRunKeys
+        var baselineExecutionKeys = request.BaselineExecutionKeys
             .Select(value => RequiredText(value, "对照运行标识", 120))
             .Distinct(StringComparer.Ordinal)
             .ToArray();
-        if (baselineRunKeys.Length != request.BaselineRunKeys.Count)
+        if (baselineExecutionKeys.Length != request.BaselineExecutionKeys.Count)
             throw new ProcessResearchRuleException("对照运行标识不能重复。");
-        if (baselineRunKeys.Length == 1)
+        if (baselineExecutionKeys.Length == 1)
             throw new ProcessResearchRuleException("生成独立对照置信区间至少需要两个对照运行。");
-        if (baselineRunKeys.Length > 0)
+        if (baselineExecutionKeys.Length > 0)
         {
-            var currentRunKeys = runPlan.Select(static value => value.RunKey)
+            var currentExecutionKeys = runPlan.Select(static value => value.ExecutionKey)
                 .ToHashSet(StringComparer.Ordinal);
-            if (currentRunKeys.All(baselineRunKeys.Contains))
+            if (currentExecutionKeys.All(baselineExecutionKeys.Contains))
                 throw new ProcessResearchRuleException("实验必须至少保留一个非对照运行用于效果比较。");
-            var eligiblePriorRunKeys = (await store.ListExperimentsAsync(projectId, ct)
+            var eligiblePriorExecutionKeys = (await store.ListExperimentsAsync(projectId, ct)
                     .ConfigureAwait(false))
                 .Where(static value =>
                     value.DesignMethod == ResearchDesignMethods.HistoricalObservation ||
                     value.Status == ResearchExperimentStatuses.Completed)
                 .SelectMany(static value => value.RunPlan)
-                .Select(static value => value.RunKey)
+                .Select(static value => value.ExecutionKey)
                 .ToHashSet(StringComparer.Ordinal);
-            if (baselineRunKeys.Any(key =>
-                    !currentRunKeys.Contains(key) && !eligiblePriorRunKeys.Contains(key)))
+            if (baselineExecutionKeys.Any(key =>
+                    !currentExecutionKeys.Contains(key) && !eligiblePriorExecutionKeys.Contains(key)))
                 throw new ProcessResearchRuleException(
                     "对照运行必须来自本实验、已导入的历史观察或已完成实验。");
         }
@@ -165,9 +165,9 @@ public sealed partial class ProcessResearchWorkflow
                 string.IsNullOrWhiteSpace(request.Optimization.ModelVersion) ||
                 request.Optimization.RunPredictions.Count != runPlan.Length ||
                 !ResearchOptimizationModes.IsValid(request.Optimization.Mode) ||
-                !request.Optimization.RunPredictions.Select(static value => value.RunKey)
+                !request.Optimization.RunPredictions.Select(static value => value.ExecutionKey)
                     .ToHashSet(StringComparer.Ordinal)
-                    .SetEquals(runPlan.Select(static value => value.RunKey)))
+                    .SetEquals(runPlan.Select(static value => value.ExecutionKey)))
                 throw new ProcessResearchRuleException("优化实验的模型版本、输入摘要或运行预测无效。");
         }
 
@@ -178,7 +178,7 @@ public sealed partial class ProcessResearchWorkflow
                 ? Guid.CreateVersion7()
                 : request.ExperimentId,
             ProjectId = projectId,
-            ValidationWindowId = validationWindow?.WindowId,
+            ValidationOperatingRegionId = validationWindow?.OperatingRegionId,
             Name = RequiredText(request.Name, "实验名称", 240),
             DesignMethod = designMethod,
             PlanVersion = 1,
@@ -193,7 +193,7 @@ public sealed partial class ProcessResearchWorkflow
             Status = ResearchExperimentStatuses.Planned,
             Factors = factors,
             RunPlan = runPlan,
-            BaselineRunKeys = baselineRunKeys,
+            BaselineExecutionKeys = baselineExecutionKeys,
             ObjectiveCodes = objectiveCodes,
             ReplicateKeys = request.ReplicateKeys.Select(static value => value.Trim())
                 .Where(static value => value.Length > 0)
@@ -207,7 +207,7 @@ public sealed partial class ProcessResearchWorkflow
                 Commands = runPlan.Select(run => new ExperimentExecutionCommand
                 {
                     CommandId = Guid.CreateVersion7(),
-                    RunKey = run.RunKey,
+                    ExecutionKey = run.ExecutionKey,
                     Sequence = run.Sequence,
                     BlockKey = run.BlockKey,
                     ReplicateKey = run.ReplicateKey,
@@ -482,7 +482,7 @@ public sealed partial class ProcessResearchWorkflow
             Commands = experiment.RunPlan.Select(run => new ExperimentExecutionCommand
             {
                 CommandId = Guid.CreateVersion7(),
-                RunKey = run.RunKey,
+                ExecutionKey = run.ExecutionKey,
                 Sequence = run.Sequence,
                 BlockKey = run.BlockKey,
                 ReplicateKey = run.ReplicateKey,

@@ -15,7 +15,7 @@ public static class AcquisitionApplicationStates
 {
     public const string Pending = "pending";
     public const string Validating = "validating";
-    public const string WaitingForCycleBoundary = "waiting-cycle-boundary";
+    public const string WaitingForProcessExecutionBoundary = "waiting-execution-boundary";
     public const string Applying = "applying";
     public const string Applied = "applied";
     public const string Rollback = "rollback";
@@ -31,9 +31,9 @@ public sealed record AcquisitionTaskRuntimeStatus(
     long SamplesCollected,
     double? LastReadDurationMs,
     double? ObservedIntervalMs,
-    string? ActiveRecipe,
+    string? ActiveProcessSpecification,
     string? LastError,
-    bool CycleActive,
+    bool ProcessExecutionActive,
     long StaleSnapshotRejectionCount = 0,
     long StaleValueRejectionCount = 0);
 
@@ -60,7 +60,7 @@ public sealed record EdgeAcquisitionRuntimeStatus(
     long SamplesCollected,
     double? LastReadDurationMs,
     double? ObservedIntervalMs,
-    string? ActiveRecipe,
+    string? ActiveProcessSpecification,
     string? LastError,
     IReadOnlyList<AcquisitionTaskRuntimeStatus> Tasks,
     IReadOnlyList<AcquisitionDeploymentApplicationStatus> Deployments,

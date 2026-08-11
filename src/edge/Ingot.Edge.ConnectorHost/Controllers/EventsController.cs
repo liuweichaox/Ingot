@@ -20,7 +20,7 @@ public sealed class EventsController(IEventLog eventLog) : ControllerBase
         [FromQuery(Name = "type")] string? eventType,
         [FromQuery] string? subjectType,
         [FromQuery] string? subjectId,
-        [FromQuery] string? correlationId,
+        [FromQuery] string? executionId,
         [FromQuery] DateTimeOffset? from,
         [FromQuery] DateTimeOffset? to,
         [FromQuery] long? afterSeq,
@@ -31,7 +31,7 @@ public sealed class EventsController(IEventLog eventLog) : ControllerBase
             eventType,
             subjectType,
             subjectId,
-            correlationId,
+            executionId,
             from,
             to,
             afterSeq,
@@ -49,28 +49,28 @@ public sealed class EventsController(IEventLog eventLog) : ControllerBase
     }
 
     /// <summary>
-    ///     按生产周期号 返回一个生产周期内已经落盘的全部记录。
+    ///     按过程执行号 返回一个过程执行内已经落盘的全部记录。
     /// </summary>
-    [HttpGet("/api/v1/cycles/{correlationId}")]
-    public async Task<IActionResult> GetCycle(
-        string correlationId,
+    [HttpGet("/api/v1/process-executions/{executionId}")]
+    public async Task<IActionResult> GetProcessExecution(
+        string executionId,
         CancellationToken ct = default)
     {
-        if (string.IsNullOrWhiteSpace(correlationId))
-            return BadRequest(new { error = "correlationId 不能为空。" });
+        if (string.IsNullOrWhiteSpace(executionId))
+            return BadRequest(new { error = "executionId 不能为空。" });
 
         var events = await ReadAllAsync(
                 eventLog,
                 new EventQuery
                 {
-                    CorrelationId = correlationId
+                    ExecutionId = executionId
                 },
                 ct)
             .ConfigureAwait(false);
 
         var pair = events.OrderBy(static evt => evt.Seq).ToArray();
         if (pair.Length == 0)
-            return NotFound(new { correlationId, error = "未找到对应生产周期。" });
+            return NotFound(new { executionId, error = "未找到对应过程执行。" });
 
         var startedAt = pair.Min(static evt => evt.OccurredAt);
         var completedAt = pair
@@ -95,8 +95,8 @@ public sealed class EventsController(IEventLog eventLog) : ControllerBase
             .ConfigureAwait(false);
         var ordered = pair
             .Concat(sameSubjectWindow.Where(evt =>
-                string.IsNullOrWhiteSpace(evt.CorrelationId) ||
-                string.Equals(evt.CorrelationId, correlationId, StringComparison.Ordinal)))
+                string.IsNullOrWhiteSpace(evt.ExecutionId) ||
+                string.Equals(evt.ExecutionId, executionId, StringComparison.Ordinal)))
             .DistinctBy(static evt => evt.EventId)
             .OrderBy(static evt => evt.OccurredAt)
             .ThenBy(static evt => evt.Seq)
@@ -104,7 +104,7 @@ public sealed class EventsController(IEventLog eventLog) : ControllerBase
 
         return Ok(new
         {
-            correlationId,
+            executionId,
             subject,
             startedAt,
             completedAt,
@@ -144,7 +144,7 @@ public sealed class EventsController(IEventLog eventLog) : ControllerBase
         [FromQuery(Name = "type")] string? eventType,
         [FromQuery] string? subjectType,
         [FromQuery] string? subjectId,
-        [FromQuery] string? correlationId,
+        [FromQuery] string? executionId,
         [FromQuery] DateTimeOffset? from,
         [FromQuery] DateTimeOffset? to,
         CancellationToken ct)
@@ -164,7 +164,7 @@ public sealed class EventsController(IEventLog eventLog) : ControllerBase
             eventType,
             subjectType,
             subjectId,
-            correlationId,
+            executionId,
             from,
             to,
             cursor,
@@ -189,7 +189,7 @@ public sealed class EventsController(IEventLog eventLog) : ControllerBase
                 eventType,
                 subjectType,
                 subjectId,
-                correlationId,
+                executionId,
                 from,
                 to,
                 cursor,
@@ -220,7 +220,7 @@ public sealed class EventsController(IEventLog eventLog) : ControllerBase
         string? eventType,
         string? subjectType,
         string? subjectId,
-        string? correlationId,
+        string? executionId,
         DateTimeOffset? from,
         DateTimeOffset? to,
         long? afterSeq,
@@ -238,7 +238,7 @@ public sealed class EventsController(IEventLog eventLog) : ControllerBase
             EventType = eventType,
             SubjectType = subjectType,
             SubjectId = subjectId,
-            CorrelationId = correlationId,
+            ExecutionId = executionId,
             From = from,
             To = to,
             AfterSeq = afterSeq,

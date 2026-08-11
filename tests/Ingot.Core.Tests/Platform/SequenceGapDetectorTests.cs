@@ -40,7 +40,7 @@ public sealed class SequenceGapDetectorTests
 
     private static ProductionEvent CreateEvent(long seq)
         => ProductionEvent.Create(
-            "cycle.completed",
+            "process.execution.completed",
             DateTimeOffset.UtcNow,
             "edge/EDGE-01/SOURCE-01/rule",
             new ObjectRef("equipment", "EQ-01")) with

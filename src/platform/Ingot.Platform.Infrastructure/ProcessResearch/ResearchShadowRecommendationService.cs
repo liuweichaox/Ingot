@@ -15,7 +15,7 @@ public sealed class ResearchShadowRecommendationService(
 {
     public async Task<ResearchShadowRecommendation> RecordDecisionAsync(
         Guid experimentId,
-        string suggestionRunKey,
+        string suggestionExecutionKey,
         ResearchShadowDecisionRequest request,
         string userId,
         CancellationToken ct = default)
@@ -32,21 +32,21 @@ public sealed class ResearchShadowRecommendationService(
         if (experiment.Optimization.Mode != ResearchOptimizationModes.Shadow)
             throw new ProcessResearchRuleException("只有显式生成的影子建议可以登记旁路决策。");
 
-        suggestionRunKey = Required(request: suggestionRunKey, field: "模型建议运行标识", 120);
+        suggestionExecutionKey = Required(request: suggestionExecutionKey, field: "模型建议运行标识", 120);
         var run = experiment.RunPlan.SingleOrDefault(value =>
-            string.Equals(value.RunKey, suggestionRunKey, StringComparison.Ordinal))
+            string.Equals(value.ExecutionKey, suggestionExecutionKey, StringComparison.Ordinal))
             ?? throw new ProcessResearchRuleException("模型建议运行不存在。");
         var prediction = experiment.Optimization.RunPredictions.SingleOrDefault(value =>
-            string.Equals(value.RunKey, suggestionRunKey, StringComparison.Ordinal))
+            string.Equals(value.ExecutionKey, suggestionExecutionKey, StringComparison.Ordinal))
             ?? throw new ProcessResearchRuleException("模型建议缺少冻结的预测快照。");
-        if (await store.GetShadowRecommendationBySuggestionAsync(experimentId, suggestionRunKey, ct)
+        if (await store.GetShadowRecommendationBySuggestionAsync(experimentId, suggestionExecutionKey, ct)
                 .ConfigureAwait(false) is { } existing)
             return existing;
 
         var decision = Required(request.Decision, "影子决策", 40).ToLowerInvariant();
         if (!ResearchShadowDecisionStatuses.IsValid(decision))
             throw new ProcessResearchRuleException("影子决策必须是 accepted、modified 或 rejected。");
-        var actualRunKey = Required(request.ActualRunKey, "工程师实际运行标识", 120);
+        var actualExecutionKey = Required(request.ActualExecutionKey, "工程师实际运行标识", 120);
         var selected = NormalizeSelectedFactors(project, request.EngineerSelectedFactors);
         var sameAsSuggestion = FactorsEqual(run.Factors, selected);
         if (decision == ResearchShadowDecisionStatuses.Accepted && !sameAsSuggestion)
@@ -79,13 +79,13 @@ public sealed class ResearchShadowRecommendationService(
         {
             experiment.ExperimentId,
             experiment.ProjectRevision,
-            suggestionRunKey,
+            suggestionExecutionKey,
             experiment.Optimization.ModelVersion,
             experiment.Optimization.InputHash,
             SuggestedFactors = run.Factors.OrderBy(static value => value.VariableCode),
             Prediction = prediction,
             decision,
-            actualRunKey,
+            actualExecutionKey,
             EngineerSelectedFactors = selected.OrderBy(static value => value.VariableCode),
             reason,
             limitations,
@@ -97,8 +97,8 @@ public sealed class ResearchShadowRecommendationService(
             RecommendationId = Guid.CreateVersion7(),
             ProjectId = project.ProjectId,
             ExperimentId = experiment.ExperimentId,
-            SuggestionRunKey = suggestionRunKey,
-            ActualRunKey = actualRunKey,
+            SuggestionExecutionKey = suggestionExecutionKey,
+            ActualExecutionKey = actualExecutionKey,
             Decision = decision,
             ModelVersion = experiment.Optimization.ModelVersion,
             ModelInputHash = experiment.Optimization.InputHash,
@@ -168,7 +168,7 @@ public sealed class ResearchShadowRecommendationService(
                 .Select(constraint => new ResearchShadowSafetyEvent
                 {
                     RecommendationId = record.RecommendationId,
-                    ActualRunKey = record.ActualRunKey,
+                    ActualExecutionKey = record.ActualExecutionKey,
                     ConstraintCode = constraint.Code,
                     ObservedValue = record.Outcome!.ConstraintOutcomes[constraint.Code],
                     Operator = constraint.Operator,
@@ -299,7 +299,7 @@ public sealed class ResearchShadowRecommendationService(
             ?? throw new ProcessResearchRuleException("影子建议的模型快照不存在。");
         var actualRun = new ExperimentRunPlan
         {
-            RunKey = recommendation.ActualRunKey,
+            ExecutionKey = recommendation.ActualExecutionKey,
             Sequence = 1,
             Factors = recommendation.EngineerSelectedFactors
         };
@@ -315,10 +315,10 @@ public sealed class ResearchShadowRecommendationService(
             ct).ConfigureAwait(false);
         var observation = assembly.Observations.SingleOrDefault()
             ?? throw new ProcessResearchRuleException(
-                "实际运行尚未形成可关联的完整生产周期，不能补齐影子结果。");
+                "实际运行尚未形成可关联的完整过程执行，不能补齐影子结果。");
         var outcome = new ResearchShadowOutcome
         {
-            ActualRunKey = recommendation.ActualRunKey,
+            ActualExecutionKey = recommendation.ActualExecutionKey,
             ActualFactors = observation.ActualFactors,
             SettingDeviationFromSuggestion = Differences(
                 recommendation.SuggestedFactors, observation.ActualFactors),

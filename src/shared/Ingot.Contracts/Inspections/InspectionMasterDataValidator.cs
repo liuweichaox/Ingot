@@ -153,10 +153,10 @@ public static partial class InspectionMasterDataValidator
             Status = status,
             Scope = scope with
             {
-                ProductSeries = NormalizeSelector(scope.ProductSeries),
+                ProductFamilyCode = NormalizeSelector(scope.ProductFamilyCode),
                 ProductCode = NormalizeSelector(scope.ProductCode),
-                RecipeId = NormalizeSelector(scope.RecipeId),
-                MachineId = NormalizeSelector(scope.MachineId),
+                ProcessSpecificationId = NormalizeSelector(scope.ProcessSpecificationId),
+                EquipmentId = NormalizeSelector(scope.EquipmentId),
                 ContextSelector = contextSelector
             },
             Items = items.OrderBy(static item => item.Sequence)
@@ -172,33 +172,33 @@ public static partial class InspectionMasterDataValidator
         normalized = null;
         if (value is null)
             return Fail("阶段映射不能为空。", out error);
-        if (!TryId(value.RecipeId, "RecipeId", out var recipeId, out error) ||
-            !TryId(value.RecipeStep, "RecipeStep", out var recipeStep, out error) ||
+        if (!TryId(value.ProcessSpecificationId, "ProcessSpecificationId", out var processSpecificationId, out error) ||
+            !TryId(value.ProcessStep, "ProcessStep", out var processStep, out error) ||
             !TryCode(value.PhaseCode, "PhaseCode", out var phaseCode, out error))
         {
             return false;
         }
 
-        var phaseSource = Normalize(value.PhaseSource)?.ToLowerInvariant() ?? "recipe";
-        if (phaseSource is not ("recipe" or "machine" or "estimated"))
-            return Fail("阶段来源只能是 recipe、machine 或 estimated。", out error);
-        var recipeVersion = Normalize(value.RecipeVersion);
-        var recipeTemplate = Normalize(value.RecipeTemplate);
+        var phaseSource = Normalize(value.PhaseSource)?.ToLowerInvariant() ?? "process-specification";
+        if (phaseSource is not ("process-specification" or "equipment" or "estimated"))
+            return Fail("阶段来源只能是 process-specification、equipment 或 estimated。", out error);
+        var processSpecificationVersion = Normalize(value.ProcessSpecification);
+        var processTemplate = Normalize(value.ProcessTemplate);
         var mappingId = string.Join(
             ":",
-            recipeId,
-            recipeVersion ?? "*",
-            recipeTemplate ?? "*",
-            recipeStep).ToLowerInvariant();
+            processSpecificationId,
+            processSpecificationVersion ?? "*",
+            processTemplate ?? "*",
+            processStep).ToLowerInvariant();
 
         normalized = value with
         {
             MappingId = string.IsNullOrWhiteSpace(value.MappingId) ? mappingId : value.MappingId.Trim().ToLowerInvariant(),
-            RecipeId = recipeId!,
-            RecipeVersion = recipeVersion,
-            RecipeTemplate = recipeTemplate,
-            RecipeStep = recipeStep!,
-            RecipeStepName = Normalize(value.RecipeStepName),
+            ProcessSpecificationId = processSpecificationId!,
+            ProcessSpecification = processSpecificationVersion,
+            ProcessTemplate = processTemplate,
+            ProcessStep = processStep!,
+            ProcessStepName = Normalize(value.ProcessStepName),
             PhaseCode = phaseCode!,
             PhaseSource = phaseSource,
             UpdatedAt = DateTimeOffset.UtcNow
@@ -240,10 +240,10 @@ public static partial class InspectionMasterDataValidator
             Aggregation = aggregation,
             BoundaryMode = boundaryMode,
             Unit = Normalize(value.Unit),
-            ProductSeries = NormalizeSelector(value.ProductSeries),
+            ProductFamilyCode = NormalizeSelector(value.ProductFamilyCode),
             ProductCode = NormalizeSelector(value.ProductCode),
-            RecipeId = NormalizeSelector(value.RecipeId),
-            MachineId = NormalizeSelector(value.MachineId),
+            ProcessSpecificationId = NormalizeSelector(value.ProcessSpecificationId),
+            EquipmentId = NormalizeSelector(value.EquipmentId),
             UpdatedAt = DateTimeOffset.UtcNow
         };
         return Succeed(out error);

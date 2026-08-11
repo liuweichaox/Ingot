@@ -131,8 +131,8 @@ public static partial class ManufacturingContextValidator
     {
         normalized = null;
         if (value is null)
-            return Fail("模具不能为空。", out error);
-        if (!TryId(value.MoldId, "MoldId", out var moldId, out error) ||
+            return Fail("工装总成不能为空。", out error);
+        if (!TryId(value.ToolingAssemblyId, "ToolingAssemblyId", out var toolingAssemblyId, out error) ||
             !TryCode(value.ToolingTypeCode, "ToolingTypeCode", out var typeCode, out error))
         {
             return false;
@@ -145,7 +145,7 @@ public static partial class ManufacturingContextValidator
             return Fail("Status 只能是 active 或 inactive。", out error);
         normalized = value with
         {
-            MoldId = moldId!,
+            ToolingAssemblyId = toolingAssemblyId!,
             ToolingTypeCode = typeCode!,
             Name = name,
             Status = status,
@@ -161,8 +161,8 @@ public static partial class ManufacturingContextValidator
     {
         normalized = null;
         if (value is null)
-            return Fail("模具组合版本不能为空。", out error);
-        if (!TryId(value.MoldId, "MoldId", out var moldId, out error))
+            return Fail("工装总成版本不能为空。", out error);
+        if (!TryId(value.ToolingAssemblyId, "ToolingAssemblyId", out var toolingAssemblyId, out error))
             return false;
         if (value.Revision <= 0)
             return Fail("Revision 必须大于 0。", out error);
@@ -184,7 +184,7 @@ public static partial class ManufacturingContextValidator
         normalized = value with
         {
             AssemblyRevisionId = value.AssemblyRevisionId == Guid.Empty ? Guid.NewGuid() : value.AssemblyRevisionId,
-            MoldId = moldId!,
+            ToolingAssemblyId = toolingAssemblyId!,
             Members = members.OrderBy(static item => item.RoleCode).ToArray(),
             CreatedBy = Normalize(value.CreatedBy),
             CreatedAt = value.CreatedAt == default ? DateTimeOffset.UtcNow : value.CreatedAt.ToUniversalTime()
@@ -200,7 +200,7 @@ public static partial class ManufacturingContextValidator
         normalized = null;
         if (value is null)
             return Fail("工装装卸记录不能为空。", out error);
-        if (!TryId(value.MachineId, "MachineId", out var machineId, out error))
+        if (!TryId(value.EquipmentId, "EquipmentId", out var equipmentId, out error))
             return false;
         if (value.AssemblyRevisionId == Guid.Empty)
             return Fail("AssemblyRevisionId 不能为空。", out error);
@@ -211,7 +211,7 @@ public static partial class ManufacturingContextValidator
         normalized = value with
         {
             InstallationId = value.InstallationId == Guid.Empty ? Guid.NewGuid() : value.InstallationId,
-            MachineId = machineId!,
+            EquipmentId = equipmentId!,
             InstalledAt = value.InstalledAt == default ? DateTimeOffset.UtcNow : value.InstalledAt.ToUniversalTime(),
             RemovedAt = value.RemovedAt?.ToUniversalTime(),
             Source = source!,
@@ -230,11 +230,11 @@ public static partial class ManufacturingContextValidator
         normalized = null;
         if (value is null)
             return Fail("生产上下文不能为空。", out error);
-        if (!TryId(value.MachineId, "MachineId", out var machineId, out error) ||
-            !TryId(value.ProductSeries, "ProductSeries", out var productSeries, out error) ||
+        if (!TryId(value.EquipmentId, "EquipmentId", out var equipmentId, out error) ||
+            !TryId(value.ProductFamilyCode, "ProductFamilyCode", out var productFamilyCode, out error) ||
             !TryId(value.ProductCode, "ProductCode", out var productCode, out error) ||
-            !TryId(value.RecipeId, "RecipeId", out var recipeId, out error) ||
-            !TryId(value.RecipeVersion, "RecipeVersion", out var recipeVersion, out error))
+            !TryId(value.ProcessSpecificationId, "ProcessSpecificationId", out var processSpecificationId, out error) ||
+            !TryId(value.ProcessSpecificationVersion, "ProcessSpecificationVersion", out var processSpecificationVersion, out error))
         {
             return false;
         }
@@ -258,11 +258,11 @@ public static partial class ManufacturingContextValidator
         normalized = value with
         {
             ContextId = value.ContextId == Guid.Empty ? Guid.NewGuid() : value.ContextId,
-            MachineId = machineId!,
-            ProductSeries = productSeries!,
+            EquipmentId = equipmentId!,
+            ProductFamilyCode = productFamilyCode!,
             ProductCode = productCode!,
-            RecipeId = recipeId!,
-            RecipeVersion = recipeVersion!,
+            ProcessSpecificationId = processSpecificationId!,
+            ProcessSpecificationVersion = processSpecificationVersion!,
             ValidFrom = value.ValidFrom == default ? DateTimeOffset.UtcNow : value.ValidFrom.ToUniversalTime(),
             ValidTo = value.ValidTo?.ToUniversalTime(),
             Source = source!,

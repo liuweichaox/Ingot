@@ -229,23 +229,6 @@ public sealed class ProductionConfigurationValidatorTests
     }
 
     [Fact]
-    public void ConnectorHost_AcceptsLegacyCentralApiConfiguration()
-    {
-        var configuration = Build(new Dictionary<string, string?>
-        {
-            ["ConnectorHost:IngestToken"] = "connector-token-with-at-least-24-characters",
-            ["Edge:EnableCentralReporting"] = "true",
-            ["Edge:EdgeId"] = "EDGE-001",
-            ["Edge:CentralApiBaseUrl"] = "http://platform-api:8000",
-            ["Edge:EnableEventShipping"] = "true",
-            ["Edge:EventIngestToken"] = "edge-token-with-at-least-24-characters",
-            ["Acquisition:DeploymentCachePath"] = "/data/acquisition-deployments.json"
-        });
-
-        EdgeValidator.Validate(configuration);
-    }
-
-    [Fact]
     public void ConnectorHost_RejectsSilentLocalFallbackInProduction()
     {
         var configuration = Build(new Dictionary<string, string?>

@@ -37,11 +37,11 @@ public sealed class ResearchOnlineCampaignService(IProcessResearchStore store)
         {
             var experiment = experimentsById[result.ExperimentId];
             var predictions = experiment.Optimization!.RunPredictions
-                .ToDictionary(static value => value.RunKey, StringComparer.Ordinal);
+                .ToDictionary(static value => value.ExecutionKey, StringComparer.Ordinal);
             return result.RunObservations
                 .Where(static value => value.ValidForOptimization)
-                .Where(value => predictions.ContainsKey(value.RunKey))
-                .Select(value => new PredictionOutcomePair(predictions[value.RunKey], value));
+                .Where(value => predictions.ContainsKey(value.ExecutionKey))
+                .Select(value => new PredictionOutcomePair(predictions[value.ExecutionKey], value));
         }).ToArray();
         var shadowPairs = (await shadowTask.ConfigureAwait(false))
             .Where(static value => value.Outcome is { ValidForOptimization: true })
@@ -49,7 +49,7 @@ public sealed class ResearchOnlineCampaignService(IProcessResearchStore store)
                 value.Prediction,
                 new ExperimentRunObservation
                 {
-                    RunKey = value.ActualRunKey,
+                    ExecutionKey = value.ActualExecutionKey,
                     Outcomes = value.Outcome!.Outcomes,
                     SourceContentHash = value.Outcome.SourceContentHash
                 }))

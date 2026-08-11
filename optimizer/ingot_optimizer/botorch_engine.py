@@ -509,11 +509,11 @@ class BotorchOptimizer:
                         "from prior observations."
                         if validation_scores is not None
                         else "Two-stage trajectory surrogate and qLogNEHVI selected "
-                        "this recipe for constrained Pareto-front improvement "
+                        "this parameter setting for constrained Pareto-front improvement "
                         "under GP uncertainty."
                         if process_feature_names
                         else
-                        "qLogNEHVI selected this recipe for constrained "
+                        "qLogNEHVI selected this parameter setting for constrained "
                         "Pareto-front improvement under GP uncertainty."
                     ),
                 )

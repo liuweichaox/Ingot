@@ -173,7 +173,7 @@ def data_model(version: int = 1) -> dict[str, object]:
         "acquisition": {
             "dataItems": data_item_definitions(),
         },
-        "recipeParameters": recipe_parameter_definitions(),
+        "controlParameters": recipe_parameter_definitions(),
     }
 
 
@@ -185,7 +185,7 @@ def recipe(
     variant: int = 1,
 ) -> dict[str, object]:
     return {
-        "recipeId": "lens-molding-demo",
+        "processSpecificationId": "lens-molding-demo",
         "version": version,
         "name": (
             "LENS-DEMO 基线模压配方"
@@ -196,7 +196,7 @@ def recipe(
         "dataModelId": "optical-lens-molding-demo",
         "dataModelVersion": data_model_version,
         "status": "published",
-        "contextSelector": {"product_series": "optical-lens-demo"},
+        "contextSelector": {"product_family_code": "optical-lens-demo"},
         "values": platform_recipe_values(variant),
     }
 
@@ -210,11 +210,11 @@ def analysis_plan(version: int = 1, data_model_version: int = 1) -> dict[str, ob
         "status": "published",
         "dataModelId": "optical-lens-molding-demo",
         "dataModelVersion": data_model_version,
-        "analysisScope": "production-cycle",
+        "analysisScope": "production-execution",
         "alignmentMode": "stage-relative",
-        "cohortDimension": "recipe_version",
-        "comparisonKeys": ["product_series", "machine_id", "mold_id"],
-        "contextSelector": {"product_series": "optical-lens-demo"},
+        "cohortDimension": "process_specification_version",
+        "comparisonKeys": ["product_family_code", "equipment_id", "tooling_assembly_id"],
+        "contextSelector": {"product_family_code": "optical-lens-demo"},
         "signals": [
             {
                 "dataItemCode": item["code"],
@@ -269,10 +269,10 @@ def quality_plan() -> dict[str, object]:
         "effectiveFrom": None,
         "effectiveTo": None,
         "scope": {
-            "productSeries": "optical-lens-demo",
+            "productFamilyCode": "optical-lens-demo",
             "productCode": "LENS-DEMO-50",
-            "recipeId": None,
-            "machineId": "OPTICAL-MOLD-SIM-01",
+            "processSpecificationId": None,
+            "equipmentId": "OPTICAL-MOLD-SIM-01",
             "contextSelector": {},
         },
         "items": [
@@ -318,7 +318,7 @@ def scenario_package(
         "constraints": [],
         "knowledgeAssets": [],
         "terminology": {
-            "operation_run": "模压周期",
+            "process_execution": "模压周期",
             "tooling": "模具组合",
             "quality_result": "镜片检验结果",
         },
@@ -326,7 +326,7 @@ def scenario_package(
 
 
 def provision_manufacturing_context(
-    api: str, recipe_version: int
+    api: str, process_specification_version: int
 ) -> list[dict[str, object]]:
     """Create the active tooling and production intervals required by run snapshots.
 
@@ -367,7 +367,7 @@ def provision_manufacturing_context(
         api,
         "/api/v1/tooling-assemblies",
         {
-            "moldId": "MOLD-DEMO-A01",
+            "toolingAssemblyId": "MOLD-DEMO-A01",
             "toolingTypeCode": "optical-molding.four-part-mold",
             "name": "光学模压模具 A01（模拟）",
             "status": "active",
@@ -383,7 +383,7 @@ def provision_manufacturing_context(
             "/api/v1/tooling-assemblies/MOLD-DEMO-A01/revisions",
             {
                 "assemblyRevisionId": "bd1a0a54-54c1-4d03-8b6a-8ff25934dcf1",
-                "moldId": "MOLD-DEMO-A01",
+                "toolingAssemblyId": "MOLD-DEMO-A01",
                 "revision": 1,
                 "members": TOOLING_MEMBERS,
                 "createdBy": "optical-molding-demo",
@@ -391,7 +391,7 @@ def provision_manufacturing_context(
             },
         )
     query = urllib.parse.urlencode(
-        {"machineId": "OPTICAL-MOLD-SIM-01", "activeOnly": "true"}
+        {"equipmentId": "OPTICAL-MOLD-SIM-01", "activeOnly": "true"}
     )
     installations = get_json(api, f"/api/v1/tooling-installations?{query}").get(
         "data", []
@@ -410,7 +410,7 @@ def provision_manufacturing_context(
             "/api/v1/tooling-installations",
             {
                 "installationId": "9b274e27-3de8-4505-a7d8-c54ca34a82e7",
-                "machineId": "OPTICAL-MOLD-SIM-01",
+                "equipmentId": "OPTICAL-MOLD-SIM-01",
                 "assemblyRevisionId": revision["assemblyRevisionId"],
                 "installedAt": "2020-01-01T00:00:00Z",
                 "source": "import",
@@ -426,8 +426,8 @@ def provision_manufacturing_context(
             item
             for item in contexts
             if item.get("toolingInstallationId") == installation["installationId"]
-            and item.get("recipeId") == "lens-molding-demo"
-            and item.get("recipeVersion") == str(recipe_version)
+            and item.get("processSpecificationId") == "lens-molding-demo"
+            and item.get("processSpecificationVersion") == str(process_specification_version)
         ),
         None,
     )
@@ -443,7 +443,7 @@ def provision_manufacturing_context(
         context_id = str(
             uuid.uuid5(
                 uuid.UUID("98b41076-45fe-41b6-83d4-dcba7f812e2c"),
-                f"optical-molding-demo-production-{recipe_version}",
+                f"optical-molding-demo-production-{process_specification_version}",
             )
         )
         context = post_json(
@@ -451,15 +451,15 @@ def provision_manufacturing_context(
             "/api/v1/production-contexts",
             {
                 "contextId": context_id,
-                "machineId": "OPTICAL-MOLD-SIM-01",
-                "productSeries": "optical-lens-demo",
+                "equipmentId": "OPTICAL-MOLD-SIM-01",
+                "productFamilyCode": "optical-lens-demo",
                 "productCode": "LENS-DEMO-50",
-                "recipeId": "lens-molding-demo",
-                "recipeVersion": str(recipe_version),
+                "processSpecificationId": "lens-molding-demo",
+                "processSpecificationVersion": str(process_specification_version),
                 "toolingInstallationId": installation["installationId"],
                 "validFrom": valid_from,
                 "source": "import",
-                "commandId": f"optical-molding-demo-production-v{recipe_version}",
+                "commandId": f"optical-molding-demo-production-v{process_specification_version}",
                 "externalOrderRef": "DEMO-ORDER-001",
                 "externalBatchRef": "DEMO-BATCH-001",
                 "materialLotRef": "GLASS-DEMO-01",
@@ -480,7 +480,7 @@ def provision_manufacturing_context(
 
 def main() -> None:
     args = parse_args()
-    baseline_recipe_version = (args.data_model_version - 1) * 2 + 1
+    baseline_process_specification_version = (args.data_model_version - 1) * 2 + 1
     resources = [
         (
             "process_data_model",
@@ -489,9 +489,9 @@ def main() -> None:
         ),
         (
             "recipe_v1",
-            "/api/v1/recipe-versions",
+            "/api/v1/process-specifications",
             recipe(
-                baseline_recipe_version,
+                baseline_process_specification_version,
                 args.data_model_version,
                 variant=1,
             ),
@@ -530,7 +530,7 @@ def main() -> None:
                 "resource": name,
                 "id": (
                     result.get("modelId")
-                    or result.get("recipeId")
+                    or result.get("processSpecificationId")
                     or result.get("planId")
                     or result.get("code")
                     or result.get("profileId")
@@ -540,7 +540,7 @@ def main() -> None:
             }
         )
     provisioned.extend(
-        provision_manufacturing_context(args.api, baseline_recipe_version)
+        provision_manufacturing_context(args.api, baseline_process_specification_version)
     )
     print(json.dumps({"provisioned": provisioned}, ensure_ascii=False, indent=2))
 

@@ -12,7 +12,7 @@ export function EventsPage() {
     type: "",
     edgeId: "",
     subjectId: urlParams.get("subjectId") || "",
-    correlationId: urlParams.get("cycleId") || "",
+    executionId: urlParams.get("executionId") || "",
   });
   const [appliedFilters, setAppliedFilters] = useState(filters);
   const [page, setPage] = useState(1);
@@ -52,7 +52,7 @@ export function EventsPage() {
           <Field label="事件类型"><Input value={filters.type} onChange={event => setFilters({ ...filters, type: event.target.value })} placeholder="process.sample" /></Field>
           <Field label="采集节点"><Input value={filters.edgeId} onChange={event => setFilters({ ...filters, edgeId: event.target.value })} /></Field>
           <Field label="工业对象"><Input value={filters.subjectId} onChange={event => setFilters({ ...filters, subjectId: event.target.value })} placeholder="设备或对象编号" /></Field>
-          <Field label="运行号"><Input value={filters.correlationId} onChange={event => setFilters({ ...filters, correlationId: event.target.value })} /></Field>
+          <Field label="运行号"><Input value={filters.executionId} onChange={event => setFilters({ ...filters, executionId: event.target.value })} /></Field>
           <Button variant="primary" type="submit" className="self-end"><MagnifyingGlassIcon className="size-4" />查询</Button>
         </form>
       </Card>
@@ -67,7 +67,7 @@ export function EventsPage() {
               { key: "ingestId", label: "摄入序号" },
               { key: "event", label: "类型", render: value => <Badge tone="info">{value?.eventType || "—"}</Badge> },
               { key: "event", label: "对象", render: value => value?.subject?.id || "—" },
-              { key: "event", label: "运行号", render: value => value?.correlationId || "—" },
+              { key: "event", label: "运行号", render: value => value?.executionId || "—" },
               { key: "event", label: "发生时间", render: value => formatTime(value?.occurredAt) },
             ]}
           />

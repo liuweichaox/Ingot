@@ -79,7 +79,7 @@ export function AcquisitionProfilePage() {
   const selectedModel = parseModelValue(form.dataModel);
   const model = models.find(item => item.modelId === selectedModel.id && item.version === selectedModel.version);
   const dataItems = model?.acquisition?.dataItems || [];
-  const recipeParameters = model?.recipeParameters || [];
+  const controlParameters = model?.controlParameters || [];
   const readOnly = mode === "maintain" && form.status !== "draft";
 
   const validation = useMemo(
@@ -93,7 +93,7 @@ export function AcquisitionProfilePage() {
     () => JSON.stringify({
       edgeId: form.edgeId, protocol: form.protocol, dataModel: form.dataModel,
       section: form[descriptor.section], valueMappings: form.valueMappings,
-      contextMappings: form.contextMappings, recipe: form.recipe,
+      contextMappings: form.contextMappings, processSpecification: form.processSpecification,
     }),
     [form, descriptor.section],
   );
@@ -105,7 +105,7 @@ export function AcquisitionProfilePage() {
     { label: "选择采集节点与工艺数据模型", done: Boolean(form.edgeId && form.dataModel) },
     { label: "填写连接参数", done: !Object.keys(descriptor.validateConnection(form[descriptor.section] || {}) || {}).length },
     {
-      label: "映射周期必需的工艺变量",
+      label: "映射过程执行必需的工艺变量",
       done: dataItems.filter(item => !item.nullable)
         .every(item => form.valueMappings.some(row => row.dataItemCode === item.code)),
       detail: dataItems.length ? `必需 ${dataItems.filter(item => !item.nullable).length} 项，已映射 ${form.valueMappings.filter(item => item.dataItemCode).length} 项` : undefined,
@@ -267,10 +267,10 @@ export function AcquisitionProfilePage() {
 
             <ContextPanel descriptor={descriptor} form={form} errors={errors} readOnly={readOnly} onChange={update} />
 
-            <RecipePanel
+            <ProcessSpecificationPanel
               descriptor={descriptor}
               form={form}
-              parameters={recipeParameters}
+              parameters={controlParameters}
               errors={errors}
               probe={probe}
               readOnly={readOnly}
@@ -322,7 +322,7 @@ function ContextPanel({ descriptor, form, errors, readOnly, onChange }) {
         {rows.map((item, index) => (
           <div key={index} className="grid gap-2 md:grid-cols-[1fr_1fr_auto_auto]">
             <Field label={index === 0 ? "上下文键" : undefined} error={errors[`contextMappings[${index}].contextKey`]}>
-              <Input value={item.contextKey} disabled={readOnly} placeholder="product_series"
+              <Input value={item.contextKey} disabled={readOnly} placeholder="product_family_code"
                 onChange={event => update(index, { contextKey: event.target.value })} />
             </Field>
             <Field
@@ -364,55 +364,55 @@ function descriptorSourcePlaceholder(descriptor) {
     case "modbus-register": return "holding-register:120:uint16";
     case "melsec-device": return "D:120:uint16";
     case "node-id": return "ns=2;s=Machine.Product";
-    default: return "productSeries";
+    default: return "productFamilyCode";
   }
 }
 
-function RecipePanel({ descriptor, form, parameters, errors, probe, readOnly, onChange }) {
-  const recipe = form.recipe;
-  const update = patch => onChange({ recipe: { ...recipe, ...patch } });
+function ProcessSpecificationPanel({ descriptor, form, parameters, errors, probe, readOnly, onChange }) {
+  const processSpecification = form.processSpecification;
+  const update = patch => onChange({ processSpecification: { ...processSpecification, ...patch } });
   return (
     <Card
-      title="设备配方识别"
-      description="从设备读取当前生效的配方标识，让每次运行都能关联到实际配方。"
+      title="设备工艺规范识别"
+      description="从设备读取当前生效的工艺规范标识，让每次运行都能关联到实际工艺规范。"
       actions={
         <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={recipe.enabled} disabled={readOnly}
+          <input type="checkbox" checked={processSpecification.enabled} disabled={readOnly}
             onChange={event => update({ enabled: event.target.checked })} />启用
         </label>
       }
     >
-      {!recipe.enabled ? (
-        <p className="text-sm text-slate-500">当前采集任务不从设备数据识别配方。</p>
+      {!processSpecification.enabled ? (
+        <p className="text-sm text-slate-500">当前采集任务不从设备数据识别工艺规范。</p>
       ) : (
         <div className="grid gap-4">
           <div className="grid gap-4 md:grid-cols-2">
-            <Field label="配方编号来源" error={errors["recipe.idPath"]}>
-              <Input value={recipe.idPath} disabled={readOnly} placeholder={descriptorSourcePlaceholder(descriptor)}
+            <Field label="工艺规范编号来源" error={errors["processSpecification.idPath"]}>
+              <Input value={processSpecification.idPath} disabled={readOnly} placeholder={descriptorSourcePlaceholder(descriptor)}
                 onChange={event => update({ idPath: event.target.value })} />
             </Field>
-            <Field label="配方版本来源" error={errors["recipe.versionPath"]}>
-              <Input value={recipe.versionPath} disabled={readOnly}
+            <Field label="工艺规范版本来源" error={errors["processSpecification.versionPath"]}>
+              <Input value={processSpecification.versionPath} disabled={readOnly}
                 onChange={event => update({ versionPath: event.target.value })} />
             </Field>
-            <Field label="配方名称来源（可选）">
-              <Input value={recipe.namePath} disabled={readOnly}
+            <Field label="工艺规范名称来源（可选）">
+              <Input value={processSpecification.namePath} disabled={readOnly}
                 onChange={event => update({ namePath: event.target.value })} />
             </Field>
-            {descriptor.capabilities.recipeParametersPath && (
+            {descriptor.capabilities.parameterObjectPath && (
               <Field label="参数集合路径" hint="参数映射的路径相对于它；「.」表示报文根。">
-                <Input value={recipe.parametersPath} disabled={readOnly}
+                <Input value={processSpecification.parametersPath} disabled={readOnly}
                   onChange={event => update({ parametersPath: event.target.value })} />
               </Field>
             )}
           </div>
           <PointMappingPanel
-            title="配方参数映射"
+            title="控制参数映射"
             descriptor={descriptor}
-            rows={recipe.parameterMappings}
+            rows={processSpecification.parameterMappings}
             options={parameters}
             errors={errors}
-            errorPrefix="recipe.parameterMappings"
+            errorPrefix="processSpecification.parameterMappings"
             probe={probe}
             form={form}
             readOnly={readOnly}
@@ -429,8 +429,8 @@ function LifecyclePanel({ form, errors, readOnly, onChange }) {
   const update = patch => onChange({ lifecycle: { ...lifecycle, ...patch } });
   return (
     <Card
-      title="周期边界识别"
-      description="设备只需提供生产状态；采集节点在生产开始时生成周期关联号，结束时关闭周期。"
+      title="过程执行边界识别"
+      description="设备只需提供生产状态；采集节点在生产开始时生成过程执行关联号，结束时关闭过程执行。"
       actions={
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={lifecycle.enabled} disabled={readOnly}
@@ -439,7 +439,7 @@ function LifecyclePanel({ form, errors, readOnly, onChange }) {
       }
     >
       {!lifecycle.enabled ? (
-        <p className="text-sm text-slate-500">适用于连续设备，或不需要自动识别周期边界的场景。</p>
+        <p className="text-sm text-slate-500">适用于连续设备，或不需要自动识别过程执行边界的场景。</p>
       ) : (
         <div className="grid gap-4 md:grid-cols-2">
           <Field label="生产状态上下文键" hint="填写上面配置过的上下文键。" error={errors["lifecycle.activeContextKey"]}>

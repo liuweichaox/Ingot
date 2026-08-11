@@ -37,7 +37,7 @@ public sealed partial class InspectionScopesController(
         if (existing is not null)
         {
             var page = await records.QueryPageAsync(
-                new InspectionRecordQuery { OperationRunId = existing.ScopeId, Limit = 1 }, ct).ConfigureAwait(false);
+                new InspectionRecordQuery { ExecutionId = existing.ScopeId, Limit = 1 }, ct).ConfigureAwait(false);
             if (page.Total > 0)
                 return Conflict(new { error = "该质量范围已经产生检测记录，不能修改。", existing });
             value = value with { CreatedAt = existing.CreatedAt, CreatedBy = existing.CreatedBy };
@@ -54,7 +54,7 @@ public sealed partial class InspectionScopesController(
         var existing = await records.GetScopeAsync(normalized, ct).ConfigureAwait(false);
         if (existing is null) return NotFound();
         var page = await records.QueryPageAsync(
-            new InspectionRecordQuery { OperationRunId = normalized, Limit = 1 }, ct).ConfigureAwait(false);
+            new InspectionRecordQuery { ExecutionId = normalized, Limit = 1 }, ct).ConfigureAwait(false);
         if (page.Total > 0)
             return Conflict(new { error = "该质量范围已经产生检测记录，不能删除。" });
         return await records.DeleteScopeAsync(normalized, ct).ConfigureAwait(false) ? NoContent() : NotFound();
@@ -84,23 +84,23 @@ public sealed partial class InspectionScopesController(
         if (request.From == default || request.To == default || request.To <= request.From)
             return Fail("质量范围的结束时间必须晚于开始时间。", out error);
         if (string.IsNullOrWhiteSpace(request.SubjectType) || string.IsNullOrWhiteSpace(request.SubjectId) ||
-            string.IsNullOrWhiteSpace(request.WorkpieceId) || string.IsNullOrWhiteSpace(request.ProductSeries) ||
+            string.IsNullOrWhiteSpace(request.OutputItemId) || string.IsNullOrWhiteSpace(request.ProductFamilyCode) ||
             string.IsNullOrWhiteSpace(request.InspectionPlanId) || request.InspectionPlanVersion < 1)
             return Fail("数据对象、质量标识、产品系列和质量方案不能为空。", out error);
         var identity = userResolver.ResolveIdentity(User)!;
         var context = request.Context
             .Where(pair => !string.IsNullOrWhiteSpace(pair.Key) && !string.IsNullOrWhiteSpace(pair.Value))
             .ToDictionary(pair => pair.Key.Trim().ToLowerInvariant(), pair => pair.Value.Trim(), StringComparer.Ordinal);
-        context["product_series"] = request.ProductSeries.Trim();
+        context["product_family_code"] = request.ProductFamilyCode.Trim();
         context["quality_scope_type"] = scopeType;
         value = request with
         {
             ScopeId = scopeId,
             ScopeType = scopeType,
-            WorkpieceId = request.WorkpieceId.Trim(),
+            OutputItemId = request.OutputItemId.Trim(),
             SubjectType = request.SubjectType.Trim().ToLowerInvariant(),
             SubjectId = request.SubjectId.Trim(),
-            ProductSeries = request.ProductSeries.Trim(),
+            ProductFamilyCode = request.ProductFamilyCode.Trim(),
             InspectionPlanId = request.InspectionPlanId.Trim().ToLowerInvariant(),
             From = request.From.ToUniversalTime(),
             To = request.To.ToUniversalTime(),

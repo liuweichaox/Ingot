@@ -66,7 +66,7 @@ public sealed class EventBatchValidatorTests
 
     private static ProductionEvent CreateEvent(long seq)
         => ProductionEvent.Create(
-            "cycle.completed",
+            "process.execution.completed",
             DateTimeOffset.UtcNow,
             "edge/EDGE-001/SOURCE-01/rule",
             new ObjectRef("equipment", "EQ-01")) with

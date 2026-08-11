@@ -57,14 +57,14 @@ public sealed class HttpEventShipper : IEventShipper
             _logger.LogInformation("已禁用事件上行（Edge:EnableEventShipping=false）");
             return;
         }
-        if (string.IsNullOrWhiteSpace(_options.EffectivePlatformApiBaseUrl))
+        if (string.IsNullOrWhiteSpace(_options.PlatformApiBaseUrl))
             throw new InvalidOperationException("启用事件上行时必须配置 Edge:PlatformApiBaseUrl。");
         if (string.IsNullOrWhiteSpace(_options.EventIngestToken))
             throw new InvalidOperationException("启用事件上行时必须配置 Edge:EventIngestToken。");
 
         var edgeId = _identity.GetEdgeId();
         var http = _httpClientFactory.CreateClient(nameof(HttpEventShipper));
-        http.BaseAddress = new Uri(_options.EffectivePlatformApiBaseUrl.TrimEnd('/') + "/");
+        http.BaseAddress = new Uri(_options.PlatformApiBaseUrl.TrimEnd('/') + "/");
         http.DefaultRequestHeaders.Authorization =
             new AuthenticationHeaderValue("Bearer", _options.EventIngestToken);
 

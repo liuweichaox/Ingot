@@ -33,19 +33,19 @@ public sealed class PostgresProcessConfigurationStore : IProcessConfigurationSto
     public Task<bool> DeleteDataModelAsync(string modelId, int version, CancellationToken ct = default)
         => DeleteAsync("process_data_models", "model_id", modelId, version, ct);
 
-    public Task<RecipeVersion> UpsertRecipeVersionAsync(RecipeVersion value, CancellationToken ct = default)
+    public Task<ProcessSpecification> UpsertProcessSpecificationAsync(ProcessSpecification value, CancellationToken ct = default)
         => UpsertAsync(
-            "recipe_versions", "recipe_id", value.RecipeId, value.Version, value.Status,
+            "process_specification_versions", "process_specification_id", value.ProcessSpecificationId, value.Version, value.Status,
             value.DataModelId, value.DataModelVersion, value, value.UpdatedAt, ct);
 
-    public Task<IReadOnlyList<RecipeVersion>> ListRecipeVersionsAsync(CancellationToken ct = default)
-        => ListAsync<RecipeVersion>("recipe_versions", "ORDER BY recipe_id, version DESC", ct);
+    public Task<IReadOnlyList<ProcessSpecification>> ListProcessSpecificationsAsync(CancellationToken ct = default)
+        => ListAsync<ProcessSpecification>("process_specification_versions", "ORDER BY process_specification_id, version DESC", ct);
 
-    public Task<RecipeVersion?> GetRecipeVersionAsync(string recipeId, int version, CancellationToken ct = default)
-        => GetAsync<RecipeVersion>("recipe_versions", "recipe_id", recipeId, version, ct);
+    public Task<ProcessSpecification?> GetProcessSpecificationAsync(string processSpecificationId, int version, CancellationToken ct = default)
+        => GetAsync<ProcessSpecification>("process_specification_versions", "process_specification_id", processSpecificationId, version, ct);
 
-    public Task<bool> DeleteRecipeVersionAsync(string recipeId, int version, CancellationToken ct = default)
-        => DeleteAsync("recipe_versions", "recipe_id", recipeId, version, ct);
+    public Task<bool> DeleteProcessSpecificationAsync(string processSpecificationId, int version, CancellationToken ct = default)
+        => DeleteAsync("process_specification_versions", "process_specification_id", processSpecificationId, version, ct);
 
     public Task<ProcessAnalysisPlan> UpsertAnalysisPlanAsync(ProcessAnalysisPlan value, CancellationToken ct = default)
         => UpsertAsync(

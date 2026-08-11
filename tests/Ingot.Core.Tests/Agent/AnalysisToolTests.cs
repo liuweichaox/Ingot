@@ -26,8 +26,8 @@ public sealed class AnalysisToolTests
         var earlier = later.AddMinutes(-10);
         var tool = new CheckDataQualityTool(new StubEventReader(
         [
-            Row(1, 1, "cycle.started", later, "cycle-1"),
-            Row(2, 2, "cycle.completed", earlier, "cycle-1")
+            Row(1, 1, "process.execution.started", later, "execution-1"),
+            Row(2, 2, "process.execution.completed", earlier, "execution-1")
         ]));
 
         var result = await tool.ExecuteAsync(
@@ -67,9 +67,9 @@ public sealed class AnalysisToolTests
             .Select(index => Row(
                 index,
                 index,
-                index == 1 ? "cycle.started" : index == 1_202 ? "cycle.completed" : "telemetry.observed",
+                index == 1 ? "process.execution.started" : index == 1_202 ? "process.execution.completed" : "telemetry.observed",
                 start.AddSeconds(index),
-                "cycle-large"))
+                "execution-large"))
             .ToArray();
         var tool = new CheckDataQualityTool(new StubEventReader(rows));
 
@@ -79,26 +79,26 @@ public sealed class AnalysisToolTests
 
         Assert.Equal(AnalysisToolOutcomes.InsufficientData, result.Outcome);
         Assert.Equal(1_202, result.Data.GetProperty("eventCount").GetInt32());
-        Assert.Equal(0, result.Data.GetProperty("incompleteCycles").GetInt32());
-        Assert.Equal(1, result.Data.GetProperty("unavailableProcessCycles").GetInt32());
+        Assert.Equal(0, result.Data.GetProperty("incompleteProcessExecutions").GetInt32());
+        Assert.Equal(1, result.Data.GetProperty("unavailableProcessProcessExecutions").GetInt32());
         Assert.DoesNotContain(result.Limitations, limitation => limitation.Contains("500", StringComparison.Ordinal));
         Assert.Contains("已完整检查 1202 条", result.Summary, StringComparison.Ordinal);
     }
 
     [Fact]
-    public async Task GetCycleTrace_UsesTheFirstStartedEventAsCycleStart()
+    public async Task GetProcessExecutionTrace_UsesTheFirstStartedEventAsProcessExecutionStart()
     {
         var observed = DateTimeOffset.Parse("2026-07-18T10:00:00Z");
         var started = observed.AddSeconds(1);
         var completed = observed.AddSeconds(4);
-        var tool = new GetCycleTraceTool(new StubEventReader(
+        var tool = new GetProcessExecutionTraceTool(new StubEventReader(
         [
-            Row(1, 1, "alarm.observed", observed, "cycle-1"),
-            Row(2, 2, "cycle.started", started, "cycle-1"),
-            Row(3, 3, "cycle.completed", completed, "cycle-1")
+            Row(1, 1, "alarm.observed", observed, "execution-1"),
+            Row(2, 2, "process.execution.started", started, "execution-1"),
+            Row(3, 3, "process.execution.completed", completed, "execution-1")
         ]));
 
-        var result = await tool.ExecuteAsync(CycleCall(tool, "cycle-1"), ExecutionContext);
+        var result = await tool.ExecuteAsync(ProcessExecutionCall(tool, "execution-1"), ExecutionContext);
 
         Assert.Equal(AnalysisToolOutcomes.Sufficient, result.Outcome);
         Assert.Equal(started, result.Data.GetProperty("startedAt").GetDateTimeOffset());
@@ -106,15 +106,15 @@ public sealed class AnalysisToolTests
     }
 
     [Fact]
-    public async Task GetCycleTrace_RejectsMissingStartAndReadsCompleteLargeTimeline()
+    public async Task GetProcessExecutionTrace_RejectsMissingStartAndReadsCompleteLargeTimeline()
     {
-        var completedOnly = new GetCycleTraceTool(new StubEventReader(
+        var completedOnly = new GetProcessExecutionTraceTool(new StubEventReader(
         [
-            Row(1, 1, "cycle.completed", DateTimeOffset.Parse("2026-07-18T10:00:00Z"), "cycle-1")
+            Row(1, 1, "process.execution.completed", DateTimeOffset.Parse("2026-07-18T10:00:00Z"), "execution-1")
         ]));
 
         var missingStart = await completedOnly.ExecuteAsync(
-            CycleCall(completedOnly, "cycle-1"),
+            ProcessExecutionCall(completedOnly, "execution-1"),
             ExecutionContext);
         Assert.Equal(AnalysisToolOutcomes.InsufficientData, missingStart.Outcome);
         Assert.Contains(missingStart.Limitations,
@@ -125,14 +125,14 @@ public sealed class AnalysisToolTests
             .Select(index => Row(
                 index,
                 index,
-                index == 1 ? "cycle.started" : index == 602 ? "cycle.completed" : "process.sample",
+                index == 1 ? "process.execution.started" : index == 602 ? "process.execution.completed" : "process.sample",
                 start.AddSeconds(index),
-                "cycle-2"))
+                "execution-2"))
             .ToArray();
-        var completeTool = new GetCycleTraceTool(new StubEventReader(rows));
+        var completeTool = new GetProcessExecutionTraceTool(new StubEventReader(rows));
 
         var complete = await completeTool.ExecuteAsync(
-            CycleCall(completeTool, "cycle-2"),
+            ProcessExecutionCall(completeTool, "execution-2"),
             ExecutionContext);
         Assert.Equal(AnalysisToolOutcomes.Sufficient, complete.Outcome);
         Assert.Equal(602, complete.Data.GetProperty("eventCount").GetInt32());
@@ -149,10 +149,10 @@ public sealed class AnalysisToolTests
             validationError);
     }
 
-    private static AnalysisToolCall CycleCall(GetCycleTraceTool tool, string correlationId) => new()
+    private static AnalysisToolCall ProcessExecutionCall(GetProcessExecutionTraceTool tool, string executionId) => new()
     {
         Tool = tool.Definition.Name,
-        Arguments = new Dictionary<string, string?> { ["correlationId"] = correlationId }
+        Arguments = new Dictionary<string, string?> { ["executionId"] = executionId }
     };
 
     private static PlatformProductionEvent Row(
@@ -160,7 +160,7 @@ public sealed class AnalysisToolTests
         long sequence,
         string eventType,
         DateTimeOffset occurredAt,
-        string? correlationId = null)
+        string? executionId = null)
         => new()
         {
             IngestId = ingestId,
@@ -175,7 +175,7 @@ public sealed class AnalysisToolTests
                 Source = "test",
                 Subject = new ObjectRef("asset", "ASSET-001"),
                 Context = new Dictionary<string, string> { ["operation"] = "test" },
-                CorrelationId = correlationId,
+                ExecutionId = executionId,
                 Seq = sequence
             }
         };

@@ -107,7 +107,7 @@ public sealed class ChatFrameworkOpenAiModelClient : IModelClient
     {
         var roleInstruction = turn.Role switch
         {
-            AnalysisPerspectives.Process => "从工艺周期、状态变化和参数差异角度提出或复核可能原因。",
+            AnalysisPerspectives.Process => "从工艺过程、状态变化和参数差异角度提出或复核可能原因。",
             AnalysisPerspectives.Quality => "从检测结果、样本范围和质量关联角度提出或复核可能原因。",
             AnalysisPerspectives.Review => "主动寻找数据缺口、混杂因素、其他解释和需要复核的情况。",
             _ => "只复核当前生产记录，不扩大数据范围。"

@@ -35,7 +35,7 @@ Ingot 不是为了“多采一些点位”，也不是为了展示某一种算�
 - 系统已经自动发现确定根因；
 - 系统已经减少某个百分比的实验或研发时间；
 - 模型推荐等同于现场保证；
-- 一个成功参数点已经证明完整工艺窗口；
+- 一个成功参数点已经证明完整工艺操作域；
 - 一个场景的结果可以无条件迁移到其他场景。
 
 观察数据只能形成候选原因、稳定关联或证据不足的判断。因果结论必须经过工程判断和适当的对照、重复、区组或干预实验。
@@ -50,9 +50,9 @@ Ingot 不是为了“多采一些点位”，也不是为了展示某一种算�
 | 数据单位 | 运行 | run |
 | 观察结论 | 候选原因、稳定关联、混杂关联、证据不足 | candidate cause, stable association, confounded association, insufficient evidence |
 | 实验结论 | 支持、否决、不确定、已验证原因 | supported, rejected, inconclusive, validated cause |
-| 优化结果 | 下一步实验建议、候选设置、已验证工艺窗口 | next-experiment recommendation, candidate setting, validated process window |
+| 优化结果 | 下一步实验建议、候选设置、已验证工艺操作域 | next-experiment recommendation, candidate setting, validated operating region |
 
-“运行”是数据单位的唯一说法；“周期”在光学模压场景中与“运行”指同一件事，已不再作为并列术语使用，界面与文档均只用“运行”。
+“过程执行”是平台中的标准业务对象；面向工程师的简短文案可使用“运行”，但代码、接口和跨场景文档不使用特定设备的周期名称代替它。
 
 “根因”只在已经说明验证证据时使用。“AI 工艺研发”可以描述交互方式，但不能替代产品类别。具体算法名只出现在技术说明中，不作为产品价值本身。
 

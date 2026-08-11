@@ -168,11 +168,11 @@ app.MapGet("/", () => Results.Ok(new
         inspectionRecords = "/api/v1/inspection-records",
         inspectionTasks = "/api/v1/inspection-tasks",
         inspectionReviews = "/api/v1/inspection-reviews",
-        cycles = "/api/v1/cycles",
-        cycleComparisons = "/api/v1/cycle-comparisons/{correlationId}",
-        processWindowComparisons = "/api/v1/process-window-comparisons",
-        cycleAnalysisBackfills = "/api/v1/cycle-analysis-backfills",
-        cycleFeatureAggregates = "/api/v1/cycle-feature-aggregates",
+        executions = "/api/v1/process-executions",
+        executionComparisons = "/api/v1/execution-comparisons/{executionId}",
+        timeWindowComparisons = "/api/v1/time-window-comparisons",
+        executionAnalysisBackfills = "/api/v1/process-execution-analysis-backfills",
+        executionFeatureAggregates = "/api/v1/process-feature-aggregates",
             scenarioPackages = "/api/v1/scenario-packages",
             goldenQuestions = "/api/v1/golden-questions",
         processModels = "/api/v1/process-models",
@@ -221,8 +221,8 @@ Log.Logger.Information("    > Quality Plans: {0}/api/v1/inspection-plans", baseA
 Log.Logger.Information("    > Inspections:   {0}/api/v1/inspection-records", baseAddress);
 Log.Logger.Information("    > Quality Tasks: {0}/api/v1/inspection-tasks", baseAddress);
 Log.Logger.Information("    > Reviews:       {0}/api/v1/inspection-reviews", baseAddress);
-Log.Logger.Information("    > Cycles:        {0}/api/v1/cycles", baseAddress);
-Log.Logger.Information("    > Comparisons:   {0}/api/v1/cycle-comparisons/{{correlationId}}", baseAddress);
+Log.Logger.Information("    > ProcessExecutions:        {0}/api/v1/process-executions", baseAddress);
+Log.Logger.Information("    > Comparisons:   {0}/api/v1/execution-comparisons/{{executionId}}", baseAddress);
 Log.Logger.Information("    > Research:      {0}/api/v1/research-projects", baseAddress);
 Log.Logger.Information("    > Models:        {0}/api/v1/process-models", baseAddress);
 Log.Logger.Information("    > Knowledge:     {0}/api/v1/process-knowledge", baseAddress);

@@ -11,7 +11,7 @@ public abstract record EventFilter
     public string? EventType { get; init; }
     public string? SubjectType { get; init; }
     public string? SubjectId { get; init; }
-    public string? CorrelationId { get; init; }
+    public string? ExecutionId { get; init; }
     public DateTimeOffset? From { get; init; }
     public DateTimeOffset? To { get; init; }
     public int Limit { get; init; } = 100;

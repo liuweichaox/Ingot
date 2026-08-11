@@ -1,21 +1,21 @@
 CREATE TABLE IF NOT EXISTS research_experiment_runs (
   experiment_id UUID NOT NULL REFERENCES research_experiments(experiment_id) ON DELETE CASCADE,
-  run_key TEXT NOT NULL,
+  execution_key TEXT NOT NULL,
   sequence INTEGER NOT NULL,
   payload JSONB NOT NULL,
-  PRIMARY KEY (experiment_id, run_key),
+  PRIMARY KEY (experiment_id, execution_key),
   UNIQUE (experiment_id, sequence),
   CHECK (sequence > 0)
 );
 
-CREATE TABLE IF NOT EXISTS research_window_results (
-  window_id UUID NOT NULL REFERENCES research_process_windows(window_id) ON DELETE CASCADE,
+CREATE TABLE IF NOT EXISTS research_operating_region_results (
+  operating_region_id UUID NOT NULL REFERENCES research_operating_regions(operating_region_id) ON DELETE CASCADE,
   result_id UUID NOT NULL REFERENCES research_experiment_results(result_id),
-  PRIMARY KEY (window_id, result_id)
+  PRIMARY KEY (operating_region_id, result_id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_research_window_results_result
-  ON research_window_results(result_id, window_id);
+CREATE INDEX IF NOT EXISTS idx_research_operating_region_results_result
+  ON research_operating_region_results(result_id, operating_region_id);
 
 CREATE TABLE IF NOT EXISTS research_evidence (
   evidence_id UUID PRIMARY KEY,
@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS research_evidence (
     'analysis-run',
     'mechanism-model',
     'knowledge-source',
-    'process-window')),
+    'operating-region')),
   CHECK (content_hash ~ '^[0-9a-f]{64}$')
 );
 

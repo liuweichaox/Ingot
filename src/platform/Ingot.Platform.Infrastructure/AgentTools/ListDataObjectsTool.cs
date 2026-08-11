@@ -92,7 +92,6 @@ public sealed class ListDataObjectsTool(IChatDataObjectReader events) : IAnalysi
         => value switch
         {
             "equipment" => "设备",
-            "optical-molding-machine" => "光学成型设备",
             _ => value
         };
 }

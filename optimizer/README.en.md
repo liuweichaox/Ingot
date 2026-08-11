@@ -16,7 +16,7 @@ See the [system design](../docs/design.en.md) for boundaries and [analysis and o
 - A two-stage set-point-to-trajectory-to-quality surrogate
 - Safe derived features declared by versioned project configuration, with no hidden behavior selected by industry, equipment, or variable names
 - Safe-baseline local cold start, pending experiments, and idempotent batches
-- Historical pool replay that can select only real, unconsumed recipes
+- Historical pool replay that can select only real, unconsumed parameter settings
 - Stateless `POST /v1/suggestions` HTTP contract
 - Synthetic digital-twin demonstration
 
@@ -56,8 +56,8 @@ Local development uses `8110` by default to avoid the common `8100` port used by
 - a campaign with variables, weighted objectives, parameter and outcome constraints;
 - an optional versioned `derived_features` DAG using only bounded numeric operators;
 - the complete immutable observation snapshot;
-- measured process features, outcome-constraint measurements, and pending recipes;
-- optional candidate recipes;
+- measured process features, outcome-constraint measurements, and pending parameter settings;
+- optional candidate parameter settings;
 - top-k, seed, candidate-count, and posterior-sample settings.
 
 It returns recommended parameters, objective means and 95% intervals, predicted distance to specification, feasibility probability, acquisition value, model version, and rationale.
@@ -75,4 +75,4 @@ The .NET platform turns the returned batch into an ordinary `ResearchExperiment`
 
 ## Historical validation
 
-Use `replay_history_pool` for real history. It measures whether the model ranks successful recipes earlier among recipes that were actually run. It does not invent outcomes for untried recipes and cannot by itself prove prospective trial savings. Aggregate repeated recipes with a predefined statistical method before replay.
+Use `replay_history_pool` for real history. It measures whether the model ranks successful parameter settings earlier among parameter settings that were actually run. It does not invent outcomes for untried parameter settings and cannot by itself prove prospective trial savings. Aggregate repeated parameter settings with a predefined statistical method before replay.

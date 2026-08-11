@@ -8,7 +8,7 @@ public interface IInspectionReviewStore
 
     Task<StoreInspectionReviewResult> CreateAsync(
         CreateInspectionReviewRequest request,
-        string operationRunId,
+        string executionId,
         string reviewedBy,
         CancellationToken ct = default);
 
@@ -16,7 +16,7 @@ public interface IInspectionReviewStore
 
     Task<IReadOnlyList<InspectionReview>> QueryAsync(
         Guid? inspectionRecordId,
-        string? operationRunId,
+        string? executionId,
         int limit,
         CancellationToken ct = default);
 

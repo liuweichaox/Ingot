@@ -40,7 +40,7 @@ def test_history_pool_replay_only_selects_real_rows_without_reuse():
                 assert step["nearest_historical_candidate_distance"] == 0.0
 
 
-def test_history_pool_requires_aggregated_unique_recipes():
+def test_history_pool_requires_aggregated_unique_parameter_settings():
     history = [
         {"params": {"x": 0.2}, "outcomes": {"loss": 0.3}},
         {"params": {"x": 0.2}, "outcomes": {"loss": 0.2}},

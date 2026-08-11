@@ -81,7 +81,7 @@ public sealed class AcquisitionProbeService(
                     document.RootElement,
                     JsonAcquisitionOptionsFactory.Create(deployment),
                     deployment.Profile.Source,
-                    previousRecipeIdentity: null);
+                    previousProcessSpecificationIdentity: null);
             }
             catch (InvalidDataException)
             {
@@ -155,7 +155,7 @@ public sealed class AcquisitionProbeService(
                             snapshot.RootElement,
                             jsonOptions,
                             deployment.Profile.Source,
-                            previousRecipeIdentity: null,
+                            previousProcessSpecificationIdentity: null,
                             assembler.BuildTopicSnapshots(receivedAt));
                     }
                     catch (InvalidDataException)
@@ -351,7 +351,7 @@ public sealed class AcquisitionProbeService(
                 deployment,
                 values,
                 deployment.Profile.Source,
-                previousRecipeIdentity: null,
+                previousProcessSpecificationIdentity: null,
                 occurredAt: occurredAt);
             return true;
         }

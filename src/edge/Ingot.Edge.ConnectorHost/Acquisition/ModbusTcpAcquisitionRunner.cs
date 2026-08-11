@@ -21,7 +21,7 @@ public sealed class ModbusTcpAcquisitionRunner(
     {
         var connection = deployment.Profile.ModbusTcp
             ?? throw new InvalidOperationException("Modbus TCP 连接配置不能为空。");
-        string? currentRecipe = null;
+        string? currentProcessSpecification = null;
         var lifecycle = new AcquisitionLifecycleTracker();
         var sourceDeduplicator = new AcquisitionSourceDeduplicator();
         while (!ct.IsCancellationRequested)
@@ -62,14 +62,14 @@ public sealed class ModbusTcpAcquisitionRunner(
                             Convert.ToInt64(sourceTimestamp, System.Globalization.CultureInfo.InvariantCulture));
                     }
                     var mapped = ProtocolAcquisitionSnapshotMapper.Map(
-                        deployment, raw, normalizedSource, currentRecipe, occurredAt);
+                        deployment, raw, normalizedSource, currentProcessSpecification, occurredAt);
                     if (!sourceDeduplicator.ShouldEmit(mapped.Sample))
                     {
-                        currentRecipe = mapped.RecipeIdentity;
+                        currentProcessSpecification = mapped.ProcessSpecificationIdentity;
                         status.RecordSuccess(
                             configurationKey,
                             DateTimeOffset.UtcNow,
-                            currentRecipe,
+                            currentProcessSpecification,
                             incrementSample: false,
                             readDurationMs: System.Diagnostics.Stopwatch.GetElapsedTime(readStarted).TotalMilliseconds);
                         await Task.Delay(connection.PollIntervalMs, ct).ConfigureAwait(false);
@@ -80,12 +80,12 @@ public sealed class ModbusTcpAcquisitionRunner(
                         deployment.Profile.Lifecycle,
                         connection.PollIntervalMs);
                     await sink.EmitBatchAsync(events, ct).ConfigureAwait(false);
-                    status.RecordCycleState(configurationKey, lifecycle.IsRunActive);
-                    currentRecipe = mapped.RecipeIdentity;
+                    status.RecordProcessExecutionState(configurationKey, lifecycle.IsRunActive);
+                    currentProcessSpecification = mapped.ProcessSpecificationIdentity;
                     status.RecordSuccess(
                         configurationKey,
                         DateTimeOffset.UtcNow,
-                        currentRecipe,
+                        currentProcessSpecification,
                         readDurationMs: System.Diagnostics.Stopwatch.GetElapsedTime(readStarted).TotalMilliseconds);
                     await Task.Delay(connection.PollIntervalMs, ct).ConfigureAwait(false);
                 }
@@ -114,13 +114,13 @@ public sealed class ModbusTcpAcquisitionRunner(
             result[deployment.Profile.TimestampPath] = NormalizeAddress(
                 ParseSelector(deployment.Profile.TimestampPath), addressBase);
         }
-        if (deployment.Profile.Recipe is { } recipe)
+        if (deployment.Profile.ProcessSpecification is { } processSpecification)
         {
-            result[recipe.IdPath] = NormalizeAddress(ParseSelector(recipe.IdPath), addressBase);
-            result[recipe.VersionPath] = NormalizeAddress(ParseSelector(recipe.VersionPath), addressBase);
-            if (!string.IsNullOrWhiteSpace(recipe.NamePath))
-                result[recipe.NamePath] = NormalizeAddress(ParseSelector(recipe.NamePath), addressBase);
-            foreach (var mapping in recipe.ParameterMappings)
+            result[processSpecification.IdPath] = NormalizeAddress(ParseSelector(processSpecification.IdPath), addressBase);
+            result[processSpecification.VersionPath] = NormalizeAddress(ParseSelector(processSpecification.VersionPath), addressBase);
+            if (!string.IsNullOrWhiteSpace(processSpecification.NamePath))
+                result[processSpecification.NamePath] = NormalizeAddress(ParseSelector(processSpecification.NamePath), addressBase);
+            foreach (var mapping in processSpecification.ParameterMappings)
                 result[mapping.SourcePath] = NormalizeAddress(mapping, addressBase);
         }
         return result;
@@ -141,7 +141,7 @@ public sealed class ModbusTcpAcquisitionRunner(
     }
 
     /// <summary>
-    ///     标量选择器（上下文、配方、时间戳来源）的解析交给公共契约中的
+    ///     标量选择器（上下文、工艺规范、时间戳来源）的解析交给公共契约中的
     ///     <see cref="AcquisitionSelectors"/>，与平台保存配置时使用的是同一份规则。
     /// </summary>
     private static AcquisitionValueMapping ParseSelector(string selector)
@@ -262,9 +262,7 @@ public sealed class ModbusTcpAcquisitionRunner(
                 BinaryPrimitives.WriteUInt16BigEndian(bytes.AsSpan(index * 2, 2), ordered[index]);
         }
 
-        var type = mapping.SourceDataType == "auto"
-            ? registers.Length == 1 ? "uint16" : "float32"
-            : mapping.SourceDataType;
+        var type = mapping.SourceDataType;
         if (type == AcquisitionSelectors.BooleanDataType)
         {
             // 保持/输入寄存器取单个位。线圈与离散输入区不会走到这里，

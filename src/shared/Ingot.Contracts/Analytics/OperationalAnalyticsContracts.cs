@@ -41,7 +41,7 @@ public sealed record DataObjectPage
 }
 
 /// <summary>
-///     一条有效质量结果及其分析上下文。既可关联生产周期，也可关联运行段或时间窗口。
+///     一条有效质量结果及其分析上下文。既可关联生产过程执行，也可关联运行段或时间窗口。
 /// </summary>
 public sealed record QualityAnalysisRecord
 {
@@ -51,10 +51,10 @@ public sealed record QualityAnalysisRecord
     public required string SubjectType { get; init; }
     public required string SubjectId { get; init; }
     public required string QualityObjectId { get; init; }
-    public string? ProductSeries { get; init; }
+    public string? ProductFamilyCode { get; init; }
     public string? ProductCode { get; init; }
-    public string? RecipeId { get; init; }
-    public string? RecipeVersion { get; init; }
+    public string? ProcessSpecificationId { get; init; }
+    public string? ProcessSpecification { get; init; }
     public required string DefinitionCode { get; init; }
     public int DefinitionVersion { get; init; }
     public DateTimeOffset? ScopeFrom { get; init; }
@@ -69,7 +69,7 @@ public sealed record QualityAnalysisRecord
 
 public sealed record QualityAnalysisQuery
 {
-    public string? ProductSeries { get; init; }
+    public string? ProductFamilyCode { get; init; }
     public string? SubjectType { get; init; }
     public string? SubjectId { get; init; }
     public string? Outcome { get; init; }

@@ -102,7 +102,7 @@ const httpPolling = {
   capabilities: {
     sourceTimestamp: true,
     sequencePath: true,
-    recipeParametersPath: true,
+    parameterObjectPath: true,
     connectTimeout: true,
     reconnectDelay: true,
     perTopicMapping: false,
@@ -151,7 +151,7 @@ const mqtt = {
   capabilities: {
     sourceTimestamp: true,
     sequencePath: true,
-    recipeParametersPath: true,
+    parameterObjectPath: true,
     connectTimeout: false,
     reconnectDelay: true,
     perTopicMapping: true,
@@ -276,7 +276,7 @@ const opcUa = {
   capabilities: {
     sourceTimestamp: false,
     sequencePath: false,
-    recipeParametersPath: false,
+    parameterObjectPath: false,
     connectTimeout: true,
     reconnectDelay: true,
     perTopicMapping: false,
@@ -380,7 +380,7 @@ const modbusTcp = {
   capabilities: {
     sourceTimestamp: true,
     sequencePath: false,
-    recipeParametersPath: false,
+    parameterObjectPath: false,
     connectTimeout: true,
     reconnectDelay: true,
     perTopicMapping: false,
@@ -475,7 +475,7 @@ const melsecA1e = {
   capabilities: {
     sourceTimestamp: true,
     sequencePath: false,
-    recipeParametersPath: false,
+    parameterObjectPath: false,
     connectTimeout: true,
     reconnectDelay: true,
     perTopicMapping: false,
@@ -601,7 +601,7 @@ export function mergeServerCapabilities(serverCapabilities) {
       ...descriptor.capabilities,
       sourceTimestamp: Boolean(entry.supportsSourceTimestamp),
       sequencePath: Boolean(entry.supportsSequencePath),
-      recipeParametersPath: Boolean(entry.supportsRecipeParametersPath),
+      parameterObjectPath: Boolean(entry.supportsControlParametersPath),
       connectTimeout: Boolean(entry.supportsConnectTimeout),
       reconnectDelay: Boolean(entry.supportsReconnectDelay),
       perTopicMapping: Boolean(entry.supportsPerTopicMapping),

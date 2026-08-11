@@ -150,7 +150,7 @@ public class AcquisitionProfileValidatorTests
     }
 
     [Fact]
-    public void RecipeParametersPathIsNoLongerRequiredForRegisterProtocols()
+    public void ControlParametersPathIsNoLongerRequiredForRegisterProtocols()
     {
         var profile = Profile(AcquisitionProtocols.ModbusTcp, new AcquisitionValueMapping
         {
@@ -161,7 +161,7 @@ public class AcquisitionProfileValidatorTests
             SourceDataType = "int16"
         }) with
         {
-            Recipe = new AcquisitionRecipeMapping
+            ProcessSpecification = new AcquisitionProcessSpecificationMapping
             {
                 IdPath = "holding-register:200:uint16",
                 VersionPath = "holding-register:201:uint16"
@@ -169,7 +169,7 @@ public class AcquisitionProfileValidatorTests
         };
         Assert.True(AcquisitionProfileValidator.TryValidate(profile, null, out var normalized, out var errors),
             string.Join("；", errors));
-        Assert.Equal(".", normalized!.Recipe!.ParametersPath);
+        Assert.Equal(".", normalized!.ProcessSpecification!.ParametersPath);
     }
 
     [Fact]

@@ -4,14 +4,14 @@
   "occurredAt": { "column": "time", "format": "yyyy-MM-dd HH:mm:ss", "utcOffset": "+08:00" },
   "subjectType": { "value": "asset" },
   "subjectId": { "column": "machine" },
-  "correlationId": { "column": "cycle_id" },
+  "executionId": { "column": "execution_id" },
   "context": {
     "product_code": { "column": "product" },
-    "recipe_id": { "column": "recipe" },
-    "recipe_step": { "column": "step" },
-    "mold_id": { "column": "mold" },
+    "process_specification_id": { "column": "recipe" },
+    "stage_number": { "column": "step" },
+    "tooling_assembly_id": { "column": "mold" },
     "mold_shot_count": { "column": "shot_count" },
-    "workpiece_id": { "column": "workpiece" }
+    "output_item_id": { "column": "workpiece" }
   },
   "values": {
     "mold_temp_upper": { "column": "t_upper", "type": "number" },

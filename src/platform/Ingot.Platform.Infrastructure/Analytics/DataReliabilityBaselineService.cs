@@ -1,6 +1,6 @@
 using Ingot.Contracts.Analytics;
 using Ingot.Contracts.Events;
-using Ingot.Platform.Infrastructure.Cycles;
+using Ingot.Platform.Infrastructure.ProcessExecutions;
 using Ingot.Platform.Infrastructure.Events;
 using Ingot.Platform.Infrastructure.ProcessResearch;
 
@@ -15,7 +15,7 @@ public interface IDataReliabilityBaselineService
 
 public sealed class DataReliabilityBaselineService(
     IPlatformEventStore events,
-    ICycleComparisonService cycles,
+    IExecutionComparisonService executions,
     ResearchContextAdmissionEvaluator? contextAdmission = null) : IDataReliabilityBaselineService
 {
     private readonly ResearchContextAdmissionEvaluator _contextAdmission =
@@ -25,11 +25,11 @@ public sealed class DataReliabilityBaselineService(
     [
         "context_capture_status",
         "equipment_id",
-        "operation_run_id",
+        "execution_id",
         "material_lot_ref",
         "material_specification",
-        "tooling_id",
-        "mold_id",
+        "tooling_assembly_id",
+        "tooling_assembly_id",
         "assembly_revision_id",
         "tooling_usage_count",
         "maintenance_status",
@@ -38,12 +38,12 @@ public sealed class DataReliabilityBaselineService(
         "calibration_valid_until"
     ];
 
-    private static readonly string[] RequiredContextFields = ["equipment_id", "operation_run_id"];
+    private static readonly string[] RequiredContextFields = ["equipment_id", "execution_id"];
 
     private static readonly (string Field, string Name)[] ContextFactors =
     [
         ("equipment_id", "设备"),
-        ("tooling_id", "工装"),
+        ("tooling_assembly_id", "工装"),
         ("material_lot_ref", "材料批次")
     ];
 
@@ -59,24 +59,24 @@ public sealed class DataReliabilityBaselineService(
         var maximumRuns = Math.Clamp(query.MaximumRuns, 1, 5000);
         var completedEvents = await QueryAllAsync(new PlatformEventQuery
         {
-            EventType = "cycle.completed",
+            EventType = "process.execution.completed",
             EdgeId = Normalize(query.EdgeId),
             SubjectId = Normalize(query.EquipmentId),
             From = query.From,
             To = query.To
         }, ct).ConfigureAwait(false);
         var matchingIds = completedEvents
-            .Where(static item => !string.IsNullOrWhiteSpace(item.Event.CorrelationId))
-            .GroupBy(static item => item.Event.CorrelationId!, StringComparer.Ordinal)
+            .Where(static item => !string.IsNullOrWhiteSpace(item.Event.ExecutionId))
+            .GroupBy(static item => item.Event.ExecutionId!, StringComparer.Ordinal)
             .Select(static group => group.OrderByDescending(static item => item.Event.OccurredAt).First())
             .OrderByDescending(static item => item.Event.OccurredAt)
-            .Select(static item => item.Event.CorrelationId!)
+            .Select(static item => item.Event.ExecutionId!)
             .ToArray();
         var selectedIds = matchingIds.Take(maximumRuns).ToArray();
-        var cycleMap = await cycles.GetCyclesAsync(selectedIds, ct).ConfigureAwait(false);
+        var executionMap = await executions.GetProcessExecutionsAsync(selectedIds, ct).ConfigureAwait(false);
         var rows = selectedIds
-            .Where(cycleMap.ContainsKey)
-            .Select(id => cycleMap[id])
+            .Where(executionMap.ContainsKey)
+            .Select(id => executionMap[id])
             .ToArray();
 
         var denominator = rows.Length;
@@ -125,19 +125,19 @@ public sealed class DataReliabilityBaselineService(
             Rates =
             [
                 Rate("lifecycle_completeness", "运行生命周期完整率", lifecycleComplete, denominator,
-                    "同时存在 cycle.started 与 cycle.completed 的运行 / 已分析运行。"),
+                    "同时存在 process.execution.started 与 process.execution.completed 的运行 / 已分析运行。"),
                 Rate("process_data_completeness", "过程数据完整率", processComplete, denominator,
                     "过程数据状态为 available 的运行 / 已分析运行；degraded 不计为完整。"),
                 Rate("process_data_usability", "过程数据可用率", processUsable, denominator,
                     "过程数据状态不是 unavailable 的运行 / 已分析运行。"),
                 Rate("actual_parameter_coverage", "实际参数覆盖率", actualParameters, denominator,
-                    "存在 recipe.applied 现场实际参数回读的运行 / 已分析运行；不使用配方计划值。"),
+                    "存在 process.specification.applied 现场实际参数回读的运行 / 已分析运行；不使用工艺规范计划值。"),
                 Rate("actual_parameter_unit_completeness", "实际参数单位完整率", parameterUnits, denominator,
                     "全部实际参数具有明确单位的运行 / 已分析运行。"),
                 Rate("context_capture_integrity", "生产上下文捕获可信率", contextIntegrity, denominator,
                     "上下文未标记为 configuration_missing 或其他无效捕获状态的运行 / 已分析运行。"),
                 Rate("minimal_context_coverage", "最小上下文覆盖率", minimalContext, denominator,
-                    "上下文捕获有效且同时包含 equipment_id 与 operation_run_id 的运行 / 已分析运行。"),
+                    "上下文捕获有效且同时包含 equipment_id 与 execution_id 的运行 / 已分析运行。"),
                 Rate("run_quality_association", "运行—质量关联率", qualityLinked, denominator,
                     "至少关联一条有效检验结果的运行 / 已分析运行。"),
                 Rate("analysis_admission", "正式分析准入率", eligible, denominator,
@@ -206,18 +206,18 @@ public sealed class DataReliabilityBaselineService(
         return result;
     }
 
-    private static bool HasActualParameters(CycleComparisonRow row)
-        => row.RecipeParameters.Count > 0;
+    private static bool HasActualParameters(ExecutionComparisonRow row)
+        => row.ControlParameters.Count > 0;
 
-    private static bool HasCompleteActualParameterUnits(CycleComparisonRow row)
+    private static bool HasCompleteActualParameterUnits(ExecutionComparisonRow row)
         => HasActualParameters(row) &&
-           row.RecipeParameters.All(static value => !string.IsNullOrWhiteSpace(value.Unit));
+           row.ControlParameters.All(static value => !string.IsNullOrWhiteSpace(value.Unit));
 
-    private bool HasMinimalContext(CycleComparisonRow row)
+    private bool HasMinimalContext(ExecutionComparisonRow row)
         => _contextAdmission.Evaluate(row.Context, null).Admitted &&
            RequiredContextFields.All(field => HasContext(row, field));
 
-    private static bool HasContext(CycleComparisonRow row, string field)
+    private static bool HasContext(ExecutionComparisonRow row, string field)
     {
         if (string.Equals(field, "material_lot_ref", StringComparison.Ordinal))
         {
@@ -231,7 +231,7 @@ public sealed class DataReliabilityBaselineService(
     }
 
     private static IReadOnlyList<ContextFactorSummary> BuildFactorSummaries(
-        IReadOnlyList<CycleComparisonRow> rows)
+        IReadOnlyList<ExecutionComparisonRow> rows)
         => ContextFactors.Select(factor =>
         {
             var populated = rows
@@ -259,7 +259,7 @@ public sealed class DataReliabilityBaselineService(
 
     private static ContextFactorLevelSummary BuildFactorLevel(
         string value,
-        IReadOnlyList<CycleComparisonRow> rows)
+        IReadOnlyList<ExecutionComparisonRow> rows)
     {
         var durations = rows
             .Where(static row => row.CompletedAt.HasValue && row.CompletedAt > row.StartedAt)
@@ -280,7 +280,7 @@ public sealed class DataReliabilityBaselineService(
     }
 
     private static IReadOnlyList<ContextFactorOverlap> BuildFactorOverlaps(
-        IReadOnlyList<CycleComparisonRow> rows)
+        IReadOnlyList<ExecutionComparisonRow> rows)
     {
         var result = new List<ContextFactorOverlap>();
         for (var leftIndex = 0; leftIndex < ContextFactors.Length; leftIndex++)
@@ -331,15 +331,15 @@ public sealed class DataReliabilityBaselineService(
         return result;
     }
 
-    private static string? ResolveFactor(CycleComparisonRow row, string field)
+    private static string? ResolveFactor(ExecutionComparisonRow row, string field)
     {
         string? value = field switch
         {
             "equipment_id" => ProcessConfiguration.ProcessAnalysisResolver.ContextValue(
-                                  row.Context, "equipment_id") ?? row.MachineId,
-            "tooling_id" => ProcessConfiguration.ProcessAnalysisResolver.ContextValue(
-                                row.Context, "tooling_id") ??
-                            ProcessConfiguration.ProcessAnalysisResolver.ContextValue(row.Context, "mold_id"),
+                                  row.Context, "equipment_id") ?? row.EquipmentId,
+            "tooling_assembly_id" => ProcessConfiguration.ProcessAnalysisResolver.ContextValue(
+                                row.Context, "tooling_assembly_id") ??
+                            ProcessConfiguration.ProcessAnalysisResolver.ContextValue(row.Context, "tooling_assembly_id"),
             "material_lot_ref" => ProcessConfiguration.ProcessAnalysisResolver.ContextValue(
                                       row.Context, "material_lot_ref") ??
                                   ProcessConfiguration.ProcessAnalysisResolver.ContextValue(row.Context, "material_lot"),
@@ -348,7 +348,7 @@ public sealed class DataReliabilityBaselineService(
         return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
     }
 
-    private static string? QualityOutcome(CycleComparisonRow row)
+    private static string? QualityOutcome(ExecutionComparisonRow row)
         => row.InspectionOutcomes.Contains("FAIL", StringComparer.OrdinalIgnoreCase)
             ? "FAIL"
             : row.InspectionOutcomes.Contains("INCONCLUSIVE", StringComparer.OrdinalIgnoreCase)

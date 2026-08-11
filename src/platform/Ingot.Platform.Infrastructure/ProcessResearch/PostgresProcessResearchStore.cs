@@ -244,11 +244,11 @@ public sealed class PostgresProcessResearchStore : IProcessResearchStore, IAsync
             addRun.Transaction = transaction;
             addRun.CommandText =
                 """
-                INSERT INTO research_experiment_runs(experiment_id, run_key, sequence, payload)
+                INSERT INTO research_experiment_runs(experiment_id, execution_key, sequence, payload)
                 VALUES ($1, $2, $3, $4)
                 """;
             addRun.Parameters.AddWithValue(value.ExperimentId);
-            addRun.Parameters.AddWithValue(run.RunKey);
+            addRun.Parameters.AddWithValue(run.ExecutionKey);
             addRun.Parameters.AddWithValue(run.Sequence);
             AddJson(addRun, run);
             await addRun.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
@@ -300,11 +300,11 @@ public sealed class PostgresProcessResearchStore : IProcessResearchStore, IAsync
             addRun.Transaction = transaction;
             addRun.CommandText =
                 """
-                INSERT INTO research_experiment_runs(experiment_id, run_key, sequence, payload)
+                INSERT INTO research_experiment_runs(experiment_id, execution_key, sequence, payload)
                 VALUES ($1, $2, $3, $4)
                 """;
             addRun.Parameters.AddWithValue(updatedExperiment.ExperimentId);
-            addRun.Parameters.AddWithValue(run.RunKey);
+            addRun.Parameters.AddWithValue(run.ExecutionKey);
             addRun.Parameters.AddWithValue(run.Sequence);
             AddJson(addRun, run);
             await addRun.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
@@ -341,7 +341,7 @@ public sealed class PostgresProcessResearchStore : IProcessResearchStore, IAsync
 
     public async Task<ResearchShadowRecommendation?> GetShadowRecommendationBySuggestionAsync(
         Guid experimentId,
-        string suggestionRunKey,
+        string suggestionExecutionKey,
         CancellationToken ct = default)
     {
         await using var connection = await _dataSource.OpenConnectionAsync(ct).ConfigureAwait(false);
@@ -350,10 +350,10 @@ public sealed class PostgresProcessResearchStore : IProcessResearchStore, IAsync
             """
             SELECT payload
             FROM research_shadow_recommendations
-            WHERE experiment_id = $1 AND suggestion_run_key = $2
+            WHERE experiment_id = $1 AND suggestion_execution_key = $2
             """;
         command.Parameters.AddWithValue(experimentId);
-        command.Parameters.AddWithValue(suggestionRunKey);
+        command.Parameters.AddWithValue(suggestionExecutionKey);
         var payload = await command.ExecuteScalarAsync(ct).ConfigureAwait(false);
         return payload is null or DBNull
             ? null
@@ -383,15 +383,15 @@ public sealed class PostgresProcessResearchStore : IProcessResearchStore, IAsync
         command.CommandText =
             """
             INSERT INTO research_shadow_recommendations
-              (recommendation_id, project_id, experiment_id, suggestion_run_key,
-               actual_run_key, decision, payload, decided_at)
+              (recommendation_id, project_id, experiment_id, suggestion_execution_key,
+               actual_execution_key, decision, payload, decided_at)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             """;
         command.Parameters.AddWithValue(value.RecommendationId);
         command.Parameters.AddWithValue(value.ProjectId);
         command.Parameters.AddWithValue(value.ExperimentId);
-        command.Parameters.AddWithValue(value.SuggestionRunKey);
-        command.Parameters.AddWithValue(value.ActualRunKey);
+        command.Parameters.AddWithValue(value.SuggestionExecutionKey);
+        command.Parameters.AddWithValue(value.ActualExecutionKey);
         command.Parameters.AddWithValue(value.Decision);
         AddJson(command, value);
         command.Parameters.AddWithValue(value.DecidedAt);
@@ -606,15 +606,15 @@ public sealed class PostgresProcessResearchStore : IProcessResearchStore, IAsync
         await using var command = _dataSource.CreateCommand(
             """
             INSERT INTO research_transfer_assessments
-              (assessment_id, project_id, source_project_id, source_window_id,
+              (assessment_id, project_id, source_project_id, source_operating_region_id,
                status, outcome, record_hash, payload, created_at, reviewed_at)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NULL)
-            ON CONFLICT (project_id, source_window_id, record_hash) DO NOTHING
+            ON CONFLICT (project_id, source_operating_region_id, record_hash) DO NOTHING
             """);
         command.Parameters.AddWithValue(value.AssessmentId);
         command.Parameters.AddWithValue(value.ProjectId);
         command.Parameters.AddWithValue(value.SourceProjectId);
-        command.Parameters.AddWithValue(value.SourceWindowId);
+        command.Parameters.AddWithValue(value.SourceOperatingRegionId);
         command.Parameters.AddWithValue(value.Status);
         command.Parameters.AddWithValue(value.Outcome);
         command.Parameters.AddWithValue(value.RecordHash);
@@ -623,7 +623,7 @@ public sealed class PostgresProcessResearchStore : IProcessResearchStore, IAsync
         if (await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false) == 1)
             return value;
         return (await ListTransferAssessmentsAsync(value.ProjectId, ct).ConfigureAwait(false))
-               .First(item => item.SourceWindowId == value.SourceWindowId &&
+               .First(item => item.SourceOperatingRegionId == value.SourceOperatingRegionId &&
                               item.RecordHash == value.RecordHash);
     }
 
@@ -803,29 +803,29 @@ public sealed class PostgresProcessResearchStore : IProcessResearchStore, IAsync
         }
     }
 
-    public Task<ResearchProcessWindow?> GetProcessWindowAsync(
-        Guid windowId,
+    public Task<ResearchOperatingRegion?> GetOperatingRegionAsync(
+        Guid operatingRegionId,
         CancellationToken ct = default)
-        => GetOneAsync<ResearchProcessWindow>(
-            "SELECT payload FROM research_process_windows WHERE window_id = $1",
-            windowId,
+        => GetOneAsync<ResearchOperatingRegion>(
+            "SELECT payload FROM research_operating_regions WHERE operating_region_id = $1",
+            operatingRegionId,
             ct);
 
-    public Task<IReadOnlyList<ResearchProcessWindow>> ListProcessWindowsAsync(
+    public Task<IReadOnlyList<ResearchOperatingRegion>> ListOperatingRegionsAsync(
         Guid projectId,
         CancellationToken ct = default)
-        => ListAsync<ResearchProcessWindow>(
+        => ListAsync<ResearchOperatingRegion>(
             """
             SELECT payload
-            FROM research_process_windows
+            FROM research_operating_regions
             WHERE project_id = $1
-            ORDER BY updated_at DESC, window_id
+            ORDER BY updated_at DESC, operating_region_id
             """,
             projectId,
             ct);
 
-    public async Task<ResearchProcessWindow> SaveProcessWindowAsync(
-        ResearchProcessWindow value,
+    public async Task<ResearchOperatingRegion> SaveOperatingRegionAsync(
+        ResearchOperatingRegion value,
         CancellationToken ct = default)
     {
         await using var connection = await _dataSource.OpenConnectionAsync(ct).ConfigureAwait(false);
@@ -834,15 +834,15 @@ public sealed class PostgresProcessResearchStore : IProcessResearchStore, IAsync
         command.Transaction = transaction;
         command.CommandText =
             """
-            INSERT INTO research_process_windows
-              (window_id, project_id, status, payload, created_at, updated_at)
+            INSERT INTO research_operating_regions
+              (operating_region_id, project_id, status, payload, created_at, updated_at)
             VALUES ($1, $2, $3, $4, $5, $6)
-            ON CONFLICT (window_id) DO UPDATE SET
+            ON CONFLICT (operating_region_id) DO UPDATE SET
               status = EXCLUDED.status,
               payload = EXCLUDED.payload,
               updated_at = EXCLUDED.updated_at
             """;
-        command.Parameters.AddWithValue(value.WindowId);
+        command.Parameters.AddWithValue(value.OperatingRegionId);
         command.Parameters.AddWithValue(value.ProjectId);
         command.Parameters.AddWithValue(value.Status);
         AddJson(command, value);
@@ -851,8 +851,8 @@ public sealed class PostgresProcessResearchStore : IProcessResearchStore, IAsync
         await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
         await using var deleteLinks = connection.CreateCommand();
         deleteLinks.Transaction = transaction;
-        deleteLinks.CommandText = "DELETE FROM research_window_results WHERE window_id = $1";
-        deleteLinks.Parameters.AddWithValue(value.WindowId);
+        deleteLinks.CommandText = "DELETE FROM research_operating_region_results WHERE operating_region_id = $1";
+        deleteLinks.Parameters.AddWithValue(value.OperatingRegionId);
         await deleteLinks.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
         foreach (var resultId in value.SupportingResultIds)
         {
@@ -860,18 +860,18 @@ public sealed class PostgresProcessResearchStore : IProcessResearchStore, IAsync
             addLink.Transaction = transaction;
             addLink.CommandText =
                 """
-                INSERT INTO research_window_results(window_id, result_id)
+                INSERT INTO research_operating_region_results(operating_region_id, result_id)
                 VALUES ($1, $2)
                 """;
-            addLink.Parameters.AddWithValue(value.WindowId);
+            addLink.Parameters.AddWithValue(value.OperatingRegionId);
             addLink.Parameters.AddWithValue(resultId);
             await addLink.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
         }
         await SyncEvidenceAsync(
             connection,
             transaction,
-            "process-window",
-            value.WindowId.ToString(),
+            "operating-region",
+            value.OperatingRegionId.ToString(),
             value.Evidence,
             ct).ConfigureAwait(false);
         await transaction.CommitAsync(ct).ConfigureAwait(false);

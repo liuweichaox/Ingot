@@ -5,14 +5,14 @@ using Microsoft.Extensions.Logging;
 namespace Ingot.Platform.Infrastructure.ProcessResearch;
 
 /// <summary>
-///     周期、实际配方和检验结果到齐后自动固化实验结果并关闭实验。
+///     过程执行、实际工艺规范和检验结果到齐后自动固化实验结果并关闭实验。
 ///     它不批准实验、不启动设备，也不绕过人工安全边界。
 /// </summary>
 public sealed class ResearchExperimentAutomationHostedService(
     IProcessResearchStore store,
     IResearchObservationAssembler observationAssembler,
     ResearchExperimentResultMaterializer materializer,
-    ResearchProcessWindowMaterializer windowMaterializer,
+    ResearchOperatingRegionMaterializer operatingRegionMaterializer,
     ILogger<ResearchExperimentAutomationHostedService> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -79,7 +79,7 @@ public sealed class ResearchExperimentAutomationHostedService(
                     }
                 }
 
-                var coveredResultIds = (await store.ListProcessWindowsAsync(project.ProjectId, ct)
+                var coveredResultIds = (await store.ListOperatingRegionsAsync(project.ProjectId, ct)
                         .ConfigureAwait(false))
                     .SelectMany(static value => value.SupportingResultIds)
                     .ToHashSet();
@@ -91,7 +91,7 @@ public sealed class ResearchExperimentAutomationHostedService(
                                  value.ExperimentId == experiment.ExperimentId &&
                                  !coveredResultIds.Contains(value.ResultId)))
                     {
-                        await windowMaterializer.MaterializeCandidateAsync(
+                        await operatingRegionMaterializer.MaterializeCandidateAsync(
                             project,
                             experiment,
                             result,

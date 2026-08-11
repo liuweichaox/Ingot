@@ -103,9 +103,9 @@ public sealed class HttpEventShipperTests
 
     private static ProductionEvent CreateEvent(long seq) =>
         ProductionEvent.Create(
-            "cycle.completed",
+            "process.execution.completed",
             DateTimeOffset.UtcNow,
-            "edge/EDGE-001/PLC-01/cycle",
+            "edge/EDGE-001/PLC-01/execution",
             new ObjectRef("equipment", "EQ-01"),
             Guid.NewGuid().ToString()) with
         {

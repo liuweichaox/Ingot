@@ -7,14 +7,14 @@ namespace Ingot.Core.Tests.Edge;
 public sealed class HttpPollingSnapshotMapperTests
 {
     [Fact]
-    public void Map_UsesConfiguredFieldsAndEmitsRecipeOnlyWhenChanged()
+    public void Map_UsesConfiguredFieldsAndEmitsProcessSpecificationOnlyWhenChanged()
     {
         using var document = JsonDocument.Parse("""
             {
               "timestamp": "2026-07-22T10:00:00Z",
               "sequence": 42,
-              "productSeries": "SHAFT-20",
-              "activeRecipe": {
+              "productFamilyCode": "SHAFT-20",
+              "activeProcessSpecification": {
                 "id": "HT-860",
                 "version": 3,
                 "name": "标准工艺",
@@ -39,18 +39,18 @@ public sealed class HttpPollingSnapshotMapperTests
             document.RootElement,
             options,
             "edge/EDGE-001/connector/furnace",
-            first.RecipeIdentity);
+            first.ProcessSpecificationIdentity);
 
-        Assert.Equal("HT-860@3", first.RecipeIdentity);
-        Assert.NotNull(first.RecipeApplied);
-        Assert.Null(second.RecipeApplied);
-        Assert.IsType<long>(first.RecipeApplied.Data["recipeVersion"]);
+        Assert.Equal("HT-860@3", first.ProcessSpecificationIdentity);
+        Assert.NotNull(first.ProcessSpecificationApplied);
+        Assert.Null(second.ProcessSpecificationApplied);
+        Assert.IsType<long>(first.ProcessSpecificationApplied.Data["processSpecificationVersion"]);
         var parameters = Assert.IsAssignableFrom<IReadOnlyDictionary<string, object?>>(
-            first.RecipeApplied.Data["resolvedParameters"]);
+            first.ProcessSpecificationApplied.Data["resolvedParameters"]);
         Assert.IsType<double>(parameters["temperature.target"]);
         Assert.IsType<bool>(parameters["protective_gas.enabled"]);
-        Assert.Equal("SHAFT-20", first.Sample.Context["product_series"]);
-        Assert.Equal("HT-860", first.Sample.Context["recipe_id"]);
+        Assert.Equal("SHAFT-20", first.Sample.Context["product_family_code"]);
+        Assert.Equal("HT-860", first.Sample.Context["process_specification_id"]);
         var values = Assert.IsAssignableFrom<IReadOnlyDictionary<string, object?>>(first.Sample.Data["values"]);
         Assert.IsType<double>(values["furnace.temperature"]);
         Assert.IsType<long>(values["fan.speed"]);
@@ -65,8 +65,8 @@ public sealed class HttpPollingSnapshotMapperTests
             {
               "timestamp": "2026-07-22T10:00:00Z",
               "sequence": 42,
-              "productSeries": "SHAFT-20",
-              "activeRecipe": {
+              "productFamilyCode": "SHAFT-20",
+              "activeProcessSpecification": {
                 "id": "HT-860",
                 "version": 3,
                 "parameters": {}
@@ -91,7 +91,7 @@ public sealed class HttpPollingSnapshotMapperTests
         SubjectId = "FURNACE-001",
         ContextFields =
         [
-            new ContextFieldMapping { SourcePath = "productSeries", Key = "product_series", Required = true }
+            new ContextFieldMapping { SourcePath = "productFamilyCode", Key = "product_family_code", Required = true }
         ],
         Fields =
         [
@@ -100,12 +100,12 @@ public sealed class HttpPollingSnapshotMapperTests
             new ValueFieldMapping { SourcePath = "sensors.加热器开启", Code = "heater.enabled", DataType = "boolean" },
             new ValueFieldMapping { SourcePath = "sensors.运行模式", Code = "operation.mode", DataType = "string" }
         ],
-        Recipe = new RecipeFieldMapping
+        ProcessSpecification = new ProcessSpecificationFieldMapping
         {
-            IdPath = "activeRecipe.id",
-            VersionPath = "activeRecipe.version",
-            NamePath = "activeRecipe.name",
-            ParametersPath = "activeRecipe.parameters",
+            IdPath = "activeProcessSpecification.id",
+            VersionPath = "activeProcessSpecification.version",
+            NamePath = "activeProcessSpecification.name",
+            ParametersPath = "activeProcessSpecification.parameters",
             ParameterFields =
             [
                 new ValueFieldMapping { SourcePath = "目标温度℃", Code = "temperature.target" },

@@ -32,7 +32,7 @@ const copy = {
     parameters: [
       ["实际控制变量", "42.0", ""],
       ["阶段轨迹偏差", "+1.8", "σ"],
-      ["工装版本", "MOLD-A", ""],
+      ["工装版本", "TOOLING-A", ""],
     ],
     predictions: [
       ["候选判断", "需要验证"],
@@ -46,7 +46,7 @@ const copy = {
     productCards: [
       ["01", "工艺定义", "明确产品、设备、变量、单位、质量目标和安全边界，让计算机知道工程问题是什么。"],
       ["02", "设备接入", "把控制系统、仪器、视觉、检验和业务数据映射成稳定、版本化的工艺语义。"],
-      ["03", "生产采集", "按真实运行记录实际配方、阶段轨迹、材料、工装和其他生产上下文。"],
+      ["03", "生产采集", "按过程执行记录实际控制参数、阶段轨迹、材料、工装和其他生产上下文。"],
       ["04", "数据闭环", "检查缺失、时间、单位和来源，将质量结果唯一关联到同一次运行。"],
       ["05", "工艺追因", "比较可比运行，形成带证据、反证、混杂边界和验证建议的候选原因。"],
       ["06", "工艺优化", "通过受控实验验证候选，并在工程师批准的边界内选择更有价值的下一步。"],
@@ -76,9 +76,9 @@ const copy = {
     engineFeatures: ["数据质量", "稳健统计", "DOE 与区组", "混合效应", "GP / BO", "机理与 LLM"],
     archKicker: "ONE EVIDENCE SPINE",
     archTitle: "所有模块围绕同一次真实运行，不建立平行真相。",
-    archText: "Cycles 定义运行，Manufacturing 保存生产条件，Inspections 保存结果，Research 组织工程判断和实验。Optimizer 与 Agent 读取同一份受版本控制的证据。",
+    archText: "Process Executions 定义执行边界，Manufacturing 保存生产条件，Inspections 保存结果，Research 组织工程判断和实验。Optimizer 与 Agent 读取同一份受版本控制的证据。",
     layers: [
-      ["现场事实", "Runs · context · inspections", "设备、产品、配方、材料、工装、轨迹和质量结果"],
+      ["现场事实", "Executions · context · inspections", "设备、产品、工艺规范、材料、工装、轨迹和质量结果"],
       ["证据主干", "Identity · provenance · versions", "稳定关联每次运行，保留缺失、来源、单位和内容哈希"],
       ["方法工具", "Statistics · DOE · ML · BO", "按问题和数据条件选择可复核的分析与实验方法"],
       ["工程决策", "Review · execute · validate", "工程师审核建议、执行实验并确认结论适用范围"],
@@ -93,7 +93,7 @@ const copy = {
     ],
     openKicker: "RUN IT YOURSELF",
     openTitle: "开放完整数据与决策闭环，而不只是算法样例。",
-    openText: "MIT 许可。现场采集、生产上下文、周期、检验、研发实验、数值服务、工程师工作台和双语文档位于同一仓库。代码能力与真实收益明确分开，真实价值通过历史回放、影子建议和受控在线实验验证。",
+    openText: "MIT 许可。现场采集、生产上下文、过程执行、检验、研发实验、数值服务、工程师工作台和双语文档位于同一仓库。代码能力与真实收益明确分开，真实价值通过历史回放、影子建议和受控在线实验验证。",
     command: "git clone https://github.com/liuweichaox/Ingot.git\ncd Ingot\ncp .env.example .env\ndocker compose -f docker-compose.app.yml up -d --build",
     readDocs: "阅读快速开始",
     contribute: "参与贡献",
@@ -130,7 +130,7 @@ const copy = {
     parameters: [
       ["Actual control", "42.0", ""],
       ["Stage deviation", "+1.8", "σ"],
-      ["Tooling revision", "MOLD-A", ""],
+      ["Tooling revision", "TOOLING-A", ""],
     ],
     predictions: [
       ["Candidate judgment", "Needs validation"],
@@ -144,7 +144,7 @@ const copy = {
     productCards: [
       ["01", "Define the process", "Declare products, equipment, variables, units, quality objectives, and safety boundaries so the computer understands the question."],
       ["02", "Connect equipment", "Map controls, instruments, vision, inspection, and business data to stable, versioned process semantics."],
-      ["03", "Collect production data", "Record actual recipes, stage trajectories, material, tooling, and other manufacturing context for each real run."],
+      ["03", "Collect production data", "Record actual control parameters, stage trajectories, material, tooling, and other manufacturing context for each process execution."],
       ["04", "Close the data loop", "Check missingness, time, units, and provenance, then link quality outcomes uniquely to the same run."],
       ["05", "Diagnose the process", "Compare like-for-like runs and form candidates with evidence, counterevidence, confounding limits, and validation advice."],
       ["06", "Process optimization", "Validate candidates through controlled experiments and choose more valuable next steps inside engineer-approved boundaries."],
@@ -174,9 +174,9 @@ const copy = {
     engineFeatures: ["Data quality", "Robust statistics", "DOE and blocking", "Mixed effects", "GP / BO", "Physics and LLMs"],
     archKicker: "ONE EVIDENCE SPINE",
     archTitle: "Every module describes the same real run—never a parallel truth.",
-    archText: "Cycles define runs, Manufacturing preserves conditions, Inspections preserve outcomes, and Research organizes engineering judgment and experiments. Optimizer and Agent read the same versioned evidence.",
+    archText: "Process Executions define execution boundaries, Manufacturing preserves conditions, Inspections preserve outcomes, and Research organizes engineering judgment and experiments. Optimizer and Agent read the same versioned evidence.",
     layers: [
-      ["FIELD FACTS", "Runs · context · inspections", "Equipment, product, recipe, material, tooling, trajectory, and quality outcomes"],
+      ["FIELD FACTS", "Executions · context · inspections", "Equipment, product, process specification, material, tooling, trajectory, and quality outcomes"],
       ["EVIDENCE SPINE", "Identity · provenance · versions", "Stable run linkage with visible missingness, sources, units, and content hashes"],
       ["METHOD TOOLBOX", "Statistics · DOE · ML · BO", "Reviewable analysis and experiment methods selected by question and data"],
       ["ENGINEERING DECISION", "Review · execute · validate", "Engineers review recommendations, execute experiments, and confirm applicability"],
@@ -191,7 +191,7 @@ const copy = {
     ],
     openKicker: "RUN IT YOURSELF",
     openTitle: "The complete data-to-decision loop, not just an algorithm sample.",
-    openText: "MIT licensed. Field acquisition, manufacturing context, cycles, inspections, R&D experiments, numerical services, the engineering workbench, and bilingual documentation live in one repository. Code capability is separated from proven benefit, which requires replay, shadow recommendations, and controlled online experiments.",
+    openText: "MIT licensed. Field acquisition, manufacturing context, process executions, inspections, R&D experiments, numerical services, the engineering workbench, and bilingual documentation live in one repository. Code capability is separated from proven benefit, which requires replay, shadow recommendations, and controlled online experiments.",
     command: "git clone https://github.com/liuweichaox/Ingot.git\ncd Ingot\ncp .env.example .env\ndocker compose -f docker-compose.app.yml up -d --build",
     readDocs: "Read the quickstart",
     contribute: "Contribute",

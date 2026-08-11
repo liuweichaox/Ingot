@@ -49,10 +49,10 @@ public sealed record ToolingComponent
     public DateTimeOffset UpdatedAt { get; init; }
 }
 
-/// <summary>用户可识别且长期稳定的工装/模具身份，不直接保存可变的成员关系。</summary>
+/// <summary>用户可识别且长期稳定的工装总成身份，不直接保存可变的成员关系。</summary>
 public sealed record ToolingAssembly
 {
-    public required string MoldId { get; init; }
+    public required string ToolingAssemblyId { get; init; }
     public required string ToolingTypeCode { get; init; }
     public required string Name { get; init; }
     public string Status { get; init; } = "active";
@@ -69,7 +69,7 @@ public sealed record ToolingAssemblyMember
 public sealed record ToolingAssemblyRevision
 {
     public Guid AssemblyRevisionId { get; init; }
-    public required string MoldId { get; init; }
+    public required string ToolingAssemblyId { get; init; }
     public int Revision { get; init; } = 1;
     public IReadOnlyList<ToolingAssemblyMember> Members { get; init; } = [];
     public string? CreatedBy { get; init; }
@@ -80,7 +80,7 @@ public sealed record ToolingAssemblyRevision
 public sealed record ToolingInstallation
 {
     public Guid InstallationId { get; init; }
-    public required string MachineId { get; init; }
+    public required string EquipmentId { get; init; }
     public Guid AssemblyRevisionId { get; init; }
     public DateTimeOffset InstalledAt { get; init; }
     public DateTimeOffset? RemovedAt { get; init; }
@@ -97,11 +97,11 @@ public sealed record ToolingInstallation
 public sealed record ProductionContext
 {
     public Guid ContextId { get; init; }
-    public required string MachineId { get; init; }
-    public required string ProductSeries { get; init; }
+    public required string EquipmentId { get; init; }
+    public required string ProductFamilyCode { get; init; }
     public required string ProductCode { get; init; }
-    public required string RecipeId { get; init; }
-    public required string RecipeVersion { get; init; }
+    public required string ProcessSpecificationId { get; init; }
+    public required string ProcessSpecificationVersion { get; init; }
     public Guid ToolingInstallationId { get; init; }
     public DateTimeOffset ValidFrom { get; init; }
     public DateTimeOffset? ValidTo { get; init; }
@@ -123,7 +123,7 @@ public sealed record ProductionContext
     public DateTimeOffset UpdatedAt { get; init; }
 }
 
-/// <summary>周期开始时解析出的完整快照，用于写入不可变事件上下文。</summary>
+/// <summary>过程执行开始时解析出的完整快照，用于写入不可变事件上下文。</summary>
 public sealed record ResolvedProductionContext
 {
     public required ProductionContext Production { get; init; }

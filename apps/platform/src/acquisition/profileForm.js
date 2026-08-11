@@ -29,26 +29,6 @@ export function parseModelValue(value) {
   return { id, version: Number(version) || 1 };
 }
 
-/** 兼容历史配置：只有 sourcePath 的 MELSEC 点位反解成结构化字段。 */
-function parseMelsecPath(path = "") {
-  const [device = "D", address = "", dataType = "int16", length = ""] = String(path).split(":");
-  const [plain = "", bit = ""] = String(address).split(".");
-  return {
-    device: (device || "D").toUpperCase(),
-    address: plain,
-    bitIndex: bit,
-    dataType: dataType || "int16",
-    length,
-  };
-}
-
-/** 兼容历史配置：只有 sourcePath 的 Modbus 点位反解成结构化字段。 */
-function parseModbusPath(path = "") {
-  const [area = "", address = "", dataType = ""] = String(path).split(":");
-  const [plain = "", bit = ""] = String(address).split(".");
-  return { area, address: plain, bitIndex: bit, dataType };
-}
-
 export function createValueMapping(value = {}, protocol = "http-polling") {
   const descriptor = protocolDescriptor(protocol);
   const base = {
@@ -70,21 +50,6 @@ export function createValueMapping(value = {}, protocol = "http-polling") {
     topic: value.topic || "",
   };
 
-  if (descriptor.addressing === ADDRESSING.melsecDevice && !value.melsecDevice && value.sourcePath) {
-    const parsed = parseMelsecPath(value.sourcePath);
-    base.melsecDevice = parsed.device;
-    base.melsecAddress = parsed.address;
-    base.bitIndex = parsed.bitIndex;
-    base.sourceDataType = parsed.dataType;
-    if (parsed.length) base.melsecStringLength = Number(parsed.length) || 16;
-  }
-  if (descriptor.addressing === ADDRESSING.modbusRegister && value.modbusAddress === undefined && value.sourcePath) {
-    const parsed = parseModbusPath(value.sourcePath);
-    if (parsed.area) base.modbusArea = parsed.area;
-    if (parsed.address !== "") base.modbusAddress = parsed.address;
-    base.bitIndex = parsed.bitIndex;
-    if (parsed.dataType) base.sourceDataType = parsed.dataType;
-  }
   return base;
 }
 
@@ -173,25 +138,25 @@ export function createProfileForm(value = {}, version) {
       topic: item.topic || "",
     })),
     valueMappings: mappings,
-    recipe: value.recipe
+    processSpecification: value.processSpecification
       ? {
         enabled: true,
-        eventType: value.recipe.eventType || "recipe.applied",
-        idPath: value.recipe.idPath || "",
-        versionPath: value.recipe.versionPath || "",
-        namePath: value.recipe.namePath || "",
-        parametersPath: value.recipe.parametersPath || ".",
-        parameterMappings: (value.recipe.parameterMappings || []).map(item => createValueMapping(item, protocol)),
+        eventType: value.processSpecification.eventType || "process.specification.applied",
+        idPath: value.processSpecification.idPath || "",
+        versionPath: value.processSpecification.versionPath || "",
+        namePath: value.processSpecification.namePath || "",
+        parametersPath: value.processSpecification.parametersPath || ".",
+        parameterMappings: (value.processSpecification.parameterMappings || []).map(item => createValueMapping(item, protocol)),
       }
       : {
-        enabled: false, eventType: "recipe.applied", idPath: "", versionPath: "",
+        enabled: false, eventType: "process.specification.applied", idPath: "", versionPath: "",
         namePath: "", parametersPath: ".", parameterMappings: [],
       },
     lifecycle: value.lifecycle
       ? { enabled: true, ...value.lifecycle }
       : {
-        enabled: false, mode: "discrete-cycle", activeContextKey: "run_active", activeValue: "1",
-        startedEventType: "cycle.started", completedEventType: "cycle.completed",
+        enabled: false, mode: "discrete", activeContextKey: "run_active", activeValue: "1",
+        startedEventType: "process.execution.started", completedEventType: "process.execution.completed",
         stepChangedEventType: "process.stage_changed",
       },
   };
@@ -214,7 +179,7 @@ export function applyProtocolChange(form, protocol) {
     timestampMode: descriptor.capabilities.sourceTimestamp ? form.timestampMode : "edge-received",
     sequencePath: descriptor.capabilities.sequencePath ? form.sequencePath : "",
     valueMappings: form.valueMappings.map(normalizeRow),
-    recipe: { ...form.recipe, parameterMappings: form.recipe.parameterMappings.map(normalizeRow) },
+    processSpecification: { ...form.processSpecification, parameterMappings: form.processSpecification.parameterMappings.map(normalizeRow) },
   };
 }
 
@@ -351,23 +316,22 @@ export function toPayload(form) {
     valueMappings: form.valueMappings
       .filter(item => item.dataItemCode.trim())
       .map(item => mappingPayload(item, descriptor)),
-    recipe: form.recipe.enabled ? {
-      eventType: form.recipe.eventType.trim(),
-      idPath: form.recipe.idPath.trim(),
-      versionPath: form.recipe.versionPath.trim(),
-      namePath: form.recipe.namePath.trim() || null,
-      parametersPath: capabilities.recipeParametersPath ? form.recipe.parametersPath.trim() || "." : ".",
-      parameterMappings: form.recipe.parameterMappings
+    processSpecification: form.processSpecification.enabled ? {
+      eventType: form.processSpecification.eventType.trim(),
+      idPath: form.processSpecification.idPath.trim(),
+      versionPath: form.processSpecification.versionPath.trim(),
+      namePath: form.processSpecification.namePath.trim() || null,
+      parametersPath: capabilities.parameterObjectPath ? form.processSpecification.parametersPath.trim() || "." : ".",
+      parameterMappings: form.processSpecification.parameterMappings
         .filter(item => item.dataItemCode.trim())
         .map(item => mappingPayload(item, descriptor)),
     } : null,
     lifecycle: form.lifecycle.enabled ? {
-      mode: "discrete-cycle",
-      correlationIdContextKey: form.lifecycle.correlationIdContextKey || null,
+      mode: "discrete",
       activeContextKey: form.lifecycle.activeContextKey || null,
       activeValue: form.lifecycle.activeValue || "",
-      startedEventType: form.lifecycle.startedEventType || "cycle.started",
-      completedEventType: form.lifecycle.completedEventType || "cycle.completed",
+      startedEventType: form.lifecycle.startedEventType || "process.execution.started",
+      completedEventType: form.lifecycle.completedEventType || "process.execution.completed",
       stepChangedEventType: form.lifecycle.stepChangedEventType || "process.stage_changed",
     } : null,
   };
@@ -439,22 +403,22 @@ export function validateProfile(form, context = {}) {
     if (!item.sourcePath.trim()) set(`contextMappings[${index}].sourcePath`, "设备来源不能为空。");
   });
 
-  if (form.recipe.enabled) {
-    if (!form.recipe.idPath.trim()) set("recipe.idPath", "配方编号来源不能为空。");
-    if (!form.recipe.versionPath.trim()) set("recipe.versionPath", "配方版本来源不能为空。");
-    if (!EVENT_TYPE_PATTERN.test(form.recipe.eventType.trim()))
-      set("recipe.eventType", "事件类型格式无效，例如 recipe.applied。");
-    validateRows(form.recipe.parameterMappings, "recipe.parameterMappings");
+  if (form.processSpecification.enabled) {
+    if (!form.processSpecification.idPath.trim()) set("processSpecification.idPath", "工艺规范编号来源不能为空。");
+    if (!form.processSpecification.versionPath.trim()) set("processSpecification.versionPath", "工艺规范版本来源不能为空。");
+    if (!EVENT_TYPE_PATTERN.test(form.processSpecification.eventType.trim()))
+      set("processSpecification.eventType", "事件类型格式无效，例如 process.specification.applied。");
+    validateRows(form.processSpecification.parameterMappings, "processSpecification.parameterMappings");
   }
 
   if (form.lifecycle.enabled && !(form.lifecycle.activeContextKey || "").trim())
-    set("lifecycle.activeContextKey", "启用周期识别时必须指定生产状态来源。");
+    set("lifecycle.activeContextKey", "启用过程执行识别时必须指定生产状态来源。");
 
   if (form.status === "published" && Array.isArray(context.dataItems)) {
     const mapped = new Set(form.valueMappings.map(item => item.dataItemCode));
     const missing = context.dataItems.filter(item => !item.nullable && !mapped.has(item.code));
     if (missing.length)
-      set("valueMappings", `发布前必须映射周期必需的数据项：${missing.map(item => item.code).join("、")}。`);
+      set("valueMappings", `发布前必须映射过程执行必需的数据项：${missing.map(item => item.code).join("、")}。`);
   }
 
   return { errors, count: Object.keys(errors).length };
@@ -491,8 +455,15 @@ export function patchFromProbePoint(point, dataItemCode, dataItems, descriptor) 
     return { ...patch, modbusArea: area || "holding-register", modbusAddress: plain, bitIndex: bit, sourceDataType: dataType || "int16" };
   }
   if (descriptor.addressing === ADDRESSING.melsecDevice) {
-    const parsed = parseMelsecPath(point.path);
-    return { ...patch, melsecDevice: parsed.device, melsecAddress: parsed.address, bitIndex: parsed.bitIndex, sourceDataType: parsed.dataType };
+    const [device = "D", address = "", dataType = "int16"] = String(point.path).split(":");
+    const [plainAddress = "", bitIndex = ""] = address.split(".");
+    return {
+      ...patch,
+      melsecDevice: device.toUpperCase(),
+      melsecAddress: plainAddress,
+      bitIndex,
+      sourceDataType: dataType || "int16",
+    };
   }
   return { ...patch, sourcePath: point.path };
 }

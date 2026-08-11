@@ -61,11 +61,11 @@ static ProductionEvent CreateEvent(string edgeId, int seq)
 {
     var timestamp = DateTimeOffset.UtcNow;
     return ProductionEvent.Create(
-        seq % 2 == 0 ? "cycle.completed" : "cycle.started",
+        seq % 2 == 0 ? "process.execution.completed" : "process.execution.started",
         timestamp,
-        $"edge/{edgeId}/BENCH-SOURCE/cycle",
+        $"edge/{edgeId}/BENCH-SOURCE/execution",
         new ObjectRef("equipment", $"EQ-{seq % 100:000}"),
-        $"cycle-{(seq + 1) / 2:D12}",
+        $"execution-{(seq + 1) / 2:D12}",
         new Dictionary<string, string>
         {
             ["material_lot"] = $"LOT-{seq % 1000:000}",

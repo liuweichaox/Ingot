@@ -31,7 +31,7 @@ public sealed class EdgeRegistryAcquisitionStatusTests
                 42,
                 12,
                 1000,
-                "recipe-a@1",
+                "processSpecification-a@1",
                 null,
                 [],
                 [

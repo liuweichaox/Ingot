@@ -17,7 +17,7 @@ test("process traces preserve elapsed time, phase context, and baseline emphasis
     { event: { eventType: "process.sample", occurredAt: "2026-07-23T08:00:00Z", context: { phase: "加热" }, data: { values: { temperature: 500 } } } },
     { event: { eventType: "process.sample", occurredAt: "2026-07-23T08:00:01Z", context: { phase: "保压" }, data: { values: { temperature: 505 } } } },
   ]);
-  const traces = processSignalTraces([{ correlationId: "cycle-1", machineId: "PRESS-01", startedAt: "2026-07-23T08:00:00Z", isBaseline: true }], { "cycle-1": samples }, "temperature");
+  const traces = processSignalTraces([{ executionId: "execution-1", equipmentId: "PRESS-01", startedAt: "2026-07-23T08:00:00Z", isBaseline: true }], { "execution-1": samples }, "temperature");
   assert.deepEqual(traces[0].x, [0, 1]);
   assert.deepEqual(traces[0].customdata[1], ["2026-07-23T08:00:01Z", "保压"]);
   assert.equal(traces[0].line.width, 3);

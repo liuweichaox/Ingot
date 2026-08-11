@@ -10,7 +10,7 @@ namespace Ingot.Platform.Infrastructure.ProcessResearch;
 /// </summary>
 public sealed class ResearchExperimentResultMaterializer(
     ProcessResearchWorkflow workflow,
-    ResearchProcessWindowMaterializer? processWindowMaterializer = null,
+    ResearchOperatingRegionMaterializer? operatingRegionMaterializer = null,
     IProcessResearchStore? store = null)
 {
     private readonly SemaphoreSlim _gate = new(1, 1);
@@ -60,12 +60,12 @@ public sealed class ResearchExperimentResultMaterializer(
             .ToHashSet();
         var observationsByRun = assembly.Observations
             .Where(static value => value.ValidForOptimization)
-            .ToDictionary(static value => value.RunKey, StringComparer.Ordinal);
+            .ToDictionary(static value => value.ExecutionKey, StringComparer.Ordinal);
         var sourceObservationsByRun = existingResults
             .SelectMany(static value => value.RunObservations)
             .Concat(assembly.Observations)
             .Where(static value => value.ValidForOptimization)
-            .GroupBy(static value => value.RunKey, StringComparer.Ordinal)
+            .GroupBy(static value => value.ExecutionKey, StringComparer.Ordinal)
             .ToDictionary(static group => group.Key, static group => group.Last(), StringComparer.Ordinal);
         var created = new List<ResearchExperimentResult>();
         foreach (var experiment in experiments
@@ -75,39 +75,39 @@ public sealed class ResearchExperimentResultMaterializer(
                      .OrderBy(static value => value.CreatedAt))
         {
             var observations = experiment.RunPlan
-                .Select(run => observationsByRun.GetValueOrDefault(run.RunKey))
+                .Select(run => observationsByRun.GetValueOrDefault(run.ExecutionKey))
                 .ToArray();
             if (observations.Any(static value => value is null))
                 continue;
             var resolved = observations.Select(static value => value!).ToArray();
-            var baseline = experiment.BaselineRunKeys
+            var baseline = experiment.BaselineExecutionKeys
                 .Select(key => sourceObservationsByRun.GetValueOrDefault(key))
                 .ToArray();
             if (baseline.Any(static value => value is null))
                 continue;
-            var baselineRunKeys = experiment.BaselineRunKeys.ToHashSet(StringComparer.Ordinal);
+            var baselineExecutionKeys = experiment.BaselineExecutionKeys.ToHashSet(StringComparer.Ordinal);
             var experimental = resolved
-                .Where(value => !baselineRunKeys.Contains(value.RunKey))
+                .Where(value => !baselineExecutionKeys.Contains(value.ExecutionKey))
                 .ToArray();
             if (experimental.Length == 0)
                 continue;
             var baselineObservations = baseline.Select(static value => value!).ToArray();
             var snapshotObservations = resolved.Concat(baselineObservations)
-                .DistinctBy(static value => value.RunKey, StringComparer.Ordinal)
-                .OrderBy(static value => value.RunKey, StringComparer.Ordinal)
+                .DistinctBy(static value => value.ExecutionKey, StringComparer.Ordinal)
+                .OrderBy(static value => value.ExecutionKey, StringComparer.Ordinal)
                 .ToArray();
             var snapshotHash = Convert.ToHexStringLower(
                 SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(
                     snapshotObservations.Select(static value => new
                     {
-                        value.RunKey,
+                        value.ExecutionKey,
                         value.SourceContentHash
                     }))));
             var result = await workflow.RecordMaterializedExperimentResultAsync(
                 experiment.ExperimentId,
                 new ResearchExperimentResult
                 {
-                    DatasetSnapshotId = $"cycle-observation-snapshot:{snapshotHash}",
+                    DatasetSnapshotId = $"process-execution-observation-snapshot:{snapshotHash}",
                     Metrics = BuildMetrics(project, experimental, baselineObservations),
                     RunObservations = resolved,
                     SafetyPassed = SatisfiesOutcomeConstraints(project, resolved),
@@ -116,9 +116,9 @@ public sealed class ResearchExperimentResultMaterializer(
                 userId,
                 ct).ConfigureAwait(false);
             created.Add(result);
-            if (processWindowMaterializer is not null)
+            if (operatingRegionMaterializer is not null)
             {
-                await processWindowMaterializer.MaterializeCandidateAsync(
+                await operatingRegionMaterializer.MaterializeCandidateAsync(
                     project,
                     experiment,
                     result,

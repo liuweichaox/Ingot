@@ -25,7 +25,7 @@ public sealed class OpcUaAcquisitionRunner(
     {
         var connection = deployment.Profile.OpcUa
             ?? throw new InvalidOperationException("OPC UA 连接配置不能为空。");
-        string? currentRecipe = null;
+        string? currentProcessSpecification = null;
         var lifecycle = new AcquisitionLifecycleTracker();
         var sourceDeduplicator = new AcquisitionSourceDeduplicator();
         while (!ct.IsCancellationRequested)
@@ -141,11 +141,11 @@ public sealed class OpcUaAcquisitionRunner(
                         deployment,
                         new Dictionary<string, object?>(raw, StringComparer.Ordinal),
                         normalizedSource,
-                        currentRecipe,
+                        currentProcessSpecification,
                         new DateTimeOffset(Interlocked.Read(ref latestTimestampTicks), TimeSpan.Zero));
                     if (!sourceDeduplicator.ShouldEmit(mapped.Sample))
                     {
-                        currentRecipe = mapped.RecipeIdentity;
+                        currentProcessSpecification = mapped.ProcessSpecificationIdentity;
                         emittedNotificationVersion = currentNotificationVersion;
                         status.RecordSuccess(configurationKey, DateTimeOffset.UtcNow, null, incrementSample: false);
                         continue;
@@ -155,8 +155,8 @@ public sealed class OpcUaAcquisitionRunner(
                         deployment.Profile.Lifecycle,
                         connection.PublishingIntervalMs);
                     await sink.EmitBatchAsync(events, ct).ConfigureAwait(false);
-                    status.RecordCycleState(configurationKey, lifecycle.IsRunActive);
-                    currentRecipe = mapped.RecipeIdentity;
+                    status.RecordProcessExecutionState(configurationKey, lifecycle.IsRunActive);
+                    currentProcessSpecification = mapped.ProcessSpecificationIdentity;
                     emittedNotificationVersion = currentNotificationVersion;
                     status.RecordSuccess(configurationKey, DateTimeOffset.UtcNow, null);
                 }
@@ -178,13 +178,13 @@ public sealed class OpcUaAcquisitionRunner(
             yield return mapping.SourcePath;
         foreach (var mapping in deployment.Profile.ContextMappings)
             yield return mapping.SourcePath;
-        if (deployment.Profile.Recipe is not { } recipe)
+        if (deployment.Profile.ProcessSpecification is not { } processSpecification)
             yield break;
-        yield return recipe.IdPath;
-        yield return recipe.VersionPath;
-        if (!string.IsNullOrWhiteSpace(recipe.NamePath))
-            yield return recipe.NamePath;
-        foreach (var mapping in recipe.ParameterMappings)
+        yield return processSpecification.IdPath;
+        yield return processSpecification.VersionPath;
+        if (!string.IsNullOrWhiteSpace(processSpecification.NamePath))
+            yield return processSpecification.NamePath;
+        foreach (var mapping in processSpecification.ParameterMappings)
             yield return mapping.SourcePath;
     }
 
@@ -194,11 +194,11 @@ public sealed class OpcUaAcquisitionRunner(
             yield return mapping.SourcePath;
         foreach (var mapping in deployment.Profile.ContextMappings.Where(item => item.Required))
             yield return mapping.SourcePath;
-        if (deployment.Profile.Recipe is not { } recipe)
+        if (deployment.Profile.ProcessSpecification is not { } processSpecification)
             yield break;
-        yield return recipe.IdPath;
-        yield return recipe.VersionPath;
-        foreach (var mapping in recipe.ParameterMappings.Where(item => item.Required))
+        yield return processSpecification.IdPath;
+        yield return processSpecification.VersionPath;
+        foreach (var mapping in processSpecification.ParameterMappings.Where(item => item.Required))
             yield return mapping.SourcePath;
     }
 

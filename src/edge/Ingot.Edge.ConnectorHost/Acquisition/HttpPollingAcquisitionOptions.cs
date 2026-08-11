@@ -1,3 +1,5 @@
+using Ingot.Contracts.Events;
+
 namespace Ingot.Edge.ConnectorHost.Acquisition;
 
 public sealed class HttpPollingAcquisitionOptions
@@ -33,7 +35,7 @@ public sealed class HttpPollingAcquisitionOptions
         = new Dictionary<string, string>();
     public IReadOnlyList<ContextFieldMapping> ContextFields { get; init; } = [];
     public IReadOnlyList<ValueFieldMapping> Fields { get; init; } = [];
-    public RecipeFieldMapping? Recipe { get; init; }
+    public ProcessSpecificationFieldMapping? ProcessSpecification { get; init; }
     public LifecycleFieldMapping? Lifecycle { get; init; }
 }
 
@@ -59,9 +61,9 @@ public sealed class ContextFieldMapping
     public string? Topic { get; init; }
 }
 
-public sealed class RecipeFieldMapping
+public sealed class ProcessSpecificationFieldMapping
 {
-    public string EventType { get; init; } = "recipe.applied";
+    public string EventType { get; init; } = "process.specification.applied";
     public required string IdPath { get; init; }
     public required string VersionPath { get; init; }
     public string? NamePath { get; init; }
@@ -71,11 +73,10 @@ public sealed class RecipeFieldMapping
 
 public sealed class LifecycleFieldMapping
 {
-    public string Mode { get; init; } = "discrete-cycle";
-    public string? CorrelationIdContextKey { get; init; }
+    public string Mode { get; init; } = ProcessExecutionKinds.Discrete;
     public string? ActiveContextKey { get; init; }
     public string ActiveValue { get; init; } = "true";
-    public string StartedEventType { get; init; } = "cycle.started";
-    public string CompletedEventType { get; init; } = "cycle.completed";
+    public string StartedEventType { get; init; } = "process.execution.started";
+    public string CompletedEventType { get; init; } = "process.execution.completed";
     public string StepChangedEventType { get; init; } = "process.stage_changed";
 }

@@ -43,8 +43,8 @@ public sealed class PostgresResearchResultTransactionTests(PostgresIntegrationFi
             RecommendationId = Guid.CreateVersion7(),
             ProjectId = project.ProjectId,
             ExperimentId = experiment.ExperimentId,
-            SuggestionRunKey = "suggestion-1",
-            ActualRunKey = "actual-1",
+            SuggestionExecutionKey = "suggestion-1",
+            ActualExecutionKey = "actual-1",
             Decision = ResearchShadowDecisionStatuses.Accepted,
             ModelVersion = "model-a",
             ModelInputHash = new string('a', 64),
@@ -58,7 +58,7 @@ public sealed class PostgresResearchResultTransactionTests(PostgresIntegrationFi
             ],
             Prediction = new OptimizationRunPrediction
             {
-                RunKey = "suggestion-1",
+                ExecutionKey = "suggestion-1",
                 Rationale = "test"
             },
             Applicability = new ResearchShadowApplicabilityAssessment
@@ -66,7 +66,7 @@ public sealed class PostgresResearchResultTransactionTests(PostgresIntegrationFi
                 Status = ResearchApplicabilityStatuses.InDomain,
                 Summary = "test"
             },
-            ContextSnapshot = new Dictionary<string, string> { ["machine_id"] = "machine-1" },
+            ContextSnapshot = new Dictionary<string, string> { ["equipment_id"] = "machine-1" },
             DecisionSnapshotHash = new string('b', 64),
             DecidedBy = "engineer",
             DecidedAt = now
@@ -82,14 +82,14 @@ public sealed class PostgresResearchResultTransactionTests(PostgresIntegrationFi
             store.CreateShadowRecommendationAsync(recommendation with
             {
                 RecommendationId = Guid.CreateVersion7(),
-                ActualRunKey = "actual-2"
+                ActualExecutionKey = "actual-2"
             }));
 
         var withOutcome = recommendation with
         {
             Outcome = new ResearchShadowOutcome
             {
-                ActualRunKey = "actual-1",
+                ActualExecutionKey = "actual-1",
                 SourceContentHash = new string('c', 64),
                 CapturedAt = now.AddMinutes(1)
             }
@@ -150,7 +150,7 @@ public sealed class PostgresResearchResultTransactionTests(PostgresIntegrationFi
             Name = "Rollback Drill",
             Scenario = "optimizer unavailable",
             StopTrigger = "timeout",
-            RollbackTarget = "last safe recipe",
+            RollbackTarget = "last safe processSpecification",
             ExpectedActions = ["stop", "rollback"],
             ObservedActions = ["stop", "rollback"],
             Passed = true,
@@ -196,7 +196,7 @@ public sealed class PostgresResearchResultTransactionTests(PostgresIntegrationFi
         };
         var originalRun = new ExperimentRunPlan
         {
-            RunKey = "controlled-run-1",
+            ExecutionKey = "controlled-run-1",
             Sequence = 1,
             Factors =
             [
@@ -305,20 +305,20 @@ public sealed class PostgresResearchResultTransactionTests(PostgresIntegrationFi
         };
         await store.SaveProjectAsync(source);
         await store.SaveProjectAsync(target);
-        var window = new ResearchProcessWindow
+        var window = new ResearchOperatingRegion
         {
-            WindowId = Guid.CreateVersion7(),
+            OperatingRegionId = Guid.CreateVersion7(),
             ProjectId = source.ProjectId,
             Name = "Source Window",
-            Status = ProcessWindowStatuses.Validated,
-            ValidationLevel = ProcessWindowValidationLevels.Production,
+            Status = OperatingRegionStatuses.Validated,
+            ValidationLevel = OperatingRegionValidationLevels.Production,
             ConfidenceMethod = ResearchConfidenceMethods.Frequentist,
             AnalysisHash = new string('a', 64),
             Applicability = "test",
             CreatedAt = now,
             UpdatedAt = now
         };
-        await store.SaveProcessWindowAsync(window);
+        await store.SaveOperatingRegionAsync(window);
         var assessment = new ResearchTransferAssessment
         {
             AssessmentId = Guid.CreateVersion7(),
@@ -326,8 +326,8 @@ public sealed class PostgresResearchResultTransactionTests(PostgresIntegrationFi
             TargetProjectRevision = 1,
             SourceProjectId = source.ProjectId,
             SourceProjectRevision = 1,
-            SourceWindowId = window.WindowId,
-            SourceWindowAnalysisHash = window.AnalysisHash,
+            SourceOperatingRegionId = window.OperatingRegionId,
+            SourceOperatingRegionAnalysisHash = window.AnalysisHash,
             TransferResultId = Guid.CreateVersion7(),
             TransferResultAnalysisHash = new string('b', 64),
             ColdStartResultId = Guid.CreateVersion7(),

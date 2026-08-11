@@ -86,10 +86,10 @@ public sealed class InspectionMasterDataValidatorTests
             new PhaseMapping
             {
                 MappingId = "",
-                RecipeId = "RCP-1",
-                RecipeVersion = "3",
-                RecipeTemplate = "optical",
-                RecipeStep = "4",
+                ProcessSpecificationId = "RCP-1",
+                ProcessSpecification = "3",
+                ProcessTemplate = "optical",
+                ProcessStep = "4",
                 PhaseCode = "anneal"
             },
             out var normalized,

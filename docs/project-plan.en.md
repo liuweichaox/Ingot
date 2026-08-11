@@ -24,12 +24,12 @@ Ingot serves expensive, small-data manufacturing process R&D with safety boundar
 
 The core platform carries stable cross-scenario concepts:
 
-- equipment, connections, runs, cycles, and stages;
-- product, recipe, material, component, tooling, and lot context;
+- equipment, connections, process executions and stages;
+- product, process specification, material, component, tooling, and lot context;
 - actual settings, trajectories, versioned features, and data quality;
 - quality objectives, safety constraints, inspection results, and human review;
 - engineering problems, candidate causes, counterevidence, hypotheses, experiments, and evidence;
-- analysis strategies, numerical recommendations, stopping, process windows, and knowledge applicability;
+- analysis strategies, numerical recommendations, stopping, operating regions, and knowledge applicability;
 - users, role permissions, audit, and provenance.
 
 Scenario differences belong in versioned configuration:
@@ -61,7 +61,7 @@ Stable decisions:
 - Edge is deployed by OT network and shared failure domain and initiates connections to Platform.
 - Platform is the sole formal record for runs, context, inspections, experiments, evidence, and knowledge.
 - Optimizer is stateless business-wise and cannot control equipment or approve experiments.
-- Agent reads structured facts through authorized tools and does not generate numerical recipes.
+- Agent reads structured facts through authorized tools and does not generate numerical process settings.
 - Web does not maintain parallel business state that conflicts with Platform.
 - Configuration, data, features, analysis, and models are versioned and replayable.
 - Field acquisition, inspection, and business records do not depend on Optimizer or Agent availability.
@@ -108,7 +108,7 @@ Objective: prove that the system records one real or representative run–contex
 
 Work:
 
-- fix ownership for equipment, Edge, runs, cycles, projects, and configuration;
+- fix ownership for equipment, Edge, process executions, projects, and configuration;
 - complete acquisition probing, publishing, safe application, old-version retention on failure, and state reporting;
 - establish stable run identity, actual settings, process data, context snapshots, and inspection linkage;
 - fix analysis admission and exclusion reasons;
@@ -125,7 +125,7 @@ Work:
 
 - organize multiple equipment, products, and contexts;
 - report tooling, material, lot, calibration, and maintenance coverage;
-- provide cycle detail, data quality, and like-for-like comparison;
+- provide process-execution detail, data quality, and like-for-like comparison;
 - preserve lineage from raw data through features and analysis to conclusions;
 - close the engineer-reviewed data-issue repair loop.
 
@@ -169,7 +169,7 @@ Work:
 - recapture actual settings, complete inspections, and materialize results automatically;
 - use repetition, blocking, randomized order, and independent confirmation;
 - handle failure, drift, unavailable models, and safety anomalies;
-- distinguish candidate-setting and process-window validation.
+- distinguish candidate-setting and operating-region validation.
 
 Gate: zero known safety violations; recommendations execute accurately and reproduce; online and shadow outcomes have no unexplained systematic gap.
 
@@ -240,7 +240,7 @@ Phase 0 records baselines before approving scenario-specific targets; it does no
 
 ## 9. Next eight rolling batches
 
-1. **Run identity and configuration control plane**: safe cycle-boundary application, fallback, and applied-state closure.
+1. **Run identity and configuration control plane**: safe execution-boundary application, fallback, and applied-state closure.
 2. **Minimum trusted data loop**: actual settings, trajectories, context, quality outcomes, and admission measures.
 3. **Long-lived evidence and replay**: batch observation assembly, protected transactions, retention, migration, and recomputation.
 4. **Deterministic diagnosis contract**: baseline, differences, counterevidence, confounding, missingness, and experiment proposal.

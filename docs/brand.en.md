@@ -35,7 +35,7 @@ Without evidence from real projects, public material must not claim that:
 - the system has automatically discovered a definitive root cause;
 - it has already reduced experiments or development time by a stated percentage;
 - a model recommendation is a field guarantee;
-- one successful setting proves a complete process window;
+- one successful setting proves a complete operating region;
 - results from one scenario transfer unconditionally to another.
 
 Observational data can support candidate causes, stable associations, confounded associations, or insufficient-evidence judgments. Causal conclusions require engineering review and appropriate controls, repetitions, blocks, or interventions.
@@ -47,10 +47,10 @@ Observational data can support candidate causes, stable associations, confounded
 | Product category | 开源工艺追因与优化系统 | Open-source Process Diagnosis & Optimization |
 | Core value | 让真实数据帮助工艺工程师抉择 | Help process engineers make decisions with real data |
 | Short tagline | 看清这次运行，优化下一次运行。 | Explain this run, optimize the next. |
-| Data unit | 运行 / 生产周期 | run / production cycle |
+| Data unit | 运行 / 过程执行 | run / process execution |
 | Observational conclusion | 候选原因、稳定关联、混杂关联、证据不足 | candidate cause, stable association, confounded association, insufficient evidence |
 | Experimental conclusion | 支持、否决、不确定、已验证原因 | supported, rejected, inconclusive, validated cause |
-| Optimization result | 下一步实验建议、候选设置、已验证工艺窗口 | next-experiment recommendation, candidate setting, validated process window |
+| Optimization result | 下一步实验建议、候选设置、已验证工艺操作域 | next-experiment recommendation, candidate setting, validated operating region |
 
 Use *root cause* only when the validating evidence is stated. *AI process R&D* may describe the interaction model but does not replace the product category. Algorithm names belong in technical explanations, not in the product value itself.
 

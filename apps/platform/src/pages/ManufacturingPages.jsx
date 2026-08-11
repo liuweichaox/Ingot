@@ -7,12 +7,12 @@ import { formatTime, LoadingCard } from "./shared";
 const productionResources = {
   context: {
     title: "运行准备", endpoint: "/api/v1/production-contexts", key: "contextId",
-    description: "为设备选择接下来生产的产品、配方和已装工装，保存后对新运行生效。",
-    drawerDescription: "按顺序确认设备、产品、配方和工装；保存后只影响新开始的生产运行。",
-    columns: [["machineId", "设备"], ["productCode", "产品"], ["recipeId", "配方"], ["validFrom", "生效时间"], ["validTo", "结束时间"]],
-    template: { machineId: "", productSeries: "", productCode: "", recipeId: "", recipeVersion: 1, toolingInstallationId: "", source: "manual", externalOrderRef: "", externalBatchRef: "", materialLotRef: "", materialSpecification: "", maintenanceStatus: "", calibrationStatus: "", calibrationRef: "", calibrationValidUntil: "" },
+    description: "为设备选择接下来生产的产品、工艺规范和已装工装，保存后对新运行生效。",
+    drawerDescription: "按顺序确认设备、产品、工艺规范和工装；保存后只影响新开始的生产运行。",
+    columns: [["equipmentId", "设备"], ["productCode", "产品"], ["processSpecificationId", "工艺规范"], ["validFrom", "生效时间"], ["validTo", "结束时间"]],
+    template: { equipmentId: "", productFamilyCode: "", productCode: "", processSpecificationId: "", processSpecificationVersion: 1, toolingInstallationId: "", source: "manual", externalOrderRef: "", externalBatchRef: "", materialLotRef: "", materialSpecification: "", maintenanceStatus: "", calibrationStatus: "", calibrationRef: "", calibrationValidUntil: "" },
     createLabel: "配置下一批生产",
-    requiredFields: ["machineId", "productSeries", "productCode", "recipeId"],
+    requiredFields: ["equipmentId", "productFamilyCode", "productCode", "processSpecificationId"],
     prepare: value => ({
       ...value,
       validFrom: new Date().toISOString(),
@@ -26,10 +26,10 @@ const productionResources = {
     title: "工装装卸", endpoint: "/api/v1/tooling-installations", key: "installationId",
     description: "记录哪个工装组合版本在何时装入设备，供后续运行自动关联。",
     drawerDescription: "选择设备和已经建立的工装组合版本，装入后会进入该设备的有效工装记录。",
-    columns: [["machineId", "设备"], ["moldId", "工装"], ["installedAt", "装入"], ["removedAt", "卸下"]],
-    template: { machineId: "", assemblyRevisionId: "", source: "manual" },
+    columns: [["equipmentId", "设备"], ["toolingAssemblyId", "工装"], ["installedAt", "装入"], ["removedAt", "卸下"]],
+    template: { equipmentId: "", assemblyRevisionId: "", source: "manual" },
     createLabel: "装入工装",
-    requiredFields: ["machineId", "assemblyRevisionId"],
+    requiredFields: ["equipmentId", "assemblyRevisionId"],
     prepare: value => ({ ...value, installedAt: new Date().toISOString(), commandId: crypto.randomUUID() }),
     lifecycle: { label: "卸下", visible: value => !value.removedAt, url: value => `/api/v1/tooling-installations/${value.installationId}:remove`, body: () => ({ at: new Date().toISOString() }) },
   },
@@ -55,7 +55,7 @@ const productionResources = {
   },
   type: {
     title: "装配模板", endpoint: "/api/v1/tooling-types", key: "toolingTypeCode",
-    description: "定义一类模具包含哪些装配位置，以及每个位置允许使用哪种组件资产。",
+    description: "定义一类工装总成包含哪些装配位置，以及每个位置允许使用哪种组件资产。",
     columns: [["toolingTypeCode", "代码"], ["version", "版本"], ["name", "名称"], ["status", "状态"], ["roles", "装配位置"]],
     template: { toolingTypeCode: "", version: 1, name: "", status: "active", roles: [] },
     createLabel: "新建装配模板",
@@ -64,23 +64,23 @@ const productionResources = {
     deleteUrl: value => `/api/v1/tooling-types/${encodeURIComponent(value.toolingTypeCode)}/${value.version}`,
   },
   assembly: {
-    title: "模具资产", endpoint: "/api/v1/tooling-assemblies", key: "moldId",
-    description: "维护模具身份，并通过不可变配置版本记录每个装配位置实际使用的组件资产。",
-    columns: [["moldId", "模具编号"], ["name", "名称"], ["toolingTypeCode", "装配模板"], ["status", "状态"]],
-    template: { moldId: "", toolingTypeCode: "", name: "", status: "active" },
+    title: "工装总成", endpoint: "/api/v1/tooling-assemblies", key: "toolingAssemblyId",
+    description: "维护工装总成身份，并通过不可变配置版本记录每个装配位置实际使用的组件资产。",
+    columns: [["toolingAssemblyId", "工装总成编号"], ["name", "名称"], ["toolingTypeCode", "装配模板"], ["status", "状态"]],
+    template: { toolingAssemblyId: "", toolingTypeCode: "", name: "", status: "active" },
     createLabel: "新建工装",
-    requiredFields: ["moldId", "toolingTypeCode", "name"],
+    requiredFields: ["toolingAssemblyId", "toolingTypeCode", "name"],
     statusOptions: [["active", "启用"], ["inactive", "停用"]],
-    deleteUrl: value => `/api/v1/tooling-assemblies/${encodeURIComponent(value.moldId)}`,
+    deleteUrl: value => `/api/v1/tooling-assemblies/${encodeURIComponent(value.toolingAssemblyId)}`,
   },
 };
 
 const productionFieldLabels = {
-  machineId: "设备编号",
-  productSeries: "产品系列",
+  equipmentId: "设备编号",
+  productFamilyCode: "产品系列",
   productCode: "产品编号",
-  recipeId: "配方编号",
-  recipeVersion: "配方版本",
+  processSpecificationId: "工艺规范编号",
+  processSpecificationVersion: "工艺规范版本",
   toolingInstallationId: "工装装卸记录",
   source: "记录来源",
   materialLotRef: "物料批次",
@@ -101,7 +101,7 @@ const productionFieldLabels = {
   toolingTypeCode: "工装类型代码",
   version: "版本",
   roles: "装配位置",
-  moldId: "工装编号",
+  toolingAssemblyId: "工装编号",
 };
 
 function createProductionEditor(resource, value) {
@@ -154,25 +154,25 @@ function isProductionEditorValid(resource, editor) {
 
 function ProductionReferenceField({ fieldKey, value, required, editor, onChange }) {
   const settings = {
-    machineId: {
+    equipmentId: {
       endpoint: "/api/v1/data-objects?limit=500",
       label: "设备",
-      filter: row => ["equipment", "machine", "optical-molding-machine"].includes(row.subjectType),
+      filter: row => row.subjectType === "equipment",
       optionValue: row => row.subjectId,
       optionLabel: row => `${row.subjectId}${row.edgeId ? ` · 由 ${row.edgeId} 采集` : ""}`,
     },
     toolingInstallationId: {
       endpoint: "/api/v1/tooling-installations?activeOnly=true",
       label: "当前已装工装",
-      filter: row => !editor.machineId || row.machineId === editor.machineId,
+      filter: row => !editor.equipmentId || row.equipmentId === editor.equipmentId,
       optionValue: row => row.installationId,
-      optionLabel: row => `${row.machineId} 当前工装${row.installedAt ? ` · ${formatTime(row.installedAt)}装入` : ""}`,
+      optionLabel: row => `${row.equipmentId} 当前工装${row.installedAt ? ` · ${formatTime(row.installedAt)}装入` : ""}`,
     },
     assemblyRevisionId: {
       endpoint: "/api/v1/tooling-assemblies/revisions",
       label: "工装组合版本",
       optionValue: row => row.assemblyRevisionId,
-      optionLabel: row => `${row.moldId} · 版本 ${row.revision}`,
+      optionLabel: row => `${row.toolingAssemblyId} · 版本 ${row.revision}`,
     },
     componentTypeCode: {
       endpoint: "/api/v1/tooling-component-types",
@@ -204,35 +204,35 @@ function ProductionReferenceField({ fieldKey, value, required, editor, onChange 
     </Field>
   );
 }
-function RecipeReferenceField({ editor, onChange, required }) {
-  const { data, error } = useApi("/api/v1/recipe-versions");
-  const recipes = extractRows(data).filter(row =>
-    row.status === "published" || (row.recipeId === editor.recipeId && Number(row.version) === Number(editor.recipeVersion)));
-  const selected = editor.recipeId ? `${editor.recipeId}:${editor.recipeVersion}` : "";
-  const hasSelected = recipes.some(row => `${row.recipeId}:${row.version}` === selected);
+function ProcessSpecificationReferenceField({ editor, onChange, required }) {
+  const { data, error } = useApi("/api/v1/process-specifications");
+  const processSpecifications = extractRows(data).filter(row =>
+    row.status === "published" || (row.processSpecificationId === editor.processSpecificationId && Number(row.version) === Number(editor.processSpecificationVersion)));
+  const selected = editor.processSpecificationId ? `${editor.processSpecificationId}:${editor.processSpecificationVersion}` : "";
+  const hasSelected = processSpecifications.some(row => `${row.processSpecificationId}:${row.version}` === selected);
   return (
-    <Field label="配方" error={error || ""}>
+    <Field label="工艺规范" error={error || ""}>
       <Select
         required={required}
         value={selected}
         onChange={event => {
-          const row = recipes.find(item => `${item.recipeId}:${item.version}` === event.target.value);
-          onChange("recipeId", row?.recipeId || "");
-          onChange("recipeVersion", row?.version || 1);
+          const row = processSpecifications.find(item => `${item.processSpecificationId}:${item.version}` === event.target.value);
+          onChange("processSpecificationId", row?.processSpecificationId || "");
+          onChange("processSpecificationVersion", row?.version || 1);
         }}
       >
-        <option value="">请选择已发布配方</option>
-        {selected && !hasSelected && <option value={selected}>{editor.recipeId} · v{editor.recipeVersion}（历史值）</option>}
-        {recipes.map(row => <option key={`${row.recipeId}:${row.version}`} value={`${row.recipeId}:${row.version}`}>{row.name} · {row.recipeId} v{row.version}</option>)}
+        <option value="">请选择已发布工艺规范</option>
+        {selected && !hasSelected && <option value={selected}>{editor.processSpecificationId} · v{editor.processSpecificationVersion}（历史值）</option>}
+        {processSpecifications.map(row => <option key={`${row.processSpecificationId}:${row.version}`} value={`${row.processSpecificationId}:${row.version}`}>{row.name} · {row.processSpecificationId} v{row.version}</option>)}
       </Select>
     </Field>
   );
 }
 function ProductionRecordForm({ resource, editor, onChange }) {
   if (resource === productionResources.context) {
-    const hasMachine = Boolean(editor.machineId);
-    const hasProduct = Boolean(editor.productCode?.trim() && editor.productSeries?.trim());
-    const hasRecipe = Boolean(editor.recipeId);
+    const hasMachine = Boolean(editor.equipmentId);
+    const hasProduct = Boolean(editor.productCode?.trim() && editor.productFamilyCode?.trim());
+    const hasProcessSpecification = Boolean(editor.processSpecificationId);
     return (
       <div className="grid gap-5">
         <WorkflowGuide
@@ -240,14 +240,14 @@ function ProductionRecordForm({ resource, editor, onChange }) {
           description="必填内容完成后，底部按钮会自动变为可用。"
           steps={[
             { title: "选择生产设备", description: "确定接下来要切换的现场设备。", state: hasMachine ? "done" : "current" },
-            { title: "确认产品与配方", description: "填写产品身份并选择已发布配方。", state: hasProduct && hasRecipe ? "done" : hasMachine ? "current" : "upcoming" },
-            { title: "检查并生效", description: "核对工装和物料批次后保存。", state: hasMachine && hasProduct && hasRecipe ? "current" : "upcoming" },
+            { title: "确认产品与工艺规范", description: "填写产品身份并选择已发布工艺规范。", state: hasProduct && hasProcessSpecification ? "done" : hasMachine ? "current" : "upcoming" },
+            { title: "检查并生效", description: "核对工装和物料批次后保存。", state: hasMachine && hasProduct && hasProcessSpecification ? "current" : "upcoming" },
           ]}
         />
         <Card title="1. 选择生产设备" description="只显示已经通过现场节点上报过数据的设备。">
           <ProductionReferenceField
-            fieldKey="machineId"
-            value={editor.machineId}
+            fieldKey="equipmentId"
+            value={editor.equipmentId}
             editor={editor}
             required
             onChange={(key, value) => {
@@ -256,16 +256,16 @@ function ProductionRecordForm({ resource, editor, onChange }) {
             }}
           />
         </Card>
-        <Card title="2. 确认产品与配方" description="产品编号用于追溯实物，产品系列用于同类分析。">
+        <Card title="2. 确认产品与工艺规范" description="产品编号用于追溯实物，产品系列用于同类分析。">
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="产品系列" hint="例如 LENS-A、轴类零件">
-              <Input required value={editor.productSeries || ""} onChange={event => onChange("productSeries", event.target.value)} />
+              <Input required value={editor.productFamilyCode || ""} onChange={event => onChange("productFamilyCode", event.target.value)} />
             </Field>
             <Field label="产品编号" hint="填写现场使用的产品或物料编号">
               <Input required value={editor.productCode || ""} onChange={event => onChange("productCode", event.target.value)} />
             </Field>
             <div className="sm:col-span-2">
-              <RecipeReferenceField editor={editor} onChange={onChange} required />
+              <ProcessSpecificationReferenceField editor={editor} onChange={onChange} required />
             </div>
           </div>
         </Card>
@@ -294,9 +294,9 @@ function ProductionRecordForm({ resource, editor, onChange }) {
             <Field label="校准有效期"><Input type="datetime-local" value={editor.calibrationValidUntil || ""} onChange={event => onChange("calibrationValidUntil", event.target.value)} /></Field>
           </div>
         </Card>
-        {hasMachine && hasProduct && hasRecipe && (
+        {hasMachine && hasProduct && hasProcessSpecification && (
           <Alert tone="success" title="可以生效">
-            保存后，设备 {editor.machineId} 新开始的运行将使用产品 {editor.productCode} 和配方 {editor.recipeId} v{editor.recipeVersion}。
+            保存后，设备 {editor.equipmentId} 新开始的运行将使用产品 {editor.productCode} 和工艺规范 {editor.processSpecificationId} v{editor.processSpecificationVersion}。
           </Alert>
         )}
       </div>
@@ -307,9 +307,9 @@ function ProductionRecordForm({ resource, editor, onChange }) {
       {Object.entries(resource.template).map(([key, initial]) => {
         const required = resource.requiredFields?.includes(key);
         const label = productionFieldLabels[key] ?? key;
-        if (key === "recipeVersion") return null;
-        if (key === "recipeId") return <RecipeReferenceField key={key} editor={editor} onChange={onChange} required={required} />;
-        if (["machineId", "toolingInstallationId", "assemblyRevisionId", "componentTypeCode", "toolingTypeCode"].includes(key)) {
+        if (key === "processSpecificationVersion") return null;
+        if (key === "processSpecificationId") return <ProcessSpecificationReferenceField key={key} editor={editor} onChange={onChange} required={required} />;
+        if (["equipmentId", "toolingInstallationId", "assemblyRevisionId", "componentTypeCode", "toolingTypeCode"].includes(key)) {
           return <ProductionReferenceField key={key} fieldKey={key} value={editor[key]} editor={editor} onChange={onChange} required={required} />;
         }
         if (key === "attributes") return <AttributeFields key={key} value={editor[key] || []} onChange={value => onChange(key, value)} />;
@@ -431,14 +431,14 @@ function ToolingRevisionComposition({ revision, template, components, componentT
   const typeByCode = new Map(componentTypes.map(type => [type.componentTypeCode, type]));
   const roles = template?.roles || [];
   if (!revision) {
-    return <EmptyState title="尚未建立配置版本" description="为模具的每个装配位置选择具体组件资产后，才能用于设备装卸和运行追溯。" />;
+    return <EmptyState title="尚未建立配置版本" description="为工装总成的每个装配位置选择具体组件资产后，才能用于设备装卸和运行追溯。" />;
   }
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
         <StatusBadge value={`Rev.${revision.revision}`} />
         <span>配置时间 {formatTime(revision.createdAt)}</span>
-        {installation && <span>当前装在 {installation.machineId}</span>}
+        {installation && <span>当前装在 {installation.equipmentId}</span>}
       </div>
       <div className="grid gap-3 md:grid-cols-2">
         {roles.map(role => {
@@ -486,7 +486,7 @@ function ToolingAssembliesPage() {
   const errors = [assembliesApi.error, revisionsApi.error, templatesApi.error, componentsApi.error, componentTypesApi.error, installationsApi.error].filter(Boolean);
   const loading = [assembliesApi, revisionsApi, templatesApi, componentsApi, componentTypesApi].some(api => api.loading && !api.data);
   const [assetOpen, setAssetOpen] = useState(false);
-  const [assetForm, setAssetForm] = useState({ moldId: "", toolingTypeCode: "", name: "", status: "active" });
+  const [assetForm, setAssetForm] = useState({ toolingAssemblyId: "", toolingTypeCode: "", name: "", status: "active" });
   const [revisionTarget, setRevisionTarget] = useState(null);
   const [memberSelection, setMemberSelection] = useState({});
   const [saving, setSaving] = useState(false);
@@ -503,9 +503,9 @@ function ToolingAssembliesPage() {
   const revisionsByMold = useMemo(() => {
     const result = new Map();
     revisions.forEach(revision => {
-      const values = result.get(revision.moldId) || [];
+      const values = result.get(revision.toolingAssemblyId) || [];
       values.push(revision);
-      result.set(revision.moldId, values);
+      result.set(revision.toolingAssemblyId, values);
     });
     result.forEach(values => values.sort((left, right) => Number(right.revision) - Number(left.revision)));
     return result;
@@ -525,9 +525,9 @@ function ToolingAssembliesPage() {
     try {
       await postJson("/api/v1/tooling-assemblies", assetForm);
       setAssetOpen(false);
-      setAssetForm({ moldId: "", toolingTypeCode: "", name: "", status: "active" });
+      setAssetForm({ toolingAssemblyId: "", toolingTypeCode: "", name: "", status: "active" });
       await reloadAll();
-      notify("模具资产已建立，请继续创建首个配置版本。", "success");
+      notify("工装总成已建立，请继续创建首个配置版本。", "success");
     } catch (requestError) {
       setActionError(requestError.message);
     } finally {
@@ -536,7 +536,7 @@ function ToolingAssembliesPage() {
   }
 
   function openRevision(assembly) {
-    const previous = (revisionsByMold.get(assembly.moldId) || [])[0];
+    const previous = (revisionsByMold.get(assembly.toolingAssemblyId) || [])[0];
     setRevisionTarget(assembly);
     setMemberSelection(Object.fromEntries((previous?.members || []).map(member => [member.roleCode, member.componentId])));
     setActionError("");
@@ -545,12 +545,12 @@ function ToolingAssembliesPage() {
   async function saveRevision() {
     if (!revisionTarget) return;
     const template = latestTemplateByCode.get(revisionTarget.toolingTypeCode);
-    const previous = (revisionsByMold.get(revisionTarget.moldId) || [])[0];
+    const previous = (revisionsByMold.get(revisionTarget.toolingAssemblyId) || [])[0];
     setSaving(true);
     setActionError("");
     try {
-      await postJson(`/api/v1/tooling-assemblies/${encodeURIComponent(revisionTarget.moldId)}/revisions`, {
-        moldId: revisionTarget.moldId,
+      await postJson(`/api/v1/tooling-assemblies/${encodeURIComponent(revisionTarget.toolingAssemblyId)}/revisions`, {
+        toolingAssemblyId: revisionTarget.toolingAssemblyId,
         revision: Number(previous?.revision || 0) + 1,
         members: (template?.roles || []).map(role => ({ roleCode: role.code, componentId: memberSelection[role.code] })),
         createdBy: "operator",
@@ -575,34 +575,34 @@ function ToolingAssembliesPage() {
 
   return (
     <Page
-      title="模具资产"
-      description="一个模具资产拥有稳定身份；每次组件更换形成新的不可变配置版本，生产运行自动保留当时的真实组成。"
-      actions={<Button variant="primary" onClick={() => { setActionError(""); setAssetOpen(true); }}>新建模具资产</Button>}
+      title="工装总成"
+      description="一个工装总成拥有稳定身份；每次组件更换形成新的不可变配置版本，生产运行自动保留当时的真实组成。"
+      actions={<Button variant="primary" onClick={() => { setActionError(""); setAssetOpen(true); }}>新建工装总成</Button>}
     >
       {(errors.length > 0 || actionError) && <Alert tone="danger">{errors[0] || actionError}</Alert>}
       <WorkflowGuide
-        title="模具数据的正确关系"
+        title="工装总成数据的正确关系"
         description="组件分类说明“是什么”，装配模板说明“装在哪里”，配置版本说明“这次具体装了哪一件”。"
         steps={[
           { title: "登记组件资产", description: "每个模芯、模架使用独立资产编号和序列号。", state: components.length ? "done" : "current" },
-          { title: "建立模具配置", description: "按装配位置选择实际组件，形成不可变版本。", state: revisions.length ? "done" : components.length ? "current" : "upcoming" },
-          { title: "装入生产设备", description: "安装后新运行自动关联模具及全部成员。", state: installations.length ? "done" : revisions.length ? "current" : "upcoming" },
+          { title: "建立工装总成配置", description: "按装配位置选择实际组件，形成不可变版本。", state: revisions.length ? "done" : components.length ? "current" : "upcoming" },
+          { title: "装入生产设备", description: "安装后新运行自动关联工装总成及全部成员。", state: installations.length ? "done" : revisions.length ? "current" : "upcoming" },
         ]}
       />
       {loading ? <LoadingCard /> : assemblies.length === 0 ? (
-        <EmptyState title="还没有模具资产" description="先准备组件分类、组件资产和装配模板，再建立模具身份。" />
+        <EmptyState title="还没有工装总成" description="先准备组件分类、组件资产和装配模板，再建立工装总成身份。" />
       ) : (
         <div className="grid gap-5">
           {assemblies.map(assembly => {
-            const assemblyRevisions = revisionsByMold.get(assembly.moldId) || [];
+            const assemblyRevisions = revisionsByMold.get(assembly.toolingAssemblyId) || [];
             const latest = assemblyRevisions[0];
             const template = latestTemplateByCode.get(assembly.toolingTypeCode);
             const installation = latest ? activeInstallationByRevision.get(latest.assemblyRevisionId) : null;
             return (
               <Card
-                key={assembly.moldId}
+                key={assembly.toolingAssemblyId}
                 title={assembly.name}
-                description={`${assembly.moldId} · ${template?.name || assembly.toolingTypeCode}`}
+                description={`${assembly.toolingAssemblyId} · ${template?.name || assembly.toolingTypeCode}`}
                 actions={<Button onClick={() => openRevision(assembly)}>{latest ? "更换组件并创建新版本" : "建立首个配置版本"}</Button>}
               >
                 <ToolingRevisionComposition
@@ -637,14 +637,14 @@ function ToolingAssembliesPage() {
       <Drawer
         open={assetOpen}
         onClose={() => setAssetOpen(false)}
-        title="新建模具资产"
-        description="建立长期稳定的模具身份；具体成员在下一步配置版本中选择。"
-        footer={<><Button onClick={() => setAssetOpen(false)}>取消</Button><Button variant="primary" disabled={saving || !assetForm.moldId.trim() || !assetForm.name.trim() || !assetForm.toolingTypeCode} onClick={saveAsset}>{saving ? "保存中" : "保存并继续"}</Button></>}
+        title="新建工装总成"
+        description="建立长期稳定的工装总成身份；具体成员在下一步配置版本中选择。"
+        footer={<><Button onClick={() => setAssetOpen(false)}>取消</Button><Button variant="primary" disabled={saving || !assetForm.toolingAssemblyId.trim() || !assetForm.name.trim() || !assetForm.toolingTypeCode} onClick={saveAsset}>{saving ? "保存中" : "保存并继续"}</Button></>}
       >
         {actionError && <Alert tone="danger">{actionError}</Alert>}
         <div className="grid gap-4">
-          <Field label="模具资产编号"><Input value={assetForm.moldId} onChange={event => setAssetForm(current => ({ ...current, moldId: event.target.value }))} /></Field>
-          <Field label="模具名称"><Input value={assetForm.name} onChange={event => setAssetForm(current => ({ ...current, name: event.target.value }))} /></Field>
+          <Field label="工装总成编号"><Input value={assetForm.toolingAssemblyId} onChange={event => setAssetForm(current => ({ ...current, toolingAssemblyId: event.target.value }))} /></Field>
+          <Field label="工装总成名称"><Input value={assetForm.name} onChange={event => setAssetForm(current => ({ ...current, name: event.target.value }))} /></Field>
           <Field label="装配模板">
             <Select value={assetForm.toolingTypeCode} onChange={event => setAssetForm(current => ({ ...current, toolingTypeCode: event.target.value }))}>
               <option value="">请选择</option>
@@ -799,8 +799,8 @@ function ProductionRecordsPage({ section }) {
         : key === "status" ? value => <StatusBadge value={value} />
           : key === resource.key ? value => <span className="font-mono text-xs font-semibold tracking-tight text-slate-800">{value || "—"}</span>
             : key === "name" ? value => <span className="font-medium text-slate-900">{value || "—"}</span>
-              : key === "recipeId" ? (value, row) => `${value} v${row.recipeVersion}`
-                : key === "productCode" ? (value, row) => <div><p className="font-medium text-slate-800">{value}</p>{row.productSeries && <p className="mt-0.5 text-xs text-slate-500">{row.productSeries}</p>}</div>
+              : key === "processSpecificationId" ? (value, row) => `${value} v${row.processSpecificationVersion}`
+                : key === "productCode" ? (value, row) => <div><p className="font-medium text-slate-800">{value}</p>{row.productFamilyCode && <p className="mt-0.5 text-xs text-slate-500">{row.productFamilyCode}</p>}</div>
                   : key === "roles" ? value => value?.length ? value.map(role => role.name).join("、") : "—"
                     : key === "attributes" ? value => <ProductionAttributeSummary value={value} />
               : undefined,
@@ -828,17 +828,17 @@ function ProductionRecordsPage({ section }) {
             <>
               <WorkflowGuide
                 title="生产开始前"
-                description="设备接入和配方发布通常只需配置一次；每次换产品或换配方时更新生产配置。"
+                description="设备接入和工艺规范发布通常只需配置一次；每次换产品或换工艺规范时更新生产配置。"
                 steps={[
                   { title: "设备已有数据", description: "在“设备采集”中完成设备接入。", state: rows.length ? "done" : "current" },
-                  { title: "产品与配方就绪", description: "准备产品编号和已发布配方。", state: rows.some(row => row.recipeId) ? "done" : rows.length ? "current" : "upcoming" },
-                  { title: "启用生产配置", description: "确认设备、产品、配方和当前工装。", state: activeRows.length ? "done" : "current" },
+                  { title: "产品与工艺规范就绪", description: "准备产品编号和已发布工艺规范。", state: rows.some(row => row.processSpecificationId) ? "done" : rows.length ? "current" : "upcoming" },
+                  { title: "启用生产配置", description: "确认设备、产品、工艺规范和当前工装。", state: activeRows.length ? "done" : "current" },
                 ]}
               />
               <Card
                 title="当前生效配置"
                 description={activeRows.length ? `${activeRows.length} 台设备已准备好开始新运行` : "目前没有正在生效的生产配置"}
-                actions={<Button variant="primary" onClick={() => openEditor()}>{activeRows.length ? "切换产品或配方" : "开始配置"}</Button>}
+                actions={<Button variant="primary" onClick={() => openEditor()}>{activeRows.length ? "切换产品或工艺规范" : "开始配置"}</Button>}
               >
                 {activeRows.length ? (
                   <div className="grid gap-3 lg:grid-cols-2">
@@ -846,17 +846,17 @@ function ProductionRecordsPage({ section }) {
                       <article key={row.contextId} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                         <div className="flex items-start justify-between gap-3">
                           <div>
-                            <p className="font-semibold text-slate-950">{row.machineId}</p>
-                            <p className="mt-1 text-sm text-slate-600">{row.productCode} · {row.productSeries || "未填写系列"}</p>
+                            <p className="font-semibold text-slate-950">{row.equipmentId}</p>
+                            <p className="mt-1 text-sm text-slate-600">{row.productCode} · {row.productFamilyCode || "未填写系列"}</p>
                           </div>
                           <StatusBadge value="active" />
                         </div>
-                        <p className="mt-3 text-sm text-slate-600">配方：{row.recipeId} v{row.recipeVersion}</p>
+                        <p className="mt-3 text-sm text-slate-600">工艺规范：{row.processSpecificationId} v{row.processSpecificationVersion}</p>
                         <p className="mt-1 text-xs text-slate-400">自 {formatTime(row.validFrom)} 生效</p>
                       </article>
                     ))}
                   </div>
-                ) : <EmptyState title="还没有生效配置" description="点击“开始配置”，完成设备、产品和配方选择。" />}
+                ) : <EmptyState title="还没有生效配置" description="点击“开始配置”，完成设备、产品和工艺规范选择。" />}
               </Card>
             </>
           )}

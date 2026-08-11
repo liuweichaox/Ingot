@@ -35,7 +35,7 @@ public sealed record TrainingDatasetVersion
     public required string DataModelId { get; init; }
     public int DataModelVersion { get; init; } = 1;
     public IReadOnlyDictionary<string, string> ContextSelector { get; init; } = new Dictionary<string, string>();
-    public IReadOnlyList<string> CycleIds { get; init; } = [];
+    public IReadOnlyList<string> ProcessExecutionIds { get; init; } = [];
     public IReadOnlyList<string> FeatureCodes { get; init; } = [];
     public required string TargetCode { get; init; }
     public DateTimeOffset WindowStart { get; init; }

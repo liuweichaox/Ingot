@@ -24,7 +24,7 @@ EDGE_ID = "EDGE-DEMO-001"
 MACHINE_ID = "TE-SIMULATOR-01"
 PRODUCT_SERIES = "tennessee-eastman-benchmark"
 PRODUCT_CODE = "tennessee-eastman-mode-1"
-RECIPE_ID = "te-mode-1-window"
+PROCESS_SPECIFICATION_ID = "te-mode-1-window"
 
 SIGNALS = {
     "process.a_feed": ("XMEAS-1", "A feed", "kscmh"),
@@ -70,14 +70,14 @@ def mapping(event_type: str, with_values: bool) -> dict:
         "occurredAt": {"column": "occurred_at"},
         "subjectType": {"value": "simulator"},
         "subjectId": {"value": MACHINE_ID},
-        "correlationId": {"column": "cycle_id"},
+        "executionId": {"column": "execution_id"},
         "context": {
-            "product_series": {"value": PRODUCT_SERIES},
+            "product_family_code": {"value": PRODUCT_SERIES},
             "product_code": {"value": PRODUCT_CODE},
-            "recipe_id": {"value": RECIPE_ID},
-            "recipe_version": {"value": "1"},
-            "workpiece_id": {"column": "workpiece_id"},
-            "recipe_step": {"value": "analysis_window"},
+            "process_specification_id": {"value": PROCESS_SPECIFICATION_ID},
+            "process_specification_version": {"value": "1"},
+            "output_item_id": {"column": "output_item_id"},
+            "stage_number": {"value": "analysis_window"},
             "benchmark_kind": {"value": "tennessee-eastman-replay"},
             "fault_code": {"column": "fault_code"},
         },
@@ -129,19 +129,19 @@ def main() -> None:
     inspections: list[dict] = []
     requests: list[dict] = []
     for ordinal, source_hour in enumerate(selected_hours, start=1):
-        cycle_id = f"{args.replay_id}-{args.fault_code:02d}-{ordinal:03d}"
-        workpiece_id = f"{args.replay_id}-sample-{ordinal:03d}"
-        cycle_start = start + timedelta(hours=ordinal)
-        cycle_end = cycle_start + timedelta(hours=1)
+        execution_id = f"{args.replay_id}-{args.fault_code:02d}-{ordinal:03d}"
+        output_item_id = f"{args.replay_id}-sample-{ordinal:03d}"
+        execution_start = start + timedelta(hours=ordinal)
+        execution_end = execution_start + timedelta(hours=1)
         failed = source_hour >= args.fault_start_hours
         boundaries.extend([
-            {"cycle_id": cycle_id, "workpiece_id": workpiece_id, "occurred_at": iso(cycle_start), "fault_code": args.fault_code},
-            {"cycle_id": cycle_id, "workpiece_id": workpiece_id, "occurred_at": iso(cycle_end), "fault_code": args.fault_code},
+            {"execution_id": execution_id, "output_item_id": output_item_id, "occurred_at": iso(execution_start), "fault_code": args.fault_code},
+            {"execution_id": execution_id, "output_item_id": output_item_id, "occurred_at": iso(execution_end), "fault_code": args.fault_code},
         ])
         for source_time, row in grouped[source_hour]:
-            sample_time = cycle_start + timedelta(hours=source_time - source_hour)
+            sample_time = execution_start + timedelta(hours=source_time - source_hour)
             item = {
-                "cycle_id": cycle_id, "workpiece_id": workpiece_id,
+                "execution_id": execution_id, "output_item_id": output_item_id,
                 "occurred_at": iso(sample_time), "fault_code": args.fault_code,
             }
             for code, (source, _, _) in SIGNALS.items():
@@ -152,37 +152,37 @@ def main() -> None:
             f"Tennessee Eastman replay. Fault {args.fault_code}; source hour {source_hour}. "
             "Outcome derives solely from the benchmark's documented injection time; it is not measured product quality.")
         requests.append({
-            "recordId": stable_uuid7(cycle_id, cycle_end + timedelta(seconds=5)),
-            "workpieceId": workpiece_id, "operationRunId": cycle_id,
+            "recordId": stable_uuid7(execution_id, execution_end + timedelta(seconds=5)),
+            "outputItemId": output_item_id, "executionId": execution_id,
             "definitionCode": "te.process.stability", "definitionVersion": 1,
-            "measuredAt": iso(cycle_end + timedelta(seconds=5)),
-            "recordedAt": iso(cycle_end + timedelta(seconds=5)),
+            "measuredAt": iso(execution_end + timedelta(seconds=5)),
+            "recordedAt": iso(execution_end + timedelta(seconds=5)),
             "outcome": "FAIL" if failed else "PASS", "submittedBy": "public-dataset-replay",
             "measurements": [{"characteristicCode": "stability.score", "outcome": "FAIL" if failed else "PASS", "numericValue": score, "unit": "1"}],
             "attachments": [], "notes": note,
         })
-        inspections.append({"cycle_id": cycle_id, "workpiece_id": workpiece_id, "source_hour": source_hour,
+        inspections.append({"execution_id": execution_id, "output_item_id": output_item_id, "source_hour": source_hour,
                             "fault_code": args.fault_code, "stability_score": score,
                             "outcome": "FAIL" if failed else "PASS"})
 
-    boundary_fields = ["cycle_id", "workpiece_id", "occurred_at", "fault_code"]
+    boundary_fields = ["execution_id", "output_item_id", "occurred_at", "fault_code"]
     sample_fields = [*boundary_fields, *[code.replace(".", "_") for code in SIGNALS]]
-    write_csv(args.output / "cycle-started.csv", boundary_fields, boundaries[::2])
-    write_csv(args.output / "cycle-completed.csv", boundary_fields, boundaries[1::2])
+    write_csv(args.output / "execution-started.csv", boundary_fields, boundaries[::2])
+    write_csv(args.output / "execution-completed.csv", boundary_fields, boundaries[1::2])
     write_csv(args.output / "process-samples.csv", sample_fields, samples)
-    write_csv(args.output / "inspection-results.csv", ["cycle_id", "workpiece_id", "source_hour", "fault_code", "stability_score", "outcome"], inspections)
+    write_csv(args.output / "inspection-results.csv", ["execution_id", "output_item_id", "source_hour", "fault_code", "stability_score", "outcome"], inspections)
     (args.output / "inspection-requests.json").write_text(json.dumps(requests, indent=2), encoding="utf-8")
-    (args.output / "cycle-started.mapping.json").write_text(json.dumps(mapping("cycle.started", False), indent=2), encoding="utf-8")
+    (args.output / "execution-started.mapping.json").write_text(json.dumps(mapping("process.execution.started", False), indent=2), encoding="utf-8")
     (args.output / "process-samples.mapping.json").write_text(json.dumps(mapping("process.sample", True), indent=2), encoding="utf-8")
-    (args.output / "cycle-completed.mapping.json").write_text(json.dumps(mapping("cycle.completed", False), indent=2), encoding="utf-8")
+    (args.output / "execution-completed.mapping.json").write_text(json.dumps(mapping("process.execution.completed", False), indent=2), encoding="utf-8")
     manifest = {
         "source": str(args.source), "fault_code": args.fault_code,
-        "fault_start_hours": args.fault_start_hours, "cycles": len(selected_hours), "samples": len(samples),
+        "fault_start_hours": args.fault_start_hours, "executions": len(selected_hours), "samples": len(samples),
         "purpose": "Architecture replay: controlled-variable traces, process data, known injection boundary and quality linkage.",
         "not_valid_for": "Claims about optical molding behavior or Bayesian-optimization effectiveness.",
     }
     (args.output / "manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
-    print(json.dumps({"cycles": len(selected_hours), "samples": len(samples), "output": str(args.output)}, indent=2))
+    print(json.dumps({"executions": len(selected_hours), "samples": len(samples), "output": str(args.output)}, indent=2))
 
 
 if __name__ == "__main__":

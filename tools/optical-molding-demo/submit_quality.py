@@ -2,7 +2,7 @@
 """Submit simulated quality records for completed source-driven lens-molding runs.
 
 Quality is deliberately submitted through the platform's inspection contract rather
-than by the device data source. The join is the immutable operationRunId/run ID.
+than by the device data source. The join is the immutable executionId/run ID.
 """
 
 from __future__ import annotations
@@ -55,10 +55,10 @@ def uuid7() -> str:
     return str(uuid.UUID(int=raw))
 
 
-def read_source_cycle_number(detail: dict[str, object]) -> int | None:
+def read_source_execution_number(detail: dict[str, object]) -> int | None:
     for item in detail.get("events", []):
         context = item.get("event", {}).get("context", {})
-        raw = context.get("source_cycle_no")
+        raw = context.get("source_execution_no")
         if raw is None:
             continue
         try:
@@ -91,8 +91,8 @@ def load_experiment_runs(api: str, project_id: str, experiment_id: str) -> dict[
             None,
         )
         if factor is None:
-            raise ValueError(f"run {run.get('runKey')} has no upper-temperature setpoint")
-        runs[run["runKey"]] = float(factor["value"])
+            raise ValueError(f"run {run.get('executionKey')} has no upper-temperature setpoint")
+        runs[run["executionKey"]] = float(factor["value"])
     return runs
 
 
@@ -107,27 +107,27 @@ def main() -> None:
         else None
     )
     if experiment_runs:
-        cycles = []
+        executions = []
         for run_id in experiment_runs:
-            query = urllib.parse.urlencode({"correlationId": run_id, "limit": "1"})
-            matches = request(f"{api}/api/v1/cycles?{query}").get("data", [])
+            query = urllib.parse.urlencode({"executionId": run_id, "limit": "1"})
+            matches = request(f"{api}/api/v1/process-executions?{query}").get("data", [])
             if matches and matches[0].get("status") == "completed":
-                cycles.append(matches[0])
-    elif args.operation_run_id:
+                executions.append(matches[0])
+    elif args.execution_id:
         query = urllib.parse.urlencode(
-            {"correlationId": args.operation_run_id, "limit": "1"}
+            {"executionId": args.execution_id, "limit": "1"}
         )
-        cycles = request(f"{api}/api/v1/cycles?{query}").get("data", [])
+        executions = request(f"{api}/api/v1/process-executions?{query}").get("data", [])
     else:
         query = urllib.parse.urlencode(
-            {"status": "completed", "limit": "200", "machineId": args.machine_id}
+            {"status": "completed", "limit": "200", "equipmentId": args.equipment_id}
         )
-        cycles = request(f"{api}/api/v1/cycles?{query}").get("data", [])
+        executions = request(f"{api}/api/v1/process-executions?{query}").get("data", [])
     submitted = 0
-    for cycle in cycles:
-        if cycle.get("inspectionCount", 0) > 0:
+    for execution in executions:
+        if execution.get("inspectionCount", 0) > 0:
             continue
-        run_id = cycle["correlationId"]
+        run_id = execution["executionId"]
         if experiment_runs:
             setpoint = experiment_runs[run_id]
             adjustment = max(0.0, min(6.0, setpoint - 620.0))
@@ -135,8 +135,8 @@ def main() -> None:
             surface_form_error = round(max(0.065, 0.23 - 0.031 * adjustment), 6)
             failed = center_deviation > 0.015 or surface_form_error > 0.15
         else:
-            detail = request(f"{api}/api/v1/cycles/{urllib.parse.quote(run_id)}")
-            ordinal = read_source_cycle_number(detail)
+            detail = request(f"{api}/api/v1/process-executions/{urllib.parse.quote(run_id)}")
+            ordinal = read_source_execution_number(detail)
             if ordinal is None:
                 continue
             if ordinal > args.maximum_run:
@@ -147,8 +147,8 @@ def main() -> None:
         outcome = "FAIL" if failed else "PASS"
         payload = {
             "recordId": uuid7(),
-            "workpieceId": cycle["workpieceId"],
-            "operationRunId": run_id,
+            "outputItemId": execution["outputItemId"],
+            "executionId": run_id,
             "definitionCode": "lens.molding.quality",
             "definitionVersion": 1,
             "measuredAt": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
@@ -168,7 +168,7 @@ def main() -> None:
         }
         request(f"{api}/api/v1/inspection-records", payload)
         submitted += 1
-    print(json.dumps({"completed_runs": len(cycles), "submitted_quality_records": submitted}, ensure_ascii=False))
+    print(json.dumps({"completed_runs": len(executions), "submitted_quality_records": submitted}, ensure_ascii=False))
 
 
 if __name__ == "__main__":

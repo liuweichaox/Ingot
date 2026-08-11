@@ -4,7 +4,7 @@ using Ingot.Contracts.Events;
 using Ingot.Contracts.Inspections;
 using Ingot.Contracts.ProcessConfiguration;
 using Ingot.Contracts.ProcessResearch;
-using Ingot.Platform.Infrastructure.Cycles;
+using Ingot.Platform.Infrastructure.ProcessExecutions;
 using Ingot.Platform.Infrastructure.Inspections;
 using Ingot.Platform.Infrastructure.ProcessConfiguration;
 
@@ -27,12 +27,12 @@ public interface IResearchObservationAssembler
 }
 
 /// <summary>
-///     将实验运行标识与 PLC 生产周期 CorrelationId 对齐，并把版本化周期特征和
-///     有效检验记录投影成优化训练元组。RunKey 是唯一的接线键，不引入第二套
+///     将实验运行标识与 PLC 生产过程执行 ExecutionId 对齐，并把版本化过程执行特征和
+///     有效检验记录投影成优化训练元组。ExecutionKey 是唯一的接线键，不引入第二套
 ///     “优化观察”业务实体。
 /// </summary>
 public sealed class ResearchObservationAssembler(
-    ICycleComparisonService cycles,
+    IExecutionComparisonService executions,
     IInspectionRecordStore inspections,
     IProcessConfigurationStore? processConfigurations = null,
     ResearchContextAdmissionEvaluator? contextAdmission = null) : IResearchObservationAssembler
@@ -52,7 +52,7 @@ public sealed class ResearchObservationAssembler(
             .Where(static experiment =>
                 experiment.Optimization?.Mode != ResearchOptimizationModes.Shadow)
             .SelectMany(experiment => experiment.RunPlan.Select(run => new CandidateRun(experiment, run)))
-            .GroupBy(static value => value.Run.RunKey, StringComparer.Ordinal)
+            .GroupBy(static value => value.Run.ExecutionKey, StringComparer.Ordinal)
             .Select(static group => group
                 .OrderByDescending(static value => value.Experiment.UpdatedAt)
                 .First())
@@ -63,24 +63,24 @@ public sealed class ResearchObservationAssembler(
             throw new ProcessResearchRuleException(
                 $"单次优化最多自动装配 {MaximumRunsPerAssembly} 个实验运行，请先归档历史项目。");
 
-        var runKeys = candidates.Select(static item => item.Run.RunKey).ToArray();
-        var cyclesByRun = await cycles.GetCyclesAsync(runKeys, ct).ConfigureAwait(false);
+        var executionKeys = candidates.Select(static item => item.Run.ExecutionKey).ToArray();
+        var executionsByRun = await executions.GetProcessExecutionsAsync(executionKeys, ct).ConfigureAwait(false);
         var allRecords = InspectionRecordSet.Effective(
-            await inspections.QueryAllByOperationRunIdsAsync(runKeys, ct).ConfigureAwait(false));
+            await inspections.QueryAllByExecutionIdsAsync(executionKeys, ct).ConfigureAwait(false));
         var recordsByRun = allRecords
-            .GroupBy(static item => item.OperationRunId, StringComparer.Ordinal)
+            .GroupBy(static item => item.ExecutionId, StringComparer.Ordinal)
             .ToDictionary(static group => group.Key, static group => group.ToArray(), StringComparer.Ordinal);
         var observations = new List<ExperimentRunObservation>(candidates.Length);
         foreach (var candidate in candidates)
         {
             ct.ThrowIfCancellationRequested();
-            if (!cyclesByRun.TryGetValue(candidate.Run.RunKey, out var cycle))
+            if (!executionsByRun.TryGetValue(candidate.Run.ExecutionKey, out var execution))
                 continue;
             observations.Add(BuildObservation(
                 project,
                 candidate.Run,
-                cycle,
-                recordsByRun.GetValueOrDefault(candidate.Run.RunKey, []),
+                execution,
+                recordsByRun.GetValueOrDefault(candidate.Run.ExecutionKey, []),
                 scenarioPackage));
         }
         return new ResearchObservationAssembly(observations, candidates.Length);
@@ -89,11 +89,11 @@ public sealed class ResearchObservationAssembler(
     private ExperimentRunObservation BuildObservation(
         ResearchProject project,
         ExperimentRunPlan run,
-        CycleComparisonRow cycle,
+        ExecutionComparisonRow execution,
         IReadOnlyList<InspectionRecord> records,
         ScenarioPackage? scenarioPackage)
     {
-        var recipeValues = cycle.RecipeParameters
+        var controlParameterValues = execution.ControlParameters
             .Select(static value => (value.Code, Value: ReadNumber(value.Value), value.Unit))
             .Where(static value => value.Value.HasValue)
             .ToDictionary(
@@ -105,7 +105,7 @@ public sealed class ResearchObservationAssembler(
         foreach (var variable in project.Variables.Where(
                      static value => value.Role == ResearchVariableRoles.Control))
         {
-            if (!TryResolveControlValue(variable, cycle, recipeValues, out var value, out var reason))
+            if (!TryResolveControlValue(variable, execution, controlParameterValues, out var value, out var reason))
             {
                 missing.Add($"控制变量:{variable.Code}（{reason}）");
                 continue;
@@ -148,25 +148,25 @@ public sealed class ResearchObservationAssembler(
                 missing.Add($"结果约束:{constraint.Code}（{reason}）");
         }
 
-        var processFeatures = FlattenFeatures(cycle);
-        var context = new Dictionary<string, string>(cycle.Context, StringComparer.Ordinal)
+        var processFeatures = FlattenFeatures(execution);
+        var context = new Dictionary<string, string>(execution.Context, StringComparer.Ordinal)
         {
-            ["machine_id"] = cycle.MachineId
+            ["equipment_id"] = execution.EquipmentId
         };
-        if (cycle.EdgeIds.Count > 0)
-            context["edge_ids"] = string.Join(',', cycle.EdgeIds.Order(StringComparer.Ordinal));
-        AddContext(context, "product_series", cycle.ProductSeries);
-        AddContext(context, "product_code", cycle.ProductCode);
-        AddContext(context, "recipe_id", cycle.RecipeId);
-        AddContext(context, "recipe_version", cycle.RecipeVersion);
-        AddContext(context, "tooling_installation_id", cycle.ToolingInstallationId);
-        AddContext(context, "tooling_id", cycle.ToolingId);
-        AddContext(context, "mold_id", cycle.MoldId);
-        AddContext(context, "assembly_revision_id", cycle.AssemblyRevisionId);
-        AddContext(context, "assembly_revision", cycle.AssemblyRevision);
-        AddContext(context, "workpiece_id", cycle.WorkpieceId);
-        AddContext(context, "external_batch_ref", cycle.ExternalBatchRef);
-        AddContext(context, "material_lot_ref", cycle.MaterialLotRef);
+        if (execution.EdgeIds.Count > 0)
+            context["edge_ids"] = string.Join(',', execution.EdgeIds.Order(StringComparer.Ordinal));
+        AddContext(context, "product_family_code", execution.ProductFamilyCode);
+        AddContext(context, "product_code", execution.ProductCode);
+        AddContext(context, "process_specification_id", execution.ProcessSpecificationId);
+        AddContext(context, "process_specification_version", execution.ProcessSpecificationVersion);
+        AddContext(context, "tooling_installation_id", execution.ToolingInstallationId);
+        AddContext(context, "tooling_assembly_id", execution.ToolingAssemblyId);
+        AddContext(context, "tooling_assembly_id", execution.ToolingAssemblyId);
+        AddContext(context, "assembly_revision_id", execution.AssemblyRevisionId);
+        AddContext(context, "assembly_revision", execution.AssemblyRevision);
+        AddContext(context, "output_item_id", execution.OutputItemId);
+        AddContext(context, "external_batch_ref", execution.ExternalBatchRef);
+        AddContext(context, "material_lot_ref", execution.MaterialLotRef);
         if (scenarioPackage is not null)
         {
             context[ResearchContextAdmissionEvaluator.ObservationScenarioContextKey] =
@@ -174,9 +174,9 @@ public sealed class ResearchObservationAssembler(
             context[ResearchContextAdmissionEvaluator.ObservationPolicyHashContextKey] =
                 ResearchContextAdmissionEvaluator.ComputePolicyHash(scenarioPackage);
         }
-        if (cycle.CompletedAt is null)
-            missing.Add("周期未完成");
-        if (cycle.ProcessDataQuality.Status == ProcessDataStatuses.Unavailable)
+        if (execution.CompletedAt is null)
+            missing.Add("过程执行未完成");
+        if (execution.ProcessDataQuality.Status == ProcessDataStatuses.Unavailable)
             missing.Add("过程数据不可用");
         if (processFeatures.Count == 0)
             missing.Add("没有可用过程特征");
@@ -185,13 +185,13 @@ public sealed class ResearchObservationAssembler(
         var valid = missing.Count == 0;
         var hashPayload = new
         {
-            cycle.CorrelationId,
-            cycle.CompletedAt,
-            cycle.AnalysisMaterialization.AlgorithmVersion,
-            cycle.AnalysisMaterialization.SourceMinIngestId,
-            cycle.AnalysisMaterialization.SourceMaxIngestId,
-            cycle.AnalysisMaterialization.SourceEventCount,
-            cycle.AnalysisMaterialization.SourceContentHash,
+            execution.ExecutionId,
+            execution.CompletedAt,
+            execution.AnalysisMaterialization.AlgorithmVersion,
+            execution.AnalysisMaterialization.SourceMinIngestId,
+            execution.AnalysisMaterialization.SourceMaxIngestId,
+            execution.AnalysisMaterialization.SourceEventCount,
+            execution.AnalysisMaterialization.SourceContentHash,
             Factors = factors,
             SettingDeviationFromPlan = settingDeviation,
             HasSettingDeviation = hasSettingDeviation,
@@ -214,7 +214,7 @@ public sealed class ResearchObservationAssembler(
             SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(hashPayload)));
         return new ExperimentRunObservation
         {
-            RunKey = run.RunKey,
+            ExecutionKey = run.ExecutionKey,
             Context = context,
             ActualFactors = factors,
             SettingDeviationFromPlan = settingDeviation,
@@ -264,8 +264,8 @@ public sealed class ResearchObservationAssembler(
 
     private static bool TryResolveControlValue(
         ResearchVariable variable,
-        CycleComparisonRow cycle,
-        IReadOnlyDictionary<string, ActualValue> recipeValues,
+        ExecutionComparisonRow execution,
+        IReadOnlyDictionary<string, ActualValue> controlParameterValues,
         out double value,
         out string reason)
     {
@@ -273,30 +273,30 @@ public sealed class ResearchObservationAssembler(
         var source = variable.DataSource?.Trim();
         if (!string.IsNullOrWhiteSpace(source) &&
             source.StartsWith("signal:", StringComparison.OrdinalIgnoreCase))
-            return TryResolveSignalFeature(cycle, source, variable.Unit, out value, out reason);
+            return TryResolveSignalFeature(execution, source, variable.Unit, out value, out reason);
         if (!string.IsNullOrWhiteSpace(source) &&
-            source.StartsWith("recipe:", StringComparison.OrdinalIgnoreCase))
+            source.StartsWith("control-parameter:", StringComparison.OrdinalIgnoreCase))
         {
-            var configuredRecipeCode = source["recipe:".Length..].Trim();
-            return TryResolveRecipeValue(recipeValues, configuredRecipeCode, variable.Unit, out value, out reason);
+            var configuredProcessSpecificationCode = source["control-parameter:".Length..].Trim();
+            return TryResolveProcessSpecificationValue(controlParameterValues, configuredProcessSpecificationCode, variable.Unit, out value, out reason);
         }
         if (!string.IsNullOrWhiteSpace(source))
         {
-            reason = "数据来源必须是 recipe:<code> 或 signal:<code>:<feature>[:<phase>]";
+            reason = "数据来源必须是 control-parameter:<code> 或 signal:<code>:<feature>[:<phase>]";
             return false;
         }
-        return TryResolveRecipeValue(recipeValues, variable.Code, variable.Unit, out value, out reason);
+        return TryResolveProcessSpecificationValue(controlParameterValues, variable.Code, variable.Unit, out value, out reason);
     }
 
-    private static bool TryResolveRecipeValue(
-        IReadOnlyDictionary<string, ActualValue> recipeValues,
+    private static bool TryResolveProcessSpecificationValue(
+        IReadOnlyDictionary<string, ActualValue> controlParameterValues,
         string code,
         string expectedUnit,
         out double value,
         out string reason)
     {
         value = default;
-        if (!recipeValues.TryGetValue(code, out var actual) || !double.IsFinite(actual.Value))
+        if (!controlParameterValues.TryGetValue(code, out var actual) || !double.IsFinite(actual.Value))
         {
             reason = "缺少设备实际参数回读";
             return false;
@@ -312,7 +312,7 @@ public sealed class ResearchObservationAssembler(
     }
 
     private static bool TryResolveSignalFeature(
-        CycleComparisonRow cycle,
+        ExecutionComparisonRow execution,
         string source,
         string expectedUnit,
         out double value,
@@ -325,7 +325,7 @@ public sealed class ResearchObservationAssembler(
             reason = "过程信号来源格式无效";
             return false;
         }
-        var signal = cycle.Signals.FirstOrDefault(
+        var signal = execution.Signals.FirstOrDefault(
             item => string.Equals(item.Code, parts[1], StringComparison.Ordinal));
         if (signal is null)
         {
@@ -355,10 +355,10 @@ public sealed class ResearchObservationAssembler(
         return true;
     }
 
-    private static Dictionary<string, double> FlattenFeatures(CycleComparisonRow cycle)
+    private static Dictionary<string, double> FlattenFeatures(ExecutionComparisonRow execution)
     {
         var result = new Dictionary<string, double>(StringComparer.Ordinal);
-        foreach (var signal in cycle.Signals.OrderBy(static value => value.Code, StringComparer.Ordinal))
+        foreach (var signal in execution.Signals.OrderBy(static value => value.Code, StringComparer.Ordinal))
         {
             if (signal.Average is { } average && double.IsFinite(average))
                 result[$"{signal.Code}.average"] = average;
@@ -371,7 +371,7 @@ public sealed class ResearchObservationAssembler(
                 if (!double.IsFinite(feature.Value!.Value))
                     continue;
                 var phase = feature.PhaseCode is null
-                    ? "cycle"
+                    ? "execution"
                     : $"{feature.PhaseCode}[{feature.PhaseOrder ?? 1}]";
                 result[$"{signal.Code}.{phase}.{feature.Code}"] = feature.Value.Value;
             }

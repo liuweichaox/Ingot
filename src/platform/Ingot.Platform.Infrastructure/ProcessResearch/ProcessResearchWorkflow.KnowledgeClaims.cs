@@ -17,17 +17,17 @@ public sealed partial class ProcessResearchWorkflow
         CancellationToken ct = default)
     {
         var project = await RequireMutableProjectAsync(projectId, ct).ConfigureAwait(false);
-        ResearchProcessWindow? referencedWindow = null;
-        if (request.ProcessWindowId is { } windowId)
+        ResearchOperatingRegion? referencedOperatingRegion = null;
+        if (request.OperatingRegionId is { } operatingRegionId)
         {
-            referencedWindow = await store.GetProcessWindowAsync(windowId, ct).ConfigureAwait(false);
-            if (referencedWindow is null || referencedWindow.ProjectId != projectId ||
-                referencedWindow.Status != ProcessWindowStatuses.Validated ||
-                referencedWindow.ValidationLevel is not (
-                    ProcessWindowValidationLevels.Laboratory or
-                    ProcessWindowValidationLevels.Production))
+            referencedOperatingRegion = await store.GetOperatingRegionAsync(operatingRegionId, ct).ConfigureAwait(false);
+            if (referencedOperatingRegion is null || referencedOperatingRegion.ProjectId != projectId ||
+                referencedOperatingRegion.Status != OperatingRegionStatuses.Validated ||
+                referencedOperatingRegion.ValidationLevel is not (
+                    OperatingRegionValidationLevels.Laboratory or
+                    OperatingRegionValidationLevels.Production))
                 throw new ProcessResearchRuleException(
-                    "知识声明只能引用经过跨区组重复实验验证的工艺窗口。");
+                    "知识声明只能引用经过跨区组重复实验验证的工艺操作域。");
         }
         ResearchTransferAssessment? referencedTransfer = null;
         if (request.TransferAssessmentId is { } assessmentId)
@@ -40,15 +40,15 @@ public sealed partial class ProcessResearchWorkflow
                 referencedTransfer.TargetProjectRevision != project.Revision)
                 throw new ProcessResearchRuleException(
                     "知识声明只能引用目标项目当前版本中经过独立复核且有收益的迁移评估。");
-            var sourceWindow = await store.GetProcessWindowAsync(
-                referencedTransfer.SourceWindowId, ct).ConfigureAwait(false);
-            if (sourceWindow?.Status != ProcessWindowStatuses.Validated ||
-                sourceWindow.ValidationLevel != ProcessWindowValidationLevels.Production ||
-                sourceWindow.AnalysisHash != referencedTransfer.SourceWindowAnalysisHash)
-                throw new ProcessResearchRuleException("迁移评估引用的源工艺窗口已经失效。");
+            var sourceOperatingRegion = await store.GetOperatingRegionAsync(
+                referencedTransfer.SourceOperatingRegionId, ct).ConfigureAwait(false);
+            if (sourceOperatingRegion?.Status != OperatingRegionStatuses.Validated ||
+                sourceOperatingRegion.ValidationLevel != OperatingRegionValidationLevels.Production ||
+                sourceOperatingRegion.AnalysisHash != referencedTransfer.SourceOperatingRegionAnalysisHash)
+                throw new ProcessResearchRuleException("迁移评估引用的源工艺操作域已经失效。");
             var repeated = (await store.ListTransferAssessmentsAsync(projectId, ct)
                     .ConfigureAwait(false))
-                .Where(value => value.SourceWindowId == referencedTransfer.SourceWindowId &&
+                .Where(value => value.SourceOperatingRegionId == referencedTransfer.SourceOperatingRegionId &&
                                 value.Status == ResearchTransferAssessmentStatuses.Reviewed &&
                                 value.Outcome == ResearchTransferOutcomes.Beneficial &&
                                 value.TargetProjectRevision == project.Revision)
@@ -69,14 +69,14 @@ public sealed partial class ProcessResearchWorkflow
             throw new ProcessResearchRuleException("已发布或已停用的知识声明保持不可变。");
 
         var evidence = NormalizeEvidence(projectId, request.Evidence).ToList();
-        if (referencedWindow is not null)
+        if (referencedOperatingRegion is not null)
         {
             evidence.Add(CreateEvidence(
                 projectId,
-                EvidenceKinds.ProcessWindow,
-                referencedWindow.WindowId.ToString(),
-                "知识声明引用的已验证工艺窗口。",
-                referencedWindow.AnalysisHash,
+                EvidenceKinds.OperatingRegion,
+                referencedOperatingRegion.OperatingRegionId.ToString(),
+                "知识声明引用的已验证工艺操作域。",
+                referencedOperatingRegion.AnalysisHash,
                 now));
         }
         if (referencedTransfer is not null)

@@ -38,7 +38,7 @@ public sealed record SignalDataCoverage
     public double Coverage { get; init; }
 }
 
-public sealed record CycleSignalFeature
+public sealed record ProcessSignalFeature
 {
     public required string Code { get; init; }
     /// <summary>特征定义版本；与定义哈希共同标识公式语义。</summary>
@@ -48,13 +48,13 @@ public sealed record CycleSignalFeature
     /// <summary>定义、输入点和计算窗口的 SHA-256，可用于复算核对。</summary>
     public string ComputationHash { get; init; } = "";
     public int InputPointCount { get; init; }
-    /// <summary>空值表示整周期特征；非空值表示该工艺阶段内的特征。</summary>
+    /// <summary>空值表示整次执行特征；非空值表示该工艺阶段内的特征。</summary>
     public string? PhaseCode { get; init; }
     public string? PhaseName { get; init; }
-    /// <summary>同一阶段在一个周期内可重复出现，序号从 1 开始。</summary>
+    /// <summary>同一阶段在一次过程执行内可重复出现，序号从 1 开始。</summary>
     public int? PhaseOrder { get; init; }
-    /// <summary>cycle、stage_number 或 unknown。</summary>
-    public string PhaseSource { get; init; } = "cycle";
+    /// <summary>execution、stage_number 或 unknown。</summary>
+    public string PhaseSource { get; init; } = "execution";
     public DateTimeOffset? StartedAt { get; init; }
     public DateTimeOffset? EndedAt { get; init; }
     public double? Value { get; init; }
@@ -63,18 +63,15 @@ public sealed record CycleSignalFeature
 }
 
 /// <summary>
-///     周期分析结果的计算与持久化状态。源事件水位、配置版本和算法版本共同决定结果能否复用。
+///     过程执行分析结果的计算与持久化状态。源事件水位、配置版本和算法版本共同决定结果能否复用。
 /// </summary>
-public sealed record CycleAnalysisMaterialization
+public sealed record ProcessExecutionAnalysisMaterialization
 {
     /// <summary>query-time、materialized 或 cached。</summary>
     public string Status { get; init; } = "query-time";
 
-    /// <summary>
-    ///     Historical payloads without this field predate explicit algorithm versioning and are
-    ///     interpreted as v1. Current computation paths always assign their fingerprinted version.
-    /// </summary>
-    public string AlgorithmVersion { get; init; } = "stage-relative-v1";
+    /// <summary>生成该结果的算法版本；尚未计算时为 uncomputed。</summary>
+    public string AlgorithmVersion { get; init; } = "uncomputed";
 
     public DateTimeOffset? ComputedAt { get; init; }
 
@@ -88,27 +85,27 @@ public sealed record CycleAnalysisMaterialization
     public string SourceContentHash { get; init; } = "";
 }
 
-public sealed record CycleAnalysisBackfillRequest
+public sealed record ProcessExecutionAnalysisBackfillRequest
 {
     public DateTimeOffset? From { get; init; }
     public DateTimeOffset? To { get; init; }
-    public string? ProductSeries { get; init; }
+    public string? ProductFamilyCode { get; init; }
     public string? ProductCode { get; init; }
-    public string? RecipeId { get; init; }
-    public string? MachineId { get; init; }
+    public string? ProcessSpecificationId { get; init; }
+    public string? EquipmentId { get; init; }
     public int PageSize { get; init; } = 100;
 }
 
-public sealed record CycleAnalysisBackfillJob
+public sealed record ProcessExecutionAnalysisBackfillJob
 {
     public Guid JobId { get; init; }
-    public CycleAnalysisBackfillRequest Request { get; init; } = new();
+    public ProcessExecutionAnalysisBackfillRequest Request { get; init; } = new();
     public string Status { get; init; } = "queued";
-    public int TotalCycles { get; init; }
-    public int ProcessedCycles { get; init; }
-    public int MaterializedCycles { get; init; }
-    public int FailedCycles { get; init; }
-    public string? LastCorrelationId { get; init; }
+    public int TotalProcessExecutions { get; init; }
+    public int ProcessedProcessExecutions { get; init; }
+    public int MaterializedProcessExecutions { get; init; }
+    public int FailedProcessExecutions { get; init; }
+    public string? LastExecutionId { get; init; }
     public string? Error { get; init; }
     public string CreatedBy { get; init; } = "";
     public DateTimeOffset CreatedAt { get; init; }
@@ -116,12 +113,12 @@ public sealed record CycleAnalysisBackfillJob
     public DateTimeOffset? CompletedAt { get; init; }
 }
 
-public sealed record CycleFeatureAggregate
+public sealed record ProcessExecutionFeatureAggregate
 {
     public required string SignalCode { get; init; }
     public required string PhaseCode { get; init; }
     public required string FeatureCode { get; init; }
-    public long CycleCount { get; init; }
+    public long ProcessExecutionCount { get; init; }
     public double Minimum { get; init; }
     public double Maximum { get; init; }
     public double Average { get; init; }

@@ -38,13 +38,4 @@ public sealed class MigrationRunnerTests
         Assert.Contains("Ingot.Platform.Infrastructure.Migrations.sql.0001_baseline.sql", names);
     }
 
-    [Fact]
-    public void Legacy_adoption_preserves_incompatible_cycle_tables_before_baseline()
-    {
-        Assert.Contains("cycle_phases_legacy_v1", MigrationRunner.LegacySchemaAdoptionSql);
-        Assert.Contains("cycle_features_legacy_v1", MigrationRunner.LegacySchemaAdoptionSql);
-        Assert.Contains("column_name = 'algorithm_version'", MigrationRunner.LegacySchemaAdoptionSql);
-        Assert.Contains("column_name = 'signal_code'", MigrationRunner.LegacySchemaAdoptionSql);
-        Assert.DoesNotContain("DROP TABLE", MigrationRunner.LegacySchemaAdoptionSql);
-    }
 }

@@ -49,7 +49,7 @@ function qualityItem(value = {}) {
 function dataItem(value = {}) {
   return {
     code: value.code || "",
-    sourceField: value.sourceField || "",
+    displayName: value.displayName || "",
     dataType: value.dataType || "double",
     unit: value.unit || "",
     category: value.category || "process",
@@ -57,17 +57,17 @@ function dataItem(value = {}) {
   };
 }
 
-function recipeParameter(value = {}) {
+function controlParameter(value = {}) {
   return {
     code: value.code || "",
-    sourceField: value.sourceField || "",
+    displayName: value.displayName || "",
     dataType: value.dataType || "double",
     unit: value.unit || "",
     nullable: value.nullable !== false,
   };
 }
 
-function recipeValue(value = {}) {
+function controlParameterValue(value = {}) {
   return {
     code: value.code || "",
     value: value.value === undefined || value.value === null ? "" : String(value.value),
@@ -121,10 +121,10 @@ export function createRegistryBusinessForm(kind, value = {}, version) {
         effectiveFrom: localDateTime(value.effectiveFrom),
         effectiveTo: localDateTime(value.effectiveTo),
         scope: {
-          productSeries: value.scope?.productSeries || "",
+          productFamilyCode: value.scope?.productFamilyCode || "",
           productCode: value.scope?.productCode || "",
-          recipeId: value.scope?.recipeId || "",
-          machineId: value.scope?.machineId || "",
+          processSpecificationId: value.scope?.processSpecificationId || "",
+          equipmentId: value.scope?.equipmentId || "",
         },
         contextPairs: pairsFromObject(value.scope?.contextSelector),
         items: (value.items || []).length ? value.items.map(qualityItem) : [qualityItem()],
@@ -137,18 +137,18 @@ export function createRegistryBusinessForm(kind, value = {}, version) {
         description: value.description || "",
         status: versionedStatus(value, version),
         dataItems: (value.acquisition?.dataItems || []).length ? value.acquisition.dataItems.map(dataItem) : [dataItem()],
-        recipeParameters: (value.recipeParameters || []).map(recipeParameter),
+        controlParameters: (value.controlParameters || []).map(controlParameter),
       };
-    case "recipeVersion":
+    case "processSpecificationVersion":
       return {
-        recipeId: value.recipeId || "",
+        processSpecificationId: value.processSpecificationId || "",
         version: version ?? value.version ?? 1,
         name: value.name || "",
         basedOnVersion: value.basedOnVersion ?? "",
         dataModel: modelValue(value.dataModelId, value.dataModelVersion),
         status: versionedStatus(value, version),
         contextPairs: pairsFromObject(value.contextSelector),
-        values: (value.values || []).map(recipeValue),
+        values: (value.values || []).map(controlParameterValue),
       };
     case "analysisPlan":
       return {
@@ -158,10 +158,10 @@ export function createRegistryBusinessForm(kind, value = {}, version) {
         description: value.description || "",
         status: versionedStatus(value, version),
         dataModel: modelValue(value.dataModelId, value.dataModelVersion),
-        analysisScope: value.analysisScope || "production-cycle",
+        analysisScope: value.analysisScope || "production-execution",
         alignmentMode: value.alignmentMode || "stage-relative",
         cohortDimension: value.cohortDimension || "",
-        comparisonKeys: (value.comparisonKeys || ["product_series"]).join(", "),
+        comparisonKeys: (value.comparisonKeys || ["product_family_code"]).join(", "),
         contextPairs: pairsFromObject(value.contextSelector),
         signals: (value.signals || []).length ? value.signals.map(analysisSignal) : [analysisSignal()],
       };
@@ -198,10 +198,10 @@ export function registryBusinessPayload(kind, form) {
       effectiveFrom: apiDateTime(form.effectiveFrom),
       effectiveTo: apiDateTime(form.effectiveTo),
       scope: {
-        productSeries: form.scope.productSeries.trim() || null,
+        productFamilyCode: form.scope.productFamilyCode.trim() || null,
         productCode: form.scope.productCode.trim() || null,
-        recipeId: form.scope.recipeId.trim() || null,
-        machineId: form.scope.machineId.trim() || null,
+        processSpecificationId: form.scope.processSpecificationId.trim() || null,
+        equipmentId: form.scope.equipmentId.trim() || null,
         contextSelector: objectFromPairs(form.contextPairs),
       },
       items: form.items.map(item => {
@@ -228,22 +228,22 @@ export function registryBusinessPayload(kind, form) {
         dataItems: form.dataItems.map(item => ({
           ...item,
           code: item.code.trim(),
-          sourceField: item.sourceField.trim(),
+          displayName: item.displayName.trim(),
           unit: item.unit.trim() || null,
         })),
       },
-      recipeParameters: form.recipeParameters.map(item => ({
+      controlParameters: form.controlParameters.map(item => ({
         ...item,
         code: item.code.trim(),
-        sourceField: item.sourceField.trim(),
+        displayName: item.displayName.trim(),
         unit: item.unit.trim() || null,
       })),
     };
   }
-  if (kind === "recipeVersion") {
+  if (kind === "processSpecificationVersion") {
     const selectedModel = parseModelValue(form.dataModel);
     return {
-      recipeId: form.recipeId.trim(),
+      processSpecificationId: form.processSpecificationId.trim(),
       version: Number(form.version),
       name: form.name.trim(),
       basedOnVersion: numberOrNull(form.basedOnVersion),
@@ -325,7 +325,7 @@ export function registryBusinessPayload(kind, form) {
 
 export function registryBusinessValidation(kind, form) {
   const identity = kind === "processModel" ? form.modelId
-    : kind === "recipeVersion" ? form.recipeId
+    : kind === "processSpecificationVersion" ? form.processSpecificationId
       : kind === "scenarioPackage" ? form.packageId
         : form.planId;
   if (!codePattern.test(identity.trim())) return "代码只能使用小写字母、数字、点、下划线和连字符。";
@@ -339,12 +339,12 @@ export function registryBusinessValidation(kind, form) {
   }
   if (kind === "processModel") {
     if (form.dataItems.length === 0) return "请至少添加一个工艺变量。";
-    const allItems = [...form.dataItems, ...form.recipeParameters];
-    if (allItems.some(item => !codePattern.test(item.code.trim()) || !item.sourceField.trim())) return "工艺变量和配方参数需填写有效代码与显示名称。";
+    const allItems = [...form.dataItems, ...form.controlParameters];
+    if (allItems.some(item => !codePattern.test(item.code.trim()) || !item.displayName.trim())) return "工艺变量和控制参数需填写有效代码与显示名称。";
   }
-  if (kind === "recipeVersion") {
+  if (kind === "processSpecificationVersion") {
     if (!form.dataModel) return "请选择工艺数据模型。";
-    if (form.values.some(item => !item.code || item.value === "")) return "配方参数需选择参数并填写值。";
+    if (form.values.some(item => !item.code || item.value === "")) return "控制参数需选择参数并填写值。";
   }
   if (kind === "analysisPlan") {
     if (!form.dataModel) return "请选择工艺数据模型。";
@@ -444,7 +444,7 @@ function QualityPlanEditor({ form, onChange, readOnly, lockIdentity }) {
       </Card>
       <Card title="适用范围" description="只填写需要限制的条件；全部留空表示不限定。">
         <div className="grid gap-4 md:grid-cols-2">
-          {[["productSeries", "产品系列"], ["productCode", "产品编号"], ["recipeId", "配方编号"], ["machineId", "设备编号"]].map(([key, label]) => (
+          {[["productFamilyCode", "产品系列"], ["productCode", "产品编号"], ["processSpecificationId", "工艺规范编号"], ["equipmentId", "设备编号"]].map(([key, label]) => (
             <Field key={key} label={label}><Input value={form.scope[key]} disabled={readOnly} onChange={event => updateNested(form, onChange, "scope", key, event.target.value)} /></Field>
           ))}
         </div>
@@ -485,17 +485,17 @@ function ProcessModelEditor({ form, onChange, readOnly, lockIdentity }) {
         <p className="text-sm leading-6 text-slate-600">同一模型可以复用于多台设备；每台设备的协议、寄存器、原始类型和换算规则在“设备接入与映射”中配置。</p>
       </Card>
       <ItemDefinitions form={form} onChange={onChange} field="dataItems" title="工艺变量" readOnly={readOnly} includeCategory />
-      <ItemDefinitions form={form} onChange={onChange} field="recipeParameters" title="配方参数结构" readOnly={readOnly} />
+      <ItemDefinitions form={form} onChange={onChange} field="controlParameters" title="控制参数结构" readOnly={readOnly} />
     </div>
   );
 }
 
 function ItemDefinitions({ form, onChange, field, title, readOnly, includeCategory = false }) {
-  const factory = field === "dataItems" ? dataItem : recipeParameter;
+  const factory = field === "dataItems" ? dataItem : controlParameter;
   return (
     <Card
       title={title}
-      description={field === "dataItems" ? "定义稳定业务代码、显示名称、平台类型和标准单位；阶段号的用途分类设为“阶段号”。" : "只定义配方参数的业务结构，具体寄存器在设备接入中映射。"}
+      description={field === "dataItems" ? "定义稳定业务代码、显示名称、平台类型和标准单位；阶段号的用途分类设为“阶段号”。" : "只定义控制参数的业务结构，具体寄存器在设备接入中映射。"}
       actions={!readOnly ? <Button onClick={() => addRow(form, onChange, field, factory())}>添加{title}</Button> : undefined}
     >
       <div className="grid gap-4">
@@ -503,7 +503,7 @@ function ItemDefinitions({ form, onChange, field, title, readOnly, includeCatego
         {form[field].map((item, index) => (
           <div key={index} className="grid gap-3 rounded-xl border border-slate-200 p-4 md:grid-cols-2 xl:grid-cols-3">
             <Field label="数据代码"><Input value={item.code} disabled={readOnly} onChange={event => updateRow(form, onChange, field, index, { code: event.target.value })} /></Field>
-            <Field label="显示名称"><Input value={item.sourceField} disabled={readOnly} onChange={event => updateRow(form, onChange, field, index, { sourceField: event.target.value })} /></Field>
+            <Field label="显示名称"><Input value={item.displayName} disabled={readOnly} onChange={event => updateRow(form, onChange, field, index, { displayName: event.target.value })} /></Field>
             <Field label="数据类型"><DataTypeSelect value={item.dataType} disabled={readOnly} onChange={event => updateRow(form, onChange, field, index, { dataType: event.target.value })} /></Field>
             <Field label="单位"><Input value={item.unit} disabled={readOnly} onChange={event => updateRow(form, onChange, field, index, { unit: event.target.value })} /></Field>
             {includeCategory && <Field label="用途分类"><Select value={item.category} disabled={readOnly} onChange={event => updateRow(form, onChange, field, index, { category: event.target.value })}><option value="process">过程值</option><option value="stage">阶段号</option><option value="setpoint">设定值</option><option value="state">状态</option><option value="quality">质量</option></Select></Field>}
@@ -525,36 +525,36 @@ function ModelSelect({ value, models, disabled, onChange }) {
   );
 }
 
-function RecipeEditor({ form, onChange, readOnly, lockIdentity }) {
+function ProcessSpecificationEditor({ form, onChange, readOnly, lockIdentity }) {
   const { data, error } = useApi("/api/v1/process-data-models");
   const models = extractRows(data);
   const selected = parseModelValue(form.dataModel);
   const model = models.find(item => item.modelId === selected.id && item.version === selected.version);
-  const parameters = model?.recipeParameters || [];
+  const parameters = model?.controlParameters || [];
   return (
     <div className="grid gap-5">
       {error && <Alert tone="danger">工艺数据模型读取失败：{error}</Alert>}
-      <IdentityFields form={form} onChange={onChange} idField="recipeId" idLabel="配方代码" readOnly={readOnly} lockIdentity={lockIdentity} description={false} />
-      <Card title="配方来源">
+      <IdentityFields form={form} onChange={onChange} idField="processSpecificationId" idLabel="工艺规范代码" readOnly={readOnly} lockIdentity={lockIdentity} description={false} />
+      <Card title="工艺规范来源">
         <div className="grid gap-4 md:grid-cols-2">
           <Field label="工艺数据模型"><ModelSelect value={form.dataModel} models={models} disabled={readOnly} onChange={event => updateAt(form, onChange, "dataModel", event.target.value)} /></Field>
           <Field label="沿用自版本"><Input type="number" min="1" value={form.basedOnVersion} disabled={readOnly} onChange={event => updateAt(form, onChange, "basedOnVersion", event.target.value)} placeholder="没有可留空" /></Field>
         </div>
       </Card>
       <PairEditor title="适用条件" description="例如产品系列或设备范围。" pairs={form.contextPairs} readOnly={readOnly} onChange={value => updateAt(form, onChange, "contextPairs", value)} />
-      <Card title="配方参数" actions={!readOnly ? <Button onClick={() => addRow(form, onChange, "values", recipeValue())}>添加参数</Button> : undefined}>
+      <Card title="控制参数" actions={!readOnly ? <Button onClick={() => addRow(form, onChange, "values", controlParameterValue())}>添加参数</Button> : undefined}>
         <div className="grid gap-3">
           {form.values.length === 0 && <p className="text-sm text-slate-500">尚未设置参数。</p>}
           {form.values.map((item, index) => {
             const parameter = parameters.find(value => value.code === item.code);
             return (
               <div key={index} className="grid gap-2 md:grid-cols-[1fr_1fr_auto]">
-                <Select value={item.code} disabled={readOnly} aria-label={`配方参数 ${index + 1}`} onChange={event => {
+                <Select value={item.code} disabled={readOnly} aria-label={`控制参数 ${index + 1}`} onChange={event => {
                   const next = parameters.find(value => value.code === event.target.value);
                   updateRow(form, onChange, "values", index, { code: event.target.value, value: "", dataType: next?.dataType || "string" });
                 }}>
                   <option value="">请选择参数</option>
-                  {parameters.map(value => <option key={value.code} value={value.code}>{value.sourceField || value.code}{value.unit ? `（${value.unit}）` : ""}</option>)}
+                  {parameters.map(value => <option key={value.code} value={value.code}>{value.displayName || value.code}{value.unit ? `（${value.unit}）` : ""}</option>)}
                 </Select>
                 {parameter?.dataType === "boolean" ? (
                   <Select value={item.value} disabled={readOnly} aria-label={`参数值 ${index + 1}`} onChange={event => updateRow(form, onChange, "values", index, { value: event.target.value })}><option value="">请选择</option><option value="true">是</option><option value="false">否</option></Select>
@@ -582,10 +582,10 @@ function AnalysisPlanEditor({ form, onChange, readOnly, lockIdentity }) {
       <Card title="分析方式">
         <div className="grid gap-4 md:grid-cols-2">
           <Field label="工艺数据模型"><ModelSelect value={form.dataModel} models={models} disabled={readOnly} onChange={event => updateAt(form, onChange, "dataModel", event.target.value)} /></Field>
-          <Field label="分析范围"><Select value={form.analysisScope} disabled={readOnly} onChange={event => updateAt(form, onChange, "analysisScope", event.target.value)}><option value="production-cycle">单次生产运行</option><option value="production-run">生产运行段</option><option value="analysis-window">自定义时间窗口</option></Select></Field>
+          <Field label="分析范围"><Select value={form.analysisScope} disabled={readOnly} onChange={event => updateAt(form, onChange, "analysisScope", event.target.value)}><option value="production-execution">单次生产运行</option><option value="production-run">生产运行段</option><option value="analysis-window">自定义时间窗口</option></Select></Field>
           <Field label="曲线对齐方式"><Select value={form.alignmentMode} disabled={readOnly} onChange={event => updateAt(form, onChange, "alignmentMode", event.target.value)}><option value="stage-relative">按工艺阶段</option><option value="elapsed">按经过时间</option><option value="normalized">按归一化进度</option></Select></Field>
           <Field label="质量分组字段"><Input value={form.cohortDimension} disabled={readOnly} onChange={event => updateAt(form, onChange, "cohortDimension", event.target.value)} placeholder="例如 quality.outcome" /></Field>
-          <Field label="同类比较字段" hint="多个字段用逗号分隔。" className="md:col-span-2"><Input value={form.comparisonKeys} disabled={readOnly} onChange={event => updateAt(form, onChange, "comparisonKeys", event.target.value)} placeholder="product_series, recipe_id" /></Field>
+          <Field label="同类比较字段" hint="多个字段用逗号分隔。" className="md:col-span-2"><Input value={form.comparisonKeys} disabled={readOnly} onChange={event => updateAt(form, onChange, "comparisonKeys", event.target.value)} placeholder="product_family_code, process_specification_id" /></Field>
         </div>
       </Card>
       <PairEditor title="分析对象筛选" description="只分析符合这些条件的生产记录。" pairs={form.contextPairs} readOnly={readOnly} onChange={value => updateAt(form, onChange, "contextPairs", value)} />
@@ -594,7 +594,7 @@ function AnalysisPlanEditor({ form, onChange, readOnly, lockIdentity }) {
           {form.signals.map((signal, index) => (
             <div key={index} className="grid gap-3 rounded-xl border border-slate-200 p-4">
               <div className="grid gap-3 md:grid-cols-[1fr_auto_auto]">
-                <Field label={`数据项 ${index + 1}`}><Select value={signal.dataItemCode} disabled={readOnly} onChange={event => updateRow(form, onChange, "signals", index, { dataItemCode: event.target.value })}><option value="">请选择</option>{dataItems.map(item => <option key={item.code} value={item.code}>{item.sourceField || item.code}</option>)}</Select></Field>
+                <Field label={`数据项 ${index + 1}`}><Select value={signal.dataItemCode} disabled={readOnly} onChange={event => updateRow(form, onChange, "signals", index, { dataItemCode: event.target.value })}><option value="">请选择</option>{dataItems.map(item => <option key={item.code} value={item.code}>{item.displayName || item.code}</option>)}</Select></Field>
                 <label className="flex items-center gap-2 self-end pb-2 text-sm"><input type="checkbox" checked={signal.includeTrace} disabled={readOnly} onChange={event => updateRow(form, onChange, "signals", index, { includeTrace: event.target.checked })} />保留曲线</label>
                 {!readOnly && form.signals.length > 1 && <Button variant="ghost" className="self-end text-rose-700" onClick={() => removeRow(form, onChange, "signals", index)}>移除</Button>}
               </div>
@@ -690,7 +690,7 @@ export function RegistryBusinessEditor({ kind, form, onChange, readOnly, lockIde
       {!readOnly && validation && <Alert tone="warning">{validation}</Alert>}
       {kind === "qualityPlan" && <QualityPlanEditor form={form} onChange={onChange} readOnly={readOnly} lockIdentity={lockIdentity} />}
       {kind === "processModel" && <ProcessModelEditor form={form} onChange={onChange} readOnly={readOnly} lockIdentity={lockIdentity} />}
-      {kind === "recipeVersion" && <RecipeEditor form={form} onChange={onChange} readOnly={readOnly} lockIdentity={lockIdentity} />}
+      {kind === "processSpecificationVersion" && <ProcessSpecificationEditor form={form} onChange={onChange} readOnly={readOnly} lockIdentity={lockIdentity} />}
       {kind === "analysisPlan" && <AnalysisPlanEditor form={form} onChange={onChange} readOnly={readOnly} lockIdentity={lockIdentity} />}
       {kind === "scenarioPackage" && <ScenarioPackageEditor form={form} onChange={onChange} readOnly={readOnly} lockIdentity={lockIdentity} />}
     </div>

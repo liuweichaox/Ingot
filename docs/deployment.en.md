@@ -80,7 +80,7 @@ Platform publishes versioned acquisition configuration by `EdgeId`. Edge pulls a
 - Modbus TCP and MELSEC read only explicitly configured addresses and never blind-scan.
 - Real-value validation runs before and during publication.
 
-Apply configuration at a process-safe boundary. For cyclic equipment, prefer switching between cycles and retain the old version on failure.
+Apply configuration at a process-safe boundary. For cyclic equipment, prefer switching between process executions and retain the old version on failure.
 
 ## Health and readiness
 

@@ -26,7 +26,7 @@ public sealed class ProcessResearchWorkflowTests
             "experiments/{experimentId:guid}/materialize-result",
             postRoutes);
         Assert.Contains(
-            "experiments/{experimentId:guid}/runs/{suggestionRunKey}/shadow-decision",
+            "experiments/{experimentId:guid}/runs/{suggestionExecutionKey}/shadow-decision",
             postRoutes);
         Assert.Contains(
             "shadow-recommendations/{recommendationId:guid}/materialize-outcome",
@@ -105,7 +105,7 @@ public sealed class ProcessResearchWorkflowTests
     }
 
     [Fact]
-    public async Task ResearchProject_CompletesOnlyAfterValidatedProcessWindow()
+    public async Task ResearchProject_CompletesOnlyAfterValidatedOperatingRegion()
     {
         var store = new MemoryStore();
         var workflow = new ProcessResearchWorkflow(store);
@@ -120,7 +120,7 @@ public sealed class ProcessResearchWorkflowTests
             new ResearchHypothesis
             {
                 Statement = "保压温度和压力共同影响面形误差。",
-                Rationale = "历史周期、物理机理和专家经验均指向该交互关系。",
+                Rationale = "历史过程执行、物理机理和专家经验均指向该交互关系。",
                 VariableCodes = ["holding-temperature", "press-force"],
                 ValidationOutcomeCode = "form-error",
                 ExpectedEffectDirection = ResearchHypothesisEffectDirections.Decrease,
@@ -158,7 +158,7 @@ public sealed class ProcessResearchWorkflowTests
                 ],
                 ObjectiveCodes = ["form-error"],
                 StopRule = "安全约束触发时停止。",
-                RollbackPlan = "恢复已验证基线配方。"
+                RollbackPlan = "恢复已验证基线工艺规范。"
             },
             "engineer-a");
         experiment = await workflow.ChangeExperimentStatusAsync(
@@ -194,7 +194,7 @@ public sealed class ProcessResearchWorkflowTests
                 [
                     new ExperimentRunObservation
                     {
-                        RunKey = "low-low",
+                        ExecutionKey = "low-low",
                         ActualFactors =
                         [
                             new ExperimentFactorSetting
@@ -223,7 +223,7 @@ public sealed class ProcessResearchWorkflowTests
                     },
                     new ExperimentRunObservation
                     {
-                        RunKey = "high-high",
+                        ExecutionKey = "high-high",
                         ActualFactors =
                         [
                             new ExperimentFactorSetting
@@ -266,21 +266,21 @@ public sealed class ProcessResearchWorkflowTests
             ResearchExperimentStatuses.Completed,
             "engineer-a");
 
-        var window = await workflow.SaveProcessWindowAsync(
+        var window = await workflow.SaveOperatingRegionAsync(
             project.ProjectId,
-            new ResearchProcessWindow
+            new ResearchOperatingRegion
             {
                 Name = "稳定成形窗口",
                 Variables =
                 [
-                    new ProcessWindowVariable
+                    new OperatingRegionVariable
                     {
                         VariableCode = "holding-temperature",
                         LowerBound = 520,
                         UpperBound = 520,
                         Unit = "Cel"
                     },
-                    new ProcessWindowVariable
+                    new OperatingRegionVariable
                     {
                         VariableCode = "press-force",
                         LowerBound = 12,
@@ -304,19 +304,19 @@ public sealed class ProcessResearchWorkflowTests
             ResearchProjectStatuses.Validating,
             "engineer-a");
         var prematureValidation = await Assert.ThrowsAsync<ProcessResearchRuleException>(
-            () => workflow.ValidateProcessWindowAsync(window.WindowId, "engineer-b"));
+            () => workflow.ValidateOperatingRegionAsync(window.OperatingRegionId, "engineer-b"));
         Assert.Contains("独立验证实验", prematureValidation.Message);
         await CompleteIndependentValidationAsync(workflow, window);
-        window = await workflow.ValidateProcessWindowAsync(window.WindowId, "engineer-b");
-        Assert.Equal(ProcessWindowValidationLevels.Laboratory, window.ValidationLevel);
-        window = await workflow.ReleaseProcessWindowAsync(window.WindowId, "engineer-c");
+        window = await workflow.ValidateOperatingRegionAsync(window.OperatingRegionId, "engineer-b");
+        Assert.Equal(OperatingRegionValidationLevels.Laboratory, window.ValidationLevel);
+        window = await workflow.ReleaseOperatingRegionAsync(window.OperatingRegionId, "engineer-c");
         project = await workflow.ChangeProjectStatusAsync(
             project.ProjectId,
             ResearchProjectStatuses.Completed,
             "engineer-a");
 
-        Assert.Equal(ProcessWindowStatuses.Validated, window.Status);
-        Assert.Equal(ProcessWindowValidationLevels.Production, window.ValidationLevel);
+        Assert.Equal(OperatingRegionStatuses.Validated, window.Status);
+        Assert.Equal(OperatingRegionValidationLevels.Production, window.ValidationLevel);
         Assert.Equal(ResearchProjectStatuses.Completed, project.Status);
         Assert.Equal(2, result.RunObservations.Count);
         Assert.Equal(2, result.RunCount);
@@ -329,7 +329,7 @@ public sealed class ProcessResearchWorkflowTests
         Assert.Equal(ResearchHypothesisStatuses.Supported, workspace.Hypotheses[0].Status);
         Assert.Single(workspace.Hypotheses[0].ValidationEvidence);
         Assert.Equal(2, workspace.Experiments.Count);
-        Assert.Single(workspace.ProcessWindows);
+        Assert.Single(workspace.OperatingRegions);
     }
 
     [Fact]
@@ -363,7 +363,7 @@ public sealed class ProcessResearchWorkflowTests
                 ],
                 ObjectiveCodes = ["form-error"],
                 StopRule = "安全约束触发时停止。",
-                RollbackPlan = "恢复基线配方。"
+                RollbackPlan = "恢复基线工艺规范。"
             },
             "engineer-a");
 
@@ -398,7 +398,7 @@ public sealed class ProcessResearchWorkflowTests
                 ],
                 ObjectiveCodes = ["form-error"],
                 StopRule = "安全约束触发时停止。",
-                RollbackPlan = "恢复基线配方。"
+                RollbackPlan = "恢复基线工艺规范。"
             },
             "engineer-a");
         await workflow.ChangeExperimentStatusAsync(
@@ -420,7 +420,7 @@ public sealed class ProcessResearchWorkflowTests
     }
 
     [Fact]
-    public async Task ResultMaterializer_PersistsCompleteCycleObservationsAsFormalResult()
+    public async Task ResultMaterializer_PersistsCompleteProcessExecutionObservationsAsFormalResult()
     {
         var store = new MemoryStore();
         var workflow = new ProcessResearchWorkflow(store);
@@ -433,9 +433,9 @@ public sealed class ProcessResearchWorkflowTests
                 DesignMethod = ResearchDesignMethods.HistoricalObservation,
                 RunPlan =
                 [
-                    Run("history-cycle-1", 1, 490, 8),
-                    Run("history-cycle-2", 2, 500, 9),
-                    Run("history-cycle-unrelated", 3, 540, 18)
+                    Run("history-execution-1", 1, 490, 8),
+                    Run("history-execution-2", 2, 500, 9),
+                    Run("history-execution-unrelated", 3, 540, 18)
                 ],
                 ObjectiveCodes = ["form-error"],
                 StopRule = "只读取历史证据。",
@@ -449,10 +449,10 @@ public sealed class ProcessResearchWorkflowTests
                 Name = "自动回灌实验",
                 RunPlan =
                 [
-                    Run("auto-cycle-1", 1, 510, 10),
-                    Run("auto-cycle-2", 2, 530, 14)
+                    Run("auto-execution-1", 1, 510, 10),
+                    Run("auto-execution-2", 2, 530, 14)
                 ],
-                BaselineRunKeys = ["history-cycle-1", "history-cycle-2"],
+                BaselineExecutionKeys = ["history-execution-1", "history-execution-2"],
                 ObjectiveCodes = ["form-error"],
                 StopRule = "完成全部运行。",
                 RollbackPlan = "恢复基线。"
@@ -467,14 +467,14 @@ public sealed class ProcessResearchWorkflowTests
             ResearchExperimentStatuses.Running,
             "engineer-a");
         ExperimentRunObservation Observation(
-            string runKey,
+            string executionKey,
             double temperature,
             double force,
             double outcome,
             char hash)
             => new()
             {
-                RunKey = runKey,
+                ExecutionKey = executionKey,
                 ActualFactors =
                 [
                     new ExperimentFactorSetting
@@ -492,18 +492,18 @@ public sealed class ProcessResearchWorkflowTests
                 ],
                 ProcessFeatures = new Dictionary<string, double>
                 {
-                    ["mold-temperature.cycle.average"] = temperature
+                    ["mold-temperature.execution.average"] = temperature
                 },
                 Outcomes = new Dictionary<string, double> { ["form-error"] = outcome },
                 SourceContentHash = new string(hash, 64)
             };
         var assembly = new ResearchObservationAssembly(
         [
-            Observation("history-cycle-1", 490, 8, 0.9, 'b'),
-            Observation("history-cycle-2", 500, 9, 0.7, 'c'),
-            Observation("history-cycle-unrelated", 540, 18, 9.9, 'f'),
-            Observation("auto-cycle-1", 510, 10, 0.52, 'd'),
-            Observation("auto-cycle-2", 530, 14, 0.37, 'e')
+            Observation("history-execution-1", 490, 8, 0.9, 'b'),
+            Observation("history-execution-2", 500, 9, 0.7, 'c'),
+            Observation("history-execution-unrelated", 540, 18, 9.9, 'f'),
+            Observation("auto-execution-1", 510, 10, 0.52, 'd'),
+            Observation("auto-execution-2", 530, 14, 0.37, 'e')
         ], 5);
         var materializer = new ResearchExperimentResultMaterializer(workflow);
 
@@ -512,12 +512,12 @@ public sealed class ProcessResearchWorkflowTests
             [historical, experiment],
             [],
             assembly,
-            "system-cycle-materializer");
+            "system-execution-materializer");
 
         var result = Assert.Single(results);
         Assert.Equal(2, result.RunObservations.Count);
         Assert.True(result.CalculatedFromSource);
-        Assert.StartsWith("cycle-observation-snapshot:", result.DatasetSnapshotId);
+        Assert.StartsWith("process-execution-observation-snapshot:", result.DatasetSnapshotId);
         var metric = Assert.Single(result.Metrics);
         Assert.Equal(0.8d, metric.BaselineValue, 6);
         Assert.Equal(0.445d, metric.ObservedValue, 6);
@@ -593,13 +593,13 @@ public sealed class ProcessResearchWorkflowTests
             ResearchExperimentStatuses.Running,
             "engineer-a");
 
-        ExperimentRunObservation Observation(string runKey, double outcome, char hash)
+        ExperimentRunObservation Observation(string executionKey, double outcome, char hash)
             => new()
             {
-                RunKey = runKey,
-                ActualFactors = runKey.EndsWith('1')
-                    ? Run(runKey, 1, 510, 10).Factors
-                    : Run(runKey, 2, 530, 14).Factors,
+                ExecutionKey = executionKey,
+                ActualFactors = executionKey.EndsWith('1')
+                    ? Run(executionKey, 1, 510, 10).Factors
+                    : Run(executionKey, 2, 530, 14).Factors,
                 Outcomes = new Dictionary<string, double> { ["form-error"] = outcome },
                 SourceContentHash = new string(hash, 64)
             };
@@ -616,7 +616,7 @@ public sealed class ProcessResearchWorkflowTests
                 Observation("current-1", 0.5, 'c'),
                 Observation("current-2", 0.3, 'd')
             ], 4),
-            "system-cycle-materializer");
+            "system-execution-materializer");
 
         var metric = Assert.Single(Assert.Single(results).Metrics);
         Assert.Equal(0, metric.BaselineSampleCount);
@@ -672,11 +672,11 @@ public sealed class ProcessResearchWorkflowTests
             experiment.ExperimentId,
             ResearchExperimentStatuses.Running,
             "engineer-a");
-        ExperimentRunObservation Observation(string runKey, double outcome, char hash)
+        ExperimentRunObservation Observation(string executionKey, double outcome, char hash)
             => new()
             {
-                RunKey = runKey,
-                ActualFactors = experiment.RunPlan.Single(value => value.RunKey == runKey).Factors,
+                ExecutionKey = executionKey,
+                ActualFactors = experiment.RunPlan.Single(value => value.ExecutionKey == executionKey).Factors,
                 Outcomes = new Dictionary<string, double> { ["form-error"] = outcome },
                 ConstraintOutcomes = new Dictionary<string, double>
                 {
@@ -712,7 +712,7 @@ public sealed class ProcessResearchWorkflowTests
                 SafetyPassed = true,
                 CalculatedFromSource = true
             },
-            "system-cycle-materializer");
+            "system-execution-materializer");
 
         Assert.False(result.SafetyPassed);
         Assert.Contains(
@@ -733,12 +733,12 @@ public sealed class ProcessResearchWorkflowTests
             ResultId = Guid.CreateVersion7(),
             ProjectId = project.ProjectId,
             ExperimentId = Guid.CreateVersion7(),
-            DatasetSnapshotId = "fx3u-cycle-snapshot",
+            DatasetSnapshotId = "fx3u-execution-snapshot",
             RunObservations =
             [
                 new ExperimentRunObservation
                 {
-                    RunKey = "fx3u-cycle-1",
+                    ExecutionKey = "fx3u-execution-1",
                     ActualFactors =
                     [
                         new ExperimentFactorSetting
@@ -755,7 +755,7 @@ public sealed class ProcessResearchWorkflowTests
                 },
                 new ExperimentRunObservation
                 {
-                    RunKey = "fx3u-cycle-context-missing",
+                    ExecutionKey = "fx3u-execution-context-missing",
                     ActualFactors =
                     [
                         new ExperimentFactorSetting
@@ -769,7 +769,7 @@ public sealed class ProcessResearchWorkflowTests
                     ],
                     Outcomes = new Dictionary<string, double> { ["form-error"] = 0.7 },
                     ValidForOptimization = false,
-                    ExclusionReason = "缺少分析必需上下文：mold_id",
+                    ExclusionReason = "缺少分析必需上下文：tooling_assembly_id",
                     SourceContentHash = new string('d', 64)
                 }
             ]
@@ -826,7 +826,7 @@ public sealed class ProcessResearchWorkflowTests
         var assembly = new ResearchObservationAssembly(
             experiment.RunPlan.Select((run, index) => new ExperimentRunObservation
             {
-                RunKey = run.RunKey,
+                ExecutionKey = run.ExecutionKey,
                 ActualFactors = run.Factors,
                 Outcomes = new Dictionary<string, double>
                 {
@@ -835,10 +835,10 @@ public sealed class ProcessResearchWorkflowTests
                 SourceContentHash = new string("defa"[index], 64)
             }).ToArray(),
             experiment.RunPlan.Count);
-        var windowMaterializer = new ResearchProcessWindowMaterializer(store, workflow);
+        var operatingRegionMaterializer = new ResearchOperatingRegionMaterializer(store, workflow);
         var resultMaterializer = new ResearchExperimentResultMaterializer(
             workflow,
-            windowMaterializer,
+            operatingRegionMaterializer,
             store);
         var results = await resultMaterializer.MaterializeCompletedAsync(
             project,
@@ -849,9 +849,9 @@ public sealed class ProcessResearchWorkflowTests
         var result = Assert.Single(results);
         Assert.Equal(2, result.ReplicateCount);
         Assert.Equal(2, result.DistinctBlockCount);
-        var candidate = Assert.Single(await store.ListProcessWindowsAsync(project.ProjectId));
-        Assert.Equal(ProcessWindowStatuses.Candidate, candidate.Status);
-        Assert.Equal(ProcessWindowValidationLevels.Evidence, candidate.ValidationLevel);
+        var candidate = Assert.Single(await store.ListOperatingRegionsAsync(project.ProjectId));
+        Assert.Equal(OperatingRegionStatuses.Candidate, candidate.Status);
+        Assert.Equal(OperatingRegionValidationLevels.Evidence, candidate.ValidationLevel);
         Assert.All(candidate.Variables, static variable =>
             Assert.Equal(variable.LowerBound, variable.UpperBound));
 
@@ -864,10 +864,10 @@ public sealed class ProcessResearchWorkflowTests
             ResearchProjectStatuses.Validating,
             "engineer-a");
         await CompleteIndependentValidationAsync(workflow, candidate);
-        var validated = await workflow.ValidateProcessWindowAsync(
-            candidate.WindowId,
+        var validated = await workflow.ValidateOperatingRegionAsync(
+            candidate.OperatingRegionId,
             "engineer-b");
-        Assert.Equal(ProcessWindowValidationLevels.Laboratory, validated.ValidationLevel);
+        Assert.Equal(OperatingRegionValidationLevels.Laboratory, validated.ValidationLevel);
     }
 
     [Fact]
@@ -911,16 +911,16 @@ public sealed class ProcessResearchWorkflowTests
         };
         await store.SaveProjectAsync(source);
         await store.SaveProjectAsync(target);
-        var window = new ResearchProcessWindow
+        var window = new ResearchOperatingRegion
         {
-            WindowId = Guid.CreateVersion7(),
+            OperatingRegionId = Guid.CreateVersion7(),
             ProjectId = source.ProjectId,
             Name = "Released source window",
-            Status = ProcessWindowStatuses.Validated,
-            ValidationLevel = ProcessWindowValidationLevels.Production,
+            Status = OperatingRegionStatuses.Validated,
+            ValidationLevel = OperatingRegionValidationLevels.Production,
             Variables =
             [
-                new ProcessWindowVariable
+                new OperatingRegionVariable
                 {
                     VariableCode = "temperature",
                     LowerBound = 500,
@@ -937,7 +937,7 @@ public sealed class ProcessResearchWorkflowTests
             CreatedAt = now,
             UpdatedAt = now
         };
-        await store.SaveProcessWindowAsync(window);
+        await store.SaveOperatingRegionAsync(window);
         var coldStart = TransferResult(target.ProjectId, 0.8, true, 'b', now);
         var transferred = TransferResult(target.ProjectId, 0.3, true, 'c', now);
         await store.SaveExperimentResultAsync(coldStart);
@@ -948,7 +948,7 @@ public sealed class ProcessResearchWorkflowTests
             target.ProjectId,
             new ResearchTransferAssessmentRequest
             {
-                SourceWindowId = window.WindowId,
+                SourceOperatingRegionId = window.OperatingRegionId,
                 TransferResultId = transferred.ResultId,
                 ColdStartResultId = coldStart.ResultId
             },
@@ -981,7 +981,7 @@ public sealed class ProcessResearchWorkflowTests
             target.ProjectId,
             new ResearchTransferAssessmentRequest
             {
-                SourceWindowId = window.WindowId,
+                SourceOperatingRegionId = window.OperatingRegionId,
                 TransferResultId = secondTransferred.ResultId,
                 ColdStartResultId = coldStart.ResultId
             },
@@ -1006,7 +1006,7 @@ public sealed class ProcessResearchWorkflowTests
             target.ProjectId,
             new ResearchTransferAssessmentRequest
             {
-                SourceWindowId = window.WindowId,
+                SourceOperatingRegionId = window.OperatingRegionId,
                 TransferResultId = regressed.ResultId,
                 ColdStartResultId = coldStart.ResultId
             },
@@ -1066,7 +1066,7 @@ public sealed class ProcessResearchWorkflowTests
     {
         var observations = Enumerable.Range(1, 3).Select(index => new ExperimentRunObservation
         {
-            RunKey = $"transfer-{hashCharacter}-{index}",
+            ExecutionKey = $"transfer-{hashCharacter}-{index}",
             ActualFactors =
             [
                 new ExperimentFactorSetting
@@ -1127,10 +1127,10 @@ public sealed class ProcessResearchWorkflowTests
         Assert.Contains("不能批准", dispatchError.Message, StringComparison.Ordinal);
         var assembler = new StubShadowObservationAssembler(new ExperimentRunObservation
         {
-            RunKey = "production-cycle-001",
+            ExecutionKey = "production-execution-001",
             Context = new Dictionary<string, string>
             {
-                ["machine_id"] = "press-01",
+                ["equipment_id"] = "press-01",
                 ["material_lot_ref"] = "lot-b"
             },
             ActualFactors =
@@ -1154,15 +1154,15 @@ public sealed class ProcessResearchWorkflowTests
             [
                 new ExperimentRunObservation
                 {
-                    RunKey = "historical-1",
-                    Context = new Dictionary<string, string> { ["machine_id"] = "press-00" },
+                    ExecutionKey = "historical-1",
+                    Context = new Dictionary<string, string> { ["equipment_id"] = "press-00" },
                     ActualFactors = experiment.RunPlan[0].Factors,
                     SourceContentHash = new string('1', 64)
                 },
                 new ExperimentRunObservation
                 {
-                    RunKey = "historical-2",
-                    Context = new Dictionary<string, string> { ["machine_id"] = "press-00" },
+                    ExecutionKey = "historical-2",
+                    Context = new Dictionary<string, string> { ["equipment_id"] = "press-00" },
                     ActualFactors = experiment.RunPlan[1].Factors,
                     SourceContentHash = new string('2', 64)
                 }
@@ -1172,11 +1172,11 @@ public sealed class ProcessResearchWorkflowTests
 
         var recorded = await service.RecordDecisionAsync(
             experiment.ExperimentId,
-            experiment.RunPlan[0].RunKey,
+            experiment.RunPlan[0].ExecutionKey,
             new ResearchShadowDecisionRequest
             {
                 Decision = ResearchShadowDecisionStatuses.Modified,
-                ActualRunKey = "production-cycle-001",
+                ActualExecutionKey = "production-execution-001",
                 EngineerSelectedFactors =
                 [
                     new ExperimentFactorSetting
@@ -1188,7 +1188,7 @@ public sealed class ProcessResearchWorkflowTests
                 SiteLimitations = ["材料批次升温速率限制"],
                 ContextSnapshot = new Dictionary<string, string>
                 {
-                    ["machine_id"] = "press-01",
+                    ["equipment_id"] = "press-01",
                     ["material_lot_ref"] = "lot-b"
                 }
             },
@@ -1199,7 +1199,7 @@ public sealed class ProcessResearchWorkflowTests
         Assert.Null(recorded.Outcome);
         Assert.Equal("optical-molding-window", recorded.ContextSnapshot["project_code"]);
         Assert.Equal(ResearchApplicabilityStatuses.ContextShift, recorded.Applicability.Status);
-        Assert.Contains("machine_id=press-01", recorded.Applicability.UnseenContextValues);
+        Assert.Contains("equipment_id=press-01", recorded.Applicability.UnseenContextValues);
         var completed = await service.MaterializeOutcomeAsync(
             recorded.RecommendationId, "engineer-b");
         Assert.NotNull(completed.Outcome);
@@ -1207,7 +1207,7 @@ public sealed class ProcessResearchWorkflowTests
         Assert.Equal(1, completed.Outcome.SettingDeviationFromEngineerSelection["holding-temperature"]);
         Assert.Equal(0.31, completed.Outcome.Outcomes["form-error"]);
         Assert.Equal(new string('a', 64), completed.Outcome.SourceContentHash);
-        Assert.Equal("production-cycle-001", assembler.RequestedRunKey);
+        Assert.Equal("production-execution-001", assembler.RequestedExecutionKey);
         var report = await service.BuildReportAsync(project.ProjectId);
         Assert.Equal(1, report.TotalRecommendations);
         Assert.Equal(1, report.ModifiedCount);
@@ -1238,21 +1238,21 @@ public sealed class ProcessResearchWorkflowTests
         var request = new ResearchShadowDecisionRequest
         {
             Decision = ResearchShadowDecisionStatuses.Accepted,
-            ActualRunKey = "production-cycle-002",
+            ActualExecutionKey = "production-execution-002",
             EngineerSelectedFactors = experiment.RunPlan[0].Factors,
             ContextSnapshot = new Dictionary<string, string>()
         };
 
         var noContext = await Assert.ThrowsAsync<ProcessResearchRuleException>(() =>
             service.RecordDecisionAsync(
-                experiment.ExperimentId, experiment.RunPlan[0].RunKey,
+                experiment.ExperimentId, experiment.RunPlan[0].ExecutionKey,
                 request, "engineer-b"));
         Assert.Contains("上下文", noContext.Message, StringComparison.Ordinal);
 
         var inconsistent = await Assert.ThrowsAsync<ProcessResearchRuleException>(() =>
             service.RecordDecisionAsync(
                 experiment.ExperimentId,
-                experiment.RunPlan[0].RunKey,
+                experiment.RunPlan[0].ExecutionKey,
                 request with
                 {
                     EngineerSelectedFactors =
@@ -1262,7 +1262,7 @@ public sealed class ProcessResearchWorkflowTests
                         new ExperimentFactorSetting
                             { VariableCode = "press-force", Value = 12, Unit = "kN" }
                     ],
-                    ContextSnapshot = new Dictionary<string, string> { ["machine_id"] = "press-01" }
+                    ContextSnapshot = new Dictionary<string, string> { ["equipment_id"] = "press-01" }
                 },
                 "engineer-b"));
         Assert.Contains("一致", inconsistent.Message, StringComparison.Ordinal);
@@ -1298,7 +1298,7 @@ public sealed class ProcessResearchWorkflowTests
             store,
             new StubShadowObservationAssembler(new ExperimentRunObservation
             {
-                RunKey = "unsafe-run",
+                ExecutionKey = "unsafe-run",
                 ActualFactors = experiment.RunPlan[0].Factors,
                 Outcomes = new Dictionary<string, double> { ["form-error"] = 0.52 },
                 ConstraintOutcomes = new Dictionary<string, double>
@@ -1307,13 +1307,13 @@ public sealed class ProcessResearchWorkflowTests
             }));
         var decision = await service.RecordDecisionAsync(
             experiment.ExperimentId,
-            experiment.RunPlan[0].RunKey,
+            experiment.RunPlan[0].ExecutionKey,
             new ResearchShadowDecisionRequest
             {
                 Decision = ResearchShadowDecisionStatuses.Accepted,
-                ActualRunKey = "unsafe-run",
+                ActualExecutionKey = "unsafe-run",
                 EngineerSelectedFactors = experiment.RunPlan[0].Factors,
-                ContextSnapshot = new Dictionary<string, string> { ["machine_id"] = "press-01" }
+                ContextSnapshot = new Dictionary<string, string> { ["equipment_id"] = "press-01" }
             },
             "engineer-b");
         await service.MaterializeOutcomeAsync(decision.RecommendationId, "engineer-b");
@@ -1338,7 +1338,7 @@ public sealed class ProcessResearchWorkflowTests
         var observations = Enumerable.Range(0, 5).Select(index =>
             new ExperimentRunObservation
             {
-                RunKey = $"historical-{index + 1}",
+                ExecutionKey = $"historical-{index + 1}",
                 ActualFactors =
                 [
                     new ExperimentFactorSetting
@@ -1486,7 +1486,7 @@ public sealed class ProcessResearchWorkflowTests
             RunObservations = Enumerable.Range(0, 5).Select(index =>
                 new ExperimentRunObservation
                 {
-                    RunKey = $"controlled-history-{index}",
+                    ExecutionKey = $"controlled-history-{index}",
                     ActualFactors = Run("unused", 1, 500 + index * 10, 8 + index).Factors,
                     ProcessFeatures = new Dictionary<string, double>
                         { ["temperature.average"] = 500 + index * 10 },
@@ -1560,7 +1560,7 @@ public sealed class ProcessResearchWorkflowTests
         await SeedOnlineAdmissionEvidenceAsync(store, project);
         for (var index = 0; index < 5; index++)
         {
-            var runKey = $"online-shift-{index}";
+            var executionKey = $"online-shift-{index}";
             var experiment = new ResearchExperiment
             {
                 ExperimentId = Guid.CreateVersion7(),
@@ -1569,19 +1569,19 @@ public sealed class ProcessResearchWorkflowTests
                 Status = ResearchExperimentStatuses.Completed,
                 StopRule = "stop",
                 RollbackPlan = "rollback",
-                RunPlan = [Run(runKey, 1, 510 + index, 10)],
+                RunPlan = [Run(executionKey, 1, 510 + index, 10)],
                 Optimization = new ResearchOptimizationMetadata
                 {
                     ModelVersion = "online-shift-test",
                     InputHash = new string((char)('a' + index), 64),
                     Mode = ResearchOptimizationModes.Controlled,
-                    RunPredictions = [Prediction(runKey, 0.3)]
+                    RunPredictions = [Prediction(executionKey, 0.3)]
                 },
                 ControlledDecision = new ResearchControlledDecision
                 {
                     Decision = ResearchControlledDecisionStatuses.Accepted,
-                    SuggestedFactors = Run(runKey, 1, 510 + index, 10).Factors,
-                    ApprovedFactors = Run(runKey, 1, 510 + index, 10).Factors,
+                    SuggestedFactors = Run(executionKey, 1, 510 + index, 10).Factors,
+                    ApprovedFactors = Run(executionKey, 1, 510 + index, 10).Factors,
                     DecisionSnapshotHash = new string('f', 64),
                     DecidedBy = "engineer-b",
                     DecidedAt = DateTimeOffset.UtcNow
@@ -1602,7 +1602,7 @@ public sealed class ProcessResearchWorkflowTests
                 [
                     new ExperimentRunObservation
                     {
-                        RunKey = runKey,
+                        ExecutionKey = executionKey,
                         ActualFactors = experiment.RunPlan[0].Factors,
                         Outcomes = new Dictionary<string, double> { ["form-error"] = 1.3 },
                         ValidForOptimization = true,
@@ -1691,8 +1691,8 @@ public sealed class ProcessResearchWorkflowTests
                 RecommendationId = Guid.CreateVersion7(),
                 ProjectId = project.ProjectId,
                 ExperimentId = Guid.CreateVersion7(),
-                SuggestionRunKey = $"shadow-suggestion-{index}",
-                ActualRunKey = $"shadow-actual-{index}",
+                SuggestionExecutionKey = $"shadow-suggestion-{index}",
+                ActualExecutionKey = $"shadow-actual-{index}",
                 Decision = ResearchShadowDecisionStatuses.Accepted,
                 ModelVersion = "botorch-test",
                 ModelInputHash = new string('3', 64),
@@ -1706,17 +1706,17 @@ public sealed class ProcessResearchWorkflowTests
                     HistoricalObservationCount = 5,
                     Summary = "inside measured envelope"
                 },
-                ContextSnapshot = new Dictionary<string, string> { ["machine_id"] = "press-01" },
+                ContextSnapshot = new Dictionary<string, string> { ["equipment_id"] = "press-01" },
                 DecisionSnapshotHash = new string('4', 64),
                 DecidedBy = "engineer-b",
                 DecidedAt = DateTimeOffset.UtcNow.AddDays(-1),
                 Outcome = new ResearchShadowOutcome
                 {
-                    ActualRunKey = $"shadow-actual-{index}",
+                    ActualExecutionKey = $"shadow-actual-{index}",
                     ActualFactors = factors,
                     Outcomes = new Dictionary<string, double> { ["form-error"] = 0.3 },
                     ActualContextSnapshot = new Dictionary<string, string>
-                        { ["machine_id"] = "press-01" },
+                        { ["equipment_id"] = "press-01" },
                     ValidForOptimization = true,
                     SourceContentHash = new string('5', 64),
                     CapturedAt = DateTimeOffset.UtcNow
@@ -1757,10 +1757,10 @@ public sealed class ProcessResearchWorkflowTests
             },
             "engineer-a");
 
-    private static OptimizationRunPrediction Prediction(string runKey, double mean)
+    private static OptimizationRunPrediction Prediction(string executionKey, double mean)
         => new()
         {
-            RunKey = runKey,
+            ExecutionKey = executionKey,
             Objectives = new Dictionary<string, OptimizationMetricPrediction>
             {
                 ["form-error"] = new()
@@ -1778,10 +1778,10 @@ public sealed class ProcessResearchWorkflowTests
 
     private static async Task CompleteIndependentValidationAsync(
         ProcessResearchWorkflow workflow,
-        ResearchProcessWindow window)
+        ResearchOperatingRegion window)
     {
-        var experiment = await workflow.CreateProcessWindowValidationExperimentAsync(
-            window.WindowId,
+        var experiment = await workflow.CreateOperatingRegionValidationExperimentAsync(
+            window.OperatingRegionId,
             "engineer-a");
         experiment = await workflow.ChangeExperimentStatusAsync(
             experiment.ExperimentId,
@@ -1794,7 +1794,7 @@ public sealed class ProcessResearchWorkflowTests
         var observations = experiment.RunPlan.Select((run, index) =>
             new ExperimentRunObservation
             {
-                RunKey = run.RunKey,
+                ExecutionKey = run.ExecutionKey,
                 ActualFactors = run.Factors,
                 Outcomes = new Dictionary<string, double>
                 {
@@ -1833,8 +1833,8 @@ public sealed class ProcessResearchWorkflowTests
                 CalculatedFromSource = true
             },
             "engineer-a");
-        await workflow.AttachProcessWindowValidationResultAsync(
-            window.WindowId,
+        await workflow.AttachOperatingRegionValidationResultAsync(
+            window.OperatingRegionId,
             experiment,
             result,
             "system-research-automation");
@@ -1847,7 +1847,7 @@ public sealed class ProcessResearchWorkflowTests
         double force)
         => new()
         {
-            RunKey = key,
+            ExecutionKey = key,
             Sequence = sequence,
             Factors =
             [
@@ -1870,7 +1870,7 @@ public sealed class ProcessResearchWorkflowTests
         => new()
         {
             Code = "optical-molding-window",
-            Name = "光学模压工艺窗口研发",
+            Name = "光学模压工艺操作域研发",
             ProcessName = "光学玻璃精密模压",
             Objectives =
             [
@@ -2086,7 +2086,7 @@ public sealed class ProcessResearchWorkflowTests
                   "initial_observation_count": 3,
                   "engine_policy": "production-equivalent: sequential below 3 observations, BoTorch at 3 or more",
                   "evidence_kind": "historical-pool-ranking",
-                  "limitations": "Ranks only observed recipes; does not prove online savings.",
+                  "limitations": "Ranks only observed processSpecifications; does not prove online savings.",
                   "state_persisted": false
                 }
                 """);
@@ -2097,14 +2097,14 @@ public sealed class ProcessResearchWorkflowTests
     private sealed class StubShadowObservationAssembler(ExperimentRunObservation? observation)
         : IResearchObservationAssembler
     {
-        public string? RequestedRunKey { get; private set; }
+        public string? RequestedExecutionKey { get; private set; }
 
         public Task<ResearchObservationAssembly> AssembleAsync(
             ResearchProject project,
             IReadOnlyList<ResearchExperiment> experiments,
             CancellationToken ct = default)
         {
-            RequestedRunKey = Assert.Single(Assert.Single(experiments).RunPlan).RunKey;
+            RequestedExecutionKey = Assert.Single(Assert.Single(experiments).RunPlan).ExecutionKey;
             return Task.FromResult(new ResearchObservationAssembly(
                 observation is null ? [] : [observation], 1));
         }
@@ -2121,13 +2121,13 @@ public sealed class ProcessResearchWorkflowTests
             => throw new NotSupportedException();
         public Task<bool> DeleteDataModelAsync(string modelId, int version, CancellationToken ct = default)
             => throw new NotSupportedException();
-        public Task<RecipeVersion> UpsertRecipeVersionAsync(RecipeVersion value, CancellationToken ct = default)
+        public Task<ProcessSpecification> UpsertProcessSpecificationAsync(ProcessSpecification value, CancellationToken ct = default)
             => throw new NotSupportedException();
-        public Task<IReadOnlyList<RecipeVersion>> ListRecipeVersionsAsync(CancellationToken ct = default)
+        public Task<IReadOnlyList<ProcessSpecification>> ListProcessSpecificationsAsync(CancellationToken ct = default)
             => throw new NotSupportedException();
-        public Task<RecipeVersion?> GetRecipeVersionAsync(string recipeId, int version, CancellationToken ct = default)
+        public Task<ProcessSpecification?> GetProcessSpecificationAsync(string processSpecificationId, int version, CancellationToken ct = default)
             => throw new NotSupportedException();
-        public Task<bool> DeleteRecipeVersionAsync(string recipeId, int version, CancellationToken ct = default)
+        public Task<bool> DeleteProcessSpecificationAsync(string processSpecificationId, int version, CancellationToken ct = default)
             => throw new NotSupportedException();
         public Task<ProcessAnalysisPlan> UpsertAnalysisPlanAsync(ProcessAnalysisPlan value, CancellationToken ct = default)
             => throw new NotSupportedException();
@@ -2154,7 +2154,7 @@ public sealed class ProcessResearchWorkflowTests
         private readonly Dictionary<Guid, ResearchHistoricalReplayReport> _replayReports = [];
         private readonly Dictionary<Guid, ResearchRollbackDrill> _rollbackDrills = [];
         private readonly Dictionary<Guid, ResearchExperimentResult> _results = [];
-        private readonly Dictionary<Guid, ResearchProcessWindow> _windows = [];
+        private readonly Dictionary<Guid, ResearchOperatingRegion> _windows = [];
         private readonly Dictionary<Guid, ResearchKnowledgeClaim> _claims = [];
         private readonly Dictionary<Guid, ResearchTransferAssessment> _transferAssessments = [];
         private readonly List<ResearchAuditEntry> _audit = [];
@@ -2234,11 +2234,11 @@ public sealed class ProcessResearchWorkflowTests
 
         public Task<ResearchShadowRecommendation?> GetShadowRecommendationBySuggestionAsync(
             Guid experimentId,
-            string suggestionRunKey,
+            string suggestionExecutionKey,
             CancellationToken ct = default)
             => Task.FromResult(_shadowRecommendations.Values.SingleOrDefault(value =>
                 value.ExperimentId == experimentId &&
-                value.SuggestionRunKey == suggestionRunKey));
+                value.SuggestionExecutionKey == suggestionExecutionKey));
 
         public Task<IReadOnlyList<ResearchShadowRecommendation>> ListShadowRecommendationsAsync(
             Guid projectId,
@@ -2350,22 +2350,22 @@ public sealed class ProcessResearchWorkflowTests
             return Task.FromResult(value);
         }
 
-        public Task<ResearchProcessWindow?> GetProcessWindowAsync(
-            Guid windowId,
+        public Task<ResearchOperatingRegion?> GetOperatingRegionAsync(
+            Guid operatingRegionId,
             CancellationToken ct = default)
-            => Task.FromResult(_windows.GetValueOrDefault(windowId));
+            => Task.FromResult(_windows.GetValueOrDefault(operatingRegionId));
 
-        public Task<IReadOnlyList<ResearchProcessWindow>> ListProcessWindowsAsync(
+        public Task<IReadOnlyList<ResearchOperatingRegion>> ListOperatingRegionsAsync(
             Guid projectId,
             CancellationToken ct = default)
-            => Task.FromResult<IReadOnlyList<ResearchProcessWindow>>(
+            => Task.FromResult<IReadOnlyList<ResearchOperatingRegion>>(
                 _windows.Values.Where(value => value.ProjectId == projectId).ToArray());
 
-        public Task<ResearchProcessWindow> SaveProcessWindowAsync(
-            ResearchProcessWindow value,
+        public Task<ResearchOperatingRegion> SaveOperatingRegionAsync(
+            ResearchOperatingRegion value,
             CancellationToken ct = default)
         {
-            _windows[value.WindowId] = value;
+            _windows[value.OperatingRegionId] = value;
             return Task.FromResult(value);
         }
 
@@ -2404,7 +2404,7 @@ public sealed class ProcessResearchWorkflowTests
             CancellationToken ct = default)
         {
             var existing = _transferAssessments.Values.FirstOrDefault(item =>
-                item.ProjectId == value.ProjectId && item.SourceWindowId == value.SourceWindowId &&
+                item.ProjectId == value.ProjectId && item.SourceOperatingRegionId == value.SourceOperatingRegionId &&
                 item.RecordHash == value.RecordHash);
             if (existing is not null)
                 return Task.FromResult(existing);

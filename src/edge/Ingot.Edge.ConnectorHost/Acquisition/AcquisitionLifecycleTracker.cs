@@ -5,20 +5,20 @@ namespace Ingot.Edge.ConnectorHost.Acquisition;
 
 /// <summary>
 /// 将生产状态和控制器步序转换为离散运行边界事件。
-/// 默认在生产开始时由 Edge 生成 CorrelationId；外部周期号仅作为向后兼容的可选输入。
+/// 在生产开始时由 Edge 生成 ExecutionId。
 /// </summary>
 public sealed class AcquisitionLifecycleTracker
 {
     private const string StageContextKey = "stage_number";
-    private string? _activeCorrelationId;
+    private string? _activeExecutionId;
     private string? _activeStep;
     private IReadOnlyDictionary<string, string> _activeContext = new Dictionary<string, string>();
     private ObjectRef? _activeSubject;
     private string? _activeSource;
-    private ProductionEvent? _latestRecipeApplied;
+    private ProductionEvent? _latestProcessSpecificationApplied;
     private long _sampleCount;
 
-    public bool IsRunActive => _activeCorrelationId is not null;
+    public bool IsRunActive => _activeExecutionId is not null;
 
     public IReadOnlyList<ProductionEvent> Track(
         AcquisitionMappingResult mapped,
@@ -60,8 +60,8 @@ public sealed class AcquisitionLifecycleTracker
         int pollDelayMs)
     {
         var sample = mapped.Sample;
-        if (mapped.RecipeApplied is not null)
-            _latestRecipeApplied = mapped.RecipeApplied;
+        if (mapped.ProcessSpecificationApplied is not null)
+            _latestProcessSpecificationApplied = mapped.ProcessSpecificationApplied;
 
         var events = new List<ProductionEvent>(5);
         if (!string.IsNullOrWhiteSpace(activeContextKey))
@@ -78,7 +78,7 @@ public sealed class AcquisitionLifecycleTracker
                 StringComparison.OrdinalIgnoreCase);
             if (!isActive)
             {
-                if (_activeCorrelationId is not null)
+                if (_activeExecutionId is not null)
                 {
                     events.Add(CompleteActiveRun(completedEventType, sample.OccurredAt));
                     ResetActiveRun();
@@ -87,21 +87,10 @@ public sealed class AcquisitionLifecycleTracker
             }
         }
 
-        var incomingCorrelationId = string.IsNullOrWhiteSpace(sample.CorrelationId)
-            ? null
-            : sample.CorrelationId.Trim();
-        if (_activeCorrelationId is not null &&
-            incomingCorrelationId is not null &&
-            !string.Equals(_activeCorrelationId, incomingCorrelationId, StringComparison.Ordinal))
-        {
-            events.Add(CompleteActiveRun(completedEventType, sample.OccurredAt));
-            ResetActiveRun();
-        }
-
         var startedNewRun = false;
-        if (_activeCorrelationId is null)
+        if (_activeExecutionId is null)
         {
-            _activeCorrelationId = incomingCorrelationId ?? Guid.CreateVersion7().ToString();
+            _activeExecutionId = Guid.CreateVersion7().ToString();
             _activeContext = sample.Context;
             _activeSubject = sample.Subject;
             _activeSource = sample.Source;
@@ -114,20 +103,20 @@ public sealed class AcquisitionLifecycleTracker
                 sample.OccurredAt,
                 sample.Source,
                 sample.Subject,
-                _activeCorrelationId,
+                _activeExecutionId,
                 sample.Context,
                 startedData));
         }
 
-        sample = sample with { CorrelationId = _activeCorrelationId };
-        var recipeApplied = mapped.RecipeApplied ?? (startedNewRun ? _latestRecipeApplied : null);
-        if (recipeApplied is not null)
+        sample = sample with { ExecutionId = _activeExecutionId };
+        var processSpecificationApplied = mapped.ProcessSpecificationApplied ?? (startedNewRun ? _latestProcessSpecificationApplied : null);
+        if (processSpecificationApplied is not null)
         {
-            events.Add(recipeApplied with
+            events.Add(processSpecificationApplied with
             {
                 EventId = Guid.CreateVersion7().ToString(),
                 RecordedAt = DateTimeOffset.UtcNow,
-                CorrelationId = _activeCorrelationId,
+                ExecutionId = _activeExecutionId,
                 Context = sample.Context
             });
         }
@@ -141,7 +130,7 @@ public sealed class AcquisitionLifecycleTracker
                 sample.OccurredAt,
                 sample.Source,
                 sample.Subject,
-                _activeCorrelationId,
+                _activeExecutionId,
                 sample.Context,
                 data));
             _activeStep = step;
@@ -161,7 +150,7 @@ public sealed class AcquisitionLifecycleTracker
             occurredAt,
             _activeSource!,
             _activeSubject!,
-            _activeCorrelationId,
+            _activeExecutionId,
             _activeContext,
             new Dictionary<string, object?>
             {
@@ -171,7 +160,7 @@ public sealed class AcquisitionLifecycleTracker
 
     private void ResetActiveRun()
     {
-        _activeCorrelationId = null;
+        _activeExecutionId = null;
         _activeStep = null;
         _activeContext = new Dictionary<string, string>();
         _activeSubject = null;
@@ -180,7 +169,7 @@ public sealed class AcquisitionLifecycleTracker
     }
 
     private static IReadOnlyList<ProductionEvent> WithoutLifecycle(AcquisitionMappingResult mapped)
-        => mapped.RecipeApplied is null
+        => mapped.ProcessSpecificationApplied is null
             ? [mapped.Sample]
-            : [mapped.RecipeApplied, mapped.Sample];
+            : [mapped.ProcessSpecificationApplied, mapped.Sample];
 }

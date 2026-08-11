@@ -24,8 +24,8 @@ public sealed partial class SearchProcessKnowledgeTool(
             properties = new
             {
                 query = new { type = "string", minLength = 1, maxLength = 500 },
-                productSeries = new { type = "string", maxLength = 120 },
-                machineId = new { type = "string", maxLength = 120 },
+                productFamilyCode = new { type = "string", maxLength = 120 },
+                equipmentId = new { type = "string", maxLength = 120 },
                 limit = new { type = "integer", minimum = 1, maximum = 20 }
             },
             additionalProperties = false
@@ -39,8 +39,8 @@ public sealed partial class SearchProcessKnowledgeTool(
     {
         if (!call.Arguments.TryGetValue("query", out var query) || string.IsNullOrWhiteSpace(query))
             throw new ArgumentException("请提供要检索的工艺问题。", nameof(call));
-        call.Arguments.TryGetValue("productSeries", out var productSeries);
-        call.Arguments.TryGetValue("machineId", out var machineId);
+        call.Arguments.TryGetValue("productFamilyCode", out var productFamilyCode);
+        call.Arguments.TryGetValue("equipmentId", out var equipmentId);
         var limit = call.Arguments.TryGetValue("limit", out var limitText) &&
                     int.TryParse(limitText, out var parsedLimit)
             ? Math.Clamp(parsedLimit, 1, 20)
@@ -56,8 +56,8 @@ public sealed partial class SearchProcessKnowledgeTool(
                 source.ContextSelector.TryGetValue("research-project-id", out var value) &&
                 string.Equals(value, projectId, StringComparison.OrdinalIgnoreCase))
             .Where(static source => source.Status == KnowledgeSourceStatuses.Reviewed)
-            .Where(source => MatchesContext(source.ContextSelector, "product_series", productSeries))
-            .Where(source => MatchesContext(source.ContextSelector, "machine_id", machineId))
+            .Where(source => MatchesContext(source.ContextSelector, "product_family_code", productFamilyCode))
+            .Where(source => MatchesContext(source.ContextSelector, "equipment_id", equipmentId))
             .ToArray();
         var matches = new List<KnowledgeMatch>();
         foreach (var source in sources)
@@ -106,8 +106,8 @@ public sealed partial class SearchProcessKnowledgeTool(
                 appliedContext = new
                 {
                     researchProjectId = projectId,
-                    productSeries = NullIfBlank(productSeries),
-                    machineId = NullIfBlank(machineId)
+                    productFamilyCode = NullIfBlank(productFamilyCode),
+                    equipmentId = NullIfBlank(equipmentId)
                 },
                 records = selected.Select(static match => new
                 {

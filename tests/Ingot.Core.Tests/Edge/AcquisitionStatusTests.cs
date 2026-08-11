@@ -17,7 +17,7 @@ public sealed class AcquisitionStatusTests
 
         var now = DateTimeOffset.UtcNow;
         status.RecordAttempt("furnace-a@1", now);
-        status.RecordSuccess("furnace-a@1", now, "recipe-a@1");
+        status.RecordSuccess("furnace-a@1", now, "processSpecification-a@1");
         status.RecordFailure("furnace-b@2", "connection refused");
 
         var snapshot = status.Get();
@@ -72,7 +72,7 @@ public sealed class AcquisitionStatusTests
         Assert.False(status.AreDesiredDeploymentsApplied());
 
         var appliedAt = DateTimeOffset.UtcNow;
-        status.RecordSuccess("furnace-a@2", appliedAt, "recipe-a@1");
+        status.RecordSuccess("furnace-a@2", appliedAt, "processSpecification-a@1");
 
         var applied = Assert.Single(status.Get().Deployments);
         Assert.Equal(AcquisitionApplicationStates.Applied, applied.State);
@@ -108,17 +108,17 @@ public sealed class AcquisitionStatusTests
     }
 
     [Fact]
-    public void ActiveCycle_ShouldBlockConfigurationReplacement()
+    public void ActiveProcessExecution_ShouldBlockConfigurationReplacement()
     {
         var status = new AcquisitionStatus();
         var deployment = Deployment(version: 1);
         status.SetDesiredDeployments([deployment], AcquisitionConfigurationSources.Platform);
         status.RegisterTask("furnace-a@1", deployment);
 
-        status.RecordCycleState("furnace-a@1", true);
+        status.RecordProcessExecutionState("furnace-a@1", true);
         Assert.False(status.IsSafeToReplace("furnace-a@1"));
 
-        status.RecordCycleState("furnace-a@1", false);
+        status.RecordProcessExecutionState("furnace-a@1", false);
         Assert.True(status.IsSafeToReplace("furnace-a@1"));
     }
 

@@ -10,7 +10,7 @@ export const metadata: Metadata = {
   applicationName: "Ingot",
   keywords: [
     "Ingot", "data-supported process R&D", "process engineer decisions", "process diagnosis",
-    "production cycles", "experiment design", "process optimization",
+    "process executions", "experiment design", "process optimization",
     "process window", "process data", "Bayesian optimization", "process knowledge",
   ],
   alternates: {

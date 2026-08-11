@@ -56,30 +56,30 @@ public sealed class DeterministicModelClient : IModelClient
         }
 
         if (context is not null &&
-            context.Kind is "cycle" or "correlation" or "operation-run" &&
-            available.Contains("get_cycle_trace"))
+            context.Kind is "execution" or "correlation" or "operation-run" &&
+            available.Contains("get_execution_trace"))
         {
             calls.Add(new AnalysisToolCall
             {
-                Tool = "get_cycle_trace",
+                Tool = "get_execution_trace",
                 Arguments = new Dictionary<string, string?>
                 {
-                    ["correlationId"] = context.Id
+                    ["executionId"] = context.Id
                 }
             });
         }
 
         if (context is not null &&
-            context.Kind is "cycle" or "correlation" or "operation-run" &&
+            context.Kind is "execution" or "correlation" or "operation-run" &&
             ContainsAny(question, "比较", "不同", "差异", "上批", "同类", "趋势", "recent") &&
-            available.Contains("find_comparable_cycles"))
+            available.Contains("find_comparable_executions"))
         {
             calls.Add(new AnalysisToolCall
             {
-                Tool = "find_comparable_cycles",
+                Tool = "find_comparable_executions",
                 Arguments = new Dictionary<string, string?>
                 {
-                    ["correlationId"] = context.Id,
+                    ["executionId"] = context.Id,
                     ["limit"] = "20"
                 }
             });
@@ -150,8 +150,8 @@ public sealed class DeterministicModelClient : IModelClient
             ]
             :
             [
-                "是否需要指定具体设备或生产周期？",
-                "是否需要查看该生产周期的完整记录？"
+                "是否需要指定具体设备或过程执行？",
+                "是否需要查看该过程执行的完整记录？"
             ];
         return Task.FromResult(Result(new AnalysisAnswer
         {
@@ -178,8 +178,8 @@ public sealed class DeterministicModelClient : IModelClient
             var (statement, reason) = turn.Role switch
             {
                 AnalysisPerspectives.Process => (
-                    "需要检查工艺状态或周期参数变化是否与当前现象同步。",
-                    "当前查询结果包含生产周期过程和数据完整性信息。"),
+                    "需要检查工艺状态或过程参数变化是否与当前现象同步。",
+                    "当前查询结果包含过程执行过程和数据完整性信息。"),
                 AnalysisPerspectives.Quality => (
                     "需要检查检测结果与周期特征之间是否存在稳定关联。",
                     "现有记录可以界定周期范围，但仍需要质量样本和特征统计才能评价关联强度。"),
@@ -217,7 +217,7 @@ public sealed class DeterministicModelClient : IModelClient
                 : FindingReviewPositions.Uncertain,
             Statement = turn.Role == AnalysisPerspectives.Review
                 ? "现有生产记录只能支持继续分析，不能确认该项就是原因。"
-                : "当前数据与该项可能原因相关，但还缺少同类周期比较或质量关系分析。",
+                : "当前数据与该项可能原因相关，但还缺少同类执行比较或质量关系分析。",
             RelatedRecords = relatedRecords
         }).ToArray();
         return Task.FromResult(Result(new PerspectiveAnalysis
@@ -248,8 +248,8 @@ public sealed class DeterministicModelClient : IModelClient
             return arguments;
         if (context.Kind is "asset" or "equipment" or "source")
             arguments["subjectId"] = context.Id;
-        else if (context.Kind is "cycle" or "correlation" or "operation-run")
-            arguments["correlationId"] = context.Id;
+        else if (context.Kind is "execution" or "correlation" or "operation-run")
+            arguments["executionId"] = context.Id;
         return arguments;
     }
 

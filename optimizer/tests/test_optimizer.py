@@ -84,7 +84,7 @@ def test_observe_rejects_incomplete_outcomes():
         optimizer.observe({"x": 0.5, "z": 0.0}, {"loss": 0.1})
 
 
-def test_candidate_pool_does_not_repeat_an_observed_recipe():
+def test_candidate_pool_does_not_repeat_an_observed_parameter_setting():
     optimizer = SequentialOptimizer(make_campaign(), seed=1)
     params = {"x": 0.5, "z": 0.0}
     optimizer.observe(params, outcomes(params))

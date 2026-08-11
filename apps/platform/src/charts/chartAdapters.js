@@ -14,7 +14,7 @@ export function qualityOutcomeTraces(groups) {
 
 export function processSignalTraces(rows, samplesById, signalCode) {
   return (rows || []).map((row, index) => {
-    const samples = samplesById?.[row.correlationId] || [];
+    const samples = samplesById?.[row.executionId] || [];
     const startedAt = new Date(row.startedAt || samples[0]?.occurredAt || 0).getTime();
     const points = samples.map(sample => {
       const value = numberOrNull(sample.values?.[signalCode]);
@@ -28,8 +28,8 @@ export function processSignalTraces(rows, samplesById, signalCode) {
       type: points.length > 2000 ? "scattergl" : "scatter",
       mode: "lines",
       name: row.isBaseline
-        ? `基准 · ${row.machineId || row.label || row.correlationId}`
-        : (row.label || `${row.machineId || "对象"} · ${shortTime(row.startedAt)}`),
+        ? `基准 · ${row.equipmentId || row.label || row.executionId}`
+        : (row.label || `${row.equipmentId || "对象"} · ${shortTime(row.startedAt)}`),
       x: points.map(point => point.x),
       y: points.map(point => point.y),
       customdata: points.map(point => [point.occurredAt, point.phase]),
@@ -45,7 +45,7 @@ export function extractProcessSamples(records) {
     .map(event => ({
       occurredAt: event.occurredAt,
       phase: event.context?.process_stage_name || event.context?.stage_number ||
-        event.context?.recipe_step_name || event.context?.recipe_step ||
+        event.context?.process_step_name || event.context?.process_step ||
         event.context?.phase || event.context?.stage || event.context?.process_stage || "",
       values: event.data?.values || event.data || {},
     }));

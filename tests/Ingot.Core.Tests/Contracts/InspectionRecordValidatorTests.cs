@@ -10,7 +10,7 @@ public sealed class InspectionRecordValidatorTests
     {
         var request = CreateRequest() with
         {
-            WorkpieceId = " PART-2026-0001 ",
+            OutputItemId = " PART-2026-0001 ",
             DefinitionCode = " VISUAL.HOUSING ",
             Outcome = " pass ",
             SubmittedBy = " OPERATOR-001 ",
@@ -26,7 +26,7 @@ public sealed class InspectionRecordValidatorTests
         };
 
         Assert.True(InspectionRecordValidator.TryValidate(request, out var normalized, out _));
-        Assert.Equal("PART-2026-0001", normalized!.WorkpieceId);
+        Assert.Equal("PART-2026-0001", normalized!.OutputItemId);
         Assert.Equal("visual.housing", normalized.DefinitionCode);
         Assert.Equal("PASS", normalized.Outcome);
         Assert.Equal("OPERATOR-001", normalized.SubmittedBy);
@@ -44,13 +44,13 @@ public sealed class InspectionRecordValidatorTests
     }
 
     [Fact]
-    public void TryValidate_ShouldAllowRunLinkedInspectionWithoutWorkpieceIdentity()
+    public void TryValidate_ShouldAllowRunLinkedInspectionWithoutOutputItemIdentity()
     {
-        var request = CreateRequest() with { WorkpieceId = null };
+        var request = CreateRequest() with { OutputItemId = null };
 
         Assert.True(InspectionRecordValidator.TryValidate(request, out var normalized, out var error), error);
-        Assert.Null(normalized!.WorkpieceId);
-        Assert.Equal("RUN-2026-0001", normalized.OperationRunId);
+        Assert.Null(normalized!.OutputItemId);
+        Assert.Equal("RUN-2026-0001", normalized.ExecutionId);
     }
 
     [Fact]
@@ -128,8 +128,8 @@ public sealed class InspectionRecordValidatorTests
     private static CreateInspectionRecordRequest CreateRequest() => new()
     {
         RecordId = Guid.CreateVersion7(),
-        WorkpieceId = "PART-2026-0001",
-        OperationRunId = "RUN-2026-0001",
+        OutputItemId = "PART-2026-0001",
+        ExecutionId = "RUN-2026-0001",
         DefinitionCode = "dimensional.final",
         MeasuredAt = DateTimeOffset.UtcNow.AddMinutes(-2),
         RecordedAt = DateTimeOffset.UtcNow,

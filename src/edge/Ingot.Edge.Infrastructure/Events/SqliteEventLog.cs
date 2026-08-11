@@ -74,11 +74,11 @@ public sealed class SqliteEventLog : IEventLog, IBatchedEventLog
             command.CommandText = """
                                   INSERT INTO events(
                                     event_id, event_type, type_version, occurred_at, recorded_at,
-                                    source, subject_type, subject_id, correlation_id,
+                                    source, subject_type, subject_id, execution_id,
                                     context_json, data_json, ship_state, ship_attempts)
                                   VALUES (
                                     $event_id, $event_type, $type_version, $occurred_at, $recorded_at,
-                                    $source, $subject_type, $subject_id, $correlation_id,
+                                    $source, $subject_type, $subject_id, $execution_id,
                                     $context_json, $data_json, 0, 0);
                                   SELECT last_insert_rowid();
                                   """;
@@ -90,7 +90,7 @@ public sealed class SqliteEventLog : IEventLog, IBatchedEventLog
             command.Parameters.AddWithValue("$source", evt.Source);
             command.Parameters.AddWithValue("$subject_type", evt.Subject.Type);
             command.Parameters.AddWithValue("$subject_id", evt.Subject.Id);
-            command.Parameters.AddWithValue("$correlation_id", (object?)evt.CorrelationId ?? DBNull.Value);
+            command.Parameters.AddWithValue("$execution_id", (object?)evt.ExecutionId ?? DBNull.Value);
             command.Parameters.AddWithValue("$context_json", JsonSerializer.Serialize(evt.Context, JsonOptions));
             command.Parameters.AddWithValue("$data_json", JsonSerializer.Serialize(evt.Data, JsonOptions));
 
@@ -159,11 +159,11 @@ public sealed class SqliteEventLog : IEventLog, IBatchedEventLog
                 command.CommandText = """
                                       INSERT INTO events(
                                         event_id, event_type, type_version, occurred_at, recorded_at,
-                                        source, subject_type, subject_id, correlation_id,
+                                        source, subject_type, subject_id, execution_id,
                                         context_json, data_json, ship_state, ship_attempts)
                                       VALUES (
                                         $event_id, $event_type, $type_version, $occurred_at, $recorded_at,
-                                        $source, $subject_type, $subject_id, $correlation_id,
+                                        $source, $subject_type, $subject_id, $execution_id,
                                         $context_json, $data_json, 0, 0);
                                       SELECT last_insert_rowid();
                                       """;
@@ -175,7 +175,7 @@ public sealed class SqliteEventLog : IEventLog, IBatchedEventLog
                 command.Parameters.AddWithValue("$source", evt.Source);
                 command.Parameters.AddWithValue("$subject_type", evt.Subject.Type);
                 command.Parameters.AddWithValue("$subject_id", evt.Subject.Id);
-                command.Parameters.AddWithValue("$correlation_id", (object?)evt.CorrelationId ?? DBNull.Value);
+                command.Parameters.AddWithValue("$execution_id", (object?)evt.ExecutionId ?? DBNull.Value);
                 command.Parameters.AddWithValue("$context_json", JsonSerializer.Serialize(evt.Context, JsonOptions));
                 command.Parameters.AddWithValue("$data_json", JsonSerializer.Serialize(evt.Data, JsonOptions));
                 var seq = Convert.ToInt64(
@@ -241,7 +241,7 @@ public sealed class SqliteEventLog : IEventLog, IBatchedEventLog
         AddOptionalEquality(command, predicates, "e.event_type", "$event_type", query.EventType);
         AddOptionalEquality(command, predicates, "e.subject_type", "$subject_type", query.SubjectType);
         AddOptionalEquality(command, predicates, "e.subject_id", "$subject_id", query.SubjectId);
-        AddOptionalEquality(command, predicates, "e.correlation_id", "$correlation_id", query.CorrelationId);
+        AddOptionalEquality(command, predicates, "e.execution_id", "$execution_id", query.ExecutionId);
 
         if (query.From.HasValue)
         {
@@ -286,7 +286,7 @@ public sealed class SqliteEventLog : IEventLog, IBatchedEventLog
         var order = query.AfterSeq.HasValue ? "ASC" : "DESC";
         command.CommandText = $"""
                                SELECT e.seq, e.event_id, e.event_type, e.type_version, e.occurred_at, e.recorded_at,
-                                      e.source, e.subject_type, e.subject_id, e.correlation_id, e.context_json, e.data_json
+                                      e.source, e.subject_type, e.subject_id, e.execution_id, e.context_json, e.data_json
                                FROM events AS e
                                {joins}
                                {where}
@@ -379,7 +379,7 @@ public sealed class SqliteEventLog : IEventLog, IBatchedEventLog
         await using var command = connection.CreateCommand();
         command.CommandText = """
                               SELECT seq, event_id, event_type, type_version, occurred_at, recorded_at,
-                                     source, subject_type, subject_id, correlation_id, context_json, data_json
+                                     source, subject_type, subject_id, execution_id, context_json, data_json
                               FROM events
                               WHERE ship_state = 0
                               ORDER BY seq ASC
@@ -458,7 +458,7 @@ public sealed class SqliteEventLog : IEventLog, IBatchedEventLog
         diagnosticCommand.CommandText = """
                                         INSERT INTO events(
                                           event_id, event_type, type_version, occurred_at, recorded_at,
-                                          source, subject_type, subject_id, correlation_id,
+                                          source, subject_type, subject_id, execution_id,
                                           context_json, data_json, ship_state, ship_attempts)
                                         VALUES (
                                           $event_id, 'diagnostic.backlog_dropped', 1, $occurred_at, $recorded_at,
@@ -493,7 +493,7 @@ public sealed class SqliteEventLog : IEventLog, IBatchedEventLog
                                 source         TEXT NOT NULL,
                                 subject_type   TEXT NOT NULL,
                                 subject_id     TEXT NOT NULL,
-                                correlation_id TEXT,
+                                execution_id TEXT,
                                 context_json   TEXT NOT NULL DEFAULT '{}',
                                 data_json      TEXT NOT NULL DEFAULT '{}',
                                 ship_state     INTEGER NOT NULL DEFAULT 0,
@@ -504,7 +504,7 @@ public sealed class SqliteEventLog : IEventLog, IBatchedEventLog
                               CREATE INDEX IF NOT EXISTS idx_events_subject_time
                                 ON events(subject_type, subject_id, occurred_at);
                               CREATE INDEX IF NOT EXISTS idx_events_correlation
-                                ON events(correlation_id, seq);
+                                ON events(execution_id, seq);
                               CREATE INDEX IF NOT EXISTS idx_events_ship
                                 ON events(ship_state, seq);
                               CREATE TABLE IF NOT EXISTS event_context (
@@ -681,7 +681,7 @@ public sealed class SqliteEventLog : IEventLog, IBatchedEventLog
             RecordedAt = DateTimeOffset.Parse(reader.GetString(5), CultureInfo.InvariantCulture),
             Source = reader.GetString(6),
             Subject = new ObjectRef(reader.GetString(7), reader.GetString(8)),
-            CorrelationId = reader.IsDBNull(9) ? null : reader.GetString(9),
+            ExecutionId = reader.IsDBNull(9) ? null : reader.GetString(9),
             Context = DeserializeContext(reader.GetString(10)),
             Data = DeserializeData(reader.GetString(11))
         };

@@ -21,7 +21,7 @@ import {
 
 const projectFormInitial = {
   name: "",
-  referenceCycleId: "",
+  referenceProcessExecutionId: "",
   scenarioPackageKey: "",
   dataModelKey: "",
   processName: "",
@@ -141,17 +141,17 @@ function createTaskForm(task, workspace) {
     expectedEffectDirection: "",
     minimumEffect: "",
     hypothesisId: workspace?.hypotheses?.[0]?.hypothesisId || "",
-    cycleIds: [],
-    baselineRunKeys: [],
+    executionIds: [],
+    baselineExecutionKeys: [],
     name: "",
     low: variable?.lowerLimit ?? "",
     high: variable?.upperLimit ?? "",
     stopRule: "触发安全约束或设备异常时立即停止。",
-    rollbackPlan: "恢复项目基线配方并保留本次运行数据。",
+    rollbackPlan: "恢复项目基线工艺规范并保留本次运行数据。",
     applicability: "",
-    processWindowId: workspace?.processWindows?.find(item =>
+    operatingRegionId: workspace?.operatingRegions?.find(item =>
       item.status === "validated" &&
-      ["laboratory", "production"].includes(item.validationLevel))?.windowId || "",
+      ["laboratory", "production"].includes(item.validationLevel))?.operatingRegionId || "",
     knowledgeSourceType: "window",
     transferAssessmentId: workspace?.transferAssessments?.find(item =>
       item.status === "reviewed" && item.outcome === "beneficial")?.assessmentId || "",
@@ -164,7 +164,7 @@ function createTaskForm(task, workspace) {
     drillPassed: "false",
     drillEvidenceReference: "",
     drillEvidenceContentHash: "",
-    sourceWindowId: workspace?.transferSources?.[0]?.windowId || "",
+    sourceOperatingRegionId: workspace?.transferSources?.[0]?.operatingRegionId || "",
     transferResultId: workspace?.experimentResults?.[0]?.resultId || "",
     coldStartResultId: workspace?.experimentResults?.[1]?.resultId || "",
     transferNotes: "",
@@ -340,7 +340,7 @@ export function ResearchProjectsPage() {
     try {
       await postJson(`/api/v1/research-projects/experiments/${experiment.experimentId}/materialize-result`, {});
       await refreshWorkspace();
-      notify("已从冻结的配方、过程与检验数据自动计算实验结果。", "success");
+      notify("已从冻结的工艺规范、过程与检验数据自动计算实验结果。", "success");
     } catch (requestError) {
       notify(requestError.message, "danger");
     }
@@ -350,11 +350,11 @@ export function ResearchProjectsPage() {
     setShadowTarget({ experiment, run });
     setShadowForm({
       decision: "accepted",
-      actualRunKey: "",
+      actualExecutionKey: "",
       factors: Object.fromEntries((run.factors || []).map(factor => [factor.variableCode, factor.value])),
       rejectionReason: "",
       siteLimitations: "",
-      contextSnapshot: "machine_id=\nmaterial_lot_ref=\ntooling_id=",
+      contextSnapshot: "equipment_id=\nmaterial_lot_ref=\ntooling_assembly_id=",
     });
   }
 
@@ -376,10 +376,10 @@ export function ResearchProjectsPage() {
           }),
       );
       await postJson(
-        `/api/v1/research-projects/experiments/${shadowTarget.experiment.experimentId}/runs/${encodeURIComponent(shadowTarget.run.runKey)}/shadow-decision`,
+        `/api/v1/research-projects/experiments/${shadowTarget.experiment.experimentId}/runs/${encodeURIComponent(shadowTarget.run.executionKey)}/shadow-decision`,
         {
           decision: shadowForm.decision,
-          actualRunKey: shadowForm.actualRunKey,
+          actualExecutionKey: shadowForm.actualExecutionKey,
           engineerSelectedFactors: shadowTarget.run.factors.map(factor => ({
             ...factor,
             value: Number(shadowForm.factors[factor.variableCode]),
@@ -504,7 +504,7 @@ export function ResearchProjectsPage() {
 
   async function validateWindow(window) {
     try {
-      await postJson(`/api/v1/research-projects/process-windows/${window.windowId}/validate`, {});
+      await postJson(`/api/v1/research-projects/operating-regions/${window.operatingRegionId}/validate`, {});
       await refreshWorkspace();
       notify("已完成独立复核；系统已按重复组和区组证据判定验证等级。", "success");
     } catch (requestError) {
@@ -515,7 +515,7 @@ export function ResearchProjectsPage() {
   async function designWindowValidation(window) {
     try {
       await postJson(
-        `/api/v1/research-projects/process-windows/${window.windowId}/design-validation`,
+        `/api/v1/research-projects/operating-regions/${window.operatingRegionId}/design-validation`,
         {},
       );
       await refreshWorkspace();
@@ -527,9 +527,9 @@ export function ResearchProjectsPage() {
 
   async function releaseWindow(window) {
     try {
-      await postJson(`/api/v1/research-projects/process-windows/${window.windowId}/release`, {});
+      await postJson(`/api/v1/research-projects/operating-regions/${window.operatingRegionId}/release`, {});
       await refreshWorkspace();
-      notify("工艺窗口已审核并发布生产。", "success");
+      notify("工艺操作域已审核并发布生产。", "success");
     } catch (requestError) {
       notify(requestError.message, "danger");
     }
@@ -573,7 +573,7 @@ export function ResearchProjectsPage() {
             ? "已返回尚未登记完的影子建议，系统没有重复生成建议。"
             : mode === "controlled"
               ? "已返回尚未决策的受控在线建议，没有生成第二条。"
-            : "上一批优化实验尚未形成完整观察，已返回原实验，系统没有重复生成配方。"
+            : "上一批优化实验尚未形成完整观察，已返回原实验，系统没有重复生成工艺规范。"
           : mode === "shadow"
             ? "已生成旁路影子建议；它不能批准或下发，请登记工程师实际选择。"
             : mode === "controlled"
@@ -627,19 +627,19 @@ export function ResearchProjectsPage() {
           factors: [{ variableCode: variable.code, value: low, unit: variable.unit }],
           runPlan: [
             {
-              runKey: "condition-low",
+              executionKey: "condition-low",
               sequence: 1,
               replicateKey: "replicate-1",
               factors: [{ variableCode: variable.code, value: low, unit: variable.unit }],
             },
             {
-              runKey: "condition-high",
+              executionKey: "condition-high",
               sequence: 2,
               replicateKey: "replicate-1",
               factors: [{ variableCode: variable.code, value: high, unit: variable.unit }],
             },
           ],
-          baselineRunKeys: taskForm.baselineRunKeys,
+          baselineExecutionKeys: taskForm.baselineExecutionKeys,
           objectiveCodes: [objective.code],
           replicateKeys: ["replicate-1"],
           stopRule: taskForm.stopRule,
@@ -647,11 +647,11 @@ export function ResearchProjectsPage() {
         });
       } else if (task === "history") {
         await postJson(`/api/v1/research-projects/${project.projectId}/experiments/import-history`, {
-          cycleIds: taskForm.cycleIds,
+          executionIds: taskForm.executionIds,
         });
       } else if (task === "claim") {
         await postJson(`/api/v1/research-projects/${project.projectId}/knowledge-claims`, {
-          processWindowId: taskForm.knowledgeSourceType === "window" ? taskForm.processWindowId : null,
+          operatingRegionId: taskForm.knowledgeSourceType === "window" ? taskForm.operatingRegionId : null,
           transferAssessmentId: taskForm.knowledgeSourceType === "transfer" ? taskForm.transferAssessmentId : null,
           statement: taskForm.statement,
           applicability: taskForm.applicability,
@@ -671,7 +671,7 @@ export function ResearchProjectsPage() {
         });
       } else if (task === "transfer") {
         await postJson(`/api/v1/research-projects/${project.projectId}/transfer-assessments`, {
-          sourceWindowId: taskForm.sourceWindowId,
+          sourceOperatingRegionId: taskForm.sourceOperatingRegionId,
           transferResultId: taskForm.transferResultId,
           coldStartResultId: taskForm.coldStartResultId,
           notes: taskForm.transferNotes || null,
@@ -773,7 +773,7 @@ export function ResearchProjectsPage() {
   return (
     <Page
       title="优化项目"
-      description="用最少的有效实验，把生产问题追溯为可验证证据，再形成可复用的工艺窗口。"
+      description="用最少的有效实验，把生产问题追溯为可验证证据，再形成可复用的工艺操作域。"
       actions={<Button variant="primary" onClick={() => setCreateOpen(true)}>新建优化项目</Button>}
     >
       {error && <Alert tone="danger">{error}</Alert>}
@@ -852,7 +852,7 @@ export function ResearchProjectsPage() {
 }
 
 function CreateProjectDrawer({ open, saving, form, setForm, onClose, onSubmit }) {
-  const [catalog, setCatalog] = useState({ cycles: [], definitions: [], models: [], scenarios: [] });
+  const [catalog, setCatalog] = useState({ executions: [], definitions: [], models: [], scenarios: [] });
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [catalogError, setCatalogError] = useState("");
 
@@ -862,14 +862,14 @@ function CreateProjectDrawer({ open, saving, form, setForm, onClose, onSubmit })
     setCatalogLoading(true);
     setCatalogError("");
     Promise.all([
-      getJson("/api/v1/cycles?status=completed&limit=200"),
+      getJson("/api/v1/process-executions?status=completed&limit=200"),
       getJson("/api/v1/inspection-definitions"),
       getJson("/api/v1/process-data-models"),
       getJson("/api/v1/scenario-packages"),
-    ]).then(([cycles, definitions, models, scenarios]) => {
+    ]).then(([executions, definitions, models, scenarios]) => {
       if (!mounted) return;
       setCatalog({
-        cycles: cycles?.data || [],
+        executions: executions?.data || [],
         definitions: definitions?.data || [],
         models: models?.data || [],
         scenarios: scenarios?.data || [],
@@ -902,11 +902,11 @@ function CreateProjectDrawer({ open, saving, form, setForm, onClose, onSubmit })
     setForm(current => ({ ...current, ...values }));
   }
 
-  function chooseReferenceCycle(correlationId) {
-    const cycle = catalog.cycles.find(item => item.correlationId === correlationId);
+  function chooseReferenceProcessExecution(executionId) {
+    const execution = catalog.executions.find(item => item.executionId === executionId);
     updateForm({
-      referenceCycleId: correlationId,
-      productName: cycle?.productCode || form.productName,
+      referenceProcessExecutionId: executionId,
+      productName: execution?.productCode || form.productName,
     });
   }
 
@@ -959,12 +959,12 @@ function CreateProjectDrawer({ open, saving, form, setForm, onClose, onSubmit })
   }
 
   function chooseVariable(code) {
-    const parameter = (selectedModel?.recipeParameters || []).find(item => item.code === code);
+    const parameter = (selectedModel?.controlParameters || []).find(item => item.code === code);
     updateForm({
       variableCode: parameter?.code || "",
-      variableName: parameter?.sourceField || parameter?.code || "",
+      variableName: parameter?.displayName || parameter?.code || "",
       variableUnit: parameter?.unit || "",
-      variableDataSource: parameter ? `recipe:${parameter.code}` : "",
+      variableDataSource: parameter ? `control-parameter:${parameter.code}` : "",
     });
   }
 
@@ -981,11 +981,11 @@ function CreateProjectDrawer({ open, saving, form, setForm, onClose, onSubmit })
     });
   }
 
-  const cycleLabel = cycle => [
-    cycle.correlationId,
-    cycle.productSeries || cycle.productCode || "未标注产品",
-    cycle.machineId || "未标注设备",
-    cycle.completedAt ? new Date(cycle.completedAt).toLocaleString("zh-CN") : "",
+  const executionLabel = execution => [
+    execution.executionId,
+    execution.productFamilyCode || execution.productCode || "未标注产品",
+    execution.equipmentId || "未标注设备",
+    execution.completedAt ? new Date(execution.completedAt).toLocaleString("zh-CN") : "",
   ].filter(Boolean).join(" · ");
 
   return (
@@ -1002,10 +1002,10 @@ function CreateProjectDrawer({ open, saving, form, setForm, onClose, onSubmit })
         {catalogLoading && <Alert tone="info">正在读取已完成运行、工艺配置、检测定义和工艺数据模型…</Alert>}
         <Card title="1. 项目范围" description="先确定问题属于哪个工艺和产品范围。">
           <div className="grid gap-4 md:grid-cols-2">
-            <Field label="项目名称"><Input required value={form.name} onChange={field("name")} placeholder="光学模压工艺窗口研发" /></Field>
-            <Field label="参考运行" hint="选择后自动带入产品范围；不影响后续用更多运行形成证据。"><Select value={form.referenceCycleId} onChange={event => chooseReferenceCycle(event.target.value)}><option value="">暂不关联历史运行</option>{catalog.cycles.map(cycle => <option key={cycle.correlationId} value={cycle.correlationId}>{cycleLabel(cycle)}</option>)}</Select></Field>
+            <Field label="项目名称"><Input required value={form.name} onChange={field("name")} placeholder="光学模压工艺操作域研发" /></Field>
+            <Field label="参考运行" hint="选择后自动带入产品范围；不影响后续用更多运行形成证据。"><Select value={form.referenceProcessExecutionId} onChange={event => chooseReferenceProcessExecution(event.target.value)}><option value="">暂不关联历史运行</option>{catalog.executions.map(execution => <option key={execution.executionId} value={execution.executionId}>{executionLabel(execution)}</option>)}</Select></Field>
             <Field label="工艺配置（推荐）" hint="只允许选择不可变的已发布版本；其中 required-for-analysis 字段会成为优化准入条件。"><Select value={form.scenarioPackageKey} onChange={event => chooseScenarioPackage(event.target.value)}><option value="">暂不使用工艺配置</option>{selectableScenarios.map(item => <option key={`${item.packageId}:${item.version}`} value={`${item.packageId}:${item.version}`}>{item.name} · v{item.version}</option>)}</Select></Field>
-            <Field label="工艺数据模型" hint="决定可选的配方参数与实际数据来源。"><Select required value={form.dataModelKey} onChange={event => chooseDataModel(event.target.value)}><option value="">选择已配置的工艺数据模型</option>{selectableModels.map(model => <option key={`${model.modelId}:${model.version}`} value={`${model.modelId}:${model.version}`}>{model.name} · v{model.version}</option>)}</Select></Field>
+            <Field label="工艺数据模型" hint="决定可选的控制参数与实际数据来源。"><Select required value={form.dataModelKey} onChange={event => chooseDataModel(event.target.value)}><option value="">选择已配置的工艺数据模型</option>{selectableModels.map(model => <option key={`${model.modelId}:${model.version}`} value={`${model.modelId}:${model.version}`}>{model.name} · v{model.version}</option>)}</Select></Field>
             <Field label="目标产品" hint="来自参考运行；未关联时可补充产品编号。"><Input value={form.productName} onChange={field("productName")} placeholder="产品编号（可选）" /></Field>
             <Field label="材料"><Input value={form.materialName} onChange={field("materialName")} /></Field>
             <Field label="项目说明" className="md:col-span-2"><Textarea value={form.description} onChange={field("description")} rows={3} /></Field>
@@ -1023,14 +1023,14 @@ function CreateProjectDrawer({ open, saving, form, setForm, onClose, onSubmit })
         </Card>
         <Card title="3. 首个可控变量" description="定义第一轮实验允许调整的参数范围。">
           <div className="grid gap-4 md:grid-cols-2">
-            <Field label="可控配方参数" hint={selectedModel ? "从所选工艺数据模型中选择。" : "请先选择工艺数据模型。"}><Select required disabled={!selectedModel} value={form.variableCode} onChange={event => chooseVariable(event.target.value)}><option value="">选择可控配方参数</option>{(selectedModel?.recipeParameters || []).map(parameter => <option key={parameter.code} value={parameter.code}>{parameter.sourceField || parameter.code}{parameter.unit ? ` (${parameter.unit})` : ""}</option>)}</Select></Field>
-            <Field label="实际数据来源"><Input readOnly value={form.variableDataSource} placeholder="选择配方参数后自动带入" className="bg-slate-50 text-slate-600" /></Field>
+            <Field label="控制参数" hint={selectedModel ? "从所选工艺数据模型中选择。" : "请先选择工艺数据模型。"}><Select required disabled={!selectedModel} value={form.variableCode} onChange={event => chooseVariable(event.target.value)}><option value="">选择控制参数</option>{(selectedModel?.controlParameters || []).map(parameter => <option key={parameter.code} value={parameter.code}>{parameter.displayName || parameter.code}{parameter.unit ? ` (${parameter.unit})` : ""}</option>)}</Select></Field>
+            <Field label="实际数据来源"><Input readOnly value={form.variableDataSource} placeholder="选择控制参数后自动带入" className="bg-slate-50 text-slate-600" /></Field>
             <Field label="变量单位"><Input readOnly required value={form.variableUnit} placeholder="自动带入" className="bg-slate-50 text-slate-600" /></Field>
             <Field label="允许下限" hint="这是实验允许范围，请按设备/安全规范确认。"><Input required type="number" step="any" value={form.variableLower} onChange={field("variableLower")} /></Field>
             <Field label="允许上限" hint="这是实验允许范围，请按设备/安全规范确认。"><Input required type="number" step="any" value={form.variableUpper} onChange={field("variableUpper")} /></Field>
           </div>
         </Card>
-        <Card title="4. 结果安全边界（可选）" description="例如裂纹率、破损率或粘模指标；优化器只推荐达到最低安全概率的配方。">
+        <Card title="4. 结果安全边界（可选）" description="例如裂纹率、破损率或粘模指标；优化器只推荐达到最低安全概率的工艺规范。">
           <div className="grid gap-4 md:grid-cols-2">
             <Field label="安全指标" hint="选择后自动带入检测特性、单位和建议安全限值。"><Select value={form.outcomeConstraintKey} onChange={event => chooseConstraint(event.target.value)}><option value="">不设置额外结果安全边界</option>{objectiveOptions.filter(item => item.key !== selectedObjective?.key).map(option => <option key={option.key} value={option.key}>{option.definition.name} · {option.characteristic.name}</option>)}</Select></Field>
             <Field label="安全约束说明"><Input readOnly value={form.outcomeConstraintName} placeholder="选择安全指标后自动带入" className="bg-slate-50 text-slate-600" /></Field>
@@ -1077,30 +1077,30 @@ function WorkspaceContent({
     historicalReplayReports = [],
     rollbackDrills = [],
     onlineReport,
-    processWindows = [],
+    operatingRegions = [],
     knowledgeClaims = [],
     transferAssessments = [],
   } = workspace;
   const onlineAdmission = workspace.onlineAdmission;
-  const reviewedWindows = processWindows.filter(item => item.status === "validated");
-  const validatedWindows = reviewedWindows.filter(item =>
+  const reviewedOperatingRegions = operatingRegions.filter(item => item.status === "validated");
+  const validatedOperatingRegions = reviewedOperatingRegions.filter(item =>
     ["laboratory", "production"].includes(item.validationLevel));
   const observationSummary = workspace.optimizationObservationSummary;
   const canEdit = !["completed", "archived"].includes(project.status);
   const hasObservation = Number(observationSummary?.validObservationCount || 0) > 0;
   const hasRunningExperiment = experiments.some(item => item.status === "running");
-  const observedRunKeys = new Set(
-    (observationSummary?.observations || []).map(item => item.runKey),
+  const observedExecutionKeys = new Set(
+    (observationSummary?.observations || []).map(item => item.executionKey),
   );
   const variableByCode = new Map(project.variables.map(item => [item.code, item]));
   const objectiveByCode = new Map(project.objectives.map(item => [item.code, item]));
   const constraintByCode = new Map(
     (project.outcomeConstraints || []).map(item => [item.code, item]),
   );
-  const currentStage = project.status === "completed" && validatedWindows.length === 0
-    ? ["历史项目待复验", "该项目按旧规则完成，但工艺窗口缺少跨区组重复证据；请新建复现实验完成实验室验证后再发布生产。"]
+  const currentStage = project.status === "completed" && validatedOperatingRegions.length === 0
+    ? ["历史项目待复验", "该项目按旧规则完成，但工艺操作域缺少跨区组重复证据；请新建复现实验完成实验室验证后再发布生产。"]
     : project.status === "completed"
-      ? ["研究已闭环", "工艺窗口已完成实验室验证或生产发布，可沉淀并复用于相似工艺。"]
+      ? ["研究已闭环", "工艺操作域已完成实验室验证或生产发布，可沉淀并复用于相似工艺。"]
       : project.status === "draft"
     ? ["定义问题", "先明确目标、可控变量和安全边界。"]
     : hypotheses.length === 0
@@ -1111,17 +1111,17 @@ function WorkspaceContent({
           ? ["收集证据", "等待运行和检验完成，再让系统更新模型。"]
           : experimentResults.length === 0
             ? ["计算结果", "把冻结的数据快照转成可追溯的实验结果。"]
-            : processWindows.length === 0
-              ? ["形成窗口", "将有证据支持的范围提交为候选工艺窗口。"]
-              : validatedWindows.length === 0
+            : operatingRegions.length === 0
+              ? ["形成操作域", "将有证据支持的范围提交为候选工艺操作域。"]
+              : validatedOperatingRegions.length === 0
                 ? ["独立验证", "由其他成员验证窗口，避免把偶然结果当作规律。"]
                 : ["沉淀知识", "已具备可复用结论，可复核后服务下一个项目。"];
   const workflowSteps = [
     { id: "project-definition", title: "定义", description: "目标与边界", state: project.status === "draft" ? "current" : "done" },
     { id: "project-diagnosis", title: "追因", description: "假设与证据", state: hypotheses.length ? "done" : project.status === "draft" ? "upcoming" : "current" },
     { id: "project-experiments", title: "实验", description: "建议与执行", state: experiments.length ? "done" : hypotheses.length ? "current" : "upcoming" },
-    { id: "project-validation", title: "验证", description: "结果与窗口", state: validatedWindows.length ? "done" : experimentResults.length ? "current" : "upcoming" },
-    { id: "project-reuse", title: "复用", description: "知识与迁移", state: knowledgeClaims.some(item => item.status === "reviewed") ? "done" : validatedWindows.length ? "current" : "upcoming" },
+    { id: "project-validation", title: "验证", description: "结果与窗口", state: validatedOperatingRegions.length ? "done" : experimentResults.length ? "current" : "upcoming" },
+    { id: "project-reuse", title: "复用", description: "知识与迁移", state: knowledgeClaims.some(item => item.status === "reviewed") ? "done" : validatedOperatingRegions.length ? "current" : "upcoming" },
   ];
   return (
     <div className="space-y-5">
@@ -1156,7 +1156,7 @@ function WorkspaceContent({
               {project.status !== "draft" && canEdit && (workspace.transferSources || []).length > 0 && experimentResults.length >= 2 && <Button onClick={() => onTask("transfer")}>评估迁移收益</Button>}
               {project.status !== "draft" && canEdit && hypotheses.length > 0 && <Button onClick={() => onTask("experiment")}>手动设计实验</Button>}
               {project.status !== "draft" && canEdit && hasRunningExperiment && <Button onClick={() => onMaterializeExperimentResult(experiments.find(item => item.status === "running"))}>立即检查数据回收</Button>}
-              {canEdit && validatedWindows.length > 0 && <Button variant="primary" onClick={() => onTask("claim")}>沉淀工艺知识</Button>}
+              {canEdit && validatedOperatingRegions.length > 0 && <Button variant="primary" onClick={() => onTask("claim")}>沉淀工艺知识</Button>}
             </div>
             <div className="rounded-xl border border-white/80 bg-white/80 p-4">
               <p className="text-sm font-semibold text-slate-900">优化模型准备度</p>
@@ -1198,7 +1198,7 @@ function WorkspaceContent({
           <Metric label="研发假设" value={hypotheses.length} hint="待验证的规律" />
           <Metric label="实验计划" value={experiments.length} hint="设计与执行记录" />
           <Metric label="可用于优化" value={observationSummary?.validObservationCount ?? 0} hint="参数、过程与结果已关联" />
-          <Metric label="已验证窗口" value={validatedWindows.length} hint={`${reviewedWindows.length} 个窗口已完成复核`} />
+          <Metric label="已验证窗口" value={validatedOperatingRegions.length} hint={`${reviewedOperatingRegions.length} 个窗口已完成复核`} />
         </div>
         {observationSummary?.excludedObservationCount > 0 && (
           <Alert tone="warning">
@@ -1264,7 +1264,7 @@ function WorkspaceContent({
                 },
               },
               {
-                key: "runKeys",
+                key: "executionKeys",
                 label: "建议执行条件",
                 render: (_, row) => {
                   const isHistorical = row.designMethod === "historical-observation";
@@ -1272,11 +1272,11 @@ function WorkspaceContent({
                   return (
                     <div className="space-y-2">
                     {runs.map(run => (
-                      <div key={run.runKey} className="rounded-lg border border-slate-200 bg-slate-50 p-2">
+                      <div key={run.executionKey} className="rounded-lg border border-slate-200 bg-slate-50 p-2">
                         <div className="flex items-center justify-between gap-2">
-                          <code className="block text-xs font-semibold text-slate-700">{run.runKey}</code>
+                          <code className="block text-xs font-semibold text-slate-700">{run.executionKey}</code>
                           {!isHistorical && (
-                            <StatusBadge value={observedRunKeys.has(run.runKey) ? "数据已回收" : "等待运行"} />
+                            <StatusBadge value={observedExecutionKeys.has(run.executionKey) ? "数据已回收" : "等待运行"} />
                           )}
                         </div>
                         {(run.blockKey || run.replicateKey) && (
@@ -1298,16 +1298,16 @@ function WorkspaceContent({
                           );
                         })}
                         {row.optimization?.mode === "shadow" && !shadowRecommendations.some(item =>
-                          item.experimentId === row.experimentId && item.suggestionRunKey === run.runKey) && canEdit && (
+                          item.experimentId === row.experimentId && item.suggestionExecutionKey === run.executionKey) && canEdit && (
                           <Button onClick={event => { event.stopPropagation(); onShadowDecision(row, run); }}>
                             登记影子选择
                           </Button>
                         )}
                         {shadowRecommendations.some(item =>
-                          item.experimentId === row.experimentId && item.suggestionRunKey === run.runKey) && (
+                          item.experimentId === row.experimentId && item.suggestionExecutionKey === run.executionKey) && (
                           <div className="mt-2">
                             <StatusBadge value={shadowDecisionLabels[shadowRecommendations.find(item =>
-                              item.experimentId === row.experimentId && item.suggestionRunKey === run.runKey)?.decision] || "已登记影子决策"} />
+                              item.experimentId === row.experimentId && item.suggestionExecutionKey === run.executionKey)?.decision] || "已登记影子决策"} />
                           </div>
                         )}
                       </div>
@@ -1333,9 +1333,9 @@ function WorkspaceContent({
                         <strong className="text-slate-900">{value.processFeatureCount || 0}</strong> 个共同轨迹特征
                       </div>
                       {(value.runPredictions || []).map(prediction => (
-                        <div key={prediction.runKey} className="rounded-lg border border-slate-200 bg-white p-2">
+                        <div key={prediction.executionKey} className="rounded-lg border border-slate-200 bg-white p-2">
                           <div className="flex flex-wrap items-center justify-between gap-2">
-                            <code>{prediction.runKey}</code>
+                            <code>{prediction.executionKey}</code>
                             <span>
                               安全可行概率{" "}
                               <strong className="text-slate-900">
@@ -1507,8 +1507,8 @@ function WorkspaceContent({
           title="候选设置与已验证窗口"
           description="优化先产生经重复实测的候选设置点；连续范围必须另做边界和交互作用实验。"
         >
-          {processWindows.length === 0 ? <EmptyState title="尚未形成候选设置" description="完成优化实验后，系统会从同一条件的重复源数据中自动形成候选设置。" /> : (
-            <DataTable rows={processWindows} keyField="windowId" columns={[
+          {operatingRegions.length === 0 ? <EmptyState title="尚未形成候选设置" description="完成优化实验后，系统会从同一条件的重复源数据中自动形成候选设置。" /> : (
+            <DataTable rows={operatingRegions} keyField="operatingRegionId" columns={[
               { key: "name", label: "窗口" },
               {
                 key: "variables",
@@ -1555,7 +1555,7 @@ function WorkspaceContent({
                       return <span className="text-xs text-slate-500">先将项目推进到验证阶段</span>;
                     }
                     const validationExperiment = experiments.find(
-                      experiment => experiment.validationWindowId === row.windowId
+                      experiment => experiment.validationOperatingRegionId === row.operatingRegionId
                         && experiment.status !== "cancelled",
                     );
                     if (!validationExperiment) {
@@ -1609,7 +1609,7 @@ function WorkspaceContent({
         <div id="project-reuse" className="scroll-mt-60 space-y-5">
         <Card
           title="跨条件迁移评估"
-          description="将源工艺窗口在当前项目的实测结果，与当前项目从零建立的独立对照比较；这里只形成证据，不自动套用参数。"
+          description="将源工艺操作域在当前项目的实测结果，与当前项目从零建立的独立对照比较；这里只形成证据，不自动套用参数。"
         >
           {transferAssessments.length === 0 ? (
             <EmptyState title="尚未评估迁移" description="先在目标项目中完成迁移组和从零对照组，且每组至少三个重复、两个区组。" />
@@ -1651,7 +1651,7 @@ function WorkspaceContent({
           )}
         </Card>
         <Card title="可复用工艺知识">
-          {knowledgeClaims.length === 0 ? <EmptyState title="尚未沉淀知识" description="只有经过验证的工艺窗口才能转化为工艺知识。" /> : (
+          {knowledgeClaims.length === 0 ? <EmptyState title="尚未沉淀知识" description="只有经过验证的工艺操作域才能转化为工艺知识。" /> : (
             <DataTable rows={knowledgeClaims} keyField="claimId" columns={[
               { key: "statement", label: "知识声明" },
               { key: "applicability", label: "适用范围" },
@@ -1675,10 +1675,10 @@ function HistoricalReplayCard({ reports, currentUserId, onReview }) {
   return (
     <Card
       title="生产等价历史回放"
-      description="只在真实跑过的唯一配方候选池内逐次选择；完整保留原顺序、优化器、随机对照、校准、安全事件和失败闸门。"
+      description="只在真实跑过的唯一工艺规范候选池内逐次选择；完整保留原顺序、优化器、随机对照、校准、安全事件和失败闸门。"
     >
       {reports.length === 0 ? (
-        <EmptyState title="尚未生成历史回放报告" description="至少积累 3 种不同的完整实际配方条件；5 种以上才具备通过探索性闸门的可能。" />
+        <EmptyState title="尚未生成历史回放报告" description="至少积累 3 种不同的完整实际工艺规范条件；5 种以上才具备通过探索性闸门的可能。" />
       ) : (
         <DataTable rows={reports} keyField="reportId" columns={[
           {
@@ -1823,9 +1823,9 @@ function ShadowEvidenceCard({ recommendations, report, variableByCode, objective
       ) : (
         <DataTable rows={recommendations} keyField="recommendationId" columns={[
           {
-            key: "suggestionRunKey",
+            key: "suggestionExecutionKey",
             label: "模型建议 / 实际运行",
-            render: (value, row) => <div className="space-y-1 text-xs"><code>{value}</code><div>实际：<code>{row.actualRunKey}</code></div><div>模型：{row.modelVersion}</div><StatusBadge value={row.applicability?.status === "in-domain" ? "适用域内" : row.applicability?.status === "context-shift" ? "上下文变化" : row.applicability?.status === "parameter-extrapolation" ? "参数外推" : "历史不足"} /><div className="max-w-64 text-slate-500">{row.applicability?.summary}</div></div>,
+            render: (value, row) => <div className="space-y-1 text-xs"><code>{value}</code><div>实际：<code>{row.actualExecutionKey}</code></div><div>模型：{row.modelVersion}</div><StatusBadge value={row.applicability?.status === "in-domain" ? "适用域内" : row.applicability?.status === "context-shift" ? "上下文变化" : row.applicability?.status === "parameter-extrapolation" ? "参数外推" : "历史不足"} /><div className="max-w-64 text-slate-500">{row.applicability?.summary}</div></div>,
           },
           {
             key: "decision",
@@ -1874,9 +1874,9 @@ function ShadowDecisionDrawer({ target, form, setForm, saving, variables, onClos
       footer={<><Button disabled={saving} onClick={onClose}>取消</Button><Button variant="primary" disabled={saving} type="submit" form="shadow-decision-form">{saving ? "正在冻结…" : "冻结影子决策"}</Button></>}
     >
       <form id="shadow-decision-form" className="space-y-4" onSubmit={onSubmit}>
-        <Alert tone="info">模型建议 <code>{target.run.runKey}</code>；请在知道检验结果之前登记实际选择。</Alert>
+        <Alert tone="info">模型建议 <code>{target.run.executionKey}</code>；请在知道检验结果之前登记实际选择。</Alert>
         <Field label="决策"><Select value={form.decision} onChange={updateDecision}><option value="accepted">采用模型建议</option><option value="modified">修改后采用</option><option value="rejected">不采用建议</option></Select></Field>
-        <Field label="实际生产运行号" hint="必须与采集周期 CorrelationId 完全一致，结果将通过它自动关联。"><Input required value={form.actualRunKey} onChange={update("actualRunKey")} /></Field>
+        <Field label="实际生产运行号" hint="必须与采集周期 ExecutionId 完全一致，结果将通过它自动关联。"><Input required value={form.actualExecutionKey} onChange={update("actualExecutionKey")} /></Field>
         <div className="grid gap-4 sm:grid-cols-2">
           {(target.run.factors || []).map(factor => (
             <Field key={factor.variableCode} label={variableByCode.get(factor.variableCode)?.name || factor.variableCode} hint={`模型建议 ${formatResearchNumber(factor.value)} ${factor.unit}`}>
@@ -1948,7 +1948,7 @@ function TaskDrawer({ task, form, setForm, workspace, saving, onClose, onSubmit 
   if (!task || !workspace) return null;
   const update = name => event => setForm({ ...form, [name]: event.target.value });
   const variables = workspace.project.variables.filter(item => item.role === "control");
-  const validatedWindows = workspace.processWindows.filter(item =>
+  const validatedOperatingRegions = workspace.operatingRegions.filter(item =>
     item.status === "validated" &&
     ["laboratory", "production"].includes(item.validationLevel));
   const beneficialTransfers = (workspace.transferAssessments || []).filter(item =>
@@ -1959,7 +1959,7 @@ function TaskDrawer({ task, form, setForm, workspace, saving, onClose, onSubmit 
       ...run,
       experimentName: experiment.name,
     })));
-  const [historicalCycles, setHistoricalCycles] = useState([]);
+  const [historicalProcessExecutions, setHistoricalProcessExecutions] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState("");
 
@@ -1969,12 +1969,12 @@ function TaskDrawer({ task, form, setForm, workspace, saving, onClose, onSubmit 
     setHistoryLoading(true);
     setHistoryError("");
     const productCode = workspace.project.productName ? `&productCode=${encodeURIComponent(workspace.project.productName)}` : "";
-    getJson(`/api/v1/cycles?status=completed&limit=200${productCode}`)
+    getJson(`/api/v1/process-executions?status=completed&limit=200${productCode}`)
       .then(response => {
         if (!mounted) return;
         const values = response?.data || [];
-        setHistoricalCycles(values);
-        setForm(current => ({ ...current, cycleIds: values.map(item => item.correlationId) }));
+        setHistoricalProcessExecutions(values);
+        setForm(current => ({ ...current, executionIds: values.map(item => item.executionId) }));
       })
       .catch(requestError => {
         if (!mounted) return;
@@ -1984,15 +1984,15 @@ function TaskDrawer({ task, form, setForm, workspace, saving, onClose, onSubmit 
     return () => { mounted = false; };
   }, [task, workspace.project.productName, setForm]);
 
-  const historicalCycleLabel = cycle => [
-    cycle.correlationId,
-    cycle.productSeries || cycle.productCode || "未标注产品",
-    cycle.machineId ? `设备 ${cycle.machineId}` : "",
-    cycle.edgeIds?.length ? `Edge ${cycle.edgeIds.join("/")}` : "",
-    cycle.externalBatchRef ? `批次 ${cycle.externalBatchRef}` : "",
-    cycle.workpieceId ? `工件 ${cycle.workpieceId}` : "",
-    cycle.recipeId ? `配方 ${cycle.recipeId}` : "",
-    cycle.completedAt ? new Date(cycle.completedAt).toLocaleString("zh-CN") : "",
+  const historicalProcessExecutionLabel = execution => [
+    execution.executionId,
+    execution.productFamilyCode || execution.productCode || "未标注产品",
+    execution.equipmentId ? `设备 ${execution.equipmentId}` : "",
+    execution.edgeIds?.length ? `Edge ${execution.edgeIds.join("/")}` : "",
+    execution.externalBatchRef ? `批次 ${execution.externalBatchRef}` : "",
+    execution.outputItemId ? `工件 ${execution.outputItemId}` : "",
+    execution.processSpecificationId ? `工艺规范 ${execution.processSpecificationId}` : "",
+    execution.completedAt ? new Date(execution.completedAt).toLocaleString("zh-CN") : "",
   ].filter(Boolean).join(" · ");
   const resultLabel = result => {
     const experiment = workspace.experiments.find(item => item.experimentId === result.experimentId);
@@ -2038,18 +2038,18 @@ function TaskDrawer({ task, form, setForm, workspace, saving, onClose, onSubmit 
               <Select
                 multiple
                 size={Math.min(8, Math.max(3, baselineRuns.length))}
-                value={form.baselineRunKeys || []}
+                value={form.baselineExecutionKeys || []}
                 onChange={event => setForm({
                   ...form,
-                  baselineRunKeys: Array.from(
+                  baselineExecutionKeys: Array.from(
                     event.target.selectedOptions,
                     option => option.value,
                   ),
                 })}
               >
                 {baselineRuns.map(run => (
-                  <option key={`${run.experimentName}:${run.runKey}`} value={run.runKey}>
-                    {run.experimentName} · {run.runKey}
+                  <option key={`${run.experimentName}:${run.executionKey}`} value={run.executionKey}>
+                    {run.experimentName} · {run.executionKey}
                   </option>
                 ))}
               </Select>
@@ -2060,21 +2060,21 @@ function TaskDrawer({ task, form, setForm, workspace, saving, onClose, onSubmit 
         </>}
         {task === "history" && <>
           <Alert tone="info" title="把已有数据变成优化观察">
-            系统只读取已完成运行的实际配方回读、过程特征和检验记录；不会向设备写入参数。至少选择两种实际配方条件，导入后优化器才能使用这些观察。
+            系统只读取已完成运行的实际控制参数回读、过程特征和检验记录；不会向设备写入参数。至少选择两种实际工艺规范条件，导入后优化器才能使用这些观察。
           </Alert>
           {historyError && <Alert tone="danger">{historyError}</Alert>}
           {historyLoading ? <Alert tone="info">正在读取可导入的已完成运行…</Alert> : (
-            <Field label="已完成运行" hint={`已默认选中 ${form.cycleIds?.length || 0} 个与项目产品匹配的运行；列表明确显示设备与 Edge，可跨节点多选。`}>
-              <Select multiple required size="12" value={form.cycleIds || []} onChange={event => setForm({ ...form, cycleIds: Array.from(event.target.selectedOptions, option => option.value) })}>
-                {historicalCycles.map(cycle => <option key={cycle.correlationId} value={cycle.correlationId}>{historicalCycleLabel(cycle)}</option>)}
+            <Field label="已完成运行" hint={`已默认选中 ${form.executionIds?.length || 0} 个与项目产品匹配的运行；列表明确显示设备与 Edge，可跨节点多选。`}>
+              <Select multiple required size="12" value={form.executionIds || []} onChange={event => setForm({ ...form, executionIds: Array.from(event.target.selectedOptions, option => option.value) })}>
+                {historicalProcessExecutions.map(execution => <option key={execution.executionId} value={execution.executionId}>{historicalProcessExecutionLabel(execution)}</option>)}
               </Select>
             </Field>
           )}
         </>}
         {task === "claim" && <>
-          {beneficialTransfers.length > 0 && <Field label="知识证据类型"><Select value={form.knowledgeSourceType} onChange={update("knowledgeSourceType")}><option value="window">当前项目已验证工艺窗口</option><option value="transfer">经复核的迁移收益</option></Select></Field>}
+          {beneficialTransfers.length > 0 && <Field label="知识证据类型"><Select value={form.knowledgeSourceType} onChange={update("knowledgeSourceType")}><option value="window">当前项目已验证工艺操作域</option><option value="transfer">经复核的迁移收益</option></Select></Field>}
           {form.knowledgeSourceType !== "transfer" ? (
-            <Field label="来源工艺窗口"><Select required value={form.processWindowId} onChange={update("processWindowId")}>{validatedWindows.map(item => <option key={item.windowId} value={item.windowId}>{item.name}</option>)}</Select></Field>
+            <Field label="来源工艺操作域"><Select required value={form.operatingRegionId} onChange={update("operatingRegionId")}>{validatedOperatingRegions.map(item => <option key={item.operatingRegionId} value={item.operatingRegionId}>{item.name}</option>)}</Select></Field>
           ) : (
             <Field label="来源迁移评估" hint="系统还会校验同一源窗口是否至少两次相对从零对照取得经复核收益。"><Select required value={form.transferAssessmentId} onChange={update("transferAssessmentId")}>{beneficialTransfers.map(item => <option key={item.assessmentId} value={item.assessmentId}>相对从零收益 {formatResearchNumber(Number(item.relativeGain) * 100)}% · {item.contextDifferences?.length || 0} 项条件变化</option>)}</Select></Field>
           )}
@@ -2096,12 +2096,12 @@ function TaskDrawer({ task, form, setForm, workspace, saving, onClose, onSubmit 
           <Field label="证据 SHA-256" hint="对原始演练日志或记录文件计算 SHA-256，防止复核后内容被替换。"><Input required minLength="64" maxLength="64" pattern="[a-fA-F0-9]{64}" value={form.drillEvidenceContentHash} onChange={update("drillEvidenceContentHash")} /></Field>
         </>}
         {task === "transfer" && <>
-          <Alert tone="warning" title="迁移不是复制配方">
+          <Alert tone="warning" title="迁移不是复制工艺规范">
             这里只比较已经完成的两组目标现场实测：一组按源窗口执行，一组从目标条件独立起步。系统不会向设备下发源参数；单次有收益也不能直接沉淀为通用知识。
           </Alert>
-          <Field label="源生产工艺窗口" hint="仅列出当前用户可访问且已经生产发布的窗口。">
-            <Select required value={form.sourceWindowId} onChange={update("sourceWindowId")}>
-              {(workspace.transferSources || []).map(item => <option key={item.windowId} value={item.windowId}>{item.sourceProjectName} · {item.windowName} · {item.sourceMaterialName || "材料未声明"}</option>)}
+          <Field label="源生产工艺操作域" hint="仅列出当前用户可访问且已经生产发布的窗口。">
+            <Select required value={form.sourceOperatingRegionId} onChange={update("sourceOperatingRegionId")}>
+              {(workspace.transferSources || []).map(item => <option key={item.operatingRegionId} value={item.operatingRegionId}>{item.sourceProjectName} · {item.operatingRegionName} · {item.sourceMaterialName || "材料未声明"}</option>)}
             </Select>
           </Field>
           <Field label="迁移组实测结果" hint="实际设置必须全部位于源窗口内，且至少三个重复、两个区组。">

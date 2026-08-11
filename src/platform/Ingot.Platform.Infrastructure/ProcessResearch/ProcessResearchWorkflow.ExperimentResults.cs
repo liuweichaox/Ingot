@@ -101,19 +101,19 @@ public sealed partial class ProcessResearchWorkflow
                 throw new ProcessResearchRuleException("排除运行观察时必须说明原因。");
             return observation with
             {
-                RunKey = RequiredText(observation.RunKey, "运行观察标识", 240),
+                ExecutionKey = RequiredText(observation.ExecutionKey, "运行观察标识", 240),
                 ActualFactors = factors,
                 SourceContentHash = sourceHash,
                 ExclusionReason = OptionalText(observation.ExclusionReason, 1000)
             };
         }).ToArray();
-        if (runObservations.Select(static value => value.RunKey)
+        if (runObservations.Select(static value => value.ExecutionKey)
                 .Distinct(StringComparer.Ordinal).Count() != runObservations.Length)
             throw new ProcessResearchRuleException("同一结果中的运行观察标识不能重复。");
-        if (!runObservations.Select(static value => value.RunKey)
+        if (!runObservations.Select(static value => value.ExecutionKey)
                 .ToHashSet(StringComparer.Ordinal)
-                .SetEquals(experiment.RunPlan.Select(static value => value.RunKey)))
-            throw new ProcessResearchRuleException("实验结果必须包含计划中每个 RunKey 的逐运行源数据观察。");
+                .SetEquals(experiment.RunPlan.Select(static value => value.ExecutionKey)))
+            throw new ProcessResearchRuleException("实验结果必须包含计划中每个 ExecutionKey 的逐运行源数据观察。");
 
         var replicateCount = experiment.RunPlan
             .Where(static value => !string.IsNullOrWhiteSpace(value.ReplicateKey))
@@ -134,16 +134,16 @@ public sealed partial class ProcessResearchWorkflow
             "material_lot_id",
             "material_batch",
             "batch_id");
-        var distinctEquipmentCount = CountDistinctContext(runObservations, "machine_id");
+        var distinctEquipmentCount = CountDistinctContext(runObservations, "equipment_id");
         var safetyPassed = project.OutcomeConstraints.All(constraint =>
             runObservations.All(observation =>
                 observation.ConstraintOutcomes.TryGetValue(constraint.Code, out var outcome) &&
                 (constraint.Operator == "<="
                     ? outcome <= constraint.Limit
                     : outcome >= constraint.Limit)));
-        var excludedRunKeys = runObservations
+        var excludedExecutionKeys = runObservations
             .Where(static value => !value.ValidForOptimization)
-            .Select(static value => value.RunKey)
+            .Select(static value => value.ExecutionKey)
             .Order(StringComparer.Ordinal)
             .ToArray();
 
@@ -170,7 +170,7 @@ public sealed partial class ProcessResearchWorkflow
             DistinctMaterialLotCount = distinctMaterialLotCount,
             DistinctEquipmentCount = distinctEquipmentCount,
             SafetyPassed = safetyPassed,
-            ExcludedRunKeys = excludedRunKeys
+            ExcludedExecutionKeys = excludedExecutionKeys
         });
         var analysisHash = Convert.ToHexStringLower(
             SHA256.HashData(Encoding.UTF8.GetBytes(hashPayload)));
@@ -207,7 +207,7 @@ public sealed partial class ProcessResearchWorkflow
             DistinctEquipmentCount = distinctEquipmentCount,
             SafetyPassed = safetyPassed,
             Evidence = evidence,
-            ExcludedRunKeys = excludedRunKeys,
+            ExcludedExecutionKeys = excludedExecutionKeys,
             RecordedBy = NormalizeUser(userId),
             RecordedAt = now
         };

@@ -138,15 +138,15 @@ internal sealed class HttpPollingAcquisitionHostedService(
     }
 
     private bool CanLoadPlatformProfiles()
-        => _edgeOptions.IsPlatformReportingEnabled &&
-           !string.IsNullOrWhiteSpace(_edgeOptions.EffectivePlatformApiBaseUrl);
+        => _edgeOptions.EnablePlatformReporting &&
+           !string.IsNullOrWhiteSpace(_edgeOptions.PlatformApiBaseUrl);
 
     private async Task<IReadOnlyList<AcquisitionDeployment>> LoadDeploymentsAsync(
         string edgeId,
         CancellationToken ct)
     {
         var client = httpClientFactory.CreateClient("platform-acquisition-configuration");
-        client.BaseAddress = new Uri(_edgeOptions.EffectivePlatformApiBaseUrl.TrimEnd('/') + "/");
+        client.BaseAddress = new Uri(_edgeOptions.PlatformApiBaseUrl.TrimEnd('/') + "/");
         using var request = new HttpRequestMessage(
             HttpMethod.Get,
             $"api/v1/acquisition-profiles/active?edgeId={Uri.EscapeDataString(edgeId)}");
@@ -192,9 +192,10 @@ internal sealed class HttpPollingAcquisitionHostedService(
                     AcquisitionApplicationStates.Validating);
                 if (!AcquisitionProfileValidator.TryValidate(
                         deployment.Profile,
+                        null,
                         out _,
-                        out var validationError))
-                    throw new InvalidDataException(validationError);
+                        out var validationErrors))
+                    throw new InvalidDataException(string.Join("；", validationErrors));
 
                 if (configurationSource == AcquisitionConfigurationSources.Platform)
                 {
@@ -208,7 +209,7 @@ internal sealed class HttpPollingAcquisitionHostedService(
                 {
                     status.RecordApplicationState(
                         deployment.Profile.ProfileId,
-                        AcquisitionApplicationStates.WaitingForCycleBoundary);
+                        AcquisitionApplicationStates.WaitingForProcessExecutionBoundary);
                     continue;
                 }
 
@@ -400,7 +401,7 @@ internal sealed class HttpPollingAcquisitionHostedService(
         client.BaseAddress = new Uri(options.DeviceBaseUrl.TrimEnd('/') + "/");
         client.Timeout = TimeSpan.FromMilliseconds(Math.Max(1000, options.TimeoutMs));
         var delay = TimeSpan.FromMilliseconds(options.PollIntervalMs);
-        string? currentRecipe = null;
+        string? currentProcessSpecification = null;
         var lifecycle = new AcquisitionLifecycleTracker();
         var sourceDeduplicator = new AcquisitionSourceDeduplicator();
 
@@ -418,14 +419,14 @@ internal sealed class HttpPollingAcquisitionHostedService(
                 response.EnsureSuccessStatusCode();
                 var snapshot = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: ct)
                     .ConfigureAwait(false);
-                var mapped = HttpPollingSnapshotMapper.Map(snapshot, options, source, currentRecipe);
+                var mapped = HttpPollingSnapshotMapper.Map(snapshot, options, source, currentProcessSpecification);
                 if (!sourceDeduplicator.ShouldEmit(mapped.Sample))
                 {
-                    currentRecipe = mapped.RecipeIdentity;
+                    currentProcessSpecification = mapped.ProcessSpecificationIdentity;
                     status.RecordSuccess(
                         key,
                         DateTimeOffset.UtcNow,
-                        currentRecipe,
+                        currentProcessSpecification,
                         incrementSample: false,
                         readDurationMs: System.Diagnostics.Stopwatch.GetElapsedTime(readStarted).TotalMilliseconds);
                     await Task.Delay(delay, ct).ConfigureAwait(false);
@@ -433,12 +434,12 @@ internal sealed class HttpPollingAcquisitionHostedService(
                 }
                 var events = lifecycle.Track(mapped, options.Lifecycle, options.PollIntervalMs);
                 await sink.EmitBatchAsync(events, ct).ConfigureAwait(false);
-                status.RecordCycleState(key, lifecycle.IsRunActive);
-                currentRecipe = mapped.RecipeIdentity;
+                status.RecordProcessExecutionState(key, lifecycle.IsRunActive);
+                currentProcessSpecification = mapped.ProcessSpecificationIdentity;
                 status.RecordSuccess(
                     key,
                     DateTimeOffset.UtcNow,
-                    currentRecipe,
+                    currentProcessSpecification,
                     readDurationMs: System.Diagnostics.Stopwatch.GetElapsedTime(readStarted).TotalMilliseconds);
             }
             catch (Exception exception) when (exception is not OperationCanceledException)

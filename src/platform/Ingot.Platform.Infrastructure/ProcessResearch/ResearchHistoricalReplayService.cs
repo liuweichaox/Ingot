@@ -5,9 +5,9 @@ using Ingot.Contracts.ProcessResearch;
 namespace Ingot.Platform.Infrastructure.ProcessResearch;
 
 /// <summary>
-///     Freezes a production-equivalent replay over real, already observed recipe conditions.
+///     Freezes a production-equivalent replay over real, already observed processSpecification conditions.
 ///     Replicates are aggregated before replay because the candidate-pool evaluator must never
-///     pretend that the same recipe is a new optimization choice.
+///     pretend that the same processSpecification is a new optimization choice.
 /// </summary>
 public sealed class ResearchHistoricalReplayService(
     IProcessResearchStore store,
@@ -40,11 +40,11 @@ public sealed class ResearchHistoricalReplayService(
             .Where(static value => value.Optimization?.Mode != ResearchOptimizationModes.Shadow)
             .SelectMany(experiment => experiment.RunPlan.Select(run => new
             {
-                run.RunKey,
+                run.ExecutionKey,
                 experiment.CreatedAt,
                 run.Sequence
             }))
-            .GroupBy(static value => value.RunKey, StringComparer.Ordinal)
+            .GroupBy(static value => value.ExecutionKey, StringComparer.Ordinal)
             .ToDictionary(
                 static group => group.Key,
                 static group => group.OrderBy(value => value.CreatedAt)
@@ -63,11 +63,11 @@ public sealed class ResearchHistoricalReplayService(
                     .SetEquals(objectiveCodes) &&
                 value.Observation.ConstraintOutcomes.Keys.ToHashSet(StringComparer.Ordinal)
                     .SetEquals(constraintCodes))
-            .OrderBy(value => runOrder.TryGetValue(value.Observation.RunKey, out var order)
+            .OrderBy(value => runOrder.TryGetValue(value.Observation.ExecutionKey, out var order)
                 ? order.CreatedAt : value.ResultAt)
-            .ThenBy(value => runOrder.TryGetValue(value.Observation.RunKey, out var order)
+            .ThenBy(value => runOrder.TryGetValue(value.Observation.ExecutionKey, out var order)
                 ? order.Sequence : int.MaxValue)
-            .ThenBy(value => value.Observation.RunKey, StringComparer.Ordinal)
+            .ThenBy(value => value.Observation.ExecutionKey, StringComparer.Ordinal)
             .ToArray();
         if (source.Length < 3)
             throw new ProcessResearchRuleException("真实历史回放至少需要 3 条参数、过程和结果完整的运行。");
@@ -83,7 +83,7 @@ public sealed class ResearchHistoricalReplayService(
             .Select(group => new
             {
                 FirstOrder = Array.IndexOf(source, group.First()),
-                RunId = string.Join(',', group.Select(value => value.Observation.RunKey)
+                RunId = string.Join(',', group.Select(value => value.Observation.ExecutionKey)
                     .Order(StringComparer.Ordinal)).Truncate(240),
                 SourceCount = group.Count(),
                 Params = controls.Keys.ToDictionary(
@@ -107,7 +107,7 @@ public sealed class ResearchHistoricalReplayService(
             .OrderBy(static value => value.FirstOrder)
             .ToArray();
         if (grouped.Length < 3)
-            throw new ProcessResearchRuleException("历史运行至少需要 3 种不同的实际配方条件才能回放排序。");
+            throw new ProcessResearchRuleException("历史运行至少需要 3 种不同的实际工艺规范条件才能回放排序。");
         var budget = request.Budget ?? grouped.Length;
         if (budget < 1 || budget > grouped.Length)
             throw new ProcessResearchRuleException("历史回放预算必须在 1 和历史唯一条件数之间。");

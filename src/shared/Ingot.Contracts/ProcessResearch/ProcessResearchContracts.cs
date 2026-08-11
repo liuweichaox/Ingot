@@ -51,7 +51,7 @@ public static class ResearchExperimentStatuses
         => value is Planned or Approved or Running or Completed or Cancelled;
 }
 
-public static class ProcessWindowStatuses
+public static class OperatingRegionStatuses
 {
     public const string Candidate = "candidate";
     public const string Validated = "validated";
@@ -72,7 +72,7 @@ public static class ResearchKnowledgeStatuses
         => value is Draft or Reviewed or Published or Retired;
 }
 
-public static class ProcessWindowValidationLevels
+public static class OperatingRegionValidationLevels
 {
     public const string Evidence = "evidence";
     public const string Replay = "replay";
@@ -193,15 +193,15 @@ public static class EvidenceKinds
     public const string DatasetSnapshot = "dataset-snapshot";
     public const string ExperimentResult = "experiment-result";
     public const string AnalysisRun = "analysis-run";
-    public const string CycleComparison = "cycle-comparison";
+    public const string ExecutionComparison = "execution-comparison";
     public const string MechanismModel = "mechanism-model";
     public const string KnowledgeSource = "knowledge-source";
-    public const string ProcessWindow = "process-window";
+    public const string OperatingRegion = "operating-region";
     public const string TransferAssessment = "transfer-assessment";
 
     public static bool IsValid(string? value)
-        => value is DatasetSnapshot or ExperimentResult or AnalysisRun or CycleComparison or
-            MechanismModel or KnowledgeSource or ProcessWindow or TransferAssessment;
+        => value is DatasetSnapshot or ExperimentResult or AnalysisRun or ExecutionComparison or
+            MechanismModel or KnowledgeSource or OperatingRegion or TransferAssessment;
 }
 
 public sealed record ResearchObjective
@@ -246,7 +246,7 @@ public sealed record ResearchConstraint
 
 /// <summary>
 ///     由实测结果定义的可行性边界。它与控制参数硬边界分开建模，
-///     供受约束贝叶斯优化计算候选配方的安全/质量可行概率。
+///     供受约束贝叶斯优化计算候选工艺规范的安全/质量可行概率。
 /// </summary>
 public sealed record ResearchOutcomeConstraint
 {
@@ -367,25 +367,25 @@ public sealed record ExperimentFactorSetting
     public required string Unit { get; init; }
 }
 
-public sealed record ResearchHypothesisFromCycleComparisonRequest
+public sealed record ResearchHypothesisFromExecutionComparisonRequest
 {
-    public required string BaselineCycleId { get; init; }
-    public IReadOnlyList<string> CycleIds { get; init; } = [];
+    public required string BaselineProcessExecutionId { get; init; }
+    public IReadOnlyList<string> ProcessExecutionIds { get; init; } = [];
     public int MaximumHypotheses { get; init; } = 3;
 }
 
 /// <summary>
-///     将已完成的生产周期作为历史证据纳入研发项目。周期标识同时是实验运行标识，
-///     因而不会复制过程、配方或检验数据。
+///     将已完成的生产过程执行作为历史证据纳入研发项目。过程执行标识同时是实验运行标识，
+///     因而不会复制过程、工艺规范或检验数据。
 /// </summary>
 public sealed record ResearchHistoricalRunImportRequest
 {
-    public IReadOnlyList<string> CycleIds { get; init; } = [];
+    public IReadOnlyList<string> ProcessExecutionIds { get; init; } = [];
 }
 
 public sealed record ExperimentRunPlan
 {
-    public required string RunKey { get; init; }
+    public required string ExecutionKey { get; init; }
     public int Sequence { get; init; }
     public string? BlockKey { get; init; }
     public string? ReplicateKey { get; init; }
@@ -395,7 +395,7 @@ public sealed record ExperimentRunPlan
 public sealed record ExperimentExecutionCommand
 {
     public Guid CommandId { get; init; }
-    public required string RunKey { get; init; }
+    public required string ExecutionKey { get; init; }
     public int Sequence { get; init; }
     public string? BlockKey { get; init; }
     public string? ReplicateKey { get; init; }
@@ -403,8 +403,8 @@ public sealed record ExperimentExecutionCommand
 }
 
 /// <summary>
-///     设备无关的实验执行交接单。PLC、MES、配方系统或人工操作站只需要消费
-///     这组有序命令，并在实际运行中沿用 RunKey；采集侧随后会自动把实际配方、
+///     设备无关的实验执行交接单。PLC、MES、工艺规范系统或人工操作站只需要消费
+///     这组有序命令，并在实际运行中沿用 ExecutionKey；采集侧随后会自动把实际工艺规范、
 ///     过程轨迹和检验结果关联回同一运行。
 /// </summary>
 public sealed record ResearchExperimentExecution
@@ -429,7 +429,7 @@ public sealed record OptimizationMetricPrediction
 
 public sealed record OptimizationRunPrediction
 {
-    public required string RunKey { get; init; }
+    public required string ExecutionKey { get; init; }
     public IReadOnlyDictionary<string, OptimizationMetricPrediction> Objectives { get; init; } =
         new Dictionary<string, OptimizationMetricPrediction>();
     public IReadOnlyDictionary<string, OptimizationMetricPrediction> Constraints { get; init; } =
@@ -469,7 +469,7 @@ public sealed record ResearchOptimizationMetadata
 public sealed record ResearchShadowDecisionRequest
 {
     public required string Decision { get; init; }
-    public required string ActualRunKey { get; init; }
+    public required string ActualExecutionKey { get; init; }
     public IReadOnlyList<ExperimentFactorSetting> EngineerSelectedFactors { get; init; } = [];
     public string? RejectionReason { get; init; }
     public IReadOnlyList<string> SiteLimitations { get; init; } = [];
@@ -479,7 +479,7 @@ public sealed record ResearchShadowDecisionRequest
 
 public sealed record ResearchShadowOutcome
 {
-    public required string ActualRunKey { get; init; }
+    public required string ActualExecutionKey { get; init; }
     public IReadOnlyList<ExperimentFactorSetting> ActualFactors { get; init; } = [];
     public IReadOnlyDictionary<string, double> SettingDeviationFromSuggestion { get; init; } =
         new Dictionary<string, double>();
@@ -526,8 +526,8 @@ public sealed record ResearchShadowRecommendation
     public Guid RecommendationId { get; init; }
     public Guid ProjectId { get; init; }
     public Guid ExperimentId { get; init; }
-    public required string SuggestionRunKey { get; init; }
-    public required string ActualRunKey { get; init; }
+    public required string SuggestionExecutionKey { get; init; }
+    public required string ActualExecutionKey { get; init; }
     public required string Decision { get; init; }
     public required string ModelVersion { get; init; }
     public required string ModelInputHash { get; init; }
@@ -557,7 +557,7 @@ public sealed record ResearchShadowCalibrationMetric
 public sealed record ResearchShadowSafetyEvent
 {
     public Guid RecommendationId { get; init; }
-    public required string ActualRunKey { get; init; }
+    public required string ActualExecutionKey { get; init; }
     public required string ConstraintCode { get; init; }
     public double ObservedValue { get; init; }
     public required string Operator { get; init; }
@@ -576,7 +576,7 @@ public sealed record ResearchShadowCampaignReport
 {
     public Guid ProjectId { get; init; }
     /// <summary>Missing in historical payloads means the thresholds predated policy versioning.</summary>
-    public string ValidationPolicyVersion { get; init; } = "legacy-unversioned";
+    public string ValidationPolicyVersion { get; init; } = "not-evaluated";
     public int TotalRecommendations { get; init; }
     public int AcceptedCount { get; init; }
     public int ModifiedCount { get; init; }
@@ -669,7 +669,7 @@ public sealed record ResearchHistoricalReplayReport
     public Guid ReportId { get; init; }
     public Guid ProjectId { get; init; }
     /// <summary>Missing in historical payloads means the thresholds predated policy versioning.</summary>
-    public string ValidationPolicyVersion { get; init; } = "legacy-unversioned";
+    public string ValidationPolicyVersion { get; init; } = "not-evaluated";
     public string Status { get; init; } = ResearchHistoricalReplayStatuses.Generated;
     public required string DatasetSnapshotHash { get; init; }
     public int UniqueConditionCount { get; init; }
@@ -703,7 +703,7 @@ public sealed record ResearchHistoricalReplayReport
 public sealed record ResearchOnlineAdmissionEvidence
 {
     /// <summary>Missing in historical payloads means the thresholds predated policy versioning.</summary>
-    public string ValidationPolicyVersion { get; init; } = "legacy-unversioned";
+    public string ValidationPolicyVersion { get; init; } = "not-evaluated";
     public bool Eligible { get; init; }
     public IReadOnlyList<string> Failures { get; init; } = [];
     public IReadOnlyList<string> Warnings { get; init; } = [];
@@ -778,10 +778,10 @@ public sealed record ResearchExperiment
     public Guid ProjectId { get; init; }
     public Guid? HypothesisId { get; init; }
     /// <summary>
-    ///     非空时表示该实验是针对指定候选工艺窗口设计的独立验证实验。
-    ///     验证实验必须与生成候选窗口的实验分离。
+    ///     非空时表示该实验是针对指定候选工艺操作域设计的独立验证实验。
+    ///     验证实验必须与生成候选操作域的实验分离。
     /// </summary>
-    public Guid? ValidationWindowId { get; init; }
+    public Guid? ValidationOperatingRegionId { get; init; }
     public required string Name { get; init; }
     public string DesignMethod { get; init; } = "engineer-defined";
     public int PlanVersion { get; init; } = 1;
@@ -795,7 +795,7 @@ public sealed record ResearchExperiment
     ///     明确作为对照组的运行标识。可以引用本实验中的对照运行，或当前项目中
     ///     已导入的历史运行/已完成实验运行；未声明时不得从项目历史中自动拼接对照。
     /// </summary>
-    public IReadOnlyList<string> BaselineRunKeys { get; init; } = [];
+    public IReadOnlyList<string> BaselineExecutionKeys { get; init; } = [];
     public IReadOnlyList<string> ObjectiveCodes { get; init; } = [];
     public IReadOnlyList<string> ReplicateKeys { get; init; } = [];
     public IReadOnlyList<Guid> ResultIds { get; init; } = [];
@@ -827,9 +827,9 @@ public sealed record ExperimentMetricResult
 
 public sealed record ExperimentRunObservation
 {
-    public required string RunKey { get; init; }
+    public required string ExecutionKey { get; init; }
     /// <summary>
-    ///     运行发生时的设备、模具、材料批次、产品和配方等上下文。
+    ///     运行发生时的设备、工装总成、材料批次、产品和工艺规范等上下文。
     ///     这些字段用于区组、分层、迁移边界和混杂因素判断，不能由计划值替代。
     /// </summary>
     public IReadOnlyDictionary<string, string> Context { get; init; } =
@@ -866,13 +866,13 @@ public sealed record ResearchExperimentResult
     public int DistinctEquipmentCount { get; init; }
     public bool SafetyPassed { get; init; }
     public bool CalculatedFromSource { get; init; }
-    public IReadOnlyList<string> ExcludedRunKeys { get; init; } = [];
+    public IReadOnlyList<string> ExcludedExecutionKeys { get; init; } = [];
     public IReadOnlyList<EvidenceReference> Evidence { get; init; } = [];
     public string RecordedBy { get; init; } = "";
     public DateTimeOffset RecordedAt { get; init; }
 }
 
-public sealed record ProcessWindowVariable
+public sealed record OperatingRegionVariable
 {
     public required string VariableCode { get; init; }
     public required double LowerBound { get; init; }
@@ -880,13 +880,13 @@ public sealed record ProcessWindowVariable
     public required string Unit { get; init; }
 }
 
-public sealed record ResearchProcessWindow
+public sealed record ResearchOperatingRegion
 {
-    public Guid WindowId { get; init; }
+    public Guid OperatingRegionId { get; init; }
     public Guid ProjectId { get; init; }
     public required string Name { get; init; }
-    public string Status { get; init; } = ProcessWindowStatuses.Candidate;
-    public IReadOnlyList<ProcessWindowVariable> Variables { get; init; } = [];
+    public string Status { get; init; } = OperatingRegionStatuses.Candidate;
+    public IReadOnlyList<OperatingRegionVariable> Variables { get; init; } = [];
     public IReadOnlyList<string> ObjectiveCodes { get; init; } = [];
     public IReadOnlyList<Guid> SupportingExperimentIds { get; init; } = [];
     public IReadOnlyList<Guid> SupportingResultIds { get; init; } = [];
@@ -896,7 +896,7 @@ public sealed record ResearchProcessWindow
     public Guid AnalysisRunId { get; init; }
     public required string AnalysisHash { get; init; }
     public required string Applicability { get; init; }
-    public string ValidationLevel { get; init; } = ProcessWindowValidationLevels.Evidence;
+    public string ValidationLevel { get; init; } = OperatingRegionValidationLevels.Evidence;
     public string? ValidationNotes { get; init; }
     public string? ValidatedBy { get; init; }
     public DateTimeOffset? ValidatedAt { get; init; }
@@ -909,7 +909,7 @@ public sealed record ResearchKnowledgeClaim
 {
     public Guid ClaimId { get; init; }
     public Guid ProjectId { get; init; }
-    public Guid? ProcessWindowId { get; init; }
+    public Guid? OperatingRegionId { get; init; }
     public Guid? TransferAssessmentId { get; init; }
     public required string Statement { get; init; }
     public required string Applicability { get; init; }
@@ -924,7 +924,7 @@ public sealed record ResearchKnowledgeClaim
 
 public sealed record ResearchTransferAssessmentRequest
 {
-    public Guid SourceWindowId { get; init; }
+    public Guid SourceOperatingRegionId { get; init; }
     public Guid TransferResultId { get; init; }
     public Guid ColdStartResultId { get; init; }
     public string? Notes { get; init; }
@@ -938,7 +938,7 @@ public sealed record ResearchTransferContextDifference
 }
 
 /// <summary>
-///     将一个已发布工艺窗口在目标项目上的实测结果，与目标项目从零建立的对照结果比较。
+///     将一个已发布工艺操作域在目标项目上的实测结果，与目标项目从零建立的对照结果比较。
 ///     记录冻结源/目标版本、结果哈希和计算结果；Beneficial 仅表示本次有收益，不能代替重复验证。
 /// </summary>
 public sealed record ResearchTransferAssessment
@@ -948,8 +948,8 @@ public sealed record ResearchTransferAssessment
     public int TargetProjectRevision { get; init; }
     public Guid SourceProjectId { get; init; }
     public int SourceProjectRevision { get; init; }
-    public Guid SourceWindowId { get; init; }
-    public required string SourceWindowAnalysisHash { get; init; }
+    public Guid SourceOperatingRegionId { get; init; }
+    public required string SourceOperatingRegionAnalysisHash { get; init; }
     public Guid TransferResultId { get; init; }
     public required string TransferResultAnalysisHash { get; init; }
     public Guid ColdStartResultId { get; init; }
@@ -985,7 +985,7 @@ public sealed record ResearchProjectWorkspace
     public IReadOnlyList<ResearchHistoricalReplayReport> HistoricalReplayReports { get; init; } = [];
     public IReadOnlyList<ResearchRollbackDrill> RollbackDrills { get; init; } = [];
     public ResearchOnlineCampaignReport? OnlineReport { get; init; }
-    public IReadOnlyList<ResearchProcessWindow> ProcessWindows { get; init; } = [];
+    public IReadOnlyList<ResearchOperatingRegion> OperatingRegions { get; init; } = [];
     public IReadOnlyList<ResearchKnowledgeClaim> KnowledgeClaims { get; init; } = [];
     public IReadOnlyList<ResearchTransferAssessment> TransferAssessments { get; init; } = [];
     public IReadOnlyList<ResearchAuditEntry> Audit { get; init; } = [];

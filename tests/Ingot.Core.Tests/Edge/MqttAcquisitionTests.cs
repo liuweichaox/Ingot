@@ -76,7 +76,7 @@ public sealed class MqttAcquisitionTests
             second.Aggregate.RootElement,
             options,
             options.Source,
-            previousRecipeIdentity: null,
+            previousProcessSpecificationIdentity: null,
             second.TopicSnapshots);
         var values = Assert.IsAssignableFrom<IReadOnlyDictionary<string, object?>>(
             mapped.Sample.Data["values"]);

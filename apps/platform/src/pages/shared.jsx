@@ -59,8 +59,6 @@ export const acquisitionProtocolLabels = {
 
 export const objectTypeLabels = {
   equipment: "生产设备",
-  "optical-molding-machine": "光学模压设备",
-  machine: "设备",
   workpiece: "工件",
 };
 
@@ -70,9 +68,9 @@ export const eventTypeLabels = {
   "process.started": "生产开始",
   "process.completed": "生产完成",
   "process.sample": "过程采样",
-  "cycle.started": "运行开始",
-  "cycle.completed": "运行完成",
-  "recipe/step_changed": "工艺步骤切换",
+  "process.execution.started": "运行开始",
+  "process.execution.completed": "运行完成",
+  "processSpecification/step_changed": "工艺步骤切换",
   "process/stage_changed": "工艺阶段切换",
   "quality.inspection.completed": "质检完成",
   "alarm.raised": "设备报警",

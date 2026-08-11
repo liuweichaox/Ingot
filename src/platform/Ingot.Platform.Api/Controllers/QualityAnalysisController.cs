@@ -13,7 +13,7 @@ public sealed class QualityAnalysisController(
 {
     [HttpGet]
     public async Task<IActionResult> Query(
-        [FromQuery] string? productSeries,
+        [FromQuery] string? productFamilyCode,
         [FromQuery] string? subjectType,
         [FromQuery] string? subjectId,
         [FromQuery] string? outcome,
@@ -40,7 +40,7 @@ public sealed class QualityAnalysisController(
 
         return Ok(await analysis.QueryAsync(new QualityAnalysisQuery
         {
-            ProductSeries = Normalize(productSeries),
+            ProductFamilyCode = Normalize(productFamilyCode),
             SubjectType = Normalize(subjectType)?.ToLowerInvariant(),
             SubjectId = Normalize(subjectId),
             Outcome = normalizedOutcome,

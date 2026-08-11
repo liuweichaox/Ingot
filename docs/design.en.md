@@ -30,7 +30,7 @@ The current Web information architecture follows the core decision chain through
 2. **Run evidence**: industrial objects, real runs, quality tasks, run events, run preparation, and tooling installation;
 3. **Process diagnosis**: data trust, run comparison, quality-deviation analysis, the analysis assistant, and evaluation cases;
 4. **Process optimization**: optimization projects and their reusable research assets;
-5. **Configuration**: process, recipe, analysis, quality, tooling, edge-node, and equipment-connectivity definitions.
+5. **Configuration**: process, process specification, analysis, quality, tooling, edge-node, and equipment-connectivity definitions.
 
 System administration has a separate entry for users, role permissions, platform status, and runtime logs, so it does not compete with the business decision chain. Secondary navigation is grouped by task. Existing URLs and data contracts remain stable; only the way engineers discover capabilities changes.
 
@@ -40,7 +40,7 @@ Menus may change, but these business facts must not be hidden, duplicated into p
 
 ```mermaid
 flowchart LR
-    Sources["PLC / instruments / vision / inspection / MES"] --> Edge["Edge ConnectorHost\nprotocols · mapping · cycles · buffering"]
+    Sources["PLC / instruments / vision / inspection / MES"] --> Edge["Edge ConnectorHost\nprotocols · mapping · process executions · buffering"]
     Edge --> Platform["Platform API\nfactory system of record"]
     Platform --> DB["PostgreSQL + TimescaleDB"]
     Platform --> Files["attachments and process knowledge"]
@@ -52,7 +52,7 @@ flowchart LR
     Web --> Platform
 ```
 
-Code-project boundaries are not deployment boundaries. Factory runtime units are Platform API, independent Edge ConnectorHost instances, the database, Optimizer, and Web. A small site may share a physical server, while Edge and Platform retain independent processes, storage, identity, and recovery lifecycles.
+Code-project boundaries are not deployment boundaries. Factory runtime units are Platform API, independent Edge ConnectorHost instances, the database, Optimizer, and Web. A small site may share a physical server, while Edge and Platform retain independent processes, storage, identity, and recovery lifeprocess executions.
 
 ## Stable component responsibilities
 
@@ -68,7 +68,7 @@ Edge does not decide process causes, run product-level optimization, or become t
 
 ### Platform
 
-- Store industrial objects, equipment, manufacturing context, runs, cycles, inspections, R&D projects, experiments, evidence, and knowledge.
+- Store industrial objects, equipment, manufacturing context, runs, process executions, inspections, R&D projects, experiments, evidence, and knowledge.
 - Maintain versioned configuration, provenance, units, permissions, audit, and business state machines.
 - Assemble the conditions, trajectory, and result of a real run into an immutable analytical observation.
 - Execute data-quality, matching, comparison, feature, and reviewable statistical calculations.
@@ -88,7 +88,7 @@ Platform is the formal business system of record. Experiment state or conclusion
 - Understand the engineer's question and current business context.
 - Call authorized read-only or controlled business tools.
 - Organize facts, cite sources, explain limits, and suggest next steps.
-- Never compute or invent numerical recipes itself and never turn language probability into an engineering conclusion.
+- Never compute or invent numerical process settings itself and never turn language probability into an engineering conclusion.
 
 ### Web
 
@@ -102,7 +102,7 @@ An analyzable run must answer:
 
 ```text
 who / which equipment / which product
-        + actual recipe and controlled conditions
+        + actual process specification and controlled conditions
         + process trajectory and stages
         + material, tooling, lot, and other context
         + quality and safety outcomes
@@ -111,10 +111,10 @@ who / which equipment / which product
 
 Stable identifiers connect these facts:
 
-- `OperationRunId`: the real run identity in Platform;
-- `CorrelationId`: the correlation identity for field events or cycles;
-- `RunKey`: the association between an R&D experiment plan and real execution;
-- `EquipmentId`, product/process object, and recipe version: minimum run identity;
+- `ExecutionId`: the real run identity in Platform;
+- `ExecutionId`: the correlation identity for field events or process executions;
+- `ExecutionKey`: the association between an R&D experiment plan and real execution;
+- `EquipmentId`, product/process object, and process specification version: minimum run identity;
 - content hash: the fixed analytical input and its provenance.
 
 Identifiers may be mapped but never inferred after the fact. Unlinked runs remain visible with a reason rather than disappearing silently.
@@ -165,7 +165,7 @@ Both must:
 - require engineer approval before execution;
 - update evidence from actual run results.
 
-One successful point is only a candidate setting. A process window requires independent confirmation, repeatability, boundary or interaction validation, and an explicit applicability scope.
+One successful point is only a candidate setting. A operating region requires independent confirmation, repeatability, boundary or interaction validation, and an explicit applicability scope.
 
 ## Consistency and replay
 

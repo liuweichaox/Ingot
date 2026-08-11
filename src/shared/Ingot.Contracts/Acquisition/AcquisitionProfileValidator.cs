@@ -11,12 +11,7 @@ public sealed record AcquisitionValidationError(string Path, string Message)
 
 /// <summary>
 ///     采集配置校验与规范化。
-///
-///     以前这套规则以 private 方法的形式住在 <c>AcquisitionProfilesController</c> 内部，
-///     带来三个后果：边缘节点从本地缓存恢复配置时绕过全部校验；MELSEC 选择器语法完全没有
-///     服务端校验；对某个协议无意义的字段被接受后在 Runner 里静默丢弃。
-///
-///     规则移到公共契约后：
+///     平台保存、边缘节点加载和配置界面共同使用这组规则：
 ///     <list type="bullet">
 ///       <item>平台保存、边缘启动、配置界面共用同一份判断；</item>
 ///       <item>错误定位到字段，而不是一整条字符串；</item>
@@ -31,17 +26,6 @@ public static partial class AcquisitionProfileValidator
 
     [GeneratedRegex(@"^[a-z][a-z0-9]*(?:\.[a-z][a-z0-9_]*)+$")]
     private static partial Regex EventTypePattern();
-
-    /// <summary>兼容旧调用点的单条错误签名。</summary>
-    public static bool TryValidate(
-        AcquisitionProfile? value,
-        out AcquisitionProfile? normalized,
-        out string error)
-    {
-        var ok = TryValidate(value, null, out normalized, out var errors);
-        error = ok ? string.Empty : string.Join("；", errors.Select(static item => item.ToString()));
-        return ok;
-    }
 
     /// <param name="model">
     ///     可选的工艺数据模型。传入时会交叉校验数据项引用与发布完整性；
@@ -77,16 +61,16 @@ public static partial class AcquisitionProfileValidator
         var contextMappings = NormalizeContextMappings(value, capability, found);
         var valueMappings = NormalizeValueMappings(
             value.ValueMappings, protocol!, capability, "valueMappings", found);
-        var recipe = NormalizeRecipe(value.Recipe, protocol!, capability, found);
+        var processSpecification = NormalizeProcessSpecification(value.ProcessSpecification, protocol!, capability, found);
         var staticContext = NormalizeStaticContext(value, found);
 
         if (valueMappings.Count == 0)
             found.Add(new AcquisitionValidationError("valueMappings", "至少需要配置一个采集数据项。"));
 
-        ValidateTopicBindings(value, capability, valueMappings, contextMappings, recipe, found);
+        ValidateTopicBindings(value, capability, valueMappings, contextMappings, processSpecification, found);
 
         if (model is not null)
-            ValidateAgainstModel(value, valueMappings, recipe, model, found);
+            ValidateAgainstModel(value, valueMappings, processSpecification, model, found);
 
         if (found.Count > 0)
         {
@@ -126,7 +110,7 @@ public static partial class AcquisitionProfileValidator
             StaticContext = staticContext,
             ContextMappings = contextMappings,
             ValueMappings = valueMappings,
-            Recipe = recipe,
+            ProcessSpecification = processSpecification,
             Lifecycle = NormalizeLifecycle(value.Lifecycle),
             UpdatedAt = DateTimeOffset.UtcNow
         };
@@ -317,7 +301,7 @@ public static partial class AcquisitionProfileValidator
         AcquisitionProtocolCapability capability,
         IReadOnlyList<AcquisitionValueMapping> valueMappings,
         IReadOnlyList<AcquisitionContextMapping> contextMappings,
-        AcquisitionRecipeMapping? recipe,
+        AcquisitionProcessSpecificationMapping? processSpecification,
         List<AcquisitionValidationError> found)
     {
         if (!capability.SupportsPerTopicMapping) return;
@@ -344,14 +328,14 @@ public static partial class AcquisitionProfileValidator
                     $"上下文绑定的主题 {topic} 不在订阅列表中，永远收不到数据。"));
         }
 
-        if (recipe is null) return;
-        for (var index = 0; index < recipe.ParameterMappings.Count; index++)
+        if (processSpecification is null) return;
+        for (var index = 0; index < processSpecification.ParameterMappings.Count; index++)
         {
-            var topic = recipe.ParameterMappings[index].Topic;
+            var topic = processSpecification.ParameterMappings[index].Topic;
             if (!string.IsNullOrEmpty(topic) && !subscribed.Contains(topic))
                 found.Add(new AcquisitionValidationError(
-                    $"recipe.parameterMappings[{index}].topic",
-                    $"配方参数绑定的主题 {topic} 不在订阅列表中，永远收不到数据。"));
+                    $"processSpecification.parameterMappings[{index}].topic",
+                    $"控制参数绑定的主题 {topic} 不在订阅列表中，永远收不到数据。"));
         }
     }
 
@@ -616,40 +600,40 @@ public static partial class AcquisitionProfileValidator
         }
     }
 
-    private static AcquisitionRecipeMapping? NormalizeRecipe(
-        AcquisitionRecipeMapping? recipe,
+    private static AcquisitionProcessSpecificationMapping? NormalizeProcessSpecification(
+        AcquisitionProcessSpecificationMapping? processSpecification,
         string protocol,
         AcquisitionProtocolCapability capability,
         List<AcquisitionValidationError> found)
     {
-        if (recipe is null) return null;
-        if (string.IsNullOrWhiteSpace(recipe.IdPath))
-            found.Add(new AcquisitionValidationError("recipe.idPath", "配方编号来源不能为空。"));
+        if (processSpecification is null) return null;
+        if (string.IsNullOrWhiteSpace(processSpecification.IdPath))
+            found.Add(new AcquisitionValidationError("processSpecification.idPath", "工艺规范编号来源不能为空。"));
         else
-            ValidateSelectorSyntax(capability, recipe.IdPath.Trim(), "recipe.idPath", found);
-        if (string.IsNullOrWhiteSpace(recipe.VersionPath))
-            found.Add(new AcquisitionValidationError("recipe.versionPath", "配方版本来源不能为空。"));
+            ValidateSelectorSyntax(capability, processSpecification.IdPath.Trim(), "processSpecification.idPath", found);
+        if (string.IsNullOrWhiteSpace(processSpecification.VersionPath))
+            found.Add(new AcquisitionValidationError("processSpecification.versionPath", "工艺规范版本来源不能为空。"));
         else
-            ValidateSelectorSyntax(capability, recipe.VersionPath.Trim(), "recipe.versionPath", found);
-        if (!string.IsNullOrWhiteSpace(recipe.NamePath))
-            ValidateSelectorSyntax(capability, recipe.NamePath.Trim(), "recipe.namePath", found);
-        var recipeEventType = recipe.EventType?.Trim() ?? string.Empty;
-        if (!EventTypePattern().IsMatch(recipeEventType))
-            found.Add(new AcquisitionValidationError("recipe.eventType", "配方事件类型格式无效，例如 recipe.applied。"));
+            ValidateSelectorSyntax(capability, processSpecification.VersionPath.Trim(), "processSpecification.versionPath", found);
+        if (!string.IsNullOrWhiteSpace(processSpecification.NamePath))
+            ValidateSelectorSyntax(capability, processSpecification.NamePath.Trim(), "processSpecification.namePath", found);
+        var processSpecificationEventType = processSpecification.EventType?.Trim() ?? string.Empty;
+        if (!EventTypePattern().IsMatch(processSpecificationEventType))
+            found.Add(new AcquisitionValidationError("processSpecification.eventType", "工艺规范事件类型格式无效，例如 process.specification.applied。"));
 
         // 只有文档类协议真正使用参数集合路径；以前对全部协议强制必填，是一个虚假约束。
-        var trimmedParametersPath = recipe.ParametersPath?.Trim();
-        var parametersPath = capability.SupportsRecipeParametersPath && !string.IsNullOrEmpty(trimmedParametersPath)
+        var trimmedParametersPath = processSpecification.ParametersPath?.Trim();
+        var parametersPath = capability.SupportsControlParametersPath && !string.IsNullOrEmpty(trimmedParametersPath)
             ? trimmedParametersPath
             : ".";
         var parameters = NormalizeValueMappings(
-            recipe.ParameterMappings, protocol, capability, "recipe.parameterMappings", found);
-        return recipe with
+            processSpecification.ParameterMappings, protocol, capability, "processSpecification.parameterMappings", found);
+        return processSpecification with
         {
-            EventType = recipeEventType,
-            IdPath = recipe.IdPath?.Trim() ?? string.Empty,
-            VersionPath = recipe.VersionPath?.Trim() ?? string.Empty,
-            NamePath = CleanOptional(recipe.NamePath),
+            EventType = processSpecificationEventType,
+            IdPath = processSpecification.IdPath?.Trim() ?? string.Empty,
+            VersionPath = processSpecification.VersionPath?.Trim() ?? string.Empty,
+            NamePath = CleanOptional(processSpecification.NamePath),
             ParametersPath = parametersPath,
             ParameterMappings = parameters
         };
@@ -674,12 +658,12 @@ public static partial class AcquisitionProfileValidator
     private static void ValidateAgainstModel(
         AcquisitionProfile value,
         IReadOnlyList<AcquisitionValueMapping> valueMappings,
-        AcquisitionRecipeMapping? recipe,
+        AcquisitionProcessSpecificationMapping? processSpecification,
         ProcessDataModel model,
         List<AcquisitionValidationError> found)
     {
         var dataItems = model.Acquisition.DataItems.ToDictionary(static item => item.Code, StringComparer.Ordinal);
-        var parameters = model.RecipeParameters.ToDictionary(static item => item.Code, StringComparer.Ordinal);
+        var parameters = model.ControlParameters.ToDictionary(static item => item.Code, StringComparer.Ordinal);
         for (var index = 0; index < valueMappings.Count; index++)
         {
             if (!dataItems.ContainsKey(valueMappings[index].DataItemCode))
@@ -700,13 +684,13 @@ public static partial class AcquisitionProfileValidator
             }
         }
 
-        if (recipe is null) return;
-        for (var index = 0; index < recipe.ParameterMappings.Count; index++)
+        if (processSpecification is null) return;
+        for (var index = 0; index < processSpecification.ParameterMappings.Count; index++)
         {
-            if (!parameters.ContainsKey(recipe.ParameterMappings[index].DataItemCode))
+            if (!parameters.ContainsKey(processSpecification.ParameterMappings[index].DataItemCode))
                 found.Add(new AcquisitionValidationError(
-                    $"recipe.parameterMappings[{index}].dataItemCode",
-                    $"配方参数 {recipe.ParameterMappings[index].DataItemCode} 不属于所选工艺数据模型。"));
+                    $"processSpecification.parameterMappings[{index}].dataItemCode",
+                    $"控制参数 {processSpecification.ParameterMappings[index].DataItemCode} 不属于所选工艺数据模型。"));
         }
     }
 
@@ -822,7 +806,6 @@ public static partial class AcquisitionProfileValidator
         => value is null ? null : value with
         {
             Mode = value.Mode.Trim().ToLowerInvariant(),
-            CorrelationIdContextKey = CleanOptional(value.CorrelationIdContextKey),
             ActiveContextKey = CleanOptional(value.ActiveContextKey),
             ActiveValue = value.ActiveValue?.Trim() ?? string.Empty
         };

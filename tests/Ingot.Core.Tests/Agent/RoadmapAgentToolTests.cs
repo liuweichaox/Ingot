@@ -45,70 +45,70 @@ public sealed class RoadmapAgentToolTests
     }
 
     [Fact]
-    public async Task FindComparableCycles_ReturnsReasonsForMatches()
+    public async Task FindComparableExecutions_ReturnsReasonsForMatches()
     {
         var rows = new[]
         {
-            Row(1, "cycle.started", "cycle-a", new Dictionary<string, string>
+            Row(1, "process.execution.started", "execution-a", new Dictionary<string, string>
             {
                 ["product_code"] = "LENS-A",
                 ["operation_code"] = "molding",
-                ["recipe_id"] = "R1",
-                ["mold_id"] = "MOLD-02"
+                ["process_specification_id"] = "R1",
+                ["tooling_assembly_id"] = "MOLD-02"
             }),
-            Row(2, "cycle.completed", "cycle-b", new Dictionary<string, string>
+            Row(2, "process.execution.completed", "execution-b", new Dictionary<string, string>
             {
                 ["product_code"] = "LENS-A",
                 ["operation_code"] = "molding",
-                ["recipe_id"] = "R1",
-                ["mold_id"] = "MOLD-01"
+                ["process_specification_id"] = "R1",
+                ["tooling_assembly_id"] = "MOLD-01"
             }),
-            Row(3, "cycle.completed", "cycle-c", new Dictionary<string, string>
+            Row(3, "process.execution.completed", "execution-c", new Dictionary<string, string>
             {
                 ["product_code"] = "OTHER",
                 ["operation_code"] = "molding",
-                ["recipe_id"] = "R2"
+                ["process_specification_id"] = "R2"
             })
         };
-        var tool = new FindComparableCyclesTool(new FilteringEventReader(rows));
+        var tool = new FindComparableExecutionsTool(new FilteringEventReader(rows));
 
         var result = await tool.ExecuteAsync(
             new AnalysisToolCall
             {
                 Tool = tool.Definition.Name,
-                Arguments = new Dictionary<string, string?> { ["correlationId"] = "cycle-a" }
+                Arguments = new Dictionary<string, string?> { ["executionId"] = "execution-a" }
             },
             ExecutionContext);
 
         Assert.Equal(AnalysisToolOutcomes.Sufficient, result.Outcome);
-        var comparable = result.Data.GetProperty("comparableCycles").EnumerateArray().Single();
-        Assert.Equal("cycle-b", comparable.GetProperty("correlationId").GetString());
+        var comparable = result.Data.GetProperty("comparableProcessExecutions").EnumerateArray().Single();
+        Assert.Equal("execution-b", comparable.GetProperty("executionId").GetString());
         Assert.Contains(
             comparable.GetProperty("matchedKeys").EnumerateArray(),
             key => key.GetString() == "product_code");
     }
 
     [Fact]
-    public async Task CompareCycles_ReportsRobustInspectionReferenceAndRelatedRecordsLinks()
+    public async Task CompareExecutions_ReportsRobustInspectionReferenceAndRelatedRecordsLinks()
     {
         var events = Enumerable.Range(1, 502)
             .Select(id => Row(
                 id,
-                id == 1 ? "cycle.started" : id == 502 ? "cycle.completed" : "process.sample",
-                "cycle-a"))
+                id == 1 ? "process.execution.started" : id == 502 ? "process.execution.completed" : "process.sample",
+                "execution-a"))
             .Concat(Enumerable.Range(1, 502)
                 .Select(id => Row(
                     1_000 + id,
-                    id == 1 ? "cycle.started" : id == 502 ? "cycle.completed" : "process.sample",
-                    "cycle-b")))
+                    id == 1 ? "process.execution.started" : id == 502 ? "process.execution.completed" : "process.sample",
+                    "execution-b")))
             .ToArray();
         var inspectionRows = Enumerable.Range(0, 501)
-            .Select(id => Inspection("cycle-a", "PASS", id == 500 ? 11m : id % 2 == 0 ? 10m : 12m))
+            .Select(id => Inspection("execution-a", "PASS", id == 500 ? 11m : id % 2 == 0 ? 10m : 12m))
             .Concat(Enumerable.Range(0, 501)
-                .Select(id => Inspection("cycle-b", id % 2 == 0 ? "PASS" : "FAIL", id == 500 ? 21m : id % 2 == 0 ? 20m : 22m)))
+                .Select(id => Inspection("execution-b", id % 2 == 0 ? "PASS" : "FAIL", id == 500 ? 21m : id % 2 == 0 ? 20m : 22m)))
             .ToArray();
         var inspections = new StubInspectionStore(inspectionRows);
-        var tool = new CompareCyclesTool(new FilteringEventReader(events), inspections);
+        var tool = new CompareExecutionsTool(new FilteringEventReader(events), inspections);
 
         var result = await tool.ExecuteAsync(
             new AnalysisToolCall
@@ -116,8 +116,8 @@ public sealed class RoadmapAgentToolTests
                 Tool = tool.Definition.Name,
                 Arguments = new Dictionary<string, string?>
                 {
-                    ["baselineCycleId"] = "cycle-a",
-                    ["comparisonCycleIds"] = "cycle-b"
+                    ["baselineProcessExecutionId"] = "execution-a",
+                    ["comparisonProcessExecutionIds"] = "execution-b"
                 }
             },
             ExecutionContext);
@@ -141,11 +141,11 @@ public sealed class RoadmapAgentToolTests
     }
 
     [Fact]
-    public async Task CheckDataQuality_DoesNotTreatPhaseMetadataAsCycleCompleteness()
+    public async Task CheckDataQuality_DoesNotTreatPhaseMetadataAsProcessExecutionCompleteness()
     {
         var tool = new CheckDataQualityTool(new FilteringEventReader(
         [
-            Row(1, "phase.anneal.started", "cycle-a", new Dictionary<string, string>
+            Row(1, "phase.anneal.started", "execution-a", new Dictionary<string, string>
             {
                 ["phase_code"] = "unknown",
                 ["phase_source"] = "estimated"
@@ -158,13 +158,13 @@ public sealed class RoadmapAgentToolTests
 
         Assert.Equal(AnalysisToolOutcomes.InsufficientData, result.Outcome);
         Assert.Contains(result.Limitations, item => item.Contains("过程数据", StringComparison.Ordinal));
-        Assert.Equal(1, result.Data.GetProperty("unavailableProcessCycles").GetInt32());
+        Assert.Equal(1, result.Data.GetProperty("unavailableProcessProcessExecutions").GetInt32());
     }
 
     private static PlatformProductionEvent Row(
         long ingestId,
         string eventType,
-        string correlationId,
+        string executionId,
         IReadOnlyDictionary<string, string>? context = null,
         DateTimeOffset? occurredAt = null)
     {
@@ -186,20 +186,20 @@ public sealed class RoadmapAgentToolTests
                 {
                     ["product_code"] = "LENS-A",
                     ["operation_code"] = "molding",
-                    ["recipe_id"] = "R1"
+                    ["process_specification_id"] = "R1"
                 },
-                CorrelationId = correlationId,
+                ExecutionId = executionId,
                 Seq = ingestId
             }
         };
     }
 
-    private static InspectionRecord Inspection(string operationRunId, string outcome, decimal value)
+    private static InspectionRecord Inspection(string executionId, string outcome, decimal value)
         => new()
         {
             RecordId = Guid.CreateVersion7(),
-            WorkpieceId = $"wp-{operationRunId}-{value}",
-            OperationRunId = operationRunId,
+            OutputItemId = $"wp-{executionId}-{value}",
+            ExecutionId = executionId,
             DefinitionCode = "entryPoint",
             DefinitionVersion = 1,
             MeasuredAt = DateTimeOffset.Parse("2026-07-18T11:00:00Z"),
@@ -228,8 +228,8 @@ public sealed class RoadmapAgentToolTests
             CancellationToken ct = default)
         {
             IEnumerable<PlatformProductionEvent> filtered = rows;
-            if (!string.IsNullOrWhiteSpace(query.CorrelationId))
-                filtered = filtered.Where(row => row.Event.CorrelationId == query.CorrelationId);
+            if (!string.IsNullOrWhiteSpace(query.ExecutionId))
+                filtered = filtered.Where(row => row.Event.ExecutionId == query.ExecutionId);
             foreach (var pair in query.Context)
                 filtered = filtered.Where(row =>
                     row.Event.Context.TryGetValue(pair.Key, out var value) &&
@@ -243,8 +243,8 @@ public sealed class RoadmapAgentToolTests
             CancellationToken ct = default)
         {
             IEnumerable<PlatformProductionEvent> filtered = rows;
-            if (!string.IsNullOrWhiteSpace(query.CorrelationId))
-                filtered = filtered.Where(row => row.Event.CorrelationId == query.CorrelationId);
+            if (!string.IsNullOrWhiteSpace(query.ExecutionId))
+                filtered = filtered.Where(row => row.Event.ExecutionId == query.ExecutionId);
             foreach (var pair in query.Context)
                 filtered = filtered.Where(row =>
                     row.Event.Context.TryGetValue(pair.Key, out var value) &&
@@ -284,18 +284,18 @@ public sealed class RoadmapAgentToolTests
             InspectionRecordQuery query,
             CancellationToken ct = default)
             => Task.FromResult<IReadOnlyList<InspectionRecord>>(records
-                .Where(record => string.IsNullOrWhiteSpace(query.OperationRunId) ||
-                                 record.OperationRunId == query.OperationRunId)
+                .Where(record => string.IsNullOrWhiteSpace(query.ExecutionId) ||
+                                 record.ExecutionId == query.ExecutionId)
                 .Take(query.Limit)
                 .ToArray());
 
-        public Task<IReadOnlyList<InspectionRecord>> QueryAllByOperationRunIdsAsync(
-            IReadOnlyCollection<string> operationRunIds,
+        public Task<IReadOnlyList<InspectionRecord>> QueryAllByExecutionIdsAsync(
+            IReadOnlyCollection<string> executionIds,
             CancellationToken ct = default)
         {
-            var ids = operationRunIds.ToHashSet(StringComparer.Ordinal);
+            var ids = executionIds.ToHashSet(StringComparer.Ordinal);
             return Task.FromResult<IReadOnlyList<InspectionRecord>>(
-                records.Where(record => ids.Contains(record.OperationRunId)).ToArray());
+                records.Where(record => ids.Contains(record.ExecutionId)).ToArray());
         }
     }
 }

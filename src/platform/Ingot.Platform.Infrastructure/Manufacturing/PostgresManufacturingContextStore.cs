@@ -189,21 +189,21 @@ public sealed class PostgresManufacturingContextStore : IManufacturingContextSto
     public async Task<ToolingAssembly> UpsertAssemblyAsync(ToolingAssembly value, CancellationToken ct = default)
     {
         await InitializeAsync(ct).ConfigureAwait(false);
-        var existing = await GetAssemblyAsync(value.MoldId, ct).ConfigureAwait(false);
+        var existing = await GetAssemblyAsync(value.ToolingAssemblyId, ct).ConfigureAwait(false);
         if (existing is not null && existing.ToolingTypeCode != value.ToolingTypeCode)
-            throw new InvalidOperationException("已创建模具的工装类型不可修改；请新建模具编号。");
+            throw new InvalidOperationException("已创建工装总成的工装类型不可修改；请新建工装总成编号。");
         _ = await GetLatestToolingTypeAsync(value.ToolingTypeCode, ct).ConfigureAwait(false)
             ?? throw new InvalidOperationException("工装类型不存在。");
         await using var command = _dataSource.CreateCommand(
             """
-            INSERT INTO tooling_assemblies(mold_id, tooling_type_code, payload, updated_at)
+            INSERT INTO tooling_assemblies(tooling_assembly_id, tooling_type_code, payload, updated_at)
             VALUES (@id, @type, @payload, @updated_at)
-            ON CONFLICT (mold_id) DO UPDATE SET
+            ON CONFLICT (tooling_assembly_id) DO UPDATE SET
               tooling_type_code = EXCLUDED.tooling_type_code,
               payload = EXCLUDED.payload,
               updated_at = EXCLUDED.updated_at;
             """);
-        command.Parameters.AddWithValue("id", value.MoldId);
+        command.Parameters.AddWithValue("id", value.ToolingAssemblyId);
         command.Parameters.AddWithValue("type", value.ToolingTypeCode);
         AddJson(command, "payload", value);
         command.Parameters.AddWithValue("updated_at", value.UpdatedAt.UtcDateTime);
@@ -213,20 +213,20 @@ public sealed class PostgresManufacturingContextStore : IManufacturingContextSto
 
     public Task<IReadOnlyList<ToolingAssembly>> ListAssembliesAsync(CancellationToken ct = default)
         => ListAsync<ToolingAssembly>(
-            "SELECT payload::text FROM tooling_assemblies ORDER BY mold_id;", null, ct);
+            "SELECT payload::text FROM tooling_assemblies ORDER BY tooling_assembly_id;", null, ct);
 
-    public async Task<bool> DeleteAssemblyAsync(string moldId, CancellationToken ct = default)
+    public async Task<bool> DeleteAssemblyAsync(string toolingAssemblyId, CancellationToken ct = default)
     {
         await InitializeAsync(ct).ConfigureAwait(false);
         if (await ExistsAsync(
-                "SELECT 1 FROM tooling_assembly_revisions WHERE mold_id = @id LIMIT 1;",
-                command => command.Parameters.AddWithValue("id", moldId), ct).ConfigureAwait(false))
+                "SELECT 1 FROM tooling_assembly_revisions WHERE tooling_assembly_id = @id LIMIT 1;",
+                command => command.Parameters.AddWithValue("id", toolingAssemblyId), ct).ConfigureAwait(false))
         {
             throw new InvalidOperationException("该工装已存在组合版本，不能删除；请将工装停用。");
         }
         return await DeleteAsync(
-            "DELETE FROM tooling_assemblies WHERE mold_id = @id;",
-            command => command.Parameters.AddWithValue("id", moldId), ct).ConfigureAwait(false);
+            "DELETE FROM tooling_assemblies WHERE tooling_assembly_id = @id;",
+            command => command.Parameters.AddWithValue("id", toolingAssemblyId), ct).ConfigureAwait(false);
     }
 
     public async Task<ToolingAssemblyRevision> CreateAssemblyRevisionAsync(
@@ -234,37 +234,37 @@ public sealed class PostgresManufacturingContextStore : IManufacturingContextSto
         CancellationToken ct = default)
     {
         await InitializeAsync(ct).ConfigureAwait(false);
-        var assembly = await GetAssemblyAsync(value.MoldId, ct).ConfigureAwait(false)
-            ?? throw new InvalidOperationException("模具编号不存在。");
+        var assembly = await GetAssemblyAsync(value.ToolingAssemblyId, ct).ConfigureAwait(false)
+            ?? throw new InvalidOperationException("工装总成编号不存在。");
         var type = await GetLatestToolingTypeAsync(assembly.ToolingTypeCode, ct).ConfigureAwait(false)
-            ?? throw new InvalidOperationException("模具对应的工装类型不存在。");
+            ?? throw new InvalidOperationException("工装总成对应的工装类型不存在。");
         await ValidateAssemblyMembersAsync(value, type, ct).ConfigureAwait(false);
 
         await using var command = _dataSource.CreateCommand(
             """
             INSERT INTO tooling_assembly_revisions(
-              assembly_revision_id, mold_id, revision, payload, created_at)
-            VALUES (@id, @mold_id, @revision, @payload, @created_at)
+              assembly_revision_id, tooling_assembly_id, revision, payload, created_at)
+            VALUES (@id, @tooling_assembly_id, @revision, @payload, @created_at)
             ON CONFLICT DO NOTHING;
             """);
         command.Parameters.AddWithValue("id", value.AssemblyRevisionId);
-        command.Parameters.AddWithValue("mold_id", value.MoldId);
+        command.Parameters.AddWithValue("tooling_assembly_id", value.ToolingAssemblyId);
         command.Parameters.AddWithValue("revision", value.Revision);
         AddJson(command, "payload", value);
         command.Parameters.AddWithValue("created_at", value.CreatedAt.UtcDateTime);
         if (await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false) == 0)
-            throw new InvalidOperationException("该模具组合版本已存在；组合版本不可修改，请创建下一版本。");
+            throw new InvalidOperationException("该工装总成版本已存在；组合版本不可修改，请创建下一版本。");
         return value;
     }
 
     public Task<IReadOnlyList<ToolingAssemblyRevision>> ListAssemblyRevisionsAsync(
-        string? moldId = null,
+        string? toolingAssemblyId = null,
         CancellationToken ct = default)
     {
         const string sql = "SELECT payload::text FROM tooling_assembly_revisions " +
-                           "WHERE (@mold_id = '' OR mold_id = @mold_id) ORDER BY mold_id, revision DESC;";
+                           "WHERE (@tooling_assembly_id = '' OR tooling_assembly_id = @tooling_assembly_id) ORDER BY tooling_assembly_id, revision DESC;";
         return ListAsync<ToolingAssemblyRevision>(sql,
-            command => command.Parameters.AddWithValue("mold_id", moldId?.Trim() ?? ""), ct);
+            command => command.Parameters.AddWithValue("tooling_assembly_id", toolingAssemblyId?.Trim() ?? ""), ct);
     }
 
     public async Task<bool> DeleteAssemblyRevisionAsync(Guid assemblyRevisionId, CancellationToken ct = default)
@@ -301,13 +301,13 @@ public sealed class PostgresManufacturingContextStore : IManufacturingContextSto
         await using var command = new NpgsqlCommand(
             """
             INSERT INTO tooling_installations(
-              installation_id, machine_id, assembly_revision_id, installed_at, removed_at,
+              installation_id, equipment_id, assembly_revision_id, installed_at, removed_at,
               source, command_id, payload, created_at)
-            VALUES (@id, @machine, @revision, @installed_at, @removed_at,
+            VALUES (@id, @equipment, @revision, @installed_at, @removed_at,
                     @source, @command_id, @payload, @created_at);
             """, connection, transaction);
         command.Parameters.AddWithValue("id", value.InstallationId);
-        command.Parameters.AddWithValue("machine", value.MachineId);
+        command.Parameters.AddWithValue("equipment", value.EquipmentId);
         command.Parameters.AddWithValue("revision", value.AssemblyRevisionId);
         command.Parameters.AddWithValue("installed_at", value.InstalledAt.UtcDateTime);
         command.Parameters.AddWithValue("removed_at", (object?)value.RemovedAt?.UtcDateTime ?? DBNull.Value);
@@ -377,16 +377,16 @@ public sealed class PostgresManufacturingContextStore : IManufacturingContextSto
     }
 
     public Task<IReadOnlyList<ToolingInstallation>> ListInstallationsAsync(
-        string? machineId = null,
+        string? equipmentId = null,
         bool activeOnly = false,
         CancellationToken ct = default)
     {
         const string sql = "SELECT payload::text FROM tooling_installations " +
-                           "WHERE (@machine = '' OR machine_id = @machine) " +
+                           "WHERE (@equipment = '' OR equipment_id = @equipment) " +
                            "AND (NOT @active OR removed_at IS NULL) ORDER BY installed_at DESC;";
         return ListAsync<ToolingInstallation>(sql, command =>
         {
-            command.Parameters.AddWithValue("machine", machineId?.Trim() ?? "");
+            command.Parameters.AddWithValue("equipment", equipmentId?.Trim() ?? "");
             command.Parameters.AddWithValue("active", activeOnly);
         }, ct);
     }
@@ -429,11 +429,11 @@ public sealed class PostgresManufacturingContextStore : IManufacturingContextSto
         await using (var invalidActive = new NpgsqlCommand(
             """
             SELECT 1 FROM production_contexts
-            WHERE machine_id = @machine AND valid_to IS NULL AND valid_from >= @valid_from
+            WHERE equipment_id = @equipment AND valid_to IS NULL AND valid_from >= @valid_from
             LIMIT 1;
             """, connection, transaction))
         {
-            invalidActive.Parameters.AddWithValue("machine", value.MachineId);
+            invalidActive.Parameters.AddWithValue("equipment", value.EquipmentId);
             invalidActive.Parameters.AddWithValue("valid_from", value.ValidFrom.UtcDateTime);
             if (await invalidActive.ExecuteScalarAsync(ct).ConfigureAwait(false) is not null)
                 throw new InvalidOperationException("新的生产上下文生效时间必须晚于当前上下文开始时间。");
@@ -442,11 +442,11 @@ public sealed class PostgresManufacturingContextStore : IManufacturingContextSto
         await using (var ownership = new NpgsqlCommand(
             """
             SELECT source FROM production_contexts
-            WHERE machine_id = @machine AND valid_to IS NULL
+            WHERE equipment_id = @equipment AND valid_to IS NULL
             LIMIT 1 FOR UPDATE;
             """, connection, transaction))
         {
-            ownership.Parameters.AddWithValue("machine", value.MachineId);
+            ownership.Parameters.AddWithValue("equipment", value.EquipmentId);
             var activeSource = await ownership.ExecuteScalarAsync(ct).ConfigureAwait(false) as string;
             if (string.Equals(activeSource, "mes", StringComparison.OrdinalIgnoreCase) &&
                 string.Equals(value.Source, "manual", StringComparison.OrdinalIgnoreCase))
@@ -461,10 +461,10 @@ public sealed class PostgresManufacturingContextStore : IManufacturingContextSto
             SET valid_to = @valid_from,
                 payload = jsonb_set(payload, '{validTo}', to_jsonb(@valid_from::timestamptz), true),
                 updated_at = now()
-            WHERE machine_id = @machine AND valid_to IS NULL AND valid_from < @valid_from;
+            WHERE equipment_id = @equipment AND valid_to IS NULL AND valid_from < @valid_from;
             """, connection, transaction))
         {
-            close.Parameters.AddWithValue("machine", value.MachineId);
+            close.Parameters.AddWithValue("equipment", value.EquipmentId);
             close.Parameters.AddWithValue("valid_from", value.ValidFrom.UtcDateTime);
             await close.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
         }
@@ -472,11 +472,11 @@ public sealed class PostgresManufacturingContextStore : IManufacturingContextSto
         await using var command = new NpgsqlCommand(
             """
             INSERT INTO production_contexts(
-              context_id, machine_id, tooling_installation_id, valid_from, valid_to, source, command_id, payload, updated_at)
-            VALUES (@id, @machine, @installation, @valid_from, @valid_to, @source, @command_id, @payload, @updated_at);
+              context_id, equipment_id, tooling_installation_id, valid_from, valid_to, source, command_id, payload, updated_at)
+            VALUES (@id, @equipment, @installation, @valid_from, @valid_to, @source, @command_id, @payload, @updated_at);
             """, connection, transaction);
         command.Parameters.AddWithValue("id", value.ContextId);
-        command.Parameters.AddWithValue("machine", value.MachineId);
+        command.Parameters.AddWithValue("equipment", value.EquipmentId);
         command.Parameters.AddWithValue("installation", value.ToolingInstallationId);
         command.Parameters.AddWithValue("valid_from", value.ValidFrom.UtcDateTime);
         command.Parameters.AddWithValue("valid_to", (object?)value.ValidTo?.UtcDateTime ?? DBNull.Value);
@@ -523,16 +523,16 @@ public sealed class PostgresManufacturingContextStore : IManufacturingContextSto
     }
 
     public Task<IReadOnlyList<ProductionContext>> ListProductionContextsAsync(
-        string? machineId = null,
+        string? equipmentId = null,
         bool activeOnly = false,
         CancellationToken ct = default)
     {
         const string sql = "SELECT payload::text FROM production_contexts " +
-                           "WHERE (@machine = '' OR machine_id = @machine) " +
+                           "WHERE (@equipment = '' OR equipment_id = @equipment) " +
                            "AND (NOT @active OR valid_to IS NULL) ORDER BY valid_from DESC;";
         return ListAsync<ProductionContext>(sql, command =>
         {
-            command.Parameters.AddWithValue("machine", machineId?.Trim() ?? "");
+            command.Parameters.AddWithValue("equipment", equipmentId?.Trim() ?? "");
             command.Parameters.AddWithValue("active", activeOnly);
         }, ct);
     }
@@ -552,7 +552,7 @@ public sealed class PostgresManufacturingContextStore : IManufacturingContextSto
     }
 
     public async Task<ResolvedProductionContext?> ResolveAsync(
-        string machineId,
+        string equipmentId,
         DateTimeOffset at,
         CancellationToken ct = default)
     {
@@ -563,14 +563,14 @@ public sealed class PostgresManufacturingContextStore : IManufacturingContextSto
             FROM production_contexts pc
             JOIN tooling_installations ti ON ti.installation_id = pc.tooling_installation_id
             JOIN tooling_assembly_revisions ar ON ar.assembly_revision_id = ti.assembly_revision_id
-            JOIN tooling_assemblies a ON a.mold_id = ar.mold_id
-            WHERE pc.machine_id = @machine
+            JOIN tooling_assemblies a ON a.tooling_assembly_id = ar.tooling_assembly_id
+            WHERE pc.equipment_id = @equipment
               AND pc.valid_from <= @at AND (pc.valid_to IS NULL OR pc.valid_to > @at)
               AND ti.installed_at <= @at AND (ti.removed_at IS NULL OR ti.removed_at > @at)
             ORDER BY pc.valid_from DESC
             LIMIT 1;
             """);
-        command.Parameters.AddWithValue("machine", machineId.Trim());
+        command.Parameters.AddWithValue("equipment", equipmentId.Trim());
         command.Parameters.AddWithValue("at", at.UtcDateTime);
         await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
         if (!await reader.ReadAsync(ct).ConfigureAwait(false))
@@ -633,7 +633,7 @@ public sealed class PostgresManufacturingContextStore : IManufacturingContextSto
 
     private async Task<ToolingAssembly?> GetAssemblyAsync(string id, CancellationToken ct)
         => await GetAsync<ToolingAssembly>(
-            "SELECT payload::text FROM tooling_assemblies WHERE mold_id = @id;",
+            "SELECT payload::text FROM tooling_assemblies WHERE tooling_assembly_id = @id;",
             command => command.Parameters.AddWithValue("id", id), ct).ConfigureAwait(false);
 
     private static async Task<ToolingInstallation?> GetInstallationAsync(
@@ -691,11 +691,11 @@ public sealed class PostgresManufacturingContextStore : IManufacturingContextSto
     }
 
     private static bool SameProductionCommand(ProductionContext left, ProductionContext right)
-        => string.Equals(left.MachineId, right.MachineId, StringComparison.Ordinal) &&
-           string.Equals(left.ProductSeries, right.ProductSeries, StringComparison.Ordinal) &&
+        => string.Equals(left.EquipmentId, right.EquipmentId, StringComparison.Ordinal) &&
+           string.Equals(left.ProductFamilyCode, right.ProductFamilyCode, StringComparison.Ordinal) &&
            string.Equals(left.ProductCode, right.ProductCode, StringComparison.Ordinal) &&
-           string.Equals(left.RecipeId, right.RecipeId, StringComparison.Ordinal) &&
-           string.Equals(left.RecipeVersion, right.RecipeVersion, StringComparison.Ordinal) &&
+           string.Equals(left.ProcessSpecificationId, right.ProcessSpecificationId, StringComparison.Ordinal) &&
+           string.Equals(left.ProcessSpecificationVersion, right.ProcessSpecificationVersion, StringComparison.Ordinal) &&
            left.ToolingInstallationId == right.ToolingInstallationId &&
            left.ValidFrom == right.ValidFrom &&
            string.Equals(left.Source, right.Source, StringComparison.Ordinal) &&
@@ -733,7 +733,7 @@ public sealed class PostgresManufacturingContextStore : IManufacturingContextSto
             """
             SELECT revision.payload::text, assembly.payload::text
             FROM tooling_assembly_revisions revision
-            JOIN tooling_assemblies assembly ON assembly.mold_id = revision.mold_id
+            JOIN tooling_assemblies assembly ON assembly.tooling_assembly_id = revision.tooling_assembly_id
             WHERE revision.assembly_revision_id = @id;
             """, connection, transaction))
         {
@@ -779,7 +779,7 @@ public sealed class PostgresManufacturingContextStore : IManufacturingContextSto
         var componentIds = revision.Members.Select(static member => member.ComponentId).Distinct(StringComparer.Ordinal).ToArray();
         await using var occupiedCommand = new NpgsqlCommand(
             """
-            SELECT installation.machine_id
+            SELECT installation.equipment_id
             FROM tooling_installations installation
             JOIN tooling_assembly_revisions active_revision
               ON active_revision.assembly_revision_id = installation.assembly_revision_id
@@ -815,12 +815,12 @@ public sealed class PostgresManufacturingContextStore : IManufacturingContextSto
         await using var command = new NpgsqlCommand(
             """
             SELECT 1 FROM tooling_installations
-            WHERE machine_id = @machine
+            WHERE equipment_id = @equipment
               AND installed_at < COALESCE(@removed_at, 'infinity'::timestamptz)
               AND COALESCE(removed_at, 'infinity'::timestamptz) > @installed_at
             LIMIT 1;
             """, connection, transaction);
-        command.Parameters.AddWithValue("machine", value.MachineId);
+        command.Parameters.AddWithValue("equipment", value.EquipmentId);
         command.Parameters.AddWithValue("installed_at", value.InstalledAt.UtcDateTime);
         command.Parameters.AddWithValue("removed_at", (object?)value.RemovedAt?.UtcDateTime ?? DBNull.Value);
         if (await command.ExecuteScalarAsync(ct).ConfigureAwait(false) is not null)
@@ -836,11 +836,11 @@ public sealed class PostgresManufacturingContextStore : IManufacturingContextSto
         await using var command = new NpgsqlCommand(
             """
             SELECT 1 FROM tooling_installations
-            WHERE installation_id = @id AND machine_id = @machine
+            WHERE installation_id = @id AND equipment_id = @equipment
               AND installed_at <= @at AND (removed_at IS NULL OR removed_at > @at);
             """, connection, transaction);
         command.Parameters.AddWithValue("id", value.ToolingInstallationId);
-        command.Parameters.AddWithValue("machine", value.MachineId);
+        command.Parameters.AddWithValue("equipment", value.EquipmentId);
         command.Parameters.AddWithValue("at", value.ValidFrom.UtcDateTime);
         if (await command.ExecuteScalarAsync(ct).ConfigureAwait(false) is null)
             throw new InvalidOperationException("生产上下文引用的工装装卸记录在该设备和时间点无效。");

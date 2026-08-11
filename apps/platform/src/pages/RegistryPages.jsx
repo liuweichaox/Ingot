@@ -16,26 +16,26 @@ const registryPages = {
   },
   processModels: {
     kind: "processModel",
-    title: "工艺模型", description: "定义工艺变量、阶段号和配方参数结构，不包含 PLC 地址和采集频率。", endpoint: "/api/v1/process-data-models", key: "modelId",
+    title: "工艺模型", description: "定义工艺变量、阶段号和控制参数结构，不包含 PLC 地址和采集频率。", endpoint: "/api/v1/process-data-models", key: "modelId",
     columns: [["modelId", "模型"], ["version", "版本"], ["name", "名称"], ["status", "状态"], ["updatedAt", "更新时间"]],
     createLabel: "创建工艺模型",
-    template: { modelId: "", version: 1, name: "", description: "", status: "draft", acquisition: { dataItems: [] }, recipeParameters: [], updatedAt: "" },
+    template: { modelId: "", version: 1, name: "", description: "", status: "draft", acquisition: { dataItems: [] }, controlParameters: [], updatedAt: "" },
     deleteUrl: value => `/api/v1/process-data-models/${encodeURIComponent(value.modelId)}/${value.version}`,
   },
-  recipes: {
-    kind: "recipeVersion",
-    title: "配方版本", description: "维护引用工艺数据模型的完整参数值。", endpoint: "/api/v1/recipe-versions", key: "recipeId",
-    columns: [["recipeId", "配方"], ["version", "版本"], ["name", "名称"], ["status", "状态"], ["updatedAt", "更新时间"]],
-    createLabel: "创建配方版本",
-    template: { recipeId: "", version: 1, name: "", basedOnVersion: null, dataModelId: "", dataModelVersion: 1, status: "draft", contextSelector: {}, values: [], updatedAt: "" },
-    deleteUrl: value => `/api/v1/recipe-versions/${encodeURIComponent(value.recipeId)}/${value.version}`,
+  processSpecifications: {
+    kind: "processSpecificationVersion",
+    title: "工艺规范版本", description: "维护引用工艺数据模型的完整参数值。", endpoint: "/api/v1/process-specifications", key: "processSpecificationId",
+    columns: [["processSpecificationId", "工艺规范"], ["version", "版本"], ["name", "名称"], ["status", "状态"], ["updatedAt", "更新时间"]],
+    createLabel: "创建工艺规范版本",
+    template: { processSpecificationId: "", version: 1, name: "", basedOnVersion: null, dataModelId: "", dataModelVersion: 1, status: "draft", contextSelector: {}, values: [], updatedAt: "" },
+    deleteUrl: value => `/api/v1/process-specifications/${encodeURIComponent(value.processSpecificationId)}/${value.version}`,
   },
   plans: {
     kind: "analysisPlan",
     title: "分析模型", description: "版本化定义分析范围、阶段对齐、质量分组和数据项。", endpoint: "/api/v1/process-analysis-plans", key: "planId",
     columns: [["planId", "模型"], ["version", "版本"], ["name", "名称"], ["status", "状态"], ["updatedAt", "更新时间"]],
     createLabel: "创建分析模型",
-    template: { planId: "", version: 1, name: "", description: "", status: "draft", dataModelId: "", dataModelVersion: 1, analysisScope: "production-cycle", alignmentMode: "stage-relative", cohortDimension: "", comparisonKeys: ["product_series"], contextSelector: {}, signals: [], updatedAt: "" },
+    template: { planId: "", version: 1, name: "", description: "", status: "draft", dataModelId: "", dataModelVersion: 1, analysisScope: "production-execution", alignmentMode: "stage-relative", cohortDimension: "", comparisonKeys: ["product_family_code"], contextSelector: {}, signals: [], updatedAt: "" },
     deleteUrl: value => `/api/v1/process-analysis-plans/${encodeURIComponent(value.planId)}/${value.version}`,
   },
   definitions: {
@@ -356,7 +356,7 @@ function InspectionDefinitionEditor({ form, onChange, readOnly, validation, lock
 
 export const ProcessDataModelsPage = () => <RegistryPage definition={registryPages.processModels} />;
 export const ScenarioPackagesPage = () => <RegistryPage definition={registryPages.scenarios} />;
-export const RecipeVersionsPage = () => <RegistryPage definition={registryPages.recipes} />;
+export const ProcessSpecificationsPage = () => <RegistryPage definition={registryPages.processSpecifications} />;
 export const ProcessAnalysisPlansPage = () => <RegistryPage definition={registryPages.plans} />;
 export const InspectionDefinitionsPage = () => <RegistryPage definition={registryPages.definitions} />;
 export const QualityPlansPage = () => <RegistryPage definition={registryPages.plansQuality} />;

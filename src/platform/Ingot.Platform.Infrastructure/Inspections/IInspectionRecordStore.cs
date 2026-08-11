@@ -47,10 +47,10 @@ public interface IInspectionRecordStore
     }
 
     /// <summary>
-    ///     返回指定生产周期的全部检测记录，供确定性分析使用；不受公共查询 API 的单页 Limit 限制。
+    ///     返回指定生产过程执行的全部检测记录，供确定性分析使用；不受公共查询 API 的单页 Limit 限制。
     /// </summary>
-    Task<IReadOnlyList<InspectionRecord>> QueryAllByOperationRunIdsAsync(
-        IReadOnlyCollection<string> operationRunIds,
+    Task<IReadOnlyList<InspectionRecord>> QueryAllByExecutionIdsAsync(
+        IReadOnlyCollection<string> executionIds,
         CancellationToken ct = default);
 }
 

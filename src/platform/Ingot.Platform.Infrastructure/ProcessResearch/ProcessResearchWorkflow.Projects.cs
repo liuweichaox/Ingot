@@ -112,14 +112,14 @@ public sealed partial class ProcessResearchWorkflow
             : project.Context;
         if (targetStatus == ResearchProjectStatuses.Completed)
         {
-            var windows = await store.ListProcessWindowsAsync(projectId, ct).ConfigureAwait(false);
+            var windows = await store.ListOperatingRegionsAsync(projectId, ct).ConfigureAwait(false);
             if (windows.All(static value =>
-                    value.Status != ProcessWindowStatuses.Validated ||
+                    value.Status != OperatingRegionStatuses.Validated ||
                     value.ValidationLevel is not (
-                        ProcessWindowValidationLevels.Laboratory or
-                        ProcessWindowValidationLevels.Production)))
+                        OperatingRegionValidationLevels.Laboratory or
+                        OperatingRegionValidationLevels.Production)))
                 throw new ProcessResearchRuleException(
-                    "研发项目完成前必须形成经过跨区组重复实验验证的工艺窗口。");
+                    "研发项目完成前必须形成经过跨区组重复实验验证的工艺操作域。");
         }
 
         var saved = await store.SaveProjectAsync(
@@ -147,7 +147,7 @@ public sealed partial class ProcessResearchWorkflow
         var shadowTask = store.ListShadowRecommendationsAsync(projectId, ct);
         var replayTask = store.ListHistoricalReplayReportsAsync(projectId, ct);
         var rollbackTask = store.ListRollbackDrillsAsync(projectId, ct);
-        var windowsTask = store.ListProcessWindowsAsync(projectId, ct);
+        var windowsTask = store.ListOperatingRegionsAsync(projectId, ct);
         var claimsTask = store.ListKnowledgeClaimsAsync(projectId, ct);
         var transfersTask = store.ListTransferAssessmentsAsync(projectId, ct);
         var auditTask = store.ListAuditEntriesAsync(projectId, ct);
@@ -171,7 +171,7 @@ public sealed partial class ProcessResearchWorkflow
             ShadowRecommendations = await shadowTask.ConfigureAwait(false),
             HistoricalReplayReports = await replayTask.ConfigureAwait(false),
             RollbackDrills = await rollbackTask.ConfigureAwait(false),
-            ProcessWindows = await windowsTask.ConfigureAwait(false),
+            OperatingRegions = await windowsTask.ConfigureAwait(false),
             KnowledgeClaims = await claimsTask.ConfigureAwait(false),
             TransferAssessments = await transfersTask.ConfigureAwait(false),
             Audit = await auditTask.ConfigureAwait(false)

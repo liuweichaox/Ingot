@@ -15,10 +15,10 @@ public sealed class ProductionEventValidatorTests
     }
 
     [Theory]
-    [InlineData("not-a-guid", "cycle.completed", 1, "EventId")]
-    [InlineData("019f6c00-0000-4000-8000-000000000001", "cycle.completed", 1, "EventId")]
-    [InlineData("019f6c00-0000-7000-8000-000000000001", "CycleCompleted", 1, "EventType")]
-    [InlineData("019f6c00-0000-7000-8000-000000000001", "cycle.completed", 0, "EventTypeVersion")]
+    [InlineData("not-a-guid", "process.execution.completed", 1, "EventId")]
+    [InlineData("019f6c00-0000-4000-8000-000000000001", "process.execution.completed", 1, "EventId")]
+    [InlineData("019f6c00-0000-7000-8000-000000000001", "ProcessExecutionCompleted", 1, "EventType")]
+    [InlineData("019f6c00-0000-7000-8000-000000000001", "process.execution.completed", 0, "EventTypeVersion")]
     public void TryValidate_ShouldRejectMalformedEnvelope(
         string eventId,
         string eventType,
@@ -46,7 +46,7 @@ public sealed class ProductionEventValidatorTests
 
     private static ProductionEvent CreateEvent()
         => ProductionEvent.Create(
-            "cycle.completed",
+            "process.execution.completed",
             DateTimeOffset.UtcNow,
             "edge/EDGE-001/SOURCE-01/rule",
             new ObjectRef("equipment", "EQ-01"));

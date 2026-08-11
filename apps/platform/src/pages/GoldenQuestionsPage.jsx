@@ -210,14 +210,14 @@ export function GoldenQuestionsPage() {
           <Field label="工程师原始问题" hint="保持现场真实措辞；评测运行必须使用完全相同的问题。"><Textarea required value={form.question} onChange={event => setForm(current => ({ ...current, question: event.target.value }))} /></Field>
           <div className="grid gap-3 sm:grid-cols-3">
             <Field label="分析模式"><Select value={form.mode} onChange={event => setForm(current => ({ ...current, mode: event.target.value }))}><option value="quick">快速</option><option value="combined">推理</option></Select></Field>
-            <Field label="页面对象类型"><Input value={form.pageKind || ""} onChange={event => setForm(current => ({ ...current, pageKind: event.target.value }))} placeholder="cycle" /></Field>
+            <Field label="页面对象类型"><Input value={form.pageKind || ""} onChange={event => setForm(current => ({ ...current, pageKind: event.target.value }))} placeholder="execution" /></Field>
             <Field label="页面对象 ID"><Input value={form.pageId || ""} onChange={event => setForm(current => ({ ...current, pageId: event.target.value }))} /></Field>
           </div>
           <label className="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" checked={form.expectRefusal} onChange={event => setForm(current => ({ ...current, expectRefusal: event.target.checked }))} />该问题在现有数据下应明确拒绝确定判断</label>
           <Card title="可自动核对的工具事实" description="JSON Pointer 指向只读工具结果中的字段；审核值支持数字、布尔、null 或文本。">
             <div className="grid gap-2 sm:grid-cols-2">
               <Input aria-label="事实标识" placeholder="事实标识" value={fact.factId} onChange={event => setFact(current => ({ ...current, factId: event.target.value }))} />
-              <Input aria-label="工具名" placeholder="工具名，例如 compare_cycles" value={fact.tool} onChange={event => setFact(current => ({ ...current, tool: event.target.value }))} />
+              <Input aria-label="工具名" placeholder="工具名，例如 compare_executions" value={fact.tool} onChange={event => setFact(current => ({ ...current, tool: event.target.value }))} />
               <Input aria-label="JSON Pointer" placeholder="/process/diagnosis/evidenceLevel" value={fact.jsonPointer} onChange={event => setFact(current => ({ ...current, jsonPointer: event.target.value }))} />
               <Input aria-label="审核值" placeholder="审核值" value={fact.expectedValue} onChange={event => setFact(current => ({ ...current, expectedValue: event.target.value }))} />
               <Input aria-label="回答必须包含" placeholder="回答必须包含的审核文本（可选）" value={fact.answerMustContain} onChange={event => setFact(current => ({ ...current, answerMustContain: event.target.value }))} />

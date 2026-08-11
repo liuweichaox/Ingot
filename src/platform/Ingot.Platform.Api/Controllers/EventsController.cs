@@ -52,7 +52,7 @@ public sealed class EventsController(
         [FromQuery(Name = "type")] string? eventType,
         [FromQuery] string? subjectType,
         [FromQuery] string? subjectId,
-        [FromQuery] string? correlationId,
+        [FromQuery] string? executionId,
         [FromQuery] DateTimeOffset? from,
         [FromQuery] DateTimeOffset? to,
         [FromQuery] long? afterIngestId,
@@ -66,7 +66,7 @@ public sealed class EventsController(
             eventType,
             subjectType,
             subjectId,
-            correlationId,
+            executionId,
             from,
             to,
             afterIngestId,
@@ -101,7 +101,7 @@ public sealed class EventsController(
         [FromQuery(Name = "type")] string? eventType,
         [FromQuery] string? subjectType,
         [FromQuery] string? subjectId,
-        [FromQuery] string? correlationId,
+        [FromQuery] string? executionId,
         [FromQuery] DateTimeOffset? from,
         [FromQuery] DateTimeOffset? to,
         [FromQuery] long? afterIngestId,
@@ -132,7 +132,7 @@ public sealed class EventsController(
             eventType,
             subjectType,
             subjectId,
-            correlationId,
+            executionId,
             from,
             to,
             cursor,
@@ -155,7 +155,7 @@ public sealed class EventsController(
         while (!ct.IsCancellationRequested)
         {
             var events = await store.QueryAsync(
-                BuildQuery(edgeId, eventType, subjectType, subjectId, correlationId, from, to, cursor, null, 100),
+                BuildQuery(edgeId, eventType, subjectType, subjectId, executionId, from, to, cursor, null, 100),
                 ct).ConfigureAwait(false);
             foreach (var item in events.OrderBy(static item => item.IngestId))
             {
@@ -173,18 +173,18 @@ public sealed class EventsController(
         }
     }
 
-    [HttpGet("/api/v1/cycles/{correlationId}")]
-    public async Task<IActionResult> GetCycle(string correlationId, CancellationToken ct)
+    [HttpGet("/api/v1/process-executions/{executionId}")]
+    public async Task<IActionResult> GetProcessExecution(string executionId, CancellationToken ct)
     {
         var correlated = await QueryAllAsync(
-            BuildQuery(null, null, null, null, correlationId, null, null, null, null, 500),
+            BuildQuery(null, null, null, null, executionId, null, null, null, null, 500),
             ct).ConfigureAwait(false);
         var pair = correlated
             .OrderBy(static item => item.Event.OccurredAt)
             .ThenBy(static item => item.IngestId)
             .ToArray();
         if (pair.Length == 0)
-            return NotFound(new { correlationId, error = "未找到对应生产周期。" });
+            return NotFound(new { executionId, error = "未找到对应生产过程执行。" });
 
         var first = pair[0];
         var startedAt = pair.Min(static item => item.Event.OccurredAt);
@@ -212,10 +212,10 @@ public sealed class EventsController(
             .ConfigureAwait(false);
         var ordered = pair
             .Concat(sameSubjectWindow.Where(item =>
-                string.IsNullOrWhiteSpace(item.Event.CorrelationId) ||
+                string.IsNullOrWhiteSpace(item.Event.ExecutionId) ||
                 string.Equals(
-                    item.Event.CorrelationId,
-                    correlationId,
+                    item.Event.ExecutionId,
+                    executionId,
                     StringComparison.Ordinal)))
             .DistinctBy(static item => item.Event.EventId)
             .OrderBy(static item => item.Event.OccurredAt)
@@ -224,7 +224,7 @@ public sealed class EventsController(
 
         return Ok(new
         {
-            correlationId,
+            executionId,
             edgeId = first.EdgeId,
             subject = first.Event.Subject,
             startedAt,
@@ -255,7 +255,7 @@ public sealed class EventsController(
 
             var nextCursor = page.Max(static item => item.IngestId);
             if (nextCursor <= cursor)
-                throw new InvalidOperationException("完整周期查询的摄入游标没有前进。");
+                throw new InvalidOperationException("完整次执行查询的摄入游标没有前进。");
 
             result.AddRange(page);
             cursor = nextCursor;
@@ -271,7 +271,7 @@ public sealed class EventsController(
         string? eventType,
         string? subjectType,
         string? subjectId,
-        string? correlationId,
+        string? executionId,
         DateTimeOffset? from,
         DateTimeOffset? to,
         long? afterIngestId,
@@ -291,7 +291,7 @@ public sealed class EventsController(
             EventType = eventType,
             SubjectType = subjectType,
             SubjectId = subjectId,
-            CorrelationId = correlationId,
+            ExecutionId = executionId,
             From = from,
             To = to,
             AfterIngestId = afterIngestId,

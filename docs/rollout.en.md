@@ -51,7 +51,7 @@ When analysis conditions fail, the result is “repair the data chain first,” 
 
 ## Phase 1: replay historical engineering questions
 
-Reconstruct real past problems using only information available at the time. The system may not see later inspections, conclusions, or the final successful recipe in advance.
+Reconstruct real past problems using only information available at the time. The system may not see later inspections, conclusions, or the final successful process specification in advance.
 
 For each question, compare:
 

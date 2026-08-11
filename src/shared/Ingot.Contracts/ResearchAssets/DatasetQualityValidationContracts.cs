@@ -24,7 +24,7 @@ public sealed record DatasetQualityValidationDatasetManifest
     public string? SheetName { get; init; }
     public int HeaderRowCount { get; init; } = 1;
     public string? MatVariableName { get; init; }
-    public string? CycleColumn { get; init; }
+    public string? ProcessExecutionColumn { get; init; }
     public string? TimestampColumn { get; init; }
     public string? PhaseColumn { get; init; }
     public IReadOnlyList<string> SignalColumns { get; init; } = [];
@@ -66,7 +66,7 @@ public sealed record DatasetQualityValidationReport
     public required string SourceSha256 { get; init; }
     public required string ManifestSha256 { get; init; }
     public long RowCount { get; init; }
-    public long CycleCount { get; init; }
+    public long ProcessExecutionCount { get; init; }
     public long ChronologyViolationCount { get; init; }
     public double StreamBatchMaximumDifference { get; init; }
     public IReadOnlyList<ScientificColumnProfile> SignalProfiles { get; init; } = [];

@@ -4,7 +4,7 @@ namespace Ingot.Platform.Infrastructure.Inspections;
 
 public interface IInspectionWorkflowService
 {
-    Task<InspectionTask?> GetTaskAsync(string operationRunId, CancellationToken ct = default);
+    Task<InspectionTask?> GetTaskAsync(string executionId, CancellationToken ct = default);
 
     Task<IReadOnlyList<InspectionTask>> QueryTasksAsync(
         string? status,

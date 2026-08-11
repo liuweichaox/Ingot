@@ -23,9 +23,9 @@ public sealed class PostgresTimeSeriesStore : ITimeSeriesStore, IAsyncDisposable
         "plant_id",
         "line_id",
         "workcell_id",
-        "machine_id",
         "equipment_id",
-        "product_series"
+        "equipment_id",
+        "product_family_code"
     ];
 
     private readonly NpgsqlDataSource _dataSource;
@@ -112,7 +112,7 @@ public sealed class PostgresTimeSeriesStore : ITimeSeriesStore, IAsyncDisposable
                 transaction,
                 analysis,
                 definition.Code,
-                definition.SourceField,
+                definition.DisplayName,
                 definition.DataType,
                 definition.Unit,
                 definition.Category,
@@ -146,10 +146,10 @@ public sealed class PostgresTimeSeriesStore : ITimeSeriesStore, IAsyncDisposable
             filters.Add("signal_code = @signal_code");
             command.Parameters.AddWithValue("signal_code", query.SignalCode.Trim());
         }
-        if (!string.IsNullOrWhiteSpace(query.CorrelationId))
+        if (!string.IsNullOrWhiteSpace(query.ExecutionId))
         {
-            filters.Add("correlation_id = @correlation_id");
-            command.Parameters.AddWithValue("correlation_id", query.CorrelationId.Trim());
+            filters.Add("execution_id = @execution_id");
+            command.Parameters.AddWithValue("execution_id", query.ExecutionId.Trim());
         }
         if (query.From.HasValue)
         {
@@ -167,7 +167,7 @@ public sealed class PostgresTimeSeriesStore : ITimeSeriesStore, IAsyncDisposable
             $"""
              SELECT collection_point_id, signal_code, data_type, unit, category,
                     occurred_at, recorded_at, event_id, ingest_id, edge_id, source,
-                    subject_type, subject_id, correlation_id, phase_code,
+                    subject_type, subject_id, execution_id, phase_code,
                     data_model_id, data_model_version, quality_code,
                     numeric_value, integer_value, boolean_value, text_value, run_context
              FROM time_series_samples
@@ -194,7 +194,7 @@ public sealed class PostgresTimeSeriesStore : ITimeSeriesStore, IAsyncDisposable
                 Source = reader.GetString(10),
                 SubjectType = reader.GetString(11),
                 SubjectId = reader.GetString(12),
-                CorrelationId = reader.IsDBNull(13) ? null : reader.GetString(13),
+                ExecutionId = reader.IsDBNull(13) ? null : reader.GetString(13),
                 PhaseCode = reader.IsDBNull(14) ? null : reader.GetString(14),
                 DataModelId = reader.GetString(15),
                 DataModelVersion = reader.GetInt32(16),
@@ -217,7 +217,7 @@ public sealed class PostgresTimeSeriesStore : ITimeSeriesStore, IAsyncDisposable
         NpgsqlTransaction transaction,
         ResolvedProcessAnalysis analysis,
         string code,
-        string sourceField,
+        string displayName,
         string dataType,
         string? unit,
         string category,
@@ -226,7 +226,7 @@ public sealed class PostgresTimeSeriesStore : ITimeSeriesStore, IAsyncDisposable
     {
         var definitionHash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
             System.Text.Encoding.UTF8.GetBytes(
-                $"{analysis.DataModel.ModelId}|{analysis.DataModel.Version}|{code}|{sourceField}|{dataType}|{unit}|{category}")))
+                $"{analysis.DataModel.ModelId}|{analysis.DataModel.Version}|{code}|{displayName}|{dataType}|{unit}|{category}")))
             .ToLowerInvariant();
         await using var command = new NpgsqlCommand(
             """
@@ -244,7 +244,7 @@ public sealed class PostgresTimeSeriesStore : ITimeSeriesStore, IAsyncDisposable
         command.Parameters.AddWithValue("model_id", analysis.DataModel.ModelId);
         command.Parameters.AddWithValue("model_version", analysis.DataModel.Version);
         command.Parameters.AddWithValue("signal_code", code);
-        command.Parameters.AddWithValue("source_field", sourceField);
+        command.Parameters.AddWithValue("source_field", displayName);
         command.Parameters.AddWithValue("data_type", dataType);
         command.Parameters.AddWithValue("unit", (object?)unit ?? DBNull.Value);
         command.Parameters.AddWithValue("category", category);
@@ -302,12 +302,12 @@ public sealed class PostgresTimeSeriesStore : ITimeSeriesStore, IAsyncDisposable
               occurred_at, collection_point_id, signal_code, data_type, unit, category,
               numeric_value, integer_value, boolean_value, text_value, quality_code,
               event_id, ingest_id, recorded_at, edge_id, source, subject_type, subject_id,
-              correlation_id, phase_code, data_model_id, data_model_version, run_context)
+              execution_id, phase_code, data_model_id, data_model_version, run_context)
             VALUES (
               @occurred_at, @point_id, @signal_code, @data_type, @unit, @category,
               @numeric_value, @integer_value, @boolean_value, @text_value, @quality_code,
               @event_id, @ingest_id, @recorded_at, @edge_id, @source, @subject_type, @subject_id,
-              @correlation_id, @phase_code, @model_id, @model_version, @run_context)
+              @execution_id, @phase_code, @model_id, @model_version, @run_context)
             ON CONFLICT (event_id, signal_code, occurred_at) DO NOTHING;
             """,
             connection,
@@ -330,7 +330,7 @@ public sealed class PostgresTimeSeriesStore : ITimeSeriesStore, IAsyncDisposable
         command.Parameters.AddWithValue("source", sample.Source);
         command.Parameters.AddWithValue("subject_type", sample.SubjectType);
         command.Parameters.AddWithValue("subject_id", sample.SubjectId);
-        command.Parameters.AddWithValue("correlation_id", (object?)sample.CorrelationId ?? DBNull.Value);
+        command.Parameters.AddWithValue("execution_id", (object?)sample.ExecutionId ?? DBNull.Value);
         command.Parameters.AddWithValue("phase_code", (object?)sample.PhaseCode ?? DBNull.Value);
         command.Parameters.AddWithValue("model_id", sample.DataModelId);
         command.Parameters.AddWithValue("model_version", sample.DataModelVersion);

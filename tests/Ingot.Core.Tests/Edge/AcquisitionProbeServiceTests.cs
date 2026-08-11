@@ -89,7 +89,7 @@ public sealed class AcquisitionProbeServiceTests
                         new ProcessDataItemDefinition
                         {
                             Code = "mold.temperature",
-                            SourceField = "模具温度",
+                            DisplayName = "模具温度",
                             Unit = "°C"
                         }
                     ]

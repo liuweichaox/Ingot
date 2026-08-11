@@ -8,7 +8,7 @@ public static class JsonAcquisitionOptionsFactory
     {
         var profile = deployment.Profile;
         var dataItems = deployment.DataModel.Acquisition.DataItems.ToDictionary(item => item.Code, StringComparer.Ordinal);
-        var parameters = deployment.DataModel.RecipeParameters.ToDictionary(item => item.Code, StringComparer.Ordinal);
+        var parameters = deployment.DataModel.ControlParameters.ToDictionary(item => item.Code, StringComparer.Ordinal);
         var context = new Dictionary<string, string>(profile.StaticContext, StringComparer.Ordinal)
         {
             ["acquisition_profile_id"] = profile.ProfileId,
@@ -51,14 +51,14 @@ public static class JsonAcquisitionOptionsFactory
                 Offset = item.Offset,
                 Topic = item.Topic
             }).ToArray(),
-            Recipe = profile.Recipe is null ? null : new RecipeFieldMapping
+            ProcessSpecification = profile.ProcessSpecification is null ? null : new ProcessSpecificationFieldMapping
             {
-                EventType = profile.Recipe.EventType,
-                IdPath = profile.Recipe.IdPath,
-                VersionPath = profile.Recipe.VersionPath,
-                NamePath = profile.Recipe.NamePath,
-                ParametersPath = profile.Recipe.ParametersPath,
-                ParameterFields = profile.Recipe.ParameterMappings.Select(item => new ValueFieldMapping
+                EventType = profile.ProcessSpecification.EventType,
+                IdPath = profile.ProcessSpecification.IdPath,
+                VersionPath = profile.ProcessSpecification.VersionPath,
+                NamePath = profile.ProcessSpecification.NamePath,
+                ParametersPath = profile.ProcessSpecification.ParametersPath,
+                ParameterFields = profile.ProcessSpecification.ParameterMappings.Select(item => new ValueFieldMapping
                 {
                     Code = item.DataItemCode,
                     SourcePath = item.SourcePath,
@@ -72,7 +72,6 @@ public static class JsonAcquisitionOptionsFactory
             Lifecycle = profile.Lifecycle is null ? null : new LifecycleFieldMapping
             {
                 Mode = profile.Lifecycle.Mode,
-                CorrelationIdContextKey = profile.Lifecycle.CorrelationIdContextKey,
                 ActiveContextKey = profile.Lifecycle.ActiveContextKey,
                 ActiveValue = profile.Lifecycle.ActiveValue,
                 StartedEventType = profile.Lifecycle.StartedEventType,

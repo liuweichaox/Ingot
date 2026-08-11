@@ -1,7 +1,7 @@
 using System.Text.Json;
 using Ingot.Agent;
 using Ingot.Platform.Infrastructure.Events;
-using Ingot.Platform.Infrastructure.Cycles;
+using Ingot.Platform.Infrastructure.ProcessExecutions;
 using Ingot.Contracts.Agents;
 using Ingot.Contracts.Events;
 
@@ -9,9 +9,9 @@ namespace Ingot.Platform.Infrastructure.AgentTools;
 
 public sealed class CheckDataQualityTool(
     IChatEventReader events,
-    WholeCycleAnalysisEngine? wholeCycleAnalysis = null) : IAnalysisTool
+    ProcessExecutionAnalysisEngine? wholeProcessExecutionAnalysis = null) : IAnalysisTool
 {
-    private readonly WholeCycleAnalysisEngine _wholeCycleAnalysis = wholeCycleAnalysis ?? new();
+    private readonly ProcessExecutionAnalysisEngine _wholeProcessExecutionAnalysis = wholeProcessExecutionAnalysis ?? new();
 
     public AnalysisToolDefinition Definition { get; } = new()
     {
@@ -19,14 +19,14 @@ public sealed class CheckDataQualityTool(
         Version = "1.0.0",
         EntryPoint = ProductEntryPoints.Chat,
         Purpose = RunPurposes.ReadOnlyAnalysis,
-        Description = "检查生产周期是否完整、生产信息是否缺失、现场采集是否中断。只查询，不修改数据。",
+        Description = "检查生产过程执行是否完整、生产信息是否缺失、现场采集是否中断。只查询，不修改数据。",
         InputSchema = JsonSerializer.SerializeToElement(new
         {
             type = "object",
             properties = new
             {
                 subjectId = new { type = "string" },
-                correlationId = new { type = "string" }
+                executionId = new { type = "string" }
             },
             additionalProperties = false
         })
@@ -38,11 +38,11 @@ public sealed class CheckDataQualityTool(
         CancellationToken ct = default)
     {
         call.Arguments.TryGetValue("subjectId", out var subjectId);
-        call.Arguments.TryGetValue("correlationId", out var correlationId);
+        call.Arguments.TryGetValue("executionId", out var executionId);
         var scope = new PlatformEventQuery
         {
             SubjectId = NullIfBlank(subjectId),
-            CorrelationId = NullIfBlank(correlationId)
+            ExecutionId = NullIfBlank(executionId)
         };
         // 全范围聚合用于快速获得总量与时间边界。
         var stats = await events.GetScopeStatsAsync(context.UserId, scope, ct).ConfigureAwait(false);
@@ -54,10 +54,10 @@ public sealed class CheckDataQualityTool(
         var ordered = rows.OrderBy(static row => row.IngestId).ToArray();
         var emptyContext = ordered.Count(static row => row.Event.Context.Count == 0);
         var correlations = ordered
-            .Where(static row => !string.IsNullOrWhiteSpace(row.Event.CorrelationId))
-            .GroupBy(static row => row.Event.CorrelationId!, StringComparer.Ordinal)
+            .Where(static row => !string.IsNullOrWhiteSpace(row.Event.ExecutionId))
+            .GroupBy(static row => row.Event.ExecutionId!, StringComparer.Ordinal)
             .ToArray();
-        var incompleteCycles = correlations.Count(group =>
+        var incompleteProcessExecutions = correlations.Count(group =>
             group.Any(static row => row.Event.EventType.EndsWith(".started", StringComparison.Ordinal)) !=
             group.Any(static row =>
                 row.Event.EventType.EndsWith(".completed", StringComparison.Ordinal) ||
@@ -66,16 +66,16 @@ public sealed class CheckDataQualityTool(
         var processQuality = correlations.Select(group =>
         {
             var startedAt = group.FirstOrDefault(static row =>
-                row.Event.EventType == "cycle.started")?.Event.OccurredAt;
+                row.Event.EventType == "process.execution.started")?.Event.OccurredAt;
             var completedAt = group.LastOrDefault(static row =>
-                row.Event.EventType == "cycle.completed")?.Event.OccurredAt;
-            return _wholeCycleAnalysis.Analyze(group.ToArray(), startedAt, completedAt, null, null).Quality;
+                row.Event.EventType == "process.execution.completed")?.Event.OccurredAt;
+            return _wholeProcessExecutionAnalysis.Analyze(group.ToArray(), startedAt, completedAt, null, null).Quality;
         }).ToArray();
-        var degradedProcessCycles = processQuality.Count(static quality =>
+        var degradedProcessProcessExecutions = processQuality.Count(static quality =>
             quality.Status == ProcessDataStatuses.Degraded);
-        var unavailableProcessCycles = processQuality.Count(static quality =>
+        var unavailableProcessProcessExecutions = processQuality.Count(static quality =>
             quality.Status == ProcessDataStatuses.Unavailable);
-        var scopedQuery = !string.IsNullOrWhiteSpace(subjectId) || !string.IsNullOrWhiteSpace(correlationId);
+        var scopedQuery = !string.IsNullOrWhiteSpace(subjectId) || !string.IsNullOrWhiteSpace(executionId);
         int? sequenceGaps = null;
         if (!scopedQuery)
         {
@@ -93,24 +93,24 @@ public sealed class CheckDataQualityTool(
         var scopeEmpty = totalEvents == 0;
         var limitations = new List<string>();
         if (scopeEmpty)
-            limitations.Add("当前范围没有生产记录，无法检查周期是否完整或采集是否中断。");
+            limitations.Add("当前范围没有生产记录，无法检查过程执行是否完整或采集是否中断。");
         else if (scopedQuery)
-            limitations.Add("按对象或周期过滤后的事件不是完整 Edge 序列，因此不计算序号连续性。");
-        if (degradedProcessCycles > 0)
-            limitations.Add($"有 {degradedProcessCycles} 个周期存在采样空窗、重复时间戳或源序号间断，比较时需要降级处理。");
-        if (unavailableProcessCycles > 0)
-            limitations.Add($"有 {unavailableProcessCycles} 个周期没有可用的过程数据。");
-        var scopeId = $"events:{subjectId ?? "*"}:{correlationId ?? "*"}:{ordered.FirstOrDefault()?.IngestId ?? 0}-{ordered.LastOrDefault()?.IngestId ?? 0}";
+            limitations.Add("按对象或过程执行过滤后的事件不是完整 Edge 序列，因此不计算序号连续性。");
+        if (degradedProcessProcessExecutions > 0)
+            limitations.Add($"有 {degradedProcessProcessExecutions} 个过程执行存在采样空窗、重复时间戳或源序号间断，比较时需要降级处理。");
+        if (unavailableProcessProcessExecutions > 0)
+            limitations.Add($"有 {unavailableProcessProcessExecutions} 个过程执行没有可用的过程数据。");
+        var scopeId = $"events:{subjectId ?? "*"}:{executionId ?? "*"}:{ordered.FirstOrDefault()?.IngestId ?? 0}-{ordered.LastOrDefault()?.IngestId ?? 0}";
         var relatedRecords = new RelatedRecordRef
         {
             Kind = "event-query",
             Id = scopeId,
             Label = $"生产记录查询结果（已完整检查 {ordered.Length} 条）",
-            Url = BuildEventsUrl(subjectId, correlationId)
+            Url = BuildEventsUrl(subjectId, executionId)
         };
         var summary = scopeEmpty
             ? "当前范围没有生产记录，无法检查数据完整性。"
-            : $"范围内共 {totalEvents} 条生产记录，已完整检查 {ordered.Length} 条：发现 {incompleteCycles} 个不完整生产周期、" +
+            : $"范围内共 {totalEvents} 条生产记录，已完整检查 {ordered.Length} 条：发现 {incompleteProcessExecutions} 个不完整生产过程执行、" +
               (sequenceGaps.HasValue ? $"{sequenceGaps} 个序号间断，" : "序号连续性未在当前过滤范围计算，") +
               $"{emptyContext} 条记录缺少生产信息；最新记录时间为 {latest:O}。";
         return new AnalysisToolResult
@@ -122,9 +122,9 @@ public sealed class CheckDataQualityTool(
                 eventCount = ordered.Length,
                 totalEventCount = totalEvents,
                 correlationCount = correlations.Length,
-                incompleteCycles,
-                degradedProcessCycles,
-                unavailableProcessCycles,
+                incompleteProcessExecutions,
+                degradedProcessProcessExecutions,
+                unavailableProcessProcessExecutions,
                 sequenceGaps,
                 emptyContext,
                 latestOccurredAt = latest,
@@ -132,7 +132,7 @@ public sealed class CheckDataQualityTool(
             }),
             RelatedRecords = [relatedRecords],
             Limitations = limitations,
-            Outcome = scopeEmpty || incompleteCycles > 0 || unavailableProcessCycles > 0 ||
+            Outcome = scopeEmpty || incompleteProcessExecutions > 0 || unavailableProcessProcessExecutions > 0 ||
                       sequenceGaps is > 0
                 ? AnalysisToolOutcomes.InsufficientData
                 : AnalysisToolOutcomes.Sufficient
@@ -142,13 +142,13 @@ public sealed class CheckDataQualityTool(
     private static string? NullIfBlank(string? value)
         => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
-    private static string BuildEventsUrl(string? subjectId, string? correlationId)
+    private static string BuildEventsUrl(string? subjectId, string? executionId)
     {
         var values = new List<string>();
         if (!string.IsNullOrWhiteSpace(subjectId))
             values.Add($"subjectId={Uri.EscapeDataString(subjectId)}");
-        if (!string.IsNullOrWhiteSpace(correlationId))
-            values.Add($"correlationId={Uri.EscapeDataString(correlationId)}");
+        if (!string.IsNullOrWhiteSpace(executionId))
+            values.Add($"executionId={Uri.EscapeDataString(executionId)}");
         return values.Count == 0 ? "/events" : $"/events?{string.Join('&', values)}";
     }
 

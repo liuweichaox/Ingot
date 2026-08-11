@@ -25,7 +25,7 @@ MACHINE_ID = "OPTICAL-MOLD-SIM-01"
 PRODUCT_SERIES = "optical-lens-demo"
 PRODUCT_CODE = "LENS-DEMO-50"
 MOLD_ID = "MOLD-DEMO-A01"
-RECIPE_ID = "lens-molding-demo"
+PROCESS_SPECIFICATION_ID = "lens-molding-demo"
 
 
 def parse_args() -> argparse.Namespace:
@@ -55,7 +55,7 @@ def event(
     seq: int,
     event_type: str,
     occurred_at: datetime,
-    cycle_id: str,
+    execution_id: str,
     context: dict[str, str],
     data: dict[str, object] | None = None,
 ) -> dict[str, object]:
@@ -66,8 +66,8 @@ def event(
         "occurredAt": iso(occurred_at),
         "recordedAt": iso(occurred_at),
         "source": f"edge/{EDGE_ID}/simulator/optical-lens-molding",
-        "subject": {"type": "optical-molding-machine", "id": MACHINE_ID},
-        "correlationId": cycle_id,
+        "subject": {"type": "equipment", "id": MACHINE_ID},
+        "executionId": execution_id,
         "context": context,
         "data": data or {},
         "seq": seq,
@@ -158,35 +158,35 @@ def build_replay(replay_id: str) -> tuple[list[dict[str, object]], list[dict[str
     sequence = 1
     groups = [("baseline", 1, 8), ("heater_drift", 1, 8), ("verification", 2, 8)]
     ordinal = 0
-    for cohort, recipe_version, count in groups:
+    for cohort, process_specification_version, count in groups:
         for _ in range(count):
             ordinal += 1
-            cycle_id = f"{replay_id}-{ordinal:03d}"
-            workpiece_id = f"{replay_id}-lens-{ordinal:03d}"
-            cycle_start = start + timedelta(minutes=ordinal * 7)
-            cycle_end = cycle_start + timedelta(seconds=300)
-            parameters = recipe_parameters(recipe_version)
+            execution_id = f"{replay_id}-{ordinal:03d}"
+            output_item_id = f"{replay_id}-lens-{ordinal:03d}"
+            execution_start = start + timedelta(minutes=ordinal * 7)
+            execution_end = execution_start + timedelta(seconds=300)
+            parameters = recipe_parameters(process_specification_version)
             context = {
-                "product_series": PRODUCT_SERIES,
+                "product_family_code": PRODUCT_SERIES,
                 "product_code": PRODUCT_CODE,
-                "recipe_id": RECIPE_ID,
-                "recipe_version": str(recipe_version),
-                "workpiece_id": workpiece_id,
-                "machine_id": MACHINE_ID,
-                "mold_id": MOLD_ID,
+                "process_specification_id": PROCESS_SPECIFICATION_ID,
+                "process_specification_version": str(process_specification_version),
+                "output_item_id": output_item_id,
+                "equipment_id": MACHINE_ID,
+                "tooling_assembly_id": MOLD_ID,
                 "material_lot_ref": "GLASS-DEMO-01",
-                "recipe_capture_source": "simulated_device_readback",
+                "process_specification_capture_source": "simulated_device_readback",
                 "demo_replay": "true",
                 "demo_cohort": cohort,
             }
             events.append(event(
-                f"{cycle_id}:recipe", sequence, "recipe.applied", cycle_start, cycle_id, context,
-                {"recipeId": RECIPE_ID, "recipeVersion": recipe_version,
-                 "recipeName": "LENS-DEMO 基线模压配方" if recipe_version == 1 else "LENS-DEMO 验证配方（上模温度调整）",
+                f"{execution_id}:process-specification", sequence, "process.specification.applied", execution_start, execution_id, context,
+                {"processSpecificationId": PROCESS_SPECIFICATION_ID, "processSpecificationVersion": process_specification_version,
+                 "processSpecificationName": "LENS-DEMO 基线模压配方" if process_specification_version == 1 else "LENS-DEMO 验证配方（上模温度调整）",
                  "resolvedParameters": parameters},
             ))
             sequence += 1
-            events.append(event(f"{cycle_id}:start", sequence, "cycle.started", cycle_start, cycle_id,
+            events.append(event(f"{execution_id}:start", sequence, "process.execution.started", execution_start, execution_id,
                                 {**context, "stage_number": "10", "process_stage_name": "预热"}))
             sequence += 1
             for seconds in range(0, 301, 10):
@@ -194,24 +194,24 @@ def build_replay(replay_id: str) -> tuple[list[dict[str, object]], list[dict[str
                 stage_number = "10" if step == "preheat" else "20" if step == "molding" else "30"
                 stage_name = {"preheat": "预热", "molding": "模压保压", "cooling": "冷却脱模"}[step]
                 events.append(event(
-                    f"{cycle_id}:sample:{seconds}", sequence, "process.sample",
-                    cycle_start + timedelta(seconds=seconds), cycle_id,
+                    f"{execution_id}:sample:{seconds}", sequence, "process.sample",
+                    execution_start + timedelta(seconds=seconds), execution_id,
                     {**context, "stage_number": stage_number, "process_stage_name": stage_name},
                     {"values": process_values(cohort, seconds)},
                 ))
                 sequence += 1
-            events.append(event(f"{cycle_id}:completed", sequence, "cycle.completed", cycle_end, cycle_id,
+            events.append(event(f"{execution_id}:completed", sequence, "process.execution.completed", execution_end, execution_id,
                                 {**context, "stage_number": "30", "process_stage_name": "冷却脱模"}))
             sequence += 1
             failed = cohort == "heater_drift"
             thickness = 0.026 if failed else (0.004 if cohort == "baseline" else 0.003)
             form_error = 0.23 if failed else (0.072 if cohort == "baseline" else 0.061)
             outcome = "FAIL" if failed else "PASS"
-            measured_at = cycle_end + timedelta(seconds=30)
+            measured_at = execution_end + timedelta(seconds=30)
             inspections.append({
-                "recordId": stable_uuid7(f"{cycle_id}:inspection", measured_at),
-                "workpieceId": workpiece_id,
-                "operationRunId": cycle_id,
+                "recordId": stable_uuid7(f"{execution_id}:inspection", measured_at),
+                "outputItemId": output_item_id,
+                "executionId": execution_id,
                 "definitionCode": "lens.molding.quality",
                 "definitionVersion": 1,
                 "measuredAt": iso(measured_at),
@@ -234,8 +234,8 @@ def build_replay(replay_id: str) -> tuple[list[dict[str, object]], list[dict[str
         "kind": "simulated-optical-lens-molding-replay",
         "replay_id": replay_id,
         "purpose": "UI and end-to-end workflow validation only; not a real process result.",
-        "cycles": 24,
-        "samples_per_cycle": 31,
+        "executions": 24,
+        "samples_per_execution": 31,
         "cohorts": {"baseline": 8, "heater_drift": 8, "verification": 8},
         "known_simulation_condition": (
             "For the heater_drift cohort, the v1 recipe readback remains unchanged while "

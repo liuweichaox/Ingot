@@ -27,7 +27,7 @@ public sealed record InspectionReview
 
     public required Guid InspectionRecordId { get; init; }
 
-    public required string OperationRunId { get; init; }
+    public required string ExecutionId { get; init; }
 
     public required string Decision { get; init; }
 
@@ -57,14 +57,14 @@ public sealed record InspectionAuditEntry
 
 public sealed record InspectionTask
 {
-    public string ScopeType { get; init; } = "production-cycle";
-    public required string OperationRunId { get; init; }
+    public string ScopeType { get; init; } = "production-execution";
+    public required string ExecutionId { get; init; }
 
-    public string? WorkpieceId { get; init; }
+    public string? OutputItemId { get; init; }
 
-    public required string MachineId { get; init; }
+    public required string EquipmentId { get; init; }
 
-    public required string ProductSeries { get; init; }
+    public required string ProductFamilyCode { get; init; }
 
     public required string InspectionPlanId { get; init; }
 
@@ -93,10 +93,10 @@ public sealed record InspectionScope
 {
     public required string ScopeId { get; init; }
     public string ScopeType { get; init; } = "analysis-window";
-    public required string WorkpieceId { get; init; }
+    public required string OutputItemId { get; init; }
     public string SubjectType { get; init; } = "equipment";
     public required string SubjectId { get; init; }
-    public required string ProductSeries { get; init; }
+    public required string ProductFamilyCode { get; init; }
     public required string InspectionPlanId { get; init; }
     public int InspectionPlanVersion { get; init; } = 1;
     public required DateTimeOffset From { get; init; }

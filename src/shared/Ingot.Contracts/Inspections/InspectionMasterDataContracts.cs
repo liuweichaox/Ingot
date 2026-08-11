@@ -59,10 +59,10 @@ public sealed record InspectionPlan
 
 public sealed record InspectionPlanScope
 {
-    public string? ProductSeries { get; init; }
+    public string? ProductFamilyCode { get; init; }
     public string? ProductCode { get; init; }
-    public string? RecipeId { get; init; }
-    public string? MachineId { get; init; }
+    public string? ProcessSpecificationId { get; init; }
+    public string? EquipmentId { get; init; }
     public IReadOnlyDictionary<string, string> ContextSelector { get; init; } = new Dictionary<string, string>();
 }
 
@@ -88,14 +88,14 @@ public sealed record PhaseDefinition
 public sealed record PhaseMapping
 {
     public required string MappingId { get; init; }
-    public required string RecipeId { get; init; }
-    public string? RecipeVersion { get; init; }
-    public string? RecipeTemplate { get; init; }
-    public required string RecipeStep { get; init; }
-    public string? RecipeStepName { get; init; }
+    public required string ProcessSpecificationId { get; init; }
+    public string? ProcessSpecification { get; init; }
+    public string? ProcessTemplate { get; init; }
+    public required string ProcessStep { get; init; }
+    public string? ProcessStepName { get; init; }
     public required string PhaseCode { get; init; }
     public bool Required { get; init; } = true;
-    public string PhaseSource { get; init; } = "recipe";
+    public string PhaseSource { get; init; } = "process-specification";
     public DateTimeOffset UpdatedAt { get; init; }
 }
 
@@ -108,10 +108,10 @@ public sealed record FeatureDefinition
     public required string Aggregation { get; init; }
     public string? BoundaryMode { get; init; }
     public string? Unit { get; init; }
-    public string? ProductSeries { get; init; }
+    public string? ProductFamilyCode { get; init; }
     public string? ProductCode { get; init; }
-    public string? RecipeId { get; init; }
-    public string? MachineId { get; init; }
+    public string? ProcessSpecificationId { get; init; }
+    public string? EquipmentId { get; init; }
     public bool Enabled { get; init; } = true;
     public bool UseInComparison { get; init; }
     public DateTimeOffset UpdatedAt { get; init; }

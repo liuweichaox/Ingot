@@ -32,11 +32,11 @@ public sealed class PostgresInspectionRecordStore : IInspectionRecordStore, IAsy
         await using var command = _dataSource.CreateCommand(
             """
             INSERT INTO inspection_records(
-              record_id, workpiece_id, operation_run_id, definition_code, definition_version,
+              record_id, output_item_id, execution_id, definition_code, definition_version,
               measured_at, recorded_at, outcome, submitted_by, submitter_verified, instrument,
               measurements, attachments, notes, supersedes_record_id, correction_reason, payload_hash)
             VALUES (
-              @record_id, @workpiece_id, @operation_run_id, @definition_code, @definition_version,
+              @record_id, @output_item_id, @execution_id, @definition_code, @definition_version,
               @measured_at, @recorded_at, @outcome, @submitted_by, @submitter_verified, @instrument,
               @measurements, @attachments, @notes, @supersedes_record_id, @correction_reason, @payload_hash)
             ON CONFLICT (record_id) DO NOTHING
@@ -136,8 +136,8 @@ public sealed class PostgresInspectionRecordStore : IInspectionRecordStore, IAsy
 
         await using var command = _dataSource.CreateCommand();
         var predicates = new List<string>();
-        AddEquality(command, predicates, "workpiece_id", "workpiece_id", query.WorkpieceId);
-        AddEquality(command, predicates, "operation_run_id", "operation_run_id", query.OperationRunId);
+        AddEquality(command, predicates, "output_item_id", "output_item_id", query.OutputItemId);
+        AddEquality(command, predicates, "execution_id", "execution_id", query.ExecutionId);
         AddEquality(command, predicates, "definition_code", "definition_code", query.DefinitionCode);
         AddEquality(command, predicates, "outcome", "outcome", query.Outcome?.ToUpperInvariant());
         if (query.From.HasValue)
@@ -175,8 +175,8 @@ public sealed class PostgresInspectionRecordStore : IInspectionRecordStore, IAsy
         await InitializeAsync(ct).ConfigureAwait(false);
         await using var countCommand = _dataSource.CreateCommand();
         var predicates = new List<string>();
-        AddEquality(countCommand, predicates, "workpiece_id", "workpiece_id", query.WorkpieceId);
-        AddEquality(countCommand, predicates, "operation_run_id", "operation_run_id", query.OperationRunId);
+        AddEquality(countCommand, predicates, "output_item_id", "output_item_id", query.OutputItemId);
+        AddEquality(countCommand, predicates, "execution_id", "execution_id", query.ExecutionId);
         AddEquality(countCommand, predicates, "definition_code", "definition_code", query.DefinitionCode);
         AddEquality(countCommand, predicates, "outcome", "outcome", query.Outcome?.ToUpperInvariant());
         if (query.From.HasValue)
@@ -202,12 +202,12 @@ public sealed class PostgresInspectionRecordStore : IInspectionRecordStore, IAsy
         };
     }
 
-    public async Task<IReadOnlyList<InspectionRecord>> QueryAllByOperationRunIdsAsync(
-        IReadOnlyCollection<string> operationRunIds,
+    public async Task<IReadOnlyList<InspectionRecord>> QueryAllByExecutionIdsAsync(
+        IReadOnlyCollection<string> executionIds,
         CancellationToken ct = default)
     {
-        ArgumentNullException.ThrowIfNull(operationRunIds);
-        var normalizedIds = operationRunIds
+        ArgumentNullException.ThrowIfNull(executionIds);
+        var normalizedIds = executionIds
             .Where(static value => !string.IsNullOrWhiteSpace(value))
             .Select(static value => value.Trim())
             .Distinct(StringComparer.Ordinal)
@@ -219,10 +219,10 @@ public sealed class PostgresInspectionRecordStore : IInspectionRecordStore, IAsy
         await using var command = _dataSource.CreateCommand(
             $"""
              {SelectColumns}
-             WHERE operation_run_id = ANY(@operation_run_ids)
+             WHERE execution_id = ANY(@execution_ids)
              ORDER BY measured_at DESC, record_id DESC;
              """);
-        command.Parameters.AddWithValue("operation_run_ids", normalizedIds);
+        command.Parameters.AddWithValue("execution_ids", normalizedIds);
         var records = new List<InspectionRecord>();
         await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
         while (await reader.ReadAsync(ct).ConfigureAwait(false))
@@ -255,10 +255,10 @@ public sealed class PostgresInspectionRecordStore : IInspectionRecordStore, IAsy
     {
         command.Parameters.AddWithValue("record_id", request.RecordId);
         command.Parameters.AddWithValue(
-            "workpiece_id",
+            "output_item_id",
             NpgsqlDbType.Text,
-            (object?)request.WorkpieceId ?? DBNull.Value);
-        command.Parameters.AddWithValue("operation_run_id", request.OperationRunId);
+            (object?)request.OutputItemId ?? DBNull.Value);
+        command.Parameters.AddWithValue("execution_id", request.ExecutionId);
         command.Parameters.AddWithValue("definition_code", request.DefinitionCode);
         command.Parameters.AddWithValue("definition_version", request.DefinitionVersion);
         command.Parameters.AddWithValue("measured_at", request.MeasuredAt.UtcDateTime);
@@ -299,8 +299,8 @@ public sealed class PostgresInspectionRecordStore : IInspectionRecordStore, IAsy
             new InspectionRecord
             {
                 RecordId = reader.GetGuid(0),
-                WorkpieceId = reader.IsDBNull(1) ? null : reader.GetString(1),
-                OperationRunId = reader.GetString(2),
+                OutputItemId = reader.IsDBNull(1) ? null : reader.GetString(1),
+                ExecutionId = reader.GetString(2),
                 DefinitionCode = reader.GetString(3),
                 DefinitionVersion = reader.GetInt32(4),
                 MeasuredAt = ToUtc(reader.GetDateTime(5)),
@@ -342,7 +342,7 @@ public sealed class PostgresInspectionRecordStore : IInspectionRecordStore, IAsy
     private sealed record StoredInspectionRecord(InspectionRecord Record, string PayloadHash);
 
     private const string SelectColumns = """
-        SELECT record_id, workpiece_id, operation_run_id, definition_code, definition_version,
+        SELECT record_id, output_item_id, execution_id, definition_code, definition_version,
                measured_at, recorded_at, ingested_at, outcome, submitted_by, submitter_verified,
                instrument::text, measurements::text, attachments::text, notes,
                supersedes_record_id, correction_reason, payload_hash

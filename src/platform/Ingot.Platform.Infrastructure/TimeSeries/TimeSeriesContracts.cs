@@ -20,7 +20,7 @@ public sealed record SignalSample
     public required string Source { get; init; }
     public required string SubjectType { get; init; }
     public required string SubjectId { get; init; }
-    public string? CorrelationId { get; init; }
+    public string? ExecutionId { get; init; }
     public string? PhaseCode { get; init; }
     public required string DataModelId { get; init; }
     public int DataModelVersion { get; init; }
@@ -44,7 +44,7 @@ public sealed record TimeSeriesQuery
 {
     public string? CollectionPointId { get; init; }
     public string? SignalCode { get; init; }
-    public string? CorrelationId { get; init; }
+    public string? ExecutionId { get; init; }
     public DateTimeOffset? From { get; init; }
     public DateTimeOffset? To { get; init; }
     public int Limit { get; init; } = 10_000;

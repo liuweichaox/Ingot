@@ -15,11 +15,11 @@ from bootstrap_demo import (
 from demo_contract import DATA_ITEMS, RECIPE_PARAMETERS, device_recipe_values
 from device_simulator import Fx3uRegisterBank, Fx3uServer, Simulator, handler, values
 from provision_data_source import build_payload
-from submit_quality import read_source_cycle_number
+from submit_quality import read_source_execution_number
 
 
 def test_sensor_and_recipe_contract_matches_reference_parameter_lists():
-    assert [item["sourceField"] for item in DATA_ITEMS] == [
+    assert [item["displayName"] for item in DATA_ITEMS] == [
         "阶段号",
         "上模红外温度",
         "上模电流",
@@ -35,7 +35,7 @@ def test_sensor_and_recipe_contract_matches_reference_parameter_lists():
         "上模功率",
         "下模功率",
     ]
-    assert [item["sourceField"] for item in RECIPE_PARAMETERS] == [
+    assert [item["displayName"] for item in RECIPE_PARAMETERS] == [
         "HEAT位置",
         "WORK位置",
         "HOST位置",
@@ -51,7 +51,7 @@ def test_sensor_and_recipe_contract_matches_reference_parameter_lists():
     ]
     assert len(data_model()["acquisition"]["dataItems"]) == 14
     assert "stages" not in data_model()
-    assert len(data_model()["recipeParameters"]) == 12
+    assert len(data_model()["controlParameters"]) == 12
     assert len(recipe(1)["values"]) == 12
 
 
@@ -93,28 +93,28 @@ def test_device_snapshot_and_acquisition_profile_cover_every_declared_field():
     assert profile["melsecA1E"]["dataCode"] == "binary"
     assert profile["melsecA1E"]["pcNumber"] == 255
     assert len(profile["valueMappings"]) == len(DATA_ITEMS)
-    assert len(profile["recipe"]["parameterMappings"]) == len(RECIPE_PARAMETERS)
+    assert len(profile["processSpecification"]["parameterMappings"]) == len(RECIPE_PARAMETERS)
     assert profile["valueMappings"][0]["sourcePath"] == "D:1:uint16"
     assert not any(
         item["contextKey"] == "stage_number"
         for item in profile["contextMappings"]
     )
-    assert "correlationIdContextKey" not in profile["lifecycle"]
+    assert "executionIdContextKey" not in profile["lifecycle"]
     assert not any(
-        item["contextKey"] == "correlation_id"
+        item["contextKey"] == "execution_id"
         for item in profile["contextMappings"]
     )
     assert any(
-        item["contextKey"] == "source_cycle_no" and item["sourcePath"] == "D:2:uint32"
+        item["contextKey"] == "source_execution_no" and item["sourcePath"] == "D:2:uint32"
         for item in profile["contextMappings"]
     )
     assert set(profile["staticContext"]) == {"demo_replay", "data_classification"}
     assert {
         "product_code": "D:30:string:20",
-        "product_series": "D:40:string:20",
-        "mold_id": "D:50:string:20",
+        "product_family_code": "D:40:string:20",
+        "tooling_assembly_id": "D:50:string:20",
         "material_lot_ref": "D:60:string:20",
-        "workpiece_id": "D:70:string:40",
+        "output_item_id": "D:70:string:40",
     }.items() <= {
         item["contextKey"]: item["sourcePath"]
         for item in profile["contextMappings"]
@@ -146,12 +146,12 @@ def test_acquisition_profile_can_identify_an_independent_second_device():
     assert profile["source"] == "connector/melsec-a1e/press-02"
 
 
-def test_device_can_offset_recipe_versions_for_a_new_data_model_generation():
+def test_device_can_offset_process_specification_versions_for_a_new_data_model_generation():
     simulator = Simulator(
-        cycle_seconds=60,
+        execution_seconds=60,
         run_prefix="stage-number",
         max_runs=1,
-        recipe_version_offset=2,
+        process_specification_version_offset=2,
     )
 
     assert simulator.snapshot()["activeRecipe"]["version"] == 3
@@ -181,25 +181,25 @@ def test_bootstrap_keeps_model_recipe_and_analysis_versions_aligned():
     }
 
 
-def test_quality_station_uses_source_cycle_context_not_operation_run_id_shape():
+def test_quality_station_uses_source_execution_context_not_execution_id_shape():
     detail = {
         "events": [
             {
                 "event": {
-                    "correlationId": "019fc719-a02f-7e19-8971-5c24033d7f69",
-                    "context": {"source_cycle_no": "12"},
+                    "executionId": "019fc719-a02f-7e19-8971-5c24033d7f69",
+                    "context": {"source_execution_no": "12"},
                 }
             }
         ]
     }
 
-    assert read_source_cycle_number(detail) == 12
+    assert read_source_execution_number(detail) == 12
 
 
-def test_fx3u_run_active_register_has_a_real_boundary_between_molding_cycles():
+def test_fx3u_run_active_register_has_a_real_boundary_between_molding_executions():
     simulator = Simulator(
-        cycle_seconds=8,
-        run_prefix="cycle-boundary",
+        execution_seconds=8,
+        run_prefix="execution-boundary",
         max_runs=2,
     )
 
@@ -217,7 +217,7 @@ def test_fx3u_run_active_register_has_a_real_boundary_between_molding_cycles():
 
 def test_fx3u_server_answers_mc_1e_binary_word_reads():
     simulator = Simulator(
-        cycle_seconds=60,
+        execution_seconds=60,
         run_prefix="fx3u",
         max_runs=1,
     )

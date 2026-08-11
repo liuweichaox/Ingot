@@ -45,7 +45,7 @@ export function InspectionsPage() {
   const [reviewLoading, setReviewLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState("");
-  const [form, setForm] = useState({ workpieceId: "", operationRunId: "", definitionKey: "", outcome: "PASS", notes: "", measurements: {}, file: null });
+  const [form, setForm] = useState({ outputItemId: "", executionId: "", definitionKey: "", outcome: "PASS", notes: "", measurements: {}, file: null });
   const [review, setReview] = useState({ decision: "CONFIRMED", notes: "" });
   const definitionRows = extractRows(definitions.data);
   const selectedDefinition = definitionRows.find(item => `${item.code}:${item.version}` === form.definitionKey);
@@ -58,7 +58,7 @@ export function InspectionsPage() {
     item => `${item.definitionCode}:${item.definitionVersion}` === form.definitionKey,
   )?.requiresAttachment);
   const entryReady = Boolean(
-    form.operationRunId.trim() && selectedDefinition &&
+    form.executionId.trim() && selectedDefinition &&
     measurementsComplete && (!requiresAttachment || form.file),
   );
   const availableDefinitions = taskTarget
@@ -69,8 +69,8 @@ export function InspectionsPage() {
     const firstDefinition = definitionRows.find(item => item.code === task?.missingDefinitionCodes?.[0]) || definitionRows[0];
     setTaskTarget(task);
     setForm({
-      workpieceId: task?.workpieceId || "",
-      operationRunId: task?.operationRunId || "",
+      outputItemId: task?.outputItemId || "",
+      executionId: task?.executionId || "",
       definitionKey: firstDefinition ? `${firstDefinition.code}:${firstDefinition.version}` : "",
       outcome: "PASS",
       notes: "",
@@ -135,8 +135,8 @@ export function InspectionsPage() {
       const now = new Date().toISOString();
       await postJson("/api/v1/inspection-records", {
         recordId: uuidv7(),
-        workpieceId: form.workpieceId.trim() || null,
-        operationRunId: form.operationRunId.trim(),
+        outputItemId: form.outputItemId.trim() || null,
+        executionId: form.executionId.trim(),
         definitionCode: selectedDefinition.code,
         definitionVersion: selectedDefinition.version,
         measuredAt: now,
@@ -241,10 +241,10 @@ export function InspectionsPage() {
             >
               <DataTable
                 rows={extractRows(tasks.data)}
-                getRowKey={row => `${row.operationRunId}:${row.inspectionPlanId}:${row.inspectionPlanVersion}`}
+                getRowKey={row => `${row.executionId}:${row.inspectionPlanId}:${row.inspectionPlanVersion}`}
                 columns={[
-                  { key: "operationRunId", label: "运行" },
-                  { key: "workpieceId", label: "工件" },
+                  { key: "executionId", label: "运行" },
+                  { key: "outputItemId", label: "工件" },
                   { key: "inspectionPlanName", label: "质量方案" },
                   { key: "status", label: "状态", render: value => <StatusBadge value={value} /> },
                   { key: "completedAt", label: "运行完成", render: formatTime },
@@ -273,7 +273,7 @@ export function InspectionsPage() {
                 rows={extractRows(records.data)}
                 keyField="recordId"
                 columns={[
-                  { key: "workpieceId", label: "工件" },
+                  { key: "outputItemId", label: "工件" },
                   { key: "definitionCode", label: "检测定义" },
                   { key: "outcome", label: "结果", render: value => <StatusBadge value={value} /> },
                   { key: "measuredAt", label: "检测时间", render: formatTime },
@@ -310,15 +310,15 @@ export function InspectionsPage() {
         <WorkflowGuide
           title="录入检测结果"
           steps={[
-            { title: "确认工件与运行", description: "从任务进入时已自动带入。", state: form.workpieceId && form.operationRunId ? "done" : "current" },
-            { title: "选择检测项目", description: "检测定义决定要填写的字段和判定规则。", state: selectedDefinition ? "done" : form.workpieceId && form.operationRunId ? "current" : "upcoming" },
+            { title: "确认工件与运行", description: "从任务进入时已自动带入。", state: form.outputItemId && form.executionId ? "done" : "current" },
+            { title: "选择检测项目", description: "检测定义决定要填写的字段和判定规则。", state: selectedDefinition ? "done" : form.outputItemId && form.executionId ? "current" : "upcoming" },
             { title: "填写结果并提交", description: "完成必填项，按需要上传原始附件。", state: entryReady ? "current" : "upcoming" },
           ]}
         />
         <form id="inspection-entry" className="grid gap-5" onSubmit={submitRecord}>
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="工件编号"><Input required value={form.workpieceId} readOnly={Boolean(taskTarget)} onChange={event => setForm({ ...form, workpieceId: event.target.value })} /></Field>
-            <Field label="运行编号"><Input required value={form.operationRunId} readOnly={Boolean(taskTarget)} onChange={event => setForm({ ...form, operationRunId: event.target.value })} /></Field>
+            <Field label="工件编号"><Input required value={form.outputItemId} readOnly={Boolean(taskTarget)} onChange={event => setForm({ ...form, outputItemId: event.target.value })} /></Field>
+            <Field label="运行编号"><Input required value={form.executionId} readOnly={Boolean(taskTarget)} onChange={event => setForm({ ...form, executionId: event.target.value })} /></Field>
           </div>
           <Field label="检测定义">
             <Select required value={form.definitionKey} onChange={event => setForm({ ...form, definitionKey: event.target.value, measurements: {} })}>
@@ -381,8 +381,8 @@ export function InspectionsPage() {
             </div>
             <Card title="检测对象">
               <div className="grid gap-3 text-sm sm:grid-cols-2">
-                <p><span className="text-slate-500">工件：</span>{reviewTarget.workpieceId}</p>
-                <p><span className="text-slate-500">运行：</span>{reviewTarget.operationRunId}</p>
+                <p><span className="text-slate-500">工件：</span>{reviewTarget.outputItemId}</p>
+                <p><span className="text-slate-500">运行：</span>{reviewTarget.executionId}</p>
                 <p><span className="text-slate-500">检测定义：</span>{reviewTarget.definitionCode} · v{reviewTarget.definitionVersion}</p>
                 <p><span className="text-slate-500">记录时间：</span>{formatTime(reviewTarget.recordedAt)}</p>
               </div>
@@ -476,7 +476,7 @@ function evaluateMeasurement(value, characteristic) {
 export function QualityAnalysisPage() {
   const [searchParams] = useSearchParams();
   const [filters, setFilters] = useState({
-    productSeries: "",
+    productFamilyCode: "",
     subjectType: searchParams.get("subjectType") || "",
     subjectId: searchParams.get("subjectId") || "",
   });
@@ -496,8 +496,8 @@ export function QualityAnalysisPage() {
     result.attachments += Number(row.attachmentCount || 0);
     return result;
   }, { pass: 0, fail: 0, inconclusive: 0, attachments: 0 });
-  const productGroups = groupQuality(records, row => row.productSeries || "未关联产品系列");
-  const recipeGroups = groupQuality(records, row => [row.recipeId, row.recipeVersion ? `v${row.recipeVersion}` : ""].filter(Boolean).join(" · ") || "未关联配方");
+  const productGroups = groupQuality(records, row => row.productFamilyCode || "未关联产品系列");
+  const processSpecificationGroups = groupQuality(records, row => [row.processSpecificationId, row.processSpecificationVersion ? `v${row.processSpecificationVersion}` : ""].filter(Boolean).join(" · ") || "未关联工艺规范");
   const chartLayout = useMemo(() => ({
     barmode: "stack",
     hovermode: "x unified",
@@ -513,10 +513,10 @@ export function QualityAnalysisPage() {
   }
 
   return (
-    <Page title="质量偏差分析" description="按产品、配方和生产上下文识别质量偏差，并追溯到运行证据。">
+    <Page title="质量偏差分析" description="按产品、工艺规范和生产上下文识别质量偏差，并追溯到运行证据。">
       <Card title="分析范围">
         <form className="grid gap-3 md:grid-cols-[1fr_1fr_1fr_auto]" onSubmit={search}>
-          <Field label="产品系列"><Input value={filters.productSeries} onChange={event => setFilters({ ...filters, productSeries: event.target.value })} /></Field>
+          <Field label="产品系列"><Input value={filters.productFamilyCode} onChange={event => setFilters({ ...filters, productFamilyCode: event.target.value })} /></Field>
           <Field label="对象类型"><Input value={filters.subjectType} onChange={event => setFilters({ ...filters, subjectType: event.target.value })} /></Field>
           <Field label="对象 ID"><Input value={filters.subjectId} onChange={event => setFilters({ ...filters, subjectId: event.target.value })} /></Field>
           <Button className="self-end" variant="primary" type="submit"><MagnifyingGlassIcon className="size-4" />分析</Button>
@@ -540,10 +540,10 @@ export function QualityAnalysisPage() {
                 { key: "pass", label: "合格" }, { key: "fail", label: "不合格" },
               ]} />
             </Card>
-            <Card title="按配方版本">
-              <PlotlyChart traces={qualityOutcomeTraces(recipeGroups.slice(0, 12))} layout={chartLayout} height={300} />
-              <DataTable rows={recipeGroups} keyField="name" columns={[
-                { key: "name", label: "配方" }, { key: "total", label: "检测" },
+            <Card title="按工艺规范版本">
+              <PlotlyChart traces={qualityOutcomeTraces(processSpecificationGroups.slice(0, 12))} layout={chartLayout} height={300} />
+              <DataTable rows={processSpecificationGroups} keyField="name" columns={[
+                { key: "name", label: "工艺规范" }, { key: "total", label: "检测" },
                 { key: "pass", label: "合格" }, { key: "fail", label: "不合格" },
               ]} />
             </Card>

@@ -5,7 +5,7 @@ React/Vite workbench for process engineers. It presents one evidence chain from 
 The visible domains are:
 
 - Global overview;
-- Cycles;
+- ProcessExecutions;
 - Manufacturing context;
 - Inspections;
 - Process R&D;

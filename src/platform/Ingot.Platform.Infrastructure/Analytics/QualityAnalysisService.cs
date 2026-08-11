@@ -18,14 +18,14 @@ public sealed class QualityAnalysisService(
         var scopes = (await inspections.ListScopesAsync(ct).ConfigureAwait(false))
             .ToDictionary(static scope => scope.ScopeId, StringComparer.Ordinal);
         var operationIds = records
-            .Select(static record => record.OperationRunId)
+            .Select(static record => record.ExecutionId)
             .Where(id => !scopes.ContainsKey(id))
             .Distinct(StringComparer.Ordinal)
             .ToArray();
-        var operationEvents = await events.QueryByCorrelationIdsAsync(operationIds, ct).ConfigureAwait(false);
+        var operationEvents = await events.QueryByExecutionIdsAsync(operationIds, ct).ConfigureAwait(false);
         var eventsByOperation = operationEvents
-            .Where(static row => !string.IsNullOrWhiteSpace(row.Event.CorrelationId))
-            .GroupBy(static row => row.Event.CorrelationId!, StringComparer.Ordinal)
+            .Where(static row => !string.IsNullOrWhiteSpace(row.Event.ExecutionId))
+            .GroupBy(static row => row.Event.ExecutionId!, StringComparer.Ordinal)
             .ToDictionary(
                 static group => group.Key,
                 static group => (IReadOnlyList<PlatformProductionEvent>)group.ToArray(),
@@ -34,8 +34,8 @@ public sealed class QualityAnalysisService(
         var rows = records
             .Select(record => BuildRow(
                 record,
-                scopes.GetValueOrDefault(record.OperationRunId),
-                eventsByOperation.GetValueOrDefault(record.OperationRunId, [])))
+                scopes.GetValueOrDefault(record.ExecutionId),
+                eventsByOperation.GetValueOrDefault(record.ExecutionId, [])))
             .Where(row => Matches(row, query))
             .OrderByDescending(static row => row.MeasuredAt)
             .ThenBy(static row => row.RecordId)
@@ -86,11 +86,11 @@ public sealed class QualityAnalysisService(
                 AnalysisScopeType = scope.ScopeType,
                 SubjectType = scope.SubjectType,
                 SubjectId = scope.SubjectId,
-                QualityObjectId = record.WorkpieceId ?? record.OperationRunId,
-                ProductSeries = scope.ProductSeries,
+                QualityObjectId = record.OutputItemId ?? record.ExecutionId,
+                ProductFamilyCode = scope.ProductFamilyCode,
                 ProductCode = Read(scope.Context, "product_code"),
-                RecipeId = Read(scope.Context, "recipe_id"),
-                RecipeVersion = Read(scope.Context, "recipe_version"),
+                ProcessSpecificationId = Read(scope.Context, "process_specification_id"),
+                ProcessSpecification = Read(scope.Context, "process_specification_version"),
                 DefinitionCode = record.DefinitionCode,
                 DefinitionVersion = record.DefinitionVersion,
                 ScopeFrom = scope.From,
@@ -115,15 +115,15 @@ public sealed class QualityAnalysisService(
         return new QualityAnalysisRecord
         {
             RecordId = record.RecordId,
-            AnalysisScopeId = record.OperationRunId,
+            AnalysisScopeId = record.ExecutionId,
             AnalysisScopeType = ResolveScopeType(ordered),
             SubjectType = first?.Event.Subject.Type ?? "operation",
-            SubjectId = first?.Event.Subject.Id ?? record.OperationRunId,
-            QualityObjectId = record.WorkpieceId ?? record.OperationRunId,
-            ProductSeries = Read(context, "product_series"),
+            SubjectId = first?.Event.Subject.Id ?? record.ExecutionId,
+            QualityObjectId = record.OutputItemId ?? record.ExecutionId,
+            ProductFamilyCode = Read(context, "product_family_code"),
             ProductCode = Read(context, "product_code"),
-            RecipeId = Read(context, "recipe_id"),
-            RecipeVersion = Read(context, "recipe_version"),
+            ProcessSpecificationId = Read(context, "process_specification_id"),
+            ProcessSpecification = Read(context, "process_specification_version"),
             DefinitionCode = record.DefinitionCode,
             DefinitionVersion = record.DefinitionVersion,
             ScopeFrom = first?.Event.OccurredAt,
@@ -143,14 +143,14 @@ public sealed class QualityAnalysisService(
             .FirstOrDefault(static type => type.EndsWith(".started", StringComparison.Ordinal));
         return startedType switch
         {
-            "cycle.started" => "production-cycle",
+            "process.execution.started" => "production-execution",
             "run.started" => "production-run",
             _ => "operation-run"
         };
     }
 
     private static bool Matches(QualityAnalysisRecord row, QualityAnalysisQuery query)
-        => MatchesText(row.ProductSeries, query.ProductSeries)
+        => MatchesText(row.ProductFamilyCode, query.ProductFamilyCode)
            && MatchesText(row.SubjectType, query.SubjectType)
            && MatchesText(row.SubjectId, query.SubjectId)
            && MatchesText(row.Outcome, query.Outcome);

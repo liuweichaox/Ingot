@@ -3,7 +3,7 @@ using Ingot.Contracts.Analytics;
 using Ingot.Contracts.Events;
 using Ingot.Domain.Events;
 using Ingot.Platform.Infrastructure.Analytics;
-using Ingot.Platform.Infrastructure.Cycles;
+using Ingot.Platform.Infrastructure.ProcessExecutions;
 using Ingot.Platform.Infrastructure.Events;
 using Xunit;
 
@@ -20,11 +20,11 @@ public sealed class DataReliabilityBaselineServiceTests
             Completed(1, "RUN-GOOD", now.AddMinutes(-2)),
             Completed(2, "RUN-BAD", now.AddMinutes(-1))
         };
-        var good = new CycleComparisonRow
+        var good = new ExecutionComparisonRow
         {
-            CorrelationId = "RUN-GOOD",
-            MachineId = "PRESS-01",
-            ProductSeries = "lens",
+            ExecutionId = "RUN-GOOD",
+            EquipmentId = "PRESS-01",
+            ProductFamilyCode = "lens",
             StartedAt = now.AddMinutes(-3),
             CompletedAt = now.AddMinutes(-2),
             HasStarted = true,
@@ -34,7 +34,7 @@ public sealed class DataReliabilityBaselineServiceTests
             {
                 ["context_capture_status"] = "resolved",
                 ["equipment_id"] = "PRESS-01",
-                ["operation_run_id"] = "RUN-GOOD",
+                ["execution_id"] = "RUN-GOOD",
                 ["material_lot"] = "LOT-01"
             },
             ProcessDataQuality = new ProcessDataQualitySummary
@@ -47,9 +47,9 @@ public sealed class DataReliabilityBaselineServiceTests
                 MaximumPlatformIngestLatencyMs = 1500,
                 NegativePlatformIngestLatencyCount = 1
             },
-            RecipeParameters =
+            ControlParameters =
             [
-                new CycleRecipeParameter
+                new ExecutionControlParameterValue
                 {
                     Code = "temperature.actual",
                     Unit = "Cel",
@@ -58,11 +58,11 @@ public sealed class DataReliabilityBaselineServiceTests
             ],
             InspectionOutcomes = ["PASS"]
         };
-        var bad = new CycleComparisonRow
+        var bad = new ExecutionComparisonRow
         {
-            CorrelationId = "RUN-BAD",
-            MachineId = "PRESS-02",
-            ProductSeries = "lens",
+            ExecutionId = "RUN-BAD",
+            EquipmentId = "PRESS-02",
+            ProductFamilyCode = "lens",
             StartedAt = now.AddMinutes(-1),
             HasCompleted = true,
             Context = new Dictionary<string, string>
@@ -78,10 +78,10 @@ public sealed class DataReliabilityBaselineServiceTests
         };
         var service = new DataReliabilityBaselineService(
             new FakeEventStore(completed),
-            new FakeCycleService(new Dictionary<string, CycleComparisonRow>
+            new FakeProcessExecutionService(new Dictionary<string, ExecutionComparisonRow>
             {
-                [good.CorrelationId] = good,
-                [bad.CorrelationId] = bad
+                [good.ExecutionId] = good,
+                [bad.ExecutionId] = bad
             }));
 
         var baseline = await service.CalculateAsync(new DataReliabilityBaselineQuery());
@@ -102,7 +102,7 @@ public sealed class DataReliabilityBaselineServiceTests
         Assert.Equal(1, baseline.NegativePlatformIngestLatencyCount);
         Assert.Equal(0.5, Assert.Single(
             baseline.ContextFields,
-            item => item.Field == "operation_run_id").Coverage);
+            item => item.Field == "execution_id").Coverage);
         Assert.Equal(0.5, Assert.Single(
             baseline.ContextFields,
             item => item.Field == "material_lot_ref").Coverage);
@@ -111,7 +111,7 @@ public sealed class DataReliabilityBaselineServiceTests
         Assert.Contains(baseline.Exclusions, item =>
             item.Code == "context_capture_invalid" && item.RunCount == 1);
         Assert.Contains(
-            "不使用配方计划值",
+            "不使用工艺规范计划值",
             Assert.Single(baseline.Rates, item => item.Code == "actual_parameter_coverage").Definition);
     }
 
@@ -127,24 +127,24 @@ public sealed class DataReliabilityBaselineServiceTests
             FactorRow("RUN-4", "PRESS-2", "TOOL-2", "LOT-2", "PASS", now.AddMinutes(-1))
         };
         var completed = rows.Select((row, index) =>
-            Completed(index + 1, row.CorrelationId, row.CompletedAt!.Value)).ToArray();
+            Completed(index + 1, row.ExecutionId, row.CompletedAt!.Value)).ToArray();
         var service = new DataReliabilityBaselineService(
             new FakeEventStore(completed),
-            new FakeCycleService(rows.ToDictionary(static row => row.CorrelationId)));
+            new FakeProcessExecutionService(rows.ToDictionary(static row => row.ExecutionId)));
 
         var baseline = await service.CalculateAsync(new DataReliabilityBaselineQuery());
 
         var equipment = Assert.Single(baseline.ContextFactors, item => item.Field == "equipment_id");
         Assert.Equal(2, equipment.DistinctLevelCount);
         Assert.All(equipment.Levels, static level => Assert.Equal(2, level.RunCount));
-        var tooling = Assert.Single(baseline.ContextFactors, item => item.Field == "tooling_id");
+        var tooling = Assert.Single(baseline.ContextFactors, item => item.Field == "tooling_assembly_id");
         Assert.All(tooling.Levels, static level =>
         {
             Assert.Equal(1, level.PassRunCount);
             Assert.Equal(1, level.FailRunCount);
         });
         var equipmentTooling = Assert.Single(baseline.ContextFactorOverlaps, item =>
-            item.LeftField == "equipment_id" && item.RightField == "tooling_id");
+            item.LeftField == "equipment_id" && item.RightField == "tooling_assembly_id");
         Assert.Equal("overlapping", equipmentTooling.Identifiability);
         Assert.Equal(1, equipmentTooling.OverlapRate);
         var equipmentMaterial = Assert.Single(baseline.ContextFactorOverlaps, item =>
@@ -157,35 +157,35 @@ public sealed class DataReliabilityBaselineServiceTests
     private static double? Rate(DataReliabilityBaseline value, string code)
         => Assert.Single(value.Rates, item => item.Code == code).Rate;
 
-    private static PlatformProductionEvent Completed(long ingestId, string correlationId, DateTimeOffset at)
+    private static PlatformProductionEvent Completed(long ingestId, string executionId, DateTimeOffset at)
         => new()
         {
             IngestId = ingestId,
             EdgeId = "EDGE-001",
             IngestedAt = at,
             Event = ProductionEvent.Create(
-                "cycle.completed",
+                "process.execution.completed",
                 at,
                 "edge/EDGE-001/equipment/PRESS-01",
                 new ObjectRef("equipment", "PRESS-01"),
-                correlationId) with
+                executionId) with
             {
                 Seq = ingestId
             }
         };
 
-    private static CycleComparisonRow FactorRow(
-        string correlationId,
+    private static ExecutionComparisonRow FactorRow(
+        string executionId,
         string equipmentId,
-        string toolingId,
+        string toolingAssemblyId,
         string materialLot,
         string outcome,
         DateTimeOffset completedAt)
         => new()
         {
-            CorrelationId = correlationId,
-            MachineId = equipmentId,
-            ProductSeries = "demo",
+            ExecutionId = executionId,
+            EquipmentId = equipmentId,
+            ProductFamilyCode = "demo",
             StartedAt = completedAt.AddMinutes(-1),
             CompletedAt = completedAt,
             HasStarted = true,
@@ -194,8 +194,8 @@ public sealed class DataReliabilityBaselineServiceTests
             Context = new Dictionary<string, string>
             {
                 ["equipment_id"] = equipmentId,
-                ["operation_run_id"] = correlationId,
-                ["tooling_id"] = toolingId,
+                ["execution_id"] = executionId,
+                ["tooling_assembly_id"] = toolingAssemblyId,
                 ["material_lot_ref"] = materialLot
             },
             ProcessDataQuality = new ProcessDataQualitySummary
@@ -206,28 +206,28 @@ public sealed class DataReliabilityBaselineServiceTests
             InspectionOutcomes = [outcome]
         };
 
-    private sealed class FakeCycleService(
-        IReadOnlyDictionary<string, CycleComparisonRow> rows) : ICycleComparisonService
+    private sealed class FakeProcessExecutionService(
+        IReadOnlyDictionary<string, ExecutionComparisonRow> rows) : IExecutionComparisonService
     {
-        public Task<CycleComparisonRow?> GetCycleAsync(string correlationId, CancellationToken ct = default)
-            => Task.FromResult(rows.GetValueOrDefault(correlationId));
+        public Task<ExecutionComparisonRow?> GetProcessExecutionAsync(string executionId, CancellationToken ct = default)
+            => Task.FromResult(rows.GetValueOrDefault(executionId));
 
-        public Task<IReadOnlyDictionary<string, CycleComparisonRow>> GetCyclesAsync(
-            IReadOnlyCollection<string> correlationIds,
+        public Task<IReadOnlyDictionary<string, ExecutionComparisonRow>> GetProcessExecutionsAsync(
+            IReadOnlyCollection<string> executionIds,
             CancellationToken ct = default)
-            => Task.FromResult<IReadOnlyDictionary<string, CycleComparisonRow>>(
-                correlationIds.Where(rows.ContainsKey)
+            => Task.FromResult<IReadOnlyDictionary<string, ExecutionComparisonRow>>(
+                executionIds.Where(rows.ContainsKey)
                     .ToDictionary(id => id, id => rows[id], StringComparer.Ordinal));
 
-        public Task<CycleComparisonResult?> CompareWithHistoryAsync(
-            string correlationId,
+        public Task<ExecutionComparisonResult?> CompareWithHistoryAsync(
+            string executionId,
             int limit,
             CancellationToken ct = default)
             => throw new NotSupportedException();
 
-        public Task<CycleComparisonResult?> CompareSelectedAsync(
-            string baselineCycleId,
-            IReadOnlyList<string> cycleIds,
+        public Task<ExecutionComparisonResult?> CompareSelectedAsync(
+            string baselineProcessExecutionId,
+            IReadOnlyList<string> executionIds,
             CancellationToken ct = default)
             => throw new NotSupportedException();
     }

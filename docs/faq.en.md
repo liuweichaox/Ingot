@@ -18,9 +18,9 @@ No. The system organizes facts, executes calculations, exposes uncertainty, and 
 
 History usually supports candidate causes, stable associations, confounded associations, or insufficient evidence. A definitive cause requires engineering judgment and appropriate controls, repetition, blocking, randomization, or intervention. Ingot narrows the field and designs validation without presenting correlation as causation.
 
-## Why are Manufacturing, Cycles, and Inspections necessary?
+## Why are Manufacturing, Process Executions, and Inspections necessary?
 
-Cycles define a real run, Manufacturing preserves its equipment, product, recipe, material, and tooling conditions, and Inspections preserve outcomes. Without any one of them, a computer may combine runs produced under different conditions.
+Process Executions define a real run, Manufacturing preserves its equipment, product, process specification, material, and tooling conditions, and Inspections preserve outcomes. Without any one of them, a computer may combine runs produced under different conditions.
 
 ## Why are planned settings insufficient?
 
@@ -28,7 +28,7 @@ Equipment may limit, bias, or dynamically deviate from a plan, and operators may
 
 ## Why do process trajectories matter?
 
-The same setting may produce different heating rates, overshoot, pressure hold, position, or cooling trajectories. Quality depends on the realized process, not only the recipe table. Stage features help engineers locate where deviation began.
+The same setting may produce different heating rates, overshoot, pressure hold, position, or cooling trajectories. Quality depends on the realized process, not only the process specification table. Stage features help engineers locate where deviation began.
 
 ## Why record material, tooling, and equipment context?
 
@@ -40,7 +40,7 @@ The most effective method depends on the question and data. Simple comparison, r
 
 ## What does the LLM do?
 
-It understands questions, calls authorized tools, organizes records, and explains results. It does not generate numerical recipes directly, replace statistics, constraints, or experimental validation, or invent facts without sources.
+It understands questions, calls authorized tools, organizes records, and explains results. It does not generate numerical process settings directly, replace statistics, constraints, or experimental validation, or invent facts without sources.
 
 ## When is Bayesian optimization appropriate?
 
@@ -48,7 +48,7 @@ It is useful when experiments are expensive, responses noisy, controlled dimensi
 
 ## How can a project start with little data?
 
-Establish a safe baseline and a small set of informative initial experiments. Engineering knowledge, classical DOE, space filling, or exploration in an approved safe region may apply. Never let an algorithm guess arbitrary recipes without safety evidence.
+Establish a safe baseline and a small set of informative initial experiments. Engineering knowledge, classical DOE, space filling, or exploration in an approved safe region may apply. Never let an algorithm guess arbitrary process specifications without safety evidence.
 
 ## Can the system recommend a batch of experiments?
 
@@ -56,11 +56,11 @@ Yes, when parallel equipment or batch efficiency justifies it, while incomplete 
 
 ## Are recommendations written automatically to controls?
 
-Not by default. A recommendation becomes a formal experiment, reviewed by an engineer and executed manually or through an MES, recipe system, or controlled integration. Equipment interlocks and field safety remain independent of the model.
+Not by default. A recommendation becomes a formal experiment, reviewed by an engineer and executed manually or through an MES, process-specification management system, or controlled integration. Equipment interlocks and field safety remain independent of the model.
 
 ## Does an Optimizer or model-service outage stop acquisition?
 
-No. Edge, Platform, cycles, and inspections continue; only new recommendations or natural-language explanations depending on that service pause.
+No. Edge, Platform, process executions, and inspections continue; only new recommendations or natural-language explanations depending on that service pause.
 
 ## Why do examples use optical-lens molding and FX3U?
 

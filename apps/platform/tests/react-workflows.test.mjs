@@ -16,7 +16,7 @@ const goldenQuestions = await readFile(new URL("../src/pages/GoldenQuestionsPage
 
 test("operations retain server pagination and resumable live events", () => {
   assert.match(pages, /offset: String\(\(page - 1\) \* pageSize\)/);
-  assert.match(pages, /makeCycleQuery\(appliedFilters, value, pageSize\)/);
+  assert.match(pages, /makeProcessExecutionQuery\(appliedFilters, value, pageSize\)/);
   assert.match(pages, /makeEventQuery\(appliedFilters, value, pageSize\)/);
   assert.match(pages, /Object\.entries\(appliedFilters\)/);
   assert.match(pages, /afterIngestId/);
@@ -24,10 +24,10 @@ test("operations retain server pagination and resumable live events", () => {
   assert.match(pages, /<Pagination/);
   assert.doesNotMatch(pages, /加载更早记录|beforeIngestId/);
   assert.match(pages, /\{ key: "completedAt", label: "结束"/);
-  assert.match(pages, /navigate\(`\/cycles\/\$\{encodeURIComponent\(row\.correlationId\)\}`\)/);
-  assert.match(pages, /export function CycleDetailPage/);
+  assert.match(pages, /navigate\(`\/process-executions\/\$\{encodeURIComponent\(row\.executionId\)\}`\)/);
+  assert.match(pages, /export function ProcessExecutionDetailPage/);
   assert.match(pages, /processDataQuality/);
-  assert.match(pages, /operationRunId=\$\{encodedId\}/);
+  assert.match(pages, /executionId=\$\{encodedId\}/);
   assert.match(pages, /历史对比/);
 });
 
@@ -52,12 +52,12 @@ test("data health exposes reproducible reliability baselines and strict admissio
   assert.match(pages, /externalBatchRef/);
   assert.match(pages, /多个设备填写相同生产批次/);
   assert.match(researchProjects, /可跨节点多选/);
-  assert.match(researchProjects, /cycle\.edgeIds/);
+  assert.match(researchProjects, /execution\.edgeIds/);
 });
 
 test("configuration registries keep create, version, retire, and draft deletion workflows", () => {
   for (const endpoint of [
-    "/api/v1/process-data-models", "/api/v1/recipe-versions",
+    "/api/v1/process-data-models", "/api/v1/process-specifications",
     "/api/v1/process-analysis-plans", "/api/v1/inspection-definitions",
     "/api/v1/inspection-plans", "/api/v1/acquisition-profiles",
   ]) {
@@ -112,17 +112,17 @@ test("edge pages use the registry heartbeat contract for status", () => {
   assert.match(pages, /数据源交付情况/);
   assert.match(pages, /从设备数据到工艺证据/);
   assert.match(pages, /\/api\/v1\/acquisition-profiles/);
-  assert.match(pages, /配方参数回读/);
-  assert.match(pages, /周期边界映射/);
+  assert.match(pages, /控制参数回读/);
+  assert.match(pages, /过程执行边界映射/);
   assert.match(pages, /节点诊断日志/);
   assert.match(pages, /数据源尚未具备工艺闭环条件/);
 });
 
 test("workbench and logs use current response contracts without misleading placeholders", () => {
-  assert.match(pages, /\/api\/v1\/cycles\?limit=8/);
+  assert.match(pages, /\/api\/v1\/process-executions\?limit=8/);
   assert.match(pages, /\/api\/v1\/research-projects\?limit=100/);
   assert.match(pages, /从现场问题进入可验证决策/);
-  assert.match(pages, /cycleOverview: cycles\.overview/);
+  assert.match(pages, /executionOverview: executions\.overview/);
   assert.match(pages, /state\.loading \? <LoadingCard \/>/);
   assert.match(pages, /logs\?pageSize=200/);
   assert.match(pages, /\{ key: "source", label: "来源"/);
@@ -130,7 +130,7 @@ test("workbench and logs use current response contracts without misleading place
   assert.match(ui, /not_applicable: "无需质检"/);
 });
 
-test("cycle comparison submits the selection contract and renders business results", () => {
+test("execution comparison submits the selection contract and renders business results", () => {
   assert.match(pages, /new URLSearchParams\(\{ status: "completed", limit: "200" \}\)/);
   assert.match(pages, /query\.set\("search", search\)/);
   assert.match(pages, /exploratory: "探索性证据"/);
@@ -138,9 +138,9 @@ test("cycle comparison submits the selection contract and renders business resul
   assert.match(pages, /label="对比范围"/);
   assert.match(pages, /label="对比运行"/);
   assert.match(pages, /comparisonScope === "cohort"/);
-  assert.match(pages, /cycle-comparisons\/\$\{encodeURIComponent\(baselineCycleId\)\}\?limit=24/);
-  assert.match(pages, /cycleIds: \[baselineCycleId, candidate\]/);
-  assert.match(pages, /correlationId=\$\{encodeURIComponent\(baseline\)\}&limit=1/);
+  assert.match(pages, /execution-comparisons\/\$\{encodeURIComponent\(baselineProcessExecutionId\)\}\?limit=24/);
+  assert.match(pages, /executionIds: \[baselineProcessExecutionId, candidate\]/);
+  assert.match(pages, /executionId=\$\{encodeURIComponent\(baseline\)\}&limit=1/);
   assert.match(pages, /title="运行概况"/);
   assert.match(pages, /title="质量候选原因"/);
   assert.match(pages, /title="确定性调查报告"/);
@@ -148,26 +148,26 @@ test("cycle comparison submits the selection contract and renders business resul
   assert.match(pages, /反证与边界/);
   assert.match(pages, /下一步验证实验/);
   assert.match(pages, /result\?\.diagnosis\?\.candidates/);
-  assert.match(pages, /实际配方/);
+  assert.match(pages, /实际工艺规范/);
   assert.match(pages, /可直接实验/);
   assert.match(pages, /诊断边界/);
   assert.match(pages, /title="信号差异"/);
   assert.match(pages, /label="运行完整"/);
   assert.match(pages, /同时具有生产开始与结束事件/);
-  assert.match(pages, /key: "lifecycleComplete", label: "周期边界"/);
-  assert.doesNotMatch(pages, /label="阶段完整"|phaseCompleteCycleCount/);
+  assert.match(pages, /key: "lifecycleComplete", label: "过程执行边界"/);
+  assert.doesNotMatch(pages, /label="阶段完整"|phaseCompleteProcessExecutionCount/);
   assert.doesNotMatch(pages, /JSON\.stringify\(result, null, 2\)/);
 });
 
-test("cycle detail presents actual recipe, source curves, phase features, and inspection measurements", () => {
-  assert.match(pages, /\/api\/v1\/cycles\/\$\{encodedId\}\/analysis/);
-  assert.match(pages, /title="实际执行配方"/);
+test("execution detail presents actual processSpecification, source curves, phase features, and inspection measurements", () => {
+  assert.match(pages, /\/api\/v1\/process-executions\/\$\{encodedId\}\/analysis/);
+  assert.match(pages, /title="实际执行工艺规范"/);
   assert.match(pages, /title="全过程曲线"/);
   assert.match(pages, /processSignalTraces\(chartRun, samplesByRun, signal\.code\)/);
   assert.match(pages, /title="阶段特征"/);
   assert.match(pages, /阶段号用于过程对齐，不参与运行完整性判定/);
-  assert.match(pages, /cycle\.lifecycleComplete/);
-  assert.doesNotMatch(pages, /cycle\.phaseComplete|key: "isComplete", label: "状态"/);
+  assert.match(pages, /execution\.lifecycleComplete/);
+  assert.doesNotMatch(pages, /execution\.phaseComplete|key: "isComplete", label: "状态"/);
   assert.match(pages, /keyField="recordId"/);
   assert.match(pages, /\{ key: "outcome", label: "判定"/);
   assert.match(pages, /测量值与规格/);
@@ -181,7 +181,7 @@ test("mechanism assets are presented as business fields instead of raw JSON", ()
   assert.doesNotMatch(researchAssets, /JSON\.stringify|JSON\.parse/);
 });
 
-test("research projects expose the evidence-backed experiment and process-window workflow", () => {
+test("research projects expose the evidence-backed experiment and operating-region workflow", () => {
   assert.match(researchProjects, /project-definition/);
   assert.match(researchProjects, /project-validation/);
   assert.match(researchProjects, /返回项目列表/);
@@ -189,7 +189,7 @@ test("research projects expose the evidence-backed experiment and process-window
   assert.match(researchProjects, /设计验证实验/);
   assert.match(researchProjects, /导入历史运行/);
   assert.match(researchProjects, /experiments\/import-history/);
-  assert.match(researchProjects, /实际配方回读、过程特征和检验记录/);
+  assert.match(researchProjects, /实际控制参数回读、过程特征和检验记录/);
   assert.match(researchProjects, /materialize-result/);
   assert.match(researchProjects, /立即检查数据回收/);
   assert.match(researchProjects, /采集和检验齐全后自动完成/);
@@ -199,7 +199,7 @@ test("research projects expose the evidence-backed experiment and process-window
   assert.match(researchProjects, /design-validation/);
   assert.match(researchProjects, /设计独立验证实验/);
   assert.match(researchProjects, /95% 效果区间/);
-  assert.match(researchProjects, /baselineRunKeys/);
+  assert.match(researchProjects, /baselineExecutionKeys/);
   assert.match(researchProjects, /独立对照运行（可选）/);
   assert.doesNotMatch(researchProjects, /calculatedFromSource: true/);
   assert.doesNotMatch(researchProjects, /记录实验计算结果/);
@@ -215,9 +215,9 @@ test("research project setup reuses configured industrial definitions instead of
   assert.match(researchProjects, /\/api\/v1\/scenario-packages/);
   assert.match(researchProjects, /scenario_package/);
   assert.match(researchProjects, /label="质量指标"/);
-  assert.match(researchProjects, /label="可控配方参数"/);
+  assert.match(researchProjects, /label="控制参数"/);
   assert.match(researchProjects, /选择质量指标后自动带入/);
-  assert.match(researchProjects, /选择配方参数后自动带入/);
+  assert.match(researchProjects, /选择控制参数后自动带入/);
 });
 
 test("research projects turn optimization into the existing experiment workflow", () => {
@@ -244,7 +244,7 @@ test("research assets retain mechanism fusion, project-scoped knowledge, and dat
 test("shadow recommendations preregister engineer choices and freeze source outcomes", () => {
   assert.match(researchProjects, /登记影子选择/);
   assert.match(researchProjects, /shadow-decision/);
-  assert.match(researchProjects, /actualRunKey/);
+  assert.match(researchProjects, /actualExecutionKey/);
   assert.match(researchProjects, /engineerSelectedFactors/);
   assert.match(researchProjects, /rejectionReason/);
   assert.match(researchProjects, /siteLimitations/);

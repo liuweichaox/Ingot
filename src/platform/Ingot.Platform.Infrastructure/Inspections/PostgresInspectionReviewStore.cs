@@ -21,25 +21,25 @@ public sealed class PostgresInspectionReviewStore : IInspectionReviewStore, IAsy
 
     public async Task<StoreInspectionReviewResult> CreateAsync(
         CreateInspectionReviewRequest request,
-        string operationRunId,
+        string executionId,
         string reviewedBy,
         CancellationToken ct = default)
     {
         await InitializeAsync(ct).ConfigureAwait(false);
         var normalizedDecision = request.Decision.Trim().ToUpperInvariant();
         var normalizedNotes = string.IsNullOrWhiteSpace(request.Notes) ? null : request.Notes.Trim();
-        var payloadHash = ComputeHash(request with { Decision = normalizedDecision, Notes = normalizedNotes }, operationRunId, reviewedBy);
+        var payloadHash = ComputeHash(request with { Decision = normalizedDecision, Notes = normalizedNotes }, executionId, reviewedBy);
         await using var command = _dataSource.CreateCommand(
             """
             INSERT INTO inspection_reviews(
-              review_id, inspection_record_id, operation_run_id, decision, reviewed_by, notes, payload_hash)
-            VALUES (@review_id, @inspection_record_id, @operation_run_id, @decision, @reviewed_by, @notes, @payload_hash)
+              review_id, inspection_record_id, execution_id, decision, reviewed_by, notes, payload_hash)
+            VALUES (@review_id, @inspection_record_id, @execution_id, @decision, @reviewed_by, @notes, @payload_hash)
             ON CONFLICT (review_id) DO NOTHING
             RETURNING review_id;
             """);
         command.Parameters.AddWithValue("review_id", request.ReviewId);
         command.Parameters.AddWithValue("inspection_record_id", request.InspectionRecordId);
-        command.Parameters.AddWithValue("operation_run_id", operationRunId);
+        command.Parameters.AddWithValue("execution_id", executionId);
         command.Parameters.AddWithValue("decision", normalizedDecision);
         command.Parameters.AddWithValue("reviewed_by", reviewedBy);
         command.Parameters.AddWithValue("notes", (object?)normalizedNotes ?? DBNull.Value);
@@ -70,7 +70,7 @@ public sealed class PostgresInspectionReviewStore : IInspectionReviewStore, IAsy
 
     public async Task<IReadOnlyList<InspectionReview>> QueryAsync(
         Guid? inspectionRecordId,
-        string? operationRunId,
+        string? executionId,
         int limit,
         CancellationToken ct = default)
     {
@@ -82,10 +82,10 @@ public sealed class PostgresInspectionReviewStore : IInspectionReviewStore, IAsy
             predicates.Add("inspection_record_id = @inspection_record_id");
             command.Parameters.AddWithValue("inspection_record_id", inspectionRecordId.Value);
         }
-        if (!string.IsNullOrWhiteSpace(operationRunId))
+        if (!string.IsNullOrWhiteSpace(executionId))
         {
-            predicates.Add("operation_run_id = @operation_run_id");
-            command.Parameters.AddWithValue("operation_run_id", operationRunId.Trim());
+            predicates.Add("execution_id = @execution_id");
+            command.Parameters.AddWithValue("execution_id", executionId.Trim());
         }
         command.CommandText = $"""
                                {SelectColumns}
@@ -112,7 +112,7 @@ public sealed class PostgresInspectionReviewStore : IInspectionReviewStore, IAsy
         await using var command = _dataSource.CreateCommand(
             $"""
              SELECT DISTINCT ON (inspection_record_id)
-                    review_id, inspection_record_id, operation_run_id, decision,
+                    review_id, inspection_record_id, execution_id, decision,
                     reviewed_at, reviewed_by, notes
              FROM inspection_reviews
              WHERE inspection_record_id = ANY(@ids)
@@ -207,7 +207,7 @@ public sealed class PostgresInspectionReviewStore : IInspectionReviewStore, IAsy
         await InitializeAsync(ct).ConfigureAwait(false);
         await using var command = _dataSource.CreateCommand(
             """
-            SELECT review_id, inspection_record_id, operation_run_id, decision,
+            SELECT review_id, inspection_record_id, execution_id, decision,
                    reviewed_at, reviewed_by, notes, payload_hash
             FROM inspection_reviews
             WHERE review_id = @review_id;
@@ -224,7 +224,7 @@ public sealed class PostgresInspectionReviewStore : IInspectionReviewStore, IAsy
         {
             ReviewId = reader.GetGuid(0),
             InspectionRecordId = reader.GetGuid(1),
-            OperationRunId = reader.GetString(2),
+            ExecutionId = reader.GetString(2),
             Decision = reader.GetString(3),
             ReviewedAt = new DateTimeOffset(reader.GetDateTime(4).ToUniversalTime()),
             ReviewedBy = reader.GetString(5),
@@ -233,15 +233,15 @@ public sealed class PostgresInspectionReviewStore : IInspectionReviewStore, IAsy
 
     private static string ComputeHash(
         CreateInspectionReviewRequest request,
-        string operationRunId,
+        string executionId,
         string reviewedBy)
         => Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(
-            new { request, operationRunId, reviewedBy }, JsonOptions)));
+            new { request, executionId, reviewedBy }, JsonOptions)));
 
     private sealed record StoredReview(InspectionReview Review, string PayloadHash);
 
     private const string SelectColumns = """
-        SELECT review_id, inspection_record_id, operation_run_id, decision,
+        SELECT review_id, inspection_record_id, execution_id, decision,
                reviewed_at, reviewed_by, notes
         FROM inspection_reviews
         """;

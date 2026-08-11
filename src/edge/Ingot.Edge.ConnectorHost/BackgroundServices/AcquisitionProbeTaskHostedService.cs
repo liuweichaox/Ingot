@@ -23,13 +23,13 @@ public sealed class AcquisitionProbeTaskHostedService(
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        if (!_options.IsPlatformReportingEnabled ||
-            string.IsNullOrWhiteSpace(_options.EffectivePlatformApiBaseUrl))
+        if (!_options.EnablePlatformReporting ||
+            string.IsNullOrWhiteSpace(_options.PlatformApiBaseUrl))
             return;
 
         var edgeId = identity.GetEdgeId();
         var client = httpClientFactory.CreateClient("platform-acquisition-probe-tasks");
-        client.BaseAddress = new Uri(_options.EffectivePlatformApiBaseUrl.TrimEnd('/') + "/");
+        client.BaseAddress = new Uri(_options.PlatformApiBaseUrl.TrimEnd('/') + "/");
         if (!string.IsNullOrWhiteSpace(_options.EventIngestToken))
             client.DefaultRequestHeaders.Authorization =
                 new AuthenticationHeaderValue("Bearer", _options.EventIngestToken);

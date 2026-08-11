@@ -3,7 +3,7 @@ using Ingot.Contracts.Events;
 using Ingot.Contracts.Inspections;
 using Ingot.Contracts.ProcessConfiguration;
 using Ingot.Contracts.ProcessResearch;
-using Ingot.Platform.Infrastructure.Cycles;
+using Ingot.Platform.Infrastructure.ProcessExecutions;
 using Ingot.Platform.Infrastructure.Inspections;
 using Ingot.Platform.Infrastructure.ProcessConfiguration;
 using Ingot.Platform.Infrastructure.ProcessResearch;
@@ -14,30 +14,30 @@ namespace Ingot.Core.Tests.Platform;
 public sealed class ResearchObservationAssemblerTests
 {
     [Fact]
-    public async Task Assemble_ConnectsCycleFeaturesRecipeAndInspectionMeasurements()
+    public async Task Assemble_ConnectsProcessExecutionFeaturesProcessSpecificationAndInspectionMeasurements()
     {
-        var runKey = "bo-cycle-001";
-        var cycle = new CycleComparisonRow
+        var executionKey = "bo-execution-001";
+        var execution = new ExecutionComparisonRow
         {
-            CorrelationId = runKey,
-            MachineId = "FX3U-01",
+            ExecutionId = executionKey,
+            EquipmentId = "FX3U-01",
             EdgeIds = ["EDGE-WORKSHOP-A"],
             Context = new Dictionary<string, string>
             {
                 ["context_capture_status"] = "resolved",
                 ["equipment_id"] = "FX3U-01",
-                ["operation_run_id"] = runKey,
-                ["recipe_id"] = "LENS-A",
-                ["recipe_version"] = "3",
+                ["execution_id"] = executionKey,
+                ["process_specification_id"] = "LENS-A",
+                ["process_specification_version"] = "3",
                 ["tooling_installation_id"] = Guid.NewGuid().ToString("D"),
                 ["material_lot"] = "GLASS-LOT-07",
                 ["material_lot_ref"] = "GLASS-LOT-07",
-                ["mold_id"] = "MOLD-A"
+                ["tooling_assembly_id"] = "MOLD-A"
             },
             StartedAt = DateTimeOffset.UtcNow.AddMinutes(-2),
             CompletedAt = DateTimeOffset.UtcNow,
-            ProductSeries = "lens-a",
-            WorkpieceId = "lens-001",
+            ProductFamilyCode = "lens-a",
+            OutputItemId = "lens-001",
             ExternalBatchRef = "BATCH-07",
             MaterialLotRef = "GLASS-LOT-07",
             ProcessDataQuality = new ProcessDataQualitySummary
@@ -45,9 +45,9 @@ public sealed class ResearchObservationAssemblerTests
                 Status = ProcessDataStatuses.Available,
                 SampleCount = 120
             },
-            RecipeParameters =
+            ControlParameters =
             [
-                new CycleRecipeParameter
+                new ExecutionControlParameterValue
                 {
                     Code = "holding-temperature",
                     Unit = "Cel",
@@ -56,7 +56,7 @@ public sealed class ResearchObservationAssemblerTests
             ],
             Signals =
             [
-                new CycleSignalStatistic
+                new ProcessSignalStatistic
                 {
                     Code = "mold-temperature",
                     Name = "模具温度",
@@ -64,7 +64,7 @@ public sealed class ResearchObservationAssemblerTests
                     Average = 510,
                     Features =
                     [
-                        new CycleSignalFeature
+                        new ProcessSignalFeature
                         {
                             Code = "overshoot",
                             DefinitionHash = new string('a', 64),
@@ -74,7 +74,7 @@ public sealed class ResearchObservationAssemblerTests
                     ]
                 }
             ],
-            AnalysisMaterialization = new CycleAnalysisMaterialization
+            AnalysisMaterialization = new ProcessExecutionAnalysisMaterialization
             {
                 AlgorithmVersion = "stage-relative-v2",
                 SourceMaxIngestId = 55,
@@ -86,8 +86,8 @@ public sealed class ResearchObservationAssemblerTests
             new InspectionRecord
             {
                 RecordId = Guid.CreateVersion7(),
-                WorkpieceId = "lens-001",
-                OperationRunId = runKey,
+                OutputItemId = "lens-001",
+                ExecutionId = executionKey,
                 DefinitionCode = "lens-final",
                 DefinitionVersion = 1,
                 MeasuredAt = DateTimeOffset.UtcNow,
@@ -115,10 +115,10 @@ public sealed class ResearchObservationAssemblerTests
                 ]
             }
         ]);
-        var cycleService = new FakeCycleService(cycle);
+        var executionService = new FakeProcessExecutionService(execution);
         var scenario = ResearchContextAdmissionEvaluatorTests.OpticalScenario();
         var assembler = new ResearchObservationAssembler(
-            cycleService,
+            executionService,
             inspections,
             new FakeProcessConfigurationStore(scenario));
         var project = new ResearchProject
@@ -148,7 +148,7 @@ public sealed class ResearchObservationAssemblerTests
                     Unit = "Cel",
                     LowerLimit = 480,
                     UpperLimit = 550,
-                    DataSource = "recipe:holding-temperature"
+                    DataSource = "control-parameter:holding-temperature"
                 }
             ],
             Context = new Dictionary<string, string>
@@ -178,7 +178,7 @@ public sealed class ResearchObservationAssemblerTests
             [
                 new ExperimentRunPlan
                 {
-                    RunKey = runKey,
+                    ExecutionKey = executionKey,
                     Sequence = 1,
                     Factors =
                     [
@@ -195,7 +195,7 @@ public sealed class ResearchObservationAssemblerTests
 
         var result = await assembler.AssembleAsync(project, [experiment]);
 
-        Assert.Equal(1, cycleService.BatchQueryCount);
+        Assert.Equal(1, executionService.BatchQueryCount);
         Assert.Equal(1, inspections.BatchQueryCount);
 
         var observation = Assert.Single(result.Observations);
@@ -205,39 +205,39 @@ public sealed class ResearchObservationAssemblerTests
         Assert.Equal(7, observation.SettingDeviationFromPlan["temperature"]);
         Assert.Equal(0.38, observation.Outcomes["form"], 6);
         Assert.Equal(0.01, observation.ConstraintOutcomes["crack-safety"], 6);
-        Assert.Equal(2.4, observation.ProcessFeatures["mold-temperature.cycle.overshoot"], 6);
-        Assert.Equal("FX3U-01", observation.Context["machine_id"]);
+        Assert.Equal(2.4, observation.ProcessFeatures["mold-temperature.execution.overshoot"], 6);
+        Assert.Equal("FX3U-01", observation.Context["equipment_id"]);
         Assert.Equal("EDGE-WORKSHOP-A", observation.Context["edge_ids"]);
         Assert.Equal("BATCH-07", observation.Context["external_batch_ref"]);
-        Assert.Equal("lens-001", observation.Context["workpiece_id"]);
+        Assert.Equal("lens-001", observation.Context["output_item_id"]);
         Assert.Equal("GLASS-LOT-07", observation.Context["material_lot_ref"]);
         Assert.Equal("GLASS-LOT-07", observation.Context["material_lot"]);
-        Assert.Equal("MOLD-A", observation.Context["mold_id"]);
+        Assert.Equal("MOLD-A", observation.Context["tooling_assembly_id"]);
         Assert.Equal(
             ResearchContextAdmissionEvaluator.ComputePolicyHash(scenario),
             observation.Context[ResearchContextAdmissionEvaluator.ObservationPolicyHashContextKey]);
         Assert.Matches("^[a-f0-9]{64}$", observation.SourceContentHash);
 
-        var missingMoldCycle = cycle with
+        var missingMoldProcessExecution = execution with
         {
-            Context = cycle.Context
-                .Where(static pair => pair.Key != "mold_id")
+            Context = execution.Context
+                .Where(static pair => pair.Key != "tooling_assembly_id")
                 .ToDictionary(static pair => pair.Key, static pair => pair.Value, StringComparer.Ordinal)
         };
         var missingMoldResult = await new ResearchObservationAssembler(
-                new FakeCycleService(missingMoldCycle),
+                new FakeProcessExecutionService(missingMoldProcessExecution),
                 inspections,
                 new FakeProcessConfigurationStore(scenario))
             .AssembleAsync(project, [experiment]);
         var missingMold = Assert.Single(missingMoldResult.Observations);
         Assert.False(missingMold.ValidForOptimization);
-        Assert.Contains("mold_id", missingMold.ExclusionReason);
+        Assert.Contains("tooling_assembly_id", missingMold.ExclusionReason);
 
         var strictProject = project with
         {
             Variables =
             [
-                project.Variables[0] with { DataSource = "recipe:not-collected" }
+                project.Variables[0] with { DataSource = "control-parameter:not-collected" }
             ]
         };
         var strictResult = await assembler.AssembleAsync(strictProject, [experiment]);
@@ -256,12 +256,12 @@ public sealed class ResearchObservationAssemblerTests
         Assert.Empty(plannedOnly.ActualFactors);
         Assert.Contains("缺少设备实际参数回读", plannedOnly.ExclusionReason);
 
-        var wrongUnitCycle = cycle with
+        var wrongUnitProcessExecution = execution with
         {
-            RecipeParameters = [cycle.RecipeParameters[0] with { Unit = "K" }]
+            ControlParameters = [execution.ControlParameters[0] with { Unit = "K" }]
         };
         var wrongUnitAssembler = new ResearchObservationAssembler(
-            new FakeCycleService(wrongUnitCycle),
+            new FakeProcessExecutionService(wrongUnitProcessExecution),
             inspections,
             new FakeProcessConfigurationStore(scenario));
         var wrongUnitResult = await wrongUnitAssembler.AssembleAsync(project, [experiment]);
@@ -271,39 +271,39 @@ public sealed class ResearchObservationAssemblerTests
         Assert.Contains("单位冲突", unitConflict.ExclusionReason);
     }
 
-    private sealed class FakeCycleService(CycleComparisonRow cycle) : ICycleComparisonService
+    private sealed class FakeProcessExecutionService(ExecutionComparisonRow execution) : IExecutionComparisonService
     {
         public int BatchQueryCount { get; private set; }
 
-        public Task<CycleComparisonRow?> GetCycleAsync(
-            string correlationId,
+        public Task<ExecutionComparisonRow?> GetProcessExecutionAsync(
+            string executionId,
             CancellationToken ct = default)
-            => Task.FromResult<CycleComparisonRow?>(
-                string.Equals(correlationId, cycle.CorrelationId, StringComparison.Ordinal)
-                    ? cycle
+            => Task.FromResult<ExecutionComparisonRow?>(
+                string.Equals(executionId, execution.ExecutionId, StringComparison.Ordinal)
+                    ? execution
                     : null);
 
-        public Task<IReadOnlyDictionary<string, CycleComparisonRow>> GetCyclesAsync(
-            IReadOnlyCollection<string> correlationIds,
+        public Task<IReadOnlyDictionary<string, ExecutionComparisonRow>> GetProcessExecutionsAsync(
+            IReadOnlyCollection<string> executionIds,
             CancellationToken ct = default)
         {
             BatchQueryCount++;
-            IReadOnlyDictionary<string, CycleComparisonRow> result = correlationIds
-                .Where(id => string.Equals(id, cycle.CorrelationId, StringComparison.Ordinal))
+            IReadOnlyDictionary<string, ExecutionComparisonRow> result = executionIds
+                .Where(id => string.Equals(id, execution.ExecutionId, StringComparison.Ordinal))
                 .Distinct(StringComparer.Ordinal)
-                .ToDictionary(static id => id, _ => cycle, StringComparer.Ordinal);
+                .ToDictionary(static id => id, _ => execution, StringComparer.Ordinal);
             return Task.FromResult(result);
         }
 
-        public Task<CycleComparisonResult?> CompareWithHistoryAsync(
-            string correlationId,
+        public Task<ExecutionComparisonResult?> CompareWithHistoryAsync(
+            string executionId,
             int limit,
             CancellationToken ct = default)
             => throw new NotSupportedException();
 
-        public Task<CycleComparisonResult?> CompareSelectedAsync(
-            string baselineCycleId,
-            IReadOnlyList<string> cycleIds,
+        public Task<ExecutionComparisonResult?> CompareSelectedAsync(
+            string baselineProcessExecutionId,
+            IReadOnlyList<string> executionIds,
             CancellationToken ct = default)
             => throw new NotSupportedException();
     }
@@ -319,13 +319,13 @@ public sealed class ResearchObservationAssemblerTests
             => throw new NotSupportedException();
         public Task<bool> DeleteDataModelAsync(string modelId, int version, CancellationToken ct = default)
             => throw new NotSupportedException();
-        public Task<RecipeVersion> UpsertRecipeVersionAsync(RecipeVersion value, CancellationToken ct = default)
+        public Task<ProcessSpecification> UpsertProcessSpecificationAsync(ProcessSpecification value, CancellationToken ct = default)
             => throw new NotSupportedException();
-        public Task<IReadOnlyList<RecipeVersion>> ListRecipeVersionsAsync(CancellationToken ct = default)
+        public Task<IReadOnlyList<ProcessSpecification>> ListProcessSpecificationsAsync(CancellationToken ct = default)
             => throw new NotSupportedException();
-        public Task<RecipeVersion?> GetRecipeVersionAsync(string recipeId, int version, CancellationToken ct = default)
+        public Task<ProcessSpecification?> GetProcessSpecificationAsync(string processSpecificationId, int version, CancellationToken ct = default)
             => throw new NotSupportedException();
-        public Task<bool> DeleteRecipeVersionAsync(string recipeId, int version, CancellationToken ct = default)
+        public Task<bool> DeleteProcessSpecificationAsync(string processSpecificationId, int version, CancellationToken ct = default)
             => throw new NotSupportedException();
         public Task<ProcessAnalysisPlan> UpsertAnalysisPlanAsync(ProcessAnalysisPlan value, CancellationToken ct = default)
             => throw new NotSupportedException();
@@ -366,13 +366,13 @@ public sealed class ResearchObservationAssemblerTests
             CancellationToken ct = default)
             => Task.FromResult<IReadOnlyList<InspectionRecord>>(records);
 
-        public Task<IReadOnlyList<InspectionRecord>> QueryAllByOperationRunIdsAsync(
-            IReadOnlyCollection<string> operationRunIds,
+        public Task<IReadOnlyList<InspectionRecord>> QueryAllByExecutionIdsAsync(
+            IReadOnlyCollection<string> executionIds,
             CancellationToken ct = default)
         {
             BatchQueryCount++;
             return Task.FromResult<IReadOnlyList<InspectionRecord>>(
-                records.Where(value => operationRunIds.Contains(value.OperationRunId)).ToArray());
+                records.Where(value => executionIds.Contains(value.ExecutionId)).ToArray());
         }
     }
 }

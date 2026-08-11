@@ -36,7 +36,7 @@ Runs that fail remain in the data-quality report. Exclusion reasons are themselv
 The first analytical layer favors reviewable methods:
 
 - median, MAD, quantiles, and sample size;
-- matched comparison under the same product, recipe, equipment, or tooling conditions;
+- matched comparison under the same product, process specification, equipment, or tooling conditions;
 - stage-aligned trajectory differences, first deviation, and planned-versus-actual gaps;
 - missingness, anomaly, coverage, and temporal drift;
 - effect size and intervals rather than only significance labels.
@@ -68,7 +68,7 @@ Candidate causes require appropriate intervention before promotion. Experiment d
 - stopping, failure, and safety fallback conditions;
 - independent confirmation runs.
 
-A single point or single block can provide intervention support at most. A continuous process window also requires boundary, repetition, and relevant interaction validation.
+A single point or single block can provide intervention support at most. A continuous operating region also requires boundary, repetition, and relevant interaction validation.
 
 ## Selecting the next experiment
 
@@ -146,7 +146,7 @@ An LLM is suitable for:
 
 An LLM does not:
 
-- generate numerical recipes directly;
+- generate numerical process settings directly;
 - replace deterministic statistics or constraint calculations;
 - invent facts absent from source records;
 - promote candidate associations to definitive causes.

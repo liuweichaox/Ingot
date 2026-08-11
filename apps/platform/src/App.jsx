@@ -25,7 +25,7 @@ const sections = [
   },
   {
     id: "evidence", label: "运行证据", icon: CircleStackIcon, path: "/explorer", groups: [
-      { label: "对象与运行", items: [["/explorer", "工业对象"], ["/cycles", "运行记录"], ["/inspections", "质量任务"]] },
+      { label: "对象与运行", items: [["/explorer", "工业对象"], ["/process-executions", "运行记录"], ["/inspections", "质量任务"]] },
       { label: "现场上下文", items: [["/events", "运行事件"], ["/production/changeover", "运行准备"], ["/production/tooling-installations", "工装装卸"]] },
     ],
   },
@@ -43,9 +43,9 @@ const sections = [
   },
   {
     id: "configuration", label: "配置", icon: AdjustmentsHorizontalIcon, path: "/configuration/scenario-packages", groups: [
-      { label: "工艺定义", items: [["/configuration/scenario-packages", "工艺配置"], ["/configuration/process-data-models", "工艺模型"], ["/configuration/recipe-versions", "配方版本"], ["/configuration/process-analysis-plans", "分析模型"]] },
+      { label: "工艺定义", items: [["/configuration/scenario-packages", "工艺配置"], ["/configuration/process-data-models", "工艺模型"], ["/configuration/process-specifications", "工艺规范版本"], ["/configuration/process-analysis-plans", "分析模型"]] },
       { label: "质量规则", items: [["/configuration/inspection-definitions", "检测定义"], ["/configuration/quality-plans", "质量方案"]] },
-      { label: "工装资产", items: [["/configuration/tooling-types", "装配模板"], ["/configuration/component-types", "组件分类"], ["/configuration/components", "组件资产"], ["/configuration/tooling-assemblies", "模具资产"]] },
+      { label: "工装资产", items: [["/configuration/tooling-types", "装配模板"], ["/configuration/component-types", "组件分类"], ["/configuration/components", "组件资产"], ["/configuration/tooling-assemblies", "工装总成"]] },
       { label: "现场接入", items: [["/edges", "现场节点"], ["/configuration/acquisition-profiles", "设备接入"]] },
     ],
   },
@@ -67,26 +67,26 @@ const pageDetails = {
   "/chat": ["分析助手", "结合实验、过程数据、机理和知识推进追因任务"],
   "/research-assets": ["研发资产", "查看项目可复用的数据集、模型、机理和知识"],
   "/explorer": ["工业对象", "选择真实业务对象，再进入它的运行、事件、质量与数据健康视图"],
-  "/cycles": ["运行记录", "查看生产运行及其数据、工艺与质量上下文"],
+  "/process-executions": ["运行记录", "查看生产运行及其数据、工艺与质量上下文"],
   "/events": ["运行事件", "查询、追溯并关联运行上下文"],
-  "/production/changeover": ["运行准备", "让设备、产品、配方和已装工装对接下来的运行生效"],
+  "/production/changeover": ["运行准备", "让设备、产品、工艺规范和已装工装对接下来的运行生效"],
   "/production/tooling-installations": ["工装装卸", "记录工装组合版本在设备上的装入与卸下区间"],
   "/inspections": ["质量任务", "处理视觉检查、人工质检与原图复核"],
-  "/quality-analysis": ["质量偏差分析", "按产品、配方和运行上下文定位质量偏差并追溯证据"],
+  "/quality-analysis": ["质量偏差分析", "按产品、工艺规范和运行上下文定位质量偏差并追溯证据"],
   "/comparisons": ["运行对比", "比较同类生产运行、运行段或时间窗口，生成待验证的候选原因"],
   "/golden-questions": ["评测问题集", "用真实问题持续核对事实、记录引用、正确拒绝和因果边界"],
   "/data-quality": ["数据可信度", "检查运行对象的数据范围、采样连续性与运行完整性"],
   "/configuration/scenario-packages": ["工艺配置", "版本化组合工艺数据、采集、分析、质量、上下文和约束"],
   "/configuration/process-analysis-plans": ["分析模型", "版本化定义分析范围、对齐方式、质量分组和数据项"],
-  "/configuration/process-data-models": ["工艺模型", "定义工艺变量、阶段号和配方参数，供设备点位统一映射"],
-  "/configuration/recipe-versions": ["配方版本", "维护引用数据模型的完整配方有效值"],
+  "/configuration/process-data-models": ["工艺模型", "定义工艺变量、阶段号和控制参数，供设备点位统一映射"],
+  "/configuration/process-specifications": ["工艺规范版本", "维护引用数据模型的完整工艺规范有效值"],
   "/configuration/acquisition-profiles": ["设备接入", "选择采集节点和通信驱动，将设备点位映射到工艺变量"],
   "/configuration/inspection-definitions": ["检测定义", "定义要检测的特性、录入类型和判定规则"],
   "/configuration/quality-plans": ["质量方案", "配置产品适用的检测项目与复核规则"],
   "/configuration/component-types": ["组件分类", "维护模芯、模架等物理资产类别；上模和下模由装配位置决定"],
   "/configuration/components": ["组件资产", "登记具有独立资产编号和序列号的可更换物理组件"],
-  "/configuration/tooling-types": ["装配模板", "定义模具结构、装配位置和各位置允许的组件分类"],
-  "/configuration/tooling-assemblies": ["模具资产", "查看模具身份、不可变配置版本及每个位置的实际成员"],
+  "/configuration/tooling-types": ["装配模板", "定义工装总成结构、装配位置和各位置允许的组件分类"],
+  "/configuration/tooling-assemblies": ["工装总成", "查看工装总成身份、不可变配置版本及每个位置的实际成员"],
   "/edges": ["现场节点", "查看负责连接设备、仪器、系统并上报数据的现场节点"],
   "/platform-metrics": ["平台运行状态", "确认中心服务、现场节点和数据上行是否正常"],
   "/logs": ["运行日志", "查询平台运行记录"],
@@ -131,7 +131,7 @@ export default function App() {
     () => allSections.find(item => item.path === location.pathname || sectionItems(item).some(([path]) => location.pathname === path || location.pathname.startsWith(`${path}/`))) ?? sections[0],
     [location.pathname],
   );
-  const page = location.pathname.startsWith("/cycles/")
+  const page = location.pathname.startsWith("/process-executions/")
     ? ["运行详情", "查看单次生产运行的过程、质量和数据完整性"]
     : location.pathname.startsWith("/edges/")
       ? ["节点诊断", "查看现场节点的连接、采集、上行和最近日志"]
@@ -357,8 +357,8 @@ function AppRoutes() {
       <Route path="/chat" element={<Pages.ChatPage />} />
       <Route path="/research-assets" element={<Pages.ResearchAssetsPage />} />
       <Route path="/explorer" element={<Pages.ObjectExplorerPage />} />
-      <Route path="/cycles" element={<Pages.CyclesPage />} />
-      <Route path="/cycles/:correlationId" element={<Pages.CycleDetailPage />} />
+      <Route path="/process-executions" element={<Pages.ProcessExecutionsPage />} />
+      <Route path="/process-executions/:executionId" element={<Pages.ProcessExecutionDetailPage />} />
       <Route path="/events" element={<Pages.EventsPage />} />
       <Route path="/production/changeover" element={<Pages.ProductionSetupPage section="context" />} />
       <Route path="/production/tooling-installations" element={<Pages.ProductionSetupPage section="installation" />} />
@@ -372,7 +372,7 @@ function AppRoutes() {
       <Route path="/quality-plans" element={<Navigate to="/configuration/quality-plans" replace />} />
       <Route path="/configuration/inspection-definitions" element={<Pages.InspectionDefinitionsPage />} />
       <Route path="/configuration/quality-plans" element={<Pages.QualityPlansPage />} />
-      <Route path="/comparisons" element={<Pages.CycleComparisonPage />} />
+      <Route path="/comparisons" element={<Pages.ExecutionComparisonPage />} />
       <Route path="/golden-questions" element={<Pages.GoldenQuestionsPage />} />
       <Route path="/data-quality" element={<Pages.DataQualityPage />} />
       <Route path="/process-improvement" element={<Navigate to="/research-projects" replace />} />
@@ -380,7 +380,7 @@ function AppRoutes() {
       <Route path="/configuration/process-analysis-plans" element={<Pages.ProcessAnalysisPlansPage />} />
       <Route path="/profiles" element={<Navigate to="/configuration/process-data-models" replace />} />
       <Route path="/configuration/process-data-models" element={<Pages.ProcessDataModelsPage />} />
-      <Route path="/configuration/recipe-versions" element={<Pages.RecipeVersionsPage />} />
+      <Route path="/configuration/process-specifications" element={<Pages.ProcessSpecificationsPage />} />
       <Route path="/configuration/acquisition-profiles" element={<AcquisitionProfilesPage />} />
       <Route path="/configuration/acquisition-profiles/:profileId" element={<AcquisitionProfilePage />} />
       <Route path="/edges" element={<Pages.EdgesPage />} />

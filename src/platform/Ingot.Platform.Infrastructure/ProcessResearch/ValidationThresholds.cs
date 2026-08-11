@@ -10,8 +10,6 @@ namespace Ingot.Platform.Infrastructure.ProcessResearch;
 /// </summary>
 public static class ValidationThresholds
 {
-    public const string LegacyPolicyVersion = "legacy-unversioned";
-
     /// <summary>Minimum calibration observations before coverage can trigger a decision.</summary>
     public const int MinimumCalibrationCheckCount = 5;
 

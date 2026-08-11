@@ -4,7 +4,7 @@ using System.Text.RegularExpressions;
 using Ingot.Contracts.Analytics;
 using Ingot.Contracts.Events;
 using Ingot.Domain.Events;
-using Ingot.Platform.Infrastructure.Cycles;
+using Ingot.Platform.Infrastructure.ProcessExecutions;
 using Ingot.Platform.Infrastructure.Manufacturing;
 using Ingot.Platform.Infrastructure.ProcessConfiguration;
 using Ingot.Platform.Infrastructure.TimeSeries;
@@ -29,8 +29,8 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, IA
     private readonly PlatformEventOptions _options;
     private readonly IManufacturingContextStore _manufacturingContexts;
     private readonly ProcessAnalysisResolver _analysisResolver;
-    private readonly ICycleAnalysisMaterializationStore _analysisMaterializations;
-    private readonly CycleAnalysisRecomputeQueue _analysisRecomputeQueue;
+    private readonly IProcessExecutionAnalysisMaterializationStore _analysisMaterializations;
+    private readonly ProcessExecutionAnalysisRecomputeQueue _analysisRecomputeQueue;
     private readonly PostgresTimeSeriesStore _timeSeriesStore;
     private readonly SemaphoreSlim _initializeLock = new(1, 1);
     private volatile bool _initialized;
@@ -46,8 +46,8 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, IA
         IOptions<PlatformEventOptions> options,
         IManufacturingContextStore manufacturingContexts,
         ProcessAnalysisResolver analysisResolver,
-        ICycleAnalysisMaterializationStore analysisMaterializations,
-        CycleAnalysisRecomputeQueue analysisRecomputeQueue,
+        IProcessExecutionAnalysisMaterializationStore analysisMaterializations,
+        ProcessExecutionAnalysisRecomputeQueue analysisRecomputeQueue,
         PostgresTimeSeriesStore timeSeriesStore)
     {
         var connectionString = configuration.GetConnectionString("Events")
@@ -96,8 +96,8 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, IA
         if (ordered.Length == 0)
             return new EventBatchResponse();
 
-        // 在运行开始时解析一次不可变上下文，并传播到同一 correlationId 的全部后续事件。
-        // 这样完成事件、质量任务与每秒样本看到的是同一份产品、配方和工装快照。
+        // 在运行开始时解析一次不可变上下文，并传播到同一 executionId 的全部后续事件。
+        // 这样完成事件、质量任务与每秒样本看到的是同一份产品、工艺规范和工装快照。
         var capturedContexts = new Dictionary<string, IReadOnlyDictionary<string, string>>(StringComparer.Ordinal);
         var analysisConfigurations = new Dictionary<string, ResolvedProcessAnalysis?>(StringComparer.Ordinal);
         for (var index = 0; index < ordered.Length; index++)
@@ -116,7 +116,7 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, IA
         var gapDetected = HasSequenceGap(previousMax, ordered);
         var accepted = 0;
         var duplicates = 0;
-        var acceptedMaxIngestByCorrelationId = new Dictionary<string, long>(StringComparer.Ordinal);
+        var acceptedMaxIngestByExecutionId = new Dictionary<string, long>(StringComparer.Ordinal);
         var transactionContexts = new Dictionary<string, IReadOnlyDictionary<string, string>>(StringComparer.Ordinal);
 
         foreach (var evt in ordered)
@@ -132,11 +132,11 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, IA
                         transaction,
                         evt,
                         ct).ConfigureAwait(false);
-                    if (!string.IsNullOrWhiteSpace(effectiveEvent.CorrelationId))
-                        transactionContexts[effectiveEvent.CorrelationId] = effectiveEvent.Context;
+                    if (!string.IsNullOrWhiteSpace(effectiveEvent.ExecutionId))
+                        transactionContexts[effectiveEvent.ExecutionId] = effectiveEvent.Context;
                 }
-                else if (!string.IsNullOrWhiteSpace(evt.CorrelationId) &&
-                         transactionContexts.TryGetValue(evt.CorrelationId, out var captured))
+                else if (!string.IsNullOrWhiteSpace(evt.ExecutionId) &&
+                         transactionContexts.TryGetValue(evt.ExecutionId, out var captured))
                 {
                     effectiveEvent = evt with { Context = MergeCapturedContext(captured, evt.Context) };
                 }
@@ -150,7 +150,7 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, IA
                     ingestId,
                     effectiveEvent,
                     ct).ConfigureAwait(false);
-                var analysisKey = effectiveEvent.CorrelationId ??
+                var analysisKey = effectiveEvent.ExecutionId ??
                                   $"{effectiveEvent.Subject.Type}:{effectiveEvent.Subject.Id}";
                 analysisConfigurations.TryGetValue(analysisKey, out var analysis);
                 await _timeSeriesStore.ProjectEventAsync(
@@ -161,10 +161,10 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, IA
                     effectiveEvent,
                     analysis,
                     ct).ConfigureAwait(false);
-                if (!string.IsNullOrWhiteSpace(effectiveEvent.CorrelationId))
+                if (!string.IsNullOrWhiteSpace(effectiveEvent.ExecutionId))
                 {
-                    acceptedMaxIngestByCorrelationId[effectiveEvent.CorrelationId] = Math.Max(
-                        acceptedMaxIngestByCorrelationId.GetValueOrDefault(effectiveEvent.CorrelationId),
+                    acceptedMaxIngestByExecutionId[effectiveEvent.ExecutionId] = Math.Max(
+                        acceptedMaxIngestByExecutionId.GetValueOrDefault(effectiveEvent.ExecutionId),
                         ingestId);
                 }
                 if (effectiveEvent.EventType.EndsWith(".started", StringComparison.Ordinal))
@@ -183,11 +183,11 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, IA
         }
 
         await transaction.CommitAsync(ct).ConfigureAwait(false);
-        if (acceptedMaxIngestByCorrelationId.Count > 0)
+        if (acceptedMaxIngestByExecutionId.Count > 0)
         {
             try
             {
-                foreach (var pair in acceptedMaxIngestByCorrelationId)
+                foreach (var pair in acceptedMaxIngestByExecutionId)
                 {
                     await _analysisMaterializations.MarkDirtyAsync(
                         [pair.Key],
@@ -195,14 +195,14 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, IA
                         "production_event_ingested",
                         ct).ConfigureAwait(false);
                 }
-                _analysisRecomputeQueue.Enqueue(acceptedMaxIngestByCorrelationId.Keys);
+                _analysisRecomputeQueue.Enqueue(acceptedMaxIngestByExecutionId.Keys);
             }
             catch (Exception ex)
             {
                 _logger.LogWarning(
                     ex,
-                    "事件已经提交，但周期分析失效标记失败：CorrelationIds={CorrelationIds}",
-                    string.Join(",", acceptedMaxIngestByCorrelationId.Keys));
+                    "事件已经提交，但周期分析失效标记失败：ExecutionIds={ExecutionIds}",
+                    string.Join(",", acceptedMaxIngestByExecutionId.Keys));
             }
         }
         var response = new EventBatchResponse
@@ -232,29 +232,18 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, IA
         IDictionary<string, IReadOnlyDictionary<string, string>> capturedContexts,
         CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(evt.CorrelationId))
+        if (string.IsNullOrWhiteSpace(evt.ExecutionId))
             return evt;
 
-        var correlationId = evt.CorrelationId;
+        var executionId = evt.ExecutionId;
         var isStart = evt.EventType.EndsWith(".started", StringComparison.Ordinal);
         if (!isStart)
         {
-            if (!capturedContexts.TryGetValue(correlationId, out var captured))
+            if (!capturedContexts.TryGetValue(executionId, out var captured))
             {
-                captured = await LoadOperationContextSnapshotAsync(correlationId, ct).ConfigureAwait(false);
-                if (captured is null)
-                {
-                    // Compatibility for event stores created before persistent operation snapshots.
-                    var previous = await QueryAsync(new PlatformEventQuery
-                    {
-                        CorrelationId = correlationId,
-                        EventType = "cycle.started",
-                        Limit = 1
-                    }, ct).ConfigureAwait(false);
-                    captured = previous.FirstOrDefault()?.Event.Context;
-                }
+                captured = await LoadOperationContextSnapshotAsync(executionId, ct).ConfigureAwait(false);
                 if (captured is not null)
-                    capturedContexts[correlationId] = captured;
+                    capturedContexts[executionId] = captured;
             }
             return captured is null ? evt : evt with { Context = MergeCapturedContext(captured, evt.Context) };
         }
@@ -262,19 +251,19 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, IA
         var resolved = await _manufacturingContexts.ResolveAsync(evt.Subject.Id, evt.OccurredAt, ct)
             .ConfigureAwait(false);
         var context = new Dictionary<string, string>(evt.Context, StringComparer.Ordinal);
-        context["operation_run_id"] = correlationId;
+        context["execution_id"] = executionId;
         if (string.Equals(evt.Subject.Type, "equipment", StringComparison.OrdinalIgnoreCase))
             context["equipment_id"] = evt.Subject.Id;
         if (resolved is not null)
         {
             context["production_context_id"] = resolved.Production.ContextId.ToString("D");
-            context["product_series"] = resolved.Production.ProductSeries;
+            context["product_family_code"] = resolved.Production.ProductFamilyCode;
             context["product_code"] = resolved.Production.ProductCode;
-            context["recipe_id"] = resolved.Production.RecipeId;
-            context["recipe_version"] = resolved.Production.RecipeVersion;
+            context["process_specification_id"] = resolved.Production.ProcessSpecificationId;
+            context["process_specification_version"] = resolved.Production.ProcessSpecificationVersion;
             context["tooling_installation_id"] = resolved.Installation.InstallationId.ToString("D");
-            context["tooling_id"] = resolved.Assembly.MoldId;
-            context["mold_id"] = resolved.Assembly.MoldId;
+            context["tooling_assembly_id"] = resolved.Assembly.ToolingAssemblyId;
+            context["tooling_assembly_id"] = resolved.Assembly.ToolingAssemblyId;
             context["assembly_revision_id"] = resolved.AssemblyRevision.AssemblyRevisionId.ToString("D");
             context["assembly_revision"] = resolved.AssemblyRevision.Revision.ToString(CultureInfo.InvariantCulture);
             context["context_captured_at"] = evt.OccurredAt.ToString("O", CultureInfo.InvariantCulture);
@@ -300,7 +289,7 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, IA
         else
         {
             context["context_captured_at"] = evt.OccurredAt.ToString("O", CultureInfo.InvariantCulture);
-            // Historical imports already carry the immutable product/recipe/workpiece
+            // Imports may already carry immutable product, process-specification, and output-item
             // context from their source system.  Do not turn a usable historical
             // replay into a configuration error merely because it did not pass
             // through this deployment's live preparation and tooling workflow.
@@ -310,12 +299,12 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, IA
                 : "configuration_missing";
         }
 
-        var recipe = await _analysisResolver.ResolveRecipeAsync(context, ct).ConfigureAwait(false);
+        var processSpecification = await _analysisResolver.ResolveProcessSpecificationAsync(context, ct).ConfigureAwait(false);
         var analysisScope = evt.EventType.StartsWith("run.", StringComparison.Ordinal)
             ? "production-run"
-            : "production-cycle";
+            : "production-execution";
         var analysis = await _analysisResolver.ResolveAsync(context, analysisScope, ct).ConfigureAwait(false);
-        if (recipe is not null)
+        if (processSpecification is not null)
         {
             var sourceModelId = ProcessAnalysisResolver.ContextValue(context, "data_model_id")?.Trim();
             var hasSourceModelVersion = int.TryParse(
@@ -325,22 +314,22 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, IA
                 out var sourceModelVersion) && sourceModelVersion > 0;
             var hasSourceModel = !string.IsNullOrWhiteSpace(sourceModelId) && hasSourceModelVersion;
 
-            // 采集配置声明的是本次原始轨迹实际采用的数据模型，不能被配方主数据的
-            // 历史模型版本覆盖。配方模型单独留痕；不一致时显式标记，交给数据质量
+            // 采集配置声明的是本次原始轨迹实际采用的数据模型，不能被工艺规范主数据的
+            // 历史模型版本覆盖。工艺规范模型单独留痕；不一致时显式标记，交给数据质量
             // 和配置治理处理，但仍按采集模型校验并保存真实设备数据。
-            context["recipe_data_model_id"] = recipe.DataModelId;
-            context["recipe_data_model_version"] = recipe.DataModelVersion.ToString(CultureInfo.InvariantCulture);
+            context["process_specification_data_model_id"] = processSpecification.DataModelId;
+            context["process_specification_data_model_version"] = processSpecification.DataModelVersion.ToString(CultureInfo.InvariantCulture);
             if (!hasSourceModel)
             {
-                context["data_model_id"] = recipe.DataModelId;
-                context["data_model_version"] = recipe.DataModelVersion.ToString(CultureInfo.InvariantCulture);
-                context["recipe_snapshot_status"] = "resolved";
+                context["data_model_id"] = processSpecification.DataModelId;
+                context["data_model_version"] = processSpecification.DataModelVersion.ToString(CultureInfo.InvariantCulture);
+                context["process_specification_snapshot_status"] = "resolved";
             }
             else
             {
-                context["recipe_snapshot_status"] =
-                    string.Equals(sourceModelId, recipe.DataModelId, StringComparison.Ordinal) &&
-                    sourceModelVersion == recipe.DataModelVersion
+                context["process_specification_snapshot_status"] =
+                    string.Equals(sourceModelId, processSpecification.DataModelId, StringComparison.Ordinal) &&
+                    sourceModelVersion == processSpecification.DataModelVersion
                         ? "resolved"
                         : "model_mismatch";
             }
@@ -352,24 +341,24 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, IA
         }
 
         var data = new Dictionary<string, object?>(evt.Data, StringComparer.Ordinal);
-        if (recipe is not null)
+        if (processSpecification is not null)
         {
-            data["plannedRecipeParameters"] = recipe.Values.ToDictionary(
+            data["plannedControlParameterValues"] = processSpecification.Values.ToDictionary(
                 static item => item.Code,
                 static item => (object?)item.Value,
                 StringComparer.Ordinal);
         }
-        capturedContexts[correlationId] = context;
+        capturedContexts[executionId] = context;
         return evt with { Context = context, Data = data };
     }
 
     private async Task<IReadOnlyDictionary<string, string>?> LoadOperationContextSnapshotAsync(
-        string correlationId,
+        string executionId,
         CancellationToken ct)
     {
         await using var command = _dataSource.CreateCommand(
-            "SELECT context::text FROM operation_context_snapshots WHERE correlation_id = @correlation_id;");
-        command.Parameters.AddWithValue("correlation_id", correlationId);
+            "SELECT context::text FROM operation_context_snapshots WHERE execution_id = @execution_id;");
+        command.Parameters.AddWithValue("execution_id", executionId);
         var raw = await command.ExecuteScalarAsync(ct).ConfigureAwait(false) as string;
         return string.IsNullOrWhiteSpace(raw)
             ? null
@@ -385,9 +374,9 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, IA
         await using var command = new NpgsqlCommand(
             """
             INSERT INTO operation_context_snapshots(
-              correlation_id, subject_type, subject_id, started_event_type, captured_at, context)
-            VALUES (@correlation_id, @subject_type, @subject_id, @started_event_type, @captured_at, @context)
-            ON CONFLICT (correlation_id) DO UPDATE SET
+              execution_id, subject_type, subject_id, started_event_type, captured_at, context)
+            VALUES (@execution_id, @subject_type, @subject_id, @started_event_type, @captured_at, @context)
+            ON CONFLICT (execution_id) DO UPDATE SET
               subject_type = EXCLUDED.subject_type,
               subject_id = EXCLUDED.subject_id,
               started_event_type = EXCLUDED.started_event_type,
@@ -396,7 +385,7 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, IA
             """,
             connection,
             transaction);
-        command.Parameters.AddWithValue("correlation_id", evt.CorrelationId!);
+        command.Parameters.AddWithValue("execution_id", evt.ExecutionId!);
         command.Parameters.AddWithValue("subject_type", evt.Subject.Type);
         command.Parameters.AddWithValue("subject_id", evt.Subject.Id);
         command.Parameters.AddWithValue("started_event_type", evt.EventType);
@@ -447,7 +436,7 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, IA
         foreach (var pair in current)
         {
             if (pair.Key is "stage_number" or "process_stage_name" or
-                "recipe_step" or "recipe_step_name" or "process_phase" or "process_stage" ||
+                "process_step" or "process_step_name" or "process_phase" or "process_stage" ||
                 !result.ContainsKey(pair.Key))
                 result[pair.Key] = pair.Value;
         }
@@ -455,7 +444,7 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, IA
     }
 
     private static bool HasSourceProvidedContext(IReadOnlyDictionary<string, string> context)
-        => new[] { "product_series", "product_code", "recipe_id", "recipe_version", "workpiece_id" }
+        => new[] { "product_family_code", "product_code", "process_specification_id", "process_specification_version", "output_item_id" }
             .All(key => context.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value));
 
     private async Task ValidateProcessSampleAsync(
@@ -465,10 +454,10 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, IA
     {
         if (!string.Equals(evt.EventType, "process.sample", StringComparison.Ordinal))
             return;
-        var cacheKey = evt.CorrelationId ?? $"{evt.Subject.Type}:{evt.Subject.Id}";
+        var cacheKey = evt.ExecutionId ?? $"{evt.Subject.Type}:{evt.Subject.Id}";
         if (!configurations.TryGetValue(cacheKey, out var analysis))
         {
-            analysis = await _analysisResolver.ResolveAsync(evt.Context, "production-cycle", ct).ConfigureAwait(false)
+            analysis = await _analysisResolver.ResolveAsync(evt.Context, "production-execution", ct).ConfigureAwait(false)
                        ?? await _analysisResolver.ResolveAsync(evt.Context, "production-run", ct).ConfigureAwait(false)
                        ?? await _analysisResolver.ResolveAsync(evt.Context, "analysis-window", ct).ConfigureAwait(false);
             configurations[cacheKey] = analysis;
@@ -558,7 +547,7 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, IA
         command.CommandText = $"""
                               SELECT ingest_id, edge_id, ingested_at, event_id, event_type, type_version,
                                      occurred_at, recorded_at, source, subject_type, subject_id,
-                                     correlation_id, context::text, data::text, seq
+                                     execution_id, context::text, data::text, seq
                               FROM production_events
                               {where}
                               ORDER BY ingest_id {order}
@@ -575,13 +564,13 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, IA
         return events;
     }
 
-    public async Task<IReadOnlyList<PlatformProductionEvent>> QueryByCorrelationIdsAsync(
-        IReadOnlyCollection<string> correlationIds,
+    public async Task<IReadOnlyList<PlatformProductionEvent>> QueryByExecutionIdsAsync(
+        IReadOnlyCollection<string> executionIds,
         CancellationToken ct = default)
     {
-        ArgumentNullException.ThrowIfNull(correlationIds);
+        ArgumentNullException.ThrowIfNull(executionIds);
         await InitializeAsync(ct).ConfigureAwait(false);
-        var ids = correlationIds
+        var ids = executionIds
             .Where(static value => !string.IsNullOrWhiteSpace(value))
             .Select(static value => value.Trim())
             .Distinct(StringComparer.Ordinal)
@@ -593,12 +582,12 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, IA
             """
             SELECT ingest_id, edge_id, ingested_at, event_id, event_type, type_version,
                    occurred_at, recorded_at, source, subject_type, subject_id,
-                   correlation_id, context::text, data::text, seq
+                   execution_id, context::text, data::text, seq
             FROM production_events
-            WHERE correlation_id = ANY(@correlation_ids)
-            ORDER BY correlation_id, occurred_at, ingest_id;
+            WHERE execution_id = ANY(@execution_ids)
+            ORDER BY execution_id, occurred_at, ingest_id;
             """);
-        command.Parameters.AddWithValue("correlation_ids", ids);
+        command.Parameters.AddWithValue("execution_ids", ids);
         var result = new List<PlatformProductionEvent>();
         await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
         while (await reader.ReadAsync(ct).ConfigureAwait(false))
@@ -643,7 +632,7 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, IA
             : $"""
                               WITH filtered AS (
                                 SELECT ingest_id, edge_id, event_type, occurred_at, subject_type,
-                                       subject_id, correlation_id, context
+                                       subject_id, execution_id, context
                                 FROM production_events
                                 {where}
                               ),
@@ -651,7 +640,7 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, IA
                                 SELECT subject_type, subject_id,
                                        count(*) AS event_count,
                                        count(*) FILTER (WHERE event_type = 'process.sample') AS sample_count,
-                                       count(DISTINCT correlation_id) AS operation_count,
+                                       count(DISTINCT execution_id) AS operation_count,
                                        min(occurred_at) AS first_observed_at,
                                        max(occurred_at) AS last_observed_at,
                                        max(occurred_at) FILTER (WHERE event_type = 'process.sample') AS last_sample_at
@@ -765,18 +754,18 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, IA
         AddEquality(command, predicates, "event_type", "event_type", query.EventType);
         AddEquality(command, predicates, "subject_type", "subject_type", query.SubjectType);
         AddEquality(command, predicates, "subject_id", "subject_id", query.SubjectId);
-        AddEquality(command, predicates, "correlation_id", "correlation_id", query.CorrelationId);
+        AddEquality(command, predicates, "execution_id", "execution_id", query.ExecutionId);
         if (!string.IsNullOrWhiteSpace(query.SearchText))
         {
             var search = query.SearchText.Trim();
             if (search.Length > 128)
                 throw new ArgumentException("运行搜索词不能超过 128 个字符。", nameof(query));
             predicates.Add("""
-                           (correlation_id ILIKE @search ESCAPE '~'
+                           (execution_id ILIKE @search ESCAPE '~'
                             OR subject_id ILIKE @search ESCAPE '~'
-                            OR context ->> 'product_series' ILIKE @search ESCAPE '~'
+                            OR context ->> 'product_family_code' ILIKE @search ESCAPE '~'
                             OR context ->> 'product_code' ILIKE @search ESCAPE '~'
-                            OR context ->> 'recipe_id' ILIKE @search ESCAPE '~')
+                            OR context ->> 'process_specification_id' ILIKE @search ESCAPE '~')
                            """);
             command.Parameters.AddWithValue("search", $"%{EscapeLike(search)}%");
         }
@@ -930,10 +919,10 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, IA
             """
             INSERT INTO production_events(
               event_id, edge_id, seq, event_type, type_version, occurred_at, recorded_at,
-              source, subject_type, subject_id, correlation_id, context, data)
+              source, subject_type, subject_id, execution_id, context, data)
             VALUES (
               @event_id, @edge_id, @seq, @event_type, @type_version, @occurred_at, @recorded_at,
-              @source, @subject_type, @subject_id, @correlation_id, @context, @data)
+              @source, @subject_type, @subject_id, @execution_id, @context, @data)
             RETURNING ingest_id;
             """,
             connection,
@@ -948,7 +937,7 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, IA
         command.Parameters.AddWithValue("source", evt.Source);
         command.Parameters.AddWithValue("subject_type", evt.Subject.Type);
         command.Parameters.AddWithValue("subject_id", evt.Subject.Id);
-        command.Parameters.AddWithValue("correlation_id", (object?)evt.CorrelationId ?? DBNull.Value);
+        command.Parameters.AddWithValue("execution_id", (object?)evt.ExecutionId ?? DBNull.Value);
         command.Parameters.AddWithValue("context", NpgsqlDbType.Jsonb, JsonSerializer.Serialize(evt.Context, JsonOptions));
         command.Parameters.AddWithValue("data", NpgsqlDbType.Jsonb, JsonSerializer.Serialize(evt.Data, JsonOptions));
         return Convert.ToInt64(await command.ExecuteScalarAsync(ct).ConfigureAwait(false), CultureInfo.InvariantCulture);
@@ -963,20 +952,20 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, IA
         CancellationToken ct)
     {
         var operationIncrement = 0;
-        if (!string.IsNullOrWhiteSpace(evt.CorrelationId))
+        if (!string.IsNullOrWhiteSpace(evt.ExecutionId))
         {
             await using var operationCommand = new NpgsqlCommand(
                 """
-                INSERT INTO data_object_operation_keys(subject_type, subject_id, correlation_id)
-                VALUES (@subject_type, @subject_id, @correlation_id)
+                INSERT INTO data_object_operation_keys(subject_type, subject_id, execution_id)
+                VALUES (@subject_type, @subject_id, @execution_id)
                 ON CONFLICT DO NOTHING
-                RETURNING correlation_id;
+                RETURNING execution_id;
                 """,
                 connection,
                 transaction);
             operationCommand.Parameters.AddWithValue("subject_type", evt.Subject.Type);
             operationCommand.Parameters.AddWithValue("subject_id", evt.Subject.Id);
-            operationCommand.Parameters.AddWithValue("correlation_id", evt.CorrelationId);
+            operationCommand.Parameters.AddWithValue("execution_id", evt.ExecutionId);
             operationIncrement = await operationCommand.ExecuteScalarAsync(ct).ConfigureAwait(false) is null ? 0 : 1;
         }
 
@@ -1087,7 +1076,7 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, IA
             RecordedAt = new DateTimeOffset(reader.GetDateTime(7).ToUniversalTime()),
             Source = reader.GetString(8),
             Subject = new ObjectRef(reader.GetString(9), reader.GetString(10)),
-            CorrelationId = reader.IsDBNull(11) ? null : reader.GetString(11),
+            ExecutionId = reader.IsDBNull(11) ? null : reader.GetString(11),
             Context = context,
             Data = data,
             Seq = reader.GetInt64(14)

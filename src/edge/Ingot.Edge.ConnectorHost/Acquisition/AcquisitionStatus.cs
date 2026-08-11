@@ -48,7 +48,7 @@ public sealed class AcquisitionStatus
                     .Select(static item => item.LastReadDurationMs).FirstOrDefault(),
                 tasks.OrderByDescending(static item => item.LastSuccessAt)
                     .Select(static item => item.ObservedIntervalMs).FirstOrDefault(),
-                tasks.Select(static item => item.ActiveRecipe).FirstOrDefault(static value => value is not null),
+                tasks.Select(static item => item.ActiveProcessSpecification).FirstOrDefault(static value => value is not null),
                 _configurationError ??
                 deployments.Select(static item => item.LastError).FirstOrDefault(static value => value is not null) ??
                 tasks.Select(static item => item.LastError).FirstOrDefault(static value => value is not null),
@@ -201,19 +201,19 @@ public sealed class AcquisitionStatus
         }
     }
 
-    public void RecordCycleState(string configurationKey, bool active)
+    public void RecordProcessExecutionState(string configurationKey, bool active)
     {
         lock (_gate)
         {
             if (_tasks.TryGetValue(configurationKey, out var task))
-                _tasks[configurationKey] = task with { CycleActive = active };
+                _tasks[configurationKey] = task with { ProcessExecutionActive = active };
         }
     }
 
     public bool IsSafeToReplace(string configurationKey)
     {
         lock (_gate)
-            return !_tasks.TryGetValue(configurationKey, out var task) || !task.CycleActive;
+            return !_tasks.TryGetValue(configurationKey, out var task) || !task.ProcessExecutionActive;
     }
 
     public bool AreDesiredDeploymentsApplied()
@@ -230,7 +230,7 @@ public sealed class AcquisitionStatus
     public void RecordSuccess(
         string configurationKey,
         DateTimeOffset timestamp,
-        string? recipe,
+        string? processSpecification,
         bool incrementSample = true,
         double? readDurationMs = null)
     {
@@ -247,7 +247,7 @@ public sealed class AcquisitionStatus
                 ObservedIntervalMs = task.LastSuccessAt.HasValue
                     ? (timestamp - task.LastSuccessAt.Value).TotalMilliseconds
                     : task.ObservedIntervalMs,
-                ActiveRecipe = recipe,
+                ActiveProcessSpecification = processSpecification,
                 LastError = null
             };
             if (_firstSuccessSignals.TryGetValue(configurationKey, out var signal))

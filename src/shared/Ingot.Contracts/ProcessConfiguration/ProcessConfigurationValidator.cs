@@ -4,7 +4,7 @@ namespace Ingot.Contracts.ProcessConfiguration;
 
 public static partial class ProcessConfigurationValidator
 {
-    private static readonly HashSet<string> SupportedWholeCycleFeatures = new(
+    private static readonly HashSet<string> SupportedWholeProcessExecutionFeatures = new(
         ["mean", "average", "min", "minimum", "max", "maximum", "range", "std", "stddev",
          "median", "p05", "p95", "integral", "slope"],
         StringComparer.Ordinal);
@@ -19,7 +19,7 @@ public static partial class ProcessConfigurationValidator
         if (value.Acquisition.DataItems.Count == 0)
             return Fail("工艺数据模型至少需要一个采集数据项。", out error);
         if (!TryNormalizeDataItems(value.Acquisition.DataItems, out var items, out error) ||
-            !TryNormalizeParameters(value.RecipeParameters, out var parameters, out error))
+            !TryNormalizeParameters(value.ControlParameters, out var parameters, out error))
             return false;
         normalized = value with
         {
@@ -31,39 +31,39 @@ public static partial class ProcessConfigurationValidator
             {
                 DataItems = items
             },
-            RecipeParameters = parameters,
+            ControlParameters = parameters,
             UpdatedAt = value.UpdatedAt == default ? DateTimeOffset.UtcNow : value.UpdatedAt
         };
         error = string.Empty;
         return true;
     }
 
-    public static bool TryValidate(RecipeVersion? value, out RecipeVersion? normalized, out string error)
+    public static bool TryValidate(ProcessSpecification? value, out ProcessSpecification? normalized, out string error)
     {
         normalized = null;
         if (value is null)
-            return Fail("配方版本不能为空。", out error);
-        if (!TryIdentity(value.RecipeId, value.Version, value.Name, value.Status, out var id, out var name, out error))
+            return Fail("工艺规范版本不能为空。", out error);
+        if (!TryIdentity(value.ProcessSpecificationId, value.Version, value.Name, value.Status, out var id, out var name, out error))
             return false;
         var modelId = NormalizeCode(value.DataModelId);
         if (!ValidCode(modelId) || value.DataModelVersion < 1)
-            return Fail("配方版本必须引用有效的工艺数据模型版本。", out error);
+            return Fail("工艺规范版本必须引用有效的工艺数据模型版本。", out error);
         if (value.BasedOnVersion.HasValue && (value.BasedOnVersion < 1 || value.BasedOnVersion == value.Version))
             return Fail("沿用版本必须是不同的正整数版本。", out error);
         if (!TryNormalizeSelector(value.ContextSelector, out var selector, out error))
             return false;
-        var values = new List<RecipeParameterValue>();
+        var values = new List<ControlParameterValue>();
         var seen = new HashSet<string>(StringComparer.Ordinal);
         foreach (var item in value.Values)
         {
             var code = NormalizeCode(item.Code);
             if (!ValidCode(code) || !seen.Add(code))
-                return Fail($"配方参数编码无效或重复：{item.Code}。", out error);
+                return Fail($"控制参数编码无效或重复：{item.Code}。", out error);
             values.Add(item with { Code = code });
         }
         normalized = value with
         {
-            RecipeId = id,
+            ProcessSpecificationId = id,
             Name = name,
             DataModelId = modelId,
             Status = value.Status.Trim().ToLowerInvariant(),
@@ -88,8 +88,8 @@ public static partial class ProcessConfigurationValidator
         if (string.IsNullOrWhiteSpace(value.AnalysisScope) || string.IsNullOrWhiteSpace(value.AlignmentMode))
             return Fail("分析范围和对齐方式不能为空。", out error);
         var analysisScope = value.AnalysisScope.Trim().ToLowerInvariant();
-        if (analysisScope is not ("production-cycle" or "production-run" or "analysis-window"))
-            return Fail("分析范围只能是 production-cycle、production-run 或 analysis-window。", out error);
+        if (analysisScope is not ("production-execution" or "production-run" or "analysis-window"))
+            return Fail("分析范围只能是 production-execution、production-run 或 analysis-window。", out error);
         var alignmentMode = value.AlignmentMode.Trim().ToLowerInvariant();
         if (alignmentMode is not ("stage-relative" or "elapsed" or "normalized"))
             return Fail("对齐方式只能是 stage-relative、elapsed 或 normalized。", out error);
@@ -111,7 +111,7 @@ public static partial class ProcessConfigurationValidator
             if (!ValidCode(code) || !seen.Add(code))
                 return Fail($"分析数据项编码无效或重复：{signal.DataItemCode}。", out error);
             var features = signal.Features.Select(NormalizeCode).Where(ValidCode).Distinct(StringComparer.Ordinal).ToArray();
-            var unsupported = features.FirstOrDefault(feature => !SupportedWholeCycleFeatures.Contains(feature));
+            var unsupported = features.FirstOrDefault(feature => !SupportedWholeProcessExecutionFeatures.Contains(feature));
             if (unsupported is not null)
                 return Fail($"分析特征不受支持：{unsupported}。", out error);
             signals.Add(signal with { DataItemCode = code, Features = features });
@@ -166,7 +166,7 @@ public static partial class ProcessConfigurationValidator
         foreach (var item in source)
         {
             var code = NormalizeCode(item.Code);
-            if (!ValidCode(code) || !seen.Add(code) || string.IsNullOrWhiteSpace(item.SourceField))
+            if (!ValidCode(code) || !seen.Add(code) || string.IsNullOrWhiteSpace(item.DisplayName))
             {
                 result = [];
                 return Fail($"采集数据项编码无效、重复或缺少来源字段：{item.Code}。", out error);
@@ -174,7 +174,7 @@ public static partial class ProcessConfigurationValidator
             values.Add(item with
             {
                 Code = code,
-                SourceField = item.SourceField.Trim(),
+                DisplayName = item.DisplayName.Trim(),
                 DataType = NormalizeDataType(item.DataType),
                 Unit = Clean(item.Unit),
                 Category = string.IsNullOrWhiteSpace(item.Category) ? "process" : item.Category.Trim().ToLowerInvariant()
@@ -197,24 +197,24 @@ public static partial class ProcessConfigurationValidator
     }
 
     private static bool TryNormalizeParameters(
-        IReadOnlyList<RecipeParameterDefinition> source,
-        out IReadOnlyList<RecipeParameterDefinition> result,
+        IReadOnlyList<ControlParameterDefinition> source,
+        out IReadOnlyList<ControlParameterDefinition> result,
         out string error)
     {
-        var values = new List<RecipeParameterDefinition>();
+        var values = new List<ControlParameterDefinition>();
         var seen = new HashSet<string>(StringComparer.Ordinal);
         foreach (var item in source)
         {
             var code = NormalizeCode(item.Code);
-            if (!ValidCode(code) || !seen.Add(code) || string.IsNullOrWhiteSpace(item.SourceField))
+            if (!ValidCode(code) || !seen.Add(code) || string.IsNullOrWhiteSpace(item.DisplayName))
             {
                 result = [];
-                return Fail($"配方参数编码无效、重复或缺少来源字段：{item.Code}。", out error);
+                return Fail($"控制参数编码无效、重复或缺少来源字段：{item.Code}。", out error);
             }
             values.Add(item with
             {
                 Code = code,
-                SourceField = item.SourceField.Trim(),
+                DisplayName = item.DisplayName.Trim(),
                 DataType = NormalizeDataType(item.DataType),
                 Unit = Clean(item.Unit)
             });

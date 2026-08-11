@@ -20,7 +20,7 @@ public static partial class ProductionEventValidator
         if (string.IsNullOrWhiteSpace(evt.EventType) ||
             !EventTypePattern().IsMatch(evt.EventType))
         {
-            return Fail("EventType 必须使用小写点分格式，例如 cycle.completed。", out error);
+            return Fail("EventType 必须使用小写点分格式，例如 process.execution.completed。", out error);
         }
         if (evt.EventTypeVersion <= 0)
             return Fail("EventTypeVersion 必须大于 0。", out error);
@@ -45,8 +45,8 @@ public static partial class ProductionEventValidator
         }
         if (evt.Data is null)
             return Fail("Data 不能为空。", out error);
-        if (evt.CorrelationId is not null && string.IsNullOrWhiteSpace(evt.CorrelationId))
-            return Fail("CorrelationId 不能是空白字符串。", out error);
+        if (evt.ExecutionId is not null && string.IsNullOrWhiteSpace(evt.ExecutionId))
+            return Fail("ExecutionId 不能是空白字符串。", out error);
         if (requirePersistedSequence && evt.Seq <= 0)
             return Fail("Seq 必须大于 0。", out error);
         if (!requirePersistedSequence && evt.Seq < 0)

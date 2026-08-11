@@ -156,13 +156,13 @@ public sealed class ToolingAssembliesController(
         catch (InvalidOperationException ex) { return Conflict(new { error = ex.Message }); }
     }
 
-    [HttpDelete("{moldId}")]
-    public async Task<IActionResult> Delete(string moldId, CancellationToken ct)
+    [HttpDelete("{toolingAssemblyId}")]
+    public async Task<IActionResult> Delete(string toolingAssemblyId, CancellationToken ct)
     {
         var denied = DeniedConfigurationWrite();
         if (denied is not null)
             return denied;
-        try { return await store.DeleteAssemblyAsync(moldId.Trim(), ct).ConfigureAwait(false) ? NoContent() : NotFound(); }
+        try { return await store.DeleteAssemblyAsync(toolingAssemblyId.Trim(), ct).ConfigureAwait(false) ? NoContent() : NotFound(); }
         catch (InvalidOperationException ex) { return Conflict(new { error = ex.Message }); }
     }
 
@@ -173,26 +173,26 @@ public sealed class ToolingAssembliesController(
         return denied ?? Ok(new { data = await store.ListAssemblyRevisionsAsync(null, ct).ConfigureAwait(false) });
     }
 
-    [HttpGet("{moldId}/revisions")]
-    public async Task<IActionResult> ListRevisions(string moldId, CancellationToken ct)
+    [HttpGet("{toolingAssemblyId}/revisions")]
+    public async Task<IActionResult> ListRevisions(string toolingAssemblyId, CancellationToken ct)
     {
         var denied = DeniedConfigurationRead();
         return denied ?? Ok(new
         {
-            data = await store.ListAssemblyRevisionsAsync(moldId, ct).ConfigureAwait(false)
+            data = await store.ListAssemblyRevisionsAsync(toolingAssemblyId, ct).ConfigureAwait(false)
         });
     }
 
-    [HttpPost("{moldId}/revisions")]
+    [HttpPost("{toolingAssemblyId}/revisions")]
     public async Task<IActionResult> CreateRevision(
-        string moldId,
+        string toolingAssemblyId,
         [FromBody] ToolingAssemblyRevision? request,
         CancellationToken ct)
     {
         var denied = DeniedConfigurationWrite();
         if (denied is not null)
             return denied;
-        request = request is null ? null : request with { MoldId = moldId.Trim() };
+        request = request is null ? null : request with { ToolingAssemblyId = toolingAssemblyId.Trim() };
         if (!ManufacturingContextValidator.TryValidate(request, out ToolingAssemblyRevision? normalized, out var error))
             return BadRequest(new { error });
         try { return Ok(await store.CreateAssemblyRevisionAsync(normalized!, ct).ConfigureAwait(false)); }
@@ -218,14 +218,14 @@ public sealed class ToolingInstallationsController(
 {
     [HttpGet]
     public async Task<IActionResult> List(
-        [FromQuery] string? machineId,
+        [FromQuery] string? equipmentId,
         [FromQuery] bool activeOnly,
         CancellationToken ct)
     {
         var denied = DeniedConfigurationRead();
         return denied ?? Ok(new
         {
-            data = await store.ListInstallationsAsync(machineId, activeOnly, ct).ConfigureAwait(false)
+            data = await store.ListInstallationsAsync(equipmentId, activeOnly, ct).ConfigureAwait(false)
         });
     }
 
@@ -282,24 +282,24 @@ public sealed class ProductionContextsController(
 {
     [HttpGet]
     public async Task<IActionResult> List(
-        [FromQuery] string? machineId,
+        [FromQuery] string? equipmentId,
         [FromQuery] bool activeOnly,
         CancellationToken ct)
     {
         var denied = DeniedConfigurationRead();
         return denied ?? Ok(new
         {
-            data = await store.ListProductionContextsAsync(machineId, activeOnly, ct).ConfigureAwait(false)
+            data = await store.ListProductionContextsAsync(equipmentId, activeOnly, ct).ConfigureAwait(false)
         });
     }
 
-    [HttpGet("current/{machineId}")]
-    public async Task<IActionResult> Current(string machineId, [FromQuery] DateTimeOffset? at, CancellationToken ct)
+    [HttpGet("current/{equipmentId}")]
+    public async Task<IActionResult> Current(string equipmentId, [FromQuery] DateTimeOffset? at, CancellationToken ct)
     {
         var denied = DeniedConfigurationRead();
         if (denied is not null)
             return denied;
-        var item = await store.ResolveAsync(machineId, at ?? DateTimeOffset.UtcNow, ct).ConfigureAwait(false);
+        var item = await store.ResolveAsync(equipmentId, at ?? DateTimeOffset.UtcNow, ct).ConfigureAwait(false);
         return item is null ? NotFound() : Ok(item);
     }
 
@@ -311,20 +311,20 @@ public sealed class ProductionContextsController(
             return denied;
         if (!ManufacturingContextValidator.TryValidate(request, out ProductionContext? normalized, out var error))
             return BadRequest(new { error });
-        if (!int.TryParse(normalized!.RecipeVersion, out var recipeVersion) || recipeVersion < 1)
-            return BadRequest(new { error = "RecipeVersion 必须是已发布配方的正整数版本。" });
-        var recipe = await processConfigurations.GetRecipeVersionAsync(
-            normalized.RecipeId.Trim().ToLowerInvariant(), recipeVersion, ct).ConfigureAwait(false);
-        if (recipe is null || recipe.Status != ConfigurationStatuses.Published)
-            return BadRequest(new { error = "生产准备必须引用已发布的配方版本。" });
-        var recipeContext = new Dictionary<string, string>(StringComparer.Ordinal)
+        if (!int.TryParse(normalized!.ProcessSpecificationVersion, out var processSpecificationVersion) || processSpecificationVersion < 1)
+            return BadRequest(new { error = "ProcessSpecificationVersion 必须是已发布工艺规范的正整数版本。" });
+        var processSpecification = await processConfigurations.GetProcessSpecificationAsync(
+            normalized.ProcessSpecificationId.Trim().ToLowerInvariant(), processSpecificationVersion, ct).ConfigureAwait(false);
+        if (processSpecification is null || processSpecification.Status != ConfigurationStatuses.Published)
+            return BadRequest(new { error = "生产上下文必须引用已发布的工艺规范版本。" });
+        var selectorContext = new Dictionary<string, string>(StringComparer.Ordinal)
         {
-            ["product_series"] = normalized.ProductSeries,
+            ["product_family_code"] = normalized.ProductFamilyCode,
             ["product_code"] = normalized.ProductCode,
-            ["machine_id"] = normalized.MachineId
+            ["equipment_id"] = normalized.EquipmentId
         };
-        if (!ProcessAnalysisResolver.MatchesSelector(recipe.ContextSelector, recipeContext))
-            return BadRequest(new { error = "配方的适用条件与当前产品或设备不匹配。" });
+        if (!ProcessAnalysisResolver.MatchesSelector(processSpecification.ContextSelector, selectorContext))
+            return BadRequest(new { error = "工艺规范的适用条件与当前产品或设备不匹配。" });
         try { return Ok(await store.StartProductionContextAsync(normalized!, ct).ConfigureAwait(false)); }
         catch (InvalidOperationException ex) { return Conflict(new { error = ex.Message }); }
     }

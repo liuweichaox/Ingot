@@ -41,7 +41,7 @@ public static partial class ResearchAssetValidator
             ContentHash = contentHash!.ToLowerInvariant(),
             CreatedBy = createdBy!,
             FeatureCodes = NormalizeCodes(value.FeatureCodes),
-            CycleIds = NormalizeValues(value.CycleIds),
+            ProcessExecutionIds = NormalizeValues(value.ProcessExecutionIds),
             ContextSelector = NormalizeMap(value.ContextSelector),
             CreatedAt = value.CreatedAt == default ? DateTimeOffset.UtcNow : value.CreatedAt
         };

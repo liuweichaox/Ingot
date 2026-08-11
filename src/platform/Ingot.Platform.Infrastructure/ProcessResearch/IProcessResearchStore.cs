@@ -44,7 +44,7 @@ public interface IProcessResearchStore
         CancellationToken ct = default);
     Task<ResearchShadowRecommendation?> GetShadowRecommendationBySuggestionAsync(
         Guid experimentId,
-        string suggestionRunKey,
+        string suggestionExecutionKey,
         CancellationToken ct = default);
     Task<IReadOnlyList<ResearchShadowRecommendation>> ListShadowRecommendationsAsync(
         Guid projectId,
@@ -101,12 +101,12 @@ public interface IProcessResearchStore
         return saved;
     }
 
-    Task<ResearchProcessWindow?> GetProcessWindowAsync(Guid windowId, CancellationToken ct = default);
-    Task<IReadOnlyList<ResearchProcessWindow>> ListProcessWindowsAsync(
+    Task<ResearchOperatingRegion?> GetOperatingRegionAsync(Guid operatingRegionId, CancellationToken ct = default);
+    Task<IReadOnlyList<ResearchOperatingRegion>> ListOperatingRegionsAsync(
         Guid projectId,
         CancellationToken ct = default);
-    Task<ResearchProcessWindow> SaveProcessWindowAsync(
-        ResearchProcessWindow value,
+    Task<ResearchOperatingRegion> SaveOperatingRegionAsync(
+        ResearchOperatingRegion value,
         CancellationToken ct = default);
 
     Task<ResearchKnowledgeClaim?> GetKnowledgeClaimAsync(Guid claimId, CancellationToken ct = default);

@@ -75,14 +75,14 @@ public sealed class EventsControllerTests
     }
 
     [Fact]
-    public async Task GetCycle_PagesThroughMoreThanFiveHundredEvents()
+    public async Task GetProcessExecution_PagesThroughMoreThanFiveHundredEvents()
     {
         var startedAt = DateTimeOffset.Parse("2026-07-18T10:00:00Z");
         var rows = Enumerable.Range(1, 602)
             .Select(index => Row(
                 index,
-                index == 1 ? "cycle.started" :
-                index == 602 ? "cycle.completed" : "process.sample",
+                index == 1 ? "process.execution.started" :
+                index == 602 ? "process.execution.completed" : "process.sample",
                 startedAt.AddSeconds(index)))
             .ToArray();
         var store = new StubPlatformEventStore(rows);
@@ -98,7 +98,7 @@ public sealed class EventsControllerTests
             }
         };
 
-        var action = await controller.GetCycle("cycle-1", CancellationToken.None);
+        var action = await controller.GetProcessExecution("execution-1", CancellationToken.None);
 
         var ok = Assert.IsType<OkObjectResult>(action);
         var json = JsonSerializer.SerializeToElement(ok.Value);
@@ -112,17 +112,17 @@ public sealed class EventsControllerTests
     }
 
     [Fact]
-    public async Task GetCycle_ExcludesEventsBelongingToAnAdjacentCycle()
+    public async Task GetProcessExecution_ExcludesEventsBelongingToAnAdjacentProcessExecution()
     {
         var startedAt = DateTimeOffset.Parse("2026-07-18T10:00:00Z");
         var rows = new[]
         {
-            Row(1, "cycle.started", startedAt, "cycle-1"),
-            Row(2, "process.sample", startedAt.AddSeconds(1), "cycle-1"),
+            Row(1, "process.execution.started", startedAt, "execution-1"),
+            Row(2, "process.sample", startedAt.AddSeconds(1), "execution-1"),
             Row(3, "alarm.raised", startedAt.AddSeconds(2), null),
-            Row(4, "cycle.started", startedAt.AddSeconds(3), "cycle-2"),
-            Row(5, "process.sample", startedAt.AddSeconds(4), "cycle-2"),
-            Row(6, "cycle.completed", startedAt.AddSeconds(5), "cycle-1")
+            Row(4, "process.execution.started", startedAt.AddSeconds(3), "execution-2"),
+            Row(5, "process.sample", startedAt.AddSeconds(4), "execution-2"),
+            Row(6, "process.execution.completed", startedAt.AddSeconds(5), "execution-1")
         };
         var store = new StubPlatformEventStore(rows);
         var options = Options.Create(new PlatformEventOptions { RequireToken = false });
@@ -137,7 +137,7 @@ public sealed class EventsControllerTests
             }
         };
 
-        var action = await controller.GetCycle("cycle-1", CancellationToken.None);
+        var action = await controller.GetProcessExecution("execution-1", CancellationToken.None);
 
         var ok = Assert.IsType<OkObjectResult>(action);
         var json = JsonSerializer.SerializeToElement(ok.Value);
@@ -146,15 +146,15 @@ public sealed class EventsControllerTests
         Assert.DoesNotContain(
             events,
             item => item.GetProperty("Event")
-                .GetProperty("CorrelationId")
-                .GetString() == "cycle-2");
+                .GetProperty("ExecutionId")
+                .GetString() == "execution-2");
     }
 
     private static PlatformProductionEvent Row(
         long ingestId,
         string eventType,
         DateTimeOffset occurredAt,
-        string? correlationId = "cycle-1")
+        string? executionId = "execution-1")
         => new()
         {
             IngestId = ingestId,
@@ -174,7 +174,7 @@ public sealed class EventsControllerTests
                     ["mold.temperature_c"] = 600d,
                     ["press.force_n"] = 1000d
                 },
-                CorrelationId = correlationId,
+                ExecutionId = executionId,
                 Seq = ingestId
             }
         };
@@ -200,8 +200,8 @@ public sealed class EventsControllerTests
             IEnumerable<PlatformProductionEvent> filtered = rows;
             if (!string.IsNullOrWhiteSpace(query.EdgeId))
                 filtered = filtered.Where(item => item.EdgeId == query.EdgeId);
-            if (!string.IsNullOrWhiteSpace(query.CorrelationId))
-                filtered = filtered.Where(item => item.Event.CorrelationId == query.CorrelationId);
+            if (!string.IsNullOrWhiteSpace(query.ExecutionId))
+                filtered = filtered.Where(item => item.Event.ExecutionId == query.ExecutionId);
             if (!string.IsNullOrWhiteSpace(query.SubjectType))
                 filtered = filtered.Where(item => item.Event.Subject.Type == query.SubjectType);
             if (!string.IsNullOrWhiteSpace(query.SubjectId))
@@ -231,8 +231,8 @@ public sealed class EventsControllerTests
                 filtered = filtered.Where(item => item.EdgeId == query.EdgeId);
             if (!string.IsNullOrWhiteSpace(query.EventType))
                 filtered = filtered.Where(item => item.Event.EventType == query.EventType);
-            if (!string.IsNullOrWhiteSpace(query.CorrelationId))
-                filtered = filtered.Where(item => item.Event.CorrelationId == query.CorrelationId);
+            if (!string.IsNullOrWhiteSpace(query.ExecutionId))
+                filtered = filtered.Where(item => item.Event.ExecutionId == query.ExecutionId);
             if (!string.IsNullOrWhiteSpace(query.SubjectType))
                 filtered = filtered.Where(item => item.Event.Subject.Type == query.SubjectType);
             if (!string.IsNullOrWhiteSpace(query.SubjectId))

@@ -5,7 +5,7 @@ Bilingual static website for Ingot. Public copy follows [`docs/brand.md`](../../
 The home page must:
 
 - lead with real data supporting process-engineer decisions;
-- show acquisition, context, cycles, inspections, diagnosis, experiments, and optimization as one evidence chain;
+- show acquisition, context, process executions, inspections, diagnosis, experiments, and optimization as one evidence chain;
 - explain that methods are selected by the question rather than presenting one algorithm as the product;
 - preserve the engineer's authority and the boundary between association and validated cause;
 - distinguish implemented capability from historical replay, shadow evidence, and online validation;

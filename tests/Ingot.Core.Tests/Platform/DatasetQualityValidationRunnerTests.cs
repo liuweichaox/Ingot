@@ -12,7 +12,7 @@ public sealed class DatasetQualityValidationRunnerTests
     public async Task EvaluateAsync_AcceptsMeasuredDataset_WhenProvenanceAndStreamBatchAgree()
     {
         var bytes = Encoding.UTF8.GetBytes(
-            "cycle,temperature,hardness\n" +
+            "execution,temperature,hardness\n" +
             string.Join("\n", Enumerable.Range(1, 10)
                 .Select(index => $"{index % 2},{300 + index},{40 + index * 0.5}")));
         var manifest = Manifest(Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant());
@@ -26,7 +26,7 @@ public sealed class DatasetQualityValidationRunnerTests
         Assert.Equal(DatasetQualityValidationStatuses.Passed, report.Status);
         Assert.True(report.ResearchClaimsAllowed);
         Assert.Equal(10, report.RowCount);
-        Assert.Equal(2, report.CycleCount);
+        Assert.Equal(2, report.ProcessExecutionCount);
         Assert.InRange(report.StreamBatchMaximumDifference, 0, 1e-10);
         Assert.Empty(report.Issues);
     }
@@ -35,7 +35,7 @@ public sealed class DatasetQualityValidationRunnerTests
     public async Task EvaluateAsync_RejectsDataset_WhenSourceHashDoesNotMatchManifest()
     {
         var bytes = Encoding.UTF8.GetBytes(
-            "cycle,temperature,hardness\n" +
+            "execution,temperature,hardness\n" +
             string.Join("\n", Enumerable.Range(1, 10)
                 .Select(index => $"{index},{300 + index},{40 + index}")));
 
@@ -54,7 +54,7 @@ public sealed class DatasetQualityValidationRunnerTests
     public async Task EvaluateAsync_RejectsUnjustifiedSignalRange()
     {
         var bytes = Encoding.UTF8.GetBytes(
-            "cycle,temperature,hardness\n" +
+            "execution,temperature,hardness\n" +
             string.Join("\n", Enumerable.Range(1, 10)
                 .Select(index => $"{index},{300 + index},{40 + index}")));
         var manifest = Manifest(Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant()) with
@@ -90,7 +90,7 @@ public sealed class DatasetQualityValidationRunnerTests
             License = "CC BY 4.0",
             Citation = "Example measured dataset",
             ExpectedSha256 = expectedSha256,
-            CycleColumn = "cycle",
+            ProcessExecutionColumn = "execution",
             SignalColumns = ["temperature"],
             OutcomeColumns = ["hardness"]
         };

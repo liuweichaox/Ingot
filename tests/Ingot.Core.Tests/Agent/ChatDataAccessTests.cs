@@ -20,7 +20,7 @@ public sealed class ChatDataAccessTests
             }
         }));
 
-        await reader.QueryAsync("OPERATOR", new PlatformEventQuery { CorrelationId = "CYCLE-1", Limit = 20 });
+        await reader.QueryAsync("OPERATOR", new PlatformEventQuery { ExecutionId = "CYCLE-1", Limit = 20 });
 
         Assert.Equal(["EDGE-001", "EDGE-002"], store.Queries.Select(static query => query.EdgeId).Order());
     }

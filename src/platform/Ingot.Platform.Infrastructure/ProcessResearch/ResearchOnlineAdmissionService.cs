@@ -5,7 +5,7 @@ namespace Ingot.Platform.Infrastructure.ProcessResearch;
 /// <summary>
 ///     Computes the fail-closed gate for proposing or approving one controlled online run.
 ///     The gate is deliberately separate from device dispatch: passing it never grants Platform
-///     permission to write a PLC or recipe system.
+///     permission to write a PLC or processSpecification system.
 /// </summary>
 public sealed class ResearchOnlineAdmissionService(
     IProcessResearchStore store,

@@ -42,6 +42,6 @@ def test_second_scenario_keeps_recipe_and_evidence_context_versioned():
         "conveyor.speed.setpoint",
     }
     required = {item["fieldCode"] for item in package["contextFields"] if item["mode"] == "required-for-analysis"}
-    assert required == {"line_id", "adhesive_lot", "product_series"}
+    assert required == {"line_id", "adhesive_lot", "product_family_code"}
     assert all(item["minimumCoverage"] is not None for item in package["contextFields"] if item["mode"] != "record-when-available")
     assert all(item["minimum"] is not None or item["maximum"] is not None for item in package["constraints"])

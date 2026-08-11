@@ -16,7 +16,7 @@ public class MqttSnapshotAssemblerTests
     private static AcquisitionProfile Profile(
         IEnumerable<AcquisitionValueMapping> values,
         IEnumerable<AcquisitionContextMapping>? contexts = null,
-        AcquisitionRecipeMapping? recipe = null,
+        AcquisitionProcessSpecificationMapping? processSpecification = null,
         string timestampMode = "edge-received")
         => new()
         {
@@ -25,7 +25,7 @@ public class MqttSnapshotAssemblerTests
             SubjectId = "PRESS-01", TimestampMode = timestampMode, SequencePath = null,
             ValueMappings = values.ToArray(),
             ContextMappings = (contexts ?? []).ToArray(),
-            Recipe = recipe
+            ProcessSpecification = processSpecification
         };
 
     private static AcquisitionValueMapping Value(string code, string path, string? topic, bool required = true)
@@ -110,7 +110,7 @@ public class MqttSnapshotAssemblerTests
                 snapshot!.RootElement,
                 options,
                 profile.Source,
-                previousRecipeIdentity: null,
+                previousProcessSpecificationIdentity: null,
                 assembler.BuildTopicSnapshots(Now));
             var values = Assert.IsAssignableFrom<IReadOnlyDictionary<string, object?>>(mapped.Sample.Data["values"]);
             Assert.Equal(511L, values["temperature"]);
@@ -144,7 +144,7 @@ public class MqttSnapshotAssemblerTests
         // 只带上下文的主题不应放大采样率。
         var profile = Profile(
             [Value("furnace.temperature", "sensors.temperature", "plant/press01/thermal")],
-            [new AcquisitionContextMapping { ContextKey = "product_series", SourcePath = "product", Topic = "plant/press01/context" }]);
+            [new AcquisitionContextMapping { ContextKey = "product_family_code", SourcePath = "product", Topic = "plant/press01/context" }]);
         var assembler = new MqttSnapshotAssembler(MqttSnapshotAssembler.SlotsFor(profile), 0);
         Assert.False(assembler.Ingest("plant/press01/context", Json("""{"product":"L-42"}"""), Now));
         Assert.True(assembler.Ingest("plant/press01/thermal", Json("""{"sensors":{"temperature":500}}"""), Now));
@@ -219,22 +219,22 @@ public class MqttSnapshotAssemblerTests
     }
 
     [Fact]
-    public void RecipeParametersKeepTheirRelativePathsInTheMergedSnapshot()
+    public void ControlParametersKeepTheirRelativePathsInTheMergedSnapshot()
     {
-        var recipe = new AcquisitionRecipeMapping
+        var processSpecification = new AcquisitionProcessSpecificationMapping
         {
-            IdPath = "recipe.id",
-            VersionPath = "recipe.version",
-            ParametersPath = "recipe.parameters",
+            IdPath = "processSpecification.id",
+            VersionPath = "processSpecification.version",
+            ParametersPath = "processSpecification.parameters",
             ParameterMappings = [new AcquisitionValueMapping { DataItemCode = "temperature.target", SourcePath = "target" }]
         };
-        var profile = Profile([Value("a", "a", null)], recipe: recipe);
+        var profile = Profile([Value("a", "a", null)], processSpecification: processSpecification);
         var assembler = new MqttSnapshotAssembler(MqttSnapshotAssembler.SlotsFor(profile), 0);
-        assembler.Ingest("t", Json("""{"a":1,"recipe":{"id":"R-1","version":"3","parameters":{"target":520}}}"""), Now);
+        assembler.Ingest("t", Json("""{"a":1,"processSpecification":{"id":"R-1","version":"3","parameters":{"target":520}}}"""), Now);
         Assert.True(assembler.TryBuildSnapshot(Now, out var snapshot, out _));
         using (snapshot)
         {
-            var rebuilt = snapshot!.RootElement.GetProperty("recipe");
+            var rebuilt = snapshot!.RootElement.GetProperty("processSpecification");
             Assert.Equal("R-1", rebuilt.GetProperty("id").GetString());
             Assert.Equal(520, rebuilt.GetProperty("parameters").GetProperty("target").GetInt32());
         }

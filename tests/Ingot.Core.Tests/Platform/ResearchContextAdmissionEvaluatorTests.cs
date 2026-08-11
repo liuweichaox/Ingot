@@ -16,7 +16,7 @@ public sealed class ResearchContextAdmissionEvaluatorTests
             {
                 ["context_capture_status"] = "configuration_missing",
                 ["equipment_id"] = "PRESS-01",
-                ["operation_run_id"] = "RUN-01"
+                ["execution_id"] = "RUN-01"
             },
             null);
 
@@ -37,12 +37,12 @@ public sealed class ResearchContextAdmissionEvaluatorTests
     public void SourceProvidedContext_MissingMold_ShouldFailClosed()
     {
         var context = CompleteContext("source_provided");
-        context.Remove("mold_id");
+        context.Remove("tooling_assembly_id");
 
         var result = _evaluator.Evaluate(context, OpticalScenario());
 
         Assert.False(result.Admitted);
-        Assert.Contains(result.ExclusionReasons, reason => reason.Contains("mold_id"));
+        Assert.Contains(result.ExclusionReasons, reason => reason.Contains("tooling_assembly_id"));
     }
 
     [Fact]
@@ -68,13 +68,13 @@ public sealed class ResearchContextAdmissionEvaluatorTests
     {
         ["context_capture_status"] = captureStatus,
         ["equipment_id"] = "PRESS-01",
-        ["operation_run_id"] = "RUN-01",
-        ["recipe_id"] = "LENS-A",
-        ["recipe_version"] = "3",
-        ["mold_id"] = "MOLD-07",
+        ["execution_id"] = "RUN-01",
+        ["process_specification_id"] = "LENS-A",
+        ["process_specification_version"] = "3",
+        ["tooling_assembly_id"] = "MOLD-07",
         ["tooling_installation_id"] = Guid.NewGuid().ToString("D"),
         ["material_lot_ref"] = "LOT-09",
-        ["product_series"] = "LENS"
+        ["product_family_code"] = "LENS"
     };
 
     internal static ScenarioPackage OpticalScenario() => new()
@@ -88,13 +88,13 @@ public sealed class ResearchContextAdmissionEvaluatorTests
         ContextFields =
         [
             Required("equipment_id"),
-            Required("operation_run_id"),
-            Required("recipe_id"),
-            Required("recipe_version"),
-            Required("mold_id"),
+            Required("execution_id"),
+            Required("process_specification_id"),
+            Required("process_specification_version"),
+            Required("tooling_assembly_id"),
             Required("tooling_installation_id"),
             Required("material_lot_ref"),
-            Required("product_series"),
+            Required("product_family_code"),
             new ScenarioContextFieldPolicy
             {
                 FieldCode = "maintenance_status",

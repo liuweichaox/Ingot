@@ -1,6 +1,6 @@
 using Ingot.Platform.Infrastructure;
 using Ingot.Platform.Infrastructure.Acquisition;
-using Ingot.Platform.Infrastructure.Cycles;
+using Ingot.Platform.Infrastructure.ProcessExecutions;
 using Ingot.Platform.Infrastructure.Events;
 using Ingot.Platform.Infrastructure.Inspections;
 using Ingot.Platform.Infrastructure.Manufacturing;
@@ -42,7 +42,7 @@ public sealed class PostgresSchemaOwnershipTests(PostgresIntegrationFixture post
             await using var provider = services.BuildServiceProvider();
 
             await provider.GetRequiredService<IManufacturingContextStore>().InitializeAsync();
-            await provider.GetRequiredService<ICycleAnalysisMaterializationStore>().InitializeAsync();
+            await provider.GetRequiredService<IProcessExecutionAnalysisMaterializationStore>().InitializeAsync();
             await provider.GetRequiredService<PostgresTimeSeriesStore>().InitializeAsync();
             await provider.GetRequiredService<IPlatformEventStore>().InitializeAsync();
             await provider.GetRequiredService<IInspectionRecordStore>().InitializeAsync();

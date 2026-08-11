@@ -9,10 +9,10 @@ public sealed record CreateInspectionRecordRequest
     public required Guid RecordId { get; init; }
 
     /// <summary>被检测工件、样件或批次内单件的稳定标识；现场没有单件标识时为空。</summary>
-    public string? WorkpieceId { get; init; }
+    public string? OutputItemId { get; init; }
 
     /// <summary>本次检测所关联的加工运行稳定标识。</summary>
-    public required string OperationRunId { get; init; }
+    public required string ExecutionId { get; init; }
 
     public required string DefinitionCode { get; init; }
 
@@ -91,8 +91,8 @@ public sealed record InspectionAttachment
 public sealed record InspectionRecord
 {
     public required Guid RecordId { get; init; }
-    public string? WorkpieceId { get; init; }
-    public required string OperationRunId { get; init; }
+    public string? OutputItemId { get; init; }
+    public required string ExecutionId { get; init; }
     public required string DefinitionCode { get; init; }
     public required int DefinitionVersion { get; init; }
     public required DateTimeOffset MeasuredAt { get; init; }
@@ -111,8 +111,8 @@ public sealed record InspectionRecord
 
 public sealed record InspectionRecordQuery
 {
-    public string? WorkpieceId { get; init; }
-    public string? OperationRunId { get; init; }
+    public string? OutputItemId { get; init; }
+    public string? ExecutionId { get; init; }
     public string? DefinitionCode { get; init; }
     public string? Outcome { get; init; }
     public DateTimeOffset? From { get; init; }

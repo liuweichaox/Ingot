@@ -42,7 +42,7 @@ public sealed class InspectionReviewsController(
         }
         var result = await reviews.CreateAsync(
             request with { Decision = decision! },
-            record.OperationRunId,
+            record.ExecutionId,
             identity.UserId,
             ct).ConfigureAwait(false);
         if (result.PayloadConflict)
@@ -65,7 +65,7 @@ public sealed class InspectionReviewsController(
     [HttpGet]
     public async Task<IActionResult> Query(
         [FromQuery] Guid? inspectionRecordId,
-        [FromQuery] string? operationRunId,
+        [FromQuery] string? executionId,
         [FromQuery] int limit = 200,
         CancellationToken ct = default)
     {
@@ -74,7 +74,7 @@ public sealed class InspectionReviewsController(
             return denied;
         if (limit is < 1 or > 500)
             return BadRequest(new { error = "Limit 必须在 1 到 500 之间。" });
-        var result = await reviews.QueryAsync(inspectionRecordId, operationRunId, limit, ct).ConfigureAwait(false);
+        var result = await reviews.QueryAsync(inspectionRecordId, executionId, limit, ct).ConfigureAwait(false);
         return Ok(new { data = result, count = result.Count });
     }
 

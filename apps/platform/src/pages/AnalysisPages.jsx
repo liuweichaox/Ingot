@@ -26,18 +26,18 @@ function formatDecimal(value) {
   return Number(value).toLocaleString("zh-CN", { maximumFractionDigits: 3 });
 }
 
-export function CycleComparisonPage() {
+export function ExecutionComparisonPage() {
   const [params] = useSearchParams();
-  const [baseline, setBaseline] = useState(params.get("cycleId") || "");
+  const [baseline, setBaseline] = useState(params.get("executionId") || "");
   const [candidate, setCandidate] = useState("");
   const [comparisonScope, setComparisonScope] = useState("cohort");
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [cycles, setCycles] = useState([]);
+  const [executions, setProcessExecutions] = useState([]);
   const [linkedBaseline, setLinkedBaseline] = useState(null);
   const [catalogLoading, setCatalogLoading] = useState(true);
-  const [cycleFilter, setCycleFilter] = useState("");
+  const [executionFilter, setProcessExecutionFilter] = useState("");
   const [researchProjects, setResearchProjects] = useState([]);
   const [researchProjectId, setResearchProjectId] = useState("");
   useEffect(() => {
@@ -51,30 +51,30 @@ export function CycleComparisonPage() {
   }, []);
   useEffect(() => {
     let mounted = true;
-    const search = cycleFilter.trim();
+    const search = executionFilter.trim();
     const query = new URLSearchParams({ status: "completed", limit: "200" });
     if (search) query.set("search", search);
     setCatalogLoading(true);
-    getJson(`/api/v1/cycles?${query}`).then(cyclePayload => {
+    getJson(`/api/v1/process-executions?${query}`).then(executionPayload => {
       if (!mounted) return;
-      setCycles(extractRows(cyclePayload));
+      setProcessExecutions(extractRows(executionPayload));
     }).catch(requestError => {
       if (!mounted) return;
-      setCycles([]);
+      setProcessExecutions([]);
       setError(requestError.message || "无法读取可比较的生产运行。");
     }).finally(() => {
       if (mounted) setCatalogLoading(false);
     });
     return () => { mounted = false; };
-  }, [cycleFilter]);
+  }, [executionFilter]);
 
   useEffect(() => {
     let mounted = true;
-    if (!baseline || cycles.some(item => item.correlationId === baseline)) {
+    if (!baseline || executions.some(item => item.executionId === baseline)) {
       setLinkedBaseline(null);
       return () => { mounted = false; };
     }
-    getJson(`/api/v1/cycles?correlationId=${encodeURIComponent(baseline)}&limit=1`)
+    getJson(`/api/v1/process-executions?executionId=${encodeURIComponent(baseline)}&limit=1`)
       .then(payload => {
         if (mounted) setLinkedBaseline(extractRows(payload)[0] || null);
       })
@@ -82,42 +82,42 @@ export function CycleComparisonPage() {
         if (mounted) setLinkedBaseline(null);
       });
     return () => { mounted = false; };
-  }, [baseline, cycles]);
+  }, [baseline, executions]);
 
-  const baselineCycle = cycles.find(item => item.correlationId === baseline) || linkedBaseline;
-  const normalizedCycleFilter = cycleFilter.trim().toLowerCase();
-  const visibleCycles = cycles.filter(item => !normalizedCycleFilter || [
-    item.correlationId,
-    item.productSeries,
+  const baselineProcessExecution = executions.find(item => item.executionId === baseline) || linkedBaseline;
+  const normalizedProcessExecutionFilter = executionFilter.trim().toLowerCase();
+  const visibleProcessExecutions = executions.filter(item => !normalizedProcessExecutionFilter || [
+    item.executionId,
+    item.productFamilyCode,
     item.productCode,
-    item.machineId,
-    item.recipeId,
-  ].some(value => String(value || "").toLowerCase().includes(normalizedCycleFilter)));
-  const comparableCycles = cycles.filter(item =>
-    item.correlationId !== baseline &&
-    (!baselineCycle?.productSeries
-      ? item.machineId === baselineCycle?.machineId
-      : item.productSeries === baselineCycle.productSeries) &&
-    (!normalizedCycleFilter || [
-      item.correlationId,
-      item.productSeries,
+    item.equipmentId,
+    item.processSpecificationId,
+  ].some(value => String(value || "").toLowerCase().includes(normalizedProcessExecutionFilter)));
+  const comparableProcessExecutions = executions.filter(item =>
+    item.executionId !== baseline &&
+    (!baselineProcessExecution?.productFamilyCode
+      ? item.equipmentId === baselineProcessExecution?.equipmentId
+      : item.productFamilyCode === baselineProcessExecution.productFamilyCode) &&
+    (!normalizedProcessExecutionFilter || [
+      item.executionId,
+      item.productFamilyCode,
       item.productCode,
-      item.machineId,
-      item.recipeId,
-    ].some(value => String(value || "").toLowerCase().includes(normalizedCycleFilter))),
+      item.equipmentId,
+      item.processSpecificationId,
+    ].some(value => String(value || "").toLowerCase().includes(normalizedProcessExecutionFilter))),
   );
 
   useEffect(() => {
-    if (comparisonScope === "single" && candidate && !comparableCycles.some(item => item.correlationId === candidate)) {
+    if (comparisonScope === "single" && candidate && !comparableProcessExecutions.some(item => item.executionId === candidate)) {
       setCandidate("");
     }
-  }, [candidate, comparableCycles, comparisonScope]);
+  }, [candidate, comparableProcessExecutions, comparisonScope]);
 
-  const cycleLabel = cycle => [
-    cycle.correlationId,
-    cycle.productSeries || cycle.productCode || "未标注产品",
-    cycle.machineId || "未标注设备",
-    cycle.completedAt ? new Date(cycle.completedAt).toLocaleString("zh-CN") : "",
+  const executionLabel = execution => [
+    execution.executionId,
+    execution.productFamilyCode || execution.productCode || "未标注产品",
+    execution.equipmentId || "未标注设备",
+    execution.completedAt ? new Date(execution.completedAt).toLocaleString("zh-CN") : "",
   ].filter(Boolean).join(" · ");
 
   async function compare(event) {
@@ -125,13 +125,13 @@ export function CycleComparisonPage() {
     setBusy(true);
     setError("");
     try {
-      const baselineCycleId = baseline.trim();
+      const baselineProcessExecutionId = baseline.trim();
       if (comparisonScope === "cohort") {
-        setResult(await getJson(`/api/v1/cycle-comparisons/${encodeURIComponent(baselineCycleId)}?limit=24`));
+        setResult(await getJson(`/api/v1/execution-comparisons/${encodeURIComponent(baselineProcessExecutionId)}?limit=24`));
       } else {
-        setResult(await postJson("/api/v1/cycle-comparisons", {
-          baselineCycleId,
-          cycleIds: [baselineCycleId, candidate],
+        setResult(await postJson("/api/v1/execution-comparisons", {
+          baselineProcessExecutionId,
+          executionIds: [baselineProcessExecutionId, candidate],
         }));
       }
     } catch (requestError) {
@@ -146,10 +146,10 @@ export function CycleComparisonPage() {
     setBusy(true);
     try {
       const created = await postJson(
-        `/api/v1/research-projects/${researchProjectId}/hypotheses/from-cycle-comparison`,
+        `/api/v1/research-projects/${researchProjectId}/hypotheses/from-execution-comparison`,
         {
-          baselineCycleId: result.baselineCycleId,
-          cycleIds: comparedCycles.map(item => item.correlationId),
+          baselineProcessExecutionId: result.baselineProcessExecutionId,
+          executionIds: comparedProcessExecutions.map(item => item.executionId),
           maximumHypotheses: 3,
         },
       );
@@ -160,9 +160,9 @@ export function CycleComparisonPage() {
       setBusy(false);
     }
   }
-  const comparedCycles = result ? [
+  const comparedProcessExecutions = result ? [
     { ...result.baseline, comparisonRole: "基准" },
-    ...(result.historicalCycles || []).map(cycle => ({ ...cycle, comparisonRole: "对比" })),
+    ...(result.historicalProcessExecutions || []).map(execution => ({ ...execution, comparisonRole: "对比" })),
   ] : [];
   const signalRows = useMemo(() => (result?.signalComparisons || [])
     .map(signal => ({
@@ -182,7 +182,7 @@ export function CycleComparisonPage() {
   const causeRows = useMemo(() => (result?.diagnosis?.candidates || [])
     .map(candidate => ({
       ...candidate,
-      sourceLabel: candidate.sourceKind === "recipe-parameter" ? "实际配方" : "过程轨迹",
+      sourceLabel: candidate.sourceKind === "control-parameter" ? "实际工艺规范" : "过程轨迹",
       actionabilityLabel: candidate.actionability === "controllable" ? "可直接实验" : "需映射控制量",
       stabilityLabel: Number.isFinite(Number(candidate.stabilitySelectionRate))
         ? `${Math.round(Number(candidate.stabilitySelectionRate) * 100)}%`
@@ -205,32 +205,32 @@ export function CycleComparisonPage() {
       {error && <Alert tone="danger">{error}</Alert>}
       <Card title="选择可比较的生产运行" description="先选择需要解释的异常运行；默认与同产品的完整样本组比较，避免从单个偶然样本得出结论。">
         <div className="mb-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
-          <Field label="筛选运行" hint="可按运行号、产品、设备或配方筛选；这是查找，不是录入运行编号。"><Input value={cycleFilter} onChange={event => setCycleFilter(event.target.value)} placeholder="例如：产品系列、设备编号或运行号" /></Field>
-          <p className="pb-2 text-sm text-slate-500">显示 {visibleCycles.length} / {cycles.length} 条已完成运行</p>
+          <Field label="筛选运行" hint="可按运行号、产品、设备或工艺规范筛选；这是查找，不是录入运行编号。"><Input value={executionFilter} onChange={event => setProcessExecutionFilter(event.target.value)} placeholder="例如：产品系列、设备编号或运行号" /></Field>
+          <p className="pb-2 text-sm text-slate-500">显示 {visibleProcessExecutions.length} / {executions.length} 条已完成运行</p>
         </div>
         <form className="grid gap-3 md:grid-cols-[1fr_1fr_1fr_auto]" onSubmit={compare}>
-          <Field label="基准运行" hint="通常选择质量异常、规格偏离或需要解释的一次运行。"><Select value={baseline} onChange={event => setBaseline(event.target.value)} required disabled={catalogLoading || !cycles.length}><option value="">选择已完成运行</option>{baseline && !cycles.some(item => item.correlationId === baseline) && <option value={baseline}>{baseline}（来自当前页面链接）</option>}{visibleCycles.map(cycle => <option key={cycle.correlationId} value={cycle.correlationId}>{cycleLabel(cycle)}</option>)}</Select></Field>
+          <Field label="基准运行" hint="通常选择质量异常、规格偏离或需要解释的一次运行。"><Select value={baseline} onChange={event => setBaseline(event.target.value)} required disabled={catalogLoading || !executions.length}><option value="">选择已完成运行</option>{baseline && !executions.some(item => item.executionId === baseline) && <option value={baseline}>{baseline}（来自当前页面链接）</option>}{visibleProcessExecutions.map(execution => <option key={execution.executionId} value={execution.executionId}>{executionLabel(execution)}</option>)}</Select></Field>
           <Field label="对比范围" hint="历史样本组由服务端按产品、时间、质量和数据完整性筛选。"><Select value={comparisonScope} onChange={event => setComparisonScope(event.target.value)} disabled={!baseline}><option value="cohort">同产品历史样本组</option><option value="single">指定一个同类运行</option></Select></Field>
-          {comparisonScope === "single" ? <Field label="对比运行" hint={baselineCycle?.productSeries ? `仅显示产品系列“${baselineCycle.productSeries}”的运行。` : baselineCycle ? `该运行未标注产品系列，暂按设备“${baselineCycle.machineId || "未标注"}”筛选。` : "正在读取基准运行。"}><Select value={candidate} onChange={event => setCandidate(event.target.value)} required disabled={!baselineCycle || catalogLoading}><option value="">选择同类运行</option>{comparableCycles.map(cycle => <option key={cycle.correlationId} value={cycle.correlationId}>{cycleLabel(cycle)}</option>)}</Select></Field> : <div className="self-end rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">系统最多选择 24 个同产品历史运行，并保留质量覆盖和数据完整性证据。</div>}
+          {comparisonScope === "single" ? <Field label="对比运行" hint={baselineProcessExecution?.productFamilyCode ? `仅显示产品系列“${baselineProcessExecution.productFamilyCode}”的运行。` : baselineProcessExecution ? `该运行未标注产品系列，暂按设备“${baselineProcessExecution.equipmentId || "未标注"}”筛选。` : "正在读取基准运行。"}><Select value={candidate} onChange={event => setCandidate(event.target.value)} required disabled={!baselineProcessExecution || catalogLoading}><option value="">选择同类运行</option>{comparableProcessExecutions.map(execution => <option key={execution.executionId} value={execution.executionId}>{executionLabel(execution)}</option>)}</Select></Field> : <div className="self-end rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">系统最多选择 24 个同产品历史运行，并保留质量覆盖和数据完整性证据。</div>}
           <Button variant="primary" type="submit" className="self-end" disabled={busy || !baseline || (comparisonScope === "single" && !candidate)}>{busy ? "正在对比…" : "开始运行对比"}</Button>
         </form>
         {catalogLoading && <p className="mt-3 text-sm text-slate-500">正在读取可比较的已完成运行…</p>}
-        {!catalogLoading && cycles.length === 0 && <Alert tone="warning" title="暂无可选择的运行">需要至少两条已完成且上下文完整的生产运行，才能开始运行对比。</Alert>}
+        {!catalogLoading && executions.length === 0 && <Alert tone="warning" title="暂无可选择的运行">需要至少两条已完成且上下文完整的生产运行，才能开始运行对比。</Alert>}
       </Card>
       {result ? (
         <>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-            <Metric label="产品系列" value={result.productSeries || "—"} />
-            <Metric label="参与对比" value={result.acceptance?.cycleCount ?? comparedCycles.length} hint="条生产运行" />
-            <Metric label="数据可用" value={result.acceptance?.availableCycleCount ?? 0} hint={`异常 ${result.acceptance?.degradedCycleCount ?? 0} 个`} />
-            <Metric label="运行完整" value={result.acceptance?.completeCycleCount ?? 0} hint="同时具有生产开始与结束事件" />
+            <Metric label="产品系列" value={result.productFamilyCode || "—"} />
+            <Metric label="参与对比" value={result.acceptance?.executionCount ?? comparedProcessExecutions.length} hint="条生产运行" />
+            <Metric label="数据可用" value={result.acceptance?.availableProcessExecutionCount ?? 0} hint={`异常 ${result.acceptance?.degradedProcessExecutionCount ?? 0} 个`} />
+            <Metric label="运行完整" value={result.acceptance?.completeProcessExecutionCount ?? 0} hint="同时具有生产开始与结束事件" />
             <Metric label="分析证据" value={evidenceLevelLabels[result.evidenceLevel] || result.evidenceLevel || "—"} />
           </div>
           <Card title="确定性调查报告" description="以下事实由系统查询和计算生成；本地模型只能组织解释，不能补写数字或把观察性候选说成根因。">
             <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               <Metric label="调查状态" value={investigation?.status === "ready" ? "可进入验证" : investigation?.status === "exploratory" ? "探索性" : "数据不足"} />
               <Metric label="目标数据" value={investigation?.dataQuality?.targetStatus || "—"} hint={`证据权重 ${formatDecimal(investigation?.dataQuality?.targetEvidenceWeight)}`} />
-              <Metric label="基线有效权重" value={formatDecimal(investigation?.comparisonBaseline?.effectiveCycleWeight)} hint={`${investigation?.comparisonBaseline?.comparisonCycleIds?.length || 0} 条对比运行`} />
+              <Metric label="基线有效权重" value={formatDecimal(investigation?.comparisonBaseline?.effectiveProcessExecutionWeight)} hint={`${investigation?.comparisonBaseline?.comparisonProcessExecutionIds?.length || 0} 条对比运行`} />
               <Metric label="匹配条件" value={Object.entries(investigation?.comparisonBaseline?.matchingContext || {}).map(([key, value]) => `${key}=${value}`).join("；") || "未记录"} />
             </div>
             {firstDeviationRows.length ? (
@@ -238,7 +238,7 @@ export function CycleComparisonPage() {
                 <h4 className="mb-2 text-sm font-semibold text-slate-900">首次阶段偏离</h4>
                 <DataTable
                   rows={firstDeviationRows}
-                  getRowKey={(row, index) => `${row.signalCode}-${row.phaseCode || "cycle"}-${row.featureCode}-${index}`}
+                  getRowKey={(row, index) => `${row.signalCode}-${row.phaseCode || "execution"}-${row.featureCode}-${index}`}
                   columns={[
                     { key: "phaseLabel", label: "阶段" },
                     { key: "signalCode", label: "信号" },
@@ -276,16 +276,16 @@ export function CycleComparisonPage() {
           </Card>
           <Card title="运行概况">
             <DataTable
-              rows={comparedCycles}
-              getRowKey={row => `${row.comparisonRole}-${row.correlationId}`}
+              rows={comparedProcessExecutions}
+              getRowKey={row => `${row.comparisonRole}-${row.executionId}`}
               columns={[
                 { key: "comparisonRole", label: "角色", render: value => <Badge tone={value === "基准" ? "info" : "neutral"}>{value}</Badge> },
-                { key: "correlationId", label: "运行" },
-                { key: "machineId", label: "设备" },
+                { key: "executionId", label: "运行" },
+                { key: "equipmentId", label: "设备" },
                 { key: "completedAt", label: "结束时间", render: formatTime },
                 { key: "durationMs", label: "时长（秒）", render: value => formatDecimal(Number(value) / 1000) },
                 { key: "sampleCount", label: "样本数", render: formatInteger },
-                { key: "lifecycleComplete", label: "周期边界", render: value => value ? <Badge tone="success">完整</Badge> : <Badge tone="warning">缺少开始或结束</Badge> },
+                { key: "lifecycleComplete", label: "过程执行边界", render: value => value ? <Badge tone="success">完整</Badge> : <Badge tone="warning">缺少开始或结束</Badge> },
                 { key: "processDataQuality", label: "数据状态", render: value => <StatusBadge value={value?.status} /> },
               ]}
             />
@@ -296,7 +296,7 @@ export function CycleComparisonPage() {
               <Button className="self-end" disabled={!researchProjectId || busy} onClick={createHypotheses}>生成候选假设</Button>
             </div>
           </Card>
-          <Card title="质量候选原因" description="同时比较实际配方参数与过程轨迹特征；优先选择能直接映射到可控变量的候选原因。">
+          <Card title="质量候选原因" description="同时比较实际控制参数与过程轨迹特征；优先选择能直接映射到可控变量的候选原因。">
             {causeRows.length ? (
               <>
                 <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -345,13 +345,13 @@ export function CycleComparisonPage() {
                   </Alert>
                 )}
               </>
-            ) : <EmptyState title="尚无质量候选原因" description="至少需要合格与不合格运行，并且配方或过程特征具有可比较差异。" />}
+            ) : <EmptyState title="尚无质量候选原因" description="至少需要合格与不合格运行，并且工艺规范或过程特征具有可比较差异。" />}
           </Card>
           <Card title="信号差异" description="按变化幅度列出前 30 项，便于快速定位阶段和参数差异。">
             {signalRows.length ? (
               <DataTable
                 rows={signalRows}
-                getRowKey={(row, index) => `${row.signalCode}-${row.phaseCode || "cycle"}-${row.featureCode}-${index}`}
+                getRowKey={(row, index) => `${row.signalCode}-${row.phaseCode || "execution"}-${row.featureCode}-${index}`}
                 columns={[
                   { key: "signalCode", label: "信号" },
                   { key: "phaseLabel", label: "阶段" },

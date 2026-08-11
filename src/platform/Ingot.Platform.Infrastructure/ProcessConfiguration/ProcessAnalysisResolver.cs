@@ -34,7 +34,7 @@ public sealed class ProcessAnalysisResolver(IProcessConfigurationStore store)
         if (contexts.Count == 0)
             return [];
         var plans = await store.ListAnalysisPlansAsync(ct).ConfigureAwait(false);
-        var recipeCache = new Dictionary<(string Id, int Version), RecipeVersion?>();
+        var processSpecificationCache = new Dictionary<(string Id, int Version), ProcessSpecification?>();
         var modelCache = new Dictionary<(string Id, int Version), ProcessDataModel?>();
         var result = new List<ResolvedProcessAnalysis?>(contexts.Count);
         foreach (var context in contexts)
@@ -44,21 +44,21 @@ public sealed class ProcessAnalysisResolver(IProcessConfigurationStore store)
                                   && modelVersion > 0;
             if (string.IsNullOrWhiteSpace(modelId) || !hasModelVersion)
             {
-                var recipeId = ContextValue(context, "recipe_id")?.Trim().ToLowerInvariant();
-                var hasRecipeVersion = int.TryParse(ContextValue(context, "recipe_version"), out var recipeVersion)
-                                       && recipeVersion > 0;
-                RecipeVersion? recipe = null;
-                if (!string.IsNullOrWhiteSpace(recipeId) && hasRecipeVersion)
+                var processSpecificationId = ContextValue(context, "process_specification_id")?.Trim().ToLowerInvariant();
+                var hasProcessSpecification = int.TryParse(ContextValue(context, "process_specification_version"), out var processSpecificationVersion)
+                                       && processSpecificationVersion > 0;
+                ProcessSpecification? processSpecification = null;
+                if (!string.IsNullOrWhiteSpace(processSpecificationId) && hasProcessSpecification)
                 {
-                    var recipeKey = (recipeId, recipeVersion);
-                    if (!recipeCache.TryGetValue(recipeKey, out recipe))
+                    var processSpecificationKey = (processSpecificationId, processSpecificationVersion);
+                    if (!processSpecificationCache.TryGetValue(processSpecificationKey, out processSpecification))
                     {
-                        recipe = await store.GetRecipeVersionAsync(recipeId, recipeVersion, ct).ConfigureAwait(false);
-                        recipeCache[recipeKey] = recipe;
+                        processSpecification = await store.GetProcessSpecificationAsync(processSpecificationId, processSpecificationVersion, ct).ConfigureAwait(false);
+                        processSpecificationCache[processSpecificationKey] = processSpecification;
                     }
                 }
-                modelId = recipe?.DataModelId;
-                modelVersion = recipe?.DataModelVersion ?? 0;
+                modelId = processSpecification?.DataModelId;
+                modelVersion = processSpecification?.DataModelVersion ?? 0;
             }
 
             var plan = plans
@@ -95,27 +95,27 @@ public sealed class ProcessAnalysisResolver(IProcessConfigurationStore store)
         return result;
     }
 
-    public async Task<RecipeVersion?> ResolveRecipeAsync(
+    public async Task<ProcessSpecification?> ResolveProcessSpecificationAsync(
         IReadOnlyDictionary<string, string> context,
         CancellationToken ct = default)
     {
-        var values = await ResolveRecipesAsync([context], ct).ConfigureAwait(false);
+        var values = await ResolveProcessSpecificationsAsync([context], ct).ConfigureAwait(false);
         return values[0];
     }
 
-    public async Task<IReadOnlyList<RecipeVersion?>> ResolveRecipesAsync(
+    public async Task<IReadOnlyList<ProcessSpecification?>> ResolveProcessSpecificationsAsync(
         IReadOnlyList<IReadOnlyDictionary<string, string>> contexts,
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(contexts);
-        var cache = new Dictionary<(string Id, int Version), RecipeVersion?>();
-        var result = new List<RecipeVersion?>(contexts.Count);
+        var cache = new Dictionary<(string Id, int Version), ProcessSpecification?>();
+        var result = new List<ProcessSpecification?>(contexts.Count);
         foreach (var context in contexts)
         {
             ct.ThrowIfCancellationRequested();
-        var recipeId = ContextValue(context, "recipe_id");
-        var versionText = ContextValue(context, "recipe_version");
-        if (string.IsNullOrWhiteSpace(recipeId) ||
+        var processSpecificationId = ContextValue(context, "process_specification_id");
+        var versionText = ContextValue(context, "process_specification_version");
+        if (string.IsNullOrWhiteSpace(processSpecificationId) ||
             !int.TryParse(versionText, out var version) ||
             version < 1)
         {
@@ -123,14 +123,14 @@ public sealed class ProcessAnalysisResolver(IProcessConfigurationStore store)
                 continue;
         }
 
-            var key = (recipeId.Trim().ToLowerInvariant(), version);
-            if (!cache.TryGetValue(key, out var recipe))
+            var key = (processSpecificationId.Trim().ToLowerInvariant(), version);
+            if (!cache.TryGetValue(key, out var processSpecification))
             {
-                recipe = await store.GetRecipeVersionAsync(key.Item1, key.version, ct)
+                processSpecification = await store.GetProcessSpecificationAsync(key.Item1, key.version, ct)
                     .ConfigureAwait(false);
-                cache[key] = recipe;
+                cache[key] = processSpecification;
             }
-            result.Add(recipe);
+            result.Add(processSpecification);
         }
         return result;
     }

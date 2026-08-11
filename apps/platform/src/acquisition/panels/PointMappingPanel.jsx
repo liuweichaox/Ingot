@@ -114,7 +114,7 @@ function PointRow({
         >
           <option value="">请选择</option>
           {options.map(item => (
-            <option key={item.code} value={item.code}>{item.sourceField || item.code}</option>
+            <option key={item.code} value={item.code}>{item.displayName || item.code}</option>
           ))}
         </Select>
       </Field>

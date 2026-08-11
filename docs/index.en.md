@@ -11,10 +11,10 @@ The computer organizes evidence, compares runs, analyzes data, and proposes expe
 ```text
 Define process → Connect equipment → Collect production data → Close the data loop → Diagnose → Optimize
       ↑                                                                                       ↓
-      └──────────── validated recipes, process windows, and knowledge return to production ───┘
+      └──────────── validated process specifications, operating regions, and knowledge return to production ───┘
 ```
 
-1. **Define the process**: define equipment, products, variables, units, recipe parameters, quality measures, and safety boundaries.
+1. **Define the process**: define equipment, products, variables, units, control parameters, quality measures, and safety boundaries.
 2. **Connect equipment**: connect controls, instruments, vision, inspection, and business systems to stable business semantics.
 3. **Collect production data**: record actual conditions, stages, and trajectories for each real run.
 4. **Close the data loop**: check time, missingness, provenance, and units, then link inspections to the same run.
@@ -48,14 +48,14 @@ These are one evidence chain, not six unrelated products. Acquisition makes fact
 
 ## Current facts
 
-The code covers the main business path across acquisition, cycles, context, inspections, R&D experiments, analysis, and optimization, with automated tests. Public historical replay and prospective results for real optical molding projects are not complete, so the project describes system capabilities but does not claim a measured reduction in experiments or development time.
+The code covers the main business path across acquisition, process executions, context, inspections, R&D experiments, analysis, and optimization, with automated tests. Public historical replay and prospective results for real optical molding projects are not complete, so the project describes system capabilities but does not claim a measured reduction in experiments or development time.
 
 ## Public commitments
 
 - Never hide missing actual values with planned values.
 - Never silently discard runs that fail analysis admission.
 - Never present correlation directly as a definitive cause.
-- Never let a language model generate numerical process recipes.
+- Never let a language model generate numerical process process specifications.
 - Never use simulated data to claim real process benefit.
 - Preserve inputs, provenance, versions, uncertainty, and applicability for every recommendation.
 

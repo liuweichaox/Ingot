@@ -27,7 +27,7 @@ Much process development still depends on personal memory, disconnected spreadsh
 
 Ingot first establishes a trustworthy data loop, then helps engineers:
 
-- identify the equipment, product, recipe, material, and tooling actually used for a run;
+- identify the equipment, product, process specification, material, and tooling actually used for a run;
 - connect actual settings, process trajectories, and inspection outcomes to that run;
 - compare like-for-like runs and locate differences by variable, stage, or context;
 - distinguish candidate causes, confounding factors, and insufficient evidence;
@@ -42,7 +42,7 @@ The computer organizes evidence, computes, and proposes. Process engineers frame
 ```text
 Define process → Connect equipment → Collect production data → Close the data loop → Diagnose → Optimize
       ↑                                                                                       ↓
-      └──────────── validated recipes, process windows, and knowledge return to production ───┘
+      └──────────── validated process specifications, operating regions, and knowledge return to production ───┘
 ```
 
 | Stage | Question answered |
@@ -66,17 +66,17 @@ Ingot does not force one “advanced algorithm” onto every question:
 - controls, repetition, blocking, randomization, and interventions support causal decisions;
 - Gaussian processes and constrained Bayesian optimization search expensive small-data parameter spaces;
 - physical features or priors help when mechanisms are known and data are scarce;
-- an LLM interprets questions, calls read-only tools, and explains evidence, but never generates numerical recipes directly.
+- an LLM interprets questions, calls read-only tools, and explains evidence, but never generates numerical process settings directly.
 
 See [Analysis and optimization methods](docs/optimization.en.md) for the detailed boundaries.
 
 ## Product components
 
-- **Edge** connects PLCs, instruments, gateways, and business sources, handling mapping, cycle collection, offline buffering, and replay.
-- **Cycles** organize continuous signals into traceable real runs and stage trajectories.
-- **Manufacturing** records product, recipe, equipment, material, component, and tooling context.
+- **Edge** connects control systems, instruments, gateways, and business sources, handling semantic mapping, execution-boundary detection, offline buffering, and replay.
+- **Process Executions** organize continuous signals into traceable real runs and stage trajectories.
+- **Manufacturing** records product, process specification, equipment, material, component, and tooling context.
 - **Inspections** preserve quality objectives, safety outcomes, attachments, and human review.
-- **Research** organizes problems, candidate causes, hypotheses, experiments, results, and process windows.
+- **Research** organizes problems, candidate causes, hypotheses, experiments, results, and operating regions.
 - **Optimizer** performs reproducible numerical modeling, constraint checks, and sequential experiment recommendations.
 - **Agent** helps engineers query, organize, and explain verified system facts.
 
@@ -84,7 +84,7 @@ These components share one evidence chain rather than creating conflicting paral
 
 ## Current status and evidence boundary
 
-The repository implements the main code path across acquisition, cycles, context, inspections, R&D experiments, diagnostic candidates, and numerical recommendations, with automated tests. Capability and product benefit remain different claims:
+The repository implements the main code path across acquisition, process executions, context, inspections, R&D experiments, diagnostic candidates, and numerical recommendations, with automated tests. Capability and product benefit remain different claims:
 
 - **Implemented** means code, contracts, and tests exist.
 - **Historical replay passed** means future data were hidden and results reproduce within a declared candidate set.
@@ -99,7 +99,7 @@ Historical replay, shadow validation, and controlled online validation are three
 
 ```mermaid
 flowchart LR
-    Sources["Controls / instruments / vision / inspection / MES"] --> Edge["Edge ConnectorHost\nmapping · cycles · buffering"]
+    Sources["Controls / instruments / vision / inspection / MES"] --> Edge["Edge ConnectorHost\nmapping · execution boundaries · buffering"]
     Edge --> Platform["Platform API\nruns · context · inspection · R&D · evidence"]
     Platform --> Web["Platform Web\nengineering workbench"]
     Platform --> Optimizer["Optimizer\nstatistics · GP · constraints · experiment proposals"]
@@ -186,7 +186,7 @@ scripts/           verification and operations scripts
 ## Roadmap
 
 - [x] Real runs, actual conditions, process features, and inspections form traceable observations.
-- [x] Candidate causes, hypotheses, experiments, and process windows share one R&D record.
+- [x] Candidate causes, hypotheses, experiments, and operating regions share one R&D record.
 - [x] Constrained GP/BO recommendations, pending-point avoidance, and safe cold start.
 - [ ] Publish leakage-free sequential replay on a real manufacturing history.
 - [ ] Complete shadow recommendations and analyze engineer rejection reasons on a new project.

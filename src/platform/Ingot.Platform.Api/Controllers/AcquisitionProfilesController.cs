@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Ingot.Contracts.Acquisition;
+using Ingot.Contracts.Events;
 using Ingot.Contracts.ProcessConfiguration;
 using Ingot.Platform.Api.Agents;
 using Ingot.Platform.Api.Events;
@@ -253,7 +254,11 @@ public sealed partial class AcquisitionProfilesController(
         AcquisitionProfile? value,
         out AcquisitionProfile? normalized,
         out string error)
-        => AcquisitionProfileValidator.TryValidate(value, out normalized, out error);
+    {
+        var valid = AcquisitionProfileValidator.TryValidate(value, null, out normalized, out var errors);
+        error = valid ? string.Empty : string.Join("；", errors.Select(static item => item.ToString()));
+        return valid;
+    }
 
     private static bool ValidateMappings(AcquisitionProfile profile, ProcessDataModel model, out string error)
     {
@@ -266,44 +271,35 @@ public sealed partial class AcquisitionProfilesController(
                 profile.ValueMappings.All(mapping => mapping.DataItemCode != item.Code));
             if (missing is not null) return Fail($"缺少必填数据项映射：{missing.Code}。", out error);
         }
-        if (profile.Recipe is not null)
+        if (profile.ProcessSpecification is not null)
         {
-            if (string.IsNullOrWhiteSpace(profile.Recipe.IdPath) ||
-                string.IsNullOrWhiteSpace(profile.Recipe.VersionPath) ||
-                string.IsNullOrWhiteSpace(profile.Recipe.ParametersPath))
-                return Fail("启用配方采集后，配方编号、版本和参数路径不能为空。", out error);
-            if (profile.Recipe.ParameterMappings.Any(item =>
+            if (string.IsNullOrWhiteSpace(profile.ProcessSpecification.IdPath) ||
+                string.IsNullOrWhiteSpace(profile.ProcessSpecification.VersionPath) ||
+                string.IsNullOrWhiteSpace(profile.ProcessSpecification.ParametersPath))
+                return Fail("启用工艺规范采集后，工艺规范编号、版本和参数路径不能为空。", out error);
+            if (profile.ProcessSpecification.ParameterMappings.Any(item =>
                     !CodePattern().IsMatch(item.DataItemCode) || string.IsNullOrWhiteSpace(item.SourcePath)) ||
-                profile.Recipe.ParameterMappings.Select(item => item.DataItemCode)
-                    .Distinct(StringComparer.Ordinal).Count() != profile.Recipe.ParameterMappings.Count)
-                return Fail("配方参数映射无效或重复。", out error);
-            var definitions = model.RecipeParameters.ToDictionary(item => item.Code, StringComparer.Ordinal);
-            var unknownParameter = profile.Recipe.ParameterMappings.FirstOrDefault(item => !definitions.ContainsKey(item.DataItemCode));
+                profile.ProcessSpecification.ParameterMappings.Select(item => item.DataItemCode)
+                    .Distinct(StringComparer.Ordinal).Count() != profile.ProcessSpecification.ParameterMappings.Count)
+                return Fail("控制参数映射无效或重复。", out error);
+            var definitions = model.ControlParameters.ToDictionary(item => item.Code, StringComparer.Ordinal);
+            var unknownParameter = profile.ProcessSpecification.ParameterMappings.FirstOrDefault(item => !definitions.ContainsKey(item.DataItemCode));
             if (unknownParameter is not null)
-                return Fail($"配方参数未在工艺数据模型中定义：{unknownParameter.DataItemCode}。", out error);
+                return Fail($"控制参数未在工艺数据模型中定义：{unknownParameter.DataItemCode}。", out error);
         }
         if (profile.Lifecycle is not null)
         {
             var lifecycle = profile.Lifecycle;
-            if (lifecycle.Mode != "discrete-cycle" ||
-                (!string.IsNullOrWhiteSpace(lifecycle.CorrelationIdContextKey) &&
-                 !CodePattern().IsMatch(lifecycle.CorrelationIdContextKey)) ||
+            if (lifecycle.Mode != ProcessExecutionKinds.Discrete ||
                 !EventTypePattern().IsMatch(lifecycle.StartedEventType) ||
                 !EventTypePattern().IsMatch(lifecycle.CompletedEventType) ||
                 !EventTypePattern().IsMatch(lifecycle.StepChangedEventType))
             {
-                return Fail("周期边界配置无效。", out error);
+                return Fail("过程执行边界配置无效。", out error);
             }
-            if (!string.IsNullOrWhiteSpace(lifecycle.CorrelationIdContextKey) &&
-                profile.ContextMappings.All(item =>
-                    item.ContextKey != lifecycle.CorrelationIdContextKey))
+            if (string.IsNullOrWhiteSpace(lifecycle.ActiveContextKey))
             {
-                return Fail($"周期边界缺少关联号上下文映射：{lifecycle.CorrelationIdContextKey}。", out error);
-            }
-            if (string.IsNullOrWhiteSpace(lifecycle.CorrelationIdContextKey) &&
-                string.IsNullOrWhiteSpace(lifecycle.ActiveContextKey))
-            {
-                return Fail("周期边界必须配置生产状态上下文映射，由 Edge 自动生成周期关联号。", out error);
+                return Fail("过程执行边界必须配置生产状态上下文映射，由 Edge 自动生成执行标识。", out error);
             }
             if (!string.IsNullOrWhiteSpace(lifecycle.ActiveContextKey) &&
                 (string.IsNullOrWhiteSpace(lifecycle.ActiveValue) ||
@@ -311,7 +307,7 @@ public sealed partial class AcquisitionProfilesController(
                      item.ContextKey != lifecycle.ActiveContextKey)))
             {
                 return Fail(
-                    $"周期边界缺少运行激活状态上下文映射：{lifecycle.ActiveContextKey}。",
+                    $"过程执行边界缺少运行激活状态上下文映射：{lifecycle.ActiveContextKey}。",
                     out error);
             }
         }

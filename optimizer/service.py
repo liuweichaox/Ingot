@@ -132,7 +132,7 @@ class SuggestionRequest(StrictModel):
 
 class DiagnosticFeatureIn(StrictModel):
     data_source: str = Field(min_length=1, max_length=300)
-    source_kind: Literal["recipe-parameter", "process-feature"]
+    source_kind: Literal["control-parameter", "process-feature"]
     actionability: Literal["controllable", "observable"]
 
 

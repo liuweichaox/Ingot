@@ -25,7 +25,7 @@ internal sealed record ImportMapping
     [JsonPropertyName("occurredAt")] public required FieldSource OccurredAt { get; init; }
     [JsonPropertyName("subjectType")] public FieldSource SubjectType { get; init; } = new() { Value = "asset" };
     [JsonPropertyName("subjectId")] public required FieldSource SubjectId { get; init; }
-    [JsonPropertyName("correlationId")] public FieldSource? CorrelationId { get; init; }
+    [JsonPropertyName("executionId")] public FieldSource? ExecutionId { get; init; }
     [JsonPropertyName("context")] public Dictionary<string, FieldSource> Context { get; init; } = new(StringComparer.Ordinal);
     [JsonPropertyName("values")] public Dictionary<string, FieldSource> Values { get; init; } = new(StringComparer.Ordinal);
 }
@@ -89,7 +89,7 @@ internal static class MappingEngine
             data["values"] = values;
         }
 
-        var correlationId = mapping.CorrelationId is null ? null : Resolve(row, mapping.CorrelationId);
+        var executionId = mapping.ExecutionId is null ? null : Resolve(row, mapping.ExecutionId);
         return new ProductionEvent
         {
             EventId = Guid.CreateVersion7().ToString("D"),
@@ -101,7 +101,7 @@ internal static class MappingEngine
             Subject = new ObjectRef(subjectType.Trim(), subjectId.Trim()),
             Context = context,
             Data = data,
-            CorrelationId = string.IsNullOrWhiteSpace(correlationId) ? null : correlationId.Trim(),
+            ExecutionId = string.IsNullOrWhiteSpace(executionId) ? null : executionId.Trim(),
             Seq = seq
         };
     }

@@ -23,22 +23,22 @@ public sealed class InspectionWorkflowService(
         };
     }
 
-    public async Task<InspectionTask?> GetTaskAsync(string operationRunId, CancellationToken ct = default)
+    public async Task<InspectionTask?> GetTaskAsync(string executionId, CancellationToken ct = default)
     {
         var completed = (await QueryAllAsync(
-                new PlatformEventQuery { CorrelationId = operationRunId, EventType = "cycle.completed" }, ct)
+                new PlatformEventQuery { ExecutionId = executionId, EventType = "process.execution.completed" }, ct)
             .ConfigureAwait(false))
             .OrderByDescending(static item => item.Event.OccurredAt)
             .ThenByDescending(static item => item.IngestId)
             .FirstOrDefault();
         if (completed is null)
         {
-            var scope = await inspections.GetScopeAsync(operationRunId, ct).ConfigureAwait(false);
+            var scope = await inspections.GetScopeAsync(executionId, ct).ConfigureAwait(false);
             if (scope is null) return null;
             var scopePlan = await masterData.GetInspectionPlanAsync(
                 scope.InspectionPlanId, scope.InspectionPlanVersion, ct).ConfigureAwait(false);
             if (scopePlan is null || scopePlan.Status != InspectionPlanStatuses.Published) return null;
-            var scopeRecords = await inspections.QueryAllByOperationRunIdsAsync([operationRunId], ct).ConfigureAwait(false);
+            var scopeRecords = await inspections.QueryAllByExecutionIdsAsync([executionId], ct).ConfigureAwait(false);
             var scopeReviews = await reviews.GetLatestByInspectionRecordIdsAsync(
                 scopeRecords.Select(static record => record.RecordId).ToArray(), ct).ConfigureAwait(false);
             return BuildTask(scope, scopePlan, scopeRecords, scopeReviews);
@@ -46,7 +46,7 @@ public sealed class InspectionWorkflowService(
         var plans = await masterData.ListInspectionPlansAsync(ct).ConfigureAwait(false);
         var plan = InspectionPlanMatcher.Resolve(plans, completed.Event.Context, completed.Event.Subject.Id, completed.Event.OccurredAt);
         if (plan is null) return null;
-        var records = await inspections.QueryAllByOperationRunIdsAsync([operationRunId], ct).ConfigureAwait(false);
+        var records = await inspections.QueryAllByExecutionIdsAsync([executionId], ct).ConfigureAwait(false);
         var latestReviews = await reviews.GetLatestByInspectionRecordIdsAsync(
             records.Select(static record => record.RecordId).ToArray(), ct).ConfigureAwait(false);
         return BuildTask(completed, plan, records, latestReviews);
@@ -58,10 +58,10 @@ public sealed class InspectionWorkflowService(
         CancellationToken ct = default)
     {
         var completedEvents = await QueryAllAsync(
-            new PlatformEventQuery { EventType = "cycle.completed" }, ct).ConfigureAwait(false);
+            new PlatformEventQuery { EventType = "process.execution.completed" }, ct).ConfigureAwait(false);
         var completed = completedEvents
-            .Where(static item => !string.IsNullOrWhiteSpace(item.Event.CorrelationId))
-            .GroupBy(static item => item.Event.CorrelationId!, StringComparer.Ordinal)
+            .Where(static item => !string.IsNullOrWhiteSpace(item.Event.ExecutionId))
+            .GroupBy(static item => item.Event.ExecutionId!, StringComparer.Ordinal)
             .Select(static group => group
                 .OrderByDescending(static item => item.Event.OccurredAt)
                 .ThenByDescending(static item => item.IngestId)
@@ -69,18 +69,18 @@ public sealed class InspectionWorkflowService(
             .OrderByDescending(static item => item.Event.OccurredAt)
             .ToArray();
         var scopes = await inspections.ListScopesAsync(ct).ConfigureAwait(false);
-        var cycleIds = completed.Select(static item => item.Event.CorrelationId!).ToHashSet(StringComparer.Ordinal);
-        scopes = scopes.Where(scope => !cycleIds.Contains(scope.ScopeId)).ToArray();
-        var operationRunIds = completed.Select(static item => item.Event.CorrelationId!)
+        var completedExecutionIds = completed.Select(static item => item.Event.ExecutionId!).ToHashSet(StringComparer.Ordinal);
+        scopes = scopes.Where(scope => !completedExecutionIds.Contains(scope.ScopeId)).ToArray();
+        var executionIds = completed.Select(static item => item.Event.ExecutionId!)
             .Concat(scopes.Select(static scope => scope.ScopeId)).ToArray();
-        var records = await inspections.QueryAllByOperationRunIdsAsync(operationRunIds, ct).ConfigureAwait(false);
+        var records = await inspections.QueryAllByExecutionIdsAsync(executionIds, ct).ConfigureAwait(false);
         var plans = await masterData.ListInspectionPlansAsync(ct).ConfigureAwait(false);
         var latestReviews = await reviews.GetLatestByInspectionRecordIdsAsync(
             records.Select(static record => record.RecordId).ToArray(), ct).ConfigureAwait(false);
-        var byCycle = records.GroupBy(static record => record.OperationRunId, StringComparer.Ordinal)
+        var byProcessExecution = records.GroupBy(static record => record.ExecutionId, StringComparer.Ordinal)
             .ToDictionary(static group => group.Key, static group => group.ToArray(), StringComparer.Ordinal);
         var normalizedStatus = status?.Trim().ToLowerInvariant();
-        var cycleTasks = completed
+        var executionTasks = completed
             .Select(item => new
             {
                 Completed = item,
@@ -94,7 +94,7 @@ public sealed class InspectionWorkflowService(
             .Select(item => BuildTask(
                 item.Completed,
                 item.Plan!,
-                byCycle.GetValueOrDefault(item.Completed.Event.CorrelationId!, []),
+                byProcessExecution.GetValueOrDefault(item.Completed.Event.ExecutionId!, []),
                 latestReviews))
             .ToArray();
         var planByKey = plans.ToDictionary(item => (item.PlanId, item.Version));
@@ -103,9 +103,9 @@ public sealed class InspectionWorkflowService(
             .Select(scope => BuildTask(
                 scope,
                 planByKey[(scope.InspectionPlanId, scope.InspectionPlanVersion)],
-                byCycle.GetValueOrDefault(scope.ScopeId, []),
+                byProcessExecution.GetValueOrDefault(scope.ScopeId, []),
                 latestReviews));
-        var tasks = cycleTasks.Concat(scopeTasks)
+        var tasks = executionTasks.Concat(scopeTasks)
             .OrderByDescending(static task => task.CompletedAt)
             .Where(task => string.IsNullOrWhiteSpace(normalizedStatus) || normalizedStatus == "all" ||
                            string.Equals(task.Status, normalizedStatus, StringComparison.Ordinal))
@@ -169,11 +169,11 @@ public sealed class InspectionWorkflowService(
         var context = completed.Event.Context;
         return new InspectionTask
         {
-            ScopeType = "production-cycle",
-            OperationRunId = completed.Event.CorrelationId!,
-            WorkpieceId = context.GetValueOrDefault("workpiece_id"),
-            MachineId = completed.Event.Subject.Id,
-            ProductSeries = context.GetValueOrDefault("product_series", "unknown"),
+            ScopeType = "production-execution",
+            ExecutionId = completed.Event.ExecutionId!,
+            OutputItemId = context.GetValueOrDefault("output_item_id"),
+            EquipmentId = completed.Event.Subject.Id,
+            ProductFamilyCode = context.GetValueOrDefault("product_family_code", "unknown"),
             InspectionPlanId = plan.PlanId,
             InspectionPlanVersion = plan.Version,
             InspectionPlanName = plan.Name,
@@ -216,10 +216,10 @@ public sealed class InspectionWorkflowService(
         return new InspectionTask
         {
             ScopeType = scope.ScopeType,
-            OperationRunId = scope.ScopeId,
-            WorkpieceId = scope.WorkpieceId,
-            MachineId = scope.SubjectId,
-            ProductSeries = scope.ProductSeries,
+            ExecutionId = scope.ScopeId,
+            OutputItemId = scope.OutputItemId,
+            EquipmentId = scope.SubjectId,
+            ProductFamilyCode = scope.ProductFamilyCode,
             InspectionPlanId = plan.PlanId,
             InspectionPlanVersion = plan.Version,
             InspectionPlanName = plan.Name,

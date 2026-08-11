@@ -1,13 +1,14 @@
 using System.Globalization;
 using System.Text.Json;
+using Ingot.Contracts.Events;
 using Ingot.Domain.Events;
 
 namespace Ingot.Edge.ConnectorHost.Acquisition;
 
 public sealed record AcquisitionMappingResult(
     ProductionEvent Sample,
-    ProductionEvent? RecipeApplied,
-    string? RecipeIdentity);
+    ProductionEvent? ProcessSpecificationApplied,
+    string? ProcessSpecificationIdentity);
 
 public static class HttpPollingSnapshotMapper
 {
@@ -15,7 +16,7 @@ public static class HttpPollingSnapshotMapper
         JsonElement snapshot,
         HttpPollingAcquisitionOptions options,
         string normalizedSource,
-        string? previousRecipeIdentity,
+        string? previousProcessSpecificationIdentity,
         IReadOnlyDictionary<string, JsonElement>? topicSnapshots = null)
     {
         ArgumentNullException.ThrowIfNull(options);
@@ -75,36 +76,33 @@ public static class HttpPollingSnapshotMapper
         if (options.TimestampMode == "source")
             sampleData["sourceTimestamp"] = occurredAt.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture);
 
-        string? recipeIdentity = null;
-        ProductionEvent? recipeEvent = null;
-        var correlationId = ResolveCorrelationId(context, options.Lifecycle);
-        if (options.Recipe is not null)
+        string? processSpecificationIdentity = null;
+        ProductionEvent? processSpecificationEvent = null;
+        if (options.ProcessSpecification is not null)
         {
-            var recipeId = RequiredScalar(snapshot, options.Recipe.IdPath);
-            var recipeVersion = RequiredScalar(snapshot, options.Recipe.VersionPath);
-            recipeIdentity = correlationId is null
-                ? $"{recipeId}@{recipeVersion}"
-                : $"{recipeId}@{recipeVersion}|{correlationId}";
-            context["recipe_id"] = recipeId;
-            context["recipe_version"] = recipeVersion;
+            var processSpecificationId = RequiredScalar(snapshot, options.ProcessSpecification.IdPath);
+            var processSpecificationVersion = RequiredScalar(snapshot, options.ProcessSpecification.VersionPath);
+            processSpecificationIdentity = $"{processSpecificationId}@{processSpecificationVersion}";
+            context["process_specification_id"] = processSpecificationId;
+            context["process_specification_version"] = processSpecificationVersion;
 
-            if (!string.Equals(recipeIdentity, previousRecipeIdentity, StringComparison.Ordinal))
+            if (!string.Equals(processSpecificationIdentity, previousProcessSpecificationIdentity, StringComparison.Ordinal))
             {
-                if (!TryResolve(snapshot, options.Recipe.ParametersPath, out var aggregateParameters) ||
+                if (!TryResolve(snapshot, options.ProcessSpecification.ParametersPath, out var aggregateParameters) ||
                     aggregateParameters.ValueKind != JsonValueKind.Object)
                 {
                     throw new InvalidDataException(
-                        $"设备快照中的配方参数必须是对象：{options.Recipe.ParametersPath}。");
+                        $"设备快照中的控制参数必须是对象：{options.ProcessSpecification.ParametersPath}。");
                 }
                 var resolvedParameters = new Dictionary<string, object?>(StringComparer.Ordinal);
-                foreach (var field in options.Recipe.ParameterFields)
+                foreach (var field in options.ProcessSpecification.ParameterFields)
                 {
                     var parameters = aggregateParameters;
                     if (!string.IsNullOrWhiteSpace(field.Topic))
                     {
                         if (!TryResolve(
                                 SourceRoot(snapshot, field.Topic, topicSnapshots),
-                                options.Recipe.ParametersPath,
+                                options.ProcessSpecification.ParametersPath,
                                 out parameters) ||
                             parameters.ValueKind != JsonValueKind.Object)
                         {
@@ -116,7 +114,7 @@ public static class HttpPollingSnapshotMapper
                         raw.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
                     {
                         if (field.Required)
-                            throw new InvalidDataException($"设备配方缺少必填参数：{field.SourcePath}。");
+                            throw new InvalidDataException($"设备工艺规范缺少必填参数：{field.SourcePath}。");
                         resolvedParameters[field.Code] = null;
                         continue;
                     }
@@ -125,30 +123,30 @@ public static class HttpPollingSnapshotMapper
                         field.Scale,
                         field.Offset);
                 }
-                string? recipeName = null;
-                if (!string.IsNullOrWhiteSpace(options.Recipe.NamePath) &&
-                    TryResolve(snapshot, options.Recipe.NamePath, out var nameValue) &&
+                string? processSpecificationName = null;
+                if (!string.IsNullOrWhiteSpace(options.ProcessSpecification.NamePath) &&
+                    TryResolve(snapshot, options.ProcessSpecification.NamePath, out var nameValue) &&
                     nameValue.ValueKind == JsonValueKind.String)
                 {
-                    recipeName = nameValue.GetString();
+                    processSpecificationName = nameValue.GetString();
                 }
-                var recipeData = new Dictionary<string, object?>(StringComparer.Ordinal)
+                var processSpecificationData = new Dictionary<string, object?>(StringComparer.Ordinal)
                 {
-                    ["recipeId"] = recipeId,
-                    ["recipeVersion"] = ScalarValue(snapshot, options.Recipe.VersionPath),
+                    ["processSpecificationId"] = processSpecificationId,
+                    ["processSpecificationVersion"] = ScalarValue(snapshot, options.ProcessSpecification.VersionPath),
                     ["resolvedParameters"] = resolvedParameters
                 };
-                if (!string.IsNullOrWhiteSpace(recipeName))
-                    recipeData["recipeName"] = recipeName;
+                if (!string.IsNullOrWhiteSpace(processSpecificationName))
+                    processSpecificationData["processSpecificationName"] = processSpecificationName;
 
-                recipeEvent = ProductionEvent.Create(
-                    options.Recipe.EventType,
+                processSpecificationEvent = ProductionEvent.Create(
+                    options.ProcessSpecification.EventType,
                     occurredAt,
                     normalizedSource,
                     new ObjectRef(options.SubjectType, options.SubjectId),
-                    correlationId,
+                    executionId: null,
                     context: context,
-                    data: recipeData);
+                    data: processSpecificationData);
             }
         }
 
@@ -157,10 +155,10 @@ public static class HttpPollingSnapshotMapper
             occurredAt,
             normalizedSource,
             new ObjectRef(options.SubjectType, options.SubjectId),
-            correlationId,
+            executionId: null,
             context: context,
             data: sampleData);
-        return new AcquisitionMappingResult(sample, recipeEvent, recipeIdentity);
+        return new AcquisitionMappingResult(sample, processSpecificationEvent, processSpecificationIdentity);
     }
 
     public static void ValidateOptions(HttpPollingAcquisitionOptions options)
@@ -194,40 +192,32 @@ public static class HttpPollingSnapshotMapper
             if (field.DataType is not ("double" or "integer" or "boolean" or "string"))
                 throw new InvalidOperationException($"采集字段 {field.Code} 的 DataType 不受支持：{field.DataType}。");
         }
-        if (options.Recipe is not null)
+        if (options.ProcessSpecification is not null)
         {
-            if (options.Recipe.ParameterFields.Count == 0)
-                throw new InvalidOperationException("配置 Recipe 时，Recipe:ParameterFields 至少需要一个参数映射。");
-            foreach (var field in options.Recipe.ParameterFields)
+            if (options.ProcessSpecification.ParameterFields.Count == 0)
+                throw new InvalidOperationException("配置 ProcessSpecification 时，ProcessSpecification:ParameterFields 至少需要一个参数映射。");
+            foreach (var field in options.ProcessSpecification.ParameterFields)
             {
                 if (string.IsNullOrWhiteSpace(field.SourcePath) || string.IsNullOrWhiteSpace(field.Code))
-                    throw new InvalidOperationException("配方参数的 SourcePath 和 Code 不能为空。");
+                    throw new InvalidOperationException("控制参数的 SourcePath 和 Code 不能为空。");
                 if (field.DataType is not ("double" or "integer" or "boolean" or "string"))
-                    throw new InvalidOperationException($"配方参数 {field.Code} 的 DataType 不受支持：{field.DataType}。");
+                    throw new InvalidOperationException($"控制参数 {field.Code} 的 DataType 不受支持：{field.DataType}。");
             }
         }
         if (options.Lifecycle is not null)
         {
-            if (options.Lifecycle.Mode != "discrete-cycle")
+            if (options.Lifecycle.Mode != ProcessExecutionKinds.Discrete)
                 throw new InvalidOperationException($"不支持的运行边界模式：{options.Lifecycle.Mode}。");
-            if (!string.IsNullOrWhiteSpace(options.Lifecycle.CorrelationIdContextKey) &&
-                !options.ContextFields.Any(item =>
-                    item.Key == options.Lifecycle.CorrelationIdContextKey))
+            if (string.IsNullOrWhiteSpace(options.Lifecycle.ActiveContextKey))
             {
-                throw new InvalidOperationException(
-                    $"周期运行缺少关联号上下文映射：{options.Lifecycle.CorrelationIdContextKey}。");
-            }
-            if (string.IsNullOrWhiteSpace(options.Lifecycle.CorrelationIdContextKey) &&
-                string.IsNullOrWhiteSpace(options.Lifecycle.ActiveContextKey))
-            {
-                throw new InvalidOperationException("周期运行必须配置生产状态上下文键，由 Edge 自动生成周期关联号。");
+                throw new InvalidOperationException("离散过程执行必须配置生产状态上下文键，由 Edge 自动生成执行标识。");
             }
             if (!string.IsNullOrWhiteSpace(options.Lifecycle.ActiveContextKey) &&
                 !options.ContextFields.Any(item =>
                     item.Key == options.Lifecycle.ActiveContextKey))
             {
                 throw new InvalidOperationException(
-                    $"周期运行缺少激活状态上下文映射：{options.Lifecycle.ActiveContextKey}。");
+                    $"离散过程执行缺少激活状态上下文映射：{options.Lifecycle.ActiveContextKey}。");
             }
         }
     }
@@ -324,17 +314,4 @@ public static class HttpPollingSnapshotMapper
             ? string.IsNullOrWhiteSpace(topic) ? aggregate : default
             : topicRoot;
 
-    private static string? ResolveCorrelationId(
-        IReadOnlyDictionary<string, string> context,
-        LifecycleFieldMapping? lifecycle)
-    {
-        if (lifecycle is null ||
-            string.IsNullOrWhiteSpace(lifecycle.CorrelationIdContextKey) ||
-            !context.TryGetValue(lifecycle.CorrelationIdContextKey, out var value) ||
-            string.IsNullOrWhiteSpace(value))
-        {
-            return null;
-        }
-        return value.Trim();
-    }
 }

@@ -93,7 +93,7 @@ public sealed class ManufacturingContextValidatorTests
         var ok = ManufacturingContextValidator.TryValidate(
             new ToolingAssemblyRevision
             {
-                MoldId = "MOLD-01",
+                ToolingAssemblyId = "MOLD-01",
                 Members =
                 [
                     new ToolingAssemblyMember { RoleCode = "upper_core", ComponentId = "UP-01" },
@@ -113,11 +113,11 @@ public sealed class ManufacturingContextValidatorTests
         var ok = ManufacturingContextValidator.TryValidate(
             new ProductionContext
             {
-                MachineId = "PRESS-01",
-                ProductSeries = "LENS-A",
+                EquipmentId = "PRESS-01",
+                ProductFamilyCode = "LENS-A",
                 ProductCode = "LENS-A-01",
-                RecipeId = "RCP-A",
-                RecipeVersion = "7",
+                ProcessSpecificationId = "RCP-A",
+                ProcessSpecificationVersion = "7",
                 ToolingInstallationId = Guid.NewGuid(),
                 Source = "MES",
                 CommandId = "MES-CMD-001",
@@ -148,11 +148,11 @@ public sealed class ManufacturingContextValidatorTests
         var ok = ManufacturingContextValidator.TryValidate(
             new ProductionContext
             {
-                MachineId = "PRESS-01",
-                ProductSeries = "LENS-A",
+                EquipmentId = "PRESS-01",
+                ProductFamilyCode = "LENS-A",
                 ProductCode = "LENS-A-01",
-                RecipeId = "RCP-A",
-                RecipeVersion = "7",
+                ProcessSpecificationId = "RCP-A",
+                ProcessSpecificationVersion = "7",
                 ToolingInstallationId = Guid.NewGuid(),
                 Source = "MES"
             },

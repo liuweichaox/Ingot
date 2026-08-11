@@ -52,7 +52,7 @@ public sealed class GetResearchProjectTool(
                   project.MemberUserIds.Contains(userId, StringComparer.Ordinal)))
                 throw new ProcessResearchRuleException("研发项目不存在或当前用户无权访问。");
             var workspace = await workflow.GetWorkspaceAsync(projectId, ct).ConfigureAwait(false);
-            var validatedWindows = workspace.ProcessWindows.Count(
+            var validatedWindows = workspace.OperatingRegions.Count(
                 static value => value.Status == "validated");
             return new AnalysisToolResult
             {

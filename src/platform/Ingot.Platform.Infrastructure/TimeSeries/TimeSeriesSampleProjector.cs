@@ -119,7 +119,7 @@ public static class TimeSeriesSampleProjector
             Source = evt.Source,
             SubjectType = evt.Subject.Type,
             SubjectId = evt.Subject.Id,
-            CorrelationId = evt.CorrelationId,
+            ExecutionId = evt.ExecutionId,
             PhaseCode = phaseCode,
             DataModelId = model.ModelId,
             DataModelVersion = model.Version,

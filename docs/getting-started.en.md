@@ -52,7 +52,7 @@ A process configuration versions the process's data and analysis rules together:
 - acquisition profile and equipment-point mapping;
 - run boundaries, stages, and process features;
 - inspection definitions and quality plan;
-- recipe variables, allowed ranges, objectives, and constraints;
+- process specification variables, allowed ranges, objectives, and constraints;
 - context fields required for analysis or recorded when available.
 
 Publish a process-configuration version before assigning it to an R&D project. Once execution starts, freeze the configuration and context policy so historical observations remain interpretable. The UI consistently uses “process configuration”; the API and code contracts retain the technical name `ScenarioPackage`.
@@ -78,23 +78,23 @@ See [Equipment and data connection](data-connection.en.md) for protocol semantic
 For the current equipment, confirm:
 
 - product or process object;
-- published recipe version;
+- published process specification version;
 - installed tooling and assembly revision;
 - material lot, components, calibration, or maintenance facts required by the scenario.
 
-These facts freeze into a snapshot when the run starts. Do not wait for a quality problem and then manually guess which mold was probably used.
+These facts freeze into a snapshot when the run starts. Do not wait for a quality problem and then manually guess which tooling assembly was probably used.
 
 ## 6. Complete one run
 
-A stable identity must span the research plan, field cycle, and inspection record:
+A stable identity must span the research plan, field execution, and inspection record:
 
 ```text
-R&D RunKey ←→ field CorrelationId ←→ Platform OperationRunId
+R&D ExecutionKey ←→ Platform ExecutionId
 ```
 
-They may share one value or use a deterministic mapping, but the relationship must exist before execution and remain traceable. An MES work order, barcode, instrument sample ID, or equipment register can carry the mapping.
+The two values may be identical or deterministically mapped, but the relationship must exist before execution and remain traceable. An MES work order, barcode, or instrument sample ID may carry the mapping; an equipment register is only an external reference and does not replace the Edge-generated `ExecutionId`.
 
-After the run, confirm in cycle detail that:
+After the run, confirm in process-execution detail that:
 
 - start and completion events are present;
 - actual parameters were collected;
@@ -158,10 +158,10 @@ The engineer approves execution. Once all runs and inspections are complete, the
 
 When the project has trustworthy observations, explicit controlled variables, and a safe baseline, it can generate the next experiment set. The system shows settings, objective intervals, safety outcomes, joint feasibility, data scope, model version, and rationale.
 
-Pending points prevent duplicate recommendations while a batch remains incomplete. One successful point is only a candidate setting; a process window requires independent repetition, boundary or interaction validation, and review by another engineer.
+Pending points prevent duplicate recommendations while a batch remains incomplete. One successful point is only a candidate setting; a operating region requires independent repetition, boundary or interaction validation, and review by another engineer.
 
 ## 12. Demo scenario
 
-The optical-lens molding simulator validates the complete data path; it is not a real equipment address map or production process window. It exposes a Mitsubishi A-compatible MC 1E binary interface together with stage, temperature, pressure, position, and recipe values. A real machine requires fresh validation of addresses, ranges, units, run boundaries, and safety conditions.
+The optical-lens molding simulator validates the complete data path; it is not a real equipment address map or production operating region. It exposes a Mitsubishi A-compatible MC 1E binary interface together with stage, temperature, pressure, position, and process specification values. A real machine requires fresh validation of addresses, ranges, units, run boundaries, and safety conditions.
 
 Simulation can prove that the software path runs. It cannot prove shorter development time in a real process.

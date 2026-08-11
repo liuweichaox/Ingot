@@ -113,14 +113,14 @@ public sealed class ResearchExperimentOptimizer(
             .ToArray();
         var sourceObservations = persisted
             .Concat(validAuto)
-            .GroupBy(static value => value.RunKey, StringComparer.Ordinal)
+            .GroupBy(static value => value.ExecutionKey, StringComparer.Ordinal)
             .Select(static group => group.Last())
-            .OrderBy(static value => value.RunKey, StringComparer.Ordinal)
+            .OrderBy(static value => value.ExecutionKey, StringComparer.Ordinal)
             .ToArray();
-        var observedRunKeys = sourceObservations.Select(static value => value.RunKey)
+        var observedExecutionKeys = sourceObservations.Select(static value => value.ExecutionKey)
             .ToHashSet(StringComparer.Ordinal);
         var decidedShadowRuns = shadowRecommendations
-            .Select(static value => value.SuggestionRunKey)
+            .Select(static value => value.SuggestionExecutionKey)
             .ToHashSet(StringComparer.Ordinal);
         var activeOptimization = experiments
             .Where(experiment =>
@@ -132,8 +132,8 @@ public sealed class ResearchExperimentOptimizer(
                     or ResearchExperimentStatuses.Approved
                     or ResearchExperimentStatuses.Running) &&
                 experiment.RunPlan.Any(run => mode == ResearchOptimizationModes.Shadow
-                    ? !decidedShadowRuns.Contains(run.RunKey)
-                    : !observedRunKeys.Contains(run.RunKey)))
+                    ? !decidedShadowRuns.Contains(run.ExecutionKey)
+                    : !observedExecutionKeys.Contains(run.ExecutionKey)))
             .OrderByDescending(static value => value.CreatedAt)
             .FirstOrDefault();
         if (activeOptimization is not null)
@@ -168,7 +168,7 @@ public sealed class ResearchExperimentOptimizer(
             .Where(static experiment =>
                 experiment.Optimization?.Mode != ResearchOptimizationModes.Shadow)
             .SelectMany(static experiment => experiment.RunPlan)
-            .Where(run => !observedRunKeys.Contains(run.RunKey) &&
+            .Where(run => !observedExecutionKeys.Contains(run.ExecutionKey) &&
                           run.Factors.Select(static value => value.VariableCode)
                               .ToHashSet(StringComparer.Ordinal).SetEquals(controls.Keys))
             .Select(run => (IReadOnlyDictionary<string, double>)run.Factors
@@ -225,11 +225,11 @@ public sealed class ResearchExperimentOptimizer(
                 ValidateSuggestion(project, response.ModelVersion, suggestion);
                 if (mode == ResearchOptimizationModes.Controlled)
                     ValidateControlledSuggestionInObservedEnvelope(suggestion, observations);
-                var runKey = $"bo-{experimentId:N}"[..15] +
+                var executionKey = $"bo-{experimentId:N}"[..15] +
                              $"-{index + 1:D2}-r{replicate + 1:D2}";
                 runPlan.Add(new ExperimentRunPlan
                 {
-                    RunKey = runKey,
+                    ExecutionKey = executionKey,
                     Sequence = sequence++,
                     BlockKey = $"block-{replicate + 1:D2}",
                     ReplicateKey = $"condition-{index + 1:D2}",
@@ -241,7 +241,7 @@ public sealed class ResearchExperimentOptimizer(
                             Unit = controls[pair.Key].Unit
                         }).ToArray()
                 });
-                predictions.Add(MapPrediction(runKey, suggestion));
+                predictions.Add(MapPrediction(executionKey, suggestion));
             }
         }
 
@@ -411,11 +411,11 @@ public sealed class ResearchExperimentOptimizer(
     }
 
     private static OptimizationRunPrediction MapPrediction(
-        string runKey,
+        string executionKey,
         OptimizerSuggestionOutput suggestion)
         => new()
         {
-            RunKey = runKey,
+            ExecutionKey = executionKey,
             Objectives = suggestion.Predictions.ToDictionary(
                 static pair => pair.Key,
                 static pair => new OptimizationMetricPrediction

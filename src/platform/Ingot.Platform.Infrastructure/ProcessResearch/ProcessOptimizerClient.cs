@@ -241,8 +241,8 @@ public sealed record ProcessDiagnosticFeatureInput
 
 public sealed record ProcessDiagnosticObservationInput
 {
-    [JsonPropertyName("run_key")]
-    public required string RunKey { get; init; }
+    [JsonPropertyName("execution_key")]
+    public required string ExecutionKey { get; init; }
 
     public double Outcome { get; init; }
     public double Weight { get; init; } = 1;

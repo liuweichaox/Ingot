@@ -51,7 +51,7 @@ public sealed class PlatformIngestWindowTests
 
     private static ProductionEvent CreateEvent(DateTimeOffset occurredAt)
         => ProductionEvent.Create(
-            "cycle.completed",
+            "process.execution.completed",
             occurredAt,
             "edge/EDGE-001/SOURCE-01/rule",
             new ObjectRef("equipment", "EQ-01")) with

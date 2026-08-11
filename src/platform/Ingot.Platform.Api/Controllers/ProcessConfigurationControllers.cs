@@ -56,14 +56,14 @@ public sealed class ProcessDataModelsController(
             return NotFound();
         if (existing.Status != ConfigurationStatuses.Draft)
             return Conflict(new { error = "只有草稿工艺数据模型可以删除。" });
-        var recipes = await store.ListRecipeVersionsAsync(ct).ConfigureAwait(false);
+        var processSpecifications = await store.ListProcessSpecificationsAsync(ct).ConfigureAwait(false);
         var plans = await store.ListAnalysisPlansAsync(ct).ConfigureAwait(false);
         var packages = await store.ListScenarioPackagesAsync(ct).ConfigureAwait(false);
-        if (recipes.Any(item => item.DataModelId == existing.ModelId && item.DataModelVersion == existing.Version) ||
+        if (processSpecifications.Any(item => item.DataModelId == existing.ModelId && item.DataModelVersion == existing.Version) ||
             plans.Any(item => item.DataModelId == existing.ModelId && item.DataModelVersion == existing.Version) ||
             packages.Any(item => item.DataModelId == existing.ModelId && item.DataModelVersion == existing.Version))
         {
-            return Conflict(new { error = "工艺数据模型仍被配方版本、分析方案或工艺配置引用，不能删除。" });
+            return Conflict(new { error = "工艺数据模型仍被工艺规范版本、分析方案或工艺配置引用，不能删除。" });
         }
         return await store.DeleteDataModelAsync(existing.ModelId, version, ct).ConfigureAwait(false) ? NoContent() : NotFound();
     }
@@ -89,27 +89,27 @@ public sealed class ProcessDataModelsController(
 }
 
 [ApiController]
-[Route("api/v1/recipe-versions")]
-public sealed class RecipeVersionsController(
+[Route("api/v1/process-specifications")]
+public sealed class ProcessSpecificationsController(
     IProcessConfigurationStore store,
     PlatformUserResolver userResolver) : PlatformConfigurationControllerBase(userResolver)
 {
     [HttpGet]
     public async Task<IActionResult> List(CancellationToken ct)
-        => DeniedConfigurationRead() ?? Ok(new { data = await store.ListRecipeVersionsAsync(ct).ConfigureAwait(false) });
+        => DeniedConfigurationRead() ?? Ok(new { data = await store.ListProcessSpecificationsAsync(ct).ConfigureAwait(false) });
 
-    [HttpGet("{recipeId}/{version:int}")]
-    public async Task<IActionResult> Get(string recipeId, int version, CancellationToken ct)
+    [HttpGet("{processSpecificationId}/{version:int}")]
+    public async Task<IActionResult> Get(string processSpecificationId, int version, CancellationToken ct)
     {
         var denied = DeniedConfigurationRead();
         if (denied is not null)
             return denied;
-        var value = await store.GetRecipeVersionAsync(Normalize(recipeId), version, ct).ConfigureAwait(false);
+        var value = await store.GetProcessSpecificationAsync(Normalize(processSpecificationId), version, ct).ConfigureAwait(false);
         return value is null ? NotFound() : Ok(value);
     }
 
     [HttpPost]
-    public async Task<IActionResult> Upsert([FromBody] RecipeVersion? request, CancellationToken ct)
+    public async Task<IActionResult> Upsert([FromBody] ProcessSpecification? request, CancellationToken ct)
     {
         var denied = DeniedConfigurationWrite();
         if (denied is not null)
@@ -121,18 +121,18 @@ public sealed class RecipeVersionsController(
         if (model is null)
             return BadRequest(new { error = "引用的工艺数据模型版本不存在。" });
         if (normalized.Status == ConfigurationStatuses.Published && model.Status != ConfigurationStatuses.Published)
-            return BadRequest(new { error = "发布配方前，引用的工艺数据模型必须已经发布。" });
-        var definitions = model.RecipeParameters.ToDictionary(item => item.Code, StringComparer.Ordinal);
+            return BadRequest(new { error = "发布工艺规范前，引用的工艺数据模型必须已经发布。" });
+        var definitions = model.ControlParameters.ToDictionary(item => item.Code, StringComparer.Ordinal);
         var unknown = normalized.Values.FirstOrDefault(item => !definitions.ContainsKey(item.Code));
         if (unknown is not null)
-            return BadRequest(new { error = $"配方参数未在工艺数据模型中定义：{unknown.Code}。" });
+            return BadRequest(new { error = $"控制参数未在工艺数据模型中定义：{unknown.Code}。" });
         var missing = definitions.Values.FirstOrDefault(item => !item.Nullable && normalized.Values.All(value => value.Code != item.Code));
         if (missing is not null)
-            return BadRequest(new { error = $"缺少必填配方参数：{missing.Code}。" });
+            return BadRequest(new { error = $"缺少必填控制参数：{missing.Code}。" });
         var invalid = normalized.Values.FirstOrDefault(item => !MatchesDataType(item.Value, definitions[item.Code].DataType));
         if (invalid is not null)
-            return BadRequest(new { error = $"配方参数 {invalid.Code} 的值不符合 {definitions[invalid.Code].DataType} 类型。" });
-        var existing = await store.GetRecipeVersionAsync(normalized.RecipeId, normalized.Version, ct).ConfigureAwait(false);
+            return BadRequest(new { error = $"控制参数 {invalid.Code} 的值不符合 {definitions[invalid.Code].DataType} 类型。" });
+        var existing = await store.GetProcessSpecificationAsync(normalized.ProcessSpecificationId, normalized.Version, ct).ConfigureAwait(false);
         if (existing is not null && existing.Status != ConfigurationStatuses.Draft)
         {
             if (existing.Status == ConfigurationStatuses.Published && normalized.Status == ConfigurationStatuses.Retired)
@@ -140,23 +140,23 @@ public sealed class RecipeVersionsController(
             else if (SamePayload(existing with { UpdatedAt = default }, normalized with { UpdatedAt = default }))
                 return Ok(existing);
             else
-                return Conflict(new { error = "已发布或停用的配方版本不可修改，请创建新版本。", existing });
+                return Conflict(new { error = "已发布或停用的工艺规范版本不可修改，请创建新版本。", existing });
         }
-        return Ok(await store.UpsertRecipeVersionAsync(normalized, ct).ConfigureAwait(false));
+        return Ok(await store.UpsertProcessSpecificationAsync(normalized, ct).ConfigureAwait(false));
     }
 
-    [HttpDelete("{recipeId}/{version:int}")]
-    public async Task<IActionResult> Delete(string recipeId, int version, CancellationToken ct)
+    [HttpDelete("{processSpecificationId}/{version:int}")]
+    public async Task<IActionResult> Delete(string processSpecificationId, int version, CancellationToken ct)
     {
         var denied = DeniedConfigurationWrite();
         if (denied is not null)
             return denied;
-        var existing = await store.GetRecipeVersionAsync(Normalize(recipeId), version, ct).ConfigureAwait(false);
+        var existing = await store.GetProcessSpecificationAsync(Normalize(processSpecificationId), version, ct).ConfigureAwait(false);
         if (existing is null)
             return NotFound();
         if (existing.Status != ConfigurationStatuses.Draft)
-            return Conflict(new { error = "只有草稿配方版本可以删除。" });
-        return await store.DeleteRecipeVersionAsync(existing.RecipeId, version, ct).ConfigureAwait(false) ? NoContent() : NotFound();
+            return Conflict(new { error = "只有草稿工艺规范版本可以删除。" });
+        return await store.DeleteProcessSpecificationAsync(existing.ProcessSpecificationId, version, ct).ConfigureAwait(false) ? NoContent() : NotFound();
     }
 
     private static string Normalize(string value) => value.Trim().ToLowerInvariant();

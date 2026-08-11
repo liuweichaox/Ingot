@@ -76,19 +76,19 @@ def build_payload(args: argparse.Namespace) -> dict[str, object]:
         },
         "contextMappings": [
             {"contextKey": "run_active", "sourcePath": "D:0:uint16", "required": True},
-            {"contextKey": "source_cycle_no", "sourcePath": "D:2:uint32", "required": False},
+            {"contextKey": "source_execution_no", "sourcePath": "D:2:uint32", "required": False},
             {"contextKey": "product_code", "sourcePath": "D:30:string:20", "required": True},
-            {"contextKey": "product_series", "sourcePath": "D:40:string:20", "required": True},
-            {"contextKey": "mold_id", "sourcePath": "D:50:string:20", "required": True},
+            {"contextKey": "product_family_code", "sourcePath": "D:40:string:20", "required": True},
+            {"contextKey": "tooling_assembly_id", "sourcePath": "D:50:string:20", "required": True},
             {"contextKey": "material_lot_ref", "sourcePath": "D:60:string:20", "required": True},
-            {"contextKey": "workpiece_id", "sourcePath": "D:70:string:40", "required": True},
+            {"contextKey": "output_item_id", "sourcePath": "D:70:string:40", "required": True},
         ],
         "valueMappings": [
             mapping(item)
             for item in DATA_ITEMS
         ],
-        "recipe": {
-            "eventType": "recipe.applied",
+        "processSpecification": {
+            "eventType": "process.specification.applied",
             "idPath": "D:10:string:20",
             "versionPath": "D:5:uint16",
             "namePath": None,
@@ -99,11 +99,11 @@ def build_payload(args: argparse.Namespace) -> dict[str, object]:
             ],
         },
         "lifecycle": {
-            "mode": "discrete-cycle",
+            "mode": "discrete",
             "activeContextKey": "run_active",
             "activeValue": "1",
-            "startedEventType": "cycle.started",
-            "completedEventType": "cycle.completed",
+            "startedEventType": "process.execution.started",
+            "completedEventType": "process.execution.completed",
             "stepChangedEventType": "process.stage_changed",
         },
     }

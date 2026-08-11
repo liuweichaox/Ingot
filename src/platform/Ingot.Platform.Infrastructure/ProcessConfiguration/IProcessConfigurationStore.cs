@@ -11,10 +11,10 @@ public interface IProcessConfigurationStore
     Task<ProcessDataModel?> GetDataModelAsync(string modelId, int version, CancellationToken ct = default);
     Task<bool> DeleteDataModelAsync(string modelId, int version, CancellationToken ct = default);
 
-    Task<RecipeVersion> UpsertRecipeVersionAsync(RecipeVersion value, CancellationToken ct = default);
-    Task<IReadOnlyList<RecipeVersion>> ListRecipeVersionsAsync(CancellationToken ct = default);
-    Task<RecipeVersion?> GetRecipeVersionAsync(string recipeId, int version, CancellationToken ct = default);
-    Task<bool> DeleteRecipeVersionAsync(string recipeId, int version, CancellationToken ct = default);
+    Task<ProcessSpecification> UpsertProcessSpecificationAsync(ProcessSpecification value, CancellationToken ct = default);
+    Task<IReadOnlyList<ProcessSpecification>> ListProcessSpecificationsAsync(CancellationToken ct = default);
+    Task<ProcessSpecification?> GetProcessSpecificationAsync(string processSpecificationId, int version, CancellationToken ct = default);
+    Task<bool> DeleteProcessSpecificationAsync(string processSpecificationId, int version, CancellationToken ct = default);
 
     Task<ProcessAnalysisPlan> UpsertAnalysisPlanAsync(ProcessAnalysisPlan value, CancellationToken ct = default);
     Task<IReadOnlyList<ProcessAnalysisPlan>> ListAnalysisPlansAsync(CancellationToken ct = default);

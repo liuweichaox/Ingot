@@ -23,16 +23,16 @@ public sealed class SqliteEventLogTests
             var firstLog = new SqliteEventLog(options, NullLogger<SqliteEventLog>.Instance);
 
             var firstSeq = await firstLog.AppendAsync(CreateEvent(
-                "cycle.started",
-                "cycle-01",
+                "process.execution.started",
+                "execution-01",
                 "LOT-A"));
             var secondSeq = await firstLog.AppendAsync(CreateEvent(
-                "cycle.completed",
-                "cycle-01",
+                "process.execution.completed",
+                "execution-01",
                 "LOT-A"));
             await firstLog.AppendAsync(CreateEvent(
-                "cycle.completed",
-                "cycle-02",
+                "process.execution.completed",
+                "execution-02",
                 "LOT-B"));
 
             Assert.Equal(1, firstSeq);
@@ -41,10 +41,10 @@ public sealed class SqliteEventLogTests
             var reopened = new SqliteEventLog(options, NullLogger<SqliteEventLog>.Instance);
             var results = await reopened.QueryAsync(new EventQuery
             {
-                EventType = "cycle.completed",
+                EventType = "process.execution.completed",
                 SubjectType = "equipment",
                 SubjectId = "POL-03",
-                CorrelationId = "cycle-01",
+                ExecutionId = "execution-01",
                 Context = new Dictionary<string, string>
                 {
                     ["material_lot"] = "LOT-A"
@@ -53,7 +53,7 @@ public sealed class SqliteEventLogTests
 
             var evt = Assert.Single(results);
             Assert.Equal(secondSeq, evt.Seq);
-            Assert.Equal("cycle.completed", evt.EventType);
+            Assert.Equal("process.execution.completed", evt.EventType);
             Assert.Equal("LOT-A", evt.Context["material_lot"]);
             Assert.Equal(2, Assert.IsType<System.Text.Json.JsonElement>(evt.Data["count"]).GetInt32());
             Assert.Equal(3, await reopened.CountPendingAsync());
@@ -79,8 +79,8 @@ public sealed class SqliteEventLogTests
                 }),
                 NullLogger<SqliteEventLog>.Instance);
 
-            await log.AppendAsync(CreateEvent("cycle.started", "cycle-01", "LOT-A"));
-            await log.AppendAsync(CreateEvent("cycle.completed", "cycle-01", "LOT-A"));
+            await log.AppendAsync(CreateEvent("process.execution.started", "execution-01", "LOT-A"));
+            await log.AppendAsync(CreateEvent("process.execution.completed", "execution-01", "LOT-A"));
 
             await log.MarkShippedAsync(1);
 
@@ -103,8 +103,8 @@ public sealed class SqliteEventLogTests
             var log = new SqliteEventLog(
                 Options.Create(new EventOptions { DatabasePath = dbPath }),
                 NullLogger<SqliteEventLog>.Instance);
-            await log.AppendAsync(CreateEvent("cycle.started", "cycle-01", "LOT-A"));
-            await log.AppendAsync(CreateEvent("cycle.completed", "cycle-01", "LOT-A"));
+            await log.AppendAsync(CreateEvent("process.execution.started", "execution-01", "LOT-A"));
+            await log.AppendAsync(CreateEvent("process.execution.completed", "execution-01", "LOT-A"));
             await log.AppendAsync(CreateEvent("alarm.raised", "alarm-01", "LOT-A"));
 
             var results = await log.QueryAsync(new EventQuery { AfterSeq = 1, Limit = 100 });
@@ -131,10 +131,10 @@ public sealed class SqliteEventLogTests
                 }),
                 NullLogger<SqliteEventLog>.Instance);
 
-            await log.AppendAsync(CreateEvent("cycle.started", "cycle-01", "LOT-A"));
-            await log.AppendAsync(CreateEvent("cycle.completed", "cycle-01", "LOT-A"));
-            await log.AppendAsync(CreateEvent("cycle.started", "cycle-02", "LOT-A"));
-            await log.AppendAsync(CreateEvent("cycle.completed", "cycle-02", "LOT-A"));
+            await log.AppendAsync(CreateEvent("process.execution.started", "execution-01", "LOT-A"));
+            await log.AppendAsync(CreateEvent("process.execution.completed", "execution-01", "LOT-A"));
+            await log.AppendAsync(CreateEvent("process.execution.started", "execution-02", "LOT-A"));
+            await log.AppendAsync(CreateEvent("process.execution.completed", "execution-02", "LOT-A"));
 
             Assert.Equal(3, await log.CountPendingAsync());
             var all = await log.QueryAsync(new EventQuery { Limit = 100 });
@@ -178,14 +178,14 @@ public sealed class SqliteEventLogTests
                 NullLogger<SqliteEventLog>.Instance);
 
             await log.AppendBatchAsync([
-                CreateEvent("cycle.started", "cycle-01", "LOT-A"),
-                CreateEvent("cycle.completed", "cycle-01", "LOT-A"),
-                CreateEvent("cycle.started", "cycle-02", "LOT-A")
+                CreateEvent("process.execution.started", "execution-01", "LOT-A"),
+                CreateEvent("process.execution.completed", "execution-01", "LOT-A"),
+                CreateEvent("process.execution.started", "execution-02", "LOT-A")
             ]);
             await log.MarkShippedAsync(1);
             await log.AppendBatchAsync([
-                CreateEvent("cycle.completed", "cycle-02", "LOT-A"),
-                CreateEvent("cycle.started", "cycle-03", "LOT-A")
+                CreateEvent("process.execution.completed", "execution-02", "LOT-A"),
+                CreateEvent("process.execution.started", "execution-03", "LOT-A")
             ]);
 
             Assert.Equal(3, await log.CountPendingAsync());
@@ -210,7 +210,7 @@ public sealed class SqliteEventLogTests
                     MaxBacklogRows = 100
                 }),
                 NullLogger<SqliteEventLog>.Instance);
-            var evt = CreateEvent("cycle.started", "cycle-01", "LOT-A") with
+            var evt = CreateEvent("process.execution.started", "execution-01", "LOT-A") with
             {
                 EventId = "duplicate-event-id"
             };
@@ -236,8 +236,8 @@ public sealed class SqliteEventLogTests
             var log = new SqliteEventLog(
                 Options.Create(new EventOptions { DatabasePath = dbPath }),
                 NullLogger<SqliteEventLog>.Instance);
-            await log.AppendAsync(CreateEvent("cycle.started", "cycle-01", "LOT-A"));
-            await log.AppendAsync(CreateEvent("cycle.completed", "cycle-01", "LOT-A"));
+            await log.AppendAsync(CreateEvent("process.execution.started", "execution-01", "LOT-A"));
+            await log.AppendAsync(CreateEvent("process.execution.completed", "execution-01", "LOT-A"));
 
             await log.IncrementShipAttemptsAsync(1, 2);
             await log.IncrementShipAttemptsAsync(1, 1);
@@ -273,7 +273,7 @@ public sealed class SqliteEventLogTests
                     CleanupIntervalSeconds = 0
                 }),
                 NullLogger<SqliteEventLog>.Instance);
-            var oldEvent = CreateEvent("cycle.completed", "cycle-old", "LOT-OLD") with
+            var oldEvent = CreateEvent("process.execution.completed", "execution-old", "LOT-OLD") with
             {
                 OccurredAt = DateTimeOffset.UtcNow.AddDays(-10),
                 RecordedAt = DateTimeOffset.UtcNow.AddDays(-10)
@@ -290,13 +290,13 @@ public sealed class SqliteEventLogTests
         }
     }
 
-    private static ProductionEvent CreateEvent(string type, string correlationId, string lot)
+    private static ProductionEvent CreateEvent(string type, string executionId, string lot)
         => ProductionEvent.Create(
             type,
             DateTimeOffset.UtcNow,
             "edge/EDGE-01/PLC-01/rule-01",
             new ObjectRef("equipment", "POL-03"),
-            correlationId,
+            executionId,
             new Dictionary<string, string> { ["material_lot"] = lot },
             new Dictionary<string, object?> { ["count"] = 2 });
 

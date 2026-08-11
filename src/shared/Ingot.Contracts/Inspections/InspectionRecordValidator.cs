@@ -14,8 +14,8 @@ public static partial class InspectionRecordValidator
             return Fail("请求不能为空。", out error);
         if (request.RecordId == Guid.Empty || request.RecordId.Version != 7)
             return Fail("RecordId 必须是 UUIDv7。", out error);
-        if (!TryNormalizeOptionalId(request.WorkpieceId, "WorkpieceId", out var workpieceId, out error) ||
-            !TryNormalizeId(request.OperationRunId, "OperationRunId", out var operationRunId, out error) ||
+        if (!TryNormalizeOptionalId(request.OutputItemId, "OutputItemId", out var outputItemId, out error) ||
+            !TryNormalizeId(request.ExecutionId, "ExecutionId", out var executionId, out error) ||
             !TryNormalizeCode(request.DefinitionCode, "DefinitionCode", out var definitionCode, out error) ||
             !TryNormalizeId(request.SubmittedBy, "SubmittedBy", out var submittedBy, out error))
         {
@@ -72,8 +72,8 @@ public static partial class InspectionRecordValidator
 
         normalized = request with
         {
-            WorkpieceId = workpieceId,
-            OperationRunId = operationRunId!,
+            OutputItemId = outputItemId,
+            ExecutionId = executionId!,
             DefinitionCode = definitionCode!,
             MeasuredAt = request.MeasuredAt.ToUniversalTime(),
             RecordedAt = request.RecordedAt.ToUniversalTime(),
@@ -101,8 +101,8 @@ public static partial class InspectionRecordValidator
             return false;
         foreach (var (value, name, code) in new[]
                  {
-                     (query.WorkpieceId, "WorkpieceId", false),
-                     (query.OperationRunId, "OperationRunId", false),
+                     (query.OutputItemId, "OutputItemId", false),
+                     (query.ExecutionId, "ExecutionId", false),
                      (query.DefinitionCode, "DefinitionCode", true)
                  })
         {

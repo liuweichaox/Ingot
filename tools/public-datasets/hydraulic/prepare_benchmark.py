@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Create a bounded, reproducible Ingot benchmark from UCI hydraulic cycles.
+"""Create a bounded, reproducible Ingot benchmark from UCI hydraulic executions.
 
 The source data stays outside the repository.  This tool makes a small derived
 replay set which exercises the same import contract used by historical factory
-data: cycle boundaries, process samples, immutable context, and inspection
+data: execution boundaries, process samples, immutable context, and inspection
 outcomes.  It never presents the derived inspection score as a real process
 quality measurement; it is a labelled validation target only.
 """
@@ -28,7 +28,7 @@ EDGE_ID = "EDGE-DEMO-001"
 MACHINE_ID = "UCI-HYDRAULIC-RIG-01"
 PRODUCT_SERIES = "uci-hydraulic-benchmark"
 PRODUCT_CODE = "hydraulic-condition-monitoring"
-RECIPE_ID = "uci-hydraulic-load-cycle"
+PROCESS_SPECIFICATION_ID = "uci-hydraulic-load-execution"
 
 
 def parser() -> argparse.ArgumentParser:
@@ -42,7 +42,7 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--reference-count", type=int, default=8)
     result.add_argument("--degraded-count", type=int, default=12)
     result.add_argument("--replay-id", default="uci-hydraulic-447",
-                        help="Stable prefix for generated cycle and workpiece ids.")
+                        help="Stable prefix for generated execution and workpiece ids.")
     result.add_argument("--start", default="2026-07-01T08:00:00Z",
                         help="Synthetic replay start in ISO-8601 UTC; not a source timestamp.")
     return result
@@ -96,10 +96,10 @@ def iso(value: datetime) -> str:
     return value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
-def stable_uuid7(cycle_id: str, measured_at: datetime) -> str:
+def stable_uuid7(execution_id: str, measured_at: datetime) -> str:
     """Make a replay-stable UUIDv7 for the inspection-record idempotency key."""
     timestamp_ms = int(measured_at.timestamp() * 1000)
-    entropy = int.from_bytes(hashlib.sha256(cycle_id.encode("utf-8")).digest()[:10], "big")
+    entropy = int.from_bytes(hashlib.sha256(execution_id.encode("utf-8")).digest()[:10], "big")
     value = (timestamp_ms << 80) | (0x7 << 76) | ((entropy >> 68) & 0xFFF) << 64
     value |= (0b10 << 62) | (entropy & ((1 << 62) - 1))
     return str(uuid.UUID(int=value))
@@ -112,14 +112,14 @@ def mapping(event_type: str, include_values: bool) -> dict:
         "occurredAt": {"column": "occurred_at"},
         "subjectType": {"value": "asset"},
         "subjectId": {"value": MACHINE_ID},
-        "correlationId": {"column": "cycle_id"},
+        "executionId": {"column": "execution_id"},
         "context": {
-            "product_series": {"value": PRODUCT_SERIES},
+            "product_family_code": {"value": PRODUCT_SERIES},
             "product_code": {"value": PRODUCT_CODE},
-            "recipe_id": {"value": RECIPE_ID},
-            "recipe_version": {"value": "1"},
-            "workpiece_id": {"column": "workpiece_id"},
-            "recipe_step": {"column": "recipe_step"},
+            "process_specification_id": {"value": PROCESS_SPECIFICATION_ID},
+            "process_specification_version": {"value": "1"},
+            "output_item_id": {"column": "output_item_id"},
+            "stage_number": {"column": "stage_number"},
             "source_dataset": {"value": "uci-hydraulic-447"},
             "benchmark_kind": {"value": "public-dataset-replay"},
         },
@@ -143,7 +143,7 @@ def write_csv(path: Path, fields: list[str], rows: list[dict]) -> None:
 def main() -> None:
     args = parser().parse_args()
     if args.reference_count < 2 or args.degraded_count < 2:
-        raise ValueError("At least two reference and two degraded cycles are required for comparison.")
+        raise ValueError("At least two reference and two degraded executions are required for comparison.")
     start = datetime.fromisoformat(args.start.replace("Z", "+00:00")).astimezone(timezone.utc)
     args.output.mkdir(parents=True, exist_ok=True)
 
@@ -154,13 +154,13 @@ def main() -> None:
         ts1 = [values(row) for row in read_lines(archive, "TS1.txt")]
 
     if not (len(profiles) == len(ps1) == len(fs1) == len(ts1)):
-        raise ValueError("Source files have inconsistent cycle counts.")
+        raise ValueError("Source files have inconsistent execution counts.")
 
     nominal = [index for index, item in enumerate(profiles) if item == (100, 100, 0, 130, 0)]
     degraded = [index for index, item in enumerate(profiles) if item[2] == 2 and item[4] == 0]
     if len(nominal) < args.reference_count or len(degraded) < args.degraded_count:
         raise ValueError(
-            f"Insufficient labelled cycles: nominal={len(nominal)}, severe-leakage={len(degraded)}. "
+            f"Insufficient labelled executions: nominal={len(nominal)}, severe-leakage={len(degraded)}. "
             "The official dataset contents may have changed.")
     selected = [(index, "reference") for index in nominal[:args.reference_count]] + [
         (index, "degraded") for index in degraded[:args.degraded_count]
@@ -171,43 +171,43 @@ def main() -> None:
     inspections: list[dict] = []
     inspection_requests: list[dict] = []
     for ordinal, (source_index, cohort) in enumerate(selected, start=1):
-        cycle_id = f"{args.replay_id}-{ordinal:03d}"
-        workpiece_id = f"{args.replay_id}-sample-{ordinal:03d}"
-        cycle_start = start + timedelta(minutes=ordinal * 2)
-        cycle_end = cycle_start + timedelta(seconds=60)
+        execution_id = f"{args.replay_id}-{ordinal:03d}"
+        output_item_id = f"{args.replay_id}-sample-{ordinal:03d}"
+        execution_start = start + timedelta(minutes=ordinal * 2)
+        execution_end = execution_start + timedelta(seconds=60)
         profile_values = profiles[source_index]
         score, label = condition(profile_values)
         boundaries.extend([
-            {"cycle_id": cycle_id, "workpiece_id": workpiece_id, "occurred_at": iso(cycle_start), "recipe_step": "load_init"},
-            {"cycle_id": cycle_id, "workpiece_id": workpiece_id, "occurred_at": iso(cycle_end), "recipe_step": "load_release"},
+            {"execution_id": execution_id, "output_item_id": output_item_id, "occurred_at": iso(execution_start), "stage_number": "load_init"},
+            {"execution_id": execution_id, "output_item_id": output_item_id, "occurred_at": iso(execution_end), "stage_number": "load_release"},
         ])
         for second in range(60):
             samples.append({
-                "cycle_id": cycle_id,
-                "workpiece_id": workpiece_id,
-                "occurred_at": iso(cycle_start + timedelta(seconds=second)),
-                "recipe_step": stage(second),
+                "execution_id": execution_id,
+                "output_item_id": output_item_id,
+                "occurred_at": iso(execution_start + timedelta(seconds=second)),
+                "stage_number": stage(second),
                 "pressure_ps1": f"{sample_at(ps1[source_index], second):.6f}",
                 "flow_fs1": f"{sample_at(fs1[source_index], second):.6f}",
                 "temperature_ts1": f"{sample_at(ts1[source_index], second):.6f}",
             })
         inspections.append({
-            "cycle_id": cycle_id,
-            "workpiece_id": workpiece_id,
-            "measured_at": iso(cycle_end + timedelta(seconds=5)),
+            "execution_id": execution_id,
+            "output_item_id": output_item_id,
+            "measured_at": iso(execution_end + timedelta(seconds=5)),
             "condition_score": score,
             "condition_label": label,
             "cohort": cohort,
             "source_profile": "/".join(str(value) for value in profile_values),
         })
         inspection_requests.append({
-            "recordId": stable_uuid7(cycle_id, cycle_end + timedelta(seconds=5)),
-            "workpieceId": workpiece_id,
-            "operationRunId": cycle_id,
+            "recordId": stable_uuid7(execution_id, execution_end + timedelta(seconds=5)),
+            "outputItemId": output_item_id,
+            "executionId": execution_id,
             "definitionCode": "uci.hydraulic.condition",
             "definitionVersion": 1,
-            "measuredAt": iso(cycle_end + timedelta(seconds=5)),
-            "recordedAt": iso(cycle_end + timedelta(seconds=5)),
+            "measuredAt": iso(execution_end + timedelta(seconds=5)),
+            "recordedAt": iso(execution_end + timedelta(seconds=5)),
             "outcome": "PASS" if score >= 80 else "FAIL",
             "submittedBy": "public-dataset-replay",
             "measurements": [{
@@ -222,18 +222,18 @@ def main() -> None:
                 "condition.score is a transparent derived validation target, not a measured product quality."),
         })
 
-    boundary_fields = ["cycle_id", "workpiece_id", "occurred_at", "recipe_step"]
-    write_csv(args.output / "cycle-started.csv", boundary_fields, boundaries[::2])
-    write_csv(args.output / "cycle-completed.csv", boundary_fields, boundaries[1::2])
+    boundary_fields = ["execution_id", "output_item_id", "occurred_at", "stage_number"]
+    write_csv(args.output / "execution-started.csv", boundary_fields, boundaries[::2])
+    write_csv(args.output / "execution-completed.csv", boundary_fields, boundaries[1::2])
     write_csv(args.output / "process-samples.csv", [
         *boundary_fields, "pressure_ps1", "flow_fs1", "temperature_ts1"], samples)
     write_csv(args.output / "inspection-results.csv", [
-        "cycle_id", "workpiece_id", "measured_at", "condition_score", "condition_label", "cohort", "source_profile"], inspections)
+        "execution_id", "output_item_id", "measured_at", "condition_score", "condition_label", "cohort", "source_profile"], inspections)
     (args.output / "inspection-requests.json").write_text(
         json.dumps(inspection_requests, indent=2), encoding="utf-8")
-    (args.output / "cycle-started.mapping.json").write_text(json.dumps(mapping("cycle.started", False), indent=2), encoding="utf-8")
+    (args.output / "execution-started.mapping.json").write_text(json.dumps(mapping("process.execution.started", False), indent=2), encoding="utf-8")
     (args.output / "process-samples.mapping.json").write_text(json.dumps(mapping("process.sample", True), indent=2), encoding="utf-8")
-    (args.output / "cycle-completed.mapping.json").write_text(json.dumps(mapping("cycle.completed", False), indent=2), encoding="utf-8")
+    (args.output / "execution-completed.mapping.json").write_text(json.dumps(mapping("process.execution.completed", False), indent=2), encoding="utf-8")
     manifest = {
         "source": {"name": SOURCE_DATASET, "url": SOURCE_URL, "license": LICENSE},
         "purpose": "Integration and usability validation only; not evidence of optimization effectiveness.",
@@ -241,14 +241,14 @@ def main() -> None:
         "derived_quality_target": (
             "condition_score is a transparent score derived from source condition labels, "
             "not an observed manufacturing quality measurement."),
-        "cycles": len(selected),
+        "executions": len(selected),
         "replay_id": args.replay_id,
         "process_samples": len(samples),
         "cohorts": dict(Counter(cohort for _, cohort in selected)),
         "profile_labels": {str(item[0] + 1): "/".join(map(str, profiles[item[0]])) for item in selected},
     }
     (args.output / "manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
-    print(json.dumps({"output": str(args.output), "cycles": len(selected), "samples": len(samples)}, indent=2))
+    print(json.dumps({"output": str(args.output), "executions": len(selected), "samples": len(samples)}, indent=2))
 
 
 if __name__ == "__main__":

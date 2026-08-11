@@ -18,9 +18,9 @@ public sealed class ResearchTransferAssessmentService(IProcessResearchStore stor
         string userId,
         CancellationToken ct = default)
     {
-        if (request.SourceWindowId == Guid.Empty || request.TransferResultId == Guid.Empty ||
+        if (request.SourceOperatingRegionId == Guid.Empty || request.TransferResultId == Guid.Empty ||
             request.ColdStartResultId == Guid.Empty)
-            throw new ProcessResearchRuleException("迁移评估必须指定源工艺窗口、迁移结果和从零对照结果。");
+            throw new ProcessResearchRuleException("迁移评估必须指定源工艺操作域、迁移结果和从零对照结果。");
         if (request.TransferResultId == request.ColdStartResultId)
             throw new ProcessResearchRuleException("迁移结果和从零对照结果必须来自不同实验结果。");
 
@@ -28,11 +28,11 @@ public sealed class ResearchTransferAssessmentService(IProcessResearchStore stor
             ?? throw new ProcessResearchRuleException("目标研发项目不存在。");
         if (target.Status is not (ResearchProjectStatuses.Active or ResearchProjectStatuses.Validating))
             throw new ProcessResearchRuleException("迁移评估只能记录在 active 或 validating 目标项目中。");
-        var window = await store.GetProcessWindowAsync(request.SourceWindowId, ct).ConfigureAwait(false)
-            ?? throw new ProcessResearchRuleException("源工艺窗口不存在。");
-        if (window.Status != ProcessWindowStatuses.Validated ||
-            window.ValidationLevel != ProcessWindowValidationLevels.Production)
-            throw new ProcessResearchRuleException("只有经过生产发布的工艺窗口可以作为迁移来源。");
+        var window = await store.GetOperatingRegionAsync(request.SourceOperatingRegionId, ct).ConfigureAwait(false)
+            ?? throw new ProcessResearchRuleException("源工艺操作域不存在。");
+        if (window.Status != OperatingRegionStatuses.Validated ||
+            window.ValidationLevel != OperatingRegionValidationLevels.Production)
+            throw new ProcessResearchRuleException("只有经过生产发布的工艺操作域可以作为迁移来源。");
         var source = await store.GetProjectAsync(window.ProjectId, ct).ConfigureAwait(false)
             ?? throw new ProcessResearchRuleException("源研发项目不存在。");
         var transfer = await RequireTargetResultAsync(
@@ -52,7 +52,7 @@ public sealed class ResearchTransferAssessmentService(IProcessResearchStore stor
         if (!RunsInsideWindow(window, transfer))
         {
             evidenceSufficient = false;
-            failures.Add("迁移结果的有效实际设置未全部位于源工艺窗口内，无法归因于该窗口的迁移。");
+            failures.Add("迁移结果的有效实际设置未全部位于源工艺操作域内，无法归因于该窗口的迁移。");
         }
 
         var transferLoss = schemaCompatible ? NormalizedLoss(target, transfer) : null;
@@ -93,8 +93,8 @@ public sealed class ResearchTransferAssessmentService(IProcessResearchStore stor
             TargetProjectRevision = target.Revision,
             SourceProjectId = source.ProjectId,
             SourceProjectRevision = source.Revision,
-            SourceWindowId = window.WindowId,
-            SourceWindowAnalysisHash = window.AnalysisHash,
+            SourceOperatingRegionId = window.OperatingRegionId,
+            SourceOperatingRegionAnalysisHash = window.AnalysisHash,
             TransferResultId = transfer.ResultId,
             TransferResultAnalysisHash = transfer.AnalysisHash,
             ColdStartResultId = coldStart.ResultId,
@@ -121,8 +121,8 @@ public sealed class ResearchTransferAssessmentService(IProcessResearchStore stor
             TargetProjectRevision = target.Revision,
             SourceProjectId = source.ProjectId,
             SourceProjectRevision = source.Revision,
-            SourceWindowId = window.WindowId,
-            SourceWindowAnalysisHash = window.AnalysisHash,
+            SourceOperatingRegionId = window.OperatingRegionId,
+            SourceOperatingRegionAnalysisHash = window.AnalysisHash,
             TransferResultId = transfer.ResultId,
             TransferResultAnalysisHash = transfer.AnalysisHash,
             ColdStartResultId = coldStart.ResultId,
@@ -163,14 +163,14 @@ public sealed class ResearchTransferAssessmentService(IProcessResearchStore stor
 
         var target = await store.GetProjectAsync(value.ProjectId, ct).ConfigureAwait(false);
         var source = await store.GetProjectAsync(value.SourceProjectId, ct).ConfigureAwait(false);
-        var window = await store.GetProcessWindowAsync(value.SourceWindowId, ct).ConfigureAwait(false);
+        var window = await store.GetOperatingRegionAsync(value.SourceOperatingRegionId, ct).ConfigureAwait(false);
         var transfer = await store.GetExperimentResultAsync(value.TransferResultId, ct).ConfigureAwait(false);
         var coldStart = await store.GetExperimentResultAsync(value.ColdStartResultId, ct).ConfigureAwait(false);
         if (target?.Revision != value.TargetProjectRevision || source?.Revision != value.SourceProjectRevision ||
-            window?.AnalysisHash != value.SourceWindowAnalysisHash ||
+            window?.AnalysisHash != value.SourceOperatingRegionAnalysisHash ||
             transfer?.AnalysisHash != value.TransferResultAnalysisHash ||
             coldStart?.AnalysisHash != value.ColdStartResultAnalysisHash)
-            throw new ProcessResearchRuleException("迁移评估引用的项目版本、工艺窗口或结果已经变化，请重新评估。");
+            throw new ProcessResearchRuleException("迁移评估引用的项目版本、工艺操作域或结果已经变化，请重新评估。");
 
         var reviewed = value with
         {
@@ -199,7 +199,7 @@ public sealed class ResearchTransferAssessmentService(IProcessResearchStore stor
     private static bool CheckSchema(
         ResearchProject source,
         ResearchProject target,
-        ResearchProcessWindow window,
+        ResearchOperatingRegion window,
         ResearchExperimentResult transfer,
         ResearchExperimentResult coldStart,
         ICollection<string> failures)
@@ -230,7 +230,7 @@ public sealed class ResearchTransferAssessmentService(IProcessResearchStore stor
             if (targetVariable.LowerLimit is { } lower && variable.LowerBound < lower ||
                 targetVariable.UpperLimit is { } upper && variable.UpperBound > upper)
             {
-                failures.Add($"源工艺窗口 {variable.VariableCode} 超出目标项目允许边界。");
+                failures.Add($"源工艺操作域 {variable.VariableCode} 超出目标项目允许边界。");
                 compatible = false;
             }
         }
@@ -263,7 +263,7 @@ public sealed class ResearchTransferAssessmentService(IProcessResearchStore stor
     }
 
     private static bool RunsInsideWindow(
-        ResearchProcessWindow window,
+        ResearchOperatingRegion window,
         ResearchExperimentResult result)
         => result.RunObservations.Where(static item => item.ValidForOptimization).All(observation =>
             window.Variables.All(variable => observation.ActualFactors.Any(factor =>

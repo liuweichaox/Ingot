@@ -38,8 +38,8 @@ public sealed class InspectionRecordsController(
             var original = await store.GetAsync(normalized.SupersedesRecordId.Value, ct).ConfigureAwait(false);
             if (original is null)
                 return BadRequest(new { error = "被更正的检测记录不存在。" });
-            if (original.OperationRunId != normalized.OperationRunId ||
-                original.WorkpieceId != normalized.WorkpieceId ||
+            if (original.ExecutionId != normalized.ExecutionId ||
+                original.OutputItemId != normalized.OutputItemId ||
                 original.DefinitionCode != normalized.DefinitionCode ||
                 original.DefinitionVersion != normalized.DefinitionVersion)
             {
@@ -51,7 +51,7 @@ public sealed class InspectionRecordsController(
         }
         if (!TryApplyDefinition(normalized, definition, out normalized, out error))
             return BadRequest(new { error });
-        var task = await workflow.GetTaskAsync(normalized.OperationRunId, ct).ConfigureAwait(false);
+        var task = await workflow.GetTaskAsync(normalized.ExecutionId, ct).ConfigureAwait(false);
         if (task is null)
             return BadRequest(new { error = "当前分析范围没有匹配的已发布质量方案。" });
         var planItem = task.RequiredInspections.FirstOrDefault(item =>
@@ -197,8 +197,8 @@ public sealed class InspectionRecordsController(
 
     [HttpGet]
     public async Task<IActionResult> Query(
-        [FromQuery] string? workpieceId,
-        [FromQuery] string? operationRunId,
+        [FromQuery] string? outputItemId,
+        [FromQuery] string? executionId,
         [FromQuery] string? definitionCode,
         [FromQuery] string? outcome,
         [FromQuery] DateTimeOffset? from,
@@ -214,8 +214,8 @@ public sealed class InspectionRecordsController(
             return Forbid();
         var query = new InspectionRecordQuery
         {
-            WorkpieceId = workpieceId?.Trim(),
-            OperationRunId = operationRunId?.Trim(),
+            OutputItemId = outputItemId?.Trim(),
+            ExecutionId = executionId?.Trim(),
             DefinitionCode = definitionCode?.Trim().ToLowerInvariant(),
             Outcome = outcome?.Trim().ToUpperInvariant(),
             From = from?.ToUniversalTime(),

@@ -59,7 +59,7 @@ public sealed class DatasetQualityValidationRunner(IResearchAssetStore store)
             issues.Add("有效数据行少于 10，不能形成数据集质量验证证据。");
         var requiredColumns = manifest.SignalColumns
             .Concat(manifest.OutcomeColumns)
-            .Append(manifest.CycleColumn)
+            .Append(manifest.ProcessExecutionColumn)
             .Append(manifest.TimestampColumn)
             .Append(manifest.PhaseColumn)
             .Where(static value => !string.IsNullOrWhiteSpace(value))
@@ -102,7 +102,7 @@ public sealed class DatasetQualityValidationRunner(IResearchAssetStore store)
             SourceSha256 = sourceHash,
             ManifestSha256 = ManifestHash(manifest),
             RowCount = rows.Count,
-            CycleCount = CountCycles(rows, manifest.CycleColumn),
+            ProcessExecutionCount = CountProcessExecutions(rows, manifest.ProcessExecutionColumn),
             ChronologyViolationCount = chronologyViolations,
             StreamBatchMaximumDifference = maximumDifference,
             SignalProfiles = signalProfiles,
@@ -256,7 +256,7 @@ public sealed class DatasetQualityValidationRunner(IResearchAssetStore store)
         if (variable.Value is not IStructureArray structure)
             throw new InvalidDataException($"MAT 变量 {manifest.MatVariableName} 不是结构数组。");
         var requested = manifest.SignalColumns.Concat(manifest.OutcomeColumns)
-            .Append(manifest.CycleColumn)
+            .Append(manifest.ProcessExecutionColumn)
             .Where(static item => !string.IsNullOrWhiteSpace(item))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
@@ -335,12 +335,12 @@ public sealed class DatasetQualityValidationRunner(IResearchAssetStore store)
             };
         }).ToArray();
 
-    private static long CountCycles(
+    private static long CountProcessExecutions(
         IReadOnlyList<IReadOnlyDictionary<string, string>> rows,
-        string? cycleColumn)
-        => string.IsNullOrWhiteSpace(cycleColumn)
+        string? executionColumn)
+        => string.IsNullOrWhiteSpace(executionColumn)
             ? rows.Count
-            : rows.Select(row => row.GetValueOrDefault(cycleColumn) ?? "")
+            : rows.Select(row => row.GetValueOrDefault(executionColumn) ?? "")
                 .Where(static value => value.Length > 0)
                 .Distinct(StringComparer.Ordinal)
                 .LongCount();
@@ -351,7 +351,7 @@ public sealed class DatasetQualityValidationRunner(IResearchAssetStore store)
     {
         if (string.IsNullOrWhiteSpace(manifest.TimestampColumn))
             return 0;
-        var lastByCycle = new Dictionary<string, DateTimeOffset>(StringComparer.Ordinal);
+        var lastByProcessExecution = new Dictionary<string, DateTimeOffset>(StringComparer.Ordinal);
         long violations = 0;
         foreach (var row in rows)
         {
@@ -362,12 +362,12 @@ public sealed class DatasetQualityValidationRunner(IResearchAssetStore store)
                     DateTimeStyles.AssumeUniversal,
                     out var timestamp))
                 continue;
-            var cycle = string.IsNullOrWhiteSpace(manifest.CycleColumn)
+            var execution = string.IsNullOrWhiteSpace(manifest.ProcessExecutionColumn)
                 ? "_dataset"
-                : row.GetValueOrDefault(manifest.CycleColumn) ?? "";
-            if (lastByCycle.TryGetValue(cycle, out var last) && timestamp < last)
+                : row.GetValueOrDefault(manifest.ProcessExecutionColumn) ?? "";
+            if (lastByProcessExecution.TryGetValue(execution, out var last) && timestamp < last)
                 violations++;
-            lastByCycle[cycle] = timestamp;
+            lastByProcessExecution[execution] = timestamp;
         }
         return violations;
     }
@@ -376,19 +376,19 @@ public sealed class DatasetQualityValidationRunner(IResearchAssetStore store)
         IReadOnlyList<IReadOnlyDictionary<string, string>> rows,
         DatasetQualityValidationDatasetManifest manifest)
     {
-        var streams = new Dictionary<(string Cycle, string Signal), OnlineMean>();
-        var batches = new Dictionary<(string Cycle, string Signal), List<double>>();
+        var streams = new Dictionary<(string ProcessExecution, string Signal), OnlineMean>();
+        var batches = new Dictionary<(string ProcessExecution, string Signal), List<double>>();
         foreach (var row in rows)
         {
-            var cycle = string.IsNullOrWhiteSpace(manifest.CycleColumn)
+            var execution = string.IsNullOrWhiteSpace(manifest.ProcessExecutionColumn)
                 ? "_dataset"
-                : row.GetValueOrDefault(manifest.CycleColumn) ?? "";
+                : row.GetValueOrDefault(manifest.ProcessExecutionColumn) ?? "";
             foreach (var signal in manifest.SignalColumns)
             {
                 var value = ParseNumber(row.GetValueOrDefault(signal));
                 if (!value.HasValue)
                     continue;
-                var key = (cycle, signal);
+                var key = (execution, signal);
                 streams.TryGetValue(key, out var online);
                 streams[key] = online.Add(value.Value);
                 if (!batches.TryGetValue(key, out var batch))

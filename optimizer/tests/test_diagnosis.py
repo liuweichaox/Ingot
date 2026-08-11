@@ -12,7 +12,7 @@ def test_small_samples_never_report_unfitted_interactions(row_count):
     target[:4] = 0
     target[-4:] = 1
     features = [
-        FeatureSpec(f"recipe:v{index}", "recipe", "controllable")
+        FeatureSpec(f"control-parameter:v{index}", "parameter setting", "controllable")
         for index in range(values.shape[1])
     ]
 

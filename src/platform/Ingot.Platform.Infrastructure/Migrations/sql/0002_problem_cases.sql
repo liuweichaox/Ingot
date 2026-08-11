@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS problem_cases (
   subject_type         TEXT,
   subject_id           TEXT,
   context_filter       JSONB NOT NULL DEFAULT '{}'::jsonb,
-  comparison_key       TEXT,             -- L2 同类分组的 context 键，如 'mold_id'
+  comparison_key       TEXT,             -- L2 同类分组的 context 键，如 'tooling_assembly_id'
   window_from          TIMESTAMPTZ,
   window_to            TIMESTAMPTZ,
   target_metric        TEXT NOT NULL DEFAULT '',

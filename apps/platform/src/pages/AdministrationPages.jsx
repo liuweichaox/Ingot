@@ -197,7 +197,7 @@ function RoleSelector({ value, onChange }) {
 export function MetricsPage() {
   const edgeResponse = useApi("/api/edges", { interval: 10000 });
   const metricResponse = useApi("/api/metrics-data?names=event_ingest_total,process_start_time_seconds,process_working_set_bytes,system_runtime_dotnet_thread_pool_queue_length", { interval: 30000 });
-  const cycleResponse = useApi("/api/v1/cycles?limit=1", { interval: 10000 });
+  const executionResponse = useApi("/api/v1/process-executions?limit=1", { interval: 10000 });
   const qualityResponse = useApi("/api/v1/inspection-tasks/summary", { interval: 10000 });
   const profileResponse = useApi("/api/v1/acquisition-profiles", { interval: 10000 });
   const rows = extractRows(edgeResponse.data);
@@ -212,7 +212,7 @@ export function MetricsPage() {
   const threadQueue = metricTotal(metrics, "system_runtime_dotnet_thread_pool_queue_length");
   const publishedProfiles = extractRows(profileResponse.data).filter(row => row.status === "published").length;
   const actionRequired = qualityResponse.data?.actionRequired ?? 0;
-  const error = edgeResponse.error || metricResponse.error || cycleResponse.error || qualityResponse.error || profileResponse.error;
+  const error = edgeResponse.error || metricResponse.error || executionResponse.error || qualityResponse.error || profileResponse.error;
   const healthy = offline === 0 && unknown === 0 && threadQueue === 0;
   return (
     <Page title="平台运行状态" description="从业务处理、设备采集和平台资源三个层面确认系统是否正常。">
@@ -221,7 +221,7 @@ export function MetricsPage() {
         {healthy ? "中心服务和现场节点均在正常工作。" : `离线节点 ${offline} 个，待确认节点 ${unknown} 个，后台排队 ${formatInteger(threadQueue)} 项。`}
       </Alert>
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Metric label="已保存运行" value={formatInteger(cycleResponse.data?.total)} hint="可追溯生产运行" />
+        <Metric label="已保存运行" value={formatInteger(executionResponse.data?.total)} hint="可追溯生产运行" />
         <Metric label="待处理质量任务" value={formatInteger(actionRequired)} hint="录入与复核合计" />
         <Metric label="已发布采集任务" value={formatInteger(publishedProfiles)} hint="正在向现场下发" />
         <Metric label="已摄入事件" value={formatInteger(ingested)} hint="本次平台运行累计" />

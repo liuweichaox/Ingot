@@ -10,15 +10,13 @@ public static class ProductionConfigurationValidator
         RequireSecret(configuration["ConnectorHost:IngestToken"], "ConnectorHost:IngestToken", errors);
         RequireOptionalSecret(configuration["ConnectorHost:LocalApiToken"], "ConnectorHost:LocalApiToken", errors);
 
-        var platformReportingEnabled = configuration.GetValue<bool?>("Edge:EnablePlatformReporting")
-            ?? configuration.GetValue<bool>("Edge:EnableCentralReporting");
+        var platformReportingEnabled = configuration.GetValue<bool>("Edge:EnablePlatformReporting", true);
         if (platformReportingEnabled)
         {
             if (string.IsNullOrWhiteSpace(configuration["Edge:EdgeId"]))
                 errors.Add("Edge:EdgeId is required and must remain stable for the lifetime of the installed node.");
 
-            var platformApiBaseUrl = configuration["Edge:PlatformApiBaseUrl"]
-                ?? configuration["Edge:CentralApiBaseUrl"];
+            var platformApiBaseUrl = configuration["Edge:PlatformApiBaseUrl"];
             if (!Uri.TryCreate(platformApiBaseUrl, UriKind.Absolute, out var uri) ||
                 (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
             {

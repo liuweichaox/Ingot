@@ -100,11 +100,11 @@ static async Task SeedAsync(string databasePath, int rows, bool pending)
         eventCommand.CommandText = """
                                    INSERT INTO events(
                                      event_id, event_type, type_version, occurred_at, recorded_at,
-                                     source, subject_type, subject_id, correlation_id,
+                                     source, subject_type, subject_id, execution_id,
                                      context_json, data_json, ship_state, ship_attempts)
                                    VALUES (
                                      $event_id, $event_type, 1, $occurred_at, $recorded_at,
-                                     $source, 'equipment', $subject_id, $correlation_id,
+                                     $source, 'equipment', $subject_id, $execution_id,
                                      $context_json, $data_json, $ship_state, 0);
                                    SELECT last_insert_rowid();
                                    """;
@@ -114,7 +114,7 @@ static async Task SeedAsync(string databasePath, int rows, bool pending)
         var recordedAt = eventCommand.Parameters.Add("$recorded_at", SqliteType.Text);
         var source = eventCommand.Parameters.Add("$source", SqliteType.Text);
         var subjectId = eventCommand.Parameters.Add("$subject_id", SqliteType.Text);
-        var correlationId = eventCommand.Parameters.Add("$correlation_id", SqliteType.Text);
+        var executionId = eventCommand.Parameters.Add("$execution_id", SqliteType.Text);
         var contextJson = eventCommand.Parameters.Add("$context_json", SqliteType.Text);
         var dataJson = eventCommand.Parameters.Add("$data_json", SqliteType.Text);
         var shipState = eventCommand.Parameters.Add("$ship_state", SqliteType.Integer);
@@ -134,12 +134,12 @@ static async Task SeedAsync(string databasePath, int rows, bool pending)
             var timestamp = DateTimeOffset.UnixEpoch.AddSeconds(index).ToString("O");
             var lot = $"LOT-{index % 1000:000}";
             eventId.Value = $"seed-{index:D12}";
-            eventType.Value = index % 2 == 0 ? "cycle.completed" : "cycle.started";
+            eventType.Value = index % 2 == 0 ? "process.execution.completed" : "process.execution.started";
             occurredAt.Value = timestamp;
             recordedAt.Value = timestamp;
-            source.Value = $"edge/BENCH/SOURCE-{index % 10:00}/cycle";
+            source.Value = $"edge/BENCH/SOURCE-{index % 10:00}/execution";
             subjectId.Value = $"EQ-{index % 100:000}";
-            correlationId.Value = $"cycle-{index / 2:D12}";
+            executionId.Value = $"execution-{index / 2:D12}";
             contextJson.Value = $$"""{"material_lot":"{{lot}}","tooling":"TOOL-{{index % 50:00}}"}""";
             dataJson.Value = $$"""{"good_count":{{index % 100}}}""";
             var seq = Convert.ToInt64(
@@ -161,7 +161,7 @@ static async Task<double[]> MeasureAppendAsync(SqliteEventLog eventLog, int samp
     for (var index = 0; index < values.Length; index++)
     {
         var evt = ProductionEvent.Create(
-            "cycle.completed",
+            "process.execution.completed",
             DateTimeOffset.UtcNow,
             "edge/BENCH/SOURCE-00/append",
             new ObjectRef("equipment", "EQ-BENCH"),
@@ -185,7 +185,7 @@ static async Task<double[]> MeasureQueriesAsync(SqliteEventLog eventLog, int sam
 {
     var query = new EventQuery
     {
-        EventType = "cycle.completed",
+        EventType = "process.execution.completed",
         SubjectType = "equipment",
         Context = new Dictionary<string, string> { ["material_lot"] = "LOT-500" },
         Limit = 100

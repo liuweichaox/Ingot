@@ -13,7 +13,7 @@ namespace Ingot.Core.Tests.Edge;
 public sealed class AcquisitionConfigurationReconciliationTests
 {
     [Fact]
-    public async Task Upgrade_ShouldWaitForSafeCycleBoundary()
+    public async Task Upgrade_ShouldWaitForSafeProcessExecutionBoundary()
     {
         var status = new AcquisitionStatus();
         var runner = new ControllableRunner(status);
@@ -24,7 +24,7 @@ public sealed class AcquisitionConfigurationReconciliationTests
             var first = Deployment("press", 1);
             await service.SynchronizeWorkersAsync(
                 [first], "EDGE-001", AcquisitionConfigurationSources.Cache, cancellation.Token);
-            status.RecordCycleState("press@1", true);
+            status.RecordProcessExecutionState("press@1", true);
 
             await service.SynchronizeWorkersAsync(
                 [Deployment("press", 2)], "EDGE-001", AcquisitionConfigurationSources.Cache, cancellation.Token);
@@ -33,10 +33,10 @@ public sealed class AcquisitionConfigurationReconciliationTests
             Assert.Contains(waiting.Tasks, item => item.ConfigurationKey == "press@1");
             Assert.DoesNotContain(waiting.Tasks, item => item.ConfigurationKey == "press@2");
             Assert.Equal(
-                AcquisitionApplicationStates.WaitingForCycleBoundary,
+                AcquisitionApplicationStates.WaitingForProcessExecutionBoundary,
                 Assert.Single(waiting.Deployments).State);
 
-            status.RecordCycleState("press@1", false);
+            status.RecordProcessExecutionState("press@1", false);
             await service.SynchronizeWorkersAsync(
                 [Deployment("press", 2)], "EDGE-001", AcquisitionConfigurationSources.Cache, cancellation.Token);
 
@@ -215,7 +215,8 @@ public sealed class AcquisitionConfigurationReconciliationTests
                 new AcquisitionValueMapping
                 {
                     DataItemCode = "temperature.actual",
-                    SourcePath = "holding-register:0:int16"
+                    SourcePath = "holding-register:0:int16",
+                    SourceDataType = "int16"
                 }
             ]
         },
@@ -231,7 +232,7 @@ public sealed class AcquisitionConfigurationReconciliationTests
                     new ProcessDataItemDefinition
                     {
                         Code = "temperature.actual",
-                        SourceField = "Temperature",
+                        DisplayName = "Temperature",
                         DataType = "double"
                     }
                 ]
@@ -261,8 +262,8 @@ public sealed class AcquisitionConfigurationReconciliationTests
             if (FailingVersions.Contains(deployment.Profile.Version) ||
                 FailingProfiles.Contains(deployment.Profile.ProfileId))
                 throw new IOException("simulated device connection failure");
-            status.RecordCycleState(configurationKey, false);
-            status.RecordSuccess(configurationKey, DateTimeOffset.UtcNow, recipe: null);
+            status.RecordProcessExecutionState(configurationKey, false);
+            status.RecordSuccess(configurationKey, DateTimeOffset.UtcNow, processSpecification: null);
             await Task.Delay(Timeout.InfiniteTimeSpan, ct);
         }
     }

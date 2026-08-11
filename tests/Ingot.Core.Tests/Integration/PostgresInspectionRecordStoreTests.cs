@@ -8,15 +8,15 @@ namespace Ingot.Core.Tests.Integration;
 public sealed class PostgresInspectionRecordStoreTests(PostgresIntegrationFixture postgres)
 {
     [LinuxDockerFact]
-    public async Task RunLinkedInspection_ShouldRoundTripWithoutFabricatedWorkpieceId()
+    public async Task RunLinkedInspection_ShouldRoundTripWithoutFabricatedOutputItemId()
     {
         await postgres.EnsureSchemaAsync();
         await using var store = new PostgresInspectionRecordStore(postgres.Configuration);
         var request = new CreateInspectionRecordRequest
         {
             RecordId = Guid.CreateVersion7(),
-            WorkpieceId = null,
-            OperationRunId = $"RUN-{Guid.NewGuid():N}",
+            OutputItemId = null,
+            ExecutionId = $"RUN-{Guid.NewGuid():N}",
             DefinitionCode = "dimensional.final",
             DefinitionVersion = 1,
             MeasuredAt = DateTimeOffset.UtcNow.AddMinutes(-1),
@@ -40,7 +40,7 @@ public sealed class PostgresInspectionRecordStoreTests(PostgresIntegrationFixtur
 
         Assert.True(created.Created);
         Assert.NotNull(loaded);
-        Assert.Null(loaded.WorkpieceId);
-        Assert.Equal(request.OperationRunId, loaded.OperationRunId);
+        Assert.Null(loaded.OutputItemId);
+        Assert.Equal(request.ExecutionId, loaded.ExecutionId);
     }
 }

@@ -14,7 +14,7 @@ public static class ProtocolAcquisitionSnapshotMapper
         AcquisitionDeployment deployment,
         IReadOnlyDictionary<string, object?> raw,
         string normalizedSource,
-        string? previousRecipeIdentity,
+        string? previousProcessSpecificationIdentity,
         DateTimeOffset occurredAt)
     {
         var profile = deployment.Profile;
@@ -65,38 +65,27 @@ public static class ProtocolAcquisitionSnapshotMapper
                 Convert.ToString(stageValue, CultureInfo.InvariantCulture) ?? string.Empty;
         }
 
-        string? correlationId = null;
-        if (profile.Lifecycle is not null &&
-            !string.IsNullOrWhiteSpace(profile.Lifecycle.CorrelationIdContextKey) &&
-            context.TryGetValue(profile.Lifecycle.CorrelationIdContextKey, out var rawCorrelationId) &&
-            !string.IsNullOrWhiteSpace(rawCorrelationId))
+        string? processSpecificationIdentity = null;
+        ProductionEvent? processSpecificationApplied = null;
+        if (profile.ProcessSpecification is not null)
         {
-            correlationId = rawCorrelationId.Trim();
-        }
-
-        string? recipeIdentity = null;
-        ProductionEvent? recipeApplied = null;
-        if (profile.Recipe is not null)
-        {
-            var recipe = profile.Recipe;
-            var recipeId = RequiredScalar(raw, recipe.IdPath);
-            var recipeVersion = RequiredScalar(raw, recipe.VersionPath);
-            recipeIdentity = correlationId is null
-                ? $"{recipeId}@{recipeVersion}"
-                : $"{recipeId}@{recipeVersion}|{correlationId}";
-            context["recipe_id"] = recipeId;
-            context["recipe_version"] = recipeVersion;
-            if (!string.Equals(recipeIdentity, previousRecipeIdentity, StringComparison.Ordinal))
+            var processSpecification = profile.ProcessSpecification;
+            var processSpecificationId = RequiredScalar(raw, processSpecification.IdPath);
+            var processSpecificationVersion = RequiredScalar(raw, processSpecification.VersionPath);
+            processSpecificationIdentity = $"{processSpecificationId}@{processSpecificationVersion}";
+            context["process_specification_id"] = processSpecificationId;
+            context["process_specification_version"] = processSpecificationVersion;
+            if (!string.Equals(processSpecificationIdentity, previousProcessSpecificationIdentity, StringComparison.Ordinal))
             {
-                var definitions = deployment.DataModel.RecipeParameters
+                var definitions = deployment.DataModel.ControlParameters
                     .ToDictionary(item => item.Code, StringComparer.Ordinal);
                 var resolved = new Dictionary<string, object?>(StringComparer.Ordinal);
-                foreach (var mapping in recipe.ParameterMappings)
+                foreach (var mapping in processSpecification.ParameterMappings)
                 {
                     if (!raw.TryGetValue(mapping.SourcePath, out var value) || value is null)
                     {
                         if (mapping.Required)
-                            throw new InvalidDataException($"采集源缺少必填配方参数：{mapping.SourcePath}。");
+                            throw new InvalidDataException($"采集源缺少必填控制参数：{mapping.SourcePath}。");
                         resolved[mapping.DataItemCode] = null;
                         continue;
                     }
@@ -108,22 +97,22 @@ public static class ProtocolAcquisitionSnapshotMapper
                 }
                 var data = new Dictionary<string, object?>
                 {
-                    ["recipeId"] = recipeId,
-                    ["recipeVersion"] = ScalarValue(raw[recipe.VersionPath]!),
+                    ["processSpecificationId"] = processSpecificationId,
+                    ["processSpecificationVersion"] = ScalarValue(raw[processSpecification.VersionPath]!),
                     ["resolvedParameters"] = resolved
                 };
-                if (!string.IsNullOrWhiteSpace(recipe.NamePath) &&
-                    raw.TryGetValue(recipe.NamePath, out var name) &&
+                if (!string.IsNullOrWhiteSpace(processSpecification.NamePath) &&
+                    raw.TryGetValue(processSpecification.NamePath, out var name) &&
                     name is not null)
                 {
-                    data["recipeName"] = Convert.ToString(name, CultureInfo.InvariantCulture);
+                    data["processSpecificationName"] = Convert.ToString(name, CultureInfo.InvariantCulture);
                 }
-                recipeApplied = ProductionEvent.Create(
-                    recipe.EventType,
+                processSpecificationApplied = ProductionEvent.Create(
+                    processSpecification.EventType,
                     occurredAt,
                     normalizedSource,
                     new ObjectRef(profile.SubjectType, profile.SubjectId),
-                    correlationId,
+                    executionId: null,
                     context,
                     data);
             }
@@ -138,10 +127,10 @@ public static class ProtocolAcquisitionSnapshotMapper
             occurredAt,
             normalizedSource,
             new ObjectRef(profile.SubjectType, profile.SubjectId),
-            correlationId,
+            executionId: null,
             context,
             sampleData);
-        return new AcquisitionMappingResult(sample, recipeApplied, recipeIdentity);
+        return new AcquisitionMappingResult(sample, processSpecificationApplied, processSpecificationIdentity);
     }
 
     private static string RequiredScalar(IReadOnlyDictionary<string, object?> raw, string sourcePath)

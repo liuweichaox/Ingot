@@ -32,7 +32,7 @@ public sealed class TimeSeriesSampleProjectorTests
         Assert.Equal("°C", temperature.Unit);
         Assert.Equal("20", temperature.PhaseCode);
         Assert.Equal(SignalQualityCodes.Uncertain, temperature.QualityCode);
-        Assert.Equal("series-a", temperature.RunContext["product_series"]);
+        Assert.Equal("series-a", temperature.RunContext["product_family_code"]);
         Assert.Equal("edge-01/device/furnace-01/temperature", temperature.CollectionPointId);
         Assert.Equal(20, Assert.Single(samples, sample => sample.SignalCode == "process.stage_number").IntegerValue);
         Assert.True(Assert.Single(samples, sample => sample.SignalCode == "heater_enabled").BooleanValue);
@@ -61,7 +61,7 @@ public sealed class TimeSeriesSampleProjectorTests
     {
         var evt = CreateEvent(new Dictionary<string, object?> { ["temperature"] = 600d }) with
         {
-            EventType = "cycle.completed"
+            EventType = "process.execution.completed"
         };
 
         Assert.Empty(TimeSeriesSampleProjector.Project("EDGE-01", 44, evt, CreateAnalysis()));
@@ -83,13 +83,13 @@ public sealed class TimeSeriesSampleProjectorTests
             RecordedAt = DateTimeOffset.Parse("2026-07-24T12:00:01Z"),
             Source = "edge/EDGE-01/FURNACE-01",
             Subject = new ObjectRef("device", "FURNACE-01"),
-            CorrelationId = "RUN-001",
+            ExecutionId = "RUN-001",
             Seq = 100,
             Context = new Dictionary<string, string>
             {
                 ["data_model_id"] = "heat-treatment",
                 ["data_model_version"] = "2",
-                ["product_series"] = "series-a",
+                ["product_family_code"] = "series-a",
                 ["stage_number"] = "20"
             },
             Data = new Dictionary<string, object?>
@@ -115,28 +115,28 @@ public sealed class TimeSeriesSampleProjectorTests
                         new ProcessDataItemDefinition
                         {
                             Code = "temperature",
-                            SourceField = "温度",
+                            DisplayName = "温度",
                             DataType = "double",
                             Unit = "°C"
                         },
                         new ProcessDataItemDefinition
                         {
                             Code = "process.stage_number",
-                            SourceField = "阶段号",
+                            DisplayName = "阶段号",
                             DataType = "integer",
                             Category = "stage"
                         },
                         new ProcessDataItemDefinition
                         {
                             Code = "heater_enabled",
-                            SourceField = "加热",
+                            DisplayName = "加热",
                             DataType = "boolean",
                             Category = "state"
                         },
                         new ProcessDataItemDefinition
                         {
                             Code = "mode",
-                            SourceField = "模式",
+                            DisplayName = "模式",
                             DataType = "string",
                             Category = "state"
                         }
@@ -145,7 +145,7 @@ public sealed class TimeSeriesSampleProjectorTests
             },
             Plan = new ProcessAnalysisPlan
             {
-                PlanId = "heat-treatment-cycle",
+                PlanId = "heat-treatment-execution",
                 Version = 1,
                 Name = "周期分析",
                 Status = ConfigurationStatuses.Published,

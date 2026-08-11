@@ -8,23 +8,12 @@ public sealed class EdgeReportingOptions
     /// <summary>
     /// 是否启用向 Platform 注册/心跳上报。
     /// </summary>
-    public bool? EnablePlatformReporting { get; init; }
+    public bool EnablePlatformReporting { get; init; } = true;
 
     /// <summary>
     /// Platform API 基地址。
     /// </summary>
     public string PlatformApiBaseUrl { get; init; } = string.Empty;
-
-    /// <summary>兼容旧版配置；新部署应使用 EnablePlatformReporting。</summary>
-    public bool EnableCentralReporting { get; init; } = true;
-
-    /// <summary>兼容旧版配置；新部署应使用 PlatformApiBaseUrl。</summary>
-    public string CentralApiBaseUrl { get; init; } = string.Empty;
-
-    public bool IsPlatformReportingEnabled => EnablePlatformReporting ?? EnableCentralReporting;
-
-    public string EffectivePlatformApiBaseUrl =>
-        string.IsNullOrWhiteSpace(PlatformApiBaseUrl) ? CentralApiBaseUrl : PlatformApiBaseUrl;
 
     /// <summary>
     /// Platform 回访本节点时使用的地址。跨容器、NAT 或反向代理部署时应显式配置，

@@ -8,7 +8,7 @@ from copy import deepcopy
 DATA_ITEMS = [
     {
         "code": "process.stage_number",
-        "sourceField": "阶段号",
+        "displayName": "阶段号",
         "dataType": "integer",
         "unit": None,
         "category": "stage",
@@ -19,7 +19,7 @@ DATA_ITEMS = [
     },
     {
         "code": "mold.upper_infrared_temperature",
-        "sourceField": "上模红外温度",
+        "displayName": "上模红外温度",
         "dataType": "double",
         "unit": "Cel",
         "category": "process",
@@ -30,7 +30,7 @@ DATA_ITEMS = [
     },
     {
         "code": "heater.upper_current",
-        "sourceField": "上模电流",
+        "displayName": "上模电流",
         "dataType": "double",
         "unit": "A",
         "category": "process",
@@ -41,7 +41,7 @@ DATA_ITEMS = [
     },
     {
         "code": "heater.upper_voltage",
-        "sourceField": "上模电压",
+        "displayName": "上模电压",
         "dataType": "double",
         "unit": "V",
         "category": "process",
@@ -52,7 +52,7 @@ DATA_ITEMS = [
     },
     {
         "code": "mold.lower_infrared_temperature",
-        "sourceField": "下模红外温度",
+        "displayName": "下模红外温度",
         "dataType": "double",
         "unit": "Cel",
         "category": "process",
@@ -63,7 +63,7 @@ DATA_ITEMS = [
     },
     {
         "code": "heater.lower_current",
-        "sourceField": "下模电流",
+        "displayName": "下模电流",
         "dataType": "double",
         "unit": "A",
         "category": "process",
@@ -74,7 +74,7 @@ DATA_ITEMS = [
     },
     {
         "code": "heater.lower_voltage",
-        "sourceField": "下模电压",
+        "displayName": "下模电压",
         "dataType": "double",
         "unit": "V",
         "category": "process",
@@ -85,7 +85,7 @@ DATA_ITEMS = [
     },
     {
         "code": "molding.pressure_load",
-        "sourceField": "压力",
+        "displayName": "压力",
         "dataType": "double",
         "unit": "kg",
         "category": "process",
@@ -96,7 +96,7 @@ DATA_ITEMS = [
     },
     {
         "code": "grating.position",
-        "sourceField": "光栅位置",
+        "displayName": "光栅位置",
         "dataType": "double",
         "unit": "mm",
         "category": "process",
@@ -107,7 +107,7 @@ DATA_ITEMS = [
     },
     {
         "code": "servo.speed",
-        "sourceField": "伺服速度",
+        "displayName": "伺服速度",
         "dataType": "double",
         "unit": "mm/s",
         "category": "process",
@@ -118,7 +118,7 @@ DATA_ITEMS = [
     },
     {
         "code": "vacuum.pressure",
-        "sourceField": "真空度",
+        "displayName": "真空度",
         "dataType": "double",
         "unit": "kPa",
         "category": "process",
@@ -129,7 +129,7 @@ DATA_ITEMS = [
     },
     {
         "code": "servo.position",
-        "sourceField": "伺服位置",
+        "displayName": "伺服位置",
         "dataType": "double",
         "unit": "mm",
         "category": "process",
@@ -140,7 +140,7 @@ DATA_ITEMS = [
     },
     {
         "code": "heater.upper_power",
-        "sourceField": "上模功率",
+        "displayName": "上模功率",
         "dataType": "double",
         "unit": "W",
         "category": "process",
@@ -151,7 +151,7 @@ DATA_ITEMS = [
     },
     {
         "code": "heater.lower_power",
-        "sourceField": "下模功率",
+        "displayName": "下模功率",
         "dataType": "double",
         "unit": "W",
         "category": "process",
@@ -166,7 +166,7 @@ DATA_ITEMS = [
 RECIPE_PARAMETERS = [
     {
         "code": "recipe.heat_position",
-        "sourceField": "HEAT位置",
+        "displayName": "HEAT位置",
         "dataType": "double",
         "unit": "mm",
         "nullable": False,
@@ -177,7 +177,7 @@ RECIPE_PARAMETERS = [
     },
     {
         "code": "recipe.work_position",
-        "sourceField": "WORK位置",
+        "displayName": "WORK位置",
         "dataType": "double",
         "unit": "mm",
         "nullable": False,
@@ -188,7 +188,7 @@ RECIPE_PARAMETERS = [
     },
     {
         "code": "recipe.host_position",
-        "sourceField": "HOST位置",
+        "displayName": "HOST位置",
         "dataType": "double",
         "unit": "mm",
         "nullable": False,
@@ -199,7 +199,7 @@ RECIPE_PARAMETERS = [
     },
     {
         "code": "recipe.upper_temperature_setpoint",
-        "sourceField": "上模设置温度",
+        "displayName": "上模设置温度",
         "dataType": "double",
         "unit": "Cel",
         "nullable": False,
@@ -210,7 +210,7 @@ RECIPE_PARAMETERS = [
     },
     {
         "code": "recipe.lower_temperature_setpoint",
-        "sourceField": "下模设置温度",
+        "displayName": "下模设置温度",
         "dataType": "double",
         "unit": "Cel",
         "nullable": False,
@@ -221,7 +221,7 @@ RECIPE_PARAMETERS = [
     },
     {
         "code": "recipe.nitrogen_temperature",
-        "sourceField": "充氮气温度",
+        "displayName": "充氮气温度",
         "dataType": "double",
         "unit": "Cel",
         "nullable": False,
@@ -232,7 +232,7 @@ RECIPE_PARAMETERS = [
     },
     {
         "code": "recipe.preheat_soak_delay",
-        "sourceField": "预热保温延时",
+        "displayName": "预热保温延时",
         "dataType": "integer",
         "unit": "s",
         "nullable": False,
@@ -243,7 +243,7 @@ RECIPE_PARAMETERS = [
     },
     {
         "code": "recipe.pressure_difference_upper_limit",
-        "sourceField": "压力差上限",
+        "displayName": "压力差上限",
         "dataType": "double",
         "unit": "kg",
         "nullable": False,
@@ -254,7 +254,7 @@ RECIPE_PARAMETERS = [
     },
     {
         "code": "recipe.upper_temperature_upper_limit",
-        "sourceField": "上模温度上限",
+        "displayName": "上模温度上限",
         "dataType": "double",
         "unit": "Cel",
         "nullable": False,
@@ -265,7 +265,7 @@ RECIPE_PARAMETERS = [
     },
     {
         "code": "recipe.lower_temperature_upper_limit",
-        "sourceField": "下模温度上限",
+        "displayName": "下模温度上限",
         "dataType": "double",
         "unit": "Cel",
         "nullable": False,
@@ -276,7 +276,7 @@ RECIPE_PARAMETERS = [
     },
     {
         "code": "recipe.pressure_upper_limit",
-        "sourceField": "压力上限",
+        "displayName": "压力上限",
         "dataType": "double",
         "unit": "kg",
         "nullable": False,
@@ -287,7 +287,7 @@ RECIPE_PARAMETERS = [
     },
     {
         "code": "recipe.work_position_pressure_setpoint",
-        "sourceField": "WORK位设定压力",
+        "displayName": "WORK位设定压力",
         "dataType": "double",
         "unit": "kg",
         "nullable": False,

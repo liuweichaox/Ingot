@@ -13,7 +13,7 @@ public sealed class ImportMappingEngineTests
           "occurredAt": { "column": "time", "format": "yyyy-MM-dd HH:mm:ss", "utcOffset": "+08:00" },
           "subjectType": { "value": "asset" },
           "subjectId": { "column": "machine" },
-          "correlationId": { "column": "cycle" },
+          "executionId": { "column": "execution" },
           "context": { "product_code": { "column": "product" } },
           "values": {
             "temp": { "column": "t", "type": "number" },
@@ -26,7 +26,7 @@ public sealed class ImportMappingEngineTests
     public void ReadCsv_ParsesQuotedFieldsAndEmbeddedCommas()
     {
         using var reader = new StringReader(
-            "time,machine,product,cycle,t,step\n" +
+            "time,machine,product,execution,t,step\n" +
             "2026-06-01 08:00:00,M-01,\"LENS,A\",CYC-1,512.5,4\n");
         var rows = MappingEngine.ReadCsv(reader).ToList();
         Assert.Single(rows);
@@ -38,7 +38,7 @@ public sealed class ImportMappingEngineTests
     public void BuildEvent_MapsColumnsToContractShape()
     {
         using var reader = new StringReader(
-            "time,machine,product,cycle,t,step\n" +
+            "time,machine,product,execution,t,step\n" +
             "2026-06-01 08:00:00,M-01,LENS-A,CYC-1,512.5,4\n");
         var row = MappingEngine.ReadCsv(reader).Single();
         var evt = MappingEngine.BuildEvent(row, SampleMapping(), seq: 7, sourceFileTag: "history");
@@ -47,7 +47,7 @@ public sealed class ImportMappingEngineTests
         Assert.Equal("edge/IMPORT-01/import/history", evt.Source);
         Assert.Equal("asset", evt.Subject.Type);
         Assert.Equal("M-01", evt.Subject.Id);
-        Assert.Equal("CYC-1", evt.CorrelationId);
+        Assert.Equal("CYC-1", evt.ExecutionId);
         Assert.Equal(7, evt.Seq);
         Assert.Equal("LENS-A", evt.Context["product_code"]);
         // +08:00 本地时间 08:00 → UTC 00:00
@@ -62,7 +62,7 @@ public sealed class ImportMappingEngineTests
     public void BuildEvent_SkipsEmptyCells_NeverGuesses()
     {
         using var reader = new StringReader(
-            "time,machine,product,cycle,t,step\n" +
+            "time,machine,product,execution,t,step\n" +
             "2026-06-01 08:00:00,M-01,,CYC-1,,4\n");
         var row = MappingEngine.ReadCsv(reader).Single();
         var evt = MappingEngine.BuildEvent(row, SampleMapping(), 1, "history");
@@ -76,7 +76,7 @@ public sealed class ImportMappingEngineTests
     public void BuildEvent_InvalidNumber_Throws()
     {
         using var reader = new StringReader(
-            "time,machine,product,cycle,t,step\n" +
+            "time,machine,product,execution,t,step\n" +
             "2026-06-01 08:00:00,M-01,LENS-A,CYC-1,not-a-number,4\n");
         var row = MappingEngine.ReadCsv(reader).Single();
         Assert.Throws<FormatException>(() => MappingEngine.BuildEvent(row, SampleMapping(), 1, "history"));

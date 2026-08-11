@@ -2,7 +2,7 @@ using System.Text.Json;
 using Ingot.Contracts.Events;
 using Ingot.Contracts.ProcessConfiguration;
 using Ingot.Domain.Events;
-using Ingot.Platform.Infrastructure.Cycles;
+using Ingot.Platform.Infrastructure.ProcessExecutions;
 using Ingot.Platform.Infrastructure.Events;
 using Ingot.Platform.Infrastructure.Manufacturing;
 using Ingot.Platform.Infrastructure.ProcessConfiguration;
@@ -24,9 +24,9 @@ public sealed class PostgresEventReplayTests(PostgresIntegrationFixture postgres
         var options = Options.Create(new PlatformEventOptions());
         await using var manufacturing = new PostgresManufacturingContextStore(postgres.Configuration);
         await using var configurations = new PostgresProcessConfigurationStore(postgres.Configuration);
-        await using var materializations = new PostgresCycleAnalysisMaterializationStore(
+        await using var materializations = new PostgresProcessExecutionAnalysisMaterializationStore(
             postgres.Configuration,
-            NullLogger<PostgresCycleAnalysisMaterializationStore>.Instance);
+            NullLogger<PostgresProcessExecutionAnalysisMaterializationStore>.Instance);
         await using var timeSeries = new PostgresTimeSeriesStore(
             postgres.Configuration,
             NullLogger<PostgresTimeSeriesStore>.Instance,
@@ -39,7 +39,7 @@ public sealed class PostgresEventReplayTests(PostgresIntegrationFixture postgres
             manufacturing,
             new ProcessAnalysisResolver(configurations),
             materializations,
-            new CycleAnalysisRecomputeQueue(),
+            new ProcessExecutionAnalysisRecomputeQueue(),
             timeSeries);
 
         var edgeId = $"EDGE-REPLAY-{Guid.NewGuid():N}";
@@ -73,15 +73,15 @@ public sealed class PostgresEventReplayTests(PostgresIntegrationFixture postgres
     }
 
     [LinuxDockerFact]
-    public async Task AcquisitionModel_ShouldRemainAuthoritative_WhenRecipeReferencesOlderModel()
+    public async Task AcquisitionModel_ShouldRemainAuthoritative_WhenProcessSpecificationReferencesOlderModel()
     {
         await postgres.EnsureSchemaAsync();
         var options = Options.Create(new PlatformEventOptions());
         await using var manufacturing = new PostgresManufacturingContextStore(postgres.Configuration);
         await using var configurations = new PostgresProcessConfigurationStore(postgres.Configuration);
-        await using var materializations = new PostgresCycleAnalysisMaterializationStore(
+        await using var materializations = new PostgresProcessExecutionAnalysisMaterializationStore(
             postgres.Configuration,
-            NullLogger<PostgresCycleAnalysisMaterializationStore>.Instance);
+            NullLogger<PostgresProcessExecutionAnalysisMaterializationStore>.Instance);
         await using var timeSeries = new PostgresTimeSeriesStore(
             postgres.Configuration,
             NullLogger<PostgresTimeSeriesStore>.Instance,
@@ -94,20 +94,20 @@ public sealed class PostgresEventReplayTests(PostgresIntegrationFixture postgres
             manufacturing,
             new ProcessAnalysisResolver(configurations),
             materializations,
-            new CycleAnalysisRecomputeQueue(),
+            new ProcessExecutionAnalysisRecomputeQueue(),
             timeSeries);
 
         var suffix = Guid.NewGuid().ToString("N");
         var modelId = $"model-{suffix}";
-        var recipeId = $"recipe-{suffix}";
+        var processSpecificationId = $"processSpecification-{suffix}";
         var planId = $"plan-{suffix}";
         var edgeId = $"EDGE-MODEL-{suffix}";
-        var correlationId = Guid.CreateVersion7().ToString();
+        var executionId = Guid.CreateVersion7().ToString();
         var now = DateTimeOffset.UtcNow;
         var temperature = new ProcessDataItemDefinition
         {
             Code = "temperature.actual",
-            SourceField = "实际温度",
+            DisplayName = "实际温度",
             DataType = "double",
             Unit = "Cel",
             Nullable = false
@@ -115,15 +115,15 @@ public sealed class PostgresEventReplayTests(PostgresIntegrationFixture postgres
         var stage = new ProcessDataItemDefinition
         {
             Code = "process.stage_number",
-            SourceField = "阶段号",
+            DisplayName = "阶段号",
             DataType = "integer",
             Category = "stage",
             Nullable = false
         };
-        var recipeParameter = new RecipeParameterDefinition
+        var controlParameter = new ControlParameterDefinition
         {
-            Code = "recipe.temperature_setpoint",
-            SourceField = "温度设定",
+            Code = "processSpecification.temperature_setpoint",
+            DisplayName = "温度设定",
             DataType = "double",
             Unit = "Cel",
             Nullable = false
@@ -135,7 +135,7 @@ public sealed class PostgresEventReplayTests(PostgresIntegrationFixture postgres
             Name = "旧数据模型",
             Status = ConfigurationStatuses.Published,
             Acquisition = new AcquisitionModel { DataItems = [temperature] },
-            RecipeParameters = [recipeParameter],
+            ControlParameters = [controlParameter],
             UpdatedAt = now
         });
         await configurations.UpsertDataModelAsync(new ProcessDataModel
@@ -145,22 +145,22 @@ public sealed class PostgresEventReplayTests(PostgresIntegrationFixture postgres
             Name = "采集数据模型",
             Status = ConfigurationStatuses.Published,
             Acquisition = new AcquisitionModel { DataItems = [temperature, stage] },
-            RecipeParameters = [recipeParameter],
+            ControlParameters = [controlParameter],
             UpdatedAt = now
         });
-        await configurations.UpsertRecipeVersionAsync(new RecipeVersion
+        await configurations.UpsertProcessSpecificationAsync(new ProcessSpecification
         {
-            RecipeId = recipeId,
+            ProcessSpecificationId = processSpecificationId,
             Version = 1,
-            Name = "历史配方",
+            Name = "历史工艺规范",
             DataModelId = modelId,
             DataModelVersion = 1,
             Status = ConfigurationStatuses.Published,
             Values =
             [
-                new RecipeParameterValue
+                new ControlParameterValue
                 {
-                    Code = recipeParameter.Code,
+                    Code = controlParameter.Code,
                     Value = JsonSerializer.SerializeToElement(620d)
                 }
             ],
@@ -192,23 +192,23 @@ public sealed class PostgresEventReplayTests(PostgresIntegrationFixture postgres
         {
             ["data_model_id"] = modelId,
             ["data_model_version"] = "2",
-            ["recipe_id"] = recipeId,
-            ["recipe_version"] = "1",
+            ["process_specification_id"] = processSpecificationId,
+            ["process_specification_version"] = "1",
             ["equipment_id"] = "PRESS-01"
         };
         var started = ProductionEvent.Create(
-            "cycle.started",
+            "process.execution.started",
             now,
             $"edge/{edgeId}/equipment/PRESS-01",
             new ObjectRef("equipment", "PRESS-01"),
-            correlationId,
+            executionId,
             context) with { Seq = 1 };
         var sample = ProductionEvent.Create(
             "process.sample",
             now.AddSeconds(1),
             $"edge/{edgeId}/equipment/PRESS-01",
             new ObjectRef("equipment", "PRESS-01"),
-            correlationId,
+            executionId,
             context,
             new Dictionary<string, object?>
             {
@@ -238,9 +238,9 @@ public sealed class PostgresEventReplayTests(PostgresIntegrationFixture postgres
         using var storedContext = JsonDocument.Parse(reader.GetString(0));
         using var storedData = JsonDocument.Parse(reader.GetString(1));
         Assert.Equal("2", storedContext.RootElement.GetProperty("data_model_version").GetString());
-        Assert.Equal("1", storedContext.RootElement.GetProperty("recipe_data_model_version").GetString());
-        Assert.Equal("model_mismatch", storedContext.RootElement.GetProperty("recipe_snapshot_status").GetString());
-        Assert.True(storedData.RootElement.TryGetProperty("plannedRecipeParameters", out _));
-        Assert.False(storedData.RootElement.TryGetProperty("recipeParameters", out _));
+        Assert.Equal("1", storedContext.RootElement.GetProperty("process_specification_data_model_version").GetString());
+        Assert.Equal("model_mismatch", storedContext.RootElement.GetProperty("process_specification_snapshot_status").GetString());
+        Assert.True(storedData.RootElement.TryGetProperty("plannedControlParameterValues", out _));
+        Assert.False(storedData.RootElement.TryGetProperty("controlParameters", out _));
     }
 }

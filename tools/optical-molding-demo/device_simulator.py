@@ -26,7 +26,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=5551)
-    parser.add_argument("--cycle-seconds", type=float, default=8.0)
+    parser.add_argument("--execution-seconds", type=float, default=8.0)
     parser.add_argument("--run-prefix", default="lens-source-demo")
     parser.add_argument("--max-runs", type=int, default=24)
     parser.add_argument(
@@ -67,11 +67,11 @@ def load_experiment_plan(args: argparse.Namespace) -> list[dict[str, object]] | 
         }
         if "recipe.upper_temperature_setpoint" not in factors:
             raise ValueError(
-                f"run {run.get('runKey')} has no recipe.upper_temperature_setpoint factor"
+                f"run {run.get('executionKey')} has no recipe.upper_temperature_setpoint factor"
             )
         plan.append(
             {
-                "run_id": run["runKey"],
+                "run_id": run["executionKey"],
                 "upper_temperature_setpoint": factors["recipe.upper_temperature_setpoint"],
             }
         )
@@ -167,22 +167,22 @@ def values(
 class Simulator:
     def __init__(
         self,
-        cycle_seconds: float,
+        execution_seconds: float,
         run_prefix: str,
         max_runs: int,
         experiment_plan: list[dict[str, object]] | None = None,
-        recipe_version_offset: int = 0,
+        process_specification_version_offset: int = 0,
     ) -> None:
-        if cycle_seconds <= 0:
-            raise ValueError("cycle_seconds must be greater than zero")
+        if execution_seconds <= 0:
+            raise ValueError("execution_seconds must be greater than zero")
         if max_runs < 1:
             raise ValueError("max_runs must be at least one")
         self.started = time.monotonic()
-        self.cycle_seconds = cycle_seconds
+        self.execution_seconds = execution_seconds
         self.run_prefix = run_prefix
         self.experiment_plan = experiment_plan
         self.max_runs = len(experiment_plan) if experiment_plan else max_runs
-        self.recipe_version_offset = recipe_version_offset
+        self.process_specification_version_offset = process_specification_version_offset
         self.sequence = 0
 
     def snapshot(self, elapsed_seconds: float | None = None) -> dict[str, object]:
@@ -192,18 +192,18 @@ class Simulator:
             if elapsed_seconds is None
             else max(0.0, elapsed_seconds)
         )
-        slot_elapsed = elapsed % self.cycle_seconds
+        slot_elapsed = elapsed % self.execution_seconds
         idle_seconds = min(
             2.0,
-            max(0.5, self.cycle_seconds * 0.2),
-            self.cycle_seconds * 0.4,
+            max(0.5, self.execution_seconds * 0.2),
+            self.execution_seconds * 0.4,
         )
-        active_seconds = self.cycle_seconds - idle_seconds
+        active_seconds = self.execution_seconds - idle_seconds
         run_active = (
-            elapsed < self.max_runs * self.cycle_seconds
+            elapsed < self.max_runs * self.execution_seconds
             and slot_elapsed < active_seconds
         )
-        ordinal = min(int(elapsed // self.cycle_seconds) + 1, self.max_runs)
+        ordinal = min(int(elapsed // self.execution_seconds) + 1, self.max_runs)
         progress = min(slot_elapsed / active_seconds, 1.0) if run_active else 1.0
         plan_item = self.experiment_plan[ordinal - 1] if self.experiment_plan else None
         cohort = (
@@ -219,7 +219,7 @@ class Simulator:
             float(plan_item["upper_temperature_setpoint"]) if plan_item else None
         )
         base_version = 3 if plan_item else 1 if cohort != "verification" else 2
-        version = base_version + self.recipe_version_offset
+        version = base_version + self.process_specification_version_offset
         run_id = str(plan_item["run_id"]) if plan_item else f"{self.run_prefix}-{ordinal:03d}"
         phase = "preheat" if progress < 1 / 3 else "molding" if progress < 2 / 3 else "cooling"
         stage_number = {"preheat": 10, "molding": 20, "cooling": 30}[phase]
@@ -231,11 +231,11 @@ class Simulator:
             "runActive": run_active,
             "runId": run_id,
             "runNumber": ordinal,
-            "productSeries": "optical-lens-demo",
+            "productFamilyCode": "optical-lens-demo",
             "productCode": "LENS-DEMO-50",
-            "workpieceId": f"{run_id}-workpiece",
-            "machineId": "OPTICAL-MOLD-SIM-01",
-            "moldId": "MOLD-DEMO-A01",
+            "outputItemId": f"{run_id}-workpiece",
+            "equipmentId": "OPTICAL-MOLD-SIM-01",
+            "toolingAssemblyId": "MOLD-DEMO-A01",
             "materialLotRef": "GLASS-DEMO-01",
             "stageNumber": stage_number,
             "step": {"code": phase, "name": phase_name},
@@ -317,7 +317,7 @@ class Fx3uRegisterBank:
         self._write(words, "D:40:string:20", "optical-lens-demo")
         self._write(words, "D:50:string:20", "MOLD-DEMO-A01")
         self._write(words, "D:60:string:20", "GLASS-DEMO-01")
-        self._write(words, "D:70:string:40", snapshot["workpieceId"])
+        self._write(words, "D:70:string:40", snapshot["outputItemId"])
         for item in DATA_ITEMS:
             self._write(
                 words,
@@ -378,11 +378,11 @@ def main() -> None:
     args = parse_args()
     experiment_plan = load_experiment_plan(args)
     simulator = Simulator(
-        args.cycle_seconds,
+        args.execution_seconds,
         args.run_prefix,
         args.max_runs,
         experiment_plan,
-        args.recipe_version_offset,
+        args.process_specification_version_offset,
     )
     registers = Fx3uRegisterBank(simulator)
     registers.start()

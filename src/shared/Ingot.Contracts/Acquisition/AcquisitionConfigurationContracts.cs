@@ -1,3 +1,4 @@
+using Ingot.Contracts.Events;
 using Ingot.Contracts.ProcessConfiguration;
 
 namespace Ingot.Contracts.Acquisition;
@@ -41,7 +42,7 @@ public sealed record AcquisitionProfile
         = new Dictionary<string, string>();
     public IReadOnlyList<AcquisitionContextMapping> ContextMappings { get; init; } = [];
     public IReadOnlyList<AcquisitionValueMapping> ValueMappings { get; init; } = [];
-    public AcquisitionRecipeMapping? Recipe { get; init; }
+    public AcquisitionProcessSpecificationMapping? ProcessSpecification { get; init; }
     public AcquisitionLifecycleMapping? Lifecycle { get; init; }
     public DateTimeOffset UpdatedAt { get; init; }
 }
@@ -215,15 +216,15 @@ public sealed record AcquisitionValueMapping
     public string? Topic { get; init; }
 }
 
-public sealed record AcquisitionRecipeMapping
+public sealed record AcquisitionProcessSpecificationMapping
 {
-    public string EventType { get; init; } = "recipe.applied";
+    public string EventType { get; init; } = "process.specification.applied";
     public required string IdPath { get; init; }
     public required string VersionPath { get; init; }
     public string? NamePath { get; init; }
 
     /// <summary>
-    ///     配方参数所在的 JSON 子对象路径，参数映射的路径相对于它；"." 表示报文根。
+    ///     控制参数所在的 JSON 子对象路径，参数映射的路径相对于它；"." 表示报文根。
     ///     只有文档类协议（HTTP / MQTT）真正使用；寄存器类协议的参数直接用点位选择器寻址，
     ///     校验器对这些协议不再强制填写。
     /// </summary>
@@ -233,21 +234,20 @@ public sealed record AcquisitionRecipeMapping
 }
 
 /// <summary>
-/// 可选的离散运行边界映射。连续设备不配置此项；周期设备通常由运行状态变化生成边界，
-/// CorrelationId 由 Edge 在周期开始时生成。CorrelationIdContextKey 仅用于兼容确实提供外部周期号的旧设备。
+/// 可选的离散过程执行边界映射。连续设备不配置此项；离散设备由运行状态变化生成边界，
+/// ExecutionId 由 Edge 在过程执行开始时生成。
 /// </summary>
 public sealed record AcquisitionLifecycleMapping
 {
-    public string Mode { get; init; } = "discrete-cycle";
-    public string? CorrelationIdContextKey { get; init; }
+    public string Mode { get; init; } = ProcessExecutionKinds.Discrete;
     /// <summary>
     /// 可选的运行激活上下文键。配置后，值不等于 ActiveValue 的快照只用于结束当前运行，
-    /// 不会生成新的过程采样或虚假占位周期。
+    /// 不会生成新的过程采样或虚假占位执行。
     /// </summary>
     public string? ActiveContextKey { get; init; }
     public string ActiveValue { get; init; } = "true";
-    public string StartedEventType { get; init; } = "cycle.started";
-    public string CompletedEventType { get; init; } = "cycle.completed";
+    public string StartedEventType { get; init; } = "process.execution.started";
+    public string CompletedEventType { get; init; } = "process.execution.completed";
     public string StepChangedEventType { get; init; } = "process.stage_changed";
 }
 

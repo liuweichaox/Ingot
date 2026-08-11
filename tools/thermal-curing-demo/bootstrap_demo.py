@@ -24,30 +24,30 @@ def data_model(version: int = 1) -> dict[str, object]:
         "status": "published",
         "acquisition": {
             "dataItems": [
-                {"code": "oven.zone1.actual_temperature", "sourceField": "一区实际温度", "dataType": "double", "unit": "Cel", "category": "process", "nullable": False},
-                {"code": "oven.zone2.actual_temperature", "sourceField": "二区实际温度", "dataType": "double", "unit": "Cel", "category": "process", "nullable": False},
-                {"code": "conveyor.actual_speed", "sourceField": "输送带实际速度", "dataType": "double", "unit": "mm/s", "category": "process", "nullable": False},
-                {"code": "oven.exhaust_pressure", "sourceField": "排风压力", "dataType": "double", "unit": "Pa", "category": "environment", "nullable": True},
-                {"code": "ambient.humidity", "sourceField": "入口环境湿度", "dataType": "double", "unit": "%RH", "category": "environment", "nullable": True},
+                {"code": "oven.zone1.actual_temperature", "displayName": "一区实际温度", "dataType": "double", "unit": "Cel", "category": "process", "nullable": False},
+                {"code": "oven.zone2.actual_temperature", "displayName": "二区实际温度", "dataType": "double", "unit": "Cel", "category": "process", "nullable": False},
+                {"code": "conveyor.actual_speed", "displayName": "输送带实际速度", "dataType": "double", "unit": "mm/s", "category": "process", "nullable": False},
+                {"code": "oven.exhaust_pressure", "displayName": "排风压力", "dataType": "double", "unit": "Pa", "category": "environment", "nullable": True},
+                {"code": "ambient.humidity", "displayName": "入口环境湿度", "dataType": "double", "unit": "%RH", "category": "environment", "nullable": True},
             ]
         },
-        "recipeParameters": [
-            {"code": "oven.zone1.setpoint", "sourceField": "一区设定温度", "dataType": "double", "unit": "Cel", "nullable": False},
-            {"code": "oven.zone2.setpoint", "sourceField": "二区设定温度", "dataType": "double", "unit": "Cel", "nullable": False},
-            {"code": "conveyor.speed.setpoint", "sourceField": "输送带设定速度", "dataType": "double", "unit": "mm/s", "nullable": False},
+        "controlParameters": [
+            {"code": "oven.zone1.setpoint", "displayName": "一区设定温度", "dataType": "double", "unit": "Cel", "nullable": False},
+            {"code": "oven.zone2.setpoint", "displayName": "二区设定温度", "dataType": "double", "unit": "Cel", "nullable": False},
+            {"code": "conveyor.speed.setpoint", "displayName": "输送带设定速度", "dataType": "double", "unit": "mm/s", "nullable": False},
         ],
     }
 
 
 def recipe(version: int = 1, data_model_version: int = 1) -> dict[str, object]:
     return {
-        "recipeId": "thermal-curing-baseline",
+        "processSpecificationId": "thermal-curing-baseline",
         "version": version,
         "name": "连续热固化基线配方（模拟）",
         "dataModelId": MODEL_ID,
         "dataModelVersion": data_model_version,
         "status": "published",
-        "contextSelector": {"product_series": "bonded-assembly-demo"},
+        "contextSelector": {"product_family_code": "bonded-assembly-demo"},
         "values": [
             {"code": "oven.zone1.setpoint", "value": 110.0},
             {"code": "oven.zone2.setpoint", "value": 135.0},
@@ -68,8 +68,8 @@ def analysis_plan(version: int = 1, data_model_version: int = 1) -> dict[str, ob
         "analysisScope": "production-run",
         "alignmentMode": "elapsed",
         "cohortDimension": "material_lot",
-        "comparisonKeys": ["product_series", "line_id", "adhesive_lot"],
-        "contextSelector": {"product_series": "bonded-assembly-demo"},
+        "comparisonKeys": ["product_family_code", "line_id", "adhesive_lot"],
+        "contextSelector": {"product_family_code": "bonded-assembly-demo"},
         "signals": [
             {"dataItemCode": code, "includeTrace": True, "features": ["mean", "min", "max", "stddev", "slope"]}
             for code in (
@@ -99,7 +99,7 @@ def scenario_package(version: int = 1) -> dict[str, object]:
         "contextFields": [
             {"fieldCode": "line_id", "name": "生产线", "mode": "required-for-analysis", "minimumCoverage": 1.0, "minimumFactorOverlap": 0.5},
             {"fieldCode": "adhesive_lot", "name": "胶黏剂批次", "mode": "required-for-analysis", "minimumCoverage": 0.95, "minimumFactorOverlap": 0.4},
-            {"fieldCode": "product_series", "name": "产品系列", "mode": "required-for-analysis", "minimumCoverage": 1.0, "minimumFactorOverlap": 0.5},
+            {"fieldCode": "product_family_code", "name": "产品系列", "mode": "required-for-analysis", "minimumCoverage": 1.0, "minimumFactorOverlap": 0.5},
             {"fieldCode": "ambient_humidity", "name": "入口环境湿度", "mode": "record-when-available", "minimumCoverage": None, "minimumFactorOverlap": None},
         ],
         "constraints": [
@@ -108,7 +108,7 @@ def scenario_package(version: int = 1) -> dict[str, object]:
         ],
         "knowledgeAssets": [],
         "terminology": {
-            "operation_run": "固化批次时间窗",
+            "process_execution": "固化批次时间窗",
             "tooling": "输送与加热单元",
             "quality_result": "粘接强度检验",
         },
@@ -145,7 +145,7 @@ def main() -> None:
     args = parser.parse_args()
     resources = [
         ("/api/v1/process-data-models", data_model(args.version)),
-        ("/api/v1/recipe-versions", recipe(args.version, args.version)),
+        ("/api/v1/process-specifications", recipe(args.version, args.version)),
         ("/api/v1/process-analysis-plans", analysis_plan(args.version, args.version)),
         ("/api/v1/scenario-packages", scenario_package(args.version)),
     ]

@@ -1,7 +1,7 @@
 using Ingot.Contracts.ProcessResearch;
 using Ingot.Contracts.Events;
 using Ingot.Platform.Api.Agents;
-using Ingot.Platform.Infrastructure.Cycles;
+using Ingot.Platform.Infrastructure.ProcessExecutions;
 using Ingot.Platform.Infrastructure.ProcessResearch;
 using Microsoft.AspNetCore.Mvc;
 using System.Globalization;
@@ -24,7 +24,7 @@ public sealed class ResearchProjectsController(
     ResearchTransferAssessmentService transferAssessments,
     IResearchObservationAssembler observationAssembler,
     ResearchExperimentResultMaterializer resultMaterializer,
-    ICycleComparisonService cycleComparisonService,
+    IExecutionComparisonService executionComparisonService,
     PlatformUserResolver userResolver) : ControllerBase
 {
     [HttpGet]
@@ -209,34 +209,34 @@ public sealed class ResearchProjectsController(
                 ct).ConfigureAwait(false)),
             ct);
 
-    [HttpPost("{projectId:guid}/hypotheses/from-cycle-comparison")]
-    public Task<IActionResult> ProposeHypothesesFromCycleComparison(
+    [HttpPost("{projectId:guid}/hypotheses/from-execution-comparison")]
+    public Task<IActionResult> ProposeHypothesesFromExecutionComparison(
         Guid projectId,
-        [FromBody] ResearchHypothesisFromCycleComparisonRequest request,
+        [FromBody] ResearchHypothesisFromExecutionComparisonRequest request,
         CancellationToken ct)
         => ExecuteForProjectAsync(
             projectId,
             true,
             async identity =>
             {
-                var baselineCycleId = request.BaselineCycleId?.Trim();
-                var cycleIds = request.CycleIds
+                var baselineProcessExecutionId = request.BaselineProcessExecutionId?.Trim();
+                var executionIds = request.ProcessExecutionIds
                     .Where(static value => !string.IsNullOrWhiteSpace(value))
                     .Select(static value => value.Trim())
                     .Distinct(StringComparer.Ordinal)
                     .ToArray();
-                if (string.IsNullOrWhiteSpace(baselineCycleId) || cycleIds.Length < 2 ||
-                    !cycleIds.Contains(baselineCycleId, StringComparer.Ordinal) ||
+                if (string.IsNullOrWhiteSpace(baselineProcessExecutionId) || executionIds.Length < 2 ||
+                    !executionIds.Contains(baselineProcessExecutionId, StringComparer.Ordinal) ||
                     request.MaximumHypotheses is < 1 or > 10)
                 {
                     throw new ProcessResearchRuleException(
-                        "请选择包含基准周期的至少两个周期，并指定 1 到 10 条候选假设。");
+                        "请选择包含基准过程执行的至少两个过程执行，并指定 1 到 10 条候选假设。");
                 }
-                var comparison = await cycleComparisonService.CompareSelectedAsync(
-                    baselineCycleId,
-                    cycleIds,
+                var comparison = await executionComparisonService.CompareSelectedAsync(
+                    baselineProcessExecutionId,
+                    executionIds,
                     ct).ConfigureAwait(false)
-                    ?? throw new ProcessResearchRuleException("所选周期不存在，无法形成追因证据。");
+                    ?? throw new ProcessResearchRuleException("所选过程执行不存在，无法形成追因证据。");
                 var project = await store.GetProjectAsync(projectId, ct).ConfigureAwait(false)
                     ?? throw new ProcessResearchRuleException("研发项目不存在。");
                 var contentHash = Convert.ToHexStringLower(SHA256.HashData(
@@ -245,9 +245,9 @@ public sealed class ResearchProjectsController(
                 {
                     EvidenceId = Guid.CreateVersion7(),
                     ProjectId = projectId,
-                    Kind = EvidenceKinds.CycleComparison,
-                    ReferenceId = $"{comparison.BaselineCycleId}:{contentHash[..16]}",
-                    Summary = $"周期比较：{comparison.BaselineCycleId} 与 {comparison.HistoricalCycles.Count} 条历史周期。",
+                    Kind = EvidenceKinds.ExecutionComparison,
+                    ReferenceId = $"{comparison.BaselineProcessExecutionId}:{contentHash[..16]}",
+                    Summary = $"过程执行比较：{comparison.BaselineProcessExecutionId} 与 {comparison.HistoricalProcessExecutions.Count} 条历史过程执行。",
                     ContentHash = contentHash,
                     CreatedAt = DateTimeOffset.UtcNow
                 };
@@ -275,8 +275,8 @@ public sealed class ResearchProjectsController(
                 foreach (var resolved in candidates)
                 {
                     var candidate = resolved.Candidate;
-                    var sourceLabel = candidate.SourceKind == CycleCauseSourceKinds.RecipeParameter
-                        ? "实际配方参数"
+                    var sourceLabel = candidate.SourceKind == ExecutionCauseSourceKinds.ProcessSpecificationParameter
+                        ? "实际控制参数"
                         : "过程轨迹特征";
                     var direction = candidate.MedianDifference is > 0
                         ? "不合格组更高"
@@ -288,7 +288,7 @@ public sealed class ResearchProjectsController(
                         {
                             Statement = $"{candidate.DisplayName} 的差异可能影响项目质量目标。",
                             Rationale =
-                                $"{sourceLabel}在合格与不合格周期间表现为“{direction}”，" +
+                                $"{sourceLabel}在合格与不合格过程执行间表现为“{direction}”，" +
                                 $"诊断证据为 {candidate.EvidenceLevel}，候选分数 {candidate.CandidateScore:F3}。" +
                                 "该结论只是观察性关联，必须通过受控实验验证。",
                             VariableCodes = resolved.VariableCodes,
@@ -306,7 +306,7 @@ public sealed class ResearchProjectsController(
                                 confoundingPenalty),
                             SupportingEvidence = [evidence with { EvidenceId = Guid.CreateVersion7() }],
                             Applicability =
-                                $"产品系列：{comparison.ProductSeries}；分析范围：{comparison.AnalysisScope}；" +
+                                $"产品系列：{comparison.ProductFamilyCode}；分析范围：{comparison.AnalysisScope}；" +
                                 $"数据来源：{candidate.DataSource}。"
                         },
                         identity.UserId,
@@ -341,15 +341,15 @@ public sealed class ResearchProjectsController(
             true,
             async identity =>
             {
-                var cycleIds = request.CycleIds
+                var executionIds = request.ProcessExecutionIds
                     .Where(static value => !string.IsNullOrWhiteSpace(value))
                     .Select(static value => value.Trim())
                     .Distinct(StringComparer.Ordinal)
                     .Take(2000)
                     .ToArray();
-                if (cycleIds.Length < 2)
+                if (executionIds.Length < 2)
                     throw new ProcessResearchRuleException("至少选择两个已完成运行，才能作为历史实验观察。");
-                if (request.CycleIds.Count > cycleIds.Length && request.CycleIds.Count > 2000)
+                if (request.ProcessExecutionIds.Count > executionIds.Length && request.ProcessExecutionIds.Count > 2000)
                     throw new ProcessResearchRuleException("一次最多导入 2000 个历史运行。");
 
                 var project = await store.GetProjectAsync(projectId, ct).ConfigureAwait(false)
@@ -360,30 +360,30 @@ public sealed class ResearchProjectsController(
                 if (controls.Length == 0)
                     throw new ProcessResearchRuleException("项目没有定义可控变量，不能导入历史运行。");
 
-                var cycles = new List<CycleComparisonRow>(cycleIds.Length);
-                foreach (var cycleId in cycleIds)
+                var executions = new List<ExecutionComparisonRow>(executionIds.Length);
+                foreach (var executionId in executionIds)
                 {
-                    var cycle = await cycleComparisonService.GetCycleAsync(cycleId, ct).ConfigureAwait(false)
-                        ?? throw new ProcessResearchRuleException($"运行 {cycleId} 不存在。");
-                    if (cycle.CompletedAt is null)
-                        throw new ProcessResearchRuleException($"运行 {cycleId} 尚未完成，不能作为历史观察。");
-                    cycles.Add(cycle);
+                    var execution = await executionComparisonService.GetProcessExecutionAsync(executionId, ct).ConfigureAwait(false)
+                        ?? throw new ProcessResearchRuleException($"运行 {executionId} 不存在。");
+                    if (execution.CompletedAt is null)
+                        throw new ProcessResearchRuleException($"运行 {executionId} 尚未完成，不能作为历史观察。");
+                    executions.Add(execution);
                 }
-                var productSeries = cycles[0].ProductSeries;
-                if (cycles.Any(cycle => !string.Equals(
-                        cycle.ProductSeries, productSeries, StringComparison.Ordinal)))
+                var productFamilyCode = executions[0].ProductFamilyCode;
+                if (executions.Any(execution => !string.Equals(
+                        execution.ProductFamilyCode, productFamilyCode, StringComparison.Ordinal)))
                 {
                     throw new ProcessResearchRuleException("历史运行必须属于同一产品系列，避免把不可比数据混入优化模型。");
                 }
 
-                var runs = cycles.Select((cycle, index) => new ExperimentRunPlan
+                var runs = executions.Select((execution, index) => new ExperimentRunPlan
                 {
-                    RunKey = cycle.CorrelationId,
+                    ExecutionKey = execution.ExecutionId,
                     Sequence = index + 1,
                     Factors = controls.Select(variable => new ExperimentFactorSetting
                     {
                         VariableCode = variable.Code,
-                        Value = ReadHistoricalRecipeValue(cycle, variable),
+                        Value = ReadHistoricalProcessSpecificationValue(execution, variable),
                         Unit = variable.Unit
                     }).ToArray()
                 }).ToArray();
@@ -395,14 +395,14 @@ public sealed class ResearchProjectsController(
                     .Count();
                 if (distinctConditions < 2)
                     throw new ProcessResearchRuleException(
-                        "所选历史运行没有至少两种不同的实际配方条件，不能作为比较实验。请选择包含不同配方水平的运行。");
+                        "所选历史运行没有至少两种不同的实际工艺规范条件，不能作为比较实验。请选择包含不同工艺规范水平的运行。");
 
                 var existing = (await store.ListExperimentsAsync(projectId, ct).ConfigureAwait(false))
                     .FirstOrDefault(experiment =>
                         experiment.DesignMethod == ResearchDesignMethods.HistoricalObservation &&
-                        experiment.RunPlan.Select(static run => run.RunKey)
+                        experiment.RunPlan.Select(static run => run.ExecutionKey)
                             .OrderBy(static key => key, StringComparer.Ordinal)
-                            .SequenceEqual(runs.Select(static run => run.RunKey)
+                            .SequenceEqual(runs.Select(static run => run.ExecutionKey)
                                 .OrderBy(static key => key, StringComparer.Ordinal), StringComparer.Ordinal));
                 if (existing is not null)
                     return Ok(existing);
@@ -415,7 +415,7 @@ public sealed class ResearchProjectsController(
                         DesignMethod = ResearchDesignMethods.HistoricalObservation,
                         RunPlan = runs,
                         ObjectiveCodes = project.Objectives.Select(static value => value.Code).ToArray(),
-                        StopRule = "仅导入已经完成且数据冻结的历史运行；不据此直接下达生产配方。",
+                        StopRule = "仅导入已经完成且数据冻结的历史运行；不据此直接下达生产工艺规范。",
                         RollbackPlan = "历史证据导入不向设备写入任何参数；后续验证实验须经工程师批准。"
                     },
                     identity.UserId,
@@ -470,7 +470,7 @@ public sealed class ResearchProjectsController(
                     ct).ConfigureAwait(false);
                 var result = materialized.FirstOrDefault(value => value.ExperimentId == experimentId)
                     ?? throw new ProcessResearchRuleException(
-                        "尚未找到全部计划运行的完整配方、过程和检验数据，不能自动计算结果。");
+                        "尚未找到全部计划运行的完整工艺规范、过程和检验数据，不能自动计算结果。");
                 return Ok(result);
             },
             ct).ConfigureAwait(false);
@@ -491,10 +491,10 @@ public sealed class ResearchProjectsController(
                 ct).ConfigureAwait(false)),
             ct);
 
-    [HttpPost("experiments/{experimentId:guid}/runs/{suggestionRunKey}/shadow-decision")]
+    [HttpPost("experiments/{experimentId:guid}/runs/{suggestionExecutionKey}/shadow-decision")]
     public async Task<IActionResult> RecordShadowDecision(
         Guid experimentId,
-        string suggestionRunKey,
+        string suggestionExecutionKey,
         [FromBody] ResearchShadowDecisionRequest request,
         CancellationToken ct)
     {
@@ -506,7 +506,7 @@ public sealed class ResearchProjectsController(
             true,
             async identity => Ok(await shadowRecommendations.RecordDecisionAsync(
                 experimentId,
-                suggestionRunKey,
+                suggestionExecutionKey,
                 request,
                 identity.UserId,
                 ct).ConfigureAwait(false)),
@@ -575,66 +575,66 @@ public sealed class ResearchProjectsController(
             },
             ct);
 
-    [HttpPost("{projectId:guid}/process-windows")]
-    public Task<IActionResult> SaveProcessWindow(
+    [HttpPost("{projectId:guid}/operating-regions")]
+    public Task<IActionResult> SaveOperatingRegion(
         Guid projectId,
-        [FromBody] ResearchProcessWindow request,
+        [FromBody] ResearchOperatingRegion request,
         CancellationToken ct)
         => ExecuteForProjectAsync(
             projectId,
             true,
-            async identity => Ok(await workflow.SaveProcessWindowAsync(
+            async identity => Ok(await workflow.SaveOperatingRegionAsync(
                 projectId,
                 request,
                 identity.UserId,
                 ct).ConfigureAwait(false)),
             ct);
 
-    [HttpPost("process-windows/{windowId:guid}/validate")]
-    public async Task<IActionResult> ValidateProcessWindow(Guid windowId, CancellationToken ct)
+    [HttpPost("operating-regions/{operatingRegionId:guid}/validate")]
+    public async Task<IActionResult> ValidateOperatingRegion(Guid operatingRegionId, CancellationToken ct)
     {
-        var window = await store.GetProcessWindowAsync(windowId, ct).ConfigureAwait(false);
+        var window = await store.GetOperatingRegionAsync(operatingRegionId, ct).ConfigureAwait(false);
         if (window is null)
-            return NotFound(new { error = "工艺窗口不存在。" });
+            return NotFound(new { error = "工艺操作域不存在。" });
         return await ExecuteForProjectAsync(
             window.ProjectId,
             true,
-            async identity => Ok(await workflow.ValidateProcessWindowAsync(
-                windowId,
+            async identity => Ok(await workflow.ValidateOperatingRegionAsync(
+                operatingRegionId,
                 identity.UserId,
                 ct).ConfigureAwait(false)),
             ct).ConfigureAwait(false);
     }
 
-    [HttpPost("process-windows/{windowId:guid}/design-validation")]
-    public async Task<IActionResult> DesignProcessWindowValidation(
-        Guid windowId,
+    [HttpPost("operating-regions/{operatingRegionId:guid}/design-validation")]
+    public async Task<IActionResult> DesignOperatingRegionValidation(
+        Guid operatingRegionId,
         CancellationToken ct)
     {
-        var window = await store.GetProcessWindowAsync(windowId, ct).ConfigureAwait(false);
+        var window = await store.GetOperatingRegionAsync(operatingRegionId, ct).ConfigureAwait(false);
         if (window is null)
-            return NotFound(new { error = "工艺窗口不存在。" });
+            return NotFound(new { error = "工艺操作域不存在。" });
         return await ExecuteForProjectAsync(
             window.ProjectId,
             true,
-            async identity => Ok(await workflow.CreateProcessWindowValidationExperimentAsync(
-                windowId,
+            async identity => Ok(await workflow.CreateOperatingRegionValidationExperimentAsync(
+                operatingRegionId,
                 identity.UserId,
                 ct).ConfigureAwait(false)),
             ct).ConfigureAwait(false);
     }
 
-    [HttpPost("process-windows/{windowId:guid}/release")]
-    public async Task<IActionResult> ReleaseProcessWindow(Guid windowId, CancellationToken ct)
+    [HttpPost("operating-regions/{operatingRegionId:guid}/release")]
+    public async Task<IActionResult> ReleaseOperatingRegion(Guid operatingRegionId, CancellationToken ct)
     {
-        var window = await store.GetProcessWindowAsync(windowId, ct).ConfigureAwait(false);
+        var window = await store.GetOperatingRegionAsync(operatingRegionId, ct).ConfigureAwait(false);
         if (window is null)
-            return NotFound(new { error = "工艺窗口不存在。" });
+            return NotFound(new { error = "工艺操作域不存在。" });
         return await ExecuteForProjectAsync(
             window.ProjectId,
             true,
-            async identity => Ok(await workflow.ReleaseProcessWindowAsync(
-                windowId,
+            async identity => Ok(await workflow.ReleaseOperatingRegionAsync(
+                operatingRegionId,
                 identity.UserId,
                 ct).ConfigureAwait(false)),
             ct).ConfigureAwait(false);
@@ -681,7 +681,7 @@ public sealed class ResearchProjectsController(
             true,
             async identity =>
             {
-                var window = await store.GetProcessWindowAsync(request.SourceWindowId, ct)
+                var window = await store.GetOperatingRegionAsync(request.SourceOperatingRegionId, ct)
                     .ConfigureAwait(false);
                 var source = window is null
                     ? null
@@ -712,14 +712,14 @@ public sealed class ResearchProjectsController(
                 var rows = await Task.WhenAll(projects.Select(async project => new
                 {
                     project,
-                    windows = await store.ListProcessWindowsAsync(project.ProjectId, ct)
+                    windows = await store.ListOperatingRegionsAsync(project.ProjectId, ct)
                         .ConfigureAwait(false)
                 })).ConfigureAwait(false);
                 return Ok(new
                 {
                     data = rows.SelectMany(row => row.windows
-                        .Where(window => window.Status == ProcessWindowStatuses.Validated &&
-                                         window.ValidationLevel == ProcessWindowValidationLevels.Production)
+                        .Where(window => window.Status == OperatingRegionStatuses.Validated &&
+                                         window.ValidationLevel == OperatingRegionValidationLevels.Production)
                         .Select(window => new
                         {
                             sourceProjectId = row.project.ProjectId,
@@ -728,8 +728,8 @@ public sealed class ResearchProjectsController(
                             sourceProductName = row.project.ProductName,
                             sourceMaterialName = row.project.MaterialName,
                             sourceSiteCode = row.project.SiteCode,
-                            windowId = window.WindowId,
-                            windowName = window.Name,
+                            operatingRegionId = window.OperatingRegionId,
+                            operatingRegionName = window.Name,
                             window.Applicability,
                             window.AnalysisHash
                         }))
@@ -783,19 +783,19 @@ public sealed class ResearchProjectsController(
         return (identity, null);
     }
 
-    private static double ReadHistoricalRecipeValue(CycleComparisonRow cycle, ResearchVariable variable)
+    private static double ReadHistoricalProcessSpecificationValue(ExecutionComparisonRow execution, ResearchVariable variable)
     {
         var source = variable.DataSource?.Trim();
-        var recipeCode = !string.IsNullOrWhiteSpace(source) &&
-                         source.StartsWith("recipe:", StringComparison.OrdinalIgnoreCase)
-            ? source["recipe:".Length..].Trim()
+        var controlParameterCode = !string.IsNullOrWhiteSpace(source) &&
+                         source.StartsWith("control-parameter:", StringComparison.OrdinalIgnoreCase)
+            ? source["control-parameter:".Length..].Trim()
             : variable.Code;
-        var value = cycle.RecipeParameters.FirstOrDefault(parameter =>
-            string.Equals(parameter.Code, recipeCode, StringComparison.Ordinal));
+        var value = execution.ControlParameters.FirstOrDefault(parameter =>
+            string.Equals(parameter.Code, controlParameterCode, StringComparison.Ordinal));
         if (value is null || !TryReadNumber(value.Value, out var number))
         {
             throw new ProcessResearchRuleException(
-                $"运行 {cycle.CorrelationId} 缺少可控变量 {variable.Code} 的实际配方回读，不能作为优化观察。");
+                $"运行 {execution.ExecutionId} 缺少可控变量 {variable.Code} 的实际控制参数回读，不能作为优化观察。");
         }
         return number;
     }
@@ -815,7 +815,7 @@ public sealed class ResearchProjectsController(
 
     private static IReadOnlyList<string> ResolveControllableVariables(
         ResearchProject project,
-        CycleCauseCandidate candidate)
+        ExecutionCauseCandidate candidate)
         => project.Variables
             .Where(static variable => variable.Role == ResearchVariableRoles.Control)
             .Where(variable =>
@@ -828,7 +828,7 @@ public sealed class ResearchProjectsController(
                         candidate.DataSource,
                         StringComparison.OrdinalIgnoreCase);
                 }
-                return candidate.SourceKind == CycleCauseSourceKinds.RecipeParameter &&
+                return candidate.SourceKind == ExecutionCauseSourceKinds.ProcessSpecificationParameter &&
                        string.Equals(
                            variable.Code,
                            candidate.VariableCode,

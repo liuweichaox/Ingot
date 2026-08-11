@@ -15,12 +15,12 @@ public interface IPlatformEventStore
         PlatformEventQuery query,
         CancellationToken ct = default);
 
-    async Task<IReadOnlyList<PlatformProductionEvent>> QueryByCorrelationIdsAsync(
-        IReadOnlyCollection<string> correlationIds,
+    async Task<IReadOnlyList<PlatformProductionEvent>> QueryByExecutionIdsAsync(
+        IReadOnlyCollection<string> executionIds,
         CancellationToken ct = default)
     {
         var result = new List<PlatformProductionEvent>();
-        foreach (var correlationId in correlationIds
+        foreach (var executionId in executionIds
                      .Where(static value => !string.IsNullOrWhiteSpace(value))
                      .Distinct(StringComparer.Ordinal))
         {
@@ -29,7 +29,7 @@ public interface IPlatformEventStore
             {
                 var page = await QueryAsync(new PlatformEventQuery
                 {
-                    CorrelationId = correlationId,
+                    ExecutionId = executionId,
                     AfterIngestId = cursor,
                     Limit = 500
                 }, ct).ConfigureAwait(false);

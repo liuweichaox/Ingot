@@ -67,8 +67,8 @@ public sealed record AcquisitionProtocolCapability
     /// <summary>是否消费 <see cref="AcquisitionProfile.SequencePath"/>。</summary>
     public bool SupportsSequencePath { get; init; }
 
-    /// <summary>是否消费 <see cref="AcquisitionRecipeMapping.ParametersPath"/>。</summary>
-    public bool SupportsRecipeParametersPath { get; init; }
+    /// <summary>是否消费 <see cref="AcquisitionProcessSpecificationMapping.ParametersPath"/>。</summary>
+    public bool SupportsControlParametersPath { get; init; }
 
     /// <summary>是否消费 <see cref="AcquisitionExecutionOptions.TimeoutMs"/>。</summary>
     public bool SupportsConnectTimeout { get; init; }
@@ -100,12 +100,10 @@ public sealed record AcquisitionProtocolCapability
 
 public static class AcquisitionProtocolCapabilities
 {
-    // "auto" 对寄存器类协议是遗留取值（1 个寄存器按 uint16、多个按 float32 解释）。
-    // 继续接受以免已发布的历史配置在边缘节点启动时被判定为非法，界面上标注为不推荐。
     private static readonly string[] RegisterTypes =
     [
         "int16", "uint16", "int32", "uint32", "float32",
-        "int64", "uint64", "float64", "string", "boolean", "auto"
+        "int64", "uint64", "float64", "string", "boolean"
     ];
 
     private static readonly string[] DocumentTypes =
@@ -131,7 +129,7 @@ public static class AcquisitionProtocolCapabilities
                 ConnectionSection = "connection",
                 SupportsSourceTimestamp = true,
                 SupportsSequencePath = true,
-                SupportsRecipeParametersPath = true,
+                SupportsControlParametersPath = true,
                 SupportsConnectTimeout = true,
                 SupportsReconnectDelay = true,
                 SourceDataTypes = DocumentTypes,
@@ -151,7 +149,7 @@ public static class AcquisitionProtocolCapabilities
                 ConnectionSection = "mqtt",
                 SupportsSourceTimestamp = true,
                 SupportsSequencePath = true,
-                SupportsRecipeParametersPath = true,
+                SupportsControlParametersPath = true,
                 SupportsReconnectDelay = true,
                 SupportsPerTopicMapping = true,
                 SourceDataTypes = DocumentTypes,
@@ -240,7 +238,7 @@ public static class AcquisitionProtocolCapabilities
     /// <summary>该数据类型占用几个 16 位字。string 由调用方按字节长度另行计算。</summary>
     public static int WordCountFor(string dataType) => dataType switch
     {
-        "boolean" or "int16" or "uint16" or "auto" => 1,
+        "boolean" or "int16" or "uint16" => 1,
         "int32" or "uint32" or "float32" => 2,
         "int64" or "uint64" or "float64" => 4,
         _ => 1

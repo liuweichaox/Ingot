@@ -50,13 +50,13 @@ public sealed class PlatformReportingClient : IPlatformReportingClient
 
     public bool TryInitialize(string? listenUrls)
     {
-        if (!_options.IsPlatformReportingEnabled)
+        if (!_options.EnablePlatformReporting)
         {
             _logger.LogInformation("已禁用 Platform 上报（Edge:EnablePlatformReporting=false）");
             return false;
         }
 
-        if (string.IsNullOrWhiteSpace(_options.EffectivePlatformApiBaseUrl))
+        if (string.IsNullOrWhiteSpace(_options.PlatformApiBaseUrl))
         {
             _logger.LogWarning("PlatformApiBaseUrl 为空，跳过 Platform 上报");
             return false;
@@ -77,7 +77,7 @@ public sealed class PlatformReportingClient : IPlatformReportingClient
             ? NormalizeHostBaseUrl(listenUrls)
             : NormalizeConfiguredBaseUrl(_options.PublicBaseUrl);
 
-        var baseUri = new Uri(_options.EffectivePlatformApiBaseUrl.TrimEnd('/') + "/");
+        var baseUri = new Uri(_options.PlatformApiBaseUrl.TrimEnd('/') + "/");
         _http = _httpClientFactory.CreateClient(nameof(PlatformReportingClient));
         _http.BaseAddress = baseUri;
         if (!string.IsNullOrWhiteSpace(_options.EventIngestToken))

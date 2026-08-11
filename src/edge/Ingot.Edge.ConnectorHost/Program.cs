@@ -120,7 +120,7 @@ app.Use(async (context, next) =>
         path.StartsWithSegments("/api/logs") ||
         path.StartsWithSegments("/api/v1/acquisition") ||
         path.StartsWithSegments("/api/v1/events") ||
-        path.StartsWithSegments("/api/v1/cycles") ||
+        path.StartsWithSegments("/api/v1/process-executions") ||
         path.StartsWithSegments("/api/v1/context") ||
         path.StartsWithSegments("/metrics");
     if (!protectedPath)
@@ -172,7 +172,7 @@ app.MapGet("/", () => Results.Ok(new
         acquisitionStatus = "/api/v1/acquisition/status",
         events = "/api/v1/events",
         eventStream = "/api/v1/events/stream",
-        cycle = "/api/v1/cycles/{correlationId}",
+        execution = "/api/v1/process-executions/{executionId}",
         context = "/api/v1/context/{subjectType}/{subjectId}"
     }
 }));

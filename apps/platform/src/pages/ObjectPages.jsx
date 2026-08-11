@@ -114,7 +114,7 @@ export function ObjectExplorerPage() {
                       <p className="mt-1 text-xs leading-5 text-slate-500">进入其他页面时保留当前对象，避免重新查找和填写编号。</p>
                       <div className="mt-3 grid gap-3 sm:grid-cols-2">
                         {[
-                          [`/cycles?machineId=${encodeURIComponent(selected.subjectId)}`, "运行记录", "查看该对象的生产运行与上下文"],
+                          [`/process-executions?equipmentId=${encodeURIComponent(selected.subjectId)}`, "运行记录", "查看该对象的生产运行与上下文"],
                           [`/events?subjectId=${encodeURIComponent(selected.subjectId)}`, "事件时间线", "追溯该对象上报的事件与状态变化"],
                           [`/quality-analysis?subjectType=${encodeURIComponent(selected.subjectType)}&subjectId=${encodeURIComponent(selected.subjectId)}`, "质量偏差分析", "查看与该对象关联的检测结果并追溯运行证据"],
                           [`/data-quality?subjectType=${encodeURIComponent(selected.subjectType)}&subjectId=${encodeURIComponent(selected.subjectId)}`, "数据健康", "确认样本范围、连续性和更新时间"],

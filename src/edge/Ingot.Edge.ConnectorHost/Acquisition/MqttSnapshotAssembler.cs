@@ -70,25 +70,25 @@ public sealed class MqttSnapshotAssembler
         if (profile.TimestampMode == "source")
             Add(profile.TimestampPath, null, required: true, isValue: false);
         Add(profile.SequencePath, null, required: false, isValue: false);
-        if (profile.Recipe is { } recipe)
+        if (profile.ProcessSpecification is { } processSpecification)
         {
-            Add(recipe.IdPath, null, required: true, isValue: false);
-            Add(recipe.VersionPath, null, required: true, isValue: false);
-            Add(recipe.NamePath, null, required: false, isValue: false);
-            foreach (var parameter in recipe.ParameterMappings)
+            Add(processSpecification.IdPath, null, required: true, isValue: false);
+            Add(processSpecification.VersionPath, null, required: true, isValue: false);
+            Add(processSpecification.NamePath, null, required: false, isValue: false);
+            foreach (var parameter in processSpecification.ParameterMappings)
                 Add(
-                    Combine(recipe.ParametersPath, parameter.SourcePath),
+                    Combine(processSpecification.ParametersPath, parameter.SourcePath),
                     parameter.Topic,
                     parameter.Required,
                     isValue: false);
-            // 配方参数集合本身必须是对象。参数逐个取值后按同样的路径重建，
+            // 控制参数集合本身必须是对象。参数逐个取值后按同样的路径重建，
             // 因此这里不再单独保留整个对象，避免与逐参数槽位互相覆盖。
         }
 
         return slots;
     }
 
-    /// <summary>把配方参数集合路径与参数自身路径拼成一条绝对路径；"." 表示报文根。</summary>
+    /// <summary>把控制参数集合路径与参数自身路径拼成一条绝对路径；"." 表示报文根。</summary>
     public static string Combine(string? parametersPath, string fieldPath)
     {
         var root = parametersPath?.Trim();

@@ -20,17 +20,17 @@ public sealed class ProcessConfigurationValidatorTests
                     new ProcessDataItemDefinition
                     {
                         Code = " Upper_Mold.Temperature ",
-                        SourceField = "上模温度℃",
+                        DisplayName = "上模温度℃",
                         Unit = "Cel"
                     }
                 ]
             },
-            RecipeParameters =
+            ControlParameters =
             [
-                new RecipeParameterDefinition
+                new ControlParameterDefinition
                 {
                     Code = "Upper_Mold.Set_Temperature",
-                    SourceField = "上模设置温度℃",
+                    DisplayName = "上模设置温度℃",
                     Unit = "Cel"
                 }
             ]
@@ -39,7 +39,7 @@ public sealed class ProcessConfigurationValidatorTests
         Assert.True(ProcessConfigurationValidator.TryValidate(value, out var normalized, out var error), error);
         Assert.Equal("optical-molding.demo", normalized!.ModelId);
         Assert.Equal("upper_mold.temperature", normalized.Acquisition.DataItems[0].Code);
-        Assert.Equal("upper_mold.set_temperature", normalized.RecipeParameters[0].Code);
+        Assert.Equal("upper_mold.set_temperature", normalized.ControlParameters[0].Code);
     }
 
     [Fact]
@@ -51,11 +51,11 @@ public sealed class ProcessConfigurationValidatorTests
             {
                 DataItems =
                 [
-                    new ProcessDataItemDefinition { Code = "temperature", SourceField = "温度" },
+                    new ProcessDataItemDefinition { Code = "temperature", DisplayName = "温度" },
                     new ProcessDataItemDefinition
                     {
                         Code = "process.stage_number",
-                        SourceField = "阶段号",
+                        DisplayName = "阶段号",
                         DataType = "integer",
                         Category = "stage",
                         Nullable = false
@@ -80,7 +80,7 @@ public sealed class ProcessConfigurationValidatorTests
                     new ProcessDataItemDefinition
                     {
                         Code = "process.stage_number",
-                        SourceField = "阶段号",
+                        DisplayName = "阶段号",
                         DataType = "double",
                         Category = "stage"
                     }
@@ -101,8 +101,8 @@ public sealed class ProcessConfigurationValidatorTests
             {
                 DataItems =
                 [
-                    new ProcessDataItemDefinition { Code = "press.load", SourceField = "压力1" },
-                    new ProcessDataItemDefinition { Code = "PRESS.LOAD", SourceField = "压力2" }
+                    new ProcessDataItemDefinition { Code = "press.load", DisplayName = "压力1" },
+                    new ProcessDataItemDefinition { Code = "PRESS.LOAD", DisplayName = "压力2" }
                 ]
             }
         };
@@ -112,24 +112,24 @@ public sealed class ProcessConfigurationValidatorTests
     }
 
     [Fact]
-    public void RecipeVersion_AcceptsTypedValuesWithoutChangeReason()
+    public void ProcessSpecification_AcceptsTypedValuesWithoutChangeReason()
     {
         using var document = JsonDocument.Parse("128.5");
-        var value = new RecipeVersion
+        var value = new ProcessSpecification
         {
-            RecipeId = "RCP-LENS-A",
+            ProcessSpecificationId = "RCP-LENS-A",
             Version = 7,
             BasedOnVersion = 6,
-            Name = "镜片 A 配方",
+            Name = "镜片 A 工艺规范",
             DataModelId = "optical-molding.demo",
             Values =
             [
-                new RecipeParameterValue { Code = "work.set_pressure", Value = document.RootElement.Clone() }
+                new ControlParameterValue { Code = "work.set_pressure", Value = document.RootElement.Clone() }
             ]
         };
 
         Assert.True(ProcessConfigurationValidator.TryValidate(value, out var normalized, out var error), error);
-        Assert.Equal("rcp-lens-a", normalized!.RecipeId);
+        Assert.Equal("rcp-lens-a", normalized!.ProcessSpecificationId);
         Assert.Equal(128.5, normalized.Values[0].Value.GetDouble());
         Assert.DoesNotContain("reason", JsonSerializer.Serialize(normalized), StringComparison.OrdinalIgnoreCase);
     }
@@ -139,7 +139,7 @@ public sealed class ProcessConfigurationValidatorTests
     {
         var value = new ProcessAnalysisPlan
         {
-            PlanId = "cycle-comparison",
+            PlanId = "execution-comparison",
             Name = "周期对比",
             DataModelId = "optical-molding.demo"
         };
@@ -171,7 +171,7 @@ public sealed class ProcessConfigurationValidatorTests
         Name = "模型",
         Acquisition = new AcquisitionModel
         {
-            DataItems = [new ProcessDataItemDefinition { Code = "signal", SourceField = "信号" }]
+            DataItems = [new ProcessDataItemDefinition { Code = "signal", DisplayName = "信号" }]
         }
     };
 }

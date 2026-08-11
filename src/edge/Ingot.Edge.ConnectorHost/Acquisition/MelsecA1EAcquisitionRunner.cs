@@ -57,7 +57,7 @@ public sealed class MelsecA1EAcquisitionRunner(
             ?? throw new InvalidOperationException("MELSEC 1E 连接配置不能为空。");
         var selectors = BuildSelectors(deployment);
         var plan = BuildReadPlan(selectors, connection.MaxMergeGap);
-        string? currentRecipe = null;
+        string? currentProcessSpecification = null;
         var lifecycle = new AcquisitionLifecycleTracker();
         var sourceDeduplicator = new AcquisitionSourceDeduplicator();
         while (!ct.IsCancellationRequested)
@@ -90,14 +90,14 @@ public sealed class MelsecA1EAcquisitionRunner(
                     }
                     var occurredAt = ResolveTimestamp(deployment.Profile, raw);
                     var mapped = ProtocolAcquisitionSnapshotMapper.Map(
-                        deployment, raw, normalizedSource, currentRecipe, occurredAt);
+                        deployment, raw, normalizedSource, currentProcessSpecification, occurredAt);
                     if (!sourceDeduplicator.ShouldEmit(mapped.Sample))
                     {
-                        currentRecipe = mapped.RecipeIdentity;
+                        currentProcessSpecification = mapped.ProcessSpecificationIdentity;
                         status.RecordSuccess(
                             configurationKey,
                             DateTimeOffset.UtcNow,
-                            currentRecipe,
+                            currentProcessSpecification,
                             incrementSample: false,
                             readDurationMs: System.Diagnostics.Stopwatch.GetElapsedTime(readStarted).TotalMilliseconds);
                         await Task.Delay(connection.PollIntervalMs, ct).ConfigureAwait(false);
@@ -108,10 +108,10 @@ public sealed class MelsecA1EAcquisitionRunner(
                         deployment.Profile.Lifecycle,
                         connection.PollIntervalMs);
                     await sink.EmitBatchAsync(events, ct).ConfigureAwait(false);
-                    status.RecordCycleState(configurationKey, lifecycle.IsRunActive);
+                    status.RecordProcessExecutionState(configurationKey, lifecycle.IsRunActive);
 
-                    currentRecipe = mapped.RecipeIdentity;
-                    status.RecordSuccess(configurationKey, DateTimeOffset.UtcNow, currentRecipe,
+                    currentProcessSpecification = mapped.ProcessSpecificationIdentity;
+                    status.RecordSuccess(configurationKey, DateTimeOffset.UtcNow, currentProcessSpecification,
                         readDurationMs: System.Diagnostics.Stopwatch.GetElapsedTime(readStarted).TotalMilliseconds);
                     await Task.Delay(connection.PollIntervalMs, ct).ConfigureAwait(false);
                 }
@@ -175,12 +175,12 @@ public sealed class MelsecA1EAcquisitionRunner(
         foreach (var mapping in deployment.Profile.ValueMappings) Add(mapping.SourcePath);
         foreach (var mapping in deployment.Profile.ContextMappings) Add(mapping.SourcePath);
         if (deployment.Profile.TimestampMode == "source") Add(deployment.Profile.TimestampPath);
-        if (deployment.Profile.Recipe is { } recipe)
+        if (deployment.Profile.ProcessSpecification is { } processSpecification)
         {
-            Add(recipe.IdPath);
-            Add(recipe.VersionPath);
-            Add(recipe.NamePath);
-            foreach (var mapping in recipe.ParameterMappings) Add(mapping.SourcePath);
+            Add(processSpecification.IdPath);
+            Add(processSpecification.VersionPath);
+            Add(processSpecification.NamePath);
+            foreach (var mapping in processSpecification.ParameterMappings) Add(mapping.SourcePath);
         }
 
         return result;

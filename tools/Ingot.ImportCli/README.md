@@ -25,4 +25,4 @@ dotnet run --project tools/Ingot.ImportCli -- \
 
 ## 周期边界
 
-若 CSV 只有过程采样、没有周期开始/结束事件，可分两次导入：先用一份按周期聚合的 CSV（每周期一行，`eventType` 取 `cycle.started`/`cycle.completed` 两列拆分或分成两个文件），再导入采样行；同一 `correlationId` 会自动关联。
+若 CSV 只有过程采样、没有周期开始/结束事件，可分两次导入：先用一份按周期聚合的 CSV（每周期一行，`eventType` 取 `process.execution.started`/`process.execution.completed` 两列拆分或分成两个文件），再导入采样行；同一 `executionId` 会自动关联。

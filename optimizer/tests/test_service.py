@@ -208,13 +208,13 @@ def test_diagnosis_adjusts_context_and_reports_stability_and_interactions():
                 "outcome": failed,
                 "weight": 1.0,
                 "values": {
-                    "recipe:temperature": temperature,
-                    "recipe:pressure": pressure,
+                    "control-parameter:temperature": temperature,
+                    "control-parameter:pressure": pressure,
                     "signal:mold-temperature:overshoot": max(0.0, temperature - 510.0),
                 },
                 "context": {
                     "product_code": "LENS-A",
-                    "machine_id": machine,
+                    "equipment_id": machine,
                     "material_lot": f"LOT-{index // 10}",
                 },
                 "occurred_at": float(index),
@@ -226,13 +226,13 @@ def test_diagnosis_adjusts_context_and_reports_stability_and_interactions():
             "outcome_kind": "binary",
             "features": [
                 {
-                    "data_source": "recipe:temperature",
-                    "source_kind": "recipe-parameter",
+                    "data_source": "control-parameter:temperature",
+                    "source_kind": "control-parameter",
                     "actionability": "controllable",
                 },
                 {
-                    "data_source": "recipe:pressure",
-                    "source_kind": "recipe-parameter",
+                    "data_source": "control-parameter:pressure",
+                    "source_kind": "control-parameter",
                     "actionability": "controllable",
                 },
                 {
@@ -251,7 +251,7 @@ def test_diagnosis_adjusts_context_and_reports_stability_and_interactions():
     assert payload["model_family"].startswith("regularized-additive-logistic")
     assert payload["fold_count"] >= 2
     assert payload["stability_runs"] == 24
-    assert "context:machine_id=PRESS-B" in payload["context_variables"]
+    assert "context:equipment_id=PRESS-B" in payload["context_variables"]
     assert payload["candidates"][0]["stability_selection_rate"] >= 0
     assert all("verified" not in item for item in payload["limitations"])
 
@@ -264,8 +264,8 @@ def test_continuous_diagnosis_selects_gp_when_nonlinearity_is_supported():
             {
                 "run_key": f"continuous-{index:03d}",
                 "outcome": float(__import__("math").sin(value * 2.2)),
-                "values": {"recipe:x": value},
-                "context": {"machine_id": "PRESS-A" if index % 2 else "PRESS-B"},
+                "values": {"control-parameter:x": value},
+                "context": {"equipment_id": "PRESS-A" if index % 2 else "PRESS-B"},
                 "occurred_at": float(index),
             }
         )
@@ -275,8 +275,8 @@ def test_continuous_diagnosis_selects_gp_when_nonlinearity_is_supported():
             "outcome_kind": "continuous",
             "features": [
                 {
-                    "data_source": "recipe:x",
-                    "source_kind": "recipe-parameter",
+                    "data_source": "control-parameter:x",
+                    "source_kind": "control-parameter",
                     "actionability": "controllable",
                 }
             ],
@@ -328,7 +328,7 @@ def test_historical_replay_endpoint_is_production_equivalent_and_auditable():
     assert "does not prove online" in payload["limitations"]
 
 
-def test_historical_replay_rejects_duplicate_recipes_and_unknown_fields():
+def test_historical_replay_rejects_duplicate_parameter_settings_and_unknown_fields():
     body = {
         "campaign": {
             "name": "duplicate-history",

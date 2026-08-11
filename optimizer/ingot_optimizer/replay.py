@@ -2,7 +2,7 @@
 
 Synthetic replay evaluates optimization mechanics against a callable response
 surface.  Historical pool replay is deliberately more conservative: the
-optimizer may only select an as-yet-unseen recipe that actually exists in the
+optimizer may only select an as-yet-unseen parameter setting that actually exists in the
 history.  It never fabricates a response with nearest-neighbour substitution.
 """
 from __future__ import annotations
@@ -120,7 +120,7 @@ def _validate_history(campaign: Campaign, history: Sequence[dict]) -> None:
         key = tuple(np.round(unit_point, 12))
         if key in seen:
             raise ValueError(
-                "historical pool replay requires unique recipes; aggregate "
+                "historical pool replay requires unique parameter settings; aggregate "
                 "replicates before replay"
             )
         seen.add(key)
@@ -259,7 +259,6 @@ def _historical_optimizer_run(
         "safety_violations": _safety_violations(campaign, history, selected),
     }
 
-
 def _safety_violations(
     campaign: Campaign, history: Sequence[dict], selected: Sequence[int]
 ) -> int:
@@ -299,10 +298,10 @@ def replay_history_pool(
     initial_observation_count: int = 0,
     derived_features: Sequence[DerivedFeature] | None = None,
 ) -> dict:
-    """Evaluate recipe ranking using only recipes and outcomes present in history.
+    """Evaluate parameter setting ranking using only parameter settings and outcomes present in history.
 
-    This is evidence about ranking observed recipes, not a counterfactual claim
-    about untried recipes or guaranteed online performance.
+    This is evidence about ranking observed parameter settings, not a counterfactual claim
+    about untried parameter settings or guaranteed online performance.
     """
     _validate_history(campaign, history)
     if n_seeds < 1:
@@ -361,13 +360,9 @@ def replay_history_pool(
         "engine_policy": "production-equivalent: sequential below 3 observations, BoTorch at 3 or more",
         "evidence_kind": "historical-pool-ranking",
         "limitations": (
-            "Ranks only recipes present in the supplied history; it does not "
-            "estimate outcomes for recipes that were never run, does not support "
-            "exact-recipe replication until production repeat scheduling is enabled, "
+            "Ranks only parameter settings present in the supplied history; it does not "
+            "estimate outcomes for parameter settings that were never run, does not support "
+            "exact control-setting replication until production repeat scheduling is enabled, "
             "and does not prove online furnace savings."
         ),
     }
-
-
-# Backwards-compatible name for callers of the original synthetic helper.
-replay = replay_synthetic

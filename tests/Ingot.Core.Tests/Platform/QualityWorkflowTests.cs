@@ -2,7 +2,7 @@ using Ingot.Contracts.Events;
 using Ingot.Contracts.Inspections;
 using Ingot.Contracts.ProcessConfiguration;
 using Ingot.Domain.Events;
-using Ingot.Platform.Infrastructure.Cycles;
+using Ingot.Platform.Infrastructure.ProcessExecutions;
 using Ingot.Platform.Infrastructure.Events;
 using Ingot.Platform.Infrastructure.Inspections;
 using Ingot.Platform.Infrastructure.ProcessConfiguration;
@@ -17,7 +17,7 @@ public sealed class QualityWorkflowTests
     {
         var events = new FakeEventStore(
         [
-            Row(1, Event("cycle.completed", "CYCLE-1", "WP-1", "UNCONFIGURED", DateTimeOffset.Parse("2026-07-20T08:10:00Z")))
+            Row(1, Event("process.execution.completed", "CYCLE-1", "WP-1", "UNCONFIGURED", DateTimeOffset.Parse("2026-07-20T08:10:00Z")))
         ]);
         var workflow = new InspectionWorkflowService(
             events,
@@ -41,7 +41,7 @@ public sealed class QualityWorkflowTests
             Status = "PUBLISHED",
             Scope = new InspectionPlanScope
             {
-                ProductSeries = "SERIES-A",
+                ProductFamilyCode = "SERIES-A",
                 ContextSelector = new Dictionary<string, string> { ["material_grade"] = "A-01" }
             },
             Items =
@@ -60,18 +60,18 @@ public sealed class QualityWorkflowTests
 
         Assert.True(valid, error);
         Assert.Equal("quality.general", normalized!.PlanId);
-        Assert.Equal("series-a", normalized.Scope.ProductSeries);
+        Assert.Equal("series-a", normalized.Scope.ProductFamilyCode);
         Assert.Equal("A-01", normalized.Scope.ContextSelector["material_grade"]);
         Assert.True(normalized.Items[0].RequiresAttachment);
     }
 
     [Fact]
-    public async Task WorkflowDerivesPendingAndReviewPendingTasksFromCompletedCycles()
+    public async Task WorkflowDerivesPendingAndReviewPendingTasksFromCompletedProcessExecutions()
     {
         var events = new FakeEventStore(
         [
-            Row(1, Event("cycle.completed", "CYCLE-1", "WP-1", "LENS-A", DateTimeOffset.Parse("2026-07-20T08:10:00Z"))),
-            Row(2, Event("cycle.completed", "CYCLE-2", "WP-2", "LENS-A", DateTimeOffset.Parse("2026-07-20T08:20:00Z")))
+            Row(1, Event("process.execution.completed", "CYCLE-1", "WP-1", "LENS-A", DateTimeOffset.Parse("2026-07-20T08:10:00Z"))),
+            Row(2, Event("process.execution.completed", "CYCLE-2", "WP-2", "LENS-A", DateTimeOffset.Parse("2026-07-20T08:20:00Z")))
         ]);
         var visual = Inspection("CYCLE-2", "WP-2", "optical.appearance.machine", withAttachment: true);
         var manual = Inspection("CYCLE-2", "WP-2", "optical.final.manual", withAttachment: false);
@@ -85,18 +85,18 @@ public sealed class QualityWorkflowTests
 
         Assert.Equal(2, tasks.Count);
         Assert.Equal("review_pending", tasks[0].Status);
-        Assert.Equal("CYCLE-2", tasks[0].OperationRunId);
+        Assert.Equal("CYCLE-2", tasks[0].ExecutionId);
         Assert.Equal("pending", tasks[1].Status);
         Assert.Equal(2, tasks[1].MissingDefinitionCodes.Count);
     }
 
     [Fact]
-    public async Task ComparisonReadsEveryPageAndComputesCompleteSameSeriesCycles()
+    public async Task ComparisonReadsEveryPageAndComputesCompleteSameSeriesProcessExecutions()
     {
         var rows = new List<PlatformProductionEvent>();
-        AddCycle(rows, "BASE", "LENS-A", "PRESS-01", DateTimeOffset.Parse("2026-07-20T08:00:00Z"), 1);
-        AddCycle(rows, "HISTORY", "LENS-A", "PRESS-02", DateTimeOffset.Parse("2026-07-20T07:00:00Z"), rows.Count + 1);
-        AddCycle(rows, "OTHER", "LENS-B", "PRESS-01", DateTimeOffset.Parse("2026-07-20T06:00:00Z"), rows.Count + 1);
+        AddProcessExecution(rows, "BASE", "LENS-A", "PRESS-01", DateTimeOffset.Parse("2026-07-20T08:00:00Z"), 1);
+        AddProcessExecution(rows, "HISTORY", "LENS-A", "PRESS-02", DateTimeOffset.Parse("2026-07-20T07:00:00Z"), rows.Count + 1);
+        AddProcessExecution(rows, "OTHER", "LENS-B", "PRESS-01", DateTimeOffset.Parse("2026-07-20T06:00:00Z"), rows.Count + 1);
         var baselineVisual = Inspection("BASE", "WP-BASE", "optical.appearance.machine", withAttachment: true);
         var historyManual = Inspection("HISTORY", "WP-HISTORY", "optical.final.manual", withAttachment: false)
             with { Outcome = "FAIL" };
@@ -104,13 +104,13 @@ public sealed class QualityWorkflowTests
         {
             ReviewId = Guid.CreateVersion7(),
             InspectionRecordId = baselineVisual.RecordId,
-            OperationRunId = "BASE",
+            ExecutionId = "BASE",
             Decision = InspectionReviewDecisions.Confirmed,
             ReviewedAt = DateTimeOffset.UtcNow,
             ReviewedBy = "reviewer"
         };
         var reviewStore = new FakeReviewStore(new Dictionary<Guid, InspectionReview> { [baselineVisual.RecordId] = review });
-        var service = new CycleComparisonService(
+        var service = new ExecutionComparisonService(
             new FakeEventStore(rows),
             new FakeInspectionStore([baselineVisual, historyManual]),
             reviewStore,
@@ -119,37 +119,37 @@ public sealed class QualityWorkflowTests
         var result = await service.CompareWithHistoryAsync("BASE", 10);
 
         Assert.NotNull(result);
-        Assert.Equal("LENS-A", result.ProductSeries);
+        Assert.Equal("LENS-A", result.ProductFamilyCode);
         Assert.Equal(600, result.Baseline.SampleCount);
-        Assert.Equal(1d, result.Baseline.SampleCompleteness);
+        Assert.Equal(ProcessDataStatuses.Available, result.Baseline.ProcessDataQuality.Status);
         Assert.Equal(5, result.Baseline.PhaseCount);
         Assert.Equal(InspectionReviewDecisions.Confirmed, result.Baseline.VisualReviewDecision);
-        Assert.Single(result.HistoricalCycles);
-        Assert.Equal("HISTORY", result.HistoricalCycles[0].CorrelationId);
+        Assert.Single(result.HistoricalProcessExecutions);
+        Assert.Equal("HISTORY", result.HistoricalProcessExecutions[0].ExecutionId);
         Assert.Equal(600, result.Baseline.Signals.Single(item => item.Code == "press.load").SampleCount);
         Assert.Contains(result.QualityAssociations, item =>
             item.SignalCode == "press.load" &&
             item.PhaseCode == "30" &&
-            item.PassCycleCount == 1 &&
-            item.FailCycleCount == 1);
-        Assert.Equal(2, result.Acceptance.CompleteCycleCount);
+            item.PassProcessExecutionCount == 1 &&
+            item.FailProcessExecutionCount == 1);
+        Assert.Equal(2, result.Acceptance.CompleteProcessExecutionCount);
 
         var selected = await service.CompareSelectedAsync("HISTORY", ["BASE", "HISTORY"]);
         Assert.NotNull(selected);
-        Assert.Equal("HISTORY", selected.BaselineCycleId);
-        Assert.Equal("HISTORY", selected.Baseline.CorrelationId);
-        Assert.Equal("BASE", Assert.Single(selected.HistoricalCycles).CorrelationId);
+        Assert.Equal("HISTORY", selected.BaselineProcessExecutionId);
+        Assert.Equal("HISTORY", selected.Baseline.ExecutionId);
+        Assert.Equal("BASE", Assert.Single(selected.HistoricalProcessExecutions).ExecutionId);
 
         await Assert.ThrowsAsync<ArgumentException>(() =>
             service.CompareSelectedAsync("BASE", ["BASE", "OTHER"]));
     }
 
     [Fact]
-    public async Task CycleUsesActuallyAppliedRecipeParametersBeforeRecipeMasterData()
+    public async Task ProcessExecutionUsesActuallyAppliedControlParametersBeforeProcessSpecificationMasterData()
     {
         var startedAt = DateTimeOffset.Parse("2026-07-20T08:00:00Z");
         var applied = Event(
-            "recipe.applied",
+            "process.specification.applied",
             "OPTIMIZED-RUN-01",
             "WP-OPTIMIZED-RUN-01",
             "LENS-A",
@@ -158,91 +158,91 @@ public sealed class QualityWorkflowTests
             {
                 ["resolvedParameters"] = new Dictionary<string, object?>
                 {
-                    ["recipe.upper_heat_compensation"] = 2.888943d
+                    ["processSpecification.upper_heat_compensation"] = 2.888943d
                 }
             });
         var rows = new[]
         {
             Row(1, Event(
-                "cycle.started",
+                "process.execution.started",
                 "OPTIMIZED-RUN-01",
                 "WP-OPTIMIZED-RUN-01",
                 "LENS-A",
                 startedAt)),
             Row(2, applied),
             Row(3, Event(
-                "cycle.completed",
+                "process.execution.completed",
                 "OPTIMIZED-RUN-01",
                 "WP-OPTIMIZED-RUN-01",
                 "LENS-A",
                 startedAt.AddMinutes(1)))
         };
-        var service = new CycleComparisonService(
+        var service = new ExecutionComparisonService(
             new FakeEventStore(rows),
             new FakeInspectionStore([]),
             new FakeReviewStore(),
             new ProcessAnalysisResolver(new FakeProcessConfigurationStore()));
 
-        var cycle = await service.GetCycleAsync("OPTIMIZED-RUN-01");
+        var execution = await service.GetProcessExecutionAsync("OPTIMIZED-RUN-01");
 
-        Assert.NotNull(cycle);
-        var parameter = Assert.Single(cycle.RecipeParameters);
-        Assert.Equal("recipe.upper_heat_compensation", parameter.Code);
+        Assert.NotNull(execution);
+        var parameter = Assert.Single(execution.ControlParameters);
+        Assert.Equal("processSpecification.upper_heat_compensation", parameter.Code);
         Assert.Equal(2.888943d, parameter.Value.GetDouble());
     }
 
     [Fact]
-    public async Task CycleWithoutAppliedRecipeEvent_DoesNotExposePlannedRecipeAsActual()
+    public async Task ProcessExecutionWithoutAppliedProcessSpecificationEvent_DoesNotExposePlannedProcessSpecificationAsActual()
     {
         var startedAt = DateTimeOffset.Parse("2026-07-20T08:00:00Z");
         var rows = new[]
         {
             Row(1, Event(
-                "cycle.started",
-                "NO-ACTUAL-RECIPE",
-                "WP-NO-ACTUAL-RECIPE",
+                "process.execution.started",
+                "NO-ACTUAL-PARAMETERS",
+                "WP-NO-ACTUAL-PARAMETERS",
                 "LENS-A",
                 startedAt)),
             Row(2, Event(
-                "cycle.completed",
-                "NO-ACTUAL-RECIPE",
-                "WP-NO-ACTUAL-RECIPE",
+                "process.execution.completed",
+                "NO-ACTUAL-PARAMETERS",
+                "WP-NO-ACTUAL-PARAMETERS",
                 "LENS-A",
                 startedAt.AddMinutes(1)))
         };
-        var plannedRecipe = new RecipeVersion
+        var plannedProcessSpecification = new ProcessSpecification
         {
-            RecipeId = "RCP-LENS-A",
-            Name = "Planned recipe",
+            ProcessSpecificationId = "RCP-LENS-A",
+            Name = "Planned processSpecification",
             Status = ConfigurationStatuses.Published,
             DataModelId = "optical-lens-molding",
             Values =
             [
-                new RecipeParameterValue
+                new ControlParameterValue
                 {
-                    Code = "recipe.upper_heat_compensation",
+                    Code = "processSpecification.upper_heat_compensation",
                     Value = System.Text.Json.JsonSerializer.SerializeToElement(9.9d)
                 }
             ]
         };
-        var service = new CycleComparisonService(
+        var service = new ExecutionComparisonService(
             new FakeEventStore(rows),
             new FakeInspectionStore([]),
             new FakeReviewStore(),
-            new ProcessAnalysisResolver(new FakeProcessConfigurationStore(plannedRecipe)));
+            new ProcessAnalysisResolver(new FakeProcessConfigurationStore(plannedProcessSpecification)));
 
-        var cycle = await service.GetCycleAsync("NO-ACTUAL-RECIPE");
+        var execution = await service.GetProcessExecutionAsync("NO-ACTUAL-PARAMETERS");
 
-        Assert.NotNull(cycle);
-        Assert.Empty(cycle.RecipeParameters);
+        Assert.NotNull(execution);
+        Assert.Empty(execution.ControlParameters);
     }
 
     [Fact]
-    public async Task CycleRecordsKeepAllSamplesAndUseConfiguredPhaseAndQualityRules()
+    public async Task ProcessExecutionsKeepAllSamplesAndUseConfiguredPhaseAndQualityRules()
     {
         var rows = new List<PlatformProductionEvent>();
-        AddCycle(rows, "CYCLE-RECORD", "LENS-A", "PRESS-01", DateTimeOffset.Parse("2026-07-20T08:00:00Z"), 1);
-        var service = new CycleRecordService(
+        AddProcessExecution(rows, "CYCLE-RECORD", "LENS-A", "PRESS-01", DateTimeOffset.Parse("2026-07-20T08:00:00Z"), 1);
+        var service = new ProcessExecutionService(
             new FakeEventStore(rows),
             new FakeInspectionStore([]),
             new FakeReviewStore(),
@@ -252,36 +252,36 @@ public sealed class QualityWorkflowTests
         var result = await service.QueryAsync(
             null, null, "LENS-A", null, null, null, null, null, "completed", 100);
 
-        var cycle = Assert.Single(result.Data);
-        Assert.Equal(600, cycle.SampleCount);
-        Assert.Equal(1d, cycle.SampleCompleteness);
-        Assert.True(cycle.HasStarted);
-        Assert.True(cycle.HasCompleted);
-        Assert.True(cycle.LifecycleComplete);
-        Assert.Equal(5, cycle.Phases.Count);
-        Assert.Equal("PENDING", cycle.QualityStatus);
-        Assert.Equal(2, cycle.RequiredInspectionCount);
-        Assert.Empty(cycle.DataIssues);
+        var execution = Assert.Single(result.Data);
+        Assert.Equal(600, execution.SampleCount);
+        Assert.Equal(ProcessDataStatuses.Available, execution.ProcessDataQuality.Status);
+        Assert.True(execution.HasStarted);
+        Assert.True(execution.HasCompleted);
+        Assert.True(execution.LifecycleComplete);
+        Assert.Equal(5, execution.Phases.Count);
+        Assert.Equal("PENDING", execution.QualityStatus);
+        Assert.Equal(2, execution.RequiredInspectionCount);
+        Assert.Empty(execution.DataIssues);
         Assert.Equal(1, result.Total);
         Assert.Equal(1, result.Overview.SampleCompleteCount);
     }
 
     [Fact]
-    public async Task CycleRecordRequiresBothStartAndEndEventsForLifecycleCompleteness()
+    public async Task ProcessExecutionRequiresBothStartAndEndEventsForLifecycleCompleteness()
     {
-        var cycleId = "MISSING-START";
+        var executionId = "MISSING-START";
         var completedAt = DateTimeOffset.Parse("2026-07-20T08:10:00Z");
         var rows = new[]
         {
             Row(1, Event(
-                "cycle.completed",
-                cycleId,
+                "process.execution.completed",
+                executionId,
                 "WP-MISSING-START",
                 "LENS-A",
                 completedAt,
                 "PRESS-01"))
         };
-        var service = new CycleRecordService(
+        var service = new ProcessExecutionService(
             new FakeEventStore(rows),
             new FakeInspectionStore([]),
             new FakeReviewStore(),
@@ -289,26 +289,26 @@ public sealed class QualityWorkflowTests
             new ProcessAnalysisResolver(new FakeProcessConfigurationStore()));
 
         var result = await service.QueryAsync(
-            null, null, null, null, null, null, null, cycleId, null, 100);
+            null, null, null, null, null, null, null, executionId, null, 100);
 
-        var cycle = Assert.Single(result.Data);
-        Assert.False(cycle.HasStarted);
-        Assert.True(cycle.HasCompleted);
-        Assert.False(cycle.LifecycleComplete);
-        Assert.Equal("incomplete", cycle.Status);
-        Assert.Null(cycle.DurationMs);
-        Assert.Contains(cycle.DataIssues, issue => issue.Code == "cycle.start.missing");
+        var execution = Assert.Single(result.Data);
+        Assert.False(execution.HasStarted);
+        Assert.True(execution.HasCompleted);
+        Assert.False(execution.LifecycleComplete);
+        Assert.Equal("incomplete", execution.Status);
+        Assert.Null(execution.DurationMs);
+        Assert.Contains(execution.DataIssues, issue => issue.Code == "execution.start.missing");
         Assert.Equal(1, result.Overview.IncompleteCount);
         Assert.Equal(0, result.Overview.CompletedCount);
     }
 
     [Fact]
-    public async Task CycleRecordPaginationReturnsFilteredTotalBeyondCurrentPage()
+    public async Task ProcessExecutionPaginationReturnsFilteredTotalBeyondCurrentPage()
     {
         var rows = new List<PlatformProductionEvent>();
-        AddCycle(rows, "PAGE-A", "LENS-A", "PRESS-01", DateTimeOffset.Parse("2026-07-20T08:00:00Z"), 1);
-        AddCycle(rows, "PAGE-B", "LENS-A", "PRESS-01", DateTimeOffset.Parse("2026-07-20T09:00:00Z"), 2);
-        var service = new CycleRecordService(
+        AddProcessExecution(rows, "PAGE-A", "LENS-A", "PRESS-01", DateTimeOffset.Parse("2026-07-20T08:00:00Z"), 1);
+        AddProcessExecution(rows, "PAGE-B", "LENS-A", "PRESS-01", DateTimeOffset.Parse("2026-07-20T09:00:00Z"), 2);
+        var service = new ProcessExecutionService(
             new FakeEventStore(rows),
             new FakeInspectionStore([]),
             new FakeReviewStore(),
@@ -320,24 +320,24 @@ public sealed class QualityWorkflowTests
 
         Assert.Single(result.Data);
         Assert.Equal(2, result.Total);
-        Assert.Equal(2, result.Overview.CycleCount);
+        Assert.Equal(2, result.Overview.ExecutionCount);
         Assert.Equal(2, result.Overview.CompletedCount);
     }
 
     [Fact]
-    public async Task CycleRecordsLinkSameBatchAcrossEquipmentAndCanNarrowByEdge()
+    public async Task ProcessExecutionsLinkSameBatchAcrossEquipmentAndCanNarrowByEdge()
     {
         static PlatformProductionEvent TaggedRow(
             long id,
             string type,
-            string cycleId,
-            string workpieceId,
-            string machineId,
+            string executionId,
+            string outputItemId,
+            string equipmentId,
             string edgeId,
             string batch,
             DateTimeOffset at)
         {
-            var productionEvent = Event(type, cycleId, workpieceId, "LENS-A", at, machineId);
+            var productionEvent = Event(type, executionId, outputItemId, "LENS-A", at, equipmentId);
             productionEvent = productionEvent with
             {
                 Context = new Dictionary<string, string>(productionEvent.Context, StringComparer.Ordinal)
@@ -351,14 +351,14 @@ public sealed class QualityWorkflowTests
         var at = DateTimeOffset.Parse("2026-07-20T08:00:00Z");
         var rows = new[]
         {
-            TaggedRow(1, "cycle.started", "RUN-A", "WP-SHARED", "PRESS-01", "EDGE-A", "BATCH-42", at),
-            TaggedRow(2, "cycle.completed", "RUN-A", "WP-SHARED", "PRESS-01", "EDGE-A", "BATCH-42", at.AddMinutes(1)),
-            TaggedRow(3, "cycle.started", "RUN-B", "WP-SHARED", "PRESS-02", "EDGE-B", "BATCH-42", at.AddMinutes(2)),
-            TaggedRow(4, "cycle.completed", "RUN-B", "WP-SHARED", "PRESS-02", "EDGE-B", "BATCH-42", at.AddMinutes(3)),
-            TaggedRow(5, "cycle.started", "RUN-C", "WP-OTHER", "PRESS-03", "EDGE-B", "BATCH-OTHER", at.AddMinutes(4)),
-            TaggedRow(6, "cycle.completed", "RUN-C", "WP-OTHER", "PRESS-03", "EDGE-B", "BATCH-OTHER", at.AddMinutes(5))
+            TaggedRow(1, "process.execution.started", "RUN-A", "WP-SHARED", "PRESS-01", "EDGE-A", "BATCH-42", at),
+            TaggedRow(2, "process.execution.completed", "RUN-A", "WP-SHARED", "PRESS-01", "EDGE-A", "BATCH-42", at.AddMinutes(1)),
+            TaggedRow(3, "process.execution.started", "RUN-B", "WP-SHARED", "PRESS-02", "EDGE-B", "BATCH-42", at.AddMinutes(2)),
+            TaggedRow(4, "process.execution.completed", "RUN-B", "WP-SHARED", "PRESS-02", "EDGE-B", "BATCH-42", at.AddMinutes(3)),
+            TaggedRow(5, "process.execution.started", "RUN-C", "WP-OTHER", "PRESS-03", "EDGE-B", "BATCH-OTHER", at.AddMinutes(4)),
+            TaggedRow(6, "process.execution.completed", "RUN-C", "WP-OTHER", "PRESS-03", "EDGE-B", "BATCH-OTHER", at.AddMinutes(5))
         };
-        var service = new CycleRecordService(
+        var service = new ProcessExecutionService(
             new FakeEventStore(rows),
             new FakeInspectionStore([]),
             new FakeReviewStore(),
@@ -370,7 +370,7 @@ public sealed class QualityWorkflowTests
             externalBatchRef: "BATCH-42");
 
         Assert.Equal(2, batch.Total);
-        Assert.Equal(["PRESS-02", "PRESS-01"], batch.Data.Select(static row => row.MachineId).ToArray());
+        Assert.Equal(["PRESS-02", "PRESS-01"], batch.Data.Select(static row => row.EquipmentId).ToArray());
         Assert.All(batch.Data, static row => Assert.Equal("BATCH-42", row.ExternalBatchRef));
         Assert.Equal(["EDGE-A", "EDGE-B"], batch.Data.SelectMany(static row => row.EdgeIds)
             .Order(StringComparer.Ordinal).ToArray());
@@ -379,26 +379,26 @@ public sealed class QualityWorkflowTests
             null, null, null, null, null, null, null, null, "completed", 100,
             externalBatchRef: "BATCH-42",
             edgeId: "EDGE-B");
-        Assert.Equal("RUN-B", Assert.Single(edge.Data).CorrelationId);
+        Assert.Equal("RUN-B", Assert.Single(edge.Data).ExecutionId);
     }
 
     [Fact]
-    public async Task ContinuousProcessWindowsCompareWithoutCycleCorrelationSemantics()
+    public async Task ContinuousOperatingRegionsCompareWithoutProcessExecutionCorrelationSemantics()
     {
         var rows = new List<PlatformProductionEvent>();
-        AddCycle(rows, "RUN-A", "LENS-A", "PRESS-01", DateTimeOffset.Parse("2026-07-20T08:00:00Z"), 1);
+        AddProcessExecution(rows, "RUN-A", "LENS-A", "PRESS-01", DateTimeOffset.Parse("2026-07-20T08:00:00Z"), 1);
         // A previous product may complete exactly when the selected window starts.
         // Window context must come from its process samples, not that boundary event.
         rows.Add(Row(rows.Count + 1, Event(
-            "cycle.completed", "PRIOR-B", "WP-PRIOR-B", "LENS-B",
+            "process.execution.completed", "PRIOR-B", "WP-PRIOR-B", "LENS-B",
             DateTimeOffset.Parse("2026-07-20T10:00:00Z"), "PRESS-01")));
-        AddCycle(rows, "RUN-B", "LENS-A", "PRESS-01", DateTimeOffset.Parse("2026-07-20T10:00:00Z"), rows.Count + 1);
-        var service = new ProcessWindowComparisonService(
+        AddProcessExecution(rows, "RUN-B", "LENS-A", "PRESS-01", DateTimeOffset.Parse("2026-07-20T10:00:00Z"), rows.Count + 1);
+        var service = new TimeWindowComparisonService(
             new FakeEventStore(rows),
             new ProcessAnalysisResolver(new FakeProcessConfigurationStore()),
             new FakeInspectionStore([]));
 
-        var result = await service.CompareAsync(new ProcessWindowComparisonRequest
+        var result = await service.CompareAsync(new TimeWindowComparisonRequest
         {
             BaselineWindowId = "morning-a",
             Windows =
@@ -415,11 +415,11 @@ public sealed class QualityWorkflowTests
     }
 
     [Fact]
-    public async Task ContinuousProcessWindowsIncludeQualityScopesAndMeasurements()
+    public async Task ContinuousOperatingRegionsIncludeQualityScopesAndMeasurements()
     {
         var rows = new List<PlatformProductionEvent>();
-        AddCycle(rows, "RUN-A", "LENS-A", "PRESS-01", DateTimeOffset.Parse("2026-07-20T08:00:00Z"), 1);
-        AddCycle(rows, "RUN-B", "LENS-A", "PRESS-01", DateTimeOffset.Parse("2026-07-20T10:00:00Z"), rows.Count + 1);
+        AddProcessExecution(rows, "RUN-A", "LENS-A", "PRESS-01", DateTimeOffset.Parse("2026-07-20T08:00:00Z"), 1);
+        AddProcessExecution(rows, "RUN-B", "LENS-A", "PRESS-01", DateTimeOffset.Parse("2026-07-20T10:00:00Z"), rows.Count + 1);
         var quality = Inspection("quality-window-a", "WP-A", "optical.final.manual", false) with
         {
             Measurements =
@@ -439,21 +439,21 @@ public sealed class QualityWorkflowTests
             {
                 ScopeId = "quality-window-a",
                 ScopeType = "analysis-window",
-                WorkpieceId = "WP-A",
+                OutputItemId = "WP-A",
                 SubjectType = "optical-molding-machine",
                 SubjectId = "PRESS-01",
-                ProductSeries = "LENS-A",
+                ProductFamilyCode = "LENS-A",
                 InspectionPlanId = "lens.quality",
                 From = DateTimeOffset.Parse("2026-07-20T08:00:00Z"),
                 To = DateTimeOffset.Parse("2026-07-20T08:10:01Z")
             }
         ];
-        var service = new ProcessWindowComparisonService(
+        var service = new TimeWindowComparisonService(
             new FakeEventStore(rows),
             new ProcessAnalysisResolver(new FakeProcessConfigurationStore()),
             new FakeInspectionStore([quality], scopes));
 
-        var result = await service.CompareAsync(new ProcessWindowComparisonRequest
+        var result = await service.CompareAsync(new TimeWindowComparisonRequest
         {
             BaselineWindowId = "morning-a",
             Windows =
@@ -470,33 +470,33 @@ public sealed class QualityWorkflowTests
         Assert.Equal(0, result.ComparisonWindows.Single().Quality.InspectionCount);
     }
 
-    private static void AddCycle(
+    private static void AddProcessExecution(
         ICollection<PlatformProductionEvent> rows,
-        string cycleId,
-        string productSeries,
-        string machineId,
+        string executionId,
+        string productFamilyCode,
+        string equipmentId,
         DateTimeOffset start,
         int firstIngestId)
     {
         var ingestId = firstIngestId;
         rows.Add(Row(ingestId++, Event(
-            "cycle.started",
-            cycleId,
-            $"WP-{cycleId}",
-            productSeries,
+            "process.execution.started",
+            executionId,
+            $"WP-{executionId}",
+            productFamilyCode,
             start,
-            machineId,
+            equipmentId,
             new Dictionary<string, object?> { ["expectedSampleCount"] = 600 })));
         for (var second = 0; second < 600; second++)
         {
             var phase = second switch { < 90 => "10", < 240 => "20", < 360 => "30", < 480 => "40", _ => "50" };
             var evt = Event(
                 "process.sample",
-                cycleId,
-                $"WP-{cycleId}",
-                productSeries,
+                executionId,
+                $"WP-{executionId}",
+                productFamilyCode,
                 start.AddSeconds(second),
-                machineId,
+                equipmentId,
                 new Dictionary<string, object?>
                 {
                     ["values"] = new Dictionary<string, object?>
@@ -512,21 +512,21 @@ public sealed class QualityWorkflowTests
             rows.Add(Row(ingestId++, evt));
         }
         rows.Add(Row(ingestId, Event(
-            "cycle.completed",
-            cycleId,
-            $"WP-{cycleId}",
-            productSeries,
+            "process.execution.completed",
+            executionId,
+            $"WP-{executionId}",
+            productFamilyCode,
             start.AddMinutes(10),
-            machineId)));
+            equipmentId)));
     }
 
     private static ProductionEvent Event(
         string type,
-        string cycleId,
-        string workpieceId,
-        string productSeries,
+        string executionId,
+        string outputItemId,
+        string productFamilyCode,
         DateTimeOffset occurredAt,
-        string machineId = "PRESS-01",
+        string equipmentId = "PRESS-01",
         IReadOnlyDictionary<string, object?>? data = null)
         => new()
         {
@@ -535,16 +535,16 @@ public sealed class QualityWorkflowTests
             OccurredAt = occurredAt,
             RecordedAt = occurredAt,
             Source = "edge/EDGE-001/PLC-01/test",
-            Subject = new ObjectRef("optical-molding-machine", machineId),
-            CorrelationId = cycleId,
+            Subject = new ObjectRef("optical-molding-machine", equipmentId),
+            ExecutionId = executionId,
             Seq = 1,
             Context = new Dictionary<string, string>
             {
-                ["workpiece_id"] = workpieceId,
-                ["product_series"] = productSeries,
-                ["product_code"] = $"{productSeries}-01",
-                ["recipe_id"] = $"RCP-{productSeries}",
-                ["recipe_version"] = "1",
+                ["output_item_id"] = outputItemId,
+                ["product_family_code"] = productFamilyCode,
+                ["product_code"] = $"{productFamilyCode}-01",
+                ["process_specification_id"] = $"RCP-{productFamilyCode}",
+                ["process_specification_version"] = "1",
                 ["data_model_id"] = "optical-molding",
                 ["data_model_version"] = "1"
             },
@@ -554,12 +554,12 @@ public sealed class QualityWorkflowTests
     private static PlatformProductionEvent Row(long ingestId, ProductionEvent evt)
         => new() { IngestId = ingestId, EdgeId = "EDGE-001", IngestedAt = evt.RecordedAt, Event = evt };
 
-    private static InspectionRecord Inspection(string cycleId, string workpieceId, string definitionCode, bool withAttachment)
+    private static InspectionRecord Inspection(string executionId, string outputItemId, string definitionCode, bool withAttachment)
         => new()
         {
             RecordId = Guid.CreateVersion7(),
-            WorkpieceId = workpieceId,
-            OperationRunId = cycleId,
+            OutputItemId = outputItemId,
+            ExecutionId = executionId,
             DefinitionCode = definitionCode,
             DefinitionVersion = 1,
             MeasuredAt = DateTimeOffset.UtcNow,
@@ -596,7 +596,7 @@ public sealed class QualityWorkflowTests
             if (!string.IsNullOrWhiteSpace(query.EventType)) filtered = filtered.Where(item => item.Event.EventType == query.EventType);
             if (!string.IsNullOrWhiteSpace(query.SubjectType)) filtered = filtered.Where(item => item.Event.Subject.Type == query.SubjectType);
             if (!string.IsNullOrWhiteSpace(query.SubjectId)) filtered = filtered.Where(item => item.Event.Subject.Id == query.SubjectId);
-            if (!string.IsNullOrWhiteSpace(query.CorrelationId)) filtered = filtered.Where(item => item.Event.CorrelationId == query.CorrelationId);
+            if (!string.IsNullOrWhiteSpace(query.ExecutionId)) filtered = filtered.Where(item => item.Event.ExecutionId == query.ExecutionId);
             if (query.From.HasValue) filtered = filtered.Where(item => item.Event.OccurredAt >= query.From.Value);
             if (query.To.HasValue) filtered = filtered.Where(item => item.Event.OccurredAt <= query.To.Value);
             foreach (var pair in query.Context) filtered = filtered.Where(item => item.Event.Context.GetValueOrDefault(pair.Key) == pair.Value);
@@ -617,17 +617,17 @@ public sealed class QualityWorkflowTests
         public Task<IReadOnlyList<InspectionScope>> ListScopesAsync(CancellationToken ct = default)
             => Task.FromResult<IReadOnlyList<InspectionScope>>(scopes ?? []);
         public Task<IReadOnlyList<InspectionRecord>> QueryAsync(InspectionRecordQuery query, CancellationToken ct = default) => Task.FromResult(records);
-        public Task<IReadOnlyList<InspectionRecord>> QueryAllByOperationRunIdsAsync(IReadOnlyCollection<string> operationRunIds, CancellationToken ct = default)
-            => Task.FromResult<IReadOnlyList<InspectionRecord>>(records.Where(item => operationRunIds.Contains(item.OperationRunId)).ToArray());
+        public Task<IReadOnlyList<InspectionRecord>> QueryAllByExecutionIdsAsync(IReadOnlyCollection<string> executionIds, CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<InspectionRecord>>(records.Where(item => executionIds.Contains(item.ExecutionId)).ToArray());
     }
 
     private sealed class FakeReviewStore(IReadOnlyDictionary<Guid, InspectionReview>? latest = null) : IInspectionReviewStore
     {
         private readonly IReadOnlyDictionary<Guid, InspectionReview> _latest = latest ?? new Dictionary<Guid, InspectionReview>();
         public Task InitializeAsync(CancellationToken ct = default) => Task.CompletedTask;
-        public Task<StoreInspectionReviewResult> CreateAsync(CreateInspectionReviewRequest request, string operationRunId, string reviewedBy, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<StoreInspectionReviewResult> CreateAsync(CreateInspectionReviewRequest request, string executionId, string reviewedBy, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<InspectionReview?> GetAsync(Guid reviewId, CancellationToken ct = default) => Task.FromResult(_latest.Values.FirstOrDefault(item => item.ReviewId == reviewId));
-        public Task<IReadOnlyList<InspectionReview>> QueryAsync(Guid? inspectionRecordId, string? operationRunId, int limit, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<InspectionReview>>(_latest.Values.ToArray());
+        public Task<IReadOnlyList<InspectionReview>> QueryAsync(Guid? inspectionRecordId, string? executionId, int limit, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<InspectionReview>>(_latest.Values.ToArray());
         public Task<IReadOnlyDictionary<Guid, InspectionReview>> GetLatestByInspectionRecordIdsAsync(IReadOnlyCollection<Guid> inspectionRecordIds, CancellationToken ct = default)
             => Task.FromResult<IReadOnlyDictionary<Guid, InspectionReview>>(_latest.Where(pair => inspectionRecordIds.Contains(pair.Key)).ToDictionary());
         public Task LogAccessAsync(Guid? inspectionRecordId, Guid? attachmentId, string action, string actor, string? detail, CancellationToken ct = default) => Task.CompletedTask;
@@ -650,7 +650,7 @@ public sealed class QualityWorkflowTests
             Name = "镜片质量方案",
             Status = InspectionPlanStatuses.Published,
             Priority = 10,
-            Scope = new InspectionPlanScope { ProductSeries = "lens-a" },
+            Scope = new InspectionPlanScope { ProductFamilyCode = "lens-a" },
             UpdatedAt = DateTimeOffset.UtcNow,
             Items =
             [
@@ -684,18 +684,18 @@ public sealed class QualityWorkflowTests
             new[] { ("10", "preheat"), ("20", "soak"), ("30", "press"), ("40", "anneal"), ("50", "cool") }
                 .Select(item => new PhaseMapping
                 {
-                    MappingId = $"test-{item.Item1}", RecipeId = "RCP-LENS-A", RecipeStep = item.Item1, PhaseCode = item.Item2
+                    MappingId = $"test-{item.Item1}", ProcessSpecificationId = "RCP-LENS-A", ProcessStep = item.Item1, PhaseCode = item.Item2
                 }).ToArray());
         public Task<PhaseMapping?> GetPhaseMappingAsync(string mappingId, CancellationToken ct = default) => Task.FromResult<PhaseMapping?>(null);
         public Task<bool> DeletePhaseMappingAsync(string mappingId, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<FeatureDefinition> UpsertFeatureDefinitionAsync(FeatureDefinition definition, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<IReadOnlyList<FeatureDefinition>> ListFeatureDefinitionsAsync(CancellationToken ct = default) => Task.FromResult<IReadOnlyList<FeatureDefinition>>(
-            [new() { Code = "comparison.press.load", Name = "压力", PhaseCode = "cycle", Signal = "press.load", Aggregation = "mean", Unit = "kg", Enabled = true, UseInComparison = true }]);
+            [new() { Code = "comparison.press.load", Name = "压力", PhaseCode = "execution", Signal = "press.load", Aggregation = "mean", Unit = "kg", Enabled = true, UseInComparison = true }]);
         public Task<FeatureDefinition?> GetFeatureDefinitionAsync(string code, CancellationToken ct = default) => Task.FromResult<FeatureDefinition?>(null);
         public Task<bool> DeleteFeatureDefinitionAsync(string code, CancellationToken ct = default) => throw new NotSupportedException();
     }
 
-    private sealed class FakeProcessConfigurationStore(RecipeVersion? recipe = null) : IProcessConfigurationStore
+    private sealed class FakeProcessConfigurationStore(ProcessSpecification? processSpecification = null) : IProcessConfigurationStore
     {
         private static readonly ProcessDataModel Model = new()
         {
@@ -707,25 +707,25 @@ public sealed class QualityWorkflowTests
             {
                 DataItems =
                 [
-                    new() { Code = "upper_mold.ir_temperature", SourceField = "上模温度", Unit = "Cel" },
-                    new() { Code = "lower_mold.ir_temperature", SourceField = "下模温度", Unit = "Cel" },
-                    new() { Code = "press.load", SourceField = "压力", Unit = "kg" },
-                    new() { Code = "chamber.vacuum", SourceField = "真空度", Unit = "kPa" },
-                    new() { Code = "servo.position", SourceField = "伺服位置", Unit = "mm" },
-                    new() { Code = "process.stage_number", SourceField = "阶段号", DataType = "integer", Category = "stage", Nullable = false }
+                    new() { Code = "upper_mold.ir_temperature", DisplayName = "上模温度", Unit = "Cel" },
+                    new() { Code = "lower_mold.ir_temperature", DisplayName = "下模温度", Unit = "Cel" },
+                    new() { Code = "press.load", DisplayName = "压力", Unit = "kg" },
+                    new() { Code = "chamber.vacuum", DisplayName = "真空度", Unit = "kPa" },
+                    new() { Code = "servo.position", DisplayName = "伺服位置", Unit = "mm" },
+                    new() { Code = "process.stage_number", DisplayName = "阶段号", DataType = "integer", Category = "stage", Nullable = false }
                 ]
             }
         };
 
         private static readonly ProcessAnalysisPlan Plan = new()
         {
-            PlanId = "cycle-comparison",
+            PlanId = "execution-comparison",
             Version = 1,
-            Name = "周期对比",
+            Name = "过程执行对比",
             Status = ConfigurationStatuses.Published,
             DataModelId = Model.ModelId,
             DataModelVersion = Model.Version,
-            ComparisonKeys = ["product_series"],
+            ComparisonKeys = ["product_family_code"],
             Signals = Model.Acquisition.DataItems.Where(static item => item.Category != "stage").Select(static item =>
                 new AnalysisSignalSelection { DataItemCode = item.Code, Features = ["mean", "min", "max"] }).ToArray()
         };
@@ -742,11 +742,11 @@ public sealed class QualityWorkflowTests
         public Task<IReadOnlyList<ProcessDataModel>> ListDataModelsAsync(CancellationToken ct = default) => Task.FromResult<IReadOnlyList<ProcessDataModel>>([Model]);
         public Task<ProcessDataModel?> GetDataModelAsync(string modelId, int version, CancellationToken ct = default) => Task.FromResult<ProcessDataModel?>(Model);
         public Task<bool> DeleteDataModelAsync(string modelId, int version, CancellationToken ct = default) => throw new NotSupportedException();
-        public Task<RecipeVersion> UpsertRecipeVersionAsync(RecipeVersion value, CancellationToken ct = default) => throw new NotSupportedException();
-        public Task<IReadOnlyList<RecipeVersion>> ListRecipeVersionsAsync(CancellationToken ct = default) => Task.FromResult<IReadOnlyList<RecipeVersion>>([]);
-        public Task<RecipeVersion?> GetRecipeVersionAsync(string recipeId, int version, CancellationToken ct = default)
-            => Task.FromResult(recipe);
-        public Task<bool> DeleteRecipeVersionAsync(string recipeId, int version, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<ProcessSpecification> UpsertProcessSpecificationAsync(ProcessSpecification value, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<IReadOnlyList<ProcessSpecification>> ListProcessSpecificationsAsync(CancellationToken ct = default) => Task.FromResult<IReadOnlyList<ProcessSpecification>>([]);
+        public Task<ProcessSpecification?> GetProcessSpecificationAsync(string processSpecificationId, int version, CancellationToken ct = default)
+            => Task.FromResult(processSpecification);
+        public Task<bool> DeleteProcessSpecificationAsync(string processSpecificationId, int version, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<ProcessAnalysisPlan> UpsertAnalysisPlanAsync(ProcessAnalysisPlan value, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<IReadOnlyList<ProcessAnalysisPlan>> ListAnalysisPlansAsync(CancellationToken ct = default) => Task.FromResult<IReadOnlyList<ProcessAnalysisPlan>>([Plan, WindowPlan]);
         public Task<ProcessAnalysisPlan?> GetAnalysisPlanAsync(string planId, int version, CancellationToken ct = default) => Task.FromResult<ProcessAnalysisPlan?>(Plan);

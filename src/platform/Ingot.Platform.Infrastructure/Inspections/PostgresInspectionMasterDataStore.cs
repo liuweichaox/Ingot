@@ -124,23 +124,23 @@ public sealed class PostgresInspectionMasterDataStore : IInspectionMasterDataSto
         await using var command = _dataSource.CreateCommand(
             """
             INSERT INTO phase_mappings(
-              mapping_id, recipe_id, recipe_version, recipe_template, recipe_step, phase_code, payload, updated_at)
+              mapping_id, process_specification_id, process_specification_version, process_template, process_step, phase_code, payload, updated_at)
             VALUES (
-              @mapping_id, @recipe_id, @recipe_version, @recipe_template, @recipe_step, @phase_code, @payload, @updated_at)
+              @mapping_id, @process_specification_id, @process_specification_version, @process_template, @process_step, @phase_code, @payload, @updated_at)
             ON CONFLICT (mapping_id) DO UPDATE SET
-              recipe_id = EXCLUDED.recipe_id,
-              recipe_version = EXCLUDED.recipe_version,
-              recipe_template = EXCLUDED.recipe_template,
-              recipe_step = EXCLUDED.recipe_step,
+              process_specification_id = EXCLUDED.process_specification_id,
+              process_specification_version = EXCLUDED.process_specification_version,
+              process_template = EXCLUDED.process_template,
+              process_step = EXCLUDED.process_step,
               phase_code = EXCLUDED.phase_code,
               payload = EXCLUDED.payload,
               updated_at = EXCLUDED.updated_at;
             """);
         command.Parameters.AddWithValue("mapping_id", mapping.MappingId);
-        command.Parameters.AddWithValue("recipe_id", mapping.RecipeId);
-        command.Parameters.AddWithValue("recipe_version", (object?)mapping.RecipeVersion ?? DBNull.Value);
-        command.Parameters.AddWithValue("recipe_template", (object?)mapping.RecipeTemplate ?? DBNull.Value);
-        command.Parameters.AddWithValue("recipe_step", mapping.RecipeStep);
+        command.Parameters.AddWithValue("process_specification_id", mapping.ProcessSpecificationId);
+        command.Parameters.AddWithValue("process_specification_version", (object?)mapping.ProcessSpecification ?? DBNull.Value);
+        command.Parameters.AddWithValue("process_template", (object?)mapping.ProcessTemplate ?? DBNull.Value);
+        command.Parameters.AddWithValue("process_step", mapping.ProcessStep);
         command.Parameters.AddWithValue("phase_code", mapping.PhaseCode);
         command.Parameters.AddWithValue("payload", NpgsqlDbType.Jsonb, JsonSerializer.Serialize(mapping, JsonOptions));
         command.Parameters.AddWithValue("updated_at", mapping.UpdatedAt.UtcDateTime);
@@ -149,7 +149,7 @@ public sealed class PostgresInspectionMasterDataStore : IInspectionMasterDataSto
     }
 
     public Task<IReadOnlyList<PhaseMapping>> ListPhaseMappingsAsync(CancellationToken ct = default)
-        => ListAsync<PhaseMapping>("phase_mappings", "ORDER BY recipe_id, recipe_version, recipe_step", ct);
+        => ListAsync<PhaseMapping>("phase_mappings", "ORDER BY process_specification_id, process_specification_version, process_step", ct);
 
     public Task<PhaseMapping?> GetPhaseMappingAsync(string mappingId, CancellationToken ct = default)
         => GetSingleAsync<PhaseMapping>("phase_mappings", "mapping_id", mappingId, ct);

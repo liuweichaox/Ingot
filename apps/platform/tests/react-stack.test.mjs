@@ -57,13 +57,13 @@ test("platform uses React, Tailwind, and Headless UI without Vue or Element Plus
 
 test("all platform routes remain available after the React migration", () => {
   for (const route of [
-    "/research-projects", "/research-assets", "/workbench", "/chat", "/explorer", "/cycles", "/events", "/production/changeover",
+    "/research-projects", "/research-assets", "/workbench", "/chat", "/explorer", "/process-executions", "/events", "/production/changeover",
     "/production/tooling-installations", "/configuration/component-types", "/configuration/components",
     "/configuration/tooling-types", "/configuration/tooling-assemblies", "/inspections",
     "/quality-analysis", "/configuration/inspection-definitions", "/configuration/quality-plans",
     "/comparisons", "/golden-questions", "/data-quality", "/process-improvement", "/configuration/scenario-packages",
     "/configuration/process-analysis-plans", "/configuration/process-data-models",
-    "/configuration/recipe-versions", "/configuration/acquisition-profiles", "/edges",
+    "/configuration/process-specifications", "/configuration/acquisition-profiles", "/edges",
     "/platform-metrics", "/logs", "/identity/users",
   ]) {
     assert.match(app, new RegExp(route.replaceAll("/", "\\/")));
@@ -126,7 +126,7 @@ test("versioned registries use composite row keys and statuses are localized", (
   assert.match(components, /unknown: "待上报"/);
   assert.match(components, /starting: "启动中"/);
   assert.match(components, /applied: "已应用"/);
-  assert.match(components, /"waiting-cycle-boundary": "等待周期边界"/);
+  assert.match(components, /"waiting-execution-boundary": "等待过程执行边界"/);
   assert.match(pages, /title="采集配置应用状态"/);
   assert.match(pages, /desiredConfigurationSetHash/);
   assert.match(pages, /appliedConfigurationSetHash/);
@@ -161,7 +161,7 @@ test("industrial object pages use the event summary contract and show an initial
   assert.match(pages, /objects\.loading && !objects\.data \? <LoadingCard \/>/);
   assert.match(pages, /title="对象目录"/);
   assert.match(pages, /在这个对象中继续工作/);
-  assert.match(pages, /\/cycles\?machineId=/);
+  assert.match(pages, /\/process-executions\?equipmentId=/);
   assert.match(pages, /\/events\?subjectId=/);
   assert.match(pages, /\/quality-analysis\?subjectType=/);
   assert.match(pages, /\/data-quality\?subjectType=/);
@@ -202,8 +202,8 @@ test("forms expose clear labels, edit intent, and required upload fields", () =>
 test("production forms use business fields and paginate long histories", () => {
   assert.match(pages, /function ProductionRecordForm/);
   assert.match(pages, /function isProductionEditorValid/);
-  assert.match(pages, /machineId: "设备编号"/);
-  assert.match(pages, /recipeId: "配方编号"/);
+  assert.match(pages, /equipmentId: "设备编号"/);
+  assert.match(pages, /processSpecificationId: "工艺规范编号"/);
   assert.match(pages, /rows\.slice\(\(page - 1\) \* pageSize, page \* pageSize\)/);
   assert.match(pages, /\["validFrom", "validTo"\]\.includes\(key\)/);
   assert.match(pages, /total=\{rows\.length\}/);
@@ -225,13 +225,13 @@ test("inspection definitions use the characteristic contract and business fields
 });
 
 test("all versioned configuration registries use business forms instead of JSON editors", () => {
-  for (const kind of ["processModel", "recipeVersion", "analysisPlan", "qualityPlan", "scenarioPackage"]) {
+  for (const kind of ["processModel", "processSpecificationVersion", "analysisPlan", "qualityPlan", "scenarioPackage"]) {
     assert.match(pages, new RegExp(`kind: "${kind}"`));
     assert.match(registryEditor, new RegExp(`kind === "${kind}"`));
   }
   assert.match(registryEditor, /function QualityPlanEditor/);
   assert.match(registryEditor, /function ProcessModelEditor/);
-  assert.match(registryEditor, /function RecipeEditor/);
+  assert.match(registryEditor, /function ProcessSpecificationEditor/);
   assert.match(registryEditor, /function AnalysisPlanEditor/);
   assert.match(registryEditor, /function ScenarioPackageEditor/);
   assert.match(registryEditor, /requiresAttachment: item\.requiresAttachment \|\| item\.requiresReview/);

@@ -38,7 +38,7 @@ public sealed class MqttAcquisitionRunner(
             connection.SnapshotMaxAgeSeconds);
         var factory = new MqttClientFactory();
         using var client = factory.CreateMqttClient();
-        string? currentRecipe = null;
+        string? currentProcessSpecification = null;
         string? currentSnapshotFingerprint = null;
         string? lastIncompleteReason = null;
         var lifecycle = new AcquisitionLifecycleTracker();
@@ -102,7 +102,7 @@ public sealed class MqttAcquisitionRunner(
                         status.RecordSuccess(
                             configurationKey,
                             DateTimeOffset.UtcNow,
-                            currentRecipe,
+                            currentProcessSpecification,
                             incrementSample: false);
                         return;
                     }
@@ -111,17 +111,17 @@ public sealed class MqttAcquisitionRunner(
                         snapshot!.RootElement,
                         jsonOptions,
                         normalizedSource,
-                        currentRecipe,
+                        currentProcessSpecification,
                         topicSnapshots);
                     // MQTT 由设备推送，没有固定采样周期，因此不向周期跟踪器提供轮询间隔。
                     var events = lifecycle.Track(mapped, deployment.Profile.Lifecycle, 0);
                     await sink.EmitBatchAsync(events, ct).ConfigureAwait(false);
-                    status.RecordCycleState(configurationKey, lifecycle.IsRunActive);
-                    currentRecipe = mapped.RecipeIdentity;
+                    status.RecordProcessExecutionState(configurationKey, lifecycle.IsRunActive);
+                    currentProcessSpecification = mapped.ProcessSpecificationIdentity;
                     currentSnapshotFingerprint = fingerprint;
                 }
 
-                status.RecordSuccess(configurationKey, DateTimeOffset.UtcNow, currentRecipe);
+                status.RecordSuccess(configurationKey, DateTimeOffset.UtcNow, currentProcessSpecification);
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {

@@ -110,9 +110,9 @@ public sealed class EventSinkTests
 
     private static ProductionEvent CreateEvent()
         => ProductionEvent.Create(
-            "cycle.completed",
+            "process.execution.completed",
             DateTimeOffset.UtcNow,
-            "edge/EDGE-01/SOURCE-01/cycle",
+            "edge/EDGE-01/SOURCE-01/execution",
             new ObjectRef("equipment", "POL-03"));
 
     private sealed class StubEventLog : IEventLog
