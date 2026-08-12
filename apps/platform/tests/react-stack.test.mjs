@@ -189,8 +189,8 @@ test("versioned tooling remains unique and the legacy improvement workspace is a
 test("forms expose clear labels, edit intent, and required upload fields", () => {
   assert.match(pages, /const chatModeLabels = \{/);
   assert.match(pages, /quick: "快速分析"/);
-  assert.match(pages, /<Field label="调查问题">/);
-  assert.match(pages, /<Field label="分析模式">/);
+  assert.match(pages, /<Field label="调查问题"/);
+  assert.match(pages, /<Field label="分析方式"/);
   assert.match(pages, /setEditorMode\(row \? \(section === "type" \? "version" : "edit"\) : "create"\)/);
   assert.match(pages, /editorMode === "create" \? resource\.createLabel/);
   assert.match(researchProjects, /<Field label="项目名称">/);

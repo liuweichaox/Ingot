@@ -312,15 +312,22 @@ test("engineer golden questions freeze reviewed evidence and evaluate actual age
   assert.doesNotMatch(page, /JSON\.stringify\(form/);
 });
 
-test("Chat renders structured answers, exposes progress and cancellation, and keeps recent history", () => {
+test("Chat renders structured answers, exposes progress and cancellation, and keeps project history", () => {
   assert.match(pages, /\/api\/v1\/chat\/capabilities/);
   assert.match(pages, /\/api\/v1\/chat\/runs/);
   assert.match(pages, /streamSse/);
   assert.match(pages, /function ChatAnswer/);
   assert.match(pages, /answer\.summary/);
   assert.match(pages, /取消分析/);
-  assert.match(pages, /最近问答/);
+  assert.match(pages, /本项目调查记录/);
   assert.match(pages, /capabilitiesLoading/);
+  assert.match(pages, /当前分析范围/);
+  assert.match(pages, /提出调查问题/);
+  assert.match(pages, /结果与证据/);
+  assert.match(pages, /scopedHistory/);
+  assert.match(pages, /item\.pageContext\?\.id === projectId/);
+  assert.match(pages, /不执行设备写入或自动工艺变更/);
+  assert.doesNotMatch(pages, /min-h-\[420px\]/);
   assert.doesNotMatch(pages, /\{run\.answer\}<\/div>/);
   assert.match(http, /Last-Event-ID/);
   assert.match(http, /平台服务暂不可用/);

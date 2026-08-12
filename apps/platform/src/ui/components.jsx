@@ -311,7 +311,11 @@ export function DataTable({ columns, rows, keyField = "id", getRowKey, onRowClic
               <th
                 key={column.id ?? `${column.key}:${columnIndex}`}
                 scope="col"
-                className={cx("whitespace-nowrap px-4 py-3 font-semibold sm:px-5", column.align === "right" && "text-right")}
+                className={cx(
+                  "whitespace-nowrap px-4 py-3 font-semibold sm:px-5",
+                  column.label === "操作" && "w-px",
+                  column.align === "right" && "text-right",
+                )}
               >
                 {column.label}
               </th>
@@ -327,8 +331,8 @@ export function DataTable({ columns, rows, keyField = "id", getRowKey, onRowClic
                 onRowClick && "cursor-pointer hover:bg-blue-50/50 focus-visible:bg-blue-50 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-blue-600",
               )}
               onClick={onRowClick ? () => onRowClick(row) : undefined}
-              // 可点击的行必须能用键盘到达并触发；保留 <tr> 原生 row 语义，
-              // 不改 role，以免破坏屏幕阅读器对表格结构的解读
+              // Interactive rows must remain keyboard reachable while preserving
+              // the native table-row semantics used by assistive technologies.
               tabIndex={onRowClick ? 0 : undefined}
               onKeyDown={onRowClick ? event => {
                 if (event.key === "Enter" || event.key === " ") {
@@ -343,6 +347,7 @@ export function DataTable({ columns, rows, keyField = "id", getRowKey, onRowClic
                   className={cx(
                     "max-w-sm px-4 py-3.5 align-middle leading-5 sm:px-5",
                     (column.primary || columnIndex === 0) && "font-medium text-slate-900",
+                    column.label === "操作" && "w-px min-w-max whitespace-nowrap [&_*]:whitespace-nowrap [&>div]:flex-nowrap",
                     column.align === "right" && "text-right",
                   )}
                 >

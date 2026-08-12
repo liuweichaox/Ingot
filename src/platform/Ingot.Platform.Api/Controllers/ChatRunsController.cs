@@ -72,6 +72,7 @@ public sealed class ChatRunsController(
             {
                 RunId = run.RunId,
                 Question = run.Question,
+                PageContext = run.PageContext,
                 EntryPoint = ProductEntryPoints.Chat,
                 Purpose = RunPurposes.ReadOnlyAnalysis,
                 Mode = run.Mode,

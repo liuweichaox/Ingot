@@ -372,6 +372,8 @@ public sealed record ChatRunListItem
 
     public required string Question { get; init; }
 
+    public PageContextRef? PageContext { get; init; }
+
     public required string EntryPoint { get; init; }
 
     public required string Purpose { get; init; }
@@ -416,6 +418,8 @@ public sealed record AgentRunListItem
     public required string RunId { get; init; }
 
     public required string Question { get; init; }
+
+    public PageContextRef? PageContext { get; init; }
 
     public required string EntryPoint { get; init; }
 

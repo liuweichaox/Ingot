@@ -144,6 +144,7 @@ public sealed class AgentRuntime : IAgentRuntime
             {
                 RunId = run.RunId,
                 Question = run.Question,
+                PageContext = run.PageContext,
                 EntryPoint = run.EntryPoint,
                 Purpose = run.Purpose,
                 Mode = run.Mode,
