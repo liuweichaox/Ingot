@@ -39,8 +39,8 @@ CREATE TABLE IF NOT EXISTS research_experiments (
 CREATE INDEX IF NOT EXISTS idx_research_experiments_project
   ON research_experiments(project_id, updated_at DESC);
 
-CREATE TABLE IF NOT EXISTS research_operating_regions (
-  operating_region_id UUID PRIMARY KEY,
+CREATE TABLE IF NOT EXISTS research_process_windows (
+  window_id UUID PRIMARY KEY,
   project_id UUID NOT NULL REFERENCES process_research_projects(project_id),
   status TEXT NOT NULL,
   payload JSONB NOT NULL,
@@ -49,8 +49,8 @@ CREATE TABLE IF NOT EXISTS research_operating_regions (
   CHECK (status IN ('candidate', 'validated', 'superseded'))
 );
 
-CREATE INDEX IF NOT EXISTS idx_research_operating_regions_project
-  ON research_operating_regions(project_id, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_research_process_windows_project
+  ON research_process_windows(project_id, updated_at DESC);
 
 CREATE TABLE IF NOT EXISTS research_knowledge_claims (
   claim_id UUID PRIMARY KEY,

@@ -19,21 +19,21 @@ CREATE TABLE IF NOT EXISTS data_object_summaries (
 CREATE TABLE IF NOT EXISTS data_object_operation_keys (
   subject_type   TEXT NOT NULL,
   subject_id     TEXT NOT NULL,
-  execution_id TEXT NOT NULL,
-  PRIMARY KEY (subject_type, subject_id, execution_id)
+  correlation_id TEXT NOT NULL,
+  PRIMARY KEY (subject_type, subject_id, correlation_id)
 );
 
-INSERT INTO data_object_operation_keys(subject_type, subject_id, execution_id)
-SELECT DISTINCT subject_type, subject_id, execution_id
+INSERT INTO data_object_operation_keys(subject_type, subject_id, correlation_id)
+SELECT DISTINCT subject_type, subject_id, correlation_id
 FROM production_events
-WHERE execution_id IS NOT NULL
+WHERE correlation_id IS NOT NULL
 ON CONFLICT DO NOTHING;
 
 WITH aggregate_rows AS (
   SELECT subject_type, subject_id,
          count(*) AS event_count,
          count(*) FILTER (WHERE event_type = 'process.sample') AS sample_count,
-         count(DISTINCT execution_id) AS operation_count,
+         count(DISTINCT correlation_id) AS operation_count,
          min(occurred_at) AS first_observed_at,
          max(occurred_at) AS last_observed_at,
          max(occurred_at) FILTER (WHERE event_type = 'process.sample') AS last_sample_at
