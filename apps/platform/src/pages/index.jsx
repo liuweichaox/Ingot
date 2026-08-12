@@ -8,6 +8,7 @@ export { ProductionSetupPage } from "./ManufacturingPages";
 export { InspectionsPage, QualityAnalysisPage } from "./InspectionPages";
 export { ExecutionComparisonPage, DataQualityPage } from "./AnalysisPages";
 export {
+  ConfigurationHubPage,
   ProcessDataModelsPage,
   ScenarioPackagesPage,
   ProcessSpecificationsPage,

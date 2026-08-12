@@ -6,7 +6,7 @@ import { formatTime, LoadingCard } from "./shared";
 
 const productionResources = {
   context: {
-    title: "运行准备", endpoint: "/api/v1/production-contexts", key: "contextId",
+    title: "生产上下文", endpoint: "/api/v1/production-contexts", key: "contextId",
     description: "为设备选择接下来生产的产品、工艺规范和已装工装，保存后对新运行生效。",
     drawerDescription: "按顺序确认设备、产品、工艺规范和工装；保存后只影响新开始的生产运行。",
     columns: [["equipmentId", "设备"], ["productCode", "产品"], ["processSpecificationId", "工艺规范"], ["validFrom", "生效时间"], ["validTo", "结束时间"]],
@@ -470,7 +470,7 @@ function ToolingRevisionComposition({ revision, template, components, componentT
   );
 }
 
-function ToolingAssembliesPage() {
+function ToolingAssembliesPage({ canWrite = true }) {
   const assembliesApi = useApi("/api/v1/tooling-assemblies");
   const revisionsApi = useApi("/api/v1/tooling-assemblies/revisions");
   const templatesApi = useApi("/api/v1/tooling-types");
@@ -577,8 +577,9 @@ function ToolingAssembliesPage() {
     <Page
       title="工装总成"
       description="一个工装总成拥有稳定身份；每次组件更换形成新的不可变配置版本，生产运行自动保留当时的真实组成。"
-      actions={<Button variant="primary" onClick={() => { setActionError(""); setAssetOpen(true); }}>新建工装总成</Button>}
+      actions={canWrite ? <Button variant="primary" onClick={() => { setActionError(""); setAssetOpen(true); }}>新建工装总成</Button> : undefined}
     >
+      {!canWrite && <Alert title="当前为只读视图">你可以核对工装结构和历史版本；新建总成与更换组件由工艺工程师或平台管理员完成。</Alert>}
       {(errors.length > 0 || actionError) && <Alert tone="danger">{errors[0] || actionError}</Alert>}
       <WorkflowGuide
         title="工装总成数据的正确关系"
@@ -603,7 +604,7 @@ function ToolingAssembliesPage() {
                 key={assembly.toolingAssemblyId}
                 title={assembly.name}
                 description={`${assembly.toolingAssemblyId} · ${template?.name || assembly.toolingTypeCode}`}
-                actions={<Button onClick={() => openRevision(assembly)}>{latest ? "更换组件并创建新版本" : "建立首个配置版本"}</Button>}
+                actions={canWrite ? <Button onClick={() => openRevision(assembly)}>{latest ? "更换组件并创建新版本" : "建立首个配置版本"}</Button> : undefined}
               >
                 <ToolingRevisionComposition
                   revision={latest}
@@ -683,10 +684,10 @@ function ToolingAssembliesPage() {
   );
 }
 
-export function ProductionSetupPage({ section }) {
+export function ProductionSetupPage({ section, canWrite = true }) {
   return section === "assembly"
-    ? <ToolingAssembliesPage />
-    : <ProductionRecordsPage key={section} section={section} />;
+    ? <ToolingAssembliesPage canWrite={canWrite} />
+    : <ProductionRecordsPage key={section} section={section} canWrite={canWrite} />;
 }
 
 const productionAttributeLabels = {
@@ -714,7 +715,7 @@ function ProductionAttributeSummary({ value }) {
   );
 }
 
-function ProductionRecordsPage({ section }) {
+function ProductionRecordsPage({ section, canWrite = true }) {
   const resource = productionResources[section];
   const { data, loading, error, reload } = useApi(resource.endpoint);
   const rows = extractRows(data);
@@ -795,6 +796,7 @@ function ProductionRecordsPage({ section }) {
     try {
       await deleteJson(resource.deleteUrl(row));
       await reload();
+      notify(`${resource.title}记录已删除。`);
     } catch (requestError) {
       setActionError(requestError.message);
     }
@@ -816,7 +818,7 @@ function ProductionRecordsPage({ section }) {
                     : key === "attributes" ? value => <ProductionAttributeSummary value={value} />
               : undefined,
     })),
-    {
+    ...(canWrite ? [{
       key: "_actions",
       label: "操作",
       align: "right",
@@ -827,11 +829,12 @@ function ProductionRecordsPage({ section }) {
           {resource.deleteUrl && <Button variant="ghost" className="px-2 text-rose-700" onClick={() => remove(row)}>删除</Button>}
         </div>
       ),
-    },
+    }] : []),
   ];
 
   return (
-    <Page className="mx-auto max-w-7xl" title={resource.title} description={resource.description} actions={section === "context" ? undefined : <Button variant="primary" onClick={() => openEditor()}>{resource.createLabel}</Button>}>
+    <Page className="mx-auto max-w-7xl" title={resource.title} description={resource.description} actions={canWrite && section !== "context" ? <Button variant="primary" onClick={() => openEditor()}>{resource.createLabel}</Button> : undefined}>
+      {!canWrite && <Alert title="当前为只读视图">你可以核对当前配置和历史记录；新增、切换、编辑与删除由工艺工程师或平台管理员完成。</Alert>}
       {(error || (!open && actionError)) && <Alert tone="danger">{error || actionError}</Alert>}
       {loading && !data ? <LoadingCard /> : (
         <>
@@ -849,7 +852,7 @@ function ProductionRecordsPage({ section }) {
               <Card
                 title="当前生效配置"
                 description={activeRows.length ? `${activeRows.length} 台设备已准备好开始新运行` : "目前没有正在生效的生产配置"}
-                actions={<Button variant="primary" onClick={() => openEditor()}>{activeRows.length ? "切换产品或工艺规范" : "开始配置"}</Button>}
+                actions={canWrite ? <Button variant="primary" onClick={() => openEditor()}>{activeRows.length ? "切换产品或工艺规范" : "开始配置"}</Button> : undefined}
               >
                 {activeRows.length ? (
                   <div className="grid gap-3 lg:grid-cols-2">

@@ -1,40 +1,132 @@
 import { useState } from "react";
+import { Link } from "react-router";
 import { deleteJson, postJson } from "../api/http";
 import { createRegistryBusinessForm, RegistryBusinessEditor, registryBusinessPayload, registryBusinessValidation } from "../components/RegistryBusinessEditor";
 import { extractRows, useApi } from "../hooks/useApi";
 import { Alert, Button, Card, DataTable, Drawer, Field, Input, Page, Select, StatusBadge, Textarea, WorkflowGuide, notify, useConfirmDialog } from "../ui/components";
 import { formatTime, emptyInspectionCharacteristic, inspectionDefinitionForm, inspectionDefinitionPayload, inspectionDefinitionValidation, inspectionInputTypes, LoadingCard } from "./shared";
 
+const configurationJourney = [
+  {
+    number: "1", title: "定义数据标准", description: "先说明设备数据代表什么，再维护允许使用的工艺参数版本。",
+    links: [["/configuration/process-data-models", "工艺数据模型"], ["/configuration/process-specifications", "工艺规范"]],
+  },
+  {
+    number: "2", title: "连接现场数据", description: "登记现场节点，把 PLC、仪器或系统点位映射到标准数据项。",
+    links: [["/edges", "现场节点"], ["/configuration/ingestion-tasks", "设备接入"]],
+  },
+  {
+    number: "3", title: "定义判断规则", description: "决定哪些运行可以比较、质量如何判定，以及缺什么数据时应拒绝分析。",
+    links: [["/configuration/process-analysis-plans", "运行分析方案"], ["/configuration/inspection-definitions", "检测定义"], ["/configuration/quality-plans", "质量方案"]],
+  },
+  {
+    number: "4", title: "建立工装结构", description: "需要区分工装差异时，再定义组件、装配模板和实际工装总成。",
+    links: [["/configuration/component-types", "组件分类"], ["/configuration/tooling-assemblies", "工装总成"]],
+  },
+  {
+    number: "5", title: "组合并发布", description: "最后把已准备好的数据、接入、分析、质量和上下文策略锁定为可追溯版本。",
+    links: [["/configuration/scenario-packages", "工艺配置方案"]],
+  },
+];
+
+export function ConfigurationHubPage({ canWrite = true }) {
+  const modelResponse = useApi("/api/v1/process-data-models");
+  const specificationResponse = useApi("/api/v1/process-specifications");
+  const ingestionResponse = useApi("/api/v1/ingestion-tasks");
+  const analysisResponse = useApi("/api/v1/process-analysis-plans");
+  const definitionResponse = useApi("/api/v1/inspection-definitions");
+  const qualityResponse = useApi("/api/v1/inspection-plans");
+  const scenarioResponse = useApi("/api/v1/scenario-packages");
+  const readiness = [
+    ["数据标准", extractRows(modelResponse.data).some(item => item.status === "published") && extractRows(specificationResponse.data).some(item => item.status === "published"), "需要已发布的数据模型和工艺规范"],
+    ["现场接入", extractRows(ingestionResponse.data).some(item => item.status === "published"), "需要至少一个已发布设备接入任务"],
+    ["分析规则", extractRows(analysisResponse.data).some(item => item.status === "published"), "需要已发布的运行分析方案"],
+    ["质量规则", extractRows(definitionResponse.data).length > 0 && extractRows(qualityResponse.data).some(item => item.status === "published"), "需要检测定义和已发布质量方案"],
+    ["组合发布", extractRows(scenarioResponse.data).some(item => item.status === "published"), "最终发布工艺配置方案"],
+  ];
+  const readinessLoading = [modelResponse, specificationResponse, ingestionResponse, analysisResponse, definitionResponse, qualityResponse, scenarioResponse].some(item => item.loading && !item.data);
+  const readinessError = [modelResponse, specificationResponse, ingestionResponse, analysisResponse, definitionResponse, qualityResponse, scenarioResponse].find(item => item.error)?.error;
+  return (
+    <Page title="配置总览" description="从现场数据到可用分析，按依赖顺序完成配置；不需要猜应该先打开哪个菜单。">
+      <Alert tone="info" title="工艺配置方案是最后一步，不是起点">
+        先完成数据标准、设备接入、分析与质量规则；最终方案只负责组合并冻结这些已发布版本。
+      </Alert>
+      {!canWrite && <Alert title="当前为只读配置视图">你可以核对已发布规则和依赖关系；创建、修改与发布由工艺工程师或平台管理员完成。</Alert>}
+      <Card title="当前准备度" description="按已发布版本判断；草稿不会被生产运行或分析使用。">
+        {readinessError && <Alert tone="warning">部分准备度暂时无法读取：{readinessError}</Alert>}
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          {readiness.map(([title, ready, hint]) => (
+            <div key={title} className={`rounded-xl border p-4 ${ready ? "border-emerald-200 bg-emerald-50" : "border-amber-200 bg-amber-50"}`}>
+              <p className="flex items-center justify-between gap-2 font-semibold text-slate-950"><span>{title}</span><span className={`text-xs ${ready ? "text-emerald-700" : "text-amber-700"}`}>{readinessLoading ? "检查中" : ready ? "已准备" : "待完成"}</span></p>
+              <p className="mt-2 text-xs leading-5 text-slate-600">{hint}</p>
+            </div>
+          ))}
+        </div>
+      </Card>
+      <Card title="推荐配置顺序" description="首次接入新工艺时按 1–5 推进；后续变更只需更新受影响的版本。">
+        <ol className="grid gap-3 md:grid-cols-2 2xl:grid-cols-5">
+          {configurationJourney.map(step => (
+            <li key={step.number} className="flex flex-col rounded-xl border border-slate-200 bg-white p-4">
+              <span className="grid size-7 place-items-center rounded-full bg-blue-600 text-sm font-semibold text-white">{step.number}</span>
+              <h3 className="mt-3 font-semibold text-slate-950">{step.title}</h3>
+              <p className="mt-1 flex-1 text-sm leading-6 text-slate-600">{step.description}</p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {step.links.map(([to, label]) => <Link key={to} to={to} className="text-sm font-medium text-blue-700 hover:text-blue-900">{label} →</Link>)}
+              </div>
+            </li>
+          ))}
+        </ol>
+      </Card>
+      <Card title="运行上下文从哪里来" description="上下文策略只规定字段如何使用，不在配置方案里制造数据。">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          {[
+            ["设备与运行身份", "由设备事件、现场节点和设备接入映射提供。", "/configuration/ingestion-tasks", "检查设备接入"],
+            ["产品、工艺、材料与批次", "由生产准备或 MES 写入不可变生产上下文。", "/production/changeover", "检查生产上下文"],
+            ["实际装机工装", "由工装装卸记录在运行开始时绑定。", "/production/tooling-installations", "检查工装装卸"],
+            ["字段覆盖率", "由历史已完成运行计算；覆盖不足时可禁止分析或建模。", "/data-quality", "检查数据可信度"],
+          ].map(([title, description, to, action]) => (
+            <div key={title} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <h3 className="font-semibold text-slate-900">{title}</h3>
+              <p className="mt-1 min-h-12 text-sm leading-6 text-slate-600">{description}</p>
+              <Link to={to} className="mt-3 inline-flex text-sm font-medium text-blue-700 hover:text-blue-900">{action} →</Link>
+            </div>
+          ))}
+        </div>
+      </Card>
+    </Page>
+  );
+}
+
 const registryPages = {
   scenarios: {
     kind: "scenarioPackage",
-    title: "工艺配置", description: "版本化组合工艺模型、设备映射、分析、质量、上下文策略和约束。", endpoint: "/api/v1/scenario-packages", key: "packageId",
+    title: "工艺配置方案", description: "版本化组合工艺数据、设备接入、运行分析、质量规则、上下文策略和安全约束。", endpoint: "/api/v1/scenario-packages", key: "packageId",
     columns: [["packageId", "场景"], ["version", "版本"], ["name", "名称"], ["status", "状态"], ["updatedAt", "更新时间"]],
-    createLabel: "创建工艺配置",
+    createLabel: "创建工艺配置方案",
     template: { packageId: "", version: 1, name: "", description: "", status: "draft", dataModelId: "", dataModelVersion: 1, analysisPlanId: "", analysisPlanVersion: 1, ingestionTasks: [], qualityPlan: null, contextFields: [], constraints: [], knowledgeAssets: [], terminology: {}, updatedAt: "" },
     deleteUrl: value => `/api/v1/scenario-packages/${encodeURIComponent(value.packageId)}/${value.version}`,
   },
   processModels: {
     kind: "processModel",
-    title: "工艺模型", description: "定义工艺变量、阶段号和控制参数结构，不包含 PLC 地址和采集频率。", endpoint: "/api/v1/process-data-models", key: "modelId",
+    title: "工艺数据模型", description: "定义工艺变量、阶段号和控制参数结构，不包含 PLC 地址和采集频率。", endpoint: "/api/v1/process-data-models", key: "modelId",
     columns: [["modelId", "模型"], ["version", "版本"], ["name", "名称"], ["status", "状态"], ["updatedAt", "更新时间"]],
-    createLabel: "创建工艺模型",
+    createLabel: "创建工艺数据模型",
     template: { modelId: "", version: 1, name: "", description: "", status: "draft", acquisition: { dataItems: [] }, controlParameters: [], updatedAt: "" },
     deleteUrl: value => `/api/v1/process-data-models/${encodeURIComponent(value.modelId)}/${value.version}`,
   },
   processSpecifications: {
     kind: "processSpecificationVersion",
-    title: "工艺规范版本", description: "维护引用工艺数据模型的完整参数值。", endpoint: "/api/v1/process-specifications", key: "processSpecificationId",
+    title: "工艺规范", description: "维护引用工艺数据模型的完整参数版本。", endpoint: "/api/v1/process-specifications", key: "processSpecificationId",
     columns: [["processSpecificationId", "工艺规范"], ["version", "版本"], ["name", "名称"], ["status", "状态"], ["updatedAt", "更新时间"]],
-    createLabel: "创建工艺规范版本",
+    createLabel: "创建工艺规范",
     template: { processSpecificationId: "", version: 1, name: "", basedOnVersion: null, dataModelId: "", dataModelVersion: 1, status: "draft", contextSelector: {}, values: [], updatedAt: "" },
     deleteUrl: value => `/api/v1/process-specifications/${encodeURIComponent(value.processSpecificationId)}/${value.version}`,
   },
   plans: {
     kind: "analysisPlan",
-    title: "分析模型", description: "版本化定义分析范围、阶段对齐、质量分组和数据项。", endpoint: "/api/v1/process-analysis-plans", key: "planId",
+    title: "运行分析方案", description: "版本化定义同类比较条件、阶段对齐、质量分组和分析数据项。", endpoint: "/api/v1/process-analysis-plans", key: "planId",
     columns: [["planId", "模型"], ["version", "版本"], ["name", "名称"], ["status", "状态"], ["updatedAt", "更新时间"]],
-    createLabel: "创建分析模型",
+    createLabel: "创建运行分析方案",
     template: { planId: "", version: 1, name: "", description: "", status: "draft", dataModelId: "", dataModelVersion: 1, analysisScope: "production-execution", alignmentMode: "stage-relative", cohortDimension: "", comparisonKeys: ["product_family_code"], contextSelector: {}, signals: [], updatedAt: "" },
     deleteUrl: value => `/api/v1/process-analysis-plans/${encodeURIComponent(value.planId)}/${value.version}`,
   },
@@ -57,7 +149,7 @@ const registryPages = {
   },
 };
 
-function RegistryPage({ definition }) {
+function RegistryPage({ definition, canWrite = true }) {
   const { data, loading, error, reload } = useApi(definition.endpoint);
   const rows = extractRows(data);
   const [open, setOpen] = useState(false);
@@ -147,14 +239,17 @@ function RegistryPage({ definition }) {
 
   async function remove(row) {
     if (!await confirm({
-      title: `删除草稿 ${row[definition.key]} v${row.version ?? 1}`,
-      description: "草稿删除后无法恢复；已发布版本不会在这里被删除。",
+      title: `${isInspectionDefinition ? "删除未引用版本" : "删除草稿"} ${row[definition.key]} v${row.version ?? 1}`,
+      description: isInspectionDefinition
+        ? "仅未被质量方案引用的检测定义版本可以删除；若已有引用，系统会拒绝并保留数据。"
+        : "草稿删除后无法恢复；已发布版本不会在这里被删除。",
       confirmLabel: "确认删除",
       tone: "danger",
     })) return;
     try {
       await deleteJson(definition.deleteUrl(row));
       await reload();
+      notify(isInspectionDefinition ? "未引用的检测定义版本已删除。" : `${definition.title}草稿已删除。`);
     } catch (requestError) {
       setEditorError(requestError.message);
     }
@@ -172,24 +267,25 @@ function RegistryPage({ definition }) {
       render: (_value, row) => (
         <div className="flex min-w-max flex-wrap gap-1" onClick={event => event.stopPropagation()}>
           <Button variant="ghost" className="px-2" onClick={() => openMaintain(row)}>
-            {isInspectionDefinition || (hasBusinessEditor && row.status !== "draft") ? "查看" : "维护"}
+            {!canWrite || isInspectionDefinition || (hasBusinessEditor && row.status !== "draft") ? "查看" : "维护"}
           </Button>
-          <Button variant="ghost" className="px-2" onClick={() => openNewVersion(row)}>沿用为新版本</Button>
-          {!isInspectionDefinition && row.status !== "retired" && <Button variant="ghost" className="px-2 text-amber-700" onClick={() => retire(row)}>停用</Button>}
-          {!isInspectionDefinition && row.status === "draft" && <Button variant="ghost" className="px-2 text-rose-700" onClick={() => remove(row)}>删除草稿</Button>}
+          {canWrite && <Button variant="ghost" className="px-2" onClick={() => openNewVersion(row)}>沿用为新版本</Button>}
+          {canWrite && !isInspectionDefinition && row.status === "published" && <Button variant="ghost" className="px-2 text-amber-700" onClick={() => retire(row)}>停用</Button>}
+          {canWrite && (isInspectionDefinition || row.status === "draft") && <Button variant="ghost" className="px-2 text-rose-700" onClick={() => remove(row)}>{isInspectionDefinition ? "删除未引用版本" : "删除草稿"}</Button>}
         </div>
       ),
     },
   ];
   const businessReadOnly = hasBusinessEditor && mode === "maintain" && businessForm.status !== "draft";
-  const editorReadOnly = mode === "maintain" && (isInspectionDefinition || businessReadOnly);
+  const editorReadOnly = !canWrite || (mode === "maintain" && (isInspectionDefinition || businessReadOnly));
 
   return (
     <Page
       title={definition.title}
       description={definition.description}
-      actions={<Button variant="primary" onClick={openCreate}>{definition.createLabel || "创建新版本"}</Button>}
+      actions={canWrite ? <Button variant="primary" onClick={openCreate}>{definition.createLabel || "创建新版本"}</Button> : undefined}
     >
+      {!canWrite && <Alert title="当前为只读视图">你可以核对已发布版本及其业务配置；创建、修改、发布与删除由工艺工程师或平台管理员完成。</Alert>}
       {definition.kind === "inspectionDefinition" && (
         <WorkflowGuide
           title="先定义检测内容，再组成质量方案"
@@ -244,7 +340,7 @@ function RegistryPage({ definition }) {
           <InspectionDefinitionEditor
             form={inspectionForm}
             onChange={setInspectionForm}
-            readOnly={mode === "maintain"}
+            readOnly={editorReadOnly}
             validation={inspectionValidation}
             lockIdentity={mode !== "create"}
           />
@@ -367,11 +463,11 @@ function InspectionDefinitionEditor({ form, onChange, readOnly, validation, lock
   );
 }
 
-export const ProcessDataModelsPage = () => <RegistryPage definition={registryPages.processModels} />;
-export const ScenarioPackagesPage = () => <RegistryPage definition={registryPages.scenarios} />;
-export const ProcessSpecificationsPage = () => <RegistryPage definition={registryPages.processSpecifications} />;
-export const ProcessAnalysisPlansPage = () => <RegistryPage definition={registryPages.plans} />;
-export const InspectionDefinitionsPage = () => <RegistryPage definition={registryPages.definitions} />;
-export const QualityPlansPage = () => <RegistryPage definition={registryPages.plansQuality} />;
+export const ProcessDataModelsPage = ({ canWrite = true }) => <RegistryPage definition={registryPages.processModels} canWrite={canWrite} />;
+export const ScenarioPackagesPage = ({ canWrite = true }) => <RegistryPage definition={registryPages.scenarios} canWrite={canWrite} />;
+export const ProcessSpecificationsPage = ({ canWrite = true }) => <RegistryPage definition={registryPages.processSpecifications} canWrite={canWrite} />;
+export const ProcessAnalysisPlansPage = ({ canWrite = true }) => <RegistryPage definition={registryPages.plans} canWrite={canWrite} />;
+export const InspectionDefinitionsPage = ({ canWrite = true }) => <RegistryPage definition={registryPages.definitions} canWrite={canWrite} />;
+export const QualityPlansPage = ({ canWrite = true }) => <RegistryPage definition={registryPages.plansQuality} canWrite={canWrite} />;
 // 设备接入已迁移到 src/acquisition/IngestionTaskPage.jsx：
 // 协议差异由描述符注册表承载，配置页是独立的左右分栏页面而不是通用注册表抽屉。

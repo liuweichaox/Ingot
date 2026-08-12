@@ -145,6 +145,25 @@ public sealed class QualityWorkflowTests
     }
 
     [Fact]
+    public async Task ComparisonDoesNotAmplifyNumericalNoiseWhenHistoricalMadIsEffectivelyZero()
+    {
+        var rows = new List<PlatformProductionEvent>();
+        AddProcessExecution(rows, "BASE", "LENS-A", "PRESS-01", DateTimeOffset.Parse("2026-07-20T08:00:00Z"), 1);
+        AddProcessExecution(rows, "HISTORY-1", "LENS-A", "PRESS-01", DateTimeOffset.Parse("2026-07-20T07:00:00Z"), rows.Count + 1);
+        AddProcessExecution(rows, "HISTORY-2", "LENS-A", "PRESS-01", DateTimeOffset.Parse("2026-07-20T06:00:00Z"), rows.Count + 1);
+        var service = new ExecutionComparisonService(
+            new FakeEventStore(rows),
+            new FakeInspectionStore([]),
+            new FakeReviewStore(),
+            new ProcessAnalysisResolver(new FakeProcessConfigurationStore()));
+
+        var result = await service.CompareWithHistoryAsync("BASE", 10);
+
+        Assert.NotNull(result);
+        Assert.All(result.SignalComparisons, comparison => Assert.Null(comparison.RobustDeviation));
+    }
+
+    [Fact]
     public async Task ProcessExecutionUsesActuallyAppliedControlParametersBeforeProcessSpecificationMasterData()
     {
         var startedAt = DateTimeOffset.Parse("2026-07-20T08:00:00Z");

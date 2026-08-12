@@ -15,6 +15,23 @@ const researchAssets = await readFile(new URL("../src/pages/ResearchAssetsPage.j
 const goldenQuestions = await readFile(new URL("../src/pages/GoldenQuestionsPage.jsx", import.meta.url), "utf8");
 const ingestionTasks = await readFile(new URL("../src/acquisition/IngestionTaskPage.jsx", import.meta.url), "utf8");
 const app = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
+const registryEditor = await readFile(new URL("../src/components/RegistryBusinessEditor.jsx", import.meta.url), "utf8");
+
+test("configuration center presents dependencies before final process configuration publishing", () => {
+  assert.match(app, /path: "\/configuration"/);
+  assert.match(pages, /export function ConfigurationHubPage/);
+  assert.match(pages, /工艺配置方案是最后一步，不是起点/);
+  for (const step of ["定义数据标准", "连接现场数据", "定义判断规则", "建立工装结构", "组合并发布"]) {
+    assert.match(pages, new RegExp(step));
+  }
+  assert.match(pages, /运行上下文从哪里来/);
+  assert.match(pages, /生产准备或 MES 写入不可变生产上下文/);
+  assert.match(pages, /当前准备度/);
+  assert.match(pages, /按已发布版本判断/);
+  assert.match(pages, /当前为只读配置视图/);
+  assert.match(pages, /canWrite \? <Button variant="primary" onClick=\{openCreate\}/);
+  assert.match(ingestionTasks, /当前为只读视图/);
+});
 
 test("operations retain server pagination and resumable live events", () => {
   assert.match(pages, /offset: String\(\(page - 1\) \* pageSize\)/);
@@ -57,6 +74,16 @@ test("data health exposes reproducible reliability baselines and strict admissio
   assert.match(researchProjects, /execution\.edgeIds/);
 });
 
+test("scenario context policy uses an observed field catalog instead of unexplained free text", () => {
+  assert.match(registryEditor, /const contextFieldCatalog = \[/);
+  assert.match(registryEditor, /"product_family_code", "产品系列", "生产运行 → 生产上下文"/);
+  assert.match(registryEditor, /"tooling_assembly_id", "工装总成", "生产运行 → 工装装卸"/);
+  assert.match(registryEditor, /\/api\/v1\/data-reliability\/baseline\?maximumRuns=2000/);
+  assert.match(registryEditor, /覆盖 \$\{Math\.round\(coverage\.coverage \* 100\)\}%/);
+  assert.match(registryEditor, /生产准备 \/ MES → 不可变运行上下文/);
+  assert.match(registryEditor, /自定义字段必须由设备接入或上游系统实际上报/);
+});
+
 test("configuration registries keep create, version, retire, and draft deletion workflows", () => {
   for (const endpoint of [
     "/api/v1/process-data-models", "/api/v1/process-specifications",
@@ -69,6 +96,9 @@ test("configuration registries keep create, version, retire, and draft deletion 
   assert.match(pages, /沿用为新版本/);
   assert.match(pages, /停用/);
   assert.match(pages, /删除草稿/);
+  assert.match(pages, /删除未引用版本/);
+  assert.match(pages, /未被质量方案引用/);
+  assert.match(pages, /草稿已删除/);
   assert.match(pages, /<Drawer/);
 });
 
@@ -90,6 +120,12 @@ test("destructive workflows use the accessible product confirmation dialog", () 
   assert.match(ui, /export function useConfirmDialog/);
   assert.match(pages, /useConfirmDialog/);
   assert.match(ingestionTasks, /useConfirmDialog/);
+  assert.match(ingestionTasks, /removeDraft/);
+  assert.match(ingestionTasks, /removeReusableDraft/);
+  assert.match(ingestionTasks, /待完成或清理的复用草稿/);
+  assert.match(ingestionTasks, /ingestion-configuration\/\$\{isTemplate \? "templates" : "data-sources"\}/);
+  assert.match(ingestionTasks, /设备接入草稿已删除/);
+  assert.match(ingestionTasks, /row\.status === "draft"/);
   assert.doesNotMatch(pages, /window\.confirm/);
   assert.doesNotMatch(ingestionTasks, /window\.confirm/);
 });
@@ -145,12 +181,15 @@ test("execution comparison submits the selection contract and renders business r
   assert.match(pages, /new URLSearchParams\(\{ status: "completed", limit: "200" \}\)/);
   assert.match(pages, /query\.set\("search", search\)/);
   assert.match(pages, /exploratory: "探索性证据"/);
-  assert.match(pages, /label="基准运行"/);
+  assert.match(pages, /label="目标运行"/);
   assert.match(pages, /label="对比范围"/);
   assert.match(pages, /label="对比运行"/);
   assert.match(pages, /comparisonScope === "cohort"/);
   assert.match(pages, /execution-comparisons\/\$\{encodeURIComponent\(baselineProcessExecutionId\)\}\?limit=24/);
-  assert.match(pages, /executionIds: \[baselineProcessExecutionId, candidate\]/);
+  assert.match(pages, /processExecutionIds: \[baselineProcessExecutionId, candidate\]/);
+  assert.match(pages, /title="三步完成一次可信对比"/);
+  assert.match(pages, /生成对比结论/);
+  assert.match(pages, /找到 \$\{comparableProcessExecutions\.length\} 条同类运行/);
   assert.match(pages, /executionId=\$\{encodeURIComponent\(baseline\)\}&limit=1/);
   assert.match(pages, /title="运行概况"/);
   assert.match(pages, /title="质量候选原因"/);
@@ -221,8 +260,8 @@ test("research projects expose the evidence-backed experiment and operating-regi
 });
 
 test("research project membership uses authenticated immutable user identities", () => {
-  assert.match(app, /<AppRoutes identity=\{identity\} \/>/);
-  assert.match(app, /function AppRoutes\(\{ identity \}\)/);
+  assert.match(app, /<AppRoutes identity=\{identity\} canConfigure=\{canConfigure\} \/>/);
+  assert.match(app, /function AppRoutes\(\{ identity, canConfigure \}\)/);
   assert.match(app, /<Pages\.ResearchProjectsPage identity=\{identity\} \/>/);
   assert.match(researchProjects, /ResearchProjectsPage\(\{ identity \}\)/);
   assert.match(researchProjects, /getJson\("\/api\/v1\/users"\)/);
@@ -344,7 +383,7 @@ test("Chat is a standalone conversation workspace with optional project context 
   assert.match(pages, /answer\.summary/);
   assert.match(pages, /新对话/);
   assert.match(pages, /删除对话/);
-  assert.match(pages, /给分析助手发送消息/);
+  assert.match(pages, /给 AI 分析助手发送消息/);
   assert.match(pages, /全部数据（无需项目）/);
   assert.match(pages, /requestSubmit/);
   assert.match(pages, /capabilitiesLoading/);

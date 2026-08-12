@@ -707,7 +707,7 @@ export function ResearchProjectsPage({ identity }) {
     const projectAction = project ? nextProjectAction(project.status) : null;
     return (
       <Page
-        title={project?.name || "优化项目工作区"}
+        title={project?.name || "研发项目工作区"}
         description={project?.description || "围绕当前问题推进假设、实验、验证和知识复用。"}
         actions={(
           <>
@@ -728,7 +728,7 @@ export function ResearchProjectsPage({ identity }) {
         {!workspace ? (
           <Card>
             <p className="py-16 text-center text-sm text-slate-500">
-              {detailLoading ? "正在读取项目工作区…" : "无法读取当前优化项目。"}
+              {detailLoading ? "正在读取项目工作区…" : "无法读取当前研发项目。"}
             </p>
           </Card>
         ) : (
@@ -788,9 +788,9 @@ export function ResearchProjectsPage({ identity }) {
 
   return (
     <Page
-      title="优化项目"
+      title="研发项目"
       description="用最少的有效实验，把生产问题追溯为可验证证据，再形成可复用的工艺操作域。"
-      actions={<Button variant="primary" onClick={() => setCreateOpen(true)}>新建优化项目</Button>}
+      actions={<Button variant="primary" onClick={() => setCreateOpen(true)}>新建研发项目</Button>}
     >
       {error && <Alert tone="danger">{error}</Alert>}
       <section className="grid gap-3 sm:grid-cols-3">
@@ -800,11 +800,11 @@ export function ResearchProjectsPage({ identity }) {
       </section>
 
       <Card
-        title="优化项目"
+        title="研发项目"
         description="先处理需要决策或验证的项目；每个工作区保留完整证据链。"
       >
         {loading ? (
-          <p className="py-12 text-center text-sm text-slate-500">正在读取优化项目…</p>
+          <p className="py-12 text-center text-sm text-slate-500">正在读取研发项目…</p>
         ) : projects.length === 0 ? (
           <EmptyState title="从一个待解决的工艺问题开始" description="填写目标、首个可控变量和安全边界；其余证据会在推进过程中逐步补齐。" />
         ) : (
@@ -813,7 +813,7 @@ export function ResearchProjectsPage({ identity }) {
             keyField="projectId"
             onRowClick={openProject}
             columns={[
-              { key: "name", label: "优化项目" },
+              { key: "name", label: "研发项目" },
               { key: "processName", label: "工艺" },
               { key: "productName", label: "产品", render: value => value || "—" },
               { key: "status", label: "阶段", render: value => <StatusBadge value={statusLabels[value] || value} /> },

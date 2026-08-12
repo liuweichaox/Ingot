@@ -540,6 +540,7 @@ public sealed class ExecutionComparisonService(
                 ? weighted.Select(item => new WeightedValue(Math.Abs(item.Value - median.Value), item.Weight)).ToArray()
                 : [];
             var mad = WeightedPercentile(deviations, 0.5);
+            var robustScaleFloor = Math.Max(Math.Abs(median ?? 0d) * 1e-9d, 1e-9d);
             double? baselinePercentile = feature.Value.HasValue && weighted.Length > 0
                 ? weighted.Where(item => item.Value <= feature.Value.Value).Sum(static item => item.Weight) /
                   weighted.Sum(static item => item.Weight)
@@ -556,7 +557,7 @@ public sealed class ExecutionComparisonService(
                 HistoricalP10 = WeightedPercentile(weighted, 0.1),
                 HistoricalP90 = WeightedPercentile(weighted, 0.9),
                 BaselinePercentile = baselinePercentile,
-                RobustDeviation = feature.Value.HasValue && median.HasValue && mad is > 0
+                RobustDeviation = feature.Value.HasValue && median.HasValue && mad > robustScaleFloor
                     ? (feature.Value.Value - median.Value) / (1.4826d * mad.Value)
                     : null,
                 EffectiveWeight = weighted.Sum(static item => item.Weight)

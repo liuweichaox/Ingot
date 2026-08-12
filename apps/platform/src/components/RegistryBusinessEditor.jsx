@@ -21,6 +21,27 @@ const featureOptions = [
   ["slope", "趋势斜率"],
 ];
 
+const contextFieldCatalog = [
+  ["execution_id", "运行标识", "平台在接收运行事件时生成", "标识一次生产运行；分析准入必需"],
+  ["equipment_id", "设备", "事件主题或设备接入映射", "区分生产设备；常用于同类运行匹配"],
+  ["product_family_code", "产品系列", "生产运行 → 生产上下文", "默认同类比较条件"],
+  ["product_code", "产品", "生产运行 → 生产上下文", "区分具体产品"],
+  ["process_specification_id", "工艺规范", "生产运行 → 生产上下文", "关联生效的工艺规范"],
+  ["process_specification_version", "工艺规范版本", "生产运行 → 生产上下文", "防止跨版本误比较"],
+  ["output_item_id", "产出物", "设备事件或上游系统", "关联本次运行产出"],
+  ["tooling_assembly_id", "工装总成", "生产运行 → 工装装卸", "区分实际装机工装"],
+  ["assembly_revision", "工装版本", "生产运行 → 工装装卸", "追踪工装配置变化"],
+  ["tooling_usage_count", "工装累计运行次数", "平台按工装运行历史计算", "评估寿命和磨损"],
+  ["material_lot_ref", "材料批次", "生产运行 → 生产上下文", "材料分层与追溯"],
+  ["material_specification", "材料规格", "生产运行 → 生产上下文", "区分材料规格"],
+  ["external_order_ref", "外部工单", "MES 同步或人工生产准备", "关联外部工单"],
+  ["external_batch_ref", "外部批次", "MES 同步或人工生产准备", "关联外部生产批次"],
+  ["maintenance_status", "维护状态", "生产运行 → 生产上下文", "识别维护状态影响"],
+  ["calibration_status", "校准状态", "生产运行 → 生产上下文", "识别传感器校准风险"],
+  ["calibration_ref", "校准记录", "生产运行 → 生产上下文", "追溯校准证据"],
+  ["calibration_valid_until", "校准有效期", "生产运行 → 生产上下文", "判断运行时校准是否过期"],
+].map(([fieldCode, name, source, purpose]) => ({ fieldCode, name, source, purpose }));
+
 const blankPair = () => ({ key: "", value: "" });
 const pairsFromObject = value => Object.entries(value || {}).map(([key, pairValue]) => ({ key, value: pairValue }));
 const objectFromPairs = pairs => Object.fromEntries(
@@ -626,6 +647,7 @@ function ScenarioPackageEditor({ form, onChange, readOnly, lockIdentity }) {
   const { data: planData, error: planError } = useApi("/api/v1/process-analysis-plans");
   const { data: profileData, error: profileError } = useApi("/api/v1/ingestion-tasks");
   const { data: qualityData, error: qualityError } = useApi("/api/v1/inspection-plans");
+  const { data: reliabilityData, error: reliabilityError } = useApi("/api/v1/data-reliability/baseline?maximumRuns=2000");
   const models = extractRows(modelData);
   const plans = extractRows(planData);
   const profiles = extractRows(profileData);
@@ -634,6 +656,16 @@ function ScenarioPackageEditor({ form, onChange, readOnly, lockIdentity }) {
   const matchingPlans = plans.filter(item => !selectedModel.id || (item.dataModelId === selectedModel.id && item.dataModelVersion === selectedModel.version));
   const matchingProfiles = profiles.filter(item => !selectedModel.id || (item.dataModelId === selectedModel.id && item.dataModelVersion === selectedModel.version));
   const referenceError = modelError || planError || profileError || qualityError;
+  const coverageByField = Object.fromEntries((reliabilityData?.contextFields || []).map(item => [item.field, item]));
+  const selectedContextCodes = new Set(form.contextFields.map(item => item.fieldCode));
+  const addContextField = definition => {
+    if (selectedContextCodes.has(definition.fieldCode)) return;
+    addRow(form, onChange, "contextFields", scenarioContextField({
+      fieldCode: definition.fieldCode,
+      name: definition.name,
+      mode: "record-when-available",
+    }));
+  };
 
   return (
     <div className="grid gap-5">
@@ -652,15 +684,37 @@ function ScenarioPackageEditor({ form, onChange, readOnly, lockIdentity }) {
           {form.ingestionTasks.map((item, index) => <div key={index} className="grid gap-2 md:grid-cols-[1fr_auto]"><ReferenceSelect value={item.reference} options={matchingProfiles} idKey="taskId" label="摄取任务" disabled={readOnly} onChange={event => updateRow(form, onChange, "ingestionTasks", index, { reference: event.target.value })} />{!readOnly && <Button variant="ghost" className="text-rose-700" onClick={() => removeRow(form, onChange, "ingestionTasks", index)}>移除</Button>}</div>)}
         </div>
       </Card>
-      <Card title="运行上下文字段策略" description="先追溯，再用现场覆盖率和因素重叠决定是否进入分析或建模。" actions={!readOnly ? <Button onClick={() => addRow(form, onChange, "contextFields", scenarioContextField())}>添加字段</Button> : undefined}>
+      <Card title="运行上下文策略" description="这些字段不是在这里产生的：设备身份来自事件，产品/工艺/材料来自生产上下文，工装来自装卸记录。此处只决定字段如何参与分析。">
         <div className="grid gap-4">
-          {form.contextFields.length === 0 && <p className="text-sm text-slate-500">尚未配置场景上下文字段。</p>}
+          <div className="rounded-xl border border-blue-100 bg-blue-50/70 p-4 text-sm text-slate-700">
+            <p className="font-semibold text-slate-950">数据链路</p>
+            <p className="mt-1 leading-6">生产准备 / MES → 不可变运行上下文 → 数据可信度计算覆盖率 → 本策略决定是否仅追溯、分析必需或允许进入建模。</p>
+            <p className="mt-1 text-xs text-slate-500">覆盖率按当前 {reliabilityData?.analyzedRunCount ?? 0} 条已完成运行计算；没有历史运行时不会凭空判定字段可用。</p>
+          </div>
+          {reliabilityError && <Alert tone="warning">暂时无法读取现场覆盖率：{reliabilityError}</Alert>}
+          {!readOnly && (
+            <div>
+              <div className="mb-2 flex items-center justify-between gap-3"><p className="text-sm font-semibold text-slate-900">从字段目录添加</p><Button variant="ghost" onClick={() => addRow(form, onChange, "contextFields", scenarioContextField())}>自定义字段</Button></div>
+              <div className="grid gap-2 lg:grid-cols-2">
+                {contextFieldCatalog.map(definition => {
+                  const coverage = coverageByField[definition.fieldCode];
+                  const selected = selectedContextCodes.has(definition.fieldCode);
+                  return <button key={definition.fieldCode} type="button" disabled={selected} onClick={() => addContextField(definition)} className="rounded-xl border border-slate-200 bg-white p-3 text-left transition hover:border-blue-300 hover:bg-blue-50 disabled:cursor-default disabled:border-emerald-200 disabled:bg-emerald-50/60">
+                    <span className="flex items-start justify-between gap-2"><span className="font-medium text-slate-900">{definition.name}</span><span className="text-xs font-medium text-slate-500">{selected ? "已添加" : coverage?.coverage == null ? "暂无样本" : `覆盖 ${Math.round(coverage.coverage * 100)}%`}</span></span>
+                    <span className="mt-1 block font-mono text-xs text-slate-500">{definition.fieldCode}</span>
+                    <span className="mt-2 block text-xs leading-5 text-slate-600">来源：{definition.source}；用途：{definition.purpose}</span>
+                  </button>;
+                })}
+              </div>
+            </div>
+          )}
+          {form.contextFields.length === 0 && <Alert tone="warning" title="尚未选择上下文字段">先从上方目录添加字段。建议至少选择产品系列、设备和工装，以避免把不同生产条件直接混在一起。</Alert>}
           {form.contextFields.map((item, index) => <div key={index} className="grid gap-3 rounded-xl border border-slate-200 p-4 md:grid-cols-2 xl:grid-cols-3">
-            <Field label="字段代码"><Input value={item.fieldCode} disabled={readOnly} onChange={event => updateRow(form, onChange, "contextFields", index, { fieldCode: event.target.value })} /></Field>
+            <Field label="字段代码" hint={contextFieldCatalog.find(field => field.fieldCode === item.fieldCode)?.source ? `来源：${contextFieldCatalog.find(field => field.fieldCode === item.fieldCode).source}` : "自定义字段必须由设备接入或上游系统实际上报。"}><Input value={item.fieldCode} disabled={readOnly} onChange={event => updateRow(form, onChange, "contextFields", index, { fieldCode: event.target.value })} /></Field>
             <Field label="业务名称"><Input value={item.name} disabled={readOnly} onChange={event => updateRow(form, onChange, "contextFields", index, { name: event.target.value })} /></Field>
-            <Field label="证据状态"><Select value={item.mode} disabled={readOnly} onChange={event => updateRow(form, onChange, "contextFields", index, { mode: event.target.value })}><option value="record-when-available">有则记录</option><option value="required-for-analysis">分析必需</option><option value="validated-for-modeling">已验证进入建模</option></Select></Field>
-            <Field label="最低覆盖率"><Input type="number" min="0" max="1" step="0.01" value={item.minimumCoverage} disabled={readOnly} onChange={event => updateRow(form, onChange, "contextFields", index, { minimumCoverage: event.target.value })} placeholder="0–1" /></Field>
-            <Field label="最低因素重叠"><Input type="number" min="0" max="1" step="0.01" value={item.minimumFactorOverlap} disabled={readOnly} onChange={event => updateRow(form, onChange, "contextFields", index, { minimumFactorOverlap: event.target.value })} placeholder="0–1，可选" /></Field>
+            <Field label="如何使用" hint="分析必需会排除缺失该字段的运行；进入建模还要求经过因素重叠验证。"><Select value={item.mode} disabled={readOnly} onChange={event => updateRow(form, onChange, "contextFields", index, { mode: event.target.value })}><option value="record-when-available">仅用于追溯</option><option value="required-for-analysis">缺失时禁止分析</option><option value="validated-for-modeling">验证后允许建模</option></Select></Field>
+            <Field label="最低覆盖率" hint={`当前覆盖：${coverageByField[item.fieldCode]?.coverage == null ? "暂无样本" : `${Math.round(coverageByField[item.fieldCode].coverage * 100)}%（${coverageByField[item.fieldCode].presentRunCount}/${coverageByField[item.fieldCode].runCount}）`}`}><Input type="number" min="0" max="1" step="0.01" value={item.minimumCoverage} disabled={readOnly} onChange={event => updateRow(form, onChange, "contextFields", index, { minimumCoverage: event.target.value })} placeholder="例如 0.95" /></Field>
+            <Field label="最低因素重叠" hint="只有把该字段作为分层/混杂因素时才填写；0.5 表示至少覆盖一半组合。"><Input type="number" min="0" max="1" step="0.01" value={item.minimumFactorOverlap} disabled={readOnly} onChange={event => updateRow(form, onChange, "contextFields", index, { minimumFactorOverlap: event.target.value })} placeholder="例如 0.5" /></Field>
             {!readOnly && <Button variant="ghost" className="justify-self-start text-rose-700" onClick={() => removeRow(form, onChange, "contextFields", index)}>移除</Button>}
           </div>)}
         </div>

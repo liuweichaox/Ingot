@@ -65,8 +65,8 @@ export function WorkbenchPage() {
       action: pendingInspections ? "去处理" : "查看记录",
     },
     {
-      title: activeOptimizationProjects ? `${activeOptimizationProjects} 个优化项目正在推进` : "从一个真实问题开始优化",
-      description: activeOptimizationProjects ? "查看证据缺口、待审核实验或需要独立验证的工艺窗口。" : "将质量偏差或运行异常转为可验证的优化项目。",
+      title: activeOptimizationProjects ? `${activeOptimizationProjects} 个研发项目正在推进` : "从一个真实问题开始研发",
+      description: activeOptimizationProjects ? "查看证据缺口、待审核实验或需要独立验证的工艺窗口。" : "将质量偏差或运行异常转为可验证的研发项目。",
       to: "/research-projects",
       tone: activeOptimizationProjects ? "border-blue-200 bg-blue-50" : "border-amber-200 bg-amber-50",
       action: activeOptimizationProjects ? "进入优化" : "创建项目",
@@ -80,7 +80,7 @@ export function WorkbenchPage() {
     },
   ];
   return (
-    <Page title="决策总览" description="在一个入口理解现场运行、质量结果、数据可信度，以及下一项最有价值的工艺行动。">
+    <Page title="我的工作台" description="集中查看今天的待办、生产状态、质量风险与研发进展。">
       {state.error && <Alert tone="danger">{state.error}</Alert>}
       {state.loading ? <LoadingCard /> : (
         <div className="flex flex-col gap-5">
@@ -114,7 +114,7 @@ export function WorkbenchPage() {
             <Metric label="生产运行" value={state.executionTotal} hint={`${activeProcessExecutions} 个正在进行`} />
             <Metric label="待处理质检" value={pendingInspections} hint="来自当前质量任务" />
             <Metric label="采集节点" value={`${onlineEdges}/${state.edges.length}`} hint="在线 / 全部" />
-            <Metric label="优化项目" value={activeOptimizationProjects} hint={`${activeContexts} 个有效生产上下文`} />
+            <Metric label="研发项目" value={activeOptimizationProjects} hint={`${activeContexts} 个有效生产上下文`} />
           </div>
           <div className="order-4 grid gap-5 xl:grid-cols-[1.3fr_.7fr]">
             <Card title="最近生产运行" actions={<Link className="text-sm font-medium text-blue-600 hover:text-blue-700" to="/process-executions">查看全部</Link>}>

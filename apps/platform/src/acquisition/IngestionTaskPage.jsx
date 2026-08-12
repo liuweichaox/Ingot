@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import {
   Alert, Badge, Button, Card, Field, Input, Page, Select, StatusBadge, notify, useConfirmDialog,
 } from "../ui/components";
-import { downloadFile, getJson, postForm, postJson } from "../api/http";
+import { deleteJson, downloadFile, getJson, postForm, postJson } from "../api/http";
 import { useApi, extractRows } from "../hooks/useApi";
 import {
   mergeServerCapabilities, protocolDescriptor, protocolOptions,
@@ -24,7 +24,7 @@ const ENDPOINT = "/api/v1/ingestion-tasks";
  * 从通用注册表抽屉里独立出来的原因：接入配置的工作流是"改一处 → 看设备返回什么 → 再改"，
  * 抽屉里垂直堆叠九个卡片无法支撑这个循环。左栏配置、右栏常驻设备面板，两边同时可见。
  */
-export function IngestionTaskPage() {
+export function IngestionTaskPage({ canWrite = true }) {
   const { taskId } = useParams();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -81,8 +81,8 @@ export function IngestionTaskPage() {
   const dataItems = model?.acquisition?.dataItems || [];
   const controlParameters = model?.controlParameters || [];
   const managedByBinding = Boolean(form.templateId && form.dataSourceId);
-  const readOnly = managedByBinding || (mode === "maintain" && form.status !== "draft");
-  const allowProbe = form.status === "draft";
+  const readOnly = !canWrite || managedByBinding || (mode === "maintain" && form.status !== "draft");
+  const allowProbe = canWrite && form.status === "draft";
 
   const validation = useMemo(
     () => validateIngestionTask(form, { dataItems }),
@@ -198,7 +198,7 @@ export function IngestionTaskPage() {
               </Button>
             </>
           )}
-          {managedByBinding && form.status === "draft" && (
+          {canWrite && managedByBinding && form.status === "draft" && (
             <Button variant="primary" disabled={saving || !probeValid} onClick={() => save("published")}>
               {probeValid ? "验证并发布绑定" : "请先验证连接"}
             </Button>
@@ -207,9 +207,11 @@ export function IngestionTaskPage() {
       }
     >
       <div className="grid gap-5">
-        {readOnly && <Alert tone="info">{managedByBinding
-          ? "该任务由不可变模板与数据源版本生成；需要调整时请创建新的资产版本和任务绑定。"
-          : "已发布或已停用的配置不可修改。要调整参数请创建新版本。"}</Alert>}
+        {readOnly && <Alert tone="info">{!canWrite
+          ? "当前为只读视图；你可以核对驱动、点位映射和上下文来源，修改与发布由工艺工程师或平台管理员完成。"
+          : managedByBinding
+            ? "该任务由不可变模板与数据源版本生成；需要调整时请创建新的资产版本和任务绑定。"
+            : "已发布或已停用的配置不可修改。要调整参数请创建新版本。"}</Alert>}
         {saveError && <Alert tone="danger">{saveError}</Alert>}
         {showErrors && validation.count > 0 && (
           <Alert tone="warning">还有 {validation.count} 处配置需要修正，已在对应字段下方标出。</Alert>
@@ -220,7 +222,7 @@ export function IngestionTaskPage() {
             <Card title="基本信息" description="采集发生在哪里、采哪台设备、结果采用哪套工艺定义。">
               <div className="grid items-start gap-4 md:grid-cols-2">
                 <Field label="接入配置代码" hint="创建后不可修改。" error={errors.taskId}>
-                  <Input value={form.taskId} disabled={!isNew && mode !== "create"}
+                  <Input value={form.taskId} disabled={readOnly || (!isNew && mode !== "create")}
                     placeholder="press01-fx3u" onChange={event => update({ taskId: event.target.value })} />
                 </Field>
                 <Field label="配置名称" error={errors.name}>
@@ -568,7 +570,7 @@ function StrategyPanel({ descriptor, form, errors, readOnly, onChange }) {
 }
 
 /** 接入配置列表。点击进入独立配置页，而不是打开抽屉。 */
-export function IngestionTasksPage() {
+export function IngestionTasksPage({ canWrite = true }) {
   const { data, error, reload } = useApi(ENDPOINT);
   const { data: templateData, reload: reloadTemplates } = useApi("/api/v1/ingestion-configuration/templates");
   const { data: sourceData, reload: reloadSources } = useApi("/api/v1/ingestion-configuration/data-sources");
@@ -579,6 +581,24 @@ export function IngestionTasksPage() {
   const bindings = extractRows(bindingData);
   const navigate = useNavigate();
   const { confirm, confirmationDialog } = useConfirmDialog();
+
+  async function removeReusableDraft(kind, row) {
+    const isTemplate = kind === "template";
+    const code = isTemplate ? row.templateId : row.dataSourceId;
+    if (!await confirm({
+      title: `删除${isTemplate ? "任务模板" : "数据源"}草稿 ${code} v${row.version}`,
+      description: "只有草稿可以删除；已发布版本和仍受保护的数据不会被移除。",
+      confirmLabel: "确认删除",
+      tone: "danger",
+    })) return;
+    try {
+      await deleteJson(`/api/v1/ingestion-configuration/${isTemplate ? "templates" : "data-sources"}/${encodeURIComponent(code)}/${row.version}`);
+      await Promise.all([reloadTemplates?.(), reloadSources?.(), reloadBindings?.()]);
+      notify(`${isTemplate ? "任务模板" : "数据源"}草稿已删除。`);
+    } catch (requestError) {
+      notify(requestError.message || "草稿删除失败。", "danger");
+    }
+  }
 
   async function retire(row) {
     if (!await confirm({
@@ -596,6 +616,22 @@ export function IngestionTasksPage() {
     }
   }
 
+  async function removeDraft(row) {
+    if (!await confirm({
+      title: `删除草稿 ${row.name || row.taskId} v${row.version}`,
+      description: "草稿删除后无法恢复；已发布任务只能停用，历史采集数据不会被删除。",
+      confirmLabel: "确认删除",
+      tone: "danger",
+    })) return;
+    try {
+      await deleteJson(`${ENDPOINT}/${encodeURIComponent(row.taskId)}/${row.version}`);
+      await reload?.();
+      notify("设备接入草稿已删除。");
+    } catch (requestError) {
+      notify(requestError.message, "danger");
+    }
+  }
+
   return (
     <Page
       title="设备接入"
@@ -604,20 +640,32 @@ export function IngestionTasksPage() {
         <div className="flex items-center gap-2">
           <Link className="inline-flex min-h-9 items-center rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100"
             to="/edges">查看现场节点</Link>
-          <Link className="inline-flex min-h-9 items-center rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
-            to="/configuration/ingestion-tasks/new">配置数据源</Link>
+          {canWrite && <Link className="inline-flex min-h-9 items-center rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
+            to="/configuration/ingestion-tasks/new">配置数据源</Link>}
         </div>
       }
     >
       <div className="grid gap-4">
         {error && <Alert tone="danger">{error}</Alert>}
-        <ReusableConfigurationPanel
-          tasks={rows}
-          templates={templates}
-          sources={sources}
-          bindings={bindings}
-          onChanged={() => Promise.all([reload?.(), reloadTemplates?.(), reloadSources?.(), reloadBindings?.()])}
-        />
+        {!canWrite && <Alert title="当前为只读视图">你可以查看设备接入状态、协议和点位数量；配置、发布、停用与删除由工艺工程师或平台管理员完成。</Alert>}
+        {canWrite ? (
+          <ReusableConfigurationPanel
+            tasks={rows}
+            templates={templates}
+            sources={sources}
+            bindings={bindings}
+            onDeleteDraft={removeReusableDraft}
+            onChanged={() => Promise.all([reload?.(), reloadTemplates?.(), reloadSources?.(), reloadBindings?.()])}
+          />
+        ) : (
+          <Card title="可复用接入资产" description="用于核对批量接入是否已经形成版本化模板、数据源与绑定。">
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="rounded-lg border border-slate-200 p-3"><p className="text-xs text-slate-500">已发布模板</p><strong className="text-xl">{templates.filter(item => item.status === "published").length}</strong></div>
+              <div className="rounded-lg border border-slate-200 p-3"><p className="text-xs text-slate-500">已发布数据源</p><strong className="text-xl">{sources.filter(item => item.status === "published").length}</strong></div>
+              <div className="rounded-lg border border-slate-200 p-3"><p className="text-xs text-slate-500">任务绑定</p><strong className="text-xl">{bindings.length}</strong></div>
+            </div>
+          </Card>
+        )}
         <Card>
           <div className="overflow-auto">
             <table className="w-full min-w-[52rem] text-left text-sm">
@@ -647,14 +695,17 @@ export function IngestionTasksPage() {
                           onClick={() => navigate(`/configuration/ingestion-tasks/${encodeURIComponent(row.taskId)}?version=${row.version}`)}>
                           查看
                         </Button>
-                        {!row.templateId && (
+                        {canWrite && !row.templateId && (
                           <Button variant="ghost"
                             onClick={() => navigate(`/configuration/ingestion-tasks/${encodeURIComponent(row.taskId)}?version=${row.version}&mode=version`)}>
                             新版本
                           </Button>
                         )}
-                        {row.status !== "retired" && (
+                        {canWrite && row.status === "published" && (
                           <Button variant="ghost" className="text-rose-700" onClick={() => retire(row)}>停用</Button>
+                        )}
+                        {canWrite && row.status === "draft" && (
+                          <Button variant="ghost" className="text-rose-700" onClick={() => removeDraft(row)}>删除草稿</Button>
                         )}
                       </div>
                     </td>
@@ -673,7 +724,7 @@ export function IngestionTasksPage() {
   );
 }
 
-function ReusableConfigurationPanel({ tasks, templates, sources, bindings, onChanged }) {
+function ReusableConfigurationPanel({ tasks, templates, sources, bindings, onDeleteDraft, onChanged }) {
   const firstPublished = tasks.find(item => item.status === "published" && !item.templateId && !item.dataSourceId);
   const [taskKey, setTaskKey] = useState(firstPublished ? `${firstPublished.taskId}@${firstPublished.version}` : "");
   const selected = tasks.find(item => `${item.taskId}@${item.version}` === taskKey);
@@ -685,6 +736,8 @@ function ReusableConfigurationPanel({ tasks, templates, sources, bindings, onCha
   const [message, setMessage] = useState("");
   const sourceFile = useRef(null);
   const bindingFile = useRef(null);
+  const draftTemplates = templates.filter(item => item.status === "draft");
+  const draftSources = sources.filter(item => item.status === "draft");
 
   useEffect(() => {
     if (!taskKey && firstPublished) setTaskKey(`${firstPublished.taskId}@${firstPublished.version}`);
@@ -755,6 +808,17 @@ function ReusableConfigurationPanel({ tasks, templates, sources, bindings, onCha
           <Button variant="ghost" onClick={() => bindingFile.current?.click()} disabled={Boolean(busy)}>导入任务绑定 CSV</Button>
           <input ref={bindingFile} className="hidden" type="file" accept=".csv,text/csv" onChange={event => importCsv("bindings", event.target.files?.[0])} />
         </div>
+        {(draftTemplates.length > 0 || draftSources.length > 0) && (
+          <div className="grid gap-3 rounded-xl border border-amber-200 bg-amber-50/60 p-4">
+            <div><p className="text-sm font-semibold text-slate-900">待完成或清理的复用草稿</p><p className="mt-1 text-xs text-slate-600">这里仅显示未发布模板和数据源；确认不再使用后可以直接删除。</p></div>
+            {[...draftTemplates.map(item => ({ kind: "template", code: item.templateId, version: item.version, name: item.name })), ...draftSources.map(item => ({ kind: "source", code: item.dataSourceId, version: item.version, name: item.name }))].map(item => (
+              <div key={`${item.kind}:${item.code}:${item.version}`} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-200 bg-white px-3 py-2">
+                <div><p className="text-sm font-medium text-slate-900">{item.name || item.code}</p><p className="font-mono text-xs text-slate-500">{item.kind === "template" ? "任务模板" : "数据源"} · {item.code} · v{item.version}</p></div>
+                <Button variant="ghost" className="text-rose-700" onClick={() => onDeleteDraft(item.kind, item.kind === "template" ? draftTemplates.find(value => value.templateId === item.code && value.version === item.version) : draftSources.find(value => value.dataSourceId === item.code && value.version === item.version))}>删除草稿</Button>
+              </div>
+            ))}
+          </div>
+        )}
         {message && <Alert tone={message.includes("已") ? "info" : "warning"}>{message}</Alert>}
         <p className="text-xs text-slate-500">安全边界：凭据字段只填写现场节点密钥引用；固定请求体和普通请求头会随 CSV 导出，不要写入凭据。批量导入只生成草稿，每个任务必须单独连接真实设备并通过映射校验后才能发布。</p>
       </div>

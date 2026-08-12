@@ -62,7 +62,7 @@ test("all platform routes remain available after the React migration", () => {
     "/research-projects", "/research-assets", "/workbench", "/chat", "/explorer", "/process-executions", "/events", "/production/changeover",
     "/production/tooling-installations", "/configuration/component-types", "/configuration/components",
     "/configuration/tooling-types", "/configuration/tooling-assemblies", "/inspections",
-    "/quality-analysis", "/configuration/inspection-definitions", "/configuration/quality-plans",
+    "/quality-analysis", "/configuration", "/configuration/inspection-definitions", "/configuration/quality-plans",
     "/comparisons", "/golden-questions", "/data-quality", "/process-improvement", "/configuration/scenario-packages",
     "/configuration/process-analysis-plans", "/configuration/process-data-models",
     "/configuration/process-specifications", "/configuration/ingestion-tasks", "/edges",
@@ -85,19 +85,24 @@ test("navigation and overlays are accessible Headless UI components", () => {
   assert.match(app, /DialogBackdrop/);
   assert.match(app, /DialogPanel/);
   assert.match(app, /MenuButton/);
-  for (const domain of ["总览", "运行证据", "工艺追因", "工艺优化", "配置"]) {
+  for (const domain of ["工作台", "AI 助手", "生产运行", "质量管理", "分析诊断", "工艺研发", "配置中心"]) {
     assert.match(app, new RegExp(domain));
   }
   assert.match(app, /const systemSection = \{/);
   assert.match(app, /aria-label="打开系统管理"/);
-  assert.match(app, /\["\/chat", "分析助手"\]/);
+  assert.match(app, /\["\/chat", "AI 分析助手"\]/);
   assert.match(app, /\["\/research-assets", "研发资产"\]/);
+  assert.match(pages, /title="研发项目"/);
+  assert.match(pages, /AI 分析助手/);
   assert.match(app, /aria-label="全局导航"/);
   assert.match(app, /aria-label="面包屑"/);
   assert.match(app, /aria-label="打开全局模块导航"/);
   assert.match(app, /xl:hidden/);
   assert.match(app, /xl:flex/);
   assert.match(app, /aria-label="打开模块导航"/);
+  assert.match(app, /const activeNavigationPath = useMemo/);
+  assert.match(app, /w-55 overflow-y-auto/);
+  assert.match(app, /w-72 overflow-y-auto/);
   assert.match(app, /<div className="lg:ml-55">/);
   assert.doesNotMatch(app, /showSectionNavigation/);
   assert.doesNotMatch(app, /label: "运营工作台"/);
@@ -156,7 +161,7 @@ test("global search opens a cross-product command palette and table columns keep
 
 test("industrial object pages use the event summary contract and show an initial loading state", () => {
   assert.match(app, /\["\/explorer", "工业对象"\]/);
-  assert.match(app, /id: "evidence", label: "运行证据"/);
+  assert.match(app, /id: "evidence", label: "生产运行"/);
   assert.match(pages, /title="工业对象"/);
   assert.match(pages, /objects\.loading && !objects\.data \? <LoadingCard \/>/);
   assert.match(pages, /title="对象目录"/);
@@ -189,8 +194,8 @@ test("versioned tooling remains unique and the legacy improvement workspace is a
 test("forms expose clear labels, edit intent, and required upload fields", () => {
   assert.match(pages, /const chatModeLabels = \{/);
   assert.match(pages, /quick: "快速分析"/);
-  assert.match(pages, /<Field label="调查问题"/);
-  assert.match(pages, /<Field label="分析方式"/);
+  assert.match(pages, /aria-label="给 AI 分析助手发送消息"/);
+  assert.match(pages, /aria-label="分析方式"/);
   assert.match(pages, /setEditorMode\(row \? \(section === "type" \? "version" : "edit"\) : "create"\)/);
   assert.match(pages, /editorMode === "create" \? resource\.createLabel/);
   assert.match(researchProjects, /<Field label="项目名称">/);
@@ -239,10 +244,10 @@ test("all versioned configuration registries use business forms instead of JSON 
 });
 
 test("user-facing terminology presents scenario packages as process configurations", () => {
-  assert.match(app, /\["\/configuration\/scenario-packages", "工艺配置"\]/);
-  assert.match(app, /"\/configuration\/scenario-packages": \["工艺配置"/);
-  assert.match(pages, /title: "工艺配置"/);
-  assert.match(pages, /createLabel: "创建工艺配置"/);
+  assert.match(app, /\["\/configuration\/scenario-packages", "工艺配置方案"\]/);
+  assert.match(app, /"\/configuration\/scenario-packages": \["工艺配置方案"/);
+  assert.match(pages, /title: "工艺配置方案"/);
+  assert.match(pages, /createLabel: "创建工艺配置方案"/);
   assert.match(registryEditor, /idLabel="工艺配置代码"/);
   assert.match(researchProjects, /label="工艺配置（推荐）"/);
   for (const source of [app, pages, registryEditor, researchProjects]) {
@@ -261,6 +266,16 @@ test("device acquisition has its own page instead of a generic registry drawer",
   assert.match(acquisitionPage, /2xl:row-span-2/);
   assert.match(acquisitionPage, /2xl:col-start-1/);
   assert.match(acquisitionPage, /<DevicePointsPanel/);
+});
+
+test("configuration surfaces align write actions with platform roles", () => {
+  assert.match(app, /const canConfigure = \(identity\?\.roles \|\| \[\]\)\.some/);
+  assert.match(app, /role === "process\.engineer" \|\| role === "platform\.admin"/);
+  assert.match(app, /<Pages\.ConfigurationHubPage canWrite=\{canConfigure\}/);
+  assert.match(app, /<Pages\.ProductionSetupPage section="context" canWrite=\{canConfigure\}/);
+  assert.match(app, /<IngestionTasksPage canWrite=\{canConfigure\}/);
+  assert.match(acquisitionPage, /const readOnly = !canWrite \|\| managedByBinding/);
+  assert.match(acquisitionPage, /canWrite && row\.status === "draft"/);
 });
 
 test("form primitives keep controls aligned and make non-editable state visible", () => {

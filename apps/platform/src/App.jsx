@@ -4,6 +4,7 @@ import {
   BoltIcon,
   BeakerIcon,
   ChatBubbleLeftRightIcon,
+  ClipboardDocumentCheckIcon,
   ChevronRightIcon,
   CircleStackIcon,
   Cog6ToothIcon,
@@ -20,46 +21,54 @@ import { cx, Input, ToastHost } from "./ui/components";
 
 const sections = [
   {
-    id: "assistant", label: "分析助手", icon: ChatBubbleLeftRightIcon, path: "/chat", groups: [
-      { items: [["/chat", "分析助手"]] },
+    id: "overview", label: "工作台", icon: BoltIcon, path: "/workbench", groups: [
+      { items: [["/workbench", "我的工作台"]] },
     ],
   },
   {
-    id: "overview", label: "总览", icon: BoltIcon, path: "/workbench", groups: [
-      { items: [["/workbench", "决策总览"]] },
+    id: "assistant", label: "AI 助手", icon: ChatBubbleLeftRightIcon, path: "/chat", groups: [
+      { items: [["/chat", "AI 分析助手"]] },
     ],
   },
   {
-    id: "evidence", label: "运行证据", icon: CircleStackIcon, path: "/explorer", groups: [
-      { label: "对象与运行", items: [["/explorer", "工业对象"], ["/process-executions", "运行记录"], ["/inspections", "质量任务"]] },
-      { label: "现场上下文", items: [["/events", "运行事件"], ["/production/changeover", "运行准备"], ["/production/tooling-installations", "工装装卸"]] },
+    id: "evidence", label: "生产运行", icon: CircleStackIcon, path: "/process-executions", groups: [
+      { label: "生产准备", items: [["/production/changeover", "生产上下文"], ["/production/tooling-installations", "工装装卸"]] },
+      { label: "运行与追溯", items: [["/process-executions", "运行记录"], ["/events", "运行事件"], ["/explorer", "工业对象"]] },
     ],
   },
   {
-    id: "diagnosis", label: "工艺追因", icon: MagnifyingGlassCircleIcon, path: "/comparisons", groups: [
-      { label: "分析准备", items: [["/data-quality", "数据可信度"]] },
-      { label: "分析与核对", items: [["/comparisons", "运行对比"], ["/quality-analysis", "质量偏差分析"], ["/golden-questions", "评测问题集"]] },
+    id: "quality", label: "质量管理", icon: ClipboardDocumentCheckIcon, path: "/inspections", groups: [
+      { label: "日常质量", items: [["/inspections", "质量任务"]] },
+      { label: "问题分析", items: [["/quality-analysis", "质量偏差分析"]] },
     ],
   },
   {
-    id: "optimization", label: "工艺优化", icon: BeakerIcon, path: "/research-projects", groups: [
-      { label: "优化工作", items: [["/research-projects", "优化项目"]] },
+    id: "diagnosis", label: "分析诊断", icon: MagnifyingGlassCircleIcon, path: "/comparisons", groups: [
+      { label: "诊断工具", items: [["/comparisons", "运行对比"]] },
+      { label: "证据准备", items: [["/data-quality", "数据可信度"]] },
+    ],
+  },
+  {
+    id: "optimization", label: "工艺研发", icon: BeakerIcon, path: "/research-projects", groups: [
+      { label: "研发工作", items: [["/research-projects", "研发项目"]] },
       { label: "复用资产", items: [["/research-assets", "研发资产"]] },
     ],
   },
   {
-    id: "configuration", label: "配置", icon: AdjustmentsHorizontalIcon, path: "/configuration/scenario-packages", groups: [
-      { label: "工艺定义", items: [["/configuration/scenario-packages", "工艺配置"], ["/configuration/process-data-models", "工艺模型"], ["/configuration/process-specifications", "工艺规范版本"], ["/configuration/process-analysis-plans", "分析模型"]] },
-      { label: "质量规则", items: [["/configuration/inspection-definitions", "检测定义"], ["/configuration/quality-plans", "质量方案"]] },
-      { label: "工装资产", items: [["/configuration/tooling-types", "装配模板"], ["/configuration/component-types", "组件分类"], ["/configuration/components", "组件资产"], ["/configuration/tooling-assemblies", "工装总成"]] },
+    id: "configuration", label: "配置中心", icon: AdjustmentsHorizontalIcon, path: "/configuration", groups: [
+      { label: "开始配置", items: [["/configuration", "配置总览"]] },
+      { label: "数据标准", items: [["/configuration/process-data-models", "工艺数据模型"], ["/configuration/process-specifications", "工艺规范"]] },
       { label: "现场接入", items: [["/edges", "现场节点"], ["/configuration/ingestion-tasks", "设备接入"]] },
+      { label: "分析与质量", items: [["/configuration/process-analysis-plans", "运行分析方案"], ["/configuration/inspection-definitions", "检测定义"], ["/configuration/quality-plans", "质量方案"]] },
+      { label: "工装定义", items: [["/configuration/component-types", "组件分类"], ["/configuration/components", "组件资产"], ["/configuration/tooling-types", "装配模板"], ["/configuration/tooling-assemblies", "工装总成"]] },
+      { label: "组合发布", items: [["/configuration/scenario-packages", "工艺配置方案"]] },
     ],
   },
 ];
 
 const systemSection = {
   id: "system", label: "系统管理", icon: Cog6ToothIcon, path: "/identity/users", groups: [
-    { items: [["/identity/users", "用户与权限"], ["/platform-metrics", "平台运行状态"], ["/logs", "运行日志"]] },
+    { items: [["/identity/users", "用户与权限"], ["/platform-metrics", "平台运行状态"], ["/logs", "运行日志"], ["/golden-questions", "助手评测"]] },
   ],
 };
 
@@ -68,24 +77,25 @@ const allSections = [...sections, systemSection];
 const sectionItems = section => section.groups.flatMap(group => group.items);
 
 const pageDetails = {
-  "/research-projects": ["优化项目", "从问题、证据与实验推进到经过验证的工艺窗口"],
-  "/workbench": ["决策总览", "实时运行、质量、数据可信度与优化行动的统一入口"],
-  "/chat": ["分析助手", "直接对话并核对运行、质量、配置、研发与知识证据"],
+  "/research-projects": ["研发项目", "从问题、证据与实验推进到经过验证的工艺窗口"],
+  "/workbench": ["我的工作台", "集中查看待办、生产状态、质量风险与研发进展"],
+  "/chat": ["AI 分析助手", "直接对话并核对运行、质量、配置、研发与知识证据"],
   "/research-assets": ["研发资产", "查看项目可复用的数据集、模型、机理和知识"],
   "/explorer": ["工业对象", "选择真实业务对象，再进入它的运行、事件、质量与数据健康视图"],
   "/process-executions": ["运行记录", "查看生产运行及其数据、工艺与质量上下文"],
   "/events": ["运行事件", "查询、追溯并关联运行上下文"],
-  "/production/changeover": ["运行准备", "让设备、产品、工艺规范和已装工装对接下来的运行生效"],
+  "/production/changeover": ["生产上下文", "让设备、产品、工艺规范和已装工装对接下来的运行生效"],
   "/production/tooling-installations": ["工装装卸", "记录工装组合版本在设备上的装入与卸下区间"],
   "/inspections": ["质量任务", "处理视觉检查、人工质检与原图复核"],
   "/quality-analysis": ["质量偏差分析", "按产品、工艺规范和运行上下文定位质量偏差并追溯证据"],
   "/comparisons": ["运行对比", "比较同类生产运行、运行段或时间窗口，生成待验证的候选原因"],
   "/golden-questions": ["评测问题集", "用真实问题持续核对事实、记录引用、正确拒绝和因果边界"],
   "/data-quality": ["数据可信度", "检查运行对象的数据范围、采样连续性与运行完整性"],
-  "/configuration/scenario-packages": ["工艺配置", "版本化组合工艺数据、采集、分析、质量、上下文和约束"],
-  "/configuration/process-analysis-plans": ["分析模型", "版本化定义分析范围、对齐方式、质量分组和数据项"],
-  "/configuration/process-data-models": ["工艺模型", "定义工艺变量、阶段号和控制参数，供设备点位统一映射"],
-  "/configuration/process-specifications": ["工艺规范版本", "维护引用数据模型的完整工艺规范有效值"],
+  "/configuration": ["配置总览", "按依赖顺序完成数据、接入、分析、质量、工装与最终发布"],
+  "/configuration/scenario-packages": ["工艺配置方案", "版本化组合工艺数据、采集、分析、质量、上下文和约束"],
+  "/configuration/process-analysis-plans": ["运行分析方案", "版本化定义同类比较条件、对齐方式、质量分组和数据项"],
+  "/configuration/process-data-models": ["工艺数据模型", "定义工艺变量、阶段号和控制参数，供设备点位统一映射"],
+  "/configuration/process-specifications": ["工艺规范", "维护引用数据模型的完整工艺规范版本"],
   "/configuration/ingestion-tasks": ["设备接入", "选择采集节点和通信驱动，将设备点位映射到工艺变量"],
   "/configuration/inspection-definitions": ["检测定义", "定义要检测的特性、录入类型和判定规则"],
   "/configuration/quality-plans": ["质量方案", "配置产品适用的检测项目与复核规则"],
@@ -119,6 +129,7 @@ export default function App({ identity, logout }) {
   const [globalSearchOpen, setGlobalSearchOpen] = useState(false);
   const displayName = identity?.displayName || identity?.username || "当前操作员";
   const userInitials = displayName.trim().slice(0, 2).toUpperCase();
+  const canConfigure = (identity?.roles || []).some(role => role === "process.engineer" || role === "platform.admin");
   const usesAppleShortcut = useMemo(isApplePlatform, []);
   const searchShortcutLabel = usesAppleShortcut ? "⌘ K" : "Ctrl K";
   const isChatWorkspace = location.pathname === "/chat";
@@ -139,12 +150,16 @@ export default function App({ identity, logout }) {
     () => allSections.find(item => item.path === location.pathname || sectionItems(item).some(([path]) => location.pathname === path || location.pathname.startsWith(`${path}/`))) ?? sections[0],
     [location.pathname],
   );
+  const activeNavigationPath = useMemo(() => sectionItems(section)
+    .map(([path]) => path)
+    .filter(path => path === location.pathname || location.pathname.startsWith(`${path}/`))
+    .sort((left, right) => right.length - left.length)[0], [location.pathname, section]);
   const page = location.pathname.startsWith("/process-executions/")
     ? ["运行详情", "查看单次生产运行的过程、质量和数据完整性"]
     : location.pathname.startsWith("/edges/")
       ? ["节点诊断", "查看现场节点的连接、采集、上行和最近日志"]
       : location.pathname.startsWith("/research-projects/")
-        ? ["优化项目工作区", "围绕当前问题推进假设、实验、验证和知识复用"]
+        ? ["研发项目工作区", "围绕当前问题推进假设、实验、验证和知识复用"]
         : location.pathname.startsWith("/configuration/ingestion-tasks/")
           ? ["配置数据源", "配置设备连接、工艺映射和发布前验证"]
           : pageDetails[location.pathname] ?? ["页面不存在", "地址可能已经变更，请返回可用功能页面"];
@@ -239,11 +254,11 @@ export default function App({ identity, logout }) {
 
       {isChatWorkspace ? (
         <main className="h-[100dvh] overflow-hidden pt-16">
-          <AppRoutes identity={identity} />
+          <AppRoutes identity={identity} canConfigure={canConfigure} />
         </main>
       ) : (
       <div className="pt-16">
-          <aside className="fixed inset-y-16 left-0 z-30 hidden w-55 border-r border-slate-200 bg-white lg:block">
+          <aside className="fixed inset-y-16 left-0 z-30 hidden w-55 overflow-y-auto border-r border-slate-200 bg-white lg:block">
             <div className="flex h-16 items-center gap-2 border-b border-slate-100 px-5">
               <section.icon className="size-5 text-blue-600" />
               <strong className="text-sm">{section.label}</strong>
@@ -253,7 +268,7 @@ export default function App({ identity, logout }) {
                 <div key={group.label || groupIndex} className="grid gap-1">
                   {section.groups.length > 1 && <p className="px-3 pt-1 text-[11px] font-semibold tracking-wide text-slate-400">{group.label}</p>}
                   {group.items.map(([path, label]) => (
-                    <Link key={path} to={path} className={cx("rounded-lg px-3 py-2.5 text-sm", (path === location.pathname || location.pathname.startsWith(`${path}/`)) ? "bg-blue-50 font-medium text-blue-700" : "text-slate-600 hover:bg-slate-50 hover:text-slate-950")}>
+                    <Link key={path} to={path} className={cx("rounded-lg px-3 py-2.5 text-sm", path === activeNavigationPath ? "bg-blue-50 font-medium text-blue-700" : "text-slate-600 hover:bg-slate-50 hover:text-slate-950")}>
                       {label}
                     </Link>
                   ))}
@@ -277,7 +292,7 @@ export default function App({ identity, logout }) {
             </div>
           </div>
           <main className="mx-auto w-full max-w-[1600px] p-4 sm:p-6">
-            <AppRoutes identity={identity} />
+            <AppRoutes identity={identity} canConfigure={canConfigure} />
           </main>
         </div>
       </div>
@@ -285,7 +300,7 @@ export default function App({ identity, logout }) {
 
       <Dialog open={mobileOpen} onClose={setMobileOpen} className="relative z-80 lg:hidden">
         <DialogBackdrop className="fixed inset-0 bg-slate-950/30" />
-        <DialogPanel className="fixed inset-y-0 left-0 w-72 bg-white shadow-2xl">
+        <DialogPanel className="fixed inset-y-0 left-0 w-72 overflow-y-auto bg-white shadow-2xl">
           <div className="flex h-16 items-center justify-between border-b border-slate-200 px-4">
             <strong>{section.label}</strong>
             <button className="grid size-9 place-items-center rounded-lg hover:bg-slate-100" onClick={() => setMobileOpen(false)} aria-label="关闭模块导航">
@@ -297,7 +312,7 @@ export default function App({ identity, logout }) {
               <div key={group.label || groupIndex} className="grid gap-1">
                 {section.groups.length > 1 && <p className="px-3 pt-1 text-[11px] font-semibold tracking-wide text-slate-400">{group.label}</p>}
                 {group.items.map(([path, label]) => (
-                  <Link key={path} to={path} onClick={() => setMobileOpen(false)} className={cx("rounded-lg px-3 py-3 text-sm", (path === location.pathname || location.pathname.startsWith(`${path}/`)) ? "bg-blue-50 font-medium text-blue-700" : "text-slate-700 hover:bg-slate-50")}>
+                  <Link key={path} to={path} onClick={() => setMobileOpen(false)} className={cx("rounded-lg px-3 py-3 text-sm", path === activeNavigationPath ? "bg-blue-50 font-medium text-blue-700" : "text-slate-700 hover:bg-slate-50")}>
                     {label}
                   </Link>
                 ))}
@@ -340,12 +355,12 @@ function GlobalSearchDialog({ open, onClose, navigate }) {
         <DialogPanel className="mx-auto w-full max-w-2xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
           <div className="border-b border-slate-100 p-4 sm:p-5">
             <p className="text-sm font-semibold text-slate-950">全局搜索</p>
-            <p className="mt-1 text-xs text-slate-500">查找运行证据、工艺追因、工艺优化、配置和系统功能。</p>
+            <p className="mt-1 text-xs text-slate-500">查找生产运行、质量管理、分析诊断、工艺研发、配置和系统功能。</p>
             <Input
               ref={inputRef}
               value={query}
               onChange={event => setQuery(event.target.value)}
-              placeholder="例如：优化项目、运行对比、设备接入、运行记录"
+              placeholder="例如：研发项目、运行对比、设备接入、质量任务"
               className="mt-4 h-11 rounded-xl bg-slate-50 px-4 focus:bg-white"
             />
           </div>
@@ -364,7 +379,7 @@ function GlobalSearchDialog({ open, onClose, navigate }) {
   );
 }
 
-function AppRoutes({ identity }) {
+function AppRoutes({ identity, canConfigure }) {
   return (
     <Routes>
       <Route path="/" element={<Navigate to="/workbench" replace />} />
@@ -377,29 +392,30 @@ function AppRoutes({ identity }) {
       <Route path="/process-executions" element={<Pages.ProcessExecutionsPage />} />
       <Route path="/process-executions/:executionId" element={<Pages.ProcessExecutionDetailPage />} />
       <Route path="/events" element={<Pages.EventsPage />} />
-      <Route path="/production/changeover" element={<Pages.ProductionSetupPage section="context" />} />
-      <Route path="/production/tooling-installations" element={<Pages.ProductionSetupPage section="installation" />} />
-      <Route path="/configuration/component-types" element={<Pages.ProductionSetupPage section="componentType" />} />
-      <Route path="/configuration/components" element={<Pages.ProductionSetupPage section="component" />} />
-      <Route path="/configuration/tooling-types" element={<Pages.ProductionSetupPage section="type" />} />
-      <Route path="/configuration/tooling-assemblies" element={<Pages.ProductionSetupPage section="assembly" />} />
+      <Route path="/production/changeover" element={<Pages.ProductionSetupPage section="context" canWrite={canConfigure} />} />
+      <Route path="/production/tooling-installations" element={<Pages.ProductionSetupPage section="installation" canWrite={canConfigure} />} />
+      <Route path="/configuration/component-types" element={<Pages.ProductionSetupPage section="componentType" canWrite={canConfigure} />} />
+      <Route path="/configuration/components" element={<Pages.ProductionSetupPage section="component" canWrite={canConfigure} />} />
+      <Route path="/configuration/tooling-types" element={<Pages.ProductionSetupPage section="type" canWrite={canConfigure} />} />
+      <Route path="/configuration/tooling-assemblies" element={<Pages.ProductionSetupPage section="assembly" canWrite={canConfigure} />} />
       <Route path="/production-setup" element={<Navigate to="/production/changeover" replace />} />
       <Route path="/inspections" element={<Pages.InspectionsPage />} />
       <Route path="/quality-analysis" element={<Pages.QualityAnalysisPage />} />
       <Route path="/quality-plans" element={<Navigate to="/configuration/quality-plans" replace />} />
-      <Route path="/configuration/inspection-definitions" element={<Pages.InspectionDefinitionsPage />} />
-      <Route path="/configuration/quality-plans" element={<Pages.QualityPlansPage />} />
+      <Route path="/configuration/inspection-definitions" element={<Pages.InspectionDefinitionsPage canWrite={canConfigure} />} />
+      <Route path="/configuration/quality-plans" element={<Pages.QualityPlansPage canWrite={canConfigure} />} />
       <Route path="/comparisons" element={<Pages.ExecutionComparisonPage />} />
       <Route path="/golden-questions" element={<Pages.GoldenQuestionsPage />} />
       <Route path="/data-quality" element={<Pages.DataQualityPage />} />
       <Route path="/process-improvement" element={<Navigate to="/research-projects" replace />} />
-      <Route path="/configuration/scenario-packages" element={<Pages.ScenarioPackagesPage />} />
-      <Route path="/configuration/process-analysis-plans" element={<Pages.ProcessAnalysisPlansPage />} />
+      <Route path="/configuration" element={<Pages.ConfigurationHubPage canWrite={canConfigure} />} />
+      <Route path="/configuration/scenario-packages" element={<Pages.ScenarioPackagesPage canWrite={canConfigure} />} />
+      <Route path="/configuration/process-analysis-plans" element={<Pages.ProcessAnalysisPlansPage canWrite={canConfigure} />} />
       <Route path="/profiles" element={<Navigate to="/configuration/process-data-models" replace />} />
-      <Route path="/configuration/process-data-models" element={<Pages.ProcessDataModelsPage />} />
-      <Route path="/configuration/process-specifications" element={<Pages.ProcessSpecificationsPage />} />
-      <Route path="/configuration/ingestion-tasks" element={<IngestionTasksPage />} />
-      <Route path="/configuration/ingestion-tasks/:taskId" element={<IngestionTaskPage />} />
+      <Route path="/configuration/process-data-models" element={<Pages.ProcessDataModelsPage canWrite={canConfigure} />} />
+      <Route path="/configuration/process-specifications" element={<Pages.ProcessSpecificationsPage canWrite={canConfigure} />} />
+      <Route path="/configuration/ingestion-tasks" element={<IngestionTasksPage canWrite={canConfigure} />} />
+      <Route path="/configuration/ingestion-tasks/:taskId" element={<IngestionTaskPage canWrite={canConfigure} />} />
       <Route path="/edges" element={<Pages.EdgesPage />} />
       <Route path="/edges/:edgeId" element={<Pages.EdgeDetailPage />} />
       <Route path="/platform-metrics" element={<Pages.MetricsPage />} />
