@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import {
-  Alert, Badge, Button, Card, Field, Input, Page, Select, StatusBadge, notify,
+  Alert, Badge, Button, Card, Field, Input, Page, Select, StatusBadge, notify, useConfirmDialog,
 } from "../ui/components";
 import { downloadFile, getJson, postForm, postJson } from "../api/http";
 import { useApi, extractRows } from "../hooks/useApi";
@@ -578,9 +578,15 @@ export function IngestionTasksPage() {
   const sources = extractRows(sourceData);
   const bindings = extractRows(bindingData);
   const navigate = useNavigate();
+  const { confirm, confirmationDialog } = useConfirmDialog();
 
   async function retire(row) {
-    if (!window.confirm(`确认停用 ${row.name || row.taskId}？现场节点会在下一次同步时停止该采集任务。`)) return;
+    if (!await confirm({
+      title: `停用 ${row.name || row.taskId}`,
+      description: "现场节点会在下一次同步时停止该采集任务；历史版本和已采集数据仍会保留。",
+      confirmLabel: "确认停用",
+      tone: "danger",
+    })) return;
     try {
       await postJson(ENDPOINT, { ...row, status: "retired" });
       notify("接入配置已停用");
@@ -636,7 +642,7 @@ export function IngestionTasksPage() {
                     <td className="px-3 py-2 text-slate-600">{row.valueMappings?.length || 0}</td>
                     <td className="px-3 py-2"><StatusBadge value={row.status} /></td>
                     <td className="px-3 py-2">
-                      <div className="flex flex-wrap gap-1">
+                      <div className="flex min-w-max gap-1">
                         <Button variant="ghost"
                           onClick={() => navigate(`/configuration/ingestion-tasks/${encodeURIComponent(row.taskId)}?version=${row.version}`)}>
                           查看
@@ -662,6 +668,7 @@ export function IngestionTasksPage() {
           </div>
         </Card>
       </div>
+      {confirmationDialog}
     </Page>
   );
 }

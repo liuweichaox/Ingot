@@ -38,6 +38,37 @@ services:
       start_period: 10s
     restart: unless-stopped
 
+  plc-simulator:
+    image: python:3.13-slim
+    container_name: ingot-fx3u-simulator
+    working_dir: /demo
+    command:
+      - python
+      - device_simulator.py
+      - --host
+      - 0.0.0.0
+      - --port
+      - "5551"
+      - --execution-seconds
+      - "8"
+      - --max-runs
+      - "24"
+    volumes:
+      - ./tools/optical-molding-demo:/demo:ro
+    ports:
+      - "127.0.0.1:5551:5551"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import socket; socket.create_connection(('127.0.0.1', 5551), 2).close()"
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 3s
+    restart: unless-stopped
+
   platform-api:
     build:
       context: .
@@ -54,12 +85,13 @@ services:
     # 列表形式允许 Compose 在配置键中展开 EdgeId；映射形式只会展开值，
     # 会把令牌错误地固定到某个示例 Edge。
     environment:
-      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_ENVIRONMENT=${INGOT_ASPNETCORE_ENVIRONMENT:-Production}
       - Urls=http://+:8000
       - ConnectionStrings__Events=Host=postgres;Port=5432;Database=ingot;Username=ingot;Password=${INGOT_POSTGRES_PASSWORD:?INGOT_POSTGRES_PASSWORD is required}
       - EventIngest__RequireToken=true
       - EventIngest__KeyRetentionDays=${INGOT_EVENT_KEY_RETENTION_DAYS:-0}
       - EventIngest__EdgeTokens__${INGOT_EDGE_ID:?INGOT_EDGE_ID is required}=${INGOT_EDGE_TOKEN:?INGOT_EDGE_TOKEN is required}
+      - EdgeDiagnostics__EdgeTokens__${INGOT_EDGE_ID:?INGOT_EDGE_ID is required}=${INGOT_CONNECTOR_LOCAL_TOKEN:-}
       - Authentication__Mode=${INGOT_AUTH_MODE:-Local}
       - Authentication__AllowInsecureDemo=${INGOT_ALLOW_INSECURE_DEMO:-false}
       - Authentication__Authority=${INGOT_AUTHORITY:-}
@@ -127,6 +159,8 @@ services:
     container_name: ingot-connector-host
     ports:
       - "127.0.0.1:8001:8001"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       # 每个 Edge 实例必须使用独立持久目录；更换目录或丢失 outbox 时也必须更换 EdgeId，
       # 否则 Platform 会正确拒绝从 1 重新开始的 (EdgeId, Seq)。
@@ -140,12 +174,14 @@ services:
       Edge__PlatformApiBaseUrl: http://platform-api:8000
       Edge__PublicBaseUrl: http://connector-host:8001
       Edge__EventIngestToken: ${INGOT_EDGE_TOKEN:?INGOT_EDGE_TOKEN is required}
-      Acquisition__Enabled: "false"
+      Acquisition__Enabled: ${INGOT_ACQUISITION_ENABLED:-true}
       Acquisition__AllowLocalFallbackWhenPlatformAvailable: "false"
       Acquisition__DeploymentCachePath: /app/Data/acquisition-deployments.json
       Acquisition__StartupHealthTimeoutMs: "30000"
     depends_on:
       platform-api:
+        condition: service_healthy
+      plc-simulator:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:8001/health"]

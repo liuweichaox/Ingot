@@ -13,7 +13,7 @@ namespace Ingot.Platform.Api.Controllers;
 [Route("api/edges/{edgeId}")]
 public sealed class EdgeDiagnosticsController(
     EdgeRegistry registry,
-    EdgeTokenValidator edgeTokenValidator,
+    EdgeDiagnosticsTokenProvider diagnosticsTokenProvider,
     IHttpClientFactory httpClientFactory) : ControllerBase
 {
     [HttpGet("metrics/raw")]
@@ -31,7 +31,7 @@ public sealed class EdgeDiagnosticsController(
 
         using var resp = await client.GetAsync(uri, cancellationToken);
         var body = await resp.Content.ReadAsStringAsync(cancellationToken);
-        if (!resp.IsSuccessStatusCode) return StatusCode((int)resp.StatusCode, body);
+        if (!resp.IsSuccessStatusCode) return EdgeProxyFailure(resp, body);
 
         return Content(body, "text/plain; version=0.0.4; charset=utf-8");
     }
@@ -47,7 +47,7 @@ public sealed class EdgeDiagnosticsController(
 
         using var resp = await client.GetAsync(uri, cancellationToken);
         var text = await resp.Content.ReadAsStringAsync(cancellationToken);
-        if (!resp.IsSuccessStatusCode) return StatusCode((int)resp.StatusCode, text);
+        if (!resp.IsSuccessStatusCode) return EdgeProxyFailure(resp, text);
 
         var metrics = PrometheusTextParser.Parse(text);
         return Ok(new
@@ -89,7 +89,7 @@ public sealed class EdgeDiagnosticsController(
         {
             using var resp = await client.GetAsync(uri, cancellationToken);
             var body = await resp.Content.ReadAsStringAsync(cancellationToken);
-            if (!resp.IsSuccessStatusCode) return StatusCode((int)resp.StatusCode, body);
+            if (!resp.IsSuccessStatusCode) return EdgeProxyFailure(resp, body);
 
             // 透传 edge 返回的 JSON（保持字段命名一致）
             return Content(body, "application/json; charset=utf-8");
@@ -112,7 +112,7 @@ public sealed class EdgeDiagnosticsController(
         var client = CreateEdgeClient(edgeId);
         using var resp = await client.GetAsync(uri, cancellationToken);
         var body = await resp.Content.ReadAsStringAsync(cancellationToken);
-        if (!resp.IsSuccessStatusCode) return StatusCode((int)resp.StatusCode, body);
+        if (!resp.IsSuccessStatusCode) return EdgeProxyFailure(resp, body);
 
         return Content(body, "application/json; charset=utf-8");
     }
@@ -138,7 +138,7 @@ public sealed class EdgeDiagnosticsController(
             var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
             return response.IsSuccessStatusCode
                 ? Content(body, "application/json; charset=utf-8")
-                : StatusCode((int)response.StatusCode, body);
+                : EdgeProxyFailure(response, body);
         }
         catch (HttpRequestException exception)
         {
@@ -168,8 +168,24 @@ public sealed class EdgeDiagnosticsController(
     private HttpClient CreateEdgeClient(string edgeId)
     {
         var client = httpClientFactory.CreateClient();
-        if (edgeTokenValidator.TryGetToken(edgeId, out var token))
+        if (diagnosticsTokenProvider.TryGetToken(edgeId, out var token))
             client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
         return client;
+    }
+
+    private IActionResult EdgeProxyFailure(HttpResponseMessage response, string body)
+    {
+        if (response.StatusCode is System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.Forbidden)
+        {
+            return StatusCode(
+                StatusCodes.Status502BadGateway,
+                new
+                {
+                    error = "平台无法通过节点诊断凭据访问该采集节点，请检查节点凭据配置。",
+                    edgeStatus = (int)response.StatusCode
+                });
+        }
+
+        return StatusCode((int)response.StatusCode, body);
     }
 }

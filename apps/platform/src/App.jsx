@@ -3,6 +3,7 @@ import {
   AdjustmentsHorizontalIcon,
   BoltIcon,
   BeakerIcon,
+  ChatBubbleLeftRightIcon,
   ChevronRightIcon,
   CircleStackIcon,
   Cog6ToothIcon,
@@ -19,6 +20,11 @@ import { cx, Input, ToastHost } from "./ui/components";
 
 const sections = [
   {
+    id: "assistant", label: "分析助手", icon: ChatBubbleLeftRightIcon, path: "/chat", groups: [
+      { items: [["/chat", "分析助手"]] },
+    ],
+  },
+  {
     id: "overview", label: "总览", icon: BoltIcon, path: "/workbench", groups: [
       { items: [["/workbench", "决策总览"]] },
     ],
@@ -32,7 +38,7 @@ const sections = [
   {
     id: "diagnosis", label: "工艺追因", icon: MagnifyingGlassCircleIcon, path: "/comparisons", groups: [
       { label: "分析准备", items: [["/data-quality", "数据可信度"]] },
-      { label: "分析与核对", items: [["/comparisons", "运行对比"], ["/quality-analysis", "质量偏差分析"], ["/chat", "分析助手"], ["/golden-questions", "评测问题集"]] },
+      { label: "分析与核对", items: [["/comparisons", "运行对比"], ["/quality-analysis", "质量偏差分析"], ["/golden-questions", "评测问题集"]] },
     ],
   },
   {
@@ -64,7 +70,7 @@ const sectionItems = section => section.groups.flatMap(group => group.items);
 const pageDetails = {
   "/research-projects": ["优化项目", "从问题、证据与实验推进到经过验证的工艺窗口"],
   "/workbench": ["决策总览", "实时运行、质量、数据可信度与优化行动的统一入口"],
-  "/chat": ["分析助手", "结合实验、过程数据、机理和知识推进追因任务"],
+  "/chat": ["分析助手", "直接对话并核对运行、质量、配置、研发与知识证据"],
   "/research-assets": ["研发资产", "查看项目可复用的数据集、模型、机理和知识"],
   "/explorer": ["工业对象", "选择真实业务对象，再进入它的运行、事件、质量与数据健康视图"],
   "/process-executions": ["运行记录", "查看生产运行及其数据、工艺与质量上下文"],
@@ -115,6 +121,7 @@ export default function App({ identity, logout }) {
   const userInitials = displayName.trim().slice(0, 2).toUpperCase();
   const usesAppleShortcut = useMemo(isApplePlatform, []);
   const searchShortcutLabel = usesAppleShortcut ? "⌘ K" : "Ctrl K";
+  const isChatWorkspace = location.pathname === "/chat";
 
   useEffect(() => {
     function handleShortcut(event) {
@@ -230,6 +237,11 @@ export default function App({ identity, logout }) {
         </Menu>
       </header>
 
+      {isChatWorkspace ? (
+        <main className="h-[100dvh] overflow-hidden pt-16">
+          <AppRoutes identity={identity} />
+        </main>
+      ) : (
       <div className="pt-16">
           <aside className="fixed inset-y-16 left-0 z-30 hidden w-55 border-r border-slate-200 bg-white lg:block">
             <div className="flex h-16 items-center gap-2 border-b border-slate-100 px-5">
@@ -265,10 +277,11 @@ export default function App({ identity, logout }) {
             </div>
           </div>
           <main className="mx-auto w-full max-w-[1600px] p-4 sm:p-6">
-            <AppRoutes />
+            <AppRoutes identity={identity} />
           </main>
         </div>
       </div>
+      )}
 
       <Dialog open={mobileOpen} onClose={setMobileOpen} className="relative z-80 lg:hidden">
         <DialogBackdrop className="fixed inset-0 bg-slate-950/30" />
@@ -351,12 +364,12 @@ function GlobalSearchDialog({ open, onClose, navigate }) {
   );
 }
 
-function AppRoutes() {
+function AppRoutes({ identity }) {
   return (
     <Routes>
       <Route path="/" element={<Navigate to="/workbench" replace />} />
-      <Route path="/research-projects" element={<Pages.ResearchProjectsPage />} />
-      <Route path="/research-projects/:projectId" element={<Pages.ResearchProjectsPage />} />
+      <Route path="/research-projects" element={<Pages.ResearchProjectsPage identity={identity} />} />
+      <Route path="/research-projects/:projectId" element={<Pages.ResearchProjectsPage identity={identity} />} />
       <Route path="/workbench" element={<Pages.WorkbenchPage />} />
       <Route path="/chat" element={<Pages.ChatPage />} />
       <Route path="/research-assets" element={<Pages.ResearchAssetsPage />} />

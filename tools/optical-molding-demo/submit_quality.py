@@ -17,6 +17,9 @@ import urllib.request
 from datetime import datetime, timezone
 
 
+_AUTH_TOKEN: str | None = None
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--api", default="http://127.0.0.1:8000")
@@ -28,6 +31,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--maximum-run", type=int, default=24)
     parser.add_argument("--project-id")
     parser.add_argument("--experiment-id")
+    parser.add_argument("--username", default=os.environ.get("INGOT_ADMIN_USERNAME"))
+    parser.add_argument("--password", default=os.environ.get("INGOT_ADMIN_PASSWORD"))
     return parser.parse_args()
 
 
@@ -36,6 +41,8 @@ def request(url: str, payload: object | None = None) -> object:
     call = urllib.request.Request(url, data=body, method="POST" if body else "GET")
     if body:
         call.add_header("Content-Type", "application/json")
+    if _AUTH_TOKEN:
+        call.add_header("Authorization", f"Bearer {_AUTH_TOKEN}")
     try:
         with urllib.request.urlopen(call, timeout=30) as response:
             return json.loads(response.read().decode("utf-8"))
@@ -44,6 +51,22 @@ def request(url: str, payload: object | None = None) -> object:
         raise RuntimeError(
             f"platform request failed with HTTP {error.code}: {detail}"
         ) from error
+
+
+def authenticate(api: str, username: str | None, password: str | None) -> None:
+    global _AUTH_TOKEN
+    if not username and not password:
+        return
+    if not username or not password:
+        raise ValueError("both --username and --password are required for local authentication")
+    response = request(
+        f"{api}/api/v1/auth/login",
+        {"username": username, "password": password},
+    )
+    token = response.get("token")
+    if not isinstance(token, str) or not token:
+        raise RuntimeError("local authentication did not return a session token")
+    _AUTH_TOKEN = token
 
 
 def uuid7() -> str:
@@ -99,6 +122,7 @@ def load_experiment_runs(api: str, project_id: str, experiment_id: str) -> dict[
 def main() -> None:
     args = parse_args()
     api = args.api.rstrip("/")
+    authenticate(api, args.username, args.password)
     if bool(args.project_id) != bool(args.experiment_id):
         raise ValueError("--project-id and --experiment-id must be supplied together")
     experiment_runs = (
@@ -113,14 +137,14 @@ def main() -> None:
             matches = request(f"{api}/api/v1/process-executions?{query}").get("data", [])
             if matches and matches[0].get("status") == "completed":
                 executions.append(matches[0])
-    elif args.execution_id:
+    elif args.operation_run_id:
         query = urllib.parse.urlencode(
-            {"executionId": args.execution_id, "limit": "1"}
+            {"executionId": args.operation_run_id, "limit": "1"}
         )
         executions = request(f"{api}/api/v1/process-executions?{query}").get("data", [])
     else:
         query = urllib.parse.urlencode(
-            {"status": "completed", "limit": "200", "equipmentId": args.equipment_id}
+            {"status": "completed", "limit": "200", "equipmentId": args.machine_id}
         )
         executions = request(f"{api}/api/v1/process-executions?{query}").get("data", [])
     submitted = 0

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { deleteJson, postJson } from "../api/http";
 import { extractRows, useApi } from "../hooks/useApi";
-import { Alert, Button, Card, DataTable, Drawer, EmptyState, Field, Input, Pagination, Page, Select, StatusBadge, WorkflowGuide, notify } from "../ui/components";
+import { Alert, Button, Card, DataTable, Drawer, EmptyState, Field, Input, Pagination, Page, Select, StatusBadge, WorkflowGuide, notify, useConfirmDialog } from "../ui/components";
 import { formatTime, LoadingCard } from "./shared";
 
 const productionResources = {
@@ -726,6 +726,7 @@ function ProductionRecordsPage({ section }) {
   const [saving, setSaving] = useState(false);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
+  const { confirm, confirmationDialog } = useConfirmDialog();
   const pagedRows = rows.slice((page - 1) * pageSize, page * pageSize);
   const editorValid = isProductionEditorValid(resource, editor);
   const activeRows = rows.filter(row => section === "context" ? !row.validTo : section === "installation" ? !row.removedAt : false);
@@ -769,7 +770,12 @@ function ProductionRecordsPage({ section }) {
   }
 
   async function lifecycle(row) {
-    if (!window.confirm(`确认${resource.lifecycle.label}这条${resource.title}记录？历史引用会继续保留。`)) return;
+    if (!await confirm({
+      title: `${resource.lifecycle.label}${resource.title}记录`,
+      description: "该记录将不再对后续运行生效，已经形成的历史引用会继续保留。",
+      confirmLabel: `确认${resource.lifecycle.label}`,
+      tone: "danger",
+    })) return;
     try {
       await postJson(resource.lifecycle.url(row), resource.lifecycle.body(row));
       await reload();
@@ -780,7 +786,12 @@ function ProductionRecordsPage({ section }) {
   }
 
   async function remove(row) {
-    if (!window.confirm("只能删除尚未形成历史引用的数据，是否继续？")) return;
+    if (!await confirm({
+      title: `删除${resource.title}记录`,
+      description: "只有尚未形成历史引用的记录才能删除。删除后无法恢复。",
+      confirmLabel: "确认删除",
+      tone: "danger",
+    })) return;
     try {
       await deleteJson(resource.deleteUrl(row));
       await reload();
@@ -903,6 +914,7 @@ function ProductionRecordsPage({ section }) {
           onChange={(key, value) => setEditor(current => ({ ...current, [key]: value }))}
         />
       </Drawer>
+      {confirmationDialog}
     </Page>
   );
 }

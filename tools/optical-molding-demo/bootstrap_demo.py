@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 from datetime import datetime, timezone
 import json
+import os
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -18,6 +19,9 @@ from demo_contract import (
     recipe_parameter_definitions,
 )
 from provision_ingestion_task import build_payload
+
+
+_AUTH_TOKEN: str | None = None
 
 
 TOOLING_COMPONENT_TYPES = [
@@ -140,14 +144,19 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--task-version", type=int, default=1)
     parser.add_argument("--data-model-version", type=int, default=1)
     parser.add_argument("--scenario-version", type=int)
+    parser.add_argument("--username", default=os.environ.get("INGOT_ADMIN_USERNAME"))
+    parser.add_argument("--password", default=os.environ.get("INGOT_ADMIN_PASSWORD"))
     return parser.parse_args()
 
 
 def post_json(api: str, path: str, payload: object) -> object:
+    headers = {"Content-Type": "application/json; charset=utf-8"}
+    if _AUTH_TOKEN:
+        headers["Authorization"] = f"Bearer {_AUTH_TOKEN}"
     request = urllib.request.Request(
         f"{api.rstrip('/')}{path}",
         data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
-        headers={"Content-Type": "application/json; charset=utf-8"},
+        headers=headers,
         method="POST",
     )
     try:
@@ -159,8 +168,29 @@ def post_json(api: str, path: str, payload: object) -> object:
 
 
 def get_json(api: str, path: str) -> object:
-    with urllib.request.urlopen(f"{api.rstrip('/')}{path}", timeout=30) as response:
+    headers = {"Accept": "application/json"}
+    if _AUTH_TOKEN:
+        headers["Authorization"] = f"Bearer {_AUTH_TOKEN}"
+    request = urllib.request.Request(f"{api.rstrip('/')}{path}", headers=headers)
+    with urllib.request.urlopen(request, timeout=30) as response:
         return json.loads(response.read().decode("utf-8"))
+
+
+def authenticate(api: str, username: str | None, password: str | None) -> None:
+    global _AUTH_TOKEN
+    if not username and not password:
+        return
+    if not username or not password:
+        raise ValueError("both --username and --password are required")
+    response = post_json(
+        api,
+        "/api/v1/auth/login",
+        {"username": username, "password": password},
+    )
+    token = response.get("token")
+    if not isinstance(token, str) or not token:
+        raise RuntimeError("local authentication did not return a session token")
+    _AUTH_TOKEN = token
 
 
 def data_model(version: int = 1) -> dict[str, object]:
@@ -308,10 +338,17 @@ def scenario_package(
         ],
         "qualityPlan": {"id": "optical-lens-molding-demo-quality", "version": 1},
         "contextFields": [
+            {"fieldCode": "execution_id", "name": "运行标识", "mode": "required-for-analysis", "minimumCoverage": 1.0, "minimumFactorOverlap": None},
             {"fieldCode": "equipment_id", "name": "设备", "mode": "required-for-analysis", "minimumCoverage": 1.0, "minimumFactorOverlap": 0.5},
+            {"fieldCode": "product_family_code", "name": "产品族", "mode": "required-for-analysis", "minimumCoverage": 1.0, "minimumFactorOverlap": 0.5},
+            {"fieldCode": "product_code", "name": "产品", "mode": "required-for-analysis", "minimumCoverage": 1.0, "minimumFactorOverlap": None},
+            {"fieldCode": "process_specification_id", "name": "工艺规范", "mode": "required-for-analysis", "minimumCoverage": 1.0, "minimumFactorOverlap": None},
+            {"fieldCode": "process_specification_version", "name": "工艺规范版本", "mode": "required-for-analysis", "minimumCoverage": 1.0, "minimumFactorOverlap": None},
+            {"fieldCode": "output_item_id", "name": "产出物", "mode": "required-for-analysis", "minimumCoverage": 1.0, "minimumFactorOverlap": None},
+            {"fieldCode": "tooling_assembly_id", "name": "工装总成", "mode": "required-for-analysis", "minimumCoverage": 1.0, "minimumFactorOverlap": 0.5},
             {"fieldCode": "assembly_revision", "name": "工装版本", "mode": "record-when-available", "minimumCoverage": None, "minimumFactorOverlap": None},
             {"fieldCode": "tooling_usage_count", "name": "工装累计运行次数", "mode": "record-when-available", "minimumCoverage": None, "minimumFactorOverlap": None},
-            {"fieldCode": "material_lot_ref", "name": "材料批次", "mode": "record-when-available", "minimumCoverage": None, "minimumFactorOverlap": None},
+            {"fieldCode": "material_lot_ref", "name": "材料批次", "mode": "required-for-analysis", "minimumCoverage": 1.0, "minimumFactorOverlap": 0.5},
             {"fieldCode": "calibration_status", "name": "校准状态", "mode": "required-for-analysis", "minimumCoverage": 0.95, "minimumFactorOverlap": None},
             {"fieldCode": "maintenance_status", "name": "维护状态", "mode": "record-when-available", "minimumCoverage": None, "minimumFactorOverlap": None},
         ],
@@ -480,6 +517,7 @@ def provision_manufacturing_context(
 
 def main() -> None:
     args = parse_args()
+    authenticate(args.api, args.username, args.password)
     baseline_process_specification_version = (args.data_model_version - 1) * 2 + 1
     resources = [
         (

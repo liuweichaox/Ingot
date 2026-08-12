@@ -2,7 +2,7 @@ import { useState } from "react";
 import { deleteJson, postJson } from "../api/http";
 import { createRegistryBusinessForm, RegistryBusinessEditor, registryBusinessPayload, registryBusinessValidation } from "../components/RegistryBusinessEditor";
 import { extractRows, useApi } from "../hooks/useApi";
-import { Alert, Button, Card, DataTable, Drawer, Field, Input, Page, Select, StatusBadge, Textarea, WorkflowGuide, notify } from "../ui/components";
+import { Alert, Button, Card, DataTable, Drawer, Field, Input, Page, Select, StatusBadge, Textarea, WorkflowGuide, notify, useConfirmDialog } from "../ui/components";
 import { formatTime, emptyInspectionCharacteristic, inspectionDefinitionForm, inspectionDefinitionPayload, inspectionDefinitionValidation, inspectionInputTypes, LoadingCard } from "./shared";
 
 const registryPages = {
@@ -66,6 +66,7 @@ function RegistryPage({ definition }) {
   const [businessForm, setBusinessForm] = useState(() => createRegistryBusinessForm(definition.kind));
   const [editorError, setEditorError] = useState("");
   const [saving, setSaving] = useState(false);
+  const { confirm, confirmationDialog } = useConfirmDialog();
   const isInspectionDefinition = definition.kind === "inspectionDefinition";
   const hasBusinessEditor = Boolean(definition.kind) && !isInspectionDefinition;
   const inspectionValidation = isInspectionDefinition ? inspectionDefinitionValidation(inspectionForm) : "";
@@ -124,6 +125,12 @@ function RegistryPage({ definition }) {
   }
 
   async function retire(row) {
+    if (!await confirm({
+      title: `停用${definition.title}`,
+      description: "该版本将不再用于新的业务记录，既有历史引用仍会保留。",
+      confirmLabel: "确认停用",
+      tone: "danger",
+    })) return;
     try {
       await postJson(definition.endpoint, {
         ...row,
@@ -139,7 +146,12 @@ function RegistryPage({ definition }) {
   }
 
   async function remove(row) {
-    if (!window.confirm(`确认删除草稿 ${row[definition.key]} v${row.version ?? 1}？此操作不可恢复。`)) return;
+    if (!await confirm({
+      title: `删除草稿 ${row[definition.key]} v${row.version ?? 1}`,
+      description: "草稿删除后无法恢复；已发布版本不会在这里被删除。",
+      confirmLabel: "确认删除",
+      tone: "danger",
+    })) return;
     try {
       await deleteJson(definition.deleteUrl(row));
       await reload();
@@ -247,6 +259,7 @@ function RegistryPage({ definition }) {
           />
         )}
       </Drawer>
+      {confirmationDialog}
     </Page>
   );
 }

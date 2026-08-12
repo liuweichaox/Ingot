@@ -13,6 +13,8 @@ const ui = await readFile(new URL("../src/ui/components.jsx", import.meta.url), 
 const researchProjects = await readFile(new URL("../src/pages/ResearchProjectsPage.jsx", import.meta.url), "utf8");
 const researchAssets = await readFile(new URL("../src/pages/ResearchAssetsPage.jsx", import.meta.url), "utf8");
 const goldenQuestions = await readFile(new URL("../src/pages/GoldenQuestionsPage.jsx", import.meta.url), "utf8");
+const ingestionTasks = await readFile(new URL("../src/acquisition/IngestionTaskPage.jsx", import.meta.url), "utf8");
+const app = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
 
 test("operations retain server pagination and resumable live events", () => {
   assert.match(pages, /offset: String\(\(page - 1\) \* pageSize\)/);
@@ -81,6 +83,15 @@ test("tooling and production lifecycle operations remain explicit", () => {
   assert.match(pages, /:close/);
   assert.match(pages, /installedAt: new Date\(\)\.toISOString\(\)/);
   assert.match(pages, /source: "manual"/);
+});
+
+test("destructive workflows use the accessible product confirmation dialog", () => {
+  assert.match(ui, /export function ConfirmDialog/);
+  assert.match(ui, /export function useConfirmDialog/);
+  assert.match(pages, /useConfirmDialog/);
+  assert.match(ingestionTasks, /useConfirmDialog/);
+  assert.doesNotMatch(pages, /window\.confirm/);
+  assert.doesNotMatch(ingestionTasks, /window\.confirm/);
 });
 
 test("quality entry supports configured input types, attachments, and human review", () => {
@@ -209,6 +220,18 @@ test("research projects expose the evidence-backed experiment and operating-regi
   assert.doesNotMatch(researchProjects, /项目代码|指标代码|变量代码|AnalysisHash|GUID/);
 });
 
+test("research project membership uses authenticated immutable user identities", () => {
+  assert.match(app, /<AppRoutes identity=\{identity\} \/>/);
+  assert.match(app, /function AppRoutes\(\{ identity \}\)/);
+  assert.match(app, /<Pages\.ResearchProjectsPage identity=\{identity\} \/>/);
+  assert.match(researchProjects, /ResearchProjectsPage\(\{ identity \}\)/);
+  assert.match(researchProjects, /getJson\("\/api\/v1\/users"\)/);
+  assert.match(researchProjects, /value=\{user\.userId\}/);
+  assert.match(researchProjects, /currentUserId=\{identity\?\.userId/);
+  assert.match(researchProjects, /candidateUserIds\.has\(userId\)/);
+  assert.doesNotMatch(researchProjects, /const identity = \{ username: "operator"/);
+});
+
 test("research project setup reuses configured industrial definitions instead of retyping identifiers", () => {
   assert.match(researchProjects, /\/api\/v1\/inspection-definitions/);
   assert.match(researchProjects, /\/api\/v1\/process-data-models/);
@@ -224,6 +247,7 @@ test("research projects turn optimization into the existing experiment workflow"
   assert.match(researchProjects, /\/optimize/);
   assert.match(researchProjects, /batchSize:\s*2/);
   assert.match(researchProjects, /智能设计下一组实验/);
+  assert.match(researchProjects, /当前没有可用的冻结观察，已生成首组先验探索实验/);
   assert.match(researchProjects, /现有流程审核后执行/);
   assert.doesNotMatch(researchProjects, /processProfile|optical-lens-molding-v1/);
   assert.doesNotMatch(researchProjects, /optimization-observations|optimization-suggestions/);
@@ -312,21 +336,26 @@ test("engineer golden questions freeze reviewed evidence and evaluate actual age
   assert.doesNotMatch(page, /JSON\.stringify\(form/);
 });
 
-test("Chat renders structured answers, exposes progress and cancellation, and keeps project history", () => {
+test("Chat is a standalone conversation workspace with optional project context and full lifecycle controls", () => {
   assert.match(pages, /\/api\/v1\/chat\/capabilities/);
   assert.match(pages, /\/api\/v1\/chat\/runs/);
   assert.match(pages, /streamSse/);
   assert.match(pages, /function ChatAnswer/);
   assert.match(pages, /answer\.summary/);
-  assert.match(pages, /取消分析/);
-  assert.match(pages, /本项目调查记录/);
+  assert.match(pages, /新对话/);
+  assert.match(pages, /删除对话/);
+  assert.match(pages, /给分析助手发送消息/);
+  assert.match(pages, /全部数据（无需项目）/);
+  assert.match(pages, /requestSubmit/);
   assert.match(pages, /capabilitiesLoading/);
-  assert.match(pages, /当前分析范围/);
-  assert.match(pages, /提出调查问题/);
-  assert.match(pages, /结果与证据/);
   assert.match(pages, /scopedHistory/);
   assert.match(pages, /item\.pageContext\?\.id === projectId/);
-  assert.match(pages, /不执行设备写入或自动工艺变更/);
+  assert.match(pages, /不自动写入设备/);
+  assert.match(pages, /\{confirmationDialog\}/);
+  assert.match(app, /isChatWorkspace/);
+  assert.match(app, /h-\[100dvh\]/);
+  assert.match(app, /id: "assistant"/);
+  assert.doesNotMatch(pages, /LegacyChatPage/);
   assert.doesNotMatch(pages, /min-h-\[420px\]/);
   assert.doesNotMatch(pages, /\{run\.answer\}<\/div>/);
   assert.match(http, /Last-Event-ID/);

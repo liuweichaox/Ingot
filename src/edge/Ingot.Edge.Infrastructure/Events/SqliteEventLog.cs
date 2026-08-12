@@ -526,54 +526,96 @@ public sealed class SqliteEventLog : IEventLog, IBatchedEventLog
     private void EnsureSchema()
     {
         using var connection = Open();
+        using var transaction = connection.BeginTransaction();
+
+        using (var createEvents = connection.CreateCommand())
+        {
+            createEvents.Transaction = transaction;
+            createEvents.CommandText = """
+                                       CREATE TABLE IF NOT EXISTS events (
+                                         seq            INTEGER PRIMARY KEY AUTOINCREMENT,
+                                         event_id       TEXT NOT NULL UNIQUE,
+                                         event_type     TEXT NOT NULL,
+                                         type_version   INTEGER NOT NULL DEFAULT 1,
+                                         occurred_at    TEXT NOT NULL,
+                                         recorded_at    TEXT NOT NULL,
+                                         source         TEXT NOT NULL,
+                                         subject_type   TEXT NOT NULL,
+                                         subject_id     TEXT NOT NULL,
+                                         execution_id   TEXT,
+                                         context_json   TEXT NOT NULL DEFAULT '{}',
+                                         data_json      TEXT NOT NULL DEFAULT '{}',
+                                         ship_state     INTEGER NOT NULL DEFAULT 0,
+                                         ship_attempts  INTEGER NOT NULL DEFAULT 0
+                                       );
+                                       """;
+            createEvents.ExecuteNonQuery();
+        }
+
+        if (!ColumnExists(connection, transaction, "events", "execution_id"))
+        {
+            using var migrateEvents = connection.CreateCommand();
+            migrateEvents.Transaction = transaction;
+            migrateEvents.CommandText = "ALTER TABLE events ADD COLUMN execution_id TEXT;";
+            migrateEvents.ExecuteNonQuery();
+        }
+
+        using (var initializeSchema = connection.CreateCommand())
+        {
+            initializeSchema.Transaction = transaction;
+            initializeSchema.CommandText = """
+                                           CREATE INDEX IF NOT EXISTS idx_events_type_time
+                                             ON events(event_type, occurred_at);
+                                           CREATE INDEX IF NOT EXISTS idx_events_subject_time
+                                             ON events(subject_type, subject_id, occurred_at);
+                                           CREATE INDEX IF NOT EXISTS idx_events_correlation
+                                             ON events(execution_id, seq);
+                                           CREATE INDEX IF NOT EXISTS idx_events_ship
+                                             ON events(ship_state, seq);
+                                           CREATE TABLE IF NOT EXISTS event_context (
+                                             event_seq INTEGER NOT NULL
+                                               REFERENCES events(seq) ON DELETE CASCADE,
+                                             ctx_key   TEXT NOT NULL,
+                                             ctx_value TEXT NOT NULL,
+                                             PRIMARY KEY(event_seq, ctx_key)
+                                           );
+                                           CREATE INDEX IF NOT EXISTS idx_event_context_lookup
+                                             ON event_context(ctx_key, ctx_value, event_seq);
+                                           CREATE TABLE IF NOT EXISTS event_log_state (
+                                             singleton_id INTEGER PRIMARY KEY CHECK(singleton_id = 1),
+                                             pending_count INTEGER NOT NULL CHECK(pending_count >= 0)
+                                           );
+                                           INSERT INTO event_log_state(singleton_id, pending_count)
+                                           VALUES (1, (SELECT COUNT(*) FROM events WHERE ship_state = 0))
+                                           ON CONFLICT(singleton_id) DO UPDATE
+                                           SET pending_count = excluded.pending_count;
+                                           INSERT OR IGNORE INTO event_context(event_seq, ctx_key, ctx_value)
+                                           SELECT events.seq, json_each.key, CAST(json_each.value AS TEXT)
+                                           FROM events, json_each(events.context_json);
+                                           """;
+            initializeSchema.ExecuteNonQuery();
+        }
+
+        transaction.Commit();
+    }
+
+    private static bool ColumnExists(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        string tableName,
+        string columnName)
+    {
         using var command = connection.CreateCommand();
-        command.CommandText = """
-                              CREATE TABLE IF NOT EXISTS events (
-                                seq            INTEGER PRIMARY KEY AUTOINCREMENT,
-                                event_id       TEXT NOT NULL UNIQUE,
-                                event_type     TEXT NOT NULL,
-                                type_version   INTEGER NOT NULL DEFAULT 1,
-                                occurred_at    TEXT NOT NULL,
-                                recorded_at    TEXT NOT NULL,
-                                source         TEXT NOT NULL,
-                                subject_type   TEXT NOT NULL,
-                                subject_id     TEXT NOT NULL,
-                                execution_id TEXT,
-                                context_json   TEXT NOT NULL DEFAULT '{}',
-                                data_json      TEXT NOT NULL DEFAULT '{}',
-                                ship_state     INTEGER NOT NULL DEFAULT 0,
-                                ship_attempts  INTEGER NOT NULL DEFAULT 0
-                              );
-                              CREATE INDEX IF NOT EXISTS idx_events_type_time
-                                ON events(event_type, occurred_at);
-                              CREATE INDEX IF NOT EXISTS idx_events_subject_time
-                                ON events(subject_type, subject_id, occurred_at);
-                              CREATE INDEX IF NOT EXISTS idx_events_correlation
-                                ON events(execution_id, seq);
-                              CREATE INDEX IF NOT EXISTS idx_events_ship
-                                ON events(ship_state, seq);
-                              CREATE TABLE IF NOT EXISTS event_context (
-                                event_seq INTEGER NOT NULL
-                                  REFERENCES events(seq) ON DELETE CASCADE,
-                                ctx_key   TEXT NOT NULL,
-                                ctx_value TEXT NOT NULL,
-                                PRIMARY KEY(event_seq, ctx_key)
-                              );
-                              CREATE INDEX IF NOT EXISTS idx_event_context_lookup
-                                ON event_context(ctx_key, ctx_value, event_seq);
-                              CREATE TABLE IF NOT EXISTS event_log_state (
-                                singleton_id INTEGER PRIMARY KEY CHECK(singleton_id = 1),
-                                pending_count INTEGER NOT NULL CHECK(pending_count >= 0)
-                              );
-                              INSERT INTO event_log_state(singleton_id, pending_count)
-                              VALUES (1, (SELECT COUNT(*) FROM events WHERE ship_state = 0))
-                              ON CONFLICT(singleton_id) DO UPDATE
-                              SET pending_count = excluded.pending_count;
-                              INSERT OR IGNORE INTO event_context(event_seq, ctx_key, ctx_value)
-                              SELECT events.seq, json_each.key, CAST(json_each.value AS TEXT)
-                              FROM events, json_each(events.context_json);
-                              """;
-        command.ExecuteNonQuery();
+        command.Transaction = transaction;
+        command.CommandText = $"PRAGMA table_info({tableName});";
+        using var reader = command.ExecuteReader();
+        while (reader.Read())
+        {
+            if (string.Equals(reader.GetString(1), columnName, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+
+        return false;
     }
 
     private static async Task<long> ReadPendingCountAsync(

@@ -24,11 +24,14 @@
 组件分类只有“模芯”和“模架”；“上/下”属于不可变配置版本中的装配位置，不重复充当资产分类。
 
 ```powershell
+$env:INGOT_ADMIN_USERNAME = "admin"
+$env:INGOT_ADMIN_PASSWORD = "<local-admin-password>"
 uv run --project optimizer --locked python tools/optical-molding-demo/bootstrap_demo.py `
   --api http://127.0.0.1:8000 `
   --edge-id EDGE-FX3U-SIM-001 `
   --device-host 127.0.0.1 `
-  --device-port 5551
+  --device-port 5551 `
+  --scenario-version 2
 ```
 
 当前模拟设备契约包含 14 个采集量：整数阶段号、上/下模红外温度、电流、电压和功率，
@@ -52,3 +55,41 @@ uv run --project optimizer --locked python tools/optical-molding-demo/replay.py 
   --api http://127.0.0.1:8000 `
   --token development-device-simulator-token-0001
 ```
+
+向开启本地账户认证的平台回传质检结果时，`submit_quality.py` 从
+`INGOT_ADMIN_USERNAME` 和 `INGOT_ADMIN_PASSWORD` 读取凭据，先获取短期会话，
+再调用正式质检接口；不绕过平台权限边界。
+
+```powershell
+$env:INGOT_ADMIN_USERNAME = "admin"
+$env:INGOT_ADMIN_PASSWORD = "<local-admin-password>"
+uv run --project optimizer --locked python tools/optical-molding-demo/submit_quality.py `
+  --api http://127.0.0.1:8000 `
+  --machine-id OPTICAL-MOLD-SIM-01
+```
+
+不要凭页面猜测上下文是否已经串通。至少完成一个模拟周期后，运行端到端验收：
+
+```powershell
+uv run --project optimizer --locked python tools/optical-molding-demo/verify_context_chain.py `
+  --api http://127.0.0.1:8000 `
+  --scenario-version 2
+```
+
+这里显式创建工艺配置 v2，因为已发布版本不可修改；v2 补齐并冻结完整的运行上下文字段策略。
+
+验收会读取已发布工艺配置、其引用的数据摄取任务以及最新完成的真实运行，逐项打印
+字段来源、运行值和 `PASS/FAIL`。只有所有工艺配置上下文字段均有明确提供者、运行开始
+快照中都有值且 `context_capture_status=resolved` 时，命令才以成功状态退出。
+
+为研发资产页面准备明确标注为模拟的数据集、模型、机理、融合、项目知识和
+数据质量报告：
+
+```powershell
+uv run --project optimizer --locked python tools/optical-molding-demo/provision_research_assets.py `
+  --api http://127.0.0.1:8000 `
+  --project-id <research-project-id>
+```
+
+脚本是幂等的，且只调用平台正式 API；它不直接写数据库，也不把模拟资产标记为
+已验证的工艺证据。

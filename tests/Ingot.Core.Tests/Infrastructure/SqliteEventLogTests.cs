@@ -10,6 +10,64 @@ namespace Ingot.Core.Tests.Infrastructure;
 public sealed class SqliteEventLogTests
 {
     [Fact]
+    public async Task Constructor_ShouldMigrateLegacyEventsTableWithoutLosingExistingRows()
+    {
+        var dbPath = CreateTempDbPath();
+        try
+        {
+            await using (var connection = new SqliteConnection($"Data Source={dbPath}"))
+            {
+                await connection.OpenAsync();
+                await using var command = connection.CreateCommand();
+                command.CommandText = """
+                                      CREATE TABLE events (
+                                        seq            INTEGER PRIMARY KEY AUTOINCREMENT,
+                                        event_id       TEXT NOT NULL UNIQUE,
+                                        event_type     TEXT NOT NULL,
+                                        type_version   INTEGER NOT NULL DEFAULT 1,
+                                        occurred_at    TEXT NOT NULL,
+                                        recorded_at    TEXT NOT NULL,
+                                        source         TEXT NOT NULL,
+                                        subject_type   TEXT NOT NULL,
+                                        subject_id     TEXT NOT NULL,
+                                        context_json   TEXT NOT NULL DEFAULT '{}',
+                                        data_json      TEXT NOT NULL DEFAULT '{}',
+                                        ship_state     INTEGER NOT NULL DEFAULT 0,
+                                        ship_attempts  INTEGER NOT NULL DEFAULT 0
+                                      );
+                                      INSERT INTO events(
+                                        event_id, event_type, occurred_at, recorded_at, source,
+                                        subject_type, subject_id, context_json, data_json)
+                                      VALUES (
+                                        'legacy-event', 'process.execution.started',
+                                        '2026-01-01T00:00:00.0000000+00:00',
+                                        '2026-01-01T00:00:00.0000000+00:00',
+                                        'edge/EDGE-01/PLC-01/rule-01', 'equipment', 'POL-03',
+                                        '{"material_lot":"LOT-LEGACY"}', '{"count":1}');
+                                      """;
+                await command.ExecuteNonQueryAsync();
+            }
+
+            var log = new SqliteEventLog(
+                Options.Create(new EventOptions { DatabasePath = dbPath }),
+                NullLogger<SqliteEventLog>.Instance);
+
+            var existing = Assert.Single(await log.QueryAsync(new EventQuery { Limit = 100 }));
+            Assert.Equal("legacy-event", existing.EventId);
+            Assert.Null(existing.ExecutionId);
+            Assert.Equal("LOT-LEGACY", existing.Context["material_lot"]);
+
+            await log.AppendAsync(CreateEvent("process.execution.completed", "execution-new", "LOT-NEW"));
+            Assert.Equal(2, await log.CountPendingAsync());
+            Assert.Single(await log.QueryAsync(new EventQuery { ExecutionId = "execution-new" }));
+        }
+        finally
+        {
+            DeleteSqliteFiles(dbPath);
+        }
+    }
+
+    [Fact]
     public async Task Append_ShouldSurviveReopenAndSupportBusinessFilters()
     {
         var dbPath = CreateTempDbPath();

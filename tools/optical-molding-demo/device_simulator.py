@@ -30,10 +30,28 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--run-prefix", default="lens-source-demo")
     parser.add_argument("--max-runs", type=int, default=24)
     parser.add_argument(
-        "--recipe-version-offset",
+        "--response-delay-ms",
         type=int,
         default=0,
-        help="Add this offset to device recipe versions when demonstrating a new data-model generation.",
+        help="Delay each PLC response to exercise acquisition timeout behavior.",
+    )
+    parser.add_argument(
+        "--protocol-error-every",
+        type=int,
+        default=0,
+        help="Return an MC 1E error status for every Nth request (0 disables).",
+    )
+    parser.add_argument(
+        "--disconnect-every",
+        type=int,
+        default=0,
+        help="Close the TCP session before every Nth response (0 disables).",
+    )
+    parser.add_argument(
+        "--process-specification-version-offset",
+        type=int,
+        default=0,
+        help="Add this offset to process specification versions for a new validation generation.",
     )
     parser.add_argument("--api", default="http://127.0.0.1:8000")
     parser.add_argument("--project-id")
@@ -341,13 +359,37 @@ class Fx3uRegisterBank:
             self._refresh()
 
 
-def handler(registers: Fx3uRegisterBank):
+def handler(
+    registers: Fx3uRegisterBank,
+    *,
+    response_delay_ms: int = 0,
+    protocol_error_every: int = 0,
+    disconnect_every: int = 0,
+):
+    if response_delay_ms < 0:
+        raise ValueError("response_delay_ms cannot be negative")
+    if protocol_error_every < 0 or disconnect_every < 0:
+        raise ValueError("fault intervals cannot be negative")
+    request_count = 0
+    request_count_lock = threading.Lock()
+
     class Mc1EHandler(socketserver.BaseRequestHandler):
         def handle(self) -> None:
+            nonlocal request_count
             while True:
                 request = self._read_exact(12)
                 if request is None:
                     return
+                with request_count_lock:
+                    request_count += 1
+                    current_request = request_count
+                if disconnect_every and current_request % disconnect_every == 0:
+                    return
+                if response_delay_ms:
+                    time.sleep(response_delay_ms / 1000)
+                if protocol_error_every and current_request % protocol_error_every == 0:
+                    self.request.sendall(b"\x81\x10")
+                    continue
                 if request[:2] != b"\x01\xff" or request[8:10] != b" D":
                     self.request.sendall(b"\x81\x10")
                     continue
@@ -386,11 +428,21 @@ def main() -> None:
     )
     registers = Fx3uRegisterBank(simulator)
     registers.start()
-    server = Fx3uServer((args.host, args.port), handler(registers))
+    server = Fx3uServer(
+        (args.host, args.port),
+        handler(
+            registers,
+            response_delay_ms=args.response_delay_ms,
+            protocol_error_every=args.protocol_error_every,
+            disconnect_every=args.disconnect_every,
+        ),
+    )
     print(
         f"FX3U optical molding simulator listening on MC 1E {args.host}:{args.port} "
         f"for {simulator.max_runs} bounded runs "
-        f"{'from experiment ' + args.experiment_id if experiment_plan else 'with prefix ' + args.run_prefix}",
+        f"{'from experiment ' + args.experiment_id if experiment_plan else 'with prefix ' + args.run_prefix}; "
+        f"delay={args.response_delay_ms}ms errorEvery={args.protocol_error_every} "
+        f"disconnectEvery={args.disconnect_every}",
         flush=True,
     )
     try:

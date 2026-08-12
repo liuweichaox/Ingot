@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Link } from "react-router";
 import { postJson } from "../api/http";
 import { extractRows, useApi } from "../hooks/useApi";
-import { Alert, Button, Card, DataTable, Drawer, EmptyState, Field, Input, Metric, Page, Select, StatusBadge, notify } from "../ui/components";
+import { Alert, Button, Card, DataTable, Drawer, EmptyState, Field, Input, Metric, Page, Select, StatusBadge, notify, useConfirmDialog } from "../ui/components";
 import { formatTime, formatInteger, formatBytes, metricTotal, formatDuration, edgeStatus, LoadingCard } from "./shared";
 
 const platformRoleOptions = [
@@ -23,6 +23,7 @@ export function UsersPage() {
   const [password, setPassword] = useState("");
   const [actionError, setActionError] = useState("");
   const [busy, setBusy] = useState(false);
+  const { confirm, confirmationDialog } = useConfirmDialog();
 
   function startCreate() {
     setCreateForm({ username: "", displayName: "", password: "", roles: ["quality.inspector"] });
@@ -86,6 +87,12 @@ export function UsersPage() {
   }
 
   async function changeDisabled() {
+    if (!selected.disabled && !await confirm({
+      title: `停用账户 ${selected.username}`,
+      description: "该用户现有会话将失效，并且不能再次登录。请先确认至少保留一个可用的平台管理员账户。",
+      confirmLabel: "确认停用",
+      tone: "danger",
+    })) return;
     const saved = await runAction(() => postJson(
       `/api/v1/users/${encodeURIComponent(selected.userId)}:set-disabled`,
       { disabled: !selected.disabled },
@@ -176,6 +183,7 @@ export function UsersPage() {
           </div>
         )}
       </Drawer>
+      {confirmationDialog}
     </Page>
   );
 }

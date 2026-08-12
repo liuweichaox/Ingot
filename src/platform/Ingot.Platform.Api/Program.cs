@@ -82,6 +82,8 @@ builder.Services.AddIngotAgentProviders(builder.Configuration);
 
 // 宿主职责：入站鉴权策略
 builder.Services.AddSingleton<EdgeTokenValidator>();
+builder.Services.Configure<EdgeDiagnosticsOptions>(builder.Configuration.GetSection("EdgeDiagnostics"));
+builder.Services.AddSingleton<EdgeDiagnosticsTokenProvider>();
 builder.Services.AddSingleton<PlatformUserResolver>();
 
 builder.Services.AddHealthChecks()

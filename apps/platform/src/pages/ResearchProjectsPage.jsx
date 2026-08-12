@@ -171,13 +171,12 @@ function createTaskForm(task, workspace) {
   };
 }
 
-export function ResearchProjectsPage() {
+export function ResearchProjectsPage({ identity }) {
   const navigate = useNavigate();
   const { projectId } = useParams();
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const identity = { username: "operator", userId: "operator" };
   const [createOpen, setCreateOpen] = useState(false);
   const [projectForm, setProjectForm] = useState(projectFormInitial);
   const [workspace, setWorkspace] = useState(null);
@@ -189,6 +188,7 @@ export function ResearchProjectsPage() {
   const [shadowForm, setShadowForm] = useState({});
   const [controlledTarget, setControlledTarget] = useState(null);
   const [controlledForm, setControlledForm] = useState({});
+  const [memberCandidates, setMemberCandidates] = useState([]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -566,6 +566,7 @@ export function ResearchProjectsPage() {
       const alreadyActive = workspace.experiments.some(
         item => item.experimentId === experiment.experimentId,
       );
+      const observationCount = Number(experiment.optimization?.observationCount || 0);
       await refreshWorkspace();
       notify(
         alreadyActive
@@ -580,7 +581,9 @@ export function ResearchProjectsPage() {
               ? "已生成一条受控在线建议；必须先由现场工程师接受、修改或拒绝。"
           : intent === "validate-hypothesis"
             ? "已设计安全的假设验证实验；完成检验后，证据和假设状态会自动更新。"
-            : "已用真实运行和检验结果生成下一组优化实验，请按现有流程审核后执行。",
+            : observationCount > 0
+              ? `已基于 ${observationCount} 条冻结观察生成下一组优化实验，请按现有流程审核后执行。`
+              : "当前没有可用的冻结观察，已生成首组先验探索实验；结果回传前不形成工艺结论。",
         "success",
       );
     } catch (requestError) {
@@ -588,7 +591,16 @@ export function ResearchProjectsPage() {
     }
   }
 
-  function startTask(name) {
+  async function startTask(name) {
+    if (name === "member") {
+      try {
+        const response = await getJson("/api/v1/users");
+        setMemberCandidates(response?.data || []);
+      } catch (requestError) {
+        setMemberCandidates([]);
+        notify(requestError.message, "danger");
+      }
+    }
     setTask(name);
     setTaskForm(createTaskForm(name, workspace));
   }
@@ -601,10 +613,13 @@ export function ResearchProjectsPage() {
     setSaving(true);
     try {
       if (task === "member") {
-        const member = taskForm.member.trim().toLowerCase();
+        const member = taskForm.member.trim();
+        const candidateUserIds = new Set(memberCandidates.map(user => user.userId));
+        const currentMemberUserIds = (project.memberUserIds || [])
+          .filter(userId => userId === project.ownerUserId || candidateUserIds.has(userId));
         await putJson(`/api/v1/research-projects/${project.projectId}`, {
           ...project,
-          memberUserIds: [...new Set([...(project.memberUserIds || []), member])],
+          memberUserIds: [...new Set([...currentMemberUserIds, member])],
         });
       } else if (task === "hypothesis") {
         await postJson(`/api/v1/research-projects/${project.projectId}/hypotheses`, {
@@ -736,7 +751,7 @@ export function ResearchProjectsPage() {
             onReviewRollbackDrill={reviewRollbackDrill}
             onReviewTransferAssessment={reviewTransferAssessment}
             onAskAi={currentProjectId => navigate(`/chat?projectId=${encodeURIComponent(currentProjectId)}`)}
-            currentUserId={identity?.username || identity?.userId || ""}
+            currentUserId={identity?.userId || ""}
           />
         )}
         <TaskDrawer
@@ -744,6 +759,7 @@ export function ResearchProjectsPage() {
           form={taskForm}
           setForm={setTaskForm}
           workspace={workspace}
+          memberCandidates={memberCandidates}
           saving={saving}
           onClose={() => !saving && setTask("")}
           onSubmit={submitTask}
@@ -1944,7 +1960,7 @@ function ControlledDecisionDrawer({ target, form, setForm, saving, variables, on
   );
 }
 
-function TaskDrawer({ task, form, setForm, workspace, saving, onClose, onSubmit }) {
+function TaskDrawer({ task, form, setForm, workspace, memberCandidates, saving, onClose, onSubmit }) {
   if (!task || !workspace) return null;
   const update = name => event => setForm({ ...form, [name]: event.target.value });
   const variables = workspace.project.variables.filter(item => item.role === "control");
@@ -2010,7 +2026,20 @@ function TaskDrawer({ task, form, setForm, workspace, saving, onClose, onSubmit 
       footer={<><Button disabled={saving} onClick={onClose}>取消</Button><Button variant="primary" disabled={saving} type="submit" form="research-task-form">{saving ? "正在保存…" : "保存"}</Button></>}
     >
       <form id="research-task-form" className="space-y-4" onSubmit={onSubmit}>
-        {task === "member" && <Field label="成员用户名" hint="成员可以查看和参与该项目。"><Input required value={form.member} onChange={update("member")} /></Field>}
+        {task === "member" && (
+          <Field label="成员账户" hint="选择平台账户；项目权限使用不可变用户 ID 关联。">
+            <Select required value={form.member} onChange={update("member")}>
+              <option value="">请选择账户</option>
+              {(memberCandidates || [])
+                .filter(user => !workspace.project.memberUserIds?.includes(user.userId) && user.userId !== workspace.project.ownerUserId)
+                .map(user => (
+                  <option key={user.userId} value={user.userId}>
+                    {user.displayName || user.username} · {user.username}{user.disabled ? "（已停用）" : ""}
+                  </option>
+                ))}
+            </Select>
+          </Field>
+        )}
         {task === "hypothesis" && <>
           <Field label="假设"><Textarea required rows={4} value={form.statement} onChange={update("statement")} placeholder="说明哪个变量通过什么机制影响目标。" /></Field>
           <Field label="提出依据"><Textarea required rows={4} value={form.rationale} onChange={update("rationale")} placeholder="填写历史数据、物理机理或专家经验。" /></Field>

@@ -1,4 +1,6 @@
 from argparse import Namespace
+from datetime import datetime, timezone
+import hashlib
 import socket
 import threading
 
@@ -13,9 +15,27 @@ from bootstrap_demo import (
     scenario_package,
 )
 from demo_contract import DATA_ITEMS, RECIPE_PARAMETERS, device_recipe_values
-from device_simulator import Fx3uRegisterBank, Fx3uServer, Simulator, handler, values
+from device_simulator import (
+    Fx3uRegisterBank,
+    Fx3uServer,
+    Simulator,
+    handler,
+    parse_args as parse_device_args,
+    values,
+)
 from provision_ingestion_task import build_payload
-from submit_quality import read_source_execution_number
+import provision_ingestion_task
+from provision_research_assets import (
+    fusion_definition,
+    mechanism_model,
+    process_model,
+    quality_csv,
+    quality_manifest,
+    training_dataset,
+)
+import submit_quality
+from submit_quality import authenticate, parse_args as parse_quality_args, read_source_execution_number
+from verify_context_chain import audit_rows
 
 
 def test_sensor_and_recipe_contract_matches_reference_parameter_lists():
@@ -181,9 +201,51 @@ def test_bootstrap_keeps_model_recipe_and_analysis_versions_aligned():
         for field in package["contextFields"]
     )
     assert {field["fieldCode"] for field in package["contextFields"]} >= {
+        "execution_id",
+        "product_family_code",
+        "product_code",
+        "process_specification_id",
+        "process_specification_version",
+        "output_item_id",
+        "tooling_assembly_id",
         "assembly_revision",
         "material_lot_ref",
     }
+
+
+def test_every_scenario_context_field_has_a_provider_and_runtime_value():
+    package = scenario_package(1, 1)
+    task = build_payload(
+        Namespace(
+            edge_id="EDGE-FX3U-SIM-001",
+            device_host="127.0.0.1",
+            device_port=5551,
+            task_version=1,
+            data_model_version=1,
+        )
+    )
+    runtime = {
+        "execution_id": "019f-demo-run",
+        "equipment_id": "OPTICAL-MOLD-SIM-01",
+        "product_family_code": "optical-lens-demo",
+        "product_code": "LENS-DEMO-50",
+        "process_specification_id": "lens-molding-demo",
+        "process_specification_version": "1",
+        "output_item_id": "LENS-DEMO-0001",
+        "tooling_assembly_id": "MOLD-DEMO-A01",
+        "assembly_revision": "1",
+        "tooling_usage_count": "1",
+        "material_lot_ref": "GLASS-DEMO-01",
+        "calibration_status": "valid",
+        "maintenance_status": "available",
+    }
+
+    rows = audit_rows(package, task, runtime)
+
+    assert rows
+    assert all(row["source"] for row in rows)
+    assert all(row["value"] for row in rows)
+    assert all(row["status"] == "PASS" for row in rows)
 
 
 def test_quality_station_uses_source_execution_context_not_execution_id_shape():
@@ -199,6 +261,97 @@ def test_quality_station_uses_source_execution_context_not_execution_id_shape():
     }
 
     assert read_source_execution_number(detail) == 12
+
+
+def test_quality_station_cli_uses_the_declared_machine_and_run_options(monkeypatch):
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "submit_quality.py",
+            "--machine-id",
+            "PRESS-02",
+            "--operation-run-id",
+            "run-42",
+        ],
+    )
+
+    args = parse_quality_args()
+
+    assert args.machine_id == "PRESS-02"
+    assert args.operation_run_id == "run-42"
+
+
+def test_device_simulator_cli_uses_process_specification_version_term(monkeypatch):
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "device_simulator.py",
+            "--process-specification-version-offset",
+            "3",
+        ],
+    )
+
+    args = parse_device_args()
+
+    assert args.process_specification_version_offset == 3
+
+
+def test_quality_station_authenticates_subsequent_platform_requests(monkeypatch):
+    monkeypatch.setattr(submit_quality, "_AUTH_TOKEN", None)
+    monkeypatch.setattr(
+        submit_quality,
+        "request",
+        lambda url, payload=None: {"token": "session-token"},
+    )
+
+    authenticate("http://platform", "operator", "secret")
+
+    assert submit_quality._AUTH_TOKEN == "session-token"
+
+
+def test_ingestion_provisioner_authenticates_subsequent_platform_requests(monkeypatch):
+    monkeypatch.setattr(provision_ingestion_task, "_AUTH_TOKEN", None)
+    monkeypatch.setattr(
+        provision_ingestion_task,
+        "request",
+        lambda url, payload: {"token": "session-token"},
+    )
+
+    provision_ingestion_task.authenticate("http://platform", "operator", "secret")
+
+    assert provision_ingestion_task._AUTH_TOKEN == "session-token"
+
+
+def test_research_asset_demo_is_explicitly_simulated_and_contract_aligned():
+    now = datetime.now(timezone.utc)
+    content = quality_csv()
+    dataset = training_dataset(now, hashlib.sha256(content).hexdigest())
+    model = process_model()
+    mechanism = mechanism_model()
+    fusion = fusion_definition()
+    manifest = quality_manifest(content)
+
+    assert dataset["analysisPlanId"] == "optical-lens-molding-demo-analysis"
+    assert model["datasetId"] == dataset["datasetId"]
+    assert model["inputFeatureCodes"] == dataset["featureCodes"]
+    assert model["outputCode"] == dataset["targetCode"]
+    assert fusion["mechanismModelId"] == mechanism["modelId"]
+    assert "模拟" in mechanism["scientificBasis"]
+    assert manifest["isMeasuredData"] is False
+    assert manifest["dataKind"] == "simulated-validation"
+    assert manifest["sourceUri"].startswith("https://github.com/liuweichaox/Ingot/")
+
+
+def test_research_asset_provisioner_contains_required_mechanism_status_transition():
+    source = (__import__("pathlib").Path(__file__).parent / "provision_research_assets.py").read_text(
+        encoding="utf-8"
+    )
+
+    assert 'mechanism.get("status") == "draft"' in source
+    assert '{"targetStatus": "validated"}' in source
+    assert source.index('"targetStatus": "validated"') < source.index(
+        'client.request_json("POST", "/api/v1/mechanism-fusions"'
+    )
 
 
 def test_fx3u_run_active_register_has_a_real_boundary_between_molding_executions():
@@ -249,3 +402,46 @@ def test_fx3u_server_answers_mc_1e_binary_word_reads():
         server.server_close()
         registers.stop()
         thread.join(timeout=2)
+
+
+def test_fx3u_server_fault_modes_expose_protocol_error_and_disconnect():
+    simulator = Simulator(execution_seconds=60, run_prefix="fx3u-fault", max_runs=1)
+    registers = Fx3uRegisterBank(simulator)
+    registers.start()
+    server = Fx3uServer(
+        ("127.0.0.1", 0),
+        handler(registers, protocol_error_every=2, disconnect_every=3),
+    )
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    request = (
+        b"\x01\xff"
+        + (16).to_bytes(2, "little")
+        + (101).to_bytes(4, "little")
+        + b" D"
+        + b"\x01\x00"
+    )
+    try:
+        responses = []
+        for _ in range(3):
+            with socket.create_connection(server.server_address, timeout=2) as client:
+                client.sendall(request)
+                responses.append(client.recv(4))
+        assert responses[0][:2] == b"\x81\x00"
+        assert responses[1] == b"\x81\x10"
+        assert responses[2] == b""
+    finally:
+        server.shutdown()
+        server.server_close()
+        registers.stop()
+        thread.join(timeout=2)
+
+
+def test_fx3u_server_rejects_invalid_fault_configuration():
+    simulator = Simulator(execution_seconds=60, run_prefix="fx3u-fault", max_runs=1)
+    registers = Fx3uRegisterBank(simulator)
+    try:
+        handler(registers, response_delay_ms=-1)
+        raise AssertionError("negative response delay must be rejected")
+    except ValueError as error:
+        assert "response_delay_ms" in str(error)

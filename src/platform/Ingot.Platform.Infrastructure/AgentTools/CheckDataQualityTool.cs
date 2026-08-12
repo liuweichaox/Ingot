@@ -105,12 +105,12 @@ public sealed class CheckDataQualityTool(
         {
             Kind = "event-query",
             Id = scopeId,
-            Label = $"生产记录查询结果（已完整检查 {ordered.Length} 条）",
+            Label = $"生产事件查询结果（已完整检查 {ordered.Length} 条）",
             Url = BuildEventsUrl(subjectId, executionId)
         };
         var summary = scopeEmpty
-            ? "当前范围没有生产记录，无法检查数据完整性。"
-            : $"范围内共 {totalEvents} 条生产记录，已完整检查 {ordered.Length} 条：发现 {incompleteProcessExecutions} 个不完整生产过程执行、" +
+            ? "当前范围没有生产事件，无法检查数据完整性。"
+            : $"范围内共 {totalEvents} 条生产事件，已完整检查 {ordered.Length} 条：涉及 {correlations.Length} 个生产运行，发现 {incompleteProcessExecutions} 个不完整运行、" +
               (sequenceGaps.HasValue ? $"{sequenceGaps} 个序号间断，" : "序号连续性未在当前过滤范围计算，") +
               $"{emptyContext} 条记录缺少生产信息；最新记录时间为 {latest:O}。";
         return new AnalysisToolResult

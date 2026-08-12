@@ -1,6 +1,6 @@
 import { Dialog, DialogBackdrop, DialogPanel, DialogTitle } from "@headlessui/react";
 import { XMarkIcon } from "@heroicons/react/24/outline";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export function cx(...values) {
   return values.filter(Boolean).join(" ");
@@ -406,6 +406,61 @@ export function Metric({ label, value, hint, className, valueClassName }) {
       {hint && <p className="mt-1 break-words text-xs leading-5 text-slate-500">{hint}</p>}
     </div>
   );
+}
+
+export function ConfirmDialog({ open, title, description, confirmLabel = "确认", tone = "danger", onCancel, onConfirm }) {
+  return (
+    <Dialog open={open} onClose={onCancel} className="relative z-150">
+      <DialogBackdrop transition className="fixed inset-0 bg-slate-950/35 backdrop-blur-sm transition data-closed:opacity-0" />
+      <div className="fixed inset-0 grid place-items-center overflow-y-auto p-4">
+        <DialogPanel
+          transition
+          className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl transition data-closed:scale-95 data-closed:opacity-0"
+        >
+          <DialogTitle className="text-lg font-semibold text-slate-950">{title}</DialogTitle>
+          {description && <p className="mt-2 text-sm leading-6 text-slate-600">{description}</p>}
+          <div className="mt-6 flex justify-end gap-2">
+            <Button onClick={onCancel}>取消</Button>
+            <Button variant={tone === "danger" ? "danger" : "primary"} onClick={onConfirm}>{confirmLabel}</Button>
+          </div>
+        </DialogPanel>
+      </div>
+    </Dialog>
+  );
+}
+
+export function useConfirmDialog() {
+  const [options, setOptions] = useState(null);
+  const resolver = useRef(null);
+
+  function settle(value) {
+    resolver.current?.(value);
+    resolver.current = null;
+    setOptions(null);
+  }
+
+  function confirm(nextOptions) {
+    resolver.current?.(false);
+    return new Promise(resolve => {
+      resolver.current = resolve;
+      setOptions(nextOptions);
+    });
+  }
+
+  return {
+    confirm,
+    confirmationDialog: (
+      <ConfirmDialog
+        open={Boolean(options)}
+        title={options?.title || "确认操作"}
+        description={options?.description}
+        confirmLabel={options?.confirmLabel}
+        tone={options?.tone}
+        onCancel={() => settle(false)}
+        onConfirm={() => settle(true)}
+      />
+    ),
+  };
 }
 
 export function Pagination({ page, pageSize, total, onPageChange, onPageSizeChange }) {

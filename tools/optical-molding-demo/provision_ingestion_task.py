@@ -5,9 +5,14 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import urllib.error
 import urllib.request
 
 from demo_contract import DATA_ITEMS, RECIPE_PARAMETERS
+
+
+_AUTH_TOKEN: str | None = None
 
 
 def parse_args() -> argparse.Namespace:
@@ -24,7 +29,44 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--device-port", type=int, default=5551)
     parser.add_argument("--task-version", type=int, default=8)
     parser.add_argument("--data-model-version", type=int, default=1)
+    parser.add_argument("--username", default=os.environ.get("INGOT_ADMIN_USERNAME"))
+    parser.add_argument("--password", default=os.environ.get("INGOT_ADMIN_PASSWORD"))
     return parser.parse_args()
+
+
+def request(url: str, payload: object) -> object:
+    call = urllib.request.Request(
+        url,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    if _AUTH_TOKEN:
+        call.add_header("Authorization", f"Bearer {_AUTH_TOKEN}")
+    try:
+        with urllib.request.urlopen(call, timeout=120) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as error:
+        detail = error.read().decode("utf-8", errors="replace")
+        raise RuntimeError(
+            f"platform request failed with HTTP {error.code}: {detail}"
+        ) from error
+
+
+def authenticate(api: str, username: str | None, password: str | None) -> None:
+    global _AUTH_TOKEN
+    if not username and not password:
+        return
+    if not username or not password:
+        raise ValueError("both --username and --password are required for local authentication")
+    response = request(
+        f"{api}/api/v1/auth/login",
+        {"username": username, "password": password},
+    )
+    token = response.get("token")
+    if not isinstance(token, str) or not token:
+        raise RuntimeError("local authentication did not return a session token")
+    _AUTH_TOKEN = token
 
 
 def mapping(item: dict[str, object]) -> dict[str, object]:
@@ -113,15 +155,10 @@ def build_payload(args: argparse.Namespace) -> dict[str, object]:
 
 def main() -> None:
     args = parse_args()
+    api = args.api.rstrip("/")
+    authenticate(api, args.username, args.password)
     payload = build_payload(args)
-    request = urllib.request.Request(
-        f"{args.api.rstrip('/')}/api/v1/ingestion-tasks",
-        data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
-    with urllib.request.urlopen(request, timeout=30) as response:
-        print(response.read().decode("utf-8"))
+    print(json.dumps(request(f"{api}/api/v1/ingestion-tasks", payload), ensure_ascii=False))
 
 
 if __name__ == "__main__":

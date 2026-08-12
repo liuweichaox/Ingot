@@ -1,9 +1,9 @@
-import { ArrowLeftIcon, ArrowPathIcon, BeakerIcon, ChatBubbleLeftRightIcon, MagnifyingGlassIcon, PaperAirplaneIcon } from "@heroicons/react/24/outline";
+import { ArrowLeftIcon, ArrowPathIcon, ChatBubbleLeftRightIcon, MagnifyingGlassIcon, PaperAirplaneIcon, TrashIcon } from "@heroicons/react/24/outline";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router";
-import { getJson, postJson, streamSse } from "../api/http";
+import { deleteJson, getJson, postJson, streamSse } from "../api/http";
 import { extractRows, useApi } from "../hooks/useApi";
-import { Alert, Badge, Button, Card, DataTable, Field, Input, Pagination, Page, Select, Textarea } from "../ui/components";
+import { Alert, Badge, Button, Card, DataTable, Field, Input, Pagination, Page, Select, notify, useConfirmDialog } from "../ui/components";
 import { eventTypeLabel, formatTime, LoadingCard } from "./shared";
 
 export function EventsPage() {
@@ -129,7 +129,14 @@ const researchStatusLabels = {
   archived: "已归档",
 };
 
-const suggestedQuestions = [
+const globalSuggestedQuestions = [
+  "最近有哪些运行或质量记录值得优先关注？",
+  "哪些生产运行满足正式分析准入条件？",
+  "当前数据有哪些完整性、关联或可信度问题？",
+  "按现有证据，下一步最值得核对什么？",
+];
+
+const projectSuggestedQuestions = [
   "概括当前项目已有证据、关键缺口和下一步建议。",
   "哪些生产运行满足正式分析准入条件？",
   "列出当前最值得优先验证的假设及其依据。",
@@ -220,7 +227,7 @@ function ChatAnswer({ answer, onFollowUp }) {
   );
 }
 export function ChatPage() {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const projectId = searchParams.get("projectId");
   const [capabilities, setCapabilities] = useState(null);
   const [capabilitiesLoading, setCapabilitiesLoading] = useState(true);
@@ -230,17 +237,20 @@ export function ChatPage() {
   const [events, setEvents] = useState([]);
   const [history, setHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(true);
+  const [projects, setProjects] = useState([]);
   const [project, setProject] = useState(null);
   const [projectLoading, setProjectLoading] = useState(Boolean(projectId));
   const [projectError, setProjectError] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const [deletingRunId, setDeletingRunId] = useState("");
+  const { confirm, confirmationDialog } = useConfirmDialog();
   const controller = useRef(null);
 
   const loadHistory = useCallback(async () => {
     try {
-      const value = await getJson("/api/v1/chat/runs?limit=8");
+      const value = await getJson("/api/v1/chat/runs?limit=50");
       setHistory(value.items || []);
     } catch (requestError) {
       setError(requestError.message);
@@ -250,11 +260,16 @@ export function ChatPage() {
   }, []);
 
   useEffect(() => {
-    getJson("/api/v1/chat/capabilities").then(value => {
-      setCapabilities(value);
-      setMode(value.modes?.[0] || "quick");
-    }).catch(requestError => setError(requestError.message))
+    getJson("/api/v1/chat/capabilities")
+      .then(value => {
+        setCapabilities(value);
+        setMode(value.modes?.[0] || "quick");
+      })
+      .catch(requestError => setError(requestError.message))
       .finally(() => setCapabilitiesLoading(false));
+    getJson("/api/v1/research-projects?limit=100")
+      .then(value => setProjects(value?.data || []))
+      .catch(() => setProjects([]));
     void loadHistory();
     return () => controller.current?.abort();
   }, [loadHistory]);
@@ -277,16 +292,18 @@ export function ChatPage() {
   async function start(event) {
     event.preventDefault();
     if (!question.trim()) return;
+    const submittedQuestion = question.trim();
     setSubmitting(true);
     setError("");
     setEvents([]);
     try {
       const created = await postJson("/api/v1/chat/runs", {
-        question: question.trim(),
+        question: submittedQuestion,
         pageContext: projectId ? { kind: "research-project", id: projectId } : null,
         mode,
       });
-      setRun({ ...created, question });
+      setRun({ ...created, question: submittedQuestion });
+      setQuestion("");
       controller.current = new AbortController();
       await streamSse(created.streamUrl, {
         signal: controller.current.signal,
@@ -324,7 +341,6 @@ export function ChatPage() {
     try {
       const value = await getJson(`/api/v1/chat/runs/${runId}`);
       setRun(value);
-      setQuestion(value.question || "");
       setMode(value.mode || "quick");
       setEvents([]);
     } catch (requestError) {
@@ -332,156 +348,137 @@ export function ChatPage() {
     }
   }
 
+  function newConversation() {
+    if (submitting) return;
+    setRun(null);
+    setQuestion("");
+    setEvents([]);
+    setError("");
+  }
+
+  function changeProjectScope(event) {
+    const nextProjectId = event.target.value;
+    setSearchParams(nextProjectId ? { projectId: nextProjectId } : {}, { replace: true });
+    newConversation();
+  }
+
+  async function deleteHistory(item) {
+    if (!await confirm({
+      title: "删除对话",
+      description: `“${item.question}”及其分析过程将被永久删除。业务运行、质检和项目记录不会受影响。`,
+      confirmLabel: "确认删除",
+      tone: "danger",
+    })) return;
+    setDeletingRunId(item.runId);
+    setError("");
+    try {
+      await deleteJson(`/api/v1/chat/runs/${item.runId}`);
+      if (run?.runId === item.runId) newConversation();
+      await loadHistory();
+      notify("对话已删除。", "success");
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setDeletingRunId("");
+    }
+  }
+
   const visibleProgress = events
     .map(item => ({ ...item, message: chatProgressText(item) }))
     .filter(item => item.message)
     .slice(-4);
-
   const scopedHistory = projectId
     ? history.filter(item => item.pageContext?.kind === "research-project" && item.pageContext?.id === projectId)
     : history;
+  const suggestedQuestions = projectId ? projectSuggestedQuestions : globalSuggestedQuestions;
   const serviceEnabled = Boolean(capabilities?.enabled);
   const analysisBlocked = capabilitiesLoading || !serviceEnabled || submitting;
 
   return (
-    <Page
-      title="项目分析"
-      description="从当前优化项目的生产运行、质量、实验和知识记录中核对事实，形成可验证的调查结论。"
-      actions={projectId && <Link to={`/research-projects/${encodeURIComponent(projectId)}`} className="inline-flex min-h-9 items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"><ArrowLeftIcon className="size-4" />返回优化项目</Link>}
-    >
-      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="grid gap-4 p-4 sm:p-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
-          <div className="flex min-w-0 items-start gap-3">
-            <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-blue-50 text-blue-700"><BeakerIcon className="size-5" /></span>
-            <div className="min-w-0">
-              <p className="text-xs font-semibold tracking-wide text-blue-700">当前分析范围</p>
-              {projectLoading ? <p className="mt-1 text-sm text-slate-500">正在读取优化项目…</p> : project ? (
-                <>
-                  <h2 className="mt-1 break-words text-lg font-semibold text-slate-950">{project.name}</h2>
-                  <p className="mt-1 line-clamp-1 text-sm leading-6 text-slate-500 sm:line-clamp-2">{project.description || "该项目尚未填写问题说明。"}</p>
-                  <p className="mt-2 text-xs font-medium text-slate-600 sm:hidden">{researchStatusLabels[project.status] || project.status} · {project.productName || "未限定产品"} · {project.objectives?.map(item => item.name).filter(Boolean).join("、") || "未设定目标"}</p>
-                </>
-              ) : (
-                <h2 className="mt-1 text-base font-semibold text-slate-900">未绑定优化项目</h2>
-              )}
+    <div className="grid h-full min-h-0 bg-white lg:grid-cols-[18rem_minmax(0,1fr)]">
+      <aside className="hidden min-h-0 border-r border-slate-200 bg-slate-50/80 lg:flex lg:flex-col">
+        <div className="border-b border-slate-200 p-3">
+          <Button className="w-full justify-center" variant="primary" onClick={newConversation} disabled={submitting}>
+            <ChatBubbleLeftRightIcon className="size-4" />新对话
+          </Button>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto p-2">
+          <p className="px-2 py-2 text-xs font-semibold text-slate-500">{projectId ? "当前项目的对话" : "最近对话"}</p>
+          {historyLoading ? (
+            <div className="inline-flex items-center gap-2 px-2 py-5 text-sm text-slate-500"><ArrowPathIcon className="size-4 animate-spin" />正在读取</div>
+          ) : scopedHistory.length ? scopedHistory.map(item => (
+            <div key={item.runId} className="group mb-1 grid grid-cols-[minmax(0,1fr)_2rem] items-center rounded-lg hover:bg-white hover:shadow-sm">
+              <button type="button" className="min-w-0 px-3 py-2.5 text-left disabled:opacity-60" onClick={() => openHistory(item.runId)} disabled={submitting}>
+                <p className="truncate text-sm font-medium text-slate-800">{item.question}</p>
+                <p className="mt-1 text-xs text-slate-400">{chatHistoryStatusLabels[item.status] || item.status} · {formatTime(item.createdAt)}</p>
+              </button>
+              <button type="button" className="grid size-8 place-items-center rounded-md text-slate-400 opacity-0 hover:bg-rose-50 hover:text-rose-700 focus:opacity-100 group-hover:opacity-100" aria-label={`删除对话：${item.question}`} onClick={() => deleteHistory(item)} disabled={Boolean(deletingRunId) || submitting}>
+                <TrashIcon className="size-4" />
+              </button>
             </div>
-          </div>
-          {project && (
-            <dl className="hidden grid-cols-2 gap-x-5 gap-y-2 text-sm sm:grid sm:grid-cols-4 lg:grid-cols-2 xl:grid-cols-4">
-              <div><dt className="text-xs text-slate-500">阶段</dt><dd className="mt-1 font-medium text-slate-800">{researchStatusLabels[project.status] || project.status}</dd></div>
-              <div><dt className="text-xs text-slate-500">工艺</dt><dd className="mt-1 max-w-40 truncate font-medium text-slate-800" title={project.processName}>{project.processName || "未记录"}</dd></div>
-              <div><dt className="text-xs text-slate-500">产品</dt><dd className="mt-1 max-w-40 truncate font-medium text-slate-800" title={project.productName}>{project.productName || "未限定"}</dd></div>
-              <div><dt className="text-xs text-slate-500">研发目标</dt><dd className="mt-1 max-w-40 truncate font-medium text-slate-800" title={project.objectives?.map(item => item.name).join("、")}>{project.objectives?.map(item => item.name).filter(Boolean).join("、") || "未设定"}</dd></div>
-            </dl>
-          )}
+          )) : <p className="px-3 py-6 text-sm leading-6 text-slate-500">还没有对话。直接在右侧输入问题即可开始，无需先选项目。</p>}
         </div>
-        <div className="border-t border-slate-100 bg-slate-50/70 px-4 py-3 text-xs text-slate-600 sm:px-5">
-          <p className="sm:hidden">只读分析 · 附证据边界 · 不自动修改工艺</p>
-          <div className="hidden flex-wrap items-center gap-x-5 gap-y-2 sm:flex">
-            <span>✓ 只读取当前账户有权访问的记录</span>
-            <span>✓ 回答附带数据限制与相关记录</span>
-            <span>✓ 不执行设备写入或自动工艺变更</span>
+        <div className="border-t border-slate-200 px-4 py-3 text-xs leading-5 text-slate-500">只读分析 · 引用正式记录 · 不自动写入设备</div>
+      </aside>
+
+      <section className="flex min-h-0 min-w-0 flex-col bg-white">
+        <header className="flex min-h-16 flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-3 sm:px-6">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2"><ChatBubbleLeftRightIcon className="size-5 text-blue-600" /><h1 className="font-semibold text-slate-950">分析助手</h1></div>
+            <p className="mt-0.5 truncate text-xs text-slate-500">{projectLoading ? "正在读取上下文…" : project ? `${project.name} · ${researchStatusLabels[project.status] || project.status}` : "全部可访问数据"}</p>
           </div>
-        </div>
-      </section>
+          <div className="flex min-w-0 flex-1 items-center justify-end gap-2 sm:flex-none">
+            <Select aria-label="对话上下文" className="max-w-56" value={projectId || ""} onChange={changeProjectScope} disabled={submitting}>
+              <option value="">全部数据（无需项目）</option>
+              {projects.map(item => <option key={item.projectId} value={item.projectId}>{item.name}</option>)}
+            </Select>
+            <Select aria-label="分析方式" className="w-32" value={mode} onChange={event => setMode(event.target.value)} disabled={!serviceEnabled || submitting} title={chatModeDescriptions[mode]}>
+              {(capabilities?.modes || ["quick"]).map(item => <option key={item} value={item}>{chatModeLabels[item] ?? item}</option>)}
+            </Select>
+            <Button className="lg:hidden" onClick={newConversation} disabled={submitting}>新对话</Button>
+            {projectId && <Link to={`/research-projects/${encodeURIComponent(projectId)}`} className="hidden min-h-9 items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 sm:inline-flex"><ArrowLeftIcon className="size-4" />项目</Link>}
+          </div>
+        </header>
 
-      {projectError && <Alert tone="danger" title="无法读取优化项目">{projectError}</Alert>}
-      {!projectId && <Alert tone="warning" title="建议从优化项目进入">未绑定项目时无法限定研发记录和知识范围，请从具体优化项目打开分析助手。</Alert>}
-      {!capabilitiesLoading && capabilities && !serviceEnabled && (
-        <Alert tone="warning" title="分析服务未启用">当前部署未配置分析模型服务，启用后即可提交问题。</Alert>
-      )}
-      {error && <Alert tone="danger">{error}</Alert>}
-
-      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_20rem]">
-        <div className="space-y-5">
-          <Card title="提出调查问题" description="一次只问一个可核对的问题；明确现象、范围和希望得到的判断。">
-            <form className="space-y-4" onSubmit={start}>
-              <Field label="调查问题" hint="系统会保留问题、查询过程、回答和引用记录，便于后续复核。">
-                <Textarea className="min-h-24" required value={question} onChange={event => setQuestion(event.target.value)} disabled={!serviceEnabled || submitting} placeholder="例如：为什么这批运行的中心厚度偏差增大？请比较阶段信号并列出证据缺口。" />
-              </Field>
-              <div>
-                <p className="text-xs font-medium text-slate-500">常用问题</p>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {suggestedQuestions.map(item => <button key={item} type="button" className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-left text-xs leading-5 text-slate-700 hover:border-blue-300 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50" onClick={() => setQuestion(item)} disabled={!serviceEnabled || submitting}>{item}</button>)}
-                </div>
-              </div>
-              <div className="flex flex-col gap-3 border-t border-slate-100 pt-4 sm:flex-row sm:items-end sm:justify-between">
-                <Field label="分析方式" hint={chatModeDescriptions[mode] || "按当前服务能力分析。"}>
-                  <Select className="sm:w-44" value={mode} onChange={event => setMode(event.target.value)} disabled={!serviceEnabled || submitting}>
-                    {(capabilities?.modes || ["quick"]).map(item => <option key={item} value={item}>{chatModeLabels[item] ?? item}</option>)}
-                  </Select>
-                </Field>
-                <div className="flex gap-2 sm:pb-0.5">
-                  {submitting && <Button type="button" onClick={cancel} disabled={cancelling}>{cancelling ? "正在取消" : "取消分析"}</Button>}
-                  <Button className="min-h-10 justify-center sm:min-w-32" variant="primary" type="submit" disabled={analysisBlocked || !question.trim()}>
-                    <PaperAirplaneIcon className="size-4" />{submitting ? "分析中" : capabilitiesLoading ? "连接中" : "开始分析"}
-                  </Button>
-                </div>
-              </div>
-            </form>
-          </Card>
-
-          <Card title={run ? "调查结果" : "结果与证据"} description={run ? "问题、执行进度、结论边界和相关记录保存在同一调查记录中。" : "提交问题后，这里会按结论、关键发现、证据边界和相关记录组织结果。"}>
+        <div className="min-h-0 flex-1 overflow-y-auto bg-slate-50/50">
+          <div className="mx-auto flex min-h-full w-full max-w-4xl flex-col justify-center px-4 py-8 sm:px-6">
+            <div className="space-y-3">
+              {projectError && <Alert tone="danger" title="无法读取项目上下文">{projectError}</Alert>}
+              {!capabilitiesLoading && capabilities && !serviceEnabled && <Alert tone="warning" title="分析服务未启用">当前部署关闭了分析能力；启用确定性或 OpenAI-compatible 模型后即可对话。</Alert>}
+              {error && <Alert tone="danger">{error}</Alert>}
+            </div>
             {!run ? (
-              <div className="grid gap-3 sm:grid-cols-3">
-                {[['1', '查询事实', '读取项目范围内的运行、质量、实验和知识记录。'], ['2', '核对证据', '区分已观测事实、推断和缺失数据。'], ['3', '形成结论', '给出边界、相关记录和可继续验证的问题。']].map(([step, title, description]) => (
-                  <div key={step} className="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
-                    <span className="grid size-7 place-items-center rounded-full bg-blue-100 text-xs font-semibold text-blue-700">{step}</span>
-                    <p className="mt-3 text-sm font-semibold text-slate-900">{title}</p>
-                    <p className="mt-1 text-xs leading-5 text-slate-500">{description}</p>
-                  </div>
-                ))}
+              <div className="mx-auto w-full max-w-2xl text-center">
+                <span className="mx-auto grid size-14 place-items-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-600/20"><ChatBubbleLeftRightIcon className="size-7" /></span>
+                <h2 className="mt-5 text-2xl font-semibold tracking-tight text-slate-950">今天要核对什么？</h2>
+                <p className="mt-2 text-sm leading-6 text-slate-500">直接询问运行、质量、设备接入、配置或研发证据。项目只是可选过滤器，不是使用前提。</p>
+                <div className="mt-7 grid gap-3 text-left sm:grid-cols-2">
+                  {suggestedQuestions.map(item => <button key={item} type="button" className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm leading-6 text-slate-700 shadow-sm hover:border-blue-300 hover:bg-blue-50 disabled:opacity-50" onClick={() => setQuestion(item)} disabled={!serviceEnabled || submitting}>{item}</button>)}
+                </div>
               </div>
             ) : (
-              <div className="space-y-4">
-                <section className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3">
-                  <p className="text-xs font-semibold text-blue-700">调查问题</p>
-                  <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-slate-800">{run.question || question}</p>
-                </section>
-                {!run.answer && visibleProgress.length > 0 && (
-                  <ol className="space-y-2" aria-label="分析进度">
-                    {visibleProgress.map((item, index) => (
-                      <li key={`${item.sequence || item.type || "event"}-${index}`} className="flex items-start gap-3 rounded-lg bg-slate-50 px-3 py-2.5 text-sm text-slate-700">
-                        <ArrowPathIcon className="mt-0.5 size-4 shrink-0 animate-spin text-blue-600" /><p className="whitespace-pre-wrap">{item.message}</p>
-                      </li>
-                    ))}
-                  </ol>
-                )}
-                {submitting && visibleProgress.length === 0 && <div className="inline-flex items-center gap-2 rounded-lg bg-slate-100 px-3 py-2.5 text-sm text-slate-600"><ArrowPathIcon className="size-4 animate-spin" />正在理解问题</div>}
+              <div className="w-full space-y-6 self-start">
+                <div className="flex justify-end"><div className="max-w-[85%] rounded-2xl rounded-br-md bg-blue-600 px-4 py-3 text-sm leading-6 text-white shadow-sm"><p className="whitespace-pre-wrap">{run.question}</p></div></div>
+                {!run.answer && visibleProgress.length > 0 && <ol className="space-y-2" aria-label="分析进度">{visibleProgress.map((item, index) => <li key={`${item.sequence || item.type || "event"}-${index}`} className="flex items-start gap-3 text-sm text-slate-600"><ArrowPathIcon className="mt-0.5 size-4 shrink-0 animate-spin text-blue-600" /><p className="whitespace-pre-wrap">{item.message}</p></li>)}</ol>}
+                {submitting && visibleProgress.length === 0 && <div className="inline-flex items-center gap-2 text-sm text-slate-500"><ArrowPathIcon className="size-4 animate-spin" />正在理解问题并核对记录</div>}
                 <ChatAnswer answer={run.answer} onFollowUp={setQuestion} />
                 {run.error && <Alert tone="danger" title="分析失败">{run.error}</Alert>}
                 {run.cancellationReason && <Alert title="分析已取消">{run.cancellationReason}</Alert>}
+                {run.runId && <p className="text-center text-[11px] text-slate-400" title={run.runId}>调查记录 {run.runId}</p>}
               </div>
             )}
-          </Card>
+          </div>
         </div>
 
-        <Card className="xl:sticky xl:top-36" title={projectId ? "本项目调查记录" : "最近调查记录"} description="选择记录查看完整问题、结论和证据边界。">
-          {historyLoading ? (
-            <div className="inline-flex items-center gap-2 py-6 text-sm text-slate-500"><ArrowPathIcon className="size-4 animate-spin" />正在读取</div>
-          ) : scopedHistory.length > 0 ? (
-            <div className="space-y-2">
-              {scopedHistory.map(item => (
-                <button key={item.runId} type="button" className="w-full rounded-xl border border-slate-200 px-3 py-3 text-left hover:border-blue-300 hover:bg-blue-50/50 disabled:opacity-60" onClick={() => openHistory(item.runId)} disabled={submitting}>
-                  <div className="flex items-start gap-2">
-                    <ChatBubbleLeftRightIcon className="mt-0.5 size-4 shrink-0 text-blue-600" />
-                    <p className="line-clamp-2 text-sm font-medium leading-5 text-slate-800">{item.question}</p>
-                  </div>
-                  <div className="mt-2 flex items-center justify-between gap-2 text-xs text-slate-400">
-                    <span>{chatHistoryStatusLabels[item.status] || item.status}</span><time>{formatTime(item.createdAt)}</time>
-                  </div>
-                </button>
-              ))}
-            </div>
-          ) : (
-            <div className="py-8 text-center">
-              <ChatBubbleLeftRightIcon className="mx-auto size-8 text-slate-300" />
-              <p className="mt-3 text-sm font-medium text-slate-700">暂无本项目调查记录</p>
-              <p className="mt-1 text-xs leading-5 text-slate-500">提交第一个问题后，记录会保存在这里。</p>
-            </div>
-          )}
-        </Card>
-      </div>
-    </Page>
+        <footer className="border-t border-slate-200 bg-white px-3 py-3 sm:px-6">
+          <form className="mx-auto flex max-w-4xl items-end gap-2 rounded-2xl border border-slate-300 bg-white p-2 shadow-sm focus-within:border-blue-500 focus-within:ring-3 focus-within:ring-blue-500/15" onSubmit={start}>
+            <textarea aria-label="给分析助手发送消息" className="max-h-40 min-h-10 min-w-0 flex-1 resize-none border-0 bg-transparent px-2 py-2 text-sm leading-6 text-slate-900 outline-none placeholder:text-slate-400" rows="1" required value={question} onChange={event => setQuestion(event.target.value)} disabled={!serviceEnabled || submitting} placeholder="直接提问，无需选择项目…" onKeyDown={event => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} />
+            {submitting ? <Button type="button" onClick={cancel} disabled={cancelling}>{cancelling ? "取消中" : "停止"}</Button> : <Button className="size-10 rounded-xl px-0" variant="primary" type="submit" aria-label="发送消息" disabled={analysisBlocked || !question.trim()}><PaperAirplaneIcon className="size-5" /></Button>}
+          </form>
+          <p className="mx-auto mt-2 max-w-4xl text-center text-[11px] text-slate-400">回答会标注证据边界；重要工艺判断必须由工程师复核。</p>
+        </footer>
+      </section>
+      {confirmationDialog}
+    </div>
   );
 }
