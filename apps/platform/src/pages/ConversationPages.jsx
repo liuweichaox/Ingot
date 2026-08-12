@@ -4,7 +4,7 @@ import { Link, useSearchParams } from "react-router";
 import { getJson, postJson, streamSse } from "../api/http";
 import { extractRows, useApi } from "../hooks/useApi";
 import { Alert, Badge, Button, Card, DataTable, EmptyState, Field, Input, Pagination, Page, Select, Textarea } from "../ui/components";
-import { formatTime, LoadingCard } from "./shared";
+import { eventTypeLabel, formatTime, LoadingCard } from "./shared";
 
 export function EventsPage() {
   const [urlParams] = useSearchParams();
@@ -65,7 +65,7 @@ export function EventsPage() {
             keyField="ingestId"
             columns={[
               { key: "ingestId", label: "摄入序号" },
-              { key: "event", label: "类型", render: value => <Badge tone="info">{value?.eventType || "—"}</Badge> },
+              { key: "event", label: "类型", render: value => <Badge tone="info">{eventTypeLabel(value?.eventType)}</Badge> },
               { key: "event", label: "对象", render: value => value?.subject?.id || "—" },
               { key: "event", label: "运行号", render: value => value?.executionId || "—" },
               { key: "event", label: "发生时间", render: value => formatTime(value?.occurredAt) },

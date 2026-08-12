@@ -70,14 +70,31 @@ export const eventTypeLabels = {
   "process.sample": "过程采样",
   "process.execution.started": "运行开始",
   "process.execution.completed": "运行完成",
-  "processSpecification/step_changed": "工艺步骤切换",
-  "process/stage_changed": "工艺阶段切换",
+  "processSpecification.step_changed": "工艺步骤切换",
+  "process.stage_changed": "工艺阶段切换",
   "quality.inspection.completed": "质检完成",
   "alarm.raised": "设备报警",
   "alarm.cleared": "报警解除",
 };
 
 export const eventTypeLabel = value => eventTypeLabels[value] || value?.split(".").join(" / ") || "生产事件";
+
+export const contextFieldLabels = {
+  context_capture_status: "上下文捕获状态",
+  equipment_id: "设备编号",
+  execution_id: "运行编号",
+  material_lot_ref: "材料批次",
+  material_specification: "材料规格",
+  tooling_assembly_id: "工装总成",
+  assembly_revision_id: "装配版本",
+  tooling_usage_count: "工装使用次数",
+  maintenance_status: "维护状态",
+  calibration_status: "校准状态",
+  calibration_ref: "校准记录",
+  calibration_valid_until: "校准有效期",
+};
+
+export const contextFieldLabel = value => contextFieldLabels[value] || value || "未命名字段";
 
 export function emptyInspectionCharacteristic() {
   return {

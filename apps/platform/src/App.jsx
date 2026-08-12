@@ -106,12 +106,13 @@ function isApplePlatform() {
   return /mac|iphone|ipad|ipod|ios/i.test(platform);
 }
 
-export default function App() {
+export default function App({ identity, logout }) {
   const location = useLocation();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [globalSearchOpen, setGlobalSearchOpen] = useState(false);
-  const identity = { username: "operator", displayName: "当前操作员" };
+  const displayName = identity?.displayName || identity?.username || "当前操作员";
+  const userInitials = displayName.trim().slice(0, 2).toUpperCase();
   const usesAppleShortcut = useMemo(isApplePlatform, []);
   const searchShortcutLabel = usesAppleShortcut ? "⌘ K" : "Ctrl K";
 
@@ -136,8 +137,10 @@ export default function App() {
     : location.pathname.startsWith("/edges/")
       ? ["节点诊断", "查看现场节点的连接、采集、上行和最近日志"]
       : location.pathname.startsWith("/research-projects/")
-         ? ["优化项目工作区", "围绕当前问题推进假设、实验、验证和知识复用"]
-     : pageDetails[location.pathname] ?? ["Ingot", "AI 工艺研发系统"];
+        ? ["优化项目工作区", "围绕当前问题推进假设、实验、验证和知识复用"]
+        : location.pathname.startsWith("/configuration/ingestion-tasks/")
+          ? ["配置数据源", "配置设备连接、工艺映射和发布前验证"]
+          : pageDetails[location.pathname] ?? ["页面不存在", "地址可能已经变更，请返回可用功能页面"];
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
       <header className="fixed inset-x-0 top-0 z-50 flex h-16 items-stretch border-b border-slate-200 bg-white/95 shadow-sm backdrop-blur">
@@ -211,17 +214,18 @@ export default function App() {
         </Menu>
         <Menu as="div" className="relative flex border-l border-slate-100">
           <MenuButton className="grid w-14 place-items-center text-slate-600 hover:bg-slate-50" aria-label="用户菜单">
-            <span className="text-xs font-semibold">OP</span>
+            <span className="text-xs font-semibold">{userInitials}</span>
           </MenuButton>
           <MenuItems transition anchor="bottom end" className="z-100 mt-2 w-48 origin-top-right rounded-xl border border-slate-200 bg-white p-1 text-sm shadow-xl transition data-closed:scale-95 data-closed:opacity-0">
             <div className="border-b border-slate-100 px-3 py-2">
-              <p className="truncate font-medium text-slate-900">{identity.displayName}</p>
-              <p className="mt-0.5 truncate text-xs text-slate-500">开发模式 · operator</p>
+              <p className="truncate font-medium text-slate-900">{displayName}</p>
+              <p className="mt-0.5 truncate text-xs text-slate-500">{identity?.username || "当前账户"}</p>
             </div>
             <MenuItem><Link to="/identity/users" className="block rounded-lg px-3 py-2 text-slate-700 data-focus:bg-slate-100">用户与权限</Link></MenuItem>
             <MenuItem><Link to="/platform-metrics" className="block rounded-lg px-3 py-2 text-slate-700 data-focus:bg-slate-100">平台运行状态</Link></MenuItem>
             <MenuItem><Link to="/logs" className="block rounded-lg px-3 py-2 text-slate-700 data-focus:bg-slate-100">运行日志</Link></MenuItem>
             <MenuItem><a href="https://docs.ingotstack.com/zh" className="block rounded-lg px-3 py-2 text-slate-700 data-focus:bg-slate-100">产品文档</a></MenuItem>
+            <MenuItem><button type="button" onClick={logout} className="block w-full rounded-lg px-3 py-2 text-left text-slate-700 data-focus:bg-slate-100">退出登录</button></MenuItem>
           </MenuItems>
         </Menu>
       </header>

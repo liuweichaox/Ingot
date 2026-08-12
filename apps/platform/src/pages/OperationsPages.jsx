@@ -321,7 +321,6 @@ export function ProcessExecutionDetailPage() {
                   ["工件", execution.outputItemId],
                   ["材料批次", execution.materialLotRef],
                   ["工装总成", execution.toolingAssemblyId],
-                  ["工装总成", execution.toolingAssemblyId],
                 ].map(([label, value]) => (
                   <div key={label}>
                     <dt className="text-xs font-medium text-slate-500">{label}</dt>
@@ -488,7 +487,7 @@ export function ProcessExecutionDetailPage() {
                   <div key={item.ingestId} className="flex items-start justify-between gap-4 rounded-xl border border-slate-100 bg-slate-50 p-3">
                     <div className="min-w-0">
                       <Badge tone={item.event?.eventType?.startsWith("alarm.") ? "danger" : item.event?.eventType === "process.sample" ? "neutral" : "info"}>
-                        {item.event?.eventType || "event"}
+                        {eventTypeLabel(item.event?.eventType)}
                       </Badge>
                       <p className="mt-2 truncate text-sm text-slate-700">{item.event?.subject?.id || execution.equipmentId || "—"}</p>
                     </div>

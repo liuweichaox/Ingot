@@ -27,6 +27,8 @@ const researchAssets = await readFile(new URL("../src/pages/ResearchAssetsPage.j
 const styles = await readFile(new URL("../src/styles/global.css", import.meta.url), "utf8");
 const vite = await readFile(new URL("../vite.config.mjs", import.meta.url), "utf8");
 const html = await readFile(new URL("../index.html", import.meta.url), "utf8");
+const authGate = await readFile(new URL("../src/auth/AuthGate.jsx", import.meta.url), "utf8");
+const main = await readFile(new URL("../src/main.jsx", import.meta.url), "utf8");
 
 async function sourceFiles(directory) {
   const entries = await readdir(directory, { withFileTypes: true });
@@ -105,11 +107,9 @@ test("navigation and overlays are accessible Headless UI components", () => {
   assert.doesNotMatch(researchProjects, />新建项目</);
 });
 
-test("direct-entry prototype exposes the implemented identity administration surface", () => {
-  assert.match(app, /username: "operator"/);
-  assert.match(app, /开发模式 · operator/);
-  assert.doesNotMatch(app, /function LoginPage/);
-  assert.doesNotMatch(app, /\/api\/v1\/auth\/login/);
+test("authenticated application exposes the identity administration surface", () => {
+  assert.match(app, /function App\(\{ identity, logout \}\)/);
+  assert.doesNotMatch(app, /username: "operator"/);
   assert.match(app, /\["\/identity\/users", "用户与权限"\]/);
   assert.match(app, /path="\/identity\/users" element=\{<Pages\.UsersPage \/>\}/);
   assert.match(pages, /export function UsersPage\(\)/);
@@ -272,6 +272,36 @@ test("form primitives keep controls aligned and make non-editable state visible"
   assert.match(app, /<Input\s+ref=\{inputRef\}/);
   assert.doesNotMatch(app, /focus:ring-blue-100/);
   assert.match(acquisitionPanels.connection, /group\.fields\.length === 4 \|\| group\.fields\.length === 8/);
+});
+
+test("comparison investigation renders context as bounded business facts", () => {
+  assert.match(components, /min-w-0 break-words text-3xl/);
+  assert.match(pages, /function MatchingContext/);
+  assert.match(pages, /comparisonContextLabels/);
+  assert.match(pages, /<StatusBadge value=\{investigation\?\.dataQuality\?\.targetStatus/);
+  assert.doesNotMatch(pages, /Object\.entries\(investigation\?\.comparisonBaseline\?\.matchingContext/);
+});
+
+test("dynamic pages and operational evidence keep business-facing labels", () => {
+  assert.match(app, /startsWith\("\/configuration\/ingestion-tasks\/"\)/);
+  assert.match(app, /\["页面不存在", "地址可能已经变更/);
+  assert.match(pages, /contextFieldLabel/);
+  assert.match(pages, /new Map\([\s\S]*contextFields/);
+  assert.doesNotMatch(pages, /\["工装总成", execution\.toolingAssemblyId\],[\s\S]*\["工装总成", execution\.toolingAssemblyId\]/);
+  assert.match(pages, /"process\.stage_changed": "工艺阶段切换"/);
+  assert.doesNotMatch(pages, /\{value\?\.eventType \|\| "—"\}/);
+  assert.doesNotMatch(pages, /\{item\.event\?\.eventType \|\| "event"\}/);
+});
+
+test("local authentication has a complete login and session-expiry experience", () => {
+  assert.match(main, /<AuthGate>/);
+  assert.match(authGate, /\/api\/v1\/auth\/me/);
+  assert.match(authGate, /\/api\/v1\/auth\/login/);
+  assert.match(authGate, /ingot:unauthorized/);
+  assert.match(authGate, /autoComplete="username"/);
+  assert.match(authGate, /autoComplete="current-password"/);
+  assert.match(app, /退出登录/);
+  assert.doesNotMatch(app, /开发模式 · operator/);
 });
 
 test("protocol differences live in one descriptor registry", () => {

@@ -391,12 +391,14 @@ export function Drawer({ open, onClose, title, description, children, footer, si
   );
 }
 
-export function Metric({ label, value, hint }) {
+export function Metric({ label, value, hint, className, valueClassName }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+    <div className={cx("min-w-0 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm", className)}>
       <p className="text-sm text-slate-500">{label}</p>
-      <p className="mt-2 text-3xl font-semibold tracking-tight text-slate-950 tabular-nums">{value ?? "—"}</p>
-      {hint && <p className="mt-1 text-xs text-slate-400">{hint}</p>}
+      <p className={cx("mt-2 min-w-0 break-words text-3xl font-semibold leading-tight tracking-tight text-slate-950 tabular-nums", valueClassName)}>
+        {value ?? "—"}
+      </p>
+      {hint && <p className="mt-1 break-words text-xs leading-5 text-slate-500">{hint}</p>}
     </div>
   );
 }

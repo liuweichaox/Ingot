@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router";
 import { getJson, postJson } from "../api/http";
 import { extractRows, useApi } from "../hooks/useApi";
 import { Alert, Badge, Button, Card, DataTable, EmptyState, Field, Input, Metric, Page, Select, StatusBadge, notify } from "../ui/components";
-import { formatTime, formatInteger, formatDuration, objectTypeLabel, LoadingCard } from "./shared";
+import { contextFieldLabel, formatTime, formatInteger, formatDuration, objectTypeLabel, LoadingCard } from "./shared";
 
 const comparisonFeatureLabels = {
   min: "最小值",
@@ -21,9 +21,43 @@ const evidenceLevelLabels = {
   insufficient: "证据不足",
 };
 
+const comparisonContextLabels = {
+  product_family_code: "产品系列",
+  product_code: "产品代码",
+  equipment_id: "生产设备",
+  tooling_assembly_id: "工装总成",
+  process_specification_id: "工艺规范",
+  material_lot_ref: "材料批次",
+  recipe_id: "配方",
+};
+
 function formatDecimal(value) {
   if (!Number.isFinite(Number(value))) return "—";
   return Number(value).toLocaleString("zh-CN", { maximumFractionDigits: 3 });
+}
+
+function MatchingContext({ value }) {
+  const entries = Object.entries(value || {});
+  return (
+    <section className="mb-4 min-w-0 rounded-xl border border-slate-200 bg-slate-50/70 p-4" aria-labelledby="matching-context-title">
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between">
+        <h4 id="matching-context-title" className="text-sm font-semibold text-slate-900">同类运行匹配条件</h4>
+        <p className="text-xs text-slate-500">对比运行必须具有相同的上下文值</p>
+      </div>
+      {entries.length ? (
+        <dl className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+          {entries.map(([key, contextValue]) => (
+            <div key={key} className="min-w-0 rounded-lg border border-slate-200 bg-white px-3 py-2.5">
+              <dt className="text-xs text-slate-500">{comparisonContextLabels[key] || key}</dt>
+              <dd className="mt-1 min-w-0 break-words text-sm font-semibold leading-5 text-slate-900">{String(contextValue)}</dd>
+            </div>
+          ))}
+        </dl>
+      ) : (
+        <p className="mt-3 text-sm text-slate-500">未记录匹配条件。</p>
+      )}
+    </section>
+  );
 }
 
 export function ExecutionComparisonPage() {
@@ -208,11 +242,11 @@ export function ExecutionComparisonPage() {
           <Field label="筛选运行" hint="可按运行号、产品、设备或工艺规范筛选；这是查找，不是录入运行编号。"><Input value={executionFilter} onChange={event => setProcessExecutionFilter(event.target.value)} placeholder="例如：产品系列、设备编号或运行号" /></Field>
           <p className="pb-2 text-sm text-slate-500">显示 {visibleProcessExecutions.length} / {executions.length} 条已完成运行</p>
         </div>
-        <form className="grid gap-3 md:grid-cols-[1fr_1fr_1fr_auto]" onSubmit={compare}>
+        <form className="grid items-start gap-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(18rem,.9fr)_auto]" onSubmit={compare}>
           <Field label="基准运行" hint="通常选择质量异常、规格偏离或需要解释的一次运行。"><Select value={baseline} onChange={event => setBaseline(event.target.value)} required disabled={catalogLoading || !executions.length}><option value="">选择已完成运行</option>{baseline && !executions.some(item => item.executionId === baseline) && <option value={baseline}>{baseline}（来自当前页面链接）</option>}{visibleProcessExecutions.map(execution => <option key={execution.executionId} value={execution.executionId}>{executionLabel(execution)}</option>)}</Select></Field>
           <Field label="对比范围" hint="历史样本组由服务端按产品、时间、质量和数据完整性筛选。"><Select value={comparisonScope} onChange={event => setComparisonScope(event.target.value)} disabled={!baseline}><option value="cohort">同产品历史样本组</option><option value="single">指定一个同类运行</option></Select></Field>
-          {comparisonScope === "single" ? <Field label="对比运行" hint={baselineProcessExecution?.productFamilyCode ? `仅显示产品系列“${baselineProcessExecution.productFamilyCode}”的运行。` : baselineProcessExecution ? `该运行未标注产品系列，暂按设备“${baselineProcessExecution.equipmentId || "未标注"}”筛选。` : "正在读取基准运行。"}><Select value={candidate} onChange={event => setCandidate(event.target.value)} required disabled={!baselineProcessExecution || catalogLoading}><option value="">选择同类运行</option>{comparableProcessExecutions.map(execution => <option key={execution.executionId} value={execution.executionId}>{executionLabel(execution)}</option>)}</Select></Field> : <div className="self-end rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">系统最多选择 24 个同产品历史运行，并保留质量覆盖和数据完整性证据。</div>}
-          <Button variant="primary" type="submit" className="self-end" disabled={busy || !baseline || (comparisonScope === "single" && !candidate)}>{busy ? "正在对比…" : "开始运行对比"}</Button>
+          {comparisonScope === "single" ? <Field label="对比运行" hint={baselineProcessExecution?.productFamilyCode ? `仅显示产品系列“${baselineProcessExecution.productFamilyCode}”的运行。` : baselineProcessExecution ? `该运行未标注产品系列，暂按设备“${baselineProcessExecution.equipmentId || "未标注"}”筛选。` : "正在读取基准运行。"}><Select value={candidate} onChange={event => setCandidate(event.target.value)} required disabled={!baselineProcessExecution || catalogLoading}><option value="">选择同类运行</option>{comparableProcessExecutions.map(execution => <option key={execution.executionId} value={execution.executionId}>{executionLabel(execution)}</option>)}</Select></Field> : <div className="self-end rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm leading-5 text-slate-600">系统最多选择 24 个同产品历史运行，并保留质量覆盖和数据完整性证据。</div>}
+          <Button variant="primary" type="submit" className="min-h-10 self-end" disabled={busy || !baseline || (comparisonScope === "single" && !candidate)}>{busy ? "正在对比…" : "开始运行对比"}</Button>
         </form>
         {catalogLoading && <p className="mt-3 text-sm text-slate-500">正在读取可比较的已完成运行…</p>}
         {!catalogLoading && executions.length === 0 && <Alert tone="warning" title="暂无可选择的运行">需要至少两条已完成且上下文完整的生产运行，才能开始运行对比。</Alert>}
@@ -220,19 +254,19 @@ export function ExecutionComparisonPage() {
       {result ? (
         <>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-            <Metric label="产品系列" value={result.productFamilyCode || "—"} />
+            <Metric label="产品系列" value={result.productFamilyCode || "—"} valueClassName="text-2xl" />
             <Metric label="参与对比" value={result.acceptance?.executionCount ?? comparedProcessExecutions.length} hint="条生产运行" />
             <Metric label="数据可用" value={result.acceptance?.availableProcessExecutionCount ?? 0} hint={`异常 ${result.acceptance?.degradedProcessExecutionCount ?? 0} 个`} />
             <Metric label="运行完整" value={result.acceptance?.completeProcessExecutionCount ?? 0} hint="同时具有生产开始与结束事件" />
-            <Metric label="分析证据" value={evidenceLevelLabels[result.evidenceLevel] || result.evidenceLevel || "—"} />
+            <Metric label="分析证据" value={evidenceLevelLabels[result.evidenceLevel] || result.evidenceLevel || "—"} valueClassName="text-2xl" />
           </div>
           <Card title="确定性调查报告" description="以下事实由系统查询和计算生成；本地模型只能组织解释，不能补写数字或把观察性候选说成根因。">
-            <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="mb-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               <Metric label="调查状态" value={investigation?.status === "ready" ? "可进入验证" : investigation?.status === "exploratory" ? "探索性" : "数据不足"} />
-              <Metric label="目标数据" value={investigation?.dataQuality?.targetStatus || "—"} hint={`证据权重 ${formatDecimal(investigation?.dataQuality?.targetEvidenceWeight)}`} />
+              <Metric label="目标数据" value={<StatusBadge value={investigation?.dataQuality?.targetStatus || "unknown"} />} hint={`证据权重 ${formatDecimal(investigation?.dataQuality?.targetEvidenceWeight)}`} />
               <Metric label="基线有效权重" value={formatDecimal(investigation?.comparisonBaseline?.effectiveProcessExecutionWeight)} hint={`${investigation?.comparisonBaseline?.comparisonProcessExecutionIds?.length || 0} 条对比运行`} />
-              <Metric label="匹配条件" value={Object.entries(investigation?.comparisonBaseline?.matchingContext || {}).map(([key, value]) => `${key}=${value}`).join("；") || "未记录"} />
             </div>
+            <MatchingContext value={investigation?.comparisonBaseline?.matchingContext} />
             {firstDeviationRows.length ? (
               <div className="mb-4">
                 <h4 className="mb-2 text-sm font-semibold text-slate-900">首次阶段偏离</h4>
@@ -381,7 +415,9 @@ export function DataQualityPage() {
   const baseline = useApi(`/api/v1/data-reliability/baseline?${baselineQuery}`);
   const objects = useApi(`/api/v1/data-objects?${objectQuery}`);
   const rates = baseline.data?.rates || [];
-  const contexts = baseline.data?.contextFields || [];
+  const contexts = Array.from(new Map(
+    (baseline.data?.contextFields || []).map(item => [item.field, item]),
+  ).values());
   const contextFactors = baseline.data?.contextFactors || [];
   const factorOverlaps = baseline.data?.contextFactorOverlaps || [];
   const exclusions = baseline.data?.exclusions || [];
@@ -472,7 +508,7 @@ export function DataQualityPage() {
               rows={contexts}
               keyField="field"
               columns={[
-                { key: "field", label: "字段" },
+                { key: "field", label: "字段", render: contextFieldLabel },
                 { key: "requiredForAdmission", label: "准入要求", render: value => value ? <Badge tone="blue">必需</Badge> : <Badge>可选追溯</Badge> },
                 { key: "coverage", label: "覆盖率", render: (value, row) => value == null ? "—" : `${Math.round(Number(value) * 100)}%（${row.presentRunCount}/${row.runCount}）` },
               ]}

@@ -73,8 +73,9 @@ public sealed class ResearchOnlineAdmissionService(
                 calibration.CoverageRate is null ||
                 calibration.CoverageRate < MinimumPredictionCoverage)
             {
+                var objectiveName = string.IsNullOrWhiteSpace(objective.Name) ? objective.Code : objective.Name;
                 failures.Add(
-                    $"目标 {objective.Code} 的影子预测区间校准未达到 " +
+                    $"目标“{objectiveName}”的影子预测区间校准未达到 " +
                     $"{MinimumValidShadowOutcomes} 次检查且覆盖率不低于 {MinimumPredictionCoverage:P0}。");
             }
         }

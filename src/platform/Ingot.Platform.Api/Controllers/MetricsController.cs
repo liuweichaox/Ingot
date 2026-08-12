@@ -26,7 +26,7 @@ public class MetricsController : ControllerBase
         try
         {
             var client = _httpClientFactory.CreateClient();
-            var baseUrl = $"{Request.Scheme}://{Request.Host}";
+            var baseUrl = $"{Request.Scheme}://127.0.0.1:{HttpContext.Connection.LocalPort}";
             var response = await client.GetStringAsync($"{baseUrl}/metrics");
 
             var metrics = PrometheusTextParser.Parse(response);

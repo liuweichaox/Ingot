@@ -106,6 +106,9 @@ public sealed class DataReliabilityBaselineServiceTests
         Assert.Equal(0.5, Assert.Single(
             baseline.ContextFields,
             item => item.Field == "material_lot_ref").Coverage);
+        Assert.Equal(
+            baseline.ContextFields.Count,
+            baseline.ContextFields.Select(static item => item.Field).Distinct(StringComparer.Ordinal).Count());
         Assert.Contains(baseline.Exclusions, item =>
             item.Code == "actual_parameters_missing" && item.RunCount == 1);
         Assert.Contains(baseline.Exclusions, item =>
