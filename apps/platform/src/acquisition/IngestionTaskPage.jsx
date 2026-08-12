@@ -215,10 +215,10 @@ export function IngestionTaskPage() {
           <Alert tone="warning">还有 {validation.count} 处配置需要修正，已在对应字段下方标出。</Alert>
         )}
 
-        <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1.55fr)_minmax(22rem,1fr)]">
+        <div className="grid items-start gap-5 2xl:grid-cols-[minmax(0,1.55fr)_minmax(22rem,1fr)]">
           <div className="grid gap-5">
             <Card title="基本信息" description="采集发生在哪里、采哪台设备、结果采用哪套工艺定义。">
-              <div className="grid gap-4 md:grid-cols-2">
+              <div className="grid items-start gap-4 md:grid-cols-2">
                 <Field label="接入配置代码" hint="创建后不可修改。" error={errors.taskId}>
                   <Input value={form.taskId} disabled={!isNew && mode !== "create"}
                     placeholder="press01-fx3u" onChange={event => update({ taskId: event.target.value })} />
@@ -272,7 +272,25 @@ export function IngestionTaskPage() {
               allowProbe={allowProbe}
               onChange={value => updateSection(descriptor.section, value)}
             />
+          </div>
 
+          <div className="2xl:sticky 2xl:top-4 2xl:row-span-2">
+            <DevicePointsPanel
+              descriptor={descriptor}
+              form={form}
+              dataItems={dataItems}
+              probe={probe}
+              probeError={probeError}
+              probing={probing}
+              readOnly={readOnly}
+              advisories={advisories}
+              publishChecklist={publishChecklist}
+              onProbe={runProbe}
+              onMapPoint={mapProbePoint}
+            />
+          </div>
+
+          <div className="grid gap-5 2xl:col-start-1">
             <PointMappingPanel
               title="工艺变量映射"
               description="把设备点位对应到平台的工艺变量，并给出换算关系。"
@@ -302,22 +320,6 @@ export function IngestionTaskPage() {
             <LifecyclePanel form={form} errors={errors} readOnly={readOnly} onChange={update} />
 
             <StrategyPanel descriptor={descriptor} form={form} errors={errors} readOnly={readOnly} onChange={update} />
-          </div>
-
-          <div className="xl:sticky xl:top-4">
-            <DevicePointsPanel
-              descriptor={descriptor}
-              form={form}
-              dataItems={dataItems}
-              probe={probe}
-              probeError={probeError}
-              probing={probing}
-              readOnly={readOnly}
-              advisories={advisories}
-              publishChecklist={publishChecklist}
-              onProbe={runProbe}
-              onMapPoint={mapProbePoint}
-            />
           </div>
         </div>
       </div>

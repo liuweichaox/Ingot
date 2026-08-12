@@ -251,14 +251,27 @@ test("user-facing terminology presents scenario packages as process configuratio
 });
 
 test("device acquisition has its own page instead of a generic registry drawer", () => {
-  // 采集配置的工作流是"改一处 → 看设备返回什么 → 再改"，通用注册表抽屉支撑不了这个循环。
+  // Acquisition configuration needs a dedicated edit-probe-adjust loop.
   assert.match(app, /acquisition\/IngestionTaskPage/);
   assert.match(app, /path="\/configuration\/ingestion-tasks\/:taskId"/);
   assert.match(acquisitionPage, /export function IngestionTaskPage/);
   assert.match(acquisitionPage, /export function IngestionTasksPage/);
-  // 左右分栏：左侧配置、右侧常驻设备面板
-  assert.match(acquisitionPage, /xl:grid-cols-\[minmax\(0,1\.55fr\)_minmax\(22rem,1fr\)\]/);
+  // Keep the configuration column wide until the viewport can support both panes.
+  assert.match(acquisitionPage, /2xl:grid-cols-\[minmax\(0,1\.55fr\)_minmax\(22rem,1fr\)\]/);
+  assert.match(acquisitionPage, /2xl:row-span-2/);
+  assert.match(acquisitionPage, /2xl:col-start-1/);
   assert.match(acquisitionPage, /<DevicePointsPanel/);
+});
+
+test("form primitives keep controls aligned and make non-editable state visible", () => {
+  assert.match(components, /grid min-w-0 content-start gap-1\.5 self-start/);
+  assert.match(components, /h-10 min-w-0 w-full rounded-lg/);
+  assert.match(components, /disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50/);
+  assert.match(components, /role="alert"/);
+  assert.match(styles, /input\[type="checkbox"\]/);
+  assert.match(app, /<Input\s+ref=\{inputRef\}/);
+  assert.doesNotMatch(app, /focus:ring-blue-100/);
+  assert.match(acquisitionPanels.connection, /group\.fields\.length === 4 \|\| group\.fields\.length === 8/);
 });
 
 test("protocol differences live in one descriptor registry", () => {

@@ -21,11 +21,16 @@ export function ConnectionPanel({ descriptor, connection, errors, readOnly, onCh
     <Card title="连接参数" description={descriptor.summary}>
       <div className="grid gap-5">
         {groups.map(group => (
-          <div key={group.name || "基础"} className="grid gap-3">
+          <section key={group.name || "基础"} className="grid gap-3">
             {group.name && (
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{group.name}</p>
+              <div className="flex items-center gap-3 pt-1">
+                <h3 className="shrink-0 text-xs font-semibold tracking-wide text-slate-600">{group.name}</h3>
+                <span className="h-px flex-1 bg-slate-200" aria-hidden="true" />
+              </div>
             )}
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <div className={`grid items-start gap-4 ${group.fields.length === 4 || group.fields.length === 8
+              ? "md:grid-cols-2"
+              : "md:grid-cols-2 xl:grid-cols-3"}`}>
               {group.fields.map(field => (
                 <ConnectionField
                   key={field.name}
@@ -37,7 +42,7 @@ export function ConnectionPanel({ descriptor, connection, errors, readOnly, onCh
                 />
               ))}
             </div>
-          </div>
+          </section>
         ))}
         {descriptor.id === "mqtt" && (
           <TopicEditor
@@ -59,15 +64,21 @@ function ConnectionField({ field, connection, error, readOnly, onChange }) {
 
   if (field.type === "checkbox") {
     return (
-      <label className={`flex items-center gap-2 self-end text-sm ${field.tone === "warning" ? "text-amber-700" : "text-slate-700"}`}>
-        <input
-          type="checkbox"
-          checked={Boolean(value)}
-          disabled={readOnly}
-          onChange={event => onChange(field.name, event.target.checked)}
-        />
-        {label}
-      </label>
+      <Field label={label} className={field.tone === "warning" ? "text-amber-700" : undefined}>
+        <span className={`flex h-10 items-center gap-2 rounded-lg border px-3 font-normal ${readOnly
+          ? "cursor-not-allowed border-slate-200 bg-slate-50 text-slate-600"
+          : field.tone === "warning"
+            ? "border-amber-300 bg-amber-50/60 text-amber-800"
+            : "border-slate-300 bg-white text-slate-700"}`}>
+          <input
+            type="checkbox"
+            checked={Boolean(value)}
+            disabled={readOnly}
+            onChange={event => onChange(field.name, event.target.checked)}
+          />
+          {value ? "已启用" : "未启用"}
+        </span>
+      </Field>
     );
   }
 

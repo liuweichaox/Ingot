@@ -15,7 +15,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, Navigate, Route, Routes, useLocation, useNavigate } from "react-router";
 import * as Pages from "./pages";
 import { IngestionTaskPage, IngestionTasksPage } from "./acquisition/IngestionTaskPage";
-import { cx, ToastHost } from "./ui/components";
+import { cx, Input, ToastHost } from "./ui/components";
 
 const sections = [
   {
@@ -324,17 +324,17 @@ function GlobalSearchDialog({ open, onClose, navigate }) {
           <div className="border-b border-slate-100 p-4 sm:p-5">
             <p className="text-sm font-semibold text-slate-950">全局搜索</p>
             <p className="mt-1 text-xs text-slate-500">查找运行证据、工艺追因、工艺优化、配置和系统功能。</p>
-            <input
+            <Input
               ref={inputRef}
               value={query}
               onChange={event => setQuery(event.target.value)}
               placeholder="例如：优化项目、运行对比、设备接入、运行记录"
-              className="mt-4 min-h-11 w-full rounded-xl border border-slate-300 bg-slate-50 px-4 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-3 focus:ring-blue-100"
+              className="mt-4 h-11 rounded-xl bg-slate-50 px-4 focus:bg-white"
             />
           </div>
           <div className="max-h-[55vh] overflow-y-auto p-2">
             {results.length ? results.map(item => (
-              <button key={item.path} type="button" onClick={() => select(item.path)} className="flex w-full items-start gap-3 rounded-xl px-3 py-3 text-left hover:bg-blue-50 focus:bg-blue-50 focus:outline-none">
+              <button key={item.path} type="button" onClick={() => select(item.path)} className="flex w-full items-start gap-3 rounded-xl px-3 py-3 text-left hover:bg-blue-50 focus-visible:bg-blue-50">
                 <span className="mt-0.5 rounded-md bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-600">{item.section}</span>
                 <span className="min-w-0"><span className="block text-sm font-medium text-slate-900">{item.label}</span><span className="mt-0.5 block text-xs leading-5 text-slate-500">{item.description}</span></span>
               </button>

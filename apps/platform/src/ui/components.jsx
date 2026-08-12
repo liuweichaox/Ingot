@@ -25,12 +25,12 @@ export function Card({ title, description, actions, className, children }) {
   return (
     <section className={cx("min-w-0 rounded-2xl border border-slate-200 bg-white shadow-sm", className)}>
       {(title || actions) && (
-        <header className="flex flex-col gap-3 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
+        <header className="flex flex-col gap-3 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
             {title && <h2 className="font-semibold text-slate-900">{title}</h2>}
-            {description && <p className="mt-0.5 text-sm text-slate-500">{description}</p>}
+            {description && <p className="mt-0.5 text-sm leading-6 text-slate-500">{description}</p>}
           </div>
-          {actions}
+          {actions && <div className="shrink-0">{actions}</div>}
         </header>
       )}
       <div className="p-5">{children}</div>
@@ -226,11 +226,11 @@ export function ToastHost() {
 
 export function Field({ label, hint, error, className, children }) {
   return (
-    <label className={cx("grid gap-1.5 text-sm font-medium text-slate-700", className)}>
-      <span>{label}</span>
+    <label className={cx("grid min-w-0 content-start gap-1.5 self-start text-sm font-medium text-slate-700", className)}>
+      {label !== undefined && label !== null && <span className="min-w-0 leading-5">{label}</span>}
       {children}
-      {hint && <span className="text-xs font-normal text-slate-500">{hint}</span>}
-      {error && <span className="text-xs font-normal text-rose-600">{error}</span>}
+      {hint && <span className="min-w-0 text-xs font-normal leading-5 text-slate-500">{hint}</span>}
+      {error && <span className="min-w-0 text-xs font-normal leading-5 text-rose-600" role="alert">{error}</span>}
     </label>
   );
 }
@@ -239,7 +239,7 @@ export function Input({ className, ...props }) {
   return (
     <input
       className={cx(
-        "min-h-10 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus-visible:ring-3 focus-visible:ring-blue-500/35",
+        "h-10 min-w-0 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus-visible:ring-3 focus-visible:ring-blue-500/35 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-600 disabled:shadow-none read-only:bg-slate-50 read-only:text-slate-600",
         className,
       )}
       {...props}
@@ -251,7 +251,7 @@ export function Select({ className, children, ...props }) {
   return (
     <select
       className={cx(
-        "min-h-10 w-full rounded-lg border border-slate-300 bg-white px-3 pr-8 py-2 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus-visible:ring-3 focus-visible:ring-blue-500/35",
+        "h-10 min-w-0 w-full rounded-lg border border-slate-300 bg-white px-3 pr-8 py-2 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus-visible:ring-3 focus-visible:ring-blue-500/35 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-600 disabled:shadow-none",
         className,
       )}
       {...props}
@@ -265,7 +265,7 @@ export function Textarea({ className, ...props }) {
   return (
     <textarea
       className={cx(
-        "min-h-28 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus-visible:ring-3 focus-visible:ring-blue-500/35",
+        "min-h-28 min-w-0 w-full resize-y rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus-visible:ring-3 focus-visible:ring-blue-500/35 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-600 disabled:shadow-none read-only:bg-slate-50 read-only:text-slate-600",
         className,
       )}
       {...props}
