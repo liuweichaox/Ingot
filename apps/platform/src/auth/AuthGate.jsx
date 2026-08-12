@@ -77,20 +77,20 @@ export default function AuthGate({ children }) {
         <section className="hidden border-r border-slate-200 bg-slate-950 px-12 py-16 text-white lg:flex lg:flex-col lg:justify-between">
           <div className="flex items-center gap-3">
             <span className="grid size-11 place-items-center rounded-xl bg-amber-50"><img src="/ingot-mark.svg" alt="" className="size-8" /></span>
-            <div><strong className="text-lg">Ingot</strong><p className="text-sm text-slate-400">工业数据与工艺决策平台</p></div>
+            <div><strong className="text-lg">Ingot</strong><p className="text-sm text-slate-400">工艺追因与优化系统</p></div>
           </div>
           <div className="max-w-xl">
-            <p className="text-sm font-semibold text-blue-300">从现场证据走向可验证决策</p>
-            <h1 className="mt-4 text-4xl font-semibold leading-tight">统一连接生产运行、质量结果、工艺分析与优化验证。</h1>
-            <p className="mt-5 text-base leading-7 text-slate-300">登录后继续访问本工厂的数据、配置和工程工作区。</p>
+            <p className="text-sm font-semibold text-blue-300">看清这次运行，优化下一次运行。</p>
+            <h1 className="mt-4 text-4xl font-semibold leading-tight">让真实生产数据成为工艺追因与优化的共同证据。</h1>
+            <p className="mt-5 text-base leading-7 text-slate-300">连接生产条件、过程轨迹与质量结果，帮助工程师比较差异、验证原因并推进下一步实验。</p>
           </div>
-          <p className="text-xs text-slate-500">单工厂部署 · 本地账户认证</p>
+          <p className="text-xs text-slate-400">支持厂内部署，生产数据与权限由企业自主掌控。</p>
         </section>
         <section className="flex items-center justify-center px-5 py-12 sm:px-10">
           <div className="w-full max-w-sm">
             <div className="mb-8 flex items-center gap-3 lg:hidden">
               <span className="grid size-10 place-items-center rounded-xl bg-amber-50 ring-1 ring-amber-200"><img src="/ingot-mark.svg" alt="" className="size-7" /></span>
-              <div><strong>Ingot</strong><p className="text-xs text-slate-500">工业数据与工艺决策平台</p></div>
+              <div><strong>Ingot</strong><p className="text-xs text-slate-500">工艺追因与优化系统</p></div>
             </div>
             <p className="text-sm font-semibold text-blue-700">平台登录</p>
             <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">继续进入工作台</h1>

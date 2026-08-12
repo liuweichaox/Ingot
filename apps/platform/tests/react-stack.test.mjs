@@ -75,9 +75,9 @@ test("all platform routes remain available after the React migration", () => {
   assert.match(app, /Navigate to="\/configuration\/process-data-models"/);
 });
 
-test("platform identity presents Ingot as an AI process research system", () => {
-  assert.match(html, /Ingot · AI 工艺研发系统/);
-  assert.match(html, /实验数据、实时过程数据、物理机理和专家知识/);
+test("platform identity presents Ingot as a process diagnosis and optimization system", () => {
+  assert.match(html, /Ingot · 工艺追因与优化系统/);
+  assert.match(html, /真实生产条件、过程轨迹与质量结果/);
   assert.doesNotMatch(html, /制造数据采集与工艺分析平台/);
 });
 
@@ -85,15 +85,16 @@ test("navigation and overlays are accessible Headless UI components", () => {
   assert.match(app, /DialogBackdrop/);
   assert.match(app, /DialogPanel/);
   assert.match(app, /MenuButton/);
-  for (const domain of ["工作台", "AI 助手", "生产运行", "质量管理", "分析诊断", "工艺研发", "配置中心"]) {
+  for (const domain of ["工作台", "生产运行", "质量管理", "工艺分析", "工艺优化", "配置中心"]) {
     assert.match(app, new RegExp(domain));
   }
   assert.match(app, /const systemSection = \{/);
   assert.match(app, /aria-label="打开系统管理"/);
-  assert.match(app, /\["\/chat", "AI 分析助手"\]/);
+  assert.match(app, /\["\/chat", "分析助手"\]/);
   assert.match(app, /\["\/research-assets", "研发资产"\]/);
   assert.match(pages, /title="研发项目"/);
-  assert.match(pages, /AI 分析助手/);
+  assert.match(pages, /工艺分析助手/);
+  assert.doesNotMatch(app, /label: "AI 助手"/);
   assert.match(app, /aria-label="全局导航"/);
   assert.match(app, /aria-label="面包屑"/);
   assert.match(app, /aria-label="打开全局模块导航"/);
@@ -145,7 +146,7 @@ test("route changes cannot display stale registry rows under new columns", () =>
   assert.match(pages, /<DataTable\s+key=\{resource\.endpoint\}/);
 });
 
-test("global search opens a cross-product command palette and table columns keep stable unique keys", () => {
+test("feature search opens a command palette and table columns keep stable unique keys", () => {
   assert.match(app, /<GlobalSearchDialog/);
   assert.match(app, /setGlobalSearchOpen\(true\)/);
   assert.match(app, /event\.key\.toLowerCase\(\) === "k"/);
@@ -153,9 +154,9 @@ test("global search opens a cross-product command palette and table columns keep
   assert.match(app, /usesAppleShortcut \? event\.metaKey : event\.ctrlKey/);
   assert.match(app, /usesAppleShortcut \? "⌘ K" : "Ctrl K"/);
   assert.match(app, /aria-keyshortcuts=\{usesAppleShortcut \? "Meta\+K" : "Control\+K"\}/);
-  assert.match(app, /全局搜索/);
+  assert.match(app, /功能搜索/);
   assert.doesNotMatch(app, /navigate\("\/explorer", \{ state: \{ focusSearch: true \} \}\)/);
-  assert.match(app, /to="\/platform-metrics"[^>]*>平台运行状态/);
+  assert.match(app, /\["\/platform-metrics", "平台运行状态"\]/);
   assert.match(components, /key=\{column\.id \?\? `\$\{column\.key\}:\$\{columnIndex\}`\}/);
 });
 
@@ -193,9 +194,9 @@ test("versioned tooling remains unique and the legacy improvement workspace is a
 
 test("forms expose clear labels, edit intent, and required upload fields", () => {
   assert.match(pages, /const chatModeLabels = \{/);
-  assert.match(pages, /quick: "快速分析"/);
-  assert.match(pages, /aria-label="给 AI 分析助手发送消息"/);
-  assert.match(pages, /aria-label="分析方式"/);
+  assert.match(pages, /quick: "证据核对"/);
+  assert.match(pages, /aria-label="给工艺分析助手发送消息"/);
+  assert.match(pages, /aria-label="分析方法"/);
   assert.match(pages, /setEditorMode\(row \? \(section === "type" \? "version" : "edit"\) : "create"\)/);
   assert.match(pages, /editorMode === "create" \? resource\.createLabel/);
   assert.match(researchProjects, /<Field label="项目名称">/);

@@ -111,7 +111,7 @@ export function ObjectExplorerPage() {
 
                     <div className="pt-5">
                       <h3 className="text-sm font-semibold text-slate-900">在这个对象中继续工作</h3>
-                      <p className="mt-1 text-xs leading-5 text-slate-500">进入其他页面时保留当前对象，避免重新查找和填写编号。</p>
+                      <p className="mt-1 text-xs leading-5 text-slate-500">围绕当前对象查看运行、事件、质量和数据健康。</p>
                       <div className="mt-3 grid gap-3 sm:grid-cols-2">
                         {[
                           [`/process-executions?equipmentId=${encodeURIComponent(selected.subjectId)}`, "运行记录", "查看该对象的生产运行与上下文"],
@@ -135,7 +135,7 @@ export function ObjectExplorerPage() {
           <>
             <WorkflowGuide
               title="建立第一个工业对象"
-              description="这里不需要手工维护目录；设备开始上报数据后，平台会自动建立可追溯对象。"
+              description="设备上报数据后，平台自动建立可追溯对象。"
               steps={[
                 { title: "接入设备", description: "选择现场节点、通信方式和设备地址。", state: "current" },
                 { title: "开始采集", description: "现场节点读取数据并持续上报。", state: "upcoming" },

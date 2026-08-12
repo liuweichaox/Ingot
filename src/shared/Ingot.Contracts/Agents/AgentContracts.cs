@@ -241,6 +241,8 @@ public sealed record AgentCapabilities
 
     public required string ReasoningModel { get; init; }
 
+    public required bool IsDeterministic { get; init; }
+
     public IReadOnlyList<string> Modes { get; init; } = [];
 
     public IReadOnlyList<string> Roles { get; init; } = [];
@@ -271,6 +273,8 @@ public sealed record ChatCapabilities
     public required string FastModel { get; init; }
 
     public required string ReasoningModel { get; init; }
+
+    public required bool IsDeterministic { get; init; }
 
     public IReadOnlyList<string> Modes { get; init; } = [];
 

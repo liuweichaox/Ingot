@@ -54,6 +54,28 @@ public sealed class AgentRuntimeTests
     }
 
     [Fact]
+    public async Task ChatRun_DeterministicProviderDoesNotAdvertiseProfessionalCombinedAnalysis()
+    {
+        var runtime = CreateRuntime(new MemoryRunStore(), [new QualityTool()]);
+        var capabilities = runtime.GetCapabilities(ProductEntryPoints.Chat);
+
+        Assert.Equal(["quick"], capabilities.Modes);
+        Assert.False(capabilities.CombinedAnalysisEnabled);
+        Assert.True(capabilities.IsDeterministic);
+        Assert.Empty(capabilities.Roles);
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => runtime.StartAsync(
+            ProductEntryPoints.Chat,
+            "analyst",
+            new CreateChatRunRequest
+        {
+            Question = "综合核对最近数据是否完整",
+            Mode = "combined"
+        }));
+        Assert.Equal("多视角研判尚未启用。", error.Message);
+    }
+
+    [Fact]
     public async Task ChatRun_HistoryIsUserScopedAndUnsupportedEntryPointIsRejected()
     {
         var store = new MemoryRunStore();

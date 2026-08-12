@@ -8,7 +8,7 @@ import { Alert, Badge, Button, Card, DataTable, EmptyState, Field, Input, Metric
 import { formatTime, formatInteger, formatMeasurementValue, formatDuration, edgeStatus, eventTypeLabel, LoadingCard } from "./shared";
 import PlotlyChart from "../components/PlotlyChart";
 
-export function WorkbenchPage() {
+export function WorkbenchPage({ identity }) {
   const [state, setState] = useState({
     loading: true,
     error: "",
@@ -56,42 +56,57 @@ export function WorkbenchPage() {
   const activeContexts = state.contexts.filter(item => !item.validTo).length;
   const activeOptimizationProjects = state.researchProjects.filter(item =>
     item.status === "active" || item.status === "validating").length;
-  const dailyActions = [
-    {
+  const roles = identity?.roles || [];
+  const isQualityRole = roles.some(role => role === "quality.inspector" || role === "quality.reviewer");
+  const isEngineeringRole = roles.some(role => role === "process.engineer" || role === "platform.admin");
+  const isAdministrator = roles.includes("platform.admin");
+  const hasProductionFoundation = state.edges.length > 0 && state.contexts.length > 0 && state.executionTotal > 0;
+  const qualityAction = {
       title: pendingInspections ? `处理 ${pendingInspections} 个质量待办` : "质量任务已处理",
       description: pendingInspections ? "优先完成检测录入和复核。" : "当前没有待录入或待复核任务。",
       to: "/inspections",
       tone: pendingInspections ? "border-amber-200 bg-amber-50" : "border-emerald-200 bg-emerald-50",
       action: pendingInspections ? "去处理" : "查看记录",
-    },
-    {
+    };
+  const engineeringAction = {
       title: activeOptimizationProjects ? `${activeOptimizationProjects} 个研发项目正在推进` : "从一个真实问题开始研发",
       description: activeOptimizationProjects ? "查看证据缺口、待审核实验或需要独立验证的工艺窗口。" : "将质量偏差或运行异常转为可验证的研发项目。",
       to: "/research-projects",
       tone: activeOptimizationProjects ? "border-blue-200 bg-blue-50" : "border-amber-200 bg-amber-50",
       action: activeOptimizationProjects ? "进入优化" : "创建项目",
-    },
-    {
+    };
+  const platformAction = {
       title: `${onlineEdges}/${state.edges.length} 个现场节点在线`,
       description: onlineEdges === state.edges.length && state.edges.length ? "设备采集与数据上行正常。" : "检查离线节点或尚未接入的设备。",
       to: "/edges",
       tone: onlineEdges === state.edges.length && state.edges.length ? "border-emerald-200 bg-emerald-50" : "border-rose-200 bg-rose-50",
       action: "查看状态",
-    },
-  ];
+    };
+  const analysisAction = {
+    title: state.executionTotal > 1 ? "从生产运行开始工艺分析" : "积累可比较的生产运行",
+    description: state.executionTotal > 1 ? "选择异常或偏离运行，系统自动核对同类条件。" : "至少需要两次运行，才能形成有意义的同类对比。",
+    to: state.executionTotal > 1 ? "/analysis" : "/process-executions",
+    tone: state.executionTotal > 1 ? "border-blue-200 bg-blue-50" : "border-amber-200 bg-amber-50",
+    action: state.executionTotal > 1 ? "开始分析" : "查看运行",
+  };
+  const dailyActions = isQualityRole && !isEngineeringRole
+    ? [qualityAction, analysisAction, platformAction]
+    : isEngineeringRole
+      ? [analysisAction, engineeringAction, isAdministrator ? platformAction : qualityAction]
+      : [analysisAction, qualityAction, platformAction];
   return (
     <Page title="我的工作台" description="集中查看今天的待办、生产状态、质量风险与研发进展。">
       {state.error && <Alert tone="danger">{state.error}</Alert>}
       {state.loading ? <LoadingCard /> : (
         <div className="flex flex-col gap-5">
-          <section className="order-3 grid gap-4 rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50 via-white to-white p-5 shadow-sm lg:grid-cols-[minmax(0,1fr)_20rem]">
+          <section className="order-1 grid gap-4 rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50 via-white to-white p-5 shadow-sm lg:grid-cols-[minmax(0,1fr)_20rem]">
             <div>
-              <p className="text-sm font-semibold text-blue-700">从现场问题进入可验证决策</p>
-              <h2 className="mt-2 max-w-3xl text-xl font-semibold tracking-tight text-slate-950">运行、质量、数据可信度和优化行动使用同一业务上下文。</h2>
-              <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">异常先成为可解释的证据，再成为需要工程审核的实验与优化行动。</p>
+              <p className="text-sm font-semibold text-blue-700">看清这次运行，优化下一次运行。</p>
+              <h2 className="mt-2 max-w-3xl text-xl font-semibold tracking-tight text-slate-950">把生产条件、过程轨迹和质量结果连成可追溯证据。</h2>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">从可信运行事实出发，比较差异、形成候选原因，并推进可验证实验。</p>
               <div className="mt-4 flex flex-wrap gap-2">
-                <Link to="/comparisons" className="inline-flex min-h-9 items-center rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">开始运行对比</Link>
-                <Link to="/research-projects" className="inline-flex min-h-9 items-center rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700">进入优化工作台</Link>
+                <Link to="/process-executions" className="inline-flex min-h-9 items-center rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">查看运行证据</Link>
+                <Link to="/analysis" className="inline-flex min-h-9 items-center rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700">开始工艺分析</Link>
               </div>
             </div>
             <div className="grid content-start gap-3 sm:grid-cols-2 lg:grid-cols-1">
@@ -99,7 +114,16 @@ export function WorkbenchPage() {
               <div className="rounded-xl border border-white bg-white/80 p-4"><p className="text-xs font-medium text-slate-500">优化闭环</p><p className="mt-1 text-lg font-semibold text-slate-950">{activeOptimizationProjects} 个项目推进中</p></div>
             </div>
           </section>
-          <Card className="order-1" title="今天先做这些" description="系统按决策优先级聚合待办，不需要逐个后台模块查找。">
+          {!hasProductionFoundation && (
+            <Card className="order-2 border-amber-200 bg-amber-50/50" title="先完成首次接入" description="按依赖顺序建立一条可追溯的数据闭环，准备完成后工作台会切换为日常待办。">
+              <div className="grid gap-3 sm:grid-cols-3">
+                <Link to="/configuration" className="rounded-xl border border-amber-200 bg-white p-4 text-sm font-medium text-amber-900 hover:border-amber-300">1. 定义数据与判断规则</Link>
+                <Link to="/edges" className="rounded-xl border border-amber-200 bg-white p-4 text-sm font-medium text-amber-900 hover:border-amber-300">2. 连接现场节点和设备</Link>
+                <Link to="/production/changeover" className="rounded-xl border border-amber-200 bg-white p-4 text-sm font-medium text-amber-900 hover:border-amber-300">3. 建立当前生产上下文</Link>
+              </div>
+            </Card>
+          )}
+          <Card className="order-3" title={isQualityRole && !isEngineeringRole ? "我的质量工作" : "今天先做这些"} description="根据当前岗位优先展示需要处理的工作。">
             <div className="grid gap-3 lg:grid-cols-3">
               {dailyActions.map(action => (
                 <Link key={action.to} to={action.to} className={`group rounded-xl border p-4 transition hover:-translate-y-0.5 hover:shadow-md ${action.tone}`}>
@@ -110,13 +134,13 @@ export function WorkbenchPage() {
               ))}
             </div>
           </Card>
-          <div className="order-2 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="order-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <Metric label="生产运行" value={state.executionTotal} hint={`${activeProcessExecutions} 个正在进行`} />
             <Metric label="待处理质检" value={pendingInspections} hint="来自当前质量任务" />
             <Metric label="采集节点" value={`${onlineEdges}/${state.edges.length}`} hint="在线 / 全部" />
             <Metric label="研发项目" value={activeOptimizationProjects} hint={`${activeContexts} 个有效生产上下文`} />
           </div>
-          <div className="order-4 grid gap-5 xl:grid-cols-[1.3fr_.7fr]">
+          <div className="order-5 grid gap-5 xl:grid-cols-[1.3fr_.7fr]">
             <Card title="最近生产运行" actions={<Link className="text-sm font-medium text-blue-600 hover:text-blue-700" to="/process-executions">查看全部</Link>}>
               <DataTable
                 rows={state.executions}

@@ -29,7 +29,7 @@ const configurationJourney = [
   },
 ];
 
-export function ConfigurationHubPage({ canWrite = true }) {
+export function ConfigurationHubPage() {
   const modelResponse = useApi("/api/v1/process-data-models");
   const specificationResponse = useApi("/api/v1/process-specifications");
   const ingestionResponse = useApi("/api/v1/ingestion-tasks");
@@ -38,32 +38,28 @@ export function ConfigurationHubPage({ canWrite = true }) {
   const qualityResponse = useApi("/api/v1/inspection-plans");
   const scenarioResponse = useApi("/api/v1/scenario-packages");
   const readiness = [
-    ["数据标准", extractRows(modelResponse.data).some(item => item.status === "published") && extractRows(specificationResponse.data).some(item => item.status === "published"), "需要已发布的数据模型和工艺规范"],
-    ["现场接入", extractRows(ingestionResponse.data).some(item => item.status === "published"), "需要至少一个已发布设备接入任务"],
-    ["分析规则", extractRows(analysisResponse.data).some(item => item.status === "published"), "需要已发布的运行分析方案"],
-    ["质量规则", extractRows(definitionResponse.data).length > 0 && extractRows(qualityResponse.data).some(item => item.status === "published"), "需要检测定义和已发布质量方案"],
-    ["组合发布", extractRows(scenarioResponse.data).some(item => item.status === "published"), "最终发布工艺配置方案"],
+    ["数据标准", extractRows(modelResponse.data).some(item => item.status === "published") && extractRows(specificationResponse.data).some(item => item.status === "published"), "数据模型和工艺规范已发布", "发布数据模型和工艺规范"],
+    ["现场接入", extractRows(ingestionResponse.data).some(item => item.status === "published"), "设备接入任务已发布", "发布至少一个设备接入任务"],
+    ["分析规则", extractRows(analysisResponse.data).some(item => item.status === "published"), "运行分析方案已发布", "发布运行分析方案"],
+    ["质量规则", extractRows(definitionResponse.data).length > 0 && extractRows(qualityResponse.data).some(item => item.status === "published"), "检测定义和质量方案已就绪", "建立检测定义并发布质量方案"],
+    ["组合发布", extractRows(scenarioResponse.data).some(item => item.status === "published"), "工艺配置方案已发布", "发布工艺配置方案"],
   ];
   const readinessLoading = [modelResponse, specificationResponse, ingestionResponse, analysisResponse, definitionResponse, qualityResponse, scenarioResponse].some(item => item.loading && !item.data);
   const readinessError = [modelResponse, specificationResponse, ingestionResponse, analysisResponse, definitionResponse, qualityResponse, scenarioResponse].find(item => item.error)?.error;
   return (
-    <Page title="配置总览" description="从现场数据到可用分析，按依赖顺序完成配置；不需要猜应该先打开哪个菜单。">
-      <Alert tone="info" title="工艺配置方案是最后一步，不是起点">
-        先完成数据标准、设备接入、分析与质量规则；最终方案只负责组合并冻结这些已发布版本。
-      </Alert>
-      {!canWrite && <Alert title="当前为只读配置视图">你可以核对已发布规则和依赖关系；创建、修改与发布由工艺工程师或平台管理员完成。</Alert>}
-      <Card title="当前准备度" description="按已发布版本判断；草稿不会被生产运行或分析使用。">
+    <Page title="配置总览" description="查看数据、接入、分析、质量和工装的准备状态。">
+      <Card title="当前准备度" description="汇总当前可用于生产运行和分析的配置。">
         {readinessError && <Alert tone="warning">部分准备度暂时无法读取：{readinessError}</Alert>}
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-          {readiness.map(([title, ready, hint]) => (
+          {readiness.map(([title, ready, readyHint, pendingHint]) => (
             <div key={title} className={`rounded-xl border p-4 ${ready ? "border-emerald-200 bg-emerald-50" : "border-amber-200 bg-amber-50"}`}>
               <p className="flex items-center justify-between gap-2 font-semibold text-slate-950"><span>{title}</span><span className={`text-xs ${ready ? "text-emerald-700" : "text-amber-700"}`}>{readinessLoading ? "检查中" : ready ? "已准备" : "待完成"}</span></p>
-              <p className="mt-2 text-xs leading-5 text-slate-600">{hint}</p>
+              <p className="mt-2 text-xs leading-5 text-slate-600">{ready ? readyHint : pendingHint}</p>
             </div>
           ))}
         </div>
       </Card>
-      <Card title="推荐配置顺序" description="首次接入新工艺时按 1–5 推进；后续变更只需更新受影响的版本。">
+      <Card title="配置路径" description="按业务依赖完成新工艺配置。">
         <ol className="grid gap-3 md:grid-cols-2 2xl:grid-cols-5">
           {configurationJourney.map(step => (
             <li key={step.number} className="flex flex-col rounded-xl border border-slate-200 bg-white p-4">
@@ -77,7 +73,7 @@ export function ConfigurationHubPage({ canWrite = true }) {
           ))}
         </ol>
       </Card>
-      <Card title="运行上下文从哪里来" description="上下文策略只规定字段如何使用，不在配置方案里制造数据。">
+      <Card title="运行数据来源" description="确认分析所需身份、生产、工装和覆盖率数据。">
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           {[
             ["设备与运行身份", "由设备事件、现场节点和设备接入映射提供。", "/configuration/ingestion-tasks", "检查设备接入"],
@@ -285,7 +281,6 @@ function RegistryPage({ definition, canWrite = true }) {
       description={definition.description}
       actions={canWrite ? <Button variant="primary" onClick={openCreate}>{definition.createLabel || "创建新版本"}</Button> : undefined}
     >
-      {!canWrite && <Alert title="当前为只读视图">你可以核对已发布版本及其业务配置；创建、修改、发布与删除由工艺工程师或平台管理员完成。</Alert>}
       {definition.kind === "inspectionDefinition" && (
         <WorkflowGuide
           title="先定义检测内容，再组成质量方案"

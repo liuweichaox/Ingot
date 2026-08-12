@@ -3,7 +3,6 @@ import {
   AdjustmentsHorizontalIcon,
   BoltIcon,
   BeakerIcon,
-  ChatBubbleLeftRightIcon,
   ClipboardDocumentCheckIcon,
   ChevronRightIcon,
   CircleStackIcon,
@@ -26,14 +25,9 @@ const sections = [
     ],
   },
   {
-    id: "assistant", label: "AI 助手", icon: ChatBubbleLeftRightIcon, path: "/chat", groups: [
-      { items: [["/chat", "AI 分析助手"]] },
-    ],
-  },
-  {
     id: "evidence", label: "生产运行", icon: CircleStackIcon, path: "/process-executions", groups: [
-      { label: "生产准备", items: [["/production/changeover", "生产上下文"], ["/production/tooling-installations", "工装装卸"]] },
       { label: "运行与追溯", items: [["/process-executions", "运行记录"], ["/events", "运行事件"], ["/explorer", "工业对象"]] },
+      { label: "生产准备", items: [["/production/changeover", "生产上下文"], ["/production/tooling-installations", "工装装卸"]] },
     ],
   },
   {
@@ -43,14 +37,15 @@ const sections = [
     ],
   },
   {
-    id: "diagnosis", label: "分析诊断", icon: MagnifyingGlassCircleIcon, path: "/comparisons", groups: [
-      { label: "诊断工具", items: [["/comparisons", "运行对比"]] },
-      { label: "证据准备", items: [["/data-quality", "数据可信度"]] },
+    id: "diagnosis", label: "工艺分析", icon: MagnifyingGlassCircleIcon, path: "/analysis", groups: [
+      { label: "开始分析", items: [["/analysis", "分析总览"]] },
+      { label: "分析工作", items: [["/comparisons", "运行对比"], ["/chat", "分析助手"]] },
+      { label: "分析基础", items: [["/data-quality", "数据可信度"]] },
     ],
   },
   {
-    id: "optimization", label: "工艺研发", icon: BeakerIcon, path: "/research-projects", groups: [
-      { label: "研发工作", items: [["/research-projects", "研发项目"]] },
+    id: "optimization", label: "工艺优化", icon: BeakerIcon, path: "/research-projects", groups: [
+      { label: "优化工作", items: [["/research-projects", "研发项目"]] },
       { label: "复用资产", items: [["/research-assets", "研发资产"]] },
     ],
   },
@@ -79,7 +74,8 @@ const sectionItems = section => section.groups.flatMap(group => group.items);
 const pageDetails = {
   "/research-projects": ["研发项目", "从问题、证据与实验推进到经过验证的工艺窗口"],
   "/workbench": ["我的工作台", "集中查看待办、生产状态、质量风险与研发进展"],
-  "/chat": ["AI 分析助手", "直接对话并核对运行、质量、配置、研发与知识证据"],
+  "/chat": ["工艺分析助手", "用自然语言查询运行、质量、配置、研发与知识证据"],
+  "/analysis": ["工艺分析", "从生产运行和可信证据进入差异比较、候选原因与工程验证"],
   "/research-assets": ["研发资产", "查看项目可复用的数据集、模型、机理和知识"],
   "/explorer": ["工业对象", "选择真实业务对象，再进入它的运行、事件、质量与数据健康视图"],
   "/process-executions": ["运行记录", "查看生产运行及其数据、工艺与质量上下文"],
@@ -172,7 +168,7 @@ export default function App({ identity, logout }) {
           </span>
           <span className="hidden sm:grid">
             <strong className="text-base leading-5 text-slate-950">Ingot</strong>
-            <small className="text-[10px] text-slate-500">工业数据与工艺决策平台</small>
+            <small className="text-[10px] text-slate-500">工艺追因与优化系统</small>
           </span>
         </button>
         <Menu as="div" className="relative flex min-w-0 flex-1 xl:hidden">
@@ -220,8 +216,8 @@ export default function App({ identity, logout }) {
             );
           })}
         </nav>
-        <button className="flex items-center gap-2 border-l border-slate-100 px-3 text-sm text-slate-600 hover:bg-slate-50 sm:px-4" onClick={() => setGlobalSearchOpen(true)} aria-label="打开全局搜索" aria-keyshortcuts={usesAppleShortcut ? "Meta+K" : "Control+K"}>
-          <MagnifyingGlassIcon className="size-5" /><span className="hidden lg:inline">全局搜索</span><kbd className="hidden rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] text-slate-400 2xl:inline">{searchShortcutLabel}</kbd>
+        <button className="flex items-center gap-2 border-l border-slate-100 px-3 text-sm text-slate-600 hover:bg-slate-50 sm:px-4" onClick={() => setGlobalSearchOpen(true)} aria-label="打开功能搜索" aria-keyshortcuts={usesAppleShortcut ? "Meta+K" : "Control+K"}>
+          <MagnifyingGlassIcon className="size-5" /><span className="hidden lg:inline">功能搜索</span><kbd className="hidden rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] text-slate-400 2xl:inline">{searchShortcutLabel}</kbd>
         </button>
         <Menu as="div" className="relative hidden border-l border-slate-100 sm:flex">
           <MenuButton className="grid w-12 place-items-center text-slate-600 hover:bg-slate-50" aria-label="打开系统管理">
@@ -243,9 +239,6 @@ export default function App({ identity, logout }) {
               <p className="truncate font-medium text-slate-900">{displayName}</p>
               <p className="mt-0.5 truncate text-xs text-slate-500">{identity?.username || "当前账户"}</p>
             </div>
-            <MenuItem><Link to="/identity/users" className="block rounded-lg px-3 py-2 text-slate-700 data-focus:bg-slate-100">用户与权限</Link></MenuItem>
-            <MenuItem><Link to="/platform-metrics" className="block rounded-lg px-3 py-2 text-slate-700 data-focus:bg-slate-100">平台运行状态</Link></MenuItem>
-            <MenuItem><Link to="/logs" className="block rounded-lg px-3 py-2 text-slate-700 data-focus:bg-slate-100">运行日志</Link></MenuItem>
             <MenuItem><a href="https://docs.ingotstack.com/zh" className="block rounded-lg px-3 py-2 text-slate-700 data-focus:bg-slate-100">产品文档</a></MenuItem>
             <MenuItem><button type="button" onClick={logout} className="block w-full rounded-lg px-3 py-2 text-left text-slate-700 data-focus:bg-slate-100">退出登录</button></MenuItem>
           </MenuItems>
@@ -354,8 +347,8 @@ function GlobalSearchDialog({ open, onClose, navigate }) {
       <div className="fixed inset-0 overflow-y-auto p-4 pt-[12vh] sm:p-6 sm:pt-[14vh]">
         <DialogPanel className="mx-auto w-full max-w-2xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
           <div className="border-b border-slate-100 p-4 sm:p-5">
-            <p className="text-sm font-semibold text-slate-950">全局搜索</p>
-            <p className="mt-1 text-xs text-slate-500">查找生产运行、质量管理、分析诊断、工艺研发、配置和系统功能。</p>
+            <p className="text-sm font-semibold text-slate-950">功能搜索</p>
+            <p className="mt-1 text-xs text-slate-500">查找生产运行、质量管理、工艺分析、工艺优化、配置和系统功能。</p>
             <Input
               ref={inputRef}
               value={query}
@@ -372,7 +365,7 @@ function GlobalSearchDialog({ open, onClose, navigate }) {
               </button>
             )) : <div className="px-4 py-10 text-center text-sm text-slate-500">没有匹配的功能。请换一个关键词。</div>}
           </div>
-          <div className="flex items-center justify-between border-t border-slate-100 px-5 py-3 text-xs text-slate-500"><span>搜索用于定位产品功能，不会把你直接带到某个数据资产。</span><span>Esc 关闭</span></div>
+          <div className="flex items-center justify-between border-t border-slate-100 px-5 py-3 text-xs text-slate-500"><span>搜索产品功能</span><span>Esc 关闭</span></div>
         </DialogPanel>
       </div>
     </Dialog>
@@ -385,7 +378,8 @@ function AppRoutes({ identity, canConfigure }) {
       <Route path="/" element={<Navigate to="/workbench" replace />} />
       <Route path="/research-projects" element={<Pages.ResearchProjectsPage identity={identity} />} />
       <Route path="/research-projects/:projectId" element={<Pages.ResearchProjectsPage identity={identity} />} />
-      <Route path="/workbench" element={<Pages.WorkbenchPage />} />
+      <Route path="/workbench" element={<Pages.WorkbenchPage identity={identity} />} />
+      <Route path="/analysis" element={<Pages.AnalysisHubPage />} />
       <Route path="/chat" element={<Pages.ChatPage />} />
       <Route path="/research-assets" element={<Pages.ResearchAssetsPage />} />
       <Route path="/explorer" element={<Pages.ObjectExplorerPage />} />

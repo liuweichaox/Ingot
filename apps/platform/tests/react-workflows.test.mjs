@@ -20,17 +20,16 @@ const registryEditor = await readFile(new URL("../src/components/RegistryBusines
 test("configuration center presents dependencies before final process configuration publishing", () => {
   assert.match(app, /path: "\/configuration"/);
   assert.match(pages, /export function ConfigurationHubPage/);
-  assert.match(pages, /工艺配置方案是最后一步，不是起点/);
   for (const step of ["定义数据标准", "连接现场数据", "定义判断规则", "建立工装结构", "组合并发布"]) {
     assert.match(pages, new RegExp(step));
   }
-  assert.match(pages, /运行上下文从哪里来/);
+  assert.match(pages, /运行数据来源/);
   assert.match(pages, /生产准备或 MES 写入不可变生产上下文/);
   assert.match(pages, /当前准备度/);
-  assert.match(pages, /按已发布版本判断/);
-  assert.match(pages, /当前为只读配置视图/);
+  assert.match(pages, /汇总当前可用于生产运行和分析的配置/);
+  assert.doesNotMatch(pages, /工艺配置方案是最后一步，不是起点|不需要猜应该先打开哪个菜单/);
   assert.match(pages, /canWrite \? <Button variant="primary" onClick=\{openCreate\}/);
-  assert.match(ingestionTasks, /当前为只读视图/);
+  assert.match(ingestionTasks, /!canWrite \|\| managedByBinding/);
 });
 
 test("operations retain server pagination and resumable live events", () => {
@@ -168,7 +167,8 @@ test("edge pages use the registry heartbeat contract for status", () => {
 test("workbench and logs use current response contracts without misleading placeholders", () => {
   assert.match(pages, /\/api\/v1\/process-executions\?limit=8/);
   assert.match(pages, /\/api\/v1\/research-projects\?limit=100/);
-  assert.match(pages, /从现场问题进入可验证决策/);
+  assert.match(pages, /看清这次运行，优化下一次运行/);
+  assert.match(pages, /开始工艺分析/);
   assert.match(pages, /executionOverview: executions\.overview/);
   assert.match(pages, /state\.loading \? <LoadingCard \/>/);
   assert.match(pages, /logs\?pageSize=200/);
@@ -187,13 +187,13 @@ test("execution comparison submits the selection contract and renders business r
   assert.match(pages, /comparisonScope === "cohort"/);
   assert.match(pages, /execution-comparisons\/\$\{encodeURIComponent\(baselineProcessExecutionId\)\}\?limit=24/);
   assert.match(pages, /processExecutionIds: \[baselineProcessExecutionId, candidate\]/);
-  assert.match(pages, /title="三步完成一次可信对比"/);
+  assert.match(pages, /title="选择目标运行并开始对比"/);
   assert.match(pages, /生成对比结论/);
   assert.match(pages, /找到 \$\{comparableProcessExecutions\.length\} 条同类运行/);
   assert.match(pages, /executionId=\$\{encodeURIComponent\(baseline\)\}&limit=1/);
   assert.match(pages, /title="运行概况"/);
   assert.match(pages, /title="质量候选原因"/);
-  assert.match(pages, /title="确定性调查报告"/);
+  assert.match(pages, /title="调查报告"/);
   assert.match(pages, /首次阶段偏离/);
   assert.match(pages, /反证与边界/);
   assert.match(pages, /下一步验证实验/);
@@ -383,17 +383,26 @@ test("Chat is a standalone conversation workspace with optional project context 
   assert.match(pages, /answer\.summary/);
   assert.match(pages, /新对话/);
   assert.match(pages, /删除对话/);
-  assert.match(pages, /给 AI 分析助手发送消息/);
-  assert.match(pages, /全部数据（无需项目）/);
+  assert.match(pages, /给工艺分析助手发送消息/);
+  assert.match(pages, /询问生产、质量或工艺问题/);
+  assert.doesNotMatch(pages, /无需先选项目|不是使用前提|直接提问，无需选择项目/);
+  assert.doesNotMatch(pages, /aria-label="对话上下文"/);
+  assert.match(pages, /\(capabilities\?\.modes \|\| \[\]\)\.length > 1/);
+  assert.match(pages, /quick: "证据核对"/);
+  assert.match(pages, /combined: "多视角研判"/);
+  assert.match(pages, /answer\.combinedAnalysis/);
+  assert.match(pages, /const latestReviews = Object\.values/);
+  assert.match(pages, /工艺、质量和复核视角基于同一批记录交叉审查/);
   assert.match(pages, /requestSubmit/);
   assert.match(pages, /capabilitiesLoading/);
   assert.match(pages, /scopedHistory/);
   assert.match(pages, /item\.pageContext\?\.id === projectId/);
-  assert.match(pages, /不自动写入设备/);
+  assert.match(pages, /生产 · 质量 · 工艺证据/);
   assert.match(pages, /\{confirmationDialog\}/);
   assert.match(app, /isChatWorkspace/);
   assert.match(app, /h-\[100dvh\]/);
-  assert.match(app, /id: "assistant"/);
+  assert.match(app, /id: "diagnosis", label: "工艺分析"/);
+  assert.doesNotMatch(app, /id: "assistant"/);
   assert.doesNotMatch(pages, /LegacyChatPage/);
   assert.doesNotMatch(pages, /min-h-\[420px\]/);
   assert.doesNotMatch(pages, /\{run\.answer\}<\/div>/);

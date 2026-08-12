@@ -24,15 +24,16 @@ Define process → Connect equipment → Collect production data → Close the d
 
 The first four steps organize field activity into trustworthy run facts. The last two use those facts to support engineering decisions. Diagnosis and optimization are not parallel products: one explains an observed result and the other selects an unexecuted experiment, so both must read the same evidence.
 
-The current Web information architecture follows the core decision chain through five business domains:
+The current Web information architecture balances the decision chain with frequent role-based tasks through six business entries:
 
-1. **Overview**: operations, quality, data trust, and next actions;
-2. **Run evidence**: industrial objects, real runs, quality tasks, run events, run preparation, and tooling installation;
-3. **Process diagnosis**: data trust, run comparison, quality-deviation analysis, the analysis assistant, and evaluation cases;
-4. **Process optimization**: optimization projects and their reusable research assets;
-5. **Configuration**: process, process specification, analysis, quality, tooling, edge-node, and equipment-connectivity definitions.
+1. **Workbench**: prioritized quality tasks, run status, field status, and R&D progress;
+2. **Production runs**: industrial objects, real runs, run events, production preparation, and tooling installation;
+3. **Quality management**: inspection entry, independent review, quality records, and quality-deviation analysis, with direct access for daily quality work;
+4. **Process analysis**: the analysis assistant, data trust, and run comparison; AI is an analysis method rather than a standalone business domain;
+5. **Process optimization**: R&D projects, experimental validation, and reusable research assets;
+6. **Configuration**: process, process specification, analysis, quality, tooling, edge-node, and equipment-connectivity definitions.
 
-System administration has a separate entry for users, role permissions, platform status, and runtime logs, so it does not compete with the business decision chain. Secondary navigation is grouped by task. Existing URLs and data contracts remain stable; only the way engineers discover capabilities changes.
+System administration has a separate entry for users, role permissions, platform status, runtime logs, and assistant evaluation, so it does not compete with business tasks. Secondary navigation places frequent daily tasks before setup and maintenance actions. Existing URLs and data contracts remain stable; only the way engineers discover capabilities changes.
 
 Menus may change, but these business facts must not be hidden, duplicated into parallel records, or buried inside algorithm state.
 

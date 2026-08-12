@@ -194,6 +194,7 @@ public sealed class ChatRunsController(
             Provider = capabilities.Provider,
             FastModel = capabilities.FastModel,
             ReasoningModel = capabilities.ReasoningModel,
+            IsDeterministic = capabilities.IsDeterministic,
             Modes = capabilities.Modes,
             Roles = capabilities.Roles,
             Tools = capabilities.Tools.Select(static tool => new ChatToolCapability

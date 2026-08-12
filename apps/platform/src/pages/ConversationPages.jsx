@@ -90,13 +90,25 @@ function makeEventQuery(filters, page, pageSize) {
 }
 
 const chatModeLabels = {
-  quick: "快速分析",
-  combined: "综合分析",
+  quick: "证据核对",
+  combined: "多视角研判",
 };
 
 const chatModeDescriptions = {
-  quick: "优先查询关键记录，适合事实核对和单一问题。",
-  combined: "分轮核对多类证据，适合复杂追因；耗时更长。",
+  quick: "查询平台记录并明确证据范围，不把观察性差异表述为根因。",
+  combined: "由工艺、质量与复核视角交叉审查后形成结论。",
+};
+
+const perspectiveLabels = {
+  process: "工艺视角",
+  quality: "质量视角",
+  review: "复核视角",
+};
+
+const reviewPositionLabels = {
+  support: "支持",
+  oppose: "反对",
+  uncertain: "待确认",
 };
 
 const chatProgressLabels = {
@@ -106,6 +118,9 @@ const chatProgressLabels = {
   "tool.started": "正在查询生产数据",
   "tool.completed": "数据查询完成",
   "relatedRecords.checked": "正在核对数据来源",
+  "discussion.started": "正在从工艺、质量和复核视角交叉审查",
+  "discussion.message": "正在汇总各视角判断",
+  "discussion.completed": "多视角研判完成",
   "answer.delta": "正在整理回答",
   "run.completed": "回答已生成",
   "run.failed": "分析失败",
@@ -166,6 +181,7 @@ function ChatAnswer({ answer, onFollowUp }) {
   }
 
   const findings = (answer.findings || []).filter(item => item && item !== answer.summary);
+  const combined = answer.combinedAnalysis;
   return (
     <article className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
       <header className="flex items-center justify-between gap-3 border-b border-slate-100 bg-slate-50/80 px-4 py-3">
@@ -198,6 +214,40 @@ function ChatAnswer({ answer, onFollowUp }) {
           </ul>
         </div>
       )}
+      {combined && (
+        <section className="rounded-xl border border-violet-200 bg-violet-50/60 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <p className="font-semibold text-violet-950">多视角研判</p>
+              <p className="mt-1 text-xs text-violet-700">工艺、质量和复核视角基于同一批记录交叉审查</p>
+            </div>
+            <Badge tone={combined.status === "needs-review" ? "warning" : "neutral"}>{combined.status === "needs-review" ? "待工程复核" : "证据不足"}</Badge>
+          </div>
+          <p className="mt-3 text-sm leading-6 text-violet-950">{combined.summary}</p>
+          {(combined.possibleCauses || []).length > 0 && (
+            <div className="mt-4 grid gap-2">
+              <p className="text-xs font-semibold tracking-wide text-violet-700">可能原因</p>
+              {combined.possibleCauses.map(cause => {
+                const reviews = (combined.reviews || []).filter(review => review.causeId === cause.causeId);
+                const latestReviews = Object.values(reviews.reduce((latest, review) => ({ ...latest, [review.authorRole]: review }), {}));
+                return (
+                  <article key={cause.causeId} className="rounded-lg border border-violet-100 bg-white p-3">
+                    <div className="flex flex-wrap items-center gap-2"><Badge tone="blue">{perspectiveLabels[cause.authorRole] || cause.authorRole}</Badge><strong className="text-sm text-slate-900">{cause.statement}</strong></div>
+                    <p className="mt-1 text-sm leading-6 text-slate-600">{cause.reason}</p>
+                    {latestReviews.length > 0 && <div className="mt-2 flex flex-wrap gap-2">{latestReviews.map(review => <span key={review.authorRole} className="rounded-md bg-slate-100 px-2 py-1 text-xs text-slate-600">{perspectiveLabels[review.authorRole] || review.authorRole} · {reviewPositionLabels[review.position] || review.position}</span>)}</div>}
+                  </article>
+                );
+              })}
+            </div>
+          )}
+          {(combined.reviewSteps || []).length > 0 && (
+            <details className="mt-3">
+              <summary className="cursor-pointer text-xs font-medium text-violet-800">查看 {combined.reviewSteps.length} 条交叉审查记录</summary>
+              <ol className="mt-2 space-y-2">{combined.reviewSteps.map((step, index) => <li key={`${step.role}-${step.round}-${index}`} className="rounded-lg bg-white px-3 py-2 text-xs leading-5 text-slate-600"><strong className="text-slate-800">第 {step.round} 轮 · {perspectiveLabels[step.role] || step.role}</strong><p>{step.summary}</p></li>)}</ol>
+            </details>
+          )}
+        </section>
+      )}
       {(answer.relatedRecords || []).length > 0 && (
         <div>
           <p className="text-xs font-semibold tracking-wide text-slate-500">相关记录</p>
@@ -227,7 +277,7 @@ function ChatAnswer({ answer, onFollowUp }) {
   );
 }
 export function ChatPage() {
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const projectId = searchParams.get("projectId");
   const [capabilities, setCapabilities] = useState(null);
   const [capabilitiesLoading, setCapabilitiesLoading] = useState(true);
@@ -237,7 +287,6 @@ export function ChatPage() {
   const [events, setEvents] = useState([]);
   const [history, setHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(true);
-  const [projects, setProjects] = useState([]);
   const [project, setProject] = useState(null);
   const [projectLoading, setProjectLoading] = useState(Boolean(projectId));
   const [projectError, setProjectError] = useState("");
@@ -267,9 +316,6 @@ export function ChatPage() {
       })
       .catch(requestError => setError(requestError.message))
       .finally(() => setCapabilitiesLoading(false));
-    getJson("/api/v1/research-projects?limit=100")
-      .then(value => setProjects(value?.data || []))
-      .catch(() => setProjects([]));
     void loadHistory();
     return () => controller.current?.abort();
   }, [loadHistory]);
@@ -293,6 +339,8 @@ export function ChatPage() {
     event.preventDefault();
     if (!question.trim()) return;
     const submittedQuestion = question.trim();
+    const availableModes = capabilities?.modes || [];
+    const submittedMode = availableModes.includes(mode) ? mode : availableModes[0] || "quick";
     setSubmitting(true);
     setError("");
     setEvents([]);
@@ -300,7 +348,7 @@ export function ChatPage() {
       const created = await postJson("/api/v1/chat/runs", {
         question: submittedQuestion,
         pageContext: projectId ? { kind: "research-project", id: projectId } : null,
-        mode,
+        mode: submittedMode,
       });
       setRun({ ...created, question: submittedQuestion });
       setQuestion("");
@@ -354,12 +402,7 @@ export function ChatPage() {
     setQuestion("");
     setEvents([]);
     setError("");
-  }
-
-  function changeProjectScope(event) {
-    const nextProjectId = event.target.value;
-    setSearchParams(nextProjectId ? { projectId: nextProjectId } : {}, { replace: true });
-    newConversation();
+    setMode(current => capabilities?.modes?.includes(current) ? current : capabilities?.modes?.[0] || "quick");
   }
 
   async function deleteHistory(item) {
@@ -392,6 +435,7 @@ export function ChatPage() {
     : history;
   const suggestedQuestions = projectId ? projectSuggestedQuestions : globalSuggestedQuestions;
   const serviceEnabled = Boolean(capabilities?.enabled);
+  const deterministicDemo = Boolean(capabilities?.isDeterministic);
   const analysisBlocked = capabilitiesLoading || !serviceEnabled || submitting;
 
   return (
@@ -416,25 +460,21 @@ export function ChatPage() {
                 <TrashIcon className="size-4" />
               </button>
             </div>
-          )) : <p className="px-3 py-6 text-sm leading-6 text-slate-500">还没有对话。直接在右侧输入问题即可开始，无需先选项目。</p>}
+          )) : <p className="px-3 py-6 text-sm leading-6 text-slate-500">从一个生产、质量或工艺问题开始。</p>}
         </div>
-        <div className="border-t border-slate-200 px-4 py-3 text-xs leading-5 text-slate-500">只读分析 · 引用正式记录 · 不自动写入设备</div>
+        <div className="border-t border-slate-200 px-4 py-3 text-xs leading-5 text-slate-500">生产 · 质量 · 工艺证据</div>
       </aside>
 
       <section className="flex min-h-0 min-w-0 flex-col bg-white">
         <header className="flex min-h-16 flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-3 sm:px-6">
           <div className="min-w-0">
-            <div className="flex items-center gap-2"><ChatBubbleLeftRightIcon className="size-5 text-blue-600" /><h1 className="font-semibold text-slate-950">AI 分析助手</h1></div>
-            <p className="mt-0.5 truncate text-xs text-slate-500">{projectLoading ? "正在读取上下文…" : project ? `${project.name} · ${researchStatusLabels[project.status] || project.status}` : "全部可访问数据"}</p>
+            <div className="flex items-center gap-2"><ChatBubbleLeftRightIcon className="size-5 text-blue-600" /><h1 className="font-semibold text-slate-950">工艺分析助手</h1></div>
+            <p className="mt-0.5 truncate text-xs text-slate-500">{projectLoading ? "正在读取上下文…" : project ? `${project.name} · ${researchStatusLabels[project.status] || project.status}` : "生产与工艺数据"}</p>
           </div>
           <div className="flex min-w-0 flex-1 items-center justify-end gap-2 sm:flex-none">
-            <Select aria-label="对话上下文" className="max-w-56" value={projectId || ""} onChange={changeProjectScope} disabled={submitting}>
-              <option value="">全部数据（无需项目）</option>
-              {projects.map(item => <option key={item.projectId} value={item.projectId}>{item.name}</option>)}
-            </Select>
-            <Select aria-label="分析方式" className="w-32" value={mode} onChange={event => setMode(event.target.value)} disabled={!serviceEnabled || submitting} title={chatModeDescriptions[mode]}>
-              {(capabilities?.modes || ["quick"]).map(item => <option key={item} value={item}>{chatModeLabels[item] ?? item}</option>)}
-            </Select>
+            {(capabilities?.modes || []).length > 1 && <Select aria-label="分析方法" className="w-36" value={mode} onChange={event => setMode(event.target.value)} disabled={!serviceEnabled || submitting} title={chatModeDescriptions[mode]}>
+              {capabilities.modes.map(item => <option key={item} value={item}>{chatModeLabels[item] ?? item}</option>)}
+            </Select>}
             <Button className="lg:hidden" onClick={newConversation} disabled={submitting}>新对话</Button>
             {projectId && <Link to={`/research-projects/${encodeURIComponent(projectId)}`} className="hidden min-h-9 items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 sm:inline-flex"><ArrowLeftIcon className="size-4" />项目</Link>}
           </div>
@@ -445,13 +485,14 @@ export function ChatPage() {
             <div className="space-y-3">
               {projectError && <Alert tone="danger" title="无法读取项目上下文">{projectError}</Alert>}
               {!capabilitiesLoading && capabilities && !serviceEnabled && <Alert tone="warning" title="分析服务未启用">当前部署关闭了分析能力；启用确定性或 OpenAI-compatible 模型后即可对话。</Alert>}
+              {!capabilitiesLoading && serviceEnabled && deterministicDemo && <Alert tone="info" title="当前分析范围">当前仅核对平台记录和证据边界，不提供多视角研判。</Alert>}
               {error && <Alert tone="danger">{error}</Alert>}
             </div>
             {!run ? (
               <div className="mx-auto w-full max-w-2xl text-center">
                 <span className="mx-auto grid size-14 place-items-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-600/20"><ChatBubbleLeftRightIcon className="size-7" /></span>
                 <h2 className="mt-5 text-2xl font-semibold tracking-tight text-slate-950">今天要核对什么？</h2>
-                <p className="mt-2 text-sm leading-6 text-slate-500">直接询问运行、质量、设备接入、配置或研发证据。项目只是可选过滤器，不是使用前提。</p>
+                <p className="mt-2 text-sm leading-6 text-slate-500">核对生产运行、质量结果、设备状态和工艺证据。</p>
                 <div className="mt-7 grid gap-3 text-left sm:grid-cols-2">
                   {suggestedQuestions.map(item => <button key={item} type="button" className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm leading-6 text-slate-700 shadow-sm hover:border-blue-300 hover:bg-blue-50 disabled:opacity-50" onClick={() => setQuestion(item)} disabled={!serviceEnabled || submitting}>{item}</button>)}
                 </div>
@@ -472,10 +513,10 @@ export function ChatPage() {
 
         <footer className="border-t border-slate-200 bg-white px-3 py-3 sm:px-6">
           <form className="mx-auto flex max-w-4xl items-end gap-2 rounded-2xl border border-slate-300 bg-white p-2 shadow-sm focus-within:border-blue-500 focus-within:ring-3 focus-within:ring-blue-500/15" onSubmit={start}>
-            <textarea aria-label="给 AI 分析助手发送消息" className="max-h-40 min-h-10 min-w-0 flex-1 resize-none border-0 bg-transparent px-2 py-2 text-sm leading-6 text-slate-900 outline-none placeholder:text-slate-400" rows="1" required value={question} onChange={event => setQuestion(event.target.value)} disabled={!serviceEnabled || submitting} placeholder="直接提问，无需选择项目…" onKeyDown={event => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} />
+            <textarea aria-label="给工艺分析助手发送消息" className="max-h-40 min-h-10 min-w-0 flex-1 resize-none border-0 bg-transparent px-2 py-2 text-sm leading-6 text-slate-900 outline-none placeholder:text-slate-400" rows="1" required value={question} onChange={event => setQuestion(event.target.value)} disabled={!serviceEnabled || submitting} placeholder="询问生产、质量或工艺问题…" onKeyDown={event => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} />
             {submitting ? <Button type="button" onClick={cancel} disabled={cancelling}>{cancelling ? "取消中" : "停止"}</Button> : <Button className="size-10 rounded-xl px-0" variant="primary" type="submit" aria-label="发送消息" disabled={analysisBlocked || !question.trim()}><PaperAirplaneIcon className="size-5" /></Button>}
           </form>
-          <p className="mx-auto mt-2 max-w-4xl text-center text-[11px] text-slate-400">回答会标注证据边界；重要工艺判断必须由工程师复核。</p>
+          <p className="mx-auto mt-2 max-w-4xl text-center text-[11px] text-slate-400">回答基于平台记录，并标注证据范围。</p>
         </footer>
       </section>
       {confirmationDialog}

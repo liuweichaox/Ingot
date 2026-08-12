@@ -841,8 +841,8 @@ export function ResearchProjectsPage({ identity }) {
         </div>
         <aside>
           <WorkflowGuide
-            title={projects.length ? "优化闭环" : "第一次使用：只需走完这四步"}
-            description={projects.length ? "当前项目会沿同一证据路径推进。" : "不需要先配置所有数据和模型；先围绕一个真实问题建立闭环。"}
+            title="研发路径"
+            description="围绕真实问题推进证据、实验和验证。"
             compact
             steps={[
               { title: "明确偏差", description: "从质量追因或历史对比确认问题和范围。", state: projects.length ? "done" : "current" },

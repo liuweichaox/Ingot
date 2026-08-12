@@ -684,12 +684,12 @@ function ScenarioPackageEditor({ form, onChange, readOnly, lockIdentity }) {
           {form.ingestionTasks.map((item, index) => <div key={index} className="grid gap-2 md:grid-cols-[1fr_auto]"><ReferenceSelect value={item.reference} options={matchingProfiles} idKey="taskId" label="摄取任务" disabled={readOnly} onChange={event => updateRow(form, onChange, "ingestionTasks", index, { reference: event.target.value })} />{!readOnly && <Button variant="ghost" className="text-rose-700" onClick={() => removeRow(form, onChange, "ingestionTasks", index)}>移除</Button>}</div>)}
         </div>
       </Card>
-      <Card title="运行上下文策略" description="这些字段不是在这里产生的：设备身份来自事件，产品/工艺/材料来自生产上下文，工装来自装卸记录。此处只决定字段如何参与分析。">
+      <Card title="分析上下文" description="选择分析使用的运行字段，并设置覆盖率和准入方式。">
         <div className="grid gap-4">
           <div className="rounded-xl border border-blue-100 bg-blue-50/70 p-4 text-sm text-slate-700">
             <p className="font-semibold text-slate-950">数据链路</p>
             <p className="mt-1 leading-6">生产准备 / MES → 不可变运行上下文 → 数据可信度计算覆盖率 → 本策略决定是否仅追溯、分析必需或允许进入建模。</p>
-            <p className="mt-1 text-xs text-slate-500">覆盖率按当前 {reliabilityData?.analyzedRunCount ?? 0} 条已完成运行计算；没有历史运行时不会凭空判定字段可用。</p>
+            <p className="mt-1 text-xs text-slate-500">覆盖率基于当前 {reliabilityData?.analyzedRunCount ?? 0} 条已完成运行。</p>
           </div>
           {reliabilityError && <Alert tone="warning">暂时无法读取现场覆盖率：{reliabilityError}</Alert>}
           {!readOnly && (

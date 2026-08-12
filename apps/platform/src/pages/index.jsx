@@ -7,6 +7,7 @@ export { ObjectExplorerPage } from "./ObjectPages";
 export { ProductionSetupPage } from "./ManufacturingPages";
 export { InspectionsPage, QualityAnalysisPage } from "./InspectionPages";
 export { ExecutionComparisonPage, DataQualityPage } from "./AnalysisPages";
+export { AnalysisHubPage } from "./AnalysisHubPage";
 export {
   ConfigurationHubPage,
   ProcessDataModelsPage,

@@ -163,7 +163,7 @@ export function DevicePointsPanel({
         </ul>
       </Card>
 
-      <Card title="驱动约束" description="这些是当前驱动的真实边界，不是暂时未做。">
+      <Card title="驱动能力" description="当前通信驱动支持的连接和读取方式。">
         <ul className="grid gap-1.5 text-sm text-slate-600">
           {descriptor.constraints.map(item => <li key={item}>· {item}</li>)}
         </ul>

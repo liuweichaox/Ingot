@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
 import { getJson, postJson } from "../api/http";
 import { extractRows, useApi } from "../hooks/useApi";
-import { Alert, Badge, Button, Card, DataTable, EmptyState, Field, Input, Metric, Page, Select, StatusBadge, WorkflowGuide, notify } from "../ui/components";
+import { Alert, Badge, Button, Card, DataTable, EmptyState, Field, Input, Metric, Page, Select, StatusBadge, notify } from "../ui/components";
 import { contextFieldLabel, formatTime, formatInteger, formatDuration, objectTypeLabel, LoadingCard } from "./shared";
 
 const comparisonFeatureLabels = {
@@ -151,6 +151,8 @@ export function ExecutionComparisonPage() {
   }, [candidate, comparableProcessExecutions, comparisonScope]);
 
   const executionLabel = execution => [
+    execution.qualityStatus && execution.qualityStatus !== "not_applicable" ? `质量：${execution.qualityStatus}` : null,
+    execution.dataQualityStatus ? `数据：${execution.dataQualityStatus}` : null,
     execution.completedAt ? new Date(execution.completedAt).toLocaleString("zh-CN") : "时间未知",
     execution.productFamilyCode || execution.productCode || "未标注产品",
     execution.equipmentId || "未标注设备",
@@ -240,31 +242,19 @@ export function ExecutionComparisonPage() {
   return (
     <Page title="运行对比" description="选择一条需要解释的运行，系统自动寻找生产条件一致的历史运行，并把差异整理成可验证结论。">
       {error && <Alert tone="danger">{error}</Alert>}
-      <WorkflowGuide
-        title="三步完成一次可信对比"
-        description="系统不会把不同产品、设备或工装的运行直接混在一起。"
-        steps={[
-          { title: "选择目标运行", description: "默认选中最新运行，也可以按产品、设备或运行号查找。", state: baseline ? "done" : "current" },
-          { title: "核对同类条件", description: "确认产品、设备、工装等匹配条件以及可用历史样本数。", state: result ? "done" : baseline ? "current" : "upcoming" },
-          { title: "阅读结论并行动", description: "先看结论和缺失证据，再决定是否转为研发假设。", state: result ? "current" : "upcoming" },
-        ]}
-      />
-      <Card title="1. 选择目标运行" description="目标运行是你想解释的那一次；页面默认选择最新完成的运行，避免从长串编号开始。">
-        <div className="mb-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
-          <Field label="筛选运行" hint="可按运行号、产品、设备或工艺规范筛选；这是查找，不是录入运行编号。"><Input value={executionFilter} onChange={event => setProcessExecutionFilter(event.target.value)} placeholder="例如：产品系列、设备编号或运行号" /></Field>
-          <p className="pb-2 text-sm text-slate-500">显示 {visibleProcessExecutions.length} / {executions.length} 条已完成运行</p>
-        </div>
-        <form className="grid items-start gap-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(18rem,.9fr)_auto]" onSubmit={compare}>
+      <Card title="选择目标运行并开始对比" description="默认选择最近完成的运行；如果存在质量异常或参数偏离，请优先选择对应运行。">
+        <form className="grid items-start gap-3 md:grid-cols-2 xl:grid-cols-[minmax(15rem,.8fr)_minmax(0,1.4fr)_minmax(12rem,.7fr)_minmax(15rem,.8fr)_auto]" onSubmit={compare}>
+          <Field label="筛选运行" hint={`显示 ${visibleProcessExecutions.length} / ${executions.length} 条已完成运行`}><Input value={executionFilter} onChange={event => setProcessExecutionFilter(event.target.value)} placeholder="产品、设备、规范或运行号" /></Field>
           <Field label="目标运行" hint="通常选择质量异常、参数偏离或刚刚完成的一次运行。"><Select value={baseline} onChange={event => { setBaseline(event.target.value); setResult(null); }} required disabled={catalogLoading || !executions.length}><option value="">选择已完成运行</option>{baseline && !executions.some(item => item.executionId === baseline) && <option value={baseline}>{baseline}（来自当前页面链接）</option>}{visibleProcessExecutions.map(execution => <option key={execution.executionId} value={execution.executionId}>{executionLabel(execution)}</option>)}</Select></Field>
           <Field label="对比范围" hint="历史样本组由服务端按产品、时间、质量和数据完整性筛选。"><Select value={comparisonScope} onChange={event => setComparisonScope(event.target.value)} disabled={!baseline}><option value="cohort">同产品历史样本组</option><option value="single">指定一个同类运行</option></Select></Field>
           {comparisonScope === "single" ? <Field label="对比运行" hint={baselineProcessExecution?.productFamilyCode ? `仅显示产品系列“${baselineProcessExecution.productFamilyCode}”的运行。` : baselineProcessExecution ? `该运行未标注产品系列，暂按设备“${baselineProcessExecution.equipmentId || "未标注"}”筛选。` : "正在读取基准运行。"}><Select value={candidate} onChange={event => setCandidate(event.target.value)} required disabled={!baselineProcessExecution || catalogLoading}><option value="">选择同类运行</option>{comparableProcessExecutions.map(execution => <option key={execution.executionId} value={execution.executionId}>{executionLabel(execution)}</option>)}</Select></Field> : <div className="self-end rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm leading-5 text-slate-600">系统最多选择 24 个同产品历史运行，并保留质量覆盖和数据完整性证据。</div>}
           <Button variant="primary" type="submit" className="min-h-10 self-end" disabled={busy || !comparisonReady || (comparisonScope === "single" && !candidate)}>{busy ? "正在对比…" : "生成对比结论"}</Button>
         </form>
         {catalogLoading && <p className="mt-3 text-sm text-slate-500">正在读取可比较的已完成运行…</p>}
-        {!catalogLoading && executions.length === 0 && <Alert tone="warning" title="还没有已完成运行">请先在“生产运行 → 生产上下文”完成生产准备，并让设备至少完成两次运行。当前不是你的选择错误。</Alert>}
+        {!catalogLoading && executions.length === 0 && <Alert tone="warning" title="还没有已完成运行">完成生产准备并积累至少两次运行后，即可开始对比。</Alert>}
         {!catalogLoading && baselineProcessExecution && (
           <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
-            <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-sm font-semibold text-slate-900">2. 核对同类条件</p><p className="mt-1 text-xs text-slate-500">系统将按工艺配置中的运行分析方案筛选，不要求你手工填写编号。</p></div><Badge tone={comparisonReady ? "success" : "warning"}>{comparisonReady ? `找到 ${comparableProcessExecutions.length} 条同类运行` : "没有同类运行"}</Badge></div>
+            <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-sm font-semibold text-slate-900">系统已核对同类条件</p><p className="mt-1 text-xs text-slate-500">匹配条件来自当前运行分析方案。</p></div><Badge tone={comparisonReady ? "success" : "warning"}>{comparisonReady ? `找到 ${comparableProcessExecutions.length} 条同类运行` : "没有同类运行"}</Badge></div>
             <dl className="mt-3 grid gap-2 sm:grid-cols-3">
               <div><dt className="text-xs text-slate-500">产品系列</dt><dd className="mt-1 text-sm font-medium">{baselineProcessExecution.productFamilyCode || "未记录"}</dd></div>
               <div><dt className="text-xs text-slate-500">设备</dt><dd className="mt-1 text-sm font-medium">{baselineProcessExecution.equipmentId || "未记录"}</dd></div>
@@ -288,7 +278,7 @@ export function ExecutionComparisonPage() {
             <Metric label="运行完整" value={result.acceptance?.completeProcessExecutionCount ?? 0} hint="同时具有生产开始与结束事件" />
             <Metric label="分析证据" value={evidenceLevelLabels[result.evidenceLevel] || result.evidenceLevel || "—"} valueClassName="text-2xl" />
           </div>
-          <Card title="确定性调查报告" description="以下事实由系统查询和计算生成；本地模型只能组织解释，不能补写数字或把观察性候选说成根因。">
+          <Card title="调查报告" description="汇总运行匹配、数据质量、首次偏离和后续验证建议。">
             <div className="mb-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               <Metric label="调查状态" value={investigation?.status === "ready" ? "可进入验证" : investigation?.status === "exploratory" ? "探索性" : "数据不足"} />
               <Metric label="目标数据" value={<StatusBadge value={investigation?.dataQuality?.targetStatus || "unknown"} />} hint={`证据权重 ${formatDecimal(investigation?.dataQuality?.targetEvidenceWeight)}`} />
@@ -427,7 +417,7 @@ export function ExecutionComparisonPage() {
             ) : <EmptyState title="暂无可比信号" description="所选运行还没有可用于阶段对比的信号特征。" />}
           </Card></div></details>
         </>
-      ) : <EmptyState title="尚未执行运行对比" description="从下拉列表选择基准运行和同类对比运行后开始；系统会保留数据可用性和生产开始/结束边界证据。" />}
+      ) : <EmptyState title="选择目标运行开始对比" description="系统将自动匹配同类运行并汇总主要差异。" />}
     </Page>
   );
 }

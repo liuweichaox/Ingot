@@ -42,7 +42,7 @@ public sealed partial class BoundedCombinedAnalysisWorkflow(IOptions<ChatOptions
         var modelCalls = new List<ModelCallUsage>();
         var limitations = new List<string>
         {
-            "综合分析只列出可能原因，不能替代统计检验或工程师确认。",
+            "多视角研判只列出可能原因，不能替代统计检验或工程师确认。",
             "分析过程只能使用本次查询结果，不能自行访问其他数据、网络或设备。"
         };
         var turns = 0;

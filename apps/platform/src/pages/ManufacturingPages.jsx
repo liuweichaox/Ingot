@@ -35,7 +35,7 @@ const productionResources = {
   },
   componentType: {
     title: "组件分类", endpoint: "/api/v1/tooling-component-types", key: "componentTypeCode",
-    description: "定义模芯、模架等物理资产类别；上模和下模属于装配位置，不在这里重复分类。",
+    description: "定义模芯、模架等可复用物理资产类别。",
     columns: [["componentTypeCode", "代码"], ["name", "名称"], ["status", "状态"], ["attributes", "属性"]],
     template: { componentTypeCode: "", name: "", status: "active", attributes: {} },
     createLabel: "新建组件分类",
@@ -579,7 +579,6 @@ function ToolingAssembliesPage({ canWrite = true }) {
       description="一个工装总成拥有稳定身份；每次组件更换形成新的不可变配置版本，生产运行自动保留当时的真实组成。"
       actions={canWrite ? <Button variant="primary" onClick={() => { setActionError(""); setAssetOpen(true); }}>新建工装总成</Button> : undefined}
     >
-      {!canWrite && <Alert title="当前为只读视图">你可以核对工装结构和历史版本；新建总成与更换组件由工艺工程师或平台管理员完成。</Alert>}
       {(errors.length > 0 || actionError) && <Alert tone="danger">{errors[0] || actionError}</Alert>}
       <WorkflowGuide
         title="工装总成数据的正确关系"
@@ -834,7 +833,6 @@ function ProductionRecordsPage({ section, canWrite = true }) {
 
   return (
     <Page className="mx-auto max-w-7xl" title={resource.title} description={resource.description} actions={canWrite && section !== "context" ? <Button variant="primary" onClick={() => openEditor()}>{resource.createLabel}</Button> : undefined}>
-      {!canWrite && <Alert title="当前为只读视图">你可以核对当前配置和历史记录；新增、切换、编辑与删除由工艺工程师或平台管理员完成。</Alert>}
       {(error || (!open && actionError)) && <Alert tone="danger">{error || actionError}</Alert>}
       {loading && !data ? <LoadingCard /> : (
         <>

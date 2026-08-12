@@ -123,7 +123,7 @@ export function EdgeDetailPage() {
       ) : <Alert tone="success" title="采集端已具备交付条件">过程信号、实际工艺规范、过程执行边界与数据上行均已就绪；请继续确认质检结果已关联到相同运行。</Alert>}
       <WorkflowGuide
         title="从设备数据到工艺证据"
-        description="节点只负责可靠交付数据；完整闭环还必须在平台把生产运行、实际工艺规范、过程曲线与质量结果关联起来。"
+        description="确认设备连接、采集上行、工艺映射和运行关联。"
         compact
         steps={[
           { title: "连接数据源", description: edgeStatus(edge) === "online" ? "现场节点持续在线。" : "等待节点恢复心跳。", state: edgeStatus(edge) === "online" ? "done" : "current" },
@@ -134,7 +134,7 @@ export function EdgeDetailPage() {
       />
       <Card
         title="数据源交付情况"
-        description="这里显示已发布配置所承诺的工艺语义，不把节点运行指标误当成已经完成的质量或追因结论。"
+        description="查看已发布数据源的过程信号、控制参数和运行边界映射。"
         actions={<Link className="text-sm font-medium text-blue-600 hover:text-blue-700" to="/configuration/ingestion-tasks">查看数据源配置</Link>}
       >
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -145,8 +145,8 @@ export function EdgeDetailPage() {
         </div>
         <p className="mt-5 rounded-xl bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-600">
           {deliveryReady
-            ? "采集端已满足过程信号、实际工艺规范与过程执行边界的交付条件。下一步在“运行记录”和“质量任务”中确认同一运行的曲线与结果已关联，随后再发起追因或优化实验。"
-            : "这不是追因结论。请先补齐运行任务、过程信号、实际控制参数回读和过程执行边界；质量结果由质检流程关联后，才形成可用于追因和优化的完整证据。"}
+            ? "数据源已具备过程分析条件。下一步确认运行曲线与质量结果已关联。"
+            : "补齐运行任务、过程信号、实际控制参数和运行边界后，即可形成可分析的运行证据。"}
         </p>
       </Card>
       <Card title="采集与上行历史" description="按 Platform 接收心跳的时间保存七天，可用于定位停采、积压开始和恢复时刻。">
@@ -164,7 +164,7 @@ export function EdgeDetailPage() {
           ]}
         />
       </Card>
-      <Card title="上送恢复基线" description="状态由 Edge 随心跳主动上报，不要求 Platform 反向访问 OT 网络。">
+      <Card title="上送恢复基线" description="查看积压容量、上送速率和最近恢复情况。">
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <Metric label="当前积压" value={formatInteger(outboxBacklog)} hint="未收到平台确认的事件" />
           <Metric label="最老积压" value={delivery?.oldestPendingEventAt ? formatTime(delivery.oldestPendingEventAt) : "—"} hint={delivery?.backlogCapacityUsedPercent == null ? "容量尚未上报" : `容量使用 ${Number(delivery.backlogCapacityUsedPercent).toFixed(1)}%`} />

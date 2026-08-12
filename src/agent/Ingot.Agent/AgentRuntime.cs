@@ -53,8 +53,9 @@ public sealed class AgentRuntime : IAgentRuntime
         var settings = GetSettings();
         if (!settings.Enabled)
             throw new InvalidOperationException("Chat 功能尚未启用。");
-        if (string.Equals(request.Mode, "combined", StringComparison.Ordinal) && !settings.EnableCombinedAnalysis)
-            throw new InvalidOperationException("Chat 综合分析尚未启用。");
+        if (string.Equals(request.Mode, "combined", StringComparison.Ordinal) &&
+            (!settings.EnableCombinedAnalysis || IsDeterministic(settings)))
+            throw new InvalidOperationException("多视角研判尚未启用。");
 
         var tools = ToolsForEntryPoint(entryPoint);
         if (tools.Count == 0)
@@ -102,14 +103,15 @@ public sealed class AgentRuntime : IAgentRuntime
             EntryPoint = entryPoint,
             Purpose = RunPurposes.ForEntryPoint(entryPoint),
             Enabled = settings.Enabled,
-            CombinedAnalysisEnabled = settings.Enabled && settings.EnableCombinedAnalysis,
+            CombinedAnalysisEnabled = settings.Enabled && settings.EnableCombinedAnalysis && !IsDeterministic(settings),
             Provider = settings.Provider,
             FastModel = settings.FastModel,
             ReasoningModel = settings.ReasoningModel,
+            IsDeterministic = IsDeterministic(settings),
             Modes = settings.Enabled
-                ? settings.EnableCombinedAnalysis ? ["quick", "combined"] : ["quick"]
+                ? settings.EnableCombinedAnalysis && !IsDeterministic(settings) ? ["quick", "combined"] : ["quick"]
                 : [],
-            Roles = settings.Enabled && settings.EnableCombinedAnalysis ? AnalysisPerspectives.All : [],
+            Roles = settings.Enabled && settings.EnableCombinedAnalysis && !IsDeterministic(settings) ? AnalysisPerspectives.All : [],
             Tools = tools.Values.Select(static tool => new AgentToolCapability
             {
                 Name = tool.Definition.Name,
@@ -608,6 +610,10 @@ public sealed class AgentRuntime : IAgentRuntime
             .Where(tool => string.Equals(tool.Definition.EntryPoint, entryPoint, StringComparison.Ordinal))
             .Where(tool => tool.Definition.Access == AgentToolAccess.Read)
             .ToDictionary(static tool => tool.Definition.Name, StringComparer.Ordinal);
+
+    private static bool IsDeterministic(EntryPointSettings settings) =>
+        string.Equals(settings.Provider, "Deterministic", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(settings.FastModel, "deterministic-v1", StringComparison.OrdinalIgnoreCase);
 
     private EntryPointSettings GetSettings() => new(
             _chatOptions.Enabled,

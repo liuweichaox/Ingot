@@ -647,7 +647,6 @@ export function IngestionTasksPage({ canWrite = true }) {
     >
       <div className="grid gap-4">
         {error && <Alert tone="danger">{error}</Alert>}
-        {!canWrite && <Alert title="当前为只读视图">你可以查看设备接入状态、协议和点位数量；配置、发布、停用与删除由工艺工程师或平台管理员完成。</Alert>}
         {canWrite ? (
           <ReusableConfigurationPanel
             tasks={rows}
