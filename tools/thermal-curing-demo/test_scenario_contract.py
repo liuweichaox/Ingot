@@ -26,7 +26,7 @@ def test_second_scenario_is_continuous_and_not_molding_specific():
     assert plan["analysisScope"] == "production-run"
     assert plan["alignmentMode"] == "elapsed"
     assert not any(item["category"] == "stage" for item in model["acquisition"]["dataItems"])
-    assert package["acquisitionProfiles"] == []
+    assert package["ingestionTasks"] == []
     assert package["qualityPlan"] is None
     assert all("mold" not in str(value).lower() for value in (model, plan, package))
 

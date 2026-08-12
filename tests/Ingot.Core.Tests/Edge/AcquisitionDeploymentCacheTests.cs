@@ -24,7 +24,7 @@ public sealed class AcquisitionDeploymentCacheTests
             var restored = await cache.LoadAsync("EDGE-001");
             var wrongEdge = await cache.LoadAsync("EDGE-002");
 
-            Assert.Equal("profile-a", Assert.Single(restored!).Profile.ProfileId);
+            Assert.Equal("profile-a", Assert.Single(restored!).Task.TaskId);
             Assert.Null(wrongEdge);
         }
         finally
@@ -100,9 +100,9 @@ public sealed class AcquisitionDeploymentCacheTests
     private static AcquisitionDeployment Deployment(string edgeId)
         => new()
         {
-            Profile = new AcquisitionProfile
+            Task = new IngestionTask
             {
-                ProfileId = "profile-a",
+                TaskId = "profile-a",
                 Name = "Profile A",
                 Status = ConfigurationStatuses.Published,
                 EdgeId = edgeId,

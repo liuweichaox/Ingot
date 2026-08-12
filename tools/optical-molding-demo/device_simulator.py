@@ -3,7 +3,7 @@
 
 The server implements the binary A-compatible 1E word-read command used by an
 FX3U-ENET-ADP. Process values and recipe setpoints are encoded into D registers
-with the same selectors and scaling used by the versioned acquisition profile.
+with the same selectors and scaling used by the versioned ingestion task.
 Replacing this simulator with a real PLC therefore only changes host and port.
 """
 

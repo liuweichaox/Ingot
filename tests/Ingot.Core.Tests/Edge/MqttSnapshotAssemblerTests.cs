@@ -6,21 +6,20 @@ using Xunit;
 namespace Ingot.Core.Tests.Edge;
 
 /// <summary>
-///     跨主题合并快照。以前 MQTT 采集器要求每条报文都是完整快照，
-///     "温度在一个主题、压力在另一个主题" 的网关无法接入。
+///     跨主题合并快照，验证多主题配置与运行时映射保持一致。
 /// </summary>
 public class MqttSnapshotAssemblerTests
 {
     private static readonly DateTimeOffset Now = new(2026, 8, 1, 12, 0, 0, TimeSpan.Zero);
 
-    private static AcquisitionProfile Profile(
+    private static IngestionTask Profile(
         IEnumerable<AcquisitionValueMapping> values,
         IEnumerable<AcquisitionContextMapping>? contexts = null,
         AcquisitionProcessSpecificationMapping? processSpecification = null,
         string timestampMode = "edge-received")
         => new()
         {
-            ProfileId = "gateway", Name = "网关接入", EdgeId = "EDGE-001",
+            TaskId = "gateway", Name = "网关接入", EdgeId = "EDGE-001",
             Protocol = AcquisitionProtocols.Mqtt, DataModelId = "model", Source = "connector/gateway",
             SubjectId = "PRESS-01", TimestampMode = timestampMode, SequencePath = null,
             ValueMappings = values.ToArray(),
@@ -248,6 +247,18 @@ public class MqttSnapshotAssemblerTests
         assembler.Ingest("topic/a", Json("""{"a":1}"""), Now);
         Assert.False(assembler.TryBuildSnapshot(Now, out _, out var missing));
         Assert.Contains("ts", missing);
+    }
+
+    [Fact]
+    public void ArrayPathIsRebuiltWithoutChangingItsShape()
+    {
+        var profile = Profile([Value("item.value", "items[1].value", null)]);
+        var assembler = new MqttSnapshotAssembler(MqttSnapshotAssembler.SlotsFor(profile), 0);
+        assembler.Ingest("topic", Json("""{"items":[{"value":1},{"value":2}]}"""), Now);
+
+        Assert.True(assembler.TryBuildSnapshot(Now, out var snapshot, out _));
+        using (snapshot)
+            Assert.Equal(2, snapshot!.RootElement.GetProperty("items")[1].GetProperty("value").GetInt32());
     }
 
     [Theory]

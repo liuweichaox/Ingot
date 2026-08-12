@@ -174,7 +174,7 @@ export function createRegistryBusinessForm(kind, value = {}, version) {
         status: versionedStatus(value, version),
         dataModel: modelValue(value.dataModelId, value.dataModelVersion),
         analysisPlan: modelValue(value.analysisPlanId, value.analysisPlanVersion),
-        acquisitionProfiles: (value.acquisitionProfiles || []).map(versionedReference),
+        ingestionTasks: (value.ingestionTasks || []).map(versionedReference),
         qualityPlan: value.qualityPlan ? modelValue(value.qualityPlan.id, value.qualityPlan.version) : "",
         contextFields: (value.contextFields || []).map(scenarioContextField),
         constraints: (value.constraints || []).map(scenarioConstraint),
@@ -299,7 +299,7 @@ export function registryBusinessPayload(kind, form) {
       dataModelVersion: dataModel.version,
       analysisPlanId: analysisPlan.id,
       analysisPlanVersion: analysisPlan.version,
-      acquisitionProfiles: references(form.acquisitionProfiles),
+      ingestionTasks: references(form.ingestionTasks),
       qualityPlan: qualityPlan.id ? { id: qualityPlan.id, version: qualityPlan.version } : null,
       contextFields: form.contextFields.map(item => ({
         fieldCode: item.fieldCode.trim(),
@@ -624,7 +624,7 @@ function ReferenceSelect({ value, options, idKey, label, disabled, onChange }) {
 function ScenarioPackageEditor({ form, onChange, readOnly, lockIdentity }) {
   const { data: modelData, error: modelError } = useApi("/api/v1/process-data-models");
   const { data: planData, error: planError } = useApi("/api/v1/process-analysis-plans");
-  const { data: profileData, error: profileError } = useApi("/api/v1/acquisition-profiles");
+  const { data: profileData, error: profileError } = useApi("/api/v1/ingestion-tasks");
   const { data: qualityData, error: qualityError } = useApi("/api/v1/inspection-plans");
   const models = extractRows(modelData);
   const plans = extractRows(planData);
@@ -646,10 +646,10 @@ function ScenarioPackageEditor({ form, onChange, readOnly, lockIdentity }) {
           <Field label="质量方案（可选）"><ReferenceSelect value={form.qualityPlan} options={qualityPlans} idKey="planId" label="质量方案" disabled={readOnly} onChange={event => updateAt(form, onChange, "qualityPlan", event.target.value)} /></Field>
         </div>
       </Card>
-      <Card title="设备采集配置" description="一个场景可以组合多设备、多 Edge 的已发布采集版本。" actions={!readOnly ? <Button onClick={() => addRow(form, onChange, "acquisitionProfiles", versionedReference())}>添加采集配置</Button> : undefined}>
+      <Card title="数据摄取任务" description="一个场景可以组合多数据源、多现场节点的已发布任务版本。" actions={!readOnly ? <Button onClick={() => addRow(form, onChange, "ingestionTasks", versionedReference())}>添加任务</Button> : undefined}>
         <div className="grid gap-3">
-          {form.acquisitionProfiles.length === 0 && <p className="text-sm text-slate-500">尚未绑定设备采集配置。</p>}
-          {form.acquisitionProfiles.map((item, index) => <div key={index} className="grid gap-2 md:grid-cols-[1fr_auto]"><ReferenceSelect value={item.reference} options={matchingProfiles} idKey="profileId" label="采集配置" disabled={readOnly} onChange={event => updateRow(form, onChange, "acquisitionProfiles", index, { reference: event.target.value })} />{!readOnly && <Button variant="ghost" className="text-rose-700" onClick={() => removeRow(form, onChange, "acquisitionProfiles", index)}>移除</Button>}</div>)}
+          {form.ingestionTasks.length === 0 && <p className="text-sm text-slate-500">尚未绑定数据摄取任务。</p>}
+          {form.ingestionTasks.map((item, index) => <div key={index} className="grid gap-2 md:grid-cols-[1fr_auto]"><ReferenceSelect value={item.reference} options={matchingProfiles} idKey="taskId" label="摄取任务" disabled={readOnly} onChange={event => updateRow(form, onChange, "ingestionTasks", index, { reference: event.target.value })} />{!readOnly && <Button variant="ghost" className="text-rose-700" onClick={() => removeRow(form, onChange, "ingestionTasks", index)}>移除</Button>}</div>)}
         </div>
       </Card>
       <Card title="运行上下文字段策略" description="先追溯，再用现场覆盖率和因素重叠决定是否进入分析或建模。" actions={!readOnly ? <Button onClick={() => addRow(form, onChange, "contextFields", scenarioContextField())}>添加字段</Button> : undefined}>

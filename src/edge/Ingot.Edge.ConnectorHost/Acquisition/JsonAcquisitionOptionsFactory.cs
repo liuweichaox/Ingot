@@ -6,41 +6,50 @@ public static class JsonAcquisitionOptionsFactory
 {
     public static HttpPollingAcquisitionOptions Create(AcquisitionDeployment deployment)
     {
-        var profile = deployment.Profile;
+        var task = deployment.Task;
         var dataItems = deployment.DataModel.Acquisition.DataItems.ToDictionary(item => item.Code, StringComparer.Ordinal);
         var parameters = deployment.DataModel.ControlParameters.ToDictionary(item => item.Code, StringComparer.Ordinal);
-        var context = new Dictionary<string, string>(profile.StaticContext, StringComparer.Ordinal)
+        var context = new Dictionary<string, string>(task.StaticContext, StringComparer.Ordinal)
         {
-            ["acquisition_profile_id"] = profile.ProfileId,
-            ["acquisition_profile_version"] = profile.Version.ToString(),
-            ["data_model_id"] = profile.DataModelId,
-            ["data_model_version"] = profile.DataModelVersion.ToString()
+            ["ingestion_task_id"] = task.TaskId,
+            ["ingestion_task_version"] = task.Version.ToString(),
+            ["data_model_id"] = task.DataModelId,
+            ["data_model_version"] = task.DataModelVersion.ToString()
         };
-        if (string.Equals(profile.SubjectType, "equipment", StringComparison.OrdinalIgnoreCase))
-            context["equipment_id"] = profile.SubjectId;
+        if (string.Equals(task.SubjectType, "equipment", StringComparison.OrdinalIgnoreCase))
+            context["equipment_id"] = task.SubjectId;
         return new HttpPollingAcquisitionOptions
         {
             Enabled = true,
-            DeviceBaseUrl = profile.Connection.BaseUrl,
-            SnapshotPath = profile.Connection.SnapshotPath,
-            PollIntervalMs = profile.Connection.PollIntervalMs,
-            TimeoutMs = profile.Execution.TimeoutMs,
-            Source = profile.Source,
-            SubjectType = profile.SubjectType,
-            SubjectId = profile.SubjectId,
-            TimestampMode = profile.TimestampMode,
-            TimestampPath = profile.TimestampPath,
-            SequencePath = profile.SequencePath,
-            SampleEventType = profile.SampleEventType,
+            DeviceBaseUrl = task.HttpPolling.BaseUrl,
+            SnapshotPath = task.HttpPolling.SnapshotPath,
+            Method = task.HttpPolling.Method,
+            ContentType = task.HttpPolling.ContentType,
+            RequestBody = task.HttpPolling.RequestBody,
+            Headers = task.HttpPolling.Headers,
+            HeaderSecretRefs = task.HttpPolling.HeaderSecretRefs,
+            PollIntervalMs = task.HttpPolling.PollIntervalMs,
+            TimeoutMs = task.Execution.TimeoutMs,
+            ReconnectDelayMs = task.Execution.ReconnectDelayMs,
+            SourceIdentityStaleAfterMs = task.Execution.SourceIdentityStaleAfterMs,
+            MaximumFutureTimestampSkewMs = task.Execution.MaximumFutureTimestampSkewMs,
+            Source = task.Source,
+            SubjectType = task.SubjectType,
+            SubjectId = task.SubjectId,
+            TimestampMode = task.TimestampMode,
+            TimestampEncoding = task.TimestampEncoding,
+            TimestampPath = task.TimestampPath,
+            SequencePath = task.SequencePath,
+            SampleEventType = task.SampleEventType,
             StaticContext = context,
-            ContextFields = profile.ContextMappings.Select(item => new ContextFieldMapping
+            ContextFields = task.ContextMappings.Select(item => new ContextFieldMapping
             {
                 Key = item.ContextKey,
                 SourcePath = item.SourcePath,
                 Required = item.Required,
                 Topic = item.Topic
             }).ToArray(),
-            Fields = profile.ValueMappings.Select(item => new ValueFieldMapping
+            Fields = task.ValueMappings.Select(item => new ValueFieldMapping
             {
                 Code = item.DataItemCode,
                 SourcePath = item.SourcePath,
@@ -49,16 +58,23 @@ public static class JsonAcquisitionOptionsFactory
                 Required = item.Required,
                 Scale = item.Scale,
                 Offset = item.Offset,
+                QualityPath = item.QualityPath,
+                AcceptedQualityValues = item.AcceptedQualityValues,
+                Minimum = item.Minimum,
+                Maximum = item.Maximum,
+                OutOfRangeBehavior = item.OutOfRangeBehavior,
+                MissingValueBehavior = item.MissingValueBehavior,
+                DefaultValue = item.DefaultValue,
                 Topic = item.Topic
             }).ToArray(),
-            ProcessSpecification = profile.ProcessSpecification is null ? null : new ProcessSpecificationFieldMapping
+            ProcessSpecification = task.ProcessSpecification is null ? null : new ProcessSpecificationFieldMapping
             {
-                EventType = profile.ProcessSpecification.EventType,
-                IdPath = profile.ProcessSpecification.IdPath,
-                VersionPath = profile.ProcessSpecification.VersionPath,
-                NamePath = profile.ProcessSpecification.NamePath,
-                ParametersPath = profile.ProcessSpecification.ParametersPath,
-                ParameterFields = profile.ProcessSpecification.ParameterMappings.Select(item => new ValueFieldMapping
+                EventType = task.ProcessSpecification.EventType,
+                IdPath = task.ProcessSpecification.IdPath,
+                VersionPath = task.ProcessSpecification.VersionPath,
+                NamePath = task.ProcessSpecification.NamePath,
+                ParametersPath = task.ProcessSpecification.ParametersPath,
+                ParameterFields = task.ProcessSpecification.ParameterMappings.Select(item => new ValueFieldMapping
                 {
                     Code = item.DataItemCode,
                     SourcePath = item.SourcePath,
@@ -66,17 +82,24 @@ public static class JsonAcquisitionOptionsFactory
                     Required = item.Required,
                     Scale = item.Scale,
                     Offset = item.Offset,
+                    QualityPath = item.QualityPath,
+                    AcceptedQualityValues = item.AcceptedQualityValues,
+                    Minimum = item.Minimum,
+                    Maximum = item.Maximum,
+                    OutOfRangeBehavior = item.OutOfRangeBehavior,
+                    MissingValueBehavior = item.MissingValueBehavior,
+                    DefaultValue = item.DefaultValue,
                     Topic = item.Topic
                 }).ToArray()
             },
-            Lifecycle = profile.Lifecycle is null ? null : new LifecycleFieldMapping
+            Lifecycle = task.Lifecycle is null ? null : new LifecycleFieldMapping
             {
-                Mode = profile.Lifecycle.Mode,
-                ActiveContextKey = profile.Lifecycle.ActiveContextKey,
-                ActiveValue = profile.Lifecycle.ActiveValue,
-                StartedEventType = profile.Lifecycle.StartedEventType,
-                CompletedEventType = profile.Lifecycle.CompletedEventType,
-                StepChangedEventType = profile.Lifecycle.StepChangedEventType
+                Mode = task.Lifecycle.Mode,
+                ActiveContextKey = task.Lifecycle.ActiveContextKey,
+                ActiveValue = task.Lifecycle.ActiveValue,
+                StartedEventType = task.Lifecycle.StartedEventType,
+                CompletedEventType = task.Lifecycle.CompletedEventType,
+                StepChangedEventType = task.Lifecycle.StepChangedEventType
             }
         };
     }

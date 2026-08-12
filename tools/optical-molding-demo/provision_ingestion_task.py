@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Publish the optical-lens molding demo as a formal, versioned data source."""
+"""Publish the optical-lens molding demo as a formal, versioned ingestion task."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--api", default="http://127.0.0.1:8000")
     parser.add_argument("--edge-id", default="EDGE-FX3U-SIM-001")
-    parser.add_argument("--profile-id", default="optical-lens-molding-simulator")
+    parser.add_argument("--task-id", default="optical-lens-molding-simulator")
     parser.add_argument("--subject-id", default="OPTICAL-MOLD-SIM-01")
     parser.add_argument(
         "--source",
@@ -22,13 +22,13 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--device-host", default="127.0.0.1")
     parser.add_argument("--device-port", type=int, default=5551)
-    parser.add_argument("--profile-version", type=int, default=8)
+    parser.add_argument("--task-version", type=int, default=8)
     parser.add_argument("--data-model-version", type=int, default=1)
     return parser.parse_args()
 
 
 def mapping(item: dict[str, object]) -> dict[str, object]:
-    return {
+    result = {
         "dataItemCode": item["code"],
         "sourcePath": item["register"],
         "required": True,
@@ -36,12 +36,15 @@ def mapping(item: dict[str, object]) -> dict[str, object]:
         "scale": item["scale"],
         "offset": 0,
     }
+    if item.get("unit"):
+        result["sourceUnit"] = item["unit"]
+    return result
 
 
 def build_payload(args: argparse.Namespace) -> dict[str, object]:
     return {
-        "profileId": getattr(args, "profile_id", "optical-lens-molding-simulator"),
-        "version": args.profile_version,
+        "taskId": getattr(args, "task_id", "optical-lens-molding-simulator"),
+        "version": args.task_version,
         "name": "光学镜片模压模拟数据源",
         "status": "published",
         "edgeId": args.edge_id,
@@ -55,7 +58,6 @@ def build_payload(args: argparse.Namespace) -> dict[str, object]:
         ),
         "subjectType": "equipment",
         "subjectId": getattr(args, "subject_id", "OPTICAL-MOLD-SIM-01"),
-        "connection": {"baseUrl": "", "snapshotPath": "/api/v1/snapshot", "pollIntervalMs": 1000},
         "melsecA1E": {
             "host": args.device_host,
             "port": args.device_port,
@@ -113,7 +115,7 @@ def main() -> None:
     args = parse_args()
     payload = build_payload(args)
     request = urllib.request.Request(
-        f"{args.api.rstrip('/')}/api/v1/acquisition-profiles",
+        f"{args.api.rstrip('/')}/api/v1/ingestion-tasks",
         data=json.dumps(payload).encode("utf-8"),
         headers={"Content-Type": "application/json"},
         method="POST",

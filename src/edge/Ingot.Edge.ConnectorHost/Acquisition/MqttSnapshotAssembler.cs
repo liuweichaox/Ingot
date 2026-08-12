@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Security.Cryptography;
 using Ingot.Contracts.Acquisition;
 
@@ -8,13 +9,9 @@ namespace Ingot.Edge.ConnectorHost.Acquisition;
 /// <summary>
 ///     把多个 MQTT 主题上收到的报文合并成一份等价的设备快照。
 ///
-///     以前 MQTT 采集器对所有订阅主题走同一套映射，也就是说**每条报文都必须是包含
-///     全部必填字段的完整快照**：网关把温度发在一个主题、把压力发在另一个主题时无法配置，
-///     而界面却允许添加多个主题，误配之后没有任何提示。
-///
-///     现在每个点位可以绑定来源主题（留空表示任意主题）。收到报文时只取属于该主题的字段，
+///     每个点位可以绑定来源主题（留空表示任意主题）。收到报文时只取属于该主题的字段，
 ///     存进按路径索引的槽位；全部必需槽位都有值之后，再拼装出一份与单主题快照结构完全一致的
-///     JSON 文档，交给 <see cref="HttpPollingSnapshotMapper"/> 走原有的换算与校验逻辑——
+///     JSON 文档，交给 <see cref="HttpPollingSnapshotMapper"/> 执行统一的换算与校验逻辑——
 ///     映射实现仍然只有一份。
 ///
 ///     本类刻意不引用 MQTTnet，只处理"报文内容 → 合并快照"这一层，因此可以被完整测试。
@@ -39,7 +36,7 @@ public sealed class MqttSnapshotAssembler
     }
 
     /// <summary>从采集配置推导槽位。路径与 <see cref="HttpPollingSnapshotMapper"/> 解析的路径严格一致。</summary>
-    public static IReadOnlyList<Slot> SlotsFor(AcquisitionProfile profile)
+    public static IReadOnlyList<Slot> SlotsFor(IngestionTask task)
     {
         var slots = new List<Slot>();
         void Add(string? path, string? topic, bool required, bool isValue)
@@ -63,24 +60,35 @@ public sealed class MqttSnapshotAssembler
             slots.Add(new Slot(normalized, normalizedTopic, required, isValue));
         }
 
-        foreach (var mapping in profile.ValueMappings)
+        foreach (var mapping in task.ValueMappings)
+        {
             Add(mapping.SourcePath, mapping.Topic, mapping.Required, isValue: true);
-        foreach (var mapping in profile.ContextMappings)
+            Add(mapping.QualityPath, mapping.Topic, mapping.AcceptedQualityValues.Count > 0, isValue: false);
+        }
+        foreach (var mapping in task.ContextMappings)
             Add(mapping.SourcePath, mapping.Topic, mapping.Required, isValue: false);
-        if (profile.TimestampMode == "source")
-            Add(profile.TimestampPath, null, required: true, isValue: false);
-        Add(profile.SequencePath, null, required: false, isValue: false);
-        if (profile.ProcessSpecification is { } processSpecification)
+        if (task.TimestampMode == "source")
+            Add(task.TimestampPath, null, required: true, isValue: false);
+        Add(task.SequencePath, null, required: false, isValue: false);
+        if (task.ProcessSpecification is { } processSpecification)
         {
             Add(processSpecification.IdPath, null, required: true, isValue: false);
             Add(processSpecification.VersionPath, null, required: true, isValue: false);
             Add(processSpecification.NamePath, null, required: false, isValue: false);
             foreach (var parameter in processSpecification.ParameterMappings)
+            {
                 Add(
                     Combine(processSpecification.ParametersPath, parameter.SourcePath),
                     parameter.Topic,
                     parameter.Required,
                     isValue: false);
+                if (!string.IsNullOrWhiteSpace(parameter.QualityPath))
+                    Add(
+                        Combine(processSpecification.ParametersPath, parameter.QualityPath),
+                        parameter.Topic,
+                        parameter.AcceptedQualityValues.Count > 0,
+                        isValue: false);
+            }
             // 控制参数集合本身必须是对象。参数逐个取值后按同样的路径重建，
             // 因此这里不再单独保留整个对象，避免与逐参数槽位互相覆盖。
         }
@@ -99,15 +107,29 @@ public sealed class MqttSnapshotAssembler
     ///     摄入一条报文。返回该报文是否带来了至少一个工艺变量——
     ///     只携带上下文的主题会更新状态但不触发采样，避免采样率被无关主题放大。
     /// </summary>
-    public bool Ingest(string topic, JsonElement payload, DateTimeOffset receivedAt)
+    public bool Ingest(
+        string topic,
+        JsonElement payload,
+        DateTimeOffset receivedAt,
+        IReadOnlyDictionary<string, string>? topicVariables = null)
     {
         var carriedValue = false;
         foreach (var slot in _slots)
         {
             if (slot.Topic is not null && !MqttTopicFilter.Matches(slot.Topic, topic)) continue;
-            if (!TryResolve(payload, slot.Path, out var value)) continue;
-            if (value.ValueKind is JsonValueKind.Undefined) continue;
-            _values[slot] = (value.GetRawText(), receivedAt);
+            if (slot.Path.StartsWith("$topic.", StringComparison.Ordinal))
+            {
+                var variable = slot.Path[7..];
+                if (topicVariables is null || !topicVariables.TryGetValue(variable, out var topicValue))
+                    continue;
+                _values[slot] = (JsonSerializer.Serialize(topicValue), receivedAt);
+            }
+            else
+            {
+                if (!TryResolve(payload, slot.Path, out var value)) continue;
+                if (value.ValueKind is JsonValueKind.Undefined) continue;
+                _values[slot] = (value.GetRawText(), receivedAt);
+            }
             if (slot.IsValue) carriedValue = true;
         }
 
@@ -153,7 +175,7 @@ public sealed class MqttSnapshotAssembler
         if (staleValueCount > 0)
             return false;
 
-        var tree = new Dictionary<string, object?>(StringComparer.Ordinal);
+        var tree = new JsonObject();
         foreach (var slot in _slots)
         {
             if (!_values.TryGetValue(slot, out var entry)) continue;
@@ -161,7 +183,7 @@ public sealed class MqttSnapshotAssembler
             Insert(tree, slot.Path, entry.Json);
         }
 
-        snapshot = JsonDocument.Parse(Render(tree));
+        snapshot = JsonDocument.Parse(tree.ToJsonString(), AcquisitionJsonLimits.DocumentOptions);
         return true;
     }
 
@@ -176,7 +198,7 @@ public sealed class MqttSnapshotAssembler
                      .Where(static slot => slot.Topic is not null)
                      .GroupBy(static slot => slot.Topic!, StringComparer.Ordinal))
         {
-            var tree = new Dictionary<string, object?>(StringComparer.Ordinal);
+            var tree = new JsonObject();
             foreach (var slot in group)
             {
                 if (!_values.TryGetValue(slot, out var entry)) continue;
@@ -184,7 +206,7 @@ public sealed class MqttSnapshotAssembler
                 Insert(tree, slot.Path, entry.Json);
             }
 
-            using var document = JsonDocument.Parse(Render(tree));
+            using var document = JsonDocument.Parse(tree.ToJsonString(), AcquisitionJsonLimits.DocumentOptions);
             snapshots[group.Key] = document.RootElement.Clone();
         }
 
@@ -203,65 +225,93 @@ public sealed class MqttSnapshotAssembler
     }
 
     /// <summary>把点号路径写进嵌套字典。前缀冲突（同时配置 a 与 a.b）会明确报错而不是静默丢值。</summary>
-    private static void Insert(Dictionary<string, object?> tree, string path, string rawJson)
+    private static void Insert(JsonObject tree, string path, string rawJson)
     {
-        var segments = path.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        if (segments.Length == 0) return;
-        var current = tree;
-        for (var index = 0; index < segments.Length - 1; index++)
+        var segments = ParsePath(path);
+        if (segments.Count == 0) return;
+        JsonNode current = tree;
+        for (var index = 0; index < segments.Count - 1; index++)
         {
-            if (!current.TryGetValue(segments[index], out var next) || next is null)
+            current = GetOrCreateChild(current, segments[index], segments[index + 1], path);
+        }
+        Assign(current, segments[^1], JsonNode.Parse(rawJson), path);
+    }
+
+    private static JsonNode GetOrCreateChild(JsonNode parent, PathSegment segment, PathSegment next, string path)
+    {
+        JsonNode? child;
+        if (segment.Name is { } name && parent is JsonObject obj)
+        {
+            child = obj[name];
+            if (child is null) obj[name] = child = next.Index.HasValue ? new JsonArray() : new JsonObject();
+        }
+        else if (segment.Index is { } index && parent is JsonArray array)
+        {
+            while (array.Count <= index) array.Add(null);
+            child = array[index];
+            if (child is null) array[index] = child = next.Index.HasValue ? new JsonArray() : new JsonObject();
+        }
+        else
+        {
+            throw PathConflict(path);
+        }
+        if (child is not JsonObject && child is not JsonArray) throw PathConflict(path);
+        return child;
+    }
+
+    private static void Assign(JsonNode parent, PathSegment segment, JsonNode? value, string path)
+    {
+        if (segment.Name is { } name && parent is JsonObject obj)
+        {
+            if (obj[name] is JsonObject or JsonArray) throw PathConflict(path);
+            obj[name] = value;
+            return;
+        }
+        if (segment.Index is { } index && parent is JsonArray array)
+        {
+            while (array.Count <= index) array.Add(null);
+            if (array[index] is JsonObject or JsonArray) throw PathConflict(path);
+            array[index] = value;
+            return;
+        }
+        throw PathConflict(path);
+    }
+
+    private static IReadOnlyList<PathSegment> ParsePath(string path)
+    {
+        if (path.StartsWith("/", StringComparison.Ordinal))
+            return path.Split('/').Skip(1)
+                .Select(static item => item.Replace("~1", "/", StringComparison.Ordinal)
+                    .Replace("~0", "~", StringComparison.Ordinal))
+                .Select(static item => int.TryParse(item, out var index) && index >= 0
+                    ? new PathSegment(null, index)
+                    : new PathSegment(item, null))
+                .ToArray();
+        var result = new List<PathSegment>();
+        foreach (var raw in path.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var bracket = raw.IndexOf('[');
+            var name = bracket < 0 ? raw : raw[..bracket];
+            if (name.Length > 0) result.Add(new PathSegment(name, null));
+            while (bracket >= 0)
             {
-                var child = new Dictionary<string, object?>(StringComparer.Ordinal);
-                current[segments[index]] = child;
-                current = child;
-                continue;
+                var close = raw.IndexOf(']', bracket + 1);
+                if (close < 0 || !int.TryParse(raw.AsSpan(bracket + 1, close - bracket - 1), out var index) || index < 0)
+                    throw new InvalidDataException($"JSON 数组路径无效：{path}。");
+                result.Add(new PathSegment(null, index));
+                bracket = raw.IndexOf('[', close + 1);
             }
-
-            if (next is not Dictionary<string, object?> existing)
-                throw new InvalidOperationException(
-                    $"合并快照时路径冲突：{path} 与另一个已配置字段互为前缀，请调整点位路径。");
-            current = existing;
         }
-
-        current[segments[^1]] = rawJson;
+        return result;
     }
 
-    /// <summary>把嵌套字典渲染成 JSON。叶子已经是原始 JSON 文本，直接写入以保留类型。</summary>
-    private static string Render(Dictionary<string, object?> tree)
-    {
-        var builder = new StringBuilder();
-        Write(builder, tree);
-        return builder.ToString();
-    }
+    private static InvalidOperationException PathConflict(string path)
+        => new($"合并快照时路径冲突：{path} 与另一个已配置字段互为前缀，请调整点位路径。");
 
-    private static void Write(StringBuilder builder, Dictionary<string, object?> tree)
-    {
-        builder.Append('{');
-        var first = true;
-        foreach (var (key, value) in tree)
-        {
-            if (!first) builder.Append(',');
-            first = false;
-            builder.Append(JsonSerializer.Serialize(key)).Append(':');
-            if (value is Dictionary<string, object?> child) Write(builder, child);
-            else builder.Append((string?)value ?? "null");
-        }
-
-        builder.Append('}');
-    }
+    private sealed record PathSegment(string? Name, int? Index);
 
     private static bool TryResolve(JsonElement root, string path, out JsonElement value)
-    {
-        value = root;
-        foreach (var segment in path.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-        {
-            if (value.ValueKind != JsonValueKind.Object || !value.TryGetProperty(segment, out value))
-                return false;
-        }
-
-        return true;
-    }
+        => JsonElementPathResolver.TryResolve(root, path, out value);
 
     /// <summary>按订阅配置剥掉报文信封，返回真正承载数据的对象。</summary>
     public static JsonElement Unwrap(JsonElement payload, string? payloadRoot)

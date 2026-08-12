@@ -17,7 +17,7 @@ from demo_contract import (
     platform_recipe_values,
     recipe_parameter_definitions,
 )
-from provision_data_source import build_payload
+from provision_ingestion_task import build_payload
 
 
 TOOLING_COMPONENT_TYPES = [
@@ -137,7 +137,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--edge-id", default="EDGE-FX3U-SIM-001")
     parser.add_argument("--device-host", default="127.0.0.1")
     parser.add_argument("--device-port", type=int, default=5551)
-    parser.add_argument("--profile-version", type=int, default=1)
+    parser.add_argument("--task-version", type=int, default=1)
     parser.add_argument("--data-model-version", type=int, default=1)
     parser.add_argument("--scenario-version", type=int)
     return parser.parse_args()
@@ -290,7 +290,7 @@ def quality_plan() -> dict[str, object]:
 
 def scenario_package(
     data_model_version: int,
-    profile_version: int,
+    task_version: int,
     scenario_version: int | None = None,
 ) -> dict[str, object]:
     return {
@@ -303,8 +303,8 @@ def scenario_package(
         "dataModelVersion": data_model_version,
         "analysisPlanId": "optical-lens-molding-demo-analysis",
         "analysisPlanVersion": data_model_version,
-        "acquisitionProfiles": [
-            {"id": "optical-lens-molding-simulator", "version": profile_version}
+        "ingestionTasks": [
+            {"id": "optical-lens-molding-simulator", "version": task_version}
         ],
         "qualityPlan": {"id": "optical-lens-molding-demo-quality", "version": 1},
         "contextFields": [
@@ -508,8 +508,8 @@ def main() -> None:
         ),
         ("quality_plan", "/api/v1/inspection-plans", quality_plan()),
         (
-            "acquisition_profile",
-            "/api/v1/acquisition-profiles",
+            "ingestion_task",
+            "/api/v1/ingestion-tasks",
             build_payload(args),
         ),
         (
@@ -517,7 +517,7 @@ def main() -> None:
             "/api/v1/scenario-packages",
             scenario_package(
                 args.data_model_version,
-                args.profile_version,
+                args.task_version,
                 args.scenario_version,
             ),
         ),
@@ -533,7 +533,7 @@ def main() -> None:
                     or result.get("processSpecificationId")
                     or result.get("planId")
                     or result.get("code")
-                    or result.get("profileId")
+                    or result.get("taskId")
                     or result.get("packageId")
                 ),
                 "version": result.get("version"),

@@ -11,7 +11,7 @@ const registryPages = {
     title: "工艺配置", description: "版本化组合工艺模型、设备映射、分析、质量、上下文策略和约束。", endpoint: "/api/v1/scenario-packages", key: "packageId",
     columns: [["packageId", "场景"], ["version", "版本"], ["name", "名称"], ["status", "状态"], ["updatedAt", "更新时间"]],
     createLabel: "创建工艺配置",
-    template: { packageId: "", version: 1, name: "", description: "", status: "draft", dataModelId: "", dataModelVersion: 1, analysisPlanId: "", analysisPlanVersion: 1, acquisitionProfiles: [], qualityPlan: null, contextFields: [], constraints: [], knowledgeAssets: [], terminology: {}, updatedAt: "" },
+    template: { packageId: "", version: 1, name: "", description: "", status: "draft", dataModelId: "", dataModelVersion: 1, analysisPlanId: "", analysisPlanVersion: 1, ingestionTasks: [], qualityPlan: null, contextFields: [], constraints: [], knowledgeAssets: [], terminology: {}, updatedAt: "" },
     deleteUrl: value => `/api/v1/scenario-packages/${encodeURIComponent(value.packageId)}/${value.version}`,
   },
   processModels: {
@@ -360,5 +360,5 @@ export const ProcessSpecificationsPage = () => <RegistryPage definition={registr
 export const ProcessAnalysisPlansPage = () => <RegistryPage definition={registryPages.plans} />;
 export const InspectionDefinitionsPage = () => <RegistryPage definition={registryPages.definitions} />;
 export const QualityPlansPage = () => <RegistryPage definition={registryPages.plansQuality} />;
-// 设备接入已迁移到 src/acquisition/AcquisitionProfilePage.jsx：
+// 设备接入已迁移到 src/acquisition/IngestionTaskPage.jsx：
 // 协议差异由描述符注册表承载，配置页是独立的左右分栏页面而不是通用注册表抽屉。

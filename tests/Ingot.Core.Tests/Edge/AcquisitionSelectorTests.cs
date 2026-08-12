@@ -5,8 +5,7 @@ using Xunit;
 namespace Ingot.Core.Tests.Edge;
 
 /// <summary>
-///     点位选择器语法。这些规则以前只存在于两个 Runner 内部，平台保存配置时不做任何检查，
-///     语法错误要等到边缘节点连接设备才暴露。
+///     点位选择器语法在平台保存、Edge 应用和设备探查阶段保持一致。
 /// </summary>
 public class AcquisitionSelectorTests
 {
@@ -76,6 +75,18 @@ public class AcquisitionSelectorTests
         => Assert.False(AcquisitionSelectors.TryParseMelsec(selector, out _, out _));
 
     [Fact]
+    public void RegisterSelectorsRejectReadsThatCrossTheAddressBoundary()
+    {
+        Assert.False(AcquisitionSelectors.TryParseModbus(
+            "holding-register:65535:float32:big-endian:high-low", out _, out var modbusError));
+        Assert.Contains("地址边界", modbusError);
+
+        Assert.False(AcquisitionSelectors.TryParseMelsec(
+            "D:4294967295:float32", out _, out var melsecError));
+        Assert.Contains("地址边界", melsecError);
+    }
+
+    [Fact]
     public void Modbus_BitAreaOnlyAcceptsBoolean()
     {
         Assert.True(AcquisitionSelectors.TryParseModbus("coil:12:boolean", out var point, out var error), error);
@@ -112,7 +123,58 @@ public class AcquisitionSelectorTests
     {
         Assert.True(AcquisitionSelectors.TryParseModbus("holding-register:40:string:16", out var point, out var error), error);
         Assert.Equal(8, point!.Quantity);
+        Assert.Equal((ushort)16, point.ByteLength);
         Assert.Equal("big-endian", point.ByteOrder);
+    }
+
+    [Fact]
+    public void RegisterStringSelectors_PreserveOddByteLengthsAcrossStructuredRoundTrip()
+    {
+        Assert.True(AcquisitionSelectors.TryParseModbus(
+            "holding-register:40:string:3", out var modbus, out var modbusError), modbusError);
+        var modbusMapping = new AcquisitionValueMapping
+        {
+            DataItemCode = "part.code",
+            SourcePath = "holding-register:40:string:3",
+            SourceDataType = modbus!.DataType,
+            SourceByteLength = modbus.ByteLength,
+            ModbusArea = modbus.Area,
+            ModbusAddress = modbus.Address,
+            ModbusQuantity = modbus.Quantity
+        };
+        Assert.Equal("holding-register:40:string:3", AcquisitionSelectors.FormatModbus(modbusMapping));
+
+        Assert.True(AcquisitionSelectors.TryParseMelsec(
+            "D:40:string:3", out var melsec, out var melsecError), melsecError);
+        var melsecMapping = modbusMapping with
+        {
+            SourcePath = "D:40:string:3",
+            MelsecDevice = melsec!.Device.Code,
+            MelsecAddress = melsec.DisplayAddress,
+            ModbusQuantity = (ushort)melsec.WordCount,
+            SourceByteLength = melsec.ByteLength
+        };
+        Assert.Equal("D:40:string:3", AcquisitionSelectors.FormatMelsec(melsecMapping));
+    }
+
+    [Fact]
+    public void RegisterStringDecoders_DoNotConsumePaddingBeyondDeclaredOddLength()
+    {
+        var modbusValue = ModbusTcpAcquisitionRunner.Decode([0x4142, 0x4358], new AcquisitionValueMapping
+        {
+            DataItemCode = "part.code",
+            SourcePath = "holding-register:40:string:3",
+            SourceDataType = "string",
+            SourceByteLength = 3,
+            ModbusArea = "holding-register",
+            ModbusAddress = 40,
+            ModbusQuantity = 2
+        });
+        Assert.Equal("ABC", modbusValue);
+
+        Assert.True(AcquisitionSelectors.TryParseMelsec("D:40:string:3", out var point, out var error), error);
+        var melsecValue = MelsecA1EAcquisitionRunner.Decode([0x81, 0x00, 0x41, 0x42, 0x43, 0x58], point!);
+        Assert.Equal("ABC", melsecValue);
     }
 
     [Fact]
@@ -134,7 +196,7 @@ public class AcquisitionSelectorTests
         Assert.Equal(6, merged[0].Count);
         Assert.Equal(3, merged[0].Points.Count);
 
-        // 合并间隔为 0 时退化为逐点读取，行为与旧实现一致。
+        // 合并间隔为 0 时按点位分别读取。
         var individual = MelsecA1EAcquisitionRunner.BuildReadPlan(selectors, maxMergeGap: 0);
         Assert.Equal(3, individual.Count);
     }
@@ -170,6 +232,37 @@ public class AcquisitionSelectorTests
         var wordFrame = MelsecA1EAcquisitionRunner.BuildWordReadFrame(
             " D"u8.ToArray(), address: 10, wordCount: 4, timer: 0x0010, layout: "A");
         Assert.Equal(0x01, wordFrame[0]);
+    }
+
+    [Fact]
+    public void Melsec_BitPayloadRejectsValuesOtherThanZeroAndOne()
+    {
+        Assert.Equal([false, true], MelsecA1EAcquisitionRunner.DecodeBitPayload("01"u8, 2, "ascii"));
+        Assert.Throws<InvalidDataException>(() =>
+            MelsecA1EAcquisitionRunner.DecodeBitPayload("02"u8, 2, "ascii"));
+        Assert.Equal([true, false], MelsecA1EAcquisitionRunner.DecodeBitPayload([0x10], 2, "binary"));
+        Assert.Throws<InvalidDataException>(() =>
+            MelsecA1EAcquisitionRunner.DecodeBitPayload([0x20], 2, "binary"));
+    }
+
+    [Fact]
+    public void RegisterStringDecodersRejectUndeclaredEncodings()
+    {
+        Assert.Throws<System.Text.DecoderFallbackException>(() =>
+            ModbusTcpAcquisitionRunner.Decode([0xC328], new AcquisitionValueMapping
+            {
+                DataItemCode = "part.code",
+                SourcePath = "holding-register:40:string:2",
+                SourceDataType = "string",
+                SourceByteLength = 2,
+                ModbusArea = "holding-register",
+                ModbusAddress = 40,
+                ModbusQuantity = 1
+            }));
+
+        Assert.True(AcquisitionSelectors.TryParseMelsec("D:40:string:2", out var point, out var error), error);
+        Assert.Throws<InvalidDataException>(() =>
+            MelsecA1EAcquisitionRunner.Decode([0x81, 0x00, 0xFF, 0x00], point!));
     }
 
     [Fact]

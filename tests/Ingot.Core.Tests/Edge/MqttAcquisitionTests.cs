@@ -15,6 +15,13 @@ public sealed class MqttAcquisitionTests
     public void TopicFiltersMatchMqttTopics(string filter, string topic, bool expected)
         => Assert.Equal(expected, MqttSnapshotAccumulator.MatchesTopicFilter(filter, topic));
 
+    [Theory]
+    [InlineData("plant/+/telemetry", "plant/press01/#", true)]
+    [InlineData("plant/a/#", "plant/b/+", false)]
+    [InlineData("plant/a", "plant/a/#", true)]
+    public void TopicFilterOverlapIsDetected(string first, string second, bool expected)
+        => Assert.Equal(expected, MqttTopicFilter.Intersects(first, second));
+
     [Fact]
     public void PayloadRootsAreUnwrappedAndTopicSnapshotsAreMerged()
     {

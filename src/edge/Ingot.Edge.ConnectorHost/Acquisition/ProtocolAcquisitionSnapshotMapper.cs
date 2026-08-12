@@ -17,19 +17,19 @@ public static class ProtocolAcquisitionSnapshotMapper
         string? previousProcessSpecificationIdentity,
         DateTimeOffset occurredAt)
     {
-        var profile = deployment.Profile;
+        var task = deployment.Task;
         var dataItems = deployment.DataModel.Acquisition.DataItems
             .ToDictionary(item => item.Code, StringComparer.Ordinal);
-        var context = new Dictionary<string, string>(profile.StaticContext, StringComparer.Ordinal)
+        var context = new Dictionary<string, string>(task.StaticContext, StringComparer.Ordinal)
         {
-            ["acquisition_profile_id"] = profile.ProfileId,
-            ["acquisition_profile_version"] = profile.Version.ToString(CultureInfo.InvariantCulture),
-            ["data_model_id"] = profile.DataModelId,
-            ["data_model_version"] = profile.DataModelVersion.ToString(CultureInfo.InvariantCulture)
+            ["ingestion_task_id"] = task.TaskId,
+            ["ingestion_task_version"] = task.Version.ToString(CultureInfo.InvariantCulture),
+            ["data_model_id"] = task.DataModelId,
+            ["data_model_version"] = task.DataModelVersion.ToString(CultureInfo.InvariantCulture)
         };
-        if (string.Equals(profile.SubjectType, "equipment", StringComparison.OrdinalIgnoreCase))
-            context["equipment_id"] = profile.SubjectId;
-        foreach (var mapping in profile.ContextMappings)
+        if (string.Equals(task.SubjectType, "equipment", StringComparison.OrdinalIgnoreCase))
+            context["equipment_id"] = task.SubjectId;
+        foreach (var mapping in task.ContextMappings)
         {
             if (!raw.TryGetValue(mapping.SourcePath, out var value) || value is null)
             {
@@ -41,20 +41,12 @@ public static class ProtocolAcquisitionSnapshotMapper
         }
 
         var values = new Dictionary<string, object?>(StringComparer.Ordinal);
-        foreach (var mapping in profile.ValueMappings)
+        foreach (var mapping in task.ValueMappings)
         {
-            if (!raw.TryGetValue(mapping.SourcePath, out var value) || value is null)
-            {
-                if (mapping.Required)
-                    throw new InvalidDataException($"采集源缺少必填数据项：{mapping.SourcePath}。");
-                values[mapping.DataItemCode] = null;
-                continue;
-            }
-            values[mapping.DataItemCode] = ConvertValue(
-                value,
-                dataItems[mapping.DataItemCode].DataType,
-                mapping.Scale,
-                mapping.Offset);
+            values[mapping.DataItemCode] = AcquisitionValuePolicy.Resolve(
+                raw,
+                mapping,
+                dataItems[mapping.DataItemCode].DataType);
         }
         var stageDefinition = dataItems.Values.SingleOrDefault(item => item.Category == "stage");
         if (stageDefinition is not null &&
@@ -67,9 +59,9 @@ public static class ProtocolAcquisitionSnapshotMapper
 
         string? processSpecificationIdentity = null;
         ProductionEvent? processSpecificationApplied = null;
-        if (profile.ProcessSpecification is not null)
+        if (task.ProcessSpecification is not null)
         {
-            var processSpecification = profile.ProcessSpecification;
+            var processSpecification = task.ProcessSpecification;
             var processSpecificationId = RequiredScalar(raw, processSpecification.IdPath);
             var processSpecificationVersion = RequiredScalar(raw, processSpecification.VersionPath);
             processSpecificationIdentity = $"{processSpecificationId}@{processSpecificationVersion}";
@@ -82,18 +74,10 @@ public static class ProtocolAcquisitionSnapshotMapper
                 var resolved = new Dictionary<string, object?>(StringComparer.Ordinal);
                 foreach (var mapping in processSpecification.ParameterMappings)
                 {
-                    if (!raw.TryGetValue(mapping.SourcePath, out var value) || value is null)
-                    {
-                        if (mapping.Required)
-                            throw new InvalidDataException($"采集源缺少必填控制参数：{mapping.SourcePath}。");
-                        resolved[mapping.DataItemCode] = null;
-                        continue;
-                    }
-                    resolved[mapping.DataItemCode] = ConvertValue(
-                        value,
-                        definitions[mapping.DataItemCode].DataType,
-                        mapping.Scale,
-                        mapping.Offset);
+                    resolved[mapping.DataItemCode] = AcquisitionValuePolicy.Resolve(
+                        raw,
+                        mapping,
+                        definitions[mapping.DataItemCode].DataType);
                 }
                 var data = new Dictionary<string, object?>
                 {
@@ -111,7 +95,7 @@ public static class ProtocolAcquisitionSnapshotMapper
                     processSpecification.EventType,
                     occurredAt,
                     normalizedSource,
-                    new ObjectRef(profile.SubjectType, profile.SubjectId),
+                    new ObjectRef(task.SubjectType, task.SubjectId),
                     executionId: null,
                     context,
                     data);
@@ -120,13 +104,13 @@ public static class ProtocolAcquisitionSnapshotMapper
 
         var sampleData = AcquisitionSampleMetadata.CreateQuality(values, DateTimeOffset.UtcNow);
         sampleData["values"] = values;
-        if (profile.TimestampMode == "source")
+        if (task.TimestampMode == "source")
             sampleData["sourceTimestamp"] = occurredAt.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture);
         var sample = ProductionEvent.Create(
-            profile.SampleEventType,
+            task.SampleEventType,
             occurredAt,
             normalizedSource,
-            new ObjectRef(profile.SubjectType, profile.SubjectId),
+            new ObjectRef(task.SubjectType, task.SubjectId),
             executionId: null,
             context,
             sampleData);
@@ -146,23 +130,4 @@ public static class ProtocolAcquisitionSnapshotMapper
             ? Convert.ToInt64(value, CultureInfo.InvariantCulture)
             : value;
 
-    private static object ConvertValue(object raw, string targetType, double scale, double offset)
-    {
-        try
-        {
-            return targetType switch
-            {
-                "double" => Convert.ToDouble(raw, CultureInfo.InvariantCulture) * scale + offset,
-                "integer" when scale == 1 && offset == 0 => Convert.ToInt64(raw, CultureInfo.InvariantCulture),
-                "integer" => Convert.ToDouble(raw, CultureInfo.InvariantCulture) * scale + offset,
-                "boolean" => Convert.ToBoolean(raw, CultureInfo.InvariantCulture),
-                "string" => Convert.ToString(raw, CultureInfo.InvariantCulture) ?? string.Empty,
-                _ => throw new InvalidDataException($"目标数据类型不受支持：{targetType}。")
-            };
-        }
-        catch (Exception exception) when (exception is FormatException or InvalidCastException or OverflowException)
-        {
-            throw new InvalidDataException($"采集值无法转换为 {targetType}：{raw}。", exception);
-        }
-    }
 }

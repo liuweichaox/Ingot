@@ -22,7 +22,7 @@ public sealed class AcquisitionController(
             return BadRequest(new { error = "缺少待验证的采集配置。" });
         try
         {
-            return Ok(await probeService.ProbeAsync(request.Deployment, cancellationToken)
+            return Ok(await probeService.ProbeAsync(request.Deployment, request.Discovery, cancellationToken)
                 .ConfigureAwait(false));
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)

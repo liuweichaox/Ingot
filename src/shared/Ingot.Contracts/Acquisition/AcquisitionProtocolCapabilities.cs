@@ -31,10 +31,7 @@ public static class AcquisitionProbeModes
 /// <summary>
 ///     一个采集协议真正具备的能力。
 ///
-///     这份矩阵是**平台、边缘与配置界面共用的唯一事实来源**：
-///     以前"契约里声明了字段、但某个 Runner 根本不读它"的差异只存在于人的记忆里，
-///     导致界面显示了永远不生效的输入框（例如 OPC UA 的时间戳模式、
-///     HTTP 轮询的重连间隔）。现在由本矩阵统一裁决：
+///     这份矩阵是**平台、边缘与配置界面共用的唯一事实来源**，统一裁决：
 ///
 ///     <list type="bullet">
 ///       <item>校验器据此拒绝对该协议无意义的配置，而不是静默接受后丢弃；</item>
@@ -58,13 +55,16 @@ public sealed record AcquisitionProtocolCapability
     /// <summary>见 <see cref="AcquisitionProbeModes"/>。</summary>
     public required string ProbeMode { get; init; }
 
-    /// <summary><see cref="AcquisitionProfile"/> 中承载该协议连接参数的属性名（驼峰形式）。</summary>
+    /// <summary><see cref="IngestionTask"/> 中承载该协议连接参数的属性名（驼峰形式）。</summary>
     public required string ConnectionSection { get; init; }
 
     /// <summary>是否支持 <c>TimestampMode = source</c>。为 false 时校验器强制 edge-received。</summary>
     public bool SupportsSourceTimestamp { get; init; }
 
-    /// <summary>是否消费 <see cref="AcquisitionProfile.SequencePath"/>。</summary>
+    /// <summary>源时间由协议值元数据直接提供，不需要另配一个时间字段或点位。</summary>
+    public bool UsesIntrinsicSourceTimestamp { get; init; }
+
+    /// <summary>是否消费 <see cref="IngestionTask.SequencePath"/>。</summary>
     public bool SupportsSequencePath { get; init; }
 
     /// <summary>是否消费 <see cref="AcquisitionProcessSpecificationMapping.ParametersPath"/>。</summary>
@@ -106,11 +106,7 @@ public static class AcquisitionProtocolCapabilities
         "int64", "uint64", "float64", "string", "boolean"
     ];
 
-    private static readonly string[] DocumentTypes =
-    [
-        "auto", "int16", "uint16", "int32", "uint32", "float32",
-        "int64", "uint64", "float64", "string", "boolean"
-    ];
+    private static readonly string[] DocumentTypes = ["auto"];
 
     /// <summary>该数据类型是否可用于寄存器类协议。</summary>
     public static bool IsRegisterDataType(string? value)
@@ -126,7 +122,7 @@ public static class AcquisitionProtocolCapabilities
                 Summary = "设备或网关以 HTTP 提供一份 JSON 快照，采集节点按间隔读取。",
                 Addressing = AcquisitionAddressingKinds.JsonPath,
                 ProbeMode = AcquisitionProbeModes.Discover,
-                ConnectionSection = "connection",
+                ConnectionSection = "httpPolling",
                 SupportsSourceTimestamp = true,
                 SupportsSequencePath = true,
                 SupportsControlParametersPath = true,
@@ -135,8 +131,8 @@ public static class AcquisitionProtocolCapabilities
                 SourceDataTypes = DocumentTypes,
                 Constraints =
                 [
-                    "当前驱动使用 GET 读取，不支持自定义请求头、请求体或 HTTP 鉴权。",
-                    "一次请求必须返回包含全部必需字段的完整快照。"
+                    "支持 GET 或 POST；敏感请求头必须引用现场节点密钥库，不在平台配置中保存值。",
+                    "一次响应必须返回包含全部必需字段的完整 JSON 快照，响应体上限为 16 MiB。"
                 ]
             },
             [AcquisitionProtocols.Mqtt] = new AcquisitionProtocolCapability
@@ -150,13 +146,15 @@ public static class AcquisitionProtocolCapabilities
                 SupportsSourceTimestamp = true,
                 SupportsSequencePath = true,
                 SupportsControlParametersPath = true,
+                SupportsConnectTimeout = true,
                 SupportsReconnectDelay = true,
                 SupportsPerTopicMapping = true,
                 SourceDataTypes = DocumentTypes,
                 Constraints =
                 [
                     "订阅多个主题时，请为每个点位指定来源主题；未指定的点位按任意主题的报文解析。",
-                    "跨主题的值会合并为一份快照，只有全部必需点位都收到过报文后才会产生采样。"
+                    "跨主题的值会合并为一份快照，只有全部必需点位都收到过报文后才会产生采样。",
+                    "订阅过滤器不得重叠；同一报文只能归属一个报文根和稳定通道。"
                 ]
             },
             [AcquisitionProtocols.OpcUa] = new AcquisitionProtocolCapability
@@ -167,14 +165,16 @@ public static class AcquisitionProtocolCapabilities
                 Addressing = AcquisitionAddressingKinds.NodeId,
                 ProbeMode = AcquisitionProbeModes.Discover,
                 ConnectionSection = "opcUa",
-                SupportsSourceTimestamp = false,
+                SupportsSourceTimestamp = true,
+                UsesIntrinsicSourceTimestamp = true,
                 SupportsConnectTimeout = true,
                 SupportsReconnectDelay = true,
                 SourceDataTypes = DocumentTypes,
                 Constraints =
                 [
                     "采样时间固定使用服务器提供的 SourceTimestamp，不能改用采集节点接收时间。",
-                    "NodeId 中的命名空间序号由服务器分配；服务器重排命名空间后需要重新验证配置。"
+                    "NodeId 中的命名空间序号由服务器分配；服务器重排命名空间后需要重新验证配置。",
+                    "当前驱动订阅变量节点，不采集 OPC UA 事件和报警。"
                 ]
             },
             [AcquisitionProtocols.ModbusTcp] = new AcquisitionProtocolCapability

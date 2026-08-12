@@ -14,7 +14,7 @@ import {
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, Navigate, Route, Routes, useLocation, useNavigate } from "react-router";
 import * as Pages from "./pages";
-import { AcquisitionProfilePage, AcquisitionProfilesPage } from "./acquisition/AcquisitionProfilePage";
+import { IngestionTaskPage, IngestionTasksPage } from "./acquisition/IngestionTaskPage";
 import { cx, ToastHost } from "./ui/components";
 
 const sections = [
@@ -46,7 +46,7 @@ const sections = [
       { label: "工艺定义", items: [["/configuration/scenario-packages", "工艺配置"], ["/configuration/process-data-models", "工艺模型"], ["/configuration/process-specifications", "工艺规范版本"], ["/configuration/process-analysis-plans", "分析模型"]] },
       { label: "质量规则", items: [["/configuration/inspection-definitions", "检测定义"], ["/configuration/quality-plans", "质量方案"]] },
       { label: "工装资产", items: [["/configuration/tooling-types", "装配模板"], ["/configuration/component-types", "组件分类"], ["/configuration/components", "组件资产"], ["/configuration/tooling-assemblies", "工装总成"]] },
-      { label: "现场接入", items: [["/edges", "现场节点"], ["/configuration/acquisition-profiles", "设备接入"]] },
+      { label: "现场接入", items: [["/edges", "现场节点"], ["/configuration/ingestion-tasks", "设备接入"]] },
     ],
   },
 ];
@@ -80,7 +80,7 @@ const pageDetails = {
   "/configuration/process-analysis-plans": ["分析模型", "版本化定义分析范围、对齐方式、质量分组和数据项"],
   "/configuration/process-data-models": ["工艺模型", "定义工艺变量、阶段号和控制参数，供设备点位统一映射"],
   "/configuration/process-specifications": ["工艺规范版本", "维护引用数据模型的完整工艺规范有效值"],
-  "/configuration/acquisition-profiles": ["设备接入", "选择采集节点和通信驱动，将设备点位映射到工艺变量"],
+  "/configuration/ingestion-tasks": ["设备接入", "选择采集节点和通信驱动，将设备点位映射到工艺变量"],
   "/configuration/inspection-definitions": ["检测定义", "定义要检测的特性、录入类型和判定规则"],
   "/configuration/quality-plans": ["质量方案", "配置产品适用的检测项目与复核规则"],
   "/configuration/component-types": ["组件分类", "维护模芯、模架等物理资产类别；上模和下模由装配位置决定"],
@@ -381,8 +381,8 @@ function AppRoutes() {
       <Route path="/profiles" element={<Navigate to="/configuration/process-data-models" replace />} />
       <Route path="/configuration/process-data-models" element={<Pages.ProcessDataModelsPage />} />
       <Route path="/configuration/process-specifications" element={<Pages.ProcessSpecificationsPage />} />
-      <Route path="/configuration/acquisition-profiles" element={<AcquisitionProfilesPage />} />
-      <Route path="/configuration/acquisition-profiles/:profileId" element={<AcquisitionProfilePage />} />
+      <Route path="/configuration/ingestion-tasks" element={<IngestionTasksPage />} />
+      <Route path="/configuration/ingestion-tasks/:taskId" element={<IngestionTaskPage />} />
       <Route path="/edges" element={<Pages.EdgesPage />} />
       <Route path="/edges/:edgeId" element={<Pages.EdgeDetailPage />} />
       <Route path="/platform-metrics" element={<Pages.MetricsPage />} />

@@ -76,8 +76,16 @@ export function blankRow(descriptor) {
     sourcePath: "",
     required: true,
     sourceDataType: descriptor.dataTypes.includes("auto") ? "auto" : "int16",
+    sourceByteLength: 16,
     scale: 1,
     offset: 0,
+    qualityPath: "",
+    acceptedQualityValues: "",
+    minimum: "",
+    maximum: "",
+    outOfRangeBehavior: "reject",
+    missingValueBehavior: "inherit",
+    defaultValue: "",
     modbusArea: "holding-register",
     modbusAddress: "",
     modbusQuantity: 1,
@@ -85,7 +93,6 @@ export function blankRow(descriptor) {
     wordOrder: "high-low",
     melsecDevice: "D",
     melsecAddress: "",
-    melsecStringLength: 16,
     bitIndex: "",
     topic: "",
   };
@@ -146,7 +153,9 @@ function PointRow({
         </Field>
       )}
 
-      <DataTypeField row={row} descriptor={descriptor} error={error} readOnly={readOnly} onChange={onChange} />
+      {[ADDRESSING.modbusRegister, ADDRESSING.melsecDevice].includes(descriptor.addressing) && (
+        <DataTypeField row={row} descriptor={descriptor} error={error} readOnly={readOnly} onChange={onChange} />
+      )}
 
       {descriptor.capabilities.perTopicMapping && (
         <Field label="来源主题" hint="留空表示接受任意主题的报文。" error={error("topic")}>
@@ -163,10 +172,56 @@ function PointRow({
         <Input type="number" step="any" value={row.scale} disabled={readOnly}
           onChange={event => onChange({ scale: event.target.value })} />
       </Field>
+      <Field label="设备值单位" hint={definition?.unit ? `平台目标单位：${definition.unit}` : "无量纲可留空。"} error={error("sourceUnit")}>
+        <Input value={row.sourceUnit || ""} disabled={readOnly}
+          placeholder={definition?.unit || "例如 °C、MPa、mm"}
+          onChange={event => onChange({ sourceUnit: event.target.value })} />
+      </Field>
       <Field label="换算偏移" error={error("offset")}>
         <Input type="number" step="any" value={row.offset} disabled={readOnly}
           onChange={event => onChange({ offset: event.target.value })} />
       </Field>
+
+      <Field label="质量字段" hint="可选；例如 OPC UA 状态或报文中的 quality。" error={error("qualityPath")}>
+        <Input value={row.qualityPath || ""} disabled={readOnly || descriptor.addressing === ADDRESSING.nodeId}
+          placeholder={descriptor.addressing === ADDRESSING.nodeId ? "$status" : undefined}
+          onChange={event => onChange({ qualityPath: event.target.value })} />
+      </Field>
+      <Field label="允许的质量值" hint="多个值用逗号分隔；配置后其他质量值会被拒绝。" error={error("acceptedQualityValues")}>
+        <Input value={row.acceptedQualityValues || ""} disabled={readOnly} placeholder="Good, Valid"
+          onChange={event => onChange({ acceptedQualityValues: event.target.value })} />
+      </Field>
+      <Field label="有效下限" error={error("minimum")}>
+        <Input type="number" step="any" value={row.minimum ?? ""} disabled={readOnly}
+          onChange={event => onChange({ minimum: event.target.value })} />
+      </Field>
+      <Field label="有效上限" error={error("maximum")}>
+        <Input type="number" step="any" value={row.maximum ?? ""} disabled={readOnly}
+          onChange={event => onChange({ maximum: event.target.value })} />
+      </Field>
+      <Field label="越界处理" error={error("outOfRangeBehavior")}>
+        <Select value={row.outOfRangeBehavior || "reject"} disabled={readOnly}
+          onChange={event => onChange({ outOfRangeBehavior: event.target.value })}>
+          <option value="reject">拒绝整条快照</option>
+          <option value="clamp">限制到边界</option>
+          <option value="omit">省略该值</option>
+        </Select>
+      </Field>
+      <Field label="缺失处理" error={error("missingValueBehavior")}>
+        <Select value={row.missingValueBehavior || "inherit"} disabled={readOnly}
+          onChange={event => onChange({ missingValueBehavior: event.target.value })}>
+          <option value="inherit">按必需/可选属性</option>
+          <option value="reject">拒绝整条快照</option>
+          <option value="omit">省略该值</option>
+          <option value="use-default">使用默认值</option>
+        </Select>
+      </Field>
+      {row.missingValueBehavior === "use-default" && (
+        <Field label="默认值" error={error("defaultValue")}>
+          <Input value={row.defaultValue ?? ""} disabled={readOnly}
+            onChange={event => onChange({ defaultValue: event.target.value })} />
+        </Field>
+      )}
 
       <div className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">
         <p className="text-xs text-slate-500">平台目标</p>
@@ -185,7 +240,8 @@ function PointRow({
             <Readout label="原始值" value={preview.rawValue ?? "未读取"} />
             <Readout label="换算值" value={preview.convertedValue ?? "—"} />
             <Readout label="设备类型" value={preview.dataType || "—"} />
-            <Readout label="单位" value={preview.unit || "—"} />
+            <Readout label="设备单位" value={preview.sourceUnit || "—"} />
+            <Readout label="目标单位" value={preview.targetUnit || "—"} />
           </div>
           {preview.error && <p className="mt-2 text-rose-700">{preview.error}</p>}
         </div>
@@ -220,7 +276,9 @@ function DataTypeField({ row, descriptor, error, readOnly, onChange }) {
           onChange({
             sourceDataType: next,
             bitIndex: next === "boolean" ? row.bitIndex : "",
-            modbusQuantity: next === "string" ? row.modbusQuantity : registerWordCount(next),
+            modbusQuantity: next === "string"
+              ? Math.max(1, Math.ceil((Number(row.sourceByteLength) || 1) / 2))
+              : registerWordCount(next),
           });
         }}
       >
@@ -236,7 +294,7 @@ function ModbusAddressFields({ row, form, error, readOnly, onChange }) {
   const area = modbusArea(row.modbusArea);
   const oneBased = form.modbusTcp?.addressBase === "one-based";
   const words = row.sourceDataType === "string"
-    ? Number(row.modbusQuantity) || 1
+    ? Math.max(1, Math.ceil((Number(row.sourceByteLength) || 1) / 2))
     : registerWordCount(row.sourceDataType);
   const needsBit = !area?.bit && row.sourceDataType === "boolean";
   return (
@@ -277,9 +335,12 @@ function ModbusAddressFields({ row, form, error, readOnly, onChange }) {
         </Field>
       )}
       {row.sourceDataType === "string" && (
-        <Field label="寄存器数量" error={error("modbusQuantity")}>
-          <Input type="number" min="1" max="64" value={row.modbusQuantity} disabled={readOnly}
-            onChange={event => onChange({ modbusQuantity: event.target.value })} />
+        <Field label="文本长度（字节）" error={error("sourceByteLength")}>
+          <Input type="number" min="1" max="128" value={row.sourceByteLength} disabled={readOnly}
+            onChange={event => onChange({
+              sourceByteLength: event.target.value,
+              modbusQuantity: Math.max(1, Math.ceil((Number(event.target.value) || 1) / 2)),
+            })} />
         </Field>
       )}
       {!area?.bit && row.sourceDataType !== "boolean" && (
@@ -342,9 +403,9 @@ function MelsecAddressFields({ row, error, readOnly, onChange }) {
         </Field>
       )}
       {row.sourceDataType === "string" && (
-        <Field label="文本长度（字节）" error={error("melsecStringLength")}>
-          <Input type="number" min="1" max="128" value={row.melsecStringLength} disabled={readOnly}
-            onChange={event => onChange({ melsecStringLength: event.target.value })} />
+        <Field label="文本长度（字节）" error={error("sourceByteLength")}>
+          <Input type="number" min="1" max="128" value={row.sourceByteLength} disabled={readOnly}
+            onChange={event => onChange({ sourceByteLength: event.target.value })} />
         </Field>
       )}
       <div className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">

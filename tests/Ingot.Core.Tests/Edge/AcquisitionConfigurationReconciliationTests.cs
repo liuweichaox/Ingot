@@ -89,6 +89,33 @@ public sealed class AcquisitionConfigurationReconciliationTests
     }
 
     [Fact]
+    public async Task UpgradeWithTransportReadsButNoValidSnapshot_ShouldRestorePreviousVersion()
+    {
+        var status = new AcquisitionStatus();
+        var runner = new ControllableRunner(status);
+        runner.ReadOnlyVersions.Add(2);
+        var service = CreateService(status, runner, startupHealthTimeoutMs: 1000);
+        using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        try
+        {
+            await service.SynchronizeWorkersAsync(
+                [Deployment("press", 1)], "EDGE-001", AcquisitionConfigurationSources.Cache, cancellation.Token);
+
+            await service.SynchronizeWorkersAsync(
+                [Deployment("press", 2)], "EDGE-001", AcquisitionConfigurationSources.Cache, cancellation.Token);
+
+            var application = Assert.Single(status.Get().Deployments);
+            Assert.Equal(AcquisitionApplicationStates.Rollback, application.State);
+            Assert.Equal(1, application.AppliedVersion);
+            Assert.DoesNotContain(status.Get().Tasks, item => item.ConfigurationKey == "press@2");
+        }
+        finally
+        {
+            await service.StopAllWorkersAsync();
+        }
+    }
+
+    [Fact]
     public async Task FailedDeviceTask_ShouldNotStopOtherDeviceTask()
     {
         var status = new AcquisitionStatus();
@@ -181,24 +208,25 @@ public sealed class AcquisitionConfigurationReconciliationTests
             }),
             cache ?? new NullDeploymentCache(),
             new AcquisitionProbeService(clients, new EnvironmentAcquisitionSecretResolver()),
+            new EnvironmentAcquisitionSecretResolver(),
             [runner],
             status,
             NullLogger<HttpPollingAcquisitionHostedService>.Instance);
     }
 
-    private static AcquisitionDeployment Deployment(string profileId, int version) => new()
+    private static AcquisitionDeployment Deployment(string taskId, int version) => new()
     {
-        Profile = new AcquisitionProfile
+        Task = new IngestionTask
         {
-            ProfileId = profileId,
+            TaskId = taskId,
             Version = version,
-            Name = profileId,
+            Name = taskId,
             Status = ConfigurationStatuses.Published,
             EdgeId = "EDGE-001",
             Protocol = AcquisitionProtocols.ModbusTcp,
             DataModelId = "generic",
-            Source = $"connector/{profileId}",
-            SubjectId = profileId,
+            Source = $"connector/{taskId}",
+            SubjectId = taskId,
             TimestampMode = "edge-received",
             ModbusTcp = new ModbusTcpConnection
             {
@@ -207,7 +235,7 @@ public sealed class AcquisitionConfigurationReconciliationTests
             },
             Execution = new AcquisitionExecutionOptions
             {
-                TimeoutMs = 100,
+                TimeoutMs = 1000,
                 ReconnectDelayMs = 100
             },
             ValueMappings =
@@ -250,6 +278,7 @@ public sealed class AcquisitionConfigurationReconciliationTests
     {
         public string Protocol => AcquisitionProtocols.ModbusTcp;
         public HashSet<int> FailingVersions { get; } = [];
+        public HashSet<int> ReadOnlyVersions { get; } = [];
         public HashSet<string> FailingProfiles { get; } = new(StringComparer.Ordinal);
 
         public async Task RunAsync(
@@ -259,11 +288,18 @@ public sealed class AcquisitionConfigurationReconciliationTests
             CancellationToken ct)
         {
             status.RecordAttempt(configurationKey, DateTimeOffset.UtcNow);
-            if (FailingVersions.Contains(deployment.Profile.Version) ||
-                FailingProfiles.Contains(deployment.Profile.ProfileId))
+            if (FailingVersions.Contains(deployment.Task.Version) ||
+                FailingProfiles.Contains(deployment.Task.TaskId))
                 throw new IOException("simulated device connection failure");
+            if (ReadOnlyVersions.Contains(deployment.Task.Version))
+            {
+                status.RecordReadSuccess(configurationKey, DateTimeOffset.UtcNow);
+                await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+                return;
+            }
             status.RecordProcessExecutionState(configurationKey, false);
-            status.RecordSuccess(configurationKey, DateTimeOffset.UtcNow, processSpecification: null);
+            status.RecordReadSuccess(configurationKey, DateTimeOffset.UtcNow);
+            status.RecordValidSnapshot(configurationKey, DateTimeOffset.UtcNow, processSpecification: null);
             await Task.Delay(Timeout.InfiniteTimeSpan, ct);
         }
     }

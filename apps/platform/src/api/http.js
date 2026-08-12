@@ -122,6 +122,34 @@ export async function postForm(url, formData, options = {}) {
   return await res.json();
 }
 
+export async function downloadFile(url, fallbackName = "download") {
+  let res;
+  try {
+    res = await fetch(resolveUrl(url), { headers: authenticatedHeaders({ Accept: "text/csv" }) });
+  } catch (error) {
+    throw platformRequestError(error);
+  }
+  if (!res.ok) {
+    notifyUnauthorized(res);
+    throw responseError(res, await res.text().catch(() => ""));
+  }
+  const disposition = res.headers.get("content-disposition") || "";
+  const encoded = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+  const plain = disposition.match(/filename="?([^";]+)"?/i)?.[1];
+  const name = encoded ? decodeURIComponent(encoded) : plain || fallbackName;
+  const objectUrl = URL.createObjectURL(await res.blob());
+  try {
+    const anchor = document.createElement("a");
+    anchor.href = objectUrl;
+    anchor.download = name;
+    document.body.append(anchor);
+    anchor.click();
+    anchor.remove();
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
 export async function streamSse(url, { headers = {}, signal, onEvent, lastEventId = 0 }) {
   const res = await fetch(resolveUrl(url), {
     headers: authenticatedHeaders({

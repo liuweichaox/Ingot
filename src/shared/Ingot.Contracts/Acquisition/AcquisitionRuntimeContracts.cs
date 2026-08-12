@@ -27,8 +27,15 @@ public sealed record AcquisitionTaskRuntimeStatus(
     string State,
     DateTimeOffset LoadedAt,
     DateTimeOffset? LastAttemptAt,
-    DateTimeOffset? LastSuccessAt,
-    long SamplesCollected,
+    DateTimeOffset? LastReadSuccessAt,
+    DateTimeOffset? LastValidSnapshotAt,
+    long ReadSuccessCount,
+    long ValidSnapshotCount,
+    long EmittedEventCount,
+    long DuplicateSuppressionCount,
+    long InactiveSnapshotCount,
+    long SourceIdentityStallCount,
+    DateTimeOffset? LastSourceIdentityChangeAt,
     double? LastReadDurationMs,
     double? ObservedIntervalMs,
     string? ActiveProcessSpecification,
@@ -38,7 +45,7 @@ public sealed record AcquisitionTaskRuntimeStatus(
     long StaleValueRejectionCount = 0);
 
 public sealed record AcquisitionDeploymentApplicationStatus(
-    string ProfileId,
+    string TaskId,
     int DesiredVersion,
     string DesiredConfigurationHash,
     int? AppliedVersion,
@@ -56,8 +63,14 @@ public sealed record EdgeAcquisitionRuntimeStatus(
     string? DesiredConfigurationSetHash,
     string? AppliedConfigurationSetHash,
     DateTimeOffset? LastAttemptAt,
-    DateTimeOffset? LastSuccessAt,
-    long SamplesCollected,
+    DateTimeOffset? LastReadSuccessAt,
+    DateTimeOffset? LastValidSnapshotAt,
+    long ReadSuccessCount,
+    long ValidSnapshotCount,
+    long EmittedEventCount,
+    long DuplicateSuppressionCount,
+    long InactiveSnapshotCount,
+    long SourceIdentityStallCount,
     double? LastReadDurationMs,
     double? ObservedIntervalMs,
     string? ActiveProcessSpecification,
@@ -90,7 +103,7 @@ public static class AcquisitionDeploymentFingerprint
     {
         ArgumentNullException.ThrowIfNull(deployments);
         var identities = deployments
-            .Select(item => $"{item.Profile.ProfileId}@{item.Profile.Version}:{Compute(item)}")
+            .Select(item => $"{item.Task.TaskId}@{item.Task.Version}:{Compute(item)}")
             .OrderBy(static item => item, StringComparer.Ordinal);
         return Convert.ToHexStringLower(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(
             string.Join('\n', identities))));

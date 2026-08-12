@@ -40,7 +40,7 @@ internal sealed class MqttSnapshotAccumulator
         int maxSkewSeconds = 5)
     {
         var observedAt = receivedAt ?? DateTimeOffset.UtcNow;
-        using var document = JsonDocument.Parse(payload);
+        using var document = JsonDocument.Parse(payload, AcquisitionJsonLimits.DocumentOptions);
         foreach (var subscription in _subscriptions)
         {
             if (!MatchesTopicFilter(subscription.Topic, actualTopic))
@@ -69,22 +69,7 @@ internal sealed class MqttSnapshotAccumulator
     }
 
     internal static bool MatchesTopicFilter(string filter, string topic)
-    {
-        var filterLevels = filter.Split('/', StringSplitOptions.None);
-        var topicLevels = topic.Split('/', StringSplitOptions.None);
-        for (var index = 0; index < filterLevels.Length; index++)
-        {
-            var filterLevel = filterLevels[index];
-            if (filterLevel == "#")
-                return index == filterLevels.Length - 1;
-            if (index >= topicLevels.Length)
-                return false;
-            if (filterLevel != "+" && !string.Equals(filterLevel, topicLevels[index], StringComparison.Ordinal))
-                return false;
-        }
-
-        return filterLevels.Length == topicLevels.Length;
-    }
+        => MqttTopicFilter.Matches(filter, topic);
 
     private MqttSnapshotSet BuildSnapshot(
         DateTimeOffset observedAt,
@@ -98,10 +83,10 @@ internal sealed class MqttSnapshotAccumulator
                 Merge(aggregate, topicSnapshot);
         }
 
-        var aggregateDocument = JsonDocument.Parse(aggregate.ToJsonString());
+        var aggregateDocument = JsonDocument.Parse(aggregate.ToJsonString(), AcquisitionJsonLimits.DocumentOptions);
         var topicDocuments = _topicSnapshots.ToDictionary(
             item => item.Key,
-            item => JsonDocument.Parse(item.Value.ToJsonString()),
+            item => JsonDocument.Parse(item.Value.ToJsonString(), AcquisitionJsonLimits.DocumentOptions),
             StringComparer.Ordinal);
         var timestamps = _subscriptions
             .Select(item => _topicUpdatedAt.GetValueOrDefault(item.Topic))
@@ -143,19 +128,7 @@ internal sealed class MqttSnapshotAccumulator
     }
 
     private static bool TryResolve(JsonElement root, string? path, out JsonElement value)
-    {
-        value = root;
-        if (string.IsNullOrWhiteSpace(path) || path.Trim() == ".")
-            return true;
-
-        foreach (var segment in path.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-        {
-            if (value.ValueKind != JsonValueKind.Object || !value.TryGetProperty(segment, out value))
-                return false;
-        }
-
-        return true;
-    }
+        => JsonElementPathResolver.TryResolve(root, path, out value);
 }
 
 internal sealed class MqttSnapshotSet : IDisposable

@@ -1,22 +1,22 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import {
   Alert, Badge, Button, Card, Field, Input, Page, Select, StatusBadge, notify,
 } from "../ui/components";
-import { getJson, postJson } from "../api/http";
+import { downloadFile, getJson, postForm, postJson } from "../api/http";
 import { useApi, extractRows } from "../hooks/useApi";
 import {
   mergeServerCapabilities, protocolDescriptor, protocolOptions,
 } from "./protocolRegistry";
 import {
-  applyProtocolChange, createProfileForm, modelValue, parseModelValue,
-  patchFromProbePoint, toPayload, validateProfile,
-} from "./profileForm";
+  applyProtocolChange, createIngestionTaskForm, modelValue, parseModelValue,
+  patchFromProbePoint, toPayload, validateIngestionTask,
+} from "./ingestionTaskForm";
 import { ConnectionPanel } from "./panels/ConnectionPanel";
 import { PointMappingPanel, blankRow } from "./panels/PointMappingPanel";
 import { DevicePointsPanel } from "./panels/DevicePointsPanel";
 
-const ENDPOINT = "/api/v1/acquisition-profiles";
+const ENDPOINT = "/api/v1/ingestion-tasks";
 
 /**
  * 设备接入配置页。
@@ -24,11 +24,11 @@ const ENDPOINT = "/api/v1/acquisition-profiles";
  * 从通用注册表抽屉里独立出来的原因：接入配置的工作流是"改一处 → 看设备返回什么 → 再改"，
  * 抽屉里垂直堆叠九个卡片无法支撑这个循环。左栏配置、右栏常驻设备面板，两边同时可见。
  */
-export function AcquisitionProfilePage() {
-  const { profileId } = useParams();
+export function IngestionTaskPage() {
+  const { taskId } = useParams();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const isNew = !profileId || profileId === "new";
+  const isNew = !taskId || taskId === "new";
   const requestedVersion = searchParams.get("version");
   const mode = searchParams.get("mode") || (isNew ? "create" : "maintain");
 
@@ -37,7 +37,7 @@ export function AcquisitionProfilePage() {
   const models = extractRows(modelData);
   const edges = extractRows(edgeData);
 
-  const [form, setForm] = useState(() => createProfileForm({}, undefined));
+  const [form, setForm] = useState(() => createIngestionTaskForm({}, undefined));
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
   const [loadError, setLoadError] = useState("");
@@ -60,7 +60,7 @@ export function AcquisitionProfilePage() {
     if (isNew) { setLoading(false); return; }
     let cancelled = false;
     setLoading(true);
-    getJson(`${ENDPOINT}?profileId=${encodeURIComponent(profileId)}`)
+    getJson(`${ENDPOINT}?taskId=${encodeURIComponent(taskId)}`)
       .then(result => {
         if (cancelled) return;
         const rows = extractRows(result);
@@ -68,22 +68,24 @@ export function AcquisitionProfilePage() {
           ? rows.find(item => String(item.version) === String(requestedVersion))
           : rows.slice().sort((left, right) => right.version - left.version)[0];
         if (!match) { setLoadError("没有找到该接入配置。"); return; }
-        setForm(createProfileForm(match, mode === "version" ? Number(match.version) + 1 : undefined));
+        setForm(createIngestionTaskForm(match, mode === "version" ? Number(match.version) + 1 : undefined));
       })
       .catch(error => { if (!cancelled) setLoadError(error.message); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [profileId, requestedVersion, mode, isNew]);
+  }, [taskId, requestedVersion, mode, isNew]);
 
   const descriptor = protocolDescriptor(form.protocol);
   const selectedModel = parseModelValue(form.dataModel);
   const model = models.find(item => item.modelId === selectedModel.id && item.version === selectedModel.version);
   const dataItems = model?.acquisition?.dataItems || [];
   const controlParameters = model?.controlParameters || [];
-  const readOnly = mode === "maintain" && form.status !== "draft";
+  const managedByBinding = Boolean(form.templateId && form.dataSourceId);
+  const readOnly = managedByBinding || (mode === "maintain" && form.status !== "draft");
+  const allowProbe = form.status === "draft";
 
   const validation = useMemo(
-    () => validateProfile(form, { dataItems }),
+    () => validateIngestionTask(form, { dataItems }),
     [form, dataItems],
   );
   const errors = showErrors ? validation.errors : {};
@@ -116,12 +118,18 @@ export function AcquisitionProfilePage() {
   function update(patch) { setForm(value => ({ ...value, ...patch })); }
   function updateSection(section, value) { setForm(current => ({ ...current, [section]: value })); }
 
-  async function runProbe() {
+  async function runProbe(discovery = {}) {
+    const { append = false, ...query } = discovery;
     setProbing(true);
     setProbeError("");
     try {
-      const result = await postJson(`${ENDPOINT}/probe`, { ...toPayload(form), status: "draft" });
-      setProbe(result);
+      const result = await postJson(`${ENDPOINT}/probe`, {
+        task: { ...toPayload(form), status: "draft" },
+        discovery: { pageSize: 300, ...query },
+      });
+      setProbe(current => append && current
+        ? { ...result, points: [...(current.points || []), ...(result.points || [])] }
+        : result);
     } catch (error) {
       setProbe(null);
       setProbeError(error.message);
@@ -145,7 +153,7 @@ export function AcquisitionProfilePage() {
 
   async function save(targetStatus) {
     const next = { ...form, status: targetStatus };
-    const check = validateProfile(next, { dataItems });
+    const check = validateIngestionTask(next, { dataItems });
     if (check.count > 0) {
       setShowErrors(true);
       setSaveError(`还有 ${check.count} 处需要修正，已在对应字段标出。`);
@@ -158,9 +166,12 @@ export function AcquisitionProfilePage() {
     setSaving(true);
     setSaveError("");
     try {
-      await postJson(ENDPOINT, toPayload(next));
+      if (targetStatus === "published" && form.templateId && form.dataSourceId)
+        await postJson(`/api/v1/ingestion-configuration/bindings/${encodeURIComponent(form.taskId)}/${form.version}:publish`);
+      else
+        await postJson(ENDPOINT, toPayload(next));
       notify(targetStatus === "published" ? "接入配置已发布" : "接入配置已保存");
-      navigate("/configuration/acquisition-profiles");
+      navigate("/configuration/ingestion-tasks");
     } catch (error) {
       setSaveError(error.message);
     } finally {
@@ -173,12 +184,12 @@ export function AcquisitionProfilePage() {
 
   return (
     <Page
-      title={isNew ? "配置数据源" : form.name || form.profileId}
+      title={isNew ? "配置数据源" : form.name || form.taskId}
       description={`${descriptor.label} · ${descriptor.summary}`}
       actions={
         <div className="flex items-center gap-2">
           <Link className="inline-flex min-h-9 items-center rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100"
-            to="/configuration/acquisition-profiles">返回列表</Link>
+            to="/configuration/ingestion-tasks">返回列表</Link>
           {!readOnly && (
             <>
               <Button disabled={saving} onClick={() => save("draft")}>{saving ? "保存中…" : "保存草稿"}</Button>
@@ -187,11 +198,18 @@ export function AcquisitionProfilePage() {
               </Button>
             </>
           )}
+          {managedByBinding && form.status === "draft" && (
+            <Button variant="primary" disabled={saving || !probeValid} onClick={() => save("published")}>
+              {probeValid ? "验证并发布绑定" : "请先验证连接"}
+            </Button>
+          )}
         </div>
       }
     >
       <div className="grid gap-5">
-        {readOnly && <Alert tone="info">已发布或已停用的配置不可修改。要调整参数请创建新版本。</Alert>}
+        {readOnly && <Alert tone="info">{managedByBinding
+          ? "该任务由不可变模板与数据源版本生成；需要调整时请创建新的资产版本和任务绑定。"
+          : "已发布或已停用的配置不可修改。要调整参数请创建新版本。"}</Alert>}
         {saveError && <Alert tone="danger">{saveError}</Alert>}
         {showErrors && validation.count > 0 && (
           <Alert tone="warning">还有 {validation.count} 处配置需要修正，已在对应字段下方标出。</Alert>
@@ -201,9 +219,9 @@ export function AcquisitionProfilePage() {
           <div className="grid gap-5">
             <Card title="基本信息" description="采集发生在哪里、采哪台设备、结果采用哪套工艺定义。">
               <div className="grid gap-4 md:grid-cols-2">
-                <Field label="接入配置代码" hint="创建后不可修改。" error={errors.profileId}>
-                  <Input value={form.profileId} disabled={!isNew && mode !== "create"}
-                    placeholder="press01-fx3u" onChange={event => update({ profileId: event.target.value })} />
+                <Field label="接入配置代码" hint="创建后不可修改。" error={errors.taskId}>
+                  <Input value={form.taskId} disabled={!isNew && mode !== "create"}
+                    placeholder="press01-fx3u" onChange={event => update({ taskId: event.target.value })} />
                 </Field>
                 <Field label="配置名称" error={errors.name}>
                   <Input value={form.name} disabled={readOnly} onChange={event => update({ name: event.target.value })} />
@@ -231,7 +249,10 @@ export function AcquisitionProfilePage() {
                     ))}
                   </Select>
                 </Field>
-                <Field label="设备编号" hint="设备在平台中的唯一编号，例如 PRESS-01。" error={errors.subjectId}>
+                <Field label="归属对象类型" hint="使用工厂对象模型中的稳定类型代码，例如 equipment、line 或 utility_meter。">
+                  <Input value={form.subjectType} disabled={readOnly} onChange={event => update({ subjectType: event.target.value })} />
+                </Field>
+                <Field label="归属对象编号" hint="数据所归属对象的唯一编号，例如 PRESS-01。" error={errors.subjectId}>
                   <Input value={form.subjectId} disabled={readOnly} onChange={event => update({ subjectId: event.target.value })} />
                 </Field>
                 <Field label="通信驱动" hint={descriptor.summary}>
@@ -248,6 +269,7 @@ export function AcquisitionProfilePage() {
               connection={form[descriptor.section]}
               errors={errors}
               readOnly={readOnly}
+              allowProbe={allowProbe}
               onChange={value => updateSection(descriptor.section, value)}
             />
 
@@ -457,8 +479,7 @@ function LifecyclePanel({ form, errors, readOnly, onChange }) {
 }
 
 /**
- * 采集策略。只显示当前驱动真正会读取的字段——
- * 以前这里对全部协议显示"连接超时"，而 5 个驱动里有 4 个根本不读它。
+ * 采集策略。只显示当前驱动真正会读取的字段。
  */
 function StrategyPanel({ descriptor, form, errors, readOnly, onChange }) {
   const capabilities = descriptor.capabilities;
@@ -472,7 +493,7 @@ function StrategyPanel({ descriptor, form, errors, readOnly, onChange }) {
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {capabilities.connectTimeout && (
           <Field label="连接超时（ms）" error={errors["execution.timeoutMs"]}>
-            <Input type="number" min="100" value={form.execution.timeoutMs} disabled={readOnly}
+            <Input type="number" min="1000" max="300000" value={form.execution.timeoutMs} disabled={readOnly}
               onChange={event => onChange({ execution: { ...form.execution, timeoutMs: event.target.value } })} />
           </Field>
         )}
@@ -482,8 +503,21 @@ function StrategyPanel({ descriptor, form, errors, readOnly, onChange }) {
               onChange={event => onChange({ execution: { ...form.execution, reconnectDelayMs: event.target.value } })} />
           </Field>
         )}
+        <Field label="源序号/时间戳停滞阈值（ms）" hint="0 表示关闭；配置了设备序号或设备时间时用于识别设备侧卡死。" error={errors["execution.sourceIdentityStaleAfterMs"]}>
+          <Input type="number" min="0" max="86400000" value={form.execution.sourceIdentityStaleAfterMs} disabled={readOnly}
+            onChange={event => onChange({ execution: { ...form.execution, sourceIdentityStaleAfterMs: event.target.value } })} />
+        </Field>
+        {(capabilities.intrinsicSourceTimestamp ||
+          (capabilities.sourceTimestamp && form.timestampMode === "source")) && (
+          <Field label="设备时间戳最大超前量（ms）" hint="0 表示关闭；超过此值拒绝样本，避免错误设备时钟污染事件时间线。" error={errors["execution.maximumFutureTimestampSkewMs"]}>
+            <Input type="number" min="0" max="86400000" value={form.execution.maximumFutureTimestampSkewMs} disabled={readOnly}
+              onChange={event => onChange({ execution: { ...form.execution, maximumFutureTimestampSkewMs: event.target.value } })} />
+          </Field>
+        )}
         <Field label="采样时间来源">
-          {capabilities.sourceTimestamp ? (
+          {capabilities.intrinsicSourceTimestamp ? (
+            <Input value="协议服务器提供的源时间" disabled />
+          ) : capabilities.sourceTimestamp ? (
             <Select value={form.timestampMode} disabled={readOnly}
               onChange={event => onChange({ timestampMode: event.target.value })}>
               <option value="source">使用设备时间</option>
@@ -493,12 +527,23 @@ function StrategyPanel({ descriptor, form, errors, readOnly, onChange }) {
             <Input value={descriptor.id === "opc-ua" ? "OPC UA 服务器 SourceTimestamp" : "采集节点接收时间"} disabled />
           )}
         </Field>
-        {capabilities.sourceTimestamp && form.timestampMode === "source" && (
-          <Field label="时间来源" hint={descriptorSourceHint(descriptor)} error={errors.timestampPath}>
-            <Input value={form.timestampPath} disabled={readOnly}
-              placeholder={descriptorSourcePlaceholder(descriptor)}
-              onChange={event => onChange({ timestampPath: event.target.value })} />
-          </Field>
+        {capabilities.sourceTimestamp && !capabilities.intrinsicSourceTimestamp && form.timestampMode === "source" && (
+          <>
+            <Field label="时间来源" hint={descriptorSourceHint(descriptor)} error={errors.timestampPath}>
+              <Input value={form.timestampPath} disabled={readOnly}
+                placeholder={descriptorSourcePlaceholder(descriptor)}
+                onChange={event => onChange({ timestampPath: event.target.value })} />
+            </Field>
+            <Field label="时间戳编码" error={errors.timestampEncoding}>
+              <Select value={form.timestampEncoding} disabled={readOnly}
+                onChange={event => onChange({ timestampEncoding: event.target.value })}>
+                <option value="auto">按协议自动选择</option>
+                <option value="iso-8601">ISO 8601</option>
+                <option value="unix-s">Unix 秒</option>
+                <option value="unix-ms">Unix 毫秒</option>
+              </Select>
+            </Field>
+          </>
         )}
         {capabilities.sequencePath && (
           <Field label="序号字段（可选）">
@@ -521,13 +566,19 @@ function StrategyPanel({ descriptor, form, errors, readOnly, onChange }) {
 }
 
 /** 接入配置列表。点击进入独立配置页，而不是打开抽屉。 */
-export function AcquisitionProfilesPage() {
+export function IngestionTasksPage() {
   const { data, error, reload } = useApi(ENDPOINT);
+  const { data: templateData, reload: reloadTemplates } = useApi("/api/v1/ingestion-configuration/templates");
+  const { data: sourceData, reload: reloadSources } = useApi("/api/v1/ingestion-configuration/data-sources");
+  const { data: bindingData, reload: reloadBindings } = useApi("/api/v1/ingestion-configuration/bindings");
   const rows = extractRows(data);
+  const templates = extractRows(templateData);
+  const sources = extractRows(sourceData);
+  const bindings = extractRows(bindingData);
   const navigate = useNavigate();
 
   async function retire(row) {
-    if (!window.confirm(`确认停用 ${row.name || row.profileId}？现场节点会在下一次同步时停止该采集任务。`)) return;
+    if (!window.confirm(`确认停用 ${row.name || row.taskId}？现场节点会在下一次同步时停止该采集任务。`)) return;
     try {
       await postJson(ENDPOINT, { ...row, status: "retired" });
       notify("接入配置已停用");
@@ -546,12 +597,19 @@ export function AcquisitionProfilesPage() {
           <Link className="inline-flex min-h-9 items-center rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100"
             to="/edges">查看现场节点</Link>
           <Link className="inline-flex min-h-9 items-center rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
-            to="/configuration/acquisition-profiles/new">配置数据源</Link>
+            to="/configuration/ingestion-tasks/new">配置数据源</Link>
         </div>
       }
     >
       <div className="grid gap-4">
         {error && <Alert tone="danger">{error}</Alert>}
+        <ReusableConfigurationPanel
+          tasks={rows}
+          templates={templates}
+          sources={sources}
+          bindings={bindings}
+          onChanged={() => Promise.all([reload?.(), reloadTemplates?.(), reloadSources?.(), reloadBindings?.()])}
+        />
         <Card>
           <div className="overflow-auto">
             <table className="w-full min-w-[52rem] text-left text-sm">
@@ -568,7 +626,7 @@ export function AcquisitionProfilesPage() {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {rows.map(row => (
-                  <tr key={`${row.profileId}@${row.version}`} className="hover:bg-slate-50">
+                  <tr key={`${row.taskId}@${row.version}`} className="hover:bg-slate-50">
                     <td className="px-3 py-2 font-medium text-slate-800">{row.subjectId}</td>
                     <td className="px-3 py-2 text-slate-600">{row.edgeId}</td>
                     <td className="px-3 py-2 text-slate-600">{row.name}<span className="ml-1 text-xs text-slate-400">v{row.version}</span></td>
@@ -578,13 +636,15 @@ export function AcquisitionProfilesPage() {
                     <td className="px-3 py-2">
                       <div className="flex flex-wrap gap-1">
                         <Button variant="ghost"
-                          onClick={() => navigate(`/configuration/acquisition-profiles/${encodeURIComponent(row.profileId)}?version=${row.version}`)}>
+                          onClick={() => navigate(`/configuration/ingestion-tasks/${encodeURIComponent(row.taskId)}?version=${row.version}`)}>
                           查看
                         </Button>
-                        <Button variant="ghost"
-                          onClick={() => navigate(`/configuration/acquisition-profiles/${encodeURIComponent(row.profileId)}?version=${row.version}&mode=version`)}>
-                          新版本
-                        </Button>
+                        {!row.templateId && (
+                          <Button variant="ghost"
+                            onClick={() => navigate(`/configuration/ingestion-tasks/${encodeURIComponent(row.taskId)}?version=${row.version}&mode=version`)}>
+                            新版本
+                          </Button>
+                        )}
                         {row.status !== "retired" && (
                           <Button variant="ghost" className="text-rose-700" onClick={() => retire(row)}>停用</Button>
                         )}
@@ -601,5 +661,94 @@ export function AcquisitionProfilesPage() {
         </Card>
       </div>
     </Page>
+  );
+}
+
+function ReusableConfigurationPanel({ tasks, templates, sources, bindings, onChanged }) {
+  const firstPublished = tasks.find(item => item.status === "published" && !item.templateId && !item.dataSourceId);
+  const [taskKey, setTaskKey] = useState(firstPublished ? `${firstPublished.taskId}@${firstPublished.version}` : "");
+  const selected = tasks.find(item => `${item.taskId}@${item.version}` === taskKey);
+  const [templateId, setTemplateId] = useState("");
+  const [dataSourceId, setDataSourceId] = useState("");
+  const nextTemplateVersion = Math.max(0, ...templates.filter(item => item.templateId === templateId.trim().toLowerCase()).map(item => Number(item.version) || 0)) + 1;
+  const nextDataSourceVersion = Math.max(0, ...sources.filter(item => item.dataSourceId === dataSourceId.trim().toLowerCase()).map(item => Number(item.version) || 0)) + 1;
+  const [busy, setBusy] = useState("");
+  const [message, setMessage] = useState("");
+  const sourceFile = useRef(null);
+  const bindingFile = useRef(null);
+
+  useEffect(() => {
+    if (!taskKey && firstPublished) setTaskKey(`${firstPublished.taskId}@${firstPublished.version}`);
+  }, [firstPublished, taskKey]);
+
+  async function extract() {
+    if (!selected || !templateId.trim() || !dataSourceId.trim()) {
+      setMessage("请选择已发布任务，并填写模板代码和首台数据源代码。");
+      return;
+    }
+    setBusy("extract"); setMessage("");
+    try {
+      await postJson("/api/v1/ingestion-configuration/extract-reusable", {
+        taskId: selected.taskId,
+        version: selected.version,
+        templateId,
+        dataSourceId,
+        templateVersion: nextTemplateVersion,
+        dataSourceVersion: nextDataSourceVersion,
+      });
+      setMessage("已生成并发布任务模板、首台数据源和任务绑定。现在可导出 CSV，批量增加同类设备。");
+      await onChanged();
+    } catch (requestError) {
+      setMessage(requestError.message);
+    } finally { setBusy(""); }
+  }
+
+  async function importCsv(kind, file) {
+    if (!file) return;
+    setBusy(kind); setMessage("");
+    try {
+      const body = new FormData(); body.append("file", file);
+      const endpoint = kind === "sources" ? "data-sources:import" : "bindings:import";
+      const result = await postForm(`/api/v1/ingestion-configuration/${endpoint}`, body);
+      setMessage(`已导入 ${result?.count ?? result?.data?.length ?? 0} 项；批量任务均为草稿，发布前仍需逐台真实探查。`);
+      await onChanged();
+    } catch (requestError) {
+      setMessage(requestError.message);
+    } finally { setBusy(""); }
+  }
+
+  return (
+    <Card title="批量接入同类设备" description="首台设备通过真实探查后提取版本化模板；连接实例与任务绑定可用 CSV 原子导入，避免重复维护整份点位映射。">
+      <div className="grid gap-4">
+        <div className="grid gap-3 md:grid-cols-3">
+          <div className="rounded-lg border border-slate-200 p-3"><p className="text-xs text-slate-500">已发布模板</p><strong className="text-xl">{templates.filter(item => item.status === "published").length}</strong></div>
+          <div className="rounded-lg border border-slate-200 p-3"><p className="text-xs text-slate-500">数据源实例</p><strong className="text-xl">{sources.length}</strong></div>
+          <div className="rounded-lg border border-slate-200 p-3"><p className="text-xs text-slate-500">任务绑定</p><strong className="text-xl">{bindings.length}</strong></div>
+        </div>
+        <div className="grid gap-3 lg:grid-cols-[1.4fr_1fr_1fr_auto]">
+          <Field label="已验证并发布的首台任务">
+            <Select value={taskKey} onChange={event => setTaskKey(event.target.value)}>
+              <option value="">请选择</option>
+              {tasks.filter(item => item.status === "published" && !item.templateId && !item.dataSourceId).map(item => (
+                <option key={`${item.taskId}@${item.version}`} value={`${item.taskId}@${item.version}`}>{item.name} · v{item.version}</option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="任务模板代码" hint={`将创建 v${nextTemplateVersion}`}><Input value={templateId} placeholder="press-fx3u" onChange={event => setTemplateId(event.target.value)} /></Field>
+          <Field label="首台数据源代码" hint={`将创建 v${nextDataSourceVersion}`}><Input value={dataSourceId} placeholder="press-01-source" onChange={event => setDataSourceId(event.target.value)} /></Field>
+          <Button className="self-end" disabled={busy === "extract"} onClick={extract}>{busy === "extract" ? "提取中…" : "提取复用资产"}</Button>
+        </div>
+        <div className="flex flex-wrap gap-2 border-t border-slate-100 pt-4">
+          <Button variant="ghost" onClick={() => downloadFile("/api/v1/ingestion-configuration/data-sources.csv", "data-sources.csv")}>导出数据源 CSV</Button>
+          <Button variant="ghost" onClick={() => sourceFile.current?.click()} disabled={Boolean(busy)}>导入数据源 CSV</Button>
+          <input ref={sourceFile} className="hidden" type="file" accept=".csv,text/csv" onChange={event => importCsv("sources", event.target.files?.[0])} />
+          <Button variant="ghost" onClick={() => downloadFile("/api/v1/ingestion-configuration/bindings.csv", "ingestion-task-bindings.csv")}>导出任务绑定 CSV</Button>
+          <Button variant="ghost" onClick={() => bindingFile.current?.click()} disabled={Boolean(busy)}>导入任务绑定 CSV</Button>
+          <input ref={bindingFile} className="hidden" type="file" accept=".csv,text/csv" onChange={event => importCsv("bindings", event.target.files?.[0])} />
+        </div>
+        {message && <Alert tone={message.includes("已") ? "info" : "warning"}>{message}</Alert>}
+        <p className="text-xs text-slate-500">安全边界：凭据字段只填写现场节点密钥引用；固定请求体和普通请求头会随 CSV 导出，不要写入凭据。批量导入只生成草稿，每个任务必须单独连接真实设备并通过映射校验后才能发布。</p>
+      </div>
+    </Card>
   );
 }

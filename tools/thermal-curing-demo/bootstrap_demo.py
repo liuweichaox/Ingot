@@ -94,7 +94,7 @@ def scenario_package(version: int = 1) -> dict[str, object]:
         "dataModelVersion": version,
         "analysisPlanId": PLAN_ID,
         "analysisPlanVersion": version,
-        "acquisitionProfiles": [],
+        "ingestionTasks": [],
         "qualityPlan": None,
         "contextFields": [
             {"fieldCode": "line_id", "name": "生产线", "mode": "required-for-analysis", "minimumCoverage": 1.0, "minimumFactorOverlap": 0.5},

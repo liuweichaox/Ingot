@@ -46,6 +46,7 @@ public sealed class AcquisitionProbeTaskCoordinatorTests
         var waiting = coordinator.QueueAndWaitAsync(
             Deployment("EDGE-001"),
             TimeSpan.FromSeconds(5),
+            new SourceDiscoveryQuery(),
             cancellation.Token);
         var task = coordinator.ClaimNext("EDGE-001")!;
         var result = new AcquisitionProbeResult
@@ -72,12 +73,54 @@ public sealed class AcquisitionProbeTaskCoordinatorTests
         Assert.False((await waiting).Success);
     }
 
+    [Fact]
+    public async Task CompletionMustBelongToAClaimedTaskAndTheExpectedProtocol()
+    {
+        var coordinator = new AcquisitionProbeTaskCoordinator();
+        using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        var waiting = coordinator.QueueAndWaitAsync(
+            Deployment("EDGE-001"),
+            TimeSpan.FromSeconds(5),
+            ct: cancellation.Token);
+        var queued = coordinator.ClaimNext("EDGE-001")!;
+
+        Assert.False(coordinator.Complete(new AcquisitionProbeTaskCompletion
+        {
+            TaskId = queued.TaskId,
+            EdgeId = queued.EdgeId,
+            Result = new AcquisitionProbeResult
+            {
+                Success = true,
+                MappingsValidated = true,
+                Protocol = AcquisitionProtocols.Mqtt,
+                Message = "wrong protocol",
+                TestedAt = DateTimeOffset.UtcNow
+            }
+        }));
+
+        var expected = new AcquisitionProbeResult
+        {
+            Success = true,
+            MappingsValidated = true,
+            Protocol = AcquisitionProtocols.HttpPolling,
+            Message = "ok",
+            TestedAt = DateTimeOffset.UtcNow
+        };
+        Assert.True(coordinator.Complete(new AcquisitionProbeTaskCompletion
+        {
+            TaskId = queued.TaskId,
+            EdgeId = queued.EdgeId,
+            Result = expected
+        }));
+        Assert.Same(expected, await waiting);
+    }
+
     private static AcquisitionDeployment Deployment(string edgeId)
         => new()
         {
-            Profile = new AcquisitionProfile
+            Task = new IngestionTask
             {
-                ProfileId = "profile-a",
+                TaskId = "profile-a",
                 Name = "Profile A",
                 Status = ConfigurationStatuses.Draft,
                 EdgeId = edgeId,

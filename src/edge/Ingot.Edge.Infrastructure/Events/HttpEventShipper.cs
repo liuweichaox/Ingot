@@ -128,7 +128,11 @@ public sealed class HttpEventShipper : IEventShipper
                 await _eventLog.MarkShippedAsync(result.AckSeq, ct).ConfigureAwait(false);
                 stopwatch.Stop();
                 var confirmed = pending.Count(evt => evt.Seq <= result.AckSeq);
-                _deliveryStatus.RecordSuccess(result.AckSeq, confirmed, DateTimeOffset.UtcNow);
+                _deliveryStatus.RecordSuccess(
+                    result.AckSeq,
+                    confirmed,
+                    DateTimeOffset.UtcNow,
+                    stopwatch.Elapsed.TotalMilliseconds);
                 RecordEventsShippedMetric(
                     edgeId,
                     confirmed,
@@ -164,9 +168,9 @@ public sealed class HttpEventShipper : IEventShipper
     {
         try
         {
-            var count = await _eventLog.CountPendingAsync(ct).ConfigureAwait(false);
-            _deliveryStatus.RecordBacklog(count);
-            _metrics.RecordEventOutboxBacklog(count);
+            var statistics = await _eventLog.GetPendingStatisticsAsync(ct).ConfigureAwait(false);
+            _deliveryStatus.RecordBacklog(statistics);
+            _metrics.RecordEventOutboxBacklog(statistics.Count);
         }
         catch (Exception ex)
         {

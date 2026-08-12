@@ -17,8 +17,16 @@ public sealed class HttpPollingAcquisitionOptions
     public string DeploymentCachePath { get; init; } = "Data/acquisition-deployments.json";
     public string DeviceBaseUrl { get; init; } = string.Empty;
     public string SnapshotPath { get; init; } = "/api/v1/snapshot";
+    public string Method { get; init; } = "get";
+    public string? ContentType { get; init; }
+    public string? RequestBody { get; init; }
+    public IReadOnlyDictionary<string, string> Headers { get; init; } = new Dictionary<string, string>();
+    public IReadOnlyDictionary<string, string> HeaderSecretRefs { get; init; } = new Dictionary<string, string>();
     public int PollIntervalMs { get; init; } = 1000;
     public int TimeoutMs { get; init; } = 10000;
+    public int ReconnectDelayMs { get; init; } = 5000;
+    public int SourceIdentityStaleAfterMs { get; init; } = 60_000;
+    public int MaximumFutureTimestampSkewMs { get; init; } = 300_000;
     /// <summary>
     ///     已有配置升级时，候选工作器必须在该时间内产生首个成功采样；否则停止候选并恢复旧版本。
     ///     这是 Edge 本地的切换保护参数，不属于设备采集配置版本。
@@ -29,7 +37,8 @@ public sealed class HttpPollingAcquisitionOptions
     public string SubjectId { get; init; } = string.Empty;
     public string TimestampPath { get; init; } = "timestamp";
     public string TimestampMode { get; init; } = "source";
-    public string? SequencePath { get; init; } = "sequence";
+    public string TimestampEncoding { get; init; } = "iso-8601";
+    public string? SequencePath { get; init; }
     public string SampleEventType { get; init; } = "process.sample";
     public IReadOnlyDictionary<string, string> StaticContext { get; init; }
         = new Dictionary<string, string>();
@@ -48,6 +57,13 @@ public sealed class ValueFieldMapping
     public bool Required { get; init; } = true;
     public double Scale { get; init; } = 1;
     public double Offset { get; init; }
+    public string? QualityPath { get; init; }
+    public IReadOnlyList<string> AcceptedQualityValues { get; init; } = [];
+    public double? Minimum { get; init; }
+    public double? Maximum { get; init; }
+    public string OutOfRangeBehavior { get; init; } = "reject";
+    public string MissingValueBehavior { get; init; } = "inherit";
+    public string? DefaultValue { get; init; }
     /// <summary>MQTT 多主题订阅时，该字段来自哪个订阅主题；留空表示合并快照。</summary>
     public string? Topic { get; init; }
 }

@@ -81,15 +81,144 @@ public static class MqttTopicFilter
 
         return filterLevels.Length == topicLevels.Length;
     }
+
+    /// <summary>判断两个合法过滤器是否可能命中同一条具体主题。</summary>
+    public static bool Intersects(string first, string second)
+    {
+        var left = first.Split('/');
+        var right = second.Split('/');
+        var index = 0;
+        while (index < left.Length && index < right.Length)
+        {
+            if (left[index] == "#" || right[index] == "#") return true;
+            if (left[index] != "+" && right[index] != "+" &&
+                !string.Equals(left[index], right[index], StringComparison.Ordinal))
+                return false;
+            index++;
+        }
+        if (index == left.Length && index == right.Length) return true;
+        return index == left.Length
+            ? index < right.Length && right[index] == "#"
+            : index < left.Length && left[index] == "#";
+    }
+}
+
+/// <summary>文档协议使用的 JSON 字段选择器语法与资源边界。</summary>
+public static class JsonFieldSelector
+{
+    public const int MaximumSegments = 64;
+    public const int MaximumArrayIndex = 10_000;
+
+    public static bool IsValid(string? selector, out string error)
+    {
+        error = string.Empty;
+        if (string.IsNullOrWhiteSpace(selector))
+        {
+            error = "JSON 字段路径不能为空。";
+            return false;
+        }
+        var text = selector.Trim();
+        if (text == ".") return true;
+        return text.StartsWith("/", StringComparison.Ordinal)
+            ? IsValidPointer(text, out error)
+            : IsValidDottedPath(text, out error);
+    }
+
+    private static bool IsValidPointer(string text, out string error)
+    {
+        error = string.Empty;
+        var segments = text.Split('/').Skip(1).ToArray();
+        if (segments.Length > MaximumSegments)
+        {
+            error = $"JSON Pointer 最多包含 {MaximumSegments} 个层级。";
+            return false;
+        }
+        foreach (var raw in segments)
+        {
+            for (var index = 0; index < raw.Length; index++)
+            {
+                if (raw[index] != '~') continue;
+                if (++index >= raw.Length || raw[index] is not ('0' or '1'))
+                {
+                    error = "JSON Pointer 的 ~ 转义只能是 ~0 或 ~1。";
+                    return false;
+                }
+            }
+            if (raw.Length > 0 && raw.All(char.IsDigit) &&
+                (!int.TryParse(raw, NumberStyles.None, CultureInfo.InvariantCulture, out var arrayIndex) ||
+                 arrayIndex > MaximumArrayIndex))
+            {
+                error = $"JSON 数组下标不能超过 {MaximumArrayIndex}。";
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static bool IsValidDottedPath(string text, out string error)
+    {
+        error = string.Empty;
+        var segmentCount = 0;
+        var rawSegments = text.Split('.', StringSplitOptions.None);
+        if (rawSegments.Any(static segment => segment.Length == 0))
+        {
+            error = "JSON 字段路径不能以点开头或结尾，也不能包含连续的点。";
+            return false;
+        }
+        foreach (var raw in rawSegments)
+        {
+            var cursor = 0;
+            var bracket = raw.IndexOf('[');
+            var nameLength = bracket < 0 ? raw.Length : bracket;
+            if (nameLength > 0)
+            {
+                if (raw.AsSpan(0, nameLength).Contains(']'))
+                {
+                    error = "JSON 字段路径包含不匹配的数组括号。";
+                    return false;
+                }
+                segmentCount++;
+                cursor = nameLength;
+            }
+            while (cursor < raw.Length)
+            {
+                if (raw[cursor] != '[')
+                {
+                    error = "JSON 数组下标后不能附加未分隔文本。";
+                    return false;
+                }
+                var close = raw.IndexOf(']', cursor + 1);
+                if (close < 0 || close == cursor + 1 ||
+                    !int.TryParse(raw.AsSpan(cursor + 1, close - cursor - 1),
+                        NumberStyles.None, CultureInfo.InvariantCulture, out var arrayIndex) ||
+                    arrayIndex > MaximumArrayIndex)
+                {
+                    error = $"JSON 数组下标必须是 0-{MaximumArrayIndex} 的整数。";
+                    return false;
+                }
+                segmentCount++;
+                cursor = close + 1;
+            }
+            if (nameLength == 0 && segmentCount == 0)
+            {
+                error = "JSON 字段路径缺少属性名或数组下标。";
+                return false;
+            }
+        }
+        if (segmentCount > MaximumSegments)
+        {
+            error = $"JSON 字段路径最多包含 {MaximumSegments} 个层级。";
+            return false;
+        }
+        return true;
+    }
 }
 
 /// <summary>
 ///     寄存器类协议的点位选择器解析。
 ///
-///     这些语法以前分别写在 <c>ModbusTcpAcquisitionRunner</c> 与
-///     <c>MelsecA1EAcquisitionRunner</c> 内部，平台侧无法复用，导致选择器语法错误
-///     要等到边缘节点真正连接设备时才暴露。解析移到公共契约后，平台保存配置时
-///     就能给出精确到字段的错误，边缘节点与配置界面共用同一套规则。
+///     平台保存、Edge 应用和设备探查共用同一套解析与地址边界规则，
+///     并给出精确到字段的配置错误。
 /// </summary>
 public static class AcquisitionSelectors
 {
@@ -128,7 +257,8 @@ public static class AcquisitionSelectors
         ushort Quantity,
         string ByteOrder,
         string WordOrder,
-        int? BitIndex)
+        int? BitIndex,
+        ushort? ByteLength)
     {
         /// <summary>该点位覆盖的寄存器（或线圈）数量，用于分块合并读取。</summary>
         public ushort Span => Quantity;
@@ -193,7 +323,7 @@ public static class AcquisitionSelectors
                 return false;
             }
 
-            point = new ModbusPoint(area, (ushort)address, BooleanDataType, 1, "big-endian", "high-low", null);
+            point = new ModbusPoint(area, (ushort)address, BooleanDataType, 1, "big-endian", "high-low", null, null);
             return true;
         }
 
@@ -210,6 +340,7 @@ public static class AcquisitionSelectors
         }
 
         ushort quantity;
+        ushort? sourceByteLength = null;
         var byteOrder = "big-endian";
         var wordOrder = "high-low";
         if (dataType == "string")
@@ -222,6 +353,7 @@ public static class AcquisitionSelectors
             }
 
             quantity = (ushort)((byteLength + 1) / 2);
+            sourceByteLength = byteLength;
         }
         else if (dataType == BooleanDataType)
         {
@@ -258,7 +390,13 @@ public static class AcquisitionSelectors
             }
         }
 
-        point = new ModbusPoint(area, (ushort)address, dataType, quantity, byteOrder, wordOrder, bitIndex);
+        if ((uint)address + quantity - 1 > ushort.MaxValue)
+        {
+            error = $"Modbus 点位 {selector} 的读取范围超出 0-65535 地址边界。";
+            return false;
+        }
+
+        point = new ModbusPoint(area, (ushort)address, dataType, quantity, byteOrder, wordOrder, bitIndex, sourceByteLength);
         return true;
     }
 
@@ -273,7 +411,7 @@ public static class AcquisitionSelectors
         if (mapping.SourceDataType == BooleanDataType)
             return $"{mapping.ModbusArea}:{address}:{BooleanDataType}";
         if (mapping.SourceDataType == "string")
-            return $"{mapping.ModbusArea}:{address}:string:{Math.Max(1, mapping.ModbusQuantity * 2)}";
+            return $"{mapping.ModbusArea}:{address}:string:{mapping.SourceByteLength ?? Math.Max(1, mapping.ModbusQuantity * 2)}";
         return $"{mapping.ModbusArea}:{address}:{mapping.SourceDataType}:{mapping.ByteOrder}:{mapping.WordOrder}";
     }
 
@@ -325,7 +463,8 @@ public static class AcquisitionSelectors
         string DisplayAddress,
         string DataType,
         int WordCount,
-        int? BitIndex)
+        int? BitIndex,
+        ushort? ByteLength)
     {
         /// <summary>布尔值读取位软元件时使用位单位批量读命令（0x00），其余使用字单位批量读（0x01）。</summary>
         public bool UsesBitRead => DataType == BooleanDataType && Device.IsBitDevice && BitIndex is null;
@@ -391,7 +530,7 @@ public static class AcquisitionSelectors
                 return false;
             }
 
-            point = new MelsecPoint(device, address, parts[1], BooleanDataType, 1, bitIndex);
+            point = new MelsecPoint(device, address, parts[1], BooleanDataType, 1, bitIndex, null);
             return true;
         }
 
@@ -402,6 +541,7 @@ public static class AcquisitionSelectors
         }
 
         int wordCount;
+        ushort? sourceByteLength = null;
         if (dataType == "string")
         {
             if (parts.Length < 4 ||
@@ -413,10 +553,17 @@ public static class AcquisitionSelectors
             }
 
             wordCount = (byteLength + 1) / 2;
+            sourceByteLength = byteLength;
         }
         else
         {
             wordCount = AcquisitionProtocolCapabilities.WordCountFor(dataType);
+        }
+
+        if (address > uint.MaxValue - (uint)(wordCount - 1))
+        {
+            error = $"MELSEC 点位 {selector} 的读取范围超出软元件地址边界。";
+            return false;
         }
 
         if (device.IsBitDevice && dataType != BooleanDataType)
@@ -425,7 +572,7 @@ public static class AcquisitionSelectors
             // 允许通过，界面负责显示提醒，避免工程师误以为读到的是单点状态。
         }
 
-        point = new MelsecPoint(device, address, parts[1], dataType, wordCount, null);
+        point = new MelsecPoint(device, address, parts[1], dataType, wordCount, null, sourceByteLength);
         return true;
     }
 
@@ -436,7 +583,7 @@ public static class AcquisitionSelectors
             : mapping.MelsecAddress ?? string.Empty;
         var device = mapping.MelsecDevice ?? "D";
         return mapping.SourceDataType == "string"
-            ? $"{device}:{address}:string:{Math.Max(1, mapping.ModbusQuantity * 2)}"
+            ? $"{device}:{address}:string:{mapping.SourceByteLength ?? Math.Max(1, mapping.ModbusQuantity * 2)}"
             : $"{device}:{address}:{mapping.SourceDataType}";
     }
 

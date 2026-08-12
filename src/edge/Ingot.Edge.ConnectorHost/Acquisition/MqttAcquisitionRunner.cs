@@ -13,8 +13,6 @@ namespace Ingot.Edge.ConnectorHost.Acquisition;
 ///
 ///     订阅多个主题时，每个点位可以绑定自己的来源主题，跨主题的值由
 ///     <see cref="MqttSnapshotAssembler"/> 合并成一份等价快照后再走统一的映射管线。
-///     以前所有主题共用一套映射，等价于要求每条报文都是完整快照——界面允许配多个主题，
-///     但多主题分别携带部分字段的场景实际上无法工作。
 /// </summary>
 public sealed class MqttAcquisitionRunner(
     IEventSink sink,
@@ -30,11 +28,11 @@ public sealed class MqttAcquisitionRunner(
         string normalizedSource,
         CancellationToken ct)
     {
-        var connection = deployment.Profile.Mqtt
+        var connection = deployment.Task.Mqtt
             ?? throw new InvalidOperationException("MQTT 连接配置不能为空。");
         var jsonOptions = JsonAcquisitionOptionsFactory.Create(deployment);
         var assembler = new MqttSnapshotAssembler(
-            MqttSnapshotAssembler.SlotsFor(deployment.Profile),
+            MqttSnapshotAssembler.SlotsFor(deployment.Task),
             connection.SnapshotMaxAgeSeconds);
         var factory = new MqttClientFactory();
         using var client = factory.CreateMqttClient();
@@ -42,6 +40,8 @@ public sealed class MqttAcquisitionRunner(
         string? currentSnapshotFingerprint = null;
         string? lastIncompleteReason = null;
         var lifecycle = new AcquisitionLifecycleTracker();
+        var lastMessageTicks = DateTimeOffset.UtcNow.UtcTicks;
+        var subscriptionsReady = false;
         // 消息回调可能并发进入；合并快照是共享状态，必须串行化。
         using var gate = new SemaphoreSlim(1, 1);
 
@@ -53,10 +53,15 @@ public sealed class MqttAcquisitionRunner(
             try
             {
                 var subscription = MqttSnapshotAssembler.SubscriptionFor(connection.Topics, topic);
-                using var document = JsonDocument.Parse(message.ApplicationMessage.Payload);
+                var decodedPayload = MqttPayloadDecoder.Decode(message.ApplicationMessage.Payload, connection);
+                using var document = JsonDocument.Parse(decodedPayload, AcquisitionJsonLimits.DocumentOptions);
                 var payload = MqttSnapshotAssembler.Unwrap(document.RootElement, subscription?.PayloadRoot);
                 var receivedAt = DateTimeOffset.UtcNow;
-                var carriedValue = assembler.Ingest(topic, payload, receivedAt);
+                var carriedValue = assembler.Ingest(
+                    topic,
+                    payload,
+                    receivedAt,
+                    MqttTopicVariableResolver.Resolve(subscription, topic));
                 if (!carriedValue)
                 {
                     // 只携带上下文的主题更新状态但不触发采样，
@@ -97,13 +102,11 @@ public sealed class MqttAcquisitionRunner(
                 {
                     var topicSnapshots = assembler.BuildTopicSnapshots(receivedAt);
                     var fingerprint = MqttSnapshotAssembler.Fingerprint(snapshot!, topicSnapshots);
+                    status.RecordReadSuccess(configurationKey, DateTimeOffset.UtcNow);
+                    Interlocked.Exchange(ref lastMessageTicks, receivedAt.UtcTicks);
                     if (string.Equals(fingerprint, currentSnapshotFingerprint, StringComparison.Ordinal))
                     {
-                        status.RecordSuccess(
-                            configurationKey,
-                            DateTimeOffset.UtcNow,
-                            currentProcessSpecification,
-                            incrementSample: false);
+                        status.RecordDuplicateSnapshot(configurationKey, stalled: false);
                         return;
                     }
 
@@ -114,14 +117,21 @@ public sealed class MqttAcquisitionRunner(
                         currentProcessSpecification,
                         topicSnapshots);
                     // MQTT 由设备推送，没有固定采样周期，因此不向周期跟踪器提供轮询间隔。
-                    var events = lifecycle.Track(mapped, deployment.Profile.Lifecycle, 0);
+                    var events = lifecycle.Track(mapped, deployment.Task.Lifecycle, 0);
                     await sink.EmitBatchAsync(events, ct).ConfigureAwait(false);
                     status.RecordProcessExecutionState(configurationKey, lifecycle.IsRunActive);
+                    status.RecordEmissionOutcome(
+                        configurationKey,
+                        events.Count,
+                        deployment.Task.Lifecycle is not null && events.Count == 0);
                     currentProcessSpecification = mapped.ProcessSpecificationIdentity;
                     currentSnapshotFingerprint = fingerprint;
+                    status.RecordValidSnapshot(
+                        configurationKey,
+                        DateTimeOffset.UtcNow,
+                        currentProcessSpecification,
+                        receivedAt);
                 }
-
-                status.RecordSuccess(configurationKey, DateTimeOffset.UtcNow, currentProcessSpecification);
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
@@ -138,16 +148,18 @@ public sealed class MqttAcquisitionRunner(
         var optionsBuilder = new MqttClientOptionsBuilder()
             .WithTcpServer(connection.Host, connection.Port)
             .WithClientId(string.IsNullOrWhiteSpace(connection.ClientId)
-                ? $"ingot-{deployment.Profile.EdgeId}-{deployment.Profile.ProfileId}"
+                ? $"ingot-{deployment.Task.EdgeId}-{deployment.Task.TaskId}"
                 : connection.ClientId)
             .WithProtocolVersion(connection.ProtocolVersion == "3.1.1"
                 ? MqttProtocolVersion.V311
                 : MqttProtocolVersion.V500)
             .WithKeepAlivePeriod(TimeSpan.FromSeconds(connection.KeepAliveSeconds))
-            .WithCleanSession(connection.CleanSession);
+            .WithCleanSession(connection.ResetSessionOnConnect);
 
+        var password = AcquisitionSecretReference.ResolveOptional(
+            secrets, connection.PasswordSecretRef, "MQTT 密码");
         if (!string.IsNullOrWhiteSpace(connection.Username))
-            optionsBuilder.WithCredentials(connection.Username, secrets.Resolve(connection.PasswordSecretRef));
+            optionsBuilder.WithCredentials(connection.Username, password);
         if (connection.UseTls)
         {
             optionsBuilder.WithTlsOptions(options =>
@@ -162,7 +174,8 @@ public sealed class MqttAcquisitionRunner(
                 {
                     var certificate = X509CertificateLoader.LoadPkcs12FromFile(
                         connection.ClientCertificatePath,
-                        secrets.Resolve(connection.ClientCertificatePasswordSecretRef));
+                        AcquisitionSecretReference.ResolveOptional(
+                            secrets, connection.ClientCertificatePasswordSecretRef, "MQTT 客户端证书密码"));
                     options.WithClientCertificates([certificate]);
                 }
             });
@@ -176,27 +189,74 @@ public sealed class MqttAcquisitionRunner(
                 status.RecordAttempt(configurationKey, DateTimeOffset.UtcNow);
                 if (!client.IsConnected)
                 {
-                    await client.ConnectAsync(options, ct).ConfigureAwait(false);
+                    subscriptionsReady = false;
+                    using var connectTimeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                    connectTimeout.CancelAfter(deployment.Task.Execution.TimeoutMs);
+                    try
+                    {
+                        await client.ConnectAsync(options, connectTimeout.Token).ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+                    {
+                        throw new TimeoutException(
+                            $"连接 MQTT 消息服务器 {connection.Host}:{connection.Port} 超过 " +
+                            $"{deployment.Task.Execution.TimeoutMs}ms 未完成。");
+                    }
+                    logger.LogInformation(
+                        "MQTT 采集任务已连接：Configuration={Configuration}, Broker={Host}:{Port}",
+                        configurationKey, connection.Host, connection.Port);
+                }
+                if (!subscriptionsReady)
+                {
                     foreach (var topic in connection.Topics)
                     {
                         var subscribeOptions = factory.CreateSubscribeOptionsBuilder()
                             .WithTopicFilter(filter => filter
                                 .WithTopic(topic.Topic)
-                                .WithQualityOfServiceLevel((MqttQualityOfServiceLevel)topic.Qos))
+                            .WithQualityOfServiceLevel((MqttQualityOfServiceLevel)topic.Qos))
                             .Build();
-                        await client.SubscribeAsync(subscribeOptions, ct).ConfigureAwait(false);
+                        using var subscribeTimeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                        subscribeTimeout.CancelAfter(deployment.Task.Execution.TimeoutMs);
+                        MqttClientSubscribeResult subscribeResult;
+                        try
+                        {
+                            subscribeResult = await client.SubscribeAsync(subscribeOptions, subscribeTimeout.Token)
+                                .ConfigureAwait(false);
+                        }
+                        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+                        {
+                            throw new TimeoutException(
+                                $"订阅 MQTT 主题 {topic.Topic} 超过 " +
+                                $"{deployment.Task.Execution.TimeoutMs}ms 未完成。");
+                        }
+                        MqttSubscriptionGuard.EnsureAccepted(subscribeResult, topic.Topic);
                     }
+                    subscriptionsReady = true;
                     logger.LogInformation(
-                        "MQTT 采集任务已连接：Configuration={Configuration}, Broker={Host}:{Port}, Topics={TopicCount}",
-                        configurationKey, connection.Host, connection.Port, connection.Topics.Count);
+                        "MQTT 采集任务订阅就绪：Configuration={Configuration}, Topics={TopicCount}",
+                        configurationKey, connection.Topics.Count);
                 }
                 await Task.Delay(TimeSpan.FromSeconds(1), ct).ConfigureAwait(false);
+                if (lifecycle.IsRunActive &&
+                    deployment.Task.Execution.SourceIdentityStaleAfterMs > 0 &&
+                    DateTimeOffset.UtcNow - new DateTimeOffset(
+                        Interlocked.Read(ref lastMessageTicks), TimeSpan.Zero) >=
+                    TimeSpan.FromMilliseconds(deployment.Task.Execution.SourceIdentityStaleAfterMs))
+                    status.RecordFailure(
+                        configurationKey,
+                        $"活动过程执行期间 MQTT 数据源超过 {deployment.Task.Execution.SourceIdentityStaleAfterMs}ms 没有报文。");
+            }
+            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+            {
+                status.RecordFailure(configurationKey, "MQTT 设备操作超时。");
+                logger.LogWarning("MQTT 采集任务 {Configuration} 操作超时，等待重连", configurationKey);
+                await Task.Delay(deployment.Task.Execution.ReconnectDelayMs, ct).ConfigureAwait(false);
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
                 status.RecordFailure(configurationKey, exception.Message);
                 logger.LogWarning(exception, "MQTT 采集任务 {Configuration} 连接失败，等待重连", configurationKey);
-                await Task.Delay(deployment.Profile.Execution.ReconnectDelayMs, ct).ConfigureAwait(false);
+                await Task.Delay(deployment.Task.Execution.ReconnectDelayMs, ct).ConfigureAwait(false);
             }
         }
     }

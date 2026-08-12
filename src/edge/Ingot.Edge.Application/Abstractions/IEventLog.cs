@@ -19,4 +19,13 @@ public interface IEventLog
     Task IncrementShipAttemptsAsync(long fromSeq, long toSeq, CancellationToken ct = default);
 
     Task<long> CountPendingAsync(CancellationToken ct = default);
+
+    async Task<EventLogPendingStatistics> GetPendingStatisticsAsync(CancellationToken ct = default)
+        => new(await CountPendingAsync(ct).ConfigureAwait(false), null, null, null);
 }
+
+public sealed record EventLogPendingStatistics(
+    long Count,
+    DateTimeOffset? OldestRecordedAt,
+    long? CapacityRows,
+    long? StorageBytes);

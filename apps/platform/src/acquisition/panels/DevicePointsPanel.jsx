@@ -14,6 +14,7 @@ export function DevicePointsPanel({
   probeError,
   probing,
   readOnly,
+  allowProbe = !readOnly,
   advisories,
   publishChecklist,
   onProbe,
@@ -33,14 +34,14 @@ export function DevicePointsPanel({
         description={descriptor.probeMode === PROBE_MODE.discover
           ? `由所选采集节点真实连接设备，成功后显示${descriptor.probeViewLabel}。`
           : "该协议无法枚举地址空间，验证连接只会回读下方已配置的点位。"}
-        actions={!readOnly ? (
-          <Button variant="primary" disabled={probing || Boolean(readiness)} onClick={onProbe}>
+        actions={allowProbe ? (
+          <Button variant="primary" disabled={probing || Boolean(readiness)} onClick={() => onProbe()}>
             {probing ? "读取中…" : "验证连接"}
           </Button>
         ) : undefined}
       >
         <div className="grid gap-3">
-          {readiness && !readOnly && <Alert tone="warning">{readiness}</Alert>}
+          {readiness && allowProbe && <Alert tone="warning">{readiness}</Alert>}
           {probeError && <Alert tone="danger">{probeError}</Alert>}
           {probe && (
             <Alert tone={probe.success && probe.mappingsValidated ? "success" : probe.success ? "info" : "warning"}>
@@ -69,8 +70,11 @@ export function DevicePointsPanel({
         title={descriptor.probeViewLabel}
         description={probe ? `共读取 ${probe.points?.length || 0} 个点位。` : "验证连接后显示设备返回的内容。"}
         actions={probe?.points?.length ? (
-          <Input className="max-w-[14rem]" value={search} placeholder="搜索路径或名称"
-            onChange={event => setSearch(event.target.value)} />
+          <div className="flex flex-wrap gap-2">
+            <Input className="max-w-[14rem]" value={search} placeholder="搜索路径或名称"
+              onChange={event => setSearch(event.target.value)} />
+            {allowProbe && <Button disabled={probing} onClick={() => onProbe({ search })}>从数据源筛选</Button>}
+          </div>
         ) : undefined}
       >
         {!probe && <EmptyState title="尚未读取设备" description="填好连接参数后点击「验证连接」。" />}
@@ -88,7 +92,7 @@ export function DevicePointsPanel({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {points.slice(0, 300).map(point => (
+                {points.map(point => (
                   <tr key={`${point.topic || ""}${point.path}`} className={mappedPaths.has(point.path) ? "bg-emerald-50/40" : undefined}>
                     <td className="px-3 py-2">
                       <p className="font-medium text-slate-700">{point.name}</p>
@@ -129,6 +133,17 @@ export function DevicePointsPanel({
               </tbody>
             </table>
           </div>
+        )}
+        {probe?.nextCursor && allowProbe && (
+          <div className="mt-3 flex items-center justify-between gap-3 text-xs text-slate-500">
+            <span>本次扫描 {probe.scannedPointCount || 0} 个点位，当前结果仍有下一页。</span>
+            <Button disabled={probing} onClick={() => onProbe({ search, cursor: probe.nextCursor, append: true })}>
+              继续加载
+            </Button>
+          </div>
+        )}
+        {probe?.scanLimitReached && (
+          <Alert tone="warning">数据源点位超过单次扫描上限，请使用根路径、命名空间或正则条件缩小范围。</Alert>
         )}
       </Card>
 

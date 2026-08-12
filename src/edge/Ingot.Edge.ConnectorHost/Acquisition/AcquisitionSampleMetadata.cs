@@ -61,14 +61,34 @@ public static class AcquisitionSampleMetadata
 public sealed class AcquisitionSourceDeduplicator
 {
     private string? _lastIdentity;
+    private DateTimeOffset? _lastIdentityChangedAt;
 
-    public bool ShouldEmit(ProductionEvent sample)
+    public AcquisitionDeduplicationResult Evaluate(
+        ProductionEvent sample,
+        DateTimeOffset observedAt,
+        TimeSpan staleAfter)
     {
         if (!AcquisitionSampleMetadata.TryGetSourceIdentity(sample, out var identity))
-            return true;
+            return AcquisitionDeduplicationResult.NoIdentity;
         if (string.Equals(_lastIdentity, identity, StringComparison.Ordinal))
-            return false;
+        {
+            var stale = staleAfter > TimeSpan.Zero &&
+                        _lastIdentityChangedAt.HasValue &&
+                        observedAt - _lastIdentityChangedAt.Value >= staleAfter;
+            return stale
+                ? AcquisitionDeduplicationResult.Stalled
+                : AcquisitionDeduplicationResult.Duplicate;
+        }
         _lastIdentity = identity;
-        return true;
+        _lastIdentityChangedAt = observedAt;
+        return AcquisitionDeduplicationResult.Changed;
     }
+}
+
+public enum AcquisitionDeduplicationResult
+{
+    NoIdentity,
+    Changed,
+    Duplicate,
+    Stalled
 }

@@ -14,9 +14,26 @@ public sealed class AcquisitionSampleMetadataTests
         var retry = first with { EventId = Guid.CreateVersion7().ToString() };
         var next = CreateSample(43L);
 
-        Assert.True(deduplicator.ShouldEmit(first));
-        Assert.False(deduplicator.ShouldEmit(retry));
-        Assert.True(deduplicator.ShouldEmit(next));
+        var now = DateTimeOffset.UtcNow;
+        Assert.Equal(AcquisitionDeduplicationResult.Changed,
+            deduplicator.Evaluate(first, now, TimeSpan.FromSeconds(30)));
+        Assert.Equal(AcquisitionDeduplicationResult.Duplicate,
+            deduplicator.Evaluate(retry, now.AddSeconds(10), TimeSpan.FromSeconds(30)));
+        Assert.Equal(AcquisitionDeduplicationResult.Changed,
+            deduplicator.Evaluate(next, now.AddSeconds(11), TimeSpan.FromSeconds(30)));
+    }
+
+    [Fact]
+    public void FrozenSourceIdentityBecomesStalledAfterConfiguredThreshold()
+    {
+        var deduplicator = new AcquisitionSourceDeduplicator();
+        var sample = CreateSample(42L);
+        var now = DateTimeOffset.UtcNow;
+
+        Assert.Equal(AcquisitionDeduplicationResult.Changed,
+            deduplicator.Evaluate(sample, now, TimeSpan.FromSeconds(30)));
+        Assert.Equal(AcquisitionDeduplicationResult.Stalled,
+            deduplicator.Evaluate(sample, now.AddSeconds(30), TimeSpan.FromSeconds(30)));
     }
 
     [Fact]

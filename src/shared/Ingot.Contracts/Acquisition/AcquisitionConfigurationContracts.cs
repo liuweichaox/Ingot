@@ -14,11 +14,26 @@ public static class AcquisitionProtocols
     public static bool IsSupported(string? value) => value is HttpPolling or Mqtt or OpcUa or ModbusTcp or MelsecA1E;
 }
 
-public sealed record AcquisitionProfile
+public static class AcquisitionTimestampEncodings
 {
-    public required string ProfileId { get; init; }
+    public const string Auto = "auto";
+    public const string Iso8601 = "iso-8601";
+    public const string UnixSeconds = "unix-s";
+    public const string UnixMilliseconds = "unix-ms";
+
+    public static bool IsSupported(string? value)
+        => value is Auto or Iso8601 or UnixSeconds or UnixMilliseconds;
+}
+
+public sealed record IngestionTask
+{
+    public required string TaskId { get; init; }
     public int Version { get; init; } = 1;
     public required string Name { get; init; }
+    public string? TemplateId { get; init; }
+    public int? TemplateVersion { get; init; }
+    public string? DataSourceId { get; init; }
+    public int? DataSourceVersion { get; init; }
     public string Status { get; init; } = ConfigurationStatuses.Draft;
     public required string EdgeId { get; init; }
     public string Protocol { get; init; } = AcquisitionProtocols.HttpPolling;
@@ -27,8 +42,7 @@ public sealed record AcquisitionProfile
     public required string Source { get; init; }
     public string SubjectType { get; init; } = "equipment";
     public required string SubjectId { get; init; }
-    /// <summary>HTTP 轮询连接。保留 Connection 名称以兼容已经保存的配置版本。</summary>
-    public HttpPollingConnection Connection { get; init; } = new();
+    public HttpPollingConnection HttpPolling { get; init; } = new();
     public MqttConnection? Mqtt { get; init; }
     public OpcUaConnection? OpcUa { get; init; }
     public ModbusTcpConnection? ModbusTcp { get; init; }
@@ -36,7 +50,8 @@ public sealed record AcquisitionProfile
     public AcquisitionExecutionOptions Execution { get; init; } = new();
     public string TimestampMode { get; init; } = "source";
     public string TimestampPath { get; init; } = "timestamp";
-    public string? SequencePath { get; init; } = "sequence";
+    public string TimestampEncoding { get; init; } = AcquisitionTimestampEncodings.Auto;
+    public string? SequencePath { get; init; }
     public string SampleEventType { get; init; } = "process.sample";
     public IReadOnlyDictionary<string, string> StaticContext { get; init; }
         = new Dictionary<string, string>();
@@ -51,6 +66,12 @@ public sealed record HttpPollingConnection
 {
     public string BaseUrl { get; init; } = string.Empty;
     public string SnapshotPath { get; init; } = "/api/v1/snapshot";
+    public string Method { get; init; } = "get";
+    public string? ContentType { get; init; }
+    public string? RequestBody { get; init; }
+    public IReadOnlyDictionary<string, string> Headers { get; init; } = new Dictionary<string, string>();
+    /// <summary>HTTP 头名称到 Edge 密钥库引用的映射；实际密钥不会进入平台配置。</summary>
+    public IReadOnlyDictionary<string, string> HeaderSecretRefs { get; init; } = new Dictionary<string, string>();
     /// <summary>一次读取完成后，开始下一次读取前等待的时间；不是固定采样周期。</summary>
     public int PollIntervalMs { get; init; } = 1000;
 }
@@ -65,6 +86,18 @@ public sealed record AcquisitionExecutionOptions
 
     /// <summary>连接断开后重新建立连接前的等待时间。</summary>
     public int ReconnectDelayMs { get; init; } = 5000;
+
+    /// <summary>
+    ///     配置了源序号或源时间戳时，允许同一源身份连续不变化的最长时间。
+    ///     超过该时间说明设备侧序号或时钟可能停滞；0 表示关闭停滞检测。
+    /// </summary>
+    public int SourceIdentityStaleAfterMs { get; init; } = 60_000;
+
+    /// <summary>
+    ///     设备源时间戳允许领先 Edge 接收时间的上限。超过该值通常表示设备时钟、编码或点位配置错误；
+    ///     0 表示关闭该检查。
+    /// </summary>
+    public int MaximumFutureTimestampSkewMs { get; init; } = 300_000;
 }
 
 public sealed record MqttConnection
@@ -79,12 +112,11 @@ public sealed record MqttConnection
     public string? CaCertificatePath { get; init; }
     public string? ClientCertificatePath { get; init; }
     public string? ClientCertificatePasswordSecretRef { get; init; }
-    /// <summary>
-    /// MQTT 3.1.1 的 Clean Session；在 MQTT 5.0 中等价作为 Clean Start 使用。
-    /// 字段名为兼容已保存配置保留，产品界面按所选协议版本显示正确术语。
-    /// </summary>
-    public bool CleanSession { get; init; } = true;
+    /// <summary>连接时是否丢弃服务端保存的旧会话状态。</summary>
+    public bool ResetSessionOnConnect { get; init; } = true;
     public int KeepAliveSeconds { get; init; } = 30;
+    public string PayloadCompression { get; init; } = "none";
+    public string PayloadEncoding { get; init; } = "utf-8";
 
     /// <summary>
     ///     跨主题合并快照时，单个值允许的最大陈旧时间（秒）。0 表示不限制。
@@ -98,8 +130,20 @@ public sealed record MqttConnection
 
 public sealed record MqttTopicSubscription
 {
+    /// <summary>
+    ///     可选的稳定通道代码。任务模板可在映射的 Topic 字段引用此代码，实例化时再解析为
+    ///     该数据源的真实主题过滤器，使同一模板可复用于主题前缀不同的多台设备。
+    /// </summary>
+    public string? Channel { get; init; }
     public required string Topic { get; init; }
     public int Qos { get; init; }
+
+    /// <summary>
+    ///     可选的主题层级变量。键是变量名，值是从 0 开始的主题层级索引。
+    ///     变量以 <c>$topic.&lt;name&gt;</c> 写入原始快照，可用于上下文和数据映射。
+    /// </summary>
+    public IReadOnlyDictionary<string, int> TopicVariables { get; init; }
+        = new Dictionary<string, int>();
 
     /// <summary>
     ///     该主题报文中承载数据的 JSON 子对象路径。留空表示报文根即数据对象。
@@ -121,6 +165,8 @@ public sealed record OpcUaConnection
     public bool TrustServerCertificate { get; init; }
     public int PublishingIntervalMs { get; init; } = 1000;
     public int SamplingIntervalMs { get; init; } = 1000;
+    public int MaximumValueAgeMs { get; init; } = 30_000;
+    public int MaximumTimestampSkewMs { get; init; } = 10_000;
 }
 
 public sealed record ModbusTcpConnection
@@ -135,6 +181,74 @@ public sealed record ModbusTcpConnection
     public string AddressBase { get; init; } = "zero-based";
     /// <summary>一次寄存器读取完成后，开始下一次读取前等待的时间；不是固定采样周期。</summary>
     public int PollIntervalMs { get; init; } = 1000;
+
+    /// <summary>
+    ///     相邻点位之间允许合并读取的最大地址间隙。0 表示只合并严格连续的点位，
+    ///     避免跨越设备未实现的寄存器区导致整批读取失败。
+    /// </summary>
+    public int MaxMergeGap { get; init; } = 8;
+}
+
+/// <summary>
+///     可复用的数据摄取任务定义。模板保存源协议、标准数据模型、映射和执行策略，
+///     不保存现场节点、真实数据源身份、网络地址或凭据。
+/// </summary>
+public sealed record IngestionTaskTemplate
+{
+    public required string TemplateId { get; init; }
+    public int Version { get; init; } = 1;
+    public required string Name { get; init; }
+    public string Status { get; init; } = ConfigurationStatuses.Draft;
+    public required string Protocol { get; init; }
+    public required string DataModelId { get; init; }
+    public int DataModelVersion { get; init; } = 1;
+    public AcquisitionExecutionOptions Execution { get; init; } = new();
+    public string TimestampMode { get; init; } = "edge-received";
+    public string TimestampPath { get; init; } = string.Empty;
+    public string TimestampEncoding { get; init; } = AcquisitionTimestampEncodings.Auto;
+    public string? SequencePath { get; init; }
+    public string SampleEventType { get; init; } = "process.sample";
+    public IReadOnlyDictionary<string, string> StaticContext { get; init; }
+        = new Dictionary<string, string>();
+    public IReadOnlyList<AcquisitionContextMapping> ContextMappings { get; init; } = [];
+    public IReadOnlyList<AcquisitionValueMapping> ValueMappings { get; init; } = [];
+    public AcquisitionProcessSpecificationMapping? ProcessSpecification { get; init; }
+    public AcquisitionLifecycleMapping? Lifecycle { get; init; }
+    public DateTimeOffset UpdatedAt { get; init; }
+}
+
+/// <summary>一个可独立连接和探查的真实数据源，只保存实例身份、位置和连接参数。</summary>
+public sealed record DataSourceInstance
+{
+    public required string DataSourceId { get; init; }
+    public int Version { get; init; } = 1;
+    public required string Name { get; init; }
+    public string Status { get; init; } = ConfigurationStatuses.Draft;
+    public required string EdgeId { get; init; }
+    public required string Protocol { get; init; }
+    public required string SourceKey { get; init; }
+    public string SubjectType { get; init; } = "equipment";
+    public required string SubjectId { get; init; }
+    public HttpPollingConnection? HttpPolling { get; init; }
+    public MqttConnection? Mqtt { get; init; }
+    public OpcUaConnection? OpcUa { get; init; }
+    public ModbusTcpConnection? ModbusTcp { get; init; }
+    public McA1EConnection? MelsecA1E { get; init; }
+    public DateTimeOffset UpdatedAt { get; init; }
+}
+
+/// <summary>把一份模板与一个数据源绑定为可发布、可版本化的数据摄取任务。</summary>
+public sealed record IngestionTaskBinding
+{
+    public required string TaskId { get; init; }
+    public int Version { get; init; } = 1;
+    public required string Name { get; init; }
+    public string Status { get; init; } = ConfigurationStatuses.Draft;
+    public required string TemplateId { get; init; }
+    public int TemplateVersion { get; init; } = 1;
+    public required string DataSourceId { get; init; }
+    public int DataSourceVersion { get; init; } = 1;
+    public DateTimeOffset UpdatedAt { get; init; }
 }
 
 /// <summary>
@@ -181,8 +295,21 @@ public sealed record AcquisitionValueMapping
     public required string SourcePath { get; init; }
     public bool Required { get; init; } = true;
     public string SourceDataType { get; init; } = "auto";
+    /// <summary>
+    ///     源值实际占用的字节数。用于长度不能仅由寄存器数量表达的类型（当前为字符串），
+    ///     避免奇数字节长度在结构化配置往返时被补齐为偶数。
+    /// </summary>
+    public ushort? SourceByteLength { get; init; }
+    public string? SourceUnit { get; init; }
     public double Scale { get; init; } = 1;
     public double Offset { get; init; }
+    public string? QualityPath { get; init; }
+    public IReadOnlyList<string> AcceptedQualityValues { get; init; } = [];
+    public double? Minimum { get; init; }
+    public double? Maximum { get; init; }
+    public string OutOfRangeBehavior { get; init; } = "reject";
+    public string MissingValueBehavior { get; init; } = "inherit";
+    public string? DefaultValue { get; init; }
 
     // ---- Modbus 结构化寻址 ----
     public string? ModbusArea { get; init; }
@@ -254,14 +381,33 @@ public sealed record AcquisitionLifecycleMapping
 /// <summary>平台下发给采集执行器的不可变配置及其数据语义。</summary>
 public sealed record AcquisitionDeployment
 {
-    public required AcquisitionProfile Profile { get; init; }
+    public required IngestionTask Task { get; init; }
     public required ProcessDataModel DataModel { get; init; }
+}
+
+public sealed record SourceDiscoveryQuery
+{
+    public string? Cursor { get; init; }
+    public int PageSize { get; init; } = 200;
+    public string? Search { get; init; }
+    public string? RootPath { get; init; }
+    public IReadOnlyList<string> Namespaces { get; init; } = [];
+    public IReadOnlyList<string> Kinds { get; init; } = [];
+    public string? PathPattern { get; init; }
+    public string? NamePattern { get; init; }
+}
+
+public sealed record IngestionTaskProbeRequest
+{
+    public required IngestionTask Task { get; init; }
+    public SourceDiscoveryQuery Discovery { get; init; } = new();
 }
 
 /// <summary>平台要求指定 Edge 对一份尚未发布的采集配置执行一次真实设备探查。</summary>
 public sealed record AcquisitionProbeRequest
 {
     public required AcquisitionDeployment Deployment { get; init; }
+    public SourceDiscoveryQuery Discovery { get; init; } = new();
 }
 
 /// <summary>由 Edge 主动拉取的一次临时设备探查任务。</summary>
@@ -270,6 +416,7 @@ public sealed record AcquisitionProbeTask
     public required string TaskId { get; init; }
     public required string EdgeId { get; init; }
     public required AcquisitionDeployment Deployment { get; init; }
+    public SourceDiscoveryQuery Discovery { get; init; } = new();
     public DateTimeOffset CreatedAt { get; init; }
     public DateTimeOffset ExpiresAt { get; init; }
 }
@@ -290,7 +437,11 @@ public sealed record AcquisitionProbeResult
     public required string Message { get; init; }
     public DateTimeOffset TestedAt { get; init; }
     public IReadOnlyList<AcquisitionProbePoint> Points { get; init; } = [];
+    public string? NextCursor { get; init; }
+    public int ScannedPointCount { get; init; }
+    public bool ScanLimitReached { get; init; }
     public IReadOnlyList<AcquisitionMappingPreview> Mappings { get; init; } = [];
+    public IReadOnlyList<string> Warnings { get; init; } = [];
 }
 
 /// <summary>设备暴露的一个可选择点位。Path 是写入映射的稳定设备路径或寄存器选择器。</summary>
@@ -301,6 +452,9 @@ public sealed record AcquisitionProbePoint
     public required string Kind { get; init; }
     public required string DataType { get; init; }
     public string? RawValue { get; init; }
+    public string? Unit { get; init; }
+    public string? Quality { get; init; }
+    public DateTimeOffset? SourceTimestamp { get; init; }
 
     /// <summary>MQTT 探查时，该点位来自哪个主题。</summary>
     public string? Topic { get; init; }
@@ -312,9 +466,12 @@ public sealed record AcquisitionMappingPreview
     public required string DataItemCode { get; init; }
     public required string SourcePath { get; init; }
     public bool Found { get; init; }
+    /// <summary>原始值缺失时也可能因默认值或可选省略策略而通过映射策略。</summary>
+    public bool Accepted { get; init; }
     public string? RawValue { get; init; }
     public string? ConvertedValue { get; init; }
     public string? DataType { get; init; }
-    public string? Unit { get; init; }
+    public string? SourceUnit { get; init; }
+    public string? TargetUnit { get; init; }
     public string? Error { get; init; }
 }

@@ -83,7 +83,7 @@ public sealed class AcquisitionProtocolTests
             "edge/EDGE-001/connector/modbus-tcp",
             null,
             DateTimeOffset.Parse("2026-07-23T08:00:00Z"));
-        var firstEvents = tracker.Track(first, deployment.Profile.Lifecycle, 1000);
+        var firstEvents = tracker.Track(first, deployment.Task.Lifecycle, 1000);
         Assert.Equal(
             ["process.execution.started", "process.specification.applied", "process.stage_changed", "process.sample"],
             firstEvents.Select(item => item.EventType));
@@ -102,7 +102,7 @@ public sealed class AcquisitionProtocolTests
             },
             ProcessSpecificationApplied = null
         };
-        var continuedEvents = tracker.Track(nextSample, deployment.Profile.Lifecycle, 1000);
+        var continuedEvents = tracker.Track(nextSample, deployment.Task.Lifecycle, 1000);
         Assert.Equal(["process.sample"], continuedEvents.Select(item => item.EventType));
         Assert.Equal(generatedExecutionId, continuedEvents[0].ExecutionId);
     }
@@ -111,14 +111,14 @@ public sealed class AcquisitionProtocolTests
     public void LifecycleTracker_ExplicitInactiveSnapshot_ClosesRunWithoutCreatingPlaceholderProcessExecution()
     {
         var deployment = Deployment();
-        var lifecycle = deployment.Profile.Lifecycle! with
+        var lifecycle = deployment.Task.Lifecycle! with
         {
             ActiveContextKey = "run_active",
             ActiveValue = "true"
         };
         var tracker = new AcquisitionLifecycleTracker();
         var first = ProtocolAcquisitionSnapshotMapper.Map(
-            deployment with { Profile = deployment.Profile with { Lifecycle = lifecycle } },
+            deployment with { Task = deployment.Task with { Lifecycle = lifecycle } },
             new Dictionary<string, object?>
             {
                 ["holding-register:0"] = 25d,
@@ -211,7 +211,7 @@ public sealed class AcquisitionProtocolTests
         };
         deployment = deployment with
         {
-            Profile = deployment.Profile with
+            Task = deployment.Task with
             {
                 ValueMappings = [mapping],
                 ProcessSpecification = null,
@@ -259,27 +259,98 @@ public sealed class AcquisitionProtocolTests
     {
         var signed = MelsecA1EAcquisitionRunner.Decode(
             [0x81, 0x00, 0x85, 0xFF],
-            "int16",
-            1);
+            MelsecPoint("int16", 1));
         var floating = MelsecA1EAcquisitionRunner.Decode(
             [0x81, 0x00, 0x00, 0x00, 0x48, 0x42],
-            "float32",
-            2);
+            MelsecPoint("float32", 2));
         var text = MelsecA1EAcquisitionRunner.Decode(
             [0x81, 0x00, 0x4C, 0x45, 0x4E, 0x53, 0x00, 0x00],
-            "string",
-            3);
+            MelsecPoint("string", 3));
 
         Assert.Equal((short)-123, signed);
         Assert.Equal(50f, floating);
         Assert.Equal("LENS", text);
     }
 
+    [Fact]
+    public void MelsecA1EErrorHeaderIsRejectedBeforeWaitingForPayload()
+    {
+        var error = Assert.Throws<InvalidOperationException>(() =>
+            MelsecA1EAcquisitionRunner.EnsureBinarySuccess([0x81, 0x5B]));
+
+        Assert.Contains("0x5B", error.Message);
+    }
+
+    [Fact]
+    public void ModbusReadBatchDoesNotCrossConfiguredAddressGap()
+    {
+        var selectors = new Dictionary<string, AcquisitionValueMapping>
+        {
+            ["holding-register:0:uint16"] = new()
+            {
+                DataItemCode = "a",
+                SourcePath = "holding-register:0:uint16",
+                ModbusArea = "holding-register",
+                ModbusAddress = 0,
+                SourceDataType = "uint16"
+            },
+            ["holding-register:120:uint16"] = new()
+            {
+                DataItemCode = "b",
+                SourcePath = "holding-register:120:uint16",
+                ModbusArea = "holding-register",
+                ModbusAddress = 120,
+                SourceDataType = "uint16"
+            }
+        }.OrderBy(item => item.Value.ModbusAddress).ToArray();
+
+        var batch = ModbusTcpAcquisitionRunner.BuildNextReadBatch(selectors, 125, maxMergeGap: 8);
+
+        Assert.Single(batch);
+        Assert.Equal("holding-register:0:uint16", batch[0].Key);
+    }
+
+    [Fact]
+    public void TimestampParserDistinguishesUnixSecondsFromMilliseconds()
+    {
+        const long unixSeconds = 1_800_000_000;
+
+        var timestamp = AcquisitionTimestampParser.Parse(
+            unixSeconds,
+            AcquisitionTimestampEncodings.UnixSeconds,
+            "D:200:int32",
+            maximumFutureSkewMs: 0);
+
+        Assert.Equal(DateTimeOffset.FromUnixTimeSeconds(unixSeconds), timestamp);
+    }
+
+    [Fact]
+    public void TimestampParserRejectsImplausibleFutureDeviceTime()
+    {
+        var receivedAt = DateTimeOffset.Parse("2026-08-12T00:00:00Z");
+        var raw = receivedAt.AddMinutes(10).ToUnixTimeMilliseconds();
+
+        var error = Assert.Throws<InvalidDataException>(() => AcquisitionTimestampParser.Parse(
+            raw,
+            AcquisitionTimestampEncodings.UnixMilliseconds,
+            "clock",
+            receivedAt,
+            maximumFutureSkewMs: 300_000));
+
+        Assert.Contains("超前", error.Message);
+    }
+
+    private static AcquisitionSelectors.MelsecPoint MelsecPoint(string dataType, int wordCount)
+    {
+        Assert.True(AcquisitionSelectors.TryGetMelsecDevice("D", out var device));
+        return new AcquisitionSelectors.MelsecPoint(device!, 0, "0", dataType, wordCount, null, null);
+    }
+
     private static AcquisitionDeployment Deployment()
     {
-        var profile = new AcquisitionProfile
+        var profile = new IngestionTask
         {
-            ProfileId = "optical",
+            TaskId = "optical",
             Name = "Optical",
             EdgeId = "EDGE-001",
             Protocol = AcquisitionProtocols.ModbusTcp,
@@ -319,7 +390,7 @@ public sealed class AcquisitionProtocolTests
         };
         return new AcquisitionDeployment
         {
-            Profile = profile,
+            Task = profile,
             DataModel = new ProcessDataModel
             {
                 ModelId = "optical",

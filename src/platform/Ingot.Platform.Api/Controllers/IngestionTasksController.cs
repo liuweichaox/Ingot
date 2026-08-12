@@ -1,7 +1,5 @@
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using Ingot.Contracts.Acquisition;
-using Ingot.Contracts.Events;
 using Ingot.Contracts.ProcessConfiguration;
 using Ingot.Platform.Api.Agents;
 using Ingot.Platform.Api.Events;
@@ -13,9 +11,9 @@ using Microsoft.AspNetCore.Mvc;
 namespace Ingot.Platform.Api.Controllers;
 
 [ApiController]
-[Route("api/v1/acquisition-profiles")]
-public sealed partial class AcquisitionProfilesController(
-    IAcquisitionProfileStore store,
+[Route("api/v1/ingestion-tasks")]
+public sealed class IngestionTasksController(
+    IIngestionTaskStore store,
     IProcessConfigurationStore processStore,
     PlatformUserResolver userResolver,
     EdgeTokenValidator edgeTokenValidator,
@@ -25,12 +23,12 @@ public sealed partial class AcquisitionProfilesController(
     public async Task<IActionResult> List(CancellationToken ct)
         => DeniedConfigurationRead() ?? Ok(new { data = await store.ListAsync(ct).ConfigureAwait(false) });
 
-    [HttpGet("{profileId}/{version:int}")]
-    public async Task<IActionResult> Get(string profileId, int version, CancellationToken ct)
+    [HttpGet("{taskId}/{version:int}")]
+    public async Task<IActionResult> Get(string taskId, int version, CancellationToken ct)
     {
         var denied = DeniedConfigurationRead();
         if (denied is not null) return denied;
-        var value = await store.GetAsync(NormalizeCode(profileId), version, ct).ConfigureAwait(false);
+        var value = await store.GetAsync(NormalizeCode(taskId), version, ct).ConfigureAwait(false);
         return value is null ? NotFound() : Ok(value);
     }
 
@@ -44,40 +42,52 @@ public sealed partial class AcquisitionProfilesController(
         if (!edgeTokenValidator.IsAuthorized(normalizedEdgeId, Request.Headers.Authorization.ToString()))
             return Unauthorized(new { error = "边缘节点认证失败。" });
 
-        var profiles = await store.ListPublishedForEdgeAsync(normalizedEdgeId, ct).ConfigureAwait(false);
+        var tasks = await store.ListPublishedForEdgeAsync(normalizedEdgeId, ct).ConfigureAwait(false);
         var deployments = new List<AcquisitionDeployment>();
-        foreach (var profile in profiles)
+        var invalidReferences = new List<string>();
+        foreach (var task in tasks)
         {
-            var model = await processStore.GetDataModelAsync(profile.DataModelId, profile.DataModelVersion, ct)
+            var model = await processStore.GetDataModelAsync(task.DataModelId, task.DataModelVersion, ct)
                 .ConfigureAwait(false);
             if (model is not null && model.Status == ConfigurationStatuses.Published)
-                deployments.Add(new AcquisitionDeployment { Profile = profile, DataModel = model });
+                deployments.Add(new AcquisitionDeployment { Task = task, DataModel = model });
+            else
+                invalidReferences.Add($"{task.TaskId}@{task.Version} → {task.DataModelId}@{task.DataModelVersion}");
         }
+        if (invalidReferences.Count > 0)
+            return Conflict(new
+            {
+                error = "已发布数据摄取任务引用了不存在或未发布的数据模型；为避免误停采，本次不下发配置。",
+                references = invalidReferences
+            });
         return Ok(new { data = deployments });
     }
 
     [HttpPost]
-    public async Task<IActionResult> Upsert([FromBody] AcquisitionProfile? request, CancellationToken ct)
+    public async Task<IActionResult> Upsert([FromBody] IngestionTask? request, CancellationToken ct)
     {
         var denied = DeniedConfigurationWrite();
         if (denied is not null) return denied;
         if (!TryNormalize(request, out var normalized, out var error))
             return BadRequest(new { error });
+        var protocolNormalized = normalized!;
 
         var model = await processStore.GetDataModelAsync(
-            normalized!.DataModelId,
-            normalized.DataModelVersion,
+            protocolNormalized.DataModelId,
+            protocolNormalized.DataModelVersion,
             ct).ConfigureAwait(false);
         if (model is null)
             return BadRequest(new { error = "引用的工艺数据模型版本不存在。" });
-        if (!ValidateMappings(normalized, model, out error))
+        if (!TryNormalize(protocolNormalized, model, out var modelNormalized, out error))
             return BadRequest(new { error });
+        normalized = modelNormalized!;
         if (normalized.Status == ConfigurationStatuses.Published && model.Status != ConfigurationStatuses.Published)
             return BadRequest(new { error = "发布采集配置前，引用的工艺数据模型必须已经发布。" });
         if (normalized.Status == ConfigurationStatuses.Published)
         {
             var probe = await ProbeEdgeAsync(
-                new AcquisitionDeployment { Profile = normalized, DataModel = model },
+                new AcquisitionDeployment { Task = normalized, DataModel = model },
+                null,
                 ct).ConfigureAwait(false);
             if (!probe.Success)
                 return StatusCode(probe.StatusCode, new { error = probe.Error, validation = probe.Result });
@@ -89,7 +99,7 @@ public sealed partial class AcquisitionProfilesController(
                 });
         }
 
-        var existing = await store.GetAsync(normalized.ProfileId, normalized.Version, ct).ConfigureAwait(false);
+        var existing = await store.GetAsync(normalized.TaskId, normalized.Version, ct).ConfigureAwait(false);
         if (existing is not null && existing.Status != ConfigurationStatuses.Draft)
         {
             if (existing.Status == ConfigurationStatuses.Published && normalized.Status == ConfigurationStatuses.Retired)
@@ -102,18 +112,26 @@ public sealed partial class AcquisitionProfilesController(
 
         // 发布走单事务：退役旧 published 版本 + 写入新版本原子完成，
         // 消除读-改-写循环在并发发布下残留两个 published 版本的竞态。
-        return normalized.Status == ConfigurationStatuses.Published
-            ? Ok(await store.PublishExclusiveAsync(normalized, ct).ConfigureAwait(false))
-            : Ok(await store.UpsertAsync(normalized, ct).ConfigureAwait(false));
+        try
+        {
+            return normalized.Status == ConfigurationStatuses.Published
+                ? Ok(await store.PublishExclusiveAsync(normalized, ct).ConfigureAwait(false))
+                : Ok(await store.UpsertAsync(normalized, ct).ConfigureAwait(false));
+        }
+        catch (InvalidOperationException exception)
+        {
+            return Conflict(new { error = exception.Message });
+        }
     }
 
     [HttpPost("probe")]
-    public async Task<IActionResult> Probe([FromBody] AcquisitionProfile? request, CancellationToken ct)
+    public async Task<IActionResult> Probe([FromBody] IngestionTaskProbeRequest? requestBody, CancellationToken ct)
     {
         var denied = DeniedConfigurationWrite();
         if (denied is not null) return denied;
-        if (request is null)
+        if (requestBody?.Task is null)
             return BadRequest(new { error = "采集配置不能为空。" });
+        var request = requestBody.Task;
         var model = await processStore.GetDataModelAsync(
             NormalizeCode(request.DataModelId),
             request.DataModelVersion,
@@ -126,7 +144,7 @@ public sealed partial class AcquisitionProfilesController(
             request.Protocol is AcquisitionProtocols.HttpPolling or AcquisitionProtocols.Mqtt or AcquisitionProtocols.OpcUa &&
             request.ValueMappings.All(item => string.IsNullOrWhiteSpace(item.DataItemCode) ||
                                               string.IsNullOrWhiteSpace(item.SourcePath));
-        var probeRequest = needsDiscoveryPlaceholder
+        var candidateRequest = needsDiscoveryPlaceholder
             ? request with
             {
                 ValueMappings =
@@ -140,14 +158,16 @@ public sealed partial class AcquisitionProfilesController(
                 ]
             }
             : request;
-        if (!TryNormalize(probeRequest, out var normalized, out var error))
+        if (!TryNormalize(candidateRequest, out var normalized, out var error))
             return BadRequest(new { error });
 
-        if (!ValidateMappings(normalized!, model, out error))
+        if (!TryNormalize(normalized!, model, out var modelNormalized, out error))
             return BadRequest(new { error });
+        normalized = modelNormalized;
 
         var probe = await ProbeEdgeAsync(
-            new AcquisitionDeployment { Profile = normalized!, DataModel = model },
+            new AcquisitionDeployment { Task = normalized!, DataModel = model },
+            requestBody.Discovery,
             ct).ConfigureAwait(false);
         if (!probe.Success)
             return StatusCode(probe.StatusCode, new { error = probe.Error });
@@ -163,17 +183,19 @@ public sealed partial class AcquisitionProfilesController(
 
     private async Task<EdgeProbeResponse> ProbeEdgeAsync(
         AcquisitionDeployment deployment,
+        SourceDiscoveryQuery? discovery,
         CancellationToken cancellationToken)
     {
         try
         {
             var timeout = TimeSpan.FromMilliseconds(Math.Clamp(
-                deployment.Profile.Execution.TimeoutMs + 15_000,
+                deployment.Task.Execution.TimeoutMs + 15_000,
                 15_000,
                 120_000));
             var result = await probeTasks.QueueAndWaitAsync(
                 deployment,
                 timeout,
+                discovery ?? new SourceDiscoveryQuery(),
                 cancellationToken).ConfigureAwait(false);
             return EdgeProbeResponse.Succeeded(result);
         }
@@ -229,100 +251,48 @@ public sealed partial class AcquisitionProfilesController(
             => new(false, statusCode, error, null);
     }
 
-    [HttpDelete("{profileId}/{version:int}")]
-    public async Task<IActionResult> Delete(string profileId, int version, CancellationToken ct)
+    [HttpDelete("{taskId}/{version:int}")]
+    public async Task<IActionResult> Delete(string taskId, int version, CancellationToken ct)
     {
         var denied = DeniedConfigurationWrite();
         if (denied is not null) return denied;
-        var existing = await store.GetAsync(NormalizeCode(profileId), version, ct).ConfigureAwait(false);
+        var existing = await store.GetAsync(NormalizeCode(taskId), version, ct).ConfigureAwait(false);
         if (existing is null) return NotFound();
         if (existing.Status != ConfigurationStatuses.Draft)
             return Conflict(new { error = "只有草稿采集配置可以删除。" });
-        return await store.DeleteAsync(existing.ProfileId, version, ct).ConfigureAwait(false)
+        return await store.DeleteAsync(existing.TaskId, version, ct).ConfigureAwait(false)
             ? NoContent()
             : NotFound();
     }
 
     /// <summary>
-    ///     校验与规范化已经迁移到 <see cref="AcquisitionProfileValidator"/>（Ingot.Contracts）。
+    ///     校验与规范化已经迁移到 <see cref="IngestionTaskValidator"/>（Ingot.Contracts）。
     ///
-    ///     原因：这套规则以前只住在本控制器内部，边缘节点从本地缓存恢复配置时会完全绕过它，
-    ///     MELSEC 选择器语法也因此没有任何服务端校验。移到公共契约后，平台、边缘节点
-    ///     和配置界面共用同一份判断，并且由协议能力矩阵裁决"这个字段对该协议是否真的生效"。
+    ///     平台、边缘节点和配置界面共用同一份判断，并由协议能力矩阵裁决
+    ///     每个字段是否适用于当前协议。
     /// </summary>
     private static bool TryNormalize(
-        AcquisitionProfile? value,
-        out AcquisitionProfile? normalized,
+        IngestionTask? value,
+        out IngestionTask? normalized,
         out string error)
     {
-        var valid = AcquisitionProfileValidator.TryValidate(value, null, out normalized, out var errors);
+        var valid = IngestionTaskValidator.TryValidate(value, null, out normalized, out var errors);
         error = valid ? string.Empty : string.Join("；", errors.Select(static item => item.ToString()));
         return valid;
     }
 
-    private static bool ValidateMappings(AcquisitionProfile profile, ProcessDataModel model, out string error)
+    private static bool TryNormalize(
+        IngestionTask value,
+        ProcessDataModel model,
+        out IngestionTask? normalized,
+        out string error)
     {
-        var dataItems = model.Acquisition.DataItems.ToDictionary(item => item.Code, StringComparer.Ordinal);
-        var unknown = profile.ValueMappings.FirstOrDefault(item => !dataItems.ContainsKey(item.DataItemCode));
-        if (unknown is not null) return Fail($"数据项未在工艺数据模型中定义：{unknown.DataItemCode}。", out error);
-        if (profile.Status == ConfigurationStatuses.Published)
-        {
-            var missing = dataItems.Values.FirstOrDefault(item => !item.Nullable &&
-                profile.ValueMappings.All(mapping => mapping.DataItemCode != item.Code));
-            if (missing is not null) return Fail($"缺少必填数据项映射：{missing.Code}。", out error);
-        }
-        if (profile.ProcessSpecification is not null)
-        {
-            if (string.IsNullOrWhiteSpace(profile.ProcessSpecification.IdPath) ||
-                string.IsNullOrWhiteSpace(profile.ProcessSpecification.VersionPath) ||
-                string.IsNullOrWhiteSpace(profile.ProcessSpecification.ParametersPath))
-                return Fail("启用工艺规范采集后，工艺规范编号、版本和参数路径不能为空。", out error);
-            if (profile.ProcessSpecification.ParameterMappings.Any(item =>
-                    !CodePattern().IsMatch(item.DataItemCode) || string.IsNullOrWhiteSpace(item.SourcePath)) ||
-                profile.ProcessSpecification.ParameterMappings.Select(item => item.DataItemCode)
-                    .Distinct(StringComparer.Ordinal).Count() != profile.ProcessSpecification.ParameterMappings.Count)
-                return Fail("控制参数映射无效或重复。", out error);
-            var definitions = model.ControlParameters.ToDictionary(item => item.Code, StringComparer.Ordinal);
-            var unknownParameter = profile.ProcessSpecification.ParameterMappings.FirstOrDefault(item => !definitions.ContainsKey(item.DataItemCode));
-            if (unknownParameter is not null)
-                return Fail($"控制参数未在工艺数据模型中定义：{unknownParameter.DataItemCode}。", out error);
-        }
-        if (profile.Lifecycle is not null)
-        {
-            var lifecycle = profile.Lifecycle;
-            if (lifecycle.Mode != ProcessExecutionKinds.Discrete ||
-                !EventTypePattern().IsMatch(lifecycle.StartedEventType) ||
-                !EventTypePattern().IsMatch(lifecycle.CompletedEventType) ||
-                !EventTypePattern().IsMatch(lifecycle.StepChangedEventType))
-            {
-                return Fail("过程执行边界配置无效。", out error);
-            }
-            if (string.IsNullOrWhiteSpace(lifecycle.ActiveContextKey))
-            {
-                return Fail("过程执行边界必须配置生产状态上下文映射，由 Edge 自动生成执行标识。", out error);
-            }
-            if (!string.IsNullOrWhiteSpace(lifecycle.ActiveContextKey) &&
-                (string.IsNullOrWhiteSpace(lifecycle.ActiveValue) ||
-                 profile.ContextMappings.All(item =>
-                     item.ContextKey != lifecycle.ActiveContextKey)))
-            {
-                return Fail(
-                    $"过程执行边界缺少运行激活状态上下文映射：{lifecycle.ActiveContextKey}。",
-                    out error);
-            }
-        }
-        error = string.Empty;
-        return true;
+        var valid = IngestionTaskValidator.TryValidate(value, model, out normalized, out var errors);
+        error = valid ? string.Empty : string.Join("；", errors.Select(static item => item.ToString()));
+        return valid;
     }
 
     private static bool SamePayload<T>(T left, T right)
         => JsonSerializer.Serialize(left) == JsonSerializer.Serialize(right);
     private static string NormalizeCode(string? value) => value?.Trim().ToLowerInvariant() ?? string.Empty;
-    private static bool Fail(string message, out string error) { error = message; return false; }
-
-    [GeneratedRegex("^[a-z0-9][a-z0-9._-]{0,127}$", RegexOptions.CultureInvariant)]
-    private static partial Regex CodePattern();
-
-    [GeneratedRegex("^[a-z][a-z0-9]*(?:\\.[a-z][a-z0-9_]*)+$", RegexOptions.CultureInvariant)]
-    private static partial Regex EventTypePattern();
 }

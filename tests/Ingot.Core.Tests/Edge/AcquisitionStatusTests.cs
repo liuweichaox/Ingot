@@ -17,7 +17,9 @@ public sealed class AcquisitionStatusTests
 
         var now = DateTimeOffset.UtcNow;
         status.RecordAttempt("furnace-a@1", now);
-        status.RecordSuccess("furnace-a@1", now, "processSpecification-a@1");
+        status.RecordReadSuccess("furnace-a@1", now, 12);
+        status.RecordValidSnapshot("furnace-a@1", now, "processSpecification-a@1", now);
+        status.RecordEmissionOutcome("furnace-a@1", 2, inactive: false);
         status.RecordFailure("furnace-b@2", "connection refused");
 
         var snapshot = status.Get();
@@ -25,7 +27,9 @@ public sealed class AcquisitionStatusTests
         Assert.Equal("degraded", snapshot.State);
         Assert.Equal(2, snapshot.Tasks.Count);
         Assert.Equal("running", snapshot.Tasks.Single(item => item.ConfigurationKey == "furnace-a@1").State);
-        Assert.Equal(1, snapshot.SamplesCollected);
+        Assert.Equal(1, snapshot.ReadSuccessCount);
+        Assert.Equal(1, snapshot.ValidSnapshotCount);
+        Assert.Equal(2, snapshot.EmittedEventCount);
         Assert.Equal("connection refused", snapshot.Tasks.Single(item => item.ConfigurationKey == "furnace-b@2").LastError);
     }
 
@@ -72,7 +76,7 @@ public sealed class AcquisitionStatusTests
         Assert.False(status.AreDesiredDeploymentsApplied());
 
         var appliedAt = DateTimeOffset.UtcNow;
-        status.RecordSuccess("furnace-a@2", appliedAt, "processSpecification-a@1");
+        status.RecordValidSnapshot("furnace-a@2", appliedAt, "processSpecification-a@1");
 
         var applied = Assert.Single(status.Get().Deployments);
         Assert.Equal(AcquisitionApplicationStates.Applied, applied.State);
@@ -91,7 +95,7 @@ public sealed class AcquisitionStatusTests
         status.SetEnabled(true);
         status.SetDesiredDeployments([first], AcquisitionConfigurationSources.Platform);
         status.RegisterTask("furnace-a@1", first);
-        status.RecordSuccess("furnace-a@1", DateTimeOffset.UtcNow, null);
+        status.RecordValidSnapshot("furnace-a@1", DateTimeOffset.UtcNow, null);
 
         status.SetDesiredDeployments([second], AcquisitionConfigurationSources.Platform);
         status.RecordApplicationState(
@@ -141,12 +145,43 @@ public sealed class AcquisitionStatusTests
         Assert.Equal(3, snapshot.StaleValueRejectionCount);
     }
 
+    [Fact]
+    public async Task ReadSuccessWithoutValidSnapshot_ShouldNotPassStartupHealth()
+    {
+        var status = new AcquisitionStatus();
+        status.RegisterTask("furnace-a@1");
+        status.RecordReadSuccess("furnace-a@1", DateTimeOffset.UtcNow);
+
+        Assert.False(await status.WaitForFirstSuccessAsync(
+            "furnace-a@1",
+            TimeSpan.FromMilliseconds(10),
+            CancellationToken.None));
+        Assert.Null(Assert.Single(status.Get().Tasks).LastValidSnapshotAt);
+    }
+
+    [Fact]
+    public void StalledSourceIdentity_ShouldDegradeWithoutAdvancingValidSnapshot()
+    {
+        var status = new AcquisitionStatus();
+        status.SetEnabled(true);
+        status.RegisterTask("furnace-a@1");
+        status.RecordValidSnapshot("furnace-a@1", DateTimeOffset.UtcNow.AddMinutes(-2), null);
+
+        status.RecordDuplicateSnapshot("furnace-a@1", stalled: true, "source clock stalled");
+
+        var task = Assert.Single(status.Get().Tasks);
+        Assert.Equal("degraded", task.State);
+        Assert.Equal(1, task.DuplicateSuppressionCount);
+        Assert.Equal(1, task.SourceIdentityStallCount);
+        Assert.Equal("source clock stalled", task.LastError);
+    }
+
     private static AcquisitionDeployment Deployment(int version)
         => new()
         {
-            Profile = new AcquisitionProfile
+            Task = new IngestionTask
             {
-                ProfileId = "furnace-a",
+                TaskId = "furnace-a",
                 Version = version,
                 Name = "Furnace A",
                 Status = ConfigurationStatuses.Published,

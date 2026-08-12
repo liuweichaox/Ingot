@@ -13,7 +13,7 @@ namespace Ingot.Platform.Api.Controllers;
 [Route("api/v1/scenario-packages")]
 public sealed class ScenarioPackagesController(
     IProcessConfigurationStore store,
-    IAcquisitionProfileStore acquisitionProfiles,
+    IIngestionTaskStore ingestionTasks,
     IInspectionMasterDataStore inspections,
     PlatformUserResolver userResolver) : PlatformConfigurationControllerBase(userResolver)
 {
@@ -89,15 +89,15 @@ public sealed class ScenarioPackagesController(
         if (plan.DataModelId != model.ModelId || plan.DataModelVersion != model.Version)
             return "分析方案与工艺配置引用的工艺数据模型版本不一致。";
 
-        foreach (var reference in package.AcquisitionProfiles)
+        foreach (var reference in package.IngestionTasks)
         {
-            var profile = await acquisitionProfiles.GetAsync(reference.Id, reference.Version, ct).ConfigureAwait(false);
-            if (profile is null)
-                return $"引用的采集配置不存在：{reference.Id} v{reference.Version}。";
-            if (profile.DataModelId != model.ModelId || profile.DataModelVersion != model.Version)
-                return $"采集配置 {reference.Id} v{reference.Version} 使用了不同的工艺数据模型。";
-            if (package.Status == ConfigurationStatuses.Published && profile.Status != ConfigurationStatuses.Published)
-                return $"发布工艺配置前，采集配置 {reference.Id} v{reference.Version} 必须已经发布。";
+            var task = await ingestionTasks.GetAsync(reference.Id, reference.Version, ct).ConfigureAwait(false);
+            if (task is null)
+                return $"引用的数据摄取任务不存在：{reference.Id} v{reference.Version}。";
+            if (task.DataModelId != model.ModelId || task.DataModelVersion != model.Version)
+                return $"数据摄取任务 {reference.Id} v{reference.Version} 使用了不同的工艺数据模型。";
+            if (package.Status == ConfigurationStatuses.Published && task.Status != ConfigurationStatuses.Published)
+                return $"发布工艺配置前，数据摄取任务 {reference.Id} v{reference.Version} 必须已经发布。";
         }
 
         if (package.QualityPlan is not null)

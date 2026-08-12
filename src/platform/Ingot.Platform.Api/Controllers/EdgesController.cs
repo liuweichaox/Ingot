@@ -33,7 +33,8 @@ public class EdgesController(EdgeRegistry registry, EdgeTokenValidator edgeToken
     {
         if (!edgeTokenValidator.IsAuthorized(request.EdgeId, Request.Headers.Authorization.ToString()))
             return Unauthorized(new { error = "边缘节点认证失败。" });
-        var now = request.Timestamp == default ? DateTimeOffset.UtcNow : request.Timestamp.ToUniversalTime();
+        // 在线状态与历史排序以中心接收时间为准，避免现场时钟漂移把节点永久显示在未来或过去。
+        var now = DateTimeOffset.UtcNow;
         var state = registry.Heartbeat(
             request.EdgeId,
             request.HostBaseUrl,
@@ -51,4 +52,8 @@ public class EdgesController(EdgeRegistry registry, EdgeTokenValidator edgeToken
             state.Delivery
         });
     }
+
+    [HttpGet("{edgeId}/status-history")]
+    public IActionResult StatusHistory(string edgeId, [FromQuery] int limit = 288)
+        => Ok(new { data = registry.ListStatusHistory(edgeId, limit) });
 }

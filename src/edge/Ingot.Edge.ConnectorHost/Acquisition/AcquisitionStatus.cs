@@ -21,7 +21,7 @@ public sealed class AcquisitionStatus
         lock (_gate)
         {
             var tasks = _tasks.Values.OrderBy(static item => item.ConfigurationKey, StringComparer.Ordinal).ToArray();
-            var deployments = _deployments.Values.OrderBy(static item => item.ProfileId, StringComparer.Ordinal).ToArray();
+            var deployments = _deployments.Values.OrderBy(static item => item.TaskId, StringComparer.Ordinal).ToArray();
             var state = !_enabled
                 ? "disabled"
                 : _configurationError is not null ||
@@ -42,11 +42,17 @@ public sealed class AcquisitionStatus
                 _desiredConfigurationSetHash,
                 ComputeAppliedSetHash(deployments),
                 tasks.Select(static item => item.LastAttemptAt).Max(),
-                tasks.Select(static item => item.LastSuccessAt).Max(),
-                tasks.Sum(static item => item.SamplesCollected),
-                tasks.OrderByDescending(static item => item.LastSuccessAt)
+                tasks.Select(static item => item.LastReadSuccessAt).Max(),
+                tasks.Select(static item => item.LastValidSnapshotAt).Max(),
+                tasks.Sum(static item => item.ReadSuccessCount),
+                tasks.Sum(static item => item.ValidSnapshotCount),
+                tasks.Sum(static item => item.EmittedEventCount),
+                tasks.Sum(static item => item.DuplicateSuppressionCount),
+                tasks.Sum(static item => item.InactiveSnapshotCount),
+                tasks.Sum(static item => item.SourceIdentityStallCount),
+                tasks.OrderByDescending(static item => item.LastReadSuccessAt)
                     .Select(static item => item.LastReadDurationMs).FirstOrDefault(),
-                tasks.OrderByDescending(static item => item.LastSuccessAt)
+                tasks.OrderByDescending(static item => item.LastReadSuccessAt)
                     .Select(static item => item.ObservedIntervalMs).FirstOrDefault(),
                 tasks.Select(static item => item.ActiveProcessSpecification).FirstOrDefault(static value => value is not null),
                 _configurationError ??
@@ -82,26 +88,26 @@ public sealed class AcquisitionStatus
         {
             _configurationSource = configurationSource;
             _desiredConfigurationSetHash = AcquisitionDeploymentFingerprint.ComputeSet(deployments);
-            var activeProfileIds = deployments.Select(static item => item.Profile.ProfileId)
+            var activeTaskIds = deployments.Select(static item => item.Task.TaskId)
                 .ToHashSet(StringComparer.Ordinal);
-            foreach (var removed in _deployments.Keys.Where(item => !activeProfileIds.Contains(item)).ToArray())
+            foreach (var removed in _deployments.Keys.Where(item => !activeTaskIds.Contains(item)).ToArray())
                 _deployments.Remove(removed);
 
             foreach (var deployment in deployments)
             {
-                var profile = deployment.Profile;
+                var task = deployment.Task;
                 var hash = AcquisitionDeploymentFingerprint.Compute(deployment);
-                if (_deployments.TryGetValue(profile.ProfileId, out var existing))
+                if (_deployments.TryGetValue(task.TaskId, out var existing))
                 {
-                    _deployments[profile.ProfileId] = existing with
+                    _deployments[task.TaskId] = existing with
                     {
-                        DesiredVersion = profile.Version,
+                        DesiredVersion = task.Version,
                         DesiredConfigurationHash = hash,
-                        DesiredAt = existing.DesiredVersion == profile.Version &&
+                        DesiredAt = existing.DesiredVersion == task.Version &&
                                     string.Equals(existing.DesiredConfigurationHash, hash, StringComparison.Ordinal)
                             ? existing.DesiredAt
                             : now,
-                        State = existing.AppliedVersion == profile.Version &&
+                        State = existing.AppliedVersion == task.Version &&
                                 string.Equals(existing.AppliedConfigurationHash, hash, StringComparison.Ordinal)
                             ? AcquisitionApplicationStates.Applied
                             : AcquisitionApplicationStates.Pending,
@@ -110,9 +116,9 @@ public sealed class AcquisitionStatus
                 }
                 else
                 {
-                    _deployments[profile.ProfileId] = new AcquisitionDeploymentApplicationStatus(
-                        profile.ProfileId,
-                        profile.Version,
+                    _deployments[task.TaskId] = new AcquisitionDeploymentApplicationStatus(
+                        task.TaskId,
+                        task.Version,
                         hash,
                         null,
                         null,
@@ -125,12 +131,12 @@ public sealed class AcquisitionStatus
         }
     }
 
-    public void RecordApplicationState(string profileId, string state, string? error = null)
+    public void RecordApplicationState(string taskId, string state, string? error = null)
     {
         lock (_gate)
         {
-            if (_deployments.TryGetValue(profileId, out var deployment))
-                _deployments[profileId] = deployment with
+            if (_deployments.TryGetValue(taskId, out var deployment))
+                _deployments[taskId] = deployment with
                 {
                     State = state,
                     LastError = string.IsNullOrWhiteSpace(error) ? null : error.Trim()
@@ -170,7 +176,7 @@ public sealed class AcquisitionStatus
         Task<DateTimeOffset> signal;
         lock (_gate)
         {
-            if (_tasks.TryGetValue(configurationKey, out var task) && task.LastSuccessAt.HasValue)
+            if (_tasks.TryGetValue(configurationKey, out var task) && task.LastValidSnapshotAt.HasValue)
                 return true;
             if (!_firstSuccessSignals.TryGetValue(configurationKey, out var source))
                 return false;
@@ -227,11 +233,9 @@ public sealed class AcquisitionStatus
                     StringComparison.Ordinal));
     }
 
-    public void RecordSuccess(
+    public void RecordReadSuccess(
         string configurationKey,
         DateTimeOffset timestamp,
-        string? processSpecification,
-        bool incrementSample = true,
         double? readDurationMs = null)
     {
         lock (_gate)
@@ -240,13 +244,32 @@ public sealed class AcquisitionStatus
                 return;
             _tasks[configurationKey] = task with
             {
-                State = "running",
-                LastSuccessAt = timestamp,
-                SamplesCollected = task.SamplesCollected + (incrementSample ? 1 : 0),
+                LastReadSuccessAt = timestamp,
+                ReadSuccessCount = task.ReadSuccessCount + 1,
                 LastReadDurationMs = readDurationMs ?? task.LastReadDurationMs,
-                ObservedIntervalMs = task.LastSuccessAt.HasValue
-                    ? (timestamp - task.LastSuccessAt.Value).TotalMilliseconds
-                    : task.ObservedIntervalMs,
+                ObservedIntervalMs = task.LastReadSuccessAt.HasValue
+                    ? (timestamp - task.LastReadSuccessAt.Value).TotalMilliseconds
+                    : task.ObservedIntervalMs
+            };
+        }
+    }
+
+    public void RecordValidSnapshot(
+        string configurationKey,
+        DateTimeOffset timestamp,
+        string? processSpecification,
+        DateTimeOffset? sourceIdentityChangedAt = null)
+    {
+        lock (_gate)
+        {
+            if (!_tasks.TryGetValue(configurationKey, out var task))
+                return;
+            _tasks[configurationKey] = task with
+            {
+                State = "running",
+                LastValidSnapshotAt = timestamp,
+                ValidSnapshotCount = task.ValidSnapshotCount + 1,
+                LastSourceIdentityChangeAt = sourceIdentityChangedAt ?? task.LastSourceIdentityChangeAt,
                 ActiveProcessSpecification = processSpecification,
                 LastError = null
             };
@@ -254,11 +277,11 @@ public sealed class AcquisitionStatus
                 signal.TrySetResult(timestamp);
 
             if (_taskIdentities.TryGetValue(configurationKey, out var identity) &&
-                _deployments.TryGetValue(identity.ProfileId, out var deployment))
+                _deployments.TryGetValue(identity.TaskId, out var deployment))
             {
                 var converged = deployment.DesiredVersion == identity.Version &&
                                 string.Equals(deployment.DesiredConfigurationHash, identity.Hash, StringComparison.Ordinal);
-                _deployments[identity.ProfileId] = deployment with
+                _deployments[identity.TaskId] = deployment with
                 {
                     AppliedVersion = identity.Version,
                     AppliedConfigurationHash = identity.Hash,
@@ -275,6 +298,41 @@ public sealed class AcquisitionStatus
         }
     }
 
+    public void RecordDuplicateSnapshot(
+        string configurationKey,
+        bool stalled,
+        string? error = null)
+    {
+        lock (_gate)
+        {
+            if (!_tasks.TryGetValue(configurationKey, out var task))
+                return;
+            _tasks[configurationKey] = task with
+            {
+                State = stalled ? "degraded" : "running",
+                DuplicateSuppressionCount = task.DuplicateSuppressionCount + 1,
+                SourceIdentityStallCount = task.SourceIdentityStallCount + (stalled ? 1 : 0),
+                LastError = stalled
+                    ? string.IsNullOrWhiteSpace(error) ? "设备源序号或源时间戳停止变化。" : error.Trim()
+                    : null
+            };
+        }
+    }
+
+    public void RecordEmissionOutcome(string configurationKey, int emittedEventCount, bool inactive)
+    {
+        lock (_gate)
+        {
+            if (!_tasks.TryGetValue(configurationKey, out var task))
+                return;
+            _tasks[configurationKey] = task with
+            {
+                EmittedEventCount = task.EmittedEventCount + Math.Max(0, emittedEventCount),
+                InactiveSnapshotCount = task.InactiveSnapshotCount + (inactive ? 1 : 0)
+            };
+        }
+    }
+
     public void RecordFailure(string configurationKey, string error)
     {
         lock (_gate)
@@ -282,10 +340,10 @@ public sealed class AcquisitionStatus
             if (_tasks.TryGetValue(configurationKey, out var task))
                 _tasks[configurationKey] = task with { State = "degraded", LastError = error };
             if (_taskIdentities.TryGetValue(configurationKey, out var identity) &&
-                _deployments.TryGetValue(identity.ProfileId, out var deployment) &&
+                _deployments.TryGetValue(identity.TaskId, out var deployment) &&
                 deployment.AppliedVersion != identity.Version)
             {
-                _deployments[identity.ProfileId] = deployment with
+                _deployments[identity.TaskId] = deployment with
                 {
                     State = deployment.AppliedVersion.HasValue
                         ? AcquisitionApplicationStates.Rollback
@@ -325,7 +383,14 @@ public sealed class AcquisitionStatus
                 DateTimeOffset.UtcNow,
                 null,
                 null,
+                null,
                 0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                null,
                 null,
                 null,
                 null,
@@ -337,8 +402,8 @@ public sealed class AcquisitionStatus
         if (deployment is not null)
         {
             _taskIdentities[configurationKey] = new TaskIdentity(
-                deployment.Profile.ProfileId,
-                deployment.Profile.Version,
+                deployment.Task.TaskId,
+                deployment.Task.Version,
                 AcquisitionDeploymentFingerprint.Compute(deployment));
         }
     }
@@ -348,7 +413,7 @@ public sealed class AcquisitionStatus
     {
         var applied = deployments
             .Where(static item => item.AppliedVersion.HasValue && item.AppliedConfigurationHash is not null)
-            .Select(static item => $"{item.ProfileId}@{item.AppliedVersion}:{item.AppliedConfigurationHash}")
+            .Select(static item => $"{item.TaskId}@{item.AppliedVersion}:{item.AppliedConfigurationHash}")
             .OrderBy(static item => item, StringComparer.Ordinal)
             .ToArray();
         if (applied.Length == 0)
@@ -357,5 +422,5 @@ public sealed class AcquisitionStatus
             System.Text.Encoding.UTF8.GetBytes(string.Join('\n', applied))));
     }
 
-    private sealed record TaskIdentity(string ProfileId, int Version, string Hash);
+    private sealed record TaskIdentity(string TaskId, int Version, string Hash);
 }

@@ -1,10 +1,6 @@
 // 采集协议描述符注册表。
 //
-// 以前 5 个协议的差异散落在 RegistryBusinessEditor 的 5 处条件分支里
-// （changeProtocol、configurationError、ConnectionFields、MappingRows、acquisitionPayload），
-// 新增一个驱动要同时改 5 个地方，而且哪些字段对哪个协议真正生效只存在于人的记忆里。
-//
-// 现在每个协议是一份声明式描述符：连接字段、寻址方式、数据类型、能力开关、校验与提示
+// 每个协议是一份声明式描述符：连接字段、寻址方式、数据类型、能力开关、校验与提示
 // 都在同一个对象里。界面按描述符渲染，校验按描述符执行。
 //
 // 能力开关（capabilities）与后端 AcquisitionProtocolCapabilities 一一对应，
@@ -28,7 +24,7 @@ const REGISTER_TYPES = [
   "int64", "uint64", "float64", "string", "boolean",
 ];
 
-const DOCUMENT_TYPES = ["auto", ...REGISTER_TYPES];
+const DOCUMENT_TYPES = ["auto"];
 
 export const MELSEC_DEVICES = [
   { code: "D", bit: false, radix: 10, description: "数据寄存器" },
@@ -92,7 +88,7 @@ export const registerWordCount = wordCount;
 const httpPolling = {
   id: "http-polling",
   label: "HTTP 轮询",
-  section: "connection",
+  section: "httpPolling",
   addressing: ADDRESSING.jsonPath,
   probeMode: PROBE_MODE.discover,
   summary: "设备或网关以 HTTP 提供一份 JSON 快照，采集节点按间隔读取。",
@@ -110,10 +106,13 @@ const httpPolling = {
     bitAddressing: false,
   },
   constraints: [
-    "当前驱动使用 GET 读取，不支持自定义请求头、请求体或 HTTP 鉴权。",
+    "固定请求头可直接配置；敏感请求头必须引用现场节点密钥库，不会保存在平台配置中。",
     "一次请求必须返回包含全部必需字段的完整快照。",
   ],
-  defaults: () => ({ baseUrl: "", snapshotPath: "/api/v1/snapshot", pollIntervalMs: 1000 }),
+  defaults: () => ({
+    baseUrl: "", snapshotPath: "/api/v1/snapshot", pollIntervalMs: 1000,
+    method: "get", contentType: "application/json", requestBody: "", headersText: "", headerSecretRefsText: "",
+  }),
   fields: [
     { name: "baseUrl", label: "服务地址", type: "text", placeholder: "http://192.168.1.10",
       hint: "设备或网关提供 HTTP 服务的根地址。" },
@@ -121,18 +120,34 @@ const httpPolling = {
       hint: "采集节点向该路径发起 GET 请求。" },
     { name: "pollIntervalMs", label: "轮询间隔（ms）", type: "number", min: 1,
       hint: "一次请求完成后等待多久再发起下一次；不是固定采样周期。" },
+    { name: "method", label: "请求方法", type: "select", options: [["get", "GET"], ["post", "POST"]] },
+    { name: "contentType", label: "请求体类型", type: "text", when: connection => connection.method === "post" },
+    { name: "requestBody", label: "请求体", type: "textarea", when: connection => connection.method === "post" },
+    { name: "headersText", label: "固定请求头", type: "textarea", hint: "每行 Name: Value；敏感值请使用密钥请求头。" },
+    { name: "headerSecretRefsText", label: "密钥请求头", type: "textarea", hint: "每行 Name: secret-ref，值从 Edge 密钥库解析。" },
   ],
   validateConnection(connection) {
     const errors = {};
-    if (!/^https?:\/\/\S+$/.test((connection.baseUrl || "").trim()))
+    const baseUrl = (connection.baseUrl || "").trim();
+    if (!/^https?:\/\/\S+$/.test(baseUrl))
       errors.baseUrl = "必须是 http:// 或 https:// 开头的绝对地址。";
-    if (!(connection.snapshotPath || "").trim()) errors.snapshotPath = "数据路径不能为空。";
+    else {
+      try {
+        const parsed = new URL(baseUrl);
+        if (parsed.username || parsed.password || parsed.search || parsed.hash)
+          errors.baseUrl = "基础地址不能包含凭据、查询参数或片段。";
+      } catch { errors.baseUrl = "设备地址格式无效。"; }
+    }
+    const snapshotPath = (connection.snapshotPath || "").trim();
+    if (!snapshotPath) errors.snapshotPath = "数据路径不能为空。";
+    else if (/^(?:[a-z][a-z0-9+.-]*:)?\/\//i.test(snapshotPath) || snapshotPath.includes("\n") || snapshotPath.includes("\r"))
+      errors.snapshotPath = "必须填写相对于设备基础地址的安全路径。";
     if (!(Number(connection.pollIntervalMs) >= 1)) errors.pollIntervalMs = "必须大于 0。";
     return errors;
   },
   validatePoint: (row) => (row.sourcePath || "").trim() ? {} : { sourcePath: "字段路径不能为空。" },
   probeReadiness(form) {
-    const connection = form.connection || {};
+    const connection = form.httpPolling || {};
     return /^https?:\/\/\S+$/.test((connection.baseUrl || "").trim()) && (connection.snapshotPath || "").trim()
       ? "" : "请填写有效的设备 HTTP 地址和数据路径。";
   },
@@ -152,7 +167,7 @@ const mqtt = {
     sourceTimestamp: true,
     sequencePath: true,
     parameterObjectPath: true,
-    connectTimeout: false,
+    connectTimeout: true,
     reconnectDelay: true,
     perTopicMapping: true,
     registerByteOrder: false,
@@ -161,12 +176,14 @@ const mqtt = {
   constraints: [
     "订阅多个主题时，请为每个点位指定来源主题；未指定的点位按任意主题的报文解析。",
     "跨主题的值会合并成一份快照，只有全部必需点位都收到过报文后才会产生采样。",
+    "订阅过滤器不得重叠；同一报文只能归属一个报文根和稳定通道。",
   ],
   defaults: () => ({
     host: "", port: 1883, protocolVersion: "5.0", clientId: "", username: "", passwordSecretRef: "",
     useTls: false, caCertificatePath: "", clientCertificatePath: "", clientCertificatePasswordSecretRef: "",
-    cleanSession: true, keepAliveSeconds: 30, snapshotMaxAgeSeconds: 0,
-    topics: [{ topic: "", qos: 0, payloadRoot: "" }],
+    resetSessionOnConnect: true, keepAliveSeconds: 30, snapshotMaxAgeSeconds: 0,
+    payloadCompression: "none", payloadEncoding: "utf-8",
+    topics: [{ channel: "", topic: "", qos: 0, payloadRoot: "", topicVariables: "" }],
   }),
   fields: [
     { name: "host", label: "消息服务器", type: "text", placeholder: "192.168.1.20" },
@@ -176,8 +193,12 @@ const mqtt = {
     { name: "clientId", label: "客户端编号", type: "text", hint: "留空时由采集节点生成唯一编号。" },
     { name: "keepAliveSeconds", label: "保活时间（秒）", type: "number", min: 1 },
     { name: "snapshotMaxAgeSeconds", label: "值的最大陈旧时间（秒）", type: "number", min: 0,
-      hint: "跨主题合并时，超过该时间未更新的值视为缺失。0 表示不限制；订阅多个主题时建议设置。" },
-    { name: "cleanSession", label: form => form.protocolVersion === "5.0" ? "重新开始会话（Clean Start）" : "清理旧会话（Clean Session）",
+      hint: "跨主题合并时，超过该时间未更新的值视为缺失；订阅多个主题时必须大于 0。" },
+    { name: "payloadCompression", label: "报文压缩", type: "select",
+      options: [["none", "无"], ["gzip", "GZip"], ["deflate", "Deflate"], ["brotli", "Brotli"]] },
+    { name: "payloadEncoding", label: "字符编码", type: "select",
+      options: [["utf-8", "UTF-8"], ["gbk", "GBK"], ["gb18030", "GB 18030"], ["big5", "Big5"]] },
+    { name: "resetSessionOnConnect", label: form => form.protocolVersion === "5.0" ? "重新开始会话（Clean Start）" : "清理旧会话（Clean Session）",
       type: "checkbox" },
     { name: "username", label: "用户名", type: "text", group: "认证" },
     { name: "passwordSecretRef", label: "密码凭据", type: "text", group: "认证",
@@ -196,12 +217,15 @@ const mqtt = {
     const port = Number(connection.port);
     if (!(port >= 1 && port <= 65535)) errors.port = "端口必须在 1-65535 之间。";
     if (!(Number(connection.keepAliveSeconds) >= 1)) errors.keepAliveSeconds = "保活时间必须大于 0 秒。";
-    if (connection.useTls && !(connection.caCertificatePath || "").trim() && !(connection.clientCertificatePath || "").trim())
-      errors.caCertificatePath = "启用 TLS 时至少需要一个证书路径。";
+    if (!(connection.username || "").trim() && (connection.passwordSecretRef || "").trim())
+      errors.passwordSecretRef = "配置密码凭据时必须同时填写用户名。";
     if (Number(connection.snapshotMaxAgeSeconds) < 0) errors.snapshotMaxAgeSeconds = "不能为负数。";
     const topics = connection.topics || [];
+    if (topics.length > 1 && Number(connection.snapshotMaxAgeSeconds) <= 0)
+      errors.snapshotMaxAgeSeconds = "订阅多个主题时必须大于 0。";
     if (!topics.some(item => (item.topic || "").trim())) errors.topics = "至少需要一个订阅主题。";
     const seen = new Set();
+    const channels = new Set();
     topics.forEach((item, index) => {
       const topic = (item.topic || "").trim();
       if (!topic) return;
@@ -209,7 +233,24 @@ const mqtt = {
       if (message) errors[`topics[${index}].topic`] = message;
       else if (seen.has(topic)) errors[`topics[${index}].topic`] = "订阅主题不能重复。";
       seen.add(topic);
+      const channel = (item.channel || "").trim().toLowerCase();
+      if (channel && !/^[a-z0-9][a-z0-9._-]{0,127}$/.test(channel))
+        errors[`topics[${index}].channel`] = "通道代码格式无效。";
+      else if (channel && channels.has(channel)) errors[`topics[${index}].channel`] = "通道代码不能重复。";
+      if (channel) channels.add(channel);
+      (item.topicVariables || "").split(",").map(value => value.trim()).filter(Boolean).forEach(variable => {
+        if (!/^[a-z0-9][a-z0-9._-]{0,127}:\d+$/.test(variable))
+          errors[`topics[${index}].topicVariables`] = "主题变量格式应为 name:层级，例如 equipment:1。";
+        else if (Number(variable.slice(variable.lastIndexOf(":") + 1)) >= topic.split("/").length)
+          errors[`topics[${index}].topicVariables`] = "主题变量的层级索引超出过滤器范围。";
+      });
     });
+    topics.forEach((item, left) => topics.slice(left + 1).forEach((candidate, offset) => {
+      const first = (item.topic || "").trim();
+      const second = (candidate.topic || "").trim();
+      if (!mqttTopicError(first) && !mqttTopicError(second) && mqttTopicFiltersIntersect(first, second))
+        errors[`topics[${left + offset + 1}].topic`] = `与订阅过滤器 ${first} 会命中同一报文。`;
+    }));
     return errors;
   },
   validatePoint: (row) => (row.sourcePath || "").trim() ? {} : { sourcePath: "字段路径不能为空。" },
@@ -263,6 +304,19 @@ export function mqttTopicError(topic) {
   return "";
 }
 
+export function mqttTopicFiltersIntersect(first, second) {
+  const left = first.split("/");
+  const right = second.split("/");
+  let index = 0;
+  while (index < left.length && index < right.length) {
+    if (left[index] === "#" || right[index] === "#") return true;
+    if (left[index] !== "+" && right[index] !== "+" && left[index] !== right[index]) return false;
+    index += 1;
+  }
+  if (index === left.length && index === right.length) return true;
+  return index === left.length ? right[index] === "#" : left[index] === "#";
+}
+
 const opcUa = {
   id: "opc-ua",
   label: "OPC UA",
@@ -274,7 +328,8 @@ const opcUa = {
   probeViewLabel: "节点浏览器",
   dataTypes: DOCUMENT_TYPES,
   capabilities: {
-    sourceTimestamp: false,
+    sourceTimestamp: true,
+    intrinsicSourceTimestamp: true,
     sequencePath: false,
     parameterObjectPath: false,
     connectTimeout: true,
@@ -286,11 +341,13 @@ const opcUa = {
   constraints: [
     "采样时间固定使用服务器提供的 SourceTimestamp，不能改用采集节点接收时间。",
     "NodeId 中的命名空间序号由服务器分配；服务器重排命名空间后需要重新验证配置。",
+    "当前驱动订阅变量节点，不采集 OPC UA 事件和报警。",
   ],
   defaults: () => ({
     endpointUrl: "", securityMode: "none", securityPolicy: "None", authenticationType: "anonymous",
     username: "", passwordSecretRef: "", clientCertificatePath: "", clientCertificatePasswordSecretRef: "",
     trustServerCertificate: false, publishingIntervalMs: 1000, samplingIntervalMs: 1000,
+    maximumValueAgeMs: 30000, maximumTimestampSkewMs: 10000,
   }),
   fields: [
     { name: "endpointUrl", label: "服务器端点", type: "text", placeholder: "opc.tcp://192.168.1.10:4840",
@@ -299,6 +356,10 @@ const opcUa = {
       hint: "服务器向客户端发送订阅通知的节奏。" },
     { name: "samplingIntervalMs", label: "采样间隔（ms）", type: "number", min: 1,
       hint: "服务器检查变量变化的最快节奏，也是本驱动唯一的节流手段。" },
+    { name: "maximumValueAgeMs", label: "必需点位最大值龄（ms）", type: "number", min: 1,
+      hint: "超过该时长未更新的必需点位不会进入快照。" },
+    { name: "maximumTimestampSkewMs", label: "快照最大时间跨度（ms）", type: "number", min: 0,
+      hint: "防止把来源时间相差过大的点位拼成同一条样本。" },
     { name: "securityMode", label: "安全模式", type: "select", group: "安全",
       options: [["none", "无"], ["sign", "签名"], ["sign-and-encrypt", "签名并加密"]] },
     { name: "securityPolicy", label: "安全策略", type: "select", group: "安全",
@@ -322,12 +383,18 @@ const opcUa = {
       errors.endpointUrl = "端点必须以 opc.tcp:// 或 https:// 开头。";
     if (!(Number(connection.publishingIntervalMs) >= 1)) errors.publishingIntervalMs = "必须大于 0。";
     if (!(Number(connection.samplingIntervalMs) >= 1)) errors.samplingIntervalMs = "必须大于 0。";
+    if (!(Number(connection.maximumValueAgeMs) >= 1)) errors.maximumValueAgeMs = "必须大于 0。";
+    if (!(Number(connection.maximumTimestampSkewMs) >= 0) ||
+        Number(connection.maximumTimestampSkewMs) > Number(connection.maximumValueAgeMs))
+      errors.maximumTimestampSkewMs = "必须在 0 到最大值龄之间。";
     if (connection.securityMode !== "none" && connection.securityPolicy === "None")
       errors.securityPolicy = "启用签名或加密时必须选择一个具体的安全策略。";
     if (connection.securityMode !== "none" && !(connection.clientCertificatePath || "").trim())
       errors.clientCertificatePath = "启用安全通道时必须配置客户端证书路径。";
     if (connection.authenticationType === "username" && !(connection.username || "").trim())
       errors.username = "用户名认证需要填写用户名。";
+    if (connection.authenticationType === "username" && !(connection.passwordSecretRef || "").trim())
+      errors.passwordSecretRef = "用户名认证必须填写密码凭据。";
     if (connection.authenticationType === "certificate" && !(connection.clientCertificatePath || "").trim())
       errors.clientCertificatePath = "证书认证需要配置客户端证书路径。";
     return errors;
@@ -391,7 +458,7 @@ const modbusTcp = {
     "协议不能枚举地址空间，验证连接只会回读已经配置的寄存器。",
     "一个采集配置只能访问一个从站编号。",
   ],
-  defaults: () => ({ host: "", port: 502, unitId: 1, addressBase: "zero-based", pollIntervalMs: 1000 }),
+  defaults: () => ({ host: "", port: 502, unitId: 1, addressBase: "zero-based", pollIntervalMs: 1000, maxMergeGap: 8 }),
   fields: [
     { name: "host", label: "设备地址", type: "text", placeholder: "192.168.1.30" },
     { name: "port", label: "端口", type: "number", min: 1, max: 65535 },
@@ -401,6 +468,8 @@ const modbusTcp = {
       options: [["zero-based", "从 0 开始（线缆地址）"], ["one-based", "从 1 开始（手册地址）"]],
       hint: "必须与设备手册的寄存器编号方式一致，填错会整体偏移一个地址。" },
     { name: "pollIntervalMs", label: "轮询间隔（ms）", type: "number", min: 1 },
+    { name: "maxMergeGap", label: "合并读取最大间隙", type: "number", min: 0, max: 125,
+      hint: "超过该间隙的地址拆成不同请求，避免跨越设备未实现的寄存器区。" },
   ],
   validateConnection(connection) {
     const errors = {};
@@ -410,6 +479,21 @@ const modbusTcp = {
     const unit = Number(connection.unitId);
     if (!(unit >= 0 && unit <= 255)) errors.unitId = "从站编号必须在 0-255 之间。";
     if (!(Number(connection.pollIntervalMs) >= 1)) errors.pollIntervalMs = "必须大于 0。";
+    ["headersText", "headerSecretRefsText"].forEach(field => {
+      const invalid = (connection[field] || "").split(/\r?\n/).map(line => line.trim()).filter(Boolean)
+        .find(line => !/^[^\s:]+:\s*\S/.test(line));
+      if (invalid) errors[field] = "每行必须是 Name: Value。";
+      const restricted = (connection[field] || "").split(/\r?\n/).map(line => line.split(":", 1)[0].trim())
+        .find(name => /^(connection|content-length|content-type|host|keep-alive|proxy-connection|te|trailer|transfer-encoding|upgrade)$/i.test(name));
+      if (restricted) errors[field] = `${restricted} 由传输层管理，不能在这里设置。`;
+      if (field === "headersText") {
+        const sensitive = (connection[field] || "").split(/\r?\n/).map(line => line.split(":", 1)[0].trim())
+          .find(name => /^(authorization|cookie|proxy-authorization|x-api-key|api-key|x-auth-token)$/i.test(name));
+        if (sensitive) errors[field] = `${sensitive} 必须配置为密钥请求头。`;
+      }
+    });
+    const gap = Number(connection.maxMergeGap);
+    if (!(gap >= 0 && gap <= 125)) errors.maxMergeGap = "合并读取间隙必须在 0-125 之间。";
     return errors;
   },
   validatePoint(row, form) {
@@ -434,9 +518,9 @@ const modbusTcp = {
       if (row.bitIndex === "" || row.bitIndex === null || !Number.isInteger(bit) || bit < 0 || bit > 15)
         errors.bitIndex = "从寄存器取布尔值时必须指定 0-15 之间的位偏移。";
     } else if (row.sourceDataType === "string") {
-      const quantity = Number(row.modbusQuantity);
-      if (!(Number.isInteger(quantity) && quantity >= 1 && quantity <= 64))
-        errors.modbusQuantity = "寄存器数量必须在 1-64 之间。";
+      const length = Number(row.sourceByteLength);
+      if (!(Number.isInteger(length) && length >= 1 && length <= 128))
+        errors.sourceByteLength = "文本长度必须在 1-128 字节之间。";
     }
     return errors;
   },
@@ -535,9 +619,9 @@ const melsecA1e = {
         errors.bitIndex = `${device.code} 本身就是位软元件，不需要位偏移。`;
       }
     } else if (row.sourceDataType === "string") {
-      const length = Number(row.melsecStringLength);
+      const length = Number(row.sourceByteLength);
       if (!(Number.isInteger(length) && length >= 1 && length <= 128))
-        errors.melsecStringLength = "文本长度必须在 1-128 字节之间。";
+        errors.sourceByteLength = "文本长度必须在 1-128 字节之间。";
     }
     return errors;
   },
@@ -600,6 +684,7 @@ export function mergeServerCapabilities(serverCapabilities) {
     descriptor.capabilities = {
       ...descriptor.capabilities,
       sourceTimestamp: Boolean(entry.supportsSourceTimestamp),
+      intrinsicSourceTimestamp: Boolean(entry.usesIntrinsicSourceTimestamp),
       sequencePath: Boolean(entry.supportsSequencePath),
       parameterObjectPath: Boolean(entry.supportsControlParametersPath),
       connectTimeout: Boolean(entry.supportsConnectTimeout),
@@ -609,7 +694,7 @@ export function mergeServerCapabilities(serverCapabilities) {
       bitAddressing: Boolean(entry.supportsBitAddressing),
     };
     if (Array.isArray(entry.sourceDataTypes) && entry.sourceDataTypes.length)
-      descriptor.dataTypes = entry.sourceDataTypes.filter(item => item !== "auto");
+      descriptor.dataTypes = [...entry.sourceDataTypes];
     if (Array.isArray(entry.constraints) && entry.constraints.length)
       descriptor.constraints = entry.constraints;
   });

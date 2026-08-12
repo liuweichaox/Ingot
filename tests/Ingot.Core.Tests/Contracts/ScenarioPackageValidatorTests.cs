@@ -57,7 +57,7 @@ public sealed class ScenarioPackageValidatorTests
     {
         var duplicate = Package() with
         {
-            AcquisitionProfiles =
+            IngestionTasks =
             [
                 new VersionedConfigurationReference { Id = "device-a", Version = 1 },
                 new VersionedConfigurationReference { Id = "DEVICE-A", Version = 1 }

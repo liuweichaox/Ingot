@@ -49,7 +49,7 @@ Variables, inspection characteristics, and units use stable codes. Display names
 A process configuration versions the process's data and analysis rules together:
 
 - process data model and standard units;
-- acquisition profile and equipment-point mapping;
+- ingestion tasks and source-point mappings;
 - run boundaries, stages, and process features;
 - inspection definitions and quality plan;
 - process specification variables, allowed ranges, objectives, and constraints;

@@ -29,6 +29,12 @@ var urls = builder.Configuration["Urls"]
 builder.WebHost.UseUrls(urls);
 
 builder.Services.AddHttpClient();
+builder.Services.AddHttpClient("device-http-acquisition")
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+    {
+        // 设备请求可能携带自定义鉴权头；禁止跨地址自动跳转，避免凭据被带到非配置主机。
+        AllowAutoRedirect = false
+    });
 
 builder.Services.Configure<Ingot.Domain.Events.EventOptions>(builder.Configuration.GetSection("Events"));
 builder.Services.Configure<LogOptions>(builder.Configuration.GetSection("Logging"));

@@ -24,7 +24,7 @@ public sealed record ScenarioPackage
     public int DataModelVersion { get; init; } = 1;
     public required string AnalysisPlanId { get; init; }
     public int AnalysisPlanVersion { get; init; } = 1;
-    public IReadOnlyList<VersionedConfigurationReference> AcquisitionProfiles { get; init; } = [];
+    public IReadOnlyList<VersionedConfigurationReference> IngestionTasks { get; init; } = [];
     public VersionedConfigurationReference? QualityPlan { get; init; }
     public IReadOnlyList<ScenarioContextFieldPolicy> ContextFields { get; init; } = [];
     public IReadOnlyList<ScenarioConstraintDefinition> Constraints { get; init; } = [];

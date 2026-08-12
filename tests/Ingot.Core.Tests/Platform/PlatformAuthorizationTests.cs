@@ -15,9 +15,9 @@ public sealed class PlatformAuthorizationTests
         var allowed = new HashSet<string>(StringComparer.Ordinal)
         {
             "AuthController.Login",
-            "AcquisitionProfilesController.Active",
-            "AcquisitionProfilesController.NextProbeTask",
-            "AcquisitionProfilesController.CompleteProbeTask",
+            "IngestionTasksController.Active",
+            "IngestionTasksController.NextProbeTask",
+            "IngestionTasksController.CompleteProbeTask",
             "EdgesController.Register",
             "EdgesController.Heartbeat",
             "EventsController.Ingest"

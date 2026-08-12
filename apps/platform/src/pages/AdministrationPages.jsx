@@ -199,7 +199,7 @@ export function MetricsPage() {
   const metricResponse = useApi("/api/metrics-data?names=event_ingest_total,process_start_time_seconds,process_working_set_bytes,system_runtime_dotnet_thread_pool_queue_length", { interval: 30000 });
   const executionResponse = useApi("/api/v1/process-executions?limit=1", { interval: 10000 });
   const qualityResponse = useApi("/api/v1/inspection-tasks/summary", { interval: 10000 });
-  const profileResponse = useApi("/api/v1/acquisition-profiles", { interval: 10000 });
+  const profileResponse = useApi("/api/v1/ingestion-tasks", { interval: 10000 });
   const rows = extractRows(edgeResponse.data);
   const online = rows.filter(row => edgeStatus(row) === "online").length;
   const offline = rows.filter(row => edgeStatus(row) === "offline").length;

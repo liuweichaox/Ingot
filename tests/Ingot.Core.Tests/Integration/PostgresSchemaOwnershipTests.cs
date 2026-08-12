@@ -51,7 +51,7 @@ public sealed class PostgresSchemaOwnershipTests(PostgresIntegrationFixture post
             await provider.GetRequiredService<IInspectionReviewStore>().InitializeAsync();
             await provider.GetRequiredService<IProcessConfigurationStore>().InitializeAsync();
             await provider.GetRequiredService<IResearchAssetStore>().InitializeAsync();
-            await provider.GetRequiredService<IAcquisitionProfileStore>().InitializeAsync();
+            await provider.GetRequiredService<IIngestionTaskStore>().InitializeAsync();
 
             var after = await ReadPublicColumnsAsync(postgres.ConnectionString);
             Assert.Equal(before, after);

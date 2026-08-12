@@ -16,6 +16,7 @@ public sealed class AcquisitionProbeTaskCoordinator
     public async Task<AcquisitionProbeResult> QueueAndWaitAsync(
         AcquisitionDeployment deployment,
         TimeSpan timeout,
+        SourceDiscoveryQuery? discovery = null,
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(deployment);
@@ -26,8 +27,9 @@ public sealed class AcquisitionProbeTaskCoordinator
         var task = new AcquisitionProbeTask
         {
             TaskId = Guid.CreateVersion7().ToString(),
-            EdgeId = deployment.Profile.EdgeId,
+            EdgeId = deployment.Task.EdgeId,
             Deployment = deployment,
+            Discovery = discovery ?? new SourceDiscoveryQuery(),
             CreatedAt = now,
             ExpiresAt = now.Add(timeout)
         };
@@ -70,7 +72,13 @@ public sealed class AcquisitionProbeTaskCoordinator
     {
         ArgumentNullException.ThrowIfNull(completion);
         if (!_pending.TryGetValue(completion.TaskId, out var pending) ||
-            !string.Equals(pending.Task.EdgeId, completion.EdgeId, StringComparison.Ordinal))
+            Volatile.Read(ref pending.Claimed) == 0 ||
+            completion.Result is null ||
+            !string.Equals(pending.Task.EdgeId, completion.EdgeId, StringComparison.Ordinal) ||
+            !string.Equals(
+                pending.Task.Deployment.Task.Protocol,
+                completion.Result.Protocol,
+                StringComparison.Ordinal))
             return false;
         return pending.Completion.TrySetResult(completion.Result);
     }

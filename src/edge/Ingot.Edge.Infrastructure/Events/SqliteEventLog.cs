@@ -20,6 +20,7 @@ public sealed class SqliteEventLog : IEventLog, IBatchedEventLog
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
     private readonly string _connectionString;
+    private readonly string _databasePath;
     private readonly SemaphoreSlim _writeLock = new(1, 1);
     private readonly EventOptions _options;
     private readonly ILogger<SqliteEventLog> _logger;
@@ -45,6 +46,7 @@ public sealed class SqliteEventLog : IEventLog, IBatchedEventLog
         if (!string.IsNullOrWhiteSpace(directory))
             Directory.CreateDirectory(directory);
 
+        _databasePath = dbPath;
         _connectionString = new SqliteConnectionStringBuilder
         {
             DataSource = dbPath,
@@ -371,6 +373,49 @@ public sealed class SqliteEventLog : IEventLog, IBatchedEventLog
         return Convert.ToInt64(
             await command.ExecuteScalarAsync(ct).ConfigureAwait(false),
             CultureInfo.InvariantCulture);
+    }
+
+    public async Task<EventLogPendingStatistics> GetPendingStatisticsAsync(CancellationToken ct = default)
+    {
+        await using var connection = await OpenAsync(ct).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+                              SELECT s.pending_count,
+                                     (SELECT MIN(recorded_at) FROM events WHERE ship_state = 0)
+                              FROM event_log_state s
+                              WHERE s.singleton_id = 1;
+                              """;
+        await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
+        if (!await reader.ReadAsync(ct).ConfigureAwait(false))
+            return new EventLogPendingStatistics(0, null, _options.MaxBacklogRows, StorageBytes());
+        DateTimeOffset? oldest = reader.IsDBNull(1)
+            ? null
+            : DateTimeOffset.Parse(reader.GetString(1), CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.RoundtripKind);
+        return new EventLogPendingStatistics(
+            reader.GetInt64(0),
+            oldest,
+            _options.MaxBacklogRows > 0 ? _options.MaxBacklogRows : null,
+            StorageBytes());
+    }
+
+    private long? StorageBytes()
+    {
+        try
+        {
+            var total = File.Exists(_databasePath) ? new FileInfo(_databasePath).Length : 0;
+            var wal = _databasePath + "-wal";
+            if (File.Exists(wal)) total += new FileInfo(wal).Length;
+            return total;
+        }
+        catch (IOException)
+        {
+            return null;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return null;
+        }
     }
 
     private async Task<IReadOnlyList<ProductionEvent>> QueryPendingAsync(int max, CancellationToken ct)

@@ -15,8 +15,8 @@ const components = await readFile(new URL("../src/ui/components.jsx", import.met
 const apiHook = await readFile(new URL("../src/hooks/useApi.js", import.meta.url), "utf8");
 const registryEditor = await readFile(new URL("../src/components/RegistryBusinessEditor.jsx", import.meta.url), "utf8");
 const acquisitionRegistry = await readFile(new URL("../src/acquisition/protocolRegistry.js", import.meta.url), "utf8");
-const acquisitionPage = await readFile(new URL("../src/acquisition/AcquisitionProfilePage.jsx", import.meta.url), "utf8");
-const acquisitionForm = await readFile(new URL("../src/acquisition/profileForm.js", import.meta.url), "utf8");
+const acquisitionPage = await readFile(new URL("../src/acquisition/IngestionTaskPage.jsx", import.meta.url), "utf8");
+const acquisitionForm = await readFile(new URL("../src/acquisition/ingestionTaskForm.js", import.meta.url), "utf8");
 const acquisitionPanels = {
   connection: await readFile(new URL("../src/acquisition/panels/ConnectionPanel.jsx", import.meta.url), "utf8"),
   mapping: await readFile(new URL("../src/acquisition/panels/PointMappingPanel.jsx", import.meta.url), "utf8"),
@@ -63,7 +63,7 @@ test("all platform routes remain available after the React migration", () => {
     "/quality-analysis", "/configuration/inspection-definitions", "/configuration/quality-plans",
     "/comparisons", "/golden-questions", "/data-quality", "/process-improvement", "/configuration/scenario-packages",
     "/configuration/process-analysis-plans", "/configuration/process-data-models",
-    "/configuration/process-specifications", "/configuration/acquisition-profiles", "/edges",
+    "/configuration/process-specifications", "/configuration/ingestion-tasks", "/edges",
     "/platform-metrics", "/logs", "/identity/users",
   ]) {
     assert.match(app, new RegExp(route.replaceAll("/", "\\/")));
@@ -252,11 +252,10 @@ test("user-facing terminology presents scenario packages as process configuratio
 
 test("device acquisition has its own page instead of a generic registry drawer", () => {
   // 采集配置的工作流是"改一处 → 看设备返回什么 → 再改"，通用注册表抽屉支撑不了这个循环。
-  assert.doesNotMatch(pages, /kind: "acquisitionProfile"/);
-  assert.match(app, /acquisition\/AcquisitionProfilePage/);
-  assert.match(app, /path="\/configuration\/acquisition-profiles\/:profileId"/);
-  assert.match(acquisitionPage, /export function AcquisitionProfilePage/);
-  assert.match(acquisitionPage, /export function AcquisitionProfilesPage/);
+  assert.match(app, /acquisition\/IngestionTaskPage/);
+  assert.match(app, /path="\/configuration\/ingestion-tasks\/:taskId"/);
+  assert.match(acquisitionPage, /export function IngestionTaskPage/);
+  assert.match(acquisitionPage, /export function IngestionTasksPage/);
   // 左右分栏：左侧配置、右侧常驻设备面板
   assert.match(acquisitionPage, /xl:grid-cols-\[minmax\(0,1\.55fr\)_minmax\(22rem,1fr\)\]/);
   assert.match(acquisitionPage, /<DevicePointsPanel/);
@@ -283,14 +282,14 @@ test("protocol differences live in one descriptor registry", () => {
 });
 
 test("acquisition validation reports errors per field", () => {
-  assert.match(acquisitionForm, /export function validateProfile/);
+  assert.match(acquisitionForm, /export function validateIngestionTask/);
   assert.match(acquisitionForm, /const set = \(path, message\)/);
   assert.match(acquisitionPanels.connection, /error=\{errors\[/);
   assert.match(acquisitionPanels.mapping, /const error = field => errors\[/);
 });
 
-test("acquisition profiles probe real device points before publishing", () => {
-  assert.match(acquisitionPage, /const ENDPOINT = "\/api\/v1\/acquisition-profiles"/);
+test("ingestion tasks probe real source points before publishing", () => {
+  assert.match(acquisitionPage, /const ENDPOINT = "\/api\/v1\/ingestion-tasks"/);
   assert.match(acquisitionPage, /postJson\(`\$\{ENDPOINT\}\/probe`/);
   assert.match(acquisitionPanels.points, /验证连接/);
   assert.match(acquisitionRegistry, /probeViewLabel: "JSON 字段树"/);

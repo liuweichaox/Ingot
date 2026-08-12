@@ -52,7 +52,7 @@ internal sealed class JsonAcquisitionDeploymentCache(
                 return null;
             }
             if (cached.Deployments.Any(deployment =>
-                    !string.Equals(deployment.Profile.EdgeId, edgeId, StringComparison.Ordinal)))
+                    !string.Equals(deployment.Task.EdgeId, edgeId, StringComparison.Ordinal)))
             {
                 logger.LogWarning(
                     "忽略包含其他 Edge 配置的采集缓存：Path={Path}, EdgeId={EdgeId}",
@@ -76,7 +76,7 @@ internal sealed class JsonAcquisitionDeploymentCache(
         CancellationToken ct = default)
     {
         if (deployments.Any(deployment =>
-                !string.Equals(deployment.Profile.EdgeId, edgeId, StringComparison.Ordinal)))
+                !string.Equals(deployment.Task.EdgeId, edgeId, StringComparison.Ordinal)))
             throw new InvalidOperationException("不能把其他 Edge 的采集配置写入当前节点缓存。");
 
         var existing = await LoadAsync(edgeId, ct).ConfigureAwait(false);

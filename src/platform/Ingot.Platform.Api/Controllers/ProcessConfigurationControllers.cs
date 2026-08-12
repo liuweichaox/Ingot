@@ -1,6 +1,8 @@
 using Ingot.Contracts.ProcessConfiguration;
+using Ingot.Contracts.Acquisition;
 using Ingot.Platform.Api.Agents;
 using Ingot.Platform.Infrastructure.ProcessConfiguration;
+using Ingot.Platform.Infrastructure.Acquisition;
 using Microsoft.AspNetCore.Mvc;
 using System.Text.Json;
 
@@ -10,6 +12,8 @@ namespace Ingot.Platform.Api.Controllers;
 [Route("api/v1/process-data-models")]
 public sealed class ProcessDataModelsController(
     IProcessConfigurationStore store,
+    IIngestionTaskStore ingestionTasks,
+    IIngestionConfigurationStore ingestionConfigurations,
     PlatformUserResolver userResolver) : PlatformConfigurationControllerBase(userResolver)
 {
     [HttpGet]
@@ -35,6 +39,17 @@ public sealed class ProcessDataModelsController(
         if (!ProcessConfigurationValidator.TryValidate(request, out var normalized, out var error))
             return BadRequest(new { error });
         var existing = await store.GetDataModelAsync(normalized!.ModelId, normalized.Version, ct).ConfigureAwait(false);
+        if (existing?.Status == ConfigurationStatuses.Published &&
+            normalized.Status == ConfigurationStatuses.Retired)
+        {
+            var activeReferences = await ActiveIngestionReferences(existing, ct).ConfigureAwait(false);
+            if (activeReferences.Count > 0)
+                return Conflict(new
+                {
+                    error = "工艺数据模型仍被活动的数据摄取任务或任务模板引用，不能退役。",
+                    references = activeReferences
+                });
+        }
         var immutable = HandleImmutable(existing, normalized, value => value.Status, (value, status) => value with
         {
             Status = status,
@@ -59,11 +74,18 @@ public sealed class ProcessDataModelsController(
         var processSpecifications = await store.ListProcessSpecificationsAsync(ct).ConfigureAwait(false);
         var plans = await store.ListAnalysisPlansAsync(ct).ConfigureAwait(false);
         var packages = await store.ListScenarioPackagesAsync(ct).ConfigureAwait(false);
+        var ingestionTaskValues = await ingestionTasks.ListAsync(ct).ConfigureAwait(false);
+        var ingestionTemplates = await ingestionConfigurations.ListTemplatesAsync(ct).ConfigureAwait(false);
         if (processSpecifications.Any(item => item.DataModelId == existing.ModelId && item.DataModelVersion == existing.Version) ||
             plans.Any(item => item.DataModelId == existing.ModelId && item.DataModelVersion == existing.Version) ||
-            packages.Any(item => item.DataModelId == existing.ModelId && item.DataModelVersion == existing.Version))
+            packages.Any(item => item.DataModelId == existing.ModelId && item.DataModelVersion == existing.Version) ||
+            ingestionTaskValues.Any(item => References(item, existing)) ||
+            ingestionTemplates.Any(item => References(item, existing)))
         {
-            return Conflict(new { error = "工艺数据模型仍被工艺规范版本、分析方案或工艺配置引用，不能删除。" });
+            return Conflict(new
+            {
+                error = "工艺数据模型仍被工艺规范版本、分析方案、工艺配置或数据摄取配置引用，不能删除。"
+            });
         }
         return await store.DeleteDataModelAsync(existing.ModelId, version, ct).ConfigureAwait(false) ? NoContent() : NotFound();
     }
@@ -86,6 +108,26 @@ public sealed class ProcessDataModelsController(
     private static string Normalize(string value) => value.Trim().ToLowerInvariant();
     private static bool SamePayload<T>(T left, T right)
         => JsonSerializer.Serialize(left) == JsonSerializer.Serialize(right);
+
+    private async Task<IReadOnlyList<string>> ActiveIngestionReferences(
+        ProcessDataModel model,
+        CancellationToken ct)
+    {
+        var tasks = await ingestionTasks.ListAsync(ct).ConfigureAwait(false);
+        var templates = await ingestionConfigurations.ListTemplatesAsync(ct).ConfigureAwait(false);
+        return tasks.Where(item => item.Status != ConfigurationStatuses.Retired && References(item, model))
+            .Select(item => $"task:{item.TaskId}@{item.Version}")
+            .Concat(templates.Where(item => item.Status != ConfigurationStatuses.Retired && References(item, model))
+                .Select(item => $"template:{item.TemplateId}@{item.Version}"))
+            .OrderBy(static item => item, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    private static bool References(IngestionTask task, ProcessDataModel model)
+        => task.DataModelId == model.ModelId && task.DataModelVersion == model.Version;
+
+    private static bool References(IngestionTaskTemplate template, ProcessDataModel model)
+        => template.DataModelId == model.ModelId && template.DataModelVersion == model.Version;
 }
 
 [ApiController]

@@ -23,7 +23,7 @@ namespace Ingot.Edge.ConnectorHost.Acquisition;
 ///       <item>相邻点位按 <see cref="McA1EConnection.MaxMergeGap"/> 合并成一次读取，
 ///             不再每个点位一次 TCP 往返；</item>
 ///       <item>支持 <c>TimestampMode = source</c>，与 Modbus 采集器一致；
-///             以前会接受该配置然后静默使用采集节点时间。</item>
+///             配置不完整时直接拒绝，不静默改用采集节点时间。</item>
 ///     </list>
 /// </summary>
 public sealed class MelsecA1EAcquisitionRunner(
@@ -53,10 +53,13 @@ public sealed class MelsecA1EAcquisitionRunner(
         string normalizedSource,
         CancellationToken ct)
     {
-        var connection = deployment.Profile.MelsecA1E
+        var connection = deployment.Task.MelsecA1E
             ?? throw new InvalidOperationException("MELSEC 1E 连接配置不能为空。");
         var selectors = BuildSelectors(deployment);
         var plan = BuildReadPlan(selectors, connection.MaxMergeGap);
+        var fallbackPlan = plan.Any(static read => read.Points.Count > 1)
+            ? BuildReadPlan(selectors, 0)
+            : plan;
         string? currentProcessSpecification = null;
         var lifecycle = new AcquisitionLifecycleTracker();
         var sourceDeduplicator = new AcquisitionSourceDeduplicator();
@@ -65,7 +68,7 @@ public sealed class MelsecA1EAcquisitionRunner(
             try
             {
                 using var tcpClient = new TcpClient();
-                await ConnectAsync(tcpClient, connection, deployment.Profile.Execution, ct).ConfigureAwait(false);
+                await ConnectAsync(tcpClient, connection, deployment.Task.Execution, ct).ConfigureAwait(false);
                 using var stream = tcpClient.GetStream();
                 logger.LogInformation(
                     "MELSEC 1E 采集任务已连接：Configuration={Configuration}, Device={Host}:{Port}, " +
@@ -76,43 +79,63 @@ public sealed class MelsecA1EAcquisitionRunner(
                     var readStarted = System.Diagnostics.Stopwatch.GetTimestamp();
                     status.RecordAttempt(configurationKey, DateTimeOffset.UtcNow);
                     using var readTimeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                    readTimeout.CancelAfter(Math.Max(1000, deployment.Profile.Execution.TimeoutMs));
+                    readTimeout.CancelAfter(Math.Max(1000, deployment.Task.Execution.TimeoutMs));
                     Dictionary<string, object?> raw;
                     try
                     {
-                        raw = await ReadSnapshotAsync(stream, connection, plan, readTimeout.Token)
-                            .ConfigureAwait(false);
+                        try
+                        {
+                            raw = await ReadSnapshotAsync(stream, connection, plan, readTimeout.Token)
+                                .ConfigureAwait(false);
+                        }
+                        catch (InvalidOperationException) when (!ReferenceEquals(plan, fallbackPlan))
+                        {
+                            raw = await ReadSnapshotAsync(stream, connection, fallbackPlan, readTimeout.Token)
+                                .ConfigureAwait(false);
+                        }
                     }
                     catch (OperationCanceledException) when (!ct.IsCancellationRequested)
                     {
                         throw new TimeoutException(
-                            $"读取 MELSEC PLC {connection.Host}:{connection.Port} 超过 {deployment.Profile.Execution.TimeoutMs}ms 未完成。");
+                            $"读取 MELSEC PLC {connection.Host}:{connection.Port} 超过 {deployment.Task.Execution.TimeoutMs}ms 未完成。");
                     }
-                    var occurredAt = ResolveTimestamp(deployment.Profile, raw);
+                    var observedAt = DateTimeOffset.UtcNow;
+                    var readDurationMs = System.Diagnostics.Stopwatch.GetElapsedTime(readStarted).TotalMilliseconds;
+                    status.RecordReadSuccess(configurationKey, observedAt, readDurationMs);
+                    var occurredAt = ResolveTimestamp(deployment.Task, raw, observedAt);
                     var mapped = ProtocolAcquisitionSnapshotMapper.Map(
                         deployment, raw, normalizedSource, currentProcessSpecification, occurredAt);
-                    if (!sourceDeduplicator.ShouldEmit(mapped.Sample))
+                    var deduplication = sourceDeduplicator.Evaluate(
+                        mapped.Sample,
+                        observedAt,
+                        TimeSpan.FromMilliseconds(deployment.Task.Execution.SourceIdentityStaleAfterMs));
+                    if (deduplication is AcquisitionDeduplicationResult.Duplicate or AcquisitionDeduplicationResult.Stalled)
                     {
                         currentProcessSpecification = mapped.ProcessSpecificationIdentity;
-                        status.RecordSuccess(
+                        status.RecordDuplicateSnapshot(
                             configurationKey,
-                            DateTimeOffset.UtcNow,
-                            currentProcessSpecification,
-                            incrementSample: false,
-                            readDurationMs: System.Diagnostics.Stopwatch.GetElapsedTime(readStarted).TotalMilliseconds);
+                            deduplication == AcquisitionDeduplicationResult.Stalled,
+                            $"设备源身份超过 {deployment.Task.Execution.SourceIdentityStaleAfterMs}ms 未变化。");
                         await Task.Delay(connection.PollIntervalMs, ct).ConfigureAwait(false);
                         continue;
                     }
                     var events = lifecycle.Track(
                         mapped,
-                        deployment.Profile.Lifecycle,
+                        deployment.Task.Lifecycle,
                         connection.PollIntervalMs);
                     await sink.EmitBatchAsync(events, ct).ConfigureAwait(false);
                     status.RecordProcessExecutionState(configurationKey, lifecycle.IsRunActive);
+                    status.RecordEmissionOutcome(
+                        configurationKey,
+                        events.Count,
+                        deployment.Task.Lifecycle is not null && events.Count == 0);
 
                     currentProcessSpecification = mapped.ProcessSpecificationIdentity;
-                    status.RecordSuccess(configurationKey, DateTimeOffset.UtcNow, currentProcessSpecification,
-                        readDurationMs: System.Diagnostics.Stopwatch.GetElapsedTime(readStarted).TotalMilliseconds);
+                    status.RecordValidSnapshot(
+                        configurationKey,
+                        observedAt,
+                        currentProcessSpecification,
+                        deduplication == AcquisitionDeduplicationResult.Changed ? observedAt : null);
                     await Task.Delay(connection.PollIntervalMs, ct).ConfigureAwait(false);
                 }
             }
@@ -120,12 +143,12 @@ public sealed class MelsecA1EAcquisitionRunner(
             {
                 status.RecordFailure(configurationKey, exception.Message);
                 logger.LogWarning(exception, "MELSEC 1E 采集任务 {Configuration} 读取失败，等待重连", configurationKey);
-                await Task.Delay(deployment.Profile.Execution.ReconnectDelayMs, ct).ConfigureAwait(false);
+                await Task.Delay(deployment.Task.Execution.ReconnectDelayMs, ct).ConfigureAwait(false);
             }
         }
     }
 
-    /// <summary>建立连接时应用配置的超时；以前完全依赖操作系统默认值，半开连接会长时间挂起。</summary>
+    /// <summary>建立连接时应用配置的超时，限制半开连接占用采集工作器的时间。</summary>
     private static async Task ConnectAsync(
         TcpClient client,
         McA1EConnection connection,
@@ -148,15 +171,19 @@ public sealed class MelsecA1EAcquisitionRunner(
     }
 
     private static DateTimeOffset ResolveTimestamp(
-        AcquisitionProfile profile,
-        IReadOnlyDictionary<string, object?> raw)
+        IngestionTask task,
+        IReadOnlyDictionary<string, object?> raw,
+        DateTimeOffset observedAt)
     {
-        if (profile.TimestampMode != "source" || string.IsNullOrWhiteSpace(profile.TimestampPath))
+        if (task.TimestampMode != "source" || string.IsNullOrWhiteSpace(task.TimestampPath))
             return DateTimeOffset.UtcNow;
-        if (!raw.TryGetValue(profile.TimestampPath, out var value) || value is null)
-            throw new InvalidOperationException($"配置的时间来源没有读到值：{profile.TimestampPath}。");
-        return DateTimeOffset.FromUnixTimeMilliseconds(
-            Convert.ToInt64(value, CultureInfo.InvariantCulture));
+        raw.TryGetValue(task.TimestampPath, out var value);
+        return AcquisitionTimestampParser.Parse(
+            value,
+            task.TimestampEncoding,
+            task.TimestampPath,
+            observedAt,
+            task.Execution.MaximumFutureTimestampSkewMs);
     }
 
     internal static IReadOnlyDictionary<string, AcquisitionSelectors.MelsecPoint> BuildSelectors(
@@ -172,15 +199,23 @@ public sealed class MelsecA1EAcquisitionRunner(
             result[path] = point;
         }
 
-        foreach (var mapping in deployment.Profile.ValueMappings) Add(mapping.SourcePath);
-        foreach (var mapping in deployment.Profile.ContextMappings) Add(mapping.SourcePath);
-        if (deployment.Profile.TimestampMode == "source") Add(deployment.Profile.TimestampPath);
-        if (deployment.Profile.ProcessSpecification is { } processSpecification)
+        foreach (var mapping in deployment.Task.ValueMappings)
+        {
+            Add(mapping.SourcePath);
+            Add(mapping.QualityPath);
+        }
+        foreach (var mapping in deployment.Task.ContextMappings) Add(mapping.SourcePath);
+        if (deployment.Task.TimestampMode == "source") Add(deployment.Task.TimestampPath);
+        if (deployment.Task.ProcessSpecification is { } processSpecification)
         {
             Add(processSpecification.IdPath);
             Add(processSpecification.VersionPath);
             Add(processSpecification.NamePath);
-            foreach (var mapping in processSpecification.ParameterMappings) Add(mapping.SourcePath);
+            foreach (var mapping in processSpecification.ParameterMappings)
+            {
+                Add(mapping.SourcePath);
+                Add(mapping.QualityPath);
+            }
         }
 
         return result;
@@ -305,6 +340,8 @@ public sealed class MelsecA1EAcquisitionRunner(
             throw new InvalidOperationException("FX3U-ENET-ADP 的 A-compatible 1E 帧只支持软元件号在前的布局 A。");
         if (count is < 1 or > 256)
             throw new InvalidOperationException($"MELSEC 1E 单次读取点数必须在 1-256 之间，实际为 {count}。");
+        if (address > uint.MaxValue - (uint)(count - 1))
+            throw new InvalidOperationException("MELSEC 1E 读取范围超出软元件地址边界。");
         if (dataCode == "ascii")
         {
             // ASCII 码的各数值按 H→L 发送；设备代码 D 的逻辑值为 4420H。
@@ -334,9 +371,11 @@ public sealed class MelsecA1EAcquisitionRunner(
     {
         if (dataCode == "ascii")
         {
-            var ascii = await ReadExactAsync(stream, 4 + wordCount * 4, ct).ConfigureAwait(false);
-            var text = System.Text.Encoding.ASCII.GetString(ascii);
-            EnsureAsciiSuccess(text);
+            var asciiHeader = await ReadExactAsync(stream, 4, ct).ConfigureAwait(false);
+            var headerText = System.Text.Encoding.ASCII.GetString(asciiHeader);
+            EnsureAsciiSuccess(headerText);
+            var asciiData = await ReadExactAsync(stream, wordCount * 4, ct).ConfigureAwait(false);
+            var text = headerText + System.Text.Encoding.ASCII.GetString(asciiData);
             var binary = new byte[2 + wordCount * 2];
             binary[0] = 0x81;
             for (var index = 0; index < wordCount; index++)
@@ -351,10 +390,10 @@ public sealed class MelsecA1EAcquisitionRunner(
         }
 
         // 成功响应：[0]=0x81 [1]=结束码0x00 + wordCount*2 字节数据；错误：[1]!=0
-        var buffer = await ReadExactAsync(stream, 2 + wordCount * 2, ct).ConfigureAwait(false);
-        if (buffer[1] != 0x00)
-            throw new InvalidOperationException($"MELSEC PLC 返回错误：结束码=0x{buffer[1]:X2}");
-        return buffer;
+        var header = await ReadExactAsync(stream, 2, ct).ConfigureAwait(false);
+        EnsureBinarySuccess(header);
+        var data = await ReadExactAsync(stream, wordCount * 2, ct).ConfigureAwait(false);
+        return header.Concat(data).ToArray();
     }
 
     /// <summary>
@@ -367,23 +406,55 @@ public sealed class MelsecA1EAcquisitionRunner(
         var result = new bool[pointCount];
         if (dataCode == "ascii")
         {
-            var ascii = await ReadExactAsync(stream, 4 + pointCount, ct).ConfigureAwait(false);
-            var text = System.Text.Encoding.ASCII.GetString(ascii);
-            EnsureAsciiSuccess(text);
+            var header = await ReadExactAsync(stream, 4, ct).ConfigureAwait(false);
+            var headerText = System.Text.Encoding.ASCII.GetString(header);
+            EnsureAsciiSuccess(headerText);
+            var data = await ReadExactAsync(stream, pointCount, ct).ConfigureAwait(false);
+            return DecodeBitPayload(data, pointCount, dataCode);
+        }
+
+        var responseHeader = await ReadExactAsync(stream, 2, ct).ConfigureAwait(false);
+        EnsureBinarySuccess(responseHeader);
+        var responseData = await ReadExactAsync(stream, (pointCount + 1) / 2, ct).ConfigureAwait(false);
+        return DecodeBitPayload(responseData, pointCount, dataCode);
+    }
+
+    internal static bool[] DecodeBitPayload(ReadOnlySpan<byte> payload, int pointCount, string dataCode)
+    {
+        var result = new bool[pointCount];
+        if (dataCode == "ascii")
+        {
+            if (payload.Length < pointCount)
+                throw new InvalidDataException("MELSEC PLC 返回的 ASCII 位数据长度不足。");
             for (var index = 0; index < pointCount; index++)
-                result[index] = text[4 + index] != '0';
+            {
+                result[index] = payload[index] switch
+                {
+                    (byte)'0' => false,
+                    (byte)'1' => true,
+                    _ => throw new InvalidDataException(
+                        $"MELSEC PLC 返回了无效的 ASCII 位值 0x{payload[index]:X2}。")
+                };
+            }
             return result;
         }
 
-        var buffer = await ReadExactAsync(stream, 2 + (pointCount + 1) / 2, ct).ConfigureAwait(false);
-        if (buffer[1] != 0x00)
-            throw new InvalidOperationException($"MELSEC PLC 返回错误：结束码=0x{buffer[1]:X2}");
+        if (dataCode != "binary")
+            throw new InvalidDataException($"MELSEC 1E 通信数据码无效：{dataCode}。");
+        if (payload.Length < (pointCount + 1) / 2)
+            throw new InvalidDataException("MELSEC PLC 返回的二进制位数据长度不足。");
         for (var index = 0; index < pointCount; index++)
         {
-            var value = buffer[2 + index / 2];
-            result[index] = (index % 2 == 0 ? value >> 4 : value & 0x0F) != 0;
+            var packed = payload[index / 2];
+            var value = index % 2 == 0 ? packed >> 4 : packed & 0x0F;
+            result[index] = value switch
+            {
+                0 => false,
+                1 => true,
+                _ => throw new InvalidDataException(
+                    $"MELSEC PLC 返回了无效的二进制位值 0x{value:X1}。")
+            };
         }
-
         return result;
     }
 
@@ -393,6 +464,14 @@ public sealed class MelsecA1EAcquisitionRunner(
             throw new InvalidDataException("MELSEC PLC 返回了无效的 ASCII 完成码。");
         if (completeCode != 0)
             throw new InvalidOperationException($"MELSEC PLC 返回错误：结束码=0x{completeCode:X2}");
+    }
+
+    internal static void EnsureBinarySuccess(ReadOnlySpan<byte> header)
+    {
+        if (header.Length < 2)
+            throw new InvalidDataException("MELSEC PLC 返回的二进制响应头长度不足。");
+        if (header[1] != 0x00)
+            throw new InvalidOperationException($"MELSEC PLC 返回错误：结束码=0x{header[1]:X2}");
     }
 
     private static async Task<byte[]> ReadExactAsync(NetworkStream stream, int expected, CancellationToken ct)
@@ -408,19 +487,6 @@ public sealed class MelsecA1EAcquisitionRunner(
         }
 
         return buffer;
-    }
-
-    /// <summary>
-    ///     按数据类型名解码的兼容重载。位软元件的布尔值由位批量读直接返回，
-    ///     因此这个重载不接受 boolean。
-    /// </summary>
-    internal static object? Decode(byte[] response, string type, int wordCount)
-    {
-        if (type == AcquisitionSelectors.BooleanDataType)
-            throw new InvalidOperationException("布尔值请使用位批量读或提供带位偏移的点位。");
-        if (!AcquisitionSelectors.TryGetMelsecDevice("D", out var device))
-            throw new InvalidOperationException("MELSEC 软元件表缺少 D。");
-        return Decode(response, new AcquisitionSelectors.MelsecPoint(device, 0, "0", type, wordCount, null));
     }
 
     /// <param name="wordOffset">该点位在本次合并读取的数据块中的字偏移。</param>
@@ -450,9 +516,17 @@ public sealed class MelsecA1EAcquisitionRunner(
             "int64" => BinaryPrimitives.ReadInt64LittleEndian(data),
             "uint64" => BinaryPrimitives.ReadUInt64LittleEndian(data),
             "float64" => BitConverter.Int64BitsToDouble(BinaryPrimitives.ReadInt64LittleEndian(data)),
-            "string" => System.Text.Encoding.ASCII.GetString(data).TrimEnd('\0'),
+            "string" => DecodeAsciiString(
+                data[..Math.Min(data.Length, point.ByteLength ?? data.Length)]),
             _ => null
         };
+    }
+
+    private static string DecodeAsciiString(ReadOnlySpan<byte> data)
+    {
+        if (data.ContainsAnyExceptInRange((byte)0x00, (byte)0x7F))
+            throw new InvalidDataException("MELSEC PLC 字符串包含非 ASCII 字节；请修正点位类型或设备编码。");
+        return System.Text.Encoding.ASCII.GetString(data).TrimEnd('\0');
     }
 
 }

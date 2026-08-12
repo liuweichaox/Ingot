@@ -30,3 +30,21 @@ public sealed record EdgeHeartbeatRequest
 
     public DateTimeOffset Timestamp { get; init; } = DateTimeOffset.UtcNow;
 }
+
+/// <summary>中心按接收时间保存的现场采集与上行健康快照，用于判断故障何时开始和是否恢复。</summary>
+public sealed record EdgeRuntimeStatusHistoryItem
+{
+    public required string EdgeId { get; init; }
+    public DateTimeOffset RecordedAt { get; init; }
+    public string? AcquisitionState { get; init; }
+    public DateTimeOffset? LastValidSnapshotAt { get; init; }
+    public long ValidSnapshotCount { get; init; }
+    public long EmittedEventCount { get; init; }
+    public string? AcquisitionError { get; init; }
+    public string? DeliveryState { get; init; }
+    public long PendingEventCount { get; init; }
+    public DateTimeOffset? OldestPendingEventAt { get; init; }
+    public double? BacklogCapacityUsedPercent { get; init; }
+    public double? ShipmentRatePerSecond { get; init; }
+    public string? DeliveryError { get; init; }
+}

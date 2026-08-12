@@ -620,19 +620,72 @@ CREATE TABLE IF NOT EXISTS research_asset_audit (
 CREATE INDEX IF NOT EXISTS idx_research_asset_audit_resource
   ON research_asset_audit(resource_type, resource_id, created_at);
 
--- ===== acquisition profiles  (来源: Acquisition/PostgresAcquisitionProfileStore.cs) =====
-CREATE TABLE IF NOT EXISTS acquisition_profiles (
-  profile_id TEXT NOT NULL,
+-- ===== ingestion configuration (来源: Acquisition stores) =====
+CREATE TABLE IF NOT EXISTS ingestion_task_templates (
+  template_id TEXT NOT NULL,
+  version INTEGER NOT NULL,
+  status TEXT NOT NULL,
+  protocol TEXT NOT NULL,
+  payload JSONB NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL,
+  PRIMARY KEY (template_id, version),
+  CHECK (version > 0)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_ingestion_task_templates_published
+  ON ingestion_task_templates(template_id) WHERE status = 'published';
+
+CREATE TABLE IF NOT EXISTS data_source_instances (
+  data_source_id TEXT NOT NULL,
+  version INTEGER NOT NULL,
+  edge_id TEXT NOT NULL,
+  status TEXT NOT NULL,
+  protocol TEXT NOT NULL,
+  payload JSONB NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL,
+  PRIMARY KEY (data_source_id, version),
+  CHECK (version > 0)
+);
+CREATE INDEX IF NOT EXISTS idx_data_source_instances_edge_status
+  ON data_source_instances(edge_id, status);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_data_source_instances_published
+  ON data_source_instances(data_source_id) WHERE status = 'published';
+
+CREATE TABLE IF NOT EXISTS ingestion_task_bindings (
+  task_id TEXT NOT NULL,
+  version INTEGER NOT NULL,
+  template_id TEXT NOT NULL,
+  template_version INTEGER NOT NULL,
+  data_source_id TEXT NOT NULL,
+  data_source_version INTEGER NOT NULL,
+  status TEXT NOT NULL,
+  payload JSONB NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL,
+  PRIMARY KEY (task_id, version),
+  CHECK (version > 0),
+  CHECK (template_version > 0),
+  CHECK (data_source_version > 0),
+  FOREIGN KEY (template_id, template_version)
+    REFERENCES ingestion_task_templates(template_id, version),
+  FOREIGN KEY (data_source_id, data_source_version)
+    REFERENCES data_source_instances(data_source_id, version)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_ingestion_task_bindings_published
+  ON ingestion_task_bindings(task_id) WHERE status = 'published';
+
+CREATE TABLE IF NOT EXISTS ingestion_tasks (
+  task_id TEXT NOT NULL,
   version INTEGER NOT NULL,
   edge_id TEXT NOT NULL,
   status TEXT NOT NULL,
   payload JSONB NOT NULL,
   updated_at TIMESTAMPTZ NOT NULL,
-  PRIMARY KEY (profile_id, version),
+  PRIMARY KEY (task_id, version),
   CHECK (version > 0)
 );
-CREATE INDEX IF NOT EXISTS idx_acquisition_profiles_edge_status
-  ON acquisition_profiles(edge_id, status);
+CREATE INDEX IF NOT EXISTS idx_ingestion_tasks_edge_status
+  ON ingestion_tasks(edge_id, status);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_ingestion_tasks_published
+  ON ingestion_tasks(task_id) WHERE status = 'published';
 
 -- ===== webhook subscriptions  (来源: Webhooks/PostgresWebhookSubscriptionStore.cs) =====
 CREATE TABLE IF NOT EXISTS webhook_subscriptions (

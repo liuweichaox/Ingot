@@ -55,7 +55,11 @@ Before publishing, verify:
 - required points, run boundaries, and context sources exist;
 - standard units match the process model.
 
-Edge retains the last successful version. A failed version leaves the old one running and reports failure rather than silently switching to unversioned local configuration.
+Edge retains the last successful version. A candidate passes startup health only after producing a decodable snapshot with every required value; a connection or OPC UA subscription alone is not success. A failed version leaves the old one running and reports failure rather than silently switching to unversioned local configuration.
+
+Runtime status reports read attempts, successful device reads, valid snapshots, emitted events, inactive empty snapshots, duplicate suppression, stalled source identity, and the latest error separately. `running` is based on valid data rather than one overloaded success counter. Delivery status also reports pending event count, oldest pending age, queue capacity usage, storage size, recent shipping rate, and estimated drain time; high queue occupancy degrades health. Platform retains seven days of heartbeat health snapshots, timestamped on receipt, so operators can identify when acquisition or backlog failed and recovered without trusting a drifting field clock for online status.
+
+HTTP and MQTT document payloads use bounded parsing. An HTTP body or decompressed MQTT payload over 16 MiB, or JSON deeper than 64 levels, is rejected so a malformed source cannot exhaust Edge memory. HTTP supports GET/POST, content type, request body, fixed headers, and secret-reference headers. Authorization, Cookie, and common API-key headers must use secret references. Fixed bodies and ordinary headers are stored and exported verbatim, so credentials must not be placed in them. An HTTP data path must remain relative to the configured device base address, and device requests do not follow redirects, preventing secret headers from reaching another host. Connection and single-operation timeouts have a 1000ms minimum; a timeout degrades and retries the task instead of silently terminating its worker.
 
 ## Driver capabilities
 
@@ -65,7 +69,7 @@ Protocols support different configuration. One capability matrix drives both the
 |---|---|---|---|---|---|
 | Device-provided sample time | yes | yes | server SourceTimestamp | yes | yes |
 | Sequence field | yes | yes | no | no | no |
-| Connection timeout | yes | no | yes | yes | yes |
+| Connection and operation timeout | yes | yes | yes | yes | yes |
 | Reconnect interval | yes | yes | yes | yes | yes |
 | Process-specification parameter path | yes | yes | no | no | no |
 | Bind point to topic | no | yes | no | no | no |
@@ -101,20 +105,49 @@ The fourth string segment is byte length. Connection configuration defines addre
 - M / X / Y / B / S / L use bit-unit reads for `boolean`.
 - Reading a bit device as `int16` returns a packed word of consecutive bits.
 
-Adjacent points may be merged into contiguous reads to reduce network round trips. Set merge distance to zero when diagnosing an individual address.
+Adjacent points may be merged into contiguous reads to reduce network round trips. Both Modbus and MELSEC limit the maximum merge gap and do not cross large undeclared address ranges. Set merge distance to zero when diagnosing an individual address.
+
+Register-based device time explicitly declares `unix-s`, `unix-ms`, or `iso-8601` encoding. Publication validation checks selector width so a 32-bit Unix-seconds value is not interpreted as milliseconds.
 
 ## MQTT with multiple topics
 
 A gateway may split one equipment snapshot across topics:
 
-- each subscription declares a topic and optional payload root;
+- each subscription declares a stable channel code, actual topic, optional payload root, and topic variables;
 - a point may bind to its source topic;
 - values merge into an equivalent sample snapshot;
 - a sample is emitted only after every required point has appeared;
 - context-only topics update the snapshot without emitting samples alone;
 - configuration referencing an unsubscribed topic is rejected.
+- overlapping subscription filters that can receive the same message are rejected because payload roots, channels, and topic variables would be ambiguous;
+- a topic-variable level index must be within the filter's level range.
 
 Set a reasonable maximum age for cross-topic values. When a topic stops, stale values must become missing rather than remaining current indefinitely.
+
+Payloads may declare UTF-8, GBK, GB 18030, or Big5 encoding and no compression, gzip, deflate, or Brotli compression. Probe and runtime acquisition share the same bounded decode, decompress, and JSON-parse path.
+
+## Equipment templates and instances
+
+An ingestion-task template contains protocol semantics, process data model, point mappings, run boundaries, and acquisition policy. A data-source instance contains the target Edge, subject identity, and actual network and authentication settings; a task binding joins the two immutable versions into a deployable ingestion task. Templates do not support arbitrary inheritance or point overrides; mapping changes create a new template version.
+
+After the first device passes a real probe through its target Edge, an operator can extract a published template, first-device source, and binding from the published task. Extraction is a configuration migration: it creates a new task version with provenance and retires the prior runtime version instead of rewriting an already-published version. MQTT templates retain stable channel codes that materialization resolves to each source's actual topics. Data sources and bindings support headed UTF-8 CSV import and export, up to 500 rows per atomic batch. Any invalid row rejects the whole batch. Credential fields store secret references, and exports neutralize spreadsheet-formula prefixes so names and other text are not executed by spreadsheet software. Batch materialization creates drafts only; every device must pass its own real probe before publication.
+
+The template, data source, binding, and final task all retain version provenance. A published version is immutable and changes require a new version. This makes the mapping and connection versions behind each field event auditable instead of losing provenance through copied configuration.
+
+## Value conversion and quality policy
+
+Each mapping can declare source type and unit, scale, offset, quality path and accepted quality values, valid range, out-of-range behavior, missing-value behavior, and a default value. Publication validation ensures that:
+
+- the target item exists in the referenced process data model;
+- every non-null item is mapped and cannot omit missing or out-of-range values;
+- units match the process model; scale and offset do not stand in for an undeclared unit conversion;
+- defaults convert to the target type, and integer targets reject fractional conversion results;
+- booleans accept explicit true/false forms or 0/1 rather than silently treating every nonzero number as true;
+- OPC UA rejects every non-Good status unless explicitly accepted;
+- the publication probe must observe every configured value, quality, context, device-time, device-sequence, and process-specification path at least once, including runtime-optional points. Leave the sequence path empty when the device does not provide one; a configured but unverified path blocks publication. Probe intermittent fields while the device can emit them.
+- device timestamps may not lead Edge receipt time by more than 300000ms by default. The threshold is configurable and violating samples are rejected, preventing a bad device clock or encoding from corrupting the event timeline.
+
+OPC UA subscription startup checks each MonitoredItem's server status. Runtime acquisition enforces maximum value age and timestamp skew across required points, and prolonged notification silence during an active run degrades health. The current OPC UA driver acquires variable nodes, not events or alarms; this is an explicit driver boundary.
 
 ## Business mappings
 

@@ -20,7 +20,7 @@ public interface IAcquisitionSecretResolver
 
 /// <summary>
 /// Resolves edge-local environment references such as env:MQTT_PASSWORD.
-/// Secret values never enter the platform profile or its API responses.
+/// Secret values never enter the platform ingestion task or its API responses.
 /// </summary>
 public sealed class EnvironmentAcquisitionSecretResolver : IAcquisitionSecretResolver
 {

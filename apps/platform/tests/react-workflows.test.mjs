@@ -59,7 +59,7 @@ test("configuration registries keep create, version, retire, and draft deletion 
   for (const endpoint of [
     "/api/v1/process-data-models", "/api/v1/process-specifications",
     "/api/v1/process-analysis-plans", "/api/v1/inspection-definitions",
-    "/api/v1/inspection-plans", "/api/v1/acquisition-profiles",
+    "/api/v1/inspection-plans", "/api/v1/ingestion-tasks",
   ]) {
     assert.match(pages, new RegExp(endpoint.replaceAll("/", "\\/")));
   }
@@ -111,7 +111,7 @@ test("edge pages use the registry heartbeat contract for status", () => {
   assert.match(pages, /state\.edges\.filter\(item => edgeStatus\(item\) === "online"\)/);
   assert.match(pages, /数据源交付情况/);
   assert.match(pages, /从设备数据到工艺证据/);
-  assert.match(pages, /\/api\/v1\/acquisition-profiles/);
+  assert.match(pages, /\/api\/v1\/ingestion-tasks/);
   assert.match(pages, /控制参数回读/);
   assert.match(pages, /过程执行边界映射/);
   assert.match(pages, /节点诊断日志/);

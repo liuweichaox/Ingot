@@ -6,6 +6,10 @@ public sealed class EdgeDeliveryStatus
 {
     private readonly object _gate = new();
     private long _pendingEventCount;
+    private DateTimeOffset? _oldestPendingEventAt;
+    private long? _backlogCapacityRows;
+    private long? _localStorageBytes;
+    private double? _shipmentRatePerSecond;
     private long? _lastAcknowledgedSequence;
     private long _eventsShipped;
     private DateTimeOffset? _lastSuccessfulShipmentAt;
@@ -20,7 +24,10 @@ public sealed class EdgeDeliveryStatus
     {
         lock (_gate)
         {
-            var state = _consecutiveFailures > 0
+            var capacityUsed = _backlogCapacityRows > 0
+                ? _pendingEventCount * 100d / _backlogCapacityRows.Value
+                : 0;
+            var state = _consecutiveFailures > 0 || capacityUsed >= 80
                 ? "degraded"
                 : _pendingEventCount > 0
                     ? "buffering"
@@ -32,6 +39,16 @@ public sealed class EdgeDeliveryStatus
                 State = state,
                 ObservedAt = DateTimeOffset.UtcNow,
                 PendingEventCount = _pendingEventCount,
+                OldestPendingEventAt = _oldestPendingEventAt,
+                BacklogCapacityRows = _backlogCapacityRows,
+                BacklogCapacityUsedPercent = _backlogCapacityRows > 0
+                    ? _pendingEventCount * 100d / _backlogCapacityRows.Value
+                    : null,
+                LocalStorageBytes = _localStorageBytes,
+                ShipmentRatePerSecond = _shipmentRatePerSecond,
+                EstimatedDrainSeconds = _shipmentRatePerSecond > 0
+                    ? _pendingEventCount / _shipmentRatePerSecond.Value
+                    : null,
                 LastAcknowledgedSequence = _lastAcknowledgedSequence,
                 EventsShipped = _eventsShipped,
                 LastSuccessfulShipmentAt = _lastSuccessfulShipmentAt,
@@ -50,6 +67,17 @@ public sealed class EdgeDeliveryStatus
             _pendingEventCount = Math.Max(0, count);
     }
 
+    public void RecordBacklog(EventLogPendingStatistics statistics)
+    {
+        lock (_gate)
+        {
+            _pendingEventCount = Math.Max(0, statistics.Count);
+            _oldestPendingEventAt = statistics.OldestRecordedAt;
+            _backlogCapacityRows = statistics.CapacityRows;
+            _localStorageBytes = statistics.StorageBytes;
+        }
+    }
+
     public void RecordFailure(string error, DateTimeOffset timestamp)
     {
         lock (_gate)
@@ -64,7 +92,8 @@ public sealed class EdgeDeliveryStatus
     public void RecordSuccess(
         long acknowledgedSequence,
         int shipped,
-        DateTimeOffset timestamp)
+        DateTimeOffset timestamp,
+        double shipmentDurationMs = 0)
     {
         lock (_gate)
         {
@@ -72,6 +101,13 @@ public sealed class EdgeDeliveryStatus
                 _lastAcknowledgedSequence ?? acknowledgedSequence,
                 acknowledgedSequence);
             _eventsShipped += Math.Max(0, shipped);
+            if (shipped > 0 && shipmentDurationMs > 0)
+            {
+                var observedRate = shipped / (shipmentDurationMs / 1000d);
+                _shipmentRatePerSecond = _shipmentRatePerSecond.HasValue
+                    ? _shipmentRatePerSecond.Value * 0.7 + observedRate * 0.3
+                    : observedRate;
+            }
             _lastSuccessfulShipmentAt = timestamp;
             if (_failureStartedAt.HasValue)
             {

@@ -40,7 +40,7 @@ public sealed class AcquisitionProbeTaskHostedService(
             try
             {
                 using var response = await client.GetAsync(
-                    $"api/v1/acquisition-profiles/probe-tasks/next?edgeId={Uri.EscapeDataString(edgeId)}",
+                    $"api/v1/ingestion-tasks/probe-tasks/next?edgeId={Uri.EscapeDataString(edgeId)}",
                     stoppingToken).ConfigureAwait(false);
                 if (response.StatusCode == HttpStatusCode.NoContent)
                 {
@@ -57,7 +57,10 @@ public sealed class AcquisitionProbeTaskHostedService(
                 AcquisitionProbeResult result;
                 try
                 {
-                    result = await probeService.ProbeAsync(task.Deployment, stoppingToken).ConfigureAwait(false);
+                    result = await probeService.ProbeAsync(
+                        task.Deployment,
+                        task.Discovery,
+                        stoppingToken).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException) when (!stoppingToken.IsCancellationRequested)
                 {
@@ -65,7 +68,7 @@ public sealed class AcquisitionProbeTaskHostedService(
                     {
                         Success = false,
                         MappingsValidated = false,
-                        Protocol = task.Deployment.Profile.Protocol,
+                        Protocol = task.Deployment.Task.Protocol,
                         Message = "设备连接或样本读取超时。",
                         TestedAt = DateTimeOffset.UtcNow
                     };
@@ -76,7 +79,7 @@ public sealed class AcquisitionProbeTaskHostedService(
                     {
                         Success = false,
                         MappingsValidated = false,
-                        Protocol = task.Deployment.Profile.Protocol,
+                        Protocol = task.Deployment.Task.Protocol,
                         Message = $"设备探查失败：{exception.Message}",
                         TestedAt = DateTimeOffset.UtcNow
                     };
@@ -117,7 +120,7 @@ public sealed class AcquisitionProbeTaskHostedService(
             try
             {
                 using var response = await client.PostAsJsonAsync(
-                    $"api/v1/acquisition-profiles/probe-tasks/{Uri.EscapeDataString(completion.TaskId)}/result",
+                    $"api/v1/ingestion-tasks/probe-tasks/{Uri.EscapeDataString(completion.TaskId)}/result",
                     completion,
                     JsonOptions,
                     ct).ConfigureAwait(false);

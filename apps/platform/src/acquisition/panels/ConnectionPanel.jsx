@@ -1,4 +1,4 @@
-import { Button, Card, Field, Input, Select } from "../../ui/components";
+import { Button, Card, Field, Input, Select, Textarea } from "../../ui/components";
 import { mqttTopicError } from "../protocolRegistry";
 
 /**
@@ -79,6 +79,9 @@ function ConnectionField({ field, connection, error, readOnly, onChange }) {
             <option key={optionValue} value={optionValue}>{optionLabel}</option>
           ))}
         </Select>
+      ) : field.type === "textarea" ? (
+        <Textarea value={value ?? ""} disabled={readOnly} placeholder={field.placeholder}
+          onChange={event => onChange(field.name, event.target.value)} />
       ) : (
         <Input
           type={field.type === "number" ? "number" : "text"}
@@ -110,7 +113,7 @@ function TopicEditor({ topics, errors, section, readOnly, onChange }) {
           <p className="text-xs text-slate-500">支持 + 和 # 通配符；+ 必须独占一层，# 只能在最后一层。</p>
         </div>
         {!readOnly && (
-          <Button onClick={() => onChange([...topics, { topic: "", qos: 0, payloadRoot: "" }])}>添加主题</Button>
+          <Button onClick={() => onChange([...topics, { channel: "", topic: "", qos: 0, payloadRoot: "", topicVariables: "" }])}>添加主题</Button>
         )}
       </div>
       {errors[`${section}.topics`] && (
@@ -120,7 +123,12 @@ function TopicEditor({ topics, errors, section, readOnly, onChange }) {
         const inlineError = errors[`${section}.topics[${index}].topic`] ||
           ((item.topic || "").trim() ? mqttTopicError(item.topic.trim()) : "");
         return (
-          <div key={index} className="grid gap-2 rounded-xl border border-slate-200 p-3 md:grid-cols-[2fr_7rem_2fr_auto]">
+          <div key={index} className="grid gap-2 rounded-xl border border-slate-200 p-3 md:grid-cols-2 xl:grid-cols-[1fr_2fr_6rem_1.3fr_1.3fr_auto]">
+            <Field label={index === 0 ? "通道代码" : undefined} error={errors[`${section}.topics[${index}].channel`]}>
+              <Input value={item.channel || ""} disabled={readOnly} placeholder="telemetry"
+                aria-label={`主题通道 ${index + 1}`}
+                onChange={event => update(index, { channel: event.target.value })} />
+            </Field>
             <Field label={index === 0 ? "主题过滤器" : undefined} error={inlineError}>
               <Input
                 value={item.topic}
@@ -153,6 +161,13 @@ function TopicEditor({ topics, errors, section, readOnly, onChange }) {
                 aria-label={`报文根路径 ${index + 1}`}
                 onChange={event => update(index, { payloadRoot: event.target.value })}
               />
+            </Field>
+            <Field label={index === 0 ? "主题变量" : undefined}
+              hint={index === 0 ? "name:层级，多个用逗号分隔；映射时用 $topic.name。" : undefined}
+              error={errors[`${section}.topics[${index}].topicVariables`]}>
+              <Input value={item.topicVariables || ""} disabled={readOnly} placeholder="equipment:1"
+                aria-label={`主题变量 ${index + 1}`}
+                onChange={event => update(index, { topicVariables: event.target.value })} />
             </Field>
             {!readOnly && topics.length > 1 && (
               <Button

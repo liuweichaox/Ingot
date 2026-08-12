@@ -13,6 +13,7 @@ using Ingot.Platform.Infrastructure.ProcessResearch;
 using Ingot.Platform.Infrastructure.Services;
 using Ingot.Platform.Infrastructure.TimeSeries;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Ingot.Platform.Infrastructure;
 
@@ -25,6 +26,9 @@ public static class ServiceCollectionExtensions
         this IServiceCollection services,
         IConfiguration configuration)
     {
+        // WebApplicationBuilder 通常已经注册 IConfiguration；独立宿主、集成测试和工具未必如此。
+        // TryAdd 保留宿主已有实例，同时保证下游存储可直接注入传入的同一份配置。
+        services.TryAddSingleton(configuration);
         // 版本化数据库迁移是 PostgreSQL user schema 的唯一真相源，且必须先于
         // Timescale 拓扑、文件存储目录和业务后台服务初始化。
         services.AddSingleton<MigrationRunner>();
@@ -141,7 +145,8 @@ public static class ServiceCollectionExtensions
         services.AddHostedService<ResearchExperimentAutomationHostedService>();
 
         // 采集配置由平台统一管理并按边缘节点发布；采集执行器只运行已发布版本。
-        services.AddSingleton<IAcquisitionProfileStore, PostgresAcquisitionProfileStore>();
+        services.AddSingleton<IIngestionTaskStore, PostgresIngestionTaskStore>();
+        services.AddSingleton<IIngestionConfigurationStore, PostgresIngestionConfigurationStore>();
         services.AddSingleton<AcquisitionProbeTaskCoordinator>();
 
         return services;

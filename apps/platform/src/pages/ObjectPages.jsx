@@ -24,7 +24,7 @@ export function ObjectExplorerPage() {
     <Page
       title="工业对象"
       description="从真实设备和生产对象出发，连续查看它的运行、事件、质量与数据健康。"
-      actions={<Link className="inline-flex min-h-9 items-center rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700" to="/configuration/acquisition-profiles">接入设备</Link>}
+      actions={<Link className="inline-flex min-h-9 items-center rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700" to="/configuration/ingestion-tasks">接入设备</Link>}
     >
       {objects.error && <Alert tone="danger" title="工业对象暂不可用">{objects.error}</Alert>}
       {objects.loading && !objects.data ? <LoadingCard /> : (

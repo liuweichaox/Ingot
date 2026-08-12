@@ -20,20 +20,27 @@ public sealed class EdgeRegistryAcquisitionStatusTests
             var configuration = new ConfigurationBuilder().AddInMemoryCollection(
                 new Dictionary<string, string?> { ["Platform:DatabasePath"] = path }).Build();
             var report = new EdgeAcquisitionRuntimeStatus(
-                true,
-                "running",
-                DateTimeOffset.UtcNow,
-                AcquisitionConfigurationSources.Platform,
-                "desired-hash",
-                "applied-hash",
-                DateTimeOffset.UtcNow,
-                DateTimeOffset.UtcNow,
-                42,
-                12,
-                1000,
-                "processSpecification-a@1",
-                null,
-                [],
+                Enabled: true,
+                State: "running",
+                ReportedAt: DateTimeOffset.UtcNow,
+                ConfigurationSource: AcquisitionConfigurationSources.Platform,
+                DesiredConfigurationSetHash: "desired-hash",
+                AppliedConfigurationSetHash: "applied-hash",
+                LastAttemptAt: DateTimeOffset.UtcNow,
+                LastReadSuccessAt: DateTimeOffset.UtcNow,
+                LastValidSnapshotAt: DateTimeOffset.UtcNow,
+                ReadSuccessCount: 45,
+                ValidSnapshotCount: 42,
+                EmittedEventCount: 84,
+                DuplicateSuppressionCount: 3,
+                InactiveSnapshotCount: 2,
+                SourceIdentityStallCount: 0,
+                LastReadDurationMs: 12,
+                ObservedIntervalMs: 1000,
+                ActiveProcessSpecification: "processSpecification-a@1",
+                LastError: null,
+                Tasks: [],
+                Deployments:
                 [
                     new AcquisitionDeploymentApplicationStatus(
                         "profile-a",
@@ -66,12 +73,20 @@ public sealed class EdgeRegistryAcquisitionStatusTests
             var restored = new EdgeRegistry(configuration).Find("EDGE-001");
             Assert.NotNull(restored?.Acquisition);
             Assert.Equal("desired-hash", restored.Acquisition.DesiredConfigurationSetHash);
-            Assert.Equal(42, restored.Acquisition.SamplesCollected);
+            Assert.Equal(42, restored.Acquisition.ValidSnapshotCount);
+            Assert.Equal(84, restored.Acquisition.EmittedEventCount);
             Assert.Equal(2, Assert.Single(restored.Acquisition.Deployments).AppliedVersion);
             Assert.NotNull(restored.Delivery);
             Assert.Equal(3, restored.Delivery.PendingEventCount);
             Assert.Equal(41, restored.Delivery.LastAcknowledgedSequence);
             Assert.Equal(2, restored.Delivery.RecoveryCount);
+            var history = new EdgeRegistry(configuration).ListStatusHistory("EDGE-001");
+            var snapshot = Assert.Single(history);
+            Assert.Equal("running", snapshot.AcquisitionState);
+            Assert.Equal(42, snapshot.ValidSnapshotCount);
+            Assert.Equal(84, snapshot.EmittedEventCount);
+            Assert.Equal(3, snapshot.PendingEventCount);
+            Assert.Equal("synchronized", snapshot.DeliveryState);
         }
         finally
         {

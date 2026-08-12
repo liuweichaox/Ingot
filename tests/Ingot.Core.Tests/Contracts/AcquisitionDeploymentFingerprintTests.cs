@@ -30,9 +30,9 @@ public sealed class AcquisitionDeploymentFingerprintTests
     {
         var first = Deployment(new Dictionary<string, string>()) with
         {
-            Profile = Deployment(new Dictionary<string, string>()).Profile with { Version = 1 }
+            Task = Deployment(new Dictionary<string, string>()).Task with { Version = 1 }
         };
-        var second = first with { Profile = first.Profile with { Version = 2 } };
+        var second = first with { Task = first.Task with { Version = 2 } };
 
         Assert.NotEqual(
             AcquisitionDeploymentFingerprint.Compute(first),
@@ -42,9 +42,9 @@ public sealed class AcquisitionDeploymentFingerprintTests
     private static AcquisitionDeployment Deployment(IReadOnlyDictionary<string, string> context)
         => new()
         {
-            Profile = new AcquisitionProfile
+            Task = new IngestionTask
             {
-                ProfileId = "profile-a",
+                TaskId = "profile-a",
                 Name = "Profile A",
                 Status = ConfigurationStatuses.Published,
                 EdgeId = "EDGE-001",

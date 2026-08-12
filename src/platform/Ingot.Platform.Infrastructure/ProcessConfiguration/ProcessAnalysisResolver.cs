@@ -39,12 +39,12 @@ public sealed class ProcessAnalysisResolver(IProcessConfigurationStore store)
         var result = new List<ResolvedProcessAnalysis?>(contexts.Count);
         foreach (var context in contexts)
         {
-            var modelId = ContextValue(context, "data_model_id")?.Trim().ToLowerInvariant();
+            var modelId = ContextValue(context, "data_model_id")?.Trim();
             var hasModelVersion = int.TryParse(ContextValue(context, "data_model_version"), out var modelVersion)
                                   && modelVersion > 0;
             if (string.IsNullOrWhiteSpace(modelId) || !hasModelVersion)
             {
-                var processSpecificationId = ContextValue(context, "process_specification_id")?.Trim().ToLowerInvariant();
+                var processSpecificationId = ContextValue(context, "process_specification_id")?.Trim();
                 var hasProcessSpecification = int.TryParse(ContextValue(context, "process_specification_version"), out var processSpecificationVersion)
                                        && processSpecificationVersion > 0;
                 ProcessSpecification? processSpecification = null;
@@ -67,7 +67,7 @@ public sealed class ProcessAnalysisResolver(IProcessConfigurationStore store)
                 // An empty selector means "all contexts of this data model", never "all industries".
                 // When the model cannot be inferred, only an explicit selector may select a plan.
                 .Where(item => !string.IsNullOrWhiteSpace(modelId)
-                    ? string.Equals(item.DataModelId, modelId, StringComparison.Ordinal) &&
+                    ? string.Equals(item.DataModelId, modelId, StringComparison.OrdinalIgnoreCase) &&
                       item.DataModelVersion == modelVersion
                     : item.ContextSelector.Count > 0)
                 .Where(item => MatchesSelector(item.ContextSelector, context))
@@ -123,7 +123,7 @@ public sealed class ProcessAnalysisResolver(IProcessConfigurationStore store)
                 continue;
         }
 
-            var key = (processSpecificationId.Trim().ToLowerInvariant(), version);
+            var key = (processSpecificationId.Trim(), version);
             if (!cache.TryGetValue(key, out var processSpecification))
             {
                 processSpecification = await store.GetProcessSpecificationAsync(key.Item1, key.version, ct)

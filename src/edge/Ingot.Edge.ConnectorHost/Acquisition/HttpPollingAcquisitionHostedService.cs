@@ -1,6 +1,6 @@
 using System.Net.Http.Headers;
-using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text;
 using Ingot.Contracts.Acquisition;
 using Ingot.Contracts.ProcessConfiguration;
 using Ingot.Edge.Application.Abstractions;
@@ -20,6 +20,7 @@ internal sealed class HttpPollingAcquisitionHostedService(
     IOptions<EdgeReportingOptions> edgeOptions,
     IAcquisitionDeploymentCache deploymentCache,
     AcquisitionProbeService probeService,
+    IAcquisitionSecretResolver secrets,
     IEnumerable<IAcquisitionProtocolRunner> protocolRunners,
     AcquisitionStatus status,
     ILogger<HttpPollingAcquisitionHostedService> logger) : BackgroundService
@@ -33,9 +34,9 @@ internal sealed class HttpPollingAcquisitionHostedService(
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        status.SetEnabled(_localOptions.Enabled || CanLoadPlatformProfiles());
+        status.SetEnabled(_localOptions.Enabled || CanLoadPlatformTasks());
         var edgeId = identity.GetEdgeId();
-        var platformAvailable = CanLoadPlatformProfiles();
+        var platformAvailable = CanLoadPlatformTasks();
         var canUseLocalFallback = _localOptions.Enabled &&
                                   (!platformAvailable || _localOptions.AllowLocalFallbackWhenPlatformAvailable);
 
@@ -137,7 +138,7 @@ internal sealed class HttpPollingAcquisitionHostedService(
         }
     }
 
-    private bool CanLoadPlatformProfiles()
+    private bool CanLoadPlatformTasks()
         => _edgeOptions.EnablePlatformReporting &&
            !string.IsNullOrWhiteSpace(_edgeOptions.PlatformApiBaseUrl);
 
@@ -149,13 +150,13 @@ internal sealed class HttpPollingAcquisitionHostedService(
         client.BaseAddress = new Uri(_edgeOptions.PlatformApiBaseUrl.TrimEnd('/') + "/");
         using var request = new HttpRequestMessage(
             HttpMethod.Get,
-            $"api/v1/acquisition-profiles/active?edgeId={Uri.EscapeDataString(edgeId)}");
+            $"api/v1/ingestion-tasks/active?edgeId={Uri.EscapeDataString(edgeId)}");
         if (!string.IsNullOrWhiteSpace(_edgeOptions.EventIngestToken))
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _edgeOptions.EventIngestToken);
         using var response = await client.SendAsync(request, ct).ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
-        var payload = await response.Content.ReadFromJsonAsync<DeploymentEnvelope>(JsonOptions, ct)
-            .ConfigureAwait(false);
+        var json = await HttpJsonSnapshotReader.ReadAsync(response.Content, ct).ConfigureAwait(false);
+        var payload = json.Deserialize<DeploymentEnvelope>(JsonOptions);
         return payload?.Data ?? [];
     }
 
@@ -166,40 +167,43 @@ internal sealed class HttpPollingAcquisitionHostedService(
         CancellationToken stoppingToken)
     {
         status.SetDesiredDeployments(deployments, configurationSource);
-        var activeProfileIds = deployments
-            .Select(static item => item.Profile.ProfileId)
+        var activeTaskIds = deployments
+            .Select(static item => item.Task.TaskId)
             .ToHashSet(StringComparer.Ordinal);
         foreach (var key in _workers
                      .Where(item => item.Key != "local" &&
                                     item.Value.Deployment is { } existing &&
-                                    !activeProfileIds.Contains(existing.Profile.ProfileId))
+                                    !activeTaskIds.Contains(existing.Task.TaskId))
                      .Select(static item => item.Key)
                      .ToArray())
             await StopWorkerAsync(key).ConfigureAwait(false);
 
         foreach (var deployment in deployments)
         {
-            var key = DeploymentKey(deployment.Profile);
+            var key = DeploymentKey(deployment.Task);
             if (_workers.ContainsKey(key)) continue;
             var previous = _workers
                 .Where(item => item.Key != key &&
-                               item.Value.Deployment?.Profile.ProfileId == deployment.Profile.ProfileId)
+                               item.Value.Deployment?.Task.TaskId == deployment.Task.TaskId)
                 .ToArray();
             try
             {
                 status.RecordApplicationState(
-                    deployment.Profile.ProfileId,
+                    deployment.Task.TaskId,
                     AcquisitionApplicationStates.Validating);
-                if (!AcquisitionProfileValidator.TryValidate(
-                        deployment.Profile,
-                        null,
+                if (!IngestionTaskValidator.TryValidate(
+                        deployment.Task,
+                        deployment.DataModel,
                         out _,
                         out var validationErrors))
                     throw new InvalidDataException(string.Join("；", validationErrors));
 
                 if (configurationSource == AcquisitionConfigurationSources.Platform)
                 {
-                    var probe = await probeService.ProbeAsync(deployment, stoppingToken).ConfigureAwait(false);
+                    var probe = await probeService.ProbeAsync(
+                        deployment,
+                        new SourceDiscoveryQuery { PageSize = 1 },
+                        stoppingToken).ConfigureAwait(false);
                     if (!probe.Success || !probe.MappingsValidated)
                         throw new InvalidDataException(probe.Message);
                 }
@@ -208,13 +212,13 @@ internal sealed class HttpPollingAcquisitionHostedService(
                 if (!string.IsNullOrWhiteSpace(unsafeWorker.Key))
                 {
                     status.RecordApplicationState(
-                        deployment.Profile.ProfileId,
+                        deployment.Task.TaskId,
                         AcquisitionApplicationStates.WaitingForProcessExecutionBoundary);
                     continue;
                 }
 
                 status.RecordApplicationState(
-                    deployment.Profile.ProfileId,
+                    deployment.Task.TaskId,
                     AcquisitionApplicationStates.Applying);
                 foreach (var previousWorker in previous)
                     await StopWorkerAsync(previousWorker.Key).ConfigureAwait(false);
@@ -239,7 +243,7 @@ internal sealed class HttpPollingAcquisitionHostedService(
             {
                 await StopWorkerAsync(key).ConfigureAwait(false);
                 status.RecordApplicationState(
-                    deployment.Profile.ProfileId,
+                    deployment.Task.TaskId,
                     previous.Length > 0
                         ? AcquisitionApplicationStates.Rollback
                         : AcquisitionApplicationStates.Failed,
@@ -280,24 +284,24 @@ internal sealed class HttpPollingAcquisitionHostedService(
         {
             status.RegisterTask(key, deployment);
             Task task;
-            if (deployment.Profile.Protocol == AcquisitionProtocols.HttpPolling)
+            if (deployment.Task.Protocol == AcquisitionProtocols.HttpPolling)
             {
                 var options = JsonAcquisitionOptionsFactory.Create(deployment);
                 HttpPollingSnapshotMapper.ValidateOptions(options);
                 task = RunWorkerAsync(key, options, edgeId, cancellation.Token);
             }
-            else if (_protocolRunners.TryGetValue(deployment.Profile.Protocol, out var runner))
+            else if (_protocolRunners.TryGetValue(deployment.Task.Protocol, out var runner))
             {
                 task = RunProtocolWorkerAsync(
                     runner,
                     key,
                     deployment,
-                    NormalizeSource(edgeId, deployment.Profile.Source),
+                    NormalizeSource(edgeId, deployment.Task.Source),
                     cancellation.Token);
             }
             else
             {
-                throw new InvalidOperationException($"没有注册采集协议执行器：{deployment.Profile.Protocol}。");
+                throw new InvalidOperationException($"没有注册采集协议执行器：{deployment.Task.Protocol}。");
             }
             _workers.Add(key, new Worker(cancellation, task, deployment));
         }
@@ -322,7 +326,7 @@ internal sealed class HttpPollingAcquisitionHostedService(
             {
                 await runner.RunAsync(key, deployment, normalizedSource, ct).ConfigureAwait(false);
                 if (!ct.IsCancellationRequested)
-                    throw new IOException($"采集协议执行器 {deployment.Profile.Protocol} 意外结束。");
+                    throw new IOException($"采集协议执行器 {deployment.Task.Protocol} 意外结束。");
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
@@ -337,7 +341,7 @@ internal sealed class HttpPollingAcquisitionHostedService(
                     key);
                 try
                 {
-                    await Task.Delay(deployment.Profile.Execution.ReconnectDelayMs, ct)
+                    await Task.Delay(deployment.Task.Execution.ReconnectDelayMs, ct)
                         .ConfigureAwait(false);
                 }
                 catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -397,9 +401,10 @@ internal sealed class HttpPollingAcquisitionHostedService(
         CancellationToken ct)
     {
         var source = NormalizeSource(edgeId, options.Source);
-        var client = httpClientFactory.CreateClient($"acquisition:{key}");
-        client.BaseAddress = new Uri(options.DeviceBaseUrl.TrimEnd('/') + "/");
+        var client = httpClientFactory.CreateClient("device-http-acquisition");
         client.Timeout = TimeSpan.FromMilliseconds(Math.Max(1000, options.TimeoutMs));
+        var endpoint = HttpAcquisitionRequestFactory.CreateEndpoint(
+            options.DeviceBaseUrl, options.SnapshotPath);
         var delay = TimeSpan.FromMilliseconds(options.PollIntervalMs);
         string? currentProcessSpecification = null;
         var lifecycle = new AcquisitionLifecycleTracker();
@@ -407,53 +412,79 @@ internal sealed class HttpPollingAcquisitionHostedService(
 
         logger.LogInformation(
             "采集配置已运行：Configuration={Configuration}, Device={Device}, Subject={SubjectType}/{SubjectId}, PollDelayMs={PollDelayMs}, Fields={FieldCount}",
-            key, client.BaseAddress, options.SubjectType, options.SubjectId, options.PollIntervalMs, options.Fields.Count);
+            key, endpoint, options.SubjectType, options.SubjectId, options.PollIntervalMs, options.Fields.Count);
 
         while (!ct.IsCancellationRequested)
         {
+            var nextDelay = delay;
             var readStarted = System.Diagnostics.Stopwatch.GetTimestamp();
             status.RecordAttempt(key, DateTimeOffset.UtcNow);
             try
             {
-                using var response = await client.GetAsync(options.SnapshotPath.TrimStart('/'), ct).ConfigureAwait(false);
-                response.EnsureSuccessStatusCode();
-                var snapshot = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: ct)
+                using var request = HttpAcquisitionRequestFactory.Create(
+                    endpoint,
+                    options.Method,
+                    options.RequestBody,
+                    options.ContentType,
+                    options.Headers,
+                    options.HeaderSecretRefs,
+                    secrets);
+                using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct)
                     .ConfigureAwait(false);
+                response.EnsureSuccessStatusCode();
+                var snapshot = await HttpJsonSnapshotReader.ReadAsync(response.Content, ct).ConfigureAwait(false);
+                var observedAt = DateTimeOffset.UtcNow;
+                var readDurationMs = System.Diagnostics.Stopwatch.GetElapsedTime(readStarted).TotalMilliseconds;
+                status.RecordReadSuccess(key, observedAt, readDurationMs);
                 var mapped = HttpPollingSnapshotMapper.Map(snapshot, options, source, currentProcessSpecification);
-                if (!sourceDeduplicator.ShouldEmit(mapped.Sample))
+                var deduplication = sourceDeduplicator.Evaluate(
+                    mapped.Sample,
+                    observedAt,
+                    TimeSpan.FromMilliseconds(options.SourceIdentityStaleAfterMs));
+                if (deduplication is AcquisitionDeduplicationResult.Duplicate or AcquisitionDeduplicationResult.Stalled)
                 {
                     currentProcessSpecification = mapped.ProcessSpecificationIdentity;
-                    status.RecordSuccess(
+                    status.RecordDuplicateSnapshot(
                         key,
-                        DateTimeOffset.UtcNow,
-                        currentProcessSpecification,
-                        incrementSample: false,
-                        readDurationMs: System.Diagnostics.Stopwatch.GetElapsedTime(readStarted).TotalMilliseconds);
+                        deduplication == AcquisitionDeduplicationResult.Stalled,
+                        $"设备源身份超过 {options.SourceIdentityStaleAfterMs}ms 未变化。");
                     await Task.Delay(delay, ct).ConfigureAwait(false);
                     continue;
                 }
                 var events = lifecycle.Track(mapped, options.Lifecycle, options.PollIntervalMs);
                 await sink.EmitBatchAsync(events, ct).ConfigureAwait(false);
                 status.RecordProcessExecutionState(key, lifecycle.IsRunActive);
-                currentProcessSpecification = mapped.ProcessSpecificationIdentity;
-                status.RecordSuccess(
+                status.RecordEmissionOutcome(
                     key,
-                    DateTimeOffset.UtcNow,
+                    events.Count,
+                    options.Lifecycle is not null && events.Count == 0);
+                currentProcessSpecification = mapped.ProcessSpecificationIdentity;
+                status.RecordValidSnapshot(
+                    key,
+                    observedAt,
                     currentProcessSpecification,
-                    readDurationMs: System.Diagnostics.Stopwatch.GetElapsedTime(readStarted).TotalMilliseconds);
+                    deduplication == AcquisitionDeduplicationResult.Changed ? observedAt : null);
+            }
+            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+            {
+                var error = $"HTTP 设备请求超过 {options.TimeoutMs}ms 未完成。";
+                status.RecordFailure(key, error);
+                logger.LogWarning("采集配置 {Configuration} 读取设备超时；等待后重试", key);
+                nextDelay = TimeSpan.FromMilliseconds(options.ReconnectDelayMs);
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
                 status.RecordFailure(key, exception.Message);
                 logger.LogWarning(exception, "采集配置 {Configuration} 读取设备失败；等待后重试", key);
+                nextDelay = TimeSpan.FromMilliseconds(options.ReconnectDelayMs);
             }
 
-            await Task.Delay(delay, ct).ConfigureAwait(false);
+            await Task.Delay(nextDelay, ct).ConfigureAwait(false);
         }
     }
 
-    private static string DeploymentKey(AcquisitionProfile profile)
-        => $"{profile.ProfileId}@{profile.Version}";
+    private static string DeploymentKey(IngestionTask task)
+        => $"{task.TaskId}@{task.Version}";
 
     private static string NormalizeSource(string edgeId, string source)
     {

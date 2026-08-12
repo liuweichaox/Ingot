@@ -22,9 +22,15 @@ public static class HttpPollingSnapshotMapper
         ArgumentNullException.ThrowIfNull(options);
         ValidateMappingOptions(options);
 
+        var receivedAt = DateTimeOffset.UtcNow;
         var occurredAt = options.TimestampMode == "edge-received"
-            ? DateTimeOffset.UtcNow
-            : ReadTimestamp(snapshot, options.TimestampPath);
+            ? receivedAt
+            : ReadTimestamp(
+                snapshot,
+                options.TimestampPath,
+                options.TimestampEncoding,
+                receivedAt,
+                options.MaximumFutureTimestampSkewMs);
         var context = new Dictionary<string, string>(options.StaticContext, StringComparer.Ordinal);
         foreach (var mapping in options.ContextFields)
         {
@@ -43,18 +49,7 @@ public static class HttpPollingSnapshotMapper
         foreach (var field in options.Fields)
         {
             var source = SourceRoot(snapshot, field.Topic, topicSnapshots);
-            if (!TryResolve(source, field.SourcePath, out var raw) ||
-                raw.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
-            {
-                if (field.Required)
-                    throw new InvalidDataException($"设备快照缺少必填采集字段：{field.SourcePath}。");
-                values[field.Code] = null;
-                continue;
-            }
-            values[field.Code] = TransformValue(
-                ConvertValue(raw, field.DataType, field.SourcePath),
-                field.Scale,
-                field.Offset);
+            values[field.Code] = ResolveMappedValue(source, field);
         }
         var stageField = options.Fields.SingleOrDefault(item => item.Category == "stage");
         if (stageField is not null &&
@@ -65,7 +60,7 @@ public static class HttpPollingSnapshotMapper
                 Convert.ToString(stageValue, CultureInfo.InvariantCulture) ?? string.Empty;
         }
 
-        var sampleData = AcquisitionSampleMetadata.CreateQuality(values, DateTimeOffset.UtcNow);
+        var sampleData = AcquisitionSampleMetadata.CreateQuality(values, receivedAt);
         sampleData["values"] = values;
         if (!string.IsNullOrWhiteSpace(options.SequencePath) &&
             TryResolve(snapshot, options.SequencePath, out var sequence) &&
@@ -110,18 +105,7 @@ public static class HttpPollingSnapshotMapper
                         }
                     }
 
-                    if (!TryResolve(parameters, field.SourcePath, out var raw) ||
-                        raw.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
-                    {
-                        if (field.Required)
-                            throw new InvalidDataException($"设备工艺规范缺少必填参数：{field.SourcePath}。");
-                        resolvedParameters[field.Code] = null;
-                        continue;
-                    }
-                    resolvedParameters[field.Code] = TransformValue(
-                        ConvertValue(raw, field.DataType, field.SourcePath),
-                        field.Scale,
-                        field.Offset);
+                    resolvedParameters[field.Code] = ResolveMappedValue(parameters, field);
                 }
                 string? processSpecificationName = null;
                 if (!string.IsNullOrWhiteSpace(options.ProcessSpecification.NamePath) &&
@@ -222,16 +206,15 @@ public static class HttpPollingSnapshotMapper
         }
     }
 
-    private static DateTimeOffset ReadTimestamp(JsonElement root, string path)
+    private static DateTimeOffset ReadTimestamp(
+        JsonElement root,
+        string path,
+        string encoding,
+        DateTimeOffset receivedAt,
+        int maximumFutureSkewMs)
     {
         var value = RequiredScalar(root, path);
-        return DateTimeOffset.TryParse(
-            value,
-            CultureInfo.InvariantCulture,
-            DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
-            out var timestamp)
-            ? timestamp
-            : throw new InvalidDataException($"设备时间戳格式无效：{path}={value}。");
+        return AcquisitionTimestampParser.Parse(value, encoding, path, receivedAt, maximumFutureSkewMs);
     }
 
     private static string RequiredScalar(JsonElement root, string path)
@@ -284,25 +267,36 @@ public static class HttpPollingSnapshotMapper
         }
     }
 
-    private static object TransformValue(object value, double scale, double offset)
-        => value switch
+    private static object? ResolveMappedValue(JsonElement root, ValueFieldMapping field)
+    {
+        var mapping = new Ingot.Contracts.Acquisition.AcquisitionValueMapping
         {
-            double number => number * scale + offset,
-            long number when scale == 1 && offset == 0 => number,
-            long number => number * scale + offset,
-            _ => value
+            DataItemCode = field.Code,
+            SourcePath = field.SourcePath,
+            Required = field.Required,
+            Scale = field.Scale,
+            Offset = field.Offset,
+            QualityPath = field.QualityPath,
+            AcceptedQualityValues = field.AcceptedQualityValues,
+            Minimum = field.Minimum,
+            Maximum = field.Maximum,
+            OutOfRangeBehavior = field.OutOfRangeBehavior,
+            MissingValueBehavior = field.MissingValueBehavior,
+            DefaultValue = field.DefaultValue
         };
+        var raw = new Dictionary<string, object?>(StringComparer.Ordinal);
+        if (TryResolve(root, field.SourcePath, out var value) &&
+            value.ValueKind is not (JsonValueKind.Null or JsonValueKind.Undefined))
+            raw[field.SourcePath] = ConvertValue(value, field.DataType, field.SourcePath);
+        if (!string.IsNullOrWhiteSpace(field.QualityPath) &&
+            TryResolve(root, field.QualityPath, out var quality) &&
+            quality.ValueKind is not (JsonValueKind.Null or JsonValueKind.Undefined))
+            raw[field.QualityPath] = ScalarText(quality, field.QualityPath);
+        return AcquisitionValuePolicy.Resolve(raw, mapping, field.DataType);
+    }
 
     private static bool TryResolve(JsonElement root, string path, out JsonElement value)
-    {
-        value = root;
-        foreach (var segment in path.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-        {
-            if (value.ValueKind != JsonValueKind.Object || !value.TryGetProperty(segment, out value))
-                return false;
-        }
-        return true;
-    }
+        => JsonElementPathResolver.TryResolve(root, path, out value);
 
     private static JsonElement SourceRoot(
         JsonElement aggregate,
