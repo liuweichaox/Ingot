@@ -453,8 +453,8 @@ public sealed class SqliteEventLog : IEventLog, IBatchedEventLog
         if (excess <= 0)
             return null;
 
-        // 审计事件本身也必须占用一个受控的 outbox 槽位，因此比单纯超额数多释放一行。
-        var rowsToDrop = Math.Min(count, excess + 1);
+        // 丢弃审计保存在本地已确认区，不再与待发送生产事件竞争容量。
+        var rowsToDrop = Math.Min(count, excess);
         await using var rangeCommand = connection.CreateCommand();
         rangeCommand.Transaction = transaction;
         rangeCommand.CommandText = """
@@ -508,7 +508,7 @@ public sealed class SqliteEventLog : IEventLog, IBatchedEventLog
                                         VALUES (
                                           $event_id, 'diagnostic.backlog_dropped', 1, $occurred_at, $recorded_at,
                                           $source, 'system', 'event-outbox', NULL,
-                                          '{}', $data_json, 0, 0);
+                                          '{}', $data_json, 1, 0);
                                         """;
         diagnosticCommand.Parameters.AddWithValue("$event_id", Guid.CreateVersion7().ToString());
         diagnosticCommand.Parameters.AddWithValue("$occurred_at", now.ToString("O"));
@@ -518,7 +518,7 @@ public sealed class SqliteEventLog : IEventLog, IBatchedEventLog
             "$data_json",
             JsonSerializer.Serialize(diagnosticData, JsonOptions));
         await diagnosticCommand.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
-        await AdjustPendingCountAsync(connection, transaction, 1L - dropped, ct).ConfigureAwait(false);
+        await AdjustPendingCountAsync(connection, transaction, -dropped, ct).ConfigureAwait(false);
 
         return new BacklogDrop(dropped, firstSeq, lastSeq);
     }
@@ -597,6 +597,49 @@ public sealed class SqliteEventLog : IEventLog, IBatchedEventLog
         }
 
         transaction.Commit();
+    }
+
+    public async Task QuarantineAsync(long seq, string reason, CancellationToken ct = default)
+    {
+        if (seq <= 0) throw new ArgumentOutOfRangeException(nameof(seq));
+        if (string.IsNullOrWhiteSpace(reason)) throw new ArgumentException("隔离原因不能为空。", nameof(reason));
+        await _writeLock.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            await using var connection = await OpenAsync(ct).ConfigureAwait(false);
+            await using var transaction = (SqliteTransaction)await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
+            await using var command = connection.CreateCommand();
+            command.Transaction = transaction;
+            command.CommandText = "UPDATE events SET ship_state = 2, ship_attempts = ship_attempts + 1 WHERE seq = $seq AND ship_state = 0;";
+            command.Parameters.AddWithValue("$seq", seq);
+            var changed = await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+            if (changed != 1) throw new InvalidOperationException($"待隔离事件不存在或已离开待发送状态：{seq}。");
+
+            await using var diagnostic = connection.CreateCommand();
+            diagnostic.Transaction = transaction;
+            diagnostic.CommandText = """
+                INSERT INTO events(event_id, event_type, type_version, occurred_at, recorded_at,
+                  source, subject_type, subject_id, execution_id, context_json, data_json, ship_state, ship_attempts)
+                VALUES($event_id, 'diagnostic.event_quarantined', 1, $occurred_at, $recorded_at,
+                  'edge://event-outbox', 'system', 'event-outbox', NULL, '{}', $data_json, 1, 0);
+                """;
+            var now = DateTimeOffset.UtcNow.ToString("O");
+            diagnostic.Parameters.AddWithValue("$event_id", Guid.CreateVersion7().ToString());
+            diagnostic.Parameters.AddWithValue("$occurred_at", now);
+            diagnostic.Parameters.AddWithValue("$recorded_at", now);
+            diagnostic.Parameters.AddWithValue("$data_json", JsonSerializer.Serialize(new
+            {
+                quarantinedSeq = seq,
+                reason = reason.Length <= 2000 ? reason : reason[..2000]
+            }, JsonOptions));
+            await diagnostic.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+            await AdjustPendingCountAsync(connection, transaction, -1, ct).ConfigureAwait(false);
+            await transaction.CommitAsync(ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            _writeLock.Release();
+        }
     }
 
     private static bool ColumnExists(

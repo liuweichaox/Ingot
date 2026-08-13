@@ -12,7 +12,9 @@ namespace Ingot.Platform.Infrastructure.AgentTools;
 public sealed class CompareExecutionsTool(
     IChatEventReader events,
     IInspectionRecordStore inspections,
-    IExecutionComparisonService? executionComparisons = null) : IAnalysisTool
+    IExecutionComparisonService? executionComparisons = null,
+    IInspectionReviewStore? reviews = null,
+    IInspectionMasterDataStore? inspectionMasterData = null) : IAnalysisTool
 {
     public AnalysisToolDefinition Definition { get; } = new()
     {
@@ -58,12 +60,25 @@ public sealed class CompareExecutionsTool(
             await inspections.QueryAllByExecutionIdsAsync(
                 [baselineId, .. candidateIds],
                 ct).ConfigureAwait(false));
-        var baselineInspections = allInspections
-            .Where(record => string.Equals(record.ExecutionId, baselineId, StringComparison.Ordinal))
-            .ToArray();
-        var candidateIdSet = candidateIds.ToHashSet(StringComparer.Ordinal);
-        var candidateInspections = allInspections
-            .Where(record => candidateIdSet.Contains(record.ExecutionId))
+        var latestReviews = reviews is null
+            ? new Dictionary<Guid, InspectionReview>()
+            : await reviews.GetLatestByInspectionRecordIdsAsync(
+                allInspections.Select(static value => value.RecordId).ToArray(), ct).ConfigureAwait(false);
+        var plans = inspectionMasterData is null
+            ? []
+            : await inspectionMasterData.ListInspectionPlansAsync(ct).ConfigureAwait(false);
+        var baselineInspections = EligibleInspections(
+            allInspections.Where(record => string.Equals(
+                record.ExecutionId, baseline.ExecutionId, StringComparison.Ordinal)),
+            baseline,
+            plans,
+            latestReviews);
+        var candidateInspections = candidates.SelectMany(candidate => EligibleInspections(
+                allInspections.Where(record => string.Equals(
+                    record.ExecutionId, candidate.ExecutionId, StringComparison.Ordinal)),
+                candidate,
+                plans,
+                latestReviews))
             .ToArray();
 
         var comparison = BuildMeasurementComparison(baselineInspections, candidateInspections);
@@ -151,7 +166,7 @@ public sealed class CompareExecutionsTool(
                 process = processComparison,
                 inspection = new
                 {
-                    baselineInspectionCount = baselineInspections.Length,
+                    baselineInspectionCount = baselineInspections.Count,
                     comparisonInspectionCount = candidateInspections.Length,
                     baselinePassRate,
                     comparisonPassRate = candidatePassRate,
@@ -189,7 +204,24 @@ public sealed class CompareExecutionsTool(
             startedAt.HasValue && completedAt.HasValue && completedAt >= startedAt
                 ? (completedAt.Value - startedAt.Value).TotalMilliseconds
                 : null,
-            ordered.Select(static row => row.Event.EventType).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray());
+            ordered.Select(static row => row.Event.EventType).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray(),
+            ordered.Select(static row => row.Event.Context).FirstOrDefault(static value => value.Count > 0)
+                ?? new Dictionary<string, string>(),
+            ordered.FirstOrDefault()?.Event.Subject.Id ?? "unknown");
+    }
+
+    private static IReadOnlyList<InspectionRecord> EligibleInspections(
+        IEnumerable<InspectionRecord> records,
+        ProcessExecutionSnapshot execution,
+        IReadOnlyList<InspectionPlan> plans,
+        IReadOnlyDictionary<Guid, InspectionReview> latestReviews)
+    {
+        var plan = InspectionPlanMatcher.Resolve(
+            plans,
+            execution.Context,
+            execution.EquipmentId,
+            execution.StartedAt ?? DateTimeOffset.MinValue);
+        return InspectionRecordSet.AnalysisEligible(records, plan, latestReviews);
     }
 
     private static IReadOnlyList<object> BuildMeasurementComparison(
@@ -306,5 +338,7 @@ public sealed class CompareExecutionsTool(
         DateTimeOffset? StartedAt,
         DateTimeOffset? CompletedAt,
         double? DurationMs,
-        IReadOnlyList<string> EventTypes);
+        IReadOnlyList<string> EventTypes,
+        IReadOnlyDictionary<string, string> Context,
+        string EquipmentId);
 }

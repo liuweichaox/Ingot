@@ -17,6 +17,8 @@ public sealed class AcquisitionLifecycleTracker
     private string? _activeSource;
     private ProductionEvent? _latestProcessSpecificationApplied;
     private long _sampleCount;
+    private bool _activeRunStartedWithoutObservedIdle;
+    private bool _hasObservedLifecycleState;
 
     public bool IsRunActive => _activeExecutionId is not null;
 
@@ -76,6 +78,8 @@ public sealed class AcquisitionLifecycleTracker
                 currentActiveValue,
                 activeValue,
                 StringComparison.OrdinalIgnoreCase);
+            var firstObservedState = !_hasObservedLifecycleState;
+            _hasObservedLifecycleState = true;
             if (!isActive)
             {
                 if (_activeExecutionId is not null)
@@ -85,6 +89,8 @@ public sealed class AcquisitionLifecycleTracker
                 }
                 return events;
             }
+            if (firstObservedState)
+                _activeRunStartedWithoutObservedIdle = true;
         }
 
         var startedNewRun = false;
@@ -98,6 +104,8 @@ public sealed class AcquisitionLifecycleTracker
             var startedData = new Dictionary<string, object?>();
             if (pollDelayMs > 0)
                 startedData["pollDelayMs"] = pollDelayMs;
+            if (_activeRunStartedWithoutObservedIdle)
+                startedData["lifecycleCaptureStatus"] = "active_at_connector_start";
             events.Add(ProductionEvent.Create(
                 startedEventType,
                 sample.OccurredAt,
@@ -155,7 +163,9 @@ public sealed class AcquisitionLifecycleTracker
             new Dictionary<string, object?>
             {
                 ["sampleCount"] = _sampleCount,
-                ["completionStatus"] = "completed"
+                ["completionStatus"] = _activeRunStartedWithoutObservedIdle
+                    ? "partial_after_connector_start"
+                    : "completed"
             });
 
     private void ResetActiveRun()
@@ -166,6 +176,7 @@ public sealed class AcquisitionLifecycleTracker
         _activeSubject = null;
         _activeSource = null;
         _sampleCount = 0;
+        _activeRunStartedWithoutObservedIdle = false;
     }
 
     private static IReadOnlyList<ProductionEvent> WithoutLifecycle(AcquisitionMappingResult mapped)

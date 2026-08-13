@@ -101,6 +101,37 @@ public sealed class HttpEventShipperTests
         Assert.NotNull(runtime.LastRecoveryDurationMs);
     }
 
+    [Fact]
+    public async Task RunAsync_QuarantinesDeterministicallyRejectedEventAndContinues()
+    {
+        using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        var eventLog = new PoisonEventLog([CreateEvent(1), CreateEvent(2), CreateEvent(3)], () => cancellation.Cancel());
+        var handler = new PoisonHandler();
+        var options = Options.Create(new EdgeReportingOptions
+        {
+            EdgeId = "EDGE-001",
+            PlatformApiBaseUrl = "http://platform/",
+            EnableEventShipping = true,
+            EventIngestToken = "secret",
+            EventBatchSize = 100,
+            EventIdleDelayMs = 100
+        });
+        var shipper = new HttpEventShipper(
+            eventLog,
+            new EdgeIdentityService(options, NullLogger<EdgeIdentityService>.Instance),
+            new SingleClientFactory(new HttpClient(handler)),
+            options,
+            new FakeMetrics(),
+            new EdgeDeliveryStatus(),
+            NullLogger<HttpEventShipper>.Instance);
+
+        await shipper.RunAsync(cancellation.Token);
+
+        Assert.Equal([2L], eventLog.Quarantined);
+        Assert.Equal(3, eventLog.AckSeq);
+        Assert.Equal(4, handler.Requests.Count);
+    }
+
     private static ProductionEvent CreateEvent(long seq) =>
         ProductionEvent.Create(
             "process.execution.completed",
@@ -157,6 +188,23 @@ public sealed class HttpEventShipperTests
                     Accepted = 2,
                     AckSeq = 8
                 })
+            };
+        }
+    }
+
+    private sealed class PoisonHandler : HttpMessageHandler
+    {
+        public List<EventBatchRequest> Requests { get; } = [];
+
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            var batch = (await request.Content!.ReadFromJsonAsync<EventBatchRequest>(cancellationToken: cancellationToken))!;
+            Requests.Add(batch);
+            if (batch.Events.Count > 1 || batch.Events[0].Seq == 2)
+                return new HttpResponseMessage(HttpStatusCode.BadRequest) { Content = JsonContent.Create(new { error = "invalid event" }) };
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = JsonContent.Create(new EventBatchResponse { Accepted = 1, AckSeq = batch.Events[0].Seq })
             };
         }
     }
@@ -237,5 +285,30 @@ public sealed class HttpEventShipperTests
             if (ThrowOnEventMetrics)
                 throw new InvalidOperationException("shipped metric failed");
         }
+    }
+
+    private sealed class PoisonEventLog(IReadOnlyList<ProductionEvent> events, Action onFinished) : IEventLog
+    {
+        private readonly HashSet<long> _quarantined = [];
+        public IReadOnlyList<long> Quarantined => _quarantined.Order().ToArray();
+        public long? AckSeq { get; private set; }
+        public Task<long> AppendAsync(ProductionEvent evt, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<IReadOnlyList<ProductionEvent>> QueryAsync(EventQuery query, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<IReadOnlyList<ProductionEvent>> ReadPendingAsync(int max, CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<ProductionEvent>>(events.Where(value => value.Seq > (AckSeq ?? 0) && !_quarantined.Contains(value.Seq)).Take(max).ToArray());
+        public Task MarkShippedAsync(long upToSeq, CancellationToken ct = default)
+        {
+            AckSeq = upToSeq;
+            if (upToSeq == events[^1].Seq) onFinished();
+            return Task.CompletedTask;
+        }
+        public Task IncrementShipAttemptsAsync(long fromSeq, long toSeq, CancellationToken ct = default) => Task.CompletedTask;
+        public Task QuarantineAsync(long seq, string reason, CancellationToken ct = default)
+        {
+            _quarantined.Add(seq);
+            return Task.CompletedTask;
+        }
+        public Task<long> CountPendingAsync(CancellationToken ct = default)
+            => Task.FromResult((long)events.Count(value => value.Seq > (AckSeq ?? 0) && !_quarantined.Contains(value.Seq)));
     }
 }

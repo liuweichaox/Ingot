@@ -51,6 +51,21 @@ public static partial class InspectionMasterDataValidator
             if (allowedValues.Length > 100 || allowedValues.Any(static item => item.Length > 200))
                 return Fail("Characteristic.AllowedValues 最多 100 项，每项最长 200 个字符。", out error);
 
+            var passingValues = (characteristic.PassingValues ?? [])
+                .Select(Normalize)
+                .Where(static item => item is not null)
+                .Cast<string>()
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
+            if (inputType is "select" or "boolean" && passingValues.Length == 0)
+                return Fail("选择型和是/否型检测特性必须明确配置合格值。", out error);
+            if (passingValues.Length > 100 || passingValues.Any(static item => item.Length > 200))
+                return Fail("Characteristic.PassingValues 最多 100 项，每项最长 200 个字符。", out error);
+            if (inputType == "select" && passingValues.Any(item => !allowedValues.Contains(item, StringComparer.Ordinal)))
+                return Fail("Characteristic.PassingValues 必须属于 AllowedValues。", out error);
+            if (inputType == "boolean" && passingValues.Any(static item => item is not ("true" or "false")))
+                return Fail("是/否型检测特性的合格值只能是 true 或 false。", out error);
+
             characteristics.Add(characteristic with
             {
                 Code = characteristicCode!,
@@ -59,7 +74,8 @@ public static partial class InspectionMasterDataValidator
                 Unit = inputType == "numeric" ? Normalize(characteristic.Unit) : null,
                 LowerLimit = inputType == "numeric" ? characteristic.LowerLimit : null,
                 UpperLimit = inputType == "numeric" ? characteristic.UpperLimit : null,
-                AllowedValues = inputType == "select" ? allowedValues : []
+                AllowedValues = inputType == "select" ? allowedValues : [],
+                PassingValues = inputType == "numeric" ? [] : passingValues
             });
         }
 

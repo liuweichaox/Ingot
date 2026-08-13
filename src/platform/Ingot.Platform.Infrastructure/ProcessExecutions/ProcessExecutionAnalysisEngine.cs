@@ -13,7 +13,7 @@ public sealed class ProcessExecutionAnalysisEngine(
     IFeatureDefinitionRegistry? featureDefinitions = null)
 {
     public static readonly string AlgorithmVersion =
-        $"stage-relative-v5+{ProcessExecutionAnalysisThresholds.ComputeFingerprint()}";
+        $"stage-relative-v6+{ProcessExecutionAnalysisThresholds.ComputeFingerprint()}";
     private readonly IFeatureDefinitionRegistry _featureDefinitions =
         featureDefinitions ?? new BuiltInFeatureDefinitionRegistry();
 
@@ -248,7 +248,10 @@ public sealed class ProcessExecutionAnalysisEngine(
             ? (endedAt.Value - startedAt.Value).TotalMilliseconds
             : validDurationMs;
         var coverage = scopeDurationMs <= 0 ? 0 : Math.Clamp(validDurationMs / scopeDurationMs, 0, 1);
-        var values = strictPoints.Select(static point => point.Value).ToArray();
+        // A boundary point participates in the time-weighted calculation, so it must also
+        // participate in the extrema. Otherwise the weighted mean can legitimately move
+        // outside the min/max computed from a different sample domain.
+        var values = calculationPoints.Select(static point => point.Value).ToArray();
         var mean = TimeWeightedMean(segments);
         return new ProcessSignalFeature
         {

@@ -446,6 +446,11 @@ function InspectionDefinitionEditor({ form, onChange, readOnly, validation, lock
                   <Textarea value={characteristic.allowedValuesText} disabled={readOnly} onChange={event => updateCharacteristic(index, "allowedValuesText", event.target.value)} placeholder={"合格\n不合格"} />
                 </Field>
               )}
+              {characteristic.inputType !== "numeric" && (
+                <Field label="合格值" hint={characteristic.inputType === "boolean" ? "填写 true 或 false。" : "每行填写一个；自由文本不配置时结果为待确认。"} className="md:col-span-2">
+                  <Textarea value={characteristic.passingValuesText} disabled={readOnly} onChange={event => updateCharacteristic(index, "passingValuesText", event.target.value)} placeholder={characteristic.inputType === "boolean" ? "true" : "合格"} />
+                </Field>
+              )}
               <label className="flex items-center gap-2 text-sm font-medium text-slate-700 md:col-span-2">
                 <input type="checkbox" checked={characteristic.required} disabled={readOnly} onChange={event => updateCharacteristic(index, "required", event.target.checked)} />
                 必须录入

@@ -14,6 +14,7 @@ public sealed class ExecutionComparisonService(
     IPlatformEventStore events,
     IInspectionRecordStore inspections,
     IInspectionReviewStore reviews,
+    IInspectionMasterDataStore inspectionMasterData,
     ProcessAnalysisResolver analysisResolver,
     ProcessExecutionAnalysisEngine? wholeProcessExecutionAnalysis = null,
     ProcessExecutionAnalysisMaterializer? materializer = null,
@@ -56,6 +57,7 @@ public sealed class ExecutionComparisonService(
             .ToDictionary(static group => group.Key, static group => group.ToArray(), StringComparer.Ordinal);
         var latestReviews = await reviews.GetLatestByInspectionRecordIdsAsync(
             allInspections.Select(static value => value.RecordId).ToArray(), ct).ConfigureAwait(false);
+        var plans = await inspectionMasterData.ListInspectionPlansAsync(ct).ConfigureAwait(false);
         var contexts = ids
             .Select(id => ResolveContext(executionEvents.GetValueOrDefault(id, [])))
             .ToArray();
@@ -69,10 +71,15 @@ public sealed class ExecutionComparisonService(
                 continue;
             var analysis = analyses[index];
             var materialized = await AnalyzeAsync(id, rows, analysis, ct).ConfigureAwait(false);
+            var inspectionPlan = ResolveInspectionPlan(plans, rows);
+            var eligibleInspections = InspectionRecordSet.AnalysisEligible(
+                inspectionsByProcessExecution.GetValueOrDefault(id, []),
+                inspectionPlan,
+                latestReviews);
             result[id] = BuildRow(
                 id,
                 rows,
-                inspectionsByProcessExecution.GetValueOrDefault(id, []),
+                eligibleInspections,
                 latestReviews,
                 analysis,
                 materialized);
@@ -104,11 +111,17 @@ public sealed class ExecutionComparisonService(
             .GroupBy(static item => item.Event.ExecutionId!, StringComparer.Ordinal)
             .Select(static group => group.OrderByDescending(static item => item.Event.OccurredAt).First())
             .OrderByDescending(static item => item.Event.OccurredAt)
-            .Take(limit)
+            .Take(Math.Min(500, Math.Max(limit, limit * 10)))
             .Select(static item => item.Event.ExecutionId!)
             .ToArray();
-        var allIds = new[] { executionId }.Concat(candidateIds).ToArray();
-        var executionEvents = await LoadProcessExecutionsAsync(allIds, ct).ConfigureAwait(false);
+        var loadedIds = new[] { executionId }.Concat(candidateIds).ToArray();
+        var executionEvents = await LoadProcessExecutionsAsync(loadedIds, ct).ConfigureAwait(false);
+        var comparisonKeys = ResolveComparisonKeys(analysis?.Plan);
+        var allIds = new[] { executionId }.Concat(loadedIds.Skip(1).Where(id => ContextsMatch(
+                baselineContext,
+                ResolveContext(executionEvents.GetValueOrDefault(id, [])),
+                comparisonKeys)).Take(limit))
+            .ToArray();
         return await BuildComparisonAsync(executionId, allIds, executionEvents, analysis, ct).ConfigureAwait(false);
     }
 
@@ -161,6 +174,7 @@ public sealed class ExecutionComparisonService(
             await inspections.QueryAllByExecutionIdsAsync(allIds, ct).ConfigureAwait(false));
         var latestReviews = await reviews.GetLatestByInspectionRecordIdsAsync(
             allInspections.Select(static record => record.RecordId).ToArray(), ct).ConfigureAwait(false);
+        var plans = await inspectionMasterData.ListInspectionPlansAsync(ct).ConfigureAwait(false);
         var inspectionsByProcessExecution = allInspections.GroupBy(static record => record.ExecutionId, StringComparer.Ordinal)
             .ToDictionary(static group => group.Key, static group => group.ToArray(), StringComparer.Ordinal);
         var materializedByProcessExecution = new Dictionary<string, MaterializedProcessExecutionAnalysis>(StringComparer.Ordinal);
@@ -168,13 +182,20 @@ public sealed class ExecutionComparisonService(
         {
             materializedByProcessExecution[id] = await AnalyzeAsync(id, executionEvents[id], analysis, ct).ConfigureAwait(false);
         }
-        var rows = allIds.Select(id => BuildRow(
-                id,
-                executionEvents[id],
-                inspectionsByProcessExecution.GetValueOrDefault(id, []),
-                latestReviews,
-                analysis,
-                materializedByProcessExecution[id]))
+        var rows = allIds.Select(id =>
+            {
+                var eventRows = executionEvents[id];
+                var plan = ResolveInspectionPlan(plans, eventRows);
+                var eligible = InspectionRecordSet.AnalysisEligible(
+                    inspectionsByProcessExecution.GetValueOrDefault(id, []), plan, latestReviews);
+                return BuildRow(
+                    id,
+                    eventRows,
+                    eligible,
+                    latestReviews,
+                    analysis,
+                    materializedByProcessExecution[id]);
+            })
             .ToArray();
         var acceptance = new ExecutionComparisonAcceptance
         {
@@ -620,8 +641,10 @@ public sealed class ExecutionComparisonService(
                 : null,
             ProductFamilyCode = ProcessAnalysisResolver.ContextValue(context, "product_family_code") ?? "unknown",
             ProductCode = ProcessAnalysisResolver.ContextValue(context, "product_code"),
-            ProcessSpecificationId = ProcessAnalysisResolver.ContextValue(context, "process_specification_id"),
-            ProcessSpecificationVersion = ProcessAnalysisResolver.ContextValue(context, "process_specification_version"),
+            ProcessSpecificationId = ProcessAnalysisResolver.ContextValue(context, "actual_process_specification_id") ??
+                                     ProcessAnalysisResolver.ContextValue(context, "process_specification_id"),
+            ProcessSpecificationVersion = ProcessAnalysisResolver.ContextValue(context, "actual_process_specification_version") ??
+                                          ProcessAnalysisResolver.ContextValue(context, "process_specification_version"),
             ToolingInstallationId = ProcessAnalysisResolver.ContextValue(context, "tooling_installation_id"),
             ToolingAssemblyId = ProcessAnalysisResolver.ContextValue(context, "tooling_assembly_id"),
             AssemblyRevisionId = ProcessAnalysisResolver.ContextValue(context, "assembly_revision_id"),
@@ -648,6 +671,24 @@ public sealed class ExecutionComparisonService(
             AnalysisMaterialization = materialized.Materialization,
             ControlParameters = BuildControlParameterValues(analysis?.DataModel, ordered)
         };
+    }
+
+    private static InspectionPlan? ResolveInspectionPlan(
+        IReadOnlyList<InspectionPlan> plans,
+        IReadOnlyList<PlatformProductionEvent> rows)
+    {
+        if (rows.Count == 0)
+            return null;
+        var ordered = rows.OrderBy(static row => row.Event.OccurredAt)
+            .ThenBy(static row => row.IngestId).ToArray();
+        var first = ordered[0];
+        var startedAt = ordered.FirstOrDefault(static row => row.Event.EventType == "process.execution.started")?
+            .Event.OccurredAt ?? first.Event.OccurredAt;
+        return InspectionPlanMatcher.Resolve(
+            plans,
+            ResolveContext(ordered),
+            first.Event.Subject.Id,
+            startedAt);
     }
 
     private async Task<MaterializedProcessExecutionAnalysis> AnalyzeAsync(
@@ -787,6 +828,8 @@ public sealed class ExecutionComparisonService(
         var result = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var key in ResolveComparisonKeys(plan))
         {
+            if (key.StartsWith("actual_", StringComparison.Ordinal))
+                continue;
             var value = ProcessAnalysisResolver.ContextValue(baselineContext, key);
             if (!string.IsNullOrWhiteSpace(value))
                 result[ToEventContextKey(key)] = value;
@@ -795,7 +838,17 @@ public sealed class ExecutionComparisonService(
     }
 
     private static IReadOnlyList<string> ResolveComparisonKeys(ProcessAnalysisPlan? plan)
-        => plan?.ComparisonKeys.Count > 0 ? plan.ComparisonKeys : ["product_family_code"];
+    {
+        var keys = (plan?.ComparisonKeys.Count > 0 ? plan.ComparisonKeys : ["product_family_code"]).ToList();
+        if (plan?.CohortDimension?.Trim().ToLowerInvariant() is "process_specification" or "process_specification_version")
+        {
+            if (!keys.Contains("actual_process_specification_id", StringComparer.Ordinal))
+                keys.Add("actual_process_specification_id");
+            if (!keys.Contains("actual_process_specification_version", StringComparer.Ordinal))
+                keys.Add("actual_process_specification_version");
+        }
+        return keys;
+    }
 
     private static void EnsureComparisonKeysPresent(
         ProcessAnalysisPlan? plan,
@@ -822,8 +875,29 @@ public sealed class ExecutionComparisonService(
 
     private static IReadOnlyDictionary<string, string> ResolveContext(
         IReadOnlyList<PlatformProductionEvent> rows)
-        => rows.Select(static row => row.Event.Context).FirstOrDefault(static context => context.Count > 0)
-           ?? new Dictionary<string, string>(StringComparer.Ordinal);
+    {
+        var context = new Dictionary<string, string>(
+            rows.Select(static row => row.Event.Context).FirstOrDefault(static value => value.Count > 0)
+            ?? new Dictionary<string, string>(StringComparer.Ordinal),
+            StringComparer.Ordinal);
+        var applied = rows.Where(static row => row.Event.EventType == "process.specification.applied")
+            .OrderByDescending(static row => row.Event.OccurredAt)
+            .ThenByDescending(static row => row.IngestId)
+            .FirstOrDefault();
+        if (applied is not null)
+        {
+            AddActualContext(context, "actual_process_specification_id", applied.Event.Data.GetValueOrDefault("processSpecificationId"));
+            AddActualContext(context, "actual_process_specification_version", applied.Event.Data.GetValueOrDefault("processSpecificationVersion"));
+        }
+        return context;
+    }
+
+    private static void AddActualContext(IDictionary<string, string> context, string key, object? raw)
+    {
+        var value = raw is JsonElement element ? element.ToString() : Convert.ToString(raw, CultureInfo.InvariantCulture);
+        if (!string.IsNullOrWhiteSpace(value))
+            context[key] = value.Trim();
+    }
 
     private async Task<IReadOnlyList<PlatformProductionEvent>> QueryAllAsync(
         PlatformEventQuery query,

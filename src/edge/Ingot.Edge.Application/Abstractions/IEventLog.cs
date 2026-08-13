@@ -18,6 +18,10 @@ public interface IEventLog
     /// <summary>记录一批待上行事件的失败尝试，便于本地审计与诊断。</summary>
     Task IncrementShipAttemptsAsync(long fromSeq, long toSeq, CancellationToken ct = default);
 
+    /// <summary>隔离被中心确定性拒绝的单条事件，使后续有效事件可以继续交付。</summary>
+    Task QuarantineAsync(long seq, string reason, CancellationToken ct = default)
+        => throw new NotSupportedException("当前事件日志不支持毒事件隔离。");
+
     Task<long> CountPendingAsync(CancellationToken ct = default);
 
     async Task<EventLogPendingStatistics> GetPendingStatisticsAsync(CancellationToken ct = default)

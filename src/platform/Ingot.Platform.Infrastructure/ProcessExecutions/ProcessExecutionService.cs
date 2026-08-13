@@ -165,12 +165,13 @@ public sealed class ProcessExecutionService(
         var lifecycleComplete = started is not null && completed is not null;
 
         var plan = InspectionPlanMatcher.Resolve(plans, context, first.Event.Subject.Id, startedAt);
+        var analysisRecords = InspectionRecordSet.AnalysisEligible(inspectionRecords, plan, latestReviews);
         var requiredItems = plan?.Items.Where(static item => item.Required).ToArray() ?? [];
-        var completedItems = requiredItems.Count(item => inspectionRecords.Any(record =>
+        var completedItems = requiredItems.Count(item => analysisRecords.Any(record =>
             record.DefinitionCode == item.DefinitionCode && record.DefinitionVersion == item.DefinitionVersion));
         var pendingReviews = requiredItems.Where(static item => item.RequiresReview).Count(item =>
         {
-            var latestRecord = inspectionRecords
+            var latestRecord = analysisRecords
                 .Where(record => record.DefinitionCode == item.DefinitionCode &&
                                  record.DefinitionVersion == item.DefinitionVersion)
                 .OrderByDescending(static record => record.MeasuredAt)
@@ -179,7 +180,7 @@ public sealed class ProcessExecutionService(
                    !latestReviews.TryGetValue(latestRecord.RecordId, out var review) ||
                    review.Decision != InspectionReviewDecisions.Confirmed;
         });
-        var qualityStatus = ResolveQualityStatus(plan, requiredItems, completedItems, pendingReviews, inspectionRecords);
+        var qualityStatus = ResolveQualityStatus(plan, requiredItems, completedItems, pendingReviews, analysisRecords);
         var issues = BuildIssues(
             started is not null,
             completed is not null,
@@ -205,8 +206,8 @@ public sealed class ProcessExecutionService(
             OutputItemId = context.GetValueOrDefault("output_item_id"),
             ProductFamilyCode = context.GetValueOrDefault("product_family_code"),
             ProductCode = context.GetValueOrDefault("product_code"),
-            ProcessSpecificationId = context.GetValueOrDefault("process_specification_id"),
-            ProcessSpecificationVersion = context.GetValueOrDefault("process_specification_version"),
+            ProcessSpecificationId = context.GetValueOrDefault("actual_process_specification_id") ?? context.GetValueOrDefault("process_specification_id"),
+            ProcessSpecificationVersion = context.GetValueOrDefault("actual_process_specification_version") ?? context.GetValueOrDefault("process_specification_version"),
             ToolingInstallationId = context.GetValueOrDefault("tooling_installation_id"),
             ToolingAssemblyId = context.GetValueOrDefault("tooling_assembly_id"),
             AssemblyRevisionId = context.GetValueOrDefault("assembly_revision_id"),
@@ -227,7 +228,7 @@ public sealed class ProcessExecutionService(
             DataModelId = analysis?.DataModel.ModelId,
             DataModelVersion = analysis?.DataModel.Version,
             AnalysisMaterialization = materialized.Materialization,
-            InspectionCount = inspectionRecords.Count,
+            InspectionCount = analysisRecords.Count,
             RequiredInspectionCount = requiredItems.Length,
             CompletedInspectionCount = completedItems,
             PendingReviewCount = pendingReviews,
@@ -332,8 +333,29 @@ public sealed class ProcessExecutionService(
 
     private static IReadOnlyDictionary<string, string> ResolveContext(
         IReadOnlyList<PlatformProductionEvent> rows)
-        => rows.Select(static row => row.Event.Context).FirstOrDefault(static value => value.Count > 0)
-           ?? new Dictionary<string, string>(StringComparer.Ordinal);
+    {
+        var context = new Dictionary<string, string>(
+            rows.Select(static row => row.Event.Context).FirstOrDefault(static value => value.Count > 0)
+            ?? new Dictionary<string, string>(StringComparer.Ordinal),
+            StringComparer.Ordinal);
+        var applied = rows.Where(static row => row.Event.EventType == "process.specification.applied")
+            .OrderByDescending(static row => row.Event.OccurredAt)
+            .ThenByDescending(static row => row.IngestId)
+            .FirstOrDefault();
+        if (applied is not null)
+        {
+            AddActual(context, "actual_process_specification_id", applied.Event.Data.GetValueOrDefault("processSpecificationId"));
+            AddActual(context, "actual_process_specification_version", applied.Event.Data.GetValueOrDefault("processSpecificationVersion"));
+        }
+        return context;
+    }
+
+    private static void AddActual(IDictionary<string, string> context, string key, object? raw)
+    {
+        var value = raw is System.Text.Json.JsonElement element ? element.ToString() : Convert.ToString(raw, System.Globalization.CultureInfo.InvariantCulture);
+        if (!string.IsNullOrWhiteSpace(value))
+            context[key] = value.Trim();
+    }
 
     private static IReadOnlyDictionary<string, string> BuildContext(
         string? productFamilyCode,

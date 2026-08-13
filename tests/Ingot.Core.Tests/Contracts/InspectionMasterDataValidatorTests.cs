@@ -49,7 +49,8 @@ public sealed class InspectionMasterDataValidatorTests
                         Code = "defect",
                         Name = "缺陷类型",
                         InputType = "select",
-                        AllowedValues = [" 合格 ", "划伤", "划伤"]
+                        AllowedValues = [" 合格 ", "划伤", "划伤"],
+                        PassingValues = [" 合格 "]
                     }
                 ]
             },
@@ -58,6 +59,49 @@ public sealed class InspectionMasterDataValidatorTests
 
         Assert.True(ok, error);
         Assert.Equal(["合格", "划伤"], normalized!.Characteristics[0].AllowedValues);
+        Assert.Equal(["合格"], normalized.Characteristics[0].PassingValues);
+    }
+
+    [Fact]
+    public void InspectionDefinition_RejectsSelectWithoutServerSidePassingValues()
+    {
+        var ok = InspectionMasterDataValidator.TryValidate(
+            new InspectionDefinition
+            {
+                Code = "surface.appearance",
+                Name = "外观检查",
+                Characteristics =
+                [
+                    new InspectionCharacteristicDefinition
+                    {
+                        Code = "defect",
+                        Name = "缺陷类型",
+                        InputType = "select",
+                        AllowedValues = ["合格", "划伤"]
+                    }
+                ]
+            },
+            out _,
+            out var error);
+
+        Assert.False(ok);
+        Assert.Contains("合格值", error, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void InspectionCharacteristicOutcome_IsDerivedFromDefinition()
+    {
+        var definition = new InspectionCharacteristicDefinition
+        {
+            Code = "defect",
+            Name = "缺陷类型",
+            InputType = "select",
+            AllowedValues = ["合格", "划伤"],
+            PassingValues = ["合格"]
+        };
+
+        Assert.Equal("PASS", InspectionCharacteristicOutcomeEvaluator.Evaluate(definition, "合格"));
+        Assert.Equal("FAIL", InspectionCharacteristicOutcomeEvaluator.Evaluate(definition, "划伤"));
     }
 
     [Fact]

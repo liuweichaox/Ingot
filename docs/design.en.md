@@ -70,12 +70,15 @@ Code-project boundaries are not deployment boundaries. Factory runtime units are
 
 Edge does not decide process causes, run product-level optimization, or become the formal record for experiments and quality outcomes.
 
+Discrete run identity must remain traceable across ConnectorHost restarts. If the connector starts while equipment is already active and no recoverable shop-floor run identity exists, Edge marks the segment as incomplete instead of presenting it as a complete run from a normal start. A single event deterministically rejected by Platform is quarantined with a local audit record and must not block later valid events.
+
 ### Platform
 
 - Store industrial objects, equipment, manufacturing context, runs, process executions, inspections, R&D projects, experiments, evidence, and knowledge.
 - Maintain versioned configuration, provenance, units, permissions, audit, and business state machines.
 - Assemble the conditions, trajectory, and result of a real run into an immutable analytical observation.
 - Execute data-quality, matching, comparison, feature, and reviewable statistical calculations.
+- Admit inspection evidence to formal comparison and optimization only when it matches a published quality plan, has trusted identity, and satisfies independent-review requirements; versioned definitions determine non-numeric outcomes on the server.
 - Preserve inputs sent to numerical services and their returned results.
 
 Platform is the formal business system of record. Experiment state or conclusions must not exist only in Optimizer, Agent, or a browser.
@@ -119,6 +122,7 @@ Stable identifiers connect these facts:
 - `ExecutionId`: the correlation identity for field events or process executions;
 - `ExecutionKey`: the association between an R&D experiment plan and real execution;
 - `EquipmentId`, product/process object, and process specification version: minimum run identity;
+- planned and actually applied process specifications remain separate, and comparable cohorts use the actual specification dimension declared by the analysis plan;
 - content hash: the fixed analytical input and its provenance.
 
 Identifiers may be mapped but never inferred after the fact. Unlinked runs remain visible with a reason rather than disappearing silently.

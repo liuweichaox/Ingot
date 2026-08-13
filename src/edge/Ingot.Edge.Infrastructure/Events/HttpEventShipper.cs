@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
@@ -10,6 +11,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Ingot.Edge.Application.Abstractions;
 using Ingot.Edge.Application.Options;
+using Ingot.Domain.Events;
 using Ingot.Contracts.Events;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -109,6 +111,13 @@ public sealed class HttpEventShipper : IEventShipper
                     var responseBody = await response.Content
                         .ReadAsStringAsync(ct)
                         .ConfigureAwait(false);
+                    if (IsDeterministicPayloadRejection(response.StatusCode))
+                    {
+                        await IsolateRejectedEventsAsync(http, edgeId, pending, responseBody, ct)
+                            .ConfigureAwait(false);
+                        retry = TimeSpan.FromSeconds(1);
+                        continue;
+                    }
                     throw new HttpRequestException(
                         $"中心拒绝事件批次（HTTP {(int)response.StatusCode}）：{responseBody}",
                         null,
@@ -163,6 +172,53 @@ public sealed class HttpEventShipper : IEventShipper
             }
         }
     }
+
+    private async Task IsolateRejectedEventsAsync(
+        HttpClient http,
+        string edgeId,
+        IReadOnlyList<ProductionEvent> pending,
+        string batchError,
+        CancellationToken ct)
+    {
+        foreach (var evt in pending)
+        {
+            var request = new EventBatchRequest { EdgeId = edgeId, Events = [evt] };
+            using var response = await http.PostAsJsonAsync(
+                "api/v1/events:batch", request, JsonOptions, ct).ConfigureAwait(false);
+            if (IsDeterministicPayloadRejection(response.StatusCode))
+            {
+                var detail = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+                await _eventLog.QuarantineAsync(
+                    evt.Seq,
+                    $"HTTP {(int)response.StatusCode}: {detail}",
+                    ct).ConfigureAwait(false);
+                _logger.LogError(
+                    "已隔离被中心确定性拒绝的事件：Seq={Seq}, EventId={EventId}, BatchError={BatchError}",
+                    evt.Seq,
+                    evt.EventId,
+                    batchError);
+                continue;
+            }
+            if (!response.IsSuccessStatusCode)
+            {
+                var detail = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+                throw new HttpRequestException(
+                    $"单条事件重试失败（HTTP {(int)response.StatusCode}）：{detail}",
+                    null,
+                    response.StatusCode);
+            }
+            var result = await response.Content.ReadFromJsonAsync<EventBatchResponse>(JsonOptions, ct)
+                .ConfigureAwait(false)
+                ?? throw new InvalidDataException("中心返回了空的事件确认响应。");
+            if (result.AckSeq != evt.Seq)
+                throw new InvalidDataException($"单条事件确认序号错误：Ack={result.AckSeq}, Seq={evt.Seq}");
+            await _eventLog.MarkShippedAsync(evt.Seq, ct).ConfigureAwait(false);
+        }
+        await RecordBacklogMetricAsync(ct).ConfigureAwait(false);
+    }
+
+    private static bool IsDeterministicPayloadRejection(HttpStatusCode statusCode)
+        => statusCode is HttpStatusCode.BadRequest or HttpStatusCode.UnprocessableEntity;
 
     private async Task RecordBacklogMetricAsync(CancellationToken ct)
     {

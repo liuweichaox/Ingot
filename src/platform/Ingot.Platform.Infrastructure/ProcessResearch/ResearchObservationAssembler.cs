@@ -34,6 +34,8 @@ public interface IResearchObservationAssembler
 public sealed class ResearchObservationAssembler(
     IExecutionComparisonService executions,
     IInspectionRecordStore inspections,
+    IInspectionReviewStore reviews,
+    IInspectionMasterDataStore inspectionMasterData,
     IProcessConfigurationStore? processConfigurations = null,
     ResearchContextAdmissionEvaluator? contextAdmission = null) : IResearchObservationAssembler
 {
@@ -67,6 +69,9 @@ public sealed class ResearchObservationAssembler(
         var executionsByRun = await executions.GetProcessExecutionsAsync(executionKeys, ct).ConfigureAwait(false);
         var allRecords = InspectionRecordSet.Effective(
             await inspections.QueryAllByExecutionIdsAsync(executionKeys, ct).ConfigureAwait(false));
+        var latestReviews = await reviews.GetLatestByInspectionRecordIdsAsync(
+            allRecords.Select(static record => record.RecordId).ToArray(), ct).ConfigureAwait(false);
+        var inspectionPlans = await inspectionMasterData.ListInspectionPlansAsync(ct).ConfigureAwait(false);
         var recordsByRun = allRecords
             .GroupBy(static item => item.ExecutionId, StringComparer.Ordinal)
             .ToDictionary(static group => group.Key, static group => group.ToArray(), StringComparer.Ordinal);
@@ -76,15 +81,67 @@ public sealed class ResearchObservationAssembler(
             ct.ThrowIfCancellationRequested();
             if (!executionsByRun.TryGetValue(candidate.Run.ExecutionKey, out var execution))
                 continue;
+            var inspectionPlan = InspectionPlanMatcher.Resolve(
+                inspectionPlans,
+                execution.Context,
+                execution.EquipmentId,
+                execution.StartedAt);
+            var eligibleRecords = InspectionRecordSet.AnalysisEligible(
+                recordsByRun.GetValueOrDefault(candidate.Run.ExecutionKey, []),
+                inspectionPlan,
+                latestReviews);
             observations.Add(BuildObservation(
                 project,
                 candidate.Run,
                 execution,
-                recordsByRun.GetValueOrDefault(candidate.Run.ExecutionKey, []),
+                eligibleRecords,
                 scenarioPackage));
         }
-        return new ResearchObservationAssembly(observations, candidates.Length);
+        return new ResearchObservationAssembly(
+            ApplyCohortContextGates(observations, scenarioPackage),
+            candidates.Length);
     }
+
+    private static IReadOnlyList<ExperimentRunObservation> ApplyCohortContextGates(
+        IReadOnlyList<ExperimentRunObservation> observations,
+        ScenarioPackage? scenarioPackage)
+    {
+        if (scenarioPackage is null || observations.Count == 0)
+            return observations;
+        var reasons = new List<string>();
+        foreach (var field in scenarioPackage.ContextFields.OrderBy(static value => value.FieldCode, StringComparer.Ordinal))
+        {
+            var populated = observations.Where(value =>
+                value.Context.TryGetValue(field.FieldCode, out var contextValue) &&
+                !string.IsNullOrWhiteSpace(contextValue)).ToArray();
+            var coverage = (double)populated.Length / observations.Count;
+            if (field.MinimumCoverage.HasValue && coverage + 1e-12 < field.MinimumCoverage.Value)
+                reasons.Add($"上下文字段 {field.FieldCode} 覆盖率 {coverage:P1} 低于门槛 {field.MinimumCoverage.Value:P1}");
+            if (!field.MinimumFactorOverlap.HasValue || populated.Length == 0)
+                continue;
+            var factorLevels = populated.Select(FactorSignature).Distinct(StringComparer.Ordinal).ToArray();
+            var contextLevels = populated.Select(value => value.Context[field.FieldCode]).Distinct(StringComparer.Ordinal).ToArray();
+            var combinations = populated.Select(value => $"{FactorSignature(value)}|{value.Context[field.FieldCode]}")
+                .Distinct(StringComparer.Ordinal).Count();
+            var overlap = (double)combinations / (factorLevels.Length * contextLevels.Length);
+            if (overlap + 1e-12 < field.MinimumFactorOverlap.Value)
+                reasons.Add($"上下文字段 {field.FieldCode} 的因素组合重叠 {overlap:P1} 低于门槛 {field.MinimumFactorOverlap.Value:P1}");
+        }
+        if (reasons.Count == 0)
+            return observations;
+        var reason = string.Join("；", reasons);
+        return observations.Select(value => value with
+        {
+            ValidForOptimization = false,
+            ExclusionReason = string.IsNullOrWhiteSpace(value.ExclusionReason)
+                ? reason
+                : $"{value.ExclusionReason}；{reason}"
+        }).ToArray();
+    }
+
+    private static string FactorSignature(ExperimentRunObservation observation)
+        => string.Join('|', observation.ActualFactors.OrderBy(static value => value.VariableCode, StringComparer.Ordinal)
+            .Select(static value => $"{value.VariableCode}:{value.Value:R}:{value.Unit}"));
 
     private ExperimentRunObservation BuildObservation(
         ResearchProject project,

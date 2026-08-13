@@ -13,6 +13,35 @@ namespace Ingot.Core.Tests.Platform;
 public sealed class QualityWorkflowTests
 {
     [Fact]
+    public void AnalysisEligible_RequiresTrustedSubmissionAndIndependentReviewWhenPlanRequiresIt()
+    {
+        var record = Inspection("RUN", "WP", "visual", withAttachment: true);
+        var plan = new InspectionPlan
+        {
+            PlanId = "quality",
+            Version = 1,
+            Name = "质量方案",
+            Status = InspectionPlanStatuses.Published,
+            Items = [new InspectionPlanItem { DefinitionCode = "visual", DefinitionVersion = 1, RequiresReview = true }]
+        };
+        var selfReview = new InspectionReview
+        {
+            ReviewId = Guid.CreateVersion7(),
+            InspectionRecordId = record.RecordId,
+            ExecutionId = record.ExecutionId,
+            Decision = InspectionReviewDecisions.Confirmed,
+            ReviewedAt = DateTimeOffset.UtcNow,
+            ReviewedBy = record.SubmittedBy
+        };
+
+        Assert.Empty(InspectionRecordSet.AnalysisEligible([record], plan, new Dictionary<Guid, InspectionReview> { [record.RecordId] = selfReview }));
+        Assert.Single(InspectionRecordSet.AnalysisEligible(
+            [record],
+            plan,
+            new Dictionary<Guid, InspectionReview> { [record.RecordId] = selfReview with { ReviewedBy = "independent-reviewer" } }));
+    }
+
+    [Fact]
     public async Task WorkflowDoesNotInventTasksWhenNoPublishedPlanMatches()
     {
         var events = new FakeEventStore(
@@ -114,6 +143,7 @@ public sealed class QualityWorkflowTests
             new FakeEventStore(rows),
             new FakeInspectionStore([baselineVisual, historyManual]),
             reviewStore,
+            new FakeMasterDataStore(),
             new ProcessAnalysisResolver(new FakeProcessConfigurationStore()));
 
         var result = await service.CompareWithHistoryAsync("BASE", 10);
@@ -155,6 +185,7 @@ public sealed class QualityWorkflowTests
             new FakeEventStore(rows),
             new FakeInspectionStore([]),
             new FakeReviewStore(),
+            new FakeMasterDataStore(),
             new ProcessAnalysisResolver(new FakeProcessConfigurationStore()));
 
         var result = await service.CompareWithHistoryAsync("BASE", 10);
@@ -178,7 +209,9 @@ public sealed class QualityWorkflowTests
                 ["resolvedParameters"] = new Dictionary<string, object?>
                 {
                     ["processSpecification.upper_heat_compensation"] = 2.888943d
-                }
+                },
+                ["processSpecificationId"] = "RCP-LENS-A",
+                ["processSpecificationVersion"] = 2
             });
         var rows = new[]
         {
@@ -200,11 +233,14 @@ public sealed class QualityWorkflowTests
             new FakeEventStore(rows),
             new FakeInspectionStore([]),
             new FakeReviewStore(),
+            new FakeMasterDataStore(),
             new ProcessAnalysisResolver(new FakeProcessConfigurationStore()));
 
         var execution = await service.GetProcessExecutionAsync("OPTIMIZED-RUN-01");
 
         Assert.NotNull(execution);
+        Assert.Equal("RCP-LENS-A", execution.ProcessSpecificationId);
+        Assert.Equal("2", execution.ProcessSpecificationVersion);
         var parameter = Assert.Single(execution.ControlParameters);
         Assert.Equal("processSpecification.upper_heat_compensation", parameter.Code);
         Assert.Equal(2.888943d, parameter.Value.GetDouble());
@@ -248,12 +284,58 @@ public sealed class QualityWorkflowTests
             new FakeEventStore(rows),
             new FakeInspectionStore([]),
             new FakeReviewStore(),
+            new FakeMasterDataStore(),
             new ProcessAnalysisResolver(new FakeProcessConfigurationStore(plannedProcessSpecification)));
 
         var execution = await service.GetProcessExecutionAsync("NO-ACTUAL-PARAMETERS");
 
         Assert.NotNull(execution);
         Assert.Empty(execution.ControlParameters);
+    }
+
+    [Fact]
+    public async Task ComparisonCohort_UsesActuallyAppliedProcessSpecificationIdentity()
+    {
+        var startedAt = DateTimeOffset.Parse("2026-07-20T08:00:00Z");
+        var rows = new List<PlatformProductionEvent>();
+        foreach (var (executionId, version, offset) in new[] { ("RUN-V1", 1, 0), ("RUN-V2", 2, 10) })
+        {
+            rows.Add(Row(rows.Count + 1, Event("process.execution.started", executionId, $"WP-{executionId}", "LENS-A", startedAt.AddMinutes(offset))));
+            rows.Add(Row(rows.Count + 1, Event(
+                "process.specification.applied",
+                executionId,
+                $"WP-{executionId}",
+                "LENS-A",
+                startedAt.AddMinutes(offset),
+                data: new Dictionary<string, object?>
+                {
+                    ["processSpecificationId"] = "RCP-LENS-A",
+                    ["processSpecificationVersion"] = version,
+                    ["resolvedParameters"] = new Dictionary<string, object?>()
+                })));
+            rows.Add(Row(rows.Count + 1, Event("process.execution.completed", executionId, $"WP-{executionId}", "LENS-A", startedAt.AddMinutes(offset + 1))));
+        }
+        var cohortPlan = new ProcessAnalysisPlan
+        {
+            PlanId = "actual-spec-cohort",
+            Version = 1,
+            Name = "实际规范组",
+            Status = ConfigurationStatuses.Published,
+            DataModelId = "optical-molding",
+            CohortDimension = "process_specification_version",
+            ComparisonKeys = ["product_family_code"]
+        };
+        var service = new ExecutionComparisonService(
+            new FakeEventStore(rows),
+            new FakeInspectionStore([]),
+            new FakeReviewStore(),
+            new FakeMasterDataStore(),
+            new ProcessAnalysisResolver(new FakeProcessConfigurationStore(analysisPlan: cohortPlan)));
+
+        var error = await Assert.ThrowsAsync<ArgumentException>(() =>
+            service.CompareSelectedAsync("RUN-V1", ["RUN-V1", "RUN-V2"]));
+
+        Assert.Contains("actual_process_specification_version", error.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -714,7 +796,9 @@ public sealed class QualityWorkflowTests
         public Task<bool> DeleteFeatureDefinitionAsync(string code, CancellationToken ct = default) => throw new NotSupportedException();
     }
 
-    private sealed class FakeProcessConfigurationStore(ProcessSpecification? processSpecification = null) : IProcessConfigurationStore
+    private sealed class FakeProcessConfigurationStore(
+        ProcessSpecification? processSpecification = null,
+        ProcessAnalysisPlan? analysisPlan = null) : IProcessConfigurationStore
     {
         private static readonly ProcessDataModel Model = new()
         {
@@ -755,6 +839,7 @@ public sealed class QualityWorkflowTests
             Name = "窗口对比",
             AnalysisScope = "analysis-window"
         };
+        private ProcessAnalysisPlan SelectedPlan => analysisPlan ?? Plan;
 
         public Task InitializeAsync(CancellationToken ct = default) => Task.CompletedTask;
         public Task<ProcessDataModel> UpsertDataModelAsync(ProcessDataModel value, CancellationToken ct = default) => throw new NotSupportedException();
@@ -767,8 +852,8 @@ public sealed class QualityWorkflowTests
             => Task.FromResult(processSpecification);
         public Task<bool> DeleteProcessSpecificationAsync(string processSpecificationId, int version, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<ProcessAnalysisPlan> UpsertAnalysisPlanAsync(ProcessAnalysisPlan value, CancellationToken ct = default) => throw new NotSupportedException();
-        public Task<IReadOnlyList<ProcessAnalysisPlan>> ListAnalysisPlansAsync(CancellationToken ct = default) => Task.FromResult<IReadOnlyList<ProcessAnalysisPlan>>([Plan, WindowPlan]);
-        public Task<ProcessAnalysisPlan?> GetAnalysisPlanAsync(string planId, int version, CancellationToken ct = default) => Task.FromResult<ProcessAnalysisPlan?>(Plan);
+        public Task<IReadOnlyList<ProcessAnalysisPlan>> ListAnalysisPlansAsync(CancellationToken ct = default) => Task.FromResult<IReadOnlyList<ProcessAnalysisPlan>>([SelectedPlan, WindowPlan]);
+        public Task<ProcessAnalysisPlan?> GetAnalysisPlanAsync(string planId, int version, CancellationToken ct = default) => Task.FromResult<ProcessAnalysisPlan?>(SelectedPlan);
         public Task<bool> DeleteAnalysisPlanAsync(string planId, int version, CancellationToken ct = default) => throw new NotSupportedException();
     }
 }

@@ -158,6 +158,7 @@ public sealed class InspectionRecordsController(
             }
             results.Add(measurement with
             {
+                Outcome = InspectionCharacteristicOutcomeEvaluator.Evaluate(characteristic, textValue),
                 TextValue = textValue,
                 Unit = null,
                 LowerLimit = null,

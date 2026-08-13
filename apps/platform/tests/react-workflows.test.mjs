@@ -242,7 +242,8 @@ test("research projects expose the evidence-backed experiment and operating-regi
   assert.match(researchProjects, /实际控制参数回读、过程特征和检验记录/);
   assert.match(researchProjects, /materialize-result/);
   assert.match(researchProjects, /立即检查数据回收/);
-  assert.match(researchProjects, /采集和检验齐全后自动完成/);
+  assert.match(researchProjects, /已记录下发意图，等待现场执行、采集和检验结果/);
+  assert.doesNotMatch(researchProjects, /下发并开始/);
   assert.match(researchProjects, /replicatesPerCondition: 2/);
   assert.match(researchProjects, /设备无关执行指令/);
   assert.match(researchProjects, /onClick=\{\(\) => onGenerateOptimizationSuggestions\(\)\}/);

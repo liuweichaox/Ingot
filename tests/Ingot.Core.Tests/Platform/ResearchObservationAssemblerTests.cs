@@ -27,6 +27,7 @@ public sealed class ResearchObservationAssemblerTests
                 ["context_capture_status"] = "resolved",
                 ["equipment_id"] = "FX3U-01",
                 ["execution_id"] = executionKey,
+                ["product_family_code"] = "lens-a",
                 ["process_specification_id"] = "LENS-A",
                 ["process_specification_version"] = "3",
                 ["tooling_installation_id"] = Guid.NewGuid().ToString("D"),
@@ -117,9 +118,13 @@ public sealed class ResearchObservationAssemblerTests
         ]);
         var executionService = new FakeProcessExecutionService(execution);
         var scenario = ResearchContextAdmissionEvaluatorTests.OpticalScenario();
+        var reviewStore = new FakeReviewStore();
+        var masterDataStore = new FakeMasterDataStore();
         var assembler = new ResearchObservationAssembler(
             executionService,
             inspections,
+            reviewStore,
+            masterDataStore,
             new FakeProcessConfigurationStore(scenario));
         var project = new ResearchProject
         {
@@ -227,6 +232,8 @@ public sealed class ResearchObservationAssemblerTests
         var missingMoldResult = await new ResearchObservationAssembler(
                 new FakeProcessExecutionService(missingMoldProcessExecution),
                 inspections,
+                reviewStore,
+                masterDataStore,
                 new FakeProcessConfigurationStore(scenario))
             .AssembleAsync(project, [experiment]);
         var missingMold = Assert.Single(missingMoldResult.Observations);
@@ -263,6 +270,8 @@ public sealed class ResearchObservationAssemblerTests
         var wrongUnitAssembler = new ResearchObservationAssembler(
             new FakeProcessExecutionService(wrongUnitProcessExecution),
             inspections,
+            reviewStore,
+            masterDataStore,
             new FakeProcessConfigurationStore(scenario));
         var wrongUnitResult = await wrongUnitAssembler.AssembleAsync(project, [experiment]);
         var unitConflict = Assert.Single(wrongUnitResult.Observations);
@@ -306,6 +315,52 @@ public sealed class ResearchObservationAssemblerTests
             IReadOnlyList<string> executionIds,
             CancellationToken ct = default)
             => throw new NotSupportedException();
+    }
+
+    private sealed class FakeReviewStore : IInspectionReviewStore
+    {
+        public Task InitializeAsync(CancellationToken ct = default) => Task.CompletedTask;
+        public Task<StoreInspectionReviewResult> CreateAsync(CreateInspectionReviewRequest request, string executionId, string reviewedBy, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<InspectionReview?> GetAsync(Guid reviewId, CancellationToken ct = default) => Task.FromResult<InspectionReview?>(null);
+        public Task<IReadOnlyList<InspectionReview>> QueryAsync(Guid? inspectionRecordId, string? executionId, int limit, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<InspectionReview>>([]);
+        public Task<IReadOnlyDictionary<Guid, InspectionReview>> GetLatestByInspectionRecordIdsAsync(IReadOnlyCollection<Guid> inspectionRecordIds, CancellationToken ct = default) => Task.FromResult<IReadOnlyDictionary<Guid, InspectionReview>>(new Dictionary<Guid, InspectionReview>());
+        public Task LogAccessAsync(Guid? inspectionRecordId, Guid? attachmentId, string action, string actor, string? detail, CancellationToken ct = default) => Task.CompletedTask;
+        public Task<IReadOnlyList<InspectionAuditEntry>> QueryAuditAsync(Guid? inspectionRecordId, Guid? attachmentId, int limit, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<InspectionAuditEntry>>([]);
+    }
+
+    private sealed class FakeMasterDataStore : IInspectionMasterDataStore
+    {
+        private static readonly InspectionPlan Plan = new()
+        {
+            PlanId = "lens-quality",
+            Version = 1,
+            Name = "镜片质量方案",
+            Status = InspectionPlanStatuses.Published,
+            Scope = new InspectionPlanScope { ProductFamilyCode = "lens-a" },
+            Items = [new InspectionPlanItem { DefinitionCode = "lens-final", DefinitionVersion = 1, Required = true }]
+        };
+
+        public Task InitializeAsync(CancellationToken ct = default) => Task.CompletedTask;
+        public Task<InspectionDefinition> UpsertInspectionDefinitionAsync(InspectionDefinition definition, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<IReadOnlyList<InspectionDefinition>> ListInspectionDefinitionsAsync(CancellationToken ct = default) => Task.FromResult<IReadOnlyList<InspectionDefinition>>([]);
+        public Task<InspectionDefinition?> GetInspectionDefinitionAsync(string code, int version, CancellationToken ct = default) => Task.FromResult<InspectionDefinition?>(null);
+        public Task<bool> DeleteInspectionDefinitionAsync(string code, int version, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<InspectionPlan> UpsertInspectionPlanAsync(InspectionPlan plan, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<IReadOnlyList<InspectionPlan>> ListInspectionPlansAsync(CancellationToken ct = default) => Task.FromResult<IReadOnlyList<InspectionPlan>>([Plan]);
+        public Task<InspectionPlan?> GetInspectionPlanAsync(string planId, int version, CancellationToken ct = default) => Task.FromResult<InspectionPlan?>(Plan);
+        public Task<bool> DeleteInspectionPlanAsync(string planId, int version, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<PhaseDefinition> UpsertPhaseDefinitionAsync(PhaseDefinition definition, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<IReadOnlyList<PhaseDefinition>> ListPhaseDefinitionsAsync(CancellationToken ct = default) => Task.FromResult<IReadOnlyList<PhaseDefinition>>([]);
+        public Task<PhaseDefinition?> GetPhaseDefinitionAsync(string code, CancellationToken ct = default) => Task.FromResult<PhaseDefinition?>(null);
+        public Task<bool> DeletePhaseDefinitionAsync(string code, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<PhaseMapping> UpsertPhaseMappingAsync(PhaseMapping mapping, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<IReadOnlyList<PhaseMapping>> ListPhaseMappingsAsync(CancellationToken ct = default) => Task.FromResult<IReadOnlyList<PhaseMapping>>([]);
+        public Task<PhaseMapping?> GetPhaseMappingAsync(string mappingId, CancellationToken ct = default) => Task.FromResult<PhaseMapping?>(null);
+        public Task<bool> DeletePhaseMappingAsync(string mappingId, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<FeatureDefinition> UpsertFeatureDefinitionAsync(FeatureDefinition definition, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<IReadOnlyList<FeatureDefinition>> ListFeatureDefinitionsAsync(CancellationToken ct = default) => Task.FromResult<IReadOnlyList<FeatureDefinition>>([]);
+        public Task<FeatureDefinition?> GetFeatureDefinitionAsync(string code, CancellationToken ct = default) => Task.FromResult<FeatureDefinition?>(null);
+        public Task<bool> DeleteFeatureDefinitionAsync(string code, CancellationToken ct = default) => throw new NotSupportedException();
     }
 
     private sealed class FakeProcessConfigurationStore(ScenarioPackage scenario) : IProcessConfigurationStore

@@ -22,7 +22,7 @@ public sealed class AnalysisThresholdVersionTests
             SHA256.HashData(Encoding.UTF8.GetBytes(canonical)))[..8];
 
         Assert.Equal(expected, ProcessExecutionAnalysisThresholds.ComputeFingerprint());
-        Assert.Equal($"stage-relative-v5+{expected}", ProcessExecutionAnalysisEngine.AlgorithmVersion);
+        Assert.Equal($"stage-relative-v6+{expected}", ProcessExecutionAnalysisEngine.AlgorithmVersion);
     }
 
     [Fact]

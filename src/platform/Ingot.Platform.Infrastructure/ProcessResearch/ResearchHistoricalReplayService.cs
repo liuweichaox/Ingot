@@ -82,7 +82,9 @@ public sealed class ResearchHistoricalReplayService(
             .GroupBy(value => Signature(value.Observation.ActualFactors), StringComparer.Ordinal)
             .Select(group => new
             {
-                FirstOrder = Array.IndexOf(source, group.First()),
+                // A repeated condition becomes visible only after its final contributing run.
+                // Ordering an all-run aggregate at the first run leaks later outcomes backwards.
+                AvailableOrder = group.Max(value => Array.IndexOf(source, value)),
                 RunId = string.Join(',', group.Select(value => value.Observation.ExecutionKey)
                     .Order(StringComparer.Ordinal)).Truncate(240),
                 SourceCount = group.Count(),
@@ -104,7 +106,7 @@ public sealed class ResearchHistoricalReplayService(
                     code => group.Average(item => item.Observation.ProcessFeatures[code]),
                     StringComparer.Ordinal)
             })
-            .OrderBy(static value => value.FirstOrder)
+            .OrderBy(static value => value.AvailableOrder)
             .ToArray();
         if (grouped.Length < 3)
             throw new ProcessResearchRuleException("历史运行至少需要 3 种不同的实际工艺规范条件才能回放排序。");

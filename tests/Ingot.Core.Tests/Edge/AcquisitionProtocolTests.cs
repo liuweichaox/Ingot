@@ -179,6 +179,11 @@ public sealed class AcquisitionProtocolTests
             ["process.execution.started", "process.specification.applied", "process.stage_changed", "process.sample"],
             restartedEvents.Select(item => item.EventType));
         Assert.NotEqual(generatedExecutionId, restartedEvents[0].ExecutionId);
+
+        var afterConnectorRestart = new AcquisitionLifecycleTracker().Track(restarted, lifecycle, 1000);
+        Assert.Equal(
+            "active_at_connector_start",
+            afterConnectorRestart[0].Data["lifecycleCaptureStatus"]);
     }
 
     [Fact]

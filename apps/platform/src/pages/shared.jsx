@@ -105,6 +105,7 @@ export function emptyInspectionCharacteristic() {
     lowerLimit: "",
     upperLimit: "",
     allowedValuesText: "",
+    passingValuesText: "",
     required: true,
   };
 }
@@ -119,6 +120,7 @@ export function inspectionDefinitionForm(value = {}, version) {
       lowerLimit: characteristic.lowerLimit ?? "",
       upperLimit: characteristic.upperLimit ?? "",
       allowedValuesText: (characteristic.allowedValues || []).join("\n"),
+      passingValuesText: (characteristic.passingValues || []).join("\n"),
       required: characteristic.required !== false,
     }))
     : [emptyInspectionCharacteristic()];
@@ -152,6 +154,9 @@ export function inspectionDefinitionPayload(form) {
       allowedValues: characteristic.inputType === "select"
         ? characteristic.allowedValuesText.split(/\r?\n|,/).map(value => value.trim()).filter(Boolean)
         : [],
+      passingValues: characteristic.inputType !== "numeric"
+        ? characteristic.passingValuesText.split(/\r?\n|,/).map(value => value.trim()).filter(Boolean)
+        : [],
       required: characteristic.required,
     })),
   };
@@ -175,6 +180,10 @@ export function inspectionDefinitionValidation(form) {
     if (characteristic.inputType === "select" &&
         !characteristic.allowedValuesText.split(/\r?\n|,/).some(value => value.trim())) {
       return `${position}是选项类型，请至少填写一个可选值。`;
+    }
+    if (["select", "boolean"].includes(characteristic.inputType) &&
+        !characteristic.passingValuesText.split(/\r?\n|,/).some(value => value.trim())) {
+      return `${position}必须明确填写合格值，不能由提交端自行判定。`;
     }
     if (characteristic.inputType === "numeric") {
       const lower = characteristic.lowerLimit === "" ? null : Number(characteristic.lowerLimit);

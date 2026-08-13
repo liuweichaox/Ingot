@@ -193,6 +193,33 @@ public sealed class ProcessExecutionAnalysisEngineTests
     }
 
     [Fact]
+    public void Analyze_UsesOneSampleDomainForPhaseMeanAndExtrema()
+    {
+        var rows = new[]
+        {
+            Sample(1, 0, 0, "10"),
+            Sample(2, 100, 0, "10"),
+            Sample(3, 200, 100, "20"),
+            Sample(4, 300, 100, "20")
+        };
+
+        var result = new ProcessExecutionAnalysisEngine().Analyze(
+            rows,
+            Start,
+            Start.AddMilliseconds(400),
+            ModelWithStageNumber(),
+            Plan("min", "mean", "max"));
+
+        var phaseFeatures = result.Signals[0].Features
+            .Where(item => item.PhaseCode == "10")
+            .ToDictionary(item => item.Code, item => item.Value!.Value);
+
+        Assert.True(phaseFeatures["min"] <= phaseFeatures["mean"]);
+        Assert.True(phaseFeatures["mean"] <= phaseFeatures["max"]);
+        Assert.Equal(100, phaseFeatures["max"]);
+    }
+
+    [Fact]
     public void Analyze_DoesNotUseStageNumberCoverageAsProcessExecutionCompleteness()
     {
         var rows = new[]

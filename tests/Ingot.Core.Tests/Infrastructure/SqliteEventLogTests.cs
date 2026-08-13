@@ -176,7 +176,7 @@ public sealed class SqliteEventLogTests
     }
 
     [Fact]
-    public async Task BacklogLimit_ShouldKeepExplicitDiagnosticInsideBoundedOutbox()
+    public async Task BacklogLimit_ShouldKeepExplicitDiagnosticOutsidePendingCapacity()
     {
         var dbPath = CreateTempDbPath();
         try
@@ -200,9 +200,9 @@ public sealed class SqliteEventLogTests
             Assert.Equal("system", diagnostic.Subject.Type);
             Assert.Equal("event-outbox", diagnostic.Subject.Id);
             Assert.Equal(
-                2,
+                1,
                 Assert.IsType<System.Text.Json.JsonElement>(diagnostic.Data["dropped_count"]).GetInt32());
-            Assert.DoesNotContain(all, evt => evt.Seq is 1 or 2);
+            Assert.DoesNotContain(all, evt => evt.Seq is 1);
 
             await using var connection = new SqliteConnection($"Data Source={dbPath}");
             await connection.OpenAsync();
@@ -310,6 +310,34 @@ public sealed class SqliteEventLogTests
                 attempts.Add((reader.GetInt64(0), reader.GetInt64(1)));
 
             Assert.Equal([(1L, 2L), (2L, 1L)], attempts);
+        }
+        finally
+        {
+            DeleteSqliteFiles(dbPath);
+        }
+    }
+
+    [Fact]
+    public async Task Quarantine_ShouldRemovePoisonEventFromPendingAndKeepLocalAudit()
+    {
+        var dbPath = CreateTempDbPath();
+        try
+        {
+            var log = new SqliteEventLog(
+                Options.Create(new EventOptions { DatabasePath = dbPath }),
+                NullLogger<SqliteEventLog>.Instance);
+            await log.AppendAsync(CreateEvent("process.execution.started", "execution-01", "LOT-A"));
+            await log.AppendAsync(CreateEvent("process.sample", "execution-01", "LOT-A"));
+
+            await log.QuarantineAsync(1, "HTTP 400: invalid payload");
+
+            Assert.Equal([2L], (await log.ReadPendingAsync(10)).Select(static value => value.Seq));
+            Assert.Equal(1, await log.CountPendingAsync());
+            await using var connection = new SqliteConnection($"Data Source={dbPath}");
+            await connection.OpenAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText = "SELECT COUNT(*) FROM events WHERE event_type = 'diagnostic.event_quarantined' AND ship_state = 1;";
+            Assert.Equal(1L, (long)(await command.ExecuteScalarAsync())!);
         }
         finally
         {

@@ -33,6 +33,8 @@ public sealed class InspectionReviewsController(
         var record = await records.GetAsync(request.InspectionRecordId, ct).ConfigureAwait(false);
         if (record is null)
             return NotFound(new { error = "未找到待复核检测记录。" });
+        if (string.Equals(record.SubmittedBy, identity.UserId, StringComparison.Ordinal))
+            return BadRequest(new { error = "提交者不能复核自己的检测记录。" });
         if (record.Attachments.Count == 0)
             return BadRequest(new { error = "视觉复核必须关联原始附件。" });
         foreach (var attachment in record.Attachments)
