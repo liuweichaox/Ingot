@@ -1,4 +1,4 @@
-# Installation and the first data loop
+# Getting started
 
 > Status: **current operating guide**. The goal is not to run an optimizer immediately, but to complete one traceable record linking actual conditions, process behavior, and inspection results.
 
@@ -71,7 +71,7 @@ Under Data and connectivity:
 
 Do not put PLC addresses in an R&D project. Equipment connectivity owns addresses and protocols; research references stable business codes.
 
-See [Equipment and data connection](data-connection.en.md) for protocol semantics.
+See [Data integration](data-connection.en.md) for protocol semantics.
 
 ## 5. Establish manufacturing context
 

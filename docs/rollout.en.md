@@ -1,8 +1,8 @@
-# Real-scenario validation
+# Scenario validation
 
 > Status: **rolling validation protocol**. This document defines how to prove that Ingot genuinely helps process engineers, not how to prove that one algorithm looks advanced.
 
-[Strategy and rolling roadmap](project-plan.en.md) defines why the system is built, what it aims to become, and when it may advance. This document only defines how historical replay, shadow validation, and controlled online experiments are preregistered, run, falsified, and published. The three work lines answer different questions and cannot substitute for one another.
+[Roadmap](project-plan.en.md) defines why the system is built, what it aims to become, and when it may advance. This document only defines how historical replay, shadow validation, and controlled online experiments are preregistered, run, falsified, and published. The three work lines answer different questions and cannot substitute for one another.
 
 ## Validation questions
 

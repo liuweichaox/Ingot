@@ -1,4 +1,4 @@
-# Ingot strategy and rolling roadmap
+# Roadmap
 
 > Status: **v2 strategy baseline plus rolling roadmap**. Sections 1–5 fix the long-term direction, strategic thesis, and stable boundaries. Sections 6–9 evolve with real data, engineer feedback, external adoption, and acceptance results. Progress follows evidence gates, never feature count or calendar time alone.
 
@@ -28,7 +28,7 @@ The governing principle is:
 
 > **Every conclusion has provenance. Every recommendation has boundaries. Every action has approval, fallback, and an outcome.**
 
-This is a strategic north star, not a claim that these product benefits have already been demonstrated. [Brand and product language](brand.en.md) remains authoritative for public claims.
+This is a strategic north star, not a claim that these product benefits have already been demonstrated. [Brand guide](brand.en.md) remains authoritative for public claims.
 
 ## 2. One product spine
 
@@ -80,7 +80,7 @@ historical replay: trustworthy, reproducible, leakage-free
 → second scenario: transferable core contracts
 ```
 
-See [Real-scenario validation](rollout.en.md) for the protocol and report requirements.
+See [Scenario validation](rollout.en.md) for the protocol and report requirements.
 
 ### Medium term: become a model-independent process capability substrate
 

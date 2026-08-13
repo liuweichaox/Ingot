@@ -4,7 +4,7 @@
 
 ## Design objective
 
-Ingot's core value is fixed by [Brand and product language](brand.en.md): move process R&D from decisions without data support to decisions supported by real data, so computers can genuinely help process engineers choose what to do next using the most effective computational methods for the problem.
+Ingot's core value is fixed by the [Brand guide](brand.en.md): move process R&D from decisions without data support to decisions supported by real data, so computers can genuinely help process engineers choose what to do next using the most effective computational methods for the problem.
 
 The architecture must therefore:
 
@@ -148,7 +148,7 @@ comparable runs → differences and first deviation → candidate cause
 - Causal promotion requires appropriate controls, repetition, blocking, randomization, or intervention evidence.
 - When identification conditions are absent, “insufficient evidence” is the correct result.
 
-Specific statistics and models are described in [Analysis and optimization methods](optimization.en.md) and are not immutable architecture.
+Specific statistics and models are described in [Analysis and optimization](optimization.en.md) and are not immutable architecture.
 
 ## From candidate to next experiment
 
@@ -202,7 +202,7 @@ Capabilities open progressively by risk:
 - **Commit**: freeze a version and submit independent approval; creators cannot self-approve.
 - **Execute**: invoke only allow-listed, time-bounded, scoped, stoppable, reversible actions.
 
-Agents do not connect directly to devices or hold arbitrary write access. Platform records approved structured actions, a controlled integration or Edge gateway executes them, and actual confirmation and outcomes return to the formal record. See [Strategy and rolling roadmap](project-plan.en.md) for protocol objects, versions, and safety invariants.
+Agents do not connect directly to devices or hold arbitrary write access. Platform records approved structured actions, a controlled integration or Edge gateway executes them, and actual confirmation and outcomes return to the formal record. See the [Roadmap](project-plan.en.md) for protocol objects, versions, and safety invariants.
 
 ## Evolvable strategies
 

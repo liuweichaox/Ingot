@@ -1,4 +1,4 @@
-# Analysis and optimization methods
+# Analysis and optimization
 
 > Status: **current scientific strategy**. This document explains how methods are selected by the engineering question and describes the limits of today's numerical implementation. Algorithms may evolve without changing the core value or evidence principles.
 

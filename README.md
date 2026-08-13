@@ -68,7 +68,7 @@ Ingot 不把某一种“先进算法”固定成所有问题的答案：
 - 机理明确而数据较少时融合物理特征或先验；
 - LLM 用于理解问题、调用只读工具和解释证据，不直接生成数值工艺设定。
 
-详细方法边界见[分析与优化方法](docs/optimization.md)。
+详细方法边界见[分析与优化](docs/optimization.md)。
 
 ## 产品组成
 
@@ -137,7 +137,7 @@ http://localhost:8100/ready
 
 首次使用应先完成一条真实或代表性的数据闭环，再进入诊断和优化：定义变量与结果 → 接入数据 → 完成一次运行 → 关联检验 → 检查数据质量 → 比较运行 → 设计验证实验。
 
-完整步骤见[安装与第一个数据闭环](docs/getting-started.md)。
+完整步骤见[快速开始](docs/getting-started.md)。
 
 ## 开发验证
 
@@ -176,15 +176,15 @@ scripts/           验证与运维脚本
 ## 文档
 
 - [文档首页](docs/index.md)
-- [安装与第一个数据闭环](docs/getting-started.md)
+- [快速开始](docs/getting-started.md)
 - [系统设计](docs/design.md)
-- [分析与优化方法](docs/optimization.md)
-- [设备与数据接线](docs/data-connection.md)
-- [真实场景验证](docs/rollout.md)
-- [战略规划与滚动路线图](docs/project-plan.md)
-- [部署与运行](docs/deployment.md)
+- [分析与优化](docs/optimization.md)
+- [数据接入](docs/data-connection.md)
+- [场景验证](docs/rollout.md)
+- [发展规划](docs/project-plan.md)
+- [部署运维](docs/deployment.md)
 - [常见问题](docs/faq.md)
-- [品牌与产品表述](docs/brand.md)
+- [品牌规范](docs/brand.md)
 - [开源依赖](docs/open-source-dependencies.md)
 
 ## 路线图
@@ -199,7 +199,7 @@ scripts/           验证与运维脚本
 - [ ] 将只读与提议能力开放为模型无关的 Agent 协议
 - [ ] 发布制造智能证据与实验协议的 Schema、验证器和参考实现候选版
 
-近期先证明历史证据装置可信，中期再开放 Agent 协议，长期才争取形成开放规范。路线图以真实证据和验收闸门为准，详细顺序见[战略规划与滚动路线图](docs/project-plan.md)。
+近期先证明历史证据装置可信，中期再开放 Agent 协议，长期才争取形成开放规范。路线图以真实证据和验收闸门为准，详细顺序见[发展规划](docs/project-plan.md)。
 
 ## 参与贡献
 

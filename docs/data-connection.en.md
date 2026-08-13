@@ -1,4 +1,4 @@
-# Equipment and data connection
+# Data integration
 
 > Status: **current technical guide**. The purpose of connectivity is not to accumulate more points, but to make one real run useful for engineering judgment.
 

@@ -68,7 +68,7 @@ Ingot does not force one “advanced algorithm” onto every question:
 - physical features or priors help when mechanisms are known and data are scarce;
 - an LLM interprets questions, calls read-only tools, and explains evidence, but never generates numerical process settings directly.
 
-See [Analysis and optimization methods](docs/optimization.en.md) for the detailed boundaries.
+See [Analysis and optimization](docs/optimization.en.md) for the detailed boundaries.
 
 ## Product components
 
@@ -133,7 +133,7 @@ http://localhost:8100/ready
 
 Complete one real or representative data loop before diagnosis or optimization: define variables and outcomes → connect data → complete a run → link inspections → review data quality → compare runs → design a validation experiment.
 
-See [Installation and the first data loop](docs/getting-started.en.md).
+See [Getting started](docs/getting-started.en.md).
 
 ## Development verification
 
@@ -172,15 +172,15 @@ scripts/           verification and operations scripts
 ## Documentation
 
 - [Documentation home](docs/index.en.md)
-- [Installation and the first data loop](docs/getting-started.en.md)
+- [Getting started](docs/getting-started.en.md)
 - [System design](docs/design.en.md)
-- [Analysis and optimization methods](docs/optimization.en.md)
-- [Equipment and data connection](docs/data-connection.en.md)
-- [Real-scenario validation](docs/rollout.en.md)
-- [Strategy and rolling roadmap](docs/project-plan.en.md)
-- [Deployment and operations](docs/deployment.en.md)
+- [Analysis and optimization](docs/optimization.en.md)
+- [Data integration](docs/data-connection.en.md)
+- [Scenario validation](docs/rollout.en.md)
+- [Roadmap](docs/project-plan.en.md)
+- [Deployment](docs/deployment.en.md)
 - [FAQ](docs/faq.en.md)
-- [Brand and product language](docs/brand.en.md)
+- [Brand guide](docs/brand.en.md)
 - [Open-source dependencies](docs/open-source-dependencies.en.md)
 
 ## Roadmap
@@ -195,7 +195,7 @@ scripts/           verification and operations scripts
 - [ ] Expose read and propose capabilities through a model-independent agent protocol.
 - [ ] Publish candidate schemas, validators, and reference implementations for the manufacturing evidence and experiment protocol.
 
-The near term proves the historical evidence apparatus, the medium term opens agent protocols, and only the long term pursues an open specification. The roadmap follows real evidence and acceptance gates. See the [Strategy and rolling roadmap](docs/project-plan.en.md) for sequencing.
+The near term proves the historical evidence apparatus, the medium term opens agent protocols, and only the long term pursues an open specification. The roadmap follows real evidence and acceptance gates. See the [Roadmap](docs/project-plan.en.md) for sequencing.
 
 ## Contributing
 

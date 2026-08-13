@@ -1,4 +1,4 @@
-# Brand and product language
+# Brand guide
 
 > Status: **v1 normative baseline**. This file is the single source of truth for product positioning, core value, and public language. Do not redefine the core value unless the product direction actually changes.
 
@@ -108,5 +108,5 @@ The domain does not rename the product; do not use “IngotStack” as the produ
 
 - [Documentation home](index.en.md)
 - [System design](design.en.md)
-- [Real-scenario validation](rollout.en.md)
-- [Strategy and rolling roadmap](project-plan.en.md)
+- [Scenario validation](rollout.en.md)
+- [Roadmap](project-plan.en.md)

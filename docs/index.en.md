@@ -27,15 +27,15 @@ These are one evidence chain, not six unrelated products. Acquisition makes fact
 
 | Goal | Read |
 |---|---|
-| Start the system and complete the first data loop | [Installation and the first data loop](getting-started.en.md) |
+| Start the system and complete the first data loop | [Getting started](getting-started.en.md) |
 | Understand stable product and architecture boundaries | [System design](design.en.md) |
-| Understand how analysis, experiment, and optimization methods are selected | [Analysis and optimization methods](optimization.en.md) |
-| Connect equipment, instruments, inspections, and business data | [Equipment and data connection](data-connection.en.md) |
-| Review the long-term position, three-horizon strategy, priorities, and gates | [Strategy and rolling roadmap](project-plan.en.md) |
-| Validate whether the product helps engineers on real projects | [Real-scenario validation](rollout.en.md) |
-| Deploy on a factory network | [Deployment and operations](deployment.en.md) |
+| Understand how analysis, experiment, and optimization methods are selected | [Analysis and optimization](optimization.en.md) |
+| Connect equipment, instruments, inspections, and business data | [Data integration](data-connection.en.md) |
+| Review the long-term position, three-horizon strategy, priorities, and gates | [Roadmap](project-plan.en.md) |
+| Validate whether the product helps engineers on real projects | [Scenario validation](rollout.en.md) |
+| Deploy on a factory network | [Deployment](deployment.en.md) |
 | Check product and technical boundaries | [FAQ](faq.en.md) |
-| Review the normative public product language | [Brand and product language](brand.en.md) |
+| Review the normative public product language | [Brand guide](brand.en.md) |
 | Review dependency principles and audit boundaries | [Open-source dependencies](open-source-dependencies.en.md) |
 
 ## Document status
@@ -44,7 +44,7 @@ These are one evidence chain, not six unrelated products. Acquisition makes fact
 - **Current strategy**: today's analysis methods, default experiment designs, and information architecture. These may evolve without changing the core value.
 - **Rolling status**: roadmap, implementation status, known limits, and validation results. These must track project facts.
 
-[Brand and product language](brand.en.md) is the single source of truth for public wording; technical documents must not create another core value.
+[Brand guide](brand.en.md) is the single source of truth for public wording; technical documents must not create another core value.
 
 ## Current facts
 

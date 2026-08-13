@@ -1,4 +1,4 @@
-# Deployment and operations
+# Deployment
 
 > Status: **current operations guide**. Deployment keeps acquisition, business records, and engineering decisions reliable inside the factory. The public website and documentation site are outside the factory runtime.
 
