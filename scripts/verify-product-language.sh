@@ -37,6 +37,47 @@ if grep -RInE --exclude='package-lock.json' \
   exit 1
 fi
 
+check_entry_order() {
+  local file="$1"
+  shift
+  local previous=0
+  local entry line
+  for entry in "$@"; do
+    line=$(grep -nF -- "$entry" "$file" | head -n 1 | cut -d: -f1 || true)
+    if [[ -z "$line" || "$line" -le "$previous" ]]; then
+      echo "$file must keep the canonical primary navigation names and dependency order." >&2
+      exit 1
+    fi
+    previous="$line"
+  done
+}
+
+check_entry_order docs/design.md \
+  '1. **工作台**' \
+  '2. **工艺定义**' \
+  '3. **设备接入**' \
+  '4. **生产运行**' \
+  '5. **质量管理**' \
+  '6. **工艺追因**' \
+  '7. **工艺研发**'
+
+check_entry_order docs/design.en.md \
+  '1. **Workbench**' \
+  '2. **Process definition**' \
+  '3. **Equipment connection**' \
+  '4. **Production runs**' \
+  '5. **Quality management**' \
+  '6. **Process diagnosis**' \
+  '7. **Process R&D**'
+
+canonical_nav_zh='工艺定义 → 设备接入 → 生产运行 → 质量管理 → 工艺追因 → 工艺研发'
+canonical_nav_en='Process definition → Equipment connection → Production runs → Quality management → Process diagnosis → Process R&D'
+if ! grep -Fq "$canonical_nav_zh" docs/design.md ||
+   ! grep -Fq "$canonical_nav_en" docs/design.en.md; then
+  echo "System design navigation summaries must match the canonical product order." >&2
+  exit 1
+fi
+
 canonical_zh='让工艺研发从没有数据支撑走向有数据支撑，让计算机基于真实数据帮助工艺工程师抉择，并采用适合问题的有效计算方法分析数据。'
 canonical_en='Move process R&D from decisions without data support to decisions supported by real data, so computers can genuinely help process engineers choose what to do next using the most effective computational methods for the problem.'
 

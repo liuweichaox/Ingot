@@ -18,7 +18,7 @@ Participation follows the [Code of Conduct](CODE_OF_CONDUCT.md).
 Requirements:
 
 - .NET SDK 10;
-- Node.js 22.13+;
+- Node.js 22.22+;
 - uv 0.11.32 (uv manages the Python 3.11+ environment);
 - Docker and Docker Compose.
 

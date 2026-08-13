@@ -114,7 +114,7 @@ Platform is the factory system of record. Optimizer is a stateless numerical ser
 
 ## Quickstart
 
-Requirements: .NET SDK 10, Node.js 22.13+, uv 0.11.32, Docker, and Docker Compose.
+Requirements: .NET SDK 10, Node.js 22.22+, uv 0.11.32, Docker, and Docker Compose.
 
 ```bash
 git clone https://github.com/liuweichaox/Ingot.git

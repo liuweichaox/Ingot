@@ -19,6 +19,8 @@
 
 Ingot 不是为了“多采一些点位”，也不是为了展示某一种算法。它把采集到的数据变成工程师可以使用的证据，再根据问题选择稳健统计、对照比较、实验设计、因果验证、机器学习、贝叶斯优化、机理模型或语言模型。
 
+“工艺研发”是产品信息架构中的业务入口，覆盖候选验证、实验设计、安全优化和研发资产；“优化”是产品类别中对选择下一步实验能力的概括，不是独立一级菜单，也不表示系统自动写入设备。
+
 ## 公开承诺
 
 公开内容可以承诺系统提供以下能力：
@@ -47,12 +49,15 @@ Ingot 不是为了“多采一些点位”，也不是为了展示某一种算�
 | 产品类别 | 开源工艺追因与优化系统 | Open-source Process Diagnosis & Optimization |
 | 核心价值 | 让真实数据帮助工艺工程师抉择 | Help process engineers make decisions with real data |
 | 简短标语 | 看清这次运行，优化下一次运行。 | Explain this run, optimize the next. |
-| 数据单位 | 运行 | run |
+| 数据单位 | 运行 / 过程执行 | run / process execution |
 | 观察结论 | 候选原因、稳定关联、混杂关联、证据不足 | candidate cause, stable association, confounded association, insufficient evidence |
 | 实验结论 | 支持、否决、不确定、已验证原因 | supported, rejected, inconclusive, validated cause |
+| 证据等级 | 证据不足、探索性证据、证据稳定、证据充分 | insufficient, exploratory, stable, sufficient |
 | 优化结果 | 下一步实验建议、候选设置、已验证工艺操作域 | next-experiment recommendation, candidate setting, validated operating region |
 
 “过程执行”是平台中的标准业务对象；面向工程师的简短文案可使用“运行”，但代码、接口和跨场景文档不使用特定设备的周期名称代替它。
+
+证据等级回答“当前支撑有多强”，观察结论回答“观察到了什么关系”，实验结论回答“干预是否支持假设”，三者不得互换。“仅稳健筛选”（`screening`）和“证据有限”（`limited`）是第一、第二级的降级说明，不新增结论类别。
 
 “根因”只在已经说明验证证据时使用。“AI 工艺研发”可以描述交互方式，但不能替代产品类别。具体算法名只出现在技术说明中，不作为产品价值本身。
 

@@ -18,7 +18,7 @@
 要求：
 
 - .NET SDK 10；
-- Node.js 22.13+；
+- Node.js 22.22+；
 - uv 0.11.32（由 uv 管理 Python 3.11+ 环境）；
 - Docker 与 Docker Compose。
 

@@ -6,7 +6,7 @@ Ingot is a .NET 10 monorepo with three web applications. Backend code lives unde
 
 ## Build, Test, and Development Commands
 
-Use .NET SDK 10, Node.js 22.13+, uv 0.11.32, Docker, and Docker Compose.
+Use .NET SDK 10, Node.js 22.22+, uv 0.11.32, Docker, and Docker Compose.
 
 - `dotnet restore Ingot.sln` installs .NET dependencies.
 - `dotnet build Ingot.sln` builds all C# projects.
@@ -16,6 +16,16 @@ Use .NET SDK 10, Node.js 22.13+, uv 0.11.32, Docker, and Docker Compose.
 - `uv sync --project optimizer --extra service --group dev --locked` creates the locked Python environment; use `uv run --project optimizer --locked ...` for all optimizer commands.
 - `docker compose -f docker-compose.app.yml up -d --build` launches the application stack.
 - `./scripts/verify.sh` runs the full CI gate: builds, tests, ESLint, audits, architecture checks, Compose validation, and `git diff --check`.
+
+## Mandatory Boundary Checks
+
+The following checks are blocking repository contracts, not optional lint rules:
+
+- `./scripts/verify-architecture.sh` enforces dependency direction, composition-root isolation, and read-only Agent analysis tools.
+- `./scripts/verify-product-scope.sh` rejects retired desktop/code-generation surfaces and legacy multi-agent product terminology.
+- `./scripts/verify-product-language.sh` protects the canonical product value, claim boundaries, scenario-neutral language, and evidence-gated roadmap wording.
+
+Run all three directly when changing architecture, product scope, public terminology, or documentation; `./scripts/verify.sh` also includes them.
 
 ## Coding Style & Naming Conventions
 

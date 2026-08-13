@@ -19,6 +19,8 @@ This is Ingot's stable starting point. Data acquisition, process diagnosis, expe
 
 Ingot is not built merely to collect more points or showcase one algorithm. It turns collected data into usable engineering evidence and then selects robust statistics, controlled comparison, experimental design, causal validation, machine learning, Bayesian optimization, physical models, or language models according to the problem.
 
+*Process R&D* is the business entry in the product information architecture. It covers candidate validation, experiment design, safe optimization, and R&D assets. *Optimization* summarizes the capability to select the next experiment in the product category; it is not a standalone primary menu and does not imply automatic writes to equipment.
+
 ## Public commitments
 
 Public material may state that the system can:
@@ -50,7 +52,10 @@ Observational data can support candidate causes, stable associations, confounded
 | Data unit | 运行 / 过程执行 | run / process execution |
 | Observational conclusion | 候选原因、稳定关联、混杂关联、证据不足 | candidate cause, stable association, confounded association, insufficient evidence |
 | Experimental conclusion | 支持、否决、不确定、已验证原因 | supported, rejected, inconclusive, validated cause |
+| Evidence level | 证据不足、探索性证据、证据稳定、证据充分 | insufficient, exploratory, stable, sufficient |
 | Optimization result | 下一步实验建议、候选设置、已验证工艺操作域 | next-experiment recommendation, candidate setting, validated operating region |
+
+An evidence level answers “how strong is the current support?”, an observational conclusion answers “what relationship was observed?”, and an experimental conclusion answers “did the intervention support the hypothesis?” These concepts are not interchangeable. *Robust screening only* (`screening`) and *limited evidence* (`limited`) are degraded labels at levels one and two; they do not introduce additional conclusion categories.
 
 Use *root cause* only when the validating evidence is stated. *AI process R&D* may describe the interaction model but does not replace the product category. Algorithm names belong in technical explanations, not in the product value itself.
 
