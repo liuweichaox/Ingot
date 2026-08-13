@@ -71,6 +71,8 @@ The immediate priority is leakage-free replay of a real historical project. It d
 - missingness, mismatches, unauthorized access, and insufficient evidence are rejected explicitly;
 - inputs, policies, models, seeds, outputs, reviews, and content hashes form a complete report.
 
+Real production data and derived results remain inside the controlled environment. The complete report above is an access-controlled, auditable internal evidence artifact; completion never requires publishing raw data, project identities, parameter distributions, or project results. The public repository provides only general protocols, schemas, synthetic examples, and conformance tests.
+
 The near-term conclusion can only be that the apparatus is trustworthy, reproducible, and leakage-free. Prospective value requires shadow validation; causal and benefit claims require controlled online experiments. The evidence ladder is:
 
 ```text
@@ -234,7 +236,7 @@ Each work line preregisters data, baselines, measures, threshold versions, accep
 |---|---|---|
 | P0 | run identity, actual values, context, inspection linkage, and quality validity | every analysis record uniquely reaches a real run and valid outcome |
 | P0 | evidence freezing, replay, transactions, and recovery | inputs cannot be rewritten after the fact; recovery preserves provenance |
-| P0 scientific | historical-question and production-equivalent sequential replay | reviewed preregistration and leakage-free report with baselines, failures, and limits |
+| P0 scientific | historical-question and production-equivalent sequential replay | access-controlled internal preregistration and reviewed leakage-free report with baselines, failures, and limits |
 | P1 | process-decision case and deterministic diagnosis contract | evidence, candidates, counterevidence, hypotheses, experiments, and conclusions share one formal spine |
 | P1 | agent replay and adversarial evaluation | unsupported inference, identity mismatch, overreach, and incorrect tool use are detectable |
 | P1 | shadow recommendations, calibration, and stopping | recommendations freeze in advance and preserve independent engineer choice and rejection reasons |
@@ -246,7 +248,7 @@ Current rolling batches:
 
 1. **Trusted identity and quality chain**: repair run identity, actual values, context admission, inspection validity, and stage statistics.
 2. **Historical evidence apparatus**: freeze real observations, protect transactions, and define hashes, retention, and recomputation.
-3. **Preregistered historical replay**: complete engineering-question and production-equivalent sequential replay and publish failures and limits.
+3. **Preregistered historical replay**: complete engineering-question and production-equivalent sequential replay, preserve every failure and limit in the controlled internal report, and expose only the protocol and conclusion boundaries publicly.
 4. **Process-decision case**: fix data quality, baseline, first deviation, candidates, counterevidence, confounding, missingness, and experiment-proposal structure.
 5. **Agent evaluation flywheel**: engineer golden questions, correct refusal, citation coverage, permissions, and tool-call evaluation.
 6. **Prospective shadow validation**: freeze variables, mappings, context, constraints, policies, and engineer rejection reasons.
@@ -303,6 +305,6 @@ Governance discipline:
 - preregister data, baselines, measures, acceptance, and falsification for every phase;
 - every feature must improve data trust, diagnosis, experiment value, action safety, or interoperability;
 - downgrade, repair, or stop methods that do not beat applicable simple baselines;
-- publish separate reports for replay, shadow, controlled online, and protocol interoperability;
+- produce separate controlled internal reports for replay, shadow, and controlled online validation, and a public conformance report for protocol interoperability; never substitute one for another;
 - never measure success by pages, conversations, agent count, model size, or token consumption;
 - stronger foundation models never relax provenance, permission, approval, safety, or causal-validation requirements.

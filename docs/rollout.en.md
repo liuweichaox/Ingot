@@ -2,7 +2,7 @@
 
 > Status: **rolling validation protocol**. This document defines how to prove that Ingot genuinely helps process engineers, not how to prove that one algorithm looks advanced.
 
-[Roadmap](project-plan.en.md) defines why the system is built, what it aims to become, and when it may advance. This document only defines how historical replay, shadow validation, and controlled online experiments are preregistered, run, falsified, and published. The three work lines answer different questions and cannot substitute for one another.
+[Roadmap](project-plan.en.md) defines why the system is built, what it aims to become, and when it may advance. This document only defines how historical replay, shadow validation, and controlled online experiments are preregistered, run, falsified, reviewed internally, and translated into public conclusion boundaries. The three work lines answer different questions and cannot substitute for one another.
 
 ## Validation questions
 
@@ -158,8 +158,10 @@ The project cannot use feature count as evidence of success when:
 
 These findings trigger data repair, workflow changes, method downgrade, or an optimization pause rather than automatic progression to a more complex phase.
 
-## Publishing results
+## Evidence confidentiality and public wording
 
-A public report includes data scope, anonymization, inclusion rules, variables, objectives, constraints, context coverage, exclusions, comparison baselines, random seeds, every failure, safety event, engineer rejection reason, and non-generalizable limitation. It also includes a machine-readable summary and content hash so independent implementations can verify inputs, conclusion boundaries, and report integrity.
+The complete report for a real project is a controlled internal evidence artifact. It preserves data scope, inclusion rules, variables, objectives, constraints, context coverage, exclusions, comparison baselines, random seeds, every failure, safety event, engineer rejection reason, non-generalizable limitation, and content hash. Access is limited to authorized project members and reviewers and follows the deployer's retention, export, backup, and deletion rules.
 
-Until real validation is complete, the website describes what the system can do without claiming unproven quantitative benefit.
+Real production data, project and equipment identities, process parameters, quality distributions, sequential traces, and derived results do not enter the public repository or public reports. Public materials expose only general protocols, schemas, synthetic examples, acceptance methods, and conclusion boundaries that disclose no project facts. Synthetic data validates contracts and software behavior; it is never real-project evidence.
+
+Public wording may state which internal validation stage has been completed, but it must also state that the evidence is non-public and cannot be independently reproduced by the public, and it must not claim quantitative benefit without prospective controlled validation.

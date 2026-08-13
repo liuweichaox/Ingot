@@ -91,9 +91,9 @@ The repository implements the main code path across acquisition, process executi
 - **Shadow validation passed** means recommendations survived field-constraint review on new projects.
 - **Online validation passed** is required before claiming fewer experiments or shorter development time on real work.
 
-Public replay and prospective results for real optical molding projects are not complete. The project therefore does not claim a measured reduction in experiments or development time.
+The project has completed internal end-to-end validation of import, run reconstruction, inspection linkage, and R&D observations using controlled, non-public production history. Formal leakage-free replay and prospective validation remain incomplete, so the project does not claim a measured reduction in experiments or development time. Real production data, project identities, process parameters, and derived results do not enter the public repository; public materials provide only protocols, schemas, synthetic examples, acceptance methods, and conclusion boundaries.
 
-Historical replay, shadow validation, and controlled online validation are three independent scientific-validation work lines. Each preregisters its own data, baselines, measures, threshold version, acceptance, and falsification criteria and publishes its own evidence artifact. Passing one does not pass the others, and the results are not compressed into a global API "maturity" field. Existing endpoints show that experimental infrastructure is implemented; engineering decisions must use the corresponding reviewed, hashed, and versioned report rather than infer validity from feature presence.
+Historical replay, shadow validation, and controlled online validation are three independent scientific-validation work lines. Each preregisters its own data, baselines, measures, threshold version, acceptance, and falsification criteria and produces its own evidence artifact inside the controlled environment. Passing one does not pass the others, and the results are not compressed into a global API "maturity" field. Existing endpoints show that experimental infrastructure is implemented; engineering decisions must use the corresponding reviewed, hashed, and versioned report rather than infer validity from feature presence.
 
 ## Architecture
 

@@ -48,7 +48,9 @@ These are one evidence chain, not six unrelated products. Acquisition makes fact
 
 ## Current facts
 
-The code covers the main business path across acquisition, process executions, context, inspections, R&D experiments, analysis, and optimization, with automated tests. Public historical replay and prospective results for real optical molding projects are not complete, so the project describes system capabilities but does not claim a measured reduction in experiments or development time.
+The code covers the main business path across acquisition, process executions, context, inspections, R&D experiments, analysis, and optimization, with automated tests. The project has completed internal end-to-end validation of import, run reconstruction, inspection linkage, and R&D observations using controlled, non-public production history. Formal leakage-free replay and prospective validation remain incomplete, so the project describes system capabilities but does not claim a measured reduction in experiments or development time.
+
+Real production data, project and equipment identities, process parameters, quality distributions, and derived results are controlled factory evidence. They do not enter the public repository or public reports. Public materials provide only protocols, schemas, synthetic examples, acceptance methods, and conclusion boundaries; internal validation on real data is not public independent reproduction.
 
 The current sequence is to prove that the evidence apparatus is reproducible and leakage-free through real historical replay, then establish value through prospective shadow and controlled online validation. Agent protocols and an open specification do not bypass those evidence stages.
 

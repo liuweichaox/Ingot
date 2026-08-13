@@ -159,7 +159,8 @@ Historical replay reveals outcomes sequentially in time; future runs are never v
 
 ## Current limitations
 
-- Public real-manufacturing replay and prospective online value evidence are not complete.
+- Internal chain validation from import to R&D observations has used controlled, non-public production history, while formal leakage-free replay and prospective online value validation remain incomplete.
+- Real production data, parameter distributions, and derived results do not enter the public repository. Public tests use contract-equivalent synthetic data and must not be presented as real-project evidence.
 - Prediction intervals still require continuous calibration on real projects.
 - Physical features exist, while real-data-calibrated grey-box priors continue to evolve.
 - Cross-product, equipment, and scenario transfer must wait for explicit applicability and second-scenario validation.

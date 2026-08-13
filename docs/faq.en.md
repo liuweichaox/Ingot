@@ -76,7 +76,9 @@ They are the first reproducible scenario for validating the data chain and algor
 
 ## Has the system proved shorter development cycles?
 
-Not publicly yet. Real-project historical replay and prospective online validation remain incomplete. Code capability is not product benefit. Quantitative claims follow the [Scenario validation](rollout.en.md) protocol and must disclose data, baselines, failures, and limitations.
+No. The project has completed internal validation of import, run reconstruction, inspection linkage, and R&D observations using controlled, non-public production history, but that does not prove shorter development cycles. Neither code capability nor internal chain validation is a product benefit; quantitative claims still require prospective shadow and controlled online validation under the [Scenario validation](rollout.en.md) protocol.
+
+Real production data and derived results remain inside the confidentiality boundary and are not submitted or disclosed for public reproduction. The public repository provides synthetic examples and general acceptance protocols, so public wording is limited to the validation stage and conclusion boundaries.
 
 ## Is the documentation now finalized?
 

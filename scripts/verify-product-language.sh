@@ -107,3 +107,19 @@ if grep -RIniE --exclude='package-lock.json' \
   echo "Public copy contains obsolete English product terminology. Follow docs/design.en.md and docs/brand.en.md." >&2
   exit 1
 fi
+
+# Real factory evidence remains access-controlled. Public documentation may
+# describe protocols and conclusion boundaries, but must not promise disclosure
+# of production data, project results, or full real-project evidence artifacts.
+if grep -RInE \
+  '公开报告至少包含数据范围|公开失败与限制|Public report includes data scope|publish failures and limits|publish separate reports for replay' \
+  README.md README.en.md docs; then
+  echo "Public documentation must not promise disclosure of confidential real-project evidence." >&2
+  exit 1
+fi
+
+if ! grep -Fq '真实生产数据、项目与设备标识' docs/rollout.md ||
+   ! grep -Fq 'Real production data, project and equipment identities' docs/rollout.en.md; then
+  echo "Scenario validation documents must retain the real-production-data confidentiality boundary." >&2
+  exit 1
+fi

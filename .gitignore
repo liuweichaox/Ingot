@@ -83,6 +83,8 @@ apps/platform/.vite/
 # Local runtime data
 /.codex-temp/
 /.codex-tmp/
+/.ingot-import/
+/mapping-*.json
 Data/*.db
 Data/*.db-*
 deploy/runtime/
