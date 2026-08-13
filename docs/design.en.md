@@ -24,14 +24,17 @@ Define process → Connect equipment → Collect production data → Close the d
 
 The first four steps organize field activity into trustworthy run facts. The last two use those facts to support engineering decisions. Diagnosis and optimization are not parallel products: one explains an observed result and the other selects an unexecuted experiment, so both must read the same evidence.
 
-The current Web information architecture balances the decision chain with frequent role-based tasks through six business entries:
+The current Web information architecture balances the decision chain with frequent role-based tasks through seven business entries:
 
 1. **Workbench**: prioritized quality tasks, run status, field status, and R&D progress;
 2. **Production runs**: industrial objects, real runs, run events, production preparation, and tooling installation;
 3. **Quality management**: inspection entry, independent review, quality records, and quality-deviation analysis, with direct access for daily quality work;
 4. **Process analysis**: the analysis assistant, data trust, and run comparison; AI is an analysis method rather than a standalone business domain;
 5. **Process optimization**: R&D projects, experimental validation, and reusable research assets;
-6. **Configuration**: process, process specification, analysis, quality, tooling, edge-node, and equipment-connectivity definitions.
+6. **Process definition**: process data models, process specifications, analysis, quality, tooling, and process-configuration packages;
+7. **Equipment connection**: edge nodes, communication drivers, and mappings from equipment points to process variables.
+
+After the workbench, the primary business entries follow “Process definition → Equipment connection → Production runs → Quality management → Process analysis → Process optimization.” This simplified dependency order explains why trustworthy data must be established before diagnosis and optimization. It summarizes the full loop rather than mapping one-to-one to the six stages above: Production runs also covers production preparation, collection, and traceability; Quality management covers inspection and quality-deviation work; and the complete data loop additionally depends on cross-entry evidence such as data trust and run context.
 
 System administration has a separate entry for users, role permissions, platform status, runtime logs, and assistant evaluation, so it does not compete with business tasks. Secondary navigation places frequent daily tasks before setup and maintenance actions. Existing URLs and data contracts remain stable; only the way engineers discover capabilities changes.
 

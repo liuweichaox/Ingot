@@ -85,9 +85,10 @@ test("navigation and overlays are accessible Headless UI components", () => {
   assert.match(app, /DialogBackdrop/);
   assert.match(app, /DialogPanel/);
   assert.match(app, /MenuButton/);
-  for (const [id, domain] of [["overview", "工作台"], ["evidence", "生产运行"], ["quality", "质量管理"], ["diagnosis", "工艺追因"], ["optimization", "工艺优化"], ["configuration", "平台配置"]]) {
+  for (const [id, domain] of [["overview", "工作台"], ["evidence", "生产运行"], ["quality", "质量管理"], ["diagnosis", "工艺追因"], ["optimization", "工艺优化"], ["process-definition", "工艺定义"], ["equipment-connection", "设备接入"]]) {
     assert.match(app, new RegExp(`id: "${id}", label: "${domain}"`));
   }
+  assert.match(app, /id: "overview"[\s\S]*id: "process-definition"[\s\S]*id: "equipment-connection"[\s\S]*id: "evidence"[\s\S]*id: "quality"[\s\S]*id: "diagnosis"[\s\S]*id: "optimization"/);
   assert.match(app, /const systemSection = \{/);
   assert.match(app, /section=\{systemSection\}/);
   assert.match(app, /\["\/chat", "分析助手"\]/);
@@ -165,10 +166,10 @@ test("feature search opens a command palette and table columns keep stable uniqu
   assert.match(components, /key=\{column\.id \?\? `\$\{column\.key\}:\$\{columnIndex\}`\}/);
 });
 
-test("equipment and workpiece pages use the event summary contract and show an initial loading state", () => {
-  assert.match(app, /\["\/explorer", "设备与工件"\]/);
+test("object catalog pages use the event summary contract and show an initial loading state", () => {
+  assert.match(app, /\["\/explorer", "对象目录"\]/);
   assert.match(app, /id: "evidence", label: "生产运行"/);
-  assert.match(pages, /title="设备与工件"/);
+  assert.match(pages, /title="对象目录"/);
   assert.match(pages, /objects\.loading && !objects\.data \? <LoadingCard \/>/);
   assert.match(pages, /title="对象目录"/);
   assert.match(pages, /在这个对象中继续工作/);

@@ -13,6 +13,7 @@ import {
   Cog6ToothIcon,
   MagnifyingGlassIcon,
   MagnifyingGlassCircleIcon,
+  SignalIcon,
   XMarkIcon,
 } from "@heroicons/react/24/outline";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -28,39 +29,43 @@ const sections = [
     ],
   },
   {
+    id: "process-definition", label: "工艺定义", icon: AdjustmentsHorizontalIcon, path: "/configuration", groups: [
+      { label: "准备总览", items: [["/configuration", "配置总览"]] },
+      { label: "工艺定义", items: [["/configuration/process-data-models", "工艺数据模型"], ["/configuration/process-specifications", "工艺规范"]] },
+      { label: "分析定义", items: [["/configuration/process-analysis-plans", "运行分析方案"]] },
+      { label: "质量定义", items: [["/configuration/inspection-definitions", "检测定义"], ["/configuration/quality-plans", "质量方案"]] },
+      { label: "工装管理", items: [["/configuration/component-types", "组件分类"], ["/configuration/components", "组件资产"], ["/configuration/tooling-types", "装配模板"], ["/configuration/tooling-assemblies", "工装总成"]] },
+      { label: "方案发布", items: [["/configuration/scenario-packages", "工艺配置方案"]] },
+    ],
+  },
+  {
+    id: "equipment-connection", label: "设备接入", icon: SignalIcon, path: "/edges", groups: [
+      { label: "现场接入", items: [["/edges", "现场节点"], ["/configuration/ingestion-tasks", "设备接入"]] },
+    ],
+  },
+  {
     id: "evidence", label: "生产运行", icon: CircleStackIcon, path: "/process-executions", groups: [
-      { label: "运行与追溯", items: [["/process-executions", "运行记录"], ["/events", "运行事件"], ["/explorer", "设备与工件"]] },
+      { label: "运行与追溯", items: [["/process-executions", "运行记录"], ["/events", "运行事件"], ["/explorer", "对象目录"]] },
       { label: "生产准备", items: [["/production/changeover", "生产切换"], ["/production/tooling-installations", "工装装卸"]] },
     ],
   },
   {
     id: "quality", label: "质量管理", icon: ClipboardDocumentCheckIcon, path: "/inspections", groups: [
       { label: "检验执行", items: [["/inspections", "检验任务"]] },
-      { label: "问题分析", items: [["/quality-analysis", "质量分析"]] },
+      { label: "问题分析", items: [["/quality-analysis", "质量偏差分析"]] },
     ],
   },
   {
     id: "diagnosis", label: "工艺追因", icon: MagnifyingGlassCircleIcon, path: "/analysis", groups: [
-      { label: "追因入口", items: [["/analysis", "追因工作台"]] },
-      { label: "证据分析", items: [["/comparisons", "运行对比"], ["/data-quality", "数据可信度"]] },
-      { label: "辅助工具", items: [["/chat", "分析助手"]] },
+      { label: "开始追因", items: [["/analysis", "追因工作台"]] },
+      { label: "比较与证据", items: [["/comparisons", "运行对比"], ["/data-quality", "数据可信度"]] },
+      { label: "辅助研判", items: [["/chat", "分析助手"]] },
     ],
   },
   {
     id: "optimization", label: "工艺优化", icon: BeakerIcon, path: "/research-projects", groups: [
       { label: "优化工作", items: [["/research-projects", "研发项目"]] },
       { label: "复用资产", items: [["/research-assets", "研发资产"]] },
-    ],
-  },
-  {
-    id: "configuration", label: "平台配置", icon: AdjustmentsHorizontalIcon, path: "/configuration", groups: [
-      { label: "配置概览", items: [["/configuration", "配置总览"]] },
-      { label: "工艺定义", items: [["/configuration/process-data-models", "工艺数据模型"], ["/configuration/process-specifications", "工艺规范"]] },
-      { label: "分析定义", items: [["/configuration/process-analysis-plans", "运行分析方案"]] },
-      { label: "质量定义", items: [["/configuration/inspection-definitions", "检测定义"], ["/configuration/quality-plans", "质量方案"]] },
-      { label: "现场接入", items: [["/edges", "现场节点"], ["/configuration/ingestion-tasks", "设备接入"]] },
-      { label: "工装管理", items: [["/configuration/component-types", "组件分类"], ["/configuration/components", "组件资产"], ["/configuration/tooling-types", "装配模板"], ["/configuration/tooling-assemblies", "工装总成"]] },
-      { label: "方案发布", items: [["/configuration/scenario-packages", "工艺配置方案"]] },
     ],
   },
 ];
@@ -81,7 +86,7 @@ const pageDetails = {
   "/chat": ["工艺分析助手", "用自然语言查询运行、质量、配置、研发与知识证据"],
   "/analysis": ["追因工作台", "从生产运行和可信证据进入差异比较、候选原因与工程验证"],
   "/research-assets": ["研发资产", "查看项目可复用的数据集、模型、机理和知识"],
-  "/explorer": ["设备与工件", "选择真实业务对象，再进入它的运行、事件、质量与数据健康视图"],
+  "/explorer": ["对象目录", "选择真实业务对象，再进入它的运行、事件、质量与数据健康视图"],
   "/process-executions": ["运行记录", "查看生产运行及其数据、工艺与质量上下文"],
   "/events": ["运行事件", "查询、追溯并关联运行上下文"],
   "/production/changeover": ["生产切换", "让设备、产品、工艺规范和已装工装对接下来的运行生效"],
@@ -257,10 +262,16 @@ export default function App({ identity, logout }) {
     return () => window.removeEventListener("keydown", handleShortcut);
   }, [usesAppleShortcut]);
 
-  const section = useMemo(
-    () => allSections.find(item => item.path === location.pathname || sectionItems(item).some(([path]) => location.pathname === path || location.pathname.startsWith(`${path}/`))) ?? sections[0],
-    [location.pathname],
-  );
+  const section = useMemo(() => allSections
+    .map(item => ({
+      item,
+      matchLength: sectionItems(item)
+        .map(([path]) => path)
+        .filter(path => location.pathname === path || location.pathname.startsWith(`${path}/`))
+        .reduce((longest, path) => Math.max(longest, path.length), item.path === location.pathname ? item.path.length : -1),
+    }))
+    .filter(candidate => candidate.matchLength >= 0)
+    .sort((left, right) => right.matchLength - left.matchLength)[0]?.item ?? sections[0], [location.pathname]);
   const activeNavigationPath = useMemo(() => sectionItems(section)
     .map(([path]) => path)
     .filter(path => path === location.pathname || location.pathname.startsWith(`${path}/`))
@@ -398,7 +409,7 @@ function GlobalSearchDialog({ open, onClose, navigate }) {
         <DialogPanel className="mx-auto w-full max-w-2xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
           <div className="border-b border-slate-100 p-4 sm:p-5">
             <p className="text-sm font-semibold text-slate-950">功能搜索</p>
-            <p className="mt-1 text-xs text-slate-500">查找生产运行、质量管理、工艺追因、工艺优化、平台配置和系统功能。</p>
+            <p className="mt-1 text-xs text-slate-500">查找生产运行、质量管理、工艺追因、工艺优化、工艺定义、设备接入和系统功能。</p>
             <Input
               ref={inputRef}
               value={query}
