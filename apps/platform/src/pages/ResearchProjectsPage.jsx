@@ -1259,7 +1259,7 @@ function WorkspaceContent({
         </Card>
         </div>
 
-        <div id="project-experiments" className="scroll-mt-60">
+        <div id="project-experiments" className="scroll-mt-60 space-y-5">
         <Card title="实验">
           {experiments.length === 0 ? <EmptyState title="尚未设计实验" description="实验必须包含至少两个不同运行条件。" /> : (
             <DataTable rows={experiments} keyField="experimentId" columns={[
@@ -1742,21 +1742,23 @@ function OnlineAdmissionCard({ evidence }) {
       title="受控在线准入"
       description="通过只代表系统可以提出一条候选建议；它不授权自动写设备，仍须现场工程师逐条确认。"
     >
-      <div className="grid gap-3 sm:grid-cols-3">
-        <Metric label="当前结论" value={evidence.eligible ? "允许单条建议" : "禁止进入在线"} hint="任何门禁失败均按失败关闭" />
-        <Metric label="有效影子结果" value={evidence.validShadowOutcomeCount || 0} hint={`共 ${evidence.shadowRecommendationCount || 0} 条影子建议，最低要求 5 条有效结果`} />
-        <Metric label="证据快照" value={evidence.historicalReplayReportId && evidence.rollbackDrillId ? "回放与演练已审核" : "前置证据未通过"} hint={evidence.shadowReportHash ? `影子报告 ${String(evidence.shadowReportHash).slice(0, 12)}…` : "尚无影子报告"} />
+      <div className="space-y-4">
+        <div className="grid gap-3 sm:grid-cols-3">
+          <Metric label="当前结论" value={evidence.eligible ? "允许单条建议" : "禁止进入在线"} hint="任何门禁失败均按失败关闭" />
+          <Metric label="有效影子结果" value={evidence.validShadowOutcomeCount || 0} hint={`共 ${evidence.shadowRecommendationCount || 0} 条影子建议，最低要求 5 条有效结果`} />
+          <Metric label="证据快照" value={evidence.historicalReplayReportId && evidence.rollbackDrillId ? "回放与演练已审核" : "前置证据未通过"} hint={evidence.shadowReportHash ? `影子报告 ${String(evidence.shadowReportHash).slice(0, 12)}…` : "尚无影子报告"} />
+        </div>
+        {(evidence.failures || []).length > 0 && (
+          <Alert tone="danger" title="在线门禁未通过">
+            {(evidence.failures || []).map(item => <div key={item}>{item}</div>)}
+          </Alert>
+        )}
+        {(evidence.warnings || []).length > 0 && (
+          <Alert tone="warning" title="运行前必须确认">
+            {(evidence.warnings || []).map(item => <div key={item}>{item}</div>)}
+          </Alert>
+        )}
       </div>
-      {(evidence.failures || []).length > 0 && (
-        <Alert tone="danger" title="在线门禁未通过">
-          {(evidence.failures || []).map(item => <div key={item}>{item}</div>)}
-        </Alert>
-      )}
-      {(evidence.warnings || []).length > 0 && (
-        <Alert tone="warning" title="运行前必须确认">
-          {(evidence.warnings || []).map(item => <div key={item}>{item}</div>)}
-        </Alert>
-      )}
     </Card>
   );
 }
@@ -1961,26 +1963,13 @@ function ControlledDecisionDrawer({ target, form, setForm, saving, variables, on
 }
 
 function TaskDrawer({ task, form, setForm, workspace, memberCandidates, saving, onClose, onSubmit }) {
-  if (!task || !workspace) return null;
-  const update = name => event => setForm({ ...form, [name]: event.target.value });
-  const variables = workspace.project.variables.filter(item => item.role === "control");
-  const validatedOperatingRegions = workspace.operatingRegions.filter(item =>
-    item.status === "validated" &&
-    ["laboratory", "production"].includes(item.validationLevel));
-  const beneficialTransfers = (workspace.transferAssessments || []).filter(item =>
-    item.status === "reviewed" && item.outcome === "beneficial");
-  const baselineRuns = workspace.experiments
-    .filter(item => item.designMethod === "historical-observation" || item.status === "completed")
-    .flatMap(experiment => (experiment.runPlan || []).map(run => ({
-      ...run,
-      experimentName: experiment.name,
-    })));
   const [historicalProcessExecutions, setHistoricalProcessExecutions] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState("");
+  const [historyFilter, setHistoryFilter] = useState("");
 
   useEffect(() => {
-    if (task !== "history") return;
+    if (task !== "history" || !workspace) return;
     let mounted = true;
     setHistoryLoading(true);
     setHistoryError("");
@@ -1998,18 +1987,42 @@ function TaskDrawer({ task, form, setForm, workspace, memberCandidates, saving, 
       })
       .finally(() => { if (mounted) setHistoryLoading(false); });
     return () => { mounted = false; };
-  }, [task, workspace.project.productName, setForm]);
+  }, [task, workspace?.project?.productName, setForm]);
 
-  const historicalProcessExecutionLabel = execution => [
-    execution.executionId,
-    execution.productFamilyCode || execution.productCode || "未标注产品",
-    execution.equipmentId ? `设备 ${execution.equipmentId}` : "",
-    execution.edgeIds?.length ? `Edge ${execution.edgeIds.join("/")}` : "",
-    execution.externalBatchRef ? `批次 ${execution.externalBatchRef}` : "",
-    execution.outputItemId ? `工件 ${execution.outputItemId}` : "",
-    execution.processSpecificationId ? `工艺规范 ${execution.processSpecificationId}` : "",
-    execution.completedAt ? new Date(execution.completedAt).toLocaleString("zh-CN") : "",
-  ].filter(Boolean).join(" · ");
+  if (!task || !workspace) return null;
+  const update = name => event => setForm({ ...form, [name]: event.target.value });
+  const variables = workspace.project.variables.filter(item => item.role === "control");
+  const validatedOperatingRegions = workspace.operatingRegions.filter(item =>
+    item.status === "validated" &&
+    ["laboratory", "production"].includes(item.validationLevel));
+  const beneficialTransfers = (workspace.transferAssessments || []).filter(item =>
+    item.status === "reviewed" && item.outcome === "beneficial");
+  const baselineRuns = workspace.experiments
+    .filter(item => item.designMethod === "historical-observation" || item.status === "completed")
+    .flatMap(experiment => (experiment.runPlan || []).map(run => ({
+      ...run,
+      experimentName: experiment.name,
+    })));
+
+  const selectedHistoryExecutionIds = new Set(form.executionIds || []);
+  const normalizedHistoryFilter = historyFilter.trim().toLowerCase();
+  const visibleHistoricalProcessExecutions = historicalProcessExecutions.filter(execution =>
+    !normalizedHistoryFilter || [
+      execution.executionId,
+      execution.productFamilyCode,
+      execution.productCode,
+      execution.equipmentId,
+      ...(execution.edgeIds || []),
+      execution.externalBatchRef,
+      execution.outputItemId,
+      execution.processSpecificationId,
+    ].some(value => String(value || "").toLowerCase().includes(normalizedHistoryFilter)));
+  const updateHistoryExecution = (executionId, checked) => {
+    const nextIds = new Set(form.executionIds || []);
+    if (checked) nextIds.add(executionId);
+    else nextIds.delete(executionId);
+    setForm({ ...form, executionIds: Array.from(nextIds) });
+  };
   const resultLabel = result => {
     const experiment = workspace.experiments.find(item => item.experimentId === result.experimentId);
     const metrics = (result.metrics || []).map(item =>
@@ -2022,8 +2035,8 @@ function TaskDrawer({ task, form, setForm, workspace, memberCandidates, saving, 
       onClose={onClose}
       title={taskTitles[task]}
       description="按研发事实填写，保存后进入项目证据链。"
-      size="lg"
-      footer={<><Button disabled={saving} onClick={onClose}>取消</Button><Button variant="primary" disabled={saving} type="submit" form="research-task-form">{saving ? "正在保存…" : "保存"}</Button></>}
+      size={task === "history" ? "xl" : "lg"}
+      footer={<><Button disabled={saving} onClick={onClose}>取消</Button><Button variant="primary" disabled={saving || (task === "history" && (form.executionIds?.length || 0) < 2)} type="submit" form="research-task-form">{saving ? "正在保存…" : "保存"}</Button></>}
     >
       <form id="research-task-form" className="space-y-4" onSubmit={onSubmit}>
         {task === "member" && (
@@ -2093,11 +2106,85 @@ function TaskDrawer({ task, form, setForm, workspace, memberCandidates, saving, 
           </Alert>
           {historyError && <Alert tone="danger">{historyError}</Alert>}
           {historyLoading ? <Alert tone="info">正在读取可导入的已完成运行…</Alert> : (
-            <Field label="已完成运行" hint={`已默认选中 ${form.executionIds?.length || 0} 个与项目产品匹配的运行；列表明确显示设备与 Edge，可跨节点多选。`}>
-              <Select multiple required size="12" value={form.executionIds || []} onChange={event => setForm({ ...form, executionIds: Array.from(event.target.selectedOptions, option => option.value) })}>
-                {historicalProcessExecutions.map(execution => <option key={execution.executionId} value={execution.executionId}>{historicalProcessExecutionLabel(execution)}</option>)}
-              </Select>
-            </Field>
+            <section className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50/70" aria-labelledby="history-execution-heading">
+              <div className="border-b border-slate-200 bg-white p-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h3 id="history-execution-heading" className="font-semibold text-slate-900">选择已完成运行</h3>
+                    <p className="mt-1 text-sm text-slate-500">
+                      已选 <strong className="font-semibold text-blue-700">{form.executionIds?.length || 0}</strong> / {historicalProcessExecutions.length} 条
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      onClick={() => setForm({
+                        ...form,
+                        executionIds: Array.from(new Set([
+                          ...(form.executionIds || []),
+                          ...visibleHistoricalProcessExecutions.map(item => item.executionId),
+                        ])),
+                      })}
+                      disabled={visibleHistoricalProcessExecutions.length === 0}
+                    >
+                      选择当前结果
+                    </Button>
+                    <Button variant="ghost" onClick={() => setForm({ ...form, executionIds: [] })} disabled={!form.executionIds?.length}>清空</Button>
+                  </div>
+                </div>
+                <Input
+                  className="mt-4"
+                  type="search"
+                  value={historyFilter}
+                  onChange={event => setHistoryFilter(event.target.value)}
+                  placeholder="搜索运行号、产品、设备、Edge、批次或工艺规范"
+                  aria-label="搜索已完成运行"
+                />
+                <p className="mt-2 text-xs leading-5 text-slate-500">
+                  默认选中与项目产品匹配的运行。可跨节点多选；导入前请确认至少包含两种实际工艺规范条件。
+                </p>
+              </div>
+              {visibleHistoricalProcessExecutions.length > 0 ? (
+                <div className="grid max-h-[52vh] gap-3 overflow-y-auto p-3 md:grid-cols-2">
+                  {visibleHistoricalProcessExecutions.map(execution => {
+                    const selected = selectedHistoryExecutionIds.has(execution.executionId);
+                    const product = execution.productFamilyCode || execution.productCode || "未标注产品";
+                    return (
+                      <label
+                        key={execution.executionId}
+                        className={`flex cursor-pointer gap-3 rounded-xl border p-4 transition ${selected ? "border-blue-400 bg-blue-50 shadow-sm" : "border-slate-200 bg-white hover:border-blue-300 hover:bg-blue-50/40"}`}
+                      >
+                        <input
+                          type="checkbox"
+                          className="mt-1 size-4 shrink-0 accent-blue-600"
+                          checked={selected}
+                          onChange={event => updateHistoryExecution(execution.executionId, event.target.checked)}
+                        />
+                        <span className="min-w-0 flex-1">
+                          <span className="flex items-start justify-between gap-3">
+                            <strong className="truncate text-sm font-semibold text-slate-900" title={execution.executionId}>{product}</strong>
+                            <span className="shrink-0 text-xs text-slate-500">{execution.completedAt ? new Date(execution.completedAt).toLocaleString("zh-CN") : "完成时间未知"}</span>
+                          </span>
+                          <span className="mt-2 flex flex-wrap gap-1.5 text-xs">
+                            <span className="rounded-md bg-slate-100 px-2 py-1 text-slate-700">设备 {execution.equipmentId || "未标注"}</span>
+                            <span className="rounded-md bg-slate-100 px-2 py-1 text-slate-700">Edge {execution.edgeIds?.join(" / ") || "未标注"}</span>
+                          </span>
+                          <span className="mt-3 grid gap-1 text-xs leading-5 text-slate-600">
+                            <span><span className="text-slate-400">工艺规范</span> {execution.processSpecificationId || "未标注"}</span>
+                            {(execution.externalBatchRef || execution.outputItemId) && <span><span className="text-slate-400">追溯</span> {[execution.externalBatchRef && `批次 ${execution.externalBatchRef}`, execution.outputItemId && `工件 ${execution.outputItemId}`].filter(Boolean).join(" · ")}</span>}
+                            <span className="truncate font-mono text-[11px] text-slate-400" title={execution.executionId}>{execution.executionId}</span>
+                          </span>
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="p-8 text-center text-sm text-slate-500">{historicalProcessExecutions.length ? "没有匹配的运行，请调整搜索条件。" : "当前没有可导入的已完成运行。"}</div>
+              )}
+              {(form.executionIds?.length || 0) < 2 && (
+                <div className="border-t border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">至少选择 2 条运行后才能保存。</div>
+              )}
+            </section>
           )}
         </>}
         {task === "claim" && <>

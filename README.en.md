@@ -52,7 +52,7 @@ Define process → Connect equipment → Collect production data → Close the d
 | Collect production data | What actually happened in this run? |
 | Close the data loop | Are conditions, trajectories, and outcomes complete, traceable, and comparable? |
 | Diagnose the process | Which differences deserve validation, and which remain confounded or unsupported? |
-| Process optimization | Which next experiment is most valuable without crossing declared safety boundaries? |
+| Process R&D | Which next experiment is most valuable without crossing declared safety boundaries? |
 
 Acquisition is not the destination, and an optimization algorithm is not the starting point. Trustworthy run facts are the common foundation for every analysis and recommendation.
 

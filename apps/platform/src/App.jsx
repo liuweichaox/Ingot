@@ -63,9 +63,8 @@ const sections = [
     ],
   },
   {
-    id: "optimization", label: "工艺优化", icon: BeakerIcon, path: "/research-projects", groups: [
-      { label: "优化工作", items: [["/research-projects", "研发项目"]] },
-      { label: "复用资产", items: [["/research-assets", "研发资产"]] },
+    id: "optimization", label: "工艺研发", icon: BeakerIcon, path: "/research-projects", groups: [
+      { items: [["/research-projects", "研发项目"], ["/research-assets", "研发资产"]] },
     ],
   },
 ];
@@ -409,7 +408,7 @@ function GlobalSearchDialog({ open, onClose, navigate }) {
         <DialogPanel className="mx-auto w-full max-w-2xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
           <div className="border-b border-slate-100 p-4 sm:p-5">
             <p className="text-sm font-semibold text-slate-950">功能搜索</p>
-            <p className="mt-1 text-xs text-slate-500">查找生产运行、质量管理、工艺追因、工艺优化、工艺定义、设备接入和系统功能。</p>
+            <p className="mt-1 text-xs text-slate-500">查找生产运行、质量管理、工艺追因、工艺研发、工艺定义、设备接入和系统功能。</p>
             <Input
               ref={inputRef}
               value={query}

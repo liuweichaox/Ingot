@@ -1,5 +1,5 @@
 import { Dialog, DialogBackdrop, DialogPanel, DialogTitle } from "@headlessui/react";
-import { XMarkIcon } from "@heroicons/react/24/outline";
+import { ShieldCheckIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { useEffect, useRef, useState } from "react";
 
 export function cx(...values) {
@@ -151,6 +151,64 @@ export function StatusBadge({ value }) {
         ? "warning"
         : "neutral";
   return <Badge tone={tone}>{labels[normalized] ?? String(value ?? "待上报")}</Badge>;
+}
+
+const evidenceLevels = {
+  insufficient: { label: "证据不足", strength: 1, activeClassName: "bg-slate-400", labelClassName: "text-slate-600" },
+  screening: { label: "仅稳健筛选", strength: 1, activeClassName: "bg-slate-400", labelClassName: "text-slate-600" },
+  limited: { label: "证据有限", strength: 2, activeClassName: "bg-amber-500", labelClassName: "text-amber-700" },
+  exploratory: { label: "探索性证据", strength: 2, activeClassName: "bg-amber-500", labelClassName: "text-amber-700" },
+  stable: { label: "证据稳定", strength: 3, activeClassName: "bg-teal-500", labelClassName: "text-teal-700" },
+  sufficient: { label: "证据充分", strength: 4, activeClassName: "bg-emerald-600", labelClassName: "text-emerald-700" },
+};
+
+export function evidenceLevelLabel(value) {
+  const normalized = String(value ?? "insufficient").toLowerCase();
+  return evidenceLevels[normalized]?.label ?? String(value ?? "证据不足");
+}
+
+export function EvidenceLevel({ value, label, size = "default", className }) {
+  const normalized = String(value ?? "insufficient").toLowerCase();
+  const definition = evidenceLevels[normalized] || evidenceLevels.insufficient;
+  const displayLabel = label || evidenceLevelLabel(value);
+  const large = size === "large";
+  return (
+    <span
+      className={cx("inline-flex max-w-full items-center gap-2 whitespace-nowrap", large ? "text-sm" : "text-xs", className)}
+      role="img"
+      aria-label={`证据等级：${displayLabel}，4 段中 ${definition.strength} 段`}
+      title={`证据等级：${displayLabel}`}
+    >
+      <span className="flex shrink-0 gap-0.5" aria-hidden="true">
+        {[1, 2, 3, 4].map(segment => (
+          <span
+            key={segment}
+            className={cx(
+              "block rounded-sm",
+              large ? "h-2 w-5" : "h-1.5 w-3.5",
+              segment <= definition.strength ? definition.activeClassName : "bg-slate-200",
+            )}
+          />
+        ))}
+      </span>
+      <strong className={cx("truncate font-semibold", definition.labelClassName)}>{displayLabel}</strong>
+    </span>
+  );
+}
+
+export function ConclusionBoundary({ title = "结论边界", children, className }) {
+  return (
+    <aside
+      className={cx("flex min-w-0 items-start gap-2 rounded-lg border border-dashed border-slate-300 bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-600", className)}
+      aria-label={title}
+    >
+      <ShieldCheckIcon className="mt-0.5 size-4 shrink-0 text-slate-500" aria-hidden="true" />
+      <div className="min-w-0">
+        <strong className="font-semibold text-slate-700">{title}</strong>
+        <div>{children}</div>
+      </div>
+    </aside>
+  );
 }
 
 export function WorkflowGuide({ title = "按步骤完成", description, steps, compact = false }) {

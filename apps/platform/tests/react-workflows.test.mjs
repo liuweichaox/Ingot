@@ -180,7 +180,17 @@ test("workbench and logs use current response contracts without misleading place
 test("execution comparison submits the selection contract and renders business results", () => {
   assert.match(pages, /new URLSearchParams\(\{ status: "completed", limit: "200" \}\)/);
   assert.match(pages, /query\.set\("search", search\)/);
-  assert.match(pages, /exploratory: "探索性证据"/);
+  assert.match(ui, /export function EvidenceLevel/);
+  assert.match(ui, /screening: \{ label: "仅稳健筛选", strength: 1/);
+  assert.match(ui, /exploratory: \{ label: "探索性证据", strength: 2/);
+  assert.match(ui, /stable: \{ label: "证据稳定", strength: 3/);
+  assert.match(ui, /sufficient: \{ label: "证据充分", strength: 4/);
+  assert.match(ui, /aria-label=\{`证据等级：\$\{displayLabel\}，4 段中 \$\{definition\.strength\} 段`\}/);
+  assert.match(ui, /export function ConclusionBoundary/);
+  assert.match(pages, /<EvidenceLevel value=\{result\.evidenceLevel\} \/>/);
+  assert.match(pages, /<EvidenceLevel value=\{value\} \/>/);
+  assert.match(pages, /这是观察性候选，不是已验证原因/);
+  assert.match(pages, /仍需经过受控重复实验验证/);
   assert.match(pages, /label="目标运行"/);
   assert.match(pages, /label="对比范围"/);
   assert.match(pages, /label="对比运行"/);
@@ -240,6 +250,12 @@ test("research projects expose the evidence-backed experiment and operating-regi
   assert.match(researchProjects, /导入历史运行/);
   assert.match(researchProjects, /experiments\/import-history/);
   assert.match(researchProjects, /实际控制参数回读、过程特征和检验记录/);
+  assert.match(researchProjects, /搜索运行号、产品、设备、Edge、批次或工艺规范/);
+  assert.match(researchProjects, /选择当前结果/);
+  assert.match(researchProjects, /至少选择 2 条运行后才能保存/);
+  assert.doesNotMatch(researchProjects, /<Select multiple required size="12"/);
+  assert.match(researchProjects, /id="project-experiments" className="scroll-mt-60 space-y-5"/);
+  assert.match(researchProjects, /title="受控在线准入"[\s\S]*?<div className="space-y-4">/);
   assert.match(researchProjects, /materialize-result/);
   assert.match(researchProjects, /立即检查数据回收/);
   assert.match(researchProjects, /已记录下发意图，等待现场执行、采集和检验结果/);

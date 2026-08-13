@@ -19,7 +19,7 @@ Define process → Connect equipment → Collect production data → Close the d
 3. **Collect production data**: record actual conditions, stages, and trajectories for each real run.
 4. **Close the data loop**: check time, missingness, provenance, and units, then link inspections to the same run.
 5. **Diagnose the process**: compare like-for-like runs and form candidate causes with evidence, counterevidence, and confounding limits.
-6. **Process optimization**: validate candidates through controlled experiments and choose more valuable next experiments within safety boundaries.
+6. **Process R&D**: validate candidates through controlled experiments and choose more valuable next experiments within safety boundaries.
 
 These are one evidence chain, not six unrelated products. Acquisition makes facts trustworthy; analysis makes them useful; experiments determine whether a candidate survives.
 

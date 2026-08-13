@@ -20,7 +20,7 @@ test("Chinese home presents the stable data-supported engineering value", async 
   assert.match(source, /帮助工艺工程师抉择/);
   assert.match(source, /PROCESS R&amp;D · RUN-042/);
   assert.match(source, /不迷信单一算法/);
-  for (const stage of ["工艺定义", "设备接入", "生产采集", "数据闭环", "工艺追因", "工艺优化"]) {
+  for (const stage of ["工艺定义", "设备接入", "生产采集", "数据闭环", "工艺追因", "工艺研发"]) {
     assert.match(source, new RegExp(stage));
   }
   assert.match(source, /核心价值不变，方法随真实证据升级/);
@@ -38,9 +38,10 @@ test("English home carries the same data-supported engineering value", async () 
   assert.match(source, /Help process engineers decide/);
   assert.match(source, /decisions grounded in real runs/);
   assert.match(source, /Choose an effective method/);
-  for (const stage of ["Define the process", "Connect equipment", "Collect production data", "Close the data loop", "Diagnose the process", "Process optimization"]) {
+  for (const stage of ["Define the process", "Connect equipment", "Collect production data", "Close the data loop", "Diagnose the process"]) {
     assert.match(source, new RegExp(stage));
   }
+  assert.match(source, /Process R(?:&amp;|&#x26;)D/);
   assert.match(source, /Keep the core value stable while methods improve/);
   assert.match(source, /Code capability is separated from proven benefit/);
   assert.doesNotMatch(source, /automatically discovered root cause|already reduced\s*\d+%|FX3U|Optical lens|molding|one real lens/i);

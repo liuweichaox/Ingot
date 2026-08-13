@@ -85,14 +85,16 @@ test("navigation and overlays are accessible Headless UI components", () => {
   assert.match(app, /DialogBackdrop/);
   assert.match(app, /DialogPanel/);
   assert.match(app, /MenuButton/);
-  for (const [id, domain] of [["overview", "工作台"], ["evidence", "生产运行"], ["quality", "质量管理"], ["diagnosis", "工艺追因"], ["optimization", "工艺优化"], ["process-definition", "工艺定义"], ["equipment-connection", "设备接入"]]) {
+  for (const [id, domain] of [["overview", "工作台"], ["evidence", "生产运行"], ["quality", "质量管理"], ["diagnosis", "工艺追因"], ["optimization", "工艺研发"], ["process-definition", "工艺定义"], ["equipment-connection", "设备接入"]]) {
     assert.match(app, new RegExp(`id: "${id}", label: "${domain}"`));
   }
   assert.match(app, /id: "overview"[\s\S]*id: "process-definition"[\s\S]*id: "equipment-connection"[\s\S]*id: "evidence"[\s\S]*id: "quality"[\s\S]*id: "diagnosis"[\s\S]*id: "optimization"/);
   assert.match(app, /const systemSection = \{/);
   assert.match(app, /section=\{systemSection\}/);
   assert.match(app, /\["\/chat", "分析助手"\]/);
+  assert.match(app, /items: \[\["\/research-projects", "研发项目"\], \["\/research-assets", "研发资产"\]\]/);
   assert.match(app, /\["\/research-assets", "研发资产"\]/);
+  assert.doesNotMatch(app, /优化工作|复用资产/);
   assert.match(pages, /title="研发项目"/);
   assert.match(pages, /工艺分析助手/);
   assert.doesNotMatch(app, /label: "AI 助手"/);

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
 import { getJson, postJson } from "../api/http";
 import { extractRows, useApi } from "../hooks/useApi";
-import { Alert, Badge, Button, Card, DataTable, EmptyState, Field, Input, Metric, Page, Select, StatusBadge, notify } from "../ui/components";
+import { Alert, Badge, Button, Card, ConclusionBoundary, DataTable, EmptyState, EvidenceLevel, Field, Input, Metric, Page, Select, StatusBadge, notify } from "../ui/components";
 import { contextFieldLabel, formatTime, formatInteger, formatDuration, objectTypeLabel, LoadingCard } from "./shared";
 
 const comparisonFeatureLabels = {
@@ -10,15 +10,6 @@ const comparisonFeatureLabels = {
   max: "最大值",
   mean: "平均值",
   stddev: "波动",
-};
-
-const evidenceLevelLabels = {
-  stable: "证据稳定",
-  exploratory: "探索性证据",
-  screening: "仅稳健筛选",
-  sufficient: "证据充分",
-  limited: "证据有限",
-  insufficient: "证据不足",
 };
 
 const comparisonContextLabels = {
@@ -226,7 +217,7 @@ export function ExecutionComparisonPage() {
       stabilityLabel: Number.isFinite(Number(candidate.stabilitySelectionRate))
         ? `${Math.round(Number(candidate.stabilitySelectionRate) * 100)}%`
         : "样本不足",
-      confoundersLabel: (candidate.possibleConfounders || []).join("、") || "未发现明显差异",
+      confoundersLabel: (candidate.possibleConfounders || []).map(contextFieldLabel).join("、") || "未识别明确混杂",
     }))
     .slice(0, 30), [result]);
   const investigation = result?.investigation;
@@ -276,7 +267,7 @@ export function ExecutionComparisonPage() {
             <Metric label="参与对比" value={result.acceptance?.executionCount ?? comparedProcessExecutions.length} hint="条生产运行" />
             <Metric label="数据可用" value={result.acceptance?.availableProcessExecutionCount ?? 0} hint={`异常 ${result.acceptance?.degradedProcessExecutionCount ?? 0} 个`} />
             <Metric label="运行完整" value={result.acceptance?.completeProcessExecutionCount ?? 0} hint="同时具有生产开始与结束事件" />
-            <Metric label="分析证据" value={evidenceLevelLabels[result.evidenceLevel] || result.evidenceLevel || "—"} valueClassName="text-2xl" />
+            <Metric label="分析证据" value={<EvidenceLevel value={result.evidenceLevel} />} />
           </div>
           <Card title="调查报告" description="汇总运行匹配、数据质量、首次偏离和后续验证建议。">
             <div className="mb-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -324,7 +315,7 @@ export function ExecutionComparisonPage() {
                 ]} />
               </div>
             )}
-            <Alert tone="warning" title="结论边界">{investigation?.conclusionGuardrail || "当前结果只能作为待验证假设。"}</Alert>
+            <ConclusionBoundary>{investigation?.conclusionGuardrail || "当前结果只能作为待验证假设。"}</ConclusionBoundary>
           </Card>
           <details className="rounded-2xl border border-slate-200 bg-white shadow-sm"><summary className="cursor-pointer px-5 py-4 text-sm font-semibold text-slate-900">查看参与对比的 {comparedProcessExecutions.length} 条运行</summary><div className="border-t border-slate-100 p-5"><Card title="运行概况">
             <DataTable
@@ -370,10 +361,20 @@ export function ExecutionComparisonPage() {
                     { key: "adjustedEffect", label: "校正后效应", render: formatDecimal },
                     { key: "stabilityLabel", label: "稳定入选率" },
                     { key: "candidateScore", label: "候选分数", render: formatDecimal },
-                    { key: "evidenceLevel", label: "证据", render: value => <Badge tone={value === "stable" ? "success" : value === "exploratory" ? "warning" : "neutral"}>{evidenceLevelLabels[value] || value}</Badge> },
+                    { key: "evidenceLevel", label: "证据", render: value => <EvidenceLevel value={value} /> },
                     { key: "confoundersLabel", label: "可能混杂" },
                   ]}
                 />
+                <div className="mt-4 grid gap-3 xl:grid-cols-2">
+                  {causeRows.map(candidate => (
+                    <ConclusionBoundary key={candidate.candidateId} title={candidate.displayName}>
+                      这是观察性候选，不是已验证原因。
+                      {(candidate.possibleConfounders || []).length
+                        ? ` 当前可能受${candidate.confoundersLabel}混杂，必须通过受控实验拆解。`
+                        : " 当前未识别出明确混杂因素，仍需经过受控重复实验验证。"}
+                    </ConclusionBoundary>
+                  ))}
+                </div>
                 {(result.diagnosis?.interactions || []).length > 0 && (
                   <div className="mt-4">
                     <h4 className="mb-2 text-sm font-semibold text-slate-900">变量交互候选</h4>
