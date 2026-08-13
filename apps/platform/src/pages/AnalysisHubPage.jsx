@@ -18,7 +18,7 @@ const tools = [
 
 export function AnalysisHubPage() {
   return (
-    <Page title="工艺分析" description="从一次需要解释的生产运行出发，形成可追溯、可反驳、可验证的工程判断。">
+    <Page title="追因工作台" description="从一次需要解释的生产运行出发，形成可追溯、可反驳、可验证的工程判断。">
       <section className="overflow-hidden rounded-2xl border border-blue-100 bg-gradient-to-br from-slate-950 via-slate-900 to-blue-950 p-6 text-white shadow-sm sm:p-8">
         <p className="text-sm font-semibold text-blue-200">证据驱动的工艺追因</p>
         <h2 className="mt-3 max-w-4xl text-2xl font-semibold tracking-tight sm:text-3xl">先确认哪次运行值得分析，再比较差异，最后决定如何验证。</h2>

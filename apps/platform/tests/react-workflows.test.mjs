@@ -168,7 +168,7 @@ test("workbench and logs use current response contracts without misleading place
   assert.match(pages, /\/api\/v1\/process-executions\?limit=8/);
   assert.match(pages, /\/api\/v1\/research-projects\?limit=100/);
   assert.match(pages, /看清这次运行，优化下一次运行/);
-  assert.match(pages, /开始工艺分析/);
+  assert.match(pages, /开始工艺追因/);
   assert.match(pages, /executionOverview: executions\.overview/);
   assert.match(pages, /state\.loading \? <LoadingCard \/>/);
   assert.match(pages, /logs\?pageSize=200/);
@@ -401,7 +401,7 @@ test("Chat is a standalone conversation workspace with optional project context 
   assert.match(pages, /\{confirmationDialog\}/);
   assert.match(app, /isChatWorkspace/);
   assert.match(app, /h-\[100dvh\]/);
-  assert.match(app, /id: "diagnosis", label: "工艺分析"/);
+  assert.match(app, /id: "diagnosis", label: "工艺追因"/);
   assert.doesNotMatch(app, /id: "assistant"/);
   assert.doesNotMatch(pages, /LegacyChatPage/);
   assert.doesNotMatch(pages, /min-h-\[420px\]/);

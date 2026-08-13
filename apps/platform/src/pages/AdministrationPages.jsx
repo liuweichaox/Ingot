@@ -223,7 +223,7 @@ export function MetricsPage() {
   const error = edgeResponse.error || metricResponse.error || executionResponse.error || qualityResponse.error || profileResponse.error;
   const healthy = offline === 0 && unknown === 0 && threadQueue === 0;
   return (
-    <Page title="平台运行状态" description="从业务处理、设备采集和平台资源三个层面确认系统是否正常。">
+    <Page title="平台状态" description="从业务处理、设备采集和平台资源三个层面确认系统是否正常。">
       {error && <Alert tone="danger">{error}</Alert>}
       <Alert tone={healthy ? "success" : "warning"} title={healthy ? "平台运行正常" : "平台存在需要关注的项目"}>
         {healthy ? "中心服务和现场节点均在正常工作。" : `离线节点 ${offline} 个，待确认节点 ${unknown} 个，后台排队 ${formatInteger(threadQueue)} 项。`}
@@ -261,7 +261,7 @@ export function LogsPage() {
   const endpoint = edgeId ? `/api/edges/${encodeURIComponent(edgeId)}/logs?pageSize=200${level ? `&level=${level}` : ""}` : null;
   const logs = useApi(endpoint, { enabled: Boolean(edgeId), interval: 5000 });
   return (
-    <Page title="运行日志" description="按边缘节点和级别查询结构化运行记录。">
+    <Page title="平台日志" description="按边缘节点和级别查询结构化运行记录。">
       <Card title="查询条件">
         <div className="grid gap-3 md:grid-cols-2">
           <Field label="边缘节点"><Select value={edgeId} onChange={event => setEdgeId(event.target.value)}><option value="">选择节点</option>{edgeRows.map(row => <option key={row.edgeId} value={row.edgeId}>{row.edgeId}</option>)}</Select></Field>

@@ -83,7 +83,7 @@ export function WorkbenchPage({ identity }) {
       action: "查看状态",
     };
   const analysisAction = {
-    title: state.executionTotal > 1 ? "从生产运行开始工艺分析" : "积累可比较的生产运行",
+    title: state.executionTotal > 1 ? "从生产运行开始工艺追因" : "积累可比较的生产运行",
     description: state.executionTotal > 1 ? "选择异常或偏离运行，系统自动核对同类条件。" : "至少需要两次运行，才能形成有意义的同类对比。",
     to: state.executionTotal > 1 ? "/analysis" : "/process-executions",
     tone: state.executionTotal > 1 ? "border-blue-200 bg-blue-50" : "border-amber-200 bg-amber-50",
@@ -95,7 +95,7 @@ export function WorkbenchPage({ identity }) {
       ? [analysisAction, engineeringAction, isAdministrator ? platformAction : qualityAction]
       : [analysisAction, qualityAction, platformAction];
   return (
-    <Page title="我的工作台" description="集中查看今天的待办、生产状态、质量风险与研发进展。">
+    <Page title="工作台" description="集中查看今天的待办、生产状态、质量风险与研发进展。">
       {state.error && <Alert tone="danger">{state.error}</Alert>}
       {state.loading ? <LoadingCard /> : (
         <div className="flex flex-col gap-5">
@@ -106,7 +106,7 @@ export function WorkbenchPage({ identity }) {
               <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">从可信运行事实出发，比较差异、形成候选原因，并推进可验证实验。</p>
               <div className="mt-4 flex flex-wrap gap-2">
                 <Link to="/process-executions" className="inline-flex min-h-9 items-center rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">查看运行证据</Link>
-                <Link to="/analysis" className="inline-flex min-h-9 items-center rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700">开始工艺分析</Link>
+                <Link to="/analysis" className="inline-flex min-h-9 items-center rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700">开始工艺追因</Link>
               </div>
             </div>
             <div className="grid content-start gap-3 sm:grid-cols-2 lg:grid-cols-1">

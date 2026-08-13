@@ -6,7 +6,7 @@ import { formatTime, LoadingCard } from "./shared";
 
 const productionResources = {
   context: {
-    title: "生产上下文", endpoint: "/api/v1/production-contexts", key: "contextId",
+    title: "生产切换", endpoint: "/api/v1/production-contexts", key: "contextId",
     description: "为设备选择接下来生产的产品、工艺规范和已装工装，保存后对新运行生效。",
     drawerDescription: "按顺序确认设备、产品、工艺规范和工装；保存后只影响新开始的生产运行。",
     columns: [["equipmentId", "设备"], ["productCode", "产品"], ["processSpecificationId", "工艺规范"], ["validFrom", "生效时间"], ["validTo", "结束时间"]],

@@ -195,10 +195,10 @@ export function InspectionsPage() {
   }
 
   return (
-    <Page title="质量任务" description="从待办开始完成检测录入、独立复核和原图追溯。" actions={<Button onClick={() => openTask()}>补录检测记录</Button>}>
+    <Page title="检验任务" description="从待办开始完成检测录入、独立复核和原图追溯。" actions={<Button onClick={() => openTask()}>补录检测记录</Button>}>
       {(tasks.error || taskSummary.error || records.error || definitions.error || (!entryOpen && !reviewOpen && actionError)) && <Alert tone="danger">{tasks.error || taskSummary.error || records.error || definitions.error || actionError}</Alert>}
       <WorkflowGuide
-        title="质量任务怎么处理"
+        title="检验任务怎么处理"
         description="正常情况下直接点击任务队列中的操作按钮；只有补录历史结果时才使用右上角“补录检测记录”。"
         steps={[
           { title: "选择待办任务", description: "平台已按生产运行生成需要处理的检测项目。", state: Number(taskSummary.data?.pending || 0) > 0 ? "current" : "done" },

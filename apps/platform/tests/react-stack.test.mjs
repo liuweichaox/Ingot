@@ -85,30 +85,32 @@ test("navigation and overlays are accessible Headless UI components", () => {
   assert.match(app, /DialogBackdrop/);
   assert.match(app, /DialogPanel/);
   assert.match(app, /MenuButton/);
-  for (const domain of ["工作台", "生产运行", "质量管理", "工艺分析", "工艺优化", "配置中心"]) {
-    assert.match(app, new RegExp(domain));
+  for (const [id, domain] of [["overview", "工作台"], ["evidence", "生产运行"], ["quality", "质量管理"], ["diagnosis", "工艺追因"], ["optimization", "工艺优化"], ["configuration", "平台配置"]]) {
+    assert.match(app, new RegExp(`id: "${id}", label: "${domain}"`));
   }
   assert.match(app, /const systemSection = \{/);
-  assert.match(app, /aria-label="打开系统管理"/);
+  assert.match(app, /section=\{systemSection\}/);
   assert.match(app, /\["\/chat", "分析助手"\]/);
   assert.match(app, /\["\/research-assets", "研发资产"\]/);
   assert.match(pages, /title="研发项目"/);
   assert.match(pages, /工艺分析助手/);
   assert.doesNotMatch(app, /label: "AI 助手"/);
-  assert.match(app, /aria-label="全局导航"/);
+  assert.match(app, /aria-label="主导航"/);
   assert.match(app, /aria-label="面包屑"/);
-  assert.match(app, /aria-label="打开全局模块导航"/);
-  assert.match(app, /xl:hidden/);
-  assert.match(app, /xl:flex/);
-  assert.match(app, /aria-label="打开模块导航"/);
+  assert.match(app, /aria-label="打开主导航"/);
+  assert.match(app, /aria-label="收起侧边栏"/);
+  assert.match(app, /aria-label="展开侧边栏"/);
+  assert.match(app, /ingot\.sidebar\.collapsed/);
+  assert.match(app, /function SidebarNavigation/);
+  assert.match(app, /function SidebarSection/);
   assert.match(app, /const activeNavigationPath = useMemo/);
-  assert.match(app, /w-55 overflow-y-auto/);
-  assert.match(app, /w-72 overflow-y-auto/);
-  assert.match(app, /<div className="lg:ml-55">/);
+  assert.match(app, /sidebarCollapsed \? "w-18" : "w-64"/);
+  assert.match(app, /sidebarCollapsed \? "lg:ml-18" : "lg:ml-64"/);
+  assert.doesNotMatch(app, /aria-label="全局导航"/);
   assert.doesNotMatch(app, /showSectionNavigation/);
   assert.doesNotMatch(app, /label: "运营工作台"/);
-  for (const obsoleteLabel of ["周期记录", "周期对比", "生产切换", "检验任务", "数据质量", "AI助手", "黄金问题集"]) {
-    assert.doesNotMatch(app, new RegExp(obsoleteLabel));
+  for (const obsoleteLabel of ["周期记录", "周期对比", "数据质量", "AI助手", "黄金问题集"]) {
+    assert.doesNotMatch(app, new RegExp(`label: "${obsoleteLabel}"`));
   }
   assert.doesNotMatch(researchProjects, />新建项目</);
 });
@@ -156,14 +158,17 @@ test("feature search opens a command palette and table columns keep stable uniqu
   assert.match(app, /aria-keyshortcuts=\{usesAppleShortcut \? "Meta\+K" : "Control\+K"\}/);
   assert.match(app, /功能搜索/);
   assert.doesNotMatch(app, /navigate\("\/explorer", \{ state: \{ focusSearch: true \} \}\)/);
-  assert.match(app, /\["\/platform-metrics", "平台运行状态"\]/);
+  assert.match(app, /\["\/platform-metrics", "平台状态"\]/);
+  assert.match(app, /\["\/logs", "平台日志"\]/);
+  assert.match(app, /"\/production\/changeover": "生产上下文 换产 产品切换 工艺切换"/);
+  assert.match(app, /"\/inspections": "质量任务 质检 检测任务"/);
   assert.match(components, /key=\{column\.id \?\? `\$\{column\.key\}:\$\{columnIndex\}`\}/);
 });
 
-test("industrial object pages use the event summary contract and show an initial loading state", () => {
-  assert.match(app, /\["\/explorer", "工业对象"\]/);
+test("equipment and workpiece pages use the event summary contract and show an initial loading state", () => {
+  assert.match(app, /\["\/explorer", "设备与工件"\]/);
   assert.match(app, /id: "evidence", label: "生产运行"/);
-  assert.match(pages, /title="工业对象"/);
+  assert.match(pages, /title="设备与工件"/);
   assert.match(pages, /objects\.loading && !objects\.data \? <LoadingCard \/>/);
   assert.match(pages, /title="对象目录"/);
   assert.match(pages, /在这个对象中继续工作/);
