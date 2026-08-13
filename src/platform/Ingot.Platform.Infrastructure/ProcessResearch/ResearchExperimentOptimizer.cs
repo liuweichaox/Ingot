@@ -210,6 +210,10 @@ public sealed class ResearchExperimentOptimizer(
         if (response.ObservationCount != observations.Length ||
             response.Suggestions.Count != request.BatchSize)
             throw new ProcessResearchRuleException("优化服务使用的数据快照或返回的实验数量不一致。");
+        EnsureExperimentConditionsAreDistinguishable(
+            response.Suggestions,
+            observations,
+            controls);
 
         var experimentId = CreateDeterministicExperimentId(projectId, inputHash);
         var runPlan = new List<ExperimentRunPlan>();
@@ -445,7 +449,8 @@ public sealed class ResearchExperimentOptimizer(
         };
 
     private static OptimizerObjectiveInput MapObjective(ResearchObjective objective)
-        => objective.Direction switch
+    {
+        OptimizerObjectiveInput mapped = objective.Direction switch
         {
             "minimize" => new()
             {
@@ -474,6 +479,11 @@ public sealed class ResearchExperimentOptimizer(
                 },
             _ => throw new ProcessResearchRuleException($"目标 {objective.Code} 的方向或规格定义不支持优化。")
         };
+        return objective.DataSource?.Trim()
+            .StartsWith("inspection-outcome:", StringComparison.OrdinalIgnoreCase) == true
+            ? mapped with { OutcomeLowerBound = 0, OutcomeUpperBound = 1 }
+            : mapped;
+    }
 
     private static void ValidateSuggestion(
         ResearchProject project,
@@ -501,6 +511,53 @@ public sealed class ResearchExperimentOptimizer(
             !output.ConstraintPredictions.Keys.ToHashSet(StringComparer.Ordinal)
                 .SetEquals(project.OutcomeConstraints.Select(static value => value.Code)))
             throw new ProcessResearchRuleException("优化建议没有覆盖全部结果约束预测。");
+    }
+
+    internal static void EnsureExperimentConditionsAreDistinguishable(
+        IReadOnlyList<OptimizerSuggestionOutput> suggestions,
+        IReadOnlyList<OptimizerObservationInput> observations,
+        IReadOnlyDictionary<string, ResearchVariable> controls)
+    {
+        if (suggestions.Count < 2)
+            return;
+        var observedResolution = controls.Keys.ToDictionary(
+            static code => code,
+            code => observations
+                .Where(value => value.Params.ContainsKey(code))
+                .Select(value => value.Params[code])
+                .Distinct()
+                .Order()
+                .Zip(
+                    observations
+                        .Where(value => value.Params.ContainsKey(code))
+                        .Select(value => value.Params[code])
+                        .Distinct()
+                        .Order()
+                        .Skip(1),
+                    static (left, right) => right - left)
+                .Where(static gap => gap > 0)
+                .DefaultIfEmpty(0)
+                .Min(),
+            StringComparer.Ordinal);
+        if (observedResolution.Values.All(static value => value <= 0))
+            return;
+        for (var left = 0; left < suggestions.Count; left++)
+        for (var right = left + 1; right < suggestions.Count; right++)
+        {
+            var distinguishable = controls.Keys.Any(code =>
+                observedResolution[code] > 0 &&
+                Math.Abs(
+                    suggestions[left].RecommendedParameters[code] -
+                    suggestions[right].RecommendedParameters[code]) + 1e-12 >= observedResolution[code]);
+            if (!distinguishable)
+            {
+                var resolution = string.Join("、", observedResolution
+                    .Where(static pair => pair.Value > 0)
+                    .Select(pair => $"{controls[pair.Key].Name} {pair.Value:G6} {controls[pair.Key].Unit}"));
+                throw new ProcessResearchRuleException(
+                    $"优化服务返回的候选条件低于历史数据可区分分辨率（{resolution}），不能伪装成两个实验条件。");
+            }
+        }
     }
 
     private static int CommonProcessFeatureCount(

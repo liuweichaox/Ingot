@@ -216,8 +216,9 @@ public sealed record ResearchObjective
     public double? UpperLimit { get; init; }
     public double Weight { get; init; } = 1;
     /// <summary>
-    ///     结果来源。默认使用同名检验特性；也可显式写成
-    ///     inspection:&lt;characteristic-code&gt;。
+    ///     结果来源。默认使用同名检验特性；可显式写成
+    ///     inspection:&lt;characteristic-code&gt;，或用
+    ///     inspection-outcome:&lt;definition-code&gt; 将 PASS/FAIL 映射为 1/0。
     /// </summary>
     public string? DataSource { get; init; }
 }

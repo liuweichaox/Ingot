@@ -360,11 +360,14 @@ public sealed class ResearchProjectsController(
                 if (controls.Length == 0)
                     throw new ProcessResearchRuleException("项目没有定义可控变量，不能导入历史运行。");
 
+                var resolvedExecutions = await executionComparisonService
+                    .GetProcessExecutionsAsync(executionIds, ct)
+                    .ConfigureAwait(false);
                 var executions = new List<ExecutionComparisonRow>(executionIds.Length);
                 foreach (var executionId in executionIds)
                 {
-                    var execution = await executionComparisonService.GetProcessExecutionAsync(executionId, ct).ConfigureAwait(false)
-                        ?? throw new ProcessResearchRuleException($"运行 {executionId} 不存在。");
+                    if (!resolvedExecutions.TryGetValue(executionId, out var execution))
+                        throw new ProcessResearchRuleException($"运行 {executionId} 不存在。");
                     if (execution.CompletedAt is null)
                         throw new ProcessResearchRuleException($"运行 {executionId} 尚未完成，不能作为历史观察。");
                     executions.Add(execution);

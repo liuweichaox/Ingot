@@ -1,0 +1,32 @@
+{
+  "edgeId": "IMPORT-REAL-DATA",
+  "eventType": { "value": "process.sample" },
+  "occurredAt": { "column": "timestamp", "format": "yyyy-MM-ddTHH:mm:ss.fffzzz", "utcOffset": "+08:00" },
+  "subjectType": { "value": "asset" },
+  "subjectId": { "column": "chamber_id" },
+  "executionId": { "column": "batch_id" },
+  "context": {
+    "product_series": { "column": "product_series" },
+    "chamber_id": { "column": "chamber_id" },
+    "process_step": { "column": "process_step" },
+    "mold_id": { "column": "mold_id" },
+    "batch_date": { "column": "batch_date", "format": "yyyy-MM-ddTHH:mm:ss.fffzzz" }
+  },
+  "values": {
+    "upper_mold_ir_temp_c": { "column": "upper_mold_ir_temp_c", "type": "number" },
+    "lower_mold_ir_temp_c": { "column": "lower_mold_ir_temp_c", "type": "number" },
+    "upper_mold_current_a": { "column": "upper_mold_current_a", "type": "number" },
+    "lower_mold_current_a": { "column": "lower_mold_current_a", "type": "number" },
+    "upper_mold_voltage_v": { "column": "upper_mold_voltage_v", "type": "number" },
+    "lower_mold_voltage_v": { "column": "lower_mold_voltage_v", "type": "number" },
+    "upper_power_w": { "column": "upper_power_w", "type": "number" },
+    "lower_power_w": { "column": "lower_power_w", "type": "number" },
+    "pressure_kg": { "column": "pressure_kg", "type": "number" },
+    "grating_position_mm": { "column": "grating_position_mm", "type": "number" },
+    "servo_position_mm": { "column": "servo_position_mm", "type": "number" },
+    "servo_speed_mm_s": { "column": "servo_speed_mm_s", "type": "number" },
+    "vacuum_degree_kpa": { "column": "vacuum_degree_kpa", "type": "number" },
+    "time_delta_s": { "column": "time_delta_s", "type": "number" },
+    "sample_seq": { "column": "sample_seq", "type": "integer" }
+  }
+}

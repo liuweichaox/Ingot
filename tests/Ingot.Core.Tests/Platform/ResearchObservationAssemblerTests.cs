@@ -82,40 +82,38 @@ public sealed class ResearchObservationAssemblerTests
                 SourceEventCount = 122
             }
         };
-        var inspections = new FakeInspectionStore(
-        [
-            new InspectionRecord
-            {
-                RecordId = Guid.CreateVersion7(),
-                OutputItemId = "lens-001",
-                ExecutionId = executionKey,
-                DefinitionCode = "lens-final",
-                DefinitionVersion = 1,
-                MeasuredAt = DateTimeOffset.UtcNow,
-                RecordedAt = DateTimeOffset.UtcNow,
-                IngestedAt = DateTimeOffset.UtcNow,
-                Outcome = "PASS",
-                SubmittedBy = "station",
-                SubmitterVerified = true,
-                Measurements =
-                [
-                    new InspectionCharacteristicResult
-                    {
-                        CharacteristicCode = "form-error",
-                        Outcome = "PASS",
-                        NumericValue = 0.38m,
-                        Unit = "um"
-                    },
-                    new InspectionCharacteristicResult
-                    {
-                        CharacteristicCode = "crack-rate",
-                        Outcome = "PASS",
-                        NumericValue = 0.01m,
-                        Unit = "ratio"
-                    }
-                ]
-            }
-        ]);
+        var inspectionRecord = new InspectionRecord
+        {
+            RecordId = Guid.CreateVersion7(),
+            OutputItemId = "lens-001",
+            ExecutionId = executionKey,
+            DefinitionCode = "lens-final",
+            DefinitionVersion = 1,
+            MeasuredAt = DateTimeOffset.UtcNow,
+            RecordedAt = DateTimeOffset.UtcNow,
+            IngestedAt = DateTimeOffset.UtcNow,
+            Outcome = "PASS",
+            SubmittedBy = "station",
+            SubmitterVerified = true,
+            Measurements =
+            [
+                new InspectionCharacteristicResult
+                {
+                    CharacteristicCode = "form-error",
+                    Outcome = "PASS",
+                    NumericValue = 0.38m,
+                    Unit = "um"
+                },
+                new InspectionCharacteristicResult
+                {
+                    CharacteristicCode = "crack-rate",
+                    Outcome = "PASS",
+                    NumericValue = 0.01m,
+                    Unit = "ratio"
+                }
+            ]
+        };
+        var inspections = new FakeInspectionStore([inspectionRecord]);
         var executionService = new FakeProcessExecutionService(execution);
         var scenario = ResearchContextAdmissionEvaluatorTests.OpticalScenario();
         var reviewStore = new FakeReviewStore();
@@ -141,6 +139,15 @@ public sealed class ResearchObservationAssemblerTests
                     Target = 0.5,
                     Direction = "minimize",
                     DataSource = "inspection:form-error"
+                },
+                new ResearchObjective
+                {
+                    Code = "pass-rate",
+                    Name = "最终检验合格率",
+                    Unit = "1",
+                    Target = 1,
+                    Direction = "maximize",
+                    DataSource = "inspection-outcome:lens-final"
                 }
             ],
             Variables =
@@ -209,6 +216,7 @@ public sealed class ResearchObservationAssemblerTests
         Assert.True(observation.HasSettingDeviation);
         Assert.Equal(7, observation.SettingDeviationFromPlan["temperature"]);
         Assert.Equal(0.38, observation.Outcomes["form"], 6);
+        Assert.Equal(1, observation.Outcomes["pass-rate"], 6);
         Assert.Equal(0.01, observation.ConstraintOutcomes["crack-safety"], 6);
         Assert.Equal(2.4, observation.ProcessFeatures["mold-temperature.execution.overshoot"], 6);
         Assert.Equal("FX3U-01", observation.Context["equipment_id"]);
@@ -222,6 +230,26 @@ public sealed class ResearchObservationAssemblerTests
             ResearchContextAdmissionEvaluator.ComputePolicyHash(scenario),
             observation.Context[ResearchContextAdmissionEvaluator.ObservationPolicyHashContextKey]);
         Assert.Matches("^[a-f0-9]{64}$", observation.SourceContentHash);
+
+        var failedInspectionAssembler = new ResearchObservationAssembler(
+            executionService,
+            new FakeInspectionStore([inspectionRecord with { RecordId = Guid.CreateVersion7(), Outcome = "FAIL" }]),
+            reviewStore,
+            masterDataStore,
+            new FakeProcessConfigurationStore(scenario));
+        var failedInspectionResult = await failedInspectionAssembler.AssembleAsync(project, [experiment]);
+        Assert.Equal(0, Assert.Single(failedInspectionResult.Observations).Outcomes["pass-rate"], 6);
+
+        var inconclusiveInspectionAssembler = new ResearchObservationAssembler(
+            executionService,
+            new FakeInspectionStore([inspectionRecord with { RecordId = Guid.CreateVersion7(), Outcome = "INCONCLUSIVE" }]),
+            reviewStore,
+            masterDataStore,
+            new FakeProcessConfigurationStore(scenario));
+        var inconclusiveInspectionResult = await inconclusiveInspectionAssembler.AssembleAsync(project, [experiment]);
+        var inconclusive = Assert.Single(inconclusiveInspectionResult.Observations);
+        Assert.False(inconclusive.ValidForOptimization);
+        Assert.Contains("INCONCLUSIVE", inconclusive.ExclusionReason);
 
         var missingMoldProcessExecution = execution with
         {

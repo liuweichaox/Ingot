@@ -12,7 +12,7 @@ from .feature_transforms import DerivedFeature, expand_inputs
 from .loop import ObjectivePrediction, Suggestion
 
 
-MODEL_VERSION = "botorch-qlogbo-v3"
+MODEL_VERSION = "botorch-qlogbo-v4"
 
 
 class BotorchOptimizer:
@@ -64,7 +64,7 @@ class BotorchOptimizer:
 
         columns = []
         for index, objective in enumerate(objectives):
-            value = samples[..., index]
+            value = objective.clip(samples[..., index])
             if objective.kind == "le":
                 threshold = float(objective.threshold)
                 badness = 1.0 + (value - threshold) / max(abs(threshold), 1.0)
@@ -418,16 +418,22 @@ class BotorchOptimizer:
             zip(selected_unit, means, deviations, strict=True)
         ):
             params = self.campaign.from_unit(unit)
-            predictions = {
-                objective_spec.name: ObjectivePrediction(
-                    mean=float(mean[index]),
-                    standard_deviation=float(deviation[index]),
-                    lower_95=float(mean[index] - 1.96 * deviation[index]),
-                    upper_95=float(mean[index] + 1.96 * deviation[index]),
+            predictions = {}
+            bounded_means = {}
+            for index, objective_spec in enumerate(self.campaign.objectives):
+                bounded_mean, bounded_deviation, lower_95, upper_95 = (
+                    objective_spec.bounded_prediction(
+                        float(mean[index]), float(deviation[index])
+                    )
+                )
+                bounded_means[objective_spec.name] = bounded_mean
+                predictions[objective_spec.name] = ObjectivePrediction(
+                    mean=bounded_mean,
+                    standard_deviation=bounded_deviation,
+                    lower_95=lower_95,
+                    upper_95=upper_95,
                     unit=objective_spec.unit,
                 )
-                for index, objective_spec in enumerate(self.campaign.objectives)
-            }
             constraint_predictions = {
                 constraint_spec.name: ObjectivePrediction(
                     mean=float(mean[objective_count + index]),
@@ -489,10 +495,7 @@ class BotorchOptimizer:
                 if validation_scores is not None and selected_indices is not None
                 else float(acquisition(selected_x[row : row + 1].unsqueeze(0)).item())
             )
-            mean_outcomes = {
-                objective_spec.name: float(mean[index])
-                for index, objective_spec in enumerate(self.campaign.objectives)
-            }
+            mean_outcomes = bounded_means
             results.append(
                 Suggestion(
                     recommended_params=params,

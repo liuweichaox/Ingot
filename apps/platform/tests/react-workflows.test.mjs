@@ -293,7 +293,8 @@ test("research project setup reuses configured industrial definitions instead of
   assert.match(researchProjects, /\/api\/v1\/process-data-models/);
   assert.match(researchProjects, /\/api\/v1\/scenario-packages/);
   assert.match(researchProjects, /scenario_package/);
-  assert.match(researchProjects, /label="质量指标"/);
+  assert.match(researchProjects, /label="质量目标"/);
+  assert.match(researchProjects, /inspection-outcome:/);
   assert.match(researchProjects, /label="控制参数"/);
   assert.match(researchProjects, /选择质量指标后自动带入/);
   assert.match(researchProjects, /选择控制参数后自动带入/);

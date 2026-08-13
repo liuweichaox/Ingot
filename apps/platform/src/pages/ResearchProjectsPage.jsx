@@ -903,15 +903,26 @@ function CreateProjectDrawer({ open, saving, form, setForm, onClose, onSubmit })
   const selectableModels = catalog.models.filter(item => item.status !== "retired");
   const selectableScenarios = catalog.scenarios.filter(item => item.status === "published");
   const selectedModel = selectableModels.find(item => `${item.modelId}:${item.version}` === form.dataModelKey);
-  const objectiveOptions = catalog.definitions.flatMap(definition =>
+  const numericObjectiveOptions = catalog.definitions.flatMap(definition =>
     (definition.characteristics || [])
       .filter(item => ["numeric", "number"].includes(String(item.inputType).toLowerCase()))
       .map(item => ({
         key: `${definition.code}:${definition.version}:${item.code}`,
+        kind: "measurement",
         definition,
         characteristic: item,
       })),
   );
+  const objectiveOptions = catalog.definitions.flatMap(definition => [
+    {
+      key: `${definition.code}:${definition.version}:$outcome`,
+      kind: "outcome",
+      definition,
+      characteristic: null,
+    },
+    ...numericObjectiveOptions.filter(option =>
+      option.definition.code === definition.code && option.definition.version === definition.version),
+  ]);
   const selectedObjective = objectiveOptions.find(item => item.key === form.objectiveKey);
 
   function updateForm(values) {
@@ -960,6 +971,18 @@ function CreateProjectDrawer({ open, saving, form, setForm, onClose, onSubmit })
 
   function chooseObjective(key) {
     const option = objectiveOptions.find(item => item.key === key);
+    if (option?.kind === "outcome") {
+      updateForm({
+        objectiveKey: key,
+        objectiveCode: `${option.definition.code}-pass-rate`,
+        objectiveName: `${option.definition.name}合格率`,
+        objectiveUnit: "1",
+        objectiveDataSource: `inspection-outcome:${option.definition.code}`,
+        objectiveDirection: "maximize",
+        objectiveTarget: "1",
+      });
+      return;
+    }
     const characteristic = option?.characteristic;
     const target = form.objectiveTarget || (
       form.objectiveDirection === "maximize" ? characteristic?.lowerLimit : characteristic?.upperLimit
@@ -1029,7 +1052,7 @@ function CreateProjectDrawer({ open, saving, form, setForm, onClose, onSubmit })
         </Card>
         <Card title="2. 首要研发目标" description="选择要改善的质量指标及判定方向。">
           <div className="grid gap-4 md:grid-cols-2">
-            <Field label="质量指标" hint="从已发布的检测定义中选择，代码、单位和数据来源会自动带入。"><Select required value={form.objectiveKey} onChange={event => chooseObjective(event.target.value)}><option value="">选择数值型检测指标</option>{objectiveOptions.map(option => <option key={option.key} value={option.key}>{option.definition.name} · {option.characteristic.name}{option.characteristic.unit ? ` (${option.characteristic.unit})` : ""}</option>)}</Select></Field>
+            <Field label="质量目标" hint="可直接优化正式检验合格率，也可选择检测数值；代码、单位和数据来源会自动带入。"><Select required value={form.objectiveKey} onChange={event => chooseObjective(event.target.value)}><option value="">选择正式质检结论或数值指标</option>{objectiveOptions.map(option => <option key={option.key} value={option.key}>{option.kind === "outcome" ? `${option.definition.name} · 合格率` : `${option.definition.name} · ${option.characteristic.name}${option.characteristic.unit ? ` (${option.characteristic.unit})` : ""}`}</option>)}</Select></Field>
             <Field label="数据来源"><Input readOnly value={form.objectiveDataSource} placeholder="选择质量指标后自动带入" className="bg-slate-50 text-slate-600" /></Field>
             <Field label="优化方向"><Select value={form.objectiveDirection} onChange={field("objectiveDirection")}><option value="minimize">越低越好</option><option value="maximize">越高越好</option><option value="target">接近目标</option><option value="range">保持范围</option></Select></Field>
             <Field label="指标单位"><Input readOnly required value={form.objectiveUnit} placeholder="自动带入" className="bg-slate-50 text-slate-600" /></Field>
@@ -1048,7 +1071,7 @@ function CreateProjectDrawer({ open, saving, form, setForm, onClose, onSubmit })
         </Card>
         <Card title="4. 结果安全边界（可选）" description="例如裂纹率、破损率或粘模指标；优化器只推荐达到最低安全概率的工艺规范。">
           <div className="grid gap-4 md:grid-cols-2">
-            <Field label="安全指标" hint="选择后自动带入检测特性、单位和建议安全限值。"><Select value={form.outcomeConstraintKey} onChange={event => chooseConstraint(event.target.value)}><option value="">不设置额外结果安全边界</option>{objectiveOptions.filter(item => item.key !== selectedObjective?.key).map(option => <option key={option.key} value={option.key}>{option.definition.name} · {option.characteristic.name}</option>)}</Select></Field>
+            <Field label="安全指标" hint="选择后自动带入检测特性、单位和建议安全限值。"><Select value={form.outcomeConstraintKey} onChange={event => chooseConstraint(event.target.value)}><option value="">不设置额外结果安全边界</option>{numericObjectiveOptions.filter(item => item.key !== selectedObjective?.key).map(option => <option key={option.key} value={option.key}>{option.definition.name} · {option.characteristic.name}</option>)}</Select></Field>
             <Field label="安全约束说明"><Input readOnly value={form.outcomeConstraintName} placeholder="选择安全指标后自动带入" className="bg-slate-50 text-slate-600" /></Field>
             <Field label="操作符"><Select value={form.outcomeConstraintOperator} onChange={field("outcomeConstraintOperator")}><option value="<=">不高于</option><option value=">=">不低于</option></Select></Field>
             <Field label="安全限值"><Input type="number" step="any" value={form.outcomeConstraintLimit} onChange={field("outcomeConstraintLimit")} /></Field>
@@ -1104,7 +1127,9 @@ function WorkspaceContent({
   const observationSummary = workspace.optimizationObservationSummary;
   const canEdit = !["completed", "archived"].includes(project.status);
   const hasObservation = Number(observationSummary?.validObservationCount || 0) > 0;
-  const hasRunningExperiment = experiments.some(item => item.status === "running");
+  const executionExperiments = experiments.filter(item =>
+    item.status !== "cancelled" && item.designMethod !== "historical-observation");
+  const hasRunningExperiment = executionExperiments.some(item => item.status === "running");
   const observedExecutionKeys = new Set(
     (observationSummary?.observations || []).map(item => item.executionKey),
   );
@@ -1121,7 +1146,7 @@ function WorkspaceContent({
     ? ["定义问题", "先明确目标、可控变量和安全边界。"]
     : hypotheses.length === 0
       ? ["建立假设", "把经验或异常转为可验证的因果判断。"]
-      : experiments.length === 0
+      : executionExperiments.length === 0
         ? ["设计实验", "优先使用智能建议，以最少实验获取最大信息量。"]
         : hasRunningExperiment
           ? ["收集证据", "等待运行和检验完成，再让系统更新模型。"]
@@ -1135,7 +1160,7 @@ function WorkspaceContent({
   const workflowSteps = [
     { id: "project-definition", title: "定义", description: "目标与边界", state: project.status === "draft" ? "current" : "done" },
     { id: "project-diagnosis", title: "追因", description: "假设与证据", state: hypotheses.length ? "done" : project.status === "draft" ? "upcoming" : "current" },
-    { id: "project-experiments", title: "实验", description: "建议与执行", state: experiments.length ? "done" : hypotheses.length ? "current" : "upcoming" },
+    { id: "project-experiments", title: "实验", description: "建议与执行", state: executionExperiments.length ? "done" : hypotheses.length ? "current" : "upcoming" },
     { id: "project-validation", title: "验证", description: "结果与窗口", state: validatedOperatingRegions.length ? "done" : experimentResults.length ? "current" : "upcoming" },
     { id: "project-reuse", title: "复用", description: "知识与迁移", state: knowledgeClaims.some(item => item.status === "reviewed") ? "done" : validatedOperatingRegions.length ? "current" : "upcoming" },
   ];
@@ -1212,7 +1237,7 @@ function WorkspaceContent({
 
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <Metric label="研发假设" value={hypotheses.length} hint="待验证的规律" />
-          <Metric label="实验计划" value={experiments.length} hint="设计与执行记录" />
+          <Metric label="有效实验计划" value={executionExperiments.length} hint="不含历史证据和取消记录" />
           <Metric label="可用于优化" value={observationSummary?.validObservationCount ?? 0} hint="参数、过程与结果已关联" />
           <Metric label="已验证窗口" value={validatedOperatingRegions.length} hint={`${reviewedOperatingRegions.length} 个窗口已完成复核`} />
         </div>
@@ -1313,7 +1338,7 @@ function WorkspaceContent({
                             </div>
                           );
                         })}
-                        {row.optimization?.mode === "shadow" && !shadowRecommendations.some(item =>
+                        {row.status !== "cancelled" && row.optimization?.mode === "shadow" && !shadowRecommendations.some(item =>
                           item.experimentId === row.experimentId && item.suggestionExecutionKey === run.executionKey) && canEdit && (
                           <Button onClick={event => { event.stopPropagation(); onShadowDecision(row, run); }}>
                             登记影子选择
@@ -1413,8 +1438,9 @@ function WorkspaceContent({
                 label: "操作",
                 render: (_, row) => (
                   <div className="flex gap-2">
-                    {row.designMethod === "historical-observation" && <span className="text-xs text-slate-500">只读证据</span>}
-                    {row.optimization?.mode === "shadow" && <span className="text-xs text-slate-500">旁路评估，不可下发</span>}
+                    {row.status === "cancelled" && <span className="text-xs text-slate-500">已取消，仅保留审计记录</span>}
+                    {row.status !== "cancelled" && row.designMethod === "historical-observation" && <span className="text-xs text-slate-500">只读证据</span>}
+                    {row.status !== "cancelled" && row.optimization?.mode === "shadow" && <span className="text-xs text-slate-500">旁路评估，不可下发</span>}
                     {row.optimization?.mode === "controlled" && row.status === "planned" && !row.controlledDecision && row.createdBy !== currentUserId && <Button onClick={event => { event.stopPropagation(); onControlledDecision(row); }}>接受 / 修改 / 拒绝</Button>}
                     {row.optimization?.mode === "controlled" && row.status === "planned" && !row.controlledDecision && row.createdBy === currentUserId && <span className="text-xs text-slate-500">等待现场工程师决策</span>}
                     {row.designMethod !== "historical-observation" && row.optimization?.mode !== "shadow" && row.optimization?.mode !== "controlled" && row.status === "planned" && row.createdBy !== currentUserId && <Button onClick={event => { event.stopPropagation(); onExperimentStatus(row, "approved"); }}>批准</Button>}

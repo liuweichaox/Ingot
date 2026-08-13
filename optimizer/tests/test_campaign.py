@@ -18,6 +18,8 @@ def test_campaign_rejects_invalid_or_empty_definitions():
         Objective("form", "target", target=0.0, tol=0.0)
     with pytest.raises(ValueError, match="at least one variable"):
         Campaign("empty", [], [Objective("form", "le", threshold=1.0)])
+    with pytest.raises(ValueError, match="supplied together"):
+        Objective("pass", "ge", threshold=1.0, outcome_lower_bound=0.0)
 
 
 def test_campaign_enforces_bounds_constraints_and_exact_keys():
@@ -35,6 +37,24 @@ def test_campaign_enforces_bounds_constraints_and_exact_keys():
         campaign.to_unit({"temperature": 350.0, "typo": 1.0})
     with pytest.raises(ValueError, match="finite"):
         campaign.distance_to_spec({"form": math.nan})
+
+
+def test_bounded_objective_rejects_impossible_observations_and_bounds_predictions():
+    objective = Objective(
+        "pass",
+        "ge",
+        threshold=1.0,
+        outcome_lower_bound=0.0,
+        outcome_upper_bound=1.0,
+    )
+    campaign = Campaign("quality", [Variable("x", 0.0, 1.0)], [objective])
+    with pytest.raises(ValueError, match="outside"):
+        campaign.validate_outcomes({"pass": 1.01})
+
+    mean, deviation, lower_95, upper_95 = objective.bounded_prediction(1.15, 0.31)
+    assert 0.0 <= mean <= 1.0
+    assert 0.0 <= lower_95 <= upper_95 <= 1.0
+    assert 0.0 <= deviation <= 0.5
 
 
 @pytest.mark.parametrize(

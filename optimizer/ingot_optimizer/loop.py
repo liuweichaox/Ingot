@@ -106,6 +106,7 @@ class SequentialOptimizer:
 
     @staticmethod
     def _badness_samples(objective: Objective, samples: np.ndarray) -> np.ndarray:
+        samples = objective.clip(samples)
         if objective.kind == "le":
             threshold = float(objective.threshold)
             return 1.0 + (samples - threshold) / max(abs(threshold), 1.0)
@@ -333,14 +334,15 @@ class SequentialOptimizer:
             mean_outcomes: dict[str, float] = {}
             for objective in self.campaign.objectives:
                 means, deviations = predictions[objective.name]
-                mean = float(means[index])
-                deviation = float(deviations[index])
+                mean, deviation, lower_95, upper_95 = objective.bounded_prediction(
+                    float(means[index]), float(deviations[index])
+                )
                 mean_outcomes[objective.name] = mean
                 objective_predictions[objective.name] = ObjectivePrediction(
                     mean=mean,
                     standard_deviation=deviation,
-                    lower_95=mean - 1.96 * deviation,
-                    upper_95=mean + 1.96 * deviation,
+                    lower_95=lower_95,
+                    upper_95=upper_95,
                     unit=objective.unit,
                 )
             results.append(

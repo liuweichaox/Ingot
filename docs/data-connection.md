@@ -170,6 +170,7 @@ signal:temperature:mean:holding
 
 ```text
 inspection:<检验特性编码>
+inspection-outcome:<检测定义编码>
 ```
 
 例如：
@@ -177,9 +178,10 @@ inspection:<检验特性编码>
 ```text
 inspection:form-error
 inspection:crack-rate
+inspection-outcome:final-inspection
 ```
 
-显式映射后，实际值缺失会排除该运行。系统不能用计划值补齐训练数据。
+`inspection-outcome` 使用无量纲单位 `1`，将正式检验记录的 PASS 映射为 1、FAIL 映射为 0；INCONCLUSIVE 不会被猜测，会排除该运行。显式映射后，实际值缺失也会排除该运行。系统不能用计划值补齐训练数据。
 
 ## 执行边界与阶段
 

@@ -27,6 +27,10 @@ public sealed record OptimizerObjectiveInput
     public double? Tol { get; init; }
     public double? Lower { get; init; }
     public double? Upper { get; init; }
+    [JsonPropertyName("outcome_lower_bound")]
+    public double? OutcomeLowerBound { get; init; }
+    [JsonPropertyName("outcome_upper_bound")]
+    public double? OutcomeUpperBound { get; init; }
     public double Weight { get; init; } = 1;
     public string Unit { get; init; } = "";
 }

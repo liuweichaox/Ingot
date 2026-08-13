@@ -50,10 +50,10 @@ public sealed class ProcessAnalysisResolver(IProcessConfigurationStore store)
                 ProcessSpecification? processSpecification = null;
                 if (!string.IsNullOrWhiteSpace(processSpecificationId) && hasProcessSpecification)
                 {
-                    var processSpecificationKey = (processSpecificationId, processSpecificationVersion);
+                    var processSpecificationKey = (processSpecificationId.ToLowerInvariant(), processSpecificationVersion);
                     if (!processSpecificationCache.TryGetValue(processSpecificationKey, out processSpecification))
                     {
-                        processSpecification = await store.GetProcessSpecificationAsync(processSpecificationId, processSpecificationVersion, ct).ConfigureAwait(false);
+                        processSpecification = await store.GetProcessSpecificationAsync(processSpecificationKey.Item1, processSpecificationKey.processSpecificationVersion, ct).ConfigureAwait(false);
                         processSpecificationCache[processSpecificationKey] = processSpecification;
                     }
                 }
@@ -123,7 +123,7 @@ public sealed class ProcessAnalysisResolver(IProcessConfigurationStore store)
                 continue;
         }
 
-            var key = (processSpecificationId.Trim(), version);
+            var key = (processSpecificationId.Trim().ToLowerInvariant(), version);
             if (!cache.TryGetValue(key, out var processSpecification))
             {
                 processSpecification = await store.GetProcessSpecificationAsync(key.Item1, key.version, ct)

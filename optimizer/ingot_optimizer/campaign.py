@@ -45,6 +45,8 @@ class Objective:
     tol: float | None = None
     lower: float | None = None
     upper: float | None = None
+    outcome_lower_bound: float | None = None
+    outcome_upper_bound: float | None = None
     unit: str = ""
     weight: float = 1.0
 
@@ -55,7 +57,15 @@ class Objective:
             raise ValueError("objective name must not be empty")
         if kind not in {"le", "ge", "target", "range"}:
             raise ValueError(f"objective {name} has unsupported kind {kind}")
-        values = (self.threshold, self.target, self.tol, self.lower, self.upper)
+        values = (
+            self.threshold,
+            self.target,
+            self.tol,
+            self.lower,
+            self.upper,
+            self.outcome_lower_bound,
+            self.outcome_upper_bound,
+        )
         if any(value is not None and not math.isfinite(value) for value in values):
             raise ValueError(f"objective {name} contains a non-finite specification")
         if not math.isfinite(self.weight) or self.weight <= 0:
@@ -70,9 +80,72 @@ class Objective:
             self.lower is None or self.upper is None or self.lower >= self.upper
         ):
             raise ValueError(f"objective {name} requires lower < upper")
+        if (self.outcome_lower_bound is None) != (self.outcome_upper_bound is None):
+            raise ValueError(f"objective {name} outcome bounds must be supplied together")
+        if (
+            self.outcome_lower_bound is not None
+            and self.outcome_upper_bound is not None
+            and self.outcome_lower_bound >= self.outcome_upper_bound
+        ):
+            raise ValueError(f"objective {name} requires outcome lower bound < upper bound")
         object.__setattr__(self, "name", name)
         object.__setattr__(self, "kind", kind)
         object.__setattr__(self, "unit", self.unit.strip())
+
+    def clip(self, value):
+        if self.outcome_lower_bound is None or self.outcome_upper_bound is None:
+            return value
+        if hasattr(value, "clamp"):
+            return value.clamp(
+                min=float(self.outcome_lower_bound),
+                max=float(self.outcome_upper_bound),
+            )
+        return np.clip(
+            value,
+            float(self.outcome_lower_bound),
+            float(self.outcome_upper_bound),
+        )
+
+    def bounded_prediction(
+        self, mean: float, standard_deviation: float
+    ) -> tuple[float, float, float, float]:
+        lower_95 = mean - 1.96 * standard_deviation
+        upper_95 = mean + 1.96 * standard_deviation
+        if self.outcome_lower_bound is None or self.outcome_upper_bound is None:
+            return mean, standard_deviation, lower_95, upper_95
+        low = float(self.outcome_lower_bound)
+        high = float(self.outcome_upper_bound)
+        if standard_deviation <= 1e-12:
+            bounded_mean = float(np.clip(mean, low, high))
+            return bounded_mean, 0.0, bounded_mean, bounded_mean
+        sigma = standard_deviation
+        alpha = (low - mean) / sigma
+        beta = (high - mean) / sigma
+        cdf_alpha = 0.5 * (1.0 + math.erf(alpha / math.sqrt(2.0)))
+        cdf_beta = 0.5 * (1.0 + math.erf(beta / math.sqrt(2.0)))
+        pdf_alpha = math.exp(-0.5 * alpha * alpha) / math.sqrt(2.0 * math.pi)
+        pdf_beta = math.exp(-0.5 * beta * beta) / math.sqrt(2.0 * math.pi)
+        inside = cdf_beta - cdf_alpha
+        bounded_mean = (
+            low * cdf_alpha
+            + mean * inside
+            + sigma * (pdf_alpha - pdf_beta)
+            + high * (1.0 - cdf_beta)
+        )
+        second_moment = (
+            low * low * cdf_alpha
+            + (mean * mean + sigma * sigma) * inside
+            + 2.0 * mean * sigma * (pdf_alpha - pdf_beta)
+            + sigma * sigma * (alpha * pdf_alpha - beta * pdf_beta)
+            + high * high * (1.0 - cdf_beta)
+        )
+        bounded_deviation = math.sqrt(max(second_moment - bounded_mean * bounded_mean, 0.0))
+        return (
+            bounded_mean,
+            bounded_deviation,
+            float(np.clip(lower_95, low, high)),
+            float(np.clip(upper_95, low, high)),
+        )
 
     def badness(self, value: float) -> float:
         """Return normalized badness where ``badness <= 1`` is in specification."""
@@ -263,6 +336,16 @@ class Campaign:
             value = float(outcomes[objective.name])
             if not math.isfinite(value):
                 raise ValueError(f"outcome {objective.name} must be finite")
+            if (
+                (objective.outcome_lower_bound is not None
+                 and value < objective.outcome_lower_bound)
+                or (objective.outcome_upper_bound is not None
+                    and value > objective.outcome_upper_bound)
+            ):
+                raise ValueError(
+                    f"outcome {objective.name}={value} is outside "
+                    f"[{objective.outcome_lower_bound}, {objective.outcome_upper_bound}]"
+                )
 
     def validate_constraint_outcomes(self, outcomes: Mapping[str, float]) -> None:
         names = set(outcomes)

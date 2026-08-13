@@ -213,6 +213,14 @@ public sealed class QualityWorkflowTests
                 ["processSpecificationId"] = "RCP-LENS-A",
                 ["processSpecificationVersion"] = 2
             });
+        applied = applied with
+        {
+            Context = new Dictionary<string, string>(applied.Context, StringComparer.Ordinal)
+            {
+                ["control_parameter_source"] = "mes_batch_recipe_reference",
+                ["control_parameter_capture_status"] = "source_linked"
+            }
+        };
         var rows = new[]
         {
             Row(1, Event(
@@ -244,6 +252,8 @@ public sealed class QualityWorkflowTests
         var parameter = Assert.Single(execution.ControlParameters);
         Assert.Equal("processSpecification.upper_heat_compensation", parameter.Code);
         Assert.Equal(2.888943d, parameter.Value.GetDouble());
+        Assert.Equal("mes_batch_recipe_reference", parameter.Source);
+        Assert.Equal("source_linked", parameter.CaptureStatus);
     }
 
     [Fact]
@@ -336,6 +346,33 @@ public sealed class QualityWorkflowTests
             service.CompareSelectedAsync("RUN-V1", ["RUN-V1", "RUN-V2"]));
 
         Assert.Contains("actual_process_specification_version", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ProcessAnalysisResolver_NormalizesMesProcessSpecificationIdentity()
+    {
+        var specification = new ProcessSpecification
+        {
+            ProcessSpecificationId = "r-m-ht032-0712",
+            Version = 1,
+            Name = "MES recipe",
+            Status = ConfigurationStatuses.Published,
+            DataModelId = "optical-molding",
+            DataModelVersion = 1
+        };
+        var resolver = new ProcessAnalysisResolver(new FakeProcessConfigurationStore(specification));
+        var context = new Dictionary<string, string>
+        {
+            ["process_specification_id"] = "R-M-HT032-0712",
+            ["process_specification_version"] = "1",
+            ["product_family_code"] = "M-HT032"
+        };
+
+        var result = await resolver.ResolveAsync(context, "production-execution");
+
+        Assert.NotNull(result);
+        Assert.Equal("optical-molding", result.DataModel.ModelId);
+        Assert.Equal("execution-comparison", result.Plan.PlanId);
     }
 
     [Fact]
@@ -849,7 +886,11 @@ public sealed class QualityWorkflowTests
         public Task<ProcessSpecification> UpsertProcessSpecificationAsync(ProcessSpecification value, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<IReadOnlyList<ProcessSpecification>> ListProcessSpecificationsAsync(CancellationToken ct = default) => Task.FromResult<IReadOnlyList<ProcessSpecification>>([]);
         public Task<ProcessSpecification?> GetProcessSpecificationAsync(string processSpecificationId, int version, CancellationToken ct = default)
-            => Task.FromResult(processSpecification);
+            => Task.FromResult(processSpecification is not null &&
+                               processSpecification.ProcessSpecificationId == processSpecificationId &&
+                               processSpecification.Version == version
+                ? processSpecification
+                : null);
         public Task<bool> DeleteProcessSpecificationAsync(string processSpecificationId, int version, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<ProcessAnalysisPlan> UpsertAnalysisPlanAsync(ProcessAnalysisPlan value, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<IReadOnlyList<ProcessAnalysisPlan>> ListAnalysisPlansAsync(CancellationToken ct = default) => Task.FromResult<IReadOnlyList<ProcessAnalysisPlan>>([SelectedPlan, WindowPlan]);

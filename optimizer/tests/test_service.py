@@ -153,7 +153,7 @@ def test_service_runs_batch_multiobjective_qlognehvi_with_declared_features():
     response = client.post("/v1/suggestions", json=body)
     assert response.status_code == 200, response.text
     payload = response.json()
-    assert payload["model_version"] == "botorch-qlogbo-v3"
+    assert payload["model_version"] == "botorch-qlogbo-v4"
     assert payload["feature_set_id"] == "optical-lens-molding-demo"
     assert payload["derived_feature_count"] == 2
     assert len(payload["suggestions"]) == 2
@@ -169,6 +169,29 @@ def test_service_runs_batch_multiobjective_qlognehvi_with_declared_features():
         set(item["constraint_predictions"]) == {"crack_rate"}
         for item in payload["suggestions"]
     )
+
+
+def test_service_keeps_binary_objective_predictions_inside_declared_bounds():
+    body = request_body()
+    body["campaign"]["objectives"] = [
+        {
+            "name": "pass",
+            "kind": "ge",
+            "threshold": 1.0,
+            "outcome_lower_bound": 0.0,
+            "outcome_upper_bound": 1.0,
+        }
+    ]
+    body["observations"] = [
+        {"params": {"x": 0.0}, "outcomes": {"pass": 0.0}},
+        {"params": {"x": 0.4}, "outcomes": {"pass": 1.0}},
+        {"params": {"x": 0.7}, "outcomes": {"pass": 1.0}},
+    ]
+    response = client.post("/v1/suggestions", json=body)
+    assert response.status_code == 200, response.text
+    prediction = response.json()["suggestions"][0]["objective_predictions"]["pass"]
+    assert 0.0 <= prediction["mean"] <= 1.0
+    assert 0.0 <= prediction["lower_95"] <= prediction["upper_95"] <= 1.0
 
 
 def test_service_rejects_hidden_process_profiles_and_invalid_feature_graphs():

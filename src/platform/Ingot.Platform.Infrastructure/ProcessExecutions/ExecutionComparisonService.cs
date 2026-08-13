@@ -746,6 +746,8 @@ public sealed class ExecutionComparisonService(
             applied.Event.Data.TryGetValue("resolvedParameters", out var raw) &&
             TryReadObject(raw, out var actual))
         {
+            var source = ProcessAnalysisResolver.ContextValue(applied.Event.Context, "control_parameter_source");
+            var captureStatus = ProcessAnalysisResolver.ContextValue(applied.Event.Context, "control_parameter_capture_status");
             var captured = actual
                 .Select(pair =>
                 {
@@ -756,6 +758,8 @@ public sealed class ExecutionComparisonService(
                             Code = pair.Key,
                             Name = definition?.DisplayName,
                             Unit = definition?.Unit,
+                            Source = source,
+                            CaptureStatus = captureStatus,
                             Value = JsonSerializer.SerializeToElement(value)
                         }
                         : null;

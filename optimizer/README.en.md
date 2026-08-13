@@ -11,6 +11,7 @@ See the [system design](../docs/design.en.md) for boundaries and [analysis and o
 - Continuous controls, hard parameter bounds, and measured outcome-safety constraints
 - Less-than, greater-than, target, and range objectives
 - Objective weights and BoTorch/GPyTorch multi-output GPs with 95% intervals
+- Declared physical outcome bounds; formal PASS/FAIL objectives keep posterior means, intervals, and acquisition samples inside 0-1
 - Outcome-constrained batch `qLogNEHVI` and `qLogNEI`
 - Two decision intents: `reach-specification` for specification seeking, and `validate-hypothesis` for safely maximizing identifiable information in hypothesis variables
 - A two-stage set-point-to-trajectory-to-quality surrogate
@@ -57,7 +58,7 @@ Local development uses `8110` by default to avoid conflicting with the optimizer
 - optional candidate parameter settings;
 - top-k, seed, candidate-count, and posterior-sample settings.
 
-It returns recommended parameters, objective means and 95% intervals, predicted distance to specification, feasibility probability, acquisition value, model version, and rationale.
+It returns recommended parameters, objective means and 95% intervals, predicted distance to specification, feasibility probability, acquisition value, model version, and rationale. Platform also checks that proposed conditions are distinguishable at the minimum spacing seen in actual historical conditions; nearby floating-point values cannot masquerade as separate experiment conditions.
 
 Derived operators run on engineering-unit controls and are normalized with the
 declared offset and scale. Inputs may reference campaign controls or an earlier

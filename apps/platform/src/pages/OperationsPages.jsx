@@ -389,7 +389,7 @@ export function ProcessExecutionDetailPage() {
 
           <Card
             title="实际执行工艺规范"
-            description="显示运行开始时从设备或控制系统回读的真实参数；优化建模使用这些值，不使用人工猜测值。"
+            description="显示本次运行关联的实际执行参数，用于历史条件对比和分析。"
           >
             {(analysis?.controlParameters || []).length ? (
               <DataTable

@@ -420,6 +420,46 @@ public sealed class ProcessResearchWorkflowTests
     }
 
     [Fact]
+    public void OptimizerRejectsConditionsBelowObservedProcessResolution()
+    {
+        var controls = new Dictionary<string, ResearchVariable>(StringComparer.Ordinal)
+        {
+            ["vacuum-position"] = new()
+            {
+                Code = "vacuum-position",
+                Name = "真空位置",
+                Role = ResearchVariableRoles.Control,
+                Unit = "mm",
+                LowerLimit = 24.25,
+                UpperLimit = 25.352
+            }
+        };
+        var observations = new[] { 24.25, 25.25, 25.352 }
+            .Select(value => new OptimizerObservationInput
+            {
+                Params = new Dictionary<string, double> { ["vacuum-position"] = value }
+            })
+            .ToArray();
+        var suggestions = new[] { 25.35040, 25.35071 }
+            .Select(value => new OptimizerSuggestionOutput
+            {
+                RecommendedParameters = new Dictionary<string, double>
+                {
+                    ["vacuum-position"] = value
+                }
+            })
+            .ToArray();
+
+        var error = Assert.Throws<ProcessResearchRuleException>(() =>
+            ResearchExperimentOptimizer.EnsureExperimentConditionsAreDistinguishable(
+                suggestions,
+                observations,
+                controls));
+
+        Assert.Contains("不能伪装成两个实验条件", error.Message);
+    }
+
+    [Fact]
     public async Task ResultMaterializer_PersistsCompleteProcessExecutionObservationsAsFormalResult()
     {
         var store = new MemoryStore();

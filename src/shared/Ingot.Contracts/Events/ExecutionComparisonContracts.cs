@@ -309,6 +309,12 @@ public sealed record ExecutionControlParameterValue
 
     public string? Unit { get; init; }
 
+    /// <summary>参数事实的来源，例如 PLC 回读或 MES 批次关联的配方快照。</summary>
+    public string? Source { get; init; }
+
+    /// <summary>来源侧的捕获状态；用于区分直接回读、源记录关联和推断值。</summary>
+    public string? CaptureStatus { get; init; }
+
     public JsonElement Value { get; init; }
 }
 

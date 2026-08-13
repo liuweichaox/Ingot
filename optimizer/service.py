@@ -50,6 +50,8 @@ class ObjectiveIn(StrictModel):
     tol: float | None = None
     lower: float | None = None
     upper: float | None = None
+    outcome_lower_bound: float | None = None
+    outcome_upper_bound: float | None = None
     unit: str = Field(default="", max_length=40)
     weight: float = Field(default=1.0, gt=0)
 

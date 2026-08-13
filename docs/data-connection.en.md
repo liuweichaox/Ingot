@@ -170,6 +170,7 @@ signal:temperature:mean:holding
 
 ```text
 inspection:<characteristic-code>
+inspection-outcome:<inspection-definition-code>
 ```
 
 For example:
@@ -177,9 +178,10 @@ For example:
 ```text
 inspection:form-error
 inspection:crack-rate
+inspection-outcome:final-inspection
 ```
 
-After an explicit mapping exists, a missing actual value excludes the run. The system never fills model training with planned values.
+`inspection-outcome` uses the dimensionless unit `1` and maps a formal inspection record's PASS outcome to 1 and FAIL outcome to 0. INCONCLUSIVE is never guessed and excludes the run. After an explicit mapping exists, a missing actual value also excludes the run. The system never fills model training with planned values.
 
 ## Runs and stages
 

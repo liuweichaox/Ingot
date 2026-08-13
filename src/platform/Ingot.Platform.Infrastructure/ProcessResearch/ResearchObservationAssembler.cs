@@ -189,8 +189,13 @@ public sealed class ResearchObservationAssembler(
         var outcomes = new Dictionary<string, double>(StringComparer.Ordinal);
         foreach (var objective in project.Objectives)
         {
-            var sourceCode = ResolveInspectionCode(objective.Code, objective.DataSource);
-            if (TryResolveMeasurement(records, sourceCode, objective.Unit, out var value, out var reason))
+            if (TryResolveInspectionValue(
+                    records,
+                    objective.Code,
+                    objective.DataSource,
+                    objective.Unit,
+                    out var value,
+                    out var reason))
                 outcomes[objective.Code] = value;
             else
                 missing.Add($"目标:{objective.Code}（{reason}）");
@@ -198,8 +203,13 @@ public sealed class ResearchObservationAssembler(
         var constraintOutcomes = new Dictionary<string, double>(StringComparer.Ordinal);
         foreach (var constraint in project.OutcomeConstraints)
         {
-            var sourceCode = ResolveInspectionCode(constraint.OutcomeCode, constraint.DataSource);
-            if (TryResolveMeasurement(records, sourceCode, constraint.Unit, out var value, out var reason))
+            if (TryResolveInspectionValue(
+                    records,
+                    constraint.OutcomeCode,
+                    constraint.DataSource,
+                    constraint.Unit,
+                    out var value,
+                    out var reason))
                 constraintOutcomes[constraint.Code] = value;
             else
                 missing.Add($"结果约束:{constraint.Code}（{reason}）");
@@ -436,14 +446,69 @@ public sealed class ResearchObservationAssembler(
         return result;
     }
 
-    private static string ResolveInspectionCode(string fallback, string? dataSource)
+    private static bool TryResolveInspectionValue(
+        IReadOnlyList<InspectionRecord> records,
+        string fallback,
+        string expectedUnit,
+        out double value,
+        out string reason)
     {
-        if (string.IsNullOrWhiteSpace(dataSource))
-            return fallback;
-        var source = dataSource.Trim();
-        return source.StartsWith("inspection:", StringComparison.OrdinalIgnoreCase)
+        var source = string.IsNullOrWhiteSpace(dataSource) ? fallback : dataSource.Trim();
+        if (source.StartsWith("inspection-outcome:", StringComparison.OrdinalIgnoreCase))
+        {
+            return TryResolveInspectionOutcome(
+                records,
+                source["inspection-outcome:".Length..].Trim(),
+                expectedUnit,
+                out value,
+                out reason);
+        }
+        var characteristicCode = source.StartsWith("inspection:", StringComparison.OrdinalIgnoreCase)
             ? source["inspection:".Length..].Trim()
             : source;
+        return TryResolveMeasurement(records, characteristicCode, expectedUnit, out value, out reason);
+    }
+
+    private static bool TryResolveInspectionOutcome(
+        IReadOnlyList<InspectionRecord> records,
+        string definitionCode,
+        string expectedUnit,
+        out double value,
+        out string reason)
+    {
+        value = default;
+        if (!UnitsMatch("1", expectedUnit))
+        {
+            reason = UnitConflict(expectedUnit, "1");
+            return false;
+        }
+        var match = records
+            .Where(record => string.Equals(
+                record.DefinitionCode,
+                definitionCode,
+                StringComparison.Ordinal))
+            .OrderByDescending(static record => record.MeasuredAt)
+            .ThenByDescending(static record => record.IngestedAt)
+            .FirstOrDefault();
+        if (match is null)
+        {
+            reason = "缺少有效检验结论";
+            return false;
+        }
+        if (string.Equals(match.Outcome, "PASS", StringComparison.OrdinalIgnoreCase))
+        {
+            value = 1;
+            reason = string.Empty;
+            return true;
+        }
+        if (string.Equals(match.Outcome, "FAIL", StringComparison.OrdinalIgnoreCase))
+        {
+            value = 0;
+            reason = string.Empty;
+            return true;
+        }
+        reason = "检验结论为 INCONCLUSIVE，不能作为确定的优化结果";
+        return false;
     }
 
     private static bool TryResolveMeasurement(
