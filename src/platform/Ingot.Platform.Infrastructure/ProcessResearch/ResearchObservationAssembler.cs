@@ -449,6 +449,7 @@ public sealed class ResearchObservationAssembler(
     private static bool TryResolveInspectionValue(
         IReadOnlyList<InspectionRecord> records,
         string fallback,
+        string? dataSource,
         string expectedUnit,
         out double value,
         out string reason)
