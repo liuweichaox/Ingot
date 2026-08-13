@@ -2,6 +2,8 @@
 
 > Status: **rolling validation protocol**. This document defines how to prove that Ingot genuinely helps process engineers, not how to prove that one algorithm looks advanced.
 
+[Strategy and rolling roadmap](project-plan.en.md) defines why the system is built, what it aims to become, and when it may advance. This document only defines how historical replay, shadow validation, and controlled online experiments are preregistered, run, falsified, and published. The three work lines answer different questions and cannot substitute for one another.
+
 ## Validation questions
 
 A real project answers four questions in order:
@@ -86,6 +88,8 @@ Record:
 
 When history covers only a narrow region, results evaluate candidate-pool ranking only, not continuous-space optimization.
 
+Phases 1 and 2 together test whether the historical evidence apparatus is trustworthy, reproducible, and leakage-free. They do not by themselves prove that recommendations improve a real process. The replay artifact freezes at least the data scope, per-round visible information, inclusion and exclusion, baselines, policy and model versions, random seeds, sequential outputs, failures, review records, and content hashes.
+
 ## Phase 3: shadow recommendations on a new project
 
 Generate recommendations without changing the engineer's original experiment order. Before the outcome, freeze:
@@ -156,6 +160,6 @@ These findings trigger data repair, workflow changes, method downgrade, or an op
 
 ## Publishing results
 
-A public report includes data scope, anonymization, inclusion rules, variables, objectives, constraints, context coverage, exclusions, comparison baselines, random seeds, every failure, safety event, engineer rejection reason, and non-generalizable limitation.
+A public report includes data scope, anonymization, inclusion rules, variables, objectives, constraints, context coverage, exclusions, comparison baselines, random seeds, every failure, safety event, engineer rejection reason, and non-generalizable limitation. It also includes a machine-readable summary and content hash so independent implementations can verify inputs, conclusion boundaries, and report integrity.
 
 Until real validation is complete, the website describes what the system can do without claiming unproven quantitative benefit.

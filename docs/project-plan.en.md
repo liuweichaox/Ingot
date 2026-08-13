@@ -1,212 +1,268 @@
-# Ingot project plan
+# Ingot strategy and rolling roadmap
 
-> Status: **v1 product baseline plus rolling roadmap**. Sections 1–4 fix the long-term direction. Sections 5–9 evolve with real data, engineer feedback, and acceptance results. Every phase advances through acceptance gates.
+> Status: **v2 strategy baseline plus rolling roadmap**. Sections 1–5 fix the long-term direction, strategic thesis, and stable boundaries. Sections 6–9 evolve with real data, engineer feedback, external adoption, and acceptance results. Progress follows evidence gates, never feature count or calendar time alone.
 
-## 1. Stable long-term direction
+## 1. Long-term position
 
 Ingot's core value remains unchanged:
 
 > **Move process R&D from decisions without data support to decisions supported by real data, so computers can genuinely help process engineers choose what to do next using the most effective computational methods for the problem.**
 
-The long-term product chain is:
+Ingot keeps its current public category:
+
+> **Open-source Process Diagnosis & Optimization.**
+
+Its long-term direction is to become:
+
+> **A trustworthy decision and validation operating system for manufacturing processes.**
+
+AGI supplies replaceable understanding, reasoning, and tool orchestration. Ingot makes every human or agent operate over the same trusted facts, scientific validation, and controlled-action discipline. Its durable advantage is not one model, but:
+
+- reliable identity across real runs, actual conditions, trajectories, quality outcomes, and field context;
+- evidence, methods, versions, uncertainty, and applicability for every judgment;
+- formal state from candidate cause through falsifiable experiment, approval, execution, and result materialization;
+- controlled actions that can be replayed, audited, denied, stopped, and rolled back;
+- validated process knowledge reusable across products, equipment, and scenarios.
+
+The governing principle is:
+
+> **Every conclusion has provenance. Every recommendation has boundaries. Every action has approval, fallback, and an outcome.**
+
+This is a strategic north star, not a claim that these product benefits have already been demonstrated. [Brand and product language](brand.en.md) remains authoritative for public claims.
+
+## 2. One product spine
+
+Ingot centers on a complete process-decision case, not a chat session, algorithm, or device point:
 
 ```text
-trusted acquisition → run and quality evidence → diagnosis → falsifiable experiment → safe optimization → knowledge reuse
+engineering problem
+→ trustworthy evidence bundle
+→ candidate causes and counterevidence
+→ falsifiable hypothesis
+→ experiment or adjustment proposal
+→ risk review and independent approval
+→ actual execution
+→ quality outcome and side effects
+→ conclusion boundary
+→ reusable process knowledge
 ```
 
-This is a capability dependency: do not perform strong analysis without trustworthy data, claim causes without testable candidates, or enter online optimization without safety and calibration evidence.
+The long-term capability chain is:
 
-Optical-lens molding is the first long-running validation scenario, not the product boundary. Generality is supported only when a second, materially different manufacturing scenario works without changing the core evidence, experiment, and optimization contracts.
+```text
+trusted acquisition → run and quality evidence → evidence-backed diagnosis
+→ falsifiable experiment → safe optimization → knowledge reuse
+```
 
-## 2. Product boundary
+This is a dependency chain, not menu order. Do not perform strong analysis with untrusted data, claim causes from observational evidence, enter shadow mode before replay, or enter controlled action before shadow and safety evidence pass.
 
-Ingot serves expensive, small-data manufacturing process R&D with safety boundaries. It is shared by process, quality, equipment, and R&D teams in one company, deployed locally on the factory network by default.
+Optical-lens molding is the first sustained validation scenario, not the product boundary. Generality is supported only when a second, materially different manufacturing process works without changing the core evidence, experiment, and action contracts.
 
-The core platform carries stable cross-scenario concepts:
+## 3. Three-horizon strategy
 
-- equipment, connections, process executions and stages;
-- product, process specification, material, component, tooling, and lot context;
+### Near term: prove the trustworthy apparatus
+
+The immediate priority is leakage-free replay of a real historical project. It does not answer whether AGI has improved the process. It tests whether:
+
+- one frozen evidence snapshot reproduces the same analysis and recommendation;
+- run identity, actual values, quality outcomes, and context are unique, complete, and traceable;
+- round `t` uses only information available at round `t`;
+- methods compare fairly with engineer history, applicable DOE, and simple baselines;
+- missingness, mismatches, unauthorized access, and insufficient evidence are rejected explicitly;
+- inputs, policies, models, seeds, outputs, reviews, and content hashes form a complete report.
+
+The near-term conclusion can only be that the apparatus is trustworthy, reproducible, and leakage-free. Prospective value requires shadow validation; causal and benefit claims require controlled online experiments. The evidence ladder is:
+
+```text
+historical replay: trustworthy, reproducible, leakage-free
+→ prospective shadow: applicable, executable, calibrated
+→ controlled intervention: safe prospective value inside declared boundaries
+→ second scenario: transferable core contracts
+```
+
+See [Real-scenario validation](rollout.en.md) for the protocol and report requirements.
+
+### Medium term: become a model-independent process capability substrate
+
+Expose R&D capabilities through agent-callable protocols without exposing internal CRUD APIs directly to models. Use two layers:
+
+```text
+any AGI / agent
+↓
+interoperability adapters such as MCP, OpenAPI, and SDKs
+↓
+Ingot process capability protocol and control plane
+↓
+evidence, experiment, approval, execution, and rollback state machines
+```
+
+MCP and similar protocols standardize discovery, description, and invocation. Ingot's domain protocol and Platform state machines enforce evidence discipline, permissions, approval, idempotency, replay, and safety. Expose capabilities by risk:
+
+| Level | Agent capability | System guarantee |
+|---|---|---|
+| Read | query runs, evidence, quality, context, and applicability | project isolation, citations, versions, least privilege |
+| Propose | create investigation drafts, candidate hypotheses, and experiment proposals | draft only, with input snapshot and rationale |
+| Commit | submit approval, freeze a plan, and sign an execution version | no self-approval; no rewriting after outcomes appear |
+| Execute | invoke allow-listed, time-bounded, scoped, reversible actions | policy checks, human authorization, device confirmation, stop, and rollback |
+
+An agent may not approve its own proposal or bypass Platform to reach a database or device. The medium-term value proposition is not that Ingot has the smartest agent:
+
+> **Every model that investigates or acts through Ingot must cite evidence, pass state and permission gates, and leave a verifiable execution receipt.**
+
+### Long term: establish an open evidence and experiment specification for manufacturing intelligence
+
+Open the cross-product semantics and validation contracts, not customer process content or current database tables. Candidate specification objects include:
+
+- run-event envelopes and provenance;
+- evidence bundles and content-addressing rules;
+- experiment contracts, preregistration, and version freezes;
+- agent recommendations, human decisions, and rejection reasons;
+- execution receipts, actual-value confirmation, stop, and rollback;
+- validation reports and machine-readable conclusion boundaries;
+- validated operating regions with applicability, failure, and drift conditions.
+
+The specification must include schemas, compatibility rules, reference implementations, adapters, conformance validators, standard fixtures, signature and provenance rules, extension namespaces, and an open change process.
+
+Before a `1.0` release, require:
+
+1. two materially different real process scenarios using the core semantics unchanged;
+2. at least two external teams implementing or validating without private Ingot code;
+3. public review of compatibility, conformance, and security boundaries;
+4. governance independent of one customer's data, one model, or one vendor interface.
+
+“TCP/IP for manufacturing AI” is an internal ambition, not a current fact. The accurate near-term name is:
+
+> **An evidence and experiment protocol for manufacturing intelligence.**
+
+Network effects come from equipment, agents, validators, scenario packages, and enterprise systems using one verifiable contract, not from centralizing customers' raw process data.
+
+## 4. Product and commercial boundary
+
+Ingot serves expensive, small-data manufacturing process R&D with measurable quality objectives and safety boundaries. Process, quality, equipment, and R&D teams collaborate inside one company, with factory-local or hybrid deployment by default.
+
+The core platform carries stable concepts:
+
+- equipment, connections, process executions, and stages;
+- products, process specifications, materials, components, tooling, and lot context;
 - actual settings, trajectories, versioned features, and data quality;
-- quality objectives, safety constraints, inspection results, and human review;
+- quality objectives, safety constraints, inspections, and human review;
 - engineering problems, candidate causes, counterevidence, hypotheses, experiments, and evidence;
 - analysis strategies, numerical recommendations, stopping, operating regions, and knowledge applicability;
-- users, role permissions, audit, and provenance.
+- human and agent identities, roles, approvals, audit, and provenance.
 
-Scenario differences belong in versioned configuration:
+Scenario differences belong in versioned configuration: variables, units, mappings, run boundaries, stages, quality plans, constraints, context, experiment policies, and optional mechanism knowledge.
 
-- variables, units, allowed ranges, and data mappings;
-- equipment points, run boundaries, stages, and process features;
-- inspections, objectives, constraints, and default experiment policy;
-- required and optional context;
-- optional mechanism knowledge, language, and report defaults.
+Ingot does not expand into a general MES, SCADA, interlock, scheduler, data lake, or unattended controller. It sits above those systems to manage process evidence, experiment decisions, controlled actions, and knowledge closure.
 
-Ingot is not production scheduling, a general MES, equipment interlocking, or unattended control. It may exchange data with those systems without replacing them.
+Recommended open and commercial boundaries:
 
-## 3. Long-term architecture decisions
+- **Open**: Edge, core schemas, evidence protocol, basic connectors, replay, and conformance tools.
+- **Enterprise**: organization governance, multi-site operation, SSO, durable audit, agent evaluation operations, controlled execution, certified scenario packages, and engineering support.
+
+Commercial value should be measured by site, line, R&D workspace, or durable decision workflow, not conversations or token use.
+
+## 5. Long-term architecture and safety invariants
 
 ```mermaid
 flowchart LR
-    Sources["controls / instruments / vision / inspection / MES"] --> Edge["Edge\nacquisition · mapping · buffering"]
-    Edge --> Platform["Platform\nfactory system of record"]
+    Sources["controls / instruments / vision / inspection / MES"] --> Edge["Edge\nacquisition · mapping · buffering · controlled action gateway"]
+    Edge --> Platform["Platform\nformal facts · state machines · permissions · audit"]
     Platform --> Analysis["deterministic analysis\nquality · comparison · statistics"]
-    Platform --> Optimizer["numerical service\nmodels · constraints · experiment proposals"]
-    Platform --> Agent["AI assistance\nquery · organize · explain"]
+    Platform --> Optimizer["Optimizer\nmodels · constraints · experiment proposals"]
+    Platform --> Agent["Agent\nunderstanding · reasoning · tool orchestration"]
     Platform --> Web["engineering workbench"]
     Engineer["Process engineer"] --> Web
     Web --> Platform
+    Agent -. "authorized capabilities only" .-> Platform
+    Platform -. "approved structured actions" .-> Edge
 ```
 
 Stable decisions:
 
-- Edge is deployed by OT network and shared failure domain and initiates connections to Platform.
-- Platform is the sole formal record for runs, context, inspections, experiments, evidence, and knowledge.
-- Optimizer is stateless business-wise and cannot control equipment or approve experiments.
-- Agent reads structured facts through authorized tools and does not generate numerical process settings.
-- Web does not maintain parallel business state that conflicts with Platform.
-- Configuration, data, features, analysis, and models are versioned and replayable.
-- Field acquisition, inspection, and business records do not depend on Optimizer or Agent availability.
+- **Platform** is the sole formal record for runs, context, inspections, experiments, evidence, approvals, agent proposals, and knowledge.
+- **Edge** provides trusted acquisition, offline buffering, and replay. It may later host a controlled action gateway but never replaces PLC, DCS, or safety interlocks.
+- **Optimizer** is stateless business-wise and performs reproducible statistics, constraints, DOE, and numerical optimization. It cannot approve experiments or control equipment.
+- **Agent** is a replaceable understanding, reasoning, and tool-orchestration layer. Conversation context and model memory are not formal business state.
+- **Web** does not maintain parallel business state that conflicts with Platform.
+- Data, features, policies, models, tools, and schemas are versioned and replayable; critical evidence uses content hashes or signatures.
+- Acquisition, inspection, and formal records do not depend on Optimizer, Agent, or an external model being available.
+- Agents never receive arbitrary device-write permission; they submit structured intent or invoke allow-listed actions.
 
-Protocols, database topology, algorithms, and page layouts may evolve. Changes to stable boundaries require an ADR.
+Every agent behavior affecting business or equipment records identity, model and policy version, tools and permissions, evidence snapshot, proposal and uncertainty, constraint checks, approval scope, device confirmation, outcomes, side effects, stop, and rollback.
 
-## 4. Product maturity ladder
+Protocol adapters, database topology, algorithms, model providers, and page layouts may evolve. Stable-boundary changes require an ADR.
 
-| Level | What an engineer can do | What the system must prove |
+## 6. Product maturity and promotion gates
+
+| Level | What an engineer or agent can do | What the system must prove |
 |---|---|---|
 | L0 connected | see equipment, instrument, and inspection data | raw values, units, time, and provenance are explicit |
-| L1 trusted run | find actual conditions, trajectory, context, and outcomes for one run | no silent loss; missingness and versions are visible |
-| L2 comparable | find a qualified baseline and locate first deviation | matching, coverage, and confounding are explicit |
+| L1 trusted run | find actual conditions, trajectory, context, and outcome | no silent loss; missingness and versions are visible |
+| L2 comparable | find a qualified baseline and first deviation | matching, coverage, and confounding are explicit |
 | L3 diagnosable | receive candidates, evidence, counterevidence, and validation advice | correlation is not sold as cause; correct refusal works |
 | L4 experimentable | turn a candidate into a reviewable, falsifiable experiment | controls, repetition, blocks, safety, and stopping are explicit |
-| L5 optimizable | receive a next-experiment recommendation | leakage-free replay, calibrated uncertainty, zero safety violations |
-| L6 reusable | reuse conclusions on a new product, machine, or scenario | applicability, failure conditions, and drift are visible |
+| L5 optimizable | receive a next-experiment recommendation | leakage-free replay, calibrated uncertainty, zero known safety violations |
+| L6 actionable | execute one reversible action inside approved scope | shadow evidence, permission, actual confirmation, and rollback drills pass |
+| L7 reusable | reuse conclusions on a new product, machine, or scenario | applicability, failure, drift, and negative transfer are visible |
+| L8 interoperable | external systems independently implement and validate the protocol | multi-scenario use, compatibility, conformance, and governance pass |
 
-No level may use a higher-level demonstration to bypass lower-level evidence.
+No level may use a higher-level demonstration to bypass lower-level evidence. Autonomy grows only inside validated operating regions and automatically degrades on drift, missing evidence, model anomalies, communication failure, or human intervention.
 
-## 5. Delivery model
+## 7. Delivery and validation model
 
-Maintain three controlled work lines:
+Maintain four mutually constraining work lines:
 
-- **Product line**: trustworthy data → comparison and diagnosis → experiment → optimization → reuse.
-- **Scientific-validation line**: historical replay, shadow validation, and controlled online validation advance as separate falsifiable work lines.
-- **Engineering-assurance line**: real-database tests, recovery exercises, performance baselines, security, and observability.
+- **Product**: trusted data → comparison and diagnosis → experiment → optimization → controlled action → reuse.
+- **Scientific validation**: historical replay, shadow validation, controlled online validation, and cross-scenario transfer advance independently.
+- **Engineering assurance**: real-database tests, recovery exercises, performance baselines, security, and observability.
+- **Protocol ecosystem**: schema stability, reference implementations, conformance tests, external implementations, and governance.
 
-In principle, keep one product milestone, one scientific-validation task, and one engineering-assurance task active at a time.
+Do not collapse the work lines into one global maturity state:
 
-The three scientific-validation work lines must not be collapsed into one global status:
-
-| Work line | Independent evidence artifact | Scope of conclusion |
+| Work line | Independent evidence artifact | Permitted conclusion only |
 |---|---|---|
-| Historical replay | frozen dataset, sequential traces, baseline comparisons, gates, and review hash | only whether the method is leakage-free and beats preregistered baselines on existing history |
-| Shadow validation | recommendation snapshot, independent engineer choice, actual outcome, rejection reasons, and calibration report | only whether recommendations are applicable, executable, and calibrated on a new project |
-| Controlled online validation | per-run approval, rollback exercise, actual settings, outcomes, and stop records | only whether prospective value is produced safely inside declared boundaries |
+| Historical replay | frozen dataset, sequential traces, baselines, gates, review hash | leakage-free, reproducible performance against preregistered baselines on existing history |
+| Shadow validation | recommendation snapshot, independent engineer choice, actual outcome, rejection reasons, calibration report | applicability, executability, and calibration on a new project |
+| Controlled online | per-run approval, rollback drill, actual settings, outcomes, stop records | safe prospective value inside declared boundaries |
+| Protocol interoperability | independent implementation, compatibility matrix, conformance report, security review | correct exchange and validation without private Ingot code |
 
-Each work line separately preregisters data scope, baselines, measures, versioned thresholds, acceptance, and falsification. Its own reviewable report expresses whether it passed; implementation of an API is not validation evidence and does not raise a global "maturity" state.
+Each work line preregisters data, baselines, measures, threshold versions, acceptance, and falsification separately. An API existing means infrastructure exists; it does not mean the work line passed.
 
-### Phase 0: establish a reproducible baseline
+## 8. Current priorities and rolling batches
 
-Objective: prove that the system records one real or representative run–context–trajectory–inspection evidence chain reliably.
-
-Work:
-
-- fix ownership for equipment, Edge, process executions, projects, and configuration;
-- complete acquisition probing, publishing, safe application, old-version retention on failure, and state reporting;
-- establish stable run identity, actual settings, process data, context snapshots, and inspection linkage;
-- fix analysis admission and exclusion reasons;
-- baseline completeness, linkage, recovery, and replay;
-- add real-instance tests for critical PostgreSQL transactions.
-
-Gate: at least one run traces from conclusion to raw provenance; Edge continues during a Platform outage and replays without duplication; failed configuration does not break old acquisition; silent loss, planned-for-actual substitution, and cross-project evidence leakage are detected.
-
-### Phase 1: form a trusted data loop
-
-Objective: let process engineers find, filter, and compare real runs in daily work.
-
-Work:
-
-- organize multiple equipment, products, and contexts;
-- report tooling, material, lot, calibration, and maintenance coverage;
-- provide process-execution detail, data quality, and like-for-like comparison;
-- preserve lineage from raw data through features and analysis to conclusions;
-- close the engineer-reviewed data-issue repair loop.
-
-Gate: consecutive samples meet scenario-approved completeness and linkage targets; exclusions are explainable and repairable; engineers can independently find runs and select comparison baselines.
-
-### Phase 2: evidence-backed process diagnosis
-
-Objective: when an engineer asks why a run missed its objective, return reviewable candidates and a next validation plan.
-
-Work:
-
-- fix the answer structure: data quality, baseline, first deviation, candidates, counterevidence, confounding, missingness, and experiment proposal;
-- implement robust differences, stage trajectories, planned-versus-actual gaps, and context stratification;
-- build engineer-authored golden questions and reviewed answers;
-- evaluate correct refusal, citation coverage, and unsupported causal claims;
-- connect candidate, hypothesis, and experiment-draft workflows.
-
-Gate: important claims trace to source records; engineers can act on the output; observational results are never written as definitive root causes.
-
-### Phase 3: replay and shadow optimization
-
-Objective: measure whether computational methods improve on current sequencing without influencing field decisions.
-
-Work:
-
-- sequential historical replay with no future-data leakage;
-- comparison with engineer history, traditional DOE, and simple baselines;
-- calibration of intervals, feasibility, and stopping;
-- shadow recommendations alongside independent engineer choices;
-- analysis of rejection reasons, unmodeled constraints, and unexecutable settings.
-
-Gate: preregistered measures show reproducible value; recommendations stay inside declared boundaries; uncertainty meets scenario-approved calibration targets.
-
-### Phase 4: controlled online loop
-
-Objective: allow recommendations into real experiments under engineer review, explicit fallback, and independent hard boundaries.
-
-Work:
-
-- begin with one recommendation at a time;
-- recapture actual settings, complete inspections, and materialize results automatically;
-- use repetition, blocking, randomized order, and independent confirmation;
-- handle failure, drift, unavailable models, and safety anomalies;
-- distinguish candidate-setting and operating-region validation.
-
-Gate: zero known safety violations; recommendations execute accurately and reproduce; online and shadow outcomes have no unexplained systematic gap.
-
-### Phase 5: knowledge reuse and generality validation
-
-Objective: reuse validated conclusions on new products, equipment, and a second scenario while preserving applicability.
-
-Work:
-
-- conclusion scope, failure conditions, and drift detection;
-- hierarchical effects across products, equipment, materials, and tooling;
-- transfer or mechanism priors benchmarked against cold start;
-- core-contract validation on a materially different second scenario.
-
-Gate: transfer beats cold start without hidden negative transfer; the second scenario does not change run identity, evidence relationships, experiment state machines, or optimization protocol.
-
-## 6. Current priorities
-
-| Priority | Work | Trigger |
+| Priority | Work | Definition of done |
 |---|---|---|
-| P0 | acquisition correctness, run identity, context, inspection linkage, and data quality | foundation for every engineering judgment |
-| P0 | PostgreSQL transactions, historical replay, and recovery validation | protect long-lived evidence |
-| P0 scientific | historical-question and production-equivalent replay | falsify ineffective methods early |
-| P1 | deterministic diagnosis contract and golden questions | first daily-value entry point |
-| P1 | scenario configuration, context assessment, and experiment design | turn candidates into trustworthy experiments |
-| P1 | shadow recommendations, calibration, and stopping | prerequisites for online experiments |
-| P1 | local-model explanation and project reports | reduce engineer effort |
-| P2 | high availability, storage split, and multi-instance leases | triggered by real scale and recovery objectives |
-| P2 | complex transfer, fine-tuning, and grey-box priors | triggered by reviewed data and baseline value |
+| P0 | run identity, actual values, context, inspection linkage, and quality validity | every analysis record uniquely reaches a real run and valid outcome |
+| P0 | evidence freezing, replay, transactions, and recovery | inputs cannot be rewritten after the fact; recovery preserves provenance |
+| P0 scientific | historical-question and production-equivalent sequential replay | reviewed preregistration and leakage-free report with baselines, failures, and limits |
+| P1 | process-decision case and deterministic diagnosis contract | evidence, candidates, counterevidence, hypotheses, experiments, and conclusions share one formal spine |
+| P1 | agent replay and adversarial evaluation | unsupported inference, identity mismatch, overreach, and incorrect tool use are detectable |
+| P1 | shadow recommendations, calibration, and stopping | recommendations freeze in advance and preserve independent engineer choice and rejection reasons |
+| P2 | read and propose agent protocols | multiple models use the same schemas and cannot bypass state machines |
+| P2 | single-step controlled action protocol | allow lists, approval, actual confirmation, stop, and rollback drills pass |
+| P3 | second scenario and specification candidate | core contracts remain unchanged and at least one external implementation exists |
 
-## 7. Long-term measures
+Current rolling batches:
 
-Each roadmap review answers three groups of questions.
+1. **Trusted identity and quality chain**: repair run identity, actual values, context admission, inspection validity, and stage statistics.
+2. **Historical evidence apparatus**: freeze real observations, protect transactions, and define hashes, retention, and recomputation.
+3. **Preregistered historical replay**: complete engineering-question and production-equivalent sequential replay and publish failures and limits.
+4. **Process-decision case**: fix data quality, baseline, first deviation, candidates, counterevidence, confounding, missingness, and experiment-proposal structure.
+5. **Agent evaluation flywheel**: engineer golden questions, correct refusal, citation coverage, permissions, and tool-call evaluation.
+6. **Prospective shadow validation**: freeze variables, mappings, context, constraints, policies, and engineer rejection reasons.
+7. **Protocolized read and propose capabilities**: derive stable domain tools from internal APIs and provide MCP, OpenAPI, or SDK adapters.
+8. **Controlled-action preparation**: action ledger, authorization tokens, policy checks, device confirmation, stop, and rollback.
+9. **Second scenario and specification candidate**: validate cross-scenario semantics and publish candidate schemas, validators, and reference implementations.
+
+These batches are the current sequence, not an immutable product definition. Reorder them after each completed batch according to evidence.
+
+## 9. Measures, governance, and falsification
+
+Every roadmap review answers five groups of questions.
 
 ### Is data more trustworthy?
 
-- complete runs and actual-setting, feature, context, and inspection coverage;
+- complete-run and actual-setting, feature, context, and inspection coverage;
 - linkage failures and unit, clock, configuration-version, and provenance anomalies;
 - Edge backlog, recovery, duplicates, and disorder;
 - successful historical recomputation, replay, and interpretation.
@@ -218,37 +274,35 @@ Each roadmap review answers three groups of questions.
 - evidence citation, correct refusal, and unsupported causal claims;
 - candidates supported, rejected, or left inconclusive by experiments.
 
-### Are experiments more efficient?
+### Are experiments and actions more effective?
 
 - valid experiments to attain and repeatedly confirm specification;
-- recommendation acceptance, rejection reasons, and actual-setting deviation;
-- calibration, reproduction, and post-stop results;
+- recommendation acceptance, modification, rejection reasons, and actual-setting deviation;
+- calibration, reproduction, post-stop outcomes, and rollback success;
 - material, equipment, inspection, and calendar time;
-- safety-boundary violations always equal zero.
+- unauthorized actions and known safety-boundary violations always equal zero.
 
-Phase 0 records baselines before approving scenario-specific targets; it does not invent unmeasured benefit numbers.
+### Is an agent worthy of trust?
 
-## 8. Governance and falsification
+- tool choice, parameters, citations, and final judgment evaluated separately;
+- regression after model, prompt, tool, or schema version changes;
+- correct refusal under missing evidence, identity conflicts, and inadequate permission;
+- reasons and later outcomes for human acceptance, modification, and rejection.
 
-- Manage core value, evidence principles, and stable component boundaries as the v1 baseline.
-- Record stable architecture changes with ADRs.
-- Upgrade algorithms, default experiment parameters, pages, and sequence according to evidence.
-- Preregister data, baselines, measures, acceptance, and falsification for every phase.
-- Every new feature must improve data trust, diagnostic usefulness, or experiment efficiency.
-- Field evidence may change the roadmap but cannot bypass safety, provenance, or validation gates.
-- If a method does not beat applicable simple baselines, downgrade, repair, or stop it instead of adding features around it.
+### Is the protocol being adopted?
 
-## 9. Next eight rolling batches
+- external implementations, connectors, validators, and compatible versions;
+- conformance pass rate and interoperability failure causes;
+- time from connecting a new system to the first conforming evidence bundle;
+- proportion validated without private Ingot code.
 
-1. **Run identity and configuration control plane**: safe execution-boundary application, fallback, and applied-state closure.
-2. **Minimum trusted data loop**: actual settings, trajectories, context, quality outcomes, and admission measures.
-3. **Long-lived evidence and replay**: batch observation assembly, protected transactions, retention, migration, and recomputation.
-4. **Deterministic diagnosis contract**: baseline, differences, counterevidence, confounding, missingness, and experiment proposal.
-5. **Engineer golden questions**: real questions and reviewed answers for facts, citations, and refusal.
-6. **Local-model explanation layer**: consume authorized tool results and explain without creating numerical conclusions.
-7. **Parallel production-equivalent validation**: reuse production policy and compare with history, DOE, and simple baselines.
-8. **First-scenario shadow preparation**: freeze versioned variables, mappings, context, constraints, and experiment policy.
+Governance discipline:
 
-These batches are the current sequence, not an immutable product definition. Reorder them after each batch according to real results.
-
-Engineering discipline: historical replay, shadow validation, and controlled online validation each maintain an independent preregistration and result. Passing one may not substitute for another, and a global API status may not flatten their different evidence levels into one conclusion.
+- manage core value, evidence principles, and stable component boundaries as normative baselines;
+- record stable architecture and breaking protocol changes with ADRs;
+- preregister data, baselines, measures, acceptance, and falsification for every phase;
+- every feature must improve data trust, diagnosis, experiment value, action safety, or interoperability;
+- downgrade, repair, or stop methods that do not beat applicable simple baselines;
+- publish separate reports for replay, shadow, controlled online, and protocol interoperability;
+- never measure success by pages, conversations, agent count, model size, or token consumption;
+- stronger foundation models never relax provenance, permission, approval, safety, or causal-validation requirements.

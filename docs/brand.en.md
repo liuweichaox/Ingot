@@ -54,6 +54,8 @@ Observational data can support candidate causes, stable associations, confounded
 
 Use *root cause* only when the validating evidence is stated. *AI process R&D* may describe the interaction model but does not replace the product category. Algorithm names belong in technical explanations, not in the product value itself.
 
+*Industrial AGI*, *autonomous factory*, and *TCP/IP for manufacturing AI* are not current product categories or implemented capabilities. They may appear only as long-term ambitions with explicit validation gates and current limitations.
+
 The short tagline is a communication shorthand for the core value, not a separate product definition.
 
 ## Mark meaning
@@ -107,3 +109,4 @@ The domain does not rename the product; do not use “IngotStack” as the produ
 - [Documentation home](index.en.md)
 - [System design](design.en.md)
 - [Real-scenario validation](rollout.en.md)
+- [Strategy and rolling roadmap](project-plan.en.md)

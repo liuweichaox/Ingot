@@ -181,7 +181,7 @@ scripts/           验证与运维脚本
 - [分析与优化方法](docs/optimization.md)
 - [设备与数据接线](docs/data-connection.md)
 - [真实场景验证](docs/rollout.md)
-- [项目规划](docs/project-plan.md)
+- [战略规划与滚动路线图](docs/project-plan.md)
 - [部署与运行](docs/deployment.md)
 - [常见问题](docs/faq.md)
 - [品牌与产品表述](docs/brand.md)
@@ -196,8 +196,10 @@ scripts/           验证与运维脚本
 - [ ] 完成新项目影子建议和工程师拒绝原因分析
 - [ ] 完成受控在线实验并公布预注册结果
 - [ ] 用第二个明显不同的工艺验证核心契约的通用性
+- [ ] 将只读与提议能力开放为模型无关的 Agent 协议
+- [ ] 发布制造智能证据与实验协议的 Schema、验证器和参考实现候选版
 
-路线图以真实证据和验收闸门为准，详细顺序见[项目规划](docs/project-plan.md)。
+近期先证明历史证据装置可信，中期再开放 Agent 协议，长期才争取形成开放规范。路线图以真实证据和验收闸门为准，详细顺序见[战略规划与滚动路线图](docs/project-plan.md)。
 
 ## 参与贡献
 

@@ -31,7 +31,7 @@ These are one evidence chain, not six unrelated products. Acquisition makes fact
 | Understand stable product and architecture boundaries | [System design](design.en.md) |
 | Understand how analysis, experiment, and optimization methods are selected | [Analysis and optimization methods](optimization.en.md) |
 | Connect equipment, instruments, inspections, and business data | [Equipment and data connection](data-connection.en.md) |
-| Review long-term stages, priorities, and acceptance gates | [Project plan](project-plan.en.md) |
+| Review the long-term position, three-horizon strategy, priorities, and gates | [Strategy and rolling roadmap](project-plan.en.md) |
 | Validate whether the product helps engineers on real projects | [Real-scenario validation](rollout.en.md) |
 | Deploy on a factory network | [Deployment and operations](deployment.en.md) |
 | Check product and technical boundaries | [FAQ](faq.en.md) |
@@ -50,12 +50,15 @@ These are one evidence chain, not six unrelated products. Acquisition makes fact
 
 The code covers the main business path across acquisition, process executions, context, inspections, R&D experiments, analysis, and optimization, with automated tests. Public historical replay and prospective results for real optical molding projects are not complete, so the project describes system capabilities but does not claim a measured reduction in experiments or development time.
 
+The current sequence is to prove that the evidence apparatus is reproducible and leakage-free through real historical replay, then establish value through prospective shadow and controlled online validation. Agent protocols and an open specification do not bypass those evidence stages.
+
 ## Public commitments
 
 - Never hide missing actual values with planned values.
 - Never silently discard runs that fail analysis admission.
 - Never present correlation directly as a definitive cause.
-- Never let a language model generate numerical process process specifications.
+- Never let a language model generate numerical process specifications.
+- Never let an agent bypass provenance, permission, approval, or equipment-safety boundaries.
 - Never use simulated data to claim real process benefit.
 - Preserve inputs, provenance, versions, uncertainty, and applicability for every recommendation.
 

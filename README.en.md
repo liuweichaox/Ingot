@@ -177,7 +177,7 @@ scripts/           verification and operations scripts
 - [Analysis and optimization methods](docs/optimization.en.md)
 - [Equipment and data connection](docs/data-connection.en.md)
 - [Real-scenario validation](docs/rollout.en.md)
-- [Project plan](docs/project-plan.en.md)
+- [Strategy and rolling roadmap](docs/project-plan.en.md)
 - [Deployment and operations](docs/deployment.en.md)
 - [FAQ](docs/faq.en.md)
 - [Brand and product language](docs/brand.en.md)
@@ -192,8 +192,10 @@ scripts/           verification and operations scripts
 - [ ] Complete shadow recommendations and analyze engineer rejection reasons on a new project.
 - [ ] Complete a controlled online experiment and publish preregistered results.
 - [ ] Validate the core contracts on a second, materially different process.
+- [ ] Expose read and propose capabilities through a model-independent agent protocol.
+- [ ] Publish candidate schemas, validators, and reference implementations for the manufacturing evidence and experiment protocol.
 
-The roadmap follows real evidence and acceptance gates. See the [Project plan](docs/project-plan.en.md) for sequencing.
+The near term proves the historical evidence apparatus, the medium term opens agent protocols, and only the long term pursues an open specification. The roadmap follows real evidence and acceptance gates. See the [Strategy and rolling roadmap](docs/project-plan.en.md) for sequencing.
 
 ## Contributing
 

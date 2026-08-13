@@ -191,6 +191,19 @@ A new process scenario provides:
 
 It should not rewrite run identity, evidence relationships, experiment state machines, audit principles, or the stateless Optimizer protocol. Generality is supported only after a second, materially different real scenario works without changing those contracts.
 
+## Agent capability and interoperability boundary
+
+Agents do not depend directly on internal Platform CRUD and do not gain business permission merely because MCP, OpenAPI, or an SDK is used. The interoperability adapter handles discovery, schemas, and invocation. Platform continues to enforce project isolation, evidence citations, state transitions, approval, idempotency, audit, and rollback.
+
+Capabilities open progressively by risk:
+
+- **Read**: query authorized runs, evidence, quality, context, and applicability.
+- **Propose**: create investigation, hypothesis, or experiment drafts without changing formal state.
+- **Commit**: freeze a version and submit independent approval; creators cannot self-approve.
+- **Execute**: invoke only allow-listed, time-bounded, scoped, stoppable, reversible actions.
+
+Agents do not connect directly to devices or hold arbitrary write access. Platform records approved structured actions, a controlled integration or Edge gateway executes them, and actual confirmation and outcomes return to the formal record. See [Strategy and rolling roadmap](project-plan.en.md) for protocol objects, versions, and safety invariants.
+
 ## Evolvable strategies
 
 The following record current choices but do not define the product core:
@@ -201,6 +214,7 @@ The following record current choices but do not define the product core:
 - default repetitions, blocks, and stopping rules;
 - GP variants, acquisition functions, physical priors, and transfer methods;
 - LLM providers, model roles, and prompts;
+- agent-protocol adapters such as MCP, OpenAPI, and SDKs;
 - implementation sequence and priorities.
 
 These strategies follow real data, engineer feedback, and field validation. Stable-boundary changes are recorded through ADRs.
