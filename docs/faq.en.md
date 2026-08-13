@@ -42,9 +42,9 @@ The most effective method depends on the question and data. Simple comparison, r
 
 It understands questions, calls authorized tools, organizes records, and explains results. It does not generate numerical process settings directly, replace statistics, constraints, or experimental validation, or invent facts without sources.
 
-## If AGI becomes central, what does Ingot become?
+## As foundation models and agents become more capable, what does Ingot become?
 
-It does not become a general industrial chat product. The long-term direction is a trustworthy decision and validation operating system for manufacturing processes. AGI can be replaced, while Ingot preserves run facts, evidence relationships, experiment state, permission and approval, execution receipts, and conclusion boundaries. The near term proves the historical evidence apparatus, the medium term opens model-independent agent capabilities, and the long term develops an open evidence and experiment specification for manufacturing intelligence. See [Strategy and rolling roadmap](project-plan.en.md).
+It does not become a general industrial chat product. The long-term direction is a trustworthy decision and validation operating system for manufacturing processes. Foundation models and agents can be replaced, while Ingot preserves run facts, evidence relationships, experiment state, permission and approval, execution receipts, and conclusion boundaries. The near term proves the historical evidence apparatus, the medium term opens model-independent agent capabilities, and the long term develops an open evidence and experiment specification for manufacturing intelligence. See [Strategy and rolling roadmap](project-plan.en.md).
 
 ## Does adding MCP make an agent safe to drive experiments?
 

@@ -54,7 +54,7 @@ Observational data can support candidate causes, stable associations, confounded
 
 Use *root cause* only when the validating evidence is stated. *AI process R&D* may describe the interaction model but does not replace the product category. Algorithm names belong in technical explanations, not in the product value itself.
 
-*Industrial AGI*, *autonomous factory*, and *TCP/IP for manufacturing AI* are not current product categories or implemented capabilities. They may appear only as long-term ambitions with explicit validation gates and current limitations.
+Do not present long-term intelligent-system ambitions, specification candidates without external adoption, or future controlled-action capabilities as a current product category, industry standard, or demonstrated benefit.
 
 The short tagline is a communication shorthand for the core value, not a separate product definition.
 

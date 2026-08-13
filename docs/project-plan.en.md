@@ -16,7 +16,7 @@ Its long-term direction is to become:
 
 > **A trustworthy decision and validation operating system for manufacturing processes.**
 
-AGI supplies replaceable understanding, reasoning, and tool orchestration. Ingot makes every human or agent operate over the same trusted facts, scientific validation, and controlled-action discipline. Its durable advantage is not one model, but:
+Foundation models and agents supply replaceable understanding, reasoning, and tool orchestration. Ingot makes every human or agent operate over the same trusted facts, scientific validation, and controlled-action discipline. Its durable advantage is not one model, but:
 
 - reliable identity across real runs, actual conditions, trajectories, quality outcomes, and field context;
 - evidence, methods, versions, uncertainty, and applicability for every judgment;
@@ -62,7 +62,7 @@ Optical-lens molding is the first sustained validation scenario, not the product
 
 ### Near term: prove the trustworthy apparatus
 
-The immediate priority is leakage-free replay of a real historical project. It does not answer whether AGI has improved the process. It tests whether:
+The immediate priority is leakage-free replay of a real historical project. It does not answer whether model recommendations have improved the process. It tests whether:
 
 - one frozen evidence snapshot reproduces the same analysis and recommendation;
 - run identity, actual values, quality outcomes, and context are unique, complete, and traceable;
@@ -87,7 +87,7 @@ See [Real-scenario validation](rollout.en.md) for the protocol and report requir
 Expose R&D capabilities through agent-callable protocols without exposing internal CRUD APIs directly to models. Use two layers:
 
 ```text
-any AGI / agent
+any conforming model / agent
 ↓
 interoperability adapters such as MCP, OpenAPI, and SDKs
 ↓
@@ -130,7 +130,7 @@ Before a `1.0` release, require:
 3. public review of compatibility, conformance, and security boundaries;
 4. governance independent of one customer's data, one model, or one vendor interface.
 
-“TCP/IP for manufacturing AI” is an internal ambition, not a current fact. The accurate near-term name is:
+Until external adoption and independent implementations exist, a specification candidate must not be described as an industry standard. The accurate near-term name is:
 
 > **An evidence and experiment protocol for manufacturing intelligence.**
 
