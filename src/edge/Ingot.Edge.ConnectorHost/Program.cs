@@ -21,7 +21,7 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 var builder = WebApplication.CreateBuilder(args);
 
-if (!builder.Environment.IsDevelopment() && !builder.Environment.IsEnvironment("DeviceSimulator"))
+if (!builder.Environment.IsDevelopment())
     ProductionConfigurationValidator.Validate(builder.Configuration);
 
 var urls = builder.Configuration["Urls"]

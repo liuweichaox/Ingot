@@ -436,10 +436,7 @@ _to_delete/
 .tmp-*.log
 .env
 build-output.log
-Data/connector-host-fx3u/
-Data/connector-host-fx3u-conflict-archive
 Data/connector-host-*/
 Data/connector-host/
 Data/connector-host-edge-factory-001/
-Data/fx3u-simulator/
 Data/platform-api/

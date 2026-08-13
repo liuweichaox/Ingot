@@ -38,37 +38,6 @@ services:
       start_period: 10s
     restart: unless-stopped
 
-  plc-simulator:
-    image: python:3.13-slim
-    container_name: ingot-fx3u-simulator
-    working_dir: /demo
-    command:
-      - python
-      - device_simulator.py
-      - --host
-      - 0.0.0.0
-      - --port
-      - "5551"
-      - --execution-seconds
-      - "8"
-      - --max-runs
-      - "24"
-    volumes:
-      - ./tools/optical-molding-demo:/demo:ro
-    ports:
-      - "127.0.0.1:5551:5551"
-    healthcheck:
-      test:
-        - CMD
-        - python
-        - -c
-        - "import socket; socket.create_connection(('127.0.0.1', 5551), 2).close()"
-      interval: 3s
-      timeout: 3s
-      retries: 20
-      start_period: 3s
-    restart: unless-stopped
-
   platform-api:
     build:
       context: .
@@ -180,8 +149,6 @@ services:
       Acquisition__StartupHealthTimeoutMs: "30000"
     depends_on:
       platform-api:
-        condition: service_healthy
-      plc-simulator:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:8001/health"]

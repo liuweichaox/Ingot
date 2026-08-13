@@ -30,7 +30,6 @@ Python 环境统一由 `uv 0.11.32` 管理，不使用手工创建的 venv 或 p
 cd optimizer
 uv sync --extra service --extra viz --group dev --locked
 uv run --locked pytest
-uv run --locked python ../tools/optical-molding-demo/optimizer_demo.py
 uv run --locked uvicorn service:app --port 8110
 ```
 
@@ -43,9 +42,7 @@ uv sync --python 3.12 --extra service --extra viz --group dev --locked
 
 依赖版本以 `uv.lock` 为准。修改 `pyproject.toml` 后运行 `uv lock` 并同时提交锁文件；CI 和容器均拒绝未同步的锁文件。
 
-`tools/optical-molding-demo/optimizer_demo.py` 只验证优化机制，不代表真实工艺效果。运行结果可能随数值库版本变化，不在文档中固化成功率或节省试验次数。
-
-本地开发默认使用 `8110`，避免与设备采集示例常用的 `8100` 冲突。Docker Compose 内部的优化服务仍使用 `8100`。
+本地开发默认使用 `8110`，避免与 Docker Compose 中优化服务的 `8100` 端口冲突。
 
 ## 无状态接口
 
@@ -111,7 +108,7 @@ Content-Type: application/json
 
 响应包含推荐参数、每项目标的均值与 95% 区间、预计距规格距离、可行概率、采集值、模型版本和推荐理由。平台把整批结果直接创建为普通实验计划。
 
-`derived_features` 只能使用固定的数值运算符，并按声明顺序引用控制变量或此前的派生特征。运算在工程单位中进行，再由 `normalization_offset` 和 `normalization_scale` 归一化。服务拒绝任意 Python 表达式、未知输入、前向引用和旧式隐藏 `process_profile`。行业示例配置属于 `tools/`，不会进入生产优化器包。
+`derived_features` 只能使用固定的数值运算符，并按声明顺序引用控制变量或此前的派生特征。运算在工程单位中进行，再由 `normalization_offset` 和 `normalization_scale` 归一化。服务拒绝任意 Python 表达式、未知输入、前向引用和旧式隐藏 `process_profile`。
 
 当 `decision_intent` 为 `validate-hypothesis` 时，还必须提供 `hypothesis_variables`。平台只会在假设已经定义目标、预期方向和最小有效效应后发起该请求；服务不会把相关性当作因果结论。
 

@@ -159,9 +159,3 @@ The engineer approves execution. Once all runs and inspections are complete, the
 When the project has trustworthy observations, explicit controlled variables, and a safe baseline, it can generate the next experiment set. The system shows settings, objective intervals, safety outcomes, joint feasibility, data scope, model version, and rationale.
 
 Pending points prevent duplicate recommendations while a batch remains incomplete. One successful point is only a candidate setting; a operating region requires independent repetition, boundary or interaction validation, and review by another engineer.
-
-## 12. Demo scenario
-
-The optical-lens molding simulator validates the complete data path; it is not a real equipment address map or production operating region. It exposes a Mitsubishi A-compatible MC 1E binary interface together with stage, temperature, pressure, position, and process specification values. A real machine requires fresh validation of addresses, ranges, units, run boundaries, and safety conditions.
-
-Simulation can prove that the software path runs. It cannot prove shorter development time in a real process.

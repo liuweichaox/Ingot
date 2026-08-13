@@ -90,10 +90,6 @@ UV_PROJECT_ENVIRONMENT="$optimizer_environment" \
   uv sync --project optimizer --extra service --group dev --locked
 UV_PROJECT_ENVIRONMENT="$optimizer_environment" \
   uv run --project optimizer --locked pytest
-UV_PROJECT_ENVIRONMENT="$optimizer_environment" \
-  uv run --project optimizer --locked pytest tools/optical-molding-demo
-UV_PROJECT_ENVIRONMENT="$optimizer_environment" \
-  uv run --project optimizer --locked pytest tools/thermal-curing-demo
 
 for script in scripts/*.sh deploy/*.sh; do
   bash -n "$script"

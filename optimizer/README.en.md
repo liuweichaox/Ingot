@@ -31,7 +31,6 @@ project venv or install project dependencies with pip:
 cd optimizer
 uv sync --extra service --extra viz --group dev --locked
 uv run --locked pytest
-uv run --locked python ../tools/optical-molding-demo/optimizer_demo.py
 uv run --locked uvicorn service:app --port 8110
 ```
 
@@ -45,9 +44,7 @@ uv sync --python 3.12 --extra service --extra viz --group dev --locked
 `uv.lock` is authoritative. After changing `pyproject.toml`, run `uv lock` and
 commit both files; CI and container builds reject an out-of-date lock.
 
-The synthetic demo tests mechanics only. Its result can vary with numerical-library versions and is not evidence of real process savings.
-
-Local development uses `8110` by default to avoid the common `8100` port used by device-acquisition examples. The optimizer remains on `8100` inside Docker Compose.
+Local development uses `8110` by default to avoid conflicting with the optimizer service on port `8100` in Docker Compose.
 
 ## Stateless contract
 
@@ -65,9 +62,7 @@ It returns recommended parameters, objective means and 95% intervals, predicted 
 Derived operators run on engineering-unit controls and are normalized with the
 declared offset and scale. Inputs may reference campaign controls or an earlier
 derived feature. Arbitrary Python expressions, unknown inputs, forward
-references, and legacy hidden `process_profile` switches are rejected. Industry
-examples live under `tools/` and are not part of the production optimizer
-package.
+references, and legacy hidden `process_profile` switches are rejected.
 
 For `validate-hypothesis`, the campaign must also provide `hypothesis_variables`. The platform sends this intent only after an engineer defines the outcome, expected direction, and minimum meaningful effect; the service never treats an association as a causal conclusion.
 
