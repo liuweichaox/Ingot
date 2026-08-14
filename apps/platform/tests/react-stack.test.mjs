@@ -313,6 +313,18 @@ test("dynamic pages and operational evidence keep business-facing labels", () =>
   assert.match(app, /startsWith\("\/configuration\/ingestion-tasks\/"\)/);
   assert.match(app, /\["页面不存在", "地址可能已经变更/);
   assert.match(pages, /contextFieldLabel/);
+  for (const [field, label] of [
+    ["product_family_code", "产品系列"],
+    ["product_code", "产品编码"],
+    ["process_specification_id", "工艺规范"],
+    ["process_specification_version", "工艺规范版本"],
+    ["output_item_id", "产出物"],
+    ["production_context_id", "生产上下文"],
+    ["external_order_ref", "外部工单"],
+    ["external_batch_ref", "外部批次"],
+  ]) {
+    assert.match(pages, new RegExp(`${field}: "${label}"`));
+  }
   assert.match(pages, /new Map\([\s\S]*contextFields/);
   assert.doesNotMatch(pages, /\["工装总成", execution\.toolingAssemblyId\],[\s\S]*\["工装总成", execution\.toolingAssemblyId\]/);
   assert.match(pages, /"process\.stage_changed": "工艺阶段切换"/);

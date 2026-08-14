@@ -114,7 +114,7 @@ Platform 是厂内业务记录源；Optimizer 是无状态数值服务；Agent �
 
 ## 快速开始
 
-要求：.NET SDK 10、Node.js 22.22+、uv 0.11.32、Docker 和 Docker Compose。
+使用完整 Docker Compose 栈只需要 Git、Docker Engine 或 Docker Desktop，以及 Docker Compose v2。只有从源码开发时才需要 .NET SDK 10、Node.js 22.22+ 和 uv 0.11.32。
 
 首次启动前请修改 `.env` 中的数据库密码、Edge 令牌和管理员配置。默认认证模式为 `Local`；
 生产环境不要使用 `Disabled`，除非这是明确隔离的演示部署并同时设置了
@@ -127,6 +127,9 @@ cp .env.example .env
 docker compose -f docker-compose.app.yml up -d --build
 ```
 
+首次构建会下载 .NET、Node、Python、PyTorch 和 TimescaleDB 镜像，耗时取决于网络。命令结束后用
+`docker compose -f docker-compose.app.yml ps` 确认四个核心服务均为 `healthy`；不要把“仍在下载镜像”误认为应用已经启动。
+
 启动后访问：
 
 ```text
@@ -134,6 +137,8 @@ http://localhost:3000       工艺研发界面
 http://localhost:8000/health
 http://localhost:8100/ready
 ```
+
+本地认证使用 `.env` 中的 `INGOT_ADMIN_USERNAME` 和 `INGOT_ADMIN_PASSWORD`。若管理员密码留空，Platform 只在首次创建管理员时把随机口令输出到 API 容器日志。启动与排障细节见[快速开始](docs/getting-started.md)和[部署运维](docs/deployment.md)。
 
 首次使用应先完成一条真实或代表性的数据闭环，再进入诊断和优化：定义变量与结果 → 接入数据 → 完成一次运行 → 关联检验 → 检查数据质量 → 比较运行 → 设计验证实验。
 

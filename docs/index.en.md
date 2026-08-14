@@ -25,18 +25,16 @@ These are one evidence chain, not six unrelated products. Acquisition makes fact
 
 ## Where to start
 
-| Goal | Read |
-|---|---|
-| Start the system and complete the first data loop | [Getting started](getting-started.en.md) |
-| Understand stable product and architecture boundaries | [System design](design.en.md) |
-| Understand how analysis, experiment, and optimization methods are selected | [Analysis and optimization](optimization.en.md) |
-| Connect equipment, instruments, inspections, and business data | [Data integration](data-connection.en.md) |
-| Review the long-term position, three-horizon strategy, priorities, and gates | [Roadmap](project-plan.en.md) |
-| Validate whether the product helps engineers on real projects | [Scenario validation](rollout.en.md) |
-| Deploy on a factory network | [Deployment](deployment.en.md) |
-| Check product and technical boundaries | [FAQ](faq.en.md) |
-| Review the normative public product language | [Brand guide](brand.en.md) |
-| Review dependency principles and audit boundaries | [Open-source dependencies](open-source-dependencies.en.md) |
+Choose an entry by role, then follow the links into method detail. You do not need to read every document in order.
+
+| Role or goal | Start with | Continue with |
+|---|---|---|
+| First evaluation or trial | [Getting started](getting-started.en.md) | [FAQ](faq.en.md) |
+| Process or data engineer | [Data integration](data-connection.en.md) | [Analysis and optimization](optimization.en.md) |
+| Platform operations or security | [Deployment](deployment.en.md) | [System design](design.en.md) |
+| Project or validation lead | [Scenario validation](rollout.en.md) | [Roadmap](project-plan.en.md) |
+| Contributor or integrator | [System design](design.en.md) | [Open-source dependencies](open-source-dependencies.en.md) |
+| Public-content maintainer | [Brand guide](brand.en.md) | [Document status](#document-status) |
 
 ## Document status
 

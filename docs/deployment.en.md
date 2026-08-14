@@ -54,11 +54,44 @@ When Chat is enabled, the model service provides an OpenAI-compatible `/v1` inte
 
 The model service is not a startup dependency for acquisition, inspection, or numerical optimization. Content sent to it remains subject to authorized tools and business permissions.
 
-## Start the application stack
+## Start and stop
+
+Validate required environment variables and Compose structure first:
+
+```bash
+docker compose -f docker-compose.app.yml config --quiet
+```
+
+Build and start the four core services:
 
 ```bash
 docker compose -f docker-compose.app.yml up -d --build
 ```
+
+Common lifecycle commands:
+
+```bash
+docker compose -f docker-compose.app.yml ps -a
+docker compose -f docker-compose.app.yml logs --tail=200
+docker compose -f docker-compose.app.yml restart platform-api
+docker compose -f docker-compose.app.yml down
+```
+
+`down` removes containers and networks but retains named volumes by default. Do not add `--volumes` without a backup and an explicit reset decision. After source changes, use `up -d --build`; after `.env`-only changes, use `up -d` to recreate affected containers.
+
+The first build downloads large SDK, PyTorch, and database images. Startup is complete only after `up` exits successfully and `ps` reports all four core services as `healthy`.
+
+| Symptom | Check first | Common cause and response |
+|---|---|---|
+| `ps -a` shows no containers | final build output | build is still running or was interrupted; rerun `up -d --build` |
+| `unexpected EOF` or `short read` | image download layer | network interruption left an incomplete layer; retry and Docker reuses complete layers |
+| Web is absent while API is healthy | `logs platform-web` | frontend build or Nginx configuration failed |
+| API repeatedly restarts | `logs platform-api` and `logs postgres` | database password, migration, directory permission, or production configuration validation failed |
+| Optimizer is unhealthy | `logs optimizer` and `/ready` | numerical Python dependencies are incomplete or failed to load |
+| Login password is unknown | `logs platform-api` | a random password is logged only when the first administrator is seeded with an empty configured password; existing accounts are not reset by editing `.env` |
+| Port is already in use | `lsof -nP -iTCP:3000 -iTCP:8000 -iTCP:8100 -sTCP:LISTEN` | stop the conflicting process or deliberately change the Compose port mapping |
+
+Use `docker compose -f docker-compose.app.yml logs --tail=200 <service>` for one service. Preserve the full error during diagnosis instead of deleting containers, images, or volumes first.
 
 For an independent field connector:
 

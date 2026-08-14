@@ -58,11 +58,44 @@ cp .env.example .env
 
 模型服务不是采集、检验或数值优化的启动依赖。发送给模型的内容必须经过授权工具和业务权限控制。
 
-## 启动应用栈
+## 启动与停止
+
+先校验必填环境变量和 Compose 结构：
+
+```bash
+docker compose -f docker-compose.app.yml config --quiet
+```
+
+构建并启动四个核心服务：
 
 ```bash
 docker compose -f docker-compose.app.yml up -d --build
 ```
+
+常用生命周期命令：
+
+```bash
+docker compose -f docker-compose.app.yml ps -a
+docker compose -f docker-compose.app.yml logs --tail=200
+docker compose -f docker-compose.app.yml restart platform-api
+docker compose -f docker-compose.app.yml down
+```
+
+`down` 停止并移除容器和网络，但默认保留命名数据卷；不要在没有备份和明确重置意图时添加 `--volumes`。修改源代码后使用 `up -d --build`；只修改 `.env` 时使用 `up -d` 重新创建受影响容器。
+
+首次构建会下载较大的 SDK、PyTorch 和数据库镜像。必须等 `up` 成功结束且 `ps` 显示四个核心服务均为 `healthy` 后，才算启动完成。
+
+| 现象 | 先检查 | 常见原因与处理 |
+|---|---|---|
+| `ps -a` 没有任何容器 | 构建命令的最后输出 | 构建仍在进行或已中断；重新执行 `up -d --build` |
+| `unexpected EOF` 或 `short read` | 镜像下载层 | 网络中断导致层不完整；直接重试，Docker 会复用完整层 |
+| Web 未启动、API 已健康 | `logs platform-web` | 前端构建或 Nginx 配置失败 |
+| API 反复重启 | `logs platform-api` 和 `logs postgres` | 数据库密码、迁移、目录权限或生产配置校验失败 |
+| Optimizer 不健康 | `logs optimizer` 和 `/ready` | Python 数值依赖尚未安装完成或运行时加载失败 |
+| 登录口令未知 | `logs platform-api` | 仅管理员首次播种且密码留空时输出随机口令；已有账户不会因修改 `.env` 自动重置 |
+| 端口已占用 | `lsof -nP -iTCP:3000 -iTCP:8000 -iTCP:8100 -sTCP:LISTEN` | 停止占用进程，或有计划地修改 Compose 端口映射 |
+
+查看单个服务日志时使用 `docker compose -f docker-compose.app.yml logs --tail=200 <服务名>`。排障时保留完整错误信息，不要先删除容器、镜像或数据卷。
 
 ### Edge 到 Platform 的传输安全
 

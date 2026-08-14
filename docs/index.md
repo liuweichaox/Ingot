@@ -25,18 +25,16 @@ Ingot 是开源工艺追因与优化系统。它把一次真实运行的生产�
 
 ## 从哪里开始
 
-| 目标 | 阅读 |
-|---|---|
-| 启动系统并完成第一条数据闭环 | [快速开始](getting-started.md) |
-| 理解稳定的产品和架构边界 | [系统设计](design.md) |
-| 理解如何选择分析、实验和优化方法 | [分析与优化](optimization.md) |
-| 接入设备、仪器、检验和业务数据 | [数据接入](data-connection.md) |
-| 了解长期定位、三阶段战略、优先级和验收闸门 | [发展规划](project-plan.md) |
-| 用真实项目验证是否帮助工程师 | [场景验证](rollout.md) |
-| 部署到工厂内部网络 | [部署运维](deployment.md) |
-| 查找产品与技术边界 | [常见问题](faq.md) |
-| 查看公开产品表述的规范基线 | [品牌规范](brand.md) |
-| 查看依赖原则与审计边界 | [开源依赖](open-source-dependencies.md) |
+先按角色选择入口，再沿链接进入具体方法说明；不需要从头顺序阅读全部文档。
+
+| 角色或目标 | 先读 | 接着读 |
+|---|---|---|
+| 首次评估或试用 | [快速开始](getting-started.md) | [常见问题](faq.md) |
+| 工艺或数据工程师 | [数据接入](data-connection.md) | [分析与优化](optimization.md) |
+| 平台运维与安全人员 | [部署运维](deployment.md) | [系统设计](design.md) |
+| 项目负责人或验证负责人 | [场景验证](rollout.md) | [发展规划](project-plan.md) |
+| 贡献者与集成人员 | [系统设计](design.md) | [开源依赖](open-source-dependencies.md) |
+| 对外内容维护者 | [品牌规范](brand.md) | [文档状态](#文档状态) |
 
 ## 文档状态
 

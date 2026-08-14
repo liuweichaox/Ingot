@@ -114,7 +114,7 @@ Platform is the factory system of record. Optimizer is a stateless numerical ser
 
 ## Quickstart
 
-Requirements: .NET SDK 10, Node.js 22.22+, uv 0.11.32, Docker, and Docker Compose.
+The complete Docker Compose stack requires only Git, Docker Engine or Docker Desktop, and Docker Compose v2. Source development additionally requires .NET SDK 10, Node.js 22.22+, and uv 0.11.32.
 
 ```bash
 git clone https://github.com/liuweichaox/Ingot.git
@@ -123,6 +123,8 @@ cp .env.example .env
 docker compose -f docker-compose.app.yml up -d --build
 ```
 
+The first build downloads .NET, Node, Python, PyTorch, and TimescaleDB images, so duration depends on network conditions. After the command exits, run `docker compose -f docker-compose.app.yml ps` and verify that all four core services are `healthy`; an image download still in progress does not mean the application has started.
+
 Then open:
 
 ```text
@@ -130,6 +132,8 @@ http://localhost:3000       Process R&D workbench
 http://localhost:8000/health
 http://localhost:8100/ready
 ```
+
+Local authentication uses `INGOT_ADMIN_USERNAME` and `INGOT_ADMIN_PASSWORD` from `.env`. If the administrator password is empty, Platform writes the generated password to the API container log only when it creates the first administrator. See [Getting started](docs/getting-started.en.md) and [Deployment](docs/deployment.en.md) for startup and troubleshooting details.
 
 Complete one real or representative data loop before diagnosis or optimization: define variables and outcomes → connect data → complete a run → link inspections → review data quality → compare runs → design a validation experiment.
 

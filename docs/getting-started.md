@@ -4,7 +4,7 @@
 
 ## 1. 准备环境
 
-推荐使用 Docker Compose 启动完整系统。需要 Git、Docker Engine 或 Docker Desktop，以及 Docker Compose v2。
+推荐使用 Docker Compose 启动完整系统。需要 Git、Docker Engine 或 Docker Desktop，以及 Docker Compose v2；Compose 路径不要求主机预装 .NET、Node.js、Python 或 uv。
 
 ```bash
 git clone https://github.com/liuweichaox/Ingot.git
@@ -12,19 +12,45 @@ cd Ingot
 cp .env.example .env
 ```
 
-修改 `.env` 中的数据库密码、Edge 上送令牌和管理员密码，然后启动：
+修改 `.env` 中的数据库密码、Edge 上送令牌和管理员密码。至少把所有 `change-this-` 占位值替换掉；生产环境还必须使用随机生成、彼此不同的密码和令牌。
+
+先校验 Compose 配置，再启动：
 
 ```bash
+docker compose -f docker-compose.app.yml config --quiet
 docker compose -f docker-compose.app.yml up -d --build
 ```
 
-检查：
+首次构建需要下载 .NET、Node、Python、PyTorch 和 TimescaleDB 镜像，可能持续数分钟。`up` 命令成功退出后检查容器状态：
+
+```bash
+docker compose -f docker-compose.app.yml ps
+```
+
+`postgres`、`optimizer`、`platform-api` 和 `platform-web` 应全部显示 `healthy`。然后检查：
 
 ```text
 http://localhost:3000       工艺研发界面
 http://localhost:8000/health
 http://localhost:8100/ready
 ```
+
+浏览器打开 `http://localhost:3000` 后，使用 `.env` 中的 `INGOT_ADMIN_USERNAME` 和 `INGOT_ADMIN_PASSWORD` 登录。若 `INGOT_ADMIN_PASSWORD` 留空，系统只在用户表为空的首次启动生成随机口令，可在 API 日志中查找：
+
+```bash
+docker compose -f docker-compose.app.yml logs platform-api
+```
+
+管理员只在用户表为空时播种。后续修改 `.env` 中的管理员密码不会重置已经存在的账户。
+
+如果页面无法访问，先执行以下两条命令，不要反复重建或删除数据卷：
+
+```bash
+docker compose -f docker-compose.app.yml ps -a
+docker compose -f docker-compose.app.yml logs --tail=200
+```
+
+若没有任何容器，说明构建尚未完成或已中断；若出现 `unexpected EOF`、`short read` 或拉取超时，通常是镜像下载不完整，直接重新执行 `up -d --build` 即可复用已完成层。更多诊断见[部署运维](deployment.md#启动与停止)。
 
 如果只想评估文档和界面，可以使用模拟数据；如果要验证产品价值，必须最终接入真实或具有代表性的现场运行。
 
@@ -59,7 +85,7 @@ http://localhost:8100/ready
 
 ## 4. 连接数据源
 
-在“数据与接入”中完成：
+进入“工艺定义 → 配置总览”，按页面给出的依赖顺序准备数据标准、现场接入、判断规则、工装结构和工艺配置方案。设备接入在“数据与接入 → 设备接入”中完成：
 
 1. 注册现场节点与设备身份；
 2. 选择协议并填写连接信息；

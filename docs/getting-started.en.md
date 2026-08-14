@@ -4,7 +4,7 @@
 
 ## 1. Prepare the environment
 
-Docker Compose is the recommended way to start the full system. You need Git, Docker Engine or Docker Desktop, and Docker Compose v2.
+Docker Compose is the recommended way to start the full system. You need Git, Docker Engine or Docker Desktop, and Docker Compose v2. The Compose path does not require .NET, Node.js, Python, or uv on the host.
 
 ```bash
 git clone https://github.com/liuweichaox/Ingot.git
@@ -12,19 +12,45 @@ cd Ingot
 cp .env.example .env
 ```
 
-Change the database password, Edge upload token, and administrator password in `.env`, then start:
+Change the database password, Edge upload token, and administrator password in `.env`. Replace every `change-this-` placeholder; production uses independently generated random passwords and tokens.
+
+Validate the Compose configuration, then start:
 
 ```bash
+docker compose -f docker-compose.app.yml config --quiet
 docker compose -f docker-compose.app.yml up -d --build
 ```
 
-Check:
+The first build downloads .NET, Node, Python, PyTorch, and TimescaleDB images and may take several minutes. After `up` exits successfully, inspect container state:
+
+```bash
+docker compose -f docker-compose.app.yml ps
+```
+
+`postgres`, `optimizer`, `platform-api`, and `platform-web` should all report `healthy`. Then check:
 
 ```text
 http://localhost:3000       Process R&D workbench
 http://localhost:8000/health
 http://localhost:8100/ready
 ```
+
+Open `http://localhost:3000` and sign in with `INGOT_ADMIN_USERNAME` and `INGOT_ADMIN_PASSWORD` from `.env`. If `INGOT_ADMIN_PASSWORD` is empty, the system generates a random password only on the first startup with an empty user table. Find it in the API log:
+
+```bash
+docker compose -f docker-compose.app.yml logs platform-api
+```
+
+The administrator is seeded only when the user table is empty. Changing the administrator password in `.env` later does not reset an existing account.
+
+If the page is unavailable, run these two commands before rebuilding repeatedly or deleting volumes:
+
+```bash
+docker compose -f docker-compose.app.yml ps -a
+docker compose -f docker-compose.app.yml logs --tail=200
+```
+
+No containers means the build has not completed or was interrupted. `unexpected EOF`, `short read`, or pull timeout usually means an incomplete image download; rerun `up -d --build` to reuse completed layers. See [Deployment](deployment.en.md#start-and-stop) for more diagnostics.
 
 Simulated data are suitable for evaluating documentation and software flow. Product value must ultimately be validated with real or representative field runs.
 
@@ -59,7 +85,7 @@ Publish a process-configuration version before assigning it to an R&D project. O
 
 ## 4. Connect data sources
 
-Under Data and connectivity:
+Open Process definition → Configuration overview and follow the dependency order shown there: data standards, field integration, decision rules, tooling structure, and the process-configuration package. Complete equipment integration under Data and connectivity → Equipment integration:
 
 1. Register the edge node and equipment identity.
 2. Select a protocol and enter connection details.

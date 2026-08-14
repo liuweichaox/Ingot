@@ -128,9 +128,27 @@ Payloads may declare UTF-8, GBK, GB 18030, or Big5 encoding and no compression, 
 
 ## Equipment templates and instances
 
-An ingestion-task template contains protocol semantics, process data model, point mappings, run boundaries, and acquisition policy. A data-source instance contains the target Edge, subject identity, and actual network and authentication settings; a task binding joins the two immutable versions into a deployable ingestion task. Templates do not support arbitrary inheritance or point overrides; mapping changes create a new template version.
+Bulk integration of similar equipment uses four objects with separate responsibilities:
 
-After the first device passes a real probe through its target Edge, an operator can extract a published template, first-device source, and binding from the published task. Extraction is a configuration migration: it creates a new task version with provenance and retires the prior runtime version instead of rewriting an already-published version. MQTT templates retain stable channel codes that materialization resolves to each source's actual topics. Data sources and bindings support headed UTF-8 CSV import and export, up to 500 rows per atomic batch. Any invalid row rejects the whole batch. Credential fields store secret references, and exports neutralize spreadsheet-formula prefixes so names and other text are not executed by spreadsheet software. Batch materialization creates drafts only; every device must pass its own real probe before publication.
+| Object | What it stores | When it changes |
+|---|---|---|
+| Task template | protocol semantics, process data model, point mappings, run boundaries, and acquisition policy | publish a new version when model semantics or mappings change |
+| Data-source instance | target Edge, equipment identity, actual network address, and secret references | maintain independently for each device |
+| Task binding | selected template version and selected data-source version | create a new version when the combination changes |
+| Equipment-ingestion task | deployable unit materialized from a binding, probed, and finally published | validate and publish separately for each device |
+
+A data source and a task binding are therefore not the same configuration. The former answers “which device is connected”; the latter answers “which ingestion template this device uses.” Templates do not support arbitrary inheritance or point overrides; mapping changes create a new template version.
+
+After the first device passes a real probe through its target Edge, an operator can extract a published template, first-device source, and binding from the published task. Extraction is a configuration migration: it creates a new task version with provenance and retires the prior runtime version instead of rewriting an already-published version. MQTT templates retain stable channel codes that materialization resolves to each source's actual topics.
+
+The four CSV actions are import and export for two different objects, not duplicate features:
+
+1. Export the data-source CSV to obtain its header and existing device rows.
+2. Add or change the Edge, identity, address, and secret references for similar devices, then import the data-source CSV.
+3. Export the task-binding CSV to obtain its header and existing template–source combinations.
+4. Select a template version for each new source, then import the task-binding CSV.
+
+Both files are headed UTF-8 CSV, support up to 500 rows per atomic batch, and reject the entire batch if any row is invalid. Import data sources before bindings that reference them. Credential fields store only secret references. Fixed request bodies and ordinary headers are exported with data sources and must not contain credentials. Exports neutralize spreadsheet-formula prefixes so names and other text are not executed by spreadsheet software. Batch materialization creates drafts only; every device must pass its own real probe before publication.
 
 The template, data source, binding, and final task all retain version provenance. A published version is immutable and changes require a new version. This makes the mapping and connection versions behind each field event auditable instead of losing provenance through copied configuration.
 
