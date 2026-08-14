@@ -9,5 +9,10 @@
     <RepositoryUrl>https://github.com/liuweichaox/Ingot</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
+    <!-- NuGet 安全审计：直接+传递依赖都审计，高危及以上（NU1903/NU1904）视为构建错误。
+         verify.sh 的 dotnet build 会自动执行此门禁。 -->
+    <NuGetAudit>true</NuGetAudit>
+    <NuGetAuditMode>all</NuGetAuditMode>
+    <WarningsAsErrors>$(WarningsAsErrors);NU1903;NU1904</WarningsAsErrors>
   </PropertyGroup>
 </Project>
