@@ -22,7 +22,10 @@ const acquisitionPanels = {
   mapping: await readFile(new URL("../src/acquisition/panels/PointMappingPanel.jsx", import.meta.url), "utf8"),
   points: await readFile(new URL("../src/acquisition/panels/DevicePointsPanel.jsx", import.meta.url), "utf8"),
 };
-const researchProjects = await readFile(new URL("../src/pages/ResearchProjectsPage.jsx", import.meta.url), "utf8");
+const researchProjects = (await Promise.all([
+  readFile(new URL("../src/pages/ResearchProjectsPage.jsx", import.meta.url), "utf8"),
+  readFile(new URL("../src/research/researchProjectModel.js", import.meta.url), "utf8"),
+])).join("\n");
 const researchAssets = await readFile(new URL("../src/pages/ResearchAssetsPage.jsx", import.meta.url), "utf8");
 const styles = await readFile(new URL("../src/styles/global.css", import.meta.url), "utf8");
 const vite = await readFile(new URL("../vite.config.mjs", import.meta.url), "utf8");
@@ -188,7 +191,7 @@ test("core workflows tell new users what to do next and confirm completed action
   assert.match(pages, /今天先做这些/);
   assert.match(pages, /配置下一批生产/);
   assert.match(researchProjects, /发现偏差 → 找到原因 → 设计实验 → 验证并固化窗口/);
-  assert.match(researchProjects, /优化模型准备度/);
+  assert.match(researchProjects, /实验建议准备度/);
   assert.match(app, /<ToastHost \/>/);
 });
 

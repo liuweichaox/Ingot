@@ -1428,7 +1428,10 @@ public sealed class ProcessResearchWorkflowTests
         Assert.Equal(1, report.PredictionIntervalCoverage);
         Assert.Equal(4, report.PredictionIntervalChecks);
         Assert.Equal(64, report.DatasetSnapshotHash.Length);
+        Assert.Equal(64, report.PreregistrationHash.Length);
         Assert.Equal(64, report.ReportHash.Length);
+        Assert.Equal(3, report.BaselineMethods.Count);
+        Assert.NotNull(report.ResponseSurface);
         Assert.Equal(JsonValueKind.Array, report.RawResult.GetProperty("step_traces").ValueKind);
         Assert.Equal(5, optimizer.LastCall!.History.Count);
         Assert.All(optimizer.LastCall.History, value =>
@@ -2100,6 +2103,8 @@ public sealed class ProcessResearchWorkflowTests
                   "original_order_trials": 5,
                   "optimizer": {"success_rate": 1.0, "median_trials": 4.0, "mean_trials": 4.0, "runs": 2},
                   "random": {"success_rate": 0.5, "median_trials": 5.0, "mean_trials": 5.0, "runs": 2},
+                  "response_surface": {"success_rate": 1.0, "median_trials": 4.0, "mean_trials": 4.0, "runs": 2},
+                  "baseline_methods": ["historical-engineer-order", "seeded-random-order", "quadratic-response-surface"],
                   "raw_optimizer": [4, 4],
                   "raw_random": [5, null],
                   "selected_history_indices": [[0,1,2,3],[0,1,2,3]],
@@ -2121,7 +2126,7 @@ public sealed class ProcessResearchWorkflowTests
                     {"prediction_interval_checks":2,"prediction_interval_covered":2,"prediction_interval_coverage":1.0,"safety_violations":0},
                     {"prediction_interval_checks":2,"prediction_interval_covered":2,"prediction_interval_coverage":1.0,"safety_violations":0}
                   ],
-                  "safety_violations": {"original_order":0,"optimizer":[0,0],"random":[0,0]},
+                  "safety_violations": {"original_order":0,"optimizer":[0,0],"random":[0,0],"response_surface":[0,0]},
                   "budget": 5,
                   "initial_observation_count": 3,
                   "engine_policy": "production-equivalent: sequential below 3 observations, BoTorch at 3 or more",

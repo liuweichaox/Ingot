@@ -279,13 +279,79 @@ def _historical_random_run(
     history: Sequence[dict],
     budget: int,
     seed: int,
+    initial_observation_count: int,
 ) -> tuple[int | None, list[int], int]:
-    order = np.random.default_rng(seed + 20_000).permutation(len(history))
-    selected: list[int] = []
-    for trial, index in enumerate(order[:budget], start=1):
+    selected = list(range(initial_observation_count))
+    first_hit = next((
+        position + 1
+        for position, index in enumerate(selected)
+        if campaign.distance_to_spec(history[index]["outcomes"]) <= 0.0
+    ), None)
+    if first_hit is not None:
+        return first_hit, selected, _safety_violations(campaign, history, selected)
+    remaining = np.arange(initial_observation_count, len(history))
+    order = np.random.default_rng(seed + 20_000).permutation(remaining)
+    for index in order[: max(0, budget - len(selected))]:
         selected.append(int(index))
         if campaign.distance_to_spec(history[int(index)]["outcomes"]) <= 0.0:
-            return trial, selected, _safety_violations(campaign, history, selected)
+            return len(selected), selected, _safety_violations(campaign, history, selected)
+    return None, selected, _safety_violations(campaign, history, selected)
+
+
+def _quadratic_features(points: np.ndarray) -> np.ndarray:
+    columns = [np.ones(points.shape[0])]
+    columns.extend(points[:, index] for index in range(points.shape[1]))
+    columns.extend(points[:, index] ** 2 for index in range(points.shape[1]))
+    columns.extend(
+        points[:, left] * points[:, right]
+        for left in range(points.shape[1])
+        for right in range(left + 1, points.shape[1])
+    )
+    return np.column_stack(columns)
+
+
+def _historical_response_surface_run(
+    campaign: Campaign,
+    history: Sequence[dict],
+    budget: int,
+    seed: int,
+    initial_observation_count: int,
+) -> tuple[int | None, list[int], int]:
+    """Rank the frozen candidate pool with a classical quadratic response surface.
+
+    The fit uses only already revealed rows. It is deliberately an unregularized,
+    low-complexity comparator rather than another production model.
+    """
+    selected = list(range(initial_observation_count))
+    remaining = list(range(initial_observation_count, len(history)))
+    first_hit = next((
+        position + 1
+        for position, index in enumerate(selected)
+        if campaign.distance_to_spec(history[index]["outcomes"]) <= 0.0
+    ), None)
+    if first_hit is not None:
+        return first_hit, selected, _safety_violations(campaign, history, selected)
+    rng = np.random.default_rng(seed + 30_000)
+    while remaining and len(selected) < budget:
+        observed_points = np.asarray([
+            campaign.to_unit(history[index]["params"]) for index in selected
+        ])
+        observed_distances = np.asarray([
+            campaign.distance_to_spec(history[index]["outcomes"]) for index in selected
+        ])
+        candidate_points = np.asarray([
+            campaign.to_unit(history[index]["params"]) for index in remaining
+        ])
+        coefficients = np.linalg.lstsq(
+            _quadratic_features(observed_points), observed_distances, rcond=None
+        )[0]
+        predictions = _quadratic_features(candidate_points) @ coefficients
+        # Randomized tie-breaking is preregistered by seed; outcomes remain hidden.
+        position = int(np.lexsort((rng.random(len(remaining)), predictions))[0])
+        history_index = remaining.pop(position)
+        selected.append(history_index)
+        if campaign.distance_to_spec(history[history_index]["outcomes"]) <= 0.0:
+            return len(selected), selected, _safety_violations(campaign, history, selected)
     return None, selected, _safety_violations(campaign, history, selected)
 
 
@@ -329,20 +395,39 @@ def replay_history_pool(
     optimizer_runs = [result[0] for result in optimizer_results]
     random_results = [
         _historical_random_run(
-            campaign, history, effective_budget, seed
+            campaign, history, effective_budget, seed, initial_observation_count
         )
         for seed in range(n_seeds)
     ]
     random_runs = [result[0] for result in random_results]
+    response_surface_applicable = initial_observation_count >= 2
+    response_surface_results = [
+        _historical_response_surface_run(
+            campaign, history, effective_budget, seed, initial_observation_count
+        )
+        for seed in range(n_seeds)
+    ] if response_surface_applicable else []
+    response_surface_runs = [result[0] for result in response_surface_results]
     original_hit = _historical_original_order(campaign, history, effective_budget)
     original_selected = list(range(original_hit or effective_budget))
     return {
         "original_order_trials": original_hit,
         "optimizer": _summarize(optimizer_runs),
         "random": _summarize(random_runs),
+        "response_surface": (
+            _summarize(response_surface_runs)
+            if response_surface_applicable
+            else {
+                "applicable": False,
+                "reason": "quadratic response-surface baseline requires at least two preregistered initial observations",
+            }
+        ),
         "raw_optimizer": optimizer_runs,
         "raw_random": random_runs,
         "random_selected_history_indices": [result[1] for result in random_results],
+        "response_surface_selected_history_indices": [
+            result[1] for result in response_surface_results
+        ],
         "selected_history_indices": [
             result[1] for result in optimizer_results
         ],
@@ -354,11 +439,17 @@ def replay_history_pool(
             ),
             "optimizer": [result[3]["safety_violations"] for result in optimizer_results],
             "random": [result[2] for result in random_results],
+            "response_surface": [result[2] for result in response_surface_results],
         },
         "budget": effective_budget,
         "initial_observation_count": initial_observation_count,
         "engine_policy": "production-equivalent: sequential below 3 observations, BoTorch at 3 or more",
         "evidence_kind": "historical-pool-ranking",
+        "baseline_methods": [
+            "historical-engineer-order",
+            "seeded-random-order",
+            "quadratic-response-surface",
+        ],
         "limitations": (
             "Ranks only parameter settings present in the supplied history; it does not "
             "estimate outcomes for parameter settings that were never run, does not support "

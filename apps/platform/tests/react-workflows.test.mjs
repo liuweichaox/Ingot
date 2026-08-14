@@ -10,7 +10,10 @@ const pages = (await Promise.all(
 )).join("\n");
 const http = await readFile(new URL("../src/api/http.js", import.meta.url), "utf8");
 const ui = await readFile(new URL("../src/ui/components.jsx", import.meta.url), "utf8");
-const researchProjects = await readFile(new URL("../src/pages/ResearchProjectsPage.jsx", import.meta.url), "utf8");
+const researchProjects = (await Promise.all([
+  readFile(new URL("../src/pages/ResearchProjectsPage.jsx", import.meta.url), "utf8"),
+  readFile(new URL("../src/research/researchProjectModel.js", import.meta.url), "utf8"),
+])).join("\n");
 const researchAssets = await readFile(new URL("../src/pages/ResearchAssetsPage.jsx", import.meta.url), "utf8");
 const goldenQuestions = await readFile(new URL("../src/pages/GoldenQuestionsPage.jsx", import.meta.url), "utf8");
 const ingestionTasks = await readFile(new URL("../src/acquisition/IngestionTaskPage.jsx", import.meta.url), "utf8");

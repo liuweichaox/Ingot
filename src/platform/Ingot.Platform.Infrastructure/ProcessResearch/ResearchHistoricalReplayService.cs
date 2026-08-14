@@ -136,10 +136,33 @@ public sealed class ResearchHistoricalReplayService(
             SeedCount = request.SeedCount,
             InitialObservationCount = request.InitialObservationCount
         };
+        var preregistrationHash = Hash(new
+        {
+            ValidationThresholds.PolicyVersion,
+            request.Budget,
+            request.SeedCount,
+            request.InitialObservationCount,
+            BaselineMethods = new[]
+            {
+                "historical-engineer-order",
+                "seeded-random-order",
+                "quadratic-response-surface"
+            }
+        });
         var datasetHash = Hash(call);
         var raw = await optimizerClient.ReplayHistoryAsync(call, ct).ConfigureAwait(false);
         var optimizer = ReadSummary(raw, "optimizer");
         var random = ReadSummary(raw, "random");
+        var responseSurface = raw.TryGetProperty("response_surface", out var responseSurfaceRaw) &&
+            responseSurfaceRaw.TryGetProperty("runs", out _)
+                ? ReadSummary(raw, "response_surface")
+                : null;
+        var baselineMethods = raw.TryGetProperty("baseline_methods", out var baselineMethodsRaw)
+            ? baselineMethodsRaw.EnumerateArray()
+                .Select(static value => value.GetString() ?? "")
+                .Where(static value => value.Length > 0)
+                .ToArray()
+            : [];
         var originalTrials = ReadNullableInt(raw, "original_order_trials");
         var calibrationRows = raw.GetProperty("calibration").EnumerateArray().ToArray();
         var predictionChecks = calibrationRows.Sum(value =>
@@ -157,6 +180,10 @@ public sealed class ResearchHistoricalReplayService(
         var gateFailures = new List<string>();
         if (!enginePolicy.StartsWith("production-equivalent:", StringComparison.Ordinal))
             gateFailures.Add("回放没有声明生产等价模型切换路径。");
+        if (!baselineMethods.Contains("historical-engineer-order", StringComparer.Ordinal) ||
+            !baselineMethods.Contains("seeded-random-order", StringComparer.Ordinal) ||
+            !baselineMethods.Contains("quadratic-response-surface", StringComparer.Ordinal))
+            gateFailures.Add("回放没有执行全部预注册基线：历史工程师顺序、随机顺序和二次响应面。");
         if (!AuditNoFutureLeakage(raw))
             gateFailures.Add("逐步轨迹检测到未来信息泄漏或审计字段不完整。");
         if (grouped.Length < 5)
@@ -168,11 +195,17 @@ public sealed class ResearchHistoricalReplayService(
             gateFailures.Add("预测区间没有可校准检查，或聚合覆盖率低于预注册的 80% 最低门槛。");
         if (optimizer.SuccessRate < random.SuccessRate)
             gateFailures.Add("优化器达到规格的成功率低于随机候选顺序。");
+        if (responseSurface is not null && optimizer.SuccessRate < responseSurface.SuccessRate)
+            gateFailures.Add("优化器达到规格的成功率低于预注册的二次响应面基线。");
         if (originalTrials is not null && optimizer.MedianTrials is not null &&
             optimizer.MedianTrials > originalTrials)
             gateFailures.Add("优化器达到规格的中位试验数劣于历史工程师原顺序。");
+        if (responseSurface?.MedianTrials is not null && optimizer.MedianTrials is not null &&
+            optimizer.MedianTrials > responseSurface.MedianTrials)
+            gateFailures.Add("优化器达到规格的中位试验数劣于预注册的二次响应面基线。");
         var reportHash = Hash(new
         {
+            preregistrationHash,
             datasetHash,
             Raw = raw,
             ValidationThresholds.PolicyVersion
@@ -191,6 +224,9 @@ public sealed class ResearchHistoricalReplayService(
             OriginalOrderTrials = originalTrials,
             Optimizer = optimizer,
             Random = random,
+            ResponseSurface = responseSurface,
+            BaselineMethods = baselineMethods,
+            PreregistrationHash = preregistrationHash,
             PredictionIntervalCoverage = coverage,
             PredictionIntervalChecks = predictionChecks,
             OptimizerSafetyViolationCount = optimizerSafetyViolations,

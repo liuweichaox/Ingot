@@ -83,6 +83,14 @@ apps/platform/.vite/
 # Local runtime data
 /.codex-temp/
 /.codex-tmp/
+# Agent-assisted builds must use disposable output roots instead of leaving
+# nested MSBuild trees beside source projects.
+**/.codex-build/
+**/.codex-test/
+**/.final-check/
+**/.final-test/
+**/.rename-check/
+**/.rename-test/
 /.ingot-import/
 /mapping-*.json
 Data/*.db

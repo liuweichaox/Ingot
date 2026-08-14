@@ -58,6 +58,9 @@ services:
       - Urls=http://+:8000
       - ConnectionStrings__Events=Host=postgres;Port=5432;Database=ingot;Username=ingot;Password=${INGOT_POSTGRES_PASSWORD:?INGOT_POSTGRES_PASSWORD is required}
       - EventIngest__RequireToken=true
+      # 0 keeps both destructive retention and compression disabled until load/restore acceptance passes.
+      - EventIngest__RetentionDays=${INGOT_EVENT_RETENTION_DAYS:-0}
+      - EventIngest__CompressAfterDays=${INGOT_EVENT_COMPRESS_AFTER_DAYS:-0}
       - EventIngest__KeyRetentionDays=${INGOT_EVENT_KEY_RETENTION_DAYS:-0}
       - EventIngest__EdgeTokens__${INGOT_EDGE_ID:?INGOT_EDGE_ID is required}=${INGOT_EDGE_TOKEN:?INGOT_EDGE_TOKEN is required}
       - EdgeDiagnostics__EdgeTokens__${INGOT_EDGE_ID:?INGOT_EDGE_ID is required}=${INGOT_CONNECTOR_LOCAL_TOKEN:-}

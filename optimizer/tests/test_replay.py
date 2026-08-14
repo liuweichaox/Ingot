@@ -30,7 +30,15 @@ def test_history_pool_replay_only_selects_real_rows_without_reuse():
     for selected in result["random_selected_history_indices"]:
         assert len(selected) == len(set(selected))
         assert set(selected).issubset(range(len(history)))
-    assert set(result["safety_violations"]) == {"original_order", "optimizer", "random"}
+    assert set(result["safety_violations"]) == {
+        "original_order", "optimizer", "random", "response_surface"
+    }
+    assert result["response_surface"]["applicable"] is False
+    assert result["baseline_methods"] == [
+        "historical-engineer-order",
+        "seeded-random-order",
+        "quadratic-response-surface",
+    ]
     assert "does not prove online" in result["limitations"]
     assert result["engine_policy"].startswith("production-equivalent")
     for trace in result["step_traces"]:
@@ -79,6 +87,26 @@ def test_history_pool_switches_to_botorch_production_engine_after_three_observat
     assert model_versions
     assert all(version.startswith("botorch-") for version in model_versions)
     assert result["calibration"][0]["prediction_interval_checks"] > 0
+    assert result["response_surface"]["runs"] == 1
+    assert len(result["response_surface_selected_history_indices"]) == 1
+
+
+def test_random_and_response_surface_baselines_share_preregistered_initial_rows():
+    history = [
+        {"params": {"x": value}, "outcomes": {"loss": (value - 0.85) ** 2}}
+        for value in [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]
+    ]
+
+    result = replay_history_pool(
+        campaign(), history, n_seeds=3, initial_observation_count=2
+    )
+
+    for key in [
+        "selected_history_indices",
+        "random_selected_history_indices",
+        "response_surface_selected_history_indices",
+    ]:
+        assert all(selected[:2] == [0, 1] for selected in result[key])
 
 
 def test_synthetic_replay_accepts_prior_mapping_without_constructor_error():

@@ -81,7 +81,45 @@ public sealed record AnalysisAnswer
 
     public IReadOnlyList<string> FollowUpQuestions { get; init; } = [];
 
+    /// <summary>
+    ///     Structured previews derived from read-only evidence. They are never formal
+    ///     Platform records; a user must confirm and submit them through the normal workflow.
+    /// </summary>
+    public IReadOnlyList<AgentProposalEnvelope> Proposals { get; init; } = [];
+
     public CombinedAnalysisResult? CombinedAnalysis { get; init; }
+}
+
+public static class AgentProposalKinds
+{
+    public const string Investigation = "investigation";
+    public const string Hypothesis = "hypothesis";
+    public const string Experiment = "experiment";
+
+    public static readonly IReadOnlySet<string> All = new HashSet<string>(StringComparer.Ordinal)
+    {
+        Investigation,
+        Hypothesis,
+        Experiment
+    };
+}
+
+public sealed record AgentProposalEnvelope
+{
+    public required string Kind { get; init; }
+
+    public required string Title { get; init; }
+
+    public required string Rationale { get; init; }
+
+    public IReadOnlyDictionary<string, string> DraftFields { get; init; }
+        = new Dictionary<string, string>();
+
+    public IReadOnlyList<RelatedRecordRef> EvidenceReferences { get; init; } = [];
+
+    public string Persistence { get; init; } = "preview-only";
+
+    public bool RequiresHumanConfirmation { get; init; } = true;
 }
 
 public sealed record RelatedRecordRef

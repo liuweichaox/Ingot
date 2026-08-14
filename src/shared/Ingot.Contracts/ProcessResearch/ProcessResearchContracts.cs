@@ -681,6 +681,10 @@ public sealed record ResearchHistoricalReplayReport
     public int? OriginalOrderTrials { get; init; }
     public required ResearchReplayMethodSummary Optimizer { get; init; }
     public required ResearchReplayMethodSummary Random { get; init; }
+    public ResearchReplayMethodSummary? ResponseSurface { get; init; }
+    public IReadOnlyList<string> BaselineMethods { get; init; } = [];
+    /// <summary>Historical payloads without this value predate preregistered baselines.</summary>
+    public string PreregistrationHash { get; init; } = "not-registered";
     public double? PredictionIntervalCoverage { get; init; }
     public int PredictionIntervalChecks { get; init; }
     public int OptimizerSafetyViolationCount { get; init; }

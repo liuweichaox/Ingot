@@ -253,6 +253,7 @@ public sealed class DefaultAnalysisResultValidator : IAnalysisResultValidator
     private const int MaxCharts = 8;
     private const int MaxLabels = 500;
     private const int MaxSeries = 16;
+    private const int MaxProposals = 8;
     private static readonly IReadOnlySet<string> AllowedChartTypes = new HashSet<string>(StringComparer.Ordinal)
     {
         "line",
@@ -318,7 +319,8 @@ public sealed class DefaultAnalysisResultValidator : IAnalysisResultValidator
         var insufficientData = results.Any(static result =>
             string.Equals(result.Outcome, AnalysisToolOutcomes.InsufficientData, StringComparison.Ordinal));
         if (insufficientData &&
-            (answer.Findings.Count > 0 || answer.Charts.Count > 0 || answer.CombinedAnalysis is not null))
+            (answer.Findings.Count > 0 || answer.Charts.Count > 0 || answer.Proposals.Count > 0 ||
+                answer.CombinedAnalysis is not null))
         {
             error = "数据不足时不能给出明确原因或分析图表。";
             return false;
@@ -329,11 +331,16 @@ public sealed class DefaultAnalysisResultValidator : IAnalysisResultValidator
             return false;
         }
 
+        if (!TryValidateProposals(answer.Proposals, results, out error))
+            return false;
+
         var source = string.Join('\n', results.Select(result =>
             $"{result.Summary}\n{result.Data.GetRawText()}"));
         var answerText = string.Join('\n', new[] { answer.Summary }
             .Concat(answer.Findings)
-            .Concat(answer.Limitations));
+            .Concat(answer.Limitations)
+            .Concat(answer.Proposals.SelectMany(static proposal =>
+                new[] { proposal.Title, proposal.Rationale }.Concat(proposal.DraftFields.Values))));
         var sourceNumbers = NumberGrounding.ExtractNormalized(source);
         if (!TryValidateCharts(answer.Charts, sourceNumbers, out error))
             return false;
@@ -356,6 +363,51 @@ public sealed class DefaultAnalysisResultValidator : IAnalysisResultValidator
             return false;
         }
 
+        error = string.Empty;
+        return true;
+    }
+
+    private static bool TryValidateProposals(
+        IReadOnlyList<AgentProposalEnvelope> proposals,
+        IReadOnlyList<AnalysisToolResult> results,
+        out string error)
+    {
+        if (proposals.Count > MaxProposals)
+        {
+            error = $"回答中的提议数量不得超过 {MaxProposals}。";
+            return false;
+        }
+        var availableEvidence = results.SelectMany(static result => result.RelatedRecords)
+            .Select(static reference => (reference.Kind, reference.Id))
+            .ToHashSet();
+        foreach (var proposal in proposals)
+        {
+            if (!AgentProposalKinds.All.Contains(proposal.Kind) ||
+                string.IsNullOrWhiteSpace(proposal.Title) || proposal.Title.Length > 200 ||
+                string.IsNullOrWhiteSpace(proposal.Rationale) || proposal.Rationale.Length > 2000)
+            {
+                error = "Agent 提议的类型、标题或依据无效。";
+                return false;
+            }
+            if (!string.Equals(proposal.Persistence, "preview-only", StringComparison.Ordinal) ||
+                !proposal.RequiresHumanConfirmation)
+            {
+                error = "Agent 提议只能作为等待人工确认的预览，不能直接持久化。";
+                return false;
+            }
+            if (proposal.EvidenceReferences.Count == 0 || proposal.EvidenceReferences.Any(reference =>
+                    !availableEvidence.Contains((reference.Kind, reference.Id))))
+            {
+                error = "Agent 提议必须引用本次只读工具返回的正式记录。";
+                return false;
+            }
+            if (proposal.DraftFields.Count > 32 || proposal.DraftFields.Any(static pair =>
+                    string.IsNullOrWhiteSpace(pair.Key) || pair.Key.Length > 64 || pair.Value.Length > 4000))
+            {
+                error = "Agent 提议草稿字段无效或超过边界。";
+                return false;
+            }
+        }
         error = string.Empty;
         return true;
     }
