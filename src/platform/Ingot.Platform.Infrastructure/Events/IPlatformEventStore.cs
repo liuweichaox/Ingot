@@ -45,6 +45,29 @@ public interface IPlatformEventStore
         return result;
     }
 
+    /// <summary>
+    ///     Loads the low-frequency identity/lifecycle events needed by execution lists together
+    ///     with an exact sample count. Stores should override this method so list queries do not
+    ///     deserialize every process.sample payload. The default keeps non-Postgres test stores
+    ///     and adapters source-compatible.
+    /// </summary>
+    async Task<IReadOnlyList<PlatformProcessExecutionSummarySource>> QueryExecutionSummarySourcesAsync(
+        IReadOnlyCollection<string> executionIds,
+        CancellationToken ct = default)
+    {
+        var rows = await QueryByExecutionIdsAsync(executionIds, ct).ConfigureAwait(false);
+        return rows
+            .Where(static row => !string.IsNullOrWhiteSpace(row.Event.ExecutionId))
+            .GroupBy(static row => row.Event.ExecutionId!, StringComparer.Ordinal)
+            .Select(static group => new PlatformProcessExecutionSummarySource
+            {
+                ExecutionId = group.Key,
+                SampleCount = group.Count(static row => row.Event.EventType == "process.sample"),
+                Events = group.Where(static row => row.Event.EventType != "process.sample").ToArray()
+            })
+            .ToArray();
+    }
+
     Task<DataObjectPage> QueryDataObjectsAsync(
         DataObjectQuery query,
         CancellationToken ct = default)
@@ -63,6 +86,15 @@ public interface IPlatformEventStore
         CancellationToken ct = default);
 
     Task<bool> CanConnectAsync(CancellationToken ct = default);
+}
+
+public sealed record PlatformProcessExecutionSummarySource
+{
+    public required string ExecutionId { get; init; }
+
+    public int SampleCount { get; init; }
+
+    public IReadOnlyList<PlatformProductionEvent> Events { get; init; } = [];
 }
 
 /// <summary>某个查询范围的聚合统计。</summary>

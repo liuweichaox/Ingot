@@ -60,16 +60,14 @@ public sealed class ProcessExecutionService(
         var allCandidates = lifecycle
             .Where(static row => !string.IsNullOrWhiteSpace(row.Event.ExecutionId))
             .GroupBy(static row => row.Event.ExecutionId!, StringComparer.Ordinal)
-            .Select(group => new
-            {
-                Id = group.Key,
-                StartedAt = group.Where(static row => row.Event.EventType == "process.execution.started")
+            .Select(group => new ExecutionCandidate(
+                group.Key,
+                group.Where(static row => row.Event.EventType == "process.execution.started")
                     .Select(static row => row.Event.OccurredAt)
                     .DefaultIfEmpty(group.Min(static row => row.Event.OccurredAt))
                     .Min(),
-                HasStarted = group.Any(static row => row.Event.EventType == "process.execution.started"),
-                HasCompleted = group.Any(static row => row.Event.EventType == "process.execution.completed")
-            })
+                group.Any(static row => row.Event.EventType == "process.execution.started"),
+                group.Any(static row => row.Event.EventType == "process.execution.completed")))
             .Where(item => status switch
             {
                 "completed" => item.HasStarted && item.HasCompleted,
@@ -85,6 +83,17 @@ public sealed class ProcessExecutionService(
             .ToArray();
 
         var ids = candidates.Select(static item => item.Id).ToArray();
+        if (_materializer is not null && string.IsNullOrWhiteSpace(executionId))
+        {
+            return await QuerySummariesAsync(
+                candidates,
+                allCandidates.Length,
+                allCandidates.Count(static row => row.HasStarted && row.HasCompleted),
+                allCandidates.Count(static row => row.HasStarted && !row.HasCompleted),
+                allCandidates.Count(static row => !row.HasStarted),
+                ct).ConfigureAwait(false);
+        }
+
         var selectedEvents = await events.QueryByExecutionIdsAsync(ids, ct).ConfigureAwait(false);
         var executionEvents = selectedEvents
             .Where(static row => !string.IsNullOrWhiteSpace(row.Event.ExecutionId))
@@ -144,6 +153,93 @@ public sealed class ProcessExecutionService(
         };
     }
 
+    private async Task<ProcessExecutionQueryResult> QuerySummariesAsync(
+        IReadOnlyList<ExecutionCandidate> candidates,
+        int total,
+        int completedCount,
+        int activeCount,
+        int incompleteCount,
+        CancellationToken ct)
+    {
+        var ids = candidates.Select(static item => item.Id).ToArray();
+        var sources = await events.QueryExecutionSummarySourcesAsync(ids, ct).ConfigureAwait(false);
+        var sourceByExecution = sources.ToDictionary(static source => source.ExecutionId, StringComparer.Ordinal);
+        var records = InspectionRecordSet.Effective(
+            await inspections.QueryAllByExecutionIdsAsync(ids, ct).ConfigureAwait(false));
+        var latestReviews = await reviews.GetLatestByInspectionRecordIdsAsync(
+            records.Select(static record => record.RecordId).ToArray(), ct).ConfigureAwait(false);
+        var plans = await masterData.ListInspectionPlansAsync(ct).ConfigureAwait(false);
+        var contexts = ids.Select(id => sourceByExecution.TryGetValue(id, out var source)
+                ? ResolveContext(source.Events)
+                : new Dictionary<string, string>(StringComparer.Ordinal))
+            .ToArray();
+        var analysisRows = await analysisResolver.ResolveManyAsync(
+            contexts,
+            "production-execution",
+            ct).ConfigureAwait(false);
+        var analyses = ids
+            .Select((id, index) => (id, Analysis: analysisRows[index]))
+            .ToDictionary(static pair => pair.id, static pair => pair.Analysis, StringComparer.Ordinal);
+        var recordsByExecution = records
+            .GroupBy(static record => record.ExecutionId, StringComparer.Ordinal)
+            .ToDictionary(static group => group.Key, static group => group.ToArray(), StringComparer.Ordinal);
+        var rows = new List<ProcessExecutionSummary>(ids.Length);
+        foreach (var id in ids)
+        {
+            if (!sourceByExecution.TryGetValue(id, out var source) || source.Events.Count == 0)
+                continue;
+            var resolved = analyses[id];
+            var materialized = await _materializer!.TryLoadLatestAsync(
+                id,
+                resolved?.DataModel,
+                resolved?.Plan,
+                ct).ConfigureAwait(false) ?? PendingAnalysis(source.SampleCount);
+            rows.Add(BuildSummary(
+                id,
+                source.Events,
+                recordsByExecution.GetValueOrDefault(id, []),
+                latestReviews,
+                plans,
+                resolved,
+                materialized,
+                source.SampleCount));
+        }
+        return new ProcessExecutionQueryResult
+        {
+            Data = rows,
+            Total = total,
+            Overview = new ProcessExecutionOverview
+            {
+                ExecutionCount = total,
+                CompletedCount = completedCount,
+                ActiveCount = activeCount,
+                IncompleteCount = incompleteCount,
+                SampleCompleteCount = rows.Count(static row => row.SampleCount > 0),
+                QualityCompleteCount = rows.Count(static row => row.QualityStatus == "COMPLETE"),
+                IssueExecutionCount = rows.Count(static row => row.DataIssues.Count > 0)
+            }
+        };
+    }
+
+    private static MaterializedProcessExecutionAnalysis PendingAnalysis(int sampleCount)
+        => new(
+            new WholeProcessExecutionAnalysisResult(
+                new ProcessDataQualitySummary
+                {
+                    Status = sampleCount > 0 ? ProcessDataStatuses.Degraded : ProcessDataStatuses.Unavailable,
+                    SampleCount = sampleCount,
+                    Issues = sampleCount > 0
+                        ? ["完整性分析正在后台生成。"]
+                        : ["没有过程采样数据。"]
+                },
+                [],
+                []),
+            new ProcessExecutionAnalysisMaterialization
+            {
+                Status = "pending",
+                AlgorithmVersion = ProcessExecutionAnalysisEngine.AlgorithmVersion
+            });
+
     private ProcessExecutionSummary BuildSummary(
         string executionId,
         IReadOnlyList<PlatformProductionEvent> rows,
@@ -151,7 +247,8 @@ public sealed class ProcessExecutionService(
         IReadOnlyDictionary<Guid, InspectionReview> latestReviews,
         IReadOnlyList<InspectionPlan> plans,
         ResolvedProcessAnalysis? analysis,
-        MaterializedProcessExecutionAnalysis materialized)
+        MaterializedProcessExecutionAnalysis materialized,
+        int? sampleCountOverride = null)
     {
         var ordered = rows.OrderBy(static row => row.Event.OccurredAt).ThenBy(static row => row.IngestId).ToArray();
         var first = ordered[0];
@@ -215,7 +312,7 @@ public sealed class ProcessExecutionService(
             ExternalOrderRef = context.GetValueOrDefault("external_order_ref"),
             ExternalBatchRef = context.GetValueOrDefault("external_batch_ref"),
             MaterialLotRef = context.GetValueOrDefault("material_lot_ref"),
-            SampleCount = samples.Length,
+            SampleCount = sampleCountOverride ?? samples.Length,
             ExpectedSampleCount = 0,
             ProcessDataQuality = processAnalysis.Quality,
             PhaseCount = phaseRows.Count(static phase => phase.Code != "unknown"),
@@ -402,4 +499,10 @@ public sealed class ProcessExecutionService(
         }
         return result;
     }
+
+    private sealed record ExecutionCandidate(
+        string Id,
+        DateTimeOffset StartedAt,
+        bool HasStarted,
+        bool HasCompleted);
 }

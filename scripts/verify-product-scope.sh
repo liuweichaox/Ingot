@@ -25,4 +25,35 @@ if grep -rEn --exclude-dir=dist --exclude-dir=node_modules \
   exit 1
 fi
 
+# Production imports and site-specific mappings are deployment-controlled
+# evidence, not repository assets. Deleted tracked files are ignored here so a
+# cleanup commit can run the gate before it is created; CI checkouts contain any
+# tracked file and will reject it.
+sensitive_paths=()
+while IFS= read -r path; do
+  [[ -e "$path" ]] || continue
+  case "$path" in
+    tests/fixtures/synthetic/*|tools/*/examples/synthetic/*)
+      ;;
+    .ingot-import/*|mapping-*.json|*.csv|*.parquet|*.xlsx|*.xls|*.db)
+      sensitive_paths+=("$path")
+      ;;
+  esac
+done < <(git ls-files)
+
+if (( ${#sensitive_paths[@]} > 0 )); then
+  printf '%s\n' "${sensitive_paths[@]}"
+  echo "Production data or site-specific import mappings must not be tracked. Synthetic data files are allowed only under tests/fixtures/synthetic or tools/*/examples/synthetic." >&2
+  exit 1
+fi
+
+if grep -RInE --exclude='package-lock.json' --exclude='verify-product-scope.sh' \
+  --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=.next \
+  --exclude-dir=bin --exclude-dir=obj --exclude-dir=.venv \
+  'IMPORT-REAL-DATA|measured_thickness_raw|vacuum_degree_kpa' \
+  README.md README.en.md docs apps src tests tools scripts; then
+  echo "Repository content contains site-specific production import markers." >&2
+  exit 1
+fi
+
 echo "Platform Web product boundaries verified."

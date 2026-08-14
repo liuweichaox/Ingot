@@ -33,6 +33,23 @@ public sealed class ProcessExecutionAnalysisMaterializerTests
     }
 
     [Fact]
+    public async Task LatestReadyMaterialization_CanServeSummaryWithoutSourceScan()
+    {
+        var store = new FakeStore();
+        var materializer = Create(store);
+        await materializer.GetOrComputeAsync(
+            "execution-1", Rows(), Start, Start.AddSeconds(2), Model(), Plan());
+
+        var latest = await materializer.TryLoadLatestAsync(
+            "execution-1", Model(), Plan());
+
+        Assert.NotNull(latest);
+        Assert.Equal(3, latest.Materialization.SourceEventCount);
+        Assert.Equal("cached", latest.Materialization.Status);
+        Assert.Equal(1, store.SaveCount);
+    }
+
+    [Fact]
     public async Task ActiveProcessExecution_RemainsQueryTimeAndIsNotPersisted()
     {
         var store = new FakeStore();
@@ -181,6 +198,11 @@ public sealed class ProcessExecutionAnalysisMaterializerTests
                 return Task.FromResult<ProcessExecutionAnalysisSnapshot?>(snapshot);
             return Task.FromResult<ProcessExecutionAnalysisSnapshot?>(null);
         }
+
+        public Task<ProcessExecutionAnalysisSnapshot?> TryLoadLatestAsync(
+            ProcessExecutionAnalysisMaterializationKey key,
+            CancellationToken ct = default)
+            => Task.FromResult(_snapshots.GetValueOrDefault(key));
 
         public Task<ProcessExecutionAnalysisSnapshot> SaveAsync(
             ProcessExecutionAnalysisMaterializationKey key,

@@ -49,7 +49,20 @@ public sealed class ExecutionComparisonService(
         if (ids.Length == 0)
             return new Dictionary<string, ExecutionComparisonRow>(StringComparer.Ordinal);
 
-        var executionEvents = await LoadProcessExecutionsAsync(ids, ct).ConfigureAwait(false);
+        var summarySources = _materializer is null
+            ? []
+            : await events.QueryExecutionSummarySourcesAsync(ids, ct).ConfigureAwait(false);
+        var summaryByExecution = summarySources.ToDictionary(
+            static source => source.ExecutionId,
+            StringComparer.Ordinal);
+        var executionEvents = _materializer is null
+            ? new Dictionary<string, IReadOnlyList<PlatformProductionEvent>>(
+                await LoadProcessExecutionsAsync(ids, ct).ConfigureAwait(false),
+                StringComparer.Ordinal)
+            : summaryByExecution.ToDictionary(
+                static pair => pair.Key,
+                static pair => pair.Value.Events,
+                StringComparer.Ordinal);
         var allInspections = InspectionRecordSet.Effective(
             await inspections.QueryAllByExecutionIdsAsync(ids, ct).ConfigureAwait(false));
         var inspectionsByProcessExecution = allInspections
@@ -63,6 +76,29 @@ public sealed class ExecutionComparisonService(
             .ToArray();
         var analyses = await analysisResolver.ResolveManyAsync(contexts, "production-execution", ct)
             .ConfigureAwait(false);
+        var materializedByExecution = new Dictionary<string, MaterializedProcessExecutionAnalysis>(StringComparer.Ordinal);
+        if (_materializer is not null)
+        {
+            var missingIds = new List<string>();
+            for (var index = 0; index < ids.Length; index++)
+            {
+                var cached = await _materializer.TryLoadLatestAsync(
+                    ids[index],
+                    analyses[index]?.DataModel,
+                    analyses[index]?.Plan,
+                    ct).ConfigureAwait(false);
+                if (cached is null)
+                    missingIds.Add(ids[index]);
+                else
+                    materializedByExecution[ids[index]] = cached;
+            }
+            if (missingIds.Count > 0)
+            {
+                var fullRows = await LoadProcessExecutionsAsync(missingIds, ct).ConfigureAwait(false);
+                foreach (var pair in fullRows)
+                    executionEvents[pair.Key] = pair.Value;
+            }
+        }
         var result = new Dictionary<string, ExecutionComparisonRow>(StringComparer.Ordinal);
         for (var index = 0; index < ids.Length; index++)
         {
@@ -70,7 +106,8 @@ public sealed class ExecutionComparisonService(
             if (!executionEvents.TryGetValue(id, out var rows) || rows.Count == 0)
                 continue;
             var analysis = analyses[index];
-            var materialized = await AnalyzeAsync(id, rows, analysis, ct).ConfigureAwait(false);
+            var materialized = materializedByExecution.GetValueOrDefault(id) ??
+                               await AnalyzeAsync(id, rows, analysis, ct).ConfigureAwait(false);
             var inspectionPlan = ResolveInspectionPlan(plans, rows);
             var eligibleInspections = InspectionRecordSet.AnalysisEligible(
                 inspectionsByProcessExecution.GetValueOrDefault(id, []),
@@ -82,7 +119,8 @@ public sealed class ExecutionComparisonService(
                 eligibleInspections,
                 latestReviews,
                 analysis,
-                materialized);
+                materialized,
+                summaryByExecution.GetValueOrDefault(id)?.SampleCount);
         }
         return result;
     }
@@ -608,7 +646,8 @@ public sealed class ExecutionComparisonService(
         IReadOnlyList<InspectionRecord> inspectionRecords,
         IReadOnlyDictionary<Guid, InspectionReview> latestReviews,
         ResolvedProcessAnalysis? analysis,
-        MaterializedProcessExecutionAnalysis materialized)
+        MaterializedProcessExecutionAnalysis materialized,
+        int? sampleCountOverride = null)
     {
         var ordered = rows.OrderBy(static row => row.Event.OccurredAt).ThenBy(static row => row.IngestId).ToArray();
         var first = ordered[0];
@@ -653,7 +692,7 @@ public sealed class ExecutionComparisonService(
             ExternalBatchRef = ProcessAnalysisResolver.ContextValue(context, "external_batch_ref"),
             MaterialLotRef = ProcessAnalysisResolver.ContextValue(context, "material_lot_ref") ??
                              ProcessAnalysisResolver.ContextValue(context, "material_lot"),
-            SampleCount = samples.Length,
+            SampleCount = sampleCountOverride ?? samples.Length,
             ExpectedSampleCount = 0,
             ProcessDataQuality = wholeProcessExecution.Quality,
             EvidenceWeight = wholeProcessExecution.Quality.Status switch

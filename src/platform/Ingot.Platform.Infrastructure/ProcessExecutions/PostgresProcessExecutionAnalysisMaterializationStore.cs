@@ -59,6 +59,41 @@ public sealed class PostgresProcessExecutionAnalysisMaterializationStore : IProc
             source);
     }
 
+    public async Task<ProcessExecutionAnalysisSnapshot?> TryLoadLatestAsync(
+        ProcessExecutionAnalysisMaterializationKey key,
+        CancellationToken ct = default)
+    {
+        await InitializeAsync(ct).ConfigureAwait(false);
+        await using var command = _dataSource.CreateCommand(
+            """
+            SELECT result::text, computed_at,
+                   source_min_ingest_id, source_max_ingest_id,
+                   source_event_count, source_content_hash
+            FROM execution_analysis_materializations
+            WHERE execution_id = @execution_id
+              AND algorithm_version = @algorithm_version
+              AND data_model_id = @data_model_id
+              AND data_model_version = @data_model_version
+              AND analysis_plan_id = @analysis_plan_id
+              AND analysis_plan_version = @analysis_plan_version
+              AND status = 'ready';
+            """);
+        AddKeyParameters(command, key);
+        await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
+        if (!await reader.ReadAsync(ct).ConfigureAwait(false))
+            return null;
+        var result = JsonSerializer.Deserialize<WholeProcessExecutionAnalysisResult>(reader.GetString(0), JsonOptions)
+                     ?? throw new InvalidOperationException($"过程执行 {key.ExecutionId} 的物化分析结果无法反序列化。");
+        return new ProcessExecutionAnalysisSnapshot(
+            result,
+            reader.GetFieldValue<DateTimeOffset>(1),
+            new ProcessExecutionAnalysisSourceFingerprint(
+                reader.GetInt64(2),
+                reader.GetInt64(3),
+                reader.GetInt32(4),
+                reader.GetString(5)));
+    }
+
     public async Task<ProcessExecutionAnalysisSnapshot> SaveAsync(
         ProcessExecutionAnalysisMaterializationKey key,
         ProcessExecutionAnalysisSourceFingerprint source,

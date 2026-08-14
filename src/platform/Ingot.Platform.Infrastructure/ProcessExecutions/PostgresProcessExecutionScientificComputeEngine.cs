@@ -13,12 +13,16 @@ public sealed class PostgresProcessExecutionScientificComputeEngine : IAsyncDisp
 {
     private const double RelativeTolerance = 1e-9;
     private readonly NpgsqlDataSource _dataSource;
+    private readonly ILogger<PostgresProcessExecutionScientificComputeEngine>? _logger;
 
-    public PostgresProcessExecutionScientificComputeEngine(IConfiguration configuration)
+    public PostgresProcessExecutionScientificComputeEngine(
+        IConfiguration configuration,
+        ILogger<PostgresProcessExecutionScientificComputeEngine>? logger = null)
     {
         var connectionString = configuration.GetConnectionString("Events")
             ?? throw new InvalidOperationException("缺少 ConnectionStrings:Events PostgreSQL 连接字符串。");
         _dataSource = NpgsqlDataSource.Create(connectionString);
+        _logger = logger;
     }
 
     public async Task<WholeProcessExecutionAnalysisResult> ComputeAndVerifyAsync(
@@ -28,6 +32,14 @@ public sealed class PostgresProcessExecutionScientificComputeEngine : IAsyncDisp
         WholeProcessExecutionAnalysisResult reference,
         CancellationToken ct = default)
     {
+        if (!await HasProjectedSamplesAsync(executionId, ct).ConfigureAwait(false))
+        {
+            _logger?.LogInformation(
+                "过程执行 {ExecutionId} 尚无时序投影，使用独立批处理基准完成分析物化",
+                executionId);
+            return reference;
+        }
+
         var phases = await LoadPhasesAsync(
             executionId,
             executionCompletedAt,
@@ -88,6 +100,16 @@ public sealed class PostgresProcessExecutionScientificComputeEngine : IAsyncDisp
             });
         }
         return reference with { Signals = signals, Phases = phases };
+    }
+
+    private async Task<bool> HasProjectedSamplesAsync(
+        string executionId,
+        CancellationToken ct)
+    {
+        await using var command = _dataSource.CreateCommand(
+            "SELECT EXISTS (SELECT 1 FROM time_series_samples WHERE execution_id = @execution_id LIMIT 1);");
+        command.Parameters.AddWithValue("execution_id", executionId);
+        return (bool)(await command.ExecuteScalarAsync(ct).ConfigureAwait(false) ?? false);
     }
 
     private async Task<IReadOnlyList<ProcessPhaseSummary>> LoadPhasesAsync(

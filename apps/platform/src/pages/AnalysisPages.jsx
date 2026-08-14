@@ -481,7 +481,7 @@ export function DataQualityPage() {
             <Metric label="运行—质量关联率" value={rateValue("run_quality_association")} hint="至少关联一条有效检验结果" />
           </div>
           <div className="grid gap-5 xl:grid-cols-[1.4fr_.6fr]">
-            <Card title="正式分析准入" description="只有全部准入条件通过的运行才进入追因、实验分析和优化。">
+            <Card title="正式分析准入" description="只有全部准入条件通过的运行才进入追因、实验分析和工艺研发。">
               <div className="mb-4 grid gap-4 sm:grid-cols-3">
                 <Metric label="准入率" value={rateValue("analysis_admission")} hint={`${rate("analysis_admission")?.numerator ?? 0} / ${rate("analysis_admission")?.denominator ?? 0} 次运行`} />
                 <Metric label="序列缺口" value={formatInteger(baseline.data?.sequenceGapCount)} hint="已分析运行累计" />

@@ -181,6 +181,8 @@ export function ResearchProjectsPage({ identity }) {
   const [projectForm, setProjectForm] = useState(projectFormInitial);
   const [workspace, setWorkspace] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [evidenceLoading, setEvidenceLoading] = useState(false);
+  const [evidenceError, setEvidenceError] = useState("");
   const [saving, setSaving] = useState(false);
   const [task, setTask] = useState("");
   const [taskForm, setTaskForm] = useState({});
@@ -223,27 +225,50 @@ export function ResearchProjectsPage({ identity }) {
   async function refreshWorkspace(projectId = workspace?.project?.projectId) {
     if (!projectId) return;
     setDetailLoading(true);
+    setEvidenceLoading(true);
+    setEvidenceError("");
     setError("");
     try {
-      const [next, observationSummary, onlineAdmission, transferSources] = await Promise.all([
-        getJson(`/api/v1/research-projects/${projectId}`),
+      const next = await getJson(`/api/v1/research-projects/${projectId}`);
+      setWorkspace(current => ({
+        ...next,
+        optimizationObservationSummary: current?.project?.projectId === projectId
+          ? current.optimizationObservationSummary
+          : null,
+        onlineAdmission: current?.project?.projectId === projectId
+          ? current.onlineAdmission
+          : null,
+        transferSources: current?.project?.projectId === projectId
+          ? current.transferSources
+          : [],
+      }));
+      setProjects(current => current.map(item =>
+        item.projectId === next.project.projectId ? next.project : item));
+      setDetailLoading(false);
+
+      try {
+        const [observationSummary, onlineAdmission, transferSources] = await Promise.all([
         getJson(`/api/v1/research-projects/${projectId}/experiment-readiness`),
         getJson(`/api/v1/research-projects/${projectId}/online-admission`),
         getJson(`/api/v1/research-projects/${projectId}/transfer-sources`),
-      ]);
-      setWorkspace({
-        ...next,
-        optimizationObservationSummary: observationSummary,
-        onlineAdmission,
-        transferSources: transferSources?.data || [],
-      });
-      setProjects(current => current.map(item =>
-        item.projectId === next.project.projectId ? next.project : item));
+        ]);
+        setWorkspace(current => current?.project?.projectId === projectId
+          ? {
+              ...current,
+              optimizationObservationSummary: observationSummary,
+              onlineAdmission,
+              transferSources: transferSources?.data || [],
+            }
+          : current);
+      } catch (requestError) {
+        setEvidenceError(requestError.message);
+      }
     } catch (requestError) {
       setError(requestError.message);
       notify(requestError.message, "danger");
     } finally {
       setDetailLoading(false);
+      setEvidenceLoading(false);
     }
   }
 
@@ -725,6 +750,9 @@ export function ResearchProjectsPage({ identity }) {
         )}
       >
         {error && <Alert tone="danger">{error}</Alert>}
+        {evidenceError && workspace && (
+          <Alert tone="warning" title="项目证据准备度暂不可用">{evidenceError}</Alert>
+        )}
         {!workspace ? (
           <Card>
             <p className="py-16 text-center text-sm text-slate-500">
@@ -734,7 +762,7 @@ export function ResearchProjectsPage({ identity }) {
         ) : (
           <WorkspaceContent
             workspace={workspace}
-            loading={detailLoading}
+            loading={evidenceLoading}
             onTask={startTask}
             onExperimentStatus={changeExperimentStatus}
             onMaterializeExperimentResult={materializeExperimentResult}
@@ -794,7 +822,7 @@ export function ResearchProjectsPage({ identity }) {
     >
       {error && <Alert tone="danger">{error}</Alert>}
       <section className="grid gap-3 sm:grid-cols-3">
-        <Metric label="进行中的优化" value={metrics.active + metrics.validating} hint="需要工程决策或独立验证" />
+        <Metric label="进行中的研发" value={metrics.active + metrics.validating} hint="需要工程决策或独立验证" />
         <Metric label="已验证结论" value={metrics.completed} hint="已完成项目" />
         <Metric label="项目组合" value={projects.length} hint="当前可访问项目" />
       </section>
@@ -827,7 +855,7 @@ export function ResearchProjectsPage({ identity }) {
 
       <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]">
         <div className="rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50 via-white to-white p-5 shadow-sm">
-          <p className="text-sm font-semibold text-blue-700">从真实偏差进入优化闭环</p>
+          <p className="text-sm font-semibold text-blue-700">从真实偏差进入研发闭环</p>
           <h2 className="mt-2 text-lg font-semibold tracking-tight text-slate-950">
             发现偏差 → 找到原因 → 设计实验 → 验证并固化窗口
           </h2>
@@ -846,7 +874,7 @@ export function ResearchProjectsPage({ identity }) {
             compact
             steps={[
               { title: "明确偏差", description: "从质量追因或历史对比确认问题和范围。", state: projects.length ? "done" : "current" },
-              { title: "设定边界", description: "写下优化目标、一个可控变量和安全限制。", state: projects.length ? "current" : "upcoming" },
+              { title: "设定边界", description: "写下研发目标、一个可控变量和安全限制。", state: projects.length ? "current" : "upcoming" },
               { title: "执行建议", description: "系统依据已有观察推荐下一组实验。", state: "upcoming" },
               { title: "验证窗口", description: "独立验证后才成为可复用结论。", state: "upcoming" },
             ]}
@@ -1131,7 +1159,8 @@ function WorkspaceContent({
     item.status !== "cancelled" && item.designMethod !== "historical-observation");
   const hasRunningExperiment = executionExperiments.some(item => item.status === "running");
   const observedExecutionKeys = new Set(
-    (observationSummary?.observations || []).map(item => item.executionKey),
+    observationSummary?.observedExecutionKeys ||
+      (observationSummary?.observations || []).map(item => item.executionKey),
   );
   const variableByCode = new Map(project.variables.map(item => [item.code, item]));
   const objectiveByCode = new Map(project.objectives.map(item => [item.code, item]));
@@ -1200,7 +1229,7 @@ function WorkspaceContent({
               {canEdit && validatedOperatingRegions.length > 0 && <Button variant="primary" onClick={() => onTask("claim")}>沉淀工艺知识</Button>}
             </div>
             <div className="rounded-xl border border-white/80 bg-white/80 p-4">
-              <p className="text-sm font-semibold text-slate-900">优化模型准备度</p>
+              <p className="text-sm font-semibold text-slate-900">实验建议准备度</p>
               <p className="mt-1 text-2xl font-semibold text-slate-950">{observationSummary?.validObservationCount ?? 0}<span className="ml-1 text-sm font-normal text-slate-500">条有效观察</span></p>
               <p className="mt-1 text-xs leading-5 text-slate-500">{hasObservation ? `已匹配 ${observationSummary?.candidateRunCount ?? 0} 个实验运行，可用于生成下一组建议。` : "尚无可用观察；完成运行、过程特征和检验结果的关联后自动具备条件。"}</p>
             </div>
@@ -1238,12 +1267,12 @@ function WorkspaceContent({
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <Metric label="研发假设" value={hypotheses.length} hint="待验证的规律" />
           <Metric label="有效实验计划" value={executionExperiments.length} hint="不含历史证据和取消记录" />
-          <Metric label="可用于优化" value={observationSummary?.validObservationCount ?? 0} hint="参数、过程与结果已关联" />
+          <Metric label="可用于研发" value={observationSummary?.validObservationCount ?? 0} hint="参数、过程与结果已关联" />
           <Metric label="已验证窗口" value={validatedOperatingRegions.length} hint={`${reviewedOperatingRegions.length} 个窗口已完成复核`} />
         </div>
         {observationSummary?.excludedObservationCount > 0 && (
           <Alert tone="warning">
-            有 {observationSummary.excludedObservationCount} 条运行因缺少检验值、过程特征或完整运行边界而未进入优化模型。
+            有 {observationSummary.excludedObservationCount} 条运行因缺少检验值、过程特征或完整运行边界而未进入实验建议模型。
           </Alert>
         )}
 

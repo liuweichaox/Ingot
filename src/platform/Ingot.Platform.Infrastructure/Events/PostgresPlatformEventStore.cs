@@ -595,6 +595,68 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, IA
         return result;
     }
 
+    public async Task<IReadOnlyList<PlatformProcessExecutionSummarySource>> QueryExecutionSummarySourcesAsync(
+        IReadOnlyCollection<string> executionIds,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(executionIds);
+        await InitializeAsync(ct).ConfigureAwait(false);
+        var ids = executionIds
+            .Where(static value => !string.IsNullOrWhiteSpace(value))
+            .Select(static value => value.Trim())
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        if (ids.Length == 0)
+            return [];
+
+        await using var command = _dataSource.CreateCommand(
+            """
+            WITH sample_counts AS (
+              SELECT execution_id, count(*) AS sample_count
+              FROM production_events
+              WHERE execution_id = ANY(@execution_ids)
+                AND event_type = 'process.sample'
+              GROUP BY execution_id
+            )
+            SELECT event.ingest_id, event.edge_id, event.ingested_at,
+                   event.event_id, event.event_type, event.type_version,
+                   event.occurred_at, event.recorded_at, event.source,
+                   event.subject_type, event.subject_id, event.execution_id,
+                   event.context::text, event.data::text, event.seq,
+                   COALESCE(sample_counts.sample_count, 0)
+            FROM production_events AS event
+            LEFT JOIN sample_counts USING (execution_id)
+            WHERE event.execution_id = ANY(@execution_ids)
+              AND event.event_type <> 'process.sample'
+            ORDER BY event.execution_id, event.occurred_at, event.ingest_id;
+            """);
+        command.Parameters.AddWithValue("execution_ids", ids);
+        var eventsByExecution = new Dictionary<string, List<PlatformProductionEvent>>(StringComparer.Ordinal);
+        var sampleCounts = new Dictionary<string, int>(StringComparer.Ordinal);
+        await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
+        while (await reader.ReadAsync(ct).ConfigureAwait(false))
+        {
+            var row = ReadEvent(reader);
+            var executionId = row.Event.ExecutionId!;
+            if (!eventsByExecution.TryGetValue(executionId, out var rows))
+            {
+                rows = [];
+                eventsByExecution[executionId] = rows;
+            }
+            rows.Add(row);
+            sampleCounts[executionId] = checked((int)reader.GetInt64(15));
+        }
+        return ids
+            .Where(eventsByExecution.ContainsKey)
+            .Select(id => new PlatformProcessExecutionSummarySource
+            {
+                ExecutionId = id,
+                SampleCount = sampleCounts.GetValueOrDefault(id),
+                Events = eventsByExecution[id]
+            })
+            .ToArray();
+    }
+
     public async Task<DataObjectPage> QueryDataObjectsAsync(
         DataObjectQuery query,
         CancellationToken ct = default)

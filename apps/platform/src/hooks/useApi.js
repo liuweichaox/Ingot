@@ -9,6 +9,7 @@ export function useApi(url, { enabled = true, interval = 0, transform = identity
   const [error, setError] = useState("");
   const mounted = useRef(false);
   const requestIdRef = useRef(0);
+  const controllerRef = useRef(null);
   const dataRef = useRef(data);
   const transformRef = useRef(transform);
 
@@ -23,17 +24,23 @@ export function useApi(url, { enabled = true, interval = 0, transform = identity
       return;
     }
     const requestId = ++requestIdRef.current;
+    controllerRef.current?.abort();
+    const controller = new AbortController();
+    controllerRef.current = controller;
     setLoading(current => dataRef.current === null ? true : current);
     try {
-      const result = transformRef.current(await getJson(url));
+      const result = transformRef.current(await getJson(url, { signal: controller.signal }));
       if (mounted.current && requestId === requestIdRef.current) {
         dataRef.current = result;
         setData(result);
         setError("");
       }
     } catch (requestError) {
-      if (mounted.current && requestId === requestIdRef.current) setError(requestError.message);
+      if (requestError?.name !== "AbortError" && mounted.current && requestId === requestIdRef.current) {
+        setError(requestError.message);
+      }
     } finally {
+      if (controllerRef.current === controller) controllerRef.current = null;
       if (mounted.current && requestId === requestIdRef.current) setLoading(false);
     }
   }, [enabled, url]);
@@ -50,6 +57,8 @@ export function useApi(url, { enabled = true, interval = 0, transform = identity
     return () => {
       mounted.current = false;
       requestIdRef.current += 1;
+      controllerRef.current?.abort();
+      controllerRef.current = null;
       if (timer) window.clearInterval(timer);
     };
   }, [enabled, interval, load, url]);

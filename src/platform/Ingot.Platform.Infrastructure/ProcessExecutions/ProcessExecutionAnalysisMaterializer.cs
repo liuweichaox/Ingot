@@ -16,6 +16,17 @@ public sealed class ProcessExecutionAnalysisMaterializer(
         .Select(static _ => new SemaphoreSlim(1, 1))
         .ToArray();
 
+    public async Task<MaterializedProcessExecutionAnalysis?> TryLoadLatestAsync(
+        string executionId,
+        ProcessDataModel? dataModel,
+        ProcessAnalysisPlan? plan,
+        CancellationToken ct = default)
+    {
+        var key = CreateKey(executionId, dataModel, plan);
+        var snapshot = await store.TryLoadLatestAsync(key, ct).ConfigureAwait(false);
+        return snapshot is null ? null : FromSnapshot(snapshot, "cached");
+    }
+
     public async Task<MaterializedProcessExecutionAnalysis> GetOrComputeAsync(
         string executionId,
         IReadOnlyList<PlatformProductionEvent> rows,
@@ -33,13 +44,7 @@ public sealed class ProcessExecutionAnalysisMaterializer(
                 source);
         }
 
-        var key = new ProcessExecutionAnalysisMaterializationKey(
-            executionId,
-            ProcessExecutionAnalysisEngine.AlgorithmVersion,
-            dataModel?.ModelId ?? string.Empty,
-            dataModel?.Version ?? 0,
-            plan?.PlanId ?? string.Empty,
-            plan?.Version ?? 0);
+        var key = CreateKey(executionId, dataModel, plan);
         var gate = _executionLocks[
             (StringComparer.Ordinal.GetHashCode(executionId) & int.MaxValue) % _executionLocks.Length];
         await gate.WaitAsync(ct).ConfigureAwait(false);
@@ -113,6 +118,18 @@ public sealed class ProcessExecutionAnalysisMaterializer(
                 SourceEventCount = snapshot.Source.EventCount,
                 SourceContentHash = snapshot.Source.ContentHash
             });
+
+    private static ProcessExecutionAnalysisMaterializationKey CreateKey(
+        string executionId,
+        ProcessDataModel? dataModel,
+        ProcessAnalysisPlan? plan)
+        => new(
+            executionId,
+            ProcessExecutionAnalysisEngine.AlgorithmVersion,
+            dataModel?.ModelId ?? string.Empty,
+            dataModel?.Version ?? 0,
+            plan?.PlanId ?? string.Empty,
+            plan?.Version ?? 0);
 
     private static MaterializedProcessExecutionAnalysis QueryTime(
         WholeProcessExecutionAnalysisResult analysis,

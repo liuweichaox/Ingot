@@ -120,7 +120,7 @@ internal static class MappingEngine
                 if (DateTime.TryParseExact(raw, source.Format, CultureInfo.InvariantCulture,
                         DateTimeStyles.None, out var localWithOffset))
                     return ApplyOffset(localWithOffset, source.UtcOffset);
-                throw new FormatException($"时间戳 '{raw}' 不符合格式 '{source.Format}'。");
+                throw new FormatException($"时间戳不符合声明格式 '{source.Format}'。");
             }
             // 无显式偏移：格式自带时区则用之，否则按 UTC 处理。
             if (DateTimeOffset.TryParseExact(raw, source.Format, CultureInfo.InvariantCulture,
@@ -129,11 +129,11 @@ internal static class MappingEngine
             if (DateTime.TryParseExact(raw, source.Format, CultureInfo.InvariantCulture,
                     DateTimeStyles.None, out var local))
                 return new DateTimeOffset(DateTime.SpecifyKind(local, DateTimeKind.Utc));
-            throw new FormatException($"时间戳 '{raw}' 不符合格式 '{source.Format}'。");
+            throw new FormatException($"时间戳不符合声明格式 '{source.Format}'。");
         }
         if (DateTimeOffset.TryParse(raw, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out parsed))
             return parsed.ToUniversalTime();
-        throw new FormatException($"无法解析时间戳 '{raw}'（可在映射中指定 format）。");
+        throw new FormatException("无法解析时间戳（可在映射中指定 format）。");
     }
 
     private static DateTimeOffset ApplyOffset(DateTime local, string? utcOffset)
@@ -158,15 +158,15 @@ internal static class MappingEngine
     {
         "number" => double.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out var d)
             ? d
-            : throw new FormatException($"数据项 {code} 的值 '{raw}' 不是数值。"),
+            : throw new FormatException($"数据项 {code} 不是数值。"),
         "integer" => long.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var i)
             ? i
-            : throw new FormatException($"数据项 {code} 的值 '{raw}' 不是整数。"),
+            : throw new FormatException($"数据项 {code} 不是整数。"),
         "boolean" => raw.ToLowerInvariant() switch
         {
             "true" or "1" or "yes" or "on" => true,
             "false" or "0" or "no" or "off" => false,
-            _ => throw new FormatException($"数据项 {code} 的值 '{raw}' 不是布尔值。")
+            _ => throw new FormatException($"数据项 {code} 不是布尔值。")
         },
         "string" => raw,
         _ => throw new FormatException($"数据项 {code} 的类型 '{type}' 无效（number|integer|boolean|string）。")

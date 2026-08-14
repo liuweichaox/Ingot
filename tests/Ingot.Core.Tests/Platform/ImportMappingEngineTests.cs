@@ -79,7 +79,10 @@ public sealed class ImportMappingEngineTests
             "time,machine,product,execution,t,step\n" +
             "2026-06-01 08:00:00,M-01,LENS-A,CYC-1,not-a-number,4\n");
         var row = MappingEngine.ReadCsv(reader).Single();
-        Assert.Throws<FormatException>(() => MappingEngine.BuildEvent(row, SampleMapping(), 1, "history"));
+        var exception = Assert.Throws<FormatException>(
+            () => MappingEngine.BuildEvent(row, SampleMapping(), 1, "history"));
+        Assert.DoesNotContain("not-a-number", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("temp", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -89,5 +92,18 @@ public sealed class ImportMappingEngineTests
             "2026-06-01T08:00:00+08:00",
             new FieldSource { Column = "time" });
         Assert.Equal(new DateTimeOffset(2026, 6, 1, 0, 0, 0, TimeSpan.Zero), parsed);
+    }
+
+    [Fact]
+    public void ParseTimestamp_InvalidValue_DoesNotEchoSourceValue()
+    {
+        const string sourceValue = "CUSTOMER-SECRET-TIMESTAMP";
+
+        var exception = Assert.Throws<FormatException>(() => MappingEngine.ParseTimestamp(
+            sourceValue,
+            new FieldSource { Column = "time", Format = "yyyy-MM-dd HH:mm:ss", UtcOffset = "+08:00" }));
+
+        Assert.DoesNotContain(sourceValue, exception.Message, StringComparison.Ordinal);
+        Assert.Contains("yyyy-MM-dd HH:mm:ss", exception.Message, StringComparison.Ordinal);
     }
 }

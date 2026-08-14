@@ -5,13 +5,16 @@
 ## 用法
 
 ```bash
-# 1. 先本地校验（不联网）：打印前 3 行转换结果并跑完整契约校验
+# 1. 先本地校验（不联网）：校验完整文件，默认不打印真实值
 dotnet run --project tools/Ingot.ImportCli -- \
-  --file history.csv --mapping mapping.json --dry-run
+  --file .ingot-import/history.csv \
+  --mapping .ingot-import/mapping.json \
+  --dry-run
 
 # 2. 正式导入
 dotnet run --project tools/Ingot.ImportCli -- \
-  --file history.csv --mapping mapping.json \
+  --file .ingot-import/history.csv \
+  --mapping .ingot-import/mapping.json \
   --url http://localhost:8000 --token "$INGOT_EDGE_TOKEN"
 ```
 
@@ -21,6 +24,9 @@ dotnet run --project tools/Ingot.ImportCli -- \
 - `--seq-start` 缺省取启动时刻 unix 毫秒 ×1000，多次导入不同文件天然单调；**失败重跑用相同 `--seq-start`**，平台按 `eventId` 与 `(edgeId, seq)` 去重，重复行计入 `duplicates`，安全；
 - 历史时间戳受 `EventIngest:MaxPastDays`（默认约 10 年）窗口约束；
 - 缺失单元格不写入、不猜测（与生产事件规范一致）；
+- `--dry-run` 会校验完整文件但默认不输出转换后的真实事件；只有在受控终端排查时才显式添加 `--show-values`，该选项最多预览 3 行；
+- 映射和契约错误只报告行号、字段及期望格式，不回显出错的生产值；
+- 事件来源默认使用不含原始文件名的 `historical-data`。确需区分导入批次时使用不泄露项目事实的 `--source-tag <opaque-tag>`；
 - 映射文件字段见 `sample-mapping.json`：每个字段取列（`column`）或常量（`value`）；时间戳可指定 `format` 与 `utcOffset`；`values` 数据项类型为 `number|integer|boolean|string`。
 
 ## 周期边界

@@ -11,6 +11,15 @@ public interface IProcessExecutionAnalysisMaterializationStore
         ProcessExecutionAnalysisSourceFingerprint source,
         CancellationToken ct = default);
 
+    /// <summary>
+    ///     Loads the current ready snapshot without re-reading raw events to rebuild a fingerprint.
+    ///     Ingestion invalidates affected executions atomically, so only status=ready is reusable.
+    /// </summary>
+    Task<ProcessExecutionAnalysisSnapshot?> TryLoadLatestAsync(
+        ProcessExecutionAnalysisMaterializationKey key,
+        CancellationToken ct = default)
+        => Task.FromResult<ProcessExecutionAnalysisSnapshot?>(null);
+
     Task<ProcessExecutionAnalysisSnapshot> SaveAsync(
         ProcessExecutionAnalysisMaterializationKey key,
         ProcessExecutionAnalysisSourceFingerprint source,

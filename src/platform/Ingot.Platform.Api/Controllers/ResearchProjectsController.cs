@@ -573,7 +573,9 @@ public sealed class ResearchProjectsController(
                     assembly.ValidObservationCount,
                     excludedObservationCount =
                         assembly.Observations.Count - assembly.ValidObservationCount,
-                    observations = assembly.Observations
+                    observedExecutionKeys = assembly.Observations
+                        .Select(static observation => observation.ExecutionKey)
+                        .ToArray()
                 });
             },
             ct);

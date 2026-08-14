@@ -73,7 +73,7 @@ export function WorkbenchPage({ identity }) {
       description: activeOptimizationProjects ? "查看证据缺口、待审核实验或需要独立验证的工艺窗口。" : "将质量偏差或运行异常转为可验证的研发项目。",
       to: "/research-projects",
       tone: activeOptimizationProjects ? "border-blue-200 bg-blue-50" : "border-amber-200 bg-amber-50",
-      action: activeOptimizationProjects ? "进入优化" : "创建项目",
+      action: activeOptimizationProjects ? "进入研发" : "创建项目",
     };
   const platformAction = {
       title: `${onlineEdges}/${state.edges.length} 个现场节点在线`,
@@ -111,7 +111,7 @@ export function WorkbenchPage({ identity }) {
             </div>
             <div className="grid content-start gap-3 sm:grid-cols-2 lg:grid-cols-1">
               <div className="rounded-xl border border-white bg-white/80 p-4"><p className="text-xs font-medium text-slate-500">现场数据贯通</p><p className="mt-1 text-lg font-semibold text-slate-950">{onlineEdges}/{state.edges.length} 个节点在线</p></div>
-              <div className="rounded-xl border border-white bg-white/80 p-4"><p className="text-xs font-medium text-slate-500">优化闭环</p><p className="mt-1 text-lg font-semibold text-slate-950">{activeOptimizationProjects} 个项目推进中</p></div>
+              <div className="rounded-xl border border-white bg-white/80 p-4"><p className="text-xs font-medium text-slate-500">研发闭环</p><p className="mt-1 text-lg font-semibold text-slate-950">{activeOptimizationProjects} 个项目推进中</p></div>
             </div>
           </section>
           {!hasProductionFoundation && (
