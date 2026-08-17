@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readdir, readFile } from "node:fs/promises";
 import test from "node:test";
 import {
-  processSignalTraces,
+  processCurveTraces,
   qualityOutcomeTraces,
 } from "../src/charts/chartAdapters.js";
 
@@ -11,15 +11,19 @@ test("quality charts retain measured outcomes", () => {
   assert.deepEqual(outcomes.map(trace => trace.y[0]), [7, 2, 1]);
 });
 
-test("process traces preserve elapsed time, phase context, and baseline emphasis", () => {
-  const samples = [
-    { frameId: 1, occurredAt: "2026-07-23T08:00:00Z", phaseCode: "加热", values: { temperature: 500 } },
-    { frameId: 2, occurredAt: "2026-07-23T08:00:01Z", phaseCode: "保压", values: { temperature: 505 } },
-  ];
-  const traces = processSignalTraces([{ executionId: "execution-1", equipmentId: "PRESS-01", startedAt: "2026-07-23T08:00:00Z", isBaseline: true }], { "execution-1": samples }, "temperature");
+test("process traces preserve elapsed time, phase context, and signal metadata", () => {
+  const series = [{
+    signalCode: "temperature",
+    points: [
+      { frameId: 1, occurredAt: "2026-07-23T08:00:00Z", phaseCode: "加热", value: 500 },
+      { frameId: 2, occurredAt: "2026-07-23T08:00:01Z", phaseCode: "保压", value: 505 },
+    ],
+  }];
+  const traces = processCurveTraces(series, [{ code: "temperature", name: "模温", unit: "℃" }], "2026-07-23T08:00:00Z");
   assert.deepEqual(traces[0].x, [0, 1]);
   assert.deepEqual(traces[0].customdata[1], ["2026-07-23T08:00:01Z", "保压"]);
-  assert.equal(traces[0].line.width, 3);
+  assert.equal(traces[0].name, "模温");
+  assert.equal(traces[0].yaxis, "y");
 });
 
 test("React Plotly renderer is responsive, lazy, and used by quality analysis", async () => {

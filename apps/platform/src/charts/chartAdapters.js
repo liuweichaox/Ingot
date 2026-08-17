@@ -12,29 +12,29 @@ export function qualityOutcomeTraces(groups) {
   }));
 }
 
-export function processSignalTraces(rows, samplesById, signalCode) {
-  return (rows || []).map((row, index) => {
-    const samples = samplesById?.[row.executionId] || [];
-    const startedAt = new Date(row.startedAt || samples[0]?.occurredAt || 0).getTime();
-    const points = samples.map(sample => {
-      const value = numberOrNull(sample.values?.[signalCode]);
-      const occurredAt = new Date(sample.occurredAt).getTime();
+export function processCurveTraces(series, signalDefinitions, startedAt) {
+  const origin = new Date(startedAt || series?.[0]?.points?.[0]?.occurredAt || 0).getTime();
+  const definitions = new Map((signalDefinitions || []).map(signal => [signal.code, signal]));
+  return (series || []).map((item, index) => {
+    const definition = definitions.get(item.signalCode) || {};
+    const points = (item.points || []).map(point => {
+      const occurredAt = new Date(point.occurredAt).getTime();
+      const value = numberOrNull(point.value);
       return value == null || !Number.isFinite(occurredAt)
         ? null
-        : { x: (occurredAt - startedAt) / 1000, y: value, occurredAt: sample.occurredAt, phase: sample.phaseCode || "" };
+        : { x: (occurredAt - origin) / 1000, y: value, occurredAt: point.occurredAt, phase: point.phaseCode || "" };
     }).filter(Boolean);
-    const color = chartPalette[index % chartPalette.length];
     return {
       type: points.length > 2000 ? "scattergl" : "scatter",
       mode: "lines",
-      name: row.isBaseline
-        ? `基准 · ${row.equipmentId || row.label || row.executionId}`
-        : (row.label || `${row.equipmentId || "对象"} · ${shortTime(row.startedAt)}`),
+      name: definition.name || item.signalCode,
       x: points.map(point => point.x),
       y: points.map(point => point.y),
+      yaxis: index ? `y${index + 1}` : "y",
       customdata: points.map(point => [point.occurredAt, point.phase]),
-      line: { color, width: row.isBaseline ? 3 : 1.7, dash: row.isBaseline ? "solid" : "dot" },
-      hovertemplate: "相对时间 %{x:.1f}s<br>数值 %{y}<br>%{customdata[0]}<br>%{customdata[1]}<extra>%{fullData.name}</extra>",
+      line: { color: chartPalette[index % chartPalette.length], width: 2 },
+      connectgaps: false,
+      hovertemplate: `%{fullData.name}<br>相对时间 %{x:.1f}s<br>数值 %{y}${definition.unit ? ` ${definition.unit}` : ""}<br>%{customdata[0]}<br>阶段：%{customdata[1]}<extra></extra>`,
     };
   }).filter(trace => trace.x.length);
 }
@@ -43,8 +43,4 @@ function numberOrNull(value) {
   if (value == null || value === "") return null;
   const numeric = Number(value);
   return Number.isFinite(numeric) ? numeric : null;
-}
-
-function shortTime(value) {
-  return value ? new Date(value).toLocaleString("zh-CN", { hour12: false }) : "";
 }

@@ -93,6 +93,21 @@ export function StatusBadge({ value }) {
     indexed: "已索引",
     reviewed: "已复核",
     available: "可用",
+    inactive: "已停用",
+    maintenance: "维护中",
+    missing: "缺少组件",
+    valid: "有效",
+    invalid: "无效",
+    connected: "已连接",
+    disconnected: "未连接",
+    "query-time": "查询时计算",
+    archived: "已归档",
+    supported: "已支持",
+    candidate: "候选",
+    dispatched: "已下发",
+    accepted: "已接受",
+    modified: "已修改",
+    recorded: "待复核",
     confirmed: "已确认",
     approved: "已批准",
     selected: "已选择",
@@ -143,11 +158,11 @@ export function StatusBadge({ value }) {
     warning: "警告",
     unknown: "待上报",
   };
-  const tone = ["active", "ready", "online", "complete", "completed", "pass", "passed", "verified", "healthy", "published", "validated", "indexed", "reviewed", "available", "confirmed", "approved", "selected", "applied", "synchronized"].includes(normalized)
+  const tone = ["active", "ready", "online", "complete", "completed", "pass", "passed", "verified", "healthy", "published", "validated", "indexed", "reviewed", "available", "valid", "connected", "confirmed", "approved", "selected", "applied", "synchronized", "supported", "dispatched", "accepted"].includes(normalized)
     ? "success"
-    : ["fail", "failed", "offline", "rejected", "error", "suspended", "rollback-required", "unavailable", "cancelled"].includes(normalized)
+    : ["fail", "failed", "offline", "rejected", "error", "suspended", "rollback-required", "unavailable", "cancelled", "missing", "invalid", "disconnected"].includes(normalized)
       ? "danger"
-      : ["pending", "buffering", "validating", "waiting-execution-boundary", "applying", "rollback", "draft", "starting", "running", "uploaded", "dirty", "degraded", "in_progress", "review_pending", "queued", "completed_with_errors", "incomplete", "cancelling", "proposed", "investigating", "trialing", "planned", "warning", "concluded", "withdrawn", "rolled-back"].includes(normalized)
+      : ["pending", "buffering", "validating", "waiting-execution-boundary", "applying", "rollback", "draft", "starting", "running", "uploaded", "dirty", "degraded", "in_progress", "review_pending", "queued", "completed_with_errors", "incomplete", "cancelling", "proposed", "investigating", "trialing", "planned", "warning", "concluded", "withdrawn", "rolled-back", "maintenance", "candidate", "modified", "recorded"].includes(normalized)
         ? "warning"
         : "neutral";
   return <Badge tone={tone}>{labels[normalized] ?? String(value ?? "待上报")}</Badge>;

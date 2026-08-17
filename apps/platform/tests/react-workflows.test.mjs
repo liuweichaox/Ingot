@@ -20,6 +20,20 @@ const ingestionTasks = await readFile(new URL("../src/acquisition/IngestionTaskP
 const app = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
 const registryEditor = await readFile(new URL("../src/components/RegistryBusinessEditor.jsx", import.meta.url), "utf8");
 
+test("manufacturing and platform runtime statuses are localized", () => {
+  assert.match(ui, /inactive: "已停用"/);
+  assert.match(ui, /maintenance: "维护中"/);
+  assert.match(ui, /missing: "缺少组件"/);
+  assert.match(ui, /"query-time": "查询时计算"/);
+  assert.match(ui, /disconnected: "未连接"/);
+});
+
+test("research workspace rejects an incomplete detail response instead of crashing", () => {
+  assert.match(researchProjects, /if \(!next\?\.project\?\.projectId\)/);
+  assert.match(researchProjects, /\{!project \? \(/);
+  assert.match(researchProjects, /未找到可显示的研发项目/);
+});
+
 test("configuration center presents dependencies before final process configuration publishing", () => {
   assert.match(app, /path: "\/configuration"/);
   assert.match(pages, /export function ConfigurationHubPage/);
@@ -224,13 +238,16 @@ test("execution comparison submits the selection contract and renders business r
 
 test("execution detail presents actual processSpecification, source curves, phase features, and inspection measurements", () => {
   assert.match(pages, /\/api\/v1\/process-executions\/\$\{encodedId\}\/analysis/);
-  assert.match(pages, /useProcessSamples\(executionId\)/);
+  assert.match(pages, /useProcessCurves\(executionId, selectedSignalCodes/);
   assert.match(pages, /title="实际执行工艺规范"/);
-  assert.match(pages, /title="全过程曲线"/);
-  assert.match(pages, /processSignalTraces\(chartRun, samplesByRun, signal\.code\)/);
+  assert.match(pages, /title="过程曲线工作台"/);
+  assert.match(pages, /processCurveTraces\(curveResponse\.data\?\.series/);
   assert.doesNotMatch(pages, /extractProcessSamples/);
+  assert.match(pages, /已保形降采样/);
+  assert.match(pages, /role="tablist"/);
   assert.match(pages, /title="阶段特征"/);
-  assert.match(pages, /阶段号用于过程对齐，不参与运行完整性判定/);
+  assert.match(pages, /const stageFeatureRows = selectedSignals\.flatMap/);
+  assert.match(pages, /用于曲线对齐和特征计算/);
   assert.match(pages, /execution\.lifecycleComplete/);
   assert.doesNotMatch(pages, /execution\.phaseComplete|key: "isComplete", label: "状态"/);
   assert.match(pages, /keyField="recordId"/);

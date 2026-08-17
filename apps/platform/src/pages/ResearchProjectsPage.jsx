@@ -88,6 +88,9 @@ export function ResearchProjectsPage({ identity }) {
     setError("");
     try {
       const next = await getJson(`/api/v1/research-projects/${projectId}`);
+      if (!next?.project?.projectId) {
+        throw new Error("未找到该研发项目，项目可能已删除或尚未同步。");
+      }
       setWorkspace(current => ({
         ...next,
         optimizationObservationSummary: current?.project?.projectId === projectId
@@ -611,10 +614,10 @@ export function ResearchProjectsPage({ identity }) {
         {evidenceError && workspace && (
           <Alert tone="warning" title="项目证据准备度暂不可用">{evidenceError}</Alert>
         )}
-        {!workspace ? (
+        {!project ? (
           <Card>
             <p className="py-16 text-center text-sm text-slate-500">
-              {detailLoading ? "正在读取项目工作区…" : "无法读取当前研发项目。"}
+              {detailLoading ? "正在读取项目工作区…" : "未找到可显示的研发项目。"}
             </p>
           </Card>
         ) : (
