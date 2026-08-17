@@ -28,7 +28,7 @@ public sealed class AnalysisToolTests
         [
             Row(1, 1, "process.execution.started", later, "execution-1"),
             Row(2, 2, "process.execution.completed", earlier, "execution-1")
-        ]));
+        ]), EmptyTimeSeriesStore.Instance);
 
         var result = await tool.ExecuteAsync(
             new AnalysisToolCall { Tool = tool.Definition.Name },
@@ -49,7 +49,7 @@ public sealed class AnalysisToolTests
                 Count = 4200,
                 LatestOccurredAt = trueLatest,
                 EarliestOccurredAt = windowLatest
-            }));
+            }), EmptyTimeSeriesStore.Instance);
 
         var result = await tool.ExecuteAsync(
             new AnalysisToolCall { Tool = tool.Definition.Name },
@@ -71,7 +71,7 @@ public sealed class AnalysisToolTests
                 start.AddSeconds(index),
                 "execution-large"))
             .ToArray();
-        var tool = new CheckDataQualityTool(new StubEventReader(rows));
+        var tool = new CheckDataQualityTool(new StubEventReader(rows), EmptyTimeSeriesStore.Instance);
 
         var result = await tool.ExecuteAsync(
             new AnalysisToolCall { Tool = tool.Definition.Name },

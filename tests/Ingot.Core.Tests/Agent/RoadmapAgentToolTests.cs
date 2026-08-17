@@ -154,7 +154,7 @@ public sealed class RoadmapAgentToolTests
                 ["phase_code"] = "unknown",
                 ["phase_source"] = "estimated"
             })
-        ]));
+        ]), EmptyTimeSeriesStore.Instance);
 
         var result = await tool.ExecuteAsync(
             new AnalysisToolCall { Tool = tool.Definition.Name },

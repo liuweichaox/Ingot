@@ -35,24 +35,17 @@ public sealed class PostgresProcessExecutionScientificComputeIntegrationTests(
             999_999_999.998,
             1_000_000_000.004
         ];
-        var rows = values.Select((value, index) => new PlatformProductionEvent
+        var rows = values.Select((value, index) => new ProcessSampleFrame
         {
+            EventId = $"scientific-event-{index}",
             IngestId = index + 1,
-            EdgeId = "EDGE-SCIENTIFIC",
+            OccurredAt = startedAt.AddSeconds(index),
+            RecordedAt = startedAt.AddSeconds(index),
             IngestedAt = startedAt.AddSeconds(index).AddMilliseconds(5),
-            Event = ProductionEvent.Create(
-                "process.sample",
-                startedAt.AddSeconds(index),
-                "edge/EDGE-SCIENTIFIC/equipment/PRESS-01",
-                new ObjectRef("equipment", "PRESS-01"),
-                executionId,
-                data: new Dictionary<string, object?>
-                {
-                    ["values"] = new Dictionary<string, object?>
-                    {
-                        ["signal.large-offset"] = value
-                    }
-                })
+            NumericValues = new Dictionary<string, double>(StringComparer.Ordinal)
+            {
+                ["signal.large-offset"] = value
+            }
         }).ToArray();
         var model = new ProcessDataModel
         {
@@ -127,16 +120,35 @@ public sealed class PostgresProcessExecutionScientificComputeIntegrationTests(
         {
             await using var command = new NpgsqlCommand(
                 """
-                INSERT INTO time_series_samples (
-                  occurred_at, collection_point_id, signal_code, data_type, unit, category,
-                  numeric_value, quality_code, event_id, ingest_id, recorded_at, edge_id,
-                  source, subject_type, subject_id, execution_id, data_model_id,
-                  data_model_version, run_context)
+                INSERT INTO signal_definitions (
+                  data_model_id, data_model_version, signal_code, source_field, data_type,
+                  unit, category, definition_hash, first_seen_at, last_seen_at)
                 VALUES (
-                  @occurred_at, @point_id, @signal_code, 'double', 'V', 'process',
-                  @numeric_value, 'good', @event_id, @ingest_id, @recorded_at, @edge_id,
-                  @source, 'equipment', 'PRESS-01', @execution_id, 'scientific-model',
-                  1, '{}'::jsonb);
+                  'scientific-model', 1, @signal_code, @signal_code, 'double',
+                  'V', 'process', 'scientific-test', @occurred_at, @occurred_at)
+                ON CONFLICT (data_model_id, data_model_version, signal_code) DO NOTHING;
+
+                INSERT INTO collection_points (
+                  collection_point_id, edge_id, subject_type, subject_id, signal_code,
+                  first_seen_at, last_seen_at)
+                VALUES (
+                  @point_id, @edge_id, 'equipment', 'PRESS-01', @signal_code,
+                  @occurred_at, @occurred_at)
+                ON CONFLICT (collection_point_id) DO NOTHING;
+
+                INSERT INTO process_sample_frames (
+                  occurred_at, frame_id, event_id, recorded_at, ingested_at, edge_id,
+                  source, subject_type, subject_id, execution_id, data_model_id, data_model_version)
+                VALUES (
+                  @occurred_at, @ingest_id, @event_id, @recorded_at, @recorded_at, @edge_id,
+                  @source, 'equipment', 'PRESS-01', @execution_id, 'scientific-model', 1);
+
+                INSERT INTO process_sample_values (
+                  occurred_at, frame_id, point_key, quality_code, numeric_value)
+                VALUES (
+                  @occurred_at, @ingest_id,
+                  (SELECT point_key FROM collection_points WHERE collection_point_id = @point_id),
+                  0, @numeric_value);
                 """,
                 connection);
             command.Parameters.AddWithValue("occurred_at", startedAt.AddSeconds(index).UtcDateTime);

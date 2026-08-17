@@ -11,6 +11,7 @@ public static class TimeSeriesSampleProjector
     public static IReadOnlyList<SignalSample> Project(
         string edgeId,
         long ingestId,
+        DateTimeOffset ingestedAt,
         ProductionEvent evt,
         ResolvedProcessAnalysis? analysis)
     {
@@ -38,6 +39,7 @@ public static class TimeSeriesSampleProjector
             var sample = CreateSample(
                 edgeId,
                 ingestId,
+                ingestedAt,
                 evt,
                 analysis.DataModel,
                 definition,
@@ -65,6 +67,7 @@ public static class TimeSeriesSampleProjector
     private static SignalSample? CreateSample(
         string edgeId,
         long ingestId,
+        DateTimeOffset ingestedAt,
         ProductionEvent evt,
         ProcessDataModel model,
         ProcessDataItemDefinition definition,
@@ -113,6 +116,7 @@ public static class TimeSeriesSampleProjector
             Category = definition.Category,
             OccurredAt = evt.OccurredAt,
             RecordedAt = evt.RecordedAt,
+            IngestedAt = ingestedAt,
             EventId = evt.EventId,
             IngestId = ingestId,
             EdgeId = edgeId,
@@ -127,8 +131,7 @@ public static class TimeSeriesSampleProjector
             NumericValue = numericValue,
             IntegerValue = integerValue,
             BooleanValue = booleanValue,
-            TextValue = textValue,
-            RunContext = new Dictionary<string, string>(evt.Context, StringComparer.Ordinal)
+            TextValue = textValue
         };
     }
 

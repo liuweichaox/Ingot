@@ -11,4 +11,8 @@ public interface ITimeSeriesStore
     Task<IReadOnlyList<SignalSample>> QueryAsync(
         TimeSeriesQuery query,
         CancellationToken ct = default);
+
+    Task<IReadOnlyList<ProcessSampleFrame>> QueryFramesAsync(
+        TimeSeriesQuery query,
+        CancellationToken ct = default);
 }

@@ -6,6 +6,7 @@ using Ingot.Platform.Infrastructure.ProcessExecutions;
 using Ingot.Platform.Infrastructure.Events;
 using Ingot.Platform.Infrastructure.Inspections;
 using Ingot.Platform.Infrastructure.ProcessConfiguration;
+using Ingot.Platform.Infrastructure.TimeSeries;
 using Xunit;
 
 namespace Ingot.Core.Tests.Platform;
@@ -144,7 +145,8 @@ public sealed class QualityWorkflowTests
             new FakeInspectionStore([baselineVisual, historyManual]),
             reviewStore,
             new FakeMasterDataStore(),
-            new ProcessAnalysisResolver(new FakeProcessConfigurationStore()));
+            new ProcessAnalysisResolver(new FakeProcessConfigurationStore()),
+            timeSeries: new FakeTimeSeriesStore(rows));
 
         var result = await service.CompareWithHistoryAsync("BASE", 10);
 
@@ -186,7 +188,8 @@ public sealed class QualityWorkflowTests
             new FakeInspectionStore([]),
             new FakeReviewStore(),
             new FakeMasterDataStore(),
-            new ProcessAnalysisResolver(new FakeProcessConfigurationStore()));
+            new ProcessAnalysisResolver(new FakeProcessConfigurationStore()),
+            timeSeries: new FakeTimeSeriesStore(rows));
 
         var result = await service.CompareWithHistoryAsync("BASE", 10);
 
@@ -242,7 +245,8 @@ public sealed class QualityWorkflowTests
             new FakeInspectionStore([]),
             new FakeReviewStore(),
             new FakeMasterDataStore(),
-            new ProcessAnalysisResolver(new FakeProcessConfigurationStore()));
+            new ProcessAnalysisResolver(new FakeProcessConfigurationStore()),
+            timeSeries: new FakeTimeSeriesStore(rows));
 
         var execution = await service.GetProcessExecutionAsync("OPTIMIZED-RUN-01");
 
@@ -295,7 +299,8 @@ public sealed class QualityWorkflowTests
             new FakeInspectionStore([]),
             new FakeReviewStore(),
             new FakeMasterDataStore(),
-            new ProcessAnalysisResolver(new FakeProcessConfigurationStore(plannedProcessSpecification)));
+            new ProcessAnalysisResolver(new FakeProcessConfigurationStore(plannedProcessSpecification)),
+            new FakeTimeSeriesStore(rows));
 
         var execution = await service.GetProcessExecutionAsync("NO-ACTUAL-PARAMETERS");
 
@@ -340,7 +345,8 @@ public sealed class QualityWorkflowTests
             new FakeInspectionStore([]),
             new FakeReviewStore(),
             new FakeMasterDataStore(),
-            new ProcessAnalysisResolver(new FakeProcessConfigurationStore(analysisPlan: cohortPlan)));
+            new ProcessAnalysisResolver(new FakeProcessConfigurationStore(analysisPlan: cohortPlan)),
+            new FakeTimeSeriesStore(rows));
 
         var error = await Assert.ThrowsAsync<ArgumentException>(() =>
             service.CompareSelectedAsync("RUN-V1", ["RUN-V1", "RUN-V2"]));
@@ -385,7 +391,8 @@ public sealed class QualityWorkflowTests
             new FakeInspectionStore([]),
             new FakeReviewStore(),
             new FakeMasterDataStore(),
-            new ProcessAnalysisResolver(new FakeProcessConfigurationStore()));
+            new ProcessAnalysisResolver(new FakeProcessConfigurationStore()),
+            timeSeries: new FakeTimeSeriesStore(rows));
 
         var result = await service.QueryAsync(
             null, null, "LENS-A", null, null, null, null, null, "completed", 100);
@@ -424,7 +431,8 @@ public sealed class QualityWorkflowTests
             new FakeInspectionStore([]),
             new FakeReviewStore(),
             new FakeMasterDataStore(),
-            new ProcessAnalysisResolver(new FakeProcessConfigurationStore()));
+            new ProcessAnalysisResolver(new FakeProcessConfigurationStore()),
+            new FakeTimeSeriesStore(rows));
 
         var result = await service.QueryAsync(
             null, null, null, null, null, null, null, executionId, null, 100);
@@ -451,7 +459,8 @@ public sealed class QualityWorkflowTests
             new FakeInspectionStore([]),
             new FakeReviewStore(),
             new FakeMasterDataStore(),
-            new ProcessAnalysisResolver(new FakeProcessConfigurationStore()));
+            new ProcessAnalysisResolver(new FakeProcessConfigurationStore()),
+            new FakeTimeSeriesStore(rows));
 
         var result = await service.QueryAsync(
             null, null, "LENS-A", null, null, null, null, null, "completed", 1, 1);
@@ -501,7 +510,8 @@ public sealed class QualityWorkflowTests
             new FakeInspectionStore([]),
             new FakeReviewStore(),
             new FakeMasterDataStore(),
-            new ProcessAnalysisResolver(new FakeProcessConfigurationStore()));
+            new ProcessAnalysisResolver(new FakeProcessConfigurationStore()),
+            new FakeTimeSeriesStore(rows));
 
         var batch = await service.QueryAsync(
             null, null, null, null, null, null, null, null, "completed", 100,
@@ -534,7 +544,8 @@ public sealed class QualityWorkflowTests
         var service = new TimeWindowComparisonService(
             new FakeEventStore(rows),
             new ProcessAnalysisResolver(new FakeProcessConfigurationStore()),
-            new FakeInspectionStore([]));
+            new FakeInspectionStore([]),
+            timeSeries: new FakeTimeSeriesStore(rows));
 
         var result = await service.CompareAsync(new TimeWindowComparisonRequest
         {
@@ -589,7 +600,8 @@ public sealed class QualityWorkflowTests
         var service = new TimeWindowComparisonService(
             new FakeEventStore(rows),
             new ProcessAnalysisResolver(new FakeProcessConfigurationStore()),
-            new FakeInspectionStore([quality], scopes));
+            new FakeInspectionStore([quality], scopes),
+            new FakeTimeSeriesStore(rows));
 
         var result = await service.CompareAsync(new TimeWindowComparisonRequest
         {
@@ -743,6 +755,75 @@ public sealed class QualityWorkflowTests
         }
         public Task<PlatformEventScopeStats> GetScopeStatsAsync(PlatformEventQuery query, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<bool> CanConnectAsync(CancellationToken ct = default) => Task.FromResult(true);
+    }
+
+    private sealed class FakeTimeSeriesStore(IReadOnlyList<PlatformProductionEvent> events) : ITimeSeriesStore
+    {
+        public Task InitializeAsync(CancellationToken ct = default) => Task.CompletedTask;
+
+        public Task<IReadOnlyList<SignalSample>> QueryAsync(TimeSeriesQuery query, CancellationToken ct = default)
+        {
+            var rows = events
+                .Where(static row => row.Event.EventType == "process.sample")
+                .Where(row => string.IsNullOrWhiteSpace(query.ExecutionId) || row.Event.ExecutionId == query.ExecutionId)
+                .Where(row => string.IsNullOrWhiteSpace(query.SubjectType) || row.Event.Subject.Type == query.SubjectType)
+                .Where(row => string.IsNullOrWhiteSpace(query.SubjectId) || row.Event.Subject.Id == query.SubjectId)
+                .Where(row => !query.From.HasValue || row.Event.OccurredAt >= query.From.Value)
+                .Where(row => !query.To.HasValue || row.Event.OccurredAt < query.To.Value)
+                .SelectMany(row => ((IReadOnlyDictionary<string, object?>)row.Event.Data["values"]!).Select(pair =>
+                    new SignalSample
+                    {
+                        CollectionPointId = $"{row.Event.Subject.Type}:{row.Event.Subject.Id}:{pair.Key}",
+                        SignalCode = pair.Key,
+                        DataType = pair.Value is long ? "integer" : "double",
+                        Category = pair.Key == "process.stage_number" ? "stage" : "measurement",
+                        OccurredAt = row.Event.OccurredAt,
+                        RecordedAt = row.Event.RecordedAt,
+                        IngestedAt = row.IngestedAt,
+                        EventId = row.Event.EventId,
+                        IngestId = row.IngestId,
+                        EdgeId = row.EdgeId,
+                        Source = row.Event.Source,
+                        SubjectType = row.Event.Subject.Type,
+                        SubjectId = row.Event.Subject.Id,
+                        ExecutionId = row.Event.ExecutionId,
+                        PhaseCode = ((IReadOnlyDictionary<string, object?>)row.Event.Data["values"]!)
+                            .GetValueOrDefault("process.stage_number")?.ToString(),
+                        DataModelId = "optical-molding",
+                        DataModelVersion = 1,
+                        IntegerValue = pair.Value is long integer ? integer : null,
+                        NumericValue = pair.Value is double number ? number : null
+                    }))
+                .Take(query.Limit)
+                .ToArray();
+            return Task.FromResult<IReadOnlyList<SignalSample>>(rows);
+        }
+
+        public async Task<IReadOnlyList<ProcessSampleFrame>> QueryFramesAsync(
+            TimeSeriesQuery query,
+            CancellationToken ct = default)
+        {
+            var rows = await QueryAsync(query, ct);
+            return rows.GroupBy(static row => row.EventId, StringComparer.Ordinal)
+                .Select(static group =>
+                {
+                    var first = group.First();
+                    return new ProcessSampleFrame
+                    {
+                        EventId = first.EventId,
+                        IngestId = first.IngestId,
+                        OccurredAt = first.OccurredAt,
+                        RecordedAt = first.RecordedAt,
+                        IngestedAt = first.IngestedAt,
+                        PhaseCode = first.PhaseCode,
+                        NumericValues = group.Where(static row => row.NumericValue.HasValue || row.IntegerValue.HasValue)
+                            .ToDictionary(
+                                static row => row.SignalCode,
+                                static row => row.NumericValue ?? row.IntegerValue!.Value,
+                                StringComparer.Ordinal)
+                    };
+                }).ToArray();
+        }
     }
 
     private sealed class FakeInspectionStore(

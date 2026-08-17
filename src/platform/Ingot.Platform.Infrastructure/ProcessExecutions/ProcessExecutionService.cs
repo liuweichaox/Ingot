@@ -3,6 +3,7 @@ using Ingot.Contracts.Inspections;
 using Ingot.Platform.Infrastructure.Events;
 using Ingot.Platform.Infrastructure.Inspections;
 using Ingot.Platform.Infrastructure.ProcessConfiguration;
+using Ingot.Platform.Infrastructure.TimeSeries;
 
 namespace Ingot.Platform.Infrastructure.ProcessExecutions;
 
@@ -12,11 +13,13 @@ public sealed class ProcessExecutionService(
     IInspectionReviewStore reviews,
     IInspectionMasterDataStore masterData,
     ProcessAnalysisResolver analysisResolver,
+    ITimeSeriesStore timeSeries,
     ProcessExecutionAnalysisEngine? wholeProcessExecutionAnalysis = null,
     ProcessExecutionAnalysisMaterializer? materializer = null) : IProcessExecutionService
 {
     private readonly ProcessExecutionAnalysisEngine _wholeProcessExecutionAnalysis = wholeProcessExecutionAnalysis ?? new();
     private readonly ProcessExecutionAnalysisMaterializer? _materializer = materializer;
+    private readonly ITimeSeriesStore _timeSeries = timeSeries;
 
     public async Task<ProcessExecutionQueryResult> QueryAsync(
         DateTimeOffset? from,
@@ -254,7 +257,6 @@ public sealed class ProcessExecutionService(
         var first = ordered[0];
         var started = ordered.FirstOrDefault(static row => row.Event.EventType == "process.execution.started");
         var completed = ordered.LastOrDefault(static row => row.Event.EventType == "process.execution.completed");
-        var samples = ordered.Where(static row => row.Event.EventType == "process.sample").ToArray();
         var startedAt = started?.Event.OccurredAt ?? first.Event.OccurredAt;
         var context = ResolveContext(ordered);
         var processAnalysis = materialized.Analysis;
@@ -312,7 +314,7 @@ public sealed class ProcessExecutionService(
             ExternalOrderRef = context.GetValueOrDefault("external_order_ref"),
             ExternalBatchRef = context.GetValueOrDefault("external_batch_ref"),
             MaterialLotRef = context.GetValueOrDefault("material_lot_ref"),
-            SampleCount = sampleCountOverride ?? samples.Length,
+            SampleCount = sampleCountOverride ?? processAnalysis.Quality.SampleCount,
             ExpectedSampleCount = 0,
             ProcessDataQuality = processAnalysis.Quality,
             PhaseCount = phaseRows.Count(static phase => phase.Code != "unknown"),
@@ -343,11 +345,13 @@ public sealed class ProcessExecutionService(
         var ordered = rows.OrderBy(static row => row.Event.OccurredAt).ThenBy(static row => row.IngestId).ToArray();
         var startedAt = ordered.FirstOrDefault(static row => row.Event.EventType == "process.execution.started")?.Event.OccurredAt;
         var completedAt = ordered.LastOrDefault(static row => row.Event.EventType == "process.execution.completed")?.Event.OccurredAt;
+        var samples = await TimeSeriesFrameReader.QueryAllAsync(
+            _timeSeries, new TimeSeriesQuery { ExecutionId = executionId }, ct).ConfigureAwait(false);
         if (_materializer is not null)
         {
             return await _materializer.GetOrComputeAsync(
                 executionId,
-                ordered,
+                samples,
                 startedAt,
                 completedAt,
                 analysis?.DataModel,
@@ -355,10 +359,10 @@ public sealed class ProcessExecutionService(
                 ct).ConfigureAwait(false);
         }
 
-        var source = ProcessExecutionAnalysisMaterializer.CreateSourceFingerprint(ordered);
+        var source = ProcessExecutionAnalysisMaterializer.CreateSourceFingerprint(samples);
         return new MaterializedProcessExecutionAnalysis(
             _wholeProcessExecutionAnalysis.Analyze(
-                ordered,
+                samples,
                 startedAt,
                 completedAt,
                 analysis?.DataModel,

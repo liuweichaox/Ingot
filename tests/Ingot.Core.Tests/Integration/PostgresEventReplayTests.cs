@@ -73,6 +73,135 @@ public sealed class PostgresEventReplayTests(PostgresIntegrationFixture postgres
     }
 
     [LinuxDockerFact]
+    public async Task ProcessSample_ShouldPersistAndQueryOnlyTypedValues()
+    {
+        await postgres.EnsureSchemaAsync();
+        var options = Options.Create(new PlatformEventOptions());
+        await using var manufacturing = new PostgresManufacturingContextStore(postgres.Configuration);
+        await using var configurations = new PostgresProcessConfigurationStore(postgres.Configuration);
+        await using var materializations = new PostgresProcessExecutionAnalysisMaterializationStore(
+            postgres.Configuration,
+            NullLogger<PostgresProcessExecutionAnalysisMaterializationStore>.Instance);
+        await using var timeSeries = new PostgresTimeSeriesStore(
+            postgres.Configuration,
+            NullLogger<PostgresTimeSeriesStore>.Instance,
+            options);
+        await using var store = new PostgresPlatformEventStore(
+            postgres.Configuration,
+            NullLogger<PostgresPlatformEventStore>.Instance,
+            new PlatformEventMetrics(),
+            options,
+            manufacturing,
+            new ProcessAnalysisResolver(configurations),
+            materializations,
+            new ProcessExecutionAnalysisRecomputeQueue(),
+            timeSeries);
+
+        var suffix = Guid.NewGuid().ToString("N");
+        var modelId = $"single-source-model-{suffix}";
+        var executionId = $"single-source-execution-{suffix}";
+        var edgeId = $"EDGE-SINGLE-SOURCE-{suffix}";
+        var now = DateTimeOffset.UtcNow;
+        var signals = Enumerable.Range(1, 10)
+            .Select(index => ($"sensor.{index:00}", Value: 600d + index))
+            .ToArray();
+        await configurations.UpsertDataModelAsync(new ProcessDataModel
+        {
+            ModelId = modelId,
+            Version = 1,
+            Name = "单一事实源模型",
+            Status = ConfigurationStatuses.Published,
+            Acquisition = new AcquisitionModel
+            {
+                DataItems = signals.Select(signal => new ProcessDataItemDefinition
+                    {
+                        Code = signal.Item1,
+                        DisplayName = signal.Item1,
+                        DataType = "double",
+                        Nullable = false
+                    }).ToArray()
+            },
+            UpdatedAt = now
+        });
+        await configurations.UpsertAnalysisPlanAsync(new ProcessAnalysisPlan
+        {
+            PlanId = $"single-source-plan-{suffix}",
+            Version = 1,
+            Name = "单一事实源分析",
+            Status = ConfigurationStatuses.Published,
+            DataModelId = modelId,
+            DataModelVersion = 1,
+            UpdatedAt = now
+        });
+
+        var sample = ProductionEvent.Create(
+            "process.sample",
+            now,
+            $"edge/{edgeId}/equipment/PRESS-01",
+            new ObjectRef("equipment", "PRESS-01"),
+            executionId,
+            new Dictionary<string, string>
+            {
+                ["data_model_id"] = modelId,
+                ["data_model_version"] = "1"
+            },
+            new Dictionary<string, object?>
+            {
+                ["values"] = signals.ToDictionary(
+                    static signal => signal.Item1,
+                    static signal => (object?)signal.Value,
+                    StringComparer.Ordinal)
+            }) with { Seq = 1 };
+
+        var first = await store.IngestAsync(new EventBatchRequest { EdgeId = edgeId, Events = [sample] });
+        var replay = await store.IngestAsync(new EventBatchRequest { EdgeId = edgeId, Events = [sample] });
+
+        Assert.Equal(1, first.Accepted);
+        Assert.Equal(1, replay.Duplicates);
+        await using var connection = new NpgsqlConnection(postgres.ConnectionString);
+        await connection.OpenAsync();
+        await using (var command = new NpgsqlCommand(
+                         """
+                         SELECT
+                           (SELECT count(*) FROM production_events WHERE event_id = @event_id),
+                           (SELECT count(*) FROM process_sample_frames WHERE event_id = @event_id),
+                           (SELECT count(*) FROM process_sample_values AS value
+                            JOIN process_sample_frames AS frame
+                              ON frame.frame_id = value.frame_id AND frame.occurred_at = value.occurred_at
+                            WHERE frame.event_id = @event_id);
+                         """,
+                         connection))
+        {
+            command.Parameters.AddWithValue("event_id", sample.EventId);
+            await using var reader = await command.ExecuteReaderAsync();
+            Assert.True(await reader.ReadAsync());
+            Assert.Equal(0, reader.GetInt64(0));
+            Assert.Equal(1, reader.GetInt64(1));
+            Assert.Equal(10, reader.GetInt64(2));
+        }
+
+        Assert.Empty(await store.QueryAsync(new PlatformEventQuery
+        {
+            ExecutionId = executionId,
+            EventType = "process.sample"
+        }));
+        var typed = await timeSeries.QueryAsync(new TimeSeriesQuery
+        {
+            ExecutionId = executionId
+        });
+        Assert.Equal(10, typed.Count);
+        Assert.Equal(601d, typed.Single(static row => row.SignalCode == "sensor.01").NumericValue);
+        var frames = await timeSeries.QueryFramesAsync(new TimeSeriesQuery
+        {
+            ExecutionId = executionId,
+            Limit = 1
+        });
+        var frame = Assert.Single(frames);
+        Assert.Equal(10, frame.NumericValues.Count);
+        Assert.Equal(610d, frame.NumericValues["sensor.10"]);
+    }
+
+    [LinuxDockerFact]
     public async Task AcquisitionModel_ShouldRemainAuthoritative_WhenProcessSpecificationReferencesOlderModel()
     {
         await postgres.EnsureSchemaAsync();

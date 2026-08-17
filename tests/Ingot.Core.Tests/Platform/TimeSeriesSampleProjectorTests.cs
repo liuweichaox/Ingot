@@ -9,7 +9,7 @@ namespace Ingot.Core.Tests.Platform;
 public sealed class TimeSeriesSampleProjectorTests
 {
     [Fact]
-    public void Project_creates_typed_samples_with_unit_phase_and_immutable_context()
+    public void Project_creates_typed_samples_with_unit_and_phase()
     {
         var evt = CreateEvent(
             new Dictionary<string, object?>
@@ -24,7 +24,12 @@ public sealed class TimeSeriesSampleProjectorTests
                 ["temperature"] = "uncertain"
             });
 
-        var samples = TimeSeriesSampleProjector.Project("EDGE-01", 42, evt, CreateAnalysis());
+        var samples = TimeSeriesSampleProjector.Project(
+            "EDGE-01",
+            42,
+            DateTimeOffset.Parse("2026-07-24T12:00:02Z"),
+            evt,
+            CreateAnalysis());
 
         Assert.Equal(4, samples.Count);
         var temperature = Assert.Single(samples, sample => sample.SignalCode == "temperature");
@@ -32,7 +37,6 @@ public sealed class TimeSeriesSampleProjectorTests
         Assert.Equal("°C", temperature.Unit);
         Assert.Equal("20", temperature.PhaseCode);
         Assert.Equal(SignalQualityCodes.Uncertain, temperature.QualityCode);
-        Assert.Equal("series-a", temperature.RunContext["product_family_code"]);
         Assert.Equal("edge-01/device/furnace-01/temperature", temperature.CollectionPointId);
         Assert.Equal(20, Assert.Single(samples, sample => sample.SignalCode == "process.stage_number").IntegerValue);
         Assert.True(Assert.Single(samples, sample => sample.SignalCode == "heater_enabled").BooleanValue);
@@ -50,7 +54,12 @@ public sealed class TimeSeriesSampleProjectorTests
             ["mode"] = "press"
         });
 
-        var samples = TimeSeriesSampleProjector.Project("EDGE-01", 43, evt, CreateAnalysis());
+        var samples = TimeSeriesSampleProjector.Project(
+            "EDGE-01",
+            43,
+            DateTimeOffset.Parse("2026-07-24T12:00:02Z"),
+            evt,
+            CreateAnalysis());
 
         Assert.DoesNotContain(samples, sample => sample.SignalCode == "temperature");
         Assert.Equal(3, samples.Count);
@@ -64,10 +73,16 @@ public sealed class TimeSeriesSampleProjectorTests
             EventType = "process.execution.completed"
         };
 
-        Assert.Empty(TimeSeriesSampleProjector.Project("EDGE-01", 44, evt, CreateAnalysis()));
         Assert.Empty(TimeSeriesSampleProjector.Project(
             "EDGE-01",
             44,
+            DateTimeOffset.Parse("2026-07-24T12:00:02Z"),
+            evt,
+            CreateAnalysis()));
+        Assert.Empty(TimeSeriesSampleProjector.Project(
+            "EDGE-01",
+            44,
+            DateTimeOffset.Parse("2026-07-24T12:00:02Z"),
             evt with { EventType = "process.sample" },
             null));
     }

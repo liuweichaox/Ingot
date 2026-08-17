@@ -1,11 +1,10 @@
-using System.Collections;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
-using System.Text.Json;
 using Ingot.Contracts.Events;
 using Ingot.Contracts.ProcessConfiguration;
 using Ingot.Platform.Infrastructure.ProcessConfiguration;
+using Ingot.Platform.Infrastructure.TimeSeries;
 
 namespace Ingot.Platform.Infrastructure.ProcessExecutions;
 
@@ -18,31 +17,30 @@ public sealed class ProcessExecutionAnalysisEngine(
         featureDefinitions ?? new BuiltInFeatureDefinitionRegistry();
 
     public WholeProcessExecutionAnalysisResult Analyze(
-        IReadOnlyList<PlatformProductionEvent> rows,
+        IReadOnlyList<ProcessSampleFrame> rows,
         DateTimeOffset? startedAt,
         DateTimeOffset? completedAt,
         ProcessDataModel? dataModel,
         ProcessAnalysisPlan? plan)
     {
         var samplesByIngest = rows
-            .Where(static row => row.Event.EventType == "process.sample")
             .OrderBy(static row => row.IngestId)
             .ToArray();
         var outOfOrderCount = samplesByIngest
             .Zip(samplesByIngest.Skip(1))
-            .Count(static pair => pair.Second.Event.OccurredAt < pair.First.Event.OccurredAt);
+            .Count(static pair => pair.Second.OccurredAt < pair.First.OccurredAt);
         var duplicateTimestampCount = samplesByIngest
-            .GroupBy(static row => row.Event.OccurredAt)
+            .GroupBy(static row => row.OccurredAt)
             .Sum(static group => Math.Max(0, group.Count() - 1));
         var samples = samplesByIngest
-            .GroupBy(static row => row.Event.OccurredAt)
+            .GroupBy(static row => row.OccurredAt)
             .Select(static group => group.OrderByDescending(static row => row.IngestId).First())
-            .OrderBy(static row => row.Event.OccurredAt)
+            .OrderBy(static row => row.OccurredAt)
             .ThenBy(static row => row.IngestId)
             .ToArray();
         var intervals = samples
             .Zip(samples.Skip(1))
-            .Select(static pair => (pair.Second.Event.OccurredAt - pair.First.Event.OccurredAt).TotalMilliseconds)
+            .Select(static pair => (pair.Second.OccurredAt - pair.First.OccurredAt).TotalMilliseconds)
             .Where(static value => value >= 0)
             .ToArray();
         var medianInterval = Percentile(intervals, 0.5);
@@ -51,11 +49,12 @@ public sealed class ProcessExecutionAnalysisEngine(
         var interruptionThreshold = medianInterval is > 0 ? medianInterval.Value * 5d : double.PositiveInfinity;
         var sequenceGapCount = CountSourceSequenceGaps(samples);
         var sourceClockOffsets = samplesByIngest
-            .Select(static row => (row.Event.RecordedAt - row.Event.OccurredAt).TotalMilliseconds)
+            .Select(static row => (row.RecordedAt - row.OccurredAt).TotalMilliseconds)
             .Where(double.IsFinite)
             .ToArray();
         var platformIngestLatencies = samplesByIngest
-            .Select(static row => (row.IngestedAt - row.Event.RecordedAt).TotalMilliseconds)
+            .Where(static row => row.IngestedAt.HasValue)
+            .Select(static row => (row.IngestedAt!.Value - row.RecordedAt).TotalMilliseconds)
             .Where(double.IsFinite)
             .ToArray();
         var medianSourceClockOffset = Percentile(sourceClockOffsets, 0.5);
@@ -78,7 +77,7 @@ public sealed class ProcessExecutionAnalysisEngine(
             .ToArray() ?? [];
         var signalCoverage = selections.Select(selection =>
         {
-            var valid = samples.Count(sample => TryReadNumber(sample.Event.Data, selection.DataItemCode, out _));
+            var valid = samples.Count(sample => sample.NumericValues.ContainsKey(selection.DataItemCode));
             return new SignalDataCoverage
             {
                 Code = selection.DataItemCode,
@@ -164,7 +163,7 @@ public sealed class ProcessExecutionAnalysisEngine(
     }
 
     private ProcessSignalStatistic BuildSignal(
-        IReadOnlyList<PlatformProductionEvent> samples,
+        IReadOnlyList<ProcessSampleFrame> samples,
         DateTimeOffset? startedAt,
         DateTimeOffset? completedAt,
         ProcessDataItemDefinition definition,
@@ -173,8 +172,8 @@ public sealed class ProcessExecutionAnalysisEngine(
         IReadOnlyList<ProcessPhaseSummary> phases)
     {
         var points = samples
-            .Select(sample => TryReadNumber(sample.Event.Data, definition.Code, out var value)
-                ? new SignalPoint(sample.Event.OccurredAt, value)
+            .Select(sample => sample.NumericValues.TryGetValue(definition.Code, out var value)
+                ? new SignalPoint(sample.OccurredAt, value)
                 : null)
             .Where(static point => point is not null)
             .Cast<SignalPoint>()
@@ -314,7 +313,7 @@ public sealed class ProcessExecutionAnalysisEngine(
     }
 
     private static PhaseAnalysisResult BuildPhases(
-        IReadOnlyList<PlatformProductionEvent> samples,
+        IReadOnlyList<ProcessSampleFrame> samples,
         DateTimeOffset? completedAt,
         ProcessDataModel? dataModel,
         ProcessAnalysisPlan? plan)
@@ -323,32 +322,25 @@ public sealed class ProcessExecutionAnalysisEngine(
             !string.Equals(plan?.AlignmentMode, "stage-relative", StringComparison.Ordinal))
             return new PhaseAnalysisResult([], []);
 
-        var stageNumberItem = dataModel.Acquisition.DataItems
-            .SingleOrDefault(static item => item.Category == "stage");
-        if (stageNumberItem is null)
+        if (!dataModel.Acquisition.DataItems.Any(static item => item.Category == "stage"))
             return new PhaseAnalysisResult([], []);
 
         var resolved = samples.Select(sample =>
         {
-            var stageNumber = ProcessAnalysisResolver.ResolveStage(
-                sample.Event.Context,
-                sample.Event.Data,
-                dataModel);
+            var stageNumber = sample.PhaseCode;
             if (string.IsNullOrWhiteSpace(stageNumber))
             {
                 return new ResolvedPhaseSample(
-                    sample.Event.OccurredAt,
+                    sample.OccurredAt,
                     "unknown",
                     "阶段号缺失",
                     "unknown");
             }
-            var stageName = ProcessAnalysisResolver.ContextValue(sample.Event.Context, "process_stage_name")
-                            ?? ProcessAnalysisResolver.ContextValue(sample.Event.Context, "process_step_name")
-                            ?? $"阶段 {stageNumber}";
+            var stageName = $"阶段 {stageNumber}";
             return stageNumber == "unknown"
-                ? new ResolvedPhaseSample(sample.Event.OccurredAt, "unknown", "未归属", "unknown")
+                ? new ResolvedPhaseSample(sample.OccurredAt, "unknown", "未归属", "unknown")
                 : new ResolvedPhaseSample(
-                    sample.Event.OccurredAt,
+                    sample.OccurredAt,
                     stageNumber,
                     stageName,
                     "stage_number");
@@ -386,13 +378,11 @@ public sealed class ProcessExecutionAnalysisEngine(
     private static string Degrade(string current)
         => current == ProcessDataStatuses.Unavailable ? current : ProcessDataStatuses.Degraded;
 
-    private static int CountSourceSequenceGaps(IReadOnlyList<PlatformProductionEvent> samples)
+    private static int CountSourceSequenceGaps(IReadOnlyList<ProcessSampleFrame> samples)
     {
         var sequences = samples
-            .Select(static sample => ReadLong(sample.Event.Data, "sourceSequence") ??
-                                     ReadLong(sample.Event.Data, "source_sequence"))
-            .Where(static value => value.HasValue)
-            .Select(static value => value!.Value)
+            .Where(static sample => sample.SourceSequence.HasValue)
+            .Select(static sample => sample.SourceSequence!.Value)
             .Distinct()
             .Order()
             .ToArray();
@@ -515,41 +505,6 @@ public sealed class ProcessExecutionAnalysisEngine(
         return lower == upper
             ? ordered[lower]
             : ordered[lower] + (ordered[upper] - ordered[lower]) * (position - lower);
-    }
-
-    private static bool TryReadNumber(
-        IReadOnlyDictionary<string, object?> data,
-        string key,
-        out double value)
-    {
-        value = 0;
-        if (!data.TryGetValue("values", out var container))
-            return false;
-        if (container is JsonElement element && element.ValueKind == JsonValueKind.Object &&
-            element.TryGetProperty(key, out var property) && property.TryGetDouble(out value))
-            return double.IsFinite(value);
-        if (container is IReadOnlyDictionary<string, object?> readOnly &&
-            readOnly.TryGetValue(key, out var raw) && TryConvert(raw, out value))
-            return double.IsFinite(value);
-        return container is IDictionary dictionary && dictionary.Contains(key) &&
-               TryConvert(dictionary[key], out value) && double.IsFinite(value);
-    }
-
-    private static bool TryConvert(object? raw, out double value)
-    {
-        if (raw is JsonElement element && element.TryGetDouble(out value))
-            return true;
-        return double.TryParse(Convert.ToString(raw, CultureInfo.InvariantCulture), NumberStyles.Float,
-            CultureInfo.InvariantCulture, out value);
-    }
-
-    private static long? ReadLong(IReadOnlyDictionary<string, object?> data, string key)
-    {
-        if (!data.TryGetValue(key, out var raw))
-            return null;
-        if (raw is JsonElement element && element.TryGetInt64(out var parsed))
-            return parsed;
-        return long.TryParse(Convert.ToString(raw, CultureInfo.InvariantCulture), out parsed) ? parsed : null;
     }
 
     private sealed record SignalPoint(DateTimeOffset At, double Value);

@@ -3,6 +3,7 @@ using Ingot.Contracts.Inspections;
 using Ingot.Platform.Infrastructure.Events;
 using Ingot.Platform.Infrastructure.Inspections;
 using Ingot.Platform.Infrastructure.ProcessConfiguration;
+using Ingot.Platform.Infrastructure.TimeSeries;
 
 namespace Ingot.Platform.Infrastructure.ProcessExecutions;
 
@@ -10,9 +11,11 @@ public sealed class TimeWindowComparisonService(
     IPlatformEventStore events,
     ProcessAnalysisResolver analysisResolver,
     IInspectionRecordStore inspections,
+    ITimeSeriesStore timeSeries,
     ProcessExecutionAnalysisEngine? wholeProcessExecutionAnalysis = null) : ITimeWindowComparisonService
 {
     private readonly ProcessExecutionAnalysisEngine _wholeProcessExecutionAnalysis = wholeProcessExecutionAnalysis ?? new();
+    private readonly ITimeSeriesStore _timeSeries = timeSeries;
 
     public async Task<TimeWindowComparisonResult> CompareAsync(
         TimeWindowComparisonRequest request,
@@ -32,6 +35,7 @@ public sealed class TimeWindowComparisonService(
             throw new ArgumentException("每个窗口必须包含有效的对象和起止时间。", nameof(request));
 
         var rows = new Dictionary<string, IReadOnlyList<PlatformProductionEvent>>(StringComparer.Ordinal);
+        var samples = new Dictionary<string, IReadOnlyList<ProcessSampleFrame>>(StringComparer.Ordinal);
         foreach (var window in request.Windows)
         {
             rows[window.WindowId] = await QueryAllAsync(new PlatformEventQuery
@@ -40,6 +44,13 @@ public sealed class TimeWindowComparisonService(
                 SubjectId = window.SubjectId.Trim(),
                 From = window.From.ToUniversalTime(),
                 To = window.To.ToUniversalTime()
+            }, ct).ConfigureAwait(false);
+            samples[window.WindowId] = await TimeSeriesFrameReader.QueryAllAsync(_timeSeries, new TimeSeriesQuery
+            {
+                From = window.From.ToUniversalTime(),
+                To = window.To.ToUniversalTime(),
+                SubjectType = window.SubjectType.Trim(),
+                SubjectId = window.SubjectId.Trim(),
             }, ct).ConfigureAwait(false);
         }
         var baselineSelection = request.Windows.Single(item => item.WindowId == request.BaselineWindowId);
@@ -85,6 +96,7 @@ public sealed class TimeWindowComparisonService(
         var resultRows = request.Windows.Select(window => BuildRow(
             window,
             rows[window.WindowId],
+            samples[window.WindowId],
             analysis,
             scopesByWindow[window.WindowId],
             inspectionRecords)).ToArray();
@@ -106,13 +118,13 @@ public sealed class TimeWindowComparisonService(
     private TimeWindowComparisonRow BuildRow(
         TimeWindowSelection window,
         IReadOnlyList<PlatformProductionEvent> rows,
+        IReadOnlyList<ProcessSampleFrame> samples,
         ResolvedProcessAnalysis analysis,
         IReadOnlyList<InspectionScope> scopes,
         IReadOnlyList<InspectionRecord> inspectionRecords)
     {
-        var samples = rows.Where(static row => row.Event.EventType == "process.sample").ToArray();
         var processAnalysis = _wholeProcessExecutionAnalysis.Analyze(
-            rows,
+            samples,
             window.From.ToUniversalTime(),
             window.To.ToUniversalTime(),
             analysis.DataModel,
@@ -126,7 +138,7 @@ public sealed class TimeWindowComparisonService(
             From = window.From.ToUniversalTime(),
             To = window.To.ToUniversalTime(),
             EventCount = rows.Count,
-            SampleCount = samples.Length,
+            SampleCount = samples.Count,
             ProcessDataQuality = processAnalysis.Quality,
             Context = ResolveContext(rows),
             Quality = BuildQuality(scopes, inspectionRecords),
@@ -181,7 +193,7 @@ public sealed class TimeWindowComparisonService(
     }
 
     private static IReadOnlyDictionary<string, string> ResolveContext(IReadOnlyList<PlatformProductionEvent> rows)
-        => rows.Where(static row => row.Event.EventType == "process.sample")
+        => rows.Where(static row => row.Event.EventType == "process.execution.started")
                .Select(static row => row.Event.Context)
                .FirstOrDefault(static item => item.Count > 0)
            ?? rows.Select(static row => row.Event.Context).FirstOrDefault(static item => item.Count > 0)
@@ -205,7 +217,7 @@ public sealed class TimeWindowComparisonService(
         string source)
     {
         var sampleContexts = rows
-            .Where(static row => row.Event.EventType == "process.sample")
+            .Where(static row => row.Event.EventType == "process.execution.started")
             .Select(static row => row.Event.Context)
             .ToArray();
         foreach (var key in keys)

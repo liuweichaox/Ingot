@@ -59,7 +59,8 @@ Console.WriteLine($"Events: {settings.Events:N0}, batch size: {settings.BatchSiz
 if (settings.EventShape == EventShapes.ProcessSample)
 {
     Console.WriteLine($"Signals/event: {settings.SignalCount:N0}");
-    Console.WriteLine($"Expected projected signal rows: {(long)settings.Events * settings.SignalCount:N0}");
+    Console.WriteLine($"Expected sample frames: {settings.Events:N0}");
+    Console.WriteLine($"Expected typed value rows: {(long)settings.Events * settings.SignalCount:N0}");
 }
 Console.WriteLine($"Accepted: {accepted:N0}, duplicates: {duplicates:N0}");
 Console.WriteLine($"Elapsed: {stopwatch.Elapsed.TotalSeconds:F3}s");

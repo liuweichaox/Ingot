@@ -52,6 +52,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ITimeSeriesStore>(
             provider => provider.GetRequiredService<PostgresTimeSeriesStore>());
         services.AddHostedService<TimeSeriesStoreInitializerHostedService>();
+        services.AddHostedService<TimeSeriesRetentionHostedService>();
         services.AddSingleton<IPlatformEventStore, PostgresPlatformEventStore>();
         services.AddHostedService<EventStoreInitializerHostedService>();
         // 幂等键修剪（EventIngest:KeyRetentionDays > 0 时启用）：

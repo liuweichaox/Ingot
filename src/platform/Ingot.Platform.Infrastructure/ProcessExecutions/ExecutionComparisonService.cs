@@ -5,6 +5,7 @@ using Ingot.Platform.Infrastructure.Events;
 using Ingot.Platform.Infrastructure.Inspections;
 using Ingot.Platform.Infrastructure.ProcessConfiguration;
 using Ingot.Platform.Infrastructure.ProcessResearch;
+using Ingot.Platform.Infrastructure.TimeSeries;
 using System.Globalization;
 using System.Text.Json;
 
@@ -16,12 +17,14 @@ public sealed class ExecutionComparisonService(
     IInspectionReviewStore reviews,
     IInspectionMasterDataStore inspectionMasterData,
     ProcessAnalysisResolver analysisResolver,
+    ITimeSeriesStore timeSeries,
     ProcessExecutionAnalysisEngine? wholeProcessExecutionAnalysis = null,
     ProcessExecutionAnalysisMaterializer? materializer = null,
     IProcessOptimizerClient? optimizerClient = null) : IExecutionComparisonService
 {
     private readonly ProcessExecutionAnalysisEngine _wholeProcessExecutionAnalysis = wholeProcessExecutionAnalysis ?? new();
     private readonly ProcessExecutionAnalysisMaterializer? _materializer = materializer;
+    private readonly ITimeSeriesStore _timeSeries = timeSeries;
     private readonly ExecutionDiagnosisEngine _diagnosisEngine = new();
     private readonly ExecutionInvestigationReportBuilder _investigationBuilder = new();
 
@@ -653,7 +656,6 @@ public sealed class ExecutionComparisonService(
         var first = ordered[0];
         var started = ordered.FirstOrDefault(static row => row.Event.EventType == "process.execution.started");
         var completed = ordered.LastOrDefault(static row => row.Event.EventType == "process.execution.completed");
-        var samples = ordered.Where(static row => row.Event.EventType == "process.sample").ToArray();
         var wholeProcessExecution = materialized.Analysis;
         var visualRecord = inspectionRecords.Where(static record => record.Attachments.Count > 0)
             .OrderByDescending(static record => record.MeasuredAt)
@@ -692,7 +694,7 @@ public sealed class ExecutionComparisonService(
             ExternalBatchRef = ProcessAnalysisResolver.ContextValue(context, "external_batch_ref"),
             MaterialLotRef = ProcessAnalysisResolver.ContextValue(context, "material_lot_ref") ??
                              ProcessAnalysisResolver.ContextValue(context, "material_lot"),
-            SampleCount = sampleCountOverride ?? samples.Length,
+            SampleCount = sampleCountOverride ?? wholeProcessExecution.Quality.SampleCount,
             ExpectedSampleCount = 0,
             ProcessDataQuality = wholeProcessExecution.Quality,
             EvidenceWeight = wholeProcessExecution.Quality.Status switch
@@ -739,11 +741,13 @@ public sealed class ExecutionComparisonService(
         var ordered = rows.OrderBy(static row => row.Event.OccurredAt).ThenBy(static row => row.IngestId).ToArray();
         var startedAt = ordered.FirstOrDefault(static row => row.Event.EventType == "process.execution.started")?.Event.OccurredAt;
         var completedAt = ordered.LastOrDefault(static row => row.Event.EventType == "process.execution.completed")?.Event.OccurredAt;
+        var samples = await TimeSeriesFrameReader.QueryAllAsync(
+            _timeSeries, new TimeSeriesQuery { ExecutionId = executionId }, ct).ConfigureAwait(false);
         if (_materializer is not null)
         {
             return await _materializer.GetOrComputeAsync(
                 executionId,
-                ordered,
+                samples,
                 startedAt,
                 completedAt,
                 analysis?.DataModel,
@@ -751,10 +755,10 @@ public sealed class ExecutionComparisonService(
                 ct).ConfigureAwait(false);
         }
 
-        var source = ProcessExecutionAnalysisMaterializer.CreateSourceFingerprint(ordered);
+        var source = ProcessExecutionAnalysisMaterializer.CreateSourceFingerprint(samples);
         return new MaterializedProcessExecutionAnalysis(
             _wholeProcessExecutionAnalysis.Analyze(
-                ordered,
+                samples,
                 startedAt,
                 completedAt,
                 analysis?.DataModel,

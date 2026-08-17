@@ -1,7 +1,6 @@
-using Ingot.Contracts.Events;
 using Ingot.Contracts.ProcessConfiguration;
-using Ingot.Domain.Events;
 using Ingot.Platform.Infrastructure.ProcessExecutions;
+using Ingot.Platform.Infrastructure.TimeSeries;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
@@ -107,7 +106,7 @@ public sealed class ProcessExecutionAnalysisMaterializerTests
     private static ProcessExecutionAnalysisMaterializer Create(FakeStore store)
         => new(store, new ProcessExecutionAnalysisEngine(), NullLogger<ProcessExecutionAnalysisMaterializer>.Instance);
 
-    private static IReadOnlyList<PlatformProductionEvent> Rows()
+    private static IReadOnlyList<ProcessSampleFrame> Rows()
         =>
         [
             Row(1, 0, 1),
@@ -115,26 +114,17 @@ public sealed class ProcessExecutionAnalysisMaterializerTests
             Row(3, 2000, 3)
         ];
 
-    private static PlatformProductionEvent Row(long ingestId, int milliseconds, double value)
+    private static ProcessSampleFrame Row(long ingestId, int milliseconds, double value)
         => new()
         {
+            EventId = $"event-{ingestId}",
             IngestId = ingestId,
-            EdgeId = "edge-a",
+            OccurredAt = Start.AddMilliseconds(milliseconds),
+            RecordedAt = Start.AddMilliseconds(milliseconds),
             IngestedAt = Start.AddMilliseconds(milliseconds),
-            Event = new ProductionEvent
+            NumericValues = new Dictionary<string, double>(StringComparer.Ordinal)
             {
-                EventId = $"event-{ingestId}",
-                EventType = "process.sample",
-                EventTypeVersion = 1,
-                OccurredAt = Start.AddMilliseconds(milliseconds),
-                RecordedAt = Start.AddMilliseconds(milliseconds),
-                Source = "test",
-                Subject = new ObjectRef("equipment", "machine-a"),
-                ExecutionId = "execution-1",
-                Data = new Dictionary<string, object?>
-                {
-                    ["values"] = new Dictionary<string, object?> { ["temperature"] = value }
-                }
+                ["temperature"] = value
             }
         };
 

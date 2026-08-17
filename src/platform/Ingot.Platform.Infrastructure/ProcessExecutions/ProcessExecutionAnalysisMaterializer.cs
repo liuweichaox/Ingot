@@ -3,6 +3,7 @@ using Ingot.Contracts.ProcessConfiguration;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Ingot.Platform.Infrastructure.TimeSeries;
 
 namespace Ingot.Platform.Infrastructure.ProcessExecutions;
 
@@ -29,18 +30,18 @@ public sealed class ProcessExecutionAnalysisMaterializer(
 
     public async Task<MaterializedProcessExecutionAnalysis> GetOrComputeAsync(
         string executionId,
-        IReadOnlyList<PlatformProductionEvent> rows,
+        IReadOnlyList<ProcessSampleFrame> samples,
         DateTimeOffset? startedAt,
         DateTimeOffset? completedAt,
         ProcessDataModel? dataModel,
         ProcessAnalysisPlan? plan,
         CancellationToken ct = default)
     {
-        var source = CreateSourceFingerprint(rows);
+        var source = CreateSourceFingerprint(samples);
         if (!completedAt.HasValue)
         {
             return QueryTime(
-                engine.Analyze(rows, startedAt, completedAt, dataModel, plan),
+                engine.Analyze(samples, startedAt, completedAt, dataModel, plan),
                 source);
         }
 
@@ -57,7 +58,7 @@ public sealed class ProcessExecutionAnalysisMaterializer(
                 if (cached is not null)
                     return FromSnapshot(cached, "cached");
 
-                var analysis = engine.Analyze(rows, startedAt, completedAt, dataModel, plan);
+                var analysis = engine.Analyze(samples, startedAt, completedAt, dataModel, plan);
                 if (databaseEngine is not null &&
                     startedAt.HasValue &&
                     completedAt.HasValue &&
@@ -95,7 +96,7 @@ public sealed class ProcessExecutionAnalysisMaterializer(
                     "过程执行 {ExecutionId} 的分析物化不可用，降级为查询时确定性计算",
                     executionId);
                 return QueryTime(
-                    engine.Analyze(rows, startedAt, completedAt, dataModel, plan),
+                    engine.Analyze(samples, startedAt, completedAt, dataModel, plan),
                     source);
             }
         }
@@ -146,14 +147,14 @@ public sealed class ProcessExecutionAnalysisMaterializer(
                 SourceContentHash = source.ContentHash
             });
 
-    public static ProcessExecutionAnalysisSourceFingerprint CreateSourceFingerprint(IReadOnlyList<PlatformProductionEvent> rows)
+    public static ProcessExecutionAnalysisSourceFingerprint CreateSourceFingerprint(IReadOnlyList<ProcessSampleFrame> rows)
     {
         if (rows.Count == 0)
             return new ProcessExecutionAnalysisSourceFingerprint(0, 0, 0, Convert.ToHexString(SHA256.HashData([])).ToLowerInvariant());
 
         var ordered = rows
             .OrderBy(static row => row.IngestId)
-            .ThenBy(static row => row.Event.EventId)
+            .ThenBy(static row => row.EventId)
             .ToArray();
         var canonical = JsonSerializer.Serialize(ordered, new JsonSerializerOptions(JsonSerializerDefaults.Web));
         var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(canonical))).ToLowerInvariant();

@@ -141,25 +141,42 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, IA
                     effectiveEvent = evt with { Context = MergeCapturedContext(captured, evt.Context) };
                 }
 
-                var ingestId = await InsertEventAsync(connection, transaction, request.EdgeId, effectiveEvent, ct)
-                    .ConfigureAwait(false);
+                var isProcessSample = string.Equals(
+                    effectiveEvent.EventType,
+                    "process.sample",
+                    StringComparison.Ordinal);
+                var ingestedAt = DateTimeOffset.UtcNow;
+                var ingestId = isProcessSample
+                    ? await AllocateIngestIdAsync(connection, transaction, ct).ConfigureAwait(false)
+                    : await InsertEventAsync(
+                        connection,
+                        transaction,
+                        request.EdgeId,
+                        effectiveEvent,
+                        ct).ConfigureAwait(false);
+                var analysisKey = effectiveEvent.ExecutionId ??
+                                  $"{effectiveEvent.Subject.Type}:{effectiveEvent.Subject.Id}";
+                analysisConfigurations.TryGetValue(analysisKey, out var analysis);
+                var projectedSamples = await _timeSeriesStore.ProjectEventAsync(
+                    connection,
+                    transaction,
+                    request.EdgeId,
+                    ingestId,
+                    ingestedAt,
+                    effectiveEvent,
+                    analysis,
+                    ct).ConfigureAwait(false);
+                if (isProcessSample && projectedSamples == 0)
+                {
+                    throw new InvalidDataException(
+                        $"事件 {effectiveEvent.EventId} 没有可持久化的类型化过程值。");
+                }
                 await ProjectDataObjectSummaryAsync(
                     connection,
                     transaction,
                     request.EdgeId,
                     ingestId,
                     effectiveEvent,
-                    ct).ConfigureAwait(false);
-                var analysisKey = effectiveEvent.ExecutionId ??
-                                  $"{effectiveEvent.Subject.Type}:{effectiveEvent.Subject.Id}";
-                analysisConfigurations.TryGetValue(analysisKey, out var analysis);
-                await _timeSeriesStore.ProjectEventAsync(
-                    connection,
-                    transaction,
-                    request.EdgeId,
-                    ingestId,
-                    effectiveEvent,
-                    analysis,
                     ct).ConfigureAwait(false);
                 if (!string.IsNullOrWhiteSpace(effectiveEvent.ExecutionId))
                 {
@@ -463,7 +480,8 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, IA
             configurations[cacheKey] = analysis;
         }
         if (analysis is null)
-            return;
+            throw new ArgumentException(
+                $"事件 {evt.EventId} 无法解析已发布的工艺数据模型，不能持久化过程采样。");
         if (!evt.Data.TryGetValue("values", out var rawValues) || !TryReadObject(rawValues, out var values))
             throw new ArgumentException($"事件 {evt.EventId} 的 process.sample.data.values 必须是对象。");
 
@@ -613,9 +631,8 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, IA
             """
             WITH sample_counts AS (
               SELECT execution_id, count(*) AS sample_count
-              FROM production_events
+              FROM process_sample_frames
               WHERE execution_id = ANY(@execution_ids)
-                AND event_type = 'process.sample'
               GROUP BY execution_id
             )
             SELECT event.ingest_id, event.edge_id, event.ingested_at,
@@ -627,7 +644,6 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, IA
             FROM production_events AS event
             LEFT JOIN sample_counts USING (execution_id)
             WHERE event.execution_id = ANY(@execution_ids)
-              AND event.event_type <> 'process.sample'
             ORDER BY event.execution_id, event.occurred_at, event.ingest_id;
             """);
         command.Parameters.AddWithValue("execution_ids", ids);
@@ -692,10 +708,26 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, IA
                LIMIT @limit OFFSET @offset;
                """
             : $"""
-                              WITH filtered AS (
+                              WITH sample_frames AS (
+                                SELECT event_id, frame_id AS ingest_id, edge_id,
+                                       'process.sample'::text AS event_type, occurred_at,
+                                       frame.subject_type, frame.subject_id, frame.execution_id,
+                                       coalesce(snapshot.context, jsonb_build_object()) AS context
+                                FROM process_sample_frames AS frame
+                                LEFT JOIN operation_context_snapshots AS snapshot
+                                  ON snapshot.execution_id = frame.execution_id
+                              ),
+                              records AS (
                                 SELECT ingest_id, edge_id, event_type, occurred_at, subject_type,
                                        subject_id, execution_id, context
                                 FROM production_events
+                                UNION ALL
+                                SELECT ingest_id, edge_id, event_type, occurred_at, subject_type,
+                                       subject_id, execution_id, context
+                                FROM sample_frames
+                              ),
+                              filtered AS (
+                                SELECT * FROM records
                                 {where}
                               ),
                               aggregate_rows AS (
@@ -1003,6 +1035,20 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, IA
         command.Parameters.AddWithValue("context", NpgsqlDbType.Jsonb, JsonSerializer.Serialize(evt.Context, JsonOptions));
         command.Parameters.AddWithValue("data", NpgsqlDbType.Jsonb, JsonSerializer.Serialize(evt.Data, JsonOptions));
         return Convert.ToInt64(await command.ExecuteScalarAsync(ct).ConfigureAwait(false), CultureInfo.InvariantCulture);
+    }
+
+    private static async Task<long> AllocateIngestIdAsync(
+        NpgsqlConnection connection,
+        NpgsqlTransaction transaction,
+        CancellationToken ct)
+    {
+        await using var command = new NpgsqlCommand(
+            "SELECT nextval('production_events_ingest_id_seq');",
+            connection,
+            transaction);
+        return Convert.ToInt64(
+            await command.ExecuteScalarAsync(ct).ConfigureAwait(false),
+            CultureInfo.InvariantCulture);
     }
 
     private static async Task ProjectDataObjectSummaryAsync(

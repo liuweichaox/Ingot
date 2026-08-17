@@ -4,14 +4,17 @@ using Ingot.Platform.Infrastructure.Events;
 using Ingot.Platform.Infrastructure.ProcessExecutions;
 using Ingot.Contracts.Agents;
 using Ingot.Contracts.Events;
+using Ingot.Platform.Infrastructure.TimeSeries;
 
 namespace Ingot.Platform.Infrastructure.AgentTools;
 
 public sealed class CheckDataQualityTool(
     IChatEventReader events,
+    ITimeSeriesStore timeSeries,
     ProcessExecutionAnalysisEngine? wholeProcessExecutionAnalysis = null) : IAnalysisTool
 {
     private readonly ProcessExecutionAnalysisEngine _wholeProcessExecutionAnalysis = wholeProcessExecutionAnalysis ?? new();
+    private readonly ITimeSeriesStore _timeSeries = timeSeries;
 
     public AnalysisToolDefinition Definition { get; } = new()
     {
@@ -63,14 +66,18 @@ public sealed class CheckDataQualityTool(
                 row.Event.EventType.EndsWith(".completed", StringComparison.Ordinal) ||
                 row.Event.EventType.EndsWith(".cleared", StringComparison.Ordinal) ||
                 row.Event.EventType.EndsWith(".exited", StringComparison.Ordinal)));
-        var processQuality = correlations.Select(group =>
+        var processQuality = new List<ProcessDataQualitySummary>();
+        foreach (var group in correlations)
         {
             var startedAt = group.FirstOrDefault(static row =>
                 row.Event.EventType == "process.execution.started")?.Event.OccurredAt;
             var completedAt = group.LastOrDefault(static row =>
                 row.Event.EventType == "process.execution.completed")?.Event.OccurredAt;
-            return _wholeProcessExecutionAnalysis.Analyze(group.ToArray(), startedAt, completedAt, null, null).Quality;
-        }).ToArray();
+            var samples = await TimeSeriesFrameReader.QueryAllAsync(
+                _timeSeries, new TimeSeriesQuery { ExecutionId = group.Key }, ct).ConfigureAwait(false);
+            processQuality.Add(_wholeProcessExecutionAnalysis.Analyze(
+                samples, startedAt, completedAt, null, null).Quality);
+        }
         var degradedProcessProcessExecutions = processQuality.Count(static quality =>
             quality.Status == ProcessDataStatuses.Degraded);
         var unavailableProcessProcessExecutions = processQuality.Count(static quality =>

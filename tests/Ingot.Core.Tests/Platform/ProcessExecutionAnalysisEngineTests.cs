@@ -1,7 +1,7 @@
 using Ingot.Contracts.Events;
 using Ingot.Contracts.ProcessConfiguration;
-using Ingot.Domain.Events;
 using Ingot.Platform.Infrastructure.ProcessExecutions;
+using Ingot.Platform.Infrastructure.TimeSeries;
 using Xunit;
 
 namespace Ingot.Core.Tests.Platform;
@@ -281,7 +281,7 @@ public sealed class ProcessExecutionAnalysisEngineTests
         Assert.Contains("未注册的科研特征定义", error.Message, StringComparison.Ordinal);
     }
 
-    private static PlatformProductionEvent Sample(
+    private static ProcessSampleFrame Sample(
         long ingestId,
         int offsetMs,
         double value,
@@ -289,28 +289,19 @@ public sealed class ProcessExecutionAnalysisEngineTests
         int recordedDelayMs = 2,
         int ingestDelayMs = 3)
     {
-        var values = new Dictionary<string, object?> { ["temperature"] = value };
-        if (stageNumber is not null)
-            values["process.stage_number"] = long.Parse(stageNumber);
         var occurredAt = Start.AddMilliseconds(offsetMs);
         var recordedAt = occurredAt.AddMilliseconds(recordedDelayMs);
-        return new PlatformProductionEvent
+        return new ProcessSampleFrame
         {
+            EventId = $"event-{ingestId}",
             IngestId = ingestId,
-            EdgeId = "EDGE-1",
+            OccurredAt = occurredAt,
+            RecordedAt = recordedAt,
             IngestedAt = recordedAt.AddMilliseconds(ingestDelayMs),
-            Event = ProductionEvent.Create(
-                "process.sample",
-                occurredAt,
-                "edge/EDGE-1/plc",
-                new ObjectRef("equipment", "PLC-1"),
-                "execution-1",
-                data: new Dictionary<string, object?>
-                {
-                    ["values"] = values
-                }) with
+            PhaseCode = stageNumber,
+            NumericValues = new Dictionary<string, double>(StringComparer.Ordinal)
             {
-                RecordedAt = recordedAt
+                ["temperature"] = value
             }
         };
     }

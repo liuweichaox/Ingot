@@ -46,10 +46,8 @@ public interface IPlatformEventStore
     }
 
     /// <summary>
-    ///     Loads the low-frequency identity/lifecycle events needed by execution lists together
-    ///     with an exact sample count. Stores should override this method so list queries do not
-    ///     deserialize every process.sample payload. The default keeps non-Postgres test stores
-    ///     and adapters source-compatible.
+    ///     Loads the low-frequency identity and lifecycle events needed by execution lists.
+    ///     Stores that also own typed samples may override this to provide an exact sample count.
     /// </summary>
     async Task<IReadOnlyList<PlatformProcessExecutionSummarySource>> QueryExecutionSummarySourcesAsync(
         IReadOnlyCollection<string> executionIds,
@@ -62,8 +60,8 @@ public interface IPlatformEventStore
             .Select(static group => new PlatformProcessExecutionSummarySource
             {
                 ExecutionId = group.Key,
-                SampleCount = group.Count(static row => row.Event.EventType == "process.sample"),
-                Events = group.Where(static row => row.Event.EventType != "process.sample").ToArray()
+                SampleCount = 0,
+                Events = group.ToArray()
             })
             .ToArray();
     }

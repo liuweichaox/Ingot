@@ -107,7 +107,7 @@ public sealed class PostgresProcessExecutionScientificComputeEngine : IAsyncDisp
         CancellationToken ct)
     {
         await using var command = _dataSource.CreateCommand(
-            "SELECT EXISTS (SELECT 1 FROM time_series_samples WHERE execution_id = @execution_id LIMIT 1);");
+            "SELECT EXISTS (SELECT 1 FROM process_sample_frames WHERE execution_id = @execution_id LIMIT 1);");
         command.Parameters.AddWithValue("execution_id", executionId);
         return (bool)(await command.ExecuteScalarAsync(ct).ConfigureAwait(false) ?? false);
     }
@@ -123,10 +123,10 @@ public sealed class PostgresProcessExecutionScientificComputeEngine : IAsyncDisp
         await using var command = _dataSource.CreateCommand(
             """
             WITH event_phases AS (
-              SELECT occurred_at, MIN(phase_code) AS phase_code
-              FROM time_series_samples
+              SELECT DISTINCT ON (occurred_at) occurred_at, phase_code
+              FROM process_sample_frames
               WHERE execution_id = @execution_id
-              GROUP BY occurred_at
+              ORDER BY occurred_at, frame_id DESC
             ),
             marked AS (
               SELECT
@@ -210,15 +210,19 @@ public sealed class PostgresProcessExecutionScientificComputeEngine : IAsyncDisp
             """
             WITH points AS (
               SELECT
-                occurred_at,
-                ingest_id,
-                COALESCE(numeric_value, integer_value::DOUBLE PRECISION) AS value
-              FROM time_series_samples
-              WHERE execution_id = @execution_id
-                AND signal_code = @signal_code
-                AND occurred_at >= @started_at
-                AND occurred_at <= @ended_at
-                AND (numeric_value IS NOT NULL OR integer_value IS NOT NULL)
+                frame.occurred_at,
+                frame.frame_id AS ingest_id,
+                COALESCE(value.numeric_value, value.integer_value::DOUBLE PRECISION) AS value
+              FROM process_sample_values AS value
+              JOIN process_sample_frames AS frame
+                ON frame.frame_id = value.frame_id AND frame.occurred_at = value.occurred_at
+              JOIN collection_points AS point
+                ON point.point_key = value.point_key
+              WHERE frame.execution_id = @execution_id
+                AND point.signal_code = @signal_code
+                AND frame.occurred_at >= @started_at
+                AND frame.occurred_at <= @ended_at
+                AND (value.numeric_value IS NOT NULL OR value.integer_value IS NOT NULL)
             ),
             deduplicated AS (
               SELECT DISTINCT ON (occurred_at) occurred_at, value

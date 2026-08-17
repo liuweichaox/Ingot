@@ -1,7 +1,7 @@
 using Ingot.Contracts.Events;
 using Ingot.Contracts.ProcessConfiguration;
-using Ingot.Domain.Events;
 using Ingot.Platform.Infrastructure.ProcessExecutions;
+using Ingot.Platform.Infrastructure.TimeSeries;
 using Xunit;
 
 namespace Ingot.Core.Tests.Platform;
@@ -87,33 +87,25 @@ public sealed class GoldenProcessExecutionAnalysisTests
         Assert.Equal(hash, TempFeature(repeated, "mean").ComputationHash);
     }
 
-    private static IReadOnlyList<PlatformProductionEvent> BuildRealProcessExecution()
+    private static IReadOnlyList<ProcessSampleFrame> BuildRealProcessExecution()
     {
-        var events = new List<PlatformProductionEvent>();
+        var events = new List<ProcessSampleFrame>();
         long ingestId = 1;
         foreach (var (offsetSeconds, tUpper, force) in RealSamples)
         {
             var at = ProcessExecutionStart.AddSeconds(offsetSeconds);
-            events.Add(new PlatformProductionEvent
+            events.Add(new ProcessSampleFrame
             {
+                EventId = $"sample-{ingestId}",
                 IngestId = ingestId++,
-                EdgeId = "EDGE-1",
+                OccurredAt = at,
+                RecordedAt = at,
                 IngestedAt = at.AddMilliseconds(5),
-                Event = ProductionEvent.Create(
-                    "process.sample",
-                    at,
-                    "edge/EDGE-1/fx3u",
-                    new ObjectRef("equipment", "PRESS-01"),
-                    "CYC-0001",
-                    context: null,
-                    data: new Dictionary<string, object?>
-                    {
-                        ["values"] = new Dictionary<string, object?>
-                        {
-                            ["temperature"] = tUpper,
-                            ["force"] = force
-                        }
-                    })
+                NumericValues = new Dictionary<string, double>(StringComparer.Ordinal)
+                {
+                    ["temperature"] = tUpper,
+                    ["force"] = force
+                }
             });
         }
 
