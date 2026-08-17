@@ -21,7 +21,7 @@ export function processSignalTraces(rows, samplesById, signalCode) {
       const occurredAt = new Date(sample.occurredAt).getTime();
       return value == null || !Number.isFinite(occurredAt)
         ? null
-        : { x: (occurredAt - startedAt) / 1000, y: value, occurredAt: sample.occurredAt, phase: sample.phase || "" };
+        : { x: (occurredAt - startedAt) / 1000, y: value, occurredAt: sample.occurredAt, phase: sample.phaseCode || "" };
     }).filter(Boolean);
     const color = chartPalette[index % chartPalette.length];
     return {
@@ -37,18 +37,6 @@ export function processSignalTraces(rows, samplesById, signalCode) {
       hovertemplate: "相对时间 %{x:.1f}s<br>数值 %{y}<br>%{customdata[0]}<br>%{customdata[1]}<extra>%{fullData.name}</extra>",
     };
   }).filter(trace => trace.x.length);
-}
-
-export function extractProcessSamples(records) {
-  return (records || []).map(record => record.event || record)
-    .filter(event => event?.eventType === "process.sample")
-    .map(event => ({
-      occurredAt: event.occurredAt,
-      phase: event.context?.process_stage_name || event.context?.stage_number ||
-        event.context?.process_step_name || event.context?.process_step ||
-        event.context?.phase || event.context?.stage || event.context?.process_stage || "",
-      values: event.data?.values || event.data || {},
-    }));
 }
 
 function numberOrNull(value) {

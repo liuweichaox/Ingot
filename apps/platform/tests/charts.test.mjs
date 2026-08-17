@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { readdir, readFile } from "node:fs/promises";
 import test from "node:test";
 import {
-  extractProcessSamples,
   processSignalTraces,
   qualityOutcomeTraces,
 } from "../src/charts/chartAdapters.js";
@@ -13,10 +12,10 @@ test("quality charts retain measured outcomes", () => {
 });
 
 test("process traces preserve elapsed time, phase context, and baseline emphasis", () => {
-  const samples = extractProcessSamples([
-    { event: { eventType: "process.sample", occurredAt: "2026-07-23T08:00:00Z", context: { phase: "加热" }, data: { values: { temperature: 500 } } } },
-    { event: { eventType: "process.sample", occurredAt: "2026-07-23T08:00:01Z", context: { phase: "保压" }, data: { values: { temperature: 505 } } } },
-  ]);
+  const samples = [
+    { frameId: 1, occurredAt: "2026-07-23T08:00:00Z", phaseCode: "加热", values: { temperature: 500 } },
+    { frameId: 2, occurredAt: "2026-07-23T08:00:01Z", phaseCode: "保压", values: { temperature: 505 } },
+  ];
   const traces = processSignalTraces([{ executionId: "execution-1", equipmentId: "PRESS-01", startedAt: "2026-07-23T08:00:00Z", isBaseline: true }], { "execution-1": samples }, "temperature");
   assert.deepEqual(traces[0].x, [0, 1]);
   assert.deepEqual(traces[0].customdata[1], ["2026-07-23T08:00:01Z", "保压"]);

@@ -224,9 +224,11 @@ test("execution comparison submits the selection contract and renders business r
 
 test("execution detail presents actual processSpecification, source curves, phase features, and inspection measurements", () => {
   assert.match(pages, /\/api\/v1\/process-executions\/\$\{encodedId\}\/analysis/);
+  assert.match(pages, /useProcessSamples\(executionId\)/);
   assert.match(pages, /title="实际执行工艺规范"/);
   assert.match(pages, /title="全过程曲线"/);
   assert.match(pages, /processSignalTraces\(chartRun, samplesByRun, signal\.code\)/);
+  assert.doesNotMatch(pages, /extractProcessSamples/);
   assert.match(pages, /title="阶段特征"/);
   assert.match(pages, /阶段号用于过程对齐，不参与运行完整性判定/);
   assert.match(pages, /execution\.lifecycleComplete/);

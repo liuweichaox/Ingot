@@ -2,8 +2,9 @@ import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { getJson } from "../api/http";
-import { extractProcessSamples, processSignalTraces } from "../charts/chartAdapters";
+import { processSignalTraces } from "../charts/chartAdapters";
 import { extractRows, useApi } from "../hooks/useApi";
+import { useProcessSamples } from "../hooks/useProcessSamples";
 import { Alert, Badge, Button, Card, DataTable, EmptyState, Field, Input, Metric, Pagination, Page, Select, StatusBadge } from "../ui/components";
 import { formatTime, formatInteger, formatMeasurementValue, formatDuration, edgeStatus, eventTypeLabel, LoadingCard } from "./shared";
 import PlotlyChart from "../components/PlotlyChart";
@@ -246,14 +247,14 @@ export function ProcessExecutionDetailPage() {
   const encodedId = encodeURIComponent(executionId);
   const executionResponse = useApi(`/api/v1/process-executions?executionId=${encodedId}&limit=1`);
   const analysisResponse = useApi(`/api/v1/process-executions/${encodedId}/analysis`);
-  const evidenceResponse = useApi(`/api/v1/process-executions/${encodedId}`);
+  const sampleResponse = useProcessSamples(executionId);
   const eventResponse = useApi(`/api/v1/events?executionId=${encodedId}&limit=30`);
   const inspectionResponse = useApi(`/api/v1/inspection-records?executionId=${encodedId}&limit=50`);
   const execution = extractRows(executionResponse.data)[0];
   const analysis = analysisResponse.data;
   const events = extractRows(eventResponse.data);
   const inspections = extractRows(inspectionResponse.data);
-  const processSamples = extractProcessSamples(evidenceResponse.data?.events || []);
+  const processSamples = sampleResponse.data;
   const samplesByRun = { [executionId]: processSamples };
   const chartRun = execution ? [{
     executionId,
@@ -278,9 +279,9 @@ export function ProcessExecutionDetailPage() {
       ...measurement,
     })));
   const loading = executionResponse.loading || analysisResponse.loading ||
-    evidenceResponse.loading || eventResponse.loading || inspectionResponse.loading;
+    sampleResponse.loading || eventResponse.loading || inspectionResponse.loading;
   const error = executionResponse.error || analysisResponse.error ||
-    evidenceResponse.error || eventResponse.error || inspectionResponse.error;
+    sampleResponse.error || eventResponse.error || inspectionResponse.error;
   const dataQuality = execution?.processDataQuality;
   const completion = execution?.expectedSampleCount
     ? `${Math.round((Number(execution.sampleCount || 0) / Number(execution.expectedSampleCount)) * 100)}%`
@@ -510,7 +511,7 @@ export function ProcessExecutionDetailPage() {
                 {events.slice(0, 10).map(item => (
                   <div key={item.ingestId} className="flex items-start justify-between gap-4 rounded-xl border border-slate-100 bg-slate-50 p-3">
                     <div className="min-w-0">
-                      <Badge tone={item.event?.eventType?.startsWith("alarm.") ? "danger" : item.event?.eventType === "process.sample" ? "neutral" : "info"}>
+                      <Badge tone={item.event?.eventType?.startsWith("alarm.") ? "danger" : "info"}>
                         {eventTypeLabel(item.event?.eventType)}
                       </Badge>
                       <p className="mt-2 truncate text-sm text-slate-700">{item.event?.subject?.id || execution.equipmentId || "—"}</p>
