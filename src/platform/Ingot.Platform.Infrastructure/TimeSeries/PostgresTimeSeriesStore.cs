@@ -13,7 +13,7 @@ namespace Ingot.Platform.Infrastructure.TimeSeries;
 /// persisted source for process samples; lifecycle and business events remain immutable
 /// in production_events.
 /// </summary>
-public sealed class PostgresTimeSeriesStore : ITimeSeriesStore, IAsyncDisposable
+public sealed class PostgresTimeSeriesStore : ITimeSeriesStore, IDisposable
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private static readonly string[] StaticTagKeys =
@@ -28,21 +28,15 @@ public sealed class PostgresTimeSeriesStore : ITimeSeriesStore, IAsyncDisposable
     ];
 
     private readonly NpgsqlDataSource _dataSource;
-    private readonly ILogger<PostgresTimeSeriesStore> _logger;
-    private readonly PlatformEventOptions _options;
     private readonly SemaphoreSlim _initializeLock = new(1, 1);
     private volatile bool _initialized;
 
     public PostgresTimeSeriesStore(
-        IConfiguration configuration,
+        NpgsqlDataSource dataSource,
         ILogger<PostgresTimeSeriesStore> logger,
         IOptions<PlatformEventOptions> options)
     {
-        var connectionString = configuration.GetConnectionString("Events")
-            ?? throw new InvalidOperationException("缺少 ConnectionStrings:Events PostgreSQL 连接字符串。");
-        _dataSource = NpgsqlDataSource.Create(connectionString);
-        _logger = logger;
-        _options = options.Value;
+        _dataSource = dataSource;
     }
 
     public async Task InitializeAsync(CancellationToken ct = default)
@@ -55,36 +49,17 @@ public sealed class PostgresTimeSeriesStore : ITimeSeriesStore, IAsyncDisposable
             if (_initialized)
                 return;
 
-            var chunkInterval = NormalizeInterval(_options.ChunkTimeInterval);
-            await using (var hypertable = _dataSource.CreateCommand(
-                             $"SELECT create_hypertable('process_sample_frames', 'occurred_at', "
-                             + $"chunk_time_interval => INTERVAL '{chunkInterval}', "
-                             + "if_not_exists => TRUE, migrate_data => TRUE);"
-                             + $"SELECT create_hypertable('process_sample_values', 'occurred_at', "
-                             + $"chunk_time_interval => INTERVAL '{chunkInterval}', "
-                             + "if_not_exists => TRUE, migrate_data => TRUE);"))
-            {
-                await hypertable.ExecuteScalarAsync(ct).ConfigureAwait(false);
-            }
-            if (_options.CompressAfterDays > 0)
-            {
-                await using var compress = _dataSource.CreateCommand(
-                    "ALTER TABLE process_sample_frames SET ("
-                    + "timescaledb.compress, "
-                    + "timescaledb.compress_segmentby = 'execution_id', "
-                    + "timescaledb.compress_orderby = 'occurred_at DESC');"
-                    + $"SELECT add_compression_policy('process_sample_frames', "
-                    + $"INTERVAL '{_options.CompressAfterDays} days', if_not_exists => TRUE);"
-                    + "ALTER TABLE process_sample_values SET ("
-                    + "timescaledb.compress, "
-                    + "timescaledb.compress_segmentby = 'point_key', "
-                    + "timescaledb.compress_orderby = 'occurred_at DESC');"
-                    + $"SELECT add_compression_policy('process_sample_values', "
-                    + $"INTERVAL '{_options.CompressAfterDays} days', if_not_exists => TRUE);");
-                await compress.ExecuteScalarAsync(ct).ConfigureAwait(false);
-            }
+            await using var topology = _dataSource.CreateCommand(
+                """
+                SELECT count(*) = 2
+                FROM timescaledb_information.hypertables
+                WHERE hypertable_schema = current_schema()
+                  AND hypertable_name IN ('process_sample_frames', 'process_sample_values')
+                """);
+            if (await topology.ExecuteScalarAsync(ct).ConfigureAwait(false) is not true)
+                throw new InvalidOperationException(
+                    "标准测点 TimescaleDB 拓扑不存在；请先运行版本化数据库迁移。");
             _initialized = true;
-            _logger.LogInformation("标准测点时序存储拓扑已就绪");
         }
         finally
         {
@@ -545,17 +520,5 @@ public sealed class PostgresTimeSeriesStore : ITimeSeriesStore, IAsyncDisposable
             _ => throw new InvalidDataException($"数据库包含未知信号质量码 {value}。")
         };
 
-    private static string NormalizeInterval(string configured)
-        => System.Text.RegularExpressions.Regex.IsMatch(
-            configured.Trim(),
-            @"^\d+\s+(second|minute|hour|day|week|month|year)s?$",
-            System.Text.RegularExpressions.RegexOptions.IgnoreCase)
-            ? configured.Trim()
-            : "30 days";
-
-    public ValueTask DisposeAsync()
-    {
-        _initializeLock.Dispose();
-        return _dataSource.DisposeAsync();
-    }
+    public void Dispose() => _initializeLock.Dispose();
 }

@@ -5,17 +5,13 @@ using NpgsqlTypes;
 
 namespace Ingot.Platform.Infrastructure.Manufacturing;
 
-public sealed class PostgresManufacturingContextStore : IManufacturingContextStore, IAsyncDisposable
+public sealed class PostgresManufacturingContextStore : IManufacturingContextStore
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private readonly NpgsqlDataSource _dataSource;
 
-    public PostgresManufacturingContextStore(IConfiguration configuration)
-    {
-        var connectionString = configuration.GetConnectionString("Events")
-            ?? throw new InvalidOperationException("缺少 ConnectionStrings:Events PostgreSQL 连接字符串。");
-        _dataSource = NpgsqlDataSource.Create(connectionString);
-    }
+    public PostgresManufacturingContextStore(NpgsqlDataSource dataSource)
+        => _dataSource = dataSource;
 
     public Task InitializeAsync(CancellationToken ct = default) => Task.CompletedTask;
 
@@ -582,11 +578,6 @@ public sealed class PostgresManufacturingContextStore : IManufacturingContextSto
             AssemblyRevision = Deserialize<ToolingAssemblyRevision>(reader.GetString(2)),
             Assembly = Deserialize<ToolingAssembly>(reader.GetString(3))
         };
-    }
-
-    public async ValueTask DisposeAsync()
-    {
-        await _dataSource.DisposeAsync().ConfigureAwait(false);
     }
 
     private async Task ValidateAssemblyMembersAsync(

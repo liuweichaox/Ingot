@@ -68,6 +68,55 @@ def test_service_has_health_endpoint_and_no_process_memory_campaign_api():
     assert client.post("/campaigns", json={}).status_code == 404
 
 
+def test_design_service_generates_reproducible_classic_doe_without_state():
+    body = {
+        "method": "full-factorial",
+        "variables": [
+            {"name": "temperature", "low": 300.0, "high": 340.0, "unit": "C"},
+            {"name": "pressure", "low": 1.0, "high": 3.0, "unit": "MPa"},
+        ],
+        "levels": 2,
+        "replicates": 2,
+        "block_count": 2,
+        "seed": 42,
+    }
+    first = client.post("/v1/designs", json=body)
+    second = client.post("/v1/designs", json=body)
+
+    assert first.status_code == 200
+    assert first.json() == second.json()
+    payload = first.json()
+    assert payload["state_persisted"] is False
+    assert len(payload["runs"]) == 8
+    assert {run["block_key"] for run in payload["runs"]} == {"block-01", "block-02"}
+
+
+def test_design_service_supports_fractional_response_surface_and_latin_hypercube():
+    variables = [
+        {"name": "a", "low": 0.0, "high": 10.0},
+        {"name": "b", "low": 0.0, "high": 10.0},
+        {"name": "c", "low": 0.0, "high": 10.0},
+    ]
+    fractional = client.post("/v1/designs", json={
+        "method": "fractional-factorial", "variables": variables, "seed": 3,
+    })
+    ccd = client.post("/v1/designs", json={
+        "method": "response-surface", "variables": variables[:2],
+        "response_surface_family": "central-composite", "seed": 3,
+    })
+    lhs = client.post("/v1/designs", json={
+        "method": "latin-hypercube", "variables": variables,
+        "sample_count": 6, "seed": 3,
+    })
+
+    assert fractional.status_code == 200
+    assert fractional.json()["alias_structure"]
+    assert ccd.status_code == 200
+    assert ccd.json()["response_surface_family"] == "central-composite"
+    assert lhs.status_code == 200
+    assert len(lhs.json()["runs"]) == 6
+
+
 def test_service_runs_batch_multiobjective_qlognehvi_with_declared_features():
     body = {
         "campaign": {

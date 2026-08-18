@@ -31,6 +31,7 @@ Ingot 是开源工艺追因与优化系统。它把一次真实运行的生产�
 |---|---|---|
 | 首次评估或试用 | [快速开始](getting-started.md) | [常见问题](faq.md) |
 | 工艺或数据工程师 | [数据接入](data-connection.md) | [分析与优化](optimization.md) |
+| 工艺知识建设人员 | [机理知识设计](mechanism-knowledge.md) | [分析与优化](optimization.md) |
 | 平台运维与安全人员 | [部署运维](deployment.md) | [系统设计](design.md) |
 | 项目负责人或验证负责人 | [场景验证](rollout.md) | [发展规划](project-plan.md) |
 | 贡献者与集成人员 | [系统设计](design.md) | [开源依赖](open-source-dependencies.md) |

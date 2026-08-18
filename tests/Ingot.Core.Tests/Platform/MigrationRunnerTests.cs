@@ -33,7 +33,16 @@ public sealed class MigrationRunnerTests
             ["0023"] = "7188d64c40c6026386295125d4fdc998786776569e93e77f95a823707ecdbc04",
             ["0024"] = "3b2347a70dc0e77d7fcf55e29b029228628fd995eda059c0b27c72a4238baf6b",
             ["0025"] = "8156358a3b273501a26720353f18a58ab4ad7c70c5fef8bf724df4333c855b9c",
-            ["0026"] = "c5a2940312049b4893eed2397b45bcf669eb33e115dda0f783be2f92f279b29d"
+            ["0026"] = "c5a2940312049b4893eed2397b45bcf669eb33e115dda0f783be2f92f279b29d",
+            ["0027"] = "cf9fba60db986d5ab0c14238f61cb6136d99a756b4dc4dec74ca415ec0d2ec6f",
+            ["0028"] = "2a6af3ef3cf362820ab44a11a6cac2f41f8b7bed8f2ea6c3fd4f54653d1b7f86",
+            ["0029"] = "a2f0b723ed2d07af673bbcacfabf763ba47b1516af1a1df5a5304d6d90c3c9f9",
+            ["0030"] = "e2ca2d749058934a43ef52405e0bcd123f96321973077265f082b095fe9c68de",
+            ["0031"] = "f028cd31acb086455053408da863f4cf402c95af1595c4a621b83bba15afb838",
+            ["0032"] = "c8b4826c823280e8d0d46cd8592bcf8f5f2b803547d645c9a0704522a0948fe3",
+            ["0033"] = "bc262e491ff3cc089f1ee395e7fb0bcd522dd1f4baef2d519eb325870fda3bee",
+            ["0034"] = "7584c4adf05a8dc017dbcca979a8647ad96b15aedc751cc1c7c292d58fba060b",
+            ["0035"] = "83ba8879fc7b1a6a611afa6cb35f14f2c9094611650f2d1017278767fbd01a0f"
         };
 
     [Fact]

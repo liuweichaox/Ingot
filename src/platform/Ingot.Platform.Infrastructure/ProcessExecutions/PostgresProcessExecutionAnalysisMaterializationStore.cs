@@ -5,19 +5,17 @@ using NpgsqlTypes;
 
 namespace Ingot.Platform.Infrastructure.ProcessExecutions;
 
-public sealed class PostgresProcessExecutionAnalysisMaterializationStore : IProcessExecutionAnalysisMaterializationStore, IAsyncDisposable
+public sealed class PostgresProcessExecutionAnalysisMaterializationStore : IProcessExecutionAnalysisMaterializationStore
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     private readonly NpgsqlDataSource _dataSource;
 
     public PostgresProcessExecutionAnalysisMaterializationStore(
-        IConfiguration configuration,
+        NpgsqlDataSource dataSource,
         ILogger<PostgresProcessExecutionAnalysisMaterializationStore> logger)
     {
-        var connectionString = configuration.GetConnectionString("Events")
-            ?? throw new InvalidOperationException("缺少 ConnectionStrings:Events PostgreSQL 连接字符串。");
-        _dataSource = NpgsqlDataSource.Create(connectionString);
+        _dataSource = dataSource;
         _ = logger;
     }
 
@@ -130,16 +128,63 @@ public sealed class PostgresProcessExecutionAnalysisMaterializationStore : IProc
             return;
 
         await InitializeAsync(ct).ConfigureAwait(false);
-        await using var command = _dataSource.CreateCommand(
+        await using var connection = await _dataSource.OpenConnectionAsync(ct).ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
+        await MarkDirtyCoreAsync(
+            connection, transaction, ids, invalidatedSourceMaxIngestId, reason, ct).ConfigureAwait(false);
+        await transaction.CommitAsync(ct).ConfigureAwait(false);
+    }
+
+    public Task MarkDirtyAsync(
+        NpgsqlConnection connection,
+        NpgsqlTransaction transaction,
+        IReadOnlyCollection<string> executionIds,
+        long invalidatedSourceMaxIngestId,
+        string reason,
+        CancellationToken ct = default)
+    {
+        var ids = executionIds
+            .Where(static value => !string.IsNullOrWhiteSpace(value))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        return ids.Length == 0
+            ? Task.CompletedTask
+            : MarkDirtyCoreAsync(
+                connection, transaction, ids, invalidatedSourceMaxIngestId, reason, ct);
+    }
+
+    private static async Task MarkDirtyCoreAsync(
+        NpgsqlConnection connection,
+        NpgsqlTransaction transaction,
+        string[] ids,
+        long invalidatedSourceMaxIngestId,
+        string reason,
+        CancellationToken ct)
+    {
+        await using var command = new NpgsqlCommand(
             """
-            UPDATE execution_analysis_materializations
-            SET status = 'dirty',
-                invalidated_at = now(),
-                invalidated_source_max_ingest_id =
-                  GREATEST(invalidated_source_max_ingest_id, @invalidated_source_max_ingest_id),
-                invalidation_reason = @reason
-            WHERE execution_id = ANY(@execution_ids);
-            """);
+            WITH dirty AS (
+              UPDATE execution_analysis_materializations
+              SET status = 'dirty',
+                  invalidated_at = now(),
+                  invalidated_source_max_ingest_id =
+                    GREATEST(invalidated_source_max_ingest_id, @invalidated_source_max_ingest_id),
+                  invalidation_reason = @reason
+              WHERE execution_id = ANY(@execution_ids)
+              RETURNING execution_id, invalidated_source_max_ingest_id)
+            INSERT INTO execution_analysis_recompute_jobs(
+              execution_id,invalidated_source_max_ingest_id,reason,status,available_at,updated_at)
+            SELECT execution_id,max(invalidated_source_max_ingest_id),@reason,'queued',now(),now()
+            FROM dirty GROUP BY execution_id
+            ON CONFLICT(execution_id) DO UPDATE SET
+              invalidated_source_max_ingest_id=GREATEST(
+                execution_analysis_recompute_jobs.invalidated_source_max_ingest_id,
+                EXCLUDED.invalidated_source_max_ingest_id),
+              reason=EXCLUDED.reason,status='queued',available_at=now(),
+              lease_id=NULL,leased_at=NULL,updated_at=now();
+            """,
+            connection,
+            transaction);
         command.Parameters.AddWithValue("invalidated_source_max_ingest_id", invalidatedSourceMaxIngestId);
         command.Parameters.AddWithValue("reason", reason);
         command.Parameters.AddWithValue("execution_ids", ids);
@@ -167,26 +212,55 @@ public sealed class PostgresProcessExecutionAnalysisMaterializationStore : IProc
         return job;
     }
 
-    public async Task<ProcessExecutionAnalysisBackfillJob> SaveBackfillJobAsync(
-        ProcessExecutionAnalysisBackfillJob job,
+    public async Task<ProcessExecutionAnalysisBackfillLease?> ClaimBackfillJobAsync(
+        TimeSpan leaseTimeout,
         CancellationToken ct = default)
     {
-        await InitializeAsync(ct).ConfigureAwait(false);
+        var leaseId = Guid.CreateVersion7();
         await using var command = _dataSource.CreateCommand(
             """
-            UPDATE execution_analysis_backfill_jobs
-            SET status = @status, payload = @payload, updated_at = now()
-            WHERE job_id = @job_id;
+            WITH candidate AS (
+              SELECT job_id FROM execution_analysis_backfill_jobs
+              WHERE (status='queued' AND available_at <= now())
+                 OR (status='running' AND leased_at < now() - @lease_timeout)
+              ORDER BY available_at,created_at FOR UPDATE SKIP LOCKED LIMIT 1)
+            UPDATE execution_analysis_backfill_jobs job SET
+              status='running',lease_id=@lease_id,leased_at=now(),
+              attempt_count=attempt_count+1,updated_at=now()
+            FROM candidate WHERE job.job_id=candidate.job_id
+            RETURNING job.payload::text,job.attempt_count;
+            """);
+        command.Parameters.AddWithValue("lease_id", leaseId);
+        command.Parameters.AddWithValue("lease_timeout", leaseTimeout);
+        await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
+        if (!await reader.ReadAsync(ct).ConfigureAwait(false))
+            return null;
+        var job = JsonSerializer.Deserialize<ProcessExecutionAnalysisBackfillJob>(reader.GetString(0), JsonOptions)
+            ?? throw new InvalidOperationException("过程执行分析回填任务无法反序列化。");
+        return new ProcessExecutionAnalysisBackfillLease(job, leaseId, reader.GetInt32(1));
+    }
+
+    public async Task<bool> SaveClaimedBackfillJobAsync(
+        ProcessExecutionAnalysisBackfillJob job,
+        Guid leaseId,
+        bool releaseLease,
+        CancellationToken ct = default)
+    {
+        await using var command = _dataSource.CreateCommand(
+            """
+            UPDATE execution_analysis_backfill_jobs SET status=@status,payload=@payload,
+              lease_id=CASE WHEN @release THEN NULL ELSE lease_id END,
+              leased_at=CASE WHEN @release THEN NULL ELSE now() END,
+              available_at=CASE WHEN @status='queued' THEN now() ELSE available_at END,
+              updated_at=now()
+            WHERE job_id=@job_id AND lease_id=@lease_id AND status='running';
             """);
         command.Parameters.AddWithValue("job_id", job.JobId);
+        command.Parameters.AddWithValue("lease_id", leaseId);
         command.Parameters.AddWithValue("status", job.Status);
-        command.Parameters.AddWithValue(
-            "payload",
-            NpgsqlDbType.Jsonb,
-            JsonSerializer.Serialize(job, JsonOptions));
-        if (await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false) == 0)
-            throw new KeyNotFoundException("过程执行分析回填任务不存在。");
-        return job;
+        command.Parameters.AddWithValue("release", releaseLease);
+        command.Parameters.AddWithValue("payload", NpgsqlDbType.Jsonb, JsonSerializer.Serialize(job, JsonOptions));
+        return await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false) == 1;
     }
 
     public async Task<ProcessExecutionAnalysisBackfillJob?> GetBackfillJobAsync(
@@ -307,26 +381,60 @@ public sealed class PostgresProcessExecutionAnalysisMaterializationStore : IProc
         return rows;
     }
 
-    public async Task<IReadOnlyList<string>> ListDirtyExecutionIdsAsync(
-        int limit,
+    public async Task<ProcessExecutionAnalysisRecomputeLease?> ClaimRecomputeAsync(
+        TimeSpan leaseTimeout,
         CancellationToken ct = default)
     {
-        await InitializeAsync(ct).ConfigureAwait(false);
+        var leaseId = Guid.CreateVersion7();
         await using var command = _dataSource.CreateCommand(
             """
-            SELECT execution_id
-            FROM execution_analysis_materializations
-            WHERE status = 'dirty'
-            GROUP BY execution_id
-            ORDER BY MIN(invalidated_at)
-            LIMIT @limit;
+            WITH candidate AS (
+              SELECT execution_id FROM execution_analysis_recompute_jobs
+              WHERE (status='queued' AND available_at <= now())
+                 OR (status='running' AND leased_at < now() - @lease_timeout)
+              ORDER BY available_at,updated_at FOR UPDATE SKIP LOCKED LIMIT 1)
+            UPDATE execution_analysis_recompute_jobs job SET
+              status='running',lease_id=@lease_id,leased_at=now(),
+              attempt_count=attempt_count+1,updated_at=now()
+            FROM candidate WHERE job.execution_id=candidate.execution_id
+            RETURNING job.execution_id,job.attempt_count;
             """);
-        command.Parameters.AddWithValue("limit", Math.Clamp(limit, 1, 1000));
+        command.Parameters.AddWithValue("lease_id", leaseId);
+        command.Parameters.AddWithValue("lease_timeout", leaseTimeout);
         await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
-        var ids = new List<string>();
-        while (await reader.ReadAsync(ct).ConfigureAwait(false))
-            ids.Add(reader.GetString(0));
-        return ids;
+        return await reader.ReadAsync(ct).ConfigureAwait(false)
+            ? new ProcessExecutionAnalysisRecomputeLease(reader.GetString(0), leaseId, reader.GetInt32(1))
+            : null;
+    }
+
+    public async Task<bool> CompleteRecomputeAsync(
+        string executionId,
+        Guid leaseId,
+        CancellationToken ct = default)
+    {
+        await using var command = _dataSource.CreateCommand(
+            "DELETE FROM execution_analysis_recompute_jobs WHERE execution_id=@id AND lease_id=@lease_id AND status='running';");
+        command.Parameters.AddWithValue("id", executionId);
+        command.Parameters.AddWithValue("lease_id", leaseId);
+        return await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false) == 1;
+    }
+
+    public async Task<bool> RetryRecomputeAsync(
+        string executionId,
+        Guid leaseId,
+        TimeSpan delay,
+        CancellationToken ct = default)
+    {
+        await using var command = _dataSource.CreateCommand(
+            """
+            UPDATE execution_analysis_recompute_jobs SET status='queued',available_at=now()+@delay,
+              lease_id=NULL,leased_at=NULL,updated_at=now()
+            WHERE execution_id=@id AND lease_id=@lease_id AND status='running';
+            """);
+        command.Parameters.AddWithValue("id", executionId);
+        command.Parameters.AddWithValue("lease_id", leaseId);
+        command.Parameters.AddWithValue("delay", delay);
+        return await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false) == 1;
     }
 
     private static async Task UpsertMaterializationAsync(
@@ -566,8 +674,4 @@ public sealed class PostgresProcessExecutionAnalysisMaterializationStore : IProc
         command.Parameters.AddWithValue("source_content_hash", source.ContentHash);
     }
 
-    public async ValueTask DisposeAsync()
-    {
-        await _dataSource.DisposeAsync().ConfigureAwait(false);
-    }
 }

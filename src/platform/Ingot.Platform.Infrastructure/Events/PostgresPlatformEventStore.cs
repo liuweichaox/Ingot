@@ -1,6 +1,5 @@
 using System.Globalization;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using Ingot.Contracts.Analytics;
 using Ingot.Contracts.Events;
 using Ingot.Domain.Events;
@@ -19,47 +18,36 @@ namespace Ingot.Platform.Infrastructure.Events;
 ///     保证 EventId、(EdgeId, Seq) 幂等；记录表由 Timescale 按 occurred_at 自动分块，
 ///     并可按配置启用保留与压缩策略。
 /// </summary>
-public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, IAsyncDisposable
+public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, IDisposable
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     private readonly NpgsqlDataSource _dataSource;
     private readonly ILogger<PostgresPlatformEventStore> _logger;
     private readonly PlatformEventMetrics _metrics;
-    private readonly PlatformEventOptions _options;
     private readonly IManufacturingContextStore _manufacturingContexts;
     private readonly ProcessAnalysisResolver _analysisResolver;
     private readonly IProcessExecutionAnalysisMaterializationStore _analysisMaterializations;
-    private readonly ProcessExecutionAnalysisRecomputeQueue _analysisRecomputeQueue;
     private readonly PostgresTimeSeriesStore _timeSeriesStore;
     private readonly SemaphoreSlim _initializeLock = new(1, 1);
     private volatile bool _initialized;
 
-    // Postgres INTERVAL 字面量白名单：配置为可信来源，仍做防御式校验后才内联进 DDL。
-    [GeneratedRegex(@"^\d+\s+(second|minute|hour|day|week|month|year)s?$", RegexOptions.IgnoreCase)]
-    private static partial Regex IntervalPattern();
-
     public PostgresPlatformEventStore(
-        IConfiguration configuration,
+        NpgsqlDataSource dataSource,
         ILogger<PostgresPlatformEventStore> logger,
         PlatformEventMetrics metrics,
         IOptions<PlatformEventOptions> options,
         IManufacturingContextStore manufacturingContexts,
         ProcessAnalysisResolver analysisResolver,
         IProcessExecutionAnalysisMaterializationStore analysisMaterializations,
-        ProcessExecutionAnalysisRecomputeQueue analysisRecomputeQueue,
         PostgresTimeSeriesStore timeSeriesStore)
     {
-        var connectionString = configuration.GetConnectionString("Events")
-            ?? throw new InvalidOperationException("缺少 ConnectionStrings:Events PostgreSQL 连接字符串。");
-        _dataSource = NpgsqlDataSource.Create(connectionString);
+        _dataSource = dataSource;
         _logger = logger;
         _metrics = metrics;
-        _options = options.Value;
         _manufacturingContexts = manufacturingContexts;
         _analysisResolver = analysisResolver;
         _analysisMaterializations = analysisMaterializations;
-        _analysisRecomputeQueue = analysisRecomputeQueue;
         _timeSeriesStore = timeSeriesStore;
     }
 
@@ -75,7 +63,16 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, IA
                 return;
 
             await _timeSeriesStore.InitializeAsync(ct).ConfigureAwait(false);
-            await ConfigureHypertableAsync(ct).ConfigureAwait(false);
+            await using var topology = _dataSource.CreateCommand(
+                """
+                SELECT EXISTS (
+                  SELECT 1 FROM timescaledb_information.hypertables
+                  WHERE hypertable_schema = current_schema()
+                    AND hypertable_name = 'production_events')
+                """);
+            if (await topology.ExecuteScalarAsync(ct).ConfigureAwait(false) is not true)
+                throw new InvalidOperationException(
+                    "生产事件 TimescaleDB 拓扑不存在；请先运行版本化数据库迁移。");
 
             _initialized = true;
             _logger.LogInformation("TimescaleDB 中心事件存储拓扑已就绪");
@@ -199,29 +196,20 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, IA
             }
         }
 
-        await transaction.CommitAsync(ct).ConfigureAwait(false);
         if (acceptedMaxIngestByExecutionId.Count > 0)
         {
-            try
+            foreach (var pair in acceptedMaxIngestByExecutionId)
             {
-                foreach (var pair in acceptedMaxIngestByExecutionId)
-                {
-                    await _analysisMaterializations.MarkDirtyAsync(
-                        [pair.Key],
-                        pair.Value,
-                        "production_event_ingested",
-                        ct).ConfigureAwait(false);
-                }
-                _analysisRecomputeQueue.Enqueue(acceptedMaxIngestByExecutionId.Keys);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(
-                    ex,
-                    "事件已经提交，但周期分析失效标记失败：ExecutionIds={ExecutionIds}",
-                    string.Join(",", acceptedMaxIngestByExecutionId.Keys));
+                await _analysisMaterializations.MarkDirtyAsync(
+                    connection,
+                    transaction,
+                    [pair.Key],
+                    pair.Value,
+                    "production_event_ingested",
+                    ct).ConfigureAwait(false);
             }
         }
+        await transaction.CommitAsync(ct).ConfigureAwait(false);
         var response = new EventBatchResponse
         {
             Accepted = accepted,
@@ -920,49 +908,7 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, IA
         }
     }
 
-    public ValueTask DisposeAsync()
-    {
-        _initializeLock.Dispose();
-        return _dataSource.DisposeAsync();
-    }
-
-    // 把 production_events 变为 hypertable，并按配置注册保留 / 压缩策略。幂等：重复调用安全。
-    private async Task ConfigureHypertableAsync(CancellationToken ct)
-    {
-        var chunkInterval = IntervalPattern().IsMatch(_options.ChunkTimeInterval.Trim())
-            ? _options.ChunkTimeInterval.Trim()
-            : "30 days";
-        if (!string.Equals(chunkInterval, _options.ChunkTimeInterval.Trim(), StringComparison.Ordinal))
-            _logger.LogWarning(
-                "无效的 ChunkTimeInterval='{Configured}'，回退为 '30 days'。",
-                _options.ChunkTimeInterval);
-
-        // migrate_data 允许在已有数据的表上首次转 hypertable；已是 hypertable 时 if_not_exists 直接跳过。
-        await using (var hypertable = _dataSource.CreateCommand(
-            $"SELECT create_hypertable('production_events', 'occurred_at', "
-            + $"chunk_time_interval => INTERVAL '{chunkInterval}', if_not_exists => TRUE, migrate_data => TRUE);"))
-        {
-            await hypertable.ExecuteScalarAsync(ct).ConfigureAwait(false);
-        }
-
-        if (_options.CompressAfterDays > 0)
-        {
-            await using var compress = _dataSource.CreateCommand(
-                "ALTER TABLE production_events SET ("
-                + "timescaledb.compress, "
-                + "timescaledb.compress_segmentby = 'edge_id, subject_type, subject_id', "
-                + "timescaledb.compress_orderby = 'occurred_at DESC');"
-                + $"SELECT add_compression_policy('production_events', INTERVAL '{_options.CompressAfterDays} days', if_not_exists => TRUE);");
-            await compress.ExecuteScalarAsync(ct).ConfigureAwait(false);
-        }
-
-        if (_options.RetentionDays > 0)
-        {
-            await using var retention = _dataSource.CreateCommand(
-                $"SELECT add_retention_policy('production_events', INTERVAL '{_options.RetentionDays} days', if_not_exists => TRUE);");
-            await retention.ExecuteScalarAsync(ct).ConfigureAwait(false);
-        }
-    }
+    public void Dispose() => _initializeLock.Dispose();
 
     private static async Task<long?> GetMaxEdgeSeqAsync(
         NpgsqlConnection connection,

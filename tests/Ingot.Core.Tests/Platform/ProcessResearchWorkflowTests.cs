@@ -1,5 +1,6 @@
 using Ingot.Contracts.ProcessConfiguration;
 using Ingot.Contracts.ProcessResearch;
+using Ingot.Contracts.ResearchAssets;
 using Ingot.Platform.Api.Controllers;
 using Ingot.Platform.Infrastructure.ProcessConfiguration;
 using Ingot.Platform.Infrastructure.ProcessResearch;
@@ -10,6 +11,45 @@ namespace Ingot.Core.Tests.Platform;
 
 public sealed class ProcessResearchWorkflowTests
 {
+    [Fact]
+    public void UnitConverter_ConvertsKnownIndustrialAliases_AndRejectsUnknownDimensions()
+    {
+        Assert.True(ResearchUnitConverter.TryConvert(10, "bar", "MPa", out var mpa));
+        Assert.Equal(1, mpa, 8);
+        Assert.True(ResearchUnitConverter.TryConvert(1, "kgf/cm²", "bar", out var bar));
+        Assert.Equal(0.980665, bar, 6);
+        Assert.True(ResearchUnitConverter.TryConvert(25, "℃", "K", out var kelvin));
+        Assert.Equal(298.15, kelvin, 8);
+        Assert.False(ResearchUnitConverter.TryConvert(1, "HRC", "MPa", out _));
+    }
+
+    [Fact]
+    public async Task Hypothesis_PreservesCausalTemporalInteractionFailureAndFalsificationStructure()
+    {
+        var store = new MemoryStore();
+        var workflow = new ProcessResearchWorkflow(store);
+        var project = await workflow.CreateProjectAsync(ProjectDraft(), "engineer-a");
+
+        var saved = await workflow.SaveHypothesisAsync(project.ProjectId, new ResearchHypothesis
+        {
+            Statement = "保压温度通过材料流动状态影响压力响应。",
+            Rationale = "来源于过程曲线和工程机理。",
+            VariableCodes = ["holding-temperature", "press-force"],
+            CausalChain = [new ResearchHypothesisCausalLink { FromVariableCode="holding-temperature", ToVariableCode="press-force", Mechanism="温度改变材料黏度和压力传递。", Direction="decrease" }],
+            TemporalFeatures = [new ResearchHypothesisTemporalFeature { VariableCode="press-force", FeatureCode="pressure-rise", PhaseCode="holding", DelayMilliseconds=500, WindowMilliseconds=3000 }],
+            Interactions = [new ResearchHypothesisInteraction { VariableCodes=["holding-temperature","press-force"], Description="温度改变压力效应强度。" }],
+            FailureConditions = [new ResearchHypothesisFailureCondition { Condition="温度超过材料稳定边界", ObservableSignal="颜色或挥发物异常", RequiredResponse="停止实验并恢复基线" }],
+            FalsificationConditions = ["升高温度后压力响应及质量结果均没有方向性变化。"],
+            Confidence = 0.4
+        }, "engineer-a");
+
+        Assert.Single(saved.CausalChain);
+        Assert.Equal(500, Assert.Single(saved.TemporalFeatures).DelayMilliseconds);
+        Assert.Equal(2, Assert.Single(saved.Interactions).VariableCodes.Count);
+        Assert.Single(saved.FailureConditions);
+        Assert.Single(saved.FalsificationConditions);
+    }
+
     [Fact]
     public void Api_ExposesOnlySourceMaterializationForExperimentResults()
     {
@@ -125,6 +165,7 @@ public sealed class ProcessResearchWorkflowTests
                 ValidationOutcomeCode = "form-error",
                 ExpectedEffectDirection = ResearchHypothesisEffectDirections.Decrease,
                 MinimumEffect = 0.2,
+                FalsificationConditions = ["重复受控实验未观察到预期方向和最小效应时推翻该假设。"],
                 Confidence = 0.6
             },
             "engineer-a");
@@ -457,6 +498,68 @@ public sealed class ProcessResearchWorkflowTests
                 controls));
 
         Assert.Contains("不能伪装成两个实验条件", error.Message);
+    }
+
+    [Fact]
+    public void MechanismKnowledge_NarrowsHardBoundsAndRanksOnlyApplicableActiveClaims()
+    {
+        var projectId = Guid.CreateVersion7();
+        var project = ProjectDraft() with
+        {
+            ProjectId = projectId,
+            Context = new Dictionary<string, string> { ["material-grade"] = "A" }
+        };
+        var claim = new MechanismClaimVersion
+        {
+            ClaimId = Guid.CreateVersion7(),
+            ProjectId = projectId,
+            Status = MechanismClaimStatuses.Active,
+            Name = "安全工艺窗",
+            MechanismType = "constraint",
+            Statement = "材料 A 仅在收窄工艺窗内稳定。",
+            FalsificationCondition = "重复实验显示窗外仍稳定。",
+            Applicability =
+            [
+                new MechanismClaimApplicability
+                    { DimensionCode = "material-grade", DimensionValue = "A" }
+            ],
+            Constraints =
+            [
+                new MechanismClaimConstraint
+                {
+                    VariableCode = "holding-temperature", ConstraintKind = "safe-range",
+                    Minimum = 500, Maximum = 530, Unit = "Cel", Severity = "hard"
+                },
+                new MechanismClaimConstraint
+                {
+                    VariableCode = "press-force", ConstraintKind = "preferred-range",
+                    Minimum = 10, Maximum = 12, Unit = "kN", Severity = "soft"
+                }
+            ],
+            CreatedBy = "engineer-a",
+            ContentHash = new string('a', 64)
+        };
+
+        var selected = MechanismKnowledgeExperimentPolicy.Select(project, [claim], []);
+        var campaign = MechanismKnowledgeExperimentPolicy.ApplyHardConstraints(
+            ResearchExperimentOptimizer.BuildCampaign(
+                project, ResearchOptimizationIntents.ReachSpecification, null),
+            selected);
+        var temperature = Assert.Single(campaign.Variables, value => value.Name == "holding-temperature");
+        Assert.Equal(500, temperature.Low);
+        Assert.Equal(530, temperature.High);
+
+        var ranked = MechanismKnowledgeExperimentPolicy.Rank(
+            [Suggestion(520, 18, 0.9), Suggestion(520, 11, 0.1)],
+            selected,
+            project.Variables.Where(value => value.Role == ResearchVariableRoles.Control)
+                .ToDictionary(value => value.Code, StringComparer.Ordinal));
+        Assert.Equal(18, ranked[0].RecommendedParameters["press-force"]);
+
+        var error = Assert.Throws<ProcessResearchRuleException>(() =>
+            MechanismKnowledgeExperimentPolicy.ValidateHardConstraints(
+                Suggestion(540, 11, 0.5), selected));
+        Assert.Contains("holding-temperature", error.Message);
     }
 
     [Fact]
@@ -1675,11 +1778,14 @@ public sealed class ProcessResearchWorkflowTests
         ResearchProject project)
     {
         var currentProject = (await store.GetProjectAsync(project.ProjectId))!;
+        var mechanismHash = MechanismKnowledgeExperimentPolicy.SnapshotHash(
+            new AppliedMechanismKnowledge([], [], []));
         await store.CreateHistoricalReplayReportAsync(new ResearchHistoricalReplayReport
         {
             ReportId = Guid.CreateVersion7(),
             ProjectId = project.ProjectId,
             Status = ResearchHistoricalReplayStatuses.Reviewed,
+            MechanismKnowledgeSnapshotHash = mechanismHash,
             DatasetSnapshotHash = new string('1', 64),
             UniqueConditionCount = 5,
             SourceRunCount = 5,
@@ -1729,11 +1835,34 @@ public sealed class ProcessResearchWorkflowTests
         for (var index = 0; index < 5; index++)
         {
             var factors = Run($"shadow-{index}", index + 1, 500 + index * 5, 8 + index).Factors;
+            var shadowExperimentId = Guid.CreateVersion7();
+            await store.SaveExperimentAsync(new ResearchExperiment
+            {
+                ExperimentId = shadowExperimentId,
+                ProjectId = project.ProjectId,
+                Name = $"机理快照影子实验 {index + 1}",
+                DesignMethod = ResearchDesignMethods.BayesianOptimization,
+                Status = ResearchExperimentStatuses.Planned,
+                RunPlan = [Run($"shadow-source-{index}", 1, 500 + index * 5, 8 + index)],
+                ObjectiveCodes = ["form-error"],
+                StopRule = "只执行影子评估。",
+                RollbackPlan = "不下发设备。",
+                Optimization = new ResearchOptimizationMetadata
+                {
+                    ModelVersion = "botorch-test",
+                    InputHash = new string('3', 64),
+                    MechanismKnowledgeSnapshotHash = mechanismHash,
+                    Mode = ResearchOptimizationModes.Shadow,
+                    RunPredictions = [Prediction($"shadow-source-{index}", 0.3)]
+                },
+                CreatedAt = DateTimeOffset.UtcNow.AddDays(-1),
+                UpdatedAt = DateTimeOffset.UtcNow.AddDays(-1)
+            });
             await store.CreateShadowRecommendationAsync(new ResearchShadowRecommendation
             {
                 RecommendationId = Guid.CreateVersion7(),
                 ProjectId = project.ProjectId,
-                ExperimentId = Guid.CreateVersion7(),
+                ExperimentId = shadowExperimentId,
                 SuggestionExecutionKey = $"shadow-suggestion-{index}",
                 ActualExecutionKey = $"shadow-actual-{index}",
                 Decision = ResearchShadowDecisionStatuses.Accepted,
@@ -1907,6 +2036,20 @@ public sealed class ProcessResearchWorkflowTests
                     Unit = "kN"
                 }
             ]
+        };
+
+    private static OptimizerSuggestionOutput Suggestion(
+        double temperature,
+        double force,
+        double acquisition)
+        => new()
+        {
+            RecommendedParameters = new Dictionary<string, double>
+            {
+                ["holding-temperature"] = temperature,
+                ["press-force"] = force
+            },
+            AcquisitionValue = acquisition
         };
 
     private static ResearchProject ProjectDraft()

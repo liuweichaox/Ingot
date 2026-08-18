@@ -6,6 +6,8 @@ service restarts cannot lose business state.
 """
 from __future__ import annotations
 
+from itertools import combinations, product
+import random
 from typing import Literal
 
 from fastapi import FastAPI, HTTPException
@@ -132,6 +134,22 @@ class SuggestionRequest(StrictModel):
     n_samples: int = Field(default=256, ge=32, le=10_000)
 
 
+class DesignRequest(StrictModel):
+    method: Literal[
+        "full-factorial",
+        "fractional-factorial",
+        "response-surface",
+        "latin-hypercube",
+    ]
+    variables: list[VariableIn] = Field(min_length=1, max_length=12)
+    levels: int = Field(default=2, ge=2, le=5)
+    replicates: int = Field(default=1, ge=1, le=5)
+    block_count: int = Field(default=1, ge=1, le=5)
+    sample_count: int = Field(default=0, ge=0, le=40)
+    response_surface_family: Literal["central-composite", "box-behnken"] | None = None
+    seed: int = Field(default=0, ge=0, le=2_147_483_647)
+
+
 class DiagnosticFeatureIn(StrictModel):
     data_source: str = Field(min_length=1, max_length=300)
     source_kind: Literal["control-parameter", "process-feature"]
@@ -159,12 +177,19 @@ class HistoricalReplayObservationIn(ObservationIn):
     occurred_at: float | None = None
 
 
+class SoftConstraintIn(StrictModel):
+    variable_code: str = Field(min_length=1, max_length=120)
+    minimum: float | None = None
+    maximum: float | None = None
+
+
 class HistoricalReplayRequest(StrictModel):
     campaign: CampaignIn
     history: list[HistoricalReplayObservationIn] = Field(min_length=3, max_length=10_000)
     budget: int | None = Field(default=None, ge=1, le=10_000)
     n_seeds: int = Field(default=30, ge=1, le=100)
     initial_observation_count: int = Field(default=3, ge=0, le=10_000)
+    soft_constraints: list[SoftConstraintIn] = Field(default_factory=list, max_length=500)
 
 
 def _campaign_from_input(spec: CampaignIn) -> Campaign:
@@ -208,6 +233,155 @@ def ready() -> dict[str, str]:
         "botorch": botorch.__version__,
         "gpytorch": gpytorch.__version__,
         "torch": torch.__version__,
+    }
+
+
+def _validate_design_variables(values: list[VariableIn]) -> None:
+    names = [value.name for value in values]
+    if len(set(names)) != len(names):
+        raise ValueError("design variable names must be unique")
+    if any(value.high <= value.low for value in values):
+        raise ValueError("each design variable must have high > low")
+
+
+def _decode_level(value: VariableIn, coded: float) -> float:
+    return (value.low + value.high) / 2 + coded * (value.high - value.low) / 2
+
+
+def _full_factorial(values: list[VariableIn], levels: int) -> list[dict[str, float]]:
+    grids = [np.linspace(value.low, value.high, levels).tolist() for value in values]
+    return [dict(zip((value.name for value in values), point, strict=True)) for point in product(*grids)]
+
+
+def _fractional_factorial(values: list[VariableIn]) -> tuple[list[dict[str, float]], str, list[str]]:
+    if len(values) < 3:
+        return (
+            _full_factorial(values, 2),
+            "无部分因子缩减：两个因素以下使用完整二水平设计。",
+            ["因素少于三个时，部分因子设计等同于完整二水平设计。"],
+        )
+    base = values[:-1]
+    points: list[dict[str, float]] = []
+    for signs in product((-1.0, 1.0), repeat=len(base)):
+        last = float(np.prod(signs))
+        coded = [*signs, last]
+        points.append({value.name: _decode_level(value, sign) for value, sign in zip(values, coded, strict=True)})
+    generator = " × ".join(value.name for value in values)
+    resolution = len(values)
+    return (
+        points,
+        f"I = {generator}（分辨率 {resolution}）",
+        ["部分因子设计会混杂部分高阶交互；请在提交前确认别名结构与现场知识一致。"],
+    )
+
+
+def _central_composite(values: list[VariableIn]) -> list[dict[str, float]]:
+    # Inscribed CCD: factorial points remain inside the approved bounds and axial points touch them.
+    points: list[dict[str, float]] = []
+    for signs in product((-0.5, 0.5), repeat=len(values)):
+        points.append({value.name: _decode_level(value, sign) for value, sign in zip(values, signs, strict=True)})
+    for index, value in enumerate(values):
+        for sign in (-1.0, 1.0):
+            points.append({
+                candidate.name: _decode_level(candidate, sign if offset == index else 0.0)
+                for offset, candidate in enumerate(values)
+            })
+    points.append({value.name: _decode_level(value, 0.0) for value in values})
+    return points
+
+
+def _box_behnken(values: list[VariableIn]) -> list[dict[str, float]]:
+    if len(values) < 3:
+        raise ValueError("Box-Behnken design requires at least three variables")
+    points: list[dict[str, float]] = []
+    for left, right in combinations(range(len(values)), 2):
+        for left_sign, right_sign in product((-1.0, 1.0), repeat=2):
+            points.append({
+                value.name: _decode_level(
+                    value,
+                    left_sign if index == left else right_sign if index == right else 0.0,
+                )
+                for index, value in enumerate(values)
+            })
+    points.append({value.name: _decode_level(value, 0.0) for value in values})
+    return points
+
+
+def _latin_hypercube(values: list[VariableIn], sample_count: int, rng: random.Random) -> list[dict[str, float]]:
+    if sample_count < 2:
+        raise ValueError("latin hypercube design requires sample_count of at least two")
+    columns: list[list[float]] = []
+    for value in values:
+        strata = list(range(sample_count))
+        rng.shuffle(strata)
+        columns.append([
+            value.low + (stratum + rng.random()) / sample_count * (value.high - value.low)
+            for stratum in strata
+        ])
+    return [
+        {value.name: columns[index][row] for index, value in enumerate(values)}
+        for row in range(sample_count)
+    ]
+
+
+def _design_runs(request: DesignRequest) -> tuple[list[dict[str, float]], str | None, list[str], str | None]:
+    _validate_design_variables(request.variables)
+    family = request.response_surface_family
+    alias_structure: str | None = None
+    warnings: list[str] = []
+    if request.method == "full-factorial":
+        points = _full_factorial(request.variables, request.levels)
+    elif request.method == "fractional-factorial":
+        if request.levels != 2:
+            raise ValueError("fractional factorial design supports exactly two levels")
+        points, alias_structure, warnings = _fractional_factorial(request.variables)
+    elif request.method == "response-surface":
+        if len(request.variables) < 2:
+            raise ValueError("response surface design requires at least two variables")
+        family = family or "central-composite"
+        if family == "central-composite":
+            points = _central_composite(request.variables)
+        else:
+            points = _box_behnken(request.variables)
+    else:
+        points = _latin_hypercube(
+            request.variables,
+            request.sample_count,
+            random.Random(request.seed),
+        )
+    if len(points) * request.replicates > 40:
+        raise ValueError("design exceeds the 40-run experiment limit after replication")
+    return points, alias_structure, warnings, family
+
+
+@app.post("/v1/designs")
+def create_design(request: DesignRequest) -> dict:
+    try:
+        points, alias_structure, warnings, family = _design_runs(request)
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    rng = random.Random(request.seed)
+    runs = []
+    for replicate in range(request.replicates):
+        for condition, params in enumerate(points, start=1):
+            runs.append({
+                "condition_key": f"condition-{condition:02d}",
+                "replicate_key": f"replicate-{replicate + 1:02d}",
+                "block_key": f"block-{replicate % request.block_count + 1:02d}",
+                "params": params,
+            })
+    rng.shuffle(runs)
+    for sequence, run in enumerate(runs, start=1):
+        run["sequence"] = sequence
+        run["execution_key"] = f"{run['condition_key']}-{run['replicate_key']}"
+    return {
+        "method": request.method,
+        "seed": request.seed,
+        "runs": runs,
+        "warnings": warnings,
+        "alias_structure": alias_structure,
+        "response_surface_family": family,
+        "state_persisted": False,
     }
 
 
@@ -373,6 +547,7 @@ def create_historical_replay(request: HistoricalReplayRequest) -> dict:
             n_seeds=request.n_seeds,
             initial_observation_count=request.initial_observation_count,
             derived_features=derived_features,
+            soft_constraints=[value.model_dump() for value in request.soft_constraints],
         )
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error

@@ -1,4 +1,3 @@
-using System.Threading.Channels;
 using Ingot.Contracts.Events;
 
 namespace Ingot.Platform.Infrastructure.ProcessExecutions;
@@ -8,13 +7,6 @@ public sealed class ProcessExecutionAnalysisBackfillService(
     IProcessExecutionService executions,
     ILogger<ProcessExecutionAnalysisBackfillService> logger) : BackgroundService
 {
-    private readonly Channel<Guid> _queue = Channel.CreateUnbounded<Guid>(
-        new UnboundedChannelOptions
-        {
-            SingleReader = true,
-            SingleWriter = false
-        });
-
     public async Task<ProcessExecutionAnalysisBackfillJob> EnqueueAsync(
         ProcessExecutionAnalysisBackfillRequest request,
         string userId,
@@ -40,35 +32,32 @@ public sealed class ProcessExecutionAnalysisBackfillService(
             CreatedAt = DateTimeOffset.UtcNow
         };
         await store.AddBackfillJobAsync(job, ct).ConfigureAwait(false);
-        await _queue.Writer.WriteAsync(job.JobId, ct).ConfigureAwait(false);
         return job;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var incomplete = (await store.ListBackfillJobsAsync(stoppingToken).ConfigureAwait(false))
-            .Where(static job => job.Status is "queued" or "running")
-            .OrderBy(static job => job.CreatedAt)
-            .ToArray();
-        foreach (var job in incomplete)
-            await _queue.Writer.WriteAsync(job.JobId, stoppingToken).ConfigureAwait(false);
-
-        await foreach (var jobId in _queue.Reader.ReadAllAsync(stoppingToken).ConfigureAwait(false))
-            await ProcessAsync(jobId, stoppingToken).ConfigureAwait(false);
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(1));
+        do
+        {
+            var lease = await store.ClaimBackfillJobAsync(TimeSpan.FromMinutes(15), stoppingToken)
+                .ConfigureAwait(false);
+            if (lease is not null)
+                await ProcessAsync(lease, stoppingToken).ConfigureAwait(false);
+        }
+        while (await timer.WaitForNextTickAsync(stoppingToken).ConfigureAwait(false));
     }
 
-    private async Task ProcessAsync(Guid jobId, CancellationToken ct)
+    private async Task ProcessAsync(ProcessExecutionAnalysisBackfillLease lease, CancellationToken ct)
     {
-        var job = await store.GetBackfillJobAsync(jobId, ct).ConfigureAwait(false);
-        if (job is null || job.Status is "completed" or "completed_with_errors" or "failed")
-            return;
-        job = job with
+        var job = lease.Job with
         {
             Status = "running",
-            StartedAt = job.StartedAt ?? DateTimeOffset.UtcNow,
+            StartedAt = lease.Job.StartedAt ?? DateTimeOffset.UtcNow,
             Error = null
         };
-        await store.SaveBackfillJobAsync(job, ct).ConfigureAwait(false);
+        if (!await store.SaveClaimedBackfillJobAsync(job, lease.LeaseId, false, ct).ConfigureAwait(false))
+            return;
         try
         {
             var offset = job.ProcessedProcessExecutions;
@@ -102,7 +91,9 @@ public sealed class ProcessExecutionAnalysisBackfillService(
                     FailedProcessExecutions = job.FailedProcessExecutions + failed,
                     LastExecutionId = page.Data[^1].ExecutionId
                 };
-                await store.SaveBackfillJobAsync(job, ct).ConfigureAwait(false);
+                if (!await store.SaveClaimedBackfillJobAsync(job, lease.LeaseId, false, ct)
+                        .ConfigureAwait(false))
+                    return;
                 if (offset >= page.Total)
                     break;
             }
@@ -111,7 +102,7 @@ public sealed class ProcessExecutionAnalysisBackfillService(
                 Status = job.FailedProcessExecutions == 0 ? "completed" : "completed_with_errors",
                 CompletedAt = DateTimeOffset.UtcNow
             };
-            await store.SaveBackfillJobAsync(job, ct).ConfigureAwait(false);
+            await store.SaveClaimedBackfillJobAsync(job, lease.LeaseId, true, ct).ConfigureAwait(false);
             logger.LogInformation(
                 "过程执行分析回填 {JobId} 完成：{Materialized}/{Total} 个过程执行已物化",
                 job.JobId,
@@ -120,19 +111,22 @@ public sealed class ProcessExecutionAnalysisBackfillService(
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
-            await store.SaveBackfillJobAsync(job with { Status = "queued" }, CancellationToken.None)
+            await store.SaveClaimedBackfillJobAsync(
+                    job with { Status = "queued" }, lease.LeaseId, true, CancellationToken.None)
                 .ConfigureAwait(false);
         }
         catch (Exception exception)
         {
             logger.LogError(exception, "过程执行分析回填 {JobId} 失败", job.JobId);
-            await store.SaveBackfillJobAsync(
+            await store.SaveClaimedBackfillJobAsync(
                 job with
                 {
                     Status = "failed",
                     Error = exception.Message,
                     CompletedAt = DateTimeOffset.UtcNow
                 },
+                lease.LeaseId,
+                true,
                 CancellationToken.None).ConfigureAwait(false);
         }
     }

@@ -132,12 +132,25 @@ public sealed class ResearchShadowRecommendationService(
 
     public async Task<ResearchShadowCampaignReport> BuildReportAsync(
         Guid projectId,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        string? mechanismKnowledgeSnapshotHash = null)
     {
         var project = await store.GetProjectAsync(projectId, ct).ConfigureAwait(false)
             ?? throw new ProcessResearchRuleException("研发项目不存在。");
         var records = await store.ListShadowRecommendationsAsync(projectId, ct)
             .ConfigureAwait(false);
+        if (mechanismKnowledgeSnapshotHash is not null)
+        {
+            var matchingExperimentIds = (await store.ListExperimentsAsync(projectId, ct)
+                    .ConfigureAwait(false))
+                .Where(value => string.Equals(
+                    value.Optimization?.MechanismKnowledgeSnapshotHash,
+                    mechanismKnowledgeSnapshotHash,
+                    StringComparison.Ordinal))
+                .Select(static value => value.ExperimentId)
+                .ToHashSet();
+            records = records.Where(value => matchingExperimentIds.Contains(value.ExperimentId)).ToArray();
+        }
         var completed = records.Where(static value => value.Outcome is not null).ToArray();
         var calibration = project.Objectives.Select(objective =>
         {
@@ -244,6 +257,7 @@ public sealed class ResearchShadowRecommendationService(
         {
             ProjectId = projectId,
             ValidationThresholds.PolicyVersion,
+            MechanismKnowledgeSnapshotHash = mechanismKnowledgeSnapshotHash ?? "all",
             Total = records.Count,
             accepted,
             modified,
@@ -262,6 +276,7 @@ public sealed class ResearchShadowRecommendationService(
         {
             ProjectId = projectId,
             ValidationPolicyVersion = ValidationThresholds.PolicyVersion,
+            MechanismKnowledgeSnapshotHash = mechanismKnowledgeSnapshotHash ?? "all",
             TotalRecommendations = records.Count,
             AcceptedCount = accepted,
             ModifiedCount = modified,

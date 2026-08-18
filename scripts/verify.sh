@@ -52,6 +52,7 @@ bash scripts/verify-product-language.sh
 
 for required_file in \
   src/platform/Ingot.Platform.Api/Dockerfile \
+  src/platform/Ingot.Platform.Worker/Dockerfile \
   apps/platform/Dockerfile \
   src/edge/Ingot.Edge.ConnectorHost/Dockerfile \
   optimizer/Dockerfile \

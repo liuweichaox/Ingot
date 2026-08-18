@@ -70,6 +70,12 @@ Candidate causes require appropriate intervention before promotion. Experiment d
 
 A single point or single block can provide intervention support at most. A continuous operating region also requires boundary, repetition, and relevant interaction validation.
 
+### Classical DOE previews
+
+Before saving an experiment, an R&D project can generate an editable run plan for full factorial, fractional factorial, central composite (CCD), Box–Behnken, and Latin-hypercube designs. The generator uses only declared controllable variables with approved ranges, fixes a random seed, and returns blocks, repetitions, run order, and the alias structure for fractional designs.
+
+A preview is not an approval and never writes settings to equipment. Engineers still declare control runs, objectives, stopping rules, and fallback plans; the preflight checklist shows repairable issues together, and the same server-side rules are applied when the experiment is created.
+
 ## Selecting the next experiment
 
 Choose methods by scale and data conditions:
@@ -158,6 +164,8 @@ Optimizer remains free of business state. Variables, objectives, constraints, va
 Historical replay reveals outcomes sequentially in time; future runs are never visible early. Every algorithm change is compared with the historical engineer sequence, applicable traditional DOE, and simple baselines.
 
 ## Current limitations
+
+See [Mechanism knowledge design](mechanism-knowledge.en.md) for the target architecture, knowledge-absent degradation modes, and governance boundaries.
 
 - Internal chain validation from import to R&D observations has used controlled, non-public production history, while formal leakage-free replay and prospective online value validation remain incomplete.
 - Real production data, parameter distributions, and derived results do not enter the public repository. Public tests use contract-equivalent synthetic data and must not be presented as real-project evidence.

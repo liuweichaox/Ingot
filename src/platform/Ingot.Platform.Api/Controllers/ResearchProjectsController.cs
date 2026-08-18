@@ -15,6 +15,8 @@ namespace Ingot.Platform.Api.Controllers;
 public sealed class ResearchProjectsController(
     IProcessResearchStore store,
     ProcessResearchWorkflow workflow,
+    ResearchExperimentDesignService experimentDesigns,
+    ResearchExperimentValidationService experimentValidation,
     ResearchExperimentOptimizer experimentOptimizer,
     ResearchShadowRecommendationService shadowRecommendations,
     ResearchHistoricalReplayService historicalReplay,
@@ -305,6 +307,10 @@ public sealed class ResearchProjectsController(
                                 (candidate.EvidenceLevel == "stable" ? 0.65d : 0.4d) -
                                 confoundingPenalty),
                             SupportingEvidence = [evidence with { EvidenceId = Guid.CreateVersion7() }],
+                            FalsificationConditions =
+                            [
+                                "后续同条件重复比较或受控实验未再观察到该变量差异与结果差异同向出现。"
+                            ],
                             Applicability =
                                 $"产品系列：{comparison.ProductFamilyCode}；分析范围：{comparison.AnalysisScope}；" +
                                 $"数据来源：{candidate.DataSource}。"
@@ -329,6 +335,30 @@ public sealed class ResearchProjectsController(
                 request,
                 identity.UserId,
                 ct).ConfigureAwait(false)),
+            ct);
+
+    [HttpPost("{projectId:guid}/experiment-designs/preview")]
+    public Task<IActionResult> PreviewExperimentDesign(
+        Guid projectId,
+        [FromBody] ResearchExperimentDesignRequest request,
+        CancellationToken ct)
+        => ExecuteForProjectAsync(
+            projectId,
+            true,
+            async _ => Ok(await experimentDesigns.PreviewAsync(projectId, request, ct)
+                .ConfigureAwait(false)),
+            ct);
+
+    [HttpPost("{projectId:guid}/experiments/validate")]
+    public Task<IActionResult> ValidateExperiment(
+        Guid projectId,
+        [FromBody] ResearchExperiment request,
+        CancellationToken ct)
+        => ExecuteForProjectAsync(
+            projectId,
+            true,
+            async _ => Ok(await experimentValidation.ValidateAsync(projectId, request, ct)
+                .ConfigureAwait(false)),
             ct);
 
     [HttpPost("{projectId:guid}/experiments/import-history")]
@@ -444,6 +474,23 @@ public sealed class ResearchProjectsController(
                 request.TargetStatus,
                 identity.UserId,
                 ct).ConfigureAwait(false)),
+            ct).ConfigureAwait(false);
+    }
+
+    [HttpPost("experiments/{experimentId:guid}/clone")]
+    public async Task<IActionResult> CloneExperiment(
+        Guid experimentId,
+        [FromBody] ResearchExperimentCloneRequest request,
+        CancellationToken ct)
+    {
+        var experiment = await store.GetExperimentAsync(experimentId, ct).ConfigureAwait(false);
+        if (experiment is null)
+            return NotFound(new { error = "实验不存在。" });
+        return await ExecuteForProjectAsync(
+            experiment.ProjectId,
+            true,
+            async identity => Ok(await workflow.CloneExperimentAsync(
+                experimentId, request, identity.UserId, ct).ConfigureAwait(false)),
             ct).ConfigureAwait(false);
     }
 
@@ -881,6 +928,14 @@ public sealed class ResearchProjectsController(
         try
         {
             return await operation().ConfigureAwait(false);
+        }
+        catch (ResearchExperimentValidationException exception)
+        {
+            return new ConflictObjectResult(new
+            {
+                error = exception.Message,
+                errors = exception.Errors
+            });
         }
         catch (ProcessResearchRuleException exception)
         {

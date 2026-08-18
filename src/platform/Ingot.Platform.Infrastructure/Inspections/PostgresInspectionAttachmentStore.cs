@@ -5,18 +5,16 @@ using Npgsql;
 
 namespace Ingot.Platform.Infrastructure.Inspections;
 
-public sealed class PostgresInspectionAttachmentStore : IInspectionAttachmentStore, IAsyncDisposable
+public sealed class PostgresInspectionAttachmentStore : IInspectionAttachmentStore
 {
     private readonly NpgsqlDataSource _dataSource;
     private readonly InspectionAttachmentOptions _options;
 
     public PostgresInspectionAttachmentStore(
-        IConfiguration configuration,
+        NpgsqlDataSource dataSource,
         IOptions<InspectionAttachmentOptions> options)
     {
-        var connectionString = configuration.GetConnectionString("Events")
-            ?? throw new InvalidOperationException("缺少 ConnectionStrings:Events PostgreSQL 连接字符串。");
-        _dataSource = NpgsqlDataSource.Create(connectionString);
+        _dataSource = dataSource;
         _options = options.Value;
     }
 
@@ -150,10 +148,6 @@ public sealed class PostgresInspectionAttachmentStore : IInspectionAttachmentSto
             options: FileOptions.Asynchronous | FileOptions.SequentialScan);
     }
 
-    public async ValueTask DisposeAsync()
-    {
-        await _dataSource.DisposeAsync().ConfigureAwait(false);
-    }
 
     private async Task<InspectionAttachment?> GetByShaAsync(string sha256, CancellationToken ct)
     {

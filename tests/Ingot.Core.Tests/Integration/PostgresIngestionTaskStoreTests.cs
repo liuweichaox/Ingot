@@ -12,7 +12,7 @@ public sealed class PostgresIngestionTaskStoreTests(PostgresIntegrationFixture p
     public async Task ConcurrentPublication_ShouldLeaveExactlyOnePublishedVersion()
     {
         await postgres.EnsureSchemaAsync();
-        await using var store = new PostgresIngestionTaskStore(postgres.Configuration);
+        var store = new PostgresIngestionTaskStore(postgres.DataSource);
         await store.InitializeAsync();
         var taskId = $"concurrent-{Guid.NewGuid():N}";
         var first = Profile(taskId, 1);
@@ -34,7 +34,7 @@ public sealed class PostgresIngestionTaskStoreTests(PostgresIntegrationFixture p
     public async Task PublishedVersionCannotBeOverwrittenOrDeleted()
     {
         await postgres.EnsureSchemaAsync();
-        await using var store = new PostgresIngestionTaskStore(postgres.Configuration);
+        var store = new PostgresIngestionTaskStore(postgres.DataSource);
         var taskId = $"immutable-{Guid.NewGuid():N}";
         var published = Profile(taskId, 1) with { Name = "first" };
         await store.PublishExclusiveAsync(published);

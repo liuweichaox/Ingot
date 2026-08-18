@@ -12,7 +12,7 @@ public sealed class PostgresIngestionConfigurationStoreTests(PostgresIntegration
     public async Task PublishedTemplateAndDataSourceVersionsAreImmutable()
     {
         await postgres.EnsureSchemaAsync();
-        await using var store = new PostgresIngestionConfigurationStore(postgres.Configuration);
+        var store = new PostgresIngestionConfigurationStore(postgres.DataSource);
         var suffix = Guid.NewGuid().ToString("N");
         var template = Template($"template-{suffix}");
         var source = Source($"source-{suffix}");

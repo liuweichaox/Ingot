@@ -19,8 +19,8 @@ public sealed class PostgresProcessExecutionScientificComputeIntegrationTests(
     public async Task LargeOffsetSmallVariation_ShouldMatchDeterministicReference()
     {
         await postgres.EnsureSchemaAsync();
-        await using var timeSeries = new PostgresTimeSeriesStore(
-            postgres.Configuration,
+        using var timeSeries = new PostgresTimeSeriesStore(
+            postgres.DataSource,
             NullLogger<PostgresTimeSeriesStore>.Instance,
             Options.Create(new PlatformEventOptions()));
         await timeSeries.InitializeAsync();
@@ -95,8 +95,8 @@ public sealed class PostgresProcessExecutionScientificComputeIntegrationTests(
         Assert.True(expectedStandardDeviation > 0.001);
 
         await InsertSamplesAsync(executionId, startedAt, values);
-        await using var databaseEngine = new PostgresProcessExecutionScientificComputeEngine(
-            postgres.Configuration);
+        var databaseEngine = new PostgresProcessExecutionScientificComputeEngine(
+            postgres.DataSource);
 
         var verified = await databaseEngine.ComputeAndVerifyAsync(
             executionId,

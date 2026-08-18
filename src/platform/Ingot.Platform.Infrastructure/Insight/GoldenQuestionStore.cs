@@ -17,17 +17,13 @@ public interface IGoldenQuestionStore
         CancellationToken ct = default);
 }
 
-public sealed class PostgresGoldenQuestionStore : IGoldenQuestionStore, IAsyncDisposable
+public sealed class PostgresGoldenQuestionStore : IGoldenQuestionStore
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private readonly NpgsqlDataSource _dataSource;
 
-    public PostgresGoldenQuestionStore(IConfiguration configuration)
-    {
-        var connectionString = configuration.GetConnectionString("Events")
-            ?? throw new InvalidOperationException("缺少 ConnectionStrings:Events PostgreSQL 连接字符串。");
-        _dataSource = NpgsqlDataSource.Create(connectionString);
-    }
+    public PostgresGoldenQuestionStore(NpgsqlDataSource dataSource)
+        => _dataSource = dataSource;
 
     public async Task<IReadOnlyList<GoldenQuestionCase>> ListAsync(
         string? status,
@@ -142,5 +138,4 @@ public sealed class PostgresGoldenQuestionStore : IGoldenQuestionStore, IAsyncDi
     private static string? NullIfBlank(string? value)
         => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
-    public ValueTask DisposeAsync() => _dataSource.DisposeAsync();
 }

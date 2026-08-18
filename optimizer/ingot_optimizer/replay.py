@@ -142,6 +142,7 @@ def _historical_optimizer_run(
     seed: int,
     initial_observation_count: int,
     derived_features: Sequence[DerivedFeature] | None,
+    soft_constraints: Sequence[dict] | None,
 ) -> tuple[int | None, list[int], list[dict], dict]:
     selected = list(range(initial_observation_count))
     remaining = list(range(initial_observation_count, len(history)))
@@ -188,11 +189,48 @@ def _historical_optimizer_run(
                 process_features=row.get("process_features"),
             )
         candidates = [history[index]["params"] for index in remaining]
-        suggestion = optimizer.suggest(
-            candidate_params=candidates,
-            n_random=len(candidates),
-            n_samples=256,
-        )[0]
+        try:
+            suggestions = optimizer.suggest(
+                candidate_params=candidates,
+                n_random=len(candidates),
+                n_samples=256,
+                top_k=min(4, len(candidates)),
+            )
+        except ValueError as error:
+            if "fewer" not in str(error):
+                raise
+            suggestions = optimizer.suggest(
+                candidate_params=candidates,
+                n_random=len(candidates),
+                n_samples=256,
+                top_k=1,
+            )
+        acquisitions = np.asarray([
+            value.acquisition_value if value.acquisition_value is not None else 0.0
+            for value in suggestions
+        ], dtype=float)
+        width = max(float(np.max(acquisitions) - np.min(acquisitions)), 1e-12)
+        def penalty(value) -> float:
+            if not soft_constraints:
+                return 0.0
+            penalties = []
+            variable_by_name = {item.name: item for item in campaign.variables}
+            for constraint in soft_constraints:
+                code = constraint["variable_code"]
+                variable = variable_by_name[code]
+                current = value.recommended_params[code]
+                span = max(variable.high - variable.low, 1e-12)
+                minimum = constraint.get("minimum")
+                maximum = constraint.get("maximum")
+                below = max((minimum if minimum is not None else -np.inf) - current, 0.0)
+                above = max(current - (maximum if maximum is not None else np.inf), 0.0)
+                penalties.append(min((below + above) / span, 1.0))
+            return float(np.mean(penalties))
+        suggestion = max(
+            suggestions,
+            key=lambda value: 0.75 * ((value.acquisition_value or 0.0) - float(np.min(acquisitions))) / width
+            - 0.25 * penalty(value),
+        )
         suggested_unit = campaign.to_unit(suggestion.recommended_params)
         position = next(
             position
@@ -237,6 +275,7 @@ def _historical_optimizer_run(
                 ),
                 "prediction_interval_checks": checks,
                 "prediction_interval_covered": covered,
+                "mechanism_soft_penalty": penalty(suggestion),
             }
         )
         selected.append(history_index)
@@ -363,6 +402,7 @@ def replay_history_pool(
     n_seeds: int = 30,
     initial_observation_count: int = 0,
     derived_features: Sequence[DerivedFeature] | None = None,
+    soft_constraints: Sequence[dict] | None = None,
 ) -> dict:
     """Evaluate parameter setting ranking using only parameter settings and outcomes present in history.
 
@@ -389,6 +429,7 @@ def replay_history_pool(
             seed,
             initial_observation_count,
             derived_features,
+            soft_constraints,
         )
         for seed in range(n_seeds)
     ]

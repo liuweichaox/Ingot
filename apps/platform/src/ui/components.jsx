@@ -117,6 +117,7 @@ export function StatusBadge({ value }) {
     failed: "不合格",
     offline: "离线",
     rejected: "已驳回",
+    falsified: "已反证",
     error: "异常",
     suspended: "已暂停",
     "rollback-required": "需要回滚",
@@ -160,7 +161,7 @@ export function StatusBadge({ value }) {
   };
   const tone = ["active", "ready", "online", "complete", "completed", "pass", "passed", "verified", "healthy", "published", "validated", "indexed", "reviewed", "available", "valid", "connected", "confirmed", "approved", "selected", "applied", "synchronized", "supported", "dispatched", "accepted"].includes(normalized)
     ? "success"
-    : ["fail", "failed", "offline", "rejected", "error", "suspended", "rollback-required", "unavailable", "cancelled", "missing", "invalid", "disconnected"].includes(normalized)
+    : ["fail", "failed", "offline", "rejected", "falsified", "error", "suspended", "rollback-required", "unavailable", "cancelled", "missing", "invalid", "disconnected"].includes(normalized)
       ? "danger"
       : ["pending", "buffering", "validating", "waiting-execution-boundary", "applying", "rollback", "draft", "starting", "running", "uploaded", "dirty", "degraded", "in_progress", "review_pending", "queued", "completed_with_errors", "incomplete", "cancelling", "proposed", "investigating", "trialing", "planned", "warning", "concluded", "withdrawn", "rolled-back", "maintenance", "candidate", "modified", "recorded"].includes(normalized)
         ? "warning"

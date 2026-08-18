@@ -6,7 +6,7 @@ namespace Ingot.Platform.Infrastructure.Identity;
 
 /// <summary>
 ///     首次启动播种初始管理员：仅当用户表为空时执行。必须在迁移之后运行
-///     （注册顺序保证：MigrationHostedService 最先，本服务在 AddIngotLocalIdentity 中较后注册）。
+///     数据库迁移由独立 Migrator 宿主在 API 启动前完成。
 /// </summary>
 public sealed class AdminSeederHostedService(
     ILocalUserStore store,

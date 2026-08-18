@@ -17,6 +17,22 @@ public sealed partial class ProcessResearchWorkflow
         CancellationToken ct = default)
     {
         var project = await RequireMutableProjectAsync(projectId, ct).ConfigureAwait(false);
+        var executionCategory = request.Optimization?.Mode switch
+        {
+            ResearchOptimizationModes.Shadow => ResearchExperimentExecutionCategories.Shadow,
+            ResearchOptimizationModes.Controlled => ResearchExperimentExecutionCategories.ControlledOnline,
+            _ => ResearchExperimentExecutionCategories.Offline
+        };
+        var safety = await ApplySafetyTemplateAsync(project, request, executionCategory, ct)
+            .ConfigureAwait(false);
+        request = safety.Request;
+        if (experimentValidation is not null)
+        {
+            var validation = await experimentValidation.ValidateAsync(projectId, request, ct)
+                .ConfigureAwait(false);
+            if (!validation.IsValid)
+                throw new ResearchExperimentValidationException(validation.Errors);
+        }
         ResearchOperatingRegion? validationWindow = null;
         if (request.ValidationOperatingRegionId is { } validationOperatingRegionId)
         {
@@ -48,7 +64,10 @@ public sealed partial class ProcessResearchWorkflow
                 throw new ProcessResearchRuleException("受控在线实验必须且只能包含一条运行建议。");
             if (onlineAdmission is null)
                 throw new ProcessResearchRuleException("受控在线准入服务不可用，按失败关闭处理。");
-            var admission = await onlineAdmission.RequireAsync(projectId, ct).ConfigureAwait(false);
+            var admission = await onlineAdmission.RequireAsync(
+                projectId,
+                request.Optimization!.MechanismKnowledgeSnapshotHash,
+                ct).ConfigureAwait(false);
             if (request.Optimization?.OnlineAdmission is not { Eligible: true } frozenAdmission ||
                 frozenAdmission.HistoricalReplayReportId != admission.HistoricalReplayReportId ||
                 !string.Equals(frozenAdmission.HistoricalReplayReportHash,
@@ -71,14 +90,17 @@ public sealed partial class ProcessResearchWorkflow
             var code = NormalizeCode(value.VariableCode, "实验变量");
             if (!knownVariables.TryGetValue(code, out var variable))
                 throw new ProcessResearchRuleException($"实验变量 {code} 不是项目中的可控变量。");
-            if (!double.IsFinite(value.Value) ||
-                variable.LowerLimit is { } lower && value.Value < lower ||
-                variable.UpperLimit is { } upper && value.Value > upper)
-                throw new ProcessResearchRuleException($"实验变量 {code} 超出允许范围。");
             var unit = RequiredText(value.Unit, "实验变量单位", 40);
-            if (!string.Equals(unit, variable.Unit, StringComparison.OrdinalIgnoreCase))
-                throw new ProcessResearchRuleException($"实验变量 {code} 的单位必须与项目变量一致。");
-            return value with { VariableCode = code, Unit = unit };
+            var normalizedValue = value.Value;
+            if (!string.Equals(unit, variable.Unit, StringComparison.OrdinalIgnoreCase) &&
+                !ResearchUnitConverter.TryConvert(value.Value, unit, variable.Unit, out normalizedValue))
+                throw new ProcessResearchRuleException(
+                    $"实验变量 {code} 的单位必须与项目变量一致或可转换为 {variable.Unit}。 ");
+            if (!double.IsFinite(normalizedValue) ||
+                variable.LowerLimit is { } lower && normalizedValue < lower ||
+                variable.UpperLimit is { } upper && normalizedValue > upper)
+                throw new ProcessResearchRuleException($"实验变量 {code} 超出允许范围。");
+            return value with { VariableCode = code, Value = normalizedValue, Unit = variable.Unit };
         }
 
         var runPlan = request.RunPlan.Select((run, index) =>
@@ -169,6 +191,8 @@ public sealed partial class ProcessResearchWorkflow
                     .ToHashSet(StringComparer.Ordinal)
                     .SetEquals(runPlan.Select(static value => value.ExecutionKey)))
                 throw new ProcessResearchRuleException("优化实验的模型版本、输入摘要或运行预测无效。");
+            await ValidateCurrentMechanismKnowledgeAsync(request with { ProjectId = projectId }, ct)
+                .ConfigureAwait(false);
         }
 
         var now = DateTimeOffset.UtcNow;
@@ -181,6 +205,8 @@ public sealed partial class ProcessResearchWorkflow
             ValidationOperatingRegionId = validationWindow?.OperatingRegionId,
             Name = RequiredText(request.Name, "实验名称", 240),
             DesignMethod = designMethod,
+            ExecutionCategory = executionCategory,
+            SafetyTemplateSource = safety.Source,
             PlanVersion = 1,
             ProjectRevision = project.Revision,
             RandomizationSeed = request.RandomizationSeed == 0
@@ -219,15 +245,105 @@ public sealed partial class ProcessResearchWorkflow
             CreatedBy = NormalizeUser(userId),
             ApprovedBy = null,
             ApprovedAt = null,
+            Revision = 1,
             CreatedAt = now,
             UpdatedAt = now
         };
         if (await store.GetExperimentAsync(value.ExperimentId, ct).ConfigureAwait(false) is not null)
             throw new ProcessResearchRuleException("实验标识已经存在。");
-        var saved = await store.SaveExperimentAsync(value, ct).ConfigureAwait(false);
-        await AuditAsync(projectId, "experiment", saved.ExperimentId.ToString(), "planned",
-            userId, null, saved.Status, ct).ConfigureAwait(false);
+        var saved = await store.SaveExperimentTransactionAsync(
+            value,
+            new ResearchAuditEntry
+            {
+                EntryId = Guid.CreateVersion7(),
+                ProjectId = projectId,
+                ResourceType = "experiment",
+                ResourceId = value.ExperimentId.ToString(),
+                Action = "planned",
+                FromStatus = null,
+                ToStatus = value.Status,
+                UserId = NormalizeUser(userId),
+                CreatedAt = now
+            },
+            ct).ConfigureAwait(false);
         return saved;
+    }
+
+    private async Task<(ResearchExperiment Request, string? Source)> ApplySafetyTemplateAsync(
+        ResearchProject project,
+        ResearchExperiment request,
+        string executionCategory,
+        CancellationToken ct)
+    {
+        // Controlled online work remains deliberately non-inheritable: every run
+        // must state its own stop and recovery plan.
+        if (executionCategory == ResearchExperimentExecutionCategories.ControlledOnline ||
+            (!string.IsNullOrWhiteSpace(request.StopRule) && !string.IsNullOrWhiteSpace(request.RollbackPlan)))
+            return (request, null);
+        var template = project.SafetyTemplates.FirstOrDefault(item =>
+            item.ExecutionCategory == executionCategory);
+        if (template is not null)
+        {
+            return (request with
+            {
+                StopRule = string.IsNullOrWhiteSpace(request.StopRule) ? template.StopRule : request.StopRule,
+                RollbackPlan = string.IsNullOrWhiteSpace(request.RollbackPlan) ? template.RollbackPlan : request.RollbackPlan
+            }, $"project:{executionCategory}");
+        }
+        var prior = (await store.ListExperimentsAsync(project.ProjectId, ct).ConfigureAwait(false))
+            .Where(item => item.ExecutionCategory == executionCategory)
+            .Where(item => !string.IsNullOrWhiteSpace(item.StopRule) && !string.IsNullOrWhiteSpace(item.RollbackPlan))
+            .OrderByDescending(static item => item.UpdatedAt)
+            .FirstOrDefault();
+        if (prior is null) return (request, null);
+        return (request with
+        {
+            StopRule = string.IsNullOrWhiteSpace(request.StopRule) ? prior.StopRule : request.StopRule,
+            RollbackPlan = string.IsNullOrWhiteSpace(request.RollbackPlan) ? prior.RollbackPlan : request.RollbackPlan
+        }, $"experiment:{prior.ExperimentId}");
+    }
+
+    public async Task<ResearchExperiment> CloneExperimentAsync(
+        Guid experimentId,
+        ResearchExperimentCloneRequest request,
+        string userId,
+        CancellationToken ct = default)
+    {
+        var source = await store.GetExperimentAsync(experimentId, ct).ConfigureAwait(false)
+            ?? throw new ProcessResearchRuleException("实验不存在。");
+        if (source.DesignMethod == ResearchDesignMethods.BayesianOptimization)
+            throw new ProcessResearchRuleException("贝叶斯优化实验必须基于当前观察重新生成，不能直接复制。 ");
+        var suffix = Guid.CreateVersion7().ToString("N")[..8];
+        var keyMap = source.RunPlan.ToDictionary(
+            static run => run.ExecutionKey,
+            run => $"copy-{suffix}-{run.Sequence:D2}",
+            StringComparer.Ordinal);
+        var clonedRuns = source.RunPlan.Select(run => run with
+        {
+            ExecutionKey = keyMap[run.ExecutionKey]
+        }).ToArray();
+        var baseline = source.BaselineExecutionKeys.Select(key =>
+            keyMap.TryGetValue(key, out var replacement) ? replacement : key).ToArray();
+        return await CreateExperimentAsync(source.ProjectId, source with
+        {
+            ExperimentId = Guid.Empty,
+            Name = string.IsNullOrWhiteSpace(request.Name)
+                ? $"{source.Name}（副本）"
+                : request.Name.Trim(),
+            Status = ResearchExperimentStatuses.Planned,
+            RunPlan = clonedRuns,
+            BaselineExecutionKeys = baseline,
+            ResultIds = [],
+            Optimization = null,
+            ControlledDecision = null,
+            Execution = null,
+            ApprovedBy = null,
+            ApprovedAt = null,
+            CreatedBy = "",
+            CreatedAt = default,
+            UpdatedAt = default,
+            Revision = 1
+        }, userId, ct).ConfigureAwait(false);
     }
 
     public async Task<ResearchExperiment> ChangeExperimentStatusAsync(
@@ -271,8 +387,13 @@ public sealed partial class ProcessResearchWorkflow
                 throw new ProcessResearchRuleException("受控在线建议必须先由工程师明确接受或修改，才能批准。");
             if (onlineAdmission is null)
                 throw new ProcessResearchRuleException("受控在线准入服务不可用，按失败关闭处理。");
-            await onlineAdmission.RequireAsync(experiment.ProjectId, ct).ConfigureAwait(false);
+            await onlineAdmission.RequireAsync(
+                experiment.ProjectId,
+                experiment.Optimization.MechanismKnowledgeSnapshotHash,
+                ct).ConfigureAwait(false);
         }
+        if (targetStatus is ResearchExperimentStatuses.Approved or ResearchExperimentStatuses.Running)
+            await ValidateCurrentMechanismKnowledgeAsync(experiment, ct).ConfigureAwait(false);
         if (targetStatus == ResearchExperimentStatuses.Running &&
             experiment.ProjectRevision !=
             (await RequireProjectAsync(experiment.ProjectId, ct).ConfigureAwait(false)).Revision)
@@ -294,23 +415,56 @@ public sealed partial class ProcessResearchWorkflow
                 throw new ProcessResearchRuleException("实验结果尚未覆盖全部实验目标。");
         }
 
-        var saved = await store.SaveExperimentAsync(
-            experiment with
+        var now = DateTimeOffset.UtcNow;
+        var updated = experiment with
             {
+                Revision = experiment.Revision + 1,
                 Status = targetStatus,
                 Execution = UpdateExecution(experiment, targetStatus, actor),
                 ApprovedBy = targetStatus == ResearchExperimentStatuses.Approved
                     ? actor
                     : experiment.ApprovedBy,
                 ApprovedAt = targetStatus == ResearchExperimentStatuses.Approved
-                    ? DateTimeOffset.UtcNow
+                    ? now
                     : experiment.ApprovedAt,
-                UpdatedAt = DateTimeOffset.UtcNow
+                UpdatedAt = now
+            };
+        var saved = await store.SaveExperimentTransactionAsync(
+            updated,
+            new ResearchAuditEntry
+            {
+                EntryId = Guid.CreateVersion7(),
+                ProjectId = experiment.ProjectId,
+                ResourceType = "experiment",
+                ResourceId = experimentId.ToString(),
+                Action = "status-changed",
+                FromStatus = experiment.Status,
+                ToStatus = targetStatus,
+                UserId = actor,
+                CreatedAt = now
             },
             ct).ConfigureAwait(false);
-        await AuditAsync(experiment.ProjectId, "experiment", experimentId.ToString(),
-            "status-changed", userId, experiment.Status, saved.Status, ct).ConfigureAwait(false);
         return saved;
+    }
+
+    private async Task ValidateCurrentMechanismKnowledgeAsync(
+        ResearchExperiment experiment,
+        CancellationToken ct)
+    {
+        if (experiment.Optimization is null || mechanismKnowledgeStore is null) return;
+        var project = await RequireProjectAsync(experiment.ProjectId, ct).ConfigureAwait(false);
+        var knowledge = MechanismKnowledgeExperimentPolicy.Select(
+            project,
+            await mechanismKnowledgeStore.ListClaimsAsync(project.ProjectId, ct).ConfigureAwait(false),
+            await mechanismKnowledgeStore.ListConflictsAsync(project.ProjectId, ct).ConfigureAwait(false));
+        var currentHash = MechanismKnowledgeExperimentPolicy.SnapshotHash(knowledge);
+        if (!string.Equals(
+                experiment.Optimization.MechanismKnowledgeSnapshotHash,
+                currentHash,
+                StringComparison.Ordinal))
+            throw new ProcessResearchRuleException(
+                "机理知识已发生变化，请取消当前实验并基于最新知识重新生成计划。");
+        MechanismKnowledgeExperimentPolicy.ValidateHardConstraints(experiment, knowledge);
     }
 
     public async Task<ResearchExperiment> DecideControlledExperimentAsync(
@@ -424,6 +578,7 @@ public sealed partial class ProcessResearchWorkflow
                             execution.Commands[0] with { RequestedFactors = approved }
                         ]
                 },
+                Revision = experiment.Revision + 1,
                 UpdatedAt = now
             };
         var saved = await store.SaveControlledDecisionTransactionAsync(

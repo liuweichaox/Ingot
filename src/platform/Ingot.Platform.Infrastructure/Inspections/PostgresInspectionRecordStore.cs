@@ -6,17 +6,13 @@ using NpgsqlTypes;
 
 namespace Ingot.Platform.Infrastructure.Inspections;
 
-public sealed class PostgresInspectionRecordStore : IInspectionRecordStore, IAsyncDisposable
+public sealed class PostgresInspectionRecordStore : IInspectionRecordStore
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private readonly NpgsqlDataSource _dataSource;
 
-    public PostgresInspectionRecordStore(IConfiguration configuration)
-    {
-        var connectionString = configuration.GetConnectionString("Events")
-            ?? throw new InvalidOperationException("缺少 ConnectionStrings:Events PostgreSQL 连接字符串。");
-        _dataSource = NpgsqlDataSource.Create(connectionString);
-    }
+    public PostgresInspectionRecordStore(NpgsqlDataSource dataSource)
+        => _dataSource = dataSource;
 
     public Task InitializeAsync(CancellationToken ct = default) => Task.CompletedTask;
 
@@ -230,10 +226,6 @@ public sealed class PostgresInspectionRecordStore : IInspectionRecordStore, IAsy
         return records;
     }
 
-    public async ValueTask DisposeAsync()
-    {
-        await _dataSource.DisposeAsync().ConfigureAwait(false);
-    }
 
     private async Task<StoredInspectionRecord?> GetWithHashAsync(
         Guid recordId,

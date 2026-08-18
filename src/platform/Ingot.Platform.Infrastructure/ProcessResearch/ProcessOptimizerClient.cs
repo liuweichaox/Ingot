@@ -10,6 +10,8 @@ public sealed class ProcessOptimizerOptions
     public bool Enabled { get; init; }
     public string BaseUrl { get; init; } = "http://127.0.0.1:8100";
     public int RequestTimeoutSeconds { get; init; } = 300;
+    public int CircuitFailureThreshold { get; init; } = 3;
+    public int CircuitBreakSeconds { get; init; } = 30;
 }
 
 public sealed record OptimizerVariableInput(
@@ -168,6 +170,15 @@ public sealed record OptimizerHistoricalReplayCall
     public int SeedCount { get; init; } = 30;
     [JsonPropertyName("initial_observation_count")]
     public int InitialObservationCount { get; init; } = 3;
+    [JsonPropertyName("soft_constraints")]
+    public IReadOnlyList<OptimizerSoftConstraintInput> SoftConstraints { get; init; } = [];
+}
+
+public sealed record OptimizerSoftConstraintInput
+{
+    public required string VariableCode { get; init; }
+    public double? Minimum { get; init; }
+    public double? Maximum { get; init; }
 }
 
 public sealed record OptimizerObjectivePrediction
@@ -228,6 +239,50 @@ public sealed record OptimizerSuggestionResponse
 
     public IReadOnlyList<OptimizerSuggestionOutput> Suggestions { get; init; } = [];
 
+    [JsonPropertyName("state_persisted")]
+    public bool StatePersisted { get; init; }
+}
+
+public sealed record OptimizerDesignCall
+{
+    public required string Method { get; init; }
+    public IReadOnlyList<OptimizerVariableInput> Variables { get; init; } = [];
+    public int Levels { get; init; } = 2;
+    public int Replicates { get; init; } = 1;
+    [JsonPropertyName("block_count")]
+    public int BlockCount { get; init; } = 1;
+    [JsonPropertyName("sample_count")]
+    public int SampleCount { get; init; }
+    [JsonPropertyName("response_surface_family")]
+    public string? ResponseSurfaceFamily { get; init; }
+    public int Seed { get; init; }
+}
+
+public sealed record OptimizerDesignRun
+{
+    [JsonPropertyName("execution_key")]
+    public required string ExecutionKey { get; init; }
+    [JsonPropertyName("condition_key")]
+    public required string ConditionKey { get; init; }
+    [JsonPropertyName("replicate_key")]
+    public string? ReplicateKey { get; init; }
+    [JsonPropertyName("block_key")]
+    public string? BlockKey { get; init; }
+    public int Sequence { get; init; }
+    public IReadOnlyDictionary<string, double> Params { get; init; } =
+        new Dictionary<string, double>();
+}
+
+public sealed record OptimizerDesignResponse
+{
+    public required string Method { get; init; }
+    public int Seed { get; init; }
+    public IReadOnlyList<OptimizerDesignRun> Runs { get; init; } = [];
+    public IReadOnlyList<string> Warnings { get; init; } = [];
+    [JsonPropertyName("alias_structure")]
+    public string? AliasStructure { get; init; }
+    [JsonPropertyName("response_surface_family")]
+    public string? ResponseSurfaceFamily { get; init; }
     [JsonPropertyName("state_persisted")]
     public bool StatePersisted { get; init; }
 }
@@ -325,6 +380,11 @@ public interface IProcessOptimizerClient
         OptimizerSuggestionCall request,
         CancellationToken ct = default);
 
+    Task<OptimizerDesignResponse> DesignAsync(
+        OptimizerDesignCall request,
+        CancellationToken ct = default)
+        => throw new NotSupportedException("当前优化客户端不支持经典实验设计。");
+
     Task<ProcessDiagnosisResponse> DiagnoseAsync(
         ProcessDiagnosisCall request,
         CancellationToken ct = default)
@@ -389,6 +449,47 @@ public sealed class ProcessOptimizerClient(
                 throw new ProcessResearchRuleException("优化服务违反无状态契约。");
             if (result.Suggestions.Count == 0 || string.IsNullOrWhiteSpace(result.ModelVersion))
                 throw new ProcessResearchRuleException("优化服务响应缺少模型版本或建议。");
+            return result;
+        }
+    }
+
+    public async Task<OptimizerDesignResponse> DesignAsync(
+        OptimizerDesignCall request,
+        CancellationToken ct = default)
+    {
+        if (!_options.Enabled)
+            throw new ProcessResearchRuleException("优化服务未启用。");
+        HttpResponseMessage response;
+        try
+        {
+            response = await httpClient.PostAsJsonAsync("v1/designs", request, ct)
+                .ConfigureAwait(false);
+        }
+        catch (HttpRequestException exception)
+        {
+            throw new ProcessOptimizerUnavailableException("实验设计服务暂时不可用。", exception);
+        }
+        catch (TaskCanceledException exception) when (!ct.IsCancellationRequested)
+        {
+            throw new ProcessOptimizerUnavailableException("实验设计服务请求超时。", exception);
+        }
+        using (response)
+        {
+            if ((int)response.StatusCode >= 500)
+                throw new ProcessOptimizerUnavailableException(
+                    $"实验设计服务暂时不可用（{(int)response.StatusCode}）。");
+            if (!response.IsSuccessStatusCode)
+            {
+                var detail = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+                throw new ProcessResearchRuleException(
+                    $"实验设计服务拒绝请求（{(int)response.StatusCode}）：{detail[..Math.Min(detail.Length, 1000)]}");
+            }
+            var result = await response.Content.ReadFromJsonAsync<OptimizerDesignResponse>(
+                    cancellationToken: ct)
+                .ConfigureAwait(false)
+                ?? throw new ProcessResearchRuleException("实验设计服务返回了空响应。");
+            if (result.StatePersisted || result.Runs.Count == 0)
+                throw new ProcessResearchRuleException("实验设计服务响应无效或违反无状态契约。");
             return result;
         }
     }

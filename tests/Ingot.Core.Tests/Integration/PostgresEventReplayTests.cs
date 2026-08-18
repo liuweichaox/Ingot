@@ -22,24 +22,23 @@ public sealed class PostgresEventReplayTests(PostgresIntegrationFixture postgres
     {
         await postgres.EnsureSchemaAsync();
         var options = Options.Create(new PlatformEventOptions());
-        await using var manufacturing = new PostgresManufacturingContextStore(postgres.Configuration);
-        await using var configurations = new PostgresProcessConfigurationStore(postgres.Configuration);
-        await using var materializations = new PostgresProcessExecutionAnalysisMaterializationStore(
-            postgres.Configuration,
+        var manufacturing = new PostgresManufacturingContextStore(postgres.DataSource);
+        var configurations = new PostgresProcessConfigurationStore(postgres.DataSource);
+        var materializations = new PostgresProcessExecutionAnalysisMaterializationStore(
+            postgres.DataSource,
             NullLogger<PostgresProcessExecutionAnalysisMaterializationStore>.Instance);
-        await using var timeSeries = new PostgresTimeSeriesStore(
-            postgres.Configuration,
+        using var timeSeries = new PostgresTimeSeriesStore(
+            postgres.DataSource,
             NullLogger<PostgresTimeSeriesStore>.Instance,
             options);
-        await using var store = new PostgresPlatformEventStore(
-            postgres.Configuration,
+        using var store = new PostgresPlatformEventStore(
+            postgres.DataSource,
             NullLogger<PostgresPlatformEventStore>.Instance,
             new PlatformEventMetrics(),
             options,
             manufacturing,
             new ProcessAnalysisResolver(configurations),
             materializations,
-            new ProcessExecutionAnalysisRecomputeQueue(),
             timeSeries);
 
         var edgeId = $"EDGE-REPLAY-{Guid.NewGuid():N}";
@@ -77,24 +76,23 @@ public sealed class PostgresEventReplayTests(PostgresIntegrationFixture postgres
     {
         await postgres.EnsureSchemaAsync();
         var options = Options.Create(new PlatformEventOptions());
-        await using var manufacturing = new PostgresManufacturingContextStore(postgres.Configuration);
-        await using var configurations = new PostgresProcessConfigurationStore(postgres.Configuration);
-        await using var materializations = new PostgresProcessExecutionAnalysisMaterializationStore(
-            postgres.Configuration,
+        var manufacturing = new PostgresManufacturingContextStore(postgres.DataSource);
+        var configurations = new PostgresProcessConfigurationStore(postgres.DataSource);
+        var materializations = new PostgresProcessExecutionAnalysisMaterializationStore(
+            postgres.DataSource,
             NullLogger<PostgresProcessExecutionAnalysisMaterializationStore>.Instance);
-        await using var timeSeries = new PostgresTimeSeriesStore(
-            postgres.Configuration,
+        using var timeSeries = new PostgresTimeSeriesStore(
+            postgres.DataSource,
             NullLogger<PostgresTimeSeriesStore>.Instance,
             options);
-        await using var store = new PostgresPlatformEventStore(
-            postgres.Configuration,
+        using var store = new PostgresPlatformEventStore(
+            postgres.DataSource,
             NullLogger<PostgresPlatformEventStore>.Instance,
             new PlatformEventMetrics(),
             options,
             manufacturing,
             new ProcessAnalysisResolver(configurations),
             materializations,
-            new ProcessExecutionAnalysisRecomputeQueue(),
             timeSeries);
 
         var suffix = Guid.NewGuid().ToString("N");
@@ -206,24 +204,23 @@ public sealed class PostgresEventReplayTests(PostgresIntegrationFixture postgres
     {
         await postgres.EnsureSchemaAsync();
         var options = Options.Create(new PlatformEventOptions());
-        await using var manufacturing = new PostgresManufacturingContextStore(postgres.Configuration);
-        await using var configurations = new PostgresProcessConfigurationStore(postgres.Configuration);
-        await using var materializations = new PostgresProcessExecutionAnalysisMaterializationStore(
-            postgres.Configuration,
+        var manufacturing = new PostgresManufacturingContextStore(postgres.DataSource);
+        var configurations = new PostgresProcessConfigurationStore(postgres.DataSource);
+        var materializations = new PostgresProcessExecutionAnalysisMaterializationStore(
+            postgres.DataSource,
             NullLogger<PostgresProcessExecutionAnalysisMaterializationStore>.Instance);
-        await using var timeSeries = new PostgresTimeSeriesStore(
-            postgres.Configuration,
+        using var timeSeries = new PostgresTimeSeriesStore(
+            postgres.DataSource,
             NullLogger<PostgresTimeSeriesStore>.Instance,
             options);
-        await using var store = new PostgresPlatformEventStore(
-            postgres.Configuration,
+        using var store = new PostgresPlatformEventStore(
+            postgres.DataSource,
             NullLogger<PostgresPlatformEventStore>.Instance,
             new PlatformEventMetrics(),
             options,
             manufacturing,
             new ProcessAnalysisResolver(configurations),
             materializations,
-            new ProcessExecutionAnalysisRecomputeQueue(),
             timeSeries);
 
         var suffix = Guid.NewGuid().ToString("N");

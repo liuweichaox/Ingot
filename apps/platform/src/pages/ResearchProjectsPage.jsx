@@ -44,6 +44,8 @@ export function ResearchProjectsPage({ identity }) {
   const [saving, setSaving] = useState(false);
   const [task, setTask] = useState("");
   const [taskForm, setTaskForm] = useState({});
+  const [experimentPreview, setExperimentPreview] = useState(null);
+  const [experimentValidation, setExperimentValidation] = useState(null);
   const [shadowTarget, setShadowTarget] = useState(null);
   const [shadowForm, setShadowForm] = useState({});
   const [controlledTarget, setControlledTarget] = useState(null);
@@ -217,6 +219,19 @@ export function ResearchProjectsPage({ identity }) {
       );
       await refreshWorkspace();
       notify("实验状态已更新。", "success");
+    } catch (requestError) {
+      notify(requestError.message, "danger");
+    }
+  }
+
+  async function cloneExperiment(experiment) {
+    try {
+      await postJson(
+        `/api/v1/research-projects/experiments/${experiment.experimentId}/clone`,
+        { name: `${experiment.name}（副本）` },
+      );
+      await refreshWorkspace();
+      notify("已基于该实验创建新计划；结果、审批与执行状态均未复制。", "success");
     } catch (requestError) {
       notify(requestError.message, "danger");
     }
@@ -487,8 +502,40 @@ export function ResearchProjectsPage({ identity }) {
         notify(requestError.message, "danger");
       }
     }
+    setExperimentPreview(null);
+    setExperimentValidation(null);
     setTask(name);
     setTaskForm(createTaskForm(name, workspace));
+  }
+
+  async function previewExperimentDesign() {
+    const project = workspace?.project;
+    if (!project) return;
+    try {
+      const preview = await postJson(
+        `/api/v1/research-projects/${project.projectId}/experiment-designs/preview`,
+        {
+          designMethod: taskForm.designMethod,
+          variableCodes: taskForm.designVariableCodes || [],
+          levels: Number(taskForm.designLevels || 2),
+          replicatesPerCondition: Number(taskForm.designReplicates || 1),
+          blockCount: Number(taskForm.designBlocks || 1),
+          sampleCount: Number(taskForm.designSampleCount || 0),
+          responseSurfaceFamily: taskForm.responseSurfaceFamily || null,
+          randomizationSeed: Number(taskForm.randomizationSeed || 0),
+        },
+      );
+      setExperimentPreview(preview);
+      setExperimentValidation(null);
+      setTaskForm(current => ({
+        ...current,
+        generatedRunPlan: preview.runPlan,
+        randomizationSeed: preview.randomizationSeed,
+      }));
+      notify(`已生成 ${preview.runPlan?.length || 0} 条可编辑运行计划。`, "success");
+    } catch (requestError) {
+      notify(requestError.message, "danger");
+    }
   }
 
   async function submitTask(event) {
@@ -516,36 +563,53 @@ export function ResearchProjectsPage({ identity }) {
           expectedEffectDirection: taskForm.expectedEffectDirection || null,
           minimumEffect: taskForm.minimumEffect ? Number(taskForm.minimumEffect) : null,
           applicability: taskForm.applicability || null,
+          causalChain: parseCausalChain(taskForm.causalChain),
+          temporalFeatures: parseTemporalFeatures(taskForm.temporalFeatures),
+          interactions: parseInteractions(taskForm.interactions),
+          failureConditions: parseFailureConditions(taskForm.failureConditions),
+          falsificationConditions: lines(taskForm.falsificationConditions),
           confidence: 0,
         });
       } else if (task === "experiment") {
         const low = Number(taskForm.low);
         const high = Number(taskForm.high);
-        await postJson(`/api/v1/research-projects/${project.projectId}/experiments`, {
+        const generatedRunPlan = taskForm.generatedRunPlan || [];
+        const runPlan = generatedRunPlan.length > 0 ? generatedRunPlan : [
+          {
+            executionKey: "condition-low",
+            sequence: 1,
+            replicateKey: "replicate-1",
+            factors: [{ variableCode: variable.code, value: low, unit: variable.unit }],
+          },
+          {
+            executionKey: "condition-high",
+            sequence: 2,
+            replicateKey: "replicate-1",
+            factors: [{ variableCode: variable.code, value: high, unit: variable.unit }],
+          },
+        ];
+        const payload = {
           hypothesisId: taskForm.hypothesisId || null,
           name: taskForm.name,
-          designMethod: "engineer-defined",
-          factors: [{ variableCode: variable.code, value: low, unit: variable.unit }],
-          runPlan: [
-            {
-              executionKey: "condition-low",
-              sequence: 1,
-              replicateKey: "replicate-1",
-              factors: [{ variableCode: variable.code, value: low, unit: variable.unit }],
-            },
-            {
-              executionKey: "condition-high",
-              sequence: 2,
-              replicateKey: "replicate-1",
-              factors: [{ variableCode: variable.code, value: high, unit: variable.unit }],
-            },
-          ],
+          designMethod: generatedRunPlan.length > 0 ? taskForm.designMethod : "engineer-defined",
+          randomizationSeed: Number(taskForm.randomizationSeed || 0),
+          factors: generatedRunPlan.length > 0 ? [] : [{ variableCode: variable.code, value: low, unit: variable.unit }],
+          runPlan,
           baselineExecutionKeys: taskForm.baselineExecutionKeys,
           objectiveCodes: [objective.code],
-          replicateKeys: ["replicate-1"],
+          replicateKeys: [...new Set(runPlan.map(item => item.replicateKey).filter(Boolean))],
           stopRule: taskForm.stopRule,
           rollbackPlan: taskForm.rollbackPlan,
-        });
+        };
+        const validation = await postJson(
+          `/api/v1/research-projects/${project.projectId}/experiments/validate`, payload,
+        );
+        setExperimentValidation(validation);
+        if (!validation.isValid) {
+          notify("实验计划还未满足全部要求，请查看校验清单。", "danger");
+          return;
+        }
+        await postJson(`/api/v1/research-projects/${project.projectId}/experiments`, payload);
       } else if (task === "history") {
         await postJson(`/api/v1/research-projects/${project.projectId}/experiments/import-history`, {
           executionIds: taskForm.executionIds,
@@ -626,6 +690,7 @@ export function ResearchProjectsPage({ identity }) {
             loading={evidenceLoading}
             onTask={startTask}
             onExperimentStatus={changeExperimentStatus}
+            onCloneExperiment={cloneExperiment}
             onMaterializeExperimentResult={materializeExperimentResult}
             onDesignWindowValidation={designWindowValidation}
             onValidateWindow={validateWindow}
@@ -650,6 +715,9 @@ export function ResearchProjectsPage({ identity }) {
           workspace={workspace}
           memberCandidates={memberCandidates}
           saving={saving}
+          experimentPreview={experimentPreview}
+          experimentValidation={experimentValidation}
+          onPreviewExperimentDesign={previewExperimentDesign}
           onClose={() => !saving && setTask("")}
           onSubmit={submitTask}
         />
@@ -978,6 +1046,7 @@ function WorkspaceContent({
   loading,
   onTask,
   onExperimentStatus,
+  onCloneExperiment,
   onMaterializeExperimentResult,
   onDesignWindowValidation,
   onValidateWindow,
@@ -1255,14 +1324,26 @@ function WorkspaceContent({
               {
                 key: "optimization",
                 label: "预测与可信度",
-                render: value => {
+                render: (value, row) => {
                   if (!value) return "—";
+                  const mechanismUsages = (workspace.mechanismKnowledgeUsages || [])
+                    .filter(item => item.recommendationId === row.experimentId);
                   return (
                     <div className="min-w-72 space-y-2 text-xs text-slate-600">
                       <div>
                         贝叶斯优化基于 <strong className="text-slate-900">{value.observationCount}</strong> 条观察和{" "}
                         <strong className="text-slate-900">{value.processFeatureCount || 0}</strong> 个共同轨迹特征
                       </div>
+                      {mechanismUsages.length > 0 && (
+                        <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-2 text-indigo-900">
+                          <strong>本次采用的机理知识</strong>
+                          {mechanismUsages.map(item => (
+                            <div className="mt-1" key={`${item.claimId}-${item.claimVersion}-${item.usageType}`}>
+                              {item.claimName || item.claimId} v{item.claimVersion} · {item.usageType === "hard-constraint" ? "缩窄硬边界" : item.usageType === "candidate-ranking" ? "候选偏好排序" : "上下文与解释"} · 哈希 {String(item.contentHash).slice(0, 12)}
+                            </div>
+                          ))}
+                        </div>
+                      )}
                       {(value.runPredictions || []).map(prediction => (
                         <div key={prediction.executionKey} className="rounded-lg border border-slate-200 bg-white p-2">
                           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1330,6 +1411,7 @@ function WorkspaceContent({
                   <div className="flex gap-2">
                     {row.status === "cancelled" && <span className="text-xs text-slate-500">已取消，仅保留审计记录</span>}
                     {row.status !== "cancelled" && row.designMethod === "historical-observation" && <span className="text-xs text-slate-500">只读证据</span>}
+                    {row.designMethod !== "historical-observation" && row.designMethod !== "bayesian-optimization" && row.status !== "cancelled" && canEdit && <Button onClick={event => { event.stopPropagation(); onCloneExperiment(row); }}>基于此实验新建</Button>}
                     {row.status !== "cancelled" && row.optimization?.mode === "shadow" && <span className="text-xs text-slate-500">旁路评估，不可下发</span>}
                     {row.optimization?.mode === "controlled" && row.status === "planned" && !row.controlledDecision && row.createdBy !== currentUserId && <Button onClick={event => { event.stopPropagation(); onControlledDecision(row); }}>接受 / 修改 / 拒绝</Button>}
                     {row.optimization?.mode === "controlled" && row.status === "planned" && !row.controlledDecision && row.createdBy === currentUserId && <span className="text-xs text-slate-500">等待现场工程师决策</span>}
@@ -1878,7 +1960,7 @@ function ControlledDecisionDrawer({ target, form, setForm, saving, variables, on
   );
 }
 
-function TaskDrawer({ task, form, setForm, workspace, memberCandidates, saving, onClose, onSubmit }) {
+function TaskDrawer({ task, form, setForm, workspace, memberCandidates, saving, experimentPreview, experimentValidation, onPreviewExperimentDesign, onClose, onSubmit }) {
   const [historicalProcessExecutions, setHistoricalProcessExecutions] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState("");
@@ -1979,10 +2061,40 @@ function TaskDrawer({ task, form, setForm, workspace, memberCandidates, saving, 
             <Field label="最小可辨别效应"><Input required type="number" min="0.0000001" step="any" value={form.minimumEffect} onChange={update("minimumEffect")} /></Field>
           </div>}
           <Field label="适用范围（可选）"><Textarea rows={3} value={form.applicability} onChange={update("applicability")} placeholder="说明产品、材料、设备或环境边界。" /></Field>
+          <Field label="作用链（每行一条）" hint="格式：起点变量 -> 终点变量 | 作用机制 | increase/decrease/nonlinear"><Textarea rows={4} value={form.causalChain} onChange={update("causalChain")} placeholder="melt.temperature -> defect.rate | 黏度下降改善充填 | decrease" /></Field>
+          <Field label="时间特征（每行一条）" hint="格式：变量 | 特征代码 | 阶段代码 | 时滞毫秒 | 窗口毫秒"><Textarea rows={4} value={form.temporalFeatures} onChange={update("temporalFeatures")} placeholder="cavity.pressure | pressure.rise-rate | holding | 500 | 3000" /></Field>
+          <Field label="交互作用（每行一条）" hint="格式：变量1,变量2 | 交互说明"><Textarea rows={3} value={form.interactions} onChange={update("interactions")} placeholder="melt.temperature,holding.pressure | 高温会放大保压压力对收缩的影响" /></Field>
+          <Field label="失效条件（每行一条）" hint="格式：触发条件 | 可观测征兆 | 必须采取的处置"><Textarea rows={3} value={form.failureConditions} onChange={update("failureConditions")} placeholder="材料温度超过降解阈值 | 挥发物或颜色异常 | 停止实验并恢复基线" /></Field>
+          <Field label="反证条件（每行一条）" hint="写出出现什么结果时应否定或收缩该假设。"><Textarea required rows={3} value={form.falsificationConditions} onChange={update("falsificationConditions")} /></Field>
         </>}
         {task === "experiment" && <>
           <Field label="实验名称"><Input required value={form.name} onChange={update("name")} /></Field>
           <Field label="验证的假设"><Select value={form.hypothesisId} onChange={update("hypothesisId")}><option value="">不关联具体假设</option>{workspace.hypotheses.map(item => <option key={item.hypothesisId} value={item.hypothesisId}>{item.statement}</option>)}</Select></Field>
+          <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4 space-y-4">
+            <div>
+              <p className="text-sm font-semibold text-indigo-950">生成实验设计</p>
+              <p className="mt-1 text-xs leading-5 text-indigo-800">系统只生成可编辑运行表；保存后仍执行全部安全、目标与对照校验。</p>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="设计方法"><Select value={form.designMethod} onChange={event => setForm({ ...form, designMethod: event.target.value, generatedRunPlan: [] })}><option value="full-factorial">全因子设计</option><option value="fractional-factorial">部分因子设计</option><option value="response-surface">响应面设计</option><option value="latin-hypercube">拉丁超立方</option></Select></Field>
+              <Field label="设计变量" hint="按 Ctrl 或 Shift 选择多个可控变量。"><Select multiple size={Math.min(5, Math.max(2, variables.length))} value={form.designVariableCodes || []} onChange={event => setForm({ ...form, designVariableCodes: Array.from(event.target.selectedOptions, option => option.value), generatedRunPlan: [] })}>{variables.map(item => <option key={item.code} value={item.code}>{item.name}（{item.unit}）</option>)}</Select></Field>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <Field label="水平数"><Input disabled={form.designMethod === "fractional-factorial" || form.designMethod === "latin-hypercube"} type="number" min="2" max="5" value={form.designLevels} onChange={update("designLevels")} /></Field>
+              <Field label="每条件重复"><Input type="number" min="1" max="5" value={form.designReplicates} onChange={update("designReplicates")} /></Field>
+              <Field label="区组数"><Input type="number" min="1" max="5" value={form.designBlocks} onChange={update("designBlocks")} /></Field>
+            </div>
+            {form.designMethod === "latin-hypercube" && <Field label="样本数"><Input type="number" min="2" max="40" value={form.designSampleCount} onChange={update("designSampleCount")} /></Field>}
+            {form.designMethod === "response-surface" && <Field label="响应面族"><Select value={form.responseSurfaceFamily} onChange={update("responseSurfaceFamily")}><option value="central-composite">中心复合设计（CCD）</option><option value="box-behnken">Box–Behnken</option></Select></Field>}
+            <Button type="button" onClick={onPreviewExperimentDesign}>生成并预览运行表</Button>
+            {experimentPreview && <div className="space-y-2 rounded-lg border border-indigo-200 bg-white p-3 text-xs text-slate-700">
+              <div><strong>已生成 {experimentPreview.runPlan?.length || 0} 条运行</strong>{experimentPreview.aliasStructure ? ` · ${experimentPreview.aliasStructure}` : ""}</div>
+              {(experimentPreview.warnings || []).map(item => <Alert key={item} tone="warning">{item}</Alert>)}
+              <div className="max-h-48 overflow-auto rounded border border-slate-200">
+                <table className="w-full text-left"><thead><tr className="bg-slate-50"><th className="p-2">顺序</th><th className="p-2">区组/重复</th><th className="p-2">变量设置</th></tr></thead><tbody>{(form.generatedRunPlan || []).map(run => <tr key={run.executionKey} className="border-t border-slate-100"><td className="p-2">{run.sequence}</td><td className="p-2">{run.blockKey || "—"} / {run.replicateKey || "—"}</td><td className="p-2">{(run.factors || []).map(factor => `${factor.variableCode}=${formatResearchNumber(factor.value)} ${factor.unit}`).join("；")}</td></tr>)}</tbody></table>
+              </div>
+            </div>}
+          </div>
           <VariableSelect variables={variables} value={form.variableCode} onChange={update("variableCode")} />
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="低水平"><Input required type="number" step="any" value={form.low} onChange={update("low")} /></Field>
@@ -2015,6 +2127,12 @@ function TaskDrawer({ task, form, setForm, workspace, memberCandidates, saving, 
           )}
           <Field label="停止规则"><Textarea required rows={3} value={form.stopRule} onChange={update("stopRule")} /></Field>
           <Field label="回退方案"><Textarea required rows={3} value={form.rollbackPlan} onChange={update("rollbackPlan")} /></Field>
+          {experimentValidation && <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+            <p className="text-sm font-semibold text-amber-950">本实验还差什么</p>
+            <ul className="mt-2 space-y-1 text-xs text-amber-900">
+              {experimentValidation.isValid ? <li>✓ 当前预检已通过；提交时仍会校验最新项目版本。</li> : (experimentValidation.errors || []).map(issue => <li key={`${issue.field}-${issue.code}`}>✗ {issue.message}{issue.fixHint ? ` ${issue.fixHint}` : ""}</li>)}
+            </ul>
+          </div>}
         </>}
         {task === "history" && <>
           <Alert tone="info" title="把已有数据变成优化观察">
@@ -2153,6 +2271,43 @@ function TaskDrawer({ task, form, setForm, workspace, memberCandidates, saving, 
       </form>
     </Drawer>
   );
+}
+
+function lines(value) {
+  return String(value || "").split("\n").map(item => item.trim()).filter(Boolean);
+}
+
+function parseCausalChain(value) {
+  return lines(value).map(item => {
+    const [edge, mechanism, direction = "unknown"] = item.split("|").map(part => part.trim());
+    const [fromVariableCode, toVariableCode] = edge.split("->").map(part => part.trim());
+    if (!fromVariableCode || !toVariableCode || !mechanism) throw new Error("作用链格式不完整。");
+    return { fromVariableCode, toVariableCode, mechanism, direction };
+  });
+}
+
+function parseTemporalFeatures(value) {
+  return lines(value).map(item => {
+    const [variableCode, featureCode, phaseCode, delay, window] = item.split("|").map(part => part.trim());
+    if (!variableCode || !featureCode) throw new Error("时间特征格式不完整。");
+    return { variableCode, featureCode, phaseCode: phaseCode || null, delayMilliseconds: delay ? Number(delay) : null, windowMilliseconds: window ? Number(window) : null };
+  });
+}
+
+function parseInteractions(value) {
+  return lines(value).map(item => {
+    const [codes, description] = item.split("|").map(part => part.trim());
+    if (!description) throw new Error("交互作用格式不完整。");
+    return { variableCodes: codes.split(",").map(code => code.trim()).filter(Boolean), description };
+  });
+}
+
+function parseFailureConditions(value) {
+  return lines(value).map(item => {
+    const [condition, observableSignal, requiredResponse] = item.split("|").map(part => part.trim());
+    if (!condition || !observableSignal || !requiredResponse) throw new Error("失效条件格式不完整。");
+    return { condition, observableSignal, requiredResponse };
+  });
 }
 
 function VariableSelect({ variables, value, onChange }) {

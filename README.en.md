@@ -123,13 +123,14 @@ cp .env.example .env
 docker compose -f docker-compose.app.yml up -d --build
 ```
 
-The first build downloads .NET, Node, Python, PyTorch, and TimescaleDB images, so duration depends on network conditions. After the command exits, run `docker compose -f docker-compose.app.yml ps` and verify that all four core services are `healthy`; an image download still in progress does not mean the application has started.
+The first build downloads .NET, Node, Python, PyTorch, and TimescaleDB images, so duration depends on network conditions. After the command exits, run `docker compose -f docker-compose.app.yml ps -a` and verify that `platform-migrate` exited successfully, the four HTTP/database services are `healthy`, and `platform-worker` remains `running`; an image download still in progress does not mean the application has started.
 
 Then open:
 
 ```text
 http://localhost:3000       Process R&D workbench
 http://localhost:8000/health
+http://localhost:8000/openapi/v1.json
 http://localhost:8100/ready
 ```
 
@@ -179,6 +180,7 @@ scripts/           verification and operations scripts
 - [Getting started](docs/getting-started.en.md)
 - [System design](docs/design.en.md)
 - [Analysis and optimization](docs/optimization.en.md)
+- [Mechanism knowledge design](docs/mechanism-knowledge.en.md)
 - [Data integration](docs/data-connection.en.md)
 - [Scenario validation](docs/rollout.en.md)
 - [Roadmap](docs/project-plan.en.md)

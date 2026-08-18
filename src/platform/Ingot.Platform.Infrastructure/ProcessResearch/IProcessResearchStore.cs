@@ -29,6 +29,15 @@ public interface IProcessResearchStore
     Task<ResearchExperiment> SaveExperimentAsync(
         ResearchExperiment value,
         CancellationToken ct = default);
+    async Task<ResearchExperiment> SaveExperimentTransactionAsync(
+        ResearchExperiment updatedExperiment,
+        ResearchAuditEntry audit,
+        CancellationToken ct = default)
+    {
+        var saved = await SaveExperimentAsync(updatedExperiment, ct).ConfigureAwait(false);
+        await AddAuditEntryAsync(audit, ct).ConfigureAwait(false);
+        return saved;
+    }
     async Task<ResearchExperiment> SaveControlledDecisionTransactionAsync(
         ResearchExperiment updatedExperiment,
         ResearchAuditEntry audit,

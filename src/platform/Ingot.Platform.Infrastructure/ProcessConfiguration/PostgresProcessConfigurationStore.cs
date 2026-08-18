@@ -5,17 +5,13 @@ using NpgsqlTypes;
 
 namespace Ingot.Platform.Infrastructure.ProcessConfiguration;
 
-public sealed class PostgresProcessConfigurationStore : IProcessConfigurationStore, IAsyncDisposable
+public sealed class PostgresProcessConfigurationStore : IProcessConfigurationStore
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private readonly NpgsqlDataSource _dataSource;
 
-    public PostgresProcessConfigurationStore(IConfiguration configuration)
-    {
-        var connectionString = configuration.GetConnectionString("Events")
-            ?? throw new InvalidOperationException("缺少 ConnectionStrings:Events PostgreSQL 连接字符串。");
-        _dataSource = NpgsqlDataSource.Create(connectionString);
-    }
+    public PostgresProcessConfigurationStore(NpgsqlDataSource dataSource)
+        => _dataSource = dataSource;
 
     public Task InitializeAsync(CancellationToken ct = default) => Task.CompletedTask;
 
@@ -100,12 +96,12 @@ public sealed class PostgresProcessConfigurationStore : IProcessConfigurationSto
             : "status = EXCLUDED.status, payload = EXCLUDED.payload, updated_at = EXCLUDED.updated_at";
         await using var command = _dataSource.CreateCommand(
             $"INSERT INTO {table}({columns}) VALUES ({values}) ON CONFLICT ({keyColumn}, version) DO UPDATE SET {updates};");
-        command.Parameters.AddWithValue("key", key);
+        command.Parameters.AddWithValue("key", NormalizeIdentifier(key));
         command.Parameters.AddWithValue("version", version);
         command.Parameters.AddWithValue("status", status);
         if (hasModel)
         {
-            command.Parameters.AddWithValue("model_id", modelId!);
+            command.Parameters.AddWithValue("model_id", NormalizeIdentifier(modelId!));
             command.Parameters.AddWithValue("model_version", modelVersion!.Value);
         }
         command.Parameters.AddWithValue("payload", NpgsqlDbType.Jsonb, JsonSerializer.Serialize(payload, JsonOptions));
@@ -130,7 +126,7 @@ public sealed class PostgresProcessConfigurationStore : IProcessConfigurationSto
         await InitializeAsync(ct).ConfigureAwait(false);
         await using var command = _dataSource.CreateCommand(
             $"SELECT payload::text FROM {table} WHERE {keyColumn} = @key AND version = @version;");
-        command.Parameters.AddWithValue("key", key);
+        command.Parameters.AddWithValue("key", NormalizeIdentifier(key));
         command.Parameters.AddWithValue("version", version);
         var payload = await command.ExecuteScalarAsync(ct).ConfigureAwait(false);
         return payload is null or DBNull ? default : JsonSerializer.Deserialize<T>((string)payload, JsonOptions);
@@ -141,13 +137,11 @@ public sealed class PostgresProcessConfigurationStore : IProcessConfigurationSto
         await InitializeAsync(ct).ConfigureAwait(false);
         await using var command = _dataSource.CreateCommand(
             $"DELETE FROM {table} WHERE {keyColumn} = @key AND version = @version;");
-        command.Parameters.AddWithValue("key", key);
+        command.Parameters.AddWithValue("key", NormalizeIdentifier(key));
         command.Parameters.AddWithValue("version", version);
         return await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false) > 0;
     }
 
-    public async ValueTask DisposeAsync()
-    {
-        await _dataSource.DisposeAsync().ConfigureAwait(false);
-    }
+    private static string NormalizeIdentifier(string value)
+        => value.Trim().ToLowerInvariant();
 }

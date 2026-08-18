@@ -2,11 +2,156 @@ using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.IO.Compression;
 using ClosedXML.Excel;
 using Ingot.Contracts.ResearchAssets;
 using UglyToad.PdfPig;
 
 namespace Ingot.Platform.Infrastructure.ResearchAssets;
+
+public sealed record KnowledgeExtractionJob(Guid SourceId, string UserId, Guid LeaseId, int AttemptCount);
+
+public enum KnowledgeExtractionFailureDisposition
+{
+    RetryScheduled,
+    DeadLettered
+}
+
+public sealed class KnowledgeExtractionWorkerOptions
+{
+    public TimeSpan LeaseTimeout { get; init; } = TimeSpan.FromMinutes(15);
+    public TimeSpan HeartbeatInterval { get; init; } = TimeSpan.FromMinutes(1);
+    public int MaxAttempts { get; init; } = 5;
+    public TimeSpan InitialRetryDelay { get; init; } = TimeSpan.FromSeconds(30);
+    public TimeSpan MaxRetryDelay { get; init; } = TimeSpan.FromMinutes(30);
+}
+
+public sealed class KnowledgeExtractionWorker(
+    IResearchAssetStore store,
+    KnowledgeExtractionService extractionService,
+    Microsoft.Extensions.Options.IOptions<KnowledgeExtractionWorkerOptions> options,
+    ILogger<KnowledgeExtractionWorker> logger) : BackgroundService
+{
+    private readonly KnowledgeExtractionWorkerOptions _options = options.Value;
+
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(1));
+        do
+        {
+            var job = await store.ClaimKnowledgeExtractionAsync(_options.LeaseTimeout, stoppingToken)
+                .ConfigureAwait(false);
+            if (job is null) continue;
+            using var extractionCts = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
+            using var heartbeatCts = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
+            var leaseLost = 0;
+            var heartbeat = RenewLeaseAsync(job, extractionCts, heartbeatCts.Token, () =>
+                Interlocked.Exchange(ref leaseLost, 1));
+            try
+            {
+                await extractionService.ExtractAsync(job.SourceId, job.UserId, extractionCts.Token)
+                    .ConfigureAwait(false);
+                heartbeatCts.Cancel();
+                await AwaitHeartbeatAsync(heartbeat).ConfigureAwait(false);
+                if (Volatile.Read(ref leaseLost) == 0 &&
+                    !await store.CompleteKnowledgeExtractionAsync(job.SourceId, job.LeaseId, stoppingToken)
+                        .ConfigureAwait(false))
+                {
+                    logger.LogWarning("知识提取任务 {SourceId} 完成时租约已失效，结果未确认。", job.SourceId);
+                }
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                heartbeatCts.Cancel();
+                await AwaitHeartbeatAsync(heartbeat).ConfigureAwait(false);
+                break;
+            }
+            catch (OperationCanceledException) when (Volatile.Read(ref leaseLost) != 0)
+            {
+                logger.LogWarning("知识提取任务 {SourceId} 丢失租约，已中止本实例处理。", job.SourceId);
+            }
+            catch (Exception exception)
+            {
+                heartbeatCts.Cancel();
+                await AwaitHeartbeatAsync(heartbeat).ConfigureAwait(false);
+                if (Volatile.Read(ref leaseLost) != 0)
+                    continue;
+                var retryable = IsRetryable(exception);
+                var disposition = await store.FailKnowledgeExtractionAsync(
+                    job.SourceId,
+                    job.LeaseId,
+                    exception.Message,
+                    retryable,
+                    Math.Max(1, _options.MaxAttempts),
+                    RetryDelay(job.AttemptCount),
+                    stoppingToken).ConfigureAwait(false);
+                logger.LogWarning(
+                    exception,
+                    "知识提取任务 {SourceId} 失败，处理结果 {Disposition}，第 {Attempt} 次尝试。",
+                    job.SourceId,
+                    disposition,
+                    job.AttemptCount);
+            }
+            finally
+            {
+                heartbeatCts.Cancel();
+                await AwaitHeartbeatAsync(heartbeat).ConfigureAwait(false);
+            }
+        }
+        while (await timer.WaitForNextTickAsync(stoppingToken).ConfigureAwait(false));
+    }
+
+    private async Task RenewLeaseAsync(
+        KnowledgeExtractionJob job,
+        CancellationTokenSource extractionCts,
+        CancellationToken ct,
+        Action markLeaseLost)
+    {
+        try
+        {
+            using var timer = new PeriodicTimer(_options.HeartbeatInterval);
+            while (await timer.WaitForNextTickAsync(ct).ConfigureAwait(false))
+            {
+                if (await store.RenewKnowledgeExtractionLeaseAsync(job.SourceId, job.LeaseId, ct)
+                        .ConfigureAwait(false))
+                    continue;
+                markLeaseLost();
+                await extractionCts.CancelAsync().ConfigureAwait(false);
+                return;
+            }
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+        }
+        catch (Exception exception)
+        {
+            logger.LogError(exception, "知识提取任务 {SourceId} 续租失败，停止处理以避免重复执行。", job.SourceId);
+            markLeaseLost();
+            await extractionCts.CancelAsync().ConfigureAwait(false);
+        }
+    }
+
+    private TimeSpan RetryDelay(int attemptCount)
+    {
+        var multiplier = Math.Pow(2, Math.Clamp(attemptCount - 1, 0, 20));
+        var ticks = Math.Min(_options.MaxRetryDelay.Ticks, _options.InitialRetryDelay.Ticks * multiplier);
+        return TimeSpan.FromTicks((long)ticks);
+    }
+
+    private static bool IsRetryable(Exception exception)
+        => exception is not (ResearchAssetRuleException or InvalidDataException or NotSupportedException);
+
+    private static async Task AwaitHeartbeatAsync(Task heartbeat)
+    {
+        try
+        {
+            await heartbeat.ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+}
 
 public sealed record ExtractedKnowledgeFragment
 {
@@ -47,21 +192,25 @@ public sealed class KnowledgeExtractionService(
         if (source.ExtractionStatus == "completed" &&
             string.Equals(source.ExtractorVersion, pipelineVersion, StringComparison.Ordinal))
             return source;
-        var stream = await store.OpenKnowledgeSourceAsync(sourceId, ct).ConfigureAwait(false)
-            ?? throw new ResearchAssetRuleException("知识来源文件不可用。");
-        await using (stream.ConfigureAwait(false))
+        source = source with
         {
-            try
+            ExtractionStatus = "running",
+            ExtractionError = null,
+            ExtractorVersion = pipelineVersion
+        };
+        await store.SaveKnowledgeSourceMetadataAsync(source, ct).ConfigureAwait(false);
+        try
+        {
+            var stream = await store.OpenKnowledgeSourceAsync(sourceId, ct).ConfigureAwait(false)
+                ?? throw new ResearchAssetRuleException("知识来源文件不可用。");
+            await using (stream.ConfigureAwait(false))
             {
                 var fragments = await extractor.ExtractAsync(stream, source, ct).ConfigureAwait(false);
                 if (fragments.Count == 0)
                     throw new InvalidDataException("文件中没有提取到可复核内容。");
-                foreach (var fragment in fragments)
-                {
-                    ct.ThrowIfCancellationRequested();
-                    await store.SaveKnowledgeRecordAsync(new KnowledgeRecord
+                var records = fragments.Select((fragment, index) => new KnowledgeRecord
                     {
-                        RecordId = Guid.CreateVersion7(),
+                        RecordId = DeterministicRecordId(source.SourceId, index, fragment.Citation.ContentHash),
                         SourceId = source.SourceId,
                         Category = fragment.Category,
                         PageOrSheet = DisplayLocation(fragment.Citation),
@@ -75,8 +224,7 @@ public sealed class KnowledgeExtractionService(
                         ExtractorVersion = extractor.Version,
                         ExtractionConfidence = fragment.Confidence,
                         Citation = fragment.Citation
-                    }, ct).ConfigureAwait(false);
-                }
+                    }).ToArray();
                 var updated = source with
                 {
                     Status = KnowledgeSourceStatuses.Indexed,
@@ -84,24 +232,24 @@ public sealed class KnowledgeExtractionService(
                     ExtractionError = null,
                     ExtractorVersion = pipelineVersion
                 };
-                await store.SaveKnowledgeSourceMetadataAsync(updated, ct).ConfigureAwait(false);
+                await store.ReplaceExtractedKnowledgeRecordsAsync(updated, records, ct).ConfigureAwait(false);
                 await AddAuditAsync(updated, "automatically-indexed", userId, fragments.Count, ct)
                     .ConfigureAwait(false);
                 return updated;
             }
-            catch (Exception exception) when (exception is not OperationCanceledException)
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            var failed = source with
             {
-                var failed = source with
-                {
-                    ExtractionStatus = "failed",
-                    ExtractionError = exception.Message[..Math.Min(exception.Message.Length, 1000)],
-                    ExtractorVersion = pipelineVersion
-                };
-                await store.SaveKnowledgeSourceMetadataAsync(failed, ct).ConfigureAwait(false);
-                await AddAuditAsync(failed, "automatic-index-failed", userId, 0, ct)
-                    .ConfigureAwait(false);
-                throw new ResearchAssetRuleException($"自动解析失败：{exception.Message}");
-            }
+                ExtractionStatus = "failed",
+                ExtractionError = exception.Message[..Math.Min(exception.Message.Length, 1000)],
+                ExtractorVersion = pipelineVersion
+            };
+            await store.SaveKnowledgeSourceMetadataAsync(failed, ct).ConfigureAwait(false);
+            await AddAuditAsync(failed, "automatic-index-failed", userId, 0, ct)
+                .ConfigureAwait(false);
+            throw new ResearchAssetRuleException($"自动解析失败：{exception.Message}");
         }
     }
 
@@ -131,10 +279,18 @@ public sealed class KnowledgeExtractionService(
         => value.PageNumber is { } page ? $"page:{page}" :
             value.SheetName is not null ? $"sheet:{value.SheetName}" :
             value.LocationKind;
+
+    private static Guid DeterministicRecordId(Guid sourceId, int index, string contentHash)
+    {
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes($"{sourceId:N}:{index}:{contentHash}"));
+        return new Guid(bytes.AsSpan(0, 16));
+    }
 }
 
 public sealed class PdfKnowledgeExtractor : IKnowledgeContentExtractor
 {
+    private const int MaximumPages = 2000;
+    private const int MaximumExtractedCharacters = 10_000_000;
     public string Version => "pdfpig-0.1.14/page-text-v1";
 
     public bool Supports(KnowledgeSource source)
@@ -146,11 +302,17 @@ public sealed class PdfKnowledgeExtractor : IKnowledgeContentExtractor
         CancellationToken ct = default)
     {
         using var document = PdfDocument.Open(content);
+        if (document.NumberOfPages > MaximumPages)
+            throw new InvalidDataException($"PDF 超过 {MaximumPages} 页解析上限。");
         var result = new List<ExtractedKnowledgeFragment>();
+        var extractedCharacters = 0;
         foreach (var page in document.GetPages())
         {
             ct.ThrowIfCancellationRequested();
             var text = NormalizeText(page.Text);
+            extractedCharacters += text.Length;
+            if (extractedCharacters > MaximumExtractedCharacters)
+                throw new InvalidDataException("PDF 提取文本超过安全上限。");
             foreach (var chunk in Chunk(text, 12000))
             {
                 result.Add(new ExtractedKnowledgeFragment
@@ -200,6 +362,8 @@ public sealed class PdfKnowledgeExtractor : IKnowledgeContentExtractor
 
 public sealed class ExcelKnowledgeExtractor : IKnowledgeContentExtractor
 {
+    private const int MaximumArchiveEntries = 20_000;
+    private const long MaximumExpandedBytes = 250L * 1024 * 1024;
     public string Version => "closedxml-0.105.0/used-range-v1";
 
     public bool Supports(KnowledgeSource source)
@@ -212,6 +376,7 @@ public sealed class ExcelKnowledgeExtractor : IKnowledgeContentExtractor
         KnowledgeSource source,
         CancellationToken ct = default)
     {
+        ValidateArchive(content);
         using var workbook = new XLWorkbook(content);
         var result = new List<ExtractedKnowledgeFragment>();
         foreach (var worksheet in workbook.Worksheets)
@@ -258,6 +423,20 @@ public sealed class ExcelKnowledgeExtractor : IKnowledgeContentExtractor
         }
         return Task.FromResult<IReadOnlyList<ExtractedKnowledgeFragment>>(result);
     }
+
+    private static void ValidateArchive(Stream content)
+    {
+        if (!content.CanSeek)
+            throw new InvalidDataException("Excel 文件流必须支持安全预检。");
+        var original = content.Position;
+        using (var archive = new ZipArchive(content, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            if (archive.Entries.Count > MaximumArchiveEntries ||
+                archive.Entries.Sum(static entry => entry.Length) > MaximumExpandedBytes)
+                throw new InvalidDataException("Excel 压缩内容超过安全解析上限。");
+        }
+        content.Position = original;
+    }
 }
 
 public sealed class PlainTextKnowledgeExtractor : IKnowledgeContentExtractor
@@ -281,6 +460,8 @@ public sealed class PlainTextKnowledgeExtractor : IKnowledgeContentExtractor
             detectEncodingFromByteOrderMarks: true,
             leaveOpen: true);
         var text = await reader.ReadToEndAsync(ct).ConfigureAwait(false);
+        if (text.Length > 10_000_000)
+            throw new InvalidDataException("文本提取内容超过安全上限。");
         return PdfKnowledgeExtractor.Chunk(text, 12000)
             .Where(static chunk => !string.IsNullOrWhiteSpace(chunk))
             .Select(chunk => new ExtractedKnowledgeFragment
@@ -315,6 +496,8 @@ public sealed class ImageKnowledgeExtractor(HttpClient httpClient, IConfiguratio
         KnowledgeSource source,
         CancellationToken ct = default)
     {
+        if (content.CanSeek && content.Length > 20L * 1024 * 1024)
+            throw new InvalidDataException("图片超过 OCR 安全解析上限。");
         var endpoint = configuration["KnowledgeExtraction:Vision:Endpoint"]?.TrimEnd('/');
         var key = configuration["KnowledgeExtraction:Vision:ApiKey"];
         if (string.IsNullOrWhiteSpace(endpoint) || string.IsNullOrWhiteSpace(key))

@@ -9,19 +9,17 @@ namespace Ingot.Platform.Infrastructure.ProcessExecutions;
 /// only when it agrees with the reference result within a declared tolerance.
 /// Both late-event recomputation and historical backfill enter through this service.
 /// </summary>
-public sealed class PostgresProcessExecutionScientificComputeEngine : IAsyncDisposable
+public sealed class PostgresProcessExecutionScientificComputeEngine
 {
     private const double RelativeTolerance = 1e-9;
     private readonly NpgsqlDataSource _dataSource;
     private readonly ILogger<PostgresProcessExecutionScientificComputeEngine>? _logger;
 
     public PostgresProcessExecutionScientificComputeEngine(
-        IConfiguration configuration,
+        NpgsqlDataSource dataSource,
         ILogger<PostgresProcessExecutionScientificComputeEngine>? logger = null)
     {
-        var connectionString = configuration.GetConnectionString("Events")
-            ?? throw new InvalidOperationException("缺少 ConnectionStrings:Events PostgreSQL 连接字符串。");
-        _dataSource = NpgsqlDataSource.Create(connectionString);
+        _dataSource = dataSource;
         _logger = logger;
     }
 
@@ -410,8 +408,6 @@ public sealed class PostgresProcessExecutionScientificComputeEngine : IAsyncDisp
         IReadOnlyList<ProcessSignalFeature> features,
         params string[] codes)
         => features.FirstOrDefault(feature => codes.Contains(feature.Code, StringComparer.Ordinal))?.Value;
-
-    public ValueTask DisposeAsync() => _dataSource.DisposeAsync();
 
     internal sealed record SqlScopeResult
     {

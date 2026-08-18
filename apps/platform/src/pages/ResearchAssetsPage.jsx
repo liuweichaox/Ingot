@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { getJson } from "../api/http";
+import { MechanismKnowledgeWorkbench } from "../components/MechanismKnowledgeWorkbench";
 import {
   Alert,
   Card,
@@ -151,8 +152,10 @@ export function ResearchAssetsPage() {
       {loading ? (
         <Card><p className="py-8 text-center text-sm text-slate-500">正在读取研发资产…</p></Card>
       ) : (
-        <div className="grid gap-5 xl:grid-cols-2">
-          {assetDefinitions.map(definition => (
+        <div className="space-y-5">
+          <MechanismKnowledgeWorkbench projectId={projectId} sources={assets.knowledge || []} reloadAssets={load} />
+          <div className="grid gap-5 xl:grid-cols-2">
+          {assetDefinitions.filter(definition => definition.key !== "knowledge").map(definition => (
             <Card
               key={definition.key}
               title={definition.title}
@@ -169,6 +172,7 @@ export function ResearchAssetsPage() {
               )}
             </Card>
           ))}
+          </div>
         </div>
       )}
     </Page>

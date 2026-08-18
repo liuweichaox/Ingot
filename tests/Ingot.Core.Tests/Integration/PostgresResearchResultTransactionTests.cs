@@ -9,10 +9,87 @@ namespace Ingot.Core.Tests.Integration;
 public sealed class PostgresResearchResultTransactionTests(PostgresIntegrationFixture postgres)
 {
     [LinuxDockerFact]
+    public async Task ExperimentTransition_ShouldAllowExactlyOneConcurrentWriterWithMatchingAudit()
+    {
+        await postgres.EnsureSchemaAsync();
+        var store = new PostgresProcessResearchStore(postgres.DataSource);
+        var now = DateTimeOffset.UtcNow;
+        var project = new ResearchProject
+        {
+            ProjectId = Guid.CreateVersion7(),
+            Code = $"experiment-cas-{Guid.NewGuid():N}",
+            Name = "Experiment CAS",
+            ProcessName = "Test Process",
+            OwnerUserId = "engineer-a",
+            Revision = 1,
+            CreatedAt = now,
+            UpdatedAt = now
+        };
+        var experiment = new ResearchExperiment
+        {
+            ExperimentId = Guid.CreateVersion7(),
+            ProjectId = project.ProjectId,
+            ProjectRevision = project.Revision,
+            Revision = 1,
+            Name = "Concurrent transition",
+            StopRule = "stop",
+            RollbackPlan = "rollback",
+            CreatedAt = now,
+            UpdatedAt = now
+        };
+        await store.SaveProjectAsync(project);
+        await store.SaveExperimentAsync(experiment);
+
+        async Task<bool> TryTransitionAsync(string status, string actor)
+        {
+            try
+            {
+                await store.SaveExperimentTransactionAsync(
+                    experiment with
+                    {
+                        Revision = 2,
+                        Status = status,
+                        UpdatedAt = now.AddSeconds(1)
+                    },
+                    new ResearchAuditEntry
+                    {
+                        EntryId = Guid.CreateVersion7(),
+                        ProjectId = project.ProjectId,
+                        ResourceType = "experiment",
+                        ResourceId = experiment.ExperimentId.ToString(),
+                        Action = "status-changed",
+                        FromStatus = ResearchExperimentStatuses.Planned,
+                        ToStatus = status,
+                        UserId = actor,
+                        CreatedAt = now.AddSeconds(1)
+                    });
+                return true;
+            }
+            catch (ProcessResearchRuleException)
+            {
+                return false;
+            }
+        }
+
+        var outcomes = await Task.WhenAll(
+            TryTransitionAsync(ResearchExperimentStatuses.Approved, "engineer-b"),
+            TryTransitionAsync(ResearchExperimentStatuses.Cancelled, "engineer-c"));
+
+        Assert.Single(outcomes, static value => value);
+        var persisted = await store.GetExperimentAsync(experiment.ExperimentId);
+        Assert.Equal(2, persisted!.Revision);
+        var audits = (await store.ListAuditEntriesAsync(project.ProjectId))
+            .Where(value => value.ResourceId == experiment.ExperimentId.ToString())
+            .ToArray();
+        var audit = Assert.Single(audits);
+        Assert.Equal(persisted.Status, audit.ToStatus);
+    }
+
+    [LinuxDockerFact]
     public async Task ShadowRecommendation_ShouldBeAppendOnlyAcrossDecisionAndOutcome()
     {
         await postgres.EnsureSchemaAsync();
-        await using var store = new PostgresProcessResearchStore(postgres.Configuration);
+        var store = new PostgresProcessResearchStore(postgres.DataSource);
         var now = DateTimeOffset.UtcNow;
         var project = new ResearchProject
         {
@@ -181,7 +258,7 @@ public sealed class PostgresResearchResultTransactionTests(PostgresIntegrationFi
     public async Task ControlledDecision_ShouldCommitOnceWithRunPlanAndAudit()
     {
         await postgres.EnsureSchemaAsync();
-        await using var store = new PostgresProcessResearchStore(postgres.Configuration);
+        var store = new PostgresProcessResearchStore(postgres.DataSource);
         var now = DateTimeOffset.UtcNow;
         var project = new ResearchProject
         {
@@ -230,6 +307,7 @@ public sealed class PostgresResearchResultTransactionTests(PostgresIntegrationFi
                 { VariableCode = "temperature", Value = approvedValue, Unit = "Cel" };
             var updated = experiment with
             {
+                Revision = experiment.Revision + 1,
                 RunPlan = [originalRun with { Factors = [approved] }],
                 ControlledDecision = new ResearchControlledDecision
                 {
@@ -284,7 +362,7 @@ public sealed class PostgresResearchResultTransactionTests(PostgresIntegrationFi
     public async Task TransferAssessment_ShouldPersistIdempotentlyAndReviewOnce()
     {
         await postgres.EnsureSchemaAsync();
-        await using var store = new PostgresProcessResearchStore(postgres.Configuration);
+        var store = new PostgresProcessResearchStore(postgres.DataSource);
         var now = DateTimeOffset.UtcNow;
         var source = new ResearchProject
         {
@@ -367,7 +445,7 @@ public sealed class PostgresResearchResultTransactionTests(PostgresIntegrationFi
     public async Task MissingExperimentUpdate_ShouldRollbackResultAndAudit()
     {
         await postgres.EnsureSchemaAsync();
-        await using var store = new PostgresProcessResearchStore(postgres.Configuration);
+        var store = new PostgresProcessResearchStore(postgres.DataSource);
         var now = DateTimeOffset.UtcNow;
         var project = new ResearchProject
         {
@@ -408,6 +486,7 @@ public sealed class PostgresResearchResultTransactionTests(PostgresIntegrationFi
         var nonexistentUpdate = experiment with
         {
             ExperimentId = Guid.CreateVersion7(),
+            Revision = experiment.Revision + 1,
             ResultIds = [result.ResultId],
             UpdatedAt = now.AddSeconds(1)
         };

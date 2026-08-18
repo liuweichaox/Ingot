@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using Ingot.Platform.Infrastructure.Migrations;
+using Npgsql;
 using Testcontainers.PostgreSql;
 using Xunit;
 
@@ -15,6 +16,7 @@ public sealed class PostgresIntegrationCollection : ICollectionFixture<PostgresI
 public sealed class PostgresIntegrationFixture : IAsyncLifetime
 {
     private PostgreSqlContainer? _container;
+    private NpgsqlDataSource? _dataSource;
     private readonly SemaphoreSlim _migrationLock = new(1, 1);
     private bool _schemaReady;
 
@@ -30,6 +32,9 @@ public sealed class PostgresIntegrationFixture : IAsyncLifetime
         })
         .Build();
 
+    public NpgsqlDataSource DataSource => _dataSource
+        ?? throw new InvalidOperationException("The PostgreSQL integration data source is not ready.");
+
     public async Task InitializeAsync()
     {
         if (OperatingSystem.IsWindows())
@@ -40,10 +45,13 @@ public sealed class PostgresIntegrationFixture : IAsyncLifetime
             .WithPassword("ingot-test-password")
             .Build();
         await _container.StartAsync().ConfigureAwait(false);
+        _dataSource = NpgsqlDataSource.Create(ConnectionString);
     }
 
     public async Task DisposeAsync()
     {
+        if (_dataSource is not null)
+            await _dataSource.DisposeAsync().ConfigureAwait(false);
         if (_container is not null)
             await _container.DisposeAsync().ConfigureAwait(false);
     }

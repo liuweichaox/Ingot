@@ -11,7 +11,7 @@ public sealed class PostgresInspectionRecordStoreTests(PostgresIntegrationFixtur
     public async Task RunLinkedInspection_ShouldRoundTripWithoutFabricatedOutputItemId()
     {
         await postgres.EnsureSchemaAsync();
-        await using var store = new PostgresInspectionRecordStore(postgres.Configuration);
+        var store = new PostgresInspectionRecordStore(postgres.DataSource);
         var request = new CreateInspectionRecordRequest
         {
             RecordId = Guid.CreateVersion7(),

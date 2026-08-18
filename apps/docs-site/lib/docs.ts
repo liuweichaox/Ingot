@@ -21,6 +21,7 @@ const publicSlugs = [
   "getting-started",
   "design",
   "optimization",
+  "mechanism-knowledge",
   "data-connection",
   "project-plan",
   "rollout",
@@ -50,7 +51,7 @@ export const docs: Doc[] = files.map((file) => {
 
 export const groups = [
   { key: "start", zh: "开始使用", en: "Get started", slugs: ["", "getting-started"] },
-  { key: "core", zh: "核心设计", en: "Core design", slugs: ["design", "optimization", "data-connection"] },
+  { key: "core", zh: "核心设计", en: "Core design", slugs: ["design", "optimization", "mechanism-knowledge", "data-connection"] },
   { key: "operate", zh: "规划、验证与运行", en: "Plan, validate, and operate", slugs: ["project-plan", "rollout", "deployment", "faq"] },
   { key: "reference", zh: "产品与项目参考", en: "Product and project reference", slugs: ["brand", "open-source-dependencies"] },
 ];

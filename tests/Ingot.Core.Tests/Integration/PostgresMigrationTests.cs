@@ -94,8 +94,8 @@ public sealed class PostgresMigrationTests(PostgresIntegrationFixture postgres)
     public async Task TimeSeriesRetention_ShouldPruneFramesAndValuesTogether()
     {
         await postgres.EnsureSchemaAsync();
-        await using var store = new PostgresTimeSeriesStore(
-            postgres.Configuration,
+        using var store = new PostgresTimeSeriesStore(
+            postgres.DataSource,
             NullLogger<PostgresTimeSeriesStore>.Instance,
             Options.Create(new PlatformEventOptions()));
         await store.InitializeAsync();
@@ -123,7 +123,7 @@ public sealed class PostgresMigrationTests(PostgresIntegrationFixture postgres)
             await insert.ExecuteNonQueryAsync();
         }
 
-        await TimeSeriesRetentionHostedService.PruneAsync(postgres.ConnectionString, 90);
+        await TimeSeriesRetentionHostedService.PruneAsync(postgres.DataSource, 90);
 
         await using var count = new NpgsqlCommand(
             """

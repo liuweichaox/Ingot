@@ -7,7 +7,6 @@ using Ingot.Platform.Api.HealthChecks;
 using Ingot.Platform.Api.Events;
 using Ingot.Platform.Api.Configuration;
 using Ingot.Platform.Infrastructure;
-using Ingot.Platform.Infrastructure.HealthChecks;
 using Ingot.Platform.Infrastructure.Identity;
 using Serilog;
 using Prometheus;
@@ -26,6 +25,7 @@ builder.WebHost.UseUrls(urls);
 
 builder.Services.AddHttpClient();
 builder.Services.AddControllers();
+builder.Services.AddOpenApi();
 
 // 三种认证模式：
 //   开发环境 → 固定本地身份（不引入第二套登录）；
@@ -87,7 +87,6 @@ builder.Services.AddSingleton<EdgeDiagnosticsTokenProvider>();
 builder.Services.AddSingleton<PlatformUserResolver>();
 
 builder.Services.AddHealthChecks()
-    .AddCheck<SqliteHealthCheck>("sqlite")
     .AddCheck<PostgresPlatformEventStoreHealthCheck>("event-store");
 
 // CORS：给 Vite 开发服务器或独立静态站点调用 API。
@@ -148,6 +147,9 @@ app.MapMetrics("/metrics").AllowAnonymous();
 
 // Health checks（官方风格）：统一用 /health
 app.MapHealthChecks("/health").AllowAnonymous();
+
+// 机器可读 HTTP 契约是 Web、Edge 与外部只读 Agent 适配层的共同边界。
+app.MapOpenApi("/openapi/{documentName}.json").AllowAnonymous();
 
 // Attribute routing（/api/..）
 app.MapControllers();

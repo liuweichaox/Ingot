@@ -11,7 +11,8 @@ public sealed class ProcessExecutionAnalysisMaterializer(
     IProcessExecutionAnalysisMaterializationStore store,
     ProcessExecutionAnalysisEngine engine,
     ILogger<ProcessExecutionAnalysisMaterializer> logger,
-    PostgresProcessExecutionScientificComputeEngine? databaseEngine = null)
+    PostgresProcessExecutionScientificComputeEngine? databaseEngine = null,
+    IExecutionAnalysisLockProvider? distributedLocks = null)
 {
     private readonly SemaphoreSlim[] _executionLocks = Enumerable.Range(0, 64)
         .Select(static _ => new SemaphoreSlim(1, 1))
@@ -53,6 +54,9 @@ public sealed class ProcessExecutionAnalysisMaterializer(
         {
             try
             {
+                await using var distributedLease = distributedLocks is null
+                    ? null
+                    : await distributedLocks.AcquireAsync(key, ct).ConfigureAwait(false);
                 var cached = await store.TryLoadAsync(key, source, ct)
                     .ConfigureAwait(false);
                 if (cached is not null)

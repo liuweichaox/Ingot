@@ -14,7 +14,10 @@ const researchProjects = (await Promise.all([
   readFile(new URL("../src/pages/ResearchProjectsPage.jsx", import.meta.url), "utf8"),
   readFile(new URL("../src/research/researchProjectModel.js", import.meta.url), "utf8"),
 ])).join("\n");
-const researchAssets = await readFile(new URL("../src/pages/ResearchAssetsPage.jsx", import.meta.url), "utf8");
+const researchAssets = (await Promise.all([
+  readFile(new URL("../src/pages/ResearchAssetsPage.jsx", import.meta.url), "utf8"),
+  readFile(new URL("../src/components/MechanismKnowledgeWorkbench.jsx", import.meta.url), "utf8"),
+])).join("\n");
 const goldenQuestions = await readFile(new URL("../src/pages/GoldenQuestionsPage.jsx", import.meta.url), "utf8");
 const ingestionTasks = await readFile(new URL("../src/acquisition/IngestionTaskPage.jsx", import.meta.url), "utf8");
 const app = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
@@ -344,6 +347,23 @@ test("research assets retain mechanism fusion, project-scoped knowledge, and dat
   assert.match(researchAssets, /知识来源严格按研发项目隔离/);
 });
 
+test("mechanism knowledge workbench structures citations, review, constraints, and conflicts", () => {
+  assert.match(researchAssets, /机理知识工作台/);
+  assert.match(researchAssets, /上传并提取/);
+  assert.match(researchAssets, /反证条件/);
+  assert.match(researchAssets, /时滞（毫秒）/);
+  assert.match(researchAssets, /工程约束（可选）/);
+  assert.match(researchAssets, /原始知识引用/);
+  assert.match(researchAssets, /通过审核/);
+  assert.match(researchAssets, /登记支持实验/);
+  assert.match(researchAssets, /登记独立验证实验/);
+  assert.match(researchAssets, /激活用于实验设计/);
+  assert.match(researchAssets, /\/lifecycle/);
+  assert.match(researchAssets, /知识冲突/);
+  assert.match(researchAssets, /\/mechanism-claims/);
+  assert.doesNotMatch(researchAssets, /JSON\.stringify|JSON\.parse/);
+});
+
 test("shadow recommendations preregister engineer choices and freeze source outcomes", () => {
   assert.match(researchProjects, /登记影子选择/);
   assert.match(researchProjects, /shadow-decision/);
@@ -360,6 +380,13 @@ test("shadow recommendations preregister engineer choices and freeze source outc
   assert.match(researchProjects, /上下文变化/);
   assert.match(researchProjects, /参数外推/);
   assert.match(researchProjects, /安全事件/);
+});
+
+test("optimized experiments explain which mechanism knowledge changed the recommendation", () => {
+  assert.match(researchProjects, /mechanismKnowledgeUsages/);
+  assert.match(researchProjects, /本次采用的机理知识/);
+  assert.match(researchProjects, /缩窄硬边界/);
+  assert.match(researchProjects, /候选偏好排序/);
 });
 
 test("historical replay reports preserve production-equivalent comparisons and failures", () => {

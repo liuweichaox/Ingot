@@ -18,7 +18,7 @@ public sealed class EventsController(
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private readonly PlatformEventOptions _eventOptions = eventOptions.Value;
 
-    [HttpPost("/api/v1/events:batch")]
+    [HttpPost(PlatformEventRoutes.AbsoluteBatchIngest)]
     [AllowAnonymous]
     public async Task<IActionResult> Ingest(
         [FromBody] EventBatchRequest? request,

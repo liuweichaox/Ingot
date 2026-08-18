@@ -213,6 +213,7 @@ public sealed partial class ProcessResearchWorkflow
         };
         var updatedExperiment = experiment with
         {
+            Revision = experiment.Revision + 1,
             ResultIds = experiment.ResultIds.Append(resultId).Distinct().ToArray(),
             Status = ResearchExperimentStatuses.Completed,
             Execution = (experiment.Execution ?? BuildExecution(experiment)) with

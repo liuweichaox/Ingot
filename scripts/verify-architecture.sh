@@ -61,14 +61,22 @@ check "platform-host" src/platform/Ingot.Platform.Api \
   'using (Npgsql|Microsoft\.Data\.Sqlite)|NpgsqlDataSource|SqliteConnection' \
   "Platform API 必须保持组合根职责"
 
+check "platform-worker-host" src/platform/Ingot.Platform.Worker \
+  'using (Npgsql|Microsoft\.Data\.Sqlite)|NpgsqlDataSource|SqliteConnection' \
+  "Platform Worker 必须保持组合根职责"
+
+check "platform-migrator-host" src/platform/Ingot.Platform.Migrator \
+  'using (Npgsql|Microsoft\.Data\.Sqlite)|NpgsqlDataSource|SqliteConnection' \
+  "Platform Migrator 必须保持组合根职责"
+
 check "platform-infrastructure" src/platform/Ingot.Platform.Infrastructure \
   'using Ingot\.Platform\.Api' \
   "Platform Infrastructure 必须独立于 API 宿主"
 
 store_schema_ddl=$(grep -rnE \
-  '(CREATE TABLE|CREATE (UNIQUE )?INDEX|ALTER TABLE[^;]*ADD COLUMN)' \
+  '(CREATE TABLE|CREATE (UNIQUE )?INDEX|ALTER TABLE|create_hypertable|add_[a-z_]*policy)' \
   src/platform/Ingot.Platform.Infrastructure \
-  --include='Postgres*Store.cs' --exclude-dir=bin --exclude-dir=obj 2>/dev/null || true)
+  --include='*.cs' --exclude-dir=Migrations --exclude-dir=bin --exclude-dir=obj 2>/dev/null || true)
 if [[ -n "$store_schema_ddl" ]]; then
   echo "✗ [postgres-schema-ownership] PostgreSQL user schema 只能由版本化迁移定义"
   echo "$store_schema_ddl" | sed 's/^/    /'
@@ -106,6 +114,14 @@ project_check src/shared/Ingot.Domain/Ingot.Domain.csproj \
 project_check src/platform/Ingot.Platform.Api/Ingot.Platform.Api.csproj \
   'Npgsql|Microsoft\.Data\.Sqlite' \
   "Platform API 的存储实现必须位于 Platform Infrastructure"
+
+project_check src/platform/Ingot.Platform.Worker/Ingot.Platform.Worker.csproj \
+  'Npgsql|Microsoft\.Data\.Sqlite' \
+  "Platform Worker 的存储实现必须位于 Platform Infrastructure"
+
+project_check src/platform/Ingot.Platform.Migrator/Ingot.Platform.Migrator.csproj \
+  'Npgsql|Microsoft\.Data\.Sqlite' \
+  "Platform Migrator 的存储实现必须位于 Platform Infrastructure"
 
 project_check src/edge/Ingot.Edge.ConnectorHost/Ingot.Edge.ConnectorHost.csproj \
   'Npgsql|Microsoft\.Data\.Sqlite' \

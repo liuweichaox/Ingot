@@ -1,4 +1,5 @@
 using Ingot.Contracts.Events;
+using Npgsql;
 
 namespace Ingot.Platform.Infrastructure.ProcessExecutions;
 
@@ -32,15 +33,31 @@ public interface IProcessExecutionAnalysisMaterializationStore
         string reason,
         CancellationToken ct = default);
 
+    Task MarkDirtyAsync(
+        NpgsqlConnection connection,
+        NpgsqlTransaction transaction,
+        IReadOnlyCollection<string> executionIds,
+        long invalidatedSourceMaxIngestId,
+        string reason,
+        CancellationToken ct = default)
+        => MarkDirtyAsync(executionIds, invalidatedSourceMaxIngestId, reason, ct);
+
     Task<ProcessExecutionAnalysisBackfillJob> AddBackfillJobAsync(
         ProcessExecutionAnalysisBackfillJob job,
         CancellationToken ct = default)
         => throw new NotSupportedException("当前过程执行分析存储不支持回填任务。");
 
-    Task<ProcessExecutionAnalysisBackfillJob> SaveBackfillJobAsync(
-        ProcessExecutionAnalysisBackfillJob job,
+    Task<ProcessExecutionAnalysisBackfillLease?> ClaimBackfillJobAsync(
+        TimeSpan leaseTimeout,
         CancellationToken ct = default)
-        => throw new NotSupportedException("当前过程执行分析存储不支持回填任务。");
+        => Task.FromResult<ProcessExecutionAnalysisBackfillLease?>(null);
+
+    Task<bool> SaveClaimedBackfillJobAsync(
+        ProcessExecutionAnalysisBackfillJob job,
+        Guid leaseId,
+        bool releaseLease,
+        CancellationToken ct = default)
+        => Task.FromResult(false);
 
     Task<ProcessExecutionAnalysisBackfillJob?> GetBackfillJobAsync(
         Guid jobId,
@@ -61,11 +78,34 @@ public interface IProcessExecutionAnalysisMaterializationStore
         CancellationToken ct = default)
         => Task.FromResult<IReadOnlyList<ProcessExecutionFeatureAggregate>>([]);
 
-    Task<IReadOnlyList<string>> ListDirtyExecutionIdsAsync(
-        int limit,
+    Task<ProcessExecutionAnalysisRecomputeLease?> ClaimRecomputeAsync(
+        TimeSpan leaseTimeout,
         CancellationToken ct = default)
-        => Task.FromResult<IReadOnlyList<string>>([]);
+        => Task.FromResult<ProcessExecutionAnalysisRecomputeLease?>(null);
+
+    Task<bool> CompleteRecomputeAsync(
+        string executionId,
+        Guid leaseId,
+        CancellationToken ct = default)
+        => Task.FromResult(false);
+
+    Task<bool> RetryRecomputeAsync(
+        string executionId,
+        Guid leaseId,
+        TimeSpan delay,
+        CancellationToken ct = default)
+        => Task.FromResult(false);
 }
+
+public sealed record ProcessExecutionAnalysisBackfillLease(
+    ProcessExecutionAnalysisBackfillJob Job,
+    Guid LeaseId,
+    int AttemptCount);
+
+public sealed record ProcessExecutionAnalysisRecomputeLease(
+    string ExecutionId,
+    Guid LeaseId,
+    int AttemptCount);
 
 public sealed record ProcessExecutionAnalysisMaterializationKey(
     string ExecutionId,

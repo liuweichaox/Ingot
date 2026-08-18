@@ -149,6 +149,8 @@ public sealed partial class ProcessResearchWorkflow
         var rollbackTask = store.ListRollbackDrillsAsync(projectId, ct);
         var windowsTask = store.ListOperatingRegionsAsync(projectId, ct);
         var claimsTask = store.ListKnowledgeClaimsAsync(projectId, ct);
+        var mechanismUsagesTask = mechanismKnowledgeStore?.ListUsagesAsync(projectId, ct)
+            ?? Task.FromResult<IReadOnlyList<Ingot.Contracts.ResearchAssets.MechanismClaimUsage>>([]);
         var transfersTask = store.ListTransferAssessmentsAsync(projectId, ct);
         var auditTask = store.ListAuditEntriesAsync(projectId, ct);
         await Task.WhenAll(
@@ -160,6 +162,7 @@ public sealed partial class ProcessResearchWorkflow
             rollbackTask,
             windowsTask,
             claimsTask,
+            mechanismUsagesTask,
             transfersTask,
             auditTask).ConfigureAwait(false);
         return new ResearchProjectWorkspace
@@ -173,6 +176,7 @@ public sealed partial class ProcessResearchWorkflow
             RollbackDrills = await rollbackTask.ConfigureAwait(false),
             OperatingRegions = await windowsTask.ConfigureAwait(false),
             KnowledgeClaims = await claimsTask.ConfigureAwait(false),
+            MechanismKnowledgeUsages = await mechanismUsagesTask.ConfigureAwait(false),
             TransferAssessments = await transfersTask.ConfigureAwait(false),
             Audit = await auditTask.ConfigureAwait(false)
         };
@@ -243,6 +247,20 @@ public sealed partial class ProcessResearchWorkflow
         if (outcomeConstraints.Select(static item => item.Code)
             .Intersect(objectives.Select(static item => item.Code), StringComparer.Ordinal).Any())
             throw new ProcessResearchRuleException("研发目标代码与结果约束代码不能重复。");
+        var safetyTemplates = value.SafetyTemplates.Select(item =>
+        {
+            var category = item.ExecutionCategory.Trim().ToLowerInvariant();
+            if (!ResearchExperimentExecutionCategories.IsValid(category))
+                throw new ProcessResearchRuleException("实验安全模板的执行类别无效。");
+            return item with
+            {
+                ExecutionCategory = category,
+                Name = OptionalText(item.Name, 120),
+                StopRule = RequiredText(item.StopRule, "模板停止规则", 4000),
+                RollbackPlan = RequiredText(item.RollbackPlan, "模板回退方案", 4000)
+            };
+        }).GroupBy(static item => item.ExecutionCategory, StringComparer.Ordinal)
+            .Select(static group => group.Last()).ToArray();
 
         return value with
         {
@@ -256,6 +274,7 @@ public sealed partial class ProcessResearchWorkflow
             Variables = variables,
             Constraints = constraints,
             OutcomeConstraints = outcomeConstraints,
+            SafetyTemplates = safetyTemplates,
             OptimizationFeatures = optimizationFeatures,
             OwnerUserId = NormalizeUser(value.OwnerUserId),
             MemberUserIds = value.MemberUserIds

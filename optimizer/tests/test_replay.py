@@ -109,6 +109,28 @@ def test_random_and_response_surface_baselines_share_preregistered_initial_rows(
         assert all(selected[:2] == [0, 1] for selected in result[key])
 
 
+def test_history_pool_replays_mechanism_soft_ranking():
+    history = [
+        {"params": {"x": value}, "outcomes": {"loss": (value - 0.9) ** 2}}
+        for value in [0.0, 0.2, 0.4, 0.6, 0.8]
+    ]
+
+    result = replay_history_pool(
+        campaign(),
+        history,
+        n_seeds=1,
+        initial_observation_count=1,
+        soft_constraints=[{"variable_code": "x", "minimum": 0.7, "maximum": 1.0}],
+    )
+
+    ranked_steps = [
+        step for step in result["step_traces"][0]
+        if step["kind"] == "optimizer-selection"
+    ]
+    assert ranked_steps
+    assert all("mechanism_soft_penalty" in step for step in ranked_steps)
+
+
 def test_synthetic_replay_accepts_prior_mapping_without_constructor_error():
     result = replay_synthetic(
         campaign(),

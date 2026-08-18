@@ -6,17 +6,13 @@ using NpgsqlTypes;
 
 namespace Ingot.Platform.Infrastructure.Acquisition;
 
-public sealed class PostgresIngestionConfigurationStore : IIngestionConfigurationStore, IAsyncDisposable
+public sealed class PostgresIngestionConfigurationStore : IIngestionConfigurationStore
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private readonly NpgsqlDataSource _dataSource;
 
-    public PostgresIngestionConfigurationStore(IConfiguration configuration)
-    {
-        var connectionString = configuration.GetConnectionString("Events")
-            ?? throw new InvalidOperationException("缺少 ConnectionStrings:Events PostgreSQL 连接字符串。");
-        _dataSource = NpgsqlDataSource.Create(connectionString);
-    }
+    public PostgresIngestionConfigurationStore(NpgsqlDataSource dataSource)
+        => _dataSource = dataSource;
 
     public Task<IReadOnlyList<IngestionTaskTemplate>> ListTemplatesAsync(CancellationToken ct = default)
         => ListAsync<IngestionTaskTemplate>(
@@ -539,5 +535,4 @@ public sealed class PostgresIngestionConfigurationStore : IIngestionConfiguratio
                 $"配置 {id} v{version} 已发布、已停用或状态转换无效，不能覆盖同一版本。");
     }
 
-    public async ValueTask DisposeAsync() => await _dataSource.DisposeAsync().ConfigureAwait(false);
 }

@@ -31,6 +31,7 @@ Choose an entry by role, then follow the links into method detail. You do not ne
 |---|---|---|
 | First evaluation or trial | [Getting started](getting-started.en.md) | [FAQ](faq.en.md) |
 | Process or data engineer | [Data integration](data-connection.en.md) | [Analysis and optimization](optimization.en.md) |
+| Process knowledge builder | [Mechanism knowledge design](mechanism-knowledge.en.md) | [Analysis and optimization](optimization.en.md) |
 | Platform operations or security | [Deployment](deployment.en.md) | [System design](design.en.md) |
 | Project or validation lead | [Scenario validation](rollout.en.md) | [Roadmap](project-plan.en.md) |
 | Contributor or integrator | [System design](design.en.md) | [Open-source dependencies](open-source-dependencies.en.md) |

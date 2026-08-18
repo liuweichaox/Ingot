@@ -8,6 +8,7 @@
 Field data sources                            Factory runtime
 controls / instruments / vision / inspection / MES
           └─ Edge ConnectorHost ───→ Platform API
+                                      ├─ Platform Worker (durable jobs)
                                       ├─ PostgreSQL / TimescaleDB
                                       ├─ attachments and process knowledge
                                       ├─ Optimizer (independent stateless service)
@@ -15,7 +16,7 @@ controls / instruments / vision / inspection / MES
                                       └─ Platform Web (independent React frontend)
 ```
 
-Platform API is the central business runtime. `Edge.Application`, `Edge.Infrastructure`, `Platform.Infrastructure`, and Agent are code libraries, not independent Compose services.
+Platform API handles requests and business transactions. Platform Worker handles knowledge extraction, analysis backfills, experiment materialization, and retention jobs. They coordinate through PostgreSQL job leases rather than process-local queues. `Edge.Application`, `Edge.Infrastructure`, `Platform.Infrastructure`, and Agent are code libraries, not independent Compose services.
 
 ### Edge partitioning
 
@@ -62,7 +63,7 @@ Validate required environment variables and Compose structure first:
 docker compose -f docker-compose.app.yml config --quiet
 ```
 
-Build and start the four core services:
+Build and start the five core services:
 
 ```bash
 docker compose -f docker-compose.app.yml up -d --build
@@ -79,14 +80,14 @@ docker compose -f docker-compose.app.yml down
 
 `down` removes containers and networks but retains named volumes by default. Do not add `--volumes` without a backup and an explicit reset decision. After source changes, use `up -d --build`; after `.env`-only changes, use `up -d` to recreate affected containers.
 
-The first build downloads large SDK, PyTorch, and database images. Startup is complete only after `up` exits successfully and `ps` reports all four core services as `healthy`.
+The first build downloads large SDK, PyTorch, and database images. Startup is complete only after `platform-migrate` exits successfully, the four HTTP/database services are `healthy`, and `platform-worker` remains `running`.
 
 | Symptom | Check first | Common cause and response |
 |---|---|---|
 | `ps -a` shows no containers | final build output | build is still running or was interrupted; rerun `up -d --build` |
 | `unexpected EOF` or `short read` | image download layer | network interruption left an incomplete layer; retry and Docker reuses complete layers |
 | Web is absent while API is healthy | `logs platform-web` | frontend build or Nginx configuration failed |
-| API repeatedly restarts | `logs platform-api` and `logs postgres` | database password, migration, directory permission, or production configuration validation failed |
+| API repeatedly restarts | `logs platform-migrate`, `logs platform-api`, and `logs postgres` | database password, migration, directory permission, or production configuration validation failed |
 | Optimizer is unhealthy | `logs optimizer` and `/ready` | numerical Python dependencies are incomplete or failed to load |
 | Login password is unknown | `logs platform-api` | a random password is logged only when the first administrator is seeded with an empty configured password; existing accounts are not reset by editing `.env` |
 | Port is already in use | `lsof -nP -iTCP:3000 -iTCP:8000 -iTCP:8100 -sTCP:LISTEN` | stop the conflicting process or deliberately change the Compose port mapping |
@@ -120,6 +121,7 @@ Apply configuration at a process-safe boundary. For cyclic equipment, prefer swi
 | Service | Check | Meaning |
 |---|---|---|
 | Platform | `/health` | central process and configured dependencies |
+| Platform Worker | container state and job-heartbeat metrics | durable job processor remains active |
 | Optimizer | `/health` | HTTP process is alive |
 | Optimizer | `/ready` | PyTorch, GPyTorch, and BoTorch runtime is usable |
 | ConnectorHost | `/health` | field process and configured dependencies |

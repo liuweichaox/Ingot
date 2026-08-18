@@ -8,6 +8,7 @@
 现场数据源                              工厂运行环境
 控制系统 / 仪器 / 视觉 / 检验 / MES
           └─ Edge ConnectorHost ───→ Platform API
+                                      ├─ Platform Worker（持久任务执行）
                                       ├─ PostgreSQL / TimescaleDB
                                       ├─ 附件与工艺知识文件
                                       ├─ Optimizer（独立无状态服务）
@@ -15,7 +16,7 @@
                                       └─ Platform Web（独立 React 前端）
 ```
 
-Platform API 是中心业务运行单元。`Edge.Application`、`Edge.Infrastructure`、`Platform.Infrastructure` 和 Agent 是代码层类库，不是独立 Compose 服务。
+Platform API 负责请求和业务事务，Platform Worker 负责知识提取、分析回填、实验固化和保留任务。两者共享 PostgreSQL 任务租约，但不共享进程内队列。`Edge.Application`、`Edge.Infrastructure`、`Platform.Infrastructure` 和 Agent 是代码层类库，不是独立 Compose 服务。
 
 ### Edge 划分原则
 
@@ -66,7 +67,7 @@ cp .env.example .env
 docker compose -f docker-compose.app.yml config --quiet
 ```
 
-构建并启动四个核心服务：
+构建并启动五个核心服务：
 
 ```bash
 docker compose -f docker-compose.app.yml up -d --build
@@ -83,14 +84,14 @@ docker compose -f docker-compose.app.yml down
 
 `down` 停止并移除容器和网络，但默认保留命名数据卷；不要在没有备份和明确重置意图时添加 `--volumes`。修改源代码后使用 `up -d --build`；只修改 `.env` 时使用 `up -d` 重新创建受影响容器。
 
-首次构建会下载较大的 SDK、PyTorch 和数据库镜像。必须等 `up` 成功结束且 `ps` 显示四个核心服务均为 `healthy` 后，才算启动完成。
+首次构建会下载较大的 SDK、PyTorch 和数据库镜像。必须等 `platform-migrate` 成功退出、四个 HTTP/数据库核心服务均为 `healthy` 且 `platform-worker` 持续为 `running` 后，才算启动完成。
 
 | 现象 | 先检查 | 常见原因与处理 |
 |---|---|---|
 | `ps -a` 没有任何容器 | 构建命令的最后输出 | 构建仍在进行或已中断；重新执行 `up -d --build` |
 | `unexpected EOF` 或 `short read` | 镜像下载层 | 网络中断导致层不完整；直接重试，Docker 会复用完整层 |
 | Web 未启动、API 已健康 | `logs platform-web` | 前端构建或 Nginx 配置失败 |
-| API 反复重启 | `logs platform-api` 和 `logs postgres` | 数据库密码、迁移、目录权限或生产配置校验失败 |
+| API 反复重启 | `logs platform-migrate`、`logs platform-api` 和 `logs postgres` | 数据库密码、迁移、目录权限或生产配置校验失败 |
 | Optimizer 不健康 | `logs optimizer` 和 `/ready` | Python 数值依赖尚未安装完成或运行时加载失败 |
 | 登录口令未知 | `logs platform-api` | 仅管理员首次播种且密码留空时输出随机口令；已有账户不会因修改 `.env` 自动重置 |
 | 端口已占用 | `lsof -nP -iTCP:3000 -iTCP:8000 -iTCP:8100 -sTCP:LISTEN` | 停止占用进程，或有计划地修改 Compose 端口映射 |
@@ -133,6 +134,7 @@ Platform 按 `EdgeId` 发布版本化采集配置。Edge 主动拉取、在本�
 | 服务 | 检查 | 含义 |
 |---|---|---|
 | Platform | `/health` | 中心进程和配置依赖状态 |
+| Platform Worker | 容器状态与任务心跳指标 | 持久任务处理进程持续运行 |
 | Optimizer | `/health` | HTTP 进程存活 |
 | Optimizer | `/ready` | PyTorch、GPyTorch 和 BoTorch 数值运行时可用 |
 | ConnectorHost | `/health` | 现场进程和配置依赖状态 |

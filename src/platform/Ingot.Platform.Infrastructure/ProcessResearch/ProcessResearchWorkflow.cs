@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using Ingot.Contracts.ProcessConfiguration;
 using Ingot.Contracts.ProcessResearch;
+using Ingot.Platform.Infrastructure.ResearchAssets;
 using Ingot.Platform.Infrastructure.ProcessConfiguration;
 
 namespace Ingot.Platform.Infrastructure.ProcessResearch;
@@ -11,7 +12,9 @@ namespace Ingot.Platform.Infrastructure.ProcessResearch;
 public sealed partial class ProcessResearchWorkflow(
     IProcessResearchStore store,
     ResearchOnlineAdmissionService? onlineAdmission = null,
-    IProcessConfigurationStore? processConfigurations = null)
+    IProcessConfigurationStore? processConfigurations = null,
+    IMechanismKnowledgeStore? mechanismKnowledgeStore = null,
+    ResearchExperimentValidationService? experimentValidation = null)
 {
     private async Task<ResearchProject> RequireProjectAsync(Guid projectId, CancellationToken ct)
         => await store.GetProjectAsync(projectId, ct).ConfigureAwait(false)

@@ -31,7 +31,6 @@ public sealed class PostgresSchemaOwnershipTests(PostgresIntegrationFixture post
                     ["InspectionAttachments:RootPath"] = Path.Combine(storageRoot, "inspections"),
                     ["ProcessKnowledge:RootPath"] = Path.Combine(storageRoot, "knowledge"),
                     ["EventIngest:RetentionDays"] = "0",
-                    ["EventIngest:CompressAfterDays"] = "0"
                 })
                 .Build();
             var before = await ReadPublicColumnsAsync(postgres.ConnectionString);

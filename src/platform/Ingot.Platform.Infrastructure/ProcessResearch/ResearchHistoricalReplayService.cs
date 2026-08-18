@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text.Json;
 using Ingot.Contracts.ProcessResearch;
+using Ingot.Platform.Infrastructure.ResearchAssets;
 
 namespace Ingot.Platform.Infrastructure.ProcessResearch;
 
@@ -11,7 +12,8 @@ namespace Ingot.Platform.Infrastructure.ProcessResearch;
 /// </summary>
 public sealed class ResearchHistoricalReplayService(
     IProcessResearchStore store,
-    IProcessOptimizerClient optimizerClient)
+    IProcessOptimizerClient optimizerClient,
+    IMechanismKnowledgeStore? mechanismKnowledgeStore = null)
 {
     public async Task<ResearchHistoricalReplayReport> RunAsync(
         Guid projectId,
@@ -27,6 +29,14 @@ public sealed class ResearchHistoricalReplayService(
             ?? throw new ProcessResearchRuleException("研发项目不存在。");
         if (project.Status is ResearchProjectStatuses.Completed or ResearchProjectStatuses.Archived)
             throw new ProcessResearchRuleException("已完成或已归档的研发项目保持只读。");
+        var mechanismKnowledge = mechanismKnowledgeStore is null
+            ? new AppliedMechanismKnowledge([], [], [])
+            : MechanismKnowledgeExperimentPolicy.Select(
+                project,
+                await mechanismKnowledgeStore.ListClaimsAsync(projectId, ct).ConfigureAwait(false),
+                await mechanismKnowledgeStore.ListConflictsAsync(projectId, ct).ConfigureAwait(false));
+        var mechanismKnowledgeSnapshotHash =
+            MechanismKnowledgeExperimentPolicy.SnapshotHash(mechanismKnowledge);
         var experiments = await store.ListExperimentsAsync(projectId, ct).ConfigureAwait(false);
         var results = await store.ListExperimentResultsAsync(projectId, ct).ConfigureAwait(false);
         var controls = project.Variables
@@ -129,12 +139,22 @@ public sealed class ResearchHistoricalReplayService(
             }).ToArray();
         var call = new OptimizerHistoricalReplayCall
         {
-            Campaign = ResearchExperimentOptimizer.BuildCampaign(
-                project, ResearchOptimizationIntents.ReachSpecification, null),
+            Campaign = MechanismKnowledgeExperimentPolicy.ApplyHardConstraints(
+                ResearchExperimentOptimizer.BuildCampaign(
+                    project, ResearchOptimizationIntents.ReachSpecification, null),
+                mechanismKnowledge),
             History = history,
             Budget = budget,
             SeedCount = request.SeedCount,
-            InitialObservationCount = request.InitialObservationCount
+            InitialObservationCount = request.InitialObservationCount,
+            SoftConstraints = mechanismKnowledge.RankingConstraints
+                .DistinctBy(static value => (value.VariableCode, value.Minimum, value.Maximum))
+                .Select(static value => new OptimizerSoftConstraintInput
+                {
+                    VariableCode = value.VariableCode,
+                    Minimum = value.Minimum,
+                    Maximum = value.Maximum
+                }).ToArray()
         };
         var preregistrationHash = Hash(new
         {
@@ -208,6 +228,7 @@ public sealed class ResearchHistoricalReplayService(
             preregistrationHash,
             datasetHash,
             Raw = raw,
+            mechanismKnowledgeSnapshotHash,
             ValidationThresholds.PolicyVersion
         });
         var report = new ResearchHistoricalReplayReport
@@ -215,6 +236,7 @@ public sealed class ResearchHistoricalReplayService(
             ReportId = Guid.CreateVersion7(),
             ProjectId = projectId,
             ValidationPolicyVersion = ValidationThresholds.PolicyVersion,
+            MechanismKnowledgeSnapshotHash = mechanismKnowledgeSnapshotHash,
             DatasetSnapshotHash = datasetHash,
             UniqueConditionCount = grouped.Length,
             SourceRunCount = grouped.Sum(static value => value.SourceCount),

@@ -101,7 +101,7 @@ public sealed class HttpEventShipper : IEventShipper
                     Events = pending
                 };
                 using var response = await http.PostAsJsonAsync(
-                        "api/v1/events:batch",
+                        PlatformEventRoutes.BatchIngest,
                         request,
                         JsonOptions,
                         ct)
@@ -184,7 +184,7 @@ public sealed class HttpEventShipper : IEventShipper
         {
             var request = new EventBatchRequest { EdgeId = edgeId, Events = [evt] };
             using var response = await http.PostAsJsonAsync(
-                "api/v1/events:batch", request, JsonOptions, ct).ConfigureAwait(false);
+                PlatformEventRoutes.BatchIngest, request, JsonOptions, ct).ConfigureAwait(false);
             if (IsDeterministicPayloadRejection(response.StatusCode))
             {
                 var detail = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);

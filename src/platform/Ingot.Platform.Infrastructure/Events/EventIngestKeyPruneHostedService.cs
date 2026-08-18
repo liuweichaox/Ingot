@@ -11,13 +11,14 @@ namespace Ingot.Platform.Infrastructure.Events;
 ///     重复入库——因此强制下限 30 天，且建议不小于 production_events 的 RetentionDays。
 /// </summary>
 public sealed class EventIngestKeyPruneHostedService(
-    IConfiguration configuration,
+    NpgsqlDataSource dataSource,
     IOptions<PlatformEventOptions> options,
     ILogger<EventIngestKeyPruneHostedService> logger) : BackgroundService
 {
     private const int MinimumRetentionDays = 30;
     private const int DeleteBatchSize = 50_000;
     private static readonly TimeSpan Interval = TimeSpan.FromHours(24);
+    private const long AdvisoryLockKey = 0x496E676F744B4559; // IngotKEY
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -37,14 +38,11 @@ public sealed class EventIngestKeyPruneHostedService(
                 retentionDays,
                 options.Value.RetentionDays);
 
-        var connectionString = configuration.GetConnectionString("Events")
-            ?? throw new InvalidOperationException("缺少 ConnectionStrings:Events PostgreSQL 连接字符串。");
-
         while (!stoppingToken.IsCancellationRequested)
         {
             try
             {
-                var deleted = await PruneAsync(connectionString, retentionDays, stoppingToken).ConfigureAwait(false);
+                var deleted = await PruneAsync(dataSource, retentionDays, stoppingToken).ConfigureAwait(false);
                 if (deleted > 0)
                     logger.LogInformation("event_ingest_keys 修剪完成：删除 {Deleted} 行（保留 {Days} 天）。", deleted, retentionDays);
             }
@@ -64,15 +62,22 @@ public sealed class EventIngestKeyPruneHostedService(
         }
     }
 
-    private static async Task<long> PruneAsync(string connectionString, int retentionDays, CancellationToken ct)
+    private static async Task<long> PruneAsync(NpgsqlDataSource dataSource, int retentionDays, CancellationToken ct)
     {
-        await using var connection = new NpgsqlConnection(connectionString);
-        await connection.OpenAsync(ct).ConfigureAwait(false);
-
-        long total = 0;
-        while (!ct.IsCancellationRequested)
+        await using var connection = await dataSource.OpenConnectionAsync(ct).ConfigureAwait(false);
+        await using (var acquire = new NpgsqlCommand(
+                         $"SELECT pg_try_advisory_lock({AdvisoryLockKey});", connection))
         {
-            await using var command = new NpgsqlCommand(
+            if (await acquire.ExecuteScalarAsync(ct).ConfigureAwait(false) is not true)
+                return 0;
+        }
+
+        try
+        {
+            long total = 0;
+            while (!ct.IsCancellationRequested)
+            {
+                await using var command = new NpgsqlCommand(
                 """
                 DELETE FROM event_ingest_keys
                 WHERE ctid IN (
@@ -82,14 +87,21 @@ public sealed class EventIngestKeyPruneHostedService(
                 );
                 """,
                 connection);
-            command.Parameters.AddWithValue("days", retentionDays);
-            command.Parameters.AddWithValue("batch", DeleteBatchSize);
-            command.CommandTimeout = 300;
-            var deleted = await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
-            total += deleted;
-            if (deleted < DeleteBatchSize)
-                break;
+                command.Parameters.AddWithValue("days", retentionDays);
+                command.Parameters.AddWithValue("batch", DeleteBatchSize);
+                command.CommandTimeout = 300;
+                var deleted = await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+                total += deleted;
+                if (deleted < DeleteBatchSize)
+                    break;
+            }
+            return total;
         }
-        return total;
+        finally
+        {
+            await using var release = new NpgsqlCommand(
+                $"SELECT pg_advisory_unlock({AdvisoryLockKey});", connection);
+            await release.ExecuteScalarAsync(CancellationToken.None).ConfigureAwait(false);
+        }
     }
 }

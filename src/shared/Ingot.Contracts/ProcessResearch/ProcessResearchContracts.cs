@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Ingot.Contracts.ResearchAssets;
 
 namespace Ingot.Contracts.ProcessResearch;
 
@@ -49,6 +50,16 @@ public static class ResearchExperimentStatuses
 
     public static bool IsValid(string? value)
         => value is Planned or Approved or Running or Completed or Cancelled;
+}
+
+public static class ResearchExperimentExecutionCategories
+{
+    public const string Offline = "offline";
+    public const string Shadow = "shadow";
+    public const string ControlledOnline = "controlled-online";
+
+    public static bool IsValid(string? value)
+        => value is Offline or Shadow or ControlledOnline;
 }
 
 public static class OperatingRegionStatuses
@@ -170,11 +181,12 @@ public static class ResearchDesignMethods
     public const string FullFactorial = "full-factorial";
     public const string FractionalFactorial = "fractional-factorial";
     public const string ResponseSurface = "response-surface";
+    public const string LatinHypercube = "latin-hypercube";
     public const string BayesianOptimization = "bayesian-optimization";
 
     public static bool IsValid(string? value)
         => value is EngineerDefined or HistoricalObservation or FullFactorial or FractionalFactorial or ResponseSurface
-            or BayesianOptimization;
+            or LatinHypercube or BayesianOptimization;
 }
 
 public static class ResearchConfidenceMethods
@@ -316,6 +328,7 @@ public sealed record ResearchProject
     public IReadOnlyList<ResearchVariable> Variables { get; init; } = [];
     public IReadOnlyList<ResearchConstraint> Constraints { get; init; } = [];
     public IReadOnlyList<ResearchOutcomeConstraint> OutcomeConstraints { get; init; } = [];
+    public IReadOnlyList<ResearchExperimentSafetyTemplate> SafetyTemplates { get; init; } = [];
     public ResearchOptimizationFeatureSet OptimizationFeatures { get; init; } = new();
     public IReadOnlyDictionary<string, string> Context { get; init; } =
         new Dictionary<string, string>();
@@ -328,6 +341,14 @@ public sealed record ResearchProject
     public int Revision { get; init; }
 }
 
+public sealed record ResearchExperimentSafetyTemplate
+{
+    public required string ExecutionCategory { get; init; }
+    public required string StopRule { get; init; }
+    public required string RollbackPlan { get; init; }
+    public string? Name { get; init; }
+}
+
 public sealed record EvidenceReference
 {
     public Guid EvidenceId { get; init; }
@@ -337,6 +358,36 @@ public sealed record EvidenceReference
     public required string Summary { get; init; }
     public required string ContentHash { get; init; }
     public DateTimeOffset CreatedAt { get; init; }
+}
+
+public sealed record ResearchHypothesisCausalLink
+{
+    public required string FromVariableCode { get; init; }
+    public required string ToVariableCode { get; init; }
+    public required string Mechanism { get; init; }
+    public string? Direction { get; init; }
+}
+
+public sealed record ResearchHypothesisTemporalFeature
+{
+    public required string VariableCode { get; init; }
+    public required string FeatureCode { get; init; }
+    public string? PhaseCode { get; init; }
+    public long? DelayMilliseconds { get; init; }
+    public long? WindowMilliseconds { get; init; }
+}
+
+public sealed record ResearchHypothesisInteraction
+{
+    public IReadOnlyList<string> VariableCodes { get; init; } = [];
+    public required string Description { get; init; }
+}
+
+public sealed record ResearchHypothesisFailureCondition
+{
+    public required string Condition { get; init; }
+    public required string ObservableSignal { get; init; }
+    public required string RequiredResponse { get; init; }
 }
 
 public sealed record ResearchHypothesis
@@ -352,6 +403,11 @@ public sealed record ResearchHypothesis
     public double? MinimumEffect { get; init; }
     public IReadOnlyList<string> PossibleConfounders { get; init; } = [];
     public string? Applicability { get; init; }
+    public IReadOnlyList<ResearchHypothesisCausalLink> CausalChain { get; init; } = [];
+    public IReadOnlyList<ResearchHypothesisTemporalFeature> TemporalFeatures { get; init; } = [];
+    public IReadOnlyList<ResearchHypothesisInteraction> Interactions { get; init; } = [];
+    public IReadOnlyList<ResearchHypothesisFailureCondition> FailureConditions { get; init; } = [];
+    public IReadOnlyList<string> FalsificationConditions { get; init; } = [];
     public IReadOnlyList<EvidenceReference> SupportingEvidence { get; init; } = [];
     public IReadOnlyList<EvidenceReference> OpposingEvidence { get; init; } = [];
     public IReadOnlyList<EvidenceReference> ValidationEvidence { get; init; } = [];
@@ -391,6 +447,46 @@ public sealed record ExperimentRunPlan
     public string? BlockKey { get; init; }
     public string? ReplicateKey { get; init; }
     public IReadOnlyList<ExperimentFactorSetting> Factors { get; init; } = [];
+}
+
+/// <summary>
+///     经典 DOE 的无状态预览请求。预览只生成可编辑的运行计划，不会保存实验、
+///     改变审批状态或向设备下发任何命令。
+/// </summary>
+public sealed record ResearchExperimentDesignRequest
+{
+    public required string DesignMethod { get; init; }
+    public IReadOnlyList<string> VariableCodes { get; init; } = [];
+    public int Levels { get; init; } = 2;
+    public int ReplicatesPerCondition { get; init; } = 1;
+    public int BlockCount { get; init; } = 1;
+    public int SampleCount { get; init; }
+    public string? ResponseSurfaceFamily { get; init; }
+    public int RandomizationSeed { get; init; }
+}
+
+public sealed record ResearchExperimentDesignPreview
+{
+    public required string DesignMethod { get; init; }
+    public int RandomizationSeed { get; init; }
+    public IReadOnlyList<ExperimentRunPlan> RunPlan { get; init; } = [];
+    public IReadOnlyList<string> Warnings { get; init; } = [];
+    public string? AliasStructure { get; init; }
+    public string? ResponseSurfaceFamily { get; init; }
+}
+
+public sealed record ResearchExperimentValidationIssue
+{
+    public required string Field { get; init; }
+    public required string Code { get; init; }
+    public required string Message { get; init; }
+    public string? FixHint { get; init; }
+}
+
+public sealed record ResearchExperimentValidationResult
+{
+    public IReadOnlyList<ResearchExperimentValidationIssue> Errors { get; init; } = [];
+    public bool IsValid => Errors.Count == 0;
 }
 
 public sealed record ExperimentExecutionCommand
@@ -450,6 +546,7 @@ public sealed record ResearchOptimizationMetadata
     public int PendingExperimentCount { get; init; }
     public int ProcessFeatureCount { get; init; }
     public string FeatureSetId { get; init; } = "generic";
+    public string MechanismKnowledgeSnapshotHash { get; init; } = "none";
     public int FeatureSetVersion { get; init; } = 1;
     public int DerivedFeatureCount { get; init; }
     public string Intent { get; init; } = ResearchOptimizationIntents.ReachSpecification;
@@ -578,6 +675,7 @@ public sealed record ResearchShadowCampaignReport
     public Guid ProjectId { get; init; }
     /// <summary>Missing in historical payloads means the thresholds predated policy versioning.</summary>
     public string ValidationPolicyVersion { get; init; } = "not-evaluated";
+    public string MechanismKnowledgeSnapshotHash { get; init; } = "none";
     public int TotalRecommendations { get; init; }
     public int AcceptedCount { get; init; }
     public int ModifiedCount { get; init; }
@@ -671,6 +769,7 @@ public sealed record ResearchHistoricalReplayReport
     public Guid ProjectId { get; init; }
     /// <summary>Missing in historical payloads means the thresholds predated policy versioning.</summary>
     public string ValidationPolicyVersion { get; init; } = "not-evaluated";
+    public string MechanismKnowledgeSnapshotHash { get; init; } = "none";
     public string Status { get; init; } = ResearchHistoricalReplayStatuses.Generated;
     public required string DatasetSnapshotHash { get; init; }
     public int UniqueConditionCount { get; init; }
@@ -709,6 +808,7 @@ public sealed record ResearchOnlineAdmissionEvidence
 {
     /// <summary>Missing in historical payloads means the thresholds predated policy versioning.</summary>
     public string ValidationPolicyVersion { get; init; } = "not-evaluated";
+    public string MechanismKnowledgeSnapshotHash { get; init; } = "none";
     public bool Eligible { get; init; }
     public IReadOnlyList<string> Failures { get; init; } = [];
     public IReadOnlyList<string> Warnings { get; init; } = [];
@@ -781,6 +881,11 @@ public sealed record ResearchExperiment
 {
     public Guid ExperimentId { get; init; }
     public Guid ProjectId { get; init; }
+    /// <summary>
+    ///     实验自身的乐观并发版本。新实验从 1 开始，每次持久化变更递增；
+    ///     与 ProjectRevision（实验设计所依据的项目定义版本）含义不同。
+    /// </summary>
+    public int Revision { get; init; } = 1;
     public Guid? HypothesisId { get; init; }
     /// <summary>
     ///     非空时表示该实验是针对指定候选工艺操作域设计的独立验证实验。
@@ -789,6 +894,8 @@ public sealed record ResearchExperiment
     public Guid? ValidationOperatingRegionId { get; init; }
     public required string Name { get; init; }
     public string DesignMethod { get; init; } = "engineer-defined";
+    public string ExecutionCategory { get; init; } = ResearchExperimentExecutionCategories.Offline;
+    public string? SafetyTemplateSource { get; init; }
     public int PlanVersion { get; init; } = 1;
     public int ProjectRevision { get; init; }
     public int RandomizationSeed { get; init; }
@@ -814,6 +921,11 @@ public sealed record ResearchExperiment
     public DateTimeOffset? ApprovedAt { get; init; }
     public DateTimeOffset CreatedAt { get; init; }
     public DateTimeOffset UpdatedAt { get; init; }
+}
+
+public sealed record ResearchExperimentCloneRequest
+{
+    public string? Name { get; init; }
 }
 
 public sealed record ExperimentMetricResult
@@ -992,6 +1104,7 @@ public sealed record ResearchProjectWorkspace
     public ResearchOnlineCampaignReport? OnlineReport { get; init; }
     public IReadOnlyList<ResearchOperatingRegion> OperatingRegions { get; init; } = [];
     public IReadOnlyList<ResearchKnowledgeClaim> KnowledgeClaims { get; init; } = [];
+    public IReadOnlyList<MechanismClaimUsage> MechanismKnowledgeUsages { get; init; } = [];
     public IReadOnlyList<ResearchTransferAssessment> TransferAssessments { get; init; } = [];
     public IReadOnlyList<ResearchAuditEntry> Audit { get; init; } = [];
 }

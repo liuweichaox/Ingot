@@ -24,16 +24,12 @@ public interface ILocalUserStore
 }
 
 /// <summary>本地账户与会话的 PostgreSQL 存储。schema 由迁移 0003 保证，本类不做 DDL。</summary>
-public sealed class PostgresLocalUserStore : ILocalUserStore, IAsyncDisposable
+public sealed class PostgresLocalUserStore : ILocalUserStore
 {
     private readonly NpgsqlDataSource _dataSource;
 
-    public PostgresLocalUserStore(IConfiguration configuration)
-    {
-        var connectionString = configuration.GetConnectionString("Events")
-            ?? throw new InvalidOperationException("缺少 ConnectionStrings:Events PostgreSQL 连接字符串。");
-        _dataSource = NpgsqlDataSource.Create(connectionString);
-    }
+    public PostgresLocalUserStore(NpgsqlDataSource dataSource)
+        => _dataSource = dataSource;
 
     private const string UserColumns =
         "user_id, username, username_lower, display_name, password_hash, roles, disabled, created_at, updated_at";
@@ -179,5 +175,4 @@ public sealed class PostgresLocalUserStore : ILocalUserStore, IAsyncDisposable
         UpdatedAt = new DateTimeOffset(reader.GetDateTime(8).ToUniversalTime())
     };
 
-    public ValueTask DisposeAsync() => _dataSource.DisposeAsync();
 }

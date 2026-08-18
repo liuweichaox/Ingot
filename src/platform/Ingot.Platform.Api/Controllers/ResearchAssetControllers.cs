@@ -170,7 +170,6 @@ public sealed class ProcessKnowledgeController(
     IResearchAssetStore store,
     IProcessResearchStore researchStore,
     ResearchAssetWorkflow workflow,
-    KnowledgeExtractionService extractionService,
     PlatformUserResolver userResolver) : PlatformConfigurationControllerBase(userResolver)
 {
     private static readonly HashSet<string> AllowedExtensions = new(
@@ -186,12 +185,7 @@ public sealed class ProcessKnowledgeController(
         var access = await ResolveProjectAccessAsync(projectId, false, ct).ConfigureAwait(false);
         if (access.Result is not null)
             return access.Result;
-        var projectKey = projectId.ToString();
-        var sources = (await store.ListKnowledgeSourcesAsync(ct).ConfigureAwait(false))
-            .Where(source =>
-                source.ContextSelector.TryGetValue("research-project-id", out var value) &&
-                string.Equals(value, projectKey, StringComparison.OrdinalIgnoreCase))
-            .ToArray();
+        var sources = await store.ListKnowledgeSourcesAsync(projectId, ct).ConfigureAwait(false);
         return Ok(new { data = sources });
     }
 
@@ -233,6 +227,8 @@ public sealed class ProcessKnowledgeController(
             return access.Result;
         if (file.Length <= 0 || !AllowedExtensions.Contains(Path.GetExtension(file.FileName)))
             return BadRequest(new { error = "仅支持文档、表格、文本和常见现场图片格式。" });
+        if (!await HasExpectedFileSignatureAsync(file, ct).ConfigureAwait(false))
+            return BadRequest(new { error = "文件内容与扩展名不一致，已拒绝解析。" });
         sourceKind = sourceKind?.Trim().ToLowerInvariant() ?? "";
         if (!AllowedSourceKinds.Contains(sourceKind))
             return BadRequest(new { error = "来源类型仅支持 document、spreadsheet、image 或 field-note。" });
@@ -273,11 +269,7 @@ public sealed class ProcessKnowledgeController(
                     CreatedAt = DateTimeOffset.UtcNow
                 },
                 ct).ConfigureAwait(false);
-            var indexed = await extractionService.ExtractAsync(
-                saved.SourceId,
-                currentUser,
-                ct).ConfigureAwait(false);
-            return Ok(indexed);
+            return Accepted(saved);
         }
         catch (InvalidDataException exception)
         {
@@ -293,10 +285,9 @@ public sealed class ProcessKnowledgeController(
             return access.Result;
         try
         {
-            return Ok(await extractionService.ExtractAsync(
-                sourceId,
-                access.Identity!.UserId,
-                ct).ConfigureAwait(false));
+            await store.EnqueueKnowledgeExtractionAsync(sourceId, access.Identity!.UserId, ct)
+                .ConfigureAwait(false);
+            return Accepted(new { sourceId, extractionStatus = "pending" });
         }
         catch (ResearchAssetRuleException exception)
         {
@@ -367,6 +358,30 @@ public sealed class ProcessKnowledgeController(
             : (null, null, access.Result);
     }
 
+    private static async Task<bool> HasExpectedFileSignatureAsync(IFormFile file, CancellationToken ct)
+    {
+        await using var stream = file.OpenReadStream();
+        var header = new byte[12];
+        var count = await stream.ReadAsync(header, ct).ConfigureAwait(false);
+        var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
+        return extension switch
+        {
+            ".pdf" => count >= 5 && header.AsSpan(0, 5).SequenceEqual("%PDF-"u8),
+            ".xlsx" or ".xlsm" => count >= 4 && header[0] == 0x50 && header[1] == 0x4b &&
+                header[2] is 0x03 or 0x05 or 0x07 && header[3] is 0x04 or 0x06 or 0x08,
+            ".png" => count >= 8 && header.AsSpan(0, 8).SequenceEqual(
+                new byte[] { 0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a }),
+            ".jpg" or ".jpeg" => count >= 3 && header[0] == 0xff && header[1] == 0xd8 && header[2] == 0xff,
+            ".webp" => count >= 12 && header.AsSpan(0, 4).SequenceEqual("RIFF"u8) &&
+                header.AsSpan(8, 4).SequenceEqual("WEBP"u8),
+            ".tif" or ".tiff" => count >= 4 &&
+                (header.AsSpan(0, 4).SequenceEqual(new byte[] { 0x49, 0x49, 0x2a, 0x00 }) ||
+                 header.AsSpan(0, 4).SequenceEqual(new byte[] { 0x4d, 0x4d, 0x00, 0x2a })),
+            ".txt" or ".md" or ".csv" => !header.AsSpan(0, count).Contains((byte)0),
+            _ => false
+        };
+    }
+
     private async Task<(ResearchProject? Project, PlatformIdentity? Identity, IActionResult? Result)>
         ResolveProjectAccessAsync(Guid projectId, bool requireWrite, CancellationToken ct)
     {
@@ -383,7 +398,8 @@ public sealed class ProcessKnowledgeController(
         var canAccess = identity.HasAnyRole(PlatformRoles.PlatformAdministrator) ||
                         string.Equals(project.OwnerUserId, identity.UserId, StringComparison.Ordinal) ||
                         project.MemberUserIds.Contains(identity.UserId, StringComparer.Ordinal);
-        if (!canAccess || requireWrite && project.Status == ResearchProjectStatuses.Archived)
+        if (!canAccess || requireWrite && (project.Status is
+                ResearchProjectStatuses.Completed or ResearchProjectStatuses.Archived))
             return (null, null, Forbid());
         return (project, identity, null);
     }

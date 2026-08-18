@@ -67,9 +67,46 @@ public interface IResearchAssetStore
         CancellationToken ct = default);
     Task<KnowledgeSource?> GetKnowledgeSourceAsync(Guid sourceId, CancellationToken ct = default);
     Task<IReadOnlyList<KnowledgeSource>> ListKnowledgeSourcesAsync(CancellationToken ct = default);
+    async Task<IReadOnlyList<KnowledgeSource>> ListKnowledgeSourcesAsync(
+        Guid projectId,
+        CancellationToken ct = default)
+        => (await ListKnowledgeSourcesAsync(ct).ConfigureAwait(false))
+            .Where(value => value.ContextSelector.TryGetValue("research-project-id", out var id) &&
+                string.Equals(id, projectId.ToString(), StringComparison.OrdinalIgnoreCase))
+            .ToArray();
     Task<Stream?> OpenKnowledgeSourceAsync(Guid sourceId, CancellationToken ct = default);
     Task<KnowledgeSource> SaveKnowledgeSourceMetadataAsync(KnowledgeSource value, CancellationToken ct = default);
     Task<KnowledgeRecord> SaveKnowledgeRecordAsync(KnowledgeRecord value, CancellationToken ct = default);
+    Task<KnowledgeSource> ReplaceExtractedKnowledgeRecordsAsync(
+        KnowledgeSource source,
+        IReadOnlyList<KnowledgeRecord> records,
+        CancellationToken ct = default)
+        => throw new NotSupportedException("This store does not support atomic extraction replacement.");
+    Task EnqueueKnowledgeExtractionAsync(Guid sourceId, string userId, CancellationToken ct = default)
+        => throw new NotSupportedException("This store does not support extraction jobs.");
+    Task<KnowledgeExtractionJob?> ClaimKnowledgeExtractionAsync(
+        TimeSpan leaseTimeout,
+        CancellationToken ct = default)
+        => Task.FromResult<KnowledgeExtractionJob?>(null);
+    Task<bool> RenewKnowledgeExtractionLeaseAsync(
+        Guid sourceId,
+        Guid leaseId,
+        CancellationToken ct = default)
+        => Task.FromResult(false);
+    Task<bool> CompleteKnowledgeExtractionAsync(
+        Guid sourceId,
+        Guid leaseId,
+        CancellationToken ct = default)
+        => Task.FromResult(false);
+    Task<KnowledgeExtractionFailureDisposition?> FailKnowledgeExtractionAsync(
+        Guid sourceId,
+        Guid leaseId,
+        string error,
+        bool retryable,
+        int maxAttempts,
+        TimeSpan retryDelay,
+        CancellationToken ct = default)
+        => Task.FromResult<KnowledgeExtractionFailureDisposition?>(null);
     Task<IReadOnlyList<KnowledgeRecord>> ListKnowledgeRecordsAsync(
         Guid sourceId,
         CancellationToken ct = default);

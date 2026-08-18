@@ -128,13 +128,14 @@ docker compose -f docker-compose.app.yml up -d --build
 ```
 
 首次构建会下载 .NET、Node、Python、PyTorch 和 TimescaleDB 镜像，耗时取决于网络。命令结束后用
-`docker compose -f docker-compose.app.yml ps` 确认四个核心服务均为 `healthy`；不要把“仍在下载镜像”误认为应用已经启动。
+`docker compose -f docker-compose.app.yml ps -a` 确认 `platform-migrate` 成功退出、四个 HTTP/数据库核心服务均为 `healthy`，且 `platform-worker` 持续为 `running`；不要把“仍在下载镜像”误认为应用已经启动。
 
 启动后访问：
 
 ```text
 http://localhost:3000       工艺研发界面
 http://localhost:8000/health
+http://localhost:8000/openapi/v1.json
 http://localhost:8100/ready
 ```
 
@@ -184,6 +185,7 @@ scripts/           验证与运维脚本
 - [快速开始](docs/getting-started.md)
 - [系统设计](docs/design.md)
 - [分析与优化](docs/optimization.md)
+- [机理知识设计](docs/mechanism-knowledge.md)
 - [数据接入](docs/data-connection.md)
 - [场景验证](docs/rollout.md)
 - [发展规划](docs/project-plan.md)

@@ -178,6 +178,8 @@ An experiment draft defines at least:
 - objective, minimum meaningful effect, and safety boundaries;
 - stopping and fallback conditions.
 
+You can first choose a classical DOE method and preview the complete run table. A preview only helps generate and check a plan: it neither approves the experiment nor sends settings to equipment. The engineer may edit runs, add controls, and submit once the checklist passes.
+
 The engineer approves execution. Once all runs and inspections are complete, the system calculates the result from source data and marks the hypothesis supported, rejected, or inconclusive.
 
 ## 11. Enter optimization when appropriate

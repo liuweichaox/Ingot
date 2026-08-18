@@ -11,7 +11,7 @@ public sealed class PostgresGoldenQuestionStoreTests(PostgresIntegrationFixture 
     public async Task ReviewedVersion_ShouldBeImmutableAndRetainEvaluation()
     {
         await postgres.EnsureSchemaAsync();
-        await using var store = new PostgresGoldenQuestionStore(postgres.Configuration);
+        var store = new PostgresGoldenQuestionStore(postgres.DataSource);
         var now = DateTimeOffset.UtcNow;
         var draft = new GoldenQuestionCase
         {

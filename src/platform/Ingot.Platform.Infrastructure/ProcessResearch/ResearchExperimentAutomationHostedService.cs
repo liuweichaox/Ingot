@@ -1,6 +1,7 @@
 using Ingot.Contracts.ProcessResearch;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Npgsql;
 
 namespace Ingot.Platform.Infrastructure.ProcessResearch;
 
@@ -9,12 +10,15 @@ namespace Ingot.Platform.Infrastructure.ProcessResearch;
 ///     它不批准实验、不启动设备，也不绕过人工安全边界。
 /// </summary>
 public sealed class ResearchExperimentAutomationHostedService(
+    NpgsqlDataSource dataSource,
     IProcessResearchStore store,
     IResearchObservationAssembler observationAssembler,
     ResearchExperimentResultMaterializer materializer,
     ResearchOperatingRegionMaterializer operatingRegionMaterializer,
     ILogger<ResearchExperimentAutomationHostedService> logger) : BackgroundService
 {
+    private const long AdvisoryLockKey = 0x496E676F74524553; // IngotRES
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         using var timer = new PeriodicTimer(TimeSpan.FromSeconds(5));
@@ -22,7 +26,7 @@ public sealed class ResearchExperimentAutomationHostedService(
         {
             try
             {
-                await MaterializeReadyExperimentsAsync(stoppingToken).ConfigureAwait(false);
+                await MaterializeAsLeaderAsync(stoppingToken).ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -33,6 +37,27 @@ public sealed class ResearchExperimentAutomationHostedService(
                 logger.LogWarning(exception, "自动回收研发实验结果失败；下一轮将重试");
             }
         } while (await timer.WaitForNextTickAsync(stoppingToken).ConfigureAwait(false));
+    }
+
+    private async Task MaterializeAsLeaderAsync(CancellationToken ct)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(ct).ConfigureAwait(false);
+        await using (var acquire = new NpgsqlCommand(
+                         $"SELECT pg_try_advisory_lock({AdvisoryLockKey});", connection))
+        {
+            if (await acquire.ExecuteScalarAsync(ct).ConfigureAwait(false) is not true)
+                return;
+        }
+        try
+        {
+            await MaterializeReadyExperimentsAsync(ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            await using var release = new NpgsqlCommand(
+                $"SELECT pg_advisory_unlock({AdvisoryLockKey});", connection);
+            await release.ExecuteScalarAsync(CancellationToken.None).ConfigureAwait(false);
+        }
     }
 
     private async Task MaterializeReadyExperimentsAsync(CancellationToken ct)

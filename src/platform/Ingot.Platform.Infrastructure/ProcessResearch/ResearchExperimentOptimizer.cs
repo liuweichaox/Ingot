@@ -1,6 +1,8 @@
 using System.Security.Cryptography;
 using System.Text.Json;
 using Ingot.Contracts.ProcessResearch;
+using Ingot.Contracts.ResearchAssets;
+using Ingot.Platform.Infrastructure.ResearchAssets;
 
 namespace Ingot.Platform.Infrastructure.ProcessResearch;
 
@@ -15,7 +17,8 @@ public sealed class ResearchExperimentOptimizer(
     IResearchObservationAssembler observationAssembler,
     ResearchExperimentResultMaterializer resultMaterializer,
     ProcessResearchWorkflow workflow,
-    ResearchOnlineAdmissionService? onlineAdmission = null)
+    ResearchOnlineAdmissionService? onlineAdmission = null,
+    IMechanismKnowledgeStore? mechanismKnowledgeStore = null)
 {
     public async Task<ResearchExperiment> CreateNextExperimentAsync(
         Guid projectId,
@@ -32,6 +35,14 @@ public sealed class ResearchExperimentOptimizer(
             ?? throw new ProcessResearchRuleException("研发项目不存在。");
         if (project.Status is ResearchProjectStatuses.Completed or ResearchProjectStatuses.Archived)
             throw new ProcessResearchRuleException("已完成或已归档的研发项目保持只读。");
+        var mechanismKnowledge = mechanismKnowledgeStore is null
+            ? new AppliedMechanismKnowledge([], [], [])
+            : MechanismKnowledgeExperimentPolicy.Select(
+                project,
+                await mechanismKnowledgeStore.ListClaimsAsync(projectId, ct).ConfigureAwait(false),
+                await mechanismKnowledgeStore.ListConflictsAsync(projectId, ct).ConfigureAwait(false));
+        var mechanismKnowledgeSnapshotHash =
+            MechanismKnowledgeExperimentPolicy.SnapshotHash(mechanismKnowledge);
         var intent = NormalizeIntent(request.Intent);
         var mode = NormalizeMode(request.Mode);
         ResearchOnlineAdmissionEvidence? onlineAdmissionEvidence = null;
@@ -43,7 +54,8 @@ public sealed class ResearchExperimentOptimizer(
                 throw new ProcessResearchRuleException("受控在线只执行已经过影子验证的逼近规格建议；假设验证仍使用离线实验设计。");
             if (onlineAdmission is null)
                 throw new ProcessResearchRuleException("受控在线准入服务不可用，按失败关闭处理。");
-            onlineAdmissionEvidence = await onlineAdmission.RequireAsync(projectId, ct)
+            onlineAdmissionEvidence = await onlineAdmission.RequireAsync(
+                    projectId, mechanismKnowledgeSnapshotHash, ct)
                 .ConfigureAwait(false);
         }
         if (intent == ResearchOptimizationIntents.ValidateHypothesis &&
@@ -136,8 +148,16 @@ public sealed class ResearchExperimentOptimizer(
                     : !observedExecutionKeys.Contains(run.ExecutionKey)))
             .OrderByDescending(static value => value.CreatedAt)
             .FirstOrDefault();
-        if (activeOptimization is not null)
+        if (activeOptimization is not null && string.Equals(
+                activeOptimization.Optimization?.MechanismKnowledgeSnapshotHash,
+                mechanismKnowledgeSnapshotHash,
+                StringComparison.Ordinal))
+        {
+            MechanismKnowledgeExperimentPolicy.ValidateHardConstraints(activeOptimization, mechanismKnowledge);
+            await CompleteExperimentSideEffectsAsync(
+                activeOptimization, mechanismKnowledge, hypothesis, projectId, userId, ct).ConfigureAwait(false);
             return activeOptimization;
+        }
 
         var controls = project.Variables
             .Where(static value => value.Role == ResearchVariableRoles.Control)
@@ -167,6 +187,10 @@ public sealed class ResearchExperimentOptimizer(
                 or ResearchExperimentStatuses.Running)
             .Where(static experiment =>
                 experiment.Optimization?.Mode != ResearchOptimizationModes.Shadow)
+            .Where(experiment => experiment.Optimization is null || string.Equals(
+                experiment.Optimization.MechanismKnowledgeSnapshotHash,
+                mechanismKnowledgeSnapshotHash,
+                StringComparison.Ordinal))
             .SelectMany(static experiment => experiment.RunPlan)
             .Where(run => !observedExecutionKeys.Contains(run.ExecutionKey) &&
                           run.Factors.Select(static value => value.VariableCode)
@@ -179,12 +203,16 @@ public sealed class ResearchExperimentOptimizer(
                     StringComparer.Ordinal))
             .Distinct(DictionaryValueComparer.Instance)
             .ToArray();
+        var optimizerTopK = mechanismKnowledge.RankingConstraints.Count == 0
+            ? request.BatchSize
+            : Math.Min(request.BatchSize * 4, 32);
         var call = new OptimizerSuggestionCall
         {
-            Campaign = BuildCampaign(project, intent, hypothesis),
+            Campaign = MechanismKnowledgeExperimentPolicy.ApplyHardConstraints(
+                BuildCampaign(project, intent, hypothesis), mechanismKnowledge),
             Observations = observations,
             PendingPoints = pendingPoints,
-            TopK = request.BatchSize,
+            TopK = optimizerTopK,
             Seed = request.Seed
         };
         var inputHash = Convert.ToHexStringLower(
@@ -195,7 +223,13 @@ public sealed class ResearchExperimentOptimizer(
                 mode,
                 OnlineReplayHash = onlineAdmissionEvidence?.HistoricalReplayReportHash,
                 OnlineShadowHash = onlineAdmissionEvidence?.ShadowReportHash,
-                OnlineRollbackHash = onlineAdmissionEvidence?.RollbackDrillRecordHash
+                OnlineRollbackHash = onlineAdmissionEvidence?.RollbackDrillRecordHash,
+                MechanismClaims = mechanismKnowledge.Claims.Select(static value => new
+                {
+                    value.ClaimId,
+                    value.Version,
+                    value.ContentHash
+                })
             })));
         var existing = experiments
             .Where(experiment => string.Equals(
@@ -205,13 +239,26 @@ public sealed class ResearchExperimentOptimizer(
             .OrderByDescending(static value => value.CreatedAt)
             .FirstOrDefault();
         if (existing is not null)
+        {
+            await CompleteExperimentSideEffectsAsync(
+                existing, mechanismKnowledge, hypothesis, projectId, userId, ct).ConfigureAwait(false);
             return existing;
+        }
         var response = await optimizerClient.SuggestAsync(call, ct).ConfigureAwait(false);
         if (response.ObservationCount != observations.Length ||
-            response.Suggestions.Count != request.BatchSize)
+            response.Suggestions.Count != optimizerTopK)
             throw new ProcessResearchRuleException("优化服务使用的数据快照或返回的实验数量不一致。");
+        foreach (var suggestion in response.Suggestions)
+        {
+            ValidateSuggestion(project, response.ModelVersion, suggestion);
+            MechanismKnowledgeExperimentPolicy.ValidateHardConstraints(suggestion, mechanismKnowledge);
+        }
+        var rankedSuggestions = MechanismKnowledgeExperimentPolicy.Rank(
+                response.Suggestions, mechanismKnowledge, controls)
+            .Take(request.BatchSize)
+            .ToArray();
         EnsureExperimentConditionsAreDistinguishable(
-            response.Suggestions,
+            rankedSuggestions,
             observations,
             controls);
 
@@ -222,11 +269,10 @@ public sealed class ResearchExperimentOptimizer(
         for (var replicate = 0; replicate < request.ReplicatesPerCondition; replicate++)
         {
             // 让同一候选条件在不同区组中的顺序轮换，避免固定执行顺序与条件混杂。
-            for (var position = 0; position < response.Suggestions.Count; position++)
+            for (var position = 0; position < rankedSuggestions.Length; position++)
             {
-                var index = (position + replicate) % response.Suggestions.Count;
-                var suggestion = response.Suggestions[index];
-                ValidateSuggestion(project, response.ModelVersion, suggestion);
+                var index = (position + replicate) % rankedSuggestions.Length;
+                var suggestion = rankedSuggestions[index];
                 if (mode == ResearchOptimizationModes.Controlled)
                     ValidateControlledSuggestionInObservedEnvelope(suggestion, observations);
                 var executionKey = $"bo-{experimentId:N}"[..15] +
@@ -288,12 +334,13 @@ public sealed class ResearchExperimentOptimizer(
                 PendingExperimentCount = pendingPoints.Length,
                 ProcessFeatureCount = CommonProcessFeatureCount(observations),
                 FeatureSetId = project.OptimizationFeatures.FeatureSetId,
+                MechanismKnowledgeSnapshotHash = mechanismKnowledgeSnapshotHash,
                 FeatureSetVersion = project.OptimizationFeatures.Version,
                 DerivedFeatureCount = project.OptimizationFeatures.DerivedFeatures.Count,
                 Intent = intent,
                 Mode = mode,
                 HypothesisId = hypothesis?.HypothesisId,
-                DistinctConditionCount = response.Suggestions.Count,
+                DistinctConditionCount = rankedSuggestions.Length,
                 ReplicatesPerCondition = request.ReplicatesPerCondition,
                 BlockCount = request.ReplicatesPerCondition,
                 RunPredictions = predictions,
@@ -308,14 +355,8 @@ public sealed class ResearchExperimentOptimizer(
                 generatedExperiment,
                 userId,
                 ct).ConfigureAwait(false);
-            if (hypothesis is not null && hypothesis.Status == ResearchHypothesisStatuses.Proposed)
-            {
-                await workflow.SaveHypothesisAsync(
-                    projectId,
-                    hypothesis with { Status = ResearchHypothesisStatuses.Selected },
-                    userId,
-                    ct).ConfigureAwait(false);
-            }
+            await CompleteExperimentSideEffectsAsync(
+                saved, mechanismKnowledge, hypothesis, projectId, userId, ct).ConfigureAwait(false);
             return saved;
         }
         catch (ProcessResearchRuleException)
@@ -324,9 +365,56 @@ public sealed class ResearchExperimentOptimizer(
             var concurrent = await store.GetExperimentAsync(experimentId, ct).ConfigureAwait(false);
             if (concurrent?.Optimization?.InputHash is { } concurrentInputHash &&
                 string.Equals(concurrentInputHash, inputHash, StringComparison.Ordinal))
+            {
+                await CompleteExperimentSideEffectsAsync(
+                    concurrent, mechanismKnowledge, hypothesis, projectId, userId, ct).ConfigureAwait(false);
                 return concurrent;
+            }
             throw;
         }
+    }
+
+    private Task SaveKnowledgeUsagesAsync(
+        Guid recommendationId,
+        AppliedMechanismKnowledge mechanismKnowledge,
+        CancellationToken ct)
+    {
+        if (mechanismKnowledgeStore is null || mechanismKnowledge.Claims.Count == 0)
+            return Task.CompletedTask;
+        var usages = mechanismKnowledge.Claims.SelectMany(value => (value.Constraints.Count == 0
+                ? ["knowledge-context"]
+                : value.Constraints.Select(static constraint => constraint.Severity == "hard"
+                    ? "hard-constraint"
+                    : "candidate-ranking").Distinct(StringComparer.Ordinal))
+            .Select(usageType => new MechanismClaimUsage
+            {
+                RecommendationId = recommendationId,
+                ClaimId = value.ClaimId,
+                ClaimVersion = value.Version,
+                UsageType = usageType,
+                ContentHash = value.ContentHash
+            })).ToArray();
+        return mechanismKnowledgeStore.SaveUsagesAsync(usages, ct);
+    }
+
+    private async Task CompleteExperimentSideEffectsAsync(
+        ResearchExperiment experiment,
+        AppliedMechanismKnowledge mechanismKnowledge,
+        ResearchHypothesis? hypothesis,
+        Guid projectId,
+        string userId,
+        CancellationToken ct)
+    {
+        await SaveKnowledgeUsagesAsync(experiment.ExperimentId, mechanismKnowledge, ct)
+            .ConfigureAwait(false);
+        if (hypothesis is null) return;
+        var current = await store.GetHypothesisAsync(hypothesis.HypothesisId, ct).ConfigureAwait(false);
+        if (current?.Status == ResearchHypothesisStatuses.Proposed)
+            await workflow.SaveHypothesisAsync(
+                projectId,
+                current with { Status = ResearchHypothesisStatuses.Selected },
+                userId,
+                ct).ConfigureAwait(false);
     }
 
     internal static OptimizerCampaignInput BuildCampaign(

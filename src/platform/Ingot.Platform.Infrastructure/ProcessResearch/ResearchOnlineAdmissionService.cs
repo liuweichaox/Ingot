@@ -1,4 +1,5 @@
 using Ingot.Contracts.ProcessResearch;
+using Ingot.Platform.Infrastructure.ResearchAssets;
 
 namespace Ingot.Platform.Infrastructure.ProcessResearch;
 
@@ -10,22 +11,32 @@ namespace Ingot.Platform.Infrastructure.ProcessResearch;
 public sealed class ResearchOnlineAdmissionService(
     IProcessResearchStore store,
     ResearchShadowRecommendationService shadowRecommendations,
-    ResearchOnlineCampaignService onlineCampaign)
+    ResearchOnlineCampaignService onlineCampaign,
+    IMechanismKnowledgeStore? mechanismKnowledgeStore = null)
 {
     public const int MinimumValidShadowOutcomes = ValidationThresholds.MinimumCalibrationCheckCount;
     public const double MinimumPredictionCoverage = ValidationThresholds.MinimumCalibrationCoverage;
 
     public async Task<ResearchOnlineAdmissionEvidence> AssessAsync(
         Guid projectId,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        string? requiredMechanismKnowledgeSnapshotHash = null)
     {
         var project = await store.GetProjectAsync(projectId, ct).ConfigureAwait(false)
             ?? throw new ProcessResearchRuleException("研发项目不存在。");
+        requiredMechanismKnowledgeSnapshotHash ??= mechanismKnowledgeStore is null
+            ? "none"
+            : MechanismKnowledgeExperimentPolicy.SnapshotHash(
+                MechanismKnowledgeExperimentPolicy.Select(
+                    project,
+                    await mechanismKnowledgeStore.ListClaimsAsync(projectId, ct).ConfigureAwait(false),
+                    await mechanismKnowledgeStore.ListConflictsAsync(projectId, ct).ConfigureAwait(false)));
         var replayTask = store.ListHistoricalReplayReportsAsync(projectId, ct);
         var rollbackTask = store.ListRollbackDrillsAsync(projectId, ct);
         var experimentsTask = store.ListExperimentsAsync(projectId, ct);
         var resultsTask = store.ListExperimentResultsAsync(projectId, ct);
-        var shadowTask = shadowRecommendations.BuildReportAsync(projectId, ct);
+        var shadowTask = shadowRecommendations.BuildReportAsync(
+            projectId, ct, requiredMechanismKnowledgeSnapshotHash);
         var onlineTask = onlineCampaign.BuildReportAsync(projectId, ct);
         await Task.WhenAll(replayTask, rollbackTask, experimentsTask, resultsTask, shadowTask, onlineTask)
             .ConfigureAwait(false);
@@ -33,6 +44,10 @@ public sealed class ResearchOnlineAdmissionService(
         var reviewedReplay = (await replayTask.ConfigureAwait(false))
             .Where(static value =>
                 value.Status == ResearchHistoricalReplayStatuses.Reviewed && value.GatePassed)
+            .Where(value => string.Equals(
+                value.MechanismKnowledgeSnapshotHash,
+                requiredMechanismKnowledgeSnapshotHash,
+                StringComparison.Ordinal))
             .OrderByDescending(static value => value.ReviewedAt ?? value.GeneratedAt)
             .FirstOrDefault();
         var shadow = await shadowTask.ConfigureAwait(false);
@@ -52,7 +67,7 @@ public sealed class ResearchOnlineAdmissionService(
             ResearchProjectStatuses.Completed or ResearchProjectStatuses.Archived)
             failures.Add("项目必须处于 active 或 validating 状态。受控在线不能在草稿、已完成或已归档项目中运行。");
         if (reviewedReplay is null)
-            failures.Add("缺少独立审核且通过预注册门槛的生产等价历史回放报告。");
+            failures.Add("缺少与当前机理知识快照一致、独立审核且通过门槛的历史回放报告。");
         if (rollbackDrill is null)
             failures.Add("缺少另一名工程师已复核且通过的停止与回退演练。");
         if (shadow.CompletedOutcomeCount - shadow.InvalidOutcomeCount < MinimumValidShadowOutcomes)
@@ -96,6 +111,7 @@ public sealed class ResearchOnlineAdmissionService(
         return new ResearchOnlineAdmissionEvidence
         {
             ValidationPolicyVersion = ValidationThresholds.PolicyVersion,
+            MechanismKnowledgeSnapshotHash = requiredMechanismKnowledgeSnapshotHash,
             Eligible = failures.Count == 0,
             Failures = failures,
             Warnings = warnings,
@@ -115,6 +131,19 @@ public sealed class ResearchOnlineAdmissionService(
         CancellationToken ct = default)
     {
         var evidence = await AssessAsync(projectId, ct).ConfigureAwait(false);
+        if (!evidence.Eligible)
+            throw new ProcessResearchRuleException(
+                "受控在线准入未通过：" + string.Join("；", evidence.Failures));
+        return evidence;
+    }
+
+    public async Task<ResearchOnlineAdmissionEvidence> RequireAsync(
+        Guid projectId,
+        string mechanismKnowledgeSnapshotHash,
+        CancellationToken ct = default)
+    {
+        var evidence = await AssessAsync(projectId, ct, mechanismKnowledgeSnapshotHash)
+            .ConfigureAwait(false);
         if (!evidence.Eligible)
             throw new ProcessResearchRuleException(
                 "受控在线准入未通过：" + string.Join("；", evidence.Failures));
