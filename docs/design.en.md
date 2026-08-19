@@ -85,6 +85,8 @@ Platform is the formal business system of record. Experiment state or conclusion
 
 The production host stores Agent run snapshots and event streams in Platform PostgreSQL. Agent core still depends only on `IAgentRunStore` and does not reference Npgsql. The legacy `Data/chat.db` remains only as a one-way compatibility import source. A run admitted to golden-question evaluation freezes its complete snapshot and SHA-256 inside the same recovery boundary and can no longer be deleted as an ordinary conversation.
 
+Platform separates policy from implementation by use case: `Platform.Application` owns application rules and storage ports that can be tested without a database, while `Platform.Infrastructure` implements PostgreSQL transactions, external services, and cross-context adapters. Concurrency idempotency and atomic writes remain enforced by database transactions and constraints rather than being lifted into in-memory rules. Process-research rules cannot read the inspection module directly; inspection, process-run, and configuration evidence enters research only through explicitly registered assembly adapters (currently `ResearchObservationAssembler`).
+
 ### Optimizer
 
 - Receive the complete problem definition, valid observations, pending points, and random seed.

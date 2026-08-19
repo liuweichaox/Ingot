@@ -85,6 +85,8 @@ Platform 是正式业务记录源，不能把实验状态或结论只保存在 O
 
 生产宿主把 Agent 运行快照和事件流保存在 Platform PostgreSQL 中；Agent 核心仍只依赖 `IAgentRunStore`，不引用 Npgsql。旧版 `Data/chat.db` 只作为一次性兼容导入源保留。进入黄金问题评测的运行会在同一恢复边界内冻结完整快照与 SHA-256，不能再按普通对话删除。
 
+Platform 内部按用例分离策略与实现：`Platform.Application` 保存可脱离数据库测试的应用规则和存储端口，`Platform.Infrastructure` 实现 PostgreSQL 事务、外部服务和跨上下文适配。并发幂等与原子写入继续由数据库事务和约束保证，不上提为内存规则。工艺研究规则不能直接读取检验模块；检验、过程运行和配置证据只能由显式登记的装配适配器（当前为 `ResearchObservationAssembler`）转换为研究观察。
+
 ### Optimizer
 
 - 接收完整问题定义、有效观察、待执行点和随机种子；

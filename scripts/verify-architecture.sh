@@ -81,6 +81,22 @@ check "platform-infrastructure" src/platform/Ingot.Platform.Infrastructure \
   'using Ingot\.Platform\.Api' \
   "Platform Infrastructure 必须独立于 API 宿主"
 
+research_inspection_hits=$(grep -rnE \
+  'using (Ingot\.Contracts\.Inspections|Ingot\.Platform\.Infrastructure\.Inspections)' \
+  src/platform/Ingot.Platform.Infrastructure/ProcessResearch \
+  --include='*.cs' --exclude='ResearchObservationAssembler.cs' 2>/dev/null || true)
+if [[ -n "$research_inspection_hits" ]]; then
+  echo "✗ [process-research-context-matrix] 研究规则不得直接读取检验上下文；请通过已登记适配器装配证据"
+  echo "$research_inspection_hits" | sed 's/^/    /'
+  fail=1
+else
+  echo "✓ [process-research-context-matrix]"
+fi
+
+check "process-research-application-rules" src/platform/Ingot.Platform.Application/ProcessResearch \
+  'using (Ingot\.Contracts\.Inspections|Ingot\.Platform\.Infrastructure\.Inspections)' \
+  "Application 研究规则不得直接读取检验上下文"
+
 store_schema_ddl=$(grep -rnE \
   '(CREATE TABLE|CREATE (UNIQUE )?INDEX|ALTER TABLE|create_hypertable|add_[a-z_]*policy)' \
   src/platform/Ingot.Platform.Infrastructure \
