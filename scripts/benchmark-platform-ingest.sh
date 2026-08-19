@@ -51,7 +51,6 @@ dotnet build Ingot.sln --no-restore >/dev/null
 dotnet run --project src/platform/Ingot.Platform.Api --no-build -- \
   "Urls=http://127.0.0.1:${port}" \
   "ConnectionStrings:Events=Host=localhost;Port=5432;Database=ingot;Username=ingot;Password=${postgres_password}" \
-  "Platform:DatabasePath=/tmp/ingot-platform-benchmark.db" \
   "EventIngest:EdgeTokens:${edge_id}=${token}" \
   >"$platform_log" 2>&1 &
 platform_pid=$!

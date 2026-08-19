@@ -21,7 +21,7 @@ public sealed class SqliteAgentStore : IAgentRunStore, IDisposable
     public SqliteAgentStore(IConfiguration configuration)
     {
         var configured = configuration["Chat:DatabasePath"];
-        var path = string.IsNullOrWhiteSpace(configured) ? "data/chat.db" : configured.Trim();
+        var path = string.IsNullOrWhiteSpace(configured) ? "Data/chat.db" : configured.Trim();
         if (!Path.IsPathRooted(path))
             path = Path.Combine(AppContext.BaseDirectory, path);
         DatabaseExistedAtConstruction = File.Exists(path);
