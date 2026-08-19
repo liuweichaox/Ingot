@@ -82,6 +82,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IAnalysisTool, SearchProcessKnowledgeTool>();
         services.AddSingleton<IAnalysisTool, GetResearchProjectTool>();
 
+        services.AddSingleton<InspectionExecutionReferenceValidator>();
         services.AddIngotInspections(configuration);
         services.AddSingleton<IExecutionComparisonService, ExecutionComparisonService>();
         services.AddSingleton<ITimeWindowComparisonService, TimeWindowComparisonService>();

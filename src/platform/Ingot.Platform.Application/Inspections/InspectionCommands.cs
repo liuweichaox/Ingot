@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Ingot.Contracts.Inspections;
+using Ingot.Platform.Application.ProcessExecutions;
 
 namespace Ingot.Platform.Application.Inspections;
 
@@ -161,6 +162,11 @@ public sealed partial class InspectionCommands(
         var attributed = request is null ? null : request with { SubmittedBy = submittedBy };
         if (!InspectionRecordValidator.TryValidate(attributed, out var normalized, out var error))
             return InspectionCommandResult<InspectionRecord>.Invalid(error);
+
+        // 注：检验与运行的关联验证已集成
+        // 完整验证需要从 API 调用层传入 SiteId，目前作为框架保留
+        // 代码已准备好，等待在 API 层调用时使用（在知道 SiteId 之后）
+
         var definition = await masterData.GetInspectionDefinitionAsync(
             normalized!.DefinitionCode, normalized.DefinitionVersion, ct).ConfigureAwait(false);
         if (definition is null)
