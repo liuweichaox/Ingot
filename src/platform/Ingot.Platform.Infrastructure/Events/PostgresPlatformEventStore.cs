@@ -233,6 +233,15 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, ID
                     "production_event_ingested",
                     ct).ConfigureAwait(false);
             }
+            await EnqueueExecutionBoundaryProjectionAsync(
+                    connection,
+                    transaction,
+                    request.SiteId,
+                    request.EdgeId,
+                    acceptedMaxIngestByExecutionId,
+                    gapDetected,
+                    ct)
+                .ConfigureAwait(false);
         }
         await transaction.CommitAsync(ct).ConfigureAwait(false);
         var response = new EventBatchResponse
@@ -984,6 +993,54 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, ID
         return await command.ExecuteScalarAsync(ct).ConfigureAwait(false) is not null;
     }
 
+    private static async Task EnqueueExecutionBoundaryProjectionAsync(
+        NpgsqlConnection connection,
+        NpgsqlTransaction transaction,
+        string siteId,
+        string edgeId,
+        IReadOnlyDictionary<string, long> maximumIngestIds,
+        bool gapDetected,
+        CancellationToken ct)
+    {
+        foreach (var pair in maximumIngestIds)
+        {
+            await using var command = new NpgsqlCommand(
+                """
+                INSERT INTO execution_boundary_recompute_jobs(
+                  site_id, source_execution_id, edge_id, requested_max_ingest_id,
+                  gap_detected, status, available_at, updated_at)
+                VALUES (
+                  @site_id, @execution_id, @edge_id, @maximum_ingest_id,
+                  @gap_detected, 'queued', now(), now())
+                ON CONFLICT (site_id, source_execution_id) DO UPDATE SET
+                  edge_id = EXCLUDED.edge_id,
+                  requested_max_ingest_id = GREATEST(
+                    execution_boundary_recompute_jobs.requested_max_ingest_id,
+                    EXCLUDED.requested_max_ingest_id),
+                  gap_detected = execution_boundary_recompute_jobs.gap_detected OR EXCLUDED.gap_detected,
+                  status = CASE
+                    WHEN execution_boundary_recompute_jobs.status = 'running' THEN 'running'
+                    ELSE 'queued'
+                  END,
+                  available_at = CASE
+                    WHEN execution_boundary_recompute_jobs.status = 'running'
+                      THEN execution_boundary_recompute_jobs.available_at
+                    ELSE now()
+                  END,
+                  last_error = NULL,
+                  updated_at = now();
+                """,
+                connection,
+                transaction);
+            command.Parameters.AddWithValue("site_id", siteId);
+            command.Parameters.AddWithValue("execution_id", pair.Key);
+            command.Parameters.AddWithValue("edge_id", edgeId);
+            command.Parameters.AddWithValue("maximum_ingest_id", pair.Value);
+            command.Parameters.AddWithValue("gap_detected", gapDetected);
+            await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+        }
+    }
+
     private static async Task<long> InsertEventAsync(
         NpgsqlConnection connection,
         NpgsqlTransaction transaction,
@@ -1176,7 +1233,7 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, ID
             reader.GetInt64(3) != evt.Seq ||
             !string.Equals(reader.GetString(4), sourcePayloadHash, StringComparison.Ordinal))
         {
-            throw new InvalidDataException(
+            throw new EventIngestConflictException(
                 $"事件幂等键或载荷冲突：SiteId={siteId}, EdgeId={edgeId}, Seq={evt.Seq}, EventId={evt.EventId}");
         }
     }

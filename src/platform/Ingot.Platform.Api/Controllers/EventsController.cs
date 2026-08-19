@@ -2,8 +2,6 @@ using System.Text.Json;
 using Ingot.Platform.Api.Errors;
 using Ingot.Platform.Api.Events;
 using Ingot.Platform.Infrastructure.Events;
-using Ingot.Platform.Infrastructure.ProcessExecutions;
-using Ingot.Platform.Application.ProcessExecutions;
 using Ingot.Contracts.Events;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -16,8 +14,6 @@ namespace Ingot.Platform.Api.Controllers;
 public sealed class EventsController(
     IPlatformEventStore store,
     EdgeTokenValidator tokenValidator,
-    IExecutionBoundaryRecognizer boundaryRecognizer,
-    IExecutionBoundaryStore boundaryStore,
     IOptions<PlatformEventOptions> eventOptions) : PlatformApiController
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
@@ -45,40 +41,16 @@ public sealed class EventsController(
         try
         {
             var response = await store.IngestAsync(normalized, ct).ConfigureAwait(false);
-
-            // 触发异步的运行边界识别（不阻塞事件摄入响应）
-            // 正常情况下应该在后台处理，但为了简化集成，这里直接调用
-            // 生产环境应该通过消息队列解耦
-            _ = Task.Run(async () =>
-            {
-                try
-                {
-                    var options = new ExecutionBoundaryRecognitionOptions();
-                    var recognized = await boundaryRecognizer.RecognizeBoundariesAsync(
-                        normalized.SiteId,
-                        normalized.EdgeId,
-                        normalized.Events,
-                        options,
-                        ct).ConfigureAwait(false);
-
-                    foreach (var boundary in recognized)
-                    {
-                        await boundaryStore.SaveBoundaryAsync(boundary, ct).ConfigureAwait(false);
-                    }
-                }
-                catch
-                {
-                    // 运行边界识别失败不应该影响事件摄入响应
-                    // 但应该被记录用于监控
-                    // （这里省略日志代码，实际应该通过ILogger记录）
-                }
-            }, ct);
-
             return Ok(response);
         }
         catch (ArgumentException exception)
         {
             return InvalidRequest(exception.Message);
+        }
+        catch (EventIngestConflictException exception)
+        {
+            return StateConflict(
+                $"{exception.Message}。该冲突不会通过重试恢复；若本地 outbox 已重建，请更换 EdgeId。");
         }
     }
 

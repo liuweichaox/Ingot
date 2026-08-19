@@ -134,7 +134,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ExecutionBoundaryRecognizer>();
         services.AddSingleton<IExecutionBoundaryRecognizer>(
             provider => provider.GetRequiredService<ExecutionBoundaryRecognizer>());
-        services.AddSingleton<ExecutionBoundaryRecognitionService>();
+        services.Configure<ExecutionBoundaryProjectionOptions>(
+            configuration.GetSection("ExecutionBoundaryProjection"));
 
         return services;
     }
@@ -145,6 +146,14 @@ public static class ServiceCollectionExtensions
     /// </summary>
     public static IServiceCollection AddIngotPlatformWorkers(this IServiceCollection services)
     {
+        services.AddOptions<ExecutionBoundaryProjectionOptions>()
+            .Validate(
+                static value => value.PollInterval > TimeSpan.Zero &&
+                                value.LeaseTimeout > value.PollInterval &&
+                                value.ExecutionTimeoutWithoutCompletion > TimeSpan.Zero &&
+                                value.MaximumRetryDelay > TimeSpan.Zero,
+                "运行边界投影 Worker 的轮询、租约、运行超时或退避配置无效。")
+            .ValidateOnStart();
         services.AddOptions<KnowledgeExtractionWorkerOptions>()
             .Validate(
                 static value => value.HeartbeatInterval > TimeSpan.Zero &&
@@ -157,6 +166,7 @@ public static class ServiceCollectionExtensions
         services.AddHostedService<TimeSeriesRetentionHostedService>();
         services.AddHostedService<EventIngestKeyPruneHostedService>();
         services.AddHostedService<ProcessExecutionAnalysisRecomputeHostedService>();
+        services.AddHostedService<ExecutionBoundaryProjectionHostedService>();
         services.AddHostedService(provider => provider.GetRequiredService<ProcessExecutionAnalysisBackfillService>());
         services.AddHostedService<KnowledgeExtractionWorker>();
         services.AddHostedService<ResearchExperimentAutomationHostedService>();

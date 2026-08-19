@@ -50,6 +50,7 @@ cp .env.example .env
 - `INGOT_EDGE_TOKEN`
 - `INGOT_CONNECTOR_TOKEN`
 - `INGOT_CONNECTOR_LOCAL_TOKEN`
+- `INGOT_EDGE_DIAGNOSTICS_BASE_URL`：Platform 固定访问该 Edge 诊断 API 的可信地址；不得使用节点上报值动态改写
 - `INGOT_ADMIN_PASSWORD`
 
 生产环境必须使用 `INGOT_AUTH_MODE=Local` 或 `INGOT_AUTH_MODE=Oidc`。`INGOT_AUTH_MODE=Disabled`

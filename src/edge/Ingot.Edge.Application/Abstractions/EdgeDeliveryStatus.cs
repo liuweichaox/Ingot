@@ -19,6 +19,7 @@ public sealed class EdgeDeliveryStatus
     private long _recoveryCount;
     private double? _lastRecoveryDurationMs;
     private string? _lastError;
+    private string? _blockedReason;
 
     public EdgeDeliveryRuntimeStatus Get()
     {
@@ -27,7 +28,9 @@ public sealed class EdgeDeliveryStatus
             var capacityUsed = _backlogCapacityRows > 0
                 ? _pendingEventCount * 100d / _backlogCapacityRows.Value
                 : 0;
-            var state = _consecutiveFailures > 0 || capacityUsed >= 80
+            var state = _blockedReason is not null
+                ? "blocked"
+                : _consecutiveFailures > 0 || capacityUsed >= 80
                 ? "degraded"
                 : _pendingEventCount > 0
                     ? "buffering"
@@ -89,6 +92,20 @@ public sealed class EdgeDeliveryStatus
         }
     }
 
+    public void RecordBlocked(string reason, DateTimeOffset timestamp)
+    {
+        lock (_gate)
+        {
+            _blockedReason = string.IsNullOrWhiteSpace(reason)
+                ? "事件上送遇到不可恢复的 Edge 身份冲突。"
+                : reason.Trim();
+            _lastError = _blockedReason;
+            _lastFailureAt = timestamp;
+            _failureStartedAt ??= timestamp;
+            _consecutiveFailures++;
+        }
+    }
+
     public void RecordSuccess(
         long acknowledgedSequence,
         int shipped,
@@ -118,6 +135,7 @@ public sealed class EdgeDeliveryStatus
             }
             _failureStartedAt = null;
             _consecutiveFailures = 0;
+            _blockedReason = null;
             _lastError = null;
         }
     }

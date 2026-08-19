@@ -58,7 +58,9 @@ test("operations retain server pagination and resumable live events", () => {
   assert.match(pages, /makeEventQuery\(appliedFilters, value, pageSize\)/);
   assert.match(pages, /Object\.entries\(appliedFilters\)/);
   assert.match(pages, /afterIngestId/);
-  assert.match(pages, /new EventSource\(`\/api\/v1\/events\/stream/);
+  assert.match(pages, /streamSse\(`\/api\/v1\/events\/stream/);
+  assert.match(pages, /lastEventId: cursor/);
+  assert.doesNotMatch(pages, /new EventSource/);
   assert.match(pages, /<Pagination/);
   assert.doesNotMatch(pages, /beforeIngestId/);
   assert.match(pages, /\{ key: "completedAt", label: "结束"/);

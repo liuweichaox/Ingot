@@ -12,6 +12,7 @@ public static class ProductionConfigurationValidator
 
         RequireProtectedMap(configuration, "EventIngest", "EdgeTokens", errors);
         RequireEdgeSiteBindings(configuration, errors);
+        RequireEdgeDiagnosticsBindings(configuration, errors);
 
         // 认证模式：Local（内置账户）、Oidc（外部 IdP）或 Disabled（本地演示固定 operator 身份）。
         var authMode = configuration["Authentication:Mode"] ?? "Local";
@@ -129,6 +130,45 @@ public static class ProductionConfigurationValidator
         if (siteEntries.Any(static entry => !IsStableId(entry.Value)))
             errors.Add("Every EventIngest:EdgeSites value must be a valid SiteId.");
     }
+
+    private static void RequireEdgeDiagnosticsBindings(
+        IConfiguration configuration,
+        ICollection<string> errors)
+    {
+        var ingestEdges = configuration.GetSection("EventIngest:EdgeTokens")
+            .GetChildren()
+            .ToDictionary(static entry => entry.Key, static entry => entry.Value, StringComparer.OrdinalIgnoreCase);
+        var diagnosticTokens = configuration.GetSection("EdgeDiagnostics:EdgeTokens")
+            .GetChildren()
+            .ToArray();
+        var diagnosticUrls = configuration.GetSection("EdgeDiagnostics:EdgeBaseUrls")
+            .GetChildren()
+            .ToArray();
+        if (!ingestEdges.Keys.ToHashSet(StringComparer.OrdinalIgnoreCase)
+                .SetEquals(diagnosticTokens.Select(static entry => entry.Key)) ||
+            diagnosticTokens.Any(entry =>
+                !IsStrongSecret(entry.Value) ||
+                ingestEdges.TryGetValue(entry.Key, out var ingestToken) &&
+                string.Equals(entry.Value, ingestToken, StringComparison.Ordinal)))
+        {
+            errors.Add(
+                "EdgeDiagnostics:EdgeTokens must contain one strong, dedicated credential for every EventIngest EdgeId.");
+        }
+        if (!ingestEdges.Keys.ToHashSet(StringComparer.OrdinalIgnoreCase)
+                .SetEquals(diagnosticUrls.Select(static entry => entry.Key)) ||
+            diagnosticUrls.Any(static entry => !IsSafeDiagnosticBaseUrl(entry.Value)))
+        {
+            errors.Add(
+                "EdgeDiagnostics:EdgeBaseUrls must contain one trusted absolute HTTP or HTTPS URL for every EventIngest EdgeId.");
+        }
+    }
+
+    private static bool IsSafeDiagnosticBaseUrl(string? value) =>
+        Uri.TryCreate(value, UriKind.Absolute, out var uri) &&
+        uri.Scheme is "http" or "https" &&
+        string.IsNullOrEmpty(uri.UserInfo) &&
+        string.IsNullOrEmpty(uri.Query) &&
+        string.IsNullOrEmpty(uri.Fragment);
 
     private static bool IsStableId(string? value)
     {

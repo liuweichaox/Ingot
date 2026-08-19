@@ -8,7 +8,13 @@ public static class ProductionConfigurationValidator
     {
         var errors = new List<string>();
         RequireSecret(configuration["ConnectorHost:IngestToken"], "ConnectorHost:IngestToken", errors);
-        RequireOptionalSecret(configuration["ConnectorHost:LocalApiToken"], "ConnectorHost:LocalApiToken", errors);
+        RequireSecret(configuration["ConnectorHost:LocalApiToken"], "ConnectorHost:LocalApiToken", errors);
+        if (SecretsEqual(
+                configuration["ConnectorHost:LocalApiToken"],
+                configuration["ConnectorHost:IngestToken"]))
+        {
+            errors.Add("ConnectorHost:LocalApiToken must be distinct from ConnectorHost:IngestToken.");
+        }
 
         var platformReportingEnabled = configuration.GetValue<bool>("Edge:EnablePlatformReporting", true);
         var eventShippingEnabled = configuration.GetValue<bool>("Edge:EnableEventShipping");
@@ -54,7 +60,15 @@ public static class ProductionConfigurationValidator
             errors.Add("Acquisition:StartupHealthTimeoutMs must be between 1000 and 300000 milliseconds.");
 
         if (eventShippingEnabled)
+        {
             RequireSecret(configuration["Edge:EventIngestToken"], "Edge:EventIngestToken", errors);
+            if (SecretsEqual(
+                    configuration["ConnectorHost:LocalApiToken"],
+                    configuration["Edge:EventIngestToken"]))
+            {
+                errors.Add("ConnectorHost:LocalApiToken must be distinct from Edge:EventIngestToken.");
+            }
+        }
 
         if (errors.Count > 0)
             throw new InvalidOperationException($"Invalid production configuration:{Environment.NewLine}- {string.Join($"{Environment.NewLine}- ", errors)}");
@@ -73,6 +87,10 @@ public static class ProductionConfigurationValidator
         value.Contains("verification-", StringComparison.OrdinalIgnoreCase) ||
         value.Contains("replace-with-", StringComparison.OrdinalIgnoreCase);
 
+    private static bool SecretsEqual(string? left, string? right) =>
+        !string.IsNullOrWhiteSpace(left) &&
+        string.Equals(left, right, StringComparison.Ordinal);
+
     private static bool IsStableId(string? value)
     {
         if (string.IsNullOrWhiteSpace(value) || value.Length > 128 || !char.IsLetterOrDigit(value[0]))
@@ -81,12 +99,4 @@ public static class ProductionConfigurationValidator
             char.IsLetterOrDigit(character) || character is '.' or '_' or '-');
     }
 
-    private static void RequireOptionalSecret(string? value, string key, ICollection<string> errors)
-    {
-        if (!string.IsNullOrWhiteSpace(value) &&
-            (value.Length < MinimumSecretLength || IsPlaceholder(value)))
-        {
-            errors.Add($"{key} must contain at least {MinimumSecretLength} characters and must not be a placeholder when configured.");
-        }
-    }
 }

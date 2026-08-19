@@ -50,6 +50,7 @@ Change at least:
 - `INGOT_EDGE_TOKEN`
 - `INGOT_CONNECTOR_TOKEN`
 - `INGOT_CONNECTOR_LOCAL_TOKEN`
+- `INGOT_EDGE_DIAGNOSTICS_BASE_URL`: the trusted, deployment-pinned Edge diagnostics API URL; reported node metadata cannot override it
 - `INGOT_ADMIN_PASSWORD`
 
 Never commit `.env` or real equipment credentials. Inject device passwords and certificates through a site-approved secret-management method.

@@ -116,6 +116,18 @@ public sealed class HttpEventShipper : IEventShipper
                     var responseBody = await response.Content
                         .ReadAsStringAsync(ct)
                         .ConfigureAwait(false);
+                    if (response.StatusCode == HttpStatusCode.Conflict)
+                    {
+                        var reason =
+                            $"中心报告不可恢复的 Edge 身份或序号冲突（HTTP 409）：{responseBody}";
+                        _deliveryStatus.RecordBlocked(reason, DateTimeOffset.UtcNow);
+                        _logger.LogCritical(
+                            "事件上行已阻塞，自动重试已停止。请检查 outbox；若 outbox 已重建，必须更换 EdgeId。" +
+                            " EdgeId={EdgeId}, Detail={Detail}",
+                            edgeId,
+                            responseBody);
+                        return;
+                    }
                     if (IsDeterministicPayloadRejection(response.StatusCode))
                     {
                         await IsolateRejectedEventsAsync(http, siteId, edgeId, pending, responseBody, ct)

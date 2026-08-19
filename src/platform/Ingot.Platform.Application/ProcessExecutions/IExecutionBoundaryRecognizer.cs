@@ -6,10 +6,10 @@ namespace Ingot.Platform.Application.ProcessExecutions;
 /// 运行边界识别器：从生产事件流识别独立的运行边界。
 ///
 /// 设计策略：
-/// - 事件驱动：遇到 process.execution.started 和 process.execution.ended 事件时确定边界。
+/// - 事件驱动：遇到 process.execution.started 和 process.execution.completed 事件时确定边界。
 /// - 启发式修正：
 ///   * 无 process.execution.started 时，用第一条事件时间 + 启发式算法推断运行开始。
-///   * 无 process.execution.ended 时，用超时时间（可配置，如 10 小时）推断运行结束。
+///   * 无 process.execution.completed 时，用超时时间（可配置，如 10 小时）推断运行结束。
 ///   * 处理乱序：边界确定后仍可接收晚到的事件；晚到超过阈值的分入新运行。
 /// - 关键约束：ExecutionId 相同的事件必须分入同一运行（除非乱序超出阈值）。
 /// </summary>
@@ -63,7 +63,7 @@ public interface IExecutionBoundaryRecognizer
 public sealed class ExecutionBoundaryRecognitionOptions
 {
     /// <summary>
-    /// 缺少 process.execution.ended 事件时，经过多久后推断运行已结束。
+    /// 缺少 process.execution.completed 事件时，经过多久后推断运行已结束。
     /// 默认 10 小时。
     /// </summary>
     public TimeSpan ExecutionTimeoutWithoutEndEvent { get; set; } = TimeSpan.FromHours(10);
@@ -75,7 +75,7 @@ public sealed class ExecutionBoundaryRecognitionOptions
     public TimeSpan LateArrivalThreshold { get; set; } = TimeSpan.FromHours(1);
 
     /// <summary>
-    /// 是否严格要求 process.execution.started 和 process.execution.ended 事件。
+    /// 是否严格要求 process.execution.started 和 process.execution.completed 事件。
     /// - true：若缺少这两个事件之一，标记为 Fragmented 置信度。
     /// - false：允许从其他事件类型推断运行边界。
     /// 默认 false（更宽松，适合试点环境）。

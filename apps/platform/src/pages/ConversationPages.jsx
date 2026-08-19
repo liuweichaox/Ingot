@@ -28,18 +28,31 @@ export function EventsPage() {
     const streamParams = new URLSearchParams();
     Object.entries(appliedFilters).forEach(([key, value]) => value.trim() && streamParams.set(key, value.trim()));
     if (newest) streamParams.set("afterIngestId", String(newest));
-    const source = new EventSource(`/api/v1/events/stream?${streamParams}`);
-    source.onmessage = message => {
-      const item = JSON.parse(message.data);
-      setData(current => {
-        const currentRows = extractRows(current);
-        if (currentRows.some(value => value.ingestId === item.ingestId)) return current;
-        return { ...(current || {}), data: [item, ...currentRows].slice(0, pageSize), total: Number(current?.total || currentRows.length) + 1 };
-      });
-    };
-    source.onopen = () => setStreamError("");
-    source.onerror = () => setStreamError("实时事件连接暂时中断，浏览器正在自动重连。");
-    return () => source.close();
+    const cancellation = new AbortController();
+    let cursor = newest;
+    void (async () => {
+      while (!cancellation.signal.aborted) {
+        try {
+          cursor = await streamSse(`/api/v1/events/stream?${streamParams}`, {
+            signal: cancellation.signal,
+            lastEventId: cursor,
+            onEvent: async ({ data: item }) => {
+              setStreamError("");
+              setData(current => {
+                const currentRows = extractRows(current);
+                if (currentRows.some(value => value.ingestId === item.ingestId)) return current;
+                return { ...(current || {}), data: [item, ...currentRows].slice(0, pageSize), total: Number(current?.total || currentRows.length) + 1 };
+              });
+            },
+          });
+        } catch (error) {
+          if (cancellation.signal.aborted || error?.name === "AbortError") return;
+          setStreamError("实时事件连接暂时中断，正在使用最近确认位置重连。");
+        }
+        await new Promise(resolve => window.setTimeout(resolve, 1000));
+      }
+    })();
+    return () => cancellation.abort();
   }, [appliedFilters, live, pageSize, setData]);
   return (
     <Page

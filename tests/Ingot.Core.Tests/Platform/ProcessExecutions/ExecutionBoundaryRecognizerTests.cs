@@ -24,7 +24,7 @@ public class ExecutionBoundaryRecognizerTests
         {
             CreateEvent("process.execution.started", baseTime, executionId),
             CreateEvent("process.parameter.set", baseTime.AddSeconds(1), executionId),
-            CreateEvent("process.execution.ended", baseTime.AddSeconds(10), executionId),
+            CreateEvent("process.execution.completed", baseTime.AddSeconds(10), executionId),
         };
 
         var options = new ExecutionBoundaryRecognitionOptions();
@@ -55,7 +55,7 @@ public class ExecutionBoundaryRecognizerTests
         var events = new List<ProductionEvent>
         {
             CreateEvent("process.parameter.set", baseTime, executionId),
-            CreateEvent("process.execution.ended", baseTime.AddSeconds(5), executionId),
+            CreateEvent("process.execution.completed", baseTime.AddSeconds(5), executionId),
         };
 
         var options = new ExecutionBoundaryRecognitionOptions();
@@ -82,9 +82,9 @@ public class ExecutionBoundaryRecognizerTests
         var events = new List<ProductionEvent>
         {
             CreateEvent("process.execution.started", baseTime, "exec-1"),
-            CreateEvent("process.execution.ended", baseTime.AddSeconds(5), "exec-1"),
+            CreateEvent("process.execution.completed", baseTime.AddSeconds(5), "exec-1"),
             CreateEvent("process.execution.started", baseTime.AddSeconds(10), "exec-2"),
-            CreateEvent("process.execution.ended", baseTime.AddSeconds(15), "exec-2"),
+            CreateEvent("process.execution.completed", baseTime.AddSeconds(15), "exec-2"),
         };
 
         var options = new ExecutionBoundaryRecognitionOptions();

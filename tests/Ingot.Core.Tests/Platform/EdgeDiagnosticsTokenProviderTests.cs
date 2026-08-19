@@ -24,6 +24,22 @@ public sealed class EdgeDiagnosticsTokenProviderTests
         Assert.Empty(token);
     }
 
+    [Fact]
+    public void TryGetBaseUrl_ShouldUseOnlyPinnedSafeTarget()
+    {
+        var options = new EdgeDiagnosticsOptions();
+        options.EdgeBaseUrls["EDGE-01"] = "http://edge-01:8001/";
+        var provider = new EdgeDiagnosticsTokenProvider(Options.Create(options));
+
+        Assert.True(provider.TryGetBaseUrl("EDGE-01", out var baseUrl));
+        Assert.Equal("http://edge-01:8001", baseUrl);
+        Assert.False(provider.TryGetBaseUrl("UNREGISTERED", out _));
+
+        options.EdgeBaseUrls["BAD"] = "http://user:secret@attacker.invalid/path?redirect=1";
+        provider = new EdgeDiagnosticsTokenProvider(Options.Create(options));
+        Assert.False(provider.TryGetBaseUrl("BAD", out _));
+    }
+
     private static EdgeDiagnosticsTokenProvider CreateProvider(string? diagnosticsToken)
     {
         var diagnostics = new EdgeDiagnosticsOptions();

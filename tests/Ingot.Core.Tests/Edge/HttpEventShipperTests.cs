@@ -136,6 +136,39 @@ public sealed class HttpEventShipperTests
         Assert.Equal(4, handler.Requests.Count);
     }
 
+    [Fact]
+    public async Task RunAsync_StopsAndReportsBlockedOnEdgeIdentityConflict()
+    {
+        var eventLog = new FakeEventLog([CreateEvent(1)], () => { });
+        var handler = new IdentityConflictHandler();
+        var options = Options.Create(new EdgeReportingOptions
+        {
+            SiteId = "SITE-001",
+            EdgeId = "EDGE-001",
+            PlatformApiBaseUrl = "http://platform/",
+            EnableEventShipping = true,
+            EventIngestToken = "secret",
+            EventBatchSize = 100,
+            EventIdleDelayMs = 100
+        });
+        var delivery = new EdgeDeliveryStatus();
+        var shipper = new HttpEventShipper(
+            eventLog,
+            new EdgeIdentityService(options, NullLogger<EdgeIdentityService>.Instance),
+            new SingleClientFactory(new HttpClient(handler)),
+            options,
+            new FakeMetrics(),
+            delivery,
+            NullLogger<HttpEventShipper>.Instance);
+
+        await shipper.RunAsync(CancellationToken.None);
+
+        Assert.Equal(1, handler.RequestCount);
+        Assert.Null(eventLog.AckSeq);
+        Assert.Equal("blocked", delivery.Get().State);
+        Assert.Contains("HTTP 409", delivery.Get().LastError, StringComparison.Ordinal);
+    }
+
     private static ProductionEvent CreateEvent(long seq) =>
         ProductionEvent.Create(
             "process.execution.completed",
@@ -210,6 +243,22 @@ public sealed class HttpEventShipperTests
             {
                 Content = JsonContent.Create(new EventBatchResponse { Accepted = 1, AckSeq = batch.Events[0].Seq })
             };
+        }
+    }
+
+    private sealed class IdentityConflictHandler : HttpMessageHandler
+    {
+        public int RequestCount { get; private set; }
+
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken)
+        {
+            RequestCount++;
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.Conflict)
+            {
+                Content = JsonContent.Create(new { code = "state.conflict", detail = "EdgeId must change" })
+            });
         }
     }
 

@@ -76,7 +76,8 @@ services:
       - EventIngest__KeyRetentionDays=${INGOT_EVENT_KEY_RETENTION_DAYS:-0}
       - EventIngest__EdgeTokens__${INGOT_EDGE_ID:?INGOT_EDGE_ID is required}=${INGOT_EDGE_TOKEN:?INGOT_EDGE_TOKEN is required}
       - EventIngest__EdgeSites__${INGOT_EDGE_ID:?INGOT_EDGE_ID is required}=${INGOT_SITE_ID:?INGOT_SITE_ID is required}
-      - EdgeDiagnostics__EdgeTokens__${INGOT_EDGE_ID:?INGOT_EDGE_ID is required}=${INGOT_CONNECTOR_LOCAL_TOKEN:-}
+      - EdgeDiagnostics__EdgeTokens__${INGOT_EDGE_ID:?INGOT_EDGE_ID is required}=${INGOT_CONNECTOR_LOCAL_TOKEN:?INGOT_CONNECTOR_LOCAL_TOKEN is required}
+      - EdgeDiagnostics__EdgeBaseUrls__${INGOT_EDGE_ID:?INGOT_EDGE_ID is required}=${INGOT_EDGE_DIAGNOSTICS_BASE_URL:-http://connector-host:8001}
       - Authentication__Mode=${INGOT_AUTH_MODE:-Local}
       - Authentication__AllowInsecureDemo=${INGOT_ALLOW_INSECURE_DEMO:-false}
       - Authentication__Authority=${INGOT_AUTHORITY:-}
@@ -199,7 +200,7 @@ services:
       ASPNETCORE_ENVIRONMENT: Production
       Urls: http://+:8001
       ConnectorHost__IngestToken: ${INGOT_CONNECTOR_TOKEN:?INGOT_CONNECTOR_TOKEN is required}
-      ConnectorHost__LocalApiToken: ${INGOT_CONNECTOR_LOCAL_TOKEN:-}
+      ConnectorHost__LocalApiToken: ${INGOT_CONNECTOR_LOCAL_TOKEN:?INGOT_CONNECTOR_LOCAL_TOKEN is required}
       Edge__SiteId: ${INGOT_SITE_ID:?INGOT_SITE_ID is required}
       Edge__EdgeId: ${INGOT_EDGE_ID:?INGOT_EDGE_ID is required}
       Edge__PlatformApiBaseUrl: http://platform-api:8000

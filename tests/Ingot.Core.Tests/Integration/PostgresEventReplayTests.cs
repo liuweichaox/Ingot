@@ -3,6 +3,7 @@ using Ingot.Contracts.Analytics;
 using Ingot.Contracts.Events;
 using Ingot.Contracts.ProcessConfiguration;
 using Ingot.Domain.Events;
+using Ingot.Platform.Application.ProcessExecutions;
 using Ingot.Platform.Infrastructure.ProcessExecutions;
 using Ingot.Platform.Infrastructure.Events;
 using Ingot.Platform.Infrastructure.Manufacturing;
@@ -18,6 +19,87 @@ namespace Ingot.Core.Tests.Integration;
 [Collection(PostgresIntegrationCollection.Name)]
 public sealed class PostgresEventReplayTests(PostgresIntegrationFixture postgres)
 {
+    [LinuxDockerFact]
+    public async Task BoundaryProjection_ShouldCoalesceBatchesAndCompleteFromCanonicalEvent()
+    {
+        await postgres.EnsureSchemaAsync();
+        var options = Options.Create(new PlatformEventOptions());
+        var manufacturing = new PostgresManufacturingContextStore(postgres.DataSource);
+        var configurations = new PostgresProcessConfigurationStore(postgres.DataSource);
+        var materializations = new PostgresProcessExecutionAnalysisMaterializationStore(
+            postgres.DataSource,
+            NullLogger<PostgresProcessExecutionAnalysisMaterializationStore>.Instance);
+        using var timeSeries = new PostgresTimeSeriesStore(
+            postgres.DataSource,
+            NullLogger<PostgresTimeSeriesStore>.Instance,
+            options);
+        using var events = new PostgresPlatformEventStore(
+            postgres.DataSource,
+            NullLogger<PostgresPlatformEventStore>.Instance,
+            new PlatformEventMetrics(),
+            options,
+            manufacturing,
+            new ProcessAnalysisResolver(configurations),
+            materializations,
+            timeSeries);
+        var boundaries = new PostgresExecutionBoundaryStore(postgres.DataSource);
+        var suffix = Guid.NewGuid().ToString("N");
+        var siteId = $"SITE-BOUNDARY-{suffix}";
+        var edgeId = $"EDGE-BOUNDARY-{suffix}";
+        var executionId = $"execution-{suffix}";
+        var startedAt = DateTimeOffset.UtcNow.AddMinutes(-2);
+        var started = ProductionEvent.Create(
+            "process.execution.started",
+            startedAt,
+            $"edge/{edgeId}/equipment/PRESS-01",
+            new ObjectRef("equipment", "PRESS-01"),
+            executionId) with { Seq = 1 };
+        var completed = ProductionEvent.Create(
+            "process.execution.completed",
+            startedAt.AddMinutes(1),
+            $"edge/{edgeId}/equipment/PRESS-01",
+            new ObjectRef("equipment", "PRESS-01"),
+            executionId) with { Seq = 2 };
+
+        await events.IngestAsync(new EventBatchRequest
+        {
+            SiteId = siteId,
+            EdgeId = edgeId,
+            Events = [started]
+        });
+        await events.IngestAsync(new EventBatchRequest
+        {
+            SiteId = siteId,
+            EdgeId = edgeId,
+            Events = [completed]
+        });
+
+        ExecutionBoundaryProjectionResult? projected = null;
+        for (var attempt = 0; attempt < 100; attempt++)
+        {
+            var lease = await boundaries.ClaimProjectionAsync(TimeSpan.FromMinutes(5), CancellationToken.None);
+            Assert.NotNull(lease);
+            var candidate = await boundaries.ProjectAsync(lease, TimeSpan.FromHours(10), CancellationToken.None);
+            Assert.True(await boundaries.FinishProjectionAsync(lease, candidate?.RecheckAt, CancellationToken.None));
+            if (lease.SiteId == siteId && lease.SourceExecutionId == executionId)
+            {
+                projected = candidate;
+                break;
+            }
+        }
+        Assert.NotNull(projected);
+
+        var boundary = Assert.IsType<ExecutionBoundary>(
+            await boundaries.GetBoundaryAsync(siteId, executionId, CancellationToken.None));
+        Assert.Equal(ExecutionBoundaryStatus.Completed, boundary.Status);
+        Assert.Equal(ExecutionBoundaryConfidence.Complete, boundary.Confidence);
+        Assert.Equal(2, boundary.EventCount);
+        Assert.Equal(startedAt, boundary.StartedAt);
+        Assert.Equal(startedAt.AddMinutes(1), boundary.EndedAt);
+        Assert.True(boundary.MinIngestId < boundary.MaxIngestId);
+        Assert.False(boundary.GapDetected);
+    }
+
     [LinuxDockerFact]
     public async Task ReplayedOutboxEvent_ShouldBeAcknowledgedWithoutDuplicateBusinessEvent()
     {
@@ -62,7 +144,7 @@ public sealed class PostgresEventReplayTests(PostgresIntegrationFixture postgres
         {
             Data = new Dictionary<string, object?> { ["changed"] = true }
         });
-        var conflict = await Assert.ThrowsAsync<InvalidDataException>(() => store.IngestAsync(
+        var conflict = await Assert.ThrowsAsync<EventIngestConflictException>(() => store.IngestAsync(
             request with { Events = [conflicting] }));
 
         Assert.Equal(1, first.Accepted);

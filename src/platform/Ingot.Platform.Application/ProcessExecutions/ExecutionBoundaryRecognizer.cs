@@ -138,6 +138,8 @@ public sealed class ExecutionBoundaryRecognizer : IExecutionBoundaryRecognizer
     {
         return boundary with
         {
+            GapDetected = true,
+            Confidence = ExecutionBoundaryConfidence.Fragmented,
             ConfidenceReason = string.IsNullOrEmpty(boundary.ConfidenceReason)
                 ? $"检测到缺口: {gapDescription}"
                 : $"{boundary.ConfidenceReason}; 检测到缺口: {gapDescription}",
@@ -153,7 +155,8 @@ public sealed class ExecutionBoundaryRecognizer : IExecutionBoundaryRecognizer
         ExecutionBoundaryRecognitionOptions options)
     {
         var startEvent = events.FirstOrDefault(e => e.EventType == "process.execution.started");
-        var endEvent = events.FirstOrDefault(e => e.EventType == "process.execution.ended");
+        var endEvent = events.FirstOrDefault(e =>
+            e.EventType == "process.execution.completed");
 
         DateTimeOffset startedAt;
         DateTimeOffset? endedAt = null;
@@ -190,14 +193,14 @@ public sealed class ExecutionBoundaryRecognizer : IExecutionBoundaryRecognizer
                 endedAt = lastEventTime + options.ExecutionTimeoutWithoutEndEvent;
                 confidence = ExecutionBoundaryConfidence.InferredEnd;
                 confidenceReason = (confidenceReason ?? "") +
-                    $"; 无 process.execution.ended 事件，用超时（{options.ExecutionTimeoutWithoutEndEvent.TotalHours} 小时）推断结束。";
+                    $"; 无 process.execution.completed 事件，用超时（{options.ExecutionTimeoutWithoutEndEvent.TotalHours} 小时）推断结束。";
             }
             else
             {
                 // 运行进行中
                 confidence = startEvent is not null ? ExecutionBoundaryConfidence.Fragmented : ExecutionBoundaryConfidence.Fragmented;
                 confidenceReason = (confidenceReason ?? "") +
-                    "; 无 process.execution.ended 事件，运行状态为 InProgress。";
+                    "; 无 process.execution.completed 事件，运行状态为 InProgress。";
             }
         }
 

@@ -29,6 +29,13 @@ var urls = builder.Configuration["Urls"]
 builder.WebHost.UseUrls(urls);
 
 builder.Services.AddHttpClient();
+builder.Services.AddHttpClient("edge-diagnostics")
+    .ConfigureHttpClient(static client => client.Timeout = TimeSpan.FromSeconds(15))
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+    {
+        // 诊断请求携带节点专用令牌，禁止重定向到另一个主机。
+        AllowAutoRedirect = false
+    });
 builder.Services.AddControllers(options =>
 {
     options.Conventions.Add(new ApiProblemDetailsConvention());

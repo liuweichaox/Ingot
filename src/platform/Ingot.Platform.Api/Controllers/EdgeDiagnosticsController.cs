@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace Ingot.Platform.Api.Controllers;
 
 /// <summary>
-/// 中心代理：按 edgeId 代理查询 Edge.Agent 的诊断数据（metrics/logs）。
+/// 中心代理：按 edgeId 代理查询 Edge ConnectorHost 的诊断数据（metrics/logs）。
 /// 说明：Platform.Api 仍然是纯 API，不提供 UI。
 /// </summary>
 [ApiController]
@@ -24,7 +24,7 @@ public sealed class EdgeDiagnosticsController(
             return Ok(reported);
 
         var baseUrl = GetEdgeBaseUrlOrNull(edgeId);
-        if (baseUrl == null) return InvalidRequest("该 edge 未上报 HostBaseUrl，无法代理 metrics。");
+        if (baseUrl == null) return InvalidRequest("该采集节点未配置可信诊断地址，无法代理 metrics。");
 
         var uri = new Uri(new Uri(baseUrl), "/metrics");
         var client = CreateEdgeClient(edgeId);
@@ -40,7 +40,7 @@ public sealed class EdgeDiagnosticsController(
     public async Task<IActionResult> GetEdgeMetricsJson([FromRoute] string edgeId, CancellationToken cancellationToken)
     {
         var baseUrl = GetEdgeBaseUrlOrNull(edgeId);
-        if (baseUrl == null) return InvalidRequest("该 edge 未上报 HostBaseUrl，无法代理 metrics。");
+        if (baseUrl == null) return InvalidRequest("该采集节点未配置可信诊断地址，无法代理 metrics。");
 
         var uri = new Uri(new Uri(baseUrl), "/metrics");
         var client = CreateEdgeClient(edgeId);
@@ -68,7 +68,7 @@ public sealed class EdgeDiagnosticsController(
         CancellationToken cancellationToken = default)
     {
         var baseUrl = GetEdgeBaseUrlOrNull(edgeId);
-        if (baseUrl == null) return InvalidRequest("该 edge 未上报 HostBaseUrl，无法代理 logs。");
+        if (baseUrl == null) return InvalidRequest("该采集节点未配置可信诊断地址，无法代理 logs。");
 
         var query = new Dictionary<string, string?>
         {
@@ -107,7 +107,7 @@ public sealed class EdgeDiagnosticsController(
     public async Task<IActionResult> GetEdgeLogLevels([FromRoute] string edgeId, CancellationToken cancellationToken)
     {
         var baseUrl = GetEdgeBaseUrlOrNull(edgeId);
-        if (baseUrl == null) return InvalidRequest("该 edge 未上报 HostBaseUrl，无法代理 logs。");
+        if (baseUrl == null) return InvalidRequest("该采集节点未配置可信诊断地址，无法代理 logs。");
 
         var uri = new Uri(new Uri(baseUrl), "/api/logs/levels");
         var client = CreateEdgeClient(edgeId);
@@ -129,7 +129,7 @@ public sealed class EdgeDiagnosticsController(
 
         var baseUrl = GetEdgeBaseUrlOrNull(edgeId);
         if (baseUrl is null)
-            return InvalidRequest("该采集节点未上报访问地址，无法查询任务状态。");
+            return InvalidRequest("该采集节点未配置可信诊断地址，无法查询任务状态。");
 
         var uri = new Uri(new Uri(baseUrl), "/api/v1/acquisition/status");
         var client = CreateEdgeClient(edgeId);
@@ -163,15 +163,14 @@ public sealed class EdgeDiagnosticsController(
 
     private string? GetEdgeBaseUrlOrNull(string edgeId)
     {
-        var state = registry.Find(edgeId);
-        var baseUrl = state?.HostBaseUrl;
-        if (string.IsNullOrWhiteSpace(baseUrl)) return null;
-        return baseUrl;
+        return diagnosticsTokenProvider.TryGetBaseUrl(edgeId, out var baseUrl)
+            ? baseUrl
+            : null;
     }
 
     private HttpClient CreateEdgeClient(string edgeId)
     {
-        var client = httpClientFactory.CreateClient();
+        var client = httpClientFactory.CreateClient("edge-diagnostics");
         if (diagnosticsTokenProvider.TryGetToken(edgeId, out var token))
             client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
         return client;

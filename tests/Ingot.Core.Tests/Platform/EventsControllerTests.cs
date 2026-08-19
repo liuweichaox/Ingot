@@ -5,8 +5,6 @@ using Ingot.Platform.Api.Controllers;
 using Ingot.Platform.Api.Errors;
 using Ingot.Platform.Api.Events;
 using Ingot.Platform.Infrastructure.Events;
-using Ingot.Platform.Infrastructure.ProcessExecutions;
-using Ingot.Platform.Application.ProcessExecutions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
@@ -17,17 +15,6 @@ namespace Ingot.Core.Tests.Platform;
 
 public sealed class EventsControllerTests
 {
-    private sealed class StubBoundaryStore : IExecutionBoundaryStore
-    {
-        public Task<ExecutionBoundary?> GetBoundaryAsync(string siteId, string sourceExecutionId, CancellationToken ct)
-            => Task.FromResult<ExecutionBoundary?>(null);
-
-        public Task SaveBoundaryAsync(ExecutionBoundary boundary, CancellationToken ct) => Task.CompletedTask;
-        public Task UpdateBoundaryAsync(ExecutionBoundary boundary, CancellationToken ct) => Task.CompletedTask;
-        public Task<IReadOnlyList<ExecutionBoundary>> QueryBoundariesAsync(string siteId, DateTimeOffset? from, DateTimeOffset? to, int limit = 100, int offset = 0, CancellationToken ct = default)
-            => Task.FromResult<IReadOnlyList<ExecutionBoundary>>(Array.Empty<ExecutionBoundary>());
-    }
-
     [Fact]
     public async Task Ingest_RejectsTokenWhenEdgeClaimsAnotherSite()
     {
@@ -46,7 +33,7 @@ public sealed class EventsControllerTests
         });
         var http = new DefaultHttpContext();
         http.Request.Headers.Authorization = "Bearer edge-secret";
-        var controller = new EventsController(store, new EdgeTokenValidator(options), new ExecutionBoundaryRecognizer(), new StubBoundaryStore(), options)
+        var controller = new EventsController(store, new EdgeTokenValidator(options), options)
         {
             ControllerContext = new ControllerContext { HttpContext = http }
         };
@@ -68,6 +55,35 @@ public sealed class EventsControllerTests
     }
 
     [Fact]
+    public async Task Ingest_ReturnsConflictForUnrecoverableEdgeIdentityCollision()
+    {
+        var options = Options.Create(new PlatformEventOptions { RequireToken = false });
+        var store = new StubPlatformEventStore(
+            [],
+            new EventIngestConflictException("事件幂等键或载荷冲突"));
+        var controller = new EventsController(store, new EdgeTokenValidator(options), options)
+        {
+            ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() }
+        };
+        var evt = ProductionEvent.Create(
+            "equipment.heartbeat",
+            DateTimeOffset.UtcNow,
+            "edge/EDGE-001/equipment/PRESS-01",
+            new ObjectRef("equipment", "PRESS-01")) with { Seq = 1 };
+
+        var action = await controller.Ingest(new EventBatchRequest
+        {
+            SiteId = "SITE-001",
+            EdgeId = "EDGE-001",
+            Events = [evt]
+        }, CancellationToken.None);
+
+        var conflict = Assert.IsType<ObjectResult>(action);
+        Assert.Equal(StatusCodes.Status409Conflict, conflict.StatusCode);
+        Assert.Contains("更换 EdgeId", Assert.IsType<ApiProblemDetails>(conflict.Value).Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Query_UsesBeforeCursorForOlderPages()
     {
         var startedAt = DateTimeOffset.Parse("2026-07-18T10:00:00Z");
@@ -75,7 +91,7 @@ public sealed class EventsControllerTests
             .Select(index => Row(index, "process.sample", startedAt.AddSeconds(index)))
             .ToArray());
         var options = Options.Create(new PlatformEventOptions { RequireToken = false });
-        var controller = new EventsController(store, new EdgeTokenValidator(options), new ExecutionBoundaryRecognizer(), new StubBoundaryStore(), options)
+        var controller = new EventsController(store, new EdgeTokenValidator(options), options)
         {
             ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() }
         };
@@ -98,7 +114,7 @@ public sealed class EventsControllerTests
             .Select(index => Row(index, "process.sample", startedAt.AddSeconds(index)))
             .ToArray());
         var options = Options.Create(new PlatformEventOptions { RequireToken = false });
-        var controller = new EventsController(store, new EdgeTokenValidator(options), new ExecutionBoundaryRecognizer(), new StubBoundaryStore(), options)
+        var controller = new EventsController(store, new EdgeTokenValidator(options), options)
         {
             ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() }
         };
@@ -117,7 +133,7 @@ public sealed class EventsControllerTests
     public async Task Query_RejectsConflictingCursors()
     {
         var options = Options.Create(new PlatformEventOptions { RequireToken = false });
-        var controller = new EventsController(new StubPlatformEventStore([]), new EdgeTokenValidator(options), new ExecutionBoundaryRecognizer(), new StubBoundaryStore(), options)
+        var controller = new EventsController(new StubPlatformEventStore([]), new EdgeTokenValidator(options), options)
         {
             ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() }
         };
@@ -146,8 +162,6 @@ public sealed class EventsControllerTests
         var controller = new EventsController(
             store,
             new EdgeTokenValidator(options),
-            new ExecutionBoundaryRecognizer(),
-            new StubBoundaryStore(),
             options)
         {
             ControllerContext = new ControllerContext
@@ -187,8 +201,6 @@ public sealed class EventsControllerTests
         var controller = new EventsController(
             store,
             new EdgeTokenValidator(options),
-            new ExecutionBoundaryRecognizer(),
-            new StubBoundaryStore(),
             options)
         {
             ControllerContext = new ControllerContext
@@ -241,7 +253,8 @@ public sealed class EventsControllerTests
         };
 
     private sealed class StubPlatformEventStore(
-        IReadOnlyList<PlatformProductionEvent> rows) : IPlatformEventStore
+        IReadOnlyList<PlatformProductionEvent> rows,
+        Exception? ingestException = null) : IPlatformEventStore
     {
         public int QueryCalls { get; private set; }
 
@@ -251,7 +264,13 @@ public sealed class EventsControllerTests
         public Task<EventBatchResponse> IngestAsync(
             EventBatchRequest request,
             CancellationToken ct = default)
-            => throw new NotSupportedException();
+            => ingestException is null
+                ? Task.FromResult(new EventBatchResponse
+                {
+                    Accepted = request.Events.Count,
+                    AckSeq = request.Events.Count == 0 ? 0 : request.Events.Max(static item => item.Seq)
+                })
+                : Task.FromException<EventBatchResponse>(ingestException);
 
         public Task<IReadOnlyList<PlatformProductionEvent>> QueryAsync(
             PlatformEventQuery query,

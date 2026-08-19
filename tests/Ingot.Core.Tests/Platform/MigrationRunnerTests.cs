@@ -9,7 +9,8 @@ public sealed class MigrationRunnerTests
         new Dictionary<string, string>(StringComparer.Ordinal)
         {
             ["0001"] = "62d13b11ac9e7cfca3ccfa3f3d5c8687d5bd709537328c8ce1afe63d736c8ce1",
-            ["0002"] = "208472536e44cca47c5e0104419d488a0c2abd4705f4092e7a4ad33bff9b6b08"
+            ["0002"] = "208472536e44cca47c5e0104419d488a0c2abd4705f4092e7a4ad33bff9b6b08",
+            ["0003"] = "17b4efb6995fb71a87af86caf29f53916665b32bf482a4de92df22097449add0"
         };
 
     [Fact]
