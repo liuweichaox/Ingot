@@ -83,6 +83,8 @@ Discrete run identity must remain traceable across ConnectorHost restarts. If th
 
 Platform is the formal business system of record. Experiment state or conclusions must not exist only in Optimizer, Agent, or a browser.
 
+The production host stores Agent run snapshots and event streams in Platform PostgreSQL. Agent core still depends only on `IAgentRunStore` and does not reference Npgsql. The legacy `Data/chat.db` remains only as a one-way compatibility import source. A run admitted to golden-question evaluation freezes its complete snapshot and SHA-256 inside the same recovery boundary and can no longer be deleted as an ordinary conversation.
+
 ### Optimizer
 
 - Receive the complete problem definition, valid observations, pending points, and random seed.
@@ -201,6 +203,8 @@ It should not rewrite run identity, evidence relationships, experiment state mac
 ## Agent capability and interoperability boundary
 
 Agents do not depend directly on internal Platform CRUD and do not gain business permission merely because MCP, OpenAPI, or an SDK is used. The interoperability adapter handles discovery, schemas, and invocation. Platform continues to enforce project isolation, evidence citations, state transitions, approval, idempotency, audit, and rollback.
+
+HTTP errors use `application/problem+json` with a stable `code`, request `traceId`, and an `error` compatibility field for existing clients. Monotonically growing research histories use opaque cursors and bounded `limit` values. The project workspace returns only the newest page plus `nextCursors`; external implementations must not depend on unbounded arrays.
 
 Capabilities open progressively by risk:
 

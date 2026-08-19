@@ -61,6 +61,8 @@ public sealed record GoldenQuestionEvaluation
     public required string Model { get; init; }
     public required string PromptVersion { get; init; }
     public required string ToolsetVersion { get; init; }
+    /// <summary>Null only for evaluations created before Agent runs moved into Platform PostgreSQL.</summary>
+    public string? AgentRunSnapshotHash { get; init; }
     public DateTimeOffset EvaluatedAt { get; init; }
 }
 

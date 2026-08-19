@@ -1,4 +1,5 @@
 using Ingot.Contracts.Agents;
+using Ingot.Platform.Infrastructure.AgentRuns;
 using Ingot.Platform.Infrastructure.Insight;
 using Xunit;
 
@@ -38,22 +39,45 @@ public sealed class PostgresGoldenQuestionStoreTests(PostgresIntegrationFixture 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             store.SaveAsync(reviewed with { Question = "被篡改的问题", UpdatedAt = now.AddMinutes(1) }));
 
+        var sourceRun = new AgentRunSnapshot
+        {
+            RunId = $"run-{Guid.NewGuid():N}",
+            UserId = "operator",
+            EntryPoint = ProductEntryPoints.Chat,
+            Purpose = RunPurposes.ReadOnlyAnalysis,
+            Question = reviewed.Question,
+            Mode = "quick",
+            Status = AgentRunStatuses.Completed,
+            ModelProvider = "OpenAI",
+            Model = "local-qwen",
+            PromptVersion = "ingot-chat-v1",
+            ToolsetVersion = "production-records-readonly-v2",
+            CreatedAt = now,
+            CompletedAt = now,
+            Usage = new AgentUsageSummary()
+        };
+        var runStore = new PostgresAgentRunStore(postgres.DataSource);
+        await runStore.CreateAsync(sourceRun);
         var evaluation = new GoldenQuestionEvaluation
         {
             EvaluationId = Guid.CreateVersion7(),
             CaseId = draft.CaseId,
             CaseVersion = 1,
-            AgentRunId = $"run-{Guid.NewGuid():N}",
+            AgentRunId = sourceRun.RunId,
             Passed = true,
             ModelProvider = "OpenAI",
             Model = "local-qwen",
             PromptVersion = "ingot-chat-v1",
             ToolsetVersion = "production-records-readonly-v2",
+            AgentRunSnapshotHash = GoldenQuestionEvaluator.SnapshotHash(sourceRun),
             EvaluatedAt = now
         };
-        await store.SaveEvaluationAsync(evaluation);
+        await store.SaveEvaluationAsync(evaluation, sourceRun);
         var evaluations = await store.ListEvaluationsAsync(draft.CaseId, 10);
 
         Assert.Contains(evaluations, item => item.EvaluationId == evaluation.EvaluationId);
+        var deletion = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            runStore.DeleteAsync(sourceRun.RunId));
+        Assert.Contains("正式评测证据", deletion.Message, StringComparison.Ordinal);
     }
 }

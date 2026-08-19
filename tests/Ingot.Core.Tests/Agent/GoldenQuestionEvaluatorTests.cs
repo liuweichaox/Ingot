@@ -20,6 +20,9 @@ public sealed class GoldenQuestionEvaluatorTests
         Assert.All(result.Gates, static gate => Assert.True(gate.Passed, gate.Code));
         Assert.Equal("local-qwen", result.Model);
         Assert.Equal("ingot-chat-v1", result.PromptVersion);
+        Assert.NotNull(result.AgentRunSnapshotHash);
+        Assert.Equal(64, result.AgentRunSnapshotHash.Length);
+        Assert.Equal(result.AgentRunSnapshotHash, GoldenQuestionEvaluator.SnapshotHash(run));
     }
 
     [Fact]

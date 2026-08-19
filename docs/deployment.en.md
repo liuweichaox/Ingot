@@ -18,6 +18,8 @@ controls / instruments / vision / inspection / MES
 
 Platform API handles requests and business transactions. Platform Worker handles knowledge extraction, analysis backfills, experiment materialization, and retention jobs. They coordinate through PostgreSQL job leases rather than process-local queues. `Edge.Application`, `Edge.Infrastructure`, `Platform.Infrastructure`, and Agent are code libraries, not independent Compose services.
 
+The bundled Compose file is a single-API reference topology, not an HA claim. Agent runs now share PostgreSQL with business evidence, so they no longer prevent an external orchestrator from scaling API replicas behind a load balancer. A production multi-replica deployment must still provide ingress load balancing, PostgreSQL HA, and capacity acceptance.
+
 ### Edge partitioning
 
 Every Edge ConnectorHost has its own `EdgeId`, process or container, data volume, configuration cache, and lifecycle.
@@ -145,6 +147,21 @@ Production monitoring includes:
 Alerts identify an actionable object such as an Edge, equipment, configuration version, or run rather than only “system error.”
 
 ## Data and backup
+
+The application-consistent backup script briefly stops Platform API and Worker, creates a logical PostgreSQL dump, archives inspection and process-knowledge volumes, writes a SHA-256 manifest, and then restores the previously running writers:
+
+```bash
+./scripts/backup-app.sh
+./scripts/check-backup.sh deploy/backups 24
+```
+
+Restore replaces the current PostgreSQL database and all four file volumes, so it requires an explicit confirmation flag. If restore fails, writers remain stopped rather than producing records against a partial recovery:
+
+```bash
+./scripts/restore-app.sh --confirm-replace-all-data deploy/backups/app-YYYYMMDDTHHMMSSZ
+```
+
+The backup uses `pg_dump --format=custom`; it supports logical restore and migration validation but is not PITR. Sites with a smaller RPO must additionally configure PostgreSQL base backups, continuous WAL archiving, off-host retention, and regular point-in-time recovery exercises. Backup directories contain business records and attachments and require production-equivalent access control.
 
 Back up at least:
 

@@ -105,7 +105,7 @@ public sealed class GoldenQuestionsController(
         try
         {
             var result = evaluator.Evaluate(goldenCase, run);
-            await store.SaveEvaluationAsync(result, ct).ConfigureAwait(false);
+            await store.SaveEvaluationAsync(result, run, ct).ConfigureAwait(false);
             return Ok(result);
         }
         catch (InvalidOperationException exception)

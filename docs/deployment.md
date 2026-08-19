@@ -18,6 +18,8 @@
 
 Platform API 负责请求和业务事务，Platform Worker 负责知识提取、分析回填、实验固化和保留任务。两者共享 PostgreSQL 任务租约，但不共享进程内队列。`Edge.Application`、`Edge.Infrastructure`、`Platform.Infrastructure` 和 Agent 是代码层类库，不是独立 Compose 服务。
 
+仓库自带的 Compose 是单 API 实例参考拓扑，不宣称高可用。Agent 运行已经与业务证据一起进入 PostgreSQL，因此不再阻止外部编排器在共享数据库和负载均衡器之后扩展 API；正式多副本部署仍需自行提供入口负载均衡、数据库高可用和容量验收。
+
 ### Edge 划分原则
 
 每个 Edge ConnectorHost 拥有独立 `EdgeId`、进程或容器、数据卷、配置缓存和生命周期。
@@ -158,6 +160,21 @@ Platform 不依赖 Optimizer 才能启动。Optimizer 故障期间继续采集�
 报警应指向可操作对象，例如具体 Edge、设备、配置版本或运行，而不是只显示“系统异常”。
 
 ## 数据与备份
+
+生成一次应用一致备份时，脚本会短暂停止 Platform API 和 Worker，逻辑导出 PostgreSQL，归档检验附件与工艺知识卷，生成 SHA-256 清单，然后恢复原先运行的写入服务：
+
+```bash
+./scripts/backup-app.sh
+./scripts/check-backup.sh deploy/backups 24
+```
+
+恢复会替换当前 PostgreSQL 数据库和四个文件卷，必须显式传入确认参数。恢复失败时写入服务保持停止，避免在半恢复状态继续产生记录：
+
+```bash
+./scripts/restore-app.sh --confirm-replace-all-data deploy/backups/app-YYYYMMDDTHHMMSSZ
+```
+
+备份格式使用 `pg_dump --format=custom`，适合逻辑恢复和迁移验证，但不是 PITR。需要更小 RPO 的现场还必须由部署方配置 PostgreSQL 基础备份、持续 WAL 归档、异机保留和定期时间点恢复演练。备份目录包含业务和附件数据，权限不得低于生产系统本身。
 
 至少备份：
 

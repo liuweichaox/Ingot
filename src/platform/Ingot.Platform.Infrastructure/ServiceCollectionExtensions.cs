@@ -2,6 +2,7 @@ using Ingot.Agent;
 using Ingot.Platform.Infrastructure.ProcessExecutions;
 using Ingot.Platform.Infrastructure.Events;
 using Ingot.Platform.Infrastructure.AgentTools;
+using Ingot.Platform.Infrastructure.AgentRuns;
 using Ingot.Platform.Infrastructure.Acquisition;
 using Ingot.Platform.Infrastructure.Analytics;
 using Ingot.Platform.Infrastructure.Inspections;
@@ -34,6 +35,9 @@ public static class ServiceCollectionExtensions
         // 避免每个 Store 独立创建默认 100 连接的池并耗尽数据库连接。
         services.TryAddSingleton<NpgsqlDataSource>(provider =>
             PostgresDataSourceFactory.Create(provider.GetRequiredService<IConfiguration>()));
+        services.AddSingleton<PostgresAgentRunStore>();
+        services.AddSingleton<IAgentRunStore>(provider =>
+            provider.GetRequiredService<PostgresAgentRunStore>());
         // 边缘注册与心跳是多 API 副本共享的 PostgreSQL 运维事实。
         services.AddSingleton<EdgeRegistry>();
 

@@ -43,6 +43,12 @@ public interface IProcessResearchStore
     Task<IReadOnlyList<ResearchExperiment>> ListExperimentsAsync(
         Guid projectId,
         CancellationToken ct = default);
+    async Task<ResearchPage<ResearchExperiment>> ListExperimentsPageAsync(
+        Guid projectId,
+        string? cursor,
+        int limit,
+        CancellationToken ct = default)
+        => new() { Items = (await ListExperimentsAsync(projectId, ct).ConfigureAwait(false)).Take(limit).ToArray() };
     Task<ResearchExperiment> SaveExperimentAsync(
         ResearchExperiment value,
         CancellationToken ct = default);
@@ -75,6 +81,12 @@ public interface IProcessResearchStore
     Task<IReadOnlyList<ResearchShadowRecommendation>> ListShadowRecommendationsAsync(
         Guid projectId,
         CancellationToken ct = default);
+    async Task<ResearchPage<ResearchShadowRecommendation>> ListShadowRecommendationsPageAsync(
+        Guid projectId,
+        string? cursor,
+        int limit,
+        CancellationToken ct = default)
+        => new() { Items = (await ListShadowRecommendationsAsync(projectId, ct).ConfigureAwait(false)).Take(limit).ToArray() };
     Task<ResearchShadowRecommendation> CreateShadowRecommendationAsync(
         ResearchShadowRecommendation value,
         CancellationToken ct = default);
@@ -88,6 +100,12 @@ public interface IProcessResearchStore
     Task<IReadOnlyList<ResearchHistoricalReplayReport>> ListHistoricalReplayReportsAsync(
         Guid projectId,
         CancellationToken ct = default);
+    async Task<ResearchPage<ResearchHistoricalReplayReport>> ListHistoricalReplayReportsPageAsync(
+        Guid projectId,
+        string? cursor,
+        int limit,
+        CancellationToken ct = default)
+        => new() { Items = (await ListHistoricalReplayReportsAsync(projectId, ct).ConfigureAwait(false)).Take(limit).ToArray() };
     Task<ResearchHistoricalReplayReport> CreateHistoricalReplayReportAsync(
         ResearchHistoricalReplayReport value,
         CancellationToken ct = default);
@@ -112,6 +130,12 @@ public interface IProcessResearchStore
     Task<IReadOnlyList<ResearchExperimentResult>> ListExperimentResultsAsync(
         Guid projectId,
         CancellationToken ct = default);
+    async Task<ResearchPage<ResearchExperimentResult>> ListExperimentResultsPageAsync(
+        Guid projectId,
+        string? cursor,
+        int limit,
+        CancellationToken ct = default)
+        => new() { Items = (await ListExperimentResultsAsync(projectId, ct).ConfigureAwait(false)).Take(limit).ToArray() };
     Task<ResearchExperimentResult> SaveExperimentResultAsync(
         ResearchExperimentResult value,
         CancellationToken ct = default);
@@ -164,6 +188,12 @@ public interface IProcessResearchStore
     Task<IReadOnlyList<ResearchAuditEntry>> ListAuditEntriesAsync(
         Guid projectId,
         CancellationToken ct = default);
+    async Task<ResearchPage<ResearchAuditEntry>> ListAuditEntriesPageAsync(
+        Guid projectId,
+        string? cursor,
+        int limit,
+        CancellationToken ct = default)
+        => new() { Items = (await ListAuditEntriesAsync(projectId, ct).ConfigureAwait(false)).Take(limit).ToArray() };
 }
 
 public sealed class ProcessResearchRuleException(string message) : InvalidOperationException(message);

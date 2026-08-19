@@ -30,6 +30,51 @@ public sealed class ResearchProjectsController(
     IExecutionComparisonService executionComparisonService,
     PlatformUserResolver userResolver) : ControllerBase
 {
+    [HttpGet("{projectId:guid}/experiments")]
+    public Task<IActionResult> ListExperiments(
+        Guid projectId,
+        [FromQuery] string? cursor,
+        [FromQuery] int limit = 100,
+        CancellationToken ct = default)
+        => ExecuteResearchPageAsync(projectId, cursor, limit,
+            value => store.ListExperimentsPageAsync(projectId, value, limit, ct), ct);
+
+    [HttpGet("{projectId:guid}/experiment-results")]
+    public Task<IActionResult> ListExperimentResults(
+        Guid projectId,
+        [FromQuery] string? cursor,
+        [FromQuery] int limit = 100,
+        CancellationToken ct = default)
+        => ExecuteResearchPageAsync(projectId, cursor, limit,
+            value => store.ListExperimentResultsPageAsync(projectId, value, limit, ct), ct);
+
+    [HttpGet("{projectId:guid}/shadow-recommendations")]
+    public Task<IActionResult> ListShadowRecommendations(
+        Guid projectId,
+        [FromQuery] string? cursor,
+        [FromQuery] int limit = 100,
+        CancellationToken ct = default)
+        => ExecuteResearchPageAsync(projectId, cursor, limit,
+            value => store.ListShadowRecommendationsPageAsync(projectId, value, limit, ct), ct);
+
+    [HttpGet("{projectId:guid}/historical-replays")]
+    public Task<IActionResult> ListHistoricalReplays(
+        Guid projectId,
+        [FromQuery] string? cursor,
+        [FromQuery] int limit = 100,
+        CancellationToken ct = default)
+        => ExecuteResearchPageAsync(projectId, cursor, limit,
+            value => store.ListHistoricalReplayReportsPageAsync(projectId, value, limit, ct), ct);
+
+    [HttpGet("{projectId:guid}/audit")]
+    public Task<IActionResult> ListAudit(
+        Guid projectId,
+        [FromQuery] string? cursor,
+        [FromQuery] int limit = 100,
+        CancellationToken ct = default)
+        => ExecuteResearchPageAsync(projectId, cursor, limit,
+            value => store.ListAuditEntriesPageAsync(projectId, value, limit, ct), ct);
+
     [HttpGet("{projectId:guid}/stage-zero-admission")]
     public Task<IActionResult> GetStageZeroAdmission(Guid projectId, CancellationToken ct)
         => ExecuteForProjectAsync(
@@ -862,6 +907,28 @@ public sealed class ResearchProjectsController(
         if (!CanAccess(project, identity.Identity!, requireWrite))
             return Forbid();
         return await ExecuteRuleAsync(() => operation(identity.Identity!)).ConfigureAwait(false);
+    }
+
+    private Task<IActionResult> ExecuteResearchPageAsync<T>(
+        Guid projectId,
+        string? cursor,
+        int limit,
+        Func<string?, Task<ResearchPage<T>>> query,
+        CancellationToken ct)
+    {
+        cursor = string.IsNullOrWhiteSpace(cursor) ? null : cursor.Trim();
+        if (limit is < 1 or > 200)
+            return Task.FromResult<IActionResult>(
+                BadRequest(new { error = "Limit 必须在 1 到 200 之间。" }));
+        if (!string.IsNullOrWhiteSpace(cursor) &&
+            !ResearchPageCursor.TryDecode(cursor, out _, out _))
+            return Task.FromResult<IActionResult>(
+                BadRequest(new { error = "分页游标无效或已经损坏。" }));
+        return ExecuteForProjectAsync(
+            projectId,
+            false,
+            async _ => Ok(await query(cursor).ConfigureAwait(false)),
+            ct);
     }
 
     private (PlatformIdentity? Identity, IActionResult? Result) ResolveResearchIdentity()

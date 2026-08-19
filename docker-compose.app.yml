@@ -104,6 +104,7 @@ services:
       - Chat__MaxRunSeconds=${INGOT_CHAT_MAX_RUN_SECONDS:-60}
       - Chat__MaxDiscussionRounds=${INGOT_CHAT_MAX_DISCUSSION_ROUNDS:-3}
       - Chat__MaxDiscussionTurns=${INGOT_CHAT_MAX_DISCUSSION_TURNS:-9}
+      - Chat__ImportLegacySqlite=${INGOT_CHAT_IMPORT_LEGACY_SQLITE:-true}
       - ChatDataAccess__Users__operator__AllowAll=${INGOT_CHAT_OPERATOR_ALLOW_ALL:-true}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - Cors__AllowedOrigins__0=http://localhost:3000
@@ -148,6 +149,18 @@ services:
       platform-migrate:
         condition: service_completed_successfully
     restart: unless-stopped
+
+  app-maintenance:
+    image: alpine:3.22
+    profiles:
+      - maintenance
+    volumes:
+      - ingot-inspection-attachments:/data/inspection-attachments
+      - ingot-inspection-archive:/archive/inspection-attachments
+      - ingot-process-knowledge:/data/process-knowledge
+      - ingot-process-knowledge-archive:/archive/process-knowledge
+    entrypoint: ["sh"]
+    restart: "no"
 
   platform-web:
     build:

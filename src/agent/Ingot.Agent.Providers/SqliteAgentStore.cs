@@ -16,12 +16,15 @@ public sealed class SqliteAgentStore : IAgentRunStore, IDisposable
     private readonly SemaphoreSlim _initializeLock = new(1, 1);
     private volatile bool _initialized;
 
+    internal bool DatabaseExistedAtConstruction { get; }
+
     public SqliteAgentStore(IConfiguration configuration)
     {
         var configured = configuration["Chat:DatabasePath"];
         var path = string.IsNullOrWhiteSpace(configured) ? "data/chat.db" : configured.Trim();
         if (!Path.IsPathRooted(path))
             path = Path.Combine(AppContext.BaseDirectory, path);
+        DatabaseExistedAtConstruction = File.Exists(path);
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         _connectionString = new SqliteConnectionStringBuilder
         {
@@ -225,6 +228,50 @@ public sealed class SqliteAgentStore : IAgentRunStore, IDisposable
     }
 
     public void Dispose() => _initializeLock.Dispose();
+
+    internal async Task<IReadOnlyList<AgentRunSnapshot>> ExportAllAsync(
+        CancellationToken ct = default)
+    {
+        await InitializeAsync(ct).ConfigureAwait(false);
+        await using var connection = await OpenAsync(ct).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT snapshot FROM agent_runs ORDER BY created_at, run_id;";
+        var result = new List<AgentRunSnapshot>();
+        await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
+        while (await reader.ReadAsync(ct).ConfigureAwait(false))
+        {
+            var run = JsonSerializer.Deserialize<AgentRunSnapshot>(reader.GetString(0), JsonOptions);
+            if (run is not null) result.Add(run);
+        }
+        return result;
+    }
+
+    internal async Task<IReadOnlyList<AgentStreamEvent>> ExportEventsAsync(
+        string runId,
+        CancellationToken ct = default)
+    {
+        await InitializeAsync(ct).ConfigureAwait(false);
+        await using var connection = await OpenAsync(ct).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandText =
+            "SELECT sequence,event_type,occurred_at,data FROM agent_stream_events WHERE run_id=$runId ORDER BY sequence;";
+        command.Parameters.AddWithValue("$runId", runId);
+        var result = new List<AgentStreamEvent>();
+        await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
+        while (await reader.ReadAsync(ct).ConfigureAwait(false))
+        {
+            result.Add(new AgentStreamEvent
+            {
+                Sequence = reader.GetInt64(0),
+                Type = reader.GetString(1),
+                OccurredAt = DateTimeOffset.Parse(reader.GetString(2)),
+                Data = reader.IsDBNull(3)
+                    ? null
+                    : JsonSerializer.Deserialize<JsonElement>(reader.GetString(3), JsonOptions)
+            });
+        }
+        return result;
+    }
 
     private async Task<SqliteConnection> OpenAsync(CancellationToken ct)
     {

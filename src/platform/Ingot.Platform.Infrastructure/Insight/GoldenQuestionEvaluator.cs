@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Security.Cryptography;
 using System.Text.Json;
 using Ingot.Contracts.Agents;
 
@@ -6,6 +7,7 @@ namespace Ingot.Platform.Infrastructure.Insight;
 
 public sealed class GoldenQuestionEvaluator
 {
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private static readonly string[] CausalClaims =
     [
         "导致", "已证明因果", "确定原因", "confirmed root cause", "proven cause",
@@ -78,12 +80,17 @@ public sealed class GoldenQuestionEvaluator
             Model = run.Model,
             PromptVersion = run.PromptVersion,
             ToolsetVersion = run.ToolsetVersion,
+            AgentRunSnapshotHash = SnapshotHash(run),
             EvaluatedAt = DateTimeOffset.UtcNow
         };
 
         void Add(string code, bool passed, string detail)
             => gates.Add(new GoldenEvaluationGate { Code = code, Passed = passed, Detail = detail });
     }
+
+    public static string SnapshotHash(AgentRunSnapshot run)
+        => Convert.ToHexStringLower(
+            SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(run, JsonOptions)));
 
     public static bool TryResolvePointer(JsonElement root, string pointer, out JsonElement value)
     {

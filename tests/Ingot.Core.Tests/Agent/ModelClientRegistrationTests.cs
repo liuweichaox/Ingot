@@ -1,5 +1,6 @@
 using Ingot.Agent;
 using Ingot.Agent.Providers;
+using Ingot.Contracts.Agents;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -15,6 +16,20 @@ public sealed class EnvironmentVariableCollection
 [Collection(EnvironmentVariableCollection.Name)]
 public sealed class ModelClientRegistrationTests
 {
+    [Fact]
+    public void Providers_DoNotReplaceHostOwnedAgentRunStore()
+    {
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection().Build();
+        var services = new ServiceCollection();
+        var marker = new MarkerRunStore();
+        services.AddSingleton<IAgentRunStore>(marker);
+
+        services.AddIngotAgentProviders(configuration);
+        using var provider = services.BuildServiceProvider();
+
+        Assert.Same(marker, provider.GetRequiredService<IAgentRunStore>());
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -85,5 +100,17 @@ public sealed class ModelClientRegistrationTests
         }
 
         return services;
+    }
+
+    private sealed class MarkerRunStore : IAgentRunStore
+    {
+        public Task InitializeAsync(CancellationToken ct = default) => Task.CompletedTask;
+        public Task CreateAsync(AgentRunSnapshot run, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<AgentRunSnapshot?> GetAsync(string runId, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<IReadOnlyList<AgentRunSnapshot>> ListAsync(string entryPoint, string userId, DateTimeOffset? before, int limit, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task UpdateAsync(AgentRunSnapshot run, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<bool> DeleteAsync(string runId, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<AgentStreamEvent> AppendEventAsync(string runId, string type, object? data, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<IReadOnlyList<AgentStreamEvent>> ReadEventsAsync(string runId, long afterSequence, int limit, CancellationToken ct = default) => throw new NotSupportedException();
     }
 }

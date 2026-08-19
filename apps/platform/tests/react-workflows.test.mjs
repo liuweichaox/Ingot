@@ -60,7 +60,7 @@ test("operations retain server pagination and resumable live events", () => {
   assert.match(pages, /afterIngestId/);
   assert.match(pages, /new EventSource\(`\/api\/v1\/events\/stream/);
   assert.match(pages, /<Pagination/);
-  assert.doesNotMatch(pages, /加载更早记录|beforeIngestId/);
+  assert.doesNotMatch(pages, /beforeIngestId/);
   assert.match(pages, /\{ key: "completedAt", label: "结束"/);
   assert.match(pages, /navigate\(`\/process-executions\/\$\{encodeURIComponent\(row\.executionId\)\}`\)/);
   assert.match(pages, /export function ProcessExecutionDetailPage/);
@@ -311,6 +311,14 @@ test("research projects enforce reviewed phase-zero preregistration and separate
   assert.match(researchProjects, /parseWorkflowSteps/);
   assert.match(researchProjects, /usefulnessRating/);
   assert.match(researchProjects, /部分有用/);
+});
+
+test("research workspace can continue through bounded cursor pages", () => {
+  assert.match(researchProjects, /workspace\?\.nextCursors/);
+  assert.match(researchProjects, /cursor=\$\{cursor\}/);
+  assert.match(researchProjects, /experiment-results/);
+  assert.match(researchProjects, /shadow-recommendations/);
+  assert.match(researchProjects, /加载更早记录/);
 });
 
 test("research project membership uses authenticated immutable user identities", () => {

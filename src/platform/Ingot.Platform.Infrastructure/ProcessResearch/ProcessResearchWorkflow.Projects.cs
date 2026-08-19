@@ -144,12 +144,17 @@ public sealed partial class ProcessResearchWorkflow
         Guid projectId,
         CancellationToken ct = default)
     {
+        const int workspaceHistoryLimit = 100;
         var project = await RequireProjectAsync(projectId, ct).ConfigureAwait(false);
         var hypothesesTask = store.ListHypothesesAsync(projectId, ct);
-        var experimentsTask = store.ListExperimentsAsync(projectId, ct);
-        var resultsTask = store.ListExperimentResultsAsync(projectId, ct);
-        var shadowTask = store.ListShadowRecommendationsAsync(projectId, ct);
-        var replayTask = store.ListHistoricalReplayReportsAsync(projectId, ct);
+        var experimentsTask = store.ListExperimentsPageAsync(
+            projectId, null, workspaceHistoryLimit, ct);
+        var resultsTask = store.ListExperimentResultsPageAsync(
+            projectId, null, workspaceHistoryLimit, ct);
+        var shadowTask = store.ListShadowRecommendationsPageAsync(
+            projectId, null, workspaceHistoryLimit, ct);
+        var replayTask = store.ListHistoricalReplayReportsPageAsync(
+            projectId, null, workspaceHistoryLimit, ct);
         var rollbackTask = store.ListRollbackDrillsAsync(projectId, ct);
         var windowsTask = store.ListOperatingRegionsAsync(projectId, ct);
         var claimsTask = store.ListKnowledgeClaimsAsync(projectId, ct);
@@ -159,7 +164,8 @@ public sealed partial class ProcessResearchWorkflow
         var preregistrationsTask = store.ListValidationPreregistrationsAsync(projectId, ct);
         var stageZeroAdmissionTask = new ResearchValidationPreregistrationService(store)
             .AssessAsync(projectId, ct);
-        var auditTask = store.ListAuditEntriesAsync(projectId, ct);
+        var auditTask = store.ListAuditEntriesPageAsync(
+            projectId, null, workspaceHistoryLimit, ct);
         await Task.WhenAll(
             hypothesesTask,
             experimentsTask,
@@ -178,10 +184,10 @@ public sealed partial class ProcessResearchWorkflow
         {
             Project = project,
             Hypotheses = await hypothesesTask.ConfigureAwait(false),
-            Experiments = await experimentsTask.ConfigureAwait(false),
-            ExperimentResults = await resultsTask.ConfigureAwait(false),
-            ShadowRecommendations = await shadowTask.ConfigureAwait(false),
-            HistoricalReplayReports = await replayTask.ConfigureAwait(false),
+            Experiments = (await experimentsTask.ConfigureAwait(false)).Items,
+            ExperimentResults = (await resultsTask.ConfigureAwait(false)).Items,
+            ShadowRecommendations = (await shadowTask.ConfigureAwait(false)).Items,
+            HistoricalReplayReports = (await replayTask.ConfigureAwait(false)).Items,
             RollbackDrills = await rollbackTask.ConfigureAwait(false),
             OperatingRegions = await windowsTask.ConfigureAwait(false),
             KnowledgeClaims = await claimsTask.ConfigureAwait(false),
@@ -189,7 +195,16 @@ public sealed partial class ProcessResearchWorkflow
             TransferAssessments = await transfersTask.ConfigureAwait(false),
             ValidationPreregistrations = await preregistrationsTask.ConfigureAwait(false),
             StageZeroAdmission = await stageZeroAdmissionTask.ConfigureAwait(false),
-            Audit = await auditTask.ConfigureAwait(false)
+            Audit = (await auditTask.ConfigureAwait(false)).Items,
+            NextCursors = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["experiments"] = (await experimentsTask.ConfigureAwait(false)).NextCursor ?? "",
+                ["experiment-results"] = (await resultsTask.ConfigureAwait(false)).NextCursor ?? "",
+                ["shadow-recommendations"] = (await shadowTask.ConfigureAwait(false)).NextCursor ?? "",
+                ["historical-replays"] = (await replayTask.ConfigureAwait(false)).NextCursor ?? "",
+                ["audit"] = (await auditTask.ConfigureAwait(false)).NextCursor ?? ""
+            }.Where(static pair => pair.Value.Length > 0)
+                .ToDictionary(static pair => pair.Key, static pair => pair.Value, StringComparer.Ordinal)
         };
     }
 

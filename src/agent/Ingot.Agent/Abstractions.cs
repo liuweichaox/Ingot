@@ -74,6 +74,15 @@ public interface IAgentRunStore
         CancellationToken ct = default);
 }
 
+/// <summary>Imports a complete legacy run atomically without exposing database dependencies to Agent.</summary>
+public interface IAgentRunImportStore
+{
+    Task<bool> ImportAsync(
+        AgentRunSnapshot run,
+        IReadOnlyList<AgentStreamEvent> events,
+        CancellationToken ct = default);
+}
+
 public interface IModelRouter
 {
     IModelClient GetClient(string entryPoint, ModelRole role);

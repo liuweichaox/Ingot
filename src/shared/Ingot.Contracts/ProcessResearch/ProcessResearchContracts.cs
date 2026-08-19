@@ -1202,6 +1202,14 @@ public sealed record ResearchProjectWorkspace
     public IReadOnlyList<ResearchValidationPreregistration> ValidationPreregistrations { get; init; } = [];
     public ResearchStageZeroAdmission? StageZeroAdmission { get; init; }
     public IReadOnlyList<ResearchAuditEntry> Audit { get; init; } = [];
+    public IReadOnlyDictionary<string, string> NextCursors { get; init; } =
+        new Dictionary<string, string>();
+}
+
+public sealed record ResearchPage<T>
+{
+    public IReadOnlyList<T> Items { get; init; } = [];
+    public string? NextCursor { get; init; }
 }
 
 public sealed record ResearchOptimizationRequest

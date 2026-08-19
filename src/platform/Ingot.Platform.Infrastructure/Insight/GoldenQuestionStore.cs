@@ -10,7 +10,10 @@ public interface IGoldenQuestionStore
     Task<IReadOnlyList<GoldenQuestionCase>> ListAsync(string? status, CancellationToken ct = default);
     Task<GoldenQuestionCase?> GetAsync(Guid caseId, int version, CancellationToken ct = default);
     Task<GoldenQuestionCase> SaveAsync(GoldenQuestionCase value, CancellationToken ct = default);
-    Task SaveEvaluationAsync(GoldenQuestionEvaluation value, CancellationToken ct = default);
+    Task SaveEvaluationAsync(
+        GoldenQuestionEvaluation value,
+        AgentRunSnapshot sourceRun,
+        CancellationToken ct = default);
     Task<IReadOnlyList<GoldenQuestionEvaluation>> ListEvaluationsAsync(
         Guid? caseId,
         int limit,
@@ -89,12 +92,21 @@ public sealed class PostgresGoldenQuestionStore : IGoldenQuestionStore
         return value;
     }
 
-    public async Task SaveEvaluationAsync(GoldenQuestionEvaluation value, CancellationToken ct = default)
+    public async Task SaveEvaluationAsync(
+        GoldenQuestionEvaluation value,
+        AgentRunSnapshot sourceRun,
+        CancellationToken ct = default)
     {
+        var snapshotHash = GoldenQuestionEvaluator.SnapshotHash(sourceRun);
+        if (!string.Equals(value.AgentRunId, sourceRun.RunId, StringComparison.Ordinal) ||
+            !string.Equals(value.AgentRunSnapshotHash, snapshotHash, StringComparison.Ordinal))
+            throw new InvalidOperationException("黄金问题评测与冻结的 Agent 运行快照不一致。");
         await using var command = _dataSource.CreateCommand("""
             INSERT INTO golden_question_evaluations(
-              evaluation_id, case_id, case_version, agent_run_id, passed, payload, evaluated_at)
-            VALUES (@evaluation_id, @case_id, @case_version, @agent_run_id, @passed, @payload, @evaluated_at);
+              evaluation_id, case_id, case_version, agent_run_id, passed, payload, evaluated_at,
+              agent_run_snapshot, agent_run_snapshot_hash)
+            VALUES (@evaluation_id, @case_id, @case_version, @agent_run_id, @passed, @payload, @evaluated_at,
+                    @agent_run_snapshot, @agent_run_snapshot_hash);
             """);
         command.Parameters.AddWithValue("evaluation_id", value.EvaluationId);
         command.Parameters.AddWithValue("case_id", value.CaseId);
@@ -106,6 +118,11 @@ public sealed class PostgresGoldenQuestionStore : IGoldenQuestionStore
             Value = JsonSerializer.Serialize(value, JsonOptions)
         });
         command.Parameters.AddWithValue("evaluated_at", value.EvaluatedAt.UtcDateTime);
+        command.Parameters.Add(new NpgsqlParameter("agent_run_snapshot", NpgsqlDbType.Jsonb)
+        {
+            Value = JsonSerializer.Serialize(sourceRun, JsonOptions)
+        });
+        command.Parameters.AddWithValue("agent_run_snapshot_hash", snapshotHash);
         await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
     }
 

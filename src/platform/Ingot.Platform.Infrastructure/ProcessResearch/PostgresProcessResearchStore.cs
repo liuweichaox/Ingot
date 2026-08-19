@@ -433,6 +433,27 @@ public sealed class PostgresProcessResearchStore : IProcessResearchStore
             projectId,
             ct);
 
+    public Task<ResearchPage<ResearchExperiment>> ListExperimentsPageAsync(
+        Guid projectId,
+        string? cursor,
+        int limit,
+        CancellationToken ct = default)
+        => ListPageAsync<ResearchExperiment>(
+            """
+            SELECT payload
+            FROM research_experiments
+            WHERE project_id = $1
+              AND ($2::timestamptz IS NULL OR (updated_at, experiment_id) < ($2, $3))
+            ORDER BY updated_at DESC, experiment_id DESC
+            LIMIT $4
+            """,
+            projectId,
+            cursor,
+            limit,
+            static value => value.UpdatedAt,
+            static value => value.ExperimentId,
+            ct);
+
     public async Task<ResearchExperiment> SaveExperimentAsync(
         ResearchExperiment value,
         CancellationToken ct = default)
@@ -559,6 +580,27 @@ public sealed class PostgresProcessResearchStore : IProcessResearchStore
             projectId,
             ct);
 
+    public Task<ResearchPage<ResearchShadowRecommendation>> ListShadowRecommendationsPageAsync(
+        Guid projectId,
+        string? cursor,
+        int limit,
+        CancellationToken ct = default)
+        => ListPageAsync<ResearchShadowRecommendation>(
+            """
+            SELECT payload
+            FROM research_shadow_recommendations
+            WHERE project_id = $1
+              AND ($2::timestamptz IS NULL OR (decided_at, recommendation_id) < ($2, $3))
+            ORDER BY decided_at DESC, recommendation_id DESC
+            LIMIT $4
+            """,
+            projectId,
+            cursor,
+            limit,
+            static value => value.DecidedAt,
+            static value => value.RecommendationId,
+            ct);
+
     public async Task<ResearchShadowRecommendation> CreateShadowRecommendationAsync(
         ResearchShadowRecommendation value,
         CancellationToken ct = default)
@@ -635,6 +677,27 @@ public sealed class PostgresProcessResearchStore : IProcessResearchStore
             ORDER BY generated_at DESC, report_id
             """,
             projectId,
+            ct);
+
+    public Task<ResearchPage<ResearchHistoricalReplayReport>> ListHistoricalReplayReportsPageAsync(
+        Guid projectId,
+        string? cursor,
+        int limit,
+        CancellationToken ct = default)
+        => ListPageAsync<ResearchHistoricalReplayReport>(
+            """
+            SELECT payload
+            FROM research_historical_replay_reports
+            WHERE project_id = $1
+              AND ($2::timestamptz IS NULL OR (generated_at, report_id) < ($2, $3))
+            ORDER BY generated_at DESC, report_id DESC
+            LIMIT $4
+            """,
+            projectId,
+            cursor,
+            limit,
+            static value => value.GeneratedAt,
+            static value => value.ReportId,
             ct);
 
     public async Task<ResearchHistoricalReplayReport> CreateHistoricalReplayReportAsync(
@@ -850,6 +913,27 @@ public sealed class PostgresProcessResearchStore : IProcessResearchStore
             ORDER BY recorded_at DESC, result_id
             """,
             projectId,
+            ct);
+
+    public Task<ResearchPage<ResearchExperimentResult>> ListExperimentResultsPageAsync(
+        Guid projectId,
+        string? cursor,
+        int limit,
+        CancellationToken ct = default)
+        => ListPageAsync<ResearchExperimentResult>(
+            """
+            SELECT payload
+            FROM research_experiment_results
+            WHERE project_id = $1
+              AND ($2::timestamptz IS NULL OR (recorded_at, result_id) < ($2, $3))
+            ORDER BY recorded_at DESC, result_id DESC
+            LIMIT $4
+            """,
+            projectId,
+            cursor,
+            limit,
+            static value => value.RecordedAt,
+            static value => value.ResultId,
             ct);
 
     public async Task<ResearchExperimentResult> SaveExperimentResultAsync(
@@ -1130,6 +1214,73 @@ public sealed class PostgresProcessResearchStore : IProcessResearchStore
             """,
             projectId,
             ct);
+
+    public Task<ResearchPage<ResearchAuditEntry>> ListAuditEntriesPageAsync(
+        Guid projectId,
+        string? cursor,
+        int limit,
+        CancellationToken ct = default)
+        => ListPageAsync<ResearchAuditEntry>(
+            """
+            SELECT payload
+            FROM process_research_audit
+            WHERE project_id = $1
+              AND ($2::timestamptz IS NULL OR (created_at, entry_id) < ($2, $3))
+            ORDER BY created_at DESC, entry_id DESC
+            LIMIT $4
+            """,
+            projectId,
+            cursor,
+            limit,
+            static value => value.CreatedAt,
+            static value => value.EntryId,
+            ct);
+
+    private async Task<ResearchPage<T>> ListPageAsync<T>(
+        string sql,
+        Guid projectId,
+        string? cursor,
+        int limit,
+        Func<T, DateTimeOffset> timestamp,
+        Func<T, Guid> id,
+        CancellationToken ct)
+    {
+        DateTimeOffset? beforeTime = null;
+        Guid? beforeId = null;
+        if (cursor is not null)
+        {
+            if (!ResearchPageCursor.TryDecode(cursor, out var decodedTime, out var decodedId))
+                throw new ProcessResearchRuleException("分页游标无效或已经损坏。");
+            beforeTime = decodedTime;
+            beforeId = decodedId;
+        }
+        limit = Math.Clamp(limit, 1, 200);
+        await using var command = _dataSource.CreateCommand(sql);
+        command.Parameters.AddWithValue(projectId);
+        command.Parameters.Add(new NpgsqlParameter
+        {
+            NpgsqlDbType = NpgsqlDbType.TimestampTz,
+            Value = (object?)beforeTime ?? DBNull.Value
+        });
+        command.Parameters.Add(new NpgsqlParameter
+        {
+            NpgsqlDbType = NpgsqlDbType.Uuid,
+            Value = (object?)beforeId ?? DBNull.Value
+        });
+        command.Parameters.AddWithValue(limit + 1);
+        var values = new List<T>(limit + 1);
+        await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
+        while (await reader.ReadAsync(ct).ConfigureAwait(false))
+            values.Add(Deserialize<T>(reader.GetString(0)));
+        var hasMore = values.Count > limit;
+        if (hasMore) values.RemoveAt(values.Count - 1);
+        var last = hasMore ? values[^1] : default;
+        return new ResearchPage<T>
+        {
+            Items = values,
+            NextCursor = last is null ? null : ResearchPageCursor.Encode(timestamp(last), id(last))
+        };
+    }
 
     private async Task<T?> GetOneAsync<T>(
         string sql,

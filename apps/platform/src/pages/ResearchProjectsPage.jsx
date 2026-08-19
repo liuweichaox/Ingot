@@ -40,6 +40,7 @@ export function ResearchProjectsPage({ identity }) {
   const [workspace, setWorkspace] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [evidenceLoading, setEvidenceLoading] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);
   const [evidenceError, setEvidenceError] = useState("");
   const [saving, setSaving] = useState(false);
   const [task, setTask] = useState("");
@@ -132,6 +133,47 @@ export function ResearchProjectsPage({ identity }) {
     } finally {
       setDetailLoading(false);
       setEvidenceLoading(false);
+    }
+  }
+
+  async function loadOlderWorkspaceHistory() {
+    const currentProjectId = workspace?.project?.projectId;
+    const cursors = workspace?.nextCursors || {};
+    if (!currentProjectId || historyLoading) return;
+
+    const collections = [
+      ["experiments", "experiments", "experiments"],
+      ["experimentResults", "experiment-results", "experiment-results"],
+      ["shadowRecommendations", "shadow-recommendations", "shadow-recommendations"],
+      ["historicalReplayReports", "historical-replays", "historical-replays"],
+      ["audit", "audit", "audit"],
+    ].filter(([, cursorKey]) => cursors[cursorKey]);
+    if (collections.length === 0) return;
+
+    setHistoryLoading(true);
+    setError("");
+    try {
+      const pages = await Promise.all(collections.map(async ([property, cursorKey, endpoint]) => {
+        const cursor = encodeURIComponent(cursors[cursorKey]);
+        const page = await getJson(
+          `/api/v1/research-projects/${currentProjectId}/${endpoint}?limit=100&cursor=${cursor}`,
+        );
+        return [property, cursorKey, page];
+      }));
+      setWorkspace(current => {
+        if (current?.project?.projectId !== currentProjectId) return current;
+        const next = { ...current, nextCursors: { ...(current.nextCursors || {}) } };
+        for (const [property, cursorKey, page] of pages) {
+          next[property] = [...(current[property] || []), ...(page?.items || [])];
+          next.nextCursors[cursorKey] = page?.nextCursor || null;
+        }
+        return next;
+      });
+    } catch (requestError) {
+      setError(requestError.message);
+      notify(requestError.message, "danger");
+    } finally {
+      setHistoryLoading(false);
     }
   }
 
@@ -731,6 +773,8 @@ export function ResearchProjectsPage({ identity }) {
           <WorkspaceContent
             workspace={workspace}
             loading={evidenceLoading}
+            historyLoading={historyLoading}
+            onLoadOlderHistory={loadOlderWorkspaceHistory}
             onTask={startTask}
             onExperimentStatus={changeExperimentStatus}
             onCloneExperiment={cloneExperiment}
@@ -1088,6 +1132,8 @@ function CreateProjectDrawer({ open, saving, form, setForm, onClose, onSubmit })
 function WorkspaceContent({
   workspace,
   loading,
+  historyLoading,
+  onLoadOlderHistory,
   onTask,
   onExperimentStatus,
   onCloneExperiment,
@@ -1178,6 +1224,16 @@ function WorkspaceContent({
   return (
     <div className="space-y-5">
         {loading && <Alert tone="info">正在更新项目证据与准备度…</Alert>}
+        {Object.values(workspace.nextCursors || {}).some(Boolean) && (
+          <Alert tone="info" title="当前先显示最近 100 条记录">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <span>实验、结果、建议、回放和审计记录已按游标分页，可继续读取更早历史。</span>
+              <Button disabled={historyLoading} onClick={onLoadOlderHistory}>
+                {historyLoading ? "正在加载…" : "加载更早记录"}
+              </Button>
+            </div>
+          </Alert>
+        )}
         <Card
           title="阶段 0：预注册与数据基线"
           description="在查看验证结果前冻结范围、纳入排除、比较方法、指标、停止与否证条件，并由另一名成员复核。"

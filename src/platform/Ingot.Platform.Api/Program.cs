@@ -1,11 +1,13 @@
 // Platform API（中心侧）：提供中心 API（边缘注册/心跳、诊断代理、查询与管理）。
 
+using System.Diagnostics;
 using Ingot.Agent;
 using Ingot.Agent.Providers;
 using Ingot.Platform.Api.Agents;
 using Ingot.Platform.Api.HealthChecks;
 using Ingot.Platform.Api.Events;
 using Ingot.Platform.Api.Configuration;
+using Ingot.Platform.Api.Errors;
 using Ingot.Platform.Infrastructure;
 using Ingot.Platform.Infrastructure.Identity;
 using Serilog;
@@ -13,6 +15,8 @@ using Prometheus;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.WebUtilities;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -24,7 +28,50 @@ var urls = builder.Configuration["Urls"]
 builder.WebHost.UseUrls(urls);
 
 builder.Services.AddHttpClient();
-builder.Services.AddControllers();
+builder.Services.AddControllers(options =>
+{
+    options.Filters.Add<ApiProblemDetailsResultFilter>();
+    options.Conventions.Add(new ApiProblemDetailsConvention());
+});
+builder.Services.AddProblemDetails(options =>
+{
+    options.CustomizeProblemDetails = context =>
+    {
+        var status = context.ProblemDetails.Status ?? StatusCodes.Status500InternalServerError;
+        var detail = context.ProblemDetails.Detail
+                     ?? ReasonPhrases.GetReasonPhrase(status);
+        context.ProblemDetails.Type ??= $"urn:ingot:problem:{ApiProblemDetailsFactory.CodeFor(status)}";
+        context.ProblemDetails.Title ??= ReasonPhrases.GetReasonPhrase(status);
+        context.ProblemDetails.Instance ??= context.HttpContext.Request.Path;
+        context.ProblemDetails.Extensions["code"] = ApiProblemDetailsFactory.CodeFor(status);
+        context.ProblemDetails.Extensions["traceId"] =
+            Activity.Current?.Id ?? context.HttpContext.TraceIdentifier;
+        context.ProblemDetails.Extensions["error"] = detail;
+    };
+});
+builder.Services.Configure<ApiBehaviorOptions>(options =>
+{
+    options.InvalidModelStateResponseFactory = context =>
+    {
+        var problem = ApiProblemDetailsFactory.Create(
+            context.HttpContext,
+            StatusCodes.Status400BadRequest,
+            "请求字段验证失败。");
+        problem.Extensions["errors"] = context.ModelState
+            .Where(static pair => pair.Value?.Errors.Count > 0)
+            .ToDictionary(
+                static pair => pair.Key,
+                static pair => pair.Value!.Errors.Select(error =>
+                    string.IsNullOrWhiteSpace(error.ErrorMessage)
+                        ? "字段值无效。"
+                        : error.ErrorMessage).ToArray(),
+                StringComparer.Ordinal);
+        return new BadRequestObjectResult(problem)
+        {
+            ContentTypes = { "application/problem+json" }
+        };
+    };
+});
 builder.Services.AddOpenApi();
 
 // 三种认证模式：
@@ -124,6 +171,9 @@ Log.Logger = new LoggerConfiguration()
 builder.Host.UseSerilog();
 
 var app = builder.Build();
+
+app.UseExceptionHandler();
+app.UseStatusCodePages();
 
 if (!app.Environment.IsDevelopment() &&
     string.Equals(authenticationMode, "Disabled", StringComparison.OrdinalIgnoreCase))
