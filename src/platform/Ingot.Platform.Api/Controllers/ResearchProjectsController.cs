@@ -24,11 +24,50 @@ public sealed class ResearchProjectsController(
     ResearchRollbackDrillService rollbackDrills,
     ResearchOnlineCampaignService onlineCampaign,
     ResearchTransferAssessmentService transferAssessments,
+    ResearchValidationPreregistrationService validationPreregistrations,
     IResearchObservationAssembler observationAssembler,
     ResearchExperimentResultMaterializer resultMaterializer,
     IExecutionComparisonService executionComparisonService,
     PlatformUserResolver userResolver) : ControllerBase
 {
+    [HttpGet("{projectId:guid}/stage-zero-admission")]
+    public Task<IActionResult> GetStageZeroAdmission(Guid projectId, CancellationToken ct)
+        => ExecuteForProjectAsync(
+            projectId,
+            false,
+            async _ => Ok(await validationPreregistrations.AssessAsync(projectId, ct)
+                .ConfigureAwait(false)),
+            ct);
+
+    [HttpPost("{projectId:guid}/validation-preregistrations")]
+    public Task<IActionResult> FreezeValidationPreregistration(
+        Guid projectId,
+        [FromBody] ResearchValidationPreregistrationRequest request,
+        CancellationToken ct)
+        => ExecuteForProjectAsync(
+            projectId,
+            true,
+            async identity => Ok(await validationPreregistrations.FreezeAsync(
+                projectId, request, identity.UserId, ct).ConfigureAwait(false)),
+            ct);
+
+    [HttpPost("validation-preregistrations/{preregistrationId:guid}/review")]
+    public async Task<IActionResult> ReviewValidationPreregistration(
+        Guid preregistrationId,
+        CancellationToken ct)
+    {
+        var value = await store.GetValidationPreregistrationAsync(preregistrationId, ct)
+            .ConfigureAwait(false);
+        if (value is null)
+            return NotFound(new { error = "阶段 0 预注册不存在。" });
+        return await ExecuteForProjectAsync(
+            value.ProjectId,
+            true,
+            async identity => Ok(await validationPreregistrations.ReviewAsync(
+                preregistrationId, identity.UserId, ct).ConfigureAwait(false)),
+            ct).ConfigureAwait(false);
+    }
+
     [HttpGet]
     public async Task<IActionResult> List(
         [FromQuery] int limit = 50,

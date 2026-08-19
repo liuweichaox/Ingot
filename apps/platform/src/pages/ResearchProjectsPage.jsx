@@ -251,6 +251,7 @@ export function ResearchProjectsPage({ identity }) {
     setShadowTarget({ experiment, run });
     setShadowForm({
       decision: "accepted",
+      usefulnessRating: "useful",
       actualExecutionKey: "",
       factors: Object.fromEntries((run.factors || []).map(factor => [factor.variableCode, factor.value])),
       rejectionReason: "",
@@ -288,6 +289,7 @@ export function ResearchProjectsPage({ identity }) {
           rejectionReason: shadowForm.rejectionReason || null,
           siteLimitations: shadowForm.siteLimitations.split("\n").map(value => value.trim()).filter(Boolean),
           contextSnapshot,
+          usefulnessRating: shadowForm.usefulnessRating,
         },
       );
       setShadowTarget(null);
@@ -385,6 +387,19 @@ export function ResearchProjectsPage({ identity }) {
       );
       await refreshWorkspace();
       notify("停止与回退演练已由另一名工程师复核并冻结。", "success");
+    } catch (requestError) {
+      notify(requestError.message, "danger");
+    }
+  }
+
+  async function reviewValidationPreregistration(preregistration) {
+    try {
+      await postJson(
+        `/api/v1/research-projects/validation-preregistrations/${preregistration.preregistrationId}/review`,
+        {},
+      );
+      await refreshWorkspace();
+      notify("阶段 0 预注册已由独立复核人确认并冻结。", "success");
     } catch (requestError) {
       notify(requestError.message, "danger");
     }
@@ -641,6 +656,31 @@ export function ResearchProjectsPage({ identity }) {
           coldStartResultId: taskForm.coldStartResultId,
           notes: taskForm.transferNotes || null,
         });
+      } else if (task === "preregistration") {
+        await postJson(`/api/v1/research-projects/${project.projectId}/validation-preregistrations`, {
+          dataScope: taskForm.preregDataScope,
+          dataFrom: new Date(taskForm.preregDataFrom).toISOString(),
+          dataTo: new Date(taskForm.preregDataTo).toISOString(),
+          edgeId: taskForm.preregEdgeId || null,
+          equipmentId: taskForm.preregEquipmentId || null,
+          maximumRuns: Number(taskForm.preregMaximumRuns),
+          inclusionMethod: taskForm.preregInclusionMethod,
+          inclusionRules: lines(taskForm.preregInclusionRules),
+          exclusionRules: lines(taskForm.preregExclusionRules),
+          matchingRules: lines(taskForm.preregMatchingRules),
+          baselineMethods: lines(taskForm.preregBaselineMethods),
+          primaryMetrics: lines(taskForm.preregPrimaryMetrics),
+          guardrailMetrics: lines(taskForm.preregGuardrailMetrics),
+          stopConditions: lines(taskForm.preregStopConditions),
+          falsificationConditions: lines(taskForm.preregFalsificationConditions),
+          engineerWorkflowBaselines: [{
+            name: taskForm.preregWorkflowName,
+            startedAt: new Date(taskForm.preregWorkflowStart).toISOString(),
+            completedAt: new Date(taskForm.preregWorkflowEnd).toISOString(),
+            steps: parseWorkflowSteps(taskForm.preregWorkflowSteps),
+            notes: taskForm.preregWorkflowNotes || null,
+          }],
+        });
       }
       setTask("");
       await refreshWorkspace();
@@ -665,7 +705,10 @@ export function ResearchProjectsPage({ identity }) {
             {projectAction && (
               <Button
                 variant="primary"
-                disabled={detailLoading}
+                disabled={detailLoading || (project.status === "draft" && !workspace?.stageZeroAdmission?.eligible)}
+                title={project.status === "draft" && !workspace?.stageZeroAdmission?.eligible
+                  ? (workspace?.stageZeroAdmission?.failures || ["先冻结并独立复核阶段 0 预注册"]).join("；")
+                  : undefined}
                 onClick={() => changeProjectStatus(projectAction[1])}
               >
                 {projectAction[0]}
@@ -704,6 +747,7 @@ export function ResearchProjectsPage({ identity }) {
             onReviewHistoricalReplay={reviewHistoricalReplay}
             onReviewRollbackDrill={reviewRollbackDrill}
             onReviewTransferAssessment={reviewTransferAssessment}
+            onReviewValidationPreregistration={reviewValidationPreregistration}
             onAskAi={currentProjectId => navigate(`/chat?projectId=${encodeURIComponent(currentProjectId)}`)}
             currentUserId={identity?.userId || ""}
           />
@@ -1060,6 +1104,7 @@ function WorkspaceContent({
   onReviewHistoricalReplay,
   onReviewRollbackDrill,
   onReviewTransferAssessment,
+  onReviewValidationPreregistration,
   onAskAi,
   currentUserId,
 }) {
@@ -1077,8 +1122,15 @@ function WorkspaceContent({
     operatingRegions = [],
     knowledgeClaims = [],
     transferAssessments = [],
+    validationPreregistrations = [],
   } = workspace;
   const onlineAdmission = workspace.onlineAdmission;
+  const stageZeroAdmission = workspace.stageZeroAdmission;
+  const latestPreregistration = validationPreregistrations[0];
+  const reliabilityBaseline = latestPreregistration?.reliabilityBaseline;
+  const analysisAdmissionRate = reliabilityBaseline?.rates?.find(
+    item => item.code === "analysis_admission",
+  )?.rate;
   const reviewedOperatingRegions = operatingRegions.filter(item => item.status === "validated");
   const validatedOperatingRegions = reviewedOperatingRegions.filter(item =>
     ["laboratory", "production"].includes(item.validationLevel));
@@ -1126,6 +1178,26 @@ function WorkspaceContent({
   return (
     <div className="space-y-5">
         {loading && <Alert tone="info">正在更新项目证据与准备度…</Alert>}
+        <Card
+          title="阶段 0：预注册与数据基线"
+          description="在查看验证结果前冻结范围、纳入排除、比较方法、指标、停止与否证条件，并由另一名成员复核。"
+        >
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            <Metric label="准入结论" value={stageZeroAdmission?.eligible ? "允许开始研发" : "尚未通过"} />
+            <Metric label="预注册版本" value={latestPreregistration ? `v${latestPreregistration.version}` : "—"} hint={latestPreregistration?.status === "reviewed" ? "已独立复核" : "等待独立复核"} />
+            <Metric label="当前流程耗时" value={latestPreregistration?.plan?.engineerWorkflowBaselines?.[0]?.totalMinutes == null ? "—" : `${formatResearchNumber(latestPreregistration.plan.engineerWorkflowBaselines[0].totalMinutes)} 分钟`} hint={`${latestPreregistration?.plan?.engineerWorkflowBaselines?.[0]?.steps?.length || 0} 个步骤`} />
+            <Metric label="数据基线运行" value={reliabilityBaseline ? formatResearchNumber(reliabilityBaseline.analyzedRunCount) : "—"} hint={reliabilityBaseline?.truncated ? "已达到最大运行数" : "已固化到当前版本"} />
+            <Metric label="正式分析准入率" value={analysisAdmissionRate == null ? "—" : `${formatResearchNumber(analysisAdmissionRate * 100)}%`} hint="不替代场景预注册阈值" />
+            <Metric label="内容哈希" value={latestPreregistration ? `${String(latestPreregistration.contentHash).slice(0, 12)}…` : "—"} />
+          </div>
+          {(stageZeroAdmission?.failures || []).length > 0 && <Alert tone="warning" title="阶段 0 门禁未通过">{stageZeroAdmission.failures.map(item => <div key={item}>{item}</div>)}</Alert>}
+          {(stageZeroAdmission?.warnings || []).length > 0 && <Alert tone="warning" title="数据基线提醒">{stageZeroAdmission.warnings.map(item => <div key={item}>{item}</div>)}</Alert>}
+          <div className="mt-4 flex flex-wrap gap-2">
+            {project.status === "draft" && <Button variant="primary" onClick={() => onTask("preregistration")}>{latestPreregistration ? "冻结新版本" : "填写并冻结预注册"}</Button>}
+            {latestPreregistration?.status === "frozen" && <Button onClick={() => onReviewValidationPreregistration(latestPreregistration)}>独立复核当前版本</Button>}
+            <a className="inline-flex min-h-9 items-center rounded-lg px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50" href="/data-quality">查看数据健康与正式分析准入</a>
+          </div>
+        </Card>
         <section className="rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50 to-white p-5">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
@@ -1822,10 +1894,11 @@ function ShadowEvidenceCard({ recommendations, report, variableByCode, objective
         </Alert>
       )}
       {report && report.totalRecommendations > 0 && (
-        <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
           <Metric label="建议采用率" value={`${Math.round(Number(report.adoptionRate || 0) * 100)}%`} hint={`${report.acceptedCount} 采用 / ${report.modifiedCount} 修改 / ${report.rejectedCount} 拒绝`} />
           <Metric label="结果回收" value={`${report.completedOutcomeCount}/${report.totalRecommendations}`} hint={`${report.invalidOutcomeCount} 条数据不可用`} />
           <Metric label="适用域变化" value={report.contextShiftCount + report.parameterExtrapolationCount} hint="上下文新组合与参数外推" />
+          <Metric label="工程师有用性" value={`${report.usefulCount || 0} / ${report.partlyUsefulCount || 0} / ${report.notUsefulCount || 0}`} hint={`有用 / 部分有用 / 无用；${report.unratedUsefulnessCount || 0} 条未评分`} />
           <Metric label="安全事件" value={report.safetyEvents?.length || 0} hint={`${report.settingDeviationCount} 次实际设置偏差`} />
         </div>
       )}
@@ -1846,7 +1919,7 @@ function ShadowEvidenceCard({ recommendations, report, variableByCode, objective
           {
             key: "decision",
             label: "工程师选择",
-            render: (value, row) => <div className="space-y-2 text-xs"><StatusBadge value={shadowDecisionLabels[value] || value} />{(row.engineerSelectedFactors || []).map(factor => <div key={factor.variableCode}>{variableByCode.get(factor.variableCode)?.name || factor.variableCode}：<strong>{formatResearchNumber(factor.value)} {factor.unit}</strong></div>)}</div>,
+            render: (value, row) => <div className="space-y-2 text-xs"><StatusBadge value={shadowDecisionLabels[value] || value} /><div>有用性：{{ useful: "有用", "partly-useful": "部分有用", "not-useful": "无用" }[row.usefulnessRating] || "未评分"}</div>{(row.engineerSelectedFactors || []).map(factor => <div key={factor.variableCode}>{variableByCode.get(factor.variableCode)?.name || factor.variableCode}：<strong>{formatResearchNumber(factor.value)} {factor.unit}</strong></div>)}</div>,
           },
           {
             key: "reason",
@@ -1892,6 +1965,7 @@ function ShadowDecisionDrawer({ target, form, setForm, saving, variables, onClos
       <form id="shadow-decision-form" className="space-y-4" onSubmit={onSubmit}>
         <Alert tone="info">模型建议 <code>{target.run.executionKey}</code>；请在知道检验结果之前登记实际选择。</Alert>
         <Field label="决策"><Select value={form.decision} onChange={updateDecision}><option value="accepted">采用模型建议</option><option value="modified">修改后采用</option><option value="rejected">不采用建议</option></Select></Field>
+        <Field label="对工程判断是否有用" hint="与是否采用分开评价；有用但受现场约束的建议仍可标为有用。"><Select required value={form.usefulnessRating} onChange={update("usefulnessRating")}><option value="useful">有用</option><option value="partly-useful">部分有用</option><option value="not-useful">无用</option></Select></Field>
         <Field label="实际生产运行号" hint="必须与采集周期 ExecutionId 完全一致，结果将通过它自动关联。"><Input required value={form.actualExecutionKey} onChange={update("actualExecutionKey")} /></Field>
         <div className="grid gap-4 sm:grid-cols-2">
           {(target.run.factors || []).map(factor => (
@@ -2268,6 +2342,37 @@ function TaskDrawer({ task, form, setForm, workspace, memberCandidates, saving, 
             <Textarea rows={4} value={form.transferNotes} onChange={update("transferNotes")} />
           </Field>
         </>}
+        {task === "preregistration" && <>
+          <Alert tone="warning" title="冻结前确认">保存后不能覆盖；项目定义变化时必须创建并独立复核新版本。这里记录的是验证协议和当前流程基线，不用于员工绩效评价。</Alert>
+          <Field label="数据范围"><Textarea required rows={3} value={form.preregDataScope} onChange={update("preregDataScope")} /></Field>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="数据开始"><Input required type="datetime-local" value={form.preregDataFrom} onChange={update("preregDataFrom")} /></Field>
+            <Field label="数据结束"><Input required type="datetime-local" value={form.preregDataTo} onChange={update("preregDataTo")} /></Field>
+            <Field label="Edge 编号（可选）"><Input value={form.preregEdgeId} onChange={update("preregEdgeId")} /></Field>
+            <Field label="设备编号（可选）"><Input value={form.preregEquipmentId} onChange={update("preregEquipmentId")} /></Field>
+            <Field label="数据基线最大运行数"><Input required type="number" min="1" max="5000" value={form.preregMaximumRuns} onChange={update("preregMaximumRuns")} /></Field>
+          </div>
+          <Field label="纳入方式"><Textarea required rows={3} value={form.preregInclusionMethod} onChange={update("preregInclusionMethod")} /></Field>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="纳入规则（每行一项）"><Textarea required rows={5} value={form.preregInclusionRules} onChange={update("preregInclusionRules")} /></Field>
+            <Field label="排除规则（每行一项）"><Textarea required rows={5} value={form.preregExclusionRules} onChange={update("preregExclusionRules")} /></Field>
+            <Field label="匹配与分层规则（每行一项）"><Textarea required rows={5} value={form.preregMatchingRules} onChange={update("preregMatchingRules")} /></Field>
+            <Field label="比较基线（每行一项）"><Textarea required rows={5} value={form.preregBaselineMethods} onChange={update("preregBaselineMethods")} /></Field>
+            <Field label="主要指标（每行一项）"><Textarea required rows={5} value={form.preregPrimaryMetrics} onChange={update("preregPrimaryMetrics")} /></Field>
+            <Field label="守门指标（每行一项）"><Textarea required rows={5} value={form.preregGuardrailMetrics} onChange={update("preregGuardrailMetrics")} /></Field>
+            <Field label="停止条件（每行一项）"><Textarea required rows={5} value={form.preregStopConditions} onChange={update("preregStopConditions")} /></Field>
+            <Field label="否证条件（每行一项）"><Textarea required rows={5} value={form.preregFalsificationConditions} onChange={update("preregFalsificationConditions")} /></Field>
+          </div>
+          <Card title="工程师当前流程基线" description="记录使用 Ingot 前完成同类任务实际需要的时间和步骤。">
+            <Field label="流程名称"><Input required value={form.preregWorkflowName} onChange={update("preregWorkflowName")} /></Field>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="开始时间"><Input required type="datetime-local" value={form.preregWorkflowStart} onChange={update("preregWorkflowStart")} /></Field>
+              <Field label="结束时间"><Input required type="datetime-local" value={form.preregWorkflowEnd} onChange={update("preregWorkflowEnd")} /></Field>
+            </div>
+            <Field label="步骤与耗时" hint="每行填写：步骤名称|分钟"><Textarea required rows={6} value={form.preregWorkflowSteps} onChange={update("preregWorkflowSteps")} /></Field>
+            <Field label="说明（可选）"><Textarea rows={3} value={form.preregWorkflowNotes} onChange={update("preregWorkflowNotes")} /></Field>
+          </Card>
+        </>}
       </form>
     </Drawer>
   );
@@ -2275,6 +2380,16 @@ function TaskDrawer({ task, form, setForm, workspace, memberCandidates, saving, 
 
 function lines(value) {
   return String(value || "").split("\n").map(item => item.trim()).filter(Boolean);
+}
+
+function parseWorkflowSteps(value) {
+  return lines(value).map((item, index) => {
+    const separator = item.lastIndexOf("|");
+    const name = separator < 0 ? "" : item.slice(0, separator).trim();
+    const minutes = separator < 0 ? Number.NaN : Number(item.slice(separator + 1).trim());
+    if (!name || !Number.isFinite(minutes) || minutes < 0) throw new Error("流程步骤必须逐行填写为：步骤名称|分钟。");
+    return { sequence: index + 1, name, minutes };
+  });
 }
 
 function parseCausalChain(value) {

@@ -204,7 +204,12 @@ public sealed class ResearchHistoricalReplayService(
             !baselineMethods.Contains("seeded-random-order", StringComparer.Ordinal) ||
             !baselineMethods.Contains("quadratic-response-surface", StringComparer.Ordinal))
             gateFailures.Add("回放没有执行全部预注册基线：历史工程师顺序、随机顺序和二次响应面。");
-        if (!AuditNoFutureLeakage(raw))
+        if (!AuditNoFutureLeakage(
+                raw,
+                request.SeedCount,
+                request.InitialObservationCount,
+                budget,
+                history.Length))
             gateFailures.Add("逐步轨迹检测到未来信息泄漏或审计字段不完整。");
         if (grouped.Length < 5)
             gateFailures.Add("唯一历史条件少于 5 个，只能形成探索性回放证据。");
@@ -321,19 +326,99 @@ public sealed class ResearchHistoricalReplayService(
         };
     }
 
-    private static bool AuditNoFutureLeakage(JsonElement root)
+    private static bool AuditNoFutureLeakage(
+        JsonElement root,
+        int expectedTraceCount,
+        int initialObservationCount,
+        int budget,
+        int historyCount)
     {
-        foreach (var trace in root.GetProperty("step_traces").EnumerateArray())
+        if (!root.TryGetProperty("step_traces", out var traces) ||
+            traces.ValueKind != JsonValueKind.Array ||
+            traces.GetArrayLength() != expectedTraceCount ||
+            !root.TryGetProperty("selected_history_indices", out var selectedRows) ||
+            selectedRows.ValueKind != JsonValueKind.Array ||
+            selectedRows.GetArrayLength() != expectedTraceCount)
+            return false;
+
+        var traceIndex = 0;
+        foreach (var trace in traces.EnumerateArray())
         {
+            if (trace.ValueKind != JsonValueKind.Array ||
+                trace.GetArrayLength() < initialObservationCount ||
+                trace.GetArrayLength() > budget)
+                return false;
+            var previouslyRevealed = new List<int>();
             foreach (var step in trace.EnumerateArray())
             {
-                if (!step.TryGetProperty("revealed_history_index", out var revealed) ||
-                    !step.TryGetProperty("visible_observation_indices_before", out var visible))
+                if (step.ValueKind != JsonValueKind.Object ||
+                    !step.TryGetProperty("step", out var stepNumber) ||
+                    stepNumber.ValueKind != JsonValueKind.Number ||
+                    !stepNumber.TryGetInt32(out var parsedStepNumber) ||
+                    parsedStepNumber != previouslyRevealed.Count + 1 ||
+                    !step.TryGetProperty("kind", out var kindRaw) ||
+                    kindRaw.ValueKind != JsonValueKind.String ||
+                    !step.TryGetProperty("revealed_history_index", out var revealed) ||
+                    revealed.ValueKind != JsonValueKind.Number ||
+                    !step.TryGetProperty("visible_observation_indices_before", out var visible) ||
+                    visible.ValueKind != JsonValueKind.Array)
                     return false;
-                if (visible.EnumerateArray().Any(value => value.GetInt32() == revealed.GetInt32()))
+                if (!revealed.TryGetInt32(out var revealedIndex))
                     return false;
+                if (revealedIndex < 0 || revealedIndex >= historyCount ||
+                    previouslyRevealed.Contains(revealedIndex))
+                    return false;
+                if (!TryReadIndices(visible, out var visibleIndices))
+                    return false;
+                if (!visibleIndices.SequenceEqual(previouslyRevealed))
+                    return false;
+                var kind = kindRaw.GetString();
+                if (previouslyRevealed.Count < initialObservationCount)
+                {
+                    if (kind != "preregistered-initial-observation" ||
+                        revealedIndex != previouslyRevealed.Count)
+                        return false;
+                }
+                else
+                {
+                    if (kind != "optimizer-selection" ||
+                        !step.TryGetProperty("candidate_history_indices", out var candidates) ||
+                        candidates.ValueKind != JsonValueKind.Array)
+                        return false;
+                    if (!TryReadIndices(candidates, out var candidateIndices))
+                        return false;
+                    if (!candidateIndices.Contains(revealedIndex) ||
+                        candidateIndices.Distinct().Count() != candidateIndices.Length ||
+                        candidateIndices.Any(index => index < 0 || index >= historyCount ||
+                            previouslyRevealed.Contains(index)))
+                        return false;
+                }
+                previouslyRevealed.Add(revealedIndex);
             }
+
+            var selected = selectedRows[traceIndex++];
+            if (selected.ValueKind != JsonValueKind.Array)
+                return false;
+            if (!TryReadIndices(selected, out var selectedIndices) ||
+                !selectedIndices.SequenceEqual(previouslyRevealed))
+                return false;
         }
+        return true;
+    }
+
+    private static bool TryReadIndices(JsonElement value, out int[] indices)
+    {
+        var result = new List<int>();
+        foreach (var item in value.EnumerateArray())
+        {
+            if (item.ValueKind != JsonValueKind.Number || !item.TryGetInt32(out var index))
+            {
+                indices = [];
+                return false;
+            }
+            result.Add(index);
+        }
+        indices = result.ToArray();
         return true;
     }
 

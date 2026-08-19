@@ -118,6 +118,7 @@ public static class ServiceCollectionExtensions
         // 工艺研发项目是实验、假设、工艺窗口与知识沉淀的产品主对象。
         services.AddSingleton<IProcessResearchStore, PostgresProcessResearchStore>();
         services.AddSingleton<ResearchExperimentValidationService>();
+        services.AddSingleton<ResearchValidationPreregistrationService>();
         services.AddSingleton<ProcessResearchWorkflow>();
         services.AddSingleton<IResearchObservationAssembler, ResearchObservationAssembler>();
         services.AddSingleton<ResearchOperatingRegionMaterializer>();

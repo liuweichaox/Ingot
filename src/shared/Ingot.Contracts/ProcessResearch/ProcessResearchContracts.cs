@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Ingot.Contracts.Analytics;
 using Ingot.Contracts.ResearchAssets;
 
 namespace Ingot.Contracts.ProcessResearch;
@@ -341,6 +342,82 @@ public sealed record ResearchProject
     public int Revision { get; init; }
 }
 
+public static class ResearchValidationPreregistrationStatuses
+{
+    public const string Frozen = "frozen";
+    public const string Reviewed = "reviewed";
+}
+
+public sealed record ResearchWorkflowBaselineStep
+{
+    public int Sequence { get; init; }
+    public required string Name { get; init; }
+    public double Minutes { get; init; }
+}
+
+/// <summary>
+///     在使用 Ingot 前观察到的工程师原流程。它是验证基线，不是员工绩效记录。
+/// </summary>
+public sealed record ResearchWorkflowBaseline
+{
+    public required string Name { get; init; }
+    public DateTimeOffset StartedAt { get; init; }
+    public DateTimeOffset CompletedAt { get; init; }
+    public IReadOnlyList<ResearchWorkflowBaselineStep> Steps { get; init; } = [];
+    public string? Notes { get; init; }
+    public double TotalMinutes => (CompletedAt - StartedAt).TotalMinutes;
+}
+
+public sealed record ResearchValidationPreregistrationRequest
+{
+    public required string DataScope { get; init; }
+    public DateTimeOffset DataFrom { get; init; }
+    public DateTimeOffset DataTo { get; init; }
+    public string? EdgeId { get; init; }
+    public string? EquipmentId { get; init; }
+    public int MaximumRuns { get; init; } = 2000;
+    public required string InclusionMethod { get; init; }
+    public IReadOnlyList<string> InclusionRules { get; init; } = [];
+    public IReadOnlyList<string> ExclusionRules { get; init; } = [];
+    public IReadOnlyList<string> MatchingRules { get; init; } = [];
+    public IReadOnlyList<string> BaselineMethods { get; init; } = [];
+    public IReadOnlyList<string> PrimaryMetrics { get; init; } = [];
+    public IReadOnlyList<string> GuardrailMetrics { get; init; } = [];
+    public IReadOnlyList<string> StopConditions { get; init; } = [];
+    public IReadOnlyList<string> FalsificationConditions { get; init; } = [];
+    public IReadOnlyList<ResearchWorkflowBaseline> EngineerWorkflowBaselines { get; init; } = [];
+}
+
+/// <summary>
+///     阶段 0 的不可变预注册证据。项目内容变化会使旧版本不再具备准入效力。
+/// </summary>
+public sealed record ResearchValidationPreregistration
+{
+    public Guid PreregistrationId { get; init; }
+    public Guid ProjectId { get; init; }
+    public int Version { get; init; }
+    public int ProjectRevision { get; init; }
+    public string Status { get; init; } = ResearchValidationPreregistrationStatuses.Frozen;
+    public required ResearchValidationPreregistrationRequest Plan { get; init; }
+    public DataReliabilityBaseline ReliabilityBaseline { get; init; } = new();
+    public required string ProjectSnapshotHash { get; init; }
+    public required string ContentHash { get; init; }
+    public string FrozenBy { get; init; } = "";
+    public DateTimeOffset FrozenAt { get; init; }
+    public string? ReviewedBy { get; init; }
+    public DateTimeOffset? ReviewedAt { get; init; }
+}
+
+public sealed record ResearchStageZeroAdmission
+{
+    public bool Eligible { get; init; }
+    public Guid? PreregistrationId { get; init; }
+    public int? PreregistrationVersion { get; init; }
+    public string? ContentHash { get; init; }
+    public IReadOnlyList<string> Failures { get; init; } = [];
+    public IReadOnlyList<string> Warnings { get; init; } = [];
+}
+
 public sealed record ResearchExperimentSafetyTemplate
 {
     public required string ExecutionCategory { get; init; }
@@ -573,6 +650,17 @@ public sealed record ResearchShadowDecisionRequest
     public IReadOnlyList<string> SiteLimitations { get; init; } = [];
     public IReadOnlyDictionary<string, string> ContextSnapshot { get; init; } =
         new Dictionary<string, string>();
+    public string? UsefulnessRating { get; init; }
+}
+
+public static class ResearchUsefulnessRatings
+{
+    public const string Useful = "useful";
+    public const string PartlyUseful = "partly-useful";
+    public const string NotUseful = "not-useful";
+
+    public static bool IsValid(string? value)
+        => value is Useful or PartlyUseful or NotUseful;
 }
 
 public sealed record ResearchShadowOutcome
@@ -639,6 +727,7 @@ public sealed record ResearchShadowRecommendation
     public IReadOnlyDictionary<string, string> ContextSnapshot { get; init; } =
         new Dictionary<string, string>();
     public required string DecisionSnapshotHash { get; init; }
+    public string? UsefulnessRating { get; init; }
     public string DecidedBy { get; init; } = "";
     public DateTimeOffset DecidedAt { get; init; }
     public ResearchShadowOutcome? Outcome { get; init; }
@@ -689,6 +778,10 @@ public sealed record ResearchShadowCampaignReport
     public IReadOnlyList<ResearchShadowCalibrationMetric> Calibration { get; init; } = [];
     public IReadOnlyList<ResearchShadowSafetyEvent> SafetyEvents { get; init; } = [];
     public IReadOnlyList<string> RejectionReasons { get; init; } = [];
+    public int UsefulCount { get; init; }
+    public int PartlyUsefulCount { get; init; }
+    public int NotUsefulCount { get; init; }
+    public int UnratedUsefulnessCount { get; init; }
     public IReadOnlyList<ResearchShadowStopSignal> StopSignals { get; init; } = [];
     public bool StopRecommended { get; init; }
     public required string ReportHash { get; init; }
@@ -1106,6 +1199,8 @@ public sealed record ResearchProjectWorkspace
     public IReadOnlyList<ResearchKnowledgeClaim> KnowledgeClaims { get; init; } = [];
     public IReadOnlyList<MechanismClaimUsage> MechanismKnowledgeUsages { get; init; } = [];
     public IReadOnlyList<ResearchTransferAssessment> TransferAssessments { get; init; } = [];
+    public IReadOnlyList<ResearchValidationPreregistration> ValidationPreregistrations { get; init; } = [];
+    public ResearchStageZeroAdmission? StageZeroAdmission { get; init; }
     public IReadOnlyList<ResearchAuditEntry> Audit { get; init; } = [];
 }
 

@@ -14,6 +14,23 @@ public interface IProcessResearchStore
         CancellationToken ct = default);
     Task<ResearchProject> SaveProjectAsync(ResearchProject value, CancellationToken ct = default);
 
+    Task<ResearchValidationPreregistration?> GetValidationPreregistrationAsync(
+        Guid preregistrationId,
+        CancellationToken ct = default)
+        => Task.FromResult<ResearchValidationPreregistration?>(null);
+    Task<IReadOnlyList<ResearchValidationPreregistration>> ListValidationPreregistrationsAsync(
+        Guid projectId,
+        CancellationToken ct = default)
+        => Task.FromResult<IReadOnlyList<ResearchValidationPreregistration>>([]);
+    Task<ResearchValidationPreregistration> CreateValidationPreregistrationAsync(
+        ResearchValidationPreregistration value,
+        CancellationToken ct = default)
+        => throw new NotSupportedException("当前存储未实现阶段 0 预注册。");
+    Task<ResearchValidationPreregistration> ReviewValidationPreregistrationAsync(
+        ResearchValidationPreregistration value,
+        CancellationToken ct = default)
+        => throw new NotSupportedException("当前存储未实现阶段 0 预注册复核。");
+
     Task<ResearchHypothesis?> GetHypothesisAsync(Guid hypothesisId, CancellationToken ct = default);
     Task<IReadOnlyList<ResearchHypothesis>> ListHypothesesAsync(
         Guid projectId,

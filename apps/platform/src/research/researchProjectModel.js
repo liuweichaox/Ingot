@@ -73,6 +73,7 @@ export const taskTitles = {
   claim: "沉淀工艺知识",
   "rollback-drill": "记录停止与回退演练",
   transfer: "评估工艺知识迁移",
+  preregistration: "冻结阶段 0 预注册",
 };
 
 export const shadowDecisionLabels = {
@@ -111,6 +112,12 @@ export function nextProjectAction(status) {
 
 export function createTaskForm(task, workspace) {
   const variable = workspace?.project?.variables?.find(item => item.role === "control");
+  const now = new Date();
+  const prior = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+  const workflowEnd = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  const workflowStart = new Date(workflowEnd.getTime() - 60 * 60 * 1000);
+  const localDateTime = value => new Date(value.getTime() - value.getTimezoneOffset() * 60000)
+    .toISOString().slice(0, 16);
   return {
     member: "",
     statement: "",
@@ -161,5 +168,25 @@ export function createTaskForm(task, workspace) {
     transferResultId: workspace?.experimentResults?.[0]?.resultId || "",
     coldStartResultId: workspace?.experimentResults?.[1]?.resultId || "",
     transferNotes: "",
+    preregDataScope: "同产品、同设备范围内已完成且可唯一关联实际参数、过程轨迹和检验的真实运行",
+    preregDataFrom: localDateTime(prior),
+    preregDataTo: localDateTime(now),
+    preregEdgeId: workspace?.project?.context?.edge_id || "",
+    preregEquipmentId: workspace?.project?.context?.equipment_id || "",
+    preregMaximumRuns: "2000",
+    preregInclusionMethod: "按运行身份关联实际参数、过程数据、上下文和有效检验结果后纳入",
+    preregInclusionRules: "运行开始与完成边界完整\n实际参数来自设备回读\n运行与检验唯一关联",
+    preregExclusionRules: "运行身份冲突\n关键过程数据缺失\n检验无效或无法唯一关联",
+    preregMatchingRules: "同产品比较\n按设备、材料批次和工装分层\n保留上下文重叠与混杂结论",
+    preregBaselineMethods: "工程师当前流程\n历史工程师顺序\n适用的传统 DOE 或响应面\n随机或空间填充基线",
+    preregPrimaryMetrics: "从异常到首个可执行假设的时间\n达到并重复确认规格的有效实验数",
+    preregGuardrailMetrics: "运行—检验唯一关联率\n预测区间覆盖率\n已知安全边界违规数为零",
+    preregStopConditions: "数据链无法稳定关联\n预测长期失准\n发生已知安全边界违规",
+    preregFalsificationConditions: "Ingot 未缩短形成可执行假设的时间\n序贯建议不优于适用简单基线",
+    preregWorkflowName: "工程师当前找数、分析和形成假设流程",
+    preregWorkflowStart: localDateTime(workflowStart),
+    preregWorkflowEnd: localDateTime(workflowEnd),
+    preregWorkflowSteps: "查找并导出运行记录|20\n关联质量与上下文|20\n建立比较并形成假设|20",
+    preregWorkflowNotes: "",
   };
 }

@@ -30,6 +30,8 @@ Optical-lens molding may be the first scenario, but it does not prove applicabil
 
 ## Phase 0: preregistration and data baseline
 
+Platform stores phase 0 as an immutable, project-scoped preregistration version. Each version binds the current project-definition hash, freezes a data-reliability baseline for the declared time, Edge, and equipment scope, records the time and steps of the engineer's existing workflow, and can only be reviewed by a different project member. A project-definition change invalidates the old admission evidence. A new project cannot move from draft into active research without a current reviewed preregistration. A scope with no analyzable runs produces an explicit warning rather than inventing a universal percentage threshold.
+
 Before seeing results, record:
 
 - data and time range and project-inclusion method;
@@ -91,6 +93,8 @@ When history covers only a narrow region, results evaluate candidate-pool rankin
 Phases 1 and 2 together test whether the historical evidence apparatus is trustworthy, reproducible, and leakage-free. They do not by themselves prove that recommendations improve a real process. The replay artifact freezes at least the data scope, per-round visible information, inclusion and exclusion, baselines, policy and model versions, random seeds, sequential outputs, failures, review records, and content hashes.
 
 ## Phase 3: shadow recommendations on a new project
+
+Platform audits the preceding sequential replay traces fail-closed: the trace count must match the seed count, each step's visible set must exactly equal the previously revealed set, candidate indices must be valid and unused, and the trace must match the final selected sequence. Empty, incomplete, duplicate, out-of-range, or self-inconsistent traces cannot pass the gate.
 
 Generate recommendations without changing the engineer's original experiment order. Before the outcome, freeze:
 

@@ -1,7 +1,9 @@
+using Ingot.Contracts.Analytics;
 using Ingot.Contracts.ProcessConfiguration;
 using Ingot.Contracts.ProcessResearch;
 using Ingot.Contracts.ResearchAssets;
 using Ingot.Platform.Api.Controllers;
+using Ingot.Platform.Infrastructure.Analytics;
 using Ingot.Platform.Infrastructure.ProcessConfiguration;
 using Ingot.Platform.Infrastructure.ProcessResearch;
 using System.Text.Json;
@@ -77,11 +79,55 @@ public sealed class ProcessResearchWorkflowTests
     }
 
     [Fact]
+    public async Task ProjectActivation_RequiresCurrentIndependentlyReviewedStageZeroPreregistration()
+    {
+        var store = new MemoryStore();
+        var workflow = new ProcessResearchWorkflow(store);
+        var project = await workflow.CreateProjectAsync(ProjectDraft(), "engineer-a");
+
+        var missing = await Assert.ThrowsAsync<ProcessResearchRuleException>(() =>
+            workflow.ChangeProjectStatusAsync(
+                project.ProjectId, ResearchProjectStatuses.Active, "engineer-a"));
+        Assert.Contains("阶段 0", missing.Message, StringComparison.Ordinal);
+
+        var service = new ResearchValidationPreregistrationService(
+            store,
+            new StubReliabilityBaselineService());
+        var frozen = await service.FreezeAsync(
+            project.ProjectId, ValidPreregistrationRequest(), "engineer-a");
+        Assert.Equal(64, frozen.ContentHash.Length);
+        Assert.Equal(45, frozen.Plan.EngineerWorkflowBaselines.Single().TotalMinutes);
+        Assert.Equal(12, frozen.ReliabilityBaseline.AnalyzedRunCount);
+        Assert.Equal(0.75, frozen.ReliabilityBaseline.Rates.Single().Rate);
+        await Assert.ThrowsAsync<ProcessResearchRuleException>(() =>
+            service.ReviewAsync(frozen.PreregistrationId, "engineer-a"));
+        var reviewed = await service.ReviewAsync(frozen.PreregistrationId, "engineer-b");
+        Assert.Equal(ResearchValidationPreregistrationStatuses.Reviewed, reviewed.Status);
+        Assert.True((await service.AssessAsync(project.ProjectId)).Eligible);
+
+        var replacement = await service.FreezeAsync(
+            project.ProjectId,
+            ValidPreregistrationRequest() with { DataScope = "收窄到同设备、同材料批次" },
+            "engineer-a");
+        var awaitingCurrentReview = await service.AssessAsync(project.ProjectId);
+        Assert.False(awaitingCurrentReview.Eligible);
+        Assert.Contains("v2", Assert.Single(awaitingCurrentReview.Failures), StringComparison.Ordinal);
+        await service.ReviewAsync(replacement.PreregistrationId, "engineer-b");
+        Assert.True((await service.AssessAsync(project.ProjectId)).Eligible);
+
+        var active = await workflow.ChangeProjectStatusAsync(
+            project.ProjectId, ResearchProjectStatuses.Active, "engineer-a");
+        Assert.Equal(ResearchProjectStatuses.Active, active.Status);
+        Assert.True((await service.AssessAsync(project.ProjectId)).Eligible);
+    }
+
+    [Fact]
     public async Task ActivatingProject_ShouldFreezePublishedScenarioContextPolicy()
     {
         var scenario = ResearchContextAdmissionEvaluatorTests.OpticalScenario();
+        var store = new MemoryStore();
         var workflow = new ProcessResearchWorkflow(
-            new MemoryStore(),
+            store,
             processConfigurations: new ScenarioOnlyConfigurationStore(scenario));
         var draft = await workflow.CreateProjectAsync(
             ProjectDraft() with
@@ -95,6 +141,7 @@ public sealed class ProcessResearchWorkflowTests
             },
             "engineer-a");
         Assert.False(draft.Context.ContainsKey(ResearchContextAdmissionEvaluator.PolicyHashContextKey));
+        await FreezeAndReviewStageZeroAsync(store, draft);
 
         var active = await workflow.ChangeProjectStatusAsync(
             draft.ProjectId,
@@ -122,8 +169,9 @@ public sealed class ProcessResearchWorkflowTests
         {
             Status = ConfigurationStatuses.Draft
         };
+        var store = new MemoryStore();
         var workflow = new ProcessResearchWorkflow(
-            new MemoryStore(),
+            store,
             processConfigurations: new ScenarioOnlyConfigurationStore(scenario));
         var project = await workflow.CreateProjectAsync(
             ProjectDraft() with
@@ -135,6 +183,7 @@ public sealed class ProcessResearchWorkflowTests
                 }
             },
             "engineer-a");
+        await FreezeAndReviewStageZeroAsync(store, project);
 
         var error = await Assert.ThrowsAsync<ProcessResearchRuleException>(() =>
             workflow.ChangeProjectStatusAsync(
@@ -150,6 +199,7 @@ public sealed class ProcessResearchWorkflowTests
         var store = new MemoryStore();
         var workflow = new ProcessResearchWorkflow(store);
         var project = await workflow.CreateProjectAsync(ProjectDraft(), "engineer-a");
+        await FreezeAndReviewStageZeroAsync(store, project);
         project = await workflow.ChangeProjectStatusAsync(
             project.ProjectId,
             ResearchProjectStatuses.Active,
@@ -379,6 +429,7 @@ public sealed class ProcessResearchWorkflowTests
         var store = new MemoryStore();
         var workflow = new ProcessResearchWorkflow(store);
         var project = await workflow.CreateProjectAsync(ProjectDraft(), "engineer-a");
+        await FreezeAndReviewStageZeroAsync(store, project);
         await workflow.ChangeProjectStatusAsync(
             project.ProjectId,
             ResearchProjectStatuses.Active,
@@ -423,6 +474,7 @@ public sealed class ProcessResearchWorkflowTests
         var store = new MemoryStore();
         var workflow = new ProcessResearchWorkflow(store);
         var project = await workflow.CreateProjectAsync(ProjectDraft(), "engineer-a");
+        await FreezeAndReviewStageZeroAsync(store, project);
         await workflow.ChangeProjectStatusAsync(
             project.ProjectId,
             ResearchProjectStatuses.Active,
@@ -998,6 +1050,7 @@ public sealed class ProcessResearchWorkflowTests
         Assert.All(candidate.Variables, static variable =>
             Assert.Equal(variable.LowerBound, variable.UpperBound));
 
+        await FreezeAndReviewStageZeroAsync(store, project);
         await workflow.ChangeProjectStatusAsync(
             project.ProjectId,
             ResearchProjectStatuses.Active,
@@ -1261,6 +1314,7 @@ public sealed class ProcessResearchWorkflowTests
         var store = new MemoryStore();
         var workflow = new ProcessResearchWorkflow(store);
         var project = await workflow.CreateProjectAsync(ProjectDraft(), "engineer-a");
+        await FreezeAndReviewStageZeroAsync(store, project);
         await workflow.ChangeProjectStatusAsync(
             project.ProjectId, ResearchProjectStatuses.Active, "engineer-a");
         var experiment = await CreateOptimizationExperimentAsync(workflow, project.ProjectId);
@@ -1328,6 +1382,7 @@ public sealed class ProcessResearchWorkflowTests
                         { VariableCode = "press-force", Value = 12, Unit = "kN" }
                 ],
                 RejectionReason = "当前材料批次要求降低升温幅度。",
+                UsefulnessRating = ResearchUsefulnessRatings.PartlyUseful,
                 SiteLimitations = ["材料批次升温速率限制"],
                 ContextSnapshot = new Dictionary<string, string>
                 {
@@ -1354,6 +1409,8 @@ public sealed class ProcessResearchWorkflowTests
         var report = await service.BuildReportAsync(project.ProjectId);
         Assert.Equal(1, report.TotalRecommendations);
         Assert.Equal(1, report.ModifiedCount);
+        Assert.Equal(1, report.PartlyUsefulCount);
+        Assert.Equal(0, report.UnratedUsefulnessCount);
         Assert.Equal(1, report.CompletedOutcomeCount);
         Assert.Equal(1, report.ContextShiftCount);
         Assert.Equal(1, report.SettingDeviationCount);
@@ -1373,6 +1430,7 @@ public sealed class ProcessResearchWorkflowTests
         var store = new MemoryStore();
         var workflow = new ProcessResearchWorkflow(store);
         var project = await workflow.CreateProjectAsync(ProjectDraft(), "engineer-a");
+        await FreezeAndReviewStageZeroAsync(store, project);
         await workflow.ChangeProjectStatusAsync(
             project.ProjectId, ResearchProjectStatuses.Active, "engineer-a");
         var experiment = await CreateOptimizationExperimentAsync(workflow, project.ProjectId);
@@ -1434,6 +1492,7 @@ public sealed class ProcessResearchWorkflowTests
             ]
         };
         var project = await workflow.CreateProjectAsync(draft, "engineer-a");
+        await FreezeAndReviewStageZeroAsync(store, project);
         await workflow.ChangeProjectStatusAsync(
             project.ProjectId, ResearchProjectStatuses.Active, "engineer-a");
         var experiment = await CreateOptimizationExperimentAsync(workflow, project.ProjectId);
@@ -1476,6 +1535,7 @@ public sealed class ProcessResearchWorkflowTests
         var workflow = new ProcessResearchWorkflow(store);
         var project = await workflow.CreateProjectAsync(
             ProjectDraft() with { Code = "historical-replay-proof" }, "engineer-a");
+        await FreezeAndReviewStageZeroAsync(store, project);
         await workflow.ChangeProjectStatusAsync(
             project.ProjectId, ResearchProjectStatuses.Active, "engineer-a");
         var observations = Enumerable.Range(0, 5).Select(index =>
@@ -1550,6 +1610,71 @@ public sealed class ProcessResearchWorkflowTests
             (await service.ReviewAsync(report.ReportId, "engineer-c")).ReviewedAt);
     }
 
+    [Theory]
+    [InlineData("empty-traces")]
+    [InlineData("current-row-visible")]
+    [InlineData("selected-trace-mismatch")]
+    public async Task HistoricalReplay_FailsGateForAdversarialOrIncompleteTrace(string mutation)
+    {
+        var store = new MemoryStore();
+        var workflow = new ProcessResearchWorkflow(store);
+        var project = await workflow.CreateProjectAsync(
+            ProjectDraft() with { Code = $"replay-adversarial-{mutation}" }, "engineer-a");
+        await FreezeAndReviewStageZeroAsync(store, project);
+        await workflow.ChangeProjectStatusAsync(
+            project.ProjectId, ResearchProjectStatuses.Active, "engineer-a");
+        await store.SaveExperimentResultAsync(new ResearchExperimentResult
+        {
+            ResultId = Guid.CreateVersion7(),
+            ProjectId = project.ProjectId,
+            ExperimentId = Guid.CreateVersion7(),
+            DatasetSnapshotId = mutation,
+            RunObservations = Enumerable.Range(0, 5).Select(index => new ExperimentRunObservation
+            {
+                ExecutionKey = $"adversarial-{index}",
+                ActualFactors =
+                [
+                    new ExperimentFactorSetting
+                        { VariableCode = "holding-temperature", Value = 500 + index, Unit = "Cel" },
+                    new ExperimentFactorSetting
+                        { VariableCode = "press-force", Value = 8 + index, Unit = "kN" }
+                ],
+                ProcessFeatures = new Dictionary<string, double> { ["temperature.average"] = 500 + index },
+                Outcomes = new Dictionary<string, double> { ["form-error"] = 0.8 - index * 0.1 },
+                SourceContentHash = new string((char)('a' + index), 64)
+            }).ToArray()
+        });
+        var optimizer = new StubReplayOptimizerClient
+        {
+            TransformJson = json => mutation switch
+            {
+                "empty-traces" => json.Replace(
+                    "\"step_traces\": [",
+                    "\"step_traces\": [], \"discarded_step_traces\": [",
+                    StringComparison.Ordinal),
+                "current-row-visible" => json.Replace(
+                    "\"visible_observation_indices_before\":[],\"revealed_history_index\":0",
+                    "\"visible_observation_indices_before\":[0],\"revealed_history_index\":0",
+                    StringComparison.Ordinal),
+                "selected-trace-mismatch" => json.Replace(
+                    "\"selected_history_indices\": [[0,1,2,3],[0,1,2,3]]",
+                    "\"selected_history_indices\": [[0,1,2,4],[0,1,2,3]]",
+                    StringComparison.Ordinal),
+                _ => json
+            }
+        };
+
+        var report = await new ResearchHistoricalReplayService(store, optimizer).RunAsync(
+            project.ProjectId,
+            new ResearchHistoricalReplayRequest
+                { SeedCount = 2, Budget = 5, InitialObservationCount = 3 },
+            "engineer-a");
+
+        Assert.False(report.GatePassed);
+        Assert.Contains(report.GateFailures, value =>
+            value.Contains("未来信息泄漏", StringComparison.Ordinal));
+    }
+
     [Fact]
     public async Task ControlledOnline_FailsClosedWithoutReviewedReplayAndShadowCalibration()
     {
@@ -1557,6 +1682,7 @@ public sealed class ProcessResearchWorkflowTests
         var workflow = new ProcessResearchWorkflow(store);
         var project = await workflow.CreateProjectAsync(
             ProjectDraft() with { Code = "controlled-gate-blocked" }, "engineer-a");
+        await FreezeAndReviewStageZeroAsync(store, project);
         await workflow.ChangeProjectStatusAsync(
             project.ProjectId, ResearchProjectStatuses.Active, "engineer-a");
         var shadow = new ResearchShadowRecommendationService(
@@ -1581,6 +1707,7 @@ public sealed class ProcessResearchWorkflowTests
         var workflow = new ProcessResearchWorkflow(store);
         var project = await workflow.CreateProjectAsync(
             ProjectDraft() with { Code = "rollback-drill-proof" }, "engineer-a");
+        await FreezeAndReviewStageZeroAsync(store, project);
         await workflow.ChangeProjectStatusAsync(
             project.ProjectId, ResearchProjectStatuses.Active, "engineer-a");
         var service = new ResearchRollbackDrillService(store);
@@ -1618,6 +1745,7 @@ public sealed class ProcessResearchWorkflowTests
         var bootstrapWorkflow = new ProcessResearchWorkflow(store);
         var project = await bootstrapWorkflow.CreateProjectAsync(
             ProjectDraft() with { Code = "controlled-online-proof" }, "engineer-a");
+        await FreezeAndReviewStageZeroAsync(store, project);
         await bootstrapWorkflow.ChangeProjectStatusAsync(
             project.ProjectId, ResearchProjectStatuses.Active, "engineer-a");
         await SeedOnlineAdmissionEvidenceAsync(store, project);
@@ -1701,6 +1829,7 @@ public sealed class ProcessResearchWorkflowTests
         var workflow = new ProcessResearchWorkflow(store);
         var project = await workflow.CreateProjectAsync(
             ProjectDraft() with { Code = "online-shift-stop" }, "engineer-a");
+        await FreezeAndReviewStageZeroAsync(store, project);
         await workflow.ChangeProjectStatusAsync(
             project.ProjectId, ResearchProjectStatuses.Active, "engineer-a");
         await SeedOnlineAdmissionEvidenceAsync(store, project);
@@ -2120,6 +2249,55 @@ public sealed class ProcessResearchWorkflowTests
             }
         };
 
+    private static async Task FreezeAndReviewStageZeroAsync(
+        MemoryStore store,
+        ResearchProject project,
+        string frozenBy = "engineer-a")
+    {
+        var service = new ResearchValidationPreregistrationService(store);
+        var frozen = await service.FreezeAsync(
+            project.ProjectId,
+            ValidPreregistrationRequest(),
+            frozenBy);
+        await service.ReviewAsync(frozen.PreregistrationId, "stage-zero-reviewer");
+    }
+
+    private static ResearchValidationPreregistrationRequest ValidPreregistrationRequest()
+    {
+        var completedAt = DateTimeOffset.UtcNow.AddDays(-1);
+        return new ResearchValidationPreregistrationRequest
+        {
+            DataScope = "同产品、同设备的已完成真实运行",
+            DataFrom = completedAt.AddDays(-30),
+            DataTo = completedAt,
+            InclusionMethod = "按运行身份、实际参数、过程轨迹和检验唯一关联纳入",
+            InclusionRules = ["运行边界完整", "实际参数与检验唯一关联"],
+            ExclusionRules = ["运行身份冲突", "关键过程数据缺失"],
+            MatchingRules = ["同产品并按设备和材料批次分层"],
+            BaselineMethods = ["工程师当前流程", "历史工程师顺序"],
+            PrimaryMetrics = ["从异常到首个可执行假设的时间"],
+            GuardrailMetrics = ["运行—检验唯一关联率", "安全边界违规数"],
+            StopConditions = ["数据链无法稳定关联"],
+            FalsificationConditions = ["系统流程不快于工程师当前流程"],
+            EngineerWorkflowBaselines =
+            [
+                new ResearchWorkflowBaseline
+                {
+                    Name = "工程师当前找数与分析流程",
+                    StartedAt = completedAt.AddMinutes(-45),
+                    CompletedAt = completedAt,
+                    Steps =
+                    [
+                        new ResearchWorkflowBaselineStep
+                            { Sequence = 1, Name = "查找运行和检验记录", Minutes = 25 },
+                        new ResearchWorkflowBaselineStep
+                            { Sequence = 2, Name = "建立比较并形成假设", Minutes = 20 }
+                    ]
+                }
+            ]
+        };
+    }
+
     private sealed class StubOptimizerClient : IProcessOptimizerClient
     {
         public Task<OptimizerSuggestionResponse> SuggestAsync(
@@ -2229,6 +2407,7 @@ public sealed class ProcessResearchWorkflowTests
     private sealed class StubReplayOptimizerClient : IProcessOptimizerClient
     {
         public OptimizerHistoricalReplayCall? LastCall { get; private set; }
+        public Func<string, string>? TransformJson { get; init; }
 
         public Task<OptimizerSuggestionResponse> SuggestAsync(
             OptimizerSuggestionCall request,
@@ -2256,13 +2435,13 @@ public sealed class ProcessResearchWorkflowTests
                       {"step":1,"kind":"preregistered-initial-observation","visible_observation_indices_before":[],"revealed_history_index":0},
                       {"step":2,"kind":"preregistered-initial-observation","visible_observation_indices_before":[0],"revealed_history_index":1},
                       {"step":3,"kind":"preregistered-initial-observation","visible_observation_indices_before":[0,1],"revealed_history_index":2},
-                      {"step":4,"kind":"optimizer-selection","visible_observation_indices_before":[0,1,2],"revealed_history_index":3}
+                      {"step":4,"kind":"optimizer-selection","visible_observation_indices_before":[0,1,2],"candidate_history_indices":[3,4],"revealed_history_index":3}
                     ],
                     [
                       {"step":1,"kind":"preregistered-initial-observation","visible_observation_indices_before":[],"revealed_history_index":0},
                       {"step":2,"kind":"preregistered-initial-observation","visible_observation_indices_before":[0],"revealed_history_index":1},
                       {"step":3,"kind":"preregistered-initial-observation","visible_observation_indices_before":[0,1],"revealed_history_index":2},
-                      {"step":4,"kind":"optimizer-selection","visible_observation_indices_before":[0,1,2],"revealed_history_index":3}
+                      {"step":4,"kind":"optimizer-selection","visible_observation_indices_before":[0,1,2],"candidate_history_indices":[3,4],"revealed_history_index":3}
                     ]
                   ],
                   "calibration": [
@@ -2278,7 +2457,9 @@ public sealed class ProcessResearchWorkflowTests
                   "state_persisted": false
                 }
                 """);
-            return Task.FromResult(document.RootElement.Clone());
+            var json = document.RootElement.GetRawText();
+            using var transformed = JsonDocument.Parse(TransformJson?.Invoke(json) ?? json);
+            return Task.FromResult(transformed.RootElement.Clone());
         }
     }
 
@@ -2336,6 +2517,7 @@ public sealed class ProcessResearchWorkflowTests
     private sealed class MemoryStore : IProcessResearchStore
     {
         private readonly Dictionary<Guid, ResearchProject> _projects = [];
+        private readonly Dictionary<Guid, ResearchValidationPreregistration> _preregistrations = [];
         private readonly Dictionary<Guid, ResearchHypothesis> _hypotheses = [];
         private readonly Dictionary<Guid, ResearchExperiment> _experiments = [];
         private readonly Dictionary<Guid, ResearchShadowRecommendation> _shadowRecommendations = [];
@@ -2374,6 +2556,36 @@ public sealed class ProcessResearchWorkflowTests
             CancellationToken ct = default)
         {
             _projects[value.ProjectId] = value;
+            return Task.FromResult(value);
+        }
+
+        public Task<ResearchValidationPreregistration?> GetValidationPreregistrationAsync(
+            Guid preregistrationId,
+            CancellationToken ct = default)
+            => Task.FromResult(_preregistrations.GetValueOrDefault(preregistrationId));
+
+        public Task<IReadOnlyList<ResearchValidationPreregistration>> ListValidationPreregistrationsAsync(
+            Guid projectId,
+            CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<ResearchValidationPreregistration>>(
+                _preregistrations.Values.Where(value => value.ProjectId == projectId).ToArray());
+
+        public Task<ResearchValidationPreregistration> CreateValidationPreregistrationAsync(
+            ResearchValidationPreregistration value,
+            CancellationToken ct = default)
+        {
+            _preregistrations.Add(value.PreregistrationId, value);
+            return Task.FromResult(value);
+        }
+
+        public Task<ResearchValidationPreregistration> ReviewValidationPreregistrationAsync(
+            ResearchValidationPreregistration value,
+            CancellationToken ct = default)
+        {
+            if (!_preregistrations.TryGetValue(value.PreregistrationId, out var current) ||
+                current.Status != ResearchValidationPreregistrationStatuses.Frozen)
+                throw new ProcessResearchRuleException("阶段 0 预注册不存在或已经复核。");
+            _preregistrations[value.PreregistrationId] = value;
             return Task.FromResult(value);
         }
 
@@ -2624,5 +2836,34 @@ public sealed class ProcessResearchWorkflowTests
             CancellationToken ct = default)
             => Task.FromResult<IReadOnlyList<ResearchAuditEntry>>(
                 _audit.Where(value => value.ProjectId == projectId).ToArray());
+    }
+
+    private sealed class StubReliabilityBaselineService : IDataReliabilityBaselineService
+    {
+        public Task<DataReliabilityBaseline> CalculateAsync(
+            DataReliabilityBaselineQuery query,
+            CancellationToken ct = default)
+            => Task.FromResult(new DataReliabilityBaseline
+            {
+                GeneratedAt = DateTimeOffset.UtcNow,
+                From = query.From,
+                To = query.To,
+                EdgeId = query.EdgeId,
+                EquipmentId = query.EquipmentId,
+                MatchingCompletedRunCount = 12,
+                AnalyzedRunCount = 12,
+                Rates =
+                [
+                    new ReliabilityRate
+                    {
+                        Code = "analysis_admission",
+                        Name = "正式分析准入率",
+                        Numerator = 9,
+                        Denominator = 12,
+                        Rate = 0.75,
+                        Definition = "测试快照"
+                    }
+                ]
+            });
     }
 }

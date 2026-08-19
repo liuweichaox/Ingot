@@ -107,6 +107,10 @@ public sealed partial class ProcessResearchWorkflow
         if (targetStatus == ResearchProjectStatuses.Active &&
             (project.Objectives.Count == 0 || project.Variables.Count == 0))
             throw new ProcessResearchRuleException("研发项目进入执行阶段前必须定义目标和变量。");
+        if (project.Status == ResearchProjectStatuses.Draft &&
+            targetStatus == ResearchProjectStatuses.Active)
+            await new ResearchValidationPreregistrationService(store)
+                .RequireAsync(projectId, ct).ConfigureAwait(false);
         var projectContext = targetStatus == ResearchProjectStatuses.Active
             ? await FreezeContextPolicyAsync(project, ct).ConfigureAwait(false)
             : project.Context;
@@ -152,6 +156,9 @@ public sealed partial class ProcessResearchWorkflow
         var mechanismUsagesTask = mechanismKnowledgeStore?.ListUsagesAsync(projectId, ct)
             ?? Task.FromResult<IReadOnlyList<Ingot.Contracts.ResearchAssets.MechanismClaimUsage>>([]);
         var transfersTask = store.ListTransferAssessmentsAsync(projectId, ct);
+        var preregistrationsTask = store.ListValidationPreregistrationsAsync(projectId, ct);
+        var stageZeroAdmissionTask = new ResearchValidationPreregistrationService(store)
+            .AssessAsync(projectId, ct);
         var auditTask = store.ListAuditEntriesAsync(projectId, ct);
         await Task.WhenAll(
             hypothesesTask,
@@ -164,6 +171,8 @@ public sealed partial class ProcessResearchWorkflow
             claimsTask,
             mechanismUsagesTask,
             transfersTask,
+            preregistrationsTask,
+            stageZeroAdmissionTask,
             auditTask).ConfigureAwait(false);
         return new ResearchProjectWorkspace
         {
@@ -178,6 +187,8 @@ public sealed partial class ProcessResearchWorkflow
             KnowledgeClaims = await claimsTask.ConfigureAwait(false),
             MechanismKnowledgeUsages = await mechanismUsagesTask.ConfigureAwait(false),
             TransferAssessments = await transfersTask.ConfigureAwait(false),
+            ValidationPreregistrations = await preregistrationsTask.ConfigureAwait(false),
+            StageZeroAdmission = await stageZeroAdmissionTask.ConfigureAwait(false),
             Audit = await auditTask.ConfigureAwait(false)
         };
     }

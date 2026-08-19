@@ -301,6 +301,18 @@ test("research projects expose the evidence-backed experiment and operating-regi
   assert.doesNotMatch(researchProjects, /项目代码|指标代码|变量代码|AnalysisHash|GUID/);
 });
 
+test("research projects enforce reviewed phase-zero preregistration and separate usefulness from adoption", () => {
+  assert.match(researchProjects, /stageZeroAdmission/);
+  assert.match(researchProjects, /validation-preregistrations/);
+  assert.match(researchProjects, /阶段 0：预注册与数据基线/);
+  assert.match(researchProjects, /工程师当前流程基线/);
+  assert.match(researchProjects, /reliabilityBaseline/);
+  assert.match(researchProjects, /正式分析准入率/);
+  assert.match(researchProjects, /parseWorkflowSteps/);
+  assert.match(researchProjects, /usefulnessRating/);
+  assert.match(researchProjects, /部分有用/);
+});
+
 test("research project membership uses authenticated immutable user identities", () => {
   assert.match(app, /<AppRoutes identity=\{identity\} canConfigure=\{canConfigure\} \/>/);
   assert.match(app, /function AppRoutes\(\{ identity, canConfigure \}\)/);

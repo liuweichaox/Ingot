@@ -124,6 +124,77 @@ public sealed class PostgresProcessResearchStore : IProcessResearchStore
         }
     }
 
+    public Task<ResearchValidationPreregistration?> GetValidationPreregistrationAsync(
+        Guid preregistrationId,
+        CancellationToken ct = default)
+        => GetOneAsync<ResearchValidationPreregistration>(
+            "SELECT payload FROM research_validation_preregistrations WHERE preregistration_id = $1",
+            preregistrationId,
+            ct);
+
+    public Task<IReadOnlyList<ResearchValidationPreregistration>> ListValidationPreregistrationsAsync(
+        Guid projectId,
+        CancellationToken ct = default)
+        => ListAsync<ResearchValidationPreregistration>(
+            """
+            SELECT payload
+            FROM research_validation_preregistrations
+            WHERE project_id = $1
+            ORDER BY version DESC, preregistration_id
+            """,
+            projectId,
+            ct);
+
+    public async Task<ResearchValidationPreregistration> CreateValidationPreregistrationAsync(
+        ResearchValidationPreregistration value,
+        CancellationToken ct = default)
+    {
+        await using var command = _dataSource.CreateCommand(
+            """
+            INSERT INTO research_validation_preregistrations
+              (preregistration_id, project_id, version, project_revision, status,
+               project_snapshot_hash, content_hash, payload, frozen_at, reviewed_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NULL)
+            """);
+        command.Parameters.AddWithValue(value.PreregistrationId);
+        command.Parameters.AddWithValue(value.ProjectId);
+        command.Parameters.AddWithValue(value.Version);
+        command.Parameters.AddWithValue(value.ProjectRevision);
+        command.Parameters.AddWithValue(value.Status);
+        command.Parameters.AddWithValue(value.ProjectSnapshotHash);
+        command.Parameters.AddWithValue(value.ContentHash);
+        AddJson(command, value);
+        command.Parameters.AddWithValue(value.FrozenAt);
+        try
+        {
+            await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+            return value;
+        }
+        catch (PostgresException exception) when (exception.SqlState == PostgresErrorCodes.UniqueViolation)
+        {
+            throw new ProcessResearchRuleException("该阶段 0 预注册版本或内容已经存在。");
+        }
+    }
+
+    public async Task<ResearchValidationPreregistration> ReviewValidationPreregistrationAsync(
+        ResearchValidationPreregistration value,
+        CancellationToken ct = default)
+    {
+        await using var command = _dataSource.CreateCommand(
+            """
+            UPDATE research_validation_preregistrations
+            SET status = $2, payload = $3, reviewed_at = $4
+            WHERE preregistration_id = $1 AND status = 'frozen'
+            """);
+        command.Parameters.AddWithValue(value.PreregistrationId);
+        command.Parameters.AddWithValue(value.Status);
+        AddJson(command, value);
+        command.Parameters.AddWithValue(value.ReviewedAt!.Value);
+        if (await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false) != 1)
+            throw new ProcessResearchRuleException("阶段 0 预注册不存在或已经复核，不能覆盖。");
+        return value;
+    }
+
     public Task<ResearchHypothesis?> GetHypothesisAsync(
         Guid hypothesisId,
         CancellationToken ct = default)

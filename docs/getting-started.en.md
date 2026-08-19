@@ -83,6 +83,8 @@ A process configuration versions the process's data and analysis rules together:
 
 Publish a process-configuration version before assigning it to an R&D project. Once execution starts, freeze the configuration and context policy so historical observations remain interpretable. The UI consistently uses “process configuration”; the API and code contracts retain the technical name `ScenarioPackage`.
 
+After creating an R&D project, complete “Phase 0: preregistration and data baseline” in the project workspace. Freeze the data scope, inclusion and exclusion, comparison baselines, primary and guardrail measures, stop and falsification conditions, and the actual time and steps of the engineer's current workflow. The system calculates and freezes a data-reliability snapshot for the same scope. A different project member must review the preregistration before “Start research” becomes available.
+
 ## 4. Connect data sources
 
 Open Process definition → Configuration overview and follow the dependency order shown there: data standards, field integration, decision rules, tooling structure, and the process-configuration package. Complete equipment integration under Data and connectivity → Equipment integration:

@@ -56,6 +56,10 @@ public sealed class ResearchShadowRecommendationService(
         var reason = Optional(request.RejectionReason, 2000);
         if (decision != ResearchShadowDecisionStatuses.Accepted && reason is null)
             throw new ProcessResearchRuleException("修改或拒绝模型建议时必须说明原因。");
+        var usefulnessRating = Optional(request.UsefulnessRating, 40)?.ToLowerInvariant();
+        if (usefulnessRating is not null && !ResearchUsefulnessRatings.IsValid(usefulnessRating))
+            throw new ProcessResearchRuleException(
+                "工程师有用性评分必须是 useful、partly-useful 或 not-useful。");
 
         ValidateHardBoundaries(project, run.Factors, "模型建议");
         ValidateHardBoundaries(project, selected, "工程师选择");
@@ -90,7 +94,8 @@ public sealed class ResearchShadowRecommendationService(
             reason,
             limitations,
             Context = context.OrderBy(static value => value.Key),
-            applicability
+            applicability,
+            usefulnessRating
         });
         var recommendation = new ResearchShadowRecommendation
         {
@@ -111,6 +116,7 @@ public sealed class ResearchShadowRecommendationService(
             SiteLimitations = limitations,
             ContextSnapshot = context,
             DecisionSnapshotHash = snapshotHash,
+            UsefulnessRating = usefulnessRating,
             DecidedBy = Required(userId, "工程师", 240),
             DecidedAt = now
         };
@@ -253,6 +259,13 @@ public sealed class ResearchShadowRecommendationService(
             .Select(static value => value.RejectionReason!)
             .Concat(records.SelectMany(static value => value.SiteLimitations))
             .ToArray();
+        var usefulCount = records.Count(static value =>
+            value.UsefulnessRating == ResearchUsefulnessRatings.Useful);
+        var partlyUsefulCount = records.Count(static value =>
+            value.UsefulnessRating == ResearchUsefulnessRatings.PartlyUseful);
+        var notUsefulCount = records.Count(static value =>
+            value.UsefulnessRating == ResearchUsefulnessRatings.NotUseful);
+        var unratedUsefulnessCount = records.Count - usefulCount - partlyUsefulCount - notUsefulCount;
         var reportBody = new
         {
             ProjectId = projectId,
@@ -270,6 +283,10 @@ public sealed class ResearchShadowRecommendationService(
             calibration,
             safetyEvents,
             reasons,
+            usefulCount,
+            partlyUsefulCount,
+            notUsefulCount,
+            unratedUsefulnessCount,
             StopSignals = signals
         };
         return new ResearchShadowCampaignReport
@@ -290,6 +307,10 @@ public sealed class ResearchShadowRecommendationService(
             Calibration = calibration,
             SafetyEvents = safetyEvents,
             RejectionReasons = reasons,
+            UsefulCount = usefulCount,
+            PartlyUsefulCount = partlyUsefulCount,
+            NotUsefulCount = notUsefulCount,
+            UnratedUsefulnessCount = unratedUsefulnessCount,
             StopSignals = signals,
             StopRecommended = signals.Any(static value => value.Severity == "stop"),
             ReportHash = Hash(reportBody),
