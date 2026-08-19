@@ -81,6 +81,14 @@ check "platform-infrastructure" src/platform/Ingot.Platform.Infrastructure \
   'using Ingot\.Platform\.Api' \
   "Platform Infrastructure 必须独立于 API 宿主"
 
+check "inspection-infrastructure" src/platform/Ingot.Platform.Inspections.Infrastructure \
+  'using Ingot\.Platform\.(Api|Infrastructure)' \
+  "检验基础设施模块必须独立于 Platform 宿主和基础设施单体"
+
+check "inspection-module-ownership" src/platform/Ingot.Platform.Infrastructure/Inspections \
+  'using Npgsql|\b(PostgresInspection|InspectionAttachmentOptions|InspectionStoreInitializerHostedService)\b' \
+  "检验 PostgreSQL 适配器与初始化器必须归属独立检验基础设施模块"
+
 check "inspection-api-ports" src/platform/Ingot.Platform.Api/Controllers \
   'using Ingot\.Platform\.Infrastructure\.Inspections' \
   "检验 API 只能依赖 Application 端口，不能依赖检验基础设施命名空间"
@@ -193,6 +201,10 @@ project_check src/shared/Ingot.Agent.Contracts/Ingot.Agent.Contracts.csproj \
 project_check src/platform/Ingot.Platform.Application/Ingot.Platform.Application.csproj \
   'Ingot\.Platform\.Infrastructure|Npgsql|Microsoft\.Data\.Sqlite|Serilog|Prometheus' \
   "Platform Application 必须独立于基础设施实现"
+
+project_check src/platform/Ingot.Platform.Inspections.Infrastructure/Ingot.Platform.Inspections.Infrastructure.csproj \
+  'Ingot\.Platform\.(Api|Infrastructure)|Ingot\.Agent|ClosedXML|PdfPig|MatFileHandler|Prometheus' \
+  "检验基础设施模块只能依赖其 Application 端口、公共契约与 PostgreSQL 驱动"
 
 project_check src/platform/Ingot.Platform.Api/Ingot.Platform.Api.csproj \
   'Npgsql|Microsoft\.Data\.Sqlite' \

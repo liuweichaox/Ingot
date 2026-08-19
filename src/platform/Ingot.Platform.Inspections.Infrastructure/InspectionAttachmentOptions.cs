@@ -1,4 +1,4 @@
-namespace Ingot.Platform.Infrastructure.Inspections;
+namespace Ingot.Platform.Inspections.Infrastructure;
 
 public sealed class InspectionAttachmentOptions
 {

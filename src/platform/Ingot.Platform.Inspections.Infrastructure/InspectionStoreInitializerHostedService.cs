@@ -1,4 +1,4 @@
-namespace Ingot.Platform.Infrastructure.Inspections;
+namespace Ingot.Platform.Inspections.Infrastructure;
 
 public sealed class InspectionStoreInitializerHostedService(
     IInspectionRecordStore records,
@@ -15,4 +15,3 @@ public sealed class InspectionStoreInitializerHostedService(
 
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 }
-

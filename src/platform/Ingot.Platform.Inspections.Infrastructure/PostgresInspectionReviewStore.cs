@@ -3,7 +3,7 @@ using System.Text.Json;
 using Ingot.Contracts.Inspections;
 using Npgsql;
 
-namespace Ingot.Platform.Infrastructure.Inspections;
+namespace Ingot.Platform.Inspections.Infrastructure;
 
 public sealed class PostgresInspectionReviewStore : IInspectionReviewStore
 {

@@ -1,6 +1,7 @@
 using Ingot.Agent;
 using Ingot.Platform.Application.Inspections;
 using Ingot.Platform.Application.ProcessResearch;
+using Ingot.Platform.Inspections.Infrastructure;
 using Ingot.Platform.Infrastructure.ProcessExecutions;
 using Ingot.Platform.Infrastructure.Events;
 using Ingot.Platform.Infrastructure.AgentTools;

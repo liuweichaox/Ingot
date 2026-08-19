@@ -36,6 +36,7 @@
     <ProjectReference Include="..\..\src\shared\Ingot.Contracts\Ingot.Contracts.csproj" />
     <ProjectReference Include="..\..\src\edge\Ingot.Edge.Infrastructure\Ingot.Edge.Infrastructure.csproj" />
     <ProjectReference Include="..\..\src\platform\Ingot.Platform.Application\Ingot.Platform.Application.csproj" />
+    <ProjectReference Include="..\..\src\platform\Ingot.Platform.Inspections.Infrastructure\Ingot.Platform.Inspections.Infrastructure.csproj" />
     <ProjectReference Include="..\..\src\platform\Ingot.Platform.Infrastructure\Ingot.Platform.Infrastructure.csproj" />
     <ProjectReference Include="..\..\src\edge\Ingot.Edge.ConnectorHost\Ingot.Edge.ConnectorHost.csproj" />
     <ProjectReference Include="..\..\src\platform\Ingot.Platform.Api\Ingot.Platform.Api.csproj" />
