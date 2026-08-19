@@ -58,8 +58,23 @@ public sealed class EventBatchValidatorTests
         Assert.Contains("EventTypeVersion", error, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void TryValidate_ShouldRejectMissingOrMalformedSiteId()
+    {
+        var request = CreateRequest(CreateEvent(1));
+
+        Assert.False(EventBatchValidator.TryValidate(
+            request with { SiteId = " " }, out _, out var missingError));
+        Assert.Contains("SiteId", missingError, StringComparison.Ordinal);
+
+        Assert.False(EventBatchValidator.TryValidate(
+            request with { SiteId = "factory/site" }, out _, out var malformedError));
+        Assert.Contains("SiteId", malformedError, StringComparison.Ordinal);
+    }
+
     private static EventBatchRequest CreateRequest(params ProductionEvent[] events) => new()
     {
+        SiteId = "SITE-001",
         EdgeId = "EDGE-001",
         Events = events
     };

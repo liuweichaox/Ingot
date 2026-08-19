@@ -2,6 +2,8 @@
 
 > 文档状态：**当前运维指南**。部署目标是让数据采集、业务记录和工程决策在厂内长期可靠运行；公开官网和文档站不属于工厂运行时。
 
+本文描述仓库当前可运行形态。多副本、PITR、站点生产单元和受控行动的目标要求见[生产架构](production-architecture.md)；未通过其中准入门槛的部署不得宣称已经达到对应生产等级。
+
 ## 推荐拓扑
 
 ```text
@@ -22,7 +24,7 @@ Platform API 负责请求和业务事务，Platform Worker 负责知识提取、
 
 ### Edge 划分原则
 
-每个 Edge ConnectorHost 拥有独立 `EdgeId`、进程或容器、数据卷、配置缓存和生命周期。
+每个 Edge ConnectorHost 拥有明确的 `SiteId` 归属，以及独立 `EdgeId`、进程或容器、数据卷、配置缓存和生命周期。`SiteId` 是生产单元边界；Platform 会把 Edge token、`EdgeId` 与 `SiteId` 绑定，持有正确 token 的 Edge 也不能向另一个站点写入数据。
 
 - 同一 OT 网络和允许共同中断的设备可以共用一个 Edge；
 - 跨 VLAN、安全区或物理隔离网络分别部署 Edge；
@@ -43,6 +45,7 @@ cp .env.example .env
 至少修改：
 
 - `INGOT_POSTGRES_PASSWORD`
+- `INGOT_SITE_ID`：当前部署所属生产单元；投产后不得随意修改
 - `INGOT_EDGE_ID`：安装后保持不变，每台 Edge 唯一
 - `INGOT_EDGE_TOKEN`
 - `INGOT_CONNECTOR_TOKEN`

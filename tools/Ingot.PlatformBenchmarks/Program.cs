@@ -28,6 +28,7 @@ for (var first = 1; first <= settings.Events; first += settings.BatchSize)
     var last = Math.Min(settings.Events, first + settings.BatchSize - 1);
     var batch = new EventBatchRequest
     {
+        SiteId = settings.SiteId,
         EdgeId = settings.EdgeId,
         Events = Enumerable.Range(first, last - first + 1)
             .Select(index => CreateEvent(settings, index))
@@ -52,6 +53,7 @@ for (var first = 1; first <= settings.Events; first += settings.BatchSize)
 stopwatch.Stop();
 var eventsPerSecond = settings.Events / stopwatch.Elapsed.TotalSeconds;
 Console.WriteLine($"Platform: {settings.PlatformUrl}");
+Console.WriteLine($"Site: {settings.SiteId}");
 Console.WriteLine($"Edge: {settings.EdgeId}");
 Console.WriteLine($"Started UTC: {startedAt:O}");
 Console.WriteLine($"Shape: {settings.EventShape}");
@@ -213,6 +215,7 @@ internal static class EventShapes
 internal sealed record Settings
 {
     public string PlatformUrl { get; init; } = "http://127.0.0.1:18080";
+    public string SiteId { get; init; } = "SITE-BENCHMARK";
     public string EdgeId { get; init; } = $"BENCH-{Guid.NewGuid():N}";
     public string Token { get; init; } = "benchmark-token";
     public int Events { get; init; } = 10_000;
@@ -237,6 +240,7 @@ internal sealed record Settings
                     PlatformUrl = ReadValue(args, ref index, "--platform-url")
                 },
                 "--edge-id" => settings with { EdgeId = ReadValue(args, ref index, "--edge-id") },
+                "--site-id" => settings with { SiteId = ReadValue(args, ref index, "--site-id") },
                 "--token" => settings with { Token = ReadValue(args, ref index, "--token") },
                 "--events" => settings with
                 {

@@ -13,6 +13,7 @@ public sealed class DataObjectsController(
 {
     [HttpGet]
     public async Task<IActionResult> Query(
+        [FromQuery] string? siteId,
         [FromQuery] string? subjectType,
         [FromQuery] string? subjectId,
         [FromQuery] DateTimeOffset? from,
@@ -35,6 +36,7 @@ public sealed class DataObjectsController(
 
         return Ok(await events.QueryDataObjectsAsync(new DataObjectQuery
         {
+            SiteId = Normalize(siteId),
             SubjectType = Normalize(subjectType)?.ToLowerInvariant(),
             SubjectId = Normalize(subjectId),
             From = from?.ToUniversalTime(),

@@ -2,6 +2,8 @@
 
 > Status: **current operations guide**. Deployment keeps acquisition, business records, and engineering decisions reliable inside the factory. The public website and documentation site are outside the factory runtime.
 
+This document describes the repository's current runnable form. See [Production architecture](production-architecture.en.md) for target requirements covering replicas, PITR, site production cells, and controlled action. A deployment that has not passed those admission gates must not claim the corresponding production level.
+
 ## Recommended topology
 
 ```text
@@ -22,7 +24,7 @@ The bundled Compose file is a single-API reference topology, not an HA claim. Ag
 
 ### Edge partitioning
 
-Every Edge ConnectorHost has its own `EdgeId`, process or container, data volume, configuration cache, and lifecycle.
+Every Edge ConnectorHost has an explicit `SiteId` assignment plus its own `EdgeId`, process or container, data volume, configuration cache, and lifecycle. `SiteId` is the production-cell boundary. Platform binds the Edge token, `EdgeId`, and `SiteId`, so even an Edge holding the correct token cannot write into another site.
 
 - Equipment on the same OT network that may stop together can share one Edge.
 - Separate Edge instances serve different VLANs, security zones, or physically isolated networks.
@@ -43,6 +45,7 @@ cp .env.example .env
 Change at least:
 
 - `INGOT_POSTGRES_PASSWORD`
+- `INGOT_SITE_ID`: owning production cell; do not change casually after production admission
 - `INGOT_EDGE_ID`: stable after installation and unique per Edge
 - `INGOT_EDGE_TOKEN`
 - `INGOT_CONNECTOR_TOKEN`

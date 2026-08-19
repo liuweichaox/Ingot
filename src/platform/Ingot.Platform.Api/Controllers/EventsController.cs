@@ -28,6 +28,7 @@ public sealed class EventsController(
         if (!EventBatchValidator.TryValidate(request, out var normalized, out var error))
             return InvalidRequest(error);
         if (!tokenValidator.IsAuthorized(
+                normalized!.SiteId,
                 normalized!.EdgeId,
                 Request.Headers.Authorization.FirstOrDefault()))
         {
@@ -49,6 +50,7 @@ public sealed class EventsController(
 
     [HttpGet]
     public async Task<IActionResult> Query(
+        [FromQuery] string? siteId,
         [FromQuery] string? edgeId,
         [FromQuery(Name = "type")] string? eventType,
         [FromQuery] string? subjectType,
@@ -63,6 +65,7 @@ public sealed class EventsController(
         CancellationToken ct = default)
     {
         var query = BuildQuery(
+            siteId,
             edgeId,
             eventType,
             subjectType,
@@ -98,6 +101,7 @@ public sealed class EventsController(
 
     [HttpGet("stream")]
     public async Task Stream(
+        [FromQuery] string? siteId,
         [FromQuery] string? edgeId,
         [FromQuery(Name = "type")] string? eventType,
         [FromQuery] string? subjectType,
@@ -139,6 +143,7 @@ public sealed class EventsController(
         cursor = Math.Max(cursor ?? 0, afterIngestId ?? 0);
 
         var initialQuery = BuildQuery(
+            siteId,
             edgeId,
             eventType,
             subjectType,
@@ -170,7 +175,9 @@ public sealed class EventsController(
         while (!ct.IsCancellationRequested)
         {
             var events = await store.QueryAsync(
-                BuildQuery(edgeId, eventType, subjectType, subjectId, executionId, from, to, cursor, null, 100),
+                BuildQuery(
+                    siteId, edgeId, eventType, subjectType, subjectId, executionId,
+                    from, to, cursor, null, 100),
                 ct).ConfigureAwait(false);
             foreach (var item in events.OrderBy(static item => item.IngestId))
             {
@@ -192,7 +199,7 @@ public sealed class EventsController(
     public async Task<IActionResult> GetProcessExecution(string executionId, CancellationToken ct)
     {
         var correlated = await QueryAllAsync(
-            BuildQuery(null, null, null, null, executionId, null, null, null, null, 500),
+            BuildQuery(null, null, null, null, null, executionId, null, null, null, null, 500),
             ct).ConfigureAwait(false);
         var pair = correlated
             .OrderBy(static item => item.Event.OccurredAt)
@@ -213,6 +220,7 @@ public sealed class EventsController(
         var windowEnd = completedAt ?? pair.Max(static item => item.Event.OccurredAt);
         var sameSubjectWindow = await QueryAllAsync(
                 BuildQuery(
+                    first.SiteId,
                     first.EdgeId,
                     null,
                     first.Event.Subject.Type,
@@ -240,6 +248,7 @@ public sealed class EventsController(
         return Ok(new
         {
             executionId,
+            siteId = first.SiteId,
             edgeId = first.EdgeId,
             subject = first.Event.Subject,
             startedAt,
@@ -282,6 +291,7 @@ public sealed class EventsController(
     }
 
     private PlatformEventQuery BuildQuery(
+        string? siteId,
         string? edgeId,
         string? eventType,
         string? subjectType,
@@ -302,6 +312,7 @@ public sealed class EventsController(
                 StringComparer.Ordinal);
         return new PlatformEventQuery
         {
+            SiteId = siteId,
             EdgeId = edgeId,
             EventType = eventType,
             SubjectType = subjectType,

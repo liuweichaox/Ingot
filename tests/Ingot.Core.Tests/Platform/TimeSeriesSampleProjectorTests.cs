@@ -25,6 +25,7 @@ public sealed class TimeSeriesSampleProjectorTests
             });
 
         var samples = TimeSeriesSampleProjector.Project(
+            "SITE-01",
             "EDGE-01",
             42,
             DateTimeOffset.Parse("2026-07-24T12:00:02Z"),
@@ -37,7 +38,8 @@ public sealed class TimeSeriesSampleProjectorTests
         Assert.Equal("°C", temperature.Unit);
         Assert.Equal("20", temperature.PhaseCode);
         Assert.Equal(SignalQualityCodes.Uncertain, temperature.QualityCode);
-        Assert.Equal("edge-01/device/furnace-01/temperature", temperature.CollectionPointId);
+        Assert.Equal("site-01/edge-01/device/furnace-01/temperature", temperature.CollectionPointId);
+        Assert.Equal("SITE-01", temperature.SiteId);
         Assert.Equal(20, Assert.Single(samples, sample => sample.SignalCode == "process.stage_number").IntegerValue);
         Assert.True(Assert.Single(samples, sample => sample.SignalCode == "heater_enabled").BooleanValue);
         Assert.Equal("soak", Assert.Single(samples, sample => sample.SignalCode == "mode").TextValue);
@@ -55,6 +57,7 @@ public sealed class TimeSeriesSampleProjectorTests
         });
 
         var samples = TimeSeriesSampleProjector.Project(
+            "SITE-01",
             "EDGE-01",
             43,
             DateTimeOffset.Parse("2026-07-24T12:00:02Z"),
@@ -74,12 +77,14 @@ public sealed class TimeSeriesSampleProjectorTests
         };
 
         Assert.Empty(TimeSeriesSampleProjector.Project(
+            "SITE-01",
             "EDGE-01",
             44,
             DateTimeOffset.Parse("2026-07-24T12:00:02Z"),
             evt,
             CreateAnalysis()));
         Assert.Empty(TimeSeriesSampleProjector.Project(
+            "SITE-01",
             "EDGE-01",
             44,
             DateTimeOffset.Parse("2026-07-24T12:00:02Z"),

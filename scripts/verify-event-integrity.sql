@@ -3,9 +3,14 @@
 \else
   \set edge_id ''
 \endif
+\if :{?site_id}
+\else
+  \set site_id ''
+\endif
 
 \echo '=== Event identity invariants (all counts must match) ==='
 SELECT
+  site_id,
   edge_id,
   COUNT(*) AS rows,
   COUNT(DISTINCT event_id) AS distinct_event_ids,
@@ -13,20 +18,24 @@ SELECT
   MIN(seq) AS min_seq,
   MAX(seq) AS max_seq
 FROM production_events
-WHERE NULLIF(:'edge_id', '') IS NULL OR edge_id = :'edge_id'
-GROUP BY edge_id
-ORDER BY edge_id;
+WHERE (NULLIF(:'site_id', '') IS NULL OR site_id = :'site_id')
+  AND (NULLIF(:'edge_id', '') IS NULL OR edge_id = :'edge_id')
+GROUP BY site_id, edge_id
+ORDER BY site_id, edge_id;
 
 \echo '=== Sequence gaps (no rows means continuous delivery) ==='
 WITH ordered AS (
   SELECT
+    site_id,
     edge_id,
     seq,
-    LAG(seq) OVER (PARTITION BY edge_id ORDER BY seq) AS previous_seq
+    LAG(seq) OVER (PARTITION BY site_id, edge_id ORDER BY seq) AS previous_seq
   FROM production_events
-  WHERE NULLIF(:'edge_id', '') IS NULL OR edge_id = :'edge_id'
+  WHERE (NULLIF(:'site_id', '') IS NULL OR site_id = :'site_id')
+    AND (NULLIF(:'edge_id', '') IS NULL OR edge_id = :'edge_id')
 )
 SELECT
+  site_id,
   edge_id,
   previous_seq + 1 AS missing_from,
   seq - 1 AS missing_to,
@@ -34,16 +43,17 @@ SELECT
 FROM ordered
 WHERE previous_seq IS NOT NULL
   AND seq > previous_seq + 1
-ORDER BY edge_id, missing_from;
+ORDER BY site_id, edge_id, missing_from;
 
 \echo '=== Reserved ingest keys without facts (no rows expected) ==='
-SELECT keys.edge_id, keys.seq, keys.event_id
+SELECT keys.site_id, keys.edge_id, keys.seq, keys.event_id
 FROM event_ingest_keys AS keys
 LEFT JOIN production_events AS events
   ON events.event_id = keys.event_id
 WHERE events.event_id IS NULL
+  AND (NULLIF(:'site_id', '') IS NULL OR keys.site_id = :'site_id')
   AND (NULLIF(:'edge_id', '') IS NULL OR keys.edge_id = :'edge_id')
-ORDER BY keys.edge_id, keys.seq;
+ORDER BY keys.site_id, keys.edge_id, keys.seq;
 
 \echo '=== Hard integrity gate ==='
 WITH stats AS (
@@ -54,17 +64,20 @@ WITH stats AS (
     MIN(seq) AS min_seq,
     MAX(seq) AS max_seq
   FROM production_events
-  WHERE NULLIF(:'edge_id', '') IS NULL OR edge_id = :'edge_id'
+  WHERE (NULLIF(:'site_id', '') IS NULL OR site_id = :'site_id')
+    AND (NULLIF(:'edge_id', '') IS NULL OR edge_id = :'edge_id')
 ),
 gaps AS (
   SELECT COUNT(*) AS gap_count
   FROM (
     SELECT
+      site_id,
       edge_id,
       seq,
-      LAG(seq) OVER (PARTITION BY edge_id ORDER BY seq) AS previous_seq
+      LAG(seq) OVER (PARTITION BY site_id, edge_id ORDER BY seq) AS previous_seq
     FROM production_events
-    WHERE NULLIF(:'edge_id', '') IS NULL OR edge_id = :'edge_id'
+    WHERE (NULLIF(:'site_id', '') IS NULL OR site_id = :'site_id')
+      AND (NULLIF(:'edge_id', '') IS NULL OR edge_id = :'edge_id')
   ) AS ordered
   WHERE previous_seq IS NOT NULL
     AND seq <> previous_seq + 1
@@ -75,6 +88,7 @@ orphans AS (
   LEFT JOIN production_events AS events
     ON events.event_id = keys.event_id
   WHERE events.event_id IS NULL
+    AND (NULLIF(:'site_id', '') IS NULL OR keys.site_id = :'site_id')
     AND (NULLIF(:'edge_id', '') IS NULL OR keys.edge_id = :'edge_id')
 )
 SELECT

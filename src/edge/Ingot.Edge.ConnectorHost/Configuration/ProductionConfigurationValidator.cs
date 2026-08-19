@@ -11,6 +11,13 @@ public static class ProductionConfigurationValidator
         RequireOptionalSecret(configuration["ConnectorHost:LocalApiToken"], "ConnectorHost:LocalApiToken", errors);
 
         var platformReportingEnabled = configuration.GetValue<bool>("Edge:EnablePlatformReporting", true);
+        var eventShippingEnabled = configuration.GetValue<bool>("Edge:EnableEventShipping");
+        if ((platformReportingEnabled || eventShippingEnabled) &&
+            !IsStableId(configuration["Edge:SiteId"]))
+        {
+            errors.Add(
+                "Edge:SiteId is required and must contain 1-128 letters, digits, dots, underscores, or hyphens.");
+        }
         if (platformReportingEnabled)
         {
             if (string.IsNullOrWhiteSpace(configuration["Edge:EdgeId"]))
@@ -46,7 +53,7 @@ public static class ProductionConfigurationValidator
         if (startupHealthTimeoutMs is < 1000 or > 300000)
             errors.Add("Acquisition:StartupHealthTimeoutMs must be between 1000 and 300000 milliseconds.");
 
-        if (configuration.GetValue<bool>("Edge:EnableEventShipping"))
+        if (eventShippingEnabled)
             RequireSecret(configuration["Edge:EventIngestToken"], "Edge:EventIngestToken", errors);
 
         if (errors.Count > 0)
@@ -65,6 +72,14 @@ public static class ProductionConfigurationValidator
         value.Contains("change-this-", StringComparison.OrdinalIgnoreCase) ||
         value.Contains("verification-", StringComparison.OrdinalIgnoreCase) ||
         value.Contains("replace-with-", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsStableId(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value) || value.Length > 128 || !char.IsLetterOrDigit(value[0]))
+            return false;
+        return value.All(static character =>
+            char.IsLetterOrDigit(character) || character is '.' or '_' or '-');
+    }
 
     private static void RequireOptionalSecret(string? value, string key, ICollection<string> errors)
     {

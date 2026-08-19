@@ -7,6 +7,10 @@ public sealed class PlatformEventOptions
     public Dictionary<string, string> EdgeTokens { get; set; }
         = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>EdgeId 到 SiteId 的唯一生产归属；请求中的 SiteId 必须与该映射一致。</summary>
+    public Dictionary<string, string> EdgeSites { get; set; }
+        = new(StringComparer.OrdinalIgnoreCase);
+
     /// <summary>允许的 OccurredAt 未来时钟偏移（分钟）。超出则拒收，避免异常时间戳凭空创建远期月度分区。</summary>
     public int MaxFutureSkewMinutes { get; set; } = 60;
 

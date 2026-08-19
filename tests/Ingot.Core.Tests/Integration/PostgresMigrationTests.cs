@@ -91,6 +91,29 @@ public sealed class PostgresMigrationTests(PostgresIntegrationFixture postgres)
     }
 
     [LinuxDockerFact]
+    public async Task ProductionCellIdentity_ShouldBeRequiredAcrossCanonicalStores()
+    {
+        await postgres.EnsureSchemaAsync();
+
+        await using var connection = new NpgsqlConnection(postgres.ConnectionString);
+        await connection.OpenAsync();
+        await using var command = new NpgsqlCommand(
+            """
+            SELECT count(*) = 6
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name IN (
+                'collection_points', 'data_object_operation_keys', 'data_object_summaries',
+                'event_ingest_keys', 'process_sample_frames', 'production_events')
+              AND column_name = 'site_id'
+              AND is_nullable = 'NO';
+            """,
+            connection);
+
+        Assert.True((bool)(await command.ExecuteScalarAsync())!);
+    }
+
+    [LinuxDockerFact]
     public async Task TimeSeriesRetention_ShouldPruneFramesAndValuesTogether()
     {
         await postgres.EnsureSchemaAsync();
@@ -107,10 +130,10 @@ public sealed class PostgresMigrationTests(PostgresIntegrationFixture postgres)
                          """
                          INSERT INTO process_sample_frames (
                            occurred_at, frame_id, event_id, recorded_at, ingested_at,
-                           edge_id, source, subject_type, subject_id, data_model_id, data_model_version)
+                           site_id, edge_id, source, subject_type, subject_id, data_model_id, data_model_version)
                          VALUES (
                            @at, @frame_id, @event_id, @at, @at,
-                           'EDGE-RETENTION', 'test', 'equipment', 'PRESS-RETENTION', 'retention-model', 1);
+                           'SITE-RETENTION', 'EDGE-RETENTION', 'test', 'equipment', 'PRESS-RETENTION', 'retention-model', 1);
                          INSERT INTO process_sample_values (
                            occurred_at, frame_id, point_key, quality_code, numeric_value)
                          VALUES (@at, @frame_id, 1, 0, 1.0);

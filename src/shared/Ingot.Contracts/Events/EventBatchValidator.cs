@@ -14,8 +14,15 @@ public static partial class EventBatchValidator
         if (request is null)
             return Fail("请求不能为空。", out error);
 
+        var siteId = request.SiteId?.Trim();
+        if (string.IsNullOrWhiteSpace(siteId) || !StableIdPattern().IsMatch(siteId))
+        {
+            return Fail(
+                "SiteId 只能包含字母、数字、点、下划线和连字符，长度为 1 到 128。",
+                out error);
+        }
         var edgeId = request.EdgeId?.Trim();
-        if (string.IsNullOrWhiteSpace(edgeId) || !EdgeIdPattern().IsMatch(edgeId))
+        if (string.IsNullOrWhiteSpace(edgeId) || !StableIdPattern().IsMatch(edgeId))
         {
             return Fail(
                 "EdgeId 只能包含字母、数字、点、下划线和连字符，长度为 1 到 128。",
@@ -56,6 +63,7 @@ public static partial class EventBatchValidator
 
         normalized = request with
         {
+            SiteId = siteId,
             EdgeId = edgeId,
             Events = ordered
         };
@@ -72,5 +80,5 @@ public static partial class EventBatchValidator
     [GeneratedRegex(
         "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$",
         RegexOptions.CultureInvariant)]
-    private static partial Regex EdgeIdPattern();
+    private static partial Regex StableIdPattern();
 }

@@ -56,7 +56,9 @@ flowchart LR
     Web --> Platform
 ```
 
-Code-project boundaries are not deployment boundaries. Factory runtime units are Platform API, independent Edge ConnectorHost instances, the database, Optimizer, and Web. A small site may share a physical server, while Edge and Platform retain independent processes, storage, identity, and recovery lifeprocess executions.
+Code-project boundaries are not deployment boundaries. Factory runtime units are Platform API, independent Edge ConnectorHost instances, the database, Optimizer, and Web. A small site may share a physical server, while Edge and Platform retain independent processes, storage, identity, and recovery lifecycles.
+
+This document fixes stable business boundaries. [Production architecture](production-architecture.en.md) defines the target topology for replicas, failure domains, data lifecycle, disaster recovery, and controlled action; [Deployment](deployment.en.md) defines current operating procedures. The target design must not be presented as a capability already delivered by the current Compose topology.
 
 ## Stable component responsibilities
 

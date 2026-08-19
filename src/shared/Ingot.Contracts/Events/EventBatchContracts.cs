@@ -7,6 +7,9 @@ namespace Ingot.Contracts.Events;
 /// </summary>
 public sealed record EventBatchRequest
 {
+    /// <summary>生产单元身份。进入生产后由 Platform 配置的 Edge 归属进行校验。</summary>
+    public required string SiteId { get; init; }
+
     public required string EdgeId { get; init; }
 
     public IReadOnlyList<ProductionEvent> Events { get; init; } = [];
@@ -32,6 +35,8 @@ public sealed record EventBatchResponse
 public sealed record PlatformProductionEvent
 {
     public required long IngestId { get; init; }
+
+    public required string SiteId { get; init; }
 
     public required string EdgeId { get; init; }
 

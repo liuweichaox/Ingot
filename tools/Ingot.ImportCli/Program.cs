@@ -9,10 +9,11 @@ using Ingot.ImportCli;
 // 体检（数据质量报告）由此获得"不依赖实时采集"的一等数据入口。
 // 用法：
 //   ingot-import --file history.csv --mapping mapping.json --url http://localhost:8000 \
-//                --token $INGOT_EDGE_TOKEN [--seq-start 1] [--source-tag historical-data]
+//                --site-id SITE-001 --token $INGOT_EDGE_TOKEN \
+//                [--seq-start 1] [--source-tag historical-data]
 //                [--dry-run] [--show-values] [--batch 500]
 // 说明：
-//   - seq 单调递增即可、允许间隙；平台按 eventId 与 (edgeId, seq) 去重，失败后用相同
+//   - seq 单调递增即可、允许间隙；平台按 eventId 与 (siteId, edgeId, seq) 去重，失败后用相同
 //     --seq-start 重跑是安全的（重复行会被识别为 duplicates）。
 //   - --seq-start 缺省取启动时刻的 unix 毫秒 ×1000，保证多次导入不同文件时仍单调。
 //   - 映射文件格式见 sample-mapping.json 与 README。
@@ -67,7 +68,7 @@ try
         events.Add(evt);
         if (events.Count >= arguments.BatchSize)
         {
-            var (accepted, dup) = await ShipAsync(http, mapping.EdgeId, events);
+            var (accepted, dup) = await ShipAsync(http, arguments.SiteId, mapping.EdgeId, events);
             shipped += accepted; duplicates += dup;
             Console.WriteLine($"已提交 {rows} 行：accepted={shipped}, duplicates={duplicates}");
             events.Clear();
@@ -81,7 +82,12 @@ try
         {
             Console.Error.WriteLine("[dry-run] 警告：以下预览包含源数据值，只能在受控终端中使用。");
             Console.WriteLine(JsonSerializer.Serialize(
-                new EventBatchRequest { EdgeId = mapping.EdgeId, Events = previewEvents },
+                new EventBatchRequest
+                {
+                    SiteId = arguments.SiteId,
+                    EdgeId = mapping.EdgeId,
+                    Events = previewEvents
+                },
                 new JsonSerializerOptions(JsonSerializerDefaults.Web) { WriteIndented = true }));
         }
         else
@@ -94,7 +100,7 @@ try
 
     if (events.Count > 0)
     {
-        var (accepted, dup) = await ShipAsync(http, mapping.EdgeId, events);
+        var (accepted, dup) = await ShipAsync(http, arguments.SiteId, mapping.EdgeId, events);
         shipped += accepted; duplicates += dup;
     }
 
@@ -110,10 +116,11 @@ catch (Exception ex)
 
 static async Task<(int Accepted, int Duplicates)> ShipAsync(
     HttpClient http,
+    string siteId,
     string edgeId,
     IReadOnlyList<ProductionEvent> events)
 {
-    var request = new EventBatchRequest { EdgeId = edgeId, Events = events };
+    var request = new EventBatchRequest { SiteId = siteId, EdgeId = edgeId, Events = events };
     using var response = await http.PostAsJsonAsync(
         "api/v1/events:batch", request, new JsonSerializerOptions(JsonSerializerDefaults.Web));
     var body = await response.Content.ReadAsStringAsync();
@@ -128,7 +135,7 @@ static async Task<(int Accepted, int Duplicates)> ShipAsync(
 
 static CliArguments? ParseArgs(string[] args)
 {
-    string? file = null, mapping = null, url = null, token = null;
+    string? file = null, mapping = null, siteId = null, url = null, token = null;
     var sourceTag = "historical-data";
     long? seqStart = null;
     var dryRun = false;
@@ -140,6 +147,7 @@ static CliArguments? ParseArgs(string[] args)
         {
             case "--file": file = Next(args, ref i); break;
             case "--mapping": mapping = Next(args, ref i); break;
+            case "--site-id": siteId = Next(args, ref i); break;
             case "--url": url = Next(args, ref i); break;
             case "--token": token = Next(args, ref i); break;
             case "--seq-start": seqStart = long.Parse(Next(args, ref i) ?? "0"); break;
@@ -154,7 +162,8 @@ static CliArguments? ParseArgs(string[] args)
                 return null;
         }
     }
-    if (file is null || mapping is null || (!dryRun && (url is null || token is null)))
+    if (file is null || mapping is null || siteId is null ||
+        (!dryRun && (url is null || token is null)))
     {
         PrintUsage();
         return null;
@@ -162,6 +171,12 @@ static CliArguments? ParseArgs(string[] args)
     if (showValues && !dryRun)
     {
         Console.Error.WriteLine("--show-values 只能与 --dry-run 一起使用。");
+        return null;
+    }
+    if (siteId.Length is < 1 or > 128 || !char.IsLetterOrDigit(siteId[0]) ||
+        siteId.Any(static value => !char.IsLetterOrDigit(value) && value is not '-' and not '_' and not '.'))
+    {
+        Console.Error.WriteLine("--site-id 只能包含 1-128 个字母、数字、点、短横线或下划线。");
         return null;
     }
     if (sourceTag.Length is < 1 or > 64 ||
@@ -173,6 +188,7 @@ static CliArguments? ParseArgs(string[] args)
     return new CliArguments(
         file,
         mapping,
+        siteId,
         url,
         token,
         seqStart ?? DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() * 1000,
@@ -186,13 +202,14 @@ static CliArguments? ParseArgs(string[] args)
     static void PrintUsage()
         => Console.Error.WriteLine(
             "用法: ingot-import --file <csv> --mapping <json> [--dry-run] [--show-values] " +
-            "[--url <platform-url> --token <edge-token>] [--seq-start <n>] " +
+            "--site-id <site-id> [--url <platform-url> --token <edge-token>] [--seq-start <n>] " +
             "[--source-tag <opaque-tag>] [--batch <1-500>]");
 }
 
 internal sealed record CliArguments(
     string FilePath,
     string MappingPath,
+    string SiteId,
     string? Url,
     string? Token,
     long SeqStart,

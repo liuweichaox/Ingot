@@ -65,6 +65,7 @@ public sealed class ChatDataAccessTests
                 .Select(static ingestId => new PlatformProductionEvent
                 {
                     IngestId = ingestId,
+                    SiteId = "SITE-001",
                     EdgeId = "EDGE-001",
                     IngestedAt = DateTimeOffset.UnixEpoch,
                     Event = null!

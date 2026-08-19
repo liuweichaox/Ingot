@@ -16,12 +16,17 @@ public sealed class EdgeTokenValidatorTests
             EdgeTokens = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
                 ["EDGE-001"] = "secret-001"
+            },
+            EdgeSites = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["EDGE-001"] = "SITE-001"
             }
         }));
 
-        Assert.True(validator.IsAuthorized("edge-001", "Bearer secret-001"));
-        Assert.False(validator.IsAuthorized("EDGE-001", "Bearer wrong"));
-        Assert.False(validator.IsAuthorized("EDGE-002", "Bearer secret-001"));
-        Assert.False(validator.IsAuthorized("EDGE-001", null));
+        Assert.True(validator.IsAuthorized("site-001", "edge-001", "Bearer secret-001"));
+        Assert.False(validator.IsAuthorized("SITE-002", "EDGE-001", "Bearer secret-001"));
+        Assert.False(validator.IsAuthorized("SITE-001", "EDGE-001", "Bearer wrong"));
+        Assert.False(validator.IsAuthorized("SITE-001", "EDGE-002", "Bearer secret-001"));
+        Assert.False(validator.IsAuthorized("SITE-001", "EDGE-001", null));
     }
 }

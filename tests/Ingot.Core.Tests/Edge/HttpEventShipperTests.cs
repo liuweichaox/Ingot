@@ -31,6 +31,7 @@ public sealed class HttpEventShipperTests
         var factory = new SingleClientFactory(new HttpClient(handler));
         var reportingOptions = Options.Create(new EdgeReportingOptions
         {
+            SiteId = "SITE-001",
             EdgeId = "EDGE-001",
             PlatformApiBaseUrl = "http://platform/",
             EnableEventShipping = true,
@@ -55,6 +56,7 @@ public sealed class HttpEventShipperTests
         Assert.Equal(2, eventLog.AckSeq);
         Assert.Equal("Bearer secret", handler.Authorization);
         Assert.NotNull(handler.Request);
+        Assert.Equal("SITE-001", handler.Request!.SiteId);
         Assert.Equal("EDGE-001", handler.Request!.EdgeId);
         Assert.Equal([1L, 2L], handler.Request.Events.Select(static evt => evt.Seq));
     }
@@ -68,6 +70,7 @@ public sealed class HttpEventShipperTests
         var handler = new RecoveringHandler();
         var options = Options.Create(new EdgeReportingOptions
         {
+            SiteId = "SITE-001",
             EdgeId = "EDGE-001",
             PlatformApiBaseUrl = "http://platform/",
             EnableEventShipping = true,
@@ -109,6 +112,7 @@ public sealed class HttpEventShipperTests
         var handler = new PoisonHandler();
         var options = Options.Create(new EdgeReportingOptions
         {
+            SiteId = "SITE-001",
             EdgeId = "EDGE-001",
             PlatformApiBaseUrl = "http://platform/",
             EnableEventShipping = true,

@@ -164,6 +164,7 @@ public sealed class AnalysisToolTests
         => new()
         {
             IngestId = ingestId,
+            SiteId = "SITE-001",
             EdgeId = "EDGE-001",
             IngestedAt = occurredAt.AddSeconds(1),
             Event = new ProductionEvent

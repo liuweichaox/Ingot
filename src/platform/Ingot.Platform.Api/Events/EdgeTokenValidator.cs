@@ -9,6 +9,14 @@ public sealed class EdgeTokenValidator(IOptions<PlatformEventOptions> options)
 {
     private readonly PlatformEventOptions _options = options.Value;
 
+    public bool IsAuthorized(string siteId, string edgeId, string? authorization)
+    {
+        return (!_options.RequireToken ||
+                (_options.EdgeSites.TryGetValue(edgeId, out var expectedSiteId) &&
+                 string.Equals(expectedSiteId?.Trim(), siteId, StringComparison.OrdinalIgnoreCase))) &&
+               IsAuthorized(edgeId, authorization);
+    }
+
     public bool IsAuthorized(string edgeId, string? authorization)
     {
         if (!_options.RequireToken)

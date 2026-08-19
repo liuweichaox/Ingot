@@ -25,6 +25,7 @@ public sealed class ProductionConfigurationValidatorTests
             ["ConnectionStrings:Events"] = "Host=postgres;Database=ingot",
             ["EventIngest:RequireToken"] = "true",
             ["EventIngest:EdgeTokens:EDGE-001"] = "edge-token-with-at-least-24-characters",
+            ["EventIngest:EdgeSites:EDGE-001"] = "SITE-001",
             ["Authentication:Authority"] = "https://identity.example.com",
             ["Authentication:Audience"] = "ingot-platform",
             ["InspectionAttachments:ArchiveRootPath"] = "/archive/inspection-attachments",
@@ -44,6 +45,7 @@ public sealed class ProductionConfigurationValidatorTests
             ["ConnectionStrings:Events"] = "Host=postgres;Database=ingot",
             ["EventIngest:RequireToken"] = "true",
             ["EventIngest:EdgeTokens:EDGE-001"] = "edge-token-with-at-least-24-characters",
+            ["EventIngest:EdgeSites:EDGE-001"] = "SITE-001",
             ["Authentication:Authority"] = "https://identity.example.com",
             ["Authentication:Audience"] = "ingot-platform",
             ["InspectionAttachments:ArchiveRootPath"] = "/archive/inspection-attachments",
@@ -110,6 +112,7 @@ public sealed class ProductionConfigurationValidatorTests
         var configuration = Build(new Dictionary<string, string?>
         {
             ["ConnectorHost:IngestToken"] = "connector-token-with-at-least-24-characters",
+            ["Edge:SiteId"] = "SITE-001",
             ["Edge:EnablePlatformReporting"] = "true",
             ["Edge:EdgeId"] = "EDGE-001",
             ["Edge:PlatformApiBaseUrl"] = "http://platform-api:8000",
@@ -146,6 +149,7 @@ public sealed class ProductionConfigurationValidatorTests
             ["ConnectionStrings:Events"] = "Host=postgres;Database=ingot",
             ["EventIngest:RequireToken"] = "true",
             ["EventIngest:EdgeTokens:EDGE-001"] = "edge-token-with-at-least-24-characters",
+            ["EventIngest:EdgeSites:EDGE-001"] = "SITE-001",
             ["Authentication:Mode"] = "Oidc",     // OIDC 模式下才要求 Authority/Audience
             ["Chat:Enabled"] = "false",
             ["Cors:AllowedOrigins:0"] = "https://ingotstack.com"
@@ -164,6 +168,7 @@ public sealed class ProductionConfigurationValidatorTests
             ["ConnectionStrings:Events"] = "Host=postgres;Database=ingot",
             ["EventIngest:RequireToken"] = "true",
             ["EventIngest:EdgeTokens:EDGE-001"] = "edge-token-with-at-least-24-characters",
+            ["EventIngest:EdgeSites:EDGE-001"] = "SITE-001",
             ["InspectionAttachments:ArchiveRootPath"] = "/archive/inspection-attachments",
             ["ProcessKnowledge:ArchiveRootPath"] = "/archive/process-knowledge",
             ["Chat:Enabled"] = "false",
@@ -182,6 +187,7 @@ public sealed class ProductionConfigurationValidatorTests
             ["ConnectionStrings:Events"] = "Host=postgres;Database=ingot",
             ["EventIngest:RequireToken"] = "true",
             ["EventIngest:EdgeTokens:EDGE-001"] = "edge-token-with-at-least-24-characters",
+            ["EventIngest:EdgeSites:EDGE-001"] = "SITE-001",
             ["Authentication:Mode"] = "Disabled",
             ["InspectionAttachments:ArchiveRootPath"] = "/archive/inspection-attachments",
             ["ProcessKnowledge:ArchiveRootPath"] = "/archive/process-knowledge",
@@ -201,6 +207,7 @@ public sealed class ProductionConfigurationValidatorTests
             ["ConnectionStrings:Events"] = "Host=postgres;Database=ingot;Password=random-production-secret",
             ["EventIngest:RequireToken"] = "true",
             ["EventIngest:EdgeTokens:EDGE-001"] = "edge-token-with-at-least-24-characters",
+            ["EventIngest:EdgeSites:EDGE-001"] = "SITE-001",
             ["Authentication:Mode"] = "Disabled",
             ["Authentication:AllowInsecureDemo"] = "true",
             ["InspectionAttachments:ArchiveRootPath"] = "/archive/inspection-attachments",
@@ -210,6 +217,60 @@ public sealed class ProductionConfigurationValidatorTests
         });
 
         PlatformValidator.Validate(configuration);
+    }
+
+    [Fact]
+    public void Platform_RejectsEdgeWithoutSiteBinding()
+    {
+        var configuration = Build(new Dictionary<string, string?>
+        {
+            ["ConnectionStrings:Events"] = "Host=postgres;Database=ingot",
+            ["EventIngest:RequireToken"] = "true",
+            ["EventIngest:EdgeTokens:EDGE-001"] = "edge-token-with-at-least-24-characters",
+            ["InspectionAttachments:ArchiveRootPath"] = "/archive/inspection-attachments",
+            ["ProcessKnowledge:ArchiveRootPath"] = "/archive/process-knowledge",
+            ["Cors:AllowedOrigins:0"] = "https://ingotstack.com"
+        });
+
+        var error = Assert.Throws<InvalidOperationException>(() => PlatformValidator.Validate(configuration));
+        Assert.Contains("EventIngest:EdgeSites", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ConnectorHost_RejectsMissingSiteIdentity()
+    {
+        var configuration = Build(new Dictionary<string, string?>
+        {
+            ["ConnectorHost:IngestToken"] = "connector-token-with-at-least-24-characters",
+            ["Edge:EnablePlatformReporting"] = "true",
+            ["Edge:EdgeId"] = "EDGE-001",
+            ["Edge:PlatformApiBaseUrl"] = "http://platform-api:8000",
+            ["Edge:EnableEventShipping"] = "true",
+            ["Edge:EventIngestToken"] = "edge-token-with-at-least-24-characters",
+            ["Acquisition:DeploymentCachePath"] = "/data/acquisition-deployments.json"
+        });
+
+        var error = Assert.Throws<InvalidOperationException>(() => EdgeValidator.Validate(configuration));
+        Assert.Contains("Edge:SiteId", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ConnectorHost_RejectsMalformedSiteIdentity()
+    {
+        var configuration = Build(new Dictionary<string, string?>
+        {
+            ["ConnectorHost:IngestToken"] = "connector-token-with-at-least-24-characters",
+            ["Edge:SiteId"] = "factory/site",
+            ["Edge:EnablePlatformReporting"] = "true",
+            ["Edge:EdgeId"] = "EDGE-001",
+            ["Edge:PlatformApiBaseUrl"] = "http://platform-api:8000",
+            ["Edge:EnableEventShipping"] = "true",
+            ["Edge:EventIngestToken"] = "edge-token-with-at-least-24-characters",
+            ["Acquisition:DeploymentCachePath"] = "/data/acquisition-deployments.json"
+        });
+
+        var error = Assert.Throws<InvalidOperationException>(() => EdgeValidator.Validate(configuration));
+        Assert.Contains("Edge:SiteId", error.Message, StringComparison.Ordinal);
     }
 
     [Fact]

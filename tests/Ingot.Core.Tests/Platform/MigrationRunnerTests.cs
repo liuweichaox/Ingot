@@ -8,7 +8,7 @@ public sealed class MigrationRunnerTests
     private static readonly IReadOnlyDictionary<string, string> CommittedChecksums =
         new Dictionary<string, string>(StringComparer.Ordinal)
         {
-            ["0001"] = "2674dede92ee6def0058af4fa2ba8f242078a2a70e4bc247ce7182c292295e29"
+            ["0001"] = "d713f244197b72bd43571a643ff10a52316c6160c3df60473c0482133f51e125"
         };
 
     [Fact]

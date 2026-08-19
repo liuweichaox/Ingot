@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Ingot.Contracts.Analytics;
 using Ingot.Contracts.Events;
 using Ingot.Contracts.ProcessConfiguration;
 using Ingot.Domain.Events;
@@ -50,7 +51,7 @@ public sealed class PostgresEventReplayTests(PostgresIntegrationFixture postgres
         {
             Seq = 1
         };
-        var request = new EventBatchRequest { EdgeId = edgeId, Events = [evt] };
+        var request = new EventBatchRequest { SiteId = "SITE-REPLAY", EdgeId = edgeId, Events = [evt] };
 
         var first = await store.IngestAsync(request);
         var replay = await store.IngestAsync(request);
@@ -61,6 +62,30 @@ public sealed class PostgresEventReplayTests(PostgresIntegrationFixture postgres
         Assert.Equal(0, replay.Accepted);
         Assert.Equal(1, replay.Duplicates);
         Assert.Equal(1, replay.AckSeq);
+        var stored = Assert.Single(await store.QueryAsync(new PlatformEventQuery
+        {
+            SiteId = "SITE-REPLAY",
+            EdgeId = edgeId
+        }));
+        Assert.Equal("SITE-REPLAY", stored.SiteId);
+        Assert.Empty(await store.QueryAsync(new PlatformEventQuery
+        {
+            SiteId = "SITE-OTHER",
+            EdgeId = edgeId
+        }));
+        var dataObject = Assert.Single((await store.QueryDataObjectsAsync(new DataObjectQuery
+        {
+            SiteId = "SITE-REPLAY",
+            SubjectType = "equipment",
+            SubjectId = "PRESS-01"
+        })).Data);
+        Assert.Equal("SITE-REPLAY", dataObject.SiteId);
+        Assert.Empty((await store.QueryDataObjectsAsync(new DataObjectQuery
+        {
+            SiteId = "SITE-OTHER",
+            SubjectType = "equipment",
+            SubjectId = "PRESS-01"
+        })).Data);
 
         await using var connection = new NpgsqlConnection(postgres.ConnectionString);
         await connection.OpenAsync();
@@ -151,8 +176,18 @@ public sealed class PostgresEventReplayTests(PostgresIntegrationFixture postgres
                     StringComparer.Ordinal)
             }) with { Seq = 1 };
 
-        var first = await store.IngestAsync(new EventBatchRequest { EdgeId = edgeId, Events = [sample] });
-        var replay = await store.IngestAsync(new EventBatchRequest { EdgeId = edgeId, Events = [sample] });
+        var first = await store.IngestAsync(new EventBatchRequest
+        {
+            SiteId = "SITE-SINGLE-SOURCE",
+            EdgeId = edgeId,
+            Events = [sample]
+        });
+        var replay = await store.IngestAsync(new EventBatchRequest
+        {
+            SiteId = "SITE-SINGLE-SOURCE",
+            EdgeId = edgeId,
+            Events = [sample]
+        });
 
         Assert.Equal(1, first.Accepted);
         Assert.Equal(1, replay.Duplicates);
@@ -185,9 +220,16 @@ public sealed class PostgresEventReplayTests(PostgresIntegrationFixture postgres
         }));
         var typed = await timeSeries.QueryAsync(new TimeSeriesQuery
         {
+            SiteId = "SITE-SINGLE-SOURCE",
             ExecutionId = executionId
         });
         Assert.Equal(10, typed.Count);
+        Assert.All(typed, static row => Assert.Equal("SITE-SINGLE-SOURCE", row.SiteId));
+        Assert.Empty(await timeSeries.QueryAsync(new TimeSeriesQuery
+        {
+            SiteId = "SITE-OTHER",
+            ExecutionId = executionId
+        }));
         Assert.Equal(601d, typed.Single(static row => row.SignalCode == "sensor.01").NumericValue);
         var frames = await timeSeries.QueryFramesAsync(new TimeSeriesQuery
         {
@@ -347,6 +389,7 @@ public sealed class PostgresEventReplayTests(PostgresIntegrationFixture postgres
 
         var response = await store.IngestAsync(new EventBatchRequest
         {
+            SiteId = "SITE-CONTEXT",
             EdgeId = edgeId,
             Events = [started, sample]
         });

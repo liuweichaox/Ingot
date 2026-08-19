@@ -17,6 +17,7 @@ const publicSlugs = [
   "optimization",
   "mechanism-knowledge",
   "data-connection",
+  "production-architecture",
   "project-plan",
   "rollout",
   "deployment",

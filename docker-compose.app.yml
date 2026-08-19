@@ -75,6 +75,7 @@ services:
       - EventIngest__RetentionDays=${INGOT_EVENT_RETENTION_DAYS:-0}
       - EventIngest__KeyRetentionDays=${INGOT_EVENT_KEY_RETENTION_DAYS:-0}
       - EventIngest__EdgeTokens__${INGOT_EDGE_ID:?INGOT_EDGE_ID is required}=${INGOT_EDGE_TOKEN:?INGOT_EDGE_TOKEN is required}
+      - EventIngest__EdgeSites__${INGOT_EDGE_ID:?INGOT_EDGE_ID is required}=${INGOT_SITE_ID:?INGOT_SITE_ID is required}
       - EdgeDiagnostics__EdgeTokens__${INGOT_EDGE_ID:?INGOT_EDGE_ID is required}=${INGOT_CONNECTOR_LOCAL_TOKEN:-}
       - Authentication__Mode=${INGOT_AUTH_MODE:-Local}
       - Authentication__AllowInsecureDemo=${INGOT_ALLOW_INSECURE_DEMO:-false}
@@ -199,6 +200,7 @@ services:
       Urls: http://+:8001
       ConnectorHost__IngestToken: ${INGOT_CONNECTOR_TOKEN:?INGOT_CONNECTOR_TOKEN is required}
       ConnectorHost__LocalApiToken: ${INGOT_CONNECTOR_LOCAL_TOKEN:-}
+      Edge__SiteId: ${INGOT_SITE_ID:?INGOT_SITE_ID is required}
       Edge__EdgeId: ${INGOT_EDGE_ID:?INGOT_EDGE_ID is required}
       Edge__PlatformApiBaseUrl: http://platform-api:8000
       Edge__PublicBaseUrl: http://connector-host:8001

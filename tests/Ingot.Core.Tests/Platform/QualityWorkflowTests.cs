@@ -702,7 +702,14 @@ public sealed class QualityWorkflowTests
         };
 
     private static PlatformProductionEvent Row(long ingestId, ProductionEvent evt)
-        => new() { IngestId = ingestId, EdgeId = "EDGE-001", IngestedAt = evt.RecordedAt, Event = evt };
+        => new()
+        {
+            IngestId = ingestId,
+            SiteId = "SITE-001",
+            EdgeId = "EDGE-001",
+            IngestedAt = evt.RecordedAt,
+            Event = evt
+        };
 
     private static InspectionRecord Inspection(string executionId, string outputItemId, string definitionCode, bool withAttachment)
         => new()
@@ -782,6 +789,7 @@ public sealed class QualityWorkflowTests
                         IngestedAt = row.IngestedAt,
                         EventId = row.Event.EventId,
                         IngestId = row.IngestId,
+                        SiteId = row.SiteId,
                         EdgeId = row.EdgeId,
                         Source = row.Event.Source,
                         SubjectType = row.Event.Subject.Type,

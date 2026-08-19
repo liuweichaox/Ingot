@@ -9,19 +9,21 @@
 dotnet run --project tools/Ingot.ImportCli -- \
   --file .ingot-import/history.csv \
   --mapping .ingot-import/mapping.json \
+  --site-id SITE-FACTORY-001 \
   --dry-run
 
 # 2. 正式导入
 dotnet run --project tools/Ingot.ImportCli -- \
   --file .ingot-import/history.csv \
   --mapping .ingot-import/mapping.json \
+  --site-id SITE-FACTORY-001 \
   --url http://localhost:8000 --token "$INGOT_EDGE_TOKEN"
 ```
 
 要点：
 
-- 平台侧需在 `EventIngest:EdgeTokens` 为映射中的 `edgeId`（如 `IMPORT-01`）配置令牌；
-- `--seq-start` 缺省取启动时刻 unix 毫秒 ×1000，多次导入不同文件天然单调；**失败重跑用相同 `--seq-start`**，平台按 `eventId` 与 `(edgeId, seq)` 去重，重复行计入 `duplicates`，安全；
+- 平台侧需在 `EventIngest:EdgeTokens` 为映射中的 `edgeId`（如 `IMPORT-01`）配置令牌，并在 `EventIngest:EdgeSites` 把它绑定到命令中的 `--site-id`；
+- `--seq-start` 缺省取启动时刻 unix 毫秒 ×1000，多次导入不同文件天然单调；**失败重跑用相同 `--seq-start`**，平台按 `eventId` 与 `(siteId, edgeId, seq)` 去重，重复行计入 `duplicates`，安全；
 - 历史时间戳受 `EventIngest:MaxPastDays`（默认约 10 年）窗口约束；
 - 缺失单元格不写入、不猜测（与生产事件规范一致）；
 - `--dry-run` 会校验完整文件但默认不输出转换后的真实事件；只有在受控终端排查时才显式添加 `--show-values`，该选项最多预览 3 行；

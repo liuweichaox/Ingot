@@ -11,6 +11,7 @@ public static class ProductionConfigurationValidator
             errors.Add("ConnectionStrings:Events is required.");
 
         RequireProtectedMap(configuration, "EventIngest", "EdgeTokens", errors);
+        RequireEdgeSiteBindings(configuration, errors);
 
         // 认证模式：Local（内置账户）、Oidc（外部 IdP）或 Disabled（本地演示固定 operator 身份）。
         var authMode = configuration["Authentication:Mode"] ?? "Local";
@@ -104,6 +105,38 @@ public static class ProductionConfigurationValidator
         !string.IsNullOrWhiteSpace(value) &&
         value.Length >= MinimumSecretLength &&
         !IsPlaceholder(value);
+
+    private static void RequireEdgeSiteBindings(
+        IConfiguration configuration,
+        ICollection<string> errors)
+    {
+        var tokenEdges = configuration.GetSection("EventIngest:EdgeTokens")
+            .GetChildren()
+            .Select(static entry => entry.Key)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var siteEntries = configuration.GetSection("EventIngest:EdgeSites").GetChildren().ToArray();
+        if (siteEntries.Length == 0)
+        {
+            errors.Add("EventIngest:EdgeSites must bind every EdgeId to one SiteId.");
+            return;
+        }
+
+        var siteEdges = siteEntries
+            .Select(static entry => entry.Key)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (!tokenEdges.SetEquals(siteEdges))
+            errors.Add("EventIngest:EdgeSites and EventIngest:EdgeTokens must contain the same EdgeId keys.");
+        if (siteEntries.Any(static entry => !IsStableId(entry.Value)))
+            errors.Add("Every EventIngest:EdgeSites value must be a valid SiteId.");
+    }
+
+    private static bool IsStableId(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value) || value.Length > 128 || !char.IsLetterOrDigit(value[0]))
+            return false;
+        return value.All(static character =>
+            char.IsLetterOrDigit(character) || character is '.' or '_' or '-');
+    }
 
     private static bool IsInsecureDemoAllowed(IConfiguration configuration) =>
         configuration.GetValue<bool>("Authentication:AllowInsecureDemo") ||

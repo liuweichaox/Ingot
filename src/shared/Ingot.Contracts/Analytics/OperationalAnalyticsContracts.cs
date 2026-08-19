@@ -5,6 +5,7 @@ namespace Ingot.Contracts.Analytics;
 /// </summary>
 public sealed record DataObjectSummary
 {
+    public required string SiteId { get; init; }
     public required string SubjectType { get; init; }
     public required string SubjectId { get; init; }
     public string? EdgeId { get; init; }
@@ -22,6 +23,7 @@ public sealed record DataObjectSummary
 
 public sealed record DataObjectQuery
 {
+    public string? SiteId { get; init; }
     public string? EdgeId { get; init; }
 
     public string? SubjectType { get; init; }

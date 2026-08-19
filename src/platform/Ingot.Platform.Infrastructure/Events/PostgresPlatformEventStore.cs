@@ -15,7 +15,7 @@ namespace Ingot.Platform.Infrastructure.Events;
 
 /// <summary>
 ///     TimescaleDB（PostgreSQL + 时序扩展）中心数据存储。全局去重键表与事件 hypertable 分离，
-///     保证 EventId、(EdgeId, Seq) 幂等；记录表由 Timescale 按 occurred_at 自动分块，
+///     保证 EventId、(SiteId, EdgeId, Seq) 幂等；记录表由 Timescale 按 occurred_at 自动分块，
 ///     并可按配置启用保留与压缩策略。
 /// </summary>
 public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, IDisposable
@@ -108,7 +108,8 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, ID
         await using var connection = await _dataSource.OpenConnectionAsync(ct).ConfigureAwait(false);
         await using var transaction = await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
 
-        var previousMax = await GetMaxEdgeSeqAsync(connection, transaction, request.EdgeId, ct)
+        var previousMax = await GetMaxEdgeSeqAsync(
+                connection, transaction, request.SiteId, request.EdgeId, ct)
             .ConfigureAwait(false);
         var gapDetected = HasSequenceGap(previousMax, ordered);
         var accepted = 0;
@@ -118,7 +119,8 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, ID
 
         foreach (var evt in ordered)
         {
-            if (await TryReserveEventAsync(connection, transaction, request.EdgeId, evt, ct)
+            if (await TryReserveEventAsync(
+                    connection, transaction, request.SiteId, request.EdgeId, evt, ct)
                     .ConfigureAwait(false))
             {
                 var effectiveEvent = evt;
@@ -148,6 +150,7 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, ID
                     : await InsertEventAsync(
                         connection,
                         transaction,
+                        request.SiteId,
                         request.EdgeId,
                         effectiveEvent,
                         ct).ConfigureAwait(false);
@@ -157,6 +160,7 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, ID
                 var projectedSamples = await _timeSeriesStore.ProjectEventAsync(
                     connection,
                     transaction,
+                    request.SiteId,
                     request.EdgeId,
                     ingestId,
                     ingestedAt,
@@ -171,6 +175,7 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, ID
                 await ProjectDataObjectSummaryAsync(
                     connection,
                     transaction,
+                    request.SiteId,
                     request.EdgeId,
                     ingestId,
                     effectiveEvent,
@@ -190,7 +195,8 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, ID
             }
             else
             {
-                await VerifyDuplicateAsync(connection, transaction, request.EdgeId, evt, ct)
+                await VerifyDuplicateAsync(
+                        connection, transaction, request.SiteId, request.EdgeId, evt, ct)
                     .ConfigureAwait(false);
                 duplicates++;
             }
@@ -551,7 +557,7 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, ID
         var where = BuildWhere(command, query);
         var order = query.AfterIngestId.HasValue ? "ASC" : "DESC";
         command.CommandText = $"""
-                              SELECT ingest_id, edge_id, ingested_at, event_id, event_type, type_version,
+                              SELECT ingest_id, site_id, edge_id, ingested_at, event_id, event_type, type_version,
                                      occurred_at, recorded_at, source, subject_type, subject_id,
                                      execution_id, context::text, data::text, seq
                               FROM production_events
@@ -586,7 +592,7 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, ID
 
         await using var command = _dataSource.CreateCommand(
             """
-            SELECT ingest_id, edge_id, ingested_at, event_id, event_type, type_version,
+            SELECT ingest_id, site_id, edge_id, ingested_at, event_id, event_type, type_version,
                    occurred_at, recorded_at, source, subject_type, subject_id,
                    execution_id, context::text, data::text, seq
             FROM production_events
@@ -623,7 +629,7 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, ID
               WHERE execution_id = ANY(@execution_ids)
               GROUP BY execution_id
             )
-            SELECT event.ingest_id, event.edge_id, event.ingested_at,
+            SELECT event.ingest_id, event.site_id, event.edge_id, event.ingested_at,
                    event.event_id, event.event_type, event.type_version,
                    event.occurred_at, event.recorded_at, event.source,
                    event.subject_type, event.subject_id, event.execution_id,
@@ -648,7 +654,7 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, ID
                 eventsByExecution[executionId] = rows;
             }
             rows.Add(row);
-            sampleCounts[executionId] = checked((int)reader.GetInt64(15));
+            sampleCounts[executionId] = checked((int)reader.GetInt64(16));
         }
         return ids
             .Where(eventsByExecution.ContainsKey)
@@ -671,6 +677,7 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, ID
         var offset = Math.Max(0, query.Offset);
         await using var command = _dataSource.CreateCommand();
         var predicates = new List<string>();
+        AddEquality(command, predicates, "site_id", "site_id", query.SiteId);
         AddEquality(command, predicates, "edge_id", "edge_id", query.EdgeId);
         AddEquality(command, predicates, "subject_type", "subject_type", query.SubjectType);
         AddEquality(command, predicates, "subject_id", "subject_id", query.SubjectId);
@@ -687,7 +694,7 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, ID
         var where = predicates.Count == 0 ? string.Empty : $"WHERE {string.Join(" AND ", predicates)}";
         command.CommandText = string.IsNullOrWhiteSpace(query.EdgeId) && !query.From.HasValue && !query.To.HasValue
             ? $"""
-               SELECT subject_type, subject_id, edge_id, event_count, sample_count, operation_count,
+               SELECT site_id, subject_type, subject_id, edge_id, event_count, sample_count, operation_count,
                       first_observed_at, last_observed_at, last_sample_at, maximum_sample_gap_seconds,
                       latest_event_type, context::text, count(*) OVER() AS total_count
                FROM data_object_summaries
@@ -697,7 +704,7 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, ID
                """
             : $"""
                               WITH sample_frames AS (
-                                SELECT event_id, frame_id AS ingest_id, edge_id,
+                                SELECT event_id, frame_id AS ingest_id, site_id, edge_id,
                                        'process.sample'::text AS event_type, occurred_at,
                                        frame.subject_type, frame.subject_id, frame.execution_id,
                                        coalesce(snapshot.context, jsonb_build_object()) AS context
@@ -706,11 +713,11 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, ID
                                   ON snapshot.execution_id = frame.execution_id
                               ),
                               records AS (
-                                SELECT ingest_id, edge_id, event_type, occurred_at, subject_type,
+                                SELECT ingest_id, site_id, edge_id, event_type, occurred_at, subject_type,
                                        subject_id, execution_id, context
                                 FROM production_events
                                 UNION ALL
-                                SELECT ingest_id, edge_id, event_type, occurred_at, subject_type,
+                                SELECT ingest_id, site_id, edge_id, event_type, occurred_at, subject_type,
                                        subject_id, execution_id, context
                                 FROM sample_frames
                               ),
@@ -719,7 +726,7 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, ID
                                 {where}
                               ),
                               aggregate_rows AS (
-                                SELECT subject_type, subject_id,
+                                SELECT site_id, subject_type, subject_id,
                                        count(*) AS event_count,
                                        count(*) FILTER (WHERE event_type = 'process.sample') AS sample_count,
                                        count(DISTINCT execution_id) AS operation_count,
@@ -727,28 +734,28 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, ID
                                        max(occurred_at) AS last_observed_at,
                                        max(occurred_at) FILTER (WHERE event_type = 'process.sample') AS last_sample_at
                                 FROM filtered
-                                GROUP BY subject_type, subject_id
+                                GROUP BY site_id, subject_type, subject_id
                               ),
                               latest_rows AS (
-                                SELECT DISTINCT ON (subject_type, subject_id)
-                                       subject_type, subject_id, edge_id, event_type, context
+                                SELECT DISTINCT ON (site_id, subject_type, subject_id)
+                                       site_id, subject_type, subject_id, edge_id, event_type, context
                                 FROM filtered
-                                ORDER BY subject_type, subject_id, occurred_at DESC, ingest_id DESC
+                                ORDER BY site_id, subject_type, subject_id, occurred_at DESC, ingest_id DESC
                               ),
                               sample_intervals AS (
-                                SELECT subject_type, subject_id,
+                                SELECT site_id, subject_type, subject_id,
                                        EXTRACT(EPOCH FROM occurred_at - lag(occurred_at) OVER (
-                                         PARTITION BY subject_type, subject_id ORDER BY occurred_at, ingest_id
+                                         PARTITION BY site_id, subject_type, subject_id ORDER BY occurred_at, ingest_id
                                        )) AS gap_seconds
                                 FROM filtered
                                 WHERE event_type = 'process.sample'
                               ),
                               gap_rows AS (
-                                SELECT subject_type, subject_id, max(gap_seconds) AS maximum_sample_gap_seconds
+                                SELECT site_id, subject_type, subject_id, max(gap_seconds) AS maximum_sample_gap_seconds
                                 FROM sample_intervals
-                                GROUP BY subject_type, subject_id
+                                GROUP BY site_id, subject_type, subject_id
                               )
-                              SELECT aggregate_rows.subject_type, aggregate_rows.subject_id,
+                              SELECT aggregate_rows.site_id, aggregate_rows.subject_type, aggregate_rows.subject_id,
                                      latest_rows.edge_id, aggregate_rows.event_count,
                                      aggregate_rows.sample_count, aggregate_rows.operation_count,
                                      aggregate_rows.first_observed_at, aggregate_rows.last_observed_at,
@@ -756,8 +763,8 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, ID
                                      latest_rows.event_type, latest_rows.context::text,
                                      count(*) OVER() AS total_count
                               FROM aggregate_rows
-                              JOIN latest_rows USING (subject_type, subject_id)
-                              LEFT JOIN gap_rows USING (subject_type, subject_id)
+                              JOIN latest_rows USING (site_id, subject_type, subject_id)
+                              LEFT JOIN gap_rows USING (site_id, subject_type, subject_id)
                               ORDER BY aggregate_rows.last_observed_at DESC,
                                        aggregate_rows.subject_type, aggregate_rows.subject_id
                               LIMIT @limit OFFSET @offset;
@@ -769,23 +776,24 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, ID
         await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
         while (await reader.ReadAsync(ct).ConfigureAwait(false))
         {
-            total = checked((int)reader.GetInt64(12));
+            total = checked((int)reader.GetInt64(13));
             rows.Add(new DataObjectSummary
             {
-                SubjectType = reader.GetString(0),
-                SubjectId = reader.GetString(1),
-                EdgeId = reader.IsDBNull(2) ? null : reader.GetString(2),
-                EventCount = reader.GetInt64(3),
-                SampleCount = reader.GetInt64(4),
-                OperationCount = reader.GetInt64(5),
-                FirstObservedAt = ReadTimestamp(reader, 6),
-                LastObservedAt = ReadTimestamp(reader, 7),
-                LastSampleAt = ReadTimestamp(reader, 8),
-                MaximumSampleGapSeconds = reader.IsDBNull(9)
+                SiteId = reader.GetString(0),
+                SubjectType = reader.GetString(1),
+                SubjectId = reader.GetString(2),
+                EdgeId = reader.IsDBNull(3) ? null : reader.GetString(3),
+                EventCount = reader.GetInt64(4),
+                SampleCount = reader.GetInt64(5),
+                OperationCount = reader.GetInt64(6),
+                FirstObservedAt = ReadTimestamp(reader, 7),
+                LastObservedAt = ReadTimestamp(reader, 8),
+                LastSampleAt = ReadTimestamp(reader, 9),
+                MaximumSampleGapSeconds = reader.IsDBNull(10)
                     ? null
-                    : Convert.ToDouble(reader.GetValue(9), CultureInfo.InvariantCulture),
-                LatestEventType = reader.IsDBNull(10) ? null : reader.GetString(10),
-                Context = JsonSerializer.Deserialize<Dictionary<string, string>>(reader.GetString(11), JsonOptions)
+                    : Convert.ToDouble(reader.GetValue(10), CultureInfo.InvariantCulture),
+                LatestEventType = reader.IsDBNull(11) ? null : reader.GetString(11),
+                Context = JsonSerializer.Deserialize<Dictionary<string, string>>(reader.GetString(12), JsonOptions)
                           ?? new Dictionary<string, string>(StringComparer.Ordinal)
             });
         }
@@ -832,6 +840,7 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, ID
     private static string BuildWhere(NpgsqlCommand command, PlatformEventQuery query)
     {
         var predicates = new List<string>();
+        AddEquality(command, predicates, "site_id", "site_id", query.SiteId);
         AddEquality(command, predicates, "edge_id", "edge_id", query.EdgeId);
         AddEquality(command, predicates, "event_type", "event_type", query.EventType);
         AddEquality(command, predicates, "subject_type", "subject_type", query.SubjectType);
@@ -913,13 +922,15 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, ID
     private static async Task<long?> GetMaxEdgeSeqAsync(
         NpgsqlConnection connection,
         NpgsqlTransaction transaction,
+        string siteId,
         string edgeId,
         CancellationToken ct)
     {
         await using var command = new NpgsqlCommand(
-            "SELECT MAX(seq) FROM event_ingest_keys WHERE edge_id = @edge_id;",
+            "SELECT MAX(seq) FROM event_ingest_keys WHERE site_id = @site_id AND edge_id = @edge_id;",
             connection,
             transaction);
+        command.Parameters.AddWithValue("site_id", siteId);
         command.Parameters.AddWithValue("edge_id", edgeId);
         var value = await command.ExecuteScalarAsync(ct).ConfigureAwait(false);
         return value is null or DBNull ? null : Convert.ToInt64(value, CultureInfo.InvariantCulture);
@@ -928,20 +939,22 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, ID
     private static async Task<bool> TryReserveEventAsync(
         NpgsqlConnection connection,
         NpgsqlTransaction transaction,
+        string siteId,
         string edgeId,
         ProductionEvent evt,
         CancellationToken ct)
     {
         await using var command = new NpgsqlCommand(
             """
-            INSERT INTO event_ingest_keys(event_id, edge_id, seq, occurred_at)
-            VALUES (@event_id, @edge_id, @seq, @occurred_at)
+            INSERT INTO event_ingest_keys(event_id, site_id, edge_id, seq, occurred_at)
+            VALUES (@event_id, @site_id, @edge_id, @seq, @occurred_at)
             ON CONFLICT DO NOTHING
             RETURNING event_id;
             """,
             connection,
             transaction);
         command.Parameters.AddWithValue("event_id", evt.EventId);
+        command.Parameters.AddWithValue("site_id", siteId);
         command.Parameters.AddWithValue("edge_id", edgeId);
         command.Parameters.AddWithValue("seq", evt.Seq);
         command.Parameters.AddWithValue("occurred_at", evt.OccurredAt.UtcDateTime);
@@ -951,6 +964,7 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, ID
     private static async Task<long> InsertEventAsync(
         NpgsqlConnection connection,
         NpgsqlTransaction transaction,
+        string siteId,
         string edgeId,
         ProductionEvent evt,
         CancellationToken ct)
@@ -958,16 +972,17 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, ID
         await using var command = new NpgsqlCommand(
             """
             INSERT INTO production_events(
-              event_id, edge_id, seq, event_type, type_version, occurred_at, recorded_at,
+              event_id, site_id, edge_id, seq, event_type, type_version, occurred_at, recorded_at,
               source, subject_type, subject_id, execution_id, context, data)
             VALUES (
-              @event_id, @edge_id, @seq, @event_type, @type_version, @occurred_at, @recorded_at,
+              @event_id, @site_id, @edge_id, @seq, @event_type, @type_version, @occurred_at, @recorded_at,
               @source, @subject_type, @subject_id, @execution_id, @context, @data)
             RETURNING ingest_id;
             """,
             connection,
             transaction);
         command.Parameters.AddWithValue("event_id", evt.EventId);
+        command.Parameters.AddWithValue("site_id", siteId);
         command.Parameters.AddWithValue("edge_id", edgeId);
         command.Parameters.AddWithValue("seq", evt.Seq);
         command.Parameters.AddWithValue("event_type", evt.EventType);
@@ -1000,6 +1015,7 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, ID
     private static async Task ProjectDataObjectSummaryAsync(
         NpgsqlConnection connection,
         NpgsqlTransaction transaction,
+        string siteId,
         string edgeId,
         long ingestId,
         ProductionEvent evt,
@@ -1010,13 +1026,14 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, ID
         {
             await using var operationCommand = new NpgsqlCommand(
                 """
-                INSERT INTO data_object_operation_keys(subject_type, subject_id, execution_id)
-                VALUES (@subject_type, @subject_id, @execution_id)
+                INSERT INTO data_object_operation_keys(site_id, subject_type, subject_id, execution_id)
+                VALUES (@site_id, @subject_type, @subject_id, @execution_id)
                 ON CONFLICT DO NOTHING
                 RETURNING execution_id;
                 """,
                 connection,
                 transaction);
+            operationCommand.Parameters.AddWithValue("site_id", siteId);
             operationCommand.Parameters.AddWithValue("subject_type", evt.Subject.Type);
             operationCommand.Parameters.AddWithValue("subject_id", evt.Subject.Id);
             operationCommand.Parameters.AddWithValue("execution_id", evt.ExecutionId);
@@ -1026,14 +1043,14 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, ID
         await using var command = new NpgsqlCommand(
             """
             INSERT INTO data_object_summaries(
-              subject_type, subject_id, edge_id, event_count, sample_count, operation_count,
+              site_id, subject_type, subject_id, edge_id, event_count, sample_count, operation_count,
               first_observed_at, last_observed_at, last_sample_at, maximum_sample_gap_seconds,
               latest_event_type, context, latest_ingest_id)
             VALUES (
-              @subject_type, @subject_id, @edge_id, 1, @sample_count, @operation_count,
+              @site_id, @subject_type, @subject_id, @edge_id, 1, @sample_count, @operation_count,
               @occurred_at, @occurred_at, @last_sample_at, NULL,
               @event_type, @context, @ingest_id)
-            ON CONFLICT (subject_type, subject_id) DO UPDATE SET
+            ON CONFLICT (site_id, subject_type, subject_id) DO UPDATE SET
               event_count = data_object_summaries.event_count + 1,
               sample_count = data_object_summaries.sample_count + EXCLUDED.sample_count,
               operation_count = data_object_summaries.operation_count + EXCLUDED.operation_count,
@@ -1070,6 +1087,7 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, ID
             """,
             connection,
             transaction);
+        command.Parameters.AddWithValue("site_id", siteId);
         command.Parameters.AddWithValue("subject_type", evt.Subject.Type);
         command.Parameters.AddWithValue("subject_id", evt.Subject.Id);
         command.Parameters.AddWithValue("edge_id", edgeId);
@@ -1088,58 +1106,63 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, ID
     private static async Task VerifyDuplicateAsync(
         NpgsqlConnection connection,
         NpgsqlTransaction transaction,
+        string siteId,
         string edgeId,
         ProductionEvent evt,
         CancellationToken ct)
     {
         await using var command = new NpgsqlCommand(
             """
-            SELECT event_id, edge_id, seq
+            SELECT event_id, site_id, edge_id, seq
             FROM event_ingest_keys
-            WHERE event_id = @event_id OR (edge_id = @edge_id AND seq = @seq)
+            WHERE event_id = @event_id OR
+                  (site_id = @site_id AND edge_id = @edge_id AND seq = @seq)
             LIMIT 1;
             """,
             connection,
             transaction);
         command.Parameters.AddWithValue("event_id", evt.EventId);
+        command.Parameters.AddWithValue("site_id", siteId);
         command.Parameters.AddWithValue("edge_id", edgeId);
         command.Parameters.AddWithValue("seq", evt.Seq);
         await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
         if (!await reader.ReadAsync(ct).ConfigureAwait(false) ||
             !string.Equals(reader.GetString(0), evt.EventId, StringComparison.Ordinal) ||
-            !string.Equals(reader.GetString(1), edgeId, StringComparison.OrdinalIgnoreCase) ||
-            reader.GetInt64(2) != evt.Seq)
+            !string.Equals(reader.GetString(1), siteId, StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(reader.GetString(2), edgeId, StringComparison.OrdinalIgnoreCase) ||
+            reader.GetInt64(3) != evt.Seq)
         {
             throw new InvalidDataException(
-                $"事件幂等键冲突：EdgeId={edgeId}, Seq={evt.Seq}, EventId={evt.EventId}");
+                $"事件幂等键冲突：SiteId={siteId}, EdgeId={edgeId}, Seq={evt.Seq}, EventId={evt.EventId}");
         }
     }
 
     private static PlatformProductionEvent ReadEvent(NpgsqlDataReader reader)
     {
-        var context = JsonSerializer.Deserialize<Dictionary<string, string>>(reader.GetString(12), JsonOptions)
+        var context = JsonSerializer.Deserialize<Dictionary<string, string>>(reader.GetString(13), JsonOptions)
                       ?? new Dictionary<string, string>();
-        var data = JsonSerializer.Deserialize<Dictionary<string, object?>>(reader.GetString(13), JsonOptions)
+        var data = JsonSerializer.Deserialize<Dictionary<string, object?>>(reader.GetString(14), JsonOptions)
                    ?? new Dictionary<string, object?>();
         var evt = new ProductionEvent
         {
-            EventId = reader.GetString(3),
-            EventType = reader.GetString(4),
-            EventTypeVersion = reader.GetInt32(5),
-            OccurredAt = new DateTimeOffset(reader.GetDateTime(6).ToUniversalTime()),
-            RecordedAt = new DateTimeOffset(reader.GetDateTime(7).ToUniversalTime()),
-            Source = reader.GetString(8),
-            Subject = new ObjectRef(reader.GetString(9), reader.GetString(10)),
-            ExecutionId = reader.IsDBNull(11) ? null : reader.GetString(11),
+            EventId = reader.GetString(4),
+            EventType = reader.GetString(5),
+            EventTypeVersion = reader.GetInt32(6),
+            OccurredAt = new DateTimeOffset(reader.GetDateTime(7).ToUniversalTime()),
+            RecordedAt = new DateTimeOffset(reader.GetDateTime(8).ToUniversalTime()),
+            Source = reader.GetString(9),
+            Subject = new ObjectRef(reader.GetString(10), reader.GetString(11)),
+            ExecutionId = reader.IsDBNull(12) ? null : reader.GetString(12),
             Context = context,
             Data = data,
-            Seq = reader.GetInt64(14)
+            Seq = reader.GetInt64(15)
         };
         return new PlatformProductionEvent
         {
             IngestId = reader.GetInt64(0),
-            EdgeId = reader.GetString(1),
-            IngestedAt = new DateTimeOffset(reader.GetDateTime(2).ToUniversalTime()),
+            SiteId = reader.GetString(1),
+            EdgeId = reader.GetString(2),
+            IngestedAt = new DateTimeOffset(reader.GetDateTime(3).ToUniversalTime()),
             Event = evt
         };
     }

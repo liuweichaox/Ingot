@@ -68,6 +68,7 @@ CREATE TABLE public.case_level_evaluations (
 
 CREATE TABLE public.collection_points (
     collection_point_id text NOT NULL,
+    site_id text NOT NULL,
     edge_id text NOT NULL,
     subject_type text NOT NULL,
     subject_id text NOT NULL,
@@ -75,7 +76,8 @@ CREATE TABLE public.collection_points (
     static_tags jsonb DEFAULT '{}'::jsonb NOT NULL,
     first_seen_at timestamp with time zone NOT NULL,
     last_seen_at timestamp with time zone NOT NULL,
-    point_key bigint NOT NULL
+    point_key bigint NOT NULL,
+    CONSTRAINT collection_points_site_id_check CHECK ((site_id ~ '^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$'::text))
 );
 
 
@@ -98,9 +100,11 @@ ALTER TABLE public.collection_points ALTER COLUMN point_key ADD GENERATED ALWAYS
 --
 
 CREATE TABLE public.data_object_operation_keys (
+    site_id text NOT NULL,
     subject_type text NOT NULL,
     subject_id text NOT NULL,
-    execution_id text NOT NULL
+    execution_id text NOT NULL,
+    CONSTRAINT data_object_operation_keys_site_id_check CHECK ((site_id ~ '^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$'::text))
 );
 
 
@@ -109,6 +113,7 @@ CREATE TABLE public.data_object_operation_keys (
 --
 
 CREATE TABLE public.data_object_summaries (
+    site_id text NOT NULL,
     subject_type text NOT NULL,
     subject_id text NOT NULL,
     edge_id text,
@@ -121,7 +126,8 @@ CREATE TABLE public.data_object_summaries (
     maximum_sample_gap_seconds double precision,
     latest_event_type text,
     context jsonb DEFAULT '{}'::jsonb NOT NULL,
-    latest_ingest_id bigint DEFAULT 0 NOT NULL
+    latest_ingest_id bigint DEFAULT 0 NOT NULL,
+    CONSTRAINT data_object_summaries_site_id_check CHECK ((site_id ~ '^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$'::text))
 );
 
 
@@ -186,9 +192,11 @@ CREATE TABLE public.edge_runtime_status_history (
 
 CREATE TABLE public.event_ingest_keys (
     event_id text NOT NULL,
+    site_id text NOT NULL,
     edge_id text NOT NULL,
     seq bigint NOT NULL,
-    occurred_at timestamp with time zone NOT NULL
+    occurred_at timestamp with time zone NOT NULL,
+    CONSTRAINT event_ingest_keys_site_id_check CHECK ((site_id ~ '^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$'::text))
 );
 
 
@@ -1062,6 +1070,7 @@ CREATE TABLE public.process_sample_frames (
     event_id text NOT NULL,
     recorded_at timestamp with time zone NOT NULL,
     ingested_at timestamp with time zone NOT NULL,
+    site_id text NOT NULL,
     edge_id text NOT NULL,
     source text NOT NULL,
     subject_type text NOT NULL,
@@ -1069,7 +1078,8 @@ CREATE TABLE public.process_sample_frames (
     execution_id text,
     phase_code text,
     data_model_id text NOT NULL,
-    data_model_version integer NOT NULL
+    data_model_version integer NOT NULL,
+    CONSTRAINT process_sample_frames_site_id_check CHECK ((site_id ~ '^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$'::text))
 );
 
 
@@ -1145,6 +1155,7 @@ CREATE SEQUENCE public.production_events_ingest_id_seq
 CREATE TABLE public.production_events (
     ingest_id bigint DEFAULT nextval('public.production_events_ingest_id_seq'::regclass) NOT NULL,
     event_id text NOT NULL,
+    site_id text NOT NULL,
     edge_id text NOT NULL,
     seq bigint NOT NULL,
     event_type text NOT NULL,
@@ -1157,7 +1168,8 @@ CREATE TABLE public.production_events (
     subject_id text NOT NULL,
     execution_id text,
     context jsonb DEFAULT '{}'::jsonb NOT NULL,
-    data jsonb DEFAULT '{}'::jsonb NOT NULL
+    data jsonb DEFAULT '{}'::jsonb NOT NULL,
+    CONSTRAINT production_events_site_id_check CHECK ((site_id ~ '^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$'::text))
 );
 
 
@@ -1762,7 +1774,7 @@ ALTER TABLE ONLY public.collection_points
 --
 
 ALTER TABLE ONLY public.data_object_operation_keys
-    ADD CONSTRAINT data_object_operation_keys_pkey PRIMARY KEY (subject_type, subject_id, execution_id);
+    ADD CONSTRAINT data_object_operation_keys_pkey PRIMARY KEY (site_id, subject_type, subject_id, execution_id);
 
 
 --
@@ -1770,7 +1782,7 @@ ALTER TABLE ONLY public.data_object_operation_keys
 --
 
 ALTER TABLE ONLY public.data_object_summaries
-    ADD CONSTRAINT data_object_summaries_pkey PRIMARY KEY (subject_type, subject_id);
+    ADD CONSTRAINT data_object_summaries_pkey PRIMARY KEY (site_id, subject_type, subject_id);
 
 
 --
@@ -1790,11 +1802,11 @@ ALTER TABLE ONLY public.edge_runtime_status_history
 
 
 --
--- Name: event_ingest_keys event_ingest_keys_edge_id_seq_key; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: event_ingest_keys event_ingest_keys_site_id_edge_id_seq_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.event_ingest_keys
-    ADD CONSTRAINT event_ingest_keys_edge_id_seq_key UNIQUE (edge_id, seq);
+    ADD CONSTRAINT event_ingest_keys_site_id_edge_id_seq_key UNIQUE (site_id, edge_id, seq);
 
 
 --
@@ -2936,6 +2948,13 @@ CREATE INDEX idx_production_events_type_time ON public.production_events USING b
 
 
 --
+-- Name: idx_production_events_site_time; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_production_events_site_time ON public.production_events USING btree (site_id, occurred_at DESC);
+
+
+--
 -- Name: idx_research_asset_audit_resource; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -3164,6 +3183,13 @@ CREATE INDEX ix_process_sample_frames_execution ON public.process_sample_frames 
 --
 
 CREATE INDEX ix_process_sample_frames_subject ON public.process_sample_frames USING btree (subject_type, subject_id, occurred_at);
+
+
+--
+-- Name: ix_process_sample_frames_site_time; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_process_sample_frames_site_time ON public.process_sample_frames USING btree (site_id, occurred_at DESC);
 
 
 --

@@ -45,6 +45,7 @@ public sealed class PlatformIngestWindowTests
 
     private static EventBatchRequest CreateRequest(params ProductionEvent[] events) => new()
     {
+        SiteId = "SITE-001",
         EdgeId = "EDGE-001",
         Events = events
     };

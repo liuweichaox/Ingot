@@ -176,6 +176,7 @@ public sealed class RoadmapAgentToolTests
         return new PlatformProductionEvent
         {
             IngestId = ingestId,
+            SiteId = "SITE-001",
             EdgeId = "EDGE-001",
             IngestedAt = timestamp,
             Event = new ProductionEvent

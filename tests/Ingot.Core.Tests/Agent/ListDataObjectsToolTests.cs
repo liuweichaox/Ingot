@@ -40,6 +40,7 @@ public sealed class ListDataObjectsToolTests
         [
             new DataObjectSummary
             {
+                SiteId = "SITE-001",
                 SubjectType = "equipment",
                 SubjectId = "FURNACE-001",
                 EdgeId = "EDGE-001",

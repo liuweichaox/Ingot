@@ -7,6 +7,7 @@ cd "$repo_root"
 port="${INGOT_BENCHMARK_PORT:-18080}"
 events="${INGOT_BENCHMARK_EVENTS:-10000}"
 edge_id="BENCH-$(date +%s)-$$"
+site_id="SITE-BENCHMARK"
 token="benchmark-token"
 platform_log="$(mktemp -t ingot-platform-benchmark.XXXXXX.log)"
 platform_pid=""
@@ -16,6 +17,8 @@ postgres_password="${INGOT_BENCHMARK_POSTGRES_PASSWORD:-ingot}"
 
 compose() {
   INGOT_POSTGRES_PASSWORD="$postgres_password" \
+  INGOT_SITE_ID="$site_id" \
+  INGOT_EDGE_ID="$edge_id" \
   INGOT_EDGE_TOKEN="benchmark-edge-token" \
   INGOT_OPERATOR_TOKEN="benchmark-operator-token" \
   INGOT_CONNECTOR_TOKEN="benchmark-connector-token" \
@@ -52,6 +55,7 @@ dotnet run --project src/platform/Ingot.Platform.Api --no-build -- \
   "Urls=http://127.0.0.1:${port}" \
   "ConnectionStrings:Events=Host=localhost;Port=5432;Database=ingot;Username=ingot;Password=${postgres_password}" \
   "EventIngest:EdgeTokens:${edge_id}=${token}" \
+  "EventIngest:EdgeSites:${edge_id}=${site_id}" \
   >"$platform_log" 2>&1 &
 platform_pid=$!
 
@@ -69,6 +73,7 @@ done
 curl -fsS "http://127.0.0.1:${port}/health" >/dev/null
 dotnet run --project tools/Ingot.PlatformBenchmarks --no-build -- \
   --platform-url "http://127.0.0.1:${port}" \
+  --site-id "$site_id" \
   --edge-id "$edge_id" \
   --token "$token" \
   --events "$events" \
@@ -77,9 +82,11 @@ dotnet run --project tools/Ingot.PlatformBenchmarks --no-build -- \
   --enforce
 
 docker exec -i ingot-postgres psql -U ingot -d ingot \
+  -v site_id="$site_id" \
   -v edge_id="$edge_id" < scripts/verify-event-integrity.sql
 
 first_ingest_id="$(curl -fsSG \
+  --data-urlencode "siteId=${site_id}" \
   --data-urlencode "edgeId=${edge_id}" \
   --data-urlencode "afterIngestId=0" \
   --data-urlencode "limit=1" \
@@ -90,6 +97,7 @@ set +e
 curl -sN --max-time 3 \
   -H "Last-Event-ID: ${first_ingest_id}" \
   --get \
+  --data-urlencode "siteId=${site_id}" \
   --data-urlencode "edgeId=${edge_id}" \
   "http://127.0.0.1:${port}/api/v1/events/stream" \
   >"$sse_output"
@@ -110,7 +118,8 @@ if [[ -z "$next_ingest_id" || -z "$first_sse_event" ]] ||
   rm -f "$sse_output"
   exit 1
 fi
-jq -e --arg edge_id "$edge_id" '.edgeId == $edge_id' \
+jq -e --arg site_id "$site_id" --arg edge_id "$edge_id" \
+  '.siteId == $site_id and .edgeId == $edge_id' \
   <<<"$first_sse_event" >/dev/null
 rm -f "$sse_output"
 echo "Platform SSE resume: PASS (cursor ${first_ingest_id} -> ${next_ingest_id})"

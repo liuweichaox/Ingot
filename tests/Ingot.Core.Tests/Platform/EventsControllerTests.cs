@@ -15,6 +15,45 @@ namespace Ingot.Core.Tests.Platform;
 public sealed class EventsControllerTests
 {
     [Fact]
+    public async Task Ingest_RejectsTokenWhenEdgeClaimsAnotherSite()
+    {
+        var store = new StubPlatformEventStore([]);
+        var options = Options.Create(new PlatformEventOptions
+        {
+            RequireToken = true,
+            EdgeTokens = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["EDGE-001"] = "edge-secret"
+            },
+            EdgeSites = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["EDGE-001"] = "SITE-001"
+            }
+        });
+        var http = new DefaultHttpContext();
+        http.Request.Headers.Authorization = "Bearer edge-secret";
+        var controller = new EventsController(store, new EdgeTokenValidator(options), options)
+        {
+            ControllerContext = new ControllerContext { HttpContext = http }
+        };
+        var evt = ProductionEvent.Create(
+            "equipment.heartbeat",
+            DateTimeOffset.UtcNow,
+            "edge/EDGE-001/equipment/PRESS-01",
+            new ObjectRef("equipment", "PRESS-01")) with { Seq = 1 };
+
+        var action = await controller.Ingest(new EventBatchRequest
+        {
+            SiteId = "SITE-002",
+            EdgeId = "EDGE-001",
+            Events = [evt]
+        }, CancellationToken.None);
+
+        var denied = Assert.IsType<ObjectResult>(action);
+        Assert.Equal(StatusCodes.Status401Unauthorized, denied.StatusCode);
+    }
+
+    [Fact]
     public async Task Query_UsesBeforeCursorForOlderPages()
     {
         var startedAt = DateTimeOffset.Parse("2026-07-18T10:00:00Z");
@@ -28,7 +67,7 @@ public sealed class EventsControllerTests
         };
 
         var action = await controller.Query(
-            null, null, null, null, null, null, null, null, 8, 0, 3, CancellationToken.None);
+            null, null, null, null, null, null, null, null, null, 8, 0, 3, CancellationToken.None);
 
         var ok = Assert.IsType<OkObjectResult>(action);
         var json = JsonSerializer.SerializeToElement(ok.Value);
@@ -51,7 +90,7 @@ public sealed class EventsControllerTests
         };
 
         var action = await controller.Query(
-            null, null, null, null, null, null, null, null, null, 3, 3, CancellationToken.None);
+            null, null, null, null, null, null, null, null, null, null, 3, 3, CancellationToken.None);
 
         var ok = Assert.IsType<OkObjectResult>(action);
         var json = JsonSerializer.SerializeToElement(ok.Value);
@@ -70,7 +109,7 @@ public sealed class EventsControllerTests
         };
 
         var action = await controller.Query(
-            null, null, null, null, null, null, null, 1, 8, 0, 3, CancellationToken.None);
+            null, null, null, null, null, null, null, null, 1, 8, 0, 3, CancellationToken.None);
 
         var invalid = Assert.IsType<ObjectResult>(action);
         Assert.Equal(StatusCodes.Status400BadRequest, invalid.StatusCode);
@@ -161,6 +200,7 @@ public sealed class EventsControllerTests
         => new()
         {
             IngestId = ingestId,
+            SiteId = "SITE-001",
             EdgeId = "EDGE-001",
             IngestedAt = occurredAt.AddSeconds(1),
             Event = new ProductionEvent

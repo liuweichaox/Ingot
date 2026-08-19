@@ -8,6 +8,7 @@ namespace Ingot.Platform.Infrastructure.Events;
 /// </summary>
 public sealed record PlatformEventQuery : EventFilter
 {
+    public string? SiteId { get; init; }
     public string? EdgeId { get; init; }
     /// <summary>面向运行目录的受限模糊查找；不替代结构化筛选。</summary>
     public string? SearchText { get; init; }

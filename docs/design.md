@@ -58,6 +58,8 @@ flowchart LR
 
 代码项目边界不等于部署边界。实际工厂运行单元是 Platform API、独立 Edge ConnectorHost、数据库、Optimizer 和 Web。小型现场可以共用物理服务器，但 Edge 与 Platform 仍保持独立进程、存储、身份和恢复生命周期。
 
+本文件固定稳定业务边界；多副本、故障域、数据生命周期、灾难恢复和受控行动的目标拓扑由[生产架构](production-architecture.md)定义，当前部署步骤由[部署运维](deployment.md)定义。目标设计不能被当作当前 Compose 已实现能力。
+
 ## 稳定组件职责
 
 ### Edge

@@ -129,18 +129,18 @@ public sealed class PostgresProcessExecutionScientificComputeIntegrationTests(
                 ON CONFLICT (data_model_id, data_model_version, signal_code) DO NOTHING;
 
                 INSERT INTO collection_points (
-                  collection_point_id, edge_id, subject_type, subject_id, signal_code,
+                  collection_point_id, site_id, edge_id, subject_type, subject_id, signal_code,
                   first_seen_at, last_seen_at)
                 VALUES (
-                  @point_id, @edge_id, 'equipment', 'PRESS-01', @signal_code,
+                  @point_id, 'SITE-SCIENTIFIC', @edge_id, 'equipment', 'PRESS-01', @signal_code,
                   @occurred_at, @occurred_at)
                 ON CONFLICT (collection_point_id) DO NOTHING;
 
                 INSERT INTO process_sample_frames (
-                  occurred_at, frame_id, event_id, recorded_at, ingested_at, edge_id,
+                  occurred_at, frame_id, event_id, recorded_at, ingested_at, site_id, edge_id,
                   source, subject_type, subject_id, execution_id, data_model_id, data_model_version)
                 VALUES (
-                  @occurred_at, @ingest_id, @event_id, @recorded_at, @recorded_at, @edge_id,
+                  @occurred_at, @ingest_id, @event_id, @recorded_at, @recorded_at, 'SITE-SCIENTIFIC', @edge_id,
                   @source, 'equipment', 'PRESS-01', @execution_id, 'scientific-model', 1);
 
                 INSERT INTO process_sample_values (
@@ -152,7 +152,7 @@ public sealed class PostgresProcessExecutionScientificComputeIntegrationTests(
                 """,
                 connection);
             command.Parameters.AddWithValue("occurred_at", startedAt.AddSeconds(index).UtcDateTime);
-            command.Parameters.AddWithValue("point_id", "EDGE-SCIENTIFIC/equipment/PRESS-01/signal.large-offset");
+            command.Parameters.AddWithValue("point_id", "SITE-SCIENTIFIC/EDGE-SCIENTIFIC/equipment/PRESS-01/signal.large-offset");
             command.Parameters.AddWithValue("signal_code", "signal.large-offset");
             command.Parameters.AddWithValue("numeric_value", values[index]);
             command.Parameters.AddWithValue("event_id", $"{executionId}-{index}");

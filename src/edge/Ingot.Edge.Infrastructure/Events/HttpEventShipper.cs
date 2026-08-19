@@ -61,10 +61,13 @@ public sealed class HttpEventShipper : IEventShipper
         }
         if (string.IsNullOrWhiteSpace(_options.PlatformApiBaseUrl))
             throw new InvalidOperationException("启用事件上行时必须配置 Edge:PlatformApiBaseUrl。");
+        if (string.IsNullOrWhiteSpace(_options.SiteId))
+            throw new InvalidOperationException("启用事件上行时必须配置 Edge:SiteId。");
         if (string.IsNullOrWhiteSpace(_options.EventIngestToken))
             throw new InvalidOperationException("启用事件上行时必须配置 Edge:EventIngestToken。");
 
         var edgeId = _identity.GetEdgeId();
+        var siteId = _options.SiteId.Trim();
         var http = _httpClientFactory.CreateClient(nameof(HttpEventShipper));
         http.BaseAddress = new Uri(_options.PlatformApiBaseUrl.TrimEnd('/') + "/");
         http.DefaultRequestHeaders.Authorization =
@@ -76,7 +79,8 @@ public sealed class HttpEventShipper : IEventShipper
         var retry = TimeSpan.FromSeconds(1);
 
         _logger.LogInformation(
-            "事件上行已启动：EdgeId={EdgeId}, Platform={Platform}, BatchSize={BatchSize}",
+            "事件上行已启动：SiteId={SiteId}, EdgeId={EdgeId}, Platform={Platform}, BatchSize={BatchSize}",
+            siteId,
             edgeId,
             http.BaseAddress,
             batchSize);
@@ -97,6 +101,7 @@ public sealed class HttpEventShipper : IEventShipper
             {
                 var request = new EventBatchRequest
                 {
+                    SiteId = siteId,
                     EdgeId = edgeId,
                     Events = pending
                 };
@@ -113,7 +118,7 @@ public sealed class HttpEventShipper : IEventShipper
                         .ConfigureAwait(false);
                     if (IsDeterministicPayloadRejection(response.StatusCode))
                     {
-                        await IsolateRejectedEventsAsync(http, edgeId, pending, responseBody, ct)
+                        await IsolateRejectedEventsAsync(http, siteId, edgeId, pending, responseBody, ct)
                             .ConfigureAwait(false);
                         retry = TimeSpan.FromSeconds(1);
                         continue;
@@ -175,6 +180,7 @@ public sealed class HttpEventShipper : IEventShipper
 
     private async Task IsolateRejectedEventsAsync(
         HttpClient http,
+        string siteId,
         string edgeId,
         IReadOnlyList<ProductionEvent> pending,
         string batchError,
@@ -182,7 +188,7 @@ public sealed class HttpEventShipper : IEventShipper
     {
         foreach (var evt in pending)
         {
-            var request = new EventBatchRequest { EdgeId = edgeId, Events = [evt] };
+            var request = new EventBatchRequest { SiteId = siteId, EdgeId = edgeId, Events = [evt] };
             using var response = await http.PostAsJsonAsync(
                 PlatformEventRoutes.BatchIngest, request, JsonOptions, ct).ConfigureAwait(false);
             if (IsDeterministicPayloadRejection(response.StatusCode))

@@ -11,6 +11,7 @@ signals="${INGOT_SAMPLE_BENCHMARK_SIGNALS:-15}"
 samples_per_execution="${INGOT_SAMPLE_BENCHMARK_SAMPLES_PER_EXECUTION:-1000}"
 edge_id="SAMPLE-BENCH-$(date +%s)-$$"
 lifecycle_edge_id="LIFECYCLE-BENCH-$(date +%s)-$$"
+site_id="SITE-BENCHMARK"
 token="sample-benchmark-token"
 database="ingot_sample_benchmark_$(date +%s)_$$"
 database_role="ingot_sample_bench_$(date +%s)_$$"
@@ -31,6 +32,7 @@ fi
 
 compose() {
   INGOT_POSTGRES_PASSWORD="sample-benchmark-compose-placeholder" \
+  INGOT_SITE_ID="$site_id" \
   INGOT_EDGE_ID="sample-benchmark-edge" \
   INGOT_EDGE_TOKEN="sample-benchmark-edge-token" \
   INGOT_CONNECTOR_TOKEN="sample-benchmark-connector-token" \
@@ -96,6 +98,8 @@ docker run -d \
   -e "ConnectionStrings__Events=Host=ingot-postgres;Port=5432;Database=${database};Username=${database_role};Password=${database_password}" \
   -e "EventIngest__EdgeTokens__${edge_id}=${token}" \
   -e "EventIngest__EdgeTokens__${lifecycle_edge_id}=${token}" \
+  -e "EventIngest__EdgeSites__${edge_id}=${site_id}" \
+  -e "EventIngest__EdgeSites__${lifecycle_edge_id}=${site_id}" \
   -e Authentication__Mode=Disabled \
   ingot-platform-api:latest >/dev/null
 
@@ -115,6 +119,7 @@ curl -fsS "http://127.0.0.1:${port}/health" >/dev/null
 echo "Lifecycle baseline:"
 "$dotnet_command" run --project tools/Ingot.PlatformBenchmarks --no-build -- \
   --platform-url "http://127.0.0.1:${port}" \
+  --site-id "$site_id" \
   --edge-id "$lifecycle_edge_id" \
   --token "$token" \
   --events "$events" \
@@ -133,6 +138,7 @@ fi
 
 "$dotnet_command" run --project tools/Ingot.PlatformBenchmarks --no-build -- \
   --platform-url "http://127.0.0.1:${port}" \
+  --site-id "$site_id" \
   --edge-id "$edge_id" \
   --token "$token" \
   --events "$events" \
@@ -146,10 +152,10 @@ expected_signal_rows=$((events * signals))
 IFS='|' read -r event_count execution_count signal_rows signal_count <<<"$(
   docker exec ingot-postgres psql -U ingot -d "$database" -At \
     -c "SELECT
-          (SELECT count(*) FROM production_events WHERE edge_id = '${edge_id}'),
-          (SELECT count(DISTINCT execution_id) FROM production_events WHERE edge_id = '${edge_id}'),
-          (SELECT count(*) FROM time_series_samples WHERE edge_id = '${edge_id}'),
-          (SELECT count(DISTINCT signal_code) FROM time_series_samples WHERE edge_id = '${edge_id}');"
+          (SELECT count(*) FROM production_events WHERE site_id = '${site_id}' AND edge_id = '${edge_id}'),
+          (SELECT count(DISTINCT execution_id) FROM production_events WHERE site_id = '${site_id}' AND edge_id = '${edge_id}'),
+          (SELECT count(*) FROM time_series_samples WHERE site_id = '${site_id}' AND edge_id = '${edge_id}'),
+          (SELECT count(DISTINCT signal_code) FROM time_series_samples WHERE site_id = '${site_id}' AND edge_id = '${edge_id}');"
 )"
 
 wal_bytes="$(docker exec ingot-postgres psql -U ingot -d "$database" -At \

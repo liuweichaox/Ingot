@@ -98,6 +98,7 @@ done
 for compose_file in docker-compose.app.yml; do
   compose_config="$(
     INGOT_POSTGRES_PASSWORD=verification-postgres-password \
+    INGOT_SITE_ID=verification-site-0001 \
     INGOT_EDGE_ID=verification-edge-0001 \
     INGOT_EDGE_TOKEN=verification-edge-token-0001 \
     INGOT_OPERATOR_TOKEN=verification-operator-token-0001 \
@@ -105,6 +106,8 @@ for compose_file in docker-compose.app.yml; do
       docker compose -f "$compose_file" --profile connector-host config
   )"
   grep -Fq 'EventIngest__EdgeTokens__verification-edge-0001:' <<<"$compose_config"
+  grep -Fq 'EventIngest__EdgeSites__verification-edge-0001: verification-site-0001' <<<"$compose_config"
+  grep -Fq 'Edge__SiteId: verification-site-0001' <<<"$compose_config"
   grep -Fq 'Edge__EdgeId: verification-edge-0001' <<<"$compose_config"
 done
 docker compose -f deploy/compose.yml --profile site --profile docs config --quiet

@@ -164,6 +164,7 @@ public sealed class DataReliabilityBaselineServiceTests
         => new()
         {
             IngestId = ingestId,
+            SiteId = "SITE-001",
             EdgeId = "EDGE-001",
             IngestedAt = at,
             Event = ProductionEvent.Create(

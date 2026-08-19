@@ -18,6 +18,7 @@ public sealed record SignalSample
     public required string EventId { get; init; }
     public long IngestId { get; init; }
     public long? SourceSequence { get; init; }
+    public required string SiteId { get; init; }
     public required string EdgeId { get; init; }
     public required string Source { get; init; }
     public required string SubjectType { get; init; }
@@ -42,6 +43,7 @@ public static class SignalQualityCodes
 
 public sealed record TimeSeriesQuery
 {
+    public string? SiteId { get; init; }
     public string? CollectionPointId { get; init; }
     public string? SignalCode { get; init; }
     public string? ExecutionId { get; init; }

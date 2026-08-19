@@ -10,6 +10,22 @@ public_files=(
   apps/platform/src
 )
 
+# Production architecture is expressed as Ingot's own engineering contract.
+# Do not name external database products as design authorities or alternatives.
+forbidden_external_database_pattern='T[Dd][Ee][Nn][Gg][Ii][Nn][Ee]'
+if grep -RInE \
+  --exclude-dir=.git \
+  --exclude-dir=node_modules \
+  --exclude-dir=.next \
+  --exclude-dir=dist \
+  --exclude-dir=out \
+  --exclude-dir=bin \
+  --exclude-dir=obj \
+  "$forbidden_external_database_pattern" .; then
+  echo "Repository copy must not name the prohibited external database product." >&2
+  exit 1
+fi
+
 forbidden_heating_character=$'\u7089'
 if grep -RInF --exclude='package-lock.json' "$forbidden_heating_character" "${public_files[@]}"; then
   echo "Public copy contains prohibited heating-equipment language or imagery cues." >&2

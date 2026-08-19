@@ -6,6 +6,11 @@ namespace Ingot.Edge.Application.Options;
 public sealed class EdgeReportingOptions
 {
     /// <summary>
+    /// Platform 中的生产单元身份。一个 Edge 在重新安装为另一个站点前不得修改此值。
+    /// </summary>
+    public string SiteId { get; init; } = string.Empty;
+
+    /// <summary>
     /// 是否启用向 Platform 注册/心跳上报。
     /// </summary>
     public bool EnablePlatformReporting { get; init; } = true;

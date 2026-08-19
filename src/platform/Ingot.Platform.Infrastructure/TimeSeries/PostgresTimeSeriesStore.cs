@@ -69,6 +69,7 @@ public sealed class PostgresTimeSeriesStore : ITimeSeriesStore, IDisposable
     internal async Task<int> ProjectEventAsync(
         NpgsqlConnection connection,
         NpgsqlTransaction transaction,
+        string siteId,
         string edgeId,
         long ingestId,
         DateTimeOffset ingestedAt,
@@ -76,7 +77,8 @@ public sealed class PostgresTimeSeriesStore : ITimeSeriesStore, IDisposable
         ResolvedProcessAnalysis? analysis,
         CancellationToken ct)
     {
-        var samples = TimeSeriesSampleProjector.Project(edgeId, ingestId, ingestedAt, evt, analysis);
+        var samples = TimeSeriesSampleProjector.Project(
+            siteId, edgeId, ingestId, ingestedAt, evt, analysis);
         if (samples.Count == 0 || analysis is null)
             return 0;
 
@@ -106,6 +108,11 @@ public sealed class PostgresTimeSeriesStore : ITimeSeriesStore, IDisposable
         var limit = Math.Clamp(query.Limit, 1, 100_000);
         var filters = new List<string>();
         await using var command = _dataSource.CreateCommand();
+        if (!string.IsNullOrWhiteSpace(query.SiteId))
+        {
+            filters.Add("frame.site_id = @site_id");
+            command.Parameters.AddWithValue("site_id", query.SiteId.Trim());
+        }
         if (!string.IsNullOrWhiteSpace(query.CollectionPointId))
         {
             filters.Add("point.collection_point_id = @collection_point_id");
@@ -148,7 +155,7 @@ public sealed class PostgresTimeSeriesStore : ITimeSeriesStore, IDisposable
              SELECT point.collection_point_id, point.signal_code,
                     definition.data_type, definition.unit, definition.category,
                     frame.occurred_at, frame.recorded_at, frame.ingested_at,
-                    frame.event_id, frame.frame_id, frame.edge_id, frame.source,
+                    frame.event_id, frame.frame_id, frame.site_id, frame.edge_id, frame.source,
                     frame.subject_type, frame.subject_id, frame.execution_id, frame.phase_code,
                     frame.data_model_id, frame.data_model_version, value.quality_code,
                     value.numeric_value, value.integer_value, value.boolean_value, value.text_value,
@@ -183,20 +190,21 @@ public sealed class PostgresTimeSeriesStore : ITimeSeriesStore, IDisposable
                 IngestedAt = reader.IsDBNull(7) ? null : new DateTimeOffset(reader.GetDateTime(7)),
                 EventId = reader.GetString(8),
                 IngestId = reader.GetInt64(9),
-                SourceSequence = reader.IsDBNull(23) ? null : reader.GetInt64(23),
-                EdgeId = reader.GetString(10),
-                Source = reader.GetString(11),
-                SubjectType = reader.GetString(12),
-                SubjectId = reader.GetString(13),
-                ExecutionId = reader.IsDBNull(14) ? null : reader.GetString(14),
-                PhaseCode = reader.IsDBNull(15) ? null : reader.GetString(15),
-                DataModelId = reader.GetString(16),
-                DataModelVersion = reader.GetInt32(17),
-                QualityCode = QualityCode(reader.GetInt16(18)),
-                NumericValue = reader.IsDBNull(19) ? null : reader.GetDouble(19),
-                IntegerValue = reader.IsDBNull(20) ? null : reader.GetInt64(20),
-                BooleanValue = reader.IsDBNull(21) ? null : reader.GetBoolean(21),
-                TextValue = reader.IsDBNull(22) ? null : reader.GetString(22)
+                SourceSequence = reader.IsDBNull(24) ? null : reader.GetInt64(24),
+                SiteId = reader.GetString(10),
+                EdgeId = reader.GetString(11),
+                Source = reader.GetString(12),
+                SubjectType = reader.GetString(13),
+                SubjectId = reader.GetString(14),
+                ExecutionId = reader.IsDBNull(15) ? null : reader.GetString(15),
+                PhaseCode = reader.IsDBNull(16) ? null : reader.GetString(16),
+                DataModelId = reader.GetString(17),
+                DataModelVersion = reader.GetInt32(18),
+                QualityCode = QualityCode(reader.GetInt16(19)),
+                NumericValue = reader.IsDBNull(20) ? null : reader.GetDouble(20),
+                IntegerValue = reader.IsDBNull(21) ? null : reader.GetInt64(21),
+                BooleanValue = reader.IsDBNull(22) ? null : reader.GetBoolean(22),
+                TextValue = reader.IsDBNull(23) ? null : reader.GetString(23)
             });
         }
         return result;
@@ -212,6 +220,11 @@ public sealed class PostgresTimeSeriesStore : ITimeSeriesStore, IDisposable
         var frameFilters = new List<string>();
         var valueFilters = new List<string>();
         await using var command = _dataSource.CreateCommand();
+        if (!string.IsNullOrWhiteSpace(query.SiteId))
+        {
+            frameFilters.Add("frame.site_id = @site_id");
+            command.Parameters.AddWithValue("site_id", query.SiteId.Trim());
+        }
         if (!string.IsNullOrWhiteSpace(query.ExecutionId))
         {
             frameFilters.Add("frame.execution_id = @execution_id");
@@ -386,16 +399,16 @@ public sealed class PostgresTimeSeriesStore : ITimeSeriesStore, IDisposable
             WITH input AS (
               SELECT *
               FROM unnest(
-                @point_ids::text[], @edge_ids::text[], @subject_types::text[],
+                @point_ids::text[], @site_ids::text[], @edge_ids::text[], @subject_types::text[],
                 @subject_ids::text[], @signal_codes::text[], @seen_ats::timestamptz[])
-              AS row(point_id, edge_id, subject_type, subject_id, signal_code, seen_at)
+              AS row(point_id, site_id, edge_id, subject_type, subject_id, signal_code, seen_at)
             ),
             upserted AS (
               INSERT INTO collection_points (
-                collection_point_id, edge_id, subject_type, subject_id, signal_code,
+                collection_point_id, site_id, edge_id, subject_type, subject_id, signal_code,
                 static_tags, first_seen_at, last_seen_at)
               SELECT
-                point_id, edge_id, subject_type, subject_id, signal_code,
+                point_id, site_id, edge_id, subject_type, subject_id, signal_code,
                 @static_tags, seen_at, seen_at
               FROM input
               ON CONFLICT (collection_point_id)
@@ -409,6 +422,7 @@ public sealed class PostgresTimeSeriesStore : ITimeSeriesStore, IDisposable
             connection,
             transaction);
         command.Parameters.AddWithValue("point_ids", samples.Select(static sample => sample.CollectionPointId).ToArray());
+        command.Parameters.AddWithValue("site_ids", samples.Select(static sample => sample.SiteId).ToArray());
         command.Parameters.AddWithValue("edge_ids", samples.Select(static sample => sample.EdgeId).ToArray());
         command.Parameters.AddWithValue("subject_types", samples.Select(static sample => sample.SubjectType).ToArray());
         command.Parameters.AddWithValue("subject_ids", samples.Select(static sample => sample.SubjectId).ToArray());
@@ -435,11 +449,11 @@ public sealed class PostgresTimeSeriesStore : ITimeSeriesStore, IDisposable
             """
             INSERT INTO process_sample_frames (
               occurred_at, frame_id, event_id, recorded_at, ingested_at,
-              edge_id, source, subject_type, subject_id, execution_id,
+              site_id, edge_id, source, subject_type, subject_id, execution_id,
               phase_code, data_model_id, data_model_version)
             VALUES (
               @occurred_at, @frame_id, @event_id, @recorded_at, @ingested_at,
-              @edge_id, @source, @subject_type, @subject_id, @execution_id,
+              @site_id, @edge_id, @source, @subject_type, @subject_id, @execution_id,
               @phase_code, @model_id, @model_version)
             ON CONFLICT (event_id, occurred_at) DO NOTHING;
             """,
@@ -450,6 +464,7 @@ public sealed class PostgresTimeSeriesStore : ITimeSeriesStore, IDisposable
         command.Parameters.AddWithValue("event_id", sample.EventId);
         command.Parameters.AddWithValue("recorded_at", sample.RecordedAt.UtcDateTime);
         command.Parameters.AddWithValue("ingested_at", sample.IngestedAt?.UtcDateTime ?? DateTime.UtcNow);
+        command.Parameters.AddWithValue("site_id", sample.SiteId);
         command.Parameters.AddWithValue("edge_id", sample.EdgeId);
         command.Parameters.AddWithValue("source", sample.Source);
         command.Parameters.AddWithValue("subject_type", sample.SubjectType);

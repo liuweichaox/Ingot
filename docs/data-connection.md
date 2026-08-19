@@ -29,12 +29,14 @@ Ingot 不把 PLC 当成唯一入口。一条运行记录可以组合：
 
 ## 标识与关联
 
-一次运行使用两个职责不同的标识：
+一次运行使用职责不同且不可互相替代的稳定标识：
 
+- `SiteId`：数据所属的生产单元，是站点隔离、容量和故障域边界；
+- `EdgeId`：安装后稳定不变的现场节点身份，与 `SiteId` 和独立凭据绑定；
 - `ExecutionId`：由 Edge 生成，是 Platform 中真实过程执行及其现场事件的统一身份；
 - `ExecutionKey`：研发实验计划和真实执行的关联键。
 
-Platform 必须显式记录 `ExecutionKey` 与 `ExecutionId` 的关系。MES 工单、条码、仪器样本号或设备寄存器可以携带 `ExecutionKey` 作为外部参考，但不能替代 Edge 生成的 `ExecutionId`。检验记录通过同一关系关联到执行。
+Platform 必须显式记录 `ExecutionKey` 与 `ExecutionId` 的关系。生产事件和类型化过程采样同时保存 `SiteId` 与 `EdgeId`，对象汇总以站点为边界，不能把不同工厂中同名设备合并。MES 工单、条码、仪器样本号或设备寄存器可以携带 `ExecutionKey` 作为外部参考，但不能替代 Edge 生成的 `ExecutionId`。检验记录通过同一关系关联到执行。
 
 如果控制器只能保存数值，可维护短数字与 `ExecutionKey` 的确定性关系。禁止仅根据时间邻近在事后猜测执行和检验的对应关系。
 

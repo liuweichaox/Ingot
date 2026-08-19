@@ -9,6 +9,7 @@ namespace Ingot.Platform.Infrastructure.TimeSeries;
 public static class TimeSeriesSampleProjector
 {
     public static IReadOnlyList<SignalSample> Project(
+        string siteId,
         string edgeId,
         long ingestId,
         DateTimeOffset ingestedAt,
@@ -37,6 +38,7 @@ public static class TimeSeriesSampleProjector
             }
 
             var sample = CreateSample(
+                siteId,
                 edgeId,
                 ingestId,
                 ingestedAt,
@@ -53,18 +55,21 @@ public static class TimeSeriesSampleProjector
     }
 
     public static string CollectionPointId(
+        string siteId,
         string edgeId,
         string subjectType,
         string subjectId,
         string signalCode)
         => string.Join(
             "/",
+            NormalizeIdentity(siteId),
             NormalizeIdentity(edgeId),
             NormalizeIdentity(subjectType),
             NormalizeIdentity(subjectId),
             NormalizeIdentity(signalCode));
 
     private static SignalSample? CreateSample(
+        string siteId,
         string edgeId,
         long ingestId,
         DateTimeOffset ingestedAt,
@@ -106,6 +111,7 @@ public static class TimeSeriesSampleProjector
         return new SignalSample
         {
             CollectionPointId = CollectionPointId(
+                siteId,
                 edgeId,
                 evt.Subject.Type,
                 evt.Subject.Id,
@@ -119,6 +125,7 @@ public static class TimeSeriesSampleProjector
             IngestedAt = ingestedAt,
             EventId = evt.EventId,
             IngestId = ingestId,
+            SiteId = siteId,
             EdgeId = edgeId,
             Source = evt.Source,
             SubjectType = evt.Subject.Type,
