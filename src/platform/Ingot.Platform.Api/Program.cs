@@ -9,6 +9,7 @@ using Ingot.Platform.Api.Events;
 using Ingot.Platform.Api.Configuration;
 using Ingot.Platform.Api.Errors;
 using Ingot.Platform.Infrastructure;
+using Ingot.Platform.Infrastructure.Events;
 using Ingot.Platform.Infrastructure.Identity;
 using Serilog;
 using Prometheus;
@@ -199,6 +200,27 @@ app.MapOpenApi("/openapi/{documentName}.json").AllowAnonymous();
 
 // Attribute routing（/api/..）
 app.MapControllers();
+
+// 验证关键依赖在启动前已就绪（快速失败）
+try
+{
+    var eventStore = app.Services.GetRequiredService<IPlatformEventStore>();
+    var canConnect = await eventStore.CanConnectAsync(CancellationToken.None).ConfigureAwait(false);
+    if (!canConnect)
+    {
+        app.Logger.LogCritical(
+            "Platform.Api 启动失败：无法连接到 PostgreSQL 事件存储。" +
+            "请检查数据库连接字符串和 PostgreSQL 服务状态。");
+        Environment.Exit(1);
+    }
+    app.Logger.LogInformation("Platform.Api 依赖检查: PostgreSQL 事件存储就绪 ✓");
+}
+catch (Exception ex)
+{
+    app.Logger.LogCritical(ex,
+        "Platform.Api 启动失败：初始化事件存储时发生异常。");
+    Environment.Exit(1);
+}
 
 // 方便验证服务是否启动（不提供页面）
 app.MapGet("/", () => Results.Ok(new
