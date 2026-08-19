@@ -5,8 +5,11 @@ using Ingot.Platform.Api.Controllers;
 using Ingot.Platform.Api.Errors;
 using Ingot.Platform.Api.Events;
 using Ingot.Platform.Infrastructure.Events;
+using Ingot.Platform.Infrastructure.ProcessExecutions;
+using Ingot.Platform.Application.ProcessExecutions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Xunit;
 
@@ -14,6 +17,17 @@ namespace Ingot.Core.Tests.Platform;
 
 public sealed class EventsControllerTests
 {
+    private sealed class StubBoundaryStore : IExecutionBoundaryStore
+    {
+        public Task<ExecutionBoundary?> GetBoundaryAsync(string siteId, string sourceExecutionId, CancellationToken ct)
+            => Task.FromResult<ExecutionBoundary?>(null);
+
+        public Task SaveBoundaryAsync(ExecutionBoundary boundary, CancellationToken ct) => Task.CompletedTask;
+        public Task UpdateBoundaryAsync(ExecutionBoundary boundary, CancellationToken ct) => Task.CompletedTask;
+        public Task<IReadOnlyList<ExecutionBoundary>> QueryBoundariesAsync(string siteId, DateTimeOffset? from, DateTimeOffset? to, int limit = 100, int offset = 0, CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<ExecutionBoundary>>(Array.Empty<ExecutionBoundary>());
+    }
+
     [Fact]
     public async Task Ingest_RejectsTokenWhenEdgeClaimsAnotherSite()
     {
@@ -32,7 +46,7 @@ public sealed class EventsControllerTests
         });
         var http = new DefaultHttpContext();
         http.Request.Headers.Authorization = "Bearer edge-secret";
-        var controller = new EventsController(store, new EdgeTokenValidator(options), options)
+        var controller = new EventsController(store, new EdgeTokenValidator(options), new ExecutionBoundaryRecognizer(), new StubBoundaryStore(), options)
         {
             ControllerContext = new ControllerContext { HttpContext = http }
         };
@@ -61,7 +75,7 @@ public sealed class EventsControllerTests
             .Select(index => Row(index, "process.sample", startedAt.AddSeconds(index)))
             .ToArray());
         var options = Options.Create(new PlatformEventOptions { RequireToken = false });
-        var controller = new EventsController(store, new EdgeTokenValidator(options), options)
+        var controller = new EventsController(store, new EdgeTokenValidator(options), new ExecutionBoundaryRecognizer(), new StubBoundaryStore(), options)
         {
             ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() }
         };
@@ -84,7 +98,7 @@ public sealed class EventsControllerTests
             .Select(index => Row(index, "process.sample", startedAt.AddSeconds(index)))
             .ToArray());
         var options = Options.Create(new PlatformEventOptions { RequireToken = false });
-        var controller = new EventsController(store, new EdgeTokenValidator(options), options)
+        var controller = new EventsController(store, new EdgeTokenValidator(options), new ExecutionBoundaryRecognizer(), new StubBoundaryStore(), options)
         {
             ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() }
         };
@@ -103,7 +117,7 @@ public sealed class EventsControllerTests
     public async Task Query_RejectsConflictingCursors()
     {
         var options = Options.Create(new PlatformEventOptions { RequireToken = false });
-        var controller = new EventsController(new StubPlatformEventStore([]), new EdgeTokenValidator(options), options)
+        var controller = new EventsController(new StubPlatformEventStore([]), new EdgeTokenValidator(options), new ExecutionBoundaryRecognizer(), new StubBoundaryStore(), options)
         {
             ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() }
         };
@@ -132,6 +146,8 @@ public sealed class EventsControllerTests
         var controller = new EventsController(
             store,
             new EdgeTokenValidator(options),
+            new ExecutionBoundaryRecognizer(),
+            new StubBoundaryStore(),
             options)
         {
             ControllerContext = new ControllerContext
@@ -171,6 +187,8 @@ public sealed class EventsControllerTests
         var controller = new EventsController(
             store,
             new EdgeTokenValidator(options),
+            new ExecutionBoundaryRecognizer(),
+            new StubBoundaryStore(),
             options)
         {
             ControllerContext = new ControllerContext
