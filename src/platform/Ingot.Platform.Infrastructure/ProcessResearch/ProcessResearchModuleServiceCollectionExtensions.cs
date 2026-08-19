@@ -46,6 +46,16 @@ public static class ProcessResearchModuleServiceCollectionExtensions
         services.AddSingleton<ResearchOnlineCampaignService>();
         services.AddSingleton<ResearchRollbackDrillService>();
         services.AddSingleton<ResearchTransferAssessmentService>();
+
+        // Week 1: 工艺操作域完整实现
+        services.AddSingleton<IOperatingRegionStore, PostgresOperatingRegionStore>();
+        services.AddSingleton<IOperatingRegionBoundaryCalculator, OperatingRegionBoundaryCalculator>();
+        services.AddSingleton<IExtensionRecommendationEngine, ExtensionRecommendationEngine>();
+
+        // Week 2: 参数优化引擎框架
+        services.AddSingleton<IOptimizationExplainabilityEngine, OptimizationExplainabilityEngine>();
+        services.AddSingleton<IParameterOptimizationCommand, ParameterOptimizationCommand>();
+
         return services;
     }
 }

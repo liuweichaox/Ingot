@@ -54,8 +54,7 @@ public sealed class EventsController(
                 try
                 {
                     var options = new ExecutionBoundaryRecognitionOptions();
-                    var recognizer = new ExecutionBoundaryRecognizer();
-                    var recognized = await recognizer.RecognizeBoundariesAsync(
+                    var recognized = await boundaryRecognizer.RecognizeBoundariesAsync(
                         normalized.SiteId,
                         normalized.EdgeId,
                         normalized.Events,
@@ -67,7 +66,7 @@ public sealed class EventsController(
                         await boundaryStore.SaveBoundaryAsync(boundary, ct).ConfigureAwait(false);
                     }
                 }
-                catch (Exception ex)
+                catch
                 {
                     // 运行边界识别失败不应该影响事件摄入响应
                     // 但应该被记录用于监控
