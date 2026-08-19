@@ -9,7 +9,6 @@ New-Item -ItemType Directory -Path (Join-Path $runtimeRoot "process-knowledge") 
 $env:ASPNETCORE_ENVIRONMENT = "Development"
 $env:Urls = "http://127.0.0.1:8000"
 $env:ConnectionStrings__Events = "Host=127.0.0.1;Port=5432;Database=ingot;Username=ingot;Password=ingot-local-dev"
-$env:Chat__DatabasePath = Join-Path $runtimeRoot "chat.db"
 $env:InspectionAttachments__RootPath = Join-Path $runtimeRoot "inspection-attachments"
 $env:ProcessKnowledge__RootPath = Join-Path $runtimeRoot "process-knowledge"
 

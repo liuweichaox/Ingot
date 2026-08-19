@@ -10,9 +10,6 @@ public sealed class ApiProblemDetails : ProblemDetails
 {
     public required string Code { get; init; }
     public required string TraceId { get; init; }
-
-    /// <summary>Compatibility alias for existing first-party clients.</summary>
-    public required string Error { get; init; }
 }
 
 public static class ApiProblemDetailsFactory
@@ -31,8 +28,7 @@ public static class ApiProblemDetailsFactory
             Type = $"urn:ingot:problem:{code}",
             Instance = context.Request.Path,
             Code = code,
-            TraceId = Activity.Current?.Id ?? context.TraceIdentifier,
-            Error = detail
+            TraceId = Activity.Current?.Id ?? context.TraceIdentifier
         };
     }
 

@@ -17,6 +17,18 @@ public sealed class EnvironmentVariableCollection
 public sealed class ModelClientRegistrationTests
 {
     [Fact]
+    public void Providers_DoNotRegisterAnAgentRunStore()
+    {
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection().Build();
+        var services = new ServiceCollection();
+
+        services.AddIngotAgentProviders(configuration);
+
+        Assert.DoesNotContain(services, static descriptor =>
+            descriptor.ServiceType == typeof(IAgentRunStore));
+    }
+
+    [Fact]
     public void Providers_DoNotReplaceHostOwnedAgentRunStore()
     {
         var configuration = new ConfigurationBuilder().AddInMemoryCollection().Build();

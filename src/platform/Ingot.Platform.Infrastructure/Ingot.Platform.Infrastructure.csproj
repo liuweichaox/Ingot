@@ -15,6 +15,7 @@
         <Using Include="Microsoft.Extensions.Hosting" />
         <Using Include="Microsoft.Extensions.Logging" />
         <Using Include="System.Net.Http.Json" />
+        <Using Include="Ingot.Platform.Application.ProcessResearch" />
     </ItemGroup>
 
     <!-- 通过共享框架获得 Hosting/Logging/Options/HttpClientFactory/HealthChecks 抽象，避免逐包引用 -->

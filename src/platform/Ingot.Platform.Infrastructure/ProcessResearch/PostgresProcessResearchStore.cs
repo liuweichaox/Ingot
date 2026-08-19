@@ -1,6 +1,4 @@
-using System.Globalization;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using Ingot.Contracts.ProcessResearch;
 using Npgsql;
 using NpgsqlTypes;
@@ -1465,40 +1463,6 @@ public sealed class PostgresProcessResearchStore : IProcessResearchStore
            ?? throw new InvalidDataException($"无法解析 {typeof(T).Name}。");
 
     private static JsonSerializerOptions CreateJsonOptions()
-    {
-        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
-        options.Converters.Add(new CompatibleDateTimeOffsetConverter());
-        return options;
-    }
-
-    private sealed class CompatibleDateTimeOffsetConverter : JsonConverter<DateTimeOffset>
-    {
-        public override DateTimeOffset Read(
-            ref Utf8JsonReader reader,
-            Type typeToConvert,
-            JsonSerializerOptions options)
-        {
-            if (reader.TokenType != JsonTokenType.String)
-                throw new JsonException("DateTimeOffset 必须是字符串。");
-            if (reader.TryGetDateTimeOffset(out var parsed))
-                return parsed;
-            var raw = reader.GetString();
-            if (DateTimeOffset.TryParse(
-                    raw,
-                    CultureInfo.InvariantCulture,
-                    DateTimeStyles.AllowWhiteSpaces | DateTimeStyles.AssumeUniversal,
-                    out parsed))
-            {
-                return parsed;
-            }
-            throw new JsonException($"无法解析 DateTimeOffset：{raw}");
-        }
-
-        public override void Write(
-            Utf8JsonWriter writer,
-            DateTimeOffset value,
-            JsonSerializerOptions options)
-            => writer.WriteStringValue(value.ToString("O", CultureInfo.InvariantCulture));
-    }
+        => new(JsonSerializerDefaults.Web);
 
 }

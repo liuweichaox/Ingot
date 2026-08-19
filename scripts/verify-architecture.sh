@@ -81,6 +81,31 @@ check "platform-infrastructure" src/platform/Ingot.Platform.Infrastructure \
   'using Ingot\.Platform\.Api' \
   "Platform Infrastructure 必须独立于 API 宿主"
 
+compatibility_hits=$(grep -rnE \
+  'SqliteAgentStore|LegacySqliteAgentRunImporter|IAgentRunImportStore|ImportLegacySqlite|Chat:DatabasePath|IBatchedEventLog|CompatibleDateTimeOffsetConverter|ResearchExperimentCommandException|ResearchExperimentPlanValidationException' \
+  src apps/platform/src docker-compose.app.yml scripts/run-platform-api.ps1 \
+  --include='*.cs' --include='*.csproj' --include='*.json' --include='*.js' \
+  --include='*.jsx' --include='*.yml' --include='*.ps1' \
+  --exclude-dir=bin --exclude-dir=obj --exclude-dir=node_modules 2>/dev/null || true)
+if [[ -n "$compatibility_hits" ]]; then
+  echo "✗ [current-product-only] 新项目不得恢复开发期兼容路径"
+  echo "$compatibility_hits" | sed 's/^/    /'
+  fail=1
+else
+  echo "✓ [current-product-only]"
+fi
+
+baseline_upgrade_hits=$(grep -nE \
+  '\b(RENAME|DROP (TABLE|VIEW|COLUMN))\b|to_regclass|legacy_' \
+  src/platform/Ingot.Platform.Infrastructure/Migrations/sql/0001_baseline.sql 2>/dev/null || true)
+if [[ -n "$baseline_upgrade_hits" ]]; then
+  echo "✗ [fresh-schema-baseline] 新装基线不得包含旧 schema 的识别、改名或删除逻辑"
+  echo "$baseline_upgrade_hits" | sed 's/^/    /'
+  fail=1
+else
+  echo "✓ [fresh-schema-baseline]"
+fi
+
 research_inspection_hits=$(grep -rnE \
   'using (Ingot\.Contracts\.Inspections|Ingot\.Platform\.Infrastructure\.Inspections)' \
   src/platform/Ingot.Platform.Infrastructure/ProcessResearch \

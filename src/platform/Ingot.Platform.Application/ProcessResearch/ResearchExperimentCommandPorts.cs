@@ -47,10 +47,10 @@ public interface IResearchExperimentKnowledgeGate
     Task ValidateAsync(ResearchExperiment experiment, CancellationToken ct = default);
 }
 
-public sealed class ResearchExperimentCommandException(string message)
+public sealed class ProcessResearchRuleException(string message)
     : InvalidOperationException(message);
 
-public sealed class ResearchExperimentPlanValidationException(
+public sealed class ResearchExperimentValidationException(
     IReadOnlyList<ResearchExperimentValidationIssue> errors)
     : InvalidOperationException(errors.FirstOrDefault()?.Message ?? "实验计划未通过校验。")
 {

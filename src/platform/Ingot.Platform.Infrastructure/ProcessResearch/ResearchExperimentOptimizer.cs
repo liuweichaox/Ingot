@@ -16,6 +16,7 @@ public sealed class ResearchExperimentOptimizer(
     IProcessOptimizerClient optimizerClient,
     IResearchObservationAssembler observationAssembler,
     ResearchExperimentResultMaterializer resultMaterializer,
+    ResearchExperimentCommands experimentCommands,
     ProcessResearchWorkflow workflow,
     ResearchOnlineAdmissionService? onlineAdmission = null,
     IMechanismKnowledgeStore? mechanismKnowledgeStore = null)
@@ -350,7 +351,7 @@ public sealed class ResearchExperimentOptimizer(
         };
         try
         {
-            var saved = await workflow.CreateExperimentAsync(
+            var saved = await experimentCommands.CreateExperimentAsync(
                 projectId,
                 generatedExperiment,
                 userId,

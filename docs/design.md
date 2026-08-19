@@ -83,7 +83,7 @@ Edge 不判断工艺原因，不运行产品级优化，也不成为实验和质
 
 Platform 是正式业务记录源，不能把实验状态或结论只保存在 Optimizer、Agent 或浏览器中。
 
-生产宿主把 Agent 运行快照和事件流保存在 Platform PostgreSQL 中；Agent 核心仍只依赖 `IAgentRunStore`，不引用 Npgsql。旧版 `Data/chat.db` 只作为一次性兼容导入源保留。进入黄金问题评测的运行会在同一恢复边界内冻结完整快照与 SHA-256，不能再按普通对话删除。
+生产宿主把 Agent 运行快照和事件流保存在 Platform PostgreSQL 中；Agent 核心仍只依赖 `IAgentRunStore`，不引用 Npgsql。进入黄金问题评测的运行会在同一恢复边界内冻结完整快照与 SHA-256，不能再按普通对话删除。
 
 Platform 内部按用例分离策略与实现：`Platform.Application` 保存可脱离数据库测试的应用规则和存储端口，`Platform.Infrastructure` 实现 PostgreSQL 事务、外部服务和跨上下文适配。并发幂等与原子写入继续由数据库事务和约束保证，不上提为内存规则。工艺研究规则不能直接读取检验模块；检验、过程运行和配置证据只能由显式登记的装配适配器（当前为 `ResearchObservationAssembler`）转换为研究观察。
 
@@ -206,7 +206,7 @@ Platform 内部按用例分离策略与实现：`Platform.Application` 保存可
 
 Agent 不直接依赖 Platform 内部 CRUD，也不因采用 MCP、OpenAPI 或某个 SDK 就获得业务权限。互操作适配层只负责能力发现、Schema 和调用；Platform 仍强制项目隔离、证据引用、状态转换、审批、幂等、审计和回滚。
 
-HTTP 错误统一使用 `application/problem+json`，并提供稳定的 `code`、请求 `traceId` 和兼容现有客户端的 `error` 字段。单调增长的研发历史集合使用不透明游标和有上限的 `limit`；项目工作区只返回最近一页及 `nextCursors`，外部实现不应依赖无界数组。
+HTTP 错误统一使用 `application/problem+json`，并提供稳定的 `code`、请求 `traceId` 和标准 `detail` 字段。单调增长的研发历史集合使用不透明游标和有上限的 `limit`；项目工作区只返回最近一页及 `nextCursors`，外部实现不应依赖无界数组。
 
 能力按风险逐步开放：
 

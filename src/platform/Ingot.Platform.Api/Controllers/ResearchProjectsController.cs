@@ -526,7 +526,7 @@ public sealed class ResearchProjectsController(
                 if (existing is not null)
                     return Ok(existing);
 
-                var experiment = await workflow.CreateExperimentAsync(
+                var experiment = await experimentCommands.CreateExperimentAsync(
                     projectId,
                     new ResearchExperiment
                     {
@@ -1045,19 +1045,7 @@ public sealed class ResearchProjectsController(
                 errors = exception.Errors
             });
         }
-        catch (ResearchExperimentPlanValidationException exception)
-        {
-            return new ConflictObjectResult(new
-            {
-                error = exception.Message,
-                errors = exception.Errors
-            });
-        }
         catch (ProcessResearchRuleException exception)
-        {
-            return new ConflictObjectResult(new { error = exception.Message });
-        }
-        catch (ResearchExperimentCommandException exception)
         {
             return new ConflictObjectResult(new { error = exception.Message });
         }

@@ -9,10 +9,7 @@ public static class ServiceCollectionExtensions
         this IServiceCollection services,
         IConfiguration configuration)
     {
-        services.AddSingleton<SqliteAgentStore>();
-        services.TryAddSingleton<IAgentRunStore>(provider => provider.GetRequiredService<SqliteAgentStore>());
         services.AddHostedService<AgentRunStoreInitializerHostedService>();
-        services.AddHostedService<LegacySqliteAgentRunImporterHostedService>();
 
         var useOpenAi = configuration.GetValue<bool>("Chat:Enabled") &&
                         string.Equals(

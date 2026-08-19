@@ -39,6 +39,11 @@ public sealed class EventLogHealthCheckTests
         public Task<long> AppendAsync(ProductionEvent evt, CancellationToken ct = default)
             => throw new NotSupportedException();
 
+        public Task<IReadOnlyList<long>> AppendBatchAsync(
+            IReadOnlyList<ProductionEvent> events,
+            CancellationToken ct = default)
+            => throw new NotSupportedException();
+
         public Task<IReadOnlyList<ProductionEvent>> QueryAsync(
             EventQuery query,
             CancellationToken ct = default)
@@ -58,7 +63,13 @@ public sealed class EventLogHealthCheckTests
             CancellationToken ct = default)
             => throw new NotSupportedException();
 
+        public Task QuarantineAsync(long seq, string reason, CancellationToken ct = default)
+            => throw new NotSupportedException();
+
         public Task<long> CountPendingAsync(CancellationToken ct = default)
             => Task.FromResult(pending);
+
+        public Task<EventLogPendingStatistics> GetPendingStatisticsAsync(CancellationToken ct = default)
+            => Task.FromResult(new EventLogPendingStatistics(pending, null, null, null));
     }
 }

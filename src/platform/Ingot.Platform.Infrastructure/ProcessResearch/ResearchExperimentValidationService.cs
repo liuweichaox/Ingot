@@ -105,10 +105,3 @@ public sealed class ResearchExperimentValidationService(IProcessResearchStore st
         return new ResearchExperimentValidationResult { Errors = errors };
     }
 }
-
-public sealed class ResearchExperimentValidationException(
-    IReadOnlyList<ResearchExperimentValidationIssue> errors)
-    : InvalidOperationException(errors.FirstOrDefault()?.Message ?? "实验计划未通过校验。")
-{
-    public IReadOnlyList<ResearchExperimentValidationIssue> Errors { get; } = errors;
-}

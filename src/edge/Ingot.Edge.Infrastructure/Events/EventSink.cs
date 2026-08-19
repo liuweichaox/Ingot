@@ -87,9 +87,7 @@ public sealed class EventSink : IEventSink
         IReadOnlyList<long> sequences;
         try
         {
-            sequences = _eventLog is IBatchedEventLog batchedLog
-                ? await batchedLog.AppendBatchAsync(recorded, ct).ConfigureAwait(false)
-                : await AppendOneByOneAsync(recorded, ct).ConfigureAwait(false);
+            sequences = await _eventLog.AppendBatchAsync(recorded, ct).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -111,16 +109,6 @@ public sealed class EventSink : IEventSink
             RecordEmittedMetric(evt.EventType, stopwatch.Elapsed.TotalMilliseconds / persisted.Length);
         await RecordBacklogMetricAsync(ct).ConfigureAwait(false);
         return persisted;
-    }
-
-    private async Task<IReadOnlyList<long>> AppendOneByOneAsync(
-        IReadOnlyList<ProductionEvent> events,
-        CancellationToken ct)
-    {
-        var sequences = new List<long>(events.Count);
-        foreach (var evt in events)
-            sequences.Add(await _eventLog.AppendAsync(evt, ct).ConfigureAwait(false));
-        return sequences;
     }
 
     private void RecordEmittedMetric(string eventType, double latencyMs)

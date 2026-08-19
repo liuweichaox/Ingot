@@ -83,7 +83,7 @@ Discrete run identity must remain traceable across ConnectorHost restarts. If th
 
 Platform is the formal business system of record. Experiment state or conclusions must not exist only in Optimizer, Agent, or a browser.
 
-The production host stores Agent run snapshots and event streams in Platform PostgreSQL. Agent core still depends only on `IAgentRunStore` and does not reference Npgsql. The legacy `Data/chat.db` remains only as a one-way compatibility import source. A run admitted to golden-question evaluation freezes its complete snapshot and SHA-256 inside the same recovery boundary and can no longer be deleted as an ordinary conversation.
+The production host stores Agent run snapshots and event streams in Platform PostgreSQL. Agent core still depends only on `IAgentRunStore` and does not reference Npgsql. A run admitted to golden-question evaluation freezes its complete snapshot and SHA-256 inside the same recovery boundary and can no longer be deleted as an ordinary conversation.
 
 Platform separates policy from implementation by use case: `Platform.Application` owns application rules and storage ports that can be tested without a database, while `Platform.Infrastructure` implements PostgreSQL transactions, external services, and cross-context adapters. Concurrency idempotency and atomic writes remain enforced by database transactions and constraints rather than being lifted into in-memory rules. Process-research rules cannot read the inspection module directly; inspection, process-run, and configuration evidence enters research only through explicitly registered assembly adapters (currently `ResearchObservationAssembler`).
 
@@ -206,7 +206,7 @@ It should not rewrite run identity, evidence relationships, experiment state mac
 
 Agents do not depend directly on internal Platform CRUD and do not gain business permission merely because MCP, OpenAPI, or an SDK is used. The interoperability adapter handles discovery, schemas, and invocation. Platform continues to enforce project isolation, evidence citations, state transitions, approval, idempotency, audit, and rollback.
 
-HTTP errors use `application/problem+json` with a stable `code`, request `traceId`, and an `error` compatibility field for existing clients. Monotonically growing research histories use opaque cursors and bounded `limit` values. The project workspace returns only the newest page plus `nextCursors`; external implementations must not depend on unbounded arrays.
+HTTP errors use `application/problem+json` with a stable `code`, request `traceId`, and standard `detail` field. Monotonically growing research histories use opaque cursors and bounded `limit` values. The project workspace returns only the newest page plus `nextCursors`; external implementations must not depend on unbounded arrays.
 
 Capabilities open progressively by risk:
 

@@ -12,7 +12,7 @@ namespace Ingot.Edge.Infrastructure.Events;
 /// <summary>
 ///     SQLite outbox：边缘生产数据的本地不可变日志。
 /// </summary>
-public sealed class SqliteEventLog : IEventLog, IBatchedEventLog
+public sealed class SqliteEventLog : IEventLog
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private static readonly Regex ContextKeyPattern = new(
@@ -552,14 +552,6 @@ public sealed class SqliteEventLog : IEventLog, IBatchedEventLog
             createEvents.ExecuteNonQuery();
         }
 
-        if (!ColumnExists(connection, transaction, "events", "execution_id"))
-        {
-            using var migrateEvents = connection.CreateCommand();
-            migrateEvents.Transaction = transaction;
-            migrateEvents.CommandText = "ALTER TABLE events ADD COLUMN execution_id TEXT;";
-            migrateEvents.ExecuteNonQuery();
-        }
-
         using (var initializeSchema = connection.CreateCommand())
         {
             initializeSchema.Transaction = transaction;
@@ -640,25 +632,6 @@ public sealed class SqliteEventLog : IEventLog, IBatchedEventLog
         {
             _writeLock.Release();
         }
-    }
-
-    private static bool ColumnExists(
-        SqliteConnection connection,
-        SqliteTransaction transaction,
-        string tableName,
-        string columnName)
-    {
-        using var command = connection.CreateCommand();
-        command.Transaction = transaction;
-        command.CommandText = $"PRAGMA table_info({tableName});";
-        using var reader = command.ExecuteReader();
-        while (reader.Read())
-        {
-            if (string.Equals(reader.GetString(1), columnName, StringComparison.OrdinalIgnoreCase))
-                return true;
-        }
-
-        return false;
     }
 
     private static async Task<long> ReadPendingCountAsync(

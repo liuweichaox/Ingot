@@ -13,7 +13,7 @@ public sealed class ResearchExperimentKnowledgeGate(
         if (experiment.Optimization is null)
             return;
         var project = await store.GetProjectAsync(experiment.ProjectId, ct).ConfigureAwait(false)
-            ?? throw new ResearchExperimentCommandException("研发项目不存在。");
+            ?? throw new ProcessResearchRuleException("研发项目不存在。");
         var knowledge = MechanismKnowledgeExperimentPolicy.Select(
             project,
             await mechanismKnowledgeStore.ListClaimsAsync(project.ProjectId, ct).ConfigureAwait(false),
@@ -23,15 +23,8 @@ public sealed class ResearchExperimentKnowledgeGate(
                 experiment.Optimization.MechanismKnowledgeSnapshotHash,
                 currentHash,
                 StringComparison.Ordinal))
-            throw new ResearchExperimentCommandException(
+            throw new ProcessResearchRuleException(
                 "机理知识已发生变化，请取消当前实验并基于最新知识重新生成计划。");
-        try
-        {
-            MechanismKnowledgeExperimentPolicy.ValidateHardConstraints(experiment, knowledge);
-        }
-        catch (ProcessResearchRuleException exception)
-        {
-            throw new ResearchExperimentCommandException(exception.Message);
-        }
+        MechanismKnowledgeExperimentPolicy.ValidateHardConstraints(experiment, knowledge);
     }
 }

@@ -34,7 +34,7 @@ public sealed partial class ResearchExperimentCommands(
             var validation = await experimentValidation.ValidateAsync(projectId, request, ct)
                 .ConfigureAwait(false);
             if (!validation.IsValid)
-                throw new ResearchExperimentPlanValidationException(validation.Errors);
+                throw new ResearchExperimentValidationException(validation.Errors);
         }
         ResearchOperatingRegion? validationWindow = null;
         if (request.ValidationOperatingRegionId is { } validationOperatingRegionId)
@@ -44,13 +44,13 @@ public sealed partial class ResearchExperimentCommands(
             if (validationWindow is null ||
                 validationWindow.ProjectId != projectId ||
                 validationWindow.Status != OperatingRegionStatuses.Candidate)
-                throw new ResearchExperimentCommandException("独立验证实验必须引用当前项目中的候选工艺操作域。");
+                throw new ProcessResearchRuleException("独立验证实验必须引用当前项目中的候选工艺操作域。");
         }
         if (request.HypothesisId is { } hypothesisId)
         {
             var hypothesis = await store.GetHypothesisAsync(hypothesisId, ct).ConfigureAwait(false);
             if (hypothesis is null || hypothesis.ProjectId != projectId)
-                throw new ResearchExperimentCommandException("实验引用的研发假设不存在于当前项目。");
+                throw new ProcessResearchRuleException("实验引用的研发假设不存在于当前项目。");
         }
 
         var knownVariables = project.Variables
@@ -59,14 +59,14 @@ public sealed partial class ResearchExperimentCommands(
         var designMethod = RequiredText(request.DesignMethod, "实验设计方法", 120)
             .ToLowerInvariant();
         if (!ResearchDesignMethods.IsValid(designMethod))
-            throw new ResearchExperimentCommandException("实验设计方法无效。");
+            throw new ProcessResearchRuleException("实验设计方法无效。");
         var controlledOnline = request.Optimization?.Mode == ResearchOptimizationModes.Controlled;
         if (controlledOnline)
         {
             if (request.RunPlan.Count != 1)
-                throw new ResearchExperimentCommandException("受控在线实验必须且只能包含一条运行建议。");
+                throw new ProcessResearchRuleException("受控在线实验必须且只能包含一条运行建议。");
             if (onlineAdmission is null)
-                throw new ResearchExperimentCommandException("受控在线准入服务不可用，按失败关闭处理。");
+                throw new ProcessResearchRuleException("受控在线准入服务不可用，按失败关闭处理。");
             var admission = await onlineAdmission.RequireAsync(
                 projectId,
                 request.Optimization!.MechanismKnowledgeSnapshotHash,
@@ -80,10 +80,10 @@ public sealed partial class ResearchExperimentCommands(
                 frozenAdmission.RollbackDrillId != admission.RollbackDrillId ||
                 !string.Equals(frozenAdmission.RollbackDrillRecordHash,
                     admission.RollbackDrillRecordHash, StringComparison.Ordinal))
-                throw new ResearchExperimentCommandException("受控在线建议没有冻结当前有效的回放与影子准入证据。");
+                throw new ProcessResearchRuleException("受控在线建议没有冻结当前有效的回放与影子准入证据。");
         }
         else if (request.RunPlan.Count < (validationWindow is null ? 2 : 3))
-            throw new ResearchExperimentCommandException(
+            throw new ProcessResearchRuleException(
                 validationWindow is null
                     ? "实验计划必须至少包含两个运行条件，不能用单点设置代替实验设计。"
                     : "独立验证实验至少需要三个重复运行。");
@@ -92,17 +92,17 @@ public sealed partial class ResearchExperimentCommands(
         {
             var code = NormalizeCode(value.VariableCode, "实验变量");
             if (!knownVariables.TryGetValue(code, out var variable))
-                throw new ResearchExperimentCommandException($"实验变量 {code} 不是项目中的可控变量。");
+                throw new ProcessResearchRuleException($"实验变量 {code} 不是项目中的可控变量。");
             var unit = RequiredText(value.Unit, "实验变量单位", 40);
             var normalizedValue = value.Value;
             if (!string.Equals(unit, variable.Unit, StringComparison.OrdinalIgnoreCase) &&
                 !ResearchUnitConverter.TryConvert(value.Value, unit, variable.Unit, out normalizedValue))
-                throw new ResearchExperimentCommandException(
+                throw new ProcessResearchRuleException(
                     $"实验变量 {code} 的单位必须与项目变量一致或可转换为 {variable.Unit}。 ");
             if (!double.IsFinite(normalizedValue) ||
                 variable.LowerLimit is { } lower && normalizedValue < lower ||
                 variable.UpperLimit is { } upper && normalizedValue > upper)
-                throw new ResearchExperimentCommandException($"实验变量 {code} 超出允许范围。");
+                throw new ProcessResearchRuleException($"实验变量 {code} 超出允许范围。");
             return value with { VariableCode = code, Value = normalizedValue, Unit = variable.Unit };
         }
 
@@ -112,7 +112,7 @@ public sealed partial class ResearchExperimentCommands(
             if (factors.Length == 0 ||
                 factors.Select(static value => value.VariableCode)
                     .Distinct(StringComparer.Ordinal).Count() != factors.Length)
-                throw new ResearchExperimentCommandException("每个实验运行必须包含不重复的可控变量设置。");
+                throw new ProcessResearchRuleException("每个实验运行必须包含不重复的可控变量设置。");
             return run with
             {
                 ExecutionKey = RequiredText(run.ExecutionKey, "实验运行标识", 120),
@@ -125,21 +125,21 @@ public sealed partial class ResearchExperimentCommands(
         if (runPlan.Select(static value => value.ExecutionKey).Distinct(StringComparer.Ordinal).Count() !=
             runPlan.Length ||
             runPlan.Select(static value => value.Sequence).Distinct().Count() != runPlan.Length)
-            throw new ResearchExperimentCommandException("实验运行标识和执行顺序必须唯一。");
+            throw new ProcessResearchRuleException("实验运行标识和执行顺序必须唯一。");
         var baselineExecutionKeys = request.BaselineExecutionKeys
             .Select(value => RequiredText(value, "对照运行标识", 120))
             .Distinct(StringComparer.Ordinal)
             .ToArray();
         if (baselineExecutionKeys.Length != request.BaselineExecutionKeys.Count)
-            throw new ResearchExperimentCommandException("对照运行标识不能重复。");
+            throw new ProcessResearchRuleException("对照运行标识不能重复。");
         if (baselineExecutionKeys.Length == 1)
-            throw new ResearchExperimentCommandException("生成独立对照置信区间至少需要两个对照运行。");
+            throw new ProcessResearchRuleException("生成独立对照置信区间至少需要两个对照运行。");
         if (baselineExecutionKeys.Length > 0)
         {
             var currentExecutionKeys = runPlan.Select(static value => value.ExecutionKey)
                 .ToHashSet(StringComparer.Ordinal);
             if (currentExecutionKeys.All(baselineExecutionKeys.Contains))
-                throw new ResearchExperimentCommandException("实验必须至少保留一个非对照运行用于效果比较。");
+                throw new ProcessResearchRuleException("实验必须至少保留一个非对照运行用于效果比较。");
             var eligiblePriorExecutionKeys = (await store.ListExperimentsAsync(projectId, ct)
                     .ConfigureAwait(false))
                 .Where(static value =>
@@ -150,7 +150,7 @@ public sealed partial class ResearchExperimentCommands(
                 .ToHashSet(StringComparer.Ordinal);
             if (baselineExecutionKeys.Any(key =>
                     !currentExecutionKeys.Contains(key) && !eligiblePriorExecutionKeys.Contains(key)))
-                throw new ResearchExperimentCommandException(
+                throw new ProcessResearchRuleException(
                     "对照运行必须来自本实验、已导入的历史观察或已完成实验。");
         }
         var distinctConditions = runPlan
@@ -160,9 +160,9 @@ public sealed partial class ResearchExperimentCommands(
             .Distinct(StringComparer.Ordinal)
             .Count();
         if (distinctConditions < 2 && validationWindow is null && !controlledOnline)
-            throw new ResearchExperimentCommandException("实验至少需要两个不同的变量组合。");
+            throw new ProcessResearchRuleException("实验至少需要两个不同的变量组合。");
         if (validationWindow is not null && distinctConditions != 1)
-            throw new ResearchExperimentCommandException("独立验证实验必须重复验证同一个候选设置，不能同时改变条件。");
+            throw new ProcessResearchRuleException("独立验证实验必须重复验证同一个候选设置，不能同时改变条件。");
 
         var factors = (request.Factors.Count > 0
                 ? request.Factors.Select(NormalizeFactor)
@@ -172,17 +172,17 @@ public sealed partial class ResearchExperimentCommands(
             .ToArray();
         if (factors.Select(static value => value.VariableCode).Distinct(StringComparer.Ordinal).Count() !=
             factors.Length)
-            throw new ResearchExperimentCommandException("同一实验变量只能设置一次。");
+            throw new ProcessResearchRuleException("同一实验变量只能设置一次。");
 
         var objectiveCodes = NormalizeCodes(request.ObjectiveCodes, "实验目标");
         var knownObjectives = project.Objectives.Select(static value => value.Code)
             .ToHashSet(StringComparer.Ordinal);
         if (objectiveCodes.Count == 0 || objectiveCodes.Any(code => !knownObjectives.Contains(code)))
-            throw new ResearchExperimentCommandException("实验必须引用项目中已经定义的目标。");
+            throw new ProcessResearchRuleException("实验必须引用项目中已经定义的目标。");
         if (request.Optimization is not null)
         {
             if (designMethod != ResearchDesignMethods.BayesianOptimization)
-                throw new ResearchExperimentCommandException("优化元数据只能附加到贝叶斯优化实验。");
+                throw new ProcessResearchRuleException("优化元数据只能附加到贝叶斯优化实验。");
             if (!Regex.IsMatch(
                     request.Optimization.InputHash,
                     "^[a-f0-9]{64}$",
@@ -193,7 +193,7 @@ public sealed partial class ResearchExperimentCommands(
                 !request.Optimization.RunPredictions.Select(static value => value.ExecutionKey)
                     .ToHashSet(StringComparer.Ordinal)
                     .SetEquals(runPlan.Select(static value => value.ExecutionKey)))
-                throw new ResearchExperimentCommandException("优化实验的模型版本、输入摘要或运行预测无效。");
+                throw new ProcessResearchRuleException("优化实验的模型版本、输入摘要或运行预测无效。");
             await ValidateCurrentMechanismKnowledgeAsync(request with { ProjectId = projectId }, ct)
                 .ConfigureAwait(false);
         }
@@ -253,7 +253,7 @@ public sealed partial class ResearchExperimentCommands(
             UpdatedAt = now
         };
         if (await store.GetExperimentAsync(value.ExperimentId, ct).ConfigureAwait(false) is not null)
-            throw new ResearchExperimentCommandException("实验标识已经存在。");
+            throw new ProcessResearchRuleException("实验标识已经存在。");
         var saved = await store.SaveExperimentTransactionAsync(
             value,
             new ResearchAuditEntry
@@ -313,9 +313,9 @@ public sealed partial class ResearchExperimentCommands(
         CancellationToken ct = default)
     {
         var source = await store.GetExperimentAsync(experimentId, ct).ConfigureAwait(false)
-            ?? throw new ResearchExperimentCommandException("实验不存在。");
+            ?? throw new ProcessResearchRuleException("实验不存在。");
         if (source.DesignMethod == ResearchDesignMethods.BayesianOptimization)
-            throw new ResearchExperimentCommandException("贝叶斯优化实验必须基于当前观察重新生成，不能直接复制。 ");
+            throw new ProcessResearchRuleException("贝叶斯优化实验必须基于当前观察重新生成，不能直接复制。 ");
         var suffix = Guid.CreateVersion7().ToString("N")[..8];
         var keyMap = source.RunPlan.ToDictionary(
             static run => run.ExecutionKey,
@@ -356,7 +356,7 @@ public sealed partial class ResearchExperimentCommands(
         CancellationToken ct = default)
     {
         var experiment = await store.GetExperimentAsync(experimentId, ct).ConfigureAwait(false)
-            ?? throw new ResearchExperimentCommandException("实验不存在。");
+            ?? throw new ProcessResearchRuleException("实验不存在。");
         await RequireMutableProjectAsync(experiment.ProjectId, ct).ConfigureAwait(false);
         var actor = NormalizeUser(userId);
         targetStatus = NormalizeStatus(targetStatus, ResearchExperimentStatuses.IsValid, "实验状态");
@@ -374,22 +374,22 @@ public sealed partial class ResearchExperimentCommands(
             _ => false
         };
         if (!allowed)
-            throw new ResearchExperimentCommandException(
+            throw new ProcessResearchRuleException(
                 $"实验状态不能从 {experiment.Status} 转换为 {targetStatus}。");
         if (targetStatus == ResearchExperimentStatuses.Approved &&
             string.Equals(experiment.CreatedBy, actor, StringComparison.Ordinal))
-            throw new ResearchExperimentCommandException("实验创建人和批准人必须分离。");
+            throw new ProcessResearchRuleException("实验创建人和批准人必须分离。");
         if (targetStatus == ResearchExperimentStatuses.Approved &&
             experiment.Optimization?.Mode == ResearchOptimizationModes.Shadow)
-            throw new ResearchExperimentCommandException("影子建议只用于旁路评估，不能批准或下发设备。");
+            throw new ProcessResearchRuleException("影子建议只用于旁路评估，不能批准或下发设备。");
         if (targetStatus == ResearchExperimentStatuses.Approved &&
             experiment.Optimization?.Mode == ResearchOptimizationModes.Controlled)
         {
             if (experiment.ControlledDecision?.Decision is not
                 (ResearchControlledDecisionStatuses.Accepted or ResearchControlledDecisionStatuses.Modified))
-                throw new ResearchExperimentCommandException("受控在线建议必须先由工程师明确接受或修改，才能批准。");
+                throw new ProcessResearchRuleException("受控在线建议必须先由工程师明确接受或修改，才能批准。");
             if (onlineAdmission is null)
-                throw new ResearchExperimentCommandException("受控在线准入服务不可用，按失败关闭处理。");
+                throw new ProcessResearchRuleException("受控在线准入服务不可用，按失败关闭处理。");
             await onlineAdmission.RequireAsync(
                 experiment.ProjectId,
                 experiment.Optimization.MechanismKnowledgeSnapshotHash,
@@ -400,7 +400,7 @@ public sealed partial class ResearchExperimentCommands(
         if (targetStatus == ResearchExperimentStatuses.Running &&
             experiment.ProjectRevision !=
             (await RequireProjectAsync(experiment.ProjectId, ct).ConfigureAwait(false)).Revision)
-            throw new ResearchExperimentCommandException("项目定义已变化，请基于最新变量和目标重新制定实验计划。");
+            throw new ProcessResearchRuleException("项目定义已变化，请基于最新变量和目标重新制定实验计划。");
         if (targetStatus == ResearchExperimentStatuses.Completed)
         {
             var results = (await store.ListExperimentResultsAsync(experiment.ProjectId, ct)
@@ -408,14 +408,14 @@ public sealed partial class ResearchExperimentCommands(
                 .Where(value => value.ExperimentId == experimentId)
                 .ToArray();
             if (results.Length == 0)
-                throw new ResearchExperimentCommandException("实验完成前必须记录由源数据计算得到的结果。");
+                throw new ProcessResearchRuleException("实验完成前必须记录由源数据计算得到的结果。");
             if (results.Any(static value => !value.CalculatedFromSource || !value.SafetyPassed))
-                throw new ResearchExperimentCommandException("实验结果必须来自源数据计算且通过安全约束检查。");
+                throw new ProcessResearchRuleException("实验结果必须来自源数据计算且通过安全约束检查。");
             var coveredObjectives = results.SelectMany(static value => value.Metrics)
                 .Select(static value => value.ObjectiveCode)
                 .ToHashSet(StringComparer.Ordinal);
             if (experiment.ObjectiveCodes.Any(code => !coveredObjectives.Contains(code)))
-                throw new ResearchExperimentCommandException("实验结果尚未覆盖全部实验目标。");
+                throw new ProcessResearchRuleException("实验结果尚未覆盖全部实验目标。");
         }
 
         var now = DateTimeOffset.UtcNow;
@@ -465,18 +465,18 @@ public sealed partial class ResearchExperimentCommands(
         CancellationToken ct = default)
     {
         var experiment = await store.GetExperimentAsync(experimentId, ct).ConfigureAwait(false)
-            ?? throw new ResearchExperimentCommandException("实验不存在。");
+            ?? throw new ProcessResearchRuleException("实验不存在。");
         var project = await RequireMutableProjectAsync(experiment.ProjectId, ct).ConfigureAwait(false);
         if (experiment.Optimization?.Mode != ResearchOptimizationModes.Controlled ||
             experiment.RunPlan.Count != 1)
-            throw new ResearchExperimentCommandException("只有单条受控在线建议可以记录人工决策。");
+            throw new ProcessResearchRuleException("只有单条受控在线建议可以记录人工决策。");
         if (experiment.Status != ResearchExperimentStatuses.Planned)
-            throw new ResearchExperimentCommandException("只有尚未批准的受控在线建议可以决策。");
+            throw new ProcessResearchRuleException("只有尚未批准的受控在线建议可以决策。");
         if (experiment.ControlledDecision is not null)
             return experiment;
         var actor = NormalizeUser(userId);
         if (string.Equals(experiment.CreatedBy, actor, StringComparison.Ordinal))
-            throw new ResearchExperimentCommandException("受控建议生成者不能替代现场工程师作出执行决策。");
+            throw new ProcessResearchRuleException("受控建议生成者不能替代现场工程师作出执行决策。");
         var decisionStatus = NormalizeStatus(
             request.Decision, ResearchControlledDecisionStatuses.IsValid, "受控在线决策");
         var reason = OptionalText(request.Reason, 4000);
@@ -493,10 +493,10 @@ public sealed partial class ResearchExperimentCommands(
                 !double.IsFinite(factor.Value) ||
                 variable.LowerLimit is { } lower && factor.Value < lower ||
                 variable.UpperLimit is { } upper && factor.Value > upper)
-                throw new ResearchExperimentCommandException($"批准变量 {code} 超出项目硬边界。");
+                throw new ProcessResearchRuleException($"批准变量 {code} 超出项目硬边界。");
             var unit = RequiredText(factor.Unit, "批准变量单位", 40);
             if (!string.Equals(unit, variable.Unit, StringComparison.OrdinalIgnoreCase))
-                throw new ResearchExperimentCommandException($"批准变量 {code} 的单位必须与项目定义一致。");
+                throw new ProcessResearchRuleException($"批准变量 {code} 的单位必须与项目定义一致。");
             return factor with { VariableCode = code, Unit = variable.Unit };
         }
 
@@ -504,7 +504,7 @@ public sealed partial class ResearchExperimentCommands(
         if (decisionStatus == ResearchControlledDecisionStatuses.Rejected)
         {
             if (reason is null)
-                throw new ResearchExperimentCommandException("拒绝受控在线建议必须记录原因，以便转化为约束或适用范围。");
+                throw new ProcessResearchRuleException("拒绝受控在线建议必须记录原因，以便转化为约束或适用范围。");
             approved = [];
         }
         else
@@ -517,14 +517,14 @@ public sealed partial class ResearchExperimentCommands(
             if (approved.Count != controls.Count ||
                 !approved.Select(static value => value.VariableCode)
                     .ToHashSet(StringComparer.Ordinal).SetEquals(controls.Keys))
-                throw new ResearchExperimentCommandException("工程师批准值必须包含且仅包含全部可控变量。");
+                throw new ProcessResearchRuleException("工程师批准值必须包含且仅包含全部可控变量。");
             var changed = approved.Zip(suggested).Any(pair =>
                 pair.First.VariableCode != pair.Second.VariableCode ||
                 Math.Abs(pair.First.Value - pair.Second.Value) > 1e-12);
             if (decisionStatus == ResearchControlledDecisionStatuses.Accepted && changed)
-                throw new ResearchExperimentCommandException("接受建议时批准值必须等于模型建议；需要改值请使用 modified。");
+                throw new ProcessResearchRuleException("接受建议时批准值必须等于模型建议；需要改值请使用 modified。");
             if (decisionStatus == ResearchControlledDecisionStatuses.Modified && (!changed || reason is null))
-                throw new ResearchExperimentCommandException("修改建议必须提供不同的完整批准值并说明原因。");
+                throw new ProcessResearchRuleException("修改建议必须提供不同的完整批准值并说明原因。");
         }
 
         var now = DateTimeOffset.UtcNow;
@@ -592,7 +592,7 @@ public sealed partial class ResearchExperimentCommands(
 
     private async Task<ResearchProject> RequireProjectAsync(Guid projectId, CancellationToken ct)
         => await store.GetProjectAsync(projectId, ct).ConfigureAwait(false)
-           ?? throw new ResearchExperimentCommandException("研发项目不存在。");
+           ?? throw new ProcessResearchRuleException("研发项目不存在。");
 
     private async Task<ResearchProject> RequireMutableProjectAsync(
         Guid projectId,
@@ -600,7 +600,7 @@ public sealed partial class ResearchExperimentCommands(
     {
         var project = await RequireProjectAsync(projectId, ct).ConfigureAwait(false);
         if (project.Status is ResearchProjectStatuses.Completed or ResearchProjectStatuses.Archived)
-            throw new ResearchExperimentCommandException("已完成或已归档的研发项目保持只读。");
+            throw new ProcessResearchRuleException("已完成或已归档的研发项目保持只读。");
         return project;
     }
 
@@ -615,7 +615,7 @@ public sealed partial class ResearchExperimentCommands(
     {
         var result = RequiredText(value, field, 120).ToLowerInvariant();
         if (!CodePattern().IsMatch(result))
-            throw new ResearchExperimentCommandException(
+            throw new ProcessResearchRuleException(
                 $"{field}必须以字母开头，并且只包含小写字母、数字、点、下划线或连字符。");
         return result;
     }
@@ -630,7 +630,7 @@ public sealed partial class ResearchExperimentCommands(
     {
         var result = RequiredText(value, field, 80).ToLowerInvariant();
         if (!validator(result))
-            throw new ResearchExperimentCommandException($"{field}无效。");
+            throw new ProcessResearchRuleException($"{field}无效。");
         return result;
     }
 
@@ -638,7 +638,7 @@ public sealed partial class ResearchExperimentCommands(
     {
         var result = value?.Trim() ?? "";
         if (result.Length == 0 || result.Length > maximumLength)
-            throw new ResearchExperimentCommandException(
+            throw new ProcessResearchRuleException(
                 $"{field}不能为空且最长 {maximumLength} 个字符。");
         return result;
     }
@@ -649,7 +649,7 @@ public sealed partial class ResearchExperimentCommands(
         if (string.IsNullOrEmpty(result))
             return null;
         if (result.Length > maximumLength)
-            throw new ResearchExperimentCommandException($"文本最长 {maximumLength} 个字符。");
+            throw new ProcessResearchRuleException($"文本最长 {maximumLength} 个字符。");
         return result;
     }
 

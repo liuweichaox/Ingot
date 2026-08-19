@@ -13,7 +13,7 @@ public sealed class ResearchExperimentCommandsTests
         var store = new MemoryCommandStore(project);
         var commands = new ResearchExperimentCommands(store);
 
-        var error = await Assert.ThrowsAsync<ResearchExperimentCommandException>(() =>
+        var error = await Assert.ThrowsAsync<ProcessResearchRuleException>(() =>
             commands.CreateExperimentAsync(
                 project.ProjectId,
                 Experiment([Run("run-1", 500)]),

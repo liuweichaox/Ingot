@@ -38,15 +38,12 @@ builder.Services.AddProblemDetails(options =>
     options.CustomizeProblemDetails = context =>
     {
         var status = context.ProblemDetails.Status ?? StatusCodes.Status500InternalServerError;
-        var detail = context.ProblemDetails.Detail
-                     ?? ReasonPhrases.GetReasonPhrase(status);
         context.ProblemDetails.Type ??= $"urn:ingot:problem:{ApiProblemDetailsFactory.CodeFor(status)}";
         context.ProblemDetails.Title ??= ReasonPhrases.GetReasonPhrase(status);
         context.ProblemDetails.Instance ??= context.HttpContext.Request.Path;
         context.ProblemDetails.Extensions["code"] = ApiProblemDetailsFactory.CodeFor(status);
         context.ProblemDetails.Extensions["traceId"] =
             Activity.Current?.Id ?? context.HttpContext.TraceIdentifier;
-        context.ProblemDetails.Extensions["error"] = detail;
     };
 });
 builder.Services.Configure<ApiBehaviorOptions>(options =>

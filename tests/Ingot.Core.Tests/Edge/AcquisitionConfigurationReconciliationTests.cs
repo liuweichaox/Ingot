@@ -344,5 +344,10 @@ public sealed class AcquisitionConfigurationReconciliationTests
             ProductionEvent evt,
             CancellationToken ct = default)
             => ValueTask.FromResult(evt);
+
+        public ValueTask<IReadOnlyList<ProductionEvent>> EmitBatchAsync(
+            IReadOnlyList<ProductionEvent> events,
+            CancellationToken ct = default)
+            => ValueTask.FromResult(events);
     }
 }

@@ -12,7 +12,7 @@ namespace Ingot.Core.Tests.Platform;
 public sealed class ApiArchitectureContractTests
 {
     [Fact]
-    public void ProblemDetails_PreservesCompatibilityAndMachineReadableIdentity()
+    public void ProblemDetails_ProvidesMachineReadableIdentity()
     {
         var context = new DefaultHttpContext();
         context.TraceIdentifier = "trace-test";
@@ -25,7 +25,6 @@ public sealed class ApiArchitectureContractTests
 
         Assert.Equal("state.conflict", value.Code);
         Assert.Equal("trace-test", value.TraceId);
-        Assert.Equal(value.Detail, value.Error);
         Assert.Equal("urn:ingot:problem:state.conflict", value.Type);
     }
 
@@ -44,7 +43,7 @@ public sealed class ApiArchitectureContractTests
     }
 
     [Fact]
-    public async Task ProblemFilter_ConvertsLegacyErrorObjectAndKeepsErrorAlias()
+    public async Task ProblemFilter_ConvertsControllerErrorObjectToProblemDetails()
     {
         var http = new DefaultHttpContext();
         http.TraceIdentifier = "trace-filter";
@@ -67,7 +66,7 @@ public sealed class ApiArchitectureContractTests
         var result = Assert.IsType<BadRequestObjectResult>(context.Result);
         var problem = Assert.IsType<ApiProblemDetails>(result.Value);
         Assert.Equal("request.invalid", problem.Code);
-        Assert.Equal("请求无效。", problem.Error);
+        Assert.Equal("请求无效。", problem.Detail);
         Assert.Contains("application/problem+json", result.ContentTypes);
     }
 }

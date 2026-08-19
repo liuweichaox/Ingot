@@ -133,6 +133,12 @@ public sealed class EventSinkTests
                 : Task.FromException<long>(AppendException);
         }
 
+        public Task<IReadOnlyList<long>> AppendBatchAsync(
+            IReadOnlyList<ProductionEvent> events,
+            CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<long>>(
+                events.Select((_, index) => AppendResult + index).ToArray());
+
         public Task<IReadOnlyList<ProductionEvent>> QueryAsync(
             EventQuery query,
             CancellationToken ct = default)
@@ -152,10 +158,17 @@ public sealed class EventSinkTests
             CancellationToken ct = default)
             => Task.CompletedTask;
 
+        public Task QuarantineAsync(long seq, string reason, CancellationToken ct = default)
+            => Task.CompletedTask;
+
         public Task<long> CountPendingAsync(CancellationToken ct = default)
             => CountPendingException is null
                 ? Task.FromResult(0L)
                 : Task.FromException<long>(CountPendingException);
+
+        public async Task<EventLogPendingStatistics> GetPendingStatisticsAsync(
+            CancellationToken ct = default)
+            => new(await CountPendingAsync(ct), null, null, null);
     }
 
     private sealed class RecordingMetrics : IMetricsCollector

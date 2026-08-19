@@ -1,5 +1,7 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Ingot.Agent;
+using Ingot.Contracts.Agents;
 using PlatformValidator = Ingot.Platform.Api.Configuration.ProductionConfigurationValidator;
 using EdgeValidator = Ingot.Edge.ConnectorHost.Configuration.ProductionConfigurationValidator;
 using Xunit;
@@ -272,11 +274,11 @@ public sealed class ProductionConfigurationValidatorTests
         var configuration = Build(new Dictionary<string, string?>
         {
             ["Chat:Enabled"] = "false",
-            ["Chat:Provider"] = "OpenAI",
-            ["Chat:DatabasePath"] = Path.Combine(Path.GetTempPath(), $"ingot-disabled-chat-{Guid.NewGuid():N}.db")
+            ["Chat:Provider"] = "OpenAI"
         });
         var services = new ServiceCollection();
         services.AddSingleton<IConfiguration>(configuration);
+        services.AddSingleton<IAgentRunStore, UnavailableAgentRunStore>();
         services.AddLogging();
         Ingot.Agent.ServiceCollectionExtensions.AddIngotAgentCore(services, configuration);
         Ingot.Agent.Providers.ServiceCollectionExtensions.AddIngotAgentProviders(services, configuration);
@@ -291,4 +293,16 @@ public sealed class ProductionConfigurationValidatorTests
 
     private static IConfiguration Build(IReadOnlyDictionary<string, string?> values) =>
         new ConfigurationBuilder().AddInMemoryCollection(values).Build();
+
+    private sealed class UnavailableAgentRunStore : IAgentRunStore
+    {
+        public Task InitializeAsync(CancellationToken ct = default) => Task.CompletedTask;
+        public Task CreateAsync(AgentRunSnapshot run, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<AgentRunSnapshot?> GetAsync(string runId, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<IReadOnlyList<AgentRunSnapshot>> ListAsync(string entryPoint, string userId, DateTimeOffset? before, int limit, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task UpdateAsync(AgentRunSnapshot run, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<bool> DeleteAsync(string runId, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<AgentStreamEvent> AppendEventAsync(string runId, string type, object? data, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<IReadOnlyList<AgentStreamEvent>> ReadEventsAsync(string runId, long afterSequence, int limit, CancellationToken ct = default) => throw new NotSupportedException();
+    }
 }

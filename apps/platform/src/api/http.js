@@ -58,7 +58,7 @@ function parseErrorDetail(text) {
   if (!value) return "";
   try {
     const payload = JSON.parse(value);
-    return payload.error || payload.message || value;
+    return payload.detail || payload.title || payload.message || value;
   } catch {
     return value;
   }

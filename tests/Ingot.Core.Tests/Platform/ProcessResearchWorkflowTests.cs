@@ -3,9 +3,11 @@ using Ingot.Contracts.ProcessConfiguration;
 using Ingot.Contracts.ProcessResearch;
 using Ingot.Contracts.ResearchAssets;
 using Ingot.Platform.Api.Controllers;
+using Ingot.Platform.Application.ProcessResearch;
 using Ingot.Platform.Infrastructure.Analytics;
 using Ingot.Platform.Infrastructure.ProcessConfiguration;
 using Ingot.Platform.Infrastructure.ProcessResearch;
+using Ingot.Platform.Infrastructure.ResearchAssets;
 using System.Text.Json;
 using Xunit;
 
@@ -29,7 +31,7 @@ public sealed class ProcessResearchWorkflowTests
     public async Task Hypothesis_PreservesCausalTemporalInteractionFailureAndFalsificationStructure()
     {
         var store = new MemoryStore();
-        var workflow = new ProcessResearchWorkflow(store);
+        var workflow = CreateWorkflow(store);
         var project = await workflow.CreateProjectAsync(ProjectDraft(), "engineer-a");
 
         var saved = await workflow.SaveHypothesisAsync(project.ProjectId, new ResearchHypothesis
@@ -82,7 +84,7 @@ public sealed class ProcessResearchWorkflowTests
     public async Task ProjectActivation_RequiresCurrentIndependentlyReviewedStageZeroPreregistration()
     {
         var store = new MemoryStore();
-        var workflow = new ProcessResearchWorkflow(store);
+        var workflow = CreateWorkflow(store);
         var project = await workflow.CreateProjectAsync(ProjectDraft(), "engineer-a");
 
         var missing = await Assert.ThrowsAsync<ProcessResearchRuleException>(() =>
@@ -126,7 +128,7 @@ public sealed class ProcessResearchWorkflowTests
     {
         var scenario = ResearchContextAdmissionEvaluatorTests.OpticalScenario();
         var store = new MemoryStore();
-        var workflow = new ProcessResearchWorkflow(
+        var workflow = CreateWorkflow(
             store,
             processConfigurations: new ScenarioOnlyConfigurationStore(scenario));
         var draft = await workflow.CreateProjectAsync(
@@ -170,7 +172,7 @@ public sealed class ProcessResearchWorkflowTests
             Status = ConfigurationStatuses.Draft
         };
         var store = new MemoryStore();
-        var workflow = new ProcessResearchWorkflow(
+        var workflow = CreateWorkflow(
             store,
             processConfigurations: new ScenarioOnlyConfigurationStore(scenario));
         var project = await workflow.CreateProjectAsync(
@@ -197,7 +199,7 @@ public sealed class ProcessResearchWorkflowTests
     public async Task ResearchProject_CompletesOnlyAfterValidatedOperatingRegion()
     {
         var store = new MemoryStore();
-        var workflow = new ProcessResearchWorkflow(store);
+        var workflow = CreateWorkflow(store);
         var project = await workflow.CreateProjectAsync(ProjectDraft(), "engineer-a");
         await FreezeAndReviewStageZeroAsync(store, project);
         project = await workflow.ChangeProjectStatusAsync(
@@ -220,7 +222,7 @@ public sealed class ProcessResearchWorkflowTests
             },
             "engineer-a");
 
-        var experiment = await workflow.CreateExperimentAsync(
+        var experiment = await workflow.ExperimentCommands.CreateExperimentAsync(
             project.ProjectId,
             new ResearchExperiment
             {
@@ -252,11 +254,11 @@ public sealed class ProcessResearchWorkflowTests
                 RollbackPlan = "恢复已验证基线工艺规范。"
             },
             "engineer-a");
-        experiment = await workflow.ChangeExperimentStatusAsync(
+        experiment = await workflow.ExperimentCommands.ChangeExperimentStatusAsync(
             experiment.ExperimentId,
             ResearchExperimentStatuses.Approved,
             "engineer-b");
-        experiment = await workflow.ChangeExperimentStatusAsync(
+        experiment = await workflow.ExperimentCommands.ChangeExperimentStatusAsync(
             experiment.ExperimentId,
             ResearchExperimentStatuses.Running,
             "engineer-a");
@@ -352,7 +354,7 @@ public sealed class ProcessResearchWorkflowTests
                 CalculatedFromSource = true
             },
             "engineer-a");
-        experiment = await workflow.ChangeExperimentStatusAsync(
+        experiment = await workflow.ExperimentCommands.ChangeExperimentStatusAsync(
             experiment.ExperimentId,
             ResearchExperimentStatuses.Completed,
             "engineer-a");
@@ -427,14 +429,14 @@ public sealed class ProcessResearchWorkflowTests
     public async Task Experiment_CreatorCannotApproveOwnPlan()
     {
         var store = new MemoryStore();
-        var workflow = new ProcessResearchWorkflow(store);
+        var workflow = CreateWorkflow(store);
         var project = await workflow.CreateProjectAsync(ProjectDraft(), "engineer-a");
         await FreezeAndReviewStageZeroAsync(store, project);
         await workflow.ChangeProjectStatusAsync(
             project.ProjectId,
             ResearchProjectStatuses.Active,
             "engineer-a");
-        var experiment = await workflow.CreateExperimentAsync(
+        var experiment = await workflow.ExperimentCommands.CreateExperimentAsync(
             project.ProjectId,
             new ResearchExperiment
             {
@@ -460,7 +462,7 @@ public sealed class ProcessResearchWorkflowTests
             "engineer-a");
 
         var error = await Assert.ThrowsAsync<ProcessResearchRuleException>(
-            () => workflow.ChangeExperimentStatusAsync(
+            () => workflow.ExperimentCommands.ChangeExperimentStatusAsync(
                 experiment.ExperimentId,
                 ResearchExperimentStatuses.Approved,
                 "engineer-a"));
@@ -472,14 +474,14 @@ public sealed class ProcessResearchWorkflowTests
     public async Task Experiment_CannotCompleteWithoutCalculatedResult()
     {
         var store = new MemoryStore();
-        var workflow = new ProcessResearchWorkflow(store);
+        var workflow = CreateWorkflow(store);
         var project = await workflow.CreateProjectAsync(ProjectDraft(), "engineer-a");
         await FreezeAndReviewStageZeroAsync(store, project);
         await workflow.ChangeProjectStatusAsync(
             project.ProjectId,
             ResearchProjectStatuses.Active,
             "engineer-a");
-        var experiment = await workflow.CreateExperimentAsync(
+        var experiment = await workflow.ExperimentCommands.CreateExperimentAsync(
             project.ProjectId,
             new ResearchExperiment
             {
@@ -494,17 +496,17 @@ public sealed class ProcessResearchWorkflowTests
                 RollbackPlan = "恢复基线工艺规范。"
             },
             "engineer-a");
-        await workflow.ChangeExperimentStatusAsync(
+        await workflow.ExperimentCommands.ChangeExperimentStatusAsync(
             experiment.ExperimentId,
             ResearchExperimentStatuses.Approved,
             "engineer-b");
-        await workflow.ChangeExperimentStatusAsync(
+        await workflow.ExperimentCommands.ChangeExperimentStatusAsync(
             experiment.ExperimentId,
             ResearchExperimentStatuses.Running,
             "engineer-a");
 
         var error = await Assert.ThrowsAsync<ProcessResearchRuleException>(
-            () => workflow.ChangeExperimentStatusAsync(
+            () => workflow.ExperimentCommands.ChangeExperimentStatusAsync(
                 experiment.ExperimentId,
                 ResearchExperimentStatuses.Completed,
                 "engineer-a"));
@@ -618,9 +620,9 @@ public sealed class ProcessResearchWorkflowTests
     public async Task ResultMaterializer_PersistsCompleteProcessExecutionObservationsAsFormalResult()
     {
         var store = new MemoryStore();
-        var workflow = new ProcessResearchWorkflow(store);
+        var workflow = CreateWorkflow(store);
         var project = await workflow.CreateProjectAsync(ProjectDraft(), "engineer-a");
-        var historical = await workflow.CreateExperimentAsync(
+        var historical = await workflow.ExperimentCommands.CreateExperimentAsync(
             project.ProjectId,
             new ResearchExperiment
             {
@@ -637,7 +639,7 @@ public sealed class ProcessResearchWorkflowTests
                 RollbackPlan = "不写入设备。"
             },
             "engineer-a");
-        var experiment = await workflow.CreateExperimentAsync(
+        var experiment = await workflow.ExperimentCommands.CreateExperimentAsync(
             project.ProjectId,
             new ResearchExperiment
             {
@@ -653,11 +655,11 @@ public sealed class ProcessResearchWorkflowTests
                 RollbackPlan = "恢复基线。"
             },
             "engineer-a");
-        experiment = await workflow.ChangeExperimentStatusAsync(
+        experiment = await workflow.ExperimentCommands.ChangeExperimentStatusAsync(
             experiment.ExperimentId,
             ResearchExperimentStatuses.Approved,
             "engineer-b");
-        experiment = await workflow.ChangeExperimentStatusAsync(
+        experiment = await workflow.ExperimentCommands.ChangeExperimentStatusAsync(
             experiment.ExperimentId,
             ResearchExperimentStatuses.Running,
             "engineer-a");
@@ -738,7 +740,7 @@ public sealed class ProcessResearchWorkflowTests
     public async Task ResultMaterializer_WithoutExplicitBaselineDoesNotInventConfidenceInterval()
     {
         var store = new MemoryStore();
-        var workflow = new ProcessResearchWorkflow(store);
+        var workflow = CreateWorkflow(store);
         var project = await workflow.CreateProjectAsync(
             ProjectDraft() with
             {
@@ -748,7 +750,7 @@ public sealed class ProcessResearchWorkflowTests
                 ]
             },
             "engineer-a");
-        var historical = await workflow.CreateExperimentAsync(
+        var historical = await workflow.ExperimentCommands.CreateExperimentAsync(
             project.ProjectId,
             new ResearchExperiment
             {
@@ -764,7 +766,7 @@ public sealed class ProcessResearchWorkflowTests
                 RollbackPlan = "不写入设备。"
             },
             "engineer-a");
-        var experiment = await workflow.CreateExperimentAsync(
+        var experiment = await workflow.ExperimentCommands.CreateExperimentAsync(
             project.ProjectId,
             new ResearchExperiment
             {
@@ -779,11 +781,11 @@ public sealed class ProcessResearchWorkflowTests
                 RollbackPlan = "恢复基线。"
             },
             "engineer-a");
-        experiment = await workflow.ChangeExperimentStatusAsync(
+        experiment = await workflow.ExperimentCommands.ChangeExperimentStatusAsync(
             experiment.ExperimentId,
             ResearchExperimentStatuses.Approved,
             "engineer-b");
-        experiment = await workflow.ChangeExperimentStatusAsync(
+        experiment = await workflow.ExperimentCommands.ChangeExperimentStatusAsync(
             experiment.ExperimentId,
             ResearchExperimentStatuses.Running,
             "engineer-a");
@@ -825,7 +827,7 @@ public sealed class ProcessResearchWorkflowTests
     public async Task MaterializedResultAudit_UsesComputedSafetyOutcome()
     {
         var store = new MemoryStore();
-        var workflow = new ProcessResearchWorkflow(store);
+        var workflow = CreateWorkflow(store);
         var draft = ProjectDraft();
         var project = await workflow.CreateProjectAsync(
             draft with
@@ -844,7 +846,7 @@ public sealed class ProcessResearchWorkflowTests
                 ]
             },
             "engineer-a");
-        var experiment = await workflow.CreateExperimentAsync(
+        var experiment = await workflow.ExperimentCommands.CreateExperimentAsync(
             project.ProjectId,
             new ResearchExperiment
             {
@@ -859,11 +861,11 @@ public sealed class ProcessResearchWorkflowTests
                 RollbackPlan = "恢复基线。"
             },
             "engineer-a");
-        experiment = await workflow.ChangeExperimentStatusAsync(
+        experiment = await workflow.ExperimentCommands.ChangeExperimentStatusAsync(
             experiment.ExperimentId,
             ResearchExperimentStatuses.Approved,
             "engineer-b");
-        experiment = await workflow.ChangeExperimentStatusAsync(
+        experiment = await workflow.ExperimentCommands.ChangeExperimentStatusAsync(
             experiment.ExperimentId,
             ResearchExperimentStatuses.Running,
             "engineer-a");
@@ -921,7 +923,7 @@ public sealed class ProcessResearchWorkflowTests
     public async Task Optimizer_CreatesAnOrdinaryExperimentFromPerRunObservations()
     {
         var store = new MemoryStore();
-        var workflow = new ProcessResearchWorkflow(store);
+        var workflow = CreateWorkflow(store);
         var project = await workflow.CreateProjectAsync(ProjectDraft(), "engineer-a");
         await store.SaveExperimentResultAsync(new ResearchExperimentResult
         {
@@ -974,6 +976,7 @@ public sealed class ProcessResearchWorkflowTests
             new StubOptimizerClient(),
             new EmptyObservationAssembler(),
             new ResearchExperimentResultMaterializer(workflow),
+            workflow.ExperimentCommands,
             workflow);
 
         var experiment = await optimizer.CreateNextExperimentAsync(
@@ -1010,11 +1013,11 @@ public sealed class ProcessResearchWorkflowTests
         Assert.Equal("declared-test-features", experiment.Optimization.FeatureSetId);
         Assert.Equal(1, experiment.Optimization.DerivedFeatureCount);
 
-        experiment = await workflow.ChangeExperimentStatusAsync(
+        experiment = await workflow.ExperimentCommands.ChangeExperimentStatusAsync(
             experiment.ExperimentId,
             ResearchExperimentStatuses.Approved,
             "engineer-b");
-        experiment = await workflow.ChangeExperimentStatusAsync(
+        experiment = await workflow.ExperimentCommands.ChangeExperimentStatusAsync(
             experiment.ExperimentId,
             ResearchExperimentStatuses.Running,
             "engineer-a");
@@ -1069,7 +1072,7 @@ public sealed class ProcessResearchWorkflowTests
     [Fact]
     public async Task Project_RejectsHiddenOrInvalidDerivedFeatureLogic()
     {
-        var workflow = new ProcessResearchWorkflow(new MemoryStore());
+        var workflow = CreateWorkflow(new MemoryStore());
         var invalid = ProjectDraft() with
         {
             Code = "invalid-derived-feature",
@@ -1160,7 +1163,7 @@ public sealed class ProcessResearchWorkflowTests
         var reviewed = await service.ReviewAsync(beneficial.AssessmentId, "engineer-b");
         Assert.Equal(ResearchTransferAssessmentStatuses.Reviewed, reviewed.Status);
 
-        var workflow = new ProcessResearchWorkflow(store);
+        var workflow = CreateWorkflow(store);
         await Assert.ThrowsAsync<ProcessResearchRuleException>(() =>
             workflow.SaveKnowledgeClaimAsync(
                 target.ProjectId,
@@ -1312,14 +1315,14 @@ public sealed class ProcessResearchWorkflowTests
     public async Task ShadowRecommendation_PreregistersDecision_ThenFreezesSourceOutcome()
     {
         var store = new MemoryStore();
-        var workflow = new ProcessResearchWorkflow(store);
+        var workflow = CreateWorkflow(store);
         var project = await workflow.CreateProjectAsync(ProjectDraft(), "engineer-a");
         await FreezeAndReviewStageZeroAsync(store, project);
         await workflow.ChangeProjectStatusAsync(
             project.ProjectId, ResearchProjectStatuses.Active, "engineer-a");
         var experiment = await CreateOptimizationExperimentAsync(workflow, project.ProjectId);
         var dispatchError = await Assert.ThrowsAsync<ProcessResearchRuleException>(() =>
-            workflow.ChangeExperimentStatusAsync(
+            workflow.ExperimentCommands.ChangeExperimentStatusAsync(
                 experiment.ExperimentId, ResearchExperimentStatuses.Approved, "engineer-b"));
         Assert.Contains("不能批准", dispatchError.Message, StringComparison.Ordinal);
         var assembler = new StubShadowObservationAssembler(new ExperimentRunObservation
@@ -1428,7 +1431,7 @@ public sealed class ProcessResearchWorkflowTests
     public async Task ShadowRecommendation_RejectsDecisionWithoutContextOrConsistentFactors()
     {
         var store = new MemoryStore();
-        var workflow = new ProcessResearchWorkflow(store);
+        var workflow = CreateWorkflow(store);
         var project = await workflow.CreateProjectAsync(ProjectDraft(), "engineer-a");
         await FreezeAndReviewStageZeroAsync(store, project);
         await workflow.ChangeProjectStatusAsync(
@@ -1473,7 +1476,7 @@ public sealed class ProcessResearchWorkflowTests
     public async Task ShadowReport_StopsOnMeasuredSafetyViolation()
     {
         var store = new MemoryStore();
-        var workflow = new ProcessResearchWorkflow(store);
+        var workflow = CreateWorkflow(store);
         var draft = ProjectDraft() with
         {
             Code = "shadow-safety-report",
@@ -1532,7 +1535,7 @@ public sealed class ProcessResearchWorkflowTests
     public async Task HistoricalReplay_FreezesCompleteRawEvidence_AndRequiresIndependentReview()
     {
         var store = new MemoryStore();
-        var workflow = new ProcessResearchWorkflow(store);
+        var workflow = CreateWorkflow(store);
         var project = await workflow.CreateProjectAsync(
             ProjectDraft() with { Code = "historical-replay-proof" }, "engineer-a");
         await FreezeAndReviewStageZeroAsync(store, project);
@@ -1617,7 +1620,7 @@ public sealed class ProcessResearchWorkflowTests
     public async Task HistoricalReplay_FailsGateForAdversarialOrIncompleteTrace(string mutation)
     {
         var store = new MemoryStore();
-        var workflow = new ProcessResearchWorkflow(store);
+        var workflow = CreateWorkflow(store);
         var project = await workflow.CreateProjectAsync(
             ProjectDraft() with { Code = $"replay-adversarial-{mutation}" }, "engineer-a");
         await FreezeAndReviewStageZeroAsync(store, project);
@@ -1679,7 +1682,7 @@ public sealed class ProcessResearchWorkflowTests
     public async Task ControlledOnline_FailsClosedWithoutReviewedReplayAndShadowCalibration()
     {
         var store = new MemoryStore();
-        var workflow = new ProcessResearchWorkflow(store);
+        var workflow = CreateWorkflow(store);
         var project = await workflow.CreateProjectAsync(
             ProjectDraft() with { Code = "controlled-gate-blocked" }, "engineer-a");
         await FreezeAndReviewStageZeroAsync(store, project);
@@ -1704,7 +1707,7 @@ public sealed class ProcessResearchWorkflowTests
     public async Task RollbackDrill_FreezesEvidenceAndRequiresIndependentReview()
     {
         var store = new MemoryStore();
-        var workflow = new ProcessResearchWorkflow(store);
+        var workflow = CreateWorkflow(store);
         var project = await workflow.CreateProjectAsync(
             ProjectDraft() with { Code = "rollback-drill-proof" }, "engineer-a");
         await FreezeAndReviewStageZeroAsync(store, project);
@@ -1742,7 +1745,7 @@ public sealed class ProcessResearchWorkflowTests
     public async Task ControlledOnline_RequiresOneEngineerDecision_AndPreservesSuggestedAndApprovedValues()
     {
         var store = new MemoryStore();
-        var bootstrapWorkflow = new ProcessResearchWorkflow(store);
+        var bootstrapWorkflow = CreateWorkflow(store);
         var project = await bootstrapWorkflow.CreateProjectAsync(
             ProjectDraft() with { Code = "controlled-online-proof" }, "engineer-a");
         await FreezeAndReviewStageZeroAsync(store, project);
@@ -1773,12 +1776,13 @@ public sealed class ProcessResearchWorkflowTests
             store, new EmptyObservationAssembler());
         var gate = new ResearchOnlineAdmissionService(
             store, shadow, new ResearchOnlineCampaignService(store));
-        var workflow = new ProcessResearchWorkflow(store, gate);
+        var workflow = CreateWorkflow(store, onlineAdmission: gate);
         var optimizer = new ResearchExperimentOptimizer(
             store,
             new ControlledOptimizerClient(),
             new EmptyObservationAssembler(),
             new ResearchExperimentResultMaterializer(workflow),
+            workflow.ExperimentCommands,
             workflow,
             gate);
 
@@ -1796,11 +1800,11 @@ public sealed class ProcessResearchWorkflowTests
         Assert.Single(experiment.RunPlan);
         Assert.True(experiment.Optimization!.OnlineAdmission!.Eligible);
         await Assert.ThrowsAsync<ProcessResearchRuleException>(() =>
-            workflow.ChangeExperimentStatusAsync(
+            workflow.ExperimentCommands.ChangeExperimentStatusAsync(
                 experiment.ExperimentId, ResearchExperimentStatuses.Approved, "engineer-b"));
 
         var approved = Run("approved", 1, 522, 11).Factors;
-        experiment = await workflow.DecideControlledExperimentAsync(
+        experiment = await workflow.ExperimentCommands.DecideControlledExperimentAsync(
             experiment.ExperimentId,
             new ResearchControlledDecisionRequest
             {
@@ -1817,7 +1821,7 @@ public sealed class ProcessResearchWorkflowTests
         Assert.Equal(64, experiment.ControlledDecision.DecisionSnapshotHash.Length);
         Assert.Equal(522, experiment.Execution!.Commands[0].RequestedFactors
             .Single(value => value.VariableCode == "holding-temperature").Value);
-        experiment = await workflow.ChangeExperimentStatusAsync(
+        experiment = await workflow.ExperimentCommands.ChangeExperimentStatusAsync(
             experiment.ExperimentId, ResearchExperimentStatuses.Approved, "engineer-b");
         Assert.Equal(ResearchExperimentExecutionStates.Ready, experiment.Execution!.State);
     }
@@ -1826,7 +1830,7 @@ public sealed class ProcessResearchWorkflowTests
     public async Task OnlineCampaign_StopsNextSuggestionOnSystematicShadowShift()
     {
         var store = new MemoryStore();
-        var workflow = new ProcessResearchWorkflow(store);
+        var workflow = CreateWorkflow(store);
         var project = await workflow.CreateProjectAsync(
             ProjectDraft() with { Code = "online-shift-stop" }, "engineer-a");
         await FreezeAndReviewStageZeroAsync(store, project);
@@ -2029,7 +2033,7 @@ public sealed class ProcessResearchWorkflowTests
     private static Task<ResearchExperiment> CreateOptimizationExperimentAsync(
         ProcessResearchWorkflow workflow,
         Guid projectId)
-        => workflow.CreateExperimentAsync(
+        => workflow.ExperimentCommands.CreateExperimentAsync(
             projectId,
             new ResearchExperiment
             {
@@ -2084,11 +2088,11 @@ public sealed class ProcessResearchWorkflowTests
         var experiment = await workflow.CreateOperatingRegionValidationExperimentAsync(
             window.OperatingRegionId,
             "engineer-a");
-        experiment = await workflow.ChangeExperimentStatusAsync(
+        experiment = await workflow.ExperimentCommands.ChangeExperimentStatusAsync(
             experiment.ExperimentId,
             ResearchExperimentStatuses.Approved,
             "engineer-b");
-        experiment = await workflow.ChangeExperimentStatusAsync(
+        experiment = await workflow.ExperimentCommands.ChangeExperimentStatusAsync(
             experiment.ExperimentId,
             ResearchExperimentStatuses.Running,
             "engineer-a");
@@ -2139,6 +2143,27 @@ public sealed class ProcessResearchWorkflowTests
             experiment,
             result,
             "system-research-automation");
+    }
+
+    private static ProcessResearchWorkflow CreateWorkflow(
+        IProcessResearchStore store,
+        ResearchOnlineAdmissionService? onlineAdmission = null,
+        IProcessConfigurationStore? processConfigurations = null,
+        IMechanismKnowledgeStore? mechanismKnowledgeStore = null,
+        ResearchExperimentValidationService? experimentValidation = null)
+    {
+        var experimentCommands = new ResearchExperimentCommands(
+            new ResearchExperimentCommandStoreAdapter(store),
+            onlineAdmission,
+            experimentValidation,
+            mechanismKnowledgeStore is null
+                ? null
+                : new ResearchExperimentKnowledgeGate(store, mechanismKnowledgeStore));
+        return new ProcessResearchWorkflow(
+            store,
+            experimentCommands,
+            processConfigurations,
+            mechanismKnowledgeStore);
     }
 
     private static ExperimentRunPlan Run(

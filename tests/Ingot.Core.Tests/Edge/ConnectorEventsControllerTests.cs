@@ -93,6 +93,12 @@ public sealed class ConnectorEventsControllerTests
             Captured = evt;
             return ValueTask.FromResult(evt with { Seq = 1 });
         }
+
+        public ValueTask<IReadOnlyList<ProductionEvent>> EmitBatchAsync(
+            IReadOnlyList<ProductionEvent> events,
+            CancellationToken ct = default)
+            => ValueTask.FromResult<IReadOnlyList<ProductionEvent>>(
+                events.Select((item, index) => item with { Seq = index + 1 }).ToArray());
     }
 
     private sealed class StubEdgeIdentityProvider : IEdgeIdentityProvider
@@ -103,6 +109,11 @@ public sealed class ConnectorEventsControllerTests
     private sealed class QueryingEventLog(IReadOnlyList<ProductionEvent> events) : IEventLog
     {
         public Task<long> AppendAsync(ProductionEvent evt, CancellationToken ct = default)
+            => throw new NotSupportedException();
+
+        public Task<IReadOnlyList<long>> AppendBatchAsync(
+            IReadOnlyList<ProductionEvent> items,
+            CancellationToken ct = default)
             => throw new NotSupportedException();
 
         public Task<IReadOnlyList<ProductionEvent>> QueryAsync(
@@ -128,7 +139,11 @@ public sealed class ConnectorEventsControllerTests
             => throw new NotSupportedException();
         public Task IncrementShipAttemptsAsync(long fromSeq, long toSeq, CancellationToken ct = default)
             => throw new NotSupportedException();
+        public Task QuarantineAsync(long seq, string reason, CancellationToken ct = default)
+            => throw new NotSupportedException();
         public Task<long> CountPendingAsync(CancellationToken ct = default)
+            => throw new NotSupportedException();
+        public Task<EventLogPendingStatistics> GetPendingStatisticsAsync(CancellationToken ct = default)
             => throw new NotSupportedException();
     }
 }

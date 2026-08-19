@@ -199,7 +199,7 @@ public sealed partial class ProcessResearchWorkflow
                 Factors = factors
             })
             .ToArray();
-        return await CreateExperimentAsync(
+        return await ExperimentCommands.CreateExperimentAsync(
             project.ProjectId,
             new ResearchExperiment
             {

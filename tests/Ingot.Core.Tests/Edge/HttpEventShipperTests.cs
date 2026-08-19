@@ -224,6 +224,11 @@ public sealed class HttpEventShipperTests
         public Task<long> AppendAsync(ProductionEvent evt, CancellationToken ct = default)
             => throw new NotSupportedException();
 
+        public Task<IReadOnlyList<long>> AppendBatchAsync(
+            IReadOnlyList<ProductionEvent> events,
+            CancellationToken ct = default)
+            => throw new NotSupportedException();
+
         public Task<IReadOnlyList<ProductionEvent>> QueryAsync(
             EventQuery query,
             CancellationToken ct = default)
@@ -248,8 +253,14 @@ public sealed class HttpEventShipperTests
             return Task.CompletedTask;
         }
 
+        public Task QuarantineAsync(long seq, string reason, CancellationToken ct = default)
+            => throw new NotSupportedException();
+
         public Task<long> CountPendingAsync(CancellationToken ct = default)
             => Task.FromResult(AckSeq.HasValue ? 0L : (long)pending.Count);
+
+        public async Task<EventLogPendingStatistics> GetPendingStatisticsAsync(CancellationToken ct = default)
+            => new(await CountPendingAsync(ct), null, null, null);
     }
 
     private sealed class FakeMetrics : IMetricsCollector
@@ -293,6 +304,7 @@ public sealed class HttpEventShipperTests
         public IReadOnlyList<long> Quarantined => _quarantined.Order().ToArray();
         public long? AckSeq { get; private set; }
         public Task<long> AppendAsync(ProductionEvent evt, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<IReadOnlyList<long>> AppendBatchAsync(IReadOnlyList<ProductionEvent> items, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<IReadOnlyList<ProductionEvent>> QueryAsync(EventQuery query, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<IReadOnlyList<ProductionEvent>> ReadPendingAsync(int max, CancellationToken ct = default)
             => Task.FromResult<IReadOnlyList<ProductionEvent>>(events.Where(value => value.Seq > (AckSeq ?? 0) && !_quarantined.Contains(value.Seq)).Take(max).ToArray());
@@ -310,5 +322,7 @@ public sealed class HttpEventShipperTests
         }
         public Task<long> CountPendingAsync(CancellationToken ct = default)
             => Task.FromResult((long)events.Count(value => value.Seq > (AckSeq ?? 0) && !_quarantined.Contains(value.Seq)));
+        public async Task<EventLogPendingStatistics> GetPendingStatisticsAsync(CancellationToken ct = default)
+            => new(await CountPendingAsync(ct), null, null, null);
     }
 }

@@ -1,5 +1,6 @@
 using Ingot.Contracts.ProcessResearch;
 using Ingot.Platform.Infrastructure.ProcessResearch;
+using Ingot.Platform.Application.ProcessResearch;
 using System.Text.Json;
 using Xunit;
 

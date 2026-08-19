@@ -9,6 +9,11 @@ public interface IEventLog
 {
     Task<long> AppendAsync(ProductionEvent evt, CancellationToken ct = default);
 
+    /// <summary>在同一事务中持久化整批事件。</summary>
+    Task<IReadOnlyList<long>> AppendBatchAsync(
+        IReadOnlyList<ProductionEvent> events,
+        CancellationToken ct = default);
+
     Task<IReadOnlyList<ProductionEvent>> QueryAsync(EventQuery query, CancellationToken ct = default);
 
     Task<IReadOnlyList<ProductionEvent>> ReadPendingAsync(int max, CancellationToken ct = default);
@@ -19,13 +24,11 @@ public interface IEventLog
     Task IncrementShipAttemptsAsync(long fromSeq, long toSeq, CancellationToken ct = default);
 
     /// <summary>隔离被中心确定性拒绝的单条事件，使后续有效事件可以继续交付。</summary>
-    Task QuarantineAsync(long seq, string reason, CancellationToken ct = default)
-        => throw new NotSupportedException("当前事件日志不支持毒事件隔离。");
+    Task QuarantineAsync(long seq, string reason, CancellationToken ct = default);
 
     Task<long> CountPendingAsync(CancellationToken ct = default);
 
-    async Task<EventLogPendingStatistics> GetPendingStatisticsAsync(CancellationToken ct = default)
-        => new(await CountPendingAsync(ct).ConfigureAwait(false), null, null, null);
+    Task<EventLogPendingStatistics> GetPendingStatisticsAsync(CancellationToken ct = default);
 }
 
 public sealed record EventLogPendingStatistics(

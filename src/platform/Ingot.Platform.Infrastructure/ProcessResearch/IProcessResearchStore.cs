@@ -197,5 +197,3 @@ public interface IProcessResearchStore
         CancellationToken ct = default)
         => new() { Items = (await ListAuditEntriesAsync(projectId, ct).ConfigureAwait(false)).Take(limit).ToArray() };
 }
-
-public sealed class ProcessResearchRuleException(string message) : InvalidOperationException(message);

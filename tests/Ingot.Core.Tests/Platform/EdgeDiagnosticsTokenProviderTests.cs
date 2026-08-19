@@ -1,5 +1,4 @@
 using Ingot.Platform.Api.Events;
-using Ingot.Platform.Infrastructure.Events;
 using Microsoft.Extensions.Options;
 using Xunit;
 
@@ -10,35 +9,27 @@ public sealed class EdgeDiagnosticsTokenProviderTests
     [Fact]
     public void TryGetToken_ShouldPreferDedicatedDiagnosticsToken()
     {
-        var provider = CreateProvider("diagnostics-token", "ingest-token");
+        var provider = CreateProvider("diagnostics-token");
 
         Assert.True(provider.TryGetToken("EDGE-01", out var token));
         Assert.Equal("diagnostics-token", token);
     }
 
     [Fact]
-    public void TryGetToken_ShouldFallBackToIngestTokenForLegacyNode()
+    public void TryGetToken_ShouldRejectMissingDedicatedDiagnosticsToken()
     {
-        var provider = CreateProvider(null, "ingest-token");
+        var provider = CreateProvider(null);
 
-        Assert.True(provider.TryGetToken("EDGE-01", out var token));
-        Assert.Equal("ingest-token", token);
+        Assert.False(provider.TryGetToken("EDGE-01", out var token));
+        Assert.Empty(token);
     }
 
-    private static EdgeDiagnosticsTokenProvider CreateProvider(
-        string? diagnosticsToken,
-        string? ingestToken)
+    private static EdgeDiagnosticsTokenProvider CreateProvider(string? diagnosticsToken)
     {
         var diagnostics = new EdgeDiagnosticsOptions();
         if (diagnosticsToken is not null)
             diagnostics.EdgeTokens["EDGE-01"] = diagnosticsToken;
 
-        var events = new PlatformEventOptions();
-        if (ingestToken is not null)
-            events.EdgeTokens["EDGE-01"] = ingestToken;
-
-        return new EdgeDiagnosticsTokenProvider(
-            Options.Create(diagnostics),
-            Options.Create(events));
+        return new EdgeDiagnosticsTokenProvider(Options.Create(diagnostics));
     }
 }
