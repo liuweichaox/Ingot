@@ -9,8 +9,7 @@ public sealed class MigrationRunnerTests
         new Dictionary<string, string>(StringComparer.Ordinal)
         {
             ["0001"] = "62d13b11ac9e7cfca3ccfa3f3d5c8687d5bd709537328c8ce1afe63d736c8ce1",
-            ["0002"] = "208472536e44cca47c5e0104419d488a0c2abd4705f4092e7a4ad33bff9b6b08",
-            ["0003"] = "e116890af686fe679465ce2cf3d1b2754681aa9b204765bc5526c80fb9446ad8"
+            ["0002"] = "208472536e44cca47c5e0104419d488a0c2abd4705f4092e7a4ad33bff9b6b08"
         };
 
     [Fact]
@@ -32,7 +31,6 @@ public sealed class MigrationRunnerTests
     [Theory]
     [InlineData("Ingot.Platform.Infrastructure.Migrations.sql.0001_baseline.sql", "0001", "baseline")]
     [InlineData("Ingot.Platform.Infrastructure.Migrations.sql.0002_problem_cases.sql", "0002", "problem_cases")]
-    [InlineData("Ingot.Platform.Infrastructure.Migrations.sql.0003_operating_region_complete.sql", "0003", "operating_region_complete")]
     public void ParseResourceName_SplitsVersionAndName(string resource, string version, string name)
     {
         var parsed = MigrationRunner.ParseResourceName(resource);
