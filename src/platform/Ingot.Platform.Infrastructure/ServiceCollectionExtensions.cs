@@ -7,6 +7,7 @@ using Ingot.Platform.Application.ProcessResearch;
 using Ingot.Platform.Application.ProcessExecutions;
 using Ingot.Platform.Inspections.Infrastructure;
 using Ingot.Platform.Infrastructure.ProcessExecutions;
+using Microsoft.Extensions.Logging;
 using Ingot.Platform.Infrastructure.Events;
 using Ingot.Platform.Infrastructure.AgentTools;
 using Ingot.Platform.Infrastructure.AgentRuns;
@@ -129,6 +130,10 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<PostgresExecutionBoundaryStore>();
         services.AddSingleton<IExecutionBoundaryStore>(
             provider => provider.GetRequiredService<PostgresExecutionBoundaryStore>());
+        services.AddSingleton<ExecutionBoundaryRecognizer>();
+        services.AddSingleton<IExecutionBoundaryRecognizer>(
+            provider => provider.GetRequiredService<ExecutionBoundaryRecognizer>());
+        services.AddSingleton<ExecutionBoundaryRecognitionService>();
 
         return services;
     }
