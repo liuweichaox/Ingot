@@ -11,9 +11,14 @@ export default defineConfig({
     chunkSizeWarningLimit: 1200,
     rollupOptions: {
       output: {
-        manualChunks: {
-          "react-vendor": ["react", "react-dom", "react-router"],
-          "ui-vendor": ["@headlessui/react", "@heroicons/react"],
+        manualChunks(id) {
+          if (/[\\/]node_modules[\\/](react|react-dom|react-router)[\\/]/.test(id)) {
+            return "react-vendor";
+          }
+          if (/[\\/]node_modules[\\/]@(?:headlessui|heroicons)[\\/]react[\\/]/.test(id)) {
+            return "ui-vendor";
+          }
+          return undefined;
         },
       },
     },
