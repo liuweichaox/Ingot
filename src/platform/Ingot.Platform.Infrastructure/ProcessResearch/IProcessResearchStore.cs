@@ -151,7 +151,9 @@ public interface IProcessResearchStore
         return saved;
     }
 
-    Task<ResearchOperatingRegion?> GetOperatingRegionAsync(Guid operatingRegionId, CancellationToken ct = default);
+    Task<ResearchOperatingRegion?> GetOperatingRegionAsync(
+        Guid operatingRegionId,
+        CancellationToken ct = default);
     Task<IReadOnlyList<ResearchOperatingRegion>> ListOperatingRegionsAsync(
         Guid projectId,
         CancellationToken ct = default);

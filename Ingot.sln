@@ -48,6 +48,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ingot.Platform.Migrator", "
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ingot.Agent.Contracts", "src\shared\Ingot.Agent.Contracts\Ingot.Agent.Contracts.csproj", "{BEB1325A-FD39-473A-BD5C-4688C9E904E5}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ingot.Platform.Application", "src\platform\Ingot.Platform.Application\Ingot.Platform.Application.csproj", "{25134936-52BD-4E79-B790-1ACDEFB74ECD}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -250,6 +252,18 @@ Global
 		{BEB1325A-FD39-473A-BD5C-4688C9E904E5}.Release|x64.Build.0 = Release|Any CPU
 		{BEB1325A-FD39-473A-BD5C-4688C9E904E5}.Release|x86.ActiveCfg = Release|Any CPU
 		{BEB1325A-FD39-473A-BD5C-4688C9E904E5}.Release|x86.Build.0 = Release|Any CPU
+		{25134936-52BD-4E79-B790-1ACDEFB74ECD}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{25134936-52BD-4E79-B790-1ACDEFB74ECD}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{25134936-52BD-4E79-B790-1ACDEFB74ECD}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{25134936-52BD-4E79-B790-1ACDEFB74ECD}.Debug|x64.Build.0 = Debug|Any CPU
+		{25134936-52BD-4E79-B790-1ACDEFB74ECD}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{25134936-52BD-4E79-B790-1ACDEFB74ECD}.Debug|x86.Build.0 = Debug|Any CPU
+		{25134936-52BD-4E79-B790-1ACDEFB74ECD}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{25134936-52BD-4E79-B790-1ACDEFB74ECD}.Release|Any CPU.Build.0 = Release|Any CPU
+		{25134936-52BD-4E79-B790-1ACDEFB74ECD}.Release|x64.ActiveCfg = Release|Any CPU
+		{25134936-52BD-4E79-B790-1ACDEFB74ECD}.Release|x64.Build.0 = Release|Any CPU
+		{25134936-52BD-4E79-B790-1ACDEFB74ECD}.Release|x86.ActiveCfg = Release|Any CPU
+		{25134936-52BD-4E79-B790-1ACDEFB74ECD}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -275,5 +289,6 @@ Global
 		{EC565E68-F5B0-4B0D-A8B6-CE7EB68A0915} = {33333333-3333-4333-8333-333333333333}
 		{1D13FF00-C928-40CE-8C2C-E474036121EF} = {33333333-3333-4333-8333-333333333333}
 		{BEB1325A-FD39-473A-BD5C-4688C9E904E5} = {11111111-1111-4111-8111-111111111111}
+		{25134936-52BD-4E79-B790-1ACDEFB74ECD} = {33333333-3333-4333-8333-333333333333}
 	EndGlobalSection
 EndGlobal

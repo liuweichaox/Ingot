@@ -1,6 +1,7 @@
 using Ingot.Contracts.ProcessResearch;
 using Ingot.Contracts.Events;
 using Ingot.Platform.Api.Agents;
+using Ingot.Platform.Application.ProcessResearch;
 using Ingot.Platform.Infrastructure.ProcessExecutions;
 using Ingot.Platform.Infrastructure.ProcessResearch;
 using Microsoft.AspNetCore.Mvc;
@@ -15,6 +16,7 @@ namespace Ingot.Platform.Api.Controllers;
 public sealed class ResearchProjectsController(
     IProcessResearchStore store,
     ProcessResearchWorkflow workflow,
+    ResearchExperimentCommands experimentCommands,
     ResearchExperimentDesignService experimentDesigns,
     ResearchExperimentValidationService experimentValidation,
     ResearchExperimentOptimizer experimentOptimizer,
@@ -414,7 +416,7 @@ public sealed class ResearchProjectsController(
         => ExecuteForProjectAsync(
             projectId,
             true,
-            async identity => Ok(await workflow.CreateExperimentAsync(
+            async identity => Ok(await experimentCommands.CreateExperimentAsync(
                 projectId,
                 request,
                 identity.UserId,
@@ -553,7 +555,7 @@ public sealed class ResearchProjectsController(
         return await ExecuteForProjectAsync(
             experiment.ProjectId,
             true,
-            async identity => Ok(await workflow.ChangeExperimentStatusAsync(
+            async identity => Ok(await experimentCommands.ChangeExperimentStatusAsync(
                 experimentId,
                 request.TargetStatus,
                 identity.UserId,
@@ -573,7 +575,7 @@ public sealed class ResearchProjectsController(
         return await ExecuteForProjectAsync(
             experiment.ProjectId,
             true,
-            async identity => Ok(await workflow.CloneExperimentAsync(
+            async identity => Ok(await experimentCommands.CloneExperimentAsync(
                 experimentId, request, identity.UserId, ct).ConfigureAwait(false)),
             ct).ConfigureAwait(false);
     }
@@ -659,7 +661,7 @@ public sealed class ResearchProjectsController(
         return await ExecuteForProjectAsync(
             experiment.ProjectId,
             true,
-            async identity => Ok(await workflow.DecideControlledExperimentAsync(
+            async identity => Ok(await experimentCommands.DecideControlledExperimentAsync(
                 experimentId, request, identity.UserId, ct).ConfigureAwait(false)),
             ct).ConfigureAwait(false);
     }
@@ -1043,7 +1045,19 @@ public sealed class ResearchProjectsController(
                 errors = exception.Errors
             });
         }
+        catch (ResearchExperimentPlanValidationException exception)
+        {
+            return new ConflictObjectResult(new
+            {
+                error = exception.Message,
+                errors = exception.Errors
+            });
+        }
         catch (ProcessResearchRuleException exception)
+        {
+            return new ConflictObjectResult(new { error = exception.Message });
+        }
+        catch (ResearchExperimentCommandException exception)
         {
             return new ConflictObjectResult(new { error = exception.Message });
         }

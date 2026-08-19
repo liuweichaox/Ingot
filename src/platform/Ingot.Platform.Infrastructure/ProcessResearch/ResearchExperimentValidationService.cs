@@ -1,4 +1,5 @@
 using Ingot.Contracts.ProcessResearch;
+using Ingot.Platform.Application.ProcessResearch;
 
 namespace Ingot.Platform.Infrastructure.ProcessResearch;
 
@@ -8,6 +9,7 @@ namespace Ingot.Platform.Infrastructure.ProcessResearch;
 /// service makes the same common failures visible before submission.
 /// </summary>
 public sealed class ResearchExperimentValidationService(IProcessResearchStore store)
+    : IResearchExperimentPlanValidator
 {
     public async Task<ResearchExperimentValidationResult> ValidateAsync(
         Guid projectId,

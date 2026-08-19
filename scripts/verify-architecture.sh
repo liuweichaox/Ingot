@@ -49,6 +49,10 @@ check "application" src/edge/Ingot.Edge.Application \
   'using (Ingot\.Edge\.(Infrastructure|ConnectorHost)|Ingot\.Platform|Npgsql|Microsoft\.Data|Serilog|Prometheus)' \
   "Application 必须保持实现中立"
 
+check "platform-application" src/platform/Ingot.Platform.Application \
+  'using (Ingot\.Platform\.Infrastructure|Npgsql|Microsoft\.Data|Serilog|Prometheus)' \
+  "Platform Application 必须保持实现中立"
+
 check "contracts" src/shared/Ingot.Contracts \
   'using (Npgsql|Microsoft\.(Data|AspNetCore|Extensions)|Serilog|Prometheus|Ingot\.(Platform|Edge|Agent))' \
   "Contracts 只允许依赖 Domain"
@@ -118,6 +122,10 @@ project_check src/shared/Ingot.Domain/Ingot.Domain.csproj \
 project_check src/shared/Ingot.Agent.Contracts/Ingot.Agent.Contracts.csproj \
   '<(PackageReference|ProjectReference)' \
   "Agent Contracts 必须保持零引用"
+
+project_check src/platform/Ingot.Platform.Application/Ingot.Platform.Application.csproj \
+  'Ingot\.Platform\.Infrastructure|Npgsql|Microsoft\.Data\.Sqlite|Serilog|Prometheus' \
+  "Platform Application 必须独立于基础设施实现"
 
 project_check src/platform/Ingot.Platform.Api/Ingot.Platform.Api.csproj \
   'Npgsql|Microsoft\.Data\.Sqlite' \

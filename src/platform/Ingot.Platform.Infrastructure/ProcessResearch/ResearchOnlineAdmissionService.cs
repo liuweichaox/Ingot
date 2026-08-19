@@ -1,4 +1,5 @@
 using Ingot.Contracts.ProcessResearch;
+using Ingot.Platform.Application.ProcessResearch;
 using Ingot.Platform.Infrastructure.ResearchAssets;
 
 namespace Ingot.Platform.Infrastructure.ProcessResearch;
@@ -12,7 +13,7 @@ public sealed class ResearchOnlineAdmissionService(
     IProcessResearchStore store,
     ResearchShadowRecommendationService shadowRecommendations,
     ResearchOnlineCampaignService onlineCampaign,
-    IMechanismKnowledgeStore? mechanismKnowledgeStore = null)
+    IMechanismKnowledgeStore? mechanismKnowledgeStore = null) : IResearchOnlineAdmissionGate
 {
     public const int MinimumValidShadowOutcomes = ValidationThresholds.MinimumCalibrationCheckCount;
     public const double MinimumPredictionCoverage = ValidationThresholds.MinimumCalibrationCoverage;
