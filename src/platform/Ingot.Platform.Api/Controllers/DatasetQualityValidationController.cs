@@ -32,7 +32,7 @@ public sealed class DatasetQualityValidationController(
         if (denied is not null)
             return denied;
         if (file.Length <= 0 || file.Length > 100 * 1024 * 1024)
-            return BadRequest(new { error = "数据集质量验证数据文件必须在 1 字节到 100 MiB 之间。" });
+            return InvalidRequest("数据集质量验证数据文件必须在 1 字节到 100 MiB 之间。");
         DatasetQualityValidationDatasetManifest? manifest;
         try
         {
@@ -42,10 +42,10 @@ public sealed class DatasetQualityValidationController(
         }
         catch (JsonException exception)
         {
-            return BadRequest(new { error = $"数据集质量验证清单 JSON 无效：{exception.Message}" });
+            return InvalidRequest($"数据集质量验证清单 JSON 无效：{exception.Message}");
         }
         if (manifest is null)
-            return BadRequest(new { error = "数据集质量验证清单不能为空。" });
+            return InvalidRequest("数据集质量验证清单不能为空。");
         try
         {
             await using var content = file.OpenReadStream();
@@ -59,7 +59,7 @@ public sealed class DatasetQualityValidationController(
         catch (Exception exception) when (
             exception is ResearchAssetRuleException or InvalidDataException)
         {
-            return Conflict(new { error = exception.Message });
+            return StateConflict(exception.Message);
         }
     }
 }

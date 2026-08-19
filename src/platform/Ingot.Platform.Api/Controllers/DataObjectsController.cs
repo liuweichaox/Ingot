@@ -9,7 +9,7 @@ namespace Ingot.Platform.Api.Controllers;
 [Route("api/v1/data-objects")]
 public sealed class DataObjectsController(
     IPlatformEventStore events,
-    PlatformUserResolver userResolver) : ControllerBase
+    PlatformUserResolver userResolver) : PlatformApiController
 {
     [HttpGet]
     public async Task<IActionResult> Query(
@@ -23,15 +23,15 @@ public sealed class DataObjectsController(
     {
         var identity = userResolver.ResolveIdentity(User);
         if (identity is null)
-            return Unauthorized(new { error = "需要平台统一认证。" });
+            return AuthenticationRequired("需要平台统一认证。");
         if (!identity.HasAnyRole(PlatformRoles.QualityRead))
-            return Forbid();
+            return AuthorizationDenied();
         if (from > to)
-            return BadRequest(new { error = "开始时间不能晚于结束时间。" });
+            return InvalidRequest("开始时间不能晚于结束时间。");
         if (limit is < 1 or > 500)
-            return BadRequest(new { error = "Limit 必须在 1 到 500 之间。" });
+            return InvalidRequest("Limit 必须在 1 到 500 之间。");
         if (offset < 0)
-            return BadRequest(new { error = "Offset 不能小于 0。" });
+            return InvalidRequest("Offset 不能小于 0。");
 
         return Ok(await events.QueryDataObjectsAsync(new DataObjectQuery
         {

@@ -444,10 +444,36 @@ public sealed class ResearchObservationAssemblerTests
             CancellationToken ct = default)
             => Task.FromResult(records.FirstOrDefault(value => value.RecordId == recordId));
 
+        public Task<InspectionRecord?> GetCorrectionForAsync(Guid recordId, CancellationToken ct = default)
+            => Task.FromResult(records.FirstOrDefault(value => value.SupersedesRecordId == recordId));
+
+        public Task<IReadOnlyList<InspectionScope>> ListScopesAsync(CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<InspectionScope>>([]);
+
+        public Task<InspectionScope?> GetScopeAsync(string scopeId, CancellationToken ct = default)
+            => Task.FromResult<InspectionScope?>(null);
+
+        public Task<InspectionScope> UpsertScopeAsync(InspectionScope scope, CancellationToken ct = default)
+            => throw new NotSupportedException();
+
+        public Task<bool> DeleteScopeAsync(string scopeId, CancellationToken ct = default)
+            => throw new NotSupportedException();
+
         public Task<IReadOnlyList<InspectionRecord>> QueryAsync(
             InspectionRecordQuery query,
             CancellationToken ct = default)
             => Task.FromResult<IReadOnlyList<InspectionRecord>>(records);
+
+        public Task<InspectionRecordPage> QueryPageAsync(
+            InspectionRecordQuery query,
+            CancellationToken ct = default)
+            => Task.FromResult(new InspectionRecordPage
+            {
+                Data = records,
+                Total = records.Count,
+                Offset = query.Offset,
+                Limit = query.Limit
+            });
 
         public Task<IReadOnlyList<InspectionRecord>> QueryAllByExecutionIdsAsync(
             IReadOnlyCollection<string> executionIds,

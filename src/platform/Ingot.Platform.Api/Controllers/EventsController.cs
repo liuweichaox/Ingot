@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Ingot.Platform.Api.Errors;
 using Ingot.Platform.Api.Events;
 using Ingot.Platform.Infrastructure.Events;
 using Ingot.Contracts.Events;
@@ -13,7 +14,7 @@ namespace Ingot.Platform.Api.Controllers;
 public sealed class EventsController(
     IPlatformEventStore store,
     EdgeTokenValidator tokenValidator,
-    IOptions<PlatformEventOptions> eventOptions) : ControllerBase
+    IOptions<PlatformEventOptions> eventOptions) : PlatformApiController
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private readonly PlatformEventOptions _eventOptions = eventOptions.Value;
@@ -25,16 +26,16 @@ public sealed class EventsController(
         CancellationToken ct)
     {
         if (!EventBatchValidator.TryValidate(request, out var normalized, out var error))
-            return BadRequest(new { error });
+            return InvalidRequest(error);
         if (!tokenValidator.IsAuthorized(
                 normalized!.EdgeId,
                 Request.Headers.Authorization.FirstOrDefault()))
         {
-            return Unauthorized(new { error = "Edge token 无效。" });
+            return AuthenticationRequired("Edge token 无效。");
         }
 
         if (!PlatformIngestWindow.TryValidate(normalized, _eventOptions, DateTimeOffset.UtcNow, out var windowError))
-            return BadRequest(new { error = windowError });
+            return InvalidRequest(windowError);
 
         try
         {
@@ -42,7 +43,7 @@ public sealed class EventsController(
         }
         catch (ArgumentException exception)
         {
-            return BadRequest(new { error = exception.Message });
+            return InvalidRequest(exception.Message);
         }
     }
 
@@ -74,7 +75,7 @@ public sealed class EventsController(
             limit,
             offset);
         if (!TryValidateQuery(query, out var error))
-            return BadRequest(new { error });
+            return InvalidRequest(error);
 
         var eventsTask = store.QueryAsync(query, ct);
         var statsTask = store.GetScopeStatsAsync(query with { Offset = 0 }, ct);
@@ -112,8 +113,12 @@ public sealed class EventsController(
                 out var cursor))
         {
             Response.StatusCode = StatusCodes.Status400BadRequest;
+            Response.ContentType = "application/problem+json";
             await Response.WriteAsJsonAsync(
-                new { error = "Last-Event-ID 必须是非负整数。" },
+                ApiProblemDetailsFactory.Create(
+                    HttpContext,
+                    StatusCodes.Status400BadRequest,
+                    "Last-Event-ID 必须是非负整数。"),
                 ct).ConfigureAwait(false);
             return;
         }
@@ -121,7 +126,13 @@ public sealed class EventsController(
         if (afterIngestId is < 0)
         {
             Response.StatusCode = StatusCodes.Status400BadRequest;
-            await Response.WriteAsJsonAsync(new { error = "afterIngestId 不能小于 0。" }, ct)
+            Response.ContentType = "application/problem+json";
+            await Response.WriteAsJsonAsync(
+                    ApiProblemDetailsFactory.Create(
+                        HttpContext,
+                        StatusCodes.Status400BadRequest,
+                        "afterIngestId 不能小于 0。"),
+                    ct)
                 .ConfigureAwait(false);
             return;
         }
@@ -141,8 +152,12 @@ public sealed class EventsController(
         if (!TryValidateQuery(initialQuery, out var validationError))
         {
             Response.StatusCode = StatusCodes.Status400BadRequest;
+            Response.ContentType = "application/problem+json";
             await Response.WriteAsJsonAsync(
-                new { error = validationError },
+                ApiProblemDetailsFactory.Create(
+                    HttpContext,
+                    StatusCodes.Status400BadRequest,
+                    validationError),
                 ct).ConfigureAwait(false);
             return;
         }
@@ -184,7 +199,7 @@ public sealed class EventsController(
             .ThenBy(static item => item.IngestId)
             .ToArray();
         if (pair.Length == 0)
-            return NotFound(new { executionId, error = "未找到对应生产过程执行。" });
+            return ResourceNotFound("未找到对应生产过程执行。", ("executionId", executionId));
 
         var first = pair[0];
         var startedAt = pair.Min(static item => item.Event.OccurredAt);

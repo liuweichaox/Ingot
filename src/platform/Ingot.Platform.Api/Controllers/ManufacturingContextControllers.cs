@@ -27,7 +27,7 @@ public sealed class ToolingComponentTypesController(
         if (denied is not null)
             return denied;
         if (!ManufacturingContextValidator.TryValidate(request, out ToolingComponentTypeDefinition? normalized, out var error))
-            return BadRequest(new { error });
+            return InvalidRequest(error);
         return Ok(await store.UpsertComponentTypeAsync(normalized!, ct).ConfigureAwait(false));
     }
 
@@ -40,8 +40,8 @@ public sealed class ToolingComponentTypesController(
         var denied = DeniedConfigurationWrite();
         if (denied is not null)
             return denied;
-        try { return await action().ConfigureAwait(false) ? NoContent() : NotFound(); }
-        catch (InvalidOperationException ex) { return Conflict(new { error = ex.Message }); }
+        try { return await action().ConfigureAwait(false) ? NoContent() : ResourceNotFound(); }
+        catch (InvalidOperationException ex) { return StateConflict(ex.Message); }
     }
 }
 
@@ -65,7 +65,7 @@ public sealed class ToolingTypesController(
         if (denied is not null)
             return denied;
         if (!ManufacturingContextValidator.TryValidate(request, out ToolingTypeDefinition? normalized, out var error))
-            return BadRequest(new { error });
+            return InvalidRequest(error);
         return await ExecuteAsync(() => store.CreateToolingTypeAsync(normalized!, ct)).ConfigureAwait(false);
     }
 
@@ -80,15 +80,15 @@ public sealed class ToolingTypesController(
             return await store.DeleteToolingTypeAsync(toolingTypeCode.Trim().ToLowerInvariant(), version, ct)
                     .ConfigureAwait(false)
                 ? NoContent()
-                : NotFound();
+                : ResourceNotFound();
         }
-        catch (InvalidOperationException ex) { return Conflict(new { error = ex.Message }); }
+        catch (InvalidOperationException ex) { return StateConflict(ex.Message); }
     }
 
     private async Task<IActionResult> ExecuteAsync<T>(Func<Task<T>> action)
     {
         try { return Ok(await action().ConfigureAwait(false)); }
-        catch (InvalidOperationException ex) { return Conflict(new { error = ex.Message }); }
+        catch (InvalidOperationException ex) { return StateConflict(ex.Message); }
     }
 }
 
@@ -115,9 +115,9 @@ public sealed class ToolingComponentsController(
         if (denied is not null)
             return denied;
         if (!ManufacturingContextValidator.TryValidate(request, out ToolingComponent? normalized, out var error))
-            return BadRequest(new { error });
+            return InvalidRequest(error);
         try { return Ok(await store.UpsertComponentAsync(normalized!, ct).ConfigureAwait(false)); }
-        catch (InvalidOperationException ex) { return Conflict(new { error = ex.Message }); }
+        catch (InvalidOperationException ex) { return StateConflict(ex.Message); }
     }
 
     [HttpDelete("{componentId}")]
@@ -126,8 +126,8 @@ public sealed class ToolingComponentsController(
         var denied = DeniedConfigurationWrite();
         if (denied is not null)
             return denied;
-        try { return await store.DeleteComponentAsync(componentId.Trim(), ct).ConfigureAwait(false) ? NoContent() : NotFound(); }
-        catch (InvalidOperationException ex) { return Conflict(new { error = ex.Message }); }
+        try { return await store.DeleteComponentAsync(componentId.Trim(), ct).ConfigureAwait(false) ? NoContent() : ResourceNotFound(); }
+        catch (InvalidOperationException ex) { return StateConflict(ex.Message); }
     }
 }
 
@@ -151,9 +151,9 @@ public sealed class ToolingAssembliesController(
         if (denied is not null)
             return denied;
         if (!ManufacturingContextValidator.TryValidate(request, out ToolingAssembly? normalized, out var error))
-            return BadRequest(new { error });
+            return InvalidRequest(error);
         try { return Ok(await store.UpsertAssemblyAsync(normalized!, ct).ConfigureAwait(false)); }
-        catch (InvalidOperationException ex) { return Conflict(new { error = ex.Message }); }
+        catch (InvalidOperationException ex) { return StateConflict(ex.Message); }
     }
 
     [HttpDelete("{toolingAssemblyId}")]
@@ -162,8 +162,8 @@ public sealed class ToolingAssembliesController(
         var denied = DeniedConfigurationWrite();
         if (denied is not null)
             return denied;
-        try { return await store.DeleteAssemblyAsync(toolingAssemblyId.Trim(), ct).ConfigureAwait(false) ? NoContent() : NotFound(); }
-        catch (InvalidOperationException ex) { return Conflict(new { error = ex.Message }); }
+        try { return await store.DeleteAssemblyAsync(toolingAssemblyId.Trim(), ct).ConfigureAwait(false) ? NoContent() : ResourceNotFound(); }
+        catch (InvalidOperationException ex) { return StateConflict(ex.Message); }
     }
 
     [HttpGet("revisions")]
@@ -194,9 +194,9 @@ public sealed class ToolingAssembliesController(
             return denied;
         request = request is null ? null : request with { ToolingAssemblyId = toolingAssemblyId.Trim() };
         if (!ManufacturingContextValidator.TryValidate(request, out ToolingAssemblyRevision? normalized, out var error))
-            return BadRequest(new { error });
+            return InvalidRequest(error);
         try { return Ok(await store.CreateAssemblyRevisionAsync(normalized!, ct).ConfigureAwait(false)); }
-        catch (InvalidOperationException ex) { return Conflict(new { error = ex.Message }); }
+        catch (InvalidOperationException ex) { return StateConflict(ex.Message); }
     }
 
     [HttpDelete("revisions/{assemblyRevisionId:guid}")]
@@ -205,8 +205,8 @@ public sealed class ToolingAssembliesController(
         var denied = DeniedConfigurationWrite();
         if (denied is not null)
             return denied;
-        try { return await store.DeleteAssemblyRevisionAsync(assemblyRevisionId, ct).ConfigureAwait(false) ? NoContent() : NotFound(); }
-        catch (InvalidOperationException ex) { return Conflict(new { error = ex.Message }); }
+        try { return await store.DeleteAssemblyRevisionAsync(assemblyRevisionId, ct).ConfigureAwait(false) ? NoContent() : ResourceNotFound(); }
+        catch (InvalidOperationException ex) { return StateConflict(ex.Message); }
     }
 }
 
@@ -236,9 +236,9 @@ public sealed class ToolingInstallationsController(
         if (denied is not null)
             return denied;
         if (!ManufacturingContextValidator.TryValidate(request, out ToolingInstallation? normalized, out var error))
-            return BadRequest(new { error });
+            return InvalidRequest(error);
         try { return Ok(await store.CreateInstallationAsync(normalized!, ct).ConfigureAwait(false)); }
-        catch (InvalidOperationException ex) { return Conflict(new { error = ex.Message }); }
+        catch (InvalidOperationException ex) { return StateConflict(ex.Message); }
     }
 
     [HttpPost("{installationId:guid}:remove")]
@@ -257,9 +257,9 @@ public sealed class ToolingInstallationsController(
                 request?.At ?? DateTimeOffset.UtcNow,
                 request?.Actor,
                 ct).ConfigureAwait(false);
-            return item is null ? NotFound() : Ok(item);
+            return item is null ? ResourceNotFound() : Ok(item);
         }
-        catch (InvalidOperationException ex) { return Conflict(new { error = ex.Message }); }
+        catch (InvalidOperationException ex) { return StateConflict(ex.Message); }
     }
 
     [HttpDelete("{installationId:guid}")]
@@ -268,8 +268,8 @@ public sealed class ToolingInstallationsController(
         var denied = DeniedConfigurationWrite();
         if (denied is not null)
             return denied;
-        try { return await store.DeleteInstallationAsync(installationId, ct).ConfigureAwait(false) ? NoContent() : NotFound(); }
-        catch (InvalidOperationException ex) { return Conflict(new { error = ex.Message }); }
+        try { return await store.DeleteInstallationAsync(installationId, ct).ConfigureAwait(false) ? NoContent() : ResourceNotFound(); }
+        catch (InvalidOperationException ex) { return StateConflict(ex.Message); }
     }
 }
 
@@ -300,7 +300,7 @@ public sealed class ProductionContextsController(
         if (denied is not null)
             return denied;
         var item = await store.ResolveAsync(equipmentId, at ?? DateTimeOffset.UtcNow, ct).ConfigureAwait(false);
-        return item is null ? NotFound() : Ok(item);
+        return item is null ? ResourceNotFound() : Ok(item);
     }
 
     [HttpPost]
@@ -310,13 +310,13 @@ public sealed class ProductionContextsController(
         if (denied is not null)
             return denied;
         if (!ManufacturingContextValidator.TryValidate(request, out ProductionContext? normalized, out var error))
-            return BadRequest(new { error });
+            return InvalidRequest(error);
         if (!int.TryParse(normalized!.ProcessSpecificationVersion, out var processSpecificationVersion) || processSpecificationVersion < 1)
-            return BadRequest(new { error = "ProcessSpecificationVersion 必须是已发布工艺规范的正整数版本。" });
+            return InvalidRequest("ProcessSpecificationVersion 必须是已发布工艺规范的正整数版本。");
         var processSpecification = await processConfigurations.GetProcessSpecificationAsync(
             normalized.ProcessSpecificationId.Trim().ToLowerInvariant(), processSpecificationVersion, ct).ConfigureAwait(false);
         if (processSpecification is null || processSpecification.Status != ConfigurationStatuses.Published)
-            return BadRequest(new { error = "生产上下文必须引用已发布的工艺规范版本。" });
+            return InvalidRequest("生产上下文必须引用已发布的工艺规范版本。");
         var selectorContext = new Dictionary<string, string>(StringComparer.Ordinal)
         {
             ["product_family_code"] = normalized.ProductFamilyCode,
@@ -324,9 +324,9 @@ public sealed class ProductionContextsController(
             ["equipment_id"] = normalized.EquipmentId
         };
         if (!ProcessAnalysisResolver.MatchesSelector(processSpecification.ContextSelector, selectorContext))
-            return BadRequest(new { error = "工艺规范的适用条件与当前产品或设备不匹配。" });
+            return InvalidRequest("工艺规范的适用条件与当前产品或设备不匹配。");
         try { return Ok(await store.StartProductionContextAsync(normalized!, ct).ConfigureAwait(false)); }
-        catch (InvalidOperationException ex) { return Conflict(new { error = ex.Message }); }
+        catch (InvalidOperationException ex) { return StateConflict(ex.Message); }
     }
 
     [HttpPost("{contextId:guid}:close")]
@@ -345,9 +345,9 @@ public sealed class ProductionContextsController(
                 request?.At ?? DateTimeOffset.UtcNow,
                 request?.Actor,
                 ct).ConfigureAwait(false);
-            return item is null ? NotFound() : Ok(item);
+            return item is null ? ResourceNotFound() : Ok(item);
         }
-        catch (InvalidOperationException ex) { return Conflict(new { error = ex.Message }); }
+        catch (InvalidOperationException ex) { return StateConflict(ex.Message); }
     }
 
     [HttpDelete("{contextId:guid}")]
@@ -356,8 +356,8 @@ public sealed class ProductionContextsController(
         var denied = DeniedConfigurationWrite();
         if (denied is not null)
             return denied;
-        try { return await store.DeleteProductionContextAsync(contextId, ct).ConfigureAwait(false) ? NoContent() : NotFound(); }
-        catch (InvalidOperationException ex) { return Conflict(new { error = ex.Message }); }
+        try { return await store.DeleteProductionContextAsync(contextId, ct).ConfigureAwait(false) ? NoContent() : ResourceNotFound(); }
+        catch (InvalidOperationException ex) { return StateConflict(ex.Message); }
     }
 }
 

@@ -8,7 +8,7 @@ namespace Ingot.Platform.Api.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/metrics-data")]
-public class MetricsController : ControllerBase
+public class MetricsController : PlatformApiController
 {
     private readonly IHttpClientFactory _httpClientFactory;
 
@@ -49,7 +49,7 @@ public class MetricsController : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, new { error = ex.Message });
+            return ProblemResponse(StatusCodes.Status500InternalServerError, ex.Message, []);
         }
     }
 

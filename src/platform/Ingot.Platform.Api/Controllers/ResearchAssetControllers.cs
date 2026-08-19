@@ -27,7 +27,7 @@ public sealed class TrainingDatasetsController(
             return denied;
         var value = await store.GetDatasetAsync(datasetId.Trim().ToLowerInvariant(), version, ct)
             .ConfigureAwait(false);
-        return value is null ? NotFound() : Ok(value);
+        return value is null ? ResourceNotFound() : Ok(value);
     }
 
     [HttpPost]
@@ -45,7 +45,7 @@ public sealed class TrainingDatasetsController(
         }
         catch (ResearchAssetRuleException exception)
         {
-            return Conflict(new { error = exception.Message });
+            return StateConflict(exception.Message);
         }
     }
 }
@@ -71,7 +71,7 @@ public sealed class ProcessModelsController(
         var normalizedId = modelId.Trim().ToLowerInvariant();
         var model = await store.GetModelAsync(normalizedId, version, ct).ConfigureAwait(false);
         if (model is null)
-            return NotFound();
+            return ResourceNotFound();
         var evaluations = await store.ListEvaluationsAsync(normalizedId, version, ct).ConfigureAwait(false);
         var driftReadings = await store.ListDriftReadingsAsync(normalizedId, version, ct).ConfigureAwait(false);
         var audit = await store.ListAuditEntriesAsync("model", $"{normalizedId}:{version}", ct)
@@ -159,7 +159,7 @@ public sealed class ProcessModelsController(
         }
         catch (ResearchAssetRuleException exception)
         {
-            return Conflict(new { error = exception.Message });
+            return StateConflict(exception.Message);
         }
     }
 }
@@ -209,7 +209,7 @@ public sealed class ProcessKnowledgeController(
             return access.Result;
         var content = await store.OpenKnowledgeSourceAsync(sourceId, ct).ConfigureAwait(false);
         return content is null
-            ? NotFound(new { error = "知识来源文件不可用。" })
+            ? ResourceNotFound("知识来源文件不可用。")
             : File(content, access.Source!.MediaType, access.Source.FileName, enableRangeProcessing: true);
     }
 
@@ -226,12 +226,12 @@ public sealed class ProcessKnowledgeController(
         if (access.Result is not null)
             return access.Result;
         if (file.Length <= 0 || !AllowedExtensions.Contains(Path.GetExtension(file.FileName)))
-            return BadRequest(new { error = "仅支持文档、表格、文本和常见现场图片格式。" });
+            return InvalidRequest("仅支持文档、表格、文本和常见现场图片格式。");
         if (!await HasExpectedFileSignatureAsync(file, ct).ConfigureAwait(false))
-            return BadRequest(new { error = "文件内容与扩展名不一致，已拒绝解析。" });
+            return InvalidRequest("文件内容与扩展名不一致，已拒绝解析。");
         sourceKind = sourceKind?.Trim().ToLowerInvariant() ?? "";
         if (!AllowedSourceKinds.Contains(sourceKind))
-            return BadRequest(new { error = "来源类型仅支持 document、spreadsheet、image 或 field-note。" });
+            return InvalidRequest("来源类型仅支持 document、spreadsheet、image 或 field-note。");
         var project = access.Project!;
         var currentUser = access.Identity!.UserId;
         IReadOnlyDictionary<string, string> contextSelector =
@@ -244,7 +244,7 @@ public sealed class ProcessKnowledgeController(
                 ["site-code"] = project.SiteCode ?? ""
             };
         if (string.IsNullOrWhiteSpace(title) || title.Trim().Length > 240)
-            return BadRequest(new { error = "知识来源标题不能为空且最长 240 个字符。" });
+            return InvalidRequest("知识来源标题不能为空且最长 240 个字符。");
         try
         {
             await using var stream = file.OpenReadStream();
@@ -273,7 +273,7 @@ public sealed class ProcessKnowledgeController(
         }
         catch (InvalidDataException exception)
         {
-            return BadRequest(new { error = exception.Message });
+            return InvalidRequest(exception.Message);
         }
     }
 
@@ -291,7 +291,7 @@ public sealed class ProcessKnowledgeController(
         }
         catch (ResearchAssetRuleException exception)
         {
-            return Conflict(new { error = exception.Message });
+            return StateConflict(exception.Message);
         }
     }
 
@@ -339,7 +339,7 @@ public sealed class ProcessKnowledgeController(
         }
         catch (ResearchAssetRuleException exception)
         {
-            return Conflict(new { error = exception.Message });
+            return StateConflict(exception.Message);
         }
     }
 
@@ -348,10 +348,10 @@ public sealed class ProcessKnowledgeController(
     {
         var source = await store.GetKnowledgeSourceAsync(sourceId, ct).ConfigureAwait(false);
         if (source is null)
-            return (null, null, NotFound(new { error = "知识来源不存在。" }));
+            return (null, null, ResourceNotFound("知识来源不存在。"));
         if (!source.ContextSelector.TryGetValue("research-project-id", out var projectIdText) ||
             !Guid.TryParse(projectIdText, out var projectId))
-            return (null, null, Forbid());
+            return (null, null, AuthorizationDenied());
         var access = await ResolveProjectAccessAsync(projectId, requireWrite, ct).ConfigureAwait(false);
         return access.Result is null
             ? (source, access.Identity, null)
@@ -387,20 +387,20 @@ public sealed class ProcessKnowledgeController(
     {
         var identity = ResolveIdentity();
         if (identity is null)
-            return (null, null, Unauthorized(new { error = "需要平台统一认证。" }));
+            return (null, null, AuthenticationRequired("需要平台统一认证。"));
         if (!identity.HasAnyRole(PlatformRoles.ProcessEngineer, PlatformRoles.PlatformAdministrator))
-            return (null, null, Forbid());
+            return (null, null, AuthorizationDenied());
         if (projectId == Guid.Empty)
-            return (null, null, BadRequest(new { error = "必须指定研发项目。" }));
+            return (null, null, InvalidRequest("必须指定研发项目。"));
         var project = await researchStore.GetProjectAsync(projectId, ct).ConfigureAwait(false);
         if (project is null)
-            return (null, null, NotFound(new { error = "研发项目不存在。" }));
+            return (null, null, ResourceNotFound("研发项目不存在。"));
         var canAccess = identity.HasAnyRole(PlatformRoles.PlatformAdministrator) ||
                         string.Equals(project.OwnerUserId, identity.UserId, StringComparison.Ordinal) ||
                         project.MemberUserIds.Contains(identity.UserId, StringComparer.Ordinal);
         if (!canAccess || requireWrite && (project.Status is
                 ResearchProjectStatuses.Completed or ResearchProjectStatuses.Archived))
-            return (null, null, Forbid());
+            return (null, null, AuthorizationDenied());
         return (project, identity, null);
     }
 }

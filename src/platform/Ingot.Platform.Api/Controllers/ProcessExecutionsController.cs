@@ -9,7 +9,7 @@ namespace Ingot.Platform.Api.Controllers;
 public sealed class ProcessExecutionsController(
     IProcessExecutionService executions,
     IExecutionComparisonService comparisons,
-    PlatformUserResolver userResolver) : ControllerBase
+    PlatformUserResolver userResolver) : PlatformApiController
 {
     [HttpGet]
     public async Task<IActionResult> Query(
@@ -31,19 +31,19 @@ public sealed class ProcessExecutionsController(
     {
         var identity = userResolver.ResolveIdentity(User);
         if (identity is null)
-            return Unauthorized(new { error = "需要平台统一认证。" });
+            return AuthenticationRequired("需要平台统一认证。");
         if (!identity.HasAnyRole(PlatformRoles.QualityRead))
-            return Forbid();
+            return AuthorizationDenied();
         if (from > to)
-            return BadRequest(new { error = "开始时间不能晚于结束时间。" });
+            return InvalidRequest("开始时间不能晚于结束时间。");
         if (status is not (null or "" or "all" or "completed" or "active"))
-            return BadRequest(new { error = "Status 仅支持 all、completed 或 active。" });
+            return InvalidRequest("Status 仅支持 all、completed 或 active。");
         if (limit is < 1 or > 1000)
-            return BadRequest(new { error = "Limit 必须在 1 到 1000 之间。" });
+            return InvalidRequest("Limit 必须在 1 到 1000 之间。");
         if (offset < 0)
-            return BadRequest(new { error = "Offset 不能小于 0。" });
+            return InvalidRequest("Offset 不能小于 0。");
         if (search?.Length > 128)
-            return BadRequest(new { error = "搜索词不能超过 128 个字符。" });
+            return InvalidRequest("搜索词不能超过 128 个字符。");
 
         var result = await executions.QueryAsync(
             from,
@@ -71,15 +71,15 @@ public sealed class ProcessExecutionsController(
     {
         var identity = userResolver.ResolveIdentity(User);
         if (identity is null)
-            return Unauthorized(new { error = "需要平台统一认证。" });
+            return AuthenticationRequired("需要平台统一认证。");
         if (!identity.HasAnyRole(PlatformRoles.QualityRead))
-            return Forbid();
+            return AuthorizationDenied();
         if (string.IsNullOrWhiteSpace(executionId) || executionId.Length > 200)
-            return BadRequest(new { error = "运行编号格式不正确。" });
+            return InvalidRequest("运行编号格式不正确。");
 
         var result = await comparisons.GetProcessExecutionAsync(executionId.Trim(), ct).ConfigureAwait(false);
         return result is null
-            ? NotFound(new { error = "未找到对应运行的分析记录。" })
+            ? ResourceNotFound("未找到对应运行的分析记录。")
             : Ok(result);
     }
 }

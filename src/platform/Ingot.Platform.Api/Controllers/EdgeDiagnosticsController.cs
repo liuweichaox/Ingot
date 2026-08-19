@@ -14,7 +14,7 @@ namespace Ingot.Platform.Api.Controllers;
 public sealed class EdgeDiagnosticsController(
     EdgeRegistry registry,
     EdgeDiagnosticsTokenProvider diagnosticsTokenProvider,
-    IHttpClientFactory httpClientFactory) : ControllerBase
+    IHttpClientFactory httpClientFactory) : PlatformApiController
 {
     [HttpGet("metrics/raw")]
     public async Task<IActionResult> GetEdgeMetricsRaw([FromRoute] string edgeId, CancellationToken cancellationToken)
@@ -24,7 +24,7 @@ public sealed class EdgeDiagnosticsController(
             return Ok(reported);
 
         var baseUrl = GetEdgeBaseUrlOrNull(edgeId);
-        if (baseUrl == null) return BadRequest(new { error = "该 edge 未上报 HostBaseUrl，无法代理 metrics。" });
+        if (baseUrl == null) return InvalidRequest("该 edge 未上报 HostBaseUrl，无法代理 metrics。");
 
         var uri = new Uri(new Uri(baseUrl), "/metrics");
         var client = CreateEdgeClient(edgeId);
@@ -40,7 +40,7 @@ public sealed class EdgeDiagnosticsController(
     public async Task<IActionResult> GetEdgeMetricsJson([FromRoute] string edgeId, CancellationToken cancellationToken)
     {
         var baseUrl = GetEdgeBaseUrlOrNull(edgeId);
-        if (baseUrl == null) return BadRequest(new { error = "该 edge 未上报 HostBaseUrl，无法代理 metrics。" });
+        if (baseUrl == null) return InvalidRequest("该 edge 未上报 HostBaseUrl，无法代理 metrics。");
 
         var uri = new Uri(new Uri(baseUrl), "/metrics");
         var client = CreateEdgeClient(edgeId);
@@ -68,7 +68,7 @@ public sealed class EdgeDiagnosticsController(
         CancellationToken cancellationToken = default)
     {
         var baseUrl = GetEdgeBaseUrlOrNull(edgeId);
-        if (baseUrl == null) return BadRequest(new { error = "该 edge 未上报 HostBaseUrl，无法代理 logs。" });
+        if (baseUrl == null) return InvalidRequest("该 edge 未上报 HostBaseUrl，无法代理 logs。");
 
         var query = new Dictionary<string, string?>
         {
@@ -96,9 +96,10 @@ public sealed class EdgeDiagnosticsController(
         }
         catch (HttpRequestException exception)
         {
-            return StatusCode(
+            return ProblemResponse(
                 StatusCodes.Status502BadGateway,
-                new { error = "采集节点不可访问，请检查节点网络或上报地址。", detail = exception.Message });
+                "采集节点不可访问，请检查节点网络或上报地址。",
+                [("upstreamDetail", exception.Message)]);
         }
     }
 
@@ -106,7 +107,7 @@ public sealed class EdgeDiagnosticsController(
     public async Task<IActionResult> GetEdgeLogLevels([FromRoute] string edgeId, CancellationToken cancellationToken)
     {
         var baseUrl = GetEdgeBaseUrlOrNull(edgeId);
-        if (baseUrl == null) return BadRequest(new { error = "该 edge 未上报 HostBaseUrl，无法代理 logs。" });
+        if (baseUrl == null) return InvalidRequest("该 edge 未上报 HostBaseUrl，无法代理 logs。");
 
         var uri = new Uri(new Uri(baseUrl), "/api/logs/levels");
         var client = CreateEdgeClient(edgeId);
@@ -128,7 +129,7 @@ public sealed class EdgeDiagnosticsController(
 
         var baseUrl = GetEdgeBaseUrlOrNull(edgeId);
         if (baseUrl is null)
-            return BadRequest(new { error = "该采集节点未上报访问地址，无法查询任务状态。" });
+            return InvalidRequest("该采集节点未上报访问地址，无法查询任务状态。");
 
         var uri = new Uri(new Uri(baseUrl), "/api/v1/acquisition/status");
         var client = CreateEdgeClient(edgeId);
@@ -142,7 +143,10 @@ public sealed class EdgeDiagnosticsController(
         }
         catch (HttpRequestException exception)
         {
-            return StatusCode(StatusCodes.Status502BadGateway, new { error = "采集节点不可访问。", detail = exception.Message });
+            return ProblemResponse(
+                StatusCodes.Status502BadGateway,
+                "采集节点不可访问。",
+                [("upstreamDetail", exception.Message)]);
         }
     }
 
@@ -151,9 +155,9 @@ public sealed class EdgeDiagnosticsController(
     {
         var state = registry.Find(edgeId);
         if (state is null)
-            return NotFound(new { error = "采集节点不存在。" });
+            return ResourceNotFound("采集节点不存在。");
         return state.Delivery is null
-            ? NotFound(new { error = "采集节点尚未上报数据上送状态。" })
+            ? ResourceNotFound("采集节点尚未上报数据上送状态。")
             : Ok(state.Delivery);
     }
 
@@ -177,15 +181,12 @@ public sealed class EdgeDiagnosticsController(
     {
         if (response.StatusCode is System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.Forbidden)
         {
-            return StatusCode(
+            return ProblemResponse(
                 StatusCodes.Status502BadGateway,
-                new
-                {
-                    error = "平台无法通过节点诊断凭据访问该采集节点，请检查节点凭据配置。",
-                    edgeStatus = (int)response.StatusCode
-                });
+                "平台无法通过节点诊断凭据访问该采集节点，请检查节点凭据配置。",
+                [("edgeStatus", (int)response.StatusCode)]);
         }
 
-        return StatusCode((int)response.StatusCode, body);
+        return ProblemResponse((int)response.StatusCode, body, []);
     }
 }

@@ -2,6 +2,7 @@ using Ingot.Contracts.Acquisition;
 using Ingot.Contracts.ProcessConfiguration;
 using Ingot.Platform.Api.Agents;
 using Ingot.Platform.Api.Controllers;
+using Ingot.Platform.Api.Errors;
 using Ingot.Platform.Api.Events;
 using Ingot.Platform.Infrastructure.Acquisition;
 using Ingot.Platform.Infrastructure.Events;
@@ -32,8 +33,9 @@ public sealed class IngestionTaskActiveConfigurationTests
 
         var result = await controller.Active("EDGE-001", CancellationToken.None);
 
-        var conflict = Assert.IsType<ConflictObjectResult>(result);
-        Assert.Contains("避免误停采", conflict.Value!.ToString());
+        var conflict = Assert.IsType<ObjectResult>(result);
+        Assert.Equal(StatusCodes.Status409Conflict, conflict.StatusCode);
+        Assert.Contains("避免误停采", Assert.IsType<ApiProblemDetails>(conflict.Value).Detail);
     }
 
     private sealed class PublishedTaskStore : IIngestionTaskStore

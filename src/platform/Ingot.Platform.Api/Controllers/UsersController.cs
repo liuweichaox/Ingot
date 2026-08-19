@@ -11,7 +11,7 @@ namespace Ingot.Platform.Api.Controllers;
 public sealed class UsersController(
     PlatformUserResolver userResolver,
     ILocalUserStore store,
-    LocalPasswordHasher hasher) : ControllerBase
+    LocalPasswordHasher hasher) : PlatformApiController
 {
     private const int MinPasswordLength = 8;
 
@@ -25,15 +25,15 @@ public sealed class UsersController(
         var denied = DeniedAdmin();
         if (denied is not null) return denied;
         if (request is null || string.IsNullOrWhiteSpace(request.Username))
-            return BadRequest(new { error = "username 不能为空。" });
+            return InvalidRequest("username 不能为空。");
         if (string.IsNullOrWhiteSpace(request.Password) || request.Password.Length < MinPasswordLength)
-            return BadRequest(new { error = $"password 至少 {MinPasswordLength} 位。" });
+            return InvalidRequest($"password 至少 {MinPasswordLength} 位。");
         if (!TryNormalizeRoles(request.Roles, out var roles, out var roleError))
-            return BadRequest(new { error = roleError });
+            return InvalidRequest(roleError);
 
         var usernameLower = request.Username.Trim().ToLowerInvariant();
         if (await store.GetByUsernameAsync(usernameLower, ct).ConfigureAwait(false) is not null)
-            return Conflict(new { error = "用户名已存在。" });
+            return StateConflict("用户名已存在。");
 
         var now = DateTimeOffset.UtcNow;
         var created = await store.CreateAsync(new UserAccount
@@ -56,8 +56,8 @@ public sealed class UsersController(
         var denied = DeniedAdmin();
         if (denied is not null) return denied;
         if (!TryNormalizeRoles(request?.Roles ?? [], out var roles, out var roleError))
-            return BadRequest(new { error = roleError });
-        return await store.SetRolesAsync(userId, roles, ct).ConfigureAwait(false) ? NoContent() : NotFound();
+            return InvalidRequest(roleError);
+        return await store.SetRolesAsync(userId, roles, ct).ConfigureAwait(false) ? NoContent() : ResourceNotFound();
     }
 
     [HttpPost("{userId:guid}:set-password")]
@@ -66,10 +66,10 @@ public sealed class UsersController(
         var denied = DeniedAdmin();
         if (denied is not null) return denied;
         if (string.IsNullOrWhiteSpace(request?.Password) || request.Password.Length < MinPasswordLength)
-            return BadRequest(new { error = $"password 至少 {MinPasswordLength} 位。" });
+            return InvalidRequest($"password 至少 {MinPasswordLength} 位。");
         // 改密会注销该用户其它会话（见 store 实现）。
         return await store.SetPasswordHashAsync(userId, hasher.Hash(request.Password), ct).ConfigureAwait(false)
-            ? NoContent() : NotFound();
+            ? NoContent() : ResourceNotFound();
     }
 
     [HttpPost("{userId:guid}:set-disabled")]
@@ -79,16 +79,16 @@ public sealed class UsersController(
         if (denied is not null) return denied;
         // 不允许停用自己，避免管理员把自己锁在门外。
         if (request?.Disabled == true && string.Equals(userResolver.Resolve(User), userId.ToString("D"), StringComparison.OrdinalIgnoreCase))
-            return BadRequest(new { error = "不能停用当前登录的账户。" });
-        return await store.SetDisabledAsync(userId, request?.Disabled ?? false, ct).ConfigureAwait(false) ? NoContent() : NotFound();
+            return InvalidRequest("不能停用当前登录的账户。");
+        return await store.SetDisabledAsync(userId, request?.Disabled ?? false, ct).ConfigureAwait(false) ? NoContent() : ResourceNotFound();
     }
 
     private IActionResult? DeniedAdmin()
     {
         var identity = userResolver.ResolveIdentity(User);
         if (identity is null)
-            return Unauthorized(new { error = "需要平台统一认证。" });
-        return identity.HasAnyRole(PlatformRoles.PlatformAdministrator) ? null : Forbid();
+            return AuthenticationRequired("需要平台统一认证。");
+        return identity.HasAnyRole(PlatformRoles.PlatformAdministrator) ? null : AuthorizationDenied();
     }
 
     private static bool TryNormalizeRoles(

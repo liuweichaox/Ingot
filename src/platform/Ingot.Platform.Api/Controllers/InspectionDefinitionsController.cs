@@ -1,6 +1,5 @@
-using System.Text.Json;
 using Ingot.Platform.Api.Agents;
-using Ingot.Platform.Infrastructure.Inspections;
+using Ingot.Platform.Application.Inspections;
 using Ingot.Contracts.Inspections;
 using Microsoft.AspNetCore.Mvc;
 
@@ -10,10 +9,9 @@ namespace Ingot.Platform.Api.Controllers;
 [Route("api/v1/inspection-definitions")]
 public sealed class InspectionDefinitionsController(
     IInspectionMasterDataStore store,
-    PlatformUserResolver userResolver) : ControllerBase
+    InspectionCommands commands,
+    PlatformUserResolver userResolver) : PlatformApiController
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
-
     [HttpGet]
     public async Task<IActionResult> List(CancellationToken ct)
     {
@@ -29,7 +27,7 @@ public sealed class InspectionDefinitionsController(
             return denied;
         var item = await store.GetInspectionDefinitionAsync(code.Trim().ToLowerInvariant(), version, ct)
             .ConfigureAwait(false);
-        return item is null ? NotFound() : Ok(item);
+        return item is null ? ResourceNotFound() : Ok(item);
     }
 
     [HttpPost]
@@ -38,20 +36,14 @@ public sealed class InspectionDefinitionsController(
         var denied = DeniedWrite();
         if (denied is not null)
             return denied;
-        if (!InspectionMasterDataValidator.TryValidate(request, out var normalized, out var error))
-            return BadRequest(new { error });
-        var existing = await store.GetInspectionDefinitionAsync(normalized!.Code, normalized.Version, ct)
-            .ConfigureAwait(false);
-        if (existing is not null)
+        var result = await commands.UpsertDefinitionAsync(request, ct).ConfigureAwait(false);
+        return result.Status switch
         {
-            var existingPayload = JsonSerializer.Serialize(existing with { UpdatedAt = default }, JsonOptions);
-            var requestedPayload = JsonSerializer.Serialize(normalized with { UpdatedAt = default }, JsonOptions);
-            return string.Equals(existingPayload, requestedPayload, StringComparison.Ordinal)
-                ? Ok(existing)
-                : Conflict(new { error = "检测定义版本不可覆盖，请创建新版本。", existing });
-        }
-        var item = await store.UpsertInspectionDefinitionAsync(normalized!, ct).ConfigureAwait(false);
-        return Ok(item);
+            InspectionCommandStatus.Success => Ok(result.Value),
+            InspectionCommandStatus.Invalid => InvalidRequest(result.Error),
+            InspectionCommandStatus.Conflict => StateConflict(result.Error, ("existing", result.Existing)),
+            _ => ServerFailure()
+        };
     }
 
     [HttpDelete("{code}/{version:int}")]
@@ -60,33 +52,31 @@ public sealed class InspectionDefinitionsController(
         var denied = DeniedWrite();
         if (denied is not null)
             return denied;
-        var normalizedCode = code.Trim().ToLowerInvariant();
-        var plans = await store.ListInspectionPlansAsync(ct).ConfigureAwait(false);
-        if (plans.Any(plan => plan.Items.Any(item =>
-                item.DefinitionCode == normalizedCode && item.DefinitionVersion == version)))
+        var result = await commands.DeleteDefinitionAsync(code, version, ct).ConfigureAwait(false);
+        return result.Status switch
         {
-            return Conflict(new { error = "检测定义已被质量方案引用，不能删除。" });
-        }
-        return await store.DeleteInspectionDefinitionAsync(normalizedCode, version, ct).ConfigureAwait(false)
-            ? NoContent()
-            : NotFound();
+            InspectionCommandStatus.Success => NoContent(),
+            InspectionCommandStatus.Conflict => StateConflict(result.Error),
+            InspectionCommandStatus.NotFound => ResourceNotFound(),
+            _ => ServerFailure()
+        };
     }
 
     private IActionResult? DeniedRead()
     {
         var identity = userResolver.ResolveIdentity(User);
         if (identity is null)
-            return Unauthorized(new { error = "需要平台统一认证。" });
-        return identity.HasAnyRole(PlatformRoles.QualityRead) ? null : Forbid();
+            return AuthenticationRequired("需要平台统一认证。");
+        return identity.HasAnyRole(PlatformRoles.QualityRead) ? null : AuthorizationDenied();
     }
 
     private IActionResult? DeniedWrite()
     {
         var identity = userResolver.ResolveIdentity(User);
         if (identity is null)
-            return Unauthorized(new { error = "需要平台统一认证。" });
+            return AuthenticationRequired("需要平台统一认证。");
         return identity.HasAnyRole(PlatformRoles.ProcessEngineer, PlatformRoles.PlatformAdministrator)
             ? null
-            : Forbid();
+            : AuthorizationDenied();
     }
 }

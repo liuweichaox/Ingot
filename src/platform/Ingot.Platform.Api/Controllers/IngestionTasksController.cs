@@ -29,7 +29,7 @@ public sealed class IngestionTasksController(
         var denied = DeniedConfigurationRead();
         if (denied is not null) return denied;
         var value = await store.GetAsync(NormalizeCode(taskId), version, ct).ConfigureAwait(false);
-        return value is null ? NotFound() : Ok(value);
+        return value is null ? ResourceNotFound() : Ok(value);
     }
 
     [HttpGet("active")]
@@ -38,9 +38,9 @@ public sealed class IngestionTasksController(
     {
         var normalizedEdgeId = edgeId?.Trim() ?? string.Empty;
         if (string.IsNullOrWhiteSpace(normalizedEdgeId))
-            return BadRequest(new { error = "edgeId 不能为空。" });
+            return InvalidRequest("edgeId 不能为空。");
         if (!edgeTokenValidator.IsAuthorized(normalizedEdgeId, Request.Headers.Authorization.ToString()))
-            return Unauthorized(new { error = "边缘节点认证失败。" });
+            return AuthenticationRequired("边缘节点认证失败。");
 
         var tasks = await store.ListPublishedForEdgeAsync(normalizedEdgeId, ct).ConfigureAwait(false);
         var deployments = new List<AcquisitionDeployment>();
@@ -55,11 +55,9 @@ public sealed class IngestionTasksController(
                 invalidReferences.Add($"{task.TaskId}@{task.Version} → {task.DataModelId}@{task.DataModelVersion}");
         }
         if (invalidReferences.Count > 0)
-            return Conflict(new
-            {
-                error = "已发布数据摄取任务引用了不存在或未发布的数据模型；为避免误停采，本次不下发配置。",
-                references = invalidReferences
-            });
+            return StateConflict(
+                "已发布数据摄取任务引用了不存在或未发布的数据模型；为避免误停采，本次不下发配置。",
+                ("references", invalidReferences));
         return Ok(new { data = deployments });
     }
 
@@ -69,7 +67,7 @@ public sealed class IngestionTasksController(
         var denied = DeniedConfigurationWrite();
         if (denied is not null) return denied;
         if (!TryNormalize(request, out var normalized, out var error))
-            return BadRequest(new { error });
+            return InvalidRequest(error);
         var protocolNormalized = normalized!;
 
         var model = await processStore.GetDataModelAsync(
@@ -77,12 +75,12 @@ public sealed class IngestionTasksController(
             protocolNormalized.DataModelVersion,
             ct).ConfigureAwait(false);
         if (model is null)
-            return BadRequest(new { error = "引用的工艺数据模型版本不存在。" });
+            return InvalidRequest("引用的工艺数据模型版本不存在。");
         if (!TryNormalize(protocolNormalized, model, out var modelNormalized, out error))
-            return BadRequest(new { error });
+            return InvalidRequest(error);
         normalized = modelNormalized!;
         if (normalized.Status == ConfigurationStatuses.Published && model.Status != ConfigurationStatuses.Published)
-            return BadRequest(new { error = "发布采集配置前，引用的工艺数据模型必须已经发布。" });
+            return InvalidRequest("发布采集配置前，引用的工艺数据模型必须已经发布。");
         if (normalized.Status == ConfigurationStatuses.Published)
         {
             var probe = await ProbeEdgeAsync(
@@ -90,13 +88,11 @@ public sealed class IngestionTasksController(
                 null,
                 ct).ConfigureAwait(false);
             if (!probe.Success)
-                return StatusCode(probe.StatusCode, new { error = probe.Error, validation = probe.Result });
+                return ProblemResponse(probe.StatusCode, probe.Error, [("validation", probe.Result)]);
             if (probe.Result is not { Success: true, MappingsValidated: true })
-                return BadRequest(new
-                {
-                    error = probe.Result?.Message ?? "设备连接与映射验证未通过，不能发布采集配置。",
-                    validation = probe.Result
-                });
+                return InvalidRequest(
+                    probe.Result?.Message ?? "设备连接与映射验证未通过，不能发布采集配置。",
+                    ("validation", probe.Result));
         }
 
         var existing = await store.GetAsync(normalized.TaskId, normalized.Version, ct).ConfigureAwait(false);
@@ -107,7 +103,7 @@ public sealed class IngestionTasksController(
             else if (SamePayload(existing with { UpdatedAt = default }, normalized with { UpdatedAt = default }))
                 return Ok(existing);
             else
-                return Conflict(new { error = "已发布或停用的采集配置不可修改，请创建新版本。", existing });
+                return StateConflict("已发布或停用的采集配置不可修改，请创建新版本。", ("existing", existing));
         }
 
         // 发布走单事务：退役旧 published 版本 + 写入新版本原子完成，
@@ -120,7 +116,7 @@ public sealed class IngestionTasksController(
         }
         catch (InvalidOperationException exception)
         {
-            return Conflict(new { error = exception.Message });
+            return StateConflict(exception.Message);
         }
     }
 
@@ -130,14 +126,14 @@ public sealed class IngestionTasksController(
         var denied = DeniedConfigurationWrite();
         if (denied is not null) return denied;
         if (requestBody?.Task is null)
-            return BadRequest(new { error = "采集配置不能为空。" });
+            return InvalidRequest("采集配置不能为空。");
         var request = requestBody.Task;
         var model = await processStore.GetDataModelAsync(
             NormalizeCode(request.DataModelId),
             request.DataModelVersion,
             ct).ConfigureAwait(false);
         if (model is null)
-            return BadRequest(new { error = "引用的工艺数据模型版本不存在。" });
+            return InvalidRequest("引用的工艺数据模型版本不存在。");
 
         const string placeholderCode = "__probe_only__";
         var needsDiscoveryPlaceholder =
@@ -159,10 +155,10 @@ public sealed class IngestionTasksController(
             }
             : request;
         if (!TryNormalize(candidateRequest, out var normalized, out var error))
-            return BadRequest(new { error });
+            return InvalidRequest(error);
 
         if (!TryNormalize(normalized!, model, out var modelNormalized, out error))
-            return BadRequest(new { error });
+            return InvalidRequest(error);
         normalized = modelNormalized;
 
         var probe = await ProbeEdgeAsync(
@@ -170,7 +166,7 @@ public sealed class IngestionTasksController(
             requestBody.Discovery,
             ct).ConfigureAwait(false);
         if (!probe.Success)
-            return StatusCode(probe.StatusCode, new { error = probe.Error });
+            return ProblemResponse(probe.StatusCode, probe.Error, []);
         return needsDiscoveryPlaceholder && probe.Result is { } result
             ? Ok(result with
             {
@@ -215,9 +211,9 @@ public sealed class IngestionTasksController(
     {
         var normalizedEdgeId = edgeId?.Trim() ?? string.Empty;
         if (string.IsNullOrWhiteSpace(normalizedEdgeId))
-            return BadRequest(new { error = "edgeId 不能为空。" });
+            return InvalidRequest("edgeId 不能为空。");
         if (!edgeTokenValidator.IsAuthorized(normalizedEdgeId, Request.Headers.Authorization.ToString()))
-            return Unauthorized(new { error = "边缘节点认证失败。" });
+            return AuthenticationRequired("边缘节点认证失败。");
         var task = probeTasks.ClaimNext(normalizedEdgeId);
         return task is null ? NoContent() : Ok(task);
     }
@@ -230,12 +226,12 @@ public sealed class IngestionTasksController(
     {
         if (completion is null ||
             !string.Equals(taskId, completion.TaskId, StringComparison.Ordinal))
-            return BadRequest(new { error = "探查任务结果与路由不匹配。" });
+            return InvalidRequest("探查任务结果与路由不匹配。");
         if (!edgeTokenValidator.IsAuthorized(completion.EdgeId, Request.Headers.Authorization.ToString()))
-            return Unauthorized(new { error = "边缘节点认证失败。" });
+            return AuthenticationRequired("边缘节点认证失败。");
         return probeTasks.Complete(completion)
             ? NoContent()
-            : NotFound(new { error = "探查任务不存在、已过期或不属于当前 Edge。" });
+            : ResourceNotFound("探查任务不存在、已过期或不属于当前 Edge。");
     }
 
     private sealed record EdgeProbeResponse(
@@ -257,12 +253,12 @@ public sealed class IngestionTasksController(
         var denied = DeniedConfigurationWrite();
         if (denied is not null) return denied;
         var existing = await store.GetAsync(NormalizeCode(taskId), version, ct).ConfigureAwait(false);
-        if (existing is null) return NotFound();
+        if (existing is null) return ResourceNotFound();
         if (existing.Status != ConfigurationStatuses.Draft)
-            return Conflict(new { error = "只有草稿采集配置可以删除。" });
+            return StateConflict("只有草稿采集配置可以删除。");
         return await store.DeleteAsync(existing.TaskId, version, ct).ConfigureAwait(false)
             ? NoContent()
-            : NotFound();
+            : ResourceNotFound();
     }
 
     /// <summary>

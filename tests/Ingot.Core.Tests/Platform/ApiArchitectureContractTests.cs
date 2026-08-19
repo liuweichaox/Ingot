@@ -1,10 +1,8 @@
+using Ingot.Platform.Api.Controllers;
 using Ingot.Platform.Api.Errors;
 using Ingot.Platform.Infrastructure.ProcessResearch;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.Abstractions;
-using Microsoft.AspNetCore.Mvc.Filters;
-using Microsoft.AspNetCore.Routing;
 using Xunit;
 
 namespace Ingot.Core.Tests.Platform;
@@ -43,30 +41,25 @@ public sealed class ApiArchitectureContractTests
     }
 
     [Fact]
-    public async Task ProblemFilter_ConvertsControllerErrorObjectToProblemDetails()
+    public void PlatformController_ReturnsProblemDetailsDirectly()
     {
         var http = new DefaultHttpContext();
-        http.TraceIdentifier = "trace-filter";
-        var action = new ActionContext(http, new RouteData(), new ActionDescriptor());
-        var context = new ResultExecutingContext(
-            action,
-            [],
-            new BadRequestObjectResult(new { error = "请求无效。" }),
-            new object());
-        var filter = new ApiProblemDetailsResultFilter();
+        http.TraceIdentifier = "trace-controller";
+        var controller = new TestPlatformController
+        {
+            ControllerContext = new ControllerContext { HttpContext = http }
+        };
 
-        await filter.OnResultExecutionAsync(
-            context,
-            () => Task.FromResult(new ResultExecutedContext(
-                action,
-                [],
-                context.Result,
-                new object())));
-
-        var result = Assert.IsType<BadRequestObjectResult>(context.Result);
+        var result = Assert.IsType<ObjectResult>(controller.Invalid("请求无效。"));
         var problem = Assert.IsType<ApiProblemDetails>(result.Value);
+        Assert.Equal(StatusCodes.Status400BadRequest, result.StatusCode);
         Assert.Equal("request.invalid", problem.Code);
         Assert.Equal("请求无效。", problem.Detail);
         Assert.Contains("application/problem+json", result.ContentTypes);
+    }
+
+    private sealed class TestPlatformController : PlatformApiController
+    {
+        public IActionResult Invalid(string detail) => InvalidRequest(detail);
     }
 }

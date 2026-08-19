@@ -27,7 +27,7 @@ public sealed class ProcessDataModelsController(
         if (denied is not null)
             return denied;
         var value = await store.GetDataModelAsync(Normalize(modelId), version, ct).ConfigureAwait(false);
-        return value is null ? NotFound() : Ok(value);
+        return value is null ? ResourceNotFound() : Ok(value);
     }
 
     [HttpPost]
@@ -37,18 +37,16 @@ public sealed class ProcessDataModelsController(
         if (denied is not null)
             return denied;
         if (!ProcessConfigurationValidator.TryValidate(request, out var normalized, out var error))
-            return BadRequest(new { error });
+            return InvalidRequest(error);
         var existing = await store.GetDataModelAsync(normalized!.ModelId, normalized.Version, ct).ConfigureAwait(false);
         if (existing?.Status == ConfigurationStatuses.Published &&
             normalized.Status == ConfigurationStatuses.Retired)
         {
             var activeReferences = await ActiveIngestionReferences(existing, ct).ConfigureAwait(false);
             if (activeReferences.Count > 0)
-                return Conflict(new
-                {
-                    error = "工艺数据模型仍被活动的数据摄取任务或任务模板引用，不能退役。",
-                    references = activeReferences
-                });
+                return StateConflict(
+                    "工艺数据模型仍被活动的数据摄取任务或任务模板引用，不能退役。",
+                    ("references", activeReferences));
         }
         var immutable = HandleImmutable(existing, normalized, value => value.Status, (value, status) => value with
         {
@@ -68,9 +66,9 @@ public sealed class ProcessDataModelsController(
             return denied;
         var existing = await store.GetDataModelAsync(Normalize(modelId), version, ct).ConfigureAwait(false);
         if (existing is null)
-            return NotFound();
+            return ResourceNotFound();
         if (existing.Status != ConfigurationStatuses.Draft)
-            return Conflict(new { error = "只有草稿工艺数据模型可以删除。" });
+            return StateConflict("只有草稿工艺数据模型可以删除。");
         var processSpecifications = await store.ListProcessSpecificationsAsync(ct).ConfigureAwait(false);
         var plans = await store.ListAnalysisPlansAsync(ct).ConfigureAwait(false);
         var packages = await store.ListScenarioPackagesAsync(ct).ConfigureAwait(false);
@@ -82,12 +80,9 @@ public sealed class ProcessDataModelsController(
             ingestionTaskValues.Any(item => References(item, existing)) ||
             ingestionTemplates.Any(item => References(item, existing)))
         {
-            return Conflict(new
-            {
-                error = "工艺数据模型仍被工艺规范版本、分析方案、工艺配置或数据摄取配置引用，不能删除。"
-            });
+            return StateConflict("工艺数据模型仍被工艺规范版本、分析方案、工艺配置或数据摄取配置引用，不能删除。");
         }
-        return await store.DeleteDataModelAsync(existing.ModelId, version, ct).ConfigureAwait(false) ? NoContent() : NotFound();
+        return await store.DeleteDataModelAsync(existing.ModelId, version, ct).ConfigureAwait(false) ? NoContent() : ResourceNotFound();
     }
 
     private (ProcessDataModel? Value, IActionResult? Result) HandleImmutable(
@@ -102,7 +97,7 @@ public sealed class ProcessDataModelsController(
             return (existing, Ok(existing));
         if (status(existing) == ConfigurationStatuses.Published && requested.Status == ConfigurationStatuses.Retired)
             return (transition(existing, ConfigurationStatuses.Retired), null);
-        return (null, Conflict(new { error = "已发布或停用的工艺数据模型不可修改，请创建新版本。", existing }));
+        return (null, StateConflict("已发布或停用的工艺数据模型不可修改，请创建新版本。", ("existing", existing)));
     }
 
     private static string Normalize(string value) => value.Trim().ToLowerInvariant();
@@ -147,7 +142,7 @@ public sealed class ProcessSpecificationsController(
         if (denied is not null)
             return denied;
         var value = await store.GetProcessSpecificationAsync(Normalize(processSpecificationId), version, ct).ConfigureAwait(false);
-        return value is null ? NotFound() : Ok(value);
+        return value is null ? ResourceNotFound() : Ok(value);
     }
 
     [HttpPost]
@@ -157,23 +152,23 @@ public sealed class ProcessSpecificationsController(
         if (denied is not null)
             return denied;
         if (!ProcessConfigurationValidator.TryValidate(request, out var normalized, out var error))
-            return BadRequest(new { error });
+            return InvalidRequest(error);
         var model = await store.GetDataModelAsync(normalized!.DataModelId, normalized.DataModelVersion, ct)
             .ConfigureAwait(false);
         if (model is null)
-            return BadRequest(new { error = "引用的工艺数据模型版本不存在。" });
+            return InvalidRequest("引用的工艺数据模型版本不存在。");
         if (normalized.Status == ConfigurationStatuses.Published && model.Status != ConfigurationStatuses.Published)
-            return BadRequest(new { error = "发布工艺规范前，引用的工艺数据模型必须已经发布。" });
+            return InvalidRequest("发布工艺规范前，引用的工艺数据模型必须已经发布。");
         var definitions = model.ControlParameters.ToDictionary(item => item.Code, StringComparer.Ordinal);
         var unknown = normalized.Values.FirstOrDefault(item => !definitions.ContainsKey(item.Code));
         if (unknown is not null)
-            return BadRequest(new { error = $"控制参数未在工艺数据模型中定义：{unknown.Code}。" });
+            return InvalidRequest($"控制参数未在工艺数据模型中定义：{unknown.Code}。");
         var missing = definitions.Values.FirstOrDefault(item => !item.Nullable && normalized.Values.All(value => value.Code != item.Code));
         if (missing is not null)
-            return BadRequest(new { error = $"缺少必填控制参数：{missing.Code}。" });
+            return InvalidRequest($"缺少必填控制参数：{missing.Code}。");
         var invalid = normalized.Values.FirstOrDefault(item => !MatchesDataType(item.Value, definitions[item.Code].DataType));
         if (invalid is not null)
-            return BadRequest(new { error = $"控制参数 {invalid.Code} 的值不符合 {definitions[invalid.Code].DataType} 类型。" });
+            return InvalidRequest($"控制参数 {invalid.Code} 的值不符合 {definitions[invalid.Code].DataType} 类型。");
         var existing = await store.GetProcessSpecificationAsync(normalized.ProcessSpecificationId, normalized.Version, ct).ConfigureAwait(false);
         if (existing is not null && existing.Status != ConfigurationStatuses.Draft)
         {
@@ -182,7 +177,7 @@ public sealed class ProcessSpecificationsController(
             else if (SamePayload(existing with { UpdatedAt = default }, normalized with { UpdatedAt = default }))
                 return Ok(existing);
             else
-                return Conflict(new { error = "已发布或停用的工艺规范版本不可修改，请创建新版本。", existing });
+                return StateConflict("已发布或停用的工艺规范版本不可修改，请创建新版本。", ("existing", existing));
         }
         return Ok(await store.UpsertProcessSpecificationAsync(normalized, ct).ConfigureAwait(false));
     }
@@ -195,10 +190,10 @@ public sealed class ProcessSpecificationsController(
             return denied;
         var existing = await store.GetProcessSpecificationAsync(Normalize(processSpecificationId), version, ct).ConfigureAwait(false);
         if (existing is null)
-            return NotFound();
+            return ResourceNotFound();
         if (existing.Status != ConfigurationStatuses.Draft)
-            return Conflict(new { error = "只有草稿工艺规范版本可以删除。" });
-        return await store.DeleteProcessSpecificationAsync(existing.ProcessSpecificationId, version, ct).ConfigureAwait(false) ? NoContent() : NotFound();
+            return StateConflict("只有草稿工艺规范版本可以删除。");
+        return await store.DeleteProcessSpecificationAsync(existing.ProcessSpecificationId, version, ct).ConfigureAwait(false) ? NoContent() : ResourceNotFound();
     }
 
     private static string Normalize(string value) => value.Trim().ToLowerInvariant();
@@ -231,7 +226,7 @@ public sealed class ProcessAnalysisPlansController(
         if (denied is not null)
             return denied;
         var value = await store.GetAnalysisPlanAsync(Normalize(planId), version, ct).ConfigureAwait(false);
-        return value is null ? NotFound() : Ok(value);
+        return value is null ? ResourceNotFound() : Ok(value);
     }
 
     [HttpPost]
@@ -241,17 +236,17 @@ public sealed class ProcessAnalysisPlansController(
         if (denied is not null)
             return denied;
         if (!ProcessConfigurationValidator.TryValidate(request, out var normalized, out var error))
-            return BadRequest(new { error });
+            return InvalidRequest(error);
         var model = await store.GetDataModelAsync(normalized!.DataModelId, normalized.DataModelVersion, ct)
             .ConfigureAwait(false);
         if (model is null)
-            return BadRequest(new { error = "引用的工艺数据模型版本不存在。" });
+            return InvalidRequest("引用的工艺数据模型版本不存在。");
         if (normalized.Status == ConfigurationStatuses.Published && model.Status != ConfigurationStatuses.Published)
-            return BadRequest(new { error = "发布分析方案前，引用的工艺数据模型必须已经发布。" });
+            return InvalidRequest("发布分析方案前，引用的工艺数据模型必须已经发布。");
         var dataItemCodes = model.Acquisition.DataItems.Select(item => item.Code).ToHashSet(StringComparer.Ordinal);
         var unknown = normalized.Signals.FirstOrDefault(item => !dataItemCodes.Contains(item.DataItemCode));
         if (unknown is not null)
-            return BadRequest(new { error = $"分析数据项未在工艺数据模型中定义：{unknown.DataItemCode}。" });
+            return InvalidRequest($"分析数据项未在工艺数据模型中定义：{unknown.DataItemCode}。");
         var existing = await store.GetAnalysisPlanAsync(normalized.PlanId, normalized.Version, ct).ConfigureAwait(false);
         if (existing is not null && existing.Status != ConfigurationStatuses.Draft)
         {
@@ -260,7 +255,7 @@ public sealed class ProcessAnalysisPlansController(
             else if (SamePayload(existing with { UpdatedAt = default }, normalized with { UpdatedAt = default }))
                 return Ok(existing);
             else
-                return Conflict(new { error = "已发布或停用的分析方案不可修改，请创建新版本。", existing });
+                return StateConflict("已发布或停用的分析方案不可修改，请创建新版本。", ("existing", existing));
         }
         return Ok(await store.UpsertAnalysisPlanAsync(normalized, ct).ConfigureAwait(false));
     }
@@ -273,13 +268,13 @@ public sealed class ProcessAnalysisPlansController(
             return denied;
         var existing = await store.GetAnalysisPlanAsync(Normalize(planId), version, ct).ConfigureAwait(false);
         if (existing is null)
-            return NotFound();
+            return ResourceNotFound();
         if (existing.Status != ConfigurationStatuses.Draft)
-            return Conflict(new { error = "只有草稿分析方案可以删除。" });
+            return StateConflict("只有草稿分析方案可以删除。");
         var packages = await store.ListScenarioPackagesAsync(ct).ConfigureAwait(false);
         if (packages.Any(item => item.AnalysisPlanId == existing.PlanId && item.AnalysisPlanVersion == existing.Version))
-            return Conflict(new { error = "分析方案仍被工艺配置引用，不能删除。" });
-        return await store.DeleteAnalysisPlanAsync(existing.PlanId, version, ct).ConfigureAwait(false) ? NoContent() : NotFound();
+            return StateConflict("分析方案仍被工艺配置引用，不能删除。");
+        return await store.DeleteAnalysisPlanAsync(existing.PlanId, version, ct).ConfigureAwait(false) ? NoContent() : ResourceNotFound();
     }
 
     private static string Normalize(string value) => value.Trim().ToLowerInvariant();

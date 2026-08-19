@@ -13,13 +13,13 @@ namespace Ingot.Platform.Api.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/v1/acquisition-protocols")]
-public sealed class AcquisitionProtocolsController(PlatformUserResolver userResolver) : ControllerBase
+public sealed class AcquisitionProtocolsController(PlatformUserResolver userResolver) : PlatformApiController
 {
     [HttpGet]
     public IActionResult List()
     {
         if (userResolver.ResolveIdentity(User) is null)
-            return Unauthorized(new { error = "需要平台统一认证。" });
+            return AuthenticationRequired("需要平台统一认证。");
         return Ok(new
         {
             protocols = AcquisitionProtocolCapabilities.All,

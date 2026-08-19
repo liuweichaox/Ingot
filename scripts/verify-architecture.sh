@@ -81,8 +81,34 @@ check "platform-infrastructure" src/platform/Ingot.Platform.Infrastructure \
   'using Ingot\.Platform\.Api' \
   "Platform Infrastructure 必须独立于 API 宿主"
 
+check "inspection-api-ports" src/platform/Ingot.Platform.Api/Controllers \
+  'using Ingot\.Platform\.Infrastructure\.Inspections' \
+  "检验 API 只能依赖 Application 端口，不能依赖检验基础设施命名空间"
+
+inspection_controller_writes=$(grep -rnE \
+  '\b(store|records|reviews|attachments|masterData|workflow)\.(Create|Upsert|Delete|Save|LogAccess)[A-Za-z]*Async' \
+  src/platform/Ingot.Platform.Api/Controllers/Inspection*.cs 2>/dev/null || true)
+if [[ -n "$inspection_controller_writes" ]]; then
+  echo "✗ [inspection-application-boundary] 检验写用例必须由 Platform Application 编排"
+  echo "$inspection_controller_writes" | sed 's/^/    /'
+  fail=1
+else
+  echo "✓ [inspection-application-boundary]"
+fi
+
+api_error_compat_hits=$(grep -rnE \
+  'ApiProblemDetailsResultFilter|new \{[^}]*\berror\s*=|\b(BadRequest|Unauthorized|Conflict|NotFound)\(new' \
+  src/platform/Ingot.Platform.Api --include='*.cs' --exclude-dir=bin --exclude-dir=obj 2>/dev/null || true)
+if [[ -n "$api_error_compat_hits" ]]; then
+  echo "✗ [typed-api-errors] API 错误必须直接返回类型化 Problem Details，不得恢复匿名错误兼容转换"
+  echo "$api_error_compat_hits" | sed 's/^/    /'
+  fail=1
+else
+  echo "✓ [typed-api-errors]"
+fi
+
 compatibility_hits=$(grep -rnE \
-  'SqliteAgentStore|LegacySqliteAgentRunImporter|IAgentRunImportStore|ImportLegacySqlite|Chat:DatabasePath|IBatchedEventLog|CompatibleDateTimeOffsetConverter|ResearchExperimentCommandException|ResearchExperimentPlanValidationException' \
+  'SqliteAgentStore|LegacySqliteAgentRunImporter|IAgentRunImportStore|ImportLegacySqlite|Chat:DatabasePath|IBatchedEventLog|CompatibleDateTimeOffsetConverter|ResearchExperimentCommandException|ResearchExperimentPlanValidationException|ApiProblemDetailsResultFilter' \
   src apps/platform/src docker-compose.app.yml scripts/run-platform-api.ps1 \
   --include='*.cs' --include='*.csproj' --include='*.json' --include='*.js' \
   --include='*.jsx' --include='*.yml' --include='*.ps1' \

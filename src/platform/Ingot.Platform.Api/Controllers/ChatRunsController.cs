@@ -12,7 +12,7 @@ namespace Ingot.Platform.Api.Controllers;
 public sealed class ChatRunsController(
     IAgentRuntime runtime,
     IProcessResearchStore researchStore,
-    PlatformUserResolver userResolver) : ControllerBase
+    PlatformUserResolver userResolver) : PlatformApiController
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
@@ -20,13 +20,13 @@ public sealed class ChatRunsController(
     public async Task<IActionResult> Create([FromBody] CreateChatRunRequest? request, CancellationToken ct)
     {
         if (!AgentContractValidator.TryValidate(request, out var normalized, out var error))
-            return BadRequest(new { error });
+            return InvalidRequest(error);
         if (!TryAuthorize(out var userId, out var unauthorized))
             return unauthorized!;
         if (normalized!.PageContext is { Kind: "research-project" } pageContext)
         {
             if (!Guid.TryParse(pageContext.Id, out var projectId))
-                return BadRequest(new { error = "研发项目上下文标识无效。" });
+                return InvalidRequest("研发项目上下文标识无效。");
             var project = await researchStore.GetProjectAsync(projectId, ct).ConfigureAwait(false);
             var identity = userResolver.ResolveIdentity(User)!;
             var canAccess = project is not null &&
@@ -34,7 +34,7 @@ public sealed class ChatRunsController(
                              string.Equals(project.OwnerUserId, identity.UserId, StringComparison.Ordinal) ||
                              project.MemberUserIds.Contains(identity.UserId, StringComparer.Ordinal));
             if (!canAccess)
-                return Forbid();
+                return AuthorizationDenied();
         }
 
         try
@@ -53,7 +53,7 @@ public sealed class ChatRunsController(
         }
         catch (InvalidOperationException ex)
         {
-            return StatusCode(StatusCodes.Status503ServiceUnavailable, new { error = ex.Message });
+            return ServiceUnavailable(ex.Message);
         }
     }
 
@@ -93,10 +93,10 @@ public sealed class ChatRunsController(
             return unauthorized!;
         var run = await runtime.GetAsync(ProductEntryPoints.Chat, runId, ct).ConfigureAwait(false);
         if (run is null)
-            return NotFound();
+            return ResourceNotFound();
         return string.Equals(run.UserId, userId, StringComparison.OrdinalIgnoreCase)
             ? Ok(ToChatSnapshot(run))
-            : StatusCode(StatusCodes.Status403Forbidden, new { error = "无权访问该 Chat 运行。" });
+            : ProblemResponse(StatusCodes.Status403Forbidden, "无权访问该 Chat 运行。", []);
     }
 
     [HttpGet("{runId}/stream")]
@@ -146,9 +146,9 @@ public sealed class ChatRunsController(
             return unauthorized!;
         var run = await runtime.GetAsync(ProductEntryPoints.Chat, runId, ct).ConfigureAwait(false);
         if (run is null)
-            return NotFound();
+            return ResourceNotFound();
         if (!string.Equals(run.UserId, userId, StringComparison.OrdinalIgnoreCase))
-            return StatusCode(StatusCodes.Status403Forbidden, new { error = "无权访问该 Chat 运行。" });
+            return ProblemResponse(StatusCodes.Status403Forbidden, "无权访问该 Chat 运行。", []);
 
         var cancelled = await runtime.CancelAsync(
             ProductEntryPoints.Chat,
@@ -156,10 +156,9 @@ public sealed class ChatRunsController(
             run.UserId,
             "用户请求取消 Chat 分析。",
             ct).ConfigureAwait(false);
-        return cancelled ? Accepted(new { runId, status = "cancelling" }) : Conflict(new
-        {
-            error = "Chat 运行已结束，无法取消。"
-        });
+        return cancelled
+            ? Accepted(new { runId, status = "cancelling" })
+            : StateConflict("Chat 运行已结束，无法取消。");
     }
 
     [HttpDelete("{runId}")]
@@ -171,11 +170,11 @@ public sealed class ChatRunsController(
         {
             return await runtime.DeleteAsync(ProductEntryPoints.Chat, runId, userId!, ct).ConfigureAwait(false)
                 ? NoContent()
-                : NotFound();
+                : ResourceNotFound();
         }
         catch (InvalidOperationException ex)
         {
-            return Conflict(new { error = ex.Message });
+            return StateConflict(ex.Message);
         }
     }
 
@@ -253,7 +252,7 @@ public sealed class ChatRunsController(
         userId = userResolver.Resolve(User);
         if (userId is null)
         {
-            error = Unauthorized(new { error = "需要先登录 Ingot 平台。" });
+            error = AuthenticationRequired("需要先登录 Ingot 平台。");
             return false;
         }
 

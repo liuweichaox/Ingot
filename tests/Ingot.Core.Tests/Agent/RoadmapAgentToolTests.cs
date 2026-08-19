@@ -284,6 +284,21 @@ public sealed class RoadmapAgentToolTests
         public Task<InspectionRecord?> GetAsync(Guid recordId, CancellationToken ct = default)
             => Task.FromResult(records.FirstOrDefault(record => record.RecordId == recordId));
 
+        public Task<InspectionRecord?> GetCorrectionForAsync(Guid recordId, CancellationToken ct = default)
+            => Task.FromResult(records.FirstOrDefault(record => record.SupersedesRecordId == recordId));
+
+        public Task<IReadOnlyList<InspectionScope>> ListScopesAsync(CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<InspectionScope>>([]);
+
+        public Task<InspectionScope?> GetScopeAsync(string scopeId, CancellationToken ct = default)
+            => Task.FromResult<InspectionScope?>(null);
+
+        public Task<InspectionScope> UpsertScopeAsync(InspectionScope scope, CancellationToken ct = default)
+            => throw new NotSupportedException();
+
+        public Task<bool> DeleteScopeAsync(string scopeId, CancellationToken ct = default)
+            => throw new NotSupportedException();
+
         public Task<IReadOnlyList<InspectionRecord>> QueryAsync(
             InspectionRecordQuery query,
             CancellationToken ct = default)
@@ -292,6 +307,20 @@ public sealed class RoadmapAgentToolTests
                                  record.ExecutionId == query.ExecutionId)
                 .Take(query.Limit)
                 .ToArray());
+
+        public async Task<InspectionRecordPage> QueryPageAsync(
+            InspectionRecordQuery query,
+            CancellationToken ct = default)
+        {
+            var items = await QueryAsync(query, ct);
+            return new InspectionRecordPage
+            {
+                Data = items,
+                Total = items.Count,
+                Offset = query.Offset,
+                Limit = query.Limit
+            };
+        }
 
         public Task<IReadOnlyList<InspectionRecord>> QueryAllByExecutionIdsAsync(
             IReadOnlyCollection<string> executionIds,

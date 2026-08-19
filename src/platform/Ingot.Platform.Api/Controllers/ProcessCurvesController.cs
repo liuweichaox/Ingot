@@ -8,7 +8,7 @@ namespace Ingot.Platform.Api.Controllers;
 [Route("api/v1/process-executions/{executionId}/curves")]
 public sealed class ProcessCurvesController(
     ITimeSeriesStore timeSeries,
-    PlatformUserResolver userResolver) : ControllerBase
+    PlatformUserResolver userResolver) : PlatformApiController
 {
     private const int DefaultMaximumPoints = 2_000;
     private const int MaximumSignals = 32;
@@ -24,24 +24,24 @@ public sealed class ProcessCurvesController(
     {
         var identity = userResolver.ResolveIdentity(User);
         if (identity is null)
-            return Unauthorized(new { error = "需要平台统一认证。" });
+            return AuthenticationRequired("需要平台统一认证。");
         if (!identity.HasAnyRole(PlatformRoles.QualityRead))
-            return Forbid();
+            return AuthorizationDenied();
         if (string.IsNullOrWhiteSpace(executionId) || executionId.Length > 200)
-            return BadRequest(new { error = "运行编号格式不正确。" });
+            return InvalidRequest("运行编号格式不正确。");
         if (from > to)
-            return BadRequest(new { error = "曲线开始时间不能晚于结束时间。" });
+            return InvalidRequest("曲线开始时间不能晚于结束时间。");
         if (maxPoints is < 100 or > 10_000)
-            return BadRequest(new { error = "MaxPoints 必须在 100 到 10000 之间。" });
+            return InvalidRequest("MaxPoints 必须在 100 到 10000 之间。");
 
         var requestedSignals = (signalCodes ?? string.Empty)
             .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Distinct(StringComparer.Ordinal)
             .ToArray();
         if (requestedSignals.Length == 0)
-            return BadRequest(new { error = "至少选择一个过程信号。" });
+            return InvalidRequest("至少选择一个过程信号。");
         if (requestedSignals.Length > MaximumSignals || requestedSignals.Any(static code => code.Length > 200))
-            return BadRequest(new { error = $"一次最多查询 {MaximumSignals} 个有效信号。" });
+            return InvalidRequest($"一次最多查询 {MaximumSignals} 个有效信号。");
 
         var frames = await TimeSeriesFrameReader.QueryAllAsync(
             timeSeries,

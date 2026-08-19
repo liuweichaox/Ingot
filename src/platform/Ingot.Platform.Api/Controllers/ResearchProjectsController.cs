@@ -30,7 +30,7 @@ public sealed class ResearchProjectsController(
     IResearchObservationAssembler observationAssembler,
     ResearchExperimentResultMaterializer resultMaterializer,
     IExecutionComparisonService executionComparisonService,
-    PlatformUserResolver userResolver) : ControllerBase
+    PlatformUserResolver userResolver) : PlatformApiController
 {
     [HttpGet("{projectId:guid}/experiments")]
     public Task<IActionResult> ListExperiments(
@@ -106,7 +106,7 @@ public sealed class ResearchProjectsController(
         var value = await store.GetValidationPreregistrationAsync(preregistrationId, ct)
             .ConfigureAwait(false);
         if (value is null)
-            return NotFound(new { error = "阶段 0 预注册不存在。" });
+            return ResourceNotFound("阶段 0 预注册不存在。");
         return await ExecuteForProjectAsync(
             value.ProjectId,
             true,
@@ -200,7 +200,7 @@ public sealed class ResearchProjectsController(
         var report = await store.GetHistoricalReplayReportAsync(reportId, ct)
             .ConfigureAwait(false);
         if (report is null)
-            return NotFound(new { error = "历史回放报告不存在。" });
+            return ResourceNotFound("历史回放报告不存在。");
         return await ExecuteForProjectAsync(
             report.ProjectId,
             true,
@@ -228,7 +228,7 @@ public sealed class ResearchProjectsController(
     {
         var drill = await store.GetRollbackDrillAsync(drillId, ct).ConfigureAwait(false);
         if (drill is null)
-            return NotFound(new { error = "停止与回退演练不存在。" });
+            return ResourceNotFound("停止与回退演练不存在。");
         return await ExecuteForProjectAsync(
             drill.ProjectId,
             true,
@@ -551,7 +551,7 @@ public sealed class ResearchProjectsController(
     {
         var experiment = await store.GetExperimentAsync(experimentId, ct).ConfigureAwait(false);
         if (experiment is null)
-            return NotFound(new { error = "实验不存在。" });
+            return ResourceNotFound("实验不存在。");
         return await ExecuteForProjectAsync(
             experiment.ProjectId,
             true,
@@ -571,7 +571,7 @@ public sealed class ResearchProjectsController(
     {
         var experiment = await store.GetExperimentAsync(experimentId, ct).ConfigureAwait(false);
         if (experiment is null)
-            return NotFound(new { error = "实验不存在。" });
+            return ResourceNotFound("实验不存在。");
         return await ExecuteForProjectAsync(
             experiment.ProjectId,
             true,
@@ -587,7 +587,7 @@ public sealed class ResearchProjectsController(
     {
         var experiment = await store.GetExperimentAsync(experimentId, ct).ConfigureAwait(false);
         if (experiment is null)
-            return NotFound(new { error = "实验不存在。" });
+            return ResourceNotFound("实验不存在。");
         return await ExecuteForProjectAsync(
             experiment.ProjectId,
             true,
@@ -636,7 +636,7 @@ public sealed class ResearchProjectsController(
     {
         var experiment = await store.GetExperimentAsync(experimentId, ct).ConfigureAwait(false);
         if (experiment is null)
-            return NotFound(new { error = "优化实验不存在。" });
+            return ResourceNotFound("优化实验不存在。");
         return await ExecuteForProjectAsync(
             experiment.ProjectId,
             true,
@@ -657,7 +657,7 @@ public sealed class ResearchProjectsController(
     {
         var experiment = await store.GetExperimentAsync(experimentId, ct).ConfigureAwait(false);
         if (experiment is null)
-            return NotFound(new { error = "受控在线建议不存在。" });
+            return ResourceNotFound("受控在线建议不存在。");
         return await ExecuteForProjectAsync(
             experiment.ProjectId,
             true,
@@ -674,7 +674,7 @@ public sealed class ResearchProjectsController(
         var recommendation = await store.GetShadowRecommendationAsync(recommendationId, ct)
             .ConfigureAwait(false);
         if (recommendation is null)
-            return NotFound(new { error = "影子建议不存在。" });
+            return ResourceNotFound("影子建议不存在。");
         return await ExecuteForProjectAsync(
             recommendation.ProjectId,
             true,
@@ -733,7 +733,7 @@ public sealed class ResearchProjectsController(
     {
         var window = await store.GetOperatingRegionAsync(operatingRegionId, ct).ConfigureAwait(false);
         if (window is null)
-            return NotFound(new { error = "工艺操作域不存在。" });
+            return ResourceNotFound("工艺操作域不存在。");
         return await ExecuteForProjectAsync(
             window.ProjectId,
             true,
@@ -751,7 +751,7 @@ public sealed class ResearchProjectsController(
     {
         var window = await store.GetOperatingRegionAsync(operatingRegionId, ct).ConfigureAwait(false);
         if (window is null)
-            return NotFound(new { error = "工艺操作域不存在。" });
+            return ResourceNotFound("工艺操作域不存在。");
         return await ExecuteForProjectAsync(
             window.ProjectId,
             true,
@@ -767,7 +767,7 @@ public sealed class ResearchProjectsController(
     {
         var window = await store.GetOperatingRegionAsync(operatingRegionId, ct).ConfigureAwait(false);
         if (window is null)
-            return NotFound(new { error = "工艺操作域不存在。" });
+            return ResourceNotFound("工艺操作域不存在。");
         return await ExecuteForProjectAsync(
             window.ProjectId,
             true,
@@ -798,7 +798,7 @@ public sealed class ResearchProjectsController(
     {
         var claim = await store.GetKnowledgeClaimAsync(claimId, ct).ConfigureAwait(false);
         if (claim is null)
-            return NotFound(new { error = "知识声明不存在。" });
+            return ResourceNotFound("知识声明不存在。");
         return await ExecuteForProjectAsync(
             claim.ProjectId,
             true,
@@ -825,7 +825,7 @@ public sealed class ResearchProjectsController(
                     ? null
                     : await store.GetProjectAsync(window.ProjectId, ct).ConfigureAwait(false);
                 if (source is not null && !CanAccess(source, identity, false))
-                    return Forbid();
+                    return AuthorizationDenied();
                 return Ok(await transferAssessments.AssessAsync(
                     projectId,
                     request,
@@ -883,7 +883,7 @@ public sealed class ResearchProjectsController(
         var assessment = await store.GetTransferAssessmentAsync(assessmentId, ct)
             .ConfigureAwait(false);
         if (assessment is null)
-            return NotFound(new { error = "迁移评估不存在。" });
+            return ResourceNotFound("迁移评估不存在。");
         return await ExecuteForProjectAsync(
             assessment.ProjectId,
             true,
@@ -905,9 +905,9 @@ public sealed class ResearchProjectsController(
             return identity.Result;
         var project = await store.GetProjectAsync(projectId, ct).ConfigureAwait(false);
         if (project is null)
-            return NotFound(new { error = "研发项目不存在。" });
+            return ResourceNotFound("研发项目不存在。");
         if (!CanAccess(project, identity.Identity!, requireWrite))
-            return Forbid();
+            return AuthorizationDenied();
         return await ExecuteRuleAsync(() => operation(identity.Identity!)).ConfigureAwait(false);
     }
 
@@ -921,11 +921,11 @@ public sealed class ResearchProjectsController(
         cursor = string.IsNullOrWhiteSpace(cursor) ? null : cursor.Trim();
         if (limit is < 1 or > 200)
             return Task.FromResult<IActionResult>(
-                BadRequest(new { error = "Limit 必须在 1 到 200 之间。" }));
+                InvalidRequest("Limit 必须在 1 到 200 之间。"));
         if (!string.IsNullOrWhiteSpace(cursor) &&
             !ResearchPageCursor.TryDecode(cursor, out _, out _))
             return Task.FromResult<IActionResult>(
-                BadRequest(new { error = "分页游标无效或已经损坏。" }));
+                InvalidRequest("分页游标无效或已经损坏。"));
         return ExecuteForProjectAsync(
             projectId,
             false,
@@ -937,9 +937,9 @@ public sealed class ResearchProjectsController(
     {
         var identity = userResolver.ResolveIdentity(User);
         if (identity is null)
-            return (null, Unauthorized(new { error = "需要平台统一认证。" }));
+            return (null, AuthenticationRequired("需要平台统一认证。"));
         if (!identity.HasAnyRole(PlatformRoles.ProcessEngineer, PlatformRoles.PlatformAdministrator))
-            return (null, Forbid());
+            return (null, AuthorizationDenied());
         return (identity, null);
     }
 
@@ -1031,7 +1031,7 @@ public sealed class ResearchProjectsController(
         return isMember && (!requireWrite || project.Status != ResearchProjectStatuses.Archived);
     }
 
-    private static async Task<IActionResult> ExecuteRuleAsync(Func<Task<IActionResult>> operation)
+    private async Task<IActionResult> ExecuteRuleAsync(Func<Task<IActionResult>> operation)
     {
         try
         {
@@ -1039,22 +1039,15 @@ public sealed class ResearchProjectsController(
         }
         catch (ResearchExperimentValidationException exception)
         {
-            return new ConflictObjectResult(new
-            {
-                error = exception.Message,
-                errors = exception.Errors
-            });
+            return StateConflict(exception.Message, ("errors", exception.Errors));
         }
         catch (ProcessResearchRuleException exception)
         {
-            return new ConflictObjectResult(new { error = exception.Message });
+            return StateConflict(exception.Message);
         }
         catch (ProcessOptimizerUnavailableException exception)
         {
-            return new ObjectResult(new { error = exception.Message })
-            {
-                StatusCode = StatusCodes.Status503ServiceUnavailable
-            };
+            return ServiceUnavailable(exception.Message);
         }
     }
 }

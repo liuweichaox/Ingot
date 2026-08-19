@@ -15,7 +15,7 @@ public sealed class AuthController(
     ILocalUserStore store,
     LocalPasswordHasher hasher,
     LoginThrottle throttle,
-    IOptions<LocalAuthOptions> options) : ControllerBase
+    IOptions<LocalAuthOptions> options) : PlatformApiController
 {
     // 用户不存在时也执行一次等价的 PBKDF2 校验，消除"账户是否存在"的时序旁路。进程内计算一次。
     private static readonly string TimingEqualizerHash = new LocalPasswordHasher().Hash("timing-equalizer");
@@ -25,11 +25,11 @@ public sealed class AuthController(
     public async Task<IActionResult> Login([FromBody] LoginRequest? request, CancellationToken ct)
     {
         if (request is null || string.IsNullOrWhiteSpace(request.Username) || string.IsNullOrWhiteSpace(request.Password))
-            return BadRequest(new { error = "用户名和口令不能为空。" });
+            return InvalidRequest("用户名和口令不能为空。");
 
         var usernameLower = request.Username.Trim().ToLowerInvariant();
         if (throttle.IsBlocked(usernameLower))
-            return StatusCode(StatusCodes.Status429TooManyRequests, new { error = "登录尝试过于频繁，请稍后再试。" });
+            return RateLimited("登录尝试过于频繁，请稍后再试。");
 
         var user = await store.GetByUsernameAsync(usernameLower, ct).ConfigureAwait(false);
         // 无论用户是否存在都执行一次哈希校验（不存在时用等时哈希），返回同一错误，避免用户名枚举与时序差异。
@@ -38,7 +38,7 @@ public sealed class AuthController(
         if (!verified)
         {
             throttle.RecordFailure(usernameLower);
-            return Unauthorized(new { error = "用户名或口令错误。" });
+            return AuthenticationRequired("用户名或口令错误。");
         }
         throttle.RecordSuccess(usernameLower);
 
@@ -74,7 +74,7 @@ public sealed class AuthController(
     public IActionResult Me()
     {
         if (User.Identity?.IsAuthenticated != true)
-            return Unauthorized();
+            return AuthenticationRequired();
         return Ok(new IdentityResponse
         {
             UserId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty,

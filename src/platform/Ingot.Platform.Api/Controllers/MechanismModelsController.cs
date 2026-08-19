@@ -26,7 +26,7 @@ public sealed class MechanismModelsController(
         var normalizedId = modelId.Trim().ToLowerInvariant();
         var model = await store.GetMechanismModelAsync(normalizedId, version, ct).ConfigureAwait(false);
         if (model is null)
-            return NotFound();
+            return ResourceNotFound();
         var audit = await store.ListAuditEntriesAsync(
             "mechanism-model",
             $"{normalizedId}:{version}",
@@ -66,7 +66,7 @@ public sealed class MechanismModelsController(
         }
         catch (ResearchAssetRuleException exception)
         {
-            return Conflict(new { error = exception.Message });
+            return StateConflict(exception.Message);
         }
     }
 }
@@ -92,7 +92,7 @@ public sealed class MechanismFusionsController(
         var normalizedId = fusionId.Trim().ToLowerInvariant();
         var fusion = await store.GetMechanismFusionAsync(normalizedId, version, ct).ConfigureAwait(false);
         if (fusion is null)
-            return NotFound();
+            return ResourceNotFound();
         var audit = await store.ListAuditEntriesAsync(
             "mechanism-fusion",
             $"{normalizedId}:{version}",
@@ -135,7 +135,7 @@ public sealed class MechanismFusionsController(
         }
         catch (ResearchAssetRuleException exception)
         {
-            return Conflict(new { error = exception.Message });
+            return StateConflict(exception.Message);
         }
     }
 
@@ -150,7 +150,7 @@ public sealed class MechanismFusionsController(
         }
         catch (ResearchAssetRuleException exception)
         {
-            return Conflict(new { error = exception.Message });
+            return StateConflict(exception.Message);
         }
     }
 }

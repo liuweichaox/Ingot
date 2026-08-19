@@ -27,7 +27,7 @@ public sealed class GoldenQuestionsController(
         var denied = DeniedConfigurationRead();
         if (denied is not null) return denied;
         var value = await store.GetAsync(caseId, version, ct).ConfigureAwait(false);
-        return value is null ? NotFound() : Ok(value);
+        return value is null ? ResourceNotFound() : Ok(value);
     }
 
     [HttpPost]
@@ -45,7 +45,7 @@ public sealed class GoldenQuestionsController(
                 false,
                 out var normalized,
                 out var error))
-            return BadRequest(new { error });
+            return InvalidRequest(error);
 
         var existing = await store.GetAsync(normalized!.CaseId, normalized.Version, ct).ConfigureAwait(false);
         var now = DateTimeOffset.UtcNow;
@@ -60,7 +60,7 @@ public sealed class GoldenQuestionsController(
         }
         catch (InvalidOperationException exception)
         {
-            return Conflict(new { error = exception.Message });
+            return StateConflict(exception.Message);
         }
     }
 
@@ -70,12 +70,12 @@ public sealed class GoldenQuestionsController(
         var denied = DeniedConfigurationWrite();
         if (denied is not null) return denied;
         var existing = await store.GetAsync(caseId, version, ct).ConfigureAwait(false);
-        if (existing is null) return NotFound();
+        if (existing is null) return ResourceNotFound();
         if (existing.Status == GoldenQuestionStatuses.Reviewed) return Ok(existing);
         if (existing.Status != GoldenQuestionStatuses.Draft)
-            return Conflict(new { error = "只有草稿黄金问题可以审核。" });
+            return StateConflict("只有草稿黄金问题可以审核。");
         if (!GoldenQuestionValidator.TryValidate(existing, true, out var normalized, out var error))
-            return BadRequest(new { error });
+            return InvalidRequest(error);
 
         var reviewed = normalized! with
         {
@@ -97,11 +97,11 @@ public sealed class GoldenQuestionsController(
         var denied = DeniedConfigurationRead();
         if (denied is not null) return denied;
         if (request is null || string.IsNullOrWhiteSpace(request.AgentRunId))
-            return BadRequest(new { error = "agentRunId 不能为空。" });
+            return InvalidRequest("agentRunId 不能为空。");
         var goldenCase = await store.GetAsync(caseId, version, ct).ConfigureAwait(false);
-        if (goldenCase is null) return NotFound();
+        if (goldenCase is null) return ResourceNotFound();
         var run = await agentRuns.GetAsync(request.AgentRunId.Trim(), ct).ConfigureAwait(false);
-        if (run is null) return BadRequest(new { error = "指定 Agent 运行不存在。" });
+        if (run is null) return InvalidRequest("指定 Agent 运行不存在。");
         try
         {
             var result = evaluator.Evaluate(goldenCase, run);
@@ -110,7 +110,7 @@ public sealed class GoldenQuestionsController(
         }
         catch (InvalidOperationException exception)
         {
-            return Conflict(new { error = exception.Message });
+            return StateConflict(exception.Message);
         }
     }
 

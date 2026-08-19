@@ -9,7 +9,7 @@ namespace Ingot.Platform.Api.Controllers;
 [Route("api/v1/data-reliability")]
 public sealed class DataReliabilityController(
     IDataReliabilityBaselineService reliability,
-    PlatformUserResolver userResolver) : ControllerBase
+    PlatformUserResolver userResolver) : PlatformApiController
 {
     [HttpGet("baseline")]
     public async Task<IActionResult> Baseline(
@@ -22,13 +22,13 @@ public sealed class DataReliabilityController(
     {
         var identity = userResolver.ResolveIdentity(User);
         if (identity is null)
-            return Unauthorized(new { error = "需要平台统一认证。" });
+            return AuthenticationRequired("需要平台统一认证。");
         if (!identity.HasAnyRole(PlatformRoles.QualityRead))
-            return Forbid();
+            return AuthorizationDenied();
         if (from > to)
-            return BadRequest(new { error = "开始时间不能晚于结束时间。" });
+            return InvalidRequest("开始时间不能晚于结束时间。");
         if (maximumRuns is < 1 or > 5000)
-            return BadRequest(new { error = "MaximumRuns 必须在 1 到 5000 之间。" });
+            return InvalidRequest("MaximumRuns 必须在 1 到 5000 之间。");
 
         return Ok(await reliability.CalculateAsync(new DataReliabilityBaselineQuery
         {

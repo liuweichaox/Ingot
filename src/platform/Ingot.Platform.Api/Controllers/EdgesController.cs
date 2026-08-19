@@ -8,7 +8,7 @@ namespace Ingot.Platform.Api.Controllers;
 
 [ApiController]
 [Route("api/edges")]
-public class EdgesController(EdgeRegistry registry, EdgeTokenValidator edgeTokenValidator) : ControllerBase
+public class EdgesController(EdgeRegistry registry, EdgeTokenValidator edgeTokenValidator) : PlatformApiController
 {
     [HttpGet]
     public IActionResult List()
@@ -21,7 +21,7 @@ public class EdgesController(EdgeRegistry registry, EdgeTokenValidator edgeToken
     public IActionResult Register([FromBody] EdgeRegistrationRequest request)
     {
         if (!edgeTokenValidator.IsAuthorized(request.EdgeId, Request.Headers.Authorization.ToString()))
-            return Unauthorized(new { error = "边缘节点认证失败。" });
+            return AuthenticationRequired("边缘节点认证失败。");
         var now = DateTimeOffset.UtcNow;
         var state = registry.Upsert(request.EdgeId, request.HostBaseUrl, request.Hostname, null, now);
         return Ok(new { state.EdgeId, state.HostBaseUrl, state.Hostname, state.LastSeen });
@@ -32,7 +32,7 @@ public class EdgesController(EdgeRegistry registry, EdgeTokenValidator edgeToken
     public IActionResult Heartbeat([FromBody] EdgeHeartbeatRequest request)
     {
         if (!edgeTokenValidator.IsAuthorized(request.EdgeId, Request.Headers.Authorization.ToString()))
-            return Unauthorized(new { error = "边缘节点认证失败。" });
+            return AuthenticationRequired("边缘节点认证失败。");
         // 在线状态与历史排序以中心接收时间为准，避免现场时钟漂移把节点永久显示在未来或过去。
         var now = DateTimeOffset.UtcNow;
         var state = registry.Heartbeat(

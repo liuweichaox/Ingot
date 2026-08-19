@@ -1,7 +1,6 @@
 using System.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ApplicationModels;
-using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.WebUtilities;
 
 namespace Ingot.Platform.Api.Errors;
@@ -47,44 +46,6 @@ public static class ApiProblemDetailsFactory
             _ when status >= 500 => "server.error",
             _ => "request.failed"
         };
-}
-
-public sealed class ApiProblemDetailsResultFilter : IAsyncResultFilter
-{
-    public async Task OnResultExecutionAsync(
-        ResultExecutingContext context,
-        ResultExecutionDelegate next)
-    {
-        if (context.Result is ObjectResult { Value: not ProblemDetails } result &&
-            (result.StatusCode ?? 0) is >= 400 and <= 599 &&
-            TryReadError(result.Value, out var detail, out var errors))
-        {
-            var problem = ApiProblemDetailsFactory.Create(
-                context.HttpContext,
-                result.StatusCode!.Value,
-                detail);
-            if (errors is not null)
-                problem.Extensions["errors"] = errors;
-            result.Value = problem;
-            result.DeclaredType = typeof(ApiProblemDetails);
-            result.ContentTypes.Clear();
-            result.ContentTypes.Add("application/problem+json");
-        }
-        await next().ConfigureAwait(false);
-    }
-
-    private static bool TryReadError(object? value, out string? detail, out object? errors)
-    {
-        detail = null;
-        errors = null;
-        if (value is null) return false;
-        var type = value.GetType();
-        detail = type.GetProperty("error")?.GetValue(value)?.ToString()
-                 ?? type.GetProperty("Error")?.GetValue(value)?.ToString();
-        errors = type.GetProperty("errors")?.GetValue(value)
-                 ?? type.GetProperty("Errors")?.GetValue(value);
-        return detail is not null;
-    }
 }
 
 public sealed class ApiProblemDetailsConvention : IApplicationModelConvention

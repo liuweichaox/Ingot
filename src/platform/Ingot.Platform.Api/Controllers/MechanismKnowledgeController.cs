@@ -13,7 +13,7 @@ public sealed class MechanismKnowledgeController(
     IMechanismKnowledgeStore store,
     MechanismKnowledgeService service,
     IProcessResearchStore researchStore,
-    PlatformUserResolver userResolver) : ControllerBase
+    PlatformUserResolver userResolver) : PlatformApiController
 {
     [HttpGet]
     public async Task<IActionResult> List(Guid projectId, CancellationToken ct)
@@ -28,7 +28,7 @@ public sealed class MechanismKnowledgeController(
         var access = await ResolveAccessAsync(projectId, false, ct).ConfigureAwait(false);
         if (access.Result is not null) return access.Result;
         var value = await store.GetClaimAsync(claimId, version, ct).ConfigureAwait(false);
-        return value is null || value.ProjectId != projectId ? NotFound() : Ok(value);
+        return value is null || value.ProjectId != projectId ? ResourceNotFound() : Ok(value);
     }
 
     [HttpPost]
@@ -53,7 +53,7 @@ public sealed class MechanismKnowledgeController(
         var access = await ResolveAccessAsync(projectId, true, ct).ConfigureAwait(false);
         if (access.Result is not null) return access.Result;
         var claim = await store.GetClaimAsync(claimId, null, ct).ConfigureAwait(false);
-        if (claim is null || claim.ProjectId != projectId) return NotFound();
+        if (claim is null || claim.ProjectId != projectId) return ResourceNotFound();
         return await ExecuteAsync(() => service.ReviewAsync(
             claimId, request, access.Identity!.UserId, ct)).ConfigureAwait(false);
     }
@@ -111,11 +111,11 @@ public sealed class MechanismKnowledgeController(
         }
         catch (ResearchAssetRuleException exception)
         {
-            return Conflict(new { error = exception.Message });
+            return StateConflict(exception.Message);
         }
         catch (InvalidOperationException exception)
         {
-            return Conflict(new { error = exception.Message });
+            return StateConflict(exception.Message);
         }
     }
 
@@ -125,17 +125,17 @@ public sealed class MechanismKnowledgeController(
         CancellationToken ct)
     {
         var identity = userResolver.ResolveIdentity(User);
-        if (identity is null) return (null, Unauthorized(new { error = "需要平台统一认证。" }));
+        if (identity is null) return (null, AuthenticationRequired("需要平台统一认证。"));
         if (!identity.HasAnyRole(PlatformRoles.ProcessEngineer, PlatformRoles.PlatformAdministrator))
-            return (null, Forbid());
+            return (null, AuthorizationDenied());
         var project = await researchStore.GetProjectAsync(projectId, ct).ConfigureAwait(false);
-        if (project is null) return (null, NotFound(new { error = "研发项目不存在。" }));
+        if (project is null) return (null, ResourceNotFound("研发项目不存在。"));
         var canAccess = identity.HasAnyRole(PlatformRoles.PlatformAdministrator) ||
                         string.Equals(project.OwnerUserId, identity.UserId, StringComparison.Ordinal) ||
                         project.MemberUserIds.Contains(identity.UserId, StringComparer.Ordinal);
         if (!canAccess || requireWrite && (project.Status is
                 ResearchProjectStatuses.Completed or ResearchProjectStatuses.Archived))
-            return (null, Forbid());
+            return (null, AuthorizationDenied());
         return (identity, null);
     }
 }

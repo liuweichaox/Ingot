@@ -1,4 +1,5 @@
 using Ingot.Agent;
+using Ingot.Platform.Application.Inspections;
 using Ingot.Platform.Application.ProcessResearch;
 using Ingot.Platform.Infrastructure.ProcessExecutions;
 using Ingot.Platform.Infrastructure.Events;
@@ -83,6 +84,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IInspectionMasterDataStore, PostgresInspectionMasterDataStore>();
         services.AddSingleton<IInspectionReviewStore, PostgresInspectionReviewStore>();
         services.AddSingleton<IInspectionWorkflowService, InspectionWorkflowService>();
+        services.AddSingleton<InspectionCommands>();
         services.AddHostedService<InspectionStoreInitializerHostedService>();
         services.AddSingleton<IExecutionComparisonService, ExecutionComparisonService>();
         services.AddSingleton<ITimeWindowComparisonService, TimeWindowComparisonService>();

@@ -30,7 +30,6 @@ builder.WebHost.UseUrls(urls);
 builder.Services.AddHttpClient();
 builder.Services.AddControllers(options =>
 {
-    options.Filters.Add<ApiProblemDetailsResultFilter>();
     options.Conventions.Add(new ApiProblemDetailsConvention());
 });
 builder.Services.AddProblemDetails(options =>

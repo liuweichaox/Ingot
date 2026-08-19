@@ -1,7 +1,6 @@
 using Ingot.Contracts.Inspections;
 using Ingot.Platform.Api.Agents;
 using Ingot.Platform.Api.Controllers;
-using Ingot.Platform.Infrastructure.Inspections;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.FileProviders;
@@ -18,9 +17,10 @@ public sealed class InspectionAttachmentsControllerTests
         var attachmentId = Guid.CreateVersion7();
         var bytes = new byte[] { 1, 2, 3, 4 };
         var reviews = new StubReviewStore();
+        var attachments = new StubAttachmentStore(attachmentId, bytes);
         var controller = new InspectionAttachmentsController(
-            new StubAttachmentStore(attachmentId, bytes),
-            reviews,
+            attachments,
+            new InspectionCommands(null!, null!, attachments, reviews, null!),
             new PlatformUserResolver(new TestHostEnvironment()))
         {
             ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() }

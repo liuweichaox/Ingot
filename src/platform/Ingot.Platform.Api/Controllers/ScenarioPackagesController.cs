@@ -2,8 +2,8 @@ using System.Text.Json;
 using Ingot.Contracts.Inspections;
 using Ingot.Contracts.ProcessConfiguration;
 using Ingot.Platform.Api.Agents;
+using Ingot.Platform.Application.Inspections;
 using Ingot.Platform.Infrastructure.Acquisition;
-using Ingot.Platform.Infrastructure.Inspections;
 using Ingot.Platform.Infrastructure.ProcessConfiguration;
 using Microsoft.AspNetCore.Mvc;
 
@@ -29,7 +29,7 @@ public sealed class ScenarioPackagesController(
         if (denied is not null)
             return denied;
         var value = await store.GetScenarioPackageAsync(Normalize(packageId), version, ct).ConfigureAwait(false);
-        return value is null ? NotFound() : Ok(value);
+        return value is null ? ResourceNotFound() : Ok(value);
     }
 
     [HttpPost]
@@ -39,12 +39,12 @@ public sealed class ScenarioPackagesController(
         if (denied is not null)
             return denied;
         if (!ScenarioPackageValidator.TryValidate(request, out var normalized, out var error))
-            return BadRequest(new { error });
+            return InvalidRequest(error);
 
         var package = normalized!;
         var referenceError = await ValidateReferencesAsync(package, ct).ConfigureAwait(false);
         if (referenceError is not null)
-            return BadRequest(new { error = referenceError });
+            return InvalidRequest(referenceError);
 
         var existing = await store.GetScenarioPackageAsync(package.PackageId, package.Version, ct)
             .ConfigureAwait(false);
@@ -55,7 +55,7 @@ public sealed class ScenarioPackagesController(
             else if (SamePayload(existing with { UpdatedAt = default }, package with { UpdatedAt = default }))
                 return Ok(existing);
             else
-                return Conflict(new { error = "已发布或停用的工艺配置不可修改，请创建新版本。", existing });
+                return StateConflict("已发布或停用的工艺配置不可修改，请创建新版本。", ("existing", existing));
         }
         return Ok(await store.UpsertScenarioPackageAsync(package, ct).ConfigureAwait(false));
     }
@@ -68,12 +68,12 @@ public sealed class ScenarioPackagesController(
             return denied;
         var existing = await store.GetScenarioPackageAsync(Normalize(packageId), version, ct).ConfigureAwait(false);
         if (existing is null)
-            return NotFound();
+            return ResourceNotFound();
         if (existing.Status != ConfigurationStatuses.Draft)
-            return Conflict(new { error = "只有草稿工艺配置可以删除。" });
+            return StateConflict("只有草稿工艺配置可以删除。");
         return await store.DeleteScenarioPackageAsync(existing.PackageId, version, ct).ConfigureAwait(false)
             ? NoContent()
-            : NotFound();
+            : ResourceNotFound();
     }
 
     private async Task<string?> ValidateReferencesAsync(ScenarioPackage package, CancellationToken ct)

@@ -2,6 +2,7 @@ using System.Text.Json;
 using Ingot.Contracts.Events;
 using Ingot.Domain.Events;
 using Ingot.Platform.Api.Controllers;
+using Ingot.Platform.Api.Errors;
 using Ingot.Platform.Api.Events;
 using Ingot.Platform.Infrastructure.Events;
 using Microsoft.AspNetCore.Http;
@@ -71,7 +72,9 @@ public sealed class EventsControllerTests
         var action = await controller.Query(
             null, null, null, null, null, null, null, 1, 8, 0, 3, CancellationToken.None);
 
-        Assert.IsType<BadRequestObjectResult>(action);
+        var invalid = Assert.IsType<ObjectResult>(action);
+        Assert.Equal(StatusCodes.Status400BadRequest, invalid.StatusCode);
+        Assert.Equal("request.invalid", Assert.IsType<ApiProblemDetails>(invalid.Value).Code);
     }
 
     [Fact]

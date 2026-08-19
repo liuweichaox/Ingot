@@ -1,5 +1,6 @@
 using Ingot.Platform.Api.Agents;
 using Ingot.Platform.Api.Controllers;
+using Ingot.Platform.Api.Errors;
 using Ingot.Platform.Infrastructure.TimeSeries;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -71,7 +72,9 @@ public sealed class ProcessCurvesControllerTests
 
         var result = await controller.Query("execution-01", null, null, null);
 
-        Assert.IsType<BadRequestObjectResult>(result);
+        var invalid = Assert.IsType<ObjectResult>(result);
+        Assert.Equal(StatusCodes.Status400BadRequest, invalid.StatusCode);
+        Assert.Equal("request.invalid", Assert.IsType<ApiProblemDetails>(invalid.Value).Code);
     }
 
     private static ProcessCurvesController Controller(ITimeSeriesStore store)

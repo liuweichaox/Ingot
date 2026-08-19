@@ -1,6 +1,6 @@
 using Ingot.Contracts.Inspections;
 
-namespace Ingot.Platform.Infrastructure.Inspections;
+namespace Ingot.Platform.Application.Inspections;
 
 public interface IInspectionAttachmentStore
 {

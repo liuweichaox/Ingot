@@ -833,9 +833,25 @@ public sealed class QualityWorkflowTests
         public Task InitializeAsync(CancellationToken ct = default) => Task.CompletedTask;
         public Task<StoreInspectionRecordResult> CreateAsync(CreateInspectionRecordRequest request, bool submitterVerified, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<InspectionRecord?> GetAsync(Guid recordId, CancellationToken ct = default) => Task.FromResult(records.FirstOrDefault(item => item.RecordId == recordId));
+        public Task<InspectionRecord?> GetCorrectionForAsync(Guid recordId, CancellationToken ct = default)
+            => Task.FromResult(records.FirstOrDefault(item => item.SupersedesRecordId == recordId));
         public Task<IReadOnlyList<InspectionScope>> ListScopesAsync(CancellationToken ct = default)
             => Task.FromResult<IReadOnlyList<InspectionScope>>(scopes ?? []);
+        public Task<InspectionScope?> GetScopeAsync(string scopeId, CancellationToken ct = default)
+            => Task.FromResult((scopes ?? []).FirstOrDefault(item => item.ScopeId == scopeId));
+        public Task<InspectionScope> UpsertScopeAsync(InspectionScope scope, CancellationToken ct = default)
+            => throw new NotSupportedException();
+        public Task<bool> DeleteScopeAsync(string scopeId, CancellationToken ct = default)
+            => throw new NotSupportedException();
         public Task<IReadOnlyList<InspectionRecord>> QueryAsync(InspectionRecordQuery query, CancellationToken ct = default) => Task.FromResult(records);
+        public Task<InspectionRecordPage> QueryPageAsync(InspectionRecordQuery query, CancellationToken ct = default)
+            => Task.FromResult(new InspectionRecordPage
+            {
+                Data = records,
+                Total = records.Count,
+                Offset = query.Offset,
+                Limit = query.Limit
+            });
         public Task<IReadOnlyList<InspectionRecord>> QueryAllByExecutionIdsAsync(IReadOnlyCollection<string> executionIds, CancellationToken ct = default)
             => Task.FromResult<IReadOnlyList<InspectionRecord>>(records.Where(item => executionIds.Contains(item.ExecutionId)).ToArray());
     }

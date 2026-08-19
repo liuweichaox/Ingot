@@ -5,6 +5,10 @@
     <IsPackable>false</IsPackable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <Using Include="Ingot.Platform.Application.Inspections" />
+  </ItemGroup>
+
     <ItemGroup>
         <ProjectReference Include="..\..\src\agent\Ingot.Agent\Ingot.Agent.csproj" />
         <ProjectReference Include="..\..\src\agent\Ingot.Agent.Providers\Ingot.Agent.Providers.csproj" />

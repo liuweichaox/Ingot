@@ -24,7 +24,7 @@ public sealed class ProcessExecutionAnalysisBackfillsController(
         if (denied is not null)
             return denied;
         var job = await store.GetBackfillJobAsync(jobId, ct).ConfigureAwait(false);
-        return job is null ? NotFound() : Ok(job);
+        return job is null ? ResourceNotFound() : Ok(job);
     }
 
     [HttpPost]
@@ -41,7 +41,7 @@ public sealed class ProcessExecutionAnalysisBackfillsController(
         }
         catch (ArgumentException exception)
         {
-            return BadRequest(new { error = exception.Message });
+            return InvalidRequest(exception.Message);
         }
     }
 }
@@ -66,9 +66,9 @@ public sealed class ProcessExecutionFeatureAggregatesController(
         if (denied is not null)
             return denied;
         if (from > to)
-            return BadRequest(new { error = "开始时间不能晚于结束时间。" });
+            return InvalidRequest("开始时间不能晚于结束时间。");
         if (limit is < 1 or > 500)
-            return BadRequest(new { error = "Limit 必须在 1 到 500 之间。" });
+            return InvalidRequest("Limit 必须在 1 到 500 之间。");
         var rows = await store.QueryFeatureAggregatesAsync(
             signalCode,
             phaseCode,
