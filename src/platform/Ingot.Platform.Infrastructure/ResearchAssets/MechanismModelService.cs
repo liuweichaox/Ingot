@@ -1,3 +1,4 @@
+using Ingot.Platform.Application.ResearchAssets;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;

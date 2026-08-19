@@ -1,3 +1,4 @@
+using Ingot.Platform.Application.Inspections;
 using System.Text.Json;
 using Ingot.Agent;
 using Ingot.Platform.Infrastructure.Events;

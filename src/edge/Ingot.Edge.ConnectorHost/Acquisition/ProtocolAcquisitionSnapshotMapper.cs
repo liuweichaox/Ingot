@@ -18,6 +18,10 @@ public static class ProtocolAcquisitionSnapshotMapper
         DateTimeOffset occurredAt)
     {
         var task = deployment.Task;
+        var appliedConfiguration = new AppliedConfigurationRef(
+            "ingestion-task",
+            task.TaskId,
+            task.Version);
         var dataItems = deployment.DataModel.Acquisition.DataItems
             .ToDictionary(item => item.Code, StringComparer.Ordinal);
         var context = new Dictionary<string, string>(task.StaticContext, StringComparer.Ordinal)
@@ -98,7 +102,8 @@ public static class ProtocolAcquisitionSnapshotMapper
                     new ObjectRef(task.SubjectType, task.SubjectId),
                     executionId: null,
                     context,
-                    data);
+                    data,
+                    appliedConfiguration);
             }
         }
 
@@ -113,7 +118,9 @@ public static class ProtocolAcquisitionSnapshotMapper
             new ObjectRef(task.SubjectType, task.SubjectId),
             executionId: null,
             context,
-            sampleData);
+            sampleData,
+            appliedConfiguration,
+            QualityFlags(values));
         return new AcquisitionMappingResult(sample, processSpecificationApplied, processSpecificationIdentity);
     }
 
@@ -129,5 +136,8 @@ public static class ProtocolAcquisitionSnapshotMapper
         => value is byte or sbyte or short or ushort or int or uint or long or ulong
             ? Convert.ToInt64(value, CultureInfo.InvariantCulture)
             : value;
+
+    private static IReadOnlyList<string> QualityFlags(IReadOnlyDictionary<string, object?> values)
+        => values.Any(static pair => pair.Value is null) ? ["missing_value"] : [];
 
 }

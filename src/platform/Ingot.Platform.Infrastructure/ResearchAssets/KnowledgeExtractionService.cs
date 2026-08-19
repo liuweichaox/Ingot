@@ -1,3 +1,4 @@
+using Ingot.Platform.Application.ResearchAssets;
 using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using System.Text;
@@ -8,14 +9,6 @@ using Ingot.Contracts.ResearchAssets;
 using UglyToad.PdfPig;
 
 namespace Ingot.Platform.Infrastructure.ResearchAssets;
-
-public sealed record KnowledgeExtractionJob(Guid SourceId, string UserId, Guid LeaseId, int AttemptCount);
-
-public enum KnowledgeExtractionFailureDisposition
-{
-    RetryScheduled,
-    DeadLettered
-}
 
 public sealed class KnowledgeExtractionWorkerOptions
 {

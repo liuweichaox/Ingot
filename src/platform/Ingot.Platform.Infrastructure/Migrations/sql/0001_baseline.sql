@@ -196,6 +196,8 @@ CREATE TABLE public.event_ingest_keys (
     edge_id text NOT NULL,
     seq bigint NOT NULL,
     occurred_at timestamp with time zone NOT NULL,
+    payload_hash text NOT NULL,
+    CONSTRAINT event_ingest_keys_payload_hash_check CHECK ((payload_hash ~ '^[0-9a-f]{64}$'::text)),
     CONSTRAINT event_ingest_keys_site_id_check CHECK ((site_id ~ '^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$'::text))
 );
 
@@ -1158,6 +1160,7 @@ CREATE TABLE public.production_events (
     site_id text NOT NULL,
     edge_id text NOT NULL,
     seq bigint NOT NULL,
+    schema_version integer NOT NULL,
     event_type text NOT NULL,
     type_version integer NOT NULL,
     occurred_at timestamp with time zone NOT NULL,
@@ -1167,8 +1170,17 @@ CREATE TABLE public.production_events (
     subject_type text NOT NULL,
     subject_id text NOT NULL,
     execution_id text,
+    configuration_kind text,
+    configuration_id text,
+    configuration_version integer,
+    quality_flags jsonb DEFAULT '[]'::jsonb NOT NULL,
+    payload_hash text NOT NULL,
     context jsonb DEFAULT '{}'::jsonb NOT NULL,
     data jsonb DEFAULT '{}'::jsonb NOT NULL,
+    CONSTRAINT production_events_configuration_check CHECK ((((configuration_kind IS NULL) AND (configuration_id IS NULL) AND (configuration_version IS NULL)) OR ((configuration_kind IS NOT NULL) AND (configuration_id IS NOT NULL) AND (configuration_version > 0)))),
+    CONSTRAINT production_events_payload_hash_check CHECK ((payload_hash ~ '^[0-9a-f]{64}$'::text)),
+    CONSTRAINT production_events_quality_flags_check CHECK ((jsonb_typeof(quality_flags) = 'array'::text)),
+    CONSTRAINT production_events_schema_version_check CHECK ((schema_version = 1)),
     CONSTRAINT production_events_site_id_check CHECK ((site_id ~ '^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$'::text))
 );
 

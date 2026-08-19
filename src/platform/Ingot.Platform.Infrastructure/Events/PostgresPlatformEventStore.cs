@@ -92,6 +92,22 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, ID
         var ordered = request.Events.OrderBy(static evt => evt.Seq).ToArray();
         if (ordered.Length == 0)
             return new EventBatchResponse();
+        for (var index = 0; index < ordered.Length; index++)
+        {
+            if (!ProductionEventValidator.TryValidate(
+                    ordered[index],
+                    requirePersistedSequence: true,
+                    out var validationError))
+            {
+                throw new ArgumentException(
+                    $"Events[{index}] 无效：{validationError}",
+                    nameof(request));
+            }
+        }
+        var sourcePayloadHashes = ordered.ToDictionary(
+            static evt => evt.EventId,
+            static evt => evt.PayloadHash,
+            StringComparer.Ordinal);
 
         // 在运行开始时解析一次不可变上下文，并传播到同一 executionId 的全部后续事件。
         // 这样完成事件、质量任务与每秒样本看到的是同一份产品、工艺规范和工装快照。
@@ -99,7 +115,8 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, ID
         var analysisConfigurations = new Dictionary<string, ResolvedProcessAnalysis?>(StringComparer.Ordinal);
         for (var index = 0; index < ordered.Length; index++)
         {
-            ordered[index] = await EnrichOperationContextAsync(ordered[index], capturedContexts, ct).ConfigureAwait(false);
+            ordered[index] = ProductionEventIntegrity.Seal(
+                await EnrichOperationContextAsync(ordered[index], capturedContexts, ct).ConfigureAwait(false));
             await ValidateProcessSampleAsync(ordered[index], analysisConfigurations, ct).ConfigureAwait(false);
         }
 
@@ -119,8 +136,9 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, ID
 
         foreach (var evt in ordered)
         {
+            var sourcePayloadHash = sourcePayloadHashes[evt.EventId];
             if (await TryReserveEventAsync(
-                    connection, transaction, request.SiteId, request.EdgeId, evt, ct)
+                    connection, transaction, request.SiteId, request.EdgeId, evt, sourcePayloadHash, ct)
                     .ConfigureAwait(false))
             {
                 var effectiveEvent = evt;
@@ -139,6 +157,7 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, ID
                 {
                     effectiveEvent = evt with { Context = MergeCapturedContext(captured, evt.Context) };
                 }
+                effectiveEvent = ProductionEventIntegrity.Seal(effectiveEvent);
 
                 var isProcessSample = string.Equals(
                     effectiveEvent.EventType,
@@ -196,7 +215,7 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, ID
             else
             {
                 await VerifyDuplicateAsync(
-                        connection, transaction, request.SiteId, request.EdgeId, evt, ct)
+                        connection, transaction, request.SiteId, request.EdgeId, evt, sourcePayloadHash, ct)
                     .ConfigureAwait(false);
                 duplicates++;
             }
@@ -557,9 +576,10 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, ID
         var where = BuildWhere(command, query);
         var order = query.AfterIngestId.HasValue ? "ASC" : "DESC";
         command.CommandText = $"""
-                              SELECT ingest_id, site_id, edge_id, ingested_at, event_id, event_type, type_version,
+                              SELECT ingest_id, site_id, edge_id, ingested_at, event_id, schema_version, event_type, type_version,
                                      occurred_at, recorded_at, source, subject_type, subject_id,
-                                     execution_id, context::text, data::text, seq
+                                     execution_id, configuration_kind, configuration_id, configuration_version,
+                                     quality_flags::text, payload_hash, context::text, data::text, seq
                               FROM production_events
                               {where}
                               ORDER BY ingest_id {order}
@@ -592,9 +612,10 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, ID
 
         await using var command = _dataSource.CreateCommand(
             """
-            SELECT ingest_id, site_id, edge_id, ingested_at, event_id, event_type, type_version,
+            SELECT ingest_id, site_id, edge_id, ingested_at, event_id, schema_version, event_type, type_version,
                    occurred_at, recorded_at, source, subject_type, subject_id,
-                   execution_id, context::text, data::text, seq
+                   execution_id, configuration_kind, configuration_id, configuration_version,
+                   quality_flags::text, payload_hash, context::text, data::text, seq
             FROM production_events
             WHERE execution_id = ANY(@execution_ids)
             ORDER BY execution_id, occurred_at, ingest_id;
@@ -942,12 +963,13 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, ID
         string siteId,
         string edgeId,
         ProductionEvent evt,
+        string sourcePayloadHash,
         CancellationToken ct)
     {
         await using var command = new NpgsqlCommand(
             """
-            INSERT INTO event_ingest_keys(event_id, site_id, edge_id, seq, occurred_at)
-            VALUES (@event_id, @site_id, @edge_id, @seq, @occurred_at)
+            INSERT INTO event_ingest_keys(event_id, site_id, edge_id, seq, occurred_at, payload_hash)
+            VALUES (@event_id, @site_id, @edge_id, @seq, @occurred_at, @payload_hash)
             ON CONFLICT DO NOTHING
             RETURNING event_id;
             """,
@@ -958,6 +980,7 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, ID
         command.Parameters.AddWithValue("edge_id", edgeId);
         command.Parameters.AddWithValue("seq", evt.Seq);
         command.Parameters.AddWithValue("occurred_at", evt.OccurredAt.UtcDateTime);
+        command.Parameters.AddWithValue("payload_hash", sourcePayloadHash);
         return await command.ExecuteScalarAsync(ct).ConfigureAwait(false) is not null;
     }
 
@@ -972,11 +995,15 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, ID
         await using var command = new NpgsqlCommand(
             """
             INSERT INTO production_events(
-              event_id, site_id, edge_id, seq, event_type, type_version, occurred_at, recorded_at,
-              source, subject_type, subject_id, execution_id, context, data)
+              event_id, site_id, edge_id, seq, schema_version, event_type, type_version, occurred_at, recorded_at,
+              source, subject_type, subject_id, execution_id,
+              configuration_kind, configuration_id, configuration_version,
+              quality_flags, payload_hash, context, data)
             VALUES (
-              @event_id, @site_id, @edge_id, @seq, @event_type, @type_version, @occurred_at, @recorded_at,
-              @source, @subject_type, @subject_id, @execution_id, @context, @data)
+              @event_id, @site_id, @edge_id, @seq, @schema_version, @event_type, @type_version, @occurred_at, @recorded_at,
+              @source, @subject_type, @subject_id, @execution_id,
+              @configuration_kind, @configuration_id, @configuration_version,
+              @quality_flags, @payload_hash, @context, @data)
             RETURNING ingest_id;
             """,
             connection,
@@ -985,6 +1012,7 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, ID
         command.Parameters.AddWithValue("site_id", siteId);
         command.Parameters.AddWithValue("edge_id", edgeId);
         command.Parameters.AddWithValue("seq", evt.Seq);
+        command.Parameters.AddWithValue("schema_version", evt.SchemaVersion);
         command.Parameters.AddWithValue("event_type", evt.EventType);
         command.Parameters.AddWithValue("type_version", evt.EventTypeVersion);
         command.Parameters.AddWithValue("occurred_at", evt.OccurredAt.UtcDateTime);
@@ -993,6 +1021,20 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, ID
         command.Parameters.AddWithValue("subject_type", evt.Subject.Type);
         command.Parameters.AddWithValue("subject_id", evt.Subject.Id);
         command.Parameters.AddWithValue("execution_id", (object?)evt.ExecutionId ?? DBNull.Value);
+        command.Parameters.AddWithValue(
+            "configuration_kind",
+            (object?)evt.AppliedConfiguration?.Kind ?? DBNull.Value);
+        command.Parameters.AddWithValue(
+            "configuration_id",
+            (object?)evt.AppliedConfiguration?.Id ?? DBNull.Value);
+        command.Parameters.AddWithValue(
+            "configuration_version",
+            (object?)evt.AppliedConfiguration?.Version ?? DBNull.Value);
+        command.Parameters.AddWithValue(
+            "quality_flags",
+            NpgsqlDbType.Jsonb,
+            JsonSerializer.Serialize(evt.QualityFlags, JsonOptions));
+        command.Parameters.AddWithValue("payload_hash", evt.PayloadHash);
         command.Parameters.AddWithValue("context", NpgsqlDbType.Jsonb, JsonSerializer.Serialize(evt.Context, JsonOptions));
         command.Parameters.AddWithValue("data", NpgsqlDbType.Jsonb, JsonSerializer.Serialize(evt.Data, JsonOptions));
         return Convert.ToInt64(await command.ExecuteScalarAsync(ct).ConfigureAwait(false), CultureInfo.InvariantCulture);
@@ -1109,11 +1151,12 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, ID
         string siteId,
         string edgeId,
         ProductionEvent evt,
+        string sourcePayloadHash,
         CancellationToken ct)
     {
         await using var command = new NpgsqlCommand(
             """
-            SELECT event_id, site_id, edge_id, seq
+            SELECT event_id, site_id, edge_id, seq, payload_hash
             FROM event_ingest_keys
             WHERE event_id = @event_id OR
                   (site_id = @site_id AND edge_id = @edge_id AND seq = @seq)
@@ -1130,32 +1173,42 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, ID
             !string.Equals(reader.GetString(0), evt.EventId, StringComparison.Ordinal) ||
             !string.Equals(reader.GetString(1), siteId, StringComparison.OrdinalIgnoreCase) ||
             !string.Equals(reader.GetString(2), edgeId, StringComparison.OrdinalIgnoreCase) ||
-            reader.GetInt64(3) != evt.Seq)
+            reader.GetInt64(3) != evt.Seq ||
+            !string.Equals(reader.GetString(4), sourcePayloadHash, StringComparison.Ordinal))
         {
             throw new InvalidDataException(
-                $"事件幂等键冲突：SiteId={siteId}, EdgeId={edgeId}, Seq={evt.Seq}, EventId={evt.EventId}");
+                $"事件幂等键或载荷冲突：SiteId={siteId}, EdgeId={edgeId}, Seq={evt.Seq}, EventId={evt.EventId}");
         }
     }
 
     private static PlatformProductionEvent ReadEvent(NpgsqlDataReader reader)
     {
-        var context = JsonSerializer.Deserialize<Dictionary<string, string>>(reader.GetString(13), JsonOptions)
+        var context = JsonSerializer.Deserialize<Dictionary<string, string>>(reader.GetString(19), JsonOptions)
                       ?? new Dictionary<string, string>();
-        var data = JsonSerializer.Deserialize<Dictionary<string, object?>>(reader.GetString(14), JsonOptions)
+        var data = JsonSerializer.Deserialize<Dictionary<string, object?>>(reader.GetString(20), JsonOptions)
                    ?? new Dictionary<string, object?>();
         var evt = new ProductionEvent
         {
             EventId = reader.GetString(4),
-            EventType = reader.GetString(5),
-            EventTypeVersion = reader.GetInt32(6),
-            OccurredAt = new DateTimeOffset(reader.GetDateTime(7).ToUniversalTime()),
-            RecordedAt = new DateTimeOffset(reader.GetDateTime(8).ToUniversalTime()),
-            Source = reader.GetString(9),
-            Subject = new ObjectRef(reader.GetString(10), reader.GetString(11)),
-            ExecutionId = reader.IsDBNull(12) ? null : reader.GetString(12),
+            SchemaVersion = reader.GetInt32(5),
+            EventType = reader.GetString(6),
+            EventTypeVersion = reader.GetInt32(7),
+            OccurredAt = new DateTimeOffset(reader.GetDateTime(8).ToUniversalTime()),
+            RecordedAt = new DateTimeOffset(reader.GetDateTime(9).ToUniversalTime()),
+            Source = reader.GetString(10),
+            Subject = new ObjectRef(reader.GetString(11), reader.GetString(12)),
+            ExecutionId = reader.IsDBNull(13) ? null : reader.GetString(13),
+            AppliedConfiguration = reader.IsDBNull(14)
+                ? null
+                : new AppliedConfigurationRef(
+                    reader.GetString(14),
+                    reader.GetString(15),
+                    reader.GetInt32(16)),
+            QualityFlags = JsonSerializer.Deserialize<string[]>(reader.GetString(17), JsonOptions) ?? [],
+            PayloadHash = reader.GetString(18),
             Context = context,
             Data = data,
-            Seq = reader.GetInt64(15)
+            Seq = reader.GetInt64(21)
         };
         return new PlatformProductionEvent
         {

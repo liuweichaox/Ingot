@@ -1,3 +1,4 @@
+using Ingot.Platform.Application.ResearchAssets;
 namespace Ingot.Platform.Infrastructure.ResearchAssets;
 
 public sealed class ResearchAssetInitializerHostedService(

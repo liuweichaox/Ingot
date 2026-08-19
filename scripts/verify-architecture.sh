@@ -50,7 +50,7 @@ check "application" src/edge/Ingot.Edge.Application \
   "Application 必须保持实现中立"
 
 check "platform-application" src/platform/Ingot.Platform.Application \
-  'using (Ingot\.Platform\.Infrastructure|Npgsql|Microsoft\.Data|Serilog|Prometheus)' \
+  'using (Ingot\.Platform\.Infrastructure|Npgsql|Microsoft\.(Data|Extensions|AspNetCore)|Serilog|Prometheus)|System\.Net\.Http\.Json' \
   "Platform Application 必须保持实现中立"
 
 check "contracts" src/shared/Ingot.Contracts \
@@ -85,9 +85,18 @@ check "inspection-infrastructure" src/platform/Ingot.Platform.Inspections.Infras
   'using Ingot\.Platform\.(Api|Infrastructure)' \
   "检验基础设施模块必须独立于 Platform 宿主和基础设施单体"
 
-check "inspection-module-ownership" src/platform/Ingot.Platform.Infrastructure/Inspections \
+inspection_ownership_hits=$(grep -rnE \
   'using Npgsql|\b(PostgresInspection|InspectionAttachmentOptions|InspectionStoreInitializerHostedService)\b' \
-  "检验 PostgreSQL 适配器与初始化器必须归属独立检验基础设施模块"
+  src/platform/Ingot.Platform.Infrastructure/Inspections \
+  --include='*.cs' --exclude='InspectionModuleServiceCollectionExtensions.cs' \
+  --exclude-dir=bin --exclude-dir=obj 2>/dev/null || true)
+if [[ -n "$inspection_ownership_hits" ]]; then
+  echo "✗ [inspection-module-ownership] 检验 PostgreSQL 适配器与初始化器必须归属独立检验基础设施模块"
+  echo "$inspection_ownership_hits" | sed 's/^/    /'
+  fail=1
+else
+  echo "✓ [inspection-module-ownership]"
+fi
 
 check "inspection-api-ports" src/platform/Ingot.Platform.Api/Controllers \
   'using Ingot\.Platform\.Infrastructure\.Inspections' \
@@ -155,6 +164,36 @@ fi
 check "process-research-application-rules" src/platform/Ingot.Platform.Application/ProcessResearch \
   'using (Ingot\.Contracts\.Inspections|Ingot\.Platform\.Infrastructure\.Inspections)' \
   "Application 研究规则不得直接读取检验上下文"
+
+unexpected_research_infrastructure=$(find src/platform/Ingot.Platform.Infrastructure/ProcessResearch \
+  -maxdepth 1 -type f -name '*.cs' \
+  ! -name 'PostgresProcessResearchStore.cs' \
+  ! -name 'ProcessOptimizerCircuitBreakerHandler.cs' \
+  ! -name 'ProcessOptimizerClient.cs' \
+  ! -name 'ResearchExperimentAutomationHostedService.cs' \
+  ! -name 'ResearchObservationAssembler.cs' \
+  ! -name 'ProcessResearchModuleServiceCollectionExtensions.cs' \
+  -print)
+if [[ -n "$unexpected_research_infrastructure" ]]; then
+  echo "✗ [process-research-module-ownership] 研究规则与存储端口必须归属 Platform Application"
+  echo "$unexpected_research_infrastructure" | sed 's/^/    /'
+  fail=1
+else
+  echo "✓ [process-research-module-ownership]"
+fi
+
+unexpected_inspection_infrastructure=$(find src/platform/Ingot.Platform.Infrastructure/Inspections \
+  -maxdepth 1 -type f -name '*.cs' \
+  ! -name 'InspectionProductionEventReader.cs' \
+  ! -name 'InspectionModuleServiceCollectionExtensions.cs' \
+  -print)
+if [[ -n "$unexpected_inspection_infrastructure" ]]; then
+  echo "✗ [inspection-workflow-ownership] 检验规则与工作流必须归属 Platform Application"
+  echo "$unexpected_inspection_infrastructure" | sed 's/^/    /'
+  fail=1
+else
+  echo "✓ [inspection-workflow-ownership]"
+fi
 
 store_schema_ddl=$(grep -rnE \
   '(CREATE TABLE|CREATE (UNIQUE )?INDEX|ALTER TABLE|create_hypertable|add_[a-z_]*policy)' \

@@ -1,3 +1,5 @@
+using Ingot.Platform.Application.Inspections;
+using Ingot.Platform.Application.ProcessConfiguration;
 using Ingot.Contracts.Events;
 using Ingot.Contracts.Inspections;
 using Ingot.Contracts.ProcessConfiguration;
@@ -742,7 +744,8 @@ public sealed class QualityWorkflowTests
                 : []
         };
 
-    private sealed class FakeEventStore(IReadOnlyList<PlatformProductionEvent> rows) : IPlatformEventStore
+    private sealed class FakeEventStore(IReadOnlyList<PlatformProductionEvent> rows)
+        : IPlatformEventStore, IInspectionProductionEventReader
     {
         public Task InitializeAsync(CancellationToken ct = default) => Task.CompletedTask;
         public Task<EventBatchResponse> IngestAsync(EventBatchRequest request, CancellationToken ct = default) => throw new NotSupportedException();
@@ -762,6 +765,16 @@ public sealed class QualityWorkflowTests
         }
         public Task<PlatformEventScopeStats> GetScopeStatsAsync(PlatformEventQuery query, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<bool> CanConnectAsync(CancellationToken ct = default) => Task.FromResult(true);
+
+        public Task<IReadOnlyList<PlatformProductionEvent>> QueryCompletedAsync(
+            string? executionId,
+            CancellationToken ct = default)
+            => QueryAsync(new PlatformEventQuery
+            {
+                EventType = "process.execution.completed",
+                ExecutionId = executionId,
+                Limit = int.MaxValue
+            }, ct);
     }
 
     private sealed class FakeTimeSeriesStore(IReadOnlyList<PlatformProductionEvent> events) : ITimeSeriesStore

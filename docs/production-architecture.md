@@ -144,12 +144,30 @@ Edge 使用至少一次传输，Platform 使用幂等写入，两者共同获得
 | `OccurredAt` | 来源事件时间，不因补传改写 |
 | `ReceivedAt` | Platform 持久接收时间 |
 | `SchemaVersion` | 信封主版本；未知主版本失败关闭 |
-| `ConfigurationVersion` | Edge 生成事件时实际应用的配置版本 |
+| `AppliedConfiguration` | Edge 生成事件时实际应用的 `Kind / Id / Version` 不可变配置引用；无配置驱动事件可以为空 |
 | `ExecutionId` | 能确定时关联的真实运行身份 |
 | `PayloadHash` | 规范化载荷哈希，用于冲突检测 |
 | `QualityFlags` | 缺失、超范围、时钟、通信和来源质量标记 |
 
 业务时间使用 `OccurredAt`，摄入延迟和运维判断使用 `ReceivedAt`。平台不按到达顺序假设事件时间顺序。
+
+`PayloadHash` 是对规范化事件内容计算的 SHA-256，不包含传输位置 `Seq` 和哈希字段自身。Edge 在本地落盘前封印事件；Platform 在摄入边界验证哈希，并在 `(SiteId, EdgeId, Seq)` 或 `EventId` 已存在时同时核对来源哈希。平台补充正式上下文后重新封印规范事件，因此查询返回的哈希始终能由持久化内容复算。缺失哈希、未知 `SchemaVersion`、未排序或非法的质量标记一律按契约错误拒绝。
+
+### 数据归属与隔离矩阵
+
+数据库表的归属不是按目录猜测，而由以下键和访问规则固定。任何新表必须先归入一类；同时包含多类数据时，以隔离更严格的一类为准。
+
+| 归属类 | 权威归属键 | 当前表族 | 访问与演进规则 |
+|---|---|---|---|
+| 部署全局 | 无 `SiteId`；部署管理员权限 | `users`、`user_sessions`、全局类型目录、通用模板 | 只能保存跨站点身份或可复用定义，不得写入某次生产运行、现场值或审批结果 |
+| 站点生产数据 | `SiteId`，并由 Edge token 绑定 | `platform_edges`；`event_ingest_keys`、`production_events`、`process_sample_frames`、`collection_points`、`data_object_summaries`、`data_object_operation_keys` | 摄入、查询、保留、容量和导出都必须显式指定站点；禁止推断默认站点 |
+| 版本化配置 | 配置身份与版本；发布绑定指向站点/Edge | `ingestion_tasks`、`ingestion_task_bindings`、`process_data_models`、`process_analysis_plans`、`process_specification_versions`、`signal_definitions` | 定义可以复用；生效范围只能通过显式绑定表达，生产事件必须保存实际应用的配置引用 |
+| 运行派生数据 | `ExecutionId`，可追溯到站点摄入事实 | `execution_features`、`execution_phases`、分析物化与重算任务、`operation_context_snapshots` | 不作为独立租户边界；所有外部读取必须从已授权站点范围解析运行集合，禁止仅凭任意 ExecutionId 越站点读取 |
+| 研发项目与证据 | `ProjectId` + 项目成员/角色 | `process_research_*`、`research_*`、`mechanism_*`、`knowledge_*`、`dataset_quality_validation_reports` | 项目可以引用一个或多个获授权站点的数据范围；证据保留原站点与运行来源，不因复制进项目而改变归属 |
+| 质量与检验 | 运行/项目/检验计划关系 | `inspection_*`、`case_level_evaluations`、`model_evaluations`、`model_drift_readings` | 授权范围从关联运行或项目继承；附件和审核日志不能脱离父记录单独访问 |
+| Agent 审计 | 发起用户 + 输入证据范围 | `agent_runs`、`agent_stream_events`、`golden_question_*`、`problem_cases` | Agent 记录不授予新数据权限；回放时重新验证用户、项目和站点范围 |
+
+当前数据库门禁已经强制六张规范摄入/投影表的 `site_id NOT NULL`。运行派生表保留 `ExecutionId` 归属，是为了避免重复存储可漂移的站点字段；对应 API 必须先用站点范围解析 ExecutionId。未来若测得该联接成为隔离审计或性能瓶颈，可以增加受外键/触发器约束的冗余 `SiteId`，但不能在应用层自行复制而缺少一致性约束。
 
 ### 乱序、缺口和迟到数据
 

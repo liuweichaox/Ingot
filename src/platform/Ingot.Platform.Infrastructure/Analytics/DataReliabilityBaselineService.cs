@@ -1,17 +1,11 @@
 using Ingot.Contracts.Analytics;
 using Ingot.Contracts.Events;
+using Ingot.Platform.Application.Analytics;
+using Ingot.Platform.Application.ProcessResearch;
 using Ingot.Platform.Infrastructure.ProcessExecutions;
 using Ingot.Platform.Infrastructure.Events;
-using Ingot.Platform.Infrastructure.ProcessResearch;
 
 namespace Ingot.Platform.Infrastructure.Analytics;
-
-public interface IDataReliabilityBaselineService
-{
-    Task<DataReliabilityBaseline> CalculateAsync(
-        DataReliabilityBaselineQuery query,
-        CancellationToken ct = default);
-}
 
 public sealed class DataReliabilityBaselineService(
     IPlatformEventStore events,

@@ -1,3 +1,4 @@
+using Ingot.Platform.Application.ResearchAssets;
 using Ingot.Contracts.ResearchAssets;
 using Npgsql;
 using NpgsqlTypes;

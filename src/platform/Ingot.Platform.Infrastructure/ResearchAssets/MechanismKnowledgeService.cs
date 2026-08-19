@@ -1,3 +1,5 @@
+using Ingot.Platform.Application.ResearchAssets;
+using Ingot.Platform.Application.ProcessResearch;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -363,23 +365,7 @@ public sealed class MechanismKnowledgeService(
     }
 
     internal static string NormalizeUnit(string? value)
-    {
-        var unit = Required(value, "单位", 80);
-        return unit.Trim().ToLowerInvariant() switch
-        {
-            "°c" or "℃" or "cel" => "Cel",
-            "kn" => "kN",
-            "n" => "N",
-            "mpa" => "MPa",
-            "pa" => "Pa",
-            "mm" => "mm",
-            "um" or "μm" or "µm" => "um",
-            "ms" => "ms",
-            "s" => "s",
-            "1" => "1",
-            _ => unit
-        };
-    }
+        => ResearchUnitConverter.NormalizeCode(Required(value, "单位", 80));
 
     private static void ValidateProjectBindings(
         ResearchProject project,

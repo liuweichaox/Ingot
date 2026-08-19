@@ -130,7 +130,8 @@ public static class HttpPollingSnapshotMapper
                     new ObjectRef(options.SubjectType, options.SubjectId),
                     executionId: null,
                     context: context,
-                    data: processSpecificationData);
+                    data: processSpecificationData,
+                    appliedConfiguration: options.AppliedConfiguration);
             }
         }
 
@@ -141,7 +142,9 @@ public static class HttpPollingSnapshotMapper
             new ObjectRef(options.SubjectType, options.SubjectId),
             executionId: null,
             context: context,
-            data: sampleData);
+            data: sampleData,
+            appliedConfiguration: options.AppliedConfiguration,
+            qualityFlags: values.Any(static pair => pair.Value is null) ? ["missing_value"] : []);
         return new AcquisitionMappingResult(sample, processSpecificationEvent, processSpecificationIdentity);
     }
 

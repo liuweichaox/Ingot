@@ -1,3 +1,6 @@
+using Ingot.Platform.Application.Analytics;
+using Ingot.Platform.Application.ResearchAssets;
+using Ingot.Platform.Application.ProcessConfiguration;
 using Ingot.Contracts.Analytics;
 using Ingot.Contracts.ProcessConfiguration;
 using Ingot.Contracts.ProcessResearch;

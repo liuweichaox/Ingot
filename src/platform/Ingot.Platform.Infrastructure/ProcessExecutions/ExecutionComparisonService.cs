@@ -1,3 +1,4 @@
+using Ingot.Platform.Application.Inspections;
 using Ingot.Contracts.Events;
 using Ingot.Contracts.Inspections;
 using Ingot.Contracts.ProcessConfiguration;

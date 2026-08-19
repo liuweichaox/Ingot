@@ -114,6 +114,33 @@ public sealed class PostgresMigrationTests(PostgresIntegrationFixture postgres)
     }
 
     [LinuxDockerFact]
+    public async Task ProductionEnvelopeIntegrity_ShouldBeRequiredBySchema()
+    {
+        await postgres.EnsureSchemaAsync();
+
+        await using var connection = new NpgsqlConnection(postgres.ConnectionString);
+        await connection.OpenAsync();
+        await using var command = new NpgsqlCommand(
+            """
+            SELECT
+              (SELECT count(*) = 1
+               FROM information_schema.columns
+               WHERE table_schema = 'public' AND table_name = 'event_ingest_keys'
+                 AND column_name = 'payload_hash' AND is_nullable = 'NO')
+              AND
+              (SELECT count(*) = 7
+               FROM information_schema.columns
+               WHERE table_schema = 'public' AND table_name = 'production_events'
+                 AND column_name IN (
+                   'schema_version', 'configuration_kind', 'configuration_id',
+                   'configuration_version', 'quality_flags', 'payload_hash', 'site_id'));
+            """,
+            connection);
+
+        Assert.True((bool)(await command.ExecuteScalarAsync())!);
+    }
+
+    [LinuxDockerFact]
     public async Task TimeSeriesRetention_ShouldPruneFramesAndValuesTogether()
     {
         await postgres.EnsureSchemaAsync();

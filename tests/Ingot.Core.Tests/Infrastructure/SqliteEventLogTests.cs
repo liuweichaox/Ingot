@@ -56,6 +56,10 @@ public sealed class SqliteEventLogTests
             Assert.Equal("process.execution.completed", evt.EventType);
             Assert.Equal("LOT-A", evt.Context["material_lot"]);
             Assert.Equal(2, Assert.IsType<System.Text.Json.JsonElement>(evt.Data["count"]).GetInt32());
+            Assert.Equal(1, evt.SchemaVersion);
+            Assert.Equal(new AppliedConfigurationRef("ingestion-task", "TASK-01", 2), evt.AppliedConfiguration);
+            Assert.Equal(["missing_value"], evt.QualityFlags);
+            Assert.True(ProductionEventIntegrity.HasValidPayloadHash(evt));
             Assert.Equal(3, await reopened.CountPendingAsync());
         }
         finally
@@ -210,10 +214,7 @@ public sealed class SqliteEventLogTests
                     MaxBacklogRows = 100
                 }),
                 NullLogger<SqliteEventLog>.Instance);
-            var evt = CreateEvent("process.execution.started", "execution-01", "LOT-A") with
-            {
-                EventId = "duplicate-event-id"
-            };
+            var evt = CreateEvent("process.execution.started", "execution-01", "LOT-A");
 
             await log.AppendAsync(evt);
             await Assert.ThrowsAsync<SqliteException>(() => log.AppendAsync(evt));
@@ -326,7 +327,9 @@ public sealed class SqliteEventLogTests
             new ObjectRef("equipment", "POL-03"),
             executionId,
             new Dictionary<string, string> { ["material_lot"] = lot },
-            new Dictionary<string, object?> { ["count"] = 2 });
+            new Dictionary<string, object?> { ["count"] = 2 },
+            new AppliedConfigurationRef("ingestion-task", "TASK-01", 2),
+            ["missing_value"]);
 
     private static string CreateTempDbPath()
         => Path.Combine(Path.GetTempPath(), $"ingot-events-{Guid.NewGuid():N}.db");

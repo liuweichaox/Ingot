@@ -1,3 +1,4 @@
+using Ingot.Platform.Application.ResearchAssets;
 using System.Text.Json;
 using Ingot.Contracts.ResearchAssets;
 using Ingot.Platform.Api.Agents;

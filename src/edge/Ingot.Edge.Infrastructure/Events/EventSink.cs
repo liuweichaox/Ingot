@@ -39,7 +39,8 @@ public sealed class EventSink : IEventSink
         }
 
         var stopwatch = Stopwatch.StartNew();
-        var recorded = evt with { RecordedAt = DateTimeOffset.UtcNow };
+        var recorded = ProductionEventIntegrity.Seal(
+            evt with { RecordedAt = DateTimeOffset.UtcNow });
         long seq;
         try
         {
@@ -82,7 +83,8 @@ public sealed class EventSink : IEventSink
 
         var stopwatch = Stopwatch.StartNew();
         var recorded = events
-            .Select(evt => evt with { RecordedAt = DateTimeOffset.UtcNow })
+            .Select(evt => ProductionEventIntegrity.Seal(
+                evt with { RecordedAt = DateTimeOffset.UtcNow }))
             .ToArray();
         IReadOnlyList<long> sequences;
         try

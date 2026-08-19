@@ -59,6 +59,10 @@ public sealed class AcquisitionProtocolTests
         Assert.Equal("30", mapped.Sample.Context["stage_number"]);
         Assert.Equal("lens-a-std@4", mapped.ProcessSpecificationIdentity);
         Assert.NotNull(mapped.ProcessSpecificationApplied);
+        Assert.Equal(
+            new AppliedConfigurationRef("ingestion-task", "optical", 1),
+            mapped.Sample.AppliedConfiguration);
+        Assert.True(ProductionEventIntegrity.HasValidPayloadHash(mapped.Sample));
         var values = Assert.IsAssignableFrom<IReadOnlyDictionary<string, object?>>(
             mapped.Sample.Data["values"]);
         Assert.Equal(612.5, values["upper_mold.ir_temperature"]);

@@ -1,3 +1,4 @@
+using Ingot.Platform.Application.ProcessResearch;
 using Ingot.Contracts.ProcessResearch;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;

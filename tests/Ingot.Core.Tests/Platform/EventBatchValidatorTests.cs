@@ -31,7 +31,8 @@ public sealed class EventBatchValidatorTests
         Assert.Contains("重复 Seq", sequenceError, StringComparison.Ordinal);
 
         Assert.False(EventBatchValidator.TryValidate(
-            CreateRequest(first, CreateEvent(2) with { EventId = first.EventId }),
+            CreateRequest(first, ProductionEventIntegrity.Seal(
+                CreateEvent(2) with { EventId = first.EventId })),
             out _,
             out var idError));
         Assert.Contains("重复 EventId", idError, StringComparison.Ordinal);
@@ -40,10 +41,10 @@ public sealed class EventBatchValidatorTests
     [Fact]
     public void TryValidate_ShouldRejectSourceOwnedByAnotherEdge()
     {
-        var request = CreateRequest(CreateEvent(1) with
+        var request = CreateRequest(ProductionEventIntegrity.Seal(CreateEvent(1) with
         {
             Source = "edge/EDGE-002/SOURCE-01/rule"
-        });
+        }));
 
         Assert.False(EventBatchValidator.TryValidate(request, out _, out var error));
         Assert.Contains("edge/EDGE-001/", error, StringComparison.Ordinal);

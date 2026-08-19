@@ -1,3 +1,5 @@
+using Ingot.Platform.Application.ResearchAssets;
+using Ingot.Platform.Application.ProcessResearch;
 using Ingot.Contracts.ProcessResearch;
 using Ingot.Contracts.ResearchAssets;
 using Ingot.Platform.Api.Agents;

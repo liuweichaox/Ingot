@@ -1,3 +1,4 @@
+using Ingot.Platform.Application.ResearchAssets;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Ingot.Agent;

@@ -47,7 +47,9 @@ public sealed class PostgresEventReplayTests(PostgresIntegrationFixture postgres
             "equipment.heartbeat",
             DateTimeOffset.UtcNow,
             $"edge/{edgeId}/equipment/PRESS-01",
-            new ObjectRef("equipment", "PRESS-01")) with
+            new ObjectRef("equipment", "PRESS-01"),
+            appliedConfiguration: new AppliedConfigurationRef("ingestion-task", "TASK-REPLAY", 4),
+            qualityFlags: ["communication_degraded"]) with
         {
             Seq = 1
         };
@@ -56,18 +58,30 @@ public sealed class PostgresEventReplayTests(PostgresIntegrationFixture postgres
         var first = await store.IngestAsync(request);
         var replay = await store.IngestAsync(request);
 
+        var conflicting = ProductionEventIntegrity.Seal(evt with
+        {
+            Data = new Dictionary<string, object?> { ["changed"] = true }
+        });
+        var conflict = await Assert.ThrowsAsync<InvalidDataException>(() => store.IngestAsync(
+            request with { Events = [conflicting] }));
+
         Assert.Equal(1, first.Accepted);
         Assert.Equal(0, first.Duplicates);
         Assert.Equal(1, first.AckSeq);
         Assert.Equal(0, replay.Accepted);
         Assert.Equal(1, replay.Duplicates);
         Assert.Equal(1, replay.AckSeq);
+        Assert.Contains("载荷冲突", conflict.Message, StringComparison.Ordinal);
         var stored = Assert.Single(await store.QueryAsync(new PlatformEventQuery
         {
             SiteId = "SITE-REPLAY",
             EdgeId = edgeId
         }));
         Assert.Equal("SITE-REPLAY", stored.SiteId);
+        Assert.Equal(1, stored.Event.SchemaVersion);
+        Assert.Equal(new AppliedConfigurationRef("ingestion-task", "TASK-REPLAY", 4), stored.Event.AppliedConfiguration);
+        Assert.Equal(["communication_degraded"], stored.Event.QualityFlags);
+        Assert.True(ProductionEventIntegrity.HasValidPayloadHash(stored.Event));
         Assert.Empty(await store.QueryAsync(new PlatformEventQuery
         {
             SiteId = "SITE-OTHER",

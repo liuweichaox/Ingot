@@ -44,12 +44,12 @@ public sealed class ConnectorEventsController(
             var normalizedSource = incomingSource.StartsWith(sourcePrefix, StringComparison.OrdinalIgnoreCase)
                 ? incomingSource
                 : $"{sourcePrefix}{incomingSource.TrimStart('/')}";
-            var normalized = incoming with
+            var normalized = ProductionEventIntegrity.Seal(incoming with
             {
                 Seq = 0,
                 RecordedAt = DateTimeOffset.UtcNow,
                 Source = normalizedSource
-            };
+            });
             if (!ProductionEventValidator.TryValidate(normalized, requirePersistedSequence: false, out var error))
                 return BadRequest(new { error, eventId = incoming.EventId });
             var persisted = await sink.EmitAsync(normalized, ct).ConfigureAwait(false);

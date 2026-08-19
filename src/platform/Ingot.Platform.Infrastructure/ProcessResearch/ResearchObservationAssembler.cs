@@ -1,3 +1,6 @@
+using Ingot.Platform.Application.ProcessResearch;
+using Ingot.Platform.Application.Inspections;
+using Ingot.Platform.Application.ProcessConfiguration;
 using System.Security.Cryptography;
 using System.Text.Json;
 using Ingot.Contracts.Events;
@@ -9,22 +12,6 @@ using Ingot.Platform.Infrastructure.Inspections;
 using Ingot.Platform.Infrastructure.ProcessConfiguration;
 
 namespace Ingot.Platform.Infrastructure.ProcessResearch;
-
-public sealed record ResearchObservationAssembly(
-    IReadOnlyList<ExperimentRunObservation> Observations,
-    int CandidateRunCount)
-{
-    public int ValidObservationCount =>
-        Observations.Count(static value => value.ValidForOptimization);
-}
-
-public interface IResearchObservationAssembler
-{
-    Task<ResearchObservationAssembly> AssembleAsync(
-        ResearchProject project,
-        IReadOnlyList<ResearchExperiment> experiments,
-        CancellationToken ct = default);
-}
 
 /// <summary>
 ///     将实验运行标识与 PLC 生产过程执行 ExecutionId 对齐，并把版本化过程执行特征和

@@ -144,12 +144,30 @@ The first production version freezes the following fields as a cross-storage con
 | `OccurredAt` | Source event time, never rewritten by replay |
 | `ReceivedAt` | Platform durable-receipt time |
 | `SchemaVersion` | Envelope major version; unknown majors fail closed |
-| `ConfigurationVersion` | Configuration actually applied by Edge when producing the event |
+| `AppliedConfiguration` | Immutable `Kind / Id / Version` reference actually applied by Edge; nullable for events not driven by configuration |
 | `ExecutionId` | Real-run identity when determinable |
 | `PayloadHash` | Canonical payload hash for conflict detection |
 | `QualityFlags` | Missing, range, clock, communication, and provenance quality flags |
 
 Business time uses `OccurredAt`; ingestion delay and operations use `ReceivedAt`. Platform does not infer event-time order from arrival order.
+
+`PayloadHash` is a SHA-256 over canonical event content, excluding the transport position `Seq` and the hash field itself. Edge seals an event before local persistence. Platform verifies the hash at the ingestion boundary and compares the source hash whenever `(SiteId, EdgeId, Seq)` or `EventId` already exists. After adding formal context, Platform reseals the canonical event, so the hash returned by queries can always be recomputed from persisted content. Missing hashes, unknown `SchemaVersion` values, and unsorted or invalid quality flags fail closed as contract errors.
+
+### Data ownership and isolation matrix
+
+Table ownership is fixed by the following keys and access rules rather than inferred from source folders. Every new table must enter one class; data spanning classes uses the stricter class.
+
+| Ownership class | Authoritative key | Current table families | Access and evolution rule |
+|---|---|---|---|
+| Deployment global | No `SiteId`; deployment-admin permission | `users`, `user_sessions`, global type catalogues, reusable templates | May contain only cross-site identities or reusable definitions, never a production run, field value, or approval outcome |
+| Site production data | `SiteId`, bound to the Edge token | `platform_edges`; `event_ingest_keys`, `production_events`, `process_sample_frames`, `collection_points`, `data_object_summaries`, `data_object_operation_keys` | Ingestion, query, retention, capacity, and export require an explicit site; no default-site inference |
+| Versioned configuration | Configuration identity and version; release binding targets site/Edge | `ingestion_tasks`, `ingestion_task_bindings`, `process_data_models`, `process_analysis_plans`, `process_specification_versions`, `signal_definitions` | Definitions may be reusable; applicability is explicit, and production events preserve the configuration actually applied |
+| Run-derived data | `ExecutionId`, traceable to a site ingestion fact | `execution_features`, `execution_phases`, analysis materializations and recompute jobs, `operation_context_snapshots` | Not an independent tenant boundary; external reads resolve allowed executions from authorized sites before loading derived rows |
+| Research projects and evidence | `ProjectId` plus project membership/role | `process_research_*`, `research_*`, `mechanism_*`, `knowledge_*`, `dataset_quality_validation_reports` | A project may reference authorized scopes from one or more sites; copied evidence retains its source site and run ownership |
+| Quality and inspection | Run/project/inspection-plan relationship | `inspection_*`, `case_level_evaluations`, `model_evaluations`, `model_drift_readings` | Authorization is inherited from the related run or project; attachments and review logs are never accessed without their parent |
+| Agent audit | Initiating user plus input-evidence scope | `agent_runs`, `agent_stream_events`, `golden_question_*`, `problem_cases` | Agent records grant no new data permission; replay rechecks user, project, and site scope |
+
+The database gate currently enforces `site_id NOT NULL` on all six canonical ingestion/projection tables. Run-derived tables keep `ExecutionId` ownership to avoid a duplicated site field that can drift; their APIs must first resolve execution IDs from an authorized site scope. If measurement later shows that join to be an audit or performance bottleneck, a redundant `SiteId` may be added only with database-enforced consistency, never as an unconstrained application copy.
 
 ### Out-of-order, gaps, and late data
 

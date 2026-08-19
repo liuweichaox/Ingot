@@ -1,3 +1,4 @@
+using Ingot.Platform.Application.ProcessResearch;
 using System.Text.Json;
 using Ingot.Agent;
 using Ingot.Contracts.Agents;

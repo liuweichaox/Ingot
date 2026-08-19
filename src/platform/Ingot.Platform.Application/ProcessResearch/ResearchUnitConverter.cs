@@ -7,6 +7,27 @@ namespace Ingot.Platform.Application.ProcessResearch;
 /// </summary>
 public static class ResearchUnitConverter
 {
+    public static string NormalizeCode(string? value)
+    {
+        var unit = (value ?? "").Trim();
+        if (unit.Length == 0)
+            throw new ProcessResearchRuleException("单位不能为空。");
+        return unit.ToLowerInvariant() switch
+        {
+            "°c" or "℃" or "cel" => "Cel",
+            "kn" => "kN",
+            "n" => "N",
+            "mpa" => "MPa",
+            "pa" => "Pa",
+            "mm" => "mm",
+            "um" or "μm" or "µm" => "um",
+            "ms" => "ms",
+            "s" => "s",
+            "1" => "1",
+            _ => unit
+        };
+    }
+
     public static bool TryConvert(double value, string? sourceUnit, string? targetUnit, out double converted)
     {
         converted = default;

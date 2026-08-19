@@ -62,6 +62,14 @@ public sealed class SqliteEventLog : IEventLog
     public async Task<long> AppendAsync(ProductionEvent evt, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(evt);
+        evt = ProductionEventIntegrity.Seal(evt);
+        if (!ProductionEventValidator.TryValidate(
+                evt,
+                requirePersistedSequence: false,
+                out var validationError))
+        {
+            throw new ArgumentException(validationError, nameof(evt));
+        }
 
         await _writeLock.WaitAsync(ct).ConfigureAwait(false);
         try
@@ -75,16 +83,19 @@ public sealed class SqliteEventLog : IEventLog
             command.Transaction = transaction;
             command.CommandText = """
                                   INSERT INTO events(
-                                    event_id, event_type, type_version, occurred_at, recorded_at,
+                                    event_id, schema_version, event_type, type_version, occurred_at, recorded_at,
                                     source, subject_type, subject_id, execution_id,
-                                    context_json, data_json, ship_state, ship_attempts)
+                                    configuration_kind, configuration_id, configuration_version,
+                                    quality_flags_json, payload_hash, context_json, data_json, ship_state, ship_attempts)
                                   VALUES (
-                                    $event_id, $event_type, $type_version, $occurred_at, $recorded_at,
+                                    $event_id, $schema_version, $event_type, $type_version, $occurred_at, $recorded_at,
                                     $source, $subject_type, $subject_id, $execution_id,
-                                    $context_json, $data_json, 0, 0);
+                                    $configuration_kind, $configuration_id, $configuration_version,
+                                    $quality_flags_json, $payload_hash, $context_json, $data_json, 0, 0);
                                   SELECT last_insert_rowid();
                                   """;
             command.Parameters.AddWithValue("$event_id", evt.EventId);
+            command.Parameters.AddWithValue("$schema_version", evt.SchemaVersion);
             command.Parameters.AddWithValue("$event_type", evt.EventType);
             command.Parameters.AddWithValue("$type_version", evt.EventTypeVersion);
             command.Parameters.AddWithValue("$occurred_at", evt.OccurredAt.ToUniversalTime().ToString("O"));
@@ -93,6 +104,7 @@ public sealed class SqliteEventLog : IEventLog
             command.Parameters.AddWithValue("$subject_type", evt.Subject.Type);
             command.Parameters.AddWithValue("$subject_id", evt.Subject.Id);
             command.Parameters.AddWithValue("$execution_id", (object?)evt.ExecutionId ?? DBNull.Value);
+            AddEnvelopeParameters(command, evt);
             command.Parameters.AddWithValue("$context_json", JsonSerializer.Serialize(evt.Context, JsonOptions));
             command.Parameters.AddWithValue("$data_json", JsonSerializer.Serialize(evt.Data, JsonOptions));
 
@@ -156,34 +168,46 @@ public sealed class SqliteEventLog : IEventLog
             foreach (var evt in events)
             {
                 ArgumentNullException.ThrowIfNull(evt);
+                var sealedEvent = ProductionEventIntegrity.Seal(evt);
+                if (!ProductionEventValidator.TryValidate(
+                        sealedEvent,
+                        requirePersistedSequence: false,
+                        out var validationError))
+                {
+                    throw new ArgumentException(validationError, nameof(events));
+                }
                 await using var command = connection.CreateCommand();
                 command.Transaction = transaction;
                 command.CommandText = """
                                       INSERT INTO events(
-                                        event_id, event_type, type_version, occurred_at, recorded_at,
+                                        event_id, schema_version, event_type, type_version, occurred_at, recorded_at,
                                         source, subject_type, subject_id, execution_id,
-                                        context_json, data_json, ship_state, ship_attempts)
+                                        configuration_kind, configuration_id, configuration_version,
+                                        quality_flags_json, payload_hash, context_json, data_json, ship_state, ship_attempts)
                                       VALUES (
-                                        $event_id, $event_type, $type_version, $occurred_at, $recorded_at,
+                                        $event_id, $schema_version, $event_type, $type_version, $occurred_at, $recorded_at,
                                         $source, $subject_type, $subject_id, $execution_id,
-                                        $context_json, $data_json, 0, 0);
+                                        $configuration_kind, $configuration_id, $configuration_version,
+                                        $quality_flags_json, $payload_hash, $context_json, $data_json, 0, 0);
                                       SELECT last_insert_rowid();
                                       """;
-                command.Parameters.AddWithValue("$event_id", evt.EventId);
-                command.Parameters.AddWithValue("$event_type", evt.EventType);
-                command.Parameters.AddWithValue("$type_version", evt.EventTypeVersion);
-                command.Parameters.AddWithValue("$occurred_at", evt.OccurredAt.ToUniversalTime().ToString("O"));
-                command.Parameters.AddWithValue("$recorded_at", evt.RecordedAt.ToUniversalTime().ToString("O"));
-                command.Parameters.AddWithValue("$source", evt.Source);
-                command.Parameters.AddWithValue("$subject_type", evt.Subject.Type);
-                command.Parameters.AddWithValue("$subject_id", evt.Subject.Id);
-                command.Parameters.AddWithValue("$execution_id", (object?)evt.ExecutionId ?? DBNull.Value);
-                command.Parameters.AddWithValue("$context_json", JsonSerializer.Serialize(evt.Context, JsonOptions));
-                command.Parameters.AddWithValue("$data_json", JsonSerializer.Serialize(evt.Data, JsonOptions));
+                command.Parameters.AddWithValue("$event_id", sealedEvent.EventId);
+                command.Parameters.AddWithValue("$schema_version", sealedEvent.SchemaVersion);
+                command.Parameters.AddWithValue("$event_type", sealedEvent.EventType);
+                command.Parameters.AddWithValue("$type_version", sealedEvent.EventTypeVersion);
+                command.Parameters.AddWithValue("$occurred_at", sealedEvent.OccurredAt.ToUniversalTime().ToString("O"));
+                command.Parameters.AddWithValue("$recorded_at", sealedEvent.RecordedAt.ToUniversalTime().ToString("O"));
+                command.Parameters.AddWithValue("$source", sealedEvent.Source);
+                command.Parameters.AddWithValue("$subject_type", sealedEvent.Subject.Type);
+                command.Parameters.AddWithValue("$subject_id", sealedEvent.Subject.Id);
+                command.Parameters.AddWithValue("$execution_id", (object?)sealedEvent.ExecutionId ?? DBNull.Value);
+                AddEnvelopeParameters(command, sealedEvent);
+                command.Parameters.AddWithValue("$context_json", JsonSerializer.Serialize(sealedEvent.Context, JsonOptions));
+                command.Parameters.AddWithValue("$data_json", JsonSerializer.Serialize(sealedEvent.Data, JsonOptions));
                 var seq = Convert.ToInt64(
                     await command.ExecuteScalarAsync(ct).ConfigureAwait(false),
                     CultureInfo.InvariantCulture);
-                await InsertContextIndexAsync(connection, transaction, seq, evt.Context, ct)
+                await InsertContextIndexAsync(connection, transaction, seq, sealedEvent.Context, ct)
                     .ConfigureAwait(false);
                 sequences.Add(seq);
             }
@@ -287,8 +311,10 @@ public sealed class SqliteEventLog : IEventLog
         var joins = string.Join(Environment.NewLine, contextJoins);
         var order = query.AfterSeq.HasValue ? "ASC" : "DESC";
         command.CommandText = $"""
-                               SELECT e.seq, e.event_id, e.event_type, e.type_version, e.occurred_at, e.recorded_at,
-                                      e.source, e.subject_type, e.subject_id, e.execution_id, e.context_json, e.data_json
+                               SELECT e.seq, e.event_id, e.schema_version, e.event_type, e.type_version, e.occurred_at, e.recorded_at,
+                                      e.source, e.subject_type, e.subject_id, e.execution_id,
+                                      e.configuration_kind, e.configuration_id, e.configuration_version,
+                                      e.quality_flags_json, e.payload_hash, e.context_json, e.data_json
                                FROM events AS e
                                {joins}
                                {where}
@@ -423,8 +449,10 @@ public sealed class SqliteEventLog : IEventLog
         await using var connection = await OpenAsync(ct).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         command.CommandText = """
-                              SELECT seq, event_id, event_type, type_version, occurred_at, recorded_at,
-                                     source, subject_type, subject_id, execution_id, context_json, data_json
+                              SELECT seq, event_id, schema_version, event_type, type_version, occurred_at, recorded_at,
+                                     source, subject_type, subject_id, execution_id,
+                                     configuration_kind, configuration_id, configuration_version,
+                                     quality_flags_json, payload_hash, context_json, data_json
                               FROM events
                               WHERE ship_state = 0
                               ORDER BY seq ASC
@@ -502,13 +530,14 @@ public sealed class SqliteEventLog : IEventLog
         diagnosticCommand.Transaction = transaction;
         diagnosticCommand.CommandText = """
                                         INSERT INTO events(
-                                          event_id, event_type, type_version, occurred_at, recorded_at,
+                                          event_id, schema_version, event_type, type_version, occurred_at, recorded_at,
                                           source, subject_type, subject_id, execution_id,
-                                          context_json, data_json, ship_state, ship_attempts)
+                                          configuration_kind, configuration_id, configuration_version,
+                                          quality_flags_json, payload_hash, context_json, data_json, ship_state, ship_attempts)
                                         VALUES (
-                                          $event_id, 'diagnostic.backlog_dropped', 1, $occurred_at, $recorded_at,
+                                          $event_id, 1, 'diagnostic.backlog_dropped', 1, $occurred_at, $recorded_at,
                                           $source, 'system', 'event-outbox', NULL,
-                                          '{}', $data_json, 1, 0);
+                                          NULL, NULL, NULL, '[]', $payload_hash, '{}', $data_json, 1, 0);
                                         """;
         diagnosticCommand.Parameters.AddWithValue("$event_id", Guid.CreateVersion7().ToString());
         diagnosticCommand.Parameters.AddWithValue("$occurred_at", now.ToString("O"));
@@ -517,6 +546,18 @@ public sealed class SqliteEventLog : IEventLog
         diagnosticCommand.Parameters.AddWithValue(
             "$data_json",
             JsonSerializer.Serialize(diagnosticData, JsonOptions));
+        diagnosticCommand.Parameters.AddWithValue(
+            "$payload_hash",
+            ProductionEventIntegrity.Seal(new ProductionEvent
+            {
+                EventId = diagnosticCommand.Parameters["$event_id"].Value!.ToString()!,
+                EventType = "diagnostic.backlog_dropped",
+                OccurredAt = now,
+                RecordedAt = now,
+                Source = BuildBacklogDiagnosticSource(cause.Source),
+                Subject = new ObjectRef("system", "event-outbox"),
+                Data = diagnosticData
+            }).PayloadHash);
         await diagnosticCommand.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
         await AdjustPendingCountAsync(connection, transaction, -dropped, ct).ConfigureAwait(false);
 
@@ -535,6 +576,7 @@ public sealed class SqliteEventLog : IEventLog
                                        CREATE TABLE IF NOT EXISTS events (
                                          seq            INTEGER PRIMARY KEY AUTOINCREMENT,
                                          event_id       TEXT NOT NULL UNIQUE,
+                                         schema_version INTEGER NOT NULL CHECK(schema_version = 1),
                                          event_type     TEXT NOT NULL,
                                          type_version   INTEGER NOT NULL DEFAULT 1,
                                          occurred_at    TEXT NOT NULL,
@@ -543,10 +585,21 @@ public sealed class SqliteEventLog : IEventLog
                                          subject_type   TEXT NOT NULL,
                                          subject_id     TEXT NOT NULL,
                                          execution_id   TEXT,
+                                         configuration_kind TEXT,
+                                         configuration_id TEXT,
+                                         configuration_version INTEGER,
+                                         quality_flags_json TEXT NOT NULL
+                                           CHECK(json_valid(quality_flags_json) AND json_type(quality_flags_json) = 'array'),
+                                         payload_hash   TEXT NOT NULL CHECK(length(payload_hash) = 64),
                                          context_json   TEXT NOT NULL DEFAULT '{}',
                                          data_json      TEXT NOT NULL DEFAULT '{}',
                                          ship_state     INTEGER NOT NULL DEFAULT 0,
-                                         ship_attempts  INTEGER NOT NULL DEFAULT 0
+                                         ship_attempts  INTEGER NOT NULL DEFAULT 0,
+                                         CHECK(
+                                           (configuration_kind IS NULL AND configuration_id IS NULL AND configuration_version IS NULL)
+                                           OR
+                                           (configuration_kind IS NOT NULL AND configuration_id IS NOT NULL AND configuration_version > 0)
+                                         )
                                        );
                                        """;
             createEvents.ExecuteNonQuery();
@@ -611,9 +664,12 @@ public sealed class SqliteEventLog : IEventLog
             diagnostic.Transaction = transaction;
             diagnostic.CommandText = """
                 INSERT INTO events(event_id, event_type, type_version, occurred_at, recorded_at,
-                  source, subject_type, subject_id, execution_id, context_json, data_json, ship_state, ship_attempts)
+                  schema_version, source, subject_type, subject_id, execution_id,
+                  configuration_kind, configuration_id, configuration_version,
+                  quality_flags_json, payload_hash, context_json, data_json, ship_state, ship_attempts)
                 VALUES($event_id, 'diagnostic.event_quarantined', 1, $occurred_at, $recorded_at,
-                  'edge://event-outbox', 'system', 'event-outbox', NULL, '{}', $data_json, 1, 0);
+                  1, 'edge://event-outbox', 'system', 'event-outbox', NULL,
+                  NULL, NULL, NULL, '[]', $payload_hash, '{}', $data_json, 1, 0);
                 """;
             var now = DateTimeOffset.UtcNow.ToString("O");
             diagnostic.Parameters.AddWithValue("$event_id", Guid.CreateVersion7().ToString());
@@ -624,6 +680,21 @@ public sealed class SqliteEventLog : IEventLog
                 quarantinedSeq = seq,
                 reason = reason.Length <= 2000 ? reason : reason[..2000]
             }, JsonOptions));
+            var diagnosticEvent = ProductionEventIntegrity.Seal(new ProductionEvent
+            {
+                EventId = diagnostic.Parameters["$event_id"].Value!.ToString()!,
+                EventType = "diagnostic.event_quarantined",
+                OccurredAt = DateTimeOffset.Parse(now, CultureInfo.InvariantCulture),
+                RecordedAt = DateTimeOffset.Parse(now, CultureInfo.InvariantCulture),
+                Source = "edge://event-outbox",
+                Subject = new ObjectRef("system", "event-outbox"),
+                Data = new Dictionary<string, object?>
+                {
+                    ["quarantinedSeq"] = seq,
+                    ["reason"] = reason.Length <= 2000 ? reason : reason[..2000]
+                }
+            });
+            diagnostic.Parameters.AddWithValue("$payload_hash", diagnosticEvent.PayloadHash);
             await diagnostic.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
             await AdjustPendingCountAsync(connection, transaction, -1, ct).ConfigureAwait(false);
             await transaction.CommitAsync(ct).ConfigureAwait(false);
@@ -778,16 +849,42 @@ public sealed class SqliteEventLog : IEventLog
         {
             Seq = reader.GetInt64(0),
             EventId = reader.GetString(1),
-            EventType = reader.GetString(2),
-            EventTypeVersion = reader.GetInt32(3),
-            OccurredAt = DateTimeOffset.Parse(reader.GetString(4), CultureInfo.InvariantCulture),
-            RecordedAt = DateTimeOffset.Parse(reader.GetString(5), CultureInfo.InvariantCulture),
-            Source = reader.GetString(6),
-            Subject = new ObjectRef(reader.GetString(7), reader.GetString(8)),
-            ExecutionId = reader.IsDBNull(9) ? null : reader.GetString(9),
-            Context = DeserializeContext(reader.GetString(10)),
-            Data = DeserializeData(reader.GetString(11))
+            SchemaVersion = reader.GetInt32(2),
+            EventType = reader.GetString(3),
+            EventTypeVersion = reader.GetInt32(4),
+            OccurredAt = DateTimeOffset.Parse(reader.GetString(5), CultureInfo.InvariantCulture),
+            RecordedAt = DateTimeOffset.Parse(reader.GetString(6), CultureInfo.InvariantCulture),
+            Source = reader.GetString(7),
+            Subject = new ObjectRef(reader.GetString(8), reader.GetString(9)),
+            ExecutionId = reader.IsDBNull(10) ? null : reader.GetString(10),
+            AppliedConfiguration = reader.IsDBNull(11)
+                ? null
+                : new AppliedConfigurationRef(
+                    reader.GetString(11),
+                    reader.GetString(12),
+                    reader.GetInt32(13)),
+            QualityFlags = JsonSerializer.Deserialize<string[]>(reader.GetString(14), JsonOptions) ?? [],
+            PayloadHash = reader.GetString(15),
+            Context = DeserializeContext(reader.GetString(16)),
+            Data = DeserializeData(reader.GetString(17))
         };
+    }
+
+    private static void AddEnvelopeParameters(SqliteCommand command, ProductionEvent evt)
+    {
+        command.Parameters.AddWithValue(
+            "$configuration_kind",
+            (object?)evt.AppliedConfiguration?.Kind ?? DBNull.Value);
+        command.Parameters.AddWithValue(
+            "$configuration_id",
+            (object?)evt.AppliedConfiguration?.Id ?? DBNull.Value);
+        command.Parameters.AddWithValue(
+            "$configuration_version",
+            (object?)evt.AppliedConfiguration?.Version ?? DBNull.Value);
+        command.Parameters.AddWithValue(
+            "$quality_flags_json",
+            JsonSerializer.Serialize(evt.QualityFlags, JsonOptions));
+        command.Parameters.AddWithValue("$payload_hash", evt.PayloadHash);
     }
 
     private static IReadOnlyDictionary<string, string> DeserializeContext(string json)

@@ -1,3 +1,4 @@
+using Ingot.Platform.Application.ProcessConfiguration;
 using Ingot.Contracts.ProcessConfiguration;
 using Ingot.Contracts.Acquisition;
 using Ingot.Platform.Api.Agents;

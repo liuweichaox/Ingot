@@ -90,7 +90,7 @@ internal static class MappingEngine
         }
 
         var executionId = mapping.ExecutionId is null ? null : Resolve(row, mapping.ExecutionId);
-        return new ProductionEvent
+        return ProductionEventIntegrity.Seal(new ProductionEvent
         {
             EventId = Guid.CreateVersion7().ToString("D"),
             EventType = eventType.Trim(),
@@ -103,7 +103,7 @@ internal static class MappingEngine
             Data = data,
             ExecutionId = string.IsNullOrWhiteSpace(executionId) ? null : executionId.Trim(),
             Seq = seq
-        };
+        });
     }
 
     internal static DateTimeOffset ParseTimestamp(string raw, FieldSource source)

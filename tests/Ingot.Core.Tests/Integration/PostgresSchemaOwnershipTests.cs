@@ -1,3 +1,5 @@
+using Ingot.Platform.Application.ResearchAssets;
+using Ingot.Platform.Application.ProcessConfiguration;
 using Ingot.Platform.Infrastructure;
 using Ingot.Platform.Infrastructure.Acquisition;
 using Ingot.Platform.Infrastructure.ProcessExecutions;

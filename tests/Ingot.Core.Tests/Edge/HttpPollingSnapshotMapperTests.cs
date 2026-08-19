@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Ingot.Edge.ConnectorHost.Acquisition;
+using Ingot.Domain.Events;
 using Xunit;
 
 namespace Ingot.Core.Tests.Edge;
@@ -56,6 +57,9 @@ public sealed class HttpPollingSnapshotMapperTests
         Assert.IsType<long>(values["fan.speed"]);
         Assert.IsType<bool>(values["heater.enabled"]);
         Assert.IsType<string>(values["operation.mode"]);
+        Assert.Equal(
+            new AppliedConfigurationRef("ingestion-task", "FURNACE-TASK", 7),
+            first.Sample.AppliedConfiguration);
     }
 
     [Fact]
@@ -86,6 +90,9 @@ public sealed class HttpPollingSnapshotMapperTests
 
     private static HttpPollingAcquisitionOptions Options() => new()
     {
+        ConfigurationKind = "ingestion-task",
+        ConfigurationId = "FURNACE-TASK",
+        ConfigurationVersion = 7,
         Enabled = true,
         DeviceBaseUrl = "http://127.0.0.1:8100",
         SubjectId = "FURNACE-001",

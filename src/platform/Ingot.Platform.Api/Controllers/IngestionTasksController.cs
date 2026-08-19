@@ -1,3 +1,4 @@
+using Ingot.Platform.Application.ProcessConfiguration;
 using System.Text.Json;
 using Ingot.Contracts.Acquisition;
 using Ingot.Contracts.ProcessConfiguration;

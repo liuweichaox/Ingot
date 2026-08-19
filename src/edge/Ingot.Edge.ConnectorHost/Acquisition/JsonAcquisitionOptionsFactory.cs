@@ -20,6 +20,9 @@ public static class JsonAcquisitionOptionsFactory
             context["equipment_id"] = task.SubjectId;
         return new HttpPollingAcquisitionOptions
         {
+            ConfigurationKind = "ingestion-task",
+            ConfigurationId = task.TaskId,
+            ConfigurationVersion = task.Version,
             Enabled = true,
             DeviceBaseUrl = task.HttpPolling.BaseUrl,
             SnapshotPath = task.HttpPolling.SnapshotPath,

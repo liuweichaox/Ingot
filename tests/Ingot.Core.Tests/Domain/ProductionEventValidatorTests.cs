@@ -44,6 +44,19 @@ public sealed class ProductionEventValidatorTests
         Assert.Contains("Seq", error, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void TryValidate_ShouldRejectTamperedPayload()
+    {
+        var tampered = CreateEvent() with
+        {
+            Data = new Dictionary<string, object?> { ["changed"] = true },
+            Seq = 1
+        };
+
+        Assert.False(ProductionEventValidator.TryValidate(tampered, true, out var error));
+        Assert.Contains("PayloadHash", error, StringComparison.Ordinal);
+    }
+
     private static ProductionEvent CreateEvent()
         => ProductionEvent.Create(
             "process.execution.completed",

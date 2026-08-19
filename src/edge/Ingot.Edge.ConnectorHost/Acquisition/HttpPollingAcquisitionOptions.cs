@@ -1,9 +1,13 @@
 using Ingot.Contracts.Events;
+using Ingot.Domain.Events;
 
 namespace Ingot.Edge.ConnectorHost.Acquisition;
 
 public sealed class HttpPollingAcquisitionOptions
 {
+    public string? ConfigurationKind { get; init; }
+    public string? ConfigurationId { get; init; }
+    public int? ConfigurationVersion { get; init; }
     public bool Enabled { get; init; }
     /// <summary>
     ///     平台已接管采集配置时，是否允许继续使用本地回退配置。默认关闭，避免未经版本化和语义校验的
@@ -46,6 +50,16 @@ public sealed class HttpPollingAcquisitionOptions
     public IReadOnlyList<ValueFieldMapping> Fields { get; init; } = [];
     public ProcessSpecificationFieldMapping? ProcessSpecification { get; init; }
     public LifecycleFieldMapping? Lifecycle { get; init; }
+
+    public AppliedConfigurationRef? AppliedConfiguration
+        => string.IsNullOrWhiteSpace(ConfigurationKind) ||
+           string.IsNullOrWhiteSpace(ConfigurationId) ||
+           ConfigurationVersion is not > 0
+            ? null
+            : new AppliedConfigurationRef(
+                ConfigurationKind,
+                ConfigurationId,
+                ConfigurationVersion.Value);
 }
 
 public sealed class ValueFieldMapping
