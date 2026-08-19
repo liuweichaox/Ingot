@@ -4,6 +4,7 @@ using Ingot.Platform.Application.ProcessConfiguration;
 using Ingot.Agent;
 using Ingot.Platform.Application.Inspections;
 using Ingot.Platform.Application.ProcessResearch;
+using Ingot.Platform.Application.ProcessExecutions;
 using Ingot.Platform.Inspections.Infrastructure;
 using Ingot.Platform.Infrastructure.ProcessExecutions;
 using Ingot.Platform.Infrastructure.Events;
@@ -123,6 +124,11 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IIngestionTaskStore, PostgresIngestionTaskStore>();
         services.AddSingleton<IIngestionConfigurationStore, PostgresIngestionConfigurationStore>();
         services.AddSingleton<AcquisitionProbeTaskCoordinator>();
+
+        // 运行边界识别与存储
+        services.AddSingleton<PostgresExecutionBoundaryStore>();
+        services.AddSingleton<IExecutionBoundaryStore>(
+            provider => provider.GetRequiredService<PostgresExecutionBoundaryStore>());
 
         return services;
     }
