@@ -18,6 +18,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Ingot.Agent\Ingot.Agent.csproj" />
-    <ProjectReference Include="..\..\shared\Ingot.Contracts\Ingot.Contracts.csproj" />
+    <ProjectReference Include="..\..\shared\Ingot.Agent.Contracts\Ingot.Agent.Contracts.csproj" />
   </ItemGroup>
 </Project>

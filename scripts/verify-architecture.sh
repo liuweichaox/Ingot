@@ -53,6 +53,10 @@ check "contracts" src/shared/Ingot.Contracts \
   'using (Npgsql|Microsoft\.(Data|AspNetCore|Extensions)|Serilog|Prometheus|Ingot\.(Platform|Edge|Agent))' \
   "Contracts 只允许依赖 Domain"
 
+check "agent-contracts" src/shared/Ingot.Agent.Contracts \
+  'using (Npgsql|Microsoft\.(Data|AspNetCore|Extensions)|Serilog|Prometheus|Ingot\.)' \
+  "Agent Contracts 必须保持零依赖"
+
 check "connector-host" src/edge/Ingot.Edge.ConnectorHost \
   'using (Npgsql|Microsoft\.Data\.Sqlite)' \
   "Connector Host 必须保持组合根职责"
@@ -111,6 +115,10 @@ project_check src/shared/Ingot.Domain/Ingot.Domain.csproj \
   '<(PackageReference|ProjectReference)' \
   "Domain 必须保持零引用"
 
+project_check src/shared/Ingot.Agent.Contracts/Ingot.Agent.Contracts.csproj \
+  '<(PackageReference|ProjectReference)' \
+  "Agent Contracts 必须保持零引用"
+
 project_check src/platform/Ingot.Platform.Api/Ingot.Platform.Api.csproj \
   'Npgsql|Microsoft\.Data\.Sqlite' \
   "Platform API 的存储实现必须位于 Platform Infrastructure"
@@ -128,8 +136,8 @@ project_check src/edge/Ingot.Edge.ConnectorHost/Ingot.Edge.ConnectorHost.csproj 
   "Connector Host 的存储实现必须位于 Infrastructure"
 
 project_check src/agent/Ingot.Agent/Ingot.Agent.csproj \
-  'Ingot\.(Platform|Agent\.Providers|Edge\.ConnectorHost)|Npgsql|Microsoft\.Data\.Sqlite|Microsoft\.Agents|OpenAI' \
-  "Agent 核心必须只依赖公共契约"
+  'Ingot\.(Contracts|Platform|Agent\.Providers|Edge\.ConnectorHost)|Npgsql|Microsoft\.Data\.Sqlite|Microsoft\.Agents|OpenAI' \
+  "Agent 核心必须只依赖 Agent Contracts"
 
 project_check src/agent/Ingot.Agent.Providers/Ingot.Agent.Providers.csproj \
   'Ingot\.Platform' \
