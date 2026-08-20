@@ -1,4 +1,5 @@
 using Ingot.Contracts.ProcessResearch;
+using Ingot.Platform.Application.ProcessConfiguration;
 
 namespace Ingot.Platform.Application.ProcessResearch;
 
@@ -62,7 +63,7 @@ public sealed class ResearchExperimentValidationService(IProcessResearchStore st
                 }
                 var normalizedValue = factor.Value;
                 var convertible = string.Equals(factor.Unit?.Trim(), variable.Unit, StringComparison.OrdinalIgnoreCase) ||
-                                  ResearchUnitConverter.TryConvert(factor.Value, factor.Unit, variable.Unit, out normalizedValue);
+                                  ProcessUnitConverter.TryConvert(factor.Value, factor.Unit, variable.Unit, out normalizedValue);
                 if (!convertible)
                     Add("runPlan", "factor-unit-mismatch", $"实验变量 {code} 的单位必须与项目变量一致或可转换。",
                         $"请使用 {variable.Unit} 或可换算单位。");

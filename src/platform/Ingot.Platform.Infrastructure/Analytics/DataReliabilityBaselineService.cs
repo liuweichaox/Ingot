@@ -1,9 +1,10 @@
 using Ingot.Contracts.Analytics;
 using Ingot.Contracts.Events;
 using Ingot.Platform.Application.Analytics;
+using Ingot.Platform.Application.Events;
 using Ingot.Platform.Application.ProcessResearch;
+using Ingot.Platform.Application.ProcessConfiguration;
 using Ingot.Platform.Infrastructure.ProcessExecutions;
-using Ingot.Platform.Infrastructure.Events;
 
 namespace Ingot.Platform.Infrastructure.Analytics;
 
@@ -225,12 +226,12 @@ public sealed class DataReliabilityBaselineService(
         if (string.Equals(field, "material_lot_ref", StringComparison.Ordinal))
         {
             return !string.IsNullOrWhiteSpace(
-                       ProcessConfiguration.ProcessAnalysisResolver.ContextValue(row.Context, field)) ||
+                       ProcessAnalysisResolver.ContextValue(row.Context, field)) ||
                    !string.IsNullOrWhiteSpace(
-                       ProcessConfiguration.ProcessAnalysisResolver.ContextValue(row.Context, "material_lot"));
+                       ProcessAnalysisResolver.ContextValue(row.Context, "material_lot"));
         }
         return !string.IsNullOrWhiteSpace(
-            ProcessConfiguration.ProcessAnalysisResolver.ContextValue(row.Context, field));
+            ProcessAnalysisResolver.ContextValue(row.Context, field));
     }
 
     private static IReadOnlyList<ContextFactorSummary> BuildFactorSummaries(
@@ -338,15 +339,15 @@ public sealed class DataReliabilityBaselineService(
     {
         string? value = field switch
         {
-            "equipment_id" => ProcessConfiguration.ProcessAnalysisResolver.ContextValue(
+            "equipment_id" => ProcessAnalysisResolver.ContextValue(
                                   row.Context, "equipment_id") ?? row.EquipmentId,
-            "tooling_assembly_id" => ProcessConfiguration.ProcessAnalysisResolver.ContextValue(
+            "tooling_assembly_id" => ProcessAnalysisResolver.ContextValue(
                                 row.Context, "tooling_assembly_id") ??
-                            ProcessConfiguration.ProcessAnalysisResolver.ContextValue(row.Context, "tooling_assembly_id"),
-            "material_lot_ref" => ProcessConfiguration.ProcessAnalysisResolver.ContextValue(
+                            ProcessAnalysisResolver.ContextValue(row.Context, "tooling_assembly_id"),
+            "material_lot_ref" => ProcessAnalysisResolver.ContextValue(
                                       row.Context, "material_lot_ref") ??
-                                  ProcessConfiguration.ProcessAnalysisResolver.ContextValue(row.Context, "material_lot"),
-            _ => ProcessConfiguration.ProcessAnalysisResolver.ContextValue(row.Context, field)
+                                  ProcessAnalysisResolver.ContextValue(row.Context, "material_lot"),
+            _ => ProcessAnalysisResolver.ContextValue(row.Context, field)
         };
         return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
     }

@@ -1,7 +1,6 @@
 using Ingot.Platform.Application.Analytics;
 using Ingot.Contracts.Analytics;
 using Ingot.Platform.Api.Agents;
-using Ingot.Platform.Infrastructure.Analytics;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Ingot.Platform.Api.Controllers;

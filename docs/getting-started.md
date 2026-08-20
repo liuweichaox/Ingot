@@ -35,13 +35,13 @@ http://localhost:8000/health
 http://localhost:8100/ready
 ```
 
-浏览器打开 `http://localhost:3000` 后，使用 `.env` 中的 `INGOT_ADMIN_USERNAME` 和 `INGOT_ADMIN_PASSWORD` 登录。若 `INGOT_ADMIN_PASSWORD` 留空，系统只在用户表为空的首次启动生成随机口令，可在 API 日志中查找：
+浏览器打开 `http://localhost:3000` 后，使用 `.env` 中的 `INGOT_ADMIN_USERNAME` 和 `INGOT_ADMIN_PASSWORD` 登录。若 `INGOT_ADMIN_PASSWORD` 留空，系统只在用户表为空的首次迁移引导中生成随机口令，可在 Migrator 日志中查找：
 
 ```bash
-docker compose -f docker-compose.app.yml logs platform-api
+docker compose -f docker-compose.app.yml logs platform-migrate
 ```
 
-管理员只在用户表为空时播种。后续修改 `.env` 中的管理员密码不会重置已经存在的账户。
+Migrator 只在用户表为空时引导首个管理员。后续修改 `.env` 中的管理员密码不会重置已经存在的账户。
 
 如果页面无法访问，先执行以下两条命令，不要反复重建或删除数据卷：
 

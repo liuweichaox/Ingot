@@ -3,6 +3,7 @@ using System.Text.Json;
 using Ingot.Contracts.ProcessResearch;
 using Ingot.Contracts.ResearchAssets;
 using Ingot.Platform.Application.ResearchAssets;
+using Ingot.Platform.Application.ProcessConfiguration;
 
 namespace Ingot.Platform.Application.ProcessResearch;
 
@@ -57,8 +58,8 @@ internal static class MechanismKnowledgeExperimentPolicy
                 throw new ProcessResearchRuleException(
                     $"生效机理约束引用了非可控变量 {constraint.VariableCode}。");
             if (!string.Equals(
-                    ResearchUnitConverter.NormalizeCode(variable.Unit),
-                    ResearchUnitConverter.NormalizeCode(constraint.Unit),
+                    ProcessUnitConverter.NormalizeCode(variable.Unit),
+                    ProcessUnitConverter.NormalizeCode(constraint.Unit),
                     StringComparison.Ordinal))
                 throw new ProcessResearchRuleException(
                     $"生效机理约束 {constraint.VariableCode} 的单位与项目变量不一致。");

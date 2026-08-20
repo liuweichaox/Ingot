@@ -3,7 +3,7 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using Ingot.Contracts.Agents;
 
-namespace Ingot.Platform.Infrastructure.Insight;
+namespace Ingot.Platform.Application.Insight;
 
 public sealed class GoldenQuestionEvaluator
 {

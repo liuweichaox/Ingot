@@ -1,11 +1,10 @@
 using Ingot.Platform.Application.ProcessConfiguration;
 using System.Text.Json;
 using Ingot.Contracts.Acquisition;
+using Ingot.Platform.Application.Acquisition;
 using Ingot.Contracts.ProcessConfiguration;
 using Ingot.Platform.Api.Agents;
 using Ingot.Platform.Api.Events;
-using Ingot.Platform.Infrastructure.Acquisition;
-using Ingot.Platform.Infrastructure.ProcessConfiguration;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 

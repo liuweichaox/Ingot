@@ -1,9 +1,8 @@
 using Ingot.Platform.Application.ProcessConfiguration;
+using Ingot.Platform.Application.Manufacturing;
 using Ingot.Contracts.Manufacturing;
 using Ingot.Contracts.ProcessConfiguration;
 using Ingot.Platform.Api.Agents;
-using Ingot.Platform.Infrastructure.Manufacturing;
-using Ingot.Platform.Infrastructure.ProcessConfiguration;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Ingot.Platform.Api.Controllers;

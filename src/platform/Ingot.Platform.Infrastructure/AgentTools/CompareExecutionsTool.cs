@@ -1,7 +1,7 @@
 using Ingot.Platform.Application.Inspections;
+using Ingot.Platform.Application.Events;
 using System.Text.Json;
 using Ingot.Agent;
-using Ingot.Platform.Infrastructure.Events;
 using Ingot.Platform.Infrastructure.Inspections;
 using Ingot.Platform.Infrastructure.ProcessExecutions;
 using Ingot.Contracts.Agents;

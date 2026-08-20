@@ -1,5 +1,6 @@
 using Ingot.Contracts.Events;
 using Ingot.Contracts.ProcessConfiguration;
+using Ingot.Platform.Application.ProcessExecutions;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;

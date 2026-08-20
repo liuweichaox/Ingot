@@ -1,5 +1,7 @@
 using System.Text.Json;
 using Ingot.Domain.Events;
+using Ingot.Platform.Application.Events;
+using Ingot.Platform.Application.ProcessConfiguration;
 using Ingot.Platform.Infrastructure.Events;
 using Ingot.Platform.Infrastructure.ProcessConfiguration;
 using Microsoft.Extensions.Options;

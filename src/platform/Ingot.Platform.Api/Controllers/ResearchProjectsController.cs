@@ -3,8 +3,6 @@ using Ingot.Contracts.Events;
 using Ingot.Platform.Api.Agents;
 using Ingot.Platform.Application.ProcessResearch;
 using Ingot.Platform.Application.ProcessExecutions;
-using Ingot.Platform.Infrastructure.ProcessExecutions;
-using Ingot.Platform.Infrastructure.ProcessResearch;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Ingot.Platform.Api.Controllers;

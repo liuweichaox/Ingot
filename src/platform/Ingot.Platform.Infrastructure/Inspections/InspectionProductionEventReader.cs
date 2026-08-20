@@ -1,6 +1,6 @@
 using Ingot.Contracts.Events;
+using Ingot.Platform.Application.Events;
 using Ingot.Platform.Application.Inspections;
-using Ingot.Platform.Infrastructure.Events;
 
 namespace Ingot.Platform.Infrastructure.Inspections;
 

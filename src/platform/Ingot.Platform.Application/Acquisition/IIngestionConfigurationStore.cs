@@ -1,6 +1,6 @@
 using Ingot.Contracts.Acquisition;
 
-namespace Ingot.Platform.Infrastructure.Acquisition;
+namespace Ingot.Platform.Application.Acquisition;
 
 public interface IIngestionConfigurationStore
 {

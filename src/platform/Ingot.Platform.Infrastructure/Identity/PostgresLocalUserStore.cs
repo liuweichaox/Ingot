@@ -1,32 +1,7 @@
 using Npgsql;
+using Ingot.Platform.Application.Identity;
 
 namespace Ingot.Platform.Infrastructure.Identity;
-
-/// <summary>已验证会话解析结果：足以构造 ClaimsPrincipal。</summary>
-public sealed record ResolvedSession(
-    Guid UserId,
-    string Username,
-    IReadOnlyList<string> Roles,
-    IReadOnlyList<string> SiteIds);
-
-public interface ILocalUserStore
-{
-    Task<long> CountAsync(CancellationToken ct = default);
-    Task<UserAccount> CreateAsync(UserAccount user, CancellationToken ct = default);
-    Task<UserAccount?> GetByUsernameAsync(string usernameLower, CancellationToken ct = default);
-    Task<UserAccount?> GetByIdAsync(Guid userId, CancellationToken ct = default);
-    Task<IReadOnlyList<UserAccount>> ListAsync(CancellationToken ct = default);
-    Task<bool> SetRolesAsync(Guid userId, IReadOnlyList<string> roles, CancellationToken ct = default);
-    Task<bool> SetSiteAccessAsync(Guid userId, IReadOnlyList<string> siteIds, CancellationToken ct = default);
-    Task<bool> SetDisabledAsync(Guid userId, bool disabled, CancellationToken ct = default);
-    Task<bool> SetPasswordHashAsync(Guid userId, string passwordHash, CancellationToken ct = default);
-
-    Task CreateSessionAsync(string tokenHash, Guid userId, DateTimeOffset expiresAt, CancellationToken ct = default);
-    Task<ResolvedSession?> ValidateSessionAsync(string tokenHash, CancellationToken ct = default);
-    Task RevokeSessionAsync(string tokenHash, CancellationToken ct = default);
-    Task RevokeAllForUserAsync(Guid userId, CancellationToken ct = default);
-    Task<int> PruneExpiredSessionsAsync(CancellationToken ct = default);
-}
 
 /// <summary>本地账户与会话的 PostgreSQL 存储。schema 由迁移 0003 保证，本类不做 DDL。</summary>
 public sealed class PostgresLocalUserStore : ILocalUserStore

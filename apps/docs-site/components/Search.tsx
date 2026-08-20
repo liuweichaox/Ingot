@@ -1,12 +1,14 @@
 "use client";
 
 import { Combobox, ComboboxInput, ComboboxOption, ComboboxOptions } from "@headlessui/react";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { Lang } from "@/lib/docs";
 
 type Item = { lang: Lang; slug: string; title: string; text: string };
 
 export default function Search({ lang }: { lang: Lang }) {
+  const router = useRouter();
   const [query, setQuery] = useState("");
   const [items, setItems] = useState<Item[]>([]);
   useEffect(() => { fetch("/search-index.json").then((response) => response.json()).then(setItems).catch(() => setItems([])); }, []);
@@ -16,7 +18,7 @@ export default function Search({ lang }: { lang: Lang }) {
     <Combobox
       value={null}
       onChange={(item: Item | null) => {
-        if (item) window.location.assign(`/${lang}${item.slug ? `/${item.slug}` : ""}`);
+        if (item) router.push(`/${lang}${item.slug ? `/${item.slug}` : ""}`);
       }}
     >
       <div className="search">

@@ -1,7 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 
-namespace Ingot.Platform.Infrastructure.ProcessExecutions;
+namespace Ingot.Platform.Application.ProcessExecutions;
 
 public sealed record ProcessFeatureDefinition
 {

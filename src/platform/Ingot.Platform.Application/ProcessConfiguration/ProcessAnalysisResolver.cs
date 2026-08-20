@@ -4,7 +4,7 @@ using System.Globalization;
 using System.Text.Json;
 using Ingot.Contracts.ProcessConfiguration;
 
-namespace Ingot.Platform.Infrastructure.ProcessConfiguration;
+namespace Ingot.Platform.Application.ProcessConfiguration;
 
 public sealed record ResolvedProcessAnalysis
 {

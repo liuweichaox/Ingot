@@ -1,5 +1,5 @@
 using Ingot.Platform.Application.ResearchAssets;
-using Ingot.Platform.Application.ProcessResearch;
+using Ingot.Platform.Application.ProcessConfiguration;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -11,7 +11,7 @@ namespace Ingot.Platform.Application.ResearchAssets;
 
 public sealed class MechanismKnowledgeService(
     IMechanismKnowledgeStore store,
-    IProcessResearchStore? researchStore = null)
+    IResearchProjectContextReader projectReader)
 {
     private static readonly IReadOnlySet<string> ApplicabilityDimensions =
         new HashSet<string>(StringComparer.Ordinal)
@@ -65,12 +65,9 @@ public sealed class MechanismKnowledgeService(
         foreach (var item in evidence)
             if (!await store.EvidenceExistsAsync(projectId, item, ct).ConfigureAwait(false))
                 throw new ResearchAssetRuleException("证据引用不存在、不属于当前项目或内容哈希不匹配。");
-        if (researchStore is not null)
-        {
-            var project = await researchStore.GetProjectAsync(projectId, ct).ConfigureAwait(false)
-                ?? throw new ResearchAssetRuleException("研发项目不存在。");
-            ValidateProjectBindings(project, variables, constraints, applicability);
-        }
+        var project = await projectReader.GetProjectAsync(projectId, ct).ConfigureAwait(false)
+            ?? throw new ResearchAssetRuleException("研发项目不存在。");
+        ValidateProjectBindings(project, variables, constraints, applicability);
 
         var now = DateTimeOffset.UtcNow;
         var claimId = existing?.ClaimId ?? (request.ClaimId == Guid.Empty ? Guid.CreateVersion7() : request.ClaimId);
@@ -364,7 +361,7 @@ public sealed class MechanismKnowledgeService(
     }
 
     internal static string NormalizeUnit(string? value)
-        => ResearchUnitConverter.NormalizeCode(Required(value, "单位", 80));
+        => ProcessUnitConverter.NormalizeCode(Required(value, "单位", 80));
 
     private static void ValidateProjectBindings(
         ResearchProject project,

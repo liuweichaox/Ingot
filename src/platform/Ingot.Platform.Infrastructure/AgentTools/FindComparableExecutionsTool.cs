@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Ingot.Agent;
-using Ingot.Platform.Infrastructure.Events;
+using Ingot.Platform.Application.Events;
+using Ingot.Platform.Application.ProcessConfiguration;
 using Ingot.Contracts.Agents;
 using Ingot.Contracts.Events;
 using Ingot.Platform.Infrastructure.ProcessConfiguration;

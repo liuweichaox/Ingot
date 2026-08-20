@@ -1,5 +1,4 @@
 using Ingot.Platform.Api.Agents;
-using Ingot.Platform.Infrastructure.ProcessExecutions;
 using Ingot.Platform.Application.ProcessExecutions;
 using Ingot.Contracts.Events;
 using Microsoft.AspNetCore.Mvc;

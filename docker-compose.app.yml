@@ -44,6 +44,9 @@ services:
       dockerfile: src/platform/Ingot.Platform.Migrator/Dockerfile
     environment:
       - ConnectionStrings__Events=Host=postgres;Port=5432;Database=ingot;Username=ingot;Password=${INGOT_POSTGRES_PASSWORD:?INGOT_POSTGRES_PASSWORD is required}
+      - Authentication__Mode=${INGOT_AUTH_MODE:-Local}
+      - Authentication__Local__SeedAdminUsername=${INGOT_ADMIN_USERNAME:-}
+      - Authentication__Local__SeedAdminPassword=${INGOT_ADMIN_PASSWORD:-}
     depends_on:
       postgres:
         condition: service_healthy
@@ -83,8 +86,6 @@ services:
       - Authentication__Authority=${INGOT_AUTHORITY:-}
       - Authentication__Audience=${INGOT_AUDIENCE:-}
       - Authentication__RequireHttpsMetadata=${INGOT_AUTH_REQUIRE_HTTPS:-true}
-      - Authentication__Local__SeedAdminUsername=${INGOT_ADMIN_USERNAME:-}
-      - Authentication__Local__SeedAdminPassword=${INGOT_ADMIN_PASSWORD:-}
       - InspectionAttachments__RootPath=/app/Data/inspection-attachments
       - InspectionAttachments__ArchiveRootPath=/app/Archive/inspection-attachments
       - ProcessKnowledge__RootPath=/app/Data/process-knowledge

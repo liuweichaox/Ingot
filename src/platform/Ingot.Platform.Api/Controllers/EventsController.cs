@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Ingot.Platform.Application.Events;
 using Ingot.Platform.Api.Errors;
 using Ingot.Platform.Api.Events;
 using Ingot.Platform.Api.Agents;

@@ -1,8 +1,9 @@
 using Ingot.Platform.Application.Inspections;
+using Ingot.Platform.Application.Analytics;
+using Ingot.Platform.Application.Events;
 using Ingot.Contracts.Analytics;
 using Ingot.Contracts.Events;
 using Ingot.Contracts.Inspections;
-using Ingot.Platform.Infrastructure.Events;
 using Ingot.Platform.Infrastructure.Inspections;
 
 namespace Ingot.Platform.Infrastructure.Analytics;

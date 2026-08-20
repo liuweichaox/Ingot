@@ -1,6 +1,6 @@
 using System.Text.Json;
 using Ingot.Agent;
-using Ingot.Platform.Infrastructure.Events;
+using Ingot.Platform.Application.Events;
 using Ingot.Contracts.Agents;
 
 namespace Ingot.Platform.Infrastructure.AgentTools;

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Ingot.Contracts.Acquisition;
+using Ingot.Platform.Application.Acquisition;
 using Npgsql;
 using NpgsqlTypes;
 

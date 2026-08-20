@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using Ingot.Platform.Application.Events;
 using Ingot.Platform.Infrastructure.Events;
 using Microsoft.Extensions.Options;
 

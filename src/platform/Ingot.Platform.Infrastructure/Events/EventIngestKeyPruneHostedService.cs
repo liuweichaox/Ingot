@@ -1,6 +1,8 @@
 using Microsoft.Extensions.Options;
 using Npgsql;
 
+using Ingot.Platform.Application.Events;
+
 namespace Ingot.Platform.Infrastructure.Events;
 
 /// <summary>

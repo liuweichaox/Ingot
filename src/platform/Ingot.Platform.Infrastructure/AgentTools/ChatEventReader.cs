@@ -1,4 +1,4 @@
-using Ingot.Platform.Infrastructure.Events;
+using Ingot.Platform.Application.Events;
 using Ingot.Contracts.Analytics;
 using Ingot.Contracts.Events;
 using Microsoft.Extensions.Options;

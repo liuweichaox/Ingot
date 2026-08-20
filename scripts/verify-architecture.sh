@@ -165,6 +165,10 @@ check "process-research-application-rules" src/platform/Ingot.Platform.Applicati
   'using (Ingot\.Contracts\.Inspections|Ingot\.Platform\.Infrastructure\.Inspections)' \
   "Application 研究规则不得直接读取检验上下文"
 
+check "application-context-direction" src/platform/Ingot.Platform.Application/ResearchAssets \
+  'using Ingot\.Platform\.Application\.ProcessResearch' \
+  "ResearchAssets 不得反向依赖 ProcessResearch；项目上下文必须通过窄端口读取"
+
 unexpected_research_infrastructure=$(find src/platform/Ingot.Platform.Infrastructure/ProcessResearch \
   -type f -name '*.cs' \
   ! -name 'PostgresProcessResearchStore.cs' \
@@ -233,6 +237,69 @@ if [[ -n "$research_asset_rule_leaks" ]]; then
   fail=1
 else
   echo "✓ [research-assets-application-boundary]"
+fi
+
+application_port_leaks=$(grep -rnE \
+  'public interface (IPlatformEventStore|IIngestionTaskStore|IIngestionConfigurationStore|IAcquisitionProbeTaskStore|IManufacturingContextStore|IQualityAnalysisService|IGoldenQuestionStore|ILocalUserStore)' \
+  src/platform/Ingot.Platform.Infrastructure --include='*.cs' 2>/dev/null || true)
+if [[ -n "$application_port_leaks" ]]; then
+  echo "✗ [platform-application-port-ownership] 数据库无关的 Platform 存储端口必须归属 Application"
+  echo "$application_port_leaks" | sed 's/^/    /'
+  fail=1
+else
+  echo "✓ [platform-application-port-ownership]"
+fi
+
+application_rule_leaks=$(grep -rnE \
+  'public (sealed |static )?class (ProcessAnalysisResolver|ProcessExecutionAnalysisEngine|ExecutionDiagnosisEngine|ExecutionInvestigationReportBuilder|BuiltInFeatureDefinitionRegistry|GoldenQuestionEvaluator|AcquisitionProbeTaskCoordinator)' \
+  src/platform/Ingot.Platform.Infrastructure --include='*.cs' 2>/dev/null || true)
+if [[ -n "$application_rule_leaks" ]]; then
+  echo "✗ [platform-application-rule-ownership] 可脱库测试的应用规则必须归属 Application"
+  echo "$application_rule_leaks" | sed 's/^/    /'
+  fail=1
+else
+  echo "✓ [platform-application-rule-ownership]"
+fi
+
+acquisition_controller_writes=$(grep -nE \
+  '\b(store|taskStore|processStore|probeTasks)\.(Upsert|Publish|Save|Delete|QueueAndWait)[A-Za-z]*Async' \
+  src/platform/Ingot.Platform.Api/Controllers/IngestionConfigurationController.cs 2>/dev/null || true)
+if [[ -n "$acquisition_controller_writes" ]]; then
+  echo "✗ [acquisition-application-boundary] 采集配置写用例必须由 Application 工作流编排"
+  echo "$acquisition_controller_writes" | sed 's/^/    /'
+  fail=1
+else
+  echo "✓ [acquisition-application-boundary]"
+fi
+
+api_module_implementation_leaks=$(grep -rnE \
+  '^using Ingot\.Platform\.Infrastructure\.(Acquisition|Analytics|Manufacturing|Insight|ProcessConfiguration|ProcessExecutions|ProcessResearch);' \
+  src/platform/Ingot.Platform.Api/Controllers --include='*.cs' 2>/dev/null || true)
+if [[ -n "$api_module_implementation_leaks" ]]; then
+  echo "✗ [platform-api-application-boundary] 业务 Controller 必须通过 Application 用例或端口，不得直接依赖模块实现"
+  echo "$api_module_implementation_leaks" | sed 's/^/    /'
+  fail=1
+else
+  echo "✓ [platform-api-application-boundary]"
+fi
+
+api_worker_hits=$(grep -nE \
+  'AddIngotPlatformWorkers|AddIngotLocalIdentityMaintenance|AdminSeederHostedService|SessionPruneHostedService' \
+  src/platform/Ingot.Platform.Api/Program.cs 2>/dev/null || true)
+if [[ -n "$api_worker_hits" ]]; then
+  echo "✗ [stateless-api-host] Platform API 不得注册持久化后台任务或部署引导任务"
+  echo "$api_worker_hits" | sed 's/^/    /'
+  fail=1
+else
+  echo "✓ [stateless-api-host]"
+fi
+
+if grep -q 'AdminSeederHostedService' \
+  src/platform/Ingot.Platform.Infrastructure/Identity/LocalIdentityHostedServices.cs 2>/dev/null; then
+  echo "✗ [identity-bootstrap-ownership] 首用户引导必须归属 Migrator，不得恢复为 API HostedService"
+  fail=1
+else
+  echo "✓ [identity-bootstrap-ownership]"
 fi
 
 store_schema_ddl=$(grep -rnE \

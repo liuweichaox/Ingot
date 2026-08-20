@@ -1,17 +1,17 @@
-namespace Ingot.Platform.Application.ProcessResearch;
+namespace Ingot.Platform.Application.ProcessConfiguration;
 
 /// <summary>
 /// Small, deterministic conversion boundary for common industrial units. Unknown
 /// or domain-specific units intentionally remain strict strings instead of being
 /// guessed by the platform.
 /// </summary>
-public static class ResearchUnitConverter
+public static class ProcessUnitConverter
 {
     public static string NormalizeCode(string? value)
     {
         var unit = (value ?? "").Trim();
         if (unit.Length == 0)
-            throw new ProcessResearchRuleException("单位不能为空。");
+            throw new ArgumentException("单位不能为空。", nameof(value));
         return unit.ToLowerInvariant() switch
         {
             "°c" or "℃" or "cel" => "Cel",

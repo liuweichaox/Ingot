@@ -1,7 +1,7 @@
 using Ingot.Contracts.Events;
 using Ingot.Contracts.Analytics;
 
-namespace Ingot.Platform.Infrastructure.Events;
+namespace Ingot.Platform.Application.Events;
 
 public interface IPlatformEventStore
 {

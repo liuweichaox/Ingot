@@ -3,7 +3,6 @@ using System.Text.Json;
 using Ingot.Agent;
 using Ingot.Platform.Api.Agents;
 using Ingot.Contracts.Agents;
-using Ingot.Platform.Infrastructure.ProcessResearch;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Ingot.Platform.Api.Controllers;

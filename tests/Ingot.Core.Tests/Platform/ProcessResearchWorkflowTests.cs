@@ -48,13 +48,13 @@ public sealed class ProcessResearchWorkflowTests
     [Fact]
     public void UnitConverter_ConvertsKnownIndustrialAliases_AndRejectsUnknownDimensions()
     {
-        Assert.True(ResearchUnitConverter.TryConvert(10, "bar", "MPa", out var mpa));
+        Assert.True(ProcessUnitConverter.TryConvert(10, "bar", "MPa", out var mpa));
         Assert.Equal(1, mpa, 8);
-        Assert.True(ResearchUnitConverter.TryConvert(1, "kgf/cm²", "bar", out var bar));
+        Assert.True(ProcessUnitConverter.TryConvert(1, "kgf/cm²", "bar", out var bar));
         Assert.Equal(0.980665, bar, 6);
-        Assert.True(ResearchUnitConverter.TryConvert(25, "℃", "K", out var kelvin));
+        Assert.True(ProcessUnitConverter.TryConvert(25, "℃", "K", out var kelvin));
         Assert.Equal(298.15, kelvin, 8);
-        Assert.False(ResearchUnitConverter.TryConvert(1, "HRC", "MPa", out _));
+        Assert.False(ProcessUnitConverter.TryConvert(1, "HRC", "MPa", out _));
     }
 
     [Fact]

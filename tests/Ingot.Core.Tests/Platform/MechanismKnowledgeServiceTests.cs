@@ -1,4 +1,5 @@
 using Ingot.Platform.Application.ResearchAssets;
+using Ingot.Contracts.ProcessResearch;
 using Ingot.Contracts.ResearchAssets;
 using Ingot.Platform.Infrastructure.ResearchAssets;
 using Xunit;
@@ -8,10 +9,21 @@ namespace Ingot.Core.Tests.Platform;
 public sealed class MechanismKnowledgeServiceTests
 {
     [Fact]
+    public async Task Draft_RejectsUnknownResearchProject()
+    {
+        var service = new MechanismKnowledgeService(
+            new MemoryMechanismKnowledgeStore(),
+            new MissingResearchProjectContextReader());
+
+        await Assert.ThrowsAsync<ResearchAssetRuleException>(() => service.SaveDraftAsync(
+            Guid.CreateVersion7(), Draft(), "engineer"));
+    }
+
+    [Fact]
     public async Task Draft_IsStructuredVersionedAndRequiresIndependentReview()
     {
         var store = new MemoryMechanismKnowledgeStore();
-        var service = new MechanismKnowledgeService(store);
+        var service = CreateService(store);
         var projectId = Guid.CreateVersion7();
 
         var draft = await service.SaveDraftAsync(projectId, Draft(), "engineer-a");
@@ -39,7 +51,7 @@ public sealed class MechanismKnowledgeServiceTests
     [Fact]
     public async Task Draft_RejectsMissingApplicabilityOrEvidence()
     {
-        var service = new MechanismKnowledgeService(new MemoryMechanismKnowledgeStore());
+        var service = CreateService(new MemoryMechanismKnowledgeStore());
         var projectId = Guid.CreateVersion7();
 
         await Assert.ThrowsAsync<ResearchAssetRuleException>(() => service.SaveDraftAsync(
@@ -52,7 +64,7 @@ public sealed class MechanismKnowledgeServiceTests
     public async Task Conflict_PreservesBothClaimVersions()
     {
         var store = new MemoryMechanismKnowledgeStore();
-        var service = new MechanismKnowledgeService(store);
+        var service = CreateService(store);
         var projectId = Guid.CreateVersion7();
         var left = await service.SaveDraftAsync(projectId, Draft() with { Name = "温度升高改善流动" }, "a");
         var right = await service.SaveDraftAsync(projectId, Draft() with { Name = "温度升高导致降解" }, "b");
@@ -76,7 +88,7 @@ public sealed class MechanismKnowledgeServiceTests
     public async Task Conflict_RequiresIndependentResolutionAndThenCloses()
     {
         var store = new MemoryMechanismKnowledgeStore();
-        var service = new MechanismKnowledgeService(store);
+        var service = CreateService(store);
         var projectId = Guid.CreateVersion7();
         var left = await service.SaveDraftAsync(projectId, Draft(), "a");
         var right = await service.SaveDraftAsync(projectId, Draft() with { Name = "相反声明" }, "b");
@@ -107,7 +119,7 @@ public sealed class MechanismKnowledgeServiceTests
     [InlineData("cause", "increase", -1)]
     public async Task Draft_RejectsInvalidVariableSemantics(string role, string direction, long delay)
     {
-        var service = new MechanismKnowledgeService(new MemoryMechanismKnowledgeStore());
+        var service = CreateService(new MemoryMechanismKnowledgeStore());
         await Assert.ThrowsAsync<ResearchAssetRuleException>(() => service.SaveDraftAsync(
             Guid.CreateVersion7(), Draft() with
             {
@@ -121,7 +133,7 @@ public sealed class MechanismKnowledgeServiceTests
     public async Task Lifecycle_RequiresTwoDistinctFormalResultsBeforeActivation()
     {
         var store = new MemoryMechanismKnowledgeStore();
-        var service = new MechanismKnowledgeService(store);
+        var service = CreateService(store);
         var projectId = Guid.CreateVersion7();
         var claim = await service.SaveDraftAsync(projectId, Draft(), "creator");
         claim = await service.ReviewAsync(
@@ -169,7 +181,7 @@ public sealed class MechanismKnowledgeServiceTests
     public async Task Lifecycle_AllowsFormalFalsificationFromPromotedState()
     {
         var store = new MemoryMechanismKnowledgeStore();
-        var service = new MechanismKnowledgeService(store);
+        var service = CreateService(store);
         var projectId = Guid.CreateVersion7();
         var claim = await service.SaveDraftAsync(projectId, Draft(), "creator");
         claim = await service.ReviewAsync(
@@ -193,7 +205,7 @@ public sealed class MechanismKnowledgeServiceTests
     [Fact]
     public async Task Draft_NormalizesControlledScopeAndEngineeringUnits()
     {
-        var service = new MechanismKnowledgeService(new MemoryMechanismKnowledgeStore());
+        var service = CreateService(new MemoryMechanismKnowledgeStore());
         var saved = await service.SaveDraftAsync(Guid.CreateVersion7(), Draft() with
         {
             Variables = [new MechanismClaimVariable { VariableCode = "temperature", VariableRole = "cause", Unit = "℃" }],
@@ -218,6 +230,45 @@ public sealed class MechanismKnowledgeServiceTests
         Evidence = [new MechanismClaimEvidence { EvidenceKind = "knowledge-fragment", ReferenceId = Guid.CreateVersion7().ToString(), ContentHash = new string('a', 64) }],
         ContentHash = "request-placeholder"
     };
+
+    private static MechanismKnowledgeService CreateService(IMechanismKnowledgeStore store)
+        => new(store, new TestResearchProjectContextReader());
+
+    private sealed class TestResearchProjectContextReader : IResearchProjectContextReader
+    {
+        public Task<ResearchProject?> GetProjectAsync(Guid projectId, CancellationToken ct = default)
+            => Task.FromResult<ResearchProject?>(new ResearchProject
+            {
+                ProjectId = projectId,
+                Code = "mechanism-tests",
+                Name = "机理知识测试项目",
+                ProcessName = "test-process",
+                MaterialName = "material-a",
+                Variables =
+                [
+                    new ResearchVariable
+                    {
+                        Code = "holding.temperature",
+                        Name = "保压温度",
+                        Role = ResearchVariableRoles.Control,
+                        Unit = "Cel"
+                    },
+                    new ResearchVariable
+                    {
+                        Code = "temperature",
+                        Name = "温度",
+                        Role = ResearchVariableRoles.Control,
+                        Unit = "Cel"
+                    }
+                ]
+            });
+    }
+
+    private sealed class MissingResearchProjectContextReader : IResearchProjectContextReader
+    {
+        public Task<ResearchProject?> GetProjectAsync(Guid projectId, CancellationToken ct = default)
+            => Task.FromResult<ResearchProject?>(null);
+    }
 
     private sealed class MemoryMechanismKnowledgeStore : IMechanismKnowledgeStore
     {

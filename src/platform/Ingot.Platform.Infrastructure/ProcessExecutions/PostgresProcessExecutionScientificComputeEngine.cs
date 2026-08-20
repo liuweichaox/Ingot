@@ -1,4 +1,5 @@
 using Ingot.Contracts.Events;
+using Ingot.Platform.Application.ProcessExecutions;
 using Npgsql;
 
 namespace Ingot.Platform.Infrastructure.ProcessExecutions;

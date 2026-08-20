@@ -7,6 +7,7 @@ using Ingot.Platform.Api.Agents;
 using Ingot.Platform.Api.HealthChecks;
 using Ingot.Platform.Api.Events;
 using Ingot.Platform.Api.Configuration;
+using Ingot.Platform.Application.Events;
 using Ingot.Platform.Api.Errors;
 using Ingot.Platform.Infrastructure;
 using Ingot.Platform.Infrastructure.Events;
@@ -128,7 +129,7 @@ builder.Services.AddAuthorization(options =>
 
 builder.Services.AddIngotPlatformInfrastructure(builder.Configuration);
 builder.Services.AddIngotInspectionInfrastructure(builder.Configuration);
-// 本地账户服务在基础设施（含迁移）之后注册，保证播种晚于建表；播种服务自身仅在 Local 模式生效。
+// API 只注册本地认证请求路径；首用户引导由 Migrator 完成，周期维护由 Worker 完成。
 builder.Services.AddIngotLocalIdentity(builder.Configuration);
 builder.Services.AddIngotAgentCore(builder.Configuration);
 builder.Services.AddIngotAgentProviders(builder.Configuration);

@@ -4,21 +4,6 @@ using Microsoft.AspNetCore.Identity;
 
 namespace Ingot.Platform.Infrastructure.Identity;
 
-/// <summary>本地账户领域模型（不出 Infrastructure；对外用 Contracts.Identity 的 DTO）。</summary>
-public sealed record UserAccount
-{
-    public required Guid UserId { get; init; }
-    public required string Username { get; init; }
-    public required string UsernameLower { get; init; }
-    public string DisplayName { get; init; } = string.Empty;
-    public required string PasswordHash { get; init; }
-    public required IReadOnlyList<string> Roles { get; init; }
-    public IReadOnlyList<string> SiteIds { get; init; } = [];
-    public bool Disabled { get; init; }
-    public DateTimeOffset CreatedAt { get; init; }
-    public DateTimeOffset UpdatedAt { get; init; }
-}
-
 public sealed class LocalAuthOptions
 {
     public int SessionLifetimeHours { get; set; } = 12;

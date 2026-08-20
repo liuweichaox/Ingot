@@ -1,4 +1,5 @@
 using Ingot.Platform.Infrastructure.Events;
+using Ingot.Platform.Application.Events;
 using Microsoft.Extensions.Options;
 using Npgsql;
 

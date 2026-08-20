@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.Json;
 using Ingot.Contracts.ProcessConfiguration;
+using Ingot.Platform.Application.ProcessConfiguration;
 using Ingot.Domain.Events;
 using Ingot.Platform.Infrastructure.ProcessConfiguration;
 

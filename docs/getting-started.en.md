@@ -35,13 +35,13 @@ http://localhost:8000/health
 http://localhost:8100/ready
 ```
 
-Open `http://localhost:3000` and sign in with `INGOT_ADMIN_USERNAME` and `INGOT_ADMIN_PASSWORD` from `.env`. If `INGOT_ADMIN_PASSWORD` is empty, the system generates a random password only on the first startup with an empty user table. Find it in the API log:
+Open `http://localhost:3000` and sign in with `INGOT_ADMIN_USERNAME` and `INGOT_ADMIN_PASSWORD` from `.env`. If `INGOT_ADMIN_PASSWORD` is empty, the system generates a random password only during the first migration bootstrap with an empty user table. Find it in the Migrator log:
 
 ```bash
-docker compose -f docker-compose.app.yml logs platform-api
+docker compose -f docker-compose.app.yml logs platform-migrate
 ```
 
-The administrator is seeded only when the user table is empty. Changing the administrator password in `.env` later does not reset an existing account.
+The Migrator bootstraps the first administrator only when the user table is empty. Changing the administrator password in `.env` later does not reset an existing account.
 
 If the page is unavailable, run these two commands before rebuilding repeatedly or deleting volumes:
 

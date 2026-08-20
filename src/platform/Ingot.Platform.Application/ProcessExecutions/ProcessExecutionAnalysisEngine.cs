@@ -3,10 +3,10 @@ using System.Security.Cryptography;
 using System.Text;
 using Ingot.Contracts.Events;
 using Ingot.Contracts.ProcessConfiguration;
-using Ingot.Platform.Infrastructure.ProcessConfiguration;
-using Ingot.Platform.Infrastructure.TimeSeries;
+using Ingot.Platform.Application.ProcessConfiguration;
+using Ingot.Platform.Application.TimeSeries;
 
-namespace Ingot.Platform.Infrastructure.ProcessExecutions;
+namespace Ingot.Platform.Application.ProcessExecutions;
 
 public sealed class ProcessExecutionAnalysisEngine(
     IFeatureDefinitionRegistry? featureDefinitions = null)

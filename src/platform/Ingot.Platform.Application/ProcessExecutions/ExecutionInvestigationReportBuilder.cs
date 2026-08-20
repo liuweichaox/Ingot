@@ -1,7 +1,7 @@
 using Ingot.Contracts.Events;
-using Ingot.Platform.Infrastructure.ProcessConfiguration;
+using Ingot.Platform.Application.ProcessConfiguration;
 
-namespace Ingot.Platform.Infrastructure.ProcessExecutions;
+namespace Ingot.Platform.Application.ProcessExecutions;
 
 /// <summary>
 ///     将过程执行比较的确定性计算结果整理成稳定的调查契约。这里不调用语言模型，

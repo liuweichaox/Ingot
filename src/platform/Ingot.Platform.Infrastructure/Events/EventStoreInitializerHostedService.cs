@@ -1,3 +1,5 @@
+using Ingot.Platform.Application.Events;
+
 namespace Ingot.Platform.Infrastructure.Events;
 
 public sealed class EventStoreInitializerHostedService(IPlatformEventStore store) : IHostedService

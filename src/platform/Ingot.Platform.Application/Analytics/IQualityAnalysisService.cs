@@ -1,6 +1,6 @@
 using Ingot.Contracts.Analytics;
 
-namespace Ingot.Platform.Infrastructure.Analytics;
+namespace Ingot.Platform.Application.Analytics;
 
 public interface IQualityAnalysisService
 {

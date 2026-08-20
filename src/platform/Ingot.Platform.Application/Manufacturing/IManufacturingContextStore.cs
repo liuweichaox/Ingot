@@ -1,6 +1,6 @@
 using Ingot.Contracts.Manufacturing;
 
-namespace Ingot.Platform.Infrastructure.Manufacturing;
+namespace Ingot.Platform.Application.Manufacturing;
 
 public interface IManufacturingContextStore
 {

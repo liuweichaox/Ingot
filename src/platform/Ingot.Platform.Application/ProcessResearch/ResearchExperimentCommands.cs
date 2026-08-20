@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using Ingot.Contracts.ProcessConfiguration;
 using Ingot.Contracts.ProcessResearch;
+using Ingot.Platform.Application.ProcessConfiguration;
 
 namespace Ingot.Platform.Application.ProcessResearch;
 
@@ -96,7 +97,7 @@ public sealed partial class ResearchExperimentCommands(
             var unit = RequiredText(value.Unit, "实验变量单位", 40);
             var normalizedValue = value.Value;
             if (!string.Equals(unit, variable.Unit, StringComparison.OrdinalIgnoreCase) &&
-                !ResearchUnitConverter.TryConvert(value.Value, unit, variable.Unit, out normalizedValue))
+                !ProcessUnitConverter.TryConvert(value.Value, unit, variable.Unit, out normalizedValue))
                 throw new ProcessResearchRuleException(
                     $"实验变量 {code} 的单位必须与项目变量一致或可转换为 {variable.Unit}。 ");
             if (!double.IsFinite(normalizedValue) ||

@@ -1,4 +1,8 @@
 using Ingot.Platform.Application.Analytics;
+using Ingot.Platform.Application.Acquisition;
+using Ingot.Platform.Application.Events;
+using Ingot.Platform.Application.Insight;
+using Ingot.Platform.Application.Manufacturing;
 using Ingot.Platform.Application.ResearchAssets;
 using Ingot.Platform.Application.ProcessConfiguration;
 using Ingot.Agent;
@@ -97,8 +101,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ResearchContextAdmissionEvaluator>();
         services.AddSingleton<IDataReliabilityBaselineService, DataReliabilityBaselineService>();
 
-        services.AddSingleton<Insight.IGoldenQuestionStore, Insight.PostgresGoldenQuestionStore>();
-        services.AddSingleton<Insight.GoldenQuestionEvaluator>();
+        services.AddSingleton<IGoldenQuestionStore, Ingot.Platform.Infrastructure.Insight.PostgresGoldenQuestionStore>();
+        services.AddSingleton<GoldenQuestionEvaluator>();
 
         // 工艺数据模型、工艺规范版本与分析方案使用独立的版本化配置存储。
         services.AddSingleton<IProcessConfigurationStore, PostgresProcessConfigurationStore>();
@@ -134,6 +138,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IIngestionConfigurationStore, PostgresIngestionConfigurationStore>();
         services.AddSingleton<IAcquisitionProbeTaskStore, PostgresAcquisitionProbeTaskStore>();
         services.AddSingleton<AcquisitionProbeTaskCoordinator>();
+        services.AddSingleton<IngestionConfigurationWorkflow>();
 
         // 运行边界识别与存储
         services.AddSingleton<PostgresExecutionBoundaryStore>();

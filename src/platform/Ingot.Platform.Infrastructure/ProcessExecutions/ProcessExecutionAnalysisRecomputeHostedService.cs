@@ -1,3 +1,5 @@
+using Ingot.Platform.Application.ProcessExecutions;
+
 namespace Ingot.Platform.Infrastructure.ProcessExecutions;
 
 public sealed class ProcessExecutionAnalysisRecomputeHostedService(

@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using System.Text.Encodings.Web;
 using Ingot.Platform.Infrastructure.Identity;
+using Ingot.Platform.Application.Identity;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.Options;
 

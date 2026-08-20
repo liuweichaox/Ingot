@@ -1,6 +1,6 @@
 using Ingot.Domain.Events;
 
-namespace Ingot.Platform.Infrastructure.Events;
+namespace Ingot.Platform.Application.Events;
 
 /// <summary>
 ///     中心数据存储的查询条件。共享过滤字段见 <see cref="EventFilter" />；

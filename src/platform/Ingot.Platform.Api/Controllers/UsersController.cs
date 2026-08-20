@@ -1,4 +1,5 @@
 using Ingot.Platform.Api.Agents;
+using Ingot.Platform.Application.Identity;
 using Ingot.Contracts.Identity;
 using Ingot.Platform.Infrastructure.Identity;
 using Microsoft.AspNetCore.Mvc;

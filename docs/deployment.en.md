@@ -26,7 +26,7 @@ The bundled Compose file is a single-API reference topology, not an HA claim. Ag
 
 Every Edge ConnectorHost has an explicit `SiteId` assignment plus its own `EdgeId`, process or container, data volume, configuration cache, and lifecycle. `SiteId` is the production-cell boundary. Platform binds the Edge token, `EdgeId`, and `SiteId`, so even an Edge holding the correct token cannot write into another site.
 
-Production reads also fail closed on `SiteId`. The OIDC issuer must emit one or more `ingot:site` claims for non-administrator identities; local accounts receive site assignments through `POST /api/v1/users/{userId}:set-site-access`. A `platform.admin` may run cross-site administrative lists, but execution detail, analysis, and curve reads still require an explicit `siteId` to avoid resolving a same-named execution in another production cell.
+Production reads also fail closed on `SiteId`. The OIDC issuer must emit one or more `ingot:site` claims for non-administrator identities; platform administrators assign sites to local accounts in user management. A `platform.admin` may run cross-site administrative lists, but execution detail, analysis, and curve reads still require an explicit `siteId` to avoid resolving a same-named execution in another production cell.
 
 - Equipment on the same OT network that may stop together can share one Edge.
 - Separate Edge instances serve different VLANs, security zones, or physically isolated networks.
@@ -97,7 +97,7 @@ The first build downloads large SDK, PyTorch, and database images. Startup is co
 | Web is absent while API is healthy | `logs platform-web` | frontend build or Nginx configuration failed |
 | API repeatedly restarts | `logs platform-migrate`, `logs platform-api`, and `logs postgres` | database password, migration, directory permission, or production configuration validation failed |
 | Optimizer is unhealthy | `logs optimizer` and `/ready` | numerical Python dependencies are incomplete or failed to load |
-| Login password is unknown | `logs platform-api` | a random password is logged only when the first administrator is seeded with an empty configured password; existing accounts are not reset by editing `.env` |
+| Login password is unknown | `logs platform-migrate` | a random password is logged only when Migrator bootstraps the first administrator with an empty configured password; existing accounts are not reset by editing `.env` |
 | Port is already in use | `lsof -nP -iTCP:3000 -iTCP:8000 -iTCP:8100 -sTCP:LISTEN` | stop the conflicting process or deliberately change the Compose port mapping |
 
 Use `docker compose -f docker-compose.app.yml logs --tail=200 <service>` for one service. Preserve the full error during diagnosis instead of deleting containers, images, or volumes first.

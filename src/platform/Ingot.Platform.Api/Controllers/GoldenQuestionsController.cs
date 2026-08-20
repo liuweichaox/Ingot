@@ -1,7 +1,7 @@
 using Ingot.Agent;
 using Ingot.Contracts.Agents;
+using Ingot.Platform.Application.Insight;
 using Ingot.Platform.Api.Agents;
-using Ingot.Platform.Infrastructure.Insight;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Ingot.Platform.Api.Controllers;

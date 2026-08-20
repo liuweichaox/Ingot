@@ -2,7 +2,7 @@ using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 
-namespace Ingot.Platform.Infrastructure.ProcessExecutions;
+namespace Ingot.Platform.Application.ProcessExecutions;
 
 /// <summary>
 ///     Versioned policy inputs for execution comparison and evidence grading. These values preserve

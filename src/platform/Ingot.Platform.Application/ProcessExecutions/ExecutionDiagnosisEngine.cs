@@ -2,7 +2,7 @@ using System.Globalization;
 using System.Text.Json;
 using Ingot.Contracts.Events;
 
-namespace Ingot.Platform.Infrastructure.ProcessExecutions;
+namespace Ingot.Platform.Application.ProcessExecutions;
 
 /// <summary>
 ///     过程执行级观察性诊断引擎。它统一评估实际控制参数与过程轨迹特征，

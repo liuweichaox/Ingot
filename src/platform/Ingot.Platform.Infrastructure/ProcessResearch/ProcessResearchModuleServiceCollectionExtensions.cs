@@ -1,4 +1,5 @@
 using Ingot.Platform.Application.ProcessResearch;
+using Ingot.Platform.Application.ResearchAssets;
 using Microsoft.Extensions.Options;
 
 namespace Ingot.Platform.Infrastructure.ProcessResearch;
@@ -10,6 +11,7 @@ public static class ProcessResearchModuleServiceCollectionExtensions
         IConfiguration configuration)
     {
         services.AddSingleton<IProcessResearchStore, PostgresProcessResearchStore>();
+        services.AddSingleton<IResearchProjectContextReader, ResearchProjectContextReader>();
         services.AddSingleton<ResearchExperimentValidationService>();
         services.AddSingleton<ResearchExperimentCommandStoreAdapter>();
         services.AddSingleton<IResearchExperimentCommandStore>(provider =>
