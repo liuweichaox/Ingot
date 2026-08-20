@@ -6,9 +6,8 @@ using Ingot.Contracts.ProcessResearch;
 namespace Ingot.Platform.Application.ProcessResearch;
 
 /// <summary>
-///     Freezes a production-equivalent replay over real, already observed processSpecification conditions.
-///     Replicates are aggregated before replay because the candidate-pool evaluator must never
-///     pretend that the same processSpecification is a new optimization choice.
+///     基于真实且已经观测到的工艺规范条件，冻结一份与生产路径等价的回放。
+///     回放前聚合重复条件，避免候选池评估器把相同工艺规范伪装成新的优化选择。
 /// </summary>
 public sealed class ResearchHistoricalReplayService(
     IProcessResearchStore store,

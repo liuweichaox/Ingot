@@ -17,6 +17,7 @@ public static class ProcessModelStatuses
     public static bool IsValid(string? value)
         => value is Draft or Validated or Active or Suspended or Retired;
 }
+
 public static class KnowledgeSourceStatuses
 {
     public const string Uploaded = "uploaded";
@@ -29,7 +30,7 @@ public static class KnowledgeSourceStatuses
 }
 
 /// <summary>
-/// Immutable description of the exact records used to train or calibrate a model.
+///     用于训练或校准模型的精确记录集合的不可变说明。
 /// </summary>
 public sealed record TrainingDatasetVersion
 {

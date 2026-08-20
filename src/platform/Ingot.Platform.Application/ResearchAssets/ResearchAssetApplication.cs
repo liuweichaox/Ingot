@@ -2,7 +2,7 @@ using Ingot.Contracts.ResearchAssets;
 
 namespace Ingot.Platform.Application.ResearchAssets;
 
-/// <summary>Application boundary for research-asset delivery adapters.</summary>
+/// <summary>研发资产交付适配器的应用层边界。</summary>
 public sealed class ResearchAssetApplication(IResearchAssetStore assets)
 {
     public Task<IReadOnlyList<TrainingDatasetVersion>> ListDatasetsAsync(CancellationToken ct = default)

@@ -56,6 +56,13 @@ During implementation:
 - include deterministic seeds, baselines, and reproducible evaluation for algorithms;
 - keep UI in process-engineering language and avoid raw JSON editors.
 
+Code and comment style:
+
+- follow the root `.editorconfig`: use four spaces for C# and Python, two spaces for JavaScript, JSX, JSON, YAML, and shell, plus UTF-8, LF, and a final newline;
+- keep comment language consistent within each file: default new C# business and contract code to Chinese explanations, retain English docstrings in the Optimizer Python module, and preserve protocol names, configuration keys, and code identifiers verbatim;
+- use comments for business constraints, design rationale, failure boundaries, or non-obvious invariants; do not narrate each line or retain dead commented-out code;
+- use XML documentation when a public C# type or member needs explanation and docstrings for public Python modules or functions; punctuate complete sentences consistently.
+
 Before submitting:
 
 ```bash

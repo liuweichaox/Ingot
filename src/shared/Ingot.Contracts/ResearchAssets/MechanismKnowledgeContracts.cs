@@ -59,8 +59,8 @@ public sealed record MechanismForbiddenCombinationFactor
 }
 
 /// <summary>
-///     A conjunction of factor ranges that must never be proposed. Each factor must match
-///     for the combination to be forbidden; individual factors do not narrow the campaign alone.
+///     永远不得建议的一组参数范围合取条件。只有所有参数同时匹配时才禁止该组合；
+///     单个参数范围不会独立收窄实验域。
 /// </summary>
 public sealed record MechanismForbiddenCombination
 {

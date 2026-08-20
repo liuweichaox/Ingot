@@ -2,8 +2,8 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using Ingot.Contracts.ProcessResearch;
 using Ingot.Contracts.ResearchAssets;
-using Ingot.Platform.Application.ResearchAssets;
 using Ingot.Platform.Application.ProcessConfiguration;
+using Ingot.Platform.Application.ResearchAssets;
 
 namespace Ingot.Platform.Application.ProcessResearch;
 

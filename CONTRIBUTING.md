@@ -56,6 +56,13 @@ git checkout -b feature/short-description
 - 算法变化提供确定种子、基线和可复现评估；
 - UI 保持工艺工程师语言，不暴露原始 JSON 编辑器。
 
+代码与注释风格：
+
+- 遵循仓库根目录 `.editorconfig`：C# 与 Python 使用 4 空格，JavaScript、JSX、JSON、YAML 与 Shell 使用 2 空格；统一 UTF-8、LF 和文件末尾换行；
+- 同一文件内保持注释语言一致；新增的 C# 业务与契约代码默认使用中文说明，Optimizer Python 模块沿用英文 Docstring，协议名、配置键和代码标识保持原文；
+- 注释说明业务约束、设计原因、失败边界或不明显的不变量，不逐行复述代码，也不保留已失效的注释代码；
+- C# 公共类型或成员需要说明时使用 XML 文档注释，Python 公共模块或函数需要说明时使用 Docstring；完整句子使用一致的标点。
+
 提交前运行：
 
 ```bash

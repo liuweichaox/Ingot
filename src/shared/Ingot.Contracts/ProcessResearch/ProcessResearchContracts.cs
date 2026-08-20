@@ -775,7 +775,7 @@ public sealed record ResearchShadowStopSignal
 public sealed record ResearchShadowCampaignReport
 {
     public Guid ProjectId { get; init; }
-    /// <summary>Missing in historical payloads means the thresholds predated policy versioning.</summary>
+    /// <summary>历史载荷缺少该值时，表示阈值早于策略版本化机制。</summary>
     public string ValidationPolicyVersion { get; init; } = "not-evaluated";
     public string MechanismKnowledgeSnapshotHash { get; init; } = "none";
     public int TotalRecommendations { get; init; }
@@ -885,7 +885,7 @@ public sealed record ResearchHistoricalReplayReport
 {
     public Guid ReportId { get; init; }
     public Guid ProjectId { get; init; }
-    /// <summary>Missing in historical payloads means the thresholds predated policy versioning.</summary>
+    /// <summary>历史载荷缺少该值时，表示阈值早于策略版本化机制。</summary>
     public string ValidationPolicyVersion { get; init; } = "not-evaluated";
     public string MechanismKnowledgeSnapshotHash { get; init; } = "none";
     public string MechanismModelSnapshotHash { get; init; } = "none";
@@ -901,7 +901,7 @@ public sealed record ResearchHistoricalReplayReport
     public required ResearchReplayMethodSummary Random { get; init; }
     public ResearchReplayMethodSummary? ResponseSurface { get; init; }
     public IReadOnlyList<string> BaselineMethods { get; init; } = [];
-    /// <summary>Historical payloads without this value predate preregistered baselines.</summary>
+    /// <summary>历史载荷缺少该值时，表示记录早于预注册基线机制。</summary>
     public string PreregistrationHash { get; init; } = "not-registered";
     public double? PredictionIntervalCoverage { get; init; }
     public int PredictionIntervalChecks { get; init; }
@@ -926,7 +926,7 @@ public sealed record ResearchHistoricalReplayReport
 /// </summary>
 public sealed record ResearchOnlineAdmissionEvidence
 {
-    /// <summary>Missing in historical payloads means the thresholds predated policy versioning.</summary>
+    /// <summary>历史载荷缺少该值时，表示阈值早于策略版本化机制。</summary>
     public string ValidationPolicyVersion { get; init; } = "not-evaluated";
     public string MechanismKnowledgeSnapshotHash { get; init; } = "none";
     public bool Eligible { get; init; }

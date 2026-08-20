@@ -7,9 +7,8 @@ using Ingot.Contracts.ResearchAssets;
 namespace Ingot.Platform.Application.ProcessResearch;
 
 /// <summary>
-/// Turns the immutable observations already attached to experiment results into
-/// the next ordinary experiment plan. The existing experiment approval and
-/// execution state machine remains the only business workflow.
+///     将实验结果中已经固化的不可变观测转换为下一份普通实验计划。
+///     现有实验审批和执行状态机仍是唯一业务流程。
 /// </summary>
 public sealed class ResearchExperimentOptimizer(
     IProcessResearchStore store,
