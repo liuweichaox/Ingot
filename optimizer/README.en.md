@@ -21,7 +21,7 @@ See the [system design](../docs/design.en.md) for boundaries and [analysis and o
 - Stateless `POST /v1/suggestions` HTTP contract
 - Synthetic digital-twin demonstration
 
-The NumPy/SciPy GP remains a cold-start and regression baseline. The production path uses BoTorch after three valid observations.
+The NumPy/SciPy GP remains a cold-start and regression baseline. Online suggestions, historical replay, and synthetic replay all use one engine-selection entry point: fewer than three valid observations use the sequential cold start and may apply NumPy GP priors; three or more use BoTorch. Every caller relies on the selected engine's `suggest` path to enforce measured outcome-safety constraints and must not instantiate a concrete engine directly.
 
 ## Local validation
 
@@ -71,4 +71,6 @@ The .NET platform turns the returned batch into an ordinary `ResearchExperiment`
 
 ## Historical validation
 
-Use `replay_history_pool` for real history. It measures whether the model ranks successful parameter settings earlier among parameter settings that were actually run. It does not invent outcomes for untried parameter settings and cannot by itself prove prospective trial savings. Aggregate repeated parameter settings with a predefined statistical method before replay.
+Use `replay_history_pool` for real history. Every row must contain a finite numeric `occurred_at`, and rows must be strictly increasing in time. Missing, duplicate, or out-of-order timestamps are rejected rather than silently sorted, preserving the no-future-leakage contract. Replay measures whether the model ranks successful parameter settings earlier among parameter settings that were actually run. It does not invent outcomes for untried parameter settings and cannot by itself prove prospective trial savings. Aggregate repeated parameter settings with a predefined statistical method before replay.
+
+Synthetic replay truth functions must return `{"outcomes": {...}, "constraint_outcomes": {...}, "process_features": {...}}` whenever the campaign declares outcome constraints; `process_features` is optional. The legacy outcomes-only mapping remains compatible only for campaigns without outcome constraints. A synthetic run succeeds only when its objectives and every outcome-safety constraint pass.

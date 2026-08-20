@@ -7,6 +7,7 @@ public sealed record ExecutionSelectionComparisonRequest
     public required string BaselineProcessExecutionId { get; init; }
 
     public IReadOnlyList<string> ProcessExecutionIds { get; init; } = [];
+    public IReadOnlyList<string> AdditionalKnownUnmeasuredConfounders { get; init; } = [];
 }
 
 public sealed record ExecutionComparisonResult
@@ -76,6 +77,11 @@ public sealed record ExecutionDiagnosisSummary
     public int FoldCount { get; init; }
     public int StabilityRuns { get; init; }
     public IReadOnlyList<string> ContextVariables { get; init; } = [];
+    public IReadOnlyList<string> AdjustedContextVariables { get; init; } = [];
+    public ExecutionAnalysisReadiness Readiness { get; init; } = new();
+    public IReadOnlyList<string> ObservedPossibleConfounders { get; init; } = [];
+    public IReadOnlyList<ExecutionConfounderDisclosure> KnownUnmeasuredConfounders { get; init; } = [];
+    public ExecutionSensitivityAssessment SensitivityAssessment { get; init; } = new();
     public string EvidenceLevel { get; init; } = "insufficient";
     public int PassProcessExecutionCount { get; init; }
     public int FailProcessExecutionCount { get; init; }
@@ -84,6 +90,27 @@ public sealed record ExecutionDiagnosisSummary
     public IReadOnlyList<ExecutionCauseCandidate> Candidates { get; init; } = [];
     public IReadOnlyList<ExecutionCauseInteraction> Interactions { get; init; } = [];
     public IReadOnlyList<string> Limitations { get; init; } = [];
+}
+
+public sealed record ExecutionAnalysisReadiness
+{
+    public string Mode { get; init; } = "descriptive-only";
+    public IReadOnlyList<string> BlockingReasons { get; init; } = [];
+}
+
+public sealed record ExecutionConfounderDisclosure
+{
+    public required string Code { get; init; }
+    public required string Name { get; init; }
+    public string? Description { get; init; }
+    public string Source { get; init; } = "analysis-plan";
+}
+
+public sealed record ExecutionSensitivityAssessment
+{
+    public string Status { get; init; } = "not-estimable";
+    public string Reason { get; init; } =
+        "当前模型没有可解释的风险比效应估计和置信区间，不能计算混杂敏感性数值。";
 }
 
 public sealed record ExecutionInvestigationReport

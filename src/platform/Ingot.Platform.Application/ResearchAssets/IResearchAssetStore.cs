@@ -9,20 +9,32 @@ public interface IResearchAssetStore
     Task<TrainingDatasetVersion> AddDatasetAsync(TrainingDatasetVersion value, CancellationToken ct = default);
     Task<TrainingDatasetVersion?> GetDatasetAsync(string datasetId, int version, CancellationToken ct = default);
     Task<IReadOnlyList<TrainingDatasetVersion>> ListDatasetsAsync(CancellationToken ct = default);
+    async Task<ResearchAssetPage<TrainingDatasetVersion>> ListDatasetsPageAsync(
+        int limit, string? cursor, CancellationToken ct = default)
+        => new() { Data = (await ListDatasetsAsync(ct).ConfigureAwait(false)).Take(limit).ToArray() };
 
     Task<ProcessModelVersion> SaveModelAsync(ProcessModelVersion value, CancellationToken ct = default);
     Task<ProcessModelVersion?> GetModelAsync(string modelId, int version, CancellationToken ct = default);
     Task<IReadOnlyList<ProcessModelVersion>> ListModelsAsync(CancellationToken ct = default);
+    async Task<ResearchAssetPage<ProcessModelVersion>> ListModelsPageAsync(
+        int limit, string? cursor, CancellationToken ct = default)
+        => new() { Data = (await ListModelsAsync(ct).ConfigureAwait(false)).Take(limit).ToArray() };
     Task<ModelEvaluation> AddEvaluationAsync(ModelEvaluation value, CancellationToken ct = default);
     Task<IReadOnlyList<ModelEvaluation>> ListEvaluationsAsync(
         string modelId,
         int version,
         CancellationToken ct = default);
+    async Task<ResearchAssetPage<ModelEvaluation>> ListEvaluationsPageAsync(
+        string modelId, int version, int limit, string? cursor, CancellationToken ct = default)
+        => new() { Data = (await ListEvaluationsAsync(modelId, version, ct).ConfigureAwait(false)).Take(limit).ToArray() };
     Task<ModelDriftReading> AddDriftReadingAsync(ModelDriftReading value, CancellationToken ct = default);
     Task<IReadOnlyList<ModelDriftReading>> ListDriftReadingsAsync(
         string modelId,
         int version,
         CancellationToken ct = default);
+    async Task<ResearchAssetPage<ModelDriftReading>> ListDriftReadingsPageAsync(
+        string modelId, int version, int limit, string? cursor, CancellationToken ct = default)
+        => new() { Data = (await ListDriftReadingsAsync(modelId, version, ct).ConfigureAwait(false)).Take(limit).ToArray() };
 
     Task<MechanismModelVersion> SaveMechanismModelAsync(
         MechanismModelVersion value,
@@ -36,6 +48,9 @@ public interface IResearchAssetStore
     Task<IReadOnlyList<MechanismModelVersion>> ListMechanismModelsAsync(
         CancellationToken ct = default)
         => Task.FromResult<IReadOnlyList<MechanismModelVersion>>([]);
+    async Task<ResearchAssetPage<MechanismModelVersion>> ListMechanismModelsPageAsync(
+        int limit, string? cursor, CancellationToken ct = default)
+        => new() { Data = (await ListMechanismModelsAsync(ct).ConfigureAwait(false)).Take(limit).ToArray() };
     Task<MechanismFusionDefinition> SaveMechanismFusionAsync(
         MechanismFusionDefinition value,
         CancellationToken ct = default)
@@ -48,6 +63,9 @@ public interface IResearchAssetStore
     Task<IReadOnlyList<MechanismFusionDefinition>> ListMechanismFusionsAsync(
         CancellationToken ct = default)
         => Task.FromResult<IReadOnlyList<MechanismFusionDefinition>>([]);
+    async Task<ResearchAssetPage<MechanismFusionDefinition>> ListMechanismFusionsPageAsync(
+        int limit, string? cursor, CancellationToken ct = default)
+        => new() { Data = (await ListMechanismFusionsAsync(ct).ConfigureAwait(false)).Take(limit).ToArray() };
     Task<DatasetQualityValidationReport> SaveDatasetQualityValidationReportAsync(
         DatasetQualityValidationReport value,
         CancellationToken ct = default)
@@ -55,6 +73,9 @@ public interface IResearchAssetStore
     Task<IReadOnlyList<DatasetQualityValidationReport>> ListDatasetQualityValidationReportsAsync(
         CancellationToken ct = default)
         => Task.FromResult<IReadOnlyList<DatasetQualityValidationReport>>([]);
+    async Task<ResearchAssetPage<DatasetQualityValidationReport>> ListDatasetQualityValidationReportsPageAsync(
+        int limit, string? cursor, CancellationToken ct = default)
+        => new() { Data = (await ListDatasetQualityValidationReportsAsync(ct).ConfigureAwait(false)).Take(limit).ToArray() };
 
     Task<KnowledgeSource> AddKnowledgeSourceAsync(
         Stream content,
@@ -67,6 +88,9 @@ public interface IResearchAssetStore
         CancellationToken ct = default);
     Task<KnowledgeSource?> GetKnowledgeSourceAsync(Guid sourceId, CancellationToken ct = default);
     Task<IReadOnlyList<KnowledgeSource>> ListKnowledgeSourcesAsync(CancellationToken ct = default);
+    async Task<ResearchAssetPage<KnowledgeSource>> ListKnowledgeSourcesPageAsync(
+        Guid projectId, int limit, string? cursor, CancellationToken ct = default)
+        => new() { Data = (await ListKnowledgeSourcesAsync(projectId, ct).ConfigureAwait(false)).Take(limit).ToArray() };
     async Task<IReadOnlyList<KnowledgeSource>> ListKnowledgeSourcesAsync(
         Guid projectId,
         CancellationToken ct = default)

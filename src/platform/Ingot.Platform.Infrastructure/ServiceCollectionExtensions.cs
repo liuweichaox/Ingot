@@ -93,6 +93,7 @@ public static class ServiceCollectionExtensions
         // 跨上下文的生产事件读取适配器属于 Platform 集成基础设施；检验模块自己的
         // PostgreSQL 适配器由宿主通过 AddIngotInspectionInfrastructure 独立组合。
         services.AddSingleton<IInspectionProductionEventReader, InspectionProductionEventReader>();
+        services.AddSingleton<ExecutionComparisonMetrics>();
         services.AddSingleton<IExecutionComparisonService, ExecutionComparisonService>();
         services.AddSingleton<ITimeWindowComparisonService, TimeWindowComparisonService>();
         services.AddSingleton<IProcessExecutionService, ProcessExecutionService>();
@@ -123,6 +124,9 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IMechanismKnowledgeStore, PostgresMechanismKnowledgeStore>();
         services.AddSingleton<MechanismKnowledgeService>();
         services.AddSingleton<MechanismKnowledgeQueries>();
+        services.AddSingleton<MechanismClaimDraftService>();
+        services.AddHttpClient("mechanism-draft-generation");
+        services.AddSingleton<IMechanismClaimDraftGenerator, OpenAiCompatibleMechanismClaimDraftGenerator>();
         services.AddSingleton<IKnowledgeContentExtractor, PdfKnowledgeExtractor>();
         services.AddSingleton<IKnowledgeContentExtractor, ExcelKnowledgeExtractor>();
         services.AddSingleton<IKnowledgeContentExtractor, PlainTextKnowledgeExtractor>();

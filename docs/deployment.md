@@ -65,6 +65,8 @@ cp .env.example .env
 
 启用 Chat 时，模型服务应提供 OpenAI-compatible `/v1` 接口。配置 `INGOT_CHAT_BASE_URL`、`INGOT_CHAT_FAST_MODEL`、`INGOT_CHAT_REASONING_MODEL` 和 `OPENAI_API_KEY`。Platform 只在配置的模型标识可用时启用相应角色。
 
+机理知识语义草稿默认关闭。需要时显式设置 `INGOT_MECHANISM_DRAFT_ENABLED=true`、`INGOT_MECHANISM_DRAFT_BASE_URL`、`INGOT_MECHANISM_DRAFT_MODEL` 和 `OPENAI_API_KEY`；启用前必须确认知识片段可发送到该服务所在区域。该能力只返回可编辑草稿，不自动持久化、审核或激活声明。
+
 模型服务不是采集、检验或数值优化的启动依赖。发送给模型的内容必须经过授权工具和业务权限控制。
 
 ## 启动与停止

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
 import { getJson, postJson } from "../api/http";
 import { extractRows, useApi } from "../hooks/useApi";
-import { Alert, Badge, Button, Card, ConclusionBoundary, DataTable, EmptyState, EvidenceLevel, Field, Input, Metric, Page, Select, StatusBadge, notify } from "../ui/components";
+import { Alert, Badge, Button, Card, ConclusionBoundary, DataTable, EmptyState, EvidenceLevel, Field, Input, Metric, Page, Select, StatusBadge, Textarea, notify } from "../ui/components";
 import { contextFieldLabel, formatTime, formatInteger, formatDuration, objectTypeLabel, LoadingCard } from "./shared";
 
 const comparisonFeatureLabels = {
@@ -20,6 +20,13 @@ const comparisonContextLabels = {
   process_specification_id: "工艺规范",
   material_lot_ref: "材料批次",
   recipe_id: "配方",
+};
+
+const readinessBlockingReasonLabels = {
+  "quality-outcomes-missing": "质量结果尚未与运行关联",
+  "outcome-class-missing": "合格或不合格类别样本不足",
+  "effective-weight-insufficient": "有效证据权重不足",
+  "process-data-unavailable": "部分运行的过程数据不可用",
 };
 
 function formatDecimal(value) {
@@ -51,6 +58,34 @@ function MatchingContext({ value }) {
   );
 }
 
+export function AnalysisReadinessCard({ diagnosis = {} }) {
+  const readiness = diagnosis.readiness || { mode: "descriptive-only", blockingReasons: [] };
+  return (
+    <Card title="分析就绪度" description="数据不足时只展示描述性事实，不生成候选原因。">
+      <div className="grid gap-3 md:grid-cols-3">
+        <Metric label="当前模式" value={{
+          "descriptive-only": "仅描述性统计",
+          exploratory: "探索性候选",
+          "candidate-ranking": "候选排序",
+        }[readiness.mode] || "仅描述性统计"} />
+        <Metric label="已调整上下文" value={(diagnosis.adjustedContextVariables || []).length} hint={(diagnosis.adjustedContextVariables || []).map(contextFieldLabel).join("、") || "未启用"} />
+        <Metric label="混杂敏感性" value="暂不可估" hint={diagnosis.sensitivityAssessment?.reason || "缺少可解释的风险比和置信区间"} />
+      </div>
+      {(readiness.blockingReasons || []).length > 0 && (
+        <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-amber-800">
+          {readiness.blockingReasons.map(reason => <li key={reason}>{readinessBlockingReasonLabels[reason] || reason}</li>)}
+        </ul>
+      )}
+      {(diagnosis.observedPossibleConfounders || []).length > 0 && (
+        <p className="mt-3 text-sm text-slate-700">已观测到的组间不平衡：{diagnosis.observedPossibleConfounders.map(contextFieldLabel).join("、")}</p>
+      )}
+      {(diagnosis.knownUnmeasuredConfounders || []).length > 0 && (
+        <p className="mt-3 text-sm text-slate-700">已知但未记录：{diagnosis.knownUnmeasuredConfounders.map(item => item.name).join("、")}</p>
+      )}
+    </Card>
+  );
+}
+
 export function ExecutionComparisonPage() {
   const [params] = useSearchParams();
   const requestedSiteId = params.get("siteId") || "";
@@ -66,6 +101,7 @@ export function ExecutionComparisonPage() {
   const [executionFilter, setProcessExecutionFilter] = useState("");
   const [researchProjects, setResearchProjects] = useState([]);
   const [researchProjectId, setResearchProjectId] = useState("");
+  const [additionalConfounders, setAdditionalConfounders] = useState("");
   useEffect(() => {
     let mounted = true;
     getJson("/api/v1/research-projects?limit=100").then(projectPayload => {
@@ -160,12 +196,19 @@ export function ExecutionComparisonPage() {
     try {
       const baselineProcessExecutionId = baseline.trim();
       const siteId = baselineProcessExecution?.siteId || requestedSiteId;
+      const knownUnmeasuredConfounders = additionalConfounders
+        .split(/[\n,，]+/)
+        .map(value => value.trim())
+        .filter(Boolean);
       if (comparisonScope === "cohort") {
-        setResult(await getJson(`/api/v1/execution-comparisons/${encodeURIComponent(baselineProcessExecutionId)}?limit=24&siteId=${encodeURIComponent(siteId)}`));
+        const query = new URLSearchParams({ limit: "24", siteId });
+        knownUnmeasuredConfounders.forEach(value => query.append("knownUnmeasuredConfounder", value));
+        setResult(await getJson(`/api/v1/execution-comparisons/${encodeURIComponent(baselineProcessExecutionId)}?${query}`));
       } else {
         setResult(await postJson(`/api/v1/execution-comparisons?siteId=${encodeURIComponent(siteId)}`, {
           baselineProcessExecutionId,
           processExecutionIds: [baselineProcessExecutionId, candidate],
+          additionalKnownUnmeasuredConfounders: knownUnmeasuredConfounders,
         }));
       }
     } catch (requestError) {
@@ -213,7 +256,9 @@ export function ExecutionComparisonPage() {
       return rightScore - leftScore;
     })
     .slice(0, 30), [result]);
-  const causeRows = useMemo(() => (result?.diagnosis?.candidates || [])
+  const causeRows = useMemo(() => (result?.diagnosis?.readiness?.mode === "descriptive-only"
+    ? []
+    : result?.diagnosis?.candidates || [])
     .map(candidate => ({
       ...candidate,
       sourceLabel: candidate.sourceKind === "control-parameter" ? "实际工艺规范" : "过程轨迹",
@@ -245,6 +290,11 @@ export function ExecutionComparisonPage() {
           {comparisonScope === "single" ? <Field label="对比运行" hint={baselineProcessExecution?.productFamilyCode ? `仅显示产品系列“${baselineProcessExecution.productFamilyCode}”的运行。` : baselineProcessExecution ? `该运行未标注产品系列，暂按设备“${baselineProcessExecution.equipmentId || "未标注"}”筛选。` : "正在读取基准运行。"}><Select value={candidate} onChange={event => setCandidate(event.target.value)} required disabled={!baselineProcessExecution || catalogLoading}><option value="">选择同类运行</option>{comparableProcessExecutions.map(execution => <option key={execution.executionId} value={execution.executionId}>{executionLabel(execution)}</option>)}</Select></Field> : <div className="self-end rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm leading-5 text-slate-600">系统最多选择 24 个同产品历史运行，并保留质量覆盖和数据完整性证据。</div>}
           <Button variant="primary" type="submit" className="min-h-10 self-end" disabled={busy || !comparisonReady || (comparisonScope === "single" && !candidate)}>{busy ? "正在对比…" : "生成对比结论"}</Button>
         </form>
+        <div className="mt-3">
+          <Field label="本次补充的潜在未测量混杂因素" hint="例如操作员、环境波动；每行一项。系统会与分析方案默认清单合并并写入本次结果快照。">
+            <Textarea rows={2} value={additionalConfounders} onChange={event => setAdditionalConfounders(event.target.value)} placeholder={"操作员经验\n环境温湿度波动"} />
+          </Field>
+        </div>
         {catalogLoading && <p className="mt-3 text-sm text-slate-500">正在读取可比较的已完成运行…</p>}
         {!catalogLoading && executions.length === 0 && <Alert tone="warning" title="还没有已完成运行">完成生产准备并积累至少两次运行后，即可开始对比。</Alert>}
         {!catalogLoading && baselineProcessExecution && (
@@ -266,6 +316,7 @@ export function ExecutionComparisonPage() {
               ? `已找到 ${firstDeviationRows.length} 个优先偏离和 ${causeRows.length} 个候选原因，可以进入受控验证。`
               : `对比计算已成功，但当前只能作为探索性证据。${(investigation?.missingData || []).length ? ` 还缺少：${investigation.missingData.join("；")}` : " 需要更多质量结果和重复运行。"}`}
           </Alert>
+          <AnalysisReadinessCard diagnosis={result.diagnosis} />
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
             <Metric label="产品系列" value={result.productFamilyCode || "—"} valueClassName="text-2xl" />
             <Metric label="参与对比" value={result.acceptance?.executionCount ?? comparedProcessExecutions.length} hint="条生产运行" />
@@ -340,7 +391,7 @@ export function ExecutionComparisonPage() {
           <Card title="将追因结果带入研发" description="系统只把有证据的关联转为候选假设；因果关系仍需后续受控实验验证。">
             <div className="grid gap-3 md:grid-cols-[1fr_auto]">
               <Field label="研发项目"><Select value={researchProjectId} onChange={event => setResearchProjectId(event.target.value)}><option value="">选择研发项目</option>{researchProjects.filter(item => !["completed", "archived"].includes(item.status)).map(item => <option key={item.projectId} value={item.projectId}>{item.name}</option>)}</Select></Field>
-              <Button className="self-end" disabled={!researchProjectId || busy} onClick={createHypotheses}>生成候选假设</Button>
+              <Button className="self-end" disabled={!researchProjectId || busy || result.diagnosis?.readiness?.mode === "descriptive-only"} onClick={createHypotheses}>生成候选假设</Button>
             </div>
           </Card>
           <Card title="质量候选原因" description="同时比较实际控制参数与过程轨迹特征；优先选择能直接映射到可控变量的候选原因。">
@@ -376,6 +427,9 @@ export function ExecutionComparisonPage() {
                       {(candidate.possibleConfounders || []).length
                         ? ` 当前可能受${candidate.confoundersLabel}混杂，必须通过受控实验拆解。`
                         : " 当前未识别出明确混杂因素，仍需经过受控重复实验验证。"}
+                      {(result.diagnosis?.knownUnmeasuredConfounders || []).length
+                        ? ` 已知但本次未记录的因素包括：${result.diagnosis.knownUnmeasuredConfounders.map(item => item.name).join("、")}。`
+                        : ""}
                     </ConclusionBoundary>
                   ))}
                 </div>

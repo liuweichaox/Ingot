@@ -12,6 +12,7 @@ namespace Ingot.Platform.Api.Controllers;
 public sealed class MechanismKnowledgeController(
     MechanismKnowledgeQueries store,
     MechanismKnowledgeService service,
+    MechanismClaimDraftService draftService,
     ProcessResearchQueries researchStore,
     PlatformUserResolver userResolver) : PlatformApiController
 {
@@ -40,6 +41,18 @@ public sealed class MechanismKnowledgeController(
         var access = await ResolveAccessAsync(projectId, true, ct).ConfigureAwait(false);
         if (access.Result is not null) return access.Result;
         return await ExecuteAsync(() => service.SaveDraftAsync(
+            projectId, request, access.Identity!.UserId, ct)).ConfigureAwait(false);
+    }
+
+    [HttpPost("draft-from-source")]
+    public async Task<IActionResult> GenerateDraft(
+        Guid projectId,
+        [FromBody] MechanismClaimDraftGenerationRequest request,
+        CancellationToken ct)
+    {
+        var access = await ResolveAccessAsync(projectId, true, ct).ConfigureAwait(false);
+        if (access.Result is not null) return access.Result;
+        return await ExecuteAsync(() => draftService.GenerateAsync(
             projectId, request, access.Identity!.UserId, ct)).ConfigureAwait(false);
     }
 

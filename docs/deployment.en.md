@@ -61,6 +61,8 @@ Never commit `.env` or real equipment credentials. Inject device passwords and c
 
 When Chat is enabled, the model service provides an OpenAI-compatible `/v1` interface. Configure `INGOT_CHAT_BASE_URL`, `INGOT_CHAT_FAST_MODEL`, `INGOT_CHAT_REASONING_MODEL`, and `OPENAI_API_KEY`. Platform enables a role only when its configured model ID is available.
 
+Model-assisted mechanism drafts are disabled by default. When required, explicitly set `INGOT_MECHANISM_DRAFT_ENABLED=true`, `INGOT_MECHANISM_DRAFT_BASE_URL`, `INGOT_MECHANISM_DRAFT_MODEL`, and `OPENAI_API_KEY`, and first confirm that knowledge fragments may be sent to that service region. The capability returns an editable draft only; it never persists, reviews, or activates a claim automatically.
+
 The model service is not a startup dependency for acquisition, inspection, or numerical optimization. Content sent to it remains subject to authorized tools and business permissions.
 
 ## Start and stop

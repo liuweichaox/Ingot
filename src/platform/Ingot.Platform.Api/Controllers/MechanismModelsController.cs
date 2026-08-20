@@ -13,9 +13,14 @@ public sealed class MechanismModelsController(
     PlatformUserResolver userResolver) : PlatformConfigurationControllerBase(userResolver)
 {
     [HttpGet]
-    public async Task<IActionResult> List(CancellationToken ct)
-        => DeniedResearchAssetRead() ??
-           Ok(new { data = await store.ListMechanismModelsAsync(ct).ConfigureAwait(false) });
+    public async Task<IActionResult> List(
+        [FromQuery] int limit = 200, [FromQuery] string? cursor = null, CancellationToken ct = default)
+    {
+        var denied = DeniedResearchAssetRead();
+        if (denied is not null) return denied;
+        if (limit is < 1 or > 200) return InvalidRequest("limit 必须在 1 到 200 之间。");
+        return Ok(await store.ListMechanismModelsPageAsync(limit, cursor, ct).ConfigureAwait(false));
+    }
 
     [HttpGet("{modelId}/{version:int}")]
     public async Task<IActionResult> Get(string modelId, int version, CancellationToken ct)
@@ -79,9 +84,14 @@ public sealed class MechanismFusionsController(
     PlatformUserResolver userResolver) : PlatformConfigurationControllerBase(userResolver)
 {
     [HttpGet]
-    public async Task<IActionResult> List(CancellationToken ct)
-        => DeniedResearchAssetRead() ??
-           Ok(new { data = await store.ListMechanismFusionsAsync(ct).ConfigureAwait(false) });
+    public async Task<IActionResult> List(
+        [FromQuery] int limit = 200, [FromQuery] string? cursor = null, CancellationToken ct = default)
+    {
+        var denied = DeniedResearchAssetRead();
+        if (denied is not null) return denied;
+        if (limit is < 1 or > 200) return InvalidRequest("limit 必须在 1 到 200 之间。");
+        return Ok(await store.ListMechanismFusionsPageAsync(limit, cursor, ct).ConfigureAwait(false));
+    }
 
     [HttpGet("{fusionId}/{version:int}")]
     public async Task<IActionResult> Get(string fusionId, int version, CancellationToken ct)

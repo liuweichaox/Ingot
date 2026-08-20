@@ -624,8 +624,10 @@ public sealed record ResearchOptimizationMetadata
     public int ProcessFeatureCount { get; init; }
     public string FeatureSetId { get; init; } = "generic";
     public string MechanismKnowledgeSnapshotHash { get; init; } = "none";
+    public string MechanismModelSnapshotHash { get; init; } = "none";
     public int FeatureSetVersion { get; init; } = 1;
     public int DerivedFeatureCount { get; init; }
+    public IReadOnlyList<MechanismModelApplicationReference> MechanismModels { get; init; } = [];
     public string Intent { get; init; } = ResearchOptimizationIntents.ReachSpecification;
     public string Mode { get; init; } = ResearchOptimizationModes.Experiment;
     public Guid? HypothesisId { get; init; }
@@ -635,6 +637,17 @@ public sealed record ResearchOptimizationMetadata
     public IReadOnlyList<OptimizationRunPrediction> RunPredictions { get; init; } = [];
     public ResearchOnlineAdmissionEvidence? OnlineAdmission { get; init; }
     public DateTimeOffset GeneratedAt { get; init; }
+}
+
+public sealed record MechanismModelApplicationReference
+{
+    public required string FusionId { get; init; }
+    public int FusionVersion { get; init; }
+    public required string FusionHash { get; init; }
+    public required string MechanismModelId { get; init; }
+    public int MechanismModelVersion { get; init; }
+    public required string MechanismModelHash { get; init; }
+    public required string FeatureCode { get; init; }
 }
 
 /// <summary>
@@ -856,6 +869,18 @@ public sealed record ResearchReplayMethodSummary
     public int Runs { get; init; }
 }
 
+public sealed record ResearchMechanismReplayComparison
+{
+    public required ResearchReplayMethodSummary KnowledgeAssisted { get; init; }
+    public required ResearchReplayMethodSummary DataOnly { get; init; }
+    public double SuccessRateDelta { get; init; }
+    public double? MedianTrialsDelta { get; init; }
+    public double? PredictionIntervalCoverageDelta { get; init; }
+    public int SafetyViolationDelta { get; init; }
+    public required string PairingHash { get; init; }
+    public JsonElement DataOnlyRawResult { get; init; }
+}
+
 public sealed record ResearchHistoricalReplayReport
 {
     public Guid ReportId { get; init; }
@@ -863,6 +888,7 @@ public sealed record ResearchHistoricalReplayReport
     /// <summary>Missing in historical payloads means the thresholds predated policy versioning.</summary>
     public string ValidationPolicyVersion { get; init; } = "not-evaluated";
     public string MechanismKnowledgeSnapshotHash { get; init; } = "none";
+    public string MechanismModelSnapshotHash { get; init; } = "none";
     public string Status { get; init; } = ResearchHistoricalReplayStatuses.Generated;
     public required string DatasetSnapshotHash { get; init; }
     public int UniqueConditionCount { get; init; }
@@ -880,6 +906,7 @@ public sealed record ResearchHistoricalReplayReport
     public double? PredictionIntervalCoverage { get; init; }
     public int PredictionIntervalChecks { get; init; }
     public int OptimizerSafetyViolationCount { get; init; }
+    public ResearchMechanismReplayComparison? MechanismComparison { get; init; }
     public required string EnginePolicy { get; init; }
     public required string EvidenceKind { get; init; }
     public required string Limitations { get; init; }

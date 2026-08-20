@@ -192,6 +192,55 @@ class ParameterConstraint:
 
 
 @dataclass(frozen=True)
+class ForbiddenCombinationFactor:
+    variable: str
+    minimum: float | None = None
+    maximum: float | None = None
+
+    def __post_init__(self) -> None:
+        variable = self.variable.strip()
+        if not variable:
+            raise ValueError("forbidden-combination variable must not be empty")
+        if self.minimum is None and self.maximum is None:
+            raise ValueError("forbidden-combination factor requires a minimum or maximum")
+        if self.minimum is not None and not math.isfinite(self.minimum):
+            raise ValueError("forbidden-combination minimum must be finite")
+        if self.maximum is not None and not math.isfinite(self.maximum):
+            raise ValueError("forbidden-combination maximum must be finite")
+        if self.minimum is not None and self.maximum is not None and self.minimum > self.maximum:
+            raise ValueError("forbidden-combination minimum must not exceed maximum")
+        object.__setattr__(self, "variable", variable)
+
+    def matches(self, value: float, tolerance: float = 1e-12) -> bool:
+        return (
+            (self.minimum is None or value >= self.minimum - tolerance)
+            and (self.maximum is None or value <= self.maximum + tolerance)
+        )
+
+
+@dataclass(frozen=True)
+class ForbiddenCombination:
+    name: str
+    factors: tuple[ForbiddenCombinationFactor, ...]
+
+    def __post_init__(self) -> None:
+        name = self.name.strip()
+        factors = tuple(self.factors)
+        if not name:
+            raise ValueError("forbidden-combination name must not be empty")
+        if len(factors) < 2:
+            raise ValueError("forbidden combination requires at least two factors")
+        names = [value.variable for value in factors]
+        if len(names) != len(set(names)):
+            raise ValueError("forbidden-combination variables must be unique")
+        object.__setattr__(self, "name", name)
+        object.__setattr__(self, "factors", factors)
+
+    def matches(self, params: Mapping[str, float]) -> bool:
+        return all(factor.matches(float(params[factor.variable])) for factor in self.factors)
+
+
+@dataclass(frozen=True)
 class OutcomeConstraint:
     name: str
     operator: str
@@ -235,6 +284,7 @@ class Campaign:
     constraints: list[ParameterConstraint] = field(default_factory=list)
     context: dict[str, str] = field(default_factory=dict)
     outcome_constraints: list[OutcomeConstraint] = field(default_factory=list)
+    forbidden_combinations: list[ForbiddenCombination] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         self.name = self.name.strip()
@@ -266,6 +316,16 @@ class Campaign:
         if unknown_constraints:
             raise ValueError(
                 f"constraints reference unknown variables: {sorted(unknown_constraints)}"
+            )
+        unknown_forbidden = {
+            factor.variable
+            for combination in self.forbidden_combinations
+            for factor in combination.factors
+        }.difference(variable_names)
+        if unknown_forbidden:
+            raise ValueError(
+                "forbidden combinations reference unknown variables: "
+                f"{sorted(unknown_forbidden)}"
             )
         self.context = {
             str(key).strip(): str(value).strip()
@@ -304,7 +364,9 @@ class Campaign:
                 )
         return all(low < high for low, high in bounds.values())
 
-    def validate_params(self, params: Mapping[str, float]) -> None:
+    def validate_params(
+        self, params: Mapping[str, float], *, enforce_candidate_constraints: bool = True
+    ) -> None:
         names = set(params)
         if names != self.variable_names:
             missing = sorted(self.variable_names.difference(names))
@@ -319,12 +381,18 @@ class Campaign:
                     f"parameter {variable.name}={value} is outside "
                     f"[{variable.low}, {variable.high}]"
                 )
-        for constraint in self.constraints:
-            if not constraint.is_satisfied(float(params[constraint.variable])):
-                raise ValueError(
-                    f"parameter {constraint.variable} violates "
-                    f"{constraint.operator} {constraint.limit}"
-                )
+        if enforce_candidate_constraints:
+            for constraint in self.constraints:
+                if not constraint.is_satisfied(float(params[constraint.variable])):
+                    raise ValueError(
+                        f"parameter {constraint.variable} violates "
+                        f"{constraint.operator} {constraint.limit}"
+                    )
+            for combination in self.forbidden_combinations:
+                if combination.matches(params):
+                    raise ValueError(
+                        f"parameters match forbidden combination {combination.name}"
+                    )
 
     def validate_outcomes(self, outcomes: Mapping[str, float]) -> None:
         names = set(outcomes)
@@ -371,8 +439,12 @@ class Campaign:
         ]
         return max(badness) - 1.0
 
-    def to_unit(self, params: Mapping[str, float]) -> np.ndarray:
-        self.validate_params(params)
+    def to_unit(
+        self, params: Mapping[str, float], *, enforce_candidate_constraints: bool = True
+    ) -> np.ndarray:
+        self.validate_params(
+            params, enforce_candidate_constraints=enforce_candidate_constraints
+        )
         return np.array(
             [variable.norm(float(params[variable.name])) for variable in self.variables],
             dtype=float,

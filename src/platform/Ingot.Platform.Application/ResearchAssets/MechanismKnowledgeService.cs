@@ -58,6 +58,8 @@ public sealed class MechanismKnowledgeService(
         if (applicability.Length == 0)
             throw new ResearchAssetRuleException("适用范围不能为空；空范围不代表全局适用。");
         var constraints = request.Constraints.Select(NormalizeConstraint).ToArray();
+        var forbiddenCombinations = request.ForbiddenCombinations
+            .Select(NormalizeForbiddenCombination).ToArray();
         var evidence = request.Evidence.Select(NormalizeEvidence).DistinctBy(
             value => (value.EvidenceKind, value.ReferenceId, value.Polarity)).ToArray();
         if (evidence.Length == 0)
@@ -67,7 +69,7 @@ public sealed class MechanismKnowledgeService(
                 throw new ResearchAssetRuleException("证据引用不存在、不属于当前项目或内容哈希不匹配。");
         var project = await projectReader.GetProjectAsync(projectId, ct).ConfigureAwait(false)
             ?? throw new ResearchAssetRuleException("研发项目不存在。");
-        ValidateProjectBindings(project, variables, constraints, applicability);
+        ValidateProjectBindings(project, variables, constraints, forbiddenCombinations, applicability);
 
         var now = DateTimeOffset.UtcNow;
         var claimId = existing?.ClaimId ?? (request.ClaimId == Guid.Empty ? Guid.CreateVersion7() : request.ClaimId);
@@ -87,6 +89,7 @@ public sealed class MechanismKnowledgeService(
             Variables = variables,
             Applicability = applicability,
             Constraints = constraints,
+            ForbiddenCombinations = forbiddenCombinations,
             Evidence = evidence,
             CreatedBy = actor,
             CreatedAt = now,
@@ -321,6 +324,33 @@ public sealed class MechanismKnowledgeService(
         };
     }
 
+    private static MechanismForbiddenCombination NormalizeForbiddenCombination(
+        MechanismForbiddenCombination value)
+    {
+        var factors = value.Factors.Select(factor =>
+        {
+            if (factor.Minimum is null && factor.Maximum is null)
+                throw new ResearchAssetRuleException("禁止组合的每个因子至少需要最小值或最大值。");
+            if (factor.Minimum > factor.Maximum)
+                throw new ResearchAssetRuleException("禁止组合因子的最小值不能大于最大值。");
+            return factor with
+            {
+                VariableCode = Required(factor.VariableCode, "禁止组合变量", 200).ToLowerInvariant(),
+                Unit = NormalizeUnit(factor.Unit)
+            };
+        }).ToArray();
+        if (factors.Length < 2)
+            throw new ResearchAssetRuleException("禁止组合至少需要两个变量条件。");
+        if (factors.Select(static item => item.VariableCode).Distinct(StringComparer.Ordinal).Count() != factors.Length)
+            throw new ResearchAssetRuleException("同一禁止组合不能重复引用变量。");
+        return value with
+        {
+            CombinationId = Guid.CreateVersion7(),
+            Name = Required(value.Name, "禁止组合名称", 240),
+            Factors = factors
+        };
+    }
+
     private static MechanismClaimEvidence NormalizeEvidence(MechanismClaimEvidence value)
     {
         var polarity = Required(value.Polarity, "证据方向", 20).ToLowerInvariant();
@@ -367,6 +397,7 @@ public sealed class MechanismKnowledgeService(
         ResearchProject project,
         IReadOnlyList<MechanismClaimVariable> variables,
         IReadOnlyList<MechanismClaimConstraint> constraints,
+        IReadOnlyList<MechanismForbiddenCombination> forbiddenCombinations,
         IReadOnlyList<MechanismClaimApplicability> applicability)
     {
         var projectVariables = project.Variables.ToDictionary(static value => value.Code, StringComparer.Ordinal);
@@ -384,6 +415,28 @@ public sealed class MechanismKnowledgeService(
                 throw new ResearchAssetRuleException($"机理约束 {constraint.VariableCode} 必须绑定当前项目可控变量。");
             if (!string.Equals(NormalizeUnit(projectVariable.Unit), constraint.Unit, StringComparison.Ordinal))
                 throw new ResearchAssetRuleException($"机理约束 {constraint.VariableCode} 的单位与项目变量不一致。");
+        }
+        foreach (var combination in forbiddenCombinations)
+        {
+            var coversAllReferencedRanges = true;
+            foreach (var factor in combination.Factors)
+            {
+                if (!projectVariables.TryGetValue(factor.VariableCode, out var projectVariable) ||
+                    projectVariable.Role != ResearchVariableRoles.Control)
+                    throw new ResearchAssetRuleException($"禁止组合变量 {factor.VariableCode} 必须绑定当前项目可控变量。");
+                if (!string.Equals(NormalizeUnit(projectVariable.Unit), factor.Unit, StringComparison.Ordinal))
+                    throw new ResearchAssetRuleException($"禁止组合变量 {factor.VariableCode} 的单位与项目变量不一致。");
+                if (projectVariable.LowerLimit is { } lower && factor.Maximum is { } maximum && maximum < lower ||
+                    projectVariable.UpperLimit is { } upper && factor.Minimum is { } minimum && minimum > upper)
+                    throw new ResearchAssetRuleException($"禁止组合变量 {factor.VariableCode} 与项目工艺范围没有交集。");
+                coversAllReferencedRanges &=
+                    projectVariable.LowerLimit is { } projectLower &&
+                    projectVariable.UpperLimit is { } projectUpper &&
+                    (factor.Minimum is null || factor.Minimum <= projectLower) &&
+                    (factor.Maximum is null || factor.Maximum >= projectUpper);
+            }
+            if (coversAllReferencedRanges)
+                throw new ResearchAssetRuleException($"禁止组合 {combination.Name} 会排除整个项目工艺空间。");
         }
         var context = new Dictionary<string, string>(project.Context, StringComparer.OrdinalIgnoreCase)
         {

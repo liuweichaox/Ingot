@@ -14,12 +14,14 @@ public sealed class DatasetQualityValidationController(
     PlatformUserResolver userResolver) : PlatformConfigurationControllerBase(userResolver)
 {
     [HttpGet]
-    public async Task<IActionResult> List(CancellationToken ct)
-        => DeniedResearchAssetRead() ??
-           Ok(new
-           {
-               data = await store.ListDatasetQualityValidationReportsAsync(ct).ConfigureAwait(false)
-           });
+    public async Task<IActionResult> List(
+        [FromQuery] int limit = 200, [FromQuery] string? cursor = null, CancellationToken ct = default)
+    {
+        var denied = DeniedResearchAssetRead();
+        if (denied is not null) return denied;
+        if (limit is < 1 or > 200) return InvalidRequest("limit 必须在 1 到 200 之间。");
+        return Ok(await store.ListDatasetQualityValidationReportsPageAsync(limit, cursor, ct).ConfigureAwait(false));
+    }
 
     [HttpPost]
     [RequestSizeLimit(104_857_600)]

@@ -68,7 +68,9 @@ class SequentialOptimizer:
         constraint_outcomes: Mapping[str, float] | None = None,
         process_features: Mapping[str, float] | None = None,
     ) -> float:
-        unit_point = self.campaign.to_unit(params)
+        unit_point = self.campaign.to_unit(
+            params, enforce_candidate_constraints=False
+        )
         self.campaign.validate_outcomes(outcomes)
         resolved_constraints = dict(constraint_outcomes or {})
         self.campaign.validate_constraint_outcomes(resolved_constraints)

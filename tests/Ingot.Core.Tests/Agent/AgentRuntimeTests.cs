@@ -118,6 +118,43 @@ public sealed class AgentRuntimeTests
         Assert.Null(await runtime.GetAsync(ProductEntryPoints.Chat, "owned"));
     }
 
+    [Fact]
+    public async Task Runtime_ExecutesDeterministicKnowledgeSearchWithIntegerSchemaArgument()
+    {
+        var store = new MemoryRunStore();
+        var tool = new KnowledgeSearchTool();
+        var runtime = CreateRuntime(store, [tool]);
+
+        var created = await runtime.StartAsync(
+            ProductEntryPoints.Chat,
+            "operator",
+            new CreateChatRunRequest { Question = "作业指导书规定的温度上限是多少？" });
+        var completed = await WaitForTerminalAsync(runtime, created.RunId);
+
+        Assert.Equal(AgentRunStatuses.Completed, completed.Status);
+        Assert.Equal("search_process_knowledge", Assert.Single(completed.ToolInvocations).Tool);
+        Assert.True(tool.Executed);
+    }
+
+    [Fact]
+    public async Task Runtime_ExcludesNonReadToolFromCapabilitiesAndExecution()
+    {
+        var store = new MemoryRunStore();
+        var nonRead = new NonReadTool();
+        var runtime = CreateRuntime(store, [new QualityTool(), nonRead]);
+
+        var capabilities = runtime.GetCapabilities(ProductEntryPoints.Chat);
+        Assert.DoesNotContain(capabilities.Tools, tool => tool.Name == nonRead.Definition.Name);
+        var created = await runtime.StartAsync(
+            ProductEntryPoints.Chat,
+            "operator",
+            new CreateChatRunRequest { Question = "检查数据质量" });
+        var completed = await WaitForTerminalAsync(runtime, created.RunId);
+
+        Assert.Equal(AgentRunStatuses.Completed, completed.Status);
+        Assert.False(nonRead.Executed);
+    }
+
     private static AgentRuntime CreateRuntime(MemoryRunStore store, IReadOnlyList<IAnalysisTool> tools)
     {
         var options = Options.Create(new ChatOptions
@@ -216,6 +253,63 @@ public sealed class AgentRuntimeTests
         {
             await Task.Delay(Timeout.InfiniteTimeSpan, ct);
             throw new InvalidOperationException("不可达。");
+        }
+    }
+
+    private sealed class KnowledgeSearchTool : IAnalysisTool
+    {
+        public bool Executed { get; private set; }
+        public AnalysisToolDefinition Definition { get; } = new()
+        {
+            Name = "search_process_knowledge",
+            Version = "v1",
+            Description = "test",
+            EntryPoint = ProductEntryPoints.Chat,
+            Purpose = RunPurposes.ReadOnlyAnalysis,
+            InputSchema = JsonSerializer.SerializeToElement(new
+            {
+                type = "object",
+                required = new[] { "query" },
+                properties = new
+                {
+                    query = new { type = "string", minLength = 1, maxLength = 500 },
+                    limit = new { type = "integer", minimum = 1, maximum = 20 }
+                },
+                additionalProperties = false
+            })
+        };
+
+        public Task<AnalysisToolResult> ExecuteAsync(
+            AnalysisToolCall call,
+            AgentExecutionContext context,
+            CancellationToken ct = default)
+        {
+            Executed = true;
+            return Task.FromResult(new AnalysisToolResult
+            {
+                Tool = call.Tool,
+                Summary = "找到一条作业指导书记录。",
+                Data = JsonSerializer.SerializeToElement(new { records = 1 }),
+                RelatedRecords = [new RelatedRecordRef { Kind = "knowledge", Id = "1", Label = "作业指导书" }]
+            });
+        }
+    }
+
+    private sealed class NonReadTool : IAnalysisTool
+    {
+        public bool Executed { get; private set; }
+        public AnalysisToolDefinition Definition { get; } = DefinitionFor("mutating_tool") with
+        {
+            Access = "write"
+        };
+
+        public Task<AnalysisToolResult> ExecuteAsync(
+            AnalysisToolCall call,
+            AgentExecutionContext context,
+            CancellationToken ct = default)
+        {
+            Executed = true;
+            throw new InvalidOperationException("非只读工具不应执行。");
         }
     }
 

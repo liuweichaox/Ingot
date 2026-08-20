@@ -10,6 +10,12 @@ namespace Ingot.Agent;
 
 public sealed class DefaultPlanValidator(IOptions<ChatOptions> chatOptions) : IPlanValidator
 {
+    private static readonly Regex CanonicalInteger = new(
+        @"^-?(?:0|[1-9][0-9]*)$",
+        RegexOptions.CultureInvariant | RegexOptions.NonBacktracking);
+    private static readonly Regex CanonicalNumber = new(
+        @"^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?$",
+        RegexOptions.CultureInvariant | RegexOptions.NonBacktracking);
     private readonly ChatOptions _chatOptions = chatOptions.Value;
 
     public bool TryValidate(
@@ -148,12 +154,43 @@ public sealed class DefaultPlanValidator(IOptions<ChatOptions> chatOptions) : IP
                 continue;
             }
 
-            if (!TryValidateString(call.Tool, name, value, propertySchema, out error))
+            if (!TryValidateValue(call.Tool, name, value, propertySchema, out error))
                 return false;
         }
 
         error = string.Empty;
         return true;
+    }
+
+    private static bool TryValidateValue(
+        string tool,
+        string name,
+        string? value,
+        JsonElement schema,
+        out string error)
+    {
+        if (schema.ValueKind != JsonValueKind.Object ||
+            !schema.TryGetProperty("type", out var type) ||
+            type.ValueKind != JsonValueKind.String)
+        {
+            error = $"工具 {tool} 的参数 {name} 使用了无效 Schema。";
+            return false;
+        }
+
+        return type.GetString() switch
+        {
+            "string" => TryValidateString(tool, name, value, schema, out error),
+            "integer" => TryValidateInteger(tool, name, value, schema, out error),
+            "number" => TryValidateNumber(tool, name, value, schema, out error),
+            "boolean" => TryValidateBoolean(tool, name, value, out error),
+            _ => FailUnsupportedSchema(tool, name, out error)
+        };
+    }
+
+    private static bool FailUnsupportedSchema(string tool, string name, out string error)
+    {
+        error = $"工具 {tool} 的参数 {name} 使用了不支持的 Schema。";
+        return false;
     }
 
     private static bool TryValidateString(
@@ -223,6 +260,104 @@ public sealed class DefaultPlanValidator(IOptions<ChatOptions> chatOptions) : IP
         }
 
         error = string.Empty;
+        return true;
+    }
+
+    private static bool TryValidateInteger(
+        string tool,
+        string name,
+        string? value,
+        JsonElement schema,
+        out string error)
+    {
+        if (value is null ||
+            !CanonicalInteger.IsMatch(value) ||
+            !long.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed))
+        {
+            error = $"工具 {tool} 的参数 {name} 必须是整数。";
+            return false;
+        }
+
+        return TryValidateNumericRange(tool, name, parsed, schema, out error);
+    }
+
+    private static bool TryValidateNumber(
+        string tool,
+        string name,
+        string? value,
+        JsonElement schema,
+        out string error)
+    {
+        if (value is null ||
+            !CanonicalNumber.IsMatch(value) ||
+            !double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed) ||
+            !double.IsFinite(parsed))
+        {
+            error = $"工具 {tool} 的参数 {name} 必须是有限数值。";
+            return false;
+        }
+
+        return TryValidateNumericRange(tool, name, parsed, schema, out error);
+    }
+
+    private static bool TryValidateBoolean(
+        string tool,
+        string name,
+        string? value,
+        out string error)
+    {
+        if (value is not ("true" or "false"))
+        {
+            error = $"工具 {tool} 的参数 {name} 必须是 true 或 false。";
+            return false;
+        }
+
+        error = string.Empty;
+        return true;
+    }
+
+    private static bool TryValidateNumericRange(
+        string tool,
+        string name,
+        double value,
+        JsonElement schema,
+        out string error)
+    {
+        if (!TryReadFiniteNumber(schema, "minimum", out var minimum) ||
+            !TryReadFiniteNumber(schema, "maximum", out var maximum) ||
+            minimum.HasValue && maximum.HasValue && minimum > maximum)
+        {
+            error = $"工具 {tool} 的参数 {name} 数值范围 Schema 无效。";
+            return false;
+        }
+        if (minimum.HasValue && value < minimum.Value)
+        {
+            error = $"工具 {tool} 的参数 {name} 不得小于 {minimum.Value}.";
+            return false;
+        }
+        if (maximum.HasValue && value > maximum.Value)
+        {
+            error = $"工具 {tool} 的参数 {name} 不得大于 {maximum.Value}.";
+            return false;
+        }
+
+        error = string.Empty;
+        return true;
+    }
+
+    private static bool TryReadFiniteNumber(
+        JsonElement schema,
+        string property,
+        out double? value)
+    {
+        value = null;
+        if (!schema.TryGetProperty(property, out var element))
+            return true;
+        if (element.ValueKind != JsonValueKind.Number ||
+            !element.TryGetDouble(out var parsed) ||
+            !double.IsFinite(parsed))
+            return false;
+        value = parsed;
         return true;
     }
 

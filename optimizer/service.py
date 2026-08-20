@@ -15,13 +15,15 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from ingot_optimizer import (
     Campaign,
-    BotorchOptimizer,
     DerivedFeature,
+    ForbiddenCombination,
+    ForbiddenCombinationFactor,
     Objective,
     OutcomeConstraint,
+    OptimizerObservation,
     ParameterConstraint,
-    SequentialOptimizer,
     Variable,
+    build_optimizer,
 )
 from ingot_optimizer.botorch_engine import MODEL_VERSION
 from ingot_optimizer.diagnosis import FeatureSpec, diagnose
@@ -88,11 +90,25 @@ class DerivedFeatureIn(StrictModel):
         "minimum",
         "maximum",
         "standard_deviation",
+        "affine",
     ]
     inputs: list[str] = Field(min_length=1, max_length=100)
     normalization_offset: float = 0.0
     normalization_scale: float = Field(default=1.0, gt=0)
     epsilon: float = Field(default=1e-9, gt=0)
+    intercept: float = 0.0
+    coefficients: list[float] = Field(default_factory=list, max_length=100)
+
+
+class ForbiddenCombinationFactorIn(StrictModel):
+    variable: str = Field(min_length=1, max_length=120)
+    minimum: float | None = None
+    maximum: float | None = None
+
+
+class ForbiddenCombinationIn(StrictModel):
+    name: str = Field(min_length=1, max_length=240)
+    factors: list[ForbiddenCombinationFactorIn] = Field(min_length=2, max_length=100)
 
 
 class CampaignIn(StrictModel):
@@ -112,6 +128,9 @@ class CampaignIn(StrictModel):
     constraints: list[ConstraintIn] = Field(default_factory=list, max_length=100)
     outcome_constraints: list[OutcomeConstraintIn] = Field(
         default_factory=list, max_length=50
+    )
+    forbidden_combinations: list[ForbiddenCombinationIn] = Field(
+        default_factory=list, max_length=100
     )
     context: dict[str, str] = Field(default_factory=dict)
 
@@ -204,7 +223,7 @@ class DiagnosisRequest(StrictModel):
 
 class HistoricalReplayObservationIn(ObservationIn):
     run_id: str | None = Field(default=None, max_length=240)
-    occurred_at: float | None = None
+    occurred_at: float = Field(allow_inf_nan=False)
 
 
 class SoftConstraintIn(StrictModel):
@@ -238,6 +257,16 @@ def _campaign_from_input(spec: CampaignIn) -> Campaign:
         outcome_constraints=[
             OutcomeConstraint(**value.model_dump())
             for value in spec.outcome_constraints
+        ],
+        forbidden_combinations=[
+            ForbiddenCombination(
+                name=value.name,
+                factors=tuple(
+                    ForbiddenCombinationFactor(**factor.model_dump())
+                    for factor in value.factors
+                ),
+            )
+            for value in spec.forbidden_combinations
         ],
     )
 
@@ -427,6 +456,8 @@ def create_suggestions(request: SuggestionRequest) -> SuggestionResponse:
                 normalization_offset=value.normalization_offset,
                 normalization_scale=value.normalization_scale,
                 epsilon=value.epsilon,
+                intercept=value.intercept,
+                coefficients=tuple(value.coefficients),
             )
             for value in request.campaign.derived_features
         ]
@@ -453,22 +484,20 @@ def create_suggestions(request: SuggestionRequest) -> SuggestionResponse:
                 raise ValueError(
                     "hypothesis validation requires at least one controllable hypothesis variable"
                 )
-        optimizer = (
-            BotorchOptimizer(
-                campaign,
-                derived_features=derived_features,
-                seed=request.seed,
-            )
-            if len(request.observations) >= 3
-            else SequentialOptimizer(campaign, seed=request.seed)
+        optimizer = build_optimizer(
+            campaign,
+            [
+                OptimizerObservation(
+                    params=observation.params,
+                    outcomes=observation.outcomes,
+                    constraint_outcomes=observation.constraint_outcomes,
+                    process_features=observation.process_features,
+                )
+                for observation in request.observations
+            ],
+            derived_features=derived_features,
+            seed=request.seed,
         )
-        for observation in request.observations:
-            optimizer.observe(
-                observation.params,
-                observation.outcomes,
-                constraint_outcomes=observation.constraint_outcomes,
-                process_features=observation.process_features,
-            )
         suggestion_args = {
             "top_k": request.top_k,
             "candidate_params": request.candidate_pool,
@@ -559,6 +588,8 @@ def create_historical_replay(request: HistoricalReplayRequest) -> dict:
                 normalization_offset=value.normalization_offset,
                 normalization_scale=value.normalization_scale,
                 epsilon=value.epsilon,
+                intercept=value.intercept,
+                coefficients=tuple(value.coefficients),
             )
             for value in request.campaign.derived_features
         ]

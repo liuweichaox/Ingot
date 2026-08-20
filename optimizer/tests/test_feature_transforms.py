@@ -89,3 +89,35 @@ def test_ratio_uses_declared_epsilon_without_non_finite_values():
     )
 
     assert expanded[0, 2] == pytest.approx(10.0)
+
+
+def test_affine_feature_uses_engineering_units_and_declared_coefficients():
+    expanded = expand_inputs(
+        np.array([[0.5, 0.25]]),
+        ["temperature", "pressure"],
+        [100.0, 0.0],
+        [200.0, 20.0],
+        [
+            DerivedFeature(
+                name="mechanism.output",
+                operator="affine",
+                inputs=("temperature", "pressure"),
+                intercept=3.0,
+                coefficients=(2.0, -4.0),
+                normalization_offset=100.0,
+                normalization_scale=10.0,
+            )
+        ],
+    )
+
+    assert np.allclose(expanded, [[0.5, 0.25, 18.3]])
+
+
+def test_affine_feature_rejects_mismatched_coefficients():
+    with pytest.raises(ValueError, match="coefficients must match"):
+        DerivedFeature(
+            name="mechanism.output",
+            operator="affine",
+            inputs=("temperature", "pressure"),
+            coefficients=(1.0,),
+        )

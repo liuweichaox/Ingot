@@ -104,6 +104,14 @@ function analysisSignal(value = {}) {
   };
 }
 
+function knownUnmeasuredConfounder(value = {}) {
+  return {
+    code: value.code || "",
+    name: value.name || "",
+    description: value.description || "",
+  };
+}
+
 function versionedReference(value = {}) {
   return { reference: modelValue(value.id, value.version) };
 }
@@ -184,6 +192,7 @@ export function createRegistryBusinessForm(kind, value = {}, version) {
         cohortDimension: value.cohortDimension || "",
         comparisonKeys: (value.comparisonKeys || ["product_family_code"]).join(", "),
         contextPairs: pairsFromObject(value.contextSelector),
+        knownUnmeasuredConfounders: (value.knownUnmeasuredConfounders || []).map(knownUnmeasuredConfounder),
         signals: (value.signals || []).length ? value.signals.map(analysisSignal) : [analysisSignal()],
       };
     case "scenarioPackage":
@@ -295,6 +304,13 @@ export function registryBusinessPayload(kind, form) {
       cohortDimension: form.cohortDimension.trim() || null,
       comparisonKeys: form.comparisonKeys.split(/[,，\s]+/).map(value => value.trim()).filter(Boolean),
       contextSelector: objectFromPairs(form.contextPairs),
+      knownUnmeasuredConfounders: form.knownUnmeasuredConfounders
+        .filter(item => item.code.trim() && item.name.trim())
+        .map(item => ({
+          code: item.code.trim(),
+          name: item.name.trim(),
+          description: item.description.trim() || null,
+        })),
       signals: form.signals.map(item => ({
         dataItemCode: item.dataItemCode.trim(),
         includeTrace: item.includeTrace,
@@ -371,6 +387,7 @@ export function registryBusinessValidation(kind, form) {
     if (!form.dataModel) return "请选择工艺数据模型。";
     if (!form.comparisonKeys.trim()) return "请至少填写一个同类比较字段。";
     if (form.signals.length === 0 || form.signals.some(item => !item.dataItemCode)) return "请至少选择一个分析数据项。";
+    if (form.knownUnmeasuredConfounders.some(item => !codePattern.test(item.code.trim()) || !item.name.trim())) return "潜在未测量混杂因素需填写有效代码和名称。";
   }
   if (kind === "scenarioPackage") {
     if (!form.dataModel || !form.analysisPlan) return "请选择工艺数据模型和分析方案。";
@@ -610,6 +627,19 @@ function AnalysisPlanEditor({ form, onChange, readOnly, lockIdentity }) {
         </div>
       </Card>
       <PairEditor title="分析对象筛选" description="只分析符合这些条件的生产记录。" pairs={form.contextPairs} readOnly={readOnly} onChange={value => updateAt(form, onChange, "contextPairs", value)} />
+      <Card title="已知但尚未记录的潜在混杂因素" description="例如操作员经验或环境波动；系统会在分析结果中披露，但不会假装已经完成校正。" actions={!readOnly ? <Button onClick={() => addRow(form, onChange, "knownUnmeasuredConfounders", knownUnmeasuredConfounder())}>添加因素</Button> : undefined}>
+        <div className="grid gap-3">
+          {form.knownUnmeasuredConfounders.map((item, index) => (
+            <div key={index} className="grid gap-3 rounded-xl border border-slate-200 p-4 md:grid-cols-[.7fr_1fr_1.4fr_auto]">
+              <Field label="代码"><Input value={item.code} disabled={readOnly} onChange={event => updateRow(form, onChange, "knownUnmeasuredConfounders", index, { code: event.target.value })} placeholder="operator_experience" /></Field>
+              <Field label="名称"><Input value={item.name} disabled={readOnly} onChange={event => updateRow(form, onChange, "knownUnmeasuredConfounders", index, { name: event.target.value })} placeholder="操作员经验" /></Field>
+              <Field label="说明"><Input value={item.description} disabled={readOnly} onChange={event => updateRow(form, onChange, "knownUnmeasuredConfounders", index, { description: event.target.value })} /></Field>
+              {!readOnly && <Button variant="ghost" className="self-end text-rose-700" onClick={() => removeRow(form, onChange, "knownUnmeasuredConfounders", index)}>移除</Button>}
+            </div>
+          ))}
+          {form.knownUnmeasuredConfounders.length === 0 && <p className="text-sm text-slate-500">当前未登记；这不表示不存在未测量混杂。</p>}
+        </div>
+      </Card>
       <Card title="分析数据项" actions={!readOnly ? <Button onClick={() => addRow(form, onChange, "signals", analysisSignal())}>添加数据项</Button> : undefined}>
         <div className="grid gap-4">
           {form.signals.map((signal, index) => (

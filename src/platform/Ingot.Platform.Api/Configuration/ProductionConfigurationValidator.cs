@@ -74,6 +74,17 @@ public static class ProductionConfigurationValidator
             }
             RequireChatDataScopes(configuration, errors);
         }
+        if (configuration.GetValue<bool>("MechanismDraftGeneration:Enabled"))
+        {
+            RequireValue(configuration, "MechanismDraftGeneration:BaseUrl", errors);
+            RequireValue(configuration, "MechanismDraftGeneration:Model", errors);
+            RequireValue(configuration, "OPENAI_API_KEY", errors);
+            if (IsPlaceholder(configuration["OPENAI_API_KEY"]))
+                errors.Add("OPENAI_API_KEY must not use a placeholder value.");
+            if (!Uri.TryCreate(configuration["MechanismDraftGeneration:BaseUrl"], UriKind.Absolute, out var uri) ||
+                uri.Scheme is not ("http" or "https") || !string.IsNullOrEmpty(uri.UserInfo))
+                errors.Add("MechanismDraftGeneration:BaseUrl must be a trusted absolute HTTP or HTTPS URL without user info.");
+        }
 
         if (errors.Count > 0)
             throw new InvalidOperationException($"Invalid production configuration:{Environment.NewLine}- {string.Join($"{Environment.NewLine}- ", errors)}");

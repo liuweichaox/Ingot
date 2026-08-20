@@ -28,11 +28,13 @@ public interface IExecutionComparisonService
         string executionId,
         int limit,
         CancellationToken ct = default,
-        string? siteId = null);
+        string? siteId = null,
+        IReadOnlyList<string>? additionalKnownUnmeasuredConfounders = null);
 
     Task<ExecutionComparisonResult?> CompareSelectedAsync(
         string baselineProcessExecutionId,
         IReadOnlyList<string> executionIds,
         CancellationToken ct = default,
-        string? siteId = null);
+        string? siteId = null,
+        IReadOnlyList<string>? additionalKnownUnmeasuredConfounders = null);
 }

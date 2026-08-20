@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router";
-import { getJson, postJson, putJson } from "../api/http";
+import { getJson, patchJson, postJson } from "../api/http";
 import {
   createTaskForm,
   experimentScale,
@@ -234,7 +234,12 @@ export function ResearchProjectsPage({ identity }) {
       notify("研发项目已创建。", "success");
       openProject(project);
     } catch (requestError) {
-      notify(requestError.message, "danger");
+      if (task === "member" && requestError.status === 409) {
+        await refreshWorkspace();
+        notify("项目成员已被其他人更新，工作区已刷新；请核对后重新提交。", "danger");
+      } else {
+        notify(requestError.message, "danger");
+      }
     } finally {
       setSaving(false);
     }
@@ -607,8 +612,8 @@ export function ResearchProjectsPage({ identity }) {
         const candidateUserIds = new Set(memberCandidates.map(user => user.userId));
         const currentMemberUserIds = (project.memberUserIds || [])
           .filter(userId => userId === project.ownerUserId || candidateUserIds.has(userId));
-        await putJson(`/api/v1/research-projects/${project.projectId}`, {
-          ...project,
+        await patchJson(`/api/v1/research-projects/${project.projectId}/members`, {
+          revision: project.revision,
           memberUserIds: [...new Set([...currentMemberUserIds, member])],
         });
       } else if (task === "hypothesis") {
@@ -794,6 +799,7 @@ export function ResearchProjectsPage({ identity }) {
             onReviewValidationPreregistration={reviewValidationPreregistration}
             onAskAi={currentProjectId => navigate(`/chat?projectId=${encodeURIComponent(currentProjectId)}`)}
             currentUserId={identity?.userId || ""}
+            isPlatformAdmin={(identity?.roles || []).includes("platform.admin")}
           />
         )}
         <TaskDrawer
@@ -1129,6 +1135,10 @@ function CreateProjectDrawer({ open, saving, form, setForm, onClose, onSubmit })
   );
 }
 
+export function MemberManagementButton({ allowed, onClick }) {
+  return allowed ? <Button onClick={onClick}>添加协作成员</Button> : null;
+}
+
 function WorkspaceContent({
   workspace,
   loading,
@@ -1153,6 +1163,7 @@ function WorkspaceContent({
   onReviewValidationPreregistration,
   onAskAi,
   currentUserId,
+  isPlatformAdmin,
 }) {
   if (!workspace) return null;
   const {
@@ -1182,6 +1193,7 @@ function WorkspaceContent({
     ["laboratory", "production"].includes(item.validationLevel));
   const observationSummary = workspace.optimizationObservationSummary;
   const canEdit = !["completed", "archived"].includes(project.status);
+  const canManageMembers = canEdit && (project.ownerUserId === currentUserId || isPlatformAdmin);
   const hasObservation = Number(observationSummary?.validObservationCount || 0) > 0;
   const executionExperiments = experiments.filter(item =>
     item.status !== "cancelled" && item.designMethod !== "historical-observation");
@@ -1266,7 +1278,7 @@ function WorkspaceContent({
           <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,1fr)_18rem]">
             <div className="flex flex-wrap content-start gap-2">
               <Button onClick={() => onAskAi(project.projectId)}>让 AI 协助分析</Button>
-              {canEdit && <Button onClick={() => onTask("member")}>添加协作成员</Button>}
+              <MemberManagementButton allowed={canManageMembers} onClick={() => onTask("member")} />
               {canEdit && hypotheses.length === 0 && <Button variant="primary" onClick={() => onTask("hypothesis")}>提出第一个假设</Button>}
               {project.status !== "draft" && canEdit && <Button onClick={() => onTask("history")}>导入历史运行</Button>}
               {project.status !== "draft" && canEdit && hypotheses.length > 0 && !hasRunningExperiment && <Button variant="primary" onClick={() => onGenerateOptimizationSuggestions()}>智能设计下一组实验</Button>}
@@ -1881,7 +1893,7 @@ function HistoricalReplayCard({ reports, currentUserId, onReview }) {
           {
             key: "comparison",
             label: "达到规格试验数",
-            render: (_, row) => <div className="min-w-52 text-xs leading-5">历史原顺序：<strong>{row.originalOrderTrials ?? "未达到"}</strong><br />优化器中位数：<strong>{row.optimizer?.medianTrials ?? "未达到"}</strong>（成功率 {Math.round(Number(row.optimizer?.successRate || 0) * 100)}%）<br />随机中位数：<strong>{row.random?.medianTrials ?? "未达到"}</strong>（成功率 {Math.round(Number(row.random?.successRate || 0) * 100)}%）<br />二次响应面：<strong>{row.responseSurface?.medianTrials ?? "不适用或未达到"}</strong>{row.responseSurface ? `（成功率 ${Math.round(Number(row.responseSurface.successRate || 0) * 100)}%）` : ""}</div>,
+            render: (_, row) => <div className="min-w-52 text-xs leading-5">历史原顺序：<strong>{row.originalOrderTrials ?? "未达到"}</strong><br />优化器中位数：<strong>{row.optimizer?.medianTrials ?? "未达到"}</strong>（成功率 {Math.round(Number(row.optimizer?.successRate || 0) * 100)}%）<br />随机中位数：<strong>{row.random?.medianTrials ?? "未达到"}</strong>（成功率 {Math.round(Number(row.random?.successRate || 0) * 100)}%）<br />二次响应面：<strong>{row.responseSurface?.medianTrials ?? "不适用或未达到"}</strong>{row.responseSurface ? `（成功率 ${Math.round(Number(row.responseSurface.successRate || 0) * 100)}%）` : ""}{row.mechanismComparison && <div className="mt-2 border-t border-slate-200 pt-2">知识 vs 纯数据：成功率差 <strong>{signedPercent(row.mechanismComparison.successRateDelta)}</strong><br />中位试验数差：<strong>{signedNumber(row.mechanismComparison.medianTrialsDelta)}</strong><br />安全违规差：<strong>{signedNumber(row.mechanismComparison.safetyViolationDelta)}</strong><br /><code title={row.mechanismComparison.pairingHash}>配对 {String(row.mechanismComparison.pairingHash).slice(0, 12)}…</code></div>}</div>,
           },
           {
             key: "calibration",
@@ -1905,6 +1917,9 @@ function HistoricalReplayCard({ reports, currentUserId, onReview }) {
     </Card>
   );
 }
+
+function signedPercent(value) { return value === null || value === undefined ? "不可比较" : `${value > 0 ? "+" : ""}${Math.round(Number(value) * 100)}%`; }
+function signedNumber(value) { return value === null || value === undefined ? "不可比较" : `${value > 0 ? "+" : ""}${Number(value).toFixed(2).replace(/\.00$/, "")}`; }
 
 function OnlineAdmissionCard({ evidence }) {
   if (!evidence) return null;

@@ -3,6 +3,7 @@ import { getJson } from "../api/http";
 import { MechanismKnowledgeWorkbench } from "../components/MechanismKnowledgeWorkbench";
 import {
   Alert,
+  Button,
   Card,
   DataTable,
   EmptyState,
@@ -95,6 +96,8 @@ const assetDefinitions = [
 
 export function ResearchAssetsPage() {
   const [assets, setAssets] = useState({});
+  const [cursors, setCursors] = useState({});
+  const [loadingMore, setLoadingMore] = useState("");
   const [projects, setProjects] = useState([]);
   const [projectId, setProjectId] = useState("");
   const [loading, setLoading] = useState(true);
@@ -116,14 +119,15 @@ export function ResearchAssetsPage() {
     try {
       const results = await Promise.all(assetDefinitions.map(async definition => {
         if (definition.key === "knowledge" && !projectId)
-          return [definition.key, []];
+          return [definition.key, { data: [], nextCursor: null }];
         const endpoint = definition.key === "knowledge"
           ? `${definition.endpoint}?projectId=${encodeURIComponent(projectId)}`
           : definition.endpoint;
         const response = await getJson(endpoint);
-        return [definition.key, response?.data || []];
+        return [definition.key, { data: response?.data || [], nextCursor: response?.nextCursor || null }];
       }));
-      setAssets(Object.fromEntries(results));
+      setAssets(Object.fromEntries(results.map(([key, value]) => [key, value.data])));
+      setCursors(Object.fromEntries(results.map(([key, value]) => [key, value.nextCursor])));
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -132,6 +136,29 @@ export function ResearchAssetsPage() {
   }, [projectId]);
 
   useEffect(() => { load(); }, [load]);
+
+  async function loadMore(definition) {
+    const cursor = cursors[definition.key];
+    if (!cursor) return;
+    setLoadingMore(definition.key);
+    setError("");
+    try {
+      const query = new URLSearchParams({ cursor, limit: "200" });
+      if (definition.key === "knowledge") query.set("projectId", projectId);
+      const response = await getJson(`${definition.endpoint}?${query}`);
+      setAssets(current => {
+        const existing = current[definition.key] || [];
+        const byKey = new Map(existing.map(row => [definition.rowKey(row), row]));
+        (response?.data || []).forEach(row => byKey.set(definition.rowKey(row), row));
+        return { ...current, [definition.key]: [...byKey.values()] };
+      });
+      setCursors(current => ({ ...current, [definition.key]: response?.nextCursor || null }));
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setLoadingMore("");
+    }
+  }
 
   return (
     <Page
@@ -154,6 +181,13 @@ export function ResearchAssetsPage() {
       ) : (
         <div className="space-y-5">
           <MechanismKnowledgeWorkbench projectId={projectId} sources={assets.knowledge || []} reloadAssets={load} />
+          {cursors.knowledge && (
+            <div className="flex justify-center">
+              <Button disabled={loadingMore === "knowledge"} onClick={() => loadMore(assetDefinitions.find(item => item.key === "knowledge"))}>
+                {loadingMore === "knowledge" ? "正在加载…" : "加载更多知识来源"}
+              </Button>
+            </div>
+          )}
           <div className="grid gap-5 xl:grid-cols-2">
           {assetDefinitions.filter(definition => definition.key !== "knowledge").map(definition => (
             <Card
@@ -169,6 +203,13 @@ export function ResearchAssetsPage() {
                   getRowKey={definition.rowKey}
                   columns={definition.columns}
                 />
+              )}
+              {cursors[definition.key] && (
+                <div className="mt-4 flex justify-center">
+                  <Button disabled={loadingMore === definition.key} onClick={() => loadMore(definition)}>
+                    {loadingMore === definition.key ? "正在加载…" : "加载更多"}
+                  </Button>
+                </div>
               )}
             </Card>
           ))}

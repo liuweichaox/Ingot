@@ -5,10 +5,13 @@ import { Alert, Button, Card, EmptyState, Field, Input, Select, StatusBadge, Tex
 const emptyVariable = () => ({ variableCode: "", variableRole: "cause", direction: "", delayMilliseconds: "", unit: "1" });
 const emptyScope = () => ({ dimensionCode: "product", dimensionValue: "" });
 const emptyConstraint = () => ({ variableCode: "", constraintKind: "range", minimum: "", maximum: "", unit: "1", severity: "hard" });
+const emptyForbiddenFactor = () => ({ variableCode: "", minimum: "", maximum: "", unit: "1" });
+const emptyForbiddenCombination = () => ({ name: "", factors: [emptyForbiddenFactor(), emptyForbiddenFactor()] });
 const initialForm = () => ({
   name: "", mechanismType: "qualitative", statement: "", expectedSignature: "",
   falsificationCondition: "", evidenceLevel: "engineering-observation",
-  variables: [emptyVariable()], applicability: [emptyScope()], constraints: [], sourceId: "", polarity: "supporting",
+  variables: [emptyVariable()], applicability: [emptyScope()], constraints: [], forbiddenCombinations: [],
+  evidence: [], sourceId: "", polarity: "supporting",
 });
 
 export function MechanismKnowledgeWorkbench({ projectId, sources = [], reloadAssets }) {
@@ -69,10 +72,29 @@ export function MechanismKnowledgeWorkbench({ projectId, sources = [], reloadAss
         variables: form.variables.map(item => ({ ...item, delayMilliseconds: numberOrNull(item.delayMilliseconds) })),
         applicability: form.applicability,
         constraints: form.constraints.map(item => ({ ...item, minimum: numberOrNull(item.minimum), maximum: numberOrNull(item.maximum) })),
-        evidence: source ? [{ evidenceKind: "knowledge-source", referenceId: source.sourceId, polarity: form.polarity, contentHash: source.sha256 }] : [],
+        forbiddenCombinations: form.forbiddenCombinations.map(item => ({ ...item, factors: item.factors.map(factor => ({ ...factor, minimum: numberOrNull(factor.minimum), maximum: numberOrNull(factor.maximum) })) })),
+        evidence: form.evidence.length > 0 ? form.evidence : source ? [{ evidenceKind: "knowledge-source", referenceId: source.sourceId, polarity: form.polarity, contentHash: source.sha256 }] : [],
       });
       setForm({ ...initialForm(), sourceId: sources[0]?.sourceId || "" });
       await load();
+    } catch (requestError) { setError(requestError.message); }
+    finally { setBusy(false); }
+  }
+
+  async function generateDraft(sourceId) {
+    setBusy(true); setError("");
+    try {
+      const draft = await postJson(`${base}/draft-from-source`, { sourceId });
+      setForm(current => ({
+        ...current,
+        ...draft,
+        sourceId,
+        variables: draft.variables?.length ? draft.variables.map(item => ({ ...item, delayMilliseconds: item.delayMilliseconds ?? "" })) : [emptyVariable()],
+        applicability: draft.applicability?.length ? draft.applicability : [emptyScope()],
+        constraints: (draft.constraints || []).map(item => ({ ...item, minimum: item.minimum ?? "", maximum: item.maximum ?? "" })),
+        forbiddenCombinations: (draft.forbiddenCombinations || []).map(item => ({ ...item, factors: item.factors.map(factor => ({ ...factor, minimum: factor.minimum ?? "", maximum: factor.maximum ?? "" })) })),
+        evidence: draft.evidence || [],
+      }));
     } catch (requestError) { setError(requestError.message); }
     finally { setBusy(false); }
   }
@@ -172,14 +194,15 @@ export function MechanismKnowledgeWorkbench({ projectId, sources = [], reloadAss
           <Field label="文件"><Input required type="file" accept=".pdf,.xlsx,.xlsm,.csv,.txt,.md,.png,.jpg,.jpeg,.webp,.tif,.tiff" onChange={event => setUpload(current => ({ ...current, file: event.target.files?.[0] || null }))} /></Field>
           <Button type="submit" variant="primary" disabled={busy || !upload.file}>上传并提取</Button>
         </form>
-        {sources.length > 0 && <div className="mt-4 grid gap-2 md:grid-cols-2">{sources.map(source => <div className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2 text-sm" key={source.sourceId}><span><span className="font-medium text-slate-800">{source.title}</span><span className="ml-2 text-xs text-slate-500">{source.sha256.slice(0, 12)} · {extractionStatusLabel(source.extractionStatus)}</span></span>{source.extractionStatus === "failed" && <Button disabled={busy} onClick={() => retryExtraction(source.sourceId)}>重新提取</Button>}</div>)}</div>}
+        {sources.length > 0 && <div className="mt-4 grid gap-2 md:grid-cols-2">{sources.map(source => <div className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2 text-sm" key={source.sourceId}><span><span className="font-medium text-slate-800">{source.title}</span><span className="ml-2 text-xs text-slate-500">{source.sha256.slice(0, 12)} · {extractionStatusLabel(source.extractionStatus)}</span></span><span className="flex gap-2">{source.extractionStatus === "completed" && <Button disabled={busy} onClick={() => generateDraft(source.sourceId)}>生成语义草稿</Button>}{source.extractionStatus === "failed" && <Button disabled={busy} onClick={() => retryExtraction(source.sourceId)}>重新提取</Button>}</span></div>)}</div>}
+        <p className="mt-3 text-xs text-slate-500">语义生成只回填可编辑草稿，不会自动保存、审核或激活；模型输出必须保留原始片段引用。</p>
       </Card>
       <Card title="机理知识工作台" description="把工程经验转成带变量、范围、反证条件和原始引用的声明草稿；创建人与审核人必须分离。">
         <form className="space-y-5" onSubmit={save}>
           <div className="grid gap-4 md:grid-cols-3">
             <Field label="声明名称"><Input required value={form.name} onChange={field(setForm, "name")} /></Field>
             <Field label="机理类型"><Select value={form.mechanismType} onChange={field(setForm, "mechanismType")}>{mechanismTypes.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select></Field>
-            <Field label="证据等级"><Select value={form.evidenceLevel} onChange={field(setForm, "evidenceLevel")}><option value="engineering-observation">工程观察</option><option value="documented-rule">受控文件</option><option value="experimental">实验结果</option></Select></Field>
+            <Field label="证据等级"><Select value={form.evidenceLevel} onChange={field(setForm, "evidenceLevel")}><option value="engineering-observation">工程观察</option><option value="documented-rule">受控文件</option><option value="experimental">实验结果</option><option value="model-assisted-draft">模型辅助草稿</option></Select></Field>
           </div>
           <div className="grid gap-4 lg:grid-cols-2">
             <Field label="机理陈述"><Textarea required rows={4} value={form.statement} onChange={field(setForm, "statement")} placeholder="什么变量通过什么作用影响什么结果。" /></Field>
@@ -195,6 +218,21 @@ export function MechanismKnowledgeWorkbench({ projectId, sources = [], reloadAss
               <Field label="时滞（毫秒）"><Input type="number" min="0" value={item.delayMilliseconds} onChange={rowField(setForm, "variables", index, "delayMilliseconds")} /></Field>
               <Field label="单位"><Input required value={item.unit} onChange={rowField(setForm, "variables", index, "unit")} /></Field>
               <Button type="button" variant="danger" disabled={form.variables.length === 1} onClick={() => removeRow(setForm, "variables", index)}>删除</Button>
+            </div>)}
+          </EditorRows>
+
+          <EditorRows title="禁止参数组合（可选）" add={() => setForm(current => ({ ...current, forbiddenCombinations: [...current.forbiddenCombinations, emptyForbiddenCombination()] }))}>
+            {form.forbiddenCombinations.length === 0 && <p className="text-sm text-slate-500">未声明多变量联合禁区。</p>}
+            {form.forbiddenCombinations.map((combination, combinationIndex) => <div className="space-y-3 rounded-xl border border-rose-200 bg-rose-50 p-3" key={combinationIndex}>
+              <div className="flex items-end gap-3"><Field className="flex-1" label="组合名称"><Input required value={combination.name} onChange={rowField(setForm, "forbiddenCombinations", combinationIndex, "name")} /></Field><Button type="button" variant="danger" onClick={() => removeRow(setForm, "forbiddenCombinations", combinationIndex)}>删除组合</Button></div>
+              {combination.factors.map((factor, factorIndex) => <div className="grid gap-3 md:grid-cols-5" key={factorIndex}>
+                <Field label="变量"><Select required value={factor.variableCode} onChange={nestedRowField(setForm, combinationIndex, factorIndex, "variableCode")}><option value="">请选择可控变量</option>{projectVariables.filter(variable => variable.role === "control").map(variable => <option key={variable.code} value={variable.code}>{variable.name || variable.code}</option>)}</Select></Field>
+                <Field label="最小值"><Input type="number" value={factor.minimum} onChange={nestedRowField(setForm, combinationIndex, factorIndex, "minimum")} /></Field>
+                <Field label="最大值"><Input type="number" value={factor.maximum} onChange={nestedRowField(setForm, combinationIndex, factorIndex, "maximum")} /></Field>
+                <Field label="单位"><Input required value={factor.unit} onChange={nestedRowField(setForm, combinationIndex, factorIndex, "unit")} /></Field>
+                <Button type="button" variant="danger" disabled={combination.factors.length <= 2} onClick={() => removeNestedRow(setForm, combinationIndex, factorIndex)}>删除条件</Button>
+              </div>)}
+              <Button type="button" onClick={() => addForbiddenFactor(setForm, combinationIndex)}>添加联合条件</Button>
             </div>)}
           </EditorRows>
 
@@ -220,7 +258,7 @@ export function MechanismKnowledgeWorkbench({ projectId, sources = [], reloadAss
           </EditorRows>
 
           <div className="grid gap-4 md:grid-cols-2">
-            <Field label="原始知识引用" hint="引用冻结的来源标识和 SHA-256；来源不是结论。"><Select required value={form.sourceId} onChange={field(setForm, "sourceId")}><option value="">请选择已上传来源</option>{sources.map(source => <option key={source.sourceId} value={source.sourceId}>{source.title}</option>)}</Select></Field>
+            <Field label="原始知识引用" hint="引用冻结的来源标识和 SHA-256；来源不是结论。"><Select required value={form.sourceId} onChange={event => setForm(current => ({ ...current, sourceId: event.target.value, evidence: [] }))}><option value="">请选择已上传来源</option>{sources.map(source => <option key={source.sourceId} value={source.sourceId}>{source.title}</option>)}</Select></Field>
             <Field label="证据方向"><Select value={form.polarity} onChange={field(setForm, "polarity")}><option value="supporting">支持</option><option value="opposing">反对</option></Select></Field>
           </div>
           <Button type="submit" variant="primary" disabled={busy || !form.sourceId}>保存声明草稿</Button>
@@ -263,6 +301,9 @@ export function MechanismKnowledgeWorkbench({ projectId, sources = [], reloadAss
 function EditorRows({ title, add, children }) { return <section className="space-y-3"><div className="flex items-center justify-between"><h3 className="text-sm font-semibold text-slate-900">{title}</h3><Button type="button" onClick={add}>添加一项</Button></div>{children}</section>; }
 function field(setter, key) { return event => setter(current => ({ ...current, [key]: event.target.value })); }
 function rowField(setter, collection, index, key) { return event => setter(current => ({ ...current, [collection]: current[collection].map((item, itemIndex) => itemIndex === index ? { ...item, [key]: event.target.value } : item) })); }
+function nestedRowField(setter, combinationIndex, factorIndex, key) { return event => setter(current => ({ ...current, forbiddenCombinations: current.forbiddenCombinations.map((combination, index) => index === combinationIndex ? { ...combination, factors: combination.factors.map((factor, nestedIndex) => nestedIndex === factorIndex ? { ...factor, [key]: event.target.value } : factor) } : combination) })); }
+function addForbiddenFactor(setter, combinationIndex) { setter(current => ({ ...current, forbiddenCombinations: current.forbiddenCombinations.map((combination, index) => index === combinationIndex ? { ...combination, factors: [...combination.factors, emptyForbiddenFactor()] } : combination) })); }
+function removeNestedRow(setter, combinationIndex, factorIndex) { setter(current => ({ ...current, forbiddenCombinations: current.forbiddenCombinations.map((combination, index) => index === combinationIndex ? { ...combination, factors: combination.factors.filter((_, nestedIndex) => nestedIndex !== factorIndex) } : combination) })); }
 function removeRow(setter, collection, index) { setter(current => ({ ...current, [collection]: current[collection].filter((_, itemIndex) => itemIndex !== index) })); }
 function numberOrNull(value) { return value === "" || value === null || value === undefined ? null : Number(value); }
 function labelForType(value) { return mechanismTypes.find(item => item[0] === value)?.[1] || value; }

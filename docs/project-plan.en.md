@@ -56,7 +56,7 @@ trusted acquisition → run and quality evidence → evidence-backed diagnosis
 
 This is a dependency chain, not menu order. Do not perform strong analysis with untrusted data, claim causes from observational evidence, enter shadow mode before replay, or enter controlled action before shadow and safety evidence pass.
 
-Optical-lens molding is the first sustained validation scenario, not the product boundary. Generality is supported only when a second, materially different manufacturing process works without changing the core evidence, experiment, and action contracts.
+The first sustained validation scenario has data onboarding and diagnosis running; historical replay, shadow, and controlled-online validation are still in progress. Its industry and equipment details stay out of the public repository, and the scenario itself is not the product boundary. Generality is supported only when a second, materially different manufacturing process works without changing the core evidence, experiment, and action contracts.
 
 ## 3. Three-horizon strategy
 

@@ -11,33 +11,36 @@ public sealed class EdgeRegistry(NpgsqlDataSource dataSource)
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
-    public IReadOnlyCollection<EdgeState> List()
+    public async Task<IReadOnlyCollection<EdgeState>> ListAsync(CancellationToken ct = default)
     {
-        using var connection = dataSource.OpenConnection();
-        using var command = connection.CreateCommand();
+        await using var connection = await dataSource.OpenConnectionAsync(ct).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
         command.CommandText =
             """
             SELECT edge_id, host_base_url, hostname, version, last_seen_at, last_error,
                    acquisition_status::text, delivery_status::text
             FROM platform_edges ORDER BY last_seen_at DESC
             """;
-        using var reader = command.ExecuteReader();
+        await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
         var values = new List<EdgeState>();
-        while (reader.Read()) values.Add(ReadEdge(reader));
+        while (await reader.ReadAsync(ct).ConfigureAwait(false)) values.Add(ReadEdge(reader));
         return values;
     }
 
-    public EdgeState? Find(string edgeId)
-        => string.IsNullOrWhiteSpace(edgeId) ? null : Get(edgeId.Trim());
+    public Task<EdgeState?> FindAsync(string edgeId, CancellationToken ct = default)
+        => string.IsNullOrWhiteSpace(edgeId)
+            ? Task.FromResult<EdgeState?>(null)
+            : GetAsync(edgeId.Trim(), ct);
 
-    public IReadOnlyList<EdgeRuntimeStatusHistoryItem> ListStatusHistory(
+    public async Task<IReadOnlyList<EdgeRuntimeStatusHistoryItem>> ListStatusHistoryAsync(
         string edgeId,
-        int limit = 288)
+        int limit = 288,
+        CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(edgeId)) return [];
         limit = Math.Clamp(limit, 1, 1000);
-        using var connection = dataSource.OpenConnection();
-        using var command = connection.CreateCommand();
+        await using var connection = await dataSource.OpenConnectionAsync(ct).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
         command.CommandText =
             """
             SELECT recorded_at, acquisition_state, last_valid_snapshot_at,
@@ -49,9 +52,9 @@ public sealed class EdgeRegistry(NpgsqlDataSource dataSource)
             """;
         command.Parameters.AddWithValue(edgeId.Trim());
         command.Parameters.AddWithValue(limit);
-        using var reader = command.ExecuteReader();
+        await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
         var values = new List<EdgeRuntimeStatusHistoryItem>();
-        while (reader.Read())
+        while (await reader.ReadAsync(ct).ConfigureAwait(false))
         {
             values.Add(new EdgeRuntimeStatusHistoryItem
             {
@@ -73,15 +76,16 @@ public sealed class EdgeRegistry(NpgsqlDataSource dataSource)
         return values;
     }
 
-    public IReadOnlyList<EdgeRuntimeStatusInterval> ListStatusIntervals(
+    public async Task<IReadOnlyList<EdgeRuntimeStatusInterval>> ListStatusIntervalsAsync(
         string edgeId,
-        int limit = 24)
+        int limit = 24,
+        CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(edgeId)) return [];
         edgeId = edgeId.Trim();
         limit = Math.Clamp(limit, 1, 200);
-        using var connection = dataSource.OpenConnection();
-        using var command = connection.CreateCommand();
+        await using var connection = await dataSource.OpenConnectionAsync(ct).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
         command.CommandText =
             """
             WITH ordered AS (
@@ -113,9 +117,9 @@ public sealed class EdgeRegistry(NpgsqlDataSource dataSource)
             """;
         command.Parameters.AddWithValue(edgeId);
         command.Parameters.AddWithValue(limit);
-        using var reader = command.ExecuteReader();
+        await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
         var values = new List<EdgeRuntimeStatusInterval>();
-        while (reader.Read())
+        while (await reader.ReadAsync(ct).ConfigureAwait(false))
         {
             values.Add(new EdgeRuntimeStatusInterval
             {
@@ -137,16 +141,17 @@ public sealed class EdgeRegistry(NpgsqlDataSource dataSource)
         return values;
     }
 
-    public EdgeState Upsert(
+    public async Task<EdgeState> UpsertAsync(
         string edgeId,
         string? hostBaseUrl,
         string? hostname,
         string? version,
-        DateTimeOffset now)
+        DateTimeOffset now,
+        CancellationToken ct = default)
     {
         edgeId = edgeId.Trim();
-        using var connection = dataSource.OpenConnection();
-        using var command = connection.CreateCommand();
+        await using var connection = await dataSource.OpenConnectionAsync(ct).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
         command.CommandText =
             """
             INSERT INTO platform_edges(
@@ -163,22 +168,24 @@ public sealed class EdgeRegistry(NpgsqlDataSource dataSource)
         AddNullable(command, NpgsqlDbType.Text, hostname);
         AddNullable(command, NpgsqlDbType.Text, version);
         command.Parameters.AddWithValue(now);
-        command.ExecuteNonQuery();
-        return Get(edgeId)!;
+        await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+        return await GetAsync(edgeId, ct).ConfigureAwait(false)
+            ?? throw new InvalidOperationException("边缘节点注册写入后无法读取。");
     }
 
-    public EdgeState Heartbeat(
+    public async Task<EdgeState> HeartbeatAsync(
         string edgeId,
         string? hostBaseUrl,
         string? lastError,
         EdgeAcquisitionRuntimeStatus? acquisition,
         DateTimeOffset now,
-        EdgeDeliveryRuntimeStatus? delivery = null)
+        EdgeDeliveryRuntimeStatus? delivery = null,
+        CancellationToken ct = default)
     {
         edgeId = edgeId.Trim();
-        using var connection = dataSource.OpenConnection();
-        using var transaction = connection.BeginTransaction();
-        using (var command = connection.CreateCommand())
+        await using var connection = await dataSource.OpenConnectionAsync(ct).ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
+        await using (var command = connection.CreateCommand())
         {
             command.Transaction = transaction;
             command.CommandText =
@@ -200,18 +207,20 @@ public sealed class EdgeRegistry(NpgsqlDataSource dataSource)
             AddNullable(command, NpgsqlDbType.Text, lastError);
             AddJson(command, acquisition);
             AddJson(command, delivery);
-            command.ExecuteNonQuery();
+            await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
         }
         if (acquisition is not null || delivery is not null)
-            SaveStatusHistory(connection, transaction, edgeId, acquisition, delivery, now);
-        transaction.Commit();
-        return Get(edgeId)!;
+            await SaveStatusHistoryAsync(connection, transaction, edgeId, acquisition, delivery, now, ct)
+                .ConfigureAwait(false);
+        await transaction.CommitAsync(ct).ConfigureAwait(false);
+        return await GetAsync(edgeId, ct).ConfigureAwait(false)
+            ?? throw new InvalidOperationException("边缘节点心跳写入后无法读取。");
     }
 
-    private EdgeState? Get(string edgeId)
+    private async Task<EdgeState?> GetAsync(string edgeId, CancellationToken ct)
     {
-        using var connection = dataSource.OpenConnection();
-        using var command = connection.CreateCommand();
+        await using var connection = await dataSource.OpenConnectionAsync(ct).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
         command.CommandText =
             """
             SELECT edge_id, host_base_url, hostname, version, last_seen_at, last_error,
@@ -219,8 +228,8 @@ public sealed class EdgeRegistry(NpgsqlDataSource dataSource)
             FROM platform_edges WHERE edge_id = $1
             """;
         command.Parameters.AddWithValue(edgeId);
-        using var reader = command.ExecuteReader();
-        return reader.Read() ? ReadEdge(reader) : null;
+        await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
+        return await reader.ReadAsync(ct).ConfigureAwait(false) ? ReadEdge(reader) : null;
     }
 
     private static EdgeState ReadEdge(NpgsqlDataReader reader)
@@ -235,15 +244,16 @@ public sealed class EdgeRegistry(NpgsqlDataSource dataSource)
             Delivery = Deserialize<EdgeDeliveryRuntimeStatus>(reader, 7)
         };
 
-    private static void SaveStatusHistory(
+    private static async Task SaveStatusHistoryAsync(
         NpgsqlConnection connection,
         NpgsqlTransaction transaction,
         string edgeId,
         EdgeAcquisitionRuntimeStatus? acquisition,
         EdgeDeliveryRuntimeStatus? delivery,
-        DateTimeOffset receivedAt)
+        DateTimeOffset receivedAt,
+        CancellationToken ct)
     {
-        using (var command = connection.CreateCommand())
+        await using (var command = connection.CreateCommand())
         {
             command.Transaction = transaction;
             command.CommandText =
@@ -280,15 +290,15 @@ public sealed class EdgeRegistry(NpgsqlDataSource dataSource)
             AddNullable(command, NpgsqlDbType.Double, delivery?.BacklogCapacityUsedPercent);
             AddNullable(command, NpgsqlDbType.Double, delivery?.ShipmentRatePerSecond);
             AddNullable(command, NpgsqlDbType.Text, delivery?.LastError);
-            command.ExecuteNonQuery();
+            await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
         }
-        using var prune = connection.CreateCommand();
+        await using var prune = connection.CreateCommand();
         prune.Transaction = transaction;
         prune.CommandText =
             "DELETE FROM edge_runtime_status_history WHERE edge_id = $1 AND recorded_at < $2";
         prune.Parameters.AddWithValue(edgeId);
         prune.Parameters.AddWithValue(receivedAt.AddDays(-7));
-        prune.ExecuteNonQuery();
+        await prune.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
     }
 
     private static void AddJson<T>(NpgsqlCommand command, T? value) where T : class

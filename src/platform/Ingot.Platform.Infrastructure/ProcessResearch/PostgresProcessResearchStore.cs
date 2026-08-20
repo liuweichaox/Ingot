@@ -203,16 +203,137 @@ public sealed class PostgresProcessResearchStore : IProcessResearchStore
         Guid projectId,
         CancellationToken ct = default)
     {
-        await using var command = _dataSource.CreateCommand(
-            "SELECT hypothesis_id FROM research_hypotheses WHERE project_id=$1 ORDER BY updated_at DESC, hypothesis_id;");
-        command.Parameters.AddWithValue(projectId);
-        await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
-        var ids = new List<Guid>();
-        while (await reader.ReadAsync(ct).ConfigureAwait(false)) ids.Add(reader.GetGuid(0));
-        var values = new List<ResearchHypothesis>(ids.Count);
-        foreach (var id in ids)
-            if (await ReadHypothesisAsync(id, ct).ConfigureAwait(false) is { } value) values.Add(value);
-        return values;
+        var values = new List<ResearchHypothesis>();
+        await using var connection = await _dataSource.OpenConnectionAsync(ct).ConfigureAwait(false);
+        await using (var command = new NpgsqlCommand(
+            """
+            SELECT hypothesis_id, project_id, statement, rationale, status, validation_outcome_code,
+              expected_effect_direction, minimum_effect, applicability, confidence,
+              created_by, created_at, updated_at
+            FROM research_hypotheses
+            WHERE project_id=@project_id
+            ORDER BY updated_at DESC, hypothesis_id;
+            """, connection))
+        {
+            command.Parameters.AddWithValue("project_id", projectId);
+            await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
+            while (await reader.ReadAsync(ct).ConfigureAwait(false))
+                values.Add(new ResearchHypothesis
+                {
+                    HypothesisId=reader.GetGuid(0), ProjectId=reader.GetGuid(1), Statement=reader.GetString(2),
+                    Rationale=reader.GetString(3), Status=reader.GetString(4),
+                    ValidationOutcomeCode=reader.IsDBNull(5)?null:reader.GetString(5),
+                    ExpectedEffectDirection=reader.IsDBNull(6)?null:reader.GetString(6),
+                    MinimumEffect=reader.IsDBNull(7)?null:reader.GetDouble(7),
+                    Applicability=reader.IsDBNull(8)?null:reader.GetString(8), Confidence=reader.GetDouble(9),
+                    CreatedBy=reader.GetString(10), CreatedAt=reader.GetFieldValue<DateTimeOffset>(11),
+                    UpdatedAt=reader.GetFieldValue<DateTimeOffset>(12)
+                });
+        }
+        if (values.Count == 0) return values;
+
+        var children = values.ToDictionary(
+            static value => value.HypothesisId,
+            static _ => new HypothesisChildren());
+        await using (var command = new NpgsqlCommand(
+            """
+            WITH requested AS (
+              SELECT hypothesis_id FROM research_hypotheses WHERE project_id=@project_id
+            )
+            SELECT item.hypothesis_id, item.kind, item.role, item.sequence, item.payload::text
+            FROM (
+              SELECT child.hypothesis_id, 'variable'::text kind, ''::text role, child.sequence,
+                to_jsonb(child.variable_code) payload
+              FROM research_hypothesis_variables child JOIN requested USING(hypothesis_id)
+              UNION ALL
+              SELECT child.hypothesis_id, 'confounder', '', child.sequence, to_jsonb(child.description)
+              FROM research_hypothesis_confounders child JOIN requested USING(hypothesis_id)
+              UNION ALL
+              SELECT child.hypothesis_id, 'causal-link', '', child.sequence,
+                jsonb_build_object('fromVariableCode',child.from_variable_code,'toVariableCode',child.to_variable_code,
+                  'mechanism',child.mechanism,'direction',child.direction)
+              FROM research_hypothesis_causal_links child JOIN requested USING(hypothesis_id)
+              UNION ALL
+              SELECT child.hypothesis_id, 'temporal-feature', '', child.sequence,
+                jsonb_build_object('variableCode',child.variable_code,'featureCode',child.feature_code,
+                  'phaseCode',child.phase_code,'delayMilliseconds',child.delay_ms,'windowMilliseconds',child.window_ms)
+              FROM research_hypothesis_temporal_features child JOIN requested USING(hypothesis_id)
+              UNION ALL
+              SELECT child.hypothesis_id, 'interaction', '', child.sequence,
+                jsonb_build_object('description',child.description,'variableCodes',COALESCE((
+                  SELECT jsonb_agg(variable.variable_code ORDER BY variable.sequence)
+                  FROM research_hypothesis_interaction_variables variable
+                  WHERE variable.interaction_id=child.interaction_id),'[]'::jsonb))
+              FROM research_hypothesis_interactions child JOIN requested USING(hypothesis_id)
+              UNION ALL
+              SELECT child.hypothesis_id, 'failure-condition', '', child.sequence,
+                jsonb_build_object('condition',child.condition,'observableSignal',child.observable_signal,
+                  'requiredResponse',child.required_response)
+              FROM research_hypothesis_failure_conditions child JOIN requested USING(hypothesis_id)
+              UNION ALL
+              SELECT child.hypothesis_id, 'falsification-condition', '', child.sequence, to_jsonb(child.condition)
+              FROM research_hypothesis_falsification_conditions child JOIN requested USING(hypothesis_id)
+              UNION ALL
+              SELECT child.hypothesis_id, 'evidence', child.evidence_role,
+                row_number() OVER (PARTITION BY child.hypothesis_id,child.evidence_role ORDER BY child.created_at,child.evidence_id)::integer,
+                jsonb_build_object('evidenceId',child.evidence_id,'projectId',child.project_id,'kind',child.kind,
+                  'referenceId',child.reference_id,'summary',child.summary,'contentHash',child.content_hash,
+                  'createdAt',child.created_at)
+              FROM research_hypothesis_evidence child JOIN requested USING(hypothesis_id)
+            ) item
+            ORDER BY item.hypothesis_id, item.kind, item.role, item.sequence;
+            """, connection))
+        {
+            command.Parameters.AddWithValue("project_id", projectId);
+            await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
+            while (await reader.ReadAsync(ct).ConfigureAwait(false))
+            {
+                var current = children[reader.GetGuid(0)];
+                var kind = reader.GetString(1);
+                var role = reader.GetString(2);
+                var payload = reader.GetString(4);
+                switch (kind)
+                {
+                    case "variable": current.VariableCodes.Add(Deserialize<string>(payload)); break;
+                    case "confounder": current.PossibleConfounders.Add(Deserialize<string>(payload)); break;
+                    case "causal-link": current.CausalChain.Add(Deserialize<ResearchHypothesisCausalLink>(payload)); break;
+                    case "temporal-feature": current.TemporalFeatures.Add(Deserialize<ResearchHypothesisTemporalFeature>(payload)); break;
+                    case "interaction": current.Interactions.Add(Deserialize<ResearchHypothesisInteraction>(payload)); break;
+                    case "failure-condition": current.FailureConditions.Add(Deserialize<ResearchHypothesisFailureCondition>(payload)); break;
+                    case "falsification-condition": current.FalsificationConditions.Add(Deserialize<string>(payload)); break;
+                    case "evidence" when role == "supporting": current.SupportingEvidence.Add(Deserialize<EvidenceReference>(payload)); break;
+                    case "evidence" when role == "opposing": current.OpposingEvidence.Add(Deserialize<EvidenceReference>(payload)); break;
+                    case "evidence" when role == "validation": current.ValidationEvidence.Add(Deserialize<EvidenceReference>(payload)); break;
+                }
+            }
+        }
+        return values.Select(value =>
+        {
+            var child = children[value.HypothesisId];
+            return value with
+            {
+                VariableCodes=child.VariableCodes, PossibleConfounders=child.PossibleConfounders,
+                CausalChain=child.CausalChain, TemporalFeatures=child.TemporalFeatures,
+                Interactions=child.Interactions, FailureConditions=child.FailureConditions,
+                FalsificationConditions=child.FalsificationConditions,
+                SupportingEvidence=child.SupportingEvidence, OpposingEvidence=child.OpposingEvidence,
+                ValidationEvidence=child.ValidationEvidence
+            };
+        }).ToArray();
+    }
+
+    private sealed class HypothesisChildren
+    {
+        public List<string> VariableCodes { get; } = [];
+        public List<string> PossibleConfounders { get; } = [];
+        public List<ResearchHypothesisCausalLink> CausalChain { get; } = [];
+        public List<ResearchHypothesisTemporalFeature> TemporalFeatures { get; } = [];
+        public List<ResearchHypothesisInteraction> Interactions { get; } = [];
+        public List<ResearchHypothesisFailureCondition> FailureConditions { get; } = [];
+        public List<string> FalsificationConditions { get; } = [];
+        public List<EvidenceReference> SupportingEvidence { get; } = [];
+        public List<EvidenceReference> OpposingEvidence { get; } = [];
+        public List<EvidenceReference> ValidationEvidence { get; } = [];
     }
 
     public async Task<ResearchHypothesis> SaveHypothesisAsync(

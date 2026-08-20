@@ -15,9 +15,14 @@ public sealed class TrainingDatasetsController(
     PlatformUserResolver userResolver) : PlatformConfigurationControllerBase(userResolver)
 {
     [HttpGet]
-    public async Task<IActionResult> List(CancellationToken ct)
-        => DeniedResearchAssetRead() ??
-           Ok(new { data = await store.ListDatasetsAsync(ct).ConfigureAwait(false) });
+    public async Task<IActionResult> List(
+        [FromQuery] int limit = 200, [FromQuery] string? cursor = null, CancellationToken ct = default)
+    {
+        var denied = DeniedResearchAssetRead();
+        if (denied is not null) return denied;
+        if (limit is < 1 or > 200) return InvalidRequest("limit 必须在 1 到 200 之间。");
+        return Ok(await store.ListDatasetsPageAsync(limit, cursor, ct).ConfigureAwait(false));
+    }
 
     [HttpGet("{datasetId}/{version:int}")]
     public async Task<IActionResult> Get(string datasetId, int version, CancellationToken ct)
@@ -58,12 +63,23 @@ public sealed class ProcessModelsController(
     PlatformUserResolver userResolver) : PlatformConfigurationControllerBase(userResolver)
 {
     [HttpGet]
-    public async Task<IActionResult> List(CancellationToken ct)
-        => DeniedResearchAssetRead() ??
-           Ok(new { data = await store.ListModelsAsync(ct).ConfigureAwait(false) });
+    public async Task<IActionResult> List(
+        [FromQuery] int limit = 200, [FromQuery] string? cursor = null, CancellationToken ct = default)
+    {
+        var denied = DeniedResearchAssetRead();
+        if (denied is not null) return denied;
+        if (limit is < 1 or > 200) return InvalidRequest("limit 必须在 1 到 200 之间。");
+        return Ok(await store.ListModelsPageAsync(limit, cursor, ct).ConfigureAwait(false));
+    }
 
     [HttpGet("{modelId}/{version:int}")]
-    public async Task<IActionResult> Get(string modelId, int version, CancellationToken ct)
+    public async Task<IActionResult> Get(
+        string modelId,
+        int version,
+        [FromQuery] int limit = 200,
+        [FromQuery] string? evaluationCursor = null,
+        [FromQuery] string? driftCursor = null,
+        CancellationToken ct = default)
     {
         var denied = DeniedResearchAssetRead();
         if (denied is not null)
@@ -72,11 +88,22 @@ public sealed class ProcessModelsController(
         var model = await store.GetModelAsync(normalizedId, version, ct).ConfigureAwait(false);
         if (model is null)
             return ResourceNotFound();
-        var evaluations = await store.ListEvaluationsAsync(normalizedId, version, ct).ConfigureAwait(false);
-        var driftReadings = await store.ListDriftReadingsAsync(normalizedId, version, ct).ConfigureAwait(false);
+        if (limit is < 1 or > 200) return InvalidRequest("limit 必须在 1 到 200 之间。");
+        var evaluations = await store.ListEvaluationsPageAsync(
+            normalizedId, version, limit, evaluationCursor, ct).ConfigureAwait(false);
+        var driftReadings = await store.ListDriftReadingsPageAsync(
+            normalizedId, version, limit, driftCursor, ct).ConfigureAwait(false);
         var audit = await store.ListAuditEntriesAsync("model", $"{normalizedId}:{version}", ct)
             .ConfigureAwait(false);
-        return Ok(new { model, evaluations, driftReadings, audit });
+        return Ok(new
+        {
+            model,
+            evaluations = evaluations.Data,
+            evaluationNextCursor = evaluations.NextCursor,
+            driftReadings = driftReadings.Data,
+            driftNextCursor = driftReadings.NextCursor,
+            audit
+        });
     }
 
     [HttpPost]
@@ -180,13 +207,17 @@ public sealed class ProcessKnowledgeController(
         StringComparer.Ordinal);
 
     [HttpGet]
-    public async Task<IActionResult> List([FromQuery] Guid projectId, CancellationToken ct)
+    public async Task<IActionResult> List(
+        [FromQuery] Guid projectId,
+        [FromQuery] int limit = 200,
+        [FromQuery] string? cursor = null,
+        CancellationToken ct = default)
     {
         var access = await ResolveProjectAccessAsync(projectId, false, ct).ConfigureAwait(false);
         if (access.Result is not null)
             return access.Result;
-        var sources = await store.ListKnowledgeSourcesAsync(projectId, ct).ConfigureAwait(false);
-        return Ok(new { data = sources });
+        if (limit is < 1 or > 200) return InvalidRequest("limit 必须在 1 到 200 之间。");
+        return Ok(await store.ListKnowledgeSourcesPageAsync(projectId, limit, cursor, ct).ConfigureAwait(false));
     }
 
     [HttpGet("{sourceId:guid}")]

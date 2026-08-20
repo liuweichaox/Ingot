@@ -219,7 +219,6 @@ test("execution comparison submits the selection contract and renders business r
   assert.match(pages, /label="对比范围"/);
   assert.match(pages, /label="对比运行"/);
   assert.match(pages, /comparisonScope === "cohort"/);
-  assert.match(pages, /execution-comparisons\/\$\{encodeURIComponent\(baselineProcessExecutionId\)\}\?limit=24&siteId=/);
   assert.match(pages, /processExecutionIds: \[baselineProcessExecutionId, candidate\]/);
   assert.match(pages, /title="选择目标运行并开始对比"/);
   assert.match(pages, /生成对比结论/);
@@ -377,6 +376,9 @@ test("mechanism knowledge workbench structures citations, review, constraints, a
   assert.match(researchAssets, /反证条件/);
   assert.match(researchAssets, /时滞（毫秒）/);
   assert.match(researchAssets, /工程约束（可选）/);
+  assert.match(researchAssets, /禁止参数组合（可选）/);
+  assert.match(researchAssets, /生成语义草稿/);
+  assert.match(researchAssets, /不会自动保存、审核或激活/);
   assert.match(researchAssets, /原始知识引用/);
   assert.match(researchAssets, /通过审核/);
   assert.match(researchAssets, /登记支持实验/);
@@ -425,6 +427,7 @@ test("historical replay reports preserve production-equivalent comparisons and f
   assert.match(researchProjects, /历史原顺序/);
   assert.match(researchProjects, /优化器中位数/);
   assert.match(researchProjects, /随机中位数/);
+  assert.match(researchProjects, /知识 vs 纯数据/);
   assert.match(researchProjects, /优化器安全违规/);
   assert.match(researchProjects, /失败与限制/);
   assert.match(researchProjects, /审核完整报告/);

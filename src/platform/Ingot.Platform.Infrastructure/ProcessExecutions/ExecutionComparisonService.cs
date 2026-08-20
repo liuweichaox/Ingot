@@ -22,7 +22,8 @@ public sealed class ExecutionComparisonService(
     ITimeSeriesStore timeSeries,
     ProcessExecutionAnalysisEngine? wholeProcessExecutionAnalysis = null,
     ProcessExecutionAnalysisMaterializer? materializer = null,
-    IProcessOptimizerClient? optimizerClient = null) : IExecutionComparisonService
+    IProcessOptimizerClient? optimizerClient = null,
+    ExecutionComparisonMetrics? comparisonMetrics = null) : IExecutionComparisonService
 {
     private readonly ProcessExecutionAnalysisEngine _wholeProcessExecutionAnalysis = wholeProcessExecutionAnalysis ?? new();
     private readonly ProcessExecutionAnalysisMaterializer? _materializer = materializer;
@@ -137,7 +138,8 @@ public sealed class ExecutionComparisonService(
         string executionId,
         int limit,
         CancellationToken ct = default,
-        string? siteId = null)
+        string? siteId = null,
+        IReadOnlyList<string>? additionalKnownUnmeasuredConfounders = null)
     {
         var baselineEvents = await QueryAllAsync(
             new PlatformEventQuery { SiteId = siteId, ExecutionId = executionId }, ct).ConfigureAwait(false);
@@ -169,14 +171,21 @@ public sealed class ExecutionComparisonService(
                 ResolveContext(executionEvents.GetValueOrDefault(id, [])),
                 comparisonKeys)).Take(limit))
             .ToArray();
-        return await BuildComparisonAsync(executionId, allIds, executionEvents, analysis, ct).ConfigureAwait(false);
+        return await BuildComparisonAsync(
+            executionId,
+            allIds,
+            executionEvents,
+            analysis,
+            additionalKnownUnmeasuredConfounders,
+            ct).ConfigureAwait(false);
     }
 
     public async Task<ExecutionComparisonResult?> CompareSelectedAsync(
         string baselineProcessExecutionId,
         IReadOnlyList<string> executionIds,
         CancellationToken ct = default,
-        string? siteId = null)
+        string? siteId = null,
+        IReadOnlyList<string>? additionalKnownUnmeasuredConfounders = null)
     {
         var allIds = new[] { baselineProcessExecutionId }
             .Concat(executionIds.Where(id => !string.Equals(id, baselineProcessExecutionId, StringComparison.Ordinal)))
@@ -207,7 +216,13 @@ public sealed class ExecutionComparisonService(
                 nameof(executionIds));
         }
 
-        return await BuildComparisonAsync(baselineProcessExecutionId, allIds, executionEvents, analysis, ct)
+        return await BuildComparisonAsync(
+                baselineProcessExecutionId,
+                allIds,
+                executionEvents,
+                analysis,
+                additionalKnownUnmeasuredConfounders,
+                ct)
             .ConfigureAwait(false);
     }
 
@@ -216,6 +231,7 @@ public sealed class ExecutionComparisonService(
         IReadOnlyList<string> allIds,
         IReadOnlyDictionary<string, IReadOnlyList<PlatformProductionEvent>> executionEvents,
         ResolvedProcessAnalysis? analysis,
+        IReadOnlyList<string>? additionalKnownUnmeasuredConfounders,
         CancellationToken ct)
     {
         var allInspections = InspectionRecordSet.Effective(
@@ -265,6 +281,13 @@ public sealed class ExecutionComparisonService(
             _diagnosisEngine.Analyze(rows),
             optimizerClient,
             ct).ConfigureAwait(false);
+        diagnosis = ApplyTransparencyPolicy(
+            diagnosis,
+            acceptance,
+            BuildConfounderDisclosures(
+                analysis?.Plan.KnownUnmeasuredConfounders ?? [],
+                additionalKnownUnmeasuredConfounders));
+        comparisonMetrics?.Observe(diagnosis.Readiness);
         var signalComparisons = BuildSignalComparisons(rows[0], rows.Skip(1).ToArray());
         var qualityAssociations = BuildQualityAssociations(rows);
         var investigation = _investigationBuilder.Build(
@@ -297,6 +320,78 @@ public sealed class ExecutionComparisonService(
             Investigation = investigation,
             Acceptance = acceptance
         };
+    }
+
+    private static ExecutionDiagnosisSummary ApplyTransparencyPolicy(
+        ExecutionDiagnosisSummary diagnosis,
+        ExecutionComparisonAcceptance acceptance,
+        IReadOnlyList<ExecutionConfounderDisclosure> knownUnmeasuredConfounders)
+    {
+        var reasons = new List<string>();
+        if (acceptance.QualityLinkedProcessExecutionCount == 0)
+            reasons.Add("quality-outcomes-missing");
+        if (diagnosis.PassProcessExecutionCount == 0 || diagnosis.FailProcessExecutionCount == 0)
+            reasons.Add("outcome-class-missing");
+        if (diagnosis.PassEffectiveWeight < 2 || diagnosis.FailEffectiveWeight < 2)
+            reasons.Add("effective-weight-insufficient");
+        if (acceptance.UnavailableProcessExecutionCount > 0)
+            reasons.Add("process-data-unavailable");
+
+        var mode = reasons.Any(reason => reason is
+                "quality-outcomes-missing" or "outcome-class-missing" or "effective-weight-insufficient")
+            ? "descriptive-only"
+            : string.Equals(diagnosis.EvidenceLevel, "stable", StringComparison.Ordinal) &&
+              diagnosis.CrossValidationScore is > 0
+                ? "candidate-ranking"
+                : "exploratory";
+        var observed = diagnosis.Candidates
+            .SelectMany(static candidate => candidate.PossibleConfounders)
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        return diagnosis with
+        {
+            Readiness = new ExecutionAnalysisReadiness
+            {
+                Mode = mode,
+                BlockingReasons = reasons
+            },
+            AdjustedContextVariables = diagnosis.ContextVariables,
+            ObservedPossibleConfounders = observed,
+            KnownUnmeasuredConfounders = knownUnmeasuredConfounders,
+            SensitivityAssessment = new ExecutionSensitivityAssessment(),
+            Candidates = mode == "descriptive-only" ? [] : diagnosis.Candidates,
+            Interactions = mode == "descriptive-only" ? [] : diagnosis.Interactions
+        };
+    }
+
+    private static IReadOnlyList<ExecutionConfounderDisclosure> BuildConfounderDisclosures(
+        IReadOnlyList<KnownUnmeasuredConfounderDefinition> configured,
+        IReadOnlyList<string>? additional)
+    {
+        var values = configured.Select(static value => new ExecutionConfounderDisclosure
+        {
+            Code = value.Code,
+            Name = value.Name,
+            Description = value.Description,
+            Source = "analysis-plan"
+        }).ToList();
+        var seen = values.Select(static value => value.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var sequence = 0;
+        foreach (var raw in additional ?? [])
+        {
+            var name = raw?.Trim();
+            if (string.IsNullOrWhiteSpace(name) || name.Length > 240 || !seen.Add(name))
+                continue;
+            sequence++;
+            values.Add(new ExecutionConfounderDisclosure
+            {
+                Code = $"additional-{sequence}",
+                Name = name,
+                Source = "request"
+            });
+        }
+        return values;
     }
 
     private static async Task<ExecutionDiagnosisSummary> EnrichDiagnosisAsync(

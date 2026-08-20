@@ -71,6 +71,7 @@ public sealed partial class ProcessResearchWorkflow
                 Code = existing.Code,
                 Status = existing.Status,
                 OwnerUserId = existing.OwnerUserId,
+                MemberUserIds = existing.MemberUserIds,
                 Context = updatedContext,
                 CreatedAt = existing.CreatedAt,
                 UpdatedAt = DateTimeOffset.UtcNow,
@@ -79,6 +80,42 @@ public sealed partial class ProcessResearchWorkflow
         var saved = await store.SaveProjectAsync(value, ct).ConfigureAwait(false);
         await AuditAsync(projectId, "project", projectId.ToString(), "updated",
             userId, existing.Status, saved.Status, ct).ConfigureAwait(false);
+        return saved;
+    }
+
+    public async Task<ResearchProject> UpdateProjectMembersAsync(
+        Guid projectId,
+        int revision,
+        IReadOnlyList<string> memberUserIds,
+        string userId,
+        bool isPlatformAdministrator,
+        CancellationToken ct = default)
+    {
+        userId = NormalizeUser(userId);
+        var existing = await RequireMutableProjectAsync(projectId, ct).ConfigureAwait(false);
+        if (revision != existing.Revision)
+            throw new ProcessResearchRuleException("研发项目已被其他人修改，请刷新后重试。");
+        if (!isPlatformAdministrator &&
+            !string.Equals(existing.OwnerUserId, userId, StringComparison.Ordinal))
+            throw new UnauthorizedAccessException("只有项目负责人或平台管理员可以管理项目成员。");
+
+        var saved = await store.SaveProjectAsync(
+            NormalizeProject(existing with
+            {
+                MemberUserIds = memberUserIds,
+                UpdatedAt = DateTimeOffset.UtcNow,
+                Revision = existing.Revision + 1
+            }),
+            ct).ConfigureAwait(false);
+        await AuditAsync(
+            projectId,
+            "project-members",
+            projectId.ToString(),
+            "members-updated",
+            userId,
+            string.Join(',', existing.MemberUserIds),
+            string.Join(',', saved.MemberUserIds),
+            ct).ConfigureAwait(false);
         return saved;
     }
 

@@ -5,6 +5,8 @@ import pytest
 
 from ingot_optimizer import (
     Campaign,
+    ForbiddenCombination,
+    ForbiddenCombinationFactor,
     Objective,
     ParameterConstraint,
     Variable,
@@ -37,6 +39,27 @@ def test_campaign_enforces_bounds_constraints_and_exact_keys():
         campaign.to_unit({"temperature": 350.0, "typo": 1.0})
     with pytest.raises(ValueError, match="finite"):
         campaign.distance_to_spec({"form": math.nan})
+
+
+def test_campaign_rejects_matching_forbidden_combination():
+    campaign = Campaign(
+        name="safe-window",
+        variables=[Variable("temperature", 100.0, 200.0), Variable("pressure", 1.0, 10.0)],
+        objectives=[Objective("quality", "ge", threshold=0.9)],
+        forbidden_combinations=[
+            ForbiddenCombination(
+                "hot-and-pressurized",
+                (
+                    ForbiddenCombinationFactor("temperature", minimum=180.0),
+                    ForbiddenCombinationFactor("pressure", minimum=8.0),
+                ),
+            )
+        ],
+    )
+
+    campaign.validate_params({"temperature": 175.0, "pressure": 9.0})
+    with pytest.raises(ValueError, match="hot-and-pressurized"):
+        campaign.validate_params({"temperature": 185.0, "pressure": 9.0})
 
 
 def test_bounded_objective_rejects_impossible_observations_and_bounds_predictions():

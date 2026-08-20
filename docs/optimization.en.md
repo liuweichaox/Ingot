@@ -1,5 +1,11 @@
 # Analysis and optimization
 
+## Diagnostic readiness and confounder disclosure
+
+Execution-comparison responses expose a structured `readiness.mode`. `descriptive-only` shows coverage, missingness, trends, strata, and data-chain gaps and disables candidate-hypothesis generation. `exploratory` may show ranked observational candidates. `candidate-ranking` means out-of-sample performance and stability support a stronger ranking, but it still does not mean a confirmed cause. Every candidate requires controlled repeated experiments.
+
+The response also freezes the context variables actually adjusted, observed group imbalances, and known unmeasured confounders from both the versioned analysis plan and the current request. The first release fixes `sensitivityAssessment.status` at `not-estimable`: standardized coefficients and model importance are not an interpretable risk-ratio estimand and lack the required confidence interval, so the product does not display an invalid E-value. Metrics record only readiness modes and structured blocking reasons, never user-entered free text as labels.
+
 > Status: **current scientific strategy**. This document explains how methods are selected by the engineering question and describes the limits of today's numerical implementation. Algorithms may evolve without changing the core value or evidence principles.
 
 ## Method-selection principle
@@ -114,7 +120,7 @@ Current objective strategies include:
 - hard parameter bounds and linear constraints;
 - modeled quality or safety outcome constraints.
 
-Before calling Optimizer, Platform also selects active, conflict-free mechanism claims that match the project context. Hard constraints narrow candidate bounds and soft constraints rank candidates; the input, claim versions, and knowledge-snapshot hash are frozen with the experiment. This is knowledge-assisted constraint and explanation behavior, not an assertion that Bayesian priors, mechanism features, or residual models are already wired into the GP.
+Before calling Optimizer, Platform also selects active, conflict-free mechanism claims that match the project context. Hard constraints and multivariable forbidden combinations enter candidate feasibility, while soft constraints rank candidates; the input, claim versions, and knowledge-snapshot hash are frozen with the experiment. Active affine `mechanism-as-feature` definitions become declarative GP inputs with exact model and fusion versions and hashes. Bayesian priors, residual models, and the other output-fusion modes are not yet on the recommendation path.
 
 Multi-objective cases may use qLogNEHVI, while single-objective cases may use qLogNEI. The acquisition function is a current implementation strategy, not a product principle.
 

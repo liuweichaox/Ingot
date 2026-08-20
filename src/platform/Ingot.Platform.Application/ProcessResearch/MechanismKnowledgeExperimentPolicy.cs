@@ -10,7 +10,8 @@ namespace Ingot.Platform.Application.ProcessResearch;
 internal sealed record AppliedMechanismKnowledge(
     IReadOnlyList<MechanismClaimVersion> Claims,
     IReadOnlyList<MechanismClaimConstraint> HardConstraints,
-    IReadOnlyList<MechanismClaimConstraint> RankingConstraints);
+    IReadOnlyList<MechanismClaimConstraint> RankingConstraints,
+    IReadOnlyList<MechanismForbiddenCombination> ForbiddenCombinations);
 
 internal static class MechanismKnowledgeExperimentPolicy
 {
@@ -43,15 +44,18 @@ internal static class MechanismKnowledgeExperimentPolicy
         return new AppliedMechanismKnowledge(
             selected,
             constraints.Where(static value => value.Severity == "hard").ToArray(),
-            constraints.Where(static value => value.Severity == "soft").ToArray());
+            constraints.Where(static value => value.Severity == "soft").ToArray(),
+            selected.SelectMany(static value => value.ForbiddenCombinations).ToArray());
     }
 
     public static OptimizerCampaignInput ApplyHardConstraints(
         OptimizerCampaignInput campaign,
         AppliedMechanismKnowledge knowledge)
     {
-        if (knowledge.HardConstraints.Count == 0) return campaign;
+        if (knowledge.HardConstraints.Count == 0 && knowledge.ForbiddenCombinations.Count == 0)
+            return campaign;
         var variables = campaign.Variables.ToDictionary(static value => value.Name, StringComparer.Ordinal);
+        var constraints = campaign.Constraints.ToList();
         foreach (var constraint in knowledge.HardConstraints)
         {
             if (!variables.TryGetValue(constraint.VariableCode, out var variable))
@@ -65,14 +69,42 @@ internal static class MechanismKnowledgeExperimentPolicy
                     $"生效机理约束 {constraint.VariableCode} 的单位与项目变量不一致。");
             var lower = Math.Max(variable.Low, constraint.Minimum ?? variable.Low);
             var upper = Math.Min(variable.High, constraint.Maximum ?? variable.High);
-            if (lower > upper)
+            if (lower >= upper)
                 throw new ProcessResearchRuleException(
                     $"生效机理约束使变量 {constraint.VariableCode} 不存在可行范围。");
-            variables[constraint.VariableCode] = variable with { Low = lower, High = upper };
+            if (constraint.Minimum is { } minimum)
+                constraints.Add(new OptimizerConstraintInput
+                {
+                    Variable = constraint.VariableCode,
+                    Operator = ">=",
+                    Limit = minimum,
+                    SafetyCritical = true
+                });
+            if (constraint.Maximum is { } maximum)
+                constraints.Add(new OptimizerConstraintInput
+                {
+                    Variable = constraint.VariableCode,
+                    Operator = "<=",
+                    Limit = maximum,
+                    SafetyCritical = true
+                });
         }
         return campaign with
         {
-            Variables = campaign.Variables.Select(value => variables[value.Name]).ToArray()
+            Constraints = constraints.DistinctBy(static value =>
+                (value.Variable, value.Operator, value.Limit)).ToArray(),
+            ForbiddenCombinations = knowledge.ForbiddenCombinations.Select(combination =>
+                new OptimizerForbiddenCombinationInput
+                {
+                    Name = combination.Name,
+                    Factors = combination.Factors.Select(static factor =>
+                        new OptimizerForbiddenCombinationFactorInput
+                        {
+                            Variable = factor.VariableCode,
+                            Minimum = factor.Minimum,
+                            Maximum = factor.Maximum
+                        }).ToArray()
+                }).ToArray()
         };
     }
 
@@ -125,6 +157,16 @@ internal static class MechanismKnowledgeExperimentPolicy
                 throw new ProcessResearchRuleException(
                     $"优化建议违反生效机理硬约束：{constraint.VariableCode}。");
             }
+        }
+        foreach (var combination in knowledge.ForbiddenCombinations)
+        {
+            var matches = combination.Factors.All(factor =>
+                suggestion.RecommendedParameters.TryGetValue(factor.VariableCode, out var value) &&
+                (factor.Minimum is null || value >= factor.Minimum) &&
+                (factor.Maximum is null || value <= factor.Maximum));
+            if (matches)
+                throw new ProcessResearchRuleException(
+                    $"优化建议命中生效机理禁止组合：{combination.Name}。");
         }
     }
 

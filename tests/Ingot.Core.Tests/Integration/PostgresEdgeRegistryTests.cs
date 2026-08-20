@@ -9,6 +9,47 @@ namespace Ingot.Core.Tests.Integration;
 public sealed class PostgresEdgeRegistryTests(PostgresIntegrationFixture postgres)
 {
     [LinuxDockerFact]
+    public async Task ConcurrentHeartbeats_CommitEveryStatusHistorySample()
+    {
+        await postgres.EnsureSchemaAsync();
+        var edgeId = $"EDGE-CONCURRENT-{Guid.NewGuid():N}";
+        var at = DateTimeOffset.UtcNow;
+        var registry = new EdgeRegistry(postgres.DataSource);
+
+        await Task.WhenAll(Enumerable.Range(0, 8).Select(index => registry.HeartbeatAsync(
+            edgeId,
+            "http://edge.local",
+            null,
+            new EdgeAcquisitionRuntimeStatus(
+                Enabled: true,
+                State: "running",
+                ReportedAt: at.AddMilliseconds(index),
+                ConfigurationSource: AcquisitionConfigurationSources.Platform,
+                DesiredConfigurationSetHash: "desired",
+                AppliedConfigurationSetHash: "applied",
+                LastAttemptAt: at,
+                LastReadSuccessAt: at,
+                LastValidSnapshotAt: at,
+                ReadSuccessCount: index,
+                ValidSnapshotCount: index,
+                EmittedEventCount: index,
+                DuplicateSuppressionCount: 0,
+                InactiveSnapshotCount: 0,
+                SourceIdentityStallCount: 0,
+                LastReadDurationMs: 1,
+                ObservedIntervalMs: 1,
+                ActiveProcessSpecification: null,
+                LastError: null,
+                Tasks: [],
+                Deployments: []),
+            at.AddMilliseconds(index))));
+
+        var history = await registry.ListStatusHistoryAsync(edgeId, 20);
+        Assert.Equal(8, history.Count);
+        Assert.Equal(7, history[0].ValidSnapshotCount);
+    }
+
+    [LinuxDockerFact]
     public async Task Heartbeat_ShouldBeVisibleAcrossRegistryInstancesWithHistory()
     {
         await postgres.EnsureSchemaAsync();
@@ -45,7 +86,7 @@ public sealed class PostgresEdgeRegistryTests(PostgresIntegrationFixture postgre
             LastRecoveryDurationMs = 1250
         };
 
-        new EdgeRegistry(postgres.DataSource).Heartbeat(
+        await new EdgeRegistry(postgres.DataSource).HeartbeatAsync(
             edgeId,
             "http://edge.local/",
             null,
@@ -53,7 +94,7 @@ public sealed class PostgresEdgeRegistryTests(PostgresIntegrationFixture postgre
             now,
             delivery);
 
-        new EdgeRegistry(postgres.DataSource).Heartbeat(
+        await new EdgeRegistry(postgres.DataSource).HeartbeatAsync(
             edgeId,
             null,
             null,
@@ -61,7 +102,7 @@ public sealed class PostgresEdgeRegistryTests(PostgresIntegrationFixture postgre
             now.AddSeconds(10),
             delivery with { PendingEventCount = 5 });
 
-        new EdgeRegistry(postgres.DataSource).Heartbeat(
+        await new EdgeRegistry(postgres.DataSource).HeartbeatAsync(
             edgeId,
             null,
             "上送中断",
@@ -70,16 +111,16 @@ public sealed class PostgresEdgeRegistryTests(PostgresIntegrationFixture postgre
             delivery with { State = "blocked", PendingEventCount = 7, LastError = "平台不可达" });
 
         var secondReplica = new EdgeRegistry(postgres.DataSource);
-        var restored = secondReplica.Find(edgeId);
+        var restored = await secondReplica.FindAsync(edgeId);
         Assert.NotNull(restored);
         Assert.Equal("http://edge.local", restored.HostBaseUrl);
         Assert.Equal(48, restored.Acquisition!.ValidSnapshotCount);
         Assert.Equal(7, restored.Delivery!.PendingEventCount);
-        var history = secondReplica.ListStatusHistory(edgeId);
+        var history = await secondReplica.ListStatusHistoryAsync(edgeId);
         Assert.Equal(3, history.Count);
         Assert.Equal("blocked", history[0].DeliveryState);
 
-        var intervals = secondReplica.ListStatusIntervals(edgeId);
+        var intervals = await secondReplica.ListStatusIntervalsAsync(edgeId);
         Assert.Equal(2, intervals.Count);
         Assert.Equal("blocked", intervals[0].DeliveryState);
         Assert.Equal("平台不可达", intervals[0].DeliveryError);

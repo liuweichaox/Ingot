@@ -27,6 +27,7 @@ FEATURE_OPERATORS = frozenset(
         "minimum",
         "maximum",
         "standard_deviation",
+        "affine",
     }
 )
 
@@ -47,6 +48,8 @@ class DerivedFeature:
     normalization_offset: float = 0.0
     normalization_scale: float = 1.0
     epsilon: float = 1e-9
+    intercept: float = 0.0
+    coefficients: tuple[float, ...] = ()
 
     def __post_init__(self) -> None:
         name = self.name.strip()
@@ -81,9 +84,26 @@ class DerivedFeature:
             raise ValueError(
                 f"derived feature {name} epsilon must be positive and finite"
             )
+        if not math.isfinite(self.intercept):
+            raise ValueError(f"derived feature {name} intercept must be finite")
+        coefficients = tuple(float(value) for value in self.coefficients)
+        if operator == "affine":
+            if len(coefficients) != len(inputs):
+                raise ValueError(
+                    f"derived feature {name} affine coefficients must match its inputs"
+                )
+            if any(not math.isfinite(value) for value in coefficients):
+                raise ValueError(
+                    f"derived feature {name} affine coefficients must be finite"
+                )
+        elif coefficients:
+            raise ValueError(
+                f"derived feature {name} coefficients are only valid for affine features"
+            )
         object.__setattr__(self, "name", name)
         object.__setattr__(self, "operator", operator)
         object.__setattr__(self, "inputs", inputs)
+        object.__setattr__(self, "coefficients", coefficients)
 
 
 def expand_inputs(
@@ -180,4 +200,6 @@ def _evaluate(feature: DerivedFeature, inputs: list[np.ndarray]) -> np.ndarray:
         return stacked.max(axis=1)
     if operator == "standard_deviation":
         return stacked.std(axis=1)
+    if operator == "affine":
+        return feature.intercept + stacked @ np.asarray(feature.coefficients, dtype=float)
     raise AssertionError(f"unhandled derived feature operator: {operator}")

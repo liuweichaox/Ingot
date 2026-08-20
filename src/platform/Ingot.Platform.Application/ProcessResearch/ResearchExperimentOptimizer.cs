@@ -19,7 +19,8 @@ public sealed class ResearchExperimentOptimizer(
     ResearchExperimentCommands experimentCommands,
     ProcessResearchWorkflow workflow,
     ResearchOnlineAdmissionService? onlineAdmission = null,
-    IMechanismKnowledgeStore? mechanismKnowledgeStore = null)
+    IMechanismKnowledgeStore? mechanismKnowledgeStore = null,
+    IResearchAssetStore? researchAssetStore = null)
 {
     public async Task<ResearchExperiment> CreateNextExperimentAsync(
         Guid projectId,
@@ -37,13 +38,19 @@ public sealed class ResearchExperimentOptimizer(
         if (project.Status is ResearchProjectStatuses.Completed or ResearchProjectStatuses.Archived)
             throw new ProcessResearchRuleException("已完成或已归档的研发项目保持只读。");
         var mechanismKnowledge = mechanismKnowledgeStore is null
-            ? new AppliedMechanismKnowledge([], [], [])
+            ? new AppliedMechanismKnowledge([], [], [], [])
             : MechanismKnowledgeExperimentPolicy.Select(
                 project,
                 await mechanismKnowledgeStore.ListClaimsAsync(projectId, ct).ConfigureAwait(false),
                 await mechanismKnowledgeStore.ListConflictsAsync(projectId, ct).ConfigureAwait(false));
         var mechanismKnowledgeSnapshotHash =
             MechanismKnowledgeExperimentPolicy.SnapshotHash(mechanismKnowledge);
+        var mechanismModels = researchAssetStore is null
+            ? new AppliedMechanismModels([], [])
+            : MechanismModelExperimentPolicy.Select(
+                project,
+                await researchAssetStore.ListMechanismModelsAsync(ct).ConfigureAwait(false),
+                await researchAssetStore.ListMechanismFusionsAsync(ct).ConfigureAwait(false));
         var intent = NormalizeIntent(request.Intent);
         var mode = NormalizeMode(request.Mode);
         ResearchOnlineAdmissionEvidence? onlineAdmissionEvidence = null;
@@ -152,6 +159,9 @@ public sealed class ResearchExperimentOptimizer(
         if (activeOptimization is not null && string.Equals(
                 activeOptimization.Optimization?.MechanismKnowledgeSnapshotHash,
                 mechanismKnowledgeSnapshotHash,
+                StringComparison.Ordinal) && string.Equals(
+                activeOptimization.Optimization?.MechanismModelSnapshotHash,
+                mechanismModels.SnapshotHash,
                 StringComparison.Ordinal))
         {
             MechanismKnowledgeExperimentPolicy.ValidateHardConstraints(activeOptimization, mechanismKnowledge);
@@ -191,6 +201,9 @@ public sealed class ResearchExperimentOptimizer(
             .Where(experiment => experiment.Optimization is null || string.Equals(
                 experiment.Optimization.MechanismKnowledgeSnapshotHash,
                 mechanismKnowledgeSnapshotHash,
+                StringComparison.Ordinal) && string.Equals(
+                experiment.Optimization.MechanismModelSnapshotHash,
+                mechanismModels.SnapshotHash,
                 StringComparison.Ordinal))
             .SelectMany(static experiment => experiment.RunPlan)
             .Where(run => !observedExecutionKeys.Contains(run.ExecutionKey) &&
@@ -209,8 +222,10 @@ public sealed class ResearchExperimentOptimizer(
             : Math.Min(request.BatchSize * 4, 32);
         var call = new OptimizerSuggestionCall
         {
-            Campaign = MechanismKnowledgeExperimentPolicy.ApplyHardConstraints(
-                BuildCampaign(project, intent, hypothesis), mechanismKnowledge),
+            Campaign = MechanismModelExperimentPolicy.Apply(
+                MechanismKnowledgeExperimentPolicy.ApplyHardConstraints(
+                    BuildCampaign(project, intent, hypothesis), mechanismKnowledge),
+                mechanismModels),
             Observations = observations,
             PendingPoints = pendingPoints,
             TopK = optimizerTopK,
@@ -230,7 +245,8 @@ public sealed class ResearchExperimentOptimizer(
                     value.ClaimId,
                     value.Version,
                     value.ContentHash
-                })
+                }),
+                MechanismModels = mechanismModels.References
             })));
         var existing = experiments
             .Where(experiment => string.Equals(
@@ -336,8 +352,10 @@ public sealed class ResearchExperimentOptimizer(
                 ProcessFeatureCount = CommonProcessFeatureCount(observations),
                 FeatureSetId = project.OptimizationFeatures.FeatureSetId,
                 MechanismKnowledgeSnapshotHash = mechanismKnowledgeSnapshotHash,
+                MechanismModelSnapshotHash = mechanismModels.SnapshotHash,
+                MechanismModels = mechanismModels.References,
                 FeatureSetVersion = project.OptimizationFeatures.Version,
-                DerivedFeatureCount = project.OptimizationFeatures.DerivedFeatures.Count,
+                DerivedFeatureCount = call.Campaign.DerivedFeatures.Count,
                 Intent = intent,
                 Mode = mode,
                 HypothesisId = hypothesis?.HypothesisId,
@@ -382,11 +400,7 @@ public sealed class ResearchExperimentOptimizer(
     {
         if (mechanismKnowledgeStore is null || mechanismKnowledge.Claims.Count == 0)
             return Task.CompletedTask;
-        var usages = mechanismKnowledge.Claims.SelectMany(value => (value.Constraints.Count == 0
-                ? ["knowledge-context"]
-                : value.Constraints.Select(static constraint => constraint.Severity == "hard"
-                    ? "hard-constraint"
-                    : "candidate-ranking").Distinct(StringComparer.Ordinal))
+        var usages = mechanismKnowledge.Claims.SelectMany(value => UsageTypes(value)
             .Select(usageType => new MechanismClaimUsage
             {
                 RecommendationId = recommendationId,
@@ -396,6 +410,17 @@ public sealed class ResearchExperimentOptimizer(
                 ContentHash = value.ContentHash
             })).ToArray();
         return mechanismKnowledgeStore.SaveUsagesAsync(usages, ct);
+    }
+
+    private static IReadOnlyList<string> UsageTypes(MechanismClaimVersion claim)
+    {
+        var values = claim.Constraints.Select(static constraint => constraint.Severity == "hard"
+                ? "hard-constraint"
+                : "candidate-ranking")
+            .ToList();
+        if (claim.ForbiddenCombinations.Count > 0) values.Add("forbidden-combination");
+        if (values.Count == 0) values.Add("knowledge-context");
+        return values.Distinct(StringComparer.Ordinal).ToArray();
     }
 
     private async Task CompleteExperimentSideEffectsAsync(

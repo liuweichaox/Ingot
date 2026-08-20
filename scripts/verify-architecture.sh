@@ -326,6 +326,16 @@ check "analysis-tools" src/platform/Ingot.Platform.Infrastructure/AgentTools \
   '(INSERT|UPDATE|DELETE|ExecuteNonQuery|Http(Post|Put|Patch|Delete)|WriteAsync)' \
   "记录分析工具必须保持查询职责"
 
+optimizer_policy_hits=$(grep -nE '(BotorchOptimizer|SequentialOptimizer)\(' \
+  optimizer/service.py optimizer/ingot_optimizer/replay.py 2>/dev/null || true)
+if [[ -n "$optimizer_policy_hits" ]]; then
+  echo "✗ [optimizer-engine-policy] 调用方必须通过 build_optimizer 选择优化引擎"
+  echo "$optimizer_policy_hits" | sed 's/^/    /'
+  fail=1
+else
+  echo "✓ [optimizer-engine-policy]"
+fi
+
 check "edge-infrastructure" src/edge/Ingot.Edge.Infrastructure \
   'using (Ingot\.Platform|Ingot\.Edge\.ConnectorHost)' \
   "边缘基础设施必须独立于宿主和 Platform 实现"

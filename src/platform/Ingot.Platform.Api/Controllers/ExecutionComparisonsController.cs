@@ -42,7 +42,11 @@ public sealed class ExecutionComparisonsController(
         try
         {
             var result = await comparisons.CompareSelectedAsync(
-                baselineProcessExecutionId, executionIds, ct, authorizedSiteId).ConfigureAwait(false);
+                baselineProcessExecutionId,
+                executionIds,
+                ct,
+                authorizedSiteId,
+                request.AdditionalKnownUnmeasuredConfounders).ConfigureAwait(false);
             return result is null ? ResourceNotFound("部分生产过程执行不存在。") : Ok(result);
         }
         catch (ArgumentException exception)
@@ -56,7 +60,8 @@ public sealed class ExecutionComparisonsController(
         string executionId,
         [FromQuery] int limit = 12,
         CancellationToken ct = default,
-        [FromQuery] string? siteId = null)
+        [FromQuery] string? siteId = null,
+        [FromQuery] string[]? knownUnmeasuredConfounder = null)
     {
         var identity = userResolver.ResolveIdentity(User);
         if (identity is null)
@@ -73,7 +78,11 @@ public sealed class ExecutionComparisonsController(
         if (limit < 1)
             return InvalidRequest("Limit 必须大于 0。");
         var result = await comparisons.CompareWithHistoryAsync(
-            executionId.Trim(), limit, ct, authorizedSiteId).ConfigureAwait(false);
+            executionId.Trim(),
+            limit,
+            ct,
+            authorizedSiteId,
+            knownUnmeasuredConfounder).ConfigureAwait(false);
         return result is null ? ResourceNotFound("未找到基准过程执行。") : Ok(result);
     }
 }

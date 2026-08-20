@@ -103,6 +103,22 @@ public static partial class ProcessConfigurationValidator
         var comparisonKeys = normalizedComparisonKeys.Distinct(StringComparer.Ordinal).ToArray();
         if (comparisonKeys.Length == 0)
             return Fail("分析方案至少需要一个同类比较键。", out error);
+        var knownConfounders = new List<KnownUnmeasuredConfounderDefinition>();
+        var confounderCodes = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var confounder in value.KnownUnmeasuredConfounders)
+        {
+            var code = NormalizeCode(confounder.Code);
+            var confounderName = confounder.Name?.Trim() ?? string.Empty;
+            if (!ValidCode(code) || !confounderCodes.Add(code) ||
+                confounderName.Length is < 1 or > 240)
+                return Fail($"潜在未测量混杂因素无效或重复：{confounder.Code}。", out error);
+            knownConfounders.Add(confounder with
+            {
+                Code = code,
+                Name = confounderName,
+                Description = Clean(confounder.Description)
+            });
+        }
         var signals = new List<AnalysisSignalSelection>();
         var seen = new HashSet<string>(StringComparer.Ordinal);
         foreach (var signal in value.Signals)
@@ -128,6 +144,7 @@ public static partial class ProcessConfigurationValidator
             CohortDimension = Clean(value.CohortDimension)?.ToLowerInvariant(),
             ComparisonKeys = comparisonKeys,
             ContextSelector = selector,
+            KnownUnmeasuredConfounders = knownConfounders,
             Signals = signals,
             UpdatedAt = value.UpdatedAt == default ? DateTimeOffset.UtcNow : value.UpdatedAt
         };

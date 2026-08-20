@@ -72,6 +72,21 @@ public sealed class PostgresMechanismKnowledgeStoreTests(PostgresIntegrationFixt
                     Unit = "Cel", Severity = "hard"
                 }
             ],
+            ForbiddenCombinations =
+            [
+                new MechanismForbiddenCombination
+                {
+                    CombinationId = Guid.CreateVersion7(),
+                    Name = "联合禁区",
+                    Factors =
+                    [
+                        new MechanismForbiddenCombinationFactor
+                            { VariableCode = "temperature", Minimum = 118, Unit = "Cel" },
+                        new MechanismForbiddenCombinationFactor
+                            { VariableCode = "pressure", Minimum = 8, Unit = "bar" }
+                    ]
+                }
+            ],
             Evidence =
             [
                 new MechanismClaimEvidence
@@ -105,6 +120,8 @@ public sealed class PostgresMechanismKnowledgeStoreTests(PostgresIntegrationFixt
             Name = "尚未用于该建议的新版本",
             Constraints = claim.Constraints.Select(value => value with
                 { ConstraintId = Guid.CreateVersion7(), Maximum = 110 }).ToArray(),
+            ForbiddenCombinations = claim.ForbiddenCombinations.Select(value => value with
+                { CombinationId = Guid.CreateVersion7() }).ToArray(),
             Evidence = claim.Evidence.Select(value => value with
                 { EvidenceLinkId = Guid.CreateVersion7() }).ToArray(),
             CreatedAt = now.AddMinutes(1),
@@ -119,6 +136,7 @@ public sealed class PostgresMechanismKnowledgeStoreTests(PostgresIntegrationFixt
         Assert.Equal(1, usage.AppliedClaim.Version);
         Assert.Equal(claim.ContentHash, usage.AppliedClaim.ContentHash);
         Assert.Equal("temperature", Assert.Single(usage.AppliedClaim.Constraints).VariableCode);
+        Assert.Equal("联合禁区", Assert.Single(usage.AppliedClaim.ForbiddenCombinations).Name);
         Assert.Equal("experiment-result", Assert.Single(usage.AppliedClaim.Evidence).EvidenceKind);
 
         await using var tamper = postgres.DataSource.CreateCommand(

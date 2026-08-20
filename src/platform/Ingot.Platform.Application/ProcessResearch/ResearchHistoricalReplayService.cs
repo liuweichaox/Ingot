@@ -13,7 +13,8 @@ namespace Ingot.Platform.Application.ProcessResearch;
 public sealed class ResearchHistoricalReplayService(
     IProcessResearchStore store,
     IProcessOptimizerClient optimizerClient,
-    IMechanismKnowledgeStore? mechanismKnowledgeStore = null)
+    IMechanismKnowledgeStore? mechanismKnowledgeStore = null,
+    IResearchAssetStore? researchAssetStore = null)
 {
     public async Task<ResearchHistoricalReplayReport> RunAsync(
         Guid projectId,
@@ -30,13 +31,19 @@ public sealed class ResearchHistoricalReplayService(
         if (project.Status is ResearchProjectStatuses.Completed or ResearchProjectStatuses.Archived)
             throw new ProcessResearchRuleException("已完成或已归档的研发项目保持只读。");
         var mechanismKnowledge = mechanismKnowledgeStore is null
-            ? new AppliedMechanismKnowledge([], [], [])
+            ? new AppliedMechanismKnowledge([], [], [], [])
             : MechanismKnowledgeExperimentPolicy.Select(
                 project,
                 await mechanismKnowledgeStore.ListClaimsAsync(projectId, ct).ConfigureAwait(false),
                 await mechanismKnowledgeStore.ListConflictsAsync(projectId, ct).ConfigureAwait(false));
         var mechanismKnowledgeSnapshotHash =
             MechanismKnowledgeExperimentPolicy.SnapshotHash(mechanismKnowledge);
+        var mechanismModels = researchAssetStore is null
+            ? new AppliedMechanismModels([], [])
+            : MechanismModelExperimentPolicy.Select(
+                project,
+                await researchAssetStore.ListMechanismModelsAsync(ct).ConfigureAwait(false),
+                await researchAssetStore.ListMechanismFusionsAsync(ct).ConfigureAwait(false));
         var experiments = await store.ListExperimentsAsync(projectId, ct).ConfigureAwait(false);
         var results = await store.ListExperimentResultsAsync(projectId, ct).ConfigureAwait(false);
         var controls = project.Variables
@@ -137,12 +144,14 @@ public sealed class ResearchHistoricalReplayService(
                 RunId = value.RunId,
                 OccurredAt = index
             }).ToArray();
+        var dataOnlyCampaign = ResearchExperimentOptimizer.BuildCampaign(
+            project, ResearchOptimizationIntents.ReachSpecification, null);
         var call = new OptimizerHistoricalReplayCall
         {
-            Campaign = MechanismKnowledgeExperimentPolicy.ApplyHardConstraints(
-                ResearchExperimentOptimizer.BuildCampaign(
-                    project, ResearchOptimizationIntents.ReachSpecification, null),
-                mechanismKnowledge),
+            Campaign = MechanismModelExperimentPolicy.Apply(
+                MechanismKnowledgeExperimentPolicy.ApplyHardConstraints(
+                    dataOnlyCampaign, mechanismKnowledge),
+                mechanismModels),
             History = history,
             Budget = budget,
             SeedCount = request.SeedCount,
@@ -169,7 +178,7 @@ public sealed class ResearchHistoricalReplayService(
                 "quadratic-response-surface"
             }
         });
-        var datasetHash = Hash(call);
+        var datasetHash = Hash(new { Campaign = dataOnlyCampaign, History = history });
         var raw = await optimizerClient.ReplayHistoryAsync(call, ct).ConfigureAwait(false);
         var optimizer = ReadSummary(raw, "optimizer");
         var random = ReadSummary(raw, "random");
@@ -194,10 +203,59 @@ public sealed class ResearchHistoricalReplayService(
             : (double?)predictionCovered / predictionChecks;
         var optimizerSafetyViolations = raw.GetProperty("safety_violations")
             .GetProperty("optimizer").EnumerateArray().Sum(static value => value.GetInt32());
+        var gateFailures = new List<string>();
+        ResearchMechanismReplayComparison? mechanismComparison = null;
+        var hasMechanismInfluence = mechanismKnowledge.HardConstraints.Count > 0 ||
+            mechanismKnowledge.RankingConstraints.Count > 0 ||
+            mechanismKnowledge.ForbiddenCombinations.Count > 0 ||
+            mechanismModels.DerivedFeatures.Count > 0;
+        if (hasMechanismInfluence)
+        {
+            var dataOnlyCall = call with
+            {
+                Campaign = dataOnlyCampaign,
+                SoftConstraints = []
+            };
+            var dataOnlyRaw = await optimizerClient.ReplayHistoryAsync(dataOnlyCall, ct)
+                .ConfigureAwait(false);
+            if (!AuditNoFutureLeakage(
+                    dataOnlyRaw,
+                    request.SeedCount,
+                    request.InitialObservationCount,
+                    budget,
+                    history.Length))
+                gateFailures.Add("纯数据成对回放轨迹检测到未来信息泄漏或审计字段不完整。");
+            var dataOnlyOptimizer = ReadSummary(dataOnlyRaw, "optimizer");
+            var dataOnlyCalibration = Coverage(dataOnlyRaw);
+            var dataOnlySafety = dataOnlyRaw.GetProperty("safety_violations")
+                .GetProperty("optimizer").EnumerateArray().Sum(static value => value.GetInt32());
+            mechanismComparison = new ResearchMechanismReplayComparison
+            {
+                KnowledgeAssisted = optimizer,
+                DataOnly = dataOnlyOptimizer,
+                SuccessRateDelta = optimizer.SuccessRate - dataOnlyOptimizer.SuccessRate,
+                MedianTrialsDelta = optimizer.MedianTrials is { } assistedMedian &&
+                    dataOnlyOptimizer.MedianTrials is { } dataOnlyMedian
+                        ? assistedMedian - dataOnlyMedian
+                        : null,
+                PredictionIntervalCoverageDelta = coverage is { } assistedCoverage &&
+                    dataOnlyCalibration is { } baselineCoverage
+                        ? assistedCoverage - baselineCoverage
+                        : null,
+                SafetyViolationDelta = optimizerSafetyViolations - dataOnlySafety,
+                PairingHash = Hash(new
+                {
+                    datasetHash,
+                    preregistrationHash,
+                    MechanismKnowledge = mechanismKnowledgeSnapshotHash,
+                    MechanismModels = mechanismModels.SnapshotHash
+                }),
+                DataOnlyRawResult = dataOnlyRaw
+            };
+        }
         var enginePolicy = raw.GetProperty("engine_policy").GetString() ?? "";
         var evidenceKind = raw.GetProperty("evidence_kind").GetString() ?? "";
         var limitations = raw.GetProperty("limitations").GetString() ?? "";
-        var gateFailures = new List<string>();
         if (!enginePolicy.StartsWith("production-equivalent:", StringComparison.Ordinal))
             gateFailures.Add("回放没有声明生产等价模型切换路径。");
         if (!baselineMethods.Contains("historical-engineer-order", StringComparer.Ordinal) ||
@@ -233,7 +291,9 @@ public sealed class ResearchHistoricalReplayService(
             preregistrationHash,
             datasetHash,
             Raw = raw,
+            MechanismComparison = mechanismComparison,
             mechanismKnowledgeSnapshotHash,
+            MechanismModelSnapshotHash = mechanismModels.SnapshotHash,
             ValidationThresholds.PolicyVersion
         });
         var report = new ResearchHistoricalReplayReport
@@ -242,6 +302,7 @@ public sealed class ResearchHistoricalReplayService(
             ProjectId = projectId,
             ValidationPolicyVersion = ValidationThresholds.PolicyVersion,
             MechanismKnowledgeSnapshotHash = mechanismKnowledgeSnapshotHash,
+            MechanismModelSnapshotHash = mechanismModels.SnapshotHash,
             DatasetSnapshotHash = datasetHash,
             UniqueConditionCount = grouped.Length,
             SourceRunCount = grouped.Sum(static value => value.SourceCount),
@@ -257,6 +318,7 @@ public sealed class ResearchHistoricalReplayService(
             PredictionIntervalCoverage = coverage,
             PredictionIntervalChecks = predictionChecks,
             OptimizerSafetyViolationCount = optimizerSafetyViolations,
+            MechanismComparison = mechanismComparison,
             EnginePolicy = enginePolicy,
             EvidenceKind = evidenceKind,
             Limitations = limitations,
@@ -324,6 +386,15 @@ public sealed class ResearchHistoricalReplayService(
             MeanTrials = ReadNullableDouble(value, "mean_trials"),
             Runs = value.GetProperty("runs").GetInt32()
         };
+    }
+
+    private static double? Coverage(JsonElement root)
+    {
+        var rows = root.GetProperty("calibration").EnumerateArray().ToArray();
+        var checks = rows.Sum(value => value.GetProperty("prediction_interval_checks").GetInt32());
+        if (checks == 0) return null;
+        var covered = rows.Sum(value => value.GetProperty("prediction_interval_covered").GetInt32());
+        return (double)covered / checks;
     }
 
     private static bool AuditNoFutureLeakage(

@@ -43,9 +43,12 @@ async function jsonRequest(url, options = {}) {
 function responseError(res, text) {
   const detail = parseErrorDetail(text);
   if (res.status >= 500 && !detail) {
-    return new Error("平台服务暂不可用，请稍后重试或联系管理员。");
+    return Object.assign(new Error("平台服务暂不可用，请稍后重试或联系管理员。"), { status: res.status });
   }
-  return new Error(detail || `操作未完成，请稍后重试（状态 ${res.status}）。`);
+  return Object.assign(
+    new Error(detail || `操作未完成，请稍后重试（状态 ${res.status}）。`),
+    { status: res.status },
+  );
 }
 
 function platformRequestError(error) {
@@ -70,6 +73,10 @@ export function getJson(url, options = {}) {
 
 export function postJson(url, body, options = {}) {
   return jsonRequest(url, { ...options, method: "POST", body: JSON.stringify(body) });
+}
+
+export function patchJson(url, body, options = {}) {
+  return jsonRequest(url, { ...options, method: "PATCH", body: JSON.stringify(body) });
 }
 
 export async function putJson(url, body, options = {}) {

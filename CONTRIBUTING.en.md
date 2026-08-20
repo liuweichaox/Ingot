@@ -86,8 +86,8 @@ docs: document historical replay protocol
 
 ## High-value contribution areas
 
-- FX3U/MELSEC and other real equipment adapters;
-- optical-molding features and physical priors;
+- additional real equipment protocol adapters;
+- process-specific features and physical priors for real manufacturing scenarios;
 - Bayesian optimization, transfer, and calibration;
 - anonymized real replay datasets and benchmarks;
 - field usability, diagnostics, and documentation.

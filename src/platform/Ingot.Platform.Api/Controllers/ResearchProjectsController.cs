@@ -263,6 +263,31 @@ public sealed class ResearchProjectsController(
                 ct).ConfigureAwait(false)),
             ct);
 
+    [HttpPatch("{projectId:guid}/members")]
+    public async Task<IActionResult> UpdateMembers(
+        Guid projectId,
+        [FromBody] ResearchProjectMembersUpdateRequest request,
+        CancellationToken ct)
+    {
+        var identity = ResolveResearchIdentity();
+        if (identity.Result is not null)
+            return identity.Result;
+        var project = await store.GetProjectAsync(projectId, ct).ConfigureAwait(false);
+        if (project is null)
+            return ResourceNotFound("研发项目不存在。");
+        var isAdministrator = identity.Identity!.HasAnyRole(PlatformRoles.PlatformAdministrator);
+        if (!isAdministrator &&
+            !string.Equals(project.OwnerUserId, identity.Identity.UserId, StringComparison.Ordinal))
+            return AuthorizationDenied("只有项目负责人或平台管理员可以管理项目成员。");
+        return await ExecuteRuleAsync(async () => Ok(await workflow.UpdateProjectMembersAsync(
+            projectId,
+            request.Revision,
+            request.MemberUserIds,
+            identity.Identity.UserId,
+            isAdministrator,
+            ct).ConfigureAwait(false))).ConfigureAwait(false);
+    }
+
     [HttpPost("{projectId:guid}/status")]
     public Task<IActionResult> ChangeStatus(
         Guid projectId,
@@ -790,3 +815,7 @@ public sealed class ResearchProjectsController(
 }
 
 public sealed record ResearchStatusChangeRequest(string TargetStatus);
+
+public sealed record ResearchProjectMembersUpdateRequest(
+    int Revision,
+    IReadOnlyList<string> MemberUserIds);

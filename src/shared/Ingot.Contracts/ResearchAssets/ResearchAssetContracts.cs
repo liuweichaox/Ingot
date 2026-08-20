@@ -1,5 +1,11 @@
 namespace Ingot.Contracts.ResearchAssets;
 
+public sealed record ResearchAssetPage<T>
+{
+    public IReadOnlyList<T> Data { get; init; } = [];
+    public string? NextCursor { get; init; }
+}
+
 public static class ProcessModelStatuses
 {
     public const string Draft = "draft";

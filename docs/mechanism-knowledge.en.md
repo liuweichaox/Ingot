@@ -48,15 +48,18 @@ The current code already provides:
 - relational research hypotheses for causal chains, temporal features, interactions, failure conditions, and falsification conditions;
 - the `reviewed → supported → validated → active → retired` lifecycle plus a formal `falsified` terminal path from every promoted state; preregistered effects and confidence intervals decide support or falsification, with a recorded human evaluation;
 - hard-bound and soft-range ranking from context-matched, conflict-free `active` claims only;
+- multivariable forbidden combinations enter the Optimizer feasible region; historical runs in a forbidden region may remain observations but cannot become candidates again;
+- an optional OpenAI-compatible semantic generator returns editable drafts with source-fragment citations and never saves, reviews, or activates them automatically;
+- `mechanism-as-feature` compiles active affine models into declarative derived features and freezes the exact model and fusion versions and hashes;
+- historical replay runs knowledge-assisted and data-only paths on the same dataset and preregistration, retaining paired deltas and raw traces;
 - one frozen mechanism-knowledge snapshot across optimization, replay, shadow evidence, and controlled-online admission; stale experiments cannot be approved or started;
 - experiment-page explanation of the exact frozen claim version, use type, content hash, constraints, falsification condition, and evidence references actually applied; reads verify the usage hash against that immutable version.
 
 The main gaps are:
 
-1. the workbench does not yet provide model-assisted semantic-extraction drafts;
-2. executable mechanism-model transitions still need the same evidence-promotion rules;
-3. Bayesian priors, mechanism features, and residual models are not yet connected to recommendations;
-4. snapshot-specific replay, shadow, and online gates are implemented; paired knowledge-versus-data-only effectiveness reports and long-horizon calibration metrics remain.
+1. executable mechanism-model transitions still need the same evidence-promotion rules;
+2. Bayesian priors, residual models, and calibration, post-processing, and ensemble output modes are not yet on the recommendation path; only the semantically explicit `mechanism-as-feature` mode is connected;
+3. paired knowledge-versus-data-only historical replay exists, while long-horizon calibration and prospective paired real-project evidence remain incomplete.
 
 ## 4. Three recommendation modes
 
@@ -489,7 +492,7 @@ Data range, prediction, uncertainty, feasibility, and pending points remain in t
 
 ## 14. Implementation sequence and acceptance
 
-Current-stage calibration: P0 is implemented. P1 has deterministic extraction, asynchronous jobs, and the human workbench, but no model-assisted semantic draft. P2 has hard bounds, soft ranking, snapshots, usage traceability, and admission gates, while paired effectiveness reports remain incomplete. P3 has standalone executable-model/fusion assets and an execution service but is not wired into recommendations. P4 replay, shadow, and online-validation infrastructure exists, but no real-project evidence yet supports an external value claim.
+Current-stage calibration: P0 is implemented. P1 now includes deterministic extraction, asynchronous jobs, the human workbench, and optional model-assisted semantic drafts. P2 includes hard bounds, forbidden combinations, soft ranking, snapshots, usage traceability, admission gates, and paired historical replay. P3 connects affine `mechanism-as-feature` models to recommendations and freezes exact model/fusion versions; other output-fusion modes and unified evidence promotion remain incomplete. P4 replay, shadow, and online-validation infrastructure exists, but no real-project evidence yet supports an external value claim.
 
 ### P0: claim kernel and relational storage
 

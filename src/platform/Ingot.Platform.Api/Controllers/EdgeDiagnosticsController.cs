@@ -19,7 +19,7 @@ public sealed class EdgeDiagnosticsController(
     [HttpGet("metrics/raw")]
     public async Task<IActionResult> GetEdgeMetricsRaw([FromRoute] string edgeId, CancellationToken cancellationToken)
     {
-        var reported = registry.Find(edgeId)?.Acquisition;
+        var reported = (await registry.FindAsync(edgeId, cancellationToken).ConfigureAwait(false))?.Acquisition;
         if (reported is not null)
             return Ok(reported);
 
@@ -125,7 +125,7 @@ public sealed class EdgeDiagnosticsController(
         [FromRoute] string edgeId,
         CancellationToken cancellationToken)
     {
-        var reported = registry.Find(edgeId)?.Acquisition;
+        var reported = (await registry.FindAsync(edgeId, cancellationToken).ConfigureAwait(false))?.Acquisition;
         if (reported is not null)
             return Ok(reported);
 
@@ -153,9 +153,11 @@ public sealed class EdgeDiagnosticsController(
     }
 
     [HttpGet("delivery/status")]
-    public IActionResult GetDeliveryStatus([FromRoute] string edgeId)
+    public async Task<IActionResult> GetDeliveryStatus(
+        [FromRoute] string edgeId,
+        CancellationToken cancellationToken)
     {
-        var state = registry.Find(edgeId);
+        var state = await registry.FindAsync(edgeId, cancellationToken).ConfigureAwait(false);
         if (state is null)
             return ResourceNotFound("采集节点不存在。");
         return state.Delivery is null

@@ -70,9 +70,9 @@ Not by default. A recommendation becomes a formal experiment, reviewed by an eng
 
 No. Edge, Platform, process executions, and inspections continue; only new recommendations or natural-language explanations depending on that service pause.
 
-## Why do examples use optical-lens molding and FX3U?
+## Why don't public materials name a specific validation scenario?
 
-They are the first reproducible scenario for validating the data chain and algorithm path, not the product boundary. A new process supplies variables, mappings, objectives, constraints, context, and optional mechanism knowledge without rewriting the evidence spine or experiment state machine.
+The first scenario is where we're testing whether the data chain and algorithm path are reproducible; historical replay, shadow, and controlled-online validation are still in progress. Its industry, equipment, and process parameters stay out of the public repository -- only protocols, schemas, acceptance methods, and conclusion boundaries are published -- so it isn't mistaken for the product boundary. A new process supplies variables, mappings, objectives, constraints, context, and optional mechanism knowledge without rewriting the evidence spine or experiment state machine.
 
 ## Has the system proved shorter development cycles?
 

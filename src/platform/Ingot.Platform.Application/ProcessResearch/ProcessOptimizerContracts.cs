@@ -63,6 +63,23 @@ public sealed record OptimizerDerivedFeatureInput
     public double NormalizationScale { get; init; } = 1;
 
     public double Epsilon { get; init; } = 1e-9;
+
+    public double Intercept { get; init; }
+
+    public IReadOnlyList<double> Coefficients { get; init; } = [];
+}
+
+public sealed record OptimizerForbiddenCombinationFactorInput
+{
+    public required string Variable { get; init; }
+    public double? Minimum { get; init; }
+    public double? Maximum { get; init; }
+}
+
+public sealed record OptimizerForbiddenCombinationInput
+{
+    public required string Name { get; init; }
+    public IReadOnlyList<OptimizerForbiddenCombinationFactorInput> Factors { get; init; } = [];
 }
 
 public sealed record OptimizerCampaignInput
@@ -85,6 +102,9 @@ public sealed record OptimizerCampaignInput
     public IReadOnlyList<OptimizerVariableInput> Variables { get; init; } = [];
     public IReadOnlyList<OptimizerObjectiveInput> Objectives { get; init; } = [];
     public IReadOnlyList<OptimizerConstraintInput> Constraints { get; init; } = [];
+
+    [JsonPropertyName("forbidden_combinations")]
+    public IReadOnlyList<OptimizerForbiddenCombinationInput> ForbiddenCombinations { get; init; } = [];
 
     [JsonPropertyName("outcome_constraints")]
     public IReadOnlyList<OptimizerOutcomeConstraintInput> OutcomeConstraints { get; init; } = [];

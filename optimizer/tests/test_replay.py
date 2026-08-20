@@ -14,10 +14,10 @@ def campaign():
 
 def test_history_pool_replay_only_selects_real_rows_without_reuse():
     history = [
-        {"params": {"x": 0.0}, "outcomes": {"loss": 0.64}},
-        {"params": {"x": 1.0}, "outcomes": {"loss": 0.04}},
-        {"params": {"x": 0.5}, "outcomes": {"loss": 0.09}},
-        {"params": {"x": 0.8}, "outcomes": {"loss": 0.0}},
+        {"params": {"x": 0.0}, "outcomes": {"loss": 0.64}, "occurred_at": 1.0},
+        {"params": {"x": 1.0}, "outcomes": {"loss": 0.04}, "occurred_at": 2.0},
+        {"params": {"x": 0.5}, "outcomes": {"loss": 0.09}, "occurred_at": 3.0},
+        {"params": {"x": 0.8}, "outcomes": {"loss": 0.0}, "occurred_at": 4.0},
     ]
 
     result = replay_history_pool(campaign(), history, n_seeds=3)
@@ -50,10 +50,38 @@ def test_history_pool_replay_only_selects_real_rows_without_reuse():
 
 def test_history_pool_requires_aggregated_unique_parameter_settings():
     history = [
-        {"params": {"x": 0.2}, "outcomes": {"loss": 0.3}},
-        {"params": {"x": 0.2}, "outcomes": {"loss": 0.2}},
+        {"params": {"x": 0.2}, "outcomes": {"loss": 0.3}, "occurred_at": 1.0},
+        {"params": {"x": 0.2}, "outcomes": {"loss": 0.2}, "occurred_at": 2.0},
     ]
     with pytest.raises(ValueError, match="aggregate replicates"):
+        replay_history_pool(campaign(), history)
+
+
+@pytest.mark.parametrize(
+    ("history", "message"),
+    [
+        (
+            [{"params": {"x": 0.1}, "outcomes": {"loss": 0.2}}],
+            "occurred_at",
+        ),
+        (
+            [
+                {"params": {"x": 0.1}, "outcomes": {"loss": 0.2}, "occurred_at": 2},
+                {"params": {"x": 0.2}, "outcomes": {"loss": 0.1}, "occurred_at": 1},
+            ],
+            "strictly later",
+        ),
+        (
+            [
+                {"params": {"x": 0.1}, "outcomes": {"loss": 0.2}, "occurred_at": 1},
+                {"params": {"x": 0.2}, "outcomes": {"loss": 0.1}, "occurred_at": 1},
+            ],
+            "strictly later",
+        ),
+    ],
+)
+def test_history_pool_rejects_missing_duplicate_or_out_of_order_time(history, message):
+    with pytest.raises(ValueError, match=message):
         replay_history_pool(campaign(), history)
 
 
@@ -68,6 +96,7 @@ def test_history_pool_switches_to_botorch_production_engine_after_three_observat
             "params": {"x": value},
             "outcomes": {"loss": (value - 0.7) ** 2},
             "run_id": f"run-{index}",
+            "occurred_at": float(index),
         }
         for index, value in enumerate([0.0, 0.2, 0.4, 0.6, 0.8])
     ]
@@ -93,8 +122,12 @@ def test_history_pool_switches_to_botorch_production_engine_after_three_observat
 
 def test_random_and_response_surface_baselines_share_preregistered_initial_rows():
     history = [
-        {"params": {"x": value}, "outcomes": {"loss": (value - 0.85) ** 2}}
-        for value in [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]
+        {
+            "params": {"x": value},
+            "outcomes": {"loss": (value - 0.85) ** 2},
+            "occurred_at": float(index),
+        }
+        for index, value in enumerate([0.0, 0.2, 0.4, 0.6, 0.8, 1.0])
     ]
 
     result = replay_history_pool(
@@ -111,8 +144,12 @@ def test_random_and_response_surface_baselines_share_preregistered_initial_rows(
 
 def test_history_pool_replays_mechanism_soft_ranking():
     history = [
-        {"params": {"x": value}, "outcomes": {"loss": (value - 0.9) ** 2}}
-        for value in [0.0, 0.2, 0.4, 0.6, 0.8]
+        {
+            "params": {"x": value},
+            "outcomes": {"loss": (value - 0.9) ** 2},
+            "occurred_at": float(index),
+        }
+        for index, value in enumerate([0.0, 0.2, 0.4, 0.6, 0.8])
     ]
 
     result = replay_history_pool(

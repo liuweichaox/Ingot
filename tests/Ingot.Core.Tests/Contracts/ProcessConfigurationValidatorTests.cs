@@ -165,6 +165,53 @@ public sealed class ProcessConfigurationValidatorTests
         Assert.Equal(["material_grade", "operation.code"], normalized!.ComparisonKeys);
     }
 
+    [Fact]
+    public void AnalysisPlan_NormalizesKnownUnmeasuredConfounders()
+    {
+        var value = new ProcessAnalysisPlan
+        {
+            PlanId = "window-comparison",
+            Name = "连续过程窗口对比",
+            DataModelId = "process-model",
+            Signals = [new AnalysisSignalSelection { DataItemCode = "temperature" }],
+            KnownUnmeasuredConfounders =
+            [
+                new()
+                {
+                    Code = " Operator_Experience ",
+                    Name = " 操作员经验 ",
+                    Description = " 尚未进入数据链 "
+                }
+            ]
+        };
+
+        Assert.True(ProcessConfigurationValidator.TryValidate(value, out var normalized, out var error), error);
+        var confounder = Assert.Single(normalized!.KnownUnmeasuredConfounders);
+        Assert.Equal("operator_experience", confounder.Code);
+        Assert.Equal("操作员经验", confounder.Name);
+        Assert.Equal("尚未进入数据链", confounder.Description);
+    }
+
+    [Fact]
+    public void AnalysisPlan_RejectsDuplicateKnownUnmeasuredConfounderCodes()
+    {
+        var value = new ProcessAnalysisPlan
+        {
+            PlanId = "window-comparison",
+            Name = "连续过程窗口对比",
+            DataModelId = "process-model",
+            Signals = [new AnalysisSignalSelection { DataItemCode = "temperature" }],
+            KnownUnmeasuredConfounders =
+            [
+                new() { Code = "operator", Name = "操作员" },
+                new() { Code = " OPERATOR ", Name = "值班人员" }
+            ]
+        };
+
+        Assert.False(ProcessConfigurationValidator.TryValidate(value, out _, out var error));
+        Assert.Contains("重复", error);
+    }
+
     private static ProcessDataModel DataModel() => new()
     {
         ModelId = "model",

@@ -26,7 +26,7 @@ The first validation project has:
 - documented safety boundaries and current engineer decision workflow;
 - a comparable historical sequence or permission for prospective experiments.
 
-Optical-lens molding may be the first scenario, but it does not prove applicability elsewhere. A second, materially different process tests the generality of stable contracts.
+The first scenario's historical replay and shadow validation are still in progress, and even passing them would not prove applicability elsewhere; its industry and equipment details stay out of the public repository. A second, materially different process tests the generality of stable contracts.
 
 ## Phase 0: preregistration and data baseline
 

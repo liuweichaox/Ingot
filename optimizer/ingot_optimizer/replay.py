@@ -7,17 +7,69 @@ history.  It never fabricates a response with nearest-neighbour substitution.
 """
 from __future__ import annotations
 
+from dataclasses import dataclass, field
+import math
 from typing import Callable, Mapping, Sequence
 
 import numpy as np
 
-from .botorch_engine import BotorchOptimizer
 from .campaign import Campaign
+from .engine_selection import OptimizerObservation, build_optimizer
 from .feature_transforms import DerivedFeature
-from .loop import SequentialOptimizer
 
 
-TruthFunction = Callable[[dict[str, float]], Mapping[str, float]]
+@dataclass(frozen=True)
+class SyntheticTruthResult:
+    outcomes: Mapping[str, float]
+    constraint_outcomes: Mapping[str, float] = field(default_factory=dict)
+    process_features: Mapping[str, float] = field(default_factory=dict)
+
+
+TruthFunction = Callable[
+    [dict[str, float]], Mapping[str, float] | SyntheticTruthResult
+]
+
+
+def _evaluate_truth(
+    campaign: Campaign,
+    truth_fn: TruthFunction,
+    params: dict[str, float],
+) -> OptimizerObservation:
+    result = truth_fn(params)
+    if isinstance(result, SyntheticTruthResult):
+        observation = OptimizerObservation(
+            params=params,
+            outcomes=result.outcomes,
+            constraint_outcomes=result.constraint_outcomes,
+            process_features=result.process_features,
+        )
+    else:
+        if campaign.outcome_constraints:
+            raise ValueError(
+                "synthetic replay with outcome constraints requires "
+                "SyntheticTruthResult"
+            )
+        observation = OptimizerObservation(params=params, outcomes=result)
+    campaign.validate_outcomes(observation.outcomes)
+    campaign.validate_constraint_outcomes(observation.constraint_outcomes)
+    return observation
+
+
+def _is_success(campaign: Campaign, observation: OptimizerObservation) -> bool:
+    return campaign.distance_to_spec(observation.outcomes) <= 0.0 and all(
+        constraint.is_satisfied(
+            float(observation.constraint_outcomes[constraint.name])
+        )
+        for constraint in campaign.outcome_constraints
+    )
+
+
+def _sample_feasible(campaign: Campaign, rng: np.random.Generator) -> dict[str, float]:
+    for _ in range(10_000):
+        point = rng.uniform(0.0, 1.0, campaign.dim)
+        if campaign.is_feasible_unit(point):
+            return campaign.from_unit(point)
+    raise ValueError("unable to sample a feasible campaign point")
 
 
 def _summarize(runs: Sequence[int | None]) -> dict[str, float | int | None]:
@@ -38,18 +90,26 @@ def _run_optimizer(
     n_seed_points: int = 2,
     prior_means: Mapping[str, object] | None = None,
 ) -> int | None:
-    optimizer = SequentialOptimizer(campaign, prior_means=prior_means, seed=seed)
+    observations: list[OptimizerObservation] = []
     rng = np.random.default_rng(seed)
     for _ in range(min(n_seed_points, budget)):
-        params = campaign.from_unit(rng.uniform(0.0, 1.0, campaign.dim))
-        optimizer.observe(params, truth_fn(params))
-        if optimizer.in_spec():
-            return len(optimizer.distances)
-    while len(optimizer.distances) < budget:
+        params = _sample_feasible(campaign, rng)
+        observation = _evaluate_truth(campaign, truth_fn, params)
+        observations.append(observation)
+        if _is_success(campaign, observation):
+            return len(observations)
+    while len(observations) < budget:
+        optimizer = build_optimizer(
+            campaign,
+            observations,
+            prior_means=prior_means,
+            seed=seed,
+        )
         params = optimizer.suggest()[0].recommended_params
-        optimizer.observe(params, truth_fn(params))
-        if optimizer.in_spec():
-            return len(optimizer.distances)
+        observation = _evaluate_truth(campaign, truth_fn, params)
+        observations.append(observation)
+        if _is_success(campaign, observation):
+            return len(observations)
     return None
 
 
@@ -58,8 +118,8 @@ def _run_random(
 ) -> int | None:
     rng = np.random.default_rng(seed + 10_000)
     for trial in range(1, budget + 1):
-        params = campaign.from_unit(rng.uniform(0.0, 1.0, campaign.dim))
-        if campaign.distance_to_spec(truth_fn(params)) <= 0.0:
+        params = _sample_feasible(campaign, rng)
+        if _is_success(campaign, _evaluate_truth(campaign, truth_fn, params)):
             return trial
     return None
 
@@ -102,19 +162,38 @@ def _validate_history(campaign: Campaign, history: Sequence[dict]) -> None:
     if not history:
         raise ValueError("history must not be empty")
     seen: set[tuple[float, ...]] = set()
+    previous_occurred_at: float | None = None
     for index, row in enumerate(history):
-        required = {"params", "outcomes"}
+        required = {"params", "outcomes", "occurred_at"}
         allowed = required | {
             "constraint_outcomes",
             "process_features",
             "run_id",
-            "occurred_at",
         }
         if not required.issubset(row) or set(row).difference(allowed):
             raise ValueError(
-                f"history row {index} must contain params and outcomes and only supported provenance fields"
+                f"history row {index} must contain params, outcomes, occurred_at "
+                "and only supported provenance fields"
             )
-        unit_point = campaign.to_unit(row["params"])
+        try:
+            occurred_at = float(row["occurred_at"])
+        except (TypeError, ValueError) as error:
+            raise ValueError(
+                f"history row {index} occurred_at must be a finite number"
+            ) from error
+        if not math.isfinite(occurred_at):
+            raise ValueError(
+                f"history row {index} occurred_at must be a finite number"
+            )
+        if previous_occurred_at is not None and occurred_at <= previous_occurred_at:
+            raise ValueError(
+                f"history row {index} occurred_at must be strictly later than row "
+                f"{index - 1}"
+            )
+        previous_occurred_at = occurred_at
+        unit_point = campaign.to_unit(
+            row["params"], enforce_candidate_constraints=False
+        )
         campaign.validate_outcomes(row["outcomes"])
         campaign.validate_constraint_outcomes(row.get("constraint_outcomes", {}))
         key = tuple(np.round(unit_point, 12))
@@ -171,24 +250,34 @@ def _historical_optimizer_run(
             "safety_violations": _safety_violations(campaign, history, selected),
         }
     while remaining and len(selected) < budget:
-        optimizer = (
-            BotorchOptimizer(
-                campaign,
-                derived_features=derived_features,
-                seed=seed,
-            )
-            if len(selected) >= 3
-            else SequentialOptimizer(campaign, seed=seed)
+        optimizer = build_optimizer(
+            campaign,
+            [
+                OptimizerObservation(
+                    params=history[index]["params"],
+                    outcomes=history[index]["outcomes"],
+                    constraint_outcomes=history[index].get(
+                        "constraint_outcomes", {}
+                    ),
+                    process_features=history[index].get("process_features", {}),
+                )
+                for index in selected
+            ],
+            derived_features=derived_features,
+            seed=seed,
         )
-        for observed_index in selected:
-            row = history[observed_index]
-            optimizer.observe(
-                row["params"],
-                row["outcomes"],
-                constraint_outcomes=row.get("constraint_outcomes"),
-                process_features=row.get("process_features"),
+        feasible_remaining = [
+            index
+            for index in remaining
+            if campaign.is_feasible_unit(
+                campaign.to_unit(
+                    history[index]["params"], enforce_candidate_constraints=False
+                )
             )
-        candidates = [history[index]["params"] for index in remaining]
+        ]
+        if not feasible_remaining:
+            break
+        candidates = [history[index]["params"] for index in feasible_remaining]
         try:
             suggestions = optimizer.suggest(
                 candidate_params=candidates,
@@ -260,9 +349,7 @@ def _historical_optimizer_run(
                 "step": len(selected) + 1,
                 "kind": "optimizer-selection",
                 "visible_observation_indices_before": selected.copy(),
-                "candidate_history_indices": remaining[:position]
-                + [history_index]
-                + remaining[position:],
+                "candidate_history_indices": feasible_remaining,
                 "revealed_history_index": history_index,
                 "run_id": history[history_index].get("run_id"),
                 "model_version": suggestion.model_version,
@@ -328,7 +415,15 @@ def _historical_random_run(
     ), None)
     if first_hit is not None:
         return first_hit, selected, _safety_violations(campaign, history, selected)
-    remaining = np.arange(initial_observation_count, len(history))
+    remaining = np.asarray([
+        index
+        for index in range(initial_observation_count, len(history))
+        if campaign.is_feasible_unit(
+            campaign.to_unit(
+                history[index]["params"], enforce_candidate_constraints=False
+            )
+        )
+    ])
     order = np.random.default_rng(seed + 20_000).permutation(remaining)
     for index in order[: max(0, budget - len(selected))]:
         selected.append(int(index))
@@ -362,7 +457,15 @@ def _historical_response_surface_run(
     low-complexity comparator rather than another production model.
     """
     selected = list(range(initial_observation_count))
-    remaining = list(range(initial_observation_count, len(history)))
+    remaining = [
+        index
+        for index in range(initial_observation_count, len(history))
+        if campaign.is_feasible_unit(
+            campaign.to_unit(
+                history[index]["params"], enforce_candidate_constraints=False
+            )
+        )
+    ]
     first_hit = next((
         position + 1
         for position, index in enumerate(selected)

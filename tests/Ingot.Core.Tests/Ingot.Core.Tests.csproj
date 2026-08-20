@@ -14,6 +14,7 @@
         <ProjectReference Include="..\..\src\agent\Ingot.Agent\Ingot.Agent.csproj" />
         <ProjectReference Include="..\..\src\agent\Ingot.Agent.Providers\Ingot.Agent.Providers.csproj" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.9.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.11" />
     <PackageReference Include="Testcontainers.PostgreSql" Version="4.14.0" />
     <!-- Transitive pin: Testcontainers -> Docker.DotNet.Enhanced -> SSH.NET 2025.1.0
          carries GHSA-q939-rpr3-3284 (high-severity path traversal). Testcontainers 4.13.0

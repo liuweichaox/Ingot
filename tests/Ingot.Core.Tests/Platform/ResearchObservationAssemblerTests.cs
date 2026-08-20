@@ -340,14 +340,16 @@ public sealed class ResearchObservationAssemblerTests
             string executionId,
             int limit,
             CancellationToken ct = default,
-            string? siteId = null)
+            string? siteId = null,
+            IReadOnlyList<string>? additionalKnownUnmeasuredConfounders = null)
             => throw new NotSupportedException();
 
         public Task<ExecutionComparisonResult?> CompareSelectedAsync(
             string baselineProcessExecutionId,
             IReadOnlyList<string> executionIds,
             CancellationToken ct = default,
-            string? siteId = null)
+            string? siteId = null,
+            IReadOnlyList<string>? additionalKnownUnmeasuredConfounders = null)
             => throw new NotSupportedException();
     }
 

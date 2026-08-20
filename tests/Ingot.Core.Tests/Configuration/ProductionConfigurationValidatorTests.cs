@@ -96,6 +96,23 @@ public sealed class ProductionConfigurationValidatorTests
     }
 
     [Fact]
+    public void MechanismDraftGeneration_FailsClosedWithoutProviderConfiguration()
+    {
+        var configuration = Build(new Dictionary<string, string?>
+        {
+            ["MechanismDraftGeneration:Enabled"] = "true",
+            ["MechanismDraftGeneration:BaseUrl"] = "not-a-url",
+            ["MechanismDraftGeneration:Model"] = "",
+            ["OPENAI_API_KEY"] = "replace-with-local-service-token"
+        });
+
+        var error = Assert.Throws<InvalidOperationException>(() => PlatformValidator.Validate(configuration));
+        Assert.Contains("MechanismDraftGeneration:Model", error.Message, StringComparison.Ordinal);
+        Assert.Contains("MechanismDraftGeneration:BaseUrl", error.Message, StringComparison.Ordinal);
+        Assert.Contains("OPENAI_API_KEY must not use a placeholder", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void ConnectorHost_RejectsShortCredentials()
     {
         var configuration = Build(new Dictionary<string, string?>

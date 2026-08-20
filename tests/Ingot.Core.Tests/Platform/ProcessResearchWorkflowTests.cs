@@ -226,6 +226,57 @@ public sealed class ProcessResearchWorkflowTests
     }
 
     [Fact]
+    public async Task GeneralProjectUpdate_ShouldPreserveServerManagedMembers()
+    {
+        var store = new MemoryStore();
+        var workflow = CreateWorkflow(store);
+        var project = await workflow.CreateProjectAsync(
+            ProjectDraft() with { MemberUserIds = ["engineer-a", "engineer-b"] },
+            "engineer-a");
+
+        var updated = await workflow.UpdateProjectAsync(
+            project.ProjectId,
+            project with { Name = "renamed", MemberUserIds = ["attacker"] },
+            "engineer-b");
+
+        Assert.Equal(["engineer-a", "engineer-b"], updated.MemberUserIds);
+        Assert.DoesNotContain("attacker", updated.MemberUserIds);
+    }
+
+    [Fact]
+    public async Task MemberManagement_ShouldRequireOwnerOrAdministratorAndRevision()
+    {
+        var store = new MemoryStore();
+        var workflow = CreateWorkflow(store);
+        var project = await workflow.CreateProjectAsync(
+            ProjectDraft() with { MemberUserIds = ["engineer-a", "engineer-b"] },
+            "engineer-a");
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
+            workflow.UpdateProjectMembersAsync(
+                project.ProjectId,
+                project.Revision,
+                ["engineer-b", "engineer-c"],
+                "engineer-b",
+                false));
+
+        var saved = await workflow.UpdateProjectMembersAsync(
+            project.ProjectId,
+            project.Revision,
+            ["engineer-c"],
+            "engineer-a",
+            false);
+        Assert.Equal(["engineer-c", "engineer-a"], saved.MemberUserIds);
+        await Assert.ThrowsAsync<ProcessResearchRuleException>(() =>
+            workflow.UpdateProjectMembersAsync(
+                project.ProjectId,
+                project.Revision,
+                ["engineer-d"],
+                "admin",
+                true));
+    }
+
+    [Fact]
     public async Task ResearchProject_CompletesOnlyAfterValidatedOperatingRegion()
     {
         var store = new MemoryStore();
@@ -629,9 +680,10 @@ public sealed class ProcessResearchWorkflowTests
             ResearchExperimentOptimizer.BuildCampaign(
                 project, ResearchOptimizationIntents.ReachSpecification, null),
             selected);
-        var temperature = Assert.Single(campaign.Variables, value => value.Name == "holding-temperature");
-        Assert.Equal(500, temperature.Low);
-        Assert.Equal(530, temperature.High);
+        Assert.Contains(campaign.Constraints, value =>
+            value.Variable == "holding-temperature" && value.Operator == ">=" && value.Limit == 500);
+        Assert.Contains(campaign.Constraints, value =>
+            value.Variable == "holding-temperature" && value.Operator == "<=" && value.Limit == 530);
 
         var ranked = MechanismKnowledgeExperimentPolicy.Rank(
             [Suggestion(520, 18, 0.9), Suggestion(520, 11, 0.1)],
@@ -1606,7 +1658,16 @@ public sealed class ProcessResearchWorkflowTests
             RecordedAt = DateTimeOffset.UtcNow
         });
         var optimizer = new StubReplayOptimizerClient();
-        var service = new ResearchHistoricalReplayService(store, optimizer);
+        var mechanismStore = new ReplayMechanismKnowledgeStore(new MechanismClaimVersion
+        {
+            ClaimId = Guid.CreateVersion7(), ProjectId = project.ProjectId, Version = 1,
+            Status = MechanismClaimStatuses.Active, Name = "优选保压范围", MechanismType = "constraint",
+            Statement = "优先在已验证保压范围内选择。", FalsificationCondition = "独立实验显示范围外更稳定。",
+            Applicability = [new MechanismClaimApplicability { DimensionCode = "project-code", DimensionValue = project.Code }],
+            Constraints = [new MechanismClaimConstraint { VariableCode = "holding-temperature", ConstraintKind = "preferred-range", Minimum = 505, Maximum = 520, Unit = "Cel", Severity = "soft" }],
+            ContentHash = new string('f', 64)
+        });
+        var service = new ResearchHistoricalReplayService(store, optimizer, mechanismStore);
 
         var report = await service.RunAsync(
             project.ProjectId,
@@ -1628,6 +1689,11 @@ public sealed class ProcessResearchWorkflowTests
         Assert.Equal(64, report.ReportHash.Length);
         Assert.Equal(3, report.BaselineMethods.Count);
         Assert.NotNull(report.ResponseSurface);
+        Assert.NotNull(report.MechanismComparison);
+        Assert.Equal(0, report.MechanismComparison.SuccessRateDelta);
+        Assert.Equal(2, optimizer.Calls.Count);
+        Assert.Single(optimizer.Calls[0].SoftConstraints);
+        Assert.Empty(optimizer.Calls[1].SoftConstraints);
         Assert.Equal(JsonValueKind.Array, report.RawResult.GetProperty("step_traces").ValueKind);
         Assert.Equal(5, optimizer.LastCall!.History.Count);
         Assert.All(optimizer.LastCall.History, value =>
@@ -1942,7 +2008,7 @@ public sealed class ProcessResearchWorkflowTests
     {
         var currentProject = (await store.GetProjectAsync(project.ProjectId))!;
         var mechanismHash = MechanismKnowledgeExperimentPolicy.SnapshotHash(
-            new AppliedMechanismKnowledge([], [], []));
+            new AppliedMechanismKnowledge([], [], [], []));
         await store.CreateHistoricalReplayReportAsync(new ResearchHistoricalReplayReport
         {
             ReportId = Guid.CreateVersion7(),
@@ -2462,6 +2528,7 @@ public sealed class ProcessResearchWorkflowTests
     private sealed class StubReplayOptimizerClient : IProcessOptimizerClient
     {
         public OptimizerHistoricalReplayCall? LastCall { get; private set; }
+        public List<OptimizerHistoricalReplayCall> Calls { get; } = [];
         public Func<string, string>? TransformJson { get; init; }
 
         public Task<OptimizerSuggestionResponse> SuggestAsync(
@@ -2474,6 +2541,7 @@ public sealed class ProcessResearchWorkflowTests
             CancellationToken ct = default)
         {
             LastCall = request;
+            Calls.Add(request);
             using var document = JsonDocument.Parse(
                 """
                 {
@@ -2516,6 +2584,29 @@ public sealed class ProcessResearchWorkflowTests
             using var transformed = JsonDocument.Parse(TransformJson?.Invoke(json) ?? json);
             return Task.FromResult(transformed.RootElement.Clone());
         }
+    }
+
+    private sealed class ReplayMechanismKnowledgeStore(MechanismClaimVersion claim)
+        : IMechanismKnowledgeStore
+    {
+        public Task<IReadOnlyList<MechanismClaimVersion>> ListClaimsAsync(Guid projectId, CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<MechanismClaimVersion>>(projectId == claim.ProjectId ? [claim] : []);
+        public Task<IReadOnlyList<MechanismClaimConflict>> ListConflictsAsync(Guid projectId, CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<MechanismClaimConflict>>([]);
+        public Task<MechanismClaimVersion?> GetClaimAsync(Guid claimId, int? version = null, CancellationToken ct = default)
+            => Task.FromResult<MechanismClaimVersion?>(claimId == claim.ClaimId ? claim : null);
+        public Task<MechanismClaimVersion> SaveDraftAsync(MechanismClaimVersion value, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<bool> EvidenceExistsAsync(Guid projectId, MechanismClaimEvidence evidence, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<MechanismClaimVersion> AddReviewAsync(MechanismClaimReview review, string targetStatus, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<MechanismClaimConflict> AddConflictAsync(MechanismClaimConflict value, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<MechanismClaimConflict?> GetConflictAsync(Guid conflictId, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<MechanismClaimConflict> ResolveConflictAsync(MechanismClaimConflict value, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task SaveUsagesAsync(IReadOnlyList<MechanismClaimUsage> values, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<IReadOnlyList<MechanismClaimUsage>> ListUsagesAsync(Guid projectId, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<bool> LifecycleEvidenceUsedAsync(Guid claimId, string referenceId, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<bool> LifecycleActorUsedAsync(Guid claimId, string userId, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<MechanismClaimVersion> TransitionAsync(MechanismClaimLifecycleDecision decision, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<bool> ExperimentResultValidatesClaimAsync(Guid projectId, MechanismClaimVersion value, Guid validationHypothesisId, MechanismClaimEvidence evidence, string evaluationOutcome = "supports", CancellationToken ct = default) => throw new NotSupportedException();
     }
 
     private sealed class StubShadowObservationAssembler(ExperimentRunObservation? observation)
@@ -2939,7 +3030,8 @@ public sealed class ProcessResearchWorkflowTests
             string executionId,
             int limit,
             CancellationToken ct = default,
-            string? siteId = null)
+            string? siteId = null,
+            IReadOnlyList<string>? additionalKnownUnmeasuredConfounders = null)
         {
             CallCount++;
             return Task.FromResult<ExecutionComparisonResult?>(null);
@@ -2949,7 +3041,8 @@ public sealed class ProcessResearchWorkflowTests
             string baselineProcessExecutionId,
             IReadOnlyList<string> executionIds,
             CancellationToken ct = default,
-            string? siteId = null)
+            string? siteId = null,
+            IReadOnlyList<string>? additionalKnownUnmeasuredConfounders = null)
         {
             CallCount++;
             return Task.FromResult<ExecutionComparisonResult?>(null);

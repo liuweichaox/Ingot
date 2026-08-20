@@ -1,5 +1,6 @@
 using Ingot.Platform.Application.ResearchAssets;
 using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Ingot.Contracts.ResearchAssets;
 using Microsoft.Extensions.Options;
@@ -60,11 +61,18 @@ public sealed class PostgresResearchAssetStore : IResearchAssetStore
             },
             ct);
 
-    public Task<IReadOnlyList<TrainingDatasetVersion>> ListDatasetsAsync(CancellationToken ct = default)
-        => ListAsync<TrainingDatasetVersion>(
-            "SELECT payload::text FROM training_dataset_versions ORDER BY created_at DESC LIMIT 200;",
-            null,
-            ct);
+    public async Task<IReadOnlyList<TrainingDatasetVersion>> ListDatasetsAsync(CancellationToken ct = default)
+        => (await ListDatasetsPageAsync(200, null, ct).ConfigureAwait(false)).Data;
+
+    public Task<ResearchAssetPage<TrainingDatasetVersion>> ListDatasetsPageAsync(
+        int limit, string? cursor, CancellationToken ct = default)
+        => ListPageAsync<TrainingDatasetVersion>(
+            """
+            SELECT payload::text, created_at, dataset_id, version
+            FROM training_dataset_versions
+            WHERE (@cursor_at IS NULL OR (created_at,dataset_id,version) < (@cursor_at,@cursor_key,@cursor_version))
+            ORDER BY created_at DESC,dataset_id DESC,version DESC LIMIT @take;
+            """, limit, cursor, null, ct);
 
     public async Task<ProcessModelVersion> SaveModelAsync(
         ProcessModelVersion value,
@@ -107,11 +115,18 @@ public sealed class PostgresResearchAssetStore : IResearchAssetStore
             },
             ct);
 
-    public Task<IReadOnlyList<ProcessModelVersion>> ListModelsAsync(CancellationToken ct = default)
-        => ListAsync<ProcessModelVersion>(
-            "SELECT payload::text FROM process_model_versions ORDER BY updated_at DESC LIMIT 200;",
-            null,
-            ct);
+    public async Task<IReadOnlyList<ProcessModelVersion>> ListModelsAsync(CancellationToken ct = default)
+        => (await ListModelsPageAsync(200, null, ct).ConfigureAwait(false)).Data;
+
+    public Task<ResearchAssetPage<ProcessModelVersion>> ListModelsPageAsync(
+        int limit, string? cursor, CancellationToken ct = default)
+        => ListPageAsync<ProcessModelVersion>(
+            """
+            SELECT payload::text, updated_at, model_id, version
+            FROM process_model_versions
+            WHERE (@cursor_at IS NULL OR (updated_at,model_id,version) < (@cursor_at,@cursor_key,@cursor_version))
+            ORDER BY updated_at DESC,model_id DESC,version DESC LIMIT @take;
+            """, limit, cursor, null, ct);
 
     public async Task<ModelEvaluation> AddEvaluationAsync(
         ModelEvaluation value,
@@ -134,17 +149,23 @@ public sealed class PostgresResearchAssetStore : IResearchAssetStore
         return value;
     }
 
-    public Task<IReadOnlyList<ModelEvaluation>> ListEvaluationsAsync(
+    public async Task<IReadOnlyList<ModelEvaluation>> ListEvaluationsAsync(
         string modelId,
         int version,
         CancellationToken ct = default)
-        => ListAsync<ModelEvaluation>(
+        => (await ListEvaluationsPageAsync(modelId, version, 200, null, ct).ConfigureAwait(false)).Data;
+
+    public Task<ResearchAssetPage<ModelEvaluation>> ListEvaluationsPageAsync(
+        string modelId, int version, int limit, string? cursor, CancellationToken ct = default)
+        => ListPageAsync<ModelEvaluation>(
             """
-            SELECT payload::text FROM model_evaluations
+            SELECT payload::text,created_at,evaluation_id::text,0 FROM model_evaluations
             WHERE model_id = @id AND model_version = @version
-            ORDER BY created_at DESC
-            LIMIT 200;
+              AND (@cursor_at IS NULL OR (created_at,evaluation_id::text,0) < (@cursor_at,@cursor_key,@cursor_version))
+            ORDER BY created_at DESC,evaluation_id::text DESC LIMIT @take;
             """,
+            limit,
+            cursor,
             command =>
             {
                 command.Parameters.AddWithValue("id", modelId);
@@ -174,17 +195,23 @@ public sealed class PostgresResearchAssetStore : IResearchAssetStore
         return value;
     }
 
-    public Task<IReadOnlyList<ModelDriftReading>> ListDriftReadingsAsync(
+    public async Task<IReadOnlyList<ModelDriftReading>> ListDriftReadingsAsync(
         string modelId,
         int version,
         CancellationToken ct = default)
-        => ListAsync<ModelDriftReading>(
+        => (await ListDriftReadingsPageAsync(modelId, version, 200, null, ct).ConfigureAwait(false)).Data;
+
+    public Task<ResearchAssetPage<ModelDriftReading>> ListDriftReadingsPageAsync(
+        string modelId, int version, int limit, string? cursor, CancellationToken ct = default)
+        => ListPageAsync<ModelDriftReading>(
             """
-            SELECT payload::text FROM model_drift_readings
+            SELECT payload::text,created_at,reading_id::text,0 FROM model_drift_readings
             WHERE model_id = @id AND model_version = @version
-            ORDER BY created_at DESC
-            LIMIT 200;
+              AND (@cursor_at IS NULL OR (created_at,reading_id::text,0) < (@cursor_at,@cursor_key,@cursor_version))
+            ORDER BY created_at DESC,reading_id::text DESC LIMIT @take;
             """,
+            limit,
+            cursor,
             command =>
             {
                 command.Parameters.AddWithValue("id", modelId);
@@ -234,12 +261,19 @@ public sealed class PostgresResearchAssetStore : IResearchAssetStore
             },
             ct);
 
-    public Task<IReadOnlyList<MechanismModelVersion>> ListMechanismModelsAsync(
+    public async Task<IReadOnlyList<MechanismModelVersion>> ListMechanismModelsAsync(
         CancellationToken ct = default)
-        => ListAsync<MechanismModelVersion>(
-            "SELECT payload::text FROM mechanism_model_versions ORDER BY updated_at DESC LIMIT 200;",
-            null,
-            ct);
+        => (await ListMechanismModelsPageAsync(200, null, ct).ConfigureAwait(false)).Data;
+
+    public Task<ResearchAssetPage<MechanismModelVersion>> ListMechanismModelsPageAsync(
+        int limit, string? cursor, CancellationToken ct = default)
+        => ListPageAsync<MechanismModelVersion>(
+            """
+            SELECT payload::text, updated_at, model_id, version
+            FROM mechanism_model_versions
+            WHERE (@cursor_at IS NULL OR (updated_at,model_id,version) < (@cursor_at,@cursor_key,@cursor_version))
+            ORDER BY updated_at DESC,model_id DESC,version DESC LIMIT @take;
+            """, limit, cursor, null, ct);
 
     public async Task<MechanismFusionDefinition> SaveMechanismFusionAsync(
         MechanismFusionDefinition value,
@@ -292,12 +326,19 @@ public sealed class PostgresResearchAssetStore : IResearchAssetStore
             },
             ct);
 
-    public Task<IReadOnlyList<MechanismFusionDefinition>> ListMechanismFusionsAsync(
+    public async Task<IReadOnlyList<MechanismFusionDefinition>> ListMechanismFusionsAsync(
         CancellationToken ct = default)
-        => ListAsync<MechanismFusionDefinition>(
-            "SELECT payload::text FROM mechanism_fusion_definitions ORDER BY updated_at DESC LIMIT 200;",
-            null,
-            ct);
+        => (await ListMechanismFusionsPageAsync(200, null, ct).ConfigureAwait(false)).Data;
+
+    public Task<ResearchAssetPage<MechanismFusionDefinition>> ListMechanismFusionsPageAsync(
+        int limit, string? cursor, CancellationToken ct = default)
+        => ListPageAsync<MechanismFusionDefinition>(
+            """
+            SELECT payload::text, updated_at, fusion_id, version
+            FROM mechanism_fusion_definitions
+            WHERE (@cursor_at IS NULL OR (updated_at,fusion_id,version) < (@cursor_at,@cursor_key,@cursor_version))
+            ORDER BY updated_at DESC,fusion_id DESC,version DESC LIMIT @take;
+            """, limit, cursor, null, ct);
 
     public async Task<DatasetQualityValidationReport> SaveDatasetQualityValidationReportAsync(
         DatasetQualityValidationReport value,
@@ -328,12 +369,19 @@ public sealed class PostgresResearchAssetStore : IResearchAssetStore
         return value;
     }
 
-    public Task<IReadOnlyList<DatasetQualityValidationReport>> ListDatasetQualityValidationReportsAsync(
+    public async Task<IReadOnlyList<DatasetQualityValidationReport>> ListDatasetQualityValidationReportsAsync(
         CancellationToken ct = default)
-        => ListAsync<DatasetQualityValidationReport>(
-            "SELECT payload::text FROM dataset_quality_validation_reports ORDER BY created_at DESC LIMIT 200;",
-            null,
-            ct);
+        => (await ListDatasetQualityValidationReportsPageAsync(200, null, ct).ConfigureAwait(false)).Data;
+
+    public Task<ResearchAssetPage<DatasetQualityValidationReport>> ListDatasetQualityValidationReportsPageAsync(
+        int limit, string? cursor, CancellationToken ct = default)
+        => ListPageAsync<DatasetQualityValidationReport>(
+            """
+            SELECT payload::text, created_at, report_id::text, 0
+            FROM dataset_quality_validation_reports
+            WHERE (@cursor_at IS NULL OR (created_at,report_id::text,0) < (@cursor_at,@cursor_key,@cursor_version))
+            ORDER BY created_at DESC,report_id::text DESC LIMIT @take;
+            """, limit, cursor, null, ct);
 
     public async Task<KnowledgeSource> AddKnowledgeSourceAsync(
         Stream content,
@@ -481,32 +529,55 @@ public sealed class PostgresResearchAssetStore : IResearchAssetStore
         => ReadKnowledgeSourceAsync(sourceId, null, null, ct);
 
     public async Task<IReadOnlyList<KnowledgeSource>> ListKnowledgeSourcesAsync(CancellationToken ct = default)
-    {
-        await using var command = _dataSource.CreateCommand(
-            "SELECT source_id FROM knowledge_sources ORDER BY updated_at DESC LIMIT 200;");
-        await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
-        var ids = new List<Guid>();
-        while (await reader.ReadAsync(ct).ConfigureAwait(false)) ids.Add(reader.GetGuid(0));
-        var values = new List<KnowledgeSource>(ids.Count);
-        foreach (var id in ids)
-            if (await ReadKnowledgeSourceAsync(id, null, null, ct).ConfigureAwait(false) is { } value) values.Add(value);
-        return values;
-    }
+        => (await ListKnowledgeSourcesPageCoreAsync(null, 200, null, ct).ConfigureAwait(false)).Data;
 
     public async Task<IReadOnlyList<KnowledgeSource>> ListKnowledgeSourcesAsync(
         Guid projectId,
         CancellationToken ct = default)
+        => (await ListKnowledgeSourcesPageAsync(projectId, 200, null, ct).ConfigureAwait(false)).Data;
+
+    public Task<ResearchAssetPage<KnowledgeSource>> ListKnowledgeSourcesPageAsync(
+        Guid projectId,
+        int limit,
+        string? cursor,
+        CancellationToken ct = default)
+        => ListKnowledgeSourcesPageCoreAsync(projectId, limit, cursor, ct);
+
+    private async Task<ResearchAssetPage<KnowledgeSource>> ListKnowledgeSourcesPageCoreAsync(
+        Guid? projectId,
+        int limit,
+        string? cursor,
+        CancellationToken ct)
     {
+        limit = Math.Clamp(limit, 1, 200);
+        var decoded = DecodeCursor(cursor);
         await using var command = _dataSource.CreateCommand(
-            "SELECT source_id FROM knowledge_sources WHERE project_id=@project_id ORDER BY updated_at DESC;");
-        command.Parameters.AddWithValue("project_id", projectId);
+            """
+            SELECT source_id,updated_at
+            FROM knowledge_sources
+            WHERE (@project_id IS NULL OR project_id=@project_id)
+              AND (@cursor_at IS NULL OR (updated_at,source_id::text,0) < (@cursor_at,@cursor_key,@cursor_version))
+            ORDER BY updated_at DESC,source_id::text DESC LIMIT @take;
+            """);
+        AddNullable(command, "project_id", NpgsqlDbType.Uuid, projectId);
+        AddCursorParameters(command, decoded, limit + 1);
         await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
-        var ids = new List<Guid>();
-        while (await reader.ReadAsync(ct).ConfigureAwait(false)) ids.Add(reader.GetGuid(0));
-        var values = new List<KnowledgeSource>(ids.Count);
-        foreach (var id in ids)
-            if (await ReadKnowledgeSourceAsync(id, null, null, ct).ConfigureAwait(false) is { } value) values.Add(value);
-        return values;
+        var rows = new List<(Guid Id, DateTimeOffset At)>();
+        while (await reader.ReadAsync(ct).ConfigureAwait(false))
+            rows.Add((reader.GetGuid(0), reader.GetFieldValue<DateTimeOffset>(1)));
+        var hasMore = rows.Count > limit;
+        if (hasMore) rows.RemoveAt(rows.Count - 1);
+        var values = new List<KnowledgeSource>(rows.Count);
+        foreach (var row in rows)
+            if (await ReadKnowledgeSourceAsync(row.Id, null, null, ct).ConfigureAwait(false) is { } value)
+                values.Add(value);
+        return new ResearchAssetPage<KnowledgeSource>
+        {
+            Data = values,
+            NextCursor = hasMore && rows.Count > 0
+                ? EncodeCursor(new AssetCursor(rows[^1].At, rows[^1].Id.ToString(), 0))
+                : null
+        };
     }
 
     public async Task<Stream?> OpenKnowledgeSourceAsync(Guid sourceId, CancellationToken ct = default)
@@ -927,6 +998,66 @@ public sealed class PostgresResearchAssetStore : IResearchAssetStore
             values.Add(Deserialize<T>(reader.GetString(0)));
         return values;
     }
+
+    private async Task<ResearchAssetPage<T>> ListPageAsync<T>(
+        string sql,
+        int limit,
+        string? cursor,
+        Action<NpgsqlCommand>? configure,
+        CancellationToken ct)
+    {
+        await InitializeAsync(ct).ConfigureAwait(false);
+        limit = Math.Clamp(limit, 1, 200);
+        var decoded = DecodeCursor(cursor);
+        await using var command = _dataSource.CreateCommand(sql);
+        configure?.Invoke(command);
+        AddCursorParameters(command, decoded, limit + 1);
+        await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
+        var rows = new List<(T Value, AssetCursor Cursor)>();
+        while (await reader.ReadAsync(ct).ConfigureAwait(false))
+            rows.Add((
+                Deserialize<T>(reader.GetString(0)),
+                new AssetCursor(
+                    reader.GetFieldValue<DateTimeOffset>(1),
+                    reader.GetString(2),
+                    reader.GetInt32(3))));
+        var hasMore = rows.Count > limit;
+        if (hasMore) rows.RemoveAt(rows.Count - 1);
+        return new ResearchAssetPage<T>
+        {
+            Data = rows.Select(static row => row.Value).ToArray(),
+            NextCursor = hasMore && rows.Count > 0 ? EncodeCursor(rows[^1].Cursor) : null
+        };
+    }
+
+    private static void AddCursorParameters(NpgsqlCommand command, AssetCursor? cursor, int take)
+    {
+        AddNullable(command, "cursor_at", NpgsqlDbType.TimestampTz, cursor?.SortAt);
+        AddNullable(command, "cursor_key", NpgsqlDbType.Text, cursor?.Key);
+        command.Parameters.Add(new NpgsqlParameter("cursor_version", NpgsqlDbType.Integer)
+            { Value = cursor?.Version ?? 0 });
+        command.Parameters.AddWithValue("take", take);
+    }
+
+    private static string EncodeCursor(AssetCursor cursor)
+        => Convert.ToHexString(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(cursor, JsonOptions)));
+
+    private static AssetCursor? DecodeCursor(string? cursor)
+    {
+        if (string.IsNullOrWhiteSpace(cursor)) return null;
+        try
+        {
+            var bytes = Convert.FromHexString(cursor.Trim());
+            return JsonSerializer.Deserialize<AssetCursor>(bytes, JsonOptions)
+                ?? throw new FormatException();
+        }
+        catch (Exception exception) when (exception is FormatException or JsonException)
+        {
+            throw new ArgumentException("分页 cursor 无效。", nameof(cursor), exception);
+        }
+    }
+
+    private sealed record AssetCursor(DateTimeOffset SortAt, string Key, int Version);
 
     private async Task<KnowledgeSource?> GetKnowledgeSourceByHashAsync(
         string sha256,

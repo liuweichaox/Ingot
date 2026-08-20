@@ -219,6 +219,34 @@ public sealed class MechanismKnowledgeServiceTests
         Assert.Equal("material-a", saved.Applicability[0].DimensionValue);
     }
 
+    [Fact]
+    public async Task Draft_NormalizesAndValidatesForbiddenCombination()
+    {
+        var service = CreateService(new MemoryMechanismKnowledgeStore());
+        var saved = await service.SaveDraftAsync(Guid.CreateVersion7(), Draft() with
+        {
+            ForbiddenCombinations =
+            [
+                new MechanismForbiddenCombination
+                {
+                    Name = "高温和长保压联合禁区",
+                    Factors =
+                    [
+                        new MechanismForbiddenCombinationFactor
+                            { VariableCode = "holding.temperature", Minimum = 520, Unit = "°C" },
+                        new MechanismForbiddenCombinationFactor
+                            { VariableCode = "holding.time", Minimum = 12, Unit = "s" }
+                    ]
+                }
+            ]
+        }, "engineer");
+
+        Assert.Single(saved.ForbiddenCombinations);
+        Assert.NotEqual(Guid.Empty, saved.ForbiddenCombinations[0].CombinationId);
+        Assert.Equal("Cel", saved.ForbiddenCombinations[0].Factors[0].Unit);
+        Assert.Equal("s", saved.ForbiddenCombinations[0].Factors[1].Unit);
+    }
+
     private static MechanismClaimVersion Draft() => new()
     {
         Name = "保压温度对缺陷的影响",
@@ -259,6 +287,13 @@ public sealed class MechanismKnowledgeServiceTests
                         Name = "温度",
                         Role = ResearchVariableRoles.Control,
                         Unit = "Cel"
+                    },
+                    new ResearchVariable
+                    {
+                        Code = "holding.time",
+                        Name = "保压时间",
+                        Role = ResearchVariableRoles.Control,
+                        Unit = "s"
                     }
                 ]
             });

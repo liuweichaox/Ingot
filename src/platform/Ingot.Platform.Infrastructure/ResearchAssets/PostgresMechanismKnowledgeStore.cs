@@ -25,22 +25,149 @@ public sealed class PostgresMechanismKnowledgeStore : IMechanismKnowledgeStore
         Guid projectId,
         CancellationToken ct = default)
     {
-        var keys = new List<(Guid ClaimId, int Version)>();
+        var values = new List<MechanismClaimVersion>();
         await using var connection = await dataSource.OpenConnectionAsync(ct).ConfigureAwait(false);
         await using (var command = new NpgsqlCommand(
-            "SELECT claim_id, current_version FROM mechanism_claims WHERE project_id = @project_id ORDER BY updated_at DESC;",
+            """
+            SELECT c.claim_id, c.project_id, v.version, c.status, v.name, v.mechanism_type,
+              v.statement, v.expected_signature, v.falsification_condition, v.evidence_level,
+              v.created_by, v.created_at, v.reviewed_by, v.reviewed_at, v.content_hash, c.updated_at
+            FROM mechanism_claims c
+            JOIN mechanism_claim_versions v
+              ON v.claim_id = c.claim_id AND v.version = c.current_version
+            WHERE c.project_id = @project_id
+            ORDER BY c.updated_at DESC, c.claim_id;
+            """,
             connection))
         {
             command.Parameters.AddWithValue("project_id", projectId);
             await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
             while (await reader.ReadAsync(ct).ConfigureAwait(false))
-                keys.Add((reader.GetGuid(0), reader.GetInt32(1)));
+                values.Add(new MechanismClaimVersion
+                {
+                    ClaimId = reader.GetGuid(0), ProjectId = reader.GetGuid(1), Version = reader.GetInt32(2),
+                    Status = reader.GetString(3), Name = reader.GetString(4), MechanismType = reader.GetString(5),
+                    Statement = reader.GetString(6), ExpectedSignature = reader.IsDBNull(7) ? null : reader.GetString(7),
+                    FalsificationCondition = reader.GetString(8), EvidenceLevel = reader.GetString(9),
+                    CreatedBy = reader.GetString(10), CreatedAt = reader.GetFieldValue<DateTimeOffset>(11),
+                    ReviewedBy = reader.IsDBNull(12) ? null : reader.GetString(12),
+                    ReviewedAt = reader.IsDBNull(13) ? null : reader.GetFieldValue<DateTimeOffset>(13),
+                    ContentHash = reader.GetString(14), UpdatedAt = reader.GetFieldValue<DateTimeOffset>(15)
+                });
         }
-        var values = new List<MechanismClaimVersion>(keys.Count);
-        foreach (var key in keys)
-            if (await ReadClaimAsync(connection, key.ClaimId, key.Version, ct).ConfigureAwait(false) is { } value)
-                values.Add(value);
-        return values;
+        if (values.Count == 0) return values;
+
+        var variables = values.ToDictionary(static value => value.ClaimId, static _ => new List<MechanismClaimVariable>());
+        await using (var command = CurrentClaimChildCommand(connection, projectId,
+            """
+            SELECT child.claim_id, child.variable_code, child.variable_role, child.direction, child.delay_ms, child.unit
+            FROM mechanism_claim_variables child
+            JOIN mechanism_claims claim ON claim.claim_id=child.claim_id AND claim.current_version=child.claim_version
+            WHERE claim.project_id=@project_id ORDER BY child.claim_id, child.variable_role, child.variable_code;
+            """))
+        await using (var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false))
+            while (await reader.ReadAsync(ct).ConfigureAwait(false))
+                variables[reader.GetGuid(0)].Add(new MechanismClaimVariable
+                {
+                    VariableCode=reader.GetString(1), VariableRole=reader.GetString(2),
+                    Direction=reader.IsDBNull(3)?null:reader.GetString(3),
+                    DelayMilliseconds=reader.IsDBNull(4)?null:reader.GetInt64(4), Unit=reader.GetString(5)
+                });
+
+        var applicability = values.ToDictionary(static value => value.ClaimId, static _ => new List<MechanismClaimApplicability>());
+        await using (var command = CurrentClaimChildCommand(connection, projectId,
+            """
+            SELECT child.claim_id, child.dimension_code, child.dimension_value
+            FROM mechanism_claim_applicability child
+            JOIN mechanism_claims claim ON claim.claim_id=child.claim_id AND claim.current_version=child.claim_version
+            WHERE claim.project_id=@project_id ORDER BY child.claim_id, child.dimension_code, child.dimension_value;
+            """))
+        await using (var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false))
+            while (await reader.ReadAsync(ct).ConfigureAwait(false))
+                applicability[reader.GetGuid(0)].Add(new MechanismClaimApplicability
+                    { DimensionCode=reader.GetString(1), DimensionValue=reader.GetString(2) });
+
+        var constraints = values.ToDictionary(static value => value.ClaimId, static _ => new List<MechanismClaimConstraint>());
+        await using (var command = CurrentClaimChildCommand(connection, projectId,
+            """
+            SELECT child.claim_id, child.constraint_id, child.variable_code, child.constraint_kind,
+              child.minimum, child.maximum, child.unit, child.severity
+            FROM mechanism_claim_constraints child
+            JOIN mechanism_claims claim ON claim.claim_id=child.claim_id AND claim.current_version=child.claim_version
+            WHERE claim.project_id=@project_id ORDER BY child.claim_id, child.variable_code;
+            """))
+        await using (var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false))
+            while (await reader.ReadAsync(ct).ConfigureAwait(false))
+                constraints[reader.GetGuid(0)].Add(new MechanismClaimConstraint
+                {
+                    ConstraintId=reader.GetGuid(1), VariableCode=reader.GetString(2), ConstraintKind=reader.GetString(3),
+                    Minimum=reader.IsDBNull(4)?null:reader.GetDouble(4), Maximum=reader.IsDBNull(5)?null:reader.GetDouble(5),
+                    Unit=reader.GetString(6), Severity=reader.GetString(7)
+                });
+
+        var combinations = values.ToDictionary(static value => value.ClaimId, static _ => new List<MechanismForbiddenCombination>());
+        await using (var command = CurrentClaimChildCommand(connection, projectId,
+            """
+            SELECT combination.claim_id, combination.combination_id, combination.name,
+              factor.variable_code, factor.minimum, factor.maximum, factor.unit
+            FROM mechanism_claim_forbidden_combinations combination
+            JOIN mechanism_claims claim ON claim.claim_id=combination.claim_id AND claim.current_version=combination.claim_version
+            LEFT JOIN mechanism_claim_forbidden_combination_factors factor ON factor.combination_id=combination.combination_id
+            WHERE claim.project_id=@project_id
+            ORDER BY combination.claim_id, combination.name, combination.combination_id, factor.variable_code;
+            """))
+        await using (var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false))
+        {
+            var byCombination = new Dictionary<Guid, (Guid ClaimId, string Name, List<MechanismForbiddenCombinationFactor> Factors)>();
+            while (await reader.ReadAsync(ct).ConfigureAwait(false))
+            {
+                var combinationId = reader.GetGuid(1);
+                if (!byCombination.TryGetValue(combinationId, out var current))
+                    current = (reader.GetGuid(0), reader.GetString(2), []);
+                if (!reader.IsDBNull(3))
+                    current.Factors.Add(new MechanismForbiddenCombinationFactor
+                    {
+                        VariableCode=reader.GetString(3), Minimum=reader.IsDBNull(4)?null:reader.GetDouble(4),
+                        Maximum=reader.IsDBNull(5)?null:reader.GetDouble(5), Unit=reader.GetString(6)
+                    });
+                byCombination[combinationId] = current;
+            }
+            foreach (var pair in byCombination)
+                combinations[pair.Value.ClaimId].Add(new MechanismForbiddenCombination
+                    { CombinationId=pair.Key, Name=pair.Value.Name, Factors=pair.Value.Factors });
+        }
+
+        var evidence = values.ToDictionary(static value => value.ClaimId, static _ => new List<MechanismClaimEvidence>());
+        await using (var command = CurrentClaimChildCommand(connection, projectId,
+            """
+            SELECT child.claim_id, child.evidence_link_id, child.evidence_kind, child.reference_id,
+              child.polarity, child.content_hash
+            FROM mechanism_claim_evidence child
+            JOIN mechanism_claims claim ON claim.claim_id=child.claim_id AND claim.current_version=child.claim_version
+            WHERE claim.project_id=@project_id ORDER BY child.claim_id, child.created_at, child.evidence_link_id;
+            """))
+        await using (var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false))
+            while (await reader.ReadAsync(ct).ConfigureAwait(false))
+                evidence[reader.GetGuid(0)].Add(new MechanismClaimEvidence
+                {
+                    EvidenceLinkId=reader.GetGuid(1), EvidenceKind=reader.GetString(2), ReferenceId=reader.GetString(3),
+                    Polarity=reader.GetString(4), ContentHash=reader.GetString(5)
+                });
+
+        return values.Select(value => value with
+        {
+            Variables=variables[value.ClaimId], Applicability=applicability[value.ClaimId],
+            Constraints=constraints[value.ClaimId], ForbiddenCombinations=combinations[value.ClaimId],
+            Evidence=evidence[value.ClaimId]
+        }).ToArray();
+    }
+
+    private static NpgsqlCommand CurrentClaimChildCommand(
+        NpgsqlConnection connection, Guid projectId, string sql)
+    {
+        var command = new NpgsqlCommand(sql, connection);
+        command.Parameters.AddWithValue("project_id", projectId);
+        return command;
     }
 
     public async Task<MechanismClaimVersion> SaveDraftAsync(
@@ -96,6 +223,8 @@ public sealed class PostgresMechanismKnowledgeStore : IMechanismKnowledgeStore
             await InsertApplicabilityAsync(connection, transaction, value, item, ct).ConfigureAwait(false);
         foreach (var item in value.Constraints)
             await InsertConstraintAsync(connection, transaction, value, item, ct).ConfigureAwait(false);
+        foreach (var item in value.ForbiddenCombinations)
+            await InsertForbiddenCombinationAsync(connection, transaction, value, item, ct).ConfigureAwait(false);
         foreach (var item in value.Evidence)
             await InsertEvidenceAsync(connection, transaction, value, item, ct).ConfigureAwait(false);
         await transaction.CommitAsync(ct).ConfigureAwait(false);
@@ -554,8 +683,10 @@ public sealed class PostgresMechanismKnowledgeStore : IMechanismKnowledgeStore
         var variables = await ReadVariablesAsync(connection, claimId, value.Version, ct).ConfigureAwait(false);
         var applicability = await ReadApplicabilityAsync(connection, claimId, value.Version, ct).ConfigureAwait(false);
         var constraints = await ReadConstraintsAsync(connection, claimId, value.Version, ct).ConfigureAwait(false);
+        var forbiddenCombinations = await ReadForbiddenCombinationsAsync(
+            connection, claimId, value.Version, ct).ConfigureAwait(false);
         var evidence = await ReadEvidenceAsync(connection, claimId, value.Version, ct).ConfigureAwait(false);
-        return value with { Variables = variables, Applicability = applicability, Constraints = constraints, Evidence = evidence };
+        return value with { Variables = variables, Applicability = applicability, Constraints = constraints, ForbiddenCombinations = forbiddenCombinations, Evidence = evidence };
     }
 
     private static async Task InsertVariableAsync(NpgsqlConnection c, NpgsqlTransaction t, MechanismClaimVersion claim, MechanismClaimVariable value, CancellationToken ct)
@@ -584,6 +715,35 @@ public sealed class PostgresMechanismKnowledgeStore : IMechanismKnowledgeStore
         command.Parameters.AddWithValue("kind", value.ConstraintKind); AddNullable(command, "minimum", NpgsqlDbType.Double, value.Minimum);
         AddNullable(command, "maximum", NpgsqlDbType.Double, value.Maximum); command.Parameters.AddWithValue("unit", value.Unit);
         command.Parameters.AddWithValue("severity", value.Severity); await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+    }
+
+    private static async Task InsertForbiddenCombinationAsync(
+        NpgsqlConnection c,
+        NpgsqlTransaction t,
+        MechanismClaimVersion claim,
+        MechanismForbiddenCombination value,
+        CancellationToken ct)
+    {
+        await using (var command = new NpgsqlCommand(
+            "INSERT INTO mechanism_claim_forbidden_combinations(combination_id, claim_id, claim_version, name) VALUES (@combination_id,@id,@version,@name);", c, t))
+        {
+            command.Parameters.AddWithValue("combination_id", value.CombinationId);
+            command.Parameters.AddWithValue("id", claim.ClaimId);
+            command.Parameters.AddWithValue("version", claim.Version);
+            command.Parameters.AddWithValue("name", value.Name);
+            await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+        }
+        foreach (var factor in value.Factors)
+        {
+            await using var command = new NpgsqlCommand(
+                "INSERT INTO mechanism_claim_forbidden_combination_factors(combination_id, variable_code, minimum, maximum, unit) VALUES (@combination_id,@code,@minimum,@maximum,@unit);", c, t);
+            command.Parameters.AddWithValue("combination_id", value.CombinationId);
+            command.Parameters.AddWithValue("code", factor.VariableCode);
+            AddNullable(command, "minimum", NpgsqlDbType.Double, factor.Minimum);
+            AddNullable(command, "maximum", NpgsqlDbType.Double, factor.Maximum);
+            command.Parameters.AddWithValue("unit", factor.Unit);
+            await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+        }
     }
 
     private static async Task InsertEvidenceAsync(NpgsqlConnection c, NpgsqlTransaction t, MechanismClaimVersion claim, MechanismClaimEvidence value, CancellationToken ct)
@@ -617,6 +777,46 @@ public sealed class PostgresMechanismKnowledgeStore : IMechanismKnowledgeStore
         await using var command = ChildCommand(c, "SELECT constraint_id, variable_code, constraint_kind, minimum, maximum, unit, severity FROM mechanism_claim_constraints WHERE claim_id=@id AND claim_version=@version ORDER BY variable_code;", id, version);
         await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false); var values = new List<MechanismClaimConstraint>();
         while (await reader.ReadAsync(ct).ConfigureAwait(false)) values.Add(new MechanismClaimConstraint { ConstraintId=reader.GetGuid(0), VariableCode=reader.GetString(1), ConstraintKind=reader.GetString(2), Minimum=reader.IsDBNull(3)?null:reader.GetDouble(3), Maximum=reader.IsDBNull(4)?null:reader.GetDouble(4), Unit=reader.GetString(5), Severity=reader.GetString(6) });
+        return values;
+    }
+
+    private static async Task<IReadOnlyList<MechanismForbiddenCombination>> ReadForbiddenCombinationsAsync(
+        NpgsqlConnection c,
+        Guid id,
+        int version,
+        CancellationToken ct)
+    {
+        var combinations = new List<(Guid Id, string Name)>();
+        await using (var command = ChildCommand(c,
+            "SELECT combination_id, name FROM mechanism_claim_forbidden_combinations WHERE claim_id=@id AND claim_version=@version ORDER BY name, combination_id;",
+            id, version))
+        await using (var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false))
+            while (await reader.ReadAsync(ct).ConfigureAwait(false))
+                combinations.Add((reader.GetGuid(0), reader.GetString(1)));
+
+        var values = new List<MechanismForbiddenCombination>(combinations.Count);
+        foreach (var combination in combinations)
+        {
+            var factors = new List<MechanismForbiddenCombinationFactor>();
+            await using var command = new NpgsqlCommand(
+                "SELECT variable_code, minimum, maximum, unit FROM mechanism_claim_forbidden_combination_factors WHERE combination_id=@id ORDER BY variable_code;", c);
+            command.Parameters.AddWithValue("id", combination.Id);
+            await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
+            while (await reader.ReadAsync(ct).ConfigureAwait(false))
+                factors.Add(new MechanismForbiddenCombinationFactor
+                {
+                    VariableCode = reader.GetString(0),
+                    Minimum = reader.IsDBNull(1) ? null : reader.GetDouble(1),
+                    Maximum = reader.IsDBNull(2) ? null : reader.GetDouble(2),
+                    Unit = reader.GetString(3)
+                });
+            values.Add(new MechanismForbiddenCombination
+            {
+                CombinationId = combination.Id,
+                Name = combination.Name,
+                Factors = factors
+            });
+        }
         return values;
     }
 

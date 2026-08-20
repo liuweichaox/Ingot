@@ -109,6 +109,10 @@ services:
       - Chat__MaxDiscussionTurns=${INGOT_CHAT_MAX_DISCUSSION_TURNS:-9}
       - ChatDataAccess__Users__operator__AllowAll=${INGOT_CHAT_OPERATOR_ALLOW_ALL:-true}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - MechanismDraftGeneration__Enabled=${INGOT_MECHANISM_DRAFT_ENABLED:-false}
+      - MechanismDraftGeneration__BaseUrl=${INGOT_MECHANISM_DRAFT_BASE_URL:-https://api.openai.com/v1}
+      - MechanismDraftGeneration__Model=${INGOT_MECHANISM_DRAFT_MODEL:-gpt-5-mini}
+      - MechanismDraftGeneration__TimeoutSeconds=${INGOT_MECHANISM_DRAFT_TIMEOUT_SECONDS:-60}
       - Cors__AllowedOrigins__0=http://localhost:3000
     depends_on:
       platform-migrate:

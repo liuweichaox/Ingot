@@ -11,37 +11,40 @@ namespace Ingot.Platform.Api.Controllers;
 public class EdgesController(EdgeRegistry registry, EdgeTokenValidator edgeTokenValidator) : PlatformApiController
 {
     [HttpGet]
-    public IActionResult List()
+    public async Task<IActionResult> List(CancellationToken ct)
     {
-        return Ok(registry.List().OrderByDescending(e => e.LastSeen));
+        var edges = await registry.ListAsync(ct).ConfigureAwait(false);
+        return Ok(edges.OrderByDescending(static edge => edge.LastSeen));
     }
 
     [HttpPost("register")]
     [AllowAnonymous]
-    public IActionResult Register([FromBody] EdgeRegistrationRequest request)
+    public async Task<IActionResult> Register([FromBody] EdgeRegistrationRequest request, CancellationToken ct)
     {
         if (!edgeTokenValidator.IsAuthorized(request.EdgeId, Request.Headers.Authorization.ToString()))
             return AuthenticationRequired("边缘节点认证失败。");
         var now = DateTimeOffset.UtcNow;
-        var state = registry.Upsert(request.EdgeId, request.HostBaseUrl, request.Hostname, null, now);
+        var state = await registry.UpsertAsync(
+            request.EdgeId, request.HostBaseUrl, request.Hostname, null, now, ct).ConfigureAwait(false);
         return Ok(new { state.EdgeId, state.HostBaseUrl, state.Hostname, state.LastSeen });
     }
 
     [HttpPost("heartbeat")]
     [AllowAnonymous]
-    public IActionResult Heartbeat([FromBody] EdgeHeartbeatRequest request)
+    public async Task<IActionResult> Heartbeat([FromBody] EdgeHeartbeatRequest request, CancellationToken ct)
     {
         if (!edgeTokenValidator.IsAuthorized(request.EdgeId, Request.Headers.Authorization.ToString()))
             return AuthenticationRequired("边缘节点认证失败。");
         // 在线状态与历史排序以中心接收时间为准，避免现场时钟漂移把节点永久显示在未来或过去。
         var now = DateTimeOffset.UtcNow;
-        var state = registry.Heartbeat(
+        var state = await registry.HeartbeatAsync(
             request.EdgeId,
             request.HostBaseUrl,
             request.LastError,
             request.Acquisition,
             now,
-            request.Delivery);
+            request.Delivery,
+            ct).ConfigureAwait(false);
         return Ok(new
         {
             state.EdgeId,
@@ -54,10 +57,12 @@ public class EdgesController(EdgeRegistry registry, EdgeTokenValidator edgeToken
     }
 
     [HttpGet("{edgeId}/status-history")]
-    public IActionResult StatusHistory(string edgeId, [FromQuery] int limit = 288)
-        => Ok(new { data = registry.ListStatusHistory(edgeId, limit) });
+    public async Task<IActionResult> StatusHistory(
+        string edgeId, [FromQuery] int limit = 288, CancellationToken ct = default)
+        => Ok(new { data = await registry.ListStatusHistoryAsync(edgeId, limit, ct).ConfigureAwait(false) });
 
     [HttpGet("{edgeId}/status-intervals")]
-    public IActionResult StatusIntervals(string edgeId, [FromQuery] int limit = 24)
-        => Ok(new { data = registry.ListStatusIntervals(edgeId, limit) });
+    public async Task<IActionResult> StatusIntervals(
+        string edgeId, [FromQuery] int limit = 24, CancellationToken ct = default)
+        => Ok(new { data = await registry.ListStatusIntervalsAsync(edgeId, limit, ct).ConfigureAwait(false) });
 }

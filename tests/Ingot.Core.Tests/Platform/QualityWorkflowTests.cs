@@ -209,6 +209,50 @@ public sealed class QualityWorkflowTests
     }
 
     [Fact]
+    public async Task ComparisonDisclosesConfoundersAndSuppressesCandidatesWhenOnlyDescriptiveAnalysisIsReady()
+    {
+        var rows = new List<PlatformProductionEvent>();
+        AddProcessExecution(rows, "BASE", "LENS-A", "PRESS-01", DateTimeOffset.Parse("2026-07-20T08:00:00Z"), 1);
+        AddProcessExecution(rows, "HISTORY", "LENS-A", "PRESS-02", DateTimeOffset.Parse("2026-07-20T07:00:00Z"), rows.Count + 1);
+        var plan = new ProcessAnalysisPlan
+        {
+            PlanId = "execution-comparison",
+            Version = 2,
+            Name = "过程执行对比",
+            Status = ConfigurationStatuses.Published,
+            DataModelId = "optical-molding",
+            DataModelVersion = 1,
+            ComparisonKeys = ["product_family_code"],
+            Signals = [new AnalysisSignalSelection { DataItemCode = "press.load", Features = ["mean"] }],
+            KnownUnmeasuredConfounders =
+            [
+                new() { Code = "operator_experience", Name = "操作员经验" }
+            ]
+        };
+        var service = new ExecutionComparisonService(
+            new FakeEventStore(rows),
+            new FakeInspectionStore([]),
+            new FakeReviewStore(),
+            new FakeMasterDataStore(),
+            new ProcessAnalysisResolver(new FakeProcessConfigurationStore(analysisPlan: plan)),
+            timeSeries: new FakeTimeSeriesStore(rows));
+
+        var result = await service.CompareSelectedAsync(
+            "BASE",
+            ["BASE", "HISTORY"],
+            additionalKnownUnmeasuredConfounders: ["环境波动", "环境波动"]);
+
+        Assert.NotNull(result);
+        Assert.Equal("descriptive-only", result.Diagnosis.Readiness.Mode);
+        Assert.Contains("quality-outcomes-missing", result.Diagnosis.Readiness.BlockingReasons);
+        Assert.Empty(result.Diagnosis.Candidates);
+        Assert.Empty(result.Diagnosis.Interactions);
+        Assert.Equal("not-estimable", result.Diagnosis.SensitivityAssessment.Status);
+        Assert.Equal(["操作员经验", "环境波动"], result.Diagnosis.KnownUnmeasuredConfounders.Select(static item => item.Name));
+        Assert.Equal(["analysis-plan", "request"], result.Diagnosis.KnownUnmeasuredConfounders.Select(static item => item.Source));
+    }
+
+    [Fact]
     public async Task ComparisonDoesNotAmplifyNumericalNoiseWhenHistoricalMadIsEffectivelyZero()
     {
         var rows = new List<PlatformProductionEvent>();

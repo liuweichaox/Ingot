@@ -84,8 +84,16 @@ public sealed record ProcessAnalysisPlan
     /// <summary>决定哪些运行记录属于同一可比组；键来自不可变运行上下文。</summary>
     public IReadOnlyList<string> ComparisonKeys { get; init; } = ["product_family_code"];
     public IReadOnlyDictionary<string, string> ContextSelector { get; init; } = new Dictionary<string, string>();
+    public IReadOnlyList<KnownUnmeasuredConfounderDefinition> KnownUnmeasuredConfounders { get; init; } = [];
     public IReadOnlyList<AnalysisSignalSelection> Signals { get; init; } = [];
     public DateTimeOffset UpdatedAt { get; init; }
+}
+
+public sealed record KnownUnmeasuredConfounderDefinition
+{
+    public required string Code { get; init; }
+    public required string Name { get; init; }
+    public string? Description { get; init; }
 }
 
 public sealed record AnalysisSignalSelection

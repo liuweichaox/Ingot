@@ -152,7 +152,7 @@ builder.Services.AddCors(options =>
         var origins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
         // 仅暴露本 API 实际使用的方法（查询/SSE 用 GET，创建/动作使用 POST，更新用 PUT），收敛 CORS 面。
         // 头部保持放开，因为需要 Authorization、Content-Type 与 SSE 续读的 Last-Event-ID。
-        string[] allowedMethods = ["GET", "POST", "PUT", "DELETE", "OPTIONS"];
+        string[] allowedMethods = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"];
         if (origins.Length == 0)
         {
             policy.WithOrigins("http://localhost:3000")
@@ -319,3 +319,5 @@ Log.Logger.Information("    > Chat Capabilities:{0}/api/v1/chat/capabilities", b
 Log.Logger.Information("==================================================================");
 
 app.Run();
+
+public partial class Program;

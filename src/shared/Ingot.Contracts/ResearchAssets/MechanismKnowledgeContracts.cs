@@ -50,6 +50,25 @@ public sealed record MechanismClaimConstraint
     public string Severity { get; init; } = "hard";
 }
 
+public sealed record MechanismForbiddenCombinationFactor
+{
+    public required string VariableCode { get; init; }
+    public double? Minimum { get; init; }
+    public double? Maximum { get; init; }
+    public required string Unit { get; init; }
+}
+
+/// <summary>
+///     A conjunction of factor ranges that must never be proposed. Each factor must match
+///     for the combination to be forbidden; individual factors do not narrow the campaign alone.
+/// </summary>
+public sealed record MechanismForbiddenCombination
+{
+    public Guid CombinationId { get; init; }
+    public required string Name { get; init; }
+    public IReadOnlyList<MechanismForbiddenCombinationFactor> Factors { get; init; } = [];
+}
+
 public sealed record MechanismClaimEvidence
 {
     public Guid EvidenceLinkId { get; init; }
@@ -74,6 +93,7 @@ public sealed record MechanismClaimVersion
     public IReadOnlyList<MechanismClaimVariable> Variables { get; init; } = [];
     public IReadOnlyList<MechanismClaimApplicability> Applicability { get; init; } = [];
     public IReadOnlyList<MechanismClaimConstraint> Constraints { get; init; } = [];
+    public IReadOnlyList<MechanismForbiddenCombination> ForbiddenCombinations { get; init; } = [];
     public IReadOnlyList<MechanismClaimEvidence> Evidence { get; init; } = [];
     public string CreatedBy { get; init; } = "";
     public DateTimeOffset CreatedAt { get; init; }
