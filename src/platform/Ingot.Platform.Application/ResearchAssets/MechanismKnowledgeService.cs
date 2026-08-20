@@ -6,9 +6,8 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using Ingot.Contracts.ProcessResearch;
 using Ingot.Contracts.ResearchAssets;
-using Ingot.Platform.Infrastructure.ProcessResearch;
 
-namespace Ingot.Platform.Infrastructure.ResearchAssets;
+namespace Ingot.Platform.Application.ResearchAssets;
 
 public sealed class MechanismKnowledgeService(
     IMechanismKnowledgeStore store,

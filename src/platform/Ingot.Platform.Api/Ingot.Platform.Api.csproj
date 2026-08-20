@@ -27,6 +27,7 @@
         <ProjectReference Include="..\..\shared\Ingot.Agent.Contracts\Ingot.Agent.Contracts.csproj" />
         <ProjectReference Include="..\..\shared\Ingot.Contracts\Ingot.Contracts.csproj" />
         <ProjectReference Include="..\Ingot.Platform.Application\Ingot.Platform.Application.csproj" />
+        <ProjectReference Include="..\Ingot.Platform.Inspections.Infrastructure\Ingot.Platform.Inspections.Infrastructure.csproj" />
         <ProjectReference Include="..\Ingot.Platform.Infrastructure\Ingot.Platform.Infrastructure.csproj" />
     </ItemGroup>
 

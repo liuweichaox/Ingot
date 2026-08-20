@@ -2,7 +2,6 @@ using Ingot.Platform.Application.ResearchAssets;
 using System.Text.Json;
 using Ingot.Contracts.ResearchAssets;
 using Ingot.Platform.Api.Agents;
-using Ingot.Platform.Infrastructure.ResearchAssets;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Ingot.Platform.Api.Controllers;
@@ -11,7 +10,7 @@ namespace Ingot.Platform.Api.Controllers;
 [Route("api/v1/dataset-quality-validations")]
 public sealed class DatasetQualityValidationController(
     IResearchAssetStore store,
-    DatasetQualityValidationRunner runner,
+    IDatasetQualityValidationService runner,
     PlatformUserResolver userResolver) : PlatformConfigurationControllerBase(userResolver)
 {
     [HttpGet]

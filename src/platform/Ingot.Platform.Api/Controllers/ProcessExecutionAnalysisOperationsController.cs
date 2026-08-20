@@ -1,6 +1,5 @@
 using Ingot.Contracts.Events;
 using Ingot.Platform.Api.Agents;
-using Ingot.Platform.Infrastructure.ProcessExecutions;
 using Ingot.Platform.Application.ProcessExecutions;
 using Microsoft.AspNetCore.Mvc;
 
@@ -9,14 +8,13 @@ namespace Ingot.Platform.Api.Controllers;
 [ApiController]
 [Route("api/v1/process-execution-analysis-backfills")]
 public sealed class ProcessExecutionAnalysisBackfillsController(
-    IProcessExecutionAnalysisMaterializationStore store,
-    ProcessExecutionAnalysisBackfillService backfill,
+    ProcessExecutionAnalysisOperationsService operations,
     PlatformUserResolver userResolver) : PlatformConfigurationControllerBase(userResolver)
 {
     [HttpGet]
     public async Task<IActionResult> List(CancellationToken ct)
         => DeniedConfigurationRead() ??
-           Ok(new { data = await store.ListBackfillJobsAsync(ct).ConfigureAwait(false) });
+           Ok(new { data = await operations.ListBackfillJobsAsync(ct).ConfigureAwait(false) });
 
     [HttpGet("{jobId:guid}")]
     public async Task<IActionResult> Get(Guid jobId, CancellationToken ct)
@@ -24,7 +22,7 @@ public sealed class ProcessExecutionAnalysisBackfillsController(
         var denied = DeniedConfigurationRead();
         if (denied is not null)
             return denied;
-        var job = await store.GetBackfillJobAsync(jobId, ct).ConfigureAwait(false);
+        var job = await operations.GetBackfillJobAsync(jobId, ct).ConfigureAwait(false);
         return job is null ? ResourceNotFound() : Ok(job);
     }
 
@@ -38,7 +36,8 @@ public sealed class ProcessExecutionAnalysisBackfillsController(
             return denied;
         try
         {
-            return Accepted(await backfill.EnqueueAsync(request, ResolveUserId()!, ct).ConfigureAwait(false));
+            return Accepted(await operations.EnqueueBackfillAsync(request, ResolveUserId()!, ct)
+                .ConfigureAwait(false));
         }
         catch (ArgumentException exception)
         {
@@ -50,7 +49,7 @@ public sealed class ProcessExecutionAnalysisBackfillsController(
 [ApiController]
 [Route("api/v1/process-feature-aggregates")]
 public sealed class ProcessExecutionFeatureAggregatesController(
-    IProcessExecutionAnalysisMaterializationStore store,
+    ProcessExecutionAnalysisOperationsService operations,
     PlatformUserResolver userResolver) : PlatformConfigurationControllerBase(userResolver)
 {
     [HttpGet]
@@ -70,7 +69,7 @@ public sealed class ProcessExecutionFeatureAggregatesController(
             return InvalidRequest("开始时间不能晚于结束时间。");
         if (limit is < 1 or > 500)
             return InvalidRequest("Limit 必须在 1 到 500 之间。");
-        var rows = await store.QueryFeatureAggregatesAsync(
+        var rows = await operations.QueryFeatureAggregatesAsync(
             signalCode,
             phaseCode,
             featureCode,
@@ -90,9 +89,7 @@ public sealed class ProcessExecutionFeatureAggregatesController(
 [ApiController]
 [Route("api/v1/process-execution-maintenance")]
 public sealed class ProcessExecutionMaintenanceController(
-    PostgresExecutionBoundaryStore boundaries,
-    IProcessExecutionAnalysisMaterializationStore materializations,
-    IProcessExecutionService executions,
+    ProcessExecutionAnalysisOperationsService operations,
     PlatformUserResolver userResolver) : PlatformConfigurationControllerBase(userResolver)
 {
     [HttpPost("boundary-jobs/{siteId}/{executionId}:replay")]
@@ -106,8 +103,9 @@ public sealed class ProcessExecutionMaintenanceController(
         var identity = ResolveIdentity()!;
         if (!identity.CanAccessSite(siteId))
             return AuthorizationDenied("当前身份无权访问该站点。", ("siteId", siteId));
-        return await boundaries.ReplayFailedProjectionAsync(siteId.Trim(), executionId.Trim(), ct)
-            .ConfigureAwait(false)
+        var result = await operations.ReplayBoundaryAsync(siteId.Trim(), executionId.Trim(), ct)
+            .ConfigureAwait(false);
+        return result == ProcessExecutionReplayResult.Accepted
             ? Accepted()
             : ResourceNotFound("未找到对应的失败边界重算任务。");
     }
@@ -123,13 +121,14 @@ public sealed class ProcessExecutionMaintenanceController(
         var identity = ResolveIdentity()!;
         if (!identity.CanAccessSite(siteId))
             return AuthorizationDenied("当前身份无权访问该站点。", ("siteId", siteId));
-        var authorized = await executions.QueryAsync(
-            null, null, null, null, null, null, null, executionId.Trim(), null, 1,
-            ct: ct, siteId: siteId.Trim()).ConfigureAwait(false);
-        if (authorized.Data.Count == 0)
-            return ResourceNotFound("未找到对应站点的过程执行。");
-        return await materializations.ReplayFailedRecomputeAsync(executionId.Trim(), ct).ConfigureAwait(false)
-            ? Accepted()
-            : ResourceNotFound("未找到对应的失败分析重算任务。");
+        var result = await operations.ReplayAnalysisAsync(siteId.Trim(), executionId.Trim(), ct)
+            .ConfigureAwait(false);
+        return result switch
+        {
+            ProcessExecutionReplayResult.Accepted => Accepted(),
+            ProcessExecutionReplayResult.ExecutionNotFound =>
+                ResourceNotFound("未找到对应站点的过程执行。"),
+            _ => ResourceNotFound("未找到对应的失败分析重算任务。")
+        };
     }
 }

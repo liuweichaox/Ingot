@@ -2,6 +2,7 @@ using Ingot.Platform.Infrastructure;
 using Ingot.Platform.Infrastructure.ProcessExecutions;
 using Ingot.Platform.Infrastructure.ProcessResearch;
 using Ingot.Platform.Infrastructure.ResearchAssets;
+using Ingot.Platform.Inspections.Infrastructure;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -54,6 +55,7 @@ public sealed class PlatformWorkerRegistrationTests
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddIngotPlatformInfrastructure(configuration);
+        services.AddIngotInspectionInfrastructure(configuration);
         return services;
     }
 }

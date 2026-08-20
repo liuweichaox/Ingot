@@ -18,6 +18,7 @@
         <Using Include="Ingot.Platform.Application.Inspections" />
         <Using Include="Ingot.Platform.Application.ProcessResearch" />
         <Using Include="Ingot.Platform.Application.ProcessExecutions" />
+        <Using Include="Ingot.Platform.Application.TimeSeries" />
     </ItemGroup>
 
     <!-- 通过共享框架获得 Hosting/Logging/Options/HttpClientFactory/HealthChecks 抽象，避免逐包引用 -->
@@ -43,7 +44,6 @@
         <ProjectReference Include="..\..\shared\Ingot.Agent.Contracts\Ingot.Agent.Contracts.csproj" />
         <ProjectReference Include="..\..\shared\Ingot.Contracts\Ingot.Contracts.csproj" />
         <ProjectReference Include="..\Ingot.Platform.Application\Ingot.Platform.Application.csproj" />
-        <ProjectReference Include="..\Ingot.Platform.Inspections.Infrastructure\Ingot.Platform.Inspections.Infrastructure.csproj" />
     </ItemGroup>
 
     <ItemGroup>

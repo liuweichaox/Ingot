@@ -9,6 +9,7 @@ using Ingot.Platform.Infrastructure.Manufacturing;
 using Ingot.Platform.Infrastructure.ProcessConfiguration;
 using Ingot.Platform.Infrastructure.ResearchAssets;
 using Ingot.Platform.Infrastructure.TimeSeries;
+using Ingot.Platform.Inspections.Infrastructure;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
@@ -40,6 +41,7 @@ public sealed class PostgresSchemaOwnershipTests(PostgresIntegrationFixture post
             var services = new ServiceCollection();
             services.AddLogging();
             services.AddIngotPlatformInfrastructure(configuration);
+            services.AddIngotInspectionInfrastructure(configuration);
             await using var provider = services.BuildServiceProvider();
 
             await provider.GetRequiredService<IManufacturingContextStore>().InitializeAsync();

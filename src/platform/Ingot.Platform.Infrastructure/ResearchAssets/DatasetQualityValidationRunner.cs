@@ -10,7 +10,7 @@ using Microsoft.VisualBasic.FileIO;
 
 namespace Ingot.Platform.Infrastructure.ResearchAssets;
 
-public sealed class DatasetQualityValidationRunner(IResearchAssetStore store)
+public sealed class DatasetQualityValidationRunner(IResearchAssetStore store) : IDatasetQualityValidationService
 {
     public const string Version = "cross-industry-validation-v1";
     private const int MaximumRows = 1_000_000;

@@ -7,34 +7,6 @@ public sealed class ProcessExecutionAnalysisBackfillService(
     IProcessExecutionService executions,
     ILogger<ProcessExecutionAnalysisBackfillService> logger) : BackgroundService
 {
-    public async Task<ProcessExecutionAnalysisBackfillJob> EnqueueAsync(
-        ProcessExecutionAnalysisBackfillRequest request,
-        string userId,
-        CancellationToken ct = default)
-    {
-        if (request.From > request.To)
-            throw new ArgumentException("回填开始时间不能晚于结束时间。", nameof(request));
-        if (request.PageSize is < 10 or > 500)
-            throw new ArgumentException("回填每批数量必须在 10 到 500 之间。", nameof(request));
-        var normalized = request with
-        {
-            ProductFamilyCode = Normalize(request.ProductFamilyCode),
-            ProductCode = Normalize(request.ProductCode),
-            ProcessSpecificationId = Normalize(request.ProcessSpecificationId),
-            EquipmentId = Normalize(request.EquipmentId)
-        };
-        var job = new ProcessExecutionAnalysisBackfillJob
-        {
-            JobId = Guid.CreateVersion7(),
-            Request = normalized,
-            Status = "queued",
-            CreatedBy = userId,
-            CreatedAt = DateTimeOffset.UtcNow
-        };
-        await store.AddBackfillJobAsync(job, ct).ConfigureAwait(false);
-        return job;
-    }
-
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         using var timer = new PeriodicTimer(TimeSpan.FromSeconds(1));
@@ -130,7 +102,4 @@ public sealed class ProcessExecutionAnalysisBackfillService(
                 CancellationToken.None).ConfigureAwait(false);
         }
     }
-
-    private static string? Normalize(string? value)
-        => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }

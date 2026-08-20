@@ -3,8 +3,6 @@ using Ingot.Platform.Application.ProcessResearch;
 using Ingot.Contracts.ResearchAssets;
 using Ingot.Contracts.ProcessResearch;
 using Ingot.Platform.Api.Agents;
-using Ingot.Platform.Infrastructure.ResearchAssets;
-using Ingot.Platform.Infrastructure.ProcessResearch;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Ingot.Platform.Api.Controllers;

@@ -51,4 +51,9 @@ public interface IExecutionBoundaryStore
         int limit = 100,
         int offset = 0,
         CancellationToken ct = default);
+
+    Task<bool> ReplayFailedProjectionAsync(
+        string siteId,
+        string sourceExecutionId,
+        CancellationToken ct = default) => Task.FromResult(false);
 }

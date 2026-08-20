@@ -5,7 +5,6 @@ using Ingot.Agent;
 using Ingot.Platform.Application.Inspections;
 using Ingot.Platform.Application.ProcessResearch;
 using Ingot.Platform.Application.ProcessExecutions;
-using Ingot.Platform.Inspections.Infrastructure;
 using Ingot.Platform.Infrastructure.ProcessExecutions;
 using Microsoft.Extensions.Logging;
 using Ingot.Platform.Infrastructure.Events;
@@ -62,6 +61,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<PostgresTimeSeriesStore>();
         services.AddSingleton<ITimeSeriesStore>(
             provider => provider.GetRequiredService<PostgresTimeSeriesStore>());
+        services.AddSingleton<ProcessCurveQueryService>();
         services.AddHostedService<TimeSeriesStoreInitializerHostedService>();
         services.AddSingleton<IPlatformEventStore, PostgresPlatformEventStore>();
         services.AddHostedService<EventStoreInitializerHostedService>();
@@ -83,10 +83,15 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IAnalysisTool, GetResearchProjectTool>();
 
         services.AddSingleton<InspectionExecutionReferenceValidator>();
-        services.AddIngotInspections(configuration);
+        // 跨上下文的生产事件读取适配器属于 Platform 集成基础设施；检验模块自己的
+        // PostgreSQL 适配器由宿主通过 AddIngotInspectionInfrastructure 独立组合。
+        services.AddSingleton<IInspectionProductionEventReader, InspectionProductionEventReader>();
         services.AddSingleton<IExecutionComparisonService, ExecutionComparisonService>();
         services.AddSingleton<ITimeWindowComparisonService, TimeWindowComparisonService>();
         services.AddSingleton<IProcessExecutionService, ProcessExecutionService>();
+        services.AddSingleton<IProcessExecutionAnalysisOperationsStore>(provider =>
+            provider.GetRequiredService<IProcessExecutionAnalysisMaterializationStore>());
+        services.AddSingleton<ProcessExecutionAnalysisOperationsService>();
         services.AddSingleton<ProcessExecutionAnalysisBackfillService>();
         services.AddSingleton<IQualityAnalysisService, QualityAnalysisService>();
         services.AddSingleton<ResearchContextAdmissionEvaluator>();
@@ -118,6 +123,8 @@ public static class ServiceCollectionExtensions
         services.Configure<KnowledgeExtractionWorkerOptions>(
             configuration.GetSection("KnowledgeExtractionWorker"));
         services.AddSingleton<DatasetQualityValidationRunner>();
+        services.AddSingleton<IDatasetQualityValidationService>(provider =>
+            provider.GetRequiredService<DatasetQualityValidationRunner>());
         services.AddHostedService<ResearchAssetInitializerHostedService>();
 
         services.AddIngotProcessResearch(configuration);

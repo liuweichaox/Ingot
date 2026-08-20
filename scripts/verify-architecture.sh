@@ -88,7 +88,7 @@ check "inspection-infrastructure" src/platform/Ingot.Platform.Inspections.Infras
 inspection_ownership_hits=$(grep -rnE \
   'using Npgsql|\b(PostgresInspection|InspectionAttachmentOptions|InspectionStoreInitializerHostedService)\b' \
   src/platform/Ingot.Platform.Infrastructure/Inspections \
-  --include='*.cs' --exclude='InspectionModuleServiceCollectionExtensions.cs' \
+  --include='*.cs' \
   --exclude-dir=bin --exclude-dir=obj 2>/dev/null || true)
 if [[ -n "$inspection_ownership_hits" ]]; then
   echo "✗ [inspection-module-ownership] 检验 PostgreSQL 适配器与初始化器必须归属独立检验基础设施模块"
@@ -185,7 +185,6 @@ fi
 unexpected_inspection_infrastructure=$(find src/platform/Ingot.Platform.Infrastructure/Inspections \
   -type f -name '*.cs' \
   ! -name 'InspectionProductionEventReader.cs' \
-  ! -name 'InspectionModuleServiceCollectionExtensions.cs' \
   -print)
 if [[ -n "$unexpected_inspection_infrastructure" ]]; then
   echo "✗ [inspection-workflow-ownership] 检验规则与工作流必须归属 Platform Application"
@@ -195,8 +194,16 @@ else
   echo "✓ [inspection-workflow-ownership]"
 fi
 
+if grep -q 'Ingot.Platform.Inspections.Infrastructure' \
+  src/platform/Ingot.Platform.Infrastructure/Ingot.Platform.Infrastructure.csproj; then
+  echo "✗ [inspection-composition-root] Platform Infrastructure 不得横向引用检验基础设施模块"
+  fail=1
+else
+  echo "✓ [inspection-composition-root]"
+fi
+
 process_execution_port_leaks=$(grep -rnE \
-  'public interface (IExecutionComparisonService|IProcessExecutionService|ITimeWindowComparisonService)' \
+  'public interface (IExecutionComparisonService|IProcessExecutionService|ITimeWindowComparisonService|ITimeSeriesStore|IProcessExecutionAnalysisOperationsStore)' \
   src/platform/Ingot.Platform.Infrastructure --include='*.cs' 2>/dev/null || true)
 if [[ -n "$process_execution_port_leaks" ]]; then
   echo "✗ [process-execution-port-ownership] 运行查询与比较端口必须归属 Platform Application"
@@ -204,6 +211,28 @@ if [[ -n "$process_execution_port_leaks" ]]; then
   fail=1
 else
   echo "✓ [process-execution-port-ownership]"
+fi
+
+process_execution_api_store_leaks=$(grep -rnE \
+  '\b(PostgresExecutionBoundaryStore|IProcessExecutionAnalysisMaterializationStore|ITimeSeriesStore)\b' \
+  src/platform/Ingot.Platform.Api/Controllers --include='*.cs' 2>/dev/null || true)
+if [[ -n "$process_execution_api_store_leaks" ]]; then
+  echo "✗ [process-execution-api-boundary] 运行 API 必须通过 Application 用例，不能直接注入存储实现"
+  echo "$process_execution_api_store_leaks" | sed 's/^/    /'
+  fail=1
+else
+  echo "✓ [process-execution-api-boundary]"
+fi
+
+research_asset_rule_leaks=$(grep -rnE \
+  'public sealed class (ResearchAssetWorkflow|MechanismModelService|MechanismKnowledgeService)' \
+  src/platform/Ingot.Platform.Infrastructure --include='*.cs' 2>/dev/null || true)
+if [[ -n "$research_asset_rule_leaks" ]]; then
+  echo "✗ [research-assets-application-boundary] 研究资产规则与工作流必须归属 Platform Application"
+  echo "$research_asset_rule_leaks" | sed 's/^/    /'
+  fail=1
+else
+  echo "✓ [research-assets-application-boundary]"
 fi
 
 store_schema_ddl=$(grep -rnE \

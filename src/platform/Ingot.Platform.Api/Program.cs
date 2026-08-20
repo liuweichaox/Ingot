@@ -11,6 +11,7 @@ using Ingot.Platform.Api.Errors;
 using Ingot.Platform.Infrastructure;
 using Ingot.Platform.Infrastructure.Events;
 using Ingot.Platform.Infrastructure.Identity;
+using Ingot.Platform.Inspections.Infrastructure;
 using Serilog;
 using Prometheus;
 using Microsoft.AspNetCore.Authentication;
@@ -126,6 +127,7 @@ builder.Services.AddAuthorization(options =>
 });
 
 builder.Services.AddIngotPlatformInfrastructure(builder.Configuration);
+builder.Services.AddIngotInspectionInfrastructure(builder.Configuration);
 // 本地账户服务在基础设施（含迁移）之后注册，保证播种晚于建表；播种服务自身仅在 Local 模式生效。
 builder.Services.AddIngotLocalIdentity(builder.Configuration);
 builder.Services.AddIngotAgentCore(builder.Configuration);

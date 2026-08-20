@@ -1,11 +1,12 @@
 using Ingot.Platform.Application.Inspections;
-using Ingot.Platform.Inspections.Infrastructure;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 
-namespace Ingot.Platform.Infrastructure.Inspections;
+namespace Ingot.Platform.Inspections.Infrastructure;
 
 public static class InspectionModuleServiceCollectionExtensions
 {
-    public static IServiceCollection AddIngotInspections(
+    public static IServiceCollection AddIngotInspectionInfrastructure(
         this IServiceCollection services,
         IConfiguration configuration)
     {
@@ -14,7 +15,6 @@ public static class InspectionModuleServiceCollectionExtensions
         services.AddSingleton<IInspectionAttachmentStore, PostgresInspectionAttachmentStore>();
         services.AddSingleton<IInspectionMasterDataStore, PostgresInspectionMasterDataStore>();
         services.AddSingleton<IInspectionReviewStore, PostgresInspectionReviewStore>();
-        services.AddSingleton<IInspectionProductionEventReader, InspectionProductionEventReader>();
         services.AddSingleton<IInspectionWorkflowService, InspectionWorkflowService>();
         services.AddSingleton<InspectionCommands>();
         services.AddHostedService<InspectionStoreInitializerHostedService>();

@@ -1,4 +1,4 @@
-namespace Ingot.Platform.Infrastructure.TimeSeries;
+namespace Ingot.Platform.Application.TimeSeries;
 
 /// <summary>
 /// A canonical, typed observation produced by one physical or logical collection point.

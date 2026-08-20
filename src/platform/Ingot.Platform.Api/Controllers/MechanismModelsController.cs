@@ -1,7 +1,6 @@
 using Ingot.Platform.Application.ResearchAssets;
 using Ingot.Contracts.ResearchAssets;
 using Ingot.Platform.Api.Agents;
-using Ingot.Platform.Infrastructure.ResearchAssets;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Ingot.Platform.Api.Controllers;

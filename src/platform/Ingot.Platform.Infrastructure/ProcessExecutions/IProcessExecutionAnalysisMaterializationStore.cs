@@ -1,9 +1,10 @@
 using Ingot.Contracts.Events;
+using Ingot.Platform.Application.ProcessExecutions;
 using Npgsql;
 
 namespace Ingot.Platform.Infrastructure.ProcessExecutions;
 
-public interface IProcessExecutionAnalysisMaterializationStore
+public interface IProcessExecutionAnalysisMaterializationStore : IProcessExecutionAnalysisOperationsStore
 {
     Task InitializeAsync(CancellationToken ct = default);
 
@@ -42,11 +43,6 @@ public interface IProcessExecutionAnalysisMaterializationStore
         CancellationToken ct = default)
         => MarkDirtyAsync(executionIds, invalidatedSourceMaxIngestId, reason, ct);
 
-    Task<ProcessExecutionAnalysisBackfillJob> AddBackfillJobAsync(
-        ProcessExecutionAnalysisBackfillJob job,
-        CancellationToken ct = default)
-        => throw new NotSupportedException("当前过程执行分析存储不支持回填任务。");
-
     Task<ProcessExecutionAnalysisBackfillLease?> ClaimBackfillJobAsync(
         TimeSpan leaseTimeout,
         CancellationToken ct = default)
@@ -58,25 +54,6 @@ public interface IProcessExecutionAnalysisMaterializationStore
         bool releaseLease,
         CancellationToken ct = default)
         => Task.FromResult(false);
-
-    Task<ProcessExecutionAnalysisBackfillJob?> GetBackfillJobAsync(
-        Guid jobId,
-        CancellationToken ct = default)
-        => Task.FromResult<ProcessExecutionAnalysisBackfillJob?>(null);
-
-    Task<IReadOnlyList<ProcessExecutionAnalysisBackfillJob>> ListBackfillJobsAsync(
-        CancellationToken ct = default)
-        => Task.FromResult<IReadOnlyList<ProcessExecutionAnalysisBackfillJob>>([]);
-
-    Task<IReadOnlyList<ProcessExecutionFeatureAggregate>> QueryFeatureAggregatesAsync(
-        string? signalCode,
-        string? phaseCode,
-        string? featureCode,
-        DateTimeOffset? from,
-        DateTimeOffset? to,
-        int limit,
-        CancellationToken ct = default)
-        => Task.FromResult<IReadOnlyList<ProcessExecutionFeatureAggregate>>([]);
 
     Task<ProcessExecutionAnalysisRecomputeLease?> ClaimRecomputeAsync(
         TimeSpan leaseTimeout,
@@ -98,8 +75,6 @@ public interface IProcessExecutionAnalysisMaterializationStore
         CancellationToken ct = default)
         => Task.FromResult(false);
 
-    Task<bool> ReplayFailedRecomputeAsync(string executionId, CancellationToken ct = default)
-        => Task.FromResult(false);
 }
 
 public sealed record ProcessExecutionAnalysisBackfillLease(

@@ -1,6 +1,7 @@
 using Ingot.Platform.Api.Agents;
 using Ingot.Platform.Api.Controllers;
 using Ingot.Platform.Api.Errors;
+using Ingot.Platform.Application.TimeSeries;
 using Ingot.Platform.Infrastructure.TimeSeries;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -78,7 +79,7 @@ public sealed class ProcessCurvesControllerTests
     }
 
     private static ProcessCurvesController Controller(ITimeSeriesStore store)
-        => new(store, new PlatformUserResolver(new DevelopmentEnvironment()))
+        => new(new ProcessCurveQueryService(store), new PlatformUserResolver(new DevelopmentEnvironment()))
         {
             ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() }
         };

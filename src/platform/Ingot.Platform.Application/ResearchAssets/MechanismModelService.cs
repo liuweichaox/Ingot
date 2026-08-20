@@ -4,7 +4,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Ingot.Contracts.ResearchAssets;
 
-namespace Ingot.Platform.Infrastructure.ResearchAssets;
+namespace Ingot.Platform.Application.ResearchAssets;
 
 public sealed class MechanismModelService(IResearchAssetStore store)
 {

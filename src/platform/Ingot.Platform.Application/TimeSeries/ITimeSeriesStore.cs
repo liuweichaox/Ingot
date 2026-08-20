@@ -1,4 +1,4 @@
-namespace Ingot.Platform.Infrastructure.TimeSeries;
+namespace Ingot.Platform.Application.TimeSeries;
 
 /// <summary>
 /// Storage-neutral access to canonical process measurements. Implementations must preserve

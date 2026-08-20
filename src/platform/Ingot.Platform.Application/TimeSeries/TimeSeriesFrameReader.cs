@@ -1,4 +1,4 @@
-namespace Ingot.Platform.Infrastructure.TimeSeries;
+namespace Ingot.Platform.Application.TimeSeries;
 
 public static class TimeSeriesFrameReader
 {
