@@ -16,6 +16,8 @@ MODEL_VERSION = "botorch-qlogbo-v4"
 
 
 class BotorchOptimizer:
+    """Runs the production Bayesian optimizer after the cold-start threshold."""
+
     def __init__(
         self,
         campaign: Campaign,

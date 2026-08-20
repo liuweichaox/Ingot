@@ -1,3 +1,5 @@
+// 验证 Agent 的 AgentProposalEnvelope 能力、只读边界和拒绝路径。
+
 using System.Text.Json;
 using Ingot.Agent;
 using Ingot.Contracts.Agents;

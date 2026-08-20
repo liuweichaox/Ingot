@@ -1,3 +1,5 @@
+-- 校验生产事件序号、内容哈希和执行关联的完整性约束。
+
 \pset pager off
 \if :{?edge_id}
 \else

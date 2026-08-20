@@ -1,3 +1,5 @@
+// 验证前端 research-assets-pagination 的渲染、交互、错误和边界状态。
+
 import React from "react";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";

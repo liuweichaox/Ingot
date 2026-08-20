@@ -156,6 +156,7 @@ public sealed record ExtractedKnowledgeFragment
     public double? Confidence { get; init; }
 }
 
+/// <summary>从受控知识来源中提取确定性文本记录，不推断工艺结论。</summary>
 public interface IKnowledgeContentExtractor
 {
     string Version { get; }

@@ -1,3 +1,5 @@
+// 提供 EventsController 的 HTTP 传输、认证与响应映射；业务规则由应用层执行。
+
 using System.Text.Json;
 using Ingot.Platform.Application.Events;
 using Ingot.Platform.Api.Errors;

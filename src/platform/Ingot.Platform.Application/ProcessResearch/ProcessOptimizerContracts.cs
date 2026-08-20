@@ -392,6 +392,7 @@ public sealed record ProcessDiagnosisResponse
     public IReadOnlyList<string> Limitations { get; init; } = [];
 }
 
+/// <summary>调用数值优化服务并保持项目证据、约束和回放契约一致。</summary>
 public interface IProcessOptimizerClient
 {
     Task<OptimizerSuggestionResponse> SuggestAsync(
@@ -414,6 +415,7 @@ public interface IProcessOptimizerClient
         => throw new NotSupportedException("当前优化客户端不支持历史项目回放。");
 }
 
+/// <summary>表示数值优化服务不可用或无法完成有效响应。</summary>
 public sealed class ProcessOptimizerUnavailableException(
     string message,
     Exception? innerException = null) : HttpRequestException(message, innerException);

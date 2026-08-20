@@ -2,6 +2,7 @@ using Ingot.Contracts.Inspections;
 
 namespace Ingot.Platform.Application.Inspections;
 
+/// <summary>持久化检验定义、质量计划及其版本化主数据。</summary>
 public interface IInspectionMasterDataStore
 {
     Task InitializeAsync(CancellationToken ct = default);

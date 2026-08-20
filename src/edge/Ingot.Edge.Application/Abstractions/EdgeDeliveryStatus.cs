@@ -2,6 +2,7 @@ using Ingot.Contracts.Edge;
 
 namespace Ingot.Edge.Application.Abstractions;
 
+/// <summary>维护边缘事件交付积压、失败和最近成功状态的线程安全快照。</summary>
 public sealed class EdgeDeliveryStatus
 {
     private readonly object _gate = new();

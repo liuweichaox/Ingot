@@ -15,6 +15,8 @@ MODEL_VERSION = "numpy-gp-mcei-v1"
 
 @dataclass(frozen=True)
 class ObjectivePrediction:
+    """Summarizes one objective prediction and its uncertainty."""
+
     mean: float
     standard_deviation: float
     lower_95: float
@@ -24,6 +26,8 @@ class ObjectivePrediction:
 
 @dataclass(frozen=True)
 class Suggestion:
+    """Represents one feasible recommendation and its supporting predictions."""
+
     recommended_params: dict[str, float]
     objective_predictions: dict[str, ObjectivePrediction]
     constraint_predictions: dict[str, ObjectivePrediction]
@@ -39,6 +43,8 @@ class Suggestion:
 
 
 class SequentialOptimizer:
+    """Runs the dependency-light optimizer used before three observations exist."""
+
     def __init__(
         self,
         campaign: Campaign,

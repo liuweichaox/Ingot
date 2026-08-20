@@ -47,6 +47,7 @@ tar \
   -C "$repo_root" -cf - apps docs | tar -C "$frontend_workspace" -xf -
 
 bash scripts/verify-architecture.sh
+bash scripts/verify-code-comments.sh
 bash scripts/verify-product-scope.sh
 bash scripts/verify-product-language.sh
 

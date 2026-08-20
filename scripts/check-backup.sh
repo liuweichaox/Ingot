@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# 校验备份文件的存在性、完整性和可恢复元数据。
 set -Eeuo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

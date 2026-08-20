@@ -44,6 +44,7 @@ public sealed record InspectionAttachmentContent(
     InspectionAttachment Metadata,
     Stream Content);
 
+/// <summary>执行检验定义、质量计划和记录变更的应用命令。</summary>
 public sealed partial class InspectionCommands(
     IInspectionMasterDataStore masterData,
     IInspectionRecordStore records,

@@ -1,3 +1,5 @@
+// 集中校验 EventBatchValidator 的输入、范围和失败条件，调用方不得绕过。
+
 using System.Text.RegularExpressions;
 using Ingot.Domain.Events;
 

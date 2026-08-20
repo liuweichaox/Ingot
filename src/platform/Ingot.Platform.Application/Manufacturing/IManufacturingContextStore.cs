@@ -2,6 +2,7 @@ using Ingot.Contracts.Manufacturing;
 
 namespace Ingot.Platform.Application.Manufacturing;
 
+/// <summary>保存生产对象及其版本化业务上下文关联。</summary>
 public interface IManufacturingContextStore
 {
     Task InitializeAsync(CancellationToken ct = default);

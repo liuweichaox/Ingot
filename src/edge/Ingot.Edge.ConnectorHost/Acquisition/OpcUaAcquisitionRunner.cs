@@ -1,3 +1,5 @@
+// 实现边缘采集组件 OpcUaAcquisitionRunner，保持协议解析、凭据和领域事件边界分离。
+
 using System.Collections.Concurrent;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;

@@ -1,3 +1,5 @@
+// 在宿主启动阶段初始化 ResearchAsset 所需的持久化资源。
+
 using Ingot.Platform.Application.ResearchAssets;
 namespace Ingot.Platform.Infrastructure.ResearchAssets;
 

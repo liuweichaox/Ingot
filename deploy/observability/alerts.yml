@@ -1,3 +1,5 @@
+# 定义生产可用性、积压、错误率和数据链异常的告警规则。
+
 groups:
   - name: ingot-production
     rules:

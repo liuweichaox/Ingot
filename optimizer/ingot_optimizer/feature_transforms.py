@@ -42,6 +42,8 @@ _EXACT_ARITY = {
 
 @dataclass(frozen=True)
 class DerivedFeature:
+    """Defines one safe declarative transform over normalized campaign inputs."""
+
     name: str
     operator: str
     inputs: tuple[str, ...]

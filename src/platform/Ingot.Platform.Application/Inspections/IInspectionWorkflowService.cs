@@ -2,6 +2,7 @@ using Ingot.Contracts.Inspections;
 
 namespace Ingot.Platform.Application.Inspections;
 
+/// <summary>执行检验记录创建、复核和处置的应用工作流。</summary>
 public interface IInspectionWorkflowService
 {
     Task<InspectionTask?> GetTaskAsync(string executionId, CancellationToken ct = default);

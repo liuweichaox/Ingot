@@ -1,3 +1,5 @@
+// 验证边缘组件 AcquisitionProbeService 的协议、状态和失败边界。
+
 using System.Net;
 using System.Text;
 using Ingot.Contracts.Acquisition;

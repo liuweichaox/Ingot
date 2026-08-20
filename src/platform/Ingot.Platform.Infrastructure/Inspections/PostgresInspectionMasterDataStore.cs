@@ -1,3 +1,5 @@
+// 实现 PostgresInspectionMasterDataStore 的 PostgreSQL 持久化适配，避免数据库细节泄漏到应用层。
+
 using System.Text.Json;
 using Ingot.Contracts.Inspections;
 using Npgsql;

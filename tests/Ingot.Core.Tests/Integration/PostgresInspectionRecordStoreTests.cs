@@ -1,3 +1,5 @@
+// 验证 PostgresInspectionRecordStore 的真实基础设施集成、失败和恢复行为。
+
 using Ingot.Contracts.Inspections;
 using Ingot.Platform.Infrastructure.Inspections;
 using Xunit;

@@ -1,3 +1,5 @@
+// 封装 useApi 的可复用异步状态、取消和刷新行为。
+
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getJson } from "../api/http";
 

@@ -1,3 +1,5 @@
+// 实现应用层用例 InspectionRecordSet，集中承载可独立测试的业务规则。
+
 using Ingot.Contracts.Inspections;
 
 namespace Ingot.Platform.Application.Inspections;

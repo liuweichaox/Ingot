@@ -1,3 +1,5 @@
+// 定义平台源码的 JavaScript、JSX 和 React 静态检查规则。
+
 import js from "@eslint/js";
 import react from "eslint-plugin-react";
 import globals from "globals";

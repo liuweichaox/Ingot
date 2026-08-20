@@ -2,6 +2,7 @@ using Ingot.Contracts.Acquisition;
 
 namespace Ingot.Platform.Application.Acquisition;
 
+/// <summary>协调设备探查任务的领取、进度、完成和失败状态。</summary>
 public interface IAcquisitionProbeTaskStore
 {
     Task EnqueueAsync(AcquisitionProbeTask task, CancellationToken ct = default);

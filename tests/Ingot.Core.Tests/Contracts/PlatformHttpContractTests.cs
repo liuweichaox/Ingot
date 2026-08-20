@@ -1,3 +1,5 @@
+// 验证共享契约 PlatformHttpContract 的合法输入、拒绝和兼容边界。
+
 using System.Reflection;
 using Ingot.Contracts.Events;
 using Ingot.Platform.Api.Controllers;

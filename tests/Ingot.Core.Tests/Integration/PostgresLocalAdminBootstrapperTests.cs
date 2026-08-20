@@ -1,3 +1,5 @@
+// 验证 PostgresLocalAdminBootstrapper 的真实基础设施集成、失败和恢复行为。
+
 using Ingot.Platform.Infrastructure.Identity;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.FileProviders;

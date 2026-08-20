@@ -1,3 +1,5 @@
+// 承载研发工作流的 KnowledgeClaims 分部，复用统一授权与并发规则。
+
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;

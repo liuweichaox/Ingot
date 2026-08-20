@@ -12,6 +12,8 @@ from .loop import SequentialOptimizer, Suggestion
 
 @dataclass(frozen=True)
 class OptimizerObservation:
+    """Immutable observation used to hydrate either production optimizer engine."""
+
     params: Mapping[str, float]
     outcomes: Mapping[str, float]
     constraint_outcomes: Mapping[str, float] = field(default_factory=dict)
@@ -19,6 +21,8 @@ class OptimizerObservation:
 
 
 class OptimizerEngine(Protocol):
+    """Common behavior exposed by every optimizer selected for production use."""
+
     def observe(
         self,
         params: Mapping[str, float],

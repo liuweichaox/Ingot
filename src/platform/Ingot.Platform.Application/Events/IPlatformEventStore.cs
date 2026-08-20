@@ -3,6 +3,7 @@ using Ingot.Contracts.Analytics;
 
 namespace Ingot.Platform.Application.Events;
 
+/// <summary>平台侧不可变生产事件的持久化与受控查询边界。</summary>
 public interface IPlatformEventStore
 {
     Task InitializeAsync(CancellationToken ct = default);

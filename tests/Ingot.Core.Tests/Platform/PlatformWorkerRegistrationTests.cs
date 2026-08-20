@@ -1,3 +1,5 @@
+// 验证平台组件 PlatformWorkerRegistration 的成功、拒绝和安全边界。
+
 using Ingot.Platform.Infrastructure;
 using Ingot.Platform.Infrastructure.ProcessExecutions;
 using Ingot.Platform.Infrastructure.ProcessResearch;

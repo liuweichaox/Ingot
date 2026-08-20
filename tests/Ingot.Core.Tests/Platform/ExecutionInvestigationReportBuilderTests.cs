@@ -1,3 +1,5 @@
+// 验证平台组件 ExecutionInvestigationReportBuilder 的成功、拒绝和安全边界。
+
 using System.Text.Json;
 using Ingot.Contracts.Events;
 using Ingot.Platform.Infrastructure.ProcessExecutions;

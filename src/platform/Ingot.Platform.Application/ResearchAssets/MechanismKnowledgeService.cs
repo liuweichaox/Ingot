@@ -9,6 +9,7 @@ using Ingot.Contracts.ResearchAssets;
 
 namespace Ingot.Platform.Application.ResearchAssets;
 
+/// <summary>管理机理声明的验证、复核、生命周期和冲突处置。</summary>
 public sealed class MechanismKnowledgeService(
     IMechanismKnowledgeStore store,
     IResearchProjectContextReader projectReader)

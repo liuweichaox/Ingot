@@ -8,6 +8,7 @@ using System.Text.RegularExpressions;
 
 namespace Ingot.Agent;
 
+/// <summary>按工具 schema 校验计划参数、只读边界和调用数量限制。</summary>
 public sealed class DefaultPlanValidator(IOptions<ChatOptions> chatOptions) : IPlanValidator
 {
     private static readonly Regex CanonicalInteger = new(
@@ -382,6 +383,7 @@ public sealed class DefaultPlanValidator(IOptions<ChatOptions> chatOptions) : IP
     }
 }
 
+/// <summary>校验分析结果的事实引用、工具来源和结论边界。</summary>
 public sealed class DefaultAnalysisResultValidator : IAnalysisResultValidator
 {
     private const int MaxToolDataBytes = 32 * 1024;

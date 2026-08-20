@@ -1,3 +1,5 @@
+// 验证边缘组件 AcquisitionConfigurationReconciliation 的协议、状态和失败边界。
+
 using Ingot.Contracts.Acquisition;
 using Ingot.Contracts.ProcessConfiguration;
 using Ingot.Domain.Events;

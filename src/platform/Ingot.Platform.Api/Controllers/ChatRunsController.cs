@@ -1,3 +1,5 @@
+// 提供 ChatRunsController 的 HTTP 传输、认证与响应映射；业务规则由应用层执行。
+
 using Ingot.Platform.Application.ProcessResearch;
 using System.Text.Json;
 using Ingot.Agent;

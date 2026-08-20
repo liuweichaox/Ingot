@@ -1,3 +1,5 @@
+// 验证 Agent 的 ChatDataAccess 能力、只读边界和拒绝路径。
+
 using Ingot.Platform.Infrastructure.AgentTools;
 using Ingot.Platform.Infrastructure.Events;
 using Ingot.Contracts.Events;

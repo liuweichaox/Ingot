@@ -1,3 +1,5 @@
+// 验证平台组件 ApiArchitectureContract 的成功、拒绝和安全边界。
+
 using Ingot.Platform.Api.Controllers;
 using Ingot.Platform.Api.Errors;
 using Ingot.Platform.Infrastructure.ProcessResearch;

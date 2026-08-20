@@ -1,3 +1,5 @@
+// 封装 useProcessCurves 的可复用异步状态、取消和刷新行为。
+
 import { useEffect, useMemo, useState } from "react";
 import { getJson } from "../api/http.js";
 

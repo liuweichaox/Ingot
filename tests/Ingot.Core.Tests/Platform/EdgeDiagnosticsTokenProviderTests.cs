@@ -1,3 +1,5 @@
+// 验证平台组件 EdgeDiagnosticsTokenProvider 的成功、拒绝和安全边界。
+
 using Ingot.Platform.Api.Events;
 using Microsoft.Extensions.Options;
 using Xunit;

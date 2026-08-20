@@ -1,3 +1,5 @@
+// 运行平台基准场景并输出可比较的性能测量结果。
+
 using System.Diagnostics;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;

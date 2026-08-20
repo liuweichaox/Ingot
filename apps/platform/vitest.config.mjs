@@ -1,3 +1,5 @@
+// 配置平台真实渲染测试的 jsdom 环境、初始化脚本和文件范围。
+
 import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 

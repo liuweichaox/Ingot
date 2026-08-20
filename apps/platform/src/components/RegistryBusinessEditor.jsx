@@ -1,3 +1,5 @@
+// 提供 RegistryBusinessEditor 的可复用界面与交互边界。
+
 import { extractRows, useApi } from "../hooks/useApi";
 import { Alert, Button, Card, Field, Input, Select, Textarea } from "../ui/components";
 

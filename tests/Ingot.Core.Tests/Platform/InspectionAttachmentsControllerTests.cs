@@ -1,3 +1,5 @@
+// 验证平台组件 InspectionAttachmentsController 的成功、拒绝和安全边界。
+
 using Ingot.Contracts.Inspections;
 using Ingot.Platform.Api.Agents;
 using Ingot.Platform.Api.Controllers;

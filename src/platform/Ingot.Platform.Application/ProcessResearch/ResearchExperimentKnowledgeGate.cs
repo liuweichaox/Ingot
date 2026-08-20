@@ -3,6 +3,7 @@ using Ingot.Contracts.ProcessResearch;
 
 namespace Ingot.Platform.Application.ProcessResearch;
 
+/// <summary>拒绝违反冻结机理硬约束或禁止组合的实验计划。</summary>
 public sealed class ResearchExperimentKnowledgeGate(
     IProcessResearchStore store,
     IMechanismKnowledgeStore mechanismKnowledgeStore,

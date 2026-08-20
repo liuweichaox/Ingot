@@ -1,3 +1,5 @@
+// 验证平台组件 ResearchObservationAssembler 的成功、拒绝和安全边界。
+
 using Ingot.Platform.Application.ProcessConfiguration;
 using System.Text.Json;
 using Ingot.Contracts.Events;

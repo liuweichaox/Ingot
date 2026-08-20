@@ -1,3 +1,5 @@
+// 封装平台 HTTP 请求、身份令牌和统一错误映射。
+
 function resolveUrl(url) {
   return url;
 }

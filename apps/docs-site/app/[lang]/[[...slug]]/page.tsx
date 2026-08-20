@@ -1,3 +1,5 @@
+// 组装当前公开路由页面，不在展示层声明未经验证的产品结论。
+
 import type { Metadata } from "next";
 import Image from "next/image";
 import { notFound } from "next/navigation";

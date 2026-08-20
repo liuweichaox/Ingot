@@ -5,6 +5,7 @@ using Ingot.Contracts.Agents;
 
 namespace Ingot.Platform.Application.Insight;
 
+/// <summary>以确定性规则比较 Agent 运行证据和黄金问题预期。</summary>
 public sealed class GoldenQuestionEvaluator
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);

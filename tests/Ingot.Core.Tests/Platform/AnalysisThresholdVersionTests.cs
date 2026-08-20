@@ -1,3 +1,5 @@
+// 验证平台组件 AnalysisThresholdVersion 的成功、拒绝和安全边界。
+
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;

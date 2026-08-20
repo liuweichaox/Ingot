@@ -18,6 +18,7 @@ public sealed class ChatUserDataScope
     public IReadOnlyList<string> EdgeIds { get; set; } = [];
 }
 
+/// <summary>为只读聊天分析工具提供受授权范围约束的生产事件读取。</summary>
 public interface IChatEventReader
 {
     Task<IReadOnlyList<PlatformProductionEvent>> QueryAsync(
@@ -40,6 +41,7 @@ public interface IChatEventReader
 
 }
 
+/// <summary>为聊天分析工具读取经过业务范围过滤的结构化数据对象。</summary>
 public interface IChatDataObjectReader
 {
     Task<DataObjectPage> QueryDataObjectsAsync(

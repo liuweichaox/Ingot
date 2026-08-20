@@ -257,6 +257,7 @@ public sealed class DeterministicModelClient : IModelClient
         => terms.Any(term => value.Contains(term, StringComparison.OrdinalIgnoreCase));
 }
 
+/// <summary>根据模型角色从已注册客户端中选择唯一实现。</summary>
 public sealed class DefaultModelRouter(IEnumerable<IModelClient> clients) : IModelRouter
 {
     private readonly IReadOnlyList<IModelClient> _clients = clients.ToArray();

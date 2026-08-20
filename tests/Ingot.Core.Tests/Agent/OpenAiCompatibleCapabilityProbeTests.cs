@@ -1,3 +1,5 @@
+// 验证 Agent 的 OpenAiCompatibleCapabilityProbe 能力、只读边界和拒绝路径。
+
 using Ingot.Agent.Providers;
 using Xunit;
 

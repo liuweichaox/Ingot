@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# 运行平台事件摄入基准并记录可复现的吞吐与延迟证据。
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

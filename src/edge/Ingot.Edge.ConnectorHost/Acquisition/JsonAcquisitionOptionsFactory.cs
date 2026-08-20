@@ -1,3 +1,5 @@
+// 实现边缘采集组件 JsonAcquisitionOptionsFactory，保持协议解析、凭据和领域事件边界分离。
+
 using Ingot.Contracts.Acquisition;
 
 namespace Ingot.Edge.ConnectorHost.Acquisition;

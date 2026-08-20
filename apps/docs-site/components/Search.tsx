@@ -1,3 +1,5 @@
+// 提供文档标题与正文索引上的客户端搜索交互。
+
 "use client";
 
 import { Combobox, ComboboxInput, ComboboxOption, ComboboxOptions } from "@headlessui/react";

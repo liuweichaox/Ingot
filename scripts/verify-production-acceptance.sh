@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# 校验生产验收声明与实测证据的一致性。
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

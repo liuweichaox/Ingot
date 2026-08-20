@@ -1,3 +1,5 @@
+// 实现基础设施适配器 QualityAnalysisService，满足应用层端口而不改变领域契约。
+
 using Ingot.Platform.Application.Inspections;
 using Ingot.Platform.Application.Analytics;
 using Ingot.Platform.Application.Events;

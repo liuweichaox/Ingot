@@ -1,3 +1,5 @@
+// 验证平台组件 ResearchContextAdmissionEvaluator 的成功、拒绝和安全边界。
+
 using Ingot.Contracts.ProcessConfiguration;
 using Ingot.Platform.Infrastructure.ProcessResearch;
 using Xunit;

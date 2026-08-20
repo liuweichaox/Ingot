@@ -1,3 +1,5 @@
+// 验证共享契约 InspectionRecordValidator 的合法输入、拒绝和兼容边界。
+
 using Ingot.Contracts.Inspections;
 using Xunit;
 
@@ -148,4 +150,3 @@ public sealed class InspectionRecordValidatorTests
         UpperLimit = 10.05m
     };
 }
-

@@ -1,3 +1,5 @@
+// 验证 Agent 的 EmptyTimeSeriesStore 能力、只读边界和拒绝路径。
+
 using Ingot.Platform.Infrastructure.TimeSeries;
 
 namespace Ingot.Core.Tests.Agent;

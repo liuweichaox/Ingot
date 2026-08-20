@@ -6,6 +6,7 @@ using Ingot.Contracts.ResearchAssets;
 
 namespace Ingot.Platform.Application.ResearchAssets;
 
+/// <summary>验证、版本化并发布可审计的机理模型和融合定义。</summary>
 public sealed class MechanismModelService(IResearchAssetStore store)
 {
     public async Task<MechanismModelVersion> SaveModelDraftAsync(

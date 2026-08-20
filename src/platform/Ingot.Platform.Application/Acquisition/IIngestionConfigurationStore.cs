@@ -2,6 +2,7 @@ using Ingot.Contracts.Acquisition;
 
 namespace Ingot.Platform.Application.Acquisition;
 
+/// <summary>读取采集任务引用的版本化数据模型和业务配置。</summary>
 public interface IIngestionConfigurationStore
 {
     Task<IReadOnlyList<IngestionTaskTemplate>> ListTemplatesAsync(CancellationToken ct = default);

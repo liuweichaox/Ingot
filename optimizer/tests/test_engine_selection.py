@@ -1,3 +1,5 @@
+"""Verify engine selection success, rejection, and boundary behavior."""
+
 import pytest
 
 from ingot_optimizer import (

@@ -1,3 +1,5 @@
+# 在 Windows 环境中验证配置并启动 Platform API 开发宿主。
+
 $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot

@@ -9,6 +9,7 @@ using Microsoft.Extensions.Options;
 
 namespace Ingot.Agent;
 
+/// <summary>执行经过校验的只读 Agent 计划并持久化完整审计轨迹。</summary>
 public sealed class AgentRuntime : IAgentRuntime
 {
     private const string ChatPromptVersion = "ingot-chat-v1";

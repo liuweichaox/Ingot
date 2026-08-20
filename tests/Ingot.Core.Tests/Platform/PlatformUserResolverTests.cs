@@ -1,3 +1,5 @@
+// 验证平台组件 PlatformUserResolver 的成功、拒绝和安全边界。
+
 using System.Security.Claims;
 using Ingot.Platform.Api.Agents;
 using Microsoft.Extensions.FileProviders;

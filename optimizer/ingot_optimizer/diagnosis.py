@@ -20,6 +20,8 @@ ALGORITHM_VERSION = "adaptive-context-diagnosis-v1"
 
 @dataclass(frozen=True)
 class FeatureSpec:
+    """Declares one measured feature and its diagnostic modeling role."""
+
     name: str
     source_kind: str
     actionability: str
@@ -242,6 +244,8 @@ def diagnose(
     outcome_kind: str,
     seed: int = 0,
 ) -> dict:
+    """Rank observational candidates with sample-size-aware validation gates."""
+
     row_count, feature_count = values.shape
     if row_count < 4 or feature_count == 0:
         return {

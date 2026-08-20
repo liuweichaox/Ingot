@@ -4,6 +4,7 @@ using Ingot.Contracts.ResearchAssets;
 
 namespace Ingot.Platform.Application.ResearchAssets;
 
+/// <summary>管理研发资产创建、版本变更和审计写入的命令工作流。</summary>
 public sealed class ResearchAssetWorkflow(
     IResearchAssetStore store,
     IProcessConfigurationStore processConfiguration)
@@ -393,4 +394,5 @@ public sealed class ResearchAssetWorkflow(
         => value.Trim().ToLowerInvariant();
 }
 
+/// <summary>表示研发资产命令违反了领域或版本规则。</summary>
 public sealed class ResearchAssetRuleException(string message) : InvalidOperationException(message);

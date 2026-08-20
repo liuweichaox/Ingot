@@ -3,6 +3,7 @@ using Ingot.Contracts.Agents;
 
 namespace Ingot.Agent;
 
+/// <summary>执行只读调查计划并发布可审计运行事件的 Agent 运行时边界。</summary>
 public interface IAgentRuntime
 {
     AgentCapabilities GetCapabilities(string entryPoint);
@@ -42,6 +43,7 @@ public interface IAgentRuntime
         CancellationToken ct = default);
 }
 
+/// <summary>持久化和查询 Agent 运行快照、事件与审计记录。</summary>
 public interface IAgentRunStore
 {
     Task InitializeAsync(CancellationToken ct = default);
@@ -74,6 +76,7 @@ public interface IAgentRunStore
         CancellationToken ct = default);
 }
 
+/// <summary>依据任务角色选择已配置模型客户端，不改变模型调用契约。</summary>
 public interface IModelRouter
 {
     IModelClient GetClient(string entryPoint, ModelRole role);
@@ -85,6 +88,7 @@ public enum ModelRole
     Reasoning
 }
 
+/// <summary>向模型提供结构化能力并返回可验证结果的调用边界。</summary>
 public interface IModelClient
 {
     string EntryPoint => "*";
@@ -159,6 +163,7 @@ public sealed record CombinedAnalysisWorkflowResult
     public IReadOnlyList<ModelCallUsage> ModelCalls { get; init; } = [];
 }
 
+/// <summary>编排多视角分析并保留每次模型调用和工具证据。</summary>
 public interface ICombinedAnalysisWorkflow
 {
     Task<CombinedAnalysisWorkflowResult> RunAsync(
@@ -170,6 +175,7 @@ public interface ICombinedAnalysisWorkflow
         CancellationToken ct = default);
 }
 
+/// <summary>Agent 可调用的只读分析工具契约。</summary>
 public interface IAnalysisTool
 {
     AnalysisToolDefinition Definition { get; }
@@ -250,6 +256,7 @@ public sealed record AgentExecutionContext
     public required CreateChatRunRequest Request { get; init; }
 }
 
+/// <summary>依据工具 schema 对模型生成的执行计划实施封闭式校验。</summary>
 public interface IPlanValidator
 {
     bool TryValidate(
@@ -259,6 +266,7 @@ public interface IPlanValidator
         out string error);
 }
 
+/// <summary>验证最终分析结果只引用已执行工具返回的事实与证据。</summary>
 public interface IAnalysisResultValidator
 {
     bool TryVerify(

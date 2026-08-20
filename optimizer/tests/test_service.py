@@ -1,3 +1,5 @@
+"""Verify service success, rejection, and boundary behavior."""
+
 from pathlib import Path
 
 from fastapi.testclient import TestClient

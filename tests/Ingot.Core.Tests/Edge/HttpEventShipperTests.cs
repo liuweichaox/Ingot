@@ -1,3 +1,5 @@
+// 验证边缘组件 HttpEventShipper 的协议、状态和失败边界。
+
 using System.Net;
 using System.Net.Http.Json;
 using Ingot.Edge.Application.Abstractions;

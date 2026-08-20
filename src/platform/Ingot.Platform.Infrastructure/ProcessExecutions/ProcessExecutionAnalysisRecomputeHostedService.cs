@@ -1,3 +1,5 @@
+// 在宿主生命周期内运行 ProcessExecutionAnalysisRecompute 后台任务并响应取消。
+
 using Ingot.Platform.Application.ProcessExecutions;
 
 namespace Ingot.Platform.Infrastructure.ProcessExecutions;

@@ -1,3 +1,5 @@
+// 验证平台组件 MechanismKnowledgeService 的成功、拒绝和安全边界。
+
 using Ingot.Platform.Application.ResearchAssets;
 using Ingot.Contracts.ProcessResearch;
 using Ingot.Contracts.ResearchAssets;

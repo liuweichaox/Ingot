@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# 演练 Compose 服务故障并记录恢复行为与验收结果。
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

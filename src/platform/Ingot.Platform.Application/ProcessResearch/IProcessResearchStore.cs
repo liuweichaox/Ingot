@@ -2,6 +2,7 @@ using Ingot.Contracts.ProcessResearch;
 
 namespace Ingot.Platform.Application.ProcessResearch;
 
+/// <summary>研发项目、假设、实验与验证证据的统一持久化端口。</summary>
 public interface IProcessResearchStore
 {
     Task<ResearchProject?> GetProjectAsync(Guid projectId, CancellationToken ct = default);

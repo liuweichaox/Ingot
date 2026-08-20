@@ -1,3 +1,5 @@
+// 验证 PostgresMigration 的真实基础设施集成、失败和恢复行为。
+
 using Ingot.Platform.Infrastructure.Migrations;
 using Ingot.Platform.Infrastructure.Events;
 using Ingot.Platform.Infrastructure.TimeSeries;

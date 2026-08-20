@@ -4,6 +4,7 @@ using Npgsql;
 
 namespace Ingot.Platform.Infrastructure.ProcessExecutions;
 
+/// <summary>持久化、失效并读取过程执行分析的可复用物化快照。</summary>
 public interface IProcessExecutionAnalysisMaterializationStore : IProcessExecutionAnalysisOperationsStore
 {
     Task InitializeAsync(CancellationToken ct = default);

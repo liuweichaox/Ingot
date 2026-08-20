@@ -9,6 +9,7 @@ using Ingot.Platform.Application.ProcessConfiguration;
 
 namespace Ingot.Platform.Application.ProcessResearch;
 
+/// <summary>管理研发项目、假设、实验和证据生命周期的统一应用工作流。</summary>
 public sealed partial class ProcessResearchWorkflow(
     IProcessResearchStore store,
     ResearchExperimentCommands experimentCommands,

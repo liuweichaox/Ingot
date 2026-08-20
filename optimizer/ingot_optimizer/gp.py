@@ -14,6 +14,8 @@ from scipy.optimize import minimize
 
 
 class GaussianProcess:
+    """Dependency-light Gaussian-process surrogate for sequential cold starts."""
+
     def __init__(
         self,
         prior_mean: Callable[[np.ndarray], np.ndarray] | None = None,

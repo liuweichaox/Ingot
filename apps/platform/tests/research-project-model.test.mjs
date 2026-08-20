@@ -1,3 +1,5 @@
+// 验证前端 research-project-model 的渲染、交互、错误和边界状态。
+
 import assert from "node:assert/strict";
 import test from "node:test";
 import {

@@ -2,6 +2,7 @@ using Npgsql;
 
 namespace Ingot.Platform.Infrastructure.ProcessExecutions;
 
+/// <summary>为单次过程执行分析获取跨副本互斥锁，避免重复物化结果。</summary>
 public interface IExecutionAnalysisLockProvider
 {
     Task<IAsyncDisposable> AcquireAsync(

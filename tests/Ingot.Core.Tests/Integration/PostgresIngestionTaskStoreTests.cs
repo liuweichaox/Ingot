@@ -1,3 +1,5 @@
+// 验证 PostgresIngestionTaskStore 的真实基础设施集成、失败和恢复行为。
+
 using Ingot.Contracts.Acquisition;
 using Ingot.Contracts.ProcessConfiguration;
 using Ingot.Platform.Infrastructure.Acquisition;

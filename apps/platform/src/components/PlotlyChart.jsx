@@ -1,3 +1,5 @@
+// 提供 PlotlyChart 的可复用界面与交互边界。
+
 import { useEffect, useRef } from "react";
 
 export default function PlotlyChart({ traces, layout = {}, height = 320, className = "" }) {

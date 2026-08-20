@@ -1,3 +1,5 @@
+// 说明 TimeWindowComparisonContracts 在所属模块中的职责、输入边界和失败语义。
+
 namespace Ingot.Contracts.Events;
 
 public sealed record TimeWindowSelection

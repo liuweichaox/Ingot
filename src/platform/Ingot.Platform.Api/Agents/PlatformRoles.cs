@@ -1,3 +1,5 @@
+// 定义平台 API 组件 PlatformRoles 的交付职责与安全边界。
+
 namespace Ingot.Platform.Api.Agents;
 
 public static class PlatformRoles

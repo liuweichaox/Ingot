@@ -1,3 +1,5 @@
+// 集中校验 ProductionConfigurationValidator 的输入、范围和失败条件，调用方不得绕过。
+
 namespace Ingot.Edge.ConnectorHost.Configuration;
 
 public static class ProductionConfigurationValidator

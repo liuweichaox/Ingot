@@ -8,6 +8,7 @@ using Ingot.Platform.Application.TimeSeries;
 
 namespace Ingot.Platform.Application.ProcessExecutions;
 
+/// <summary>从不可变执行事件和时序数据计算确定性过程特征。</summary>
 public sealed class ProcessExecutionAnalysisEngine(
     IFeatureDefinitionRegistry? featureDefinitions = null)
 {

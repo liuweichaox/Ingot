@@ -1,3 +1,5 @@
+// 实现 Agent 提供器组件 ChatFrameworkOpenAiModelClient，隔离外部模型或持久化细节。
+
 using System.Diagnostics;
 using System.Text.Json;
 using Ingot.Contracts.Agents;

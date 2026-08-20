@@ -1,3 +1,5 @@
+// 验证平台组件 ProcessExecutionAnalysisOperationsService 的成功、拒绝和安全边界。
+
 using Ingot.Contracts.Events;
 using Ingot.Platform.Application.ProcessExecutions;
 using Xunit;

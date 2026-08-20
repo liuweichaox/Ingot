@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# 运行平台样本写入基准并记录吞吐与延迟。
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

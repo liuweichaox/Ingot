@@ -1,3 +1,5 @@
+// 验证平台组件 ProcessOptimizerCircuitBreaker 的成功、拒绝和安全边界。
+
 using System.Net;
 using Ingot.Platform.Infrastructure.ProcessResearch;
 using Microsoft.Extensions.Options;

@@ -1,3 +1,5 @@
+// 读取、解析并规范化双语 Markdown 文档及内部链接。
+
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import GithubSlugger from "github-slugger";

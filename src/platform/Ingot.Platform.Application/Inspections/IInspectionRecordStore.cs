@@ -2,6 +2,7 @@ using Ingot.Contracts.Inspections;
 
 namespace Ingot.Platform.Application.Inspections;
 
+/// <summary>保存和查询与生产执行关联的正式检验记录。</summary>
 public interface IInspectionRecordStore
 {
     Task InitializeAsync(CancellationToken ct = default);

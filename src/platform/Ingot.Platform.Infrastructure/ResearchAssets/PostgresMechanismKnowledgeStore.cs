@@ -1,3 +1,5 @@
+// 实现 PostgresMechanismKnowledgeStore 的 PostgreSQL 持久化适配，避免数据库细节泄漏到应用层。
+
 using Ingot.Platform.Application.ResearchAssets;
 using Ingot.Contracts.ResearchAssets;
 using Npgsql;

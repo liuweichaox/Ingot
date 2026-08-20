@@ -20,6 +20,8 @@ from .feature_transforms import DerivedFeature
 
 @dataclass(frozen=True)
 class SyntheticTruthResult:
+    """Carries objective, constraint, and optional process outcomes from a simulator."""
+
     outcomes: Mapping[str, float]
     constraint_outcomes: Mapping[str, float] = field(default_factory=dict)
     process_features: Mapping[str, float] = field(default_factory=dict)

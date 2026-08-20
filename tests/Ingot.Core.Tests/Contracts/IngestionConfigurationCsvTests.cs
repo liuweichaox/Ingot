@@ -1,3 +1,5 @@
+// 验证共享契约 IngestionConfigurationCsv 的合法输入、拒绝和兼容边界。
+
 using Ingot.Contracts.Acquisition;
 using Xunit;
 

@@ -1,3 +1,5 @@
+# 配置 Grafana 使用 Compose 网络中的 Prometheus 数据源。
+
 apiVersion: 1
 
 datasources:

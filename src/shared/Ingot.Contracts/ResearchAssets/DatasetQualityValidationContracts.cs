@@ -1,3 +1,5 @@
+// 集中校验 DatasetQualityValidationContracts 的输入、范围和失败条件，调用方不得绕过。
+
 namespace Ingot.Contracts.ResearchAssets;
 
 public static class DatasetQualityValidationStatuses

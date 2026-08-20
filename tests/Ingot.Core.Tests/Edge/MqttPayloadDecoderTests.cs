@@ -1,3 +1,5 @@
+// 验证边缘组件 MqttPayloadDecoder 的协议、状态和失败边界。
+
 using System.IO.Compression;
 using System.Text;
 using Ingot.Contracts.Acquisition;

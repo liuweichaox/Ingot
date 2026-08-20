@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# 校验 Prometheus、告警和可观测性配置的有效性。
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

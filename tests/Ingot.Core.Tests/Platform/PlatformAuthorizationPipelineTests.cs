@@ -1,3 +1,5 @@
+// 验证平台组件 PlatformAuthorizationPipeline 的成功、拒绝和安全边界。
+
 using System.Net;
 using System.Security.Claims;
 using System.Text.Encodings.Web;

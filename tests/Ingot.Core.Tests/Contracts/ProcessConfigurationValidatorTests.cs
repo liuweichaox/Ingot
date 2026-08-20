@@ -1,3 +1,5 @@
+// 验证共享契约 ProcessConfigurationValidator 的合法输入、拒绝和兼容边界。
+
 using System.Text.Json;
 using Ingot.Contracts.ProcessConfiguration;
 using Xunit;

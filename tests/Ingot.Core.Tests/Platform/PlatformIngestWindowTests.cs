@@ -1,3 +1,5 @@
+// 验证平台组件 PlatformIngestWindow 的成功、拒绝和安全边界。
+
 using Ingot.Platform.Infrastructure.Events;
 using Ingot.Contracts.Events;
 using Ingot.Domain.Events;

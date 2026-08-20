@@ -1,3 +1,5 @@
+// 验证平台组件 MechanismExperimentPolicy 的成功、拒绝和安全边界。
+
 using Ingot.Contracts.ProcessResearch;
 using Ingot.Contracts.ResearchAssets;
 using Ingot.Platform.Application.ProcessResearch;

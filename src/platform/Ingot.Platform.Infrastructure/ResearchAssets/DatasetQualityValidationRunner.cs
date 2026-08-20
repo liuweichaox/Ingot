@@ -1,3 +1,5 @@
+// 集中校验 DatasetQualityValidationRunner 的输入、范围和失败条件，调用方不得绕过。
+
 using Ingot.Platform.Application.ResearchAssets;
 using System.Globalization;
 using System.Security.Cryptography;

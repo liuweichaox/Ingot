@@ -2,6 +2,7 @@ using Ingot.Contracts.Inspections;
 
 namespace Ingot.Platform.Application.Inspections;
 
+/// <summary>持久化检验复核决定及其审计信息。</summary>
 public interface IInspectionReviewStore
 {
     Task InitializeAsync(CancellationToken ct = default);

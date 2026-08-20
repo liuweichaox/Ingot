@@ -1,3 +1,5 @@
+// 验证平台组件 AcquisitionProbeTaskCoordinator 的成功、拒绝和安全边界。
+
 using Ingot.Contracts.Acquisition;
 using Ingot.Contracts.ProcessConfiguration;
 using Ingot.Platform.Infrastructure.Acquisition;

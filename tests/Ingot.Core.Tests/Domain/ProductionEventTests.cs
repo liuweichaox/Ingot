@@ -1,3 +1,5 @@
+// 验证领域对象 ProductionEvent 的不变量和拒绝路径。
+
 using Ingot.Domain.Events;
 using Xunit;
 

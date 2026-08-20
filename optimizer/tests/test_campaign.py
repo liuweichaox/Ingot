@@ -1,3 +1,5 @@
+"""Verify campaign success, rejection, and boundary behavior."""
+
 import math
 
 import numpy as np

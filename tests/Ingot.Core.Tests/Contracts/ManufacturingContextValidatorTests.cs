@@ -1,3 +1,5 @@
+// 验证共享契约 ManufacturingContextValidator 的合法输入、拒绝和兼容边界。
+
 using Ingot.Contracts.Manufacturing;
 using Xunit;
 

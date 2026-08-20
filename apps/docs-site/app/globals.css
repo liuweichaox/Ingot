@@ -1,3 +1,5 @@
+/* 定义文档站共享的排版、代码高亮和响应式内容样式。 */
+
 @import "tailwindcss";
 @import "highlight.js/styles/github-dark.css";
 

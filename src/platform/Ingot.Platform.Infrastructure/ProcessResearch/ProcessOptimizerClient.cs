@@ -1,3 +1,5 @@
+// 实现基础设施适配器 ProcessOptimizerClient，满足应用层端口而不改变领域契约。
+
 using Ingot.Platform.Application.ProcessResearch;
 using System.Net.Http.Json;
 using System.Text.Json;

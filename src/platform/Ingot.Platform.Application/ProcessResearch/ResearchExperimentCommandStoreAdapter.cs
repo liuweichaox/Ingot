@@ -2,6 +2,7 @@ using Ingot.Contracts.ProcessResearch;
 
 namespace Ingot.Platform.Application.ProcessResearch;
 
+/// <summary>将实验命令端口适配到统一的研发项目存储。</summary>
 public sealed class ResearchExperimentCommandStoreAdapter(IProcessResearchStore store)
     : IResearchExperimentCommandStore
 {

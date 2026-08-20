@@ -1,3 +1,5 @@
+// 验证边缘组件 LogAudienceClassifier 的协议、状态和失败边界。
+
 using Ingot.Edge.Application.Abstractions;
 using Ingot.Edge.Infrastructure.Logs;
 using Microsoft.Data.Sqlite;

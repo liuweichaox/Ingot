@@ -1,3 +1,5 @@
+// 将双语 Markdown 文档转换为文档站可消费的受控内容。
+
 import { cp, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";

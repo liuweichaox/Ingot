@@ -1,3 +1,5 @@
+// 实现基础设施适配器 InspectionModuleServiceCollectionExtensions，满足应用层端口而不改变领域契约。
+
 using Ingot.Platform.Application.Inspections;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;

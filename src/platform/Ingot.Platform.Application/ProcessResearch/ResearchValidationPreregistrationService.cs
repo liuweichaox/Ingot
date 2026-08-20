@@ -6,6 +6,7 @@ using Ingot.Platform.Application.Analytics;
 
 namespace Ingot.Platform.Application.ProcessResearch;
 
+/// <summary>冻结受控验证门槛、数据基线和版本哈希的预注册证据。</summary>
 public sealed class ResearchValidationPreregistrationService(
     IProcessResearchStore store,
     IDataReliabilityBaselineService? reliability = null)

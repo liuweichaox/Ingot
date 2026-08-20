@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# 阻断违反依赖方向、组合根和只读 Agent 边界的源码变更。
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

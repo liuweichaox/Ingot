@@ -1,3 +1,5 @@
+// 定义 Agent 核心组件 AgentTelemetry 的运行职责与只读边界。
+
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
 

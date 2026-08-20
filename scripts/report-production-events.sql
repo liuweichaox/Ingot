@@ -1,3 +1,5 @@
+-- 汇总生产事件数量、时间范围和关键完整性指标，供运维核验使用。
+
 \pset pager off
 \if :{?material_lot}
 \else

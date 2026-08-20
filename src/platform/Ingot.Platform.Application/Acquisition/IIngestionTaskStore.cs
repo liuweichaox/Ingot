@@ -2,6 +2,7 @@ using Ingot.Contracts.Acquisition;
 
 namespace Ingot.Platform.Application.Acquisition;
 
+/// <summary>持久化采集任务定义、版本和运行状态。</summary>
 public interface IIngestionTaskStore
 {
     Task InitializeAsync(CancellationToken ct = default);

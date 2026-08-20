@@ -1,3 +1,5 @@
+// 统一映射 ApiProblemDetails 的 API 错误语义，避免端点自行拼装响应。
+
 using System.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ApplicationModels;

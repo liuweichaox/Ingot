@@ -1,3 +1,5 @@
+// 验证平台组件 PlatformAuthorization 的成功、拒绝和安全边界。
+
 using System.Reflection;
 using Ingot.Platform.Api.Controllers;
 using Microsoft.AspNetCore.Authorization;

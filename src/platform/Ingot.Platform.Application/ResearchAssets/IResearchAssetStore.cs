@@ -2,6 +2,7 @@ using Ingot.Contracts.ResearchAssets;
 
 namespace Ingot.Platform.Application.ResearchAssets;
 
+/// <summary>研发数据集、模型、知识来源及审计记录的统一持久化端口。</summary>
 public interface IResearchAssetStore
 {
     Task InitializeAsync(CancellationToken ct = default);

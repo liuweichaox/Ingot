@@ -1,3 +1,5 @@
+// 组装官网主体内容、导航和双语展示组件。
+
 "use client";
 
 import { Disclosure, DisclosureButton, DisclosurePanel } from "@headlessui/react";

@@ -16,6 +16,7 @@ public sealed record AcquisitionBatchFailure(
     string TaskId,
     IReadOnlyList<AcquisitionValidationError> Errors);
 
+/// <summary>表示采集配置工作流拒绝了不满足业务规则的命令。</summary>
 public sealed class AcquisitionWorkflowException : Exception
 {
     public AcquisitionWorkflowException(

@@ -2,6 +2,7 @@ using Ingot.Contracts.Manufacturing;
 
 namespace Ingot.Platform.Application.Manufacturing;
 
+/// <summary>管理生产对象及其业务上下文关联的应用层用例。</summary>
 public sealed class ManufacturingContextApplication(IManufacturingContextStore contexts)
 {
     public Task<ToolingComponentTypeDefinition> UpsertComponentTypeAsync(

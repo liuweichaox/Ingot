@@ -1,3 +1,5 @@
+"""Verify diagnosis success, rejection, and boundary behavior."""
+
 import numpy as np
 import pytest
 

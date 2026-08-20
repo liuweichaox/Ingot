@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# 验证生产运维脚本的失败保护和恢复流程。
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

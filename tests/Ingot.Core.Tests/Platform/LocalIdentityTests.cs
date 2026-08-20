@@ -1,3 +1,5 @@
+// 验证平台组件 LocalIdentity 的成功、拒绝和安全边界。
+
 using Ingot.Contracts.Identity;
 using Ingot.Platform.Infrastructure.Identity;
 using Xunit;

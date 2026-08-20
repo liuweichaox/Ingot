@@ -1,3 +1,5 @@
+// 验证 PostgresMechanismKnowledgeStore 的真实基础设施集成、失败和恢复行为。
+
 using Ingot.Contracts.ProcessResearch;
 using Ingot.Contracts.ResearchAssets;
 using Ingot.Platform.Infrastructure.ProcessResearch;

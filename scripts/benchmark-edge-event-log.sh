@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# 运行边缘事件日志基准并输出可复现性能证据。
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

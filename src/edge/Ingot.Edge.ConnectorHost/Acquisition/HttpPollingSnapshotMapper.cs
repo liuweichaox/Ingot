@@ -1,3 +1,5 @@
+// 实现边缘采集组件 HttpPollingSnapshotMapper，保持协议解析、凭据和领域事件边界分离。
+
 using System.Globalization;
 using System.Text.Json;
 using Ingot.Contracts.Events;

@@ -1,3 +1,5 @@
+// 验证平台组件 EdgeRegistryCancellation 的成功、拒绝和安全边界。
+
 using Ingot.Platform.Infrastructure.Services;
 using Npgsql;
 using Xunit;

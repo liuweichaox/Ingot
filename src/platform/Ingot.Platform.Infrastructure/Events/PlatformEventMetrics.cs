@@ -1,3 +1,5 @@
+// 实现事件基础设施组件 PlatformEventMetrics，保持不可变事件和交付语义。
+
 using Prometheus;
 
 namespace Ingot.Platform.Infrastructure.Events;

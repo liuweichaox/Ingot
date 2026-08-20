@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# 按受控配置部署 Ingot 服务并保留失败诊断信息。
 set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"

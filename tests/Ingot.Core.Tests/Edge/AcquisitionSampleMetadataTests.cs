@@ -1,3 +1,5 @@
+// 验证边缘组件 AcquisitionSampleMetadata 的协议、状态和失败边界。
+
 using Ingot.Domain.Events;
 using Ingot.Edge.ConnectorHost.Acquisition;
 using Xunit;

@@ -8,6 +8,7 @@ using Ingot.Platform.Application.ProcessConfiguration;
 
 namespace Ingot.Platform.Application.ProcessResearch;
 
+/// <summary>执行实验创建、审批、运行和完成的状态机命令。</summary>
 public sealed partial class ResearchExperimentCommands(
     IResearchExperimentCommandStore store,
     IResearchOnlineAdmissionGate? onlineAdmission = null,

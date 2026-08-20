@@ -15,6 +15,7 @@ public sealed record ProcessFeatureDefinition
     public required string DefinitionHash { get; init; }
 }
 
+/// <summary>提供带版本和内容哈希的确定性过程特征定义。</summary>
 public interface IFeatureDefinitionRegistry
 {
     ProcessFeatureDefinition GetRequired(string code);

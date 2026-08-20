@@ -1,3 +1,5 @@
+# 构建并托管 Ingot 官网的静态生产产物。
+
 FROM node:22-alpine AS build
 WORKDIR /app
 

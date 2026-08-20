@@ -1,3 +1,5 @@
+# 构建平台前端静态资源，并由最小化 Web 服务器镜像提供服务。
+
 FROM node:22-alpine AS build
 WORKDIR /app
 

@@ -1,3 +1,5 @@
+// 验证 PostgresEventReplay 的真实基础设施集成、失败和恢复行为。
+
 using System.Text.Json;
 using Ingot.Contracts.Analytics;
 using Ingot.Contracts.Events;

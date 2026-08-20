@@ -1,3 +1,5 @@
+// 验证平台组件 KnowledgeExtraction 的成功、拒绝和安全边界。
+
 using System.Net;
 using System.Text;
 using ClosedXML.Excel;

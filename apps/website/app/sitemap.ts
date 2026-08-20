@@ -1,3 +1,5 @@
+// 从公开路由生成站点地图，保持中英文页面可发现。
+
 import type { MetadataRoute } from "next";
 
 export const dynamic = "force-static";

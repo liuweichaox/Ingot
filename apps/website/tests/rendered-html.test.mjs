@@ -1,3 +1,5 @@
+// 验证构建后的公开页面、链接和产品语言边界。
+
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";

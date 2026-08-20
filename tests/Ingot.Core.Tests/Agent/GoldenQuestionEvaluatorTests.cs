@@ -1,3 +1,5 @@
+// 验证 Agent 的 GoldenQuestionEvaluator 能力、只读边界和拒绝路径。
+
 using System.Text.Json;
 using Ingot.Contracts.Agents;
 using Ingot.Platform.Infrastructure.Insight;

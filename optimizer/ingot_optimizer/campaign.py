@@ -15,6 +15,8 @@ import numpy as np
 
 @dataclass(frozen=True)
 class Variable:
+    """Defines one bounded controllable variable in a campaign."""
+
     name: str
     low: float
     high: float
@@ -38,6 +40,8 @@ class Variable:
 
 @dataclass(frozen=True)
 class Objective:
+    """Defines one measured optimization objective and its acceptable range."""
+
     name: str
     kind: str
     threshold: float | None = None
@@ -168,6 +172,8 @@ class Objective:
 
 @dataclass(frozen=True)
 class ParameterConstraint:
+    """Defines a linear safety or feasibility constraint on control variables."""
+
     variable: str
     operator: str
     limit: float
@@ -193,6 +199,8 @@ class ParameterConstraint:
 
 @dataclass(frozen=True)
 class ForbiddenCombinationFactor:
+    """Defines one bounded factor within a forbidden parameter combination."""
+
     variable: str
     minimum: float | None = None
     maximum: float | None = None
@@ -220,6 +228,8 @@ class ForbiddenCombinationFactor:
 
 @dataclass(frozen=True)
 class ForbiddenCombination:
+    """Rejects candidates only when every declared factor matches."""
+
     name: str
     factors: tuple[ForbiddenCombinationFactor, ...]
 
@@ -242,6 +252,8 @@ class ForbiddenCombination:
 
 @dataclass(frozen=True)
 class OutcomeConstraint:
+    """Defines a measured outcome boundary and its required feasibility level."""
+
     name: str
     operator: str
     limit: float
@@ -278,6 +290,8 @@ class OutcomeConstraint:
 
 @dataclass
 class Campaign:
+    """Validates and transforms the complete optimization campaign contract."""
+
     name: str
     variables: list[Variable]
     objectives: list[Objective]
