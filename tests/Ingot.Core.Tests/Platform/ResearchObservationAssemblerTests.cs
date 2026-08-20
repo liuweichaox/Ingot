@@ -5,6 +5,7 @@ using Ingot.Contracts.Inspections;
 using Ingot.Contracts.ProcessConfiguration;
 using Ingot.Contracts.ProcessResearch;
 using Ingot.Platform.Infrastructure.ProcessExecutions;
+using Ingot.Platform.Application.ProcessExecutions;
 using Ingot.Platform.Infrastructure.Inspections;
 using Ingot.Platform.Infrastructure.ProcessConfiguration;
 using Ingot.Platform.Infrastructure.ProcessResearch;
@@ -315,7 +316,8 @@ public sealed class ResearchObservationAssemblerTests
 
         public Task<ExecutionComparisonRow?> GetProcessExecutionAsync(
             string executionId,
-            CancellationToken ct = default)
+            CancellationToken ct = default,
+            string? siteId = null)
             => Task.FromResult<ExecutionComparisonRow?>(
                 string.Equals(executionId, execution.ExecutionId, StringComparison.Ordinal)
                     ? execution
@@ -323,7 +325,8 @@ public sealed class ResearchObservationAssemblerTests
 
         public Task<IReadOnlyDictionary<string, ExecutionComparisonRow>> GetProcessExecutionsAsync(
             IReadOnlyCollection<string> executionIds,
-            CancellationToken ct = default)
+            CancellationToken ct = default,
+            string? siteId = null)
         {
             BatchQueryCount++;
             IReadOnlyDictionary<string, ExecutionComparisonRow> result = executionIds
@@ -336,13 +339,15 @@ public sealed class ResearchObservationAssemblerTests
         public Task<ExecutionComparisonResult?> CompareWithHistoryAsync(
             string executionId,
             int limit,
-            CancellationToken ct = default)
+            CancellationToken ct = default,
+            string? siteId = null)
             => throw new NotSupportedException();
 
         public Task<ExecutionComparisonResult?> CompareSelectedAsync(
             string baselineProcessExecutionId,
             IReadOnlyList<string> executionIds,
-            CancellationToken ct = default)
+            CancellationToken ct = default,
+            string? siteId = null)
             => throw new NotSupportedException();
     }
 

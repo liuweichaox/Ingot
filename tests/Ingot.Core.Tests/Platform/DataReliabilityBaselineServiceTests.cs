@@ -4,6 +4,7 @@ using Ingot.Contracts.Events;
 using Ingot.Domain.Events;
 using Ingot.Platform.Infrastructure.Analytics;
 using Ingot.Platform.Infrastructure.ProcessExecutions;
+using Ingot.Platform.Application.ProcessExecutions;
 using Ingot.Platform.Infrastructure.Events;
 using Xunit;
 
@@ -213,12 +214,13 @@ public sealed class DataReliabilityBaselineServiceTests
     private sealed class FakeProcessExecutionService(
         IReadOnlyDictionary<string, ExecutionComparisonRow> rows) : IExecutionComparisonService
     {
-        public Task<ExecutionComparisonRow?> GetProcessExecutionAsync(string executionId, CancellationToken ct = default)
+        public Task<ExecutionComparisonRow?> GetProcessExecutionAsync(string executionId, CancellationToken ct = default, string? siteId = null)
             => Task.FromResult(rows.GetValueOrDefault(executionId));
 
         public Task<IReadOnlyDictionary<string, ExecutionComparisonRow>> GetProcessExecutionsAsync(
             IReadOnlyCollection<string> executionIds,
-            CancellationToken ct = default)
+            CancellationToken ct = default,
+            string? siteId = null)
             => Task.FromResult<IReadOnlyDictionary<string, ExecutionComparisonRow>>(
                 executionIds.Where(rows.ContainsKey)
                     .ToDictionary(id => id, id => rows[id], StringComparer.Ordinal));
@@ -226,13 +228,15 @@ public sealed class DataReliabilityBaselineServiceTests
         public Task<ExecutionComparisonResult?> CompareWithHistoryAsync(
             string executionId,
             int limit,
-            CancellationToken ct = default)
+            CancellationToken ct = default,
+            string? siteId = null)
             => throw new NotSupportedException();
 
         public Task<ExecutionComparisonResult?> CompareSelectedAsync(
             string baselineProcessExecutionId,
             IReadOnlyList<string> executionIds,
-            CancellationToken ct = default)
+            CancellationToken ct = default,
+            string? siteId = null)
             => throw new NotSupportedException();
     }
 

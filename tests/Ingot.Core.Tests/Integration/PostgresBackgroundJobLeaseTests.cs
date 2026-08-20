@@ -1,6 +1,9 @@
 using System.Text;
 using Ingot.Contracts.Events;
 using Ingot.Platform.Infrastructure.ProcessExecutions;
+using Ingot.Platform.Infrastructure.Acquisition;
+using Ingot.Contracts.Acquisition;
+using Ingot.Contracts.ProcessConfiguration;
 using Ingot.Platform.Infrastructure.ResearchAssets;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -106,6 +109,95 @@ public sealed class PostgresBackgroundJobLeaseTests(PostgresIntegrationFixture p
         var retried = await store.ClaimRecomputeAsync(TimeSpan.FromMinutes(5));
         Assert.NotNull(retried);
         Assert.True(await store.CompleteRecomputeAsync(executionId, retried!.LeaseId));
+    }
+
+    [LinuxDockerFact]
+    public async Task ProbeTask_ShouldCrossApiReplicaStoreInstances()
+    {
+        await postgres.EnsureSchemaAsync();
+        var coordinatorA = new AcquisitionProbeTaskCoordinator(
+            new PostgresAcquisitionProbeTaskStore(postgres.DataSource));
+        var coordinatorB = new AcquisitionProbeTaskCoordinator(
+            new PostgresAcquisitionProbeTaskStore(postgres.DataSource));
+        var waiting = coordinatorA.QueueAndWaitAsync(
+            new AcquisitionDeployment
+            {
+                Task = new IngestionTask
+                {
+                    TaskId = "probe-test",
+                    Name = "Probe test",
+                    Status = ConfigurationStatuses.Draft,
+                    EdgeId = "EDGE-PROBE",
+                    Protocol = AcquisitionProtocols.HttpPolling,
+                    DataModelId = "model-test",
+                    Source = "connector/http/probe-test",
+                    SubjectId = "MACHINE-01"
+                },
+                DataModel = new ProcessDataModel
+                {
+                    ModelId = "model-test",
+                    Name = "Model test",
+                    Status = ConfigurationStatuses.Published
+                }
+            },
+            TimeSpan.FromSeconds(10));
+
+        AcquisitionProbeTask? task = null;
+        for (var attempt = 0; attempt < 50 && task is null; attempt++)
+        {
+            task = await coordinatorB.ClaimNextAsync("EDGE-PROBE");
+            if (task is null) await Task.Delay(20);
+        }
+        Assert.NotNull(task);
+        var result = new AcquisitionProbeResult
+        {
+            Success = true,
+            MappingsValidated = true,
+            Protocol = AcquisitionProtocols.HttpPolling,
+            Message = "ok",
+            TestedAt = DateTimeOffset.UtcNow
+        };
+        Assert.True(await coordinatorB.CompleteAsync(new AcquisitionProbeTaskCompletion
+        {
+            TaskId = task!.TaskId,
+            EdgeId = task.EdgeId,
+            Result = result
+        }));
+        Assert.True((await waiting).Success);
+    }
+
+    [LinuxDockerFact]
+    public async Task Recompute_ShouldEnterFailedTerminalStateAtAttemptLimit()
+    {
+        await postgres.EnsureSchemaAsync();
+        var store = new PostgresProcessExecutionAnalysisMaterializationStore(
+            postgres.DataSource,
+            NullLogger<PostgresProcessExecutionAnalysisMaterializationStore>.Instance);
+        var executionId = $"failed-{Guid.NewGuid():N}";
+        await using (var insert = postgres.DataSource.CreateCommand(
+                         """
+                         INSERT INTO execution_analysis_recompute_jobs(
+                           execution_id,invalidated_source_max_ingest_id,reason,status,attempt_count)
+                         VALUES(@id,1,'test','queued',7);
+                         """))
+        {
+            insert.Parameters.AddWithValue("id", executionId);
+            await insert.ExecuteNonQueryAsync();
+        }
+        var lease = Assert.IsType<ProcessExecutionAnalysisRecomputeLease>(
+            await store.ClaimRecomputeAsync(TimeSpan.FromMinutes(5)));
+        Assert.Equal(8, lease.AttemptCount);
+        Assert.True(await store.RetryRecomputeAsync(
+            executionId, lease.LeaseId, TimeSpan.Zero, "permanent", 8));
+
+        await using var status = postgres.DataSource.CreateCommand(
+            "SELECT status, last_error, failed_at IS NOT NULL FROM execution_analysis_recompute_jobs WHERE execution_id=@id;");
+        status.Parameters.AddWithValue("id", executionId);
+        await using var reader = await status.ExecuteReaderAsync();
+        Assert.True(await reader.ReadAsync());
+        Assert.Equal("failed", reader.GetString(0));
+        Assert.Equal("permanent", reader.GetString(1));
+        Assert.True(reader.GetBoolean(2));
     }
 
     private async Task<Guid> InsertProjectAsync()

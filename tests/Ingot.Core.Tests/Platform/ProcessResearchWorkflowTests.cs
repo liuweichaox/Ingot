@@ -4,9 +4,11 @@ using Ingot.Platform.Application.ProcessConfiguration;
 using Ingot.Contracts.Analytics;
 using Ingot.Contracts.ProcessConfiguration;
 using Ingot.Contracts.ProcessResearch;
+using Ingot.Contracts.Events;
 using Ingot.Contracts.ResearchAssets;
 using Ingot.Platform.Api.Controllers;
 using Ingot.Platform.Application.ProcessResearch;
+using Ingot.Platform.Application.ProcessExecutions;
 using Ingot.Platform.Infrastructure.Analytics;
 using Ingot.Platform.Infrastructure.ProcessConfiguration;
 using Ingot.Platform.Infrastructure.ProcessResearch;
@@ -18,6 +20,31 @@ namespace Ingot.Core.Tests.Platform;
 
 public sealed class ProcessResearchWorkflowTests
 {
+    [Fact]
+    public async Task ExecutionEvidenceService_RejectsInvalidComparisonBeforeReadingExecutions()
+    {
+        var store = new MemoryStore();
+        var commands = new ResearchExperimentCommands(new ResearchExperimentCommandStoreAdapter(store));
+        var comparisons = new RejectingExecutionComparisonService();
+        var service = new ResearchExecutionEvidenceService(
+            store,
+            new ProcessResearchWorkflow(store, commands),
+            commands,
+            comparisons);
+
+        await Assert.ThrowsAsync<ProcessResearchRuleException>(() => service.ProposeHypothesesAsync(
+            Guid.CreateVersion7(),
+            new ResearchHypothesisFromExecutionComparisonRequest
+            {
+                BaselineProcessExecutionId = "run-a",
+                ProcessExecutionIds = ["run-a"],
+                MaximumHypotheses = 3
+            },
+            "engineer-a",
+            CancellationToken.None));
+
+        Assert.Equal(0, comparisons.CallCount);
+    }
     [Fact]
     public void UnitConverter_ConvertsKnownIndustrialAliases_AndRejectsUnknownDimensions()
     {
@@ -2893,5 +2920,39 @@ public sealed class ProcessResearchWorkflowTests
                     }
                 ]
             });
+    }
+
+    private sealed class RejectingExecutionComparisonService : IExecutionComparisonService
+    {
+        public int CallCount { get; private set; }
+
+        public Task<ExecutionComparisonRow?> GetProcessExecutionAsync(
+            string executionId,
+            CancellationToken ct = default,
+            string? siteId = null)
+        {
+            CallCount++;
+            return Task.FromResult<ExecutionComparisonRow?>(null);
+        }
+
+        public Task<ExecutionComparisonResult?> CompareWithHistoryAsync(
+            string executionId,
+            int limit,
+            CancellationToken ct = default,
+            string? siteId = null)
+        {
+            CallCount++;
+            return Task.FromResult<ExecutionComparisonResult?>(null);
+        }
+
+        public Task<ExecutionComparisonResult?> CompareSelectedAsync(
+            string baselineProcessExecutionId,
+            IReadOnlyList<string> executionIds,
+            CancellationToken ct = default,
+            string? siteId = null)
+        {
+            CallCount++;
+            return Task.FromResult<ExecutionComparisonResult?>(null);
+        }
     }
 }

@@ -20,13 +20,19 @@ public sealed class ProcessCurvesController(
         [FromQuery] DateTimeOffset? from,
         [FromQuery] DateTimeOffset? to,
         [FromQuery] int maxPoints = DefaultMaximumPoints,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        [FromQuery] string? siteId = null)
     {
         var identity = userResolver.ResolveIdentity(User);
         if (identity is null)
             return AuthenticationRequired("需要平台统一认证。");
         if (!identity.HasAnyRole(PlatformRoles.QualityRead))
             return AuthorizationDenied();
+        var siteFailure = PlatformSiteScope.Resolve(identity, siteId, false, out var authorizedSiteId);
+        if (siteFailure == SiteScopeFailure.Forbidden)
+            return AuthorizationDenied("当前身份无权访问该站点。", ("siteId", siteId));
+        if (siteFailure == SiteScopeFailure.Missing)
+            return InvalidRequest("读取运行曲线必须指定当前身份有权访问的 siteId。");
         if (string.IsNullOrWhiteSpace(executionId) || executionId.Length > 200)
             return InvalidRequest("运行编号格式不正确。");
         if (from > to)
@@ -47,6 +53,7 @@ public sealed class ProcessCurvesController(
             timeSeries,
             new TimeSeriesQuery
             {
+                SiteId = authorizedSiteId,
                 ExecutionId = executionId.Trim(),
                 From = from,
                 To = to

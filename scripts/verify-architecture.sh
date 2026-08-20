@@ -195,6 +195,17 @@ else
   echo "✓ [inspection-workflow-ownership]"
 fi
 
+process_execution_port_leaks=$(grep -rnE \
+  'public interface (IExecutionComparisonService|IProcessExecutionService|ITimeWindowComparisonService)' \
+  src/platform/Ingot.Platform.Infrastructure --include='*.cs' 2>/dev/null || true)
+if [[ -n "$process_execution_port_leaks" ]]; then
+  echo "✗ [process-execution-port-ownership] 运行查询与比较端口必须归属 Platform Application"
+  echo "$process_execution_port_leaks" | sed 's/^/    /'
+  fail=1
+else
+  echo "✓ [process-execution-port-ownership]"
+fi
+
 store_schema_ddl=$(grep -rnE \
   '(CREATE TABLE|CREATE (UNIQUE )?INDEX|ALTER TABLE|create_hypertable|add_[a-z_]*policy)' \
   src/platform/Ingot.Platform.Infrastructure \

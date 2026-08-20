@@ -31,18 +31,20 @@ public sealed class ExecutionComparisonService(
 
     public async Task<ExecutionComparisonRow?> GetProcessExecutionAsync(
         string executionId,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        string? siteId = null)
     {
         if (string.IsNullOrWhiteSpace(executionId))
             throw new ArgumentException("过程执行标识不能为空。", nameof(executionId));
         executionId = executionId.Trim();
-        var rows = await GetProcessExecutionsAsync([executionId], ct).ConfigureAwait(false);
+        var rows = await GetProcessExecutionsAsync([executionId], ct, siteId).ConfigureAwait(false);
         return rows.GetValueOrDefault(executionId);
     }
 
     public async Task<IReadOnlyDictionary<string, ExecutionComparisonRow>> GetProcessExecutionsAsync(
         IReadOnlyCollection<string> executionIds,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        string? siteId = null)
     {
         ArgumentNullException.ThrowIfNull(executionIds);
         var ids = executionIds
@@ -53,15 +55,16 @@ public sealed class ExecutionComparisonService(
         if (ids.Length == 0)
             return new Dictionary<string, ExecutionComparisonRow>(StringComparer.Ordinal);
 
-        var summarySources = _materializer is null
+        var useMaterializer = _materializer is not null && string.IsNullOrWhiteSpace(siteId);
+        var summarySources = !useMaterializer
             ? []
             : await events.QueryExecutionSummarySourcesAsync(ids, ct).ConfigureAwait(false);
         var summaryByExecution = summarySources.ToDictionary(
             static source => source.ExecutionId,
             StringComparer.Ordinal);
-        var executionEvents = _materializer is null
+        var executionEvents = !useMaterializer
             ? new Dictionary<string, IReadOnlyList<PlatformProductionEvent>>(
-                await LoadProcessExecutionsAsync(ids, ct).ConfigureAwait(false),
+                await LoadProcessExecutionsAsync(ids, ct, siteId).ConfigureAwait(false),
                 StringComparer.Ordinal)
             : summaryByExecution.ToDictionary(
                 static pair => pair.Key,
@@ -81,12 +84,12 @@ public sealed class ExecutionComparisonService(
         var analyses = await analysisResolver.ResolveManyAsync(contexts, "production-execution", ct)
             .ConfigureAwait(false);
         var materializedByExecution = new Dictionary<string, MaterializedProcessExecutionAnalysis>(StringComparer.Ordinal);
-        if (_materializer is not null)
+        if (useMaterializer)
         {
             var missingIds = new List<string>();
             for (var index = 0; index < ids.Length; index++)
             {
-                var cached = await _materializer.TryLoadLatestAsync(
+                var cached = await _materializer!.TryLoadLatestAsync(
                     ids[index],
                     analyses[index]?.DataModel,
                     analyses[index]?.Plan,
@@ -98,7 +101,7 @@ public sealed class ExecutionComparisonService(
             }
             if (missingIds.Count > 0)
             {
-                var fullRows = await LoadProcessExecutionsAsync(missingIds, ct).ConfigureAwait(false);
+                var fullRows = await LoadProcessExecutionsAsync(missingIds, ct, siteId).ConfigureAwait(false);
                 foreach (var pair in fullRows)
                     executionEvents[pair.Key] = pair.Value;
             }
@@ -132,10 +135,11 @@ public sealed class ExecutionComparisonService(
     public async Task<ExecutionComparisonResult?> CompareWithHistoryAsync(
         string executionId,
         int limit,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        string? siteId = null)
     {
         var baselineEvents = await QueryAllAsync(
-            new PlatformEventQuery { ExecutionId = executionId }, ct).ConfigureAwait(false);
+            new PlatformEventQuery { SiteId = siteId, ExecutionId = executionId }, ct).ConfigureAwait(false);
         if (baselineEvents.Count == 0)
             return null;
 
@@ -145,7 +149,7 @@ public sealed class ExecutionComparisonService(
         EnsureComparisonKeysPresent(analysis?.Plan, baselineContext, "基准过程执行");
         var comparisonContext = BuildComparisonContext(analysis?.Plan, baselineContext);
         var completed = await QueryAllAsync(
-            new PlatformEventQuery { EventType = "process.execution.completed", Context = comparisonContext }, ct)
+            new PlatformEventQuery { SiteId = siteId, EventType = "process.execution.completed", Context = comparisonContext }, ct)
             .ConfigureAwait(false);
         var candidateIds = completed
             .Where(item => !string.IsNullOrWhiteSpace(item.Event.ExecutionId) &&
@@ -157,7 +161,7 @@ public sealed class ExecutionComparisonService(
             .Select(static item => item.Event.ExecutionId!)
             .ToArray();
         var loadedIds = new[] { executionId }.Concat(candidateIds).ToArray();
-        var executionEvents = await LoadProcessExecutionsAsync(loadedIds, ct).ConfigureAwait(false);
+        var executionEvents = await LoadProcessExecutionsAsync(loadedIds, ct, siteId).ConfigureAwait(false);
         var comparisonKeys = ResolveComparisonKeys(analysis?.Plan);
         var allIds = new[] { executionId }.Concat(loadedIds.Skip(1).Where(id => ContextsMatch(
                 baselineContext,
@@ -170,7 +174,8 @@ public sealed class ExecutionComparisonService(
     public async Task<ExecutionComparisonResult?> CompareSelectedAsync(
         string baselineProcessExecutionId,
         IReadOnlyList<string> executionIds,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        string? siteId = null)
     {
         var allIds = new[] { baselineProcessExecutionId }
             .Concat(executionIds.Where(id => !string.Equals(id, baselineProcessExecutionId, StringComparison.Ordinal)))
@@ -179,7 +184,7 @@ public sealed class ExecutionComparisonService(
         if (allIds.Length < 2)
             throw new ArgumentException("请选择至少两个不同的生产过程执行。", nameof(executionIds));
 
-        var executionEvents = await LoadProcessExecutionsAsync(allIds, ct).ConfigureAwait(false);
+        var executionEvents = await LoadProcessExecutionsAsync(allIds, ct, siteId).ConfigureAwait(false);
         if (allIds.Any(id => !executionEvents.TryGetValue(id, out var rows) || rows.Count == 0))
             return null;
 
@@ -743,7 +748,9 @@ public sealed class ExecutionComparisonService(
         var startedAt = ordered.FirstOrDefault(static row => row.Event.EventType == "process.execution.started")?.Event.OccurredAt;
         var completedAt = ordered.LastOrDefault(static row => row.Event.EventType == "process.execution.completed")?.Event.OccurredAt;
         var samples = await TimeSeriesFrameReader.QueryAllAsync(
-            _timeSeries, new TimeSeriesQuery { ExecutionId = executionId }, ct).ConfigureAwait(false);
+            _timeSeries,
+            new TimeSeriesQuery { SiteId = ordered[0].SiteId, ExecutionId = executionId },
+            ct).ConfigureAwait(false);
         if (_materializer is not null)
         {
             return await _materializer.GetOrComputeAsync(
@@ -971,10 +978,13 @@ public sealed class ExecutionComparisonService(
 
     private async Task<IReadOnlyDictionary<string, IReadOnlyList<PlatformProductionEvent>>> LoadProcessExecutionsAsync(
         IReadOnlyCollection<string> executionIds,
-        CancellationToken ct)
+        CancellationToken ct,
+        string? siteId = null)
     {
         var rows = await events.QueryByExecutionIdsAsync(executionIds, ct).ConfigureAwait(false);
         return rows
+            .Where(row => string.IsNullOrWhiteSpace(siteId) ||
+                          string.Equals(row.SiteId, siteId.Trim(), StringComparison.OrdinalIgnoreCase))
             .Where(static row => !string.IsNullOrWhiteSpace(row.Event.ExecutionId))
             .GroupBy(static row => row.Event.ExecutionId!, StringComparer.Ordinal)
             .ToDictionary(

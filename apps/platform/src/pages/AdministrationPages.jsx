@@ -18,15 +18,16 @@ export function UsersPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [manageOpen, setManageOpen] = useState(false);
   const [selected, setSelected] = useState(null);
-  const [createForm, setCreateForm] = useState({ username: "", displayName: "", password: "", roles: ["quality.inspector"] });
+  const [createForm, setCreateForm] = useState({ username: "", displayName: "", password: "", roles: ["quality.inspector"], siteIdsText: "" });
   const [roles, setRoles] = useState([]);
+  const [siteIdsText, setSiteIdsText] = useState("");
   const [password, setPassword] = useState("");
   const [actionError, setActionError] = useState("");
   const [busy, setBusy] = useState(false);
   const { confirm, confirmationDialog } = useConfirmDialog();
 
   function startCreate() {
-    setCreateForm({ username: "", displayName: "", password: "", roles: ["quality.inspector"] });
+    setCreateForm({ username: "", displayName: "", password: "", roles: ["quality.inspector"], siteIdsText: "" });
     setActionError("");
     setCreateOpen(true);
   }
@@ -34,6 +35,7 @@ export function UsersPage() {
   function startManage(user) {
     setSelected(user);
     setRoles(user.roles || []);
+    setSiteIdsText((user.siteIds || []).join(", "));
     setPassword("");
     setActionError("");
     setManageOpen(true);
@@ -66,7 +68,9 @@ export function UsersPage() {
   }
 
   async function createUser() {
-    const saved = await runAction(() => postJson("/api/v1/users", createForm));
+    const { siteIdsText: rawSiteIds, ...fields } = createForm;
+    const siteIds = rawSiteIds.split(",").map(value => value.trim()).filter(Boolean);
+    const saved = await runAction(() => postJson("/api/v1/users", { ...fields, siteIds }));
     if (saved) {
       setCreateOpen(false);
       notify(`用户 ${createForm.displayName || createForm.username} 已创建。`);
@@ -76,6 +80,15 @@ export function UsersPage() {
   async function saveRoles() {
     const saved = await runAction(() => postJson(`/api/v1/users/${encodeURIComponent(selected.userId)}:set-roles`, { roles }));
     if (saved) notify("岗位权限已更新。");
+  }
+
+  async function saveSiteAccess() {
+    const siteIds = siteIdsText.split(",").map(value => value.trim()).filter(Boolean);
+    const saved = await runAction(() => postJson(
+      `/api/v1/users/${encodeURIComponent(selected.userId)}:set-site-access`,
+      { siteIds },
+    ));
+    if (saved) notify("站点访问范围已更新。");
   }
 
   async function savePassword() {
@@ -125,6 +138,7 @@ export function UsersPage() {
                 { key: "username", label: "用户名" },
                 { key: "displayName", label: "姓名", render: value => value || "—" },
                 { key: "roles", label: "岗位权限", render: value => (value || []).map(role => platformRoleOptions.find(option => option[0] === role)?.[1] || role).join("、") || "未分配" },
+                { key: "siteIds", label: "站点范围", render: value => (value || []).join("、") || "未分配" },
                 { key: "disabled", label: "状态", render: value => <StatusBadge value={value ? "disabled" : "active"} /> },
                 { key: "createdAt", label: "创建时间", render: formatTime },
                 { key: "_action", label: "操作", render: (_value, row) => <Button variant="ghost" onClick={event => { event.stopPropagation(); startManage(row); }}>管理</Button> },
@@ -147,6 +161,7 @@ export function UsersPage() {
           <Field label="用户名"><Input required autoComplete="off" value={createForm.username} onChange={event => setCreateForm({ ...createForm, username: event.target.value })} /></Field>
           <Field label="姓名"><Input value={createForm.displayName} onChange={event => setCreateForm({ ...createForm, displayName: event.target.value })} /></Field>
           <Field label="初始密码" hint="至少 8 位"><Input required type="password" autoComplete="new-password" value={createForm.password} onChange={event => setCreateForm({ ...createForm, password: event.target.value })} /></Field>
+          <Field label="站点范围" hint="多个 SiteId 用英文逗号分隔；平台管理员可留空"><Input value={createForm.siteIdsText} onChange={event => setCreateForm({ ...createForm, siteIdsText: event.target.value })} placeholder="SITE-001, SITE-002" /></Field>
           <RoleSelector value={createForm.roles} onChange={(role, enabled) => toggleRole(role, enabled, "create")} />
         </div>
       </Drawer>
@@ -172,6 +187,12 @@ export function UsersPage() {
               <div className="grid gap-4">
                 <RoleSelector value={roles} onChange={(role, enabled) => toggleRole(role, enabled)} />
                 <div><Button variant="primary" disabled={busy || roles.length === 0} onClick={saveRoles}>保存权限</Button></div>
+              </div>
+            </Card>
+            <Card title="站点访问范围" description="多个 SiteId 使用英文逗号分隔；空值表示不授予生产站点读取权限。">
+              <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
+                <Field label="SiteId"><Input value={siteIdsText} onChange={event => setSiteIdsText(event.target.value)} placeholder="SITE-001, SITE-002" /></Field>
+                <Button variant="primary" disabled={busy} onClick={saveSiteAccess}>保存站点范围</Button>
               </div>
             </Card>
             <Card title="重置密码" description="新密码至少 8 位。">

@@ -1,25 +1,23 @@
 using Ingot.Contracts.Events;
 
-namespace Ingot.Platform.Infrastructure.ProcessExecutions;
+namespace Ingot.Platform.Application.ProcessExecutions;
 
 public interface IExecutionComparisonService
 {
-    /// <summary>
-    ///     读取一个生产过程执行的确定性分析投影。该投影统一包含实际过程执行上下文、
-    ///     版本化过程特征、控制参数和质量关联，供比较与优化观察装配共同使用。
-    /// </summary>
     Task<ExecutionComparisonRow?> GetProcessExecutionAsync(
         string executionId,
-        CancellationToken ct = default);
+        CancellationToken ct = default,
+        string? siteId = null);
 
     async Task<IReadOnlyDictionary<string, ExecutionComparisonRow>> GetProcessExecutionsAsync(
         IReadOnlyCollection<string> executionIds,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        string? siteId = null)
     {
         var rows = new Dictionary<string, ExecutionComparisonRow>(StringComparer.Ordinal);
         foreach (var executionId in executionIds.Distinct(StringComparer.Ordinal))
         {
-            var row = await GetProcessExecutionAsync(executionId, ct).ConfigureAwait(false);
+            var row = await GetProcessExecutionAsync(executionId, ct, siteId).ConfigureAwait(false);
             if (row is not null)
                 rows[executionId] = row;
         }
@@ -29,10 +27,12 @@ public interface IExecutionComparisonService
     Task<ExecutionComparisonResult?> CompareWithHistoryAsync(
         string executionId,
         int limit,
-        CancellationToken ct = default);
+        CancellationToken ct = default,
+        string? siteId = null);
 
     Task<ExecutionComparisonResult?> CompareSelectedAsync(
         string baselineProcessExecutionId,
         IReadOnlyList<string> executionIds,
-        CancellationToken ct = default);
+        CancellationToken ct = default,
+        string? siteId = null);
 }

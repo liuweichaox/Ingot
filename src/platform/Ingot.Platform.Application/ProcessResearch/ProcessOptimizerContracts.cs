@@ -228,6 +228,15 @@ public sealed record OptimizerSuggestionResponse
 
     public IReadOnlyList<OptimizerSuggestionOutput> Suggestions { get; init; } = [];
 
+    [JsonPropertyName("feature_set_id")]
+    public string FeatureSetId { get; init; } = "";
+
+    [JsonPropertyName("feature_set_version")]
+    public int FeatureSetVersion { get; init; }
+
+    [JsonPropertyName("derived_feature_count")]
+    public int DerivedFeatureCount { get; init; }
+
     [JsonPropertyName("state_persisted")]
     public bool StatePersisted { get; init; }
 }

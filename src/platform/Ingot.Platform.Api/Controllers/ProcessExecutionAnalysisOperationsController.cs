@@ -1,6 +1,7 @@
 using Ingot.Contracts.Events;
 using Ingot.Platform.Api.Agents;
 using Ingot.Platform.Infrastructure.ProcessExecutions;
+using Ingot.Platform.Application.ProcessExecutions;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Ingot.Platform.Api.Controllers;
@@ -83,5 +84,52 @@ public sealed class ProcessExecutionFeatureAggregatesController(
             aggregation = "database",
             onlyReadyMaterializations = true
         });
+    }
+}
+
+[ApiController]
+[Route("api/v1/process-execution-maintenance")]
+public sealed class ProcessExecutionMaintenanceController(
+    PostgresExecutionBoundaryStore boundaries,
+    IProcessExecutionAnalysisMaterializationStore materializations,
+    IProcessExecutionService executions,
+    PlatformUserResolver userResolver) : PlatformConfigurationControllerBase(userResolver)
+{
+    [HttpPost("boundary-jobs/{siteId}/{executionId}:replay")]
+    public async Task<IActionResult> ReplayBoundary(
+        string siteId,
+        string executionId,
+        CancellationToken ct)
+    {
+        var denied = DeniedConfigurationWrite();
+        if (denied is not null) return denied;
+        var identity = ResolveIdentity()!;
+        if (!identity.CanAccessSite(siteId))
+            return AuthorizationDenied("当前身份无权访问该站点。", ("siteId", siteId));
+        return await boundaries.ReplayFailedProjectionAsync(siteId.Trim(), executionId.Trim(), ct)
+            .ConfigureAwait(false)
+            ? Accepted()
+            : ResourceNotFound("未找到对应的失败边界重算任务。");
+    }
+
+    [HttpPost("analysis-jobs/{siteId}/{executionId}:replay")]
+    public async Task<IActionResult> ReplayAnalysis(
+        string siteId,
+        string executionId,
+        CancellationToken ct)
+    {
+        var denied = DeniedConfigurationWrite();
+        if (denied is not null) return denied;
+        var identity = ResolveIdentity()!;
+        if (!identity.CanAccessSite(siteId))
+            return AuthorizationDenied("当前身份无权访问该站点。", ("siteId", siteId));
+        var authorized = await executions.QueryAsync(
+            null, null, null, null, null, null, null, executionId.Trim(), null, 1,
+            ct: ct, siteId: siteId.Trim()).ConfigureAwait(false);
+        if (authorized.Data.Count == 0)
+            return ResourceNotFound("未找到对应站点的过程执行。");
+        return await materializations.ReplayFailedRecomputeAsync(executionId.Trim(), ct).ConfigureAwait(false)
+            ? Accepted()
+            : ResourceNotFound("未找到对应的失败分析重算任务。");
     }
 }

@@ -17,6 +17,7 @@
         <Using Include="System.Net.Http.Json" />
         <Using Include="Ingot.Platform.Application.Inspections" />
         <Using Include="Ingot.Platform.Application.ProcessResearch" />
+        <Using Include="Ingot.Platform.Application.ProcessExecutions" />
     </ItemGroup>
 
     <!-- 通过共享框架获得 Hosting/Logging/Options/HttpClientFactory/HealthChecks 抽象，避免逐包引用 -->

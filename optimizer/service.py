@@ -134,6 +134,36 @@ class SuggestionRequest(StrictModel):
     n_samples: int = Field(default=256, ge=32, le=10_000)
 
 
+class ObjectivePredictionOut(StrictModel):
+    mean: float
+    standard_deviation: float
+    lower_95: float
+    upper_95: float
+    unit: str
+
+
+class SuggestionOut(StrictModel):
+    recommended_params: dict[str, float]
+    objective_predictions: dict[str, ObjectivePredictionOut]
+    constraint_predictions: dict[str, ObjectivePredictionOut]
+    predicted_distance_to_spec: float | None
+    feasibility_probability: float | None
+    acquisition_value: float | None
+    cold_start: bool
+    model_version: str
+    rationale: str
+
+
+class SuggestionResponse(StrictModel):
+    model_version: str
+    observation_count: int = Field(ge=0)
+    suggestions: list[SuggestionOut] = Field(min_length=1, max_length=20)
+    feature_set_id: str = Field(min_length=1, max_length=120)
+    feature_set_version: int = Field(ge=1)
+    derived_feature_count: int = Field(ge=0, le=100)
+    state_persisted: Literal[False]
+
+
 class DesignRequest(StrictModel):
     method: Literal[
         "full-factorial",
@@ -385,8 +415,8 @@ def create_design(request: DesignRequest) -> dict:
     }
 
 
-@app.post("/v1/suggestions")
-def create_suggestions(request: SuggestionRequest) -> dict:
+@app.post("/v1/suggestions", response_model=SuggestionResponse)
+def create_suggestions(request: SuggestionRequest) -> SuggestionResponse:
     try:
         campaign = _campaign_from_input(request.campaign)
         derived_features = [
@@ -455,15 +485,15 @@ def create_suggestions(request: SuggestionRequest) -> dict:
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
     model_version = suggestions[0].model_version
-    return {
-        "model_version": model_version,
-        "observation_count": len(request.observations),
-        "suggestions": [suggestion.to_dict() for suggestion in suggestions],
-        "feature_set_id": request.campaign.feature_set_id,
-        "feature_set_version": request.campaign.feature_set_version,
-        "derived_feature_count": len(request.campaign.derived_features),
-        "state_persisted": False,
-    }
+    return SuggestionResponse(
+        model_version=model_version,
+        observation_count=len(request.observations),
+        suggestions=[SuggestionOut.model_validate(suggestion.to_dict()) for suggestion in suggestions],
+        feature_set_id=request.campaign.feature_set_id,
+        feature_set_version=request.campaign.feature_set_version,
+        derived_feature_count=len(request.campaign.derived_features),
+        state_persisted=False,
+    )
 
 
 @app.post("/v1/diagnosis")

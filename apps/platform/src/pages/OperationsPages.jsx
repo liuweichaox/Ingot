@@ -212,7 +212,7 @@ export function ProcessExecutionsPage() {
           <DataTable
             rows={rows}
             keyField="executionId"
-            onRowClick={row => navigate(`/process-executions/${encodeURIComponent(row.executionId)}`)}
+            onRowClick={row => navigate(`/process-executions/${encodeURIComponent(row.executionId)}?siteId=${encodeURIComponent(row.siteId)}`)}
             columns={[
               { key: "executionId", label: "运行号" },
               { key: "equipmentId", label: "来源", render: (value, row) => <div><p className="font-medium text-slate-800">{value}</p><p className="text-xs text-slate-500">{row.edgeIds?.join("、") || "Edge 未记录"}</p></div> },
@@ -225,7 +225,7 @@ export function ProcessExecutionsPage() {
               {
                 key: "executionId",
                 label: "操作",
-                render: value => <Link className="font-medium text-blue-600 hover:text-blue-700" to={`/process-executions/${encodeURIComponent(value)}`} onClick={event => event.stopPropagation()}>查看详情</Link>,
+                render: (value, row) => <Link className="font-medium text-blue-600 hover:text-blue-700" to={`/process-executions/${encodeURIComponent(value)}?siteId=${encodeURIComponent(row.siteId)}`} onClick={event => event.stopPropagation()}>查看详情</Link>,
               },
             ]}
           />
@@ -248,9 +248,11 @@ export function ProcessExecutionDetailPage() {
   const [selectedSignalCodes, setSelectedSignalCodes] = useState([]);
   const [signalSearch, setSignalSearch] = useState("");
   const encodedId = encodeURIComponent(executionId);
-  const executionResponse = useApi(`/api/v1/process-executions?executionId=${encodedId}&limit=1`);
-  const analysisResponse = useApi(`/api/v1/process-executions/${encodedId}/analysis`);
-  const eventResponse = useApi(`/api/v1/events?executionId=${encodedId}&limit=30`);
+  const siteId = searchParams.get("siteId") || "";
+  const encodedSiteId = encodeURIComponent(siteId);
+  const executionResponse = useApi(`/api/v1/process-executions?executionId=${encodedId}&siteId=${encodedSiteId}&limit=1`);
+  const analysisResponse = useApi(`/api/v1/process-executions/${encodedId}/analysis?siteId=${encodedSiteId}`);
+  const eventResponse = useApi(`/api/v1/events?executionId=${encodedId}&siteId=${encodedSiteId}&limit=30`);
   const inspectionResponse = useApi(`/api/v1/inspection-records?executionId=${encodedId}&limit=50`);
   const execution = extractRows(executionResponse.data)[0];
   const analysis = analysisResponse.data;
@@ -270,6 +272,7 @@ export function ProcessExecutionDetailPage() {
   const curveResponse = useProcessCurves(executionId, selectedSignalCodes, {
     enabled: activeTab === "curves" && selectedSignalCodes.length > 0,
     maxPoints: 2000,
+    siteId,
   });
   const selectedSignals = useMemo(
     () => availableSignals.filter(signal => selectedSignalCodes.includes(signal.code)),

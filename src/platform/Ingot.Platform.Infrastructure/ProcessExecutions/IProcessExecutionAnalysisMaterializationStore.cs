@@ -97,6 +97,9 @@ public interface IProcessExecutionAnalysisMaterializationStore
         int maxAttempts,
         CancellationToken ct = default)
         => Task.FromResult(false);
+
+    Task<bool> ReplayFailedRecomputeAsync(string executionId, CancellationToken ct = default)
+        => Task.FromResult(false);
 }
 
 public sealed record ProcessExecutionAnalysisBackfillLease(

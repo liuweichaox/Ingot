@@ -1,6 +1,6 @@
 using Ingot.Contracts.Events;
 
-namespace Ingot.Platform.Infrastructure.ProcessExecutions;
+namespace Ingot.Platform.Application.ProcessExecutions;
 
 public interface ITimeWindowComparisonService
 {

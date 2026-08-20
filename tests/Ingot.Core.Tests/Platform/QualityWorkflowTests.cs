@@ -16,6 +16,36 @@ namespace Ingot.Core.Tests.Platform;
 public sealed class QualityWorkflowTests
 {
     [Fact]
+    public async Task ExecutionComparison_RestrictsEventsAndSamplesToAuthorizedSite()
+    {
+        var rows = new List<PlatformProductionEvent>();
+        var expectedStart = DateTimeOffset.Parse("2026-07-20T08:00:00Z");
+        AddProcessExecution(rows, "RUN-01", "LENS-A", "PRESS-01", expectedStart, 1);
+        var otherSite = new List<PlatformProductionEvent>();
+        AddProcessExecution(
+            otherSite,
+            "RUN-01",
+            "LENS-A",
+            "PRESS-02",
+            DateTimeOffset.Parse("2026-07-21T08:00:00Z"),
+            rows.Count + 1);
+        rows.AddRange(otherSite.Select(row => row with { SiteId = "SITE-002" }));
+        var service = new ExecutionComparisonService(
+            new FakeEventStore(rows),
+            new FakeInspectionStore([]),
+            new FakeReviewStore(),
+            new FakeMasterDataStore(),
+            new ProcessAnalysisResolver(new FakeProcessConfigurationStore()),
+            timeSeries: new FakeTimeSeriesStore(rows));
+
+        var result = await service.GetProcessExecutionAsync(
+            "RUN-01", siteId: "SITE-001");
+
+        Assert.NotNull(result);
+        Assert.Equal(expectedStart, result.StartedAt);
+        Assert.Equal(600, result.SampleCount);
+    }
+    [Fact]
     public void AnalysisEligible_RequiresTrustedSubmissionAndIndependentReviewWhenPlanRequiresIt()
     {
         var record = Inspection("RUN", "WP", "visual", withAttachment: true);
@@ -785,6 +815,7 @@ public sealed class QualityWorkflowTests
         {
             var rows = events
                 .Where(static row => row.Event.EventType == "process.sample")
+                .Where(row => string.IsNullOrWhiteSpace(query.SiteId) || row.SiteId == query.SiteId)
                 .Where(row => string.IsNullOrWhiteSpace(query.ExecutionId) || row.Event.ExecutionId == query.ExecutionId)
                 .Where(row => string.IsNullOrWhiteSpace(query.SubjectType) || row.Event.Subject.Type == query.SubjectType)
                 .Where(row => string.IsNullOrWhiteSpace(query.SubjectId) || row.Event.Subject.Id == query.SubjectId)

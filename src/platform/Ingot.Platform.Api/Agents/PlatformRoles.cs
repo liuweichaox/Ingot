@@ -33,3 +33,35 @@ public sealed record PlatformIdentity(
         => !string.IsNullOrWhiteSpace(siteId) &&
            (Roles.Contains(PlatformRoles.PlatformAdministrator) || SiteIds.Contains(siteId.Trim()));
 }
+
+public enum SiteScopeFailure
+{
+    None,
+    Missing,
+    Forbidden
+}
+
+public static class PlatformSiteScope
+{
+    public static SiteScopeFailure Resolve(
+        PlatformIdentity identity,
+        string? requestedSiteId,
+        bool allowAllForAdministrator,
+        out string? siteId)
+    {
+        siteId = requestedSiteId?.Trim();
+        if (!string.IsNullOrWhiteSpace(siteId))
+            return identity.CanAccessSite(siteId) ? SiteScopeFailure.None : SiteScopeFailure.Forbidden;
+        if (allowAllForAdministrator && identity.Roles.Contains(PlatformRoles.PlatformAdministrator))
+        {
+            siteId = null;
+            return SiteScopeFailure.None;
+        }
+        if (identity.SiteIds.Count == 1)
+        {
+            siteId = identity.SiteIds.Single();
+            return SiteScopeFailure.None;
+        }
+        return SiteScopeFailure.Missing;
+    }
+}

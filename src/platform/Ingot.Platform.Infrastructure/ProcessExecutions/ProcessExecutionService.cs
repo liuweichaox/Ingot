@@ -37,19 +37,21 @@ public sealed class ProcessExecutionService(
         string? search = null,
         CancellationToken ct = default,
         string? edgeId = null,
-        string? externalBatchRef = null)
+        string? externalBatchRef = null,
+        string? siteId = null)
     {
         var context = BuildContext(productFamilyCode, productCode, processSpecificationId, outputItemId, externalBatchRef);
         var lifecycle = new List<PlatformProductionEvent>();
         if (!string.IsNullOrWhiteSpace(executionId))
         {
             lifecycle.AddRange(await QueryAllAsync(
-                new PlatformEventQuery { ExecutionId = executionId.Trim() }, ct).ConfigureAwait(false));
+                new PlatformEventQuery { SiteId = Normalize(siteId), ExecutionId = executionId.Trim() }, ct).ConfigureAwait(false));
         }
         else
         {
             var baseQuery = new PlatformEventQuery
             {
+                SiteId = Normalize(siteId),
                 EdgeId = Normalize(edgeId),
                 SubjectId = Normalize(equipmentId),
                 From = from,
@@ -289,6 +291,7 @@ public sealed class ProcessExecutionService(
         return new ProcessExecutionSummary
         {
             ExecutionId = executionId,
+            SiteId = first.SiteId,
             EquipmentId = first.Event.Subject.Id,
             EdgeIds = ordered.Select(static row => row.EdgeId)
                 .Distinct(StringComparer.Ordinal)

@@ -2,6 +2,7 @@ using System.Text.Json;
 using Ingot.Platform.Api.Errors;
 using Ingot.Platform.Api.Events;
 using Ingot.Platform.Api.Agents;
+using Ingot.Platform.Application.ProcessExecutions;
 using Ingot.Platform.Infrastructure.Events;
 using Ingot.Contracts.Events;
 using Microsoft.AspNetCore.Authorization;
@@ -17,6 +18,7 @@ public sealed class EventsController(
     EdgeTokenValidator tokenValidator,
     IOptions<PlatformEventOptions> eventOptions,
     PlatformUserResolver userResolver,
+    IExecutionBoundaryStore executionBoundaries,
     PlatformEventMetrics metrics,
     ILogger<EventsController> logger) : PlatformApiController
 {
@@ -246,12 +248,11 @@ public sealed class EventsController(
             return ResourceNotFound("未找到对应生产过程执行。", ("executionId", executionId));
 
         var first = pair[0];
-        var startedAt = pair.Min(static item => item.Event.OccurredAt);
-        var completedAt = pair
-            .Where(static item =>
-                item.Event.EventType.EndsWith(".completed", StringComparison.Ordinal) ||
-                item.Event.EventType.EndsWith(".cleared", StringComparison.Ordinal) ||
-                item.Event.EventType.EndsWith(".exited", StringComparison.Ordinal))
+        var boundary = await executionBoundaries.GetBoundaryAsync(
+            siteAccess.SiteId!, executionId, ct).ConfigureAwait(false);
+        var startedAt = boundary?.StartedAt ?? pair.Min(static item => item.Event.OccurredAt);
+        var completedAt = boundary?.EndedAt ?? pair
+            .Where(static item => item.Event.EventType == "process.execution.completed")
             .Select(static item => (DateTimeOffset?)item.Event.OccurredAt)
             .LastOrDefault();
         var windowEnd = completedAt ?? pair.Max(static item => item.Event.OccurredAt);

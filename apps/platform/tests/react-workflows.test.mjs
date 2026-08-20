@@ -64,7 +64,7 @@ test("operations retain server pagination and resumable live events", () => {
   assert.match(pages, /<Pagination/);
   assert.doesNotMatch(pages, /beforeIngestId/);
   assert.match(pages, /\{ key: "completedAt", label: "结束"/);
-  assert.match(pages, /navigate\(`\/process-executions\/\$\{encodeURIComponent\(row\.executionId\)\}`\)/);
+  assert.match(pages, /navigate\(`\/process-executions\/\$\{encodeURIComponent\(row\.executionId\)\}\?siteId=\$\{encodeURIComponent\(row\.siteId\)\}`\)/);
   assert.match(pages, /export function ProcessExecutionDetailPage/);
   assert.match(pages, /processDataQuality/);
   assert.match(pages, /executionId=\$\{encodedId\}/);
@@ -217,12 +217,12 @@ test("execution comparison submits the selection contract and renders business r
   assert.match(pages, /label="对比范围"/);
   assert.match(pages, /label="对比运行"/);
   assert.match(pages, /comparisonScope === "cohort"/);
-  assert.match(pages, /execution-comparisons\/\$\{encodeURIComponent\(baselineProcessExecutionId\)\}\?limit=24/);
+  assert.match(pages, /execution-comparisons\/\$\{encodeURIComponent\(baselineProcessExecutionId\)\}\?limit=24&siteId=/);
   assert.match(pages, /processExecutionIds: \[baselineProcessExecutionId, candidate\]/);
   assert.match(pages, /title="选择目标运行并开始对比"/);
   assert.match(pages, /生成对比结论/);
   assert.match(pages, /找到 \$\{comparableProcessExecutions\.length\} 条同类运行/);
-  assert.match(pages, /executionId=\$\{encodeURIComponent\(baseline\)\}&limit=1/);
+  assert.match(pages, /executionId=\$\{encodeURIComponent\(baseline\)\}&siteId=\$\{encodeURIComponent\(requestedSiteId\)\}&limit=1/);
   assert.match(pages, /title="运行概况"/);
   assert.match(pages, /title="质量候选原因"/);
   assert.match(pages, /title="调查报告"/);

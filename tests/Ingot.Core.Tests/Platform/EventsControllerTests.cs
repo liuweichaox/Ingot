@@ -3,6 +3,7 @@ using Ingot.Contracts.Events;
 using Ingot.Domain.Events;
 using Ingot.Platform.Api.Controllers;
 using Ingot.Platform.Api.Agents;
+using Ingot.Platform.Application.ProcessExecutions;
 using Ingot.Platform.Api.Errors;
 using Ingot.Platform.Api.Events;
 using Ingot.Platform.Infrastructure.Events;
@@ -137,6 +138,20 @@ public sealed class EventsControllerTests
     }
 
     [Fact]
+    public async Task Query_RejectsSiteOutsideAuthenticatedScope()
+    {
+        var options = Options.Create(new PlatformEventOptions { RequireToken = false });
+        var controller = CreateController(new StubPlatformEventStore([]), options);
+
+        var action = await controller.Query(
+            "SITE-002", null, null, null, null, null, null, null, null, null, 0, 100,
+            CancellationToken.None);
+
+        var denied = Assert.IsType<ObjectResult>(action);
+        Assert.Equal(StatusCodes.Status403Forbidden, denied.StatusCode);
+    }
+
+    [Fact]
     public async Task GetProcessExecution_PagesThroughMoreThanFiveHundredEvents()
     {
         var startedAt = DateTimeOffset.Parse("2026-07-18T10:00:00Z");
@@ -233,6 +248,7 @@ public sealed class EventsControllerTests
             new EdgeTokenValidator(options),
             options,
             new PlatformUserResolver(new TestHostEnvironment()),
+            new MissingBoundaryStore(),
             Metrics,
             NullLogger<EventsController>.Instance);
         var identity = new ClaimsIdentity(
@@ -254,6 +270,17 @@ public sealed class EventsControllerTests
         public string ApplicationName { get; set; } = "Ingot.Tests";
         public string ContentRootPath { get; set; } = AppContext.BaseDirectory;
         public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
+    }
+
+    private sealed class MissingBoundaryStore : IExecutionBoundaryStore
+    {
+        public Task<ExecutionBoundary?> GetBoundaryAsync(string siteId, string sourceExecutionId, CancellationToken ct)
+            => Task.FromResult<ExecutionBoundary?>(null);
+        public Task SaveBoundaryAsync(ExecutionBoundary boundary, CancellationToken ct) => Task.CompletedTask;
+        public Task UpdateBoundaryAsync(ExecutionBoundary boundary, CancellationToken ct) => Task.CompletedTask;
+        public Task<IReadOnlyList<ExecutionBoundary>> QueryBoundariesAsync(
+            string siteId, DateTimeOffset? from, DateTimeOffset? to, int limit = 100, int offset = 0,
+            CancellationToken ct = default) => Task.FromResult<IReadOnlyList<ExecutionBoundary>>([]);
     }
 
     private sealed class StubPlatformEventStore(

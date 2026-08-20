@@ -448,6 +448,19 @@ public sealed class PostgresProcessExecutionAnalysisMaterializationStore : IProc
         return await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false) == 1;
     }
 
+    public async Task<bool> ReplayFailedRecomputeAsync(string executionId, CancellationToken ct = default)
+    {
+        await using var command = _dataSource.CreateCommand(
+            """
+            UPDATE execution_analysis_recompute_jobs
+            SET status='queued',attempt_count=0,available_at=now(),lease_id=NULL,leased_at=NULL,
+                last_error=NULL,failed_at=NULL,updated_at=now()
+            WHERE execution_id=@id AND status='failed';
+            """);
+        command.Parameters.AddWithValue("id", executionId);
+        return await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false) == 1;
+    }
+
     private static async Task UpsertMaterializationAsync(
         NpgsqlConnection connection,
         NpgsqlTransaction transaction,

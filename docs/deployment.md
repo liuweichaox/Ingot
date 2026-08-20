@@ -26,6 +26,8 @@ Platform API 负责请求和业务事务，Platform Worker 负责知识提取、
 
 每个 Edge ConnectorHost 拥有明确的 `SiteId` 归属，以及独立 `EdgeId`、进程或容器、数据卷、配置缓存和生命周期。`SiteId` 是生产单元边界；Platform 会把 Edge token、`EdgeId` 与 `SiteId` 绑定，持有正确 token 的 Edge 也不能向另一个站点写入数据。
 
+生产读路径同样按 `SiteId` 失败关闭。OIDC 颁发者必须为非管理员身份签发一个或多个 `ingot:site` 声明；本地账户由平台管理员通过 `POST /api/v1/users/{userId}:set-site-access` 分配站点。`platform.admin` 可进行跨站点管理查询，但按运行号读取详情、分析和曲线仍要求显式给出 `siteId`，避免把同名运行误归到其他生产单元。
+
 - 同一 OT 网络和允许共同中断的设备可以共用一个 Edge；
 - 跨 VLAN、安全区或物理隔离网络分别部署 Edge；
 - 关键设备、事件率高或本地积压大的设备使用独立 Edge；

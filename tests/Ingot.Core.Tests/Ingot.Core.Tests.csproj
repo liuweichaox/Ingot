@@ -42,4 +42,10 @@
     <ProjectReference Include="..\..\src\platform\Ingot.Platform.Api\Ingot.Platform.Api.csproj" />
     <ProjectReference Include="..\..\tools\Ingot.ImportCli\Ingot.ImportCli.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\contract-fixtures\optimizer-suggestion-response.json"
+          Link="contract-fixtures\optimizer-suggestion-response.json"
+          CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

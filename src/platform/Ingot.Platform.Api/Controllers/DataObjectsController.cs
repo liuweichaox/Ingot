@@ -27,6 +27,11 @@ public sealed class DataObjectsController(
             return AuthenticationRequired("需要平台统一认证。");
         if (!identity.HasAnyRole(PlatformRoles.QualityRead))
             return AuthorizationDenied();
+        var siteFailure = PlatformSiteScope.Resolve(identity, siteId, true, out var authorizedSiteId);
+        if (siteFailure == SiteScopeFailure.Forbidden)
+            return AuthorizationDenied("当前身份无权访问该站点。", ("siteId", siteId));
+        if (siteFailure == SiteScopeFailure.Missing)
+            return InvalidRequest("必须指定当前身份有权访问的 siteId。");
         if (from > to)
             return InvalidRequest("开始时间不能晚于结束时间。");
         if (limit is < 1 or > 500)
@@ -36,7 +41,7 @@ public sealed class DataObjectsController(
 
         return Ok(await events.QueryDataObjectsAsync(new DataObjectQuery
         {
-            SiteId = Normalize(siteId),
+            SiteId = authorizedSiteId,
             SubjectType = Normalize(subjectType)?.ToLowerInvariant(),
             SubjectId = Normalize(subjectId),
             From = from?.ToUniversalTime(),

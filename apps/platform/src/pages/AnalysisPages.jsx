@@ -53,6 +53,7 @@ function MatchingContext({ value }) {
 
 export function ExecutionComparisonPage() {
   const [params] = useSearchParams();
+  const requestedSiteId = params.get("siteId") || "";
   const [baseline, setBaseline] = useState(params.get("executionId") || "");
   const [candidate, setCandidate] = useState("");
   const [comparisonScope, setComparisonScope] = useState("cohort");
@@ -78,6 +79,7 @@ export function ExecutionComparisonPage() {
     let mounted = true;
     const search = executionFilter.trim();
     const query = new URLSearchParams({ status: "completed", limit: "200" });
+    if (requestedSiteId) query.set("siteId", requestedSiteId);
     if (search) query.set("search", search);
     setCatalogLoading(true);
     getJson(`/api/v1/process-executions?${query}`).then(executionPayload => {
@@ -93,7 +95,7 @@ export function ExecutionComparisonPage() {
       if (mounted) setCatalogLoading(false);
     });
     return () => { mounted = false; };
-  }, [executionFilter]);
+  }, [executionFilter, requestedSiteId]);
 
   useEffect(() => {
     let mounted = true;
@@ -101,7 +103,7 @@ export function ExecutionComparisonPage() {
       setLinkedBaseline(null);
       return () => { mounted = false; };
     }
-    getJson(`/api/v1/process-executions?executionId=${encodeURIComponent(baseline)}&limit=1`)
+    getJson(`/api/v1/process-executions?executionId=${encodeURIComponent(baseline)}&siteId=${encodeURIComponent(requestedSiteId)}&limit=1`)
       .then(payload => {
         if (mounted) setLinkedBaseline(extractRows(payload)[0] || null);
       })
@@ -109,7 +111,7 @@ export function ExecutionComparisonPage() {
         if (mounted) setLinkedBaseline(null);
       });
     return () => { mounted = false; };
-  }, [baseline, executions]);
+  }, [baseline, executions, requestedSiteId]);
 
   const baselineProcessExecution = executions.find(item => item.executionId === baseline) || linkedBaseline;
   const normalizedProcessExecutionFilter = executionFilter.trim().toLowerCase();
@@ -122,6 +124,7 @@ export function ExecutionComparisonPage() {
   ].some(value => String(value || "").toLowerCase().includes(normalizedProcessExecutionFilter)));
   const comparableProcessExecutions = executions.filter(item =>
     item.executionId !== baseline &&
+    item.siteId === baselineProcessExecution?.siteId &&
     (!baselineProcessExecution?.productFamilyCode
       ? item.equipmentId === baselineProcessExecution?.equipmentId
       : item.productFamilyCode === baselineProcessExecution.productFamilyCode) &&
@@ -156,10 +159,11 @@ export function ExecutionComparisonPage() {
     setError("");
     try {
       const baselineProcessExecutionId = baseline.trim();
+      const siteId = baselineProcessExecution?.siteId || requestedSiteId;
       if (comparisonScope === "cohort") {
-        setResult(await getJson(`/api/v1/execution-comparisons/${encodeURIComponent(baselineProcessExecutionId)}?limit=24`));
+        setResult(await getJson(`/api/v1/execution-comparisons/${encodeURIComponent(baselineProcessExecutionId)}?limit=24&siteId=${encodeURIComponent(siteId)}`));
       } else {
-        setResult(await postJson("/api/v1/execution-comparisons", {
+        setResult(await postJson(`/api/v1/execution-comparisons?siteId=${encodeURIComponent(siteId)}`, {
           baselineProcessExecutionId,
           processExecutionIds: [baselineProcessExecutionId, candidate],
         }));

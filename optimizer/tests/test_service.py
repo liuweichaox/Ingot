@@ -1,9 +1,32 @@
+from pathlib import Path
+
 from fastapi.testclient import TestClient
 
-from service import app
+from service import SuggestionResponse, app
 
 
 client = TestClient(app)
+
+
+def test_shared_suggestion_response_fixture_matches_python_contract():
+    fixture = (
+        Path(__file__).parents[2]
+        / "tests"
+        / "contract-fixtures"
+        / "optimizer-suggestion-response.json"
+    )
+    response = SuggestionResponse.model_validate_json(fixture.read_text())
+
+    assert response.feature_set_id == "molding-v2"
+    assert response.feature_set_version == 2
+    assert response.derived_feature_count == 4
+
+
+def test_suggestion_endpoint_publishes_typed_response_schema():
+    schema = app.openapi()["paths"]["/v1/suggestions"]["post"]["responses"]["200"]
+    assert schema["content"]["application/json"]["schema"]["$ref"].endswith(
+        "/SuggestionResponse"
+    )
 
 
 def request_body():

@@ -64,6 +64,15 @@ public sealed class ProcessOptimizerClient(
                 throw new ProcessResearchRuleException("优化服务违反无状态契约。");
             if (result.Suggestions.Count == 0 || string.IsNullOrWhiteSpace(result.ModelVersion))
                 throw new ProcessResearchRuleException("优化服务响应缺少模型版本或建议。");
+            if (!string.Equals(
+                    result.FeatureSetId,
+                    request.Campaign.FeatureSetId,
+                    StringComparison.Ordinal)
+                || result.FeatureSetVersion != request.Campaign.FeatureSetVersion
+                || result.DerivedFeatureCount != request.Campaign.DerivedFeatures.Count)
+            {
+                throw new ProcessResearchRuleException("优化服务响应的特征集契约与请求不一致。");
+            }
             return result;
         }
     }

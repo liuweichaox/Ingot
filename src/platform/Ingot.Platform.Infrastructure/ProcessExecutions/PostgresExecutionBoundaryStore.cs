@@ -343,6 +343,23 @@ public sealed class PostgresExecutionBoundaryStore : IExecutionBoundaryStore
         return await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false) == 1;
     }
 
+    public async Task<bool> ReplayFailedProjectionAsync(
+        string siteId,
+        string sourceExecutionId,
+        CancellationToken ct = default)
+    {
+        await using var command = _dataSource.CreateCommand(
+            """
+            UPDATE execution_boundary_recompute_jobs
+            SET status='queued',attempt_count=0,available_at=now(),lease_id=NULL,leased_at=NULL,
+                last_error=NULL,failed_at=NULL,updated_at=now()
+            WHERE site_id=@site_id AND source_execution_id=@execution_id AND status='failed';
+            """);
+        command.Parameters.AddWithValue("site_id", siteId);
+        command.Parameters.AddWithValue("execution_id", sourceExecutionId);
+        return await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false) == 1;
+    }
+
     private async Task UpsertProjectedBoundaryAsync(ExecutionBoundary boundary, CancellationToken ct)
     {
         await using var command = _dataSource.CreateCommand(

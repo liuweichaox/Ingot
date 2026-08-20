@@ -10,6 +10,7 @@ public static class ProcessExecutionKinds
 public sealed record ProcessExecutionSummary
 {
     public required string ExecutionId { get; init; }
+    public required string SiteId { get; init; }
     public string Kind { get; init; } = ProcessExecutionKinds.Discrete;
     public required string EquipmentId { get; init; }
     /// <summary>该运行实际收到事件的 Edge；正常运行通常只有一个，迁移或补传时可能有多个。</summary>

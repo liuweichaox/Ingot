@@ -1,0 +1,31 @@
+{
+  "model_version": "contract-fixture-v1",
+  "observation_count": 3,
+  "suggestions": [
+    {
+      "recommended_params": {
+        "temperature": 512.5
+      },
+      "objective_predictions": {
+        "defect_rate": {
+          "mean": 0.012,
+          "standard_deviation": 0.003,
+          "lower_95": 0.006,
+          "upper_95": 0.018,
+          "unit": "ratio"
+        }
+      },
+      "constraint_predictions": {},
+      "predicted_distance_to_spec": -0.008,
+      "feasibility_probability": 0.98,
+      "acquisition_value": 0.42,
+      "cold_start": false,
+      "model_version": "contract-fixture-v1",
+      "rationale": "Shared contract fixture"
+    }
+  ],
+  "feature_set_id": "molding-v2",
+  "feature_set_version": 2,
+  "derived_feature_count": 4,
+  "state_persisted": false
+}

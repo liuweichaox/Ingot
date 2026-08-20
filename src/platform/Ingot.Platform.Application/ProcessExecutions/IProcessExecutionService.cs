@@ -1,6 +1,6 @@
 using Ingot.Contracts.Events;
 
-namespace Ingot.Platform.Infrastructure.ProcessExecutions;
+namespace Ingot.Platform.Application.ProcessExecutions;
 
 public interface IProcessExecutionService
 {
@@ -19,5 +19,6 @@ public interface IProcessExecutionService
         string? search = null,
         CancellationToken ct = default,
         string? edgeId = null,
-        string? externalBatchRef = null);
+        string? externalBatchRef = null,
+        string? siteId = null);
 }

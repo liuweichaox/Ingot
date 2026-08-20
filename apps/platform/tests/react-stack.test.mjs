@@ -127,6 +127,8 @@ test("authenticated application exposes the identity administration surface", ()
   assert.match(app, /\["\/identity\/users", "用户与权限"\]/);
   assert.match(app, /path="\/identity\/users" element=\{<Pages\.UsersPage \/>\}/);
   assert.match(pages, /export function UsersPage\(\)/);
+  assert.match(pages, /:set-site-access/);
+  assert.match(pages, /站点访问范围/);
   assert.doesNotMatch(researchProjects, /\/api\/v1\/auth\/me/);
 });
 

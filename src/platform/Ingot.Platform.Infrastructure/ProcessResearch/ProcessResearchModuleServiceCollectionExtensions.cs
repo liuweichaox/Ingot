@@ -20,6 +20,7 @@ public static class ProcessResearchModuleServiceCollectionExtensions
         services.AddSingleton<ResearchExperimentCommands>();
         services.AddSingleton<ResearchValidationPreregistrationService>();
         services.AddSingleton<ProcessResearchWorkflow>();
+        services.AddSingleton<ResearchExecutionEvidenceService>();
         services.AddSingleton<IResearchObservationAssembler, ResearchObservationAssembler>();
         services.AddSingleton<ResearchOperatingRegionMaterializer>();
         services.AddSingleton<ResearchExperimentResultMaterializer>();

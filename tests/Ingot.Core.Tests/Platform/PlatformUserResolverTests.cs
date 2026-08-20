@@ -27,12 +27,15 @@ public sealed class PlatformUserResolverTests
         var principal = new ClaimsPrincipal(new ClaimsIdentity(
         [
             new Claim(ClaimTypes.NameIdentifier, "Reviewer-01"),
-            new Claim(ClaimTypes.Role, "QUALITY.REVIEWER")
+            new Claim(ClaimTypes.Role, "QUALITY.REVIEWER"),
+            new Claim(PlatformClaimTypes.SiteId, "SITE-001")
         ], "test"));
 
         var identity = Assert.IsType<PlatformIdentity>(resolver.ResolveIdentity(principal));
         Assert.True(identity.HasAnyRole(PlatformRoles.QualityReviewer));
         Assert.False(identity.HasAnyRole(PlatformRoles.QualityInspector));
+        Assert.True(identity.CanAccessSite("site-001"));
+        Assert.False(identity.CanAccessSite("SITE-002"));
     }
 
     [Fact]

@@ -26,6 +26,8 @@ The bundled Compose file is a single-API reference topology, not an HA claim. Ag
 
 Every Edge ConnectorHost has an explicit `SiteId` assignment plus its own `EdgeId`, process or container, data volume, configuration cache, and lifecycle. `SiteId` is the production-cell boundary. Platform binds the Edge token, `EdgeId`, and `SiteId`, so even an Edge holding the correct token cannot write into another site.
 
+Production reads also fail closed on `SiteId`. The OIDC issuer must emit one or more `ingot:site` claims for non-administrator identities; local accounts receive site assignments through `POST /api/v1/users/{userId}:set-site-access`. A `platform.admin` may run cross-site administrative lists, but execution detail, analysis, and curve reads still require an explicit `siteId` to avoid resolving a same-named execution in another production cell.
+
 - Equipment on the same OT network that may stop together can share one Edge.
 - Separate Edge instances serve different VLANs, security zones, or physically isolated networks.
 - Critical equipment and high-event or high-backlog sources use dedicated Edge instances.
