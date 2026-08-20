@@ -7,7 +7,7 @@ namespace Ingot.Platform.Api.Controllers;
 [ApiController]
 [Route("api/v1/inspection-attachments")]
 public sealed class InspectionAttachmentsController(
-    IInspectionAttachmentStore store,
+    InspectionQueries queries,
     InspectionCommands commands,
     PlatformUserResolver userResolver) : PlatformApiController
 {
@@ -46,7 +46,7 @@ public sealed class InspectionAttachmentsController(
             return AuthenticationRequired("需要平台统一认证。");
         if (!identity.HasAnyRole(PlatformRoles.QualityRead))
             return AuthorizationDenied();
-        var attachment = await store.GetAsync(attachmentId, ct).ConfigureAwait(false);
+        var attachment = await queries.GetAttachmentAsync(attachmentId, ct).ConfigureAwait(false);
         return attachment is null ? ResourceNotFound() : Ok(attachment);
     }
 

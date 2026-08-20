@@ -3,7 +3,7 @@ using Ingot.Contracts.Inspections;
 using Npgsql;
 using NpgsqlTypes;
 
-namespace Ingot.Platform.Inspections.Infrastructure;
+namespace Ingot.Platform.Infrastructure.Inspections;
 
 public sealed class PostgresInspectionMasterDataStore : IInspectionMasterDataStore
 {

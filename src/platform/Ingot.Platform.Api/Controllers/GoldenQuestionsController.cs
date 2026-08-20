@@ -1,4 +1,3 @@
-using Ingot.Agent;
 using Ingot.Contracts.Agents;
 using Ingot.Platform.Application.Insight;
 using Ingot.Platform.Api.Agents;
@@ -10,15 +9,13 @@ namespace Ingot.Platform.Api.Controllers;
 [Route("api/v1/golden-questions")]
 public sealed class GoldenQuestionsController(
     PlatformUserResolver userResolver,
-    IGoldenQuestionStore store,
-    IAgentRunStore agentRuns,
-    GoldenQuestionEvaluator evaluator) : PlatformConfigurationControllerBase(userResolver)
+    GoldenQuestionApplication application) : PlatformConfigurationControllerBase(userResolver)
 {
     [HttpGet]
     public async Task<IActionResult> List([FromQuery] string? status, CancellationToken ct)
         => DeniedConfigurationRead() ?? Ok(new
         {
-            data = await store.ListAsync(status, ct).ConfigureAwait(false)
+            data = await application.ListAsync(status, ct).ConfigureAwait(false)
         });
 
     [HttpGet("{caseId:guid}/{version:int}")]
@@ -26,7 +23,7 @@ public sealed class GoldenQuestionsController(
     {
         var denied = DeniedConfigurationRead();
         if (denied is not null) return denied;
-        var value = await store.GetAsync(caseId, version, ct).ConfigureAwait(false);
+        var value = await application.GetAsync(caseId, version, ct).ConfigureAwait(false);
         return value is null ? ResourceNotFound() : Ok(value);
     }
 
@@ -47,7 +44,7 @@ public sealed class GoldenQuestionsController(
                 out var error))
             return InvalidRequest(error);
 
-        var existing = await store.GetAsync(normalized!.CaseId, normalized.Version, ct).ConfigureAwait(false);
+        var existing = await application.GetAsync(normalized!.CaseId, normalized.Version, ct).ConfigureAwait(false);
         var now = DateTimeOffset.UtcNow;
         var value = normalized with
         {
@@ -56,7 +53,7 @@ public sealed class GoldenQuestionsController(
         };
         try
         {
-            return Ok(await store.SaveAsync(value, ct).ConfigureAwait(false));
+            return Ok(await application.SaveAsync(value, ct).ConfigureAwait(false));
         }
         catch (InvalidOperationException exception)
         {
@@ -69,7 +66,7 @@ public sealed class GoldenQuestionsController(
     {
         var denied = DeniedConfigurationWrite();
         if (denied is not null) return denied;
-        var existing = await store.GetAsync(caseId, version, ct).ConfigureAwait(false);
+        var existing = await application.GetAsync(caseId, version, ct).ConfigureAwait(false);
         if (existing is null) return ResourceNotFound();
         if (existing.Status == GoldenQuestionStatuses.Reviewed) return Ok(existing);
         if (existing.Status != GoldenQuestionStatuses.Draft)
@@ -84,7 +81,7 @@ public sealed class GoldenQuestionsController(
             ReviewedAt = DateTimeOffset.UtcNow,
             UpdatedAt = DateTimeOffset.UtcNow
         };
-        return Ok(await store.SaveAsync(reviewed, ct).ConfigureAwait(false));
+        return Ok(await application.SaveAsync(reviewed, ct).ConfigureAwait(false));
     }
 
     [HttpPost("{caseId:guid}/{version:int}:evaluate")]
@@ -98,15 +95,17 @@ public sealed class GoldenQuestionsController(
         if (denied is not null) return denied;
         if (request is null || string.IsNullOrWhiteSpace(request.AgentRunId))
             return InvalidRequest("agentRunId 不能为空。");
-        var goldenCase = await store.GetAsync(caseId, version, ct).ConfigureAwait(false);
+        var goldenCase = await application.GetAsync(caseId, version, ct).ConfigureAwait(false);
         if (goldenCase is null) return ResourceNotFound();
-        var run = await agentRuns.GetAsync(request.AgentRunId.Trim(), ct).ConfigureAwait(false);
-        if (run is null) return InvalidRequest("指定 Agent 运行不存在。");
         try
         {
-            var result = evaluator.Evaluate(goldenCase, run);
-            await store.SaveEvaluationAsync(result, run, ct).ConfigureAwait(false);
+            var result = await application.EvaluateAsync(
+                goldenCase, request.AgentRunId.Trim(), ct).ConfigureAwait(false);
             return Ok(result);
+        }
+        catch (ArgumentException exception)
+        {
+            return InvalidRequest(exception.Message);
         }
         catch (InvalidOperationException exception)
         {
@@ -122,7 +121,7 @@ public sealed class GoldenQuestionsController(
     {
         var denied = DeniedConfigurationRead();
         if (denied is not null) return denied;
-        var values = await store.ListEvaluationsAsync(caseId, limit, ct).ConfigureAwait(false);
+        var values = await application.ListEvaluationsAsync(caseId, limit, ct).ConfigureAwait(false);
         return Ok(new { data = values, summary = Summarize(values) });
     }
 

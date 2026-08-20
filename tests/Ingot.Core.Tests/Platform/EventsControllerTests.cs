@@ -244,11 +244,11 @@ public sealed class EventsControllerTests
         IOptions<PlatformEventOptions> options)
     {
         var controller = new EventsController(
-            store,
+            new PlatformEventApplication(store),
             new EdgeTokenValidator(options),
             options,
             new PlatformUserResolver(new TestHostEnvironment()),
-            new MissingBoundaryStore(),
+            new ExecutionBoundaryQueries(new MissingBoundaryStore()),
             Metrics,
             NullLogger<EventsController>.Instance);
         var identity = new ClaimsIdentity(

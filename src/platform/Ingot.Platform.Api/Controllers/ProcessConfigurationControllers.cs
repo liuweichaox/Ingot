@@ -11,9 +11,9 @@ namespace Ingot.Platform.Api.Controllers;
 [ApiController]
 [Route("api/v1/process-data-models")]
 public sealed class ProcessDataModelsController(
-    IProcessConfigurationStore store,
-    IIngestionTaskStore ingestionTasks,
-    IIngestionConfigurationStore ingestionConfigurations,
+    ProcessConfigurationApplication store,
+    AcquisitionApplication ingestionTasks,
+    AcquisitionApplication ingestionConfigurations,
     PlatformUserResolver userResolver) : PlatformConfigurationControllerBase(userResolver)
 {
     [HttpGet]
@@ -128,7 +128,7 @@ public sealed class ProcessDataModelsController(
 [ApiController]
 [Route("api/v1/process-specifications")]
 public sealed class ProcessSpecificationsController(
-    IProcessConfigurationStore store,
+    ProcessConfigurationApplication store,
     PlatformUserResolver userResolver) : PlatformConfigurationControllerBase(userResolver)
 {
     [HttpGet]
@@ -212,7 +212,7 @@ public sealed class ProcessSpecificationsController(
 [ApiController]
 [Route("api/v1/process-analysis-plans")]
 public sealed class ProcessAnalysisPlansController(
-    IProcessConfigurationStore store,
+    ProcessConfigurationApplication store,
     PlatformUserResolver userResolver) : PlatformConfigurationControllerBase(userResolver)
 {
     [HttpGet]

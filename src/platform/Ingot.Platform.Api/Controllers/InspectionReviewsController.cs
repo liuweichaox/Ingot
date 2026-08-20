@@ -8,7 +8,7 @@ namespace Ingot.Platform.Api.Controllers;
 [ApiController]
 [Route("api/v1/inspection-reviews")]
 public sealed class InspectionReviewsController(
-    IInspectionReviewStore reviews,
+    InspectionQueries queries,
     InspectionCommands commands,
     PlatformUserResolver userResolver) : PlatformApiController
 {
@@ -41,7 +41,7 @@ public sealed class InspectionReviewsController(
         var denied = DeniedRead();
         if (denied is not null)
             return denied;
-        var review = await reviews.GetAsync(reviewId, ct).ConfigureAwait(false);
+        var review = await queries.GetReviewAsync(reviewId, ct).ConfigureAwait(false);
         return review is null ? ResourceNotFound() : Ok(review);
     }
 
@@ -57,7 +57,7 @@ public sealed class InspectionReviewsController(
             return denied;
         if (limit is < 1 or > 500)
             return InvalidRequest("Limit 必须在 1 到 500 之间。");
-        var result = await reviews.QueryAsync(inspectionRecordId, executionId, limit, ct).ConfigureAwait(false);
+        var result = await queries.QueryReviewsAsync(inspectionRecordId, executionId, limit, ct).ConfigureAwait(false);
         return Ok(new { data = result, count = result.Count });
     }
 
@@ -75,7 +75,7 @@ public sealed class InspectionReviewsController(
             return AuthorizationDenied();
         if (limit is < 1 or > 500)
             return InvalidRequest("Limit 必须在 1 到 500 之间。");
-        var result = await reviews.QueryAuditAsync(inspectionRecordId, attachmentId, limit, ct).ConfigureAwait(false);
+        var result = await queries.QueryAuditAsync(inspectionRecordId, attachmentId, limit, ct).ConfigureAwait(false);
         return Ok(new { data = result, count = result.Count });
     }
 

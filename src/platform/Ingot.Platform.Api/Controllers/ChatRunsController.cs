@@ -11,7 +11,7 @@ namespace Ingot.Platform.Api.Controllers;
 [Route("api/v1/chat/runs")]
 public sealed class ChatRunsController(
     IAgentRuntime runtime,
-    IProcessResearchStore researchStore,
+    ProcessResearchQueries researchStore,
     PlatformUserResolver userResolver) : PlatformApiController
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);

@@ -8,7 +8,7 @@ namespace Ingot.Platform.Api.Controllers;
 [ApiController]
 [Route("api/v1/inspection-plans")]
 public sealed class InspectionPlansController(
-    IInspectionMasterDataStore store,
+    InspectionQueries queries,
     InspectionCommands commands,
     PlatformUserResolver userResolver) : PlatformApiController
 {
@@ -18,7 +18,7 @@ public sealed class InspectionPlansController(
         var denied = DeniedRead();
         if (denied is not null)
             return denied;
-        return Ok(new { data = await store.ListInspectionPlansAsync(ct).ConfigureAwait(false) });
+        return Ok(new { data = await queries.ListPlansAsync(ct).ConfigureAwait(false) });
     }
 
     [HttpGet("{planId}/{version:int}")]
@@ -27,7 +27,7 @@ public sealed class InspectionPlansController(
         var denied = DeniedRead();
         if (denied is not null)
             return denied;
-        var item = await store.GetInspectionPlanAsync(planId.Trim().ToLowerInvariant(), version, ct)
+        var item = await queries.GetPlanAsync(planId, version, ct)
             .ConfigureAwait(false);
         return item is null ? ResourceNotFound() : Ok(item);
     }

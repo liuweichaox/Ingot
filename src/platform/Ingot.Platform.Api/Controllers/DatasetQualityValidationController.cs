@@ -9,7 +9,7 @@ namespace Ingot.Platform.Api.Controllers;
 [ApiController]
 [Route("api/v1/dataset-quality-validations")]
 public sealed class DatasetQualityValidationController(
-    IResearchAssetStore store,
+    ResearchAssetApplication store,
     IDatasetQualityValidationService runner,
     PlatformUserResolver userResolver) : PlatformConfigurationControllerBase(userResolver)
 {

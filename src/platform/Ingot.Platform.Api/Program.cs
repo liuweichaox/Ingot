@@ -12,7 +12,7 @@ using Ingot.Platform.Api.Errors;
 using Ingot.Platform.Infrastructure;
 using Ingot.Platform.Infrastructure.Events;
 using Ingot.Platform.Infrastructure.Identity;
-using Ingot.Platform.Inspections.Infrastructure;
+using Ingot.Platform.Infrastructure.Inspections;
 using Serilog;
 using Prometheus;
 using Microsoft.AspNetCore.Authentication;

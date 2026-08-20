@@ -9,7 +9,6 @@ using Ingot.Platform.Infrastructure.Manufacturing;
 using Ingot.Platform.Infrastructure.ProcessConfiguration;
 using Ingot.Platform.Infrastructure.ResearchAssets;
 using Ingot.Platform.Infrastructure.TimeSeries;
-using Ingot.Platform.Inspections.Infrastructure;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;

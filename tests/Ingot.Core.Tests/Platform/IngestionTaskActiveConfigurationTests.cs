@@ -23,8 +23,8 @@ public sealed class IngestionTaskActiveConfigurationTests
     public async Task ActiveConfigurationFailsClosedWhenPublishedTaskModelIsUnavailable()
     {
         var controller = new IngestionTasksController(
-            new PublishedTaskStore(),
-            new MissingModelStore(),
+            new AcquisitionApplication(new PublishedTaskStore(), null!),
+            new ProcessConfigurationApplication(new MissingModelStore()),
             new PlatformUserResolver(new TestHostEnvironment()),
             new EdgeTokenValidator(Options.Create(new PlatformEventOptions { RequireToken = false })),
             new AcquisitionProbeTaskCoordinator(new UnusedProbeTaskStore()))

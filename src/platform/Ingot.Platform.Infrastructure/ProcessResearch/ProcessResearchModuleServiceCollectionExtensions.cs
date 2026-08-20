@@ -11,6 +11,7 @@ public static class ProcessResearchModuleServiceCollectionExtensions
         IConfiguration configuration)
     {
         services.AddSingleton<IProcessResearchStore, PostgresProcessResearchStore>();
+        services.AddSingleton<ProcessResearchQueries>();
         services.AddSingleton<IResearchProjectContextReader, ResearchProjectContextReader>();
         services.AddSingleton<ResearchExperimentValidationService>();
         services.AddSingleton<ResearchExperimentCommandStoreAdapter>();

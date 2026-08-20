@@ -10,9 +10,9 @@ namespace Ingot.Platform.Api.Controllers;
 [ApiController]
 [Route("api/v1/research-projects/{projectId:guid}/mechanism-claims")]
 public sealed class MechanismKnowledgeController(
-    IMechanismKnowledgeStore store,
+    MechanismKnowledgeQueries store,
     MechanismKnowledgeService service,
-    IProcessResearchStore researchStore,
+    ProcessResearchQueries researchStore,
     PlatformUserResolver userResolver) : PlatformApiController
 {
     [HttpGet]

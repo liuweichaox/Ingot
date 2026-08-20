@@ -8,7 +8,7 @@ namespace Ingot.Platform.Api.Controllers;
 [ApiController]
 [Route("api/v1/mechanism-models")]
 public sealed class MechanismModelsController(
-    IResearchAssetStore store,
+    ResearchAssetApplication store,
     MechanismModelService service,
     PlatformUserResolver userResolver) : PlatformConfigurationControllerBase(userResolver)
 {
@@ -74,7 +74,7 @@ public sealed class MechanismModelsController(
 [ApiController]
 [Route("api/v1/mechanism-fusions")]
 public sealed class MechanismFusionsController(
-    IResearchAssetStore store,
+    ResearchAssetApplication store,
     MechanismModelService service,
     PlatformUserResolver userResolver) : PlatformConfigurationControllerBase(userResolver)
 {

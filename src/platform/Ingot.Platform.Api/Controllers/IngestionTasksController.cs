@@ -13,8 +13,8 @@ namespace Ingot.Platform.Api.Controllers;
 [ApiController]
 [Route("api/v1/ingestion-tasks")]
 public sealed class IngestionTasksController(
-    IIngestionTaskStore store,
-    IProcessConfigurationStore processStore,
+    AcquisitionApplication store,
+    ProcessConfigurationApplication processStore,
     PlatformUserResolver userResolver,
     EdgeTokenValidator edgeTokenValidator,
     AcquisitionProbeTaskCoordinator probeTasks) : PlatformConfigurationControllerBase(userResolver)

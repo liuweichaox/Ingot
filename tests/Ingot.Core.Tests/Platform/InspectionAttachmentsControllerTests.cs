@@ -19,7 +19,7 @@ public sealed class InspectionAttachmentsControllerTests
         var reviews = new StubReviewStore();
         var attachments = new StubAttachmentStore(attachmentId, bytes);
         var controller = new InspectionAttachmentsController(
-            attachments,
+            new InspectionQueries(null!, null!, attachments, reviews),
             new InspectionCommands(null!, null!, attachments, reviews, null!),
             new PlatformUserResolver(new TestHostEnvironment()))
         {

@@ -10,7 +10,7 @@ namespace Ingot.Platform.Api.Controllers;
 [ApiController]
 [Route("api/v1/training-datasets")]
 public sealed class TrainingDatasetsController(
-    IResearchAssetStore store,
+    ResearchAssetApplication store,
     ResearchAssetWorkflow workflow,
     PlatformUserResolver userResolver) : PlatformConfigurationControllerBase(userResolver)
 {
@@ -53,7 +53,7 @@ public sealed class TrainingDatasetsController(
 [ApiController]
 [Route("api/v1/process-models")]
 public sealed class ProcessModelsController(
-    IResearchAssetStore store,
+    ResearchAssetApplication store,
     ResearchAssetWorkflow workflow,
     PlatformUserResolver userResolver) : PlatformConfigurationControllerBase(userResolver)
 {
@@ -167,8 +167,8 @@ public sealed class ProcessModelsController(
 [ApiController]
 [Route("api/v1/process-knowledge")]
 public sealed class ProcessKnowledgeController(
-    IResearchAssetStore store,
-    IProcessResearchStore researchStore,
+    ResearchAssetApplication store,
+    ProcessResearchQueries researchStore,
     ResearchAssetWorkflow workflow,
     PlatformUserResolver userResolver) : PlatformConfigurationControllerBase(userResolver)
 {

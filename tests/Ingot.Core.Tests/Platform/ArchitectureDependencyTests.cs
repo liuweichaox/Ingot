@@ -1,6 +1,7 @@
 using Ingot.Platform.Application.ProcessExecutions;
 using Ingot.Platform.Infrastructure.ProcessExecutions;
-using Ingot.Platform.Inspections.Infrastructure;
+using Ingot.Platform.Infrastructure.Inspections;
+using Microsoft.AspNetCore.Mvc;
 using Xunit;
 
 namespace Ingot.Core.Tests.Platform;
@@ -19,24 +20,39 @@ public sealed class ArchitectureDependencyTests
     }
 
     [Fact]
-    public void InfrastructureModules_ShouldDependOnApplicationButNotEachOther()
+    public void Infrastructure_ShouldOwnInspectionAdaptersAndDependOnApplication()
     {
         var platform = ReferencedAssemblies(typeof(PostgresExecutionBoundaryStore).Assembly);
-        var inspections = ReferencedAssemblies(typeof(PostgresInspectionRecordStore).Assembly);
 
         Assert.Contains("Ingot.Platform.Application", platform);
-        Assert.Contains("Ingot.Platform.Application", inspections);
-        Assert.DoesNotContain("Ingot.Platform.Inspections.Infrastructure", platform);
-        Assert.DoesNotContain("Ingot.Platform.Infrastructure", inspections);
+        Assert.Same(
+            typeof(PostgresExecutionBoundaryStore).Assembly,
+            typeof(PostgresInspectionRecordStore).Assembly);
     }
 
     [Fact]
-    public void ApiHost_ShouldBeTheCompositionRootForInfrastructureModules()
+    public void ApiHost_ShouldComposeTheUnifiedInfrastructureAssembly()
     {
         var api = ReferencedAssemblies(typeof(Ingot.Platform.Api.Controllers.ProcessCurvesController).Assembly);
 
         Assert.Contains("Ingot.Platform.Infrastructure", api);
-        Assert.Contains("Ingot.Platform.Inspections.Infrastructure", api);
+        Assert.DoesNotContain("Ingot.Platform.Inspections.Infrastructure", api);
+    }
+
+    [Fact]
+    public void ApiControllers_ShouldDependOnApplicationUseCasesRatherThanStores()
+    {
+        var violations = typeof(Ingot.Platform.Api.Controllers.ProcessCurvesController).Assembly
+            .GetTypes()
+            .Where(static type => !type.IsAbstract && typeof(ControllerBase).IsAssignableFrom(type))
+            .SelectMany(static type => type.GetConstructors()
+                .SelectMany(constructor => constructor.GetParameters()
+                    .Where(static parameter => parameter.ParameterType.Name.EndsWith("Store", StringComparison.Ordinal))
+                    .Select(parameter => $"{type.FullName}: {parameter.ParameterType.FullName}")))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Empty(violations);
     }
 
     private static string[] ReferencedAssemblies(System.Reflection.Assembly assembly) =>

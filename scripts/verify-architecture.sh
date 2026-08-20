@@ -81,18 +81,15 @@ check "platform-infrastructure" src/platform/Ingot.Platform.Infrastructure \
   'using Ingot\.Platform\.Api' \
   "Platform Infrastructure 必须独立于 API 宿主"
 
-check "inspection-infrastructure" src/platform/Ingot.Platform.Inspections.Infrastructure \
-  'using Ingot\.Platform\.(Api|Infrastructure)' \
-  "检验基础设施模块必须独立于 Platform 宿主和基础设施单体"
+check "inspection-infrastructure" src/platform/Ingot.Platform.Infrastructure/Inspections \
+  'using Ingot\.Platform\.Api|namespace Ingot\.Platform\.Inspections\.Infrastructure' \
+  "检验基础设施必须归属统一 Platform Infrastructure，且独立于 API 宿主"
 
-inspection_ownership_hits=$(grep -rnE \
-  'using Npgsql|\b(PostgresInspection|InspectionAttachmentOptions|InspectionStoreInitializerHostedService)\b' \
-  src/platform/Ingot.Platform.Infrastructure/Inspections \
-  --include='*.cs' \
-  --exclude-dir=bin --exclude-dir=obj 2>/dev/null || true)
-if [[ -n "$inspection_ownership_hits" ]]; then
-  echo "✗ [inspection-module-ownership] 检验 PostgreSQL 适配器与初始化器必须归属独立检验基础设施模块"
-  echo "$inspection_ownership_hits" | sed 's/^/    /'
+legacy_inspection_files=$(find src/platform/Ingot.Platform.Inspections.Infrastructure \
+  -maxdepth 1 -type f \( -name '*.cs' -o -name '*.csproj' \) -print 2>/dev/null || true)
+if [[ -n "$legacy_inspection_files" ]]; then
+  echo "✗ [inspection-module-ownership] 不得恢复独立检验基础设施程序集"
+  echo "$legacy_inspection_files" | sed 's/^/    /'
   fail=1
 else
   echo "✓ [inspection-module-ownership]"
@@ -101,6 +98,10 @@ fi
 check "inspection-api-ports" src/platform/Ingot.Platform.Api/Controllers \
   'using Ingot\.Platform\.Infrastructure\.Inspections' \
   "检验 API 只能依赖 Application 端口，不能依赖检验基础设施命名空间"
+
+check "api-application-boundary" src/platform/Ingot.Platform.Api/Controllers \
+  '\bI[A-Z][A-Za-z0-9]*Store\b|\b(Postgres|Sqlite)[A-Za-z0-9]*Store\b' \
+  "Controller 不得直接依赖存储端口或数据库 Store；必须通过 Platform Application 用例"
 
 inspection_controller_writes=$(grep -rnE \
   '\b(store|records|reviews|attachments|masterData|workflow)\.(Create|Upsert|Delete|Save|LogAccess)[A-Za-z]*Async' \
@@ -189,6 +190,13 @@ fi
 unexpected_inspection_infrastructure=$(find src/platform/Ingot.Platform.Infrastructure/Inspections \
   -type f -name '*.cs' \
   ! -name 'InspectionProductionEventReader.cs' \
+  ! -name 'InspectionAttachmentOptions.cs' \
+  ! -name 'InspectionModuleServiceCollectionExtensions.cs' \
+  ! -name 'InspectionStoreInitializerHostedService.cs' \
+  ! -name 'PostgresInspectionAttachmentStore.cs' \
+  ! -name 'PostgresInspectionMasterDataStore.cs' \
+  ! -name 'PostgresInspectionRecordStore.cs' \
+  ! -name 'PostgresInspectionReviewStore.cs' \
   -print)
 if [[ -n "$unexpected_inspection_infrastructure" ]]; then
   echo "✗ [inspection-workflow-ownership] 检验规则与工作流必须归属 Platform Application"
@@ -196,14 +204,6 @@ if [[ -n "$unexpected_inspection_infrastructure" ]]; then
   fail=1
 else
   echo "✓ [inspection-workflow-ownership]"
-fi
-
-if grep -q 'Ingot.Platform.Inspections.Infrastructure' \
-  src/platform/Ingot.Platform.Infrastructure/Ingot.Platform.Infrastructure.csproj; then
-  echo "✗ [inspection-composition-root] Platform Infrastructure 不得横向引用检验基础设施模块"
-  fail=1
-else
-  echo "✓ [inspection-composition-root]"
 fi
 
 process_execution_port_leaks=$(grep -rnE \
@@ -347,10 +347,6 @@ project_check src/shared/Ingot.Agent.Contracts/Ingot.Agent.Contracts.csproj \
 project_check src/platform/Ingot.Platform.Application/Ingot.Platform.Application.csproj \
   'Ingot\.Platform\.Infrastructure|Npgsql|Microsoft\.Data\.Sqlite|Serilog|Prometheus' \
   "Platform Application 必须独立于基础设施实现"
-
-project_check src/platform/Ingot.Platform.Inspections.Infrastructure/Ingot.Platform.Inspections.Infrastructure.csproj \
-  'Ingot\.Platform\.(Api|Infrastructure)|Ingot\.Agent|ClosedXML|PdfPig|MatFileHandler|Prometheus' \
-  "检验基础设施模块只能依赖其 Application 端口、公共契约与 PostgreSQL 驱动"
 
 project_check src/platform/Ingot.Platform.Api/Ingot.Platform.Api.csproj \
   'Npgsql|Microsoft\.Data\.Sqlite' \

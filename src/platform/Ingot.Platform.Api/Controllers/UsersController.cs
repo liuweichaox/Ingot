@@ -11,7 +11,7 @@ namespace Ingot.Platform.Api.Controllers;
 [Route("api/v1/users")]
 public sealed class UsersController(
     PlatformUserResolver userResolver,
-    ILocalUserStore store,
+    LocalIdentityApplication store,
     LocalPasswordHasher hasher) : PlatformApiController
 {
     private const int MinPasswordLength = 8;

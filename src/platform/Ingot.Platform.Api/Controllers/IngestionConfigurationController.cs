@@ -9,7 +9,7 @@ namespace Ingot.Platform.Api.Controllers;
 [ApiController]
 [Route("api/v1/ingestion-configuration")]
 public sealed class IngestionConfigurationController(
-    IIngestionConfigurationStore store,
+    AcquisitionApplication store,
     IngestionConfigurationWorkflow workflow,
     PlatformUserResolver userResolver) : PlatformConfigurationControllerBase(userResolver)
 {

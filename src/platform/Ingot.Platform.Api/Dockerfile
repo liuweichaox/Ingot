@@ -8,16 +8,20 @@ COPY Directory.Build.props ./
 
 COPY src/shared/Ingot.Contracts/Ingot.Contracts.csproj src/shared/Ingot.Contracts/
 COPY src/shared/Ingot.Domain/Ingot.Domain.csproj src/shared/Ingot.Domain/
+COPY src/shared/Ingot.Agent.Contracts/Ingot.Agent.Contracts.csproj src/shared/Ingot.Agent.Contracts/
 COPY src/agent/Ingot.Agent/Ingot.Agent.csproj src/agent/Ingot.Agent/
 COPY src/agent/Ingot.Agent.Providers/Ingot.Agent.Providers.csproj src/agent/Ingot.Agent.Providers/
+COPY src/platform/Ingot.Platform.Application/Ingot.Platform.Application.csproj src/platform/Ingot.Platform.Application/
 COPY src/platform/Ingot.Platform.Infrastructure/Ingot.Platform.Infrastructure.csproj src/platform/Ingot.Platform.Infrastructure/
 COPY src/platform/Ingot.Platform.Api/Ingot.Platform.Api.csproj src/platform/Ingot.Platform.Api/
 RUN dotnet restore src/platform/Ingot.Platform.Api/Ingot.Platform.Api.csproj
 
 COPY src/shared/Ingot.Domain/ src/shared/Ingot.Domain/
 COPY src/shared/Ingot.Contracts/ src/shared/Ingot.Contracts/
+COPY src/shared/Ingot.Agent.Contracts/ src/shared/Ingot.Agent.Contracts/
 COPY src/agent/Ingot.Agent/ src/agent/Ingot.Agent/
 COPY src/agent/Ingot.Agent.Providers/ src/agent/Ingot.Agent.Providers/
+COPY src/platform/Ingot.Platform.Application/ src/platform/Ingot.Platform.Application/
 COPY src/platform/Ingot.Platform.Infrastructure/ src/platform/Ingot.Platform.Infrastructure/
 COPY src/platform/Ingot.Platform.Api/ src/platform/Ingot.Platform.Api/
 RUN dotnet publish src/platform/Ingot.Platform.Api/Ingot.Platform.Api.csproj \

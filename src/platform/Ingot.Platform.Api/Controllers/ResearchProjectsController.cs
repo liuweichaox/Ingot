@@ -10,7 +10,7 @@ namespace Ingot.Platform.Api.Controllers;
 [ApiController]
 [Route("api/v1/research-projects")]
 public sealed class ResearchProjectsController(
-    IProcessResearchStore store,
+    ProcessResearchQueries store,
     ProcessResearchWorkflow workflow,
     ResearchExperimentCommands experimentCommands,
     ResearchExperimentDesignService experimentDesigns,

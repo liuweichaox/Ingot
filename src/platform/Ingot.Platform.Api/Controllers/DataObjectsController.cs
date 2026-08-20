@@ -8,7 +8,7 @@ namespace Ingot.Platform.Api.Controllers;
 [ApiController]
 [Route("api/v1/data-objects")]
 public sealed class DataObjectsController(
-    IPlatformEventStore events,
+    PlatformEventApplication events,
     PlatformUserResolver userResolver) : PlatformApiController
 {
     [HttpGet]

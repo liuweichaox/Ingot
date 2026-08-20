@@ -8,7 +8,7 @@ namespace Ingot.Platform.Api.Controllers;
 [ApiController]
 [Route("api/v1/inspection-definitions")]
 public sealed class InspectionDefinitionsController(
-    IInspectionMasterDataStore store,
+    InspectionQueries queries,
     InspectionCommands commands,
     PlatformUserResolver userResolver) : PlatformApiController
 {
@@ -16,7 +16,7 @@ public sealed class InspectionDefinitionsController(
     public async Task<IActionResult> List(CancellationToken ct)
     {
         var denied = DeniedRead();
-        return denied ?? Ok(new { data = await store.ListInspectionDefinitionsAsync(ct).ConfigureAwait(false) });
+        return denied ?? Ok(new { data = await queries.ListDefinitionsAsync(ct).ConfigureAwait(false) });
     }
 
     [HttpGet("{code}/{version:int}")]
@@ -25,7 +25,7 @@ public sealed class InspectionDefinitionsController(
         var denied = DeniedRead();
         if (denied is not null)
             return denied;
-        var item = await store.GetInspectionDefinitionAsync(code.Trim().ToLowerInvariant(), version, ct)
+        var item = await queries.GetDefinitionAsync(code, version, ct)
             .ConfigureAwait(false);
         return item is null ? ResourceNotFound() : Ok(item);
     }

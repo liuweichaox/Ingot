@@ -1,5 +1,5 @@
 using Ingot.Contracts.Inspections;
-using Ingot.Platform.Inspections.Infrastructure;
+using Ingot.Platform.Infrastructure.Inspections;
 using Xunit;
 
 namespace Ingot.Core.Tests.Integration;

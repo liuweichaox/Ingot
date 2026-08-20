@@ -15,11 +15,11 @@ namespace Ingot.Platform.Api.Controllers;
 [ApiController]
 [Route("api/v1/events")]
 public sealed class EventsController(
-    IPlatformEventStore store,
+    PlatformEventApplication store,
     EdgeTokenValidator tokenValidator,
     IOptions<PlatformEventOptions> eventOptions,
     PlatformUserResolver userResolver,
-    IExecutionBoundaryStore executionBoundaries,
+    ExecutionBoundaryQueries executionBoundaries,
     PlatformEventMetrics metrics,
     ILogger<EventsController> logger) : PlatformApiController
 {
@@ -249,7 +249,7 @@ public sealed class EventsController(
             return ResourceNotFound("未找到对应生产过程执行。", ("executionId", executionId));
 
         var first = pair[0];
-        var boundary = await executionBoundaries.GetBoundaryAsync(
+        var boundary = await executionBoundaries.GetAsync(
             siteAccess.SiteId!, executionId, ct).ConfigureAwait(false);
         var startedAt = boundary?.StartedAt ?? pair.Min(static item => item.Event.OccurredAt);
         var completedAt = boundary?.EndedAt ?? pair

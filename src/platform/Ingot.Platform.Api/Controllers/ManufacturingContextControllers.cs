@@ -10,7 +10,7 @@ namespace Ingot.Platform.Api.Controllers;
 [ApiController]
 [Route("api/v1/tooling-component-types")]
 public sealed class ToolingComponentTypesController(
-    IManufacturingContextStore store,
+    ManufacturingContextApplication store,
     PlatformUserResolver userResolver) : PlatformConfigurationControllerBase(userResolver)
 {
     [HttpGet]
@@ -48,7 +48,7 @@ public sealed class ToolingComponentTypesController(
 [ApiController]
 [Route("api/v1/tooling-types")]
 public sealed class ToolingTypesController(
-    IManufacturingContextStore store,
+    ManufacturingContextApplication store,
     PlatformUserResolver userResolver) : PlatformConfigurationControllerBase(userResolver)
 {
     [HttpGet]
@@ -95,7 +95,7 @@ public sealed class ToolingTypesController(
 [ApiController]
 [Route("api/v1/tooling-components")]
 public sealed class ToolingComponentsController(
-    IManufacturingContextStore store,
+    ManufacturingContextApplication store,
     PlatformUserResolver userResolver) : PlatformConfigurationControllerBase(userResolver)
 {
     [HttpGet]
@@ -134,7 +134,7 @@ public sealed class ToolingComponentsController(
 [ApiController]
 [Route("api/v1/tooling-assemblies")]
 public sealed class ToolingAssembliesController(
-    IManufacturingContextStore store,
+    ManufacturingContextApplication store,
     PlatformUserResolver userResolver) : PlatformConfigurationControllerBase(userResolver)
 {
     [HttpGet]
@@ -213,7 +213,7 @@ public sealed class ToolingAssembliesController(
 [ApiController]
 [Route("api/v1/tooling-installations")]
 public sealed class ToolingInstallationsController(
-    IManufacturingContextStore store,
+    ManufacturingContextApplication store,
     PlatformUserResolver userResolver) : PlatformConfigurationControllerBase(userResolver)
 {
     [HttpGet]
@@ -276,8 +276,8 @@ public sealed class ToolingInstallationsController(
 [ApiController]
 [Route("api/v1/production-contexts")]
 public sealed class ProductionContextsController(
-    IManufacturingContextStore store,
-    IProcessConfigurationStore processConfigurations,
+    ManufacturingContextApplication store,
+    ProcessConfigurationApplication processConfigurations,
     PlatformUserResolver userResolver) : PlatformConfigurationControllerBase(userResolver)
 {
     [HttpGet]

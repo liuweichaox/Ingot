@@ -8,7 +8,7 @@ namespace Ingot.Platform.Api.Controllers;
 [ApiController]
 [Route("api/v1/inspection-scopes")]
 public sealed class InspectionScopesController(
-    IInspectionRecordStore records,
+    InspectionQueries queries,
     InspectionCommands commands,
     PlatformUserResolver userResolver) : PlatformApiController
 {
@@ -16,7 +16,7 @@ public sealed class InspectionScopesController(
     public async Task<IActionResult> List(CancellationToken ct = default)
     {
         var denied = Denied(readOnly: true);
-        return denied ?? Ok(new { data = await records.ListScopesAsync(ct).ConfigureAwait(false) });
+        return denied ?? Ok(new { data = await queries.ListScopesAsync(ct).ConfigureAwait(false) });
     }
 
     [HttpPost]

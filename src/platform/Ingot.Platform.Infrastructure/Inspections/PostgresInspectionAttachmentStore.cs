@@ -3,7 +3,7 @@ using Ingot.Contracts.Inspections;
 using Microsoft.Extensions.Options;
 using Npgsql;
 
-namespace Ingot.Platform.Inspections.Infrastructure;
+namespace Ingot.Platform.Infrastructure.Inspections;
 
 public sealed class PostgresInspectionAttachmentStore : IInspectionAttachmentStore
 {

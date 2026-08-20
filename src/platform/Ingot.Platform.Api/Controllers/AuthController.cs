@@ -13,7 +13,7 @@ namespace Ingot.Platform.Api.Controllers;
 [ApiController]
 [Route("api/v1/auth")]
 public sealed class AuthController(
-    ILocalUserStore store,
+    LocalIdentityApplication store,
     LocalPasswordHasher hasher,
     LoginThrottle throttle,
     IOptions<LocalAuthOptions> options) : PlatformApiController

@@ -18,6 +18,7 @@ public static class LocalIdentityServiceCollectionExtensions
         services.AddSingleton<LocalPasswordHasher>();
         services.AddSingleton<LoginThrottle>();
         services.AddSingleton<ILocalUserStore, PostgresLocalUserStore>();
+        services.AddSingleton<LocalIdentityApplication>();
         return services;
     }
 

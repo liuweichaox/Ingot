@@ -50,8 +50,6 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ingot.Agent.Contracts", "sr
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ingot.Platform.Application", "src\platform\Ingot.Platform.Application\Ingot.Platform.Application.csproj", "{25134936-52BD-4E79-B790-1ACDEFB74ECD}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ingot.Platform.Inspections.Infrastructure", "src\platform\Ingot.Platform.Inspections.Infrastructure\Ingot.Platform.Inspections.Infrastructure.csproj", "{5E744B79-8E60-45C2-9341-C0F795655DCF}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -266,18 +264,6 @@ Global
 		{25134936-52BD-4E79-B790-1ACDEFB74ECD}.Release|x64.Build.0 = Release|Any CPU
 		{25134936-52BD-4E79-B790-1ACDEFB74ECD}.Release|x86.ActiveCfg = Release|Any CPU
 		{25134936-52BD-4E79-B790-1ACDEFB74ECD}.Release|x86.Build.0 = Release|Any CPU
-		{5E744B79-8E60-45C2-9341-C0F795655DCF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{5E744B79-8E60-45C2-9341-C0F795655DCF}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{5E744B79-8E60-45C2-9341-C0F795655DCF}.Debug|x64.ActiveCfg = Debug|Any CPU
-		{5E744B79-8E60-45C2-9341-C0F795655DCF}.Debug|x64.Build.0 = Debug|Any CPU
-		{5E744B79-8E60-45C2-9341-C0F795655DCF}.Debug|x86.ActiveCfg = Debug|Any CPU
-		{5E744B79-8E60-45C2-9341-C0F795655DCF}.Debug|x86.Build.0 = Debug|Any CPU
-		{5E744B79-8E60-45C2-9341-C0F795655DCF}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{5E744B79-8E60-45C2-9341-C0F795655DCF}.Release|Any CPU.Build.0 = Release|Any CPU
-		{5E744B79-8E60-45C2-9341-C0F795655DCF}.Release|x64.ActiveCfg = Release|Any CPU
-		{5E744B79-8E60-45C2-9341-C0F795655DCF}.Release|x64.Build.0 = Release|Any CPU
-		{5E744B79-8E60-45C2-9341-C0F795655DCF}.Release|x86.ActiveCfg = Release|Any CPU
-		{5E744B79-8E60-45C2-9341-C0F795655DCF}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -304,6 +290,5 @@ Global
 		{1D13FF00-C928-40CE-8C2C-E474036121EF} = {33333333-3333-4333-8333-333333333333}
 		{BEB1325A-FD39-473A-BD5C-4688C9E904E5} = {11111111-1111-4111-8111-111111111111}
 		{25134936-52BD-4E79-B790-1ACDEFB74ECD} = {33333333-3333-4333-8333-333333333333}
-		{5E744B79-8E60-45C2-9341-C0F795655DCF} = {33333333-3333-4333-8333-333333333333}
 	EndGlobalSection
 EndGlobal

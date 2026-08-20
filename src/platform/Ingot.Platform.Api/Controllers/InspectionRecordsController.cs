@@ -8,7 +8,7 @@ namespace Ingot.Platform.Api.Controllers;
 [ApiController]
 [Route("api/v1/inspection-records")]
 public sealed class InspectionRecordsController(
-    IInspectionRecordStore store,
+    InspectionQueries queries,
     InspectionCommands commands,
     PlatformUserResolver userResolver) : PlatformApiController
 {
@@ -43,7 +43,7 @@ public sealed class InspectionRecordsController(
             return AuthenticationRequired("需要平台统一认证。");
         if (!identity.HasAnyRole(PlatformRoles.QualityRead))
             return AuthorizationDenied();
-        var record = await store.GetAsync(recordId, ct).ConfigureAwait(false);
+        var record = await queries.GetRecordAsync(recordId, ct).ConfigureAwait(false);
         return record is null ? ResourceNotFound() : Ok(record);
     }
 
@@ -75,10 +75,10 @@ public sealed class InspectionRecordsController(
             Limit = limit,
             Offset = offset
         };
-        if (!InspectionRecordValidator.TryValidateQuery(query, out var error))
-            return InvalidRequest(error);
-
-        var page = await store.QueryPageAsync(query, ct).ConfigureAwait(false);
+        var result = await queries.QueryRecordsAsync(query, ct).ConfigureAwait(false);
+        if (result.Status == InspectionCommandStatus.Invalid)
+            return InvalidRequest(result.Error);
+        var page = result.Value!;
         return Ok(new { page.Data, count = page.Data.Count, page.Total, page.Offset, page.Limit });
     }
 }

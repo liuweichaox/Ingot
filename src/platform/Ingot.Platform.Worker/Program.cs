@@ -1,6 +1,6 @@
 using Ingot.Platform.Infrastructure;
 using Ingot.Platform.Infrastructure.Identity;
-using Ingot.Platform.Inspections.Infrastructure;
+using Ingot.Platform.Infrastructure.Inspections;
 
 var builder = Host.CreateApplicationBuilder(args);
 builder.Services.AddIngotPlatformInfrastructure(builder.Configuration);

@@ -48,12 +48,14 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<PostgresAgentRunStore>();
         services.AddSingleton<IAgentRunStore>(provider =>
             provider.GetRequiredService<PostgresAgentRunStore>());
+        services.AddSingleton<IAgentRunSnapshotReader, AgentRunSnapshotReader>();
         // 边缘注册与心跳是多 API 副本共享的 PostgreSQL 运维事实。
         services.AddSingleton<EdgeRegistry>();
 
         // 事件生产记录库（PostgreSQL）
         // 生产上下文必须先于事件库就绪；process.execution.started 会解析并固化当时有效的工装与工艺规范引用。
         services.AddSingleton<IManufacturingContextStore, PostgresManufacturingContextStore>();
+        services.AddSingleton<ManufacturingContextApplication>();
         services.AddSingleton<IProcessExecutionAnalysisMaterializationStore, PostgresProcessExecutionAnalysisMaterializationStore>();
         services.AddSingleton<IFeatureDefinitionRegistry, BuiltInFeatureDefinitionRegistry>();
         services.AddSingleton<ProcessExecutionAnalysisEngine>();
@@ -68,6 +70,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ProcessCurveQueryService>();
         services.AddHostedService<TimeSeriesStoreInitializerHostedService>();
         services.AddSingleton<IPlatformEventStore, PostgresPlatformEventStore>();
+        services.AddSingleton<PlatformEventApplication>();
         services.AddHostedService<EventStoreInitializerHostedService>();
 
         // Chat 只能通过显式注册的只读工具访问中心数据。
@@ -103,18 +106,23 @@ public static class ServiceCollectionExtensions
 
         services.AddSingleton<IGoldenQuestionStore, Ingot.Platform.Infrastructure.Insight.PostgresGoldenQuestionStore>();
         services.AddSingleton<GoldenQuestionEvaluator>();
+        services.AddSingleton<GoldenQuestionApplication>();
 
         // 工艺数据模型、工艺规范版本与分析方案使用独立的版本化配置存储。
         services.AddSingleton<IProcessConfigurationStore, PostgresProcessConfigurationStore>();
         services.AddSingleton<ProcessAnalysisResolver>();
+        services.AddSingleton<ProcessConfigurationApplication>();
+        services.AddSingleton<ScenarioPackageService>();
 
         // 研发资产保存版本化数据集、模型、机理模型和项目知识来源。
         services.Configure<ProcessKnowledgeOptions>(configuration.GetSection("ProcessKnowledge"));
         services.AddSingleton<IResearchAssetStore, PostgresResearchAssetStore>();
+        services.AddSingleton<ResearchAssetApplication>();
         services.AddSingleton<ResearchAssetWorkflow>();
         services.AddSingleton<MechanismModelService>();
         services.AddSingleton<IMechanismKnowledgeStore, PostgresMechanismKnowledgeStore>();
         services.AddSingleton<MechanismKnowledgeService>();
+        services.AddSingleton<MechanismKnowledgeQueries>();
         services.AddSingleton<IKnowledgeContentExtractor, PdfKnowledgeExtractor>();
         services.AddSingleton<IKnowledgeContentExtractor, ExcelKnowledgeExtractor>();
         services.AddSingleton<IKnowledgeContentExtractor, PlainTextKnowledgeExtractor>();
@@ -136,6 +144,7 @@ public static class ServiceCollectionExtensions
         // 采集配置由平台统一管理并按边缘节点发布；采集执行器只运行已发布版本。
         services.AddSingleton<IIngestionTaskStore, PostgresIngestionTaskStore>();
         services.AddSingleton<IIngestionConfigurationStore, PostgresIngestionConfigurationStore>();
+        services.AddSingleton<AcquisitionApplication>();
         services.AddSingleton<IAcquisitionProbeTaskStore, PostgresAcquisitionProbeTaskStore>();
         services.AddSingleton<AcquisitionProbeTaskCoordinator>();
         services.AddSingleton<IngestionConfigurationWorkflow>();
@@ -144,6 +153,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<PostgresExecutionBoundaryStore>();
         services.AddSingleton<IExecutionBoundaryStore>(
             provider => provider.GetRequiredService<PostgresExecutionBoundaryStore>());
+        services.AddSingleton<ExecutionBoundaryQueries>();
         services.AddSingleton<ExecutionBoundaryRecognizer>();
         services.AddSingleton<IExecutionBoundaryRecognizer>(
             provider => provider.GetRequiredService<ExecutionBoundaryRecognizer>());
