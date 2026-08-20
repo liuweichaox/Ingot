@@ -1456,21 +1456,66 @@ function WorkspaceContent({
                   if (!value) return "—";
                   const mechanismUsages = (workspace.mechanismKnowledgeUsages || [])
                     .filter(item => item.recommendationId === row.experimentId);
+                  const appliedMechanismClaims = groupMechanismUsages(mechanismUsages);
                   return (
                     <div className="min-w-72 space-y-2 text-xs text-slate-600">
                       <div>
                         贝叶斯优化基于 <strong className="text-slate-900">{value.observationCount}</strong> 条观察和{" "}
                         <strong className="text-slate-900">{value.processFeatureCount || 0}</strong> 个共同轨迹特征
                       </div>
-                      {mechanismUsages.length > 0 && (
-                        <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-2 text-indigo-900">
-                          <strong>本次采用的机理知识</strong>
-                          {mechanismUsages.map(item => (
-                            <div className="mt-1" key={`${item.claimId}-${item.claimVersion}-${item.usageType}`}>
-                              {item.claimName || item.claimId} v{item.claimVersion} · {item.usageType === "hard-constraint" ? "缩窄硬边界" : item.usageType === "candidate-ranking" ? "候选偏好排序" : "上下文与解释"} · 哈希 {String(item.contentHash).slice(0, 12)}
-                            </div>
-                          ))}
-                        </div>
+                      {appliedMechanismClaims.length > 0 && (
+                        <details className="rounded-lg border border-indigo-200 bg-indigo-50 p-2 text-indigo-950">
+                          <summary className="cursor-pointer font-semibold marker:text-indigo-500">
+                            本次采用的机理知识 · {appliedMechanismClaims.length} 条
+                          </summary>
+                          <p className="mt-1 text-[11px] text-indigo-700">
+                            冻结知识快照 <code>{String(value.mechanismKnowledgeSnapshotHash).slice(0, 12)}</code>
+                          </p>
+                          <div className="mt-2 space-y-2">
+                            {appliedMechanismClaims.map(item => {
+                              const claim = item.appliedClaim;
+                              return (
+                                <article className="rounded-lg border border-indigo-100 bg-white p-2 text-slate-700" key={`${item.claimId}-${item.claimVersion}`}>
+                                  <div className="flex flex-wrap items-center justify-between gap-2">
+                                    <strong className="text-slate-900">{claim?.name || item.claimName || item.claimId} v{item.claimVersion}</strong>
+                                    <code title={item.contentHash}>{String(item.contentHash).slice(0, 12)}</code>
+                                  </div>
+                                  <p className="mt-1 text-[11px] text-indigo-700">{item.usageTypes.map(mechanismUsageLabel).join(" · ")}</p>
+                                  {claim?.statement && <p className="mt-2 leading-5">{claim.statement}</p>}
+                                  {(claim?.constraints || []).length > 0 && (
+                                    <div className="mt-2 space-y-1">
+                                      <strong className="text-[11px] text-slate-500">实际采用的边界与偏好</strong>
+                                      {claim.constraints.map(constraint => (
+                                        <div className="rounded-md bg-slate-50 px-2 py-1" key={constraint.constraintId}>
+                                          <span className={constraint.severity === "hard" ? "font-semibold text-red-700" : "font-semibold text-amber-700"}>
+                                            {constraint.severity === "hard" ? "硬边界" : "候选偏好"}
+                                          </span>
+                                          {" · "}{variableByCode.get(constraint.variableCode)?.name || constraint.variableCode}：{formatMechanismConstraint(constraint)}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                  {claim?.falsificationCondition && (
+                                    <p className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-amber-900">
+                                      <strong>反证条件：</strong>{claim.falsificationCondition}
+                                    </p>
+                                  )}
+                                  {(claim?.evidence || []).length > 0 && (
+                                    <div className="mt-2 space-y-1">
+                                      <strong className="text-[11px] text-slate-500">冻结证据引用</strong>
+                                      {claim.evidence.map(evidence => (
+                                        <div className="break-all rounded-md bg-slate-50 px-2 py-1" key={evidence.evidenceLinkId}>
+                                          {mechanismEvidenceLabel(evidence.evidenceKind)} · {evidence.polarity === "opposing" ? "反对证据" : "支持证据"}<br />
+                                          <code>{evidence.referenceId}</code> · 哈希 <code>{String(evidence.contentHash).slice(0, 12)}</code>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </article>
+                              );
+                            })}
+                          </div>
+                        </details>
                       )}
                       {(value.runPredictions || []).map(prediction => (
                         <div key={prediction.executionKey} className="rounded-lg border border-slate-200 bg-white p-2">
@@ -2432,6 +2477,40 @@ function TaskDrawer({ task, form, setForm, workspace, memberCandidates, saving, 
       </form>
     </Drawer>
   );
+}
+
+function groupMechanismUsages(usages) {
+  const grouped = new Map();
+  for (const usage of usages) {
+    const key = `${usage.claimId}:${usage.claimVersion}`;
+    const current = grouped.get(key) || { ...usage, usageTypes: [] };
+    if (!current.usageTypes.includes(usage.usageType)) current.usageTypes.push(usage.usageType);
+    if (!current.appliedClaim && usage.appliedClaim) current.appliedClaim = usage.appliedClaim;
+    grouped.set(key, current);
+  }
+  return [...grouped.values()];
+}
+
+function mechanismUsageLabel(value) {
+  return ({
+    "hard-constraint": "缩窄硬边界",
+    "candidate-ranking": "候选偏好排序",
+    "knowledge-context": "上下文与解释",
+  })[value] || value;
+}
+
+function mechanismEvidenceLabel(value) {
+  return ({
+    "knowledge-source": "原始知识来源",
+    "knowledge-fragment": "可定位知识片段",
+    "experiment-result": "正式实验结果",
+  })[value] || value;
+}
+
+function formatMechanismConstraint(constraint) {
+  const lower = constraint.minimum == null ? "−∞" : formatResearchNumber(constraint.minimum);
+  const upper = constraint.maximum == null ? "+∞" : formatResearchNumber(constraint.maximum);
+  return `${lower} ～ ${upper} ${constraint.unit || ""}`.trim();
 }
 
 function lines(value) {

@@ -93,6 +93,8 @@ The repository implements the main code path across acquisition, process executi
 
 The project has completed internal end-to-end validation of import, run reconstruction, inspection linkage, and R&D observations using controlled, non-public production history. Formal leakage-free replay and prospective validation remain incomplete, so the project does not claim a measured reduction in experiments or development time. Real production data, project identities, process parameters, and derived results do not enter the public repository; public materials provide only protocols, schemas, synthetic examples, acceptance methods, and conclusion boundaries.
 
+The current engineering baseline also keeps Platform business records and Agent-run audit in PostgreSQL; carries site, schema version, applied-configuration version, quality flags, and a content hash in the production-event envelope; organizes major R&D and inspection use cases through Application boundaries; and applies active mechanism claims to hard bounds, candidate ranking, and frozen usage records. The repository includes logical backup/restore, a monitoring stack, and production-acceptance artifact tooling, while the default Compose topology remains a single API, single Worker, and single PostgreSQL reference deployment. It does not provide PostgreSQL HA, continuous WAL/PITR, object storage, or controlled equipment writes.
+
 Historical replay, shadow validation, and controlled online validation are three independent scientific-validation work lines. Each preregisters its own data, baselines, measures, threshold version, acceptance, and falsification criteria and produces its own evidence artifact inside the controlled environment. Passing one does not pass the others, and the results are not compressed into a global API "maturity" field. Existing endpoints show that experimental infrastructure is implemented; engineering decisions must use the corresponding reviewed, hashed, and versioned report rather than infer validity from feature presence.
 
 ## Architecture
@@ -128,13 +130,13 @@ The first build downloads .NET, Node, Python, PyTorch, and TimescaleDB images, s
 Then open:
 
 ```text
-http://localhost:3000       Process R&D workbench
+http://localhost:3000       Engineering workbench
 http://localhost:8000/health
 http://localhost:8000/openapi/v1.json
 http://localhost:8100/ready
 ```
 
-Local authentication uses `INGOT_ADMIN_USERNAME` and `INGOT_ADMIN_PASSWORD` from `.env`. If the administrator password is empty, Platform writes the generated password to the API container log only when it creates the first administrator. See [Getting started](docs/getting-started.en.md) and [Deployment](docs/deployment.en.md) for startup and troubleshooting details.
+Local authentication uses `INGOT_ADMIN_USERNAME` and `INGOT_ADMIN_PASSWORD` from `.env`. If the administrator password is empty, Migrator writes the generated password to the `platform-migrate` log only when it bootstraps an empty user table. See [Getting started](docs/getting-started.en.md) and [Deployment](docs/deployment.en.md) for startup and troubleshooting details.
 
 Complete one real or representative data loop before diagnosis or optimization: define variables and outcomes → connect data → complete a run → link inspections → review data quality → compare runs → design a validation experiment.
 

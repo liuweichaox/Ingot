@@ -93,6 +93,8 @@ Ingot 不把某一种“先进算法”固定成所有问题的答案：
 
 项目已使用受控的非公开生产历史数据完成导入、运行重建、检验关联和研发观察的内部端到端验证。正式无泄漏历史回放和前瞻验证尚未完成，因此本项目不声称已经减少某个比例的实验或研发周期。真实生产数据、项目标识、工艺参数和派生结果不进入公开仓库；公开材料只提供协议、Schema、合成样例、验收方法和结论边界。
 
+当前工程基线还包括：Platform 业务记录和 Agent 运行审计统一保存在 PostgreSQL；生产事件信封带站点、Schema 版本、配置版本、质量标记和内容哈希；工艺研发与检验等主要业务用例通过 Application 边界组织；机理知识可以用已激活声明缩窄硬边界、排序候选并冻结使用记录。仓库同时提供逻辑备份/恢复、监控栈和生产验收工件脚本，但默认 Compose 仍是单 API、单 Worker、单 PostgreSQL 的参考拓扑，不具备 PostgreSQL HA、持续 WAL/PITR、对象存储或受控设备写入能力。
+
 历史回放、影子验证和受控在线验证是三条独立的科学验证工作线。每条工作线分别预注册数据、基线、指标、阈值版本、验收与否证条件，并在受控环境形成自己的证据工件；某一条通过不代表其他工作线通过，也不会被压缩成 API 中的全局“成熟度”字段。现有端点表示实验基础设施已实现，工程判断应读取对应报告及其审核、哈希和版本，而不是从功能是否存在推断有效性。
 
 ## 系统架构
@@ -133,13 +135,13 @@ docker compose -f docker-compose.app.yml up -d --build
 启动后访问：
 
 ```text
-http://localhost:3000       工艺研发界面
+http://localhost:3000       工程工作台
 http://localhost:8000/health
 http://localhost:8000/openapi/v1.json
 http://localhost:8100/ready
 ```
 
-本地认证使用 `.env` 中的 `INGOT_ADMIN_USERNAME` 和 `INGOT_ADMIN_PASSWORD`。若管理员密码留空，Platform 只在首次创建管理员时把随机口令输出到 API 容器日志。启动与排障细节见[快速开始](docs/getting-started.md)和[部署运维](docs/deployment.md)。
+本地认证使用 `.env` 中的 `INGOT_ADMIN_USERNAME` 和 `INGOT_ADMIN_PASSWORD`。若管理员密码留空，Migrator 只在空用户表首次创建管理员时把随机口令输出到 `platform-migrate` 日志。启动与排障细节见[快速开始](docs/getting-started.md)和[部署运维](docs/deployment.md)。
 
 首次使用应先完成一条真实或代表性的数据闭环，再进入诊断和优化：定义变量与结果 → 接入数据 → 完成一次运行 → 关联检验 → 检查数据质量 → 比较运行 → 设计验证实验。
 

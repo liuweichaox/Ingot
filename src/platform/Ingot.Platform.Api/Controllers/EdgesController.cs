@@ -56,4 +56,8 @@ public class EdgesController(EdgeRegistry registry, EdgeTokenValidator edgeToken
     [HttpGet("{edgeId}/status-history")]
     public IActionResult StatusHistory(string edgeId, [FromQuery] int limit = 288)
         => Ok(new { data = registry.ListStatusHistory(edgeId, limit) });
+
+    [HttpGet("{edgeId}/status-intervals")]
+    public IActionResult StatusIntervals(string edgeId, [FromQuery] int limit = 24)
+        => Ok(new { data = registry.ListStatusIntervals(edgeId, limit) });
 }

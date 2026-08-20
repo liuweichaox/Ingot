@@ -188,4 +188,6 @@ The engineer approves execution. Once all runs and inspections are complete, the
 
 When the project has trustworthy observations, explicit controlled variables, and a safe baseline, it can generate the next experiment set. The system shows settings, objective intervals, safety outcomes, joint feasibility, data scope, model version, and rationale.
 
+To use mechanism knowledge, open “Process R&D → Research assets,” select the project, upload a source, and complete claim review and activation. Claims that match the current project context may narrow hard bounds or participate in soft ranking. Actual usage is not shown in a separate Mechanism tab; it appears in the “Prediction and trust” column of the project's Experiment table, and only when an optimization experiment actually used a claim.
+
 Pending points prevent duplicate recommendations while a batch remains incomplete. One successful point is only a candidate setting; a operating region requires independent repetition, boundary or interaction validation, and review by another engineer.

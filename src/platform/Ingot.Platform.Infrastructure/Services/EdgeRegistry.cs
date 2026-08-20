@@ -73,6 +73,70 @@ public sealed class EdgeRegistry(NpgsqlDataSource dataSource)
         return values;
     }
 
+    public IReadOnlyList<EdgeRuntimeStatusInterval> ListStatusIntervals(
+        string edgeId,
+        int limit = 24)
+    {
+        if (string.IsNullOrWhiteSpace(edgeId)) return [];
+        edgeId = edgeId.Trim();
+        limit = Math.Clamp(limit, 1, 200);
+        using var connection = dataSource.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText =
+            """
+            WITH ordered AS (
+              SELECT *,
+                CASE WHEN
+                  acquisition_state IS DISTINCT FROM lag(acquisition_state) OVER sequence OR
+                  acquisition_error IS DISTINCT FROM lag(acquisition_error) OVER sequence OR
+                  delivery_state IS DISTINCT FROM lag(delivery_state) OVER sequence OR
+                  delivery_error IS DISTINCT FROM lag(delivery_error) OVER sequence
+                THEN 1 ELSE 0 END AS changed
+              FROM edge_runtime_status_history
+              WHERE edge_id = $1
+              WINDOW sequence AS (ORDER BY recorded_at)
+            ), grouped AS (
+              SELECT *, sum(changed) OVER (ORDER BY recorded_at) AS interval_id
+              FROM ordered
+            )
+            SELECT min(recorded_at), max(recorded_at), count(*),
+                   acquisition_state, acquisition_error, delivery_state, delivery_error,
+                   (array_agg(valid_snapshot_count ORDER BY recorded_at))[1],
+                   (array_agg(valid_snapshot_count ORDER BY recorded_at DESC))[1],
+                   (array_agg(emitted_event_count ORDER BY recorded_at))[1],
+                   (array_agg(emitted_event_count ORDER BY recorded_at DESC))[1],
+                   max(pending_event_count)
+            FROM grouped
+            GROUP BY interval_id, acquisition_state, acquisition_error, delivery_state, delivery_error
+            ORDER BY max(recorded_at) DESC
+            LIMIT $2
+            """;
+        command.Parameters.AddWithValue(edgeId);
+        command.Parameters.AddWithValue(limit);
+        using var reader = command.ExecuteReader();
+        var values = new List<EdgeRuntimeStatusInterval>();
+        while (reader.Read())
+        {
+            values.Add(new EdgeRuntimeStatusInterval
+            {
+                EdgeId = edgeId,
+                StartedAt = reader.GetFieldValue<DateTimeOffset>(0),
+                EndedAt = reader.GetFieldValue<DateTimeOffset>(1),
+                SampleCount = reader.GetInt64(2),
+                AcquisitionState = reader.IsDBNull(3) ? null : reader.GetString(3),
+                AcquisitionError = reader.IsDBNull(4) ? null : reader.GetString(4),
+                DeliveryState = reader.IsDBNull(5) ? null : reader.GetString(5),
+                DeliveryError = reader.IsDBNull(6) ? null : reader.GetString(6),
+                StartingValidSnapshotCount = reader.GetInt64(7),
+                EndingValidSnapshotCount = reader.GetInt64(8),
+                StartingEmittedEventCount = reader.GetInt64(9),
+                EndingEmittedEventCount = reader.GetInt64(10),
+                MaximumPendingEventCount = reader.GetInt64(11)
+            });
+        }
+        return values;
+    }
+
     public EdgeState Upsert(
         string edgeId,
         string? hostBaseUrl,

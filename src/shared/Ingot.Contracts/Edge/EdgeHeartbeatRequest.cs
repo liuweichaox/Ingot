@@ -48,3 +48,21 @@ public sealed record EdgeRuntimeStatusHistoryItem
     public double? ShipmentRatePerSecond { get; init; }
     public string? DeliveryError { get; init; }
 }
+
+/// <summary>把连续相同的采集、上行状态与问题合并为一个可读区间；原始心跳历史仍单独保留。</summary>
+public sealed record EdgeRuntimeStatusInterval
+{
+    public required string EdgeId { get; init; }
+    public DateTimeOffset StartedAt { get; init; }
+    public DateTimeOffset EndedAt { get; init; }
+    public long SampleCount { get; init; }
+    public string? AcquisitionState { get; init; }
+    public string? AcquisitionError { get; init; }
+    public string? DeliveryState { get; init; }
+    public string? DeliveryError { get; init; }
+    public long StartingValidSnapshotCount { get; init; }
+    public long EndingValidSnapshotCount { get; init; }
+    public long StartingEmittedEventCount { get; init; }
+    public long EndingEmittedEventCount { get; init; }
+    public long MaximumPendingEventCount { get; init; }
+}

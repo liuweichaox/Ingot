@@ -63,6 +63,7 @@ public sealed class EdgeDiagnosticsController(
         [FromRoute] string edgeId,
         [FromQuery] string? level = null,
         [FromQuery] string? keyword = null,
+        [FromQuery] string? audience = null,
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 100,
         CancellationToken cancellationToken = default)
@@ -74,6 +75,7 @@ public sealed class EdgeDiagnosticsController(
         {
             ["level"] = string.IsNullOrWhiteSpace(level) ? null : level,
             ["keyword"] = string.IsNullOrWhiteSpace(keyword) ? null : keyword,
+            ["audience"] = string.IsNullOrWhiteSpace(audience) ? null : audience,
             ["page"] = page.ToString(),
             ["pageSize"] = pageSize.ToString()
         };

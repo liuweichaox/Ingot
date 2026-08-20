@@ -49,7 +49,7 @@ The current code already provides:
 - the `reviewed → supported → validated → active → retired` lifecycle plus a formal `falsified` terminal path from every promoted state; preregistered effects and confidence intervals decide support or falsification, with a recorded human evaluation;
 - hard-bound and soft-range ranking from context-matched, conflict-free `active` claims only;
 - one frozen mechanism-knowledge snapshot across optimization, replay, shadow evidence, and controlled-online admission; stale experiments cannot be approved or started;
-- experiment-page explanation of the claim, version, use type, and content hash actually applied.
+- experiment-page explanation of the exact frozen claim version, use type, content hash, constraints, falsification condition, and evidence references actually applied; reads verify the usage hash against that immutable version.
 
 The main gaps are:
 
@@ -406,44 +406,49 @@ Admission order:
 
 Conflicts, incomplete scope, or insufficient evidence exclude the affected knowledge or downgrade the mode. The system never silently chooses one conflicting claim.
 
-## 11. Proposed APIs
+## 11. Current APIs
 
 ### Sources and fragments
 
 ```text
-POST /api/v1/research-projects/{projectId}/knowledge-sources
-GET  /api/v1/research-projects/{projectId}/knowledge-sources
-GET  /api/v1/knowledge-sources/{sourceId}
-POST /api/v1/knowledge-sources/{sourceId}:extract
-POST /api/v1/knowledge-fragments/{fragmentId}:review
+GET  /api/v1/process-knowledge?projectId={projectId}
+POST /api/v1/process-knowledge
+GET  /api/v1/process-knowledge/{sourceId}
+GET  /api/v1/process-knowledge/{sourceId}/content
+POST /api/v1/process-knowledge/{sourceId}/extract
+POST /api/v1/process-knowledge/{sourceId}/records
+POST /api/v1/process-knowledge/{sourceId}/status
 ```
+
+Uploads use `multipart/form-data`. Fragments and extraction state currently live under the source record; there is no separate `knowledge-fragments` controller.
 
 ### Mechanism claims
 
 ```text
 POST /api/v1/research-projects/{projectId}/mechanism-claims
 GET  /api/v1/research-projects/{projectId}/mechanism-claims
-GET  /api/v1/mechanism-claims/{claimId}/versions/{version}
-POST /api/v1/mechanism-claims/{claimId}/versions/{version}:review
-POST /api/v1/mechanism-claims/{claimId}/versions/{version}:activate
-POST /api/v1/mechanism-claims/{claimId}/versions/{version}:retire
-GET  /api/v1/mechanism-claims:applicable
+GET  /api/v1/research-projects/{projectId}/mechanism-claims/{claimId}?version={version}
+POST /api/v1/research-projects/{projectId}/mechanism-claims/{claimId}/review
+POST /api/v1/research-projects/{projectId}/mechanism-claims/{claimId}/lifecycle
+GET  /api/v1/research-projects/{projectId}/mechanism-claims/conflicts
+POST /api/v1/research-projects/{projectId}/mechanism-claims/conflicts
+POST /api/v1/research-projects/{projectId}/mechanism-claims/conflicts/{conflictId}/resolve
 ```
 
 ### Recommendation explanation
 
-```text
-GET /api/v1/recommendations/{recommendationId}/knowledge-usage
-GET /api/v1/recommendations/{recommendationId}/capability-profile
-```
+There is currently no generic `recommendations` controller. The project workspace,
+`GET /api/v1/research-projects/{projectId}`, returns experiment optimization snapshots and
+`mechanismKnowledgeUsages`. Every usage carries the exact frozen claim version, and reads verify its content hash.
+Any future standalone recommendation-detail endpoint must project the same Application query model rather than create a second usage record.
 
 Writes use structured requests and explicit authorization policies. State transitions use command endpoints rather than generic PUT replacement.
 
 ## 12. UI information architecture
 
-### 12.1 Process R&D / Mechanism knowledge
+### 12.1 Process R&D / Research assets
 
-Add a stable entry containing:
+The current stable entry is “Process R&D → Research assets.” Select a research project before opening the mechanism-knowledge workbench, which contains:
 
 - **Sources**: upload, extraction, hash, status, and project scope;
 - **Extraction review**: source and extraction side by side, with click-through to page or cell locations;
@@ -454,21 +459,22 @@ Add a stable entry containing:
 
 ### 12.2 Research project
 
-Add a Mechanism tab limited to knowledge accessible to the current project. A hypothesis may cite claims; experiment design shows what the experiment may support or falsify; completed results show evidence changes without mutating claims automatically.
+The project workspace currently has no standalone Mechanism tab. The research-assets workbench connects claim lifecycle decisions to project hypotheses and experiment results. A completed result never mutates a claim automatically; promotion or falsification requires an explicit lifecycle command and independent review.
 
-### 12.3 Recommendation detail
+### 12.3 Recommendation explanation in the experiment table
 
-Every recommendation shows:
+The current display is the “Prediction and trust” column in the project's Experiment table. The expandable “Mechanism knowledge used” panel appears only when an experiment has an optimization snapshot and that optimization actually used claims. It shows:
 
-- current mode;
-- data range and sample coverage;
-- claim and model versions used;
-- usage type: constraint, prior, feature, or explanation;
+- frozen knowledge-snapshot hash;
+- exact claim version and content hash used;
+- usage type: hard bound, candidate ranking, or contextual explanation;
 - prediction, uncertainty, and feasibility probability;
 - hard safety boundaries and platform limits;
 - whether the point is inside observed data support;
 - proposed validation and falsification conditions;
-- engineer accept, modify, or reject reason.
+- the claim's falsification condition and frozen evidence references.
+
+Data range, prediction, uncertainty, feasibility, and pending points remain in the same “Prediction and trust” column. Shadow accept, modify, or reject reasons live in shadow-decision records rather than being copied into mechanism-usage records.
 
 ## 13. Security, privacy, and deployment
 
@@ -482,6 +488,8 @@ Every recommendation shows:
 - Source deletion follows retention policy and cannot break evidence cited by published conclusions.
 
 ## 14. Implementation sequence and acceptance
+
+Current-stage calibration: P0 is implemented. P1 has deterministic extraction, asynchronous jobs, and the human workbench, but no model-assisted semantic draft. P2 has hard bounds, soft ranking, snapshots, usage traceability, and admission gates, while paired effectiveness reports remain incomplete. P3 has standalone executable-model/fusion assets and an execution service but is not wired into recommendations. P4 replay, shadow, and online-validation infrastructure exists, but no real-project evidence yet supports an external value claim.
 
 ### P0: claim kernel and relational storage
 

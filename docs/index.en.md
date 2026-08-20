@@ -49,6 +49,14 @@ Choose an entry by role, then follow the links into method detail. You do not ne
 
 The code covers the main business path across acquisition, process executions, context, inspections, R&D experiments, analysis, and optimization, with automated tests. The project has completed internal end-to-end validation of import, run reconstruction, inspection linkage, and R&D observations using controlled, non-public production history. Formal leakage-free replay and prospective validation remain incomplete, so the project describes system capabilities but does not claim a measured reduction in experiments or development time.
 
+Current repository implementation snapshot:
+
+- Platform business records, Agent run snapshots, and evaluation evidence share the PostgreSQL recovery boundary.
+- Edge uses a durable local outbox and at-least-once delivery; Platform fails closed on site, event identity, schema, applied-configuration version, content hash, and quality flags.
+- Major Platform business workflows now live in Application, while PostgreSQL stores, external clients, and evidence assemblers remain in Infrastructure. A small set of operational adapters for Edge registration/diagnostics, identity, and runtime metrics still reaches Infrastructure from API; these are remaining convergence points, not templates for new business controllers.
+- Mechanism-knowledge sources, claims, reviews, conflicts, lifecycle, hard bounds, soft ranking, frozen snapshots, and usage traceability are integrated. Model-assisted semantic drafts, Bayesian priors/mechanism features/residual fusion, and paired long-horizon calibration remain incomplete.
+- The repository provides logical backup/restore, monitoring configuration, limited failure drills, and production-acceptance artifact validation. The default Compose deployment remains a single-instance reference topology, not an HA production cell, and does not include PITR, object storage, or controlled equipment writes.
+
 Real production data, project and equipment identities, process parameters, quality distributions, and derived results are controlled factory evidence. They do not enter the public repository or public reports. Public materials provide only protocols, schemas, synthetic examples, acceptance methods, and conclusion boundaries; internal validation on real data is not public independent reproduction.
 
 The current sequence is to prove that the evidence apparatus is reproducible and leakage-free through real historical replay, then establish value through prospective shadow and controlled online validation. Agent protocols and an open specification do not bypass those evidence stages.

@@ -21,6 +21,7 @@ import { Link, Navigate, Route, Routes, useLocation, useNavigate } from "react-r
 import * as Pages from "./pages";
 import { IngestionTaskPage, IngestionTasksPage } from "./acquisition/IngestionTaskPage";
 import { cx, Input, ToastHost } from "./ui/components";
+import { formatRoleSummary, formatSiteScope } from "./auth/identityPresentation";
 
 const sections = [
   {
@@ -339,10 +340,14 @@ export default function App({ identity, logout }) {
           <MenuButton className="grid w-14 place-items-center text-slate-600 hover:bg-slate-50" aria-label="用户菜单">
             <span className="text-xs font-semibold">{userInitials}</span>
           </MenuButton>
-          <MenuItems transition anchor="bottom end" className="z-100 mt-2 w-48 origin-top-right rounded-xl border border-slate-200 bg-white p-1 text-sm shadow-xl transition data-closed:scale-95 data-closed:opacity-0">
+          <MenuItems transition anchor="bottom end" className="z-100 mt-2 w-64 origin-top-right rounded-xl border border-slate-200 bg-white p-1 text-sm shadow-xl transition data-closed:scale-95 data-closed:opacity-0">
             <div className="border-b border-slate-100 px-3 py-2">
               <p className="truncate font-medium text-slate-900">{displayName}</p>
-              <p className="mt-0.5 truncate text-xs text-slate-500">{identity?.username || "当前账户"}</p>
+              {displayName !== identity?.username && <p className="mt-0.5 truncate text-xs text-slate-500">{identity?.username || "当前账户"}</p>}
+              <dl className="mt-2 grid gap-1 text-xs text-slate-500">
+                <div className="grid grid-cols-[3rem_1fr] gap-2"><dt>岗位</dt><dd className="text-slate-700">{formatRoleSummary(identity?.roles)}</dd></div>
+                <div className="grid grid-cols-[3rem_1fr] gap-2"><dt>站点</dt><dd className="break-words text-slate-700">{formatSiteScope(identity?.siteIds, identity?.roles)}</dd></div>
+              </dl>
             </div>
             <MenuItem><a href="https://docs.ingotstack.com/zh" className="block rounded-lg px-3 py-2 text-slate-700 data-focus:bg-slate-100">产品文档</a></MenuItem>
             <MenuItem><button type="button" onClick={logout} className="block w-full rounded-lg px-3 py-2 text-left text-slate-700 data-focus:bg-slate-100">退出登录</button></MenuItem>

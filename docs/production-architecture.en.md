@@ -369,6 +369,17 @@ Before controlled action, also prove that:
 
 ## Implementation sequence
 
+### Current implementation calibration
+
+| Scope | Current repository fact | Deployment or later-phase work still required |
+|---|---|---|
+| P0 production contract | `SiteId`, the canonical event envelope, fail-closed unknown schemas, applied-configuration version, quality flags, content hash, site scope, and database constraints are implemented. `.env.example` declares RPO/RTO, backlog, freshness, capacity headroom, and observation-period targets, and the acceptance script requires measured values plus evidence identifiers. | Site-specific tiered pinning/deletion policy for formal evidence remains; repository tooling cannot substitute for real field acceptance. |
+| P1 recoverable cell | Consistent logical backup/restore, checksums, a monitoring Compose profile, base dashboards/alerts, and limited API/Worker/Optimizer failure drills are provided. | Default Compose remains one API, one Worker, and one PostgreSQL. It has no ingress load balancer, PostgreSQL HA, continuous WAL/PITR, off-host immutable backup, or object storage. |
+| P2 data plane | Edge outbox, idempotent ingestion, deterministic-rejection quarantine, background leases, and dead-letter foundations exist. | Lateness watermarks, a complete recompute/replay operations surface, hot/warm/cold lifecycle, and fair quotas are not yet a production loop. |
+| P3 controlled action | The product remains observation, analysis, and recommendation only. Agent analysis tools are read-only, and Optimizer cannot approve or execute actions. | Action ledger, signed dispatch, Edge Safety Executor, equipment readback, and staged admission are not implemented; no closed-loop equipment-control claim is allowed. |
+
+The P0-P3 sections below are phase definitions of done. “Implemented” in this table means that code, tests, or deployment assets exist in the repository; it does not mean a particular site has passed capacity, recovery, HA, security, or sustained-observation acceptance.
+
 ### P0: Freeze the production contract
 
 - Add `SiteId`, the canonical ingestion envelope, and rejection of unknown major versions.

@@ -137,6 +137,11 @@ public sealed record MechanismClaimUsage
     public required string UsageType { get; init; }
     public required string ContentHash { get; init; }
     public string? ClaimName { get; init; }
+    /// <summary>
+    ///     读取建议审计信息时解析出的精确声明版本。写入使用记录时为空；读取时必须与
+    ///     ClaimId、ClaimVersion 和 ContentHash 一致，不能回退到声明的当前版本。
+    /// </summary>
+    public MechanismClaimVersion? AppliedClaim { get; init; }
 }
 
 public sealed record MechanismClaimLifecycleRequest

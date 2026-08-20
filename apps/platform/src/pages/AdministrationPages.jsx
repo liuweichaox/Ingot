@@ -5,13 +5,7 @@ import { postJson } from "../api/http";
 import { extractRows, useApi } from "../hooks/useApi";
 import { Alert, Button, Card, DataTable, Drawer, EmptyState, Field, Input, Metric, Page, Select, StatusBadge, notify, useConfirmDialog } from "../ui/components";
 import { formatTime, formatInteger, formatBytes, metricTotal, formatDuration, edgeStatus, LoadingCard } from "./shared";
-
-const platformRoleOptions = [
-  ["platform.admin", "平台管理员", "用户、权限和系统配置"],
-  ["quality.inspector", "质量检验员", "质量结果录入"],
-  ["quality.reviewer", "质量复核员", "质量结果复核"],
-  ["process.engineer", "工艺工程师", "分析、调查、模型和改进建议"],
-];
+import { formatRoleSummary, formatSiteScope, platformRoleOptions } from "../auth/identityPresentation";
 
 export function UsersPage() {
   const { data, loading, error, reload } = useApi("/api/v1/users");
@@ -137,8 +131,8 @@ export function UsersPage() {
               columns={[
                 { key: "username", label: "用户名" },
                 { key: "displayName", label: "姓名", render: value => value || "—" },
-                { key: "roles", label: "岗位权限", render: value => (value || []).map(role => platformRoleOptions.find(option => option[0] === role)?.[1] || role).join("、") || "未分配" },
-                { key: "siteIds", label: "站点范围", render: value => (value || []).join("、") || "未分配" },
+                { key: "roles", label: "岗位权限", render: formatRoleSummary },
+                { key: "siteIds", label: "站点范围", render: (value, row) => formatSiteScope(value, row.roles) },
                 { key: "disabled", label: "状态", render: value => <StatusBadge value={value ? "disabled" : "active"} /> },
                 { key: "createdAt", label: "创建时间", render: formatTime },
                 { key: "_action", label: "操作", render: (_value, row) => <Button variant="ghost" onClick={event => { event.stopPropagation(); startManage(row); }}>管理</Button> },
@@ -189,7 +183,7 @@ export function UsersPage() {
                 <div><Button variant="primary" disabled={busy || roles.length === 0} onClick={saveRoles}>保存权限</Button></div>
               </div>
             </Card>
-            <Card title="站点访问范围" description="多个 SiteId 使用英文逗号分隔；空值表示不授予生产站点读取权限。">
+            <Card title="站点访问范围" description="平台管理员拥有全部站点权限；其他岗位空值表示不授予生产站点读取权限。">
               <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
                 <Field label="SiteId"><Input value={siteIdsText} onChange={event => setSiteIdsText(event.target.value)} placeholder="SITE-001, SITE-002" /></Field>
                 <Button variant="primary" disabled={busy} onClick={saveSiteAccess}>保存站点范围</Button>

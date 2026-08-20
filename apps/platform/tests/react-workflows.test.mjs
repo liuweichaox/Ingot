@@ -182,7 +182,9 @@ test("edge pages use the registry heartbeat contract for status", () => {
   assert.match(pages, /\/api\/v1\/ingestion-tasks/);
   assert.match(pages, /控制参数回读/);
   assert.match(pages, /过程执行边界映射/);
-  assert.match(pages, /节点诊断日志/);
+  assert.match(pages, /节点操作日志/);
+  assert.match(pages, /展开系统日志/);
+  assert.match(pages, /status-intervals\?limit=24/);
   assert.match(pages, /数据源尚未具备工艺闭环条件/);
 });
 
@@ -409,6 +411,11 @@ test("optimized experiments explain which mechanism knowledge changed the recomm
   assert.match(researchProjects, /本次采用的机理知识/);
   assert.match(researchProjects, /缩窄硬边界/);
   assert.match(researchProjects, /候选偏好排序/);
+  assert.match(researchProjects, /appliedClaim/);
+  assert.match(researchProjects, /实际采用的边界与偏好/);
+  assert.match(researchProjects, /反证条件/);
+  assert.match(researchProjects, /冻结证据引用/);
+  assert.match(researchProjects, /mechanismKnowledgeSnapshotHash/);
 });
 
 test("historical replay reports preserve production-equivalent comparisons and failures", () => {

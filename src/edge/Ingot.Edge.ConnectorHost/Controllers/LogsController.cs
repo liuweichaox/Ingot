@@ -17,6 +17,7 @@ public class LogsController(ILogViewService logViewService) : ControllerBase
     public async Task<IActionResult> GetLogs(
         [FromQuery] string? level = null,
         [FromQuery] string? keyword = null,
+        [FromQuery] string? audience = null,
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 100,
         CancellationToken cancellationToken = default)
@@ -25,7 +26,7 @@ public class LogsController(ILogViewService logViewService) : ControllerBase
         {
             var skip = (page - 1) * pageSize;
             var (entries, totalCount) = await logViewService.GetLogsAsync(
-                level, keyword, skip, pageSize, cancellationToken);
+                level, keyword, audience, skip, pageSize, cancellationToken);
 
             return Ok(new
             {
@@ -52,4 +53,3 @@ public class LogsController(ILogViewService logViewService) : ControllerBase
         return Ok(levels);
     }
 }
-

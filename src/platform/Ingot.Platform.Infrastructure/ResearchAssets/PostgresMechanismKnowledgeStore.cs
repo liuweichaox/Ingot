@@ -387,7 +387,9 @@ public sealed class PostgresMechanismKnowledgeStore : IMechanismKnowledgeStore
         Guid projectId,
         CancellationToken ct = default)
     {
-        await using var command = dataSource.CreateCommand(
+        await using var connection = await dataSource.OpenConnectionAsync(ct).ConfigureAwait(false);
+        var values = new List<MechanismClaimUsage>();
+        await using (var command = new NpgsqlCommand(
             """
             SELECT usage.recommendation_id, usage.claim_id, usage.claim_version,
               usage.usage_type, usage.content_hash, version.name
@@ -397,21 +399,40 @@ public sealed class PostgresMechanismKnowledgeStore : IMechanismKnowledgeStore
               ON version.claim_id = usage.claim_id AND version.version = usage.claim_version
             WHERE claim.project_id = @project_id
             ORDER BY usage.recommendation_id, version.name, usage.usage_type;
-            """);
-        command.Parameters.AddWithValue("project_id", projectId);
-        await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
-        var values = new List<MechanismClaimUsage>();
-        while (await reader.ReadAsync(ct).ConfigureAwait(false))
-            values.Add(new MechanismClaimUsage
-            {
-                RecommendationId = reader.GetGuid(0),
-                ClaimId = reader.GetGuid(1),
-                ClaimVersion = reader.GetInt32(2),
-                UsageType = reader.GetString(3),
-                ContentHash = reader.GetString(4),
-                ClaimName = reader.GetString(5)
-            });
-        return values;
+            """, connection))
+        {
+            command.Parameters.AddWithValue("project_id", projectId);
+            await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
+            while (await reader.ReadAsync(ct).ConfigureAwait(false))
+                values.Add(new MechanismClaimUsage
+                {
+                    RecommendationId = reader.GetGuid(0),
+                    ClaimId = reader.GetGuid(1),
+                    ClaimVersion = reader.GetInt32(2),
+                    UsageType = reader.GetString(3),
+                    ContentHash = reader.GetString(4),
+                    ClaimName = reader.GetString(5)
+                });
+        }
+
+        var claims = new Dictionary<(Guid ClaimId, int Version), MechanismClaimVersion>();
+        foreach (var key in values.Select(static value => (value.ClaimId, value.ClaimVersion)).Distinct())
+        {
+            var claim = await ReadClaimAsync(connection, key.ClaimId, key.ClaimVersion, ct)
+                .ConfigureAwait(false)
+                ?? throw new InvalidOperationException("建议引用的机理声明版本不存在。");
+            if (claim.ProjectId != projectId)
+                throw new InvalidOperationException("建议引用的机理声明不属于当前研发项目。");
+            claims[key] = claim;
+        }
+
+        return values.Select(value =>
+        {
+            var claim = claims[(value.ClaimId, value.ClaimVersion)];
+            if (!string.Equals(value.ContentHash, claim.ContentHash, StringComparison.Ordinal))
+                throw new InvalidOperationException("建议引用的机理声明内容哈希不一致。");
+            return value with { ClaimName = claim.Name, AppliedClaim = claim };
+        }).ToArray();
     }
 
     public async Task<bool> LifecycleEvidenceUsedAsync(

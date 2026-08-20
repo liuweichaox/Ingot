@@ -15,6 +15,7 @@ public interface ILogViewService
     /// </summary>
     /// <param name="level">日志级别过滤（可选）</param>
     /// <param name="keyword">关键词搜索（可选）</param>
+    /// <param name="audience">日志受众过滤：operator、system 或空值（全部）</param>
     /// <param name="skip">跳过条数</param>
     /// <param name="take">获取条数</param>
     /// <param name="cancellationToken">取消令牌</param>
@@ -22,6 +23,7 @@ public interface ILogViewService
     Task<(List<LogEntry> Entries, int TotalCount)> GetLogsAsync(
         string? level = null,
         string? keyword = null,
+        string? audience = null,
         int skip = 0,
         int take = 100,
         CancellationToken cancellationToken = default);
@@ -43,4 +45,6 @@ public class LogEntry
     public string Message { get; set; } = string.Empty;
     public string? Exception { get; set; }
     public string Source { get; set; } = string.Empty;
+    public string Audience { get; set; } = LogAudiences.System;
+    public string Category { get; set; } = "系统";
 }

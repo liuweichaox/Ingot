@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link, useParams } from "react-router";
 import { extractRows, useApi } from "../hooks/useApi";
 import { Alert, Badge, Card, DataTable, Metric, Page, StatusBadge, WorkflowGuide } from "../ui/components";
@@ -49,12 +50,14 @@ export function EdgesPage() {
   );
 }
 export function EdgeDetailPage() {
+  const [showSystemLogs, setShowSystemLogs] = useState(false);
   const { edgeId = "" } = useParams();
   const encodedId = encodeURIComponent(edgeId);
   const edges = useApi("/api/edges", { interval: 10000 });
   const acquisition = useApi(`/api/edges/${encodedId}/acquisition/status`, { interval: 5000 });
-  const statusHistory = useApi(`/api/edges/${encodedId}/status-history?limit=96`, { interval: 30000 });
-  const logs = useApi(`/api/edges/${encodedId}/logs?page=1&pageSize=50`, { interval: 10000 });
+  const statusIntervals = useApi(`/api/edges/${encodedId}/status-intervals?limit=24`, { interval: 30000 });
+  const logAudience = showSystemLogs ? "" : "&audience=operator";
+  const logs = useApi(`/api/edges/${encodedId}/logs?page=1&pageSize=50${logAudience}`, { interval: 10000 });
   const ingestionTasks = useApi("/api/v1/ingestion-tasks", { interval: 10000 });
   const edge = extractRows(edges.data).find(row => row.edgeId === edgeId);
   const tasks = acquisition.data?.tasks || [];
@@ -77,7 +80,7 @@ export function EdgeDetailPage() {
   const controlParameterMappingCount = publishedTasks.reduce((total, task) => total + (task.processSpecification?.parameterMappings?.length || 0), 0);
   const lifecycleTaskCount = publishedTasks.filter(task => task.lifecycle).length;
   const allTaskDefinitionsResolved = tasks.length > 0 && taskRows.every(task => task.ingestionTask);
-  const error = edges.error || acquisition.error || statusHistory.error || logs.error || ingestionTasks.error;
+  const error = edges.error || acquisition.error || statusIntervals.error || logs.error || ingestionTasks.error;
   const delivery = edge?.delivery;
   const outboxBacklog = Number(delivery?.pendingEventCount || 0);
   const shipped = Number(delivery?.eventsShipped || 0);
@@ -149,17 +152,17 @@ export function EdgeDetailPage() {
             : "补齐运行任务、过程信号、实际控制参数和运行边界后，即可形成可分析的运行证据。"}
         </p>
       </Card>
-      <Card title="采集与上行历史" description="按 Platform 接收心跳的时间保存七天，可用于定位停采、积压开始和恢复时刻。">
+      <Card title="采集与上行状态区间" description="连续相同状态自动合并；原始心跳仍在 Platform 保存七天，用于审计和复算。">
         <DataTable
-          rows={extractRows(statusHistory.data).slice(0, 24)}
-          keyField="recordedAt"
+          rows={extractRows(statusIntervals.data)}
+          getRowKey={row => `${row.startedAt}:${row.endedAt}`}
           columns={[
-            { key: "recordedAt", label: "接收时间", render: formatTime },
+            { key: "startedAt", label: "持续区间", render: (_value, row) => <div><p>{formatTime(row.startedAt)} – {formatTime(row.endedAt)}</p><p className="mt-0.5 text-xs text-slate-500">持续 {formatDuration(Math.max(0, new Date(row.endedAt) - new Date(row.startedAt)))} · {formatInteger(row.sampleCount)} 次心跳</p></div> },
             { key: "acquisitionState", label: "采集", render: value => <StatusBadge value={value || "unknown"} /> },
-            { key: "validSnapshotCount", label: "有效快照", render: formatInteger },
-            { key: "emittedEventCount", label: "事件", render: formatInteger },
+            { key: "endingValidSnapshotCount", label: "新增快照", render: (_value, row) => formatInteger(Math.max(0, Number(row.endingValidSnapshotCount) - Number(row.startingValidSnapshotCount))) },
+            { key: "endingEmittedEventCount", label: "新增事件", render: (_value, row) => formatInteger(Math.max(0, Number(row.endingEmittedEventCount) - Number(row.startingEmittedEventCount))) },
             { key: "deliveryState", label: "上行", render: value => <StatusBadge value={value || "unknown"} /> },
-            { key: "pendingEventCount", label: "积压", render: formatInteger },
+            { key: "maximumPendingEventCount", label: "最高积压", render: formatInteger },
             { key: "_error", label: "问题", render: (_value, row) => row.acquisitionError || row.deliveryError || "无" },
           ]}
         />
@@ -215,7 +218,11 @@ export function EdgeDetailPage() {
           ]}
         />
       </Card>
-      <Card title="节点诊断日志" description={`仅在排查连接、协议或上行问题时使用 · 最近 ${recentLogs.length} 条 / 共 ${logs.data?.total ?? recentLogs.length} 条`}>
+      <Card
+        title={showSystemLogs ? "节点系统日志" : "节点操作日志"}
+        description={`${showSystemLogs ? "包含框架启动和内部运行记录" : "默认仅显示连接、采集、配置、上行问题与可操作事件"} · 最近 ${recentLogs.length} 条 / 共 ${logs.data?.total ?? recentLogs.length} 条`}
+        actions={<button type="button" className="text-sm font-medium text-blue-600 hover:text-blue-700" onClick={() => setShowSystemLogs(value => !value)}>{showSystemLogs ? "返回操作日志" : "展开系统日志"}</button>}
+      >
         <DataTable
           rows={recentLogs}
           getRowKey={(row, index) => `${row.timestamp}:${index}`}
@@ -223,7 +230,7 @@ export function EdgeDetailPage() {
             { key: "timestamp", label: "时间", render: formatTime },
             { key: "level", label: "级别", render: value => <Badge tone={["error", "fatal"].includes(String(value).toLowerCase()) ? "danger" : String(value).toLowerCase() === "warning" ? "warning" : "neutral"}>{value}</Badge> },
             { key: "message", label: "内容" },
-            { key: "source", label: "来源", render: value => String(value || "—").replaceAll("\"", "") },
+            { key: "category", label: "类别", render: (value, row) => <div><p>{value || "节点服务"}</p>{showSystemLogs && <p className="mt-0.5 max-w-80 break-all text-xs text-slate-400">{String(row.source || "—").replaceAll("\"", "")}</p>}</div> },
           ]}
         />
       </Card>

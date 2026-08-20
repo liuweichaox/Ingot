@@ -114,6 +114,8 @@ Current objective strategies include:
 - hard parameter bounds and linear constraints;
 - modeled quality or safety outcome constraints.
 
+Before calling Optimizer, Platform also selects active, conflict-free mechanism claims that match the project context. Hard constraints narrow candidate bounds and soft constraints rank candidates; the input, claim versions, and knowledge-snapshot hash are frozen with the experiment. This is knowledge-assisted constraint and explanation behavior, not an assertion that Bayesian priors, mechanism features, or residual models are already wired into the GP.
+
 Multi-objective cases may use qLogNEHVI, while single-objective cases may use qLogNEI. The acquisition function is a current implementation strategy, not a product principle.
 
 ## Safety and cold start
@@ -165,7 +167,7 @@ Historical replay reveals outcomes sequentially in time; future runs are never v
 
 ## Current limitations
 
-See [Mechanism knowledge design](mechanism-knowledge.en.md) for the target architecture, knowledge-absent degradation modes, and governance boundaries.
+See [Mechanism knowledge design](mechanism-knowledge.en.md) for the current implementation, knowledge-absent degradation modes, and remaining fusion boundary.
 
 - Internal chain validation from import to R&D observations has used controlled, non-public production history, while formal leakage-free replay and prospective online value validation remain incomplete.
 - Real production data, parameter distributions, and derived results do not enter the public repository. Public tests use contract-equivalent synthetic data and must not be presented as real-project evidence.

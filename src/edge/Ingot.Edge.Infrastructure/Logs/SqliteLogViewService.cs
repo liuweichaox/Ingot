@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -16,6 +15,19 @@ namespace Ingot.Edge.Infrastructure.Logs;
 /// </summary>
 public class SqliteLogViewService : ILogViewService, IDisposable
 {
+    private const string OperatorAudienceSql =
+        """
+        lower(l.Level) IN ('warning', 'error', 'fatal') OR
+        instr(lower(CASE WHEN json_valid(l.Properties) THEN coalesce(json_extract(l.Properties, '$.SourceContext'), '') ELSE '' END), 'acquisition') > 0 OR
+        instr(lower(CASE WHEN json_valid(l.Properties) THEN coalesce(json_extract(l.Properties, '$.SourceContext'), '') ELSE '' END), 'protocol') > 0 OR
+        instr(lower(CASE WHEN json_valid(l.Properties) THEN coalesce(json_extract(l.Properties, '$.SourceContext'), '') ELSE '' END), 'device') > 0 OR
+        instr(lower(CASE WHEN json_valid(l.Properties) THEN coalesce(json_extract(l.Properties, '$.SourceContext'), '') ELSE '' END), 'configuration') > 0 OR
+        instr(lower(CASE WHEN json_valid(l.Properties) THEN coalesce(json_extract(l.Properties, '$.SourceContext'), '') ELSE '' END), 'deployment') > 0 OR
+        instr(lower(CASE WHEN json_valid(l.Properties) THEN coalesce(json_extract(l.Properties, '$.SourceContext'), '') ELSE '' END), 'outbox') > 0 OR
+        instr(lower(CASE WHEN json_valid(l.Properties) THEN coalesce(json_extract(l.Properties, '$.SourceContext'), '') ELSE '' END), 'shipment') > 0 OR
+        instr(lower(CASE WHEN json_valid(l.Properties) THEN coalesce(json_extract(l.Properties, '$.SourceContext'), '') ELSE '' END), 'delivery') > 0
+        """;
+
     private readonly SqliteConnection _connection;
     private readonly SemaphoreSlim _connectionLock = new(1, 1);
     private readonly string _dbPath;
@@ -97,6 +109,7 @@ public class SqliteLogViewService : ILogViewService, IDisposable
     public async Task<(List<LogEntry> Entries, int TotalCount)> GetLogsAsync(
         string? level = null,
         string? keyword = null,
+        string? audience = null,
         int skip = 0,
         int take = 100,
         CancellationToken cancellationToken = default)
@@ -130,7 +143,16 @@ public class SqliteLogViewService : ILogViewService, IDisposable
                     ? "WHERE " + string.Join(" AND ", whereConditions)
                     : "";
 
-                // 获取总数
+                var normalizedAudience = NormalizeAudience(audience);
+                if (normalizedAudience is not null)
+                {
+                    whereConditions.Add(normalizedAudience == LogAudiences.Operator
+                        ? $"({OperatorAudienceSql})"
+                        : $"NOT ({OperatorAudienceSql})");
+                    whereClause = "WHERE " + string.Join(" AND ", whereConditions);
+                }
+
+                // 受众、级别和关键词均在 SQLite 内完成过滤、计数与分页。
                 var countSql = $@"
                 SELECT COUNT(*) 
                 FROM Logs l
@@ -138,8 +160,8 @@ public class SqliteLogViewService : ILogViewService, IDisposable
             ";
 
                 int totalCount;
-                using (var countCommand = new SqliteCommand(countSql, _connection))
                 {
+                    using var countCommand = new SqliteCommand(countSql, _connection);
                     foreach (var param in parameters)
                     {
                         countCommand.Parameters.Add(param);
@@ -182,13 +204,16 @@ public class SqliteLogViewService : ILogViewService, IDisposable
 
                         var source = ExtractSourceFromProperties(properties);
 
+                        var classification = LogAudienceClassifier.Classify(rowLevel, source);
                         entries.Add(new LogEntry
                         {
                             Timestamp = rowTimestamp,
                             Level = rowLevel,
                             Source = source,
                             Message = message,
-                            Exception = exception
+                            Exception = exception,
+                            Audience = classification.Audience,
+                            Category = classification.Category
                         });
                     }
                 }
@@ -201,6 +226,14 @@ public class SqliteLogViewService : ILogViewService, IDisposable
             _connectionLock.Release();
         }
     }
+
+    private static string? NormalizeAudience(string? audience)
+        => audience?.Trim().ToLowerInvariant() switch
+        {
+            LogAudiences.Operator => LogAudiences.Operator,
+            LogAudiences.System => LogAudiences.System,
+            _ => null
+        };
 
     /// <summary>
     ///     获取可用的日志级别列表

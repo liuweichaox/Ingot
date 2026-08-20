@@ -48,7 +48,7 @@
 - `reviewed → supported → validated → active → retired` 主生命周期，并允许任一晋级状态经正式反证实验进入 `falsified`；支持、验证和反证均由预注册效应与置信区间自动判定并记录人工评价；
 - 仅对项目上下文匹配、无开放冲突的 `active` 声明应用硬边界和软范围候选排序；
 - 优化、历史回放、影子证据和受控在线准入冻结同一个机理知识快照；知识变化后旧实验不能批准或启动；
-- 研发实验页面展示实际采用的声明、版本、用途和内容哈希。
+- 研发实验页面展示实际采用的冻结声明版本、用途、内容哈希、具体约束、反证条件和证据引用；读取时校验使用记录与声明版本哈希一致。
 
 关键缺口是：
 
@@ -405,44 +405,49 @@ public sealed record RecommendationCapabilityProfile
 
 存在冲突、范围不明或证据不足时，应排除相关知识或降级模式，不能静默选择一条声明。
 
-## 11. API 提案
+## 11. 当前 API
 
 ### 来源和片段
 
 ```text
-POST /api/v1/research-projects/{projectId}/knowledge-sources
-GET  /api/v1/research-projects/{projectId}/knowledge-sources
-GET  /api/v1/knowledge-sources/{sourceId}
-POST /api/v1/knowledge-sources/{sourceId}:extract
-POST /api/v1/knowledge-fragments/{fragmentId}:review
+GET  /api/v1/process-knowledge?projectId={projectId}
+POST /api/v1/process-knowledge
+GET  /api/v1/process-knowledge/{sourceId}
+GET  /api/v1/process-knowledge/{sourceId}/content
+POST /api/v1/process-knowledge/{sourceId}/extract
+POST /api/v1/process-knowledge/{sourceId}/records
+POST /api/v1/process-knowledge/{sourceId}/status
 ```
+
+上传使用 `multipart/form-data`；片段和提取状态保存在来源记录内，目前没有独立的 `knowledge-fragments` 控制器。
 
 ### 机理声明
 
 ```text
 POST /api/v1/research-projects/{projectId}/mechanism-claims
 GET  /api/v1/research-projects/{projectId}/mechanism-claims
-GET  /api/v1/mechanism-claims/{claimId}/versions/{version}
-POST /api/v1/mechanism-claims/{claimId}/versions/{version}:review
-POST /api/v1/mechanism-claims/{claimId}/versions/{version}:activate
-POST /api/v1/mechanism-claims/{claimId}/versions/{version}:retire
-GET  /api/v1/mechanism-claims:applicable
+GET  /api/v1/research-projects/{projectId}/mechanism-claims/{claimId}?version={version}
+POST /api/v1/research-projects/{projectId}/mechanism-claims/{claimId}/review
+POST /api/v1/research-projects/{projectId}/mechanism-claims/{claimId}/lifecycle
+GET  /api/v1/research-projects/{projectId}/mechanism-claims/conflicts
+POST /api/v1/research-projects/{projectId}/mechanism-claims/conflicts
+POST /api/v1/research-projects/{projectId}/mechanism-claims/conflicts/{conflictId}/resolve
 ```
 
 ### 建议解释
 
-```text
-GET /api/v1/recommendations/{recommendationId}/knowledge-usage
-GET /api/v1/recommendations/{recommendationId}/capability-profile
-```
+当前没有独立的通用 `recommendations` 控制器。项目工作区
+`GET /api/v1/research-projects/{projectId}` 返回实验的优化快照和
+`mechanismKnowledgeUsages`；每条使用记录携带精确冻结的声明版本，读取时校验其内容哈希。
+若未来拆出独立建议详情端点，必须从同一 Application 查询模型投影，不能建立第二份使用记录。
 
 写操作必须使用结构化请求和明确的权限策略。状态转换使用命令端点，不能通过通用 PUT 任意覆盖。
 
 ## 12. 页面信息架构
 
-### 12.1 工艺研发 / 机理知识
+### 12.1 工艺研发 / 研发资产
 
-新增稳定入口，包含：
+当前稳定入口是“工艺研发 → 研发资产”。先选择研发项目，再进入机理知识工作台，包含：
 
 - **知识来源**：上传、解析、哈希、状态和项目范围；
 - **提取复核**：原文与提取结果左右对照，点击声明定位页码或单元格；
@@ -453,21 +458,22 @@ GET /api/v1/recommendations/{recommendationId}/capability-profile
 
 ### 12.2 研发项目
 
-项目工作区增加“机理”页签，只显示当前项目可访问的知识。提出假设时可以引用声明；设计实验时显示该实验将支持或反驳什么；结果完成后展示证据变化，但不自动改写声明。
+项目工作区当前没有独立“机理”页签。机理声明的生命周期通过研发资产工作台关联项目假设和实验结果；声明不会因为结果完成而被自动改写，晋级或反证必须走显式生命周期命令和独立审核。
 
-### 12.3 建议详情
+### 12.3 实验表中的建议解释
 
-每条建议显示：
+当前展示位置是项目“实验”表的“预测与可信度”列。只有实验带优化快照且本次优化实际采用声明时，才出现“本次采用的机理知识”展开面板。面板显示：
 
-- 当前模式；
-- 数据范围和样本覆盖；
-- 使用的声明及版本；
-- 使用方式：约束、先验、特征或解释；
+- 冻结知识快照哈希；
+- 使用的精确声明版本与内容哈希；
+- 使用方式：硬边界、候选排序或上下文解释；
 - 预测、不确定性和可行概率；
 - 硬安全边界和平台限制；
 - 是否位于已有数据范围；
 - 建议验证方式和反证条件；
-- 工程师采用、修改或拒绝原因。
+- 声明的反证条件和冻结证据引用。
+
+数据范围、预测、不确定性、可行概率和待执行点仍由同一“预测与可信度”列展示；影子采用、修改或拒绝原因保存在影子决策记录中，不复制到机理使用记录。
 
 ## 13. 安全、隐私与部署
 
@@ -481,6 +487,8 @@ GET /api/v1/recommendations/{recommendationId}/capability-profile
 - 原始来源删除遵循保留策略，不能破坏已发布结论的证据引用。
 
 ## 14. 实施顺序与验收
+
+当前阶段校准：P0 已实现；P1 已实现确定性提取、异步任务和人工工作台，但缺模型辅助语义草稿；P2 的硬边界、软排序、快照、使用追溯和准入门禁已实现，成对效果报告未完成；P3 只有独立可执行模型/融合资产与执行服务，尚未接入推荐；P4 的回放、影子和在线验证基础设施已实现，但没有形成可对外声称价值的真实项目通过证据。
 
 ### P0：声明内核和关系型存储
 

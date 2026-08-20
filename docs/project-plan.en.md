@@ -232,6 +232,8 @@ Each work line preregisters data, baselines, measures, threshold versions, accep
 
 ## 8. Current priorities and rolling batches
 
+The current code checkpoint is not a validation pass. Trusted identity, event integrity, quality admission, Application use cases, replay/shadow/online report services, mechanism-knowledge gates, and production-acceptance tooling are in the repository. A formal leakage-free report on real history, new-project shadow results, controlled-online results, a second scenario, and an external protocol implementation remain incomplete. The first two batches therefore shift from filling code paths to proving them under real load and failure exercises; the next scientific hard gate remains Batch 3, preregistered historical replay.
+
 | Priority | Work | Definition of done |
 |---|---|---|
 | P0 | run identity, actual values, context, inspection linkage, and quality validity | every analysis record uniquely reaches a real run and valid outcome |
@@ -246,11 +248,11 @@ Each work line preregisters data, baselines, measures, threshold versions, accep
 
 Current rolling batches:
 
-1. **Trusted identity and quality chain**: repair run identity, actual values, context admission, inspection validity, and stage statistics.
-2. **Historical evidence apparatus**: freeze real observations, protect transactions, and define hashes, retention, and recomputation.
+1. **Trusted identity and quality chain**: core code paths and database constraints exist; continue adversarial acceptance with real site isolation, clock faults, missing actual values, and incorrect inspection linkage.
+2. **Historical evidence apparatus**: freezing, content hashes, transactions, replay services, and recovery tooling exist; complete site retention rules, recomputation consistency, and recovery-drill evidence.
 3. **Preregistered historical replay**: complete engineering-question and production-equivalent sequential replay, preserve every failure and limit in the controlled internal report, and expose only the protocol and conclusion boundaries publicly.
 4. **Process-decision case**: fix data quality, baseline, first deviation, candidates, counterevidence, confounding, missingness, and experiment-proposal structure.
-5. **Agent evaluation flywheel**: engineer golden questions, correct refusal, citation coverage, permissions, and tool-call evaluation.
+5. **Agent evaluation flywheel**: golden-question, run-snapshot, and evaluation storage exist; expand adversarial examples for engineer questions, correct refusal, citation coverage, permissions, and tool calls.
 6. **Prospective shadow validation**: freeze variables, mappings, context, constraints, policies, and engineer rejection reasons.
 7. **Protocolized read and propose capabilities**: derive stable domain tools from internal APIs and provide MCP, OpenAPI, or SDK adapters.
 8. **Controlled-action preparation**: action ledger, authorization tokens, policy checks, device confirmation, stop, and rollback.
