@@ -16,8 +16,20 @@ public static class PlatformRoles
     ];
 }
 
-public sealed record PlatformIdentity(string UserId, IReadOnlySet<string> Roles)
+public static class PlatformClaimTypes
+{
+    public const string SiteId = "ingot:site";
+}
+
+public sealed record PlatformIdentity(
+    string UserId,
+    IReadOnlySet<string> Roles,
+    IReadOnlySet<string> SiteIds)
 {
     public bool HasAnyRole(params string[] roles)
         => roles.Any(Roles.Contains);
+
+    public bool CanAccessSite(string? siteId)
+        => !string.IsNullOrWhiteSpace(siteId) &&
+           (Roles.Contains(PlatformRoles.PlatformAdministrator) || SiteIds.Contains(siteId.Trim()));
 }

@@ -181,7 +181,10 @@ public sealed class PostgresProcessExecutionAnalysisMaterializationStore : IProc
                 execution_analysis_recompute_jobs.invalidated_source_max_ingest_id,
                 EXCLUDED.invalidated_source_max_ingest_id),
               reason=EXCLUDED.reason,status='queued',available_at=now(),
-              lease_id=NULL,leased_at=NULL,updated_at=now();
+              lease_id=NULL,leased_at=NULL,last_error=NULL,failed_at=NULL,
+              attempt_count=CASE WHEN execution_analysis_recompute_jobs.status='failed' THEN 0
+                                 ELSE execution_analysis_recompute_jobs.attempt_count END,
+              updated_at=now();
             """,
             connection,
             transaction);
@@ -423,17 +426,25 @@ public sealed class PostgresProcessExecutionAnalysisMaterializationStore : IProc
         string executionId,
         Guid leaseId,
         TimeSpan delay,
+        string error,
+        int maxAttempts,
         CancellationToken ct = default)
     {
         await using var command = _dataSource.CreateCommand(
             """
-            UPDATE execution_analysis_recompute_jobs SET status='queued',available_at=now()+@delay,
-              lease_id=NULL,leased_at=NULL,updated_at=now()
+            UPDATE execution_analysis_recompute_jobs SET
+              status=CASE WHEN attempt_count >= @max_attempts THEN 'failed' ELSE 'queued' END,
+              available_at=now()+@delay,lease_id=NULL,leased_at=NULL,
+              last_error=@error,
+              failed_at=CASE WHEN attempt_count >= @max_attempts THEN now() ELSE NULL END,
+              updated_at=now()
             WHERE execution_id=@id AND lease_id=@lease_id AND status='running';
             """);
         command.Parameters.AddWithValue("id", executionId);
         command.Parameters.AddWithValue("lease_id", leaseId);
         command.Parameters.AddWithValue("delay", delay);
+        command.Parameters.AddWithValue("error", error.Length <= 2000 ? error : error[..2000]);
+        command.Parameters.AddWithValue("max_attempts", maxAttempts);
         return await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false) == 1;
     }
 

@@ -10,13 +10,13 @@ public sealed class AcquisitionProbeTaskCoordinatorTests
     [Fact]
     public async Task Edge_ShouldClaimOnlyItsOwnTaskAndCompleteWaitingRequest()
     {
-        var coordinator = new AcquisitionProbeTaskCoordinator();
+        var coordinator = new AcquisitionProbeTaskCoordinator(new MemoryProbeTaskStore());
         var waiting = coordinator.QueueAndWaitAsync(
             Deployment("EDGE-001"),
             TimeSpan.FromSeconds(5));
 
-        Assert.Null(coordinator.ClaimNext("EDGE-002"));
-        var task = coordinator.ClaimNext("EDGE-001");
+        Assert.Null(await coordinator.ClaimNextAsync("EDGE-002"));
+        var task = await coordinator.ClaimNextAsync("EDGE-001");
         Assert.NotNull(task);
         Assert.Equal("EDGE-001", task.EdgeId);
 
@@ -28,7 +28,7 @@ public sealed class AcquisitionProbeTaskCoordinatorTests
             Message = "ok",
             TestedAt = DateTimeOffset.UtcNow
         };
-        Assert.True(coordinator.Complete(new AcquisitionProbeTaskCompletion
+        Assert.True(await coordinator.CompleteAsync(new AcquisitionProbeTaskCompletion
         {
             TaskId = task.TaskId,
             EdgeId = "EDGE-001",
@@ -41,14 +41,14 @@ public sealed class AcquisitionProbeTaskCoordinatorTests
     [Fact]
     public async Task WrongEdge_ShouldNotCompleteClaimedTask()
     {
-        var coordinator = new AcquisitionProbeTaskCoordinator();
+        var coordinator = new AcquisitionProbeTaskCoordinator(new MemoryProbeTaskStore());
         using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(5));
         var waiting = coordinator.QueueAndWaitAsync(
             Deployment("EDGE-001"),
             TimeSpan.FromSeconds(5),
             new SourceDiscoveryQuery(),
             cancellation.Token);
-        var task = coordinator.ClaimNext("EDGE-001")!;
+        var task = (await coordinator.ClaimNextAsync("EDGE-001"))!;
         var result = new AcquisitionProbeResult
         {
             Success = false,
@@ -58,13 +58,13 @@ public sealed class AcquisitionProbeTaskCoordinatorTests
             TestedAt = DateTimeOffset.UtcNow
         };
 
-        Assert.False(coordinator.Complete(new AcquisitionProbeTaskCompletion
+        Assert.False(await coordinator.CompleteAsync(new AcquisitionProbeTaskCompletion
         {
             TaskId = task.TaskId,
             EdgeId = "EDGE-002",
             Result = result
         }));
-        Assert.True(coordinator.Complete(new AcquisitionProbeTaskCompletion
+        Assert.True(await coordinator.CompleteAsync(new AcquisitionProbeTaskCompletion
         {
             TaskId = task.TaskId,
             EdgeId = "EDGE-001",
@@ -76,15 +76,15 @@ public sealed class AcquisitionProbeTaskCoordinatorTests
     [Fact]
     public async Task CompletionMustBelongToAClaimedTaskAndTheExpectedProtocol()
     {
-        var coordinator = new AcquisitionProbeTaskCoordinator();
+        var coordinator = new AcquisitionProbeTaskCoordinator(new MemoryProbeTaskStore());
         using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(5));
         var waiting = coordinator.QueueAndWaitAsync(
             Deployment("EDGE-001"),
             TimeSpan.FromSeconds(5),
             ct: cancellation.Token);
-        var queued = coordinator.ClaimNext("EDGE-001")!;
+        var queued = (await coordinator.ClaimNextAsync("EDGE-001"))!;
 
-        Assert.False(coordinator.Complete(new AcquisitionProbeTaskCompletion
+        Assert.False(await coordinator.CompleteAsync(new AcquisitionProbeTaskCompletion
         {
             TaskId = queued.TaskId,
             EdgeId = queued.EdgeId,
@@ -106,7 +106,7 @@ public sealed class AcquisitionProbeTaskCoordinatorTests
             Message = "ok",
             TestedAt = DateTimeOffset.UtcNow
         };
-        Assert.True(coordinator.Complete(new AcquisitionProbeTaskCompletion
+        Assert.True(await coordinator.CompleteAsync(new AcquisitionProbeTaskCompletion
         {
             TaskId = queued.TaskId,
             EdgeId = queued.EdgeId,
@@ -135,4 +135,46 @@ public sealed class AcquisitionProbeTaskCoordinatorTests
                 Status = ConfigurationStatuses.Published
             }
         };
+
+    private sealed class MemoryProbeTaskStore : IAcquisitionProbeTaskStore
+    {
+        private readonly Dictionary<string, AcquisitionProbeTask> _tasks = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, AcquisitionProbeResult> _results = new(StringComparer.Ordinal);
+        private readonly HashSet<string> _claimed = new(StringComparer.Ordinal);
+
+        public Task EnqueueAsync(AcquisitionProbeTask task, CancellationToken ct = default)
+        {
+            _tasks.Add(task.TaskId, task);
+            return Task.CompletedTask;
+        }
+
+        public Task<AcquisitionProbeTask?> ClaimNextAsync(string edgeId, CancellationToken ct = default)
+        {
+            var task = _tasks.Values.FirstOrDefault(item =>
+                item.EdgeId == edgeId && item.ExpiresAt > DateTimeOffset.UtcNow && !_claimed.Contains(item.TaskId));
+            if (task is not null) _claimed.Add(task.TaskId);
+            return Task.FromResult(task);
+        }
+
+        public Task<bool> CompleteAsync(AcquisitionProbeTaskCompletion completion, CancellationToken ct = default)
+        {
+            var valid = _tasks.TryGetValue(completion.TaskId, out var task) &&
+                        _claimed.Contains(completion.TaskId) &&
+                        task.EdgeId == completion.EdgeId &&
+                        task.Deployment.Task.Protocol == completion.Result.Protocol;
+            if (valid) _results[completion.TaskId] = completion.Result;
+            return Task.FromResult(valid);
+        }
+
+        public Task<AcquisitionProbeResult?> GetResultAsync(string taskId, CancellationToken ct = default)
+            => Task.FromResult(_results.GetValueOrDefault(taskId));
+
+        public Task DeleteAsync(string taskId, CancellationToken ct = default)
+        {
+            _tasks.Remove(taskId);
+            _results.Remove(taskId);
+            _claimed.Remove(taskId);
+            return Task.CompletedTask;
+        }
+    }
 }

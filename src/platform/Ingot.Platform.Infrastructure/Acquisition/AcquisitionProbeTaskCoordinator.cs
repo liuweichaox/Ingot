@@ -1,17 +1,23 @@
-using System.Collections.Concurrent;
 using Ingot.Contracts.Acquisition;
 
 namespace Ingot.Platform.Infrastructure.Acquisition;
 
-/// <summary>
-///     Coordinates short-lived probe requests without requiring Platform to open a connection into OT.
-///     Probe tasks are deliberately ephemeral: the caller is waiting for the result, and a Platform restart
-///     terminates that request instead of replaying an obsolete device probe.
-/// </summary>
-public sealed class AcquisitionProbeTaskCoordinator
+public interface IAcquisitionProbeTaskStore
 {
-    private readonly ConcurrentDictionary<string, PendingProbe> _pending = new(StringComparer.Ordinal);
-    private readonly ConcurrentDictionary<string, ConcurrentQueue<string>> _queues = new(StringComparer.Ordinal);
+    Task EnqueueAsync(AcquisitionProbeTask task, CancellationToken ct = default);
+    Task<AcquisitionProbeTask?> ClaimNextAsync(string edgeId, CancellationToken ct = default);
+    Task<bool> CompleteAsync(AcquisitionProbeTaskCompletion completion, CancellationToken ct = default);
+    Task<AcquisitionProbeResult?> GetResultAsync(string taskId, CancellationToken ct = default);
+    Task DeleteAsync(string taskId, CancellationToken ct = default);
+}
+
+/// <summary>
+///     Coordinates read-only device probes through a persistent store. The waiting HTTP request may be served by
+///     a different API replica from Edge polling and completion; PostgreSQL is the coordination authority.
+/// </summary>
+public sealed class AcquisitionProbeTaskCoordinator(IAcquisitionProbeTaskStore store)
+{
+    private static readonly TimeSpan ResultPollInterval = TimeSpan.FromMilliseconds(100);
 
     public async Task<AcquisitionProbeResult> QueueAndWaitAsync(
         AcquisitionDeployment deployment,
@@ -33,61 +39,40 @@ public sealed class AcquisitionProbeTaskCoordinator
             CreatedAt = now,
             ExpiresAt = now.Add(timeout)
         };
-        var pending = new PendingProbe(task);
-        if (!_pending.TryAdd(task.TaskId, pending))
-            throw new InvalidOperationException("Failed to allocate a unique acquisition probe task.");
-        _queues.GetOrAdd(task.EdgeId, static _ => new ConcurrentQueue<string>()).Enqueue(task.TaskId);
+        await store.EnqueueAsync(task, ct).ConfigureAwait(false);
 
+        using var timeoutSource = new CancellationTokenSource(timeout);
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, timeoutSource.Token);
         try
         {
-            return await pending.Completion.Task.WaitAsync(timeout, ct).ConfigureAwait(false);
+            while (true)
+            {
+                var result = await store.GetResultAsync(task.TaskId, linked.Token).ConfigureAwait(false);
+                if (result is not null)
+                    return result;
+                await Task.Delay(ResultPollInterval, linked.Token).ConfigureAwait(false);
+            }
+        }
+        catch (OperationCanceledException) when (timeoutSource.IsCancellationRequested && !ct.IsCancellationRequested)
+        {
+            throw new TimeoutException("The acquisition probe task expired.");
         }
         finally
         {
-            _pending.TryRemove(task.TaskId, out _);
+            await store.DeleteAsync(task.TaskId, CancellationToken.None).ConfigureAwait(false);
         }
     }
 
-    public AcquisitionProbeTask? ClaimNext(string edgeId)
-    {
-        if (string.IsNullOrWhiteSpace(edgeId) || !_queues.TryGetValue(edgeId, out var queue))
-            return null;
-        while (queue.TryDequeue(out var taskId))
-        {
-            if (!_pending.TryGetValue(taskId, out var pending))
-                continue;
-            if (pending.Task.ExpiresAt <= DateTimeOffset.UtcNow)
-            {
-                pending.Completion.TrySetException(new TimeoutException("The acquisition probe task expired."));
-                _pending.TryRemove(taskId, out _);
-                continue;
-            }
-            if (Interlocked.CompareExchange(ref pending.Claimed, 1, 0) == 0)
-                return pending.Task;
-        }
-        return null;
-    }
+    public Task<AcquisitionProbeTask?> ClaimNextAsync(string edgeId, CancellationToken ct = default)
+        => string.IsNullOrWhiteSpace(edgeId)
+            ? Task.FromResult<AcquisitionProbeTask?>(null)
+            : store.ClaimNextAsync(edgeId.Trim(), ct);
 
-    public bool Complete(AcquisitionProbeTaskCompletion completion)
+    public Task<bool> CompleteAsync(AcquisitionProbeTaskCompletion completion, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(completion);
-        if (!_pending.TryGetValue(completion.TaskId, out var pending) ||
-            Volatile.Read(ref pending.Claimed) == 0 ||
-            completion.Result is null ||
-            !string.Equals(pending.Task.EdgeId, completion.EdgeId, StringComparison.Ordinal) ||
-            !string.Equals(
-                pending.Task.Deployment.Task.Protocol,
-                completion.Result.Protocol,
-                StringComparison.Ordinal))
-            return false;
-        return pending.Completion.TrySetResult(completion.Result);
-    }
-
-    private sealed class PendingProbe(AcquisitionProbeTask task)
-    {
-        public AcquisitionProbeTask Task { get; } = task;
-        public TaskCompletionSource<AcquisitionProbeResult> Completion { get; } =
-            new(TaskCreationOptions.RunContinuationsAsynchronously);
-        public int Claimed;
+        return completion.Result is null
+            ? Task.FromResult(false)
+            : store.CompleteAsync(completion, ct);
     }
 }

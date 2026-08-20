@@ -44,6 +44,7 @@ public sealed class AdminSeederHostedService(
             DisplayName = "初始管理员",
             PasswordHash = hasher.Hash(password!),
             Roles = PlatformRoleNames.All,
+            SiteIds = [],
             CreatedAt = now,
             UpdatedAt = now
         }, cancellationToken).ConfigureAwait(false);

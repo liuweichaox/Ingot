@@ -53,7 +53,8 @@ public sealed class AuthController(
             UserId = user.UserId.ToString("D"),
             Username = user.Username,
             DisplayName = user.DisplayName,
-            Roles = user.Roles
+            Roles = user.Roles,
+            SiteIds = user.SiteIds
         });
     }
 
@@ -79,7 +80,8 @@ public sealed class AuthController(
         {
             UserId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty,
             Username = User.Identity.Name ?? string.Empty,
-            Roles = User.FindAll(ClaimTypes.Role).Select(static claim => claim.Value).ToArray()
+            Roles = User.FindAll(ClaimTypes.Role).Select(static claim => claim.Value).ToArray(),
+            SiteIds = User.FindAll(PlatformClaimTypes.SiteId).Select(static claim => claim.Value).ToArray()
         });
     }
 }

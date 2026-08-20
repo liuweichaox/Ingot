@@ -30,6 +30,8 @@ public sealed class UsersController(
             return InvalidRequest($"password 至少 {MinPasswordLength} 位。");
         if (!TryNormalizeRoles(request.Roles, out var roles, out var roleError))
             return InvalidRequest(roleError);
+        if (!TryNormalizeSiteIds(request.SiteIds, out var siteIds, out var siteError))
+            return InvalidRequest(siteError);
 
         var usernameLower = request.Username.Trim().ToLowerInvariant();
         if (await store.GetByUsernameAsync(usernameLower, ct).ConfigureAwait(false) is not null)
@@ -44,6 +46,7 @@ public sealed class UsersController(
             DisplayName = request.DisplayName?.Trim() ?? string.Empty,
             PasswordHash = hasher.Hash(request.Password),
             Roles = roles,
+            SiteIds = siteIds,
             CreatedAt = now,
             UpdatedAt = now
         }, ct).ConfigureAwait(false);
@@ -58,6 +61,21 @@ public sealed class UsersController(
         if (!TryNormalizeRoles(request?.Roles ?? [], out var roles, out var roleError))
             return InvalidRequest(roleError);
         return await store.SetRolesAsync(userId, roles, ct).ConfigureAwait(false) ? NoContent() : ResourceNotFound();
+    }
+
+    [HttpPost("{userId:guid}:set-site-access")]
+    public async Task<IActionResult> SetSiteAccess(
+        Guid userId,
+        [FromBody] SetSiteAccessRequest? request,
+        CancellationToken ct)
+    {
+        var denied = DeniedAdmin();
+        if (denied is not null) return denied;
+        if (!TryNormalizeSiteIds(request?.SiteIds ?? [], out var siteIds, out var siteError))
+            return InvalidRequest(siteError);
+        return await store.SetSiteAccessAsync(userId, siteIds, ct).ConfigureAwait(false)
+            ? NoContent()
+            : ResourceNotFound();
     }
 
     [HttpPost("{userId:guid}:set-password")]
@@ -111,12 +129,39 @@ public sealed class UsersController(
         return true;
     }
 
+    private static bool TryNormalizeSiteIds(
+        IReadOnlyList<string> input,
+        out IReadOnlyList<string> siteIds,
+        out string error)
+    {
+        var normalized = input
+            .Where(static value => !string.IsNullOrWhiteSpace(value))
+            .Select(static value => value.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        var invalid = normalized.FirstOrDefault(static value =>
+            value.Length > 100 ||
+            value == "*" ||
+            value.Any(static character =>
+                !char.IsLetterOrDigit(character) && character is not '-' and not '_' and not '.'));
+        if (invalid is not null)
+        {
+            siteIds = [];
+            error = $"无效站点标识：{invalid}。";
+            return false;
+        }
+        siteIds = normalized;
+        error = string.Empty;
+        return true;
+    }
+
     private static UserSummary ToSummary(UserAccount user) => new()
     {
         UserId = user.UserId.ToString("D"),
         Username = user.Username,
         DisplayName = user.DisplayName,
         Roles = user.Roles,
+        SiteIds = user.SiteIds,
         Disabled = user.Disabled,
         CreatedAt = user.CreatedAt
     };

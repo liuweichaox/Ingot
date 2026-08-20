@@ -1,0 +1,7 @@
+# Replace these labels with the admitted SiteId and EdgeId. Add one target block per
+# independently operated Edge; labels are operational identity, not display text.
+- targets:
+    - connector-host:8001
+  labels:
+    site: SITE-FACTORY-001
+    edge: EDGE-FACTORY-001

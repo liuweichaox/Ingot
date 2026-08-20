@@ -2,12 +2,17 @@ using System.Text.Json;
 using Ingot.Contracts.Events;
 using Ingot.Domain.Events;
 using Ingot.Platform.Api.Controllers;
+using Ingot.Platform.Api.Agents;
 using Ingot.Platform.Api.Errors;
 using Ingot.Platform.Api.Events;
 using Ingot.Platform.Infrastructure.Events;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.FileProviders;
+using System.Security.Claims;
 using Microsoft.Extensions.Options;
 using Xunit;
 
@@ -15,6 +20,7 @@ namespace Ingot.Core.Tests.Platform;
 
 public sealed class EventsControllerTests
 {
+    private static readonly PlatformEventMetrics Metrics = new();
     [Fact]
     public async Task Ingest_RejectsTokenWhenEdgeClaimsAnotherSite()
     {
@@ -31,12 +37,8 @@ public sealed class EventsControllerTests
                 ["EDGE-001"] = "SITE-001"
             }
         });
-        var http = new DefaultHttpContext();
-        http.Request.Headers.Authorization = "Bearer edge-secret";
-        var controller = new EventsController(store, new EdgeTokenValidator(options), options)
-        {
-            ControllerContext = new ControllerContext { HttpContext = http }
-        };
+        var controller = CreateController(store, options);
+        controller.Request.Headers.Authorization = "Bearer edge-secret";
         var evt = ProductionEvent.Create(
             "equipment.heartbeat",
             DateTimeOffset.UtcNow,
@@ -61,10 +63,7 @@ public sealed class EventsControllerTests
         var store = new StubPlatformEventStore(
             [],
             new EventIngestConflictException("事件幂等键或载荷冲突"));
-        var controller = new EventsController(store, new EdgeTokenValidator(options), options)
-        {
-            ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() }
-        };
+        var controller = CreateController(store, options);
         var evt = ProductionEvent.Create(
             "equipment.heartbeat",
             DateTimeOffset.UtcNow,
@@ -91,10 +90,7 @@ public sealed class EventsControllerTests
             .Select(index => Row(index, "process.sample", startedAt.AddSeconds(index)))
             .ToArray());
         var options = Options.Create(new PlatformEventOptions { RequireToken = false });
-        var controller = new EventsController(store, new EdgeTokenValidator(options), options)
-        {
-            ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() }
-        };
+        var controller = CreateController(store, options);
 
         var action = await controller.Query(
             null, null, null, null, null, null, null, null, null, 8, 0, 3, CancellationToken.None);
@@ -114,10 +110,7 @@ public sealed class EventsControllerTests
             .Select(index => Row(index, "process.sample", startedAt.AddSeconds(index)))
             .ToArray());
         var options = Options.Create(new PlatformEventOptions { RequireToken = false });
-        var controller = new EventsController(store, new EdgeTokenValidator(options), options)
-        {
-            ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() }
-        };
+        var controller = CreateController(store, options);
 
         var action = await controller.Query(
             null, null, null, null, null, null, null, null, null, null, 3, 3, CancellationToken.None);
@@ -133,10 +126,7 @@ public sealed class EventsControllerTests
     public async Task Query_RejectsConflictingCursors()
     {
         var options = Options.Create(new PlatformEventOptions { RequireToken = false });
-        var controller = new EventsController(new StubPlatformEventStore([]), new EdgeTokenValidator(options), options)
-        {
-            ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() }
-        };
+        var controller = CreateController(new StubPlatformEventStore([]), options);
 
         var action = await controller.Query(
             null, null, null, null, null, null, null, null, 1, 8, 0, 3, CancellationToken.None);
@@ -159,18 +149,9 @@ public sealed class EventsControllerTests
             .ToArray();
         var store = new StubPlatformEventStore(rows);
         var options = Options.Create(new PlatformEventOptions { RequireToken = false });
-        var controller = new EventsController(
-            store,
-            new EdgeTokenValidator(options),
-            options)
-        {
-            ControllerContext = new ControllerContext
-            {
-                HttpContext = new DefaultHttpContext()
-            }
-        };
+        var controller = CreateController(store, options);
 
-        var action = await controller.GetProcessExecution("execution-1", CancellationToken.None);
+        var action = await controller.GetProcessExecution("execution-1", "SITE-001", CancellationToken.None);
 
         var ok = Assert.IsType<OkObjectResult>(action);
         var json = JsonSerializer.SerializeToElement(ok.Value);
@@ -198,18 +179,9 @@ public sealed class EventsControllerTests
         };
         var store = new StubPlatformEventStore(rows);
         var options = Options.Create(new PlatformEventOptions { RequireToken = false });
-        var controller = new EventsController(
-            store,
-            new EdgeTokenValidator(options),
-            options)
-        {
-            ControllerContext = new ControllerContext
-            {
-                HttpContext = new DefaultHttpContext()
-            }
-        };
+        var controller = CreateController(store, options);
 
-        var action = await controller.GetProcessExecution("execution-1", CancellationToken.None);
+        var action = await controller.GetProcessExecution("execution-1", "SITE-001", CancellationToken.None);
 
         var ok = Assert.IsType<OkObjectResult>(action);
         var json = JsonSerializer.SerializeToElement(ok.Value);
@@ -251,6 +223,38 @@ public sealed class EventsControllerTests
                 Seq = ingestId
             }
         };
+
+    private static EventsController CreateController(
+        IPlatformEventStore store,
+        IOptions<PlatformEventOptions> options)
+    {
+        var controller = new EventsController(
+            store,
+            new EdgeTokenValidator(options),
+            options,
+            new PlatformUserResolver(new TestHostEnvironment()),
+            Metrics,
+            NullLogger<EventsController>.Instance);
+        var identity = new ClaimsIdentity(
+        [
+            new Claim(ClaimTypes.NameIdentifier, "engineer-1"),
+            new Claim(ClaimTypes.Role, PlatformRoles.ProcessEngineer),
+            new Claim(PlatformClaimTypes.SiteId, "SITE-001")
+        ], "test");
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(identity) }
+        };
+        return controller;
+    }
+
+    private sealed class TestHostEnvironment : IHostEnvironment
+    {
+        public string EnvironmentName { get; set; } = Environments.Production;
+        public string ApplicationName { get; set; } = "Ingot.Tests";
+        public string ContentRootPath { get; set; } = AppContext.BaseDirectory;
+        public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
+    }
 
     private sealed class StubPlatformEventStore(
         IReadOnlyList<PlatformProductionEvent> rows,

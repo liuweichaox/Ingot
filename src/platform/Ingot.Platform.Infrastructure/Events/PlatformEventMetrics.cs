@@ -19,6 +19,11 @@ public sealed class PlatformEventMetrics
         "检测到的边缘事件序号缺口数量",
         new CounterConfiguration { LabelNames = ["edge"] });
 
+    private readonly Counter _payloadConflicts = Metrics.CreateCounter(
+        "event_payload_conflict_total",
+        "相同事件幂等键携带不同载荷而被中心拒绝的次数",
+        new CounterConfiguration { LabelNames = ["site", "edge"] });
+
     public void Record(string edgeId, int accepted, int duplicates, bool gapDetected)
     {
         if (accepted > 0)
@@ -28,4 +33,8 @@ public sealed class PlatformEventMetrics
         if (gapDetected)
             _gaps.WithLabels(edgeId).Inc();
     }
+
+
+    public void RecordPayloadConflict(string siteId, string edgeId)
+        => _payloadConflicts.WithLabels(siteId, edgeId).Inc();
 }

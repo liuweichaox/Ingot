@@ -163,6 +163,22 @@ Platform 不依赖 Optimizer 才能启动。Optimizer 故障期间继续采集�
 
 报警应指向可操作对象，例如具体 Edge、设备、配置版本或运行，而不是只显示“系统异常”。
 
+仓库提供一个可选的最小监控 profile，包括 Prometheus、Alertmanager、PostgreSQL exporter 和预置 Grafana 看板：
+
+```bash
+docker compose -f docker-compose.app.yml \
+  --profile connector-host --profile monitoring up -d --build
+```
+
+Grafana、Prometheus 和 Alertmanager 分别只绑定本机 `3001`、`9090` 和 `9093` 端口。启用前必须：
+
+- 修改 `deploy/observability/edge-targets.yml`，为每个 Edge 填入真实目标、`SiteId` 和 `EdgeId`；
+- 设置唯一的 `INGOT_GRAFANA_ADMIN_PASSWORD`；
+- 用现场拥有的 `INGOT_ALERTMANAGER_CONFIG_PATH` 替换默认配置，并接入经过实测的通知渠道；
+- 按容量和数据分级确定 `INGOT_PROMETHEUS_RETENTION`，同时监控 Prometheus 自身磁盘。
+
+仓库中的默认 Alertmanager receiver 刻意不向外发送通知，不能作为“报警已经接通”的证据。这个 profile 消除了“只有指标端点、没有采集和看板”的空档，但仍是单机参考拓扑；它不会把 Compose 变成高可用系统。
+
 ## 数据与备份
 
 生成一次应用一致备份时，脚本会短暂停止 Platform API 和 Worker，逻辑导出 PostgreSQL，归档检验附件与工艺知识卷，生成 SHA-256 清单，然后恢复原先运行的写入服务：
@@ -223,3 +239,41 @@ Platform 不依赖 Optimizer 才能启动。Optimizer 故障期间继续采集�
 ## 生产验收
 
 上线前至少完成一次：Platform 中断、Edge 重启、网络断开、错误配置发布、数据库恢复、Optimizer 不可用和模型服务不可用演练，并证明采集和正式业务记录按设计降级或恢复。
+
+`.env.example` 中的 RPO、RTO、离线窗口、积压时限、峰值负载和连续观察周期是部署声明。声明本身不是验收证据。完成现场演练后，加载这些目标，并补充实测值和稳定证据标识：
+
+```bash
+set -a; . ./.env; set +a
+export INGOT_MEASURED_RPO_MINUTES=10
+export INGOT_MEASURED_RTO_MINUTES=45
+export INGOT_MEASURED_EDGE_OFFLINE_HOURS=24
+export INGOT_MEASURED_BACKLOG_AGE_SECONDS=600
+export INGOT_MEASURED_CAPACITY_EVENT_RATE_PER_SECOND=2000
+export INGOT_MEASURED_CAPACITY_SAMPLE_POINTS_PER_SECOND=30000
+export INGOT_OBSERVED_CONTINUOUS_HOURS=168
+export INGOT_BACKUP_EVIDENCE=backup-20260820-001
+export INGOT_PITR_DRILL_ID=pitr-20260820-001
+export INGOT_FAILURE_DRILL_ID=failure-20260820-001
+export INGOT_DATABASE_HA_EVIDENCE=database-ha-20260820-001
+export INGOT_FILE_RECOVERY_EVIDENCE=file-recovery-20260820-001
+export INGOT_EDGE_REPLAY_EVIDENCE=edge-replay-20260820-001
+export INGOT_DETERMINISM_EVIDENCE=determinism-20260820-001
+export INGOT_SITE_ISOLATION_EVIDENCE=site-isolation-20260820-001
+export INGOT_RUNBOOK_EVIDENCE=runbook-review-20260820-001
+export INGOT_MONITORING_EVIDENCE=grafana-snapshot-20260820-001
+export INGOT_ALERT_ROUTING_EVIDENCE=alert-route-20260820-001
+export INGOT_ACCEPTANCE_REVIEWER=quality-owner
+./scripts/verify-production-acceptance.sh artifacts/production-acceptance.txt
+```
+
+脚本会校验门槛、拒绝覆盖已有工件，并为结果生成 SHA-256；失败结果同样会保留。它只固化声明、实测值和证据引用，不会替代证据真实性复核，也不会自行执行 PITR 或容量测试。
+
+隔离 Compose 环境可以自动演练 Optimizer、Worker 和 API 进程中断，脚本会恢复被停止的服务并生成校验和工件：
+
+```bash
+INGOT_DRILL_ENVIRONMENT=isolated \
+  ./scripts/drill-compose-failures.sh --confirm-isolated-environment \
+  artifacts/compose-failure-drill.txt
+```
+
+该脚本明确拒绝在未标记的环境运行，也不会停止 PostgreSQL。网络分区、Edge 断电补传、数据库 HA/PITR、错误配置、模型服务故障和恢复后数据完整性仍需按现场拓扑单独演练。任何一次脚本通过都不能单独构成生产准入。

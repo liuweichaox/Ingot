@@ -41,6 +41,7 @@ public sealed class LocalTokenAuthenticationHandler(
             new(ClaimTypes.Name, session.Username)
         };
         claims.AddRange(session.Roles.Select(static role => new Claim(ClaimTypes.Role, role)));
+        claims.AddRange(session.SiteIds.Select(static siteId => new Claim(PlatformClaimTypes.SiteId, siteId)));
         var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, SchemeName));
         return AuthenticateResult.Success(new AuthenticationTicket(principal, SchemeName));
     }

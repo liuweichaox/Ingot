@@ -1,0 +1,60 @@
+{
+  "annotations": { "list": [] },
+  "editable": false,
+  "graphTooltip": 1,
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Platform availability",
+      "gridPos": { "h": 5, "w": 8, "x": 0, "y": 0 },
+      "targets": [{ "expr": "up{job=\"ingot-platform\"}", "refId": "A" }],
+      "fieldConfig": { "defaults": { "min": 0, "max": 1 }, "overrides": [] }
+    },
+    {
+      "type": "stat",
+      "title": "PostgreSQL availability",
+      "gridPos": { "h": 5, "w": 8, "x": 8, "y": 0 },
+      "targets": [{ "expr": "pg_up", "refId": "A" }],
+      "fieldConfig": { "defaults": { "min": 0, "max": 1 }, "overrides": [] }
+    },
+    {
+      "type": "stat",
+      "title": "Active alerts",
+      "gridPos": { "h": 5, "w": 8, "x": 16, "y": 0 },
+      "targets": [{ "expr": "count(ALERTS{alertstate=\"firing\"}) or vector(0)", "refId": "A" }]
+    },
+    {
+      "type": "timeseries",
+      "title": "Accepted production events / second",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 5 },
+      "targets": [{ "expr": "sum by (edge) (rate(event_ingest_total[5m]))", "legendFormat": "{{edge}}", "refId": "A" }]
+    },
+    {
+      "type": "timeseries",
+      "title": "Edge outbox backlog",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 5 },
+      "targets": [{ "expr": "event_outbox_backlog", "legendFormat": "{{edge}}", "refId": "A" }]
+    },
+    {
+      "type": "timeseries",
+      "title": "Sequence gaps",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 13 },
+      "targets": [{ "expr": "increase(edge_seq_gap_detected_total[5m])", "legendFormat": "{{edge}}", "refId": "A" }]
+    },
+    {
+      "type": "timeseries",
+      "title": "Event shipping failures",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 13 },
+      "targets": [{ "expr": "increase(event_ship_failures_total[5m])", "legendFormat": "{{edge}}", "refId": "A" }]
+    }
+  ],
+  "refresh": "15s",
+  "schemaVersion": 41,
+  "tags": ["ingot", "production"],
+  "templating": { "list": [] },
+  "time": { "from": "now-6h", "to": "now" },
+  "timezone": "browser",
+  "title": "Ingot production overview",
+  "uid": "ingot-production-overview",
+  "version": 1
+}

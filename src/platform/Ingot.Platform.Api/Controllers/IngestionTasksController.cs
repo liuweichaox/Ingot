@@ -208,29 +208,30 @@ public sealed class IngestionTasksController(
 
     [HttpGet("probe-tasks/next")]
     [AllowAnonymous]
-    public IActionResult NextProbeTask([FromQuery] string edgeId)
+    public async Task<IActionResult> NextProbeTask([FromQuery] string edgeId, CancellationToken ct)
     {
         var normalizedEdgeId = edgeId?.Trim() ?? string.Empty;
         if (string.IsNullOrWhiteSpace(normalizedEdgeId))
             return InvalidRequest("edgeId 不能为空。");
         if (!edgeTokenValidator.IsAuthorized(normalizedEdgeId, Request.Headers.Authorization.ToString()))
             return AuthenticationRequired("边缘节点认证失败。");
-        var task = probeTasks.ClaimNext(normalizedEdgeId);
+        var task = await probeTasks.ClaimNextAsync(normalizedEdgeId, ct).ConfigureAwait(false);
         return task is null ? NoContent() : Ok(task);
     }
 
     [HttpPost("probe-tasks/{taskId}/result")]
     [AllowAnonymous]
-    public IActionResult CompleteProbeTask(
+    public async Task<IActionResult> CompleteProbeTask(
         string taskId,
-        [FromBody] AcquisitionProbeTaskCompletion? completion)
+        [FromBody] AcquisitionProbeTaskCompletion? completion,
+        CancellationToken ct)
     {
         if (completion is null ||
             !string.Equals(taskId, completion.TaskId, StringComparison.Ordinal))
             return InvalidRequest("探查任务结果与路由不匹配。");
         if (!edgeTokenValidator.IsAuthorized(completion.EdgeId, Request.Headers.Authorization.ToString()))
             return AuthenticationRequired("边缘节点认证失败。");
-        return probeTasks.Complete(completion)
+        return await probeTasks.CompleteAsync(completion, ct).ConfigureAwait(false)
             ? NoContent()
             : ResourceNotFound("探查任务不存在、已过期或不属于当前 Edge。");
     }

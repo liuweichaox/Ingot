@@ -166,7 +166,7 @@ check "process-research-application-rules" src/platform/Ingot.Platform.Applicati
   "Application 研究规则不得直接读取检验上下文"
 
 unexpected_research_infrastructure=$(find src/platform/Ingot.Platform.Infrastructure/ProcessResearch \
-  -maxdepth 1 -type f -name '*.cs' \
+  -type f -name '*.cs' \
   ! -name 'PostgresProcessResearchStore.cs' \
   ! -name 'ProcessOptimizerCircuitBreakerHandler.cs' \
   ! -name 'ProcessOptimizerClient.cs' \
@@ -183,7 +183,7 @@ else
 fi
 
 unexpected_inspection_infrastructure=$(find src/platform/Ingot.Platform.Infrastructure/Inspections \
-  -maxdepth 1 -type f -name '*.cs' \
+  -type f -name '*.cs' \
   ! -name 'InspectionProductionEventReader.cs' \
   ! -name 'InspectionModuleServiceCollectionExtensions.cs' \
   -print)

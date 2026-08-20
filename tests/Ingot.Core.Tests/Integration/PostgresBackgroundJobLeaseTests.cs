@@ -101,7 +101,8 @@ public sealed class PostgresBackgroundJobLeaseTests(PostgresIntegrationFixture p
         var recompute = await store.ClaimRecomputeAsync(TimeSpan.FromMinutes(5));
         Assert.NotNull(recompute);
         Assert.Null(await store.ClaimRecomputeAsync(TimeSpan.FromMinutes(5)));
-        Assert.True(await store.RetryRecomputeAsync(executionId, recompute!.LeaseId, TimeSpan.Zero));
+        Assert.True(await store.RetryRecomputeAsync(
+            executionId, recompute!.LeaseId, TimeSpan.Zero, "test", 8));
         var retried = await store.ClaimRecomputeAsync(TimeSpan.FromMinutes(5));
         Assert.NotNull(retried);
         Assert.True(await store.CompleteRecomputeAsync(executionId, retried!.LeaseId));

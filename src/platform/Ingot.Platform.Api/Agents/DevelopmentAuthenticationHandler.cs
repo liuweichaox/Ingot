@@ -29,7 +29,8 @@ public sealed class DevelopmentAuthenticationHandler(
             new(ClaimTypes.Role, PlatformRoles.QualityInspector),
             new(ClaimTypes.Role, PlatformRoles.QualityReviewer),
             new(ClaimTypes.Role, PlatformRoles.ProcessEngineer),
-            new(ClaimTypes.Role, PlatformRoles.PlatformAdministrator)
+            new(ClaimTypes.Role, PlatformRoles.PlatformAdministrator),
+            new(PlatformClaimTypes.SiteId, "*")
         ];
         var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, SchemeName));
         return Task.FromResult(AuthenticateResult.Success(

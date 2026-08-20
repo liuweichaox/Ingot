@@ -150,6 +150,22 @@ Production monitoring includes:
 
 Alerts identify an actionable object such as an Edge, equipment, configuration version, or run rather than only “system error.”
 
+The repository provides an optional minimum monitoring profile with Prometheus, Alertmanager, a PostgreSQL exporter, and a provisioned Grafana dashboard:
+
+```bash
+docker compose -f docker-compose.app.yml \
+  --profile connector-host --profile monitoring up -d --build
+```
+
+Grafana, Prometheus, and Alertmanager bind only to local ports `3001`, `9090`, and `9093`. Before enabling the profile:
+
+- edit `deploy/observability/edge-targets.yml` with the real target, `SiteId`, and `EdgeId` for every independently operated Edge;
+- set a unique `INGOT_GRAFANA_ADMIN_PASSWORD`;
+- replace the default with a site-owned `INGOT_ALERTMANAGER_CONFIG_PATH` connected to a tested notification route;
+- select `INGOT_PROMETHEUS_RETENTION` from capacity and data-classification requirements, and monitor Prometheus storage itself.
+
+The checked-in Alertmanager receiver deliberately sends no external notification and cannot prove that alert delivery works. This profile closes the gap between exported metrics and an actual collector/dashboard, but it remains a single-host reference topology and does not make Compose highly available.
+
 ## Data and backup
 
 The application-consistent backup script briefly stops Platform API and Worker, creates a logical PostgreSQL dump, archives inspection and process-knowledge volumes, writes a SHA-256 manifest, and then restores the previously running writers:
@@ -210,3 +226,41 @@ A recovery exercise verifies more than service startup:
 ## Production acceptance
 
 Before go-live, exercise Platform outage, Edge restart, network loss, bad configuration publication, database recovery, unavailable Optimizer, and unavailable model service. Prove that acquisition and formal records degrade or recover as designed.
+
+The RPO, RTO, offline window, backlog age, peak load, and observation period in `.env.example` are deployment declarations, not acceptance evidence. After site exercises, load those targets and provide measured values plus stable evidence identifiers:
+
+```bash
+set -a; . ./.env; set +a
+export INGOT_MEASURED_RPO_MINUTES=10
+export INGOT_MEASURED_RTO_MINUTES=45
+export INGOT_MEASURED_EDGE_OFFLINE_HOURS=24
+export INGOT_MEASURED_BACKLOG_AGE_SECONDS=600
+export INGOT_MEASURED_CAPACITY_EVENT_RATE_PER_SECOND=2000
+export INGOT_MEASURED_CAPACITY_SAMPLE_POINTS_PER_SECOND=30000
+export INGOT_OBSERVED_CONTINUOUS_HOURS=168
+export INGOT_BACKUP_EVIDENCE=backup-20260820-001
+export INGOT_PITR_DRILL_ID=pitr-20260820-001
+export INGOT_FAILURE_DRILL_ID=failure-20260820-001
+export INGOT_DATABASE_HA_EVIDENCE=database-ha-20260820-001
+export INGOT_FILE_RECOVERY_EVIDENCE=file-recovery-20260820-001
+export INGOT_EDGE_REPLAY_EVIDENCE=edge-replay-20260820-001
+export INGOT_DETERMINISM_EVIDENCE=determinism-20260820-001
+export INGOT_SITE_ISOLATION_EVIDENCE=site-isolation-20260820-001
+export INGOT_RUNBOOK_EVIDENCE=runbook-review-20260820-001
+export INGOT_MONITORING_EVIDENCE=grafana-snapshot-20260820-001
+export INGOT_ALERT_ROUTING_EVIDENCE=alert-route-20260820-001
+export INGOT_ACCEPTANCE_REVIEWER=quality-owner
+./scripts/verify-production-acceptance.sh artifacts/production-acceptance.txt
+```
+
+The script checks thresholds, refuses to overwrite an existing artifact, and writes a SHA-256 checksum; failed results are retained too. It records declarations, measurements, and evidence references. It neither validates the referenced evidence nor performs PITR or capacity tests by itself.
+
+An isolated Compose environment can automatically exercise Optimizer, Worker, and API process outages. The script restores stopped services and writes a checksummed artifact:
+
+```bash
+INGOT_DRILL_ENVIRONMENT=isolated \
+  ./scripts/drill-compose-failures.sh --confirm-isolated-environment \
+  artifacts/compose-failure-drill.txt
+```
+
+The script refuses to run without the isolation marker and never stops PostgreSQL. Network partitions, Edge power-loss replay, database HA/PITR, bad configuration, model-service failure, and post-recovery data integrity still require site-specific exercises. A single passing script is never sufficient for production admission.

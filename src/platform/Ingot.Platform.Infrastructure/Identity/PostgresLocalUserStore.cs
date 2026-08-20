@@ -3,7 +3,11 @@ using Npgsql;
 namespace Ingot.Platform.Infrastructure.Identity;
 
 /// <summary>已验证会话解析结果：足以构造 ClaimsPrincipal。</summary>
-public sealed record ResolvedSession(Guid UserId, string Username, IReadOnlyList<string> Roles);
+public sealed record ResolvedSession(
+    Guid UserId,
+    string Username,
+    IReadOnlyList<string> Roles,
+    IReadOnlyList<string> SiteIds);
 
 public interface ILocalUserStore
 {
@@ -13,6 +17,7 @@ public interface ILocalUserStore
     Task<UserAccount?> GetByIdAsync(Guid userId, CancellationToken ct = default);
     Task<IReadOnlyList<UserAccount>> ListAsync(CancellationToken ct = default);
     Task<bool> SetRolesAsync(Guid userId, IReadOnlyList<string> roles, CancellationToken ct = default);
+    Task<bool> SetSiteAccessAsync(Guid userId, IReadOnlyList<string> siteIds, CancellationToken ct = default);
     Task<bool> SetDisabledAsync(Guid userId, bool disabled, CancellationToken ct = default);
     Task<bool> SetPasswordHashAsync(Guid userId, string passwordHash, CancellationToken ct = default);
 
@@ -32,7 +37,7 @@ public sealed class PostgresLocalUserStore : ILocalUserStore
         => _dataSource = dataSource;
 
     private const string UserColumns =
-        "user_id, username, username_lower, display_name, password_hash, roles, disabled, created_at, updated_at";
+        "user_id, username, username_lower, display_name, password_hash, roles, site_ids, disabled, created_at, updated_at";
 
     public async Task<long> CountAsync(CancellationToken ct = default)
     {
@@ -43,8 +48,8 @@ public sealed class PostgresLocalUserStore : ILocalUserStore
     public async Task<UserAccount> CreateAsync(UserAccount user, CancellationToken ct = default)
     {
         await using var command = _dataSource.CreateCommand("""
-            INSERT INTO users(user_id, username, username_lower, display_name, password_hash, roles, disabled, created_at, updated_at)
-            VALUES (@user_id, @username, @username_lower, @display_name, @password_hash, @roles, @disabled, @created_at, @updated_at);
+            INSERT INTO users(user_id, username, username_lower, display_name, password_hash, roles, site_ids, disabled, created_at, updated_at)
+            VALUES (@user_id, @username, @username_lower, @display_name, @password_hash, @roles, @site_ids, @disabled, @created_at, @updated_at);
             """);
         command.Parameters.AddWithValue("user_id", user.UserId);
         command.Parameters.AddWithValue("username", user.Username);
@@ -52,6 +57,7 @@ public sealed class PostgresLocalUserStore : ILocalUserStore
         command.Parameters.AddWithValue("display_name", user.DisplayName);
         command.Parameters.AddWithValue("password_hash", user.PasswordHash);
         command.Parameters.AddWithValue("roles", user.Roles.ToArray());
+        command.Parameters.AddWithValue("site_ids", user.SiteIds.ToArray());
         command.Parameters.AddWithValue("disabled", user.Disabled);
         command.Parameters.AddWithValue("created_at", user.CreatedAt.UtcDateTime);
         command.Parameters.AddWithValue("updated_at", user.UpdatedAt.UtcDateTime);
@@ -81,6 +87,18 @@ public sealed class PostgresLocalUserStore : ILocalUserStore
             "UPDATE users SET roles = @roles, updated_at = now() WHERE user_id = @user_id;");
         command.Parameters.AddWithValue("user_id", userId);
         command.Parameters.AddWithValue("roles", roles.ToArray());
+        return await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false) > 0;
+    }
+
+    public async Task<bool> SetSiteAccessAsync(
+        Guid userId,
+        IReadOnlyList<string> siteIds,
+        CancellationToken ct = default)
+    {
+        await using var command = _dataSource.CreateCommand(
+            "UPDATE users SET site_ids = @site_ids, updated_at = now() WHERE user_id = @user_id;");
+        command.Parameters.AddWithValue("user_id", userId);
+        command.Parameters.AddWithValue("site_ids", siteIds.ToArray());
         return await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false) > 0;
     }
 
@@ -131,7 +149,9 @@ public sealed class PostgresLocalUserStore : ILocalUserStore
         if (userIdObj is null or DBNull)
             return null;
         var user = await GetByIdAsync((Guid)userIdObj, ct).ConfigureAwait(false);
-        return user is null || user.Disabled ? null : new ResolvedSession(user.UserId, user.Username, user.Roles);
+        return user is null || user.Disabled
+            ? null
+            : new ResolvedSession(user.UserId, user.Username, user.Roles, user.SiteIds);
     }
 
     public async Task RevokeSessionAsync(string tokenHash, CancellationToken ct = default)
@@ -170,9 +190,10 @@ public sealed class PostgresLocalUserStore : ILocalUserStore
         DisplayName = reader.GetString(3),
         PasswordHash = reader.GetString(4),
         Roles = reader.GetFieldValue<string[]>(5),
-        Disabled = reader.GetBoolean(6),
-        CreatedAt = new DateTimeOffset(reader.GetDateTime(7).ToUniversalTime()),
-        UpdatedAt = new DateTimeOffset(reader.GetDateTime(8).ToUniversalTime())
+        SiteIds = reader.GetFieldValue<string[]>(6),
+        Disabled = reader.GetBoolean(7),
+        CreatedAt = new DateTimeOffset(reader.GetDateTime(8).ToUniversalTime()),
+        UpdatedAt = new DateTimeOffset(reader.GetDateTime(9).ToUniversalTime())
     };
 
 }

@@ -93,6 +93,8 @@ public interface IProcessExecutionAnalysisMaterializationStore
         string executionId,
         Guid leaseId,
         TimeSpan delay,
+        string error,
+        int maxAttempts,
         CancellationToken ct = default)
         => Task.FromResult(false);
 }

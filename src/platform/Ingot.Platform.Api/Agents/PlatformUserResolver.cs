@@ -24,7 +24,11 @@ public sealed class PlatformUserResolver(IHostEnvironment environment)
                     .Select(static claim => claim.Value.Trim().ToLowerInvariant())
                     .Where(static role => !string.IsNullOrWhiteSpace(role))
                     .ToHashSet(StringComparer.Ordinal);
-                return new PlatformIdentity(value.Trim().ToLowerInvariant(), roles);
+                var siteIds = principal.FindAll(PlatformClaimTypes.SiteId)
+                    .Select(static claim => claim.Value.Trim())
+                    .Where(static siteId => !string.IsNullOrWhiteSpace(siteId))
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+                return new PlatformIdentity(value.Trim().ToLowerInvariant(), roles, siteIds);
             }
         }
 
@@ -38,7 +42,8 @@ public sealed class PlatformUserResolver(IHostEnvironment environment)
                         PlatformRoles.ProcessEngineer,
                         PlatformRoles.PlatformAdministrator
                     ],
-                    StringComparer.Ordinal))
+                    StringComparer.Ordinal),
+                new HashSet<string>(["*"], StringComparer.OrdinalIgnoreCase))
             : null;
     }
 }

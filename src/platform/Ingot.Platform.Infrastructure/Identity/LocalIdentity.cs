@@ -13,6 +13,7 @@ public sealed record UserAccount
     public string DisplayName { get; init; } = string.Empty;
     public required string PasswordHash { get; init; }
     public required IReadOnlyList<string> Roles { get; init; }
+    public IReadOnlyList<string> SiteIds { get; init; } = [];
     public bool Disabled { get; init; }
     public DateTimeOffset CreatedAt { get; init; }
     public DateTimeOffset UpdatedAt { get; init; }

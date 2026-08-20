@@ -36,6 +36,7 @@ compose() {
   INGOT_EDGE_ID="sample-benchmark-edge" \
   INGOT_EDGE_TOKEN="sample-benchmark-edge-token" \
   INGOT_CONNECTOR_TOKEN="sample-benchmark-connector-token" \
+  INGOT_CONNECTOR_LOCAL_TOKEN="sample-benchmark-connector-local-token" \
     docker compose -f "$compose_file" "$@"
 }
 

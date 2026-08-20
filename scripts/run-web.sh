@@ -28,17 +28,30 @@ if [[ ! -f "$ENV_FILE" ]]; then
   cat > "$ENV_FILE" <<EOF
 # Ingot 本地运行机密 —— 自动生成，勿提交
 INGOT_POSTGRES_PASSWORD=$(gen)
+INGOT_SITE_ID=SITE-LOCAL-001
+INGOT_EDGE_ID=EDGE-LOCAL-001
 INGOT_EDGE_TOKEN=$(gen)
 INGOT_OPERATOR_TOKEN=$(gen)
 INGOT_CONNECTOR_TOKEN=$(gen)
+INGOT_CONNECTOR_LOCAL_TOKEN=$(gen)
 INGOT_ADMIN_USERNAME=admin
 INGOT_ADMIN_PASSWORD=$(gen)
 INGOT_AUTH_MODE=Disabled
+INGOT_ALLOW_INSECURE_DEMO=true
 INGOT_AUTH_REQUIRE_HTTPS=false
 EOF
 else
   echo ">> 复用已存在的 .env"
 fi
+
+for required_key in \
+  INGOT_POSTGRES_PASSWORD INGOT_SITE_ID INGOT_EDGE_ID INGOT_EDGE_TOKEN \
+  INGOT_CONNECTOR_TOKEN INGOT_CONNECTOR_LOCAL_TOKEN; do
+  if ! grep -qE "^${required_key}=.+" "$ENV_FILE"; then
+    echo "ERROR: .env 缺少必填配置 ${required_key}；请按 .env.example 补齐后重试。" >&2
+    exit 1
+  fi
+done
 
 # 确保 .env 不会被提交
 if [[ -f "$ROOT/.gitignore" ]] && ! grep -qxF '.env' "$ROOT/.gitignore"; then

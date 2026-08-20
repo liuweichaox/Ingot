@@ -322,18 +322,23 @@ public sealed class PostgresExecutionBoundaryStore : IExecutionBoundaryStore
         ExecutionBoundaryProjectionLease lease,
         string error,
         TimeSpan delay,
+        int maxAttempts,
         CancellationToken ct)
     {
         await using var command = _dataSource.CreateCommand(
             """
             UPDATE execution_boundary_recompute_jobs
-            SET status = 'queued', lease_id = NULL, leased_at = NULL,
-                available_at = now() + @delay, last_error = @error, updated_at = now()
+            SET status = CASE WHEN attempt_count >= @max_attempts THEN 'failed' ELSE 'queued' END,
+                lease_id = NULL, leased_at = NULL,
+                available_at = now() + @delay, last_error = @error,
+                failed_at = CASE WHEN attempt_count >= @max_attempts THEN now() ELSE NULL END,
+                updated_at = now()
             WHERE site_id = @site_id AND source_execution_id = @execution_id
               AND status = 'running' AND lease_id = @lease_id;
             """);
         AddLeaseParameters(command, lease);
         command.Parameters.AddWithValue("delay", delay);
+        command.Parameters.AddWithValue("max_attempts", maxAttempts);
         command.Parameters.AddWithValue("error", error.Length <= 2000 ? error : error[..2000]);
         return await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false) == 1;
     }

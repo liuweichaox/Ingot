@@ -49,19 +49,23 @@ jobs:
       - name: Build application images
         env:
           INGOT_POSTGRES_PASSWORD: verification-postgres-password
+          INGOT_SITE_ID: verification-site-0001
           INGOT_EDGE_ID: verification-edge-0001
           INGOT_EDGE_TOKEN: verification-edge-token-0001
           INGOT_OPERATOR_TOKEN: verification-operator-token-0001
           INGOT_CONNECTOR_TOKEN: verification-connector-token-0001
-        run: docker compose -f docker-compose.app.yml --profile connector-host build platform-api platform-web connector-host
+          INGOT_CONNECTOR_LOCAL_TOKEN: verification-connector-local-token-0001
+        run: docker compose -f docker-compose.app.yml --profile connector-host build
 
       - name: Smoke application stack
         env:
           INGOT_POSTGRES_PASSWORD: verification-postgres-password
+          INGOT_SITE_ID: verification-site-0001
           INGOT_EDGE_ID: verification-edge-0001
           INGOT_EDGE_TOKEN: verification-edge-token-0001
           INGOT_OPERATOR_TOKEN: verification-operator-token-0001
           INGOT_CONNECTOR_TOKEN: verification-connector-token-0001
+          INGOT_CONNECTOR_LOCAL_TOKEN: verification-connector-local-token-0001
         run: |
           docker compose -f docker-compose.app.yml --profile connector-host up -d --no-build --wait
           curl --fail --silent http://127.0.0.1:3000/health
@@ -75,8 +79,10 @@ jobs:
         if: always()
         env:
           INGOT_POSTGRES_PASSWORD: verification-postgres-password
+          INGOT_SITE_ID: verification-site-0001
           INGOT_EDGE_ID: verification-edge-0001
           INGOT_EDGE_TOKEN: verification-edge-token-0001
           INGOT_OPERATOR_TOKEN: verification-operator-token-0001
           INGOT_CONNECTOR_TOKEN: verification-connector-token-0001
+          INGOT_CONNECTOR_LOCAL_TOKEN: verification-connector-local-token-0001
         run: docker compose -f docker-compose.app.yml down -v --remove-orphans

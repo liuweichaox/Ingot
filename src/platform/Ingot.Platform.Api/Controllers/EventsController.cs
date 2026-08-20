@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Ingot.Platform.Api.Errors;
 using Ingot.Platform.Api.Events;
+using Ingot.Platform.Api.Agents;
 using Ingot.Platform.Infrastructure.Events;
 using Ingot.Contracts.Events;
 using Microsoft.AspNetCore.Authorization;
@@ -14,7 +15,10 @@ namespace Ingot.Platform.Api.Controllers;
 public sealed class EventsController(
     IPlatformEventStore store,
     EdgeTokenValidator tokenValidator,
-    IOptions<PlatformEventOptions> eventOptions) : PlatformApiController
+    IOptions<PlatformEventOptions> eventOptions,
+    PlatformUserResolver userResolver,
+    PlatformEventMetrics metrics,
+    ILogger<EventsController> logger) : PlatformApiController
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private readonly PlatformEventOptions _eventOptions = eventOptions.Value;
@@ -49,6 +53,14 @@ public sealed class EventsController(
         }
         catch (EventIngestConflictException exception)
         {
+            metrics.RecordPayloadConflict(normalized.SiteId, normalized.EdgeId);
+            logger.LogError(
+                exception,
+                "生产事件幂等键载荷冲突：Site={SiteId}, Edge={EdgeId}, FirstSeq={FirstSeq}, EventCount={EventCount}",
+                normalized.SiteId,
+                normalized.EdgeId,
+                normalized.Events.Min(static item => item.Seq),
+                normalized.Events.Count);
             return StateConflict(
                 $"{exception.Message}。该冲突不会通过重试恢复；若本地 outbox 已重建，请更换 EdgeId。");
         }
@@ -70,8 +82,11 @@ public sealed class EventsController(
         [FromQuery] int limit = 100,
         CancellationToken ct = default)
     {
+        var siteAccess = ResolveSiteAccess(siteId);
+        if (siteAccess.Denied is not null)
+            return siteAccess.Denied;
         var query = BuildQuery(
-            siteId,
+            siteAccess.SiteId,
             edgeId,
             eventType,
             subjectType,
@@ -118,6 +133,16 @@ public sealed class EventsController(
         [FromQuery] long? afterIngestId,
         CancellationToken ct)
     {
+        var siteAccess = ResolveSiteAccess(siteId);
+        if (siteAccess.Denied is not null)
+        {
+            var denied = (ObjectResult)siteAccess.Denied;
+            Response.StatusCode = denied.StatusCode ?? StatusCodes.Status403Forbidden;
+            Response.ContentType = "application/problem+json";
+            await Response.WriteAsJsonAsync(denied.Value, ct).ConfigureAwait(false);
+            return;
+        }
+        siteId = siteAccess.SiteId;
         if (!EventQueryContractValidator.TryParseCursor(
                 Request.Headers["Last-Event-ID"].FirstOrDefault(),
                 out var cursor))
@@ -202,10 +227,16 @@ public sealed class EventsController(
     }
 
     [HttpGet("/api/v1/process-executions/{executionId}")]
-    public async Task<IActionResult> GetProcessExecution(string executionId, CancellationToken ct)
+    public async Task<IActionResult> GetProcessExecution(
+        string executionId,
+        [FromQuery] string? siteId,
+        CancellationToken ct)
     {
+        var siteAccess = ResolveSiteAccess(siteId, requireExplicitForAdministrator: true);
+        if (siteAccess.Denied is not null)
+            return siteAccess.Denied;
         var correlated = await QueryAllAsync(
-            BuildQuery(null, null, null, null, null, executionId, null, null, null, null, 500),
+            BuildQuery(siteAccess.SiteId, null, null, null, null, executionId, null, null, null, null, 500),
             ct).ConfigureAwait(false);
         var pair = correlated
             .OrderBy(static item => item.Event.OccurredAt)
@@ -264,6 +295,27 @@ public sealed class EventsController(
                 : (double?)null,
             events = ordered
         });
+    }
+
+    private (string? SiteId, IActionResult? Denied) ResolveSiteAccess(
+        string? requestedSiteId,
+        bool requireExplicitForAdministrator = false)
+    {
+        var identity = userResolver.ResolveIdentity(User);
+        if (identity is null)
+            return (null, AuthenticationRequired("需要平台统一认证。"));
+
+        var normalized = requestedSiteId?.Trim();
+        if (!string.IsNullOrWhiteSpace(normalized))
+            return identity.CanAccessSite(normalized)
+                ? (normalized, null)
+                : (null, AuthorizationDenied("当前身份无权访问该站点。", ("siteId", normalized)));
+
+        if (identity.Roles.Contains(PlatformRoles.PlatformAdministrator) && !requireExplicitForAdministrator)
+            return (null, null);
+        if (identity.SiteIds.Count == 1)
+            return (identity.SiteIds.Single(), null);
+        return (null, InvalidRequest("必须指定当前身份有权访问的 siteId。"));
     }
 
     private async Task<IReadOnlyList<PlatformProductionEvent>> QueryAllAsync(

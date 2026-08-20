@@ -1028,6 +1028,11 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, ID
                     ELSE now()
                   END,
                   last_error = NULL,
+                  failed_at = NULL,
+                  attempt_count = CASE
+                    WHEN execution_boundary_recompute_jobs.status = 'failed' THEN 0
+                    ELSE execution_boundary_recompute_jobs.attempt_count
+                  END,
                   updated_at = now();
                 """,
                 connection,

@@ -95,6 +95,10 @@ UV_PROJECT_ENVIRONMENT="$optimizer_environment" \
 for script in scripts/*.sh deploy/*.sh; do
   bash -n "$script"
 done
+
+scripts/test-production-operations.sh
+scripts/verify-observability.sh
+
 for compose_file in docker-compose.app.yml; do
   compose_config="$(
     INGOT_POSTGRES_PASSWORD=verification-postgres-password \
@@ -103,12 +107,17 @@ for compose_file in docker-compose.app.yml; do
     INGOT_EDGE_TOKEN=verification-edge-token-0001 \
     INGOT_OPERATOR_TOKEN=verification-operator-token-0001 \
     INGOT_CONNECTOR_TOKEN=verification-connector-token-0001 \
-      docker compose -f "$compose_file" --profile connector-host config
+    INGOT_CONNECTOR_LOCAL_TOKEN=verification-connector-local-token-0001 \
+    INGOT_GRAFANA_ADMIN_PASSWORD=verification-grafana-password-0001 \
+      docker compose -f "$compose_file" --profile connector-host --profile monitoring config
   )"
   grep -Fq 'EventIngest__EdgeTokens__verification-edge-0001:' <<<"$compose_config"
   grep -Fq 'EventIngest__EdgeSites__verification-edge-0001: verification-site-0001' <<<"$compose_config"
   grep -Fq 'Edge__SiteId: verification-site-0001' <<<"$compose_config"
   grep -Fq 'Edge__EdgeId: verification-edge-0001' <<<"$compose_config"
+  grep -Fq 'prom/prometheus:v3.12.0' <<<"$compose_config"
+  grep -Fq 'prom/alertmanager:v0.32.1' <<<"$compose_config"
+  grep -Fq 'grafana/grafana:13.1.3' <<<"$compose_config"
 done
 docker compose -f deploy/compose.yml --profile site --profile docs config --quiet
 git diff --check

@@ -53,13 +53,16 @@ public sealed class ExecutionBoundaryProjectionHostedService(
                     Math.Pow(2, Math.Min(lease.AttemptCount, 10))));
                 logger.LogError(
                     exception,
-                    "运行边界投影失败，将退避重试：Site={SiteId}, ExecutionId={ExecutionId}",
+                    lease.AttemptCount >= _options.MaxAttempts
+                        ? "运行边界投影达到最大尝试次数，转入失败终态：Site={SiteId}, ExecutionId={ExecutionId}"
+                        : "运行边界投影失败，将退避重试：Site={SiteId}, ExecutionId={ExecutionId}",
                     lease.SiteId,
                     lease.SourceExecutionId);
                 await store.RetryProjectionAsync(
                         lease,
                         exception.Message,
                         delay,
+                        _options.MaxAttempts,
                         CancellationToken.None)
                     .ConfigureAwait(false);
             }
@@ -73,4 +76,5 @@ public sealed class ExecutionBoundaryProjectionOptions
     public TimeSpan LeaseTimeout { get; init; } = TimeSpan.FromMinutes(5);
     public TimeSpan ExecutionTimeoutWithoutCompletion { get; init; } = TimeSpan.FromHours(10);
     public TimeSpan MaximumRetryDelay { get; init; } = TimeSpan.FromMinutes(5);
+    public int MaxAttempts { get; init; } = 8;
 }

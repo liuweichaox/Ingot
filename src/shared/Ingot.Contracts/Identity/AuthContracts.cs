@@ -31,6 +31,7 @@ public sealed record LoginResponse
     public required string Username { get; init; }
     public string DisplayName { get; init; } = string.Empty;
     public required IReadOnlyList<string> Roles { get; init; }
+    public IReadOnlyList<string> SiteIds { get; init; } = [];
 }
 
 public sealed record IdentityResponse
@@ -39,6 +40,7 @@ public sealed record IdentityResponse
     public required string Username { get; init; }
     public string DisplayName { get; init; } = string.Empty;
     public required IReadOnlyList<string> Roles { get; init; }
+    public IReadOnlyList<string> SiteIds { get; init; } = [];
 }
 
 public sealed record UserSummary
@@ -47,6 +49,7 @@ public sealed record UserSummary
     public required string Username { get; init; }
     public string DisplayName { get; init; } = string.Empty;
     public required IReadOnlyList<string> Roles { get; init; }
+    public IReadOnlyList<string> SiteIds { get; init; } = [];
     public bool Disabled { get; init; }
     public DateTimeOffset CreatedAt { get; init; }
 }
@@ -57,11 +60,17 @@ public sealed record CreateUserRequest
     public string? Password { get; init; }
     public string? DisplayName { get; init; }
     public IReadOnlyList<string> Roles { get; init; } = [];
+    public IReadOnlyList<string> SiteIds { get; init; } = [];
 }
 
 public sealed record SetRolesRequest
 {
     public IReadOnlyList<string> Roles { get; init; } = [];
+}
+
+public sealed record SetSiteAccessRequest
+{
+    public IReadOnlyList<string> SiteIds { get; init; } = [];
 }
 
 public sealed record SetPasswordRequest

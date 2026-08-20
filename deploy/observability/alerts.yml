@@ -1,0 +1,83 @@
+groups:
+  - name: ingot-production
+    rules:
+      - alert: IngotPlatformUnavailable
+        expr: up{job="ingot-platform"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: Platform API cannot be scraped
+          description: Production event ingestion and reads may be unavailable.
+
+      - alert: IngotPostgresUnavailable
+        expr: up{job="ingot-postgres"} == 0 or pg_up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: PostgreSQL is unavailable
+          description: Platform must not acknowledge events while durable storage is unavailable.
+
+      - alert: IngotEdgeUnavailable
+        expr: up{job="ingot-edge"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: Edge ConnectorHost cannot be scraped
+          description: Check the affected site and Edge identity before its offline budget is exhausted.
+
+      - alert: IngotEdgeSequenceGapDetected
+        expr: increase(edge_seq_gap_detected_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: A production event sequence gap was detected
+          description: Inspect the affected Edge outbox and do not treat the run as complete evidence.
+
+      - alert: IngotEventPayloadConflict
+        expr: increase(event_payload_conflict_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: An event idempotency key was reused with different payload
+          description: Quarantine the affected site and Edge identity; retry cannot repair this conflict.
+
+      - alert: IngotEdgeOutboxBacklogHigh
+        expr: event_outbox_backlog > 10000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Edge outbox backlog is high
+          description: Confirm Platform reachability and compare drain time with the declared backlog-age budget.
+
+      - alert: IngotEdgeDroppedEvents
+        expr: increase(event_backlog_dropped_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: Edge dropped events after reaching its hard capacity limit
+          description: The production evidence window is incomplete and requires incident review.
+
+      - alert: IngotEdgePersistenceFailure
+        expr: increase(event_persistence_failures_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: Edge could not persist a production event
+          description: Stop relying on the affected evidence stream until storage health is restored.
+
+      - alert: IngotEventShippingDegraded
+        expr: increase(event_ship_failures_total[10m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Edge event shipping is repeatedly failing
+          description: Check network reachability, credentials, and Platform ingestion health.

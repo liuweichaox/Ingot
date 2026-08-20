@@ -125,6 +125,7 @@ public static class ServiceCollectionExtensions
         // 采集配置由平台统一管理并按边缘节点发布；采集执行器只运行已发布版本。
         services.AddSingleton<IIngestionTaskStore, PostgresIngestionTaskStore>();
         services.AddSingleton<IIngestionConfigurationStore, PostgresIngestionConfigurationStore>();
+        services.AddSingleton<IAcquisitionProbeTaskStore, PostgresAcquisitionProbeTaskStore>();
         services.AddSingleton<AcquisitionProbeTaskCoordinator>();
 
         // 运行边界识别与存储
@@ -136,6 +137,8 @@ public static class ServiceCollectionExtensions
             provider => provider.GetRequiredService<ExecutionBoundaryRecognizer>());
         services.Configure<ExecutionBoundaryProjectionOptions>(
             configuration.GetSection("ExecutionBoundaryProjection"));
+        services.Configure<ProcessExecutionAnalysisRecomputeOptions>(
+            configuration.GetSection("ProcessExecutionAnalysisRecompute"));
 
         return services;
     }
@@ -151,8 +154,12 @@ public static class ServiceCollectionExtensions
                 static value => value.PollInterval > TimeSpan.Zero &&
                                 value.LeaseTimeout > value.PollInterval &&
                                 value.ExecutionTimeoutWithoutCompletion > TimeSpan.Zero &&
-                                value.MaximumRetryDelay > TimeSpan.Zero,
+                                value.MaximumRetryDelay > TimeSpan.Zero &&
+                                value.MaxAttempts > 0,
                 "运行边界投影 Worker 的轮询、租约、运行超时或退避配置无效。")
+            .ValidateOnStart();
+        services.AddOptions<ProcessExecutionAnalysisRecomputeOptions>()
+            .Validate(static value => value.MaxAttempts > 0, "过程执行分析重算最大尝试次数必须大于 0。")
             .ValidateOnStart();
         services.AddOptions<KnowledgeExtractionWorkerOptions>()
             .Validate(

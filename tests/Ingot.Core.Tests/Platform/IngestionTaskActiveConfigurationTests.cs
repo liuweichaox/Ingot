@@ -27,7 +27,7 @@ public sealed class IngestionTaskActiveConfigurationTests
             new MissingModelStore(),
             new PlatformUserResolver(new TestHostEnvironment()),
             new EdgeTokenValidator(Options.Create(new PlatformEventOptions { RequireToken = false })),
-            new AcquisitionProbeTaskCoordinator())
+            new AcquisitionProbeTaskCoordinator(new UnusedProbeTaskStore()))
         {
             ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() }
         };
@@ -112,5 +112,14 @@ public sealed class IngestionTaskActiveConfigurationTests
         public string ApplicationName { get; set; } = "Ingot.Tests";
         public string ContentRootPath { get; set; } = AppContext.BaseDirectory;
         public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
+    }
+
+    private sealed class UnusedProbeTaskStore : IAcquisitionProbeTaskStore
+    {
+        public Task EnqueueAsync(AcquisitionProbeTask task, CancellationToken ct = default) => Task.CompletedTask;
+        public Task<AcquisitionProbeTask?> ClaimNextAsync(string edgeId, CancellationToken ct = default) => Task.FromResult<AcquisitionProbeTask?>(null);
+        public Task<bool> CompleteAsync(AcquisitionProbeTaskCompletion completion, CancellationToken ct = default) => Task.FromResult(false);
+        public Task<AcquisitionProbeResult?> GetResultAsync(string taskId, CancellationToken ct = default) => Task.FromResult<AcquisitionProbeResult?>(null);
+        public Task DeleteAsync(string taskId, CancellationToken ct = default) => Task.CompletedTask;
     }
 }
