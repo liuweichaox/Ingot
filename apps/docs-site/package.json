@@ -16,7 +16,7 @@
   "dependencies": {
     "@headlessui/react": "^2.2.10",
     "github-slugger": "2.0.0",
-    "next": "16.3.0",
+    "next": "16.3.1",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "rehype-autolink-headings": "7.1.0",
@@ -33,10 +33,10 @@
     "@types/node": "26.2.0",
     "@types/react": "19.2.18",
     "@types/react-dom": "19.2.4",
-    "eslint": "^9.39.5",
-    "eslint-config-next": "16.3.0",
+    "eslint": "^10.8.1",
+    "eslint-config-next": "16.3.1",
     "tailwindcss": "^4.2.1",
-    "typescript": "^6.0.3"
+    "typescript": "^7.0.2"
   },
   "overrides": {
     "nanoid": "3.3.18",
