@@ -15,6 +15,11 @@ const ui = await readFile(new URL("../src/ui/components.jsx", import.meta.url), 
 const researchProjects = (await Promise.all([
   readFile(new URL("../src/pages/ResearchProjectsPage.jsx", import.meta.url), "utf8"),
   readFile(new URL("../src/research/researchProjectModel.js", import.meta.url), "utf8"),
+  readFile(new URL("../src/research/researchProjectPresentation.js", import.meta.url), "utf8"),
+  readFile(new URL("../src/research/components/CreateResearchProjectDrawer.jsx", import.meta.url), "utf8"),
+  readFile(new URL("../src/research/components/ResearchEvidenceCards.jsx", import.meta.url), "utf8"),
+  readFile(new URL("../src/research/components/ResearchProjectDrawers.jsx", import.meta.url), "utf8"),
+  readFile(new URL("../src/research/components/ResearchWorkspaceContent.jsx", import.meta.url), "utf8"),
 ])).join("\n");
 const researchAssets = (await Promise.all([
   readFile(new URL("../src/pages/ResearchAssetsPage.jsx", import.meta.url), "utf8"),
@@ -105,7 +110,7 @@ test("scenario context policy uses an observed field catalog instead of unexplai
   assert.match(registryEditor, /\/api\/v1\/data-reliability\/baseline\?maximumRuns=2000/);
   assert.match(registryEditor, /覆盖 \$\{Math\.round\(coverage\.coverage \* 100\)\}%/);
   assert.match(registryEditor, /生产准备 \/ MES → 不可变运行上下文/);
-  assert.match(registryEditor, /自定义字段必须由设备接入或上游系统实际上报/);
+  assert.match(registryEditor, /自定义字段必须由现场接入或上游系统实际上报/);
 });
 
 test("configuration registries keep create, version, retire, and draft deletion workflows", () => {

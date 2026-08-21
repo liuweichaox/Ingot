@@ -145,7 +145,7 @@ export function ObjectExplorerPage() {
             />
             <EmptyState
               title="尚未收到生产数据"
-              description="完成设备接入并开始采集后，对象会自动显示在这里。"
+              description="完成现场接入并开始采集后，对象会自动显示在这里。"
             />
           </>
         )

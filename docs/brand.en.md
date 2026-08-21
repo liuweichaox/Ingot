@@ -19,7 +19,7 @@ This is Ingot's stable starting point. Data acquisition, process diagnosis, expe
 
 Ingot is not built merely to collect more points or showcase one algorithm. It turns collected data into usable engineering evidence and then selects robust statistics, controlled comparison, experimental design, causal validation, machine learning, Bayesian optimization, physical models, or language models according to the problem.
 
-*Process R&D* is the business entry in the product information architecture. It covers candidate validation, experiment design, safe optimization, and R&D assets. *Optimization* summarizes the capability to select the next experiment in the product category; it is not a standalone primary menu and does not imply automatic writes to equipment.
+*Process R&D* is the business entry in the product information architecture. It covers candidate validation, experiment design, safe optimization, and R&D outcomes. *Optimization* summarizes the capability to select the next experiment in the product category; it is not a standalone primary menu and does not imply automatic writes to equipment.
 
 ## Public commitments
 

@@ -302,7 +302,7 @@ export function ExecutionComparisonPage() {
         {!catalogLoading && executions.length === 0 && <Alert tone="warning" title="还没有已完成运行">完成生产准备并积累至少两次运行后，即可开始对比。</Alert>}
         {!catalogLoading && baselineProcessExecution && (
           <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
-            <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-sm font-semibold text-slate-900">系统已核对同类条件</p><p className="mt-1 text-xs text-slate-500">匹配条件来自当前运行分析方案。</p></div><Badge tone={comparisonReady ? "success" : "warning"}>{comparisonReady ? `找到 ${comparableProcessExecutions.length} 条同类运行` : "没有同类运行"}</Badge></div>
+            <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-sm font-semibold text-slate-900">系统已核对同类条件</p><p className="mt-1 text-xs text-slate-500">匹配条件来自当前运行分析规则。</p></div><Badge tone={comparisonReady ? "success" : "warning"}>{comparisonReady ? `找到 ${comparableProcessExecutions.length} 条同类运行` : "没有同类运行"}</Badge></div>
             <dl className="mt-3 grid gap-2 sm:grid-cols-3">
               <div><dt className="text-xs text-slate-500">产品系列</dt><dd className="mt-1 text-sm font-medium">{baselineProcessExecution.productFamilyCode || "未记录"}</dd></div>
               <div><dt className="text-xs text-slate-500">设备</dt><dd className="mt-1 text-sm font-medium">{baselineProcessExecution.equipmentId || "未记录"}</dd></div>

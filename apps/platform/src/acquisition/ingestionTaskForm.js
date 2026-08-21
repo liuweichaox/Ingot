@@ -414,7 +414,7 @@ export function validateIngestionTask(form, context = {}) {
     set("taskId", "只能包含小写字母、数字、点、下划线和短横线。");
   if (!form.name.trim()) set("name", "配置名称不能为空。");
   if (!form.edgeId.trim()) set("edgeId", "请选择执行采集的现场节点。");
-  if (!form.dataModel) set("dataModel", "请选择工艺数据模型。");
+  if (!form.dataModel) set("dataModel", "请选择工艺数据字典。");
   if (!form.subjectId.trim()) set("subjectId", "设备编号不能为空。");
   if (!EVENT_TYPE_PATTERN.test(form.sampleEventType.trim()))
     set("sampleEventType", "事件类型格式无效，例如 process.sample。");

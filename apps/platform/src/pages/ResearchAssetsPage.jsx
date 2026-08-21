@@ -167,7 +167,7 @@ export function ResearchAssetsPage() {
 
   return (
     <Page
-      title="研发资产"
+      title="研发成果"
       description="集中查看项目可复用的数据集、模型、机理和知识；正式研发结论仍在研发项目中形成。"
     >
       <RequestError error={error} onRetry={() => projectId ? Promise.all([loadProjects(), load()]) : loadProjects()} />
@@ -182,7 +182,7 @@ export function ResearchAssetsPage() {
         </Field>
       </Card>
       {loading ? (
-        <Card><p className="py-8 text-center text-sm text-slate-500">正在读取研发资产…</p></Card>
+        <Card><p className="py-8 text-center text-sm text-slate-500">正在读取研发成果…</p></Card>
       ) : (
         <div className="space-y-5">
           <MechanismKnowledgeWorkbench projectId={projectId} sources={assets.knowledge || []} reloadAssets={load} />

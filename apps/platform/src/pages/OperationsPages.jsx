@@ -519,7 +519,7 @@ export function ProcessExecutionDetailPage() {
             <div className="space-y-5" role="tabpanel">
               <Card title="过程曲线工作台" description="选择关键信号，在统一时间轴中查看阶段、尖峰和采样断点。">
                 {analysisResponse.loading && !analysis ? <LoadingCard /> : analysisResponse.error ? <Alert tone="danger">{analysisResponse.error}</Alert> : !availableSignals.length ? (
-                  <EmptyState title="尚无可用信号" description="发布运行分析方案并采集有效过程值后即可查看。" />
+                  <EmptyState title="尚无可用信号" description="发布运行分析规则并采集有效过程值后即可查看。" />
                 ) : (
                   <div className="grid gap-5 xl:grid-cols-[16rem_minmax(0,1fr)]">
                     <aside className="rounded-xl border border-slate-200 bg-slate-50 p-3">

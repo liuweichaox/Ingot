@@ -33,24 +33,24 @@ const sections = [
     ],
   },
   {
-    id: "process-definition", label: "工艺定义", icon: AdjustmentsHorizontalIcon, path: "/configuration", groups: [
-      { label: "准备总览", items: [["/configuration", "配置总览"]] },
-      { label: "工艺定义", items: [["/configuration/process-data-models", "工艺数据模型"], ["/configuration/process-specifications", "工艺规范"]] },
-      { label: "分析定义", items: [["/configuration/process-analysis-plans", "运行分析方案"]] },
-      { label: "质量定义", items: [["/configuration/inspection-definitions", "检测定义"], ["/configuration/quality-plans", "质量方案"]] },
-      { label: "工装管理", items: [["/configuration/component-types", "组件分类"], ["/configuration/components", "组件资产"], ["/configuration/tooling-types", "装配模板"], ["/configuration/tooling-assemblies", "工装总成"]] },
-      { label: "方案发布", items: [["/configuration/scenario-packages", "工艺配置方案"]] },
+    id: "equipment-connection", label: "现场接入", icon: SignalIcon, path: "/configuration", groups: [
+      { label: "接入准备", items: [["/configuration", "配置总览"]] },
+      { label: "连接与采集", items: [["/edges", "现场节点"], ["/configuration/ingestion-tasks", "数据源配置"]] },
     ],
   },
   {
-    id: "equipment-connection", label: "设备接入", icon: SignalIcon, path: "/edges", groups: [
-      { label: "现场接入", items: [["/edges", "现场节点"], ["/configuration/ingestion-tasks", "采集配置"]] },
+    id: "process-definition", label: "工艺配置", icon: AdjustmentsHorizontalIcon, path: "/configuration/process-data-models", groups: [
+      { label: "工艺标准", items: [["/configuration/process-data-models", "工艺数据字典"], ["/configuration/process-specifications", "工艺规范"]] },
+      { label: "分析规则", items: [["/configuration/process-analysis-plans", "运行分析规则"]] },
+      { label: "质量定义", items: [["/configuration/inspection-definitions", "检测定义"], ["/configuration/quality-plans", "质量方案"]] },
+      { label: "工装配置", items: [["/configuration/component-types", "组件分类"], ["/configuration/components", "组件资产"], ["/configuration/tooling-types", "工装结构定义"], ["/configuration/tooling-assemblies", "实际工装总成"]] },
+      { label: "配置发布", items: [["/configuration/scenario-packages", "配置发布"]] },
     ],
   },
   {
     id: "evidence", label: "生产运行", icon: CircleStackIcon, path: "/process-executions", groups: [
-      { label: "运行与追溯", items: [["/process-executions", "运行记录"], ["/events", "运行事件"], ["/explorer", "对象目录"]] },
       { label: "生产准备", items: [["/production/changeover", "生产切换"], ["/production/tooling-installations", "工装装卸"]] },
+      { label: "运行与追溯", items: [["/process-executions", "运行记录"], ["/explorer", "对象目录"], ["/events", "运行事件"]] },
     ],
   },
   {
@@ -62,13 +62,13 @@ const sections = [
   {
     id: "diagnosis", label: "工艺追因", icon: MagnifyingGlassCircleIcon, path: "/analysis", groups: [
       { label: "开始追因", items: [["/analysis", "追因工作台"]] },
-      { label: "比较与证据", items: [["/comparisons", "运行对比"], ["/data-quality", "数据可信度"]] },
+      { label: "证据与比较", items: [["/data-quality", "数据可信度"], ["/comparisons", "运行对比"]] },
       { label: "辅助研判", items: [["/chat", "分析助手"]] },
     ],
   },
   {
     id: "optimization", label: "工艺研发", icon: BeakerIcon, path: "/research-projects", groups: [
-      { label: "项目与资产", items: [["/research-projects", "研发项目"], ["/research-assets", "研发资产"]] },
+      { label: "项目与成果", items: [["/research-projects", "研发项目"], ["/research-assets", "研发成果"]] },
     ],
   },
 ];
@@ -92,7 +92,7 @@ const pageDetails = {
   "/workbench": ["工作台", "集中查看待办、生产状态、质量风险与研发进展"],
   "/chat": ["工艺分析助手", "用自然语言查询运行、质量、配置、研发与知识证据"],
   "/analysis": ["追因工作台", "从生产运行和可信证据进入差异比较、候选原因与工程验证"],
-  "/research-assets": ["研发资产", "查看项目可复用的数据集、模型、机理和知识"],
+  "/research-assets": ["研发成果", "查看项目可复用的数据集、模型、机理和知识"],
   "/explorer": ["对象目录", "选择真实业务对象，再进入它的运行、事件、质量与数据健康视图"],
   "/process-executions": ["运行记录", "查看生产运行及其数据、工艺与质量上下文"],
   "/events": ["运行事件", "查询、追溯并关联运行上下文"],
@@ -104,17 +104,17 @@ const pageDetails = {
   "/golden-questions": ["评测问题集", "用真实问题持续核对事实、记录引用、正确拒绝和因果边界"],
   "/data-quality": ["数据可信度", "检查运行对象的数据范围、采样连续性与运行完整性"],
   "/configuration": ["配置总览", "按依赖顺序完成数据、接入、分析、质量、工装与最终发布"],
-  "/configuration/scenario-packages": ["工艺配置方案", "版本化组合工艺数据、采集、分析、质量、上下文和约束"],
-  "/configuration/process-analysis-plans": ["运行分析方案", "版本化定义同类比较条件、对齐方式、质量分组和数据项"],
-  "/configuration/process-data-models": ["工艺数据模型", "定义工艺变量、阶段号和控制参数，供设备点位统一映射"],
+  "/configuration/scenario-packages": ["配置发布", "版本化组合工艺数据、采集、分析、质量、上下文和约束"],
+  "/configuration/process-analysis-plans": ["运行分析规则", "版本化定义同类比较条件、对齐方式、质量分组和数据项"],
+  "/configuration/process-data-models": ["工艺数据字典", "定义工艺变量、阶段号和控制参数，供现场数据源统一映射"],
   "/configuration/process-specifications": ["工艺规范", "维护引用数据模型的完整工艺规范版本"],
-  "/configuration/ingestion-tasks": ["采集配置", "选择采集节点和通信驱动，将设备点位映射到工艺变量"],
+  "/configuration/ingestion-tasks": ["数据源配置", "选择现场节点和通信驱动，将来源字段映射到工艺变量"],
   "/configuration/inspection-definitions": ["检测定义", "定义要检测的特性、录入类型和判定规则"],
   "/configuration/quality-plans": ["质量方案", "配置产品适用的检测项目与复核规则"],
   "/configuration/component-types": ["组件分类", "维护模芯、模架等物理资产类别；上模和下模由装配位置决定"],
   "/configuration/components": ["组件资产", "登记具有独立资产编号和序列号的可更换物理组件"],
-  "/configuration/tooling-types": ["装配模板", "定义工装总成结构、装配位置和各位置允许的组件分类"],
-  "/configuration/tooling-assemblies": ["工装总成", "查看工装总成身份、不可变配置版本及每个位置的实际成员"],
+  "/configuration/tooling-types": ["工装结构定义", "定义工装总成结构、装配位置和各位置允许的组件分类"],
+  "/configuration/tooling-assemblies": ["实际工装总成", "查看工装总成身份、不可变配置版本及每个位置的实际成员"],
   "/edges": ["现场节点", "查看负责连接设备、仪器、系统并上报数据的现场节点"],
   "/platform-metrics": ["平台状态", "确认中心服务、现场节点和数据上行是否正常"],
   "/logs": ["平台日志", "查询平台运行记录"],
@@ -430,12 +430,12 @@ function GlobalSearchDialog({ open, onClose, navigate, entries }) {
         <DialogPanel className="mx-auto w-full max-w-2xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
           <div className="border-b border-slate-100 p-4 sm:p-5">
             <p className="text-sm font-semibold text-slate-950">功能搜索</p>
-            <p className="mt-1 text-xs text-slate-500">查找生产运行、质量管理、工艺追因、工艺研发、工艺定义、设备接入和系统功能。</p>
+            <p className="mt-1 text-xs text-slate-500">查找现场接入、工艺配置、生产运行、质量管理、工艺追因、工艺研发和系统功能。</p>
             <Input
               ref={inputRef}
               value={query}
               onChange={event => setQuery(event.target.value)}
-              placeholder="例如：运行对比、检验任务、设备接入、工艺规范"
+              placeholder="例如：数据源配置、工艺规范、运行对比、检验任务"
               className="mt-4 h-11 rounded-xl bg-slate-50 px-4 focus:bg-white"
             />
           </div>

@@ -70,8 +70,8 @@ check_entry_order() {
 
 check_entry_order docs/design.md \
   '1. **工作台**' \
-  '2. **工艺定义**' \
-  '3. **设备接入**' \
+  '2. **现场接入**' \
+  '3. **工艺配置**' \
   '4. **生产运行**' \
   '5. **质量管理**' \
   '6. **工艺追因**' \
@@ -79,15 +79,15 @@ check_entry_order docs/design.md \
 
 check_entry_order docs/design.en.md \
   '1. **Workbench**' \
-  '2. **Process definition**' \
-  '3. **Equipment connection**' \
+  '2. **Field integration**' \
+  '3. **Process configuration**' \
   '4. **Production runs**' \
   '5. **Quality management**' \
   '6. **Process diagnosis**' \
   '7. **Process R&D**'
 
-canonical_nav_zh='工艺定义 → 设备接入 → 生产运行 → 质量管理 → 工艺追因 → 工艺研发'
-canonical_nav_en='Process definition → Equipment connection → Production runs → Quality management → Process diagnosis → Process R&D'
+canonical_nav_zh='现场接入 → 工艺配置 → 生产运行 → 质量管理 → 工艺追因 → 工艺研发'
+canonical_nav_en='Field integration → Process configuration → Production runs → Quality management → Process diagnosis → Process R&D'
 if ! grep -Fq "$canonical_nav_zh" docs/design.md ||
    ! grep -Fq "$canonical_nav_en" docs/design.en.md; then
   echo "System design navigation summaries must match the canonical product order." >&2

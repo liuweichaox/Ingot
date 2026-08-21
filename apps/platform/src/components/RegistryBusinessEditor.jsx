@@ -24,7 +24,7 @@ const featureOptions = [
 
 const contextFieldCatalog = [
   ["execution_id", "运行标识", "平台在接收运行事件时生成", "标识一次生产运行；分析准入必需"],
-  ["equipment_id", "设备", "事件主题或设备接入映射", "区分生产设备；常用于同类运行匹配"],
+  ["equipment_id", "设备", "事件主题或现场接入映射", "区分生产设备；常用于同类运行匹配"],
   ["product_family_code", "产品系列", "生产运行 → 生产上下文", "默认同类比较条件"],
   ["product_code", "产品", "生产运行 → 生产上下文", "区分具体产品"],
   ["process_specification_id", "工艺规范", "生产运行 → 生产上下文", "关联生效的工艺规范"],
@@ -381,17 +381,17 @@ export function registryBusinessValidation(kind, form) {
     if (allItems.some(item => !codePattern.test(item.code.trim()) || !item.displayName.trim())) return "工艺变量和控制参数需填写有效代码与显示名称。";
   }
   if (kind === "processSpecificationVersion") {
-    if (!form.dataModel) return "请选择工艺数据模型。";
+    if (!form.dataModel) return "请选择工艺数据字典。";
     if (form.values.some(item => !item.code || item.value === "")) return "控制参数需选择参数并填写值。";
   }
   if (kind === "analysisPlan") {
-    if (!form.dataModel) return "请选择工艺数据模型。";
+    if (!form.dataModel) return "请选择工艺数据字典。";
     if (!form.comparisonKeys.trim()) return "请至少填写一个同类比较字段。";
     if (form.signals.length === 0 || form.signals.some(item => !item.dataItemCode)) return "请至少选择一个分析数据项。";
     if (form.knownUnmeasuredConfounders.some(item => !codePattern.test(item.code.trim()) || !item.name.trim())) return "潜在未测量混杂因素需填写有效代码和名称。";
   }
   if (kind === "scenarioPackage") {
-    if (!form.dataModel || !form.analysisPlan) return "请选择工艺数据模型和分析方案。";
+    if (!form.dataModel || !form.analysisPlan) return "请选择工艺数据字典和分析规则。";
     if (form.contextFields.some(item => !codePattern.test(item.fieldCode.trim()) || !item.name.trim())) return "上下文字段需填写有效代码和名称。";
     if (form.contextFields.some(item => item.mode !== "record-when-available" && item.minimumCoverage === "")) return "进入分析或建模的上下文字段必须填写最低覆盖率。";
     if (form.constraints.some(item => !codePattern.test(item.code.trim()) || !item.name.trim() || (item.minimum === "" && item.maximum === ""))) return "安全约束需填写有效代码、名称和至少一个边界。";
@@ -521,7 +521,7 @@ function ProcessModelEditor({ form, onChange, readOnly, lockIdentity }) {
     <div className="grid gap-5">
       <IdentityFields form={form} onChange={onChange} idField="modelId" idLabel="模型代码" readOnly={readOnly} lockIdentity={lockIdentity} />
       <Card title="模型职责" description="这里只定义平台如何理解数据，不填写 PLC 地址、设备点位或采集频率。">
-        <p className="text-sm leading-6 text-slate-600">同一模型可以复用于多台设备；每台设备的协议、寄存器、原始类型和换算规则在“设备接入与映射”中配置。</p>
+        <p className="text-sm leading-6 text-slate-600">同一数据字典可以复用于多台设备；每个来源的协议、地址、原始类型和换算规则在“现场接入”中配置。</p>
       </Card>
       <ItemDefinitions form={form} onChange={onChange} field="dataItems" title="工艺变量" readOnly={readOnly} includeCategory />
       <ItemDefinitions form={form} onChange={onChange} field="controlParameters" title="控制参数结构" readOnly={readOnly} />
@@ -534,7 +534,7 @@ function ItemDefinitions({ form, onChange, field, title, readOnly, includeCatego
   return (
     <Card
       title={title}
-      description={field === "dataItems" ? "定义稳定业务代码、显示名称、平台类型和标准单位；阶段号的用途分类设为“阶段号”。" : "只定义控制参数的业务结构，具体寄存器在设备接入中映射。"}
+      description={field === "dataItems" ? "定义稳定业务代码、显示名称、平台类型和标准单位；阶段号的用途分类设为“阶段号”。" : "只定义控制参数的业务结构，具体来源地址在现场接入中映射。"}
       actions={!readOnly ? <Button onClick={() => addRow(form, onChange, field, factory())}>添加{title}</Button> : undefined}
     >
       <div className="grid gap-4">
@@ -558,7 +558,7 @@ function ItemDefinitions({ form, onChange, field, title, readOnly, includeCatego
 function ModelSelect({ value, models, disabled, onChange }) {
   return (
     <Select value={value} disabled={disabled} onChange={onChange}>
-      <option value="">请选择数据模型</option>
+      <option value="">请选择数据字典</option>
       {models.map(model => <option key={`${model.modelId}:${model.version}`} value={modelValue(model.modelId, model.version)}>{model.name}（v{model.version}）</option>)}
     </Select>
   );
@@ -572,11 +572,11 @@ function ProcessSpecificationEditor({ form, onChange, readOnly, lockIdentity }) 
   const parameters = model?.controlParameters || [];
   return (
     <div className="grid gap-5">
-      {error && <Alert tone="danger">工艺数据模型读取失败：{error}</Alert>}
+      {error && <Alert tone="danger">工艺数据字典读取失败：{error}</Alert>}
       <IdentityFields form={form} onChange={onChange} idField="processSpecificationId" idLabel="工艺规范代码" readOnly={readOnly} lockIdentity={lockIdentity} description={false} />
       <Card title="工艺规范来源">
         <div className="grid gap-4 md:grid-cols-2">
-          <Field label="工艺数据模型"><ModelSelect value={form.dataModel} models={models} disabled={readOnly} onChange={event => updateAt(form, onChange, "dataModel", event.target.value)} /></Field>
+          <Field label="工艺数据字典"><ModelSelect value={form.dataModel} models={models} disabled={readOnly} onChange={event => updateAt(form, onChange, "dataModel", event.target.value)} /></Field>
           <Field label="沿用自版本"><Input type="number" min="1" value={form.basedOnVersion} disabled={readOnly} onChange={event => updateAt(form, onChange, "basedOnVersion", event.target.value)} placeholder="没有可留空" /></Field>
         </div>
       </Card>
@@ -616,11 +616,11 @@ function AnalysisPlanEditor({ form, onChange, readOnly, lockIdentity }) {
   const dataItems = model?.acquisition?.dataItems || [];
   return (
     <div className="grid gap-5">
-      {error && <Alert tone="danger">工艺数据模型读取失败：{error}</Alert>}
+      {error && <Alert tone="danger">工艺数据字典读取失败：{error}</Alert>}
       <IdentityFields form={form} onChange={onChange} idField="planId" idLabel="方案代码" readOnly={readOnly} lockIdentity={lockIdentity} />
       <Card title="分析方式">
         <div className="grid gap-4 md:grid-cols-2">
-          <Field label="工艺数据模型"><ModelSelect value={form.dataModel} models={models} disabled={readOnly} onChange={event => updateAt(form, onChange, "dataModel", event.target.value)} /></Field>
+          <Field label="工艺数据字典"><ModelSelect value={form.dataModel} models={models} disabled={readOnly} onChange={event => updateAt(form, onChange, "dataModel", event.target.value)} /></Field>
           <Field label="分析范围"><Select value={form.analysisScope} disabled={readOnly} onChange={event => updateAt(form, onChange, "analysisScope", event.target.value)}><option value="production-execution">单次生产运行</option><option value="production-run">生产运行段</option><option value="analysis-window">自定义时间窗口</option></Select></Field>
           <Field label="曲线对齐方式"><Select value={form.alignmentMode} disabled={readOnly} onChange={event => updateAt(form, onChange, "alignmentMode", event.target.value)}><option value="stage-relative">按工艺阶段</option><option value="elapsed">按经过时间</option><option value="normalized">按归一化进度</option></Select></Field>
           <Field label="质量分组字段"><Input value={form.cohortDimension} disabled={readOnly} onChange={event => updateAt(form, onChange, "cohortDimension", event.target.value)} placeholder="例如 quality.outcome" /></Field>
@@ -704,7 +704,7 @@ function ScenarioPackageEditor({ form, onChange, readOnly, lockIdentity }) {
       <IdentityFields form={form} onChange={onChange} idField="packageId" idLabel="工艺配置代码" readOnly={readOnly} lockIdentity={lockIdentity} />
       <Card title="版本化配置组合" description="工艺配置只引用已定义资产；设备地址和业务数据仍由各自配置管理。">
         <div className="grid gap-4 md:grid-cols-2">
-          <Field label="工艺数据模型"><ModelSelect value={form.dataModel} models={models} disabled={readOnly} onChange={event => updateAt(form, onChange, "dataModel", event.target.value)} /></Field>
+          <Field label="工艺数据字典"><ModelSelect value={form.dataModel} models={models} disabled={readOnly} onChange={event => updateAt(form, onChange, "dataModel", event.target.value)} /></Field>
           <Field label="分析方案"><ReferenceSelect value={form.analysisPlan} options={matchingPlans} idKey="planId" label="分析方案" disabled={readOnly} onChange={event => updateAt(form, onChange, "analysisPlan", event.target.value)} /></Field>
           <Field label="质量方案（可选）"><ReferenceSelect value={form.qualityPlan} options={qualityPlans} idKey="planId" label="质量方案" disabled={readOnly} onChange={event => updateAt(form, onChange, "qualityPlan", event.target.value)} /></Field>
         </div>
@@ -741,7 +741,7 @@ function ScenarioPackageEditor({ form, onChange, readOnly, lockIdentity }) {
           )}
           {form.contextFields.length === 0 && <Alert tone="warning" title="尚未选择上下文字段">先从上方目录添加字段。建议至少选择产品系列、设备和工装，以避免把不同生产条件直接混在一起。</Alert>}
           {form.contextFields.map((item, index) => <div key={index} className="grid gap-3 rounded-xl border border-slate-200 p-4 md:grid-cols-2 xl:grid-cols-3">
-            <Field label="字段代码" hint={contextFieldCatalog.find(field => field.fieldCode === item.fieldCode)?.source ? `来源：${contextFieldCatalog.find(field => field.fieldCode === item.fieldCode).source}` : "自定义字段必须由设备接入或上游系统实际上报。"}><Input value={item.fieldCode} disabled={readOnly} onChange={event => updateRow(form, onChange, "contextFields", index, { fieldCode: event.target.value })} /></Field>
+            <Field label="字段代码" hint={contextFieldCatalog.find(field => field.fieldCode === item.fieldCode)?.source ? `来源：${contextFieldCatalog.find(field => field.fieldCode === item.fieldCode).source}` : "自定义字段必须由现场接入或上游系统实际上报。"}><Input value={item.fieldCode} disabled={readOnly} onChange={event => updateRow(form, onChange, "contextFields", index, { fieldCode: event.target.value })} /></Field>
             <Field label="业务名称"><Input value={item.name} disabled={readOnly} onChange={event => updateRow(form, onChange, "contextFields", index, { name: event.target.value })} /></Field>
             <Field label="如何使用" hint="分析必需会排除缺失该字段的运行；进入建模还要求经过因素重叠验证。"><Select value={item.mode} disabled={readOnly} onChange={event => updateRow(form, onChange, "contextFields", index, { mode: event.target.value })}><option value="record-when-available">仅用于追溯</option><option value="required-for-analysis">缺失时禁止分析</option><option value="validated-for-modeling">验证后允许建模</option></Select></Field>
             <Field label="最低覆盖率" hint={`当前覆盖：${coverageByField[item.fieldCode]?.coverage == null ? "暂无样本" : `${Math.round(coverageByField[item.fieldCode].coverage * 100)}%（${coverageByField[item.fieldCode].presentRunCount}/${coverageByField[item.fieldCode].runCount}）`}`}><Input type="number" min="0" max="1" step="0.01" value={item.minimumCoverage} disabled={readOnly} onChange={event => updateRow(form, onChange, "contextFields", index, { minimumCoverage: event.target.value })} placeholder="例如 0.95" /></Field>

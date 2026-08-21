@@ -9,23 +9,23 @@ import { formatTime, emptyInspectionCharacteristic, inspectionDefinitionForm, in
 const configurationJourney = [
   {
     number: "1", title: "定义数据标准", description: "先说明设备数据代表什么，再维护允许使用的工艺参数版本。",
-    links: [["/configuration/process-data-models", "工艺数据模型"], ["/configuration/process-specifications", "工艺规范"]],
+    links: [["/configuration/process-data-models", "工艺数据字典"], ["/configuration/process-specifications", "工艺规范"]],
   },
   {
     number: "2", title: "连接现场数据", description: "登记现场节点，把 PLC、仪器或系统点位映射到标准数据项。",
-    links: [["/edges", "现场节点"], ["/configuration/ingestion-tasks", "采集配置"]],
+    links: [["/edges", "现场节点"], ["/configuration/ingestion-tasks", "数据源配置"]],
   },
   {
     number: "3", title: "定义判断规则", description: "决定哪些运行可以比较、质量如何判定，以及缺什么数据时应拒绝分析。",
-    links: [["/configuration/process-analysis-plans", "运行分析方案"], ["/configuration/inspection-definitions", "检测定义"], ["/configuration/quality-plans", "质量方案"]],
+    links: [["/configuration/process-analysis-plans", "运行分析规则"], ["/configuration/inspection-definitions", "检测定义"], ["/configuration/quality-plans", "质量方案"]],
   },
   {
-    number: "4", title: "建立工装结构", description: "需要区分工装差异时，再定义组件、装配模板和实际工装总成。",
-    links: [["/configuration/component-types", "组件分类"], ["/configuration/tooling-assemblies", "工装总成"]],
+    number: "4", title: "建立工装结构", description: "需要区分工装差异时，再定义组件、工装结构和实际工装总成。",
+    links: [["/configuration/component-types", "组件分类"], ["/configuration/tooling-assemblies", "实际工装总成"]],
   },
   {
     number: "5", title: "组合并发布", description: "最后把已准备好的数据、接入、分析、质量和上下文策略锁定为可追溯版本。",
-    links: [["/configuration/scenario-packages", "工艺配置方案"]],
+    links: [["/configuration/scenario-packages", "配置发布"]],
   },
 ];
 
@@ -38,11 +38,11 @@ export function ConfigurationHubPage() {
   const qualityResponse = useApi("/api/v1/inspection-plans");
   const scenarioResponse = useApi("/api/v1/scenario-packages");
   const readiness = [
-    { title: "数据标准", ready: extractRows(modelResponse.data).some(item => item.status === "published") && extractRows(specificationResponse.data).some(item => item.status === "published"), readyHint: "数据模型和工艺规范已发布", pendingHint: "发布数据模型和工艺规范", to: "/configuration/process-data-models", action: "检查数据标准", responses: [modelResponse, specificationResponse] },
-    { title: "现场接入", ready: extractRows(ingestionResponse.data).some(item => item.status === "published"), readyHint: "采集配置已发布", pendingHint: "发布至少一个采集配置", to: "/configuration/ingestion-tasks", action: "配置数据采集", responses: [ingestionResponse] },
-    { title: "分析规则", ready: extractRows(analysisResponse.data).some(item => item.status === "published"), readyHint: "运行分析方案已发布", pendingHint: "发布运行分析方案", to: "/configuration/process-analysis-plans", action: "配置分析规则", responses: [analysisResponse] },
+    { title: "数据标准", ready: extractRows(modelResponse.data).some(item => item.status === "published") && extractRows(specificationResponse.data).some(item => item.status === "published"), readyHint: "数据字典和工艺规范已发布", pendingHint: "发布数据字典和工艺规范", to: "/configuration/process-data-models", action: "检查数据标准", responses: [modelResponse, specificationResponse] },
+    { title: "现场接入", ready: extractRows(ingestionResponse.data).some(item => item.status === "published"), readyHint: "数据源配置已发布", pendingHint: "发布至少一个数据源配置", to: "/configuration/ingestion-tasks", action: "配置数据来源", responses: [ingestionResponse] },
+    { title: "分析规则", ready: extractRows(analysisResponse.data).some(item => item.status === "published"), readyHint: "运行分析规则已发布", pendingHint: "发布运行分析规则", to: "/configuration/process-analysis-plans", action: "配置分析规则", responses: [analysisResponse] },
     { title: "质量规则", ready: extractRows(definitionResponse.data).length > 0 && extractRows(qualityResponse.data).some(item => item.status === "published"), readyHint: "检测定义和质量方案已就绪", pendingHint: "建立检测定义并发布质量方案", to: "/configuration/quality-plans", action: "配置质量规则", responses: [definitionResponse, qualityResponse] },
-    { title: "组合发布", ready: extractRows(scenarioResponse.data).some(item => item.status === "published"), readyHint: "工艺配置方案已发布", pendingHint: "发布工艺配置方案", to: "/configuration/scenario-packages", action: "发布配置方案", responses: [scenarioResponse] },
+    { title: "组合发布", ready: extractRows(scenarioResponse.data).some(item => item.status === "published"), readyHint: "工艺配置已发布", pendingHint: "发布工艺配置", to: "/configuration/scenario-packages", action: "发布配置", responses: [scenarioResponse] },
   ].map(item => ({
     ...item,
     loading: item.responses.some(response => response.loading && !response.data),
@@ -96,7 +96,7 @@ export function ConfigurationHubPage() {
       <Card title="运行数据来源" description="确认分析所需身份、生产、工装和覆盖率数据。">
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           {[
-            ["设备与运行身份", "由设备事件、现场节点和采集配置映射提供。", "/configuration/ingestion-tasks", "检查采集配置"],
+            ["设备与运行身份", "由设备事件、现场节点和数据源配置映射提供。", "/configuration/ingestion-tasks", "检查数据源配置"],
             ["产品、工艺、材料与批次", "由生产准备或 MES 写入不可变生产上下文。", "/production/changeover", "检查生产上下文"],
             ["实际装机工装", "由工装装卸记录在运行开始时绑定。", "/production/tooling-installations", "检查工装装卸"],
             ["字段覆盖率", "由历史已完成运行计算；覆盖不足时可禁止分析或建模。", "/data-quality", "检查数据可信度"],
@@ -116,23 +116,23 @@ export function ConfigurationHubPage() {
 const registryPages = {
   scenarios: {
     kind: "scenarioPackage",
-    title: "工艺配置方案", description: "版本化组合工艺数据、设备接入、运行分析、质量规则、上下文策略和安全约束。", endpoint: "/api/v1/scenario-packages", key: "packageId",
+    title: "配置发布", description: "版本化组合工艺数据、现场接入、运行分析、质量规则、上下文策略和安全约束。", endpoint: "/api/v1/scenario-packages", key: "packageId",
     columns: [["packageId", "场景"], ["version", "版本"], ["name", "名称"], ["status", "状态"], ["updatedAt", "更新时间"]],
-    createLabel: "创建工艺配置方案",
+    createLabel: "创建配置版本",
     template: { packageId: "", version: 1, name: "", description: "", status: "draft", dataModelId: "", dataModelVersion: 1, analysisPlanId: "", analysisPlanVersion: 1, ingestionTasks: [], qualityPlan: null, contextFields: [], constraints: [], knowledgeAssets: [], terminology: {}, updatedAt: "" },
     deleteUrl: value => `/api/v1/scenario-packages/${encodeURIComponent(value.packageId)}/${value.version}`,
   },
   processModels: {
     kind: "processModel",
-    title: "工艺数据模型", description: "定义工艺变量、阶段号和控制参数结构，不包含 PLC 地址和采集频率。", endpoint: "/api/v1/process-data-models", key: "modelId",
+    title: "工艺数据字典", description: "定义工艺变量、阶段号和控制参数结构，不包含来源地址和采集频率。", endpoint: "/api/v1/process-data-models", key: "modelId",
     columns: [["modelId", "模型"], ["version", "版本"], ["name", "名称"], ["status", "状态"], ["updatedAt", "更新时间"]],
-    createLabel: "创建工艺数据模型",
+    createLabel: "创建工艺数据字典",
     template: { modelId: "", version: 1, name: "", description: "", status: "draft", acquisition: { dataItems: [] }, controlParameters: [], updatedAt: "" },
     deleteUrl: value => `/api/v1/process-data-models/${encodeURIComponent(value.modelId)}/${value.version}`,
   },
   processSpecifications: {
     kind: "processSpecificationVersion",
-    title: "工艺规范", description: "维护引用工艺数据模型的完整参数版本。", endpoint: "/api/v1/process-specifications", key: "processSpecificationId",
+    title: "工艺规范", description: "维护引用工艺数据字典的完整参数版本。", endpoint: "/api/v1/process-specifications", key: "processSpecificationId",
     columns: [["processSpecificationId", "工艺规范"], ["version", "版本"], ["name", "名称"], ["status", "状态"], ["updatedAt", "更新时间"]],
     createLabel: "创建工艺规范",
     template: { processSpecificationId: "", version: 1, name: "", basedOnVersion: null, dataModelId: "", dataModelVersion: 1, status: "draft", contextSelector: {}, values: [], updatedAt: "" },
@@ -140,9 +140,9 @@ const registryPages = {
   },
   plans: {
     kind: "analysisPlan",
-    title: "运行分析方案", description: "版本化定义同类比较条件、阶段对齐、质量分组和分析数据项。", endpoint: "/api/v1/process-analysis-plans", key: "planId",
+    title: "运行分析规则", description: "版本化定义同类比较条件、阶段对齐、质量分组和分析数据项。", endpoint: "/api/v1/process-analysis-plans", key: "planId",
     columns: [["planId", "模型"], ["version", "版本"], ["name", "名称"], ["status", "状态"], ["updatedAt", "更新时间"]],
-    createLabel: "创建运行分析方案",
+    createLabel: "创建运行分析规则",
     template: { planId: "", version: 1, name: "", description: "", status: "draft", dataModelId: "", dataModelVersion: 1, analysisScope: "production-execution", alignmentMode: "stage-relative", cohortDimension: "", comparisonKeys: ["product_family_code"], contextSelector: {}, signals: [], updatedAt: "" },
     deleteUrl: value => `/api/v1/process-analysis-plans/${encodeURIComponent(value.planId)}/${value.version}`,
   },

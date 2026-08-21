@@ -55,19 +55,19 @@ const productionResources = {
     deleteUrl: value => `/api/v1/tooling-components/${encodeURIComponent(value.componentId)}`,
   },
   type: {
-    title: "装配模板", endpoint: "/api/v1/tooling-types", key: "toolingTypeCode",
+    title: "工装结构定义", endpoint: "/api/v1/tooling-types", key: "toolingTypeCode",
     description: "定义一类工装总成包含哪些装配位置，以及每个位置允许使用哪种组件资产。",
     columns: [["toolingTypeCode", "代码"], ["version", "版本"], ["name", "名称"], ["status", "状态"], ["roles", "装配位置"]],
     template: { toolingTypeCode: "", version: 1, name: "", status: "active", roles: [] },
-    createLabel: "新建装配模板",
+    createLabel: "新建工装结构",
     requiredFields: ["toolingTypeCode", "name"],
     statusOptions: [["active", "启用"], ["inactive", "停用"]],
     deleteUrl: value => `/api/v1/tooling-types/${encodeURIComponent(value.toolingTypeCode)}/${value.version}`,
   },
   assembly: {
-    title: "工装总成", endpoint: "/api/v1/tooling-assemblies", key: "toolingAssemblyId",
+    title: "实际工装总成", endpoint: "/api/v1/tooling-assemblies", key: "toolingAssemblyId",
     description: "维护工装总成身份，并通过不可变配置版本记录每个装配位置实际使用的组件资产。",
-    columns: [["toolingAssemblyId", "工装总成编号"], ["name", "名称"], ["toolingTypeCode", "装配模板"], ["status", "状态"]],
+    columns: [["toolingAssemblyId", "工装总成编号"], ["name", "名称"], ["toolingTypeCode", "工装结构"], ["status", "状态"]],
     template: { toolingAssemblyId: "", toolingTypeCode: "", name: "", status: "active" },
     createLabel: "新建工装",
     requiredFields: ["toolingAssemblyId", "toolingTypeCode", "name"],
@@ -576,7 +576,7 @@ function ToolingAssembliesPage({ canWrite = true }) {
 
   return (
     <Page
-      title="工装总成"
+      title="实际工装总成"
       description="一个工装总成拥有稳定身份；每次组件更换形成新的不可变配置版本，生产运行自动保留当时的真实组成。"
       actions={canWrite ? <Button variant="primary" onClick={() => { setActionError(""); setAssetOpen(true); }}>新建工装总成</Button> : undefined}
     >
@@ -587,7 +587,7 @@ function ToolingAssembliesPage({ canWrite = true }) {
       {actionError && <Alert tone="danger">{actionError}</Alert>}
       <WorkflowGuide
         title="工装总成数据的正确关系"
-        description="组件分类说明“是什么”，装配模板说明“装在哪里”，配置版本说明“这次具体装了哪一件”。"
+        description="组件分类说明“是什么”，工装结构定义说明“装在哪里”，配置版本说明“这次具体装了哪一件”。"
         steps={[
           { title: "登记组件资产", description: "每个模芯、模架使用独立资产编号和序列号。", state: components.length ? "done" : "current" },
           { title: "建立工装总成配置", description: "按装配位置选择实际组件，形成不可变版本。", state: revisions.length ? "done" : components.length ? "current" : "upcoming" },
@@ -595,7 +595,7 @@ function ToolingAssembliesPage({ canWrite = true }) {
         ]}
       />
       {loading ? <LoadingCard /> : assemblies.length === 0 ? (
-        <EmptyState title="还没有工装总成" description="先准备组件分类、组件资产和装配模板，再建立工装总成身份。" />
+        <EmptyState title="还没有实际工装总成" description="先准备组件分类、组件资产和工装结构定义，再建立工装总成身份。" />
       ) : (
         <div className="grid gap-5">
           {assemblies.map(assembly => {
@@ -650,7 +650,7 @@ function ToolingAssembliesPage({ canWrite = true }) {
         <div className="grid gap-4">
           <Field label="工装总成编号"><Input value={assetForm.toolingAssemblyId} onChange={event => setAssetForm(current => ({ ...current, toolingAssemblyId: event.target.value }))} /></Field>
           <Field label="工装总成名称"><Input value={assetForm.name} onChange={event => setAssetForm(current => ({ ...current, name: event.target.value }))} /></Field>
-          <Field label="装配模板">
+          <Field label="工装结构">
             <Select value={assetForm.toolingTypeCode} onChange={event => setAssetForm(current => ({ ...current, toolingTypeCode: event.target.value }))}>
               <option value="">请选择</option>
               {activeTemplates.map(template => <option key={template.toolingTypeCode} value={template.toolingTypeCode}>{template.name} · v{template.version}</option>)}
@@ -846,9 +846,9 @@ function ProductionRecordsPage({ section, canWrite = true }) {
             <>
               <WorkflowGuide
                 title="生产开始前"
-                description="设备接入和工艺规范发布通常只需配置一次；每次换产品或换工艺规范时更新生产配置。"
+                description="现场接入和工艺规范发布通常只需配置一次；每次换产品或换工艺规范时更新生产配置。"
                 steps={[
-                  { title: "设备已有数据", description: "在“设备采集”中完成设备接入。", state: rows.length ? "done" : "current" },
+                  { title: "设备已有数据", description: "在“现场接入”中完成数据源配置。", state: rows.length ? "done" : "current" },
                   { title: "产品与工艺规范就绪", description: "准备产品编号和已发布工艺规范。", state: rows.some(row => row.processSpecificationId) ? "done" : rows.length ? "current" : "upcoming" },
                   { title: "启用生产配置", description: "确认设备、产品、工艺规范和当前工装。", state: activeRows.length ? "done" : "current" },
                 ]}

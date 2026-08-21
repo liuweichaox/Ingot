@@ -87,7 +87,7 @@ After creating an R&D project, complete “Phase 0: preregistration and data bas
 
 ## 4. Connect data sources
 
-Open Process definition → Configuration overview and follow the dependency order shown there: data standards, field integration, decision rules, tooling structure, and the process-configuration package. Connect data sources under Equipment connectivity → Acquisition configuration:
+Open Field integration → Configuration overview and follow the dependency order shown there: data standards, field integration, decision rules, tooling structure, and configuration publishing. Connect continuous process sources under Field integration → Data source configuration:
 
 1. Register the edge node and equipment identity.
 2. Select a protocol and enter connection details.
@@ -97,7 +97,7 @@ Open Process definition → Configuration overview and follow the dependency ord
 6. Publish the configuration and confirm the Edge actually applied it.
 7. Configure inspection entry, instruments, or quality-system sources.
 
-Do not put PLC addresses in an R&D project. Equipment connectivity owns addresses and protocols; research references stable business codes.
+Do not put PLC, instrument, or gateway addresses in an R&D project. Field integration owns source addresses and protocols; research references stable business codes.
 
 See [Data integration](data-connection.en.md) for protocol semantics.
 

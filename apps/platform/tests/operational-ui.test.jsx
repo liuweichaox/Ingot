@@ -50,7 +50,7 @@ describe("生产界面状态反馈", () => {
 
     await waitFor(() => expect(screen.getByRole("progressbar", { name: "配置准备进度" })).toHaveAttribute("aria-valuenow", "0"));
     expect(screen.getByText("还需完成 5 项")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /配置数据采集/ })).toHaveAttribute("href", "/configuration/ingestion-tasks");
-    expect(screen.getByRole("link", { name: /发布配置方案/ })).toHaveAttribute("href", "/configuration/scenario-packages");
+    expect(screen.getByRole("link", { name: /配置数据来源/ })).toHaveAttribute("href", "/configuration/ingestion-tasks");
+    expect(screen.getByRole("link", { name: /发布配置/ })).toHaveAttribute("href", "/configuration/scenario-packages");
   });
 });

@@ -49,7 +49,7 @@ test("核心数据接口和主要页面使用完整模拟场景", async ({ page,
   await expect(page.getByRole("navigation", { name: "主导航" })).not.toContainText("系统管理");
 
   for (const [path, heading, evidence] of [
-    ["/configuration/process-data-models", "工艺数据模型", "精密光学模压工艺"],
+    ["/configuration/process-data-models", "工艺数据字典", "精密光学模压工艺"],
     ["/process-executions", "运行记录", "RUN-2026-0821-005"],
     ["/inspections", "检验任务", "LENS-006"],
     ["/edges", "现场节点", "上海一号压机节点"],
@@ -153,7 +153,7 @@ test("全部业务导航和关键详情深链可达", async ({ page }) => {
 test("全局搜索、面包屑和系统管理深链一致", async ({ page }) => {
   await login(page, "admin", "admin12345");
   await page.getByRole("button", { name: "打开功能搜索" }).click();
-  await page.getByPlaceholder("例如：运行对比、检验任务、设备接入、工艺规范").fill("运行对比");
+  await page.getByPlaceholder("例如：数据源配置、工艺规范、运行对比、检验任务").fill("运行对比");
   await page.getByText("运行对比", { exact: true }).last().click();
   await expect(page).toHaveURL(/\/comparisons$/);
   await expect(page.getByRole("navigation", { name: "面包屑" })).toContainText("运行对比");
@@ -186,7 +186,7 @@ test("模拟场景覆盖空态、加载态、权限态和生命周期状态", as
 
   await setScenario(request, "empty");
   for (const [route, emptyText] of [
-    ["/configuration/process-data-models", "还没有工艺数据模型"],
+    ["/configuration/process-data-models", "还没有工艺数据字典"],
     ["/process-executions", "还没有形成生产运行"],
     ["/inspections", "暂无数据"],
     ["/edges", "暂无数据"],

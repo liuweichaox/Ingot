@@ -96,7 +96,7 @@ export function IngestionTaskPage({ canWrite = true }) {
   const advisories = descriptor.advisories ? descriptor.advisories(form) : [];
   const probeValid = Boolean(probe?.success && probe?.mappingsValidated);
   const publishChecklist = [
-    { label: "选择采集节点与工艺数据模型", done: Boolean(form.edgeId && form.dataModel) },
+    { label: "选择现场节点与工艺数据字典", done: Boolean(form.edgeId && form.dataModel) },
     { label: "填写连接参数", done: !Object.keys(descriptor.validateConnection(form[descriptor.section] || {}) || {}).length },
     {
       label: "映射过程执行必需的工艺变量",
@@ -171,8 +171,8 @@ export function IngestionTaskPage({ canWrite = true }) {
     }
   }
 
-  if (loading) return <Page title="采集配置"><Card><p className="text-sm text-slate-500">正在载入配置…</p></Card></Page>;
-  if (loadError) return <Page title="采集配置"><Alert tone="danger">{loadError}</Alert></Page>;
+  if (loading) return <Page title="数据源配置"><Card><p className="text-sm text-slate-500">正在载入配置…</p></Card></Page>;
+  if (loadError) return <Page title="数据源配置"><Alert tone="danger">{loadError}</Alert></Page>;
 
   return (
     <Page
@@ -211,7 +211,7 @@ export function IngestionTaskPage({ canWrite = true }) {
 
         <div className="grid items-start gap-5 2xl:grid-cols-[minmax(0,1.55fr)_minmax(22rem,1fr)]">
           <div className="grid gap-5">
-            <Card title="基本信息" description="采集发生在哪里、采哪台设备、结果采用哪套工艺定义。">
+            <Card title="基本信息" description="数据来自哪里、关联哪台设备、结果采用哪套工艺数据字典。">
               <div className="grid items-start gap-4 md:grid-cols-2">
                 <Field label="接入配置代码" hint="创建后不可修改。" error={errors.taskId}>
                   <Input value={form.taskId} disabled={readOnly || (!isNew && mode !== "create")}
@@ -233,7 +233,7 @@ export function IngestionTaskPage({ canWrite = true }) {
                     ))}
                   </Select>
                 </Field>
-                <Field label="工艺数据模型" hint="规定平台中的工艺变量和单位，不包含设备地址。" error={errors.dataModel}>
+                <Field label="工艺数据字典" hint="规定平台中的工艺变量和单位，不包含来源地址。" error={errors.dataModel}>
                   <Select value={form.dataModel} disabled={readOnly} onChange={event => update({ dataModel: event.target.value })}>
                     <option value="">请选择数据模型</option>
                     {models.map(item => (
@@ -622,8 +622,8 @@ export function IngestionTasksPage({ canWrite = true }) {
 
   return (
     <Page
-      title="采集配置"
-      description="选择采集节点和通信驱动，把设备点位映射到工艺变量。"
+      title="数据源配置"
+      description="选择现场节点和通信驱动，把来源字段映射到稳定工艺变量。"
       actions={
         <div className="flex items-center gap-2">
           <Link className="inline-flex min-h-9 items-center rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100"
@@ -659,7 +659,7 @@ export function IngestionTasksPage({ canWrite = true }) {
               <thead className="text-slate-600">
                 <tr>
                   <th className="px-3 py-2">设备</th>
-                  <th className="px-3 py-2">采集节点</th>
+                  <th className="px-3 py-2">现场节点</th>
                   <th className="px-3 py-2">配置名称</th>
                   <th className="px-3 py-2">通信驱动</th>
                   <th className="px-3 py-2">点位</th>

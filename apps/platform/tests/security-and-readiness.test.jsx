@@ -3,7 +3,7 @@ import React from "react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AnalysisReadinessCard } from "../src/pages/AnalysisPages";
-import { MemberManagementButton } from "../src/pages/ResearchProjectsPage";
+import { MemberManagementButton } from "../src/research/components/ResearchWorkspaceContent";
 import { getJson, patchJson } from "../src/api/http";
 
 afterEach(() => {

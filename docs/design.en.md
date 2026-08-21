@@ -19,7 +19,7 @@ The system is designed for one company on its factory network, shared by process
 ## Product model
 
 ```text
-Define process → Connect equipment → Collect production data → Close the data loop → Process diagnosis → Process R&D
+Integrate field sources → Configure process semantics → Collect production data → Close the data loop → Process diagnosis → Process R&D
 ```
 
 The first four steps organize field activity into trustworthy run facts. The last two use those facts to support engineering decisions. Process diagnosis and Process R&D are not parallel products: diagnosis explains an observed result, while R&D validates candidates through falsifiable experiments and selects the next experiment. Safe optimization is a method within Process R&D, not a standalone business entry. Both must read the same evidence.
@@ -27,14 +27,14 @@ The first four steps organize field activity into trustworthy run facts. The las
 The current Web information architecture balances the decision chain with frequent role-based tasks through seven business entries:
 
 1. **Workbench**: prioritized quality tasks, run status, field status, and R&D progress;
-2. **Process definition**: process data models, process specifications, analysis, quality, tooling, and process-configuration packages;
-3. **Equipment connection**: edge nodes, communication drivers, and mappings from equipment points to process variables;
-4. **Production runs**: run records, run events, the object catalog, production preparation, and tooling installation;
+2. **Field integration**: configuration overview, edge nodes, communication drivers, and mappings from multiple source fields to process variables;
+3. **Process configuration**: process data dictionaries, process specifications, analysis rules, quality, tooling, and configuration publishing;
+4. **Production runs**: production preparation, tooling installation, run records, the object catalog, and run events;
 5. **Quality management**: inspection entry, independent review, quality records, and quality-deviation analysis, with direct access for daily quality work;
-6. **Process diagnosis**: the diagnosis workbench, run comparison, data trust, and the analysis assistant; AI is an analysis method rather than a standalone business domain;
-7. **Process R&D**: R&D projects, experimental validation, and R&D assets.
+6. **Process diagnosis**: the diagnosis workbench, data trust, run comparison, and the analysis assistant; AI is an analysis method rather than a standalone business domain;
+7. **Process R&D**: R&D projects, experimental validation, and R&D outcomes.
 
-After the workbench, the primary business entries follow “Process definition → Equipment connection → Production runs → Quality management → Process diagnosis → Process R&D.” This simplified dependency order explains why trustworthy data must be established before diagnosis and R&D. It summarizes the full loop rather than mapping one-to-one to the six stages above: Production runs also covers production preparation, collection, and traceability; Quality management covers inspection and quality-deviation work; and the complete data loop additionally depends on cross-entry evidence such as data trust and run context.
+After the workbench, the primary business entries follow “Field integration → Process configuration → Production runs → Quality management → Process diagnosis → Process R&D.” Field integration starts with a configuration overview of sources and dependencies; process configuration then establishes stable semantics, rules, and published versions before production, quality, diagnosis, and R&D. It summarizes the full loop rather than mapping one-to-one to the six stages above: Production runs also covers production preparation, collection, and traceability; Quality management covers inspection and quality-deviation work; and the complete data loop additionally depends on cross-entry evidence such as data trust and run context.
 
 System administration has a separate entry for users, role permissions, platform status, runtime logs, and assistant evaluation, so it does not compete with business tasks. Secondary navigation places frequent daily tasks before setup and maintenance actions. Existing URLs and data contracts remain stable; only the way engineers discover capabilities changes.
 

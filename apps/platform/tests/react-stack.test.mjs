@@ -22,9 +22,15 @@ const acquisitionPanels = {
   mapping: await readFile(new URL("../src/acquisition/panels/PointMappingPanel.jsx", import.meta.url), "utf8"),
   points: await readFile(new URL("../src/acquisition/panels/DevicePointsPanel.jsx", import.meta.url), "utf8"),
 };
+const researchProjectsPage = await readFile(new URL("../src/pages/ResearchProjectsPage.jsx", import.meta.url), "utf8");
 const researchProjects = (await Promise.all([
-  readFile(new URL("../src/pages/ResearchProjectsPage.jsx", import.meta.url), "utf8"),
+  researchProjectsPage,
   readFile(new URL("../src/research/researchProjectModel.js", import.meta.url), "utf8"),
+  readFile(new URL("../src/research/researchProjectPresentation.js", import.meta.url), "utf8"),
+  readFile(new URL("../src/research/components/CreateResearchProjectDrawer.jsx", import.meta.url), "utf8"),
+  readFile(new URL("../src/research/components/ResearchEvidenceCards.jsx", import.meta.url), "utf8"),
+  readFile(new URL("../src/research/components/ResearchProjectDrawers.jsx", import.meta.url), "utf8"),
+  readFile(new URL("../src/research/components/ResearchWorkspaceContent.jsx", import.meta.url), "utf8"),
 ])).join("\n");
 const researchAssets = await readFile(new URL("../src/pages/ResearchAssetsPage.jsx", import.meta.url), "utf8");
 const styles = await readFile(new URL("../src/styles/global.css", import.meta.url), "utf8");
@@ -88,19 +94,22 @@ test("navigation and overlays are accessible Headless UI components", () => {
   assert.match(app, /DialogBackdrop/);
   assert.match(app, /DialogPanel/);
   assert.match(app, /MenuButton/);
-  for (const [id, domain] of [["overview", "工作台"], ["evidence", "生产运行"], ["quality", "质量管理"], ["diagnosis", "工艺追因"], ["optimization", "工艺研发"], ["process-definition", "工艺定义"], ["equipment-connection", "设备接入"]]) {
+  for (const [id, domain] of [["overview", "工作台"], ["evidence", "生产运行"], ["quality", "质量管理"], ["diagnosis", "工艺追因"], ["optimization", "工艺研发"], ["process-definition", "工艺配置"], ["equipment-connection", "现场接入"]]) {
     assert.match(app, new RegExp(`id: "${id}", label: "${domain}"`));
   }
-  assert.match(app, /id: "overview"[\s\S]*id: "process-definition"[\s\S]*id: "equipment-connection"[\s\S]*id: "evidence"[\s\S]*id: "quality"[\s\S]*id: "diagnosis"[\s\S]*id: "optimization"/);
+  assert.match(app, /id: "overview"[\s\S]*id: "equipment-connection"[\s\S]*id: "process-definition"[\s\S]*id: "evidence"[\s\S]*id: "quality"[\s\S]*id: "diagnosis"[\s\S]*id: "optimization"/);
   assert.match(app, /const systemSection = \{/);
   assert.match(app, /sectionsForIdentity/);
   assert.match(app, /roles \|\| \[\]\)\.includes\("platform\.admin"\)/);
-  assert.match(app, /id: "equipment-connection"[\s\S]*label: "现场接入", items: \[\["\/edges", "现场节点"\], \["\/configuration\/ingestion-tasks", "采集配置"\]\]/);
-  assert.match(app, /id: "optimization"[\s\S]*label: "项目与资产", items: \[\["\/research-projects", "研发项目"\], \["\/research-assets", "研发资产"\]\]/);
+  assert.match(app, /id: "equipment-connection"[\s\S]*\["\/configuration", "配置总览"\][\s\S]*\["\/edges", "现场节点"\], \["\/configuration\/ingestion-tasks", "数据源配置"\]/);
+  assert.match(app, /id: "process-definition"[\s\S]*\["\/configuration\/process-data-models", "工艺数据字典"\][\s\S]*\["\/configuration\/tooling-types", "工装结构定义"\][\s\S]*\["\/configuration\/scenario-packages", "配置发布"\]/);
+  assert.match(app, /id: "optimization"[\s\S]*label: "项目与成果", items: \[\["\/research-projects", "研发项目"\], \["\/research-assets", "研发成果"\]\]/);
   assert.match(app, /id: "system"[\s\S]*label: "身份与权限"[\s\S]*label: "平台运维"[\s\S]*label: "助手治理"/);
   assert.match(app, /\["\/chat", "分析助手"\]/);
-  assert.match(app, /items: \[\["\/research-projects", "研发项目"\], \["\/research-assets", "研发资产"\]\]/);
-  assert.match(app, /\["\/research-assets", "研发资产"\]/);
+  assert.match(app, /items: \[\["\/research-projects", "研发项目"\], \["\/research-assets", "研发成果"\]\]/);
+  assert.match(app, /\["\/research-assets", "研发成果"\]/);
+  assert.match(app, /\["\/production\/changeover", "生产切换"\][\s\S]*\["\/process-executions", "运行记录"\]/);
+  assert.match(app, /\["\/data-quality", "数据可信度"\], \["\/comparisons", "运行对比"\]/);
   assert.doesNotMatch(app, /优化工作|复用资产/);
   assert.match(pages, /title="研发项目"/);
   assert.match(pages, /工艺分析助手/);
@@ -212,6 +221,15 @@ test("core workflows tell new users what to do next and confirm completed action
   assert.match(app, /<ToastHost \/>/);
 });
 
+test("research project orchestration stays separate from forms, evidence cards, and workspace presentation", () => {
+  assert.ok(researchProjectsPage.split("\n").length < 1100);
+  assert.match(researchProjectsPage, /CreateResearchProjectDrawer/);
+  assert.match(researchProjectsPage, /ResearchProjectDrawers/);
+  assert.match(researchProjectsPage, /ResearchWorkspaceContent/);
+  assert.doesNotMatch(researchProjectsPage, /function WorkspaceContent/);
+  assert.doesNotMatch(researchProjectsPage, /function CreateProjectDrawer/);
+});
+
 test("versioned tooling remains unique and the legacy improvement workspace is absent", () => {
   assert.match(pages, /getRowKey=\{section === "type" \? row => `\$\{row\[resource\.key\]\}:\$\{row\.version \?\? 1\}` : undefined\}/);
   assert.match(pages, /<option value="Information">信息<\/option>/);
@@ -272,11 +290,11 @@ test("all versioned configuration registries use business forms instead of JSON 
   assert.doesNotMatch(pages, /label="版本定义"/);
 });
 
-test("user-facing terminology presents scenario packages as process configurations", () => {
-  assert.match(app, /\["\/configuration\/scenario-packages", "工艺配置方案"\]/);
-  assert.match(app, /"\/configuration\/scenario-packages": \["工艺配置方案"/);
-  assert.match(pages, /title: "工艺配置方案"/);
-  assert.match(pages, /createLabel: "创建工艺配置方案"/);
+test("user-facing terminology presents scenario packages as configuration publishing", () => {
+  assert.match(app, /\["\/configuration\/scenario-packages", "配置发布"\]/);
+  assert.match(app, /"\/configuration\/scenario-packages": \["配置发布"/);
+  assert.match(pages, /title: "配置发布"/);
+  assert.match(pages, /createLabel: "创建配置版本"/);
   assert.match(registryEditor, /idLabel="工艺配置代码"/);
   assert.match(researchProjects, /label="工艺配置（推荐）"/);
   for (const source of [app, pages, registryEditor, researchProjects]) {
