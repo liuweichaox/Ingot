@@ -309,7 +309,7 @@ export function Field({ label, hint, error, className, children }) {
     <label className={cx("grid min-w-0 content-start gap-1.5 self-start text-sm font-medium text-slate-700", className)}>
       {label !== undefined && label !== null && <span className="min-w-0 leading-5">{label}</span>}
       {children}
-      {hint && <span className="min-w-0 text-xs font-normal leading-5 text-slate-500">{hint}</span>}
+      {hint && <span className="sr-only">{hint}</span>}
       {error && <span className="min-w-0 text-xs font-normal leading-5 text-rose-600" role="alert">{error}</span>}
     </label>
   );

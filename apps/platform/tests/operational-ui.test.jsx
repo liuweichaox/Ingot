@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router";
 import { SystemStatusIndicator } from "../src/App";
 import { ConfigurationHubPage } from "../src/pages/RegistryPages";
-import { EmptyState } from "../src/ui/components";
+import { EmptyState, Field, Input } from "../src/ui/components";
 
 afterEach(() => {
   cleanup();
@@ -19,6 +19,18 @@ function jsonResponse(payload) {
 }
 
 describe("生产界面状态反馈", () => {
+  it("不在表单下方显示常规辅助说明，但保留校验错误", () => {
+    render(
+      <Field label="工艺规范" hint="选择当前生产使用的已发布版本。" error="请选择工艺规范">
+        <Input />
+      </Field>,
+    );
+
+    expect(screen.getByText("选择当前生产使用的已发布版本。")).toHaveClass("sr-only");
+    expect(screen.getByRole("alert")).toHaveTextContent("请选择工艺规范");
+    expect(screen.getByRole("alert")).not.toHaveClass("sr-only");
+  });
+
   it("在全局导航中展示平台与现场节点状态", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse([
       { edgeId: "edge-01", lastSeen: new Date().toISOString() },
