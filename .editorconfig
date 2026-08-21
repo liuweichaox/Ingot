@@ -44,6 +44,7 @@ csharp_style_expression_bodied_lambdas = true:suggestion
 dotnet_diagnostic.IDE0055.severity = warning
 dotnet_diagnostic.IDE0065.severity = warning
 dotnet_diagnostic.IDE0161.severity = warning
+dotnet_diagnostic.IDE0007.severity = warning
 dotnet_diagnostic.IDE0290.severity = suggestion
 
 csharp_indent_block_contents = true
