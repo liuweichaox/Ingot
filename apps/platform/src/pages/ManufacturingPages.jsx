@@ -10,7 +10,7 @@ const productionResources = {
     title: "生产切换", endpoint: "/api/v1/production-contexts", key: "contextId",
     description: "为设备选择接下来生产的产品、工艺规范和已装工装，保存后对新运行生效。",
     drawerDescription: "按顺序确认设备、产品、工艺规范和工装；保存后只影响新开始的生产运行。",
-    columns: [["equipmentId", "设备"], ["productCode", "产品"], ["processSpecificationId", "工艺规范"], ["validFrom", "生效时间"], ["validTo", "结束时间"]],
+    columns: [["equipmentId", "设备"], ["productCode", "产品"], ["processSpecificationId", "工艺规范"], ["toolingInstallationId", "当前工装"], ["externalBatchRef", "生产批次"], ["validFrom", "生效时间"], ["validTo", "结束时间"]],
     template: { equipmentId: "", productFamilyCode: "", productCode: "", processSpecificationId: "", processSpecificationVersion: 1, toolingInstallationId: "", source: "manual", externalOrderRef: "", externalBatchRef: "", materialLotRef: "", materialSpecification: "", maintenanceStatus: "", calibrationStatus: "", calibrationRef: "", calibrationValidUntil: "" },
     createLabel: "配置下一批生产",
     requiredFields: ["equipmentId", "productFamilyCode", "productCode", "processSpecificationId"],
@@ -103,6 +103,13 @@ const productionFieldLabels = {
   version: "版本",
   roles: "装配位置",
   toolingAssemblyId: "工装编号",
+};
+
+const productionConditionLabels = {
+  released: "允许生产",
+  due: "即将到期",
+  valid: "有效",
+  expired: "已过期",
 };
 
 function createProductionEditor(resource, value) {
@@ -229,7 +236,7 @@ function ProcessSpecificationReferenceField({ editor, onChange, required }) {
     </Field>
   );
 }
-function ProductionRecordForm({ resource, editor, onChange }) {
+function ProductionRecordForm({ resource, editor, editorMode, onChange }) {
   if (resource === productionResources.context) {
     const hasMachine = Boolean(editor.equipmentId);
     const hasProduct = Boolean(editor.productCode?.trim() && editor.productFamilyCode?.trim());
@@ -310,6 +317,19 @@ function ProductionRecordForm({ resource, editor, onChange }) {
         const label = productionFieldLabels[key] ?? key;
         if (key === "processSpecificationVersion") return null;
         if (key === "processSpecificationId") return <ProcessSpecificationReferenceField key={key} editor={editor} onChange={onChange} required={required} />;
+        if (key === "toolingTypeCode" && resource === productionResources.type) {
+          return (
+            <Field key={key} label="工装结构代码">
+              <Input
+                required={required}
+                value={editor[key] ?? ""}
+                disabled={editorMode === "version"}
+                placeholder="例如 optical-mold"
+                onChange={event => onChange(key, event.target.value)}
+              />
+            </Field>
+          );
+        }
         if (["equipmentId", "toolingInstallationId", "assemblyRevisionId", "componentTypeCode", "toolingTypeCode"].includes(key)) {
           return <ProductionReferenceField key={key} fieldKey={key} value={editor[key]} editor={editor} onChange={onChange} required={required} />;
         }
@@ -387,8 +407,31 @@ function ToolingRoleFields({ value, onChange }) {
   function add() {
     onChange([...value, { code: "", name: "", required: true, maxCount: 1, sortOrder: value.length + 1, acceptedComponentTypeCodes: [] }]);
   }
+  function applyMoldingTemplate() {
+    const insertType = componentTypes.find(type => /模芯|insert/i.test(`${type.name} ${type.componentTypeCode}`));
+    const frameType = componentTypes.find(type => /模架|frame/i.test(`${type.name} ${type.componentTypeCode}`));
+    if (!insertType || !frameType) {
+      notify("请先建立“模芯”和“模架”组件分类。", "danger");
+      return;
+    }
+    onChange([
+      { code: "upper-insert", name: "上模芯", required: true, maxCount: 1, sortOrder: 1, acceptedComponentTypeCodes: [insertType.componentTypeCode] },
+      { code: "lower-insert", name: "下模芯", required: true, maxCount: 1, sortOrder: 2, acceptedComponentTypeCodes: [insertType.componentTypeCode] },
+      { code: "mold-frame", name: "模架", required: true, maxCount: 1, sortOrder: 3, acceptedComponentTypeCodes: [frameType.componentTypeCode] },
+    ]);
+  }
   return (
-    <Card className="sm:col-span-2" title="装配位置" description="定义工装由哪些组件位置组成。" actions={<Button onClick={add}>添加装配位置</Button>}>
+    <Card
+      className="sm:col-span-2"
+      title="装配位置"
+      description="定义工装由哪些组件位置组成。"
+      actions={(
+        <div className="flex flex-wrap gap-2">
+          {value.length === 0 && <Button variant="ghost" onClick={applyMoldingTemplate}>应用模压结构示例</Button>}
+          <Button onClick={add}>添加装配位置</Button>
+        </div>
+      )}
+    >
       {error && <Alert tone="danger">{error}</Alert>}
       <div className="grid gap-4">
         {value.length === 0 && <p className="text-sm text-slate-500">请至少添加一个装配位置。</p>}
@@ -817,6 +860,7 @@ function ProductionRecordsPage({ section, canWrite = true }) {
           : key === resource.key ? value => <span className="font-mono text-xs font-semibold tracking-tight text-slate-800">{value || "—"}</span>
             : key === "name" ? value => <span className="font-medium text-slate-900">{value || "—"}</span>
               : key === "processSpecificationId" ? (value, row) => `${value} v${row.processSpecificationVersion}`
+                : key === "toolingInstallationId" ? (value, row) => row.toolingAssemblyId || value || "未绑定"
                 : key === "productCode" ? (value, row) => <div><p className="font-medium text-slate-800">{value}</p>{row.productFamilyCode && <p className="mt-0.5 text-xs text-slate-500">{row.productFamilyCode}</p>}</div>
                   : key === "roles" ? value => value?.length ? value.map(role => role.name).join("、") : "—"
                     : key === "attributes" ? value => <ProductionAttributeSummary value={value} />
@@ -869,7 +913,23 @@ function ProductionRecordsPage({ section, canWrite = true }) {
                           </div>
                           <StatusBadge value="active" />
                         </div>
-                        <p className="mt-3 text-sm text-slate-600">工艺规范：{row.processSpecificationId} v{row.processSpecificationVersion}</p>
+                        <dl className="mt-4 grid gap-x-4 gap-y-3 border-t border-slate-200 pt-4 text-sm sm:grid-cols-2">
+                          {[
+                            ["工艺规范", `${row.processSpecificationId} v${row.processSpecificationVersion}`],
+                            ["当前工装", row.toolingAssemblyId || row.toolingInstallationId || "未绑定"],
+                            ["生产批次", row.externalBatchRef || "未填写"],
+                            ["物料批次", row.materialLotRef || "未填写"],
+                            ["材料规格", row.materialSpecification || "未填写"],
+                            ["维护状态", productionConditionLabels[row.maintenanceStatus] || row.maintenanceStatus || "未记录"],
+                            ["校准状态", productionConditionLabels[row.calibrationStatus] || row.calibrationStatus || "未记录"],
+                            ["校准有效期", row.calibrationValidUntil ? formatTime(row.calibrationValidUntil) : "未记录"],
+                          ].map(([label, value]) => (
+                            <div key={label}>
+                              <dt className="text-xs font-medium text-slate-500">{label}</dt>
+                              <dd className="mt-1 font-medium text-slate-800">{value}</dd>
+                            </div>
+                          ))}
+                        </dl>
                         <p className="mt-1 text-xs text-slate-400">自 {formatTime(row.validFrom)} 生效</p>
                       </article>
                     ))}
@@ -918,6 +978,7 @@ function ProductionRecordsPage({ section, canWrite = true }) {
         <ProductionRecordForm
           resource={resource}
           editor={editor}
+          editorMode={editorMode}
           onChange={(key, value) => setEditor(current => ({ ...current, [key]: value }))}
         />
       </Drawer>

@@ -87,7 +87,7 @@ After creating an R&D project, complete “Phase 0: preregistration and data bas
 
 ## 4. Connect data sources
 
-Open Field integration → Configuration overview and follow the dependency order shown there: data standards, field integration, decision rules, tooling structure, and configuration publishing. Connect continuous process sources under Field integration → Data source configuration:
+Open Process configuration → Configuration overview and check the readiness of data standards, field integration, decision rules, quality rules, and configuration publishing. Connect continuous process sources under Field integration → Data source configuration:
 
 1. Register the edge node and equipment identity.
 2. Select a protocol and enter connection details.
@@ -98,6 +98,8 @@ Open Field integration → Configuration overview and follow the dependency orde
 7. Configure inspection entry, instruments, or quality-system sources.
 
 Do not put PLC, instrument, or gateway addresses in an R&D project. Field integration owns source addresses and protocols; research references stable business codes.
+
+The system supports reusable starting points. A precision-molding example can prefill a new process data dictionary, and a tooling-structure example can prefill upper insert, lower insert, and mold-frame roles. These examples only seed the structure; they must be adapted to the plant's actual equipment, instruments, vision systems, or MES fields, then connection-tested and version-published. Once the first device of a kind is verified, versioned task templates, data-source instances, and task bindings can be extracted for batch onboarding.
 
 See [Data integration](data-connection.en.md) for protocol semantics.
 

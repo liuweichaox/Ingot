@@ -101,8 +101,8 @@ test("navigation and overlays are accessible Headless UI components", () => {
   assert.match(app, /const systemSection = \{/);
   assert.match(app, /sectionsForIdentity/);
   assert.match(app, /roles \|\| \[\]\)\.includes\("platform\.admin"\)/);
-  assert.match(app, /id: "equipment-connection"[\s\S]*\["\/configuration", "配置总览"\][\s\S]*\["\/edges", "现场节点"\], \["\/configuration\/ingestion-tasks", "数据源配置"\]/);
-  assert.match(app, /id: "process-definition"[\s\S]*\["\/configuration\/process-data-models", "工艺数据字典"\][\s\S]*\["\/configuration\/tooling-types", "工装结构定义"\][\s\S]*\["\/configuration\/scenario-packages", "配置发布"\]/);
+  assert.match(app, /id: "equipment-connection"[\s\S]*\["\/edges", "现场节点"\], \["\/configuration\/ingestion-tasks", "数据源配置"\]/);
+  assert.match(app, /id: "process-definition"[\s\S]*\["\/configuration", "配置总览"\][\s\S]*\["\/configuration\/process-data-models", "工艺数据字典"\][\s\S]*\["\/configuration\/tooling-types", "工装结构定义"\][\s\S]*\["\/configuration\/scenario-packages", "配置发布"\]/);
   assert.match(app, /id: "optimization"[\s\S]*label: "项目与成果", items: \[\["\/research-projects", "研发项目"\], \["\/research-assets", "研发成果"\]\]/);
   assert.match(app, /id: "system"[\s\S]*label: "身份与权限"[\s\S]*label: "平台运维"[\s\S]*label: "助手治理"/);
   assert.match(app, /\["\/chat", "分析助手"\]/);

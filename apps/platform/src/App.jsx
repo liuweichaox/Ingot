@@ -33,13 +33,13 @@ const sections = [
     ],
   },
   {
-    id: "equipment-connection", label: "现场接入", icon: SignalIcon, path: "/configuration", groups: [
-      { label: "接入准备", items: [["/configuration", "配置总览"]] },
+    id: "equipment-connection", label: "现场接入", icon: SignalIcon, path: "/edges", groups: [
       { label: "连接与采集", items: [["/edges", "现场节点"], ["/configuration/ingestion-tasks", "数据源配置"]] },
     ],
   },
   {
-    id: "process-definition", label: "工艺配置", icon: AdjustmentsHorizontalIcon, path: "/configuration/process-data-models", groups: [
+    id: "process-definition", label: "工艺配置", icon: AdjustmentsHorizontalIcon, path: "/configuration", groups: [
+      { label: "配置准备", items: [["/configuration", "配置总览"]] },
       { label: "工艺标准", items: [["/configuration/process-data-models", "工艺数据字典"], ["/configuration/process-specifications", "工艺规范"]] },
       { label: "分析规则", items: [["/configuration/process-analysis-plans", "运行分析规则"]] },
       { label: "质量定义", items: [["/configuration/inspection-definitions", "检测定义"], ["/configuration/quality-plans", "质量方案"]] },

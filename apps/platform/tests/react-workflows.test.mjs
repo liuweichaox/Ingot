@@ -47,16 +47,30 @@ test("research workspace rejects an incomplete detail response instead of crashi
 test("configuration center presents dependencies before final process configuration publishing", () => {
   assert.match(app, /path: "\/configuration"/);
   assert.match(pages, /export function ConfigurationHubPage/);
-  for (const step of ["定义数据标准", "连接现场数据", "定义判断规则", "建立工装结构", "组合并发布"]) {
+  for (const step of ["数据标准", "现场接入", "分析规则", "质量规则", "组合发布"]) {
     assert.match(pages, new RegExp(step));
   }
-  assert.match(pages, /运行数据来源/);
+  assert.match(pages, /运行数据来源与追溯要求/);
   assert.match(pages, /生产准备或 MES 写入不可变生产上下文/);
   assert.match(pages, /当前准备度/);
   assert.match(pages, /按顺序补齐待完成项后再发布生产配置/);
   assert.doesNotMatch(pages, /工艺配置方案是最后一步，不是起点|不需要猜应该先打开哪个菜单/);
   assert.match(pages, /canWrite \? <Button variant="primary" onClick=\{openCreate\}/);
   assert.match(ingestionTasks, /!canWrite \|\| managedByBinding/);
+});
+
+test("first-use configuration offers safe starters and progressive disclosure", () => {
+  assert.match(registryEditor, /应用精密模压示例/);
+  assert.match(registryEditor, /mold\.temperature/);
+  assert.match(pages, /应用模压结构示例/);
+  assert.match(pages, /上模芯/);
+  assert.match(pages, /下模芯/);
+  assert.match(pages, /模架/);
+  assert.match(ingestionTasks, /完成 4 步即可发布/);
+  assert.match(ingestionTasks, /数据归属类型/);
+  assert.match(ingestionTasks, /高级采集与运行识别/);
+  assert.match(ingestionTasks, /批量接入同类设备/);
+  assert.match(ingestionTasks, /group-open:hidden/);
 });
 
 test("operations retain server pagination and resumable live events", () => {

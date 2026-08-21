@@ -89,6 +89,22 @@ function controlParameter(value = {}) {
   };
 }
 
+const opticalMoldingStarter = {
+  name: "精密模压工艺数据字典",
+  description: "精密模压通用起始结构；发布前请按现场设备和产品补充、删减变量。",
+  dataItems: [
+    dataItem({ code: "mold.temperature", displayName: "模具温度", unit: "°C", nullable: false }),
+    dataItem({ code: "press.force", displayName: "压制力", unit: "kN", nullable: false }),
+    dataItem({ code: "plunger.position", displayName: "压头位移", unit: "mm" }),
+    dataItem({ code: "process.stage", displayName: "工艺阶段", dataType: "integer", category: "stage", unit: "", nullable: false }),
+    dataItem({ code: "surface.error", displayName: "面形误差", unit: "μm", category: "quality" }),
+  ],
+  controlParameters: [
+    controlParameter({ code: "holding.temperature", displayName: "保压温度", unit: "°C", nullable: false }),
+    controlParameter({ code: "holding.pressure", displayName: "保压压力", unit: "kN", nullable: false }),
+  ],
+};
+
 function controlParameterValue(value = {}) {
   return {
     code: value.code || "",
@@ -517,10 +533,24 @@ function DataTypeSelect({ value, disabled, onChange }) {
 }
 
 function ProcessModelEditor({ form, onChange, readOnly, lockIdentity }) {
+  const canApplyStarter = !readOnly && form.dataItems.length === 1 && !form.dataItems[0].code.trim() && form.controlParameters.length === 0;
+  function applyStarter() {
+    onChange({
+      ...form,
+      name: form.name || opticalMoldingStarter.name,
+      description: form.description || opticalMoldingStarter.description,
+      dataItems: opticalMoldingStarter.dataItems.map(item => ({ ...item })),
+      controlParameters: opticalMoldingStarter.controlParameters.map(item => ({ ...item })),
+    });
+  }
   return (
     <div className="grid gap-5">
-      <IdentityFields form={form} onChange={onChange} idField="modelId" idLabel="模型代码" readOnly={readOnly} lockIdentity={lockIdentity} />
-      <Card title="模型职责" description="这里只定义平台如何理解数据，不填写 PLC 地址、设备点位或采集频率。">
+      <IdentityFields form={form} onChange={onChange} idField="modelId" idLabel="数据字典代码" readOnly={readOnly} lockIdentity={lockIdentity} />
+      <Card
+        title="数据字典职责"
+        description="这里只定义平台如何理解数据，不填写 PLC 地址、设备点位或采集频率。"
+        actions={canApplyStarter ? <Button variant="ghost" onClick={applyStarter}>应用精密模压示例</Button> : undefined}
+      >
         <p className="text-sm leading-6 text-slate-600">同一数据字典可以复用于多台设备；每个来源的协议、地址、原始类型和换算规则在“现场接入”中配置。</p>
       </Card>
       <ItemDefinitions form={form} onChange={onChange} field="dataItems" title="工艺变量" readOnly={readOnly} includeCategory />

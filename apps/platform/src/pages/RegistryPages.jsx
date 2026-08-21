@@ -6,29 +6,6 @@ import { extractRows, useApi } from "../hooks/useApi";
 import { Alert, Button, Card, DataTable, Drawer, EmptyState, Field, Input, Page, RequestError, Select, StatusBadge, Textarea, WorkflowGuide, notify, useConfirmDialog } from "../ui/components";
 import { formatTime, emptyInspectionCharacteristic, inspectionDefinitionForm, inspectionDefinitionPayload, inspectionDefinitionValidation, inspectionInputTypes, LoadingCard } from "./shared";
 
-const configurationJourney = [
-  {
-    number: "1", title: "定义数据标准", description: "先说明设备数据代表什么，再维护允许使用的工艺参数版本。",
-    links: [["/configuration/process-data-models", "工艺数据字典"], ["/configuration/process-specifications", "工艺规范"]],
-  },
-  {
-    number: "2", title: "连接现场数据", description: "登记现场节点，把 PLC、仪器或系统点位映射到标准数据项。",
-    links: [["/edges", "现场节点"], ["/configuration/ingestion-tasks", "数据源配置"]],
-  },
-  {
-    number: "3", title: "定义判断规则", description: "决定哪些运行可以比较、质量如何判定，以及缺什么数据时应拒绝分析。",
-    links: [["/configuration/process-analysis-plans", "运行分析规则"], ["/configuration/inspection-definitions", "检测定义"], ["/configuration/quality-plans", "质量方案"]],
-  },
-  {
-    number: "4", title: "建立工装结构", description: "需要区分工装差异时，再定义组件、工装结构和实际工装总成。",
-    links: [["/configuration/component-types", "组件分类"], ["/configuration/tooling-assemblies", "实际工装总成"]],
-  },
-  {
-    number: "5", title: "组合并发布", description: "最后把已准备好的数据、接入、分析、质量和上下文策略锁定为可追溯版本。",
-    links: [["/configuration/scenario-packages", "配置发布"]],
-  },
-];
-
 export function ConfigurationHubPage() {
   const modelResponse = useApi("/api/v1/process-data-models");
   const specificationResponse = useApi("/api/v1/process-specifications");
@@ -63,7 +40,7 @@ export function ConfigurationHubPage() {
           <div className={`h-full rounded-full transition-[width] ${readyCount === readiness.length ? "bg-emerald-600" : "bg-amber-500"}`} style={{ width: `${readinessLoading ? 0 : readyCount / readiness.length * 100}%` }} />
         </div>
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-          {readiness.map(item => {
+          {readiness.map((item, index) => {
             const cardTone = item.error ? "border-rose-200 bg-rose-50" : item.ready ? "border-emerald-200 bg-emerald-50" : "border-amber-200 bg-amber-50";
             const textTone = item.error ? "text-rose-700" : item.ready ? "text-emerald-700" : "text-amber-700";
             const linkTone = item.error ? "text-rose-800 hover:text-rose-950" : item.ready ? "text-emerald-800 hover:text-emerald-950" : "text-amber-800 hover:text-amber-950";
@@ -71,7 +48,7 @@ export function ConfigurationHubPage() {
             const hint = item.error ? "状态接口暂时不可用，请进入对应页面查看详情。" : item.ready ? item.readyHint : item.pendingHint;
             return (
               <div key={item.title} className={`flex flex-col rounded-xl border p-4 sm:min-h-40 ${cardTone}`}>
-                <p className="flex items-center justify-between gap-2 font-semibold text-slate-950"><span>{item.title}</span><span className={`text-xs ${textTone}`}>{status}</span></p>
+                <p className="flex items-center justify-between gap-2 font-semibold text-slate-950"><span>{index + 1}. {item.title}</span><span className={`text-xs ${textTone}`}>{status}</span></p>
                 <p className="mt-2 flex-1 text-sm leading-6 text-slate-600">{hint}</p>
                 <Link to={item.to} className={`mt-3 inline-flex text-sm font-semibold ${linkTone}`}>{item.action} →</Link>
               </div>
@@ -79,22 +56,13 @@ export function ConfigurationHubPage() {
           })}
         </div>
       </Card>
-      <Card title="配置路径" description="按业务依赖完成新工艺配置。">
-        <ol className="grid gap-3 md:grid-cols-2 2xl:grid-cols-5">
-          {configurationJourney.map(step => (
-            <li key={step.number} className="flex flex-col rounded-xl border border-slate-200 bg-white p-4">
-              <span className="grid size-7 place-items-center rounded-full bg-blue-600 text-sm font-semibold text-white">{step.number}</span>
-              <h3 className="mt-3 font-semibold text-slate-950">{step.title}</h3>
-              <p className="mt-1 flex-1 text-sm leading-6 text-slate-600">{step.description}</p>
-              <div className="mt-4 flex flex-wrap gap-2">
-                {step.links.map(([to, label]) => <Link key={to} to={to} className="text-sm font-medium text-blue-700 hover:text-blue-900">{label} →</Link>)}
-              </div>
-            </li>
-          ))}
-        </ol>
-      </Card>
-      <Card title="运行数据来源" description="确认分析所需身份、生产、工装和覆盖率数据。">
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <details className="group rounded-xl border border-slate-200 bg-white shadow-sm">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 marker:content-none">
+          <div><p className="font-semibold text-slate-950">运行数据来源与追溯要求</p><p className="mt-1 text-sm text-slate-600">核对生产运行进入分析前必须具备的上下文。</p></div>
+          <span className="text-sm font-medium text-blue-700 group-open:hidden">查看详情</span>
+          <span className="hidden text-sm font-medium text-blue-700 group-open:inline">收起</span>
+        </summary>
+        <div className="grid gap-3 border-t border-slate-200 p-5 md:grid-cols-2 xl:grid-cols-4">
           {[
             ["设备与运行身份", "由设备事件、现场节点和数据源配置映射提供。", "/configuration/ingestion-tasks", "检查数据源配置"],
             ["产品、工艺、材料与批次", "由生产准备或 MES 写入不可变生产上下文。", "/production/changeover", "检查生产上下文"],
@@ -108,7 +76,7 @@ export function ConfigurationHubPage() {
             </div>
           ))}
         </div>
-      </Card>
+      </details>
     </Page>
   );
 }
@@ -173,6 +141,7 @@ function RegistryPage({ definition, canWrite = true }) {
   const [inspectionForm, setInspectionForm] = useState(() => inspectionDefinitionForm());
   const [businessForm, setBusinessForm] = useState(() => createRegistryBusinessForm(definition.kind));
   const [editorError, setEditorError] = useState("");
+  const [showValidation, setShowValidation] = useState(false);
   const [saving, setSaving] = useState(false);
   const { confirm, confirmationDialog } = useConfirmDialog();
   const isInspectionDefinition = definition.kind === "inspectionDefinition";
@@ -189,6 +158,7 @@ function RegistryPage({ definition, canWrite = true }) {
       setBusinessForm(createRegistryBusinessForm(definition.kind));
     }
     setEditorError("");
+    setShowValidation(false);
     setOpen(true);
   }
   function openMaintain(row) {
@@ -199,6 +169,7 @@ function RegistryPage({ definition, canWrite = true }) {
       setBusinessForm(createRegistryBusinessForm(definition.kind, row));
     }
     setEditorError("");
+    setShowValidation(false);
     setOpen(true);
   }
 
@@ -210,10 +181,15 @@ function RegistryPage({ definition, canWrite = true }) {
       setBusinessForm(createRegistryBusinessForm(definition.kind, row, Number(row.version || 0) + 1));
     }
     setEditorError("");
+    setShowValidation(false);
     setOpen(true);
   }
 
   async function save() {
+    if (editorValidation) {
+      setShowValidation(true);
+      return;
+    }
     setSaving(true);
     setEditorError("");
     try {
@@ -352,7 +328,7 @@ function RegistryPage({ definition, canWrite = true }) {
           : "编辑完整版本内容。保存前会由平台执行结构、引用与状态校验。"}
         footer={editorReadOnly
           ? <Button onClick={() => setOpen(false)}>关闭</Button>
-          : <><Button onClick={() => setOpen(false)}>取消</Button><Button variant="primary" onClick={save} disabled={saving || Boolean(editorValidation)}>{saving ? "保存中" : "保存"}</Button></>}
+          : <><Button onClick={() => setOpen(false)}>取消</Button><Button variant="primary" onClick={save} disabled={saving}>{saving ? "保存中" : "保存"}</Button></>}
         size="xl"
       >
         {editorError && <Alert tone="danger">{editorError}</Alert>}
@@ -361,7 +337,7 @@ function RegistryPage({ definition, canWrite = true }) {
             form={inspectionForm}
             onChange={setInspectionForm}
             readOnly={editorReadOnly}
-            validation={inspectionValidation}
+            validation={showValidation ? inspectionValidation : ""}
             lockIdentity={mode !== "create"}
           />
         ) : (
@@ -370,7 +346,7 @@ function RegistryPage({ definition, canWrite = true }) {
             form={businessForm}
             onChange={setBusinessForm}
             readOnly={editorReadOnly}
-            validation={businessValidation}
+            validation={showValidation ? businessValidation : ""}
             lockIdentity={mode !== "create"}
           />
         )}

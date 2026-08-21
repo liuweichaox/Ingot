@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import {
-  Alert, Badge, Button, Card, Field, Input, Page, Select, StatusBadge, notify, useConfirmDialog,
+  Alert, Badge, Button, Card, Field, Input, Page, Select, StatusBadge, WorkflowGuide, notify, useConfirmDialog,
 } from "../ui/components";
 import { deleteJson, downloadFile, getJson, postForm, postJson } from "../api/http";
 import { useApi, extractRows } from "../hooks/useApi";
@@ -186,13 +186,13 @@ export function IngestionTaskPage({ canWrite = true }) {
             <>
               <Button disabled={saving} onClick={() => save("draft")}>{saving ? "保存中…" : "保存草稿"}</Button>
               <Button variant="primary" disabled={saving || !probeValid} onClick={() => save("published")}>
-                {probeValid ? "发布到现场节点" : "请先验证连接"}
+                发布到现场节点
               </Button>
             </>
           )}
           {canWrite && managedByBinding && form.status === "draft" && (
             <Button variant="primary" disabled={saving || !probeValid} onClick={() => save("published")}>
-              {probeValid ? "验证并发布绑定" : "请先验证连接"}
+              发布任务绑定
             </Button>
           )}
         </div>
@@ -209,6 +209,17 @@ export function IngestionTaskPage({ canWrite = true }) {
           <Alert tone="warning">还有 {validation.count} 处配置需要修正，已在对应字段下方标出。</Alert>
         )}
 
+        <WorkflowGuide
+          title="完成 4 步即可发布"
+          description="先确定数据归属，再验证真实连接；高级采集策略可在需要时展开。"
+          steps={[
+            { title: "选择来源与数据字典", description: "选择现场节点、数据归属和工艺数据字典。", state: form.edgeId && form.dataModel && form.subjectId ? "done" : "current" },
+            { title: "填写连接参数", description: `按 ${descriptor.label} 填写设备、仪器或系统连接。`, state: publishChecklist[1].done ? "done" : form.edgeId && form.dataModel && form.subjectId ? "current" : "upcoming" },
+            { title: "验证并映射变量", description: "读取真实点位，再映射必需工艺变量。", state: probe ? (publishChecklist[2].done ? "done" : "current") : (publishChecklist[1].done ? "current" : "upcoming") },
+            { title: "检查并发布", description: "连接和点位换算全部通过后发布到现场节点。", state: probeValid ? "current" : "upcoming" },
+          ]}
+        />
+
         <div className="grid items-start gap-5 2xl:grid-cols-[minmax(0,1.55fr)_minmax(22rem,1fr)]">
           <div className="grid gap-5">
             <Card title="基本信息" description="数据来自哪里、关联哪台设备、结果采用哪套工艺数据字典。">
@@ -220,9 +231,9 @@ export function IngestionTaskPage({ canWrite = true }) {
                 <Field label="配置名称" error={errors.name}>
                   <Input value={form.name} disabled={readOnly} onChange={event => update({ name: event.target.value })} />
                 </Field>
-                <Field label="采集节点" hint="运行在设备所在网络、负责执行采集的边缘节点。" error={errors.edgeId}>
+                <Field label="现场节点" hint="运行在设备所在网络、负责执行采集的边缘节点。" error={errors.edgeId}>
                   <Select value={form.edgeId} disabled={readOnly} onChange={event => update({ edgeId: event.target.value })}>
-                    <option value="">请选择采集节点</option>
+                    <option value="">请选择现场节点</option>
                     {form.edgeId && !edges.some(edge => edge.edgeId === form.edgeId) && (
                       <option value={form.edgeId}>{form.edgeId}（历史值）</option>
                     )}
@@ -235,7 +246,7 @@ export function IngestionTaskPage({ canWrite = true }) {
                 </Field>
                 <Field label="工艺数据字典" hint="规定平台中的工艺变量和单位，不包含来源地址。" error={errors.dataModel}>
                   <Select value={form.dataModel} disabled={readOnly} onChange={event => update({ dataModel: event.target.value })}>
-                    <option value="">请选择数据模型</option>
+                    <option value="">请选择工艺数据字典</option>
                     {models.map(item => (
                       <option key={`${item.modelId}::${item.version}`} value={modelValue(item.modelId, item.version)}>
                         {item.name || item.modelId} · v{item.version}
@@ -243,8 +254,15 @@ export function IngestionTaskPage({ canWrite = true }) {
                     ))}
                   </Select>
                 </Field>
-                <Field label="归属对象类型" hint="使用工厂对象模型中的稳定类型代码，例如 equipment、line 或 utility_meter。">
-                  <Input value={form.subjectType} disabled={readOnly} onChange={event => update({ subjectType: event.target.value })} />
+                <Field label="数据归属类型" hint="选择产生这组数据的设备、仪器、产线或业务系统。">
+                  <Select value={form.subjectType} disabled={readOnly} onChange={event => update({ subjectType: event.target.value })}>
+                    <option value="equipment">生产设备</option>
+                    <option value="quality_instrument">检测仪器</option>
+                    <option value="line">生产线</option>
+                    <option value="utility_meter">公用工程仪表</option>
+                    <option value="system">业务系统</option>
+                    {!["equipment", "quality_instrument", "line", "utility_meter", "system"].includes(form.subjectType) && <option value={form.subjectType}>{form.subjectType}（历史值）</option>}
+                  </Select>
                 </Field>
                 <Field label="归属对象编号" hint="数据所归属对象的唯一编号，例如 PRESS-01。" error={errors.subjectId}>
                   <Input value={form.subjectId} disabled={readOnly} onChange={event => update({ subjectId: event.target.value })} />
@@ -299,21 +317,26 @@ export function IngestionTaskPage({ canWrite = true }) {
               onChange={value => update({ valueMappings: value })}
             />
 
-            <ContextPanel descriptor={descriptor} form={form} errors={errors} readOnly={readOnly} onChange={update} />
+            <details className="rounded-xl border border-slate-200 bg-white shadow-sm">
+              <summary className="cursor-pointer px-5 py-4 text-sm font-semibold text-slate-900">高级采集与运行识别</summary>
+              <div className="grid gap-5 border-t border-slate-200 p-5">
+                <ContextPanel descriptor={descriptor} form={form} errors={errors} readOnly={readOnly} onChange={update} />
 
-            <ProcessSpecificationPanel
-              descriptor={descriptor}
-              form={form}
-              parameters={controlParameters}
-              errors={errors}
-              probe={probe}
-              readOnly={readOnly}
-              onChange={update}
-            />
+                <ProcessSpecificationPanel
+                  descriptor={descriptor}
+                  form={form}
+                  parameters={controlParameters}
+                  errors={errors}
+                  probe={probe}
+                  readOnly={readOnly}
+                  onChange={update}
+                />
 
-            <LifecyclePanel form={form} errors={errors} readOnly={readOnly} onChange={update} />
+                <LifecyclePanel form={form} errors={errors} readOnly={readOnly} onChange={update} />
 
-            <StrategyPanel descriptor={descriptor} form={form} errors={errors} readOnly={readOnly} onChange={update} />
+                <StrategyPanel descriptor={descriptor} form={form} errors={errors} readOnly={readOnly} onChange={update} />
+              </div>
+            </details>
           </div>
         </div>
       </div>
@@ -636,14 +659,27 @@ export function IngestionTasksPage({ canWrite = true }) {
       <div className="grid gap-4">
         {error && <Alert tone="danger">{error}</Alert>}
         {canWrite ? (
-          <ReusableConfigurationPanel
-            tasks={rows}
-            templates={templates}
-            sources={sources}
-            bindings={bindings}
-            onDeleteDraft={removeReusableDraft}
-            onChanged={() => Promise.all([reload?.(), reloadTemplates?.(), reloadSources?.(), reloadBindings?.()])}
-          />
+          <details className="group rounded-xl border border-slate-200 bg-white shadow-sm">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 marker:content-none">
+              <div>
+                <p className="font-semibold text-slate-950">批量接入同类设备</p>
+                <p className="mt-1 text-sm text-slate-600">已有 {templates.filter(item => item.status === "published").length} 个模板、{sources.length} 个数据源实例和 {bindings.length} 个任务绑定</p>
+              </div>
+              <span className="text-sm font-medium text-blue-700 group-open:hidden">展开配置</span>
+              <span className="hidden text-sm font-medium text-blue-700 group-open:inline">收起</span>
+            </summary>
+            <div className="border-t border-slate-200 p-5">
+              <ReusableConfigurationPanel
+                embedded
+                tasks={rows}
+                templates={templates}
+                sources={sources}
+                bindings={bindings}
+                onDeleteDraft={removeReusableDraft}
+                onChanged={() => Promise.all([reload?.(), reloadTemplates?.(), reloadSources?.(), reloadBindings?.()])}
+              />
+            </div>
+          </details>
         ) : (
           <Card title="可复用接入资产" description="用于核对批量接入是否已经形成版本化模板、数据源与绑定。">
             <div className="grid gap-3 sm:grid-cols-3">
@@ -670,7 +706,7 @@ export function IngestionTasksPage({ canWrite = true }) {
               <tbody className="divide-y divide-slate-100">
                 {rows.map(row => (
                   <tr key={`${row.taskId}@${row.version}`} className="hover:bg-slate-50">
-                    <td className="px-3 py-2 font-medium text-slate-800">{row.subjectId}</td>
+                    <td className="px-3 py-2 font-medium text-slate-800">{row.subjectId || row.equipmentId || "未绑定"}</td>
                     <td className="px-3 py-2 text-slate-600">{row.edgeId}</td>
                     <td className="px-3 py-2 text-slate-600">{row.name}<span className="ml-1 text-xs text-slate-400">v{row.version}</span></td>
                     <td className="px-3 py-2"><Badge tone="neutral">{protocolDescriptor(row.protocol).label}</Badge></td>
@@ -711,7 +747,7 @@ export function IngestionTasksPage({ canWrite = true }) {
   );
 }
 
-function ReusableConfigurationPanel({ tasks, templates, sources, bindings, onDeleteDraft, onChanged }) {
+function ReusableConfigurationPanel({ tasks, templates, sources, bindings, onDeleteDraft, onChanged, embedded = false }) {
   const firstPublished = tasks.find(item => item.status === "published" && !item.templateId && !item.dataSourceId);
   const [taskKey, setTaskKey] = useState(firstPublished ? `${firstPublished.taskId}@${firstPublished.version}` : "");
   const selected = tasks.find(item => `${item.taskId}@${item.version}` === taskKey);
@@ -766,9 +802,8 @@ function ReusableConfigurationPanel({ tasks, templates, sources, bindings, onDel
     } finally { setBusy(""); }
   }
 
-  return (
-    <Card title="批量接入同类设备" description="首台设备通过真实探查后提取版本化模板；连接实例与任务绑定可用 CSV 原子导入，避免重复维护整份点位映射。">
-      <div className="grid gap-4">
+  const content = (
+    <div className="grid gap-4">
         <div className="grid gap-3 md:grid-cols-3">
           <div className="rounded-lg border border-slate-200 p-3"><p className="text-xs text-slate-500">已发布模板</p><strong className="text-xl">{templates.filter(item => item.status === "published").length}</strong></div>
           <div className="rounded-lg border border-slate-200 p-3"><p className="text-xs text-slate-500">数据源实例</p><strong className="text-xl">{sources.length}</strong></div>
@@ -808,7 +843,13 @@ function ReusableConfigurationPanel({ tasks, templates, sources, bindings, onDel
         )}
         {message && <Alert tone={message.includes("已") ? "info" : "warning"}>{message}</Alert>}
         <p className="text-xs text-slate-500">安全边界：凭据字段只填写现场节点密钥引用；固定请求体和普通请求头会随 CSV 导出，不要写入凭据。批量导入只生成草稿，每个任务必须单独连接真实设备并通过映射校验后才能发布。</p>
-      </div>
+    </div>
+  );
+
+  if (embedded) return content;
+  return (
+    <Card title="批量接入同类设备" description="首台设备通过真实探查后提取版本化模板；连接实例与任务绑定可用 CSV 原子导入，避免重复维护整份点位映射。">
+      {content}
     </Card>
   );
 }
