@@ -11,7 +11,8 @@ namespace Ingot.Platform.Api.Controllers;
 public sealed class UsersController(
     PlatformUserResolver userResolver,
     LocalIdentityApplication store,
-    LocalPasswordHasher hasher) : PlatformApiController
+    LocalPasswordHasher hasher,
+    ILogger<UsersController> logger) : PlatformApiController
 {
     private const int MinPasswordLength = 8;
 
@@ -50,6 +51,7 @@ public sealed class UsersController(
             CreatedAt = now,
             UpdatedAt = now
         }, ct).ConfigureAwait(false);
+        Audit("user.created", created.UserId, $"roles={string.Join(',', roles)};sites={string.Join(',', siteIds)}");
         return Ok(ToSummary(created));
     }
 
@@ -60,7 +62,9 @@ public sealed class UsersController(
         if (denied is not null) return denied;
         if (!TryNormalizeRoles(request?.Roles ?? [], out var roles, out var roleError))
             return InvalidRequest(roleError);
-        return await store.SetRolesAsync(userId, roles, ct).ConfigureAwait(false) ? NoContent() : ResourceNotFound();
+        var updated = await store.SetRolesAsync(userId, roles, ct).ConfigureAwait(false);
+        if (updated) Audit("user.roles.updated", userId, $"roles={string.Join(',', roles)}");
+        return updated ? NoContent() : ResourceNotFound();
     }
 
     [HttpPost("{userId:guid}:set-site-access")]
@@ -73,9 +77,9 @@ public sealed class UsersController(
         if (denied is not null) return denied;
         if (!TryNormalizeSiteIds(request?.SiteIds ?? [], out var siteIds, out var siteError))
             return InvalidRequest(siteError);
-        return await store.SetSiteAccessAsync(userId, siteIds, ct).ConfigureAwait(false)
-            ? NoContent()
-            : ResourceNotFound();
+        var updated = await store.SetSiteAccessAsync(userId, siteIds, ct).ConfigureAwait(false);
+        if (updated) Audit("user.site-access.updated", userId, $"sites={string.Join(',', siteIds)}");
+        return updated ? NoContent() : ResourceNotFound();
     }
 
     [HttpPost("{userId:guid}:set-password")]
@@ -86,8 +90,9 @@ public sealed class UsersController(
         if (string.IsNullOrWhiteSpace(request?.Password) || request.Password.Length < MinPasswordLength)
             return InvalidRequest($"password 至少 {MinPasswordLength} 位。");
 
-        return await store.SetPasswordHashAsync(userId, hasher.Hash(request.Password), ct).ConfigureAwait(false)
-            ? NoContent() : ResourceNotFound();
+        var updated = await store.SetPasswordHashAsync(userId, hasher.Hash(request.Password), ct).ConfigureAwait(false);
+        if (updated) Audit("user.password.reset", userId, "sessions=revoked");
+        return updated ? NoContent() : ResourceNotFound();
     }
 
     [HttpPost("{userId:guid}:set-disabled")]
@@ -98,7 +103,10 @@ public sealed class UsersController(
 
         if (request?.Disabled == true && string.Equals(userResolver.Resolve(User), userId.ToString("D"), StringComparison.OrdinalIgnoreCase))
             return InvalidRequest("不能停用当前登录的账户。");
-        return await store.SetDisabledAsync(userId, request?.Disabled ?? false, ct).ConfigureAwait(false) ? NoContent() : ResourceNotFound();
+        var disabled = request?.Disabled ?? false;
+        var updated = await store.SetDisabledAsync(userId, disabled, ct).ConfigureAwait(false);
+        if (updated) Audit(disabled ? "user.disabled" : "user.enabled", userId, $"disabled={disabled}");
+        return updated ? NoContent() : ResourceNotFound();
     }
 
     private IActionResult? DeniedAdmin()
@@ -108,6 +116,14 @@ public sealed class UsersController(
             return AuthenticationRequired("需要平台统一认证。");
         return identity.HasAnyRole(PlatformRoles.PlatformAdministrator) ? null : AuthorizationDenied();
     }
+
+    private void Audit(string action, Guid targetUserId, string details)
+        => logger.LogInformation(
+            "IdentityAudit action={Action} actorUserId={ActorUserId} targetUserId={TargetUserId} details={Details}",
+            action,
+            userResolver.Resolve(User) ?? "unknown",
+            targetUserId,
+            details);
 
     private static bool TryNormalizeRoles(
         IReadOnlyList<string> input, out IReadOnlyList<string> roles, out string error)

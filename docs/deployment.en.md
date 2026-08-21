@@ -231,6 +231,18 @@ A recovery exercise verifies more than service startup:
 
 Before go-live, exercise Platform outage, Edge restart, network loss, bad configuration publication, database recovery, unavailable Optimizer, and unavailable model service. Prove that acquisition and formal records degrade or recover as designed.
 
+First run the read-only business-workflow verifier against the target deployment. It checks versioned configuration, a running real source, complete tooling, production context, run-to-inspection linkage, data admission, candidate guardrails, experiment results, and role separation:
+
+```bash
+export INGOT_PLATFORM_URL=https://ingot.example.com
+export INGOT_ACCEPTANCE_USERNAME=acceptance-admin
+export INGOT_ACCEPTANCE_PASSWORD='provided by the site secret manager'
+node scripts/verify-pilot-workflow.mjs \
+  --output artifacts/pilot-workflow.json
+```
+
+The script only signs in and reads business APIs; it does not create, publish, or modify production records. `business-workflow-passed` means that the workflow has verifiable data, not that production admission is complete. Backup recovery, failure, capacity, alert-delivery, and continuous-observation evidence below remain mandatory.
+
 The RPO, RTO, offline window, backlog age, peak load, and observation period in `.env.example` are deployment declarations, not acceptance evidence. After site exercises, load those targets and provide measured values plus stable evidence identifiers:
 
 ```bash

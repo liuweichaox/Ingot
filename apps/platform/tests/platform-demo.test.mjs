@@ -2,6 +2,9 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { test } from "node:test";
 
 const root = new URL("../../..", import.meta.url);
@@ -18,6 +21,16 @@ async function waitForHealth(baseUrl, child) {
     await new Promise(resolve => setTimeout(resolve, 50));
   }
   throw new Error("模拟服务未在预期时间内启动");
+}
+
+async function runNode(args, options) {
+  const child = spawn(process.execPath, args, { ...options, stdio: ["ignore", "pipe", "pipe"] });
+  let stdout = "";
+  let stderr = "";
+  child.stdout.on("data", chunk => { stdout += chunk; });
+  child.stderr.on("data", chunk => { stderr += chunk; });
+  const [code] = await once(child, "exit");
+  return { code, stdout, stderr };
 }
 
 test("platform demo serves authenticated workflow data and deterministic failure modes", async () => {
@@ -57,5 +70,41 @@ test("platform demo serves authenticated workflow data and deterministic failure
   } finally {
     child.kill("SIGTERM");
     if (child.exitCode === null) await once(child, "exit");
+  }
+});
+
+test("controlled-pilot verifier produces a checksummed read-only workflow artifact", async () => {
+  const demoPort = 44111;
+  const baseUrl = `http://127.0.0.1:${demoPort}`;
+  const temporary = await mkdtemp(join(tmpdir(), "ingot-pilot-verifier-"));
+  const output = join(temporary, "pilot-workflow.json");
+  const demo = spawn(process.execPath, ["scripts/platform-demo.mjs"], {
+    cwd: root,
+    env: { ...process.env, INGOT_DEMO_PORT: String(demoPort) },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  try {
+    await waitForHealth(baseUrl, demo);
+    const result = await runNode(["scripts/verify-pilot-workflow.mjs", "--output", output], {
+      cwd: root,
+      env: {
+        ...process.env,
+        INGOT_PLATFORM_URL: baseUrl,
+        INGOT_ACCEPTANCE_USERNAME: "admin",
+        INGOT_ACCEPTANCE_PASSWORD: "admin12345",
+      },
+    });
+    assert.equal(result.code, 0, result.stderr || result.stdout);
+    assert.match(result.stdout, /business-workflow-passed/);
+    const artifact = JSON.parse(await readFile(output, "utf8"));
+    assert.equal(artifact.result, "business-workflow-passed");
+    assert.ok(artifact.checks.length >= 10);
+    assert.ok(artifact.checks.every(check => check.passed));
+    assert.match(artifact.boundary, /不等于生产准入/);
+    assert.match(await readFile(`${output}.sha256`, "utf8"), /^[a-f0-9]{64}\s+/);
+  } finally {
+    demo.kill("SIGTERM");
+    if (demo.exitCode === null) await once(demo, "exit");
+    await rm(temporary, { recursive: true, force: true });
   }
 });

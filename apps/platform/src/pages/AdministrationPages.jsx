@@ -112,6 +112,8 @@ export function UsersPage() {
   }
 
   const users = extractRows(data);
+  const enabledAdministrators = users.filter(user => !user.disabled && (user.roles || []).includes("platform.admin"));
+  const namedDemoAccounts = users.filter(user => !user.disabled && /^(demo|test|admin123)$/i.test(user.username || ""));
   return (
     <Page
       title="用户与权限"
@@ -119,9 +121,15 @@ export function UsersPage() {
       actions={<Button variant="primary" onClick={startCreate}>创建用户</Button>}
     >
       <Alert tone="info" title="岗位分权">
-        质量录入与复核应由不同人员承担；配置、生产操作和工艺改进也建议使用独立账户。
+        质量录入与复核应由不同人员承担；配置、生产操作和工艺改进也建议使用独立账户。账户、岗位、站点范围、密码和停用变更会写入 Platform 结构化审计日志。
       </Alert>
       <RequestError error={error} title="用户列表不可用" onRetry={reload} />
+      {!loading && data && (namedDemoAccounts.length > 0 || enabledAdministrators.length < 2) && (
+        <Alert tone="warning" title="上线前账户检查">
+          {namedDemoAccounts.length > 0 ? `发现演示命名账户：${namedDemoAccounts.map(user => user.username).join("、")}；受控试点前应停用或替换。` : ""}
+          {enabledAdministrators.length < 2 ? " 建议保留至少两个由不同人员持有的可用管理员账户，避免单一账户失效后无法恢复管理。" : ""}
+        </Alert>
+      )}
       {loading && !data ? <LoadingCard /> : (
         <Card title="平台用户" description={`共 ${users.length} 个账户`}>
           {users.length ? (
@@ -221,9 +229,12 @@ function RoleSelector({ value, onChange }) {
 export function MetricsPage() {
   const edgeResponse = useApi("/api/edges", { interval: 10000 });
   const metricResponse = useApi("/api/metrics-data?names=event_ingest_total,process_start_time_seconds,process_working_set_bytes,system_runtime_dotnet_thread_pool_queue_length", { interval: 30000 });
-  const executionResponse = useApi("/api/v1/process-executions?limit=1", { interval: 10000 });
+  const executionResponse = useApi("/api/v1/process-executions?limit=100", { interval: 10000 });
   const qualityResponse = useApi("/api/v1/inspection-tasks/summary", { interval: 10000 });
   const profileResponse = useApi("/api/v1/ingestion-tasks", { interval: 10000 });
+  const contextResponse = useApi("/api/v1/production-contexts", { interval: 10000 });
+  const inspectionResponse = useApi("/api/v1/inspection-records", { interval: 10000 });
+  const reliabilityResponse = useApi("/api/v1/data-reliability/baseline?maximumRuns=2000", { interval: 30000 });
   const rows = extractRows(edgeResponse.data);
   const online = rows.filter(row => edgeStatus(row) === "online").length;
   const offline = rows.filter(row => edgeStatus(row) === "offline").length;
@@ -235,14 +246,29 @@ export function MetricsPage() {
   const memory = metricTotal(metrics, "process_working_set_bytes");
   const threadQueue = metricTotal(metrics, "system_runtime_dotnet_thread_pool_queue_length");
   const publishedProfiles = extractRows(profileResponse.data).filter(row => row.status === "published").length;
+  const contexts = extractRows(contextResponse.data);
+  const executions = extractRows(executionResponse.data);
+  const inspections = extractRows(inspectionResponse.data);
+  const activeContext = contexts.find(item => !item.validTo && item.status !== "closed");
+  const completeContext = activeContext && [activeContext.equipmentId, activeContext.productCode, activeContext.processSpecificationId, activeContext.toolingAssemblyId || activeContext.toolingInstallationId, activeContext.externalBatchRef, activeContext.materialLotRef].every(Boolean);
+  const completedExecutions = executions.filter(item => item.status === "completed" && item.lifecycleComplete !== false);
+  const linkedExecution = completedExecutions.find(execution => inspections.some(record => record.executionId === execution.executionId));
+  const admissionRate = (reliabilityResponse.data?.rates || []).find(item => item.code === "analysis_admission")?.rate || 0;
+  const pilotChecks = [
+    { title: "现场来源运行", passed: publishedProfiles > 0 && online > 0, detail: `${publishedProfiles} 个已发布数据源 · ${online} 个节点在线`, to: "/configuration/ingestion-tasks" },
+    { title: "生产上下文完整", passed: Boolean(completeContext), detail: completeContext ? `${activeContext.equipmentId} · ${activeContext.externalBatchRef}` : "缺少设备、产品、工艺、工装、批次或材料", to: "/production/changeover" },
+    { title: "运行—检验已关联", passed: Boolean(linkedExecution), detail: linkedExecution?.executionId || "尚无完整运行关联检验", to: "/process-executions" },
+    { title: "正式分析可准入", passed: Number(reliabilityResponse.data?.analyzedRunCount || 0) > 0 && admissionRate > 0, detail: `${reliabilityResponse.data?.analyzedRunCount || 0} 条运行 · ${Math.round(admissionRate * 100)}% 准入`, to: "/data-quality" },
+  ];
+  const pilotReady = pilotChecks.every(item => item.passed);
   const actionRequired = qualityResponse.data?.actionRequired ?? 0;
-  const error = edgeResponse.error || metricResponse.error || executionResponse.error || qualityResponse.error || profileResponse.error;
+  const error = edgeResponse.error || metricResponse.error || executionResponse.error || qualityResponse.error || profileResponse.error || contextResponse.error || inspectionResponse.error || reliabilityResponse.error;
   const healthy = offline === 0 && unknown === 0 && threadQueue === 0;
   return (
     <Page title="平台状态" description="从业务处理、设备采集和平台资源三个层面确认系统是否正常。">
       <RequestError
         error={error}
-        onRetry={() => Promise.all([edgeResponse.reload(), metricResponse.reload(), executionResponse.reload(), qualityResponse.reload(), profileResponse.reload()])}
+        onRetry={() => Promise.all([edgeResponse.reload(), metricResponse.reload(), executionResponse.reload(), qualityResponse.reload(), profileResponse.reload(), contextResponse.reload(), inspectionResponse.reload(), reliabilityResponse.reload()])}
       />
       <Alert tone={healthy ? "success" : "warning"} title={healthy ? "平台运行正常" : "平台存在需要关注的项目"}>
         {healthy ? "中心服务和现场节点均在正常工作。" : `离线节点 ${offline} 个，待确认节点 ${unknown} 个，后台排队 ${formatInteger(threadQueue)} 项。`}
@@ -259,6 +285,24 @@ export function MetricsPage() {
         <Metric label="后台排队" value={formatInteger(threadQueue)} />
         <Metric label="现场节点在线" value={`${online}/${rows.length}`} hint={`${offline} 个离线`} />
       </div>
+      <Card
+        title="受控试点业务闭环"
+        description={pilotReady ? "业务数据门槛已满足；仍需独立完成备份恢复、故障、容量、告警送达和连续观察验收。" : "先关闭未通过项，再生成只读业务闭环验收工件。"}
+        actions={<span className={`text-sm font-semibold ${pilotReady ? "text-emerald-700" : "text-amber-700"}`}>{pilotReady ? "业务闭环可验收" : `${pilotChecks.filter(item => !item.passed).length} 项待完成`}</span>}
+      >
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          {pilotChecks.map(item => (
+            <Link key={item.title} to={item.to} className={`rounded-xl border p-4 transition hover:shadow-sm ${item.passed ? "border-emerald-200 bg-emerald-50" : "border-amber-200 bg-amber-50"}`}>
+              <p className="flex items-center justify-between gap-2 font-semibold text-slate-950"><span>{item.title}</span><span className={item.passed ? "text-emerald-700" : "text-amber-700"}>{item.passed ? "通过" : "待完成"}</span></p>
+              <p className="mt-2 text-sm leading-6 text-slate-600">{item.detail}</p>
+            </Link>
+          ))}
+        </div>
+        <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <p className="text-sm font-semibold text-slate-900">生成验收工件</p>
+          <p className="mt-1 text-sm leading-6 text-slate-600">由管理员在部署主机运行 <code className="rounded bg-white px-1.5 py-0.5 text-xs">node scripts/verify-pilot-workflow.mjs --output artifacts/pilot-workflow.json</code>。脚本只读取业务 API，不会修改生产记录。</p>
+        </div>
+      </Card>
       <Card title="现场节点" description="点击诊断可查看采集任务、上行积压和最近日志。">
         <DataTable rows={rows} keyField="edgeId" columns={[
           { key: "edgeId", label: "节点" },

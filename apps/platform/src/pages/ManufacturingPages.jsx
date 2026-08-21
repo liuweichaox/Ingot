@@ -1,5 +1,6 @@
 
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router";
 import { deleteJson, postJson } from "../api/http";
 import { extractRows, useApi } from "../hooks/useApi";
 import { Alert, Button, Card, DataTable, Drawer, EmptyState, Field, Input, Pagination, Page, RequestError, Select, StatusBadge, WorkflowGuide, notify, useConfirmDialog } from "../ui/components";
@@ -900,7 +901,12 @@ function ProductionRecordsPage({ section, canWrite = true }) {
               <Card
                 title="当前生效配置"
                 description={activeRows.length ? `${activeRows.length} 台设备已准备好开始新运行` : "目前没有正在生效的生产配置"}
-                actions={canWrite ? <Button variant="primary" onClick={() => openEditor()}>{activeRows.length ? "切换产品或工艺规范" : "开始配置"}</Button> : undefined}
+                actions={(
+                  <div className="flex flex-wrap items-center gap-2">
+                    {activeRows.length > 0 && <Link className="inline-flex min-h-9 items-center rounded-lg px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100" to="/process-executions">查看运行记录</Link>}
+                    {canWrite && <Button variant="primary" onClick={() => openEditor()}>{activeRows.length ? "切换产品或工艺规范" : "开始配置"}</Button>}
+                  </div>
+                )}
               >
                 {activeRows.length ? (
                   <div className="grid gap-3 lg:grid-cols-2">

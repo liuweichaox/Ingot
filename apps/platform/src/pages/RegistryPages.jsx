@@ -28,8 +28,17 @@ export function ConfigurationHubPage() {
   const readinessLoading = readiness.some(item => item.loading);
   const readinessError = readiness.find(item => item.error)?.error;
   const readyCount = readiness.filter(item => item.ready).length;
+  const nextReadiness = readiness.find(item => !item.ready);
   return (
-    <Page title="配置总览" description="查看数据、接入、分析、质量和工装的准备状态。">
+    <Page
+      title="配置总览"
+      description="查看数据、接入、分析、质量和工装的准备状态。"
+      actions={!readinessLoading && !readinessError && (
+        readyCount === readiness.length
+          ? <Link className="inline-flex min-h-10 items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700" to="/production/changeover">进入生产切换</Link>
+          : <Link className="inline-flex min-h-10 items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700" to={nextReadiness?.to || "/configuration"}>继续：{nextReadiness?.action || "完善配置"}</Link>
+      )}
+    >
       <Card
         title="当前准备度"
         description={readinessLoading ? "正在检查生产运行和分析所需配置。" : readinessError ? "部分配置状态暂时无法读取，请先恢复接口后重新检查。" : `已完成 ${readyCount}/${readiness.length} 项；按顺序补齐待完成项后再发布生产配置。`}

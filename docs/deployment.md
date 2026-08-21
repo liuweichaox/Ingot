@@ -244,6 +244,18 @@ Grafana、Prometheus 和 Alertmanager 分别只绑定本机 `3001`、`9090` 和 
 
 上线前至少完成一次：Platform 中断、Edge 重启、网络断开、错误配置发布、数据库恢复、Optimizer 不可用和模型服务不可用演练，并证明采集和正式业务记录按设计降级或恢复。
 
+先使用只读业务闭环验收脚本核对当前部署是否已经具备版本化配置、运行中的真实来源、完整工装、生产上下文、运行—检验关联、数据准入、候选边界、实验结果和岗位分权：
+
+```bash
+export INGOT_PLATFORM_URL=https://ingot.example.com
+export INGOT_ACCEPTANCE_USERNAME=acceptance-admin
+export INGOT_ACCEPTANCE_PASSWORD='由现场密钥管理提供'
+node scripts/verify-pilot-workflow.mjs \
+  --output artifacts/pilot-workflow.json
+```
+
+脚本只登录并读取业务 API，不会创建、发布或修改生产记录。输出 `business-workflow-passed` 只表示业务闭环具备可核验数据，不等于生产准入；以下备份恢复、故障、容量、监控告警和连续观察证据仍然必须独立完成。
+
 `.env.example` 中的 RPO、RTO、离线窗口、积压时限、峰值负载和连续观察周期是部署声明。声明本身不是验收证据。完成现场演练后，加载这些目标，并补充实测值和稳定证据标识：
 
 ```bash

@@ -29,6 +29,7 @@ const goldenQuestions = await readFile(new URL("../src/pages/GoldenQuestionsPage
 const ingestionTasks = await readFile(new URL("../src/acquisition/IngestionTaskPage.jsx", import.meta.url), "utf8");
 const app = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
 const registryEditor = await readFile(new URL("../src/components/RegistryBusinessEditor.jsx", import.meta.url), "utf8");
+const pilotVerifier = await readFile(new URL("../../../scripts/verify-pilot-workflow.mjs", import.meta.url), "utf8");
 
 test("manufacturing and platform runtime statuses are localized", () => {
   assert.match(ui, /inactive: "已停用"/);
@@ -71,6 +72,19 @@ test("first-use configuration offers safe starters and progressive disclosure", 
   assert.match(ingestionTasks, /高级采集与运行识别/);
   assert.match(ingestionTasks, /批量接入同类设备/);
   assert.match(ingestionTasks, /group-open:hidden/);
+});
+
+test("controlled pilot has a finite in-product gate and a read-only evidence verifier", () => {
+  assert.match(pages, /进入生产切换/);
+  assert.match(pages, /查看运行记录/);
+  assert.match(pages, /受控试点业务闭环/);
+  assert.match(pages, /生成验收工件/);
+  assert.match(pages, /上线前账户检查/);
+  assert.match(pages, /结构化审计日志/);
+  assert.match(pilotVerifier, /ingot-controlled-pilot-workflow-v1/);
+  assert.match(pilotVerifier, /business-workflow-passed/);
+  assert.match(pilotVerifier, /不会创建、发布或修改生产记录/);
+  assert.match(pilotVerifier, /不等于生产准入/);
 });
 
 test("operations retain server pagination and resumable live events", () => {
