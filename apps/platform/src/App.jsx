@@ -81,7 +81,9 @@ const systemSection = {
   ],
 };
 
-const allSections = [...sections, systemSection];
+export const sectionsForIdentity = identity => (identity?.roles || []).includes("platform.admin")
+  ? [...sections, systemSection]
+  : sections;
 
 const sectionItems = section => section.groups.flatMap(group => group.items);
 
@@ -133,7 +135,7 @@ const searchAliases = {
   "/logs": "运行日志 系统日志",
 };
 
-const globalSearchEntries = allSections.flatMap(section => sectionItems(section).map(([path, label]) => ({
+const searchEntriesForSections = navigationSections => navigationSections.flatMap(section => sectionItems(section).map(([path, label]) => ({
   path,
   label,
   section: section.label,
@@ -204,10 +206,10 @@ function SidebarSection({ section, activeSectionId, activeNavigationPath, expand
   );
 }
 
-function SidebarNavigation({ activeSectionId, activeNavigationPath, expandedSectionId, compact = false, onToggle, onNavigate }) {
+function SidebarNavigation({ navigationSections, activeSectionId, activeNavigationPath, expandedSectionId, compact = false, onToggle, onNavigate }) {
   return (
     <nav className={cx("grid flex-1 content-start overflow-y-auto", compact ? "gap-1 p-3" : "gap-1 p-3")} aria-label="主导航">
-      {allSections.map(item => (
+      {navigationSections.map(item => (
         <SidebarSection
           key={item.id}
           section={item}
@@ -261,6 +263,8 @@ export default function App({ identity, logout }) {
   const displayName = identity?.displayName || identity?.username || "当前操作员";
   const userInitials = displayName.trim().slice(0, 2).toUpperCase();
   const canConfigure = (identity?.roles || []).some(role => role === "process.engineer" || role === "platform.admin");
+  const navigationSections = useMemo(() => sectionsForIdentity(identity), [identity]);
+  const globalSearchEntries = useMemo(() => searchEntriesForSections(navigationSections), [navigationSections]);
   const usesAppleShortcut = useMemo(isApplePlatform, []);
   const searchShortcutLabel = usesAppleShortcut ? "⌘ K" : "Ctrl K";
   const isChatWorkspace = location.pathname === "/chat";
@@ -277,7 +281,7 @@ export default function App({ identity, logout }) {
     return () => window.removeEventListener("keydown", handleShortcut);
   }, [usesAppleShortcut]);
 
-  const section = useMemo(() => allSections
+  const section = useMemo(() => navigationSections
     .map(item => ({
       item,
       matchLength: sectionItems(item)
@@ -286,7 +290,7 @@ export default function App({ identity, logout }) {
         .reduce((longest, path) => Math.max(longest, path.length), item.path === location.pathname ? item.path.length : -1),
     }))
     .filter(candidate => candidate.matchLength >= 0)
-    .sort((left, right) => right.matchLength - left.matchLength)[0]?.item ?? sections[0], [location.pathname]);
+    .sort((left, right) => right.matchLength - left.matchLength)[0]?.item ?? sections[0], [location.pathname, navigationSections]);
   const activeNavigationPath = useMemo(() => sectionItems(section)
     .map(([path]) => path)
     .filter(path => path === location.pathname || location.pathname.startsWith(`${path}/`))
@@ -322,6 +326,7 @@ export default function App({ identity, logout }) {
           {!sidebarCollapsed && <button type="button" className="grid size-9 place-items-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700" onClick={() => setSidebarCollapsed(true)} aria-label="收起侧边栏"><ChevronDoubleLeftIcon className="size-4.5" /></button>}
         </div>
         <SidebarNavigation
+          navigationSections={navigationSections}
           activeSectionId={section.id}
           activeNavigationPath={activeNavigationPath}
           expandedSectionId={expandedSectionId}
@@ -387,20 +392,21 @@ export default function App({ identity, logout }) {
               <XMarkIcon className="size-5" />
             </button>
           </div>
-          <SidebarNavigation activeSectionId={section.id} activeNavigationPath={activeNavigationPath} expandedSectionId={expandedSectionId} onToggle={toggleSection} onNavigate={() => setMobileOpen(false)} />
+          <SidebarNavigation navigationSections={navigationSections} activeSectionId={section.id} activeNavigationPath={activeNavigationPath} expandedSectionId={expandedSectionId} onToggle={toggleSection} onNavigate={() => setMobileOpen(false)} />
         </DialogPanel>
       </Dialog>
       <GlobalSearchDialog
         open={globalSearchOpen}
         onClose={() => setGlobalSearchOpen(false)}
         navigate={navigate}
+        entries={globalSearchEntries}
       />
       <ToastHost />
     </div>
   );
 }
 
-function GlobalSearchDialog({ open, onClose, navigate }) {
+function GlobalSearchDialog({ open, onClose, navigate, entries }) {
   const [query, setQuery] = useState("");
   const inputRef = useRef(null);
   useEffect(() => {
@@ -410,9 +416,9 @@ function GlobalSearchDialog({ open, onClose, navigate }) {
   }, [open]);
   const results = useMemo(() => {
     const keyword = query.trim().toLowerCase();
-    if (!keyword) return globalSearchEntries;
-    return globalSearchEntries.filter(item => `${item.label} ${item.section} ${item.description} ${item.aliases}`.toLowerCase().includes(keyword));
-  }, [query]);
+    if (!keyword) return entries;
+    return entries.filter(item => `${item.label} ${item.section} ${item.description} ${item.aliases}`.toLowerCase().includes(keyword));
+  }, [entries, query]);
   function select(path) {
     onClose();
     navigate(path);
@@ -448,6 +454,21 @@ function GlobalSearchDialog({ open, onClose, navigate }) {
   );
 }
 
+export function RequireRole({ identity, roles, children }) {
+  const allowed = (identity?.roles || []).some(role => roles.includes(role));
+  if (allowed) return children;
+  return (
+    <div className="grid min-h-[55vh] place-items-center rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm" role="alert">
+      <div className="max-w-lg">
+        <p className="text-sm font-semibold text-amber-700">权限不足</p>
+        <h1 className="mt-2 text-2xl font-semibold text-slate-950">当前岗位不能访问此功能</h1>
+        <p className="mt-3 text-sm leading-6 text-slate-600">该页面仅向平台管理员开放。你仍可继续处理已授权的生产、质量和工艺任务。</p>
+        <Link className="mt-5 inline-flex min-h-10 items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600" to="/workbench">返回工作台</Link>
+      </div>
+    </div>
+  );
+}
+
 function AppRoutes({ identity, canConfigure }) {
   return (
     <Routes>
@@ -475,7 +496,7 @@ function AppRoutes({ identity, canConfigure }) {
       <Route path="/configuration/inspection-definitions" element={<Pages.InspectionDefinitionsPage canWrite={canConfigure} />} />
       <Route path="/configuration/quality-plans" element={<Pages.QualityPlansPage canWrite={canConfigure} />} />
       <Route path="/comparisons" element={<Pages.ExecutionComparisonPage />} />
-      <Route path="/golden-questions" element={<Pages.GoldenQuestionsPage />} />
+      <Route path="/golden-questions" element={<RequireRole identity={identity} roles={["platform.admin"]}><Pages.GoldenQuestionsPage /></RequireRole>} />
       <Route path="/data-quality" element={<Pages.DataQualityPage />} />
       <Route path="/process-improvement" element={<Navigate to="/research-projects" replace />} />
       <Route path="/configuration" element={<Pages.ConfigurationHubPage canWrite={canConfigure} />} />
@@ -489,8 +510,8 @@ function AppRoutes({ identity, canConfigure }) {
       <Route path="/edges" element={<Pages.EdgesPage />} />
       <Route path="/edges/:edgeId" element={<Pages.EdgeDetailPage />} />
       <Route path="/platform-metrics" element={<Pages.MetricsPage />} />
-      <Route path="/logs" element={<Pages.LogsPage />} />
-      <Route path="/identity/users" element={<Pages.UsersPage />} />
+      <Route path="/logs" element={<RequireRole identity={identity} roles={["platform.admin"]}><Pages.LogsPage /></RequireRole>} />
+      <Route path="/identity/users" element={<RequireRole identity={identity} roles={["platform.admin"]}><Pages.UsersPage /></RequireRole>} />
       <Route path="/users" element={<Navigate to="/identity/users" replace />} />
       <Route path="*" element={<Pages.NotFoundPage />} />
     </Routes>

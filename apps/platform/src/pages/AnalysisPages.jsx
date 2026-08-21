@@ -1,9 +1,9 @@
 
 import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router";
+import { Link, useNavigate, useSearchParams } from "react-router";
 import { getJson, postJson } from "../api/http";
 import { extractRows, useApi } from "../hooks/useApi";
-import { Alert, Badge, Button, Card, ConclusionBoundary, DataTable, EmptyState, EvidenceLevel, Field, Input, Metric, Page, Select, StatusBadge, Textarea, notify } from "../ui/components";
+import { Alert, Badge, Button, Card, ConclusionBoundary, DataTable, EmptyState, EvidenceLevel, Field, Input, Metric, Page, RequestError, Select, StatusBadge, Textarea, notify } from "../ui/components";
 import { contextFieldLabel, formatTime, formatInteger, formatDuration, objectTypeLabel, LoadingCard } from "./shared";
 
 const comparisonFeatureLabels = {
@@ -88,6 +88,7 @@ export function AnalysisReadinessCard({ diagnosis = {} }) {
 }
 
 export function ExecutionComparisonPage() {
+  const navigate = useNavigate();
   const [params] = useSearchParams();
   const requestedSiteId = params.get("siteId") || "";
   const [baseline, setBaseline] = useState(params.get("executionId") || "");
@@ -103,6 +104,7 @@ export function ExecutionComparisonPage() {
   const [researchProjects, setResearchProjects] = useState([]);
   const [researchProjectId, setResearchProjectId] = useState("");
   const [additionalConfounders, setAdditionalConfounders] = useState("");
+  const [catalogRetryKey, setCatalogRetryKey] = useState(0);
   useEffect(() => {
     let mounted = true;
     getJson("/api/v1/research-projects?limit=100").then(projectPayload => {
@@ -132,7 +134,7 @@ export function ExecutionComparisonPage() {
       if (mounted) setCatalogLoading(false);
     });
     return () => { mounted = false; };
-  }, [executionFilter, requestedSiteId]);
+  }, [catalogRetryKey, executionFilter, requestedSiteId]);
 
   useEffect(() => {
     let mounted = true;
@@ -282,7 +284,7 @@ export function ExecutionComparisonPage() {
   }));
   return (
     <Page title="运行对比" description="选择一条需要解释的运行，系统自动寻找生产条件一致的历史运行，并把差异整理成可验证结论。">
-      {error && <Alert tone="danger">{error}</Alert>}
+      <RequestError error={error} onRetry={() => { setError(""); setCatalogRetryKey(value => value + 1); }} />
       <Card title="选择目标运行并开始对比" description="默认选择最近完成的运行；如果存在质量异常或参数偏离，请优先选择对应运行。">
         <form className="grid items-start gap-3 md:grid-cols-2 xl:grid-cols-[minmax(15rem,.8fr)_minmax(0,1.4fr)_minmax(12rem,.7fr)_minmax(15rem,.8fr)_auto]" onSubmit={compare}>
           <Field label="筛选运行" hint={`显示 ${visibleProcessExecutions.length} / ${executions.length} 条已完成运行`}><Input value={executionFilter} onChange={event => setProcessExecutionFilter(event.target.value)} placeholder="产品、设备、规范或运行号" /></Field>
@@ -392,7 +394,21 @@ export function ExecutionComparisonPage() {
           <Card title="将追因结果带入研发" description="系统只把有证据的关联转为候选假设；因果关系仍需后续受控实验验证。">
             <div className="grid gap-3 md:grid-cols-[1fr_auto]">
               <Field label="研发项目"><Select value={researchProjectId} onChange={event => setResearchProjectId(event.target.value)}><option value="">选择研发项目</option>{researchProjects.filter(item => !["completed", "archived"].includes(item.status)).map(item => <option key={item.projectId} value={item.projectId}>{item.name}</option>)}</Select></Field>
-              <Button className="self-end" disabled={!researchProjectId || busy || result.diagnosis?.readiness?.mode === "descriptive-only"} onClick={createHypotheses}>生成候选假设</Button>
+              {researchProjects.some(item => !["completed", "archived"].includes(item.status))
+                ? <Button className="self-end" disabled={!researchProjectId || busy || result.diagnosis?.readiness?.mode === "descriptive-only"} onClick={createHypotheses}>生成候选假设</Button>
+                : <Button
+                    className="self-end"
+                    variant="primary"
+                    disabled={result.diagnosis?.readiness?.mode === "descriptive-only"}
+                    onClick={() => {
+                      const next = new URLSearchParams({
+                        create: "1",
+                        executionId: result.baselineProcessExecutionId,
+                        comparisonExecutionIds: comparedProcessExecutions.map(item => item.executionId).join(","),
+                      });
+                      navigate(`/research-projects?${next}`);
+                    }}
+                  >新建研发项目并带入本次对比</Button>}
             </div>
           </Card>
           <Card title="质量候选原因" description="同时比较实际控制参数与过程轨迹特征；优先选择能直接映射到可控变量的候选原因。">
@@ -527,7 +543,7 @@ export function DataQualityPage() {
         ? `检查对象 ${params.get("subjectId")} 的证据完整性、实际参数、上下文和质量关联。`
         : "用明确分子、分母和排除原因建立可重复的数据可靠性基线。"}
     >
-      {error && <Alert tone="danger">{error}</Alert>}
+      <RequestError error={error} onRetry={() => Promise.all([baseline.reload(), objects.reload()])} />
       {loading ? <LoadingCard /> : (
         <div className="space-y-5">
           {baseline.data?.truncated && (
@@ -640,6 +656,13 @@ export function DataQualityPage() {
                 { key: "lastSampleAt", label: "最后样本", render: formatTime },
               ]}
             />
+          </Card>
+          <Card title="数据可信度确认后的下一步" description="只有满足正式分析准入的运行才应进入候选原因排序；未通过的运行先补齐缺失证据。">
+            <div className="flex flex-wrap gap-2">
+              <Link className="inline-flex min-h-10 items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700" to="/comparisons">进入运行对比</Link>
+              <Link className="inline-flex min-h-10 items-center rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50" to="/inspections">补齐检验结果</Link>
+              <Link className="inline-flex min-h-10 items-center rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50" to="/process-executions">检查运行完整性</Link>
+            </div>
           </Card>
         </div>
       )}

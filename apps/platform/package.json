@@ -8,8 +8,10 @@
   },
   "scripts": {
     "dev": "vite --port 3000",
+    "demo": "vite --mode demo --host 127.0.0.1 --port 3001 --strictPort",
     "serve": "vite --port 3000",
     "build": "vite build",
+    "test:e2e": "playwright test",
     "preview": "vite preview --port 3000",
     "test": "node --test tests/*.test.mjs && vitest run",
     "lint": "eslint src"
@@ -24,6 +26,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",
+    "@playwright/test": "^1.62.1",
     "@tailwindcss/vite": "^4.2.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
@@ -35,6 +38,6 @@
     "jsdom": "^28.1.0",
     "tailwindcss": "^4.2.1",
     "vite": "8.2.1",
-    "vitest": "^4.0.18"
+    "vitest": "^4.1.11"
   }
 }

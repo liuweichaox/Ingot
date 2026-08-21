@@ -16,7 +16,7 @@ export default function AuthGate({ children }) {
       setError("");
     } catch (requestError) {
       setIdentity(null);
-      if (!requestError.message.includes("401")) setError(requestError.message);
+      if (requestError.status !== 401) setError(requestError.message);
     } finally {
       setChecking(false);
     }
@@ -43,7 +43,7 @@ export default function AuthGate({ children }) {
       setIdentity(response);
       setCredentials(current => ({ ...current, password: "" }));
     } catch (requestError) {
-      setError(requestError.message);
+      setError(requestError.status === 401 ? "用户名或口令错误。" : requestError.message);
     } finally {
       setBusy(false);
     }
@@ -77,7 +77,7 @@ export default function AuthGate({ children }) {
           <div className="max-w-xl">
             <p className="text-sm font-semibold text-blue-300">看清这次运行，优化下一次运行。</p>
             <h1 className="mt-4 text-4xl font-semibold leading-tight">让真实生产数据成为工艺追因与优化的共同证据。</h1>
-            <p className="mt-5 text-base leading-7 text-slate-300">连接生产条件、过程轨迹与质量结果，帮助工程师比较差异、验证原因并推进下一步实验。</p>
+            <p className="mt-5 text-base leading-7 text-slate-300">连接生产条件、过程轨迹与质量结果，帮助工程师比较差异、验证候选原因并推进下一步实验。</p>
           </div>
           <p className="text-xs text-slate-400">支持厂内部署，生产数据与权限由企业自主掌控。</p>
         </section>

@@ -137,6 +137,10 @@ export function StatusBadge({ value }) {
     retired: "已停用",
     inconclusive: "待确认",
     degraded: "运行异常",
+    collecting: "采集中",
+    blocked: "禁止正式分析",
+    forbidden: "禁止分析",
+    not_analyzable: "禁止分析",
     in_progress: "进行中",
     review_pending: "待复核",
     reinspection_required: "需要重检",
@@ -157,13 +161,15 @@ export function StatusBadge({ value }) {
     "rolled-back": "已回退",
     information: "信息",
     warning: "警告",
+    released: "已发布",
+    removed: "已卸下",
     unknown: "待上报",
   };
   const tone = ["active", "ready", "online", "complete", "completed", "pass", "passed", "verified", "healthy", "published", "validated", "indexed", "reviewed", "available", "valid", "connected", "confirmed", "approved", "selected", "applied", "synchronized", "supported", "dispatched", "accepted"].includes(normalized)
     ? "success"
-    : ["fail", "failed", "offline", "rejected", "falsified", "error", "suspended", "rollback-required", "unavailable", "cancelled", "missing", "invalid", "disconnected"].includes(normalized)
+    : ["fail", "failed", "offline", "rejected", "falsified", "error", "suspended", "rollback-required", "unavailable", "cancelled", "missing", "invalid", "disconnected", "blocked", "forbidden", "not_analyzable"].includes(normalized)
       ? "danger"
-      : ["pending", "buffering", "validating", "waiting-execution-boundary", "applying", "rollback", "draft", "starting", "running", "uploaded", "dirty", "degraded", "in_progress", "review_pending", "queued", "completed_with_errors", "incomplete", "cancelling", "proposed", "investigating", "trialing", "planned", "warning", "concluded", "withdrawn", "rolled-back", "maintenance", "candidate", "modified", "recorded"].includes(normalized)
+      : ["pending", "buffering", "validating", "waiting-execution-boundary", "applying", "rollback", "draft", "starting", "running", "uploaded", "dirty", "degraded", "collecting", "in_progress", "review_pending", "queued", "completed_with_errors", "incomplete", "cancelling", "proposed", "investigating", "trialing", "planned", "warning", "concluded", "withdrawn", "rolled-back", "maintenance", "candidate", "modified", "recorded"].includes(normalized)
         ? "warning"
         : "neutral";
   return <Badge tone={tone}>{labels[normalized] ?? String(value ?? "待上报")}</Badge>;
@@ -375,11 +381,28 @@ export function Alert({ tone = "info", title, children }) {
   );
 }
 
+export function RequestError({ error, onRetry, title }) {
+  if (!error) return null;
+  const message = typeof error === "string" ? error : error.message || String(error);
+  const effectiveTitle = title || (/无权|权限不足/.test(message)
+    ? "当前岗位无权读取这些数据"
+    : "数据暂时无法读取");
+  return (
+    <Alert tone="danger" title={effectiveTitle}>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <span className="min-w-0 break-words">{message}</span>
+        {onRetry && <Button className="shrink-0" onClick={onRetry}>重试</Button>}
+      </div>
+    </Alert>
+  );
+}
+
 export function DataTable({ columns, rows, keyField = "id", getRowKey, onRowClick }) {
   if (!rows?.length) return <EmptyState />;
   const minimumWidth = columns.length >= 8 ? "min-w-[1080px]" : columns.length >= 5 ? "min-w-[760px]" : "min-w-full";
   return (
-    <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white scrollbar-thin">
+    <div className="relative overflow-x-auto rounded-xl border border-slate-200 bg-white scrollbar-thin" role="region" aria-label="可横向滚动的数据表" tabIndex={columns.length >= 5 ? 0 : undefined}>
+      {columns.length >= 5 && <p className="sticky left-0 top-0 z-20 border-b border-slate-200 bg-blue-50 px-3 py-1.5 text-xs text-blue-700 sm:hidden">左右滑动查看全部字段；操作列固定在右侧。</p>}
       <table className={cx("w-full divide-y divide-slate-200 text-left text-sm tabular-nums", minimumWidth)}>
         <thead className="bg-slate-50/90 text-xs tracking-wide text-slate-600">
           <tr>
@@ -389,7 +412,7 @@ export function DataTable({ columns, rows, keyField = "id", getRowKey, onRowClic
                 scope="col"
                 className={cx(
                   "whitespace-nowrap px-4 py-3 font-semibold sm:px-5",
-                  column.label === "操作" && "w-px",
+                  column.label === "操作" && "sticky right-0 z-10 w-px border-l border-slate-200 bg-slate-50 shadow-[-8px_0_12px_-12px_rgba(15,23,42,.45)]",
                   column.align === "right" && "text-right",
                 )}
               >
@@ -422,7 +445,7 @@ export function DataTable({ columns, rows, keyField = "id", getRowKey, onRowClic
                   className={cx(
                     "max-w-sm px-4 py-3.5 align-middle leading-5 sm:px-5",
                     (column.primary || columnIndex === 0) && "font-medium text-slate-900",
-                    column.label === "操作" && "w-px min-w-max whitespace-nowrap [&_*]:whitespace-nowrap [&>div]:flex-nowrap",
+                    column.label === "操作" && "sticky right-0 z-10 w-px min-w-max whitespace-nowrap border-l border-slate-100 bg-white shadow-[-8px_0_12px_-12px_rgba(15,23,42,.45)] [&_*]:whitespace-nowrap [&>div]:flex-nowrap",
                     column.align === "right" && "text-right",
                   )}
                 >

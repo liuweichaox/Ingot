@@ -2,11 +2,11 @@
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from "@headlessui/react";
 import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
 import { useMemo, useState } from "react";
-import { useSearchParams } from "react-router";
+import { Link, useSearchParams } from "react-router";
 import { getJson, postForm, postJson } from "../api/http";
 import { qualityOutcomeTraces } from "../charts/chartAdapters";
 import { extractRows, useApi } from "../hooks/useApi";
-import { Alert, Button, Card, DataTable, Drawer, EmptyState, Field, Input, Metric, Pagination, Page, Select, StatusBadge, Textarea, WorkflowGuide, notify } from "../ui/components";
+import { Alert, Button, Card, DataTable, Drawer, EmptyState, Field, Input, Metric, Pagination, Page, RequestError, Select, StatusBadge, Textarea, WorkflowGuide, notify } from "../ui/components";
 import { formatTime, LoadingCard, uuidv7 } from "./shared";
 import PlotlyChart from "../components/PlotlyChart";
 
@@ -197,7 +197,10 @@ export function InspectionsPage() {
 
   return (
     <Page title="检验任务" description="从待办开始完成检测录入、独立复核和原图追溯。" actions={<Button onClick={() => openTask()}>补录检测记录</Button>}>
-      {(tasks.error || taskSummary.error || records.error || definitions.error || (!entryOpen && !reviewOpen && actionError)) && <Alert tone="danger">{tasks.error || taskSummary.error || records.error || definitions.error || actionError}</Alert>}
+      <RequestError
+        error={tasks.error || taskSummary.error || records.error || definitions.error || (!entryOpen && !reviewOpen && actionError)}
+        onRetry={() => Promise.all([tasks.reload(), taskSummary.reload(), records.reload(), definitions.reload()])}
+      />
       <WorkflowGuide
         title="检验任务怎么处理"
         description="正常情况下直接点击任务队列中的操作按钮；只有补录历史结果时才使用右上角“补录检测记录”。"
@@ -298,6 +301,13 @@ export function InspectionsPage() {
           </TabPanel>
         </TabPanels>
       </TabGroup>
+      <Card title="完成检验后的下一步" description="正式分析只使用已关联运行并完成复核的质量结果。">
+        <div className="flex flex-wrap gap-2">
+          <Link className="inline-flex min-h-10 items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700" to="/data-quality">检查数据可信度</Link>
+          <Link className="inline-flex min-h-10 items-center rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50" to="/process-executions">查看关联运行</Link>
+          <Link className="inline-flex min-h-10 items-center rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50" to="/quality-analysis">分析质量偏差</Link>
+        </div>
+      </Card>
       <Drawer
         open={entryOpen}
         onClose={() => setEntryOpen(false)}
@@ -487,7 +497,7 @@ export function QualityAnalysisPage() {
     if (searchParams.get("subjectId")) params.set("subjectId", searchParams.get("subjectId"));
     return params.toString();
   });
-  const { data, loading, error } = useApi(`/api/v1/quality-analysis?${query}`);
+  const { data, loading, error, reload } = useApi(`/api/v1/quality-analysis?${query}`);
   const records = extractRows(data);
   const summary = records.reduce((result, row) => {
     const outcome = String(row.outcome || "INCONCLUSIVE").toUpperCase();
@@ -523,7 +533,7 @@ export function QualityAnalysisPage() {
           <Button className="self-end" variant="primary" type="submit"><MagnifyingGlassIcon className="size-4" />分析</Button>
         </form>
       </Card>
-      {error && <Alert tone="danger">{error}</Alert>}
+      <RequestError error={error} onRetry={reload} />
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <Metric label="有效检测记录" value={records.length} />
         <Metric label="合格" value={summary.pass} hint={ratio(summary.pass, records.length)} />

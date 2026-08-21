@@ -3,7 +3,7 @@ import { Link } from "react-router";
 import { deleteJson, postJson } from "../api/http";
 import { createRegistryBusinessForm, RegistryBusinessEditor, registryBusinessPayload, registryBusinessValidation } from "../components/RegistryBusinessEditor";
 import { extractRows, useApi } from "../hooks/useApi";
-import { Alert, Button, Card, DataTable, Drawer, EmptyState, Field, Input, Page, Select, StatusBadge, Textarea, WorkflowGuide, notify, useConfirmDialog } from "../ui/components";
+import { Alert, Button, Card, DataTable, Drawer, EmptyState, Field, Input, Page, RequestError, Select, StatusBadge, Textarea, WorkflowGuide, notify, useConfirmDialog } from "../ui/components";
 import { formatTime, emptyInspectionCharacteristic, inspectionDefinitionForm, inspectionDefinitionPayload, inspectionDefinitionValidation, inspectionInputTypes, LoadingCard } from "./shared";
 
 const configurationJourney = [
@@ -321,7 +321,8 @@ function RegistryPage({ definition, canWrite = true }) {
           ]}
         />
       )}
-      {(error || (!open && editorError)) && <Alert tone="danger">{error || editorError}</Alert>}
+      <RequestError error={error} onRetry={reload} />
+      {!open && editorError && <Alert tone="danger">{editorError}</Alert>}
       {loading && !data ? <LoadingCard /> : (
         <Card title={`${definition.title}列表`} description={`共 ${data?.total ?? rows.length} 条记录`}>
           {rows.length ? <DataTable

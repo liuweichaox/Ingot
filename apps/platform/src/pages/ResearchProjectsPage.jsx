@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { getJson, patchJson, postJson } from "../api/http";
 import {
   createTaskForm,
@@ -22,6 +22,7 @@ import {
   Input,
   Metric,
   Page,
+  RequestError,
   Select,
   StatusBadge,
   Textarea,
@@ -32,6 +33,7 @@ import {
 export function ResearchProjectsPage({ identity }) {
   const navigate = useNavigate();
   const { projectId } = useParams();
+  const [searchParams] = useSearchParams();
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -67,6 +69,13 @@ export function ResearchProjectsPage({ identity }) {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    if (projectId || searchParams.get("create") !== "1") return;
+    const executionId = searchParams.get("executionId") || "";
+    setProjectForm(current => ({ ...current, referenceProcessExecutionId: executionId }));
+    setCreateOpen(true);
+  }, [projectId, searchParams]);
 
   useEffect(() => {
     if (!projectId) {
@@ -228,10 +237,26 @@ export function ResearchProjectsPage({ identity }) {
           ...(projectForm.scenarioPackageKey ? { scenario_package: projectForm.scenarioPackageKey } : {}),
         },
       });
+      const comparisonExecutionIds = (searchParams.get("comparisonExecutionIds") || "").split(",").filter(Boolean);
+      let comparisonImported = false;
+      if (projectForm.referenceProcessExecutionId && comparisonExecutionIds.length > 1) {
+        try {
+          await postJson(`/api/v1/research-projects/${project.projectId}/hypotheses/from-execution-comparison`, {
+            baselineProcessExecutionId: projectForm.referenceProcessExecutionId,
+            executionIds: comparisonExecutionIds,
+            maximumHypotheses: 3,
+          });
+          comparisonImported = true;
+        } catch (requestError) {
+          notify(`研发项目已创建，但运行对比未能带入：${requestError.message}。可在项目内重新添加候选假设。`, "warning");
+        }
+      }
       setProjects(current => [project, ...current]);
       setProjectForm(projectFormInitial);
       setCreateOpen(false);
-      notify("研发项目已创建。", "success");
+      if (comparisonExecutionIds.length <= 1 || comparisonImported) {
+        notify(comparisonImported ? "研发项目和候选假设已从运行对比创建。" : "研发项目已创建。", "success");
+      }
       openProject(project);
     } catch (requestError) {
       if (task === "member" && requestError.status === 409) {
@@ -763,7 +788,7 @@ export function ResearchProjectsPage({ identity }) {
           </>
         )}
       >
-        {error && <Alert tone="danger">{error}</Alert>}
+        <RequestError error={error} onRetry={() => refreshWorkspace(projectId)} />
         {evidenceError && workspace && (
           <Alert tone="warning" title="项目证据准备度暂不可用">{evidenceError}</Alert>
         )}
@@ -842,7 +867,7 @@ export function ResearchProjectsPage({ identity }) {
       description="用最少的有效实验，把生产问题追溯为可验证证据，再形成可复用的工艺操作域。"
       actions={<Button variant="primary" onClick={() => setCreateOpen(true)}>新建研发项目</Button>}
     >
-      {error && <Alert tone="danger">{error}</Alert>}
+      <RequestError error={error} onRetry={load} />
       <section className="grid gap-3 sm:grid-cols-3">
         <Metric label="进行中的研发" value={metrics.active + metrics.validating} hint="需要工程决策或独立验证" />
         <Metric label="已验证结论" value={metrics.completed} hint="已完成项目" />
@@ -879,7 +904,7 @@ export function ResearchProjectsPage({ identity }) {
         <div className="rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50 via-white to-white p-5 shadow-sm">
           <p className="text-sm font-semibold text-blue-700">从真实偏差进入研发闭环</p>
           <h2 className="mt-2 text-lg font-semibold tracking-tight text-slate-950">
-            发现偏差 → 找到原因 → 设计实验 → 验证并固化窗口
+            发现偏差 → 缩小候选原因 → 设计实验 → 验证并固化窗口
           </h2>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
             运行、质量和设备数据是证据来源；系统负责整理证据与下一步，工程人员负责审核和决策。
@@ -1262,7 +1287,7 @@ function WorkspaceContent({
           <div className="mt-4 flex flex-wrap gap-2">
             {project.status === "draft" && <Button variant="primary" onClick={() => onTask("preregistration")}>{latestPreregistration ? "冻结新版本" : "填写并冻结预注册"}</Button>}
             {latestPreregistration?.status === "frozen" && <Button onClick={() => onReviewValidationPreregistration(latestPreregistration)}>独立复核当前版本</Button>}
-            <a className="inline-flex min-h-9 items-center rounded-lg px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50" href="/data-quality">查看数据健康与正式分析准入</a>
+            <Link className="inline-flex min-h-9 items-center rounded-lg px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50" to="/data-quality">查看数据健康与正式分析准入</Link>
           </div>
         </Card>
         <section className="rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50 to-white p-5">
@@ -1374,7 +1399,7 @@ function WorkspaceContent({
                 key: "actions",
                 label: "下一步",
                 render: (_, row) => row.validationOutcomeCode && row.expectedEffectDirection && row.minimumEffect > 0 && canEdit && project.status !== "draft"
-                  ? <Button onClick={event => { event.stopPropagation(); onGenerateOptimizationSuggestions("validate-hypothesis", row.hypothesisId); }}>用优化器验证</Button>
+                  ? <Button onClick={event => { event.stopPropagation(); onGenerateOptimizationSuggestions("validate-hypothesis", row.hypothesisId); }}>让优化器设计验证实验</Button>
                   : "补充验证标准后可自动设计实验",
               },
             ]} />

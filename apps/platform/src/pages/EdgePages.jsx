@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { Link, useParams } from "react-router";
 import { extractRows, useApi } from "../hooks/useApi";
-import { Alert, Badge, Card, DataTable, Metric, Page, StatusBadge, WorkflowGuide } from "../ui/components";
+import { Alert, Badge, Card, DataTable, Metric, Page, RequestError, StatusBadge, WorkflowGuide } from "../ui/components";
 import { formatTime, formatInteger, formatDuration, edgeStatus, acquisitionProtocolLabels, objectTypeLabel, LoadingCard } from "./shared";
 
 function formatBytes(value) {
@@ -15,7 +15,7 @@ function formatBytes(value) {
 }
 
 export function EdgesPage() {
-  const { data, loading, error } = useApi("/api/edges", { interval: 10000 });
+  const { data, loading, error, reload } = useApi("/api/edges", { interval: 10000 });
   const rows = extractRows(data);
   const online = rows.filter(row => edgeStatus(row) === "online").length;
   return (
@@ -24,7 +24,7 @@ export function EdgesPage() {
       description="查看部署在现场、负责连接设备并上报数据的节点。"
       actions={<Link className="inline-flex min-h-9 items-center rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700" to="/configuration/ingestion-tasks">配置数据源</Link>}
     >
-      {error && <Alert tone="danger" title="现场节点暂不可用">{error}</Alert>}
+      <RequestError error={error} title="现场节点暂不可用" onRetry={reload} />
       <div className="grid gap-4 sm:grid-cols-3">
         <Metric label="现场节点" value={rows.length} hint="已登记" />
         <Metric label="当前在线" value={online} hint="30 秒内有心跳" />
@@ -100,7 +100,11 @@ export function EdgeDetailPage() {
         </>
       )}
     >
-      {error && <Alert tone="danger" title="部分诊断信息暂不可用">{error}</Alert>}
+      <RequestError
+        error={error}
+        title="部分诊断信息暂不可用"
+        onRetry={() => Promise.all([edges.reload(), acquisition.reload(), statusIntervals.reload(), logs.reload(), ingestionTasks.reload()])}
+      />
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Metric label="设备连接" value={<StatusBadge value={edgeStatus(edge)} />} hint={edge?.lastSeen ? `最后心跳 ${formatTime(edge.lastSeen)}` : "尚未收到心跳"} />
         <Metric label="配置收敛" value={<StatusBadge value={acquisition.data?.state || "unknown"} />} hint={`${convergedDeployments} 个已应用 / ${deploymentStates.length} 个期望配置`} />

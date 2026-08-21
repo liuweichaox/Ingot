@@ -93,7 +93,8 @@ test("navigation and overlays are accessible Headless UI components", () => {
   }
   assert.match(app, /id: "overview"[\s\S]*id: "process-definition"[\s\S]*id: "equipment-connection"[\s\S]*id: "evidence"[\s\S]*id: "quality"[\s\S]*id: "diagnosis"[\s\S]*id: "optimization"/);
   assert.match(app, /const systemSection = \{/);
-  assert.match(app, /section=\{systemSection\}/);
+  assert.match(app, /sectionsForIdentity/);
+  assert.match(app, /roles \|\| \[\]\)\.includes\("platform\.admin"\)/);
   assert.match(app, /id: "equipment-connection"[\s\S]*label: "现场接入", items: \[\["\/edges", "现场节点"\], \["\/configuration\/ingestion-tasks", "采集配置"\]\]/);
   assert.match(app, /id: "optimization"[\s\S]*label: "项目与资产", items: \[\["\/research-projects", "研发项目"\], \["\/research-assets", "研发资产"\]\]/);
   assert.match(app, /id: "system"[\s\S]*label: "身份与权限"[\s\S]*label: "平台运维"[\s\S]*label: "助手治理"/);
@@ -137,7 +138,8 @@ test("authenticated application exposes the identity administration surface", ()
   assert.match(app, /function App\(\{ identity, logout \}\)/);
   assert.doesNotMatch(app, /username: "operator"/);
   assert.match(app, /\["\/identity\/users", "用户与权限"\]/);
-  assert.match(app, /path="\/identity\/users" element=\{<Pages\.UsersPage \/>\}/);
+  assert.match(app, /path="\/identity\/users" element=\{<RequireRole identity=\{identity\}/);
+  assert.match(app, /当前岗位不能访问此功能/);
   assert.match(pages, /export function UsersPage\(\)/);
   assert.match(pages, /:set-site-access/);
   assert.match(pages, /站点访问范围/);
@@ -204,7 +206,8 @@ test("core workflows tell new users what to do next and confirm completed action
   assert.match(components, /export function ToastHost/);
   assert.match(pages, /今天先做这些/);
   assert.match(pages, /配置下一批生产/);
-  assert.match(researchProjects, /发现偏差 → 找到原因 → 设计实验 → 验证并固化窗口/);
+  assert.match(researchProjects, /发现偏差 → 缩小候选原因 → 设计实验 → 验证并固化窗口/);
+  assert.match(researchProjects, /让优化器设计验证实验/);
   assert.match(researchProjects, /实验建议准备度/);
   assert.match(app, /<ToastHost \/>/);
 });

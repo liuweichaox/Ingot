@@ -1,10 +1,13 @@
-import { defineConfig } from "vite";
+// 配置 Platform 前端构建，并让 demo 模式默认连接只读本地模拟 API。
+import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 
-const apiTarget = process.env.INGOT_PLATFORM_API_TARGET || "http://127.0.0.1:8000";
-
-export default defineConfig({
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), "");
+  const defaultApiTarget = mode === "demo" ? "http://127.0.0.1:4010" : "http://127.0.0.1:8000";
+  const apiTarget = env.INGOT_PLATFORM_API_TARGET || process.env.INGOT_PLATFORM_API_TARGET || defaultApiTarget;
+  return ({
   plugins: [react(), tailwindcss()],
   build: {
     // Plotly stays in a lazy chart-only chunk; the initial application chunks remain below the default threshold.
@@ -40,4 +43,5 @@ export default defineConfig({
       },
     },
   },
+  });
 });

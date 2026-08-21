@@ -6,11 +6,12 @@ import { getJson } from "../api/http";
 import { processCurveTraces } from "../charts/chartAdapters";
 import { extractRows, useApi } from "../hooks/useApi";
 import { useProcessCurves } from "../hooks/useProcessCurves";
-import { Alert, Badge, Button, Card, DataTable, EmptyState, Field, Input, Metric, Pagination, Page, Select, StatusBadge, cx } from "../ui/components";
+import { Alert, Badge, Button, Card, DataTable, EmptyState, Field, Input, Metric, Pagination, Page, RequestError, Select, StatusBadge, cx } from "../ui/components";
 import { formatTime, formatInteger, formatMeasurementValue, formatDuration, edgeStatus, eventTypeLabel, LoadingCard } from "./shared";
 import PlotlyChart from "../components/PlotlyChart";
 
 export function WorkbenchPage({ identity }) {
+  const [retryKey, setRetryKey] = useState(0);
   const [state, setState] = useState({
     loading: true,
     error: "",
@@ -49,7 +50,7 @@ export function WorkbenchPage({ identity }) {
       if (alive) setState(current => ({ ...current, loading: false, error: error.message }));
     });
     return () => { alive = false; };
-  }, []);
+  }, [retryKey]);
 
   const activeProcessExecutions = state.executionOverview.activeCount
     ?? state.executions.filter(item => item.status === "active" || !item.completedAt).length;
@@ -98,7 +99,7 @@ export function WorkbenchPage({ identity }) {
       : [analysisAction, qualityAction, platformAction];
   return (
     <Page title="工作台" description="集中查看今天的待办、生产状态、质量风险与研发进展。">
-      {state.error && <Alert tone="danger">{state.error}</Alert>}
+      <RequestError error={state.error} onRetry={() => setRetryKey(value => value + 1)} />
       {state.loading ? <LoadingCard /> : (
         <div className="flex flex-col gap-5">
           <section className="order-1 grid gap-4 rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50 via-white to-white p-5 shadow-sm lg:grid-cols-[minmax(0,1fr)_20rem]">
@@ -193,7 +194,7 @@ export function ProcessExecutionsPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
   const [query, setQuery] = useState(() => makeProcessExecutionQuery(filters, 1, 50));
-  const { data, loading, error } = useApi(`/api/v1/process-executions?${query}`);
+  const { data, loading, error, reload } = useApi(`/api/v1/process-executions?${query}`);
   const rows = extractRows(data);
   const showingEmptyState = Boolean(data) && rows.length === 0;
   const edgeResponse = useApi("/api/edges", { enabled: showingEmptyState });
@@ -227,7 +228,7 @@ export function ProcessExecutionsPage() {
           <Button className="self-end" variant="primary" type="submit"><MagnifyingGlassIcon className="size-4" />查询</Button>
         </form>
       </Card>
-      {error && <Alert tone="danger">{error}</Alert>}
+      <RequestError error={error} onRetry={reload} />
       {loading && !data ? <LoadingCard /> : (
         <Card title="生产运行" description={`共 ${data?.total ?? rows.length} 条`}>
           {rows.length ? <DataTable
@@ -384,7 +385,11 @@ export function ProcessExecutionDetailPage() {
         </>
       )}
     >
-      {executionResponse.error && <Alert tone="danger" title="运行详情暂不可用">{executionResponse.error}</Alert>}
+      <RequestError
+        error={executionResponse.error || analysisResponse.error || eventResponse.error || inspectionResponse.error}
+        title="运行详情暂不可用"
+        onRetry={() => Promise.all([executionResponse.reload(), analysisResponse.reload(), eventResponse.reload(), inspectionResponse.reload()])}
+      />
       {executionResponse.loading && !executionResponse.data ? <LoadingCard /> : !execution ? (
         <EmptyState title="未找到生产运行" description="该运行可能尚未同步，或运行号已经失效。" />
       ) : (

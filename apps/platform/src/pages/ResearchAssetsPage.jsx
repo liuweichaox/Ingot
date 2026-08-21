@@ -3,13 +3,13 @@ import { useCallback, useEffect, useState } from "react";
 import { getJson } from "../api/http";
 import { MechanismKnowledgeWorkbench } from "../components/MechanismKnowledgeWorkbench";
 import {
-  Alert,
   Button,
   Card,
   DataTable,
   EmptyState,
   Field,
   Page,
+  RequestError,
   Select,
   StatusBadge,
 } from "../ui/components";
@@ -104,15 +104,19 @@ export function ResearchAssetsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    getJson("/api/v1/research-projects?limit=100")
-      .then(response => {
-        const values = response?.data || [];
-        setProjects(values);
-        setProjectId(current => current || values[0]?.projectId || "");
-      })
-      .catch(requestError => setError(requestError.message));
+  const loadProjects = useCallback(async () => {
+    try {
+      const response = await getJson("/api/v1/research-projects?limit=100");
+      const values = response?.data || [];
+      setProjects(values);
+      setProjectId(current => current || values[0]?.projectId || "");
+      setError("");
+    } catch (requestError) {
+      setError(requestError.message);
+    }
   }, []);
+
+  useEffect(() => { loadProjects(); }, [loadProjects]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -166,7 +170,7 @@ export function ResearchAssetsPage() {
       title="研发资产"
       description="集中查看项目可复用的数据集、模型、机理和知识；正式研发结论仍在研发项目中形成。"
     >
-      {error && <Alert tone="danger">{error}</Alert>}
+      <RequestError error={error} onRetry={() => projectId ? Promise.all([loadProjects(), load()]) : loadProjects()} />
       <Card title="项目范围" description="知识来源严格按研发项目隔离；其他版本化资产可被授权项目复用。">
         <Field label="当前研发项目">
           <Select value={projectId} onChange={event => setProjectId(event.target.value)}>

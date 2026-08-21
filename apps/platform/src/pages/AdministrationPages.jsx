@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Link } from "react-router";
 import { postJson } from "../api/http";
 import { extractRows, useApi } from "../hooks/useApi";
-import { Alert, Button, Card, DataTable, Drawer, EmptyState, Field, Input, Metric, Page, Select, StatusBadge, notify, useConfirmDialog } from "../ui/components";
+import { Alert, Button, Card, DataTable, Drawer, EmptyState, Field, Input, Metric, Page, RequestError, Select, StatusBadge, notify, useConfirmDialog } from "../ui/components";
 import { formatTime, formatInteger, formatBytes, metricTotal, formatDuration, edgeStatus, LoadingCard } from "./shared";
 import { formatRoleSummary, formatSiteScope, platformRoleOptions } from "../auth/identityPresentation";
 
@@ -121,7 +121,7 @@ export function UsersPage() {
       <Alert tone="info" title="岗位分权">
         质量录入与复核应由不同人员承担；配置、生产操作和工艺改进也建议使用独立账户。
       </Alert>
-      {error && <Alert tone="danger" title="用户列表不可用">{error}</Alert>}
+      <RequestError error={error} title="用户列表不可用" onRetry={reload} />
       {loading && !data ? <LoadingCard /> : (
         <Card title="平台用户" description={`共 ${users.length} 个账户`}>
           {users.length ? (
@@ -240,7 +240,10 @@ export function MetricsPage() {
   const healthy = offline === 0 && unknown === 0 && threadQueue === 0;
   return (
     <Page title="平台状态" description="从业务处理、设备采集和平台资源三个层面确认系统是否正常。">
-      {error && <Alert tone="danger">{error}</Alert>}
+      <RequestError
+        error={error}
+        onRetry={() => Promise.all([edgeResponse.reload(), metricResponse.reload(), executionResponse.reload(), qualityResponse.reload(), profileResponse.reload()])}
+      />
       <Alert tone={healthy ? "success" : "warning"} title={healthy ? "平台运行正常" : "平台存在需要关注的项目"}>
         {healthy ? "中心服务和现场节点均在正常工作。" : `离线节点 ${offline} 个，待确认节点 ${unknown} 个，后台排队 ${formatInteger(threadQueue)} 项。`}
       </Alert>
@@ -270,7 +273,8 @@ export function MetricsPage() {
 }
 
 export function LogsPage() {
-  const { data: edges } = useApi("/api/edges");
+  const edgeResponse = useApi("/api/edges");
+  const { data: edges } = edgeResponse;
   const edgeRows = extractRows(edges);
   const [edgeId, setEdgeId] = useState("");
   const [level, setLevel] = useState("");
@@ -284,7 +288,7 @@ export function LogsPage() {
           <Field label="级别"><Select value={level} onChange={event => setLevel(event.target.value)}><option value="">全部</option><option value="Information">信息</option><option value="Warning">警告</option><option value="Error">错误</option></Select></Field>
         </div>
       </Card>
-      {logs.error && <Alert tone="danger">{logs.error}</Alert>}
+      <RequestError error={edgeResponse.error || logs.error} onRetry={() => Promise.all([edgeResponse.reload(), logs.reload()])} />
       <Card title="日志记录">
         {edgeId
           ? logs.loading && !logs.data

@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { deleteJson, postJson } from "../api/http";
 import { extractRows, useApi } from "../hooks/useApi";
-import { Alert, Button, Card, DataTable, Drawer, EmptyState, Field, Input, Pagination, Page, Select, StatusBadge, WorkflowGuide, notify, useConfirmDialog } from "../ui/components";
+import { Alert, Button, Card, DataTable, Drawer, EmptyState, Field, Input, Pagination, Page, RequestError, Select, StatusBadge, WorkflowGuide, notify, useConfirmDialog } from "../ui/components";
 import { formatTime, LoadingCard } from "./shared";
 
 const productionResources = {
@@ -580,7 +580,11 @@ function ToolingAssembliesPage({ canWrite = true }) {
       description="一个工装总成拥有稳定身份；每次组件更换形成新的不可变配置版本，生产运行自动保留当时的真实组成。"
       actions={canWrite ? <Button variant="primary" onClick={() => { setActionError(""); setAssetOpen(true); }}>新建工装总成</Button> : undefined}
     >
-      {(errors.length > 0 || actionError) && <Alert tone="danger">{errors[0] || actionError}</Alert>}
+      <RequestError
+        error={errors[0]}
+        onRetry={() => Promise.all([assembliesApi.reload(), revisionsApi.reload(), templatesApi.reload(), componentsApi.reload(), componentTypesApi.reload(), installationsApi.reload()])}
+      />
+      {actionError && <Alert tone="danger">{actionError}</Alert>}
       <WorkflowGuide
         title="工装总成数据的正确关系"
         description="组件分类说明“是什么”，装配模板说明“装在哪里”，配置版本说明“这次具体装了哪一件”。"
@@ -834,7 +838,8 @@ function ProductionRecordsPage({ section, canWrite = true }) {
 
   return (
     <Page className="mx-auto max-w-7xl" title={resource.title} description={resource.description} actions={canWrite && section !== "context" ? <Button variant="primary" onClick={() => openEditor()}>{resource.createLabel}</Button> : undefined}>
-      {(error || (!open && actionError)) && <Alert tone="danger">{error || actionError}</Alert>}
+      <RequestError error={error} onRetry={reload} />
+      {!open && actionError && <Alert tone="danger">{actionError}</Alert>}
       {loading && !data ? <LoadingCard /> : (
         <>
           {section === "context" && (
