@@ -194,6 +194,22 @@ export function ProcessExecutionsPage() {
   const [query, setQuery] = useState(() => makeProcessExecutionQuery(filters, 1, 50));
   const { data, loading, error } = useApi(`/api/v1/process-executions?${query}`);
   const rows = extractRows(data);
+  const showingEmptyState = Boolean(data) && rows.length === 0;
+  const edgeResponse = useApi("/api/edges", { enabled: showingEmptyState });
+  const ingestionResponse = useApi("/api/v1/ingestion-tasks", { enabled: showingEmptyState });
+  const hasAppliedFilters = appliedFilters.status !== "all" || Object.entries(appliedFilters).some(([key, value]) => key !== "status" && value.trim());
+  const edgeRows = extractRows(edgeResponse.data);
+  const onlineEdges = edgeRows.filter(item => edgeStatus(item) === "online").length;
+  const publishedIngestionTasks = extractRows(ingestionResponse.data).filter(item => item.status === "published").length;
+  const edgeSummary = edgeResponse.error ? "检查失败" : edgeResponse.loading ? "检查中" : `${onlineEdges}/${edgeRows.length} 在线`;
+  const ingestionSummary = ingestionResponse.error ? "检查失败" : ingestionResponse.loading ? "检查中" : publishedIngestionTasks;
+  function resetFilters() {
+    const cleared = { status: "all", equipmentId: "", edgeId: "", externalBatchRef: "", outputItemId: "", executionId: "" };
+    setFilters(cleared);
+    setAppliedFilters(cleared);
+    setPage(1);
+    setQuery(makeProcessExecutionQuery(cleared, 1, pageSize));
+  }
   return (
     <Page title="运行记录" description="按 Edge、设备、批次、工件和运行号追溯跨设备生产过程。">
       <Card title="筛选条件">
@@ -210,7 +226,7 @@ export function ProcessExecutionsPage() {
       {error && <Alert tone="danger">{error}</Alert>}
       {loading && !data ? <LoadingCard /> : (
         <Card title="生产运行" description={`共 ${data?.total ?? rows.length} 条`}>
-          <DataTable
+          {rows.length ? <DataTable
             rows={rows}
             keyField="executionId"
             onRowClick={row => navigate(`/process-executions/${encodeURIComponent(row.executionId)}?siteId=${encodeURIComponent(row.siteId)}`)}
@@ -229,14 +245,37 @@ export function ProcessExecutionsPage() {
                 render: (value, row) => <Link className="font-medium text-blue-600 hover:text-blue-700" to={`/process-executions/${encodeURIComponent(value)}?siteId=${encodeURIComponent(row.siteId)}`} onClick={event => event.stopPropagation()}>查看详情</Link>,
               },
             ]}
-          />
-          <Pagination
+          /> : hasAppliedFilters ? (
+            <EmptyState
+              title="当前筛选条件下没有运行记录"
+              description="数据可能尚未到达，也可能被设备、批次、工件或运行号筛选掉。"
+              actions={<Button type="button" onClick={resetFilters}>清除筛选条件</Button>}
+            />
+          ) : (
+            <EmptyState
+              title="还没有形成生产运行"
+              description="先确认现场节点在线、采集任务已发布，并且设备数据包含明确的运行开始与结束边界。"
+              details={(
+                <dl className="grid gap-2 rounded-xl border border-slate-200 bg-white p-3 sm:grid-cols-2">
+                  <div className="flex items-center justify-between gap-4"><dt>现场节点</dt><dd className={`font-semibold ${edgeResponse.error ? "text-rose-700" : "text-slate-800"}`}>{edgeSummary}</dd></div>
+                  <div className="flex items-center justify-between gap-4"><dt>已发布采集任务</dt><dd className={`font-semibold ${ingestionResponse.error ? "text-rose-700" : "text-slate-800"}`}>{ingestionSummary}</dd></div>
+                </dl>
+              )}
+              actions={(
+                <>
+                  <Link className="inline-flex min-h-10 items-center rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50" to="/edges">查看现场节点</Link>
+                  <Link className="inline-flex min-h-10 items-center rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700" to="/configuration/ingestion-tasks">配置数据源</Link>
+                </>
+              )}
+            />
+          )}
+          {rows.length > 0 && <Pagination
             page={page}
             pageSize={pageSize}
             total={data?.total ?? rows.length}
             onPageChange={value => { setPage(value); setQuery(makeProcessExecutionQuery(appliedFilters, value, pageSize)); }}
             onPageSizeChange={value => { setPageSize(value); setPage(1); setQuery(makeProcessExecutionQuery(appliedFilters, 1, value)); }}
-          />
+          />}
         </Card>
       )}
     </Page>

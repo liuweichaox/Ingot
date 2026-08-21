@@ -50,14 +50,9 @@ export default function AuthGate({ children }) {
   }
 
   async function logout() {
-    try {
-      await postJson("/api/v1/auth/logout", {});
-    } catch {
-
-    } finally {
-      setAuthToken(null);
-      setIdentity(null);
-    }
+    await postJson("/api/v1/auth/logout", {}).catch(() => null);
+    setAuthToken(null);
+    setIdentity(null);
   }
 
   if (checking) {

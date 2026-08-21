@@ -347,12 +347,14 @@ export function Textarea({ className, ...props }) {
   );
 }
 
-export function EmptyState({ title = "暂无数据", description = "数据到达后会自动显示在这里。" }) {
+export function EmptyState({ title = "暂无数据", description = "数据到达后会自动显示在这里。", actions, details }) {
   return (
     <div className="grid min-h-40 place-items-center rounded-xl border border-dashed border-slate-300 bg-slate-50/70 p-8 text-center">
-      <div>
-        <p className="font-medium text-slate-700">{title}</p>
-        <p className="mt-1 text-sm text-slate-500">{description}</p>
+      <div className="max-w-xl">
+        <p className="font-semibold text-slate-800">{title}</p>
+        <p className="mt-1 text-sm leading-6 text-slate-600">{description}</p>
+        {details && <div className="mt-4 text-left text-sm leading-6 text-slate-600">{details}</div>}
+        {actions && <div className="mt-5 flex flex-wrap justify-center gap-2">{actions}</div>}
       </div>
     </div>
   );

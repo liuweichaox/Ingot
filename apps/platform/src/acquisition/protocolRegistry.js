@@ -129,7 +129,7 @@ const httpPolling = {
     }
     const snapshotPath = (connection.snapshotPath || "").trim();
     if (!snapshotPath) errors.snapshotPath = "数据路径不能为空。";
-    else if (/^(?:[a-z][a-z0-9+.-]*:)?\/\
+    else if (/^(?:[a-z][a-z0-9+.-]*:)?\/\//i.test(snapshotPath) || snapshotPath.includes("\n") || snapshotPath.includes("\r"))
       errors.snapshotPath = "必须填写相对于设备基础地址的安全路径。";
     if (!(Number(connection.pollIntervalMs) >= 1)) errors.pollIntervalMs = "必须大于 0。";
     return errors;

@@ -38,25 +38,45 @@ export function ConfigurationHubPage() {
   const qualityResponse = useApi("/api/v1/inspection-plans");
   const scenarioResponse = useApi("/api/v1/scenario-packages");
   const readiness = [
-    ["数据标准", extractRows(modelResponse.data).some(item => item.status === "published") && extractRows(specificationResponse.data).some(item => item.status === "published"), "数据模型和工艺规范已发布", "发布数据模型和工艺规范"],
-    ["现场接入", extractRows(ingestionResponse.data).some(item => item.status === "published"), "设备接入任务已发布", "发布至少一个设备接入任务"],
-    ["分析规则", extractRows(analysisResponse.data).some(item => item.status === "published"), "运行分析方案已发布", "发布运行分析方案"],
-    ["质量规则", extractRows(definitionResponse.data).length > 0 && extractRows(qualityResponse.data).some(item => item.status === "published"), "检测定义和质量方案已就绪", "建立检测定义并发布质量方案"],
-    ["组合发布", extractRows(scenarioResponse.data).some(item => item.status === "published"), "工艺配置方案已发布", "发布工艺配置方案"],
-  ];
-  const readinessLoading = [modelResponse, specificationResponse, ingestionResponse, analysisResponse, definitionResponse, qualityResponse, scenarioResponse].some(item => item.loading && !item.data);
-  const readinessError = [modelResponse, specificationResponse, ingestionResponse, analysisResponse, definitionResponse, qualityResponse, scenarioResponse].find(item => item.error)?.error;
+    { title: "数据标准", ready: extractRows(modelResponse.data).some(item => item.status === "published") && extractRows(specificationResponse.data).some(item => item.status === "published"), readyHint: "数据模型和工艺规范已发布", pendingHint: "发布数据模型和工艺规范", to: "/configuration/process-data-models", action: "检查数据标准", responses: [modelResponse, specificationResponse] },
+    { title: "现场接入", ready: extractRows(ingestionResponse.data).some(item => item.status === "published"), readyHint: "设备接入任务已发布", pendingHint: "发布至少一个设备接入任务", to: "/configuration/ingestion-tasks", action: "配置现场接入", responses: [ingestionResponse] },
+    { title: "分析规则", ready: extractRows(analysisResponse.data).some(item => item.status === "published"), readyHint: "运行分析方案已发布", pendingHint: "发布运行分析方案", to: "/configuration/process-analysis-plans", action: "配置分析规则", responses: [analysisResponse] },
+    { title: "质量规则", ready: extractRows(definitionResponse.data).length > 0 && extractRows(qualityResponse.data).some(item => item.status === "published"), readyHint: "检测定义和质量方案已就绪", pendingHint: "建立检测定义并发布质量方案", to: "/configuration/quality-plans", action: "配置质量规则", responses: [definitionResponse, qualityResponse] },
+    { title: "组合发布", ready: extractRows(scenarioResponse.data).some(item => item.status === "published"), readyHint: "工艺配置方案已发布", pendingHint: "发布工艺配置方案", to: "/configuration/scenario-packages", action: "发布配置方案", responses: [scenarioResponse] },
+  ].map(item => ({
+    ...item,
+    loading: item.responses.some(response => response.loading && !response.data),
+    error: item.responses.find(response => response.error)?.error || "",
+  }));
+  const readinessLoading = readiness.some(item => item.loading);
+  const readinessError = readiness.find(item => item.error)?.error;
+  const readyCount = readiness.filter(item => item.ready).length;
   return (
     <Page title="配置总览" description="查看数据、接入、分析、质量和工装的准备状态。">
-      <Card title="当前准备度" description="汇总当前可用于生产运行和分析的配置。">
+      <Card
+        title="当前准备度"
+        description={readinessLoading ? "正在检查生产运行和分析所需配置。" : readinessError ? "部分配置状态暂时无法读取，请先恢复接口后重新检查。" : `已完成 ${readyCount}/${readiness.length} 项；按顺序补齐待完成项后再发布生产配置。`}
+        actions={!readinessLoading && <span className={`text-sm font-semibold ${readinessError ? "text-rose-700" : readyCount === readiness.length ? "text-emerald-700" : "text-amber-700"}`}>{readinessError ? "检查未完成" : readyCount === readiness.length ? "生产配置已就绪" : `还需完成 ${readiness.length - readyCount} 项`}</span>}
+      >
         {readinessError && <Alert tone="warning">部分准备度暂时无法读取：{readinessError}</Alert>}
+        <div className="mb-4 h-2 overflow-hidden rounded-full bg-slate-100" role="progressbar" aria-label="配置准备进度" aria-valuemin="0" aria-valuemax={readiness.length} aria-valuenow={readyCount}>
+          <div className={`h-full rounded-full transition-[width] ${readyCount === readiness.length ? "bg-emerald-600" : "bg-amber-500"}`} style={{ width: `${readinessLoading ? 0 : readyCount / readiness.length * 100}%` }} />
+        </div>
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-          {readiness.map(([title, ready, readyHint, pendingHint]) => (
-            <div key={title} className={`rounded-xl border p-4 ${ready ? "border-emerald-200 bg-emerald-50" : "border-amber-200 bg-amber-50"}`}>
-              <p className="flex items-center justify-between gap-2 font-semibold text-slate-950"><span>{title}</span><span className={`text-xs ${ready ? "text-emerald-700" : "text-amber-700"}`}>{readinessLoading ? "检查中" : ready ? "已准备" : "待完成"}</span></p>
-              <p className="mt-2 text-xs leading-5 text-slate-600">{ready ? readyHint : pendingHint}</p>
-            </div>
-          ))}
+          {readiness.map(item => {
+            const cardTone = item.error ? "border-rose-200 bg-rose-50" : item.ready ? "border-emerald-200 bg-emerald-50" : "border-amber-200 bg-amber-50";
+            const textTone = item.error ? "text-rose-700" : item.ready ? "text-emerald-700" : "text-amber-700";
+            const linkTone = item.error ? "text-rose-800 hover:text-rose-950" : item.ready ? "text-emerald-800 hover:text-emerald-950" : "text-amber-800 hover:text-amber-950";
+            const status = item.loading ? "检查中" : item.error ? "无法检查" : item.ready ? "已准备" : "待完成";
+            const hint = item.error ? "状态接口暂时不可用，请进入对应页面查看详情。" : item.ready ? item.readyHint : item.pendingHint;
+            return (
+              <div key={item.title} className={`flex min-h-40 flex-col rounded-xl border p-4 ${cardTone}`}>
+                <p className="flex items-center justify-between gap-2 font-semibold text-slate-950"><span>{item.title}</span><span className={`text-xs ${textTone}`}>{status}</span></p>
+                <p className="mt-2 flex-1 text-sm leading-6 text-slate-600">{hint}</p>
+                <Link to={item.to} className={`mt-3 inline-flex text-sm font-semibold ${linkTone}`}>{item.action} →</Link>
+              </div>
+            );
+          })}
         </div>
       </Card>
       <Card title="配置路径" description="按业务依赖完成新工艺配置。">

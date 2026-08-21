@@ -21,6 +21,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, Navigate, Route, Routes, useLocation, useNavigate } from "react-router";
 import * as Pages from "./pages";
 import { IngestionTaskPage, IngestionTasksPage } from "./acquisition/IngestionTaskPage";
+import { extractRows, useApi } from "./hooks/useApi";
+import { edgeStatus } from "./pages/shared";
 import { cx, Input, ToastHost } from "./ui/components";
 import { formatRoleSummary, formatSiteScope } from "./auth/identityPresentation";
 
@@ -186,13 +188,13 @@ function SidebarSection({ section, activeSectionId, activeNavigationPath, expand
         <div className="ml-5 mt-1 border-l border-slate-200 pl-3">
           {section.groups.map((group, groupIndex) => (
             <div key={group.label || groupIndex} className="mb-2 grid gap-0.5 last:mb-0">
-              {section.groups.length > 1 && <p className="px-3 pb-1 pt-2 text-[10px] font-semibold tracking-wide text-slate-400">{group.label}</p>}
+              {section.groups.length > 1 && <p className="px-3 pb-1 pt-2 text-[11px] font-semibold tracking-wide text-slate-500">{group.label}</p>}
               {group.items.map(([path, label]) => (
                 <Link
                   key={path}
                   to={path}
                   onClick={onNavigate}
-                  className={cx("rounded-lg px-3 py-2 text-[13px] leading-5", path === activeNavigationPath ? "bg-blue-50 font-medium text-blue-700" : "text-slate-600 hover:bg-slate-50 hover:text-slate-950")}
+                  className={cx("rounded-lg px-3 py-2 text-sm leading-5", path === activeNavigationPath ? "bg-blue-50 font-medium text-blue-700" : "text-slate-600 hover:bg-slate-50 hover:text-slate-950")}
                 >
                   {label}
                 </Link>
@@ -234,6 +236,33 @@ function SidebarNavigation({ activeSectionId, activeNavigationPath, expandedSect
         />
       </div>
     </>
+  );
+}
+
+export function SystemStatusIndicator() {
+  const { data, loading, error } = useApi("/api/edges", { interval: 30000 });
+  const edges = extractRows(data);
+  const online = edges.filter(item => edgeStatus(item) === "online").length;
+  const needsAttention = edges.filter(item => edgeStatus(item) !== "online").length;
+  const presentation = error
+    ? { label: "状态不可用", detail: "平台状态暂时无法读取", dot: "bg-rose-500", text: "text-rose-700", background: "hover:bg-rose-50" }
+    : loading && !data
+      ? { label: "检查中", detail: "正在检查平台和现场节点", dot: "bg-slate-400", text: "text-slate-600", background: "hover:bg-slate-50" }
+      : edges.length === 0
+        ? { label: "待接入", detail: "平台正常，尚未登记现场节点", dot: "bg-amber-500", text: "text-amber-700", background: "hover:bg-amber-50" }
+        : needsAttention > 0
+          ? { label: `${needsAttention} 项关注`, detail: `平台正常，现场节点 ${online}/${edges.length} 在线`, dot: "bg-amber-500", text: "text-amber-700", background: "hover:bg-amber-50" }
+          : { label: "运行正常", detail: `平台正常，现场节点 ${online}/${edges.length} 在线`, dot: "bg-emerald-500", text: "text-emerald-700", background: "hover:bg-emerald-50" };
+  return (
+    <Link
+      to="/platform-metrics"
+      className={cx("flex shrink-0 items-center gap-2 border-l border-slate-100 px-3 text-sm font-medium sm:px-4", presentation.text, presentation.background)}
+      aria-label={`系统状态：${presentation.detail}`}
+      title={presentation.detail}
+    >
+      <span className={cx("size-2.5 rounded-full ring-4 ring-current/10", presentation.dot)} aria-hidden="true" />
+      <span className="hidden xl:inline">{presentation.label}</span>
+    </Link>
   );
 }
 
@@ -308,7 +337,7 @@ export default function App({ identity, logout }) {
             <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-amber-50 ring-1 ring-amber-200">
               <img src="/ingot-mark.svg" alt="" className="size-7" />
             </span>
-            {!sidebarCollapsed && <span className="grid min-w-0"><strong className="text-base leading-5 text-slate-950">Ingot</strong><small className="truncate text-[10px] text-slate-500">工艺追因与优化系统</small></span>}
+            {!sidebarCollapsed && <span className="grid min-w-0"><strong className="text-base leading-5 text-slate-950">Ingot</strong><small className="truncate text-[11px] text-slate-500">工艺追因与优化系统</small></span>}
           </button>
           {!sidebarCollapsed && <button type="button" className="grid size-9 place-items-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700" onClick={() => setSidebarCollapsed(true)} aria-label="收起侧边栏"><ChevronDoubleLeftIcon className="size-4.5" /></button>}
         </div>
@@ -334,6 +363,7 @@ export default function App({ identity, logout }) {
             <p className="mt-1 hidden truncate text-xs text-slate-500 sm:block">{page[1]}</p>
           </div>
         </div>
+        <SystemStatusIndicator />
         <button className="flex items-center gap-2 border-l border-slate-100 px-3 text-sm text-slate-600 hover:bg-slate-50 sm:px-4" onClick={() => setGlobalSearchOpen(true)} aria-label="打开功能搜索" aria-keyshortcuts={usesAppleShortcut ? "Meta+K" : "Control+K"}>
           <MagnifyingGlassIcon className="size-5" /><span className="hidden md:inline">功能搜索</span><kbd className="hidden rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] text-slate-400 xl:inline">{searchShortcutLabel}</kbd>
         </button>
@@ -372,7 +402,7 @@ export default function App({ identity, logout }) {
         <DialogBackdrop className="fixed inset-0 bg-slate-950/30" />
         <DialogPanel className="fixed inset-y-0 left-0 flex w-80 max-w-[88vw] flex-col bg-white shadow-2xl">
           <div className="flex h-16 items-center justify-between border-b border-slate-200 px-4">
-            <button className="flex items-center gap-3 text-left" onClick={() => { setMobileOpen(false); navigate("/workbench"); }}><img src="/ingot-mark.svg" alt="" className="size-8" /><span><strong className="block">Ingot</strong><small className="text-[10px] text-slate-500">工艺追因与优化系统</small></span></button>
+            <button className="flex items-center gap-3 text-left" onClick={() => { setMobileOpen(false); navigate("/workbench"); }}><img src="/ingot-mark.svg" alt="" className="size-8" /><span><strong className="block">Ingot</strong><small className="text-[11px] text-slate-500">工艺追因与优化系统</small></span></button>
             <button className="grid size-9 place-items-center rounded-lg hover:bg-slate-100" onClick={() => setMobileOpen(false)} aria-label="关闭模块导航">
               <XMarkIcon className="size-5" />
             </button>

@@ -48,7 +48,7 @@ test("configuration center presents dependencies before final process configurat
   assert.match(pages, /运行数据来源/);
   assert.match(pages, /生产准备或 MES 写入不可变生产上下文/);
   assert.match(pages, /当前准备度/);
-  assert.match(pages, /汇总当前可用于生产运行和分析的配置/);
+  assert.match(pages, /按顺序补齐待完成项后再发布生产配置/);
   assert.doesNotMatch(pages, /工艺配置方案是最后一步，不是起点|不需要猜应该先打开哪个菜单/);
   assert.match(pages, /canWrite \? <Button variant="primary" onClick=\{openCreate\}/);
   assert.match(ingestionTasks, /!canWrite \|\| managedByBinding/);
