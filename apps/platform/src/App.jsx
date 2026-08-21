@@ -206,33 +206,20 @@ function SidebarSection({ section, activeSectionId, activeNavigationPath, expand
 
 function SidebarNavigation({ activeSectionId, activeNavigationPath, expandedSectionId, compact = false, onToggle, onNavigate }) {
   return (
-    <>
-      <nav className={cx("grid flex-1 content-start overflow-y-auto", compact ? "gap-1 p-3" : "gap-1 p-3")} aria-label="主导航">
-        {sections.map(item => (
-          <SidebarSection
-            key={item.id}
-            section={item}
-            activeSectionId={activeSectionId}
-            activeNavigationPath={activeNavigationPath}
-            expanded={expandedSectionId === item.id}
-            compact={compact}
-            onToggle={onToggle}
-            onNavigate={onNavigate}
-          />
-        ))}
-      </nav>
-      <div className="border-t border-slate-200 p-3">
+    <nav className={cx("grid flex-1 content-start overflow-y-auto", compact ? "gap-1 p-3" : "gap-1 p-3")} aria-label="主导航">
+      {allSections.map(item => (
         <SidebarSection
-          section={systemSection}
+          key={item.id}
+          section={item}
           activeSectionId={activeSectionId}
           activeNavigationPath={activeNavigationPath}
-          expanded={expandedSectionId === systemSection.id}
+          expanded={expandedSectionId === item.id}
           compact={compact}
           onToggle={onToggle}
           onNavigate={onNavigate}
         />
-      </div>
-    </>
+      ))}
+    </nav>
   );
 }
 
