@@ -171,8 +171,8 @@ export function IngestionTaskPage({ canWrite = true }) {
     }
   }
 
-  if (loading) return <Page title="设备接入"><Card><p className="text-sm text-slate-500">正在载入配置…</p></Card></Page>;
-  if (loadError) return <Page title="设备接入"><Alert tone="danger">{loadError}</Alert></Page>;
+  if (loading) return <Page title="采集配置"><Card><p className="text-sm text-slate-500">正在载入配置…</p></Card></Page>;
+  if (loadError) return <Page title="采集配置"><Alert tone="danger">{loadError}</Alert></Page>;
 
   return (
     <Page
@@ -614,7 +614,7 @@ export function IngestionTasksPage({ canWrite = true }) {
     try {
       await deleteJson(`${ENDPOINT}/${encodeURIComponent(row.taskId)}/${row.version}`);
       await reload?.();
-      notify("设备接入草稿已删除。");
+      notify("采集配置草稿已删除。");
     } catch (requestError) {
       notify(requestError.message, "danger");
     }
@@ -622,7 +622,7 @@ export function IngestionTasksPage({ canWrite = true }) {
 
   return (
     <Page
-      title="设备接入"
+      title="采集配置"
       description="选择采集节点和通信驱动，把设备点位映射到工艺变量。"
       actions={
         <div className="flex items-center gap-2">

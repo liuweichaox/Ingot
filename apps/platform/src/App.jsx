@@ -44,7 +44,7 @@ const sections = [
   },
   {
     id: "equipment-connection", label: "设备接入", icon: SignalIcon, path: "/edges", groups: [
-      { label: "现场接入", items: [["/edges", "现场节点"], ["/configuration/ingestion-tasks", "设备接入"]] },
+      { label: "现场接入", items: [["/edges", "现场节点"], ["/configuration/ingestion-tasks", "采集配置"]] },
     ],
   },
   {
@@ -68,14 +68,16 @@ const sections = [
   },
   {
     id: "optimization", label: "工艺研发", icon: BeakerIcon, path: "/research-projects", groups: [
-      { items: [["/research-projects", "研发项目"], ["/research-assets", "研发资产"]] },
+      { label: "项目与资产", items: [["/research-projects", "研发项目"], ["/research-assets", "研发资产"]] },
     ],
   },
 ];
 
 const systemSection = {
   id: "system", label: "系统管理", icon: Cog6ToothIcon, path: "/identity/users", groups: [
-    { items: [["/identity/users", "用户与权限"], ["/platform-metrics", "平台状态"], ["/logs", "平台日志"], ["/golden-questions", "助手评测"]] },
+    { label: "身份与权限", items: [["/identity/users", "用户与权限"]] },
+    { label: "平台运维", items: [["/platform-metrics", "平台状态"], ["/logs", "平台日志"]] },
+    { label: "助手治理", items: [["/golden-questions", "助手评测"]] },
   ],
 };
 
@@ -104,7 +106,7 @@ const pageDetails = {
   "/configuration/process-analysis-plans": ["运行分析方案", "版本化定义同类比较条件、对齐方式、质量分组和数据项"],
   "/configuration/process-data-models": ["工艺数据模型", "定义工艺变量、阶段号和控制参数，供设备点位统一映射"],
   "/configuration/process-specifications": ["工艺规范", "维护引用数据模型的完整工艺规范版本"],
-  "/configuration/ingestion-tasks": ["设备接入", "选择采集节点和通信驱动，将设备点位映射到工艺变量"],
+  "/configuration/ingestion-tasks": ["采集配置", "选择采集节点和通信驱动，将设备点位映射到工艺变量"],
   "/configuration/inspection-definitions": ["检测定义", "定义要检测的特性、录入类型和判定规则"],
   "/configuration/quality-plans": ["质量方案", "配置产品适用的检测项目与复核规则"],
   "/configuration/component-types": ["组件分类", "维护模芯、模架等物理资产类别；上模和下模由装配位置决定"],
@@ -168,7 +170,7 @@ function SidebarSection({ section, activeSectionId, activeNavigationPath, expand
   return (
     <div>
       <div className={cx("flex items-center rounded-xl transition", active ? "bg-blue-50 text-blue-700" : "text-slate-700 hover:bg-slate-50")}>
-        <Link to={section.path} onClick={onNavigate} className="flex min-w-0 flex-1 items-center gap-3 px-3 py-2.5 text-sm font-semibold">
+        <Link to={section.path} onClick={onNavigate} className="flex min-w-0 flex-1 items-center gap-3 px-3 py-2.5 text-[15px] font-semibold leading-5">
           <Icon className="size-5 shrink-0" />
           <span className="truncate">{section.label}</span>
         </Link>
@@ -185,21 +187,16 @@ function SidebarSection({ section, activeSectionId, activeNavigationPath, expand
         )}
       </div>
       {hasNestedItems && expanded && (
-        <div className="ml-5 mt-1 border-l border-slate-200 pl-3">
-          {section.groups.map((group, groupIndex) => (
-            <div key={group.label || groupIndex} className="mb-2 grid gap-0.5 last:mb-0">
-              {section.groups.length > 1 && <p className="px-3 pb-1 pt-2 text-[11px] font-semibold tracking-wide text-slate-500">{group.label}</p>}
-              {group.items.map(([path, label]) => (
-                <Link
-                  key={path}
-                  to={path}
-                  onClick={onNavigate}
-                  className={cx("rounded-lg px-3 py-2 text-sm leading-5", path === activeNavigationPath ? "bg-blue-50 font-medium text-blue-700" : "text-slate-600 hover:bg-slate-50 hover:text-slate-950")}
-                >
-                  {label}
-                </Link>
-              ))}
-            </div>
+        <div className="mt-1 grid gap-1">
+          {items.map(([path, label]) => (
+            <Link
+              key={path}
+              to={path}
+              onClick={onNavigate}
+              className={cx("flex min-h-10 items-center rounded-lg py-2 pl-11 pr-3 text-sm font-medium leading-5", path === activeNavigationPath ? "bg-blue-50 font-semibold text-blue-700" : "text-slate-600 hover:bg-slate-50 hover:text-slate-950")}
+            >
+              {label}
+            </Link>
           ))}
         </div>
       )}
@@ -207,7 +204,7 @@ function SidebarSection({ section, activeSectionId, activeNavigationPath, expand
   );
 }
 
-function SidebarNavigation({ activeSectionId, activeNavigationPath, expandedSectionIds, compact = false, onToggle, onNavigate }) {
+function SidebarNavigation({ activeSectionId, activeNavigationPath, expandedSectionId, compact = false, onToggle, onNavigate }) {
   return (
     <>
       <nav className={cx("grid flex-1 content-start overflow-y-auto", compact ? "gap-1 p-3" : "gap-1 p-3")} aria-label="主导航">
@@ -217,7 +214,7 @@ function SidebarNavigation({ activeSectionId, activeNavigationPath, expandedSect
             section={item}
             activeSectionId={activeSectionId}
             activeNavigationPath={activeNavigationPath}
-            expanded={expandedSectionIds.has(item.id)}
+            expanded={expandedSectionId === item.id}
             compact={compact}
             onToggle={onToggle}
             onNavigate={onNavigate}
@@ -229,7 +226,7 @@ function SidebarNavigation({ activeSectionId, activeNavigationPath, expandedSect
           section={systemSection}
           activeSectionId={activeSectionId}
           activeNavigationPath={activeNavigationPath}
-          expanded={expandedSectionIds.has(systemSection.id)}
+          expanded={expandedSectionId === systemSection.id}
           compact={compact}
           onToggle={onToggle}
           onNavigate={onNavigate}
@@ -245,14 +242,14 @@ export function SystemStatusIndicator() {
   const online = edges.filter(item => edgeStatus(item) === "online").length;
   const needsAttention = edges.filter(item => edgeStatus(item) !== "online").length;
   const presentation = error
-    ? { label: "状态不可用", detail: "平台状态暂时无法读取", dot: "bg-rose-500", text: "text-rose-700", background: "hover:bg-rose-50" }
+    ? { label: "状态不可用", compactLabel: "!", detail: "平台状态暂时无法读取", dot: "bg-rose-500", text: "text-rose-700", background: "hover:bg-rose-50" }
     : loading && !data
-      ? { label: "检查中", detail: "正在检查平台和现场节点", dot: "bg-slate-400", text: "text-slate-600", background: "hover:bg-slate-50" }
+      ? { label: "检查中", compactLabel: "…", detail: "正在检查平台和现场节点", dot: "bg-slate-400", text: "text-slate-600", background: "hover:bg-slate-50" }
       : edges.length === 0
-        ? { label: "待接入", detail: "平台正常，尚未登记现场节点", dot: "bg-amber-500", text: "text-amber-700", background: "hover:bg-amber-50" }
+        ? { label: "待接入", compactLabel: "0", detail: "平台正常，尚未登记现场节点", dot: "bg-amber-500", text: "text-amber-700", background: "hover:bg-amber-50" }
         : needsAttention > 0
-          ? { label: `${needsAttention} 项关注`, detail: `平台正常，现场节点 ${online}/${edges.length} 在线`, dot: "bg-amber-500", text: "text-amber-700", background: "hover:bg-amber-50" }
-          : { label: "运行正常", detail: `平台正常，现场节点 ${online}/${edges.length} 在线`, dot: "bg-emerald-500", text: "text-emerald-700", background: "hover:bg-emerald-50" };
+          ? { label: `${needsAttention} 项关注`, compactLabel: String(needsAttention), detail: `平台正常，现场节点 ${online}/${edges.length} 在线`, dot: "bg-amber-500", text: "text-amber-700", background: "hover:bg-amber-50" }
+          : { label: "运行正常", compactLabel: "✓", detail: `平台正常，现场节点 ${online}/${edges.length} 在线`, dot: "bg-emerald-500", text: "text-emerald-700", background: "hover:bg-emerald-50" };
   return (
     <Link
       to="/platform-metrics"
@@ -261,6 +258,7 @@ export function SystemStatusIndicator() {
       title={presentation.detail}
     >
       <span className={cx("size-2.5 rounded-full ring-4 ring-current/10", presentation.dot)} aria-hidden="true" />
+      <span className="text-xs font-bold md:hidden" aria-hidden="true">{presentation.compactLabel}</span>
       <span className="hidden xl:inline">{presentation.label}</span>
     </Link>
   );
@@ -272,7 +270,7 @@ export default function App({ identity, logout }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [globalSearchOpen, setGlobalSearchOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => typeof window !== "undefined" && window.localStorage.getItem("ingot.sidebar.collapsed") === "true");
-  const [expandedSectionIds, setExpandedSectionIds] = useState(() => new Set(["overview"]));
+  const [expandedSectionId, setExpandedSectionId] = useState("overview");
   const displayName = identity?.displayName || identity?.username || "当前操作员";
   const userInitials = displayName.trim().slice(0, 2).toUpperCase();
   const canConfigure = (identity?.roles || []).some(role => role === "process.engineer" || role === "platform.admin");
@@ -307,18 +305,13 @@ export default function App({ identity, logout }) {
     .filter(path => path === location.pathname || location.pathname.startsWith(`${path}/`))
     .sort((left, right) => right.length - left.length)[0], [location.pathname, section]);
   useEffect(() => {
-    setExpandedSectionIds(current => current.has(section.id) ? current : new Set([...current, section.id]));
+    setExpandedSectionId(section.id);
   }, [section.id]);
   useEffect(() => {
     window.localStorage.setItem("ingot.sidebar.collapsed", String(sidebarCollapsed));
   }, [sidebarCollapsed]);
   function toggleSection(sectionId) {
-    setExpandedSectionIds(current => {
-      const next = new Set(current);
-      if (next.has(sectionId)) next.delete(sectionId);
-      else next.add(sectionId);
-      return next;
-    });
+    setExpandedSectionId(current => current === sectionId ? null : sectionId);
   }
   const page = location.pathname.startsWith("/process-executions/")
     ? ["运行详情", "查看单次生产运行的过程、质量和数据完整性"]
@@ -344,7 +337,7 @@ export default function App({ identity, logout }) {
         <SidebarNavigation
           activeSectionId={section.id}
           activeNavigationPath={activeNavigationPath}
-          expandedSectionIds={expandedSectionIds}
+          expandedSectionId={expandedSectionId}
           compact={sidebarCollapsed}
           onToggle={toggleSection}
         />
@@ -407,7 +400,7 @@ export default function App({ identity, logout }) {
               <XMarkIcon className="size-5" />
             </button>
           </div>
-          <SidebarNavigation activeSectionId={section.id} activeNavigationPath={activeNavigationPath} expandedSectionIds={expandedSectionIds} onToggle={toggleSection} onNavigate={() => setMobileOpen(false)} />
+          <SidebarNavigation activeSectionId={section.id} activeNavigationPath={activeNavigationPath} expandedSectionId={expandedSectionId} onToggle={toggleSection} onNavigate={() => setMobileOpen(false)} />
         </DialogPanel>
       </Dialog>
       <GlobalSearchDialog

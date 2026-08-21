@@ -94,6 +94,9 @@ test("navigation and overlays are accessible Headless UI components", () => {
   assert.match(app, /id: "overview"[\s\S]*id: "process-definition"[\s\S]*id: "equipment-connection"[\s\S]*id: "evidence"[\s\S]*id: "quality"[\s\S]*id: "diagnosis"[\s\S]*id: "optimization"/);
   assert.match(app, /const systemSection = \{/);
   assert.match(app, /section=\{systemSection\}/);
+  assert.match(app, /id: "equipment-connection"[\s\S]*label: "现场接入", items: \[\["\/edges", "现场节点"\], \["\/configuration\/ingestion-tasks", "采集配置"\]\]/);
+  assert.match(app, /id: "optimization"[\s\S]*label: "项目与资产", items: \[\["\/research-projects", "研发项目"\], \["\/research-assets", "研发资产"\]\]/);
+  assert.match(app, /id: "system"[\s\S]*label: "身份与权限"[\s\S]*label: "平台运维"[\s\S]*label: "助手治理"/);
   assert.match(app, /\["\/chat", "分析助手"\]/);
   assert.match(app, /items: \[\["\/research-projects", "研发项目"\], \["\/research-assets", "研发资产"\]\]/);
   assert.match(app, /\["\/research-assets", "研发资产"\]/);
@@ -109,6 +112,15 @@ test("navigation and overlays are accessible Headless UI components", () => {
   assert.match(app, /ingot\.sidebar\.collapsed/);
   assert.match(app, /function SidebarNavigation/);
   assert.match(app, /function SidebarSection/);
+  assert.doesNotMatch(app, /function SidebarGroup/);
+  assert.doesNotMatch(app, /group\.label/);
+  assert.match(app, /items\.map\(\(\[path, label\]\) =>/);
+  assert.match(app, /expanded=\{expandedSectionId === item\.id\}/);
+  assert.match(app, /setExpandedSectionId\(current => current === sectionId \? null : sectionId\)/);
+  assert.match(app, /min-h-10[^"]*pl-11[^"]*text-sm[^"]*font-medium/);
+  assert.doesNotMatch(app, /pl-14/);
+  assert.doesNotMatch(app, /border-l border-slate-200/);
+  assert.match(app, /text-\[15px\] font-semibold leading-5/);
   assert.match(app, /const activeNavigationPath = useMemo/);
   assert.match(app, /sidebarCollapsed \? "w-18" : "w-64"/);
   assert.match(app, /sidebarCollapsed \? "lg:ml-18" : "lg:ml-64"/);

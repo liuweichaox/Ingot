@@ -59,6 +59,7 @@ test("operations retain server pagination and resumable live events", () => {
   assert.match(pages, /makeProcessExecutionQuery\(appliedFilters, value, pageSize\)/);
   assert.match(pages, /makeEventQuery\(appliedFilters, value, pageSize\)/);
   assert.match(pages, /Object\.entries\(appliedFilters\)/);
+  assert.match(pages, /更多筛选/);
   assert.match(pages, /afterIngestId/);
   assert.match(pages, /streamSse\(`\/api\/v1\/events\/stream/);
   assert.match(pages, /lastEventId: cursor/);
@@ -147,7 +148,7 @@ test("destructive workflows use the accessible product confirmation dialog", () 
   assert.match(ingestionTasks, /removeReusableDraft/);
   assert.match(ingestionTasks, /待完成或清理的复用草稿/);
   assert.match(ingestionTasks, /ingestion-configuration\/\$\{isTemplate \? "templates" : "data-sources"\}/);
-  assert.match(ingestionTasks, /设备接入草稿已删除/);
+  assert.match(ingestionTasks, /采集配置草稿已删除/);
   assert.match(ingestionTasks, /row\.status === "draft"/);
   assert.doesNotMatch(pages, /window\.confirm/);
   assert.doesNotMatch(ingestionTasks, /window\.confirm/);

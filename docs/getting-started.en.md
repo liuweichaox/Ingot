@@ -87,7 +87,7 @@ After creating an R&D project, complete “Phase 0: preregistration and data bas
 
 ## 4. Connect data sources
 
-Open Process definition → Configuration overview and follow the dependency order shown there: data standards, field integration, decision rules, tooling structure, and the process-configuration package. Complete equipment integration under Data and connectivity → Equipment integration:
+Open Process definition → Configuration overview and follow the dependency order shown there: data standards, field integration, decision rules, tooling structure, and the process-configuration package. Connect data sources under Equipment connectivity → Acquisition configuration:
 
 1. Register the edge node and equipment identity.
 2. Select a protocol and enter connection details.

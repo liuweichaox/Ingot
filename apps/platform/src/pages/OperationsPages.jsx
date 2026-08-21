@@ -6,7 +6,7 @@ import { getJson } from "../api/http";
 import { processCurveTraces } from "../charts/chartAdapters";
 import { extractRows, useApi } from "../hooks/useApi";
 import { useProcessCurves } from "../hooks/useProcessCurves";
-import { Alert, Badge, Button, Card, DataTable, EmptyState, Field, Input, Metric, Pagination, Page, Select, StatusBadge } from "../ui/components";
+import { Alert, Badge, Button, Card, DataTable, EmptyState, Field, Input, Metric, Pagination, Page, Select, StatusBadge, cx } from "../ui/components";
 import { formatTime, formatInteger, formatMeasurementValue, formatDuration, edgeStatus, eventTypeLabel, LoadingCard } from "./shared";
 import PlotlyChart from "../components/PlotlyChart";
 
@@ -189,6 +189,7 @@ export function ProcessExecutionsPage() {
     executionId: params.get("executionId") || "",
   });
   const [appliedFilters, setAppliedFilters] = useState(filters);
+  const [advancedFiltersOpen, setAdvancedFiltersOpen] = useState(() => Boolean(params.get("equipmentId") || params.get("edgeId") || params.get("externalBatchRef") || params.get("outputItemId")));
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
   const [query, setQuery] = useState(() => makeProcessExecutionQuery(filters, 1, 50));
@@ -215,11 +216,14 @@ export function ProcessExecutionsPage() {
       <Card title="筛选条件">
         <form className="grid gap-3 md:grid-cols-2 xl:grid-cols-[140px_repeat(5,minmax(0,1fr))_auto]" onSubmit={event => { event.preventDefault(); setAppliedFilters(filters); setPage(1); setQuery(makeProcessExecutionQuery(filters, 1, pageSize)); }}>
           <Field label="状态"><Select value={filters.status} onChange={event => setFilters({ ...filters, status: event.target.value })}><option value="all">全部</option><option value="active">进行中</option><option value="completed">已完成</option></Select></Field>
-          <Field label="Edge"><Input value={filters.edgeId} onChange={event => setFilters({ ...filters, edgeId: event.target.value })} placeholder="现场节点编号" /></Field>
-          <Field label="设备"><Input value={filters.equipmentId} onChange={event => setFilters({ ...filters, equipmentId: event.target.value })} placeholder="设备编号" /></Field>
-          <Field label="生产批次"><Input value={filters.externalBatchRef} onChange={event => setFilters({ ...filters, externalBatchRef: event.target.value })} placeholder="跨设备批次编号" /></Field>
-          <Field label="工件"><Input value={filters.outputItemId} onChange={event => setFilters({ ...filters, outputItemId: event.target.value })} placeholder="跨工序工件编号" /></Field>
+          <div className={cx("gap-3 md:col-span-2 md:grid-cols-2 xl:contents", advancedFiltersOpen ? "grid" : "hidden xl:contents")}>
+            <Field label="Edge"><Input value={filters.edgeId} onChange={event => setFilters({ ...filters, edgeId: event.target.value })} placeholder="现场节点编号" /></Field>
+            <Field label="设备"><Input value={filters.equipmentId} onChange={event => setFilters({ ...filters, equipmentId: event.target.value })} placeholder="设备编号" /></Field>
+            <Field label="生产批次"><Input value={filters.externalBatchRef} onChange={event => setFilters({ ...filters, externalBatchRef: event.target.value })} placeholder="跨设备批次编号" /></Field>
+            <Field label="工件"><Input value={filters.outputItemId} onChange={event => setFilters({ ...filters, outputItemId: event.target.value })} placeholder="跨工序工件编号" /></Field>
+          </div>
           <Field label="运行号"><Input value={filters.executionId} onChange={event => setFilters({ ...filters, executionId: event.target.value })} placeholder="精确运行号" /></Field>
+          <Button className="justify-center xl:hidden" type="button" onClick={() => setAdvancedFiltersOpen(current => !current)}>{advancedFiltersOpen ? "收起筛选" : "更多筛选"}</Button>
           <Button className="self-end" variant="primary" type="submit"><MagnifyingGlassIcon className="size-4" />查询</Button>
         </form>
       </Card>

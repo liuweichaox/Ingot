@@ -3,7 +3,7 @@ import { Link } from "react-router";
 import { deleteJson, postJson } from "../api/http";
 import { createRegistryBusinessForm, RegistryBusinessEditor, registryBusinessPayload, registryBusinessValidation } from "../components/RegistryBusinessEditor";
 import { extractRows, useApi } from "../hooks/useApi";
-import { Alert, Button, Card, DataTable, Drawer, Field, Input, Page, Select, StatusBadge, Textarea, WorkflowGuide, notify, useConfirmDialog } from "../ui/components";
+import { Alert, Button, Card, DataTable, Drawer, EmptyState, Field, Input, Page, Select, StatusBadge, Textarea, WorkflowGuide, notify, useConfirmDialog } from "../ui/components";
 import { formatTime, emptyInspectionCharacteristic, inspectionDefinitionForm, inspectionDefinitionPayload, inspectionDefinitionValidation, inspectionInputTypes, LoadingCard } from "./shared";
 
 const configurationJourney = [
@@ -13,7 +13,7 @@ const configurationJourney = [
   },
   {
     number: "2", title: "连接现场数据", description: "登记现场节点，把 PLC、仪器或系统点位映射到标准数据项。",
-    links: [["/edges", "现场节点"], ["/configuration/ingestion-tasks", "设备接入"]],
+    links: [["/edges", "现场节点"], ["/configuration/ingestion-tasks", "采集配置"]],
   },
   {
     number: "3", title: "定义判断规则", description: "决定哪些运行可以比较、质量如何判定，以及缺什么数据时应拒绝分析。",
@@ -39,7 +39,7 @@ export function ConfigurationHubPage() {
   const scenarioResponse = useApi("/api/v1/scenario-packages");
   const readiness = [
     { title: "数据标准", ready: extractRows(modelResponse.data).some(item => item.status === "published") && extractRows(specificationResponse.data).some(item => item.status === "published"), readyHint: "数据模型和工艺规范已发布", pendingHint: "发布数据模型和工艺规范", to: "/configuration/process-data-models", action: "检查数据标准", responses: [modelResponse, specificationResponse] },
-    { title: "现场接入", ready: extractRows(ingestionResponse.data).some(item => item.status === "published"), readyHint: "设备接入任务已发布", pendingHint: "发布至少一个设备接入任务", to: "/configuration/ingestion-tasks", action: "配置现场接入", responses: [ingestionResponse] },
+    { title: "现场接入", ready: extractRows(ingestionResponse.data).some(item => item.status === "published"), readyHint: "采集配置已发布", pendingHint: "发布至少一个采集配置", to: "/configuration/ingestion-tasks", action: "配置数据采集", responses: [ingestionResponse] },
     { title: "分析规则", ready: extractRows(analysisResponse.data).some(item => item.status === "published"), readyHint: "运行分析方案已发布", pendingHint: "发布运行分析方案", to: "/configuration/process-analysis-plans", action: "配置分析规则", responses: [analysisResponse] },
     { title: "质量规则", ready: extractRows(definitionResponse.data).length > 0 && extractRows(qualityResponse.data).some(item => item.status === "published"), readyHint: "检测定义和质量方案已就绪", pendingHint: "建立检测定义并发布质量方案", to: "/configuration/quality-plans", action: "配置质量规则", responses: [definitionResponse, qualityResponse] },
     { title: "组合发布", ready: extractRows(scenarioResponse.data).some(item => item.status === "published"), readyHint: "工艺配置方案已发布", pendingHint: "发布工艺配置方案", to: "/configuration/scenario-packages", action: "发布配置方案", responses: [scenarioResponse] },
@@ -70,7 +70,7 @@ export function ConfigurationHubPage() {
             const status = item.loading ? "检查中" : item.error ? "无法检查" : item.ready ? "已准备" : "待完成";
             const hint = item.error ? "状态接口暂时不可用，请进入对应页面查看详情。" : item.ready ? item.readyHint : item.pendingHint;
             return (
-              <div key={item.title} className={`flex min-h-40 flex-col rounded-xl border p-4 ${cardTone}`}>
+              <div key={item.title} className={`flex flex-col rounded-xl border p-4 sm:min-h-40 ${cardTone}`}>
                 <p className="flex items-center justify-between gap-2 font-semibold text-slate-950"><span>{item.title}</span><span className={`text-xs ${textTone}`}>{status}</span></p>
                 <p className="mt-2 flex-1 text-sm leading-6 text-slate-600">{hint}</p>
                 <Link to={item.to} className={`mt-3 inline-flex text-sm font-semibold ${linkTone}`}>{item.action} →</Link>
@@ -96,7 +96,7 @@ export function ConfigurationHubPage() {
       <Card title="运行数据来源" description="确认分析所需身份、生产、工装和覆盖率数据。">
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           {[
-            ["设备与运行身份", "由设备事件、现场节点和设备接入映射提供。", "/configuration/ingestion-tasks", "检查设备接入"],
+            ["设备与运行身份", "由设备事件、现场节点和采集配置映射提供。", "/configuration/ingestion-tasks", "检查采集配置"],
             ["产品、工艺、材料与批次", "由生产准备或 MES 写入不可变生产上下文。", "/production/changeover", "检查生产上下文"],
             ["实际装机工装", "由工装装卸记录在运行开始时绑定。", "/production/tooling-installations", "检查工装装卸"],
             ["字段覆盖率", "由历史已完成运行计算；覆盖不足时可禁止分析或建模。", "/data-quality", "检查数据可信度"],
@@ -324,12 +324,16 @@ function RegistryPage({ definition, canWrite = true }) {
       {(error || (!open && editorError)) && <Alert tone="danger">{error || editorError}</Alert>}
       {loading && !data ? <LoadingCard /> : (
         <Card title={`${definition.title}列表`} description={`共 ${data?.total ?? rows.length} 条记录`}>
-          <DataTable
+          {rows.length ? <DataTable
             rows={rows}
             keyField={definition.key}
             getRowKey={row => `${row[definition.key]}:${row.version ?? 1}`}
             columns={columns}
-          />
+          /> : <EmptyState
+            title={`还没有${definition.title}`}
+            description={canWrite ? `创建第一个${definition.title}后，即可在后续配置和生产流程中引用。` : "当前岗位只有查看权限，请联系工艺工程师或平台管理员完成配置。"}
+            actions={canWrite && <Button variant="primary" onClick={openCreate}>{definition.createLabel}</Button>}
+          />}
         </Card>
       )}
       <Drawer
