@@ -40,18 +40,18 @@ The computer organizes evidence, computes, and proposes. Process engineers frame
 ## One complete loop
 
 ```text
-Define process → Connect equipment → Collect production data → Close the data loop → Diagnose → Optimize
-      ↑                                                                                       ↓
-      └──────────── validated process specifications, operating regions, and knowledge return to production ───┘
+Process configuration → Field integration → Production runs → Quality management → Diagnosis → Process R&D
+        ↑                                                                                              ↓
+        └──────── validated process specifications, operating regions, and knowledge return to production ────────┘
 ```
 
 | Stage | Question answered |
 |---|---|
-| Define the process | Which variables, units, objectives, and safety boundaries must the platform understand? |
-| Connect equipment | How do raw registers, nodes, messages, and inspections map to stable business semantics? |
-| Collect production data | What actually happened in this run? |
-| Close the data loop | Are conditions, trajectories, and outcomes complete, traceable, and comparable? |
-| Diagnose the process | Which differences deserve validation, and which remain confounded or unsupported? |
+| Process configuration | Which variables, units, objectives, quality rules, and safety boundaries must the platform understand? |
+| Field integration | How do controls, instruments, vision, inspection, and business sources map to stable business semantics? |
+| Production runs | Which conditions did this run use, and what actually happened during the process? |
+| Quality management | Can inspection outcomes be linked to the same run and independently reviewed? |
+| Process diagnosis | Is the data trustworthy, which differences deserve validation, and which remain confounded or unsupported? |
 | Process R&D | Which next experiment is most valuable without crossing declared safety boundaries? |
 
 Acquisition is not the destination, and an optimization algorithm is not the starting point. Trustworthy run facts are the common foundation for every analysis and recommendation.
@@ -84,18 +84,20 @@ These components share one evidence chain rather than creating conflicting paral
 
 ## Current status and evidence boundary
 
-The repository implements the main code path across acquisition, process executions, context, inspections, R&D experiments, diagnostic candidates, and numerical recommendations, with automated tests. Capability and product benefit remain different claims:
+The repository implements the main code path across field integration, production runs, context, inspections, R&D experiments, diagnostic candidates, and numerical recommendations, with automated tests. Four evidence levels describe its current maturity:
 
 - **Implemented** means code, contracts, and tests exist.
 - **Historical replay passed** means future data were hidden and results reproduce within a declared candidate set.
 - **Shadow validation passed** means recommendations survived field-constraint review on new projects.
 - **Online validation passed** is required before claiming fewer experiments or shorter development time on real work.
 
-The project has completed internal end-to-end validation of import, run reconstruction, inspection linkage, and R&D observations using controlled, non-public production history. Formal leakage-free replay and prospective validation remain incomplete, so the project does not claim a measured reduction in experiments or development time. Real production data, project identities, process parameters, and derived results do not enter the public repository; public materials provide only protocols, schemas, synthetic examples, acceptance methods, and conclusion boundaries.
+The project has completed internal end-to-end validation of import, run reconstruction, inspection linkage, and R&D observations using controlled, non-public production history. Formal leakage-free replay and prospective validation remain incomplete, so it does not claim a measured reduction in experiments or development time.
 
-The current engineering baseline also keeps Platform business records and Agent-run audit in PostgreSQL; carries site, schema version, applied-configuration version, quality flags, and a content hash in the production-event envelope; organizes major R&D and inspection use cases through Application boundaries; and applies active mechanism claims to hard bounds, candidate ranking, and frozen usage records. The repository includes logical backup/restore, a monitoring stack, and production-acceptance artifact tooling, while the default Compose topology remains a single API, single Worker, and single PostgreSQL reference deployment. It does not provide PostgreSQL HA, continuous WAL/PITR, object storage, or controlled equipment writes.
+- **The public repository provides** code, protocols, schemas, synthetic examples, tests, acceptance methods, and conclusion boundaries.
+- **The public repository excludes** real production data, project identities, process parameters, quality distributions, and derived results.
+- **The reference deployment remains bounded**: the default Compose topology uses one API, one Worker, and one PostgreSQL instance, without PostgreSQL HA, continuous WAL/PITR, object storage, or controlled equipment writes.
 
-Historical replay, shadow validation, and controlled online validation are three independent scientific-validation work lines. Each preregisters its own data, baselines, measures, threshold version, acceptance, and falsification criteria and produces its own evidence artifact inside the controlled environment. Passing one does not pass the others, and the results are not compressed into a global API "maturity" field. Existing endpoints show that experimental infrastructure is implemented; engineering decisions must use the corresponding reviewed, hashed, and versioned report rather than infer validity from feature presence.
+Historical replay, shadow validation, and controlled online validation produce independent evidence; passing one stage does not pass the others. See the [documentation home](docs/index.en.md) for implementation status, [Scenario validation](docs/rollout.en.md) for validation methods, and [Production architecture](docs/production-architecture.en.md) for deployment boundaries.
 
 ## Architecture
 
@@ -118,6 +120,8 @@ Platform is the factory system of record. Optimizer is a stateless numerical ser
 
 The complete Docker Compose stack requires only Git, Docker Engine or Docker Desktop, and Docker Compose v2. Source development additionally requires .NET SDK 10, Node.js 22.22+, and uv 0.11.32.
 
+To inspect the UI and a complete synthetic workflow first, use the [simulated-data preview](docs/getting-started.en.md#simulated-data-preview). Use the full Compose stack below for a representative field pilot or production deployment.
+
 ```bash
 git clone https://github.com/liuweichaox/Ingot.git
 cd Ingot
@@ -138,7 +142,7 @@ http://localhost:8100/ready
 
 Local authentication uses `INGOT_ADMIN_USERNAME` and `INGOT_ADMIN_PASSWORD` from `.env`. If the administrator password is empty, Migrator writes the generated password to the `platform-migrate` log only when it bootstraps an empty user table. See [Getting started](docs/getting-started.en.md) and [Deployment](docs/deployment.en.md) for startup and troubleshooting details.
 
-Complete one real or representative data loop before diagnosis or optimization: define variables and outcomes → connect data → complete a run → link inspections → review data quality → compare runs → design a validation experiment.
+Complete one real or representative data loop before diagnosis and R&D: build a process configuration → connect field data → complete a run → link inspections → review data trust → compare runs → design a validation experiment.
 
 See [Getting started](docs/getting-started.en.md).
 

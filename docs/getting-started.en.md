@@ -2,6 +2,37 @@
 
 > Status: **current operating guide**. The goal is not to run an optimizer immediately, but to complete one traceable record linking actual conditions, process behavior, and inspection results.
 
+## Choose a path
+
+You do not need to complete every step before seeing the system. Start with the path that matches your goal:
+
+| Goal | Recommended path | Boundary |
+|---|---|---|
+| Evaluate the UI and workflow | Use the [simulated-data preview](#simulated-data-preview) below | Validates software flow only; it does not prove process benefit |
+| Prepare a controlled pilot | Start with [Prepare the environment](#1-prepare-the-environment) and complete one representative run | Requires real or representative field data |
+| Prepare production deployment | Read [Production architecture](production-architecture.en.md), then execute the acceptance steps in [Deployment](deployment.en.md) | Requires independent backup, failure, capacity, alert-delivery, and continuous-observation evidence |
+| Contribute code | Install the repository and run `./scripts/verify.sh` | Applies to code contribution, not field acceptance |
+
+### Simulated-data preview
+
+This path requires Node.js 22.22+ only; it does not require a database, equipment, or Docker. Install the frontend dependencies once:
+
+```bash
+npm --prefix apps/platform ci
+```
+
+Start the synthetic API and frontend in separate terminals:
+
+```bash
+# Terminal 1: synthetic business API
+node scripts/platform-demo.mjs
+
+# Terminal 2: frontend connected to the synthetic API
+npm --prefix apps/platform run demo
+```
+
+Open `http://127.0.0.1:3001`. Use `demo / demo` for the engineer workflow or `admin / admin12345` for system administration and the controlled-pilot gate. The service covers process configuration, field integration, production runs, inspections, diagnosis, experiments, and multiple data states, but every record is synthetic. Press `Ctrl+C` in both terminals when finished.
+
 ## 1. Prepare the environment
 
 Docker Compose is the recommended way to start the full system. You need Git, Docker Engine or Docker Desktop, and Docker Compose v2. The Compose path does not require .NET, Node.js, Python, or uv on the host.
@@ -30,7 +61,7 @@ docker compose -f docker-compose.app.yml ps
 `postgres`, `optimizer`, `platform-api`, and `platform-web` should all report `healthy`. Then check:
 
 ```text
-http://localhost:3000       Process R&D workbench
+http://localhost:3000       Engineering workbench
 http://localhost:8000/health
 http://localhost:8100/ready
 ```
@@ -87,7 +118,7 @@ After creating an R&D project, complete “Phase 0: preregistration and data bas
 
 ## 4. Connect data sources
 
-Open Process configuration → Configuration overview and check the readiness of data standards, field integration, decision rules, quality rules, and configuration publishing. Connect continuous process sources under Field integration → Data source configuration:
+Open Process configuration → Configuration overview and check the readiness of data standards, field integration, analysis rules, quality rules, and configuration publishing. Connect continuous process sources under Field integration → Data source configuration:
 
 1. Register the edge node and equipment identity.
 2. Select a protocol and enter connection details.
@@ -124,7 +155,7 @@ R&D ExecutionKey ←→ Platform ExecutionId
 
 The two values may be identical or deterministically mapped, but the relationship must exist before execution and remain traceable. An MES work order, barcode, or instrument sample ID may carry the mapping; an equipment register is only an external reference and does not replace the Edge-generated `ExecutionId`.
 
-After the run, confirm in process-execution detail that:
+After the run, open Production runs → Run records and confirm in the run detail that:
 
 - start and completion events are present;
 - actual parameters were collected;
@@ -146,7 +177,7 @@ The result must link to the same real run. If linkage is not unique, retain a pe
 
 ## 8. Review data trust
 
-In Data quality and the project's Experiment data readiness view, review:
+In Process diagnosis → Data trust and the project's Experiment data readiness view, review:
 
 - run completeness;
 - actual-setting coverage;
@@ -162,7 +193,7 @@ At this point the system has moved from “data were collected” to “data can
 
 ## 9. Compare runs and form candidates
 
-Select a run that missed its objective and a qualified historical or conforming baseline with explicit matching conditions. The system can help inspect:
+Open Process diagnosis → Diagnosis workbench. Select a run that missed its objective and a qualified historical or conforming baseline with explicit matching conditions. The system can help inspect:
 
 - the stage where deviation first appeared;
 - planned-versus-actual settings;

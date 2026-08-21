@@ -9,16 +9,16 @@ The computer organizes evidence, compares runs, analyzes data, and proposes expe
 ## Product loop
 
 ```text
-Define process → Connect equipment → Collect production data → Close the data loop → Diagnose → Optimize
-      ↑                                                                                       ↓
-      └──────────── validated process specifications, operating regions, and knowledge return to production ───┘
+Process configuration → Field integration → Production runs → Quality management → Diagnosis → Process R&D
+        ↑                                                                                              ↓
+        └──────── validated process specifications, operating regions, and knowledge return to production ────────┘
 ```
 
-1. **Define the process**: define equipment, products, variables, units, control parameters, quality measures, and safety boundaries.
-2. **Connect equipment**: connect controls, instruments, vision, inspection, and business systems to stable business semantics.
-3. **Collect production data**: record actual conditions, stages, and trajectories for each real run.
-4. **Close the data loop**: check time, missingness, provenance, and units, then link inspections to the same run.
-5. **Diagnose the process**: compare like-for-like runs and form candidate causes with evidence, counterevidence, and confounding limits.
+1. **Process configuration**: define products, variables, units, control parameters, quality measures, and safety boundaries.
+2. **Field integration**: connect controls, instruments, vision, inspection, and business systems to stable business semantics.
+3. **Production runs**: record actual conditions, stages, and trajectories for each real run.
+4. **Quality management**: enter, link, and independently review quality and safety outcomes for the same run.
+5. **Process diagnosis**: review data trust, compare like-for-like runs, and form candidate causes with evidence, counterevidence, and confounding limits.
 6. **Process R&D**: validate candidates through controlled experiments and choose more valuable next experiments within safety boundaries.
 
 These are one evidence chain, not six unrelated products. Acquisition makes facts trustworthy; analysis makes them useful; experiments determine whether a candidate survives.
