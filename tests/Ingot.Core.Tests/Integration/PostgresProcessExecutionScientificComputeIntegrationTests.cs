@@ -3,8 +3,8 @@
 using Ingot.Contracts.Events;
 using Ingot.Contracts.ProcessConfiguration;
 using Ingot.Domain.Events;
-using Ingot.Platform.Infrastructure.ProcessExecutions;
 using Ingot.Platform.Infrastructure.Events;
+using Ingot.Platform.Infrastructure.ProcessExecutions;
 using Ingot.Platform.Infrastructure.TimeSeries;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;

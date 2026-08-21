@@ -1,4 +1,3 @@
-// 组装 ConversationPages 的页面状态与用户交互，业务判定由服务端完成。
 
 import { ArrowLeftIcon, ArrowPathIcon, ChatBubbleLeftRightIcon, MagnifyingGlassIcon, PaperAirplaneIcon, TrashIcon } from "@heroicons/react/24/outline";
 import { useCallback, useEffect, useRef, useState } from "react";

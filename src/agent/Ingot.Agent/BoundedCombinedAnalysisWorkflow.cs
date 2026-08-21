@@ -1,13 +1,9 @@
+using System.Text.RegularExpressions;
 using Ingot.Contracts.Agents;
 using Microsoft.Extensions.Options;
-using System.Text.RegularExpressions;
 
 namespace Ingot.Agent;
 
-/// <summary>
-///     有界群聊工作流。参与者只读取同一批已经验证的工具结果，不能自行调用工具，
-///     协调器负责轮数、消息预算、相关记录归一化和确定性终止。
-/// </summary>
 public sealed partial class BoundedCombinedAnalysisWorkflow(IOptions<ChatOptions> options) : ICombinedAnalysisWorkflow
 {
     private readonly ChatOptions _options = options.Value;
@@ -109,7 +105,6 @@ public sealed partial class BoundedCombinedAnalysisWorkflow(IOptions<ChatOptions
                     .ConfigureAwait(false);
             }
 
-            // 第一轮必须形成可能原因；后续轮次若所有视角都没有新增复核意见，立即终止。
             if (round == 1 && hypotheses.Count == 0)
                 break;
             if (round > 1 && normalizedThisRound.All(item => item.Reviews.Count == 0 && item.PossibleCauses.Count == 0))
@@ -235,7 +230,6 @@ public sealed partial class BoundedCombinedAnalysisWorkflow(IOptions<ChatOptions
         => !string.IsNullOrWhiteSpace(value) &&
            !CausalLanguage().IsMatch(value);
 
-    // 用统一的“归一化数值相等”追查来源，替代此前脆弱的子串匹配（子串匹配会让 "1" 命中 "100"）。
     private static bool HasGroundedNumbers(string? value, IReadOnlySet<string> groundedNumbers)
         => NumberGrounding.IsGrounded(value, groundedNumbers, out _);
 

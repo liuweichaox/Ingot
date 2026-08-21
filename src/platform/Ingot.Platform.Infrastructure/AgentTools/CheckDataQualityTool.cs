@@ -1,10 +1,10 @@
 using System.Text.Json;
 using Ingot.Agent;
+using Ingot.Contracts.Agents;
+using Ingot.Contracts.Events;
 using Ingot.Platform.Application.Events;
 using Ingot.Platform.Application.ProcessExecutions;
 using Ingot.Platform.Infrastructure.ProcessExecutions;
-using Ingot.Contracts.Agents;
-using Ingot.Contracts.Events;
 using Ingot.Platform.Infrastructure.TimeSeries;
 
 namespace Ingot.Platform.Infrastructure.AgentTools;
@@ -48,9 +48,9 @@ public sealed class CheckDataQualityTool(
             SubjectId = NullIfBlank(subjectId),
             ExecutionId = NullIfBlank(executionId)
         };
-        // 全范围聚合用于快速获得总量与时间边界。
+
         var stats = await events.GetScopeStatsAsync(context.UserId, scope, ct).ConfigureAwait(false);
-        // 明细检查自动翻页读取完整范围；500 只是内部单页传输大小，不是分析上限。
+
         var rows = await events.QueryAllAsync(
             context.UserId,
             scope,
@@ -95,7 +95,7 @@ public sealed class CheckDataQualityTool(
                     return sequences.Zip(sequences.Skip(1)).Count(static pair => pair.Second > pair.First + 1);
                 });
         }
-        // 新鲜度取自全范围聚合，不再受 500 明细窗口影响（即使乱序回填也能反映真实最新时间）。
+
         var latest = stats.LatestOccurredAt;
         var totalEvents = stats.Count;
         var scopeEmpty = totalEvents == 0;

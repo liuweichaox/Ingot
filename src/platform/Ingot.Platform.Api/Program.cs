@@ -1,25 +1,24 @@
-// Platform API（中心侧）：提供中心 API（边缘注册/心跳、诊断代理、查询与管理）。
 
 using System.Diagnostics;
 using Ingot.Agent;
 using Ingot.Agent.Providers;
 using Ingot.Platform.Api.Agents;
-using Ingot.Platform.Api.HealthChecks;
-using Ingot.Platform.Api.Events;
 using Ingot.Platform.Api.Configuration;
-using Ingot.Platform.Application.Events;
 using Ingot.Platform.Api.Errors;
+using Ingot.Platform.Api.Events;
+using Ingot.Platform.Api.HealthChecks;
+using Ingot.Platform.Application.Events;
 using Ingot.Platform.Infrastructure;
 using Ingot.Platform.Infrastructure.Events;
 using Ingot.Platform.Infrastructure.Identity;
 using Ingot.Platform.Infrastructure.Inspections;
-using Serilog;
-using Prometheus;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.WebUtilities;
+using Prometheus;
+using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -35,7 +34,7 @@ builder.Services.AddHttpClient("edge-diagnostics")
     .ConfigureHttpClient(static client => client.Timeout = TimeSpan.FromSeconds(15))
     .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
     {
-        // 诊断请求携带节点专用令牌，禁止重定向到另一个主机。
+
         AllowAutoRedirect = false
     });
 builder.Services.AddControllers(options =>
@@ -80,11 +79,6 @@ builder.Services.Configure<ApiBehaviorOptions>(options =>
 });
 builder.Services.AddOpenApi();
 
-// 三种认证模式：
-//   开发环境 → 固定本地身份（不引入第二套登录）；
-//   Authentication:Mode=Disabled → 本地原型固定 operator 身份；
-//   生产 + Authentication:Mode=Oidc → 外部 JWT 颁发者；
-//   生产 + Authentication:Mode=Local（默认）→ 内置本地账户会话令牌，消除强制 OIDC 依赖。
 var authenticationMode = builder.Configuration["Authentication:Mode"] ?? "Local";
 var useAnonymousDevelopmentIdentity = builder.Environment.IsDevelopment()
     || string.Equals(authenticationMode, "Disabled", StringComparison.OrdinalIgnoreCase);
@@ -129,12 +123,11 @@ builder.Services.AddAuthorization(options =>
 
 builder.Services.AddIngotPlatformInfrastructure(builder.Configuration);
 builder.Services.AddIngotInspectionInfrastructure(builder.Configuration);
-// API 只注册本地认证请求路径；首用户引导由 Migrator 完成，周期维护由 Worker 完成。
+
 builder.Services.AddIngotLocalIdentity(builder.Configuration);
 builder.Services.AddIngotAgentCore(builder.Configuration);
 builder.Services.AddIngotAgentProviders(builder.Configuration);
 
-// 宿主职责：入站鉴权策略
 builder.Services.AddSingleton<EdgeTokenValidator>();
 builder.Services.Configure<EdgeDiagnosticsOptions>(builder.Configuration.GetSection("EdgeDiagnostics"));
 builder.Services.AddSingleton<EdgeDiagnosticsTokenProvider>();
@@ -143,15 +136,13 @@ builder.Services.AddSingleton<PlatformUserResolver>();
 builder.Services.AddHealthChecks()
     .AddCheck<PostgresPlatformEventStoreHealthCheck>("event-store");
 
-// CORS：给 Vite 开发服务器或独立静态站点调用 API。
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("frontend", policy =>
     {
-        // 支持配置：Cors:AllowedOrigins=["http://localhost:3000", "..."]
+
         var origins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
-        // 仅暴露本 API 实际使用的方法（查询/SSE 用 GET，创建/动作使用 POST，更新用 PUT），收敛 CORS 面。
-        // 头部保持放开，因为需要 Authorization、Content-Type 与 SSE 续读的 Last-Event-ID。
+
         string[] allowedMethods = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"];
         if (origins.Length == 0)
         {
@@ -191,27 +182,21 @@ if (!app.Environment.IsDevelopment() &&
 }
 
 app.UseRouting();
-// CORS 必须位于 UseRouting 之后、UseAuthentication/UseAuthorization 之前（官方规定顺序）；
-// 否则 401/403 响应不携带 CORS 头，前端只能看到不明网络错误。
+
 app.UseCors("frontend");
 app.UseAuthentication();
 app.UseAuthorization();
 
-// Prometheus 指标（中心自身进程）
 app.UseHttpMetrics();
-// Prometheus 原始指标（官方默认端点）
+
 app.MapMetrics("/metrics").AllowAnonymous();
 
-// Health checks（官方风格）：统一用 /health
 app.MapHealthChecks("/health").AllowAnonymous();
 
-// 机器可读 HTTP 契约是 Web、Edge 与外部只读 Agent 适配层的共同边界。
 app.MapOpenApi("/openapi/{documentName}.json").AllowAnonymous();
 
-// Attribute routing（/api/..）
 app.MapControllers();
 
-// 验证关键依赖在启动前已就绪（快速失败）
 try
 {
     var eventStore = app.Services.GetRequiredService<IPlatformEventStore>();
@@ -232,7 +217,6 @@ catch (Exception ex)
     Environment.Exit(1);
 }
 
-// 方便验证服务是否启动（不提供页面）
 app.MapGet("/", () => Results.Ok(new
 {
     service = "Ingot.Platform.Api",
@@ -255,8 +239,8 @@ app.MapGet("/", () => Results.Ok(new
         timeWindowComparisons = "/api/v1/time-window-comparisons",
         executionAnalysisBackfills = "/api/v1/process-execution-analysis-backfills",
         executionFeatureAggregates = "/api/v1/process-feature-aggregates",
-            scenarioPackages = "/api/v1/scenario-packages",
-            goldenQuestions = "/api/v1/golden-questions",
+        scenarioPackages = "/api/v1/scenario-packages",
+        goldenQuestions = "/api/v1/golden-questions",
         processModels = "/api/v1/process-models",
         trainingDatasets = "/api/v1/training-datasets",
         processKnowledge = "/api/v1/process-knowledge",
@@ -274,7 +258,6 @@ app.MapGet("/", () => Results.Ok(new
     }
 })).AllowAnonymous();
 
-// 解析并显示所有监听地址
 var addresses = urls.Split(';', ',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 var baseAddress = addresses.First();
 

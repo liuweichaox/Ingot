@@ -2,7 +2,6 @@ using Ingot.Contracts.ProcessConfiguration;
 
 namespace Ingot.Platform.Application.ProcessConfiguration;
 
-/// <summary>Delivery-facing application boundary for versioned process configuration.</summary>
 public sealed class ProcessConfigurationApplication(IProcessConfigurationStore configurations)
 {
     public Task<IReadOnlyList<ProcessDataModel>> ListDataModelsAsync(CancellationToken ct = default)

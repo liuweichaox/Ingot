@@ -1,4 +1,3 @@
-// 组装 AdministrationPages 的页面状态与用户交互，业务判定由服务端完成。
 
 import { ArrowPathIcon } from "@heroicons/react/24/outline";
 import { useState } from "react";

@@ -15,10 +15,10 @@ public sealed record GoldenExpectedFact
 {
     public required string FactId { get; init; }
     public required string Tool { get; init; }
-    /// <summary>相对于工具 Data 的 RFC 6901 JSON Pointer。</summary>
+
     public required string JsonPointer { get; init; }
     public required JsonElement ExpectedValue { get; init; }
-    /// <summary>非空时，还要求最终回答包含该工艺工程师审核文本。</summary>
+
     public string? AnswerMustContain { get; init; }
 }
 
@@ -61,7 +61,7 @@ public sealed record GoldenQuestionEvaluation
     public required string Model { get; init; }
     public required string PromptVersion { get; init; }
     public required string ToolsetVersion { get; init; }
-    /// <summary>Null only for evaluations created before Agent runs moved into Platform PostgreSQL.</summary>
+
     public string? AgentRunSnapshotHash { get; init; }
     public DateTimeOffset EvaluatedAt { get; init; }
 }

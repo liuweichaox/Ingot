@@ -1,4 +1,3 @@
-// 提供页面间共享的展示格式、表单转换和无副作用辅助函数。
 
 import { ArrowPathIcon } from "@heroicons/react/24/outline";
 import { Card } from "../ui/components";
@@ -225,7 +224,6 @@ export function LoadingCard() {
     </Card>
   );
 }
-
 
 export function uuidv7() {
   const bytes = new Uint8Array(16);

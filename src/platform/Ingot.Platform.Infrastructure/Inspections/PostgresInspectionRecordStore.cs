@@ -1,4 +1,3 @@
-// 实现 PostgresInspectionRecordStore 的 PostgreSQL 持久化适配，避免数据库细节泄漏到应用层。
 
 using System.Security.Cryptography;
 using System.Text.Json;
@@ -227,7 +226,6 @@ public sealed class PostgresInspectionRecordStore : IInspectionRecordStore
             records.Add(Read(reader).Record);
         return records;
     }
-
 
     private async Task<StoredInspectionRecord?> GetWithHashAsync(
         Guid recordId,

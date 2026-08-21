@@ -2,9 +2,6 @@ using System.Security.Claims;
 
 namespace Ingot.Platform.Api.Agents;
 
-/// <summary>
-///     从平台统一认证主体解析用户。开发环境允许固定本地身份，生产环境绝不信任客户端自报用户头。
-/// </summary>
 public sealed class PlatformUserResolver(IHostEnvironment environment)
 {
     public string? Resolve(ClaimsPrincipal principal)

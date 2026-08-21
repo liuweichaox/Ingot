@@ -2,7 +2,6 @@ using Ingot.Contracts.Acquisition;
 
 namespace Ingot.Platform.Application.Acquisition;
 
-/// <summary>协调设备探查任务的领取、进度、完成和失败状态。</summary>
 public interface IAcquisitionProbeTaskStore
 {
     Task EnqueueAsync(AcquisitionProbeTask task, CancellationToken ct = default);
@@ -12,10 +11,6 @@ public interface IAcquisitionProbeTaskStore
     Task DeleteAsync(string taskId, CancellationToken ct = default);
 }
 
-/// <summary>
-///     Coordinates read-only device probes through a persistent store. The waiting HTTP request may be served by
-///     a different API replica from Edge polling and completion; PostgreSQL is the coordination authority.
-/// </summary>
 public sealed class AcquisitionProbeTaskCoordinator(IAcquisitionProbeTaskStore store)
 {
     private static readonly TimeSpan ResultPollInterval = TimeSpan.FromMilliseconds(100);

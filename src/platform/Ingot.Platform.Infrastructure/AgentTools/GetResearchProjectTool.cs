@@ -1,9 +1,8 @@
-// 实现只读 Agent 工具 GetResearchProjectTool，仅暴露授权范围内的确定性证据。
 
-using Ingot.Platform.Application.ProcessResearch;
 using System.Text.Json;
 using Ingot.Agent;
 using Ingot.Contracts.Agents;
+using Ingot.Platform.Application.ProcessResearch;
 using Ingot.Platform.Infrastructure.ProcessResearch;
 
 namespace Ingot.Platform.Infrastructure.AgentTools;

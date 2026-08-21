@@ -121,11 +121,11 @@ public sealed class PostgresMechanismKnowledgeStoreTests(PostgresIntegrationFixt
             Version = 2,
             Name = "尚未用于该建议的新版本",
             Constraints = claim.Constraints.Select(value => value with
-                { ConstraintId = Guid.CreateVersion7(), Maximum = 110 }).ToArray(),
+            { ConstraintId = Guid.CreateVersion7(), Maximum = 110 }).ToArray(),
             ForbiddenCombinations = claim.ForbiddenCombinations.Select(value => value with
-                { CombinationId = Guid.CreateVersion7() }).ToArray(),
+            { CombinationId = Guid.CreateVersion7() }).ToArray(),
             Evidence = claim.Evidence.Select(value => value with
-                { EvidenceLinkId = Guid.CreateVersion7() }).ToArray(),
+            { EvidenceLinkId = Guid.CreateVersion7() }).ToArray(),
             CreatedAt = now.AddMinutes(1),
             UpdatedAt = now.AddMinutes(1),
             ContentHash = new string('d', 64)

@@ -2,7 +2,6 @@ using System.Text.Json.Serialization;
 
 namespace Ingot.Contracts.Manufacturing;
 
-/// <summary>可配置的物理组件分类，例如模芯、模架、刀片或喷嘴。</summary>
 public sealed record ToolingComponentTypeDefinition
 {
     public required string ComponentTypeCode { get; init; }
@@ -13,7 +12,6 @@ public sealed record ToolingComponentTypeDefinition
     public DateTimeOffset UpdatedAt { get; init; }
 }
 
-/// <summary>工装类型中的一个可配置装配位置；平台核心不理解具体行业位置名称。</summary>
 public sealed record ToolingRoleDefinition
 {
     public required string Code { get; init; }
@@ -21,7 +19,7 @@ public sealed record ToolingRoleDefinition
     public bool Required { get; init; } = true;
     public int MaxCount { get; init; } = 1;
     public int SortOrder { get; init; }
-    /// <summary>允许放入该位置的组件类型；空集合表示不限制。</summary>
+
     public IReadOnlyList<string> AcceptedComponentTypeCodes { get; init; } = [];
 }
 
@@ -35,11 +33,10 @@ public sealed record ToolingTypeDefinition
     public DateTimeOffset UpdatedAt { get; init; }
 }
 
-/// <summary>可单独拆换、复用和分析寿命的物理组件。</summary>
 public sealed record ToolingComponent
 {
     public required string ComponentId { get; init; }
-    /// <summary>组件自身的分类，不代表它在某次装配中的位置或角色。</summary>
+
     public required string ComponentTypeCode { get; init; }
     public required string SerialNo { get; init; }
     public string? Name { get; init; }
@@ -49,7 +46,6 @@ public sealed record ToolingComponent
     public DateTimeOffset UpdatedAt { get; init; }
 }
 
-/// <summary>用户可识别且长期稳定的工装总成身份，不直接保存可变的成员关系。</summary>
 public sealed record ToolingAssembly
 {
     public required string ToolingAssemblyId { get; init; }
@@ -65,7 +61,6 @@ public sealed record ToolingAssemblyMember
     public required string ComponentId { get; init; }
 }
 
-/// <summary>某次工装组成的不可变快照；更换任一组件必须创建下一版本。</summary>
 public sealed record ToolingAssemblyRevision
 {
     public Guid AssemblyRevisionId { get; init; }
@@ -76,7 +71,6 @@ public sealed record ToolingAssemblyRevision
     public DateTimeOffset CreatedAt { get; init; }
 }
 
-/// <summary>某个组合版本在设备上的实际有效区间；同一组合再次装入会产生新记录。</summary>
 public sealed record ToolingInstallation
 {
     public Guid InstallationId { get; init; }
@@ -91,9 +85,6 @@ public sealed record ToolingInstallation
     public DateTimeOffset CreatedAt { get; init; }
 }
 
-/// <summary>
-/// 设备当前有效的生产信息。它不是 MES 工单；有 MES 时只保存外部引用，无 MES 时由现场在换型时录入一次。
-/// </summary>
 public sealed record ProductionContext
 {
     public Guid ContextId { get; init; }
@@ -106,15 +97,15 @@ public sealed record ProductionContext
     public DateTimeOffset ValidFrom { get; init; }
     public DateTimeOffset? ValidTo { get; init; }
     public string Source { get; init; } = "manual";
-    /// <summary>MES/import command id used for idempotent synchronization.</summary>
+
     public string? CommandId { get; init; }
     public string? ExternalOrderRef { get; init; }
     public string? ExternalBatchRef { get; init; }
     public string? MaterialLotRef { get; init; }
     public string? MaterialSpecification { get; init; }
-    /// <summary>现场在本生产区间确认的设备维护状态，例如 available、due 或 maintenance。</summary>
+
     public string? MaintenanceStatus { get; init; }
-    /// <summary>设备或关键传感器在本生产区间的校准状态；有效期过期时采集快照会强制标记 expired。</summary>
+
     public string? CalibrationStatus { get; init; }
     public string? CalibrationRef { get; init; }
     public DateTimeOffset? CalibrationValidUntil { get; init; }
@@ -123,7 +114,6 @@ public sealed record ProductionContext
     public DateTimeOffset UpdatedAt { get; init; }
 }
 
-/// <summary>过程执行开始时解析出的完整快照，用于写入不可变事件上下文。</summary>
 public sealed record ResolvedProductionContext
 {
     public required ProductionContext Production { get; init; }

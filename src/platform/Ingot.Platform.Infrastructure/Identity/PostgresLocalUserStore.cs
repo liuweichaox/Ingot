@@ -1,9 +1,8 @@
-using Npgsql;
 using Ingot.Platform.Application.Identity;
+using Npgsql;
 
 namespace Ingot.Platform.Infrastructure.Identity;
 
-/// <summary>本地账户与会话的 PostgreSQL 存储。schema 由迁移 0003 保证，本类不做 DDL。</summary>
 public sealed class PostgresLocalUserStore : ILocalUserStore
 {
     private readonly NpgsqlDataSource _dataSource;
@@ -97,7 +96,7 @@ public sealed class PostgresLocalUserStore : ILocalUserStore
         command.Parameters.AddWithValue("hash", passwordHash);
         var affected = await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
         if (affected > 0)
-            await RevokeAllForUserAsync(userId, ct).ConfigureAwait(false); // 改密即注销其它会话
+            await RevokeAllForUserAsync(userId, ct).ConfigureAwait(false);
         return affected > 0;
     }
 

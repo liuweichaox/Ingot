@@ -99,7 +99,7 @@ public static class IngestionTaskDecomposer
         var binding = new IngestionTaskBinding
         {
             TaskId = task.TaskId,
-            // 提取复用资产属于一次配置迁移。必须创建新运行版本，不能给已发布版本补写来源字段。
+
             Version = task.Version + 1,
             Name = task.Name,
             Status = ConfigurationStatuses.Published,

@@ -1,10 +1,9 @@
-// 提供 ResearchProjectsController 的 HTTP 传输、认证与响应映射；业务规则由应用层执行。
 
-using Ingot.Contracts.ProcessResearch;
 using Ingot.Contracts.Events;
+using Ingot.Contracts.ProcessResearch;
 using Ingot.Platform.Api.Agents;
-using Ingot.Platform.Application.ProcessResearch;
 using Ingot.Platform.Application.ProcessExecutions;
+using Ingot.Platform.Application.ProcessResearch;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Ingot.Platform.Api.Controllers;

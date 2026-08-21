@@ -7,10 +7,6 @@ using Ingot.Platform.Application.ProcessExecutions;
 
 namespace Ingot.Platform.Application.ProcessResearch;
 
-/// <summary>
-///     Converts production execution evidence into auditable research hypotheses and historical observations.
-///     The API only performs transport and authorization; scientific policy remains independently testable here.
-/// </summary>
 public sealed class ResearchExecutionEvidenceService(
     IProcessResearchStore store,
     ProcessResearchWorkflow workflow,

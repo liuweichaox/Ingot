@@ -3,7 +3,6 @@ using Ingot.Contracts.ResearchAssets;
 
 namespace Ingot.Platform.Application.ResearchAssets;
 
-/// <summary>只生成可编辑建议；持久化和复核始终由用户显式执行。</summary>
 public sealed class MechanismClaimDraftService(
     IResearchAssetStore assets,
     IResearchProjectContextReader projects,

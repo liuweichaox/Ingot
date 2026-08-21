@@ -6,19 +6,11 @@ using Npgsql;
 
 namespace Ingot.Platform.Infrastructure.Migrations;
 
-/// <summary>
-///     版本化 SQL 迁移执行器。
-///     - 迁移脚本以嵌入资源形式存放于 Migrations/sql/NNNN_name.sql，按文件名顺序执行；
-///     - schema_version 表记录已应用版本与内容校验和，已应用脚本内容改变会启动失败（防漂移）；
-///     - 通过 pg_advisory_lock 串行化多实例启动；
-///     Schema 变更纪律：本文件之后的任何表结构变化，只能通过新增编号迁移脚本表达；
-///     禁止在迁移中编写无 WHERE 的全表数据修复。
-/// </summary>
 public sealed class MigrationRunner(
     IConfiguration configuration,
     ILogger<MigrationRunner> logger)
 {
-    /// <summary>advisory lock key："Ingot" 的 ASCII 常量，避免与其他应用冲突。</summary>
+
     private const long AdvisoryLockKey = 0x496E676F74;
 
     private const string ResourcePrefix = "Ingot.Platform.Infrastructure.Migrations.sql.";
@@ -38,7 +30,6 @@ public sealed class MigrationRunner(
         await using var connection = new NpgsqlConnection(connectionString);
         await connection.OpenAsync(ct).ConfigureAwait(false);
 
-        // 会话级 advisory lock：多实例同时启动时串行执行，连接关闭自动释放。
         await ExecuteAsync(connection, $"SELECT pg_advisory_lock({AdvisoryLockKey});", ct).ConfigureAwait(false);
         try
         {
@@ -110,7 +101,7 @@ public sealed class MigrationRunner(
 
     internal static (string Version, string Name) ParseResourceName(string resourceName)
     {
-        // Ingot.Platform.Infrastructure.Migrations.sql.0001_baseline.sql → ("0001", "baseline")
+
         var file = resourceName[ResourcePrefix.Length..];
         var stem = file.EndsWith(".sql", StringComparison.OrdinalIgnoreCase) ? file[..^4] : file;
         var separator = stem.IndexOf('_', StringComparison.Ordinal);

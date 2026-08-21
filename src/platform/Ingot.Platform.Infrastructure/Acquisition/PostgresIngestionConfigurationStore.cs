@@ -1,9 +1,8 @@
-// 实现 PostgresIngestionConfigurationStore 的 PostgreSQL 持久化适配，避免数据库细节泄漏到应用层。
 
 using System.Text.Json;
 using Ingot.Contracts.Acquisition;
-using Ingot.Platform.Application.Acquisition;
 using Ingot.Contracts.ProcessConfiguration;
+using Ingot.Platform.Application.Acquisition;
 using Npgsql;
 using NpgsqlTypes;
 

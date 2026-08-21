@@ -3,10 +3,6 @@ using Ingot.Edge.ConnectorHost.Acquisition;
 
 namespace Ingot.Edge.ConnectorHost.BackgroundServices;
 
-/// <summary>
-/// Edge 启动即注册到中心并周期发送心跳。
-/// 宿主只保留节拍循环，HTTP 客户端与重试逻辑见 IPlatformReportingClient 实现。
-/// </summary>
 public sealed class EdgePlatformReporterHostedService(
     IPlatformReportingClient client,
     AcquisitionStatus acquisitionStatus,

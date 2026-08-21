@@ -4,10 +4,10 @@ using System.Text.Json;
 using Ingot.Contracts.Analytics;
 using Ingot.Contracts.Events;
 using Ingot.Domain.Events;
-using Ingot.Platform.Infrastructure.Analytics;
-using Ingot.Platform.Infrastructure.ProcessExecutions;
 using Ingot.Platform.Application.ProcessExecutions;
+using Ingot.Platform.Infrastructure.Analytics;
 using Ingot.Platform.Infrastructure.Events;
+using Ingot.Platform.Infrastructure.ProcessExecutions;
 using Xunit;
 
 namespace Ingot.Core.Tests.Platform;

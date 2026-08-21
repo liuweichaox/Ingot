@@ -2,9 +2,9 @@
 
 using System.Net;
 using System.Net.Http.Json;
-using Ingot.Edge.Application.Abstractions;
 using Ingot.Contracts.Events;
 using Ingot.Domain.Events;
+using Ingot.Edge.Application.Abstractions;
 using Ingot.Edge.Application.Options;
 using Ingot.Edge.ConnectorHost.Services;
 using Ingot.Edge.Infrastructure.Events;

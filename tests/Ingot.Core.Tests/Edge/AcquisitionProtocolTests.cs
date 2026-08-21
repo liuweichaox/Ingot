@@ -2,8 +2,8 @@
 
 using Ingot.Contracts.Acquisition;
 using Ingot.Contracts.ProcessConfiguration;
-using Ingot.Edge.ConnectorHost.Acquisition;
 using Ingot.Domain.Events;
+using Ingot.Edge.ConnectorHost.Acquisition;
 using Xunit;
 
 namespace Ingot.Core.Tests.Edge;

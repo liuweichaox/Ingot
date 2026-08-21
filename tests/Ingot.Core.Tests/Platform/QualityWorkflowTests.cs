@@ -1,13 +1,13 @@
-using Ingot.Platform.Application.Inspections;
-using Ingot.Platform.Application.ProcessConfiguration;
 using Ingot.Contracts.Events;
 using Ingot.Contracts.Inspections;
 using Ingot.Contracts.ProcessConfiguration;
 using Ingot.Domain.Events;
-using Ingot.Platform.Infrastructure.ProcessExecutions;
+using Ingot.Platform.Application.Inspections;
+using Ingot.Platform.Application.ProcessConfiguration;
 using Ingot.Platform.Infrastructure.Events;
 using Ingot.Platform.Infrastructure.Inspections;
 using Ingot.Platform.Infrastructure.ProcessConfiguration;
+using Ingot.Platform.Infrastructure.ProcessExecutions;
 using Ingot.Platform.Infrastructure.TimeSeries;
 using Xunit;
 
@@ -161,7 +161,8 @@ public sealed class QualityWorkflowTests
         AddProcessExecution(rows, "OTHER", "LENS-B", "PRESS-01", DateTimeOffset.Parse("2026-07-20T06:00:00Z"), rows.Count + 1);
         var baselineVisual = Inspection("BASE", "WP-BASE", "optical.appearance.machine", withAttachment: true);
         var historyManual = Inspection("HISTORY", "WP-HISTORY", "optical.final.manual", withAttachment: false)
-            with { Outcome = "FAIL" };
+            with
+        { Outcome = "FAIL" };
         var review = new InspectionReview
         {
             ReviewId = Guid.CreateVersion7(),
@@ -1015,7 +1016,10 @@ public sealed class QualityWorkflowTests
             new[] { ("10", "preheat"), ("20", "soak"), ("30", "press"), ("40", "anneal"), ("50", "cool") }
                 .Select(item => new PhaseMapping
                 {
-                    MappingId = $"test-{item.Item1}", ProcessSpecificationId = "RCP-LENS-A", ProcessStep = item.Item1, PhaseCode = item.Item2
+                    MappingId = $"test-{item.Item1}",
+                    ProcessSpecificationId = "RCP-LENS-A",
+                    ProcessStep = item.Item1,
+                    PhaseCode = item.Item2
                 }).ToArray());
         public Task<PhaseMapping?> GetPhaseMappingAsync(string mappingId, CancellationToken ct = default) => Task.FromResult<PhaseMapping?>(null);
         public Task<bool> DeletePhaseMappingAsync(string mappingId, CancellationToken ct = default) => throw new NotSupportedException();

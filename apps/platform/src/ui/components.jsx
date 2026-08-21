@@ -249,7 +249,7 @@ export function WorkflowGuide({ title = "按步骤完成", description, steps, c
             >
               <span className={cx(
                 "grid size-7 shrink-0 place-items-center rounded-full text-xs font-semibold",
-                // emerald-600 上的白字只有 3.65:1，不达 AA；emerald-700 为 5.36:1
+
                 state === "done" ? "bg-emerald-700 text-white" :
                   state === "current" ? "bg-blue-600 text-white" :
                     "bg-slate-200 text-slate-600",
@@ -405,8 +405,7 @@ export function DataTable({ columns, rows, keyField = "id", getRowKey, onRowClic
                 onRowClick && "cursor-pointer hover:bg-blue-50/50 focus-visible:bg-blue-50 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-blue-600",
               )}
               onClick={onRowClick ? () => onRowClick(row) : undefined}
-              // Interactive rows must remain keyboard reachable while preserving
-              // the native table-row semantics used by assistive technologies.
+
               tabIndex={onRowClick ? 0 : undefined}
               onKeyDown={onRowClick ? event => {
                 if (event.key === "Enter" || event.key === " ") {

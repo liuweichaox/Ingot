@@ -1,23 +1,22 @@
-// Connector Host：接收用户接入程序产生的标准事件并上报中心。
 
 using System.Security.Cryptography;
 using System.Text;
 using Ingot.Edge.Application.Abstractions;
 using Ingot.Edge.Application.Options;
+using Ingot.Edge.ConnectorHost.Acquisition;
+using Ingot.Edge.ConnectorHost.BackgroundServices;
+using Ingot.Edge.ConnectorHost.Configuration;
+using Ingot.Edge.ConnectorHost.HealthChecks;
+using Ingot.Edge.ConnectorHost.Services;
 using Ingot.Edge.Infrastructure.Events;
 using Ingot.Edge.Infrastructure.Logs;
 using Ingot.Edge.Infrastructure.Metrics;
 using Ingot.Edge.Infrastructure.Reporting;
 using Ingot.Edge.Infrastructure.State;
-using Ingot.Edge.ConnectorHost.BackgroundServices;
-using Ingot.Edge.ConnectorHost.HealthChecks;
-using Ingot.Edge.ConnectorHost.Services;
-using Ingot.Edge.ConnectorHost.Configuration;
-using Ingot.Edge.ConnectorHost.Acquisition;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Prometheus;
 using Serilog;
 using Serilog.Events;
-using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -32,14 +31,13 @@ builder.Services.AddHttpClient();
 builder.Services.AddHttpClient("device-http-acquisition")
     .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
     {
-        // 设备请求可能携带自定义鉴权头；禁止跨地址自动跳转，避免凭据被带到非配置主机。
+
         AllowAutoRedirect = false
     });
 
 builder.Services.Configure<Ingot.Domain.Events.EventOptions>(builder.Configuration.GetSection("Events"));
 builder.Services.Configure<LogOptions>(builder.Configuration.GetSection("Logging"));
 
-// 配置 Edge 上报（注册/心跳）
 builder.Services.Configure<EdgeReportingOptions>(builder.Configuration.GetSection("Edge"));
 builder.Services.Configure<HttpPollingAcquisitionOptions>(builder.Configuration.GetSection("Acquisition"));
 builder.Services.AddSingleton<EdgeIdentityService>();
@@ -63,7 +61,6 @@ builder.Services.AddSingleton<IAcquisitionProtocolRunner, OpcUaAcquisitionRunner
 builder.Services.AddSingleton<IAcquisitionProtocolRunner, ModbusTcpAcquisitionRunner>();
 builder.Services.AddSingleton<IAcquisitionProtocolRunner, MelsecA1EAcquisitionRunner>();
 
-// 日志查看服务（使用 SQLite）
 builder.Services.AddSingleton<ILogViewService, SqliteLogViewService>();
 
 builder.Services.AddHostedService<EdgePlatformReporterHostedService>();
@@ -73,12 +70,10 @@ builder.Services.AddHostedService<HttpPollingAcquisitionHostedService>();
 
 builder.Services.AddControllers();
 
-// Health checks（官方风格）：统一用 /health
 builder.Services.AddHealthChecks()
     .AddCheck("self", () => HealthCheckResult.Healthy("ok"))
     .AddCheck<EventLogHealthCheck>("event-log", tags: ["ready"]);
 
-// 配置 SQLite 日志数据库路径（从配置读取，支持相对路径和绝对路径）
 var logOptions = new LogOptions();
 builder.Configuration.GetSection("Logging").Bind(logOptions);
 
@@ -106,9 +101,6 @@ var app = builder.Build();
 
 app.UseRouting();
 
-// 本地查询 API（日志/事件/周期/指标）使用独立令牌 ConnectorHost:LocalApiToken，
-// 与向平台上行的 Edge:EventIngestToken 分离——避免把"能看本地日志"的人
-// 顺带授予"能向平台注入事件"的凭据（跨信任边界复用）。
 var localApiToken = app.Configuration["ConnectorHost:LocalApiToken"];
 if (string.IsNullOrWhiteSpace(localApiToken))
     throw new InvalidOperationException("ConnectorHost:LocalApiToken is required.");
@@ -145,20 +137,16 @@ app.Use(async (context, next) =>
     await next(context).ConfigureAwait(false);
 });
 
-// 添加 Prometheus HTTP 指标收集
 app.UseHttpMetrics();
 
-// 初始化 System.Diagnostics.Metrics 到 Prometheus 的桥接
 var metricsBridge = app.Services.GetRequiredService<MetricsBridge>();
 metricsBridge.StartListening();
 
-// 暴露 Prometheus 指标端点
 app.MapMetrics();
 
 app.MapControllers();
 app.MapHealthChecks("/health");
 
-// 方便验证服务是否启动（不提供页面）
 app.MapGet("/", () => Results.Ok(new
 {
     service = "Ingot.Edge.ConnectorHost",
@@ -177,7 +165,6 @@ app.MapGet("/", () => Results.Ok(new
     }
 }));
 
-// 解析并显示所有监听地址
 var addresses = urls.Split(';', ',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 var baseAddress = addresses.FirstOrDefault()?.Trim() ?? "http://localhost:8001";
 

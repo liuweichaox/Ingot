@@ -10,11 +10,6 @@ using NpgsqlTypes;
 
 namespace Ingot.Platform.Infrastructure.TimeSeries;
 
-/// <summary>
-/// TimescaleDB implementation of the canonical signal model. Typed rows are the sole
-/// persisted source for process samples; lifecycle and business events remain immutable
-/// in production_events.
-/// </summary>
 public sealed class PostgresTimeSeriesStore : ITimeSeriesStore, IDisposable
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);

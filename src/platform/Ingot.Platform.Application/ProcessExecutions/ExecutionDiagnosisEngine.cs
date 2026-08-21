@@ -4,10 +4,6 @@ using Ingot.Contracts.Events;
 
 namespace Ingot.Platform.Application.ProcessExecutions;
 
-/// <summary>
-///     过程执行级观察性诊断引擎。它统一评估实际控制参数与过程轨迹特征，
-///     只输出待验证的候选原因，不把相关性升级为因果结论。
-/// </summary>
 public sealed class ExecutionDiagnosisEngine
 {
     public const string AlgorithmVersion = "robust-stratified-v1";

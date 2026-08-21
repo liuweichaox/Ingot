@@ -420,7 +420,7 @@ public sealed partial class ProcessResearchWorkflow
             "range" or "target"
                 when objective.LowerLimit is { } min && objective.UpperLimit is { } max =>
                 value >= min && value <= max,
-            // 只有目标点而没有公差时，系统无法诚实判断“达到规格”。
+
             "target" => false,
             _ => false
         };

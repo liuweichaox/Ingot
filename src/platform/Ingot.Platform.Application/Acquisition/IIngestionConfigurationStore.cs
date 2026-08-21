@@ -2,7 +2,6 @@ using Ingot.Contracts.Acquisition;
 
 namespace Ingot.Platform.Application.Acquisition;
 
-/// <summary>读取采集任务引用的版本化数据模型和业务配置。</summary>
 public interface IIngestionConfigurationStore
 {
     Task<IReadOnlyList<IngestionTaskTemplate>> ListTemplatesAsync(CancellationToken ct = default);
@@ -23,12 +22,10 @@ public interface IIngestionConfigurationStore
     Task<IReadOnlyList<IngestionTaskBinding>> ListBindingsAsync(CancellationToken ct = default);
     Task<IngestionTaskBinding?> GetBindingAsync(string taskId, int version, CancellationToken ct = default);
 
-    /// <summary>在一个事务中保存任务绑定及其不可变运行快照，供单个或批量实例化使用。</summary>
     Task<IReadOnlyList<IngestionTask>> SaveMaterializedTasksAsync(
         IReadOnlyList<(IngestionTaskBinding Binding, IngestionTask Task)> values,
         CancellationToken ct = default);
 
-    /// <summary>原子保存从首台已验证任务提取出的模板、数据源、绑定和带来源引用的运行快照。</summary>
     Task<ReusableIngestionConfiguration> SaveExtractedAsync(
         ReusableIngestionConfiguration value,
         CancellationToken ct = default);

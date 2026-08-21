@@ -1,10 +1,9 @@
-// 实现基础设施适配器 TimeSeriesSampleProjector，满足应用层端口而不改变领域契约。
 
 using System.Globalization;
 using System.Text.Json;
 using Ingot.Contracts.ProcessConfiguration;
-using Ingot.Platform.Application.ProcessConfiguration;
 using Ingot.Domain.Events;
+using Ingot.Platform.Application.ProcessConfiguration;
 using Ingot.Platform.Infrastructure.ProcessConfiguration;
 
 namespace Ingot.Platform.Infrastructure.TimeSeries;

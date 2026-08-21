@@ -24,7 +24,6 @@ public static class ServiceCollectionExtensions
             services.AddHostedService<OpenAiCompatibleCapabilityProbe>();
         }
 
-        // Replace makes provider selection explicit and stable even when host registration order changes.
         services.Replace(ServiceDescriptor.Singleton<IModelClient>(provider => useOpenAi
             ? provider.GetRequiredService<ChatFrameworkOpenAiModelClient>()
             : provider.GetRequiredService<DeterministicModelClient>()));

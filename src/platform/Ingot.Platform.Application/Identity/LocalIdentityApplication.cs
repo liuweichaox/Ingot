@@ -1,6 +1,5 @@
 namespace Ingot.Platform.Application.Identity;
 
-/// <summary>Application boundary for local identity delivery adapters.</summary>
 public sealed class LocalIdentityApplication(ILocalUserStore users)
 {
     public Task<UserAccount> CreateAsync(UserAccount user, CancellationToken ct = default)

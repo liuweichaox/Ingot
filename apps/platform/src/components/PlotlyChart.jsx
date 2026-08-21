@@ -1,4 +1,3 @@
-// 提供 PlotlyChart 的可复用界面与交互边界。
 
 import { useEffect, useRef } from "react";
 

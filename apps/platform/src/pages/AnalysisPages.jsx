@@ -1,4 +1,3 @@
-// 组装 AnalysisPages 的页面状态与用户交互，业务判定由服务端完成。
 
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router";

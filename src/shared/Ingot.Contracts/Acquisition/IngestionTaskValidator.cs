@@ -4,22 +4,11 @@ using Ingot.Contracts.ProcessConfiguration;
 
 namespace Ingot.Contracts.Acquisition;
 
-/// <summary>一条定位到具体字段的配置错误。<see cref="Path"/> 与配置界面的字段路径一致。</summary>
 public sealed record AcquisitionValidationError(string Path, string Message)
 {
     public override string ToString() => string.IsNullOrEmpty(Path) ? Message : $"{Path}：{Message}";
 }
 
-/// <summary>
-///     采集配置校验与规范化。
-///     平台保存、边缘节点加载和配置界面共同使用这组规则：
-///     <list type="bullet">
-///       <item>平台保存、边缘启动、配置界面共用同一份判断；</item>
-///       <item>错误定位到字段，而不是一整条字符串；</item>
-///       <item><see cref="AcquisitionProtocolCapabilities"/> 裁决"这个协议是否真的支持这个字段"，
-///             不支持就明确拒绝，而不是接受后丢弃。</item>
-///     </list>
-/// </summary>
 public static partial class IngestionTaskValidator
 {
     [GeneratedRegex("^[a-z0-9][a-z0-9._-]{0,127}$")]
@@ -28,10 +17,6 @@ public static partial class IngestionTaskValidator
     [GeneratedRegex(@"^[a-z][a-z0-9]*(?:\.[a-z][a-z0-9_]*)+$")]
     private static partial Regex EventTypePattern();
 
-    /// <param name="model">
-    ///     可选的工艺数据模型。传入时会交叉校验数据项引用与发布完整性；
-    ///     边缘节点只做协议自洽校验时传 null。
-    /// </param>
     public static bool TryValidate(
         IngestionTask? value,
         ProcessDataModel? model,
@@ -135,8 +120,6 @@ public static partial class IngestionTaskValidator
         errors = [];
         return true;
     }
-
-    // ------------------------------------------------------------- 身份与连接
 
     private static IngestionTask SanitizeNullCollectionsAndMembers(
         IngestionTask value,
@@ -265,7 +248,7 @@ public static partial class IngestionTaskValidator
             DataItemCode = value.DataItemCode ?? string.Empty,
             SourcePath = value.SourcePath ?? string.Empty,
             SourceDataType = value.SourceDataType ?? string.Empty,
-            AcceptedQualityValues = value.AcceptedQualityValues ?? [] ,
+            AcceptedQualityValues = value.AcceptedQualityValues ?? [],
             OutOfRangeBehavior = value.OutOfRangeBehavior ?? string.Empty,
             MissingValueBehavior = value.MissingValueBehavior ?? string.Empty
         };
@@ -680,10 +663,6 @@ public static partial class IngestionTaskValidator
         }
     }
 
-    /// <summary>
-    ///     点位绑定的主题必须是本配置真正订阅了的过滤器之一。
-    ///     绑定到没订阅的主题不会报错、也永远收不到数据，是最难排查的一类误配。
-    /// </summary>
     private static void ValidateTopicBindings(
         IngestionTask value,
         AcquisitionProtocolCapability capability,
@@ -850,8 +829,6 @@ public static partial class IngestionTaskValidator
                 $"时间戳编码 {normalizedEncoding} 与点位数据类型 {dataType} 不匹配。"));
     }
 
-    // ------------------------------------------------------------- 映射
-
     private static IReadOnlyList<AcquisitionContextMapping> NormalizeContextMappings(
         IngestionTask value,
         AcquisitionProtocolCapability capability,
@@ -980,9 +957,6 @@ public static partial class IngestionTaskValidator
         return result;
     }
 
-    /// <summary>
-    ///     把结构化寻址字段与规范选择器字符串对齐。两种表示必须解析为同一个点位定义。
-    /// </summary>
     private static AcquisitionValueMapping NormalizeAddressing(
         AcquisitionValueMapping mapping,
         string protocol,
@@ -993,22 +967,31 @@ public static partial class IngestionTaskValidator
         switch (capability.Addressing)
         {
             case AcquisitionAddressingKinds.ModbusRegister:
-            {
-                var selector = mapping.ModbusAddress.HasValue && AcquisitionSelectors.IsModbusArea(mapping.ModbusArea)
-                    ? AcquisitionSelectors.FormatModbus(mapping)
-                    : mapping.SourcePath?.Trim() ?? string.Empty;
-                if (!AcquisitionSelectors.TryParseModbus(selector, out var point, out var error))
                 {
-                    found.Add(new AcquisitionValidationError($"{path}.modbusAddress", error));
-                    return mapping with { SourcePath = selector };
-                }
-
-                if (mapping.ModbusQuantity is < 1 or > 64)
-                    found.Add(new AcquisitionValidationError($"{path}.modbusQuantity", "寄存器数量必须在 1-64 之间。"));
-                return mapping with
-                {
-                    SourcePath = AcquisitionSelectors.FormatModbus(mapping with
+                    var selector = mapping.ModbusAddress.HasValue && AcquisitionSelectors.IsModbusArea(mapping.ModbusArea)
+                        ? AcquisitionSelectors.FormatModbus(mapping)
+                        : mapping.SourcePath?.Trim() ?? string.Empty;
+                    if (!AcquisitionSelectors.TryParseModbus(selector, out var point, out var error))
                     {
+                        found.Add(new AcquisitionValidationError($"{path}.modbusAddress", error));
+                        return mapping with { SourcePath = selector };
+                    }
+
+                    if (mapping.ModbusQuantity is < 1 or > 64)
+                        found.Add(new AcquisitionValidationError($"{path}.modbusQuantity", "寄存器数量必须在 1-64 之间。"));
+                    return mapping with
+                    {
+                        SourcePath = AcquisitionSelectors.FormatModbus(mapping with
+                        {
+                            ModbusArea = point.Area,
+                            ModbusAddress = point.Address,
+                            ModbusQuantity = point.Quantity,
+                            SourceByteLength = point.ByteLength,
+                            SourceDataType = point.DataType,
+                            ByteOrder = point.ByteOrder,
+                            WordOrder = point.WordOrder,
+                            BitIndex = point.BitIndex
+                        }),
                         ModbusArea = point.Area,
                         ModbusAddress = point.Address,
                         ModbusQuantity = point.Quantity,
@@ -1016,68 +999,59 @@ public static partial class IngestionTaskValidator
                         SourceDataType = point.DataType,
                         ByteOrder = point.ByteOrder,
                         WordOrder = point.WordOrder,
-                        BitIndex = point.BitIndex
-                    }),
-                    ModbusArea = point.Area,
-                    ModbusAddress = point.Address,
-                    ModbusQuantity = point.Quantity,
-                    SourceByteLength = point.ByteLength,
-                    SourceDataType = point.DataType,
-                    ByteOrder = point.ByteOrder,
-                    WordOrder = point.WordOrder,
-                    BitIndex = point.BitIndex,
-                    MelsecDevice = null,
-                    MelsecAddress = null
-                };
-            }
-
-            case AcquisitionAddressingKinds.MelsecDevice:
-            {
-                var selector = !string.IsNullOrWhiteSpace(mapping.MelsecDevice) &&
-                               !string.IsNullOrWhiteSpace(mapping.MelsecAddress)
-                    ? AcquisitionSelectors.FormatMelsec(mapping)
-                    : mapping.SourcePath?.Trim() ?? string.Empty;
-                if (!AcquisitionSelectors.TryParseMelsec(selector, out var point, out var error))
-                {
-                    found.Add(new AcquisitionValidationError($"{path}.melsecAddress", error));
-                    return mapping with { SourcePath = selector };
+                        BitIndex = point.BitIndex,
+                        MelsecDevice = null,
+                        MelsecAddress = null
+                    };
                 }
 
-                return mapping with
+            case AcquisitionAddressingKinds.MelsecDevice:
                 {
-                    SourcePath = selector,
-                    MelsecDevice = point.Device.Code,
-                    MelsecAddress = point.DisplayAddress,
-                    SourceDataType = point.DataType,
-                    ModbusQuantity = (ushort)Math.Max(1, point.WordCount),
-                    SourceByteLength = point.ByteLength,
-                    BitIndex = point.BitIndex,
-                    ModbusArea = null,
-                    ModbusAddress = null
-                };
-            }
+                    var selector = !string.IsNullOrWhiteSpace(mapping.MelsecDevice) &&
+                                   !string.IsNullOrWhiteSpace(mapping.MelsecAddress)
+                        ? AcquisitionSelectors.FormatMelsec(mapping)
+                        : mapping.SourcePath?.Trim() ?? string.Empty;
+                    if (!AcquisitionSelectors.TryParseMelsec(selector, out var point, out var error))
+                    {
+                        found.Add(new AcquisitionValidationError($"{path}.melsecAddress", error));
+                        return mapping with { SourcePath = selector };
+                    }
+
+                    return mapping with
+                    {
+                        SourcePath = selector,
+                        MelsecDevice = point.Device.Code,
+                        MelsecAddress = point.DisplayAddress,
+                        SourceDataType = point.DataType,
+                        ModbusQuantity = (ushort)Math.Max(1, point.WordCount),
+                        SourceByteLength = point.ByteLength,
+                        BitIndex = point.BitIndex,
+                        ModbusArea = null,
+                        ModbusAddress = null
+                    };
+                }
 
             default:
-            {
-                var source = mapping.SourcePath?.Trim() ?? string.Empty;
-                if (string.IsNullOrWhiteSpace(source))
-                    found.Add(new AcquisitionValidationError(
-                        $"{path}.sourcePath",
-                        capability.Addressing == AcquisitionAddressingKinds.NodeId ? "节点编号不能为空。" : "设备字段路径不能为空。"));
-                else
-                    ValidateSelectorSyntax(capability, source, $"{path}.sourcePath", found);
-                if (mapping.BitIndex is not null && !capability.SupportsBitAddressing)
-                    found.Add(new AcquisitionValidationError(
-                        $"{path}.bitIndex", $"{capability.DisplayName} 不支持位提取。"));
-                return mapping with
                 {
-                    SourcePath = source,
-                    ModbusArea = null,
-                    ModbusAddress = null,
-                    MelsecDevice = null,
-                    MelsecAddress = null
-                };
-            }
+                    var source = mapping.SourcePath?.Trim() ?? string.Empty;
+                    if (string.IsNullOrWhiteSpace(source))
+                        found.Add(new AcquisitionValidationError(
+                            $"{path}.sourcePath",
+                            capability.Addressing == AcquisitionAddressingKinds.NodeId ? "节点编号不能为空。" : "设备字段路径不能为空。"));
+                    else
+                        ValidateSelectorSyntax(capability, source, $"{path}.sourcePath", found);
+                    if (mapping.BitIndex is not null && !capability.SupportsBitAddressing)
+                        found.Add(new AcquisitionValidationError(
+                            $"{path}.bitIndex", $"{capability.DisplayName} 不支持位提取。"));
+                    return mapping with
+                    {
+                        SourcePath = source,
+                        ModbusArea = null,
+                        ModbusAddress = null,
+                        MelsecDevice = null,
+                        MelsecAddress = null
+                    };
+                }
         }
     }
 
@@ -1129,7 +1103,6 @@ public static partial class IngestionTaskValidator
         if (!EventTypePattern().IsMatch(processSpecificationEventType))
             found.Add(new AcquisitionValidationError("processSpecification.eventType", "工艺规范事件类型格式无效，例如 process.specification.applied。"));
 
-        // 只有文档类协议使用参数集合路径；寄存器类协议直接使用点位选择器。
         var trimmedParametersPath = processSpecification.ParametersPath?.Trim();
         var parametersPath = capability.SupportsControlParametersPath && !string.IsNullOrEmpty(trimmedParametersPath)
             ? trimmedParametersPath
@@ -1277,8 +1250,6 @@ public static partial class IngestionTaskValidator
         }
     }
 
-    // ------------------------------------------------------------- 规范化辅助
-
     private static bool HasAnyAddress(AcquisitionValueMapping mapping)
         => !string.IsNullOrWhiteSpace(mapping.SourcePath) ||
            mapping.ModbusAddress.HasValue ||
@@ -1341,14 +1312,9 @@ public static partial class IngestionTaskValidator
             static pair => pair.Value.Trim(),
             StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>MQTT 主题过滤器语法。规则由 <see cref="MqttTopicFilter"/> 统一提供。</summary>
     public static bool IsValidMqttTopicFilter(string topic, out string error)
         => MqttTopicFilter.IsValid(topic, out error);
 
-    /// <summary>
-    ///     OPC UA NodeId 文本形式的结构检查。真正的合法性由服务器裁决，
-    ///     这里只拦住明显写错的形式，避免等到边缘节点连接设备才发现。
-    /// </summary>
     public static bool IsPlausibleNodeId(string value, out string error)
     {
         error = string.Empty;

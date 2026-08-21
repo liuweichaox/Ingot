@@ -1,17 +1,9 @@
+using Ingot.Platform.Application.Events;
 using Microsoft.Extensions.Options;
 using Npgsql;
 
-using Ingot.Platform.Application.Events;
-
 namespace Ingot.Platform.Infrastructure.Events;
 
-/// <summary>
-///     event_ingest_keys 幂等键修剪：production_events 可按保留策略丢弃旧数据块，
-///     但键表此前无任何清理机制，会无限增长。本服务按 EventIngest:KeyRetentionDays
-///     周期性批量删除超龄键行。默认 0（关闭）。
-///     注意：键保留窗口必须大于边缘端最大补传时间跨度，否则超窗重放的旧事件会被当作新事件
-///     重复入库——因此强制下限 30 天，且建议不小于 production_events 的 RetentionDays。
-/// </summary>
 public sealed class EventIngestKeyPruneHostedService(
     NpgsqlDataSource dataSource,
     IOptions<PlatformEventOptions> options,
@@ -20,7 +12,7 @@ public sealed class EventIngestKeyPruneHostedService(
     private const int MinimumRetentionDays = 30;
     private const int DeleteBatchSize = 50_000;
     private static readonly TimeSpan Interval = TimeSpan.FromHours(24);
-    private const long AdvisoryLockKey = 0x496E676F744B4559; // IngotKEY
+    private const long AdvisoryLockKey = 0x496E676F744B4559;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {

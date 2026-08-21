@@ -1,12 +1,11 @@
-// 集中校验 DatasetQualityValidationRunner 的输入、范围和失败条件，调用方不得绕过。
 
-using Ingot.Platform.Application.ResearchAssets;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using ClosedXML.Excel;
 using Ingot.Contracts.ResearchAssets;
+using Ingot.Platform.Application.ResearchAssets;
 using MatFileHandler;
 using Microsoft.VisualBasic.FileIO;
 
@@ -165,10 +164,10 @@ public sealed class DatasetQualityValidationRunner(IResearchAssetStore store) : 
             if (values.All(string.IsNullOrWhiteSpace))
                 continue;
             result.Add(headers.Select((header, index) => new
-                {
-                    Header = header.Trim(),
-                    Value = index < values.Length ? values[index].Trim() : ""
-                })
+            {
+                Header = header.Trim(),
+                Value = index < values.Length ? values[index].Trim() : ""
+            })
                 .ToDictionary(static item => item.Header, static item => item.Value,
                     StringComparer.OrdinalIgnoreCase));
         }
@@ -227,10 +226,10 @@ public sealed class DatasetQualityValidationRunner(IResearchAssetStore store) : 
             if (values.All(string.IsNullOrWhiteSpace))
                 continue;
             result.Add(headers.Select((header, index) => new
-                {
-                    Header = header,
-                    Value = values[index]
-                })
+            {
+                Header = header,
+                Value = values[index]
+            })
                 .ToDictionary(static item => item.Header, static item => item.Value,
                     StringComparer.OrdinalIgnoreCase));
         }

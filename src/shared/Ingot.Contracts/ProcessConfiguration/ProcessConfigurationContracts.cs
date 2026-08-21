@@ -31,7 +31,7 @@ public sealed record AcquisitionModel
 public sealed record ProcessDataItemDefinition
 {
     public required string Code { get; init; }
-    /// <summary>面向用户的业务显示名称，不表示设备地址或原始字段路径。</summary>
+
     public required string DisplayName { get; init; }
     public string DataType { get; init; } = "double";
     public string? Unit { get; init; }
@@ -42,7 +42,7 @@ public sealed record ProcessDataItemDefinition
 public sealed record ControlParameterDefinition
 {
     public required string Code { get; init; }
-    /// <summary>面向用户的业务显示名称，不表示设备地址或原始字段路径。</summary>
+
     public required string DisplayName { get; init; }
     public string DataType { get; init; } = "double";
     public string? Unit { get; init; }
@@ -81,7 +81,7 @@ public sealed record ProcessAnalysisPlan
     public string AnalysisScope { get; init; } = "production-execution";
     public string AlignmentMode { get; init; } = "stage-relative";
     public string? CohortDimension { get; init; }
-    /// <summary>决定哪些运行记录属于同一可比组；键来自不可变运行上下文。</summary>
+
     public IReadOnlyList<string> ComparisonKeys { get; init; } = ["product_family_code"];
     public IReadOnlyDictionary<string, string> ContextSelector { get; init; } = new Dictionary<string, string>();
     public IReadOnlyList<KnownUnmeasuredConfounderDefinition> KnownUnmeasuredConfounders { get; init; } = [];

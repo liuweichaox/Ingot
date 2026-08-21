@@ -1,8 +1,5 @@
 namespace Ingot.Contracts.Analytics;
 
-/// <summary>
-///     事件库中可被分析的运行对象。对象类型由数据源提供，不限定为设备。
-/// </summary>
 public sealed record DataObjectSummary
 {
     public required string SiteId { get; init; }
@@ -42,9 +39,6 @@ public sealed record DataObjectPage
     public int Offset { get; init; }
 }
 
-/// <summary>
-///     一条有效质量结果及其分析上下文。既可关联生产过程执行，也可关联运行段或时间窗口。
-/// </summary>
 public sealed record QualityAnalysisRecord
 {
     public required Guid RecordId { get; init; }

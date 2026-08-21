@@ -1,6 +1,5 @@
 namespace Ingot.Contracts.Edge;
 
-/// <summary>Edge 生产事件 outbox 向 Platform 可靠上送的主动心跳状态。</summary>
 public sealed record EdgeDeliveryRuntimeStatus
 {
     public string State { get; init; } = "starting";

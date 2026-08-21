@@ -1,8 +1,7 @@
-// 实现 PostgresProcessConfigurationStore 的 PostgreSQL 持久化适配，避免数据库细节泄漏到应用层。
 
-using Ingot.Platform.Application.ProcessConfiguration;
 using System.Text.Json;
 using Ingot.Contracts.ProcessConfiguration;
+using Ingot.Platform.Application.ProcessConfiguration;
 using Npgsql;
 using NpgsqlTypes;
 

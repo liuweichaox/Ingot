@@ -1,15 +1,15 @@
 // 验证平台组件 ResearchAssetWorkflow 的成功、拒绝和安全边界。
 
-using Ingot.Platform.Application.ResearchAssets;
-using Ingot.Platform.Application.ProcessConfiguration;
+using Ingot.Agent;
 using Ingot.Contracts.ProcessConfiguration;
 using Ingot.Contracts.ResearchAssets;
-using Ingot.Agent;
+using Ingot.Platform.Application.ProcessConfiguration;
+using Ingot.Platform.Application.ResearchAssets;
 using Ingot.Platform.Infrastructure.AgentTools;
-using AgentContracts = Ingot.Contracts.Agents;
 using Ingot.Platform.Infrastructure.ProcessConfiguration;
 using Ingot.Platform.Infrastructure.ResearchAssets;
 using Xunit;
+using AgentContracts = Ingot.Contracts.Agents;
 
 namespace Ingot.Core.Tests.Platform;
 

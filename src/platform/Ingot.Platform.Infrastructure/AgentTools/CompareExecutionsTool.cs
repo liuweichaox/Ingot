@@ -1,14 +1,13 @@
-// 实现只读 Agent 工具 CompareExecutionsTool，仅暴露授权范围内的确定性证据。
 
-using Ingot.Platform.Application.Inspections;
-using Ingot.Platform.Application.Events;
 using System.Text.Json;
 using Ingot.Agent;
-using Ingot.Platform.Infrastructure.Inspections;
-using Ingot.Platform.Infrastructure.ProcessExecutions;
 using Ingot.Contracts.Agents;
 using Ingot.Contracts.Events;
 using Ingot.Contracts.Inspections;
+using Ingot.Platform.Application.Events;
+using Ingot.Platform.Application.Inspections;
+using Ingot.Platform.Infrastructure.Inspections;
+using Ingot.Platform.Infrastructure.ProcessExecutions;
 
 namespace Ingot.Platform.Infrastructure.AgentTools;
 

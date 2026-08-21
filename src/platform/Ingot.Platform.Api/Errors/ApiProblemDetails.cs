@@ -1,4 +1,3 @@
-// 统一映射 ApiProblemDetails 的 API 错误语义，避免端点自行拼装响应。
 
 using System.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
@@ -66,12 +65,12 @@ public sealed class ApiProblemDetailsConvention : IApplicationModelConvention
     public void Apply(ApplicationModel application)
     {
         foreach (var action in application.Controllers.SelectMany(static value => value.Actions))
-        foreach (var status in CommonErrorStatuses)
-        {
-            if (action.Filters.OfType<ProducesResponseTypeAttribute>()
-                .Any(value => value.StatusCode == status))
-                continue;
-            action.Filters.Add(new ProducesResponseTypeAttribute(typeof(ApiProblemDetails), status));
-        }
+            foreach (var status in CommonErrorStatuses)
+            {
+                if (action.Filters.OfType<ProducesResponseTypeAttribute>()
+                    .Any(value => value.StatusCode == status))
+                    continue;
+                action.Filters.Add(new ProducesResponseTypeAttribute(typeof(ApiProblemDetails), status));
+            }
     }
 }

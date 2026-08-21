@@ -1,9 +1,5 @@
 namespace Ingot.Contracts.Identity;
 
-/// <summary>
-///     平台角色的规范字符串常量（跨项目共享）。Api 的 PlatformRoles 与本地账户播种共用同一取值，
-///     避免角色字符串在多处漂移。
-/// </summary>
 public static class PlatformRoleNames
 {
     public const string QualityInspector = "quality.inspector";

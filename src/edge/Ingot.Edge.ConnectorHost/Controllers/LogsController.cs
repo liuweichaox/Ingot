@@ -3,16 +3,11 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Ingot.Edge.ConnectorHost.Controllers;
 
-/// <summary>
-///     日志查询 API（供 Web 门户代理调用）
-/// </summary>
 [ApiController]
 [Route("api/logs")]
 public class LogsController(ILogViewService logViewService) : ControllerBase
 {
-    /// <summary>
-    ///     获取日志数据
-    /// </summary>
+
     [HttpGet]
     public async Task<IActionResult> GetLogs(
         [FromQuery] string? level = null,
@@ -43,9 +38,6 @@ public class LogsController(ILogViewService logViewService) : ControllerBase
         }
     }
 
-    /// <summary>
-    ///     获取可用的日志级别
-    /// </summary>
     [HttpGet("levels")]
     public IActionResult GetLevels()
     {

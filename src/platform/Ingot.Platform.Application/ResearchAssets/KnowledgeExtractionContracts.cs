@@ -48,7 +48,6 @@ public sealed record GeneratedMechanismClaimDraft
     public string GeneratorModel { get; init; } = "";
 }
 
-/// <summary>根据受控来源生成待人工复核的结构化机理声明草稿。</summary>
 public interface IMechanismClaimDraftGenerator
 {
     Task<GeneratedMechanismClaimDraft> GenerateAsync(

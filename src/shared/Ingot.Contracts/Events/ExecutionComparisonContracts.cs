@@ -28,7 +28,6 @@ public sealed record ExecutionComparisonResult
 
     public string? AlignmentMode { get; init; }
 
-    /// <summary>生成比较特征的算法版本；尚未计算时为 uncomputed。</summary>
     public string FeatureAlgorithmVersion { get; init; } = "uncomputed";
 
     public string EvidenceLevel { get; init; } = "insufficient";
@@ -41,16 +40,8 @@ public sealed record ExecutionComparisonResult
 
     public IReadOnlyList<ExecutionQualityAssociation> QualityAssociations { get; init; } = [];
 
-    /// <summary>
-    ///     将实际控制参数和过程轨迹特征放在同一证据口径下形成的诊断结果。
-    ///     候选原因仍是观察性关联，必须经过受控实验才能升级为因果结论。
-    /// </summary>
     public ExecutionDiagnosisSummary Diagnosis { get; init; } = new();
 
-    /// <summary>
-    ///     由确定性工具生成的统一调查报告。本地模型只能组织和解释这些字段，
-    ///     不能自行补写数值、记录标识或把候选关联升级为根因。
-    /// </summary>
     public ExecutionInvestigationReport Investigation { get; init; } = new();
 
     public required ExecutionComparisonAcceptance Acceptance { get; init; }
@@ -336,10 +327,8 @@ public sealed record ExecutionControlParameterValue
 
     public string? Unit { get; init; }
 
-    /// <summary>参数事实的来源，例如 PLC 回读或 MES 批次关联的配方快照。</summary>
     public string? Source { get; init; }
 
-    /// <summary>来源侧的捕获状态；用于区分直接回读、源记录关联和推断值。</summary>
     public string? CaptureStatus { get; init; }
 
     public JsonElement Value { get; init; }

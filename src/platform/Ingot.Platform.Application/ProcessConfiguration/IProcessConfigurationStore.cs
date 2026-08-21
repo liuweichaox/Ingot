@@ -2,7 +2,6 @@ using Ingot.Contracts.ProcessConfiguration;
 
 namespace Ingot.Platform.Application.ProcessConfiguration;
 
-/// <summary>保存并解析版本化工艺配置，历史执行始终引用不可变版本。</summary>
 public interface IProcessConfigurationStore
 {
     Task InitializeAsync(CancellationToken ct = default);

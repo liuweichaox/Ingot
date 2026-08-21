@@ -4,7 +4,6 @@ using System.Text.Json;
 
 namespace Ingot.Contracts.Acquisition;
 
-/// <summary>批量数据源与任务绑定的 RFC 4180 CSV 交换格式。</summary>
 public static class IngestionConfigurationCsv
 {
     private const int MaximumCsvCharacters = 10 * 1024 * 1024;

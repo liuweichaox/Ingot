@@ -1,15 +1,11 @@
-using Ingot.Platform.Application.ProcessResearch;
 using Ingot.Contracts.ProcessResearch;
+using Ingot.Platform.Application.ProcessResearch;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Npgsql;
 
 namespace Ingot.Platform.Infrastructure.ProcessResearch;
 
-/// <summary>
-///     过程执行、实际工艺规范和检验结果到齐后自动固化实验结果并关闭实验。
-///     它不批准实验、不启动设备，也不绕过人工安全边界。
-/// </summary>
 public sealed class ResearchExperimentAutomationHostedService(
     NpgsqlDataSource dataSource,
     IProcessResearchStore store,
@@ -18,7 +14,7 @@ public sealed class ResearchExperimentAutomationHostedService(
     ResearchOperatingRegionMaterializer operatingRegionMaterializer,
     ILogger<ResearchExperimentAutomationHostedService> logger) : BackgroundService
 {
-    private const long AdvisoryLockKey = 0x496E676F74524553; // IngotRES
+    private const long AdvisoryLockKey = 0x496E676F74524553;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -64,7 +60,7 @@ public sealed class ResearchExperimentAutomationHostedService(
     private async Task MaterializeReadyExperimentsAsync(CancellationToken ct)
     {
         const int pageSize = 100;
-        for (var offset = 0;; offset += pageSize)
+        for (var offset = 0; ; offset += pageSize)
         {
             var projects = await store.ListProjectsAsync(
                 "system-research-automation",

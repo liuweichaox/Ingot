@@ -1,4 +1,3 @@
-// 实现应用层用例 MechanismModelExperimentPolicy，集中承载可独立测试的业务规则。
 
 using System.Security.Cryptography;
 using System.Text.Json;

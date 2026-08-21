@@ -70,10 +70,10 @@ public sealed class AgentRuntimeTests
             ProductEntryPoints.Chat,
             "analyst",
             new CreateChatRunRequest
-        {
-            Question = "综合核对最近数据是否完整",
-            Mode = "combined"
-        }));
+            {
+                Question = "综合核对最近数据是否完整",
+                Mode = "combined"
+            }));
         Assert.Equal("多视角研判尚未启用。", error.Message);
     }
 

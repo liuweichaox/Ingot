@@ -2,7 +2,6 @@ using Npgsql;
 
 namespace Ingot.Platform.Infrastructure.ProcessExecutions;
 
-/// <summary>为单次过程执行分析获取跨副本互斥锁，避免重复物化结果。</summary>
 public interface IExecutionAnalysisLockProvider
 {
     Task<IAsyncDisposable> AcquireAsync(
@@ -10,11 +9,6 @@ public interface IExecutionAnalysisLockProvider
         CancellationToken ct = default);
 }
 
-/// <summary>
-///     Uses a session advisory lock so API and Worker replicas do not repeat the same
-///     completed-execution scientific computation. The dedicated connection is held only
-///     for the duration of the computation and releases the lock when disposed.
-/// </summary>
 public sealed class PostgresExecutionAnalysisLockProvider(NpgsqlDataSource dataSource)
     : IExecutionAnalysisLockProvider
 {
@@ -22,6 +16,7 @@ public sealed class PostgresExecutionAnalysisLockProvider(NpgsqlDataSource dataS
         ProcessExecutionAnalysisMaterializationKey key,
         CancellationToken ct = default)
     {
+
         var lockKey = string.Join('\u001f',
             key.ExecutionId,
             key.AlgorithmVersion,

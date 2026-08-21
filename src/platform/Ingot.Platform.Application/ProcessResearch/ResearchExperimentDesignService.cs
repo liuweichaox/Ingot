@@ -3,11 +3,6 @@ using Ingot.Contracts.ProcessResearch;
 
 namespace Ingot.Platform.Application.ProcessResearch;
 
-/// <summary>
-/// Bridges a project-scoped DOE request to the stateless numerical service.  The
-/// generated plan deliberately remains a preview until the caller submits the
-/// normal experiment-creation command.
-/// </summary>
 public sealed class ResearchExperimentDesignService(
     IProcessResearchStore store,
     IProcessOptimizerClient optimizer)

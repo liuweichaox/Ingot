@@ -53,7 +53,7 @@ export default function AuthGate({ children }) {
     try {
       await postJson("/api/v1/auth/logout", {});
     } catch {
-      // Local state must still be cleared when the server session has already expired.
+
     } finally {
       setAuthToken(null);
       setIdentity(null);

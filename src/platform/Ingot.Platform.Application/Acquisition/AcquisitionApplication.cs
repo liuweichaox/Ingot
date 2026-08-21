@@ -2,12 +2,11 @@ using Ingot.Contracts.Acquisition;
 
 namespace Ingot.Platform.Application.Acquisition;
 
-/// <summary>Delivery-facing application boundary for acquisition configuration.</summary>
 public sealed class AcquisitionApplication(
     IIngestionTaskStore tasks,
     IIngestionConfigurationStore configurations)
 {
-    // Task names intentionally mirror the established public use-case vocabulary.
+
     public Task<IReadOnlyList<IngestionTask>> ListAsync(CancellationToken ct = default)
         => tasks.ListAsync(ct);
     public Task<IReadOnlyList<IngestionTask>> ListPublishedForEdgeAsync(string edgeId, CancellationToken ct = default)

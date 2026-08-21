@@ -3,7 +3,6 @@ using System.Text.Json;
 
 namespace Ingot.Edge.ConnectorHost.Acquisition;
 
-/// <summary>解析简单点号/数组路径以及 RFC 6901 JSON Pointer。</summary>
 internal static class JsonElementPathResolver
 {
     public static bool TryResolve(JsonElement root, string? path, out JsonElement value)

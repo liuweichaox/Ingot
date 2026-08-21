@@ -16,10 +16,6 @@ internal interface IAcquisitionDeploymentCache
         CancellationToken ct = default);
 }
 
-/// <summary>
-///     保存平台最后一次成功下发的不可变采集部署。缓存只属于一个 EdgeId，
-///     避免复制磁盘或修改启动身份后误用其他节点的设备配置。
-/// </summary>
 internal sealed class JsonAcquisitionDeploymentCache(
     IOptions<HttpPollingAcquisitionOptions> options,
     ILogger<JsonAcquisitionDeploymentCache> logger) : IAcquisitionDeploymentCache

@@ -1,4 +1,3 @@
-// 生成搜索引擎抓取策略，避免依赖手工维护的静态文件。
 
 import type { MetadataRoute } from "next";
 

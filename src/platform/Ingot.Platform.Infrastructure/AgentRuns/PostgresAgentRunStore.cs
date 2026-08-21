@@ -6,10 +6,6 @@ using NpgsqlTypes;
 
 namespace Ingot.Platform.Infrastructure.AgentRuns;
 
-/// <summary>
-///     Production Agent run record source. Run snapshots, streaming events, and formal
-///     evaluation references share the same PostgreSQL recovery boundary.
-/// </summary>
 public sealed class PostgresAgentRunStore(NpgsqlDataSource dataSource) : IAgentRunStore
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);

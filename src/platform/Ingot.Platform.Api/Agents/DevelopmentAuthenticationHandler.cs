@@ -5,10 +5,6 @@ using Microsoft.Extensions.Options;
 
 namespace Ingot.Platform.Api.Agents;
 
-/// <summary>
-/// Local development uses the platform identity directly and never introduces
-/// a second product login. Production always uses the configured JWT issuer.
-/// </summary>
 public sealed class DevelopmentAuthenticationHandler(
     IOptionsMonitor<AuthenticationSchemeOptions> options,
     ILoggerFactory logger,

@@ -25,26 +25,25 @@ public sealed record InspectionCommandResult<T>
     public string? Error { get; init; }
 
     public static InspectionCommandResult<T> Success(T value) => new()
-        { Status = InspectionCommandStatus.Success, Value = value };
+    { Status = InspectionCommandStatus.Success, Value = value };
 
     public static InspectionCommandResult<T> Created(T value) => new()
-        { Status = InspectionCommandStatus.Created, Value = value };
+    { Status = InspectionCommandStatus.Created, Value = value };
 
     public static InspectionCommandResult<T> Invalid(string error) => new()
-        { Status = InspectionCommandStatus.Invalid, Error = error };
+    { Status = InspectionCommandStatus.Invalid, Error = error };
 
     public static InspectionCommandResult<T> Conflict(string error, object? existing = null) => new()
-        { Status = InspectionCommandStatus.Conflict, Error = error, Existing = existing };
+    { Status = InspectionCommandStatus.Conflict, Error = error, Existing = existing };
 
     public static InspectionCommandResult<T> NotFound(string? error = null) => new()
-        { Status = InspectionCommandStatus.NotFound, Error = error };
+    { Status = InspectionCommandStatus.NotFound, Error = error };
 }
 
 public sealed record InspectionAttachmentContent(
     InspectionAttachment Metadata,
     Stream Content);
 
-/// <summary>执行检验定义、质量计划和记录变更的应用命令。</summary>
 public sealed partial class InspectionCommands(
     IInspectionMasterDataStore masterData,
     IInspectionRecordStore records,
@@ -163,10 +162,6 @@ public sealed partial class InspectionCommands(
         var attributed = request is null ? null : request with { SubmittedBy = submittedBy };
         if (!InspectionRecordValidator.TryValidate(attributed, out var normalized, out var error))
             return InspectionCommandResult<InspectionRecord>.Invalid(error);
-
-        // 注：检验与运行的关联验证已集成
-        // 完整验证需要从 API 调用层传入 SiteId，目前作为框架保留
-        // 代码已准备好，等待在 API 层调用时使用（在知道 SiteId 之后）
 
         var definition = await masterData.GetInspectionDefinitionAsync(
             normalized!.DefinitionCode, normalized.DefinitionVersion, ct).ConfigureAwait(false);

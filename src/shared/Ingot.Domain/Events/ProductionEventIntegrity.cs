@@ -4,10 +4,6 @@ using System.Text.Json;
 
 namespace Ingot.Domain.Events;
 
-/// <summary>
-///     生产事件信封的规范化与内容指纹。哈希不包含 Seq（传输位置）和 PayloadHash（自身），
-///     因此同一业务事件重放到相同 Edge outbox 时保持稳定。
-/// </summary>
 public static class ProductionEventIntegrity
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);

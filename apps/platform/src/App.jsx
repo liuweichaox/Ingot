@@ -1,4 +1,3 @@
-// 组装平台导航、身份边界和页面路由，不承载服务端业务规则。
 
 import { Dialog, DialogBackdrop, DialogPanel, Menu, MenuButton, MenuItem, MenuItems } from "@headlessui/react";
 import {

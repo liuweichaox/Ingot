@@ -3,7 +3,6 @@ using Ingot.Contracts.Events;
 
 namespace Ingot.Platform.Application.Events;
 
-/// <summary>向交付层提供经过授权和分页约束的平台事件用例。</summary>
 public sealed class PlatformEventApplication(IPlatformEventStore events)
 {
     public Task<EventBatchResponse> IngestAsync(EventBatchRequest request, CancellationToken ct = default)

@@ -1,15 +1,15 @@
 // 验证平台组件 ResearchObservationAssembler 的成功、拒绝和安全边界。
 
-using Ingot.Platform.Application.ProcessConfiguration;
 using System.Text.Json;
 using Ingot.Contracts.Events;
 using Ingot.Contracts.Inspections;
 using Ingot.Contracts.ProcessConfiguration;
 using Ingot.Contracts.ProcessResearch;
-using Ingot.Platform.Infrastructure.ProcessExecutions;
+using Ingot.Platform.Application.ProcessConfiguration;
 using Ingot.Platform.Application.ProcessExecutions;
 using Ingot.Platform.Infrastructure.Inspections;
 using Ingot.Platform.Infrastructure.ProcessConfiguration;
+using Ingot.Platform.Infrastructure.ProcessExecutions;
 using Ingot.Platform.Infrastructure.ProcessResearch;
 using Xunit;
 

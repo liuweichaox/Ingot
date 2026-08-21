@@ -1,11 +1,10 @@
-// 实现只读 Agent 工具 SearchProcessKnowledgeTool，仅暴露授权范围内的确定性证据。
 
-using Ingot.Platform.Application.ResearchAssets;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Ingot.Agent;
 using Ingot.Contracts.Agents;
 using Ingot.Contracts.ResearchAssets;
+using Ingot.Platform.Application.ResearchAssets;
 using Ingot.Platform.Infrastructure.ResearchAssets;
 
 namespace Ingot.Platform.Infrastructure.AgentTools;

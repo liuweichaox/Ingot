@@ -1,7 +1,7 @@
 // 验证平台组件 SequenceGapDetector 的成功、拒绝和安全边界。
 
-using Ingot.Platform.Infrastructure.Events;
 using Ingot.Domain.Events;
+using Ingot.Platform.Infrastructure.Events;
 using Xunit;
 
 namespace Ingot.Core.Tests.Platform;

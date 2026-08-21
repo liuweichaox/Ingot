@@ -2,18 +2,17 @@ namespace Ingot.Contracts.Events;
 
 public static class ProcessExecutionKinds
 {
-    /// <summary>具有明确开始和结束边界的离散过程执行。</summary>
+
     public const string Discrete = "discrete";
 }
 
-/// <summary>面向生产与质量人员的过程执行视图，不包含高频样本明细。</summary>
 public sealed record ProcessExecutionSummary
 {
     public required string ExecutionId { get; init; }
     public required string SiteId { get; init; }
     public string Kind { get; init; } = ProcessExecutionKinds.Discrete;
     public required string EquipmentId { get; init; }
-    /// <summary>该运行实际收到事件的 Edge；正常运行通常只有一个，迁移或补传时可能有多个。</summary>
+
     public IReadOnlyList<string> EdgeIds { get; init; } = [];
     public required string Status { get; init; }
     public bool HasStarted { get; init; }
@@ -59,9 +58,9 @@ public sealed record ProcessPhaseSummary
 {
     public required string Code { get; init; }
     public required string Name { get; init; }
-    /// <summary>同一阶段在一次过程执行内可重复出现，序号从 1 开始。</summary>
+
     public int Order { get; init; }
-    /// <summary>stage_number 或 unknown。</summary>
+
     public string Source { get; init; } = "unknown";
     public int SampleCount { get; init; }
     public DateTimeOffset? StartedAt { get; init; }

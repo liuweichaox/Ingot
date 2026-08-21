@@ -65,12 +65,12 @@ public sealed class MqttPayloadDecoderTests
     {
         using var output = new MemoryStream();
         using (Stream compressor = compression switch
-               {
-                   "gzip" => new GZipStream(output, CompressionLevel.Fastest, leaveOpen: true),
-                   "deflate" => new DeflateStream(output, CompressionLevel.Fastest, leaveOpen: true),
-                   "brotli" => new BrotliStream(output, CompressionLevel.Fastest, leaveOpen: true),
-                   _ => throw new ArgumentOutOfRangeException(nameof(compression))
-               })
+        {
+            "gzip" => new GZipStream(output, CompressionLevel.Fastest, leaveOpen: true),
+            "deflate" => new DeflateStream(output, CompressionLevel.Fastest, leaveOpen: true),
+            "brotli" => new BrotliStream(output, CompressionLevel.Fastest, leaveOpen: true),
+            _ => throw new ArgumentOutOfRangeException(nameof(compression))
+        })
             compressor.Write(source);
         return output.ToArray();
     }

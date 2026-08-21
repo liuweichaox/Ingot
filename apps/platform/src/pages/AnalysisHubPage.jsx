@@ -1,4 +1,3 @@
-// 组装 AnalysisHubPage 的页面状态与用户交互，业务判定由服务端完成。
 
 import { ArrowRightIcon, BeakerIcon, ChatBubbleLeftRightIcon, CheckBadgeIcon, ScaleIcon } from "@heroicons/react/24/outline";
 import { Link } from "react-router";

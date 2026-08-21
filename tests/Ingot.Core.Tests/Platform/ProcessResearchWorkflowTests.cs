@@ -1,19 +1,19 @@
-using Ingot.Platform.Application.Analytics;
-using Ingot.Platform.Application.ResearchAssets;
-using Ingot.Platform.Application.ProcessConfiguration;
+using System.Text.Json;
 using Ingot.Contracts.Analytics;
+using Ingot.Contracts.Events;
 using Ingot.Contracts.ProcessConfiguration;
 using Ingot.Contracts.ProcessResearch;
-using Ingot.Contracts.Events;
 using Ingot.Contracts.ResearchAssets;
 using Ingot.Platform.Api.Controllers;
-using Ingot.Platform.Application.ProcessResearch;
+using Ingot.Platform.Application.Analytics;
+using Ingot.Platform.Application.ProcessConfiguration;
 using Ingot.Platform.Application.ProcessExecutions;
+using Ingot.Platform.Application.ProcessResearch;
+using Ingot.Platform.Application.ResearchAssets;
 using Ingot.Platform.Infrastructure.Analytics;
 using Ingot.Platform.Infrastructure.ProcessConfiguration;
 using Ingot.Platform.Infrastructure.ProcessResearch;
 using Ingot.Platform.Infrastructure.ResearchAssets;
-using System.Text.Json;
 using Xunit;
 
 namespace Ingot.Core.Tests.Platform;
@@ -69,10 +69,10 @@ public sealed class ProcessResearchWorkflowTests
             Statement = "保压温度通过材料流动状态影响压力响应。",
             Rationale = "来源于过程曲线和工程机理。",
             VariableCodes = ["holding-temperature", "press-force"],
-            CausalChain = [new ResearchHypothesisCausalLink { FromVariableCode="holding-temperature", ToVariableCode="press-force", Mechanism="温度改变材料黏度和压力传递。", Direction="decrease" }],
-            TemporalFeatures = [new ResearchHypothesisTemporalFeature { VariableCode="press-force", FeatureCode="pressure-rise", PhaseCode="holding", DelayMilliseconds=500, WindowMilliseconds=3000 }],
-            Interactions = [new ResearchHypothesisInteraction { VariableCodes=["holding-temperature","press-force"], Description="温度改变压力效应强度。" }],
-            FailureConditions = [new ResearchHypothesisFailureCondition { Condition="温度超过材料稳定边界", ObservableSignal="颜色或挥发物异常", RequiredResponse="停止实验并恢复基线" }],
+            CausalChain = [new ResearchHypothesisCausalLink { FromVariableCode = "holding-temperature", ToVariableCode = "press-force", Mechanism = "温度改变材料黏度和压力传递。", Direction = "decrease" }],
+            TemporalFeatures = [new ResearchHypothesisTemporalFeature { VariableCode = "press-force", FeatureCode = "pressure-rise", PhaseCode = "holding", DelayMilliseconds = 500, WindowMilliseconds = 3000 }],
+            Interactions = [new ResearchHypothesisInteraction { VariableCodes = ["holding-temperature", "press-force"], Description = "温度改变压力效应强度。" }],
+            FailureConditions = [new ResearchHypothesisFailureCondition { Condition = "温度超过材料稳定边界", ObservableSignal = "颜色或挥发物异常", RequiredResponse = "停止实验并恢复基线" }],
             FalsificationConditions = ["升高温度后压力响应及质量结果均没有方向性变化。"],
             Confidence = 0.4
         }, "engineer-a");
@@ -1589,7 +1589,7 @@ public sealed class ProcessResearchWorkflowTests
                 ActualFactors = experiment.RunPlan[0].Factors,
                 Outcomes = new Dictionary<string, double> { ["form-error"] = 0.52 },
                 ConstraintOutcomes = new Dictionary<string, double>
-                    { ["form-error-safety"] = 0.52 },
+                { ["form-error-safety"] = 0.52 },
                 SourceContentHash = new string('e', 64)
             }));
         var decision = await service.RecordDecisionAsync(
@@ -1643,9 +1643,9 @@ public sealed class ProcessResearchWorkflowTests
                     }
                 ],
                 ProcessFeatures = new Dictionary<string, double>
-                    { ["temperature.average"] = 500 + index * 5 },
+                { ["temperature.average"] = 500 + index * 5 },
                 Outcomes = new Dictionary<string, double>
-                    { ["form-error"] = 0.8 - index * 0.12 },
+                { ["form-error"] = 0.8 - index * 0.12 },
                 SourceContentHash = new string((char)('a' + index), 64)
             }).ToArray();
         await store.SaveExperimentResultAsync(new ResearchExperimentResult
@@ -1660,9 +1660,14 @@ public sealed class ProcessResearchWorkflowTests
         var optimizer = new StubReplayOptimizerClient();
         var mechanismStore = new ReplayMechanismKnowledgeStore(new MechanismClaimVersion
         {
-            ClaimId = Guid.CreateVersion7(), ProjectId = project.ProjectId, Version = 1,
-            Status = MechanismClaimStatuses.Active, Name = "优选保压范围", MechanismType = "constraint",
-            Statement = "优先在已验证保压范围内选择。", FalsificationCondition = "独立实验显示范围外更稳定。",
+            ClaimId = Guid.CreateVersion7(),
+            ProjectId = project.ProjectId,
+            Version = 1,
+            Status = MechanismClaimStatuses.Active,
+            Name = "优选保压范围",
+            MechanismType = "constraint",
+            Statement = "优先在已验证保压范围内选择。",
+            FalsificationCondition = "独立实验显示范围外更稳定。",
             Applicability = [new MechanismClaimApplicability { DimensionCode = "project-code", DimensionValue = project.Code }],
             Constraints = [new MechanismClaimConstraint { VariableCode = "holding-temperature", ConstraintKind = "preferred-range", Minimum = 505, Maximum = 520, Unit = "Cel", Severity = "soft" }],
             ContentHash = new string('f', 64)
@@ -1766,7 +1771,7 @@ public sealed class ProcessResearchWorkflowTests
         var report = await new ResearchHistoricalReplayService(store, optimizer).RunAsync(
             project.ProjectId,
             new ResearchHistoricalReplayRequest
-                { SeedCount = 2, Budget = 5, InitialObservationCount = 3 },
+            { SeedCount = 2, Budget = 5, InitialObservationCount = 3 },
             "engineer-a");
 
         Assert.False(report.GatePassed);
@@ -1862,9 +1867,9 @@ public sealed class ProcessResearchWorkflowTests
                     ExecutionKey = $"controlled-history-{index}",
                     ActualFactors = Run("unused", 1, 500 + index * 10, 8 + index).Factors,
                     ProcessFeatures = new Dictionary<string, double>
-                        { ["temperature.average"] = 500 + index * 10 },
+                    { ["temperature.average"] = 500 + index * 10 },
                     Outcomes = new Dictionary<string, double>
-                        { ["form-error"] = 0.55 - index * 0.05 },
+                    { ["form-error"] = 0.55 - index * 0.05 },
                     SourceContentHash = new string((char)('f' + index), 64)
                 }).ToArray()
         });
@@ -2117,7 +2122,7 @@ public sealed class ProcessResearchWorkflowTests
                     ActualFactors = factors,
                     Outcomes = new Dictionary<string, double> { ["form-error"] = 0.3 },
                     ActualContextSnapshot = new Dictionary<string, string>
-                        { ["equipment_id"] = "press-01" },
+                    { ["equipment_id"] = "press-01" },
                     ValidForOptimization = true,
                     SourceContentHash = new string('5', 64),
                     CapturedAt = DateTimeOffset.UtcNow

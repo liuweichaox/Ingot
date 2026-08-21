@@ -1,14 +1,11 @@
 using System.Diagnostics;
-using Ingot.Edge.Application.Abstractions;
 using Ingot.Domain.Events;
+using Ingot.Edge.Application.Abstractions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace Ingot.Edge.Infrastructure.Events;
 
-/// <summary>
-///     协议无关的事件写入口：先持久化记录，再由 outbox 上报中心。
-/// </summary>
 public sealed class EventSink : IEventSink
 {
     private readonly IEventLog _eventLog;

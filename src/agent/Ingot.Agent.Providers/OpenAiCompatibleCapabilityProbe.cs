@@ -6,10 +6,6 @@ using Microsoft.Extensions.Options;
 
 namespace Ingot.Agent.Providers;
 
-/// <summary>
-///     Chat 启用且配置内网 OpenAI-compatible 地址时，在启动阶段验证 /models
-///     并确认快速、推理两个角色使用的模型均可见，避免运行到工程师提问时才失败。
-/// </summary>
 public sealed class OpenAiCompatibleCapabilityProbe(
     IHttpClientFactory clients,
     IOptions<ChatOptions> options,

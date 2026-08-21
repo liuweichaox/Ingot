@@ -228,11 +228,7 @@ public sealed record ResearchObjective
     public double? LowerLimit { get; init; }
     public double? UpperLimit { get; init; }
     public double Weight { get; init; } = 1;
-    /// <summary>
-    ///     结果来源。默认使用同名检验特性；可显式写成
-    ///     inspection:&lt;characteristic-code&gt;，或用
-    ///     inspection-outcome:&lt;definition-code&gt; 将 PASS/FAIL 映射为 1/0。
-    /// </summary>
+
     public string? DataSource { get; init; }
 }
 
@@ -258,10 +254,6 @@ public sealed record ResearchConstraint
     public bool SafetyCritical { get; init; }
 }
 
-/// <summary>
-///     由实测结果定义的可行性边界。它与控制参数硬边界分开建模，
-///     供受约束贝叶斯优化计算候选工艺规范的安全/质量可行概率。
-/// </summary>
 public sealed record ResearchOutcomeConstraint
 {
     public required string Code { get; init; }
@@ -294,10 +286,6 @@ public static class ResearchDerivedFeatureOperators
             or AbsoluteDifference or Ratio or Minimum or Maximum or StandardDeviation;
 }
 
-/// <summary>
-///     安全的声明式候选特征。输入只能引用项目可控变量或排在此前的派生特征；
-///     优化服务不执行任意表达式，也不根据变量名称猜测工艺含义。
-/// </summary>
 public sealed record ResearchDerivedFeature
 {
     public required string Name { get; init; }
@@ -355,9 +343,6 @@ public sealed record ResearchWorkflowBaselineStep
     public double Minutes { get; init; }
 }
 
-/// <summary>
-///     在使用 Ingot 前观察到的工程师原流程。它是验证基线，不是员工绩效记录。
-/// </summary>
 public sealed record ResearchWorkflowBaseline
 {
     public required string Name { get; init; }
@@ -388,9 +373,6 @@ public sealed record ResearchValidationPreregistrationRequest
     public IReadOnlyList<ResearchWorkflowBaseline> EngineerWorkflowBaselines { get; init; } = [];
 }
 
-/// <summary>
-///     阶段 0 的不可变预注册证据。项目内容变化会使旧版本不再具备准入效力。
-/// </summary>
 public sealed record ResearchValidationPreregistration
 {
     public Guid PreregistrationId { get; init; }
@@ -508,10 +490,6 @@ public sealed record ResearchHypothesisFromExecutionComparisonRequest
     public int MaximumHypotheses { get; init; } = 3;
 }
 
-/// <summary>
-///     将已完成的生产过程执行作为历史证据纳入研发项目。过程执行标识同时是实验运行标识，
-///     因而不会复制过程、工艺规范或检验数据。
-/// </summary>
 public sealed record ResearchHistoricalRunImportRequest
 {
     public IReadOnlyList<string> ProcessExecutionIds { get; init; } = [];
@@ -526,10 +504,6 @@ public sealed record ExperimentRunPlan
     public IReadOnlyList<ExperimentFactorSetting> Factors { get; init; } = [];
 }
 
-/// <summary>
-///     经典 DOE 的无状态预览请求。预览只生成可编辑的运行计划，不会保存实验、
-///     改变审批状态或向设备下发任何命令。
-/// </summary>
 public sealed record ResearchExperimentDesignRequest
 {
     public required string DesignMethod { get; init; }
@@ -576,11 +550,6 @@ public sealed record ExperimentExecutionCommand
     public IReadOnlyList<ExperimentFactorSetting> RequestedFactors { get; init; } = [];
 }
 
-/// <summary>
-///     设备无关的实验执行交接单。PLC、MES、工艺规范系统或人工操作站只需要消费
-///     这组有序命令，并在实际运行中沿用 ExecutionKey；采集侧随后会自动把实际工艺规范、
-///     过程轨迹和检验结果关联回同一运行。
-/// </summary>
 public sealed record ResearchExperimentExecution
 {
     public Guid DispatchId { get; init; }
@@ -650,10 +619,6 @@ public sealed record MechanismModelApplicationReference
     public required string FeatureCode { get; init; }
 }
 
-/// <summary>
-///     工程师在不知道该次运行结果时，对一条旁路模型建议作出的预注册选择。
-///     模型建议本身由服务端从冻结的优化实验快照复制，调用方不能覆盖。
-/// </summary>
 public sealed record ResearchShadowDecisionRequest
 {
     public required string Decision { get; init; }
@@ -716,10 +681,6 @@ public sealed record ResearchShadowApplicabilityAssessment
     public required string Summary { get; init; }
 }
 
-/// <summary>
-///     影子建议不下发设备。它把冻结的模型输入、建议、人工选择和后续源数据结果
-///     绑定到一起，用于评估采用率、未建模现场限制、校准和设置偏差。
-/// </summary>
 public sealed record ResearchShadowRecommendation
 {
     public Guid RecommendationId { get; init; }
@@ -775,7 +736,7 @@ public sealed record ResearchShadowStopSignal
 public sealed record ResearchShadowCampaignReport
 {
     public Guid ProjectId { get; init; }
-    /// <summary>历史载荷缺少该值时，表示阈值早于策略版本化机制。</summary>
+
     public string ValidationPolicyVersion { get; init; } = "not-evaluated";
     public string MechanismKnowledgeSnapshotHash { get; init; } = "none";
     public int TotalRecommendations { get; init; }
@@ -827,10 +788,6 @@ public sealed record ResearchRollbackDrillRequest
     public DateTimeOffset ConductedAt { get; init; }
 }
 
-/// <summary>
-///     受控在线前的停止与回退演练证据。演练人提交后内容不可改，且必须由另一名
-///     工程师复核；在线门禁只接受复核通过且本身 Passed=true 的记录。
-/// </summary>
 public sealed record ResearchRollbackDrill
 {
     public Guid DrillId { get; init; }
@@ -885,7 +842,7 @@ public sealed record ResearchHistoricalReplayReport
 {
     public Guid ReportId { get; init; }
     public Guid ProjectId { get; init; }
-    /// <summary>历史载荷缺少该值时，表示阈值早于策略版本化机制。</summary>
+
     public string ValidationPolicyVersion { get; init; } = "not-evaluated";
     public string MechanismKnowledgeSnapshotHash { get; init; } = "none";
     public string MechanismModelSnapshotHash { get; init; } = "none";
@@ -901,7 +858,7 @@ public sealed record ResearchHistoricalReplayReport
     public required ResearchReplayMethodSummary Random { get; init; }
     public ResearchReplayMethodSummary? ResponseSurface { get; init; }
     public IReadOnlyList<string> BaselineMethods { get; init; } = [];
-    /// <summary>历史载荷缺少该值时，表示记录早于预注册基线机制。</summary>
+
     public string PreregistrationHash { get; init; } = "not-registered";
     public double? PredictionIntervalCoverage { get; init; }
     public int PredictionIntervalChecks { get; init; }
@@ -920,13 +877,9 @@ public sealed record ResearchHistoricalReplayReport
     public DateTimeOffset? ReviewedAt { get; init; }
 }
 
-/// <summary>
-///     进入受控在线建议前冻结的准入证据。它只证明当时允许提出一条候选建议，
-///     不替代工程师逐条确认，也不授权 Platform 直接写设备。
-/// </summary>
 public sealed record ResearchOnlineAdmissionEvidence
 {
-    /// <summary>历史载荷缺少该值时，表示阈值早于策略版本化机制。</summary>
+
     public string ValidationPolicyVersion { get; init; } = "not-evaluated";
     public string MechanismKnowledgeSnapshotHash { get; init; } = "none";
     public bool Eligible { get; init; }
@@ -982,10 +935,6 @@ public sealed record ResearchControlledDecisionRequest
     public string? Reason { get; init; }
 }
 
-/// <summary>
-///     单条受控建议的人工决策快照。SuggestedFactors 永远保留模型原建议；
-///     ApprovedFactors 是工程师接受或修改后允许进入执行交接单的设置。
-/// </summary>
 public sealed record ResearchControlledDecision
 {
     public required string Decision { get; init; }
@@ -1001,16 +950,10 @@ public sealed record ResearchExperiment
 {
     public Guid ExperimentId { get; init; }
     public Guid ProjectId { get; init; }
-    /// <summary>
-    ///     实验自身的乐观并发版本。新实验从 1 开始，每次持久化变更递增；
-    ///     与 ProjectRevision（实验设计所依据的项目定义版本）含义不同。
-    /// </summary>
+
     public int Revision { get; init; } = 1;
     public Guid? HypothesisId { get; init; }
-    /// <summary>
-    ///     非空时表示该实验是针对指定候选工艺操作域设计的独立验证实验。
-    ///     验证实验必须与生成候选操作域的实验分离。
-    /// </summary>
+
     public Guid? ValidationOperatingRegionId { get; init; }
     public required string Name { get; init; }
     public string DesignMethod { get; init; } = "engineer-defined";
@@ -1023,10 +966,7 @@ public sealed record ResearchExperiment
     public string Status { get; init; } = ResearchExperimentStatuses.Planned;
     public IReadOnlyList<ExperimentFactorSetting> Factors { get; init; } = [];
     public IReadOnlyList<ExperimentRunPlan> RunPlan { get; init; } = [];
-    /// <summary>
-    ///     明确作为对照组的运行标识。可以引用本实验中的对照运行，或当前项目中
-    ///     已导入的历史运行/已完成实验运行；未声明时不得从项目历史中自动拼接对照。
-    /// </summary>
+
     public IReadOnlyList<string> BaselineExecutionKeys { get; init; } = [];
     public IReadOnlyList<string> ObjectiveCodes { get; init; } = [];
     public IReadOnlyList<string> ReplicateKeys { get; init; } = [];
@@ -1065,10 +1005,7 @@ public sealed record ExperimentMetricResult
 public sealed record ExperimentRunObservation
 {
     public required string ExecutionKey { get; init; }
-    /// <summary>
-    ///     运行发生时的设备、工装总成、材料批次、产品和工艺规范等上下文。
-    ///     这些字段用于区组、分层、迁移边界和混杂因素判断，不能由计划值替代。
-    /// </summary>
+
     public IReadOnlyDictionary<string, string> Context { get; init; } =
         new Dictionary<string, string>();
     public IReadOnlyList<ExperimentFactorSetting> ActualFactors { get; init; } = [];
@@ -1174,10 +1111,6 @@ public sealed record ResearchTransferContextDifference
     public string? TargetValue { get; init; }
 }
 
-/// <summary>
-///     将一个已发布工艺操作域在目标项目上的实测结果，与目标项目从零建立的对照结果比较。
-///     记录冻结源/目标版本、结果哈希和计算结果；Beneficial 仅表示本次有收益，不能代替重复验证。
-/// </summary>
 public sealed record ResearchTransferAssessment
 {
     public Guid AssessmentId { get; init; }

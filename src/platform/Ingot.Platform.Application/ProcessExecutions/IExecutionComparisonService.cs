@@ -2,7 +2,6 @@ using Ingot.Contracts.Events;
 
 namespace Ingot.Platform.Application.ProcessExecutions;
 
-/// <summary>比较生产执行并输出描述性或观察性诊断证据，不宣称因果。</summary>
 public interface IExecutionComparisonService
 {
     Task<ExecutionComparisonRow?> GetProcessExecutionAsync(

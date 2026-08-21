@@ -8,15 +8,10 @@ public sealed class LocalAuthOptions
 {
     public int SessionLifetimeHours { get; set; } = 12;
 
-    /// <summary>首次启动且无任何用户时的初始管理员；缺省则生成随机口令并写入日志。</summary>
     public string? SeedAdminUsername { get; set; }
     public string? SeedAdminPassword { get; set; }
 }
 
-/// <summary>
-///     口令哈希：直接复用 ASP.NET Core 的 PasswordHasher（PBKDF2-HMAC-SHA256，加盐、可升级迭代）。
-///     不自研密码学。令牌哈希用 SHA-256（令牌本身是高熵随机串，无需加盐）。
-/// </summary>
 public sealed class LocalPasswordHasher
 {
     private static readonly object Dummy = new();
@@ -35,10 +30,6 @@ public sealed class LocalPasswordHasher
         => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(token)));
 }
 
-/// <summary>
-///     登录失败限速：单实例内存计数。同一用户名在窗口内失败达上限后暂时拒绝，减缓暴力破解。
-///     成功登录清零。不替代网络层限流，只是就近的一道闸。
-/// </summary>
 public sealed class LoginThrottle
 {
     private const int MaxFailures = 5;

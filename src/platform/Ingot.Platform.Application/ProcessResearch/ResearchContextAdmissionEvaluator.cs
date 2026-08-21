@@ -8,10 +8,6 @@ public sealed record ResearchContextAdmissionResult(
     bool Admitted,
     IReadOnlyList<string> ExclusionReasons);
 
-/// <summary>
-///     对研究观察的运行上下文执行确定性准入。场景包只提供版本化策略；
-///     本服务不推断字段别名，也不会用记录存在代替明确的上下文捕获状态。
-/// </summary>
 public sealed class ResearchContextAdmissionEvaluator
 {
     public const string ScenarioPackageContextKey = "scenario_package";

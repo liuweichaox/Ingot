@@ -4,10 +4,6 @@ using Ingot.Contracts.ProcessResearch;
 
 namespace Ingot.Platform.Application.ProcessResearch;
 
-/// <summary>
-///     Evaluates transfer against a target-project cold-start result. This service never applies
-///     a source window automatically: it only freezes evidence and makes negative transfer visible.
-/// </summary>
 public sealed class ResearchTransferAssessmentService(IProcessResearchStore store)
 {
     private const double MaterialGainThreshold = 0.05;

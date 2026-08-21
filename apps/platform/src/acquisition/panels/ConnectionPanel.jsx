@@ -1,11 +1,6 @@
 import { Button, Card, Field, Input, Select, Textarea } from "../../ui/components";
 import { mqttTopicError } from "../protocolRegistry";
 
-/**
- * 由协议描述符驱动的连接参数表单。
- * 界面不再为每个协议写一段 if-else：字段来自 descriptor.fields，
- * 分组、显示条件、校验提示都由描述符声明。
- */
 export function ConnectionPanel({ descriptor, connection, errors, readOnly, onChange }) {
   const update = (name, value) => onChange({ ...connection, [name]: value });
   const groups = [];
@@ -108,10 +103,6 @@ function ConnectionField({ field, connection, error, readOnly, onChange }) {
   );
 }
 
-/**
- * MQTT 订阅主题。每个主题可以单独指定报文根路径，
- * 配合点位上的"来源主题"实现多主题各自携带一部分字段。
- */
 function TopicEditor({ topics, errors, section, readOnly, onChange }) {
   const update = (index, patch) =>
     onChange(topics.map((item, rowIndex) => (rowIndex === index ? { ...item, ...patch } : item)));

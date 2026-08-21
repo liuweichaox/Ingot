@@ -1,6 +1,5 @@
 namespace Ingot.Platform.Application.TimeSeries;
 
-/// <summary>读取过程曲线并实施点数、顺序和质量边界。</summary>
 public sealed class ProcessCurveQueryService(ITimeSeriesStore timeSeries)
 {
     public async Task<ProcessCurveResponse> QueryAsync(

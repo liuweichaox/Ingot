@@ -18,12 +18,6 @@ import { DevicePointsPanel } from "./panels/DevicePointsPanel";
 
 const ENDPOINT = "/api/v1/ingestion-tasks";
 
-/**
- * 设备接入配置页。
- *
- * 从通用注册表抽屉里独立出来的原因：接入配置的工作流是"改一处 → 看设备返回什么 → 再改"，
- * 抽屉里垂直堆叠九个卡片无法支撑这个循环。左栏配置、右栏常驻设备面板，两边同时可见。
- */
 export function IngestionTaskPage({ canWrite = true }) {
   const { taskId } = useParams();
   const [searchParams] = useSearchParams();
@@ -47,12 +41,11 @@ export function IngestionTaskPage({ canWrite = true }) {
   const [probing, setProbing] = useState(false);
   const [showErrors, setShowErrors] = useState(false);
 
-  // 能力矩阵以后端 Runner 的实际行为为准，界面不自行猜测字段是否生效。
   useEffect(() => {
     let cancelled = false;
     getJson("/api/v1/acquisition-protocols")
       .then(result => { if (!cancelled) { mergeServerCapabilities(result?.protocols || result); setForm(value => ({ ...value })); } })
-      .catch(() => { /* 后端尚未提供时沿用本地默认能力矩阵 */ });
+      .catch(() => {  });
     return () => { cancelled = true; };
   }, []);
 
@@ -90,7 +83,6 @@ export function IngestionTaskPage({ canWrite = true }) {
   );
   const errors = showErrors ? validation.errors : {};
 
-  // 连接参数或点位一变，之前的验证结果立即失效——设备可能已经不是刚才那台了。
   const probeFingerprint = useMemo(
     () => JSON.stringify({
       edgeId: form.edgeId, protocol: form.protocol, dataModel: form.dataModel,
@@ -482,9 +474,6 @@ function LifecyclePanel({ form, errors, readOnly, onChange }) {
   );
 }
 
-/**
- * 采集策略。只显示当前驱动真正会读取的字段。
- */
 function StrategyPanel({ descriptor, form, errors, readOnly, onChange }) {
   const capabilities = descriptor.capabilities;
   const hidden = [
@@ -569,7 +558,6 @@ function StrategyPanel({ descriptor, form, errors, readOnly, onChange }) {
   );
 }
 
-/** 接入配置列表。点击进入独立配置页，而不是打开抽屉。 */
 export function IngestionTasksPage({ canWrite = true }) {
   const { data, error, reload } = useApi(ENDPOINT);
   const { data: templateData, reload: reloadTemplates } = useApi("/api/v1/ingestion-configuration/templates");

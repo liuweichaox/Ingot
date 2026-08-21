@@ -1,10 +1,9 @@
-// 提供 IngestionConfigurationController 的 HTTP 传输、认证与响应映射；业务规则由应用层执行。
 
-using Ingot.Platform.Application.Acquisition;
+using System.Text;
 using Ingot.Contracts.Acquisition;
 using Ingot.Platform.Api.Agents;
+using Ingot.Platform.Application.Acquisition;
 using Microsoft.AspNetCore.Mvc;
-using System.Text;
 
 namespace Ingot.Platform.Api.Controllers;
 

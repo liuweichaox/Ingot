@@ -1,4 +1,3 @@
-// 提供 MechanismKnowledgeWorkbench 的可复用界面与交互边界。
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getJson, postForm, postJson } from "../api/http";

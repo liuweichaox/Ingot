@@ -6,10 +6,10 @@ using Ingot.Contracts.Events;
 using Ingot.Contracts.ProcessConfiguration;
 using Ingot.Domain.Events;
 using Ingot.Platform.Application.ProcessExecutions;
-using Ingot.Platform.Infrastructure.ProcessExecutions;
 using Ingot.Platform.Infrastructure.Events;
 using Ingot.Platform.Infrastructure.Manufacturing;
 using Ingot.Platform.Infrastructure.ProcessConfiguration;
+using Ingot.Platform.Infrastructure.ProcessExecutions;
 using Ingot.Platform.Infrastructure.TimeSeries;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -55,13 +55,15 @@ public sealed class PostgresEventReplayTests(PostgresIntegrationFixture postgres
             startedAt,
             $"edge/{edgeId}/equipment/PRESS-01",
             new ObjectRef("equipment", "PRESS-01"),
-            executionId) with { Seq = 1 };
+            executionId) with
+        { Seq = 1 };
         var completed = ProductionEvent.Create(
             "process.execution.completed",
             startedAt.AddMinutes(1),
             $"edge/{edgeId}/equipment/PRESS-01",
             new ObjectRef("equipment", "PRESS-01"),
-            executionId) with { Seq = 2 };
+            executionId) with
+        { Seq = 2 };
 
         await events.IngestAsync(new EventBatchRequest
         {
@@ -235,12 +237,12 @@ public sealed class PostgresEventReplayTests(PostgresIntegrationFixture postgres
             Acquisition = new AcquisitionModel
             {
                 DataItems = signals.Select(signal => new ProcessDataItemDefinition
-                    {
-                        Code = signal.Item1,
-                        DisplayName = signal.Item1,
-                        DataType = "double",
-                        Nullable = false
-                    }).ToArray()
+                {
+                    Code = signal.Item1,
+                    DisplayName = signal.Item1,
+                    DataType = "double",
+                    Nullable = false
+                }).ToArray()
             },
             UpdatedAt = now
         });
@@ -272,7 +274,8 @@ public sealed class PostgresEventReplayTests(PostgresIntegrationFixture postgres
                     static signal => signal.Item1,
                     static signal => (object?)signal.Value,
                     StringComparer.Ordinal)
-            }) with { Seq = 1 };
+            }) with
+        { Seq = 1 };
 
         var first = await store.IngestAsync(new EventBatchRequest
         {
@@ -468,7 +471,8 @@ public sealed class PostgresEventReplayTests(PostgresIntegrationFixture postgres
             $"edge/{edgeId}/equipment/PRESS-01",
             new ObjectRef("equipment", "PRESS-01"),
             executionId,
-            context) with { Seq = 1 };
+            context) with
+        { Seq = 1 };
         var sample = ProductionEvent.Create(
             "process.sample",
             now.AddSeconds(1),
@@ -483,7 +487,8 @@ public sealed class PostgresEventReplayTests(PostgresIntegrationFixture postgres
                     [temperature.Code] = 618.5d,
                     [stage.Code] = 20L
                 }
-            }) with { Seq = 2 };
+            }) with
+        { Seq = 2 };
 
         var response = await store.IngestAsync(new EventBatchRequest
         {

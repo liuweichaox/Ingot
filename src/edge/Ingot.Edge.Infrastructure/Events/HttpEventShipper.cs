@@ -9,19 +9,15 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Ingot.Contracts.Events;
+using Ingot.Domain.Events;
 using Ingot.Edge.Application.Abstractions;
 using Ingot.Edge.Application.Options;
-using Ingot.Domain.Events;
-using Ingot.Contracts.Events;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace Ingot.Edge.Infrastructure.Events;
 
-/// <summary>
-///     从最小未确认 Seq 开始批量上行。HTTP 超时或响应丢失时安全重发，
-    ///     Platform 通过 EventId 与 (EdgeId, Seq) 去重。
-/// </summary>
 public sealed class HttpEventShipper : IEventShipper
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
@@ -116,6 +112,7 @@ public sealed class HttpEventShipper : IEventShipper
                     var responseBody = await response.Content
                         .ReadAsStringAsync(ct)
                         .ConfigureAwait(false);
+
                     if (response.StatusCode == HttpStatusCode.Conflict)
                     {
                         var reason =
@@ -128,6 +125,7 @@ public sealed class HttpEventShipper : IEventShipper
                             responseBody);
                         return;
                     }
+
                     if (IsDeterministicPayloadRejection(response.StatusCode))
                     {
                         await IsolateRejectedEventsAsync(http, siteId, edgeId, pending, responseBody, ct)

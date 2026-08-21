@@ -30,10 +30,6 @@ public sealed record MechanismVariableDefinition
     public double? ValidMaximum { get; init; }
 }
 
-/// <summary>
-/// Versioned, executable mechanism model. The first implementation deliberately supports
-/// an auditable affine equation rather than arbitrary uploaded code.
-/// </summary>
 public sealed record MechanismModelVersion
 {
     public required string ModelId { get; init; }

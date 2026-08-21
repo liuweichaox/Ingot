@@ -516,8 +516,7 @@ export function ResearchProjectsPage({ identity }) {
       const experiment = await postJson(
         `/api/v1/research-projects/${workspace.project.projectId}/optimize`,
         {
-          // A single point cannot distinguish a process effect from run noise.
-          // Keep the smallest useful industrial experiment as a two-condition batch.
+
           ...optimizationShape,
           seed: 0,
           intent,

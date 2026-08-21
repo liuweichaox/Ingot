@@ -12,7 +12,7 @@ public sealed class EventShipperHostedService(IEventShipper shipper) : Backgroun
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {
-            // 正常停机。
+
         }
     }
 }

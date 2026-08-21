@@ -1,8 +1,7 @@
-// 实现 PostgresProcessResearchStore 的 PostgreSQL 持久化适配，避免数据库细节泄漏到应用层。
 
-using Ingot.Platform.Application.ProcessResearch;
 using System.Text.Json;
 using Ingot.Contracts.ProcessResearch;
+using Ingot.Platform.Application.ProcessResearch;
 using Npgsql;
 using NpgsqlTypes;
 
@@ -222,14 +221,19 @@ public sealed class PostgresProcessResearchStore : IProcessResearchStore
             while (await reader.ReadAsync(ct).ConfigureAwait(false))
                 values.Add(new ResearchHypothesis
                 {
-                    HypothesisId=reader.GetGuid(0), ProjectId=reader.GetGuid(1), Statement=reader.GetString(2),
-                    Rationale=reader.GetString(3), Status=reader.GetString(4),
-                    ValidationOutcomeCode=reader.IsDBNull(5)?null:reader.GetString(5),
-                    ExpectedEffectDirection=reader.IsDBNull(6)?null:reader.GetString(6),
-                    MinimumEffect=reader.IsDBNull(7)?null:reader.GetDouble(7),
-                    Applicability=reader.IsDBNull(8)?null:reader.GetString(8), Confidence=reader.GetDouble(9),
-                    CreatedBy=reader.GetString(10), CreatedAt=reader.GetFieldValue<DateTimeOffset>(11),
-                    UpdatedAt=reader.GetFieldValue<DateTimeOffset>(12)
+                    HypothesisId = reader.GetGuid(0),
+                    ProjectId = reader.GetGuid(1),
+                    Statement = reader.GetString(2),
+                    Rationale = reader.GetString(3),
+                    Status = reader.GetString(4),
+                    ValidationOutcomeCode = reader.IsDBNull(5) ? null : reader.GetString(5),
+                    ExpectedEffectDirection = reader.IsDBNull(6) ? null : reader.GetString(6),
+                    MinimumEffect = reader.IsDBNull(7) ? null : reader.GetDouble(7),
+                    Applicability = reader.IsDBNull(8) ? null : reader.GetString(8),
+                    Confidence = reader.GetDouble(9),
+                    CreatedBy = reader.GetString(10),
+                    CreatedAt = reader.GetFieldValue<DateTimeOffset>(11),
+                    UpdatedAt = reader.GetFieldValue<DateTimeOffset>(12)
                 });
         }
         if (values.Count == 0) return values;
@@ -314,12 +318,16 @@ public sealed class PostgresProcessResearchStore : IProcessResearchStore
             var child = children[value.HypothesisId];
             return value with
             {
-                VariableCodes=child.VariableCodes, PossibleConfounders=child.PossibleConfounders,
-                CausalChain=child.CausalChain, TemporalFeatures=child.TemporalFeatures,
-                Interactions=child.Interactions, FailureConditions=child.FailureConditions,
-                FalsificationConditions=child.FalsificationConditions,
-                SupportingEvidence=child.SupportingEvidence, OpposingEvidence=child.OpposingEvidence,
-                ValidationEvidence=child.ValidationEvidence
+                VariableCodes = child.VariableCodes,
+                PossibleConfounders = child.PossibleConfounders,
+                CausalChain = child.CausalChain,
+                TemporalFeatures = child.TemporalFeatures,
+                Interactions = child.Interactions,
+                FailureConditions = child.FailureConditions,
+                FalsificationConditions = child.FalsificationConditions,
+                SupportingEvidence = child.SupportingEvidence,
+                OpposingEvidence = child.OpposingEvidence,
+                ValidationEvidence = child.ValidationEvidence
             };
         }).ToArray();
     }
@@ -402,14 +410,19 @@ public sealed class PostgresProcessResearchStore : IProcessResearchStore
             if (!await reader.ReadAsync(ct).ConfigureAwait(false)) return null;
             value = new ResearchHypothesis
             {
-                HypothesisId=hypothesisId, ProjectId=reader.GetGuid(0), Statement=reader.GetString(1),
-                Rationale=reader.GetString(2), Status=reader.GetString(3),
-                ValidationOutcomeCode=reader.IsDBNull(4)?null:reader.GetString(4),
-                ExpectedEffectDirection=reader.IsDBNull(5)?null:reader.GetString(5),
-                MinimumEffect=reader.IsDBNull(6)?null:reader.GetDouble(6),
-                Applicability=reader.IsDBNull(7)?null:reader.GetString(7), Confidence=reader.GetDouble(8),
-                CreatedBy=reader.GetString(9), CreatedAt=reader.GetFieldValue<DateTimeOffset>(10),
-                UpdatedAt=reader.GetFieldValue<DateTimeOffset>(11)
+                HypothesisId = hypothesisId,
+                ProjectId = reader.GetGuid(0),
+                Statement = reader.GetString(1),
+                Rationale = reader.GetString(2),
+                Status = reader.GetString(3),
+                ValidationOutcomeCode = reader.IsDBNull(4) ? null : reader.GetString(4),
+                ExpectedEffectDirection = reader.IsDBNull(5) ? null : reader.GetString(5),
+                MinimumEffect = reader.IsDBNull(6) ? null : reader.GetDouble(6),
+                Applicability = reader.IsDBNull(7) ? null : reader.GetString(7),
+                Confidence = reader.GetDouble(8),
+                CreatedBy = reader.GetString(9),
+                CreatedAt = reader.GetFieldValue<DateTimeOffset>(10),
+                UpdatedAt = reader.GetFieldValue<DateTimeOffset>(11)
             };
         }
         return value with
@@ -449,7 +462,7 @@ public sealed class PostgresProcessResearchStore : IProcessResearchStore
         await using var command = _dataSource.CreateCommand("SELECT from_variable_code,to_variable_code,mechanism,direction FROM research_hypothesis_causal_links WHERE hypothesis_id=@id ORDER BY sequence;");
         command.Parameters.AddWithValue("id", id); await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
         var values = new List<ResearchHypothesisCausalLink>();
-        while (await reader.ReadAsync(ct).ConfigureAwait(false)) values.Add(new ResearchHypothesisCausalLink { FromVariableCode=reader.GetString(0), ToVariableCode=reader.GetString(1), Mechanism=reader.GetString(2), Direction=reader.IsDBNull(3)?null:reader.GetString(3) });
+        while (await reader.ReadAsync(ct).ConfigureAwait(false)) values.Add(new ResearchHypothesisCausalLink { FromVariableCode = reader.GetString(0), ToVariableCode = reader.GetString(1), Mechanism = reader.GetString(2), Direction = reader.IsDBNull(3) ? null : reader.GetString(3) });
         return values;
     }
 
@@ -458,7 +471,7 @@ public sealed class PostgresProcessResearchStore : IProcessResearchStore
         await using var command = _dataSource.CreateCommand("SELECT variable_code,feature_code,phase_code,delay_ms,window_ms FROM research_hypothesis_temporal_features WHERE hypothesis_id=@id ORDER BY sequence;");
         command.Parameters.AddWithValue("id", id); await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
         var values = new List<ResearchHypothesisTemporalFeature>();
-        while (await reader.ReadAsync(ct).ConfigureAwait(false)) values.Add(new ResearchHypothesisTemporalFeature { VariableCode=reader.GetString(0), FeatureCode=reader.GetString(1), PhaseCode=reader.IsDBNull(2)?null:reader.GetString(2), DelayMilliseconds=reader.IsDBNull(3)?null:reader.GetInt64(3), WindowMilliseconds=reader.IsDBNull(4)?null:reader.GetInt64(4) });
+        while (await reader.ReadAsync(ct).ConfigureAwait(false)) values.Add(new ResearchHypothesisTemporalFeature { VariableCode = reader.GetString(0), FeatureCode = reader.GetString(1), PhaseCode = reader.IsDBNull(2) ? null : reader.GetString(2), DelayMilliseconds = reader.IsDBNull(3) ? null : reader.GetInt64(3), WindowMilliseconds = reader.IsDBNull(4) ? null : reader.GetInt64(4) });
         return values;
     }
 
@@ -466,14 +479,14 @@ public sealed class PostgresProcessResearchStore : IProcessResearchStore
     {
         await using var command = _dataSource.CreateCommand("SELECT interaction_id,description FROM research_hypothesis_interactions WHERE hypothesis_id=@id ORDER BY sequence;");
         command.Parameters.AddWithValue("id", id); await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
-        var rows = new List<(Guid Id, string Description)>(); while (await reader.ReadAsync(ct).ConfigureAwait(false)) rows.Add((reader.GetGuid(0),reader.GetString(1)));
+        var rows = new List<(Guid Id, string Description)>(); while (await reader.ReadAsync(ct).ConfigureAwait(false)) rows.Add((reader.GetGuid(0), reader.GetString(1)));
         var values = new List<ResearchHypothesisInteraction>();
         foreach (var row in rows)
         {
             await using var variables = _dataSource.CreateCommand("SELECT variable_code FROM research_hypothesis_interaction_variables WHERE interaction_id=@id ORDER BY sequence;");
             variables.Parameters.AddWithValue("id", row.Id); await using var variableReader = await variables.ExecuteReaderAsync(ct).ConfigureAwait(false);
             var codes = new List<string>(); while (await variableReader.ReadAsync(ct).ConfigureAwait(false)) codes.Add(variableReader.GetString(0));
-            values.Add(new ResearchHypothesisInteraction { VariableCodes=codes, Description=row.Description });
+            values.Add(new ResearchHypothesisInteraction { VariableCodes = codes, Description = row.Description });
         }
         return values;
     }
@@ -483,7 +496,7 @@ public sealed class PostgresProcessResearchStore : IProcessResearchStore
         await using var command = _dataSource.CreateCommand("SELECT condition,observable_signal,required_response FROM research_hypothesis_failure_conditions WHERE hypothesis_id=@id ORDER BY sequence;");
         command.Parameters.AddWithValue("id", id); await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
         var values = new List<ResearchHypothesisFailureCondition>();
-        while (await reader.ReadAsync(ct).ConfigureAwait(false)) values.Add(new ResearchHypothesisFailureCondition { Condition=reader.GetString(0), ObservableSignal=reader.GetString(1), RequiredResponse=reader.GetString(2) });
+        while (await reader.ReadAsync(ct).ConfigureAwait(false)) values.Add(new ResearchHypothesisFailureCondition { Condition = reader.GetString(0), ObservableSignal = reader.GetString(1), RequiredResponse = reader.GetString(2) });
         return values;
     }
 
@@ -492,7 +505,7 @@ public sealed class PostgresProcessResearchStore : IProcessResearchStore
         await using var command = _dataSource.CreateCommand("SELECT evidence_id,project_id,kind,reference_id,summary,content_hash,created_at FROM research_hypothesis_evidence WHERE hypothesis_id=@id AND evidence_role=@role ORDER BY created_at,evidence_id;");
         command.Parameters.AddWithValue("id", id); command.Parameters.AddWithValue("role", role);
         await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false); var values = new List<EvidenceReference>();
-        while (await reader.ReadAsync(ct).ConfigureAwait(false)) values.Add(new EvidenceReference { EvidenceId=reader.GetGuid(0), ProjectId=reader.GetGuid(1), Kind=reader.GetString(2), ReferenceId=reader.GetString(3), Summary=reader.GetString(4), ContentHash=reader.GetString(5), CreatedAt=reader.GetFieldValue<DateTimeOffset>(6) });
+        while (await reader.ReadAsync(ct).ConfigureAwait(false)) values.Add(new EvidenceReference { EvidenceId = reader.GetGuid(0), ProjectId = reader.GetGuid(1), Kind = reader.GetString(2), ReferenceId = reader.GetString(3), Summary = reader.GetString(4), ContentHash = reader.GetString(5), CreatedAt = reader.GetFieldValue<DateTimeOffset>(6) });
         return values;
     }
 
@@ -503,35 +516,35 @@ public sealed class PostgresProcessResearchStore : IProcessResearchStore
             await using var delete = new NpgsqlCommand($"DELETE FROM {table} WHERE hypothesis_id=@id;", connection, transaction);
             delete.Parameters.AddWithValue("id", value.HypothesisId); await delete.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
         }
-        for (var i=0;i<value.VariableCodes.Count;i++) await InsertSimpleChildAsync(connection,transaction,"research_hypothesis_variables","variable_code",value.HypothesisId,i,value.VariableCodes[i],ct).ConfigureAwait(false);
-        for (var i=0;i<value.PossibleConfounders.Count;i++) await InsertSimpleChildAsync(connection,transaction,"research_hypothesis_confounders","description",value.HypothesisId,i,value.PossibleConfounders[i],ct).ConfigureAwait(false);
-        for (var i=0;i<value.FalsificationConditions.Count;i++) await InsertSimpleChildAsync(connection,transaction,"research_hypothesis_falsification_conditions","condition",value.HypothesisId,i,value.FalsificationConditions[i],ct).ConfigureAwait(false);
-        for (var i=0;i<value.CausalChain.Count;i++)
+        for (var i = 0; i < value.VariableCodes.Count; i++) await InsertSimpleChildAsync(connection, transaction, "research_hypothesis_variables", "variable_code", value.HypothesisId, i, value.VariableCodes[i], ct).ConfigureAwait(false);
+        for (var i = 0; i < value.PossibleConfounders.Count; i++) await InsertSimpleChildAsync(connection, transaction, "research_hypothesis_confounders", "description", value.HypothesisId, i, value.PossibleConfounders[i], ct).ConfigureAwait(false);
+        for (var i = 0; i < value.FalsificationConditions.Count; i++) await InsertSimpleChildAsync(connection, transaction, "research_hypothesis_falsification_conditions", "condition", value.HypothesisId, i, value.FalsificationConditions[i], ct).ConfigureAwait(false);
+        for (var i = 0; i < value.CausalChain.Count; i++)
         {
-            var item=value.CausalChain[i]; await using var command=new NpgsqlCommand("INSERT INTO research_hypothesis_causal_links VALUES (@id,@sequence,@from,@to,@mechanism,@direction);",connection,transaction);
-            command.Parameters.AddWithValue("id",value.HypothesisId); command.Parameters.AddWithValue("sequence",i); command.Parameters.AddWithValue("from",item.FromVariableCode); command.Parameters.AddWithValue("to",item.ToVariableCode); command.Parameters.AddWithValue("mechanism",item.Mechanism); AddNullable(command,"direction",NpgsqlDbType.Text,item.Direction); await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+            var item = value.CausalChain[i]; await using var command = new NpgsqlCommand("INSERT INTO research_hypothesis_causal_links VALUES (@id,@sequence,@from,@to,@mechanism,@direction);", connection, transaction);
+            command.Parameters.AddWithValue("id", value.HypothesisId); command.Parameters.AddWithValue("sequence", i); command.Parameters.AddWithValue("from", item.FromVariableCode); command.Parameters.AddWithValue("to", item.ToVariableCode); command.Parameters.AddWithValue("mechanism", item.Mechanism); AddNullable(command, "direction", NpgsqlDbType.Text, item.Direction); await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
         }
-        for (var i=0;i<value.TemporalFeatures.Count;i++)
+        for (var i = 0; i < value.TemporalFeatures.Count; i++)
         {
-            var item=value.TemporalFeatures[i]; await using var command=new NpgsqlCommand("INSERT INTO research_hypothesis_temporal_features VALUES (@id,@sequence,@variable,@feature,@phase,@delay,@window);",connection,transaction);
-            command.Parameters.AddWithValue("id",value.HypothesisId); command.Parameters.AddWithValue("sequence",i); command.Parameters.AddWithValue("variable",item.VariableCode); command.Parameters.AddWithValue("feature",item.FeatureCode); AddNullable(command,"phase",NpgsqlDbType.Text,item.PhaseCode); AddNullable(command,"delay",NpgsqlDbType.Bigint,item.DelayMilliseconds); AddNullable(command,"window",NpgsqlDbType.Bigint,item.WindowMilliseconds); await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+            var item = value.TemporalFeatures[i]; await using var command = new NpgsqlCommand("INSERT INTO research_hypothesis_temporal_features VALUES (@id,@sequence,@variable,@feature,@phase,@delay,@window);", connection, transaction);
+            command.Parameters.AddWithValue("id", value.HypothesisId); command.Parameters.AddWithValue("sequence", i); command.Parameters.AddWithValue("variable", item.VariableCode); command.Parameters.AddWithValue("feature", item.FeatureCode); AddNullable(command, "phase", NpgsqlDbType.Text, item.PhaseCode); AddNullable(command, "delay", NpgsqlDbType.Bigint, item.DelayMilliseconds); AddNullable(command, "window", NpgsqlDbType.Bigint, item.WindowMilliseconds); await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
         }
-        for (var i=0;i<value.Interactions.Count;i++)
+        for (var i = 0; i < value.Interactions.Count; i++)
         {
-            var item=value.Interactions[i]; var interactionId=Guid.CreateVersion7(); await using var command=new NpgsqlCommand("INSERT INTO research_hypothesis_interactions VALUES (@interaction_id,@id,@sequence,@description);",connection,transaction);
-            command.Parameters.AddWithValue("interaction_id",interactionId); command.Parameters.AddWithValue("id",value.HypothesisId); command.Parameters.AddWithValue("sequence",i); command.Parameters.AddWithValue("description",item.Description); await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
-            for(var j=0;j<item.VariableCodes.Count;j++){await using var variable=new NpgsqlCommand("INSERT INTO research_hypothesis_interaction_variables VALUES (@interaction_id,@sequence,@code);",connection,transaction);variable.Parameters.AddWithValue("interaction_id",interactionId);variable.Parameters.AddWithValue("sequence",j);variable.Parameters.AddWithValue("code",item.VariableCodes[j]);await variable.ExecuteNonQueryAsync(ct).ConfigureAwait(false);}
+            var item = value.Interactions[i]; var interactionId = Guid.CreateVersion7(); await using var command = new NpgsqlCommand("INSERT INTO research_hypothesis_interactions VALUES (@interaction_id,@id,@sequence,@description);", connection, transaction);
+            command.Parameters.AddWithValue("interaction_id", interactionId); command.Parameters.AddWithValue("id", value.HypothesisId); command.Parameters.AddWithValue("sequence", i); command.Parameters.AddWithValue("description", item.Description); await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+            for (var j = 0; j < item.VariableCodes.Count; j++) { await using var variable = new NpgsqlCommand("INSERT INTO research_hypothesis_interaction_variables VALUES (@interaction_id,@sequence,@code);", connection, transaction); variable.Parameters.AddWithValue("interaction_id", interactionId); variable.Parameters.AddWithValue("sequence", j); variable.Parameters.AddWithValue("code", item.VariableCodes[j]); await variable.ExecuteNonQueryAsync(ct).ConfigureAwait(false); }
         }
-        for(var i=0;i<value.FailureConditions.Count;i++){var item=value.FailureConditions[i];await using var command=new NpgsqlCommand("INSERT INTO research_hypothesis_failure_conditions VALUES (@failure_id,@id,@sequence,@condition,@signal,@response);",connection,transaction);command.Parameters.AddWithValue("failure_id",Guid.CreateVersion7());command.Parameters.AddWithValue("id",value.HypothesisId);command.Parameters.AddWithValue("sequence",i);command.Parameters.AddWithValue("condition",item.Condition);command.Parameters.AddWithValue("signal",item.ObservableSignal);command.Parameters.AddWithValue("response",item.RequiredResponse);await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);}
-        foreach(var pair in new[]{("supporting",value.SupportingEvidence),("opposing",value.OpposingEvidence),("validation",value.ValidationEvidence)})
-            foreach(var item in pair.Item2){await using var command=new NpgsqlCommand("INSERT INTO research_hypothesis_evidence VALUES (@id,@evidence_id,@role,@project_id,@kind,@reference,@summary,@hash,@created_at);",connection,transaction);command.Parameters.AddWithValue("id",value.HypothesisId);command.Parameters.AddWithValue("evidence_id",item.EvidenceId);command.Parameters.AddWithValue("role",pair.Item1);command.Parameters.AddWithValue("project_id",item.ProjectId);command.Parameters.AddWithValue("kind",item.Kind);command.Parameters.AddWithValue("reference",item.ReferenceId);command.Parameters.AddWithValue("summary",item.Summary);command.Parameters.AddWithValue("hash",item.ContentHash);command.Parameters.AddWithValue("created_at",item.CreatedAt);await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);}
+        for (var i = 0; i < value.FailureConditions.Count; i++) { var item = value.FailureConditions[i]; await using var command = new NpgsqlCommand("INSERT INTO research_hypothesis_failure_conditions VALUES (@failure_id,@id,@sequence,@condition,@signal,@response);", connection, transaction); command.Parameters.AddWithValue("failure_id", Guid.CreateVersion7()); command.Parameters.AddWithValue("id", value.HypothesisId); command.Parameters.AddWithValue("sequence", i); command.Parameters.AddWithValue("condition", item.Condition); command.Parameters.AddWithValue("signal", item.ObservableSignal); command.Parameters.AddWithValue("response", item.RequiredResponse); await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false); }
+        foreach (var pair in new[] { ("supporting", value.SupportingEvidence), ("opposing", value.OpposingEvidence), ("validation", value.ValidationEvidence) })
+            foreach (var item in pair.Item2) { await using var command = new NpgsqlCommand("INSERT INTO research_hypothesis_evidence VALUES (@id,@evidence_id,@role,@project_id,@kind,@reference,@summary,@hash,@created_at);", connection, transaction); command.Parameters.AddWithValue("id", value.HypothesisId); command.Parameters.AddWithValue("evidence_id", item.EvidenceId); command.Parameters.AddWithValue("role", pair.Item1); command.Parameters.AddWithValue("project_id", item.ProjectId); command.Parameters.AddWithValue("kind", item.Kind); command.Parameters.AddWithValue("reference", item.ReferenceId); command.Parameters.AddWithValue("summary", item.Summary); command.Parameters.AddWithValue("hash", item.ContentHash); command.Parameters.AddWithValue("created_at", item.CreatedAt); await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false); }
     }
 
-    private static async Task InsertSimpleChildAsync(NpgsqlConnection connection,NpgsqlTransaction transaction,string table,string column,Guid id,int sequence,string value,CancellationToken ct)
+    private static async Task InsertSimpleChildAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, string table, string column, Guid id, int sequence, string value, CancellationToken ct)
     {
-        var allowed=(table,column) is ("research_hypothesis_variables","variable_code") or ("research_hypothesis_confounders","description") or ("research_hypothesis_falsification_conditions","condition");
-        if(!allowed) throw new InvalidOperationException("不允许写入未注册的假设子表。");
-        await using var command=new NpgsqlCommand($"INSERT INTO {table}(hypothesis_id,sequence,{column}) VALUES (@id,@sequence,@value);",connection,transaction);command.Parameters.AddWithValue("id",id);command.Parameters.AddWithValue("sequence",sequence);command.Parameters.AddWithValue("value",value);await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+        var allowed = (table, column) is ("research_hypothesis_variables", "variable_code") or ("research_hypothesis_confounders", "description") or ("research_hypothesis_falsification_conditions", "condition");
+        if (!allowed) throw new InvalidOperationException("不允许写入未注册的假设子表。");
+        await using var command = new NpgsqlCommand($"INSERT INTO {table}(hypothesis_id,sequence,{column}) VALUES (@id,@sequence,@value);", connection, transaction); command.Parameters.AddWithValue("id", id); command.Parameters.AddWithValue("sequence", sequence); command.Parameters.AddWithValue("value", value); await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
     }
 
     public Task<ResearchExperiment?> GetExperimentAsync(

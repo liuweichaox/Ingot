@@ -3,9 +3,6 @@ using Npgsql;
 
 namespace Ingot.Platform.Infrastructure.ProcessExecutions;
 
-/// <summary>
-/// PostgreSQL 实现的运行边界存储。
-/// </summary>
 public sealed class PostgresExecutionBoundaryStore : IExecutionBoundaryStore
 {
     private readonly NpgsqlDataSource _dataSource;
@@ -141,6 +138,7 @@ public sealed class PostgresExecutionBoundaryStore : IExecutionBoundaryStore
         CancellationToken ct)
     {
         var leaseId = Guid.CreateVersion7();
+
         await using var command = _dataSource.CreateCommand(
             """
             WITH candidate AS (

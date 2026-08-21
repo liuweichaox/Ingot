@@ -2,7 +2,6 @@ using Ingot.Contracts.ResearchAssets;
 
 namespace Ingot.Platform.Application.ResearchAssets;
 
-/// <summary>持久化机理声明、冲突、复核和使用审计。</summary>
 public interface IMechanismKnowledgeStore
 {
     Task<MechanismClaimVersion?> GetClaimAsync(Guid claimId, int? version = null, CancellationToken ct = default);

@@ -3,14 +3,9 @@ using System.Globalization;
 
 namespace Ingot.Contracts.Acquisition;
 
-/// <summary>
-///     MQTT 主题过滤器的语法校验与匹配。
-///     校验器用它拒绝非法过滤器，采集节点用它判断一条报文属于哪个订阅——
-///     两边必须是同一份规则，否则界面上能配的绑定在现场不生效。
-/// </summary>
 public static class MqttTopicFilter
 {
-    /// <summary>+ 必须独占一层，# 只能出现在最后一层。</summary>
+
     public static bool IsValid(string? filter, out string error)
     {
         error = string.Empty;
@@ -53,7 +48,6 @@ public static class MqttTopicFilter
         return true;
     }
 
-    /// <summary>判断一条具体主题的报文是否命中该过滤器。</summary>
     public static bool Matches(string? filter, string? topic)
     {
         if (filter is null || topic is null) return false;
@@ -65,7 +59,7 @@ public static class MqttTopicFilter
             var level = filterLevels[index];
             if (level == "#")
             {
-                // # 匹配剩余所有层级，但按 MQTT 规范不匹配以 $ 开头的系统主题。
+
                 return index != 0 || !topicLevels[0].StartsWith('$');
             }
 
@@ -82,7 +76,6 @@ public static class MqttTopicFilter
         return filterLevels.Length == topicLevels.Length;
     }
 
-    /// <summary>判断两个合法过滤器是否可能命中同一条具体主题。</summary>
     public static bool Intersects(string first, string second)
     {
         var left = first.Split('/');
@@ -103,7 +96,6 @@ public static class MqttTopicFilter
     }
 }
 
-/// <summary>文档协议使用的 JSON 字段选择器语法与资源边界。</summary>
 public static class JsonFieldSelector
 {
     public const int MaximumSegments = 64;
@@ -214,12 +206,6 @@ public static class JsonFieldSelector
     }
 }
 
-/// <summary>
-///     寄存器类协议的点位选择器解析。
-///
-///     平台保存、Edge 应用和设备探查共用同一套解析与地址边界规则，
-///     并给出精确到字段的配置错误。
-/// </summary>
 public static class AcquisitionSelectors
 {
     public const string BooleanDataType = "boolean";
@@ -233,7 +219,6 @@ public static class AcquisitionSelectors
     public static bool IsModbusArea(string? value)
         => value is not null && Array.IndexOf(ModbusAreas, value) >= 0;
 
-    /// <summary>线圈与离散输入天然是位区，读取结果始终是布尔值。</summary>
     public static bool IsModbusBitArea(string? value)
         => value is "coil" or "discrete-input";
 
@@ -245,11 +230,6 @@ public static class AcquisitionSelectors
 
     public static IReadOnlyList<string> ModbusAreaValues => ModbusAreas;
 
-    // ---------------------------------------------------------------- Modbus
-
-    /// <summary>
-    ///     Modbus 点位。<see cref="BitIndex"/> 非空表示从保持/输入寄存器的某一位取布尔值。
-    /// </summary>
     public sealed record ModbusPoint(
         string Area,
         ushort Address,
@@ -260,15 +240,10 @@ public static class AcquisitionSelectors
         int? BitIndex,
         ushort? ByteLength)
     {
-        /// <summary>该点位覆盖的寄存器（或线圈）数量，用于分块合并读取。</summary>
+
         public ushort Span => Quantity;
     }
 
-    /// <summary>
-    ///     解析 <c>area:address:type[:extra][:wordOrder]</c>。
-    ///     地址允许 <c>100.3</c> 形式表示位偏移，此时类型必须是 boolean。
-    ///     string 类型的第 4 段是字节长度，其余类型的第 4 段是字节序、第 5 段是字序。
-    /// </summary>
     public static bool TryParseModbus(
         string? selector,
         [NotNullWhen(true)] out ModbusPoint? point,
@@ -400,7 +375,6 @@ public static class AcquisitionSelectors
         return true;
     }
 
-    /// <summary>把结构化的值映射还原为规范选择器字符串，保证与解析端严格互逆。</summary>
     public static string FormatModbus(AcquisitionValueMapping mapping)
     {
         var address = mapping.BitIndex is { } bit && !IsModbusBitArea(mapping.ModbusArea)
@@ -415,15 +389,6 @@ public static class AcquisitionSelectors
         return $"{mapping.ModbusArea}:{address}:{mapping.SourceDataType}:{mapping.ByteOrder}:{mapping.WordOrder}";
     }
 
-    // ---------------------------------------------------------------- MELSEC
-
-    /// <summary>
-    ///     MELSEC 软元件定义。<see cref="IsBitDevice"/> 决定读取时使用位单位批量读还是字单位批量读；
-    ///     <see cref="Radix"/> 是该软元件在设备手册中的编号进制。
-    ///
-    ///     X / Y 在 FX 系列按八进制编号，B / W 按十六进制编号。界面会同时显示换算后的
-    ///     软元件编号，便于工程师对照手册确认第一次接线。
-    /// </summary>
     public sealed record MelsecDevice(string Code, bool IsBitDevice, int Radix, string Description);
 
     private static readonly Dictionary<string, MelsecDevice> MelsecDevices =
@@ -456,7 +421,6 @@ public static class AcquisitionSelectors
         return false;
     }
 
-    /// <param name="WireAddress">按软元件进制换算后、真正写进 1E 帧的软元件编号。</param>
     public sealed record MelsecPoint(
         MelsecDevice Device,
         uint WireAddress,
@@ -466,14 +430,10 @@ public static class AcquisitionSelectors
         int? BitIndex,
         ushort? ByteLength)
     {
-        /// <summary>布尔值读取位软元件时使用位单位批量读命令（0x00），其余使用字单位批量读（0x01）。</summary>
+
         public bool UsesBitRead => DataType == BooleanDataType && Device.IsBitDevice && BitIndex is null;
     }
 
-    /// <summary>
-    ///     解析 <c>软元件:编号:类型[:字节长度]</c>。
-    ///     编号允许 <c>100.3</c> 形式表示字软元件内的位偏移，此时类型必须是 boolean。
-    /// </summary>
     public static bool TryParseMelsec(
         string? selector,
         [NotNullWhen(true)] out MelsecPoint? point,
@@ -568,8 +528,7 @@ public static class AcquisitionSelectors
 
         if (device.IsBitDevice && dataType != BooleanDataType)
         {
-            // 合法但危险：按字读取位软元件会把 16 个连续点打包成一个字。
-            // 允许通过，界面负责显示提醒，避免工程师误以为读到的是单点状态。
+
         }
 
         point = new MelsecPoint(device, address, parts[1], dataType, wordCount, null, sourceByteLength);
@@ -587,9 +546,6 @@ public static class AcquisitionSelectors
             : $"{device}:{address}:{mapping.SourceDataType}";
     }
 
-    // ---------------------------------------------------------------- 公共
-
-    /// <summary>解析 <c>100</c> 或 <c>100.3</c>；地址部分按软元件进制解析，位偏移固定十进制 0-15。</summary>
     private static bool TryParseAddressWithBit(
         string value,
         int radix,

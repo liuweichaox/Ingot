@@ -2,7 +2,6 @@ using Ingot.Contracts.ProcessResearch;
 
 namespace Ingot.Platform.Application.ProcessResearch;
 
-/// <summary>Read use cases exposed to delivery adapters.</summary>
 public sealed class ProcessResearchQueries(IProcessResearchStore research)
 {
     public Task<ResearchProject?> GetProjectAsync(Guid id, CancellationToken ct = default)

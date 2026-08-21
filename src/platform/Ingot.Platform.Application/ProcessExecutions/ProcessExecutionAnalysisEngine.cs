@@ -8,7 +8,6 @@ using Ingot.Platform.Application.TimeSeries;
 
 namespace Ingot.Platform.Application.ProcessExecutions;
 
-/// <summary>从不可变执行事件和时序数据计算确定性过程特征。</summary>
 public sealed class ProcessExecutionAnalysisEngine(
     IFeatureDefinitionRegistry? featureDefinitions = null)
 {
@@ -44,6 +43,7 @@ public sealed class ProcessExecutionAnalysisEngine(
             .Select(static pair => (pair.Second.OccurredAt - pair.First.OccurredAt).TotalMilliseconds)
             .Where(static value => value >= 0)
             .ToArray();
+
         var medianInterval = Percentile(intervals, 0.5);
         var p95Interval = Percentile(intervals, 0.95);
         double? maximumGap = intervals.Length == 0 ? null : intervals.Max();
@@ -67,6 +67,7 @@ public sealed class ProcessExecutionAnalysisEngine(
         double? maximumPlatformIngestLatency = platformIngestLatencies.Length == 0
             ? null
             : platformIngestLatencies.Max();
+
         var negativePlatformIngestLatencyCount = platformIngestLatencies.Count(static value => value < -1000d);
         var phaseAnalysis = BuildPhases(samples, completedAt, dataModel, plan);
 
@@ -104,6 +105,7 @@ public sealed class ProcessExecutionAnalysisEngine(
             status = ProcessDataStatuses.Unavailable;
             issues.Add("分析方案选择的信号均没有有效数值。");
         }
+
         if (duplicateTimestampCount > 0)
         {
             status = Degrade(status);
@@ -248,9 +250,7 @@ public sealed class ProcessExecutionAnalysisEngine(
             ? (endedAt.Value - startedAt.Value).TotalMilliseconds
             : validDurationMs;
         var coverage = scopeDurationMs <= 0 ? 0 : Math.Clamp(validDurationMs / scopeDurationMs, 0, 1);
-        // A boundary point participates in the time-weighted calculation, so it must also
-        // participate in the extrema. Otherwise the weighted mean can legitimately move
-        // outside the min/max computed from a different sample domain.
+
         var values = calculationPoints.Select(static point => point.Value).ToArray();
         var mean = TimeWeightedMean(segments);
         return new ProcessSignalFeature
@@ -414,11 +414,7 @@ public sealed class ProcessExecutionAnalysisEngine(
         var duration = segments.Sum(static item => item.DurationMs);
         if (duration <= 0)
             return null;
-        // Integrate the squared distance from the already-computed mean instead of
-        // subtracting E[x]^2 from E[x^2]. The latter loses most significant digits
-        // for common industrial signals with a large offset and small variation,
-        // and made the C# and PostgreSQL implementations disagree solely because
-        // their aggregate summation order differs.
+
         var centeredSquaredIntegral = segments.Sum(item =>
         {
             var start = item.Start.Value - mean.Value;

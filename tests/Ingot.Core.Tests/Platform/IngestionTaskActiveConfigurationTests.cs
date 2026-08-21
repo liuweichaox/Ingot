@@ -1,19 +1,19 @@
 // 验证平台组件 IngestionTaskActiveConfiguration 的成功、拒绝和安全边界。
 
-using Ingot.Platform.Application.ProcessConfiguration;
 using Ingot.Contracts.Acquisition;
 using Ingot.Contracts.ProcessConfiguration;
 using Ingot.Platform.Api.Agents;
 using Ingot.Platform.Api.Controllers;
 using Ingot.Platform.Api.Errors;
 using Ingot.Platform.Api.Events;
+using Ingot.Platform.Application.ProcessConfiguration;
 using Ingot.Platform.Infrastructure.Acquisition;
 using Ingot.Platform.Infrastructure.Events;
 using Ingot.Platform.Infrastructure.ProcessConfiguration;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.FileProviders;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Xunit;
 

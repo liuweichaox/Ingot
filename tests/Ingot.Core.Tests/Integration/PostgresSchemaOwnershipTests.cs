@@ -1,14 +1,14 @@
 // 验证 PostgresSchemaOwnership 的真实基础设施集成、失败和恢复行为。
 
-using Ingot.Platform.Application.ResearchAssets;
 using Ingot.Platform.Application.ProcessConfiguration;
+using Ingot.Platform.Application.ResearchAssets;
 using Ingot.Platform.Infrastructure;
 using Ingot.Platform.Infrastructure.Acquisition;
-using Ingot.Platform.Infrastructure.ProcessExecutions;
 using Ingot.Platform.Infrastructure.Events;
 using Ingot.Platform.Infrastructure.Inspections;
 using Ingot.Platform.Infrastructure.Manufacturing;
 using Ingot.Platform.Infrastructure.ProcessConfiguration;
+using Ingot.Platform.Infrastructure.ProcessExecutions;
 using Ingot.Platform.Infrastructure.ResearchAssets;
 using Ingot.Platform.Infrastructure.TimeSeries;
 using Microsoft.Extensions.Configuration;

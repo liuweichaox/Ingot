@@ -3,9 +3,6 @@ using Prometheus;
 
 namespace Ingot.Edge.ConnectorHost.Services;
 
-/// <summary>
-///     将 System.Diagnostics.Metrics 的指标桥接到 Prometheus
-/// </summary>
 public class MetricsBridge : IDisposable
 {
     private readonly Dictionary<string, ICollector<Counter.Child>> _counters = new();
@@ -29,9 +26,6 @@ public class MetricsBridge : IDisposable
         _listener.SetMeasurementEventCallback<long>(OnMeasurementRecorded);
     }
 
-    /// <summary>
-    ///     启动指标监听器（显式初始化）
-    /// </summary>
     public void StartListening()
     {
         _listener.Start();
@@ -137,7 +131,7 @@ public class MetricsBridge : IDisposable
 
     private string SanitizeMetricName(string name)
     {
-        // Prometheus 指标名称只能包含字母、数字、下划线和冒号
+
         return name.Replace(".", "_").Replace("-", "_");
     }
 

@@ -2,7 +2,6 @@ using Ingot.Contracts.Events;
 
 namespace Ingot.Platform.Application.ProcessExecutions;
 
-/// <summary>维护过程执行分析物化状态及其重算、失效和回填任务。</summary>
 public interface IProcessExecutionAnalysisOperationsStore
 {
     Task<ProcessExecutionAnalysisBackfillJob> AddBackfillJobAsync(
@@ -41,7 +40,6 @@ public enum ProcessExecutionReplayResult
     FailedJobNotFound
 }
 
-/// <summary>协调过程执行分析的重算、回填和物化状态管理。</summary>
 public sealed class ProcessExecutionAnalysisOperationsService(
     IProcessExecutionAnalysisOperationsStore store,
     IExecutionBoundaryStore boundaries,

@@ -2,13 +2,11 @@ using Ingot.Contracts.Agents;
 
 namespace Ingot.Platform.Application.Insight;
 
-/// <summary>为评测工作流读取不可变的 Agent 运行快照。</summary>
 public interface IAgentRunSnapshotReader
 {
     Task<AgentRunSnapshot?> GetAsync(string runId, CancellationToken ct = default);
 }
 
-/// <summary>管理黄金问题、评测执行和结果查询的应用层入口。</summary>
 public sealed class GoldenQuestionApplication(
     IGoldenQuestionStore questions,
     IAgentRunSnapshotReader agentRuns,

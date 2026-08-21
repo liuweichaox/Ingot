@@ -4,12 +4,6 @@ using Npgsql;
 
 namespace Ingot.Platform.Infrastructure.ProcessExecutions;
 
-/// <summary>
-/// Pushes phase-window and numerical feature work to TimescaleDB. The independent
-/// deterministic engine remains the scientific reference: database output is accepted
-/// only when it agrees with the reference result within a declared tolerance.
-/// Both late-event recomputation and historical backfill enter through this service.
-/// </summary>
 public sealed class PostgresProcessExecutionScientificComputeEngine
 {
     private const double RelativeTolerance = 1e-9;

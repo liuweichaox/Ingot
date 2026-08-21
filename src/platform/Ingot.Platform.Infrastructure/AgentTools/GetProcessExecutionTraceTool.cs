@@ -1,9 +1,8 @@
-// 实现只读 Agent 工具 GetProcessExecutionTraceTool，仅暴露授权范围内的确定性证据。
 
 using System.Text.Json;
 using Ingot.Agent;
-using Ingot.Platform.Application.Events;
 using Ingot.Contracts.Agents;
+using Ingot.Platform.Application.Events;
 
 namespace Ingot.Platform.Infrastructure.AgentTools;
 

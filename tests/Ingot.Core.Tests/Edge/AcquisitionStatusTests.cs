@@ -1,8 +1,8 @@
 // 验证边缘组件 AcquisitionStatus 的协议、状态和失败边界。
 
-using Ingot.Edge.ConnectorHost.Acquisition;
 using Ingot.Contracts.Acquisition;
 using Ingot.Contracts.ProcessConfiguration;
+using Ingot.Edge.ConnectorHost.Acquisition;
 using Xunit;
 
 namespace Ingot.Core.Tests.Edge;

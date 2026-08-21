@@ -4,7 +4,6 @@ using Npgsql;
 
 namespace Ingot.Platform.Infrastructure.ProcessExecutions;
 
-/// <summary>持久化、失效并读取过程执行分析的可复用物化快照。</summary>
 public interface IProcessExecutionAnalysisMaterializationStore : IProcessExecutionAnalysisOperationsStore
 {
     Task InitializeAsync(CancellationToken ct = default);
@@ -14,10 +13,6 @@ public interface IProcessExecutionAnalysisMaterializationStore : IProcessExecuti
         ProcessExecutionAnalysisSourceFingerprint source,
         CancellationToken ct = default);
 
-    /// <summary>
-    ///     Loads the current ready snapshot without re-reading raw events to rebuild a fingerprint.
-    ///     Ingestion invalidates affected executions atomically, so only status=ready is reusable.
-    /// </summary>
     Task<ProcessExecutionAnalysisSnapshot?> TryLoadLatestAsync(
         ProcessExecutionAnalysisMaterializationKey key,
         CancellationToken ct = default)

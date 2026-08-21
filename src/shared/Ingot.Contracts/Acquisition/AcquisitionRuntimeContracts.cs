@@ -80,10 +80,6 @@ public sealed record EdgeAcquisitionRuntimeStatus(
     long StaleSnapshotRejectionCount = 0,
     long StaleValueRejectionCount = 0);
 
-/// <summary>
-///     Produces a stable SHA-256 fingerprint for immutable acquisition deployments.
-///     Object properties are recursively sorted so dictionary insertion order does not alter identity.
-/// </summary>
 public static class AcquisitionDeploymentFingerprint
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);

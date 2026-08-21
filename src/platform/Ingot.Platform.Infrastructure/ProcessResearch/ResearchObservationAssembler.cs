@@ -1,23 +1,18 @@
-using Ingot.Platform.Application.ProcessResearch;
-using Ingot.Platform.Application.Inspections;
-using Ingot.Platform.Application.ProcessConfiguration;
 using System.Security.Cryptography;
 using System.Text.Json;
 using Ingot.Contracts.Events;
 using Ingot.Contracts.Inspections;
 using Ingot.Contracts.ProcessConfiguration;
 using Ingot.Contracts.ProcessResearch;
-using Ingot.Platform.Infrastructure.ProcessExecutions;
+using Ingot.Platform.Application.Inspections;
+using Ingot.Platform.Application.ProcessConfiguration;
+using Ingot.Platform.Application.ProcessResearch;
 using Ingot.Platform.Infrastructure.Inspections;
 using Ingot.Platform.Infrastructure.ProcessConfiguration;
+using Ingot.Platform.Infrastructure.ProcessExecutions;
 
 namespace Ingot.Platform.Infrastructure.ProcessResearch;
 
-/// <summary>
-///     将实验运行标识与 PLC 生产过程执行 ExecutionId 对齐，并把版本化过程执行特征和
-///     有效检验记录投影成优化训练元组。ExecutionKey 是唯一的接线键，不引入第二套
-///     “优化观察”业务实体。
-/// </summary>
 public sealed class ResearchObservationAssembler(
     IExecutionComparisonService executions,
     IInspectionRecordStore inspections,

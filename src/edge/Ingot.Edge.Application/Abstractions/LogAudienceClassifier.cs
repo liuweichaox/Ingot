@@ -6,7 +6,6 @@ public static class LogAudiences
     public const string System = "system";
 }
 
-/// <summary>把框架日志与现场人员可操作的领域事件分开。</summary>
 public static class LogAudienceClassifier
 {
     public static (string Audience, string Category) Classify(string? level, string? source)

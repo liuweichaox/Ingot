@@ -1,4 +1,3 @@
-// 汇总平台页面导出，避免路由层依赖各页面的内部目录结构。
 
 export { ResearchProjectsPage } from "./ResearchProjectsPage";
 export { ResearchAssetsPage } from "./ResearchAssetsPage";

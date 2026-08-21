@@ -10,9 +10,6 @@ using Serilog.Events;
 
 namespace Ingot.Edge.Infrastructure.Logs;
 
-/// <summary>
-///     Serilog sink backed by Microsoft.Data.Sqlite.
-/// </summary>
 public sealed class MicrosoftSqliteSink : ILogEventSink, IDisposable
 {
     private readonly string _dbPath;
@@ -95,7 +92,7 @@ public sealed class MicrosoftSqliteSink : ILogEventSink, IDisposable
                     }
                     catch
                     {
-                        // Sink should not break the caller.
+
                     }
                 });
             }

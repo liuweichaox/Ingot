@@ -1,4 +1,3 @@
-// 实现基础设施适配器 ProcessResearchModuleServiceCollectionExtensions，满足应用层端口而不改变领域契约。
 
 using Ingot.Platform.Application.ProcessResearch;
 using Ingot.Platform.Application.ResearchAssets;

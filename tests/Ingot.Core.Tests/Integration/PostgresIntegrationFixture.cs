@@ -1,8 +1,8 @@
 // 提供 PostgresIntegrationFixture 的隔离环境、生命周期和清理边界。
 
+using Ingot.Platform.Infrastructure.Migrations;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
-using Ingot.Platform.Infrastructure.Migrations;
 using Npgsql;
 using Testcontainers.PostgreSql;
 using Xunit;

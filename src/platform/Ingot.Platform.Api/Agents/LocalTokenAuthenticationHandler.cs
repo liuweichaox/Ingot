@@ -1,16 +1,12 @@
 using System.Security.Claims;
 using System.Text.Encodings.Web;
-using Ingot.Platform.Infrastructure.Identity;
 using Ingot.Platform.Application.Identity;
+using Ingot.Platform.Infrastructure.Identity;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.Options;
 
 namespace Ingot.Platform.Api.Agents;
 
-/// <summary>
-///     本地会话令牌认证：读取 Authorization: Bearer &lt;token&gt;，按其 SHA-256 查会话，
-///     解析出用户与角色声明。生产自托管默认模式，消除对外部 OIDC 的强制依赖。
-/// </summary>
 public sealed class LocalTokenAuthenticationHandler(
     IOptionsMonitor<AuthenticationSchemeOptions> options,
     ILoggerFactory logger,
@@ -25,7 +21,7 @@ public sealed class LocalTokenAuthenticationHandler(
         var header = Request.Headers.Authorization.ToString();
         if (string.IsNullOrWhiteSpace(header) ||
             !header.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
-            return AuthenticateResult.NoResult(); // 匿名：受保护端点由 fallback 策略拒绝
+            return AuthenticateResult.NoResult();
 
         var token = header["Bearer ".Length..].Trim();
         if (token.Length == 0)

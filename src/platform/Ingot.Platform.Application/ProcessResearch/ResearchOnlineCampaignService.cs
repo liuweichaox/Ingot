@@ -4,12 +4,6 @@ using Ingot.Contracts.ProcessResearch;
 
 namespace Ingot.Platform.Application.ProcessResearch;
 
-/// <summary>
-///     Deterministic monitoring report for controlled online runs. It compares prediction
-///     residuals with the preceding shadow campaign without claiming causality. A systematic
-///     shift is signalled only after both groups contain at least five measured outcomes and
-///     the approximate 95% interval for the residual-mean difference excludes zero.
-/// </summary>
 public sealed class ResearchOnlineCampaignService(IProcessResearchStore store)
 {
     private const int MinimumComparisonCount = 5;

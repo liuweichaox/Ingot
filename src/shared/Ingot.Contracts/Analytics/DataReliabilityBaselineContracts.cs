@@ -62,7 +62,7 @@ public sealed record ContextFactorOverlap
     public int ObservedCombinationCount { get; init; }
     public int PossibleCombinationCount { get; init; }
     public double? OverlapRate { get; init; }
-    /// <summary>overlapping、limited、confounded 或 insufficient_levels。</summary>
+
     public required string Identifiability { get; init; }
 }
 
@@ -94,7 +94,7 @@ public sealed record DataReliabilityBaseline
     public int SequenceGapCount { get; init; }
     public double? MaximumSampleGapMs { get; init; }
     public double? MaximumAbsoluteSourceClockOffsetMs { get; init; }
-    /// <summary>所有已分析运行中最大的单运行 P95 Edge→Platform 摄入延迟。</summary>
+
     public double? WorstRunP95PlatformIngestLatencyMs { get; init; }
     public double? MaximumPlatformIngestLatencyMs { get; init; }
     public int NegativePlatformIngestLatencyCount { get; init; }

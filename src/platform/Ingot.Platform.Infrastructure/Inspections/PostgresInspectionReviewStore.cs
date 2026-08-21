@@ -1,4 +1,3 @@
-// 实现 PostgresInspectionReviewStore 的 PostgreSQL 持久化适配，避免数据库细节泄漏到应用层。
 
 using System.Security.Cryptography;
 using System.Text.Json;
@@ -194,7 +193,6 @@ public sealed class PostgresInspectionReviewStore : IInspectionReviewStore
         }
         return result;
     }
-
 
     private async Task<StoredReview?> GetWithHashAsync(Guid reviewId, CancellationToken ct)
     {

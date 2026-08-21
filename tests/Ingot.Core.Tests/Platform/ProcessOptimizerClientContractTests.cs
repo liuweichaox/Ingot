@@ -73,9 +73,9 @@ public sealed class ProcessOptimizerClientContractTests
         protected override Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request,
             CancellationToken cancellationToken) => Task.FromResult(new HttpResponseMessage
-        {
-            StatusCode = HttpStatusCode.OK,
-            Content = new StringContent(response, Encoding.UTF8, "application/json")
-        });
+            {
+                StatusCode = HttpStatusCode.OK,
+                Content = new StringContent(response, Encoding.UTF8, "application/json")
+            });
     }
 }

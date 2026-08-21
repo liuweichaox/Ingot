@@ -1,12 +1,11 @@
+using Ingot.Contracts.Identity;
 using Ingot.Platform.Api.Agents;
 using Ingot.Platform.Application.Identity;
-using Ingot.Contracts.Identity;
 using Ingot.Platform.Infrastructure.Identity;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Ingot.Platform.Api.Controllers;
 
-/// <summary>本地账户管理：仅平台管理员。OIDC 模式下账户由外部管理，这些端点无实际用户可管。</summary>
 [ApiController]
 [Route("api/v1/users")]
 public sealed class UsersController(
@@ -86,7 +85,7 @@ public sealed class UsersController(
         if (denied is not null) return denied;
         if (string.IsNullOrWhiteSpace(request?.Password) || request.Password.Length < MinPasswordLength)
             return InvalidRequest($"password 至少 {MinPasswordLength} 位。");
-        // 改密会注销该用户其它会话（见 store 实现）。
+
         return await store.SetPasswordHashAsync(userId, hasher.Hash(request.Password), ct).ConfigureAwait(false)
             ? NoContent() : ResourceNotFound();
     }
@@ -96,7 +95,7 @@ public sealed class UsersController(
     {
         var denied = DeniedAdmin();
         if (denied is not null) return denied;
-        // 不允许停用自己，避免管理员把自己锁在门外。
+
         if (request?.Disabled == true && string.Equals(userResolver.Resolve(User), userId.ToString("D"), StringComparison.OrdinalIgnoreCase))
             return InvalidRequest("不能停用当前登录的账户。");
         return await store.SetDisabledAsync(userId, request?.Disabled ?? false, ct).ConfigureAwait(false) ? NoContent() : ResourceNotFound();

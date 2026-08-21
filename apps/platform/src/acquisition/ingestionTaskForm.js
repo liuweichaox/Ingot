@@ -1,8 +1,3 @@
-// 采集配置的表单模型：后端契约 ↔ 表单状态 ↔ 字段级校验。
-//
-// 与旧的 registryBusinessValidation 相比有两点不同：
-//   1. 校验结果是 { 字段路径: 消息 } 而不是一整条字符串，界面可以把错误显示在出错的输入框上；
-//   2. 每个协议自己的规则由描述符提供，这里只负责通用结构与装配。
 
 import {
   ADDRESSING,
@@ -197,7 +192,6 @@ export function createIngestionTaskForm(value = {}, version) {
   };
 }
 
-/** 切换协议时，把不属于新协议的取值收敛到合法范围，避免把死值提交给后端。 */
 export function applyProtocolChange(form, protocol) {
   const descriptor = protocolDescriptor(protocol);
   const fallbackType = descriptor.dataTypes.includes("auto") ? "auto" : "int16";
@@ -411,10 +405,6 @@ export function toPayload(form) {
 const CODE_PATTERN = /^[a-z0-9][a-z0-9._-]{0,127}$/;
 const EVENT_TYPE_PATTERN = /^[a-z][a-z0-9]*(?:\.[a-z][a-z0-9_]*)+$/;
 
-/**
- * 字段级校验。返回 { errors, count }，errors 的键与输入框的 name 一致。
- * @param context.dataItems 所选工艺数据模型的数据项，用于发布前的完整性检查。
- */
 export function validateIngestionTask(form, context = {}) {
   const descriptor = protocolDescriptor(form.protocol);
   const errors = {};
@@ -541,7 +531,6 @@ function hasAnyAddress(row, descriptor) {
   return (row.sourcePath || "").trim() !== "";
 }
 
-/** 把时间戳来源伪装成一个点位行，复用协议描述符的点位校验规则。 */
 function timestampProbeRow(form, descriptor) {
   const text = form.timestampPath.trim();
   if (descriptor.addressing === ADDRESSING.modbusRegister) {
@@ -555,7 +544,6 @@ function timestampProbeRow(form, descriptor) {
   return { sourcePath: text };
 }
 
-/** 从探查结果的一个设备点位生成映射补丁。 */
 export function patchFromProbePoint(point, dataItemCode, dataItems, descriptor) {
   const definition = (dataItems || []).find(item => item.code === dataItemCode);
   const patch = { dataItemCode, required: definition ? !definition.nullable : true };

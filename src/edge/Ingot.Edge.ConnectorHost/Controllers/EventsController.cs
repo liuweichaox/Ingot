@@ -1,14 +1,11 @@
 using System.Text.Json;
-using Ingot.Edge.Application.Abstractions;
 using Ingot.Contracts.Events;
 using Ingot.Domain.Events;
+using Ingot.Edge.Application.Abstractions;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Ingot.Edge.ConnectorHost.Controllers;
 
-/// <summary>
-///     边缘本地生产事件查询与 SSE 订阅。
-/// </summary>
 [ApiController]
 [Route("api/v1/events")]
 public sealed class EventsController(IEventLog eventLog) : ControllerBase
@@ -48,9 +45,6 @@ public sealed class EventsController(IEventLog eventLog) : ControllerBase
         });
     }
 
-    /// <summary>
-    ///     按过程执行号 返回一个过程执行内已经落盘的全部记录。
-    /// </summary>
     [HttpGet("/api/v1/process-executions/{executionId}")]
     public async Task<IActionResult> GetProcessExecution(
         string executionId,

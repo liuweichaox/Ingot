@@ -1,4 +1,3 @@
-// 实现只读 Agent 工具 CompareTimeWindowsTool，仅暴露授权范围内的确定性证据。
 
 using System.Text.Json;
 using Ingot.Agent;

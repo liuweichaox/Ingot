@@ -2,7 +2,6 @@ using Ingot.Contracts.ResearchAssets;
 
 namespace Ingot.Platform.Application.ResearchAssets;
 
-/// <summary>研发资产交付适配器的应用层边界。</summary>
 public sealed class ResearchAssetApplication(IResearchAssetStore assets)
 {
     public Task<IReadOnlyList<TrainingDatasetVersion>> ListDatasetsAsync(CancellationToken ct = default)
@@ -85,7 +84,6 @@ public sealed class ResearchAssetApplication(IResearchAssetStore assets)
         => assets.ListAuditEntriesAsync(resourceType, resourceId, ct);
 }
 
-/// <summary>向交付层提供机理知识、冲突和审计记录的只读查询。</summary>
 public sealed class MechanismKnowledgeQueries(IMechanismKnowledgeStore knowledge)
 {
     public Task<IReadOnlyList<MechanismClaimVersion>> ListClaimsAsync(Guid projectId, CancellationToken ct = default)

@@ -1,12 +1,11 @@
-// 实现基础设施适配器 TimeWindowComparisonService，满足应用层端口而不改变领域契约。
 
-using Ingot.Platform.Application.Inspections;
+using Ingot.Contracts.Events;
+using Ingot.Contracts.Inspections;
 using Ingot.Platform.Application.Events;
+using Ingot.Platform.Application.Inspections;
 using Ingot.Platform.Application.ProcessConfiguration;
 using Ingot.Platform.Application.ProcessExecutions;
 using Ingot.Platform.Application.TimeSeries;
-using Ingot.Contracts.Events;
-using Ingot.Contracts.Inspections;
 using Ingot.Platform.Infrastructure.Inspections;
 
 namespace Ingot.Platform.Infrastructure.ProcessExecutions;

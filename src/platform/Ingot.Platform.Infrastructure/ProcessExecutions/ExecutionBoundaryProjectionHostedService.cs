@@ -2,10 +2,6 @@ using Microsoft.Extensions.Options;
 
 namespace Ingot.Platform.Infrastructure.ProcessExecutions;
 
-/// <summary>
-///     从持久化重算队列生成运行边界。任务与事件在同一事务登记，API 重启不会丢失；
-///     租约允许多个 Worker 副本安全竞争。
-/// </summary>
 public sealed class ExecutionBoundaryProjectionHostedService(
     PostgresExecutionBoundaryStore store,
     IOptions<ExecutionBoundaryProjectionOptions> options,

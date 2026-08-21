@@ -1,9 +1,8 @@
-using Ingot.Contracts.Events;
 using Ingot.Contracts.Analytics;
+using Ingot.Contracts.Events;
 
 namespace Ingot.Platform.Application.Events;
 
-/// <summary>平台侧不可变生产事件的持久化与受控查询边界。</summary>
 public interface IPlatformEventStore
 {
     Task InitializeAsync(CancellationToken ct = default);
@@ -46,10 +45,6 @@ public interface IPlatformEventStore
         return result;
     }
 
-    /// <summary>
-    ///     Loads the low-frequency identity and lifecycle events needed by execution lists.
-    ///     Stores that also own typed samples may override this to provide an exact sample count.
-    /// </summary>
     async Task<IReadOnlyList<PlatformProcessExecutionSummarySource>> QueryExecutionSummarySourcesAsync(
         IReadOnlyCollection<string> executionIds,
         CancellationToken ct = default)
@@ -76,10 +71,6 @@ public interface IPlatformEventStore
             Offset = query.Offset
         });
 
-    /// <summary>
-    ///     对同一过滤范围做聚合统计（总条数、最早/最新 OccurredAt），不受查询 Limit 截断。
-    ///     用于数据质量的准确"新鲜度"与总量，避免"拉 N 行取 max"的近似。
-    /// </summary>
     Task<PlatformEventScopeStats> GetScopeStatsAsync(
         PlatformEventQuery query,
         CancellationToken ct = default);
@@ -96,7 +87,6 @@ public sealed record PlatformProcessExecutionSummarySource
     public IReadOnlyList<PlatformProductionEvent> Events { get; init; } = [];
 }
 
-/// <summary>某个查询范围的聚合统计。</summary>
 public sealed record PlatformEventScopeStats
 {
     public long Count { get; init; }

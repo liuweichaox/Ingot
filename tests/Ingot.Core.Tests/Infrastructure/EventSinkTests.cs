@@ -1,7 +1,7 @@
 // 验证 EventSink 的成功、失败和边界行为。
 
-using Ingot.Edge.Application.Abstractions;
 using Ingot.Domain.Events;
+using Ingot.Edge.Application.Abstractions;
 using Ingot.Edge.Infrastructure.Events;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;

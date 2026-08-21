@@ -2,10 +2,6 @@ import { useState } from "react";
 import { Alert, Badge, Button, Card, EmptyState, Input, Select } from "../../ui/components";
 import { PROBE_MODE } from "../protocolRegistry";
 
-/**
- * 右栏常驻的设备面板：验证连接、协议约束、读取到的点位、发布检查。
- * 配置表单在左栏，工程师可以一边改一边看设备真实返回的值。
- */
 export function DevicePointsPanel({
   descriptor,
   form,

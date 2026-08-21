@@ -6,18 +6,15 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Ingot.Contracts.Acquisition;
+using Ingot.Contracts.Edge;
 using Ingot.Edge.Application.Abstractions;
 using Ingot.Edge.Application.Options;
-using Ingot.Contracts.Edge;
-using Ingot.Contracts.Acquisition;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace Ingot.Edge.Infrastructure.Reporting;
 
-/// <summary>
-///     Connector Host 向 Platform 注册并发送心跳；注册使用 1 到 30 秒指数退避。
-/// </summary>
 public sealed class PlatformReportingClient : IPlatformReportingClient
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
@@ -155,10 +152,6 @@ public sealed class PlatformReportingClient : IPlatformReportingClient
         }
     }
 
-    /// <summary>
-    ///     +/*/0.0.0.0/localhost 是 ASP.NET 通配符或回环，不是中心可回访的主机名；
-    ///     提取 scheme 与端口后用本机出口 IP 替换。
-    /// </summary>
     private static string? NormalizeHostBaseUrl(string? urls)
     {
         if (string.IsNullOrWhiteSpace(urls))
@@ -197,7 +190,6 @@ public sealed class PlatformReportingClient : IPlatformReportingClient
         return normalized;
     }
 
-    /// <summary>获取本机第一个可用的真实 IPv4 出口地址。</summary>
     private static string? GetLocalIpAddress()
     {
         return System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces()

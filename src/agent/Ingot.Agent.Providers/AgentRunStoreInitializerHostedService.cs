@@ -1,4 +1,3 @@
-// 在宿主启动阶段初始化 AgentRunStore 所需的持久化资源。
 
 using Microsoft.Extensions.Hosting;
 

@@ -48,7 +48,10 @@ public sealed class PlanValidatorSchemaTests
         var tool = new SchemaTool();
         var arguments = new Dictionary<string, string?>
         {
-            ["text"] = "ok", ["count"] = "8", ["ratio"] = "0.25", ["enabled"] = "true"
+            ["text"] = "ok",
+            ["count"] = "8",
+            ["ratio"] = "0.25",
+            ["enabled"] = "true"
         };
         arguments[key] = value;
 
@@ -67,7 +70,10 @@ public sealed class PlanValidatorSchemaTests
         {
             var arguments = new Dictionary<string, string?>
             {
-                ["text"] = "ok", ["count"] = "8", ["ratio"] = "0.25", ["enabled"] = "true"
+                ["text"] = "ok",
+                ["count"] = "8",
+                ["ratio"] = "0.25",
+                ["enabled"] = "true"
             };
             arguments[key] = null;
             Assert.False(validator.TryValidate(

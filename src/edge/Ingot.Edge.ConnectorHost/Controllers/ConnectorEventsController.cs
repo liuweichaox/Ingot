@@ -1,15 +1,11 @@
 using System.Security.Cryptography;
 using System.Text;
-using Ingot.Edge.Application.Abstractions;
 using Ingot.Domain.Events;
+using Ingot.Edge.Application.Abstractions;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Ingot.Edge.ConnectorHost.Controllers;
 
-/// <summary>
-/// Protocol-neutral ingress for user-owned source adapters. Adapters translate their source
-/// protocol into Ingot production events; this host never loads a PLC/device SDK.
-/// </summary>
 [ApiController]
 [Route("api/v1/connector-events")]
 public sealed class ConnectorEventsController(

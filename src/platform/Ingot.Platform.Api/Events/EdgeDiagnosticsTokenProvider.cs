@@ -1,4 +1,3 @@
-// 定义平台 API 组件 EdgeDiagnosticsTokenProvider 的交付职责与安全边界。
 
 using Microsoft.Extensions.Options;
 

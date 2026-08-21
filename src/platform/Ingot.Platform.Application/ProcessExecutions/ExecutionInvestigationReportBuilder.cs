@@ -3,10 +3,6 @@ using Ingot.Platform.Application.ProcessConfiguration;
 
 namespace Ingot.Platform.Application.ProcessExecutions;
 
-/// <summary>
-///     将过程执行比较的确定性计算结果整理成稳定的调查契约。这里不调用语言模型，
-///     也不把观察性关联提升为因果结论。
-/// </summary>
 public sealed class ExecutionInvestigationReportBuilder
 {
     public ExecutionInvestigationReport Build(

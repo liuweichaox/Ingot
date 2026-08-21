@@ -1,4 +1,3 @@
-// 实现应用层用例 MechanismKnowledgeExperimentPolicy，集中承载可独立测试的业务规则。
 
 using System.Security.Cryptography;
 using System.Text.Json;
@@ -130,15 +129,15 @@ internal static class MechanismKnowledgeExperimentPolicy
             ? 1
             : Math.Max(finiteAcquisitions.Max() - minimumAcquisition, 1e-12);
         return suggestions.Select((value, index) => new
-            {
-                Value = value,
-                Index = index,
-                Penalty = constraints.Average(constraint =>
-                    Math.Min(SoftPenalty(value, constraint, controls), 1)),
-                Acquisition = value.AcquisitionValue is { } acquisition && double.IsFinite(acquisition)
+        {
+            Value = value,
+            Index = index,
+            Penalty = constraints.Average(constraint =>
+                Math.Min(SoftPenalty(value, constraint, controls), 1)),
+            Acquisition = value.AcquisitionValue is { } acquisition && double.IsFinite(acquisition)
                     ? (acquisition - minimumAcquisition) / acquisitionWidth
                     : 0
-            })
+        })
             .OrderByDescending(static value => 0.75 * value.Acquisition - 0.25 * value.Penalty)
             .ThenByDescending(static value => value.Value.AcquisitionValue ?? double.NegativeInfinity)
             .ThenBy(static value => value.Index)

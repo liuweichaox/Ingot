@@ -1,6 +1,5 @@
 namespace Ingot.Agent;
 
-/// <summary>定义 Agent 运行、模型路由和工具调用的配置边界。</summary>
 public sealed class ChatOptions
 {
     public bool Enabled { get; set; }
@@ -11,10 +10,6 @@ public sealed class ChatOptions
 
     public string ReasoningModel { get; set; } = "deterministic-v1";
 
-    /// <summary>
-    ///     OpenAI-compatible API root, for example http://model-host:8000/v1.
-    ///     Empty uses the provider SDK default endpoint.
-    /// </summary>
     public string? BaseUrl { get; set; }
 
     public bool ProbeOnStartup { get; set; } = true;
@@ -35,7 +30,6 @@ public sealed class ChatOptions
         = new(StringComparer.OrdinalIgnoreCase);
 }
 
-/// <summary>定义模型输入、输出和缓存令牌的单位价格。</summary>
 public sealed class ModelPricingOptions
 {
     public decimal InputPerMillionTokens { get; set; }

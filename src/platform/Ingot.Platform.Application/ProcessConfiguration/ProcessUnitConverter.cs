@@ -1,10 +1,5 @@
 namespace Ingot.Platform.Application.ProcessConfiguration;
 
-/// <summary>
-/// Small, deterministic conversion boundary for common industrial units. Unknown
-/// or domain-specific units intentionally remain strict strings instead of being
-/// guessed by the platform.
-/// </summary>
 public static class ProcessUnitConverter
 {
     public static string NormalizeCode(string? value)

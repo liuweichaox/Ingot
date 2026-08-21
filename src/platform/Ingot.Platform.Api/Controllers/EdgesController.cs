@@ -1,6 +1,6 @@
-using Ingot.Platform.Infrastructure.Services;
 using Ingot.Contracts.Edge;
 using Ingot.Platform.Api.Events;
+using Ingot.Platform.Infrastructure.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -35,7 +35,7 @@ public class EdgesController(EdgeRegistry registry, EdgeTokenValidator edgeToken
     {
         if (!edgeTokenValidator.IsAuthorized(request.EdgeId, Request.Headers.Authorization.ToString()))
             return AuthenticationRequired("边缘节点认证失败。");
-        // 在线状态与历史排序以中心接收时间为准，避免现场时钟漂移把节点永久显示在未来或过去。
+
         var now = DateTimeOffset.UtcNow;
         var state = await registry.HeartbeatAsync(
             request.EdgeId,

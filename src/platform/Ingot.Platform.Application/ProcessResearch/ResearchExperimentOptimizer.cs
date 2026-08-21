@@ -1,15 +1,11 @@
-using Ingot.Platform.Application.ResearchAssets;
 using System.Security.Cryptography;
 using System.Text.Json;
 using Ingot.Contracts.ProcessResearch;
 using Ingot.Contracts.ResearchAssets;
+using Ingot.Platform.Application.ResearchAssets;
 
 namespace Ingot.Platform.Application.ProcessResearch;
 
-/// <summary>
-///     将实验结果中已经固化的不可变观测转换为下一份普通实验计划。
-///     现有实验审批和执行状态机仍是唯一业务流程。
-/// </summary>
 public sealed class ResearchExperimentOptimizer(
     IProcessResearchStore store,
     IProcessOptimizerClient optimizerClient,
@@ -284,7 +280,7 @@ public sealed class ResearchExperimentOptimizer(
         var sequence = 1;
         for (var replicate = 0; replicate < request.ReplicatesPerCondition; replicate++)
         {
-            // 让同一候选条件在不同区组中的顺序轮换，避免固定执行顺序与条件混杂。
+
             for (var position = 0; position < rankedSuggestions.Length; position++)
             {
                 var index = (position + replicate) % rankedSuggestions.Length;
@@ -379,7 +375,7 @@ public sealed class ResearchExperimentOptimizer(
         }
         catch (ProcessResearchRuleException)
         {
-            // 两个并发请求会得到相同快照哈希和确定性 ID；后写者返回先写结果。
+
             var concurrent = await store.GetExperimentAsync(experimentId, ct).ConfigureAwait(false);
             if (concurrent?.Optimization?.InputHash is { } concurrentInputHash &&
                 string.Equals(concurrentInputHash, inputHash, StringComparison.Ordinal))
@@ -567,28 +563,39 @@ public sealed class ResearchExperimentOptimizer(
         {
             "minimize" => new()
             {
-                Name = objective.Code, Kind = "le",
+                Name = objective.Code,
+                Kind = "le",
                 Threshold = objective.UpperLimit ?? objective.Target,
-                Weight = objective.Weight, Unit = objective.Unit
+                Weight = objective.Weight,
+                Unit = objective.Unit
             },
             "maximize" => new()
             {
-                Name = objective.Code, Kind = "ge",
+                Name = objective.Code,
+                Kind = "ge",
                 Threshold = objective.LowerLimit ?? objective.Target,
-                Weight = objective.Weight, Unit = objective.Unit
+                Weight = objective.Weight,
+                Unit = objective.Unit
             },
             "range" when objective.LowerLimit is { } lower && objective.UpperLimit is { } upper =>
                 new()
                 {
-                    Name = objective.Code, Kind = "range", Lower = lower, Upper = upper,
-                    Weight = objective.Weight, Unit = objective.Unit
+                    Name = objective.Code,
+                    Kind = "range",
+                    Lower = lower,
+                    Upper = upper,
+                    Weight = objective.Weight,
+                    Unit = objective.Unit
                 },
             "target" when objective.LowerLimit is { } lower && objective.UpperLimit is { } upper =>
                 new()
                 {
-                    Name = objective.Code, Kind = "target", Target = objective.Target,
+                    Name = objective.Code,
+                    Kind = "target",
+                    Target = objective.Target,
                     Tol = Math.Min(objective.Target - lower, upper - objective.Target),
-                    Weight = objective.Weight, Unit = objective.Unit
+                    Weight = objective.Weight,
+                    Unit = objective.Unit
                 },
             _ => throw new ProcessResearchRuleException($"目标 {objective.Code} 的方向或规格定义不支持优化。")
         };
@@ -655,22 +662,22 @@ public sealed class ResearchExperimentOptimizer(
         if (observedResolution.Values.All(static value => value <= 0))
             return;
         for (var left = 0; left < suggestions.Count; left++)
-        for (var right = left + 1; right < suggestions.Count; right++)
-        {
-            var distinguishable = controls.Keys.Any(code =>
-                observedResolution[code] > 0 &&
-                Math.Abs(
-                    suggestions[left].RecommendedParameters[code] -
-                    suggestions[right].RecommendedParameters[code]) + 1e-12 >= observedResolution[code]);
-            if (!distinguishable)
+            for (var right = left + 1; right < suggestions.Count; right++)
             {
-                var resolution = string.Join("、", observedResolution
-                    .Where(static pair => pair.Value > 0)
-                    .Select(pair => $"{controls[pair.Key].Name} {pair.Value:G6} {controls[pair.Key].Unit}"));
-                throw new ProcessResearchRuleException(
-                    $"优化服务返回的候选条件低于历史数据可区分分辨率（{resolution}），不能伪装成两个实验条件。");
+                var distinguishable = controls.Keys.Any(code =>
+                    observedResolution[code] > 0 &&
+                    Math.Abs(
+                        suggestions[left].RecommendedParameters[code] -
+                        suggestions[right].RecommendedParameters[code]) + 1e-12 >= observedResolution[code]);
+                if (!distinguishable)
+                {
+                    var resolution = string.Join("、", observedResolution
+                        .Where(static pair => pair.Value > 0)
+                        .Select(pair => $"{controls[pair.Key].Name} {pair.Value:G6} {controls[pair.Key].Unit}"));
+                    throw new ProcessResearchRuleException(
+                        $"优化服务返回的候选条件低于历史数据可区分分辨率（{resolution}），不能伪装成两个实验条件。");
+                }
             }
-        }
     }
 
     private static int CommonProcessFeatureCount(

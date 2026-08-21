@@ -10,9 +10,6 @@ public static class ScenarioContextModes
         => value is RequiredForAnalysis or RecordWhenAvailable or ValidatedForModeling;
 }
 
-/// <summary>
-///     将场景差异组合成不可变版本；核心运行、证据和实验状态机不依赖具体行业类型。
-/// </summary>
 public sealed record ScenarioPackage
 {
     public required string PackageId { get; init; }

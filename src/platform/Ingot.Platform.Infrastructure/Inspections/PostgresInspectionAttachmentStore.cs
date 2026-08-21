@@ -1,4 +1,3 @@
-// 实现 PostgresInspectionAttachmentStore 的 PostgreSQL 持久化适配，避免数据库细节泄漏到应用层。
 
 using System.Security.Cryptography;
 using Ingot.Contracts.Inspections;
@@ -149,7 +148,6 @@ public sealed class PostgresInspectionAttachmentStore : IInspectionAttachmentSto
             bufferSize: 81920,
             options: FileOptions.Asynchronous | FileOptions.SequentialScan);
     }
-
 
     private async Task<InspectionAttachment?> GetByShaAsync(string sha256, CancellationToken ct)
     {

@@ -1,4 +1,3 @@
-// 实现 PostgresInspectionMasterDataStore 的 PostgreSQL 持久化适配，避免数据库细节泄漏到应用层。
 
 using System.Text.Json;
 using Ingot.Contracts.Inspections;
@@ -187,7 +186,6 @@ public sealed class PostgresInspectionMasterDataStore : IInspectionMasterDataSto
 
     public Task<bool> DeleteFeatureDefinitionAsync(string code, CancellationToken ct = default)
         => DeleteSingleAsync("feature_definitions", "code", code, ct);
-
 
     private async Task UpsertSingleAsync<T>(
         string table,

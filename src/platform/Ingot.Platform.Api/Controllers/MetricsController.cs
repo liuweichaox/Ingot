@@ -3,9 +3,6 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Ingot.Platform.Api.Controllers;
 
-/// <summary>
-///     指标查看控制器
-/// </summary>
 [ApiController]
 [Route("api/metrics-data")]
 public class MetricsController : PlatformApiController
@@ -17,9 +14,6 @@ public class MetricsController : PlatformApiController
         _httpClientFactory = httpClientFactory;
     }
 
-    /// <summary>
-    ///     获取格式化的指标数据（JSON 格式）
-    /// </summary>
     [HttpGet]
     public async Task<IActionResult> GetMetricsJson([FromQuery] string? names = null)
     {
@@ -53,9 +47,6 @@ public class MetricsController : PlatformApiController
         }
     }
 
-    /// <summary>
-    ///     获取指标信息（说明如何查看指标）
-    /// </summary>
     [HttpGet("info")]
     public IActionResult GetMetricsInfo()
     {

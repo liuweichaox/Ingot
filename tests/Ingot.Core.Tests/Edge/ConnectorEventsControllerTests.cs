@@ -1,12 +1,12 @@
 // 验证边缘组件 ConnectorEventsController 的协议、状态和失败边界。
 
-using Ingot.Edge.Application.Abstractions;
+using System.Text.Json;
 using Ingot.Domain.Events;
+using Ingot.Edge.Application.Abstractions;
 using Ingot.Edge.ConnectorHost.Controllers;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
-using System.Text.Json;
 using Xunit;
 
 namespace Ingot.Core.Tests.Edge;
@@ -84,7 +84,8 @@ public sealed class ConnectorEventsControllerTests
             occurredAt,
             "edge/EDGE-001/connector/test",
             new ObjectRef("equipment", "PRESS-01"),
-            executionId) with { Seq = seq };
+            executionId) with
+        { Seq = seq };
 
     private sealed class CapturingEventSink : IEventSink
     {

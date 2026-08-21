@@ -5,9 +5,6 @@ using Microsoft.Extensions.Options;
 
 namespace Ingot.Edge.ConnectorHost.Services;
 
-/// <summary>
-/// 负责解析 EdgeId（用于中心注册/心跳）。宿主实现 IEdgeIdentityProvider，供基础设施实现消费。
-/// </summary>
 public sealed class EdgeIdentityService : IEdgeIdentityProvider
 {
     private readonly EdgeReportingOptions _options;
@@ -31,4 +28,3 @@ public sealed class EdgeIdentityService : IEdgeIdentityProvider
         return _options.EdgeId.Trim();
     }
 }
-

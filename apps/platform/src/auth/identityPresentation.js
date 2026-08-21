@@ -1,4 +1,3 @@
-// 将身份角色和站点范围转换为一致的用户可见说明。
 
 export const platformRoleOptions = [
   ["platform.admin", "平台管理员", "用户、权限和系统配置"],

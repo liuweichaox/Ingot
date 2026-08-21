@@ -20,7 +20,6 @@ public sealed record ResolvedSession(
     IReadOnlyList<string> Roles,
     IReadOnlyList<string> SiteIds);
 
-/// <summary>管理本地身份模式下的用户、角色、站点范围和会话。</summary>
 public interface ILocalUserStore
 {
     Task<long> CountAsync(CancellationToken ct = default);

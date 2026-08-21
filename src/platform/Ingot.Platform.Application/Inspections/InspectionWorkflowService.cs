@@ -3,7 +3,6 @@ using Ingot.Contracts.Inspections;
 
 namespace Ingot.Platform.Application.Inspections;
 
-/// <summary>执行检验记录、复核、附件和处置的正式应用工作流。</summary>
 public sealed class InspectionWorkflowService(
     IInspectionProductionEventReader events,
     IInspectionRecordStore inspections,

@@ -6,10 +6,6 @@ using Ingot.Contracts.Acquisition;
 
 namespace Ingot.Edge.ConnectorHost.Acquisition;
 
-/// <summary>
-///     保留 MQTT 各订阅主题的最近一份报文，并生成一个合并快照。
-///     主题级快照用于支持点位的显式 Topic 绑定；合并快照用于未绑定主题的点位。
-/// </summary>
 internal sealed class MqttSnapshotAccumulator
 {
     private readonly IReadOnlyList<MqttTopicSubscription> _subscriptions;

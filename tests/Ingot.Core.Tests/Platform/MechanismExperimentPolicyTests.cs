@@ -25,10 +25,10 @@ public sealed class MechanismExperimentPolicyTests
                 new MechanismVariableDefinition { Code = "pressure", Unit = "bar" }
             ],
             Output = new MechanismVariableDefinition
-                { Code = "thermal.index", Unit = "1", ValidMinimum = 0, ValidMaximum = 1000 },
+            { Code = "thermal.index", Unit = "1", ValidMinimum = 0, ValidMaximum = 1000 },
             Intercept = 5,
             Coefficients = new Dictionary<string, double>
-                { ["temperature"] = 2, ["pressure"] = -3 },
+            { ["temperature"] = 2, ["pressure"] = -3 },
             ApplicabilityContext = new Dictionary<string, string> { ["process"] = "molding" },
             ScientificBasis = "受控实验拟合并独立验证。",
             ContentHash = new string('a', 64)
@@ -65,9 +65,14 @@ public sealed class MechanismExperimentPolicyTests
         var project = Project();
         var claim = new MechanismClaimVersion
         {
-            ClaimId = Guid.CreateVersion7(), ProjectId = project.ProjectId, Version = 1,
-            Status = MechanismClaimStatuses.Active, Name = "联合禁区", MechanismType = "constraint",
-            Statement = "高温高压联合状态不可用。", FalsificationCondition = "独立安全试验证明联合状态安全。",
+            ClaimId = Guid.CreateVersion7(),
+            ProjectId = project.ProjectId,
+            Version = 1,
+            Status = MechanismClaimStatuses.Active,
+            Name = "联合禁区",
+            MechanismType = "constraint",
+            Statement = "高温高压联合状态不可用。",
+            FalsificationCondition = "独立安全试验证明联合状态安全。",
             Applicability = [new MechanismClaimApplicability { DimensionCode = "process", DimensionValue = "molding" }],
             ForbiddenCombinations =
             [
@@ -94,14 +99,16 @@ public sealed class MechanismExperimentPolicyTests
                 new OptimizerSuggestionOutput
                 {
                     RecommendedParameters = new Dictionary<string, double>
-                        { ["temperature"] = 190, ["pressure"] = 9 }
+                    { ["temperature"] = 190, ["pressure"] = 9 }
                 }, knowledge));
     }
 
     private static ResearchProject Project() => new()
     {
         ProjectId = Guid.CreateVersion7(),
-        Code = "mechanism-policy", Name = "机理策略测试", ProcessName = "molding",
+        Code = "mechanism-policy",
+        Name = "机理策略测试",
+        ProcessName = "molding",
         Variables =
         [
             new ResearchVariable { Code = "temperature", Name = "温度", Role = ResearchVariableRoles.Control, Unit = "Cel", LowerLimit = 100, UpperLimit = 200 },

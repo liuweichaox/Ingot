@@ -1,4 +1,3 @@
-// 固化站点构建、静态导出和安全响应头配置。
 
 import type { NextConfig } from "next";
 import path from "node:path";

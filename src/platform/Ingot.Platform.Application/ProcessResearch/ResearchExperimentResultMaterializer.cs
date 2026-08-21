@@ -4,10 +4,6 @@ using Ingot.Contracts.ProcessResearch;
 
 namespace Ingot.Platform.Application.ProcessResearch;
 
-/// <summary>
-///     将已经完成采集和检验的运行观察固化为正式实验结果。它只处理处于 Running、
-///     尚无结果且全部计划运行均已形成有效观察的实验，因此不会替代工程师的启动审批。
-/// </summary>
 public sealed class ResearchExperimentResultMaterializer(
     ProcessResearchWorkflow workflow,
     ResearchOperatingRegionMaterializer? operatingRegionMaterializer = null,
@@ -195,8 +191,6 @@ public sealed class ResearchExperimentResultMaterializer(
             : Math.Pow(experimentTerm + baselineTerm, 2) / denominator;
     }
 
-    // 小样本使用双侧 95% t 临界值表，并向下取整自由度以保持保守；
-    // 30 以上才使用收敛良好的 Cornish-Fisher 近似。
     private static double StudentT95Critical(double degreesOfFreedom)
     {
         if (!double.IsFinite(degreesOfFreedom) || degreesOfFreedom <= 0)

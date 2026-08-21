@@ -2,10 +2,6 @@ using Ingot.Contracts.Events;
 
 namespace Ingot.Platform.Infrastructure.Events;
 
-/// <summary>
-///     中心侧摄入时间窗策略。把 OccurredAt 限制在合理区间内：既允许正常回填，
-///     又防止异常或恶意的时间戳凭空创建大量月度分区（分区膨胀 / 轻量 DoS）。
-/// </summary>
 public static class PlatformIngestWindow
 {
     public static bool TryValidate(

@@ -1,10 +1,5 @@
 namespace Ingot.Platform.Application.TimeSeries;
 
-/// <summary>
-/// A canonical, typed observation produced by one physical or logical collection point.
-/// This contract deliberately contains no database-specific concepts so the same semantics
-/// is independent from SQL details so deterministic offline scientific runners can reuse it.
-/// </summary>
 public sealed record SignalSample
 {
     public required string CollectionPointId { get; init; }
@@ -56,10 +51,6 @@ public sealed record TimeSeriesQuery
     public int Limit { get; init; } = 10_000;
 }
 
-/// <summary>
-/// One logical acquisition frame assembled in memory from canonical signal rows.
-/// It is an analysis contract, not a second persistence format.
-/// </summary>
 public sealed record ProcessSampleFrame
 {
     public required string EventId { get; init; }

@@ -3,11 +3,6 @@ using Ingot.Platform.Application.ProcessConfiguration;
 
 namespace Ingot.Platform.Application.ProcessResearch;
 
-/// <summary>
-/// Produces the user-facing, aggregate portion of experiment validation.  The
-/// workflow retains its defensive validation as the final authority; this
-/// service makes the same common failures visible before submission.
-/// </summary>
 public sealed class ResearchExperimentValidationService(IProcessResearchStore store)
     : IResearchExperimentPlanValidator
 {

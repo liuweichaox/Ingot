@@ -1,14 +1,10 @@
-using Ingot.Platform.Application.ResearchAssets;
 using System.Security.Cryptography;
 using System.Text.Json;
 using Ingot.Contracts.ProcessResearch;
+using Ingot.Platform.Application.ResearchAssets;
 
 namespace Ingot.Platform.Application.ProcessResearch;
 
-/// <summary>
-///     基于真实且已经观测到的工艺规范条件，冻结一份与生产路径等价的回放。
-///     回放前聚合重复条件，避免候选池评估器把相同工艺规范伪装成新的优化选择。
-/// </summary>
 public sealed class ResearchHistoricalReplayService(
     IProcessResearchStore store,
     IProcessOptimizerClient optimizerClient,
@@ -98,8 +94,7 @@ public sealed class ResearchHistoricalReplayService(
             .GroupBy(value => Signature(value.Observation.ActualFactors), StringComparer.Ordinal)
             .Select(group => new
             {
-                // A repeated condition becomes visible only after its final contributing run.
-                // Ordering an all-run aggregate at the first run leaks later outcomes backwards.
+
                 AvailableOrder = group.Max(value => Array.IndexOf(source, value)),
                 RunId = string.Join(',', group.Select(value => value.Observation.ExecutionKey)
                     .Order(StringComparer.Ordinal)).Truncate(240),

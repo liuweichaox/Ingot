@@ -1,5 +1,5 @@
-using System.Text.Json;
 using System.Security.Cryptography.X509Certificates;
+using System.Text.Json;
 using Ingot.Contracts.Acquisition;
 using Ingot.Edge.Application.Abstractions;
 using MQTTnet;
@@ -8,12 +8,6 @@ using MQTTnet.Protocol;
 
 namespace Ingot.Edge.ConnectorHost.Acquisition;
 
-/// <summary>
-///     MQTT 订阅采集器。
-///
-///     订阅多个主题时，每个点位可以绑定自己的来源主题，跨主题的值由
-///     <see cref="MqttSnapshotAssembler"/> 合并成一份等价快照后再走统一的映射管线。
-/// </summary>
 public sealed class MqttAcquisitionRunner(
     IEventSink sink,
     IAcquisitionSecretResolver secrets,
@@ -42,7 +36,7 @@ public sealed class MqttAcquisitionRunner(
         var lifecycle = new AcquisitionLifecycleTracker();
         var lastMessageTicks = DateTimeOffset.UtcNow.UtcTicks;
         var subscriptionsReady = false;
-        // 消息回调可能并发进入；合并快照是共享状态，必须串行化。
+
         using var gate = new SemaphoreSlim(1, 1);
 
         client.ApplicationMessageReceivedAsync += async message =>
@@ -64,8 +58,7 @@ public sealed class MqttAcquisitionRunner(
                     MqttTopicVariableResolver.Resolve(subscription, topic));
                 if (!carriedValue)
                 {
-                    // 只携带上下文的主题更新状态但不触发采样，
-                    // 否则采样率会被与工艺变量无关的主题放大。
+
                     logger.LogDebug(
                         "MQTT 采集任务 {Configuration} 收到主题 {Topic} 的上下文报文，已并入合并快照",
                         configurationKey, topic);
@@ -116,7 +109,7 @@ public sealed class MqttAcquisitionRunner(
                         normalizedSource,
                         currentProcessSpecification,
                         topicSnapshots);
-                    // MQTT 由设备推送，没有固定采样周期，因此不向周期跟踪器提供轮询间隔。
+
                     var events = lifecycle.Track(mapped, deployment.Task.Lifecycle, 0);
                     await sink.EmitBatchAsync(events, ct).ConfigureAwait(false);
                     status.RecordProcessExecutionState(configurationKey, lifecycle.IsRunActive);

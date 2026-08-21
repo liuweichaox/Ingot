@@ -6,7 +6,6 @@ using NpgsqlTypes;
 
 namespace Ingot.Platform.Infrastructure.Services;
 
-/// <summary>所有 Platform API 副本共享的 PostgreSQL 边缘节点注册表。</summary>
 public sealed class EdgeRegistry(NpgsqlDataSource dataSource)
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);

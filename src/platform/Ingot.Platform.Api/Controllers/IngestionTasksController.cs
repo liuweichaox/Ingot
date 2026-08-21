@@ -1,10 +1,10 @@
-using Ingot.Platform.Application.ProcessConfiguration;
 using System.Text.Json;
 using Ingot.Contracts.Acquisition;
-using Ingot.Platform.Application.Acquisition;
 using Ingot.Contracts.ProcessConfiguration;
 using Ingot.Platform.Api.Agents;
 using Ingot.Platform.Api.Events;
+using Ingot.Platform.Application.Acquisition;
+using Ingot.Platform.Application.ProcessConfiguration;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -106,8 +106,6 @@ public sealed class IngestionTasksController(
                 return StateConflict("已发布或停用的采集配置不可修改，请创建新版本。", ("existing", existing));
         }
 
-        // 发布走单事务：退役旧 published 版本 + 写入新版本原子完成，
-        // 消除读-改-写循环在并发发布下残留两个 published 版本的竞态。
         try
         {
             return normalized.Status == ConfigurationStatuses.Published
@@ -262,12 +260,6 @@ public sealed class IngestionTasksController(
             : ResourceNotFound();
     }
 
-    /// <summary>
-    ///     校验与规范化已经迁移到 <see cref="IngestionTaskValidator"/>（Ingot.Contracts）。
-    ///
-    ///     平台、边缘节点和配置界面共用同一份判断，并由协议能力矩阵裁决
-    ///     每个字段是否适用于当前协议。
-    /// </summary>
     private static bool TryNormalize(
         IngestionTask? value,
         out IngestionTask? normalized,

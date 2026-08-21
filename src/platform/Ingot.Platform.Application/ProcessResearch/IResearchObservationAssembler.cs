@@ -10,7 +10,6 @@ public sealed record ResearchObservationAssembly(
         Observations.Count(static value => value.ValidForOptimization);
 }
 
-/// <summary>从生产执行和检验事实装配不可变、可追溯的研发观测。</summary>
 public interface IResearchObservationAssembler
 {
     Task<ResearchObservationAssembly> AssembleAsync(

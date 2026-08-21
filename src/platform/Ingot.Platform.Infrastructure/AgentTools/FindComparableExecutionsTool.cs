@@ -1,11 +1,10 @@
-// 实现只读 Agent 工具 FindComparableExecutionsTool，仅暴露授权范围内的确定性证据。
 
 using System.Text.Json;
 using Ingot.Agent;
-using Ingot.Platform.Application.Events;
-using Ingot.Platform.Application.ProcessConfiguration;
 using Ingot.Contracts.Agents;
 using Ingot.Contracts.Events;
+using Ingot.Platform.Application.Events;
+using Ingot.Platform.Application.ProcessConfiguration;
 using Ingot.Platform.Infrastructure.ProcessConfiguration;
 
 namespace Ingot.Platform.Infrastructure.AgentTools;

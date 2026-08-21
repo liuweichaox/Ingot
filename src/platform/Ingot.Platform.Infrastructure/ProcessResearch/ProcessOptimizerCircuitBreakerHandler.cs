@@ -2,10 +2,6 @@ using Microsoft.Extensions.Options;
 
 namespace Ingot.Platform.Infrastructure.ProcessResearch;
 
-/// <summary>
-///     Fast-fails after consecutive transport/5xx failures. It intentionally does not retry:
-///     optimizer POST requests can be expensive and are not assumed idempotent.
-/// </summary>
 public sealed class ProcessOptimizerCircuitBreakerHandler(
     IOptions<ProcessOptimizerOptions> options) : DelegatingHandler
 {

@@ -1,17 +1,12 @@
 namespace Ingot.Contracts.Inspections;
 
-/// <summary>
-///     人工或半自动检测提交。它是检测结果记录，不是生产事件，也不代表 QMS 放行。
-/// </summary>
 public sealed record CreateInspectionRecordRequest
 {
-    /// <summary>由提交端生成的 UUIDv7，用于离线重试和幂等提交。</summary>
+
     public required Guid RecordId { get; init; }
 
-    /// <summary>被检测工件、样件或批次内单件的稳定标识；现场没有单件标识时为空。</summary>
     public string? OutputItemId { get; init; }
 
-    /// <summary>本次检测所关联的加工运行稳定标识。</summary>
     public required string ExecutionId { get; init; }
 
     public required string DefinitionCode { get; init; }
@@ -20,13 +15,10 @@ public sealed record CreateInspectionRecordRequest
 
     public required DateTimeOffset MeasuredAt { get; init; }
 
-    /// <summary>提交端将记录固化到本地的时间，支持断网后补传。</summary>
     public required DateTimeOffset RecordedAt { get; init; }
 
-    /// <summary>PASS、FAIL 或 INCONCLUSIVE；只表示检测结果。</summary>
     public required string Outcome { get; init; }
 
-    /// <summary>人员或受控工位身份；是否已验证由服务端决定。</summary>
     public required string SubmittedBy { get; init; }
 
     public InspectionInstrumentRef? Instrument { get; init; }
@@ -37,7 +29,6 @@ public sealed record CreateInspectionRecordRequest
 
     public string? Notes { get; init; }
 
-    /// <summary>被本记录更正的原记录；原记录保持不变。</summary>
     public Guid? SupersedesRecordId { get; init; }
 
     public string? CorrectionReason { get; init; }
@@ -64,7 +55,6 @@ public sealed record InspectionCharacteristicResult
 
     public string? TextValue { get; init; }
 
-    /// <summary>数值量纲；无量纲值使用 UCUM 的 1。</summary>
     public string? Unit { get; init; }
 
     public decimal? LowerLimit { get; init; }
@@ -72,7 +62,6 @@ public sealed record InspectionCharacteristicResult
     public decimal? UpperLimit { get; init; }
 }
 
-/// <summary>已经进入受控附件暂存区的文件引用；API 不会主动抓取该地址。</summary>
 public sealed record InspectionAttachment
 {
     public required Guid AttachmentId { get; init; }
@@ -128,4 +117,3 @@ public sealed record InspectionRecordPage
     public int Offset { get; init; }
     public int Limit { get; init; }
 }
-

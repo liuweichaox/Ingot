@@ -1,7 +1,7 @@
 using System.Security.Claims;
+using Ingot.Contracts.Identity;
 using Ingot.Platform.Api.Agents;
 using Ingot.Platform.Application.Identity;
-using Ingot.Contracts.Identity;
 using Ingot.Platform.Infrastructure.Identity;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -9,7 +9,6 @@ using Microsoft.Extensions.Options;
 
 namespace Ingot.Platform.Api.Controllers;
 
-/// <summary>本地账户登录 / 注销 / 当前身份。OIDC 模式下无本地用户，登录恒返回 401。</summary>
 [ApiController]
 [Route("api/v1/auth")]
 public sealed class AuthController(
@@ -18,7 +17,7 @@ public sealed class AuthController(
     LoginThrottle throttle,
     IOptions<LocalAuthOptions> options) : PlatformApiController
 {
-    // 用户不存在时也执行一次等价的 PBKDF2 校验，消除"账户是否存在"的时序旁路。进程内计算一次。
+
     private static readonly string TimingEqualizerHash = new LocalPasswordHasher().Hash("timing-equalizer");
 
     [HttpPost("login")]
@@ -33,7 +32,7 @@ public sealed class AuthController(
             return RateLimited("登录尝试过于频繁，请稍后再试。");
 
         var user = await store.GetByUsernameAsync(usernameLower, ct).ConfigureAwait(false);
-        // 无论用户是否存在都执行一次哈希校验（不存在时用等时哈希），返回同一错误，避免用户名枚举与时序差异。
+
         var passwordMatches = hasher.Verify(user?.PasswordHash ?? TimingEqualizerHash, request.Password);
         var verified = user is { Disabled: false } && passwordMatches;
         if (!verified)

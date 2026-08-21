@@ -1,11 +1,11 @@
 // 验证 PostgresBackgroundJobLease 的真实基础设施集成、失败和恢复行为。
 
 using System.Text;
-using Ingot.Contracts.Events;
-using Ingot.Platform.Infrastructure.ProcessExecutions;
-using Ingot.Platform.Infrastructure.Acquisition;
 using Ingot.Contracts.Acquisition;
+using Ingot.Contracts.Events;
 using Ingot.Contracts.ProcessConfiguration;
+using Ingot.Platform.Infrastructure.Acquisition;
+using Ingot.Platform.Infrastructure.ProcessExecutions;
 using Ingot.Platform.Infrastructure.ResearchAssets;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;

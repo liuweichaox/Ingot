@@ -1,7 +1,7 @@
 using System.Text.Json;
 using Ingot.Contracts.Acquisition;
-using Ingot.Platform.Application.Acquisition;
 using Ingot.Contracts.ProcessConfiguration;
+using Ingot.Platform.Application.Acquisition;
 using Npgsql;
 using NpgsqlTypes;
 
@@ -96,8 +96,6 @@ public sealed class PostgresIngestionTaskStore : IIngestionTaskStore
         await using var connection = await _dataSource.OpenConnectionAsync(ct).ConfigureAwait(false);
         await using var transaction = await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
 
-        // Serialize publication per logical task. Row locks alone are insufficient when two
-        // versions are published concurrently before either transaction has inserted a row.
         await AcquireLockAsync(connection, transaction, published.TaskId, ct).ConfigureAwait(false);
         var currentStatus = await ReadStatusForUpdateAsync(
             connection, transaction, published.TaskId, published.Version, ct).ConfigureAwait(false);
@@ -105,7 +103,6 @@ public sealed class PostgresIngestionTaskStore : IIngestionTaskStore
             throw new InvalidOperationException(
                 $"任务 {published.TaskId} v{published.Version} 已发布或停用，不能覆盖同一版本。");
 
-        // 锁定并读取同任务的其他 published 版本（payload 为真相来源，必须同步改写其中的状态）。
         var retire = new List<(int Version, IngestionTask Task)>();
         await using (var select = new NpgsqlCommand(
             """

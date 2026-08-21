@@ -16,7 +16,6 @@ public sealed record AcquisitionBatchFailure(
     string TaskId,
     IReadOnlyList<AcquisitionValidationError> Errors);
 
-/// <summary>表示采集配置工作流拒绝了不满足业务规则的命令。</summary>
 public sealed class AcquisitionWorkflowException : Exception
 {
     public AcquisitionWorkflowException(
@@ -40,10 +39,6 @@ public sealed record PublishedIngestionTask(
     IngestionTask Task,
     AcquisitionProbeResult Validation);
 
-/// <summary>
-///     Owns the application rules for extracting, versioning, materializing and publishing
-///     reusable ingestion configuration. HTTP controllers only translate transport concerns.
-/// </summary>
 public sealed class IngestionConfigurationWorkflow(
     IIngestionConfigurationStore store,
     IIngestionTaskStore taskStore,
@@ -254,7 +249,7 @@ public sealed class IngestionConfigurationWorkflow(
                 if (existing is not null && existing.Status != ConfigurationStatuses.Draft)
                 {
                     failures.Add(new AcquisitionBatchFailure(binding.TaskId,
-                        [new AcquisitionValidationError("status", "已发布或停用的任务绑定不可修改。") ]));
+                        [new AcquisitionValidationError("status", "已发布或停用的任务绑定不可修改。")]));
                     continue;
                 }
                 materialized.Add((binding, task!));

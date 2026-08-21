@@ -1,4 +1,3 @@
-// 组装 EdgePages 的页面状态与用户交互，业务判定由服务端完成。
 
 import { useState } from "react";
 import { Link, useParams } from "react-router";

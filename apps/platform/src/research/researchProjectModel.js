@@ -1,4 +1,3 @@
-// 定义研发项目表单、状态和展示转换的前端纯函数。
 
 export const projectFormInitial = {
   name: "",

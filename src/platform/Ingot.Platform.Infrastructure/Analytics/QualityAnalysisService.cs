@@ -1,11 +1,10 @@
-// 实现基础设施适配器 QualityAnalysisService，满足应用层端口而不改变领域契约。
 
-using Ingot.Platform.Application.Inspections;
-using Ingot.Platform.Application.Analytics;
-using Ingot.Platform.Application.Events;
 using Ingot.Contracts.Analytics;
 using Ingot.Contracts.Events;
 using Ingot.Contracts.Inspections;
+using Ingot.Platform.Application.Analytics;
+using Ingot.Platform.Application.Events;
+using Ingot.Platform.Application.Inspections;
 using Ingot.Platform.Infrastructure.Inspections;
 
 namespace Ingot.Platform.Infrastructure.Analytics;

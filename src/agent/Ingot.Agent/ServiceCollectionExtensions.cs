@@ -1,4 +1,3 @@
-// 定义 Agent 核心组件 ServiceCollectionExtensions 的运行职责与只读边界。
 
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;

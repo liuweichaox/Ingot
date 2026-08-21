@@ -2,10 +2,6 @@ using Ingot.Contracts.Inspections;
 
 namespace Ingot.Platform.Application.Inspections;
 
-/// <summary>
-///     Application query boundary for inspection HTTP and other delivery adapters.
-///     Store ports remain private implementation dependencies of this use-case boundary.
-/// </summary>
 public sealed class InspectionQueries(
     IInspectionMasterDataStore masterData,
     IInspectionRecordStore records,

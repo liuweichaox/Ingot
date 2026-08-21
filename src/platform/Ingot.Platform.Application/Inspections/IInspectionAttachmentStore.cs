@@ -2,7 +2,6 @@ using Ingot.Contracts.Inspections;
 
 namespace Ingot.Platform.Application.Inspections;
 
-/// <summary>保存检验附件内容及其不可变元数据引用。</summary>
 public interface IInspectionAttachmentStore
 {
     Task InitializeAsync(CancellationToken ct = default);

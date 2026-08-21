@@ -2,9 +2,9 @@ using System.Buffers;
 using System.Globalization;
 using System.Net.Sockets;
 using System.Security.Cryptography.X509Certificates;
+using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
-using System.Text;
 using Ingot.Contracts.Acquisition;
 using MQTTnet;
 using MQTTnet.Formatter;
@@ -378,7 +378,7 @@ public sealed class AcquisitionProbeService(
         var points = new List<AcquisitionProbePoint>();
         BrowseOpcNodes(session, ObjectIds.ObjectsFolder, string.Empty, 0, values, points);
         var page = ApplyDiscoveryQuery(points, discoveryQuery);
-#pragma warning disable CS0618 // OPC Foundation keeps the synchronous compatibility API; probe work is already isolated on an async request.
+#pragma warning disable CS0618
         var mappedValues = deployment.Task.ValueMappings
             .Concat(deployment.Task.ProcessSpecification?.ParameterMappings ?? [])
             .GroupBy(static item => item.SourcePath, StringComparer.Ordinal)
@@ -477,7 +477,7 @@ public sealed class AcquisitionProbeService(
         }
     }
 
-#pragma warning disable CS0618 // See ProbeOpcUaAsync: the bounded compatibility browse API is used for one-shot discovery.
+#pragma warning disable CS0618
     private static void BrowseOpcNodes(
         Opc.Ua.Client.ISession session,
         NodeId parent,
@@ -789,12 +789,6 @@ public sealed class AcquisitionProbeService(
             .Distinct(StringComparer.Ordinal);
     }
 
-    /// <summary>
-    ///     发布探查必须证明每个配置引用至少真实出现一次。Required 只控制运行期某次快照
-    ///     缺失时的处理，不应让从未存在过的拼写错误路径通过发布。
-    ///     SequencePath 未配置时可省略；一旦配置，就必须由真实报文证明，避免序号路径拼错后
-    ///     静默失去去重与停滞检测能力。
-    /// </summary>
     private static IEnumerable<PublicationEvidencePath> PublicationEvidencePaths(AcquisitionDeployment deployment)
     {
         var task = deployment.Task;

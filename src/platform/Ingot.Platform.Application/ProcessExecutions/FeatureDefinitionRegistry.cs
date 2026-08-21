@@ -15,18 +15,12 @@ public sealed record ProcessFeatureDefinition
     public required string DefinitionHash { get; init; }
 }
 
-/// <summary>提供带版本和内容哈希的确定性过程特征定义。</summary>
 public interface IFeatureDefinitionRegistry
 {
     ProcessFeatureDefinition GetRequired(string code);
     IReadOnlyList<ProcessFeatureDefinition> List();
 }
 
-/// <summary>
-/// Immutable reference definitions for the deterministic feature engine. A definition
-/// version or semantic field change produces a different hash and therefore a new
-/// reproducibility identity, even when the display code remains unchanged.
-/// </summary>
 public sealed class BuiltInFeatureDefinitionRegistry : IFeatureDefinitionRegistry
 {
     private readonly IReadOnlyDictionary<string, ProcessFeatureDefinition> _definitions;

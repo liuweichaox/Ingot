@@ -1,4 +1,3 @@
-// 实现边缘采集组件 AcquisitionSecretReference，保持协议解析、凭据和领域事件边界分离。
 
 namespace Ingot.Edge.ConnectorHost.Acquisition;
 

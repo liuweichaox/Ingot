@@ -81,10 +81,6 @@ public sealed record AnalysisAnswer
 
     public IReadOnlyList<string> FollowUpQuestions { get; init; } = [];
 
-    /// <summary>
-    ///     Structured previews derived from read-only evidence. They are never formal
-    ///     Platform records; a user must confirm and submit them through the normal workflow.
-    /// </summary>
     public IReadOnlyList<AgentProposalEnvelope> Proposals { get; init; } = [];
 
     public CombinedAnalysisResult? CombinedAnalysis { get; init; }
@@ -170,10 +166,6 @@ public sealed record AgentToolInvocation
     public IReadOnlyList<RelatedRecordRef> RelatedRecords { get; init; } = [];
 }
 
-/// <summary>
-///     已通过运行时校验的只读工具结果快照。完整数据与内容哈希用于黄金评测和事后审计，
-///     不允许由模型补写。
-/// </summary>
 public sealed record AgentToolResultSnapshot
 {
     public required string Tool { get; init; }

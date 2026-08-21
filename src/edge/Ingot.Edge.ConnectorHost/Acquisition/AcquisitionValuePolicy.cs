@@ -1,4 +1,3 @@
-// 实现边缘采集组件 AcquisitionValuePolicy，保持协议解析、凭据和领域事件边界分离。
 
 using System.Globalization;
 using Ingot.Contracts.Acquisition;

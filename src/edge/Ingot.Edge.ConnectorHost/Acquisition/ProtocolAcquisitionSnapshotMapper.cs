@@ -4,10 +4,6 @@ using Ingot.Domain.Events;
 
 namespace Ingot.Edge.ConnectorHost.Acquisition;
 
-/// <summary>
-/// 将已经由 OPC UA 或 Modbus TCP 读取的标量按平台配置映射为统一事件。
-/// 字典键始终是配置中的 SourcePath，因此协议点位不进入领域模型。
-/// </summary>
 public static class ProtocolAcquisitionSnapshotMapper
 {
     public static AcquisitionMappingResult Map(

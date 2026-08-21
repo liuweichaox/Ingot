@@ -58,10 +58,6 @@ public sealed record MechanismForbiddenCombinationFactor
     public required string Unit { get; init; }
 }
 
-/// <summary>
-///     永远不得建议的一组参数范围合取条件。只有所有参数同时匹配时才禁止该组合；
-///     单个参数范围不会独立收窄实验域。
-/// </summary>
 public sealed record MechanismForbiddenCombination
 {
     public Guid CombinationId { get; init; }
@@ -157,10 +153,7 @@ public sealed record MechanismClaimUsage
     public required string UsageType { get; init; }
     public required string ContentHash { get; init; }
     public string? ClaimName { get; init; }
-    /// <summary>
-    ///     读取建议审计信息时解析出的精确声明版本。写入使用记录时为空；读取时必须与
-    ///     ClaimId、ClaimVersion 和 ContentHash 一致，不能回退到声明的当前版本。
-    /// </summary>
+
     public MechanismClaimVersion? AppliedClaim { get; init; }
 }
 

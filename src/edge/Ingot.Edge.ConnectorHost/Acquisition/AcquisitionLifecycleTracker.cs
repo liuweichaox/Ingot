@@ -3,10 +3,6 @@ using Ingot.Domain.Events;
 
 namespace Ingot.Edge.ConnectorHost.Acquisition;
 
-/// <summary>
-/// 将生产状态和控制器步序转换为离散运行边界事件。
-/// 在生产开始时由 Edge 生成 ExecutionId。
-/// </summary>
 public sealed class AcquisitionLifecycleTracker
 {
     private const string StageContextKey = "stage_number";

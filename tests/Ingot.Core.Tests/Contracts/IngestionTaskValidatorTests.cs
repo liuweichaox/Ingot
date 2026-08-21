@@ -1,6 +1,6 @@
 using Ingot.Contracts.Acquisition;
-using Xunit;
 using Ingot.Contracts.ProcessConfiguration;
+using Xunit;
 
 namespace Ingot.Core.Tests.Contracts;
 
@@ -80,7 +80,8 @@ public class IngestionTaskValidatorTests
         {
             DataItemCode = "press.temperature",
             SourcePath = "ns=2;s=Press.Temperature"
-        }) with { TimestampMode = "source", TimestampPath = "ignored" };
+        }) with
+        { TimestampMode = "source", TimestampPath = "ignored" };
         Assert.True(IngestionTaskValidator.TryValidate(profile, null, out var normalized, out var errors),
             string.Join("；", errors));
         Assert.Equal("source", normalized!.TimestampMode);
@@ -239,7 +240,8 @@ public class IngestionTaskValidatorTests
         {
             DataItemCode = "press.temperature",
             SourcePath = "temperature"
-        }) with { HttpPolling = new HttpPollingConnection { BaseUrl = "http://device.local", Method = " POST " } };
+        }) with
+        { HttpPolling = new HttpPollingConnection { BaseUrl = "http://device.local", Method = " POST " } };
 
         Assert.True(IngestionTaskValidator.TryValidate(task, null, out var normalized, out var errors),
             string.Join("；", errors));
@@ -476,7 +478,8 @@ public class IngestionTaskValidatorTests
             ModbusArea = "holding-register",
             ModbusAddress = 100,
             SourceDataType = "int16"
-        }) with { Status = ConfigurationStatuses.Published };
+        }) with
+        { Status = ConfigurationStatuses.Published };
         var model = new ProcessDataModel
         {
             ModelId = "press-model",

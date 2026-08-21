@@ -1,7 +1,6 @@
-// 实现 PostgresEventStoreHealthCheck 的 PostgreSQL 持久化适配，避免数据库细节泄漏到应用层。
 
-using Ingot.Platform.Infrastructure.Events;
 using Ingot.Platform.Application.Events;
+using Ingot.Platform.Infrastructure.Events;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 namespace Ingot.Platform.Api.HealthChecks;

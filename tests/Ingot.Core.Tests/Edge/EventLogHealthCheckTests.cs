@@ -1,7 +1,7 @@
 // 验证边缘组件 EventLogHealthCheck 的协议、状态和失败边界。
 
-using Ingot.Edge.Application.Abstractions;
 using Ingot.Domain.Events;
+using Ingot.Edge.Application.Abstractions;
 using Ingot.Edge.ConnectorHost.HealthChecks;
 using Ingot.Edge.Infrastructure.Events;
 using Microsoft.Extensions.Diagnostics.HealthChecks;

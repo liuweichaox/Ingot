@@ -1,10 +1,9 @@
-// 实现 PostgresResearchAssetStore 的 PostgreSQL 持久化适配，避免数据库细节泄漏到应用层。
 
-using Ingot.Platform.Application.ResearchAssets;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Ingot.Contracts.ResearchAssets;
+using Ingot.Platform.Application.ResearchAssets;
 using Microsoft.Extensions.Options;
 using Npgsql;
 using NpgsqlTypes;
@@ -926,12 +925,21 @@ public sealed class PostgresResearchAssetStore : IResearchAssetStore
             };
             rows.Add(new KnowledgeRecord
             {
-                RecordId=reader.GetGuid(0), SourceId=sourceId, Category=reader.GetString(1),
-                PageOrSheet=reader.IsDBNull(2)?null:reader.GetString(2), Region=reader.IsDBNull(3)?null:reader.GetString(3),
-                Content=reader.GetString(4), HumanReviewed=reader.GetBoolean(5), CreatedBy=reader.GetString(6),
-                CreatedAt=reader.GetFieldValue<DateTimeOffset>(7), ReviewedBy=reader.IsDBNull(8)?null:reader.GetString(8),
-                ReviewedAt=reader.IsDBNull(9)?null:reader.GetFieldValue<DateTimeOffset>(9), ExtractionMethod=reader.GetString(10),
-                ExtractorVersion=reader.GetString(11), ExtractionConfidence=reader.IsDBNull(12)?null:reader.GetDouble(12), Citation=citation
+                RecordId = reader.GetGuid(0),
+                SourceId = sourceId,
+                Category = reader.GetString(1),
+                PageOrSheet = reader.IsDBNull(2) ? null : reader.GetString(2),
+                Region = reader.IsDBNull(3) ? null : reader.GetString(3),
+                Content = reader.GetString(4),
+                HumanReviewed = reader.GetBoolean(5),
+                CreatedBy = reader.GetString(6),
+                CreatedAt = reader.GetFieldValue<DateTimeOffset>(7),
+                ReviewedBy = reader.IsDBNull(8) ? null : reader.GetString(8),
+                ReviewedAt = reader.IsDBNull(9) ? null : reader.GetFieldValue<DateTimeOffset>(9),
+                ExtractionMethod = reader.GetString(10),
+                ExtractorVersion = reader.GetString(11),
+                ExtractionConfidence = reader.IsDBNull(12) ? null : reader.GetDouble(12),
+                Citation = citation
             });
         }
         foreach (var index in Enumerable.Range(0, rows.Count))
@@ -1037,7 +1045,7 @@ public sealed class PostgresResearchAssetStore : IResearchAssetStore
         AddNullable(command, "cursor_at", NpgsqlDbType.TimestampTz, cursor?.SortAt);
         AddNullable(command, "cursor_key", NpgsqlDbType.Text, cursor?.Key);
         command.Parameters.Add(new NpgsqlParameter("cursor_version", NpgsqlDbType.Integer)
-            { Value = cursor?.Version ?? 0 });
+        { Value = cursor?.Version ?? 0 });
         command.Parameters.AddWithValue("take", take);
     }
 
@@ -1092,14 +1100,22 @@ public sealed class PostgresResearchAssetStore : IResearchAssetStore
             if (!await reader.ReadAsync(ct).ConfigureAwait(false)) return null;
             value = new KnowledgeSource
             {
-                SourceId=reader.GetGuid(0), Title=reader.GetString(1), SourceKind=reader.GetString(2),
-                Status=reader.GetString(3), StorageRef=reader.GetString(4), Sha256=reader.GetString(5),
-                MediaType=reader.GetString(6), FileName=reader.GetString(7), SizeBytes=reader.GetInt64(8),
-                UploadedBy=reader.GetString(9), UploadedAt=reader.GetFieldValue<DateTimeOffset>(10),
-                ReviewedBy=reader.IsDBNull(11)?null:reader.GetString(11),
-                ReviewedAt=reader.IsDBNull(12)?null:reader.GetFieldValue<DateTimeOffset>(12),
-                ExtractionStatus=reader.GetString(13), ExtractionError=reader.IsDBNull(14)?null:reader.GetString(14),
-                ExtractorVersion=reader.IsDBNull(15)?null:reader.GetString(15)
+                SourceId = reader.GetGuid(0),
+                Title = reader.GetString(1),
+                SourceKind = reader.GetString(2),
+                Status = reader.GetString(3),
+                StorageRef = reader.GetString(4),
+                Sha256 = reader.GetString(5),
+                MediaType = reader.GetString(6),
+                FileName = reader.GetString(7),
+                SizeBytes = reader.GetInt64(8),
+                UploadedBy = reader.GetString(9),
+                UploadedAt = reader.GetFieldValue<DateTimeOffset>(10),
+                ReviewedBy = reader.IsDBNull(11) ? null : reader.GetString(11),
+                ReviewedAt = reader.IsDBNull(12) ? null : reader.GetFieldValue<DateTimeOffset>(12),
+                ExtractionStatus = reader.GetString(13),
+                ExtractionError = reader.IsDBNull(14) ? null : reader.GetString(14),
+                ExtractorVersion = reader.IsDBNull(15) ? null : reader.GetString(15)
             };
         }
         await using var context = _dataSource.CreateCommand(

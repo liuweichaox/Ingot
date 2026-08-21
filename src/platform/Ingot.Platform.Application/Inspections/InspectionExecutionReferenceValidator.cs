@@ -2,11 +2,6 @@ using Ingot.Platform.Application.ProcessExecutions;
 
 namespace Ingot.Platform.Application.Inspections;
 
-/// <summary>
-/// 检验记录与运行的关联验证器。
-/// 确保检验记录的 ExecutionId 有效，时间戳在对应运行的范围内。
-/// 这个验证器专注于执行边界相关的检查（与 InspectionRecordValidator 分工不同）。
-/// </summary>
 public sealed class InspectionExecutionReferenceValidator
 {
     private readonly IExecutionBoundaryStore _boundaryStore;
@@ -16,17 +11,6 @@ public sealed class InspectionExecutionReferenceValidator
         _boundaryStore = boundaryStore ?? throw new ArgumentNullException(nameof(boundaryStore));
     }
 
-    /// <summary>
-    /// 验证检验记录是否与有效的运行关联。
-    /// </summary>
-    /// <param name="siteId">生产单元。</param>
-    /// <param name="executionId">运行标识。</param>
-    /// <param name="inspectionTime">检验执行的时间。</param>
-    /// <param name="ct">取消令牌。</param>
-    /// <returns>
-    /// - (true, null) 如果运行存在且检验时间在运行范围内。
-    /// - (false, reason) 如果运行不存在或检验时间超出范围。
-    /// </returns>
     public async Task<(bool IsValid, string? ErrorReason)> ValidateExecutionReferenceAsync(
         string siteId,
         string executionId,
@@ -36,12 +20,10 @@ public sealed class InspectionExecutionReferenceValidator
         if (string.IsNullOrWhiteSpace(executionId))
             return (false, "检验记录的 ExecutionId 不能为空。");
 
-        // 查询运行边界是否存在
         var boundary = await _boundaryStore.GetBoundaryAsync(siteId, executionId, ct).ConfigureAwait(false);
         if (boundary is null)
             return (false, $"运行 {executionId} 不存在或未被识别。");
 
-        // 检查时间戳是否在运行范围内（容限 ±5 分钟以应对时钟偏差）
         var tolerance = TimeSpan.FromMinutes(5);
         var effectiveStartTime = boundary.StartedAt - tolerance;
         var effectiveEndTime = (boundary.EndedAt ?? DateTimeOffset.UtcNow) + tolerance;
@@ -57,16 +39,6 @@ public sealed class InspectionExecutionReferenceValidator
         return (true, null);
     }
 
-    /// <summary>
-    /// 验证一批检验记录的一致性（它们是否来自同一实验批次/工作单元）。
-    /// </summary>
-    /// <param name="records">待验证的检验记录。</param>
-    /// <param name="siteId">生产单元。</param>
-    /// <param name="ct">取消令牌。</param>
-    /// <returns>
-    /// - (true, null) 如果所有记录属于同一运行。
-    /// - (false, reason) 如果记录来自不同运行或某个运行不存在。
-    /// </returns>
     public async Task<(bool IsConsistent, string? ErrorReason)> ValidateBatchConsistencyAsync(
         IReadOnlyList<InspectionRecordInput> records,
         string siteId,
@@ -75,7 +47,6 @@ public sealed class InspectionExecutionReferenceValidator
         if (records.Count == 0)
             return (true, null);
 
-        // 所有记录应来自同一个 ExecutionId
         var executionIds = records
             .Select(r => r.ExecutionId)
             .Distinct()
@@ -88,7 +59,6 @@ public sealed class InspectionExecutionReferenceValidator
         if (executionIds.Count == 1 && string.IsNullOrEmpty(executionIds[0]))
             return (false, "批次中的所有检验记录都缺少 ExecutionId。");
 
-        // 检查时间戳的离散度（来自同一运行的检验不应间隔超过 1 小时）
         var times = records
             .Select(r => r.InspectionTime)
             .OrderBy(t => t)
@@ -109,9 +79,6 @@ public sealed class InspectionExecutionReferenceValidator
     }
 }
 
-/// <summary>
-/// 检验记录的输入模型（用于验证阶段）。
-/// </summary>
 public sealed record InspectionRecordInput
 {
     public required string ExecutionId { get; init; }

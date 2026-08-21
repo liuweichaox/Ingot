@@ -3,9 +3,6 @@ using Ingot.Domain.Events;
 
 namespace Ingot.Edge.ConnectorHost.Acquisition;
 
-/// <summary>
-/// 采样侧的可审计元数据和源级幂等判断。
-/// </summary>
 public static class AcquisitionSampleMetadata
 {
     public static Dictionary<string, object?> CreateQuality(

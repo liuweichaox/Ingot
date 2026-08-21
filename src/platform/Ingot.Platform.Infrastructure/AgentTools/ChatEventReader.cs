@@ -1,6 +1,6 @@
-using Ingot.Platform.Application.Events;
 using Ingot.Contracts.Analytics;
 using Ingot.Contracts.Events;
+using Ingot.Platform.Application.Events;
 using Microsoft.Extensions.Options;
 
 namespace Ingot.Platform.Infrastructure.AgentTools;
@@ -18,7 +18,6 @@ public sealed class ChatUserDataScope
     public IReadOnlyList<string> EdgeIds { get; set; } = [];
 }
 
-/// <summary>为只读聊天分析工具提供受授权范围约束的生产事件读取。</summary>
 public interface IChatEventReader
 {
     Task<IReadOnlyList<PlatformProductionEvent>> QueryAsync(
@@ -26,9 +25,6 @@ public interface IChatEventReader
         PlatformEventQuery query,
         CancellationToken ct = default);
 
-    /// <summary>
-    ///     读取完整分析范围。底层仍按 500 行分页，500 只约束单页传输，不约束参与计算的数据量。
-    /// </summary>
     Task<IReadOnlyList<PlatformProductionEvent>> QueryAllAsync(
         string userId,
         PlatformEventQuery query,
@@ -41,7 +37,6 @@ public interface IChatEventReader
 
 }
 
-/// <summary>为聊天分析工具读取经过业务范围过滤的结构化数据对象。</summary>
 public interface IChatDataObjectReader
 {
     Task<DataObjectPage> QueryDataObjectsAsync(
@@ -160,7 +155,6 @@ public sealed class ChatEventReader(
         };
     }
 
-    // null 表示 AllowAll（不按 Edge 收窄）；否则返回该用户 被授权的 Edge 集合。
     private string[]? ResolveEdgeScope(string userId)
     {
         if (!_options.Users.TryGetValue(userId, out var scope))

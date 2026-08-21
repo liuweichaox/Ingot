@@ -8,7 +8,6 @@ using Ingot.Platform.Application.ProcessConfiguration;
 
 namespace Ingot.Platform.Application.ProcessResearch;
 
-/// <summary>执行实验创建、审批、运行和完成的状态机命令。</summary>
 public sealed partial class ResearchExperimentCommands(
     IResearchExperimentCommandStore store,
     IResearchOnlineAdmissionGate? onlineAdmission = null,
@@ -280,8 +279,7 @@ public sealed partial class ResearchExperimentCommands(
         string executionCategory,
         CancellationToken ct)
     {
-        // Controlled online work remains deliberately non-inheritable: every run
-        // must state its own stop and recovery plan.
+
         if (executionCategory == ResearchExperimentExecutionCategories.ControlledOnline ||
             (!string.IsNullOrWhiteSpace(request.StopRule) && !string.IsNullOrWhiteSpace(request.RollbackPlan)))
             return (request, null);
@@ -422,18 +420,18 @@ public sealed partial class ResearchExperimentCommands(
 
         var now = DateTimeOffset.UtcNow;
         var updated = experiment with
-            {
-                Revision = experiment.Revision + 1,
-                Status = targetStatus,
-                Execution = UpdateExecution(experiment, targetStatus, actor),
-                ApprovedBy = targetStatus == ResearchExperimentStatuses.Approved
+        {
+            Revision = experiment.Revision + 1,
+            Status = targetStatus,
+            Execution = UpdateExecution(experiment, targetStatus, actor),
+            ApprovedBy = targetStatus == ResearchExperimentStatuses.Approved
                     ? actor
                     : experiment.ApprovedBy,
-                ApprovedAt = targetStatus == ResearchExperimentStatuses.Approved
+            ApprovedAt = targetStatus == ResearchExperimentStatuses.Approved
                     ? now
                     : experiment.ApprovedAt,
-                UpdatedAt = now
-            };
+            UpdatedAt = now
+        };
         var saved = await store.SaveExperimentTransactionAsync(
             updated,
             new ResearchAuditEntry
@@ -553,16 +551,16 @@ public sealed partial class ResearchExperimentCommands(
         };
         var execution = experiment.Execution ?? BuildExecution(experiment);
         var updated = experiment with
-            {
-                ControlledDecision = decision,
-                Factors = approved.Count > 0 ? approved : experiment.Factors,
-                RunPlan = approved.Count > 0
+        {
+            ControlledDecision = decision,
+            Factors = approved.Count > 0 ? approved : experiment.Factors,
+            RunPlan = approved.Count > 0
                     ? [experiment.RunPlan[0] with { Factors = approved }]
                     : experiment.RunPlan,
-                Status = decisionStatus == ResearchControlledDecisionStatuses.Rejected
+            Status = decisionStatus == ResearchControlledDecisionStatuses.Rejected
                     ? ResearchExperimentStatuses.Cancelled
                     : experiment.Status,
-                Execution = decisionStatus == ResearchControlledDecisionStatuses.Rejected
+            Execution = decisionStatus == ResearchControlledDecisionStatuses.Rejected
                     ? execution with { State = ResearchExperimentExecutionStates.Cancelled }
                     : execution with
                     {
@@ -570,10 +568,10 @@ public sealed partial class ResearchExperimentCommands(
                         [
                             execution.Commands[0] with { RequestedFactors = approved }
                         ]
-                },
-                Revision = experiment.Revision + 1,
-                UpdatedAt = now
-            };
+                    },
+            Revision = experiment.Revision + 1,
+            UpdatedAt = now
+        };
         var saved = await store.SaveControlledDecisionTransactionAsync(
             updated,
             new ResearchAuditEntry

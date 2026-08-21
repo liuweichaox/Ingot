@@ -1,8 +1,8 @@
 // 验证平台组件 ArchitectureDependency 的成功、拒绝和安全边界。
 
 using Ingot.Platform.Application.ProcessExecutions;
-using Ingot.Platform.Infrastructure.ProcessExecutions;
 using Ingot.Platform.Infrastructure.Inspections;
+using Ingot.Platform.Infrastructure.ProcessExecutions;
 using Microsoft.AspNetCore.Mvc;
 using Xunit;
 

@@ -6,26 +6,6 @@ using Ingot.Edge.Application.Abstractions;
 
 namespace Ingot.Edge.ConnectorHost.Acquisition;
 
-/// <summary>
-///     三菱 MC 协议 A 兼容 1E 帧采集器 —— 用于 FX3U-ENET(-L/-ADP) 等设备。
-///     不依赖 HslCommunication（商业授权）；MC/SLMP 是公开协议，本类直接构造 1E 帧字节。
-///
-///     帧字节布局按 FX3U-ENET-ADP User's Manual 的 A-compatible 1E frame：
-///     软元件号在前，2 字节软元件代码按低字节到高字节发送（D 的线缆字节为 20H 44H）。
-///
-///     选择器语法与解析由 <see cref="AcquisitionSelectors"/> 提供，平台侧与本类共用同一份规则。
-///
-///     相对早期实现修正了三处语义：
-///     <list type="number">
-///       <item>位软元件（M/X/Y/B/S/L）读取布尔值时使用位单位批量读命令 0x00，
-///             而不是一律用字单位批量读 0x01 —— 后者返回的是从该编号起 16 个点打包成的字，
-///             把它当成单点状态是错的；</item>
-///       <item>相邻点位按 <see cref="McA1EConnection.MaxMergeGap"/> 合并成一次读取，
-///             不再每个点位一次 TCP 往返；</item>
-///       <item>支持 <c>TimestampMode = source</c>，与 Modbus 采集器一致；
-///             配置不完整时直接拒绝，不静默改用采集节点时间。</item>
-///     </list>
-/// </summary>
 public sealed class MelsecA1EAcquisitionRunner(
     IEventSink sink,
     AcquisitionStatus status,
@@ -33,17 +13,22 @@ public sealed class MelsecA1EAcquisitionRunner(
 {
     public string Protocol => AcquisitionProtocols.MelsecA1E;
 
-    /// <summary>1E 帧的软元件代码（ASCII 两字节，按低字节到高字节发送）。</summary>
     private static readonly IReadOnlyDictionary<string, byte[]> DeviceCodes =
         new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase)
         {
-            ["D"] = " D"u8.ToArray(), ["W"] = " W"u8.ToArray(), ["R"] = " R"u8.ToArray(),
-            ["M"] = " M"u8.ToArray(), ["X"] = " X"u8.ToArray(), ["Y"] = " Y"u8.ToArray(),
-            ["B"] = " B"u8.ToArray(), ["T"] = " T"u8.ToArray(), ["C"] = " C"u8.ToArray(),
-            ["L"] = " L"u8.ToArray(), ["S"] = " S"u8.ToArray(),
+            ["D"] = " D"u8.ToArray(),
+            ["W"] = " W"u8.ToArray(),
+            ["R"] = " R"u8.ToArray(),
+            ["M"] = " M"u8.ToArray(),
+            ["X"] = " X"u8.ToArray(),
+            ["Y"] = " Y"u8.ToArray(),
+            ["B"] = " B"u8.ToArray(),
+            ["T"] = " T"u8.ToArray(),
+            ["C"] = " C"u8.ToArray(),
+            ["L"] = " L"u8.ToArray(),
+            ["S"] = " S"u8.ToArray(),
         };
 
-    /// <summary>1E 帧字批量读取一次最多 256 个字；位批量读取一次最多 256 个点。</summary>
     private const int MaxWordsPerRead = 256;
     private const int MaxBitsPerRead = 256;
 
@@ -148,7 +133,6 @@ public sealed class MelsecA1EAcquisitionRunner(
         }
     }
 
-    /// <summary>建立连接时应用配置的超时，限制半开连接占用采集工作器的时间。</summary>
     private static async Task ConnectAsync(
         TcpClient client,
         McA1EConnection connection,
@@ -221,7 +205,6 @@ public sealed class MelsecA1EAcquisitionRunner(
         return result;
     }
 
-    /// <summary>一次 1E 读取请求覆盖的点位集合。</summary>
     internal sealed record McRead(
         string Device,
         byte[] DeviceCode,
@@ -230,11 +213,6 @@ public sealed class MelsecA1EAcquisitionRunner(
         int Count,
         IReadOnlyList<KeyValuePair<string, AcquisitionSelectors.MelsecPoint>> Points);
 
-    /// <summary>
-    ///     把点位合并成尽量少的读取请求。同一软元件、同一读取方式（位/字）且编号间隔
-    ///     不超过 <paramref name="maxMergeGap"/> 的点位合并成一次请求。
-    ///     maxMergeGap 为 0 时退化为逐点读取。
-    /// </summary>
     internal static IReadOnlyList<McRead> BuildReadPlan(
         IReadOnlyDictionary<string, AcquisitionSelectors.MelsecPoint> selectors,
         int maxMergeGap)
@@ -258,9 +236,7 @@ public sealed class MelsecA1EAcquisitionRunner(
                 var end = start + (uint)Span(ordered[index].Value, bitRead);
                 var batch = new List<KeyValuePair<string, AcquisitionSelectors.MelsecPoint>> { ordered[index] };
                 var next = index + 1;
-                // maxMergeGap <= 0 表示显式关闭合并：每个点位单独一次读取。
-                // 现场排查某个软元件是否可读时需要这个逃生口，因此不能因为
-                // "间隔恰好为 0" 就把连续点位并进来。
+
                 while (maxMergeGap > 0 && next < ordered.Count)
                 {
                     var candidate = ordered[next].Value;
@@ -317,16 +293,11 @@ public sealed class MelsecA1EAcquisitionRunner(
         return snapshot;
     }
 
-    /// <summary>1E 帧字批量读取请求（命令 0x01）。</summary>
     internal static byte[] BuildWordReadFrame(
         byte[] deviceCode, uint address, int wordCount, ushort timer, string layout,
         byte pcNumber = 0xFF, string dataCode = "binary")
         => BuildReadFrame(0x01, deviceCode, address, wordCount, timer, layout, pcNumber, dataCode);
 
-    /// <summary>
-    ///     1E 帧位批量读取请求（命令 0x00）。
-    ///     位软元件读取布尔值必须用这个命令；用字读取拿到的是 16 个点打包成的字。
-    /// </summary>
     internal static byte[] BuildBitReadFrame(
         byte[] deviceCode, uint address, int pointCount, ushort timer, string layout,
         byte pcNumber = 0xFF, string dataCode = "binary")
@@ -344,8 +315,7 @@ public sealed class MelsecA1EAcquisitionRunner(
             throw new InvalidOperationException("MELSEC 1E 读取范围超出软元件地址边界。");
         if (dataCode == "ascii")
         {
-            // ASCII 码的各数值按 H→L 发送；设备代码 D 的逻辑值为 4420H。
-            // 例如 D100/1 word: 01 FF 0010 00000064 4420 0001。
+
             var ascii = $"{command:X2}{pcNumber:X2}{timer:X4}{address:X8}" +
                         $"{deviceCode[1]:X2}{deviceCode[0]:X2}{count:X4}";
             return System.Text.Encoding.ASCII.GetBytes(ascii);
@@ -389,17 +359,12 @@ public sealed class MelsecA1EAcquisitionRunner(
             return binary;
         }
 
-        // 成功响应：[0]=0x81 [1]=结束码0x00 + wordCount*2 字节数据；错误：[1]!=0
         var header = await ReadExactAsync(stream, 2, ct).ConfigureAwait(false);
         EnsureBinarySuccess(header);
         var data = await ReadExactAsync(stream, wordCount * 2, ct).ConfigureAwait(false);
         return header.Concat(data).ToArray();
     }
 
-    /// <summary>
-    ///     位批量读响应。二进制模式每个字节承载 2 个点（高半字节在前），
-    ///     ASCII 模式每个点一个 '0' / '1' 字符。
-    /// </summary>
     internal static async Task<bool[]> ReadBitResponseAsync(
         NetworkStream stream, int pointCount, string dataCode, CancellationToken ct)
     {
@@ -489,7 +454,6 @@ public sealed class MelsecA1EAcquisitionRunner(
         return buffer;
     }
 
-    /// <param name="wordOffset">该点位在本次合并读取的数据块中的字偏移。</param>
     internal static object? Decode(byte[] response, AcquisitionSelectors.MelsecPoint point, int wordOffset = 0)
     {
         var required = 2 + (wordOffset + Math.Max(1, point.WordCount)) * 2;
@@ -499,13 +463,12 @@ public sealed class MelsecA1EAcquisitionRunner(
         var data = response.AsSpan(2 + wordOffset * 2, Math.Max(1, point.WordCount) * 2);
         if (point.DataType == AcquisitionSelectors.BooleanDataType)
         {
-            // 走到这里只可能是"字软元件 + 位偏移"；位软元件的布尔值由位批量读直接返回。
+
             var word = BinaryPrimitives.ReadUInt16LittleEndian(data);
             var bit = point.BitIndex ?? 0;
             return (word & (1 << bit)) != 0;
         }
 
-        // 三菱字为小端；跨字的 32/64 位按低字在前拼接。
         return point.DataType switch
         {
             "int16" => BinaryPrimitives.ReadInt16LittleEndian(data),

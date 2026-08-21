@@ -1,5 +1,5 @@
-// 实现 Agent 提供器组件 ChatFrameworkOpenAiModelClient，隔离外部模型或持久化细节。
 
+using System.ClientModel;
 using System.Diagnostics;
 using System.Text.Json;
 using Ingot.Contracts.Agents;
@@ -7,7 +7,6 @@ using Microsoft.Agents.AI;
 using Microsoft.Extensions.Options;
 using OpenAI;
 using OpenAI.Responses;
-using System.ClientModel;
 
 #pragma warning disable OPENAI001
 

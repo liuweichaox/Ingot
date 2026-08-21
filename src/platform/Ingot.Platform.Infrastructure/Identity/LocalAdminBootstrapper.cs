@@ -5,10 +5,6 @@ using Npgsql;
 
 namespace Ingot.Platform.Infrastructure.Identity;
 
-/// <summary>
-///     在 Migrator 的 schema 迁移完成后原子创建首个本地管理员。
-///     advisory transaction lock 保证多个部署引导进程并发时也只会创建一个首用户。
-/// </summary>
 public sealed class LocalAdminBootstrapper(
     NpgsqlDataSource dataSource,
     LocalPasswordHasher hasher,

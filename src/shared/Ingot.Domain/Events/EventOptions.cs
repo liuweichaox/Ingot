@@ -1,8 +1,5 @@
 namespace Ingot.Domain.Events;
 
-/// <summary>
-///     边缘事件日志配置。
-/// </summary>
 public sealed class EventOptions
 {
     public string DatabasePath { get; set; } = "Data/events.db";

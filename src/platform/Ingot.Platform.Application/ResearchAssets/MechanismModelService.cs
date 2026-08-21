@@ -1,12 +1,11 @@
-using Ingot.Platform.Application.ResearchAssets;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using Ingot.Contracts.ResearchAssets;
+using Ingot.Platform.Application.ResearchAssets;
 
 namespace Ingot.Platform.Application.ResearchAssets;
 
-/// <summary>验证、版本化并发布可审计的机理模型和融合定义。</summary>
 public sealed class MechanismModelService(IResearchAssetStore store)
 {
     public async Task<MechanismModelVersion> SaveModelDraftAsync(

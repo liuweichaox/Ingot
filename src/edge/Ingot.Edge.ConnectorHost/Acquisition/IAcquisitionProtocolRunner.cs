@@ -2,7 +2,6 @@ using Ingot.Contracts.Acquisition;
 
 namespace Ingot.Edge.ConnectorHost.Acquisition;
 
-/// <summary>按协议执行设备探查和采集读取，不向核心领域暴露协议实现细节。</summary>
 public interface IAcquisitionProtocolRunner
 {
     string Protocol { get; }
@@ -14,16 +13,11 @@ public interface IAcquisitionProtocolRunner
         CancellationToken ct);
 }
 
-/// <summary>为采集协议解析受保护的连接凭据，调用方不得持久化解析后的明文。</summary>
 public interface IAcquisitionSecretResolver
 {
     string? Resolve(string? reference);
 }
 
-/// <summary>
-/// Resolves edge-local environment references such as env:MQTT_PASSWORD.
-/// Secret values never enter the platform ingestion task or its API responses.
-/// </summary>
 public sealed class EnvironmentAcquisitionSecretResolver : IAcquisitionSecretResolver
 {
     public string? Resolve(string? reference)

@@ -1,7 +1,6 @@
-// 提供 AcquisitionController 的 HTTP 传输、认证与响应映射；业务规则由应用层执行。
 
-using Ingot.Edge.ConnectorHost.Acquisition;
 using Ingot.Contracts.Acquisition;
+using Ingot.Edge.ConnectorHost.Acquisition;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Ingot.Edge.ConnectorHost.Controllers;

@@ -1,7 +1,6 @@
-// 实现 PostgresMechanismKnowledgeStore 的 PostgreSQL 持久化适配，避免数据库细节泄漏到应用层。
 
-using Ingot.Platform.Application.ResearchAssets;
 using Ingot.Contracts.ResearchAssets;
+using Ingot.Platform.Application.ResearchAssets;
 using Npgsql;
 using NpgsqlTypes;
 
@@ -47,14 +46,22 @@ public sealed class PostgresMechanismKnowledgeStore : IMechanismKnowledgeStore
             while (await reader.ReadAsync(ct).ConfigureAwait(false))
                 values.Add(new MechanismClaimVersion
                 {
-                    ClaimId = reader.GetGuid(0), ProjectId = reader.GetGuid(1), Version = reader.GetInt32(2),
-                    Status = reader.GetString(3), Name = reader.GetString(4), MechanismType = reader.GetString(5),
-                    Statement = reader.GetString(6), ExpectedSignature = reader.IsDBNull(7) ? null : reader.GetString(7),
-                    FalsificationCondition = reader.GetString(8), EvidenceLevel = reader.GetString(9),
-                    CreatedBy = reader.GetString(10), CreatedAt = reader.GetFieldValue<DateTimeOffset>(11),
+                    ClaimId = reader.GetGuid(0),
+                    ProjectId = reader.GetGuid(1),
+                    Version = reader.GetInt32(2),
+                    Status = reader.GetString(3),
+                    Name = reader.GetString(4),
+                    MechanismType = reader.GetString(5),
+                    Statement = reader.GetString(6),
+                    ExpectedSignature = reader.IsDBNull(7) ? null : reader.GetString(7),
+                    FalsificationCondition = reader.GetString(8),
+                    EvidenceLevel = reader.GetString(9),
+                    CreatedBy = reader.GetString(10),
+                    CreatedAt = reader.GetFieldValue<DateTimeOffset>(11),
                     ReviewedBy = reader.IsDBNull(12) ? null : reader.GetString(12),
                     ReviewedAt = reader.IsDBNull(13) ? null : reader.GetFieldValue<DateTimeOffset>(13),
-                    ContentHash = reader.GetString(14), UpdatedAt = reader.GetFieldValue<DateTimeOffset>(15)
+                    ContentHash = reader.GetString(14),
+                    UpdatedAt = reader.GetFieldValue<DateTimeOffset>(15)
                 });
         }
         if (values.Count == 0) return values;
@@ -71,9 +78,11 @@ public sealed class PostgresMechanismKnowledgeStore : IMechanismKnowledgeStore
             while (await reader.ReadAsync(ct).ConfigureAwait(false))
                 variables[reader.GetGuid(0)].Add(new MechanismClaimVariable
                 {
-                    VariableCode=reader.GetString(1), VariableRole=reader.GetString(2),
-                    Direction=reader.IsDBNull(3)?null:reader.GetString(3),
-                    DelayMilliseconds=reader.IsDBNull(4)?null:reader.GetInt64(4), Unit=reader.GetString(5)
+                    VariableCode = reader.GetString(1),
+                    VariableRole = reader.GetString(2),
+                    Direction = reader.IsDBNull(3) ? null : reader.GetString(3),
+                    DelayMilliseconds = reader.IsDBNull(4) ? null : reader.GetInt64(4),
+                    Unit = reader.GetString(5)
                 });
 
         var applicability = values.ToDictionary(static value => value.ClaimId, static _ => new List<MechanismClaimApplicability>());
@@ -87,7 +96,7 @@ public sealed class PostgresMechanismKnowledgeStore : IMechanismKnowledgeStore
         await using (var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false))
             while (await reader.ReadAsync(ct).ConfigureAwait(false))
                 applicability[reader.GetGuid(0)].Add(new MechanismClaimApplicability
-                    { DimensionCode=reader.GetString(1), DimensionValue=reader.GetString(2) });
+                { DimensionCode = reader.GetString(1), DimensionValue = reader.GetString(2) });
 
         var constraints = values.ToDictionary(static value => value.ClaimId, static _ => new List<MechanismClaimConstraint>());
         await using (var command = CurrentClaimChildCommand(connection, projectId,
@@ -102,9 +111,13 @@ public sealed class PostgresMechanismKnowledgeStore : IMechanismKnowledgeStore
             while (await reader.ReadAsync(ct).ConfigureAwait(false))
                 constraints[reader.GetGuid(0)].Add(new MechanismClaimConstraint
                 {
-                    ConstraintId=reader.GetGuid(1), VariableCode=reader.GetString(2), ConstraintKind=reader.GetString(3),
-                    Minimum=reader.IsDBNull(4)?null:reader.GetDouble(4), Maximum=reader.IsDBNull(5)?null:reader.GetDouble(5),
-                    Unit=reader.GetString(6), Severity=reader.GetString(7)
+                    ConstraintId = reader.GetGuid(1),
+                    VariableCode = reader.GetString(2),
+                    ConstraintKind = reader.GetString(3),
+                    Minimum = reader.IsDBNull(4) ? null : reader.GetDouble(4),
+                    Maximum = reader.IsDBNull(5) ? null : reader.GetDouble(5),
+                    Unit = reader.GetString(6),
+                    Severity = reader.GetString(7)
                 });
 
         var combinations = values.ToDictionary(static value => value.ClaimId, static _ => new List<MechanismForbiddenCombination>());
@@ -129,14 +142,16 @@ public sealed class PostgresMechanismKnowledgeStore : IMechanismKnowledgeStore
                 if (!reader.IsDBNull(3))
                     current.Factors.Add(new MechanismForbiddenCombinationFactor
                     {
-                        VariableCode=reader.GetString(3), Minimum=reader.IsDBNull(4)?null:reader.GetDouble(4),
-                        Maximum=reader.IsDBNull(5)?null:reader.GetDouble(5), Unit=reader.GetString(6)
+                        VariableCode = reader.GetString(3),
+                        Minimum = reader.IsDBNull(4) ? null : reader.GetDouble(4),
+                        Maximum = reader.IsDBNull(5) ? null : reader.GetDouble(5),
+                        Unit = reader.GetString(6)
                     });
                 byCombination[combinationId] = current;
             }
             foreach (var pair in byCombination)
                 combinations[pair.Value.ClaimId].Add(new MechanismForbiddenCombination
-                    { CombinationId=pair.Key, Name=pair.Value.Name, Factors=pair.Value.Factors });
+                { CombinationId = pair.Key, Name = pair.Value.Name, Factors = pair.Value.Factors });
         }
 
         var evidence = values.ToDictionary(static value => value.ClaimId, static _ => new List<MechanismClaimEvidence>());
@@ -152,15 +167,20 @@ public sealed class PostgresMechanismKnowledgeStore : IMechanismKnowledgeStore
             while (await reader.ReadAsync(ct).ConfigureAwait(false))
                 evidence[reader.GetGuid(0)].Add(new MechanismClaimEvidence
                 {
-                    EvidenceLinkId=reader.GetGuid(1), EvidenceKind=reader.GetString(2), ReferenceId=reader.GetString(3),
-                    Polarity=reader.GetString(4), ContentHash=reader.GetString(5)
+                    EvidenceLinkId = reader.GetGuid(1),
+                    EvidenceKind = reader.GetString(2),
+                    ReferenceId = reader.GetString(3),
+                    Polarity = reader.GetString(4),
+                    ContentHash = reader.GetString(5)
                 });
 
         return values.Select(value => value with
         {
-            Variables=variables[value.ClaimId], Applicability=applicability[value.ClaimId],
-            Constraints=constraints[value.ClaimId], ForbiddenCombinations=combinations[value.ClaimId],
-            Evidence=evidence[value.ClaimId]
+            Variables = variables[value.ClaimId],
+            Applicability = applicability[value.ClaimId],
+            Constraints = constraints[value.ClaimId],
+            ForbiddenCombinations = combinations[value.ClaimId],
+            Evidence = evidence[value.ClaimId]
         }).ToArray();
     }
 
@@ -477,11 +497,16 @@ public sealed class PostgresMechanismKnowledgeStore : IMechanismKnowledgeStore
 
     private static MechanismClaimConflict ReadConflict(NpgsqlDataReader reader) => new()
     {
-        ConflictId = reader.GetGuid(0), ProjectId = reader.GetGuid(1),
-        LeftClaimId = reader.GetGuid(2), LeftClaimVersion = reader.GetInt32(3),
-        RightClaimId = reader.GetGuid(4), RightClaimVersion = reader.GetInt32(5),
-        ConflictKind = reader.GetString(6), Rationale = reader.GetString(7),
-        Status = reader.GetString(8), CreatedBy = reader.GetString(9),
+        ConflictId = reader.GetGuid(0),
+        ProjectId = reader.GetGuid(1),
+        LeftClaimId = reader.GetGuid(2),
+        LeftClaimVersion = reader.GetInt32(3),
+        RightClaimId = reader.GetGuid(4),
+        RightClaimVersion = reader.GetInt32(5),
+        ConflictKind = reader.GetString(6),
+        Rationale = reader.GetString(7),
+        Status = reader.GetString(8),
+        CreatedBy = reader.GetString(9),
         CreatedAt = reader.GetFieldValue<DateTimeOffset>(10),
         ResolvedBy = reader.IsDBNull(11) ? null : reader.GetString(11),
         ResolvedAt = reader.IsDBNull(12) ? null : reader.GetFieldValue<DateTimeOffset>(12),
@@ -672,14 +697,22 @@ public sealed class PostgresMechanismKnowledgeStore : IMechanismKnowledgeStore
             if (!await reader.ReadAsync(ct).ConfigureAwait(false)) return null;
             value = new MechanismClaimVersion
             {
-                ClaimId = claimId, ProjectId = reader.GetGuid(0), Version = reader.GetInt32(1),
-                Status = reader.GetString(2), Name = reader.GetString(3), MechanismType = reader.GetString(4),
-                Statement = reader.GetString(5), ExpectedSignature = reader.IsDBNull(6) ? null : reader.GetString(6),
-                FalsificationCondition = reader.GetString(7), EvidenceLevel = reader.GetString(8),
-                CreatedBy = reader.GetString(9), CreatedAt = reader.GetFieldValue<DateTimeOffset>(10),
+                ClaimId = claimId,
+                ProjectId = reader.GetGuid(0),
+                Version = reader.GetInt32(1),
+                Status = reader.GetString(2),
+                Name = reader.GetString(3),
+                MechanismType = reader.GetString(4),
+                Statement = reader.GetString(5),
+                ExpectedSignature = reader.IsDBNull(6) ? null : reader.GetString(6),
+                FalsificationCondition = reader.GetString(7),
+                EvidenceLevel = reader.GetString(8),
+                CreatedBy = reader.GetString(9),
+                CreatedAt = reader.GetFieldValue<DateTimeOffset>(10),
                 ReviewedBy = reader.IsDBNull(11) ? null : reader.GetString(11),
                 ReviewedAt = reader.IsDBNull(12) ? null : reader.GetFieldValue<DateTimeOffset>(12),
-                ContentHash = reader.GetString(13), UpdatedAt = reader.GetFieldValue<DateTimeOffset>(14)
+                ContentHash = reader.GetString(13),
+                UpdatedAt = reader.GetFieldValue<DateTimeOffset>(14)
             };
         }
         var variables = await ReadVariablesAsync(connection, claimId, value.Version, ct).ConfigureAwait(false);
@@ -762,7 +795,7 @@ public sealed class PostgresMechanismKnowledgeStore : IMechanismKnowledgeStore
     {
         await using var command = ChildCommand(c, "SELECT variable_code, variable_role, direction, delay_ms, unit FROM mechanism_claim_variables WHERE claim_id=@id AND claim_version=@version ORDER BY variable_role, variable_code;", id, version);
         await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false); var values = new List<MechanismClaimVariable>();
-        while (await reader.ReadAsync(ct).ConfigureAwait(false)) values.Add(new MechanismClaimVariable { VariableCode=reader.GetString(0), VariableRole=reader.GetString(1), Direction=reader.IsDBNull(2)?null:reader.GetString(2), DelayMilliseconds=reader.IsDBNull(3)?null:reader.GetInt64(3), Unit=reader.GetString(4) });
+        while (await reader.ReadAsync(ct).ConfigureAwait(false)) values.Add(new MechanismClaimVariable { VariableCode = reader.GetString(0), VariableRole = reader.GetString(1), Direction = reader.IsDBNull(2) ? null : reader.GetString(2), DelayMilliseconds = reader.IsDBNull(3) ? null : reader.GetInt64(3), Unit = reader.GetString(4) });
         return values;
     }
 
@@ -770,7 +803,7 @@ public sealed class PostgresMechanismKnowledgeStore : IMechanismKnowledgeStore
     {
         await using var command = ChildCommand(c, "SELECT dimension_code, dimension_value FROM mechanism_claim_applicability WHERE claim_id=@id AND claim_version=@version ORDER BY dimension_code, dimension_value;", id, version);
         await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false); var values = new List<MechanismClaimApplicability>();
-        while (await reader.ReadAsync(ct).ConfigureAwait(false)) values.Add(new MechanismClaimApplicability { DimensionCode=reader.GetString(0), DimensionValue=reader.GetString(1) });
+        while (await reader.ReadAsync(ct).ConfigureAwait(false)) values.Add(new MechanismClaimApplicability { DimensionCode = reader.GetString(0), DimensionValue = reader.GetString(1) });
         return values;
     }
 
@@ -778,7 +811,7 @@ public sealed class PostgresMechanismKnowledgeStore : IMechanismKnowledgeStore
     {
         await using var command = ChildCommand(c, "SELECT constraint_id, variable_code, constraint_kind, minimum, maximum, unit, severity FROM mechanism_claim_constraints WHERE claim_id=@id AND claim_version=@version ORDER BY variable_code;", id, version);
         await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false); var values = new List<MechanismClaimConstraint>();
-        while (await reader.ReadAsync(ct).ConfigureAwait(false)) values.Add(new MechanismClaimConstraint { ConstraintId=reader.GetGuid(0), VariableCode=reader.GetString(1), ConstraintKind=reader.GetString(2), Minimum=reader.IsDBNull(3)?null:reader.GetDouble(3), Maximum=reader.IsDBNull(4)?null:reader.GetDouble(4), Unit=reader.GetString(5), Severity=reader.GetString(6) });
+        while (await reader.ReadAsync(ct).ConfigureAwait(false)) values.Add(new MechanismClaimConstraint { ConstraintId = reader.GetGuid(0), VariableCode = reader.GetString(1), ConstraintKind = reader.GetString(2), Minimum = reader.IsDBNull(3) ? null : reader.GetDouble(3), Maximum = reader.IsDBNull(4) ? null : reader.GetDouble(4), Unit = reader.GetString(5), Severity = reader.GetString(6) });
         return values;
     }
 
@@ -826,7 +859,7 @@ public sealed class PostgresMechanismKnowledgeStore : IMechanismKnowledgeStore
     {
         await using var command = ChildCommand(c, "SELECT evidence_link_id, evidence_kind, reference_id, polarity, content_hash FROM mechanism_claim_evidence WHERE claim_id=@id AND claim_version=@version ORDER BY created_at;", id, version);
         await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false); var values = new List<MechanismClaimEvidence>();
-        while (await reader.ReadAsync(ct).ConfigureAwait(false)) values.Add(new MechanismClaimEvidence { EvidenceLinkId=reader.GetGuid(0), EvidenceKind=reader.GetString(1), ReferenceId=reader.GetString(2), Polarity=reader.GetString(3), ContentHash=reader.GetString(4) });
+        while (await reader.ReadAsync(ct).ConfigureAwait(false)) values.Add(new MechanismClaimEvidence { EvidenceLinkId = reader.GetGuid(0), EvidenceKind = reader.GetString(1), ReferenceId = reader.GetString(2), Polarity = reader.GetString(3), ContentHash = reader.GetString(4) });
         return values;
     }
 

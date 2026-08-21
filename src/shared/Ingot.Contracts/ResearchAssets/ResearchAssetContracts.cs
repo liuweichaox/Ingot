@@ -29,9 +29,6 @@ public static class KnowledgeSourceStatuses
         => value is Uploaded or Indexed or Reviewed or Retired;
 }
 
-/// <summary>
-///     用于训练或校准模型的精确记录集合的不可变说明。
-/// </summary>
 public sealed record TrainingDatasetVersion
 {
     public required string DatasetId { get; init; }

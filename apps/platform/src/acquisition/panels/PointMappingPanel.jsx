@@ -11,13 +11,6 @@ import {
   registerWordCount,
 } from "../protocolRegistry";
 
-/**
- * 协议专业点位编辑器。
- *
- * 每种寻址方式有自己的字段组合：Modbus 用寄存器区 + 地址 + 字节序，
- * MELSEC 用软元件 + 编号（含进制换算），文档类协议用路径 + 探查点位补全。
- * 不再让工程师在同一排输入框里面对与自己协议无关的字段。
- */
 export function PointMappingPanel({
   title,
   description,

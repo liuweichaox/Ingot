@@ -1,11 +1,10 @@
-// 实现基础设施适配器 ProcessExecutionAnalysisMaterializer，满足应用层端口而不改变领域契约。
 
-using Ingot.Contracts.Events;
-using Ingot.Contracts.ProcessConfiguration;
-using Ingot.Platform.Application.ProcessExecutions;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Ingot.Contracts.Events;
+using Ingot.Contracts.ProcessConfiguration;
+using Ingot.Platform.Application.ProcessExecutions;
 using Ingot.Platform.Infrastructure.TimeSeries;
 
 namespace Ingot.Platform.Infrastructure.ProcessExecutions;

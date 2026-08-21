@@ -1,6 +1,6 @@
 using System.Net.Http.Headers;
-using System.Text.Json;
 using System.Text;
+using System.Text.Json;
 using Ingot.Contracts.Acquisition;
 using Ingot.Contracts.ProcessConfiguration;
 using Ingot.Edge.Application.Abstractions;
@@ -9,9 +9,6 @@ using Microsoft.Extensions.Options;
 
 namespace Ingot.Edge.ConnectorHost.Acquisition;
 
-/// <summary>
-///     执行平台发布给当前边缘节点的采集配置。配置版本不可变，发布新版本时平滑替换对应工作器。
-/// </summary>
 internal sealed class HttpPollingAcquisitionHostedService(
     IHttpClientFactory httpClientFactory,
     IEventSink sink,
@@ -375,7 +372,7 @@ internal sealed class HttpPollingAcquisitionHostedService(
         }
         catch (OperationCanceledException)
         {
-            // 正常停止。
+
         }
         catch (Exception exception)
         {

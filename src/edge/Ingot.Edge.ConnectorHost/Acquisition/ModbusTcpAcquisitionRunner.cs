@@ -168,10 +168,6 @@ public sealed class ModbusTcpAcquisitionRunner(
         return mapping with { ModbusAddress = checked((ushort)(address - 1)) };
     }
 
-    /// <summary>
-    ///     标量选择器（上下文、工艺规范、时间戳来源）的解析交给公共契约中的
-    ///     <see cref="AcquisitionSelectors"/>，与平台保存配置时使用的是同一份规则。
-    /// </summary>
     private static AcquisitionValueMapping ParseSelector(string selector)
     {
         if (!AcquisitionSelectors.TryParseModbus(selector, out var point, out var error))
@@ -191,7 +187,6 @@ public sealed class ModbusTcpAcquisitionRunner(
         };
     }
 
-    /// <summary>建立连接时应用配置的超时，限制半开连接占用采集工作器的时间。</summary>
     private static async Task ConnectAsync(
         TcpClient client,
         ModbusTcpConnection connection,
@@ -269,8 +264,7 @@ public sealed class ModbusTcpAcquisitionRunner(
                 }
                 catch (Exception) when (included.Count > 1 && !ct.IsCancellationRequested)
                 {
-                    // 某些从站会因合并范围跨过未实现地址而拒绝整批。逐点回退既保留正常批读性能，
-                    // 又让一个坏点不会连带所有有效点位一起消失；真正不可读的单点仍会明确失败。
+
                     foreach (var item in included)
                     {
                         var single = await ReadSnapshotAsync(
@@ -335,8 +329,7 @@ public sealed class ModbusTcpAcquisitionRunner(
         var type = mapping.SourceDataType;
         if (type == AcquisitionSelectors.BooleanDataType)
         {
-            // 保持/输入寄存器取单个位。线圈与离散输入区不会走到这里，
-            // 它们在 ReadSnapshotAsync 中直接返回布尔值。
+
             var bit = mapping.BitIndex
                 ?? throw new InvalidOperationException(
                     $"数据项 {mapping.DataItemCode} 从寄存器读取布尔值时必须指定位偏移。");

@@ -1,8 +1,8 @@
 // 验证平台组件 MechanismKnowledgeService 的成功、拒绝和安全边界。
 
-using Ingot.Platform.Application.ResearchAssets;
 using Ingot.Contracts.ProcessResearch;
 using Ingot.Contracts.ResearchAssets;
+using Ingot.Platform.Application.ResearchAssets;
 using Ingot.Platform.Infrastructure.ResearchAssets;
 using Xunit;
 
@@ -174,7 +174,7 @@ public sealed class MechanismKnowledgeServiceTests
             EvaluationSummary = "独立实验再次观察到预期方向。"
         }, "validator-b");
         claim = await service.TransitionAsync(projectId, claim.ClaimId, new MechanismClaimLifecycleRequest
-            { TargetStatus = MechanismClaimStatuses.Active, Comment = "两轮实验均支持。" }, "approver");
+        { TargetStatus = MechanismClaimStatuses.Active, Comment = "两轮实验均支持。" }, "approver");
 
         Assert.Equal(MechanismClaimStatuses.Active, claim.Status);
     }

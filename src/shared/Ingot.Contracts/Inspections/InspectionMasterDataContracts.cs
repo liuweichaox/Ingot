@@ -29,9 +29,7 @@ public sealed record InspectionCharacteristicDefinition
     public decimal? LowerLimit { get; init; }
     public decimal? UpperLimit { get; init; }
     public IReadOnlyList<string> AllowedValues { get; init; } = [];
-    /// <summary>
-    ///     非数值特性的合格值。服务端依据此集合判定 PASS；未配置的自由文本结果为 INCONCLUSIVE。
-    /// </summary>
+
     public IReadOnlyList<string> PassingValues { get; init; } = [];
     public bool Required { get; init; } = true;
 }

@@ -1,10 +1,10 @@
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
 using Ingot.Agent;
 using Ingot.Contracts.Agents;
-using PlatformValidator = Ingot.Platform.Api.Configuration.ProductionConfigurationValidator;
-using EdgeValidator = Ingot.Edge.ConnectorHost.Configuration.ProductionConfigurationValidator;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using EdgeValidator = Ingot.Edge.ConnectorHost.Configuration.ProductionConfigurationValidator;
+using PlatformValidator = Ingot.Platform.Api.Configuration.ProductionConfigurationValidator;
 
 namespace Ingot.Core.Tests.Configuration;
 

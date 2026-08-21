@@ -1,11 +1,11 @@
 // 验证 Agent 的 AnalysisTool 能力、只读边界和拒绝路径。
 
 using Ingot.Agent;
-using Ingot.Platform.Infrastructure.AgentTools;
-using Ingot.Platform.Infrastructure.Events;
 using Ingot.Contracts.Agents;
 using Ingot.Contracts.Events;
 using Ingot.Domain.Events;
+using Ingot.Platform.Infrastructure.AgentTools;
+using Ingot.Platform.Infrastructure.Events;
 using Xunit;
 
 namespace Ingot.Core.Tests.Agent;

@@ -1,8 +1,8 @@
 // 验证边缘组件 HttpPollingSnapshotMapper 的协议、状态和失败边界。
 
 using System.Text.Json;
-using Ingot.Edge.ConnectorHost.Acquisition;
 using Ingot.Domain.Events;
+using Ingot.Edge.ConnectorHost.Acquisition;
 using Xunit;
 
 namespace Ingot.Core.Tests.Edge;

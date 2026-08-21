@@ -1,4 +1,3 @@
-// 集中校验 ResearchAssetValidator 的输入、范围和失败条件，调用方不得绕过。
 
 using System.Text.RegularExpressions;
 

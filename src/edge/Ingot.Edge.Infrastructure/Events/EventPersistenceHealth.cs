@@ -2,10 +2,6 @@ using Ingot.Edge.Application.Abstractions;
 
 namespace Ingot.Edge.Infrastructure.Events;
 
-/// <summary>
-///     进程内事件持久化健康状态。成功 append 是唯一恢复信号，
-///     避免单纯 SELECT 成功掩盖实际写路径故障。
-/// </summary>
 public sealed class EventPersistenceHealth : IEventPersistenceHealth
 {
     private readonly object _sync = new();

@@ -10,9 +10,6 @@ using Microsoft.Extensions.Options;
 
 namespace Ingot.Edge.Infrastructure.Logs;
 
-/// <summary>
-///     基于 SQLite 的日志查看服务实现
-/// </summary>
 public class SqliteLogViewService : ILogViewService, IDisposable
 {
     private const string OperatorAudienceSql =
@@ -34,15 +31,13 @@ public class SqliteLogViewService : ILogViewService, IDisposable
 
     public SqliteLogViewService(IOptions<LogOptions>? options = null)
     {
-        // 从配置或默认路径获取数据库路径
+
         var configuredPath = options?.Value?.DatabasePath ?? "Data/logs.db";
 
-        // 如果是相对路径，转换为绝对路径
         _dbPath = Path.IsPathRooted(configuredPath)
             ? configuredPath
             : Path.Combine(AppContext.BaseDirectory, configuredPath);
 
-        // 确保目录存在
         var directory = Path.GetDirectoryName(_dbPath);
         if (!string.IsNullOrEmpty(directory))
         {
@@ -56,10 +51,6 @@ public class SqliteLogViewService : ILogViewService, IDisposable
         InitializeDatabase();
     }
 
-    /// <summary>
-    ///     初始化数据库表结构
-    ///     创建索引和 FTS5 全文搜索表
-    /// </summary>
     private void InitializeDatabase()
     {
         var sql = @"
@@ -99,13 +90,10 @@ public class SqliteLogViewService : ILogViewService, IDisposable
         }
         catch (SqliteException)
         {
-            // Logs 表可能尚未由 MicrosoftSqliteSink 创建，此处忽略
+
         }
     }
 
-    /// <summary>
-    ///     获取日志条目列表
-    /// </summary>
     public async Task<(List<LogEntry> Entries, int TotalCount)> GetLogsAsync(
         string? level = null,
         string? keyword = null,
@@ -122,19 +110,17 @@ public class SqliteLogViewService : ILogViewService, IDisposable
                 var whereConditions = new List<string>();
                 var parameters = new List<SqliteParameter>();
 
-                // 按级别过滤
                 if (!string.IsNullOrWhiteSpace(level))
                 {
                     whereConditions.Add("l.Level = @level");
                     parameters.Add(new SqliteParameter("@level", level));
                 }
 
-                // 按关键词过滤（使用 FTS5 全文搜索）
                 if (!string.IsNullOrWhiteSpace(keyword))
                 {
-                    // FTS5 搜索语法：搜索所有字段
+
                     whereConditions.Add("l.Id IN (SELECT rowid FROM LogsFts WHERE LogsFts MATCH @keyword)");
-                    // 转义特殊字符
+
                     var escapedKeyword = keyword.Replace("\"", "\"\"");
                     parameters.Add(new SqliteParameter("@keyword", escapedKeyword));
                 }
@@ -152,9 +138,8 @@ public class SqliteLogViewService : ILogViewService, IDisposable
                     whereClause = "WHERE " + string.Join(" AND ", whereConditions);
                 }
 
-                // 受众、级别和关键词均在 SQLite 内完成过滤、计数与分页。
                 var countSql = $@"
-                SELECT COUNT(*) 
+                SELECT COUNT(*)
                 FROM Logs l
                 {whereClause}
             ";
@@ -169,9 +154,8 @@ public class SqliteLogViewService : ILogViewService, IDisposable
                     totalCount = Convert.ToInt32(countCommand.ExecuteScalar());
                 }
 
-                // 查询数据（适配 Serilog.Sinks.SQLite 的表结构）
                 var querySql = $@"
-                SELECT 
+                SELECT
                     l.TimeStamp,
                     l.Level,
                     l.Properties,
@@ -235,18 +219,15 @@ public class SqliteLogViewService : ILogViewService, IDisposable
             _ => null
         };
 
-    /// <summary>
-    ///     获取可用的日志级别列表
-    /// </summary>
     public List<string> GetAvailableLevels()
     {
         _connectionLock.Wait();
         try
         {
             var sql = @"
-            SELECT DISTINCT Level 
-            FROM Logs 
-            ORDER BY 
+            SELECT DISTINCT Level
+            FROM Logs
+            ORDER BY
                 CASE Level
                     WHEN 'Verbose' THEN 1
                     WHEN 'Debug' THEN 2
@@ -266,7 +247,6 @@ public class SqliteLogViewService : ILogViewService, IDisposable
                 levels.Add(reader.GetString(0));
             }
 
-            // 如果没有找到任何级别，返回默认列表
             if (levels.Count == 0)
             {
                 return new List<string> { "Verbose", "Debug", "Information", "Warning", "Error", "Fatal" };
@@ -280,9 +260,6 @@ public class SqliteLogViewService : ILogViewService, IDisposable
         }
     }
 
-    /// <summary>
-    ///     从 Properties JSON 中提取 SourceContext
-    /// </summary>
     private string ExtractSourceFromProperties(string? properties)
     {
         if (string.IsNullOrWhiteSpace(properties))
@@ -298,7 +275,7 @@ public class SqliteLogViewService : ILogViewService, IDisposable
         }
         catch
         {
-            // 忽略 JSON 解析错误
+
         }
 
         return string.Empty;
@@ -311,7 +288,3 @@ public class SqliteLogViewService : ILogViewService, IDisposable
         _connectionLock?.Dispose();
     }
 }
-
-/// <summary>
-///     日志配置选项
-/// </summary>

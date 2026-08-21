@@ -1,4 +1,3 @@
-// 实现事件基础设施组件 PlatformEventMetrics，保持不可变事件和交付语义。
 
 using Prometheus;
 
@@ -35,7 +34,6 @@ public sealed class PlatformEventMetrics
         if (gapDetected)
             _gaps.WithLabels(edgeId).Inc();
     }
-
 
     public void RecordPayloadConflict(string siteId, string edgeId)
         => _payloadConflicts.WithLabels(siteId, edgeId).Inc();

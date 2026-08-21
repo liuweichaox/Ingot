@@ -1,11 +1,3 @@
-// 采集协议描述符注册表。
-//
-// 每个协议是一份声明式描述符：连接字段、寻址方式、数据类型、能力开关、校验与提示
-// 都在同一个对象里。界面按描述符渲染，校验按描述符执行。
-//
-// 能力开关（capabilities）与后端 AcquisitionProtocolCapabilities 一一对应，
-// 并在页面加载时用 GET /api/v1/acquisition-protocols 的返回值覆盖，
-// 保证"这个字段是否真的生效"永远以后端 Runner 的实际行为为准。
 
 export const ADDRESSING = {
   jsonPath: "json-path",
@@ -53,7 +45,6 @@ export const isModbusBitArea = value => Boolean(modbusArea(value)?.bit);
 
 const RADIX_LABEL = { 8: "八进制", 10: "十进制", 16: "十六进制" };
 
-/** 把按软元件进制书写的编号换算成真正写进 1E 帧的数字，界面同时显示两者便于对照手册。 */
 export function melsecWireAddress(deviceCode, address) {
   const device = melsecDevice(deviceCode);
   if (!device || !address) return null;
@@ -82,8 +73,6 @@ function wordCount(dataType, byteLength) {
 }
 
 export const registerWordCount = wordCount;
-
-// ---------------------------------------------------------------- 协议描述符
 
 const httpPolling = {
   id: "http-polling",
@@ -140,7 +129,7 @@ const httpPolling = {
     }
     const snapshotPath = (connection.snapshotPath || "").trim();
     if (!snapshotPath) errors.snapshotPath = "数据路径不能为空。";
-    else if (/^(?:[a-z][a-z0-9+.-]*:)?\/\//i.test(snapshotPath) || snapshotPath.includes("\n") || snapshotPath.includes("\r"))
+    else if (/^(?:[a-z][a-z0-9+.-]*:)?\/\
       errors.snapshotPath = "必须填写相对于设备基础地址的安全路径。";
     if (!(Number(connection.pollIntervalMs) >= 1)) errors.pollIntervalMs = "必须大于 0。";
     return errors;
@@ -290,7 +279,6 @@ const mqtt = {
   },
 };
 
-/** MQTT 主题过滤器语法：+ 必须独占一层，# 只能在最后一层。与后端校验保持一致。 */
 export function mqttTopicError(topic) {
   if (!topic) return "主题不能为空。";
   const levels = topic.split("/");
@@ -414,7 +402,6 @@ const opcUa = {
   },
 };
 
-/** NodeId 结构检查。真正的合法性由服务器裁决，这里只拦住明显写错的形式。 */
 export function nodeIdError(value) {
   if (!value) return "节点编号不能为空。";
   let body = value;
@@ -672,10 +659,6 @@ export function protocolDescriptor(id) {
   return DESCRIPTORS.find(item => item.id === id) || httpPolling;
 }
 
-/**
- * 用后端返回的能力矩阵覆盖本地默认值。
- * 后端是 Runner 行为的唯一事实来源，界面不应该自行猜测某个字段是否生效。
- */
 export function mergeServerCapabilities(serverCapabilities) {
   if (!Array.isArray(serverCapabilities)) return;
   serverCapabilities.forEach(entry => {

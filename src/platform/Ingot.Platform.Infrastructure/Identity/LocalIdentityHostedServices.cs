@@ -2,7 +2,6 @@ using Ingot.Platform.Application.Identity;
 
 namespace Ingot.Platform.Infrastructure.Identity;
 
-/// <summary>周期性清理过期会话行。</summary>
 public sealed class SessionPruneHostedService(
     ILocalUserStore store,
     ILogger<SessionPruneHostedService> logger) : BackgroundService

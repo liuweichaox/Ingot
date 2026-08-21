@@ -1,15 +1,14 @@
-using Ingot.Platform.Application.ResearchAssets;
-using Ingot.Platform.Application.ProcessConfiguration;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Ingot.Contracts.ProcessResearch;
 using Ingot.Contracts.ResearchAssets;
+using Ingot.Platform.Application.ProcessConfiguration;
+using Ingot.Platform.Application.ResearchAssets;
 
 namespace Ingot.Platform.Application.ResearchAssets;
 
-/// <summary>管理机理声明的验证、复核、生命周期和冲突处置。</summary>
 public sealed class MechanismKnowledgeService(
     IMechanismKnowledgeStore store,
     IResearchProjectContextReader projectReader)

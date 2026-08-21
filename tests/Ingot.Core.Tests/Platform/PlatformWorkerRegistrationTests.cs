@@ -1,11 +1,11 @@
 // 验证平台组件 PlatformWorkerRegistration 的成功、拒绝和安全边界。
 
 using Ingot.Platform.Infrastructure;
+using Ingot.Platform.Infrastructure.Identity;
+using Ingot.Platform.Infrastructure.Inspections;
 using Ingot.Platform.Infrastructure.ProcessExecutions;
 using Ingot.Platform.Infrastructure.ProcessResearch;
 using Ingot.Platform.Infrastructure.ResearchAssets;
-using Ingot.Platform.Infrastructure.Inspections;
-using Ingot.Platform.Infrastructure.Identity;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;

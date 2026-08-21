@@ -1,4 +1,3 @@
-// 说明 CombinedAnalysisContracts 在所属模块中的职责、输入边界和失败语义。
 
 namespace Ingot.Contracts.Agents;
 

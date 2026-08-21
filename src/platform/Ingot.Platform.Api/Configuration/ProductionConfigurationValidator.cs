@@ -14,7 +14,6 @@ public static class ProductionConfigurationValidator
         RequireEdgeSiteBindings(configuration, errors);
         RequireEdgeDiagnosticsBindings(configuration, errors);
 
-        // 认证模式：Local（内置账户）、Oidc（外部 IdP）或 Disabled（本地演示固定 operator 身份）。
         var authMode = configuration["Authentication:Mode"] ?? "Local";
         if (!string.Equals(authMode, "Local", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(authMode, "Oidc", StringComparison.OrdinalIgnoreCase) &&

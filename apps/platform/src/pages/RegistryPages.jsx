@@ -469,5 +469,3 @@ export const ProcessSpecificationsPage = ({ canWrite = true }) => <RegistryPage 
 export const ProcessAnalysisPlansPage = ({ canWrite = true }) => <RegistryPage definition={registryPages.plans} canWrite={canWrite} />;
 export const InspectionDefinitionsPage = ({ canWrite = true }) => <RegistryPage definition={registryPages.definitions} canWrite={canWrite} />;
 export const QualityPlansPage = ({ canWrite = true }) => <RegistryPage definition={registryPages.plansQuality} canWrite={canWrite} />;
-// 设备接入已迁移到 src/acquisition/IngestionTaskPage.jsx：
-// 协议差异由描述符注册表承载，配置页是独立的左右分栏页面而不是通用注册表抽屉。

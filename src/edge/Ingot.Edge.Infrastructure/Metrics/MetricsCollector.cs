@@ -4,9 +4,6 @@ using Ingot.Edge.Application.Abstractions;
 
 namespace Ingot.Edge.Infrastructure.Metrics;
 
-/// <summary>
-///     基于 System.Diagnostics.Metrics 的指标收集器实现
-/// </summary>
 public class MetricsCollector : IMetricsCollector
 {
     private readonly Histogram<double> _batchWriteEfficiencyHistogram;
@@ -35,55 +32,46 @@ public class MetricsCollector : IMetricsCollector
     {
         _meter = new Meter("Ingot", "1.0.0");
 
-        // 采集延迟指标
         _collectionLatencyHistogram = _meter.CreateHistogram<double>(
             "ingot.telemetry.collection_latency_ms",
             "ms",
             "采集延迟（从数据源读取到写入数据库的时间，毫秒）");
 
-        // 采集频率指标
         _collectionRateHistogram = _meter.CreateHistogram<double>(
             "ingot.telemetry.collection_rate",
             "points/s",
             "采集频率（每秒采集的数据点数）");
 
-        // 队列深度指标（包括 Channel 待读取 + 批量积累）
         _queueDepthHistogram = _meter.CreateHistogram<int>(
             "ingot.telemetry.queue_depth",
             "messages",
             "队列深度（Channel待读取 + 批量积累的待处理消息总数）");
 
-        // 处理延迟指标
         _processingLatencyHistogram = _meter.CreateHistogram<double>(
             "ingot.telemetry.processing_latency_ms",
             "ms",
             "处理延迟（队列处理延迟，毫秒）");
 
-        // 写入延迟指标
         _writeLatencyHistogram = _meter.CreateHistogram<double>(
             "ingot.telemetry.write_latency_ms",
             "ms",
             "写入延迟（数据库写入延迟，毫秒）");
 
-        // 批量写入效率指标
         _batchWriteEfficiencyHistogram = _meter.CreateHistogram<double>(
             "ingot.telemetry.batch_write_efficiency",
             "points/ms",
             "批量写入效率（批量大小/写入耗时）");
 
-        // 错误计数
         _errorCounter = _meter.CreateCounter<long>(
             "ingot.telemetry.errors_total",
             "errors",
             "错误总数（按设备/通道统计）");
 
-        // 连接状态计数
         _connectionStatusCounter = _meter.CreateCounter<long>(
             "ingot.source.connection_status_changes_total",
             "changes",
             "连接状态变化总数");
 
-        // 连接持续时间
         _connectionDurationHistogram = _meter.CreateHistogram<double>(
             "ingot.source.connection_duration_seconds",
             "seconds",
@@ -178,7 +166,7 @@ public class MetricsCollector : IMetricsCollector
     {
         if (latencyMs > 0)
         {
-            var efficiency = batchSize / latencyMs; // points per millisecond
+            var efficiency = batchSize / latencyMs;
             _batchWriteEfficiencyHistogram.Record(efficiency);
         }
     }

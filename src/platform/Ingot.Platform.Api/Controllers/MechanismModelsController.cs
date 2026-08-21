@@ -1,8 +1,7 @@
-// 提供 MechanismModelsController 的 HTTP 传输、认证与响应映射；业务规则由应用层执行。
 
-using Ingot.Platform.Application.ResearchAssets;
 using Ingot.Contracts.ResearchAssets;
 using Ingot.Platform.Api.Agents;
+using Ingot.Platform.Application.ResearchAssets;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Ingot.Platform.Api.Controllers;

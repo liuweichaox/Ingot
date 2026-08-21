@@ -2,9 +2,6 @@ using Ingot.Domain.Events;
 
 namespace Ingot.Edge.Application.Abstractions;
 
-/// <summary>
-///     按资产维护的边缘业务关联信息。
-/// </summary>
 public interface IEdgeContextStore
 {
     string? Get(ObjectRef asset, string key);

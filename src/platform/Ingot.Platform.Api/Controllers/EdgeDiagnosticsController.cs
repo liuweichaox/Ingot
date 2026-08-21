@@ -1,14 +1,10 @@
-using Ingot.Platform.Infrastructure.Services;
-using Ingot.Platform.Api.Events;
 using System.Net.Http.Headers;
+using Ingot.Platform.Api.Events;
+using Ingot.Platform.Infrastructure.Services;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Ingot.Platform.Api.Controllers;
 
-/// <summary>
-/// 中心代理：按 edgeId 代理查询 Edge ConnectorHost 的诊断数据（metrics/logs）。
-/// 说明：Platform.Api 仍然是纯 API，不提供 UI。
-/// </summary>
 [ApiController]
 [Route("api/edges/{edgeId}")]
 public sealed class EdgeDiagnosticsController(
@@ -93,7 +89,6 @@ public sealed class EdgeDiagnosticsController(
             var body = await resp.Content.ReadAsStringAsync(cancellationToken);
             if (!resp.IsSuccessStatusCode) return EdgeProxyFailure(resp, body);
 
-            // 透传 edge 返回的 JSON（保持字段命名一致）
             return Content(body, "application/json; charset=utf-8");
         }
         catch (HttpRequestException exception)

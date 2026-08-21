@@ -1,4 +1,3 @@
-// 验证前端 security-and-readiness 的渲染、交互、错误和边界状态。
 
 import React from "react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";

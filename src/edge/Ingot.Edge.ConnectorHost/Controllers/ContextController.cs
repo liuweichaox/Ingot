@@ -1,12 +1,9 @@
-using Ingot.Edge.Application.Abstractions;
 using Ingot.Domain.Events;
+using Ingot.Edge.Application.Abstractions;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Ingot.Edge.ConnectorHost.Controllers;
 
-/// <summary>
-///     边缘业务关联信息管理。事件发出时按规则 ContextKeys 获取快照。
-/// </summary>
 [ApiController]
 [Route("api/v1/context")]
 public sealed class ContextController(IEdgeContextStore contextStore) : ControllerBase

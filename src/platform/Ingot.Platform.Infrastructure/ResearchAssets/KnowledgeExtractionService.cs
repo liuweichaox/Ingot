@@ -1,11 +1,11 @@
-using Ingot.Platform.Application.ResearchAssets;
+using System.IO.Compression;
 using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using System.IO.Compression;
 using ClosedXML.Excel;
 using Ingot.Contracts.ResearchAssets;
+using Ingot.Platform.Application.ResearchAssets;
 using UglyToad.PdfPig;
 
 namespace Ingot.Platform.Infrastructure.ResearchAssets;
@@ -156,7 +156,6 @@ public sealed record ExtractedKnowledgeFragment
     public double? Confidence { get; init; }
 }
 
-/// <summary>从受控知识来源中提取确定性文本记录，不推断工艺结论。</summary>
 public interface IKnowledgeContentExtractor
 {
     string Version { get; }
@@ -203,22 +202,22 @@ public sealed class KnowledgeExtractionService(
                 if (fragments.Count == 0)
                     throw new InvalidDataException("文件中没有提取到可复核内容。");
                 var records = fragments.Select((fragment, index) => new KnowledgeRecord
-                    {
-                        RecordId = DeterministicRecordId(source.SourceId, index, fragment.Citation.ContentHash),
-                        SourceId = source.SourceId,
-                        Category = fragment.Category,
-                        PageOrSheet = DisplayLocation(fragment.Citation),
-                        Region = fragment.Citation.Region,
-                        Content = fragment.Content,
-                        StructuredValues = fragment.StructuredValues,
-                        HumanReviewed = false,
-                        CreatedBy = userId,
-                        CreatedAt = DateTimeOffset.UtcNow,
-                        ExtractionMethod = extractor.GetType().Name,
-                        ExtractorVersion = extractor.Version,
-                        ExtractionConfidence = fragment.Confidence,
-                        Citation = fragment.Citation
-                    }).ToArray();
+                {
+                    RecordId = DeterministicRecordId(source.SourceId, index, fragment.Citation.ContentHash),
+                    SourceId = source.SourceId,
+                    Category = fragment.Category,
+                    PageOrSheet = DisplayLocation(fragment.Citation),
+                    Region = fragment.Citation.Region,
+                    Content = fragment.Content,
+                    StructuredValues = fragment.StructuredValues,
+                    HumanReviewed = false,
+                    CreatedBy = userId,
+                    CreatedAt = DateTimeOffset.UtcNow,
+                    ExtractionMethod = extractor.GetType().Name,
+                    ExtractorVersion = extractor.Version,
+                    ExtractionConfidence = fragment.Confidence,
+                    Citation = fragment.Citation
+                }).ToArray();
                 var updated = source with
                 {
                     Status = KnowledgeSourceStatuses.Indexed,

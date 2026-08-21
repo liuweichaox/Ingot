@@ -2,12 +2,9 @@ using Ingot.Domain.Events;
 
 namespace Ingot.Contracts.Events;
 
-/// <summary>
-///     Edge 向 Platform 发送的有序生产事件批次。
-/// </summary>
 public sealed record EventBatchRequest
 {
-    /// <summary>生产单元身份。进入生产后由 Platform 配置的 Edge 归属进行校验。</summary>
+
     public required string SiteId { get; init; }
 
     public required string EdgeId { get; init; }
@@ -15,9 +12,6 @@ public sealed record EventBatchRequest
     public IReadOnlyList<ProductionEvent> Events { get; init; } = [];
 }
 
-/// <summary>
-///     Platform 对批次的持久化确认。AckSeq 表示此前序号均已安全接收或确认重复。
-/// </summary>
 public sealed record EventBatchResponse
 {
     public int Accepted { get; init; }
@@ -29,9 +23,6 @@ public sealed record EventBatchResponse
     public bool GapDetected { get; init; }
 }
 
-/// <summary>
-///     中心事件查询返回值。IngestId 是跨 Edge 的中心游标。
-/// </summary>
 public sealed record PlatformProductionEvent
 {
     public required long IngestId { get; init; }

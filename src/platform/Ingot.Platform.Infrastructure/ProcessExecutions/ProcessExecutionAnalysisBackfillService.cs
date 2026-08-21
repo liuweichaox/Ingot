@@ -1,4 +1,3 @@
-// 实现基础设施适配器 ProcessExecutionAnalysisBackfillService，满足应用层端口而不改变领域契约。
 
 using Ingot.Contracts.Events;
 using Ingot.Platform.Application.ProcessExecutions;

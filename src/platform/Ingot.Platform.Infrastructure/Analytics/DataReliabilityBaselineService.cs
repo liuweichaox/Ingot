@@ -1,11 +1,10 @@
-// 实现基础设施适配器 DataReliabilityBaselineService，满足应用层端口而不改变领域契约。
 
 using Ingot.Contracts.Analytics;
 using Ingot.Contracts.Events;
 using Ingot.Platform.Application.Analytics;
 using Ingot.Platform.Application.Events;
-using Ingot.Platform.Application.ProcessResearch;
 using Ingot.Platform.Application.ProcessConfiguration;
+using Ingot.Platform.Application.ProcessResearch;
 using Ingot.Platform.Infrastructure.ProcessExecutions;
 
 namespace Ingot.Platform.Infrastructure.Analytics;

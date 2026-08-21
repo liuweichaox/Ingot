@@ -2,10 +2,6 @@ using Ingot.Contracts.ProcessResearch;
 
 namespace Ingot.Platform.Application.ProcessResearch;
 
-/// <summary>
-///     从已经实际执行并完成检验的优化实验中形成“候选操作域”。这里只自动生成候选，
-///     不替代独立复核、实验室重复验证或生产发布。
-/// </summary>
 public sealed class ResearchOperatingRegionMaterializer(
     IProcessResearchStore store,
     ProcessResearchWorkflow workflow)

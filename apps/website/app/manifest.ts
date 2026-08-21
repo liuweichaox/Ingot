@@ -1,4 +1,3 @@
-// 生成官网的 Web App 清单和品牌元数据。
 
 import type { MetadataRoute } from "next";
 

@@ -1,8 +1,8 @@
-using Ingot.Platform.Application.ProcessConfiguration;
 using System.Collections;
 using System.Globalization;
 using System.Text.Json;
 using Ingot.Contracts.ProcessConfiguration;
+using Ingot.Platform.Application.ProcessConfiguration;
 
 namespace Ingot.Platform.Application.ProcessConfiguration;
 
@@ -12,10 +12,6 @@ public sealed record ResolvedProcessAnalysis
     public required ProcessDataModel DataModel { get; init; }
 }
 
-/// <summary>
-/// Resolves the published process-analysis configuration that applies to an immutable
-/// production context. This is the single runtime entry point for stages and signals.
-/// </summary>
 public sealed class ProcessAnalysisResolver(IProcessConfigurationStore store)
 {
     public async Task<ResolvedProcessAnalysis?> ResolveAsync(
@@ -65,8 +61,7 @@ public sealed class ProcessAnalysisResolver(IProcessConfigurationStore store)
             var plan = plans
                 .Where(static item => item.Status == ConfigurationStatuses.Published)
                 .Where(item => string.Equals(item.AnalysisScope, analysisScope, StringComparison.Ordinal))
-                // An empty selector means "all contexts of this data model", never "all industries".
-                // When the model cannot be inferred, only an explicit selector may select a plan.
+
                 .Where(item => !string.IsNullOrWhiteSpace(modelId)
                     ? string.Equals(item.DataModelId, modelId, StringComparison.OrdinalIgnoreCase) &&
                       item.DataModelVersion == modelVersion
@@ -114,15 +109,15 @@ public sealed class ProcessAnalysisResolver(IProcessConfigurationStore store)
         foreach (var context in contexts)
         {
             ct.ThrowIfCancellationRequested();
-        var processSpecificationId = ContextValue(context, "process_specification_id");
-        var versionText = ContextValue(context, "process_specification_version");
-        if (string.IsNullOrWhiteSpace(processSpecificationId) ||
-            !int.TryParse(versionText, out var version) ||
-            version < 1)
-        {
+            var processSpecificationId = ContextValue(context, "process_specification_id");
+            var versionText = ContextValue(context, "process_specification_version");
+            if (string.IsNullOrWhiteSpace(processSpecificationId) ||
+                !int.TryParse(versionText, out var version) ||
+                version < 1)
+            {
                 result.Add(null);
                 continue;
-        }
+            }
 
             var key = (processSpecificationId.Trim().ToLowerInvariant(), version);
             if (!cache.TryGetValue(key, out var processSpecification))

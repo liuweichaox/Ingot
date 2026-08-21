@@ -19,9 +19,15 @@ public class MqttSnapshotAssemblerTests
         string timestampMode = "edge-received")
         => new()
         {
-            TaskId = "gateway", Name = "网关接入", EdgeId = "EDGE-001",
-            Protocol = AcquisitionProtocols.Mqtt, DataModelId = "model", Source = "connector/gateway",
-            SubjectId = "PRESS-01", TimestampMode = timestampMode, SequencePath = null,
+            TaskId = "gateway",
+            Name = "网关接入",
+            EdgeId = "EDGE-001",
+            Protocol = AcquisitionProtocols.Mqtt,
+            DataModelId = "model",
+            Source = "connector/gateway",
+            SubjectId = "PRESS-01",
+            TimestampMode = timestampMode,
+            SequencePath = null,
             ValueMappings = values.ToArray(),
             ContextMappings = (contexts ?? []).ToArray(),
             ProcessSpecification = processSpecification

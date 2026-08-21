@@ -1,4 +1,3 @@
-// 实现基础设施适配器 GoldenQuestionStore，满足应用层端口而不改变领域契约。
 
 using System.Text.Json;
 using Ingot.Contracts.Agents;

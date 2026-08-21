@@ -3,9 +3,6 @@ using System.Text.RegularExpressions;
 
 namespace Ingot.Platform.Infrastructure.Services;
 
-/// <summary>
-///     将 Prometheus 格式的指标文本解析为结构化字典。
-/// </summary>
 public static class PrometheusTextParser
 {
     public static Dictionary<string, object> Parse(string prometheusText)

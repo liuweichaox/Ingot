@@ -9,7 +9,6 @@ using Microsoft.Extensions.Options;
 
 namespace Ingot.Agent;
 
-/// <summary>执行经过校验的只读 Agent 计划并持久化完整审计轨迹。</summary>
 public sealed class AgentRuntime : IAgentRuntime
 {
     private const string ChatPromptVersion = "ingot-chat-v1";
@@ -84,6 +83,7 @@ public sealed class AgentRuntime : IAgentRuntime
             WorkflowStage = "analysis",
             Usage = new AgentUsageSummary()
         };
+
         await _store.CreateAsync(run, ct).ConfigureAwait(false);
 
         var timeout = TimeSpan.FromSeconds(Math.Clamp(settings.MaxRunSeconds, 1, 900));
@@ -177,6 +177,7 @@ public sealed class AgentRuntime : IAgentRuntime
         ValidateEntryPoint(entryPoint);
         if (await GetAsync(entryPoint, runId, ct).ConfigureAwait(false) is null)
             yield break;
+
         var cursor = Math.Max(0, afterSequence);
         while (!ct.IsCancellationRequested)
         {
@@ -188,6 +189,7 @@ public sealed class AgentRuntime : IAgentRuntime
             }
 
             var run = await GetAsync(entryPoint, runId, ct).ConfigureAwait(false);
+
             if (run is null || (AgentRunStatuses.IsTerminal(run.Status) && events.Count == 0))
                 yield break;
             await Task.Delay(TimeSpan.FromMilliseconds(350), ct).ConfigureAwait(false);

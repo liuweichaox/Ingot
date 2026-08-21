@@ -5,7 +5,6 @@ using Ingot.Contracts.ProcessResearch;
 
 namespace Ingot.Platform.Application.ProcessResearch;
 
-/// <summary>记录并复核受控在线前的停止与回退演练证据。</summary>
 public sealed partial class ResearchRollbackDrillService(IProcessResearchStore store)
 {
     public async Task<ResearchRollbackDrill> RecordAsync(

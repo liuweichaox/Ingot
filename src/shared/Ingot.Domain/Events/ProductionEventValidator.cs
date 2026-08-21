@@ -2,10 +2,6 @@ using System.Text.RegularExpressions;
 
 namespace Ingot.Domain.Events;
 
-/// <summary>
-///     生产事件信封的领域边界校验。反序列化可以绕过 <see cref="ProductionEvent.Create" />，
-///     因此任何外部摄入入口都必须显式调用此校验器。
-/// </summary>
 public static partial class ProductionEventValidator
 {
     public static bool TryValidate(

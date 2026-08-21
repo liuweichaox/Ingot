@@ -2,13 +2,13 @@ using System.Globalization;
 using System.Text.Json;
 using Ingot.Contracts.Analytics;
 using Ingot.Contracts.Events;
+using Ingot.Domain.Events;
 using Ingot.Platform.Application.Events;
 using Ingot.Platform.Application.Manufacturing;
 using Ingot.Platform.Application.ProcessConfiguration;
-using Ingot.Domain.Events;
-using Ingot.Platform.Infrastructure.ProcessExecutions;
 using Ingot.Platform.Infrastructure.Manufacturing;
 using Ingot.Platform.Infrastructure.ProcessConfiguration;
+using Ingot.Platform.Infrastructure.ProcessExecutions;
 using Ingot.Platform.Infrastructure.TimeSeries;
 using Microsoft.Extensions.Options;
 using Npgsql;
@@ -16,11 +16,6 @@ using NpgsqlTypes;
 
 namespace Ingot.Platform.Infrastructure.Events;
 
-/// <summary>
-///     TimescaleDB（PostgreSQL + 时序扩展）中心数据存储。全局去重键表与事件 hypertable 分离，
-///     保证 EventId、(SiteId, EdgeId, Seq) 幂等；记录表由 Timescale 按 occurred_at 自动分块，
-///     并可按配置启用保留与压缩策略。
-/// </summary>
 public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, IDisposable
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
@@ -112,8 +107,6 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, ID
             static evt => evt.PayloadHash,
             StringComparer.Ordinal);
 
-        // 在运行开始时解析一次不可变上下文，并传播到同一 executionId 的全部后续事件。
-        // 这样完成事件、质量任务与每秒样本看到的是同一份产品、工艺规范和工装快照。
         var capturedContexts = new Dictionary<string, IReadOnlyDictionary<string, string>>(StringComparer.Ordinal);
         var analysisConfigurations = new Dictionary<string, ResolvedProcessAnalysis?>(StringComparer.Ordinal);
         for (var index = 0; index < ordered.Length; index++)
@@ -123,8 +116,6 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, ID
             await ValidateProcessSampleAsync(ordered[index], analysisConfigurations, ct).ConfigureAwait(false);
         }
 
-        // 无需在热路径创建分区：Timescale hypertable 在插入时自动落到对应时间块。
-        // OccurredAt 的合理区间由上游 PlatformIngestWindow 校验，防止异常时间戳撑出无意义的远期块。
         await using var connection = await _dataSource.OpenConnectionAsync(ct).ConfigureAwait(false);
         await using var transaction = await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
 
@@ -331,11 +322,7 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, ID
         else
         {
             context["context_captured_at"] = evt.OccurredAt.ToString("O", CultureInfo.InvariantCulture);
-            // Imports may already carry immutable product, process-specification, and output-item
-            // context from their source system.  Do not turn a usable historical
-            // replay into a configuration error merely because it did not pass
-            // through this deployment's live preparation and tooling workflow.
-            // This remains distinct from a locally resolved live context.
+
             context["context_capture_status"] = HasSourceProvidedContext(context)
                 ? "source_provided"
                 : "configuration_missing";
@@ -356,9 +343,6 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, ID
                 out var sourceModelVersion) && sourceModelVersion > 0;
             var hasSourceModel = !string.IsNullOrWhiteSpace(sourceModelId) && hasSourceModelVersion;
 
-            // 采集配置声明的是本次原始轨迹实际采用的数据模型，不能被工艺规范主数据的
-            // 历史模型版本覆盖。工艺规范模型单独留痕；不一致时显式标记，交给数据质量
-            // 和配置治理处理，但仍按采集模型校验并保存真实设备数据。
             context["process_specification_data_model_id"] = processSpecification.DataModelId;
             context["process_specification_data_model_version"] = processSpecification.DataModelVersion.ToString(CultureInfo.InvariantCulture);
             if (!hasSourceModel)
@@ -848,7 +832,7 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, ID
 
         await using var command = _dataSource.CreateCommand();
         var where = BuildWhere(command, query);
-        // 全范围聚合，不受 Limit 截断；hypertable 上 max/min(occurred_at) 与 count 都能借助时间维索引与块裁剪。
+
         command.CommandText = $"""
                               SELECT count(*), max(occurred_at), min(occurred_at)
                               FROM production_events
@@ -869,7 +853,6 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, ID
         };
     }
 
-    // 按查询条件构造 WHERE 子句并绑定参数（QueryAsync 与 GetScopeStatsAsync 共用，保证筛选规则一致）。
     private static string BuildWhere(NpgsqlCommand command, PlatformEventQuery query)
     {
         var predicates = new List<string>();

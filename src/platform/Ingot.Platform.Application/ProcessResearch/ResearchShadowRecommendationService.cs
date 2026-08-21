@@ -4,11 +4,6 @@ using Ingot.Contracts.ProcessResearch;
 
 namespace Ingot.Platform.Application.ProcessResearch;
 
-/// <summary>
-///     Records shadow recommendations without dispatching them to equipment. A decision is
-///     preregistered once; the actual outcome is attached once from acquisition and inspection
-///     source data, so later knowledge cannot rewrite the engineer's original choice.
-/// </summary>
 public sealed class ResearchShadowRecommendationService(
     IProcessResearchStore store,
     IResearchObservationAssembler observationAssembler)

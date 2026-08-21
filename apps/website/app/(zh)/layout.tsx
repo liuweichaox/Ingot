@@ -1,4 +1,3 @@
-// 定义当前路由层级的页面框架、语言和元数据边界。
 
 import type { Metadata } from "next";
 import "../globals.css";

@@ -1,4 +1,3 @@
-// 挂载平台 React 应用，并集中启用路由与全局运行时依赖。
 
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";

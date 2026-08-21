@@ -1,21 +1,21 @@
 // 验证平台组件 EventsController 的成功、拒绝和安全边界。
 
+using System.Security.Claims;
 using System.Text.Json;
 using Ingot.Contracts.Events;
 using Ingot.Domain.Events;
-using Ingot.Platform.Api.Controllers;
 using Ingot.Platform.Api.Agents;
-using Ingot.Platform.Application.ProcessExecutions;
+using Ingot.Platform.Api.Controllers;
 using Ingot.Platform.Api.Errors;
 using Ingot.Platform.Api.Events;
+using Ingot.Platform.Application.ProcessExecutions;
 using Ingot.Platform.Infrastructure.Events;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.FileProviders;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.FileProviders;
-using System.Security.Claims;
 using Microsoft.Extensions.Options;
 using Xunit;
 
@@ -46,7 +46,8 @@ public sealed class EventsControllerTests
             "equipment.heartbeat",
             DateTimeOffset.UtcNow,
             "edge/EDGE-001/equipment/PRESS-01",
-            new ObjectRef("equipment", "PRESS-01")) with { Seq = 1 };
+            new ObjectRef("equipment", "PRESS-01")) with
+        { Seq = 1 };
 
         var action = await controller.Ingest(new EventBatchRequest
         {
@@ -71,7 +72,8 @@ public sealed class EventsControllerTests
             "equipment.heartbeat",
             DateTimeOffset.UtcNow,
             "edge/EDGE-001/equipment/PRESS-01",
-            new ObjectRef("equipment", "PRESS-01")) with { Seq = 1 };
+            new ObjectRef("equipment", "PRESS-01")) with
+        { Seq = 1 };
 
         var action = await controller.Ingest(new EventBatchRequest
         {

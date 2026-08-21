@@ -2,13 +2,13 @@
 
 using System.Text.Json;
 using Ingot.Agent;
-using Ingot.Platform.Infrastructure.AgentTools;
-using Ingot.Platform.Infrastructure.Events;
-using Ingot.Platform.Infrastructure.Inspections;
 using Ingot.Contracts.Agents;
 using Ingot.Contracts.Events;
 using Ingot.Contracts.Inspections;
 using Ingot.Domain.Events;
+using Ingot.Platform.Infrastructure.AgentTools;
+using Ingot.Platform.Infrastructure.Events;
+using Ingot.Platform.Infrastructure.Inspections;
 using Xunit;
 
 namespace Ingot.Core.Tests.Agent;

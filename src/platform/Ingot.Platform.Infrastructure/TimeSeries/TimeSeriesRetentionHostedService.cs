@@ -1,21 +1,17 @@
-using Ingot.Platform.Infrastructure.Events;
 using Ingot.Platform.Application.Events;
+using Ingot.Platform.Infrastructure.Events;
 using Microsoft.Extensions.Options;
 using Npgsql;
 
 namespace Ingot.Platform.Infrastructure.TimeSeries;
 
-/// <summary>
-/// Drops value chunks before their matching frame chunks in one transaction so readers
-/// never observe one-sided retention. Disabled when EventIngest:RetentionDays is zero.
-/// </summary>
 public sealed class TimeSeriesRetentionHostedService(
     NpgsqlDataSource dataSource,
     IOptions<PlatformEventOptions> options,
     ILogger<TimeSeriesRetentionHostedService> logger) : BackgroundService
 {
     private static readonly TimeSpan Interval = TimeSpan.FromHours(24);
-    private const long AdvisoryLockKey = 0x496E676F74545352; // IngotTSR
+    private const long AdvisoryLockKey = 0x496E676F74545352;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -59,9 +55,9 @@ public sealed class TimeSeriesRetentionHostedService(
         }
         try
         {
-        await using var transaction = await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
-        await using var command = new NpgsqlCommand(
-            """
+            await using var transaction = await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
+            await using var command = new NpgsqlCommand(
+                """
             SELECT drop_chunks(
               'process_sample_values',
               older_than => now() - make_interval(days => @days));
@@ -72,12 +68,12 @@ public sealed class TimeSeriesRetentionHostedService(
               'production_events',
               older_than => now() - make_interval(days => @days));
             """,
-            connection,
-            transaction);
-        command.Parameters.AddWithValue("days", retentionDays);
-        command.CommandTimeout = 300;
-        await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
-        await transaction.CommitAsync(ct).ConfigureAwait(false);
+                connection,
+                transaction);
+            command.Parameters.AddWithValue("days", retentionDays);
+            command.CommandTimeout = 300;
+            await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+            await transaction.CommitAsync(ct).ConfigureAwait(false);
         }
         finally
         {

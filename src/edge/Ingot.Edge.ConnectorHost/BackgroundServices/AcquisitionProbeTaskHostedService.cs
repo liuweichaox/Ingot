@@ -10,7 +10,6 @@ using Microsoft.Extensions.Options;
 
 namespace Ingot.Edge.ConnectorHost.BackgroundServices;
 
-/// <summary>Edge 主动拉取并执行设备探查任务，使 Platform 无需反向访问 OT 网络。</summary>
 public sealed class AcquisitionProbeTaskHostedService(
     IHttpClientFactory httpClientFactory,
     IEdgeIdentityProvider identity,

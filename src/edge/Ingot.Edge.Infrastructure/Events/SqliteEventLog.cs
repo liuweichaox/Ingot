@@ -1,17 +1,14 @@
 using System.Globalization;
 using System.Text.Json;
 using System.Text.RegularExpressions;
-using Ingot.Edge.Application.Abstractions;
 using Ingot.Domain.Events;
+using Ingot.Edge.Application.Abstractions;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace Ingot.Edge.Infrastructure.Events;
 
-/// <summary>
-///     SQLite outbox：边缘生产数据的本地不可变日志。
-/// </summary>
 public sealed class SqliteEventLog : IEventLog
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
@@ -481,7 +478,6 @@ public sealed class SqliteEventLog : IEventLog
         if (excess <= 0)
             return null;
 
-        // 丢弃审计保存在本地已确认区，不再与待发送生产事件竞争容量。
         var rowsToDrop = Math.Min(count, excess);
         await using var rangeCommand = connection.CreateCommand();
         rangeCommand.Transaction = transaction;

@@ -22,9 +22,6 @@ public sealed record ScenarioPackageOperationResult
     public string? Error { get; init; }
 }
 
-/// <summary>
-///     Owns scenario-package lifecycle rules and cross-context reference validation.
-/// </summary>
 public sealed class ScenarioPackageService(
     IProcessConfigurationStore configurations,
     IIngestionTaskStore ingestionTasks,
@@ -142,10 +139,10 @@ public sealed class ScenarioPackageService(
     }
 
     private static ScenarioPackageOperationResult Success(ScenarioPackage value) => new()
-        { Status = ScenarioPackageOperationStatus.Success, Value = value };
+    { Status = ScenarioPackageOperationStatus.Success, Value = value };
 
     private static ScenarioPackageOperationResult Invalid(string error) => new()
-        { Status = ScenarioPackageOperationStatus.Invalid, Error = error };
+    { Status = ScenarioPackageOperationStatus.Invalid, Error = error };
 
     private static string Normalize(string value) => value.Trim().ToLowerInvariant();
 
