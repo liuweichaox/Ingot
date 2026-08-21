@@ -27,7 +27,7 @@ public sealed class ToolingComponentTypesController(
         var denied = DeniedConfigurationWrite();
         if (denied is not null)
             return denied;
-        if (!ManufacturingContextValidator.TryValidate(request, out ToolingComponentTypeDefinition? normalized, out var error))
+        if (!ManufacturingContextValidator.TryValidate(request, out var normalized, out var error))
             return InvalidRequest(error);
         return Ok(await store.UpsertComponentTypeAsync(normalized!, ct).ConfigureAwait(false));
     }
@@ -65,7 +65,7 @@ public sealed class ToolingTypesController(
         var denied = DeniedConfigurationWrite();
         if (denied is not null)
             return denied;
-        if (!ManufacturingContextValidator.TryValidate(request, out ToolingTypeDefinition? normalized, out var error))
+        if (!ManufacturingContextValidator.TryValidate(request, out var normalized, out var error))
             return InvalidRequest(error);
         return await ExecuteAsync(() => store.CreateToolingTypeAsync(normalized!, ct)).ConfigureAwait(false);
     }
@@ -115,7 +115,7 @@ public sealed class ToolingComponentsController(
         var denied = DeniedConfigurationWrite();
         if (denied is not null)
             return denied;
-        if (!ManufacturingContextValidator.TryValidate(request, out ToolingComponent? normalized, out var error))
+        if (!ManufacturingContextValidator.TryValidate(request, out var normalized, out var error))
             return InvalidRequest(error);
         try { return Ok(await store.UpsertComponentAsync(normalized!, ct).ConfigureAwait(false)); }
         catch (InvalidOperationException ex) { return StateConflict(ex.Message); }
@@ -151,7 +151,7 @@ public sealed class ToolingAssembliesController(
         var denied = DeniedConfigurationWrite();
         if (denied is not null)
             return denied;
-        if (!ManufacturingContextValidator.TryValidate(request, out ToolingAssembly? normalized, out var error))
+        if (!ManufacturingContextValidator.TryValidate(request, out var normalized, out var error))
             return InvalidRequest(error);
         try { return Ok(await store.UpsertAssemblyAsync(normalized!, ct).ConfigureAwait(false)); }
         catch (InvalidOperationException ex) { return StateConflict(ex.Message); }
@@ -194,7 +194,7 @@ public sealed class ToolingAssembliesController(
         if (denied is not null)
             return denied;
         request = request is null ? null : request with { ToolingAssemblyId = toolingAssemblyId.Trim() };
-        if (!ManufacturingContextValidator.TryValidate(request, out ToolingAssemblyRevision? normalized, out var error))
+        if (!ManufacturingContextValidator.TryValidate(request, out var normalized, out var error))
             return InvalidRequest(error);
         try { return Ok(await store.CreateAssemblyRevisionAsync(normalized!, ct).ConfigureAwait(false)); }
         catch (InvalidOperationException ex) { return StateConflict(ex.Message); }
@@ -236,7 +236,7 @@ public sealed class ToolingInstallationsController(
         var denied = DeniedConfigurationWrite();
         if (denied is not null)
             return denied;
-        if (!ManufacturingContextValidator.TryValidate(request, out ToolingInstallation? normalized, out var error))
+        if (!ManufacturingContextValidator.TryValidate(request, out var normalized, out var error))
             return InvalidRequest(error);
         try { return Ok(await store.CreateInstallationAsync(normalized!, ct).ConfigureAwait(false)); }
         catch (InvalidOperationException ex) { return StateConflict(ex.Message); }
@@ -310,7 +310,7 @@ public sealed class ProductionContextsController(
         var denied = DeniedConfigurationWrite();
         if (denied is not null)
             return denied;
-        if (!ManufacturingContextValidator.TryValidate(request, out ProductionContext? normalized, out var error))
+        if (!ManufacturingContextValidator.TryValidate(request, out var normalized, out var error))
             return InvalidRequest(error);
         if (!int.TryParse(normalized!.ProcessSpecificationVersion, out var processSpecificationVersion) || processSpecificationVersion < 1)
             return InvalidRequest("ProcessSpecificationVersion 必须是已发布工艺规范的正整数版本。");

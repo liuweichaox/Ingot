@@ -338,7 +338,7 @@ public sealed class DataReliabilityBaselineService(
 
     private static string? ResolveFactor(ExecutionComparisonRow row, string field)
     {
-        string? value = field switch
+        var value = field switch
         {
             "equipment_id" => ProcessAnalysisResolver.ContextValue(
                                   row.Context, "equipment_id") ?? row.EquipmentId,

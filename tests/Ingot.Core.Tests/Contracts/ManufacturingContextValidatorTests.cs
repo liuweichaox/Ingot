@@ -16,7 +16,7 @@ public sealed class ManufacturingContextValidatorTests
                 ComponentTypeCode = "MOLD_CORE",
                 Name = "模芯"
             },
-            out ToolingComponentTypeDefinition? normalized,
+            out var normalized,
             out var error);
 
         Assert.True(ok, error);
@@ -44,7 +44,7 @@ public sealed class ManufacturingContextValidatorTests
                     new ToolingRoleDefinition { Code = "LOWER_CORE", Name = "下模芯", SortOrder = 2 }
                 ]
             },
-            out ToolingTypeDefinition? normalized,
+            out var normalized,
             out var error);
 
         Assert.True(ok, error);
@@ -64,7 +64,7 @@ public sealed class ManufacturingContextValidatorTests
                 SerialNo = "SN-001",
                 Name = "可复用模芯"
             },
-            out ToolingComponent? normalized,
+            out var normalized,
             out var error);
 
         Assert.True(ok, error);
@@ -82,7 +82,7 @@ public sealed class ManufacturingContextValidatorTests
                 SerialNo = "SN-001",
                 Status = "deleted"
             },
-            out ToolingComponent? _,
+            out var _,
             out var error);
 
         Assert.False(ok);
@@ -102,7 +102,7 @@ public sealed class ManufacturingContextValidatorTests
                     new ToolingAssemblyMember { RoleCode = "upper_core", ComponentId = "UP-02" }
                 ]
             },
-            out ToolingAssemblyRevision? _,
+            out var _,
             out var error);
 
         Assert.False(ok);
@@ -129,7 +129,7 @@ public sealed class ManufacturingContextValidatorTests
                 CalibrationRef = " CAL-2026-07 ",
                 CalibrationValidUntil = DateTimeOffset.Parse("2027-01-01T00:00:00+08:00")
             },
-            out ProductionContext? normalized,
+            out var normalized,
             out var error);
 
         Assert.True(ok, error);
@@ -158,7 +158,7 @@ public sealed class ManufacturingContextValidatorTests
                 ToolingInstallationId = Guid.NewGuid(),
                 Source = "MES"
             },
-            out ProductionContext? _,
+            out var _,
             out var error);
 
         Assert.False(ok);

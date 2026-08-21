@@ -292,7 +292,7 @@ public sealed class AgentRuntime : IAgentRuntime
 
             var results = new List<AnalysisToolResult>();
             var invocations = new List<AgentToolInvocation>();
-            IReadOnlyList<AnalysisToolCall> pendingCalls = plan.ToolCalls;
+            var pendingCalls = plan.ToolCalls;
             AnalysisToolCall? previousCall = null;
             var maxToolCalls = settings.MaxToolCalls;
             if (pendingCalls.Count > 0)
