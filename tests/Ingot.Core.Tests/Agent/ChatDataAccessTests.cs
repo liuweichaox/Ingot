@@ -1,5 +1,6 @@
 // 验证 Agent 的 ChatDataAccess 能力、只读边界和拒绝路径。
 
+using Ingot.Contracts.Analytics;
 using Ingot.Contracts.Events;
 using Ingot.Platform.Infrastructure.AgentTools;
 using Ingot.Platform.Infrastructure.Events;
@@ -94,6 +95,14 @@ public sealed class ChatDataAccessTests
             return Task.FromResult<IReadOnlyList<PlatformProductionEvent>>(rows);
         }
 
+        public Task<IReadOnlyList<PlatformProductionEvent>> QueryByExecutionIdsAsync(
+            IReadOnlyCollection<string> executionIds,
+            CancellationToken ct = default) => Task.FromResult<IReadOnlyList<PlatformProductionEvent>>([]);
+
+        public Task<IReadOnlyList<PlatformProcessExecutionSummarySource>> QueryExecutionSummarySourcesAsync(
+            IReadOnlyCollection<string> executionIds,
+            CancellationToken ct = default) => Task.FromResult<IReadOnlyList<PlatformProcessExecutionSummarySource>>([]);
+
         public Task<PlatformEventScopeStats> GetScopeStatsAsync(
             PlatformEventQuery query,
             CancellationToken ct = default)
@@ -103,5 +112,8 @@ public sealed class ChatDataAccessTests
         }
 
         public Task<bool> CanConnectAsync(CancellationToken ct = default) => Task.FromResult(true);
+
+        public Task<DataObjectPage> QueryDataObjectsAsync(DataObjectQuery query, CancellationToken ct = default)
+            => Task.FromResult(new DataObjectPage { Limit = query.Limit, Offset = query.Offset });
     }
 }

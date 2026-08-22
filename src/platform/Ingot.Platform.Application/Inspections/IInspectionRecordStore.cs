@@ -1,7 +1,9 @@
+// 定义检验记录与质量范围的持久化边界。
 using Ingot.Contracts.Inspections;
 
 namespace Ingot.Platform.Application.Inspections;
 
+/// <summary>保存并按站点查询检验事实和质量范围。</summary>
 public interface IInspectionRecordStore
 {
     Task InitializeAsync(CancellationToken ct = default);
@@ -15,7 +17,9 @@ public interface IInspectionRecordStore
 
     Task<InspectionRecord?> GetCorrectionForAsync(Guid recordId, CancellationToken ct = default);
 
-    Task<IReadOnlyList<InspectionScope>> ListScopesAsync(CancellationToken ct = default);
+    Task<IReadOnlyList<InspectionScope>> ListScopesAsync(
+        string? siteId,
+        CancellationToken ct = default);
 
     Task<InspectionScope?> GetScopeAsync(string scopeId, CancellationToken ct = default);
 
@@ -33,6 +37,7 @@ public interface IInspectionRecordStore
 
     Task<IReadOnlyList<InspectionRecord>> QueryAllByExecutionIdsAsync(
         IReadOnlyCollection<string> executionIds,
+        string? siteId,
         CancellationToken ct = default);
 }
 

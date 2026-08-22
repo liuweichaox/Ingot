@@ -1,3 +1,4 @@
+// 管理候选工艺操作域从实验室验证到受控在线生产验证的证据门禁。
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -356,19 +357,76 @@ public sealed partial class ProcessResearchWorkflow
     {
         var value = await store.GetOperatingRegionAsync(operatingRegionId, ct).ConfigureAwait(false)
             ?? throw new ProcessResearchRuleException("工艺操作域不存在。");
-        await RequireMutableProjectAsync(value.ProjectId, ct).ConfigureAwait(false);
+        var project = await RequireMutableProjectAsync(value.ProjectId, ct).ConfigureAwait(false);
         if (value.Status != OperatingRegionStatuses.Validated ||
             value.ValidationLevel != OperatingRegionValidationLevels.Laboratory)
-            throw new ProcessResearchRuleException("只有通过跨区组重复实验验证的工艺操作域才能发布生产。");
+            throw new ProcessResearchRuleException("只有通过跨区组重复实验验证的工艺操作域才能申请生产发布。");
         var actor = NormalizeUser(userId);
         if (string.Equals(value.ValidatedBy, actor, StringComparison.Ordinal))
             throw new ProcessResearchRuleException("实验室验证人与生产发布人必须分离。");
+        var controlledExperiments = (await store.ListExperimentsAsync(value.ProjectId, ct)
+                .ConfigureAwait(false))
+            .Where(experiment =>
+                experiment.ExecutionCategory == ResearchExperimentExecutionCategories.ControlledOnline &&
+                experiment.Optimization?.Mode == ResearchOptimizationModes.Controlled &&
+                experiment.Status == ResearchExperimentStatuses.Completed &&
+                experiment.ControlledDecision?.Decision is
+                    ResearchControlledDecisionStatuses.Accepted or
+                    ResearchControlledDecisionStatuses.Modified)
+            .ToArray();
+        var productionResults = new List<ResearchExperimentResult>();
+        foreach (var experiment in controlledExperiments)
+        {
+            foreach (var resultId in experiment.ResultIds)
+            {
+                var result = await store.GetExperimentResultAsync(resultId, ct).ConfigureAwait(false);
+                if (result is not null && result.ProjectId == value.ProjectId &&
+                    result.ExperimentId == experiment.ExperimentId &&
+                    result.CalculatedFromSource && result.SafetyPassed)
+                {
+                    productionResults.Add(result);
+                }
+            }
+        }
+        var productionObservations = productionResults
+            .SelectMany(static result => result.RunObservations)
+            .ToArray();
+        if (productionObservations.Length < 3 || productionObservations.Any(observation =>
+                !observation.ValidForOptimization ||
+                !IsInsideWindow(value, observation) ||
+                !MeetsMeasuredSpecification(project, observation)))
+        {
+            throw new ProcessResearchRuleException(
+                "生产发布前必须完成至少三个来自受控在线运行的源数据结果，并确认全部位于候选操作域内且满足目标与安全约束。");
+        }
+        if (controlledExperiments.Any(experiment =>
+                string.Equals(experiment.ControlledDecision?.DecidedBy, actor, StringComparison.Ordinal)))
+            throw new ProcessResearchRuleException("受控在线决策人与生产发布人必须分离。");
+        var now = DateTimeOffset.UtcNow;
+        var evidence = value.Evidence
+            .Concat(productionResults.Select(result => CreateEvidence(
+                value.ProjectId,
+                EvidenceKinds.ExperimentResult,
+                result.ResultId.ToString(),
+                "工艺操作域的受控在线生产验证结果。",
+                result.AnalysisHash,
+                now)))
+            .GroupBy(static item => (item.Kind, item.ReferenceId))
+            .Select(static group => group.First())
+            .ToArray();
         var saved = await store.SaveOperatingRegionAsync(
             value with
             {
                 ValidationLevel = OperatingRegionValidationLevels.Production,
-                ValidationNotes = $"{value.ValidationNotes} 由 {actor} 审核并发布生产。",
-                UpdatedAt = DateTimeOffset.UtcNow
+                SupportingExperimentIds = value.SupportingExperimentIds
+                    .Concat(controlledExperiments.Select(static experiment => experiment.ExperimentId))
+                    .Distinct().ToArray(),
+                SupportingResultIds = value.SupportingResultIds
+                    .Concat(productionResults.Select(static result => result.ResultId))
+                    .Distinct().ToArray(),
+                Evidence = evidence,
+                ValidationNotes = $"{value.ValidationNotes} 受控在线运行验证通过，由 {actor} 独立审核并发布生产。",
+                UpdatedAt = now
             },
             ct).ConfigureAwait(false);
         await AuditAsync(value.ProjectId, "operating-region", operatingRegionId.ToString(),

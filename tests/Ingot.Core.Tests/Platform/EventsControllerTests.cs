@@ -2,6 +2,7 @@
 
 using System.Security.Claims;
 using System.Text.Json;
+using Ingot.Contracts.Analytics;
 using Ingot.Contracts.Events;
 using Ingot.Domain.Events;
 using Ingot.Platform.Api.Agents;
@@ -285,6 +286,9 @@ public sealed class EventsControllerTests
         public Task<IReadOnlyList<ExecutionBoundary>> QueryBoundariesAsync(
             string siteId, DateTimeOffset? from, DateTimeOffset? to, int limit = 100, int offset = 0,
             CancellationToken ct = default) => Task.FromResult<IReadOnlyList<ExecutionBoundary>>([]);
+
+        public Task<bool> ReplayFailedProjectionAsync(string siteId, string sourceExecutionId, CancellationToken ct = default)
+            => Task.FromResult(false);
     }
 
     private sealed class StubPlatformEventStore(
@@ -337,6 +341,26 @@ public sealed class EventsControllerTests
                 ordered.Skip(query.Offset).Take(query.Limit).ToArray());
         }
 
+        public Task<IReadOnlyList<PlatformProductionEvent>> QueryByExecutionIdsAsync(
+            IReadOnlyCollection<string> executionIds,
+            CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<PlatformProductionEvent>>(rows
+                .Where(item => item.Event.ExecutionId is not null && executionIds.Contains(item.Event.ExecutionId))
+                .ToArray());
+
+        public Task<IReadOnlyList<PlatformProcessExecutionSummarySource>> QueryExecutionSummarySourcesAsync(
+            IReadOnlyCollection<string> executionIds,
+            CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<PlatformProcessExecutionSummarySource>>(rows
+                .Where(item => item.Event.ExecutionId is not null && executionIds.Contains(item.Event.ExecutionId))
+                .GroupBy(item => item.Event.ExecutionId!, StringComparer.Ordinal)
+                .Select(group => new PlatformProcessExecutionSummarySource
+                {
+                    ExecutionId = group.Key,
+                    Events = group.ToArray()
+                })
+                .ToArray());
+
         public Task<PlatformEventScopeStats> GetScopeStatsAsync(
             PlatformEventQuery query,
             CancellationToken ct = default)
@@ -371,5 +395,8 @@ public sealed class EventsControllerTests
 
         public Task<bool> CanConnectAsync(CancellationToken ct = default)
             => Task.FromResult(true);
+
+        public Task<DataObjectPage> QueryDataObjectsAsync(DataObjectQuery query, CancellationToken ct = default)
+            => Task.FromResult(new DataObjectPage { Limit = query.Limit, Offset = query.Offset });
     }
 }

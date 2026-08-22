@@ -1,3 +1,4 @@
+// 组装站点隔离的生产运行、检验结果与对比证据。
 
 using System.Globalization;
 using System.Text.Json;
@@ -74,7 +75,7 @@ public sealed class ExecutionComparisonService(
                 static pair => pair.Value.Events,
                 StringComparer.Ordinal);
         var allInspections = InspectionRecordSet.Effective(
-            await inspections.QueryAllByExecutionIdsAsync(ids, ct).ConfigureAwait(false));
+            await inspections.QueryAllByExecutionIdsAsync(ids, siteId, ct).ConfigureAwait(false));
         var inspectionsByProcessExecution = allInspections
             .GroupBy(static item => item.ExecutionId, StringComparer.Ordinal)
             .ToDictionary(static group => group.Key, static group => group.ToArray(), StringComparer.Ordinal);
@@ -236,7 +237,7 @@ public sealed class ExecutionComparisonService(
         CancellationToken ct)
     {
         var allInspections = InspectionRecordSet.Effective(
-            await inspections.QueryAllByExecutionIdsAsync(allIds, ct).ConfigureAwait(false));
+            await inspections.QueryAllByExecutionIdsAsync(allIds, null, ct).ConfigureAwait(false));
         var latestReviews = await reviews.GetLatestByInspectionRecordIdsAsync(
             allInspections.Select(static record => record.RecordId).ToArray(), ct).ConfigureAwait(false);
         var plans = await inspectionMasterData.ListInspectionPlansAsync(ct).ConfigureAwait(false);

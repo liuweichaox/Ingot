@@ -1,3 +1,4 @@
+// 编排研发项目从预注册、假设和实验到独立验证与受控生产发布的页面工作流。
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router";
 import { getJson, patchJson, postJson } from "../api/http";
@@ -34,6 +35,7 @@ import {
   StatusBadge,
   WorkflowGuide,
   notify,
+  useConfirmDialog,
 } from "../ui/components";
 
 export function ResearchProjectsPage({ identity }) {
@@ -60,6 +62,7 @@ export function ResearchProjectsPage({ identity }) {
   const [controlledTarget, setControlledTarget] = useState(null);
   const [controlledForm, setControlledForm] = useState({});
   const [memberCandidates, setMemberCandidates] = useState([]);
+  const { confirm, confirmationDialog } = useConfirmDialog();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -521,6 +524,13 @@ export function ResearchProjectsPage({ identity }) {
   }
 
   async function releaseWindow(window) {
+    const accepted = await confirm({
+      title: "确认发布生产工艺操作域",
+      description: "系统将再次校验受控在线源数据、目标、安全边界和职责分离。发布后该操作域作为生产级证据使用，不能把它当作未经验证的候选设置。",
+      confirmLabel: "审核并发布",
+      tone: "danger",
+    });
+    if (!accepted) return;
     try {
       await postJson(`/api/v1/research-projects/operating-regions/${window.operatingRegionId}/release`, {});
       await refreshWorkspace();
@@ -864,6 +874,7 @@ export function ResearchProjectsPage({ identity }) {
           onClose={() => !saving && setControlledTarget(null)}
           onSubmit={submitControlledDecision}
         />
+        {confirmationDialog}
       </Page>
     );
   }
@@ -944,7 +955,7 @@ export function ResearchProjectsPage({ identity }) {
         onClose={() => !saving && setCreateOpen(false)}
         onSubmit={createProject}
       />
-
+      {confirmationDialog}
     </Page>
   );
 }

@@ -1,3 +1,4 @@
+// 编排检验主数据、记录、附件、复核和质量范围写入规则。
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Ingot.Contracts.Inspections;
@@ -44,6 +45,7 @@ public sealed record InspectionAttachmentContent(
     InspectionAttachment Metadata,
     Stream Content);
 
+/// <summary>执行带身份归属、不可变性和证据完整性校验的检验命令。</summary>
 public sealed partial class InspectionCommands(
     IInspectionMasterDataStore masterData,
     IInspectionRecordStore records,
@@ -157,9 +159,14 @@ public sealed partial class InspectionCommands(
     public async Task<InspectionCommandResult<InspectionRecord>> CreateRecordAsync(
         CreateInspectionRecordRequest? request,
         string submittedBy,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        string? siteId = null)
     {
-        var attributed = request is null ? null : request with { SubmittedBy = submittedBy };
+        var attributed = request is null ? null : request with
+        {
+            SubmittedBy = submittedBy,
+            SiteId = string.IsNullOrWhiteSpace(siteId) ? request.SiteId : siteId.Trim()
+        };
         if (!InspectionRecordValidator.TryValidate(attributed, out var normalized, out var error))
             return InspectionCommandResult<InspectionRecord>.Invalid(error);
 
@@ -175,7 +182,8 @@ public sealed partial class InspectionCommands(
             var original = await records.GetAsync(normalized.SupersedesRecordId.Value, ct).ConfigureAwait(false);
             if (original is null)
                 return InspectionCommandResult<InspectionRecord>.Invalid("被更正的检测记录不存在。");
-            if (original.ExecutionId != normalized.ExecutionId ||
+            if (original.SiteId != normalized.SiteId ||
+                original.ExecutionId != normalized.ExecutionId ||
                 original.OutputItemId != normalized.OutputItemId ||
                 original.DefinitionCode != normalized.DefinitionCode ||
                 original.DefinitionVersion != normalized.DefinitionVersion)
@@ -193,7 +201,8 @@ public sealed partial class InspectionCommands(
         }
         if (!TryApplyDefinition(normalized, definition, out normalized, out error))
             return InspectionCommandResult<InspectionRecord>.Invalid(error);
-        var task = await workflow.GetTaskAsync(normalized.ExecutionId, ct).ConfigureAwait(false);
+        var task = await workflow.GetTaskAsync(
+            normalized.ExecutionId, ct, normalized.SiteId).ConfigureAwait(false);
         if (task is null)
             return InspectionCommandResult<InspectionRecord>.Invalid("当前分析范围没有匹配的已发布质量方案。");
         var planItem = task.RequiredInspections.FirstOrDefault(item =>
@@ -208,7 +217,8 @@ public sealed partial class InspectionCommands(
             var stored = await attachments.GetAsync(attachment.AttachmentId, ct).ConfigureAwait(false);
             if (stored is null)
                 return InspectionCommandResult<InspectionRecord>.Invalid($"AttachmentId 不存在: {attachment.AttachmentId}");
-            if (!string.Equals(stored.Sha256, attachment.Sha256, StringComparison.Ordinal) ||
+            if (!string.Equals(stored.SiteId, normalized.SiteId, StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(stored.Sha256, attachment.Sha256, StringComparison.Ordinal) ||
                 !string.Equals(stored.StorageRef, attachment.StorageRef, StringComparison.Ordinal) ||
                 stored.SizeBytes != attachment.SizeBytes)
             {
@@ -280,8 +290,15 @@ public sealed partial class InspectionCommands(
         var existing = await records.GetScopeAsync(value.ScopeId, ct).ConfigureAwait(false);
         if (existing is not null)
         {
+            if (!string.Equals(existing.SiteId, value.SiteId, StringComparison.OrdinalIgnoreCase))
+                return InspectionCommandResult<InspectionScope>.Conflict("质量范围不能迁移到另一个站点。", existing);
             var page = await records.QueryPageAsync(
-                new InspectionRecordQuery { ExecutionId = existing.ScopeId, Limit = 1 }, ct).ConfigureAwait(false);
+                new InspectionRecordQuery
+                {
+                    SiteId = existing.SiteId,
+                    ExecutionId = existing.ScopeId,
+                    Limit = 1
+                }, ct).ConfigureAwait(false);
             if (page.Total > 0)
                 return InspectionCommandResult<InspectionScope>.Conflict("该质量范围已经产生检测记录，不能修改。", existing);
             value = value with { CreatedAt = existing.CreatedAt, CreatedBy = existing.CreatedBy };
@@ -299,7 +316,12 @@ public sealed partial class InspectionCommands(
         if (existing is null)
             return InspectionCommandResult<bool>.NotFound();
         var page = await records.QueryPageAsync(
-            new InspectionRecordQuery { ExecutionId = normalized, Limit = 1 }, ct).ConfigureAwait(false);
+            new InspectionRecordQuery
+            {
+                SiteId = existing.SiteId,
+                ExecutionId = normalized,
+                Limit = 1
+            }, ct).ConfigureAwait(false);
         if (page.Total > 0)
             return InspectionCommandResult<bool>.Conflict("该质量范围已经产生检测记录，不能删除。");
         return await records.DeleteScopeAsync(normalized, ct).ConfigureAwait(false)
@@ -311,12 +333,13 @@ public sealed partial class InspectionCommands(
         Stream content,
         string fileName,
         string mediaType,
+        string siteId,
         CancellationToken ct = default)
     {
         try
         {
             return InspectionCommandResult<AttachmentUploadResponse>.Success(
-                await attachments.SaveAsync(content, fileName, mediaType, ct).ConfigureAwait(false));
+                await attachments.SaveAsync(content, fileName, mediaType, siteId, ct).ConfigureAwait(false));
         }
         catch (Exception exception) when (exception is ArgumentException or InvalidDataException)
         {
@@ -419,9 +442,12 @@ public sealed partial class InspectionCommands(
         if (request is null)
             return Fail("质量范围不能为空。", out error);
         var scopeId = request.ScopeId?.Trim() ?? string.Empty;
+        var siteId = request.SiteId?.Trim() ?? string.Empty;
         var scopeType = request.ScopeType?.Trim().ToLowerInvariant();
         if (!IdPattern().IsMatch(scopeId))
             return Fail("质量范围编号无效。", out error);
+        if (siteId.Length > 0 && !IdPattern().IsMatch(siteId))
+            return Fail("站点编号无效。", out error);
         if (scopeType is not ("analysis-window" or "production-run" or "material-lot"))
             return Fail("质量范围类型必须是时间窗口、生产运行段或物料批次。", out error);
         if (request.From == default || request.To == default || request.To <= request.From)
@@ -438,6 +464,7 @@ public sealed partial class InspectionCommands(
         value = request with
         {
             ScopeId = scopeId,
+            SiteId = siteId,
             ScopeType = scopeType,
             OutputItemId = request.OutputItemId.Trim(),
             SubjectType = request.SubjectType.Trim().ToLowerInvariant(),

@@ -164,10 +164,10 @@ Edge 使用至少一次传输，Platform 使用幂等写入，两者共同获得
 | 版本化配置 | 配置身份与版本；发布绑定指向站点/Edge | `ingestion_tasks`、`ingestion_task_bindings`、`process_data_models`、`process_analysis_plans`、`process_specification_versions`、`signal_definitions` | 定义可以复用；生效范围只能通过显式绑定表达，生产事件必须保存实际应用的配置引用 |
 | 运行派生数据 | `ExecutionId`，可追溯到站点摄入事实 | `execution_features`、`execution_phases`、分析物化与重算任务、`operation_context_snapshots` | 不作为独立租户边界；所有外部读取必须从已授权站点范围解析运行集合，禁止仅凭任意 ExecutionId 越站点读取 |
 | 研发项目与证据 | `ProjectId` + 项目成员/角色 | `process_research_*`、`research_*`、`mechanism_*`、`knowledge_*`、`dataset_quality_validation_reports` | 项目可以引用一个或多个获授权站点的数据范围；证据保留原站点与运行来源，不因复制进项目而改变归属 |
-| 质量与检验 | 运行/项目/检验计划关系 | `inspection_*`、`case_level_evaluations`、`model_evaluations`、`model_drift_readings` | 授权范围从关联运行或项目继承；附件和审核日志不能脱离父记录单独访问 |
+| 质量与检验 | `SiteId` + 运行/项目/检验计划关系 | `inspection_*`、`case_level_evaluations`、`model_evaluations`、`model_drift_readings` | 检验记录、范围和附件固化站点归属；授权仍从关联运行或项目继承，附件和审核日志不能脱离父记录单独访问 |
 | Agent 审计 | 发起用户 + 输入证据范围 | `agent_runs`、`agent_stream_events`、`golden_question_*`、`problem_cases` | Agent 记录不授予新数据权限；回放时重新验证用户、项目和站点范围 |
 
-当前数据库门禁已经强制六张规范摄入/投影表的 `site_id NOT NULL`。运行派生表保留 `ExecutionId` 归属，是为了避免重复存储可漂移的站点字段；对应 API 必须先用站点范围解析 ExecutionId。未来若测得该联接成为隔离审计或性能瓶颈，可以增加受外键/触发器约束的冗余 `SiteId`，但不能在应用层自行复制而缺少一致性约束。
+当前数据库门禁已经强制规范摄入/投影表以及 Edge 注册、检验记录、质量范围和检验附件的 `site_id NOT NULL`。Edge 注册不能跨站迁移；检验附件按站点和内容哈希去重，读取时重新校验岗位与站点。其余运行派生表保留 `ExecutionId` 归属，是为了避免重复存储可漂移的站点字段；对应 API 必须先用站点范围解析 ExecutionId。未来若测得该联接成为隔离审计或性能瓶颈，可以增加受外键/触发器约束的冗余 `SiteId`，但不能在应用层自行复制而缺少一致性约束。
 
 ### 乱序、缺口和迟到数据
 

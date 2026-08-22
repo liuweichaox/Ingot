@@ -1,7 +1,10 @@
+// 定义按站点归属的检验记录、测量值和分页查询契约。
 namespace Ingot.Contracts.Inspections;
 
 public sealed record CreateInspectionRecordRequest
 {
+
+    public string SiteId { get; init; } = string.Empty;
 
     public required Guid RecordId { get; init; }
 
@@ -64,6 +67,7 @@ public sealed record InspectionCharacteristicResult
 
 public sealed record InspectionAttachment
 {
+    public string SiteId { get; init; } = string.Empty;
     public required Guid AttachmentId { get; init; }
 
     public required string StorageRef { get; init; }
@@ -80,6 +84,7 @@ public sealed record InspectionAttachment
 public sealed record InspectionRecord
 {
     public required Guid RecordId { get; init; }
+    public string SiteId { get; init; } = string.Empty;
     public string? OutputItemId { get; init; }
     public required string ExecutionId { get; init; }
     public required string DefinitionCode { get; init; }
@@ -100,6 +105,7 @@ public sealed record InspectionRecord
 
 public sealed record InspectionRecordQuery
 {
+    public string? SiteId { get; init; }
     public string? OutputItemId { get; init; }
     public string? ExecutionId { get; init; }
     public string? DefinitionCode { get; init; }

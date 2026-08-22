@@ -1,3 +1,4 @@
+using Ingot.Contracts.Analytics;
 using Ingot.Contracts.Events;
 using Ingot.Contracts.Inspections;
 using Ingot.Contracts.ProcessConfiguration;
@@ -838,16 +839,38 @@ public sealed class QualityWorkflowTests
             if (query.AfterIngestId.HasValue) filtered = filtered.Where(item => item.IngestId > query.AfterIngestId.Value);
             return Task.FromResult<IReadOnlyList<PlatformProductionEvent>>(filtered.OrderBy(item => item.IngestId).Take(query.Limit).ToArray());
         }
+        public Task<IReadOnlyList<PlatformProductionEvent>> QueryByExecutionIdsAsync(
+            IReadOnlyCollection<string> executionIds,
+            CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<PlatformProductionEvent>>(rows
+                .Where(item => item.Event.ExecutionId is not null && executionIds.Contains(item.Event.ExecutionId))
+                .ToArray());
+        public Task<IReadOnlyList<PlatformProcessExecutionSummarySource>> QueryExecutionSummarySourcesAsync(
+            IReadOnlyCollection<string> executionIds,
+            CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<PlatformProcessExecutionSummarySource>>(rows
+                .Where(item => item.Event.ExecutionId is not null && executionIds.Contains(item.Event.ExecutionId))
+                .GroupBy(item => item.Event.ExecutionId!, StringComparer.Ordinal)
+                .Select(group => new PlatformProcessExecutionSummarySource
+                {
+                    ExecutionId = group.Key,
+                    Events = group.ToArray()
+                })
+                .ToArray());
         public Task<PlatformEventScopeStats> GetScopeStatsAsync(PlatformEventQuery query, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<bool> CanConnectAsync(CancellationToken ct = default) => Task.FromResult(true);
+        public Task<DataObjectPage> QueryDataObjectsAsync(DataObjectQuery query, CancellationToken ct = default)
+            => Task.FromResult(new DataObjectPage { Limit = query.Limit, Offset = query.Offset });
 
         public Task<IReadOnlyList<PlatformProductionEvent>> QueryCompletedAsync(
             string? executionId,
+            string? siteId,
             CancellationToken ct = default)
             => QueryAsync(new PlatformEventQuery
             {
                 EventType = "process.execution.completed",
                 ExecutionId = executionId,
+                SiteId = siteId,
                 Limit = int.MaxValue
             }, ct);
     }
@@ -932,8 +955,9 @@ public sealed class QualityWorkflowTests
         public Task<InspectionRecord?> GetAsync(Guid recordId, CancellationToken ct = default) => Task.FromResult(records.FirstOrDefault(item => item.RecordId == recordId));
         public Task<InspectionRecord?> GetCorrectionForAsync(Guid recordId, CancellationToken ct = default)
             => Task.FromResult(records.FirstOrDefault(item => item.SupersedesRecordId == recordId));
-        public Task<IReadOnlyList<InspectionScope>> ListScopesAsync(CancellationToken ct = default)
-            => Task.FromResult<IReadOnlyList<InspectionScope>>(scopes ?? []);
+        public Task<IReadOnlyList<InspectionScope>> ListScopesAsync(string? siteId, CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<InspectionScope>>((scopes ?? [])
+                .Where(item => string.IsNullOrWhiteSpace(siteId) || item.SiteId == siteId).ToArray());
         public Task<InspectionScope?> GetScopeAsync(string scopeId, CancellationToken ct = default)
             => Task.FromResult((scopes ?? []).FirstOrDefault(item => item.ScopeId == scopeId));
         public Task<InspectionScope> UpsertScopeAsync(InspectionScope scope, CancellationToken ct = default)
@@ -949,8 +973,12 @@ public sealed class QualityWorkflowTests
                 Offset = query.Offset,
                 Limit = query.Limit
             });
-        public Task<IReadOnlyList<InspectionRecord>> QueryAllByExecutionIdsAsync(IReadOnlyCollection<string> executionIds, CancellationToken ct = default)
-            => Task.FromResult<IReadOnlyList<InspectionRecord>>(records.Where(item => executionIds.Contains(item.ExecutionId)).ToArray());
+        public Task<IReadOnlyList<InspectionRecord>> QueryAllByExecutionIdsAsync(
+            IReadOnlyCollection<string> executionIds,
+            string? siteId,
+            CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<InspectionRecord>>(records.Where(item => executionIds.Contains(item.ExecutionId) &&
+                (string.IsNullOrWhiteSpace(siteId) || item.SiteId == siteId)).ToArray());
     }
 
     private sealed class FakeReviewStore(IReadOnlyDictionary<Guid, InspectionReview>? latest = null) : IInspectionReviewStore
@@ -1093,5 +1121,9 @@ public sealed class QualityWorkflowTests
         public Task<IReadOnlyList<ProcessAnalysisPlan>> ListAnalysisPlansAsync(CancellationToken ct = default) => Task.FromResult<IReadOnlyList<ProcessAnalysisPlan>>([SelectedPlan, WindowPlan]);
         public Task<ProcessAnalysisPlan?> GetAnalysisPlanAsync(string planId, int version, CancellationToken ct = default) => Task.FromResult<ProcessAnalysisPlan?>(SelectedPlan);
         public Task<bool> DeleteAnalysisPlanAsync(string planId, int version, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<ScenarioPackage> UpsertScenarioPackageAsync(ScenarioPackage value, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<IReadOnlyList<ScenarioPackage>> ListScenarioPackagesAsync(CancellationToken ct = default) => Task.FromResult<IReadOnlyList<ScenarioPackage>>([]);
+        public Task<ScenarioPackage?> GetScenarioPackageAsync(string packageId, int version, CancellationToken ct = default) => Task.FromResult<ScenarioPackage?>(null);
+        public Task<bool> DeleteScenarioPackageAsync(string packageId, int version, CancellationToken ct = default) => Task.FromResult(false);
     }
 }

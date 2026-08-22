@@ -34,7 +34,7 @@ Ingot 是开源工艺追因与优化系统。它把一次真实运行的生产�
 | 工艺知识建设人员 | [机理知识设计](mechanism-knowledge.md) | [分析与优化](optimization.md) |
 | 平台运维与安全人员 | [生产架构](production-architecture.md) | [部署运维](deployment.md) |
 | 项目负责人或验证负责人 | [场景验证](rollout.md) | [发展规划](project-plan.md) |
-| 算法或验证贡献者 | [公开数据实验效率验证](../tools/public-validation/README.md) | [分析与优化](optimization.md) |
+| 算法或验证贡献者 | [公开数据实验效率验证](https://github.com/liuweichaox/Ingot/blob/main/tools/public-validation/README.md) | [分析与优化](optimization.md) |
 | 贡献者与集成人员 | [系统设计](design.md) | [生产架构](production-architecture.md) |
 | 对外内容维护者 | [品牌规范](brand.md) | [文档状态](#文档状态) |
 

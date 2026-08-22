@@ -1,4 +1,5 @@
 
+// 在站点和扫描上限内组装质量分析记录。
 using Ingot.Contracts.Analytics;
 using Ingot.Contracts.Events;
 using Ingot.Contracts.Inspections;
@@ -13,19 +14,24 @@ public sealed class QualityAnalysisService(
     IInspectionRecordStore inspections,
     IPlatformEventStore events) : IQualityAnalysisService
 {
+    private const int MaximumScannedRecords = 10_000;
+
     public async Task<QualityAnalysisPage> QueryAsync(
         QualityAnalysisQuery query,
         CancellationToken ct = default)
     {
         var records = InspectionRecordSet.Effective(await QueryAllRecordsAsync(query, ct).ConfigureAwait(false));
-        var scopes = (await inspections.ListScopesAsync(ct).ConfigureAwait(false))
+        var scopes = (await inspections.ListScopesAsync(query.SiteId, ct).ConfigureAwait(false))
             .ToDictionary(static scope => scope.ScopeId, StringComparer.Ordinal);
         var operationIds = records
             .Select(static record => record.ExecutionId)
             .Where(id => !scopes.ContainsKey(id))
             .Distinct(StringComparer.Ordinal)
             .ToArray();
-        var operationEvents = await events.QueryByExecutionIdsAsync(operationIds, ct).ConfigureAwait(false);
+        var operationEvents = (await events.QueryByExecutionIdsAsync(operationIds, ct).ConfigureAwait(false))
+            .Where(item => string.IsNullOrWhiteSpace(query.SiteId) || string.Equals(
+                item.SiteId, query.SiteId, StringComparison.OrdinalIgnoreCase))
+            .ToArray();
         var eventsByOperation = operationEvents
             .Where(static row => !string.IsNullOrWhiteSpace(row.Event.ExecutionId))
             .GroupBy(static row => row.Event.ExecutionId!, StringComparer.Ordinal)
@@ -62,11 +68,18 @@ public sealed class QualityAnalysisService(
         {
             var page = await inspections.QueryPageAsync(new InspectionRecordQuery
             {
+                SiteId = query.SiteId,
                 From = query.From,
                 To = query.To,
+                Outcome = query.Outcome,
                 Limit = 500,
                 Offset = offset
             }, ct).ConfigureAwait(false);
+            if (page.Total > MaximumScannedRecords)
+            {
+                throw new InspectionQueryLimitExceededException(
+                    $"质量分析命中 {page.Total} 条检测记录，超过 {MaximumScannedRecords} 条扫描上限，请增加时间、结果或对象筛选条件。");
+            }
             result.AddRange(page.Data);
             offset += page.Data.Count;
             if (offset >= page.Total || page.Data.Count == 0)

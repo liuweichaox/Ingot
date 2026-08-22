@@ -1,22 +1,21 @@
+// 编排运行分析回填、聚合查询和失败任务重放，不直接访问数据库。
 using Ingot.Contracts.Events;
 
 namespace Ingot.Platform.Application.ProcessExecutions;
 
+/// <summary>持久化运行分析运维任务和特征聚合。</summary>
 public interface IProcessExecutionAnalysisOperationsStore
 {
     Task<ProcessExecutionAnalysisBackfillJob> AddBackfillJobAsync(
         ProcessExecutionAnalysisBackfillJob job,
-        CancellationToken ct = default) =>
-        throw new NotSupportedException("当前过程执行分析存储不支持回填任务。");
+        CancellationToken ct = default);
 
     Task<ProcessExecutionAnalysisBackfillJob?> GetBackfillJobAsync(
         Guid jobId,
-        CancellationToken ct = default) =>
-        Task.FromResult<ProcessExecutionAnalysisBackfillJob?>(null);
+        CancellationToken ct = default);
 
     Task<IReadOnlyList<ProcessExecutionAnalysisBackfillJob>> ListBackfillJobsAsync(
-        CancellationToken ct = default) =>
-        Task.FromResult<IReadOnlyList<ProcessExecutionAnalysisBackfillJob>>([]);
+        CancellationToken ct = default);
 
     Task<IReadOnlyList<ProcessExecutionFeatureAggregate>> QueryFeatureAggregatesAsync(
         string? signalCode,
@@ -25,12 +24,11 @@ public interface IProcessExecutionAnalysisOperationsStore
         DateTimeOffset? from,
         DateTimeOffset? to,
         int limit,
-        CancellationToken ct = default) =>
-        Task.FromResult<IReadOnlyList<ProcessExecutionFeatureAggregate>>([]);
+        CancellationToken ct = default);
 
     Task<bool> ReplayFailedRecomputeAsync(
         string executionId,
-        CancellationToken ct = default) => Task.FromResult(false);
+        CancellationToken ct = default);
 }
 
 public enum ProcessExecutionReplayResult
@@ -40,6 +38,7 @@ public enum ProcessExecutionReplayResult
     FailedJobNotFound
 }
 
+/// <summary>在授权运行范围内编排分析回填和可恢复重放。</summary>
 public sealed class ProcessExecutionAnalysisOperationsService(
     IProcessExecutionAnalysisOperationsStore store,
     IExecutionBoundaryStore boundaries,

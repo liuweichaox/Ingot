@@ -1,4 +1,5 @@
 
+// 提供站点隔离的检验记录写入和分页查询接口。
 using Ingot.Contracts.Inspections;
 using Ingot.Platform.Api.Agents;
 using Ingot.Platform.Application.Inspections;
@@ -23,7 +24,12 @@ public sealed class InspectionRecordsController(
             return AuthenticationRequired("需要平台统一认证。");
         if (!identity.HasAnyRole(PlatformRoles.QualityInspector, PlatformRoles.QualityReviewer, PlatformRoles.PlatformAdministrator))
             return AuthorizationDenied();
-        var result = await commands.CreateRecordAsync(request, identity.UserId, ct).ConfigureAwait(false);
+        var siteFailure = PlatformSiteScope.Resolve(identity, request?.SiteId, false, out var siteId);
+        if (siteFailure == SiteScopeFailure.Forbidden)
+            return AuthorizationDenied("当前身份无权访问该站点。", ("siteId", request?.SiteId));
+        if (siteFailure == SiteScopeFailure.Missing)
+            return InvalidRequest("创建检测记录必须指定当前身份有权访问的 siteId。");
+        var result = await commands.CreateRecordAsync(request, identity.UserId, ct, siteId).ConfigureAwait(false);
         return result.Status switch
         {
             InspectionCommandStatus.Created => CreatedAtAction(
@@ -45,7 +51,11 @@ public sealed class InspectionRecordsController(
         if (!identity.HasAnyRole(PlatformRoles.QualityRead))
             return AuthorizationDenied();
         var record = await queries.GetRecordAsync(recordId, ct).ConfigureAwait(false);
-        return record is null ? ResourceNotFound() : Ok(record);
+        if (record is null)
+            return ResourceNotFound();
+        return identity.CanAccessSite(record.SiteId)
+            ? Ok(record)
+            : ResourceNotFound();
     }
 
     [HttpGet]
@@ -58,15 +68,22 @@ public sealed class InspectionRecordsController(
         [FromQuery] DateTimeOffset? to,
         [FromQuery] int limit = 100,
         [FromQuery] int offset = 0,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        [FromQuery] string? siteId = null)
     {
         var identity = userResolver.ResolveIdentity(User);
         if (identity is null)
             return AuthenticationRequired("需要平台统一认证。");
         if (!identity.HasAnyRole(PlatformRoles.QualityRead))
             return AuthorizationDenied();
+        var siteFailure = PlatformSiteScope.Resolve(identity, siteId, true, out var authorizedSiteId);
+        if (siteFailure == SiteScopeFailure.Forbidden)
+            return AuthorizationDenied("当前身份无权访问该站点。", ("siteId", siteId));
+        if (siteFailure == SiteScopeFailure.Missing)
+            return InvalidRequest("必须指定当前身份有权访问的 siteId。");
         var query = new InspectionRecordQuery
         {
+            SiteId = authorizedSiteId,
             OutputItemId = outputItemId?.Trim(),
             ExecutionId = executionId?.Trim(),
             DefinitionCode = definitionCode?.Trim().ToLowerInvariant(),

@@ -37,14 +37,39 @@ public sealed class InspectionAttachmentsControllerTests
         using var copy = new MemoryStream();
         await content.CopyToAsync(copy);
         Assert.Equal(bytes, copy.ToArray());
-        Assert.Contains("inline", controller.Response.Headers.ContentDisposition.ToString());
+        Assert.Contains("attachment", controller.Response.Headers.ContentDisposition.ToString());
+        Assert.Equal("default-src 'none'; sandbox", controller.Response.Headers.ContentSecurityPolicy.ToString());
         Assert.Equal(attachmentId, reviews.OpenedAttachmentId);
     }
+
+    [Theory]
+    [InlineData("sample.png", "89504e470d0a1a0a", "image/png")]
+    [InlineData("sample.jpg", "ffd8ffe000104a46", "image/jpeg")]
+    [InlineData("sample.tiff", "49492a0008000000", "image/tiff")]
+    [InlineData("sample.pdf", "255044462d312e37", "application/pdf")]
+    public void AttachmentPolicy_DetectsSupportedFileSignatures(
+        string fileName,
+        string prefixHex,
+        string expectedMediaType)
+    {
+        var prefix = Convert.FromHexString(prefixHex);
+
+        Assert.Equal(expectedMediaType, InspectionAttachmentPolicy.DetectMediaType(fileName, prefix));
+    }
+
+    [Theory]
+    [InlineData("payload.html", "3c68746d6c3e")]
+    [InlineData("payload.svg", "3c7376673e")]
+    [InlineData("fake.png", "255044462d312e37")]
+    public void AttachmentPolicy_RejectsActiveOrMismatchedContent(string fileName, string prefixHex)
+        => Assert.Throws<InvalidDataException>(() =>
+            InspectionAttachmentPolicy.DetectMediaType(fileName, Convert.FromHexString(prefixHex)));
 
     private sealed class StubAttachmentStore(Guid attachmentId, byte[] bytes) : IInspectionAttachmentStore
     {
         private readonly InspectionAttachment _attachment = new()
         {
+            SiteId = "site-test",
             AttachmentId = attachmentId,
             StorageRef = "attachment://sha256/test/original.tiff",
             Sha256 = new string('a', 64),
@@ -59,6 +84,7 @@ public sealed class InspectionAttachmentsControllerTests
             Stream content,
             string fileName,
             string mediaType,
+            string siteId,
             CancellationToken ct = default) => throw new NotSupportedException();
 
         public Task<InspectionAttachment?> GetAsync(Guid id, CancellationToken ct = default)

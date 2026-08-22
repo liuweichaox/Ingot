@@ -1,3 +1,4 @@
+// 定义检验复核、审计、任务和质量范围契约。
 
 namespace Ingot.Contracts.Inspections;
 
@@ -58,6 +59,7 @@ public sealed record InspectionAuditEntry
 
 public sealed record InspectionTask
 {
+    public string SiteId { get; init; } = string.Empty;
     public string ScopeType { get; init; } = "production-execution";
     public required string ExecutionId { get; init; }
 
@@ -92,6 +94,7 @@ public sealed record InspectionTask
 
 public sealed record InspectionScope
 {
+    public string SiteId { get; init; } = string.Empty;
     public required string ScopeId { get; init; }
     public string ScopeType { get; init; } = "analysis-window";
     public required string OutputItemId { get; init; }

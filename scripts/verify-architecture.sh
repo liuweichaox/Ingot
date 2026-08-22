@@ -140,6 +140,61 @@ else
   echo "✓ [current-product-only]"
 fi
 
+retired_route_hits=$(grep -nE \
+  '<Route path="/(production-setup|quality-plans|process-improvement|profiles|users)"' \
+  apps/platform/src/App.jsx 2>/dev/null || true)
+if [[ -n "$retired_route_hits" ]]; then
+  echo "✗ [canonical-platform-routes] 首次生产发布前不得恢复开发期路由别名"
+  echo "$retired_route_hits" | sed 's/^/    /'
+  fail=1
+else
+  echo "✓ [canonical-platform-routes]"
+fi
+
+legacy_scope_hits=$(grep -rn '__legacy_unscoped__' \
+  src/platform/Ingot.Platform.Infrastructure/Migrations/sql \
+  --include='*.sql' 2>/dev/null || true)
+if [[ -n "$legacy_scope_hits" ]]; then
+  echo "✗ [fail-closed-site-scope] 站点迁移不得用占位租户承接无法归属的数据"
+  echo "$legacy_scope_hits" | sed 's/^/    /'
+  fail=1
+else
+  echo "✓ [fail-closed-site-scope]"
+fi
+
+capability_default_hits=$(grep -nE 'Task\.FromResult|throw new NotSupportedException' \
+  src/platform/Ingot.Platform.Application/ProcessConfiguration/IProcessConfigurationStore.cs \
+  src/platform/Ingot.Platform.Application/ProcessResearch/ProcessOptimizerContracts.cs \
+  src/platform/Ingot.Platform.Application/ProcessResearch/IProcessResearchStore.cs \
+  src/platform/Ingot.Platform.Application/ResearchAssets/IResearchAssetStore.cs \
+  src/platform/Ingot.Platform.Application/ProcessExecutions/ProcessExecutionAnalysisOperationsService.cs \
+  src/platform/Ingot.Platform.Infrastructure/ProcessExecutions/IProcessExecutionAnalysisMaterializationStore.cs \
+  src/platform/Ingot.Platform.Application/Inspections/IInspectionProductionEventReader.cs \
+  src/platform/Ingot.Platform.Application/Inspections/IInspectionRecordStore.cs \
+  src/platform/Ingot.Platform.Application/Events/IPlatformEventStore.cs \
+  src/platform/Ingot.Platform.Application/ProcessExecutions/IExecutionBoundaryStore.cs \
+  src/platform/Ingot.Platform.Application/ProcessExecutions/IExecutionComparisonService.cs \
+  2>/dev/null || true)
+interface_body_hits=$(grep -nE 'async Task|^[[:space:]]+[^/].*=>' \
+  src/platform/Ingot.Platform.Application/ProcessConfiguration/IProcessConfigurationStore.cs \
+  src/platform/Ingot.Platform.Application/ProcessResearch/IProcessResearchStore.cs \
+  src/platform/Ingot.Platform.Application/ResearchAssets/IResearchAssetStore.cs \
+  src/platform/Ingot.Platform.Infrastructure/ProcessExecutions/IProcessExecutionAnalysisMaterializationStore.cs \
+  src/platform/Ingot.Platform.Application/Inspections/IInspectionProductionEventReader.cs \
+  src/platform/Ingot.Platform.Application/Inspections/IInspectionRecordStore.cs \
+  src/platform/Ingot.Platform.Application/Events/IPlatformEventStore.cs \
+  src/platform/Ingot.Platform.Application/ProcessExecutions/IExecutionBoundaryStore.cs \
+  src/platform/Ingot.Platform.Application/ProcessExecutions/IExecutionComparisonService.cs \
+  2>/dev/null || true)
+if [[ -n "$capability_default_hits" || -n "$interface_body_hits" ]]; then
+  echo "✗ [explicit-port-capabilities] 端口不得用默认空结果或 NotSupported 掩盖实现缺口"
+  echo "$capability_default_hits" | sed 's/^/    /'
+  echo "$interface_body_hits" | sed 's/^/    /'
+  fail=1
+else
+  echo "✓ [explicit-port-capabilities]"
+fi
+
 baseline_upgrade_hits=$(grep -nE \
   '\b(RENAME|DROP (TABLE|VIEW|COLUMN))\b|to_regclass|legacy_' \
   src/platform/Ingot.Platform.Infrastructure/Migrations/sql/0001_baseline.sql 2>/dev/null || true)

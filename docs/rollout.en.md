@@ -120,6 +120,8 @@ Enter only when:
 
 Begin with one recommendation at a time. Update only after its quality outcome is complete. Any safety anomaly, data drift, or run-linkage failure pauses recommendations.
 
+A laboratory-validated operating region cannot be released directly to production. Release requires at least three valid source-data runs from completed controlled-online experiments, all within the candidate region and meeting objective and safety constraints; the controlled decision maker and production release reviewer must be different people.
+
 ## Measures
 
 ### Data trust

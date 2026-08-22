@@ -1,13 +1,19 @@
+// 提供不依赖外部模型服务的确定性分析客户端和入口路由。
 using System.Text.Json;
 using Ingot.Contracts.Agents;
 
 namespace Ingot.Agent;
 
+/// <summary>使用固定规则生成可复现的分析计划和答案。</summary>
 public sealed class DeterministicModelClient : IModelClient
 {
+    public string EntryPoint => "*";
+
     public string Provider => "Deterministic";
 
     public string Model => "deterministic-v1";
+
+    public string ModelFor(ModelRole role) => Model;
 
     public Task<ModelCallResult<AnalysisPlan>> ResolveIntentAsync(
         CreateChatRunRequest request,
@@ -253,6 +259,7 @@ public sealed class DeterministicModelClient : IModelClient
         => terms.Any(term => value.Contains(term, StringComparison.OrdinalIgnoreCase));
 }
 
+/// <summary>优先选择入口专用模型，并以显式通配客户端作为统一后备。</summary>
 public sealed class DefaultModelRouter(IEnumerable<IModelClient> clients) : IModelRouter
 {
     private readonly IReadOnlyList<IModelClient> _clients = clients.ToArray();

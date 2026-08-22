@@ -1,4 +1,4 @@
-
+// 定义产品壳层、规范路由、导航结构、权限入口和全局功能搜索。
 import { Dialog, DialogBackdrop, DialogPanel, Menu, MenuButton, MenuItem, MenuItems } from "@headlessui/react";
 import {
   AdjustmentsHorizontalIcon,
@@ -489,20 +489,16 @@ function AppRoutes({ identity, canConfigure }) {
       <Route path="/configuration/components" element={<Pages.ProductionSetupPage section="component" canWrite={canConfigure} />} />
       <Route path="/configuration/tooling-types" element={<Pages.ProductionSetupPage section="type" canWrite={canConfigure} />} />
       <Route path="/configuration/tooling-assemblies" element={<Pages.ProductionSetupPage section="assembly" canWrite={canConfigure} />} />
-      <Route path="/production-setup" element={<Navigate to="/production/changeover" replace />} />
       <Route path="/inspections" element={<Pages.InspectionsPage />} />
       <Route path="/quality-analysis" element={<Pages.QualityAnalysisPage />} />
-      <Route path="/quality-plans" element={<Navigate to="/configuration/quality-plans" replace />} />
       <Route path="/configuration/inspection-definitions" element={<Pages.InspectionDefinitionsPage canWrite={canConfigure} />} />
       <Route path="/configuration/quality-plans" element={<Pages.QualityPlansPage canWrite={canConfigure} />} />
       <Route path="/comparisons" element={<Pages.ExecutionComparisonPage />} />
       <Route path="/golden-questions" element={<RequireRole identity={identity} roles={["platform.admin"]}><Pages.GoldenQuestionsPage /></RequireRole>} />
       <Route path="/data-quality" element={<Pages.DataQualityPage />} />
-      <Route path="/process-improvement" element={<Navigate to="/research-projects" replace />} />
       <Route path="/configuration" element={<Pages.ConfigurationHubPage canWrite={canConfigure} />} />
       <Route path="/configuration/scenario-packages" element={<Pages.ScenarioPackagesPage canWrite={canConfigure} />} />
       <Route path="/configuration/process-analysis-plans" element={<Pages.ProcessAnalysisPlansPage canWrite={canConfigure} />} />
-      <Route path="/profiles" element={<Navigate to="/configuration/process-data-models" replace />} />
       <Route path="/configuration/process-data-models" element={<Pages.ProcessDataModelsPage canWrite={canConfigure} />} />
       <Route path="/configuration/process-specifications" element={<Pages.ProcessSpecificationsPage canWrite={canConfigure} />} />
       <Route path="/configuration/ingestion-tasks" element={<IngestionTasksPage canWrite={canConfigure} />} />
@@ -512,7 +508,6 @@ function AppRoutes({ identity, canConfigure }) {
       <Route path="/platform-metrics" element={<Pages.MetricsPage />} />
       <Route path="/logs" element={<RequireRole identity={identity} roles={["platform.admin"]}><Pages.LogsPage /></RequireRole>} />
       <Route path="/identity/users" element={<RequireRole identity={identity} roles={["platform.admin"]}><Pages.UsersPage /></RequireRole>} />
-      <Route path="/users" element={<Navigate to="/identity/users" replace />} />
       <Route path="*" element={<Pages.NotFoundPage />} />
     </Routes>
   );

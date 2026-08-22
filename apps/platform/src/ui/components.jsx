@@ -1,3 +1,4 @@
+// 提供平台统一、可访问且具备稳定列表标识的基础界面组件。
 import { Dialog, DialogBackdrop, DialogPanel, DialogTitle } from "@headlessui/react";
 import { ShieldCheckIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { useEffect, useRef, useState } from "react";
@@ -400,6 +401,9 @@ export function RequestError({ error, onRetry, title }) {
 export function DataTable({ columns, rows, keyField = "id", getRowKey, onRowClick }) {
   if (!rows?.length) return <EmptyState />;
   const minimumWidth = columns.length >= 8 ? "min-w-[1080px]" : columns.length >= 5 ? "min-w-[760px]" : "min-w-full";
+  const rowKeys = rows.map((row, index) => getRowKey ? getRowKey(row, index) : row[keyField] ?? index);
+  const rowKeyCounts = new Map();
+  rowKeys.forEach(key => rowKeyCounts.set(key, (rowKeyCounts.get(key) || 0) + 1));
   return (
     <div className="relative overflow-x-auto rounded-xl border border-slate-200 bg-white scrollbar-thin" role="region" aria-label="可横向滚动的数据表" tabIndex={columns.length >= 5 ? 0 : undefined}>
       {columns.length >= 5 && <p className="sticky left-0 top-0 z-20 border-b border-slate-200 bg-blue-50 px-3 py-1.5 text-xs text-blue-700 sm:hidden">左右滑动查看全部字段；操作列固定在右侧。</p>}
@@ -424,7 +428,7 @@ export function DataTable({ columns, rows, keyField = "id", getRowKey, onRowClic
         <tbody className="divide-y divide-slate-100">
           {rows.map((row, index) => (
             <tr
-              key={getRowKey ? getRowKey(row, index) : row[keyField] ?? index}
+              key={rowKeyCounts.get(rowKeys[index]) > 1 ? `${rowKeys[index]}:${index}` : rowKeys[index]}
               className={cx(
                 "text-slate-700 transition-colors hover:bg-slate-50/80",
                 onRowClick && "cursor-pointer hover:bg-blue-50/50 focus-visible:bg-blue-50 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-blue-600",

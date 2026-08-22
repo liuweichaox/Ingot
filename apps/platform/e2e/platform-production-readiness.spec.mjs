@@ -2,6 +2,7 @@
 import { expect, test } from "@playwright/test";
 
 const demoApi = `http://127.0.0.1:${process.env.INGOT_E2E_API_PORT || "4010"}`;
+const renderingErrors = new WeakMap();
 
 async function setScenario(request, mode = "normal") {
   const response = await request.get(`${demoApi}/__demo/state?mode=${mode}`);
@@ -21,8 +22,20 @@ test.beforeEach(async ({ request }) => {
   await setScenario(request);
 });
 
-test.afterEach(async ({ request }) => {
+test.beforeEach(async ({ page }) => {
+  const errors = [];
+  renderingErrors.set(page, errors);
+  page.on("pageerror", error => errors.push(error.message));
+  page.on("console", message => {
+    if (message.type() === "error" && message.text().includes("unique \"key\" prop")) {
+      errors.push(message.text());
+    }
+  });
+});
+
+test.afterEach(async ({ page, request }) => {
   await setScenario(request);
+  expect(renderingErrors.get(page) || [], "页面不应出现未处理异常或 React 列表标识警告").toEqual([]);
 });
 
 test("核心数据接口和主要页面使用完整模拟场景", async ({ page, request }) => {

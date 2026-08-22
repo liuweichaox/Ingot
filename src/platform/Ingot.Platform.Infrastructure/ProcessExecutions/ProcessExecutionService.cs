@@ -1,4 +1,4 @@
-
+// 组装运行事件、轨迹、上下文、检验和分析物化结果供应用层查询。
 using Ingot.Contracts.Events;
 using Ingot.Contracts.Inspections;
 using Ingot.Platform.Application.Events;
@@ -111,7 +111,7 @@ public sealed class ProcessExecutionService(
                 static group => (IReadOnlyList<PlatformProductionEvent>)group.ToArray(),
                 StringComparer.Ordinal);
         var records = InspectionRecordSet.Effective(
-            await inspections.QueryAllByExecutionIdsAsync(ids, ct).ConfigureAwait(false));
+            await inspections.QueryAllByExecutionIdsAsync(ids, null, ct).ConfigureAwait(false));
         var latestReviews = await reviews.GetLatestByInspectionRecordIdsAsync(
             records.Select(static record => record.RecordId).ToArray(), ct).ConfigureAwait(false);
         var plans = await masterData.ListInspectionPlansAsync(ct).ConfigureAwait(false);
@@ -173,7 +173,7 @@ public sealed class ProcessExecutionService(
         var sources = await events.QueryExecutionSummarySourcesAsync(ids, ct).ConfigureAwait(false);
         var sourceByExecution = sources.ToDictionary(static source => source.ExecutionId, StringComparer.Ordinal);
         var records = InspectionRecordSet.Effective(
-            await inspections.QueryAllByExecutionIdsAsync(ids, ct).ConfigureAwait(false));
+            await inspections.QueryAllByExecutionIdsAsync(ids, null, ct).ConfigureAwait(false));
         var latestReviews = await reviews.GetLatestByInspectionRecordIdsAsync(
             records.Select(static record => record.RecordId).ToArray(), ct).ConfigureAwait(false);
         var plans = await masterData.ListInspectionPlansAsync(ct).ConfigureAwait(false);

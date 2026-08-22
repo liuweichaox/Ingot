@@ -1,9 +1,11 @@
 // 验证平台组件 ProcessExecutionAnalysisMaterializer 的成功、拒绝和安全边界。
 
 using Ingot.Contracts.ProcessConfiguration;
+using Ingot.Contracts.Events;
 using Ingot.Platform.Infrastructure.ProcessExecutions;
 using Ingot.Platform.Infrastructure.TimeSeries;
 using Microsoft.Extensions.Logging.Abstractions;
+using Npgsql;
 using Xunit;
 
 namespace Ingot.Core.Tests.Platform;
@@ -224,5 +226,62 @@ public sealed class ProcessExecutionAnalysisMaterializerTests
                 _snapshots.Remove(key);
             return Task.CompletedTask;
         }
+
+        public Task MarkDirtyAsync(
+            NpgsqlConnection connection,
+            NpgsqlTransaction transaction,
+            IReadOnlyCollection<string> executionIds,
+            long invalidatedSourceMaxIngestId,
+            string reason,
+            CancellationToken ct = default)
+            => MarkDirtyAsync(executionIds, invalidatedSourceMaxIngestId, reason, ct);
+
+        public Task<ProcessExecutionAnalysisBackfillJob> AddBackfillJobAsync(
+            ProcessExecutionAnalysisBackfillJob job,
+            CancellationToken ct = default) => Task.FromResult(job);
+
+        public Task<ProcessExecutionAnalysisBackfillJob?> GetBackfillJobAsync(
+            Guid jobId,
+            CancellationToken ct = default) => Task.FromResult<ProcessExecutionAnalysisBackfillJob?>(null);
+
+        public Task<IReadOnlyList<ProcessExecutionAnalysisBackfillJob>> ListBackfillJobsAsync(
+            CancellationToken ct = default) => Task.FromResult<IReadOnlyList<ProcessExecutionAnalysisBackfillJob>>([]);
+
+        public Task<IReadOnlyList<ProcessExecutionFeatureAggregate>> QueryFeatureAggregatesAsync(
+            string? signalCode,
+            string? phaseCode,
+            string? featureCode,
+            DateTimeOffset? from,
+            DateTimeOffset? to,
+            int limit,
+            CancellationToken ct = default) => Task.FromResult<IReadOnlyList<ProcessExecutionFeatureAggregate>>([]);
+
+        public Task<bool> ReplayFailedRecomputeAsync(string executionId, CancellationToken ct = default)
+            => Task.FromResult(false);
+
+        public Task<ProcessExecutionAnalysisBackfillLease?> ClaimBackfillJobAsync(
+            TimeSpan leaseTimeout,
+            CancellationToken ct = default) => Task.FromResult<ProcessExecutionAnalysisBackfillLease?>(null);
+
+        public Task<bool> SaveClaimedBackfillJobAsync(
+            ProcessExecutionAnalysisBackfillJob job,
+            Guid leaseId,
+            bool releaseLease,
+            CancellationToken ct = default) => Task.FromResult(false);
+
+        public Task<ProcessExecutionAnalysisRecomputeLease?> ClaimRecomputeAsync(
+            TimeSpan leaseTimeout,
+            CancellationToken ct = default) => Task.FromResult<ProcessExecutionAnalysisRecomputeLease?>(null);
+
+        public Task<bool> CompleteRecomputeAsync(string executionId, Guid leaseId, CancellationToken ct = default)
+            => Task.FromResult(false);
+
+        public Task<bool> RetryRecomputeAsync(
+            string executionId,
+            Guid leaseId,
+            TimeSpan delay,
+            string error,
+            int maxAttempts,
+            CancellationToken ct = default) => Task.FromResult(false);
     }
 }

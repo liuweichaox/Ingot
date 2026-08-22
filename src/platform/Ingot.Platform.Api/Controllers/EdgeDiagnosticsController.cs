@@ -1,4 +1,6 @@
+// 在站点授权边界内代理边缘节点诊断信息。
 using System.Net.Http.Headers;
+using Ingot.Platform.Api.Agents;
 using Ingot.Platform.Api.Events;
 using Ingot.Platform.Infrastructure.Services;
 using Microsoft.AspNetCore.Mvc;
@@ -10,11 +12,14 @@ namespace Ingot.Platform.Api.Controllers;
 public sealed class EdgeDiagnosticsController(
     EdgeRegistry registry,
     EdgeDiagnosticsTokenProvider diagnosticsTokenProvider,
-    IHttpClientFactory httpClientFactory) : PlatformApiController
+    IHttpClientFactory httpClientFactory,
+    PlatformUserResolver userResolver) : PlatformApiController
 {
     [HttpGet("metrics/raw")]
     public async Task<IActionResult> GetEdgeMetricsRaw([FromRoute] string edgeId, CancellationToken cancellationToken)
     {
+        var denied = await DeniedEdgeAsync(edgeId, cancellationToken).ConfigureAwait(false);
+        if (denied is not null) return denied;
         var reported = (await registry.FindAsync(edgeId, cancellationToken).ConfigureAwait(false))?.Acquisition;
         if (reported is not null)
             return Ok(reported);
@@ -35,6 +40,8 @@ public sealed class EdgeDiagnosticsController(
     [HttpGet("metrics/json")]
     public async Task<IActionResult> GetEdgeMetricsJson([FromRoute] string edgeId, CancellationToken cancellationToken)
     {
+        var denied = await DeniedEdgeAsync(edgeId, cancellationToken).ConfigureAwait(false);
+        if (denied is not null) return denied;
         var baseUrl = GetEdgeBaseUrlOrNull(edgeId);
         if (baseUrl == null) return InvalidRequest("该采集节点未配置可信诊断地址，无法代理 metrics。");
 
@@ -64,6 +71,8 @@ public sealed class EdgeDiagnosticsController(
         [FromQuery] int pageSize = 100,
         CancellationToken cancellationToken = default)
     {
+        var denied = await DeniedEdgeAsync(edgeId, cancellationToken).ConfigureAwait(false);
+        if (denied is not null) return denied;
         var baseUrl = GetEdgeBaseUrlOrNull(edgeId);
         if (baseUrl == null) return InvalidRequest("该采集节点未配置可信诊断地址，无法代理 logs。");
 
@@ -103,6 +112,8 @@ public sealed class EdgeDiagnosticsController(
     [HttpGet("logs/levels")]
     public async Task<IActionResult> GetEdgeLogLevels([FromRoute] string edgeId, CancellationToken cancellationToken)
     {
+        var denied = await DeniedEdgeAsync(edgeId, cancellationToken).ConfigureAwait(false);
+        if (denied is not null) return denied;
         var baseUrl = GetEdgeBaseUrlOrNull(edgeId);
         if (baseUrl == null) return InvalidRequest("该采集节点未配置可信诊断地址，无法代理 logs。");
 
@@ -120,6 +131,8 @@ public sealed class EdgeDiagnosticsController(
         [FromRoute] string edgeId,
         CancellationToken cancellationToken)
     {
+        var denied = await DeniedEdgeAsync(edgeId, cancellationToken).ConfigureAwait(false);
+        if (denied is not null) return denied;
         var reported = (await registry.FindAsync(edgeId, cancellationToken).ConfigureAwait(false))?.Acquisition;
         if (reported is not null)
             return Ok(reported);
@@ -152,6 +165,8 @@ public sealed class EdgeDiagnosticsController(
         [FromRoute] string edgeId,
         CancellationToken cancellationToken)
     {
+        var denied = await DeniedEdgeAsync(edgeId, cancellationToken).ConfigureAwait(false);
+        if (denied is not null) return denied;
         var state = await registry.FindAsync(edgeId, cancellationToken).ConfigureAwait(false);
         if (state is null)
             return ResourceNotFound("采集节点不存在。");
@@ -165,6 +180,19 @@ public sealed class EdgeDiagnosticsController(
         return diagnosticsTokenProvider.TryGetBaseUrl(edgeId, out var baseUrl)
             ? baseUrl
             : null;
+    }
+
+    private async Task<IActionResult?> DeniedEdgeAsync(string edgeId, CancellationToken ct)
+    {
+        var identity = userResolver.ResolveIdentity(User);
+        if (identity is null)
+            return AuthenticationRequired("需要平台统一认证。");
+        if (!identity.HasAnyRole(PlatformRoles.QualityRead))
+            return AuthorizationDenied();
+        var edge = await registry.FindAsync(edgeId, ct).ConfigureAwait(false);
+        if (edge is null || !identity.CanAccessSite(edge.SiteId))
+            return ResourceNotFound("采集节点不存在。");
+        return null;
     }
 
     private HttpClient CreateEdgeClient(string edgeId)

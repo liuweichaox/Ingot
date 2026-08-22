@@ -1,4 +1,5 @@
 
+// 在质量岗位和站点授权边界内上传、查询与下载检验附件。
 using Ingot.Platform.Api.Agents;
 using Ingot.Platform.Application.Inspections;
 using Microsoft.AspNetCore.Mvc;
@@ -14,13 +15,21 @@ public sealed class InspectionAttachmentsController(
 {
     [HttpPost]
     [RequestSizeLimit(30_000_000)]
-    public async Task<IActionResult> Upload([FromForm] IFormFile? file, CancellationToken ct)
+    public async Task<IActionResult> Upload(
+        [FromForm] IFormFile? file,
+        [FromForm] string? siteId,
+        CancellationToken ct)
     {
         var identity = userResolver.ResolveIdentity(User);
         if (identity is null)
             return AuthenticationRequired("需要平台统一认证。");
         if (!identity.HasAnyRole(PlatformRoles.QualityInspector, PlatformRoles.QualityReviewer, PlatformRoles.PlatformAdministrator))
             return AuthorizationDenied();
+        var siteFailure = PlatformSiteScope.Resolve(identity, siteId, false, out var authorizedSiteId);
+        if (siteFailure == SiteScopeFailure.Forbidden)
+            return AuthorizationDenied("当前身份无权访问该站点。", ("siteId", siteId));
+        if (siteFailure == SiteScopeFailure.Missing)
+            return InvalidRequest("上传检测附件必须指定当前身份有权访问的 siteId。");
         if (file is null)
             return InvalidRequest("必须上传名为 file 的 multipart 文件。");
         await using var stream = file.OpenReadStream();
@@ -30,6 +39,7 @@ public sealed class InspectionAttachmentsController(
             string.IsNullOrWhiteSpace(file.ContentType)
                 ? "application/octet-stream"
                 : file.ContentType,
+            authorizedSiteId!,
             ct).ConfigureAwait(false);
         return result.Status switch
         {
@@ -48,7 +58,9 @@ public sealed class InspectionAttachmentsController(
         if (!identity.HasAnyRole(PlatformRoles.QualityRead))
             return AuthorizationDenied();
         var attachment = await queries.GetAttachmentAsync(attachmentId, ct).ConfigureAwait(false);
-        return attachment is null ? ResourceNotFound() : Ok(attachment);
+        if (attachment is null || !identity.CanAccessSite(attachment.SiteId))
+            return ResourceNotFound();
+        return Ok(attachment);
     }
 
     [HttpGet("{attachmentId:guid}/content")]
@@ -59,14 +71,18 @@ public sealed class InspectionAttachmentsController(
             return AuthenticationRequired("需要平台统一认证。");
         if (!identity.HasAnyRole(PlatformRoles.QualityRead))
             return AuthorizationDenied();
+        var attachment = await queries.GetAttachmentAsync(attachmentId, ct).ConfigureAwait(false);
+        if (attachment is null || !identity.CanAccessSite(attachment.SiteId))
+            return ResourceNotFound();
         var result = await commands.OpenAttachmentAsync(attachmentId, identity.UserId, ct).ConfigureAwait(false);
         if (result.Status == InspectionCommandStatus.NotFound)
             return result.Error is null ? ResourceNotFound() : ResourceNotFound(result.Error);
         if (result.Status != InspectionCommandStatus.Success || result.Value is null)
             return ServerFailure();
-        var attachment = result.Value.Metadata;
+        var metadata = result.Value.Metadata;
         Response.Headers.ContentDisposition =
-            $"inline; filename*=UTF-8''{Uri.EscapeDataString(attachment.FileName)}";
-        return File(result.Value.Content, attachment.MediaType, enableRangeProcessing: true);
+            $"attachment; filename*=UTF-8''{Uri.EscapeDataString(metadata.FileName)}";
+        Response.Headers.ContentSecurityPolicy = "default-src 'none'; sandbox";
+        return File(result.Value.Content, metadata.MediaType, enableRangeProcessing: true);
     }
 }

@@ -1,3 +1,4 @@
+// 将边缘节点身份、站点归属和运行状态安全上报到平台。
 using System;
 using System.Linq;
 using System.Net.Http;
@@ -58,6 +59,11 @@ public sealed class PlatformReportingClient : IPlatformReportingClient
             _logger.LogWarning("PlatformApiBaseUrl 为空，跳过 Platform 上报");
             return false;
         }
+        if (string.IsNullOrWhiteSpace(_options.SiteId))
+        {
+            _logger.LogWarning("SiteId 为空，跳过 Platform 上报");
+            return false;
+        }
 
         try
         {
@@ -98,6 +104,7 @@ public sealed class PlatformReportingClient : IPlatformReportingClient
             {
                 var req = new EdgeRegistrationRequest
                 {
+                    SiteId = _options.SiteId,
                     EdgeId = _edgeId!,
                     HostBaseUrl = _hostBaseUrl,
                     Hostname = _hostname
@@ -132,6 +139,7 @@ public sealed class PlatformReportingClient : IPlatformReportingClient
         {
             var req = new EdgeHeartbeatRequest
             {
+                SiteId = _options.SiteId,
                 EdgeId = _edgeId!,
                 HostBaseUrl = _hostBaseUrl,
                 LastError = _lastError,

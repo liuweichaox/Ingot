@@ -33,6 +33,9 @@ public class InspectionRecordValidatorTests
         public Task UpdateBoundaryAsync(ExecutionBoundary boundary, CancellationToken ct) => Task.CompletedTask;
         public Task<IReadOnlyList<ExecutionBoundary>> QueryBoundariesAsync(string siteId, DateTimeOffset? from, DateTimeOffset? to, int limit = 100, int offset = 0, CancellationToken ct = default)
             => Task.FromResult<IReadOnlyList<ExecutionBoundary>>(Array.Empty<ExecutionBoundary>());
+
+        public Task<bool> ReplayFailedProjectionAsync(string siteId, string sourceExecutionId, CancellationToken ct = default)
+            => Task.FromResult(false);
     }
 
     private readonly TestBoundaryStore _boundaryStore;

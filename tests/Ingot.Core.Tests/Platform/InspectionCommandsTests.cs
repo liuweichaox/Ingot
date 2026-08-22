@@ -178,7 +178,7 @@ public sealed class InspectionCommandsTests
         public Task<InspectionRecord?> GetCorrectionForAsync(Guid recordId, CancellationToken ct = default)
             => Task.FromResult(records.FirstOrDefault(value => value.SupersedesRecordId == recordId));
 
-        public Task<IReadOnlyList<InspectionScope>> ListScopesAsync(CancellationToken ct = default)
+        public Task<IReadOnlyList<InspectionScope>> ListScopesAsync(string? siteId, CancellationToken ct = default)
             => Task.FromResult<IReadOnlyList<InspectionScope>>(StoredScope is null ? [] : [StoredScope]);
 
         public Task<InspectionScope?> GetScopeAsync(string scopeId, CancellationToken ct = default)
@@ -211,9 +211,11 @@ public sealed class InspectionCommandsTests
 
         public Task<IReadOnlyList<InspectionRecord>> QueryAllByExecutionIdsAsync(
             IReadOnlyCollection<string> executionIds,
+            string? siteId,
             CancellationToken ct = default)
             => Task.FromResult<IReadOnlyList<InspectionRecord>>(
-                records.Where(value => executionIds.Contains(value.ExecutionId)).ToArray());
+                records.Where(value => executionIds.Contains(value.ExecutionId) &&
+                    (string.IsNullOrWhiteSpace(siteId) || value.SiteId == siteId)).ToArray());
     }
 
     private sealed class MasterDataStore(

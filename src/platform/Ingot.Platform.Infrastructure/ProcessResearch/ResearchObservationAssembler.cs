@@ -1,3 +1,4 @@
+// 将真实运行、工艺配置和检验结果组装为研发优化可接受的冻结观察。
 using System.Security.Cryptography;
 using System.Text.Json;
 using Ingot.Contracts.Events;
@@ -50,7 +51,7 @@ public sealed class ResearchObservationAssembler(
         var executionKeys = candidates.Select(static item => item.Run.ExecutionKey).ToArray();
         var executionsByRun = await executions.GetProcessExecutionsAsync(executionKeys, ct).ConfigureAwait(false);
         var allRecords = InspectionRecordSet.Effective(
-            await inspections.QueryAllByExecutionIdsAsync(executionKeys, ct).ConfigureAwait(false));
+            await inspections.QueryAllByExecutionIdsAsync(executionKeys, null, ct).ConfigureAwait(false));
         var latestReviews = await reviews.GetLatestByInspectionRecordIdsAsync(
             allRecords.Select(static record => record.RecordId).ToArray(), ct).ConfigureAwait(false);
         var inspectionPlans = await inspectionMasterData.ListInspectionPlansAsync(ct).ConfigureAwait(false);

@@ -44,7 +44,7 @@ tar \
   --exclude='*/dist/*' \
   --exclude='*/out' \
   --exclude='*/out/*' \
-  -C "$repo_root" -cf - apps docs | tar -C "$frontend_workspace" -xf -
+  -C "$repo_root" -cf - apps docs scripts | tar -C "$frontend_workspace" -xf -
 
 bash scripts/verify-architecture.sh
 bash scripts/verify-code-comments.sh
@@ -73,6 +73,7 @@ npm --prefix "$platform_app" ci
 npm --prefix "$platform_app" run build
 npm --prefix "$platform_app" run test
 npm --prefix "$platform_app" run lint
+INGOT_E2E_API_PORT=4410 INGOT_E2E_WEB_PORT=3401 npm --prefix "$platform_app" run test:e2e
 npm --prefix "$platform_app" audit --omit=dev
 
 npm --prefix "$website_app" ci

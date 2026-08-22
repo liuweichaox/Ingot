@@ -1,3 +1,4 @@
+// 定义运行与质量分析的公共查询和返回契约。
 namespace Ingot.Contracts.Analytics;
 
 public sealed record DataObjectSummary
@@ -65,6 +66,7 @@ public sealed record QualityAnalysisRecord
 
 public sealed record QualityAnalysisQuery
 {
+    public string? SiteId { get; init; }
     public string? ProductFamilyCode { get; init; }
     public string? SubjectType { get; init; }
     public string? SubjectId { get; init; }

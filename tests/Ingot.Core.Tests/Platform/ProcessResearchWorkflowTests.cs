@@ -544,6 +544,10 @@ public sealed class ProcessResearchWorkflowTests
         await CompleteIndependentValidationAsync(workflow, window);
         window = await workflow.ValidateOperatingRegionAsync(window.OperatingRegionId, "engineer-b");
         Assert.Equal(OperatingRegionValidationLevels.Laboratory, window.ValidationLevel);
+        var prematureRelease = await Assert.ThrowsAsync<ProcessResearchRuleException>(
+            () => workflow.ReleaseOperatingRegionAsync(window.OperatingRegionId, "engineer-c"));
+        Assert.Contains("受控在线运行", prematureRelease.Message);
+        await SeedControlledOnlineValidationAsync(store, window);
         window = await workflow.ReleaseOperatingRegionAsync(window.OperatingRegionId, "engineer-c");
         project = await workflow.ChangeProjectStatusAsync(
             project.ProjectId,
@@ -563,7 +567,7 @@ public sealed class ProcessResearchWorkflowTests
         Assert.Single(workspace.Hypotheses);
         Assert.Equal(ResearchHypothesisStatuses.Supported, workspace.Hypotheses[0].Status);
         Assert.Single(workspace.Hypotheses[0].ValidationEvidence);
-        Assert.Equal(2, workspace.Experiments.Count);
+        Assert.Equal(3, workspace.Experiments.Count);
         Assert.Single(workspace.OperatingRegions);
     }
 
@@ -2368,6 +2372,81 @@ public sealed class ProcessResearchWorkflowTests
             "system-research-automation");
     }
 
+    private static async Task SeedControlledOnlineValidationAsync(
+        MemoryStore store,
+        ResearchOperatingRegion window)
+    {
+        var experimentId = Guid.CreateVersion7();
+        var resultId = Guid.CreateVersion7();
+        var factors = window.Variables.Select(variable => new ExperimentFactorSetting
+        {
+            VariableCode = variable.VariableCode,
+            Value = variable.LowerBound,
+            Unit = variable.Unit
+        }).ToArray();
+        var observations = Enumerable.Range(1, 3).Select(index => new ExperimentRunObservation
+        {
+            ExecutionKey = $"controlled-validation-{index}",
+            ActualFactors = factors,
+            Outcomes = new Dictionary<string, double> { ["form-error"] = 0.25 + index * 0.01 },
+            SourceContentHash = new string((char)('d' + index), 64)
+        }).ToArray();
+        await store.SaveExperimentAsync(new ResearchExperiment
+        {
+            ExperimentId = experimentId,
+            ProjectId = window.ProjectId,
+            Name = "受控在线操作域验证",
+            ExecutionCategory = ResearchExperimentExecutionCategories.ControlledOnline,
+            Status = ResearchExperimentStatuses.Completed,
+            Factors = factors,
+            RunPlan = observations.Select((observation, index) => new ExperimentRunPlan
+            {
+                ExecutionKey = observation.ExecutionKey,
+                Sequence = index + 1,
+                Factors = factors
+            }).ToArray(),
+            ObjectiveCodes = window.ObjectiveCodes,
+            ResultIds = [resultId],
+            Optimization = new ResearchOptimizationMetadata
+            {
+                ModelVersion = "controlled-validation-test",
+                InputHash = new string('a', 64),
+                Mode = ResearchOptimizationModes.Controlled
+            },
+            ControlledDecision = new ResearchControlledDecision
+            {
+                Decision = ResearchControlledDecisionStatuses.Accepted,
+                SuggestedFactors = factors,
+                ApprovedFactors = factors,
+                DecisionSnapshotHash = new string('b', 64),
+                DecidedBy = "engineer-b",
+                DecidedAt = DateTimeOffset.UtcNow
+            },
+            StopRule = "任一安全约束失败立即停止。",
+            RollbackPlan = "恢复已验证实验室设置。",
+            CreatedBy = "engineer-a",
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow
+        });
+        await store.SaveExperimentResultAsync(new ResearchExperimentResult
+        {
+            ResultId = resultId,
+            ProjectId = window.ProjectId,
+            ExperimentId = experimentId,
+            DatasetSnapshotId = $"controlled-validation:{experimentId:N}",
+            AnalysisRunId = Guid.CreateVersion7(),
+            AnalysisHash = new string('c', 64),
+            RunObservations = observations,
+            RunCount = observations.Length,
+            ReplicateCount = observations.Length,
+            DistinctBlockCount = 2,
+            SafetyPassed = true,
+            CalculatedFromSource = true,
+            RecordedBy = "system-research-automation",
+            RecordedAt = DateTimeOffset.UtcNow
+        });
+    }
+
     private static ProcessResearchWorkflow CreateWorkflow(
         IProcessResearchStore store,
         ResearchOnlineAdmissionService? onlineAdmission = null,
@@ -2572,6 +2651,15 @@ public sealed class ProcessResearchWorkflowTests
             });
         }
 
+        public Task<OptimizerDesignResponse> DesignAsync(OptimizerDesignCall request, CancellationToken ct = default)
+            => throw new NotSupportedException();
+
+        public Task<ProcessDiagnosisResponse> DiagnoseAsync(ProcessDiagnosisCall request, CancellationToken ct = default)
+            => throw new NotSupportedException();
+
+        public Task<JsonElement> ReplayHistoryAsync(OptimizerHistoricalReplayCall request, CancellationToken ct = default)
+            => throw new NotSupportedException();
+
         private static OptimizerSuggestionOutput Suggest(
             double temperature,
             double force,
@@ -2650,6 +2738,15 @@ public sealed class ProcessResearchWorkflowTests
                 ]
             });
         }
+
+        public Task<OptimizerDesignResponse> DesignAsync(OptimizerDesignCall request, CancellationToken ct = default)
+            => throw new NotSupportedException();
+
+        public Task<ProcessDiagnosisResponse> DiagnoseAsync(ProcessDiagnosisCall request, CancellationToken ct = default)
+            => throw new NotSupportedException();
+
+        public Task<JsonElement> ReplayHistoryAsync(OptimizerHistoricalReplayCall request, CancellationToken ct = default)
+            => throw new NotSupportedException();
     }
 
     private sealed class StubReplayOptimizerClient : IProcessOptimizerClient
@@ -2661,6 +2758,12 @@ public sealed class ProcessResearchWorkflowTests
         public Task<OptimizerSuggestionResponse> SuggestAsync(
             OptimizerSuggestionCall request,
             CancellationToken ct = default)
+            => throw new NotSupportedException();
+
+        public Task<OptimizerDesignResponse> DesignAsync(OptimizerDesignCall request, CancellationToken ct = default)
+            => throw new NotSupportedException();
+
+        public Task<ProcessDiagnosisResponse> DiagnoseAsync(ProcessDiagnosisCall request, CancellationToken ct = default)
             => throw new NotSupportedException();
 
         public Task<JsonElement> ReplayHistoryAsync(
@@ -2779,12 +2882,18 @@ public sealed class ProcessResearchWorkflowTests
             => throw new NotSupportedException();
         public Task<bool> DeleteAnalysisPlanAsync(string planId, int version, CancellationToken ct = default)
             => throw new NotSupportedException();
+        public Task<ScenarioPackage> UpsertScenarioPackageAsync(ScenarioPackage value, CancellationToken ct = default)
+            => throw new NotSupportedException();
+        public Task<IReadOnlyList<ScenarioPackage>> ListScenarioPackagesAsync(CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<ScenarioPackage>>([scenario]);
         public Task<ScenarioPackage?> GetScenarioPackageAsync(
             string packageId,
             int version,
             CancellationToken ct = default)
             => Task.FromResult<ScenarioPackage?>(
                 packageId == scenario.PackageId && version == scenario.Version ? scenario : null);
+        public Task<bool> DeleteScenarioPackageAsync(string packageId, int version, CancellationToken ct = default)
+            => Task.FromResult(false);
     }
 
     private sealed class MemoryStore : IProcessResearchStore
@@ -2892,6 +3001,13 @@ public sealed class ProcessResearchWorkflowTests
             => Task.FromResult<IReadOnlyList<ResearchExperiment>>(
                 _experiments.Values.Where(value => value.ProjectId == projectId).ToArray());
 
+        public async Task<ResearchPage<ResearchExperiment>> ListExperimentsPageAsync(
+            Guid projectId,
+            string? cursor,
+            int limit,
+            CancellationToken ct = default)
+            => new() { Items = (await ListExperimentsAsync(projectId, ct)).Take(limit).ToArray() };
+
         public Task<ResearchExperiment> SaveExperimentAsync(
             ResearchExperiment value,
             CancellationToken ct = default)
@@ -2899,6 +3015,22 @@ public sealed class ProcessResearchWorkflowTests
             _experiments[value.ExperimentId] = value;
             return Task.FromResult(value);
         }
+
+        public async Task<ResearchExperiment> SaveExperimentTransactionAsync(
+            ResearchExperiment updatedExperiment,
+            ResearchAuditEntry audit,
+            CancellationToken ct = default)
+        {
+            var saved = await SaveExperimentAsync(updatedExperiment, ct);
+            await AddAuditEntryAsync(audit, ct);
+            return saved;
+        }
+
+        public Task<ResearchExperiment> SaveControlledDecisionTransactionAsync(
+            ResearchExperiment updatedExperiment,
+            ResearchAuditEntry audit,
+            CancellationToken ct = default)
+            => SaveExperimentTransactionAsync(updatedExperiment, audit, ct);
 
         public Task<ResearchShadowRecommendation?> GetShadowRecommendationAsync(
             Guid recommendationId,
@@ -2918,6 +3050,13 @@ public sealed class ProcessResearchWorkflowTests
             CancellationToken ct = default)
             => Task.FromResult<IReadOnlyList<ResearchShadowRecommendation>>(
                 _shadowRecommendations.Values.Where(value => value.ProjectId == projectId).ToArray());
+
+        public async Task<ResearchPage<ResearchShadowRecommendation>> ListShadowRecommendationsPageAsync(
+            Guid projectId,
+            string? cursor,
+            int limit,
+            CancellationToken ct = default)
+            => new() { Items = (await ListShadowRecommendationsAsync(projectId, ct)).Take(limit).ToArray() };
 
         public Task<ResearchShadowRecommendation> CreateShadowRecommendationAsync(
             ResearchShadowRecommendation value,
@@ -2948,6 +3087,13 @@ public sealed class ProcessResearchWorkflowTests
             CancellationToken ct = default)
             => Task.FromResult<IReadOnlyList<ResearchHistoricalReplayReport>>(
                 _replayReports.Values.Where(value => value.ProjectId == projectId).ToArray());
+
+        public async Task<ResearchPage<ResearchHistoricalReplayReport>> ListHistoricalReplayReportsPageAsync(
+            Guid projectId,
+            string? cursor,
+            int limit,
+            CancellationToken ct = default)
+            => new() { Items = (await ListHistoricalReplayReportsAsync(projectId, ct)).Take(limit).ToArray() };
 
         public Task<ResearchHistoricalReplayReport> CreateHistoricalReplayReportAsync(
             ResearchHistoricalReplayReport value,
@@ -3015,12 +3161,31 @@ public sealed class ProcessResearchWorkflowTests
             => Task.FromResult<IReadOnlyList<ResearchExperimentResult>>(
                 _results.Values.Where(value => value.ProjectId == projectId).ToArray());
 
+        public async Task<ResearchPage<ResearchExperimentResult>> ListExperimentResultsPageAsync(
+            Guid projectId,
+            string? cursor,
+            int limit,
+            CancellationToken ct = default)
+            => new() { Items = (await ListExperimentResultsAsync(projectId, ct)).Take(limit).ToArray() };
+
         public Task<ResearchExperimentResult> SaveExperimentResultAsync(
             ResearchExperimentResult value,
             CancellationToken ct = default)
         {
             _results[value.ResultId] = value;
             return Task.FromResult(value);
+        }
+
+        public async Task<ResearchExperimentResult> SaveExperimentResultTransactionAsync(
+            ResearchExperimentResult result,
+            ResearchExperiment updatedExperiment,
+            ResearchAuditEntry audit,
+            CancellationToken ct = default)
+        {
+            var saved = await SaveExperimentResultAsync(result, ct);
+            await SaveExperimentAsync(updatedExperiment, ct);
+            await AddAuditEntryAsync(audit, ct);
+            return saved;
         }
 
         public Task<ResearchOperatingRegion?> GetOperatingRegionAsync(
@@ -3109,6 +3274,13 @@ public sealed class ProcessResearchWorkflowTests
             CancellationToken ct = default)
             => Task.FromResult<IReadOnlyList<ResearchAuditEntry>>(
                 _audit.Where(value => value.ProjectId == projectId).ToArray());
+
+        public async Task<ResearchPage<ResearchAuditEntry>> ListAuditEntriesPageAsync(
+            Guid projectId,
+            string? cursor,
+            int limit,
+            CancellationToken ct = default)
+            => new() { Items = (await ListAuditEntriesAsync(projectId, ct)).Take(limit).ToArray() };
     }
 
     private sealed class StubReliabilityBaselineService : IDataReliabilityBaselineService
@@ -3153,6 +3325,16 @@ public sealed class ProcessResearchWorkflowTests
             return Task.FromResult<ExecutionComparisonRow?>(null);
         }
 
+        public Task<IReadOnlyDictionary<string, ExecutionComparisonRow>> GetProcessExecutionsAsync(
+            IReadOnlyCollection<string> executionIds,
+            CancellationToken ct = default,
+            string? siteId = null)
+        {
+            CallCount++;
+            return Task.FromResult<IReadOnlyDictionary<string, ExecutionComparisonRow>>(
+                new Dictionary<string, ExecutionComparisonRow>());
+        }
+
         public Task<ExecutionComparisonResult?> CompareWithHistoryAsync(
             string executionId,
             int limit,
@@ -3185,6 +3367,15 @@ public sealed class ProcessResearchWorkflowTests
             string? siteId = null)
             => Task.FromResult<ExecutionComparisonRow?>(
                 executionId == result.Baseline.ExecutionId ? result.Baseline : null);
+
+        public Task<IReadOnlyDictionary<string, ExecutionComparisonRow>> GetProcessExecutionsAsync(
+            IReadOnlyCollection<string> executionIds,
+            CancellationToken ct = default,
+            string? siteId = null)
+            => Task.FromResult<IReadOnlyDictionary<string, ExecutionComparisonRow>>(
+                new[] { result.Baseline }.Concat(result.HistoricalProcessExecutions)
+                    .Where(row => executionIds.Contains(row.ExecutionId))
+                    .ToDictionary(row => row.ExecutionId, StringComparer.Ordinal));
 
         public Task<ExecutionComparisonResult?> CompareWithHistoryAsync(
             string executionId,

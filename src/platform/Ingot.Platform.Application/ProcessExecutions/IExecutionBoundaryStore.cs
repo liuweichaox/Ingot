@@ -1,5 +1,7 @@
+// 定义真实运行边界识别、更新和失败投影重放的存储端口。
 namespace Ingot.Platform.Application.ProcessExecutions;
 
+/// <summary>保存站点内的运行边界，并显式支持失败投影重放。</summary>
 public interface IExecutionBoundaryStore
 {
 
@@ -23,5 +25,5 @@ public interface IExecutionBoundaryStore
     Task<bool> ReplayFailedProjectionAsync(
         string siteId,
         string sourceExecutionId,
-        CancellationToken ct = default) => Task.FromResult(false);
+        CancellationToken ct = default);
 }

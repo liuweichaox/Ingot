@@ -1,4 +1,4 @@
-
+// 将运行比较、过程轨迹和检验结果组装为只读 Agent 证据。
 using System.Text.Json;
 using Ingot.Agent;
 using Ingot.Contracts.Agents;
@@ -61,6 +61,7 @@ public sealed class CompareExecutionsTool(
         var allInspections = InspectionRecordSet.Effective(
             await inspections.QueryAllByExecutionIdsAsync(
                 [baselineId, .. candidateIds],
+                null,
                 ct).ConfigureAwait(false));
         var latestReviews = reviews is null
             ? new Dictionary<Guid, InspectionReview>()

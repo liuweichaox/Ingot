@@ -1,6 +1,7 @@
 // 验证平台组件 PlatformAuthorizationPipeline 的成功、拒绝和安全边界。
 
 using System.Net;
+using Ingot.Contracts.Analytics;
 using System.Security.Claims;
 using System.Text.Encodings.Web;
 using Ingot.Contracts.Events;
@@ -116,11 +117,24 @@ public sealed class PlatformAuthorizationPipelineTests : IClassFixture<PlatformA
             CancellationToken ct = default)
             => Task.FromResult<IReadOnlyList<PlatformProductionEvent>>([]);
 
+        public Task<IReadOnlyList<PlatformProductionEvent>> QueryByExecutionIdsAsync(
+            IReadOnlyCollection<string> executionIds,
+            CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<PlatformProductionEvent>>([]);
+
+        public Task<IReadOnlyList<PlatformProcessExecutionSummarySource>> QueryExecutionSummarySourcesAsync(
+            IReadOnlyCollection<string> executionIds,
+            CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<PlatformProcessExecutionSummarySource>>([]);
+
         public Task<PlatformEventScopeStats> GetScopeStatsAsync(
             PlatformEventQuery query,
             CancellationToken ct = default)
             => Task.FromResult(new PlatformEventScopeStats());
 
         public Task<bool> CanConnectAsync(CancellationToken ct = default) => Task.FromResult(true);
+
+        public Task<DataObjectPage> QueryDataObjectsAsync(DataObjectQuery query, CancellationToken ct = default)
+            => Task.FromResult(new DataObjectPage { Limit = query.Limit, Offset = query.Offset });
     }
 }

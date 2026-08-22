@@ -1,7 +1,9 @@
+// 定义运行详情与同条件比较所需的应用查询边界。
 using Ingot.Contracts.Events;
 
 namespace Ingot.Platform.Application.ProcessExecutions;
 
+/// <summary>读取站点授权范围内可用于工程比较的过程执行。</summary>
 public interface IExecutionComparisonService
 {
     Task<ExecutionComparisonRow?> GetProcessExecutionAsync(
@@ -9,20 +11,10 @@ public interface IExecutionComparisonService
         CancellationToken ct = default,
         string? siteId = null);
 
-    async Task<IReadOnlyDictionary<string, ExecutionComparisonRow>> GetProcessExecutionsAsync(
+    Task<IReadOnlyDictionary<string, ExecutionComparisonRow>> GetProcessExecutionsAsync(
         IReadOnlyCollection<string> executionIds,
         CancellationToken ct = default,
-        string? siteId = null)
-    {
-        var rows = new Dictionary<string, ExecutionComparisonRow>(StringComparer.Ordinal);
-        foreach (var executionId in executionIds.Distinct(StringComparer.Ordinal))
-        {
-            var row = await GetProcessExecutionAsync(executionId, ct, siteId).ConfigureAwait(false);
-            if (row is not null)
-                rows[executionId] = row;
-        }
-        return rows;
-    }
+        string? siteId = null);
 
     Task<ExecutionComparisonResult?> CompareWithHistoryAsync(
         string executionId,

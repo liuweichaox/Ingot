@@ -1,7 +1,9 @@
+// 定义数据可靠性基线的站点范围、统计结果和排除原因。
 namespace Ingot.Contracts.Analytics;
 
 public sealed record DataReliabilityBaselineQuery
 {
+    public string? SiteId { get; init; }
     public DateTimeOffset? From { get; init; }
     public DateTimeOffset? To { get; init; }
     public string? EdgeId { get; init; }

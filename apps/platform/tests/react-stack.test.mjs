@@ -72,7 +72,7 @@ test("all platform routes remain available after the React migration", () => {
     "/production/tooling-installations", "/configuration/component-types", "/configuration/components",
     "/configuration/tooling-types", "/configuration/tooling-assemblies", "/inspections",
     "/quality-analysis", "/configuration", "/configuration/inspection-definitions", "/configuration/quality-plans",
-    "/comparisons", "/golden-questions", "/data-quality", "/process-improvement", "/configuration/scenario-packages",
+    "/comparisons", "/golden-questions", "/data-quality", "/configuration/scenario-packages",
     "/configuration/process-analysis-plans", "/configuration/process-data-models",
     "/configuration/process-specifications", "/configuration/ingestion-tasks", "/edges",
     "/platform-metrics", "/logs", "/identity/users",
@@ -80,8 +80,9 @@ test("all platform routes remain available after the React migration", () => {
     assert.match(app, new RegExp(route.replaceAll("/", "\\/")));
   }
   assert.match(app, /\/research-projects\/:projectId/);
-  assert.match(app, /Navigate to="\/research-projects"/);
-  assert.match(app, /Navigate to="\/configuration\/process-data-models"/);
+  for (const retiredAlias of ["/production-setup", "/quality-plans", "/process-improvement", "/profiles", "/users"]) {
+    assert.doesNotMatch(app, new RegExp(`path="${retiredAlias.replaceAll("/", "\\/")}"`));
+  }
 });
 
 test("platform identity presents Ingot as a process diagnosis and optimization system", () => {

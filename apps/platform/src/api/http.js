@@ -1,3 +1,4 @@
+// 封装带统一认证、错误解析和二进制下载能力的平台 HTTP 请求。
 
 function resolveUrl(url) {
   return url;
@@ -156,6 +157,20 @@ export async function downloadFile(url, fallbackName = "download") {
   } finally {
     URL.revokeObjectURL(objectUrl);
   }
+}
+
+export async function getBlob(url) {
+  let res;
+  try {
+    res = await fetch(resolveUrl(url), { headers: authenticatedHeaders({ Accept: "image/*,application/pdf" }) });
+  } catch (error) {
+    throw platformRequestError(error);
+  }
+  if (!res.ok) {
+    notifyUnauthorized(res);
+    throw responseError(res, await res.text().catch(() => ""));
+  }
+  return await res.blob();
 }
 
 export async function streamSse(url, { headers = {}, signal, onEvent, lastEventId = 0 }) {

@@ -1,3 +1,4 @@
+// 持久化边缘节点站点归属、心跳状态和诊断历史。
 using System.Text.Json;
 using Ingot.Contracts.Acquisition;
 using Ingot.Contracts.Edge;
@@ -10,16 +11,25 @@ public sealed class EdgeRegistry(NpgsqlDataSource dataSource)
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
-    public async Task<IReadOnlyCollection<EdgeState>> ListAsync(CancellationToken ct = default)
+    public async Task<IReadOnlyCollection<EdgeState>> ListAsync(
+        CancellationToken ct = default,
+        string? siteId = null)
     {
         await using var connection = await dataSource.OpenConnectionAsync(ct).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
-        command.CommandText =
-            """
+        command.CommandText = string.IsNullOrWhiteSpace(siteId)
+            ? """
             SELECT edge_id, host_base_url, hostname, version, last_seen_at, last_error,
-                   acquisition_status::text, delivery_status::text
+                   acquisition_status::text, delivery_status::text, site_id
             FROM platform_edges ORDER BY last_seen_at DESC
+            """
+            : """
+            SELECT edge_id, host_base_url, hostname, version, last_seen_at, last_error,
+                   acquisition_status::text, delivery_status::text, site_id
+            FROM platform_edges WHERE site_id = $1 ORDER BY last_seen_at DESC
             """;
+        if (!string.IsNullOrWhiteSpace(siteId))
+            command.Parameters.AddWithValue(siteId.Trim());
         await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
         var values = new List<EdgeState>();
         while (await reader.ReadAsync(ct).ConfigureAwait(false)) values.Add(ReadEdge(reader));
@@ -142,6 +152,7 @@ public sealed class EdgeRegistry(NpgsqlDataSource dataSource)
 
     public async Task<EdgeState> UpsertAsync(
         string edgeId,
+        string siteId,
         string? hostBaseUrl,
         string? hostname,
         string? version,
@@ -149,31 +160,39 @@ public sealed class EdgeRegistry(NpgsqlDataSource dataSource)
         CancellationToken ct = default)
     {
         edgeId = edgeId.Trim();
+        siteId = NormalizeSiteId(siteId);
         await using var connection = await dataSource.OpenConnectionAsync(ct).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         command.CommandText =
             """
             INSERT INTO platform_edges(
-              edge_id, host_base_url, hostname, version, last_seen_at, last_error)
-            VALUES ($1, $2, $3, $4, $5, NULL)
+              edge_id, site_id, host_base_url, hostname, version, last_seen_at, last_error)
+            VALUES ($1, $2, $3, $4, $5, $6, NULL)
             ON CONFLICT(edge_id) DO UPDATE SET
               host_base_url = COALESCE(EXCLUDED.host_base_url, platform_edges.host_base_url),
               hostname = COALESCE(EXCLUDED.hostname, platform_edges.hostname),
               version = COALESCE(EXCLUDED.version, platform_edges.version),
               last_seen_at = EXCLUDED.last_seen_at
+            WHERE platform_edges.site_id = EXCLUDED.site_id
             """;
         command.Parameters.AddWithValue(edgeId);
+        command.Parameters.AddWithValue(siteId);
         AddNullable(command, NpgsqlDbType.Text, NormalizeBaseUrl(hostBaseUrl));
         AddNullable(command, NpgsqlDbType.Text, hostname);
         AddNullable(command, NpgsqlDbType.Text, version);
         command.Parameters.AddWithValue(now);
-        await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
-        return await GetAsync(edgeId, ct).ConfigureAwait(false)
+        var affected = await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+        var stored = await GetAsync(edgeId, ct).ConfigureAwait(false);
+        if (affected == 0 && stored is not null && !string.Equals(
+                stored.SiteId, siteId, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("边缘节点不能从原站点迁移到另一个站点。");
+        return stored
             ?? throw new InvalidOperationException("边缘节点注册写入后无法读取。");
     }
 
     public async Task<EdgeState> HeartbeatAsync(
         string edgeId,
+        string siteId,
         string? hostBaseUrl,
         string? lastError,
         EdgeAcquisitionRuntimeStatus? acquisition,
@@ -182,6 +201,7 @@ public sealed class EdgeRegistry(NpgsqlDataSource dataSource)
         CancellationToken ct = default)
     {
         edgeId = edgeId.Trim();
+        siteId = NormalizeSiteId(siteId);
         await using var connection = await dataSource.OpenConnectionAsync(ct).ConfigureAwait(false);
         await using var transaction = await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
         await using (var command = connection.CreateCommand())
@@ -190,23 +210,27 @@ public sealed class EdgeRegistry(NpgsqlDataSource dataSource)
             command.CommandText =
                 """
                 INSERT INTO platform_edges(
-                  edge_id, host_base_url, hostname, version, last_seen_at, last_error,
+                  edge_id, site_id, host_base_url, hostname, version, last_seen_at, last_error,
                   acquisition_status, delivery_status)
-                VALUES ($1, $2, NULL, NULL, $3, $4, $5, $6)
+                VALUES ($1, $2, $3, NULL, NULL, $4, $5, $6, $7)
                 ON CONFLICT(edge_id) DO UPDATE SET
                   last_seen_at = EXCLUDED.last_seen_at,
                   host_base_url = COALESCE(EXCLUDED.host_base_url, platform_edges.host_base_url),
                   last_error = EXCLUDED.last_error,
                   acquisition_status = COALESCE(EXCLUDED.acquisition_status, platform_edges.acquisition_status),
                   delivery_status = COALESCE(EXCLUDED.delivery_status, platform_edges.delivery_status)
+                WHERE platform_edges.site_id = EXCLUDED.site_id
                 """;
             command.Parameters.AddWithValue(edgeId);
+            command.Parameters.AddWithValue(siteId);
             AddNullable(command, NpgsqlDbType.Text, NormalizeBaseUrl(hostBaseUrl));
             command.Parameters.AddWithValue(now);
             AddNullable(command, NpgsqlDbType.Text, lastError);
             AddJson(command, acquisition);
             AddJson(command, delivery);
-            await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+            var affected = await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+            if (affected == 0)
+                throw new InvalidOperationException("边缘节点不能从原站点迁移到另一个站点。");
         }
         if (acquisition is not null || delivery is not null)
             await SaveStatusHistoryAsync(connection, transaction, edgeId, acquisition, delivery, now, ct)
@@ -223,7 +247,7 @@ public sealed class EdgeRegistry(NpgsqlDataSource dataSource)
         command.CommandText =
             """
             SELECT edge_id, host_base_url, hostname, version, last_seen_at, last_error,
-                   acquisition_status::text, delivery_status::text
+                   acquisition_status::text, delivery_status::text, site_id
             FROM platform_edges WHERE edge_id = $1
             """;
         command.Parameters.AddWithValue(edgeId);
@@ -240,7 +264,8 @@ public sealed class EdgeRegistry(NpgsqlDataSource dataSource)
             LastSeen = reader.GetFieldValue<DateTimeOffset>(4),
             LastError = reader.IsDBNull(5) ? null : reader.GetString(5),
             Acquisition = Deserialize<EdgeAcquisitionRuntimeStatus>(reader, 6),
-            Delivery = Deserialize<EdgeDeliveryRuntimeStatus>(reader, 7)
+            Delivery = Deserialize<EdgeDeliveryRuntimeStatus>(reader, 7),
+            SiteId = reader.GetString(8)
         };
 
     private static async Task SaveStatusHistoryAsync(
@@ -322,9 +347,18 @@ public sealed class EdgeRegistry(NpgsqlDataSource dataSource)
     private static string? NormalizeBaseUrl(string? url)
         => string.IsNullOrWhiteSpace(url) ? null : url.Trim().TrimEnd('/');
 
+    private static string NormalizeSiteId(string? siteId)
+    {
+        siteId = siteId?.Trim();
+        if (string.IsNullOrWhiteSpace(siteId) || siteId.Length > 128)
+            throw new ArgumentException("SiteId 不能为空且最长 128 个字符。", nameof(siteId));
+        return siteId;
+    }
+
     public sealed class EdgeState(string edgeId)
     {
         public string EdgeId { get; } = edgeId;
+        public required string SiteId { get; set; }
         public string? HostBaseUrl { get; set; }
         public string? Hostname { get; set; }
         public string? Version { get; set; }

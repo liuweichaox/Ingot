@@ -1,8 +1,10 @@
+// 定义 Agent 运行、模型路由、分析工具和结果校验的实现中立边界。
 using System.Text.Json;
 using Ingot.Contracts.Agents;
 
 namespace Ingot.Agent;
 
+/// <summary>编排一次受治理的 Agent 运行及其生命周期。</summary>
 public interface IAgentRuntime
 {
     AgentCapabilities GetCapabilities(string entryPoint);
@@ -42,6 +44,7 @@ public interface IAgentRuntime
         CancellationToken ct = default);
 }
 
+/// <summary>持久化 Agent 运行快照和有序流事件。</summary>
 public interface IAgentRunStore
 {
     Task InitializeAsync(CancellationToken ct = default);
@@ -74,6 +77,7 @@ public interface IAgentRunStore
         CancellationToken ct = default);
 }
 
+/// <summary>按功能入口和模型角色选择已配置的模型客户端。</summary>
 public interface IModelRouter
 {
     IModelClient GetClient(string entryPoint, ModelRole role);
@@ -85,15 +89,16 @@ public enum ModelRole
     Reasoning
 }
 
+/// <summary>执行意图解析、答案组织和多视角分析的模型端口。</summary>
 public interface IModelClient
 {
-    string EntryPoint => "*";
+    string EntryPoint { get; }
 
     string Provider { get; }
 
     string Model { get; }
 
-    string ModelFor(ModelRole role) => Model;
+    string ModelFor(ModelRole role);
 
     Task<ModelCallResult<AnalysisPlan>> ResolveIntentAsync(
         CreateChatRunRequest request,
@@ -159,6 +164,7 @@ public sealed record CombinedAnalysisWorkflowResult
     public IReadOnlyList<ModelCallUsage> ModelCalls { get; init; } = [];
 }
 
+/// <summary>执行受治理的多视角分析并保留模型调用记录。</summary>
 public interface ICombinedAnalysisWorkflow
 {
     Task<CombinedAnalysisWorkflowResult> RunAsync(
@@ -170,6 +176,7 @@ public interface ICombinedAnalysisWorkflow
         CancellationToken ct = default);
 }
 
+/// <summary>声明并执行一个只读分析工具。</summary>
 public interface IAnalysisTool
 {
     AnalysisToolDefinition Definition { get; }
@@ -250,6 +257,7 @@ public sealed record AgentExecutionContext
     public required CreateChatRunRequest Request { get; init; }
 }
 
+/// <summary>验证模型生成的分析计划只能调用获准工具。</summary>
 public interface IPlanValidator
 {
     bool TryValidate(
@@ -259,6 +267,7 @@ public interface IPlanValidator
         out string error);
 }
 
+/// <summary>验证工具结果和最终答案的证据引用与结论边界。</summary>
 public interface IAnalysisResultValidator
 {
     bool TryVerify(

@@ -1,3 +1,4 @@
+// 从有限范围的生产事件和检验事实计算可审计的数据可靠性基线。
 
 using Ingot.Contracts.Analytics;
 using Ingot.Contracts.Events;
@@ -53,6 +54,7 @@ public sealed class DataReliabilityBaselineService(
     ];
 
     private const int MaximumFactorLevels = 50;
+    private const int MaximumScannedEvents = 50_000;
 
     public async Task<DataReliabilityBaseline> CalculateAsync(
         DataReliabilityBaselineQuery query,
@@ -64,6 +66,7 @@ public sealed class DataReliabilityBaselineService(
         var maximumRuns = Math.Clamp(query.MaximumRuns, 1, 5000);
         var completedEvents = await QueryAllAsync(new PlatformEventQuery
         {
+            SiteId = Normalize(query.SiteId),
             EventType = "process.execution.completed",
             EdgeId = Normalize(query.EdgeId),
             SubjectId = Normalize(query.EquipmentId),
@@ -78,7 +81,8 @@ public sealed class DataReliabilityBaselineService(
             .Select(static item => item.Event.ExecutionId!)
             .ToArray();
         var selectedIds = matchingIds.Take(maximumRuns).ToArray();
-        var executionMap = await executions.GetProcessExecutionsAsync(selectedIds, ct).ConfigureAwait(false);
+        var executionMap = await executions.GetProcessExecutionsAsync(
+            selectedIds, ct, Normalize(query.SiteId)).ConfigureAwait(false);
         var rows = selectedIds
             .Where(executionMap.ContainsKey)
             .Select(id => executionMap[id])
@@ -200,6 +204,11 @@ public sealed class DataReliabilityBaselineService(
                 .ConfigureAwait(false);
             if (page.Count == 0)
                 break;
+            if (result.Count + page.Count > MaximumScannedEvents)
+            {
+                throw new InspectionQueryLimitExceededException(
+                    $"数据可靠性基线超过 {MaximumScannedEvents} 条事件扫描上限，请缩小站点或时间范围。");
+            }
             result.AddRange(page);
             var next = page.Max(static item => item.IngestId);
             if (next <= cursor)

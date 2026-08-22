@@ -106,6 +106,14 @@ public sealed class IngestionTaskActiveConfigurationTests
             => System.Threading.Tasks.Task.FromResult<ProcessAnalysisPlan?>(null);
         public Task<bool> DeleteAnalysisPlanAsync(string planId, int version, CancellationToken ct = default)
             => System.Threading.Tasks.Task.FromResult(false);
+        public Task<ScenarioPackage> UpsertScenarioPackageAsync(ScenarioPackage value, CancellationToken ct = default)
+            => throw new NotSupportedException();
+        public Task<IReadOnlyList<ScenarioPackage>> ListScenarioPackagesAsync(CancellationToken ct = default)
+            => System.Threading.Tasks.Task.FromResult<IReadOnlyList<ScenarioPackage>>([]);
+        public Task<ScenarioPackage?> GetScenarioPackageAsync(string packageId, int version, CancellationToken ct = default)
+            => System.Threading.Tasks.Task.FromResult<ScenarioPackage?>(null);
+        public Task<bool> DeleteScenarioPackageAsync(string packageId, int version, CancellationToken ct = default)
+            => System.Threading.Tasks.Task.FromResult(false);
     }
 
     private sealed class TestHostEnvironment : IHostEnvironment

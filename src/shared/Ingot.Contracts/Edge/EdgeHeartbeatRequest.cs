@@ -1,9 +1,12 @@
+// 定义绑定站点的边缘节点心跳和运行状态契约。
 using Ingot.Contracts.Acquisition;
 
 namespace Ingot.Contracts.Edge;
 
 public sealed record EdgeHeartbeatRequest
 {
+    public required string SiteId { get; init; }
+
     public required string EdgeId { get; init; }
 
     public string? HostBaseUrl { get; init; }

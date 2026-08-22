@@ -1,9 +1,10 @@
 
+// 提供待检任务录入、附件预览、复核和历史记录页面。
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from "@headlessui/react";
 import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router";
-import { getJson, postForm, postJson } from "../api/http";
+import { getBlob, getJson, postForm, postJson } from "../api/http";
 import { qualityOutcomeTraces } from "../charts/chartAdapters";
 import { extractRows, useApi } from "../hooks/useApi";
 import { Alert, Button, Card, DataTable, Drawer, EmptyState, Field, Input, Metric, Pagination, Page, RequestError, Select, StatusBadge, Textarea, WorkflowGuide, notify } from "../ui/components";
@@ -27,6 +28,55 @@ function groupQuality(rows, keySelector) {
 
 function ratio(value, total) {
   return total ? `${Math.round(value / total * 100)}%` : "—";
+}
+
+function InspectionAttachmentPreview({ attachment }) {
+  const [objectUrl, setObjectUrl] = useState("");
+  const [error, setError] = useState("");
+  const contentUrl = `/api/v1/inspection-attachments/${encodeURIComponent(attachment.attachmentId)}/content`;
+
+  useEffect(() => {
+    let active = true;
+    let url = "";
+    getBlob(contentUrl).then(blob => {
+      if (!active) return;
+      url = URL.createObjectURL(blob);
+      setObjectUrl(url);
+    }).catch(requestError => {
+      if (active) setError(requestError.message);
+    });
+    return () => {
+      active = false;
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [contentUrl]);
+
+  function download() {
+    if (!objectUrl) return;
+    const anchor = document.createElement("a");
+    anchor.href = objectUrl;
+    anchor.download = attachment.fileName;
+    document.body.append(anchor);
+    anchor.click();
+    anchor.remove();
+  }
+
+  return (
+    <article className="overflow-hidden rounded-xl border border-slate-200">
+      {attachment.mediaType?.startsWith("image/") && objectUrl && (
+        <img src={objectUrl} alt={attachment.fileName} className="max-h-72 w-full bg-slate-50 object-contain" />
+      )}
+      <div className="p-3 text-sm">
+        <p className="font-medium text-slate-900">{attachment.fileName}</p>
+        <p className="mt-1 text-xs text-slate-500">{Math.ceil(attachment.sizeBytes / 1024)} KiB</p>
+        {error ? <p className="mt-2 text-xs text-red-600">{error}</p> : (
+          <button className="mt-2 inline-flex text-sm font-medium text-blue-600 hover:text-blue-700 disabled:text-slate-400" type="button" disabled={!objectUrl} onClick={download}>
+            {objectUrl ? "下载原始文件" : "正在读取附件…"}
+          </button>
+        )}
+      </div>
+    </article>
+  );
 }
 
 export function InspectionsPage() {
@@ -113,6 +163,7 @@ export function InspectionsPage() {
       if (form.file) {
         const upload = new FormData();
         upload.append("file", form.file);
+        if (taskTarget?.siteId) upload.append("siteId", taskTarget.siteId);
         attachments.push(await postForm("/api/v1/inspection-attachments", upload));
       }
       const measurements = (selectedDefinition.characteristics || []).map(characteristic => {
@@ -135,6 +186,7 @@ export function InspectionsPage() {
       }).filter(Boolean);
       const now = new Date().toISOString();
       await postJson("/api/v1/inspection-records", {
+        siteId: taskTarget?.siteId || "",
         recordId: uuidv7(),
         outputItemId: form.outputItemId.trim() || null,
         executionId: form.executionId.trim(),
@@ -415,23 +467,9 @@ export function InspectionsPage() {
             <Card title="原始附件" description={`${reviewTarget.attachments?.length ?? 0} 个附件`}>
               {reviewTarget.attachments?.length ? (
                 <div className="grid gap-4 sm:grid-cols-2">
-                  {reviewTarget.attachments.map(attachment => {
-                    const contentUrl = `/api/v1/inspection-attachments/${encodeURIComponent(attachment.attachmentId)}/content`;
-                    return (
-                      <article key={attachment.attachmentId} className="overflow-hidden rounded-xl border border-slate-200">
-                        {attachment.mediaType?.startsWith("image/") && (
-                          <a href={contentUrl} target="_blank" rel="noreferrer">
-                            <img src={contentUrl} alt={attachment.fileName} className="max-h-72 w-full bg-slate-50 object-contain" />
-                          </a>
-                        )}
-                        <div className="p-3 text-sm">
-                          <p className="font-medium text-slate-900">{attachment.fileName}</p>
-                          <p className="mt-1 text-xs text-slate-500">{Math.ceil(attachment.sizeBytes / 1024)} KiB</p>
-                          <a className="mt-2 inline-flex text-sm font-medium text-blue-600 hover:text-blue-700" href={contentUrl} target="_blank" rel="noreferrer">查看原始文件</a>
-                        </div>
-                      </article>
-                    );
-                  })}
+                  {reviewTarget.attachments.map(attachment => (
+                    <InspectionAttachmentPreview key={attachment.attachmentId} attachment={attachment} />
+                  ))}
                 </div>
               ) : <EmptyState title="没有原始附件" description="该记录不能执行视觉复核，只能查看检测详情。" />}
             </Card>

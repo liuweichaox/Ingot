@@ -269,9 +269,9 @@ def test_service_keeps_binary_objective_predictions_inside_declared_bounds():
 
 
 def test_service_rejects_hidden_process_profiles_and_invalid_feature_graphs():
-    legacy = request_body()
-    legacy["campaign"]["process_profile"] = "fx3u-optical-molding"
-    response = client.post("/v1/suggestions", json=legacy)
+    unsupported = request_body()
+    unsupported["campaign"]["process_profile"] = "fx3u-optical-molding"
+    response = client.post("/v1/suggestions", json=unsupported)
     assert response.status_code == 422
     assert "process_profile" in response.text
 

@@ -262,6 +262,26 @@ public sealed class DataReliabilityBaselineServiceTests
                 .Take(query.Limit)
                 .ToArray());
 
+        public Task<IReadOnlyList<PlatformProductionEvent>> QueryByExecutionIdsAsync(
+            IReadOnlyCollection<string> executionIds,
+            CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<PlatformProductionEvent>>(rows
+                .Where(row => row.Event.ExecutionId is not null && executionIds.Contains(row.Event.ExecutionId))
+                .ToArray());
+
+        public Task<IReadOnlyList<PlatformProcessExecutionSummarySource>> QueryExecutionSummarySourcesAsync(
+            IReadOnlyCollection<string> executionIds,
+            CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<PlatformProcessExecutionSummarySource>>(rows
+                .Where(row => row.Event.ExecutionId is not null && executionIds.Contains(row.Event.ExecutionId))
+                .GroupBy(row => row.Event.ExecutionId!, StringComparer.Ordinal)
+                .Select(group => new PlatformProcessExecutionSummarySource
+                {
+                    ExecutionId = group.Key,
+                    Events = group.ToArray()
+                })
+                .ToArray());
+
         public Task<PlatformEventScopeStats> GetScopeStatsAsync(
             PlatformEventQuery query,
             CancellationToken ct = default)
@@ -269,5 +289,8 @@ public sealed class DataReliabilityBaselineServiceTests
 
         public Task<bool> CanConnectAsync(CancellationToken ct = default)
             => Task.FromResult(true);
+
+        public Task<DataObjectPage> QueryDataObjectsAsync(DataObjectQuery query, CancellationToken ct = default)
+            => Task.FromResult(new DataObjectPage { Limit = query.Limit, Offset = query.Offset });
     }
 }

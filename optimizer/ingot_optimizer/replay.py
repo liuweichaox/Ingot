@@ -27,9 +27,7 @@ class SyntheticTruthResult:
     process_features: Mapping[str, float] = field(default_factory=dict)
 
 
-TruthFunction = Callable[
-    [dict[str, float]], Mapping[str, float] | SyntheticTruthResult
-]
+TruthFunction = Callable[[dict[str, float]], SyntheticTruthResult]
 
 
 def _evaluate_truth(
@@ -38,20 +36,14 @@ def _evaluate_truth(
     params: dict[str, float],
 ) -> OptimizerObservation:
     result = truth_fn(params)
-    if isinstance(result, SyntheticTruthResult):
-        observation = OptimizerObservation(
-            params=params,
-            outcomes=result.outcomes,
-            constraint_outcomes=result.constraint_outcomes,
-            process_features=result.process_features,
-        )
-    else:
-        if campaign.outcome_constraints:
-            raise ValueError(
-                "synthetic replay with outcome constraints requires "
-                "SyntheticTruthResult"
-            )
-        observation = OptimizerObservation(params=params, outcomes=result)
+    if not isinstance(result, SyntheticTruthResult):
+        raise TypeError("synthetic replay truth functions must return SyntheticTruthResult")
+    observation = OptimizerObservation(
+        params=params,
+        outcomes=result.outcomes,
+        constraint_outcomes=result.constraint_outcomes,
+        process_features=result.process_features,
+    )
     campaign.validate_outcomes(observation.outcomes)
     campaign.validate_constraint_outcomes(observation.constraint_outcomes)
     return observation

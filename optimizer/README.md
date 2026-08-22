@@ -164,7 +164,7 @@ print(replay_history_pool(campaign, history))
 
 在线建议、历史回放和合成回放共用同一个引擎选择入口：少于 3 条有效观察时使用序贯冷启动并允许 NumPy GP 先验；达到 3 条后统一切换 BoTorch，安全结果约束继续由所选引擎的 `suggest` 路径强制执行。调用方不得自行实例化具体引擎。
 
-合成回放的 truth 函数在存在结果安全约束时必须返回结构化结果：`{"outcomes": {...}, "constraint_outcomes": {...}, "process_features": {...}}`，其中 `process_features` 可省略。仅当 campaign 没有结果安全约束时，旧式纯 outcome 映射才继续兼容。成功判定同时要求目标达标和全部结果安全约束通过。
+合成回放的 truth 函数必须返回 `SyntheticTruthResult`，明确提供 `outcomes`、`constraint_outcomes` 和可选的 `process_features`。成功判定同时要求目标达标和全部结果安全约束通过。
 
 ## 产品接线
 

@@ -364,6 +364,7 @@ public sealed class ResearchAssetWorkflowTests
         private readonly List<ModelDriftReading> _drift = [];
         private readonly Dictionary<(string, int), MechanismModelVersion> _mechanismModels = [];
         private readonly Dictionary<(string, int), MechanismFusionDefinition> _mechanismFusions = [];
+        private readonly List<DatasetQualityValidationReport> _datasetQualityReports = [];
         private readonly Dictionary<Guid, KnowledgeSource> _knowledgeSources = [];
         private readonly Dictionary<Guid, KnowledgeRecord> _knowledgeRecords = [];
         public List<ResearchAssetAuditEntry> Audit { get; } = [];
@@ -379,25 +380,42 @@ public sealed class ResearchAssetWorkflowTests
         public Task<TrainingDatasetVersion> AddDatasetAsync(TrainingDatasetVersion value, CancellationToken ct = default) { _datasets[(value.DatasetId, value.Version)] = value; return Task.FromResult(value); }
         public Task<TrainingDatasetVersion?> GetDatasetAsync(string datasetId, int version, CancellationToken ct = default) => Task.FromResult(_datasets.GetValueOrDefault((datasetId, version)));
         public Task<IReadOnlyList<TrainingDatasetVersion>> ListDatasetsAsync(CancellationToken ct = default) => Task.FromResult<IReadOnlyList<TrainingDatasetVersion>>(_datasets.Values.ToArray());
+        public Task<ResearchAssetPage<TrainingDatasetVersion>> ListDatasetsPageAsync(int limit, string? cursor, CancellationToken ct = default) => Task.FromResult(new ResearchAssetPage<TrainingDatasetVersion> { Data = _datasets.Values.Take(limit).ToArray() });
         public Task<ProcessModelVersion> SaveModelAsync(ProcessModelVersion value, CancellationToken ct = default) { _models[(value.ModelId, value.Version)] = value; return Task.FromResult(value); }
         public Task<ProcessModelVersion?> GetModelAsync(string modelId, int version, CancellationToken ct = default) => Task.FromResult(_models.GetValueOrDefault((modelId, version)));
         public Task<IReadOnlyList<ProcessModelVersion>> ListModelsAsync(CancellationToken ct = default) => Task.FromResult<IReadOnlyList<ProcessModelVersion>>(_models.Values.ToArray());
+        public Task<ResearchAssetPage<ProcessModelVersion>> ListModelsPageAsync(int limit, string? cursor, CancellationToken ct = default) => Task.FromResult(new ResearchAssetPage<ProcessModelVersion> { Data = _models.Values.Take(limit).ToArray() });
         public Task<ModelEvaluation> AddEvaluationAsync(ModelEvaluation value, CancellationToken ct = default) { _evaluations.Add(value); return Task.FromResult(value); }
         public Task<IReadOnlyList<ModelEvaluation>> ListEvaluationsAsync(string modelId, int version, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<ModelEvaluation>>(_evaluations.Where(item => item.ModelId == modelId && item.ModelVersion == version).ToArray());
+        public Task<ResearchAssetPage<ModelEvaluation>> ListEvaluationsPageAsync(string modelId, int version, int limit, string? cursor, CancellationToken ct = default) => Task.FromResult(new ResearchAssetPage<ModelEvaluation> { Data = _evaluations.Where(item => item.ModelId == modelId && item.ModelVersion == version).Take(limit).ToArray() });
         public Task<ModelDriftReading> AddDriftReadingAsync(ModelDriftReading value, CancellationToken ct = default) { _drift.Add(value); return Task.FromResult(value); }
         public Task<IReadOnlyList<ModelDriftReading>> ListDriftReadingsAsync(string modelId, int version, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<ModelDriftReading>>(_drift.Where(item => item.ModelId == modelId && item.ModelVersion == version).ToArray());
+        public Task<ResearchAssetPage<ModelDriftReading>> ListDriftReadingsPageAsync(string modelId, int version, int limit, string? cursor, CancellationToken ct = default) => Task.FromResult(new ResearchAssetPage<ModelDriftReading> { Data = _drift.Where(item => item.ModelId == modelId && item.ModelVersion == version).Take(limit).ToArray() });
         public Task<MechanismModelVersion> SaveMechanismModelAsync(MechanismModelVersion value, CancellationToken ct = default) { _mechanismModels[(value.ModelId, value.Version)] = value; return Task.FromResult(value); }
         public Task<MechanismModelVersion?> GetMechanismModelAsync(string modelId, int version, CancellationToken ct = default) => Task.FromResult(_mechanismModels.GetValueOrDefault((modelId, version)));
         public Task<IReadOnlyList<MechanismModelVersion>> ListMechanismModelsAsync(CancellationToken ct = default) => Task.FromResult<IReadOnlyList<MechanismModelVersion>>(_mechanismModels.Values.ToArray());
+        public Task<ResearchAssetPage<MechanismModelVersion>> ListMechanismModelsPageAsync(int limit, string? cursor, CancellationToken ct = default) => Task.FromResult(new ResearchAssetPage<MechanismModelVersion> { Data = _mechanismModels.Values.Take(limit).ToArray() });
         public Task<MechanismFusionDefinition> SaveMechanismFusionAsync(MechanismFusionDefinition value, CancellationToken ct = default) { _mechanismFusions[(value.FusionId, value.Version)] = value; return Task.FromResult(value); }
         public Task<MechanismFusionDefinition?> GetMechanismFusionAsync(string fusionId, int version, CancellationToken ct = default) => Task.FromResult(_mechanismFusions.GetValueOrDefault((fusionId, version)));
         public Task<IReadOnlyList<MechanismFusionDefinition>> ListMechanismFusionsAsync(CancellationToken ct = default) => Task.FromResult<IReadOnlyList<MechanismFusionDefinition>>(_mechanismFusions.Values.ToArray());
+        public Task<ResearchAssetPage<MechanismFusionDefinition>> ListMechanismFusionsPageAsync(int limit, string? cursor, CancellationToken ct = default) => Task.FromResult(new ResearchAssetPage<MechanismFusionDefinition> { Data = _mechanismFusions.Values.Take(limit).ToArray() });
+        public Task<DatasetQualityValidationReport> SaveDatasetQualityValidationReportAsync(DatasetQualityValidationReport value, CancellationToken ct = default) { _datasetQualityReports.Add(value); return Task.FromResult(value); }
+        public Task<IReadOnlyList<DatasetQualityValidationReport>> ListDatasetQualityValidationReportsAsync(CancellationToken ct = default) => Task.FromResult<IReadOnlyList<DatasetQualityValidationReport>>(_datasetQualityReports.ToArray());
+        public Task<ResearchAssetPage<DatasetQualityValidationReport>> ListDatasetQualityValidationReportsPageAsync(int limit, string? cursor, CancellationToken ct = default) => Task.FromResult(new ResearchAssetPage<DatasetQualityValidationReport> { Data = _datasetQualityReports.Take(limit).ToArray() });
         public Task<KnowledgeSource> AddKnowledgeSourceAsync(Stream content, string title, string sourceKind, string fileName, string mediaType, IReadOnlyDictionary<string, string> contextSelector, string userId, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<KnowledgeSource?> GetKnowledgeSourceAsync(Guid sourceId, CancellationToken ct = default) => Task.FromResult(_knowledgeSources.GetValueOrDefault(sourceId));
         public Task<IReadOnlyList<KnowledgeSource>> ListKnowledgeSourcesAsync(CancellationToken ct = default) => Task.FromResult<IReadOnlyList<KnowledgeSource>>(_knowledgeSources.Values.ToArray());
+        public Task<IReadOnlyList<KnowledgeSource>> ListKnowledgeSourcesAsync(Guid projectId, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<KnowledgeSource>>(_knowledgeSources.Values.Where(value => value.ContextSelector.GetValueOrDefault("research-project-id") == projectId.ToString()).ToArray());
+        public async Task<ResearchAssetPage<KnowledgeSource>> ListKnowledgeSourcesPageAsync(Guid projectId, int limit, string? cursor, CancellationToken ct = default) => new() { Data = (await ListKnowledgeSourcesAsync(projectId, ct)).Take(limit).ToArray() };
         public Task<Stream?> OpenKnowledgeSourceAsync(Guid sourceId, CancellationToken ct = default) => Task.FromResult<Stream?>(null);
         public Task<KnowledgeSource> SaveKnowledgeSourceMetadataAsync(KnowledgeSource value, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<KnowledgeRecord> SaveKnowledgeRecordAsync(KnowledgeRecord value, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<KnowledgeSource> ReplaceExtractedKnowledgeRecordsAsync(KnowledgeSource source, IReadOnlyList<KnowledgeRecord> records, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task EnqueueKnowledgeExtractionAsync(Guid sourceId, string userId, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<KnowledgeExtractionJob?> ClaimKnowledgeExtractionAsync(TimeSpan leaseTimeout, CancellationToken ct = default) => Task.FromResult<KnowledgeExtractionJob?>(null);
+        public Task<bool> RenewKnowledgeExtractionLeaseAsync(Guid sourceId, Guid leaseId, CancellationToken ct = default) => Task.FromResult(false);
+        public Task<bool> CompleteKnowledgeExtractionAsync(Guid sourceId, Guid leaseId, CancellationToken ct = default) => Task.FromResult(false);
+        public Task<KnowledgeExtractionFailureDisposition?> FailKnowledgeExtractionAsync(Guid sourceId, Guid leaseId, string error, bool retryable, int maxAttempts, TimeSpan retryDelay, CancellationToken ct = default) => Task.FromResult<KnowledgeExtractionFailureDisposition?>(null);
         public Task<IReadOnlyList<KnowledgeRecord>> ListKnowledgeRecordsAsync(Guid sourceId, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<KnowledgeRecord>>(_knowledgeRecords.Values.Where(item => item.SourceId == sourceId).ToArray());
         public Task AddAuditEntryAsync(ResearchAssetAuditEntry value, CancellationToken ct = default) { Audit.Add(value); return Task.CompletedTask; }
         public Task<IReadOnlyList<ResearchAssetAuditEntry>> ListAuditEntriesAsync(string resourceType, string resourceId, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<ResearchAssetAuditEntry>>(Audit.Where(item => item.ResourceType == resourceType && item.ResourceId == resourceId).ToArray());
@@ -418,5 +436,9 @@ public sealed class ResearchAssetWorkflowTests
         public Task<IReadOnlyList<ProcessAnalysisPlan>> ListAnalysisPlansAsync(CancellationToken ct = default) => Task.FromResult<IReadOnlyList<ProcessAnalysisPlan>>([]);
         public Task<ProcessAnalysisPlan?> GetAnalysisPlanAsync(string planId, int version, CancellationToken ct = default) => Task.FromResult<ProcessAnalysisPlan?>(null);
         public Task<bool> DeleteAnalysisPlanAsync(string planId, int version, CancellationToken ct = default) => Task.FromResult(false);
+        public Task<ScenarioPackage> UpsertScenarioPackageAsync(ScenarioPackage value, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<IReadOnlyList<ScenarioPackage>> ListScenarioPackagesAsync(CancellationToken ct = default) => Task.FromResult<IReadOnlyList<ScenarioPackage>>([]);
+        public Task<ScenarioPackage?> GetScenarioPackageAsync(string packageId, int version, CancellationToken ct = default) => Task.FromResult<ScenarioPackage?>(null);
+        public Task<bool> DeleteScenarioPackageAsync(string packageId, int version, CancellationToken ct = default) => Task.FromResult(false);
     }
 }

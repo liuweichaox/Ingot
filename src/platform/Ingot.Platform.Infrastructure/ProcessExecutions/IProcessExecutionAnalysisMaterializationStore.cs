@@ -1,9 +1,11 @@
+// 定义运行分析物化、失效标记、租约和运维任务的数据库事务边界。
 using Ingot.Contracts.Events;
 using Ingot.Platform.Application.ProcessExecutions;
 using Npgsql;
 
 namespace Ingot.Platform.Infrastructure.ProcessExecutions;
 
+/// <summary>以显式租约和事务保存可重算的运行分析物化结果。</summary>
 public interface IProcessExecutionAnalysisMaterializationStore : IProcessExecutionAnalysisOperationsStore
 {
     Task InitializeAsync(CancellationToken ct = default);
@@ -15,8 +17,7 @@ public interface IProcessExecutionAnalysisMaterializationStore : IProcessExecuti
 
     Task<ProcessExecutionAnalysisSnapshot?> TryLoadLatestAsync(
         ProcessExecutionAnalysisMaterializationKey key,
-        CancellationToken ct = default)
-        => Task.FromResult<ProcessExecutionAnalysisSnapshot?>(null);
+        CancellationToken ct = default);
 
     Task<ProcessExecutionAnalysisSnapshot> SaveAsync(
         ProcessExecutionAnalysisMaterializationKey key,
@@ -36,31 +37,26 @@ public interface IProcessExecutionAnalysisMaterializationStore : IProcessExecuti
         IReadOnlyCollection<string> executionIds,
         long invalidatedSourceMaxIngestId,
         string reason,
-        CancellationToken ct = default)
-        => MarkDirtyAsync(executionIds, invalidatedSourceMaxIngestId, reason, ct);
+        CancellationToken ct = default);
 
     Task<ProcessExecutionAnalysisBackfillLease?> ClaimBackfillJobAsync(
         TimeSpan leaseTimeout,
-        CancellationToken ct = default)
-        => Task.FromResult<ProcessExecutionAnalysisBackfillLease?>(null);
+        CancellationToken ct = default);
 
     Task<bool> SaveClaimedBackfillJobAsync(
         ProcessExecutionAnalysisBackfillJob job,
         Guid leaseId,
         bool releaseLease,
-        CancellationToken ct = default)
-        => Task.FromResult(false);
+        CancellationToken ct = default);
 
     Task<ProcessExecutionAnalysisRecomputeLease?> ClaimRecomputeAsync(
         TimeSpan leaseTimeout,
-        CancellationToken ct = default)
-        => Task.FromResult<ProcessExecutionAnalysisRecomputeLease?>(null);
+        CancellationToken ct = default);
 
     Task<bool> CompleteRecomputeAsync(
         string executionId,
         Guid leaseId,
-        CancellationToken ct = default)
-        => Task.FromResult(false);
+        CancellationToken ct = default);
 
     Task<bool> RetryRecomputeAsync(
         string executionId,
@@ -68,8 +64,7 @@ public interface IProcessExecutionAnalysisMaterializationStore : IProcessExecuti
         TimeSpan delay,
         string error,
         int maxAttempts,
-        CancellationToken ct = default)
-        => Task.FromResult(false);
+        CancellationToken ct = default);
 
 }
 

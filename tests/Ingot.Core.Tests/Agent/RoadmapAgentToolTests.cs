@@ -290,7 +290,7 @@ public sealed class RoadmapAgentToolTests
         public Task<InspectionRecord?> GetCorrectionForAsync(Guid recordId, CancellationToken ct = default)
             => Task.FromResult(records.FirstOrDefault(record => record.SupersedesRecordId == recordId));
 
-        public Task<IReadOnlyList<InspectionScope>> ListScopesAsync(CancellationToken ct = default)
+        public Task<IReadOnlyList<InspectionScope>> ListScopesAsync(string? siteId, CancellationToken ct = default)
             => Task.FromResult<IReadOnlyList<InspectionScope>>([]);
 
         public Task<InspectionScope?> GetScopeAsync(string scopeId, CancellationToken ct = default)
@@ -327,11 +327,13 @@ public sealed class RoadmapAgentToolTests
 
         public Task<IReadOnlyList<InspectionRecord>> QueryAllByExecutionIdsAsync(
             IReadOnlyCollection<string> executionIds,
+            string? siteId,
             CancellationToken ct = default)
         {
             var ids = executionIds.ToHashSet(StringComparer.Ordinal);
             return Task.FromResult<IReadOnlyList<InspectionRecord>>(
-                records.Where(record => ids.Contains(record.ExecutionId)).ToArray());
+                records.Where(record => ids.Contains(record.ExecutionId) &&
+                    (string.IsNullOrWhiteSpace(siteId) || record.SiteId == siteId)).ToArray());
         }
     }
 

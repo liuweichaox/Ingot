@@ -35,7 +35,7 @@ export function HistoricalReplayCard({ reports, currentUserId, onReview }) {
           {
             key: "gateFailures",
             label: "失败与限制",
-            render: (value, row) => <div className="max-w-96 text-xs leading-5 text-slate-600">{(value || []).map(item => <div key={item}>失败：{item}</div>)}<div>限制：{row.limitations}</div></div>,
+            render: (value, row) => <div className="max-w-96 text-xs leading-5 text-slate-600">{(value || []).map((item, index) => <div key={`failure:${index}:${item}`}>失败：{item}</div>)}<div>限制：{row.limitations}</div></div>,
           },
           {
             key: "actions",
@@ -67,12 +67,12 @@ export function OnlineAdmissionCard({ evidence }) {
         </div>
         {(evidence.failures || []).length > 0 && (
           <Alert tone="danger" title="在线门禁未通过">
-            {(evidence.failures || []).map(item => <div key={item}>{item}</div>)}
+            {(evidence.failures || []).map((item, index) => <div key={`failure:${index}:${item}`}>{item}</div>)}
           </Alert>
         )}
         {(evidence.warnings || []).length > 0 && (
           <Alert tone="warning" title="运行前必须确认">
-            {(evidence.warnings || []).map(item => <div key={item}>{item}</div>)}
+            {(evidence.warnings || []).map((item, index) => <div key={`warning:${index}:${item}`}>{item}</div>)}
           </Alert>
         )}
       </div>
@@ -92,7 +92,7 @@ export function RollbackDrillCard({ drills, currentUserId, onReview }) {
         <DataTable rows={drills} keyField="drillId" columns={[
           { key: "name", label: "演练", render: (value, row) => <div className="max-w-72 text-xs leading-5"><strong>{value}</strong><div>{row.scenario}</div><code>{String(row.recordHash).slice(0, 12)}…</code></div> },
           { key: "trigger", label: "停止 / 回退", render: (_, row) => <div className="max-w-80 text-xs leading-5">触发：{row.stopTrigger}<br />回退：{row.rollbackTarget}</div> },
-          { key: "evidence", label: "实际证据", render: (_, row) => <div className="max-w-72 text-xs leading-5">{(row.observedActions || []).map(value => <div key={value}>· {value}</div>)}<div>{row.evidenceReference}</div></div> },
+          { key: "evidence", label: "实际证据", render: (_, row) => <div className="max-w-72 text-xs leading-5">{(row.observedActions || []).map((value, index) => <div key={`action:${index}:${value}`}>· {value}</div>)}<div>{row.evidenceReference}</div></div> },
           { key: "status", label: "结论", render: (value, row) => <div className="space-y-1 text-xs"><StatusBadge value={row.passed ? "演练通过" : "演练失败"} /><StatusBadge value={value === "reviewed" ? "已独立复核" : "待独立复核"} /></div> },
           { key: "actions", label: "操作", render: (_, row) => row.status === "recorded" && row.conductedBy !== currentUserId ? <Button onClick={event => { event.stopPropagation(); onReview(row); }}>复核演练证据</Button> : row.status === "recorded" ? <span className="text-xs text-slate-500">等待其他工程师复核</span> : "已冻结" },
         ]} />
@@ -166,17 +166,17 @@ export function ShadowEvidenceCard({ recommendations, report, variableByCode, ob
           {
             key: "decision",
             label: "工程师选择",
-            render: (value, row) => <div className="space-y-2 text-xs"><StatusBadge value={shadowDecisionLabels[value] || value} /><div>有用性：{{ useful: "有用", "partly-useful": "部分有用", "not-useful": "无用" }[row.usefulnessRating] || "未评分"}</div>{(row.engineerSelectedFactors || []).map(factor => <div key={factor.variableCode}>{variableByCode.get(factor.variableCode)?.name || factor.variableCode}：<strong>{formatResearchNumber(factor.value)} {factor.unit}</strong></div>)}</div>,
+            render: (value, row) => <div className="space-y-2 text-xs"><StatusBadge value={shadowDecisionLabels[value] || value} /><div>有用性：{{ useful: "有用", "partly-useful": "部分有用", "not-useful": "无用" }[row.usefulnessRating] || "未评分"}</div>{(row.engineerSelectedFactors || []).map((factor, index) => <div key={`${factor.variableCode}:${index}`}>{variableByCode.get(factor.variableCode)?.name || factor.variableCode}：<strong>{formatResearchNumber(factor.value)} {factor.unit}</strong></div>)}</div>,
           },
           {
             key: "reason",
             label: "拒绝原因 / 现场限制",
-            render: (_, row) => <div className="max-w-72 text-xs leading-5 text-slate-600"><div>{row.rejectionReason || "采用建议，无拒绝原因"}</div>{(row.siteLimitations || []).map(value => <div key={value}>限制：{value}</div>)}</div>,
+            render: (_, row) => <div className="max-w-72 text-xs leading-5 text-slate-600"><div>{row.rejectionReason || "采用建议，无拒绝原因"}</div>{(row.siteLimitations || []).map((value, index) => <div key={`limitation:${index}:${value}`}>限制：{value}</div>)}</div>,
           },
           {
             key: "outcome",
             label: "源数据结果",
-            render: value => value ? <div className="space-y-1 text-xs"><StatusBadge value={value.validForOptimization ? "数据完整" : "数据不足"} />{Object.entries(value.outcomes || {}).map(([code, number]) => <div key={code}>{objectiveByCode.get(code)?.name || code}：<strong>{formatResearchNumber(number)}</strong></div>)}{Object.entries(value.settingDeviationFromEngineerSelection || {}).map(([code, number]) => <div key={code}>实际设置偏差 {variableByCode.get(code)?.name || code}：<strong>{formatResearchNumber(number)}</strong></div>)}<code title={value.sourceContentHash}>{String(value.sourceContentHash).slice(0, 12)}…</code></div> : <span className="text-xs text-slate-500">等待实际运行与检验</span>,
+            render: value => value ? <div className="space-y-1 text-xs"><StatusBadge value={value.validForOptimization ? "数据完整" : "数据不足"} />{Object.entries(value.outcomes || {}).map(([code, number]) => <div key={`outcome:${code}`}>{objectiveByCode.get(code)?.name || code}：<strong>{formatResearchNumber(number)}</strong></div>)}{Object.entries(value.settingDeviationFromEngineerSelection || {}).map(([code, number]) => <div key={`deviation:${code}`}>实际设置偏差 {variableByCode.get(code)?.name || code}：<strong>{formatResearchNumber(number)}</strong></div>)}<code title={value.sourceContentHash}>{String(value.sourceContentHash).slice(0, 12)}…</code></div> : <span className="text-xs text-slate-500">等待实际运行与检验</span>,
           },
           {
             key: "actions",

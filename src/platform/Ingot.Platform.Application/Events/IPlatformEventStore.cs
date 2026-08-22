@@ -1,8 +1,10 @@
+// 定义生产事件写入、查询和分析投影所需的应用存储端口。
 using Ingot.Contracts.Analytics;
 using Ingot.Contracts.Events;
 
 namespace Ingot.Platform.Application.Events;
 
+/// <summary>保存正式生产事件，并提供按站点隔离的事件与汇总查询。</summary>
 public interface IPlatformEventStore
 {
     Task InitializeAsync(CancellationToken ct = default);
@@ -15,61 +17,17 @@ public interface IPlatformEventStore
         PlatformEventQuery query,
         CancellationToken ct = default);
 
-    async Task<IReadOnlyList<PlatformProductionEvent>> QueryByExecutionIdsAsync(
+    Task<IReadOnlyList<PlatformProductionEvent>> QueryByExecutionIdsAsync(
         IReadOnlyCollection<string> executionIds,
-        CancellationToken ct = default)
-    {
-        var result = new List<PlatformProductionEvent>();
-        foreach (var executionId in executionIds
-                     .Where(static value => !string.IsNullOrWhiteSpace(value))
-                     .Distinct(StringComparer.Ordinal))
-        {
-            var cursor = 0L;
-            while (true)
-            {
-                var page = await QueryAsync(new PlatformEventQuery
-                {
-                    ExecutionId = executionId,
-                    AfterIngestId = cursor,
-                    Limit = 500
-                }, ct).ConfigureAwait(false);
-                if (page.Count == 0)
-                    break;
-                result.AddRange(page);
-                var next = page.Max(static row => row.IngestId);
-                if (next <= cursor || page.Count < 500)
-                    break;
-                cursor = next;
-            }
-        }
-        return result;
-    }
+        CancellationToken ct = default);
 
-    async Task<IReadOnlyList<PlatformProcessExecutionSummarySource>> QueryExecutionSummarySourcesAsync(
+    Task<IReadOnlyList<PlatformProcessExecutionSummarySource>> QueryExecutionSummarySourcesAsync(
         IReadOnlyCollection<string> executionIds,
-        CancellationToken ct = default)
-    {
-        var rows = await QueryByExecutionIdsAsync(executionIds, ct).ConfigureAwait(false);
-        return rows
-            .Where(static row => !string.IsNullOrWhiteSpace(row.Event.ExecutionId))
-            .GroupBy(static row => row.Event.ExecutionId!, StringComparer.Ordinal)
-            .Select(static group => new PlatformProcessExecutionSummarySource
-            {
-                ExecutionId = group.Key,
-                SampleCount = 0,
-                Events = group.ToArray()
-            })
-            .ToArray();
-    }
+        CancellationToken ct = default);
 
     Task<DataObjectPage> QueryDataObjectsAsync(
         DataObjectQuery query,
-        CancellationToken ct = default)
-        => Task.FromResult(new DataObjectPage
-        {
-            Limit = query.Limit,
-            Offset = query.Offset
-        });
+        CancellationToken ct = default);
 
     Task<PlatformEventScopeStats> GetScopeStatsAsync(
         PlatformEventQuery query,

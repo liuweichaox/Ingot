@@ -305,10 +305,12 @@ export function WorkspaceContent({
                   const runs = isHistorical ? (row.runPlan || []).slice(0, 3) : row.runPlan || [];
                   return (
                     <div className="space-y-2">
-                    {runs.map(run => (
-                      <div key={run.executionKey} className="rounded-lg border border-slate-200 bg-slate-50 p-2">
+                    {runs.map((run, runIndex) => {
+                      const runIdentifier = run.executionKey || run.runKey || `run-${runIndex + 1}`;
+                      return (
+                      <div key={`${row.experimentId}:${runIdentifier}:${runIndex}`} className="rounded-lg border border-slate-200 bg-slate-50 p-2">
                         <div className="flex items-center justify-between gap-2">
-                          <code className="block text-xs font-semibold text-slate-700">{run.executionKey}</code>
+                          <code className="block text-xs font-semibold text-slate-700">{runIdentifier}</code>
                           {!isHistorical && (
                             <StatusBadge value={observedExecutionKeys.has(run.executionKey) ? "数据已回收" : "等待运行"} />
                           )}
@@ -320,10 +322,10 @@ export function WorkspaceContent({
                             {run.replicateKey ? `重复条件 ${run.replicateKey}` : ""}
                           </div>
                         )}
-                        {(run.factors || []).map(factor => {
+                        {(run.factors || []).map((factor, factorIndex) => {
                           const variable = variableByCode.get(factor.variableCode);
                           return (
-                            <div key={factor.variableCode} className="mt-1 text-xs text-slate-600">
+                            <div key={`${factor.variableCode}:${factorIndex}`} className="mt-1 text-xs text-slate-600">
                               {variable?.name || factor.variableCode}：
                               <strong className="ml-1 text-slate-900">
                                 {formatResearchNumber(factor.value)} {factor.unit || variable?.unit || ""}
@@ -345,7 +347,8 @@ export function WorkspaceContent({
                           </div>
                         )}
                       </div>
-                    ))}
+                      );
+                    })}
                     {isHistorical && row.runPlan.length > runs.length && (
                       <div className="text-xs text-slate-500">
                         另有 {row.runPlan.length - runs.length} 条只读历史运行
@@ -565,7 +568,7 @@ export function WorkspaceContent({
                 label: "目标结果",
                 render: value => (
                   <div className="min-w-72 space-y-2">
-                    {(value || []).map(metric => {
+                    {(value || []).map((metric, metricIndex) => {
                       const objective = objectiveByCode.get(metric.objectiveCode);
                       const target = objective?.target;
                       const reached = objective?.direction === "range"
@@ -578,7 +581,7 @@ export function WorkspaceContent({
                             ? metric.observedValue >= target
                             : metric.observedValue <= target);
                       return (
-                        <div key={metric.objectiveCode} className="rounded-lg border border-slate-200 bg-slate-50 p-2 text-xs">
+                        <div key={`${metric.objectiveCode}:${metricIndex}`} className="rounded-lg border border-slate-200 bg-slate-50 p-2 text-xs">
                           <div className="flex flex-wrap items-center justify-between gap-2">
                             <strong>{objective?.name || metric.objectiveCode}</strong>
                             {Number.isFinite(Number(target)) && (
@@ -621,10 +624,10 @@ export function WorkspaceContent({
                 label: "设置 / 范围",
                 render: value => (
                   <div className="space-y-1">
-                    {(value || []).map(variable => {
+                    {(value || []).map((variable, variableIndex) => {
                       const definition = variableByCode.get(variable.variableCode);
                       return (
-                        <div key={variable.variableCode} className="text-xs">
+                        <div key={`${variable.variableCode}:${variableIndex}`} className="text-xs">
                           {definition?.name || variable.variableCode}：
                           <strong className="ml-1">
                             {variable.lowerBound === variable.upperBound
@@ -699,6 +702,20 @@ export function WorkspaceContent({
                     return <span className="text-xs text-slate-500">等待其他成员审核验证结果</span>;
                   }
                   if (row.validationLevel === "laboratory" && row.validatedBy !== currentUserId) {
+                    const controlledExperimentIds = new Set(experiments
+                      .filter(experiment => experiment.executionCategory === "controlled-online"
+                        && experiment.optimization?.mode === "controlled"
+                        && experiment.status === "completed"
+                        && ["accepted", "modified"].includes(experiment.controlledDecision?.decision))
+                      .map(experiment => experiment.experimentId));
+                    const controlledRunCount = experimentResults
+                      .filter(result => controlledExperimentIds.has(result.experimentId)
+                        && result.calculatedFromSource
+                        && result.safetyPassed)
+                      .reduce((count, result) => count + (result.runObservations?.filter(observation => observation.validForOptimization !== false).length || 0), 0);
+                    if (controlledRunCount < 3) {
+                      return <span className="text-xs text-amber-700">先完成至少 3 条受控在线运行并回收源数据结果</span>;
+                    }
                     return <Button onClick={event => { event.stopPropagation(); onReleaseWindow(row); }}>发布生产</Button>;
                   }
                   if (row.validationLevel === "replay") {
@@ -739,12 +756,12 @@ export function WorkspaceContent({
               {
                 key: "contextDifferences",
                 label: "变化条件",
-                render: value => <div className="max-w-72 text-xs leading-5">{(value || []).map(item => <div key={item.field}>{item.field}：{item.sourceValue || "未声明"} → {item.targetValue || "未声明"}</div>)}</div>,
+                render: value => <div className="max-w-72 text-xs leading-5">{(value || []).map((item, index) => <div key={`${item.field}:${index}`}>{item.field}：{item.sourceValue || "未声明"} → {item.targetValue || "未声明"}</div>)}</div>,
               },
               {
                 key: "failures",
                 label: "失败与边界",
-                render: (value, row) => <div className="max-w-96 text-xs leading-5 text-slate-600">{(value || []).map(item => <div key={item}>失败：{item}</div>)}{(row.warnings || []).map(item => <div key={item}>提示：{item}</div>)}</div>,
+                render: (value, row) => <div className="max-w-96 text-xs leading-5 text-slate-600">{(value || []).map((item, index) => <div key={`failure:${index}:${item}`}>失败：{item}</div>)}{(row.warnings || []).map((item, index) => <div key={`warning:${index}:${item}`}>提示：{item}</div>)}</div>,
               },
               {
                 key: "actions",

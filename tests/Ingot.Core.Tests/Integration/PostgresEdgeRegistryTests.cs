@@ -20,6 +20,7 @@ public sealed class PostgresEdgeRegistryTests(PostgresIntegrationFixture postgre
 
         await Task.WhenAll(Enumerable.Range(0, 8).Select(index => registry.HeartbeatAsync(
             edgeId,
+            "SITE-INTEGRATION",
             "http://edge.local",
             null,
             new EdgeAcquisitionRuntimeStatus(
@@ -90,6 +91,7 @@ public sealed class PostgresEdgeRegistryTests(PostgresIntegrationFixture postgre
 
         await new EdgeRegistry(postgres.DataSource).HeartbeatAsync(
             edgeId,
+            "SITE-INTEGRATION",
             "http://edge.local/",
             null,
             acquisition,
@@ -98,6 +100,7 @@ public sealed class PostgresEdgeRegistryTests(PostgresIntegrationFixture postgre
 
         await new EdgeRegistry(postgres.DataSource).HeartbeatAsync(
             edgeId,
+            "SITE-INTEGRATION",
             null,
             null,
             acquisition with { ValidSnapshotCount = 47, EmittedEventCount = 94 },
@@ -106,6 +109,7 @@ public sealed class PostgresEdgeRegistryTests(PostgresIntegrationFixture postgre
 
         await new EdgeRegistry(postgres.DataSource).HeartbeatAsync(
             edgeId,
+            "SITE-INTEGRATION",
             null,
             "上送中断",
             acquisition with { ValidSnapshotCount = 48, EmittedEventCount = 96 },

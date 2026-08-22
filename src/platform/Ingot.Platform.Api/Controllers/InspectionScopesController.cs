@@ -1,4 +1,5 @@
 
+// 管理按站点隔离的质量分析范围。
 using Ingot.Contracts.Inspections;
 using Ingot.Platform.Api.Agents;
 using Ingot.Platform.Application.Inspections;
@@ -14,10 +15,19 @@ public sealed class InspectionScopesController(
     PlatformUserResolver userResolver) : PlatformApiController
 {
     [HttpGet]
-    public async Task<IActionResult> List(CancellationToken ct = default)
+    public async Task<IActionResult> List(
+        CancellationToken ct = default,
+        [FromQuery] string? siteId = null)
     {
         var denied = Denied(readOnly: true);
-        return denied ?? Ok(new { data = await queries.ListScopesAsync(ct).ConfigureAwait(false) });
+        if (denied is not null) return denied;
+        var identity = userResolver.ResolveIdentity(User)!;
+        var siteFailure = PlatformSiteScope.Resolve(identity, siteId, true, out var authorizedSiteId);
+        if (siteFailure == SiteScopeFailure.Forbidden)
+            return AuthorizationDenied("当前身份无权访问该站点。", ("siteId", siteId));
+        if (siteFailure == SiteScopeFailure.Missing)
+            return InvalidRequest("必须指定当前身份有权访问的 siteId。");
+        return Ok(new { data = await queries.ListScopesAsync(ct, authorizedSiteId).ConfigureAwait(false) });
     }
 
     [HttpPost]
@@ -26,7 +36,13 @@ public sealed class InspectionScopesController(
         var denied = Denied(readOnly: false);
         if (denied is not null) return denied;
         var identity = userResolver.ResolveIdentity(User)!;
-        var result = await commands.UpsertScopeAsync(request, identity.UserId, ct).ConfigureAwait(false);
+        var siteFailure = PlatformSiteScope.Resolve(identity, request?.SiteId, false, out var siteId);
+        if (siteFailure == SiteScopeFailure.Forbidden)
+            return AuthorizationDenied("当前身份无权访问该站点。", ("siteId", request?.SiteId));
+        if (siteFailure == SiteScopeFailure.Missing)
+            return InvalidRequest("创建质量范围必须指定当前身份有权访问的 siteId。");
+        var result = await commands.UpsertScopeAsync(
+            request is null ? null : request with { SiteId = siteId! }, identity.UserId, ct).ConfigureAwait(false);
         return result.Status switch
         {
             InspectionCommandStatus.Success => Ok(result.Value),
@@ -41,6 +57,10 @@ public sealed class InspectionScopesController(
     {
         var denied = Denied(readOnly: false);
         if (denied is not null) return denied;
+        var identity = userResolver.ResolveIdentity(User)!;
+        var scope = await queries.GetScopeAsync(scopeId, ct).ConfigureAwait(false);
+        if (scope is not null && !identity.CanAccessSite(scope.SiteId))
+            return ResourceNotFound();
         var result = await commands.DeleteScopeAsync(scopeId, ct).ConfigureAwait(false);
         return result.Status switch
         {

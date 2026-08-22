@@ -1,4 +1,5 @@
 
+// 在 Postgres 中持久化按站点隔离的检验事实和质量范围。
 using System.Security.Cryptography;
 using System.Text.Json;
 using Ingot.Contracts.Inspections;
@@ -29,11 +30,11 @@ public sealed class PostgresInspectionRecordStore : IInspectionRecordStore
         await using var command = _dataSource.CreateCommand(
             """
             INSERT INTO inspection_records(
-              record_id, output_item_id, execution_id, definition_code, definition_version,
+              record_id, site_id, output_item_id, execution_id, definition_code, definition_version,
               measured_at, recorded_at, outcome, submitted_by, submitter_verified, instrument,
               measurements, attachments, notes, supersedes_record_id, correction_reason, payload_hash)
             VALUES (
-              @record_id, @output_item_id, @execution_id, @definition_code, @definition_version,
+              @record_id, @site_id, @output_item_id, @execution_id, @definition_code, @definition_version,
               @measured_at, @recorded_at, @outcome, @submitted_by, @submitter_verified, @instrument,
               @measurements, @attachments, @notes, @supersedes_record_id, @correction_reason, @payload_hash)
             ON CONFLICT (record_id) DO NOTHING
@@ -66,15 +67,26 @@ public sealed class PostgresInspectionRecordStore : IInspectionRecordStore
         return await reader.ReadAsync(ct).ConfigureAwait(false) ? Read(reader).Record : null;
     }
 
-    public async Task<IReadOnlyList<InspectionScope>> ListScopesAsync(CancellationToken ct = default)
+    public async Task<IReadOnlyList<InspectionScope>> ListScopesAsync(
+        string? siteId,
+        CancellationToken ct = default)
     {
         await InitializeAsync(ct).ConfigureAwait(false);
-        await using var command = _dataSource.CreateCommand(
-            "SELECT payload::text FROM inspection_scopes ORDER BY to_at DESC, scope_id;");
+        await using var command = _dataSource.CreateCommand();
+        command.CommandText = string.IsNullOrWhiteSpace(siteId)
+            ? "SELECT site_id, payload::text FROM inspection_scopes ORDER BY to_at DESC, scope_id LIMIT 20001;"
+            : "SELECT site_id, payload::text FROM inspection_scopes WHERE site_id = @site_id ORDER BY to_at DESC, scope_id LIMIT 20001;";
+        if (!string.IsNullOrWhiteSpace(siteId))
+            command.Parameters.AddWithValue("site_id", siteId.Trim());
         var values = new List<InspectionScope>();
         await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
         while (await reader.ReadAsync(ct).ConfigureAwait(false))
-            values.Add(JsonSerializer.Deserialize<InspectionScope>(reader.GetString(0), JsonOptions)!);
+        {
+            var value = JsonSerializer.Deserialize<InspectionScope>(reader.GetString(1), JsonOptions)!;
+            values.Add(value with { SiteId = reader.GetString(0) });
+        }
+        if (values.Count > 20_000)
+            throw new InspectionQueryLimitExceededException("质量范围超过 20000 条扫描上限，请按站点归档历史范围。");
         return values;
     }
 
@@ -82,12 +94,13 @@ public sealed class PostgresInspectionRecordStore : IInspectionRecordStore
     {
         await InitializeAsync(ct).ConfigureAwait(false);
         await using var command = _dataSource.CreateCommand(
-            "SELECT payload::text FROM inspection_scopes WHERE scope_id = @scope_id;");
+            "SELECT site_id, payload::text FROM inspection_scopes WHERE scope_id = @scope_id;");
         command.Parameters.AddWithValue("scope_id", scopeId);
-        var payload = await command.ExecuteScalarAsync(ct).ConfigureAwait(false);
-        return payload is null or DBNull
-            ? null
-            : JsonSerializer.Deserialize<InspectionScope>((string)payload, JsonOptions);
+        await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
+        if (!await reader.ReadAsync(ct).ConfigureAwait(false))
+            return null;
+        var value = JsonSerializer.Deserialize<InspectionScope>(reader.GetString(1), JsonOptions)!;
+        return value with { SiteId = reader.GetString(0) };
     }
 
     public async Task<InspectionScope> UpsertScopeAsync(InspectionScope scope, CancellationToken ct = default)
@@ -95,9 +108,10 @@ public sealed class PostgresInspectionRecordStore : IInspectionRecordStore
         await InitializeAsync(ct).ConfigureAwait(false);
         await using var command = _dataSource.CreateCommand(
             """
-            INSERT INTO inspection_scopes(scope_id, scope_type, subject_id, from_at, to_at, payload, updated_at)
-            VALUES (@scope_id, @scope_type, @subject_id, @from_at, @to_at, @payload, now())
+            INSERT INTO inspection_scopes(scope_id, site_id, scope_type, subject_id, from_at, to_at, payload, updated_at)
+            VALUES (@scope_id, @site_id, @scope_type, @subject_id, @from_at, @to_at, @payload, now())
             ON CONFLICT (scope_id) DO UPDATE SET
+              site_id = EXCLUDED.site_id,
               scope_type = EXCLUDED.scope_type,
               subject_id = EXCLUDED.subject_id,
               from_at = EXCLUDED.from_at,
@@ -106,6 +120,7 @@ public sealed class PostgresInspectionRecordStore : IInspectionRecordStore
               updated_at = now();
             """);
         command.Parameters.AddWithValue("scope_id", scope.ScopeId);
+        command.Parameters.AddWithValue("site_id", scope.SiteId);
         command.Parameters.AddWithValue("scope_type", scope.ScopeType);
         command.Parameters.AddWithValue("subject_id", scope.SubjectId);
         command.Parameters.AddWithValue("from_at", scope.From.UtcDateTime);
@@ -133,6 +148,7 @@ public sealed class PostgresInspectionRecordStore : IInspectionRecordStore
 
         await using var command = _dataSource.CreateCommand();
         var predicates = new List<string>();
+        AddEquality(command, predicates, "site_id", "site_id", query.SiteId);
         AddEquality(command, predicates, "output_item_id", "output_item_id", query.OutputItemId);
         AddEquality(command, predicates, "execution_id", "execution_id", query.ExecutionId);
         AddEquality(command, predicates, "definition_code", "definition_code", query.DefinitionCode);
@@ -172,6 +188,7 @@ public sealed class PostgresInspectionRecordStore : IInspectionRecordStore
         await InitializeAsync(ct).ConfigureAwait(false);
         await using var countCommand = _dataSource.CreateCommand();
         var predicates = new List<string>();
+        AddEquality(countCommand, predicates, "site_id", "site_id", query.SiteId);
         AddEquality(countCommand, predicates, "output_item_id", "output_item_id", query.OutputItemId);
         AddEquality(countCommand, predicates, "execution_id", "execution_id", query.ExecutionId);
         AddEquality(countCommand, predicates, "definition_code", "definition_code", query.DefinitionCode);
@@ -201,6 +218,7 @@ public sealed class PostgresInspectionRecordStore : IInspectionRecordStore
 
     public async Task<IReadOnlyList<InspectionRecord>> QueryAllByExecutionIdsAsync(
         IReadOnlyCollection<string> executionIds,
+        string? siteId,
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(executionIds);
@@ -217,13 +235,18 @@ public sealed class PostgresInspectionRecordStore : IInspectionRecordStore
             $"""
              {SelectColumns}
              WHERE execution_id = ANY(@execution_ids)
-             ORDER BY measured_at DESC, record_id DESC;
+               AND (@site_id IS NULL OR site_id = @site_id)
+             ORDER BY measured_at DESC, record_id DESC
+             LIMIT 50001;
              """);
         command.Parameters.AddWithValue("execution_ids", normalizedIds);
+        command.Parameters.AddWithValue("site_id", NpgsqlDbType.Text, (object?)siteId?.Trim() ?? DBNull.Value);
         var records = new List<InspectionRecord>();
         await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
         while (await reader.ReadAsync(ct).ConfigureAwait(false))
             records.Add(Read(reader).Record);
+        if (records.Count > 50_000)
+            throw new InspectionQueryLimitExceededException("检测记录超过 50000 条扫描上限，请缩小任务范围。");
         return records;
     }
 
@@ -246,6 +269,7 @@ public sealed class PostgresInspectionRecordStore : IInspectionRecordStore
         string payloadHash)
     {
         command.Parameters.AddWithValue("record_id", request.RecordId);
+        command.Parameters.AddWithValue("site_id", request.SiteId);
         command.Parameters.AddWithValue(
             "output_item_id",
             NpgsqlDbType.Text,
@@ -280,35 +304,36 @@ public sealed class PostgresInspectionRecordStore : IInspectionRecordStore
 
     private static StoredInspectionRecord Read(NpgsqlDataReader reader)
     {
-        var instrument = reader.IsDBNull(11)
+        var instrument = reader.IsDBNull(12)
             ? null
-            : JsonSerializer.Deserialize<InspectionInstrumentRef>(reader.GetString(11), JsonOptions);
+            : JsonSerializer.Deserialize<InspectionInstrumentRef>(reader.GetString(12), JsonOptions);
         var measurements = JsonSerializer.Deserialize<InspectionCharacteristicResult[]>(
-                               reader.GetString(12), JsonOptions) ?? [];
+                               reader.GetString(13), JsonOptions) ?? [];
         var attachments = JsonSerializer.Deserialize<InspectionAttachment[]>(
-                           reader.GetString(13), JsonOptions) ?? [];
+                           reader.GetString(14), JsonOptions) ?? [];
         return new StoredInspectionRecord(
             new InspectionRecord
             {
                 RecordId = reader.GetGuid(0),
-                OutputItemId = reader.IsDBNull(1) ? null : reader.GetString(1),
-                ExecutionId = reader.GetString(2),
-                DefinitionCode = reader.GetString(3),
-                DefinitionVersion = reader.GetInt32(4),
-                MeasuredAt = ToUtc(reader.GetDateTime(5)),
-                RecordedAt = ToUtc(reader.GetDateTime(6)),
-                IngestedAt = ToUtc(reader.GetDateTime(7)),
-                Outcome = reader.GetString(8),
-                SubmittedBy = reader.GetString(9),
-                SubmitterVerified = reader.GetBoolean(10),
+                SiteId = reader.GetString(1),
+                OutputItemId = reader.IsDBNull(2) ? null : reader.GetString(2),
+                ExecutionId = reader.GetString(3),
+                DefinitionCode = reader.GetString(4),
+                DefinitionVersion = reader.GetInt32(5),
+                MeasuredAt = ToUtc(reader.GetDateTime(6)),
+                RecordedAt = ToUtc(reader.GetDateTime(7)),
+                IngestedAt = ToUtc(reader.GetDateTime(8)),
+                Outcome = reader.GetString(9),
+                SubmittedBy = reader.GetString(10),
+                SubmitterVerified = reader.GetBoolean(11),
                 Instrument = instrument,
                 Measurements = measurements,
                 Attachments = attachments,
-                Notes = reader.IsDBNull(14) ? null : reader.GetString(14),
-                SupersedesRecordId = reader.IsDBNull(15) ? null : reader.GetGuid(15),
-                CorrectionReason = reader.IsDBNull(16) ? null : reader.GetString(16)
+                Notes = reader.IsDBNull(15) ? null : reader.GetString(15),
+                SupersedesRecordId = reader.IsDBNull(16) ? null : reader.GetGuid(16),
+                CorrectionReason = reader.IsDBNull(17) ? null : reader.GetString(17)
             },
-            reader.GetString(17));
+            reader.GetString(18));
     }
 
     private static DateTimeOffset ToUtc(DateTime value)
@@ -334,7 +359,7 @@ public sealed class PostgresInspectionRecordStore : IInspectionRecordStore
     private sealed record StoredInspectionRecord(InspectionRecord Record, string PayloadHash);
 
     private const string SelectColumns = """
-        SELECT record_id, output_item_id, execution_id, definition_code, definition_version,
+        SELECT record_id, site_id, output_item_id, execution_id, definition_code, definition_version,
                measured_at, recorded_at, ingested_at, outcome, submitted_by, submitter_verified,
                instrument::text, measurements::text, attachments::text, notes,
                supersedes_record_id, correction_reason, payload_hash

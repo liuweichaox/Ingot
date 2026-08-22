@@ -428,12 +428,18 @@ public sealed class ResearchObservationAssemblerTests
             => throw new NotSupportedException();
         public Task<bool> DeleteAnalysisPlanAsync(string planId, int version, CancellationToken ct = default)
             => throw new NotSupportedException();
+        public Task<ScenarioPackage> UpsertScenarioPackageAsync(ScenarioPackage value, CancellationToken ct = default)
+            => throw new NotSupportedException();
+        public Task<IReadOnlyList<ScenarioPackage>> ListScenarioPackagesAsync(CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<ScenarioPackage>>([scenario]);
         public Task<ScenarioPackage?> GetScenarioPackageAsync(
             string packageId,
             int version,
             CancellationToken ct = default)
             => Task.FromResult<ScenarioPackage?>(
                 packageId == scenario.PackageId && version == scenario.Version ? scenario : null);
+        public Task<bool> DeleteScenarioPackageAsync(string packageId, int version, CancellationToken ct = default)
+            => Task.FromResult(false);
     }
 
     private sealed class FakeInspectionStore(IReadOnlyList<InspectionRecord> records) :
@@ -457,7 +463,7 @@ public sealed class ResearchObservationAssemblerTests
         public Task<InspectionRecord?> GetCorrectionForAsync(Guid recordId, CancellationToken ct = default)
             => Task.FromResult(records.FirstOrDefault(value => value.SupersedesRecordId == recordId));
 
-        public Task<IReadOnlyList<InspectionScope>> ListScopesAsync(CancellationToken ct = default)
+        public Task<IReadOnlyList<InspectionScope>> ListScopesAsync(string? siteId, CancellationToken ct = default)
             => Task.FromResult<IReadOnlyList<InspectionScope>>([]);
 
         public Task<InspectionScope?> GetScopeAsync(string scopeId, CancellationToken ct = default)
@@ -487,11 +493,13 @@ public sealed class ResearchObservationAssemblerTests
 
         public Task<IReadOnlyList<InspectionRecord>> QueryAllByExecutionIdsAsync(
             IReadOnlyCollection<string> executionIds,
+            string? siteId,
             CancellationToken ct = default)
         {
             BatchQueryCount++;
             return Task.FromResult<IReadOnlyList<InspectionRecord>>(
-                records.Where(value => executionIds.Contains(value.ExecutionId)).ToArray());
+                records.Where(value => executionIds.Contains(value.ExecutionId) &&
+                    (string.IsNullOrWhiteSpace(siteId) || value.SiteId == siteId)).ToArray());
         }
     }
 }

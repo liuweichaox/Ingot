@@ -94,7 +94,7 @@ The .NET platform turns the returned batch into an ordinary `ResearchExperiment`
 
 Use `replay_history_pool` for real history. Every row must contain a finite numeric `occurred_at`, and rows must be strictly increasing in time. Missing, duplicate, or out-of-order timestamps are rejected rather than silently sorted, preserving the no-future-leakage contract. Replay measures whether the model ranks successful parameter settings earlier among parameter settings that were actually run. It does not invent outcomes for untried parameter settings and cannot by itself prove prospective trial savings. Aggregate repeated parameter settings with a predefined statistical method before replay.
 
-Synthetic replay truth functions must return `{"outcomes": {...}, "constraint_outcomes": {...}, "process_features": {...}}` whenever the campaign declares outcome constraints; `process_features` is optional. The legacy outcomes-only mapping remains compatible only for campaigns without outcome constraints. A synthetic run succeeds only when its objectives and every outcome-safety constraint pass.
+Synthetic replay truth functions must return `SyntheticTruthResult` with explicit `outcomes`, `constraint_outcomes`, and optional `process_features`. A synthetic run succeeds only when its objectives and every outcome-safety constraint pass.
 
 ## Platform integration
 

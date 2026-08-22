@@ -42,7 +42,7 @@ This path requires Git and uv 0.11.32 but no database, equipment, or factory dat
 ./scripts/benchmark-public-validation.sh
 ```
 
-The result is written to `artifacts/public-validation.json`. The current reference result demonstrates fewer additional experiments than seeded random search and overall noninferiority to the linear response surface; it does not support a claim of superiority to every DOE/RSM method. See [Public-data experiment-efficiency validation](../tools/public-validation/README.en.md) for the fast check, complete decision rule, data license, and reference result. Public data can reproduce the software and method path; it cannot prove the same benefit for another factory.
+The result is written to `artifacts/public-validation.json`. The current reference result demonstrates fewer additional experiments than seeded random search and overall noninferiority to the linear response surface; it does not support a claim of superiority to every DOE/RSM method. See [Public-data experiment-efficiency validation](https://github.com/liuweichaox/Ingot/blob/main/tools/public-validation/README.en.md) for the fast check, complete decision rule, data license, and reference result. Public data can reproduce the software and method path; it cannot prove the same benefit for another factory.
 
 The repository also contains a draft v3 external-data evaluation. It uses two physical-experiment datasets not used during v2 development, registers four comparison baselines, and includes a mechanism-feature ablation. At draft status, run only the integrity check:
 
@@ -191,6 +191,8 @@ Enter or receive quality and safety results for the run. Each result includes at
 - sample or run identity;
 - time, provenance, and required attachments;
 - review state when applicable.
+
+The platform currently accepts only PNG, JPEG, TIFF, or PDF inspection attachments whose signature matches the extension. An attachment is uploaded under the authorized `SiteId`, and every download rechecks role and site permission.
 
 The result must link to the same real run. If linkage is not unique, retain a pending state instead of guessing by time proximity.
 

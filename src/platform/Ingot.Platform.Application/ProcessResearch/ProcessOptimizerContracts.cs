@@ -1,3 +1,4 @@
+// 定义 Platform 与无状态优化服务之间的严格请求和响应契约。
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -392,6 +393,7 @@ public sealed record ProcessDiagnosisResponse
     public IReadOnlyList<string> Limitations { get; init; } = [];
 }
 
+/// <summary>调用建议、实验设计、诊断和历史回放四类优化能力。</summary>
 public interface IProcessOptimizerClient
 {
     Task<OptimizerSuggestionResponse> SuggestAsync(
@@ -400,20 +402,18 @@ public interface IProcessOptimizerClient
 
     Task<OptimizerDesignResponse> DesignAsync(
         OptimizerDesignCall request,
-        CancellationToken ct = default)
-        => throw new NotSupportedException("当前优化客户端不支持经典实验设计。");
+        CancellationToken ct = default);
 
     Task<ProcessDiagnosisResponse> DiagnoseAsync(
         ProcessDiagnosisCall request,
-        CancellationToken ct = default)
-        => throw new NotSupportedException("当前优化客户端不支持多变量诊断。");
+        CancellationToken ct = default);
 
     Task<JsonElement> ReplayHistoryAsync(
         OptimizerHistoricalReplayCall request,
-        CancellationToken ct = default)
-        => throw new NotSupportedException("当前优化客户端不支持历史项目回放。");
+        CancellationToken ct = default);
 }
 
+/// <summary>表示优化服务不可达或未达到调用准入条件。</summary>
 public sealed class ProcessOptimizerUnavailableException(
     string message,
     Exception? innerException = null) : HttpRequestException(message, innerException);

@@ -1,4 +1,4 @@
-
+// 在站点授权范围内组装时间窗口运行、检验和过程特征比较。
 using Ingot.Contracts.Events;
 using Ingot.Contracts.Inspections;
 using Ingot.Platform.Application.Events;
@@ -82,7 +82,7 @@ public sealed class TimeWindowComparisonService(
             }
         }
 
-        var scopes = await inspections.ListScopesAsync(ct).ConfigureAwait(false);
+        var scopes = await inspections.ListScopesAsync(null, ct).ConfigureAwait(false);
         var scopesByWindow = request.Windows.ToDictionary(
             static window => window.WindowId,
             window => scopes.Where(scope => ScopeBelongsToWindow(scope, window)).ToArray(),
@@ -95,7 +95,7 @@ public sealed class TimeWindowComparisonService(
         var inspectionRecords = scopeIds.Length == 0
             ? []
             : InspectionRecordSet.Effective(
-                await inspections.QueryAllByExecutionIdsAsync(scopeIds, ct).ConfigureAwait(false));
+                await inspections.QueryAllByExecutionIdsAsync(scopeIds, null, ct).ConfigureAwait(false));
         var resultRows = request.Windows.Select(window => BuildRow(
             window,
             rows[window.WindowId],

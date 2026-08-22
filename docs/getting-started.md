@@ -42,7 +42,7 @@ npm --prefix apps/platform run demo
 ./scripts/benchmark-public-validation.sh
 ```
 
-结果写入 `artifacts/public-validation.json`。当前参考结果证明相对固定随机搜索减少追加实验，并与线性响应面总体非劣；不支持“优于所有 DOE/RSM 方法”的表述。快速检查、完整判定规则、数据许可和参考结果见[公开数据实验效率验证](../tools/public-validation/README.md)。公开数据可以验证软件与方法链路是否可复现，不能证明另一个工厂可以获得相同收益。
+结果写入 `artifacts/public-validation.json`。当前参考结果证明相对固定随机搜索减少追加实验，并与线性响应面总体非劣；不支持“优于所有 DOE/RSM 方法”的表述。快速检查、完整判定规则、数据许可和参考结果见[公开数据实验效率验证](https://github.com/liuweichaox/Ingot/blob/main/tools/public-validation/README.md)。公开数据可以验证软件与方法链路是否可复现，不能证明另一个工厂可以获得相同收益。
 
 仓库还包含 v3 外部数据评估草案。它使用两个未参与 v2 开发的物理实验数据集，登记四个比较基线并加入机理特征消融。当前只执行完整性检查：
 
@@ -191,6 +191,8 @@ docker compose -f docker-compose.app.yml logs --tail=200
 - 样本或运行身份；
 - 时间、来源和必要附件；
 - 需要时的复核状态。
+
+平台当前只接受签名与扩展名一致的 PNG、JPEG、TIFF 或 PDF 检验附件；附件必须随当前授权 `SiteId` 上传，下载也会重新校验岗位和站点权限。
 
 检验结果必须关联到同一次真实运行。无法唯一关联时保留待处理状态，不要按时间邻近自动猜测。
 

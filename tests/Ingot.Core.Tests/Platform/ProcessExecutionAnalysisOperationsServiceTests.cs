@@ -71,6 +71,17 @@ public sealed class ProcessExecutionAnalysisOperationsServiceTests
             ReplayedExecutionId = executionId;
             return Task.FromResult(ReplayResult);
         }
+
+        public Task<ProcessExecutionAnalysisBackfillJob?> GetBackfillJobAsync(Guid jobId, CancellationToken ct = default)
+            => Task.FromResult<ProcessExecutionAnalysisBackfillJob?>(null);
+
+        public Task<IReadOnlyList<ProcessExecutionAnalysisBackfillJob>> ListBackfillJobsAsync(CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<ProcessExecutionAnalysisBackfillJob>>([]);
+
+        public Task<IReadOnlyList<ProcessExecutionFeatureAggregate>> QueryFeatureAggregatesAsync(
+            string? signalCode, string? phaseCode, string? featureCode,
+            DateTimeOffset? from, DateTimeOffset? to, int limit, CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<ProcessExecutionFeatureAggregate>>([]);
     }
 
     private sealed class BoundaryStore : IExecutionBoundaryStore
@@ -94,6 +105,9 @@ public sealed class ProcessExecutionAnalysisOperationsServiceTests
             int offset = 0,
             CancellationToken ct = default) =>
             Task.FromResult<IReadOnlyList<ExecutionBoundary>>([]);
+
+        public Task<bool> ReplayFailedProjectionAsync(string siteId, string sourceExecutionId, CancellationToken ct = default)
+            => Task.FromResult(false);
     }
 
     private sealed class ExecutionService(bool exists) : IProcessExecutionService

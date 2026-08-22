@@ -34,7 +34,7 @@ Choose an entry by role, then follow the links into method detail. You do not ne
 | Process knowledge builder | [Mechanism knowledge design](mechanism-knowledge.en.md) | [Analysis and optimization](optimization.en.md) |
 | Platform operations or security | [Production architecture](production-architecture.en.md) | [Deployment](deployment.en.md) |
 | Project or validation lead | [Scenario validation](rollout.en.md) | [Roadmap](project-plan.en.md) |
-| Algorithm or validation contributor | [Public-data experiment-efficiency validation](../tools/public-validation/README.en.md) | [Analysis and optimization](optimization.en.md) |
+| Algorithm or validation contributor | [Public-data experiment-efficiency validation](https://github.com/liuweichaox/Ingot/blob/main/tools/public-validation/README.en.md) | [Analysis and optimization](optimization.en.md) |
 | Contributor or integrator | [System design](design.en.md) | [Production architecture](production-architecture.en.md) |
 | Public-content maintainer | [Brand guide](brand.en.md) | [Document status](#document-status) |
 

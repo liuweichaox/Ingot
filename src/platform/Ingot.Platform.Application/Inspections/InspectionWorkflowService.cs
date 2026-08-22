@@ -1,17 +1,21 @@
+// 从生产完成事件、质量范围和检验事实派生待检任务状态。
 using Ingot.Contracts.Events;
 using Ingot.Contracts.Inspections;
 
 namespace Ingot.Platform.Application.Inspections;
 
+/// <summary>构建按站点隔离且状态可追溯的检验任务。</summary>
 public sealed class InspectionWorkflowService(
     IInspectionProductionEventReader events,
     IInspectionRecordStore inspections,
     IInspectionReviewStore reviews,
     IInspectionMasterDataStore masterData) : IInspectionWorkflowService
 {
-    public async Task<InspectionTaskSummary> GetSummaryAsync(CancellationToken ct = default)
+    public async Task<InspectionTaskSummary> GetSummaryAsync(
+        CancellationToken ct = default,
+        string? siteId = null)
     {
-        var tasks = await QueryTasksAsync("all", int.MaxValue, ct).ConfigureAwait(false);
+        var tasks = await QueryTasksAsync("all", int.MaxValue, ct, siteId).ConfigureAwait(false);
         return new InspectionTaskSummary
         {
             Total = tasks.Count,
@@ -22,9 +26,12 @@ public sealed class InspectionWorkflowService(
         };
     }
 
-    public async Task<InspectionTask?> GetTaskAsync(string executionId, CancellationToken ct = default)
+    public async Task<InspectionTask?> GetTaskAsync(
+        string executionId,
+        CancellationToken ct = default,
+        string? siteId = null)
     {
-        var completed = (await events.QueryCompletedAsync(executionId, ct).ConfigureAwait(false))
+        var completed = (await events.QueryCompletedAsync(executionId, siteId, ct).ConfigureAwait(false))
             .OrderByDescending(static item => item.Event.OccurredAt)
             .ThenByDescending(static item => item.IngestId)
             .FirstOrDefault();
@@ -35,7 +42,10 @@ public sealed class InspectionWorkflowService(
             var scopePlan = await masterData.GetInspectionPlanAsync(
                 scope.InspectionPlanId, scope.InspectionPlanVersion, ct).ConfigureAwait(false);
             if (scopePlan is null || scopePlan.Status != InspectionPlanStatuses.Published) return null;
-            var scopeRecords = await inspections.QueryAllByExecutionIdsAsync([executionId], ct).ConfigureAwait(false);
+            if (!string.IsNullOrWhiteSpace(siteId) &&
+                !string.Equals(scope.SiteId, siteId, StringComparison.OrdinalIgnoreCase)) return null;
+            var scopeRecords = await inspections.QueryAllByExecutionIdsAsync(
+                [executionId], siteId, ct).ConfigureAwait(false);
             var scopeReviews = await reviews.GetLatestByInspectionRecordIdsAsync(
                 scopeRecords.Select(static record => record.RecordId).ToArray(), ct).ConfigureAwait(false);
             return BuildTask(scope, scopePlan, scopeRecords, scopeReviews);
@@ -43,7 +53,8 @@ public sealed class InspectionWorkflowService(
         var plans = await masterData.ListInspectionPlansAsync(ct).ConfigureAwait(false);
         var plan = InspectionPlanMatcher.Resolve(plans, completed.Event.Context, completed.Event.Subject.Id, completed.Event.OccurredAt);
         if (plan is null) return null;
-        var records = await inspections.QueryAllByExecutionIdsAsync([executionId], ct).ConfigureAwait(false);
+        var records = await inspections.QueryAllByExecutionIdsAsync(
+            [executionId], siteId, ct).ConfigureAwait(false);
         var latestReviews = await reviews.GetLatestByInspectionRecordIdsAsync(
             records.Select(static record => record.RecordId).ToArray(), ct).ConfigureAwait(false);
         return BuildTask(completed, plan, records, latestReviews);
@@ -52,9 +63,10 @@ public sealed class InspectionWorkflowService(
     public async Task<IReadOnlyList<InspectionTask>> QueryTasksAsync(
         string? status,
         int limit,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        string? siteId = null)
     {
-        var completedEvents = await events.QueryCompletedAsync(null, ct).ConfigureAwait(false);
+        var completedEvents = await events.QueryCompletedAsync(null, siteId, ct).ConfigureAwait(false);
         var completed = completedEvents
             .Where(static item => !string.IsNullOrWhiteSpace(item.Event.ExecutionId))
             .GroupBy(static item => item.Event.ExecutionId!, StringComparer.Ordinal)
@@ -64,12 +76,13 @@ public sealed class InspectionWorkflowService(
                 .First())
             .OrderByDescending(static item => item.Event.OccurredAt)
             .ToArray();
-        var scopes = await inspections.ListScopesAsync(ct).ConfigureAwait(false);
+        var scopes = await inspections.ListScopesAsync(siteId, ct).ConfigureAwait(false);
         var completedExecutionIds = completed.Select(static item => item.Event.ExecutionId!).ToHashSet(StringComparer.Ordinal);
         scopes = scopes.Where(scope => !completedExecutionIds.Contains(scope.ScopeId)).ToArray();
         var executionIds = completed.Select(static item => item.Event.ExecutionId!)
             .Concat(scopes.Select(static scope => scope.ScopeId)).ToArray();
-        var records = await inspections.QueryAllByExecutionIdsAsync(executionIds, ct).ConfigureAwait(false);
+        var records = await inspections.QueryAllByExecutionIdsAsync(
+            executionIds, siteId, ct).ConfigureAwait(false);
         var plans = await masterData.ListInspectionPlansAsync(ct).ConfigureAwait(false);
         var latestReviews = await reviews.GetLatestByInspectionRecordIdsAsync(
             records.Select(static record => record.RecordId).ToArray(), ct).ConfigureAwait(false);
@@ -113,9 +126,10 @@ public sealed class InspectionWorkflowService(
         string? status,
         int offset,
         int limit,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        string? siteId = null)
     {
-        var all = await QueryTasksAsync(status, int.MaxValue, ct).ConfigureAwait(false);
+        var all = await QueryTasksAsync(status, int.MaxValue, ct, siteId).ConfigureAwait(false);
         return new InspectionTaskPage
         {
             Data = all.Skip(offset).Take(limit).ToArray(),
@@ -165,6 +179,7 @@ public sealed class InspectionWorkflowService(
         var context = completed.Event.Context;
         return new InspectionTask
         {
+            SiteId = completed.SiteId,
             ScopeType = "production-execution",
             ExecutionId = completed.Event.ExecutionId!,
             OutputItemId = context.GetValueOrDefault("output_item_id"),
@@ -211,6 +226,7 @@ public sealed class InspectionWorkflowService(
             : hasPendingReview ? "review_pending" : "completed";
         return new InspectionTask
         {
+            SiteId = scope.SiteId,
             ScopeType = scope.ScopeType,
             ExecutionId = scope.ScopeId,
             OutputItemId = scope.OutputItemId,

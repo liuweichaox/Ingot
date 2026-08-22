@@ -1,7 +1,9 @@
+// 定义检验主数据和附件上传响应契约。
 namespace Ingot.Contracts.Inspections;
 
 public sealed record AttachmentUploadResponse
 {
+    public string SiteId { get; init; } = string.Empty;
     public required Guid AttachmentId { get; init; }
     public required string StorageRef { get; init; }
     public required string Sha256 { get; init; }

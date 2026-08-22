@@ -1,3 +1,4 @@
+// 规范化并验证检验事实、附件引用和查询边界。
 
 using System.Text.RegularExpressions;
 
@@ -15,7 +16,8 @@ public static partial class InspectionRecordValidator
             return Fail("请求不能为空。", out error);
         if (request.RecordId == Guid.Empty || request.RecordId.Version != 7)
             return Fail("RecordId 必须是 UUIDv7。", out error);
-        if (!TryNormalizeOptionalId(request.OutputItemId, "OutputItemId", out var outputItemId, out error) ||
+        if (!TryNormalizeOptionalId(request.SiteId, "SiteId", out var siteId, out error) ||
+            !TryNormalizeOptionalId(request.OutputItemId, "OutputItemId", out var outputItemId, out error) ||
             !TryNormalizeId(request.ExecutionId, "ExecutionId", out var executionId, out error) ||
             !TryNormalizeCode(request.DefinitionCode, "DefinitionCode", out var definitionCode, out error) ||
             !TryNormalizeId(request.SubmittedBy, "SubmittedBy", out var submittedBy, out error))
@@ -73,6 +75,7 @@ public static partial class InspectionRecordValidator
 
         normalized = request with
         {
+            SiteId = siteId ?? string.Empty,
             OutputItemId = outputItemId,
             ExecutionId = executionId!,
             DefinitionCode = definitionCode!,
@@ -103,6 +106,7 @@ public static partial class InspectionRecordValidator
         foreach (var (value, name, code) in new[]
                  {
                      (query.OutputItemId, "OutputItemId", false),
+                     (query.SiteId, "SiteId", false),
                      (query.ExecutionId, "ExecutionId", false),
                      (query.DefinitionCode, "DefinitionCode", true)
                  })
