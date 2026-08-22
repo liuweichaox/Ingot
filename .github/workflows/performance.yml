@@ -42,8 +42,11 @@ jobs:
       - name: Benchmark platform ingest
         run: ./scripts/benchmark-platform-ingest.sh
 
-      - name: Benchmark public-data offline validation
+      - name: Benchmark v2 public-data development regression
         run: ./scripts/benchmark-public-validation.sh public-validation.json
+
+      - name: Verify v3 external-data evaluation candidate
+        run: ./scripts/verify-public-validation-v3.sh
 
       - name: Verify public-data claim boundary
         run: |
@@ -52,11 +55,21 @@ jobs:
           from pathlib import Path
 
           result = json.loads(Path("public-validation.json").read_text())
-          assert result["schema"] == "ingot-public-validation-v1"
+          assert result["schema"] == "ingot-public-validation-v2"
           assert result["summary"]["workflow_validation"] == "passed"
-          assert result["summary"]["categorical_context_isolation_passed"] is True
-          assert result["summary"]["experiment_reduction_claim"] in {
+          assert result["summary"]["dataset_count"] == 2
+          assert result["summary"]["scenario_count"] == 14
+          assert result["summary"]["all_initial_designs_unique"] is True
+          assert result["summary"]["experiment_reduction_vs_uninformed_search"] in {
               "passed-public-benchmark",
+              "not-demonstrated",
+          }
+          assert result["summary"]["active_comparator_noninferiority"] in {
+              "passed-public-benchmark",
+              "not-demonstrated",
+          }
+          assert result["summary"]["experiment_reduction_claim"] in {
+              "passed-vs-seeded-random-search",
               "not-demonstrated",
           }
           PY

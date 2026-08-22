@@ -70,6 +70,17 @@ export function CreateProjectDrawer({ open, saving, form, setForm, onClose, onSu
     updateForm({
       referenceProcessExecutionId: executionId,
       productName: execution?.productCode || form.productName,
+      materialName: execution?.materialLotRef || form.materialName,
+      referenceContext: execution ? {
+        ...(execution.equipmentId ? { equipment: execution.equipmentId } : {}),
+        ...(execution.toolingAssemblyId ? { tooling: execution.toolingAssemblyId } : {}),
+        ...(execution.processSpecificationId ? {
+          "process-specification": execution.processSpecificationVersion
+            ? `${execution.processSpecificationId}@${execution.processSpecificationVersion}`
+            : execution.processSpecificationId,
+        } : {}),
+        ...(execution.siteId ? { site: execution.siteId } : {}),
+      } : {},
     });
   }
 

@@ -13,7 +13,7 @@
 - `<=`、`>=`、靶值和范围目标；
 - 目标权重、BoTorch/GPyTorch 多输出 GP 与 95% 预测区间；
 - 可声明结果物理边界；正式 PASS/FAIL 目标固定在 0–1，后验均值、区间和采集函数都遵守该边界；
-- 带结果可行性约束的批量 `qLogNEHVI` / `qLogNEI`；
+- 面向达标概率、线性响应面可靠度和结果安全约束的候选排序；
 - 两种决策意图：`reach-specification` 用于逼近规格，`validate-hypothesis` 用于安全地最大化假设关键变量的可辨识信息；
 - “设定参数→实际轨迹→质量结果”两级 GP；
 - 由项目版本化配置声明的安全派生特征，不根据行业、设备或变量名称触发隐藏逻辑；
@@ -56,7 +56,15 @@ uv sync --python 3.12 --extra service --extra viz --group dev --locked
 ./scripts/benchmark-public-validation.sh
 ```
 
-普通 CI 中的 `optimizer/tests/test_public_validation.py` 只运行快速、确定性的回归检查；六个场景、每个场景 20 个随机种子的完整基准由 `Performance` 工作流定期或手动运行并上传结果。算法或回放策略变化时应同时检查完整基准，不得只以单元测试通过宣称实验效率提高。数据来源、当前结果和更新规则见[公开数据离线验证](../tools/public-validation/README.md)。
+普通 CI 中的 `optimizer/tests/test_public_validation.py` 只运行快速、确定性的回归检查；两个数据集、14 个上下文、每个上下文 100 个配对 episode 的完整基准由 `Performance` 工作流定期或手动运行并上传结果。算法或回放策略变化时应同时检查完整基准，不得只以单元测试通过宣称实验效率提高。数据来源、当前结果和更新规则见[公开数据实验效率验证](../tools/public-validation/README.md)。
+
+v3 外部数据评估使用两个未参与 v2 开发的公开物理实验数据集、四个预先登记基线和机理派生特征消融。冻结前只允许运行完整性检查：
+
+```bash
+./scripts/verify-public-validation-v3.sh
+```
+
+完整评估器会拒绝 `draft` 协议。算法和协议提交冻结后，才能运行 `./scripts/benchmark-public-validation-v3.sh` 并形成首次结果。
 
 ## 无状态接口
 

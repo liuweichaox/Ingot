@@ -104,6 +104,12 @@ The first build downloads large SDK, PyTorch, and database images. Startup is co
 
 Use `docker compose -f docker-compose.app.yml logs --tail=200 <service>` for one service. Preserve the full error during diagnosis instead of deleting containers, images, or volumes first.
 
+### Edge-to-Platform transport security
+
+Edge usually runs on a separate shop-floor host. Production deployments must terminate TLS between Edge and the Platform API, for example through nginx or Caddy with an internal CA certificate. Set `Edge:PlatformApiBaseUrl` (`Edge__PlatformApiBaseUrl` as an environment variable) to an `https://` address. Do not transmit bearer tokens over HTTP between hosts or across an untrusted internal network segment.
+
+Platform, Optimizer, and the database should not be exposed to network segments that do not require them. A reverse proxy should publish only the required Web and API entry points and protect `/metrics` separately.
+
 For an independent field connector:
 
 ```bash

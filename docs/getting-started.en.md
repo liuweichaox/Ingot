@@ -34,15 +34,23 @@ npm --prefix apps/platform run demo
 
 Open `http://127.0.0.1:3001`. Use `demo / demo` for the engineer workflow or `admin / admin12345` for system administration and the controlled-pilot gate. The service covers process configuration, field integration, production runs, inspections, diagnosis, experiments, and multiple data states, but every record is synthetic. Press `Ctrl+C` in both terminals when finished.
 
-### Public-data offline validation
+### Public-data experiment-efficiency validation
 
-This path requires Git and uv 0.11.32 but no database, equipment, or factory data. It uses the explicitly licensed, SHA-256-verified public FDM DOE fixture committed to the repository, evaluates six categorical process contexts, and compares the optimizer with random selection and response-surface baselines:
+This path requires Git and uv 0.11.32 but no database, equipment, or factory data. It uses explicitly licensed, SHA-256-verified public FDM and concrete fixtures, evaluates 14 stratified process contexts, and compares the optimizer with random selection and a linear response surface:
 
 ```bash
 ./scripts/benchmark-public-validation.sh
 ```
 
-The result is written to `artifacts/public-validation.json`. The current reference result passes workflow and categorical-context-isolation checks, while the strict experiment-count reduction claim remains not demonstrated. See [Public-data offline validation](../tools/public-validation/README.en.md) for the fast check, complete decision rule, data license, and reference result. Public data can reproduce the software and method path; it cannot prove the same benefit for another factory.
+The result is written to `artifacts/public-validation.json`. The current reference result demonstrates fewer additional experiments than seeded random search and overall noninferiority to the linear response surface; it does not support a claim of superiority to every DOE/RSM method. See [Public-data experiment-efficiency validation](../tools/public-validation/README.en.md) for the fast check, complete decision rule, data license, and reference result. Public data can reproduce the software and method path; it cannot prove the same benefit for another factory.
+
+The repository also contains a draft v3 external-data evaluation. It uses two physical-experiment datasets not used during v2 development, registers four comparison baselines, and includes a mechanism-feature ablation. At draft status, run only the integrity check:
+
+```bash
+./scripts/verify-public-validation-v3.sh
+```
+
+The draft protocol cannot run the complete effect evaluation. After committing and freezing the algorithm and protocol, use `./scripts/benchmark-public-validation-v3.sh` to produce the first result.
 
 ## 1. Prepare the environment
 
@@ -232,6 +240,6 @@ The engineer approves execution. Once all runs and inspections are complete, the
 
 When the project has trustworthy observations, explicit controlled variables, and a safe baseline, it can generate the next experiment set. The system shows settings, objective intervals, safety outcomes, joint feasibility, data scope, model version, and rationale.
 
-To use mechanism knowledge, open “Process R&D → Research assets,” select the project, upload a source, and complete claim review and activation. Claims that match the current project context may narrow hard bounds or participate in soft ranking. Actual usage is not shown in a separate Mechanism tab; it appears in the “Prediction and trust” column of the project's Experiment table, and only when an optimization experiment actually used a claim.
+To use mechanism knowledge, open “Process R&D → Research assets,” select the project, upload a source, and complete claim review and activation. Select variables by name; their units come from the project. Select product, equipment, tooling, and process-specification applicability from project context. Claims that match the current project context may narrow hard bounds or participate in soft ranking. Actual usage is not shown in a separate Mechanism tab; it appears in the “Prediction and trust” column of the project's Experiment table, and only when an optimization experiment actually used a claim.
 
 Pending points prevent duplicate recommendations while a batch remains incomplete. One successful point is only a candidate setting; a operating region requires independent repetition, boundary or interaction validation, and review by another engineer.

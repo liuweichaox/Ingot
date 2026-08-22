@@ -122,7 +122,7 @@ Current objective strategies include:
 
 Before calling Optimizer, Platform also selects active, conflict-free mechanism claims that match the project context. Hard constraints and multivariable forbidden combinations enter candidate feasibility, while soft constraints rank candidates; the input, claim versions, and knowledge-snapshot hash are frozen with the experiment. Active affine `mechanism-as-feature` definitions become declarative GP inputs with exact model and fusion versions and hashes. Bayesian priors, residual models, and the other output-fusion modes are not yet on the recommendation path.
 
-Multi-objective cases may use qLogNEHVI, while single-objective cases may use qLogNEI. The acquisition function is a current implementation strategy, not a product principle.
+The current reach-specification path jointly ranks the posterior probability that every objective and outcome constraint passes and the predicted distance from a regularized linear response surface, adapting the response-surface weight with leave-one-out error. The hypothesis-validation path instead prioritizes outcome uncertainty and identifiability in the key variables. The acquisition strategy and model version are regression-tested implementation choices, not product principles.
 
 ## Safety and cold start
 
@@ -153,7 +153,7 @@ Stopping may follow when:
 
 An LLM is suitable for:
 
-- understanding engineer questions and page context;
+- parsing engineer questions and page context;
 - calling structured, authorized system tools;
 - summarizing records, explaining statistical results, and drafting experiment text;
 - clearly stating missing data and conclusion boundaries.
@@ -173,11 +173,13 @@ Historical replay reveals outcomes sequentially in time; future runs are never v
 
 ### Public-data benchmark
 
-`tools/public-validation` commits a CC BY 4.0 public FDM DOE snapshot, SHA-256 verification, fixed-seed replay runner, and automated tests. Discrete factors such as material, equipment type, tooling identity, and formulation class are stratified as process context: one optimization campaign fits one explicit context, and category codes must not be treated as continuous values with a false distance relationship. Comparing multiple discrete levels requires stratified campaigns or an applicable factorial design.
+`tools/public-validation` commits CC BY 4.0 FDM DOE and concrete-mixture snapshots, SHA-256 verification, a fixed-seed replay runner, and automated tests. Discrete factors such as material, equipment type, tooling identity, formulation class, and curing age are stratified as process context: one optimization campaign fits one explicit context, and category codes must not be treated as continuous values with a false distance relationship. Comparing multiple discrete levels requires stratified campaigns or an applicable factorial design.
 
-The public benchmark reports workflow validation and experiment-count reduction as separate conclusions. Passing the former does not pass the latter. The reduction claim passes only when, under the same budget and initial observations, every categorical context preserves success rate and uses fewer experiments than both random and response-surface baselines. See [Public-data offline validation](../tools/public-validation/README.en.md).
+The public benchmark separately reports workflow validation, superiority to model-free search, and noninferiority to a linear response surface. Passing the first does not pass the other two. Superiority requires a 95% confidence-interval lower bound of at least 10% for relative additional-trial reduction, with success-rate, context, and dataset guardrails. Because a linear response surface is itself an experiment-reduction method, it is checked against a frozen noninferiority margin; noninferiority is never described as superiority. See [Public-data experiment-efficiency validation](../tools/public-validation/README.en.md).
 
-The committed reference result covers six categorical contexts with 20 fixed seeds per context. It passes workflow and categorical-context-isolation checks, but the optimizer uses fewer trials than the random and response-surface baselines in only 4/6 contexts respectively, so the strict experiment-count reduction claim remains not demonstrated. This is an acceptable validation result, not a test failure to erase by changing thresholds or hiding unfavorable contexts.
+The committed reference result covers two datasets, 14 contexts, and 1,400 paired episodes. Relative to seeded random search, additional trials fall by 49.45% (95% CI 42.40%–56.01%), passing superiority. Relative to the linear response surface, the reduction is 16.03% (95% CI -1.15%–27.44%), passing noninferiority but not demonstrating superiority. The permitted conclusion is only that the optimizer reduces additional experiments versus random search in the fixed public pools; it is not evidence of factory benefit or superiority to every DOE/RSM method.
+
+That result is the v2 development regression. v3 uses NASA wind-tunnel airfoil-noise and Delft yacht-hydrodynamics physical experiments as external data not used during v2 development. It preregisters random search, maximin space filling, linear response surface, and quadratic response surface, and performs a paired ablation between the same optimizer with and without mechanism-derived features. The v3 protocol remains a draft, and a code gate blocks the full evaluation; there is no citable v3 result before freeze. Even a passing v3 result would establish only additional-result-query efficiency in the fixed public physical-experiment pools, not development-cycle reduction for an arbitrary factory.
 
 ## Current limitations
 

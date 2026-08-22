@@ -2,6 +2,7 @@
 export const projectFormInitial = {
   name: "",
   referenceProcessExecutionId: "",
+  referenceContext: {},
   scenarioPackageKey: "",
   dataModelKey: "",
   processName: "",

@@ -3,7 +3,11 @@
 import pytest
 
 from ingot_optimizer import Campaign, Objective, Variable
-from ingot_optimizer.replay import replay_history_pool, replay_synthetic
+from ingot_optimizer.replay import (
+    replay_history_pool,
+    replay_optimizer_history_pool_once,
+    replay_synthetic,
+)
 
 
 def campaign():
@@ -48,6 +52,37 @@ def test_history_pool_replay_only_selects_real_rows_without_reuse():
             assert step["revealed_history_index"] not in step["visible_observation_indices_before"]
             if step["kind"] == "optimizer-selection":
                 assert step["nearest_historical_candidate_distance"] == 0.0
+
+
+def test_single_optimizer_episode_reports_additional_trials_and_audit_trace():
+    history = [
+        {
+            "params": {"x": value},
+            "outcomes": {"loss": (value - 0.8) ** 2},
+            "occurred_at": float(index),
+            "run_id": f"run-{index}",
+        }
+        for index, value in enumerate([0.0, 0.2, 0.4, 0.6, 0.8, 1.0], start=1)
+    ]
+
+    result = replay_optimizer_history_pool_once(
+        campaign(),
+        history,
+        budget=6,
+        initial_observation_count=3,
+        seed=17,
+    )
+
+    assert result["evidence_kind"] == "historical-pool-ranking"
+    assert result["total_trials"] == result["additional_trials"] + 3
+    assert result["selected_history_indices"][:3] == [0, 1, 2]
+    assert len(result["selected_history_indices"]) == len(
+        set(result["selected_history_indices"])
+    )
+    for step in result["step_trace"]:
+        assert step["revealed_history_index"] not in step[
+            "visible_observation_indices_before"
+        ]
 
 
 def test_history_pool_requires_aggregated_unique_parameter_settings():
@@ -142,6 +177,41 @@ def test_random_and_response_surface_baselines_share_preregistered_initial_rows(
         "response_surface_selected_history_indices",
     ]:
         assert all(selected[:2] == [0, 1] for selected in result[key])
+
+
+def test_history_pool_applies_seed_offset_to_each_paired_policy():
+    history = [
+        {
+            "params": {"x": index / 9},
+            "outcomes": {"loss": 1.0},
+            "occurred_at": float(index),
+        }
+        for index in range(10)
+    ]
+
+    first = replay_history_pool(
+        campaign(),
+        history,
+        budget=6,
+        n_seeds=1,
+        initial_observation_count=2,
+        seed_offset=31,
+    )
+    second = replay_history_pool(
+        campaign(),
+        history,
+        budget=6,
+        n_seeds=1,
+        initial_observation_count=2,
+        seed_offset=32,
+    )
+
+    assert first["seed_offset"] == 31
+    assert second["seed_offset"] == 32
+    assert (
+        first["random_selected_history_indices"]
+        != second["random_selected_history_indices"]
+    )
 
 
 def test_history_pool_replays_mechanism_soft_ranking():

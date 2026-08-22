@@ -13,7 +13,7 @@ See the [system design](../docs/design.en.md) for boundaries and [analysis and o
 - Less-than, greater-than, target, and range objectives
 - Objective weights and BoTorch/GPyTorch multi-output GPs with 95% intervals
 - Declared physical outcome bounds; formal PASS/FAIL objectives keep posterior means, intervals, and acquisition samples inside 0-1
-- Outcome-constrained batch `qLogNEHVI` and `qLogNEI`
+- Candidate ranking by specification probability, linear-response reliability, and measured outcome-safety constraints
 - Two decision intents: `reach-specification` for specification seeking, and `validate-hypothesis` for safely maximizing identifiable information in hypothesis variables
 - A two-stage set-point-to-trajectory-to-quality surrogate
 - Safe derived features declared by versioned project configuration, with no hidden behavior selected by industry, equipment, or variable names
@@ -58,7 +58,15 @@ The repository uses fixed public manufacturing data to check categorical-context
 ./scripts/benchmark-public-validation.sh
 ```
 
-Ordinary CI runs only the fast, deterministic regression checks in `optimizer/tests/test_public_validation.py`. The `Performance` workflow runs the complete six-scenario benchmark with 20 seeds per scenario on schedule or on demand and uploads the result. An algorithm or replay-policy change must inspect the complete benchmark as well; passing unit tests alone does not establish improved experiment efficiency. See [Public-data offline validation](../tools/public-validation/README.en.md) for provenance, the current result, and update rules.
+Ordinary CI runs only the fast, deterministic regression checks in `optimizer/tests/test_public_validation.py`. The `Performance` workflow runs the complete two-dataset, 14-context benchmark with 100 paired episodes per context on schedule or on demand and uploads the result. An algorithm or replay-policy change must inspect the complete benchmark as well; passing unit tests alone does not establish improved experiment efficiency. See [Public-data experiment-efficiency validation](../tools/public-validation/README.en.md) for provenance, the current result, and update rules.
+
+The v3 external-data evaluation uses two public physical-experiment datasets not used during v2 development, four preregistered baselines, and a mechanism-derived-feature ablation. Before freeze, only its integrity check may run:
+
+```bash
+./scripts/verify-public-validation-v3.sh
+```
+
+The full evaluator rejects a `draft` protocol. Run `./scripts/benchmark-public-validation-v3.sh` and produce the first result only after the algorithm and protocol revisions are committed and frozen.
 
 ## Stateless contract
 
@@ -87,3 +95,15 @@ The .NET platform turns the returned batch into an ordinary `ResearchExperiment`
 Use `replay_history_pool` for real history. Every row must contain a finite numeric `occurred_at`, and rows must be strictly increasing in time. Missing, duplicate, or out-of-order timestamps are rejected rather than silently sorted, preserving the no-future-leakage contract. Replay measures whether the model ranks successful parameter settings earlier among parameter settings that were actually run. It does not invent outcomes for untried parameter settings and cannot by itself prove prospective trial savings. Aggregate repeated parameter settings with a predefined statistical method before replay.
 
 Synthetic replay truth functions must return `{"outcomes": {...}, "constraint_outcomes": {...}, "process_features": {...}}` whenever the campaign declares outcome constraints; `process_features` is optional. The legacy outcomes-only mapping remains compatible only for campaigns without outcome constraints. A synthetic run succeeds only when its objectives and every outcome-safety constraint pass.
+
+## Platform integration
+
+The .NET platform remains the only business system of record:
+
+1. An experiment `ExecutionKey` maps to the field run identifier. Platform assembles measured process features, realized control values, and inspection results into one observation.
+2. Platform sends the complete project definition, valid observations, and constraints to this service.
+3. This service calculates the next parameter batch without retaining business state.
+4. Platform creates ordinary experiments with the input hash, model version, and prediction intervals.
+5. After all runs are complete, Platform records the reviewed result. If the experiment tests a hypothesis, the result interval updates that hypothesis as supported, rejected, or inconclusive through the existing approval and completion workflow.
+
+PLC, instrument, vision, file, and API connectors only map source data into this contract; they do not change the optimizer's responsibility or authority.

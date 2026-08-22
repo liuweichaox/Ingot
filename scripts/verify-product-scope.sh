@@ -35,6 +35,8 @@ while IFS= read -r path; do
   case "$path" in
     tests/fixtures/synthetic/*|tools/*/examples/synthetic/*)
       ;;
+    tools/public-validation/data/fdm-doe-grid.csv|tools/public-validation/data/concrete-strength.csv|tools/public-validation/data/airfoil-self-noise.csv|tools/public-validation/data/yacht-hydrodynamics.csv)
+      ;;
     .ingot-import/*|mapping-*.json|*.csv|*.parquet|*.xlsx|*.xls|*.db)
       sensitive_paths+=("$path")
       ;;
@@ -46,6 +48,39 @@ if (( ${#sensitive_paths[@]} > 0 )); then
   echo "Production data or site-specific import mappings must not be tracked. Synthetic data files are allowed only under tests/fixtures/synthetic or tools/*/examples/synthetic." >&2
   exit 1
 fi
+
+python3 - <<'PY'
+import hashlib
+import json
+from pathlib import Path
+
+root = Path("tools/public-validation")
+protocols = [
+    json.loads((root / name).read_text(encoding="utf-8"))
+    for name in ("protocol-v2.json", "protocol-v3.json")
+]
+allowed = {
+    "data/fdm-doe-grid.csv",
+    "data/concrete-strength.csv",
+    "data/airfoil-self-noise.csv",
+    "data/yacht-hydrodynamics.csv",
+}
+declared = {
+    source["fixture"]
+    for protocol in protocols
+    for source in protocol["sources"].values()
+}
+if declared != allowed:
+    raise SystemExit("public validation protocol must declare exactly the approved fixtures")
+if not (root / "NOTICE.md").is_file():
+    raise SystemExit("public validation fixtures require NOTICE.md attribution")
+for protocol in protocols:
+    for source in protocol["sources"].values():
+        path = root / source["fixture"]
+        actual = hashlib.sha256(path.read_bytes()).hexdigest()
+        if actual != source["fixture_sha256"]:
+            raise SystemExit(f"public validation checksum mismatch: {path}")
+PY
 
 if grep -RInE --exclude='package-lock.json' --exclude='verify-product-scope.sh' \
   --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=.next \

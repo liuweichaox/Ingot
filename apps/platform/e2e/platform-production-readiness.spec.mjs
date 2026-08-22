@@ -1,7 +1,7 @@
 // 覆盖 Platform 核心工作流、状态矩阵、权限边界与响应式交互的浏览器回归。
 import { expect, test } from "@playwright/test";
 
-const demoApi = "http://127.0.0.1:4010";
+const demoApi = `http://127.0.0.1:${process.env.INGOT_E2E_API_PORT || "4010"}`;
 
 async function setScenario(request, mode = "normal") {
   const response = await request.get(`${demoApi}/__demo/state?mode=${mode}`);
@@ -251,4 +251,33 @@ test("核心模块接口失败后均可原地重试恢复", async ({ page, reque
     await retry.click();
     await expect(page.getByText(recoveredEvidence, { exact: false }).first(), route).toBeVisible();
   }
+});
+
+test("机理知识从业务选择映射到可追溯实验建议", async ({ page }) => {
+  await login(page);
+  await page.goto("/research-assets");
+  await page.getByLabel("当前研发项目").selectOption({ label: "面形误差候选原因验证" });
+
+  await expect(page.getByText("已激活的模压安全窗口", { exact: true })).toBeVisible();
+  await expect(page.getByText("待审核的冷却速率观察", { exact: true })).toBeVisible();
+  await expect(page.getByText("不适用于当前设备的声明", { exact: true })).toBeVisible();
+  await expect(page.getByText("已反证的升温收益声明", { exact: true })).toBeVisible();
+  await expect(page.getByText("已停用的旧材料经验", { exact: true })).toBeVisible();
+  await expect(page.getByText("相同产品范围内对温度影响方向的判断相反", { exact: false })).toBeVisible();
+
+  await page.getByLabel("项目变量").selectOption("holding.temperature");
+  await expect(page.getByLabel("作用变量单位")).toHaveValue("°C");
+  await expect(page.getByLabel("作用变量单位")).toHaveAttribute("readonly", "");
+
+  await page.getByLabel("适用维度").selectOption("equipment");
+  await expect(page.getByLabel("适用对象")).toHaveValue("PRESS-01");
+  await expect(page.getByLabel("适用对象").locator("option")).toHaveCount(1);
+
+  await page.goto("/research-projects/research-active");
+  const knowledgeSummary = page.getByText("本次采用的机理知识 · 1 条", { exact: true });
+  await expect(knowledgeSummary).toBeVisible();
+  await knowledgeSummary.click();
+  await expect(page.getByText("硬边界", { exact: true })).toBeVisible();
+  await expect(page.getByText("候选偏好", { exact: true })).toBeVisible();
+  await expect(page.getByText("高温高压联合禁区", { exact: true })).toBeVisible();
 });

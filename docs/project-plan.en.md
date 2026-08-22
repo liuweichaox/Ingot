@@ -16,7 +16,7 @@ Its long-term direction is to become:
 
 > **A trustworthy decision and validation operating system for manufacturing processes.**
 
-Foundation models and agents supply replaceable understanding, reasoning, and tool orchestration. Ingot makes every human or agent operate over the same trusted facts, scientific validation, and controlled-action discipline. Its durable advantage is not one model, but:
+Foundation models and agents provide replaceable language parsing, evidence retrieval, and tool orchestration. Ingot keeps engineers and agents on the same trusted facts, scientific validation, and controlled-action discipline. Its durable advantage is not one model, but:
 
 - reliable identity across real runs, actual conditions, trajectories, quality outcomes, and field context;
 - evidence, methods, versions, uncertainty, and applicability for every judgment;
@@ -107,7 +107,7 @@ MCP and similar protocols standardize discovery, description, and invocation. In
 | Commit | submit approval, freeze a plan, and sign an execution version | no self-approval; no rewriting after outcomes appear |
 | Execute | invoke allow-listed, time-bounded, scoped, reversible actions | policy checks, human authorization, device confirmation, stop, and rollback |
 
-An agent may not approve its own proposal or bypass Platform to reach a database or device. The medium-term value proposition is not that Ingot has the smartest agent:
+An agent may not approve its own proposal or bypass Platform to reach a database or device. The medium-term value is established through engineering guarantees rather than model-capability claims:
 
 > **Every model that investigates or acts through Ingot must cite evidence, pass state and permission gates, and leave a verifiable execution receipt.**
 
@@ -171,7 +171,7 @@ flowchart LR
     Edge --> Platform["Platform\nformal facts · state machines · permissions · audit"]
     Platform --> Analysis["deterministic analysis\nquality · comparison · statistics"]
     Platform --> Optimizer["Optimizer\nmodels · constraints · experiment proposals"]
-    Platform --> Agent["Agent\nunderstanding · reasoning · tool orchestration"]
+    Platform --> Agent["Agent\nlanguage parsing · evidence retrieval · tool orchestration"]
     Platform --> Web["engineering workbench"]
     Engineer["Process engineer"] --> Web
     Web --> Platform
@@ -184,7 +184,7 @@ Stable decisions:
 - **Platform** is the sole formal record for runs, context, inspections, experiments, evidence, approvals, agent proposals, and knowledge.
 - **Edge** provides trusted acquisition, offline buffering, and replay. It may later host a controlled action gateway but never replaces PLC, DCS, or safety interlocks.
 - **Optimizer** is stateless business-wise and performs reproducible statistics, constraints, DOE, and numerical optimization. It cannot approve experiments or control equipment.
-- **Agent** is a replaceable understanding, reasoning, and tool-orchestration layer. Conversation context and model memory are not formal business state.
+- **Agent** is a replaceable language-parsing, evidence-retrieval, and tool-orchestration layer. Conversation context and model memory are not formal business state.
 - **Web** does not maintain parallel business state that conflicts with Platform.
 - Data, features, policies, models, tools, and schemas are versioned and replayable; critical evidence uses content hashes or signatures.
 - Acquisition, inspection, and formal records do not depend on Optimizer, Agent, or an external model being available.
@@ -239,6 +239,7 @@ The current code checkpoint is not a validation pass. Trusted identity, event in
 | P0 | run identity, actual values, context, inspection linkage, and quality validity | every analysis record uniquely reaches a real run and valid outcome |
 | P0 | evidence freezing, replay, transactions, and recovery | inputs cannot be rewritten after the fact; recovery preserves provenance |
 | P0 scientific | historical-question and production-equivalent sequential replay | access-controlled internal preregistration and reviewed leakage-free report with baselines, failures, and limits |
+| P0 scientific | protocol-frozen public external-data evaluation | data not used during development, strong baselines, and mechanism ablation run under the frozen protocol with unfavorable results retained |
 | P1 | process-decision case and deterministic diagnosis contract | evidence, candidates, counterevidence, hypotheses, experiments, and conclusions share one formal spine |
 | P1 | agent replay and adversarial evaluation | unsupported inference, identity mismatch, overreach, and incorrect tool use are detectable |
 | P1 | shadow recommendations, calibration, and stopping | recommendations freeze in advance and preserve independent engineer choice and rejection reasons |
@@ -250,13 +251,14 @@ Current rolling batches:
 
 1. **Trusted identity and quality chain**: core code paths and database constraints exist; continue adversarial acceptance with real site isolation, clock faults, missing actual values, and incorrect inspection linkage.
 2. **Historical evidence apparatus**: freezing, content hashes, transactions, replay services, and recovery tooling exist; complete site retention rules, recomputation consistency, and recovery-drill evidence.
-3. **Preregistered historical replay**: complete engineering-question and production-equivalent sequential replay, preserve every failure and limit in the controlled internal report, and expose only that real project's protocol and conclusion boundaries publicly; a separately published public-data benchmark must not be presented as the real-project result.
-4. **Process-decision case**: fix data quality, baseline, first deviation, candidates, counterevidence, confounding, missingness, and experiment-proposal structure.
-5. **Agent evaluation flywheel**: golden-question, run-snapshot, and evaluation storage exist; expand adversarial examples for engineer questions, correct refusal, citation coverage, permissions, and tool calls.
-6. **Prospective shadow validation**: freeze variables, mappings, context, constraints, policies, and engineer rejection reasons.
-7. **Protocolized read and propose capabilities**: derive stable domain tools from internal APIs and provide MCP, OpenAPI, or SDK adapters.
-8. **Controlled-action preparation**: action ledger, authorization tokens, policy checks, device confirmation, stop, and rollback.
-9. **Second scenario and specification candidate**: validate cross-scenario semantics and publish candidate schemas, validators, and reference implementations.
+3. **Protocol-frozen public external-data evaluation**: commit the algorithm and protocol before running physical-experiment data not used during development, strong baselines, and mechanism-feature ablation; do not revise frozen conditions in response to the first result.
+4. **Preregistered historical replay**: complete engineering-question and production-equivalent sequential replay, preserve every failure and limit in the controlled internal report, and expose only that real project's protocol and conclusion boundaries publicly; a separately published public-data benchmark must not be presented as the real-project result.
+5. **Process-decision case**: fix data quality, baseline, first deviation, candidates, counterevidence, confounding, missingness, and experiment-proposal structure.
+6. **Agent evaluation corpus**: golden-question, run-snapshot, and evaluation storage exist; expand adversarial examples for engineer questions, correct refusal, citation coverage, permissions, and tool calls.
+7. **Prospective shadow validation**: freeze variables, mappings, context, constraints, policies, and engineer rejection reasons.
+8. **Protocolized read and propose capabilities**: derive stable domain tools from internal APIs and provide MCP, OpenAPI, or SDK adapters.
+9. **Controlled-action preparation**: action ledger, authorization tokens, policy checks, device confirmation, stop, and rollback.
+10. **Second scenario and specification candidate**: validate cross-scenario semantics and publish candidate schemas, validators, and reference implementations.
 
 These batches are the current sequence, not an immutable product definition. Reorder them after each completed batch according to evidence.
 

@@ -241,6 +241,7 @@ export function ResearchProjectsPage({ identity }) {
         context: {
           data_model: projectForm.dataModelKey,
           ...(projectForm.scenarioPackageKey ? { scenario_package: projectForm.scenarioPackageKey } : {}),
+          ...projectForm.referenceContext,
         },
       });
       const comparisonExecutionIds = (searchParams.get("comparisonExecutionIds") || "").split(",").filter(Boolean);

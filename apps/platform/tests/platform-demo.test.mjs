@@ -60,6 +60,27 @@ test("platform demo serves authenticated workflow data and deterministic failure
       assert.ok(payload.data.length > 0, `${endpoint} should contain demo data`);
     }
 
+    const mechanismResponse = await fetch(
+      `${baseUrl}/api/v1/research-projects/research-active/mechanism-claims`,
+      { headers },
+    );
+    assert.equal(mechanismResponse.status, 200);
+    const mechanisms = (await mechanismResponse.json()).data;
+    for (const status of ["draft", "reviewed", "active", "falsified", "retired"]) {
+      assert.ok(mechanisms.some(claim => claim.status === status), `missing mechanism status ${status}`);
+    }
+    const applied = mechanisms.find(claim => claim.name === "已激活的模压安全窗口");
+    assert.ok(applied.constraints.some(constraint => constraint.severity === "hard"));
+    assert.ok(applied.constraints.some(constraint => constraint.severity === "soft"));
+    assert.equal(applied.forbiddenCombinations.length, 1);
+
+    const conflictsResponse = await fetch(
+      `${baseUrl}/api/v1/research-projects/research-active/mechanism-claims/conflicts`,
+      { headers },
+    );
+    assert.equal(conflictsResponse.status, 200);
+    assert.equal((await conflictsResponse.json()).data[0].status, "open");
+
     await fetch(`${baseUrl}/__demo/state?mode=empty`);
     assert.equal((await (await fetch(`${baseUrl}/api/v1/process-executions`, { headers })).json()).data.length, 0);
     await fetch(`${baseUrl}/__demo/state?mode=forbidden`);

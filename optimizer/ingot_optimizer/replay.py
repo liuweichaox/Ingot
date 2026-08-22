@@ -499,6 +499,54 @@ def _historical_response_surface_run(
     return None, selected, _safety_violations(campaign, history, selected)
 
 
+def replay_optimizer_history_pool_once(
+    campaign: Campaign,
+    history: Sequence[dict],
+    *,
+    budget: int,
+    initial_observation_count: int,
+    seed: int,
+    derived_features: Sequence[DerivedFeature] | None = None,
+    soft_constraints: Sequence[dict] | None = None,
+) -> dict:
+    """Run one auditable optimizer episode against a finite hidden-result pool."""
+    _validate_history(campaign, history)
+    if budget < 1 or budget > len(history):
+        raise ValueError("budget must be between 1 and the history length")
+    if initial_observation_count < 0 or initial_observation_count > budget:
+        raise ValueError("initial_observation_count must be between 0 and budget")
+    if seed < 0:
+        raise ValueError("seed must be non-negative")
+    if campaign.outcome_constraints and initial_observation_count == 0:
+        raise ValueError(
+            "historical replay with outcome safety constraints requires preregistered initial observations"
+        )
+    total_trials, selected, trace, diagnostics = _historical_optimizer_run(
+        campaign,
+        history,
+        budget,
+        seed,
+        initial_observation_count,
+        derived_features,
+        soft_constraints,
+    )
+    return {
+        "total_trials": total_trials,
+        "additional_trials": (
+            total_trials - initial_observation_count
+            if total_trials is not None
+            else None
+        ),
+        "selected_history_indices": selected,
+        "step_trace": trace,
+        "diagnostics": diagnostics,
+        "budget": budget,
+        "initial_observation_count": initial_observation_count,
+        "seed": seed,
+        "evidence_kind": "historical-pool-ranking",
+    }
+
+
 def replay_history_pool(
     campaign: Campaign,
     history: Sequence[dict],
@@ -506,6 +554,7 @@ def replay_history_pool(
     budget: int | None = None,
     n_seeds: int = 30,
     initial_observation_count: int = 0,
+    seed_offset: int = 0,
     derived_features: Sequence[DerivedFeature] | None = None,
     soft_constraints: Sequence[dict] | None = None,
 ) -> dict:
@@ -517,6 +566,8 @@ def replay_history_pool(
     _validate_history(campaign, history)
     if n_seeds < 1:
         raise ValueError("n_seeds must be positive")
+    if seed_offset < 0:
+        raise ValueError("seed_offset must be non-negative")
     effective_budget = len(history) if budget is None else budget
     if effective_budget < 1 or effective_budget > len(history):
         raise ValueError("budget must be between 1 and the history length")
@@ -536,14 +587,14 @@ def replay_history_pool(
             derived_features,
             soft_constraints,
         )
-        for seed in range(n_seeds)
+        for seed in range(seed_offset, seed_offset + n_seeds)
     ]
     optimizer_runs = [result[0] for result in optimizer_results]
     random_results = [
         _historical_random_run(
             campaign, history, effective_budget, seed, initial_observation_count
         )
-        for seed in range(n_seeds)
+        for seed in range(seed_offset, seed_offset + n_seeds)
     ]
     random_runs = [result[0] for result in random_results]
     response_surface_applicable = initial_observation_count >= 2
@@ -551,7 +602,7 @@ def replay_history_pool(
         _historical_response_surface_run(
             campaign, history, effective_budget, seed, initial_observation_count
         )
-        for seed in range(n_seeds)
+        for seed in range(seed_offset, seed_offset + n_seeds)
     ] if response_surface_applicable else []
     response_surface_runs = [result[0] for result in response_surface_results]
     original_hit = _historical_original_order(campaign, history, effective_budget)
@@ -589,6 +640,7 @@ def replay_history_pool(
         },
         "budget": effective_budget,
         "initial_observation_count": initial_observation_count,
+        "seed_offset": seed_offset,
         "engine_policy": "production-equivalent: sequential below 3 observations, BoTorch at 3 or more",
         "evidence_kind": "historical-pool-ranking",
         "baseline_methods": [

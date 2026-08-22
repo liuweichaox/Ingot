@@ -9,7 +9,5 @@ cd "$repo_root"
 uvx --from uv==0.11.32 uv run \
   --project optimizer \
   --locked \
-  python tools/public-validation/benchmark.py \
-  --seeds 20 \
-  --budget 12 \
+  python tools/public-validation/benchmark_v2.py \
   --output "$output"

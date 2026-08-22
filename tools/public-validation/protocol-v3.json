@@ -1,0 +1,181 @@
+{
+  "schema": "ingot-public-validation-protocol-v3",
+  "status": "draft",
+  "purpose": "Protocol-frozen evaluation of additional-trial efficiency on public physical-experiment datasets that were not used by the v2 development benchmark.",
+  "freeze": {
+    "optimizer_revision": null,
+    "protocol_revision": null,
+    "evaluation_fingerprint": null,
+    "result_policy": "A full result is valid only after status is frozen, both revisions identify the preceding committed candidate, and evaluation_fingerprint matches the algorithm, data, dependency lock, evaluator, and normalized protocol."
+  },
+  "development_evidence": {
+    "protocol": "protocol-v2.json",
+    "datasets": ["fdm", "concrete"],
+    "use": "development-and-regression-only"
+  },
+  "sources": {
+    "airfoil": {
+      "title": "Airfoil Self-Noise",
+      "doi": "10.24432/C5VW2C",
+      "license": "CC BY 4.0",
+      "official_url": "https://archive.ics.uci.edu/dataset/291/airfoil+self+noise",
+      "archive_url": "https://archive.ics.uci.edu/static/public/291/airfoil+self+noise.zip",
+      "archive_sha256": "5c7767ba53ad827d3f48ba1eb9434117f4892df8f10bc4c99e118a9e8a7ae07c",
+      "fixture": "data/airfoil-self-noise.csv",
+      "fixture_sha256": "d055aab9202ea1932a5ed933d549ae31f3b58926de19d67ac326360f81722f85",
+      "fixture_rows": 1503,
+      "evidence_kind": "physical-wind-tunnel-experiments"
+    },
+    "yacht": {
+      "title": "Yacht Hydrodynamics",
+      "doi": "10.24432/C5XG7R",
+      "license": "CC BY 4.0",
+      "official_url": "https://archive.ics.uci.edu/dataset/243/yacht+hydrodynamics",
+      "archive_url": "https://archive.ics.uci.edu/static/public/243/yacht+hydrodynamics.zip",
+      "archive_sha256": "aa52b68f88c4bb552187a53ef4c5753fa178f6a36035a3771c5bc04e078487ac",
+      "fixture": "data/yacht-hydrodynamics.csv",
+      "fixture_sha256": "8ce2f8eabe81b72484a5956c233cec031b840df938956d8f38740663009ce6b1",
+      "fixture_rows": 308,
+      "evidence_kind": "physical-hydrodynamic-experiments"
+    }
+  },
+  "datasets": {
+    "airfoil": {
+      "controls": {
+        "frequency_hz": [200.0, 20000.0],
+        "attack_angle_deg": [0.0, 22.2],
+        "chord_length_m": [0.0254, 0.3048],
+        "free_stream_velocity_m_s": [31.7, 71.3],
+        "displacement_thickness_m": [0.000400682, 0.0584113]
+      },
+      "objective": {
+        "name": "sound_pressure_db",
+        "direction": "le",
+        "unit": "dB",
+        "threshold_rule": {
+          "kind": "empirical-quantile",
+          "quantile": 0.15,
+          "method": "linear",
+          "rationale": "Fixed prevalence rule for method evaluation; not an engineering specification."
+        }
+      },
+      "mechanism_features": [
+        {
+          "name": "reynolds_proxy",
+          "operator": "product",
+          "inputs": ["chord_length_m", "free_stream_velocity_m_s"],
+          "normalization_scale": 22.0,
+          "basis": "Velocity-length product preserves the ordering of Reynolds number when fluid properties are fixed."
+        },
+        {
+          "name": "frequency_chord",
+          "operator": "product",
+          "inputs": ["frequency_hz", "chord_length_m"],
+          "normalization_scale": 6100.0,
+          "basis": "Intermediate term for a reduced-frequency proxy."
+        },
+        {
+          "name": "reduced_frequency_proxy",
+          "operator": "ratio",
+          "inputs": ["frequency_chord", "free_stream_velocity_m_s"],
+          "normalization_scale": 200.0,
+          "basis": "Frequency-length divided by velocity is a dimensionless aerodynamic similarity term."
+        },
+        {
+          "name": "relative_displacement_thickness",
+          "operator": "ratio",
+          "inputs": ["displacement_thickness_m", "chord_length_m"],
+          "normalization_scale": 1.0,
+          "basis": "Boundary-layer displacement thickness relative to chord length."
+        }
+      ],
+      "initial_observations": 10,
+      "additional_trial_budget": 12
+    },
+    "yacht": {
+      "controls": {
+        "longitudinal_buoyancy_position": [-5.0, 0.0],
+        "prismatic_coefficient": [0.53, 0.6],
+        "length_displacement_ratio": [4.34, 5.14],
+        "beam_draught_ratio": [2.81, 5.35],
+        "length_beam_ratio": [2.73, 3.64],
+        "froude_number": [0.125, 0.45]
+      },
+      "objective": {
+        "name": "residuary_resistance",
+        "direction": "le",
+        "unit": "dimensionless",
+        "threshold_rule": {
+          "kind": "empirical-quantile",
+          "quantile": 0.15,
+          "method": "linear",
+          "rationale": "Fixed prevalence rule for method evaluation; not an engineering specification."
+        }
+      },
+      "mechanism_features": [
+        {
+          "name": "froude_squared",
+          "operator": "product",
+          "inputs": ["froude_number", "froude_number"],
+          "normalization_scale": 0.21,
+          "basis": "Wave-making resistance has a nonlinear dependence on Froude number."
+        },
+        {
+          "name": "slenderness_interaction",
+          "operator": "product",
+          "inputs": ["length_displacement_ratio", "length_beam_ratio"],
+          "normalization_scale": 19.0,
+          "basis": "Interaction between two dimensionless hull-slenderness descriptors."
+        },
+        {
+          "name": "fullness_draught_interaction",
+          "operator": "product",
+          "inputs": ["prismatic_coefficient", "beam_draught_ratio"],
+          "normalization_scale": 3.3,
+          "basis": "Interaction between hull fullness and beam-draught geometry."
+        }
+      ],
+      "initial_observations": 12,
+      "additional_trial_budget": 12
+    }
+  },
+  "episodes": {
+    "count_per_dataset": 200,
+    "base_seed": 57221,
+    "initial_design": "seeded-random-without-replacement-shared-by-all-methods",
+    "eligibility": "initial-observations-do-not-meet-specification"
+  },
+  "methods": {
+    "primary": "ingot-with-preregistered-mechanism-features",
+    "ablation": "ingot-without-mechanism-features",
+    "baselines": [
+      "seeded-random-search",
+      "sequential-maximin-space-filling",
+      "regularized-linear-response-surface",
+      "regularized-quadratic-response-surface"
+    ],
+    "linear_ridge": 0.001,
+    "quadratic_ridge": 0.01
+  },
+  "statistics": {
+    "primary_metric": "capped-additional-trials-to-specification",
+    "unsuccessful_trial_value": 13,
+    "bootstrap_samples": 5000,
+    "bootstrap_seed": 61987,
+    "bootstrap_unit": "episodes-within-each-fixed-dataset",
+    "confidence_level": 0.95,
+    "minimum_relative_reduction_ci_lower": 0.0,
+    "minimum_success_rate_difference_ci_lower": -0.05,
+    "minimum_dataset_non_worse_fraction": 1.0,
+    "mechanism_ablation_relative_reduction_ci_lower": 0.0,
+    "mechanism_ablation_success_rate_difference_ci_lower": -0.05
+  },
+  "claim_boundary": {
+    "permitted_if_passed": "On the protocol-frozen public physical-experiment evaluation, Ingot required fewer additional result queries than every preregistered baseline while preserving the success-rate guardrail.",
+    "not_permitted": [
+      "The same reduction applies to another factory, process, material, machine, objective, or experiment cost.",
+      "Offline pool replay proves prospective production-cycle reduction.",
+      "Mechanism features are validated physical laws or confirmed causes."
+    ]
+  }
+}

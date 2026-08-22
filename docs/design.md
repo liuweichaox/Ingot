@@ -51,7 +51,7 @@ flowchart LR
     Platform --> Web["Platform Web\n工程师工作台"]
     Platform --> Analysis["确定性分析\n质量 · 比较 · 特征 · 统计"]
     Platform --> Optimizer["Optimizer\n模型 · 约束 · 实验建议"]
-    Platform --> Agent["Agent\n问题理解 · 工具编排 · 解释"]
+    Platform --> Agent["Agent\n问题解析 · 工具编排 · 证据说明"]
     Engineer["工艺工程师"] --> Web
     Web --> Platform
 ```
@@ -98,7 +98,7 @@ Platform 内部按用例分离策略与实现：`Platform.Application` 保存可
 
 ### Agent
 
-- 理解工程师的问题和当前业务上下文；
+- 解析工程师的问题和当前业务上下文；
 - 调用授权的只读或受控业务工具；
 - 组织事实、引用来源、说明限制和建议下一步；
 - 不自行计算或生成数值工艺设定，不把语言概率写成工程结论。

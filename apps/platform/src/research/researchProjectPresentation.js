@@ -17,6 +17,7 @@ export function mechanismUsageLabel(value) {
   return ({
     "hard-constraint": "缩窄硬边界",
     "candidate-ranking": "候选偏好排序",
+    "forbidden-combination": "排除禁止组合",
     "knowledge-context": "上下文与解释",
   })[value] || value;
 }

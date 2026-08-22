@@ -139,3 +139,5 @@ if ! grep -Fq '真实生产数据、项目与设备标识' docs/rollout.md ||
   echo "Scenario validation documents must retain the real-production-data confidentiality boundary." >&2
   exit 1
 fi
+
+python3 scripts/verify-documentation-style.py

@@ -34,13 +34,13 @@ The same setting may produce different heating rates, overshoot, pressure hold, 
 
 They may be important factors or merely traceability. The system checks coverage and overlap before estimating influence; it does not add a field to a model merely because the field exists.
 
-## Why not always use the most complex AI?
+## Why not always use the most complex model?
 
 The most effective method depends on the question and data. Simple comparison, robust statistics, or a well-designed controlled experiment may be more reliable. With insufficient or unidentifiable data, the system should request data or refuse to answer.
 
 ## What does the LLM do?
 
-It understands questions, calls authorized tools, organizes records, and explains results. It does not generate numerical process settings directly, replace statistics, constraints, or experimental validation, or invent facts without sources.
+It parses questions, calls authorized tools, organizes records, and explains results. It does not generate numerical process settings directly, replace statistics, constraints, or experimental validation, or invent facts without sources.
 
 ## As foundation models and agents become more capable, what does Ingot become?
 
@@ -78,7 +78,7 @@ The first real scenario tests whether the data chain and algorithm path are repr
 
 No. The project has completed internal validation of import, run reconstruction, inspection linkage, and R&D observations using controlled, non-public production history, but that does not prove shorter development cycles. Neither code capability nor internal chain validation is a product benefit; quantitative claims still require prospective shadow and controlled online validation under the [Scenario validation](rollout.en.md) protocol.
 
-Real production data and derived results remain inside the confidentiality boundary and are not submitted or disclosed for public reproduction. The public repository provides synthetic examples, an explicitly licensed and checksum-verified public-data benchmark, and general acceptance protocols. The current public benchmark passes workflow validation, while the strict experiment-count reduction claim remains not demonstrated; public wording therefore continues to identify the validation stage and conclusion boundary of each evidence type.
+Real production data and derived results remain inside the confidentiality boundary and are not submitted or disclosed for public reproduction. The public repository provides synthetic examples, explicitly licensed and checksum-verified public-data evaluation, and general acceptance protocols. The v2 development regression demonstrates fewer additional experiments than random search in two fixed public pools and overall noninferiority to a linear response surface. v3 prepares public physical-experiment data not used during development, four strong baselines, and a mechanism-feature ablation, but no result may run or be cited before protocol freeze. Neither is factory-benefit evidence; public wording must identify the datasets, comparator, validation stage, and conclusion boundary.
 
 ## Is the documentation now finalized?
 

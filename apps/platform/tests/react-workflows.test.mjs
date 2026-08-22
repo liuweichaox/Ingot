@@ -419,6 +419,11 @@ test("mechanism knowledge workbench structures citations, review, constraints, a
   assert.match(researchAssets, /上传并提取/);
   assert.match(researchAssets, /反证条件/);
   assert.match(researchAssets, /时滞（毫秒）/);
+  assert.match(researchAssets, /label="项目变量"/);
+  assert.match(researchAssets, /aria-label="作用变量单位"/);
+  assert.match(researchAssets, /buildApplicabilityCatalog/);
+  assert.match(researchAssets, /label="适用对象"/);
+  assert.doesNotMatch(researchAssets, /label="变量代码"/);
   assert.match(researchAssets, /工程约束（可选）/);
   assert.match(researchAssets, /禁止参数组合（可选）/);
   assert.match(researchAssets, /生成语义草稿/);

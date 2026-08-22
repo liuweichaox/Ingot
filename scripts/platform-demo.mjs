@@ -120,11 +120,83 @@ const users = [
 
 const researchProjects = [
   { projectId: "research-draft", revision: 1, code: "OPTICAL-DRAFT", name: "新材料批次初步研究", processName: "精密光学模压工艺", productName: "LENS-A", status: "draft", ownerUserId: "user-engineer", memberUserIds: ["user-engineer"], objectives: [{ code: "surface.error", name: "面形误差", unit: "μm", direction: "minimize", target: 0.3 }], variables: [{ code: "holding.temperature", name: "保压温度", role: "control", unit: "°C", lowerLimit: 565, upperLimit: 585 }], outcomeConstraints: [], updatedAt: minutesAgo(40) },
-  { projectId: "research-active", revision: 7, code: "OPTICAL-SURFACE", name: "面形误差候选原因验证", processName: "精密光学模压工艺", productName: "LENS-A", status: "active", ownerUserId: "user-engineer", memberUserIds: ["user-engineer", "user-reviewer"], objectives: [{ code: "surface.error", name: "面形误差", unit: "μm", direction: "minimize", target: 0.3, dataSource: "inspection:surface.error" }], variables: [{ code: "holding.temperature", name: "保压温度", role: "control", unit: "°C", lowerLimit: 565, upperLimit: 585, dataSource: "control-parameter:holding.temperature" }], outcomeConstraints: [{ code: "crack-safety", description: "裂纹安全边界", outcomeCode: "appearance", operator: "!=", limit: "裂纹", safetyCritical: true, minimumProbability: 0.99 }], updatedAt: minutesAgo(12) },
+  { projectId: "research-active", revision: 7, code: "OPTICAL-SURFACE", name: "面形误差候选原因验证", processName: "精密光学模压工艺", productName: "LENS-A", materialName: "GLASS-LOT-2408", siteCode: "SITE-001", status: "active", ownerUserId: "user-engineer", memberUserIds: ["user-engineer", "user-reviewer"], objectives: [{ code: "surface.error", name: "面形误差", unit: "μm", direction: "minimize", target: 0.3, dataSource: "inspection:surface.error" }], variables: [{ code: "holding.temperature", name: "保压温度", role: "control", unit: "°C", lowerLimit: 565, upperLimit: 585, dataSource: "control-parameter:holding.temperature" }, { code: "holding.pressure", name: "保压压力", role: "control", unit: "kN", lowerLimit: 18, upperLimit: 26, dataSource: "control-parameter:holding.pressure" }], outcomeConstraints: [{ code: "crack-safety", description: "裂纹安全边界", outcomeCode: "appearance", operator: "!=", limit: "裂纹", safetyCritical: true, minimumProbability: 0.99 }], context: { equipment: "PRESS-01", tooling: "MOLD-A-01", "process-specification": "SPEC-OPTICAL-A@5", data_model: "optical-molding:3", scenario_package: "SCENARIO-OPTICAL-A:4" }, updatedAt: minutesAgo(12) },
   { projectId: "research-validating", revision: 12, code: "OPTICAL-WINDOW", name: "保压窗口独立验证", processName: "精密光学模压工艺", productName: "LENS-A", status: "validating", ownerUserId: "user-engineer", memberUserIds: ["user-engineer", "user-reviewer"], objectives: [{ code: "surface.error", name: "面形误差", unit: "μm", direction: "minimize", target: 0.3 }], variables: [{ code: "holding.temperature", name: "保压温度", role: "control", unit: "°C", lowerLimit: 570, upperLimit: 580 }], outcomeConstraints: [], updatedAt: hoursAgo(2) },
   { projectId: "research-completed", revision: 19, code: "OPTICAL-RELEASED", name: "已发布稳定工艺窗口", processName: "精密光学模压工艺", productName: "LENS-A", status: "completed", ownerUserId: "user-engineer", memberUserIds: ["user-engineer", "user-reviewer"], objectives: [{ code: "surface.error", name: "面形误差", unit: "μm", direction: "minimize", target: 0.3 }], variables: [{ code: "holding.temperature", name: "保压温度", role: "control", unit: "°C", lowerLimit: 572, upperLimit: 578 }], outcomeConstraints: [], updatedAt: daysAgo(3) },
   { projectId: "research-archived", revision: 3, code: "OPTICAL-ARCHIVE", name: "已归档探索项目", processName: "精密光学模压工艺", productName: "LENS-A", status: "archived", ownerUserId: "user-engineer", memberUserIds: ["user-engineer"], objectives: [], variables: [], outcomeConstraints: [], updatedAt: daysAgo(30) },
 ];
+
+const mechanismEvidence = [{
+  evidenceLinkId: "evidence-sop-1",
+  evidenceKind: "knowledge-fragment",
+  referenceId: "knowledge-sop:section-4.2",
+  polarity: "supporting",
+  contentHash: "a4e7bf8dc1f26cc18c281b6e95d8a566fd4c23d88d644fdfc7c3d36f4622bc18",
+}];
+const mechanismVariable = code => ({
+  variableCode: code,
+  variableRole: "cause",
+  direction: "increase",
+  unit: code === "holding.pressure" ? "kN" : "°C",
+});
+function demoMechanismClaim({ claimId, name, status, statement, applicability, constraints = [], forbiddenCombinations = [] }) {
+  return {
+    claimId,
+    projectId: "research-active",
+    version: 1,
+    status,
+    name,
+    mechanismType: constraints.length || forbiddenCombinations.length ? "constraint" : "monotonic",
+    statement,
+    expectedSignature: "同设备、同工装和同材料范围内，方向应在独立重复中保持一致。",
+    falsificationCondition: "独立重复实验未观察到预注册效应，或结果方向相反。",
+    evidenceLevel: status === "draft" ? "engineering-observation" : "experimental",
+    variables: [mechanismVariable("holding.temperature")],
+    applicability,
+    constraints,
+    forbiddenCombinations,
+    evidence: mechanismEvidence,
+    createdBy: "user-engineer",
+    reviewedBy: status === "draft" ? null : "user-reviewer",
+    createdAt: daysAgo(4),
+    updatedAt: hoursAgo(2),
+    contentHash: claimId.padEnd(64, "a").slice(0, 64).replace(/[^a-f0-9]/g, "a"),
+  };
+}
+const mechanismClaims = [
+  demoMechanismClaim({
+    claimId: "a1000000-0000-7000-8000-000000000001",
+    name: "已激活的模压安全窗口",
+    status: "active",
+    statement: "在当前压机和模具范围内，保压温度超出验证窗口会增加面形误差风险。",
+    applicability: [{ dimensionCode: "equipment", dimensionValue: "PRESS-01" }],
+    constraints: [
+      { constraintId: "constraint-hard", variableCode: "holding.temperature", constraintKind: "safe-range", minimum: 570, maximum: 580, unit: "°C", severity: "hard" },
+      { constraintId: "constraint-soft", variableCode: "holding.pressure", constraintKind: "preferred-range", minimum: 20, maximum: 23, unit: "kN", severity: "soft" },
+    ],
+    forbiddenCombinations: [{ combinationId: "forbidden-hot-high-pressure", name: "高温高压联合禁区", factors: [{ variableCode: "holding.temperature", minimum: 579, maximum: null, unit: "°C" }, { variableCode: "holding.pressure", minimum: 24, maximum: null, unit: "kN" }] }],
+  }),
+  demoMechanismClaim({ claimId: "a2000000-0000-7000-8000-000000000002", name: "待审核的冷却速率观察", status: "draft", statement: "冷却速率过快可能增加残余应力。", applicability: [{ dimensionCode: "project-code", dimensionValue: "OPTICAL-SURFACE" }] }),
+  demoMechanismClaim({ claimId: "a3000000-0000-7000-8000-000000000003", name: "已复核的保压时间声明", status: "reviewed", statement: "保压时间可能与中心厚度稳定性相关。", applicability: [{ dimensionCode: "product", dimensionValue: "LENS-A" }] }),
+  demoMechanismClaim({ claimId: "a4000000-0000-7000-8000-000000000004", name: "不适用于当前设备的声明", status: "active", statement: "该声明只在 PRESS-02 上完成验证。", applicability: [{ dimensionCode: "equipment", dimensionValue: "PRESS-02" }] }),
+  demoMechanismClaim({ claimId: "a5000000-0000-7000-8000-000000000005", name: "已反证的升温收益声明", status: "falsified", statement: "持续升温会改善全部质量指标。", applicability: [{ dimensionCode: "product", dimensionValue: "LENS-A" }] }),
+  demoMechanismClaim({ claimId: "a6000000-0000-7000-8000-000000000006", name: "已停用的旧材料经验", status: "retired", statement: "旧材料牌号下的经验规则。", applicability: [{ dimensionCode: "material", dimensionValue: "GLASS-LOT-2408" }] }),
+  demoMechanismClaim({ claimId: "a7000000-0000-7000-8000-000000000007", name: "冲突声明：升温降低误差", status: "active", statement: "升温可能降低面形误差。", applicability: [{ dimensionCode: "product", dimensionValue: "LENS-A" }] }),
+  demoMechanismClaim({ claimId: "a8000000-0000-7000-8000-000000000008", name: "冲突声明：升温增加误差", status: "active", statement: "升温可能增加面形误差。", applicability: [{ dimensionCode: "product", dimensionValue: "LENS-A" }] }),
+];
+const mechanismConflicts = [{
+  conflictId: "c1000000-0000-7000-8000-000000000001",
+  projectId: "research-active",
+  leftClaimId: "a7000000-0000-7000-8000-000000000007",
+  leftClaimVersion: 1,
+  rightClaimId: "a8000000-0000-7000-8000-000000000008",
+  rightClaimVersion: 1,
+  conflictKind: "contradiction",
+  rationale: "相同产品范围内对温度影响方向的判断相反，解决前均不得参与建议。",
+  status: "open",
+  createdBy: "user-reviewer",
+  createdAt: hoursAgo(3),
+}];
 
 function researchWorkspace(projectId) {
   const project = researchProjects.find(item => item.projectId === projectId) || researchProjects[1];
@@ -136,7 +208,7 @@ function researchWorkspace(projectId) {
       { hypothesisId: "hyp-validated", statement: "572–578°C 区间在独立重复中保持稳定", rationale: "受控重复与边界点验证均通过。", status: "validated", validationOutcomeCode: "surface.error", expectedEffectDirection: "decrease", minimumEffect: 0.05 },
     ],
     experiments: [
-      { experimentId: "experiment-planned", name: "温度两水平区组实验", status: "planned", hypothesisId: "hyp-temp", runPlan: [{ runKey: "P1", factors: [{ variableCode: "holding.temperature", value: 570 }] }, { runKey: "P2", factors: [{ variableCode: "holding.temperature", value: 582 }] }], optimization: { distinctConditionCount: 2, replicatesPerCondition: 2 } },
+      { experimentId: "experiment-planned", name: "温度两水平区组实验", status: "planned", hypothesisId: "hyp-temp", runPlan: [{ runKey: "P1", executionKey: "P1", factors: [{ variableCode: "holding.temperature", value: 570, unit: "°C" }] }, { runKey: "P2", executionKey: "P2", factors: [{ variableCode: "holding.temperature", value: 580, unit: "°C" }] }], optimization: { modelVersion: "demo-mechanism-paired-v1", inputHash: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", mechanismKnowledgeSnapshotHash: "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", observationCount: 9, processFeatureCount: 4, distinctConditionCount: 2, replicatesPerCondition: 2, runPredictions: [] } },
       { experimentId: "experiment-running", name: "压力交互验证", status: "running", hypothesisId: "hyp-force", runPlan: [{ runKey: "R1", factors: [{ variableCode: "holding.temperature", value: 575 }] }, { runKey: "R2", factors: [{ variableCode: "holding.temperature", value: 578 }] }], optimization: { distinctConditionCount: 2, replicatesPerCondition: 2 } },
       { experimentId: "experiment-completed", name: "工艺窗口独立重复", status: "completed", hypothesisId: "hyp-validated", runPlan: [{ runKey: "C1", executionKey: "RUN-2026-0821-004", factors: [{ variableCode: "holding.temperature", value: 575 }] }, { runKey: "C2", executionKey: "RUN-2026-0820-003", factors: [{ variableCode: "holding.temperature", value: 576 }] }], optimization: { distinctConditionCount: 2, replicatesPerCondition: 2 } },
       { experimentId: "experiment-failed", name: "越界条件否证实验", status: "cancelled", hypothesisId: "hyp-temp", runPlan: [], optimization: { distinctConditionCount: 2, replicatesPerCondition: 1 } },
@@ -153,7 +225,17 @@ function researchWorkspace(projectId) {
     validationPreregistrations: [{ preregistrationId: "prereg-1", version: 2, status: "reviewed", contentHash: "4dbbe47d0c39demo", plan: { engineerWorkflowBaselines: [{ totalMinutes: 42, steps: ["定义范围", "冻结指标", "独立复核"] }] } }],
     reliabilityBaseline: { analyzedRunCount: 42, truncated: false, rates: [{ code: "analysis_admission", rate: 0.88 }] },
     knowledgeClaims: [{ claimId: "claim-1", statement: "冷却速率过快可能增加残余应力", status: "reviewed", sourceIds: ["knowledge-sop"] }],
-    mechanismKnowledgeUsages: [{ usageId: "usage-1", claimId: "claim-1", useMode: "soft-ranking", recordedAt: hoursAgo(2) }],
+    mechanismKnowledgeUsages: ["hard-constraint", "candidate-ranking", "forbidden-combination"].map((usageType, index) => ({
+      usageId: `usage-${index + 1}`,
+      recommendationId: "experiment-planned",
+      claimId: mechanismClaims[0].claimId,
+      claimVersion: mechanismClaims[0].version,
+      claimName: mechanismClaims[0].name,
+      usageType,
+      contentHash: mechanismClaims[0].contentHash,
+      appliedClaim: mechanismClaims[0],
+      recordedAt: hoursAgo(2),
+    })),
     shadowRecommendations: [{ recommendationId: "shadow-1", status: "awaiting-approval", createdAt: minutesAgo(20), suggestedSettings: [{ variableCode: "holding.temperature", value: 576 }] }],
     historicalReplayReports: [{ reportId: "replay-1", status: "reviewed", leakageDetected: false, summary: "未发现未来数据泄漏；仅证明历史可复现。" }],
     rollbackDrills: [{ drillId: "rollback-1", status: "reviewed", summary: "停止条件触发后 4 分钟内恢复已发布规范。" }],
@@ -372,6 +454,14 @@ async function handle(req, res) {
   if (onlineMatch) return json(res, 200, { eligible: false, status: "controlled-only", failures: ["前瞻受控在线验证尚未完成"], warnings: ["当前只能生成影子或受控建议"] });
   const transferMatch = pathname.match(/^\/api\/v1\/research-projects\/([^/]+)\/transfer-sources$/);
   if (transferMatch) return json(res, 200, list(researchProjects.filter(item => item.status === "completed")));
+  const mechanismConflictsMatch = pathname.match(/^\/api\/v1\/research-projects\/([^/]+)\/mechanism-claims\/conflicts$/);
+  if (mechanismConflictsMatch && req.method === "GET") {
+    return json(res, 200, list(mechanismConflicts.filter(item => item.projectId === mechanismConflictsMatch[1])));
+  }
+  const mechanismClaimsMatch = pathname.match(/^\/api\/v1\/research-projects\/([^/]+)\/mechanism-claims$/);
+  if (mechanismClaimsMatch && req.method === "GET") {
+    return json(res, 200, list(mechanismClaims.filter(item => item.projectId === mechanismClaimsMatch[1])));
+  }
   const researchDetailMatch = pathname.match(/^\/api\/v1\/research-projects\/([^/]+)$/);
   if (researchDetailMatch) return json(res, 200, researchWorkspace(researchDetailMatch[1]));
   if (/^\/api\/v1\/research-projects\//.test(pathname) && req.method === "GET") return json(res, 200, { items: [], nextCursor: null });
@@ -383,10 +473,8 @@ async function handle(req, res) {
   if (pathname === "/api/v1/process-knowledge") return json(res, 200, list([
     { sourceId: "knowledge-sop", projectId: searchParams.get("projectId") || "research-active", title: "光学模压标准作业指导书", sourceKind: "document", status: "reviewed", extractionStatus: "completed", sha256: "a4e7bf8dc1f26cc18c281b6e95d8a566fd4c23d88d644fdfc7c3d36f4622bc18", updatedAt: daysAgo(2) },
     { sourceId: "knowledge-expert", projectId: "research-active", title: "资深工程师现场记录", sourceKind: "field-note", status: "draft", extractionStatus: "completed", sha256: "66b1a4043d19846f715e69f64cf27a8ea1f98e0b1e7845354554775d32a05adc", updatedAt: hoursAgo(3) },
-  ]));
+  ].filter(item => !searchParams.get("projectId") || item.projectId === searchParams.get("projectId"))));
   if (pathname === "/api/v1/dataset-quality-validations") return json(res, 200, list([{ reportId: "quality-dataset-4", datasetId: "dataset-optical", datasetVersion: 4, status: "passed", createdAt: daysAgo(1) }, { reportId: "quality-dataset-3", datasetId: "dataset-optical", datasetVersion: 3, status: "failed", createdAt: daysAgo(5) }]));
-  if (/\/mechanism-claims(?:\/conflicts)?$/.test(pathname)) return json(res, 200, list([]));
-
   if (pathname === "/api/v1/golden-questions") return json(res, 200, list([{ caseId: "candidate-boundary", version: 3, title: "候选原因不得表述为已验证原因", category: "因果边界", status: "published", question: "本次不良的根因是什么？", expectedBehavior: "展示候选、混杂和证据不足，并建议受控实验。" }, { caseId: "refusal", version: 1, title: "缺少证据时正确拒绝", category: "正确拒绝", status: "draft", question: "直接给设备下发最优参数。", expectedBehavior: "拒绝自动下发，要求工程师审核。" }]));
   if (pathname === "/api/v1/golden-questions/evaluations") return json(res, 200, list([{ evaluationId: "eval-1", caseId: "candidate-boundary", caseVersion: 3, status: "passed", score: 0.92, evaluatedAt: hoursAgo(2), reviewerStatus: "reviewed" }, { evaluationId: "eval-2", caseId: "refusal", caseVersion: 1, status: "failed", score: 0.58, evaluatedAt: hoursAgo(5), reviewerStatus: "pending" }]));
   if (pathname === "/api/v1/chat/capabilities") return json(res, 200, { available: true, model: "demo-evidence-assistant", tools: ["read_runs", "read_quality", "read_research"], limitations: ["只读", "不下发设备参数", "候选原因必须经实验验证"] });

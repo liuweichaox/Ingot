@@ -47,7 +47,7 @@ Process configuration → Field integration → Production runs → Quality mana
 
 | Stage | Question answered |
 |---|---|
-| Process configuration | Which variables, units, objectives, quality rules, and safety boundaries must the platform understand? |
+| Process configuration | Which variables, units, objectives, quality rules, and safety boundaries must the platform represent? |
 | Field integration | How do controls, instruments, vision, inspection, and business sources map to stable business semantics? |
 | Production runs | Which conditions did this run use, and what actually happened during the process? |
 | Quality management | Can inspection outcomes be linked to the same run and independently reviewed? |
@@ -66,7 +66,7 @@ Ingot does not force one “advanced algorithm” onto every question:
 - controls, repetition, blocking, randomization, and interventions support causal decisions;
 - Gaussian processes and constrained Bayesian optimization search expensive small-data parameter spaces;
 - physical features or priors help when mechanisms are known and data are scarce;
-- an LLM interprets questions, calls read-only tools, and explains evidence, but never generates numerical process settings directly.
+- an LLM parses engineering questions, calls read-only tools, and organizes evidence explanations, but never generates numerical process settings directly.
 
 See [Analysis and optimization](docs/optimization.en.md) for the detailed boundaries.
 
@@ -91,7 +91,7 @@ The repository implements the main code path across field integration, productio
 - **Shadow validation passed** means recommendations survived field-constraint review on new projects.
 - **Online validation passed** is required before claiming fewer experiments or shorter development time on real work.
 
-The project has completed internal end-to-end validation of import, run reconstruction, inspection linkage, and R&D observations using controlled, non-public production history. The repository also provides a fixed offline benchmark using explicitly licensed public manufacturing data. The current benchmark passes workflow, categorical-context-isolation, and claim-boundary checks, while the strict experiment-count reduction claim remains not demonstrated. Formal leakage-free replay on real history and prospective validation remain incomplete, so the project does not claim a measured reduction in experiments or development time.
+The project has completed internal end-to-end validation of import, run reconstruction, inspection linkage, and R&D observations using controlled, non-public production history. The repository also provides public-data experiment-efficiency validation under explicit licenses. The v2 development regression demonstrates fewer additional experiments than seeded random search and overall noninferiority to a linear response surface across two datasets and 14 contexts. v3 adds two physical-experiment datasets not used during development, four preregistered baselines, and a mechanism-feature ablation, but its protocol remains a pre-freeze draft and has no result. Existing conclusions apply only to fixed public pools; formal leakage-free replay on real history and prospective validation remain incomplete, so the project does not claim the same reduction for any factory or development program.
 
 - **The public repository provides** code, protocols, schemas, synthetic examples, an explicitly licensed and checksum-verified public-data benchmark, tests, acceptance methods, and conclusion boundaries.
 - **The public repository excludes** real production data, project identities, process parameters, quality distributions, and derived results.
@@ -169,14 +169,22 @@ Run the complete fixed public-manufacturing-data benchmark with:
 ./scripts/benchmark-public-validation.sh
 ```
 
-This benchmark validates a reproducible software and method path; it does not replace shadow or controlled online validation on a real project. See [Public-data offline validation](tools/public-validation/README.en.md) for the current result and decision rules.
+This benchmark validates a reproducible software and method path; it does not replace shadow or controlled online validation on a real project. See [Public-data experiment-efficiency validation](tools/public-validation/README.en.md) for the current result and decision rules.
+
+Verify the not-yet-frozen v3 external-data evaluation protocol with:
+
+```bash
+./scripts/verify-public-validation-v3.sh
+```
+
+The complete v3 evaluation can run only after the algorithm and protocol revisions are committed and frozen. The evaluator rejects a draft protocol.
 
 ## Repository layout
 
 ```text
 src/edge/          field acquisition and reliable upload
 src/platform/      central API and business modules
-src/agent/         AI query and explanation capabilities
+src/agent/         model-assisted query and evidence explanation
 src/shared/        domain models and shared contracts
 optimizer/         numerical analysis and Bayesian optimization service
 tests/             .NET core tests
@@ -194,7 +202,7 @@ scripts/           verification and operations scripts
 - [Getting started](docs/getting-started.en.md)
 - [System design](docs/design.en.md)
 - [Analysis and optimization](docs/optimization.en.md)
-- [Public-data offline validation](tools/public-validation/README.en.md)
+- [Public-data experiment-efficiency validation](tools/public-validation/README.en.md)
 - [Mechanism knowledge design](docs/mechanism-knowledge.en.md)
 - [Data integration](docs/data-connection.en.md)
 - [Scenario validation](docs/rollout.en.md)
@@ -210,6 +218,7 @@ scripts/           verification and operations scripts
 - [x] Candidate causes, hypotheses, experiments, and operating regions share one R&D record.
 - [x] Constrained GP/BO recommendations, pending-point avoidance, and safe cold start.
 - [x] Reproducible public-manufacturing-data benchmark with an explicit claim boundary.
+- [ ] Freeze and run the external public physical-experiment evaluation, strong-baseline comparison, and mechanism-feature ablation.
 - [ ] Publish leakage-free sequential replay on a real manufacturing history.
 - [ ] Complete shadow recommendations and analyze engineer rejection reasons on a new project.
 - [ ] Complete a controlled online experiment and publish preregistered results.

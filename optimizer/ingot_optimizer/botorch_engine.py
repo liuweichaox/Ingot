@@ -1,18 +1,21 @@
-"""Production Bayesian optimizer: multi-output GP + batch qLogNEHVI."""
+"""Production optimizer: target-aware GP and response-surface ensemble."""
 from __future__ import annotations
 
 import math
 from typing import Mapping, Sequence
 
 import numpy as np
-from scipy.stats import norm
+from scipy.stats import norm, rankdata
 
-from .campaign import Campaign, Objective
+from .campaign import Campaign
 from .feature_transforms import DerivedFeature, expand_inputs
 from .loop import ObjectivePrediction, Suggestion
 
 
-MODEL_VERSION = "botorch-qlogbo-v5"
+MODEL_VERSION = "botorch-spec-ensemble-v6"
+SPEC_PROBABILITY_WEIGHT = 0.75
+SPEC_RESPONSE_SURFACE_WEIGHT = 0.25
+SPEC_LINEAR_RELIABILITY_SCALE = 1.0
 
 
 def _observation_variance(values: np.ndarray) -> np.ndarray:
@@ -73,28 +76,6 @@ class BotorchOptimizer:
         self.process_features.append(resolved_features)
         return self.campaign.distance_to_spec(outcomes)
 
-    @staticmethod
-    def _utility(samples, objectives: list[Objective]):
-        import torch
-
-        columns = []
-        for index, objective in enumerate(objectives):
-            value = objective.clip(samples[..., index])
-            if objective.kind == "le":
-                threshold = float(objective.threshold)
-                badness = 1.0 + (value - threshold) / max(abs(threshold), 1.0)
-            elif objective.kind == "ge":
-                threshold = float(objective.threshold)
-                badness = 1.0 + (threshold - value) / max(abs(threshold), 1.0)
-            elif objective.kind == "target":
-                badness = torch.abs(value - float(objective.target)) / float(objective.tol)
-            else:
-                midpoint = (float(objective.lower) + float(objective.upper)) / 2.0
-                half_width = (float(objective.upper) - float(objective.lower)) / 2.0
-                badness = torch.abs(value - midpoint) / half_width
-            columns.append(-badness * float(objective.weight))
-        return torch.stack(columns, dim=-1)
-
     def _common_process_feature_names(self) -> list[str]:
         if not self.process_features or any(
             not values for values in self.process_features
@@ -142,7 +123,9 @@ class BotorchOptimizer:
         **_: object,
     ) -> list[Suggestion]:
         if len(self.x) < 3:
-            raise ValueError("qLogNEHVI requires at least three observations")
+            raise ValueError(
+                "the production surrogate requires at least three observations"
+            )
         if top_k < 1 or top_k > 20:
             raise ValueError("top_k must be between 1 and 20")
         if decision_intent not in {"reach-specification", "validate-hypothesis"}:
@@ -169,18 +152,8 @@ class BotorchOptimizer:
 
         import torch
         from botorch import fit_gpytorch_mll
-        from botorch.acquisition.multi_objective.logei import (
-            qLogNoisyExpectedHypervolumeImprovement,
-        )
-        from botorch.acquisition.logei import qLogNoisyExpectedImprovement
-        from botorch.acquisition.objective import GenericMCObjective
-        from botorch.acquisition.multi_objective.objective import (
-            GenericMCMultiOutputObjective,
-        )
         from botorch.models import SingleTaskGP
         from botorch.models.transforms.outcome import Standardize
-        from botorch.optim import optimize_acqf_discrete
-        from botorch.sampling.normal import SobolQMCNormalSampler
         from gpytorch.mlls import ExactMarginalLogLikelihood
 
         torch.manual_seed(self.seed)
@@ -189,11 +162,6 @@ class BotorchOptimizer:
         train_unit = np.vstack(self.x)
         train_unit_tensor = torch.tensor(train_unit, dtype=dtype)
         candidate_unit_tensor = torch.tensor(candidates, dtype=dtype)
-        pending_unit_tensor = (
-            torch.tensor(pending_units, dtype=dtype)
-            if pending_units.size
-            else None
-        )
         lows = [value.low for value in self.campaign.variables]
         highs = [value.high for value in self.campaign.variables]
         train_x_np = expand_inputs(
@@ -209,17 +177,6 @@ class BotorchOptimizer:
             lows,
             highs,
             self.derived_features,
-        )
-        pending_np = (
-            expand_inputs(
-                pending_units,
-                names,
-                lows,
-                highs,
-                self.derived_features,
-            )
-            if pending_units.size
-            else None
         )
         process_feature_names = self._common_process_feature_names()
         if process_feature_names:
@@ -249,13 +206,6 @@ class BotorchOptimizer:
                     .mean.cpu()
                     .numpy()
                 )
-                predicted_pending_process = (
-                    process_model.posterior(pending_unit_tensor)
-                    .mean.cpu()
-                    .numpy()
-                    if pending_unit_tensor is not None
-                    else None
-                )
             process_minimum = process_train_np.min(axis=0)
             process_scale = process_train_np.max(axis=0) - process_minimum
             process_scale = np.where(process_scale > 1e-9, process_scale, 1.0)
@@ -265,26 +215,12 @@ class BotorchOptimizer:
             choices_np = np.column_stack(
                 [choices_np, (predicted_process - process_minimum) / process_scale]
             )
-            if pending_np is not None and predicted_pending_process is not None:
-                pending_np = np.column_stack(
-                    [
-                        pending_np,
-                        (predicted_pending_process - process_minimum)
-                        / process_scale,
-                    ]
-                )
         train_x = torch.tensor(train_x_np, dtype=dtype)
         train_y_np = np.column_stack(
             [np.asarray(self.y), np.asarray(self.constraint_y)]
         )
         train_y = torch.tensor(train_y_np, dtype=dtype)
         choices = torch.tensor(choices_np, dtype=dtype)
-        pending_x = (
-            torch.tensor(pending_np, dtype=dtype)
-            if pending_np is not None
-            else None
-        )
-
         model = SingleTaskGP(
             train_x,
             train_y,
@@ -294,24 +230,6 @@ class BotorchOptimizer:
         mll = ExactMarginalLogLikelihood(model.likelihood, model)
         fit_gpytorch_mll(mll)
         objective_count = len(self.campaign.objectives)
-        posterior_constraints = []
-        for index, constraint_spec in enumerate(
-            self.campaign.outcome_constraints
-        ):
-            output_index = objective_count + index
-            if constraint_spec.operator == "<=":
-                posterior_constraints.append(
-                    lambda samples, output_index=output_index, limit=float(
-                        constraint_spec.limit
-                    ): samples[..., output_index] - limit
-                )
-            else:
-                posterior_constraints.append(
-                    lambda samples, output_index=output_index, limit=float(
-                        constraint_spec.limit
-                    ): limit - samples[..., output_index]
-                )
-
         if self.campaign.outcome_constraints:
             with torch.no_grad():
                 safety_posterior = model.posterior(choices)
@@ -345,9 +263,6 @@ class BotorchOptimizer:
                 )
             candidates = candidates[safe]
             choices = choices[safe]
-        sampler = SobolQMCNormalSampler(
-            sample_shape=torch.Size([n_samples]), seed=self.seed
-        )
         validation_scores = None
         selected_indices = None
         selected_acquisition_values = None
@@ -378,61 +293,143 @@ class BotorchOptimizer:
                 axis=1,
             )
             validation_scores = objective_uncertainty * (1.0 + separation)
-            selected_indices = self._select_diverse_validation_points(
+            selected_indices = self._select_diverse_points(
                 candidates, validation_scores, top_k
             )
             selected_x = choices[selected_indices]
-        elif len(self.campaign.objectives) == 1:
-            objective = GenericMCObjective(
-                lambda samples, X=None: self._utility(
-                    samples, self.campaign.objectives
-                ).squeeze(-1)
-            )
-            acquisition = qLogNoisyExpectedImprovement(
-                model=model,
-                X_baseline=train_x,
-                sampler=sampler,
-                objective=objective,
-                constraints=posterior_constraints or None,
-                X_pending=pending_x,
-                prune_baseline=True,
-            )
         else:
-            objective = GenericMCMultiOutputObjective(
-                lambda samples, X=None: self._utility(
-                    samples, self.campaign.objectives
-                )
-            )
             with torch.no_grad():
-                observed_utility = objective(train_y)
-            spread = (
-                observed_utility.max(dim=0).values
-                - observed_utility.min(dim=0).values
+                reach_posterior = model.posterior(choices)
+                reach_means = reach_posterior.mean.cpu().numpy()
+                reach_deviations = (
+                    reach_posterior.variance.clamp_min(0).sqrt().cpu().numpy()
+                )
+            specification_probability = np.ones(len(candidates), dtype=float)
+            for index, objective_spec in enumerate(self.campaign.objectives):
+                sigma = np.maximum(reach_deviations[:, index], 1e-12)
+                if objective_spec.kind == "le":
+                    probability = norm.cdf(
+                        (float(objective_spec.threshold) - reach_means[:, index])
+                        / sigma
+                    )
+                elif objective_spec.kind == "ge":
+                    probability = 1.0 - norm.cdf(
+                        (float(objective_spec.threshold) - reach_means[:, index])
+                        / sigma
+                    )
+                else:
+                    lower = (
+                        float(objective_spec.target) - float(objective_spec.tol)
+                        if objective_spec.kind == "target"
+                        else float(objective_spec.lower)
+                    )
+                    upper = (
+                        float(objective_spec.target) + float(objective_spec.tol)
+                        if objective_spec.kind == "target"
+                        else float(objective_spec.upper)
+                    )
+                    probability = norm.cdf(
+                        (upper - reach_means[:, index]) / sigma
+                    ) - norm.cdf((lower - reach_means[:, index]) / sigma)
+                specification_probability *= np.clip(probability, 0.0, 1.0)
+            for index, constraint_spec in enumerate(
+                self.campaign.outcome_constraints
+            ):
+                output_index = objective_count + index
+                sigma = np.maximum(
+                    reach_deviations[:, output_index], 1e-12
+                )
+                if constraint_spec.operator == "<=":
+                    probability = norm.cdf(
+                        (
+                            float(constraint_spec.limit)
+                            - reach_means[:, output_index]
+                        )
+                        / sigma
+                    )
+                else:
+                    probability = 1.0 - norm.cdf(
+                        (
+                            float(constraint_spec.limit)
+                            - reach_means[:, output_index]
+                        )
+                        / sigma
+                    )
+                specification_probability *= np.clip(probability, 0.0, 1.0)
+            observed_design = np.column_stack(
+                [np.ones(len(train_unit)), train_unit]
             )
-            ref_point = (
-                observed_utility.min(dim=0).values
-                - torch.clamp(0.1 * spread, min=0.1)
-            ).tolist()
-            acquisition = qLogNoisyExpectedHypervolumeImprovement(
-                model=model,
-                ref_point=ref_point,
-                X_baseline=train_x,
-                sampler=sampler,
-                objective=objective,
-                constraints=posterior_constraints or None,
-                X_pending=pending_x,
-                prune_baseline=True,
+            observed_distance = np.asarray(
+                [
+                    self.campaign.distance_to_spec(
+                        {
+                            objective.name: float(values[index])
+                            for index, objective in enumerate(
+                                self.campaign.objectives
+                            )
+                        }
+                    )
+                    for values in self.y
+                ]
             )
-        if decision_intent == "reach-specification":
-            selected_x, selected_acquisition = optimize_acqf_discrete(
-                acq_function=acquisition,
-                q=top_k,
-                choices=choices,
-                unique=True,
+            ridge = np.eye(observed_design.shape[1]) * 1e-3
+            ridge[0, 0] = 0.0
+            coefficients = np.linalg.solve(
+                observed_design.T @ observed_design + ridge,
+                observed_design.T @ observed_distance,
             )
-            selected_acquisition_values = (
-                selected_acquisition.detach().reshape(-1).cpu().numpy()
+            linear_distance = (
+                np.column_stack([np.ones(len(candidates)), candidates])
+                @ coefficients
             )
+            probability_rank = rankdata(
+                specification_probability, method="average"
+            )
+            response_surface_rank = rankdata(
+                -linear_distance, method="average"
+            )
+            probability_weight = SPEC_PROBABILITY_WEIGHT
+            response_surface_weight = SPEC_RESPONSE_SURFACE_WEIGHT
+            if len(observed_distance) >= 6:
+                leave_one_out_errors = []
+                for held_out in range(len(observed_distance)):
+                    retained = np.arange(len(observed_distance)) != held_out
+                    retained_design = observed_design[retained]
+                    retained_penalty = (
+                        np.eye(retained_design.shape[1]) * 1e-3
+                    )
+                    retained_penalty[0, 0] = 0.0
+                    retained_coefficients = np.linalg.solve(
+                        retained_design.T @ retained_design
+                        + retained_penalty,
+                        retained_design.T @ observed_distance[retained],
+                    )
+                    prediction = (
+                        observed_design[held_out] @ retained_coefficients
+                    )
+                    leave_one_out_errors.append(
+                        prediction - observed_distance[held_out]
+                    )
+                distance_scale = max(float(np.ptp(observed_distance)), 0.05)
+                normalized_error = (
+                    float(np.sqrt(np.mean(np.square(leave_one_out_errors))))
+                    / distance_scale
+                )
+                maturity = min((len(observed_distance) - 5) / 4.0, 1.0)
+                reliability = math.exp(
+                    -normalized_error / SPEC_LINEAR_RELIABILITY_SCALE
+                )
+                response_surface_weight += 0.5 * maturity * reliability
+                probability_weight = 1.0 - response_surface_weight
+            acquisition_score = (
+                probability_weight * probability_rank
+                + response_surface_weight * response_surface_rank
+            ) / len(candidates)
+            selected_indices = self._select_diverse_points(
+                candidates, acquisition_score, top_k
+            )
+            selected_x = choices[selected_indices]
+            selected_acquisition_values = acquisition_score[selected_indices]
         selected_expanded = selected_x.detach().cpu().numpy()
         selected_unit = selected_expanded[:, : self.campaign.dim]
         with torch.no_grad():
@@ -485,7 +482,9 @@ class BotorchOptimizer:
                 if objective_spec.kind == "le":
                     probability = norm.cdf((float(objective_spec.threshold) - mean[index]) / sigma)
                 elif objective_spec.kind == "ge":
-                    probability = 1.0 - norm.cdf((float(objective_spec.threshold) - mean[index]) / sigma)
+                    probability = 1.0 - norm.cdf(
+                        (float(objective_spec.threshold) - mean[index]) / sigma
+                    )
                 else:
                     lower = (
                         float(objective_spec.target) - float(objective_spec.tol)
@@ -538,19 +537,15 @@ class BotorchOptimizer:
                         "maximizes outcome uncertainty while separating the hypothesis variables "
                         "from prior observations."
                         if validation_scores is not None
-                        else "Two-stage trajectory surrogate and qLogNEHVI selected "
-                        "this parameter setting for constrained Pareto-front improvement "
-                        "under GP uncertainty."
-                        if process_feature_names
-                        else
-                        "qLogNEHVI selected this parameter setting for constrained "
-                        "Pareto-front improvement under GP uncertainty."
+                        else "The production surrogate selected this parameter setting "
+                        "from a versioned ensemble of joint specification "
+                        "probability and regularized response-surface rank."
                     ),
                 )
             )
         return results
 
-    def _select_diverse_validation_points(
+    def _select_diverse_points(
         self,
         candidates: np.ndarray,
         scores: np.ndarray,

@@ -39,7 +39,16 @@ describe("研发项目创建抽屉", () => {
   it("读取现有定义，并从工艺配置连续带入模型、目标与控制参数", async () => {
     const fetchMock = vi.fn(url => {
       if (String(url).startsWith("/api/v1/process-executions")) {
-        return Promise.resolve(jsonResponse([{ executionId: "RUN-001", productCode: "LENS-A", equipmentId: "PRESS-01" }]));
+        return Promise.resolve(jsonResponse([{
+          executionId: "RUN-001",
+          productCode: "LENS-A",
+          equipmentId: "PRESS-01",
+          toolingAssemblyId: "MOLD-A-01",
+          processSpecificationId: "SPEC-A",
+          processSpecificationVersion: 5,
+          siteId: "SITE-001",
+          materialLotRef: "GLASS-LOT-01",
+        }]));
       }
       if (url === "/api/v1/inspection-definitions") {
         return Promise.resolve(jsonResponse([{
@@ -75,6 +84,7 @@ describe("研发项目创建抽屉", () => {
     render(<CreateProjectHarness />);
 
     const scenario = await screen.findByLabelText(/^工艺配置（推荐）/);
+    fireEvent.change(screen.getByLabelText(/^参考运行/), { target: { value: "RUN-001" } });
     fireEvent.change(scenario, { target: { value: "lens-production:3" } });
     expect(screen.getByLabelText(/^工艺数据字典/)).toHaveValue("molding:2");
 
@@ -85,6 +95,8 @@ describe("研发项目创建抽屉", () => {
     fireEvent.change(screen.getByLabelText(/^控制参数/), { target: { value: "mold-temperature" } });
     expect(screen.getByLabelText("实际数据来源")).toHaveValue("control-parameter:mold-temperature");
     expect(screen.getByLabelText("变量单位")).toHaveValue("℃");
+    expect(screen.getByLabelText(/^目标产品/)).toHaveValue("LENS-A");
+    expect(screen.getByLabelText("材料")).toHaveValue("GLASS-LOT-01");
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(4));
   });

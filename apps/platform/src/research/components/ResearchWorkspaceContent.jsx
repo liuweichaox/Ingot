@@ -401,6 +401,19 @@ export function WorkspaceContent({
                                       ))}
                                     </div>
                                   )}
+                                  {(claim?.forbiddenCombinations || []).length > 0 && (
+                                    <div className="mt-2 space-y-1">
+                                      <strong className="text-[11px] text-slate-500">禁止参数组合</strong>
+                                      {claim.forbiddenCombinations.map(combination => (
+                                        <div className="rounded-md border border-red-100 bg-red-50 px-2 py-1 text-red-900" key={combination.combinationId}>
+                                          <strong>{combination.name}</strong>
+                                          <span className="ml-1">
+                                            {combination.factors.map(factor => `${variableByCode.get(factor.variableCode)?.name || factor.variableCode} ${formatMechanismConstraint(factor)}`).join(" 且 ")}
+                                          </span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
                                   {claim?.falsificationCondition && (
                                     <p className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-amber-900">
                                       <strong>反证条件：</strong>{claim.falsificationCondition}

@@ -1,7 +1,7 @@
 [project]
 name = "ingot-optimizer"
 version = "0.4.0"
-description = "Ingot 工艺研发优化大脑:序贯实验优化(高斯过程 + 贝叶斯优化 + 物理先验)"
+description = "Ingot 工艺研发数值服务：代理建模、约束判断与序贯实验建议"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [

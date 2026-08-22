@@ -2,7 +2,7 @@
 
 > **Core value**: Move process R&D from decisions without data support to decisions supported by real data, so computers can genuinely help process engineers choose what to do next using the most effective computational methods for the problem.
 
-Ingot is an open-source process diagnosis and optimization system. It connects the production conditions, process trajectory, and inspection result of a real run into traceable evidence, helping engineers understand what happened, what deserves validation, and what is most valuable to do next.
+Ingot is an open-source process diagnosis and optimization system. It connects the production conditions, process trajectory, and inspection result of a real run into traceable evidence, helping engineers determine what happened, what warrants validation, and which next action has the highest expected value.
 
 The computer organizes evidence, compares runs, analyzes data, and proposes experiments. Process engineers frame the problem, review data and constraints, approve experiments, and make the final judgment. The system does not present observational correlation as a definitive cause or a model recommendation as a field guarantee.
 
@@ -34,7 +34,7 @@ Choose an entry by role, then follow the links into method detail. You do not ne
 | Process knowledge builder | [Mechanism knowledge design](mechanism-knowledge.en.md) | [Analysis and optimization](optimization.en.md) |
 | Platform operations or security | [Production architecture](production-architecture.en.md) | [Deployment](deployment.en.md) |
 | Project or validation lead | [Scenario validation](rollout.en.md) | [Roadmap](project-plan.en.md) |
-| Algorithm or validation contributor | [Public-data offline validation](../tools/public-validation/README.en.md) | [Analysis and optimization](optimization.en.md) |
+| Algorithm or validation contributor | [Public-data experiment-efficiency validation](../tools/public-validation/README.en.md) | [Analysis and optimization](optimization.en.md) |
 | Contributor or integrator | [System design](design.en.md) | [Production architecture](production-architecture.en.md) |
 | Public-content maintainer | [Brand guide](brand.en.md) | [Document status](#document-status) |
 
@@ -48,7 +48,7 @@ Choose an entry by role, then follow the links into method detail. You do not ne
 
 ## Current facts
 
-The code covers the main business path across acquisition, process executions, context, inspections, R&D experiments, analysis, and optimization, with automated tests. The project has completed internal end-to-end validation of import, run reconstruction, inspection linkage, and R&D observations using controlled, non-public production history. The fixed public-data benchmark passes workflow, categorical-context-isolation, and claim-boundary checks, while the strict experiment-count reduction claim remains not demonstrated. Formal leakage-free replay on real history and prospective validation remain incomplete, so the project describes system capabilities but does not claim a measured reduction in experiments or development time.
+The code covers the main business path across acquisition, process executions, context, inspections, R&D experiments, analysis, and optimization, with automated tests. The project has completed internal end-to-end validation of import, run reconstruction, inspection linkage, and R&D observations using controlled, non-public production history. The v2 public-data development regression demonstrates fewer additional experiments than seeded random search and overall noninferiority to a linear response surface across two datasets and 14 contexts. The v3 external-data evaluation fixes candidate data, strong baselines, mechanism-feature ablation, and a gate that rejects draft execution, but it is not frozen and has no result. Formal leakage-free replay on real history and prospective validation remain incomplete, so existing results cannot be extrapolated into a measured benefit for any factory.
 
 Current repository implementation snapshot:
 

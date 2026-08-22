@@ -51,7 +51,7 @@ flowchart LR
     Platform --> Web["Platform Web\nengineering workbench"]
     Platform --> Analysis["deterministic analysis\nquality · comparison · features · statistics"]
     Platform --> Optimizer["Optimizer\nmodels · constraints · experiment proposals"]
-    Platform --> Agent["Agent\nquestion understanding · tools · explanation"]
+    Platform --> Agent["Agent\nquestion parsing · tools · evidence explanation"]
     Engineer["Process engineer"] --> Web
     Web --> Platform
 ```
@@ -98,7 +98,7 @@ Platform separates policy from implementation by use case: `Platform.Application
 
 ### Agent
 
-- Understand the engineer's question and current business context.
+- Parse the engineer's question and current business context.
 - Call authorized read-only or controlled business tools.
 - Organize facts, cite sources, explain limits, and suggest next steps.
 - Never compute or invent numerical process settings itself and never turn language probability into an engineering conclusion.

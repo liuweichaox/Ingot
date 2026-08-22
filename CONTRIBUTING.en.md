@@ -2,7 +2,7 @@
 
 [简体中文](CONTRIBUTING.md)
 
-Thank you for helping Ingot optimize manufacturing processes with fewer real experiments. Contributions are welcome across code, equipment adapters, algorithms, anonymized replay data, tests, documentation, and process knowledge.
+Ingot accepts contributions across code, equipment adapters, algorithms, authorized public replay data, tests, documentation, and process knowledge. Every contribution preserves the experiment-efficiency, evidence, and safety claim boundaries.
 
 Participation follows the [Code of Conduct](CODE_OF_CONDUCT.md).
 
@@ -98,5 +98,5 @@ docs: document historical replay protocol
 - additional real equipment protocol adapters;
 - process-specific features and physical priors for real manufacturing scenarios;
 - Bayesian optimization, transfer, and calibration;
-- anonymized real replay datasets and benchmarks;
+- replay datasets and benchmarks with explicit authorization, licensing, and provenance;
 - field usability, diagnostics, and documentation.

@@ -4,20 +4,22 @@ React/Vite workbench for process engineers. It presents one evidence chain from 
 
 The visible domains are:
 
-- Global overview;
-- ProcessExecutions;
-- Manufacturing context;
-- Inspections;
+- Workbench;
+- Field integration;
+- Process configuration;
+- Production runs;
+- Quality management;
+- Process diagnosis;
 - Process R&D;
-- Data and connectivity;
-- Identity and system.
+- System administration.
 
 The working path is:
 
 ```text
-define the process
-→ connect and qualify data
+connect field sources
+→ define process semantics
 → inspect a real run
+→ review quality and data trust
 → compare evidence
 → form and validate a candidate cause
 → review a next experiment

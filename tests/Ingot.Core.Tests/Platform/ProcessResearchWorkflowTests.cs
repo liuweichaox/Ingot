@@ -760,6 +760,67 @@ public sealed class ProcessResearchWorkflowTests
     }
 
     [Fact]
+    public async Task MechanismKnowledgeSnapshotChange_BlocksExistingExperiment()
+    {
+        var store = new MemoryStore();
+        var workflow = CreateWorkflow(store);
+        var project = await workflow.CreateProjectAsync(ProjectDraft(), "engineer-a");
+        var emptySnapshot = MechanismKnowledgeExperimentPolicy.SnapshotHash(
+            new AppliedMechanismKnowledge([], [], [], []));
+        var claim = new MechanismClaimVersion
+        {
+            ClaimId = Guid.CreateVersion7(),
+            ProjectId = project.ProjectId,
+            Version = 1,
+            Status = MechanismClaimStatuses.Active,
+            Name = "新激活的保压窗口",
+            MechanismType = "constraint",
+            Statement = "该知识在实验计划生成后才激活。",
+            FalsificationCondition = "独立实验不支持该窗口。",
+            Applicability =
+            [
+                new MechanismClaimApplicability
+                    { DimensionCode = "project-code", DimensionValue = project.Code }
+            ],
+            ContentHash = new string('a', 64)
+        };
+        var knowledgeStore = new ReplayMechanismKnowledgeStore(claim);
+        var gate = new ResearchExperimentKnowledgeGate(store, knowledgeStore);
+        var experiment = new ResearchExperiment
+        {
+            ExperimentId = Guid.CreateVersion7(),
+            ProjectId = project.ProjectId,
+            Name = "基于旧知识快照的实验",
+            Status = ResearchExperimentStatuses.Planned,
+            StopRule = "触发安全约束时停止。",
+            RollbackPlan = "恢复已发布工艺规范。",
+            RunPlan = [Run("snapshot-change", 1, 515, 10)],
+            Optimization = new ResearchOptimizationMetadata
+            {
+                ModelVersion = "snapshot-test",
+                InputHash = new string('b', 64),
+                MechanismKnowledgeSnapshotHash = emptySnapshot,
+                MechanismModelSnapshotHash = "none"
+            }
+        };
+
+        var error = await Assert.ThrowsAsync<ProcessResearchRuleException>(
+            () => gate.ValidateAsync(experiment));
+
+        Assert.Contains("机理知识已发生变化", error.Message);
+
+        var currentKnowledge = MechanismKnowledgeExperimentPolicy.Select(project, [claim], []);
+        await gate.ValidateAsync(experiment with
+        {
+            Optimization = experiment.Optimization with
+            {
+                MechanismKnowledgeSnapshotHash =
+                    MechanismKnowledgeExperimentPolicy.SnapshotHash(currentKnowledge)
+            }
+        });
+    }
+
+    [Fact]
     public async Task ResultMaterializer_PersistsCompleteProcessExecutionObservationsAsFormalResult()
     {
         var store = new MemoryStore();

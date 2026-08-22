@@ -10,6 +10,43 @@ namespace Ingot.Core.Tests.Platform;
 public sealed class MechanismExperimentPolicyTests
 {
     [Fact]
+    public void Selection_UsesOnlyActiveApplicableConflictFreeClaims()
+    {
+        var project = Project();
+        var applicable = Claim(project, MechanismClaimStatuses.Active, "适用且已激活", "process", "molding");
+        var draft = Claim(project, MechanismClaimStatuses.Draft, "草稿", "process", "molding");
+        var reviewed = Claim(project, MechanismClaimStatuses.Reviewed, "已复核", "process", "molding");
+        var mismatched = Claim(project, MechanismClaimStatuses.Active, "范围不匹配", "process", "coating");
+        var falsified = Claim(project, MechanismClaimStatuses.Falsified, "已反证", "process", "molding");
+        var retired = Claim(project, MechanismClaimStatuses.Retired, "已停用", "process", "molding");
+        var conflictedLeft = Claim(project, MechanismClaimStatuses.Active, "冲突左侧", "process", "molding");
+        var conflictedRight = Claim(project, MechanismClaimStatuses.Active, "冲突右侧", "process", "molding");
+        var conflicts = new[]
+        {
+            new MechanismClaimConflict
+            {
+                ConflictId = Guid.CreateVersion7(),
+                ProjectId = project.ProjectId,
+                LeftClaimId = conflictedLeft.ClaimId,
+                LeftClaimVersion = 1,
+                RightClaimId = conflictedRight.ClaimId,
+                RightClaimVersion = 1,
+                ConflictKind = "contradiction",
+                Rationale = "同一范围内方向相反。",
+                Status = "open"
+            }
+        };
+
+        var selected = MechanismKnowledgeExperimentPolicy.Select(
+            project,
+            [applicable, draft, reviewed, mismatched, falsified, retired, conflictedLeft, conflictedRight],
+            conflicts);
+
+        var claim = Assert.Single(selected.Claims);
+        Assert.Equal(applicable.ClaimId, claim.ClaimId);
+    }
+
+    [Fact]
     public void ActiveMechanismFeature_BecomesAuditableAffineOptimizerInput()
     {
         var project = Project();
@@ -119,4 +156,42 @@ public sealed class MechanismExperimentPolicyTests
             new ResearchObjective { Code = "quality", Name = "质量", Direction = "maximize", Target = 0.9, Unit = "1" }
         ]
     };
+
+    private static MechanismClaimVersion Claim(
+        ResearchProject project,
+        string status,
+        string name,
+        string dimension,
+        string value)
+        => new()
+        {
+            ClaimId = Guid.CreateVersion7(),
+            ProjectId = project.ProjectId,
+            Version = 1,
+            Status = status,
+            Name = name,
+            MechanismType = "monotonic",
+            Statement = "用于验证状态和适用范围选择规则。",
+            FalsificationCondition = "独立实验结果与预期方向相反。",
+            Variables =
+            [
+                new MechanismClaimVariable
+                {
+                    VariableCode = "temperature",
+                    VariableRole = "cause",
+                    Direction = "increase",
+                    Unit = "Cel"
+                }
+            ],
+            Applicability =
+            [
+                new MechanismClaimApplicability
+                {
+                    DimensionCode = dimension,
+                    DimensionValue = value
+                }
+            ],
+            ContentHash = Convert.ToHexStringLower(
+                System.Security.Cryptography.SHA256.HashData(Guid.NewGuid().ToByteArray()))
+        };
 }

@@ -6,7 +6,7 @@
 
 > **Move process R&D from decisions without data support to decisions supported by real data, so computers can genuinely help process engineers choose what to do next using the most effective computational methods for the problem.**
 
-This is Ingot's stable starting point. Data acquisition, process diagnosis, experiment design, numerical optimization, mechanism fusion, and AI interaction serve it; none creates a new core value.
+This is Ingot's stable starting point. Data acquisition, process diagnosis, experiment design, numerical optimization, mechanism fusion, and model interaction serve it; none creates a new core value.
 
 ## Product position
 
@@ -59,9 +59,22 @@ An evidence level answers “how strong is the current support?”, an observati
 
 Use *root cause* only when the validating evidence is stated. *AI process R&D* may describe the interaction model but does not replace the product category. Algorithm names belong in technical explanations, not in the product value itself.
 
-Do not present long-term intelligent-system ambitions, specification candidates without external adoption, or future controlled-action capabilities as a current product category, industry standard, or demonstrated benefit.
+Do not present long-term automation ambitions, specification candidates without external adoption, or future controlled-action capabilities as a current product category, industry standard, or demonstrated benefit.
 
 The short tagline is a communication shorthand for the core value, not a separate product definition.
+
+## Documentation voice
+
+Public documentation uses a formal, direct, and verifiable engineering voice:
+
+- State the object, capability, and result before implementation detail. Do not replace a concrete calculation or workflow with anthropomorphic terms such as *thinking*, *understanding*, or *brain*.
+- Distinguish implemented capability, test result, development-stage evidence, external validation, and roadmap work. Planned work is never written as current behavior.
+- Use `AI`, `LLM`, Gaussian process, and Bayesian optimization only to identify a concrete technical responsibility, not as effect adjectives.
+- Quantitative results include the evaluated population, comparator, metric, confidence interval, and applicability boundary. Without those elements, do not present a number as a benefit claim.
+- Procedures use explicit commands and expected results. Product explanations avoid slogan stacking, rhetorical questions, self-assessment, and promotional second-person language.
+- Chinese and English documents retain the same information hierarchy and claim strength. Translation may change sentence structure but must not add capability, benefit, or assurance.
+
+Terms such as *help*, *recommendation*, and *candidate* are appropriate when engineer review, safety boundaries, and evidence level remain explicit. Interface labels, API fields, and commands remain unchanged for stylistic reasons.
 
 ## Mark meaning
 

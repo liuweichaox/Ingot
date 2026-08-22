@@ -320,7 +320,7 @@ Creators cannot review their own claims or mechanism models. A reviewer does not
 
 ## 8. Document recognition and semantic extraction
 
-The pipeline has three independent layers so one model never reads, interprets, and approves the same content.
+The pipeline has three independent layers so one model never performs source extraction, semantic structuring, and approval for the same content.
 
 ### 8.1 Deterministic structure extraction
 
@@ -460,6 +460,8 @@ The current stable entry is “Process R&D → Research assets.” Select a rese
 - **Review queue**: pending review, conflicts, low confidence, and successor-version requests;
 - **Usage and validation**: hypotheses, experiments, recommendations, and operating regions that reference a claim.
 
+The workbench does not require process engineers to remember internal variable codes. Variables are selected by business name and unit; the unit is inherited from the project variable and cannot be retyped inside the claim. Internal codes remain stable references only. Applicability is selected only from the product, material, equipment, tooling, process specification, phase, site, or project scope already bound to the research project. When a project starts from a production run, its equipment, tooling, process specification, and site context are carried forward so free text cannot create a claim that appears active but never matches.
+
 ### 12.2 Research project
 
 The project workspace currently has no standalone Mechanism tab. The research-assets workbench connects claim lifecycle decisions to project hypotheses and experiment results. A completed result never mutates a claim automatically; promotion or falsification requires an explicit lifecycle command and independent review.
@@ -493,6 +495,17 @@ Data range, prediction, uncertainty, feasibility, and pending points remain in t
 ## 14. Implementation sequence and acceptance
 
 Current-stage calibration: P0 is implemented. P1 now includes deterministic extraction, asynchronous jobs, the human workbench, and optional model-assisted semantic drafts. P2 includes hard bounds, forbidden combinations, soft ranking, snapshots, usage traceability, admission gates, and paired historical replay. P3 connects affine `mechanism-as-feature` models to recommendations and freezes exact model/fusion versions; other output-fusion modes and unified evidence promotion remain incomplete. P4 replay, shadow, and online-validation infrastructure exists, but no real-project evidence yet supports an external value claim.
+
+The repository regression suite fixes the following states: no knowledge, draft/reviewed, active and applicable, context mismatch, unresolved conflict, falsified/retired, and an optimizer returning a violating suggestion. Backend tests assert that only active, applicable, conflict-free claims enter the policy and that a changed knowledge snapshot blocks an existing experiment. Demo and Playwright regressions verify business-name mapping, inherited units, controlled project scope, and recommendation-usage traceability. Run them with:
+
+```bash
+dotnet test tests/Ingot.Core.Tests/Ingot.Core.Tests.csproj \
+  --filter "FullyQualifiedName~MechanismKnowledgeServiceTests|FullyQualifiedName~MechanismExperimentPolicyTests|Name~MechanismKnowledge"
+npm --prefix apps/platform test
+npm --prefix apps/platform run test:e2e
+```
+
+These checks prove that the software path and safety-selection rules are reproducible. They do not prove that a mechanism is true in a real factory or that real experiments have already been reduced.
 
 ### P0: claim kernel and relational storage
 

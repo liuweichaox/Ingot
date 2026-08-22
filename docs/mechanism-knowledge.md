@@ -319,7 +319,7 @@ draft → reviewed → supported → validated → active → retired
 
 ## 8. 文档识别与语义提取
 
-识别流水线分成三个独立层，避免一个模型同时负责读取、理解和批准。
+识别流水线分成三个独立层，避免一个模型同时负责读取、语义提取和批准。
 
 ### 8.1 确定性结构提取
 
@@ -459,6 +459,8 @@ POST /api/v1/research-projects/{projectId}/mechanism-claims/conflicts/{conflictI
 - **审核队列**：待审核、冲突、低置信度和需要新版本的声明；
 - **使用与验证**：被哪些假设、实验、建议和工艺操作域引用。
 
+工作台不要求工艺工程师记忆内部变量代码。变量按业务名称和单位选择，单位随项目变量自动带入且不可在声明中另行改写；内部代码只用于稳定引用。适用范围也只能从研发项目已经绑定的产品、材料、设备、工装、工艺规范、阶段、站点或项目范围中选择。以生产运行创建项目时，设备、工装、工艺规范和站点上下文随参考运行带入，避免自由文本造成“看似激活但实际不匹配”。
+
 ### 12.2 研发项目
 
 项目工作区当前没有独立“机理”页签。机理声明的生命周期通过研发资产工作台关联项目假设和实验结果；声明不会因为结果完成而被自动改写，晋级或反证必须走显式生命周期命令和独立审核。
@@ -492,6 +494,17 @@ POST /api/v1/research-projects/{projectId}/mechanism-claims/conflicts/{conflictI
 ## 14. 实施顺序与验收
 
 当前阶段校准：P0 已实现；P1 已实现确定性提取、异步任务、人工工作台和可选模型辅助语义草稿；P2 的硬边界、禁止组合、软排序、快照、使用追溯、准入门禁和成对历史回放已实现；P3 已把 `mechanism-as-feature` 仿射模型接入推荐并冻结模型/融合版本，其他输出融合模式和统一证据升级仍未完成；P4 的回放、影子和在线验证基础设施已实现，但没有形成可对外声称价值的真实项目通过证据。
+
+仓库固定回归覆盖无知识、草稿/已复核、适用且已激活、上下文不匹配、未解决冲突、已反证/已停用以及优化器返回违规建议等状态。后端测试断言只有适用且无冲突的激活声明进入策略，知识快照变化会阻止旧实验继续；Demo 和 Playwright 回归验证业务名称映射、单位自动带入、项目范围选择以及实验建议中的使用追溯。可分别运行：
+
+```bash
+dotnet test tests/Ingot.Core.Tests/Ingot.Core.Tests.csproj \
+  --filter "FullyQualifiedName~MechanismKnowledgeServiceTests|FullyQualifiedName~MechanismExperimentPolicyTests|Name~MechanismKnowledge"
+npm --prefix apps/platform test
+npm --prefix apps/platform run test:e2e
+```
+
+这些检查证明软件链路和安全取舍规则可重复，不证明某条机理在真实工厂成立，也不证明已经减少真实实验次数。
 
 ### P0：声明内核和关系型存储
 

@@ -2,7 +2,7 @@
 
 ## Project Structure & Module Organization
 
-Ingot is a .NET 10 monorepo with three web applications. Backend code lives under `src/`: `edge/` contains shop-floor services, `platform/` contains the central API, `agent/` contains AI investigation logic, and `shared/` holds domain models and contracts. The xUnit suite is centralized in `tests/Ingot.Core.Tests`, mirroring those areas. User-facing applications live under `apps/`: `platform` is the React/Vite product UI, while `website` and `docs-site` are Next.js applications. Deployment files are in `deploy/`, verification utilities in `scripts/`, benchmarks in `tools/`, documentation in `docs/`, and the canonical brand assets are in `apps/website/public/brand/`.
+Ingot is a .NET 10 monorepo with three web applications. Backend code lives under `src/`: `edge/` contains shop-floor services, `platform/` contains the central API, `agent/` contains model-assisted investigation and evidence logic, and `shared/` holds domain models and contracts. The xUnit suite is centralized in `tests/Ingot.Core.Tests`, mirroring those areas. User-facing applications live under `apps/`: `platform` is the React/Vite product UI, while `website` and `docs-site` are Next.js applications. Deployment files are in `deploy/`, verification utilities in `scripts/`, benchmarks in `tools/`, documentation in `docs/`, and the canonical brand assets are in `apps/website/public/brand/`.
 
 ## Build, Test, and Development Commands
 
@@ -24,6 +24,7 @@ The following checks are blocking repository contracts, not optional lint rules:
 - `./scripts/verify-architecture.sh` enforces dependency direction, composition-root isolation, and read-only Agent analysis tools.
 - `./scripts/verify-product-scope.sh` rejects retired desktop/code-generation surfaces and legacy multi-agent product terminology.
 - `./scripts/verify-product-language.sh` protects the canonical product value, claim boundaries, scenario-neutral language, and evidence-gated roadmap wording.
+- `python3 scripts/verify-documentation-style.py` checks bilingual heading parity and rejects promotional or unsupported public wording; it also runs through `verify-product-language.sh`.
 
 Run all three directly when changing architecture, product scope, public terminology, or documentation; `./scripts/verify.sh` also includes them.
 

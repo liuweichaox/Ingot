@@ -3,10 +3,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { getJson, postForm, postJson } from "../api/http";
 import { Alert, Button, Card, EmptyState, Field, Input, Select, StatusBadge, Textarea } from "../ui/components";
 
-const emptyVariable = () => ({ variableCode: "", variableRole: "cause", direction: "", delayMilliseconds: "", unit: "1" });
+const emptyVariable = () => ({ variableCode: "", variableRole: "cause", direction: "", delayMilliseconds: "", unit: "" });
 const emptyScope = () => ({ dimensionCode: "product", dimensionValue: "" });
-const emptyConstraint = () => ({ variableCode: "", constraintKind: "range", minimum: "", maximum: "", unit: "1", severity: "hard" });
-const emptyForbiddenFactor = () => ({ variableCode: "", minimum: "", maximum: "", unit: "1" });
+const emptyConstraint = () => ({ variableCode: "", constraintKind: "range", minimum: "", maximum: "", unit: "", severity: "hard" });
+const emptyForbiddenFactor = () => ({ variableCode: "", minimum: "", maximum: "", unit: "" });
 const emptyForbiddenCombination = () => ({ name: "", factors: [emptyForbiddenFactor(), emptyForbiddenFactor()] });
 const initialForm = () => ({
   name: "", mechanismType: "qualitative", statement: "", expectedSignature: "",
@@ -55,6 +55,31 @@ export function MechanismKnowledgeWorkbench({ projectId, sources = [], reloadAss
 
   const sourceById = useMemo(() => Object.fromEntries(sources.map(source => [source.sourceId, source])), [sources]);
   const projectVariables = workspace.project?.variables || [];
+  const projectVariableByCode = useMemo(
+    () => new Map(projectVariables.map(variable => [variable.code, variable])),
+    [projectVariables],
+  );
+  const applicabilityCatalog = useMemo(
+    () => buildApplicabilityCatalog(workspace.project),
+    [workspace.project],
+  );
+  useEffect(() => {
+    if (applicabilityCatalog.length === 0) return;
+    setForm(current => {
+      let changed = false;
+      const applicability = current.applicability.map(scope => {
+        const dimension = applicabilityCatalog.find(item => item.code === scope.dimensionCode)
+          || applicabilityCatalog[0];
+        const value = dimension.values.includes(scope.dimensionValue)
+          ? scope.dimensionValue
+          : dimension.values[0];
+        if (dimension.code === scope.dimensionCode && value === scope.dimensionValue) return scope;
+        changed = true;
+        return { dimensionCode: dimension.code, dimensionValue: value };
+      });
+      return changed ? { ...current, applicability } : current;
+    });
+  }, [applicabilityCatalog]);
   const eligibleResults = useMemo(() => {
     if (!lifecycleAction?.validationHypothesisId) return [];
     const experimentIds = new Set((workspace.experiments || [])
@@ -62,6 +87,41 @@ export function MechanismKnowledgeWorkbench({ projectId, sources = [], reloadAss
       .map(item => item.experimentId));
     return (workspace.experimentResults || []).filter(item => experimentIds.has(item.experimentId) && item.safetyPassed && item.calculatedFromSource);
   }, [lifecycleAction?.validationHypothesisId, workspace.experimentResults, workspace.experiments]);
+
+  function chooseVariable(section, index, variableCode) {
+    const variable = projectVariableByCode.get(variableCode);
+    setForm(current => ({
+      ...current,
+      [section]: current[section].map((item, rowIndex) => rowIndex === index
+        ? { ...item, variableCode, unit: variable?.unit || "" }
+        : item),
+    }));
+  }
+
+  function chooseForbiddenVariable(combinationIndex, factorIndex, variableCode) {
+    const variable = projectVariableByCode.get(variableCode);
+    setForm(current => ({
+      ...current,
+      forbiddenCombinations: current.forbiddenCombinations.map((combination, rowIndex) => rowIndex === combinationIndex
+        ? {
+          ...combination,
+          factors: combination.factors.map((factor, nestedIndex) => nestedIndex === factorIndex
+            ? { ...factor, variableCode, unit: variable?.unit || "" }
+            : factor),
+        }
+        : combination),
+    }));
+  }
+
+  function chooseApplicabilityDimension(index, dimensionCode) {
+    const dimension = applicabilityCatalog.find(item => item.code === dimensionCode);
+    setForm(current => ({
+      ...current,
+      applicability: current.applicability.map((item, rowIndex) => rowIndex === index
+        ? { dimensionCode, dimensionValue: dimension?.values[0] || "" }
+        : item),
+    }));
+  }
 
   async function save(event) {
     event.preventDefault();
@@ -213,11 +273,11 @@ export function MechanismKnowledgeWorkbench({ projectId, sources = [], reloadAss
 
           <EditorRows title="作用变量" add={() => setForm(current => ({ ...current, variables: [...current.variables, emptyVariable()] }))}>
             {form.variables.map((item, index) => <div className="grid gap-3 rounded-xl bg-slate-50 p-3 md:grid-cols-6" key={index}>
-              <Field label="变量代码"><Select required value={item.variableCode} onChange={rowField(setForm, "variables", index, "variableCode")}><option value="">请选择项目变量</option>{projectVariables.map(variable => <option key={variable.code} value={variable.code}>{variable.name || variable.code}</option>)}</Select></Field>
+              <Field label="项目变量"><Select required value={item.variableCode} onChange={event => chooseVariable("variables", index, event.target.value)}><option value="">请选择项目变量</option>{projectVariables.map(variable => <option key={variable.code} value={variable.code}>{variableLabel(variable)}</option>)}</Select></Field>
               <Field label="作用"><Select value={item.variableRole} onChange={rowField(setForm, "variables", index, "variableRole")}><option value="cause">原因</option><option value="mediator">中介</option><option value="outcome">结果</option><option value="moderator">交互变量</option></Select></Field>
               <Field label="方向"><Select value={item.direction} onChange={rowField(setForm, "variables", index, "direction")}><option value="">未指定</option><option value="increase">增加</option><option value="decrease">降低</option><option value="nonlinear">非线性</option></Select></Field>
               <Field label="时滞（毫秒）"><Input type="number" min="0" value={item.delayMilliseconds} onChange={rowField(setForm, "variables", index, "delayMilliseconds")} /></Field>
-              <Field label="单位"><Input required value={item.unit} onChange={rowField(setForm, "variables", index, "unit")} /></Field>
+              <Field label="单位"><Input required readOnly aria-label="作用变量单位" className="bg-slate-100 text-slate-600" value={item.unit} /></Field>
               <Button type="button" variant="danger" disabled={form.variables.length === 1} onClick={() => removeRow(setForm, "variables", index)}>删除</Button>
             </div>)}
           </EditorRows>
@@ -227,10 +287,10 @@ export function MechanismKnowledgeWorkbench({ projectId, sources = [], reloadAss
             {form.forbiddenCombinations.map((combination, combinationIndex) => <div className="space-y-3 rounded-xl border border-rose-200 bg-rose-50 p-3" key={combinationIndex}>
               <div className="flex items-end gap-3"><Field className="flex-1" label="组合名称"><Input required value={combination.name} onChange={rowField(setForm, "forbiddenCombinations", combinationIndex, "name")} /></Field><Button type="button" variant="danger" onClick={() => removeRow(setForm, "forbiddenCombinations", combinationIndex)}>删除组合</Button></div>
               {combination.factors.map((factor, factorIndex) => <div className="grid gap-3 md:grid-cols-5" key={factorIndex}>
-                <Field label="变量"><Select required value={factor.variableCode} onChange={nestedRowField(setForm, combinationIndex, factorIndex, "variableCode")}><option value="">请选择可控变量</option>{projectVariables.filter(variable => variable.role === "control").map(variable => <option key={variable.code} value={variable.code}>{variable.name || variable.code}</option>)}</Select></Field>
+                <Field label="变量"><Select required value={factor.variableCode} onChange={event => chooseForbiddenVariable(combinationIndex, factorIndex, event.target.value)}><option value="">请选择可控变量</option>{projectVariables.filter(variable => variable.role === "control").map(variable => <option key={variable.code} value={variable.code}>{variableLabel(variable)}</option>)}</Select></Field>
                 <Field label="最小值"><Input type="number" value={factor.minimum} onChange={nestedRowField(setForm, combinationIndex, factorIndex, "minimum")} /></Field>
                 <Field label="最大值"><Input type="number" value={factor.maximum} onChange={nestedRowField(setForm, combinationIndex, factorIndex, "maximum")} /></Field>
-                <Field label="单位"><Input required value={factor.unit} onChange={nestedRowField(setForm, combinationIndex, factorIndex, "unit")} /></Field>
+                <Field label="单位"><Input required readOnly className="bg-slate-100 text-slate-600" value={factor.unit} /></Field>
                 <Button type="button" variant="danger" disabled={combination.factors.length <= 2} onClick={() => removeNestedRow(setForm, combinationIndex, factorIndex)}>删除条件</Button>
               </div>)}
               <Button type="button" onClick={() => addForbiddenFactor(setForm, combinationIndex)}>添加联合条件</Button>
@@ -239,8 +299,8 @@ export function MechanismKnowledgeWorkbench({ projectId, sources = [], reloadAss
 
           <EditorRows title="适用范围" add={() => setForm(current => ({ ...current, applicability: [...current.applicability, emptyScope()] }))}>
             {form.applicability.map((item, index) => <div className="grid gap-3 rounded-xl bg-slate-50 p-3 md:grid-cols-3" key={index}>
-              <Field label="维度"><Select value={item.dimensionCode} onChange={rowField(setForm, "applicability", index, "dimensionCode")}><option value="product">产品</option><option value="material">材料</option><option value="equipment">设备</option><option value="tooling">工装</option><option value="process-specification">工艺规范</option><option value="phase">阶段</option></Select></Field>
-              <Field label="适用值"><Input required value={item.dimensionValue} onChange={rowField(setForm, "applicability", index, "dimensionValue")} /></Field>
+              <Field label="适用维度"><Select value={item.dimensionCode} onChange={event => chooseApplicabilityDimension(index, event.target.value)}>{applicabilityCatalog.map(dimension => <option key={dimension.code} value={dimension.code}>{dimension.label}</option>)}</Select></Field>
+              <Field label="适用对象"><Select required value={item.dimensionValue} onChange={rowField(setForm, "applicability", index, "dimensionValue")}>{(applicabilityCatalog.find(dimension => dimension.code === item.dimensionCode)?.values || []).map(value => <option key={value} value={value}>{value}</option>)}</Select></Field>
               <Button type="button" variant="danger" disabled={form.applicability.length === 1} onClick={() => removeRow(setForm, "applicability", index)}>删除</Button>
             </div>)}
           </EditorRows>
@@ -248,11 +308,11 @@ export function MechanismKnowledgeWorkbench({ projectId, sources = [], reloadAss
           <EditorRows title="工程约束（可选）" add={() => setForm(current => ({ ...current, constraints: [...current.constraints, emptyConstraint()] }))}>
             {form.constraints.length === 0 && <p className="text-sm text-slate-500">当前声明不产生约束。</p>}
             {form.constraints.map((item, index) => <div className="grid gap-3 rounded-xl bg-slate-50 p-3 md:grid-cols-7" key={index}>
-              <Field label="变量"><Select required value={item.variableCode} onChange={rowField(setForm, "constraints", index, "variableCode")}><option value="">请选择可控变量</option>{projectVariables.filter(variable => variable.role === "control").map(variable => <option key={variable.code} value={variable.code}>{variable.name || variable.code}</option>)}</Select></Field>
+              <Field label="变量"><Select required value={item.variableCode} onChange={event => chooseVariable("constraints", index, event.target.value)}><option value="">请选择可控变量</option>{projectVariables.filter(variable => variable.role === "control").map(variable => <option key={variable.code} value={variable.code}>{variableLabel(variable)}</option>)}</Select></Field>
               <Field label="约束类型"><Select required value={item.constraintKind} onChange={rowField(setForm, "constraints", index, "constraintKind")}><option value="range">范围</option><option value="safe-range">安全范围</option><option value="preferred-range">优选范围</option></Select></Field>
               <Field label="最小值"><Input type="number" value={item.minimum} onChange={rowField(setForm, "constraints", index, "minimum")} /></Field>
               <Field label="最大值"><Input type="number" value={item.maximum} onChange={rowField(setForm, "constraints", index, "maximum")} /></Field>
-              <Field label="单位"><Input required value={item.unit} onChange={rowField(setForm, "constraints", index, "unit")} /></Field>
+              <Field label="单位"><Input required readOnly className="bg-slate-100 text-slate-600" value={item.unit} /></Field>
               <Field label="级别"><Select value={item.severity} onChange={rowField(setForm, "constraints", index, "severity")}><option value="hard">硬约束</option><option value="soft">软约束</option></Select></Field>
               <Button type="button" variant="danger" onClick={() => removeRow(setForm, "constraints", index)}>删除</Button>
             </div>)}
@@ -307,6 +367,32 @@ function addForbiddenFactor(setter, combinationIndex) { setter(current => ({ ...
 function removeNestedRow(setter, combinationIndex, factorIndex) { setter(current => ({ ...current, forbiddenCombinations: current.forbiddenCombinations.map((combination, index) => index === combinationIndex ? { ...combination, factors: combination.factors.filter((_, nestedIndex) => nestedIndex !== factorIndex) } : combination) })); }
 function removeRow(setter, collection, index) { setter(current => ({ ...current, [collection]: current[collection].filter((_, itemIndex) => itemIndex !== index) })); }
 function numberOrNull(value) { return value === "" || value === null || value === undefined ? null : Number(value); }
+function variableLabel(variable) {
+  const name = variable.name || variable.code;
+  return variable.unit ? `${name}（${variable.unit}）` : name;
+}
+function buildApplicabilityCatalog(project) {
+  if (!project) return [];
+  const context = project.context || {};
+  const values = new Map();
+  const add = (code, label, value) => {
+    if (value === null || value === undefined || String(value).trim() === "") return;
+    const entry = values.get(code) || { code, label, values: [] };
+    const normalized = String(value).trim();
+    if (!entry.values.includes(normalized)) entry.values.push(normalized);
+    values.set(code, entry);
+  };
+  add("project-code", "当前研发项目", project.code);
+  add("process", "工艺", project.processName);
+  add("product", "产品", project.productName || context.product || context.product_code);
+  add("material", "材料", project.materialName || context.material || context.material_lot_ref);
+  add("equipment", "设备", context.equipment || context.equipment_id);
+  add("tooling", "工装", context.tooling || context.tooling_assembly_id);
+  add("process-specification", "工艺规范", context["process-specification"] || context.process_specification_id);
+  add("phase", "工艺阶段", context.phase || context.phase_code);
+  add("site", "站点", project.siteCode || context.site || context.site_id);
+  return [...values.values()];
+}
 function labelForType(value) { return mechanismTypes.find(item => item[0] === value)?.[1] || value; }
 function extractionStatusLabel(value) { return ({ pending: "待提取", running: "提取中", completed: "已提取", failed: "提取失败" })[value] || "状态未知"; }
 const mechanismTypes = [["qualitative", "定性作用链"], ["monotonic", "单调关系"], ["threshold", "阈值"], ["interaction", "交互作用"], ["temporal", "时间响应"], ["constraint", "工程约束"], ["failure-mode", "失效模式"], ["executable-model", "可执行机理模型"]];
