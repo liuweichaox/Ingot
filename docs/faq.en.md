@@ -72,13 +72,13 @@ No. Edge, Platform, process executions, and inspections continue; only new recom
 
 ## Why don't public materials name a specific validation scenario?
 
-The first scenario is where we're testing whether the data chain and algorithm path are reproducible; historical replay, shadow, and controlled-online validation are still in progress. Its industry, equipment, and process parameters stay out of the public repository -- only protocols, schemas, acceptance methods, and conclusion boundaries are published -- so it isn't mistaken for the product boundary. A new process supplies variables, mappings, objectives, constraints, context, and optional mechanism knowledge without rewriting the evidence spine or experiment state machine.
+The first real scenario tests whether the data chain and algorithm path are reproducible; historical replay, shadow, and controlled-online validation are still in progress. Its industry, equipment, and process parameters stay out of the public repository, while protocols, schemas, acceptance methods, and conclusion boundaries are published so the scenario is not mistaken for the product boundary. The repository separately provides an explicitly licensed public FDM benchmark for independent reproduction of software and method behavior. That dataset is not the first real scenario and cannot replace its validation. A new process supplies variables, mappings, objectives, constraints, context, and optional mechanism knowledge without rewriting the evidence spine or experiment state machine.
 
 ## Has the system proved shorter development cycles?
 
 No. The project has completed internal validation of import, run reconstruction, inspection linkage, and R&D observations using controlled, non-public production history, but that does not prove shorter development cycles. Neither code capability nor internal chain validation is a product benefit; quantitative claims still require prospective shadow and controlled online validation under the [Scenario validation](rollout.en.md) protocol.
 
-Real production data and derived results remain inside the confidentiality boundary and are not submitted or disclosed for public reproduction. The public repository provides synthetic examples and general acceptance protocols, so public wording is limited to the validation stage and conclusion boundaries.
+Real production data and derived results remain inside the confidentiality boundary and are not submitted or disclosed for public reproduction. The public repository provides synthetic examples, an explicitly licensed and checksum-verified public-data benchmark, and general acceptance protocols. The current public benchmark passes workflow validation, while the strict experiment-count reduction claim remains not demonstrated; public wording therefore continues to identify the validation stage and conclusion boundary of each evidence type.
 
 ## Is the documentation now finalized?
 

@@ -171,12 +171,20 @@ Optimizer remains free of business state. Variables, objectives, constraints, va
 
 Historical replay reveals outcomes sequentially in time; future runs are never visible early. Every algorithm change is compared with the historical engineer sequence, applicable traditional DOE, and simple baselines.
 
+### Public-data benchmark
+
+`tools/public-validation` commits a CC BY 4.0 public FDM DOE snapshot, SHA-256 verification, fixed-seed replay runner, and automated tests. Discrete factors such as material, equipment type, tooling identity, and formulation class are stratified as process context: one optimization campaign fits one explicit context, and category codes must not be treated as continuous values with a false distance relationship. Comparing multiple discrete levels requires stratified campaigns or an applicable factorial design.
+
+The public benchmark reports workflow validation and experiment-count reduction as separate conclusions. Passing the former does not pass the latter. The reduction claim passes only when, under the same budget and initial observations, every categorical context preserves success rate and uses fewer experiments than both random and response-surface baselines. See [Public-data offline validation](../tools/public-validation/README.en.md).
+
+The committed reference result covers six categorical contexts with 20 fixed seeds per context. It passes workflow and categorical-context-isolation checks, but the optimizer uses fewer trials than the random and response-surface baselines in only 4/6 contexts respectively, so the strict experiment-count reduction claim remains not demonstrated. This is an acceptable validation result, not a test failure to erase by changing thresholds or hiding unfavorable contexts.
+
 ## Current limitations
 
 See [Mechanism knowledge design](mechanism-knowledge.en.md) for the current implementation, knowledge-absent degradation modes, and remaining fusion boundary.
 
 - Internal chain validation from import to R&D observations has used controlled, non-public production history, while formal leakage-free replay and prospective online value validation remain incomplete.
-- Real production data, parameter distributions, and derived results do not enter the public repository. Public tests use contract-equivalent synthetic data and must not be presented as real-project evidence.
+- Real production data, parameter distributions, and derived results do not enter the public repository. Public tests use synthetic data or explicitly licensed, checksum-verified public data and must not be presented as real-project evidence.
 - Prediction intervals still require continuous calibration on real projects.
 - Physical features exist, while real-data-calibrated grey-box priors continue to evolve.
 - Cross-product, equipment, and scenario transfer must wait for explicit applicability and second-scenario validation.

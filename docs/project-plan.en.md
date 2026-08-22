@@ -71,7 +71,7 @@ The immediate priority is leakage-free replay of a real historical project. It d
 - missingness, mismatches, unauthorized access, and insufficient evidence are rejected explicitly;
 - inputs, policies, models, seeds, outputs, reviews, and content hashes form a complete report.
 
-Real production data and derived results remain inside the controlled environment. The complete report above is an access-controlled, auditable internal evidence artifact; completion never requires publishing raw data, project identities, parameter distributions, or project results. The public repository provides only general protocols, schemas, synthetic examples, and conformance tests.
+Real production data and derived results remain inside the controlled environment. The complete report above is an access-controlled, auditable internal evidence artifact; completion never requires publishing raw data, project identities, parameter distributions, or project results. The public repository provides general protocols, schemas, synthetic examples, explicitly licensed and checksum-verified public-data benchmarks, and conformance tests. A public benchmark validates reproducible software and method behavior; it does not replace the real-project report.
 
 The near-term conclusion can only be that the apparatus is trustworthy, reproducible, and leakage-free. Prospective value requires shadow validation; causal and benefit claims require controlled online experiments. The evidence ladder is:
 
@@ -250,7 +250,7 @@ Current rolling batches:
 
 1. **Trusted identity and quality chain**: core code paths and database constraints exist; continue adversarial acceptance with real site isolation, clock faults, missing actual values, and incorrect inspection linkage.
 2. **Historical evidence apparatus**: freezing, content hashes, transactions, replay services, and recovery tooling exist; complete site retention rules, recomputation consistency, and recovery-drill evidence.
-3. **Preregistered historical replay**: complete engineering-question and production-equivalent sequential replay, preserve every failure and limit in the controlled internal report, and expose only the protocol and conclusion boundaries publicly.
+3. **Preregistered historical replay**: complete engineering-question and production-equivalent sequential replay, preserve every failure and limit in the controlled internal report, and expose only that real project's protocol and conclusion boundaries publicly; a separately published public-data benchmark must not be presented as the real-project result.
 4. **Process-decision case**: fix data quality, baseline, first deviation, candidates, counterevidence, confounding, missingness, and experiment-proposal structure.
 5. **Agent evaluation flywheel**: golden-question, run-snapshot, and evaluation storage exist; expand adversarial examples for engineer questions, correct refusal, citation coverage, permissions, and tool calls.
 6. **Prospective shadow validation**: freeze variables, mappings, context, constraints, policies, and engineer rejection reasons.

@@ -1,4 +1,5 @@
 
+// 呈现运行对比、候选原因与数据可信度，并在证据不足时阻止结论升级。
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import { getJson, postJson } from "../api/http";
@@ -176,6 +177,7 @@ export function ExecutionComparisonPage() {
     ].some(value => String(value || "").toLowerCase().includes(normalizedProcessExecutionFilter))),
   );
   const comparisonReady = Boolean(baselineProcessExecution) && comparableProcessExecutions.length > 0;
+  const hypothesisGenerationReady = canGenerateHypotheses(result);
 
   useEffect(() => {
     if (comparisonScope === "single" && candidate && !comparableProcessExecutions.some(item => item.executionId === candidate)) {
@@ -392,14 +394,15 @@ export function ExecutionComparisonPage() {
             />
           </Card></div></details>
           <Card title="将追因结果带入研发" description="系统只把有证据的关联转为候选假设；因果关系仍需后续受控实验验证。">
+            {!hypothesisGenerationReady && <Alert tone="warning" title="暂不能批量生成候选假设">当前证据仍处于探索阶段。补充质量结果、重复运行和上下文变量，并在样本外验证通过后再转入研发。</Alert>}
             <div className="grid gap-3 md:grid-cols-[1fr_auto]">
               <Field label="研发项目"><Select value={researchProjectId} onChange={event => setResearchProjectId(event.target.value)}><option value="">选择研发项目</option>{researchProjects.filter(item => !["completed", "archived"].includes(item.status)).map(item => <option key={item.projectId} value={item.projectId}>{item.name}</option>)}</Select></Field>
               {researchProjects.some(item => !["completed", "archived"].includes(item.status))
-                ? <Button className="self-end" disabled={!researchProjectId || busy || result.diagnosis?.readiness?.mode === "descriptive-only"} onClick={createHypotheses}>生成候选假设</Button>
+                ? <Button className="self-end" disabled={!researchProjectId || busy || !hypothesisGenerationReady} onClick={createHypotheses}>生成候选假设</Button>
                 : <Button
                     className="self-end"
                     variant="primary"
-                    disabled={result.diagnosis?.readiness?.mode === "descriptive-only"}
+                    disabled={!hypothesisGenerationReady}
                     onClick={() => {
                       const next = new URLSearchParams({
                         create: "1",
@@ -496,6 +499,12 @@ export function ExecutionComparisonPage() {
       ) : <EmptyState title="选择目标运行开始对比" description="系统将自动匹配同类运行并汇总主要差异。" />}
     </Page>
   );
+}
+
+export function canGenerateHypotheses(result) {
+  return result?.diagnosis?.readiness?.mode === "candidate-ranking"
+    && Number(result?.diagnosis?.crossValidationScore) > 0
+    && (result?.diagnosis?.candidates || []).some(candidate => candidate.evidenceLevel === "stable");
 }
 export function DataQualityPage() {
   const [params] = useSearchParams();

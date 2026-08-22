@@ -45,6 +45,67 @@ public sealed class ProcessResearchWorkflowTests
 
         Assert.Equal(0, comparisons.CallCount);
     }
+
+    [Fact]
+    public async Task ExecutionEvidenceService_RejectsExploratoryComparisonBeforeCreatingHypotheses()
+    {
+        var store = new MemoryStore();
+        var commands = new ResearchExperimentCommands(new ResearchExperimentCommandStoreAdapter(store));
+        var project = await new ProcessResearchWorkflow(store, commands)
+            .CreateProjectAsync(ProjectDraft(), "engineer-a");
+        var comparisons = new FixedExecutionComparisonService(
+            Comparison("exploratory", -0.2, "exploratory"));
+        var service = new ResearchExecutionEvidenceService(
+            store,
+            new ProcessResearchWorkflow(store, commands),
+            commands,
+            comparisons);
+
+        var error = await Assert.ThrowsAsync<ProcessResearchRuleException>(() =>
+            service.ProposeHypothesesAsync(
+                project.ProjectId,
+                new ResearchHypothesisFromExecutionComparisonRequest
+                {
+                    BaselineProcessExecutionId = "run-a",
+                    ProcessExecutionIds = ["run-a", "run-b"],
+                    MaximumHypotheses = 3
+                },
+                "engineer-a",
+                CancellationToken.None));
+
+        Assert.Contains("探索性证据", error.Message, StringComparison.Ordinal);
+        Assert.Empty(await store.ListHypothesesAsync(project.ProjectId));
+    }
+
+    [Fact]
+    public async Task ExecutionEvidenceService_CreatesHypothesisOnlyFromStableRankedComparison()
+    {
+        var store = new MemoryStore();
+        var commands = new ResearchExperimentCommands(new ResearchExperimentCommandStoreAdapter(store));
+        var workflow = new ProcessResearchWorkflow(store, commands);
+        var project = await workflow.CreateProjectAsync(ProjectDraft(), "engineer-a");
+        var service = new ResearchExecutionEvidenceService(
+            store,
+            workflow,
+            commands,
+            new FixedExecutionComparisonService(
+                Comparison("candidate-ranking", 0.4, "stable")));
+
+        var created = await service.ProposeHypothesesAsync(
+            project.ProjectId,
+            new ResearchHypothesisFromExecutionComparisonRequest
+            {
+                BaselineProcessExecutionId = "run-a",
+                ProcessExecutionIds = ["run-a", "run-b"],
+                MaximumHypotheses = 3
+            },
+            "engineer-a",
+            CancellationToken.None);
+
+        var hypothesis = Assert.Single(created);
+        Assert.Contains("观察性关联", hypothesis.Rationale, StringComparison.Ordinal);
+        Assert.Equal(["holding-temperature"], hypothesis.VariableCodes);
+    }
     [Fact]
     public void UnitConverter_ConvertsKnownIndustrialAliases_AndRejectsUnknownDimensions()
     {
@@ -3052,5 +3113,76 @@ public sealed class ProcessResearchWorkflowTests
             CallCount++;
             return Task.FromResult<ExecutionComparisonResult?>(null);
         }
+    }
+
+    private sealed class FixedExecutionComparisonService(ExecutionComparisonResult result)
+        : IExecutionComparisonService
+    {
+        public Task<ExecutionComparisonRow?> GetProcessExecutionAsync(
+            string executionId,
+            CancellationToken ct = default,
+            string? siteId = null)
+            => Task.FromResult<ExecutionComparisonRow?>(
+                executionId == result.Baseline.ExecutionId ? result.Baseline : null);
+
+        public Task<ExecutionComparisonResult?> CompareWithHistoryAsync(
+            string executionId,
+            int limit,
+            CancellationToken ct = default,
+            string? siteId = null,
+            IReadOnlyList<string>? additionalKnownUnmeasuredConfounders = null)
+            => Task.FromResult<ExecutionComparisonResult?>(result);
+
+        public Task<ExecutionComparisonResult?> CompareSelectedAsync(
+            string baselineProcessExecutionId,
+            IReadOnlyList<string> executionIds,
+            CancellationToken ct = default,
+            string? siteId = null,
+            IReadOnlyList<string>? additionalKnownUnmeasuredConfounders = null)
+            => Task.FromResult<ExecutionComparisonResult?>(result);
+    }
+
+    private static ExecutionComparisonResult Comparison(
+        string readinessMode,
+        double crossValidationScore,
+        string candidateEvidenceLevel)
+    {
+        var row = new ExecutionComparisonRow
+        {
+            ExecutionId = "run-a",
+            EquipmentId = "press-01",
+            StartedAt = DateTimeOffset.UtcNow.AddMinutes(-5),
+            CompletedAt = DateTimeOffset.UtcNow,
+            ProductFamilyCode = "lens-a"
+        };
+        return new ExecutionComparisonResult
+        {
+            BaselineProcessExecutionId = row.ExecutionId,
+            ProductFamilyCode = row.ProductFamilyCode,
+            Baseline = row,
+            HistoricalProcessExecutions = [row with { ExecutionId = "run-b" }],
+            Acceptance = new ExecutionComparisonAcceptance { ProcessExecutionCount = 2 },
+            Diagnosis = new ExecutionDiagnosisSummary
+            {
+                EvidenceLevel = candidateEvidenceLevel,
+                CrossValidationScore = crossValidationScore,
+                Readiness = new ExecutionAnalysisReadiness { Mode = readinessMode },
+                Candidates =
+                [
+                    new ExecutionCauseCandidate
+                    {
+                        CandidateId = "control-parameter:holding-temperature",
+                        SourceKind = ExecutionCauseSourceKinds.ProcessSpecificationParameter,
+                        Actionability = ExecutionCauseActionability.Controllable,
+                        VariableCode = "holding-temperature",
+                        DataSource = "control-parameter:holding-temperature",
+                        DisplayName = "保压温度",
+                        MedianDifference = 2.5,
+                        EvidenceLevel = candidateEvidenceLevel,
+                        CandidateScore = 0.8
+                    }
+                ]
+            }
+        };
     }
 }

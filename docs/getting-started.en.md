@@ -9,6 +9,7 @@ You do not need to complete every step before seeing the system. Start with the 
 | Goal | Recommended path | Boundary |
 |---|---|---|
 | Evaluate the UI and workflow | Use the [simulated-data preview](#simulated-data-preview) below | Validates software flow only; it does not prove process benefit |
+| Reproduce the optimization method without a real factory | Use the [public-data offline validation](#public-data-offline-validation) below | Validates data checks, categorical isolation, historical-pool replay, baseline comparison, and claim boundaries; it does not prove factory benefit |
 | Prepare a controlled pilot | Start with [Prepare the environment](#1-prepare-the-environment) and complete one representative run | Requires real or representative field data |
 | Prepare production deployment | Read [Production architecture](production-architecture.en.md), then execute the acceptance steps in [Deployment](deployment.en.md) | Requires independent backup, failure, capacity, alert-delivery, and continuous-observation evidence |
 | Contribute code | Install the repository and run `./scripts/verify.sh` | Applies to code contribution, not field acceptance |
@@ -32,6 +33,16 @@ npm --prefix apps/platform run demo
 ```
 
 Open `http://127.0.0.1:3001`. Use `demo / demo` for the engineer workflow or `admin / admin12345` for system administration and the controlled-pilot gate. The service covers process configuration, field integration, production runs, inspections, diagnosis, experiments, and multiple data states, but every record is synthetic. Press `Ctrl+C` in both terminals when finished.
+
+### Public-data offline validation
+
+This path requires Git and uv 0.11.32 but no database, equipment, or factory data. It uses the explicitly licensed, SHA-256-verified public FDM DOE fixture committed to the repository, evaluates six categorical process contexts, and compares the optimizer with random selection and response-surface baselines:
+
+```bash
+./scripts/benchmark-public-validation.sh
+```
+
+The result is written to `artifacts/public-validation.json`. The current reference result passes workflow and categorical-context-isolation checks, while the strict experiment-count reduction claim remains not demonstrated. See [Public-data offline validation](../tools/public-validation/README.en.md) for the fast check, complete decision rule, data license, and reference result. Public data can reproduce the software and method path; it cannot prove the same benefit for another factory.
 
 ## 1. Prepare the environment
 

@@ -11,6 +11,7 @@ from ingot_optimizer import (
     SequentialOptimizer,
     Variable,
 )
+from ingot_optimizer.gp import GaussianProcess
 
 
 def make_campaign():
@@ -123,3 +124,15 @@ def test_safety_constrained_cold_start_requires_and_stays_near_safe_baseline():
     )
     suggestion = optimizer.suggest(top_k=1, n_random=500)[0]
     assert abs(suggestion.recommended_params["x"] - 0.5) <= 0.2
+
+
+def test_dependency_light_gp_stays_finite_with_repeated_points_and_large_units():
+    points = np.array([[0.1], [0.1], [0.5], [0.9]], dtype=float)
+    outcomes = np.array([24_000.0, 24_000.0, 31_000.0, 40_000.0], dtype=float)
+
+    model = GaussianProcess(n_restarts=1, seed=7).fit(points, outcomes)
+    mean, deviation = model.predict(np.array([[0.1], [0.7]], dtype=float))
+
+    assert np.isfinite(mean).all()
+    assert np.isfinite(deviation).all()
+    assert model.effective_jitter_ <= 1e-2

@@ -29,8 +29,40 @@ jobs:
       - name: Restore
         run: dotnet restore Ingot.sln
 
+      - name: Set up uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.11.32"
+          enable-cache: true
+          cache-dependency-glob: optimizer/uv.lock
+
       - name: Benchmark edge event log
         run: ./scripts/benchmark-edge-event-log.sh
 
       - name: Benchmark platform ingest
         run: ./scripts/benchmark-platform-ingest.sh
+
+      - name: Benchmark public-data offline validation
+        run: ./scripts/benchmark-public-validation.sh public-validation.json
+
+      - name: Verify public-data claim boundary
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          result = json.loads(Path("public-validation.json").read_text())
+          assert result["schema"] == "ingot-public-validation-v1"
+          assert result["summary"]["workflow_validation"] == "passed"
+          assert result["summary"]["categorical_context_isolation_passed"] is True
+          assert result["summary"]["experiment_reduction_claim"] in {
+              "passed-public-benchmark",
+              "not-demonstrated",
+          }
+          PY
+
+      - name: Upload public-data result
+        uses: actions/upload-artifact@v4
+        with:
+          name: public-validation
+          path: public-validation.json

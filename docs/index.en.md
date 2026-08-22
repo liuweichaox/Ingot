@@ -34,6 +34,7 @@ Choose an entry by role, then follow the links into method detail. You do not ne
 | Process knowledge builder | [Mechanism knowledge design](mechanism-knowledge.en.md) | [Analysis and optimization](optimization.en.md) |
 | Platform operations or security | [Production architecture](production-architecture.en.md) | [Deployment](deployment.en.md) |
 | Project or validation lead | [Scenario validation](rollout.en.md) | [Roadmap](project-plan.en.md) |
+| Algorithm or validation contributor | [Public-data offline validation](../tools/public-validation/README.en.md) | [Analysis and optimization](optimization.en.md) |
 | Contributor or integrator | [System design](design.en.md) | [Production architecture](production-architecture.en.md) |
 | Public-content maintainer | [Brand guide](brand.en.md) | [Document status](#document-status) |
 
@@ -47,7 +48,7 @@ Choose an entry by role, then follow the links into method detail. You do not ne
 
 ## Current facts
 
-The code covers the main business path across acquisition, process executions, context, inspections, R&D experiments, analysis, and optimization, with automated tests. The project has completed internal end-to-end validation of import, run reconstruction, inspection linkage, and R&D observations using controlled, non-public production history. Formal leakage-free replay and prospective validation remain incomplete, so the project describes system capabilities but does not claim a measured reduction in experiments or development time.
+The code covers the main business path across acquisition, process executions, context, inspections, R&D experiments, analysis, and optimization, with automated tests. The project has completed internal end-to-end validation of import, run reconstruction, inspection linkage, and R&D observations using controlled, non-public production history. The fixed public-data benchmark passes workflow, categorical-context-isolation, and claim-boundary checks, while the strict experiment-count reduction claim remains not demonstrated. Formal leakage-free replay on real history and prospective validation remain incomplete, so the project describes system capabilities but does not claim a measured reduction in experiments or development time.
 
 Current repository implementation snapshot:
 
@@ -57,7 +58,7 @@ Current repository implementation snapshot:
 - Mechanism-knowledge sources, claims, reviews, conflicts, lifecycle, hard bounds, soft ranking, frozen snapshots, and usage traceability are integrated. Model-assisted semantic drafts, Bayesian priors/mechanism features/residual fusion, and paired long-horizon calibration remain incomplete.
 - The repository provides logical backup/restore, monitoring configuration, limited failure drills, and production-acceptance artifact validation. The default Compose deployment remains a single-instance reference topology, not an HA production cell, and does not include PITR, object storage, or controlled equipment writes.
 
-Real production data, project and equipment identities, process parameters, quality distributions, and derived results are controlled factory evidence. They do not enter the public repository or public reports. Public materials provide only protocols, schemas, synthetic examples, acceptance methods, and conclusion boundaries; internal validation on real data is not public independent reproduction.
+Real production data, project and equipment identities, process parameters, quality distributions, and derived results are controlled factory evidence. They do not enter the public repository or public reports. Public materials provide protocols, schemas, synthetic examples, an explicitly licensed and checksum-verified public-data benchmark, acceptance methods, and conclusion boundaries. The public benchmark independently reproduces software and method behavior, but it does not replace internal validation on real data.
 
 The current sequence is to prove that the evidence apparatus is reproducible and leakage-free through real historical replay, then establish value through prospective shadow and controlled online validation. Agent protocols and an open specification do not bypass those evidence stages.
 

@@ -43,7 +43,7 @@ test("publishes the data-supported process R&D journey and public references wit
     assert.match(index, lang === "zh" ? /让工艺研发从没有数据支撑走向有数据支撑/ : /Move process R(?:&amp;|&#x26;)D from decisions without data support/i);
     assert.match(design, lang === "zh" ? /设计目标/ : /Design objective/i);
     assert.match(index, lang === "zh" ? /帮助工艺工程师抉择/ : /help process engineers choose what to do next/i);
-    assert.match(index, lang === "zh" ? /工艺定义.*设备接入.*生产采集.*数据闭环.*工艺追因.*工艺研发/s : /define process.*connect equipment.*collect production data.*close the data loop.*diagnose.*process R(?:&amp;|&#x26;)D/is);
+    assert.match(index, lang === "zh" ? /工艺配置.*现场接入.*生产运行.*质量管理.*工艺追因.*工艺研发/s : /process configuration.*field integration.*production runs.*quality management.*diagnosis.*process R(?:&amp;|&#x26;)D/is);
     assert.doesNotMatch(`${index}${design}`, /\/api\/|curl|ProductionEvent|InspectionRecord|endpoint|HTTP API/i);
   }
   assert.doesNotMatch(JSON.stringify(search), /\/api\/|curl|ProductionEvent|InspectionRecord|endpoint|HTTP API/i);

@@ -33,6 +33,26 @@ class GaussianProcess:
         self.rng = np.random.default_rng(seed)
         self.is_fitted = False
 
+    def _stable_cholesky(self, covariance: np.ndarray) -> tuple[np.ndarray, float]:
+        """Factor a covariance matrix with a bounded, observable jitter ladder."""
+        identity = np.eye(covariance.shape[0])
+        last_error: np.linalg.LinAlgError | None = None
+        for multiplier in (1.0, 10.0, 100.0, 1_000.0, 10_000.0):
+            effective_jitter = self.jitter * multiplier
+            try:
+                factor = cholesky(
+                    covariance + effective_jitter * identity,
+                    lower=True,
+                    check_finite=False,
+                )
+                return factor, effective_jitter
+            except np.linalg.LinAlgError as error:
+                last_error = error
+        raise np.linalg.LinAlgError(
+            "Gaussian-process covariance remained non-positive-definite after "
+            "the bounded jitter ladder"
+        ) from last_error
+
     @staticmethod
     def _rbf(
         first: np.ndarray,
@@ -63,9 +83,9 @@ class GaussianProcess:
         count = self.X_.shape[0]
         covariance = self._rbf(
             self.X_, self.X_, length_scales, signal_variance
-        ) + (noise_variance + self.jitter) * np.eye(count)
+        ) + noise_variance * np.eye(count)
         try:
-            factor = cholesky(covariance, lower=True)
+            factor, _ = self._stable_cholesky(covariance)
         except np.linalg.LinAlgError:
             return 1e25
         alpha = cho_solve((factor, True), self.residuals_)
@@ -130,8 +150,8 @@ class GaussianProcess:
         length_scales, signal_variance, noise_variance = self._unpack(self.theta_)
         covariance = self._rbf(
             points, points, length_scales, signal_variance
-        ) + (noise_variance + self.jitter) * np.eye(len(outcomes))
-        self.factor_ = cholesky(covariance, lower=True)
+        ) + noise_variance * np.eye(len(outcomes))
+        self.factor_, self.effective_jitter_ = self._stable_cholesky(covariance)
         self.alpha_ = cho_solve((self.factor_, True), self.residuals_)
         self.is_fitted = True
         return self

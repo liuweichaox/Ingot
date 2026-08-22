@@ -9,6 +9,7 @@ See the [system design](../docs/design.en.md) for boundaries and [analysis and o
 ## Current capabilities
 
 - Continuous controls, hard parameter bounds, and measured outcome-safety constraints
+- Explicit `context` stratification for discrete factors such as material, equipment, tooling, and formulation; category codes are never disguised as continuous controls
 - Less-than, greater-than, target, and range objectives
 - Objective weights and BoTorch/GPyTorch multi-output GPs with 95% intervals
 - Declared physical outcome bounds; formal PASS/FAIL objectives keep posterior means, intervals, and acquisition samples inside 0-1
@@ -22,6 +23,8 @@ See the [system design](../docs/design.en.md) for boundaries and [analysis and o
 - Synthetic digital-twin demonstration
 
 The NumPy/SciPy GP remains a cold-start and regression baseline. Online suggestions, historical replay, and synthetic replay all use one engine-selection entry point: fewer than three valid observations use the sequential cold start and may apply NumPy GP priors; three or more use BoTorch. Every caller relies on the selected engine's `suggest` path to enforce measured outcome-safety constraints and must not instantiate a concrete engine directly.
+
+The numerical optimizer directly searches continuous controls only. Comparing multiple discrete levels requires separate campaigns stratified by categorical context or an applicable full/fractional factorial design. Adjacent identifiers never make different materials, machines, or tooling artificially similar.
 
 ## Local validation
 
@@ -46,6 +49,16 @@ uv sync --python 3.12 --extra service --extra viz --group dev --locked
 commit both files; CI and container builds reject an out-of-date lock.
 
 Local development uses `8110` by default to avoid conflicting with the optimizer service on port `8100` in Docker Compose.
+
+## Public-data regression
+
+The repository uses fixed public manufacturing data to check categorical-context isolation, historical-pool replay, comparisons with random and response-surface baselines, and preservation of the correct claim boundary when results are unfavorable. Run the complete benchmark with:
+
+```bash
+./scripts/benchmark-public-validation.sh
+```
+
+Ordinary CI runs only the fast, deterministic regression checks in `optimizer/tests/test_public_validation.py`. The `Performance` workflow runs the complete six-scenario benchmark with 20 seeds per scenario on schedule or on demand and uploads the result. An algorithm or replay-policy change must inspect the complete benchmark as well; passing unit tests alone does not establish improved experiment efficiency. See [Public-data offline validation](../tools/public-validation/README.en.md) for provenance, the current result, and update rules.
 
 ## Stateless contract
 

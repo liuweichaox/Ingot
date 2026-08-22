@@ -87,6 +87,14 @@ test("controlled pilot has a finite in-product gate and a read-only evidence ver
   assert.match(pilotVerifier, /不等于生产准入/);
 });
 
+test("exploratory comparisons cannot be bulk-converted into research hypotheses", () => {
+  assert.match(pages, /hypothesisGenerationReady = canGenerateHypotheses\(result\)/);
+  assert.match(pages, /readiness\?\.mode === "candidate-ranking"/);
+  assert.match(pages, /crossValidationScore\) > 0/);
+  assert.match(pages, /candidate\.evidenceLevel === "stable"/);
+  assert.match(pages, /暂不能批量生成候选假设/);
+});
+
 test("operations retain server pagination and resumable live events", () => {
   assert.match(pages, /offset: String\(\(page - 1\) \* pageSize\)/);
   assert.match(pages, /makeProcessExecutionQuery\(appliedFilters, value, pageSize\)/);

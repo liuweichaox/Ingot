@@ -91,9 +91,9 @@ The repository implements the main code path across field integration, productio
 - **Shadow validation passed** means recommendations survived field-constraint review on new projects.
 - **Online validation passed** is required before claiming fewer experiments or shorter development time on real work.
 
-The project has completed internal end-to-end validation of import, run reconstruction, inspection linkage, and R&D observations using controlled, non-public production history. Formal leakage-free replay and prospective validation remain incomplete, so it does not claim a measured reduction in experiments or development time.
+The project has completed internal end-to-end validation of import, run reconstruction, inspection linkage, and R&D observations using controlled, non-public production history. The repository also provides a fixed offline benchmark using explicitly licensed public manufacturing data. The current benchmark passes workflow, categorical-context-isolation, and claim-boundary checks, while the strict experiment-count reduction claim remains not demonstrated. Formal leakage-free replay on real history and prospective validation remain incomplete, so the project does not claim a measured reduction in experiments or development time.
 
-- **The public repository provides** code, protocols, schemas, synthetic examples, tests, acceptance methods, and conclusion boundaries.
+- **The public repository provides** code, protocols, schemas, synthetic examples, an explicitly licensed and checksum-verified public-data benchmark, tests, acceptance methods, and conclusion boundaries.
 - **The public repository excludes** real production data, project identities, process parameters, quality distributions, and derived results.
 - **The reference deployment remains bounded**: the default Compose topology uses one API, one Worker, and one PostgreSQL instance, without PostgreSQL HA, continuous WAL/PITR, object storage, or controlled equipment writes.
 
@@ -163,6 +163,14 @@ Run the full CI gate with:
 ./scripts/verify.sh
 ```
 
+Run the complete fixed public-manufacturing-data benchmark with:
+
+```bash
+./scripts/benchmark-public-validation.sh
+```
+
+This benchmark validates a reproducible software and method path; it does not replace shadow or controlled online validation on a real project. See [Public-data offline validation](tools/public-validation/README.en.md) for the current result and decision rules.
+
 ## Repository layout
 
 ```text
@@ -186,6 +194,7 @@ scripts/           verification and operations scripts
 - [Getting started](docs/getting-started.en.md)
 - [System design](docs/design.en.md)
 - [Analysis and optimization](docs/optimization.en.md)
+- [Public-data offline validation](tools/public-validation/README.en.md)
 - [Mechanism knowledge design](docs/mechanism-knowledge.en.md)
 - [Data integration](docs/data-connection.en.md)
 - [Scenario validation](docs/rollout.en.md)
@@ -200,6 +209,7 @@ scripts/           verification and operations scripts
 - [x] Real runs, actual conditions, process features, and inspections form traceable observations.
 - [x] Candidate causes, hypotheses, experiments, and operating regions share one R&D record.
 - [x] Constrained GP/BO recommendations, pending-point avoidance, and safe cold start.
+- [x] Reproducible public-manufacturing-data benchmark with an explicit claim boundary.
 - [ ] Publish leakage-free sequential replay on a real manufacturing history.
 - [ ] Complete shadow recommendations and analyze engineer rejection reasons on a new project.
 - [ ] Complete a controlled online experiment and publish preregistered results.

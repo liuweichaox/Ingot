@@ -12,7 +12,18 @@ from .feature_transforms import DerivedFeature, expand_inputs
 from .loop import ObjectivePrediction, Suggestion
 
 
-MODEL_VERSION = "botorch-qlogbo-v4"
+MODEL_VERSION = "botorch-qlogbo-v5"
+
+
+def _observation_variance(values: np.ndarray) -> np.ndarray:
+    """Return a scale-aware noise floor that stabilizes repeated DOE points."""
+    values = np.asarray(values, dtype=float)
+    spread = np.ptp(values, axis=0)
+    median = np.median(values, axis=0)
+    mad = np.median(np.abs(values - median), axis=0) * 1.4826
+    scale = np.maximum.reduce([spread, mad, np.ones_like(spread)])
+    variance = np.square(scale * 1e-3)
+    return np.broadcast_to(variance, values.shape).copy()
 
 
 class BotorchOptimizer:
@@ -223,6 +234,9 @@ class BotorchOptimizer:
             process_model = SingleTaskGP(
                 train_unit_tensor,
                 process_train,
+                train_Yvar=torch.tensor(
+                    _observation_variance(process_train_np), dtype=dtype
+                ),
                 outcome_transform=Standardize(process_train.shape[-1]),
             )
             process_mll = ExactMarginalLogLikelihood(
@@ -271,7 +285,12 @@ class BotorchOptimizer:
             else None
         )
 
-        model = SingleTaskGP(train_x, train_y, outcome_transform=Standardize(train_y.shape[-1]))
+        model = SingleTaskGP(
+            train_x,
+            train_y,
+            train_Yvar=torch.tensor(_observation_variance(train_y_np), dtype=dtype),
+            outcome_transform=Standardize(train_y.shape[-1]),
+        )
         mll = ExactMarginalLogLikelihood(model.likelihood, model)
         fit_gpytorch_mll(mll)
         objective_count = len(self.campaign.objectives)
@@ -331,6 +350,7 @@ class BotorchOptimizer:
         )
         validation_scores = None
         selected_indices = None
+        selected_acquisition_values = None
         if decision_intent == "validate-hypothesis":
             requested = [str(value) for value in (hypothesis_variables or [])]
             variable_indexes = [names.index(value) for value in requested if value in names]
@@ -404,11 +424,14 @@ class BotorchOptimizer:
                 prune_baseline=True,
             )
         if decision_intent == "reach-specification":
-            selected_x, _ = optimize_acqf_discrete(
+            selected_x, selected_acquisition = optimize_acqf_discrete(
                 acq_function=acquisition,
                 q=top_k,
                 choices=choices,
                 unique=True,
+            )
+            selected_acquisition_values = (
+                selected_acquisition.detach().reshape(-1).cpu().numpy()
             )
         selected_expanded = selected_x.detach().cpu().numpy()
         selected_unit = selected_expanded[:, : self.campaign.dim]
@@ -497,7 +520,7 @@ class BotorchOptimizer:
             acq_value = (
                 float(validation_scores[selected_indices[row]])
                 if validation_scores is not None and selected_indices is not None
-                else float(acquisition(selected_x[row : row + 1].unsqueeze(0)).item())
+                else float(selected_acquisition_values[row])
             )
             mean_outcomes = bounded_means
             results.append(

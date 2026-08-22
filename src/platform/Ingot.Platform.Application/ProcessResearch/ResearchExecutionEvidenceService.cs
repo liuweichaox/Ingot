@@ -1,3 +1,4 @@
+// 将达到候选排序门槛的运行对比固化为待验证研发证据，不提升探索性关联。
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text.Json;
@@ -7,6 +8,9 @@ using Ingot.Platform.Application.ProcessExecutions;
 
 namespace Ingot.Platform.Application.ProcessResearch;
 
+/// <summary>
+/// 在样本外验证和稳定性门槛通过后，将运行对比候选转换为研发假设或历史观察。
+/// </summary>
 public sealed class ResearchExecutionEvidenceService(
     IProcessResearchStore store,
     ProcessResearchWorkflow workflow,
@@ -36,6 +40,15 @@ public sealed class ResearchExecutionEvidenceService(
         var comparison = await executionComparisons.CompareSelectedAsync(baselineId, executionIds, ct)
             .ConfigureAwait(false)
             ?? throw new ProcessResearchRuleException("所选过程执行不存在，无法形成追因证据。");
+        if (!string.Equals(
+                comparison.Diagnosis.Readiness.Mode,
+                "candidate-ranking",
+                StringComparison.Ordinal) ||
+            comparison.Diagnosis.CrossValidationScore is not > 0)
+        {
+            throw new ProcessResearchRuleException(
+                "当前运行对比仅形成探索性证据，不能批量生成候选假设。请补充质量结果、重复运行和上下文变量，待样本外验证通过后重试。");
+        }
         var project = await RequireProjectAsync(projectId, ct).ConfigureAwait(false);
         var contentHash = Convert.ToHexStringLower(SHA256.HashData(
             JsonSerializer.SerializeToUtf8Bytes(comparison)));
@@ -50,7 +63,7 @@ public sealed class ResearchExecutionEvidenceService(
             CreatedAt = DateTimeOffset.UtcNow
         };
         var candidates = comparison.Diagnosis.Candidates
-            .Where(static value => value.EvidenceLevel is "stable" or "exploratory")
+            .Where(static value => value.EvidenceLevel == "stable")
             .Select(candidate => new
             {
                 Candidate = candidate,
