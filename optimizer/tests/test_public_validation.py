@@ -449,8 +449,8 @@ def test_v7_draft_fixtures_and_composition_features_are_valid():
     protocol = benchmark_v7.load_protocol()
     report = benchmark_v7.integrity_report(protocol)
 
-    assert report["status"] == "draft"
-    assert report["full_evaluation_allowed"] is False
+    assert report["status"] == "frozen"
+    assert report["full_evaluation_allowed"] is True
     assert report["evaluation_unit_count"] == 4
     assert len(report["candidate_evaluation_fingerprint"]) == 64
     assert set(report["datasets"]) == {
@@ -475,11 +475,9 @@ def test_v7_draft_fixtures_and_composition_features_are_valid():
     )
 
 
-def test_v7_draft_refuses_full_evaluation_until_metadata_only_freeze():
+def test_v7_frozen_protocol_allows_only_matching_full_evaluation():
     protocol = benchmark_v7.load_protocol()
-
-    with pytest.raises(RuntimeError, match="protocol-v7 is not frozen"):
-        benchmark_v7.require_frozen(protocol)
+    benchmark_v7.require_frozen(protocol)
 
 
 def test_v7_freeze_fingerprint_covers_all_data_and_method_inputs():
@@ -520,3 +518,44 @@ def test_v7_keeps_all_strong_baselines_and_per_plate_guardrail():
         and settings["additional_trial_budget"] == 24
         for settings in protocol["datasets"].values()
     )
+
+
+def test_v7_retained_result_discloses_quadratic_and_feature_failures():
+    protocol = benchmark_v7.load_protocol()
+    result = json.loads(
+        (BENCHMARK_PATH.parent / "latest-results-v7.json").read_text(
+            encoding="utf-8"
+        )
+    )
+
+    assert result["evaluation_fingerprint"] == protocol["freeze"][
+        "evaluation_fingerprint"
+    ]
+    assert result["summary"]["episode_count"] == 400
+    assert result["summary"][
+        "experiment_reduction_vs_all_preregistered_baselines"
+    ] == "not-demonstrated"
+    assert result["summary"]["mechanism_feature_contribution"] == (
+        "not-demonstrated"
+    )
+    effects = {
+        item["comparator"]: item
+        for item in result["summary"]["paired_effects"]
+    }
+    assert effects["seeded-random-search"]["passed"] is True
+    assert effects["sequential-maximin-space-filling"]["passed"] is True
+    assert effects["regularized-linear-response-surface"]["passed"] is True
+    assert effects["regularized-quadratic-response-surface"]["passed"] is False
+    assert effects["regularized-quadratic-response-surface"][
+        "relative_trial_reduction"
+    ] == pytest.approx(0.1166627934)
+    assert effects["regularized-quadratic-response-surface"][
+        "evaluation_unit_non_worse_fraction"
+    ] == 0.5
+    assert effects["ingot-v10-without-composition-features"]["passed"] is False
+    assert effects["ingot-v10-without-composition-features"][
+        "relative_trial_reduction"
+    ] == pytest.approx(0.0013137152)
+    assert effects["ingot-v10-without-composition-features"][
+        "evaluation_unit_non_worse_fraction"
+    ] == 0.5

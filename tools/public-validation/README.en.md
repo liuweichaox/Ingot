@@ -149,11 +149,21 @@ Verify the v6 data, frozen protocol, and unified fingerprint with:
 
 The freeze references candidate commit `ab1675bccb1283a679a86f61b7175359fc83c1af` and unified evaluation fingerprint `06099fa53a4d5f9c7898380f2bf24bb1982e830b7926cf567625507c04bf9cca`. Once main advances to a successor algorithm, the fingerprint check intentionally refuses a current-tree rerun that could present new-algorithm output as v6. Reproducing the original trajectories requires checking out the candidate revision recorded by the protocol; current main retains fixture checks, the complete result, and independent summary recomputation.
 
-## v7 OER composition evaluation (not frozen)
+## v7 protocol-frozen OER composition result
 
-Before reading outcomes, v7 selected four Olympus high-throughput measured OER composition plates. See [v7-selection.en.md](v7-selection.en.md) for the selection, features, and stop conditions. The data-quality gate confirmed finite pools of 2,121, 2,119, 2,120, and 2,121 unique six-component compositions that satisfy the simplex, 10 at% grid, at-most-quaternary support, and finite-outcome contracts. No row was removed or imputed, and no emulator result was introduced.
+Before reading outcomes, v7 selected four Olympus high-throughput measured OER composition plates. See [v7-selection.en.md](v7-selection.en.md) for the selection, features, and stop conditions. The data-quality gate confirmed finite pools of 2,121, 2,119, 2,120, and 2,121 unique six-component compositions satisfying the simplex, 10 at% grid, at-most-quaternary support, and finite-outcome contracts. No row was removed or imputed, and no emulator result was introduced. The frozen evaluation completed 400 paired episodes. [latest-results-v7.json](latest-results-v7.json) retains every trajectory, and [validate_v7_result.py](development/validate_v7_result.py) independently recomputes the summary.
 
-The draft protocol fixes 24 initial observations, at most 24 additional queries, the first overpotential percentile target, 100 paired episodes per plate, four strong baselines, and composition-feature ablation of the same v10 method. Every plate must be non-worse and all five comparisons must pass. `protocol-v7.json` remains `draft`, so the full evaluator refuses to run and there is no v7 efficiency result or success claim. Run only the integrity check, which exposes no outcome distribution:
+| v7 comparator | Relative additional-trial reduction | 95% CI | Plate non-worse | Gate |
+|---|---:|---:|---:|---|
+| No-composition-feature ablation | 0.13% | −2.00% to 2.23% | 50% | failed |
+| Seeded random search | 57.70% | 54.63% to 60.64% | 100% | passed |
+| Sequential maximin | 58.01% | 54.84% to 60.98% | 100% | passed |
+| Regularized linear response surface | 53.67% | 50.42% to 56.84% | 100% | passed |
+| Regularized quadratic response surface | 11.67% | 4.96% to 17.81% | 50% | failed |
+
+The aggregate interval versus the quadratic response surface is positive, but on plate 3851 v10 averages 8.24 additional queries versus 5.17 for quadratic; on plate 3860 the values are 15.72 and 14.90. Those results trigger the 100% plate-non-worse guardrail. The feature variant is better only on plates 3496 and 4098 and slightly worse on the other two; the ablation interval crosses zero. Both the overall and feature-contribution conclusions remain `not-demonstrated`.
+
+The frozen protocol references candidate commit `4857d825816721bab52c1211dc90bc1d6aa09ce6` and unified evaluation fingerprint `c7c173eb3a025b90cfa78ba62db3410e702317ec7346c4e368398fa2f8d29983`. Verify data, protocol, and fingerprint with:
 
 ```bash
 ./scripts/verify-public-validation-v7.sh
