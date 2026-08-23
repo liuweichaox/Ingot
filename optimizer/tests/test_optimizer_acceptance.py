@@ -26,8 +26,8 @@ def test_acceptance_fixtures_pass_preregistered_quality_gates():
     protocol = benchmark.load_protocol()
     report = benchmark.integrity_report(protocol)
 
-    assert report["status"] == "draft"
-    assert report["full_evaluation_allowed"] is False
+    assert report["status"] == "frozen"
+    assert report["full_evaluation_allowed"] is True
     assert report["evaluation_unit_count"] == 3
     assert {
         name: (item["rows"], item["control_count"])
@@ -77,22 +77,51 @@ def test_acceptance_protocol_keeps_fixed_baselines_budgets_and_gates():
     }
 
 
-def test_acceptance_protocol_refuses_execution_before_freeze():
+def test_acceptance_protocol_is_frozen_and_refuses_tampering():
     protocol = benchmark.load_protocol()
+    benchmark.require_frozen(protocol)
+
+    draft = json.loads(json.dumps(protocol))
+    draft["status"] = "draft"
     with pytest.raises(RuntimeError, match="not frozen"):
-        benchmark.require_frozen(protocol)
+        benchmark.require_frozen(draft)
 
     frozen = json.loads(json.dumps(protocol))
-    frozen["status"] = "frozen"
-    frozen["freeze"]["optimizer_revision"] = "a" * 40
-    frozen["freeze"]["protocol_revision"] = "b" * 40
-    frozen["freeze"]["evaluation_fingerprint"] = (
-        benchmark.evaluation_fingerprint(frozen)
-    )
-    benchmark.require_frozen(frozen)
     frozen["datasets"]["alkox"]["additional_trial_budget"] += 1
     with pytest.raises(RuntimeError, match="fingerprint does not match"):
         benchmark.require_frozen(frozen)
+
+
+def test_retained_acceptance_result_discloses_linear_subgroup_failures():
+    protocol = benchmark.load_protocol()
+    result = json.loads(
+        (BENCHMARK_PATH.parent / "acceptance-results.json").read_text(
+            encoding="utf-8"
+        )
+    )
+
+    assert result["evaluation_fingerprint"] == protocol["freeze"][
+        "evaluation_fingerprint"
+    ]
+    assert result["summary"]["episode_count"] == 450
+    assert result["summary"]["core_experiment_selection"] == (
+        "not-demonstrated"
+    )
+    assert result["summary"]["response_surface_added_value"] is True
+    effects = {
+        item["comparator"]: item
+        for item in result["summary"]["paired_effects"]
+    }
+    assert effects["seeded-random-search"]["passed"] is True
+    assert effects["sequential-maximin-space-filling"]["passed"] is True
+    assert effects["regularized-linear-response-surface"]["passed"] is False
+    assert effects["regularized-quadratic-response-surface"]["passed"] is True
+    assert effects["regularized-linear-response-surface"][
+        "evaluation_unit_relative_reductions"
+    ]["alkox:all"] == pytest.approx(-0.3208430913)
+    assert effects["regularized-linear-response-surface"][
+        "evaluation_unit_relative_reductions"
+    ]["p3ht:all"] == pytest.approx(-0.6836158192)
 
 
 @pytest.mark.parametrize("dataset", ["alkox", "p3ht", "hplc"])
