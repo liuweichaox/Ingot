@@ -1,12 +1,12 @@
 {
   "schema": "ingot-optimizer-acceptance-protocol",
-  "status": "draft",
+  "status": "frozen",
   "purpose": "Fresh-data acceptance of the current experiment-selection policy against two model-free and two response-surface baselines.",
   "freeze": {
     "selection_revision": "2e4f3b1f8d638eb2e3b5e6cd0ca24b9d73f45807",
-    "optimizer_revision": null,
-    "protocol_revision": null,
-    "evaluation_fingerprint": null,
+    "optimizer_revision": "1c840f7e44d41f1f1a1ec516168fab84eacf1414",
+    "protocol_revision": "1c840f7e44d41f1f1a1ec516168fab84eacf1414",
+    "evaluation_fingerprint": "e971be855f7dafcf5b7ea5bbc9779ddf03173ae7a33a0e69f93d6d826c8f05a2",
     "result_policy": "A full result is valid only after the protocol is frozen and its fingerprint matches the algorithm, evaluator, fixtures, source snapshots, dependencies, and normalized protocol."
   },
   "sources": {
