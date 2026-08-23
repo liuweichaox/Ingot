@@ -29,7 +29,7 @@ test("uses the exact official brand assets", async () => {
   }
 });
 
-test("publishes the data-supported process R&D journey and public references without interface documentation", async () => {
+test("publishes the experiment-decision journey and public references without interface documentation", async () => {
   const search = JSON.parse(await readFile(path.join(out, "search-index.json"), "utf8"));
   assert.equal(search.length, 26);
   assert.deepEqual(
@@ -40,9 +40,9 @@ test("publishes the data-supported process R&D journey and public references wit
   for (const lang of ["zh", "en"]) {
     const index = await readFile(path.join(out, lang, "index.html"), "utf8");
     const design = await readFile(path.join(out, lang, "design", "index.html"), "utf8");
-    assert.match(index, lang === "zh" ? /让工艺研发从没有数据支撑走向有数据支撑/ : /Move process R(?:&amp;|&#x26;)D from decisions without data support/i);
+    assert.match(index, lang === "zh" ? /减少无效实验/ : /avoid unproductive experiments/i);
     assert.match(design, lang === "zh" ? /设计目标/ : /Design objective/i);
-    assert.match(index, lang === "zh" ? /帮助工艺工程师抉择/ : /help process engineers choose what to do next/i);
+    assert.match(index, lang === "zh" ? /更快找到达到目标的工艺条件/ : /reach target process conditions faster/i);
     assert.match(index, lang === "zh" ? /工艺配置.*现场接入.*生产运行.*质量管理.*工艺追因.*工艺研发/s : /process configuration.*field integration.*production runs.*quality management.*diagnosis.*process R(?:&amp;|&#x26;)D/is);
     assert.doesNotMatch(`${index}${design}`, /\/api\/|curl|ProductionEvent|InspectionRecord|endpoint|HTTP API/i);
   }

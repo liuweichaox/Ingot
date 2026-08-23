@@ -2,6 +2,8 @@
 import type { Metadata } from "next";
 import "../globals.css";
 
+// Defines canonical Chinese metadata for the public product entry point.
+
 const origin = "https://ingotstack.com";
 
 export const metadata: Metadata = {
@@ -11,7 +13,7 @@ export const metadata: Metadata = {
     languages: { "zh-CN": "/", en: "/en/" },
   },
   title: "Ingot — 开源工艺追因与优化系统",
-  description: "让工艺研发从没有数据支撑走向有数据支撑，让计算机基于真实运行证据帮助工艺工程师抉择。",
+  description: "把真实运行变成可比较、可验证的工程证据，减少无效实验，更快找到达标工艺。",
   applicationName: "Ingot",
   keywords: [
     "Ingot", "数据驱动工艺研发", "工艺工程师决策", "工艺追因",
@@ -24,13 +26,13 @@ export const metadata: Metadata = {
     apple: "/brand/ingot-mark-dark.svg",
   },
   openGraph: {
-    title: "Ingot — 让真实数据帮助工艺工程师抉择",
-    description: "从真实生产条件、过程轨迹和质量结果形成工程证据，再按问题选择有效分析与实验方法。",
+    title: "Ingot — 少做无效实验，更快找到达标工艺",
+    description: "还原真实运行，比较关键差异，设计验证并选择下一项实验。",
     url: origin,
     type: "website",
     locale: "zh_CN",
     siteName: "Ingot",
-    images: [{ url: "/og.png", width: 1733, height: 908, alt: "Ingot — 让真实数据帮助工艺工程师抉择。" }],
+    images: [{ url: "/og.png", width: 1733, height: 908, alt: "Ingot — 少做无效实验，更快找到达标工艺。" }],
   },
   twitter: {
     card: "summary_large_image",

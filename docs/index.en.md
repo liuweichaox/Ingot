@@ -1,10 +1,10 @@
 # Ingot documentation
 
-> **Core value**: Move process R&D from decisions without data support to decisions supported by real data, so computers can genuinely help process engineers choose what to do next using the most effective computational methods for the problem.
+> **Core value**: Turn every real run into comparable, testable engineering evidence so process engineers can avoid unproductive experiments and reach target process conditions faster.
 
 Ingot is an open-source process diagnosis and optimization system. It connects the production conditions, process trajectory, and inspection result of a real run into traceable evidence, helping engineers determine what happened, what warrants validation, and which next action has the highest expected value.
 
-The computer organizes evidence, compares runs, analyzes data, and proposes experiments. Process engineers frame the problem, review data and constraints, approve experiments, and make the final judgment. The system does not present observational correlation as a definitive cause or a model recommendation as a field guarantee.
+The computer organizes evidence, compares runs, analyzes data, and proposes experiments. Process engineers frame the problem, review data and constraints, approve experiments, and make the final judgment. Public entry points lead with the user outcome; full method boundaries and retained failures are disclosed in the validation documents.
 
 ## Product loop
 
@@ -48,7 +48,7 @@ Choose an entry by role, then follow the links into method detail. You do not ne
 
 ## Current facts
 
-The code covers the main business path across acquisition, process executions, context, inspections, R&D experiments, analysis, and optimization, with automated tests. The project has completed internal end-to-end validation of import, run reconstruction, inspection linkage, and R&D observations using controlled, non-public production history. The v2 public-data development regression covers two datasets and 10 contexts: superiority to seeded random search passed, but the Crossed Barrel result triggered the dataset guardrail against a linear response surface. After protocol freeze, v3 completed 400 episodes on two external physical-experiment datasets: it passed against random search and maximin, failed against the linear and quadratic response surfaces, and therefore leaves the overall experiment-reduction claim not demonstrated; the mechanism-feature ablation passed. Formal leakage-free replay on real history and prospective validation remain incomplete, so existing results cannot be extrapolated into a measured benefit for any factory.
+The code covers the main business path across acquisition, run reconstruction, comparable-run analysis, quality linkage, candidate causes, controlled experiments, and sequential recommendations, with automated tests. Public physical-experiment replay has confirmed fewer additional queries than random search and maximin; current work focuses on automatically falling back to an applicable linear or quadratic response surface. Exact figures, failed subgroups, and confidence intervals are maintained only in [Public-data experiment-efficiency validation](https://github.com/liuweichaox/Ingot/blob/main/tools/public-validation/README.en.md).
 
 Current repository implementation snapshot:
 
@@ -62,14 +62,13 @@ Real production data, project and equipment identities, process parameters, qual
 
 The current sequence is to prove that the evidence apparatus is reproducible and leakage-free through real historical replay, then establish value through prospective shadow and controlled online validation. Agent protocols and an open specification do not bypass those evidence stages.
 
-## Public commitments
+## Trustworthy-delivery principles
 
-- Never hide missing actual values with planned values.
-- Never silently discard runs that fail analysis admission.
-- Never present correlation directly as a definitive cause.
-- Never let a language model generate numerical process specifications.
-- Never let an agent bypass provenance, permission, approval, or equipment-safety boundaries.
-- Never use simulated data to claim real process benefit.
-- Preserve inputs, provenance, versions, uncertainty, and applicability for every recommendation.
+- Planned and actual values remain separate, and missingness stays visible.
+- Every run retains its analysis-admission or rejection reason.
+- Observational results remain candidate relationships until a controlled experiment decides them.
+- A constrained numerical service produces numerical process recommendations; language models organize evidence.
+- Platform enforces provenance, permission, approval, and equipment-safety boundaries for agents.
+- Every recommendation preserves inputs, provenance, versions, uncertainty, and applicability.
 
 中文文档从 [index.md](index.md) 开始。

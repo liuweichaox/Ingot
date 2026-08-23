@@ -94,8 +94,8 @@ if ! grep -Fq "$canonical_nav_zh" docs/design.md ||
   exit 1
 fi
 
-canonical_zh='让工艺研发从没有数据支撑走向有数据支撑，让计算机基于真实数据帮助工艺工程师抉择，并采用适合问题的有效计算方法分析数据。'
-canonical_en='Move process R&D from decisions without data support to decisions supported by real data, so computers can genuinely help process engineers choose what to do next using the most effective computational methods for the problem.'
+canonical_zh='把每次真实运行变成可比较、可验证的工程证据，帮助工艺工程师减少无效实验，更快找到达到目标的工艺条件。'
+canonical_en='Turn every real run into comparable, testable engineering evidence so process engineers can avoid unproductive experiments and reach target process conditions faster.'
 
 for file in README.md docs/brand.md docs/index.md docs/project-plan.md; do
   if ! grep -Fq "$canonical_zh" "$file"; then

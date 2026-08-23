@@ -2,12 +2,14 @@
 import type { Metadata } from "next";
 import "../globals.css";
 
+// Defines canonical English metadata for the public product entry point.
+
 const origin = "https://ingotstack.com";
 
 export const metadata: Metadata = {
   metadataBase: new URL(origin),
   title: "Ingot — Open-source Process Diagnosis & Optimization",
-  description: "Move process R&D from unsupported judgment to decisions grounded in real run evidence, helping process engineers choose what to do next.",
+  description: "Turn real runs into comparable, testable engineering evidence, avoid unproductive experiments, and reach target process conditions faster.",
   applicationName: "Ingot",
   keywords: [
     "Ingot", "data-supported process R&D", "process engineer decisions", "process diagnosis",
@@ -24,14 +26,14 @@ export const metadata: Metadata = {
     apple: "/brand/ingot-mark-dark.svg",
   },
   openGraph: {
-    title: "Ingot — Help process engineers decide with real data",
-    description: "Turn actual conditions, process trajectories, and quality outcomes into engineering evidence, then select methods that fit the question.",
+    title: "Ingot — Fewer wasted experiments, faster routes to target conditions",
+    description: "Reconstruct real runs, compare important differences, design validation, and select the next experiment.",
     url: `${origin}/en/`,
     locale: "en_US",
     alternateLocale: ["zh_CN"],
     siteName: "Ingot",
     type: "website",
-    images: [{ url: "/og.png", width: 1733, height: 908, alt: "Ingot — Help process engineers decide with real data." }],
+    images: [{ url: "/og.png", width: 1733, height: 908, alt: "Ingot — Fewer wasted experiments, faster routes to target conditions." }],
   },
   twitter: {
     card: "summary_large_image",

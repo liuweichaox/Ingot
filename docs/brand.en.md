@@ -4,9 +4,9 @@
 
 ## Core value
 
-> **Move process R&D from decisions without data support to decisions supported by real data, so computers can genuinely help process engineers choose what to do next using the most effective computational methods for the problem.**
+> **Turn every real run into comparable, testable engineering evidence so process engineers can avoid unproductive experiments and reach target process conditions faster.**
 
-This is Ingot's stable starting point. Data acquisition, process diagnosis, experiment design, numerical optimization, mechanism fusion, and model interaction serve it; none creates a new core value.
+Avoiding unproductive experiments is the outcome the product is built to deliver, not a synonym for one algorithm. Data acquisition, process diagnosis, experimental design, linear or quadratic response surfaces, Bayesian optimization, mechanism fusion, and model interaction are means to that outcome.
 
 ## Product position
 
@@ -47,8 +47,8 @@ Observational data can support candidate causes, stable associations, confounded
 | Use | Chinese | English |
 |---|---|---|
 | Product category | 开源工艺追因与优化系统 | Open-source Process Diagnosis & Optimization |
-| Core value | 让真实数据帮助工艺工程师抉择 | Help process engineers make decisions with real data |
-| Short tagline | 看清这次运行，优化下一次运行。 | Explain this run, optimize the next. |
+| Core value | 少做无效实验，更快找到达标工艺 | Avoid unproductive experiments and reach target process conditions faster |
+| Short tagline | 看清这次运行，做对下一项实验。 | Understand this run. Choose the right next experiment. |
 | Data unit | 运行 / 过程执行 | run / process execution |
 | Observational conclusion | 候选原因、稳定关联、混杂关联、证据不足 | candidate cause, stable association, confounded association, insufficient evidence |
 | Experimental conclusion | 支持、否决、不确定、已验证原因 | supported, rejected, inconclusive, validated cause |

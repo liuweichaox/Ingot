@@ -4,7 +4,7 @@
 
 ## Design objective
 
-Ingot's core value is fixed by the [Brand guide](brand.en.md): move process R&D from decisions without data support to decisions supported by real data, so computers can genuinely help process engineers choose what to do next using the most effective computational methods for the problem.
+Ingot's core value is fixed by the [Brand guide](brand.en.md): turn every real run into comparable, testable engineering evidence so process engineers can avoid unproductive experiments and reach target process conditions faster.
 
 The architecture must therefore:
 

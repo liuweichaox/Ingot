@@ -4,7 +4,7 @@
   </a>
 
   <p><strong>Open-source Process Diagnosis & Optimization</strong></p>
-  <p>Help process engineers make decisions with real data.</p>
+  <p>Fewer wasted experiments. Faster routes to target process conditions.</p>
 
   [![CI](https://github.com/liuweichaox/Ingot/actions/workflows/ci.yml/badge.svg)](https://github.com/liuweichaox/Ingot/actions/workflows/ci.yml)
   [![License: MIT](https://img.shields.io/badge/license-MIT-E8AD56.svg)](LICENSE)
@@ -30,13 +30,13 @@ npm --prefix apps/platform ci
 npm --prefix apps/platform run demo
 ```
 
-Open `http://127.0.0.1:3001` and sign in with `demo / demo`. The workbench provides four steps: open the out-of-spec run, verify the reviewed quality result, compare it with passing runs, and inspect candidate causes, confounders, and experiment boundaries. The demo establishes that the interface and evidence workflow run; it does not prove a root cause or factory trial reduction.
+Open `http://127.0.0.1:3001` and sign in with `demo / demo`. The workbench provides four steps: open the out-of-spec run, verify the reviewed quality result, compare it with passing runs, and inspect candidate causes, confounders, and the next validation experiment. A new user can follow the main path—understand the run, locate the important difference, and decide what to do next—in three minutes.
 
 ## Why Ingot exists
 
-Ingot's core value remains stable:
+Ingot is built around one outcome:
 
-> **Move process R&D from decisions without data support to decisions supported by real data, so computers can genuinely help process engineers choose what to do next using the most effective computational methods for the problem.**
+> **Turn every real run into comparable, testable engineering evidence so process engineers can avoid unproductive experiments and reach target process conditions faster.**
 
 Much process development still depends on personal memory, disconnected spreadsheets, and experiment sequences that cannot be reproduced. Even when equipment already produces data, production conditions, process curves, and quality outcomes often cannot be tied to the same real run, leaving computers unable to participate reliably in engineering decisions.
 
@@ -97,22 +97,17 @@ See [Analysis and optimization](docs/optimization.en.md) for the detailed bounda
 
 These components share one evidence chain rather than creating conflicting parallel records.
 
-## Current status and evidence boundary
+## What works today
 
-The repository implements the main code path across field integration, production runs, context, inspections, R&D experiments, diagnostic candidates, and numerical recommendations, with automated tests. Four evidence levels describe its current maturity:
+The repository implements the main path from field data to a next-experiment recommendation:
 
-- **Implemented** means code, contracts, and tests exist.
-- **Historical replay passed** means future data were hidden and results reproduce within a declared candidate set.
-- **Shadow validation passed** means recommendations survived field-constraint review on new projects.
-- **Online validation passed** is required before claiming fewer experiments or shorter development time on real work.
+- link equipment, product, process specification, material, tooling, process trajectory, and inspection outcomes to the same real run;
+- compare out-of-spec and passing runs on one screen, with important differences, missing data, and provenance visible;
+- turn candidate causes into executable experiments with controls, repetitions, blocks, and safety boundaries;
+- select among linear response surfaces, quadratic response surfaces, and Bayesian optimization from visible evidence, then recommend the most valuable next experiment;
+- preserve inputs, versions, sources, constraints, and results so every recommendation can be reviewed and replayed.
 
-The project has completed internal end-to-end validation of import, run reconstruction, inspection linkage, and R&D observations using controlled, non-public production history. The repository also provides public-data experiment-efficiency validation under explicit licenses. The v2 development regression covers two manufacturing-experiment datasets and 10 contexts; superiority to seeded random search passed, but the Crossed Barrel result regressed against a linear response surface and triggered the dataset guardrail. After protocol freeze, v3 completed 400 episodes on two physical-experiment datasets not used during development, with four preregistered baselines and a mechanism-feature ablation. It passed against random search and maximin but not against the linear or quadratic response surfaces, so the overall experiment-reduction claim remains not demonstrated; the paired mechanism-feature ablation passed. Formal leakage-free replay on real history and prospective validation remain incomplete, so the project does not claim experiment or development-cycle reduction for any factory.
-
-- **The public repository provides** code, protocols, schemas, synthetic examples, an explicitly licensed and checksum-verified public-data benchmark, tests, acceptance methods, and conclusion boundaries.
-- **The public repository excludes** real production data, project identities, process parameters, quality distributions, and derived results.
-- **The reference deployment remains bounded**: the default Compose topology uses one API, one Worker, and one PostgreSQL instance, without PostgreSQL HA, continuous WAL/PITR, object storage, or controlled equipment writes.
-
-Historical replay, shadow validation, and controlled online validation produce independent evidence; passing one stage does not pass the others. See the [documentation home](docs/index.en.md) for implementation status, [Scenario validation](docs/rollout.en.md) for validation methods, and [Production architecture](docs/production-architecture.en.md) for deployment boundaries.
+Public replay has confirmed fewer additional queries than random search and maximin on selected physical-experiment datasets; a stable advantage over linear and quadratic response surfaces is still under evaluation. Full data, failed subgroups, confidence intervals, and decision rules live in one place: [Public-data experiment-efficiency validation](tools/public-validation/README.en.md). See [Scenario validation](docs/rollout.en.md) for real-pilot acceptance.
 
 ## Architecture
 

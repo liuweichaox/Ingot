@@ -1,13 +1,15 @@
 
 import type { MetadataRoute } from "next";
 
+// Exposes install metadata for the public, read-only website surface.
+
 export const dynamic = "force-static";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "Ingot",
     short_name: "Ingot",
-    description: "让真实数据帮助工艺工程师抉择的开源工艺追因与优化系统",
+    description: "减少无效实验、更快找到达标工艺的开源工艺追因与优化系统",
     start_url: "/",
     display: "standalone",
     background_color: "#10161c",

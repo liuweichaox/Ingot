@@ -4,7 +4,7 @@
 
 ## What is the central problem Ingot solves?
 
-Move process R&D from decisions without data support to decisions supported by real data, so computers genuinely help process engineers choose what to do next using effective methods selected for the problem. Acquisition, analysis, experiments, and optimization all serve that goal.
+Turn every real run into comparable, testable engineering evidence so process engineers can avoid unproductive experiments and reach target process conditions faster. Acquisition, comparison, diagnosis, experimental design, and numerical optimization are means to that outcome.
 
 ## Is Ingot a data-acquisition system?
 

@@ -4,9 +4,9 @@
 
 ## 核心价值
 
-> **让工艺研发从没有数据支撑走向有数据支撑，让计算机基于真实数据帮助工艺工程师抉择，并采用适合问题的有效计算方法分析数据。**
+> **把每次真实运行变成可比较、可验证的工程证据，帮助工艺工程师减少无效实验，更快找到达到目标的工艺条件。**
 
-这句话是 Ingot 长期不变的出发点。数据采集、工艺追因、实验设计、数值优化、机理融合和模型交互都服务于它，不构成新的核心价值。
+“减少无效实验”是产品要交付的结果，不是某一种算法的同义词。数据采集、工艺追因、实验设计、线性或二次响应面、贝叶斯优化、机理融合和模型交互都是服务于这个结果的手段。
 
 ## 产品定位
 
@@ -47,8 +47,8 @@ Ingot 不是为了“多采一些点位”，也不是为了展示某一种算�
 | 用途 | 中文 | English |
 |---|---|---|
 | 产品类别 | 开源工艺追因与优化系统 | Open-source Process Diagnosis & Optimization |
-| 核心价值 | 让真实数据帮助工艺工程师抉择 | Help process engineers make decisions with real data |
-| 简短标语 | 看清这次运行，优化下一次运行。 | Explain this run, optimize the next. |
+| 核心价值 | 少做无效实验，更快找到达标工艺 | Avoid unproductive experiments and reach target process conditions faster |
+| 简短标语 | 看清这次运行，做对下一项实验。 | Understand this run. Choose the right next experiment. |
 | 数据单位 | 运行 / 过程执行 | run / process execution |
 | 观察结论 | 候选原因、稳定关联、混杂关联、证据不足 | candidate cause, stable association, confounded association, insufficient evidence |
 | 实验结论 | 支持、否决、不确定、已验证原因 | supported, rejected, inconclusive, validated cause |
