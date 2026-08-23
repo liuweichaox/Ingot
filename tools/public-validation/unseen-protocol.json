@@ -1,0 +1,148 @@
+{
+  "schema": "ingot-unseen-data-acceptance-protocol",
+  "status": "draft",
+  "purpose": "Freeze-before-run acceptance of core experiment selection and separate mechanism-feature contribution on previously unused physical reaction-process data.",
+  "freeze": {
+    "selection_revision": "875b66015b85d9319c0646ba36cd6024cbc2a98a",
+    "optimizer_revision": null,
+    "protocol_revision": null,
+    "evaluation_fingerprint": null,
+    "result_policy": "A full result is valid only after status is frozen, both revisions identify the preceding committed candidate, and the evaluation fingerprint matches every method, adapter, data, dependency, and normalized protocol input."
+  },
+  "sources": {
+    "fullerenes": {
+      "title": "Buckminsterfullerene adduct flow-reaction experiments",
+      "license": "MIT",
+      "official_url": "https://github.com/the-matter-lab/olympus/tree/440b6b58ebfcaa2391cff7e94b570fb4fda98d68/src/olympus/datasets/dataset_fullerenes",
+      "source_revision": "440b6b58ebfcaa2391cff7e94b570fb4fda98d68",
+      "source_snapshot": "data/fullerenes-source.csv",
+      "source_sha256": "87aa0927f0180a0f7d46dffb0b707df5caccc879492dbc0688ac3252414d4441",
+      "source_rows": 246,
+      "fixture": "data/fullerenes.csv",
+      "fixture_sha256": "24ba7b2657913d20d268aa0a521edf3e6a1e6ea98b0f0990e681b55e2794b787",
+      "fixture_rows": 216,
+      "evidence_kind": "physical-flow-reaction-full-factorial-experiments"
+    },
+    "suzuki": {
+      "title": "Continuous-condition Suzuki coupling experiments",
+      "license": "MIT",
+      "official_url": "https://github.com/the-matter-lab/olympus/tree/440b6b58ebfcaa2391cff7e94b570fb4fda98d68/src/olympus/datasets/dataset_suzuki",
+      "source_revision": "440b6b58ebfcaa2391cff7e94b570fb4fda98d68",
+      "source_snapshot": "data/suzuki-source.csv",
+      "source_sha256": "88e3c2613ee6238300f3b326c34d14dc3f76f0335a3e193cf423750146c819b6",
+      "source_rows": 247,
+      "fixture": "data/suzuki.csv",
+      "fixture_sha256": "704e9303a40c9014078f1618a8a824a90d009da61cfb1cb946472310be2983f3",
+      "fixture_rows": 247,
+      "evidence_kind": "physical-continuous-reaction-condition-experiments"
+    }
+  },
+  "datasets": {
+    "fullerenes": {
+      "controls": {
+        "reaction_time": [3.0, 31.0],
+        "sultine": [1.5, 6.0],
+        "temperature": [100.0, 150.0]
+      },
+      "contexts": {},
+      "objective": {
+        "name": "product",
+        "direction": "ge",
+        "unit": "mole fraction",
+        "threshold_rule": {
+          "kind": "empirical-quantile-within-evaluation-unit",
+          "quantile": 0.9,
+          "method": "linear",
+          "rationale": "Fixed-prevalence finite-pool comparison device; not a field reaction specification."
+        }
+      },
+      "mechanism_features": [
+        {
+          "name": "reagent_contact_exposure",
+          "operator": "product",
+          "inputs": ["reaction_time", "sultine"],
+          "normalization_scale": 186.0,
+          "basis": "Residence time multiplied by reagent ratio is a low-dimensional contact-exposure interaction declared before outcomes were read."
+        }
+      ],
+      "minimum_unit_rows": 216,
+      "initial_observations": 10,
+      "additional_trial_budget": 12
+    },
+    "suzuki": {
+      "controls": {
+        "temperature": [75.0, 90.0],
+        "pd_mol": [0.5, 5.0],
+        "arbpin": [1.0, 1.8],
+        "k3po4": [1.5, 3.0]
+      },
+      "contexts": {},
+      "objective": {
+        "name": "yield",
+        "direction": "ge",
+        "unit": "percent",
+        "threshold_rule": {
+          "kind": "empirical-quantile-within-evaluation-unit",
+          "quantile": 0.9,
+          "method": "linear",
+          "rationale": "Fixed-prevalence finite-pool comparison device; not a field reaction specification."
+        }
+      },
+      "mechanism_features": [
+        {
+          "name": "catalyst_temperature_exposure",
+          "operator": "product",
+          "inputs": ["pd_mol", "temperature"],
+          "normalization_scale": 450.0,
+          "basis": "Catalyst loading multiplied by temperature is a low-dimensional catalytic-condition interaction declared before outcomes were read."
+        }
+      ],
+      "minimum_unit_rows": 247,
+      "initial_observations": 15,
+      "additional_trial_budget": 12
+    }
+  },
+  "methods": {
+    "primary": "ingot-current-with-preregistered-process-feature",
+    "ablation": "ingot-current-without-process-feature",
+    "baselines": [
+      "seeded-random-search",
+      "sequential-maximin-space-filling",
+      "regularized-linear-response-surface",
+      "regularized-quadratic-response-surface"
+    ],
+    "linear_ridge": 0.001,
+    "quadratic_ridge": 0.01
+  },
+  "episodes": {
+    "count_per_evaluation_unit": 200,
+    "base_seed": 84221,
+    "initial_history_policy": "Unique random initial settings shared by every paired method; episodes already at target are excluded before any method runs."
+  },
+  "statistics": {
+    "primary_metric": "capped-additional-trials-to-specification",
+    "unsuccessful_trial_value": 13,
+    "bootstrap_samples": 5000,
+    "bootstrap_seed": 84223,
+    "bootstrap_unit": "episodes-within-each-fixed-dataset",
+    "confidence_level": 0.95,
+    "model_free_minimum_relative_reduction_ci_lower": 0.1,
+    "response_surface_noninferiority_margin": -0.1,
+    "minimum_success_rate_difference_ci_lower": -0.05,
+    "mechanism_ablation_relative_reduction_ci_lower": 0.0,
+    "mechanism_ablation_success_rate_difference_ci_lower": -0.05,
+    "mechanism_ablation_unit_margin": 0.0,
+    "response_surface_added_value_rule": "At least one linear or quadratic response-surface comparison must have a relative-trial-reduction 95% CI lower bound above zero."
+  },
+  "claim_boundaries": {
+    "core_pass": "The current method-selection policy passed this fixed public reaction-process acceptance for additional-result-query efficiency.",
+    "mechanism_pass": "The two preregistered low-dimensional interactions contributed on this fixed public acceptance only.",
+    "failure": "A failed gate remains not demonstrated and cannot be hidden by an aggregate or by another claim passing.",
+    "forbidden": [
+      "factory cycle-time reduction",
+      "universal superiority to DOE or response surfaces",
+      "validated physical law or causal mechanism",
+      "transfer to another process without local replay"
+    ]
+  }
+}
