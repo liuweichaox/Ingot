@@ -27,6 +27,8 @@ FEATURE_OPERATORS = frozenset(
         "minimum",
         "maximum",
         "standard_deviation",
+        "weighted_mean",
+        "weighted_standard_deviation",
         "affine",
     }
 )
@@ -89,10 +91,14 @@ class DerivedFeature:
         if not math.isfinite(self.intercept):
             raise ValueError(f"derived feature {name} intercept must be finite")
         coefficients = tuple(float(value) for value in self.coefficients)
-        if operator == "affine":
+        if operator in {
+            "affine",
+            "weighted_mean",
+            "weighted_standard_deviation",
+        }:
             if len(coefficients) != len(inputs):
                 raise ValueError(
-                    f"derived feature {name} affine coefficients must match its inputs"
+                    f"derived feature {name} {operator} coefficients must match its inputs"
                 )
             if any(not math.isfinite(value) for value in coefficients):
                 raise ValueError(
@@ -100,7 +106,8 @@ class DerivedFeature:
                 )
         elif coefficients:
             raise ValueError(
-                f"derived feature {name} coefficients are only valid for affine features"
+                f"derived feature {name} coefficients are only valid for affine or "
+                "weighted-composition features"
             )
         object.__setattr__(self, "name", name)
         object.__setattr__(self, "operator", operator)
@@ -202,6 +209,24 @@ def _evaluate(feature: DerivedFeature, inputs: list[np.ndarray]) -> np.ndarray:
         return stacked.max(axis=1)
     if operator == "standard_deviation":
         return stacked.std(axis=1)
+    if operator in {"weighted_mean", "weighted_standard_deviation"}:
+        if np.any(stacked < 0.0):
+            raise ValueError(
+                f"derived feature {feature.name} composition weights must be non-negative"
+            )
+        totals = stacked.sum(axis=1)
+        if np.any(totals < feature.epsilon):
+            raise ValueError(
+                f"derived feature {feature.name} composition weights must have "
+                "a positive total"
+            )
+        properties = np.asarray(feature.coefficients, dtype=float)
+        means = (stacked @ properties) / totals
+        if operator == "weighted_mean":
+            return means
+        centered = properties[None, :] - means[:, None]
+        variances = (stacked * np.square(centered)).sum(axis=1) / totals
+        return np.sqrt(np.maximum(variances, 0.0))
     if operator == "affine":
         return feature.intercept + stacked @ np.asarray(feature.coefficients, dtype=float)
     raise AssertionError(f"unhandled derived feature operator: {operator}")

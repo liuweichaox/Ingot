@@ -12,7 +12,7 @@ from .feature_transforms import DerivedFeature, expand_inputs
 from .loop import ObjectivePrediction, Suggestion
 
 
-MODEL_VERSION = "botorch-cross-validated-method-routing-v9"
+MODEL_VERSION = "botorch-cross-validated-method-routing-v10"
 MONOTONIC_PEARSON_FLOOR = 0.75
 MONOTONIC_SPEARMAN_FLOOR = 0.85
 RAW_LINEAR_RIDGE = 1e-3

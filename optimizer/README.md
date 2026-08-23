@@ -130,7 +130,7 @@ Content-Type: application/json
 
 响应包含推荐参数、每项目标的均值与 95% 区间、预计距规格距离、可行概率、采集值、模型版本和推荐理由。平台还会用历史实际条件的最小间距检查候选条件是否真的可区分；低于该分辨率的多个浮点值不会被包装成多个实验条件。通过检查后，平台才把整批结果创建为普通实验计划。
 
-`derived_features` 只能使用固定的数值运算符，并按声明顺序引用控制变量或此前的派生特征。运算在工程单位中进行，再由 `normalization_offset` 和 `normalization_scale` 归一化。服务拒绝任意 Python 表达式、未知输入、前向引用和旧式隐藏 `process_profile`。
+`derived_features` 只能使用固定的数值运算符，并按声明顺序引用控制变量或此前的派生特征。运算在工程单位中进行，再由 `normalization_offset` 和 `normalization_scale` 归一化。组成问题还可用带固定属性系数的 `weighted_mean` 和 `weighted_standard_deviation`；权重必须非负且总和为正。服务拒绝任意 Python 表达式、未知输入、前向引用和旧式隐藏 `process_profile`。
 
 当 `decision_intent` 为 `validate-hypothesis` 时，还必须提供 `hypothesis_variables`。平台只会在假设已经定义目标、预期方向和最小有效效应后发起该请求；服务不会把相关性当作因果结论。
 

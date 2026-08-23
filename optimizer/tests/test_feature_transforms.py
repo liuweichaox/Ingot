@@ -123,3 +123,65 @@ def test_affine_feature_rejects_mismatched_coefficients():
             inputs=("temperature", "pressure"),
             coefficients=(1.0,),
         )
+
+
+def test_weighted_composition_features_use_declared_properties():
+    expanded = expand_inputs(
+        np.array([[0.25, 0.75]]),
+        ["component_a", "component_b"],
+        [0.0, 0.0],
+        [1.0, 1.0],
+        [
+            DerivedFeature(
+                name="property_mean",
+                operator="weighted_mean",
+                inputs=("component_a", "component_b"),
+                coefficients=(1.0, 3.0),
+                normalization_scale=3.0,
+            ),
+            DerivedFeature(
+                name="property_dispersion",
+                operator="weighted_standard_deviation",
+                inputs=("component_a", "component_b"),
+                coefficients=(1.0, 3.0),
+                normalization_scale=2.0,
+            ),
+        ],
+    )
+
+    assert expanded.shape == (1, 4)
+    assert expanded[0, 2] == pytest.approx(2.5 / 3.0)
+    assert expanded[0, 3] == pytest.approx(np.sqrt(0.75) / 2.0)
+
+
+def test_weighted_composition_features_reject_invalid_weights_and_coefficients():
+    with pytest.raises(ValueError, match="coefficients must match"):
+        DerivedFeature(
+            name="property_mean",
+            operator="weighted_mean",
+            inputs=("component_a", "component_b"),
+            coefficients=(1.0,),
+        )
+
+    feature = DerivedFeature(
+        name="property_mean",
+        operator="weighted_mean",
+        inputs=("component_a", "component_b"),
+        coefficients=(1.0, 3.0),
+    )
+    with pytest.raises(ValueError, match="non-negative"):
+        expand_inputs(
+            np.array([[0.0, 0.0]]),
+            ["component_a", "component_b"],
+            [-1.0, 0.0],
+            [1.0, 1.0],
+            [feature],
+        )
+    with pytest.raises(ValueError, match="positive total"):
+        expand_inputs(
+            np.array([[0.0, 0.0]]),
+            ["component_a", "component_b"],
+            [0.0, 0.0],
+            [1.0, 1.0],
+            [feature],
+        )

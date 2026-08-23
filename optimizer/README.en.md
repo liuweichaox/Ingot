@@ -83,7 +83,9 @@ It returns recommended parameters, objective means and 95% intervals, predicted 
 
 Derived operators run on engineering-unit controls and are normalized with the
 declared offset and scale. Inputs may reference campaign controls or an earlier
-derived feature. Arbitrary Python expressions, unknown inputs, forward
+derived feature. Composition problems may also use `weighted_mean` and
+`weighted_standard_deviation` with fixed property coefficients; weights must
+be non-negative and have a positive total. Arbitrary Python expressions, unknown inputs, forward
 references, and legacy hidden `process_profile` switches are rejected.
 
 For `validate-hypothesis`, the campaign must also provide `hypothesis_variables`. The platform sends this intent only after an engineer defines the outcome, expected direction, and minimum meaningful effect; the service never treats an association as a causal conclusion.
