@@ -3,8 +3,8 @@
     <img src="apps/website/public/brand/ingot-lockup.svg" alt="Ingot" width="340">
   </a>
 
-  <p><strong>开源工艺追因与优化系统</strong></p>
-  <p>少做无效实验，更快找到达标工艺。</p>
+  <p><strong>Open-source industrial process experimentation / 开源工业工艺实验系统</strong></p>
+  <p>把现场运行数据变成可审计证据、人工批准的实验和经过验证的工艺知识。</p>
 
   [![CI](https://github.com/liuweichaox/Ingot/actions/workflows/ci.yml/badge.svg)](https://github.com/liuweichaox/Ingot/actions/workflows/ci.yml)
   [![License: MIT](https://img.shields.io/badge/license-MIT-E8AD56.svg)](LICENSE)
@@ -12,10 +12,18 @@
   [![Python 3.12](https://img.shields.io/badge/Python-3.12-3776AB.svg)](https://www.python.org/)
   [![BoTorch](https://img.shields.io/badge/optimizer-BoTorch-5FD4C8.svg)](https://botorch.org/)
 
-  [官网](https://ingotstack.com) · [文档](https://docs.ingotstack.com/zh) · [快速开始](docs/getting-started.md) · [报告问题](https://github.com/liuweichaox/Ingot/issues)
+  [三分钟演示](#三分钟看懂-ingot) · [工作原理](#一条完整闭环) · [快速开始](#快速开始) · [验证结果](#现在能做什么) · [参与讨论](https://github.com/liuweichaox/Ingot/discussions)
 
   简体中文 · [English](README.en.md)
 </div>
+
+![Ingot：从真实运行到工程证据、决策与验证](apps/website/public/og.png)
+
+## Ingot 是什么
+
+Ingot 是一套把工业现场运行数据与质量结果转化为可审计实验观察，并在安全边界和人工审批下生成、验证与沉淀工艺建议的开源企业软件。
+
+系统沿同一条证据链连接现场采集、运行识别、质量结果、工艺追因、实验设计和操作域验证。Optimizer 是可替换的无状态数值服务；Agent 只负责查询、组织和解释已授权事实，不直接控制设备，也不替工程师批准实验。
 
 ## 三分钟看懂 Ingot
 
@@ -34,9 +42,11 @@ npm --prefix apps/platform run demo
 
 ## 为什么做 Ingot
 
-Ingot 只围绕一个结果建设：
+Ingot 围绕一条可复核的工程链路建设：
 
-> **把每次真实运行变成可比较、可验证的工程证据，帮助工艺工程师减少无效实验，更快找到达到目标的工艺条件。**
+> **把每次真实运行变成可比较、可验证的工程证据，并把下一次实验的依据、约束、审批和结果保留在同一条记录链上。**
+
+项目保留的目标表述是：**把每次真实运行变成可比较、可验证的工程证据，帮助工艺工程师减少无效实验，更快找到达到目标的工艺条件。** 这是需要由公开回放和真实项目持续验证的目标，不是对所有工艺和算法的既成效果承诺。
 
 传统工艺研发中，大量判断依赖个人记忆、零散表格和不可复现的试验顺序。即使设备已经产生数据，生产条件、过程曲线和质量结果也常常无法对应到同一次真实运行，计算机因此无法可靠地参与工程判断。
 
@@ -97,6 +107,17 @@ Ingot 不把某一种“先进算法”固定成所有问题的答案：
 
 这些模块围绕同一条证据链工作，不建立互相冲突的平行业务记录。
 
+## 和已有工具的边界
+
+| 类别 | Ingot 使用它解决什么 | Ingot 不是什么 |
+|---|---|---|
+| MES、SCADA、Historian | 接收运行、设备和过程事实 | 不替代生产执行、监控或实时控制 |
+| LIMS、QMS、ELN | 关联检验结果、审核和研发上下文 | 不替代完整样品、合规或文档管理 |
+| DOE、响应面、贝叶斯优化 | 在统一约束和证据快照下选择实验方法 | 不声称某一种算法适合所有工艺 |
+| AI Agent | 查询、组织和解释已授权事实 | 不直接写入参数、批准实验或控制设备 |
+
+历史回放或方法准入不通过时，Optimizer 可以退回传统 DOE 或正则化响应面。公开冻结结果用于界定声明边界，而不是替代真实项目验证。
+
 ## 现在能做什么
 
 仓库已实现从现场数据到下一项实验建议的主要路径：
@@ -107,7 +128,15 @@ Ingot 不把某一种“先进算法”固定成所有问题的答案：
 - 根据已完成实验给出下一项具体参数建议，并说明它是沿当前稳定趋势继续尝试，还是在探索可能更好的参数组合；
 - 保留输入、版本、来源、约束和实验结果，使建议可以复核和重放。
 
-450 次冻结配对回放显示，上一候选策略确实比随机试错节省实验，但在 Alkox 和 P3HT 上选了过于复杂的判断方式，分别比“沿当前稳定趋势继续试”多用了 32.08% 和 68.36% 的追加实验，因此核心验收未通过。当前后继实现先采用稳定趋势，只有连续多次数据都证明存在拐点或参数组合效应时才切换；旧验收结果不再代表当前算法，新的未见数据验收尚未完成。专业比较方法、置信区间和失败分项见[优化器实验效率验证](tools/public-validation/README.md)；真实试点验收见[场景验证](docs/rollout.md)。
+### 当前证据边界
+
+| 冻结评估 | 观察结果 | 可以得出的结论 |
+|---|---|---|
+| 450 次开发数据配对回放 | 优于随机和最大最小空间填充；总体结果与正则化二次响应面相同；未在所有数据集上不劣于线性响应面 | 软件与响应面建模链路可复现；核心选点优势尚未证明 |
+| 400 次未见数据回放 | 总体成功率 85.5%；优于所测线性和二次响应面，但未通过相对随机与最大最小空间填充的预注册门槛 | 不能据此声称对经典方法具有普遍优势 |
+| 预注册过程特征消融 | 没有显示稳定的增量贡献 | 机理特征贡献尚未证明 |
+
+完整比较方法、置信区间和失败分项见[优化器实验效率验证](tools/public-validation/README.md)；真实试点验收见[场景验证](docs/rollout.md)。
 
 ## 系统架构
 
@@ -128,7 +157,7 @@ Platform 是厂内业务记录源；Optimizer 是无状态数值服务；Agent �
 
 ## 快速开始
 
-使用完整 Docker Compose 栈只需要 Git、Docker Engine 或 Docker Desktop，以及 Docker Compose v2。只有从源码开发时才需要 .NET SDK 10、Node.js 22.22+ 和 uv 0.11.32。
+使用完整 Docker Compose 栈只需要 Git、Docker Engine 或 Docker Desktop，以及 Docker Compose v2。只有从源码开发时才需要 .NET SDK 10、Node.js 22.22+ 和 uv 0.12.5。
 
 如果只想先查看界面和完整模拟业务数据，可以直接使用[模拟数据快速预览](docs/getting-started.md#模拟数据快速预览)；准备真实试点或生产部署时再使用下面的完整 Compose 栈。
 
@@ -233,7 +262,7 @@ scripts/           验证与运维脚本
 - [x] 候选原因、假设、实验和工艺操作域使用同一研发记录主线
 - [x] 受约束 GP/BO 建议、待执行点避让和安全冷启动
 - [x] 用明确许可的公开制造数据固化可复现基准和声明边界
-- [ ] 冻结并运行未参与开发的公开物理实验评估、强基线比较和机理特征消融
+- [x] 完成一组未参与开发的公开物理实验评估、强基线比较和机理特征消融，并保留“尚未证明”的结果
 - [ ] 公布真实制造历史项目的无泄漏逐次回放
 - [ ] 完成新项目影子建议和工程师拒绝原因分析
 - [ ] 完成受控在线实验并公布预注册结果
@@ -244,6 +273,8 @@ scripts/           验证与运维脚本
 近期先证明历史证据装置可信，中期再开放 Agent 协议，长期才争取形成开放规范。路线图以真实证据和验收闸门为准，详细顺序见[发展规划](docs/project-plan.md)。
 
 ## 参与贡献
+
+如果你也在研究工业数据如何进入可审计的实验闭环，可以 Star 本仓库以关注后续验证结果，并通过 [Discussions](https://github.com/liuweichaox/Ingot/discussions) 分享工艺场景、数据契约或方法建议。
 
 欢迎贡献设备适配、统计方法、实验设计、优化算法、真实回放、测试、文档和工艺知识。开始前请阅读[贡献指南](CONTRIBUTING.md)、[行为准则](CODE_OF_CONDUCT.md)和[安全策略](SECURITY.md)。
 
