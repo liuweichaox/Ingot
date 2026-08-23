@@ -22,12 +22,15 @@ benchmark = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(benchmark)
 
 
-def test_acceptance_fixtures_pass_preregistered_quality_gates():
+def test_acceptance_fixtures_pass_quality_gates_but_current_candidate_is_new():
     protocol = benchmark.load_protocol()
     report = benchmark.integrity_report(protocol)
 
     assert report["status"] == "frozen"
-    assert report["full_evaluation_allowed"] is True
+    assert report["full_evaluation_allowed"] is False
+    assert report["candidate_evaluation_fingerprint"] != protocol["freeze"][
+        "evaluation_fingerprint"
+    ]
     assert report["evaluation_unit_count"] == 3
     assert {
         name: (item["rows"], item["control_count"])
@@ -77,9 +80,10 @@ def test_acceptance_protocol_keeps_fixed_baselines_budgets_and_gates():
     }
 
 
-def test_acceptance_protocol_is_frozen_and_refuses_tampering():
+def test_old_acceptance_protocol_refuses_the_successor_and_tampering():
     protocol = benchmark.load_protocol()
-    benchmark.require_frozen(protocol)
+    with pytest.raises(RuntimeError, match="fingerprint does not match"):
+        benchmark.require_frozen(protocol)
 
     draft = json.loads(json.dumps(protocol))
     draft["status"] = "draft"

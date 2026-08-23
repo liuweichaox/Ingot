@@ -13,7 +13,11 @@ from ingot_optimizer import (
     Variable,
     build_optimizer,
 )
-from ingot_optimizer.botorch_engine import _reach_specification_scores
+from ingot_optimizer.botorch_engine import (
+    _feature_representation_is_admitted,
+    _has_one_standard_error_improvement,
+    _reach_specification_scores,
+)
 
 
 def safe_campaign():
@@ -68,7 +72,7 @@ def test_five_observation_policy_rejects_attractive_unsafe_candidate():
     assert suggestions[0].recommended_params["x"] == pytest.approx(0.45)
 
 
-def test_reach_specification_scores_fall_back_to_dominant_linear_response():
+def test_reach_specification_scores_keep_linear_when_quadratic_lacks_evidence():
     observed = np.asarray(
         [
             [0.0, 0.2],
@@ -91,7 +95,7 @@ def test_reach_specification_scores_fall_back_to_dominant_linear_response():
         np.ones(len(candidates)),
     )
 
-    assert policy == "dominant-linear-response"
+    assert policy == "one-standard-error-linear-response"
     assert int(np.argmax(scores)) == 0
 
 
@@ -125,11 +129,11 @@ def test_reach_specification_scores_use_raw_quadratic_without_features():
         np.ones(len(candidates)),
     )
 
-    assert policy == "space-filling-quadratic-response"
+    assert policy == "evidence-quadratic-response"
     assert int(np.argmax(scores)) == 1
 
 
-def test_reach_specification_scores_cross_validate_declared_features():
+def test_feature_representation_admission_requires_paired_predictive_evidence():
     observed = np.asarray(
         [
             [0.0, 0.0],
@@ -148,23 +152,13 @@ def test_reach_specification_scores_cross_validate_declared_features():
     observed_augmented = np.column_stack(
         [observed, np.abs(observed[:, 0] - observed[:, 1])]
     )
-    candidate_augmented = np.column_stack(
-        [candidates, np.abs(candidates[:, 0] - candidates[:, 1])]
-    )
-
-    scores, policy = _reach_specification_scores(
+    admitted = _feature_representation_is_admitted(
         observed,
         distance,
-        candidates,
-        np.asarray([0.7, 0.6, 0.7]),
-        observed_augmented_points=observed_augmented,
-        candidate_augmented_points=candidate_augmented,
+        observed_augmented,
     )
 
-    assert policy == (
-        "space-filling-cross-validated-mechanism-quadratic-response"
-    )
-    assert int(np.argmax(scores)) == 0
+    assert admitted is True
 
 
 def test_reach_specification_scores_reject_unhelpful_declared_features():
@@ -182,7 +176,6 @@ def test_reach_specification_scores_reject_unhelpful_declared_features():
         ]
     )
     distance = observed[:, 0] + observed[:, 1]
-    candidates = np.asarray([[0.1, 0.1], [0.5, 0.5], [0.9, 0.9]])
     unhelpful = np.asarray(
         [
             [0, 1, 0, 1, 0, 1, 0],
@@ -196,56 +189,37 @@ def test_reach_specification_scores_reject_unhelpful_declared_features():
             [0, 0, 1, 1, 1, 0, 0],
         ]
     )
-    candidate_unhelpful = np.asarray(
-        [[1, 0, 1, 0, 1, 0, 1], [0, 1, 0, 1, 0, 1, 0], [1, 1, 0, 0, 1, 0, 0]]
-    )
-
-    scores, policy = _reach_specification_scores(
+    admitted = _feature_representation_is_admitted(
         observed,
         distance,
-        candidates,
-        np.ones(len(candidates)),
-        observed_augmented_points=np.column_stack([observed, unhelpful]),
-        candidate_augmented_points=np.column_stack(
-            [candidates, candidate_unhelpful]
-        ),
+        np.column_stack([observed, unhelpful]),
     )
 
-    assert policy == "response-consensus-quadratic-response"
-    assert int(np.argmax(scores)) == 0
+    assert admitted is False
 
 
 def test_reach_specification_scores_require_predictive_gain_with_enough_observations():
     x = np.linspace(0.0, 1.0, 9)
     observed = np.column_stack([x, np.roll(x, 3)])
     distance = (x - 0.5) ** 2 + 0.1 * np.sin(8.0 * np.pi * x)
-    candidates = np.column_stack(
-        [np.linspace(0.01, 0.99, 65), np.linspace(0.99, 0.01, 65)]
-    )
     observed_augmented = np.column_stack(
         [observed, observed[:, 0] * observed[:, 1]]
     )
-    candidate_augmented = np.column_stack(
-        [candidates, candidates[:, 0] * candidates[:, 1]]
-    )
 
-    scores, policy = _reach_specification_scores(
+    admitted = _feature_representation_is_admitted(
         observed,
         distance,
-        candidates,
-        np.full(len(candidates), 0.5),
-        observed_augmented_points=observed_augmented,
-        candidate_augmented_points=candidate_augmented,
+        observed_augmented,
     )
 
-    assert policy == "space-filling-quadratic-response"
-    assert np.isfinite(scores).all()
+    assert admitted is False
 
 
 def test_reach_specification_scores_admit_gp_only_after_six_observations_per_dimension():
-    x = np.linspace(0.0, 1.0, 12)
-    observed = np.column_stack([x, np.roll(x, 4)])
-    distance = (x - 0.5) ** 2 + 0.1 * np.sin(8.0 * np.pi * x)
+    observed = np.random.default_rng(0).random((12, 2))
+    distance = (observed[:, 0] - 0.3) ** 2 + 2.0 * (
+        observed[:, 1] - 0.7
+    ) ** 2
     candidates = np.asarray([[0.05, 0.5], [0.5, 0.5], [0.95, 0.5]])
 
     _, before_policy = _reach_specification_scores(
@@ -261,11 +235,11 @@ def test_reach_specification_scores_admit_gp_only_after_six_observations_per_dim
         np.asarray([0.7, 0.6, 0.7]),
     )
 
-    assert before_policy == "space-filling-quadratic-response"
-    assert admitted_policy == "gp-space-filling-quadratic-response"
+    assert before_policy == "evidence-quadratic-response"
+    assert admitted_policy == "nonlinear-evidence-gp-probability"
 
 
-def test_reach_specification_scores_reject_euclidean_maximin_above_three_dimensions():
+def test_reach_specification_scores_do_not_infer_complexity_from_dimension():
     rng = np.random.default_rng(42)
     observed = rng.random((12, 4))
     distance = (
@@ -282,5 +256,31 @@ def test_reach_specification_scores_reject_euclidean_maximin_above_three_dimensi
         np.full(len(candidates), 0.5),
     )
 
-    assert "space-filling" not in policy
-    assert policy.endswith("quadratic-response")
+    assert policy == "one-standard-error-linear-response"
+
+
+def test_one_standard_error_rule_rejects_uncertain_gain():
+    reference = np.asarray([4.0, 1.0, 4.0, 1.0])
+    candidate = np.asarray([1.0, 4.0, 1.0, 4.0])
+
+    assert _has_one_standard_error_improvement(reference, candidate) is False
+    assert _has_one_standard_error_improvement(
+        reference, np.asarray([1.0, 0.25, 1.0, 0.25])
+    ) is True
+
+
+def test_reach_specification_scores_keep_linear_when_models_disagree_without_evidence():
+    rng = np.random.default_rng(1)
+    observed = rng.random((8, 2))
+    distance = observed[:, 0] + 0.2 * rng.normal(size=8)
+    candidates = np.random.default_rng(3).random((5, 2))
+
+    scores, policy = _reach_specification_scores(
+        observed,
+        distance,
+        candidates,
+        np.ones(len(candidates)),
+    )
+
+    assert policy == "one-standard-error-linear-response"
+    assert int(np.argmax(scores)) == 0

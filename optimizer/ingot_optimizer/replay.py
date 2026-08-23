@@ -347,6 +347,7 @@ def _historical_optimizer_run(
                 "revealed_history_index": history_index,
                 "run_id": history[history_index].get("run_id"),
                 "model_version": suggestion.model_version,
+                "recommendation_rationale": suggestion.rationale,
                 "recommended_params": suggestion.recommended_params,
                 "nearest_historical_candidate_distance": float(
                     np.linalg.norm(

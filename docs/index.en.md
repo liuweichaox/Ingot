@@ -48,7 +48,7 @@ Choose an entry by role, then follow the links into method detail. You do not ne
 
 ## Current facts
 
-The code covers the main business path across acquisition, run reconstruction, comparable-run analysis, quality linkage, candidate causes, controlled experiments, and sequential recommendations, with automated tests. Public physical-experiment replay has confirmed fewer additional queries than random search and maximin; current work focuses on automatically falling back to an applicable linear or quadratic response surface. Exact figures, failed subgroups, and confidence intervals are maintained only in [Public-data experiment-efficiency validation](https://github.com/liuweichaox/Ingot/blob/main/tools/public-validation/README.en.md).
+The code covers the main business path across acquisition, run reconstruction, comparable-run analysis, quality linkage, candidate causes, controlled experiments, and next-experiment recommendations, with automated tests. Public physical-experiment replay confirms that the system finds passing settings faster than random trial and error. The unresolved question is whether, with limited data, it can reliably decide to continue along the observed trend or explore a possible best region and parameter interaction. Exact algorithm names, figures, failed subgroups, and confidence intervals are maintained only in [Public-data experiment-efficiency validation](https://github.com/liuweichaox/Ingot/blob/main/tools/public-validation/README.en.md).
 
 Current repository implementation snapshot:
 

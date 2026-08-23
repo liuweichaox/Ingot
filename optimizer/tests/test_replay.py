@@ -3,6 +3,7 @@
 import pytest
 
 from ingot_optimizer import Campaign, Objective, Variable
+from ingot_optimizer.botorch_engine import MODEL_VERSION
 from ingot_optimizer.replay import (
     SyntheticTruthResult,
     replay_history_pool,
@@ -152,7 +153,12 @@ def test_history_pool_switches_to_botorch_production_engine_after_three_observat
         if step["kind"] == "optimizer-selection"
     ]
     assert model_versions
-    assert all(version.startswith("botorch-") for version in model_versions)
+    assert all(version == MODEL_VERSION for version in model_versions)
+    assert all(
+        step["recommendation_rationale"]
+        for step in result["step_traces"][0]
+        if step["kind"] == "optimizer-selection"
+    )
     assert result["calibration"][0]["prediction_interval_checks"] > 0
     assert result["response_surface"]["runs"] == 1
     assert len(result["response_surface_selected_history_indices"]) == 1

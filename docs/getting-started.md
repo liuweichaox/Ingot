@@ -8,8 +8,8 @@
 
 | 目标 | 建议路径 | 结果边界 |
 |---|---|---|
-| 先评估界面和业务流程 | 使用下方[模拟数据快速预览](#模拟数据快速预览) | 只能验证页面和流程，不能证明真实工艺收益 |
-| 不接真实工厂，复现优化方法链路 | 使用下方[公开数据实验效率验证](#公开数据实验效率验证) | 验证数据检查、分类隔离、历史池回放、基线比较和声明边界，不证明工厂收益 |
+| 先评估界面和业务流程 | 使用下方[模拟数据快速预览](#模拟数据快速预览) | 验证页面和流程；真实工艺收益按现场执行结果计量 |
+| 不接真实工厂，复现优化方法链路 | 使用下方[公开数据实验效率验证](#公开数据实验效率验证) | 验证数据检查、分类隔离、历史池回放和基线比较；工厂收益使用该工厂的实验数和周期单独验收 |
 | 准备受控试点 | 从[准备环境](#1-准备环境)开始，按顺序完成一次代表性运行 | 需要真实或具有代表性的现场数据 |
 | 准备生产部署 | 先读[生产架构](production-architecture.md)，再执行[部署运维](deployment.md)中的验收 | 必须独立完成备份恢复、故障、容量、告警和连续观察验收 |
 | 参与开发 | 完成仓库安装后运行 `./scripts/verify.sh` | 适用于代码贡献，不替代现场验收 |
@@ -42,7 +42,7 @@ npm --prefix apps/platform run demo
 ./scripts/verify-optimizer-acceptance.sh
 ```
 
-当前冻结结果相对随机搜索和 maximin 通过，也不劣于二次响应面；但 Alkox 和 P3HT 分项明显落后于线性响应面，因此总体方法路由仍未通过。完整结果见 [`acceptance-results.json`](https://github.com/liuweichaox/Ingot/blob/main/tools/public-validation/acceptance-results.json)，完整判定规则、数据许可和分项结果见[公开数据实验效率验证](https://github.com/liuweichaox/Ingot/blob/main/tools/public-validation/README.md)。公开数据可以验证软件与方法链路是否可复现，不能证明另一个工厂可以获得相同收益。
+保留的冻结结果属于上一候选：它比随机试错更快，但在 Alkox 和 P3HT 上没有采用更简单、更有效的稳定趋势，反而多做了实验，因此自动判断下一步方法的验收未通过。当前算法已经修改，检查命令只确认旧数据和旧结果仍可复现，不会把它们算成当前算法的成绩。完整结果见 [`acceptance-results.json`](https://github.com/liuweichaox/Ingot/blob/main/tools/public-validation/acceptance-results.json)，专业判定规则、数据许可和分项结果见[公开数据实验效率验证](https://github.com/liuweichaox/Ingot/blob/main/tools/public-validation/README.md)。另一个工厂是否获得相同收益，使用该工厂实际执行的实验数、达标率和周期按同一协议单独验收。
 
 ## 1. 准备环境
 

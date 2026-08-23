@@ -228,7 +228,7 @@ def test_service_runs_batch_multiobjective_spec_ensemble_with_declared_features(
     assert response.status_code == 200, response.text
     payload = response.json()
     assert payload["model_version"] == (
-        "botorch-evidence-routed-exploration-2026-08-23"
+        "conservative-target-ranking-selector-2026-08-23"
     )
     assert payload["feature_set_id"] == "optical-lens-molding-demo"
     assert payload["derived_feature_count"] == 2

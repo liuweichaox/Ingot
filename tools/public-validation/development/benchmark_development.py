@@ -29,7 +29,7 @@ def load_benchmark():
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--episodes", type=int, default=25)
+    parser.add_argument("--episodes", type=int, default=150)
     parser.add_argument("--bootstrap-samples", type=int, default=1000)
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()

@@ -67,6 +67,9 @@ The short tagline is a communication shorthand for the core value, not a separat
 
 Public documentation uses a formal, direct, and verifiable engineering voice:
 
+- Home, getting-started, FAQ, and interface copy first state what the system recommends, why, and with what risk; they do not require engineers to understand model names. For example, say “continue along the stable observed trend” before introducing “linear response surface.”
+- Algorithm, architecture, validation-protocol, and development documents retain precise terminology, formal conditions, and statistical gates. Explain a term in plain language on first use rather than replacing technical precision with vague copy.
+- The same fact may have layered wording: user documentation explains business meaning, while technical documentation supplies model names and decision rules. Both layers retain the same claim strength.
 - State the object, capability, and result before implementation detail. Do not replace a concrete calculation or workflow with anthropomorphic terms such as *thinking*, *understanding*, or *brain*.
 - Distinguish implemented capability, test result, development-stage evidence, external validation, and roadmap work. Planned work is never written as current behavior.
 - Use `AI`, `LLM`, Gaussian process, and Bayesian optimization only to identify a concrete technical responsibility, not as effect adjectives.

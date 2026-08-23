@@ -26,6 +26,14 @@ if ! command -v uv >/dev/null 2>&1; then
   echo "需要 uv 才能执行 optimizer 与现场模拟器测试。" >&2
   exit 1
 fi
+uv_command=(uv)
+if [[ "$(uv --version)" != "uv 0.11.32" ]]; then
+  if ! command -v uvx >/dev/null 2>&1; then
+    echo "需要 uv 0.11.32，或可用 uvx 启动锁定版本。" >&2
+    exit 1
+  fi
+  uv_command=(uvx --from uv==0.11.32 uv)
+fi
 
 verification_temp="$(mktemp -d)"
 dotnet_artifacts="$verification_temp/dotnet-artifacts"
@@ -90,9 +98,9 @@ npm --prefix "$docs_app" audit --omit=dev
 
 optimizer_environment="$verification_temp/optimizer-venv"
 UV_PROJECT_ENVIRONMENT="$optimizer_environment" \
-  uv sync --project optimizer --extra service --group dev --locked
+  "${uv_command[@]}" sync --project optimizer --extra service --group dev --locked
 UV_PROJECT_ENVIRONMENT="$optimizer_environment" \
-  uv run --project optimizer --locked pytest
+  "${uv_command[@]}" run --project optimizer --locked pytest
 
 for script in scripts/*.sh deploy/*.sh; do
   bash -n "$script"

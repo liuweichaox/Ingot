@@ -104,10 +104,10 @@ The repository implements the main path from field data to a next-experiment rec
 - link equipment, product, process specification, material, tooling, process trajectory, and inspection outcomes to the same real run;
 - compare out-of-spec and passing runs on one screen, with important differences, missing data, and provenance visible;
 - turn candidate causes into executable experiments with controls, repetitions, blocks, and safety boundaries;
-- select among linear response surfaces, quadratic response surfaces, and Bayesian optimization from visible evidence, then recommend the most valuable next experiment;
+- recommend concrete settings for the next experiment from completed runs and explain whether the proposal follows the stable observed trend or explores a potentially better parameter combination;
 - preserve inputs, versions, sources, constraints, and results so every recommendation can be reviewed and replayed.
 
-Across 450 frozen paired replays, the current policy reduces additional experiments by 49.24% versus random search and 62.96% versus maximin, with no dataset regression. It nevertheless uses 32.08% and 68.36% more experiments than the linear response surface on Alkox and P3HT and matches the quadratic surface exactly, so core acceptance fails. The implementation establishes structured selection over blind exploration, but not routing value over an applicable simple response surface. Full data, subgroup failures, confidence intervals, and rules live in [Optimizer experiment-efficiency validation](tools/public-validation/README.en.md). See [Scenario validation](docs/rollout.en.md) for real-pilot acceptance.
+Across 450 frozen paired replays, the previous candidate did save experiments versus random trial and error, but on Alkox and P3HT it chose an unnecessarily complex interpretation and used 32.08% and 68.36% more additional experiments than simply following the stable observed trend. Core acceptance therefore failed. The successor starts from the stable trend and changes course only after repeated data support a turning point or parameter interaction. The old result no longer represents the current algorithm, whose new unseen-data acceptance is not complete. See [Optimizer experiment-efficiency validation](tools/public-validation/README.en.md) for formal comparators, confidence intervals, and failed subgroups, and [Scenario validation](docs/rollout.en.md) for real-pilot acceptance.
 
 ## Architecture
 

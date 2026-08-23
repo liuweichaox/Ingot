@@ -8,8 +8,8 @@ You do not need to complete every step before seeing the system. Start with the 
 
 | Goal | Recommended path | Boundary |
 |---|---|---|
-| Evaluate the UI and workflow | Use the [simulated-data preview](#simulated-data-preview) below | Validates software flow only; it does not prove process benefit |
-| Reproduce the optimization method without a real factory | Use the [public-data offline validation](#public-data-offline-validation) below | Validates data checks, categorical isolation, historical-pool replay, baseline comparison, and claim boundaries; it does not prove factory benefit |
+| Evaluate the UI and workflow | Use the [simulated-data preview](#simulated-data-preview) below | Validates software flow; real process benefit is measured from field execution |
+| Reproduce the optimization method without a real factory | Use the [public-data offline validation](#public-data-offline-validation) below | Validates data checks, categorical isolation, historical-pool replay, and baseline comparison; factory benefit is accepted separately using that factory's experiment count and elapsed time |
 | Prepare a controlled pilot | Start with [Prepare the environment](#1-prepare-the-environment) and complete one representative run | Requires real or representative field data |
 | Prepare production deployment | Read [Production architecture](production-architecture.en.md), then execute the acceptance steps in [Deployment](deployment.en.md) | Requires independent backup, failure, capacity, alert-delivery, and continuous-observation evidence |
 | Contribute code | Install the repository and run `./scripts/verify.sh` | Applies to code contribution, not field acceptance |
@@ -42,7 +42,7 @@ This path requires Git and uv 0.11.32 but no database, equipment, or factory dat
 ./scripts/verify-optimizer-acceptance.sh
 ```
 
-The current frozen result passes against random search and maximin and is noninferior to the quadratic surface. It materially trails the linear surface on Alkox and P3HT, however, so overall method routing still fails. See [`acceptance-results.json`](https://github.com/liuweichaox/Ingot/blob/main/tools/public-validation/acceptance-results.json) and [Public-data experiment-efficiency validation](https://github.com/liuweichaox/Ingot/blob/main/tools/public-validation/README.en.md) for the complete rule, license, and per-dataset result. Public data can reproduce the software and method path; it cannot prove the same benefit for another factory.
+The retained frozen result belongs to the previous candidate. It found passing settings faster than random trial and error, but on Alkox and P3HT it failed to use the simpler, more effective stable trend and therefore ran extra experiments. Automatic method selection failed acceptance. The algorithm has since changed; this check confirms only that the old data and result remain reproducible and does not count them as current performance. See [`acceptance-results.json`](https://github.com/liuweichaox/Ingot/blob/main/tools/public-validation/acceptance-results.json) and [Public-data experiment-efficiency validation](https://github.com/liuweichaox/Ingot/blob/main/tools/public-validation/README.en.md) for formal decision rules, licenses, and subgroup results. Whether another factory receives the same benefit is accepted separately under the same protocol using that factory's executed experiment count, success rate, and elapsed time.
 
 ## 1. Prepare the environment
 

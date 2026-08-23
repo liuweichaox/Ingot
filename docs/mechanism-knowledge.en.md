@@ -505,7 +505,7 @@ npm --prefix apps/platform test
 npm --prefix apps/platform run test:e2e
 ```
 
-These checks prove that the software path and safety-selection rules are reproducible. They do not prove that a mechanism is true in a real factory or that real experiments have already been reduced.
+These checks establish that the software path and safety-selection rules are reproducible. Controlled interventions test whether a mechanism holds in a real factory; preregistered comparisons then measure experiment reduction from every executed experiment, success rate, and elapsed time.
 
 ### P0: claim kernel and relational storage
 
