@@ -1,3 +1,4 @@
+// 定义工艺研发跨层契约；只承载状态、请求和证据快照，不包含存储或执行逻辑。
 using System.Text.Json;
 using Ingot.Contracts.Analytics;
 using Ingot.Contracts.ResearchAssets;
@@ -614,6 +615,22 @@ public sealed record ResearchMethodAdmissionEvidence
     public string ValidationPolicyVersion { get; init; } = "not-evaluated";
     public Guid HistoricalReplayReportId { get; init; }
     public required string HistoricalReplayReportHash { get; init; }
+    public IReadOnlyList<string> BaselineMethods { get; init; } = [];
+    public IReadOnlyList<string> OptimizerModelVersions { get; init; } = [];
+    public string MechanismKnowledgeSnapshotHash { get; init; } = "none";
+    public string MechanismModelSnapshotHash { get; init; } = "none";
+    public DateTimeOffset AssessedAt { get; init; }
+}
+
+public sealed record ResearchMethodAdmissionAssessment
+{
+    public string ValidationPolicyVersion { get; init; } = "not-evaluated";
+    public bool Eligible { get; init; }
+    public IReadOnlyList<string> Failures { get; init; } = [];
+    public IReadOnlyList<string> FallbackMethods { get; init; } =
+        ["正则化响应面", "适用的传统 DOE"];
+    public Guid? HistoricalReplayReportId { get; init; }
+    public string? HistoricalReplayReportHash { get; init; }
     public IReadOnlyList<string> BaselineMethods { get; init; } = [];
     public IReadOnlyList<string> OptimizerModelVersions { get; init; } = [];
     public string MechanismKnowledgeSnapshotHash { get; init; } = "none";

@@ -1,3 +1,4 @@
+// 负责把研发观察转为受门禁约束的实验建议；不绕过历史回放、在线准入或人工审批边界。
 using System.Security.Cryptography;
 using System.Text.Json;
 using Ingot.Contracts.ProcessResearch;
@@ -6,6 +7,9 @@ using Ingot.Platform.Application.ResearchAssets;
 
 namespace Ingot.Platform.Application.ProcessResearch;
 
+/// <summary>
+/// 评估当前方法准入，并在证据门槛通过后生成可追溯的序贯实验设计。
+/// </summary>
 public sealed class ResearchExperimentOptimizer(
     IProcessResearchStore store,
     IProcessOptimizerClient optimizerClient,
@@ -17,6 +21,32 @@ public sealed class ResearchExperimentOptimizer(
     IMechanismKnowledgeStore? mechanismKnowledgeStore = null,
     IResearchAssetStore? researchAssetStore = null)
 {
+    public async Task<ResearchMethodAdmissionAssessment> AssessMethodAdmissionAsync(
+        Guid projectId,
+        CancellationToken ct = default)
+    {
+        var project = await store.GetProjectAsync(projectId, ct).ConfigureAwait(false)
+            ?? throw new ProcessResearchRuleException("研发项目不存在。");
+        var mechanismKnowledge = mechanismKnowledgeStore is null
+            ? new AppliedMechanismKnowledge([], [], [], [])
+            : MechanismKnowledgeExperimentPolicy.Select(
+                project,
+                await mechanismKnowledgeStore.ListClaimsAsync(projectId, ct).ConfigureAwait(false),
+                await mechanismKnowledgeStore.ListConflictsAsync(projectId, ct).ConfigureAwait(false));
+        var mechanismModels = researchAssetStore is null
+            ? new AppliedMechanismModels([], [])
+            : MechanismModelExperimentPolicy.Select(
+                project,
+                await researchAssetStore.ListMechanismModelsAsync(ct).ConfigureAwait(false),
+                await researchAssetStore.ListMechanismFusionsAsync(ct).ConfigureAwait(false));
+        return await AssessMethodAdmissionAsync(
+                projectId,
+                MechanismKnowledgeExperimentPolicy.SnapshotHash(mechanismKnowledge),
+                mechanismModels.SnapshotHash,
+                ct)
+            .ConfigureAwait(false);
+    }
+
     public async Task<ResearchExperiment> CreateNextExperimentAsync(
         Guid projectId,
         ResearchOptimizationRequest request,
@@ -415,9 +445,40 @@ public sealed class ResearchExperimentOptimizer(
         string mechanismModelSnapshotHash,
         CancellationToken ct)
     {
+        var assessment = await AssessMethodAdmissionAsync(
+                projectId,
+                mechanismKnowledgeSnapshotHash,
+                mechanismModelSnapshotHash,
+                ct)
+            .ConfigureAwait(false);
+        if (!assessment.Eligible)
+        {
+            throw new ProcessResearchRuleException(
+                "序贯优化已暂停：" + string.Join("；", assessment.Failures) +
+                "。请降级为正则化响应面或适用 DOE，不得继续生成优化建议。");
+        }
+
+        return new ResearchMethodAdmissionEvidence
+        {
+            ValidationPolicyVersion = assessment.ValidationPolicyVersion,
+            HistoricalReplayReportId = assessment.HistoricalReplayReportId!.Value,
+            HistoricalReplayReportHash = assessment.HistoricalReplayReportHash!,
+            BaselineMethods = assessment.BaselineMethods,
+            OptimizerModelVersions = assessment.OptimizerModelVersions,
+            MechanismKnowledgeSnapshotHash = assessment.MechanismKnowledgeSnapshotHash,
+            MechanismModelSnapshotHash = assessment.MechanismModelSnapshotHash,
+            AssessedAt = assessment.AssessedAt
+        };
+    }
+
+    private async Task<ResearchMethodAdmissionAssessment> AssessMethodAdmissionAsync(
+        Guid projectId,
+        string mechanismKnowledgeSnapshotHash,
+        string mechanismModelSnapshotHash,
+        CancellationToken ct)
+    {
         var latest = (await store.ListHistoricalReplayReportsAsync(projectId, ct)
                 .ConfigureAwait(false))
-            .Where(static value => value.Status == ResearchHistoricalReplayStatuses.Reviewed)
             .Where(value => string.Equals(
                     value.ValidationPolicyVersion,
                     ValidationThresholds.PolicyVersion,
@@ -430,39 +491,32 @@ public sealed class ResearchExperimentOptimizer(
                     value.MechanismModelSnapshotHash,
                     mechanismModelSnapshotHash,
                     StringComparison.Ordinal))
-            .OrderByDescending(static value => value.ReviewedAt ?? value.GeneratedAt)
+            .OrderByDescending(static value => value.GeneratedAt)
+            .ThenByDescending(static value => value.ReportId)
             .FirstOrDefault();
+        var failures = new List<string>();
         if (latest is null)
-        {
-            throw new ProcessResearchRuleException(
-                "序贯优化已暂停：缺少与当前方法、机理知识和模型快照一致、经独立审核的历史回放。" +
-                "请先使用响应面或适用 DOE 建立历史基线并完成回放审核。");
-        }
-        if (!latest.GatePassed)
-        {
-            var failures = latest.GateFailures.Count == 0
+            failures.Add("缺少与当前策略、机理知识和模型快照一致的历史回放");
+        else if (latest.Status != ResearchHistoricalReplayStatuses.Reviewed)
+            failures.Add("当前快照的最新历史回放尚未完成独立审核");
+        else if (!latest.GatePassed)
+            failures.Add(latest.GateFailures.Count == 0
                 ? "历史回放没有通过方法准入门槛。"
-                : string.Join("；", latest.GateFailures);
-            throw new ProcessResearchRuleException(
-                "序贯优化已暂停：最新的当前方法历史回放未通过。" + failures +
-                "请降级为响应面或适用 DOE，不得继续生成优化建议。");
-        }
-        if (latest.OptimizerModelVersions.Count == 0)
-        {
-            throw new ProcessResearchRuleException(
-                "序贯优化已暂停：最新历史回放没有冻结优化器模型版本。" +
-                "请重新运行并审核回放，或降级为响应面或适用 DOE。");
-        }
+                : string.Join("；", latest.GateFailures));
+        if (latest is not null && latest.OptimizerModelVersions.Count == 0)
+            failures.Add("最新历史回放没有冻结可核对的优化器模型版本");
 
-        return new ResearchMethodAdmissionEvidence
+        return new ResearchMethodAdmissionAssessment
         {
-            ValidationPolicyVersion = latest.ValidationPolicyVersion,
-            HistoricalReplayReportId = latest.ReportId,
-            HistoricalReplayReportHash = latest.ReportHash,
-            BaselineMethods = latest.BaselineMethods,
-            OptimizerModelVersions = latest.OptimizerModelVersions,
-            MechanismKnowledgeSnapshotHash = latest.MechanismKnowledgeSnapshotHash,
-            MechanismModelSnapshotHash = latest.MechanismModelSnapshotHash,
+            ValidationPolicyVersion = ValidationThresholds.PolicyVersion,
+            Eligible = failures.Count == 0,
+            Failures = failures,
+            HistoricalReplayReportId = latest?.ReportId,
+            HistoricalReplayReportHash = latest?.ReportHash,
+            BaselineMethods = latest?.BaselineMethods ?? [],
+            OptimizerModelVersions = latest?.OptimizerModelVersions ?? [],
+            MechanismKnowledgeSnapshotHash = mechanismKnowledgeSnapshotHash,
+            MechanismModelSnapshotHash = mechanismModelSnapshotHash,
             AssessedAt = DateTimeOffset.UtcNow
         };
     }

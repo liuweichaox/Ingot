@@ -44,13 +44,13 @@ npm --prefix apps/platform run demo
 
 结果写入 `artifacts/public-validation.json`。当前参考结果相对固定随机搜索通过优效检验，但 Crossed Barrel 分项对线性响应面触发数据集护栏，因此总体实验缩减声明为未证明。快速检查、完整判定规则、数据许可和分项结果见[公开数据实验效率验证](https://github.com/liuweichaox/Ingot/blob/main/tools/public-validation/README.md)。公开数据可以验证软件与方法链路是否可复现，不能证明另一个工厂可以获得相同收益。
 
-仓库还包含 v3 外部数据评估草案。它使用两个未参与 v2 开发的物理实验数据集，登记四个比较基线并加入机理特征消融。当前只执行完整性检查：
+仓库还包含已冻结的 v3 外部数据评估。它使用两个未参与 v2 开发的物理实验数据集，登记四个比较基线并加入机理特征消融。先校验数据、协议和统一指纹：
 
 ```bash
 ./scripts/verify-public-validation-v3.sh
 ```
 
-草案协议不能运行完整效果评价。算法和协议提交冻结后，才使用 `./scripts/benchmark-public-validation-v3.sh` 生成首次结果。
+保留结果相对随机搜索和 maximin 通过，但相对线性与二次响应面未通过，因此总体实验缩减声明仍为未证明；机理特征配对消融通过。完整结果见 [`latest-results-v3.json`](https://github.com/liuweichaox/Ingot/blob/main/tools/public-validation/latest-results-v3.json)，复现运行使用 `./scripts/benchmark-public-validation-v3.sh`。
 
 ## 1. 准备环境
 

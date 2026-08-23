@@ -1187,6 +1187,7 @@ public sealed class ProcessResearchWorkflowTests
             new ResearchExperimentResultMaterializer(workflow),
             workflow.ExperimentCommands,
             workflow);
+        var methodAssessment = await optimizer.AssessMethodAdmissionAsync(project.ProjectId);
 
         var experiment = await optimizer.CreateNextExperimentAsync(
             project.ProjectId,
@@ -1208,6 +1209,8 @@ public sealed class ProcessResearchWorkflowTests
             "engineer-a");
 
         Assert.Equal(ResearchDesignMethods.BayesianOptimization, experiment.DesignMethod);
+        Assert.True(methodAssessment.Eligible);
+        Assert.Equal(methodAdmission.ReportId, methodAssessment.HistoricalReplayReportId);
         Assert.Equal(experiment.ExperimentId, repeated.ExperimentId);
         Assert.Equal(ResearchExperimentStatuses.Planned, experiment.Status);
         Assert.Equal(4, experiment.RunPlan.Count);
@@ -1291,6 +1294,7 @@ public sealed class ProcessResearchWorkflowTests
         {
             Code = "optimizer-method-gate"
         }, "engineer-a");
+        await SeedMethodAdmissionEvidenceAsync(store, project);
         await SeedMethodAdmissionEvidenceAsync(
             store,
             project,
@@ -1303,6 +1307,7 @@ public sealed class ProcessResearchWorkflowTests
             new ResearchExperimentResultMaterializer(workflow),
             workflow.ExperimentCommands,
             workflow);
+        var assessment = await optimizer.AssessMethodAdmissionAsync(project.ProjectId);
 
         var exception = await Assert.ThrowsAsync<ProcessResearchRuleException>(() =>
             optimizer.CreateNextExperimentAsync(
@@ -1310,6 +1315,10 @@ public sealed class ProcessResearchWorkflowTests
                 new ResearchOptimizationRequest(),
                 "engineer-a"));
 
+        Assert.False(assessment.Eligible);
+        Assert.Contains(assessment.Failures, value =>
+            value.Contains("二次响应面", StringComparison.Ordinal));
+        Assert.Contains("正则化响应面", assessment.FallbackMethods);
         Assert.Contains("序贯优化已暂停", exception.Message, StringComparison.Ordinal);
         Assert.Contains("二次响应面", exception.Message, StringComparison.Ordinal);
         Assert.Contains("适用 DOE", exception.Message, StringComparison.Ordinal);

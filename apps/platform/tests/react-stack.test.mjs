@@ -91,6 +91,14 @@ test("platform identity presents Ingot as a process diagnosis and optimization s
   assert.doesNotMatch(html, /制造数据采集与工艺分析平台/);
 });
 
+test("demo mode starts with one out-of-spec run story", () => {
+  assert.match(pages, /import\.meta\.env\.MODE === "demo"/);
+  assert.match(pages, /三分钟演示：一片镜片为什么超差/);
+  assert.match(pages, /RUN-2026-0821-005/);
+  assert.match(pages, /0\.48 μm/);
+  assert.match(pages, /\/comparisons\?executionId=RUN-2026-0821-005/);
+});
+
 test("navigation and overlays are accessible Headless UI components", () => {
   assert.match(app, /DialogBackdrop/);
   assert.match(app, /DialogPanel/);

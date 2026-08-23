@@ -1,4 +1,5 @@
 
+// 暴露项目级研发工作流 API；业务准入、证据判断和状态转换均委托给 Application 层。
 using Ingot.Contracts.Events;
 using Ingot.Contracts.ProcessResearch;
 using Ingot.Platform.Api.Agents;
@@ -167,6 +168,15 @@ public sealed class ResearchProjectsController(
             projectId,
             false,
             async _ => Ok(await onlineAdmission.AssessAsync(projectId, ct).ConfigureAwait(false)),
+            ct);
+
+    [HttpGet("{projectId:guid}/method-admission")]
+    public Task<IActionResult> GetMethodAdmission(Guid projectId, CancellationToken ct)
+        => ExecuteForProjectAsync(
+            projectId,
+            false,
+            async _ => Ok(await experimentOptimizer.AssessMethodAdmissionAsync(projectId, ct)
+                .ConfigureAwait(false)),
             ct);
 
     [HttpGet("{projectId:guid}/online-report")]

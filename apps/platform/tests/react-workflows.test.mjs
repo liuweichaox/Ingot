@@ -394,6 +394,10 @@ test("research project setup reuses configured industrial definitions instead of
 
 test("research projects turn optimization into the existing experiment workflow", () => {
   assert.match(researchProjects, /\/optimize/);
+  assert.match(researchProjects, /\/method-admission/);
+  assert.match(researchProjects, /序贯优化已暂停/);
+  assert.match(researchProjects, /正则化响应面或适用的传统 DOE/);
+  assert.match(researchProjects, /disabled=\{!methodEligible\}/);
   assert.match(researchProjects, /batchSize:\s*2/);
   assert.match(researchProjects, /智能设计下一组实验/);
   assert.match(researchProjects, /当前没有可用的冻结观察，已生成首组先验探索实验/);

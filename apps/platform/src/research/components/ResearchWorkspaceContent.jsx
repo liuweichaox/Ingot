@@ -76,6 +76,7 @@ export function WorkspaceContent({
     validationPreregistrations = [],
   } = workspace;
   const onlineAdmission = workspace.onlineAdmission;
+  const methodAdmission = workspace.methodAdmission;
   const stageZeroAdmission = workspace.stageZeroAdmission;
   const latestPreregistration = validationPreregistrations[0];
   const reliabilityBaseline = latestPreregistration?.reliabilityBaseline;
@@ -89,6 +90,9 @@ export function WorkspaceContent({
   const canEdit = !["completed", "archived"].includes(project.status);
   const canManageMembers = canEdit && (project.ownerUserId === currentUserId || isPlatformAdmin);
   const hasObservation = Number(observationSummary?.validObservationCount || 0) > 0;
+  const methodEligible = methodAdmission?.eligible === true;
+  const methodAdmissionReason = (methodAdmission?.failures || []).join("；") ||
+    "正在核对当前策略、机理快照和历史回放。";
   const executionExperiments = experiments.filter(item =>
     item.status !== "cancelled" && item.designMethod !== "historical-observation");
   const hasRunningExperiment = executionExperiments.some(item => item.status === "running");
@@ -169,19 +173,31 @@ export function WorkspaceContent({
             </div>
             <StatusBadge value={statusLabels[project.status] || project.status} />
           </div>
+          {!methodEligible && (
+            <Alert tone="warning" title="序贯优化已暂停">
+              <p>{methodAdmissionReason}</p>
+              <p className="mt-1">
+                当前仍可手动设计正则化响应面或适用的传统 DOE；完成当前版本历史回放并由另一名工程师审核后，再重新评估准入。
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {project.status !== "draft" && canEdit && <Button onClick={() => onTask("experiment")}>手动设计实验</Button>}
+                {project.status !== "draft" && canEdit && Number(observationSummary?.validObservationCount || 0) >= 3 && <Button onClick={onRunHistoricalReplay}>运行当前版本历史回放</Button>}
+              </div>
+            </Alert>
+          )}
           <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,1fr)_18rem]">
             <div className="flex flex-wrap content-start gap-2">
               <Button onClick={() => onAskAi(project.projectId)}>让 AI 协助分析</Button>
               <MemberManagementButton allowed={canManageMembers} onClick={() => onTask("member")} />
               {canEdit && hypotheses.length === 0 && <Button variant="primary" onClick={() => onTask("hypothesis")}>提出第一个假设</Button>}
               {project.status !== "draft" && canEdit && <Button onClick={() => onTask("history")}>导入历史运行</Button>}
-              {project.status !== "draft" && canEdit && hypotheses.length > 0 && !hasRunningExperiment && <Button variant="primary" onClick={() => onGenerateOptimizationSuggestions()}>智能设计下一组实验</Button>}
-              {project.status !== "draft" && canEdit && hypotheses.length > 0 && <Button onClick={() => onGenerateOptimizationSuggestions("reach-specification", null, "shadow")}>生成影子建议</Button>}
+              {project.status !== "draft" && canEdit && hypotheses.length > 0 && !hasRunningExperiment && <Button variant="primary" disabled={!methodEligible} title={!methodEligible ? methodAdmissionReason : "已通过当前方法准入"} onClick={() => onGenerateOptimizationSuggestions()}>智能设计下一组实验</Button>}
+              {project.status !== "draft" && canEdit && hypotheses.length > 0 && <Button disabled={!methodEligible} title={!methodEligible ? methodAdmissionReason : "仅生成旁路建议"} onClick={() => onGenerateOptimizationSuggestions("reach-specification", null, "shadow")}>生成影子建议</Button>}
               {project.status !== "draft" && canEdit && hypotheses.length > 0 && (
                 <Button
                   variant="primary"
-                  disabled={!onlineAdmission?.eligible || hasRunningExperiment}
-                  title={!onlineAdmission?.eligible ? (onlineAdmission?.failures || []).join("；") : "每次只生成一条，仍需工程师逐条确认"}
+                  disabled={!methodEligible || !onlineAdmission?.eligible || hasRunningExperiment}
+                  title={!methodEligible ? methodAdmissionReason : !onlineAdmission?.eligible ? (onlineAdmission?.failures || []).join("；") : "每次只生成一条，仍需工程师逐条确认"}
                   onClick={() => onGenerateOptimizationSuggestions("reach-specification", null, "controlled")}
                 >生成一条受控在线建议</Button>
               )}
@@ -196,6 +212,9 @@ export function WorkspaceContent({
               <p className="text-sm font-semibold text-slate-900">实验建议准备度</p>
               <p className="mt-1 text-2xl font-semibold text-slate-950">{observationSummary?.validObservationCount ?? 0}<span className="ml-1 text-sm font-normal text-slate-500">条有效观察</span></p>
               <p className="mt-1 text-xs leading-5 text-slate-500">{hasObservation ? `已匹配 ${observationSummary?.candidateRunCount ?? 0} 个实验运行，可用于生成下一组建议。` : "尚无可用观察；完成运行、过程特征和检验结果的关联后自动具备条件。"}</p>
+              <p className={`mt-2 text-xs font-medium ${methodEligible ? "text-emerald-700" : "text-amber-700"}`}>
+                {methodEligible ? "方法准入已通过" : "方法准入未通过，已切换到工程师设计路径"}
+              </p>
             </div>
           </div>
         </section>

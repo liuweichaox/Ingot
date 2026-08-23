@@ -17,6 +17,21 @@
   [简体中文](README.md) · English
 </div>
 
+## Understand Ingot in three minutes
+
+The demo follows one concrete problem: lens run `RUN-2026-0821-005` has a surface error of **0.48 μm**, above the **0.35 μm** limit, while the adjacent passing run measures **0.22 μm**. No database or Docker is required. Run these commands in two terminals:
+
+```bash
+node scripts/platform-demo.mjs
+```
+
+```bash
+npm --prefix apps/platform ci
+npm --prefix apps/platform run demo
+```
+
+Open `http://127.0.0.1:3001` and sign in with `demo / demo`. The workbench provides four steps: open the out-of-spec run, verify the reviewed quality result, compare it with passing runs, and inspect candidate causes, confounders, and experiment boundaries. The demo establishes that the interface and evidence workflow run; it does not prove a root cause or factory trial reduction.
+
 ## Why Ingot exists
 
 Ingot's core value remains stable:
@@ -91,7 +106,7 @@ The repository implements the main code path across field integration, productio
 - **Shadow validation passed** means recommendations survived field-constraint review on new projects.
 - **Online validation passed** is required before claiming fewer experiments or shorter development time on real work.
 
-The project has completed internal end-to-end validation of import, run reconstruction, inspection linkage, and R&D observations using controlled, non-public production history. The repository also provides public-data experiment-efficiency validation under explicit licenses. The v2 development regression covers two manufacturing-experiment datasets and 10 contexts. Superiority to seeded random search passed, but the Crossed Barrel result regressed against a linear response surface and triggered the dataset guardrail, so the overall experiment-reduction claim is not demonstrated. v3 adds two physical-experiment datasets not used during development, four preregistered baselines, and a mechanism-feature ablation, but its protocol remains a pre-freeze draft and has no result. Formal leakage-free replay on real history and prospective validation remain incomplete, so the project does not claim experiment or development-cycle reduction for any factory.
+The project has completed internal end-to-end validation of import, run reconstruction, inspection linkage, and R&D observations using controlled, non-public production history. The repository also provides public-data experiment-efficiency validation under explicit licenses. The v2 development regression covers two manufacturing-experiment datasets and 10 contexts; superiority to seeded random search passed, but the Crossed Barrel result regressed against a linear response surface and triggered the dataset guardrail. After protocol freeze, v3 completed 400 episodes on two physical-experiment datasets not used during development, with four preregistered baselines and a mechanism-feature ablation. It passed against random search and maximin but not against the linear or quadratic response surfaces, so the overall experiment-reduction claim remains not demonstrated; the paired mechanism-feature ablation passed. Formal leakage-free replay on real history and prospective validation remain incomplete, so the project does not claim experiment or development-cycle reduction for any factory.
 
 - **The public repository provides** code, protocols, schemas, synthetic examples, an explicitly licensed and checksum-verified public-data benchmark, tests, acceptance methods, and conclusion boundaries.
 - **The public repository excludes** real production data, project identities, process parameters, quality distributions, and derived results.
@@ -171,13 +186,13 @@ Run the complete fixed public-manufacturing-data benchmark with:
 
 This benchmark validates a reproducible software and method path; it does not replace shadow or controlled online validation on a real project. See [Public-data experiment-efficiency validation](tools/public-validation/README.en.md) for the current result and decision rules.
 
-Verify the not-yet-frozen v3 external-data evaluation protocol with:
+Verify the frozen v3 external-data evaluation protocol with:
 
 ```bash
 ./scripts/verify-public-validation-v3.sh
 ```
 
-The complete v3 evaluation can run only after the algorithm and protocol revisions are committed and frozen. The evaluator rejects a draft protocol.
+See the frozen [`protocol-v3.json`](tools/public-validation/protocol-v3.json) and retained [`latest-results-v3.json`](tools/public-validation/latest-results-v3.json). The evaluator rejects any algorithm, data, dependency, or protocol state that differs from the frozen fingerprint.
 
 ## Repository layout
 

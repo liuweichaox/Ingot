@@ -164,7 +164,7 @@ The project cannot use feature count as evidence of success when:
 
 These findings trigger data repair, workflow changes, method downgrade, or an optimization pause rather than automatic progression to a more complex phase.
 
-The “sequential recommendations do not beat an applicable baseline” condition is enforced as an executable gate. Every reach-specification optimization must cite an independently reviewed, passing historical replay for the current policy and mechanism snapshots, and the current optimizer model version must actually appear in its replay trace. A missing or failing replay, or a version mismatch, stops the request and returns a response-surface or traditional-DOE downgrade path; recording the failure in a report while continuing to recommend is not allowed.
+The “sequential recommendations do not beat an applicable baseline” condition is enforced as an executable gate. The newest historical replay for the current policy and mechanism snapshots must have been independently reviewed and passed, and the current optimizer model version must actually appear in its replay trace. A missing, unreviewed, or failing newest replay, or a version mismatch, stops the request and returns a response-surface or traditional-DOE downgrade path; an older passing report cannot mask a newer failure, and recording the failure while continuing to recommend is not allowed.
 
 ## Evidence confidentiality and public wording
 

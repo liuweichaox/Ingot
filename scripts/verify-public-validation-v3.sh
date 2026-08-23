@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 校验 v3 公开评估协议、固定数据和机理特征定义；草案阶段不运行结果评估。
+# 校验已冻结的 v3 公开评估协议、固定数据、机理特征定义和统一指纹。
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

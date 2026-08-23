@@ -104,8 +104,8 @@ def test_v3_external_evaluation_fixtures_and_mechanism_features_are_valid():
     protocol = benchmark_v3.load_protocol()
     report = benchmark_v3.integrity_report(protocol)
 
-    assert report["status"] == "draft"
-    assert report["full_evaluation_allowed"] is False
+    assert report["status"] == "frozen"
+    assert report["full_evaluation_allowed"] is True
     assert report["runtime"]["python"]
     assert report["runtime"]["packages"]["numpy"]
     airfoil = report["datasets"]["airfoil"]
@@ -133,11 +133,10 @@ def test_v3_external_evaluation_fixtures_and_mechanism_features_are_valid():
         ]
 
 
-def test_v3_draft_cannot_produce_a_public_result():
+def test_v3_protocol_is_frozen_before_the_retained_result():
     protocol = benchmark_v3.load_protocol()
 
-    with pytest.raises(RuntimeError, match="not frozen"):
-        benchmark_v3.require_frozen(protocol)
+    benchmark_v3.require_frozen(protocol)
 
     assert protocol["methods"]["baselines"] == [
         "seeded-random-search",
@@ -149,6 +148,24 @@ def test_v3_draft_cannot_produce_a_public_result():
         "ingot-without-mechanism-features"
     )
     assert len(protocol["claim_boundary"]["not_permitted"]) == 3
+
+    result = json.loads(
+        (BENCHMARK_PATH.parent / "latest-results-v3.json").read_text(encoding="utf-8")
+    )
+    assert result["evaluation_fingerprint"] == protocol["freeze"]["evaluation_fingerprint"]
+    assert result["summary"]["episode_count"] == 400
+    assert result["summary"]["experiment_reduction_vs_all_preregistered_baselines"] == (
+        "not-demonstrated"
+    )
+    assert result["summary"]["mechanism_feature_contribution"] == (
+        "passed-protocol-frozen-ablation"
+    )
+    effects = {
+        item["comparator"]: item
+        for item in result["summary"]["paired_effects"]
+    }
+    assert effects["regularized-linear-response-surface"]["passed"] is False
+    assert effects["regularized-quadratic-response-surface"]["passed"] is False
 
 
 def test_v3_fingerprint_freezes_algorithm_data_dependencies_and_protocol():

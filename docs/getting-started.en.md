@@ -44,13 +44,13 @@ This path requires Git and uv 0.11.32 but no database, equipment, or factory dat
 
 The result is written to `artifacts/public-validation.json`. The current reference result passes superiority to seeded random search, but the Crossed Barrel result triggers the dataset guardrail against the linear response surface, so the overall experiment-reduction claim is not demonstrated. See [Public-data experiment-efficiency validation](https://github.com/liuweichaox/Ingot/blob/main/tools/public-validation/README.en.md) for the fast check, complete decision rule, data license, and per-dataset result. Public data can reproduce the software and method path; it cannot prove the same benefit for another factory.
 
-The repository also contains a draft v3 external-data evaluation. It uses two physical-experiment datasets not used during v2 development, registers four comparison baselines, and includes a mechanism-feature ablation. At draft status, run only the integrity check:
+The repository also contains a frozen v3 external-data evaluation. It uses two physical-experiment datasets not used during v2 development, registers four comparison baselines, and includes a mechanism-feature ablation. First verify its data, protocol, and unified fingerprint:
 
 ```bash
 ./scripts/verify-public-validation-v3.sh
 ```
 
-The draft protocol cannot run the complete effect evaluation. After committing and freezing the algorithm and protocol, use `./scripts/benchmark-public-validation-v3.sh` to produce the first result.
+The retained result passes against random search and maximin but fails against the linear and quadratic response surfaces, so the overall experiment-reduction claim remains not demonstrated; the paired mechanism-feature ablation passes. See [`latest-results-v3.json`](https://github.com/liuweichaox/Ingot/blob/main/tools/public-validation/latest-results-v3.json), and reproduce it with `./scripts/benchmark-public-validation-v3.sh`.
 
 ## 1. Prepare the environment
 

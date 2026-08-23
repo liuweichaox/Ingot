@@ -5,7 +5,7 @@ This directory turns “does the optimizer reduce additional experiments?” int
 | Evidence layer | Purpose | Data | Current state |
 |---|---|---|---|
 | v2 development regression | algorithm development, regression detection, and claim-boundary checks | FDM and Crossed Barrel mechanical design | complete reference result retained |
-| v3 protocol-frozen evaluation | strong-baseline comparison and mechanism-feature ablation | NASA airfoil noise and Delft yacht hydrodynamics | draft protocol; code blocks a full run |
+| v3 protocol-frozen evaluation | strong-baseline comparison and mechanism-feature ablation | NASA airfoil noise and Delft yacht hydrodynamics | frozen with a retained 400-episode result; overall claim not demonstrated |
 
 ## Data and scenarios
 
@@ -68,12 +68,27 @@ A method may read candidate parameters but receives an outcome only after select
 
 The result retains per-dataset summaries and the actual runtime versions. Confidence intervals resample episodes within each of the two fixed datasets. They describe episode uncertainty in those datasets and do not estimate transfer uncertainty across processes, equipment, or factories.
 
-v3 currently has `draft` status, and the full evaluator refuses to run. The freeze procedure is:
+v3 has completed its first run under the following freeze procedure:
 
 1. commit the algorithm, data snapshots, conversion script, and draft protocol;
 2. obtain `candidate_evaluation_fingerprint` from the integrity check; in a following metadata-only commit, record the preceding commit in `optimizer_revision` and `protocol_revision`, copy that fingerprint into `evaluation_fingerprint`, and change the status to `frozen`;
 3. run the complete evaluation without changing the algorithm, data, target, budget, baselines, or decision thresholds in response to the result; and
 4. retain an unfavorable result and publish `not-demonstrated` where applicable.
+
+The freeze references candidate commit `70cd12c16df55247dff70971cded312705f4b88b` and evaluation fingerprint `f82d3745530de851a901307f720b127f4db38bc2a1ed4d44d9a0d99fa66bbb5d`. The complete result is retained in [latest-results-v3.json](latest-results-v3.json):
+
+| v3 check | Result |
+|---|---|
+| Data and execution integrity | passed; two datasets and 400 episodes with unique initial designs |
+| Ingot with mechanism features | 100% target success; 1.4525 mean capped additional trials |
+| Versus random search | +75.10%, 95% CI 72.67%–77.32%, passed |
+| Versus maximin space filling | +9.22%, 95% CI 0.33%–17.19%, passed |
+| Versus regularized linear response surface | -13.70%, 95% CI -22.94%–-4.55%, failed; non-worse on only 1/2 datasets |
+| Versus regularized quadratic response surface | -5.06%, 95% CI -17.07%–6.51%, failed; non-worse on only 1/2 datasets |
+| Paired mechanism-feature ablation | +22.64%, 95% CI 17.63%–27.50%, passed |
+| Permitted overall conclusion | **failed: no claim of trial reduction versus every registered baseline** (`not-demonstrated`) |
+
+On Yacht, the linear response surface averages 1.00 additional query versus Ingot's 1.38. On Airfoil, the quadratic response surface averages 1.36 versus Ingot's 1.525. Those dataset-level failures override the wins against random search and maximin. Passing the mechanism-feature ablation means only that the preregistered derived features improve the same optimizer in these two fixed pools; it does not validate them as physical laws or causal claims.
 
 Because public outcome columns are not objectively inaccessible to maintainers, v3 is described as a protocol-frozen external-data evaluation with sequentially hidden outcomes, not an independent blind test. Independent third-party evaluation remains a higher evidence level.
 
@@ -97,7 +112,7 @@ uvx --from uv==0.11.32 uv run --project optimizer --locked \
 - The `Performance` workflow runs the full benchmark weekly or on demand and uploads the result.
 - `latest-results.json` changes only after human review of an algorithm, dataset, dependency lock, or decision-protocol change.
 
-Verify the v3 data and draft protocol without running effect evaluation:
+Verify the v3 data, frozen protocol, and unified fingerprint:
 
 ```bash
 ./scripts/verify-public-validation-v3.sh

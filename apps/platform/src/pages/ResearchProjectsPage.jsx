@@ -120,6 +120,9 @@ export function ResearchProjectsPage({ identity }) {
         onlineAdmission: current?.project?.projectId === projectId
           ? current.onlineAdmission
           : null,
+        methodAdmission: current?.project?.projectId === projectId
+          ? current.methodAdmission
+          : null,
         transferSources: current?.project?.projectId === projectId
           ? current.transferSources
           : [],
@@ -129,15 +132,17 @@ export function ResearchProjectsPage({ identity }) {
       setDetailLoading(false);
 
       try {
-        const [observationSummary, onlineAdmission, transferSources] = await Promise.all([
-        getJson(`/api/v1/research-projects/${projectId}/experiment-readiness`),
-        getJson(`/api/v1/research-projects/${projectId}/online-admission`),
-        getJson(`/api/v1/research-projects/${projectId}/transfer-sources`),
+        const [observationSummary, methodAdmission, onlineAdmission, transferSources] = await Promise.all([
+          getJson(`/api/v1/research-projects/${projectId}/experiment-readiness`),
+          getJson(`/api/v1/research-projects/${projectId}/method-admission`),
+          getJson(`/api/v1/research-projects/${projectId}/online-admission`),
+          getJson(`/api/v1/research-projects/${projectId}/transfer-sources`),
         ]);
         setWorkspace(current => current?.project?.projectId === projectId
           ? {
               ...current,
               optimizationObservationSummary: observationSummary,
+              methodAdmission,
               onlineAdmission,
               transferSources: transferSources?.data || [],
             }

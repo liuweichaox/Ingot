@@ -1,4 +1,5 @@
 
+// 呈现生产运行、过程曲线和比较入口；页面只编排受权 API 数据，不在客户端推断工艺因果。
 import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
@@ -102,6 +103,28 @@ export function WorkbenchPage({ identity }) {
       <RequestError error={state.error} onRetry={() => setRetryKey(value => value + 1)} />
       {state.loading ? <LoadingCard /> : (
         <div className="flex flex-col gap-5">
+          {import.meta.env.MODE === "demo" && (
+            <Card
+              className="order-1 border-amber-200 bg-amber-50/60"
+              title="三分钟演示：一片镜片为什么超差？"
+              description="RUN-2026-0821-005 的面形误差为 0.48 μm，超过 0.35 μm 上限。按四步核对事实、质量、差异和证据边界。"
+            >
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                {[
+                  ["1", "打开超差运行", "设备、产品、规范、材料、工装与过程曲线", "/process-executions/RUN-2026-0821-005"],
+                  ["2", "核对质量结果", "确认 0.48 μm 已复核，而不是未决测量", "/quality-analysis"],
+                  ["3", "比较合格运行", "定位压制阶段温度和压力波动差异", "/comparisons?executionId=RUN-2026-0821-005"],
+                  ["4", "查看证据边界", "候选原因仍受操作员与工装混杂，必须实验验证", "/research-projects/research-active"],
+                ].map(([step, title, description, to]) => (
+                  <Link key={step} to={to} className="rounded-xl border border-amber-200 bg-white p-4 transition hover:-translate-y-0.5 hover:shadow-md">
+                    <span className="grid size-7 place-items-center rounded-full bg-amber-100 text-xs font-bold text-amber-800">{step}</span>
+                    <p className="mt-3 font-semibold text-slate-950">{title}</p>
+                    <p className="mt-1 text-sm leading-5 text-slate-600">{description}</p>
+                  </Link>
+                ))}
+              </div>
+            </Card>
+          )}
           <section className="order-1 grid gap-4 rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50 via-white to-white p-5 shadow-sm lg:grid-cols-[minmax(0,1fr)_20rem]">
             <div>
               <p className="text-sm font-semibold text-blue-700">看清这次运行，优化下一次运行。</p>

@@ -60,6 +60,16 @@ test("platform demo serves authenticated workflow data and deterministic failure
       assert.ok(payload.data.length > 0, `${endpoint} should contain demo data`);
     }
 
+    const methodAdmission = await fetch(
+      `${baseUrl}/api/v1/research-projects/research-active/method-admission`,
+      { headers },
+    );
+    assert.equal(methodAdmission.status, 200);
+    const methodGate = await methodAdmission.json();
+    assert.equal(methodGate.eligible, false);
+    assert.match(methodGate.failures[0], /二次响应面/);
+    assert.deepEqual(methodGate.fallbackMethods, ["正则化响应面", "适用的传统 DOE"]);
+
     const mechanismResponse = await fetch(
       `${baseUrl}/api/v1/research-projects/research-active/mechanism-claims`,
       { headers },

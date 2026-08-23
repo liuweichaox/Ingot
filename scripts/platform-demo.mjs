@@ -390,7 +390,15 @@ async function handle(req, res) {
   if (analysisMatch) return json(res, 200, executionAnalysis());
   const curvesMatch = pathname.match(/^\/api\/v1\/process-executions\/([^/]+)\/curves$/);
   if (curvesMatch) {
-    const points = Array.from({ length: 180 }, (_, index) => ({ timestamp: new Date(Date.now() - (180 - index) * 1000).toISOString(), values: { "mold.temperature": 560 + index * 0.12 + Math.sin(index / 8) * 2, "press.force": index < 55 ? 0 : 22 + Math.sin(index / 5), "plunger.position": index < 55 ? 0 : 12 + Math.cos(index / 7) } }));
+    const isOutOfSpecRun = curvesMatch[1] === "RUN-2026-0821-005";
+    const points = Array.from({ length: 180 }, (_, index) => ({
+      timestamp: new Date(Date.now() - (180 - index) * 1000).toISOString(),
+      values: {
+        "mold.temperature": (isOutOfSpecRun ? 566 : 560) + index * (isOutOfSpecRun ? 0.1 : 0.085) + Math.sin(index / 8) * (isOutOfSpecRun ? 2.8 : 1.1),
+        "press.force": index < 55 ? 0 : 22 + Math.sin(index / 5) * (isOutOfSpecRun ? 1.8 : 0.7),
+        "plunger.position": index < 55 ? 0 : 12 + Math.cos(index / 7),
+      },
+    }));
     const signalCodes = String(searchParams.get("signalCodes") || "mold.temperature,press.force").split(",");
     return json(res, 200, { totalFrameCount: 1200, returnedPointCount: points.length, downsampled: true, series: signalCodes.map(code => ({ signalCode: code, points: points.map(point => ({ timestamp: point.timestamp, value: point.values[code] ?? 0 })) })) });
   }
@@ -403,6 +411,21 @@ async function handle(req, res) {
   if (pathname === "/api/v1/events/stream") return json(res, 200, list(events));
   if (pathname === "/api/v1/data-objects") return json(res, 200, list([{ subjectType: "equipment", subjectId: "PRESS-01", edgeId: "edge-shanghai-01", eventCount: 840, sampleCount: 18400, latestEventType: "process.execution.started", lastObservedAt: now(), lastSampleAt: now(), maximumSampleGapSeconds: 18 }, { subjectType: "equipment", subjectId: "VISION-01", edgeId: "edge-shanghai-02", eventCount: 420, sampleCount: 9200, latestEventType: "quality.inspection.completed", lastObservedAt: minutesAgo(4), lastSampleAt: minutesAgo(4), maximumSampleGapSeconds: 7 }, { subjectType: "workpiece", subjectId: "LENS-005", edgeId: "edge-shanghai-01", eventCount: 8, sampleCount: 1200, latestEventType: "quality.inspection.completed", lastObservedAt: minutesAgo(60), lastSampleAt: minutesAgo(73), maximumSampleGapSeconds: 18 }]));
   if (pathname === "/api/v1/data-reliability/baseline") return json(res, 200, reliabilityBaseline);
+
+  const methodAdmissionMatch = pathname.match(/^\/api\/v1\/research-projects\/([^/]+)\/method-admission$/);
+  if (methodAdmissionMatch) return json(res, 200, {
+    validationPolicyVersion: "research-validation-v1",
+    eligible: false,
+    failures: ["最新历史回放未通过二次响应面基线门槛"],
+    fallbackMethods: ["正则化响应面", "适用的传统 DOE"],
+    historicalReplayReportId: "replay-1",
+    historicalReplayReportHash: "demo-replay-hash",
+    baselineMethods: ["historical-engineer-order", "seeded-random-order", "quadratic-response-surface"],
+    optimizerModelVersions: ["botorch-demo-v1"],
+    mechanismKnowledgeSnapshotHash: "demo-knowledge-snapshot",
+    mechanismModelSnapshotHash: "none",
+    assessedAt: now(),
+  });
 
   if (pathname === "/api/v1/inspection-tasks/summary") return json(res, 200, { actionRequired: 2, pending: 1, pendingCount: 1, reviewPending: 1, completed: 1 });
   if (pathname === "/api/v1/inspection-tasks") {
