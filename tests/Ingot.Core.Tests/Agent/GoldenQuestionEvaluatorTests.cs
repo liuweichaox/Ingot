@@ -40,6 +40,33 @@ public sealed class GoldenQuestionEvaluatorTests
     }
 
     [Fact]
+    public void Evaluate_FailsStructuredCausalClaimWithoutKeywordMatch()
+    {
+        var golden = Golden(JsonSerializer.SerializeToElement(0.95));
+        var run = Run("完整率为 0.95，形成一个可核查结论。", "sufficient") with
+        {
+            Answer = new AnalysisAnswer
+            {
+                Summary = "完整率为 0.95，形成一个可核查结论。",
+                Findings =
+                [
+                    new AnalysisClaim
+                    {
+                        Statement = "温度变化解释了当前缺陷分布。",
+                        Strength = AnalysisClaimStrengths.Causal,
+                        EvidenceReferences = [Reference()]
+                    }
+                ],
+                RelatedRecords = [Reference()]
+            }
+        };
+
+        var result = new GoldenQuestionEvaluator().Evaluate(golden, run);
+
+        Assert.False(result.Gates.Single(static gate => gate.Code == "causal-guard").Passed);
+    }
+
+    [Fact]
     public void Evaluate_RequiresToolBackedRefusal()
     {
         var golden = Golden(JsonSerializer.SerializeToElement(0.95)) with

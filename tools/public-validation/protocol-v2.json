@@ -9,15 +9,18 @@
       "fixture_rows": 162,
       "source_rows": 500
     },
-    "concrete": {
-      "doi": "10.24432/C5PK67",
-      "license": "CC BY 4.0",
-      "fixture": "data/concrete-strength.csv",
-      "fixture_sha256": "d4215772a264284b50205eacdfcf30a5c4a0a22aa1c40fa2fb42729c4a394baf",
-      "fixture_rows": 996,
-      "source_rows": 1030,
-      "official_archive_sha256": "dad85d14de8aee4e07479daa774e6b569a313715b71a3b92c95a07cf91c2c9a7",
-      "duplicate_policy": "mean-outcome-per-identical-age-and-mixture; retain replicate count and sample standard deviation"
+    "crossed_barrel": {
+      "title": "Crossed Barrel additive-manufacturing mechanical-design grid",
+      "doi": "10.1126/sciadv.aaz1708",
+      "license": "MIT",
+      "source_revision": "7585c517ad88e676c42c6bf24a8ad278e01ddb21",
+      "source_url": "https://github.com/PV-Lab/Benchmarking/blob/7585c517ad88e676c42c6bf24a8ad278e01ddb21/datasets/Crossed%20barrel_dataset.csv",
+      "source_sha256": "2c01f875f3c210e986ca6142bf20f417884c2ad7d6f008c2fc574b44a3d5f606",
+      "fixture": "data/crossed-barrel.csv",
+      "fixture_sha256": "48697282734eac3dff9fbc12b1355844f6a4369b3da190de57906041e81476a9",
+      "fixture_rows": 600,
+      "source_rows": 1800,
+      "duplicate_policy": "mean-toughness-per-identical-design; retain three-replicate count and sample standard deviation"
     }
   },
   "datasets": {
@@ -42,26 +45,19 @@
       "initial_observations": 4,
       "budget": 12
     },
-    "concrete": {
+    "crossed_barrel": {
       "controls": {
-        "cement_kg_m3": [100.0, 550.0],
-        "slag_kg_m3": [0.0, 370.0],
-        "fly_ash_kg_m3": [0.0, 210.0],
-        "water_kg_m3": [120.0, 250.0],
-        "superplasticizer_kg_m3": [0.0, 35.0],
-        "coarse_aggregate_kg_m3": [800.0, 1150.0],
-        "fine_aggregate_kg_m3": [590.0, 1000.0]
+        "twist_angle_deg": [0.0, 200.0],
+        "outer_radius_mm": [1.5, 2.5],
+        "wall_thickness_mm": [0.7, 1.4]
       },
-      "outcome_bounds": {"compressive_strength_mpa": [0.0, 100.0]},
+      "outcome_bounds": {"toughness_j": [0.0, 55.0]},
+      "threshold_policy": "per-column-count empirical 80th percentile using the higher observed setting; development-regression target, not an engineering specification",
       "scenario_thresholds": {
-        "3": {"compressive_strength_mpa_min": 25.5894092556},
-        "7": {"compressive_strength_mpa_min": 38.239717912},
-        "14": {"compressive_strength_mpa_min": 34.586874064},
-        "28": {"compressive_strength_mpa_min": 46.2464648048},
-        "56": {"compressive_strength_mpa_min": 62.553399576000004},
-        "90": {"compressive_strength_mpa_min": 48.9820297824},
-        "100": {"compressive_strength_mpa_min": 55.51660752},
-        "180": {"compressive_strength_mpa_min": 50.94882902}
+        "6": {"toughness_j_min": 18.57780188},
+        "8": {"toughness_j_min": 23.774167450000004},
+        "10": {"toughness_j_min": 28.04539886666667},
+        "12": {"toughness_j_min": 32.26382266666666}
       },
       "initial_observations": 8,
       "budget": 16
@@ -86,6 +82,7 @@
     "bootstrap_samples": 5000,
     "bootstrap_seed": 8417,
     "confidence_level": 0.95,
+    "minimum_scenarios_per_dataset": 4,
     "minimum_relative_reduction_ci_lower": 0.10,
     "minimum_success_rate_difference_ci_lower": -0.05,
     "minimum_context_non_worse_fraction": 0.8,
@@ -97,5 +94,5 @@
     "dataset_noninferiority_guardrail_minimum_success_rate_difference": -0.05
   },
   "claim_boundary": "Passing supports only a reduction in experiment queries on these frozen public offline benchmarks. It does not prove savings in another factory, material, machine, or process.",
-  "development_disclosure": "The target-aware optimizer policy and v2 decision structure were selected during diagnostics on the public FDM and concrete data. The committed protocol freezes future regression runs, but its reference result is development-stage reproducible comparative evidence, not preregistered blind external validation."
+  "development_disclosure": "The target-aware optimizer policy, datasets, targets, and v2 decision structure were selected during development on public data. This protocol and its reference result are development-stage reproducible comparative evidence, not preregistered blind external validation."
 }

@@ -38,18 +38,14 @@ DATASETS = {
         "outcome_fields": ("roughness_avg", "peak_stress_kpa"),
         "id_field": "sample_no",
     },
-    "concrete": {
-        "context_fields": ("age_days",),
+    "crossed_barrel": {
+        "context_fields": ("column_count",),
         "control_fields": (
-            "cement_kg_m3",
-            "slag_kg_m3",
-            "fly_ash_kg_m3",
-            "water_kg_m3",
-            "superplasticizer_kg_m3",
-            "coarse_aggregate_kg_m3",
-            "fine_aggregate_kg_m3",
+            "twist_angle_deg",
+            "outer_radius_mm",
+            "wall_thickness_mm",
         ),
-        "outcome_fields": ("compressive_strength_mpa",),
+        "outcome_fields": ("toughness_j",),
         "id_field": "setting_id",
     },
 }
@@ -97,14 +93,14 @@ def load_rows(dataset: str, protocol: dict) -> list[dict[str, str]]:
     identifiers = [row[identifier] for row in rows]
     if len(identifiers) != len(set(identifiers)):
         raise ValueError(f"{dataset} fixture contains duplicate identifiers")
-    if dataset == "concrete":
+    if "replicate_count" in rows[0]:
         if sum(int(row["replicate_count"]) for row in rows) != int(
             source["source_rows"]
         ):
-            raise ValueError("concrete replicate counts do not reconcile to source")
+            raise ValueError(f"{dataset} replicate counts do not reconcile to source")
         keys = DATASETS[dataset]["context_fields"] + DATASETS[dataset]["control_fields"]
         if len({tuple(row[field] for field in keys) for row in rows}) != len(rows):
-            raise ValueError("concrete fixture contains duplicate candidate settings")
+            raise ValueError(f"{dataset} fixture contains duplicate candidate settings")
     return rows
 
 
@@ -140,6 +136,12 @@ def group_scenarios(
         len(scenarios) != 6 or any(len(values) != 27 for _, values in scenarios)
     ):
         raise ValueError("FDM fixture must retain six complete 27-point grids")
+    if dataset == "crossed_barrel" and (
+        len(scenarios) != 4 or any(len(values) != 150 for _, values in scenarios)
+    ):
+        raise ValueError(
+            "crossed-barrel fixture must retain four complete 150-setting grids"
+        )
     return scenarios
 
 
@@ -176,16 +178,12 @@ def build_campaign(dataset: str, context_values: tuple[str, ...], protocol: dict
     else:
         objectives = [
             Objective(
-                "compressive_strength_mpa",
+                "toughness_j",
                 "ge",
-                threshold=float(thresholds["compressive_strength_mpa_min"]),
-                outcome_lower_bound=float(
-                    settings["outcome_bounds"]["compressive_strength_mpa"][0]
-                ),
-                outcome_upper_bound=float(
-                    settings["outcome_bounds"]["compressive_strength_mpa"][1]
-                ),
-                unit="MPa",
+                threshold=float(thresholds["toughness_j_min"]),
+                outcome_lower_bound=float(settings["outcome_bounds"]["toughness_j"][0]),
+                outcome_upper_bound=float(settings["outcome_bounds"]["toughness_j"][1]),
+                unit="J",
             )
         ]
     context = dict(zip(metadata["context_fields"], context_values, strict=True))
@@ -514,8 +512,10 @@ def summarize(records: list[dict], protocol: dict) -> dict:
             effect["baseline"]: dataset_guardrail(effect, protocol["statistics"])
             for effect in dataset_effects[dataset]
         }
+    minimum_scenarios = int(protocol["statistics"]["minimum_scenarios_per_dataset"])
     enough_coverage = len(present_datasets) >= 2 and all(
-        sum(record["dataset"] == dataset for record in records) >= 6 for dataset in dataset_effects
+        sum(record["dataset"] == dataset for record in records) >= minimum_scenarios
+        for dataset in dataset_effects
     )
     passed = enough_coverage and all(effect["passed"] for effect in effects) and all(
         value for dataset in guardrails.values() for value in dataset.values()

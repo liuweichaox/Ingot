@@ -143,7 +143,14 @@ public sealed class DeterministicModelClient : IModelClient
         var limitations = results.SelectMany(static result => result.Limitations)
             .Distinct(StringComparer.Ordinal)
             .ToArray();
-        var findings = results.Select(static result => result.Summary).ToArray();
+        var findings = results.Select(result => new AnalysisClaim
+        {
+            Statement = result.Summary,
+            Strength = AnalysisClaimStrengths.Observation,
+            EvidenceReferences = result.RelatedRecords.Count > 0
+                ? result.RelatedRecords
+                : relatedRecords
+        }).ToArray();
         string[] followUps = results.Any(static result => result.Tool == "list_data_objects")
             ?
             [
@@ -159,7 +166,7 @@ public sealed class DeterministicModelClient : IModelClient
         {
             Summary = findings.Length == 0
                 ? "没有足够的生产数据回答该问题。"
-                : string.Join(" ", findings),
+                : string.Join(" ", findings.Select(static finding => finding.Statement)),
             Findings = findings,
             Limitations = limitations,
             RelatedRecords = relatedRecords,

@@ -10,7 +10,7 @@
   },
   "development_evidence": {
     "protocol": "protocol-v2.json",
-    "datasets": ["fdm", "concrete"],
+    "datasets": ["fdm", "crossed_barrel"],
     "use": "development-and-regression-only"
   },
   "sources": {

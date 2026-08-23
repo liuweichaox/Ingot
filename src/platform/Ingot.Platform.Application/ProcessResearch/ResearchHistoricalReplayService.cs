@@ -186,6 +186,17 @@ public sealed class ResearchHistoricalReplayService(
                 .Where(static value => value.Length > 0)
                 .ToArray()
             : [];
+        var optimizerModelVersions = raw.TryGetProperty("step_traces", out var stepTracesRaw)
+            ? stepTracesRaw.EnumerateArray()
+                .SelectMany(static trace => trace.EnumerateArray())
+                .Select(static step => step.TryGetProperty("model_version", out var modelVersion)
+                    ? modelVersion.GetString() ?? ""
+                    : "")
+                .Where(static value => value.Length > 0)
+                .Distinct(StringComparer.Ordinal)
+                .Order(StringComparer.Ordinal)
+                .ToArray()
+            : [];
         var originalTrials = ReadNullableInt(raw, "original_order_trials");
         var calibrationRows = raw.GetProperty("calibration").EnumerateArray().ToArray();
         var predictionChecks = calibrationRows.Sum(value =>
@@ -256,6 +267,8 @@ public sealed class ResearchHistoricalReplayService(
             !baselineMethods.Contains("seeded-random-order", StringComparer.Ordinal) ||
             !baselineMethods.Contains("quadratic-response-surface", StringComparer.Ordinal))
             gateFailures.Add("回放没有执行全部预注册基线：历史工程师顺序、随机顺序和二次响应面。");
+        if (optimizerModelVersions.Length == 0)
+            gateFailures.Add("回放没有留下任何可核对的优化器模型版本。");
         if (!AuditNoFutureLeakage(
                 raw,
                 request.SeedCount,
@@ -308,6 +321,7 @@ public sealed class ResearchHistoricalReplayService(
             Random = random,
             ResponseSurface = responseSurface,
             BaselineMethods = baselineMethods,
+            OptimizerModelVersions = optimizerModelVersions,
             PreregistrationHash = preregistrationHash,
             PredictionIntervalCoverage = coverage,
             PredictionIntervalChecks = predictionChecks,

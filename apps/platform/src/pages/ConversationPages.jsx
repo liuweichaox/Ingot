@@ -194,7 +194,16 @@ function ChatAnswer({ answer, onFollowUp }) {
     );
   }
 
-  const findings = (answer.findings || []).filter(item => item && item !== answer.summary);
+  const findings = (answer.findings || [])
+    .map(item => typeof item === "string"
+      ? { statement: item, strength: "observation", evidenceReferences: [] }
+      : item)
+    .filter(item => item?.statement && item.statement !== answer.summary);
+  const findingStrengthLabels = {
+    observation: "记录事实",
+    association: "统计关联",
+    hypothesis: "待验证假设",
+  };
   const combined = answer.combinedAnalysis;
   return (
     <article className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
@@ -212,9 +221,14 @@ function ChatAnswer({ answer, onFollowUp }) {
           <p className="text-xs font-semibold tracking-wide text-slate-500">关键发现</p>
           <ol className="mt-2 space-y-2">
             {findings.map((item, index) => (
-              <li key={item} className="flex gap-3 rounded-lg bg-slate-50 px-3 py-2.5">
+              <li key={`${item.statement}-${index}`} className="flex gap-3 rounded-lg bg-slate-50 px-3 py-2.5">
                 <span className="grid size-6 shrink-0 place-items-center rounded-full bg-blue-100 text-xs font-semibold text-blue-700">{index + 1}</span>
-                <span>{item}</span>
+                <span className="min-w-0 flex-1">
+                  <span className="block">{item.statement}</span>
+                  <span className="mt-1 block text-xs text-slate-500">
+                    {findingStrengthLabels[item.strength] || "证据陈述"} · {item.evidenceReferences?.length || 0} 条记录引用
+                  </span>
+                </span>
               </li>
             ))}
           </ol>

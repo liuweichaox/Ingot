@@ -71,7 +71,9 @@ public sealed record AnalysisAnswer
 {
     public required string Summary { get; init; }
 
-    public IReadOnlyList<string> Findings { get; init; } = [];
+    public string SummaryStrength { get; init; } = AnalysisClaimStrengths.Observation;
+
+    public IReadOnlyList<AnalysisClaim> Findings { get; init; } = [];
 
     public IReadOnlyList<string> Limitations { get; init; } = [];
 
@@ -84,6 +86,34 @@ public sealed record AnalysisAnswer
     public IReadOnlyList<AgentProposalEnvelope> Proposals { get; init; } = [];
 
     public CombinedAnalysisResult? CombinedAnalysis { get; init; }
+}
+
+public static class AnalysisClaimStrengths
+{
+    public const string Observation = "observation";
+
+    public const string Association = "association";
+
+    public const string Hypothesis = "hypothesis";
+
+    public const string Causal = "causal";
+
+    public static readonly IReadOnlySet<string> All = new HashSet<string>(StringComparer.Ordinal)
+    {
+        Observation,
+        Association,
+        Hypothesis,
+        Causal
+    };
+}
+
+public sealed record AnalysisClaim
+{
+    public required string Statement { get; init; }
+
+    public string Strength { get; init; } = AnalysisClaimStrengths.Observation;
+
+    public IReadOnlyList<RelatedRecordRef> EvidenceReferences { get; init; } = [];
 }
 
 public static class AgentProposalKinds

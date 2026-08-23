@@ -4,17 +4,17 @@ This directory turns “does the optimizer reduce additional experiments?” int
 
 | Evidence layer | Purpose | Data | Current state |
 |---|---|---|---|
-| v2 development regression | algorithm development, regression detection, and claim-boundary checks | FDM and concrete | complete reference result retained |
+| v2 development regression | algorithm development, regression detection, and claim-boundary checks | FDM and Crossed Barrel mechanical design | complete reference result retained |
 | v3 protocol-frozen evaluation | strong-baseline comparison and mechanism-feature ablation | NASA airfoil noise and Delft yacht hydrodynamics | draft protocol; code blocks a full run |
 
 ## Data and scenarios
 
-The benchmark uses two CC BY 4.0 manufacturing datasets:
+The benchmark uses two explicitly licensed manufacturing-experiment datasets:
 
 - FDM 3D printing, DOI `10.17632/zd6td6svd6.2`: 162 complete DOE records in six material-and-infill contexts; layer thickness, infill, and speed are controls, with roughness and peak stress as outcomes.
-- UCI Concrete Compressive Strength, DOI `10.24432/C5PK67`: 1,030 source records aggregated into 996 unique mixtures and eight sufficiently populated curing-age contexts; seven ingredients are controls and compressive strength is the outcome.
+- Crossed Barrel additive-manufacturing mechanical design, DOI `10.1126/sciadv.aaz1708`: 600 structural designs were each physically printed and compression-tested three times, for 1,800 experiments; discrete hollow-column count defines four contexts, twist angle, outer radius, and wall thickness are controls, and toughness is the outcome.
 
-Categorical factors are stratified as context and never encoded as continuous controls with false distance. Identical concrete age-and-mixture records are averaged while retaining replicate count and sample standard deviation, so repeated measurements do not masquerade as separate candidate experiments. See [NOTICE](NOTICE.md) for provenance, licenses, archive checksums, and transformations, and [protocol-v2.json](protocol-v2.json) for the frozen protocol. The loader verifies fixture hashes, row counts, unique identities, and replicate reconciliation before running.
+Categorical factors are stratified as context and never encoded as continuous controls with false distance. Each Crossed Barrel design uses the mean of its three measured toughness values while retaining replicate count and sample standard deviation, so repeated measurements do not masquerade as separate candidate experiments. See [NOTICE](NOTICE.md) for provenance, licenses, pinned source revision, checksums, and transformations, and [protocol-v2.json](protocol-v2.json) for the protocol. The loader verifies fixture hashes, row counts, unique identities, and replicate reconciliation before running.
 
 ## Compared methods
 
@@ -26,7 +26,7 @@ Every replay episode gives all three methods the same unique, seeded initial his
 
 An episode whose initial history already meets specification is excluded before any method runs. The endpoint therefore asks: “After observed history has not met specification, how many additional experiments are required?” Methods may query only real, unobserved settings in the public pool. They cannot inspect candidate outcomes, substitute nearest neighbors, interpolate outcomes, or synthesize results.
 
-FDM uses four initial observations and a total budget of 12; concrete uses eight and 16. Both allow at most eight additional trials, and a failure is scored as nine to avoid survivor bias. The reference run uses 100 unique episodes in each of 14 contexts, or 1,400 paired replays.
+FDM uses four initial observations and a total budget of 12; Crossed Barrel uses eight and 16. Both allow at most eight additional trials, and a failure is scored as nine to avoid survivor bias. The reference run uses 100 unique episodes in each of 10 contexts, or 1,000 paired replays. Each Crossed Barrel target is the empirical 80th percentile for its column-count context; it is a development-regression threshold, not an engineering specification.
 
 ## Decision rules
 
@@ -42,14 +42,14 @@ Random search represents experimentation without a response model. A linear resp
 
 | Check | Result |
 |---|---|
-| Data and workflow validation | Passed; 2 datasets, 14 contexts, 1,400 episodes |
-| Ingot / random / linear-response success | 98.71% / 80.79% / 92.86% |
-| Ingot / random / linear-response capped mean additional trials | 2.26 / 4.47 / 2.69 |
-| Reduction versus random search | 49.45%, 95% CI 42.40%–56.01%; superiority passed |
-| Reduction versus linear response surface | 16.03%, 95% CI -1.15%–27.44%; noninferiority passed, superiority not demonstrated |
-| Permitted public conclusion | **Passed only versus seeded random search** (`passed-vs-seeded-random-search`) |
+| Data and workflow validation | Passed; 2 datasets, 10 contexts, 1,000 episodes |
+| Ingot / random / linear-response success | 98.20% / 75.90% / 90.40% |
+| Ingot / random / linear-response capped mean additional trials | 2.77 / 4.87 / 3.21 |
+| Reduction versus random search | 43.08%, 95% CI 36.19%–49.86%; superiority and both dataset guardrails passed |
+| Reduction versus linear response surface | 13.53% overall, 95% CI -9.41%–27.76%; overall noninferiority passed, but Crossed Barrel was -33.39%, 95% CI -64.45%–-8.38%, and failed its guardrail |
+| Permitted public conclusion | **Not passed: no overall experiment-reduction claim** (`not-demonstrated`) |
 
-This is a development-stage public benchmark, not preregistered independent external validation. It shows that this version significantly reduces model-free additional experiments in these two fixed public pools and is noninferior overall to the linear response surface. It does not prove the same savings for another factory, material, machine, or objective.
+This is a development-stage public benchmark, not preregistered independent external validation. Superiority to seeded random search holds, but the dataset guardrail takes precedence over the aggregate: in Crossed Barrel, Ingot required 2.13 capped mean additional trials versus 1.60 for the linear response surface and was non-worse in none of the four contexts. The overall experiment-reduction claim is therefore marked not demonstrated. The result also does not prove the same savings for another factory, material, machine, or objective.
 
 ## v3 protocol-frozen evaluation
 

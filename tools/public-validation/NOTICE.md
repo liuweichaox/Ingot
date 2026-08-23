@@ -10,15 +10,31 @@ License: [Creative Commons Attribution 4.0 International](https://creativecommon
 
 Changes made by the Ingot project: selected the six complete closed-printer PLA+/PETG × grid/triangles/zigzag 3×3×3 DOE grids; renamed columns; normalized categorical labels; retained only the controls and outcomes used by the public benchmark. No outcome values were synthesized or imputed.
 
-`data/concrete-strength.csv` is a normalized copy of:
+`data/crossed-barrel.csv` is a normalized copy of the Crossed Barrel dataset in:
 
-> Yeh, I-Cheng, “Concrete Compressive Strength”, UCI Machine Learning Repository, doi: 10.24432/C5PK67.
+> Liang, Q.; Gongora, A. E.; Ren, Z. et al. (2021), “Benchmarking the performance of Bayesian optimization across multiple experimental materials science domains”, *npj Computational Materials* 7, 188, doi: 10.1038/s41524-021-00656-9.
 
-Source: https://archive.ics.uci.edu/dataset/165/concrete+compressive+strength
+The underlying experiments are described in:
 
-License: [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/)
+> Gongora, A. E.; Xu, B.; Perry, W. et al. (2020), “A Bayesian experimental autonomous researcher for mechanical design”, *Science Advances* 6(15), eaaz1708, doi: 10.1126/sciadv.aaz1708.
 
-Changes made by the Ingot project: renamed columns, sorted records by curing age and mixture, and aggregated identical age-plus-mixture records to one candidate setting. The committed fixture retains the mean strength, replicate count, and sample standard deviation. Its 996 unique settings reconcile to all 1,030 source rows. No outcome was synthesized or imputed. The official ZIP used for normalization has SHA-256 `dad85d14de8aee4e07479daa774e6b569a313715b71a3b92c95a07cf91c2c9a7`; `prepare_concrete_fixture.py` documents the deterministic transformation.
+Source: https://github.com/PV-Lab/Benchmarking/blob/7585c517ad88e676c42c6bf24a8ad278e01ddb21/datasets/Crossed%20barrel_dataset.csv
+
+License: [MIT](https://github.com/PV-Lab/Benchmarking/blob/7585c517ad88e676c42c6bf24a8ad278e01ddb21/LICENSE)
+
+Changes made by the Ingot project: renamed the four published design variables and toughness outcome with descriptive names and units, sorted designs, and averaged only exact design replicates. The committed fixture retains the three-replicate count and sample standard deviation. Its 600 unique settings reconcile to all 1,800 physical tests. No outcome was synthesized or imputed. The pinned source CSV has SHA-256 `2c01f875f3c210e986ca6142bf20f417884c2ad7d6f008c2fc574b44a3d5f606`; `prepare_crossed_barrel_fixture.py` documents the deterministic transformation.
+
+The source repository's license notice is reproduced below as required:
+
+> MIT License
+>
+> Copyright (c) 2020 MIT PVLab
+>
+> Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+>
+> The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+>
+> THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 `data/airfoil-self-noise.csv` is a normalized copy of:
 

@@ -36,13 +36,13 @@ Open `http://127.0.0.1:3001`. Use `demo / demo` for the engineer workflow or `ad
 
 ### Public-data experiment-efficiency validation
 
-This path requires Git and uv 0.11.32 but no database, equipment, or factory data. It uses explicitly licensed, SHA-256-verified public FDM and concrete fixtures, evaluates 14 stratified process contexts, and compares the optimizer with random selection and a linear response surface:
+This path requires Git and uv 0.11.32 but no database, equipment, or factory data. It uses explicitly licensed, SHA-256-verified public FDM DOE and Crossed Barrel mechanical-design fixtures, evaluates 10 stratified process contexts, and compares the optimizer with random selection and a linear response surface:
 
 ```bash
 ./scripts/benchmark-public-validation.sh
 ```
 
-The result is written to `artifacts/public-validation.json`. The current reference result demonstrates fewer additional experiments than seeded random search and overall noninferiority to the linear response surface; it does not support a claim of superiority to every DOE/RSM method. See [Public-data experiment-efficiency validation](https://github.com/liuweichaox/Ingot/blob/main/tools/public-validation/README.en.md) for the fast check, complete decision rule, data license, and reference result. Public data can reproduce the software and method path; it cannot prove the same benefit for another factory.
+The result is written to `artifacts/public-validation.json`. The current reference result passes superiority to seeded random search, but the Crossed Barrel result triggers the dataset guardrail against the linear response surface, so the overall experiment-reduction claim is not demonstrated. See [Public-data experiment-efficiency validation](https://github.com/liuweichaox/Ingot/blob/main/tools/public-validation/README.en.md) for the fast check, complete decision rule, data license, and per-dataset result. Public data can reproduce the software and method path; it cannot prove the same benefit for another factory.
 
 The repository also contains a draft v3 external-data evaluation. It uses two physical-experiment datasets not used during v2 development, registers four comparison baselines, and includes a mechanism-feature ablation. At draft status, run only the integrity check:
 

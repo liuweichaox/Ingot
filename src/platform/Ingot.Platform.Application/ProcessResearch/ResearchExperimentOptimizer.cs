@@ -48,6 +48,16 @@ public sealed class ResearchExperimentOptimizer(
                 await researchAssetStore.ListMechanismFusionsAsync(ct).ConfigureAwait(false));
         var intent = NormalizeIntent(request.Intent);
         var mode = NormalizeMode(request.Mode);
+        ResearchMethodAdmissionEvidence? methodAdmissionEvidence = null;
+        if (intent == ResearchOptimizationIntents.ReachSpecification)
+        {
+            methodAdmissionEvidence = await RequireMethodAdmissionAsync(
+                    projectId,
+                    mechanismKnowledgeSnapshotHash,
+                    mechanismModels.SnapshotHash,
+                    ct)
+                .ConfigureAwait(false);
+        }
         ResearchOnlineAdmissionEvidence? onlineAdmissionEvidence = null;
         if (mode == ResearchOptimizationModes.Controlled)
         {
@@ -232,6 +242,7 @@ public sealed class ResearchExperimentOptimizer(
                 optimizerCall = call,
                 request.ReplicatesPerCondition,
                 mode,
+                MethodReplayHash = methodAdmissionEvidence?.HistoricalReplayReportHash,
                 OnlineReplayHash = onlineAdmissionEvidence?.HistoricalReplayReportHash,
                 OnlineShadowHash = onlineAdmissionEvidence?.ShadowReportHash,
                 OnlineRollbackHash = onlineAdmissionEvidence?.RollbackDrillRecordHash,
@@ -257,6 +268,15 @@ public sealed class ResearchExperimentOptimizer(
             return existing;
         }
         var response = await optimizerClient.SuggestAsync(call, ct).ConfigureAwait(false);
+        if (methodAdmissionEvidence is not null &&
+            !methodAdmissionEvidence.OptimizerModelVersions.Contains(
+                response.ModelVersion,
+                StringComparer.Ordinal))
+        {
+            throw new ProcessResearchRuleException(
+                $"序贯优化已暂停：当前优化器模型 {response.ModelVersion} 未出现在通过审核的历史回放中。" +
+                "请用当前模型重新运行并审核历史回放，或降级为响应面或适用 DOE。");
+        }
         if (response.ObservationCount != observations.Length ||
             response.Suggestions.Count != optimizerTopK)
             throw new ProcessResearchRuleException("优化服务使用的数据快照或返回的实验数量不一致。");
@@ -358,6 +378,7 @@ public sealed class ResearchExperimentOptimizer(
                 ReplicatesPerCondition = request.ReplicatesPerCondition,
                 BlockCount = request.ReplicatesPerCondition,
                 RunPredictions = predictions,
+                MethodAdmission = methodAdmissionEvidence,
                 OnlineAdmission = onlineAdmissionEvidence,
                 GeneratedAt = DateTimeOffset.UtcNow
             }
@@ -386,6 +407,64 @@ public sealed class ResearchExperimentOptimizer(
             }
             throw;
         }
+    }
+
+    private async Task<ResearchMethodAdmissionEvidence> RequireMethodAdmissionAsync(
+        Guid projectId,
+        string mechanismKnowledgeSnapshotHash,
+        string mechanismModelSnapshotHash,
+        CancellationToken ct)
+    {
+        var latest = (await store.ListHistoricalReplayReportsAsync(projectId, ct)
+                .ConfigureAwait(false))
+            .Where(static value => value.Status == ResearchHistoricalReplayStatuses.Reviewed)
+            .Where(value => string.Equals(
+                    value.ValidationPolicyVersion,
+                    ValidationThresholds.PolicyVersion,
+                    StringComparison.Ordinal) &&
+                string.Equals(
+                    value.MechanismKnowledgeSnapshotHash,
+                    mechanismKnowledgeSnapshotHash,
+                    StringComparison.Ordinal) &&
+                string.Equals(
+                    value.MechanismModelSnapshotHash,
+                    mechanismModelSnapshotHash,
+                    StringComparison.Ordinal))
+            .OrderByDescending(static value => value.ReviewedAt ?? value.GeneratedAt)
+            .FirstOrDefault();
+        if (latest is null)
+        {
+            throw new ProcessResearchRuleException(
+                "序贯优化已暂停：缺少与当前方法、机理知识和模型快照一致、经独立审核的历史回放。" +
+                "请先使用响应面或适用 DOE 建立历史基线并完成回放审核。");
+        }
+        if (!latest.GatePassed)
+        {
+            var failures = latest.GateFailures.Count == 0
+                ? "历史回放没有通过方法准入门槛。"
+                : string.Join("；", latest.GateFailures);
+            throw new ProcessResearchRuleException(
+                "序贯优化已暂停：最新的当前方法历史回放未通过。" + failures +
+                "请降级为响应面或适用 DOE，不得继续生成优化建议。");
+        }
+        if (latest.OptimizerModelVersions.Count == 0)
+        {
+            throw new ProcessResearchRuleException(
+                "序贯优化已暂停：最新历史回放没有冻结优化器模型版本。" +
+                "请重新运行并审核回放，或降级为响应面或适用 DOE。");
+        }
+
+        return new ResearchMethodAdmissionEvidence
+        {
+            ValidationPolicyVersion = latest.ValidationPolicyVersion,
+            HistoricalReplayReportId = latest.ReportId,
+            HistoricalReplayReportHash = latest.ReportHash,
+            BaselineMethods = latest.BaselineMethods,
+            OptimizerModelVersions = latest.OptimizerModelVersions,
+            MechanismKnowledgeSnapshotHash = latest.MechanismKnowledgeSnapshotHash,
+            MechanismModelSnapshotHash = latest.MechanismModelSnapshotHash,
+            AssessedAt = DateTimeOffset.UtcNow
+        };
     }
 
     private Task SaveKnowledgeUsagesAsync(

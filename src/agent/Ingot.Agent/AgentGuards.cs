@@ -466,13 +466,16 @@ public sealed class DefaultAnalysisResultValidator : IAnalysisResultValidator
             return false;
         }
 
+        if (!TryValidateClaims(answer, results, out error))
+            return false;
+
         if (!TryValidateProposals(answer.Proposals, results, out error))
             return false;
 
         var source = string.Join('\n', results.Select(result =>
             $"{result.Summary}\n{result.Data.GetRawText()}"));
         var answerText = string.Join('\n', new[] { answer.Summary }
-            .Concat(answer.Findings)
+            .Concat(answer.Findings.Select(static finding => finding.Statement))
             .Concat(answer.Limitations)
             .Concat(answer.Proposals.SelectMany(static proposal =>
                 new[] { proposal.Title, proposal.Rationale }.Concat(proposal.DraftFields.Values))));
@@ -496,6 +499,50 @@ public sealed class DefaultAnalysisResultValidator : IAnalysisResultValidator
         {
             error = "回答把参数相关性说成了已经确认的原因。";
             return false;
+        }
+
+        error = string.Empty;
+        return true;
+    }
+
+    private static bool TryValidateClaims(
+        AnalysisAnswer answer,
+        IReadOnlyList<AnalysisToolResult> results,
+        out string error)
+    {
+        if (!AnalysisClaimStrengths.All.Contains(answer.SummaryStrength))
+        {
+            error = "回答摘要必须声明有效的结论强度。";
+            return false;
+        }
+        if (string.Equals(answer.SummaryStrength, AnalysisClaimStrengths.Causal, StringComparison.Ordinal))
+        {
+            error = "只读分析不能把摘要声明为因果结论。";
+            return false;
+        }
+
+        var availableEvidence = results.SelectMany(static result => result.RelatedRecords)
+            .Select(static reference => (reference.Kind, reference.Id))
+            .ToHashSet();
+        foreach (var finding in answer.Findings)
+        {
+            if (string.IsNullOrWhiteSpace(finding.Statement) || finding.Statement.Length > 4000 ||
+                !AnalysisClaimStrengths.All.Contains(finding.Strength))
+            {
+                error = "分析发现必须包含有效陈述和结论强度。";
+                return false;
+            }
+            if (string.Equals(finding.Strength, AnalysisClaimStrengths.Causal, StringComparison.Ordinal))
+            {
+                error = "只读分析不能声明因果结论；请降级为关联或待验证假设。";
+                return false;
+            }
+            if (finding.EvidenceReferences.Count == 0 || finding.EvidenceReferences.Any(reference =>
+                    !availableEvidence.Contains((reference.Kind, reference.Id))))
+            {
+                error = "每条分析发现都必须引用本次只读工具返回的正式记录。";
+                return false;
+            }
         }
 
         error = string.Empty;

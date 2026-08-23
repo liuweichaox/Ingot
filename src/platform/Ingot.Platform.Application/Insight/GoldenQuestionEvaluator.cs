@@ -65,7 +65,12 @@ public sealed class GoldenQuestionEvaluator
 
         var forbidden = CausalClaims.Concat(goldenCase.ForbiddenAnswerText)
             .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
-        Add("causal-guard", !forbidden.Any(term => AnswerText(run).Contains(term, StringComparison.OrdinalIgnoreCase)),
+        var hasStructuredCausalClaim = run.Answer is not null &&
+            (string.Equals(run.Answer.SummaryStrength, AnalysisClaimStrengths.Causal, StringComparison.Ordinal) ||
+             run.Answer.Findings.Any(static finding =>
+                 string.Equals(finding.Strength, AnalysisClaimStrengths.Causal, StringComparison.Ordinal)));
+        Add("causal-guard", !hasStructuredCausalClaim &&
+            !forbidden.Any(term => AnswerText(run).Contains(term, StringComparison.OrdinalIgnoreCase)),
             "未经受控实验验证的回答不得包含因果断言或审核禁用文本。");
 
         return new GoldenQuestionEvaluation
@@ -131,6 +136,6 @@ public sealed class GoldenQuestionEvaluator
 
     private static string AnswerText(AgentRunSnapshot run)
         => run.Answer is null ? string.Empty : string.Join('\n', new[] { run.Answer.Summary }
-            .Concat(run.Answer.Findings)
+            .Concat(run.Answer.Findings.Select(static finding => finding.Statement))
             .Concat(run.Answer.Limitations));
 }

@@ -4,7 +4,6 @@ import {
   AdjustmentsHorizontalIcon,
   Bars3Icon,
   BoltIcon,
-  BeakerIcon,
   ClipboardDocumentCheckIcon,
   ChevronDoubleLeftIcon,
   ChevronDoubleRightIcon,
@@ -64,11 +63,7 @@ const sections = [
       { label: "开始追因", items: [["/analysis", "追因工作台"]] },
       { label: "证据与比较", items: [["/data-quality", "数据可信度"], ["/comparisons", "运行对比"]] },
       { label: "辅助研判", items: [["/chat", "分析助手"]] },
-    ],
-  },
-  {
-    id: "optimization", label: "工艺研发", icon: BeakerIcon, path: "/research-projects", groups: [
-      { label: "项目与成果", items: [["/research-projects", "研发项目"], ["/research-assets", "研发成果"]] },
+      { label: "高级工程验证", items: [["/research-projects", "研发项目"], ["/research-assets", "研发成果"]] },
     ],
   },
 ];

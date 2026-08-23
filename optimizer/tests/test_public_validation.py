@@ -29,17 +29,18 @@ def test_public_fixtures_are_verified_and_contexts_are_isolated():
     fdm = benchmark.group_scenarios(
         "fdm", benchmark.load_rows("fdm", protocol), protocol
     )
-    concrete = benchmark.group_scenarios(
-        "concrete", benchmark.load_rows("concrete", protocol), protocol
+    crossed_barrel = benchmark.group_scenarios(
+        "crossed_barrel", benchmark.load_rows("crossed_barrel", protocol), protocol
     )
 
     assert len(fdm) == 6
     assert all(len(values) == 27 for _, values in fdm)
-    assert len(concrete) == 8
+    assert len(crossed_barrel) == 4
+    assert all(len(values) == 150 for _, values in crossed_barrel)
     assert sum(
         int(row["replicate_count"])
-        for row in benchmark.load_rows("concrete", protocol)
-    ) == 1030
+        for row in benchmark.load_rows("crossed_barrel", protocol)
+    ) == 1800
     for dataset in benchmark.DATASETS.values():
         assert set(dataset["context_fields"]).isdisjoint(dataset["control_fields"])
 
@@ -74,7 +75,8 @@ def test_committed_full_result_keeps_public_claim_boundary_explicit():
     assert payload["method"]["episodes"]["count_per_scenario"] == 100
     assert payload["summary"]["workflow_validation"] == "passed"
     assert payload["summary"]["dataset_count"] == 2
-    assert payload["summary"]["scenario_count"] == 14
+    assert payload["summary"]["scenario_count"] == 10
+    assert payload["summary"]["episode_count"] == 1000
     assert payload["summary"]["experiment_reduction_vs_uninformed_search"] in {
         "passed-public-benchmark",
         "not-demonstrated",
@@ -83,6 +85,16 @@ def test_committed_full_result_keeps_public_claim_boundary_explicit():
         "passed-public-benchmark",
         "not-demonstrated",
     }
+    crossed_barrel_effect = next(
+        effect
+        for effect in payload["summary"]["dataset_effects"]["crossed_barrel"]
+        if effect["baseline"] == "regularized-linear-response-surface"
+    )
+    assert crossed_barrel_effect["passed"] is False
+    assert payload["summary"]["dataset_guardrails"]["crossed_barrel"][
+        "regularized-linear-response-surface"
+    ] is False
+    assert payload["summary"]["experiment_reduction_claim"] == "not-demonstrated"
     assert "does not prove savings in another factory" in payload["method"][
         "claim_boundary"
     ]

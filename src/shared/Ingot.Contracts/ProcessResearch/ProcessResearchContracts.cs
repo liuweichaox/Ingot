@@ -604,8 +604,21 @@ public sealed record ResearchOptimizationMetadata
     public int ReplicatesPerCondition { get; init; } = 1;
     public int BlockCount { get; init; } = 1;
     public IReadOnlyList<OptimizationRunPrediction> RunPredictions { get; init; } = [];
+    public ResearchMethodAdmissionEvidence? MethodAdmission { get; init; }
     public ResearchOnlineAdmissionEvidence? OnlineAdmission { get; init; }
     public DateTimeOffset GeneratedAt { get; init; }
+}
+
+public sealed record ResearchMethodAdmissionEvidence
+{
+    public string ValidationPolicyVersion { get; init; } = "not-evaluated";
+    public Guid HistoricalReplayReportId { get; init; }
+    public required string HistoricalReplayReportHash { get; init; }
+    public IReadOnlyList<string> BaselineMethods { get; init; } = [];
+    public IReadOnlyList<string> OptimizerModelVersions { get; init; } = [];
+    public string MechanismKnowledgeSnapshotHash { get; init; } = "none";
+    public string MechanismModelSnapshotHash { get; init; } = "none";
+    public DateTimeOffset AssessedAt { get; init; }
 }
 
 public sealed record MechanismModelApplicationReference
@@ -858,6 +871,7 @@ public sealed record ResearchHistoricalReplayReport
     public required ResearchReplayMethodSummary Random { get; init; }
     public ResearchReplayMethodSummary? ResponseSurface { get; init; }
     public IReadOnlyList<string> BaselineMethods { get; init; } = [];
+    public IReadOnlyList<string> OptimizerModelVersions { get; init; } = [];
 
     public string PreregistrationHash { get; init; } = "not-registered";
     public double? PredictionIntervalCoverage { get; init; }

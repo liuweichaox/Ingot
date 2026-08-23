@@ -36,13 +36,13 @@ npm --prefix apps/platform run demo
 
 ### 公开数据实验效率验证
 
-这条路径不需要数据库、设备或工厂数据，只需要 Git 和 uv 0.11.32。它使用仓库内明确许可、带 SHA-256 校验的固定 FDM 与混凝土公开数据，运行 14 个分层工艺上下文，并与随机选择和线性响应面比较：
+这条路径不需要数据库、设备或工厂数据，只需要 Git 和 uv 0.11.32。它使用仓库内明确许可、带 SHA-256 校验的 FDM DOE 与 Crossed Barrel 机械设计公开数据，运行 10 个分层工艺上下文，并与随机选择和线性响应面比较：
 
 ```bash
 ./scripts/benchmark-public-validation.sh
 ```
 
-结果写入 `artifacts/public-validation.json`。当前参考结果证明相对固定随机搜索减少追加实验，并与线性响应面总体非劣；不支持“优于所有 DOE/RSM 方法”的表述。快速检查、完整判定规则、数据许可和参考结果见[公开数据实验效率验证](https://github.com/liuweichaox/Ingot/blob/main/tools/public-validation/README.md)。公开数据可以验证软件与方法链路是否可复现，不能证明另一个工厂可以获得相同收益。
+结果写入 `artifacts/public-validation.json`。当前参考结果相对固定随机搜索通过优效检验，但 Crossed Barrel 分项对线性响应面触发数据集护栏，因此总体实验缩减声明为未证明。快速检查、完整判定规则、数据许可和分项结果见[公开数据实验效率验证](https://github.com/liuweichaox/Ingot/blob/main/tools/public-validation/README.md)。公开数据可以验证软件与方法链路是否可复现，不能证明另一个工厂可以获得相同收益。
 
 仓库还包含 v3 外部数据评估草案。它使用两个未参与 v2 开发的物理实验数据集，登记四个比较基线并加入机理特征消融。当前只执行完整性检查：
 

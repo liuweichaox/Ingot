@@ -95,16 +95,17 @@ test("navigation and overlays are accessible Headless UI components", () => {
   assert.match(app, /DialogBackdrop/);
   assert.match(app, /DialogPanel/);
   assert.match(app, /MenuButton/);
-  for (const [id, domain] of [["overview", "工作台"], ["evidence", "生产运行"], ["quality", "质量管理"], ["diagnosis", "工艺追因"], ["optimization", "工艺研发"], ["process-definition", "工艺配置"], ["equipment-connection", "现场接入"]]) {
+  for (const [id, domain] of [["overview", "工作台"], ["evidence", "生产运行"], ["quality", "质量管理"], ["diagnosis", "工艺追因"], ["process-definition", "工艺配置"], ["equipment-connection", "现场接入"]]) {
     assert.match(app, new RegExp(`id: "${id}", label: "${domain}"`));
   }
-  assert.match(app, /id: "overview"[\s\S]*id: "equipment-connection"[\s\S]*id: "process-definition"[\s\S]*id: "evidence"[\s\S]*id: "quality"[\s\S]*id: "diagnosis"[\s\S]*id: "optimization"/);
+  assert.match(app, /id: "overview"[\s\S]*id: "equipment-connection"[\s\S]*id: "process-definition"[\s\S]*id: "evidence"[\s\S]*id: "quality"[\s\S]*id: "diagnosis"/);
+  assert.doesNotMatch(app, /id: "optimization"/);
   assert.match(app, /const systemSection = \{/);
   assert.match(app, /sectionsForIdentity/);
   assert.match(app, /roles \|\| \[\]\)\.includes\("platform\.admin"\)/);
   assert.match(app, /id: "equipment-connection"[\s\S]*\["\/edges", "现场节点"\], \["\/configuration\/ingestion-tasks", "数据源配置"\]/);
   assert.match(app, /id: "process-definition"[\s\S]*\["\/configuration", "配置总览"\][\s\S]*\["\/configuration\/process-data-models", "工艺数据字典"\][\s\S]*\["\/configuration\/tooling-types", "工装结构定义"\][\s\S]*\["\/configuration\/scenario-packages", "配置发布"\]/);
-  assert.match(app, /id: "optimization"[\s\S]*label: "项目与成果", items: \[\["\/research-projects", "研发项目"\], \["\/research-assets", "研发成果"\]\]/);
+  assert.match(app, /id: "diagnosis"[\s\S]*label: "高级工程验证", items: \[\["\/research-projects", "研发项目"\], \["\/research-assets", "研发成果"\]\]/);
   assert.match(app, /id: "system"[\s\S]*label: "身份与权限"[\s\S]*label: "平台运维"[\s\S]*label: "助手治理"/);
   assert.match(app, /\["\/chat", "分析助手"\]/);
   assert.match(app, /items: \[\["\/research-projects", "研发项目"\], \["\/research-assets", "研发成果"\]\]/);

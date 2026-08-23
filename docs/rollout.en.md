@@ -164,6 +164,8 @@ The project cannot use feature count as evidence of success when:
 
 These findings trigger data repair, workflow changes, method downgrade, or an optimization pause rather than automatic progression to a more complex phase.
 
+The “sequential recommendations do not beat an applicable baseline” condition is enforced as an executable gate. Every reach-specification optimization must cite an independently reviewed, passing historical replay for the current policy and mechanism snapshots, and the current optimizer model version must actually appear in its replay trace. A missing or failing replay, or a version mismatch, stops the request and returns a response-surface or traditional-DOE downgrade path; recording the failure in a report while continuing to recommend is not allowed.
+
 ## Evidence confidentiality and public wording
 
 The complete report for a real project is a controlled internal evidence artifact. It preserves data scope, inclusion rules, variables, objectives, constraints, context coverage, exclusions, comparison baselines, random seeds, every failure, safety event, engineer rejection reason, non-generalizable limitation, and content hash. Access is limited to authorized project members and reviewers and follows the deployer's retention, export, backup, and deletion rules.

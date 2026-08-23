@@ -84,6 +84,8 @@ public sealed class ChatFrameworkOpenAiModelClient : IModelClient
     {
         var prompt = $"""
                      仅根据已经验证的只读工具结果回答用户问题。数字和相关记录 ID 必须原样来自工具结果；不得把相关性描述为因果关系。
+                     SummaryStrength 和每条 Finding.Strength 只能是 observation、association 或 hypothesis，不能是 causal。
+                     每条 Finding 必须在 EvidenceReferences 中引用本次工具结果实际返回的 Kind 和 Id，不得编造或省略证据引用。
                      数据不足时必须明确拒绝确定性结论并说明限制。不要生成代码、配置或可执行操作。
                      问题: {request.Question}
                      计划: {JsonSerializer.Serialize(plan, JsonOptions)}

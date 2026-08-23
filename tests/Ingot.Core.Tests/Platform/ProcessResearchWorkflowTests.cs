@@ -1133,6 +1133,7 @@ public sealed class ProcessResearchWorkflowTests
         var store = new MemoryStore();
         var workflow = CreateWorkflow(store);
         var project = await workflow.CreateProjectAsync(ProjectDraft(), "engineer-a");
+        var methodAdmission = await SeedMethodAdmissionEvidenceAsync(store, project);
         await store.SaveExperimentResultAsync(new ResearchExperimentResult
         {
             ResultId = Guid.CreateVersion7(),
@@ -1220,6 +1221,10 @@ public sealed class ProcessResearchWorkflowTests
         Assert.Equal("botorch-qlogbo-test", experiment.Optimization.ModelVersion);
         Assert.Equal("declared-test-features", experiment.Optimization.FeatureSetId);
         Assert.Equal(1, experiment.Optimization.DerivedFeatureCount);
+        Assert.Equal(methodAdmission.ReportId,
+            experiment.Optimization.MethodAdmission!.HistoricalReplayReportId);
+        Assert.Equal(methodAdmission.ReportHash,
+            experiment.Optimization.MethodAdmission.HistoricalReplayReportHash);
 
         experiment = await workflow.ExperimentCommands.ChangeExperimentStatusAsync(
             experiment.ExperimentId,
@@ -1275,6 +1280,39 @@ public sealed class ProcessResearchWorkflowTests
             candidate.OperatingRegionId,
             "engineer-b");
         Assert.Equal(OperatingRegionValidationLevels.Laboratory, validated.ValidationLevel);
+    }
+
+    [Fact]
+    public async Task Optimizer_PausesReachSpecificationWhenCurrentReplayFailsSimpleBaselineGate()
+    {
+        var store = new MemoryStore();
+        var workflow = CreateWorkflow(store);
+        var project = await workflow.CreateProjectAsync(ProjectDraft() with
+        {
+            Code = "optimizer-method-gate"
+        }, "engineer-a");
+        await SeedMethodAdmissionEvidenceAsync(
+            store,
+            project,
+            gatePassed: false,
+            gateFailure: "优化器达到规格的中位试验数劣于预注册的二次响应面基线。");
+        var optimizer = new ResearchExperimentOptimizer(
+            store,
+            new StubOptimizerClient(),
+            new EmptyObservationAssembler(),
+            new ResearchExperimentResultMaterializer(workflow),
+            workflow.ExperimentCommands,
+            workflow);
+
+        var exception = await Assert.ThrowsAsync<ProcessResearchRuleException>(() =>
+            optimizer.CreateNextExperimentAsync(
+                project.ProjectId,
+                new ResearchOptimizationRequest(),
+                "engineer-a"));
+
+        Assert.Contains("序贯优化已暂停", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("二次响应面", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("适用 DOE", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -1819,6 +1857,7 @@ public sealed class ProcessResearchWorkflowTests
         Assert.Equal(64, report.PreregistrationHash.Length);
         Assert.Equal(64, report.ReportHash.Length);
         Assert.Equal(3, report.BaselineMethods.Count);
+        Assert.Equal(["botorch-qlogbo-test"], report.OptimizerModelVersions);
         Assert.NotNull(report.ResponseSurface);
         Assert.NotNull(report.MechanismComparison);
         Assert.Equal(0, report.MechanismComparison.SuccessRateDelta);
@@ -2025,6 +2064,8 @@ public sealed class ProcessResearchWorkflowTests
             "engineer-a");
 
         Assert.Single(experiment.RunPlan);
+        Assert.Contains("botorch-controlled-test",
+            experiment.Optimization!.MethodAdmission!.OptimizerModelVersions);
         Assert.True(experiment.Optimization!.OnlineAdmission!.Eligible);
         await Assert.ThrowsAsync<ProcessResearchRuleException>(() =>
             workflow.ExperimentCommands.ChangeExperimentStatusAsync(
@@ -2144,8 +2185,10 @@ public sealed class ProcessResearchWorkflowTests
         {
             ReportId = Guid.CreateVersion7(),
             ProjectId = project.ProjectId,
+            ValidationPolicyVersion = ValidationThresholds.PolicyVersion,
             Status = ResearchHistoricalReplayStatuses.Reviewed,
             MechanismKnowledgeSnapshotHash = mechanismHash,
+            MechanismModelSnapshotHash = "none",
             DatasetSnapshotHash = new string('1', 64),
             UniqueConditionCount = 5,
             SourceRunCount = 5,
@@ -2156,6 +2199,7 @@ public sealed class ProcessResearchWorkflowTests
             Random = new ResearchReplayMethodSummary { SuccessRate = 0.5, Runs = 30 },
             PredictionIntervalCoverage = 1,
             PredictionIntervalChecks = 5,
+            OptimizerModelVersions = ["botorch-controlled-test"],
             EnginePolicy = "production-equivalent:sequential-suggest",
             EvidenceKind = "real-history-candidate-pool",
             Limitations = "candidate pool only",
@@ -2255,6 +2299,54 @@ public sealed class ProcessResearchWorkflowTests
                 }
             });
         }
+    }
+
+    private static async Task<ResearchHistoricalReplayReport> SeedMethodAdmissionEvidenceAsync(
+        MemoryStore store,
+        ResearchProject project,
+        bool gatePassed = true,
+        string? gateFailure = null)
+    {
+        var mechanismHash = MechanismKnowledgeExperimentPolicy.SnapshotHash(
+            new AppliedMechanismKnowledge([], [], [], []));
+        var report = new ResearchHistoricalReplayReport
+        {
+            ReportId = Guid.CreateVersion7(),
+            ProjectId = project.ProjectId,
+            ValidationPolicyVersion = ValidationThresholds.PolicyVersion,
+            MechanismKnowledgeSnapshotHash = mechanismHash,
+            MechanismModelSnapshotHash = "none",
+            Status = ResearchHistoricalReplayStatuses.Reviewed,
+            DatasetSnapshotHash = new string('1', 64),
+            UniqueConditionCount = 5,
+            SourceRunCount = 5,
+            Budget = 5,
+            SeedCount = 30,
+            InitialObservationCount = 3,
+            Optimizer = new ResearchReplayMethodSummary { SuccessRate = 1, Runs = 30 },
+            Random = new ResearchReplayMethodSummary { SuccessRate = 0.5, Runs = 30 },
+            ResponseSurface = new ResearchReplayMethodSummary { SuccessRate = 0.9, Runs = 30 },
+            BaselineMethods =
+            [
+                "historical-engineer-order",
+                "seeded-random-order",
+                "quadratic-response-surface"
+            ],
+            OptimizerModelVersions = ["botorch-qlogbo-test"],
+            PredictionIntervalCoverage = 1,
+            PredictionIntervalChecks = 5,
+            EnginePolicy = "production-equivalent:sequential-suggest",
+            EvidenceKind = "real-history-candidate-pool",
+            Limitations = "candidate pool only",
+            GatePassed = gatePassed,
+            GateFailures = gateFailure is null ? [] : [gateFailure],
+            ReportHash = new string(gatePassed ? '2' : '3', 64),
+            GeneratedBy = "engineer-a",
+            GeneratedAt = DateTimeOffset.UtcNow.AddMinutes(-2),
+            ReviewedBy = "engineer-b",
+            ReviewedAt = DateTimeOffset.UtcNow.AddMinutes(-1)
+        };
+        return await store.CreateHistoricalReplayReportAsync(report);
     }
 
     private static Task<ResearchExperiment> CreateOptimizationExperimentAsync(
@@ -2788,13 +2880,13 @@ public sealed class ProcessResearchWorkflowTests
                       {"step":1,"kind":"preregistered-initial-observation","visible_observation_indices_before":[],"revealed_history_index":0},
                       {"step":2,"kind":"preregistered-initial-observation","visible_observation_indices_before":[0],"revealed_history_index":1},
                       {"step":3,"kind":"preregistered-initial-observation","visible_observation_indices_before":[0,1],"revealed_history_index":2},
-                      {"step":4,"kind":"optimizer-selection","visible_observation_indices_before":[0,1,2],"candidate_history_indices":[3,4],"revealed_history_index":3}
+                      {"step":4,"kind":"optimizer-selection","visible_observation_indices_before":[0,1,2],"candidate_history_indices":[3,4],"revealed_history_index":3,"model_version":"botorch-qlogbo-test"}
                     ],
                     [
                       {"step":1,"kind":"preregistered-initial-observation","visible_observation_indices_before":[],"revealed_history_index":0},
                       {"step":2,"kind":"preregistered-initial-observation","visible_observation_indices_before":[0],"revealed_history_index":1},
                       {"step":3,"kind":"preregistered-initial-observation","visible_observation_indices_before":[0,1],"revealed_history_index":2},
-                      {"step":4,"kind":"optimizer-selection","visible_observation_indices_before":[0,1,2],"candidate_history_indices":[3,4],"revealed_history_index":3}
+                      {"step":4,"kind":"optimizer-selection","visible_observation_indices_before":[0,1,2],"candidate_history_indices":[3,4],"revealed_history_index":3,"model_version":"botorch-qlogbo-test"}
                     ]
                   ],
                   "calibration": [

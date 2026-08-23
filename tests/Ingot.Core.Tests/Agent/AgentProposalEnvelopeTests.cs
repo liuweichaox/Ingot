@@ -66,6 +66,60 @@ public sealed class AgentProposalEnvelopeTests
         Assert.Contains("只读工具", error);
     }
 
+    [Fact]
+    public void CausalClaimIsRejectedEvenWithoutKeywordMatch()
+    {
+        var answer = Answer(Proposal()) with
+        {
+            Findings =
+            [
+                new AnalysisClaim
+                {
+                    Statement = "温度变化解释了当前缺陷分布。",
+                    Strength = AnalysisClaimStrengths.Causal,
+                    EvidenceReferences = [Reference()]
+                }
+            ]
+        };
+
+        var valid = new DefaultAnalysisResultValidator().TryVerifyAnswer(
+            answer, [ToolResult()], out var error);
+
+        Assert.False(valid);
+        Assert.Contains("因果结论", error);
+    }
+
+    [Fact]
+    public void FindingCannotInventAnEvidenceReference()
+    {
+        var answer = Answer(Proposal()) with
+        {
+            Findings =
+            [
+                new AnalysisClaim
+                {
+                    Statement = "当前记录显示温度与缺陷同时变化。",
+                    Strength = AnalysisClaimStrengths.Association,
+                    EvidenceReferences =
+                    [
+                        new RelatedRecordRef
+                        {
+                            Kind = "process-execution",
+                            Id = "execution-not-returned",
+                            Label = "不存在的运行"
+                        }
+                    ]
+                }
+            ]
+        };
+
+        var valid = new DefaultAnalysisResultValidator().TryVerifyAnswer(
+            answer, [ToolResult()], out var error);
+
+        Assert.False(valid);
+        Assert.Contains("每条分析发现", error);
+    }
+
     private static AnalysisAnswer Answer(AgentProposalEnvelope proposal) => new()
     {
         Summary = "基于已读取运行形成一个待人工确认的实验草案。",
@@ -82,15 +136,14 @@ public sealed class AgentProposalEnvelopeTests
             ["stopRule"] = "出现安全约束或数据失效时停止。",
             ["rollbackPlan"] = "恢复经工程师确认的基线工艺规范。"
         },
-        EvidenceReferences =
-        [
-            new RelatedRecordRef
-            {
-                Kind = "process-execution",
-                Id = "execution-1",
-                Label = "运行 execution-1"
-            }
-        ]
+        EvidenceReferences = [Reference()]
+    };
+
+    private static RelatedRecordRef Reference() => new()
+    {
+        Kind = "process-execution",
+        Id = "execution-1",
+        Label = "运行 execution-1"
     };
 
     private static AnalysisToolResult ToolResult()
@@ -101,15 +154,7 @@ public sealed class AgentProposalEnvelopeTests
             Tool = "get_process_execution_trace",
             Summary = "读取到一条完整运行。",
             Data = document.RootElement.Clone(),
-            RelatedRecords =
-            [
-                new RelatedRecordRef
-                {
-                    Kind = "process-execution",
-                    Id = "execution-1",
-                    Label = "运行 execution-1"
-                }
-            ]
+            RelatedRecords = [Reference()]
         };
     }
 }

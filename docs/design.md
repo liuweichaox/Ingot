@@ -87,7 +87,15 @@ Platform 是正式业务记录源，不能把实验状态或结论只保存在 O
 
 生产宿主把 Agent 运行快照和事件流保存在 Platform PostgreSQL 中；Agent 核心仍只依赖 `IAgentRunStore`，不引用 Npgsql。进入黄金问题评测的运行会在同一恢复边界内冻结完整快照与 SHA-256，不能再按普通对话删除。
 
-Platform 内部按用例分离策略与实现：`Platform.Application` 保存可脱离数据库测试的应用规则和存储端口，`Platform.Infrastructure` 实现 PostgreSQL 事务、外部服务和跨上下文适配。工艺研发、采集配置、制造上下文、事件、身份、洞察、分析与检验的数据库无关端口，以及其中的多步规则和用例，均归属 Application；PostgreSQL Store、优化器 HTTP 客户端、后台宿主和证据装配器归属 Infrastructure，并通过按模块的组合入口注册。新业务控制器只处理传输、鉴权并通过 Application 用例委托业务操作；当前 Edge 注册/诊断、身份和运行指标等少量运维适配器仍由 API 直接注入 Infrastructure 服务，这是需要继续收口的已知边界，不允许扩展为新的业务写路径。首用户引导由 Migrator 在事务锁内完成，周期维护由 Worker 执行。并发幂等与原子写入继续由数据库事务和约束保证，不上提为内存规则。工艺研究规则不能直接读取检验模块；检验、过程运行和配置证据只能由显式登记的装配适配器（当前为 `ResearchObservationAssembler`）转换为研究观察。
+Platform 内部按用例分离策略与实现：`Platform.Application` 保存可脱离数据库测试的应用规则和存储端口，`Platform.Infrastructure` 实现 PostgreSQL 事务、外部服务和跨上下文适配。工艺研发、采集配置、制造上下文、事件、身份、洞察、分析与检验的数据库无关端口，以及其中的多步规则和用例，均归属 Application；PostgreSQL Store、优化器 HTTP 客户端、后台宿主和证据装配器归属 Infrastructure，并通过按模块的组合入口注册。新业务控制器只处理传输、鉴权并通过 Application 用例委托业务操作；当前 Edge 注册/诊断、身份和运行指标等少量运维适配器仍由 API 直接注入 Infrastructure 服务，受下方 `ARCH-001` 约束，不允许扩展为新的业务写路径。首用户引导由 Migrator 在事务锁内完成，周期维护由 Worker 执行。并发幂等与原子写入继续由数据库事务和约束保证，不上提为内存规则。工艺研究规则不能直接读取检验模块；检验、过程运行和配置证据只能由显式登记的装配适配器（当前为 `ResearchObservationAssembler`）转换为研究观察。
+
+### 架构债务登记
+
+| 编号 | 当前豁口 | 责任边界 | 禁止扩张 | 关闭条件 | 触发时点 |
+| --- | --- | --- | --- | --- | --- |
+| `ARCH-001` | Edge 注册/诊断、身份和运行指标的少量 API 控制器直接注入 Infrastructure 服务 | Platform 组合根 | 不得新增业务写路径或让领域规则进入控制器 | 为现有运维用例建立 Application 端口；API 不再引用对应 Infrastructure 命名空间；架构检查覆盖该规则 | 首个生产试点前，或引入第二位生产维护者前，以先发生者为准 |
+
+`ARCH-001` 不是永久例外。任何触碰这些控制器的功能改动都必须同时减少该清单范围，或在变更说明中证明没有扩大依赖面。
 
 ### Optimizer
 

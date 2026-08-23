@@ -35,7 +35,7 @@ while IFS= read -r path; do
   case "$path" in
     tests/fixtures/synthetic/*|tools/*/examples/synthetic/*)
       ;;
-    tools/public-validation/data/fdm-doe-grid.csv|tools/public-validation/data/concrete-strength.csv|tools/public-validation/data/airfoil-self-noise.csv|tools/public-validation/data/yacht-hydrodynamics.csv)
+    tools/public-validation/data/fdm-doe-grid.csv|tools/public-validation/data/crossed-barrel.csv|tools/public-validation/data/airfoil-self-noise.csv|tools/public-validation/data/yacht-hydrodynamics.csv)
       ;;
     .ingot-import/*|mapping-*.json|*.csv|*.parquet|*.xlsx|*.xls|*.db)
       sensitive_paths+=("$path")
@@ -61,7 +61,7 @@ protocols = [
 ]
 allowed = {
     "data/fdm-doe-grid.csv",
-    "data/concrete-strength.csv",
+    "data/crossed-barrel.csv",
     "data/airfoil-self-noise.csv",
     "data/yacht-hydrodynamics.csv",
 }
