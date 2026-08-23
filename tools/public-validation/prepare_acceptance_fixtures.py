@@ -115,7 +115,11 @@ def write_fixture(name: str, records: list[dict[str, object]]) -> None:
     """Write one deterministic normalized fixture."""
     path = SOURCES[name]["fixture"]
     with path.open("w", encoding="utf-8", newline="") as stream:
-        writer = csv.DictWriter(stream, fieldnames=list(records[0]))
+        writer = csv.DictWriter(
+            stream,
+            fieldnames=list(records[0]),
+            lineterminator="\n",
+        )
         writer.writeheader()
         writer.writerows(records)
 

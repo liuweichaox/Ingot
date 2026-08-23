@@ -19,7 +19,7 @@
       "source_sha256": "133ff07b39a05c21be3d22ad18d14eee73fe0a1a75f95814a68b4591a042be22",
       "source_rows": 208,
       "fixture": "data/alkox.csv",
-      "fixture_sha256": "66c8f068474646385cee5dfe95f0194df16ed354b882502bdf280dac4f379fa0",
+      "fixture_sha256": "94e7c8e6beafd8f59b5e3f5350ce75e4c5d8969d00e9d1b69b31fb2921bfb6f9",
       "fixture_rows": 104,
       "evidence_kind": "physical-enzyme-catalysis-experiments"
     },
@@ -32,7 +32,7 @@
       "source_sha256": "be832eb97e1e18f49766733ca5865718b57819fdaf4e6fcaa2f53873360838c8",
       "source_rows": 178,
       "fixture": "data/p3ht.csv",
-      "fixture_sha256": "34637bf1bb504b71152542004b2f40aba53f0f6beaf821c8084736ea1ce6cb1a",
+      "fixture_sha256": "44f43a74a7a9b2390ad52c5dda8246220e751c8f871abf1225d9f7bfc3af1d23",
       "fixture_rows": 178,
       "evidence_kind": "physical-conductive-material-formulation-experiments"
     },
@@ -45,7 +45,7 @@
       "source_sha256": "9c94222798229c1391f75445f44d9c0ed285e83c1b1e0608ab76b28bf05decef",
       "source_rows": 1386,
       "fixture": "data/hplc.csv",
-      "fixture_sha256": "ae16a9939e05775a9d7df573a08cd380bb1b61bb675c186765e0cc9008dba17a",
+      "fixture_sha256": "1dca0cb51dc6a57dc88b4a3dfc8bb24eff7fc388541002a1b5610050347336ed",
       "fixture_rows": 1007,
       "evidence_kind": "physical-liquid-chromatography-process-experiments"
     }
