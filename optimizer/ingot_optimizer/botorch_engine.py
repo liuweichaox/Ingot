@@ -12,13 +12,14 @@ from .feature_transforms import DerivedFeature, expand_inputs
 from .loop import ObjectivePrediction, Suggestion
 
 
-MODEL_VERSION = "botorch-evidence-gated-method-admission-v7"
+MODEL_VERSION = "botorch-evidence-gated-method-routing-v8"
 MONOTONIC_PEARSON_FLOOR = 0.75
 MONOTONIC_SPEARMAN_FLOOR = 0.85
 RAW_LINEAR_RIDGE = 1e-3
 RAW_QUADRATIC_RIDGE = 1e-2
 MECHANISM_QUADRATIC_RIDGE = 1.5e-2
 JOINT_QUADRATIC_RIDGE = 2e-2
+JOINT_LINEAR_RIDGE = 2e-2
 
 
 def _observation_variance(values: np.ndarray) -> np.ndarray:
@@ -76,6 +77,31 @@ def _ridge_response_predictions(
     return candidate_design @ coefficients
 
 
+def _leave_one_out_error(
+    points: np.ndarray,
+    distance: np.ndarray,
+    *,
+    quadratic: bool,
+    ridge: float,
+) -> float:
+    """Return outcome-scale RMSE from predictions made without each held-out row."""
+    values = np.atleast_2d(np.asarray(points, dtype=float))
+    outcomes = np.asarray(distance, dtype=float)
+    if len(values) != len(outcomes) or len(values) < 3:
+        raise ValueError("leave-one-out admission requires at least three matched rows")
+    predictions = np.empty(len(values), dtype=float)
+    for held_out in range(len(values)):
+        keep = np.arange(len(values)) != held_out
+        predictions[held_out] = _ridge_response_predictions(
+            values[keep],
+            outcomes[keep],
+            values[held_out : held_out + 1],
+            quadratic=quadratic,
+            ridge=ridge,
+        )[0]
+    return float(np.sqrt(np.mean(np.square(outcomes - predictions))))
+
+
 def _reach_specification_scores(
     observed_points: np.ndarray,
     observed_distance: np.ndarray,
@@ -89,11 +115,14 @@ def _reach_specification_scores(
 
     A raw control must show both strong Pearson association and strong monotonic
     rank association before a linear response surface is admitted. Otherwise,
-    declared mechanism features are evaluated through an equal-rank ensemble of
-    mechanism-only and joint quadratic surfaces. Without declared features the
-    policy falls back to a raw-control quadratic surface. Candidate outcomes are
-    never read by this policy; the GP remains responsible for uncertainty and
-    returned predictions, not for overriding an admitted simpler decision rule.
+    Without declared mechanism features, the policy uses the raw quadratic
+    response surface unless a dominant monotonic control supports the simpler
+    raw linear surface. With declared features, the policy stays with first-order
+    surfaces until the visible observations outnumber their coefficients. It then
+    uses an equal-rank mechanism-only and joint quadratic consensus. Candidate
+    outcomes are never read by this policy; the GP remains responsible for
+    uncertainty and returned predictions, not for overriding the routed response
+    surface.
     """
     observed = np.atleast_2d(np.asarray(observed_points, dtype=float))
     distance = np.asarray(observed_distance, dtype=float)
@@ -155,39 +184,69 @@ def _reach_specification_scores(
     if monotonic_control:
         return linear_rank / len(candidates), "dominant-linear-response"
 
-    raw_quadratic_distance = _ridge_response_predictions(
-        observed,
-        distance,
-        candidates,
-        quadratic=True,
-        ridge=RAW_QUADRATIC_RIDGE,
-    )
-    raw_quadratic_rank = rankdata(-raw_quadratic_distance, method="average")
     raw_width = observed.shape[1]
     if augmented_observed.shape[1] == raw_width:
-        return raw_quadratic_rank / len(candidates), "raw-quadratic-response"
+        raw_quadratic_distance = _ridge_response_predictions(
+            observed,
+            distance,
+            candidates,
+            quadratic=True,
+            ridge=RAW_QUADRATIC_RIDGE,
+        )
+        return (
+            rankdata(-raw_quadratic_distance, method="average") / len(candidates),
+            "raw-quadratic-response",
+        )
 
-    mechanism_observed = augmented_observed[:, raw_width:]
-    mechanism_candidates = augmented_candidates[:, raw_width:]
-    mechanism_distance = _ridge_response_predictions(
-        mechanism_observed,
+    first_order_coefficient_count = augmented_observed.shape[1] + 1
+    if len(observed) > first_order_coefficient_count:
+        mechanism_observed = augmented_observed[:, raw_width:]
+        mechanism_candidates = augmented_candidates[:, raw_width:]
+        mechanism_distance = _ridge_response_predictions(
+            mechanism_observed,
+            distance,
+            mechanism_candidates,
+            quadratic=True,
+            ridge=MECHANISM_QUADRATIC_RIDGE,
+        )
+        joint_distance = _ridge_response_predictions(
+            augmented_observed,
+            distance,
+            augmented_candidates,
+            quadratic=True,
+            ridge=JOINT_QUADRATIC_RIDGE,
+        )
+        mechanism_rank = rankdata(-mechanism_distance, method="average")
+        joint_rank = rankdata(-joint_distance, method="average")
+        return (
+            (mechanism_rank + joint_rank) / (2.0 * len(candidates)),
+            "evidence-supported-mechanism-quadratic-consensus",
+        )
+
+    linear_error = _leave_one_out_error(
+        observed,
         distance,
-        mechanism_candidates,
-        quadratic=True,
-        ridge=MECHANISM_QUADRATIC_RIDGE,
+        quadratic=False,
+        ridge=RAW_LINEAR_RIDGE,
     )
-    joint_distance = _ridge_response_predictions(
+    joint_linear_distance = _ridge_response_predictions(
         augmented_observed,
         distance,
         augmented_candidates,
-        quadratic=True,
-        ridge=JOINT_QUADRATIC_RIDGE,
+        quadratic=False,
+        ridge=JOINT_LINEAR_RIDGE,
     )
-    mechanism_rank = rankdata(-mechanism_distance, method="average")
-    joint_rank = rankdata(-joint_distance, method="average")
+    joint_error = _leave_one_out_error(
+        augmented_observed,
+        distance,
+        quadratic=False,
+        ridge=JOINT_LINEAR_RIDGE,
+    )
+    if not math.isfinite(joint_error) or joint_error > linear_error:
+        return linear_rank / len(candidates), "cross-validated-linear-response"
     return (
-        (mechanism_rank + joint_rank) / (2.0 * len(candidates)),
-        "mechanism-quadratic-response-ensemble",
+        rankdata(-joint_linear_distance, method="average") / len(candidates),
+        "cross-validated-joint-linear-response",
     )
 
 

@@ -35,7 +35,7 @@ while IFS= read -r path; do
   case "$path" in
     tests/fixtures/synthetic/*|tools/*/examples/synthetic/*)
       ;;
-    tools/public-validation/data/fdm-doe-grid.csv|tools/public-validation/data/crossed-barrel.csv|tools/public-validation/data/airfoil-self-noise.csv|tools/public-validation/data/yacht-hydrodynamics.csv)
+    tools/public-validation/data/fdm-doe-grid.csv|tools/public-validation/data/crossed-barrel.csv|tools/public-validation/data/airfoil-self-noise.csv|tools/public-validation/data/yacht-hydrodynamics.csv|tools/public-validation/data/energy-efficiency.csv|tools/public-validation/data/synchronous-machine.csv)
       ;;
     .ingot-import/*|mapping-*.json|*.csv|*.parquet|*.xlsx|*.xls|*.db)
       sensitive_paths+=("$path")
@@ -57,13 +57,15 @@ from pathlib import Path
 root = Path("tools/public-validation")
 protocols = [
     json.loads((root / name).read_text(encoding="utf-8"))
-    for name in ("protocol-v2.json", "protocol-v3.json")
+    for name in ("protocol-v2.json", "protocol-v3.json", "protocol-v4.json")
 ]
 allowed = {
     "data/fdm-doe-grid.csv",
     "data/crossed-barrel.csv",
     "data/airfoil-self-noise.csv",
     "data/yacht-hydrodynamics.csv",
+    "data/energy-efficiency.csv",
+    "data/synchronous-machine.csv",
 }
 declared = {
     source["fixture"]

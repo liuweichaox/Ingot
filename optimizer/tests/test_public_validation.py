@@ -201,7 +201,9 @@ def test_v4_holdout_fixtures_are_verified_after_protocol_freeze():
     report = benchmark_v4.integrity_report(protocol)
 
     assert report["status"] == "frozen"
-    assert report["full_evaluation_allowed"] is True
+    # The retained v4 result remains immutable, while a newer optimizer must not
+    # be replayed under the old primary-method name and frozen fingerprint.
+    assert report["full_evaluation_allowed"] is False
     assert report["evaluation_unit_count"] == 25
     assert len(report["candidate_evaluation_fingerprint"]) == 64
 
@@ -236,7 +238,8 @@ def test_v4_holdout_fixtures_are_verified_after_protocol_freeze():
 def test_v4_protocol_refuses_drafts_and_freezes_every_input():
     protocol = benchmark_v4.load_protocol()
 
-    benchmark_v4.require_frozen(protocol)
+    with pytest.raises(RuntimeError, match="fingerprint does not match"):
+        benchmark_v4.require_frozen(protocol)
 
     draft = json.loads(json.dumps(protocol))
     draft["status"] = "draft"

@@ -39,6 +39,8 @@ These numbers show that the implementation is ready to become a frozen candidate
 
 v4 ran only after data selection, candidate implementation, and protocol freeze. The complete 1,250 paired episodes are retained in [`../latest-results-v4.json`](../latest-results-v4.json), with [`validate_v4_result.py`](validate_v4_result.py) providing an independent recomputation. The result is again “not demonstrated”:
 
+The v4 fingerprint freezes the candidate algorithm used at the time. Once the main branch advances to a successor algorithm, the complete v4 evaluator intentionally refuses to rerun from the current worktree. Reproducing the original trajectories requires checking out the candidate revision recorded by the protocol; current main retains the result, fixture-integrity checks, and independent summary recomputation.
+
 | Comparator | v4 relative reduction | 95% CI | Unit non-worse | Gate |
 |---|---:|---:|---:|---|
 | No-mechanism ablation | 7.55% | 5.19% to 9.88% | 92% | failed |
@@ -48,3 +50,14 @@ v4 ran only after data selection, candidate implementation, and protocol freeze.
 | Regularized quadratic response surface | 25.39% | 22.39% to 28.21% | 100% | passed |
 
 v4 shows that the v7 Pearson/Spearman admission rule is still too coarse. Most Energy Efficiency units call for a linear response surface, but declared mechanism features admit the mechanism-quadratic ensemble too early. v4 is development and regression evidence for v8 from this point onward; it cannot be relabeled as external validation after the policy changes. The next public decision requires fresh, uninspected data and a newly frozen protocol.
+
+## v8 method-routing development regression
+
+v8 no longer enters a quadratic model merely because mechanism features exist. A raw control with strong Pearson and Spearman evidence still routes to the raw linear surface. No mechanism features routes to the raw quadratic surface. With mechanism features but no more observations than first-order joint-model coefficients, leave-one-out error selects between raw linear and joint linear surfaces. Only after that minimum complexity gate does the method enter a mechanism-only plus joint-feature quadratic rank consensus. The rule uses revealed observations and model dimension only; it never reads candidate outcomes or branches on dataset names.
+
+Both regressions below use inspected v3/v4 outcomes and therefore remain development evidence:
+
+- Across the 400 v3 episodes, v8 reduces trials by 80.75%, 29.84%, 12.13%, and 18.81% versus random, maximin, linear, and quadratic response surfaces. All four pass and neither dataset is worse. The reduction versus the no-mechanism ablation is only 4.47%, with a 95% CI of −3.53% to 12.34%, so the ablation gate fails.
+- Across the 1,250 v4 episodes, reductions versus random, maximin, and quadratic response surfaces are 64.11%, 45.97%, and 33.31%; the mechanism ablation reduction is 17.36%. All four pass. The aggregate reduction versus the linear response surface is 2.84%, with a 95% CI of 1.43% to 4.29%, but only 96% of evaluation units are non-worse, so the per-unit guardrail still fails.
+
+Both failures are retained alongside the passes. They show that routing fixes v7's aggregate linear-model mismatch, but does not establish that mechanism features help every pool or that every small context is non-worse than an applicable linear baseline. v8 needs a newly frozen successor protocol with fresh outcome columns before it can support a new public conclusion.

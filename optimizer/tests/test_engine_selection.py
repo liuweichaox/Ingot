@@ -95,7 +95,7 @@ def test_reach_specification_scores_fall_back_to_dominant_linear_response():
     assert int(np.argmax(scores)) == 0
 
 
-def test_reach_specification_scores_use_raw_quadratic_without_declared_features():
+def test_reach_specification_scores_use_raw_quadratic_without_features():
     x = np.linspace(0.0, 1.0, 9)
     observed = np.column_stack([x, np.roll(x, 3)])
     distance = (x - 0.5) ** 2 + 0.1 * np.sin(8.0 * np.pi * x)
@@ -112,16 +112,39 @@ def test_reach_specification_scores_use_raw_quadratic_without_declared_features(
     assert int(np.argmax(scores)) == 1
 
 
-def test_reach_specification_scores_use_declared_features_in_quadratic_ensemble():
-    x = np.linspace(0.0, 1.0, 9)
-    observed = np.column_stack([x, np.roll(x, 3)])
-    distance = (x - 0.5) ** 2 + 0.1 * np.sin(8.0 * np.pi * x)
-    candidates = np.asarray([[0.05, 0.5], [0.5, 0.5], [0.95, 0.5]])
+def test_reach_specification_scores_cross_validate_declared_features():
+    observed = np.asarray(
+        [
+            [0.0, 0.0],
+            [0.0, 0.5],
+            [0.0, 1.0],
+            [0.5, 0.0],
+            [0.5, 0.5],
+            [0.5, 1.0],
+            [1.0, 0.0],
+            [1.0, 0.5],
+            [1.0, 1.0],
+        ]
+    )
+    distance = observed[:, 0] * observed[:, 1]
+    candidates = np.asarray([[0.1, 0.1], [0.5, 0.5], [0.9, 0.9]])
     observed_augmented = np.column_stack(
-        [observed, observed[:, 0] * observed[:, 1]]
+        [
+            observed,
+            observed[:, 0] * observed[:, 1],
+            observed[:, 0] ** 2,
+            observed[:, 1] ** 2,
+            np.zeros((len(observed), 4)),
+        ]
     )
     candidate_augmented = np.column_stack(
-        [candidates, candidates[:, 0] * candidates[:, 1]]
+        [
+            candidates,
+            candidates[:, 0] * candidates[:, 1],
+            candidates[:, 0] ** 2,
+            candidates[:, 1] ** 2,
+            np.zeros((len(candidates), 4)),
+        ]
     )
 
     scores, policy = _reach_specification_scores(
@@ -133,5 +156,80 @@ def test_reach_specification_scores_use_declared_features_in_quadratic_ensemble(
         candidate_augmented_points=candidate_augmented,
     )
 
-    assert policy == "mechanism-quadratic-response-ensemble"
-    assert int(np.argmax(scores)) == 1
+    assert policy == "cross-validated-joint-linear-response"
+    assert int(np.argmax(scores)) == 0
+
+
+def test_reach_specification_scores_reject_unhelpful_declared_features():
+    observed = np.asarray(
+        [
+            [0.0, 0.0],
+            [0.0, 0.5],
+            [0.0, 1.0],
+            [0.5, 0.0],
+            [0.5, 0.5],
+            [0.5, 1.0],
+            [1.0, 0.0],
+            [1.0, 0.5],
+            [1.0, 1.0],
+        ]
+    )
+    distance = observed[:, 0] + observed[:, 1]
+    candidates = np.asarray([[0.1, 0.1], [0.5, 0.5], [0.9, 0.9]])
+    unhelpful = np.asarray(
+        [
+            [0, 1, 0, 1, 0, 1, 0],
+            [1, 0, 1, 0, 1, 0, 1],
+            [0, 0, 1, 1, 0, 0, 1],
+            [1, 1, 0, 0, 1, 1, 0],
+            [0, 1, 1, 0, 0, 1, 1],
+            [1, 0, 0, 1, 1, 0, 0],
+            [0, 1, 0, 1, 1, 0, 1],
+            [1, 0, 1, 0, 0, 1, 0],
+            [0, 0, 1, 1, 1, 0, 0],
+        ]
+    )
+    candidate_unhelpful = np.asarray(
+        [[1, 0, 1, 0, 1, 0, 1], [0, 1, 0, 1, 0, 1, 0], [1, 1, 0, 0, 1, 0, 0]]
+    )
+
+    scores, policy = _reach_specification_scores(
+        observed,
+        distance,
+        candidates,
+        np.ones(len(candidates)),
+        observed_augmented_points=np.column_stack([observed, unhelpful]),
+        candidate_augmented_points=np.column_stack(
+            [candidates, candidate_unhelpful]
+        ),
+    )
+
+    assert policy == "cross-validated-linear-response"
+    assert int(np.argmax(scores)) == 0
+
+
+def test_reach_specification_scores_use_quadratic_consensus_with_enough_observations():
+    x = np.linspace(0.0, 1.0, 9)
+    observed = np.column_stack([x, np.roll(x, 3)])
+    distance = (x - 0.5) ** 2 + 0.1 * np.sin(8.0 * np.pi * x)
+    candidates = np.column_stack(
+        [np.linspace(0.01, 0.99, 65), np.linspace(0.99, 0.01, 65)]
+    )
+    observed_augmented = np.column_stack(
+        [observed, observed[:, 0] * observed[:, 1]]
+    )
+    candidate_augmented = np.column_stack(
+        [candidates, candidates[:, 0] * candidates[:, 1]]
+    )
+
+    scores, policy = _reach_specification_scores(
+        observed,
+        distance,
+        candidates,
+        np.full(len(candidates), 0.5),
+        observed_augmented_points=observed_augmented,
+        candidate_augmented_points=candidate_augmented,
+    )
+
+    assert policy == "evidence-supported-mechanism-quadratic-consensus"
+    assert np.isfinite(scores).all()
