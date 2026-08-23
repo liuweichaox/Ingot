@@ -3,8 +3,8 @@
     <img src="apps/website/public/brand/ingot-lockup.svg" alt="Ingot" width="340">
   </a>
 
-  <p><strong>Open-source Process Diagnosis & Optimization</strong></p>
-  <p>Fewer wasted experiments. Faster routes to target process conditions.</p>
+  <p><strong>Open-source industrial process experimentation</strong></p>
+  <p>Turn factory runs into auditable evidence, human-approved experiments, and validated process knowledge.</p>
 
   [![CI](https://github.com/liuweichaox/Ingot/actions/workflows/ci.yml/badge.svg)](https://github.com/liuweichaox/Ingot/actions/workflows/ci.yml)
   [![License: MIT](https://img.shields.io/badge/license-MIT-E8AD56.svg)](LICENSE)
@@ -12,10 +12,18 @@
   [![Python 3.12](https://img.shields.io/badge/Python-3.12-3776AB.svg)](https://www.python.org/)
   [![BoTorch](https://img.shields.io/badge/optimizer-BoTorch-5FD4C8.svg)](https://botorch.org/)
 
-  [Website](https://ingotstack.com/en/) · [Documentation](https://docs.ingotstack.com/en) · [Quickstart](docs/getting-started.en.md) · [Report an issue](https://github.com/liuweichaox/Ingot/issues)
+  [3-minute demo](#understand-ingot-in-three-minutes) · [How it works](#one-complete-loop) · [Quickstart](#quickstart) · [Evidence](#what-works-today) · [Discussions](https://github.com/liuweichaox/Ingot/discussions)
 
   [简体中文](README.md) · English
 </div>
+
+![Ingot: from real runs to engineering evidence, decisions, and validation](apps/website/public/og.png)
+
+## What Ingot is
+
+Ingot is open-source enterprise software that turns industrial run data and quality outcomes into auditable experimental observations, then proposes, validates, and preserves process recommendations under safety boundaries and human approval.
+
+The system connects field acquisition, run identification, quality outcomes, process diagnosis, experimental design, and operating-region validation through one evidence chain. Optimizer is a replaceable stateless numerical service. Agent only queries, organizes, and explains authorized facts; it does not control equipment or approve experiments for engineers.
 
 ## Understand Ingot in three minutes
 
@@ -34,9 +42,11 @@ Open `http://127.0.0.1:3001` and sign in with `demo / demo`. The workbench provi
 
 ## Why Ingot exists
 
-Ingot is built around one outcome:
+Ingot is built around one reviewable engineering path:
 
-> **Turn every real run into comparable, testable engineering evidence so process engineers can avoid unproductive experiments and reach target process conditions faster.**
+> **Turn every real run into comparable, testable engineering evidence, and retain the rationale, constraints, approval, and outcome of the next experiment in the same record chain.**
+
+The project retains this intended outcome: **Turn every real run into comparable, testable engineering evidence so process engineers can avoid unproductive experiments and reach target process conditions faster.** This remains an objective to be tested through public replay and real projects, not an established performance claim across every process or algorithm.
 
 Much process development still depends on personal memory, disconnected spreadsheets, and experiment sequences that cannot be reproduced. Even when equipment already produces data, production conditions, process curves, and quality outcomes often cannot be tied to the same real run, leaving computers unable to participate reliably in engineering decisions.
 
@@ -97,6 +107,17 @@ See [Analysis and optimization](docs/optimization.en.md) for the detailed bounda
 
 These components share one evidence chain rather than creating conflicting parallel records.
 
+## Boundaries with existing tools
+
+| Category | How Ingot uses it | What Ingot is not |
+|---|---|---|
+| MES, SCADA, historians | Receive run, equipment, and process facts | A replacement for execution, monitoring, or real-time control |
+| LIMS, QMS, ELN | Link inspection outcomes, review, and R&D context | A replacement for complete sample, compliance, or document management |
+| DOE, response surfaces, Bayesian optimization | Select methods under shared constraints and evidence snapshots | A claim that one algorithm fits every process |
+| AI agents | Query, organize, and explain authorized facts | A system that writes settings, approves experiments, or controls equipment |
+
+When historical replay or method admission fails, Optimizer can fall back to conventional DOE or regularized response surfaces. Frozen public results define the claim boundary; they do not replace validation on a real project.
+
 ## What works today
 
 The repository implements the main path from field data to a next-experiment recommendation:
@@ -107,7 +128,15 @@ The repository implements the main path from field data to a next-experiment rec
 - recommend concrete settings for the next experiment from completed runs and explain whether the proposal follows the stable observed trend or explores a potentially better parameter combination;
 - preserve inputs, versions, sources, constraints, and results so every recommendation can be reviewed and replayed.
 
-Across 450 frozen paired replays, the previous candidate did save experiments versus random trial and error, but on Alkox and P3HT it chose an unnecessarily complex interpretation and used 32.08% and 68.36% more additional experiments than simply following the stable observed trend. Core acceptance therefore failed. The successor starts from the stable trend and changes course only after repeated data support a turning point or parameter interaction. The old result no longer represents the current algorithm, whose new unseen-data acceptance is not complete. See [Optimizer experiment-efficiency validation](tools/public-validation/README.en.md) for formal comparators, confidence intervals, and failed subgroups, and [Scenario validation](docs/rollout.en.md) for real-pilot acceptance.
+### Current evidence boundary
+
+| Frozen evaluation | Observed result | Supported conclusion |
+|---|---|---|
+| 450 paired replays on development data | Better than random and sequential maximin space filling; matched the aggregate quadratic response-surface result; not non-inferior to the linear surface on every dataset | The software and response-surface path are reproducible; a core selection advantage is not demonstrated |
+| 400 unseen-data replays | 85.5% aggregate success; better than the tested linear and quadratic surfaces, but failed preregistered gates against random and sequential maximin space filling | The result does not establish a general advantage over classical methods |
+| Preregistered process-feature ablation | No stable incremental contribution | Mechanism-feature contribution is not demonstrated |
+
+See [Optimizer experiment-efficiency validation](tools/public-validation/README.en.md) for formal comparators, confidence intervals, and failed subgroups, and [Scenario validation](docs/rollout.en.md) for real-pilot acceptance.
 
 ## Architecture
 
@@ -128,7 +157,7 @@ Platform is the factory system of record. Optimizer is a stateless numerical ser
 
 ## Quickstart
 
-The complete Docker Compose stack requires only Git, Docker Engine or Docker Desktop, and Docker Compose v2. Source development additionally requires .NET SDK 10, Node.js 22.22+, and uv 0.11.32.
+The complete Docker Compose stack requires only Git, Docker Engine or Docker Desktop, and Docker Compose v2. Source development additionally requires .NET SDK 10, Node.js 22.22+, and uv 0.12.5.
 
 To inspect the UI and a complete synthetic workflow first, use the [simulated-data preview](docs/getting-started.en.md#simulated-data-preview). Use the full Compose stack below for a representative field pilot or production deployment.
 
@@ -228,7 +257,7 @@ scripts/           verification and operations scripts
 - [x] Candidate causes, hypotheses, experiments, and operating regions share one R&D record.
 - [x] Constrained GP/BO recommendations, pending-point avoidance, and safe cold start.
 - [x] Reproducible public-manufacturing-data benchmark with an explicit claim boundary.
-- [ ] Freeze and run the external public physical-experiment evaluation, strong-baseline comparison, and mechanism-feature ablation.
+- [x] Complete one external public physical-experiment evaluation, strong-baseline comparison, and mechanism-feature ablation, retaining the not-demonstrated result.
 - [ ] Publish leakage-free sequential replay on a real manufacturing history.
 - [ ] Complete shadow recommendations and analyze engineer rejection reasons on a new project.
 - [ ] Complete a controlled online experiment and publish preregistered results.
@@ -239,6 +268,8 @@ scripts/           verification and operations scripts
 The near term proves the historical evidence apparatus, the medium term opens agent protocols, and only the long term pursues an open specification. The roadmap follows real evidence and acceptance gates. See the [Roadmap](docs/project-plan.en.md) for sequencing.
 
 ## Contributing
+
+If you are exploring how industrial data can enter an auditable experimentation loop, star this repository to follow new validation results and use [Discussions](https://github.com/liuweichaox/Ingot/discussions) to share process scenarios, data-contract needs, or method proposals.
 
 Contributions are welcome across device adapters, statistics, experimental design, optimization algorithms, real replay, tests, documentation, and process knowledge. Start with the [Contributing guide](CONTRIBUTING.en.md), [Code of Conduct](CODE_OF_CONDUCT.md), and [Security policy](SECURITY.md).
 
