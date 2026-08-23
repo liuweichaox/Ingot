@@ -1,11 +1,11 @@
 {
   "schema": "ingot-public-validation-protocol-v6",
-  "status": "draft",
+  "status": "frozen",
   "purpose": "Protocol-frozen holdout evaluation of v8 evidence-gated method routing on newly selected physical formulation experiments.",
   "freeze": {
-    "optimizer_revision": null,
-    "protocol_revision": null,
-    "evaluation_fingerprint": null,
+    "optimizer_revision": "ab1675bccb1283a679a86f61b7175359fc83c1af",
+    "protocol_revision": "ab1675bccb1283a679a86f61b7175359fc83c1af",
+    "evaluation_fingerprint": "06099fa53a4d5f9c7898380f2bf24bb1982e830b7926cf567625507c04bf9cca",
     "result_policy": "A full result is valid only after status is frozen, both revisions identify the preceding committed candidate, and evaluation_fingerprint matches the algorithm, adapter, data, dependencies, and normalized protocol."
   },
   "development_evidence": {
