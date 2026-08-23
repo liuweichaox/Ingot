@@ -17,7 +17,7 @@
   简体中文 · [English](README.en.md)
 </div>
 
-![Ingot：从真实运行到工艺优化与验证](apps/website/public/og.png)
+![Ingot：从真实运行到工艺优化与验证](apps/website/public/og-readme.zh.svg)
 
 ## Ingot 是什么
 
@@ -140,18 +140,7 @@ Ingot 不把某一种“先进算法”固定成所有问题的答案：
 
 ## 系统架构
 
-```mermaid
-flowchart LR
-    Sources["控制系统 / 仪器 / 视觉 / 检验 / MES"] --> Edge["Edge ConnectorHost\n映射 · 执行边界 · 缓存"]
-    Edge --> Platform["Platform API\n运行 · 上下文 · 检验 · 研发 · 证据"]
-    Platform --> Web["Platform Web\n工程师工作台"]
-    Platform --> Optimizer["Optimizer\nDOE · 响应面 · GP/BO · 参数建议"]
-    Platform --> Agent["Agent\n查询 · 组织 · 解释"]
-    Engineer["工艺工程师"] --> Web
-    Web --> Platform
-    Optimizer --> Platform
-    Agent --> Platform
-```
+![Ingot 系统架构：现场系统、Edge、Platform、Optimizer、Agent 与工程师之间的边界](apps/website/public/architecture.zh.svg)
 
 Platform 是厂内业务记录源；Optimizer 是无状态数值服务；Agent 只能使用授权工具访问结构化事实。Edge 与 Platform 即使部署在同一台机器，也保持独立进程、存储和故障恢复。
 

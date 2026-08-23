@@ -32,13 +32,13 @@ export const metadata: Metadata = {
     type: "website",
     locale: "zh_CN",
     siteName: "Ingot",
-    images: [{ url: "/og.png", width: 1733, height: 908, alt: "Ingot — 少做无效实验，更快找到达标工艺。" }],
+    images: [{ url: "/og.zh.png", width: 1200, height: 630, alt: "Ingot — 让真实运行成为可验证的工艺证据。" }],
   },
   twitter: {
     card: "summary_large_image",
     title: "Ingot — 开源工艺追因与优化系统",
     description: "让真实运行证据支持工艺比较、原因验证和下一步实验。",
-    images: ["/og.png"],
+    images: ["/og.zh.png"],
   },
 };
 

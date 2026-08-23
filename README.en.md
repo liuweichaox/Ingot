@@ -17,7 +17,7 @@
   [简体中文](README.md) · English
 </div>
 
-![Ingot: from real runs to process optimization and validation](apps/website/public/og.png)
+![Ingot: from real runs to process optimization and validation](apps/website/public/og-readme.en.svg)
 
 ## What Ingot is
 
@@ -140,18 +140,7 @@ See [Optimizer experiment-efficiency validation](tools/public-validation/README.
 
 ## Architecture
 
-```mermaid
-flowchart LR
-    Sources["Controls / instruments / vision / inspection / MES"] --> Edge["Edge ConnectorHost\nmapping · execution boundaries · buffering"]
-    Edge --> Platform["Platform API\nruns · context · inspection · R&D · evidence"]
-    Platform --> Web["Platform Web\nengineering workbench"]
-    Platform --> Optimizer["Optimizer\nDOE · response surfaces · GP/BO · parameter proposals"]
-    Platform --> Agent["Agent\nquery · organize · explain"]
-    Engineer["Process engineer"] --> Web
-    Web --> Platform
-    Optimizer --> Platform
-    Agent --> Platform
-```
+![Ingot system architecture: boundaries between field systems, Edge, Platform, Optimizer, Agent, and process engineers](apps/website/public/architecture.en.svg)
 
 Platform is the factory system of record. Optimizer is a stateless numerical service. Agent can access structured facts only through authorized tools. Edge and Platform keep independent processes, storage, and recovery even when deployed on one physical host.
 

@@ -33,7 +33,7 @@ export const metadata: Metadata = {
     alternateLocale: ["zh_CN"],
     siteName: "Ingot",
     type: "website",
-    images: [{ url: "/og.png", width: 1733, height: 908, alt: "Ingot — Fewer wasted experiments, faster routes to target conditions." }],
+    images: [{ url: "/og.png", width: 1200, height: 630, alt: "Ingot — Turn real runs into testable process evidence." }],
   },
   twitter: {
     card: "summary_large_image",
