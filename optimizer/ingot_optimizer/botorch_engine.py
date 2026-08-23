@@ -12,7 +12,7 @@ from .feature_transforms import DerivedFeature, expand_inputs
 from .loop import ObjectivePrediction, Suggestion
 
 
-MODEL_VERSION = "botorch-evidence-gated-method-routing-v8"
+MODEL_VERSION = "botorch-cross-validated-method-routing-v9"
 MONOTONIC_PEARSON_FLOOR = 0.75
 MONOTONIC_SPEARMAN_FLOOR = 0.85
 RAW_LINEAR_RIDGE = 1e-3
@@ -20,6 +20,10 @@ RAW_QUADRATIC_RIDGE = 1e-2
 MECHANISM_QUADRATIC_RIDGE = 1.5e-2
 JOINT_QUADRATIC_RIDGE = 2e-2
 JOINT_LINEAR_RIDGE = 2e-2
+FEATURE_ADMISSION_RELATIVE_IMPROVEMENT = 0.10
+MINIMUM_OBSERVATIONS_PER_RESPONSE_COEFFICIENT = 3
+GP_PROBABILITY_RANK_WEIGHT = 0.50
+MINIMUM_OBSERVATIONS_PER_GP_DIMENSION = 3
 
 
 def _observation_variance(values: np.ndarray) -> np.ndarray:
@@ -45,6 +49,15 @@ def _response_surface_features(points: np.ndarray, *, quadratic: bool) -> np.nda
             for right in range(left + 1, values.shape[1])
         )
     return np.column_stack(columns)
+
+
+def _response_surface_coefficient_count(width: int, *, quadratic: bool) -> int:
+    """Return intercept plus raw, squared, and interaction coefficients."""
+    if width < 1:
+        raise ValueError("response surfaces require at least one input")
+    return 1 + width + (
+        width + width * (width - 1) // 2 if quadratic else 0
+    )
 
 
 def _ridge_response_predictions(
@@ -102,6 +115,56 @@ def _leave_one_out_error(
     return float(np.sqrt(np.mean(np.square(outcomes - predictions))))
 
 
+def _feature_representation_is_admitted(
+    observed_points: np.ndarray,
+    observed_distance: np.ndarray,
+    augmented_points: np.ndarray,
+) -> bool:
+    """Admit declared features only with capacity and predictive-gain evidence."""
+    observed = np.atleast_2d(np.asarray(observed_points, dtype=float))
+    distance = np.asarray(observed_distance, dtype=float)
+    augmented = np.atleast_2d(np.asarray(augmented_points, dtype=float))
+    if len(observed) != len(distance) or len(augmented) != len(observed):
+        raise ValueError("feature admission requires matched observed rows")
+    if augmented.shape[1] <= observed.shape[1]:
+        return False
+
+    raw_error = _leave_one_out_error(
+        observed,
+        distance,
+        quadratic=True,
+        ridge=RAW_QUADRATIC_RIDGE,
+    )
+    mechanism = augmented[:, observed.shape[1] :]
+    errors = []
+    for model_points, quadratic, ridge in (
+        (augmented, False, JOINT_LINEAR_RIDGE),
+        (mechanism, True, MECHANISM_QUADRATIC_RIDGE),
+        (augmented, True, JOINT_QUADRATIC_RIDGE),
+    ):
+        minimum_observations = (
+            MINIMUM_OBSERVATIONS_PER_RESPONSE_COEFFICIENT
+            * _response_surface_coefficient_count(
+                model_points.shape[1], quadratic=quadratic
+            )
+        )
+        if len(observed) < minimum_observations:
+            continue
+        error = _leave_one_out_error(
+            model_points,
+            distance,
+            quadratic=quadratic,
+            ridge=ridge,
+        )
+        if math.isfinite(error):
+            errors.append(error)
+    return bool(
+        errors
+        and min(errors)
+        <= raw_error * (1.0 - FEATURE_ADMISSION_RELATIVE_IMPROVEMENT)
+    )
+
+
 def _reach_specification_scores(
     observed_points: np.ndarray,
     observed_distance: np.ndarray,
@@ -115,14 +178,14 @@ def _reach_specification_scores(
 
     A raw control must show both strong Pearson association and strong monotonic
     rank association before a linear response surface is admitted. Otherwise,
-    Without declared mechanism features, the policy uses the raw quadratic
-    response surface unless a dominant monotonic control supports the simpler
-    raw linear surface. With declared features, the policy stays with first-order
-    surfaces until the visible observations outnumber their coefficients. It then
-    uses an equal-rank mechanism-only and joint quadratic consensus. Candidate
-    outcomes are never read by this policy; the GP remains responsible for
-    uncertainty and returned predictions, not for overriding the routed response
-    surface.
+    Strong monotonic evidence admits the raw linear surface; otherwise the raw
+    quadratic surface is the conservative default. Declared mechanism features
+    admit joint-linear, mechanism-quadratic, and
+    joint-quadratic candidates to the same comparison, but an augmented model
+    must improve on the best raw model by a fixed relative margin. Candidate
+    outcomes are never read by this policy; only revealed observations can
+    admit model complexity. The GP remains responsible for uncertainty and
+    returned predictions, not for overriding the routed response surface.
     """
     observed = np.atleast_2d(np.asarray(observed_points, dtype=float))
     distance = np.asarray(observed_distance, dtype=float)
@@ -158,6 +221,20 @@ def _reach_specification_scores(
     if augmented_observed.shape[1] < observed.shape[1]:
         raise ValueError("augmented points cannot omit raw controls")
 
+    probability_rank = rankdata(probabilities, method="average") / len(candidates)
+    gp_probability_admitted = len(observed) >= (
+        MINIMUM_OBSERVATIONS_PER_GP_DIMENSION * observed.shape[1]
+    )
+
+    def finish(response_score: np.ndarray, policy: str) -> tuple[np.ndarray, str]:
+        if not gp_probability_admitted:
+            return response_score, policy
+        return (
+            (1.0 - GP_PROBABILITY_RANK_WEIGHT) * response_score
+            + GP_PROBABILITY_RANK_WEIGHT * probability_rank,
+            f"gp-{policy}",
+        )
+
     linear_distance = _ridge_response_predictions(
         observed,
         distance,
@@ -184,70 +261,91 @@ def _reach_specification_scores(
     if monotonic_control:
         return linear_rank / len(candidates), "dominant-linear-response"
 
-    raw_width = observed.shape[1]
-    if augmented_observed.shape[1] == raw_width:
-        raw_quadratic_distance = _ridge_response_predictions(
-            observed,
-            distance,
-            candidates,
-            quadratic=True,
-            ridge=RAW_QUADRATIC_RIDGE,
-        )
-        return (
-            rankdata(-raw_quadratic_distance, method="average") / len(candidates),
-            "raw-quadratic-response",
-        )
-
-    first_order_coefficient_count = augmented_observed.shape[1] + 1
-    if len(observed) > first_order_coefficient_count:
-        mechanism_observed = augmented_observed[:, raw_width:]
-        mechanism_candidates = augmented_candidates[:, raw_width:]
-        mechanism_distance = _ridge_response_predictions(
-            mechanism_observed,
-            distance,
-            mechanism_candidates,
-            quadratic=True,
-            ridge=MECHANISM_QUADRATIC_RIDGE,
-        )
-        joint_distance = _ridge_response_predictions(
-            augmented_observed,
-            distance,
-            augmented_candidates,
-            quadratic=True,
-            ridge=JOINT_QUADRATIC_RIDGE,
-        )
-        mechanism_rank = rankdata(-mechanism_distance, method="average")
-        joint_rank = rankdata(-joint_distance, method="average")
-        return (
-            (mechanism_rank + joint_rank) / (2.0 * len(candidates)),
-            "evidence-supported-mechanism-quadratic-consensus",
-        )
-
-    linear_error = _leave_one_out_error(
+    raw_quadratic_distance = _ridge_response_predictions(
         observed,
         distance,
-        quadratic=False,
-        ridge=RAW_LINEAR_RIDGE,
+        candidates,
+        quadratic=True,
+        ridge=RAW_QUADRATIC_RIDGE,
     )
-    joint_linear_distance = _ridge_response_predictions(
-        augmented_observed,
+    raw_quadratic_error = _leave_one_out_error(
+        observed,
         distance,
-        augmented_candidates,
-        quadratic=False,
-        ridge=JOINT_LINEAR_RIDGE,
+        quadratic=True,
+        ridge=RAW_QUADRATIC_RIDGE,
     )
-    joint_error = _leave_one_out_error(
-        augmented_observed,
+    raw_error = raw_quadratic_error
+    raw_score = (
+        linear_rank + rankdata(-raw_quadratic_distance, method="average")
+    ) / (2.0 * len(candidates))
+    raw_policy = "linear-quadratic-rank-consensus"
+
+    raw_width = observed.shape[1]
+    if augmented_observed.shape[1] == raw_width:
+        return finish(raw_score, raw_policy)
+
+    if not _feature_representation_is_admitted(
+        observed,
         distance,
-        quadratic=False,
-        ridge=JOINT_LINEAR_RIDGE,
-    )
-    if not math.isfinite(joint_error) or joint_error > linear_error:
-        return linear_rank / len(candidates), "cross-validated-linear-response"
-    return (
-        rankdata(-joint_linear_distance, method="average") / len(candidates),
-        "cross-validated-joint-linear-response",
-    )
+        augmented_observed,
+    ):
+        return finish(raw_score, raw_policy)
+
+    mechanism_observed = augmented_observed[:, raw_width:]
+    mechanism_candidates = augmented_candidates[:, raw_width:]
+    augmented_models: list[tuple[float, np.ndarray, str]] = []
+    for model_points, model_candidates, quadratic, ridge, policy in (
+        (
+            augmented_observed,
+            augmented_candidates,
+            False,
+            JOINT_LINEAR_RIDGE,
+            "cross-validated-joint-linear-response",
+        ),
+        (
+            mechanism_observed,
+            mechanism_candidates,
+            True,
+            MECHANISM_QUADRATIC_RIDGE,
+            "cross-validated-mechanism-quadratic-response",
+        ),
+        (
+            augmented_observed,
+            augmented_candidates,
+            True,
+            JOINT_QUADRATIC_RIDGE,
+            "cross-validated-joint-quadratic-response",
+        ),
+    ):
+        error = _leave_one_out_error(
+            model_points,
+            distance,
+            quadratic=quadratic,
+            ridge=ridge,
+        )
+        if not math.isfinite(error):
+            continue
+        predictions = _ridge_response_predictions(
+            model_points,
+            distance,
+            model_candidates,
+            quadratic=quadratic,
+            ridge=ridge,
+        )
+        augmented_models.append((error, predictions, policy))
+
+    if augmented_models:
+        augmented_error, augmented_distance, augmented_policy = min(
+            augmented_models, key=lambda item: item[0]
+        )
+        if augmented_error <= raw_error * (
+            1.0 - FEATURE_ADMISSION_RELATIVE_IMPROVEMENT
+        ):
+            return finish(
+                rankdata(-augmented_distance, method="average") / len(candidates),
+                augmented_policy,
+            )
+    return finish(raw_score, raw_policy)
 
 
 class BotorchOptimizer:
@@ -385,20 +483,40 @@ class BotorchOptimizer:
         candidate_unit_tensor = torch.tensor(candidates, dtype=dtype)
         lows = [value.low for value in self.campaign.variables]
         highs = [value.high for value in self.campaign.variables]
-        train_x_np = expand_inputs(
+        expanded_train_np = expand_inputs(
             train_unit,
             names,
             lows,
             highs,
             self.derived_features,
         )
-        choices_np = expand_inputs(
+        expanded_choices_np = expand_inputs(
             candidates,
             names,
             lows,
             highs,
             self.derived_features,
         )
+        observed_distance = np.asarray(
+            [
+                self.campaign.distance_to_spec(
+                    {
+                        objective.name: float(values[index])
+                        for index, objective in enumerate(
+                            self.campaign.objectives
+                        )
+                    }
+                )
+                for values in self.y
+            ]
+        )
+        features_admitted = _feature_representation_is_admitted(
+            train_unit,
+            observed_distance,
+            expanded_train_np,
+        )
+        train_x_np = expanded_train_np if features_admitted else train_unit.copy()
+        choices_np = expanded_choices_np if features_admitted else candidates.copy()
         decision_train_np = train_x_np.copy()
         decision_choices_np = choices_np.copy()
         process_feature_names = self._common_process_feature_names()
@@ -581,19 +699,6 @@ class BotorchOptimizer:
                         / sigma
                     )
                 specification_probability *= np.clip(probability, 0.0, 1.0)
-            observed_distance = np.asarray(
-                [
-                    self.campaign.distance_to_spec(
-                        {
-                            objective.name: float(values[index])
-                            for index, objective in enumerate(
-                                self.campaign.objectives
-                            )
-                        }
-                    )
-                    for values in self.y
-                ]
-            )
             acquisition_score, reach_policy = _reach_specification_scores(
                 train_unit,
                 observed_distance,

@@ -88,7 +88,7 @@ def test_reach_specification_scores_fall_back_to_dominant_linear_response():
         observed,
         distance,
         candidates,
-        np.asarray([0.2, 0.9, 0.8]),
+        np.ones(len(candidates)),
     )
 
     assert policy == "dominant-linear-response"
@@ -105,10 +105,10 @@ def test_reach_specification_scores_use_raw_quadratic_without_features():
         observed,
         distance,
         candidates,
-        np.asarray([0.7, 0.6, 0.7]),
+        np.ones(len(candidates)),
     )
 
-    assert policy == "raw-quadratic-response"
+    assert policy == "gp-linear-quadratic-rank-consensus"
     assert int(np.argmax(scores)) == 1
 
 
@@ -126,25 +126,13 @@ def test_reach_specification_scores_cross_validate_declared_features():
             [1.0, 1.0],
         ]
     )
-    distance = observed[:, 0] * observed[:, 1]
+    distance = np.abs(observed[:, 0] - observed[:, 1])
     candidates = np.asarray([[0.1, 0.1], [0.5, 0.5], [0.9, 0.9]])
     observed_augmented = np.column_stack(
-        [
-            observed,
-            observed[:, 0] * observed[:, 1],
-            observed[:, 0] ** 2,
-            observed[:, 1] ** 2,
-            np.zeros((len(observed), 4)),
-        ]
+        [observed, np.abs(observed[:, 0] - observed[:, 1])]
     )
     candidate_augmented = np.column_stack(
-        [
-            candidates,
-            candidates[:, 0] * candidates[:, 1],
-            candidates[:, 0] ** 2,
-            candidates[:, 1] ** 2,
-            np.zeros((len(candidates), 4)),
-        ]
+        [candidates, np.abs(candidates[:, 0] - candidates[:, 1])]
     )
 
     scores, policy = _reach_specification_scores(
@@ -156,7 +144,7 @@ def test_reach_specification_scores_cross_validate_declared_features():
         candidate_augmented_points=candidate_augmented,
     )
 
-    assert policy == "cross-validated-joint-linear-response"
+    assert policy == "gp-cross-validated-mechanism-quadratic-response"
     assert int(np.argmax(scores)) == 0
 
 
@@ -204,11 +192,11 @@ def test_reach_specification_scores_reject_unhelpful_declared_features():
         ),
     )
 
-    assert policy == "cross-validated-linear-response"
+    assert policy == "gp-linear-quadratic-rank-consensus"
     assert int(np.argmax(scores)) == 0
 
 
-def test_reach_specification_scores_use_quadratic_consensus_with_enough_observations():
+def test_reach_specification_scores_require_predictive_gain_with_enough_observations():
     x = np.linspace(0.0, 1.0, 9)
     observed = np.column_stack([x, np.roll(x, 3)])
     distance = (x - 0.5) ** 2 + 0.1 * np.sin(8.0 * np.pi * x)
@@ -231,5 +219,5 @@ def test_reach_specification_scores_use_quadratic_consensus_with_enough_observat
         candidate_augmented_points=candidate_augmented,
     )
 
-    assert policy == "evidence-supported-mechanism-quadratic-consensus"
+    assert policy == "gp-linear-quadratic-rank-consensus"
     assert np.isfinite(scores).all()

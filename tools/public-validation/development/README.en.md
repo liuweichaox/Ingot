@@ -67,3 +67,15 @@ Both failures are retained alongside the passes. They show that routing fixes v7
 After freeze, v6 completed 300 LNP3 formulation episodes. The full result is retained in [`../latest-results-v6.json`](../latest-results-v6.json) and independently recomputed by [`validate_v6_result.py`](validate_v6_result.py). Reductions versus random and maximin are 43.75% and 35.96%, both passed. The aggregate reduction versus linear is 27.61%, but only 2/3 contexts are non-worse; the effect versus quadratic is −8.46%; and mechanism features are −5.80% versus the no-mechanism version, with zero of three contexts non-worse. Neither the overall nor mechanism-contribution claim is demonstrated.
 
 This failure narrows successor development to mechanism-feature admission rather than adding model complexity. Exceeding a coefficient-count threshold does not establish predictive value for derived features. A successor router must compare raw and mechanism-augmented models using revealed observations and retain the raw response surface when evidence is insufficient. Because v6 outcomes are now inspected, they are development and regression evidence only; any new public decision requires fresh uninspected outcomes and a newly frozen protocol.
+
+## v9 conservative method-routing development regression
+
+v9 applies capacity and leave-one-out gain gates to the complete surrogate, not just the final ranking. With insufficient observations, the mechanism and ablation variants must produce identical trajectories. Strong monotonic evidence directly admits the linear surface. Other cases use a linear–quadratic rank consensus, with GP specification probability joining only after three visible observations per raw control. Complete regressions on disclosed evidence are:
+
+| Disclosed data | Random | Maximin | Linear | Quadratic | Mechanism ablation | Remaining failed guardrail |
+|---|---:|---:|---:|---:|---:|---|
+| v3, 400 episodes | +79.64% | +25.78% | +7.05% | +14.10% | 0% | quadratic non-worse on only 1/2 datasets; no ablation gain |
+| v4, 1,250 episodes | +62.82% | +44.03% | −0.65% | +30.91% | 0% | linear non-worse on 52% and quadratic on 88% of units; no ablation gain |
+| v6, 300 episodes | +49.97% | +43.05% | +35.62% | +3.54% | 0% | quadratic non-worse in only 1/3 contexts with CI crossing zero; no ablation gain |
+
+All figures are post-inspection development evidence and cannot replace any frozen result. They show that v9 executes safe degradation and consistently beats random search across these pools. They also rule out claiming that the current version generally beats every response surface or that mechanism features are already validated. A new decision must select uninspected outcomes only after committing v9, then freeze the objective, contexts, sample sizes, and every gate.

@@ -316,12 +316,12 @@ def test_v4_retained_result_discloses_failed_linear_and_ablation_guardrails():
     ] == pytest.approx(0.92)
 
 
-def test_v6_frozen_fixture_is_complete_and_contexts_are_isolated():
+def test_v6_frozen_fixture_rejects_successor_algorithm_and_keeps_data_checks():
     protocol = benchmark_v6.load_protocol()
     report = benchmark_v6.integrity_report(protocol)
 
     assert report["status"] == "frozen"
-    assert report["full_evaluation_allowed"] is True
+    assert report["full_evaluation_allowed"] is False
     assert report["evaluation_unit_count"] == 3
     assert len(report["candidate_evaluation_fingerprint"]) == 64
     profile = report["datasets"]["lnp3"]

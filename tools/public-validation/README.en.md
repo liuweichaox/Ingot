@@ -147,6 +147,6 @@ Verify the v6 data, frozen protocol, and unified fingerprint with:
 ./scripts/verify-public-validation-v6.sh
 ```
 
-The freeze references candidate commit `ab1675bccb1283a679a86f61b7175359fc83c1af` and unified evaluation fingerprint `06099fa53a4d5f9c7898380f2bf24bb1982e830b7926cf567625507c04bf9cca`. The current tree can still rerun the frozen evaluation with `./scripts/benchmark-public-validation-v6.sh`; after a successor algorithm commit, the fingerprint check intentionally prevents new-algorithm output from being presented as v6.
+The freeze references candidate commit `ab1675bccb1283a679a86f61b7175359fc83c1af` and unified evaluation fingerprint `06099fa53a4d5f9c7898380f2bf24bb1982e830b7926cf567625507c04bf9cca`. Once main advances to a successor algorithm, the fingerprint check intentionally refuses a current-tree rerun that could present new-algorithm output as v6. Reproducing the original trajectories requires checking out the candidate revision recorded by the protocol; current main retains fixture checks, the complete result, and independent summary recomputation.
 
 When refreshing the reference result, retain every context and failure, run the complete benchmark first, and update Chinese and English documentation together. A real deployment still needs in-factory local-history replay and a small controlled transfer test; factory data does not need to leave the site.
