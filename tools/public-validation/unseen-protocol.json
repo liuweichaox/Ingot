@@ -1,12 +1,12 @@
 {
   "schema": "ingot-unseen-data-acceptance-protocol",
-  "status": "draft",
+  "status": "frozen",
   "purpose": "Freeze-before-run acceptance of core experiment selection and separate mechanism-feature contribution on previously unused physical reaction-process data.",
   "freeze": {
     "selection_revision": "875b66015b85d9319c0646ba36cd6024cbc2a98a",
-    "optimizer_revision": null,
-    "protocol_revision": null,
-    "evaluation_fingerprint": null,
+    "optimizer_revision": "e4bbe95eae1d71d546acf757e72f5a287b037805",
+    "protocol_revision": "e4bbe95eae1d71d546acf757e72f5a287b037805",
+    "evaluation_fingerprint": "453e7d90ee110f641c04e4a7425333222a21c2eb913e2d22481000f0a9aec84a",
     "result_policy": "A full result is valid only after status is frozen, both revisions identify the preceding committed candidate, and the evaluation fingerprint matches every method, adapter, data, dependency, and normalized protocol input."
   },
   "sources": {
