@@ -39,6 +39,14 @@ benchmark_v6 = importlib.util.module_from_spec(SPEC_V6)
 assert SPEC_V6.loader is not None
 SPEC_V6.loader.exec_module(benchmark_v6)
 
+BENCHMARK_V7_PATH = BENCHMARK_PATH.with_name("benchmark_v7.py")
+SPEC_V7 = importlib.util.spec_from_file_location(
+    "ingot_public_validation_v7", BENCHMARK_V7_PATH
+)
+benchmark_v7 = importlib.util.module_from_spec(SPEC_V7)
+assert SPEC_V7.loader is not None
+SPEC_V7.loader.exec_module(benchmark_v7)
+
 
 def test_public_fixtures_are_verified_and_contexts_are_isolated():
     protocol = benchmark.load_protocol()
@@ -435,3 +443,80 @@ def test_v6_retained_result_discloses_failed_model_and_ablation_guardrails():
     assert effects["ingot-v8-without-mechanism-features"][
         "evaluation_unit_non_worse_fraction"
     ] == 0.0
+
+
+def test_v7_draft_fixtures_and_composition_features_are_valid():
+    protocol = benchmark_v7.load_protocol()
+    report = benchmark_v7.integrity_report(protocol)
+
+    assert report["status"] == "draft"
+    assert report["full_evaluation_allowed"] is False
+    assert report["evaluation_unit_count"] == 4
+    assert len(report["candidate_evaluation_fingerprint"]) == 64
+    assert set(report["datasets"]) == {
+        "oer_plate_3496",
+        "oer_plate_3851",
+        "oer_plate_3860",
+        "oer_plate_4098",
+    }
+    assert {profile["rows"] for profile in report["datasets"].values()} == {
+        2119,
+        2120,
+        2121,
+    }
+    assert all(
+        profile["control_count"] == 6
+        and profile["context_count"] == 0
+        and profile["mechanism_feature_count"] == 3
+        and profile["evaluation_unit_count"] == 1
+        and profile["duplicate_control_context_settings"] == 0
+        and "outcome_minimum" not in profile
+        for profile in report["datasets"].values()
+    )
+
+
+def test_v7_draft_refuses_full_evaluation_until_metadata_only_freeze():
+    protocol = benchmark_v7.load_protocol()
+
+    with pytest.raises(RuntimeError, match="protocol-v7 is not frozen"):
+        benchmark_v7.require_frozen(protocol)
+
+
+def test_v7_freeze_fingerprint_covers_all_data_and_method_inputs():
+    protocol = benchmark_v7.load_protocol()
+    candidate = benchmark_v7.evaluation_fingerprint(protocol)
+    frozen = json.loads(json.dumps(protocol))
+    frozen["status"] = "frozen"
+    frozen["freeze"]["optimizer_revision"] = "a" * 40
+    frozen["freeze"]["protocol_revision"] = "b" * 40
+    frozen["freeze"]["evaluation_fingerprint"] = candidate
+
+    benchmark_v7.require_frozen(frozen)
+    frozen["datasets"]["oer_plate_3496"]["additional_trial_budget"] += 1
+    with pytest.raises(RuntimeError, match="fingerprint does not match"):
+        benchmark_v7.require_frozen(frozen)
+
+
+def test_v7_keeps_all_strong_baselines_and_per_plate_guardrail():
+    protocol = benchmark_v7.load_protocol()
+
+    assert protocol["methods"]["baselines"] == [
+        "seeded-random-search",
+        "sequential-maximin-space-filling",
+        "regularized-linear-response-surface",
+        "regularized-quadratic-response-surface",
+    ]
+    assert protocol["statistics"]["minimum_relative_reduction_ci_lower"] == 0.0
+    assert protocol["statistics"][
+        "minimum_success_rate_difference_ci_lower"
+    ] == -0.05
+    assert protocol["statistics"][
+        "minimum_evaluation_unit_non_worse_fraction"
+    ] == 1.0
+    assert protocol["statistics"]["unsuccessful_trial_value"] == 25
+    assert all(
+        settings["objective"]["threshold_rule"]["quantile"] == 0.01
+        and settings["initial_observations"] == 24
+        and settings["additional_trial_budget"] == 24
+        for settings in protocol["datasets"].values()
+    )

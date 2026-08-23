@@ -85,3 +85,15 @@ Source: https://github.com/the-matter-lab/olympus/tree/440b6b58ebfcaa2391cff7e94
 License: [MIT](https://github.com/the-matter-lab/olympus/blob/440b6b58ebfcaa2391cff7e94b570fb4fda98d68/LICENSE)
 
 Changes made by the Ingot project: added stable setting identifiers and descriptive headers to the source's headerless rows. All 768 settings, the three solid-lipid identities, four formulation inputs, and three measured outcomes are unchanged. No outcome was synthesized, imputed, averaged, or removed. The pinned source CSV has SHA-256 `69e8847e30f8b8b8720884676cd20d354152b7093309d278ee9910f9924b48ba`; `prepare_v6_fixture.py` verifies the checksum and the complete 3 × 4⁴ factorial structure before writing the fixture.
+
+`data/oer-plate-3496.csv`, `data/oer-plate-3851.csv`, `data/oer-plate-3860.csv`, and `data/oer-plate-4098.csv` are normalized copies of four OER composition-screen datasets in:
+
+> The Matter Lab, “Olympus: a benchmarking framework for noisy optimization and experiment planning”, pinned revision `440b6b58ebfcaa2391cff7e94b570fb4fda98d68`.
+
+The physical screens and their Olympus benchmark representation are documented in the source repository and in *Olympus, enhanced: benchmarking mixed-parameter and multi-objective optimization in chemistry and materials science*.
+
+Source: https://github.com/the-matter-lab/olympus/tree/440b6b58ebfcaa2391cff7e94b570fb4fda98d68/src/olympus/datasets
+
+License: [MIT](https://github.com/the-matter-lab/olympus/blob/440b6b58ebfcaa2391cff7e94b570fb4fda98d68/LICENSE)
+
+Changes made by the Ingot project: added stable setting identifiers and descriptive headers to the four headerless source files. The six elemental fractions and measured OER overpotential values are unchanged. No row or outcome was synthesized, imputed, averaged, removed, or replaced by emulator output. The pinned source CSV SHA-256 values are `3c70049ccfdd11bc05d1777421fc4c724d2b2d4a86c12b8759079609912cfade`, `e2212be9cc5c866fa98dcb9513fca63946003f317688cb025bd0d648d8c3caab`, `834e2832818900e5cefa9de3b433e2246424faa1b2c3c460a1daf0707710fc90`, and `a3e4b4b781e3a04f861d062e773ce64d543118aa8ee9ccfc1aa4612502070b12`, respectively. `prepare_v7_fixtures.py` verifies checksums, finite values, simplex sums, the 10 at% grid, support size, and unique compositions before writing the fixtures.

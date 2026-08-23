@@ -62,6 +62,7 @@ protocols = [
         "protocol-v3.json",
         "protocol-v4.json",
         "protocol-v6.json",
+        "protocol-v7.json",
     )
 ]
 allowed = {
@@ -72,6 +73,10 @@ allowed = {
     "data/energy-efficiency.csv",
     "data/synchronous-machine.csv",
     "data/lnp3-formulations.csv",
+    "data/oer-plate-3496.csv",
+    "data/oer-plate-3851.csv",
+    "data/oer-plate-3860.csv",
+    "data/oer-plate-4098.csv",
 }
 declared = {
     source["fixture"]

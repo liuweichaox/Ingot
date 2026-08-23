@@ -149,4 +149,14 @@ Verify the v6 data, frozen protocol, and unified fingerprint with:
 
 The freeze references candidate commit `ab1675bccb1283a679a86f61b7175359fc83c1af` and unified evaluation fingerprint `06099fa53a4d5f9c7898380f2bf24bb1982e830b7926cf567625507c04bf9cca`. Once main advances to a successor algorithm, the fingerprint check intentionally refuses a current-tree rerun that could present new-algorithm output as v6. Reproducing the original trajectories requires checking out the candidate revision recorded by the protocol; current main retains fixture checks, the complete result, and independent summary recomputation.
 
+## v7 OER composition evaluation (not frozen)
+
+Before reading outcomes, v7 selected four Olympus high-throughput measured OER composition plates. See [v7-selection.en.md](v7-selection.en.md) for the selection, features, and stop conditions. The data-quality gate confirmed finite pools of 2,121, 2,119, 2,120, and 2,121 unique six-component compositions that satisfy the simplex, 10 at% grid, at-most-quaternary support, and finite-outcome contracts. No row was removed or imputed, and no emulator result was introduced.
+
+The draft protocol fixes 24 initial observations, at most 24 additional queries, the first overpotential percentile target, 100 paired episodes per plate, four strong baselines, and composition-feature ablation of the same v10 method. Every plate must be non-worse and all five comparisons must pass. `protocol-v7.json` remains `draft`, so the full evaluator refuses to run and there is no v7 efficiency result or success claim. Run only the integrity check, which exposes no outcome distribution:
+
+```bash
+./scripts/verify-public-validation-v7.sh
+```
+
 When refreshing the reference result, retain every context and failure, run the complete benchmark first, and update Chinese and English documentation together. A real deployment still needs in-factory local-history replay and a small controlled transfer test; factory data does not need to leave the site.
