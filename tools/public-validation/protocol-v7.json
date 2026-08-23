@@ -1,11 +1,11 @@
 {
   "schema": "ingot-public-validation-protocol-v7",
-  "status": "draft",
+  "status": "frozen",
   "purpose": "Protocol-frozen evaluation of v10 evidence-gated method routing on four newly selected physical OER composition screens.",
   "freeze": {
-    "optimizer_revision": null,
-    "protocol_revision": null,
-    "evaluation_fingerprint": null,
+    "optimizer_revision": "4857d825816721bab52c1211dc90bc1d6aa09ce6",
+    "protocol_revision": "4857d825816721bab52c1211dc90bc1d6aa09ce6",
+    "evaluation_fingerprint": "c7c173eb3a025b90cfa78ba62db3410e702317ec7346c4e368398fa2f8d29983",
     "result_policy": "A full result is valid only after status is frozen, both revisions identify the preceding committed candidate, and evaluation_fingerprint matches the algorithm, adapter, data, dependencies, and normalized protocol."
   },
   "development_evidence": {
