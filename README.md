@@ -3,8 +3,8 @@
     <img src="apps/website/public/brand/ingot-lockup.svg" alt="Ingot" width="340">
   </a>
 
-  <p><strong>Open-source industrial process experimentation / 开源工业工艺实验系统</strong></p>
-  <p>把现场运行数据变成可审计证据、人工批准的实验和经过验证的工艺知识。</p>
+  <p><strong>Open-source industrial process optimization / 开源工业工艺优化系统</strong></p>
+  <p>用真实生产数据持续优化工艺。</p>
 
   [![CI](https://github.com/liuweichaox/Ingot/actions/workflows/ci.yml/badge.svg)](https://github.com/liuweichaox/Ingot/actions/workflows/ci.yml)
   [![License: MIT](https://img.shields.io/badge/license-MIT-E8AD56.svg)](LICENSE)
@@ -17,13 +17,13 @@
   简体中文 · [English](README.en.md)
 </div>
 
-![Ingot：从真实运行到工程证据、决策与验证](apps/website/public/og.png)
+![Ingot：从真实运行到工艺优化与验证](apps/website/public/og.png)
 
 ## Ingot 是什么
 
-Ingot 是一套把工业现场运行数据与质量结果转化为可审计实验观察，并在安全边界和人工审批下生成、验证与沉淀工艺建议的开源企业软件。
+Ingot 是一套开源工业工艺优化系统，将现场运行数据和质量结果转化为可复现的实验观察、下一步参数建议和经过验证的工艺操作域。
 
-系统沿同一条证据链连接现场采集、运行识别、质量结果、工艺追因、实验设计和操作域验证。Optimizer 是可替换的无状态数值服务；Agent 只负责查询、组织和解释已授权事实，不直接控制设备，也不替工程师批准实验。
+系统沿同一条数据闭环连接现场采集、运行识别、质量结果、工艺追因和实验设计，再根据问题选择 DOE、响应面或受约束贝叶斯优化方法推荐下一组工艺条件。证据快照、人工审批和影子验证用于约束优化结果如何进入生产；Agent 只负责查询和解释，不是优化或控制主体。
 
 ## 三分钟看懂 Ingot
 
@@ -42,9 +42,9 @@ npm --prefix apps/platform run demo
 
 ## 为什么做 Ingot
 
-Ingot 围绕一条可复核的工程链路建设：
+Ingot 围绕一条可复核的工艺优化链路建设：
 
-> **把每次真实运行变成可比较、可验证的工程证据，并把下一次实验的依据、约束、审批和结果保留在同一条记录链上。**
+> **把每次真实运行变成可比较、可验证的工程证据，持续选择更值得验证的下一组工艺条件，并沉淀适用范围明确的工艺操作域。**
 
 项目保留的目标表述是：**把每次真实运行变成可比较、可验证的工程证据，帮助工艺工程师减少无效实验，更快找到达到目标的工艺条件。** 这是需要由公开回放和真实项目持续验证的目标，不是对所有工艺和算法的既成效果承诺。
 
@@ -60,7 +60,7 @@ Ingot 先建立可信的数据闭环，再帮助工程师：
 - 在安全边界内选择更有价值的下一步实验；
 - 保存经过验证的结论、适用范围和失效条件。
 
-计算机负责整理证据、计算和提出建议；工艺工程师负责定义问题、审核约束、批准实验并作出最终判断。
+系统负责整理运行事实、比较候选方法并提出参数建议；工艺工程师负责定义目标和安全边界、执行验证并判断结果能否进入生产。
 
 ## 一条完整闭环
 
@@ -145,7 +145,7 @@ flowchart LR
     Sources["控制系统 / 仪器 / 视觉 / 检验 / MES"] --> Edge["Edge ConnectorHost\n映射 · 执行边界 · 缓存"]
     Edge --> Platform["Platform API\n运行 · 上下文 · 检验 · 研发 · 证据"]
     Platform --> Web["Platform Web\n工程师工作台"]
-    Platform --> Optimizer["Optimizer\n统计 · GP · 约束 · 实验建议"]
+    Platform --> Optimizer["Optimizer\nDOE · 响应面 · GP/BO · 参数建议"]
     Platform --> Agent["Agent\n查询 · 组织 · 解释"]
     Engineer["工艺工程师"] --> Web
     Web --> Platform
