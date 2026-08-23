@@ -60,13 +60,13 @@ The repository uses fixed public manufacturing data to check categorical-context
 
 Ordinary CI runs only the fast, deterministic regression checks in `optimizer/tests/test_public_validation.py`. The `Performance` workflow runs the complete two-dataset, 14-context benchmark with 100 paired episodes per context on schedule or on demand and uploads the result. An algorithm or replay-policy change must inspect the complete benchmark as well; passing unit tests alone does not establish improved experiment efficiency. See [Public-data experiment-efficiency validation](../tools/public-validation/README.en.md) for provenance, the current result, and update rules.
 
-The v3 external-data evaluation uses two public physical-experiment datasets not used during v2 development, four preregistered baselines, and a mechanism-derived-feature ablation. Before freeze, only its integrity check may run:
+The current method-selection policy's development regression uses four strong baselines and a mechanism-feature ablation:
 
 ```bash
-./scripts/verify-public-validation-v3.sh
+./scripts/benchmark-optimizer-development.sh
 ```
 
-The full evaluator rejects a `draft` protocol. Run `./scripts/benchmark-public-validation-v3.sh` and produce the first result only after the algorithm and protocol revisions are committed and frozen.
+This command reads disclosed data and exists only for development and regression prevention. New effect evidence requires committing the algorithm, data selection, objective, budget, and decision rules before unseen-data acceptance runs; a modified method cannot rerun old outcomes and relabel them as independent validation.
 
 ## Stateless contract
 

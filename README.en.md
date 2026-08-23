@@ -181,13 +181,13 @@ Run the complete fixed public-manufacturing-data benchmark with:
 
 This benchmark validates a reproducible software and method path; it does not replace shadow or controlled online validation on a real project. See [Public-data experiment-efficiency validation](tools/public-validation/README.en.md) for the current result and decision rules.
 
-Verify the frozen v3 external-data evaluation protocol with:
+Run the current optimizer policy's regression on disclosed data with:
 
 ```bash
-./scripts/verify-public-validation-v3.sh
+./scripts/benchmark-optimizer-development.sh
 ```
 
-See the frozen [`protocol-v3.json`](tools/public-validation/protocol-v3.json) and retained [`latest-results-v3.json`](tools/public-validation/latest-results-v3.json). The evaluator rejects any algorithm, data, dependency, or protocol state that differs from the frozen fingerprint.
+This regression confirms that method selection repairs known failures; it is not new effect evidence. Public acceptance uses only three states—development regression, unseen-data acceptance, and real pilot—while internal historical rounds and complete failed results remain available in the validation directory for audit.
 
 ## Repository layout
 

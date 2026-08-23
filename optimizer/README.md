@@ -58,13 +58,13 @@ uv sync --python 3.12 --extra service --extra viz --group dev --locked
 
 普通 CI 中的 `optimizer/tests/test_public_validation.py` 只运行快速、确定性的回归检查；两个数据集、14 个上下文、每个上下文 100 个配对 episode 的完整基准由 `Performance` 工作流定期或手动运行并上传结果。算法或回放策略变化时应同时检查完整基准，不得只以单元测试通过宣称实验效率提高。数据来源、当前结果和更新规则见[公开数据实验效率验证](../tools/public-validation/README.md)。
 
-v3 外部数据评估使用两个未参与 v2 开发的公开物理实验数据集、四个预先登记基线和机理派生特征消融。冻结前只允许运行完整性检查：
+当前方法选择策略的开发回归使用四个强基线和机理特征消融：
 
 ```bash
-./scripts/verify-public-validation-v3.sh
+./scripts/benchmark-optimizer-development.sh
 ```
 
-完整评估器会拒绝 `draft` 协议。算法和协议提交冻结后，才能运行 `./scripts/benchmark-public-validation-v3.sh` 并形成首次结果。
+该命令只读取已经披露的数据，用于开发和防止退化。形成新的效果证据时，必须先提交算法、数据选择、目标、预算和判定规则，再运行未见数据验收；不能用修改后的算法重跑旧数据并把结果称为独立验证。
 
 ## 无状态接口
 

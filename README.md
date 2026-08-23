@@ -186,13 +186,13 @@ uv sync --project optimizer --extra service --group dev --locked
 
 该基准验证可复现的软件和方法链路，不替代真实项目的影子验证或受控在线验证。当前结果与判定规则见[公开数据实验效率验证](tools/public-validation/README.md)。
 
-校验已冻结的 v3 外部数据评估协议：
+运行当前优化策略在已披露数据上的开发回归：
 
 ```bash
-./scripts/verify-public-validation-v3.sh
+./scripts/benchmark-optimizer-development.sh
 ```
 
-冻结协议和保留结果见 [`protocol-v3.json`](tools/public-validation/protocol-v3.json) 与 [`latest-results-v3.json`](tools/public-validation/latest-results-v3.json)。评估器会拒绝任何与冻结指纹不一致的算法、数据、依赖或协议。
+开发回归用于确认方法选择已经修复已知退化，不作为新的效果证明。公开验收只使用“开发回归、未见数据验收、真实试点”三个状态；内部历史批次和完整失败结果仍保留在验证目录中供审计。
 
 ## 仓库结构
 

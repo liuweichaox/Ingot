@@ -6,6 +6,7 @@ import argparse
 import importlib.util
 import json
 from pathlib import Path
+import sys
 
 from ingot_optimizer.botorch_engine import MODEL_VERSION
 
@@ -55,6 +56,9 @@ def main() -> None:
         if args.dataset == "all"
         else [args.dataset]
     )
+    benchmark.DATASETS = {
+        dataset: benchmark.DATASETS[dataset] for dataset in datasets
+    }
     units = []
     for dataset in datasets:
         rows = benchmark.load_rows(dataset, protocol)
@@ -64,18 +68,25 @@ def main() -> None:
                 dataset, rows, protocol
             )
         )
-    records = [
-        benchmark.run_unit(
-            dataset,
-            unit_id,
-            context,
-            rows,
-            unit_index=index,
-            protocol=protocol,
-            episode_count=args.episodes,
+    records = []
+    for index, (dataset, unit_id, context, rows) in enumerate(units):
+        print(
+            f"[{index + 1}/{len(units)}] running {dataset}:{unit_id} "
+            f"({args.episodes} paired episodes)",
+            file=sys.stderr,
+            flush=True,
         )
-        for index, (dataset, unit_id, context, rows) in enumerate(units)
-    ]
+        records.append(
+            benchmark.run_unit(
+                dataset,
+                unit_id,
+                context,
+                rows,
+                unit_index=index,
+                protocol=protocol,
+                episode_count=args.episodes,
+            )
+        )
     summary = benchmark.summarize(records, protocol)
     summary["experiment_reduction_vs_all_preregistered_baselines"] = (
         "passed-development-regression"
