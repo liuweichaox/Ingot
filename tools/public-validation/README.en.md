@@ -44,10 +44,11 @@ Numbers embedded in older filenames identify past internal experiment rounds. Th
 |---|---:|---|
 | Current-policy regression on disclosed data | `+53.66%` versus random, `+54.42%` versus maximin, `+50.52%` versus linear, and `+7.00%` versus quadratic; every dataset guardrail passed | development regression passed |
 | Generic composition-feature ablation | `−0.10%`, with no stable benefit | failed; current policy rejects admission |
-| Unseen public-data acceptance for the current policy | not run yet | awaiting acceptance |
+| Unseen-data acceptance for the current policy | `+16.74%` versus linear and `+7.25%` versus quadratic, both passed; Fullerenes was `−23.01%` versus random and `−40.65%` versus maximin, triggering subgroup guardrails | core acceptance failed |
+| Preregistered process-feature ablation | `+0.20%`, with a 95% CI lower bound of `0` | failed; features remain disabled |
 | Real-factory historical replay and prospective pilot | not complete | awaiting pilot |
 
-The present conclusion is therefore: **the current policy repairs the known linear- and quadratic-response-surface regressions on development data and rejects unsupported mechanism features. Whether it reliably saves experiments on new data remains a decision for the next freeze-before-run acceptance.**
+The present conclusion is therefore: **the current policy passes the linear- and quadratic-response-surface guardrails on unseen data but does not yet reliably beat model-free space filling; core experiment-reduction acceptance failed.** The Fullerenes failure narrows successor work to whether insufficient model evidence should trigger a maximin fallback. [unseen-results.json](unseen-results.json) retains the complete result; it is development regression for any successor and cannot be rerun into a passing result.
 
 ## Running the checks
 

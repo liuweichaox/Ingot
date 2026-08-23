@@ -27,8 +27,8 @@ def test_unseen_reaction_fixtures_pass_preregistered_data_quality_gate():
     protocol = benchmark.load_protocol()
     report = benchmark.integrity_report(protocol)
 
-    assert report["status"] == "draft"
-    assert report["full_evaluation_allowed"] is False
+    assert report["status"] == "frozen"
+    assert report["full_evaluation_allowed"] is True
     assert report["evaluation_unit_count"] == 2
     assert report["datasets"]["fullerenes"]["rows"] == 216
     assert report["datasets"]["suzuki"]["rows"] == 247
@@ -69,22 +69,53 @@ def test_unseen_protocol_keeps_fixed_baselines_budgets_and_separate_claims():
     }
 
 
-def test_unseen_protocol_refuses_draft_and_fingerprint_tampering():
+def test_unseen_protocol_accepts_frozen_state_and_refuses_tampering():
     protocol = benchmark.load_protocol()
+    benchmark.require_frozen(protocol)
+
+    draft = json.loads(json.dumps(protocol))
+    draft["status"] = "draft"
     with pytest.raises(RuntimeError, match="not frozen"):
-        benchmark.require_frozen(protocol)
+        benchmark.require_frozen(draft)
 
     frozen = json.loads(json.dumps(protocol))
-    frozen["status"] = "frozen"
-    frozen["freeze"]["optimizer_revision"] = "a" * 40
-    frozen["freeze"]["protocol_revision"] = "b" * 40
-    frozen["freeze"]["evaluation_fingerprint"] = benchmark.evaluation_fingerprint(
-        protocol
-    )
-    benchmark.require_frozen(frozen)
     frozen["datasets"]["fullerenes"]["additional_trial_budget"] += 1
     with pytest.raises(RuntimeError, match="fingerprint does not match"):
         benchmark.require_frozen(frozen)
+
+
+def test_retained_unseen_result_discloses_model_free_and_feature_failures():
+    protocol = benchmark.load_protocol()
+    result = json.loads(
+        (BENCHMARK_PATH.parent / "unseen-results.json").read_text(
+            encoding="utf-8"
+        )
+    )
+
+    assert result["evaluation_fingerprint"] == protocol["freeze"][
+        "evaluation_fingerprint"
+    ]
+    assert result["summary"]["episode_count"] == 400
+    assert result["summary"]["core_experiment_selection"] == "not-demonstrated"
+    assert result["summary"]["response_surface_added_value"] is True
+    assert result["summary"]["mechanism_feature_contribution"] == (
+        "not-demonstrated"
+    )
+    effects = {
+        item["comparator"]: item
+        for item in result["summary"]["paired_effects"]
+    }
+    assert effects["seeded-random-search"]["passed"] is False
+    assert effects["sequential-maximin-space-filling"]["passed"] is False
+    assert effects["regularized-linear-response-surface"]["passed"] is True
+    assert effects["regularized-quadratic-response-surface"]["passed"] is True
+    assert effects[benchmark.ABLATION]["passed"] is False
+    assert effects["seeded-random-search"][
+        "evaluation_unit_relative_reductions"
+    ]["fullerenes:all"] == pytest.approx(-0.2300762301)
+    assert effects["sequential-maximin-space-filling"][
+        "evaluation_unit_relative_reductions"
+    ]["fullerenes:all"] == pytest.approx(-0.4064976228)
 
 
 @pytest.mark.parametrize("dataset", ["fullerenes", "suzuki"])

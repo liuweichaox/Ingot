@@ -107,7 +107,7 @@ The repository implements the main path from field data to a next-experiment rec
 - select among linear response surfaces, quadratic response surfaces, and Bayesian optimization from visible evidence, then recommend the most valuable next experiment;
 - preserve inputs, versions, sources, constraints, and results so every recommendation can be reviewed and replayed.
 
-Public replay has confirmed fewer additional queries than random search and maximin on selected physical-experiment datasets; a stable advantage over linear and quadratic response surfaces is still under evaluation. Full data, failed subgroups, confidence intervals, and decision rules live in one place: [Public-data experiment-efficiency validation](tools/public-validation/README.en.md). See [Scenario validation](docs/rollout.en.md) for real-pilot acceptance.
+Public replay confirms fewer additional queries on some physical-experiment data. The latest unseen-data acceptance passes its linear- and quadratic-response-surface guardrails but trails random search and maximin on Fullerenes, so the core conclusion still fails. Full data, failed subgroups, confidence intervals, and decision rules live in [Optimizer experiment-efficiency validation](tools/public-validation/README.en.md). See [Scenario validation](docs/rollout.en.md) for real-pilot acceptance.
 
 ## Architecture
 
