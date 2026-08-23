@@ -35,7 +35,7 @@ while IFS= read -r path; do
   case "$path" in
     tests/fixtures/synthetic/*|tools/*/examples/synthetic/*)
       ;;
-    tools/public-validation/data/fdm-doe-grid.csv|tools/public-validation/data/crossed-barrel.csv|tools/public-validation/data/airfoil-self-noise.csv|tools/public-validation/data/yacht-hydrodynamics.csv|tools/public-validation/data/energy-efficiency.csv|tools/public-validation/data/synchronous-machine.csv|tools/public-validation/data/lnp3-formulations.csv|tools/public-validation/data/oer-plate-3496.csv|tools/public-validation/data/oer-plate-3851.csv|tools/public-validation/data/oer-plate-3860.csv|tools/public-validation/data/oer-plate-4098.csv|tools/public-validation/data/fullerenes-source.csv|tools/public-validation/data/fullerenes.csv|tools/public-validation/data/suzuki-source.csv|tools/public-validation/data/suzuki.csv)
+    tools/public-validation/data/fdm-doe-grid.csv|tools/public-validation/data/crossed-barrel.csv|tools/public-validation/data/airfoil-self-noise.csv|tools/public-validation/data/yacht-hydrodynamics.csv|tools/public-validation/data/energy-efficiency.csv|tools/public-validation/data/synchronous-machine.csv|tools/public-validation/data/lnp3-formulations.csv|tools/public-validation/data/oer-plate-3496.csv|tools/public-validation/data/oer-plate-3851.csv|tools/public-validation/data/oer-plate-3860.csv|tools/public-validation/data/oer-plate-4098.csv|tools/public-validation/data/fullerenes-source.csv|tools/public-validation/data/fullerenes.csv|tools/public-validation/data/suzuki-source.csv|tools/public-validation/data/suzuki.csv|tools/public-validation/data/alkox-source.csv|tools/public-validation/data/alkox.csv|tools/public-validation/data/p3ht-source.csv|tools/public-validation/data/p3ht.csv|tools/public-validation/data/hplc-source.csv|tools/public-validation/data/hplc.csv)
       ;;
     .ingot-import/*|mapping-*.json|*.csv|*.parquet|*.xlsx|*.xls|*.db)
       sensitive_paths+=("$path")
@@ -64,6 +64,7 @@ protocols = [
         "protocol-v6.json",
         "protocol-v7.json",
         "unseen-protocol.json",
+        "acceptance-protocol.json",
     )
 ]
 allowed = {
@@ -82,6 +83,12 @@ allowed = {
     "data/fullerenes.csv",
     "data/suzuki-source.csv",
     "data/suzuki.csv",
+    "data/alkox-source.csv",
+    "data/alkox.csv",
+    "data/p3ht-source.csv",
+    "data/p3ht.csv",
+    "data/hplc-source.csv",
+    "data/hplc.csv",
 }
 declared = {
     path
