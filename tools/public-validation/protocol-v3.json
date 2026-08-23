@@ -1,11 +1,11 @@
 {
   "schema": "ingot-public-validation-protocol-v3",
-  "status": "draft",
+  "status": "frozen",
   "purpose": "Protocol-frozen evaluation of additional-trial efficiency on public physical-experiment datasets that were not used by the v2 development benchmark.",
   "freeze": {
-    "optimizer_revision": null,
-    "protocol_revision": null,
-    "evaluation_fingerprint": null,
+    "optimizer_revision": "70cd12c16df55247dff70971cded312705f4b88b",
+    "protocol_revision": "70cd12c16df55247dff70971cded312705f4b88b",
+    "evaluation_fingerprint": "f82d3745530de851a901307f720b127f4db38bc2a1ed4d44d9a0d99fa66bbb5d",
     "result_policy": "A full result is valid only after status is frozen, both revisions identify the preceding committed candidate, and evaluation_fingerprint matches the algorithm, data, dependency lock, evaluator, and normalized protocol."
   },
   "development_evidence": {
