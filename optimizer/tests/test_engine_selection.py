@@ -108,7 +108,7 @@ def test_reach_specification_scores_use_raw_quadratic_without_features():
         np.ones(len(candidates)),
     )
 
-    assert policy == "gp-linear-quadratic-rank-consensus"
+    assert policy == "quadratic-response"
     assert int(np.argmax(scores)) == 1
 
 
@@ -144,7 +144,7 @@ def test_reach_specification_scores_cross_validate_declared_features():
         candidate_augmented_points=candidate_augmented,
     )
 
-    assert policy == "gp-cross-validated-mechanism-quadratic-response"
+    assert policy == "cross-validated-mechanism-quadratic-response"
     assert int(np.argmax(scores)) == 0
 
 
@@ -192,7 +192,7 @@ def test_reach_specification_scores_reject_unhelpful_declared_features():
         ),
     )
 
-    assert policy == "gp-linear-quadratic-rank-consensus"
+    assert policy == "quadratic-response"
     assert int(np.argmax(scores)) == 0
 
 
@@ -219,5 +219,28 @@ def test_reach_specification_scores_require_predictive_gain_with_enough_observat
         candidate_augmented_points=candidate_augmented,
     )
 
-    assert policy == "gp-linear-quadratic-rank-consensus"
+    assert policy == "quadratic-response"
     assert np.isfinite(scores).all()
+
+
+def test_reach_specification_scores_admit_gp_only_after_six_observations_per_dimension():
+    x = np.linspace(0.0, 1.0, 12)
+    observed = np.column_stack([x, np.roll(x, 4)])
+    distance = (x - 0.5) ** 2 + 0.1 * np.sin(8.0 * np.pi * x)
+    candidates = np.asarray([[0.05, 0.5], [0.5, 0.5], [0.95, 0.5]])
+
+    _, before_policy = _reach_specification_scores(
+        observed[:-1],
+        distance[:-1],
+        candidates,
+        np.asarray([0.7, 0.6, 0.7]),
+    )
+    _, admitted_policy = _reach_specification_scores(
+        observed,
+        distance,
+        candidates,
+        np.asarray([0.7, 0.6, 0.7]),
+    )
+
+    assert before_policy == "quadratic-response"
+    assert admitted_policy == "gp-quadratic-response"

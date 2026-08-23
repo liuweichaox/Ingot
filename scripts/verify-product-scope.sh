@@ -35,7 +35,7 @@ while IFS= read -r path; do
   case "$path" in
     tests/fixtures/synthetic/*|tools/*/examples/synthetic/*)
       ;;
-    tools/public-validation/data/fdm-doe-grid.csv|tools/public-validation/data/crossed-barrel.csv|tools/public-validation/data/airfoil-self-noise.csv|tools/public-validation/data/yacht-hydrodynamics.csv|tools/public-validation/data/energy-efficiency.csv|tools/public-validation/data/synchronous-machine.csv|tools/public-validation/data/lnp3-formulations.csv)
+    tools/public-validation/data/fdm-doe-grid.csv|tools/public-validation/data/crossed-barrel.csv|tools/public-validation/data/airfoil-self-noise.csv|tools/public-validation/data/yacht-hydrodynamics.csv|tools/public-validation/data/energy-efficiency.csv|tools/public-validation/data/synchronous-machine.csv|tools/public-validation/data/lnp3-formulations.csv|tools/public-validation/data/oer-plate-3496.csv|tools/public-validation/data/oer-plate-3851.csv|tools/public-validation/data/oer-plate-3860.csv|tools/public-validation/data/oer-plate-4098.csv)
       ;;
     .ingot-import/*|mapping-*.json|*.csv|*.parquet|*.xlsx|*.xls|*.db)
       sensitive_paths+=("$path")

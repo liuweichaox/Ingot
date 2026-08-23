@@ -85,3 +85,19 @@ All figures are post-inspection development evidence and cannot replace any froz
 v10 runs 400 frozen episodes on four measured OER composition plates not used for development. It reduces trials by 57.70%, 58.01%, and 53.67% versus random, maximin, and linear response surfaces, passing all three. The aggregate reduction versus quadratic is 11.67% (95% CI 4.96%–17.81%), but plates 3851 and 3860 are individually worse, leaving only 50% of plates non-worse. Composition features reduce trials by only 0.13% versus the no-feature version (95% CI −2.00%–2.23%), again with only 2/4 plates non-worse. The full result is retained in [`../latest-results-v7.json`](../latest-results-v7.json) and independently recomputed by [`validate_v7_result.py`](validate_v7_result.py).
 
 This failure shows that v10 avoids the earlier linear mismatch, but can still be slowed by GP and the linear–quadratic rank consensus when a quadratic response surface is strongly applicable. The preregistered generic composition descriptors also provide no reproducible gain. OER outcomes are development evidence from this point onward and may be used only for successor raw-model selection, feature rejection, and regression. Any new public decision still requires uninspected outcomes selected before a new freeze; tuning these four plates to pass cannot rewrite v7.
+
+## v11 staged-complexity routing
+
+[`diagnose_v7_model_router.py`](diagnose_v7_model_router.py) reads disclosed v7 trajectories only. Initial leave-one-out error cannot distinguish plate 3496, where GP helps, from plate 3851, where the quadratic response surface is better; kernel-ridge leave-one-out error also provides no stable separator. v11 therefore adds no dataset rule chosen from known outcomes. It uses the quadratic response surface by default, admits GP at 25% weight only after six visible observations per raw control, and requires mechanism features to improve leave-one-out error by at least 50% over the raw quadratic surface.
+
+[`benchmark_candidate_v7.py`](benchmark_candidate_v7.py) runs 25 episodes on each disclosed OER plate, for 100 paired development episodes:
+
+| Comparator | v11 development reduction | 95% CI | Plate non-worse | Gate |
+|---|---:|---:|---:|---|
+| Seeded random search | 53.66% | 47.45% to 59.10% | 100% | passed |
+| Sequential maximin | 54.42% | 48.12% to 59.86% | 100% | passed |
+| Regularized linear response surface | 50.52% | 43.57% to 56.55% | 100% | passed |
+| Regularized quadratic response surface | 7.00% | 3.99% to 10.33% | 100% | passed |
+| No-composition-feature ablation | −0.10% | −0.31% to 0% | 75% | failed |
+
+This small regression shows that staged routing repairs the known OER quadratic-baseline regression while correctly rejecting generic composition features that provide no gain. It is a 100-episode regression on disclosed outcomes, does not replace the frozen v7 result, and does not satisfy a new public-success condition.

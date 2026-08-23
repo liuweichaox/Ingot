@@ -12,7 +12,7 @@ from .feature_transforms import DerivedFeature, expand_inputs
 from .loop import ObjectivePrediction, Suggestion
 
 
-MODEL_VERSION = "botorch-cross-validated-method-routing-v10"
+MODEL_VERSION = "botorch-cross-validated-method-routing-v11"
 MONOTONIC_PEARSON_FLOOR = 0.75
 MONOTONIC_SPEARMAN_FLOOR = 0.85
 RAW_LINEAR_RIDGE = 1e-3
@@ -20,10 +20,10 @@ RAW_QUADRATIC_RIDGE = 1e-2
 MECHANISM_QUADRATIC_RIDGE = 1.5e-2
 JOINT_QUADRATIC_RIDGE = 2e-2
 JOINT_LINEAR_RIDGE = 2e-2
-FEATURE_ADMISSION_RELATIVE_IMPROVEMENT = 0.10
+FEATURE_ADMISSION_RELATIVE_IMPROVEMENT = 0.50
 MINIMUM_OBSERVATIONS_PER_RESPONSE_COEFFICIENT = 3
-GP_PROBABILITY_RANK_WEIGHT = 0.50
-MINIMUM_OBSERVATIONS_PER_GP_DIMENSION = 3
+GP_PROBABILITY_RANK_WEIGHT = 0.25
+MINIMUM_OBSERVATIONS_PER_GP_DIMENSION = 6
 
 
 def _observation_variance(values: np.ndarray) -> np.ndarray:
@@ -178,9 +178,8 @@ def _reach_specification_scores(
 
     A raw control must show both strong Pearson association and strong monotonic
     rank association before a linear response surface is admitted. Otherwise,
-    Strong monotonic evidence admits the raw linear surface; otherwise the raw
-    quadratic surface is the conservative default. Declared mechanism features
-    admit joint-linear, mechanism-quadratic, and
+    the raw quadratic surface is the conservative default. Declared mechanism
+    features admit joint-linear, mechanism-quadratic, and
     joint-quadratic candidates to the same comparison, but an augmented model
     must improve on the best raw model by a fixed relative margin. Candidate
     outcomes are never read by this policy; only revealed observations can
@@ -275,10 +274,10 @@ def _reach_specification_scores(
         ridge=RAW_QUADRATIC_RIDGE,
     )
     raw_error = raw_quadratic_error
-    raw_score = (
-        linear_rank + rankdata(-raw_quadratic_distance, method="average")
-    ) / (2.0 * len(candidates))
-    raw_policy = "linear-quadratic-rank-consensus"
+    raw_score = rankdata(-raw_quadratic_distance, method="average") / len(
+        candidates
+    )
+    raw_policy = "quadratic-response"
 
     raw_width = observed.shape[1]
     if augmented_observed.shape[1] == raw_width:

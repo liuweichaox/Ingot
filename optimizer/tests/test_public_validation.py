@@ -445,12 +445,15 @@ def test_v6_retained_result_discloses_failed_model_and_ablation_guardrails():
     ] == 0.0
 
 
-def test_v7_draft_fixtures_and_composition_features_are_valid():
+def test_v7_frozen_fixture_rejects_successor_algorithm_and_keeps_data_checks():
     protocol = benchmark_v7.load_protocol()
     report = benchmark_v7.integrity_report(protocol)
 
     assert report["status"] == "frozen"
-    assert report["full_evaluation_allowed"] is True
+    assert report["full_evaluation_allowed"] is False
+    assert report["candidate_evaluation_fingerprint"] != protocol["freeze"][
+        "evaluation_fingerprint"
+    ]
     assert report["evaluation_unit_count"] == 4
     assert len(report["candidate_evaluation_fingerprint"]) == 64
     assert set(report["datasets"]) == {
@@ -475,9 +478,10 @@ def test_v7_draft_fixtures_and_composition_features_are_valid():
     )
 
 
-def test_v7_frozen_protocol_allows_only_matching_full_evaluation():
+def test_v7_frozen_protocol_rejects_the_current_successor_algorithm():
     protocol = benchmark_v7.load_protocol()
-    benchmark_v7.require_frozen(protocol)
+    with pytest.raises(RuntimeError, match="fingerprint does not match"):
+        benchmark_v7.require_frozen(protocol)
 
 
 def test_v7_freeze_fingerprint_covers_all_data_and_method_inputs():
