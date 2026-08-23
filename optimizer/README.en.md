@@ -13,7 +13,7 @@ See the [system design](../docs/design.en.md) for boundaries and [analysis and o
 - Less-than, greater-than, target, and range objectives
 - Objective weights and BoTorch/GPyTorch multi-output GPs with 95% intervals
 - Declared physical outcome bounds; formal PASS/FAIL objectives keep posterior means, intervals, and acquisition samples inside 0-1
-- Candidate ranking by specification probability, linear-response reliability, and measured outcome-safety constraints
+- GP outcome-safety filtering followed by evidence-gated linear or quadratic response-surface admission from visible observations
 - Two decision intents: `reach-specification` for specification seeking, and `validate-hypothesis` for safely maximizing identifiable information in hypothesis variables
 - A two-stage set-point-to-trajectory-to-quality surrogate
 - Safe derived features declared by versioned project configuration, with no hidden behavior selected by industry, equipment, or variable names
@@ -22,7 +22,7 @@ See the [system design](../docs/design.en.md) for boundaries and [analysis and o
 - Stateless `POST /v1/suggestions` HTTP contract
 - Synthetic digital-twin demonstration
 
-The NumPy/SciPy GP remains a cold-start and regression baseline. Online suggestions, historical replay, and synthetic replay all use one engine-selection entry point: fewer than three valid observations use the sequential cold start and may apply NumPy GP priors; three or more use BoTorch. Every caller relies on the selected engine's `suggest` path to enforce measured outcome-safety constraints and must not instantiate a concrete engine directly.
+The NumPy/SciPy GP remains a cold-start and regression baseline. Online suggestions, historical replay, and synthetic replay all use one engine-selection entry point: fewer than three valid observations use the sequential cold start and may apply NumPy GP priors; three or more use BoTorch. For specification seeking, candidate selection does not force the GP to outrank an applicable simpler model. A regularized linear response surface is admitted when a raw control clears both Pearson and Spearman evidence thresholds. Otherwise, declared mechanism features use an equal-rank ensemble of mechanism-only and joint quadratic surfaces; without them, the policy uses a raw-control quadratic surface. The GP still supplies prediction intervals and outcome-safety probabilities. Every caller relies on the selected engine's `suggest` path to enforce measured outcome-safety constraints and must not instantiate a concrete engine directly.
 
 The numerical optimizer directly searches continuous controls only. Comparing multiple discrete levels requires separate campaigns stratified by categorical context or an applicable full/fractional factorial design. Adjacent identifiers never make different materials, machines, or tooling artificially similar.
 

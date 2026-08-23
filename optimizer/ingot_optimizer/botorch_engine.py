@@ -1,21 +1,24 @@
-"""Production optimizer: target-aware GP and response-surface ensemble."""
+"""Production optimizer: target-aware GP with evidence-gated method admission."""
 from __future__ import annotations
 
 import math
 from typing import Mapping, Sequence
 
 import numpy as np
-from scipy.stats import norm, rankdata
+from scipy.stats import norm, rankdata, spearmanr
 
 from .campaign import Campaign
 from .feature_transforms import DerivedFeature, expand_inputs
 from .loop import ObjectivePrediction, Suggestion
 
 
-MODEL_VERSION = "botorch-spec-ensemble-v6"
-SPEC_PROBABILITY_WEIGHT = 0.75
-SPEC_RESPONSE_SURFACE_WEIGHT = 0.25
-SPEC_LINEAR_RELIABILITY_SCALE = 1.0
+MODEL_VERSION = "botorch-evidence-gated-method-admission-v7"
+MONOTONIC_PEARSON_FLOOR = 0.75
+MONOTONIC_SPEARMAN_FLOOR = 0.85
+RAW_LINEAR_RIDGE = 1e-3
+RAW_QUADRATIC_RIDGE = 1e-2
+MECHANISM_QUADRATIC_RIDGE = 1.5e-2
+JOINT_QUADRATIC_RIDGE = 2e-2
 
 
 def _observation_variance(values: np.ndarray) -> np.ndarray:
@@ -27,6 +30,165 @@ def _observation_variance(values: np.ndarray) -> np.ndarray:
     scale = np.maximum.reduce([spread, mad, np.ones_like(spread)])
     variance = np.square(scale * 1e-3)
     return np.broadcast_to(variance, values.shape).copy()
+
+
+def _response_surface_features(points: np.ndarray, *, quadratic: bool) -> np.ndarray:
+    """Build a raw-control response-surface basis without process-specific terms."""
+    values = np.atleast_2d(np.asarray(points, dtype=float))
+    columns: list[np.ndarray] = [values]
+    if quadratic:
+        columns.append(values**2)
+        columns.extend(
+            (values[:, left] * values[:, right])[:, None]
+            for left in range(values.shape[1])
+            for right in range(left + 1, values.shape[1])
+        )
+    return np.column_stack(columns)
+
+
+def _ridge_response_predictions(
+    observed_points: np.ndarray,
+    observed_distance: np.ndarray,
+    candidate_points: np.ndarray,
+    *,
+    quadratic: bool,
+    ridge: float,
+) -> np.ndarray:
+    """Predict distance-to-specification with a regularized response surface."""
+    observed_features = _response_surface_features(
+        observed_points, quadratic=quadratic
+    )
+    candidate_features = _response_surface_features(
+        candidate_points, quadratic=quadratic
+    )
+    observed_design = np.column_stack(
+        [np.ones(len(observed_features)), observed_features]
+    )
+    candidate_design = np.column_stack(
+        [np.ones(len(candidate_features)), candidate_features]
+    )
+    penalty = np.eye(observed_design.shape[1]) * ridge
+    penalty[0, 0] = 0.0
+    coefficients = np.linalg.solve(
+        observed_design.T @ observed_design + penalty,
+        observed_design.T @ observed_distance,
+    )
+    return candidate_design @ coefficients
+
+
+def _reach_specification_scores(
+    observed_points: np.ndarray,
+    observed_distance: np.ndarray,
+    candidate_points: np.ndarray,
+    specification_probability: np.ndarray,
+    *,
+    observed_augmented_points: np.ndarray | None = None,
+    candidate_augmented_points: np.ndarray | None = None,
+) -> tuple[np.ndarray, str]:
+    """Select the least-complex response model supported by visible evidence.
+
+    A raw control must show both strong Pearson association and strong monotonic
+    rank association before a linear response surface is admitted. Otherwise,
+    declared mechanism features are evaluated through an equal-rank ensemble of
+    mechanism-only and joint quadratic surfaces. Without declared features the
+    policy falls back to a raw-control quadratic surface. Candidate outcomes are
+    never read by this policy; the GP remains responsible for uncertainty and
+    returned predictions, not for overriding an admitted simpler decision rule.
+    """
+    observed = np.atleast_2d(np.asarray(observed_points, dtype=float))
+    distance = np.asarray(observed_distance, dtype=float)
+    candidates = np.atleast_2d(np.asarray(candidate_points, dtype=float))
+    probabilities = np.asarray(specification_probability, dtype=float)
+    if len(observed) != len(distance):
+        raise ValueError("observed points and distances must have equal length")
+    if len(candidates) != len(probabilities):
+        raise ValueError("candidate points and probabilities must have equal length")
+
+    augmented_observed = np.atleast_2d(
+        np.asarray(
+            observed_augmented_points
+            if observed_augmented_points is not None
+            else observed,
+            dtype=float,
+        )
+    )
+    augmented_candidates = np.atleast_2d(
+        np.asarray(
+            candidate_augmented_points
+            if candidate_augmented_points is not None
+            else candidates,
+            dtype=float,
+        )
+    )
+    if len(augmented_observed) != len(observed):
+        raise ValueError("augmented observed points must match observed rows")
+    if len(augmented_candidates) != len(candidates):
+        raise ValueError("augmented candidate points must match candidate rows")
+    if augmented_observed.shape[1] != augmented_candidates.shape[1]:
+        raise ValueError("augmented observed and candidate widths must match")
+    if augmented_observed.shape[1] < observed.shape[1]:
+        raise ValueError("augmented points cannot omit raw controls")
+
+    linear_distance = _ridge_response_predictions(
+        observed,
+        distance,
+        candidates,
+        quadratic=False,
+        ridge=RAW_LINEAR_RIDGE,
+    )
+    monotonic_control = False
+    if np.ptp(distance) > 1e-12:
+        for column in range(observed.shape[1]):
+            if np.ptp(observed[:, column]) <= 1e-12:
+                continue
+            pearson = float(np.corrcoef(observed[:, column], distance)[0, 1])
+            spearman = float(spearmanr(observed[:, column], distance).statistic)
+            if (
+                math.isfinite(pearson)
+                and math.isfinite(spearman)
+                and abs(pearson) >= MONOTONIC_PEARSON_FLOOR
+                and abs(spearman) >= MONOTONIC_SPEARMAN_FLOOR
+            ):
+                monotonic_control = True
+                break
+    linear_rank = rankdata(-linear_distance, method="average")
+    if monotonic_control:
+        return linear_rank / len(candidates), "dominant-linear-response"
+
+    raw_quadratic_distance = _ridge_response_predictions(
+        observed,
+        distance,
+        candidates,
+        quadratic=True,
+        ridge=RAW_QUADRATIC_RIDGE,
+    )
+    raw_quadratic_rank = rankdata(-raw_quadratic_distance, method="average")
+    raw_width = observed.shape[1]
+    if augmented_observed.shape[1] == raw_width:
+        return raw_quadratic_rank / len(candidates), "raw-quadratic-response"
+
+    mechanism_observed = augmented_observed[:, raw_width:]
+    mechanism_candidates = augmented_candidates[:, raw_width:]
+    mechanism_distance = _ridge_response_predictions(
+        mechanism_observed,
+        distance,
+        mechanism_candidates,
+        quadratic=True,
+        ridge=MECHANISM_QUADRATIC_RIDGE,
+    )
+    joint_distance = _ridge_response_predictions(
+        augmented_observed,
+        distance,
+        augmented_candidates,
+        quadratic=True,
+        ridge=JOINT_QUADRATIC_RIDGE,
+    )
+    mechanism_rank = rankdata(-mechanism_distance, method="average")
+    joint_rank = rankdata(-joint_distance, method="average")
+    return (
+        (mechanism_rank + joint_rank) / (2.0 * len(candidates)),
+        "mechanism-quadratic-response-ensemble",
+    )
 
 
 class BotorchOptimizer:
@@ -178,6 +340,8 @@ class BotorchOptimizer:
             highs,
             self.derived_features,
         )
+        decision_train_np = train_x_np.copy()
+        decision_choices_np = choices_np.copy()
         process_feature_names = self._common_process_feature_names()
         if process_feature_names:
             process_train_np = np.asarray(
@@ -263,9 +427,11 @@ class BotorchOptimizer:
                 )
             candidates = candidates[safe]
             choices = choices[safe]
+            decision_choices_np = decision_choices_np[safe]
         validation_scores = None
         selected_indices = None
         selected_acquisition_values = None
+        reach_policy = None
         if decision_intent == "validate-hypothesis":
             requested = [str(value) for value in (hypothesis_variables or [])]
             variable_indexes = [names.index(value) for value in requested if value in names]
@@ -356,9 +522,6 @@ class BotorchOptimizer:
                         / sigma
                     )
                 specification_probability *= np.clip(probability, 0.0, 1.0)
-            observed_design = np.column_stack(
-                [np.ones(len(train_unit)), train_unit]
-            )
             observed_distance = np.asarray(
                 [
                     self.campaign.distance_to_spec(
@@ -372,59 +535,14 @@ class BotorchOptimizer:
                     for values in self.y
                 ]
             )
-            ridge = np.eye(observed_design.shape[1]) * 1e-3
-            ridge[0, 0] = 0.0
-            coefficients = np.linalg.solve(
-                observed_design.T @ observed_design + ridge,
-                observed_design.T @ observed_distance,
+            acquisition_score, reach_policy = _reach_specification_scores(
+                train_unit,
+                observed_distance,
+                candidates,
+                specification_probability,
+                observed_augmented_points=decision_train_np,
+                candidate_augmented_points=decision_choices_np,
             )
-            linear_distance = (
-                np.column_stack([np.ones(len(candidates)), candidates])
-                @ coefficients
-            )
-            probability_rank = rankdata(
-                specification_probability, method="average"
-            )
-            response_surface_rank = rankdata(
-                -linear_distance, method="average"
-            )
-            probability_weight = SPEC_PROBABILITY_WEIGHT
-            response_surface_weight = SPEC_RESPONSE_SURFACE_WEIGHT
-            if len(observed_distance) >= 6:
-                leave_one_out_errors = []
-                for held_out in range(len(observed_distance)):
-                    retained = np.arange(len(observed_distance)) != held_out
-                    retained_design = observed_design[retained]
-                    retained_penalty = (
-                        np.eye(retained_design.shape[1]) * 1e-3
-                    )
-                    retained_penalty[0, 0] = 0.0
-                    retained_coefficients = np.linalg.solve(
-                        retained_design.T @ retained_design
-                        + retained_penalty,
-                        retained_design.T @ observed_distance[retained],
-                    )
-                    prediction = (
-                        observed_design[held_out] @ retained_coefficients
-                    )
-                    leave_one_out_errors.append(
-                        prediction - observed_distance[held_out]
-                    )
-                distance_scale = max(float(np.ptp(observed_distance)), 0.05)
-                normalized_error = (
-                    float(np.sqrt(np.mean(np.square(leave_one_out_errors))))
-                    / distance_scale
-                )
-                maturity = min((len(observed_distance) - 5) / 4.0, 1.0)
-                reliability = math.exp(
-                    -normalized_error / SPEC_LINEAR_RELIABILITY_SCALE
-                )
-                response_surface_weight += 0.5 * maturity * reliability
-                probability_weight = 1.0 - response_surface_weight
-            acquisition_score = (
-                probability_weight * probability_rank
-                + response_surface_weight * response_surface_rank
-            ) / len(candidates)
             selected_indices = self._select_diverse_points(
                 candidates, acquisition_score, top_k
             )
@@ -538,8 +656,8 @@ class BotorchOptimizer:
                         "from prior observations."
                         if validation_scores is not None
                         else "The production surrogate selected this parameter setting "
-                        "from a versioned ensemble of joint specification "
-                        "probability and regularized response-surface rank."
+                        f"under the versioned {reach_policy} policy using only visible "
+                        "observations."
                     ),
                 )
             )

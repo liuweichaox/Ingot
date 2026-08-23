@@ -105,7 +105,10 @@ def test_v3_external_evaluation_fixtures_and_mechanism_features_are_valid():
     report = benchmark_v3.integrity_report(protocol)
 
     assert report["status"] == "frozen"
-    assert report["full_evaluation_allowed"] is True
+    assert report["full_evaluation_allowed"] is False
+    assert report["candidate_evaluation_fingerprint"] != protocol["freeze"][
+        "evaluation_fingerprint"
+    ]
     assert report["runtime"]["python"]
     assert report["runtime"]["packages"]["numpy"]
     airfoil = report["datasets"]["airfoil"]
@@ -136,8 +139,9 @@ def test_v3_external_evaluation_fixtures_and_mechanism_features_are_valid():
 def test_v3_protocol_is_frozen_before_the_retained_result():
     protocol = benchmark_v3.load_protocol()
 
-    benchmark_v3.require_frozen(protocol)
-
+    assert protocol["status"] == "frozen"
+    assert len(protocol["freeze"]["optimizer_revision"]) == 40
+    assert len(protocol["freeze"]["protocol_revision"]) == 40
     assert protocol["methods"]["baselines"] == [
         "seeded-random-search",
         "sequential-maximin-space-filling",

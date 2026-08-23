@@ -227,7 +227,7 @@ def test_service_runs_batch_multiobjective_spec_ensemble_with_declared_features(
     response = client.post("/v1/suggestions", json=body)
     assert response.status_code == 200, response.text
     payload = response.json()
-    assert payload["model_version"] == "botorch-spec-ensemble-v6"
+    assert payload["model_version"] == "botorch-evidence-gated-method-admission-v7"
     assert payload["feature_set_id"] == "optical-lens-molding-demo"
     assert payload["derived_feature_count"] == 2
     assert len(payload["suggestions"]) == 2
