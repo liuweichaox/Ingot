@@ -1,11 +1,11 @@
 {
   "schema": "ingot-public-validation-protocol-v4",
-  "status": "draft",
+  "status": "frozen",
   "purpose": "Protocol-frozen holdout evaluation of evidence-gated method admission on newly selected public engineering data that were not used for v7 development.",
   "freeze": {
-    "optimizer_revision": null,
-    "protocol_revision": null,
-    "evaluation_fingerprint": null,
+    "optimizer_revision": "f564f52b3576ea00e8c1a54aca9a83ebfa23c6ca",
+    "protocol_revision": "f564f52b3576ea00e8c1a54aca9a83ebfa23c6ca",
+    "evaluation_fingerprint": "38e255f98ea49cd6944bc3c79a98094fdd848b93503386d036b6c4c264f54c33",
     "result_policy": "A full result is valid only after status is frozen, both revisions identify the preceding committed candidate, and evaluation_fingerprint matches the algorithm, adapters, data, dependencies, and normalized protocol."
   },
   "development_evidence": {

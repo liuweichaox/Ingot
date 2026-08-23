@@ -196,12 +196,12 @@ def test_v3_fingerprint_freezes_algorithm_data_dependencies_and_protocol():
         benchmark_v3.require_frozen(frozen)
 
 
-def test_v4_holdout_fixtures_are_verified_before_protocol_freeze():
+def test_v4_holdout_fixtures_are_verified_after_protocol_freeze():
     protocol = benchmark_v4.load_protocol()
     report = benchmark_v4.integrity_report(protocol)
 
-    assert report["status"] == "draft"
-    assert report["full_evaluation_allowed"] is False
+    assert report["status"] == "frozen"
+    assert report["full_evaluation_allowed"] is True
     assert report["evaluation_unit_count"] == 25
     assert len(report["candidate_evaluation_fingerprint"]) == 64
 
@@ -233,23 +233,22 @@ def test_v4_holdout_fixtures_are_verified_before_protocol_freeze():
         ]
 
 
-def test_v4_draft_refuses_full_evaluation_and_freezes_every_input():
+def test_v4_protocol_refuses_drafts_and_freezes_every_input():
     protocol = benchmark_v4.load_protocol()
 
+    benchmark_v4.require_frozen(protocol)
+
+    draft = json.loads(json.dumps(protocol))
+    draft["status"] = "draft"
+    draft["freeze"]["optimizer_revision"] = None
+    draft["freeze"]["protocol_revision"] = None
+    draft["freeze"]["evaluation_fingerprint"] = None
     with pytest.raises(RuntimeError, match="not frozen"):
-        benchmark_v4.require_frozen(protocol)
+        benchmark_v4.require_frozen(draft)
 
-    candidate = benchmark_v4.evaluation_fingerprint(protocol)
-    frozen = json.loads(json.dumps(protocol))
-    frozen["status"] = "frozen"
-    frozen["freeze"]["optimizer_revision"] = "a" * 40
-    frozen["freeze"]["protocol_revision"] = "b" * 40
-    frozen["freeze"]["evaluation_fingerprint"] = candidate
-    benchmark_v4.require_frozen(frozen)
-
-    frozen["statistics"]["minimum_relative_reduction_ci_lower"] = -0.01
+    protocol["statistics"]["minimum_relative_reduction_ci_lower"] = -0.01
     with pytest.raises(RuntimeError, match="fingerprint does not match"):
-        benchmark_v4.require_frozen(frozen)
+        benchmark_v4.require_frozen(protocol)
 
 
 def test_v4_uses_all_preregistered_comparators_and_strict_unit_guardrail():
