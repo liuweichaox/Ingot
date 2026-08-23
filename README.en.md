@@ -3,8 +3,8 @@
     <img src="apps/website/public/brand/ingot-lockup.svg" alt="Ingot" width="340">
   </a>
 
-  <p><strong>Open-source industrial process experimentation</strong></p>
-  <p>Turn factory runs into auditable evidence, human-approved experiments, and validated process knowledge.</p>
+  <p><strong>Open-source industrial process optimization</strong></p>
+  <p>Continuously improve industrial processes with real production data.</p>
 
   [![CI](https://github.com/liuweichaox/Ingot/actions/workflows/ci.yml/badge.svg)](https://github.com/liuweichaox/Ingot/actions/workflows/ci.yml)
   [![License: MIT](https://img.shields.io/badge/license-MIT-E8AD56.svg)](LICENSE)
@@ -17,13 +17,13 @@
   [简体中文](README.md) · English
 </div>
 
-![Ingot: from real runs to engineering evidence, decisions, and validation](apps/website/public/og.png)
+![Ingot: from real runs to process optimization and validation](apps/website/public/og.png)
 
 ## What Ingot is
 
-Ingot is open-source enterprise software that turns industrial run data and quality outcomes into auditable experimental observations, then proposes, validates, and preserves process recommendations under safety boundaries and human approval.
+Ingot is an open-source industrial process optimization system that turns factory runs and quality outcomes into reproducible observations, next-step parameter recommendations, and validated operating regions.
 
-The system connects field acquisition, run identification, quality outcomes, process diagnosis, experimental design, and operating-region validation through one evidence chain. Optimizer is a replaceable stateless numerical service. Agent only queries, organizes, and explains authorized facts; it does not control equipment or approve experiments for engineers.
+The system connects field acquisition, run identification, quality outcomes, process diagnosis, and experimental design in one data loop, then selects DOE, response-surface, or constrained Bayesian optimization methods to recommend the next process conditions. Evidence snapshots, human approval, and shadow validation govern how optimization results enter production; Agent is a query and explanation interface, not the optimization or control core.
 
 ## Understand Ingot in three minutes
 
@@ -42,9 +42,9 @@ Open `http://127.0.0.1:3001` and sign in with `demo / demo`. The workbench provi
 
 ## Why Ingot exists
 
-Ingot is built around one reviewable engineering path:
+Ingot is built around one reviewable process-optimization path:
 
-> **Turn every real run into comparable, testable engineering evidence, and retain the rationale, constraints, approval, and outcome of the next experiment in the same record chain.**
+> **Turn every real run into comparable, testable engineering evidence, keep selecting more valuable process conditions to validate, and preserve operating regions with explicit applicability.**
 
 The project retains this intended outcome: **Turn every real run into comparable, testable engineering evidence so process engineers can avoid unproductive experiments and reach target process conditions faster.** This remains an objective to be tested through public replay and real projects, not an established performance claim across every process or algorithm.
 
@@ -60,7 +60,7 @@ Ingot first establishes a trustworthy data loop, then helps engineers:
 - choose more valuable next experiments within safety boundaries;
 - preserve validated conclusions, applicability, and failure conditions.
 
-The computer organizes evidence, computes, and proposes. Process engineers frame the problem, review constraints, approve experiments, and make the final judgment.
+The system organizes run facts, compares candidate methods, and proposes parameter settings. Process engineers define objectives and safety boundaries, execute validation, and decide whether results can enter production.
 
 ## One complete loop
 
@@ -145,7 +145,7 @@ flowchart LR
     Sources["Controls / instruments / vision / inspection / MES"] --> Edge["Edge ConnectorHost\nmapping · execution boundaries · buffering"]
     Edge --> Platform["Platform API\nruns · context · inspection · R&D · evidence"]
     Platform --> Web["Platform Web\nengineering workbench"]
-    Platform --> Optimizer["Optimizer\nstatistics · GP · constraints · experiment proposals"]
+    Platform --> Optimizer["Optimizer\nDOE · response surfaces · GP/BO · parameter proposals"]
     Platform --> Agent["Agent\nquery · organize · explain"]
     Engineer["Process engineer"] --> Web
     Web --> Platform
