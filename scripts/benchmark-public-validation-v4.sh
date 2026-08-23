@@ -8,7 +8,7 @@ cd "${repo_root}"
 uvx --from uv==0.11.32 uv run \
   --project optimizer \
   --locked \
-  python ../tools/public-validation/benchmark_v4.py \
+  python tools/public-validation/benchmark_v4.py \
   --output "${output}"
 
 echo "wrote ${output}"
