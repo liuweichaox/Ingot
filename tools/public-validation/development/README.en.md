@@ -34,3 +34,17 @@ On the inspected v3 pools, the current candidate produces 400 paired episodes wi
 | Regularized quadratic response surface | 23.69% | 15.89% to 31.20% | passed |
 
 These numbers show that the implementation is ready to become a frozen candidate. They do **not** replace the retained v3 result, justify changing its failed conclusion, or support a public experiment-reduction claim. Fresh datasets selected before outcome inspection and a frozen successor protocol are still required.
+
+## v4 holdout result and successor boundary
+
+v4 ran only after data selection, candidate implementation, and protocol freeze. The complete 1,250 paired episodes are retained in [`../latest-results-v4.json`](../latest-results-v4.json), with [`validate_v4_result.py`](validate_v4_result.py) providing an independent recomputation. The result is again “not demonstrated”:
+
+| Comparator | v4 relative reduction | 95% CI | Unit non-worse | Gate |
+|---|---:|---:|---:|---|
+| No-mechanism ablation | 7.55% | 5.19% to 9.88% | 92% | failed |
+| Seeded random search | 59.85% | 57.93% to 61.70% | 100% | passed |
+| Sequential maximin | 39.55% | 36.43% to 42.52% | 100% | passed |
+| Regularized linear response surface | −8.70% | −11.69% to −5.89% | 12% | failed |
+| Regularized quadratic response surface | 25.39% | 22.39% to 28.21% | 100% | passed |
+
+v4 shows that the v7 Pearson/Spearman admission rule is still too coarse. Most Energy Efficiency units call for a linear response surface, but declared mechanism features admit the mechanism-quadratic ensemble too early. v4 is development and regression evidence for v8 from this point onward; it cannot be relabeled as external validation after the policy changes. The next public decision requires fresh, uninspected data and a newly frozen protocol.
