@@ -6,6 +6,9 @@
 |---|---|---|---|
 | v2 开发回归 | 算法开发、退化检测和声明边界 | FDM、Crossed Barrel 机械设计 | 已运行并保存参考结果 |
 | v3 冻结评估 | 强基线比较和机理特征消融 | NASA 翼型噪声、Delft 船模水动力 | 已冻结并保留 400 个 episode 的完整结果；总体声明未证明 |
+| v4 冻结评估 | v7 新数据留出 | 建筑能耗仿真、同步电机实验 | 已保留 1,250 个 episode；线性基线与消融护栏未通过 |
+| v5 数据质量门禁 | 自动化 HPLC 候选 | Olympus HPLC | 重复设置对账后四个预登记分折小于下限；未运行算法 |
+| v6 冻结评估候选 | v8 新数据留出 | Olympus LNP3 配方实验 | 数据、评价器和协议草案准备中；尚未运行 |
 
 ## 数据与场景
 
@@ -123,5 +126,13 @@ uvx --from uv==0.11.32 uv run --project optimizer --locked \
 ```bash
 ./scripts/benchmark-public-validation-v3.sh
 ```
+
+v6 使用三个固体脂质上下文的 768 条完整配方网格；数据选择和停止条件见 [v6-selection.md](v6-selection.md)。冻结前只运行：
+
+```bash
+./scripts/verify-public-validation-v6.sh
+```
+
+完整 v6 评价器在协议仍为 `draft` 时会拒绝运行。只有数据、评价器、依赖和算法提交后，再以单独的仅元数据提交写入统一指纹，才能运行 `./scripts/benchmark-public-validation-v6.sh`。
 
 更新参考结果时必须保留所有上下文和失败，先运行完整基准，再同步更新中英文文档。公开数据通过后，真实部署仍需在厂内用本地历史回放和少量受控实验做迁移验证，数据无需出厂。

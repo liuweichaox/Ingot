@@ -31,6 +31,14 @@ benchmark_v4 = importlib.util.module_from_spec(SPEC_V4)
 assert SPEC_V4.loader is not None
 SPEC_V4.loader.exec_module(benchmark_v4)
 
+BENCHMARK_V6_PATH = BENCHMARK_PATH.with_name("benchmark_v6.py")
+SPEC_V6 = importlib.util.spec_from_file_location(
+    "ingot_public_validation_v6", BENCHMARK_V6_PATH
+)
+benchmark_v6 = importlib.util.module_from_spec(SPEC_V6)
+assert SPEC_V6.loader is not None
+SPEC_V6.loader.exec_module(benchmark_v6)
+
 
 def test_public_fixtures_are_verified_and_contexts_are_isolated():
     protocol = benchmark.load_protocol()
@@ -306,3 +314,83 @@ def test_v4_retained_result_discloses_failed_linear_and_ablation_guardrails():
     assert effects["ingot-v7-without-mechanism-features"][
         "evaluation_unit_non_worse_fraction"
     ] == pytest.approx(0.92)
+
+
+def test_v6_draft_fixture_is_complete_and_contexts_are_isolated():
+    protocol = benchmark_v6.load_protocol()
+    report = benchmark_v6.integrity_report(protocol)
+
+    assert report["status"] == "draft"
+    assert report["full_evaluation_allowed"] is False
+    assert report["evaluation_unit_count"] == 3
+    assert len(report["candidate_evaluation_fingerprint"]) == 64
+    profile = report["datasets"]["lnp3"]
+    assert profile["rows"] == 768
+    assert profile["fixture_sha256"] == (
+        "30d2b926a53976b36c210d988f7dd241be94037bb34d2913bc1077ac4e5bfdac"
+    )
+    assert profile["evaluation_unit_count"] == 3
+    assert profile["minimum_unit_rows"] == 256
+    assert profile["maximum_unit_rows"] == 256
+    assert profile["mechanism_feature_count"] == 4
+    assert profile["duplicate_control_context_settings"] == 0
+
+
+def test_v6_freeze_covers_algorithm_data_dependencies_and_protocol():
+    protocol = benchmark_v6.load_protocol()
+    candidate = benchmark_v6.evaluation_fingerprint(protocol)
+    frozen = json.loads(json.dumps(protocol))
+    frozen["status"] = "frozen"
+    frozen["freeze"]["optimizer_revision"] = "a" * 40
+    frozen["freeze"]["protocol_revision"] = "b" * 40
+    frozen["freeze"]["evaluation_fingerprint"] = candidate
+
+    benchmark_v6.require_frozen(frozen)
+    frozen["datasets"]["lnp3"]["additional_trial_budget"] += 1
+    with pytest.raises(RuntimeError, match="fingerprint does not match"):
+        benchmark_v6.require_frozen(frozen)
+
+
+def test_v6_paired_replay_keeps_solid_lipid_context_out_of_controls():
+    protocol = benchmark_v6.load_protocol()
+    rows = benchmark_v6.load_rows("lnp3", protocol)
+    unit_id, context, unit_rows = benchmark_v6.group_evaluation_units(
+        "lnp3", rows, protocol
+    )[0]
+    record = benchmark_v6.run_unit(
+        "lnp3",
+        unit_id,
+        context,
+        unit_rows,
+        unit_index=0,
+        protocol=protocol,
+        episode_count=1,
+    )
+
+    assert context == {"solid_lipid": "Compritol_888"}
+    assert record["candidate_settings"] == 256
+    assert len(record["episodes"][0]["initial_run_ids"]) == 12
+    assert set(record["episodes"][0]["methods"]) == {
+        benchmark_v6.PRIMARY,
+        benchmark_v6.ABLATION,
+        *protocol["methods"]["baselines"],
+    }
+
+
+def test_v6_uses_all_strong_baselines_and_strict_context_guardrail():
+    protocol = benchmark_v6.load_protocol()
+
+    assert protocol["methods"]["baselines"] == [
+        "seeded-random-search",
+        "sequential-maximin-space-filling",
+        "regularized-linear-response-surface",
+        "regularized-quadratic-response-surface",
+    ]
+    assert protocol["statistics"]["minimum_relative_reduction_ci_lower"] == 0.0
+    assert protocol["statistics"][
+        "minimum_success_rate_difference_ci_lower"
+    ] == -0.05
+    assert protocol["statistics"][
+        "minimum_evaluation_unit_non_worse_fraction"
+    ] == 1.0
+    assert len(protocol["claim_boundary"]["not_permitted"]) == 4

@@ -6,6 +6,9 @@ This directory turns “does the optimizer reduce additional experiments?” int
 |---|---|---|---|
 | v2 development regression | algorithm development, regression detection, and claim-boundary checks | FDM and Crossed Barrel mechanical design | complete reference result retained |
 | v3 protocol-frozen evaluation | strong-baseline comparison and mechanism-feature ablation | NASA airfoil noise and Delft yacht hydrodynamics | frozen with a retained 400-episode result; overall claim not demonstrated |
+| v4 protocol-frozen evaluation | v7 new-data holdout | building-energy simulation and synchronous-machine experiments | 1,250 episodes retained; linear-baseline and ablation guardrails failed |
+| v5 data-quality gate | automated HPLC candidate | Olympus HPLC | stopped before algorithms after replicate reconciliation left four preregistered folds below minimum size |
+| v6 protocol-freeze candidate | v8 new-data holdout | Olympus LNP3 formulation experiments | data, evaluator, and draft protocol in preparation; not run |
 
 ## Data and scenarios
 
@@ -123,5 +126,13 @@ The integrity fingerprint covers optimizer source, the dependency lock, evaluato
 ```bash
 ./scripts/benchmark-public-validation-v3.sh
 ```
+
+v6 uses the complete 768-setting formulation grid in three solid-lipid contexts. See [v6-selection.en.md](v6-selection.en.md) for data selection and stop conditions. Before freeze, run only:
+
+```bash
+./scripts/verify-public-validation-v6.sh
+```
+
+The complete v6 evaluator refuses to run while the protocol is `draft`. Only after committing the data, evaluator, dependencies, and algorithm may a separate metadata-only commit record the unified fingerprint and enable `./scripts/benchmark-public-validation-v6.sh`.
 
 When refreshing the reference result, retain every context and failure, run the complete benchmark first, and update Chinese and English documentation together. A real deployment still needs in-factory local-history replay and a small controlled transfer test; factory data does not need to leave the site.

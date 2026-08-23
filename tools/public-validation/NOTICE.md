@@ -57,3 +57,31 @@ License: [Creative Commons Attribution 4.0 International](https://creativecommon
 Changes made by the Ingot project: removed the archive's trailing blank line, added stable row identifiers, assigned descriptive column names from the repository metadata, and converted whitespace-delimited rows to CSV. The 308 unique physical-experiment settings and measured outcomes are unchanged. The official ZIP has SHA-256 `aa52b68f88c4bb552187a53ef4c5753fa178f6a36035a3771c5bc04e078487ac`.
 
 `prepare_v3_fixtures.py` verifies both official archive hashes and documents these deterministic transformations.
+
+`data/energy-efficiency.csv` is a normalized copy of:
+
+> Tsanas, Athanasios; Xifara, Angeliki (2012), “Energy Efficiency”, UCI Machine Learning Repository, doi: 10.24432/C51307.
+
+Source: https://archive.ics.uci.edu/dataset/242/energy+efficiency
+
+License: [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/)
+
+`data/synchronous-machine.csv` is a normalized copy of:
+
+> Synchronous Machine Data Set (2020), UCI Machine Learning Repository, doi: 10.24432/C5W32R.
+
+Source: https://archive.ics.uci.edu/dataset/607/synchronous+machine+data+set
+
+License: [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/)
+
+Changes made by the Ingot project for both v4 fixtures: assigned descriptive column names from the official metadata, added stable setting identifiers, converted the source formats to CSV, and retained all published controls and outcomes. No outcome was synthesized or imputed. `prepare_v4_fixtures.py` verifies the official archive hashes and the deterministic transformations.
+
+`data/lnp3-formulations.csv` is a normalized copy of the LNP3 dataset in:
+
+> The Matter Lab, “Olympus: a benchmarking framework for noisy optimization and experiment planning”, pinned revision `440b6b58ebfcaa2391cff7e94b570fb4fda98d68`.
+
+Source: https://github.com/the-matter-lab/olympus/tree/440b6b58ebfcaa2391cff7e94b570fb4fda98d68/src/olympus/datasets/dataset_lnp3
+
+License: [MIT](https://github.com/the-matter-lab/olympus/blob/440b6b58ebfcaa2391cff7e94b570fb4fda98d68/LICENSE)
+
+Changes made by the Ingot project: added stable setting identifiers and descriptive headers to the source's headerless rows. All 768 settings, the three solid-lipid identities, four formulation inputs, and three measured outcomes are unchanged. No outcome was synthesized, imputed, averaged, or removed. The pinned source CSV has SHA-256 `69e8847e30f8b8b8720884676cd20d354152b7093309d278ee9910f9924b48ba`; `prepare_v6_fixture.py` verifies the checksum and the complete 3 × 4⁴ factorial structure before writing the fixture.
