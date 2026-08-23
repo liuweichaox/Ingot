@@ -9,7 +9,7 @@ cd "${repo_root}"
 uvx --from uv==0.11.32 uv run \
   --project optimizer \
   --locked \
-  python tools/public-validation/development/benchmark_candidate_unseen.py \
-  --episodes 200 \
+  python tools/public-validation/development/benchmark_development.py \
+  --episodes 25 \
   --bootstrap-samples 5000 \
   --output "${output}"

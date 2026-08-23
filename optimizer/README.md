@@ -50,13 +50,13 @@ uv sync --python 3.12 --extra service --extra viz --group dev --locked
 
 ## 公开数据回归
 
-仓库使用固定公开制造数据检查分类上下文隔离、历史池回放、随机与响应面基线比较，以及不利结果是否仍保持正确声明边界。完整基准运行：
+仓库使用固定公开实验数据检查历史池回放、随机与响应面基线比较，以及不利结果是否仍保持正确声明边界。检查当前冻结验收的完整性：
 
 ```bash
-./scripts/benchmark-public-validation.sh
+./scripts/verify-optimizer-acceptance.sh
 ```
 
-普通 CI 中的 `optimizer/tests/test_public_validation.py` 只运行快速、确定性的回归检查；两个数据集、14 个上下文、每个上下文 100 个配对 episode 的完整基准由 `Performance` 工作流定期或手动运行并上传结果。算法或回放策略变化时应同时检查完整基准，不得只以单元测试通过宣称实验效率提高。数据来源、当前结果和更新规则见[公开数据实验效率验证](../tools/public-validation/README.md)。
+普通 CI 中的 `optimizer/tests/test_optimizer_acceptance.py` 运行快速、确定性的完整性与无泄漏检查。冻结的 450 次正式回放已完整保留；算法变化后不得重跑成新的验收。数据来源、当前失败结果和更新规则见[公开数据实验效率验证](../tools/public-validation/README.md)。
 
 当前方法选择策略的开发回归使用四个强基线和机理特征消融：
 
@@ -64,7 +64,7 @@ uv sync --python 3.12 --extra service --extra viz --group dev --locked
 ./scripts/benchmark-optimizer-development.sh
 ```
 
-该命令只读取已经披露的数据，用于开发和防止退化。形成新的效果证据时，必须先提交算法、数据选择、目标、预算和判定规则，再运行未见数据验收；不能用修改后的算法重跑旧数据并把结果称为独立验证。
+该命令只读取已经披露的数据，用于开发和防止退化。当前开发问题是区分适用的线性与二次结构。形成新的效果证据时，必须先提交后继算法，再选择全新数据并冻结目标、预算和判定规则；不能用修改后的算法重跑旧数据并把结果称为独立验证。
 
 ## 无状态接口
 

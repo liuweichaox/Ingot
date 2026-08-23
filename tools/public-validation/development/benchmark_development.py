@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run candidate policies on the inspected v7 OER development evidence."""
+"""Run development-only regression on already inspected acceptance data."""
 from __future__ import annotations
 
 import argparse
@@ -12,15 +12,16 @@ from ingot_optimizer.botorch_engine import MODEL_VERSION
 
 
 VALIDATION_ROOT = Path(__file__).resolve().parent.parent
-BENCHMARK_PATH = VALIDATION_ROOT / "benchmark_v7.py"
+BENCHMARK_PATH = VALIDATION_ROOT / "benchmark_acceptance.py"
 
 
 def load_benchmark():
+    """Load the current evaluator without claiming frozen acceptance."""
     specification = importlib.util.spec_from_file_location(
-        "ingot_public_validation_v7_development", BENCHMARK_PATH
+        "ingot_optimizer_development", BENCHMARK_PATH
     )
     if specification is None or specification.loader is None:
-        raise RuntimeError("unable to load the v7 public-validation evaluator")
+        raise RuntimeError("unable to load the optimizer acceptance evaluator")
     benchmark = importlib.util.module_from_spec(specification)
     specification.loader.exec_module(benchmark)
     return benchmark
@@ -28,18 +29,7 @@ def load_benchmark():
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--episodes", type=int, default=10)
-    parser.add_argument(
-        "--dataset",
-        choices=(
-            "all",
-            "oer_plate_3496",
-            "oer_plate_3851",
-            "oer_plate_3860",
-            "oer_plate_4098",
-        ),
-        default="all",
-    )
+    parser.add_argument("--episodes", type=int, default=25)
     parser.add_argument("--bootstrap-samples", type=int, default=1000)
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
@@ -51,16 +41,8 @@ def main() -> None:
     benchmark = load_benchmark()
     protocol = benchmark.load_protocol()
     protocol["statistics"]["bootstrap_samples"] = args.bootstrap_samples
-    datasets = (
-        list(benchmark.DATASETS)
-        if args.dataset == "all"
-        else [args.dataset]
-    )
-    benchmark.DATASETS = {
-        dataset: benchmark.DATASETS[dataset] for dataset in datasets
-    }
     units = []
-    for dataset in datasets:
+    for dataset in benchmark.DATASETS:
         rows = benchmark.load_rows(dataset, protocol)
         units.extend(
             (dataset, unit_id, context, unit_rows)
@@ -72,7 +54,7 @@ def main() -> None:
     for index, (dataset, unit_id, context, rows) in enumerate(units):
         print(
             f"[{index + 1}/{len(units)}] running {dataset}:{unit_id} "
-            f"({args.episodes} paired episodes)",
+            f"({args.episodes} development episodes)",
             file=sys.stderr,
             flush=True,
         )
@@ -88,46 +70,20 @@ def main() -> None:
             )
         )
     summary = benchmark.summarize(records, protocol)
-    summary["experiment_reduction_vs_all_preregistered_baselines"] = (
-        "passed-development-regression"
-        if all(
-            effect["passed"]
-            for effect in summary["paired_effects"]
-            if effect["comparator"] != benchmark.ABLATION
-        )
-        else "not-demonstrated"
-    )
-    ablation = next(
-        effect
-        for effect in summary["paired_effects"]
-        if effect["comparator"] == benchmark.ABLATION
-    )
-    summary["mechanism_feature_contribution"] = (
-        "passed-development-regression"
-        if ablation["passed"]
-        else "not-demonstrated"
-    )
     payload = {
-        "schema": "ingot-public-validation-candidate-development-v7",
+        "schema": "ingot-optimizer-development-regression",
         "evidence_status": "development-regression-only",
-        "source_protocol": "v7-inspected-not-external",
+        "source_evidence": "inspected-fresh-data-acceptance",
         "candidate_model_version": MODEL_VERSION,
         "records": records,
         "summary": summary,
     }
-    rendered = json.dumps(payload, ensure_ascii=False, indent=2)
+    rendered = json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
-        args.output.write_text(rendered + "\n", encoding="utf-8")
-        print(
-            json.dumps(
-                {"output": str(args.output), "summary": summary},
-                ensure_ascii=False,
-                indent=2,
-            )
-        )
+        args.output.write_text(rendered, encoding="utf-8")
     else:
-        print(rendered)
+        print(rendered, end="")
 
 
 if __name__ == "__main__":

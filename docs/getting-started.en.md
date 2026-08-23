@@ -36,21 +36,13 @@ Open `http://127.0.0.1:3001`. Use `demo / demo` for the engineer workflow or `ad
 
 ### Public-data experiment-efficiency validation
 
-This path requires Git and uv 0.11.32 but no database, equipment, or factory data. It uses explicitly licensed, SHA-256-verified public FDM DOE and Crossed Barrel mechanical-design fixtures, evaluates 10 stratified process contexts, and compares the optimizer with random selection and a linear response surface:
+This path requires Git and uv 0.11.32 but no database, equipment, or factory data. It checks three explicitly licensed and SHA-256-verified reaction, formulation, and equipment-process datasets together with the frozen protocol and complete result:
 
 ```bash
-./scripts/benchmark-public-validation.sh
+./scripts/verify-optimizer-acceptance.sh
 ```
 
-The result is written to `artifacts/public-validation.json`. The current reference result passes superiority to seeded random search, but the Crossed Barrel result triggers the dataset guardrail against the linear response surface, so the overall experiment-reduction claim is not demonstrated. See [Public-data experiment-efficiency validation](https://github.com/liuweichaox/Ingot/blob/main/tools/public-validation/README.en.md) for the fast check, complete decision rule, data license, and per-dataset result. Public data can reproduce the software and method path; it cannot prove the same benefit for another factory.
-
-The repository also contains a frozen v3 external-data evaluation. It uses two physical-experiment datasets not used during v2 development, registers four comparison baselines, and includes a mechanism-feature ablation. First verify its data, protocol, and unified fingerprint:
-
-```bash
-./scripts/verify-public-validation-v3.sh
-```
-
-The retained result passes against random search and maximin but fails against the linear and quadratic response surfaces, so the overall experiment-reduction claim remains not demonstrated; the paired mechanism-feature ablation passes. See [`latest-results-v3.json`](https://github.com/liuweichaox/Ingot/blob/main/tools/public-validation/latest-results-v3.json), and reproduce it with `./scripts/benchmark-public-validation-v3.sh`.
+The current frozen result passes against random search and maximin and is noninferior to the quadratic surface. It materially trails the linear surface on Alkox and P3HT, however, so overall method routing still fails. See [`acceptance-results.json`](https://github.com/liuweichaox/Ingot/blob/main/tools/public-validation/acceptance-results.json) and [Public-data experiment-efficiency validation](https://github.com/liuweichaox/Ingot/blob/main/tools/public-validation/README.en.md) for the complete rule, license, and per-dataset result. Public data can reproduce the software and method path; it cannot prove the same benefit for another factory.
 
 ## 1. Prepare the environment
 

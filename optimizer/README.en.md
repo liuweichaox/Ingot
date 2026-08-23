@@ -52,13 +52,13 @@ Local development uses `8110` by default to avoid conflicting with the optimizer
 
 ## Public-data regression
 
-The repository uses fixed public manufacturing data to check categorical-context isolation, historical-pool replay, comparisons with random and response-surface baselines, and preservation of the correct claim boundary when results are unfavorable. Run the complete benchmark with:
+The repository uses fixed public experimental data to check historical-pool replay, comparisons with random and response-surface baselines, and preservation of the correct claim boundary when results are unfavorable. Check current frozen-acceptance integrity with:
 
 ```bash
-./scripts/benchmark-public-validation.sh
+./scripts/verify-optimizer-acceptance.sh
 ```
 
-Ordinary CI runs only the fast, deterministic regression checks in `optimizer/tests/test_public_validation.py`. The `Performance` workflow runs the complete two-dataset, 14-context benchmark with 100 paired episodes per context on schedule or on demand and uploads the result. An algorithm or replay-policy change must inspect the complete benchmark as well; passing unit tests alone does not establish improved experiment efficiency. See [Public-data experiment-efficiency validation](../tools/public-validation/README.en.md) for provenance, the current result, and update rules.
+Ordinary CI runs fast deterministic integrity and no-leakage checks in `optimizer/tests/test_optimizer_acceptance.py`. The complete 450-episode frozen result is retained and cannot become new acceptance after an algorithm change. See [Public-data experiment-efficiency validation](../tools/public-validation/README.en.md) for provenance, the current failed result, and update rules.
 
 The current method-selection policy's development regression uses four strong baselines and a mechanism-feature ablation:
 
@@ -66,7 +66,7 @@ The current method-selection policy's development regression uses four strong ba
 ./scripts/benchmark-optimizer-development.sh
 ```
 
-This command reads disclosed data and exists only for development and regression prevention. New effect evidence requires committing the algorithm, data selection, objective, budget, and decision rules before unseen-data acceptance runs; a modified method cannot rerun old outcomes and relabel them as independent validation.
+This command reads disclosed data and exists only for development and regression prevention. The current development problem is distinguishing applicable linear from quadratic structure. New effect evidence requires committing a successor first, then selecting fresh data and freezing objectives, budgets, and rules; a modified method cannot rerun old outcomes and relabel them as independent validation.
 
 ## Stateless contract
 

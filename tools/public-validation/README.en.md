@@ -42,12 +42,13 @@ Numbers embedded in older filenames identify past internal experiment rounds. Th
 
 | Item | Result | State |
 |---|---:|---|
-| Unseen-data acceptance for the frozen predecessor | `+16.74%` versus linear and `+7.25%` versus quadratic, both passed; Fullerenes was `−23.01%` versus random and `−40.65%` versus maximin, triggering subgroup guardrails | core acceptance failed; the policy was retired |
-| Current-policy regression on those now-disclosed data | `+48.90%` versus random, `+21.37%` versus maximin, `+39.78%` versus linear, and `+32.91%` versus quadratic; all four gates and both dataset guardrails passed | development regression passed; fresh-data acceptance pending |
-| Current-policy process-feature ablation | `−0.14%`, with no stable benefit | failed; features remain disabled without blocking raw-control selection |
+| Current policy versus random search | `+49.24%`, 95% CI `[+44.45%, +53.68%]`; non-worse on all three datasets | passed |
+| Current policy versus maximin | `+62.96%`, 95% CI `[+59.93%, +65.85%]`; non-worse on all three datasets | passed |
+| Current policy versus linear response surface | `+12.02%` aggregate, but `−32.08%` on Alkox and `−68.36%` on P3HT | subgroup guardrail failed |
+| Current policy versus quadratic response surface | `0%`; trajectories match on all three datasets | passed, with no added value |
 | Real-factory historical replay and prospective pilot | not complete | awaiting pilot |
 
-The present conclusion is therefore: **the frozen predecessor failed unseen-data acceptance; the exposed problem has been repaired, and the current policy passes all four core comparisons on the same now-disclosed data, but still needs acceptance on another fresh dataset.** [unseen-results.json](unseen-results.json) retains the predecessor's complete failed result, while [development/current-results.json](development/current-results.json) retains the current policy's development regression. Neither may be presented as independent effect evidence for the current policy.
+The present conclusion is therefore: **the current policy reliably beats model-free selection, but on these three fresh datasets it collapses to the quadratic response surface and fails to recognize the more effective linear surface on Alkox and P3HT; core acceptance failed.** This rejects the current routing rule, not sequential experiment design itself. [acceptance-results.json](acceptance-results.json) retains the complete frozen result; [acceptance-selection.en.md](acceptance-selection.en.md) and [acceptance-protocol.json](acceptance-protocol.json) retain the selection and fixed rules.
 
 ## Running the checks
 
@@ -57,11 +58,13 @@ Run the current development regression with:
 ./scripts/benchmark-optimizer-development.sh
 ```
 
-Run the repository's fixed public-data software regression with:
+Check the current frozen acceptance data and protocol integrity with:
 
 ```bash
-./scripts/benchmark-public-validation.sh
+./scripts/verify-optimizer-acceptance.sh
 ```
+
+`./scripts/benchmark-optimizer-acceptance.sh` reproduces only the frozen formal result and intentionally refuses to run after an algorithm change. Use `./scripts/benchmark-optimizer-development.sh` for successor regression on inspected data.
 
 Every result must retain all baselines, dataset subgroups, confidence intervals, and failures. Once the algorithm, data, objective, budget, or gate changes, an older result becomes development evidence and cannot be relabeled as unseen-data acceptance for the current policy.
 

@@ -107,7 +107,7 @@ The repository implements the main path from field data to a next-experiment rec
 - select among linear response surfaces, quadratic response surfaces, and Bayesian optimization from visible evidence, then recommend the most valuable next experiment;
 - preserve inputs, versions, sources, constraints, and results so every recommendation can be reviewed and replayed.
 
-Public replay confirms fewer additional queries on some physical-experiment data. A frozen predecessor trailed random search and maximin on Fullerenes and has been retired. The current policy repairs that problem and, across 400 paired development replays on the same now-disclosed data, beats random, maximin, linear, and quadratic response surfaces. Its next decision is acceptance on another fresh dataset group. Full data, failed subgroups, confidence intervals, and decision rules live in [Optimizer experiment-efficiency validation](tools/public-validation/README.en.md). See [Scenario validation](docs/rollout.en.md) for real-pilot acceptance.
+Across 450 frozen paired replays, the current policy reduces additional experiments by 49.24% versus random search and 62.96% versus maximin, with no dataset regression. It nevertheless uses 32.08% and 68.36% more experiments than the linear response surface on Alkox and P3HT and matches the quadratic surface exactly, so core acceptance fails. The implementation establishes structured selection over blind exploration, but not routing value over an applicable simple response surface. Full data, subgroup failures, confidence intervals, and rules live in [Optimizer experiment-efficiency validation](tools/public-validation/README.en.md). See [Scenario validation](docs/rollout.en.md) for real-pilot acceptance.
 
 ## Architecture
 
@@ -176,7 +176,7 @@ Run the full CI gate with:
 Run the complete fixed public-manufacturing-data benchmark with:
 
 ```bash
-./scripts/benchmark-public-validation.sh
+./scripts/verify-optimizer-acceptance.sh
 ```
 
 This benchmark validates a reproducible software and method path; it does not replace shadow or controlled online validation on a real project. See [Public-data experiment-efficiency validation](tools/public-validation/README.en.md) for the current result and decision rules.

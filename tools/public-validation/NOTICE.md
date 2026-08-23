@@ -22,7 +22,7 @@ Source: https://github.com/PV-Lab/Benchmarking/blob/7585c517ad88e676c42c6bf24a8a
 
 License: [MIT](https://github.com/PV-Lab/Benchmarking/blob/7585c517ad88e676c42c6bf24a8ad278e01ddb21/LICENSE)
 
-Changes made by the Ingot project: renamed the four published design variables and toughness outcome with descriptive names and units, sorted designs, and averaged only exact design replicates. The committed fixture retains the three-replicate count and sample standard deviation. Its 600 unique settings reconcile to all 1,800 physical tests. No outcome was synthesized or imputed. The pinned source CSV has SHA-256 `2c01f875f3c210e986ca6142bf20f417884c2ad7d6f008c2fc574b44a3d5f606`; `prepare_crossed_barrel_fixture.py` documents the deterministic transformation.
+Changes made by the Ingot project: renamed the four published design variables and toughness outcome with descriptive names and units, sorted designs, and averaged only exact design replicates. The committed fixture retains the three-replicate count and sample standard deviation. Its 600 unique settings reconcile to all 1,800 physical tests. No outcome was synthesized or imputed. The pinned source CSV has SHA-256 `2c01f875f3c210e986ca6142bf20f417884c2ad7d6f008c2fc574b44a3d5f606`; the retained frozen protocol records the normalized fixture checksum.
 
 The source repository's license notice is reproduced below as required:
 
@@ -56,7 +56,7 @@ License: [Creative Commons Attribution 4.0 International](https://creativecommon
 
 Changes made by the Ingot project: removed the archive's trailing blank line, added stable row identifiers, assigned descriptive column names from the repository metadata, and converted whitespace-delimited rows to CSV. The 308 unique physical-experiment settings and measured outcomes are unchanged. The official ZIP has SHA-256 `aa52b68f88c4bb552187a53ef4c5753fa178f6a36035a3771c5bc04e078487ac`.
 
-`prepare_v3_fixtures.py` verifies both official archive hashes and documents these deterministic transformations.
+The retained frozen protocol records both normalized fixture checksums.
 
 `data/energy-efficiency.csv` is a normalized copy of:
 
@@ -74,7 +74,7 @@ Source: https://archive.ics.uci.edu/dataset/607/synchronous+machine+data+set
 
 License: [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/)
 
-Changes made by the Ingot project for both v4 fixtures: assigned descriptive column names from the official metadata, added stable setting identifiers, converted the source formats to CSV, and retained all published controls and outcomes. No outcome was synthesized or imputed. `prepare_v4_fixtures.py` verifies the official archive hashes and the deterministic transformations.
+Changes made by the Ingot project for both historical fixtures: assigned descriptive column names from the official metadata, added stable setting identifiers, converted the source formats to CSV, and retained all published controls and outcomes. No outcome was synthesized or imputed. The retained frozen protocol records the official and normalized checksums.
 
 `data/lnp3-formulations.csv` is a normalized copy of the LNP3 dataset in:
 
@@ -84,7 +84,7 @@ Source: https://github.com/the-matter-lab/olympus/tree/440b6b58ebfcaa2391cff7e94
 
 License: [MIT](https://github.com/the-matter-lab/olympus/blob/440b6b58ebfcaa2391cff7e94b570fb4fda98d68/LICENSE)
 
-Changes made by the Ingot project: added stable setting identifiers and descriptive headers to the source's headerless rows. All 768 settings, the three solid-lipid identities, four formulation inputs, and three measured outcomes are unchanged. No outcome was synthesized, imputed, averaged, or removed. The pinned source CSV has SHA-256 `69e8847e30f8b8b8720884676cd20d354152b7093309d278ee9910f9924b48ba`; `prepare_v6_fixture.py` verifies the checksum and the complete 3 × 4⁴ factorial structure before writing the fixture.
+Changes made by the Ingot project: added stable setting identifiers and descriptive headers to the source's headerless rows. All 768 settings, the three solid-lipid identities, four formulation inputs, and three measured outcomes are unchanged. No outcome was synthesized, imputed, averaged, or removed. The pinned source CSV has SHA-256 `69e8847e30f8b8b8720884676cd20d354152b7093309d278ee9910f9924b48ba`; the retained frozen protocol records the fixture checksum and complete 3 × 4⁴ factorial structure.
 
 `data/oer-plate-3496.csv`, `data/oer-plate-3851.csv`, `data/oer-plate-3860.csv`, and `data/oer-plate-4098.csv` are normalized copies of four OER composition-screen datasets in:
 
@@ -96,7 +96,7 @@ Source: https://github.com/the-matter-lab/olympus/tree/440b6b58ebfcaa2391cff7e94
 
 License: [MIT](https://github.com/the-matter-lab/olympus/blob/440b6b58ebfcaa2391cff7e94b570fb4fda98d68/LICENSE)
 
-Changes made by the Ingot project: added stable setting identifiers and descriptive headers to the four headerless source files. The six elemental fractions and measured OER overpotential values are unchanged. No row or outcome was synthesized, imputed, averaged, removed, or replaced by emulator output. The pinned source CSV SHA-256 values are `3c70049ccfdd11bc05d1777421fc4c724d2b2d4a86c12b8759079609912cfade`, `e2212be9cc5c866fa98dcb9513fca63946003f317688cb025bd0d648d8c3caab`, `834e2832818900e5cefa9de3b433e2246424faa1b2c3c460a1daf0707710fc90`, and `a3e4b4b781e3a04f861d062e773ce64d543118aa8ee9ccfc1aa4612502070b12`, respectively. `prepare_v7_fixtures.py` verifies checksums, finite values, simplex sums, the 10 at% grid, support size, and unique compositions before writing the fixtures.
+Changes made by the Ingot project: added stable setting identifiers and descriptive headers to the four headerless source files. The six elemental fractions and measured OER overpotential values are unchanged. No row or outcome was synthesized, imputed, averaged, removed, or replaced by emulator output. The pinned source CSV SHA-256 values are `3c70049ccfdd11bc05d1777421fc4c724d2b2d4a86c12b8759079609912cfade`, `e2212be9cc5c866fa98dcb9513fca63946003f317688cb025bd0d648d8c3caab`, `834e2832818900e5cefa9de3b433e2246424faa1b2c3c460a1daf0707710fc90`, and `a3e4b4b781e3a04f861d062e773ce64d543118aa8ee9ccfc1aa4612502070b12`, respectively. The retained frozen protocol records fixture checksums, finite-value and simplex checks, the 10 at% grid, support size, and unique compositions.
 
 `data/fullerenes-source.csv` and `data/suzuki-source.csv` are pinned source snapshots of the Buckminsterfullerene flow-reaction and Suzuki coupling datasets in:
 
@@ -106,7 +106,7 @@ Sources: https://github.com/the-matter-lab/olympus/tree/440b6b58ebfcaa2391cff7e9
 
 License: [MIT](https://github.com/the-matter-lab/olympus/blob/440b6b58ebfcaa2391cff7e94b570fb4fda98d68/LICENSE)
 
-Changes made by the Ingot project: `data/fullerenes.csv` averages only exact repeated control settings, retaining replicate counts and sample standard deviations; its 216 unique settings reconcile to all 246 source rows. `data/suzuki.csv` adds stable setting identifiers and replicate metadata to the 247 unique source settings. Controls and measured outcomes are otherwise unchanged; no outcome was synthesized or imputed. Source SHA-256 values are `87aa0927f0180a0f7d46dffb0b707df5caccc879492dbc0688ac3252414d4441` and `88e3c2613ee6238300f3b326c34d14dc3f76f0335a3e193cf423750146c819b6`; normalized fixture hashes are `24ba7b2657913d20d268aa0a521edf3e6a1e6ea98b0f0990e681b55e2794b787` and `704e9303a40c9014078f1618a8a824a90d009da61cfb1cb946472310be2983f3`. `prepare_unseen_fixtures.py` documents and verifies the deterministic transformation.
+Changes made by the Ingot project: `data/fullerenes.csv` averages only exact repeated control settings, retaining replicate counts and sample standard deviations; its 216 unique settings reconcile to all 246 source rows. `data/suzuki.csv` adds stable setting identifiers and replicate metadata to the 247 unique source settings. Controls and measured outcomes are otherwise unchanged; no outcome was synthesized or imputed. Source SHA-256 values are `87aa0927f0180a0f7d46dffb0b707df5caccc879492dbc0688ac3252414d4441` and `88e3c2613ee6238300f3b326c34d14dc3f76f0335a3e193cf423750146c819b6`; normalized fixture hashes are `24ba7b2657913d20d268aa0a521edf3e6a1e6ea98b0f0990e681b55e2794b787` and `704e9303a40c9014078f1618a8a824a90d009da61cfb1cb946472310be2983f3`. The retained frozen protocol documents and verifies the deterministic transformation.
 
 `data/alkox-source.csv`, `data/p3ht-source.csv`, and `data/hplc-source.csv` are pinned source snapshots of the Alkox enzyme-catalysis, P3HT conductive-formulation, and HPLC injection-process datasets from the same Olympus revision and MIT license.
 

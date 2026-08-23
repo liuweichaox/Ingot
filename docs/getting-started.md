@@ -36,21 +36,13 @@ npm --prefix apps/platform run demo
 
 ### 公开数据实验效率验证
 
-这条路径不需要数据库、设备或工厂数据，只需要 Git 和 uv 0.11.32。它使用仓库内明确许可、带 SHA-256 校验的 FDM DOE 与 Crossed Barrel 机械设计公开数据，运行 10 个分层工艺上下文，并与随机选择和线性响应面比较：
+这条路径不需要数据库、设备或工厂数据，只需要 Git 和 uv 0.11.32。它检查三组明确许可、带 SHA-256 校验的反应、材料配方和设备工艺公开数据，以及冻结协议和完整结果：
 
 ```bash
-./scripts/benchmark-public-validation.sh
+./scripts/verify-optimizer-acceptance.sh
 ```
 
-结果写入 `artifacts/public-validation.json`。当前参考结果相对固定随机搜索通过优效检验，但 Crossed Barrel 分项对线性响应面触发数据集护栏，因此总体实验缩减声明为未证明。快速检查、完整判定规则、数据许可和分项结果见[公开数据实验效率验证](https://github.com/liuweichaox/Ingot/blob/main/tools/public-validation/README.md)。公开数据可以验证软件与方法链路是否可复现，不能证明另一个工厂可以获得相同收益。
-
-仓库还包含已冻结的 v3 外部数据评估。它使用两个未参与 v2 开发的物理实验数据集，登记四个比较基线并加入机理特征消融。先校验数据、协议和统一指纹：
-
-```bash
-./scripts/verify-public-validation-v3.sh
-```
-
-保留结果相对随机搜索和 maximin 通过，但相对线性与二次响应面未通过，因此总体实验缩减声明仍为未证明；机理特征配对消融通过。完整结果见 [`latest-results-v3.json`](https://github.com/liuweichaox/Ingot/blob/main/tools/public-validation/latest-results-v3.json)，复现运行使用 `./scripts/benchmark-public-validation-v3.sh`。
+当前冻结结果相对随机搜索和 maximin 通过，也不劣于二次响应面；但 Alkox 和 P3HT 分项明显落后于线性响应面，因此总体方法路由仍未通过。完整结果见 [`acceptance-results.json`](https://github.com/liuweichaox/Ingot/blob/main/tools/public-validation/acceptance-results.json)，完整判定规则、数据许可和分项结果见[公开数据实验效率验证](https://github.com/liuweichaox/Ingot/blob/main/tools/public-validation/README.md)。公开数据可以验证软件与方法链路是否可复现，不能证明另一个工厂可以获得相同收益。
 
 ## 1. 准备环境
 
