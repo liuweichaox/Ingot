@@ -1,6 +1,12 @@
 # v5 new-data selection record
 
-> Status: selected from public metadata; `data.csv` has not been downloaded, outcome values have not been read, and no evaluation has been run.
+> Status: stopped at the data-quality gate; no protocol was created and no algorithm evaluation was run.
+
+## Post-download data-quality decision
+
+After selection commit `f18e93b`, the `data.csv` downloaded from the pinned source revision had SHA-256 `9c94222798229c1391f75445f44d9c0ed285e83c1b1e0608ab76b28bf05decef`. The headerless file contains 1,386 rows of seven finite numeric values. Reconciliation by the exact text of the first six control values leaves 1,007 unique settings: 628 occur once and 379 occur twice. Of the repeated settings, 326 have different outcomes across their two measurements, confirming that they are replicates rather than identical rows that could be silently discarded.
+
+Following the preregistration, repeated settings were first treated as one candidate. SHA-256 of the six controls in `.17g` canonical form modulo five then produced evaluation-unit sizes 204, 197, 215, 196, and 195. Four units fall below the preregistered 200-row minimum, so v5 stopped before any replay or algorithm comparison. No outcome-driven fold or gate change was made. The HPLC outcome column is development evidence from this point onward and cannot be repackaged as a fresh external validation.
 
 ## Selection time and purpose
 
