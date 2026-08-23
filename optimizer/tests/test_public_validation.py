@@ -23,6 +23,14 @@ benchmark_v3 = importlib.util.module_from_spec(SPEC_V3)
 assert SPEC_V3.loader is not None
 SPEC_V3.loader.exec_module(benchmark_v3)
 
+BENCHMARK_V4_PATH = BENCHMARK_PATH.with_name("benchmark_v4.py")
+SPEC_V4 = importlib.util.spec_from_file_location(
+    "ingot_public_validation_v4", BENCHMARK_V4_PATH
+)
+benchmark_v4 = importlib.util.module_from_spec(SPEC_V4)
+assert SPEC_V4.loader is not None
+SPEC_V4.loader.exec_module(benchmark_v4)
+
 
 def test_public_fixtures_are_verified_and_contexts_are_isolated():
     protocol = benchmark.load_protocol()
@@ -186,3 +194,78 @@ def test_v3_fingerprint_freezes_algorithm_data_dependencies_and_protocol():
     frozen["datasets"]["airfoil"]["additional_trial_budget"] += 1
     with pytest.raises(RuntimeError, match="fingerprint does not match"):
         benchmark_v3.require_frozen(frozen)
+
+
+def test_v4_holdout_fixtures_are_verified_before_protocol_freeze():
+    protocol = benchmark_v4.load_protocol()
+    report = benchmark_v4.integrity_report(protocol)
+
+    assert report["status"] == "draft"
+    assert report["full_evaluation_allowed"] is False
+    assert report["evaluation_unit_count"] == 25
+    assert len(report["candidate_evaluation_fingerprint"]) == 64
+
+    energy = report["datasets"]["energy_efficiency"]
+    assert energy["rows"] == 768
+    assert energy["fixture_sha256"] == (
+        "c8ddcfd2751dae6aa0185343eba4073bf3c15ffa55953ed006512a95574af54a"
+    )
+    assert energy["evaluation_unit_count"] == 24
+    assert energy["minimum_unit_rows"] == 12
+    assert energy["maximum_unit_rows"] == 36
+
+    machine = report["datasets"]["synchronous_machine"]
+    assert machine["rows"] == 557
+    assert machine["fixture_sha256"] == (
+        "75ae917e07f58c9213fcbbabc470dee3d4411a7291f53083abe55f33dbd43fec"
+    )
+    assert machine["evaluation_unit_count"] == 1
+    assert machine["minimum_unit_rows"] == 557
+    assert machine["maximum_unit_rows"] == 557
+
+    for profile in (energy, machine):
+        assert profile["mechanism_feature_count"] == 3
+        assert profile["null_or_non_finite_values"] == 0
+        assert profile["duplicate_identifiers"] == 0
+        assert profile["duplicate_control_context_settings"] == 0
+        assert profile["outcome_minimum"] < profile["outcome_median"] < profile[
+            "outcome_maximum"
+        ]
+
+
+def test_v4_draft_refuses_full_evaluation_and_freezes_every_input():
+    protocol = benchmark_v4.load_protocol()
+
+    with pytest.raises(RuntimeError, match="not frozen"):
+        benchmark_v4.require_frozen(protocol)
+
+    candidate = benchmark_v4.evaluation_fingerprint(protocol)
+    frozen = json.loads(json.dumps(protocol))
+    frozen["status"] = "frozen"
+    frozen["freeze"]["optimizer_revision"] = "a" * 40
+    frozen["freeze"]["protocol_revision"] = "b" * 40
+    frozen["freeze"]["evaluation_fingerprint"] = candidate
+    benchmark_v4.require_frozen(frozen)
+
+    frozen["statistics"]["minimum_relative_reduction_ci_lower"] = -0.01
+    with pytest.raises(RuntimeError, match="fingerprint does not match"):
+        benchmark_v4.require_frozen(frozen)
+
+
+def test_v4_uses_all_preregistered_comparators_and_strict_unit_guardrail():
+    protocol = benchmark_v4.load_protocol()
+
+    assert protocol["methods"]["baselines"] == [
+        "seeded-random-search",
+        "sequential-maximin-space-filling",
+        "regularized-linear-response-surface",
+        "regularized-quadratic-response-surface",
+    ]
+    assert protocol["statistics"]["minimum_relative_reduction_ci_lower"] == 0.0
+    assert protocol["statistics"][
+        "minimum_success_rate_difference_ci_lower"
+    ] == -0.05
+    assert protocol["statistics"][
+        "minimum_evaluation_unit_non_worse_fraction"
+    ] == 1.0
+    assert len(protocol["claim_boundary"]["not_permitted"]) == 4
