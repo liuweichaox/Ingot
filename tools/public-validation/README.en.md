@@ -8,7 +8,7 @@ This directory turns “does the optimizer reduce additional experiments?” int
 | v3 protocol-frozen evaluation | strong-baseline comparison and mechanism-feature ablation | NASA airfoil noise and Delft yacht hydrodynamics | frozen with a retained 400-episode result; overall claim not demonstrated |
 | v4 protocol-frozen evaluation | v7 new-data holdout | building-energy simulation and synchronous-machine experiments | 1,250 episodes retained; linear-baseline and ablation guardrails failed |
 | v5 data-quality gate | automated HPLC candidate | Olympus HPLC | stopped before algorithms after replicate reconciliation left four preregistered folds below minimum size |
-| v6 protocol-freeze candidate | v8 new-data holdout | Olympus LNP3 formulation experiments | data, evaluator, and draft protocol in preparation; not run |
+| v6 protocol-frozen evaluation | v8 new-data holdout | Olympus LNP3 formulation experiments | 300 episodes retained; quadratic baseline, linear context guardrail, and mechanism ablation failed |
 
 ## Data and scenarios
 
@@ -127,12 +127,26 @@ The integrity fingerprint covers optimizer source, the dependency lock, evaluato
 ./scripts/benchmark-public-validation-v3.sh
 ```
 
-v6 uses the complete 768-setting formulation grid in three solid-lipid contexts. See [v6-selection.en.md](v6-selection.en.md) for data selection and stop conditions. Before freeze, run only:
+## v6 protocol-frozen result
+
+v6 uses the complete 768-setting formulation grid in three solid-lipid contexts. See [v6-selection.en.md](v6-selection.en.md) for data selection and stop conditions. After freezing the algorithm, data, evaluator, and decision rules, the evaluation completed 300 paired episodes. The full trajectories are retained in [latest-results-v6.json](latest-results-v6.json), and [validate_v6_result.py](development/validate_v6_result.py) independently recomputes the summary:
+
+| v6 comparator | Relative additional-trial reduction | 95% CI | Context non-worse | Gate |
+|---|---:|---:|---:|---|
+| No-mechanism ablation | −5.80% | −16.22% to 3.58% | 0% | failed |
+| Seeded random search | 43.75% | 36.64% to 50.08% | 100% | passed |
+| Sequential maximin | 35.96% | 28.64% to 42.69% | 100% | passed |
+| Regularized linear response surface | 27.61% | 20.95% to 34.00% | 66.67% | failed |
+| Regularized quadratic response surface | −8.46% | −20.54% to 2.42% | 0% | failed |
+
+The aggregate effect versus the linear response surface is positive, but in the Stearic-acid context Ingot averages 1.72 additional trials versus 1.66 for linear, triggering the preregistered 100% context-non-worse guardrail. The no-mechanism ablation and quadratic response surface are non-worse in all three contexts, refuting v8's automatic admission of the mechanism-quadratic ensemble in this pool. Both the overall and mechanism-feature conclusions remain `not-demonstrated`; v6 is development evidence only for any successor policy.
+
+Verify the v6 data, frozen protocol, and unified fingerprint with:
 
 ```bash
 ./scripts/verify-public-validation-v6.sh
 ```
 
-The complete v6 evaluator refuses to run while the protocol is `draft`. Only after committing the data, evaluator, dependencies, and algorithm may a separate metadata-only commit record the unified fingerprint and enable `./scripts/benchmark-public-validation-v6.sh`.
+The freeze references candidate commit `ab1675bccb1283a679a86f61b7175359fc83c1af` and unified evaluation fingerprint `06099fa53a4d5f9c7898380f2bf24bb1982e830b7926cf567625507c04bf9cca`. The current tree can still rerun the frozen evaluation with `./scripts/benchmark-public-validation-v6.sh`; after a successor algorithm commit, the fingerprint check intentionally prevents new-algorithm output from being presented as v6.
 
 When refreshing the reference result, retain every context and failure, run the complete benchmark first, and update Chinese and English documentation together. A real deployment still needs in-factory local-history replay and a small controlled transfer test; factory data does not need to leave the site.

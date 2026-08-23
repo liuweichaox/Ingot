@@ -316,12 +316,12 @@ def test_v4_retained_result_discloses_failed_linear_and_ablation_guardrails():
     ] == pytest.approx(0.92)
 
 
-def test_v6_draft_fixture_is_complete_and_contexts_are_isolated():
+def test_v6_frozen_fixture_is_complete_and_contexts_are_isolated():
     protocol = benchmark_v6.load_protocol()
     report = benchmark_v6.integrity_report(protocol)
 
-    assert report["status"] == "draft"
-    assert report["full_evaluation_allowed"] is False
+    assert report["status"] == "frozen"
+    assert report["full_evaluation_allowed"] is True
     assert report["evaluation_unit_count"] == 3
     assert len(report["candidate_evaluation_fingerprint"]) == 64
     profile = report["datasets"]["lnp3"]
@@ -394,3 +394,44 @@ def test_v6_uses_all_strong_baselines_and_strict_context_guardrail():
         "minimum_evaluation_unit_non_worse_fraction"
     ] == 1.0
     assert len(protocol["claim_boundary"]["not_permitted"]) == 4
+
+
+def test_v6_retained_result_discloses_failed_model_and_ablation_guardrails():
+    protocol = benchmark_v6.load_protocol()
+    result = json.loads(
+        (BENCHMARK_PATH.parent / "latest-results-v6.json").read_text(
+            encoding="utf-8"
+        )
+    )
+
+    assert result["evaluation_fingerprint"] == protocol["freeze"][
+        "evaluation_fingerprint"
+    ]
+    assert result["summary"]["episode_count"] == 300
+    assert result["summary"][
+        "experiment_reduction_vs_all_preregistered_baselines"
+    ] == "not-demonstrated"
+    assert result["summary"]["mechanism_feature_contribution"] == (
+        "not-demonstrated"
+    )
+    effects = {
+        item["comparator"]: item
+        for item in result["summary"]["paired_effects"]
+    }
+    assert effects["seeded-random-search"]["passed"] is True
+    assert effects["sequential-maximin-space-filling"]["passed"] is True
+    assert effects["regularized-linear-response-surface"]["passed"] is False
+    assert effects["regularized-linear-response-surface"][
+        "relative_trial_reduction"
+    ] == pytest.approx(0.2761250953)
+    assert effects["regularized-linear-response-surface"][
+        "evaluation_unit_non_worse_fraction"
+    ] == pytest.approx(2 / 3)
+    assert effects["regularized-quadratic-response-surface"]["passed"] is False
+    assert effects["regularized-quadratic-response-surface"][
+        "relative_trial_reduction"
+    ] == pytest.approx(-0.0845714286)
+    assert effects["ingot-v8-without-mechanism-features"]["passed"] is False
+    assert effects["ingot-v8-without-mechanism-features"][
+        "evaluation_unit_non_worse_fraction"
+    ] == 0.0
