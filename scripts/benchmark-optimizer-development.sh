@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Run the current optimizer only against already inspected development fixtures.
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -8,7 +9,7 @@ cd "${repo_root}"
 uvx --from uv==0.11.32 uv run \
   --project optimizer \
   --locked \
-  python tools/public-validation/development/benchmark_candidate_v7.py \
-  --episodes 25 \
+  python tools/public-validation/development/benchmark_candidate_unseen.py \
+  --episodes 200 \
   --bootstrap-samples 5000 \
   --output "${output}"

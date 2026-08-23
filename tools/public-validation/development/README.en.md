@@ -1,6 +1,20 @@
 # Public-validation development workspace
 
-Everything in this directory is **development and regression evidence only**. The v3 outcome data and retained episode results were inspected before the v7 policy was chosen, so no result produced here is an external, blind, or protocol-frozen validation result.
+Everything in this directory is **development and regression evidence only**. Numbers in older filenames identify past internal experiment rounds; they are not product versions, capability levels, or concepts a user must understand.
+
+## Current policy
+
+The current policy addresses the latest frozen acceptance failure, where weak model evidence caused premature local exploitation. It keeps sparse histories on a linear response surface, adds maximin coverage when linear and quadratic surfaces disagree on low-dimensional problems, and disables Euclidean fallback in higher dimensions where distance concentration makes it unreliable. The rule reads revealed observations and candidate controls only and never branches on dataset names.
+
+[`current-results.json`](current-results.json) retains 400 paired regressions on the now-disclosed Fullerenes and Suzuki data. The policy reduces experiments by 48.90%, 21.37%, 39.78%, and 32.91% versus random, maximin, linear, and quadratic response surfaces; all four gates and both dataset guardrails pass. Process-feature ablation is −0.14% and fails, so the features remain disabled. This establishes that the known regression is repaired, not acceptance on another fresh dataset.
+
+Run the current development regression with:
+
+```bash
+./scripts/benchmark-optimizer-development.sh
+```
+
+The older rounds below remain only as an audit history of method development.
 
 ## v3 failure diagnosis
 

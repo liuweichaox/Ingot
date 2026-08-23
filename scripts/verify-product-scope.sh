@@ -35,7 +35,7 @@ while IFS= read -r path; do
   case "$path" in
     tests/fixtures/synthetic/*|tools/*/examples/synthetic/*)
       ;;
-    tools/public-validation/data/fdm-doe-grid.csv|tools/public-validation/data/crossed-barrel.csv|tools/public-validation/data/airfoil-self-noise.csv|tools/public-validation/data/yacht-hydrodynamics.csv|tools/public-validation/data/energy-efficiency.csv|tools/public-validation/data/synchronous-machine.csv|tools/public-validation/data/lnp3-formulations.csv|tools/public-validation/data/oer-plate-3496.csv|tools/public-validation/data/oer-plate-3851.csv|tools/public-validation/data/oer-plate-3860.csv|tools/public-validation/data/oer-plate-4098.csv)
+    tools/public-validation/data/fdm-doe-grid.csv|tools/public-validation/data/crossed-barrel.csv|tools/public-validation/data/airfoil-self-noise.csv|tools/public-validation/data/yacht-hydrodynamics.csv|tools/public-validation/data/energy-efficiency.csv|tools/public-validation/data/synchronous-machine.csv|tools/public-validation/data/lnp3-formulations.csv|tools/public-validation/data/oer-plate-3496.csv|tools/public-validation/data/oer-plate-3851.csv|tools/public-validation/data/oer-plate-3860.csv|tools/public-validation/data/oer-plate-4098.csv|tools/public-validation/data/fullerenes-source.csv|tools/public-validation/data/fullerenes.csv|tools/public-validation/data/suzuki-source.csv|tools/public-validation/data/suzuki.csv)
       ;;
     .ingot-import/*|mapping-*.json|*.csv|*.parquet|*.xlsx|*.xls|*.db)
       sensitive_paths+=("$path")
@@ -63,6 +63,7 @@ protocols = [
         "protocol-v4.json",
         "protocol-v6.json",
         "protocol-v7.json",
+        "unseen-protocol.json",
     )
 ]
 allowed = {
@@ -77,11 +78,17 @@ allowed = {
     "data/oer-plate-3851.csv",
     "data/oer-plate-3860.csv",
     "data/oer-plate-4098.csv",
+    "data/fullerenes-source.csv",
+    "data/fullerenes.csv",
+    "data/suzuki-source.csv",
+    "data/suzuki.csv",
 }
 declared = {
-    source["fixture"]
+    path
     for protocol in protocols
     for source in protocol["sources"].values()
+    for path in (source["fixture"], source.get("source_snapshot"))
+    if path is not None
 }
 if declared != allowed:
     raise SystemExit("public validation protocol must declare exactly the approved fixtures")
@@ -89,10 +96,14 @@ if not (root / "NOTICE.md").is_file():
     raise SystemExit("public validation fixtures require NOTICE.md attribution")
 for protocol in protocols:
     for source in protocol["sources"].values():
-        path = root / source["fixture"]
-        actual = hashlib.sha256(path.read_bytes()).hexdigest()
-        if actual != source["fixture_sha256"]:
-            raise SystemExit(f"public validation checksum mismatch: {path}")
+        checks = [(source["fixture"], source["fixture_sha256"])]
+        if source.get("source_snapshot") is not None:
+            checks.append((source["source_snapshot"], source["source_sha256"]))
+        for relative_path, expected in checks:
+            path = root / relative_path
+            actual = hashlib.sha256(path.read_bytes()).hexdigest()
+            if actual != expected:
+                raise SystemExit(f"public validation checksum mismatch: {path}")
 PY
 
 if grep -RInE --exclude='package-lock.json' --exclude='verify-product-scope.sh' \

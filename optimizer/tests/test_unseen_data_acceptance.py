@@ -23,12 +23,15 @@ benchmark = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(benchmark)
 
 
-def test_unseen_reaction_fixtures_pass_preregistered_data_quality_gate():
+def test_unseen_reaction_fixtures_keep_quality_checks_after_policy_change():
     protocol = benchmark.load_protocol()
     report = benchmark.integrity_report(protocol)
 
     assert report["status"] == "frozen"
-    assert report["full_evaluation_allowed"] is True
+    assert report["full_evaluation_allowed"] is False
+    assert report["candidate_evaluation_fingerprint"] != protocol["freeze"][
+        "evaluation_fingerprint"
+    ]
     assert report["evaluation_unit_count"] == 2
     assert report["datasets"]["fullerenes"]["rows"] == 216
     assert report["datasets"]["suzuki"]["rows"] == 247
@@ -69,9 +72,10 @@ def test_unseen_protocol_keeps_fixed_baselines_budgets_and_separate_claims():
     }
 
 
-def test_unseen_protocol_accepts_frozen_state_and_refuses_tampering():
+def test_unseen_protocol_rejects_current_successor_and_covers_tampering():
     protocol = benchmark.load_protocol()
-    benchmark.require_frozen(protocol)
+    with pytest.raises(RuntimeError, match="fingerprint does not match"):
+        benchmark.require_frozen(protocol)
 
     draft = json.loads(json.dumps(protocol))
     draft["status"] = "draft"
@@ -79,6 +83,10 @@ def test_unseen_protocol_accepts_frozen_state_and_refuses_tampering():
         benchmark.require_frozen(draft)
 
     frozen = json.loads(json.dumps(protocol))
+    frozen["freeze"]["evaluation_fingerprint"] = (
+        benchmark.evaluation_fingerprint(frozen)
+    )
+    benchmark.require_frozen(frozen)
     frozen["datasets"]["fullerenes"]["additional_trial_budget"] += 1
     with pytest.raises(RuntimeError, match="fingerprint does not match"):
         benchmark.require_frozen(frozen)
@@ -116,6 +124,50 @@ def test_retained_unseen_result_discloses_model_free_and_feature_failures():
     assert effects["sequential-maximin-space-filling"][
         "evaluation_unit_relative_reductions"
     ]["fullerenes:all"] == pytest.approx(-0.4064976228)
+
+
+def test_current_policy_development_result_repairs_all_core_comparisons():
+    result = json.loads(
+        (
+            BENCHMARK_PATH.parent
+            / "development"
+            / "current-results.json"
+        ).read_text(encoding="utf-8")
+    )
+
+    assert result["evidence_status"] == "development-regression-only"
+    assert result["candidate_model_version"] == (
+        "botorch-evidence-routed-exploration-2026-08-23"
+    )
+    assert result["summary"]["episode_count"] == 400
+    assert result["summary"]["core_experiment_selection"] == (
+        "passed-development-regression"
+    )
+    assert result["summary"]["mechanism_feature_contribution"] == (
+        "not-demonstrated"
+    )
+    effects = {
+        item["comparator"]: item
+        for item in result["summary"]["paired_effects"]
+    }
+    assert all(
+        effects[comparator]["passed"] is True
+        for comparator in (
+            "seeded-random-search",
+            "sequential-maximin-space-filling",
+            "regularized-linear-response-surface",
+            "regularized-quadratic-response-surface",
+        )
+    )
+    assert all(
+        effects[comparator]["evaluation_unit_non_worse_fraction"] == 1.0
+        for comparator in (
+            "seeded-random-search",
+            "sequential-maximin-space-filling",
+            "regularized-linear-response-surface",
+            "regularized-quadratic-response-surface",
+        )
+    )
 
 
 @pytest.mark.parametrize("dataset", ["fullerenes", "suzuki"])

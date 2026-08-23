@@ -42,13 +42,12 @@ Numbers embedded in older filenames identify past internal experiment rounds. Th
 
 | Item | Result | State |
 |---|---:|---|
-| Current-policy regression on disclosed data | `+53.66%` versus random, `+54.42%` versus maximin, `+50.52%` versus linear, and `+7.00%` versus quadratic; every dataset guardrail passed | development regression passed |
-| Generic composition-feature ablation | `−0.10%`, with no stable benefit | failed; current policy rejects admission |
-| Unseen-data acceptance for the current policy | `+16.74%` versus linear and `+7.25%` versus quadratic, both passed; Fullerenes was `−23.01%` versus random and `−40.65%` versus maximin, triggering subgroup guardrails | core acceptance failed |
-| Preregistered process-feature ablation | `+0.20%`, with a 95% CI lower bound of `0` | failed; features remain disabled |
+| Unseen-data acceptance for the frozen predecessor | `+16.74%` versus linear and `+7.25%` versus quadratic, both passed; Fullerenes was `−23.01%` versus random and `−40.65%` versus maximin, triggering subgroup guardrails | core acceptance failed; the policy was retired |
+| Current-policy regression on those now-disclosed data | `+48.90%` versus random, `+21.37%` versus maximin, `+39.78%` versus linear, and `+32.91%` versus quadratic; all four gates and both dataset guardrails passed | development regression passed; fresh-data acceptance pending |
+| Current-policy process-feature ablation | `−0.14%`, with no stable benefit | failed; features remain disabled without blocking raw-control selection |
 | Real-factory historical replay and prospective pilot | not complete | awaiting pilot |
 
-The present conclusion is therefore: **the current policy passes the linear- and quadratic-response-surface guardrails on unseen data but does not yet reliably beat model-free space filling; core experiment-reduction acceptance failed.** The Fullerenes failure narrows successor work to whether insufficient model evidence should trigger a maximin fallback. [unseen-results.json](unseen-results.json) retains the complete result; it is development regression for any successor and cannot be rerun into a passing result.
+The present conclusion is therefore: **the frozen predecessor failed unseen-data acceptance; the exposed problem has been repaired, and the current policy passes all four core comparisons on the same now-disclosed data, but still needs acceptance on another fresh dataset.** [unseen-results.json](unseen-results.json) retains the predecessor's complete failed result, while [development/current-results.json](development/current-results.json) retains the current policy's development regression. Neither may be presented as independent effect evidence for the current policy.
 
 ## Running the checks
 

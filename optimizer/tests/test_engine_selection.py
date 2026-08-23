@@ -95,6 +95,23 @@ def test_reach_specification_scores_fall_back_to_dominant_linear_response():
     assert int(np.argmax(scores)) == 0
 
 
+def test_reach_specification_scores_keep_sparse_history_on_linear_response():
+    observed = np.asarray(
+        [[0.0, 0.0], [0.5, 1.0], [1.0, 0.25]]
+    )
+    distance = np.asarray([0.8, 0.2, 0.6])
+    candidates = np.asarray([[0.1, 0.9], [0.5, 0.5], [0.9, 0.1]])
+
+    _, policy = _reach_specification_scores(
+        observed,
+        distance,
+        candidates,
+        np.ones(len(candidates)),
+    )
+
+    assert policy == "capacity-linear-response"
+
+
 def test_reach_specification_scores_use_raw_quadratic_without_features():
     x = np.linspace(0.0, 1.0, 9)
     observed = np.column_stack([x, np.roll(x, 3)])
@@ -108,7 +125,7 @@ def test_reach_specification_scores_use_raw_quadratic_without_features():
         np.ones(len(candidates)),
     )
 
-    assert policy == "quadratic-response"
+    assert policy == "space-filling-quadratic-response"
     assert int(np.argmax(scores)) == 1
 
 
@@ -144,7 +161,9 @@ def test_reach_specification_scores_cross_validate_declared_features():
         candidate_augmented_points=candidate_augmented,
     )
 
-    assert policy == "cross-validated-mechanism-quadratic-response"
+    assert policy == (
+        "space-filling-cross-validated-mechanism-quadratic-response"
+    )
     assert int(np.argmax(scores)) == 0
 
 
@@ -192,7 +211,7 @@ def test_reach_specification_scores_reject_unhelpful_declared_features():
         ),
     )
 
-    assert policy == "quadratic-response"
+    assert policy == "response-consensus-quadratic-response"
     assert int(np.argmax(scores)) == 0
 
 
@@ -219,7 +238,7 @@ def test_reach_specification_scores_require_predictive_gain_with_enough_observat
         candidate_augmented_points=candidate_augmented,
     )
 
-    assert policy == "quadratic-response"
+    assert policy == "space-filling-quadratic-response"
     assert np.isfinite(scores).all()
 
 
@@ -242,5 +261,26 @@ def test_reach_specification_scores_admit_gp_only_after_six_observations_per_dim
         np.asarray([0.7, 0.6, 0.7]),
     )
 
-    assert before_policy == "quadratic-response"
-    assert admitted_policy == "gp-quadratic-response"
+    assert before_policy == "space-filling-quadratic-response"
+    assert admitted_policy == "gp-space-filling-quadratic-response"
+
+
+def test_reach_specification_scores_reject_euclidean_maximin_above_three_dimensions():
+    rng = np.random.default_rng(42)
+    observed = rng.random((12, 4))
+    distance = (
+        np.sin(observed[:, 0] * 7.0)
+        + np.cos(observed[:, 1] * 5.0)
+        + observed[:, 2] * observed[:, 3]
+    )
+    candidates = rng.random((16, 4))
+
+    _, policy = _reach_specification_scores(
+        observed,
+        distance,
+        candidates,
+        np.full(len(candidates), 0.5),
+    )
+
+    assert "space-filling" not in policy
+    assert policy.endswith("quadratic-response")

@@ -12,9 +12,9 @@ from .feature_transforms import DerivedFeature, expand_inputs
 from .loop import ObjectivePrediction, Suggestion
 
 
-MODEL_VERSION = "botorch-cross-validated-method-routing-v11"
+MODEL_VERSION = "botorch-evidence-routed-exploration-2026-08-23"
 MONOTONIC_PEARSON_FLOOR = 0.75
-MONOTONIC_SPEARMAN_FLOOR = 0.85
+MONOTONIC_SPEARMAN_FLOOR = 0.925
 RAW_LINEAR_RIDGE = 1e-3
 RAW_QUADRATIC_RIDGE = 1e-2
 MECHANISM_QUADRATIC_RIDGE = 1.5e-2
@@ -24,6 +24,9 @@ FEATURE_ADMISSION_RELATIVE_IMPROVEMENT = 0.50
 MINIMUM_OBSERVATIONS_PER_RESPONSE_COEFFICIENT = 3
 GP_PROBABILITY_RANK_WEIGHT = 0.25
 MINIMUM_OBSERVATIONS_PER_GP_DIMENSION = 6
+MINIMUM_OBSERVATIONS_PER_QUADRATIC_DIMENSION = 2
+MAXIMIN_RANK_WEIGHT = 0.60
+MAXIMIN_MAXIMUM_DIMENSIONS = 3
 
 
 def _observation_variance(values: np.ndarray) -> np.ndarray:
@@ -176,15 +179,23 @@ def _reach_specification_scores(
 ) -> tuple[np.ndarray, str]:
     """Select the least-complex response model supported by visible evidence.
 
-    A raw control must show both strong Pearson association and strong monotonic
-    rank association before a linear response surface is admitted. Otherwise,
-    the raw quadratic surface is the conservative default. Declared mechanism
+    Sparse histories remain on a linear response surface until there are two
+    visible observations per raw control. After that point, a raw control must
+    show both strong Pearson association and strong monotonic rank association
+    to retain the linear surface; otherwise, the raw quadratic surface is the
+    conservative default. Declared mechanism
     features admit joint-linear, mechanism-quadratic, and
     joint-quadratic candidates to the same comparison, but an augmented model
     must improve on the best raw model by a fixed relative margin. Candidate
     outcomes are never read by this policy; only revealed observations can
-    admit model complexity. The GP remains responsible for uncertainty and
-    returned predictions, not for overriding the routed response surface.
+    admit model complexity. Strong monotonic evidence uses the linear response
+    rank unchanged. Otherwise, the routed response rank is balanced with a
+    maximin coverage rank on low-dimensional campaigns, where distance remains
+    informative, so that a locally plausible but globally incomplete model
+    cannot spend the whole budget exploiting one region. Higher-dimensional
+    campaigns retain response-model routing because distance concentration
+    makes a generic Euclidean maximin rank unreliable. Once admitted, GP
+    specification probability joins the routed score.
     """
     observed = np.atleast_2d(np.asarray(observed_points, dtype=float))
     distance = np.asarray(observed_distance, dtype=float)
@@ -221,17 +232,42 @@ def _reach_specification_scores(
         raise ValueError("augmented points cannot omit raw controls")
 
     probability_rank = rankdata(probabilities, method="average") / len(candidates)
+    observed_distances = np.sqrt(
+        np.square(candidates[:, None, :] - observed[None, :, :]).sum(axis=2)
+    ).min(axis=1)
+    maximin_rank = rankdata(observed_distances, method="average") / len(candidates)
     gp_probability_admitted = len(observed) >= (
         MINIMUM_OBSERVATIONS_PER_GP_DIMENSION * observed.shape[1]
     )
 
     def finish(response_score: np.ndarray, policy: str) -> tuple[np.ndarray, str]:
+        response_models_agree = int(np.argmin(linear_distance)) == int(
+            np.argmin(raw_quadratic_distance)
+        )
+        maximin_admitted = (
+            not response_models_agree
+            and observed.shape[1] <= MAXIMIN_MAXIMUM_DIMENSIONS
+        )
+        maximin_weight = MAXIMIN_RANK_WEIGHT if maximin_admitted else 0.0
+        response_and_coverage = (
+            (1.0 - maximin_weight) * response_score
+            + maximin_weight * maximin_rank
+        )
+        routed_policy = (
+            f"response-consensus-{policy}"
+            if response_models_agree
+            else (
+                f"space-filling-{policy}"
+                if maximin_admitted
+                else f"response-only-{policy}"
+            )
+        )
         if not gp_probability_admitted:
-            return response_score, policy
+            return response_and_coverage, routed_policy
         return (
-            (1.0 - GP_PROBABILITY_RANK_WEIGHT) * response_score
+            (1.0 - GP_PROBABILITY_RANK_WEIGHT) * response_and_coverage
             + GP_PROBABILITY_RANK_WEIGHT * probability_rank,
-            f"gp-{policy}",
+            f"gp-{routed_policy}",
         )
 
     linear_distance = _ridge_response_predictions(
@@ -257,6 +293,11 @@ def _reach_specification_scores(
                 monotonic_control = True
                 break
     linear_rank = rankdata(-linear_distance, method="average")
+    quadratic_has_minimum_capacity = len(observed) >= (
+        MINIMUM_OBSERVATIONS_PER_QUADRATIC_DIMENSION * observed.shape[1]
+    )
+    if not quadratic_has_minimum_capacity:
+        return linear_rank / len(candidates), "capacity-linear-response"
     if monotonic_control:
         return linear_rank / len(candidates), "dominant-linear-response"
 
