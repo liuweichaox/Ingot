@@ -23,7 +23,7 @@ viz = ["matplotlib>=3.8"]
 dev = ["pytest>=8", "httpx2>=0.1"]
 
 [tool.uv]
-required-version = "==0.11.32"
+required-version = "==0.12.5"
 
 [tool.uv.sources]
 torch = [

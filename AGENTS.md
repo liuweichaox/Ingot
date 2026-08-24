@@ -6,7 +6,7 @@ Ingot is a .NET 10 monorepo with three web applications. Backend code lives unde
 
 ## Build, Test, and Development Commands
 
-Use .NET SDK 10, Node.js 22.22+, uv 0.11.32, Docker, and Docker Compose.
+Use .NET SDK 10, Node.js 22.22+, uv 0.12.5, Docker, and Docker Compose.
 
 - `dotnet restore Ingot.sln` installs .NET dependencies.
 - `dotnet build Ingot.sln` builds all C# projects.

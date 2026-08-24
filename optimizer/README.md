@@ -28,7 +28,7 @@ NumPy/SciPy GP 只保留为冷启动与回归基线；三个有效观察后，�
 
 ## 本地验证
 
-Python 环境统一由 `uv 0.11.32` 管理，不使用手工创建的 venv 或 pip 安装项目依赖：
+Python 环境统一由 `uv 0.12.5` 管理，不使用手工创建的 venv 或 pip 安装项目依赖：
 
 ```bash
 cd optimizer

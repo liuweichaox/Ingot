@@ -27,12 +27,12 @@ if ! command -v uv >/dev/null 2>&1; then
   exit 1
 fi
 uv_command=(uv)
-if [[ "$(uv --version)" != "uv 0.11.32" ]]; then
+if [[ "$(uv --version)" != "uv 0.12.5" ]]; then
   if ! command -v uvx >/dev/null 2>&1; then
-    echo "需要 uv 0.11.32，或可用 uvx 启动锁定版本。" >&2
+    echo "需要 uv 0.12.5，或可用 uvx 启动锁定版本。" >&2
     exit 1
   fi
-  uv_command=(uvx --from uv==0.11.32 uv)
+  uv_command=(uvx --from uv==0.12.5 uv)
 fi
 
 verification_temp="$(mktemp -d)"

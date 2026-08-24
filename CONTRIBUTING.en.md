@@ -19,7 +19,7 @@ Requirements:
 
 - .NET SDK 10;
 - Node.js 22.22+;
-- uv 0.11.32 (uv manages the Python 3.11+ environment);
+- uv 0.12.5 (uv manages the Python 3.11+ environment);
 - Docker and Docker Compose.
 
 ```bash

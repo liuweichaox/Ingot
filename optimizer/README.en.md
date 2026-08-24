@@ -28,7 +28,7 @@ The numerical optimizer directly searches continuous controls only. Comparing mu
 
 ## Local validation
 
-Python environments are managed exclusively with `uv 0.11.32`; do not create a
+Python environments are managed exclusively with `uv 0.12.5`; do not create a
 project venv or install project dependencies with pip:
 
 ```bash

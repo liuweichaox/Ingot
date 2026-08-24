@@ -19,7 +19,7 @@ Ingot 接受代码、设备适配、算法、获授权的公开回放数据、�
 
 - .NET SDK 10；
 - Node.js 22.22+；
-- uv 0.11.32（由 uv 管理 Python 3.11+ 环境）；
+- uv 0.12.5（由 uv 管理 Python 3.11+ 环境）；
 - Docker 与 Docker Compose。
 
 ```bash

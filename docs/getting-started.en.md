@@ -36,7 +36,7 @@ Open `http://127.0.0.1:3001`. Use `demo / demo` for the engineer workflow or `ad
 
 ### Public-data experiment-efficiency validation
 
-This path requires Git and uv 0.11.32 but no database, equipment, or factory data. It checks three explicitly licensed and SHA-256-verified reaction, formulation, and equipment-process datasets together with the frozen protocol and complete result:
+This path requires Git and uv 0.12.5 but no database, equipment, or factory data. It checks three explicitly licensed and SHA-256-verified reaction, formulation, and equipment-process datasets together with the frozen protocol and complete result:
 
 ```bash
 ./scripts/verify-optimizer-acceptance.sh
