@@ -3,27 +3,23 @@
     <img src="apps/website/public/brand/ingot-lockup.svg" alt="Ingot" width="340">
   </a>
 
-  <p><strong>Open-source industrial process optimization / 开源工业工艺优化系统</strong></p>
-  <p>用真实生产数据持续优化工艺。</p>
+  <p><strong>开源工业工艺优化系统</strong></p>
+  <p>将真实运行与质量结果沉淀为可复核的工程证据，指导下一步工艺实验。</p>
 
   [![CI](https://github.com/liuweichaox/Ingot/actions/workflows/ci.yml/badge.svg)](https://github.com/liuweichaox/Ingot/actions/workflows/ci.yml)
   [![License: MIT](https://img.shields.io/badge/license-MIT-E8AD56.svg)](LICENSE)
   [![.NET 10](https://img.shields.io/badge/.NET-10-512BD4.svg)](https://dotnet.microsoft.com/)
-  [![Python 3.12](https://img.shields.io/badge/Python-3.12-3776AB.svg)](https://www.python.org/)
-  [![BoTorch](https://img.shields.io/badge/optimizer-BoTorch-5FD4C8.svg)](https://botorch.org/)
 
-  [三分钟演示](#三分钟看懂-ingot) · [工作原理](#一条完整闭环) · [快速开始](#快速开始) · [验证结果](#现在能做什么) · [参与讨论](https://github.com/liuweichaox/Ingot/discussions)
+  [三分钟演示](#三分钟看懂-ingot) · [快速开始](#快速开始) · [系统架构](#系统架构) · [文档](#文档) · [路线图](#路线图) · [参与讨论](https://github.com/liuweichaox/Ingot/discussions)
 
   简体中文 · [English](README.en.md)
 </div>
 
-![Ingot：从真实运行到工艺优化与验证](apps/website/public/og-readme.zh.svg)
-
 ## Ingot 是什么
 
-Ingot 是一套开源工业工艺优化系统，将现场运行数据和质量结果转化为可复现的实验观察、下一步参数建议和经过验证的工艺操作域。
+Ingot 是一套开源工业工艺优化系统，将现场运行数据和质量结果组织为可复现的实验观察、下一步参数建议和经过验证的工艺操作域。
 
-系统沿同一条数据闭环连接现场采集、运行识别、质量结果、工艺追因和实验设计，再根据问题选择 DOE、响应面或受约束贝叶斯优化方法推荐下一组工艺条件。证据快照、人工审批和影子验证用于约束优化结果如何进入生产；Agent 只负责查询和解释，不是优化或控制主体。
+它将现场采集、运行识别、质量结果、工艺追因和实验设计连接在同一条数据闭环中；再按问题选择 DOE、响应面或受约束贝叶斯优化，推荐下一组待验证的工艺条件。证据快照、人工审批和影子验证约束结果如何进入生产；Agent 只负责查询与解释，不是优化或控制主体。
 
 ## 三分钟看懂 Ingot
 

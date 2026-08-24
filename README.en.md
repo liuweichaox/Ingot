@@ -4,26 +4,22 @@
   </a>
 
   <p><strong>Open-source industrial process optimization</strong></p>
-  <p>Continuously improve industrial processes with real production data.</p>
+  <p>Turn real runs and quality outcomes into reviewable engineering evidence for the next process experiment.</p>
 
   [![CI](https://github.com/liuweichaox/Ingot/actions/workflows/ci.yml/badge.svg)](https://github.com/liuweichaox/Ingot/actions/workflows/ci.yml)
   [![License: MIT](https://img.shields.io/badge/license-MIT-E8AD56.svg)](LICENSE)
   [![.NET 10](https://img.shields.io/badge/.NET-10-512BD4.svg)](https://dotnet.microsoft.com/)
-  [![Python 3.12](https://img.shields.io/badge/Python-3.12-3776AB.svg)](https://www.python.org/)
-  [![BoTorch](https://img.shields.io/badge/optimizer-BoTorch-5FD4C8.svg)](https://botorch.org/)
 
-  [3-minute demo](#understand-ingot-in-three-minutes) · [How it works](#one-complete-loop) · [Quickstart](#quickstart) · [Evidence](#what-works-today) · [Discussions](https://github.com/liuweichaox/Ingot/discussions)
+  [3-minute demo](#understand-ingot-in-three-minutes) · [Quickstart](#quickstart) · [Architecture](#architecture) · [Documentation](#documentation) · [Roadmap](#roadmap) · [Discussions](https://github.com/liuweichaox/Ingot/discussions)
 
   [简体中文](README.md) · English
 </div>
 
-![Ingot: from real runs to process optimization and validation](apps/website/public/og-readme.en.svg)
-
 ## What Ingot is
 
-Ingot is an open-source industrial process optimization system that turns factory runs and quality outcomes into reproducible observations, next-step parameter recommendations, and validated operating regions.
+Ingot is an open-source industrial process optimization system that organizes factory runs and quality outcomes into reproducible observations, next-step parameter recommendations, and validated operating regions.
 
-The system connects field acquisition, run identification, quality outcomes, process diagnosis, and experimental design in one data loop, then selects DOE, response-surface, or constrained Bayesian optimization methods to recommend the next process conditions. Evidence snapshots, human approval, and shadow validation govern how optimization results enter production; Agent is a query and explanation interface, not the optimization or control core.
+It connects field acquisition, run identification, quality outcomes, process diagnosis, and experimental design in one data loop; then selects DOE, response-surface, or constrained Bayesian optimization methods for the next conditions to validate. Evidence snapshots, human approval, and shadow validation govern how results enter production; Agent is a query and explanation interface, not the optimization or control core.
 
 ## Understand Ingot in three minutes
 
