@@ -140,9 +140,35 @@ Ingot 不把某一种“先进算法”固定成所有问题的答案：
 
 ## 系统架构
 
-![Ingot 系统架构：现场系统、Edge、Platform、Optimizer、Agent 与工程师之间的边界](apps/website/public/architecture.zh.svg)
+```mermaid
+flowchart LR
+    Engineer[工艺工程师] -->|配置、录入、审核| Web[Platform Web]
+    Equipment[现场设备（可选）] -->|直接采集| Edge[Edge ConnectorHost]
 
-Platform 是厂内业务记录源；Optimizer 是无状态数值服务；Agent 只能使用授权工具访问结构化事实。Edge 与 Platform 即使部署在同一台机器，也保持独立进程、存储和故障恢复。
+    subgraph Ingot[Ingot 当前运行边界]
+        direction LR
+        Web -->|HTTPS / JSON| Api[Platform API<br/>业务记录 · 证据装配<br/>Agent 编排：授权只读工具]
+        Edge -->|运行事件 / HTTPS| Api
+        Api -->|读写| Database[(PostgreSQL + TimescaleDB<br/>业务记录 · 时序数据)]
+        Worker[Platform Worker<br/>后台任务 · 知识处理] -->|读写| Database
+        Api -->|计算请求| Optimizer[Optimizer<br/>无状态数值服务]
+        Worker -->|后台计算| Optimizer
+    end
+
+    classDef person fill:#F8FAFC,stroke:#64748B,color:#0F172A,stroke-width:1.5px;
+    classDef edge fill:#ECFDF5,stroke:#0F766E,color:#0F172A,stroke-width:1.5px;
+    classDef platform fill:#F0FDFA,stroke:#0F766E,color:#0F172A,stroke-width:1.5px;
+    classDef storage fill:#FFFFFF,stroke:#475569,color:#0F172A,stroke-width:1.5px;
+    classDef compute fill:#FFFBEB,stroke:#A16207,color:#0F172A,stroke-width:1.5px;
+    class Engineer,Equipment person;
+    class Edge edge;
+    class Web,Api,Worker platform;
+    class Database storage;
+    class Optimizer compute;
+    style Ingot fill:#FFFFFF,stroke:#0F766E,stroke-width:1.5px
+```
+
+Platform API 是当前产品内业务记录与证据的记录源；Platform Worker 是独立后台进程；Optimizer 是无状态数值服务；Agent 编排在 Platform API 内运行，只能通过授权只读工具访问结构化事实。Edge 是可选的现场直接采集能力，与 Platform 即使部署在同一台机器，也保持独立进程、存储和故障恢复。当前架构不假设 MES、QMS 或 LIMS 对接。
 
 ## 快速开始
 

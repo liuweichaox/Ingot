@@ -140,9 +140,35 @@ See [Optimizer experiment-efficiency validation](tools/public-validation/README.
 
 ## Architecture
 
-![Ingot system architecture: boundaries between field systems, Edge, Platform, Optimizer, Agent, and process engineers](apps/website/public/architecture.en.svg)
+```mermaid
+flowchart LR
+    Engineer[Process engineer] -->|Configures, records, and reviews| Web[Platform Web]
+    Equipment[Field equipment (optional)] -->|Direct acquisition| Edge[Edge ConnectorHost]
 
-Platform is the factory system of record. Optimizer is a stateless numerical service. Agent can access structured facts only through authorized tools. Edge and Platform keep independent processes, storage, and recovery even when deployed on one physical host.
+    subgraph Ingot[Ingot current runtime boundary]
+        direction LR
+        Web -->|HTTPS / JSON| Api[Platform API<br/>Business records · evidence assembly<br/>Agent orchestration: authorised read-only tools]
+        Edge -->|Run events / HTTPS| Api
+        Api -->|Reads and writes| Database[(PostgreSQL + TimescaleDB<br/>Business records · time-series data)]
+        Worker[Platform Worker<br/>Background jobs · knowledge processing] -->|Reads and writes| Database
+        Api -->|Calculation request| Optimizer[Optimizer<br/>Stateless numerical service]
+        Worker -->|Background calculation| Optimizer
+    end
+
+    classDef person fill:#F8FAFC,stroke:#64748B,color:#0F172A,stroke-width:1.5px;
+    classDef edge fill:#ECFDF5,stroke:#0F766E,color:#0F172A,stroke-width:1.5px;
+    classDef platform fill:#F0FDFA,stroke:#0F766E,color:#0F172A,stroke-width:1.5px;
+    classDef storage fill:#FFFFFF,stroke:#475569,color:#0F172A,stroke-width:1.5px;
+    classDef compute fill:#FFFBEB,stroke:#A16207,color:#0F172A,stroke-width:1.5px;
+    class Engineer,Equipment person;
+    class Edge edge;
+    class Web,Api,Worker platform;
+    class Database storage;
+    class Optimizer compute;
+    style Ingot fill:#FFFFFF,stroke:#0F766E,stroke-width:1.5px
+```
+
+Platform API is the current product record for business facts and evidence; Platform Worker is an independent background process; Optimizer is a stateless numerical service; and Agent orchestration runs inside Platform API, accessing structured facts only through authorised read-only tools. Edge is optional direct field acquisition and retains an independent process, storage, and recovery lifecycle even when deployed on the same host as Platform. The current architecture does not assume MES, QMS, or LIMS integration.
 
 ## Quickstart
 
