@@ -9,6 +9,14 @@
   [![CI](https://github.com/liuweichaox/Ingot/actions/workflows/ci.yml/badge.svg)](https://github.com/liuweichaox/Ingot/actions/workflows/ci.yml)
   [![License: MIT](https://img.shields.io/badge/license-MIT-E8AD56.svg)](LICENSE)
   [![.NET 10](https://img.shields.io/badge/.NET-10-512BD4.svg)](https://dotnet.microsoft.com/)
+  [![React 19](https://img.shields.io/badge/React-19-61DAFB.svg)](https://react.dev/)
+  [![Vite 8](https://img.shields.io/badge/Vite-8-646CFF.svg)](https://vite.dev/)
+  [![Python 3.12](https://img.shields.io/badge/Python-3.12-3776AB.svg)](https://www.python.org/)
+  [![PyTorch](https://img.shields.io/badge/PyTorch-2.2%2B-EE4C2C.svg)](https://pytorch.org/)
+  [![BoTorch](https://img.shields.io/badge/BoTorch-0.18-5FD4C8.svg)](https://botorch.org/)
+  [![PostgreSQL 17](https://img.shields.io/badge/PostgreSQL-17-4169E1.svg)](https://www.postgresql.org/)
+  [![TimescaleDB](https://img.shields.io/badge/TimescaleDB-2.28-FDB515.svg)](https://www.timescale.com/)
+  [![Docker Compose](https://img.shields.io/badge/Docker_Compose-v2-2496ED.svg)](https://docs.docker.com/compose/)
 
   [三分钟演示](#三分钟看懂-ingot) · [快速开始](#快速开始) · [系统架构](#系统架构) · [文档](#文档) · [路线图](#路线图) · [参与讨论](https://github.com/liuweichaox/Ingot/discussions)
 
