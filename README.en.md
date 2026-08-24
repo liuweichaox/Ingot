@@ -11,11 +11,11 @@
   [![.NET 10](https://img.shields.io/badge/.NET-10-512BD4.svg)](https://dotnet.microsoft.com/)
   [![React 19](https://img.shields.io/badge/React-19-61DAFB.svg)](https://react.dev/)
   [![Vite 8](https://img.shields.io/badge/Vite-8-646CFF.svg)](https://vite.dev/)
+  [![PostgreSQL 17](https://img.shields.io/badge/PostgreSQL-17-4169E1.svg)](https://www.postgresql.org/)
+  [![TimescaleDB](https://img.shields.io/badge/TimescaleDB-2.28-FDB515.svg)](https://www.timescale.com/)
   [![Python 3.12](https://img.shields.io/badge/Python-3.12-3776AB.svg)](https://www.python.org/)
   [![PyTorch](https://img.shields.io/badge/PyTorch-2.2%2B-EE4C2C.svg)](https://pytorch.org/)
   [![BoTorch](https://img.shields.io/badge/BoTorch-0.18-5FD4C8.svg)](https://botorch.org/)
-  [![PostgreSQL 17](https://img.shields.io/badge/PostgreSQL-17-4169E1.svg)](https://www.postgresql.org/)
-  [![TimescaleDB](https://img.shields.io/badge/TimescaleDB-2.28-FDB515.svg)](https://www.timescale.com/)
   [![Docker Compose](https://img.shields.io/badge/Docker_Compose-v2-2496ED.svg)](https://docs.docker.com/compose/)
 
   [3-minute demo](#understand-ingot-in-three-minutes) · [Quickstart](#quickstart) · [Architecture](#architecture) · [Documentation](#documentation) · [Roadmap](#roadmap) · [Discussions](https://github.com/liuweichaox/Ingot/discussions)
