@@ -1,0 +1,126 @@
+<svg viewBox="0 0 1200 630" xmlns="http://www.w3.org/2000/svg" font-family="Inter, 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#050C0A"/><stop offset="1" stop-color="#0A1713"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFCE57"/><stop offset="1" stop-color="#F09A24"/>
+    </linearGradient>
+    <linearGradient id="steel" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#5B6E80"/><stop offset="1" stop-color="#3C4A58"/>
+    </linearGradient>
+    <radialGradient id="halo" cx="0.5" cy="0.5" r="0.5">
+      <stop stop-color="#5FD4C8" stop-opacity="0.16"/><stop offset="1" stop-color="#5FD4C8" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="band" x1="0" y1="0" x2="0" y2="1">
+      <stop stop-color="#5FD4C8" stop-opacity="0.16"/><stop offset="1" stop-color="#5FD4C8" stop-opacity="0.05"/>
+    </linearGradient>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse">
+      <path d="M32 0H0V32" fill="none" stroke="#5FD4C8" stroke-opacity="0.05"/>
+    </pattern>
+  </defs>
+
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <rect x="640" width="560" height="630" fill="url(#grid)"/>
+  <circle cx="900" cy="300" r="280" fill="url(#halo)"/>
+  <rect x="20" y="20" width="1160" height="590" rx="22" fill="none" stroke="#E8AD56" stroke-opacity="0.5"/>
+
+  <!-- Eyebrow -->
+  <text x="64" y="90" font-size="14" font-weight="700" fill="#5FD4C8" letter-spacing="3">开源 · 工艺追因与优化系统</text>
+
+  <!-- Logo lockup -->
+  <g transform="translate(64,112)">
+    <svg width="92" height="92" viewBox="0 0 128 128">
+      <g stroke-linejoin="round">
+        <path d="M43.5 30 H84.5 L91.5 64 H36.5 Z" fill="url(#gold)" stroke="url(#gold)" stroke-width="4"/>
+        <path d="M47 36 H81" fill="none" stroke="#FFEDC0" stroke-width="3" stroke-linecap="round" opacity="0.8"/>
+        <path d="M13 70 H54 L61 104 H6 Z" fill="url(#steel)" stroke="url(#steel)" stroke-width="4"/>
+        <path d="M74 70 H115 L122 104 H67 Z" fill="url(#steel)" stroke="url(#steel)" stroke-width="4"/>
+      </g>
+    </svg>
+    <text x="108" y="66" font-size="58" font-weight="700" letter-spacing="-1" fill="#EEF5F1">Ingot</text>
+  </g>
+
+  <!-- Headline -->
+  <g transform="translate(64,268)">
+    <text y="0" font-size="46" font-weight="800" fill="#F4F8F6">让真实运行，</text>
+    <text y="58" font-size="46" font-weight="800" fill="#F4F8F6">成为可验证的工艺证据。</text>
+  </g>
+
+  <!-- Subheadline -->
+  <text x="64" y="372" font-size="19" fill="#9FB0AA">看清这次运行，做对下一项实验。</text>
+
+  <!-- Divider -->
+  <path d="M64 410h300" stroke="#E8AD56" stroke-opacity="0.4" stroke-width="1.5"/>
+
+  <!-- Stack chips -->
+  <g font-size="13" font-weight="600" fill="#9FB0AA">
+    <circle cx="70" cy="446" r="3" fill="#E8AD56"/><text x="82" y="450">.NET 10</text>
+    <circle cx="170" cy="446" r="3" fill="#E8AD56"/><text x="182" y="450">Python + BoTorch</text>
+    <circle cx="340" cy="446" r="3" fill="#E8AD56"/><text x="352" y="450">PostgreSQL + TimescaleDB</text>
+  </g>
+
+  <!-- Footer -->
+  <g font-size="15" font-weight="600" fill="#7C9089">
+    <text x="64" y="560">ingotstack.com</text>
+    <circle cx="210" cy="555" r="2.5" fill="#3E5A52"/>
+    <text x="226" y="560">github.com/liuweichaox/Ingot</text>
+    <circle cx="500" cy="555" r="2.5" fill="#3E5A52"/>
+    <text x="516" y="560">MIT License</text>
+  </g>
+
+  <!-- ================= Right panel: run comparison chart ================= -->
+  <g transform="translate(660,90)">
+    <rect width="476" height="450" rx="18" fill="#0E1D19" stroke="#5FD4C8" stroke-opacity="0.28"/>
+    <text x="28" y="40" font-size="13" font-weight="700" fill="#5FD4C8" letter-spacing="1.5">运行对比 · 真实示例</text>
+    <text x="448" y="40" font-size="11" fill="#5C7A72" text-anchor="end">面形误差 (μm)</text>
+
+    <!-- grid -->
+    <g stroke="#5FD4C8" stroke-opacity="0.08">
+      <line x1="28" y1="90" x2="448" y2="90"/>
+      <line x1="28" y1="150" x2="448" y2="150"/>
+      <line x1="28" y1="210" x2="448" y2="210"/>
+      <line x1="28" y1="270" x2="448" y2="270"/>
+      <line x1="28" y1="330" x2="448" y2="330"/>
+    </g>
+
+    <!-- validated band -->
+    <rect x="28" y="210" width="420" height="80" fill="url(#band)"/>
+    <line x1="28" y1="210" x2="448" y2="210" stroke="#E8AD56" stroke-width="1.4" stroke-dasharray="5 4"/>
+    <text x="448" y="204" font-size="11" fill="#E8AD56" text-anchor="end">上限 0.35 μm</text>
+    <text x="34" y="226" font-size="11" fill="#5FD4C8" fill-opacity="0.8">验证过的工艺操作域</text>
+
+    <!-- qualified run line (cyan) -->
+    <path d="M28,258 C90,246 150,262 210,250 C270,240 320,256 380,246 C405,242 428,244 448,240"
+          fill="none" stroke="#5FD4C8" stroke-width="3.2" stroke-linecap="round"/>
+
+    <!-- flagged run line (gold), deviates above the band -->
+    <path d="M28,266 C90,256 150,268 210,258 C255,250 275,180 305,140 C325,116 355,108 390,112 C412,114 432,118 448,122"
+          fill="none" stroke="#E8AD56" stroke-width="3.2" stroke-linecap="round"/>
+
+    <!-- reference marker on qualified run -->
+    <circle cx="245" cy="253" r="5" fill="#0E1D19" stroke="#5FD4C8" stroke-width="2.5"/>
+    <text x="245" y="235" font-size="12" font-weight="700" fill="#5FD4C8" text-anchor="middle">0.22 μm</text>
+
+    <!-- deviation marker on flagged run -->
+    <circle cx="305" cy="140" r="6" fill="#0E1D19" stroke="#E8AD56" stroke-width="3"/>
+    <circle cx="305" cy="140" r="11" fill="none" stroke="#E8AD56" stroke-opacity="0.4" stroke-width="1.5"/>
+    <text x="305" y="112" font-size="13" font-weight="800" fill="#FFD68F" text-anchor="middle">0.48 μm</text>
+    <text x="305" y="368" font-size="10.5" fill="#8DA19A" text-anchor="middle">RUN-2026-0821-005</text>
+
+    <!-- x axis -->
+    <line x1="28" y1="330" x2="448" y2="330" stroke="#5FD4C8" stroke-opacity="0.18"/>
+    <text x="28" y="352" font-size="11" fill="#5C7A72">运行起点</text>
+    <text x="448" y="352" font-size="11" fill="#5C7A72" text-anchor="end">检验完成</text>
+    <text x="238" y="352" font-size="11" fill="#5C7A72" text-anchor="middle">工艺阶段</text>
+
+    <!-- legend -->
+    <g font-size="12.5" font-weight="600">
+      <circle cx="34" cy="400" r="5" fill="#5FD4C8"/>
+      <text x="48" y="404" fill="#CBD8D3">合格运行</text>
+      <circle cx="150" cy="400" r="5" fill="#E8AD56"/>
+      <text x="164" y="404" fill="#CBD8D3">超差运行</text>
+    </g>
+    <text x="448" y="404" font-size="11" fill="#5C7A72" text-anchor="end">下一步：候选原因 → 验证实验</text>
+  </g>
+</svg>

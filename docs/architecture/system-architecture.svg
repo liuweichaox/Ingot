@@ -1,0 +1,185 @@
+<svg viewBox="0 0 1440 990" xmlns="http://www.w3.org/2000/svg" font-family="Inter, 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0L10 5L0 10z" fill="#0F766E"/>
+    </marker>
+    <marker id="arrowGray" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0L10 5L0 10z" fill="#94A3B8"/>
+    </marker>
+    <marker id="arrowAmber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0L10 5L0 10z" fill="#A16207"/>
+    </marker>
+    <linearGradient id="titleAccent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#E8AD56"/>
+      <stop offset="1" stop-color="#5FD4C8"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1440" height="990" fill="#FFFFFF"/>
+
+  <!-- Title -->
+  <text x="60" y="46" font-size="28" font-weight="800" fill="#0F172A" letter-spacing="0.3">Ingot 系统架构</text>
+  <text x="60" y="70" font-size="14" fill="#64748B">工艺工程师、现场数据、业务记录与数值服务之间的组件与数据流边界</text>
+  <rect x="60" y="84" width="160" height="4" rx="2" fill="url(#titleAccent)"/>
+
+  <!-- ============ Actors row ============ -->
+  <!-- Engineer -->
+  <g>
+    <rect x="150" y="120" width="300" height="86" rx="12" fill="#F8FAFC" stroke="#64748B" stroke-width="1.5"/>
+    <rect x="166" y="134" width="72" height="18" rx="9" fill="#64748B"/>
+    <text x="202" y="147" font-size="9.5" font-weight="700" fill="#FFFFFF" text-anchor="middle" letter-spacing="1">外部 · 人员</text>
+    <text x="300" y="180" font-size="18" font-weight="700" fill="#0F172A" text-anchor="middle">工艺工程师</text>
+    <text x="300" y="198" font-size="12" fill="#64748B" text-anchor="middle">定义目标、审核证据、批准实验</text>
+  </g>
+
+  <!-- Field sources -->
+  <g>
+    <rect x="900" y="120" width="430" height="86" rx="12" fill="#F8FAFC" stroke="#64748B" stroke-width="1.5" stroke-dasharray="6 5"/>
+    <rect x="916" y="134" width="96" height="18" rx="9" fill="#64748B"/>
+    <text x="964" y="147" font-size="9.5" font-weight="700" fill="#FFFFFF" text-anchor="middle" letter-spacing="1">外部 · 可选</text>
+    <text x="1115" y="180" font-size="18" font-weight="700" fill="#0F172A" text-anchor="middle">现场数据源（可选）</text>
+    <text x="1115" y="198" font-size="12" fill="#64748B" text-anchor="middle">控制系统 · 仪器 · 视觉 · 检验 · MES</text>
+  </g>
+
+  <!-- Arrows: actors -> entry -->
+  <line x1="300" y1="206" x2="300" y2="288" stroke="#64748B" stroke-width="1.8" marker-end="url(#arrowGray)"/>
+  <text x="312" y="252" font-size="11.5" fill="#475569">配置 · 录入 · 审核</text>
+
+  <line x1="1115" y1="206" x2="1115" y2="288" stroke="#64748B" stroke-width="1.8" stroke-dasharray="5 4" marker-end="url(#arrowGray)"/>
+  <text x="1000" y="252" font-size="11.5" fill="#475569" text-anchor="end">直接采集（可选）</text>
+
+  <!-- ============ Boundary ============ -->
+  <rect x="60" y="230" width="1320" height="642" rx="18" fill="#FFFFFF" stroke="#0F766E" stroke-width="1.8"/>
+  <text x="92" y="262" font-size="13" font-weight="700" fill="#0F766E" letter-spacing="1.5">INGOT 当前运行边界</text>
+  <text x="1348" y="262" font-size="11.5" fill="#94A3B8" text-anchor="end">代码项目边界 ≠ 部署边界</text>
+
+  <!-- Entry row -->
+  <!-- Platform Web -->
+  <g>
+    <rect x="140" y="292" width="320" height="88" rx="12" fill="#F0FDFA" stroke="#0F766E" stroke-width="1.5"/>
+    <rect x="156" y="306" width="68" height="18" rx="9" fill="#0F766E"/>
+    <text x="190" y="319" font-size="9.5" font-weight="700" fill="#FFFFFF" text-anchor="middle" letter-spacing="1">PLATFORM</text>
+    <text x="300" y="345" font-size="18" font-weight="700" fill="#0F172A" text-anchor="middle">Platform Web</text>
+    <text x="300" y="363" font-size="12" fill="#334155" text-anchor="middle">工程师工作台</text>
+    <text x="450" y="374" font-size="10.5" font-family="ui-monospace, Menlo, monospace" fill="#94A3B8" text-anchor="end">apps/platform · React</text>
+  </g>
+
+  <!-- Edge ConnectorHost -->
+  <g>
+    <rect x="925" y="292" width="380" height="88" rx="12" fill="#ECFDF5" stroke="#0F766E" stroke-width="1.5"/>
+    <rect x="941" y="306" width="48" height="18" rx="9" fill="#0F766E"/>
+    <text x="965" y="319" font-size="9.5" font-weight="700" fill="#FFFFFF" text-anchor="middle" letter-spacing="1">EDGE</text>
+    <text x="1115" y="345" font-size="18" font-weight="700" fill="#0F172A" text-anchor="middle">Edge ConnectorHost</text>
+    <text x="1115" y="363" font-size="12" fill="#334155" text-anchor="middle">协议 · 映射 · 执行边界 · 缓存</text>
+    <text x="1295" y="374" font-size="10.5" font-family="ui-monospace, Menlo, monospace" fill="#94A3B8" text-anchor="end">src/edge · Ingot.Edge.*</text>
+  </g>
+
+  <!-- Arrows entry -> Api -->
+  <line x1="300" y1="380" x2="300" y2="428" stroke="#0F766E" stroke-width="1.8" marker-end="url(#arrow)"/>
+  <text x="312" y="410" font-size="11.5" fill="#0F766E">HTTPS / JSON</text>
+
+  <line x1="1115" y1="380" x2="1115" y2="428" stroke="#0F766E" stroke-width="1.8" marker-end="url(#arrow)"/>
+  <text x="1103" y="410" font-size="11.5" fill="#0F766E" text-anchor="end">运行事件 / HTTPS</text>
+
+  <!-- Platform API core -->
+  <g>
+    <rect x="170" y="430" width="1080" height="192" rx="14" fill="#F0FDFA" stroke="#0F766E" stroke-width="2"/>
+    <rect x="192" y="450" width="68" height="18" rx="9" fill="#0F766E"/>
+    <text x="226" y="463" font-size="9.5" font-weight="700" fill="#FFFFFF" text-anchor="middle" letter-spacing="1">PLATFORM</text>
+    <text x="710" y="472" font-size="23" font-weight="800" fill="#0F172A" text-anchor="middle">Platform API</text>
+    <text x="710" y="494" font-size="13" fill="#334155" text-anchor="middle">厂内业务记录源 · 一次真实运行的证据装配</text>
+
+    <!-- inner capability chips -->
+    <g>
+      <rect x="200" y="515" width="320" height="72" rx="10" fill="#FFFFFF" stroke="#5FD4C8" stroke-width="1.3"/>
+      <text x="360" y="540" font-size="13" font-weight="700" fill="#0F172A" text-anchor="middle">业务记录 · 证据装配</text>
+      <text x="360" y="559" font-size="11" fill="#64748B" text-anchor="middle">运行、检验、实验的记录源</text>
+      <text x="360" y="576" font-size="11" fill="#64748B" text-anchor="middle">版本 · 来源 · 权限 · 审计</text>
+    </g>
+    <g>
+      <rect x="550" y="515" width="320" height="72" rx="10" fill="#FFFFFF" stroke="#5FD4C8" stroke-width="1.3"/>
+      <text x="710" y="540" font-size="13" font-weight="700" fill="#0F172A" text-anchor="middle">确定性分析</text>
+      <text x="710" y="559" font-size="11" fill="#64748B" text-anchor="middle">质量 · 匹配 · 比较 · 特征</text>
+      <text x="710" y="576" font-size="11" fill="#64748B" text-anchor="middle">可复核统计计算</text>
+    </g>
+    <g>
+      <rect x="900" y="515" width="320" height="72" rx="10" fill="#FFFFFF" stroke="#E8AD56" stroke-width="1.3" stroke-dasharray="5 4"/>
+      <text x="1060" y="540" font-size="13" font-weight="700" fill="#0F172A" text-anchor="middle">Agent 编排</text>
+      <text x="1060" y="559" font-size="11" fill="#64748B" text-anchor="middle">授权只读工具 · 证据说明</text>
+      <text x="1060" y="576" font-size="11" fill="#64748B" text-anchor="middle">src/agent · 同进程内运行</text>
+    </g>
+
+    <text x="1238" y="612" font-size="10.5" font-family="ui-monospace, Menlo, monospace" fill="#94A3B8" text-anchor="end">src/platform · Ingot.Platform.Api</text>
+  </g>
+
+  <!-- Services row -->
+  <!-- Worker -->
+  <g>
+    <rect x="110" y="662" width="340" height="98" rx="12" fill="#F0FDFA" stroke="#0F766E" stroke-width="1.5"/>
+    <rect x="126" y="676" width="68" height="18" rx="9" fill="#0F766E"/>
+    <text x="160" y="689" font-size="9.5" font-weight="700" fill="#FFFFFF" text-anchor="middle" letter-spacing="1">PLATFORM</text>
+    <text x="280" y="716" font-size="17" font-weight="700" fill="#0F172A" text-anchor="middle">Platform Worker</text>
+    <text x="280" y="734" font-size="12" fill="#334155" text-anchor="middle">后台任务 · 知识处理</text>
+    <text x="280" y="750" font-size="10.5" font-family="ui-monospace, Menlo, monospace" fill="#94A3B8" text-anchor="middle">独立后台进程</text>
+  </g>
+
+  <!-- Optimizer -->
+  <g>
+    <rect x="530" y="662" width="360" height="98" rx="12" fill="#FFFBEB" stroke="#A16207" stroke-width="1.5"/>
+    <rect x="546" y="676" width="82" height="18" rx="9" fill="#A16207"/>
+    <text x="587" y="689" font-size="9.5" font-weight="700" fill="#FFFFFF" text-anchor="middle" letter-spacing="1">COMPUTE</text>
+    <text x="710" y="716" font-size="17" font-weight="700" fill="#0F172A" text-anchor="middle">Optimizer</text>
+    <text x="710" y="734" font-size="12" fill="#334155" text-anchor="middle">模型 · 约束判断 · 实验建议 · 无状态数值服务</text>
+    <text x="710" y="750" font-size="10.5" font-family="ui-monospace, Menlo, monospace" fill="#94A3B8" text-anchor="middle">optimizer/ · Python + BoTorch</text>
+  </g>
+
+  <!-- Storage -->
+  <g>
+    <rect x="970" y="662" width="340" height="98" rx="12" fill="#FFFFFF" stroke="#475569" stroke-width="1.5"/>
+    <rect x="986" y="676" width="68" height="18" rx="9" fill="#475569"/>
+    <text x="1020" y="689" font-size="9.5" font-weight="700" fill="#FFFFFF" text-anchor="middle" letter-spacing="1">STORAGE</text>
+    <text x="1140" y="712" font-size="15.5" font-weight="700" fill="#0F172A" text-anchor="middle">PostgreSQL + TimescaleDB</text>
+    <text x="1140" y="730" font-size="12" fill="#334155" text-anchor="middle">业务记录 · 时序数据</text>
+    <text x="1140" y="747" font-size="12" fill="#334155" text-anchor="middle">附件与工艺知识</text>
+  </g>
+
+  <!-- Arrows: Api -> Optimizer -->
+  <line x1="710" y1="622" x2="710" y2="660" stroke="#A16207" stroke-width="1.8" marker-end="url(#arrowAmber)"/>
+  <text x="722" y="646" font-size="11.5" fill="#A16207">计算请求</text>
+
+  <!-- Worker -> Optimizer -->
+  <line x1="450" y1="711" x2="528" y2="711" stroke="#0F766E" stroke-width="1.8" marker-end="url(#arrow)"/>
+  <text x="489" y="702" font-size="10.5" fill="#0F766E" text-anchor="middle">后台计算</text>
+
+  <!-- Api -> Storage -->
+  <path d="M1180,622 C1180,648 1160,648 1140,660" fill="none" stroke="#475569" stroke-width="1.8" marker-end="url(#arrowGray)"/>
+  <text x="1192" y="646" font-size="11.5" fill="#475569">读写</text>
+
+  <!-- Worker -> Storage (under arc) -->
+  <path d="M280,762 C280,818 1140,818 1140,762" fill="none" stroke="#475569" stroke-width="1.8" stroke-dasharray="1 0" marker-end="url(#arrowGray)"/>
+  <text x="710" y="814" font-size="11.5" fill="#475569" text-anchor="middle">读写</text>
+
+  <!-- ============ Legend ============ -->
+  <g font-size="11.5" fill="#334155">
+    <rect x="150" y="898" width="16" height="16" rx="4" fill="#F8FAFC" stroke="#64748B" stroke-width="1.3"/>
+    <text x="174" y="910">外部 / 人员</text>
+
+    <rect x="330" y="898" width="16" height="16" rx="4" fill="#ECFDF5" stroke="#0F766E" stroke-width="1.3"/>
+    <text x="354" y="910">Edge 现场层</text>
+
+    <rect x="510" y="898" width="16" height="16" rx="4" fill="#F0FDFA" stroke="#0F766E" stroke-width="1.3"/>
+    <text x="534" y="910">Platform 平台层</text>
+
+    <rect x="720" y="898" width="16" height="16" rx="4" fill="#FFFBEB" stroke="#A16207" stroke-width="1.3"/>
+    <text x="744" y="910">Optimizer 计算层</text>
+
+    <rect x="930" y="898" width="16" height="16" rx="4" fill="#FFFFFF" stroke="#475569" stroke-width="1.3"/>
+    <text x="954" y="910">数据存储</text>
+
+    <line x1="1090" y1="906" x2="1120" y2="906" stroke="#0F172A" stroke-width="1.5" stroke-dasharray="5 4"/>
+    <text x="1128" y="910">可选 / 同进程</text>
+  </g>
+
+  <text x="720" y="944" font-size="12" fill="#64748B" text-anchor="middle">Edge 与 Platform 即使部署在同一台机器，也保持独立进程、存储与故障恢复。</text>
+  <text x="720" y="964" font-size="12" fill="#64748B" text-anchor="middle">当前架构不假设 MES、QMS 或 LIMS 对接；这些系统至多作为 Edge 的现场数据源之一。</text>
+</svg>

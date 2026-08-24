@@ -1,0 +1,185 @@
+<svg viewBox="0 0 1440 990" xmlns="http://www.w3.org/2000/svg" font-family="Inter, 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0L10 5L0 10z" fill="#0F766E"/>
+    </marker>
+    <marker id="arrowGray" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0L10 5L0 10z" fill="#94A3B8"/>
+    </marker>
+    <marker id="arrowAmber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0L10 5L0 10z" fill="#A16207"/>
+    </marker>
+    <linearGradient id="titleAccent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#E8AD56"/>
+      <stop offset="1" stop-color="#5FD4C8"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1440" height="990" fill="#FFFFFF"/>
+
+  <!-- Title -->
+  <text x="60" y="46" font-size="28" font-weight="800" fill="#0F172A" letter-spacing="0.3">Ingot System Architecture</text>
+  <text x="60" y="70" font-size="14" fill="#64748B">Component and data-flow boundary between engineers, field data, the system of record, and numerical services</text>
+  <rect x="60" y="84" width="160" height="4" rx="2" fill="url(#titleAccent)"/>
+
+  <!-- ============ Actors row ============ -->
+  <!-- Engineer -->
+  <g>
+    <rect x="150" y="120" width="300" height="86" rx="12" fill="#F8FAFC" stroke="#64748B" stroke-width="1.5"/>
+    <rect x="166" y="134" width="152" height="18" rx="9" fill="#64748B"/>
+    <text x="242" y="147" font-size="9.5" font-weight="700" fill="#FFFFFF" text-anchor="middle" letter-spacing="0.6">EXTERNAL · PEOPLE</text>
+    <text x="300" y="180" font-size="18" font-weight="700" fill="#0F172A" text-anchor="middle">Process Engineer</text>
+    <text x="300" y="198" font-size="12" fill="#64748B" text-anchor="middle">Sets goals, reviews evidence, approves experiments</text>
+  </g>
+
+  <!-- Field sources -->
+  <g>
+    <rect x="900" y="120" width="430" height="86" rx="12" fill="#F8FAFC" stroke="#64748B" stroke-width="1.5" stroke-dasharray="6 5"/>
+    <rect x="916" y="134" width="166" height="18" rx="9" fill="#64748B"/>
+    <text x="999" y="147" font-size="9.5" font-weight="700" fill="#FFFFFF" text-anchor="middle" letter-spacing="0.6">EXTERNAL · OPTIONAL</text>
+    <text x="1115" y="180" font-size="18" font-weight="700" fill="#0F172A" text-anchor="middle">Field Data Sources (optional)</text>
+    <text x="1115" y="198" font-size="12" fill="#64748B" text-anchor="middle">PLC · instruments · vision · inspection · MES</text>
+  </g>
+
+  <!-- Arrows: actors -> entry -->
+  <line x1="300" y1="206" x2="300" y2="288" stroke="#64748B" stroke-width="1.8" marker-end="url(#arrowGray)"/>
+  <text x="312" y="252" font-size="11.5" fill="#475569">Configures, records, reviews</text>
+
+  <line x1="1115" y1="206" x2="1115" y2="288" stroke="#64748B" stroke-width="1.8" stroke-dasharray="5 4" marker-end="url(#arrowGray)"/>
+  <text x="1003" y="252" font-size="11.5" fill="#475569" text-anchor="end">Direct acquisition (optional)</text>
+
+  <!-- ============ Boundary ============ -->
+  <rect x="60" y="230" width="1320" height="642" rx="18" fill="#FFFFFF" stroke="#0F766E" stroke-width="1.8"/>
+  <text x="92" y="262" font-size="13" font-weight="700" fill="#0F766E" letter-spacing="1.5">INGOT CURRENT RUNTIME BOUNDARY</text>
+  <text x="1348" y="262" font-size="11.5" fill="#94A3B8" text-anchor="end">Code boundaries ≠ deployment boundaries</text>
+
+  <!-- Entry row -->
+  <!-- Platform Web -->
+  <g>
+    <rect x="140" y="292" width="320" height="88" rx="12" fill="#F0FDFA" stroke="#0F766E" stroke-width="1.5"/>
+    <rect x="156" y="306" width="68" height="18" rx="9" fill="#0F766E"/>
+    <text x="190" y="319" font-size="9.5" font-weight="700" fill="#FFFFFF" text-anchor="middle" letter-spacing="1">PLATFORM</text>
+    <text x="300" y="345" font-size="18" font-weight="700" fill="#0F172A" text-anchor="middle">Platform Web</text>
+    <text x="300" y="363" font-size="12" fill="#334155" text-anchor="middle">Engineering workbench</text>
+    <text x="450" y="374" font-size="10.5" font-family="ui-monospace, Menlo, monospace" fill="#94A3B8" text-anchor="end">apps/platform · React</text>
+  </g>
+
+  <!-- Edge ConnectorHost -->
+  <g>
+    <rect x="925" y="292" width="380" height="88" rx="12" fill="#ECFDF5" stroke="#0F766E" stroke-width="1.5"/>
+    <rect x="941" y="306" width="48" height="18" rx="9" fill="#0F766E"/>
+    <text x="965" y="319" font-size="9.5" font-weight="700" fill="#FFFFFF" text-anchor="middle" letter-spacing="1">EDGE</text>
+    <text x="1115" y="345" font-size="18" font-weight="700" fill="#0F172A" text-anchor="middle">Edge ConnectorHost</text>
+    <text x="1115" y="363" font-size="12" fill="#334155" text-anchor="middle">Protocols · mapping · process executions · buffering</text>
+    <text x="1295" y="374" font-size="10.5" font-family="ui-monospace, Menlo, monospace" fill="#94A3B8" text-anchor="end">src/edge · Ingot.Edge.*</text>
+  </g>
+
+  <!-- Arrows entry -> Api -->
+  <line x1="300" y1="380" x2="300" y2="428" stroke="#0F766E" stroke-width="1.8" marker-end="url(#arrow)"/>
+  <text x="312" y="410" font-size="11.5" fill="#0F766E">HTTPS / JSON</text>
+
+  <line x1="1115" y1="380" x2="1115" y2="428" stroke="#0F766E" stroke-width="1.8" marker-end="url(#arrow)"/>
+  <text x="1103" y="410" font-size="11.5" fill="#0F766E" text-anchor="end">Run events / HTTPS</text>
+
+  <!-- Platform API core -->
+  <g>
+    <rect x="170" y="430" width="1080" height="192" rx="14" fill="#F0FDFA" stroke="#0F766E" stroke-width="2"/>
+    <rect x="192" y="450" width="68" height="18" rx="9" fill="#0F766E"/>
+    <text x="226" y="463" font-size="9.5" font-weight="700" fill="#FFFFFF" text-anchor="middle" letter-spacing="1">PLATFORM</text>
+    <text x="710" y="472" font-size="23" font-weight="800" fill="#0F172A" text-anchor="middle">Platform API</text>
+    <text x="710" y="494" font-size="13" fill="#334155" text-anchor="middle">Factory system of record · evidence assembly for one real run</text>
+
+    <!-- inner capability chips -->
+    <g>
+      <rect x="200" y="515" width="320" height="72" rx="10" fill="#FFFFFF" stroke="#5FD4C8" stroke-width="1.3"/>
+      <text x="360" y="540" font-size="13" font-weight="700" fill="#0F172A" text-anchor="middle">Business records · evidence assembly</text>
+      <text x="360" y="559" font-size="11" fill="#64748B" text-anchor="middle">Record of runs, inspections, experiments</text>
+      <text x="360" y="576" font-size="11" fill="#64748B" text-anchor="middle">Versions · provenance · access · audit</text>
+    </g>
+    <g>
+      <rect x="550" y="515" width="320" height="72" rx="10" fill="#FFFFFF" stroke="#5FD4C8" stroke-width="1.3"/>
+      <text x="710" y="540" font-size="13" font-weight="700" fill="#0F172A" text-anchor="middle">Deterministic analysis</text>
+      <text x="710" y="559" font-size="11" fill="#64748B" text-anchor="middle">Quality · matching · comparison · features</text>
+      <text x="710" y="576" font-size="11" fill="#64748B" text-anchor="middle">Auditable statistical computation</text>
+    </g>
+    <g>
+      <rect x="900" y="515" width="320" height="72" rx="10" fill="#FFFFFF" stroke="#E8AD56" stroke-width="1.3" stroke-dasharray="5 4"/>
+      <text x="1060" y="540" font-size="13" font-weight="700" fill="#0F172A" text-anchor="middle">Agent orchestration</text>
+      <text x="1060" y="559" font-size="11" fill="#64748B" text-anchor="middle">Authorised read-only tools · evidence</text>
+      <text x="1060" y="576" font-size="11" fill="#64748B" text-anchor="middle">src/agent · runs in-process</text>
+    </g>
+
+    <text x="1238" y="612" font-size="10.5" font-family="ui-monospace, Menlo, monospace" fill="#94A3B8" text-anchor="end">src/platform · Ingot.Platform.Api</text>
+  </g>
+
+  <!-- Services row -->
+  <!-- Worker -->
+  <g>
+    <rect x="110" y="662" width="340" height="98" rx="12" fill="#F0FDFA" stroke="#0F766E" stroke-width="1.5"/>
+    <rect x="126" y="676" width="68" height="18" rx="9" fill="#0F766E"/>
+    <text x="160" y="689" font-size="9.5" font-weight="700" fill="#FFFFFF" text-anchor="middle" letter-spacing="1">PLATFORM</text>
+    <text x="280" y="716" font-size="17" font-weight="700" fill="#0F172A" text-anchor="middle">Platform Worker</text>
+    <text x="280" y="734" font-size="12" fill="#334155" text-anchor="middle">Background jobs · knowledge processing</text>
+    <text x="280" y="750" font-size="10.5" font-family="ui-monospace, Menlo, monospace" fill="#94A3B8" text-anchor="middle">independent background process</text>
+  </g>
+
+  <!-- Optimizer -->
+  <g>
+    <rect x="530" y="662" width="360" height="98" rx="12" fill="#FFFBEB" stroke="#A16207" stroke-width="1.5"/>
+    <rect x="546" y="676" width="82" height="18" rx="9" fill="#A16207"/>
+    <text x="587" y="689" font-size="9.5" font-weight="700" fill="#FFFFFF" text-anchor="middle" letter-spacing="1">COMPUTE</text>
+    <text x="710" y="716" font-size="17" font-weight="700" fill="#0F172A" text-anchor="middle">Optimizer</text>
+    <text x="710" y="734" font-size="12" fill="#334155" text-anchor="middle">Models · constraints · proposals · stateless service</text>
+    <text x="710" y="750" font-size="10.5" font-family="ui-monospace, Menlo, monospace" fill="#94A3B8" text-anchor="middle">optimizer/ · Python + BoTorch</text>
+  </g>
+
+  <!-- Storage -->
+  <g>
+    <rect x="970" y="662" width="340" height="98" rx="12" fill="#FFFFFF" stroke="#475569" stroke-width="1.5"/>
+    <rect x="986" y="676" width="68" height="18" rx="9" fill="#475569"/>
+    <text x="1020" y="689" font-size="9.5" font-weight="700" fill="#FFFFFF" text-anchor="middle" letter-spacing="1">STORAGE</text>
+    <text x="1140" y="712" font-size="15.5" font-weight="700" fill="#0F172A" text-anchor="middle">PostgreSQL + TimescaleDB</text>
+    <text x="1140" y="730" font-size="12" fill="#334155" text-anchor="middle">Business records · time-series data</text>
+    <text x="1140" y="747" font-size="12" fill="#334155" text-anchor="middle">Attachments and process knowledge</text>
+  </g>
+
+  <!-- Arrows: Api -> Optimizer -->
+  <line x1="710" y1="622" x2="710" y2="660" stroke="#A16207" stroke-width="1.8" marker-end="url(#arrowAmber)"/>
+  <text x="722" y="646" font-size="11.5" fill="#A16207">Calculation request</text>
+
+  <!-- Worker -> Optimizer -->
+  <line x1="450" y1="711" x2="528" y2="711" stroke="#0F766E" stroke-width="1.8" marker-end="url(#arrow)"/>
+  <text x="489" y="702" font-size="9.5" fill="#0F766E" text-anchor="middle">async calc</text>
+
+  <!-- Api -> Storage -->
+  <path d="M1180,622 C1180,648 1160,648 1140,660" fill="none" stroke="#475569" stroke-width="1.8" marker-end="url(#arrowGray)"/>
+  <text x="1192" y="646" font-size="11.5" fill="#475569">reads / writes</text>
+
+  <!-- Worker -> Storage (under arc) -->
+  <path d="M280,762 C280,818 1140,818 1140,762" fill="none" stroke="#475569" stroke-width="1.8" marker-end="url(#arrowGray)"/>
+  <text x="710" y="814" font-size="11.5" fill="#475569" text-anchor="middle">reads / writes</text>
+
+  <!-- ============ Legend ============ -->
+  <g font-size="11.5" fill="#334155">
+    <rect x="120" y="898" width="16" height="16" rx="4" fill="#F8FAFC" stroke="#64748B" stroke-width="1.3"/>
+    <text x="144" y="910">External / people</text>
+
+    <rect x="320" y="898" width="16" height="16" rx="4" fill="#ECFDF5" stroke="#0F766E" stroke-width="1.3"/>
+    <text x="344" y="910">Edge tier</text>
+
+    <rect x="470" y="898" width="16" height="16" rx="4" fill="#F0FDFA" stroke="#0F766E" stroke-width="1.3"/>
+    <text x="494" y="910">Platform tier</text>
+
+    <rect x="650" y="898" width="16" height="16" rx="4" fill="#FFFBEB" stroke="#A16207" stroke-width="1.3"/>
+    <text x="674" y="910">Optimizer / compute</text>
+
+    <rect x="880" y="898" width="16" height="16" rx="4" fill="#FFFFFF" stroke="#475569" stroke-width="1.3"/>
+    <text x="904" y="910">Data storage</text>
+
+    <line x1="1040" y1="906" x2="1070" y2="906" stroke="#0F172A" stroke-width="1.5" stroke-dasharray="5 4"/>
+    <text x="1078" y="910">optional / in-process</text>
+  </g>
+
+  <text x="720" y="944" font-size="12" fill="#64748B" text-anchor="middle">Edge retains an independent process, storage, and recovery lifecycle even when deployed on the same host as Platform.</text>
+  <text x="720" y="964" font-size="12" fill="#64748B" text-anchor="middle">The current architecture does not assume MES, QMS, or LIMS integration; each is at most one optional source Edge can map.</text>
+</svg>
