@@ -6,6 +6,8 @@ Ingot accepts contributions across code, equipment adapters, algorithms, authori
 
 Participation follows the [Code of Conduct](CODE_OF_CONDUCT.md).
 
+Unless a contributor explicitly states otherwise in writing, accepted contributions to this repository are provided under the [Apache License 2.0](LICENSE).
+
 ## Before starting
 
 1. Search Issues for duplicates.

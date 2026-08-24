@@ -94,7 +94,7 @@ const copy = {
     ],
     openKicker: "RUN IT YOURSELF",
     openTitle: "开放完整数据与决策闭环，而不只是算法样例。",
-    openText: "MIT 许可，可厂内自托管。现场采集、运行对比、质量结果、研发实验、数值服务和工程师工作台位于同一仓库；公开验证协议与结果可独立复现。",
+    openText: "Apache-2.0 许可，可厂内自托管。现场采集、运行对比、质量结果、研发实验、数值服务和工程师工作台位于同一仓库；公开验证协议与结果可独立复现。",
     command: "git clone https://github.com/liuweichaox/Ingot.git\ncd Ingot\ncp .env.example .env\ndocker compose -f docker-compose.app.yml up -d --build",
     readDocs: "阅读快速开始",
     contribute: "参与贡献",
@@ -190,7 +190,7 @@ const copy = {
     ],
     openKicker: "RUN IT YOURSELF",
     openTitle: "The complete data-to-decision loop, not just an algorithm sample.",
-    openText: "MIT licensed and self-hostable inside the plant. Field acquisition, run comparison, quality outcomes, R&D experiments, numerical services, and the engineering workbench live in one repository; public validation protocols and results are independently reproducible.",
+    openText: "Apache-2.0 licensed and self-hostable inside the plant. Field acquisition, run comparison, quality outcomes, R&D experiments, numerical services, and the engineering workbench live in one repository; public validation protocols and results are independently reproducible.",
     command: "git clone https://github.com/liuweichaox/Ingot.git\ncd Ingot\ncp .env.example .env\ndocker compose -f docker-compose.app.yml up -d --build",
     readDocs: "Read the quickstart",
     contribute: "Contribute",
@@ -344,7 +344,7 @@ export default function IngotSite({ initialLocale }: { initialLocale: Locale }) 
         <div className="frame footer-inner">
           <Image src="/brand/ingot-lockup-dark.svg" alt="Ingot" width={120} height={30} />
           <p>{t.footer}</p>
-          <div><a href={t.docs}>Docs</a><a href={github}>GitHub</a><a href={`${github}/blob/main/LICENSE`}>MIT</a></div>
+          <div><a href={t.docs}>Docs</a><a href={github}>GitHub</a><a href={`${github}/blob/main/LICENSE`}>Apache-2.0</a></div>
         </div>
       </footer>
     </main>
