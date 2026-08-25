@@ -46,7 +46,7 @@
 
 ## Project overview
 
-Ingot is an open-source process diagnosis and optimization system for process engineers. The system links equipment records, production runs, process trajectories, inspection results, and R&D context into comparable, traceable run evidence.
+Ingot is an open-source process diagnosis and optimization system. The system links equipment records, production runs, process trajectories, inspection results, and R&D context into comparable, traceable run evidence.
 
 For each real run, Ingot provides three engineering capabilities:
 

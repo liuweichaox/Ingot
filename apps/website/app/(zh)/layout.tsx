@@ -13,7 +13,7 @@ export const metadata: Metadata = {
     languages: { "zh-CN": "/", en: "/en/" },
   },
   title: "Ingot — 开源工艺追因与优化系统",
-  description: "面向工艺工程师的开源工艺追因与优化系统，支持运行证据关联、工艺追因、实验设计与受约束优化。",
+  description: "开源工艺追因与优化系统，支持运行证据关联、候选原因验证、实验设计与受约束优化。",
   applicationName: "Ingot",
   keywords: [
     "Ingot", "工艺追因", "工艺优化", "工艺研发", "工艺工程师决策",

@@ -18,6 +18,8 @@ const retired = /Ingot Agent|desktop Agent|connector-workspaces|awaiting-package
 test("Chinese home uses the canonical diagnosis-and-optimization narrative", async () => {
   const source = await html();
   assert.match(source, /<title>Ingot — 开源工艺追因与优化系统<\/title>/i);
+  assert.match(source, /开源工艺追因与优化系统。关联设备、生产和检验数据/);
+  assert.doesNotMatch(source, /面向工艺工程师的开源工艺追因与优化系统/);
   assert.match(source, /看清这次运行/);
   assert.match(source, /做对下一项实验/);
   assert.match(source, /受约束优化/);
@@ -39,6 +41,8 @@ test("English home uses the same diagnosis-and-optimization narrative", async ()
   const source = await html("/en/");
   assert.match(source, /<html lang="en">/);
   assert.match(source, /<title>Ingot — Open-source Process Diagnosis &amp; Optimization<\/title>/i);
+  assert.match(source, /system that links equipment, production, and inspection data/i);
+  assert.doesNotMatch(source, /system for process engineers/i);
   assert.match(source, /Understand this run/);
   assert.match(source, /Choose the right next experiment/);
   assert.match(source, /constrained optimization/i);
