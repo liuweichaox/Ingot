@@ -46,16 +46,25 @@ Numbers embedded in older filenames identify past internal experiment rounds. Th
 
 ## Current state
 
-| Item | Result | State |
-|---|---:|---|
-| Previous frozen policy versus random search | `+49.24%`, 95% CI `[+44.45%, +53.68%]`; non-worse on all three datasets | passed |
-| Previous frozen policy versus maximin | `+62.96%`, 95% CI `[+59.93%, +65.85%]`; non-worse on all three datasets | passed |
-| Previous frozen policy versus stable-trend method (linear response surface) | `+12.02%` aggregate, but `−32.08%` on Alkox and `−68.36%` on P3HT | subgroup guardrail failed |
-| Previous frozen policy versus turning-point and interaction method (quadratic response surface) | `0%`; trajectories match on all three datasets | passed, with no added value |
-| Current successor | old frozen fingerprint is invalid; these inspected data support development regression only | awaiting new unseen-data acceptance |
-| Real-factory historical replay and prospective pilot | not complete | awaiting pilot |
+| Object | Current conclusion |
+|---|---|
+| Current strategy | Has not passed an independent unseen-data acceptance |
+| Core experiment-selection capability | Historical freezes contain successful comparisons, but no evaluation passed every preregistered baseline and dataset guardrail together |
+| Mechanism or process-feature contribution | Stable incremental contribution has not been demonstrated |
+| Real-factory historical replay and prospective pilot | Incomplete |
 
-The supported conclusion is therefore: **the previous frozen policy reliably beat model-free selection, but on Alkox and P3HT it treated problems that could be solved by following a stable trend as unnecessarily complex and therefore ran extra experiments; core acceptance failed.** Technically, it collapsed to the quadratic response surface and failed to recognize the more effective linear surface. The successor now follows the stable trend first and changes course only after repeated evidence supports a turning point or parameter interaction. Because the algorithm changed, these three datasets serve only as development regression and do not count as independent effect evidence for the successor. The next preregistered unseen-data test decides successor effectiveness. [acceptance-results.json](acceptance-results.json) retains the complete frozen result; [acceptance-selection.en.md](acceptance-selection.en.md) and [acceptance-protocol.json](acceptance-protocol.json) retain the selection and fixed rules.
+It is therefore not supported to say that Ingot has proved a general experiment-count advantage over random, space-filling, or classical response-surface methods. The supported statement is that the repository retains multiple frozen protocols, successful comparisons, and failures in full; the current implementation addresses known failures; and another preregistered dataset group that did not participate in development decides promotion. See [Current status](../../docs/status.en.md) for the capability and production boundary.
+
+## Retained frozen evidence
+
+| Frozen evaluation | Main observation | Decision |
+|---|---|---|
+| 450 paired Alkox, P3HT, and HPLC replays | `49.24%` fewer trials than random and `62.96%` fewer than maximin, but substantial Alkox and P3HT regression versus the linear response surface and identical trajectories to the quadratic surface | Core acceptance failed; see [acceptance-results.json](acceptance-results.json) |
+| 400 paired unseen reaction-process replays | `85.5%` aggregate success and better aggregate results than the tested linear and quadratic surfaces, but preregistered gates against random and maximin failed | Core selection was not demonstrated; see [unseen-results.json](unseen-results.json) |
+| 400 paired OER composition-plate replays | Strong aggregate results against several baselines, but the quadratic-response-surface guardrail did not pass on every composition plate | Advantage over every baseline was not demonstrated; see [latest-results-v7.json](latest-results-v7.json) |
+| Preregistered feature ablations | Neither process interactions nor composition descriptors showed stable incremental contribution | Mechanism-feature contribution was not demonstrated |
+
+These results belong to different frozen candidates and data selections. They cannot be combined into one aggregate win rate, and a successful comparison from one freeze cannot be transferred to the current strategy. After an algorithm, dataset, objective, budget, or gate changes, the old result serves only development regression and failure audit.
 
 ## Running the checks
 

@@ -43,22 +43,22 @@
 
   <!-- Headline -->
   <g transform="translate(64,270)">
-    <text y="0" font-size="38" font-weight="800" fill="#F4F8F6">Turn real runs into</text>
-    <text y="42" font-size="38" font-weight="800" fill="#F4F8F6">testable process</text>
-    <text y="84" font-size="38" font-weight="800" fill="#F4F8F6">evidence.</text>
+    <text y="0" font-size="38" font-weight="800" fill="#F4F8F6">Understand this run.</text>
+    <text y="52" font-size="38" font-weight="800" fill="#F4F8F6">Choose the right</text>
+    <text y="104" font-size="38" font-weight="800" fill="#F4F8F6">next experiment.</text>
   </g>
 
   <!-- Subheadline -->
-  <text x="64" y="400" font-size="19" fill="#9FB0AA">Understand this run. Choose the right next experiment.</text>
+  <text x="64" y="408" font-size="18" fill="#9FB0AA">Process diagnosis · experiment design · constrained optimization</text>
 
   <!-- Divider -->
-  <path d="M64 434h300" stroke="#E8AD56" stroke-opacity="0.4" stroke-width="1.5"/>
+  <path d="M64 442h300" stroke="#E8AD56" stroke-opacity="0.4" stroke-width="1.5"/>
 
   <!-- Stack chips -->
   <g font-size="13" font-weight="600" fill="#9FB0AA">
-    <circle cx="70" cy="466" r="3" fill="#E8AD56"/><text x="82" y="470">.NET 10</text>
-    <circle cx="170" cy="466" r="3" fill="#E8AD56"/><text x="182" y="470">Python + BoTorch</text>
-    <circle cx="340" cy="466" r="3" fill="#E8AD56"/><text x="352" y="470">PostgreSQL + TimescaleDB</text>
+    <circle cx="70" cy="474" r="3" fill="#E8AD56"/><text x="82" y="478">.NET 10</text>
+    <circle cx="170" cy="474" r="3" fill="#E8AD56"/><text x="182" y="478">Python + BoTorch</text>
+    <circle cx="340" cy="474" r="3" fill="#E8AD56"/><text x="352" y="478">PostgreSQL + TimescaleDB</text>
   </g>
 
   <!-- Footer -->
@@ -67,13 +67,13 @@
     <circle cx="210" cy="555" r="2.5" fill="#3E5A52"/>
     <text x="226" y="560">github.com/liuweichaox/Ingot</text>
     <circle cx="500" cy="555" r="2.5" fill="#3E5A52"/>
-    <text x="516" y="560">MIT License</text>
+    <text x="516" y="560">Apache-2.0</text>
   </g>
 
   <!-- ================= Right panel: run comparison chart ================= -->
   <g transform="translate(660,90)">
     <rect width="476" height="450" rx="18" fill="#0E1D19" stroke="#5FD4C8" stroke-opacity="0.28"/>
-    <text x="28" y="40" font-size="13" font-weight="700" fill="#5FD4C8" letter-spacing="1.5">RUN COMPARISON · REAL EXAMPLE</text>
+    <text x="28" y="40" font-size="13" font-weight="700" fill="#5FD4C8" letter-spacing="1.5">RUN EVIDENCE · ILLUSTRATION</text>
     <text x="448" y="40" font-size="11" fill="#5C7A72" text-anchor="end">surface error (μm)</text>
 
     <!-- grid -->
@@ -122,6 +122,6 @@
       <circle cx="176" cy="400" r="5" fill="#E8AD56"/>
       <text x="190" y="404" fill="#CBD8D3">flagged run</text>
     </g>
-    <text x="448" y="404" font-size="11" fill="#5C7A72" text-anchor="end">next: validate the cause</text>
+    <text x="448" y="404" font-size="11" fill="#5C7A72" text-anchor="end">next: candidate → experiment</text>
   </g>
 </svg>

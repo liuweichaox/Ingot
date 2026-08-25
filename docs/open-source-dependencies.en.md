@@ -2,7 +2,7 @@
 
 > Status: **rolling dependency overview**. Exact versions, transitive dependencies, and licenses are determined by project files, lockfiles, image manifests, and automated audit results.
 
-Ingot selects dependencies the same way it selects analytical methods: start from the engineering problem and choose an appropriate tool rather than turning a popular technology into an irreplaceable product boundary.
+Dependency selection is based on the engineering problem, license compatibility, maintainability, and local-deployment requirements. Popularity does not justify fixing a technology as an irreplaceable product boundary.
 
 | Capability | Main components | Typical licenses |
 |---|---|---|

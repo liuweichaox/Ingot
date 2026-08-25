@@ -1,181 +1,160 @@
+<a id="readme-top"></a>
+
 <div align="center">
   <a href="https://ingotstack.com/en/">
     <img src="apps/website/public/brand/ingot-lockup.svg" alt="Ingot" width="340">
   </a>
 
-  <p><strong>Open-source industrial process optimization</strong></p>
-  <p>Turn real runs and quality outcomes into reviewable engineering evidence for the next process experiment.</p>
+  <p><strong>Open-source Process Diagnosis &amp; Optimization</strong></p>
+  <p>Understand this run. Choose the right next experiment.</p>
 
   [![CI](https://github.com/liuweichaox/Ingot/actions/workflows/ci.yml/badge.svg)](https://github.com/liuweichaox/Ingot/actions/workflows/ci.yml)
   [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-E8AD56.svg)](LICENSE)
   [![.NET 10](https://img.shields.io/badge/.NET-10-512BD4.svg)](https://dotnet.microsoft.com/)
   [![React 19](https://img.shields.io/badge/React-19-61DAFB.svg)](https://react.dev/)
   [![PostgreSQL 17](https://img.shields.io/badge/PostgreSQL-17-4169E1.svg)](https://www.postgresql.org/)
-  [![TimescaleDB](https://img.shields.io/badge/TimescaleDB-2.28-FDB515.svg)](https://www.timescale.com/)
   [![Python 3.12](https://img.shields.io/badge/Python-3.12-3776AB.svg)](https://www.python.org/)
-  [![Docker Compose](https://img.shields.io/badge/Docker_Compose-v2-2496ED.svg)](https://docs.docker.com/compose/)
 
-  [3-minute demo](#understand-ingot-in-three-minutes) · [Quickstart](#quickstart) · [Architecture](#architecture) · [Documentation](#documentation) · [Roadmap](#roadmap) · [Discussions](https://github.com/liuweichaox/Ingot/discussions)
+  [Website](https://ingotstack.com/en/) · [Documentation](https://docs.ingotstack.com/en) · [Local demo](#local-demo) · [Report an issue](https://github.com/liuweichaox/Ingot/issues) · [Discuss](https://github.com/liuweichaox/Ingot/discussions)
 
   [简体中文](README.md) · English
 </div>
 
-## What Ingot is
+<a href="https://ingotstack.com/en/">
+  <img src="apps/website/public/og.png" alt="Ingot: Understand this run. Choose the right next experiment." width="100%">
+</a>
 
-Ingot is an open-source industrial process optimization system that organizes factory runs and quality outcomes into reproducible observations, next-step parameter recommendations, and validated operating regions.
+<details>
+  <summary>Table of contents</summary>
 
-It connects field acquisition, run identification, quality outcomes, process diagnosis, and experimental design in one data loop; then selects DOE, response-surface, or constrained Bayesian optimization methods for the next conditions to validate. Evidence snapshots, human approval, and shadow validation govern how results enter production; Agent is a query and explanation interface, not the optimization or control core.
+- [Project overview](#project-overview)
+- [Capability scope](#capability-scope)
+- [Local demo](#local-demo)
+- [Domain workflow](#domain-workflow)
+- [Current status](#current-status)
+- [System boundaries](#system-boundaries)
+- [Runtime architecture](#runtime-architecture)
+- [Repository structure](#repository-structure)
+- [Full deployment](#full-deployment)
+- [Development verification](#development-verification)
+- [Documentation](#documentation)
+- [Roadmap](#roadmap)
+- [Contributing](#contributing)
+- [License](#license)
 
-## Understand Ingot in three minutes
+</details>
 
-The demo follows one concrete problem: lens run `RUN-2026-0821-005` has a surface error of **0.48 μm**, above the **0.35 μm** limit, while the adjacent passing run measures **0.22 μm**. No database or Docker is required. Run these commands in two terminals:
+## Project overview
+
+Ingot is an open-source process diagnosis and optimization system for process engineers. The system links equipment records, production runs, process trajectories, inspection results, and R&D context into comparable, traceable run evidence.
+
+For each real run, Ingot provides three engineering capabilities:
+
+- **Run reconstruction**: establish actual conditions, process changes, material, tooling, and quality outcomes;
+- **Cause validation**: compare eligible runs and record candidate causes, counterevidence, and evidence gaps;
+- **Experiment decisions**: design validation experiments and propose the next experiment within objectives and safety boundaries.
+
+The fixed design objective is:
+
+> **Turn every real run into comparable, testable engineering evidence so process engineers can avoid unproductive experiments and reach target process conditions faster.**
+
+Ingot applies to process development where experiments are expensive, samples are limited, and quality objectives and safety boundaries are explicit. The standard workflow covers data qualification, comparable-run selection, candidate-cause analysis, validation-experiment design, and constrained next-experiment recommendations. Engineers define objectives and boundaries, review recommendations, approve experiments, and decide whether conclusions may enter production.
+
+Methods are selected by question type, data coverage, and constraints. Available methods include traditional design of experiments (DOE), response surfaces, and constrained Bayesian optimization. Every recommendation retains its input data, applicability conditions, computational rationale, uncertainty, and review status.
+
+## Capability scope
+
+Ingot does not replace production-execution, real-time-control, quality-compliance, or laboratory-management systems. The current domain model covers the following engineering tasks:
+
+| Typical task | System output |
+|---|---|
+| Nonconforming-run analysis | Eligible comparison runs, key differences, candidate causes, and evidence gaps |
+| Validation of a new material, machine, or parameter | A controlled, bounded experiment with a review record |
+| Selection of next-experiment conditions | Candidate process settings within quality objectives and safety constraints, with rationale, risk, and open questions |
+
+## Local demo
+
+The synthetic demo uses a lens run that exceeds its surface-form error limit. The workflow covers opening the nonconforming run, reviewing its quality result, comparing it with a conforming run, and inspecting candidate causes and the next validation experiment.
+
+The demo requires Node.js 22.22+ but no database, equipment, or Docker:
+
+```bash
+npm --prefix apps/platform ci
+```
+
+Run these commands in two terminals:
 
 ```bash
 node scripts/platform-demo.mjs
 ```
 
 ```bash
-npm --prefix apps/platform ci
 npm --prefix apps/platform run demo
 ```
 
-Open `http://127.0.0.1:3001` and sign in with `demo / demo`. The workbench provides four steps: open the out-of-spec run, verify the reviewed quality result, compare it with passing runs, and inspect candidate causes, confounders, and the next validation experiment. A new user can follow the main path—understand the run, locate the important difference, and decide what to do next—in three minutes.
+Open `http://127.0.0.1:3001` and sign in with `demo / demo`. All demo data are synthetic. The tour verifies the interface and workflow, not real process benefit.
 
-## Why Ingot exists
-
-Ingot is built around one reviewable process-optimization path:
-
-> **Turn every real run into comparable, testable engineering evidence, keep selecting more valuable process conditions to validate, and preserve operating regions with explicit applicability.**
-
-The project retains this intended outcome: **Turn every real run into comparable, testable engineering evidence so process engineers can avoid unproductive experiments and reach target process conditions faster.** This remains an objective to be tested through public replay and real projects, not an established performance claim across every process or algorithm.
-
-Much process development still depends on personal memory, disconnected spreadsheets, and experiment sequences that cannot be reproduced. Even when equipment already produces data, production conditions, process curves, and quality outcomes often cannot be tied to the same real run, leaving computers unable to participate reliably in engineering decisions.
-
-Ingot first establishes a trustworthy data loop, then helps engineers:
-
-- identify the equipment, product, process specification, material, and tooling actually used for a run;
-- connect actual settings, process trajectories, and inspection outcomes to that run;
-- compare like-for-like runs and locate differences by variable, stage, or context;
-- distinguish candidate causes, confounding factors, and insufficient evidence;
-- turn engineering judgment into falsifiable, reviewable experiments;
-- choose more valuable next experiments within safety boundaries;
-- preserve validated conclusions, applicability, and failure conditions.
-
-The system organizes run facts, compares candidate methods, and proposes parameter settings. Process engineers define objectives and safety boundaries, execute validation, and decide whether results can enter production.
-
-## One complete loop
+## Domain workflow
 
 ```text
-Process configuration → Field integration → Production runs → Quality management → Diagnosis → Process R&D
-        ↑                                                                                              ↓
-        └──────── validated process specifications, operating regions, and knowledge return to production ────────┘
+Process configuration → Field integration → Production runs → Quality management → Process diagnosis → Process R&D
+           ↑                                                                                         ↓
+           └──────── Validated specifications, operating regions, and knowledge return to production ────────┘
 ```
 
-| Stage | Question answered |
+| Stage | Primary responsibility |
 |---|---|
-| Process configuration | Which variables, units, objectives, quality rules, and safety boundaries must the platform represent? |
-| Field integration | How do controls, instruments, vision, inspection, and business sources map to stable business semantics? |
-| Production runs | Which conditions did this run use, and what actually happened during the process? |
-| Quality management | Can inspection outcomes be linked to the same run and independently reviewed? |
-| Process diagnosis | Is the data trustworthy, which differences deserve validation, and which remain confounded or unsupported? |
-| Process R&D | Which next experiment is most valuable without crossing declared safety boundaries? |
+| Process configuration | Define variables, units, quality rules, and safety boundaries |
+| Field integration | Map equipment points and business data to consistent process fields |
+| Production runs | Record actual conditions, process trajectories, and production context |
+| Quality management | Link inspection results and perform independent review |
+| Process diagnosis | Compare run differences and form candidate causes, counterevidence, and evidence gaps |
+| Process R&D | Validate candidates and select the next experiment within objectives and safety boundaries |
 
-Acquisition is not the destination, and an optimization algorithm is not the starting point. Trustworthy run facts are the common foundation for every analysis and recommendation.
+Trustworthy run facts are a prerequisite for analysis and recommendations. Data acquisition and optimization methods serve the same evidence chain.
 
-## Select computation by the problem
+## Current status
 
-Ingot does not force one “advanced algorithm” onto every question:
+The main software workflow is implemented: the system can link runs to quality outcomes, check whether data are usable, compare like-for-like runs, form candidate causes, design experiments, and preserve review records.
 
-- data quality statistics measure coverage, missingness, and drift;
-- robust statistics, matching, and stage analysis compare normal and abnormal runs;
-- hierarchical summaries, variance components, or mixed-effects models assess equipment, material, and tooling context;
-- controls, repetition, blocking, randomization, and interventions support causal decisions;
-- Gaussian processes and constrained Bayesian optimization search expensive small-data parameter spaces;
-- physical features or priors help when mechanisms are known and data are scarce;
-- an LLM parses engineering questions, calls read-only tools, and organizes evidence explanations, but never generates numerical process settings directly.
+Benefit validation remains incomplete. The current strategy has not yet passed an independent unseen-data acceptance, and real-factory historical review, side-by-side shadow use, and controlled online validation remain in progress. The software is available for inspection and evaluation, but the current evidence does not establish fewer experiments or shorter development time in a real factory.
 
-See [Analysis and optimization](docs/optimization.en.md) for the detailed boundaries.
+When data or methods fail admission, the system stops the recommendation, records the reason, and falls back to a response-surface or traditional experiment-design path.
 
-## Product components
+See [Current status](docs/status.en.md) for capability, validation, and production maturity. See [Optimizer experiment-efficiency validation](tools/public-validation/README.en.md) for public method results, failures, and statistical boundaries.
 
-- **Edge** connects control systems, instruments, gateways, and business sources, handling semantic mapping, execution-boundary detection, offline buffering, and replay.
-- **Process Executions** organize continuous signals into traceable real runs and stage trajectories.
-- **Manufacturing** records product, process specification, equipment, material, component, and tooling context.
-- **Inspections** preserve quality objectives, safety outcomes, attachments, and human review.
-- **Research** organizes problems, candidate causes, hypotheses, experiments, results, and operating regions.
-- **Optimizer** performs reproducible numerical modeling, constraint checks, and sequential experiment recommendations.
-- **Agent** helps engineers query, organize, and explain verified system facts.
+## System boundaries
 
-These components share one evidence chain rather than creating conflicting parallel records.
-
-## Boundaries with existing tools
-
-| Category | How Ingot uses it | What Ingot is not |
+| Adjacent system or method | Relationship to Ingot | System boundary |
 |---|---|---|
-| MES, SCADA, historians | Receive run, equipment, and process facts | A replacement for execution, monitoring, or real-time control |
-| LIMS, QMS, ELN | Link inspection outcomes, review, and R&D context | A replacement for complete sample, compliance, or document management |
-| DOE, response surfaces, Bayesian optimization | Select methods under shared constraints and evidence snapshots | A claim that one algorithm fits every process |
-| AI agents | Query, organize, and explain authorized facts | A system that writes settings, approves experiments, or controls equipment |
+| MES, SCADA, historian | Receive run, equipment, and process facts | Does not replace execution, monitoring, or real-time control |
+| LIMS, QMS, ELN | Link inspection results, review, and R&D context | Does not replace complete sample, compliance, or document management |
+| DOE, response surfaces, Bayesian optimization | Optimize the next experiment under shared objectives, constraints, and evidence snapshots | Does not treat one algorithm as the answer to every process problem |
+| AI agent | Query, organize, and explain authorized facts | Does not generate numeric settings directly, approve experiments, or control equipment |
 
-When historical replay or method admission fails, Optimizer can fall back to conventional DOE or regularized response surfaces. Frozen public results define the claim boundary; they do not replace validation on a real project.
+## Runtime architecture
 
-## What works today
+![Ingot runtime components, code ownership, systems of record, and cross-service data flows](docs/architecture/system-architecture.en.svg)
 
-The repository implements the main path from field data to a next-experiment recommendation:
+Platform API is the system of record for factory business records and evidence assembly. Optimizer is a stateless numerical service. Agent runs in the Platform API process and accesses structured facts only through authorized read-only analysis tools. Edge ConnectorHost has an independent identity, local store, and failure-recovery lifecycle. Code-project boundaries are not deployment boundaries; see [Production architecture](docs/production-architecture.en.md) for production topology and availability requirements.
 
-- link equipment, product, process specification, material, tooling, process trajectory, and inspection outcomes to the same real run;
-- compare out-of-spec and passing runs on one screen, with important differences, missing data, and provenance visible;
-- turn candidate causes into executable experiments with controls, repetitions, blocks, and safety boundaries;
-- recommend concrete settings for the next experiment from completed runs and explain whether the proposal follows the stable observed trend or explores a potentially better parameter combination;
-- preserve inputs, versions, sources, constraints, and results so every recommendation can be reviewed and replayed.
+## Repository structure
 
-### Current evidence boundary
+| Path | Responsibility |
+|---|---|
+| `src/edge` | Field protocols, acquisition lifecycle, semantic mapping, offline buffering, and replay |
+| `src/platform` | Business API, systems of record, evidence assembly, authorization, and background work |
+| `src/agent` | Model-assisted question parsing, read-only tool calls, and evidence explanation |
+| `src/shared` | Domain models, cross-module contracts, and stable identifiers |
+| `optimizer` | Experiment design, surrogate models, constraint evaluation, and sequential optimization service |
+| `apps/platform` | React/Vite engineering workbench |
+| `apps/website`, `apps/docs-site` | Public website and documentation site |
+| `tests/Ingot.Core.Tests` | xUnit coverage for backend behavior, module boundaries, and protocols |
+| `deploy`, `scripts`, `tools` | Deployment manifests, architecture gates, validation utilities, and benchmarks |
 
-| Frozen evaluation | Observed result | Supported conclusion |
-|---|---|---|
-| 450 paired replays on development data | Better than random and sequential maximin space filling; matched the aggregate quadratic response-surface result; not non-inferior to the linear surface on every dataset | The software and response-surface path are reproducible; a core selection advantage is not demonstrated |
-| 400 unseen-data replays | 85.5% aggregate success; better than the tested linear and quadratic surfaces, but failed preregistered gates against random and sequential maximin space filling | The result does not establish a general advantage over classical methods |
-| Preregistered process-feature ablation | No stable incremental contribution | Mechanism-feature contribution is not demonstrated |
+## Full deployment
 
-See [Optimizer experiment-efficiency validation](tools/public-validation/README.en.md) for formal comparators, confidence intervals, and failed subgroups, and [Scenario validation](docs/rollout.en.md) for real-pilot acceptance.
-
-## Architecture
-
-```mermaid
-flowchart LR
-    Engineer[Process engineer] -->|Configures, records, and reviews| Web[Platform Web]
-    Equipment[Field equipment (optional)] -->|Direct acquisition| Edge[Edge ConnectorHost]
-
-    subgraph Ingot[Ingot current runtime boundary]
-        direction LR
-        Web -->|HTTPS / JSON| Api[Platform API<br/>Business records · evidence assembly<br/>Agent orchestration: authorised read-only tools]
-        Edge -->|Run events / HTTPS| Api
-        Api -->|Reads and writes| Database[(PostgreSQL + TimescaleDB<br/>Business records · time-series data)]
-        Worker[Platform Worker<br/>Background jobs · knowledge processing] -->|Reads and writes| Database
-        Api -->|Calculation request| Optimizer[Optimizer<br/>Stateless numerical service]
-        Worker -->|Background calculation| Optimizer
-    end
-
-    classDef person fill:#F8FAFC,stroke:#64748B,color:#0F172A,stroke-width:1.5px;
-    classDef edge fill:#ECFDF5,stroke:#0F766E,color:#0F172A,stroke-width:1.5px;
-    classDef platform fill:#F0FDFA,stroke:#0F766E,color:#0F172A,stroke-width:1.5px;
-    classDef storage fill:#FFFFFF,stroke:#475569,color:#0F172A,stroke-width:1.5px;
-    classDef compute fill:#FFFBEB,stroke:#A16207,color:#0F172A,stroke-width:1.5px;
-    class Engineer,Equipment person;
-    class Edge edge;
-    class Web,Api,Worker platform;
-    class Database storage;
-    class Optimizer compute;
-    style Ingot fill:#FFFFFF,stroke:#0F766E,stroke-width:1.5px
-```
-
-Platform API is the current product record for business facts and evidence; Platform Worker is an independent background process; Optimizer is a stateless numerical service; and Agent orchestration runs inside Platform API, accessing structured facts only through authorised read-only tools. Edge is optional direct field acquisition and retains an independent process, storage, and recovery lifecycle even when deployed on the same host as Platform. The current architecture does not assume MES, QMS, or LIMS integration.
-
-## Quickstart
-
-The complete Docker Compose stack requires only Git, Docker Engine or Docker Desktop, and Docker Compose v2. Source development additionally requires .NET SDK 10, Node.js 22.22+, and uv 0.12.5.
-
-To inspect the UI and a complete synthetic workflow first, use the [simulated-data preview](docs/getting-started.en.md#simulated-data-preview). Use the full Compose stack below for a representative field pilot or production deployment.
+The complete Compose stack requires Git, Docker Engine or Docker Desktop, and Docker Compose v2:
 
 ```bash
 git clone https://github.com/liuweichaox/Ingot.git
@@ -184,109 +163,38 @@ cp .env.example .env
 docker compose -f docker-compose.app.yml up -d --build
 ```
 
-The first build downloads .NET, Node, Python, PyTorch, and TimescaleDB images, so duration depends on network conditions. After the command exits, run `docker compose -f docker-compose.app.yml ps -a` and verify that `platform-migrate` exited successfully, the four HTTP/database services are `healthy`, and `platform-worker` remains `running`; an image download still in progress does not mean the application has started.
-
-Then open:
-
-```text
-http://localhost:3000       Engineering workbench
-http://localhost:8000/health
-http://localhost:8000/openapi/v1.json
-http://localhost:8100/ready
-```
-
-Local authentication uses `INGOT_ADMIN_USERNAME` and `INGOT_ADMIN_PASSWORD` from `.env`. If the administrator password is empty, Migrator writes the generated password to the `platform-migrate` log only when it bootstraps an empty user table. See [Getting started](docs/getting-started.en.md) and [Deployment](docs/deployment.en.md) for startup and troubleshooting details.
-
-Complete one real or representative data loop before diagnosis and R&D: build a process configuration → connect field data → complete a run → link inspections → review data trust → compare runs → design a validation experiment.
-
-See [Getting started](docs/getting-started.en.md).
+Before startup, change the database passwords, Edge token, and administrator settings in `.env`. Open `http://localhost:3000` after startup. See [Getting started](docs/getting-started.en.md) for health checks, authentication, and troubleshooting; follow the [Controlled pilot guide](docs/pilot.en.md) for a real pilot; and read [Production architecture](docs/production-architecture.en.md) and [Deployment](docs/deployment.en.md) before production use.
 
 ## Development verification
 
-```bash
-dotnet restore Ingot.sln
-dotnet build Ingot.sln
-dotnet test tests/Ingot.Core.Tests/Ingot.Core.Tests.csproj
-npm --prefix apps/platform ci
-npm --prefix apps/platform test
-uv sync --project optimizer --extra service --group dev --locked
-```
-
-Run the full CI gate with:
+Source development requires .NET SDK 10, Node.js 22.22+, and uv 0.12.5. Run the complete CI gate with:
 
 ```bash
 ./scripts/verify.sh
 ```
 
-Run the complete fixed public-manufacturing-data benchmark with:
-
-```bash
-./scripts/verify-optimizer-acceptance.sh
-```
-
-This benchmark validates a reproducible software and method path; it does not replace shadow or controlled online validation on a real project. See [Public-data experiment-efficiency validation](tools/public-validation/README.en.md) for the current result and decision rules.
-
-Run the current optimizer policy's regression on disclosed data with:
-
-```bash
-./scripts/benchmark-optimizer-development.sh
-```
-
-This regression confirms that method selection repairs known failures; it is not new effect evidence. Public acceptance uses only three states—development regression, unseen-data acceptance, and real pilot—while internal historical rounds and complete failed results remain available in the validation directory for audit.
-
-## Repository layout
-
-```text
-src/edge/          field acquisition and reliable upload
-src/platform/      central API and business modules
-src/agent/         model-assisted query and evidence explanation
-src/shared/        domain models and shared contracts
-optimizer/         numerical analysis and Bayesian optimization service
-tests/             .NET core tests
-apps/platform/     React process R&D workbench
-apps/website/      official website
-apps/docs-site/    documentation site
-docs/              Chinese and English project documentation
-deploy/            deployment assets
-scripts/           verification and operations scripts
-```
+See [Contributing](CONTRIBUTING.en.md) for common commands and engineering contracts.
 
 ## Documentation
 
-- [Documentation home](docs/index.en.md)
-- [Getting started](docs/getting-started.en.md)
-- [System design](docs/design.en.md)
-- [Analysis and optimization](docs/optimization.en.md)
-- [Public-data experiment-efficiency validation](tools/public-validation/README.en.md)
-- [Mechanism knowledge design](docs/mechanism-knowledge.en.md)
-- [Data integration](docs/data-connection.en.md)
-- [Scenario validation](docs/rollout.en.md)
-- [Roadmap](docs/project-plan.en.md)
-- [Deployment](docs/deployment.en.md)
-- [FAQ](docs/faq.en.md)
-- [Brand guide](docs/brand.en.md)
-- [Open-source dependencies](docs/open-source-dependencies.en.md)
+- [Documentation home](docs/index.en.md): choose a path by objective
+- [Getting started](docs/getting-started.en.md): tour the demo or run the complete local stack
+- [Current status](docs/status.en.md): implemented capabilities, validation evidence, and production boundaries
+- [Controlled pilot guide](docs/pilot.en.md): move from an engineering question to the first controlled experiment
+- [System design](docs/design.en.md): stable business boundaries and component responsibilities
+- [Analysis and optimization](docs/optimization.en.md): method selection, admission, and numerical strategy
+- [Data integration](docs/data-connection.en.md): identity, mapping, and data quality
+- [Scenario validation](docs/rollout.en.md): historical replay, shadow validation, and online validation
+- [Roadmap](docs/project-plan.en.md): long-term direction and promotion gates
 
 ## Roadmap
 
-- [x] Real runs, actual conditions, process features, and inspections form traceable observations.
-- [x] Candidate causes, hypotheses, experiments, and operating regions share one R&D record.
-- [x] Constrained GP/BO recommendations, pending-point avoidance, and safe cold start.
-- [x] Reproducible public-manufacturing-data benchmark with an explicit claim boundary.
-- [x] Complete one external public physical-experiment evaluation, strong-baseline comparison, and mechanism-feature ablation, retaining the not-demonstrated result.
-- [ ] Publish leakage-free sequential replay on a real manufacturing history.
-- [ ] Complete shadow recommendations and analyze engineer rejection reasons on a new project.
-- [ ] Complete a controlled online experiment and publish preregistered results.
-- [ ] Validate the core contracts on a second, materially different process.
-- [ ] Expose read and propose capabilities through a model-independent agent protocol.
-- [ ] Publish candidate schemas, validators, and reference implementations for the manufacturing evidence and experiment protocol.
-
-The near term proves the historical evidence apparatus, the medium term opens agent protocols, and only the long term pursues an open specification. The roadmap follows real evidence and acceptance gates. See the [Roadmap](docs/project-plan.en.md) for sequencing.
+The near-term objective is leakage-free replay on real historical projects, followed by prospective shadow and controlled online validation. Model-independent agent protocols and a manufacturing-evidence specification come later. See the [Roadmap](docs/project-plan.en.md) for the detailed gates.
 
 ## Contributing
 
-If you are exploring how industrial data can enter an auditable experimentation loop, star this repository to follow new validation results and use [Discussions](https://github.com/liuweichaox/Ingot/discussions) to share process scenarios, data-contract needs, or method proposals.
+The project accepts contributions to equipment adapters, statistical methods, experiment design, optimization, tests, and documentation. Participation options include [opening an issue](https://github.com/liuweichaox/Ingot/issues), [joining a discussion](https://github.com/liuweichaox/Ingot/discussions), or following the [contributing guide](CONTRIBUTING.en.md) to submit a pull request. Review the [Code of Conduct](CODE_OF_CONDUCT.md) and [Security Policy](SECURITY.md) before submitting changes.
 
-Contributions are welcome across device adapters, statistics, experimental design, optimization algorithms, real replay, tests, documentation, and process knowledge. Start with the [Contributing guide](CONTRIBUTING.en.md), [Code of Conduct](CODE_OF_CONDUCT.md), and [Security policy](SECURITY.md).
+## License
 
-Ingot is available under the [Apache License 2.0](LICENSE).
+Ingot is licensed under the [Apache License 2.0](LICENSE).

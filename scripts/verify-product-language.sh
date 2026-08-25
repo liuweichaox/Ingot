@@ -96,10 +96,49 @@ fi
 
 canonical_zh='把每次真实运行变成可比较、可验证的工程证据，帮助工艺工程师减少无效实验，更快找到达到目标的工艺条件。'
 canonical_en='Turn every real run into comparable, testable engineering evidence so process engineers can avoid unproductive experiments and reach target process conditions faster.'
+canonical_category_zh='开源工艺追因与优化系统'
+canonical_category_en_pattern='Open-source Process Diagnosis (&|&amp;) Optimization'
 
 for file in README.md docs/brand.md docs/index.md docs/project-plan.md; do
   if ! grep -Fq "$canonical_zh" "$file"; then
     echo "$file must retain the canonical Chinese core value from docs/brand.md." >&2
+    exit 1
+  fi
+done
+
+for file in README.md docs/brand.md docs/index.md docs/project-plan.md; do
+  if ! grep -Fq "$canonical_category_zh" "$file"; then
+    echo "$file must retain the canonical Chinese product category from docs/brand.md." >&2
+    exit 1
+  fi
+done
+
+for file in README.en.md docs/brand.en.md docs/index.en.md docs/project-plan.en.md; do
+  if ! grep -Eqi "$canonical_category_en_pattern" "$file"; then
+    echo "$file must retain the canonical English product category from docs/brand.en.md." >&2
+    exit 1
+  fi
+done
+
+if grep -RIniE --exclude='package-lock.json' \
+  '开源工业工艺优化系统|open-source industrial process optimization system' \
+  README.md README.en.md docs apps/website/app apps/docs-site/app; then
+  echo "Public copy contains a non-canonical product category. Follow docs/brand.md." >&2
+  exit 1
+fi
+
+current_evidence_zh='当前策略尚未通过独立的未见数据验收'
+current_evidence_en='current strategy has not yet passed an independent unseen-data acceptance'
+for file in README.md docs/index.md docs/status.md; do
+  if ! grep -Fq "$current_evidence_zh" "$file"; then
+    echo "$file must retain the current public evidence boundary from docs/status.md." >&2
+    exit 1
+  fi
+done
+
+for file in README.en.md docs/index.en.md docs/status.en.md; do
+  if ! grep -Fqi "$current_evidence_en" "$file"; then
+    echo "$file must retain the current public evidence boundary from docs/status.en.md." >&2
     exit 1
   fi
 done

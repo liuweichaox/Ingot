@@ -8,18 +8,24 @@
 
 Avoiding unproductive experiments is the outcome the product is built to deliver, not a synonym for one algorithm. Data acquisition, process diagnosis, experimental design, linear or quadratic response surfaces, Bayesian optimization, mechanism fusion, and model interaction are means to that outcome.
 
+For product communication, prefer the more concrete action line:
+
+> **Understand this run. Choose the right next experiment.**
+
+It represents the complete product loop: establish trustworthy run evidence, form candidate causes, design validation, optimize the next experiment within objectives and safety boundaries, and preserve validated results as process knowledge.
+
 ## Product position
 
 - **Category**: Open-source Process Diagnosis & Optimization / 开源工艺追因与优化系统
 - **Primary users**: process, quality, equipment, and R&D engineers developing new products, materials, and processes
 - **Unit of work**: the conditions, trajectory, quality result, engineering judgment, and next experiment for a real run
-- **Product responsibility**: organize trustworthy facts, compare runs, form testable candidates, help select the next experiment, and preserve the limits of every conclusion
+- **Product responsibility**: organize trustworthy facts, compare runs, form testable candidates, design validation, optimize the next experiment within constraints, and preserve the limits of every conclusion
 - **Engineer responsibility**: frame the problem, review data and constraints, judge executability, approve experiments, and interpret field context
 - **System boundary**: Ingot does not replace engineers or bypass safety constraints, approvals, or equipment control systems
 
-Ingot is not built merely to collect more points or showcase one algorithm. It turns collected data into usable engineering evidence and then selects robust statistics, controlled comparison, experimental design, causal validation, machine learning, Bayesian optimization, physical models, or language models according to the problem.
+Ingot works on reviewable process-run evidence rather than isolated data points or a single algorithm. The system selects robust statistics, controlled comparison, experimental design, causal validation, machine learning, Bayesian optimization, physical models, or language models according to the specific problem.
 
-*Process R&D* is the business entry in the product information architecture. It covers candidate validation, experiment design, safe optimization, and R&D outcomes. *Optimization* summarizes the capability to select the next experiment in the product category; it is not a standalone primary menu and does not imply automatic writes to equipment.
+*Process R&D* is the business entry in the product information architecture. It covers candidate validation, experiment design, constrained optimization, and R&D outcomes. *Optimization* is both a product-category and capability term: the system selects a more valuable next experiment around explicit objectives, allowed variables, and safety boundaries. It is not synonymous with automatic control, does not establish real-factory benefit by itself, and never bypasses engineering approval.
 
 ## Public commitments
 
@@ -49,15 +55,27 @@ Observational data can support candidate causes, stable associations, confounded
 | Product category | 开源工艺追因与优化系统 | Open-source Process Diagnosis & Optimization |
 | Core value | 少做无效实验，更快找到达标工艺 | Avoid unproductive experiments and reach target process conditions faster |
 | Short tagline | 看清这次运行，做对下一项实验。 | Understand this run. Choose the right next experiment. |
+| Business entries | 工艺追因、工艺研发 | Process Diagnosis, Process R&D |
+| Capability terms | 运行比较、工艺追因、实验设计、受约束优化 | run comparison, process diagnosis, experiment design, constrained optimization |
 | Data unit | 运行 / 过程执行 | run / process execution |
 | Observational conclusion | 候选原因、稳定关联、混杂关联、证据不足 | candidate cause, stable association, confounded association, insufficient evidence |
 | Experimental conclusion | 支持、否决、不确定、已验证原因 | supported, rejected, inconclusive, validated cause |
 | Evidence level | 证据不足、探索性证据、证据稳定、证据充分 | insufficient, exploratory, stable, sufficient |
-| Optimization result | 下一步实验建议、候选设置、已验证工艺操作域 | next-experiment recommendation, candidate setting, validated operating region |
+| Optimization result | 下一步实验建议、候选工艺设置、已验证工艺操作域 | next-experiment recommendation, candidate process setting, validated operating region |
+
+Choose terms by object:
+
+- Describe the complete product as a “Process Diagnosis & Optimization system.”
+- Use “Process R&D” for the workspace where engineers validate candidates, run experiments, and preserve knowledge.
+- Use “constrained optimization” or “sequential optimization” for numerical capabilities, together with objectives, safety boundaries, and method admission.
+- Call system outputs a “next-experiment recommendation” or “candidate process setting,” never an “optimal process” or “production-parameter recommendation.”
+- Call a completed, supported outcome a “validated operating region”; one successful setting is not a process window.
+
+“Smart process” is incomplete and can imply an autonomous process, so it is not a product category, menu, or capability name. “Intelligent Process R&D” may appear only in promotional context that explicitly retains engineer review and constrained experiment recommendations; formal product descriptions should prefer “Process R&D,” “experiment design,” and “constrained optimization.” “Process recommendation” is not a formal term because the system recommends a next experiment or candidate process setting, not a complete production-ready process.
 
 An evidence level answers “how strong is the current support?”, an observational conclusion answers “what relationship was observed?”, and an experimental conclusion answers “did the intervention support the hypothesis?” These concepts are not interchangeable. *Robust screening only* (`screening`) and *limited evidence* (`limited`) are degraded labels at levels one and two; they do not introduce additional conclusion categories.
 
-Use *root cause* only when the validating evidence is stated. *AI process R&D* may describe the interaction model but does not replace the product category. Algorithm names belong in technical explanations, not in the product value itself.
+Use *root cause* only when the validating evidence is stated. *AI Process R&D* or *Intelligent Process R&D* may describe the interaction model but does not replace the product category. Algorithm names belong in technical explanations, not in the product value itself.
 
 Do not present long-term automation ambitions, specification candidates without external adoption, or future controlled-action capabilities as a current product category, industry standard, or demonstrated benefit.
 
@@ -68,9 +86,12 @@ The short tagline is a communication shorthand for the core value, not a separat
 Public documentation uses a formal, direct, and verifiable engineering voice:
 
 - Home, getting-started, FAQ, and interface copy first state what the system recommends, why, and with what risk; they do not require engineers to understand model names. For example, say “continue along the stable observed trend” before introducing “linear response surface.”
+- Public entry pages answer “what is this, which problem does it solve, and what works today?” before architecture names, API fields, or statistical terms. A string of abbreviations is not a product explanation.
+- Expand an abbreviation on first use, such as “design of experiments (DOE),” “large language model (LLM),” or “Model Context Protocol (MCP).” Keep fields needed only by developers in technical sections.
 - Algorithm, architecture, validation-protocol, and development documents retain precise terminology, formal conditions, and statistical gates. Explain a term in plain language on first use rather than replacing technical precision with vague copy.
 - The same fact may have layered wording: user documentation explains business meaning, while technical documentation supplies model names and decision rules. Both layers retain the same claim strength.
 - State the object, capability, and result before implementation detail. Do not replace a concrete calculation or workflow with anthropomorphic terms such as *thinking*, *understanding*, or *brain*.
+- Product definitions state the user, unit of work, capabilities, and outputs directly. Do not continue a definition with vague pronouns or explain internal marketing choices to readers.
 - Distinguish implemented capability, test result, development-stage evidence, external validation, and roadmap work. Planned work is never written as current behavior.
 - Use `AI`, `LLM`, Gaussian process, and Bayesian optimization only to identify a concrete technical responsibility, not as effect adjectives.
 - Quantitative results include the evaluated population, comparator, metric, confidence interval, and applicability boundary. Without those elements, do not present a number as a benefit claim.

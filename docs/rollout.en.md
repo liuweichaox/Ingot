@@ -1,8 +1,10 @@
 # Scenario validation
 
-> Status: **rolling validation protocol**. This document defines how to prove that Ingot genuinely helps process engineers, not how to prove that one algorithm looks advanced.
+> Status: **rolling validation protocol**. This document defines the validation method and evidence boundaries for real-project benefit; algorithm complexity is not an acceptance criterion.
 
-[Roadmap](project-plan.en.md) defines why the system is built, what it aims to become, and when it may advance. This document only defines how historical replay, shadow validation, and controlled online experiments are preregistered, run, falsified, reviewed internally, and translated into public conclusion boundaries. The three work lines answer different questions and cannot substitute for one another.
+A working demo establishes that the software workflow exists; it does not establish experiment-efficiency benefit. Benefit validation has three stages: leakage-free replay of historical projects, evaluation of new recommendations in shadow use, and measurement of actual benefit through controlled online experiments.
+
+[Roadmap](project-plan.en.md) defines the system objective, long-term position, and promotion conditions. This document defines preregistration, execution, falsification, internal review, and public conclusion boundaries for historical replay, shadow validation, and controlled online experiments. The three validation lines answer different questions and cannot substitute for one another.
 
 ## Validation questions
 

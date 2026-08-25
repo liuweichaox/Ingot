@@ -2,13 +2,15 @@
 
 > Status: **v2 strategy baseline plus rolling roadmap**. Sections 1–5 fix the long-term direction, strategic thesis, and stable boundaries. Sections 6–9 evolve with real data, engineer feedback, external adoption, and acceptance results. Progress follows evidence gates, never feature count or calendar time alone.
 
+This document distinguishes current capabilities from long-term objectives. Near-term work validates the trustworthiness of the data chain, recommendations, and review process. Automation and open protocols advance only after the preceding evidence stage passes.
+
 ## 1. Long-term position
 
 Ingot's core value remains unchanged:
 
 > **Turn every real run into comparable, testable engineering evidence so process engineers can avoid unproductive experiments and reach target process conditions faster.**
 
-Ingot keeps its current public category:
+Ingot keeps its current public category. *Optimization* means selecting the next experiment around explicit objectives and safety boundaries; it does not mean automatic control or demonstrated real-factory benefit:
 
 > **Open-source Process Diagnosis & Optimization.**
 
@@ -51,7 +53,7 @@ The long-term capability chain is:
 
 ```text
 trusted acquisition → run and quality evidence → evidence-backed diagnosis
-→ falsifiable experiment → safe optimization → knowledge reuse
+→ falsifiable experiment → constrained optimization → knowledge reuse
 ```
 
 This is a dependency chain, not menu order. Do not perform strong analysis with untrusted data, claim causes from observational evidence, enter shadow mode before replay, or enter controlled action before shadow and safety evidence pass.
@@ -170,7 +172,7 @@ flowchart LR
     Sources["controls / instruments / vision / inspection / MES"] --> Edge["Edge\nacquisition · mapping · buffering · controlled action gateway"]
     Edge --> Platform["Platform\nformal facts · state machines · permissions · audit"]
     Platform --> Analysis["deterministic analysis\nquality · comparison · statistics"]
-    Platform --> Optimizer["Optimizer\nmodels · constraints · experiment proposals"]
+    Platform --> Optimizer["Optimizer\nexperiment design · constrained optimization"]
     Platform --> Agent["Agent\nlanguage parsing · evidence retrieval · tool orchestration"]
     Platform --> Web["engineering workbench"]
     Engineer["Process engineer"] --> Web

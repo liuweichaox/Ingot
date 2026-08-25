@@ -1,69 +1,100 @@
+<a id="readme-top"></a>
+
 <div align="center">
   <a href="https://ingotstack.com">
     <img src="apps/website/public/brand/ingot-lockup.svg" alt="Ingot" width="340">
   </a>
 
-  <p><strong>开源工业工艺优化系统</strong></p>
-  <p>将真实运行与质量结果沉淀为可复核的工程证据，指导下一步工艺实验。</p>
+  <p><strong>开源工艺追因与优化系统</strong></p>
+  <p>看清这次运行，做对下一项实验。</p>
 
   [![CI](https://github.com/liuweichaox/Ingot/actions/workflows/ci.yml/badge.svg)](https://github.com/liuweichaox/Ingot/actions/workflows/ci.yml)
   [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-E8AD56.svg)](LICENSE)
   [![.NET 10](https://img.shields.io/badge/.NET-10-512BD4.svg)](https://dotnet.microsoft.com/)
   [![React 19](https://img.shields.io/badge/React-19-61DAFB.svg)](https://react.dev/)
   [![PostgreSQL 17](https://img.shields.io/badge/PostgreSQL-17-4169E1.svg)](https://www.postgresql.org/)
-  [![TimescaleDB](https://img.shields.io/badge/TimescaleDB-2.28-FDB515.svg)](https://www.timescale.com/)
   [![Python 3.12](https://img.shields.io/badge/Python-3.12-3776AB.svg)](https://www.python.org/)
-  [![Docker Compose](https://img.shields.io/badge/Docker_Compose-v2-2496ED.svg)](https://docs.docker.com/compose/)
 
-  [三分钟演示](#三分钟看懂-ingot) · [快速开始](#快速开始) · [系统架构](#系统架构) · [文档](#文档) · [路线图](#路线图) · [参与讨论](https://github.com/liuweichaox/Ingot/discussions)
+  [官网](https://ingotstack.com) · [在线文档](https://docs.ingotstack.com/zh) · [本地演示](#本地演示) · [报告问题](https://github.com/liuweichaox/Ingot/issues) · [参与讨论](https://github.com/liuweichaox/Ingot/discussions)
 
   简体中文 · [English](README.en.md)
 </div>
 
-## Ingot 是什么
+<a href="https://ingotstack.com">
+  <img src="apps/website/public/og.zh.png" alt="Ingot：看清这次运行，做对下一项实验" width="100%">
+</a>
 
-Ingot 是一套开源工业工艺优化系统，将现场运行数据和质量结果组织为可复现的实验观察、下一步参数建议和经过验证的工艺操作域。
+<details>
+  <summary>目录</summary>
 
-它将现场采集、运行识别、质量结果、工艺追因和实验设计连接在同一条数据闭环中；再按问题选择 DOE、响应面或受约束贝叶斯优化，推荐下一组待验证的工艺条件。证据快照、人工审批和影子验证约束结果如何进入生产；Agent 只负责查询与解释，不是优化或控制主体。
+- [项目概览](#项目概览)
+- [能力范围](#能力范围)
+- [本地演示](#本地演示)
+- [领域流程](#领域流程)
+- [当前状态](#当前状态)
+- [系统边界](#系统边界)
+- [运行时架构](#运行时架构)
+- [仓库结构](#仓库结构)
+- [完整部署](#完整部署)
+- [开发验证](#开发验证)
+- [文档](#文档)
+- [路线图](#路线图)
+- [参与贡献](#参与贡献)
+- [许可证](#许可证)
 
-## 三分钟看懂 Ingot
+</details>
 
-模拟数据讲的是一个具体问题：`RUN-2026-0821-005` 的镜片面形误差达到 **0.48 μm**，超过 **0.35 μm** 上限；相邻合格运行是 **0.22 μm**。不需要数据库或 Docker，在两个终端运行：
+## 项目概览
+
+Ingot 是面向工艺工程师的开源工艺追因与优化系统。系统统一关联设备记录、生产运行、过程轨迹、检验结果和研发上下文，形成可比较、可追溯的运行证据。
+
+围绕一次真实运行，Ingot 提供三类工程能力：
+
+- **运行还原**：确认实际条件、过程变化、材料、工装和质量结果；
+- **原因验证**：比较可比运行，形成候选原因、反证和证据缺口；
+- **实验决策**：设计验证实验，并在目标和安全边界内提出下一步实验建议。
+
+项目的固定设计目标是：
+
+> **把每次真实运行变成可比较、可验证的工程证据，帮助工艺工程师减少无效实验，更快找到达到目标的工艺条件。**
+
+Ingot 适用于实验成本较高、样本有限、质量目标和安全边界明确的工艺研发。标准工作流程包括数据可信度检查、可比运行筛选、候选原因分析、验证实验设计和受约束的下一步实验建议。工程师负责确定目标和边界、审核建议、批准实验，并判断结论能否用于生产。
+
+分析方法根据问题类型、数据覆盖和约束条件选择，可采用传统实验设计（DOE）、响应面或受约束贝叶斯优化。每项建议均保留输入数据、适用条件、计算理由、不确定性和审核状态。
+
+## 能力范围
+
+Ingot 不替换现有生产执行、实时控制、质量合规或实验室管理系统。当前领域模型覆盖以下工程任务：
+
+| 典型任务 | 系统输出 |
+|---|---|
+| 超差运行分析 | 满足可比条件的运行、关键差异、候选原因和证据缺口 |
+| 新材料、新设备或新参数验证 | 具有对照、边界和审核记录的验证实验 |
+| 下一步实验条件选择 | 质量目标和安全约束内的候选工艺设置、理由、风险和待验证点 |
+
+## 本地演示
+
+合成演示使用一条面形误差超限的镜片运行记录。演示流程包括“打开超差运行 → 核对质量结果 → 与合格运行比较 → 查看候选原因和下一项验证实验”。
+
+运行环境要求 Node.js 22.22+；无需数据库、设备或 Docker：
+
+```bash
+npm --prefix apps/platform ci
+```
+
+在两个终端分别运行：
 
 ```bash
 node scripts/platform-demo.mjs
 ```
 
 ```bash
-npm --prefix apps/platform ci
 npm --prefix apps/platform run demo
 ```
 
-打开 `http://127.0.0.1:3001`，使用 `demo / demo` 登录。工作台会给出四步入口：打开超差运行 → 核对已复核质量结果 → 与合格运行比较 → 查看候选原因、混杂因素和下一项验证实验。用户可以在三分钟内走完“看清这次运行——找到关键差异——决定下一步”的主线。
+打开 `http://127.0.0.1:3001`，使用 `demo / demo` 登录。演示数据全部为合成数据，只验证界面和业务流程，不证明真实工艺收益。
 
-## 为什么做 Ingot
-
-Ingot 围绕一条可复核的工艺优化链路建设：
-
-> **把每次真实运行变成可比较、可验证的工程证据，持续选择更值得验证的下一组工艺条件，并沉淀适用范围明确的工艺操作域。**
-
-项目保留的目标表述是：**把每次真实运行变成可比较、可验证的工程证据，帮助工艺工程师减少无效实验，更快找到达到目标的工艺条件。** 这是需要由公开回放和真实项目持续验证的目标，不是对所有工艺和算法的既成效果承诺。
-
-传统工艺研发中，大量判断依赖个人记忆、零散表格和不可复现的试验顺序。即使设备已经产生数据，生产条件、过程曲线和质量结果也常常无法对应到同一次真实运行，计算机因此无法可靠地参与工程判断。
-
-Ingot 先建立可信的数据闭环，再帮助工程师：
-
-- 找到一次运行实际用了什么设备、产品、工艺规范、材料和工装；
-- 把实际设定、过程轨迹和检验结果关联到同一次运行；
-- 比较可比运行，发现差异发生在哪个变量、阶段或上下文；
-- 区分候选原因、混杂因素和证据不足；
-- 把工程判断转成可证伪、可审核的实验；
-- 在安全边界内选择更有价值的下一步实验；
-- 保存经过验证的结论、适用范围和失效条件。
-
-系统负责整理运行事实、比较候选方法并提出参数建议；工艺工程师负责定义目标和安全边界、执行验证并判断结果能否进入生产。
-
-## 一条完整闭环
+## 领域流程
 
 ```text
 工艺配置 → 现场接入 → 生产运行 → 质量管理 → 工艺追因 → 工艺研发
@@ -71,115 +102,59 @@ Ingot 先建立可信的数据闭环，再帮助工程师：
     └────────── 已验证工艺规范、工艺操作域与知识返回生产 ──────────┘
 ```
 
-| 阶段 | 解决的问题 |
+| 阶段 | 主要职责 |
 |---|---|
-| 工艺配置 | 平台应记录哪些变量、单位、目标、质量规则和安全边界？ |
-| 现场接入 | 控制系统、仪器、视觉、检验和业务数据如何映射成稳定业务语义？ |
-| 生产运行 | 这次真实运行用了什么条件，过程实际发生了什么？ |
-| 质量管理 | 检验结果能否准确关联到同一次运行并完成独立复核？ |
-| 工艺追因 | 数据是否可信，哪些差异值得验证，哪些仍受混杂或证据不足限制？ |
-| 工艺研发 | 下一步做什么实验最有价值，并且没有越过已声明的安全边界？ |
+| 工艺配置 | 定义变量、单位、质量规则和安全边界 |
+| 现场接入 | 将设备点位和业务数据映射为统一工艺字段 |
+| 生产运行 | 记录实际条件、过程轨迹和生产上下文 |
+| 质量管理 | 关联检验结果并执行独立复核 |
+| 工艺追因 | 比较运行差异，形成候选原因、反证和证据缺口 |
+| 工艺研发 | 验证候选，并在目标与安全边界内选择下一项实验 |
 
-采集不是终点，优化算法也不是起点。可信运行事实是所有分析和建议的共同地基。
+可信运行事实是分析和建议的前置条件；数据采集与优化算法均服务于同一条证据链。
 
-## 按问题选择计算方法
+## 当前状态
 
-Ingot 不把某一种“先进算法”固定成所有问题的答案：
+主要软件流程已经实现：系统可以把运行和质量结果关联起来，检查数据能否用于分析，比较可比运行，形成候选原因，设计实验并保存审核记录。
 
-- 数据覆盖、缺失和漂移使用数据质量统计；
-- 正常/异常差异使用稳健统计、匹配比较和阶段分析；
-- 设备、材料、工装等上下文使用分层统计、方差分量或混合效应模型；
-- 原因判断使用对照、重复、区组、随机化和干预实验；
-- 昂贵的小样本参数搜索使用高斯过程和受约束贝叶斯优化；
-- 机理明确而数据较少时融合物理特征或先验；
-- LLM 用于解析工程问题、调用只读工具和组织证据说明，不直接生成数值工艺设定。
+真实收益验证尚未完成。当前策略尚未通过独立的未见数据验收，真实工厂的历史复盘、旁路试用和受控在线验证仍在进行。现阶段可对软件能力进行体验和评估，但相关结果不能证明系统已在真实工厂减少实验或缩短研发周期。
 
-详细方法边界见[分析与优化](docs/optimization.md)。
+数据或方法未通过准入时，系统停止相应建议、记录原因，并降级至响应面或传统实验设计。
 
-## 产品组成
+完整的能力、验证和生产成熟度见[当前状态](docs/status.md)；公开方法结果、失败项和统计边界见[优化器实验效率验证](tools/public-validation/README.md)。
 
-- **Edge**：连接控制系统、仪器、网关和业务数据源，完成语义映射、执行边界识别、断网缓存与补传。
-- **Process Executions**：把连续信号组织成可追溯的真实运行和阶段轨迹。
-- **Manufacturing**：记录产品、工艺规范、设备、材料、组件和工装等运行上下文。
-- **Inspections**：保存质量目标、安全结果、附件和人工复核。
-- **Research**：组织问题、候选原因、假设、实验、结果和工艺操作域。
-- **Optimizer**：执行可重复的数值建模、约束判断和序贯实验建议。
-- **Agent**：帮助工程师查询、组织和解释经过验证的系统事实。
+## 系统边界
 
-这些模块围绕同一条证据链工作，不建立互相冲突的平行业务记录。
-
-## 和已有工具的边界
-
-| 类别 | Ingot 使用它解决什么 | Ingot 不是什么 |
+| 相邻系统或方法 | 与 Ingot 的关系 | 系统边界 |
 |---|---|---|
 | MES、SCADA、Historian | 接收运行、设备和过程事实 | 不替代生产执行、监控或实时控制 |
 | LIMS、QMS、ELN | 关联检验结果、审核和研发上下文 | 不替代完整样品、合规或文档管理 |
-| DOE、响应面、贝叶斯优化 | 在统一约束和证据快照下选择实验方法 | 不声称某一种算法适合所有工艺 |
-| AI Agent | 查询、组织和解释已授权事实 | 不直接写入参数、批准实验或控制设备 |
+| DOE、响应面、贝叶斯优化 | 在统一目标、约束和证据快照下优化下一项实验 | 不固定一种算法作为所有问题的答案 |
+| AI Agent | 查询、组织和解释已授权事实 | 不直接生成数值设定、批准实验或控制设备 |
 
-历史回放或方法准入不通过时，Optimizer 可以退回传统 DOE 或正则化响应面。公开冻结结果用于界定声明边界，而不是替代真实项目验证。
+## 运行时架构
 
-## 现在能做什么
+![Ingot 运行时组件、代码归属、记录源与跨服务数据流](docs/architecture/system-architecture.svg)
 
-仓库已实现从现场数据到下一项实验建议的主要路径：
+Platform API 是工厂业务记录和证据装配的正式记录源；Optimizer 是无业务状态的数值服务；Agent 与 Platform API 同进程运行，只能通过授权的只读分析工具访问结构化事实；Edge ConnectorHost 具有独立身份、本地存储和故障恢复生命周期。代码项目边界不等于部署边界，生产拓扑及高可用要求见[生产架构](docs/production-architecture.md)。
 
-- 按真实运行关联设备、产品、工艺规范、材料、工装、过程轨迹和检验结果；
-- 在一屏内比较超差与合格运行，显示关键差异、缺失和数据来源；
-- 把候选原因转成带对照、重复、区组和安全边界的可执行实验；
-- 根据已完成实验给出下一项具体参数建议，并说明它是沿当前稳定趋势继续尝试，还是在探索可能更好的参数组合；
-- 保留输入、版本、来源、约束和实验结果，使建议可以复核和重放。
+## 仓库结构
 
-### 当前证据边界
+| 路径 | 职责 |
+|---|---|
+| `src/edge` | 现场协议、采集生命周期、语义映射、离线缓冲与重放 |
+| `src/platform` | 业务 API、正式记录、证据装配、权限与后台任务 |
+| `src/agent` | 模型辅助的问题解析、只读工具调用与证据说明 |
+| `src/shared` | 领域模型、跨模块契约和稳定标识 |
+| `optimizer` | 实验设计、代理模型、约束判断与序贯优化数值服务 |
+| `apps/platform` | React/Vite 工程工作台 |
+| `apps/website`、`apps/docs-site` | 公开官网与文档站 |
+| `tests/Ingot.Core.Tests` | 后端行为、模块边界和协议的 xUnit 测试 |
+| `deploy`、`scripts`、`tools` | 部署清单、架构门禁、验证工具与基准程序 |
 
-| 冻结评估 | 观察结果 | 可以得出的结论 |
-|---|---|---|
-| 450 次开发数据配对回放 | 优于随机和最大最小空间填充；总体结果与正则化二次响应面相同；未在所有数据集上不劣于线性响应面 | 软件与响应面建模链路可复现；核心选点优势尚未证明 |
-| 400 次未见数据回放 | 总体成功率 85.5%；优于所测线性和二次响应面，但未通过相对随机与最大最小空间填充的预注册门槛 | 不能据此声称对经典方法具有普遍优势 |
-| 预注册过程特征消融 | 没有显示稳定的增量贡献 | 机理特征贡献尚未证明 |
+## 完整部署
 
-完整比较方法、置信区间和失败分项见[优化器实验效率验证](tools/public-validation/README.md)；真实试点验收见[场景验证](docs/rollout.md)。
-
-## 系统架构
-
-```mermaid
-flowchart LR
-    Engineer[工艺工程师] -->|配置、录入、审核| Web[Platform Web]
-    Equipment[现场设备（可选）] -->|直接采集| Edge[Edge ConnectorHost]
-
-    subgraph Ingot[Ingot 当前运行边界]
-        direction LR
-        Web -->|HTTPS / JSON| Api[Platform API<br/>业务记录 · 证据装配<br/>Agent 编排：授权只读工具]
-        Edge -->|运行事件 / HTTPS| Api
-        Api -->|读写| Database[(PostgreSQL + TimescaleDB<br/>业务记录 · 时序数据)]
-        Worker[Platform Worker<br/>后台任务 · 知识处理] -->|读写| Database
-        Api -->|计算请求| Optimizer[Optimizer<br/>无状态数值服务]
-        Worker -->|后台计算| Optimizer
-    end
-
-    classDef person fill:#F8FAFC,stroke:#64748B,color:#0F172A,stroke-width:1.5px;
-    classDef edge fill:#ECFDF5,stroke:#0F766E,color:#0F172A,stroke-width:1.5px;
-    classDef platform fill:#F0FDFA,stroke:#0F766E,color:#0F172A,stroke-width:1.5px;
-    classDef storage fill:#FFFFFF,stroke:#475569,color:#0F172A,stroke-width:1.5px;
-    classDef compute fill:#FFFBEB,stroke:#A16207,color:#0F172A,stroke-width:1.5px;
-    class Engineer,Equipment person;
-    class Edge edge;
-    class Web,Api,Worker platform;
-    class Database storage;
-    class Optimizer compute;
-    style Ingot fill:#FFFFFF,stroke:#0F766E,stroke-width:1.5px
-```
-
-Platform API 是当前产品内业务记录与证据的记录源；Platform Worker 是独立后台进程；Optimizer 是无状态数值服务；Agent 编排在 Platform API 内运行，只能通过授权只读工具访问结构化事实。Edge 是可选的现场直接采集能力，与 Platform 即使部署在同一台机器，也保持独立进程、存储和故障恢复。当前架构不假设 MES、QMS 或 LIMS 对接。
-
-## 快速开始
-
-使用完整 Docker Compose 栈只需要 Git、Docker Engine 或 Docker Desktop，以及 Docker Compose v2。只有从源码开发时才需要 .NET SDK 10、Node.js 22.22+ 和 uv 0.12.5。
-
-如果只想先查看界面和完整模拟业务数据，可以直接使用[模拟数据快速预览](docs/getting-started.md#模拟数据快速预览)；准备真实试点或生产部署时再使用下面的完整 Compose 栈。
-
-首次启动前请修改 `.env` 中的数据库密码、Edge 令牌和管理员配置。默认认证模式为 `Local`；
-生产环境不要使用 `Disabled`，除非这是明确隔离的演示部署并同时设置了
-`INGOT_ALLOW_INSECURE_DEMO=true`。
+完整 Compose 栈需要 Git、Docker Engine 或 Docker Desktop，以及 Docker Compose v2：
 
 ```bash
 git clone https://github.com/liuweichaox/Ingot.git
@@ -188,110 +163,38 @@ cp .env.example .env
 docker compose -f docker-compose.app.yml up -d --build
 ```
 
-首次构建会下载 .NET、Node、Python、PyTorch 和 TimescaleDB 镜像，耗时取决于网络。命令结束后用
-`docker compose -f docker-compose.app.yml ps -a` 确认 `platform-migrate` 成功退出、四个 HTTP/数据库核心服务均为 `healthy`，且 `platform-worker` 持续为 `running`；不要把“仍在下载镜像”误认为应用已经启动。
-
-启动后访问：
-
-```text
-http://localhost:3000       工程工作台
-http://localhost:8000/health
-http://localhost:8000/openapi/v1.json
-http://localhost:8100/ready
-```
-
-本地认证使用 `.env` 中的 `INGOT_ADMIN_USERNAME` 和 `INGOT_ADMIN_PASSWORD`。若管理员密码留空，Migrator 只在空用户表首次创建管理员时把随机口令输出到 `platform-migrate` 日志。启动与排障细节见[快速开始](docs/getting-started.md)和[部署运维](docs/deployment.md)。
-
-首次使用应先完成一条真实或代表性的数据闭环，再进入追因和研发：建立工艺配置 → 接入现场数据 → 完成一次运行 → 关联检验 → 检查数据可信度 → 比较运行 → 设计验证实验。
-
-完整步骤见[快速开始](docs/getting-started.md)。
+启动前必须修改 `.env` 中的数据库密码、Edge 令牌和管理员配置。启动后访问 `http://localhost:3000`。详细状态检查、认证和排障见[快速开始](docs/getting-started.md)；真实试点按[受控试点指南](docs/pilot.md)执行；生产环境先阅读[生产架构](docs/production-architecture.md)和[部署运维](docs/deployment.md)。
 
 ## 开发验证
 
-```bash
-dotnet restore Ingot.sln
-dotnet build Ingot.sln
-dotnet test tests/Ingot.Core.Tests/Ingot.Core.Tests.csproj
-npm --prefix apps/platform ci
-npm --prefix apps/platform test
-uv sync --project optimizer --extra service --group dev --locked
-```
-
-完整 CI 门禁：
+源码开发需要 .NET SDK 10、Node.js 22.22+ 和 uv 0.12.5。完整 CI 门禁：
 
 ```bash
 ./scripts/verify.sh
 ```
 
-使用固定公开制造数据运行完整离线基准：
-
-```bash
-./scripts/verify-optimizer-acceptance.sh
-```
-
-该基准验证可复现的软件和方法链路，不替代真实项目的影子验证或受控在线验证。当前结果与判定规则见[公开数据实验效率验证](tools/public-validation/README.md)。
-
-运行当前优化策略在已披露数据上的开发回归：
-
-```bash
-./scripts/benchmark-optimizer-development.sh
-```
-
-开发回归用于确认方法选择已经修复已知退化，不作为新的效果证明。公开验收只使用“开发回归、未见数据验收、真实试点”三个状态；内部历史批次和完整失败结果仍保留在验证目录中供审计。
-
-## 仓库结构
-
-```text
-src/edge/          现场采集与可靠上送
-src/platform/      中心 API 与业务模块
-src/agent/         模型辅助查询与证据说明
-src/shared/        领域模型与公共契约
-optimizer/         数值分析与贝叶斯优化服务
-tests/             .NET 核心测试
-apps/platform/     React 工艺研发工作台
-apps/website/      官方网站
-apps/docs-site/    文档站
-docs/              中英文项目文档
-deploy/            部署资产
-scripts/           验证与运维脚本
-```
+常用命令和工程约束见[贡献指南](CONTRIBUTING.md)。
 
 ## 文档
 
-- [文档首页](docs/index.md)
-- [快速开始](docs/getting-started.md)
-- [系统设计](docs/design.md)
-- [分析与优化](docs/optimization.md)
-- [公开数据实验效率验证](tools/public-validation/README.md)
-- [机理知识设计](docs/mechanism-knowledge.md)
-- [数据接入](docs/data-connection.md)
-- [场景验证](docs/rollout.md)
-- [发展规划](docs/project-plan.md)
-- [部署运维](docs/deployment.md)
-- [常见问题](docs/faq.md)
-- [品牌规范](docs/brand.md)
-- [开源依赖](docs/open-source-dependencies.md)
+- [文档首页](docs/index.md)：按目标选择阅读路径
+- [快速开始](docs/getting-started.md)：体验演示或启动本地完整栈
+- [当前状态](docs/status.md)：已实现能力、验证证据和生产边界
+- [受控试点指南](docs/pilot.md)：从工程问题到首个受控实验
+- [系统设计](docs/design.md)：稳定业务边界和组件职责
+- [分析与优化](docs/optimization.md)：方法选择、准入和数值策略
+- [数据接入](docs/data-connection.md)：身份、映射和数据质量
+- [场景验证](docs/rollout.md)：历史回放、影子和在线验证
+- [发展规划](docs/project-plan.md)：长期方向和晋级闸门
 
 ## 路线图
 
-- [x] 真实运行、实际条件、过程特征与检验结果形成可追溯观察
-- [x] 候选原因、假设、实验和工艺操作域使用同一研发记录主线
-- [x] 受约束 GP/BO 建议、待执行点避让和安全冷启动
-- [x] 用明确许可的公开制造数据固化可复现基准和声明边界
-- [x] 完成一组未参与开发的公开物理实验评估、强基线比较和机理特征消融，并保留“尚未证明”的结果
-- [ ] 公布真实制造历史项目的无泄漏逐次回放
-- [ ] 完成新项目影子建议和工程师拒绝原因分析
-- [ ] 完成受控在线实验并公布预注册结果
-- [ ] 用第二个明显不同的工艺验证核心契约的通用性
-- [ ] 将只读与提议能力开放为模型无关的 Agent 协议
-- [ ] 发布制造智能证据与实验协议的 Schema、验证器和参考实现候选版
-
-近期先证明历史证据装置可信，中期再开放 Agent 协议，长期才争取形成开放规范。路线图以真实证据和验收闸门为准，详细顺序见[发展规划](docs/project-plan.md)。
+近期目标是完成真实历史项目的无泄漏回放，再进入前瞻影子和受控在线验证；中长期才开放模型无关的 Agent 协议和制造智能证据规范。详细闸门见[发展规划](docs/project-plan.md)。
 
 ## 参与贡献
 
-如果你也在研究工业数据如何进入可审计的实验闭环，可以 Star 本仓库以关注后续验证结果，并通过 [Discussions](https://github.com/liuweichaox/Ingot/discussions) 分享工艺场景、数据契约或方法建议。
+项目接受设备适配、统计方法、实验设计、优化算法、测试和文档贡献。参与方式包括[提交问题](https://github.com/liuweichaox/Ingot/issues)、[参与讨论](https://github.com/liuweichaox/Ingot/discussions)，或按[贡献指南](CONTRIBUTING.md)发起 Pull Request。提交前应同时阅读[行为准则](CODE_OF_CONDUCT.md)和[安全策略](SECURITY.md)。
 
-欢迎贡献设备适配、统计方法、实验设计、优化算法、真实回放、测试、文档和工艺知识。开始前请阅读[贡献指南](CONTRIBUTING.md)、[行为准则](CODE_OF_CONDUCT.md)和[安全策略](SECURITY.md)。
+## 许可证
 
 Ingot 使用 [Apache License 2.0](LICENSE)。

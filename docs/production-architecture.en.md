@@ -1,6 +1,8 @@
 # Production architecture
 
-> Document status: **target design and implementation baseline**. This document defines the failure model, data semantics, safety boundaries, and admission gates required to move Ingot from R&D validation into sustained production operation. It does not claim that the bundled single-host Compose topology is highly available.
+> Document status: **target design and implementation baseline**. This document defines the failure model, data semantics, safety boundaries, and admission gates required to move Ingot from R&D validation into sustained production operation. The definition does not establish that the bundled single-host Compose topology is highly available.
+
+This document defines production topology, failure models, data semantics, and safety-admission requirements; it is not an installation guide. The default single-machine deployment is limited to development validation and controlled pilots. Long-running factory use must additionally verify data durability under failure, site-permission isolation, enforcement of safety rules, and backup restoration.
 
 ## Scope and objective
 

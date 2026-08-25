@@ -2,29 +2,29 @@
 
 > Status: **current product and technical boundaries**.
 
-## What is the central problem Ingot solves?
+## What core problem does Ingot solve?
 
-Turn every real run into comparable, testable engineering evidence so process engineers can avoid unproductive experiments and reach target process conditions faster. Acquisition, comparison, diagnosis, experimental design, and numerical optimization are means to that outcome.
+A shared run identity links actual conditions, process curves, and quality outcomes so engineers can review field facts in one place. The system then compares run differences, forms candidate causes worth testing, and designs the next experiment.
 
 ## Is Ingot a data-acquisition system?
 
-Not only. Acquisition is necessary, but value appears when data become the conditions, trajectory, and quality evidence of a real run and can support comparison, judgment, and the next experiment.
+Data acquisition is not Ingot's only responsibility. Acquisition receives raw data; the system also determines the associated run, actual conditions, quality outcome, and subsequent validation task.
 
 ## Does Ingot replace process engineers?
 
-No. The system organizes facts, executes calculations, exposes uncertainty, and proposes actions. Engineers frame the problem, review data and constraints, judge field executability, approve experiments, and own the final decision.
+No. The system organizes facts, performs calculations, explains uncertainty, and proposes actions. Engineers frame the problem, review field constraints, approve experiments, and make the final judgment.
 
 ## Can the system find root causes automatically?
 
-History usually supports candidate causes, stable associations, confounded associations, or insufficient evidence. A definitive cause requires engineering judgment and appropriate controls, repetition, blocking, randomization, or intervention. Ingot narrows the field and designs validation without presenting correlation as causation.
+Historical data cannot establish a root cause by itself; it can only identify associations between factors. Material, equipment, time, and tooling may change together and create confounding. The system records these limits and supports controlled, repeated experiments. A candidate becomes a validated cause only when experimental results and engineering judgment support it.
 
-## Why are Manufacturing, Process Executions, and Inspections necessary?
+## Why does the system record conditions, runs, and inspections together?
 
-Process Executions define a real run, Manufacturing preserves its equipment, product, process specification, material, and tooling conditions, and Inspections preserve outcomes. Without any one of them, a computer may combine runs produced under different conditions.
+Conditions, runs, and inspections jointly describe execution conditions, execution behavior, and final outcomes. In the code they correspond to Manufacturing, Process Executions, and Inspections. Missing any one of these records can cause runs made under different conditions to be compared incorrectly.
 
 ## Why are planned settings insufficient?
 
-Equipment may limit, bias, or dynamically deviate from a plan, and operators may intervene. Models need actual execution values. Missing explicitly mapped actual values exclude a run with a visible reason instead of being filled by plans.
+Equipment limits, deviations, operator adjustments, and dynamic response can cause planned and actual values to differ. When actual values are missing, the system excludes the run with an explicit reason and prohibits silent substitution from the plan.
 
 ## Why do process trajectories matter?
 
@@ -32,53 +32,53 @@ The same setting may produce different heating rates, overshoot, pressure hold, 
 
 ## Why record material, tooling, and equipment context?
 
-They may be important factors or merely traceability. The system checks coverage and overlap before estimating influence; it does not add a field to a model merely because the field exists.
+Material, tooling, and equipment context may affect quality or may serve only traceability. The system verifies that sufficient comparable data exist before estimating their influence; field presence alone does not constitute causal evidence.
 
 ## Why not always use the most complex model?
 
-The most effective method depends on the question and data. Simple comparison, robust statistics, or a well-designed controlled experiment may be more reliable. With insufficient or unidentifiable data, the system should request data or refuse to answer.
+Model complexity does not establish reliability. With limited samples or confounded conditions, a controlled experiment often provides clearer evidence than a complex model. When evidence is insufficient, the system requires additional data or experiments and does not generate an unsupported conclusion.
 
-## What does the LLM do?
+## What responsibilities does the language model have?
 
-It parses questions, calls authorized tools, organizes records, and explains results. It does not generate numerical process settings directly, replace statistics, constraints, or experimental validation, or invent facts without sources.
+A large language model (LLM) parses questions, queries authorized records, and generates explanations of calculated results. Numeric process settings come from deterministic calculations. The language model does not replace statistical analysis, constraint checks, or experimental validation and may not generate facts without sources.
 
 ## As foundation models and agents become more capable, what does Ingot become?
 
-It does not become a general industrial chat product. The long-term direction is a trustworthy decision and validation operating system for manufacturing processes. Foundation models and agents can be replaced, while Ingot preserves run facts, evidence relationships, experiment state, permission and approval, execution receipts, and conclusion boundaries. The near term proves the historical evidence apparatus, the medium term opens model-independent agent capabilities, and the long term develops an open evidence and experiment specification for manufacturing intelligence. See the [Roadmap](project-plan.en.md).
+Ingot's product position does not change with foundation-model capability. Language models remain replaceable components, while Ingot preserves run records, evidence sources, experiment state, approvals, and final conclusions. See the [Roadmap](project-plan.en.md).
 
 ## Does adding MCP make an agent safe to drive experiments?
 
-No. MCP and similar protocols standardize tool discovery and invocation. Platform and field systems must still enforce project isolation, provenance, approval, idempotency, action allow lists, device confirmation, and rollback. Capabilities progress from read to propose, commit, and execute; an agent cannot self-approve or connect directly to equipment.
+No. Model Context Protocol (MCP) standardizes only how a model discovers and calls tools. Project access, recommendation approval, call idempotency, device confirmation, and failure recovery remain under platform and field-system control. An agent may not approve its own proposal or bypass the platform to connect directly to equipment.
 
 ## When is Bayesian optimization appropriate?
 
-It is useful when experiments are expensive, responses noisy, controlled dimensions limited, objectives measurable, boundaries explicit, and experiments selected sequentially. High-dimensional, strongly drifting, slowly measured, or heavily unobserved processes should reduce scope, improve data, or use another method first.
+Bayesian optimization applies when individual experiments are costly and each result can guide subsequent experiment selection. The controllable-variable count must be limited, objectives measurable, and safety boundaries explicit. When variables are numerous, the process drifts rapidly, feedback is delayed, or key factors are unmeasured, the problem scope or data must be improved first.
 
-## How can a project start with little data?
+## How does a small-sample project start?
 
-Establish a safe baseline and a small set of informative initial experiments. Engineering knowledge, classical DOE, space filling, or exploration in an approved safe region may apply. Never let an algorithm guess arbitrary process specifications without safety evidence.
+The project first establishes an approved safe baseline, then runs a small set of experiments that can separate the principal factors. The initial design may use engineering judgment, traditional design of experiments (DOE), or evenly distributed points within an approved region. Without safety evidence, an algorithm may not attempt arbitrary process settings.
 
-## Can the system recommend a batch of experiments?
+## Can the system generate a batch of experiment recommendations?
 
-Yes, when parallel equipment or batch efficiency justifies it, while incomplete conditions remain pending points. Field execution determines batch size; “more recommendations” is not a value measure.
+Yes. When equipment can run in parallel or the site schedules work in batches, the system can propose a group of experiments. Unfinished experiments remain “pending points” to prevent the next round from repeating the same conditions. Field capacity and experiment design determine the batch size.
 
-## Are recommendations written automatically to controls?
+## Are experiment recommendations written automatically to controls?
 
-Not by default. A recommendation becomes a formal experiment, reviewed by an engineer and executed manually or through an MES, process-specification management system, or controlled integration. Equipment interlocks and field safety remain independent of the model.
+Not by default. A recommendation must become a formal experiment and pass engineer review before it is executed manually, through an MES or process-specification system, or through an approved integration. Equipment interlocks and field safety remain independent of the model.
 
-## Does an Optimizer or model-service outage stop acquisition?
+## Does an optimization or language-model outage stop acquisition?
 
-No. Edge, Platform, process executions, and inspections continue; only new recommendations or natural-language explanations depending on that service pause.
+No. Field acquisition, run records, and inspections continue; generation of new optimization recommendations and natural-language explanations pauses.
 
 ## Why don't public materials name a specific validation scenario?
 
-The first real scenario tests whether the data chain and algorithm path are reproducible; historical replay, shadow, and controlled-online validation are still in progress. Its industry, equipment, and process parameters stay out of the public repository, while protocols, schemas, acceptance methods, and conclusion boundaries are published so the scenario is not mistaken for the product boundary. The repository separately provides explicitly licensed reaction, formulation, and equipment-process data for independent reproduction of software and method behavior. Those data cannot replace real-scenario validation. A new process supplies variables, mappings, objectives, constraints, context, and optional mechanism knowledge without rewriting the evidence spine or experiment state machine.
+Real projects usually contain restricted equipment, parameter, and production data. The repository therefore publishes validation methods, data formats, synthetic examples, and conclusion boundaries without identifying a factory. Public data with appropriate permission can reproduce software and algorithm behavior but cannot replace real-factory validation. This rule protects field information and preserves scenario neutrality.
 
-## How does the system prove that it reduces experiments?
+## How is a reduction in experiment count validated?
 
-It is measurable. Freeze the target, initial data, experiment budget, comparators, and pass criteria before execution, then count every experiment actually run. One executed recommendation counts as one experiment; if uncertainty produces two recommendations and both are run, both count. A successful option cannot be counted while the other executed option is discarded. Public historical-pool replay, prospective shadow validation, and controlled online validation answer in turn whether the method is faster within an observed candidate pool, remains better without influencing the engineer, and reduces experiments and elapsed time in a real project. See [Scenario validation](rollout.en.md) for the complete method.
+Before results are reviewed, the validation plan fixes the target, starting data, experiment budget, comparison methods, and pass criteria. Every executed experiment is included in cost. Historical review, shadow use, and controlled online experiments respectively evaluate historical efficiency, recommendation stability on a new project, and experiment count and elapsed time after adoption. See [Scenario validation](rollout.en.md) for the complete method.
 
-The previous candidate already demonstrated faster target attainment than random trial and error on three public physical-experiment datasets that were unseen at the time. It did not consistently beat the applicable simple method on Alkox and P3HT, so automatic next-method selection failed overall acceptance. The algorithm has since changed; another unseen-data test will decide whether it both beats model-free selection and avoids material regression against applicable simple methods. Benefit in another factory is measured separately under the same rules using that factory's executed experiment count, success rate, and elapsed time. See [Public-data experiment-efficiency validation](https://github.com/liuweichaox/Ingot/blob/main/tools/public-validation/README.en.md) for formal comparators, statistical gates, and failed subgroups.
+Existing public-data tests support a cautious conclusion: the system was faster than random trial and error in some tests, but did not consistently beat every applicable simple method, so overall acceptance failed. The algorithm has changed and still needs another test on data that were not inspected during development. See [Public-data experiment-efficiency validation](https://github.com/liuweichaox/Ingot/blob/main/tools/public-validation/README.en.md) for complete figures and failures.
 
 ## Is the documentation now finalized?
 

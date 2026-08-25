@@ -2,6 +2,8 @@
 
 > Status: **current technical guide**. The purpose of connectivity is not to accumulate more points, but to make one real run useful for engineering judgment.
 
+This document defines the integration contract for equipment and business data entering Ingot, including the identity semantics of `SiteId`, `EdgeId`, and `ExecutionId`, plus provenance, mapping, time, quality-result linkage, and analysis-admission requirements. Every real integration must verify data ownership, traceable provenance, and quality-result linkage.
+
 ## Definition of a complete connection
 
 A qualified data chain answers:

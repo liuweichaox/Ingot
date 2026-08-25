@@ -15,36 +15,40 @@ async function html(pathname = "/") {
 
 const retired = /Ingot Agent|desktop Agent|connector-workspaces|awaiting-package-approval|FactoryScene3D|制造生产数据与工艺分析系统|Connected production history/i;
 
-test("Chinese home leads with the experiment-reduction outcome", async () => {
+test("Chinese home uses the canonical diagnosis-and-optimization narrative", async () => {
   const source = await html();
   assert.match(source, /<title>Ingot — 开源工艺追因与优化系统<\/title>/i);
-  assert.match(source, /少做无效实验/);
-  assert.match(source, /更快找到达标工艺/);
+  assert.match(source, /看清这次运行/);
+  assert.match(source, /做对下一项实验/);
+  assert.match(source, /受约束优化/);
   assert.match(source, /PROCESS R&amp;D · RUN-042/);
-  assert.match(source, /简单方法先行/);
-  for (const stage of ["还原运行", "比较差异", "设计验证", "选择下一项"]) {
+  assert.match(source, /先确认数据是否可靠，再选择分析与优化方法/);
+  for (const stage of ["建立运行证据", "开展工艺追因", "设计验证实验", "优化下一项实验"]) {
     assert.match(source, new RegExp(stage));
   }
-  assert.match(source, /目标固定：减少无效实验/);
-  assert.match(source, /可厂内自托管/);
+  assert.match(source, /优化能力持续升级，证据边界始终不变/);
+  assert.match(source, /可在厂内自托管/);
+  assert.match(source, /真实工厂收益验证尚未完成/);
   assert.doesNotMatch(source, /自动发现确定根因|已经减少\s*\d+%|FX3U|光学镜片|模压/);
   assert.match(source, /docker compose -f docker-compose\.app\.yml/);
   assert.match(source, /https:\/\/docs\.ingotstack\.com\/zh\/getting-started/);
   assert.doesNotMatch(source, retired);
 });
 
-test("English home leads with the same experiment-reduction outcome", async () => {
+test("English home uses the same diagnosis-and-optimization narrative", async () => {
   const source = await html("/en/");
   assert.match(source, /<html lang="en">/);
   assert.match(source, /<title>Ingot — Open-source Process Diagnosis &amp; Optimization<\/title>/i);
-  assert.match(source, /Avoid unproductive experiments/);
-  assert.match(source, /Reach target conditions faster/);
-  assert.match(source, /Simple methods go first/);
-  for (const stage of ["Reconstruct the run", "Compare differences", "Design validation", "Select what comes next"]) {
+  assert.match(source, /Understand this run/);
+  assert.match(source, /Choose the right next experiment/);
+  assert.match(source, /constrained optimization/i);
+  assert.match(source, /Confirm that the data are trustworthy before choosing an analysis or optimization method/);
+  for (const stage of ["Build run evidence", "Diagnose the process", "Design validation", "Optimize the next experiment"]) {
     assert.match(source, new RegExp(stage));
   }
-  assert.match(source, /One fixed outcome: fewer unproductive experiments/);
+  assert.match(source, /Optimization capabilities evolve/);
   assert.match(source, /self-hostable inside the plant/);
+  assert.match(source, /real-factory benefit validation remains incomplete/i);
   assert.doesNotMatch(source, /automatically discovered root cause|already reduced\s*\d+%|FX3U|Optical lens|molding|one real lens/i);
   assert.match(source, /rel="canonical" href="https:\/\/ingotstack\.com\/en\/"/i);
   assert.doesNotMatch(source, retired);

@@ -13,11 +13,11 @@ export const metadata: Metadata = {
     languages: { "zh-CN": "/", en: "/en/" },
   },
   title: "Ingot — 开源工艺追因与优化系统",
-  description: "把真实运行变成可比较、可验证的工程证据，减少无效实验，更快找到达标工艺。",
+  description: "面向工艺工程师的开源工艺追因与优化系统，支持运行证据关联、工艺追因、实验设计与受约束优化。",
   applicationName: "Ingot",
   keywords: [
-    "Ingot", "数据驱动工艺研发", "工艺工程师决策", "工艺追因",
-    "生产周期", "实验设计", "工艺研发", "工艺窗口",
+    "Ingot", "工艺追因", "工艺优化", "工艺研发", "工艺工程师决策",
+    "生产运行", "实验设计", "受约束优化", "工艺操作域",
     "过程数据", "贝叶斯优化", "工艺知识",
   ],
   icons: {
@@ -26,18 +26,18 @@ export const metadata: Metadata = {
     apple: "/brand/ingot-mark-dark.svg",
   },
   openGraph: {
-    title: "Ingot — 少做无效实验，更快找到达标工艺",
-    description: "还原真实运行，比较关键差异，设计验证并选择下一项实验。",
+    title: "Ingot — 看清这次运行，做对下一项实验",
+    description: "连接真实运行证据，缩小候选原因，设计验证并在安全边界内优化下一项实验。",
     url: origin,
     type: "website",
     locale: "zh_CN",
     siteName: "Ingot",
-    images: [{ url: "/og.zh.png", width: 1200, height: 630, alt: "Ingot — 让真实运行成为可验证的工艺证据。" }],
+    images: [{ url: "/og.zh.png", width: 1200, height: 630, alt: "Ingot — 看清这次运行，做对下一项实验。" }],
   },
   twitter: {
     card: "summary_large_image",
     title: "Ingot — 开源工艺追因与优化系统",
-    description: "让真实运行证据支持工艺比较、原因验证和下一步实验。",
+    description: "用可追溯运行证据支持工艺追因、实验设计和受约束优化。",
     images: ["/og.zh.png"],
   },
 };

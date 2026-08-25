@@ -9,12 +9,12 @@ const origin = "https://ingotstack.com";
 export const metadata: Metadata = {
   metadataBase: new URL(origin),
   title: "Ingot — Open-source Process Diagnosis & Optimization",
-  description: "Turn real runs into comparable, testable engineering evidence, avoid unproductive experiments, and reach target process conditions faster.",
+  description: "An open-source process diagnosis and optimization system for run-evidence linkage, process diagnosis, experiment design, and constrained optimization.",
   applicationName: "Ingot",
   keywords: [
-    "Ingot", "data-supported process R&D", "process engineer decisions", "process diagnosis",
-    "process executions", "experiment design", "process R&D",
-    "process window", "process data", "Bayesian optimization", "process knowledge",
+    "Ingot", "process diagnosis", "process optimization", "process R&D", "process engineer decisions",
+    "process executions", "experiment design", "constrained optimization",
+    "operating region", "process data", "Bayesian optimization", "process knowledge",
   ],
   alternates: {
     canonical: "/en/",
@@ -26,19 +26,19 @@ export const metadata: Metadata = {
     apple: "/brand/ingot-mark-dark.svg",
   },
   openGraph: {
-    title: "Ingot — Fewer wasted experiments, faster routes to target conditions",
-    description: "Reconstruct real runs, compare important differences, design validation, and select the next experiment.",
+    title: "Ingot — Understand this run. Choose the right next experiment.",
+    description: "Connect real-run evidence, narrow candidate causes, design validation, and optimize the next experiment within safety boundaries.",
     url: `${origin}/en/`,
     locale: "en_US",
     alternateLocale: ["zh_CN"],
     siteName: "Ingot",
     type: "website",
-    images: [{ url: "/og.png", width: 1200, height: 630, alt: "Ingot — Turn real runs into testable process evidence." }],
+    images: [{ url: "/og.png", width: 1200, height: 630, alt: "Ingot — Understand this run. Choose the right next experiment." }],
   },
   twitter: {
     card: "summary_large_image",
     title: "Ingot — Open-source Process Diagnosis & Optimization",
-    description: "Use real run evidence for process comparison, causal validation, and the next experiment.",
+    description: "Use traceable run evidence for process diagnosis, experiment design, and constrained optimization.",
     images: ["/og.png"],
   },
 };

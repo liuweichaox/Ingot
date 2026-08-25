@@ -2,73 +2,81 @@
 
 > **Core value**: Turn every real run into comparable, testable engineering evidence so process engineers can avoid unproductive experiments and reach target process conditions faster.
 
-Ingot is an open-source process diagnosis and optimization system. It connects the production conditions, process trajectory, and inspection result of a real run into traceable evidence, helping engineers determine what happened, what warrants validation, and which next action has the highest expected value.
+**Product category:** Open-source Process Diagnosis & Optimization. Ingot links run conditions, process trajectories, production context, and quality outcomes for run comparison, candidate-cause validation, and next-experiment decisions.
 
-The computer organizes evidence, compares runs, analyzes data, and proposes experiments. Process engineers frame the problem, review data and constraints, approve experiments, and make the final judgment. Public entry points lead with the user outcome; full method boundaries and retained failures are disclosed in the validation documents.
+The documentation can be read by task rather than in sequence.
+
+## Choose documentation by task
+
+| Objective | Read first | Continue with |
+|---|---|---|
+| Evaluate the product workflow | [Getting started](getting-started.en.md) | [Current status](status.en.md) |
+| Connect a real problem | [Controlled pilot guide](pilot.en.md) | [Data integration](data-connection.en.md) |
+| Prepare production | [Production architecture](production-architecture.en.md) | [Deployment](deployment.en.md) |
+| Review how the system forms a recommendation | [System design](design.en.md) | [Analysis and optimization](optimization.en.md) |
+| Build process knowledge | [Mechanism knowledge design](mechanism-knowledge.en.md) | [Analysis and optimization](optimization.en.md) |
+| Review effect claims | [Current status](status.en.md) | [Scenario validation](rollout.en.md) |
+| Contribute code | [Contributing](../CONTRIBUTING.en.md) | [System design](design.en.md) |
 
 ## Product loop
 
 ```text
-Process configuration → Field integration → Production runs → Quality management → Diagnosis → Process R&D
-        ↑                                                                                              ↓
-        └──────── validated process specifications, operating regions, and knowledge return to production ────────┘
+Process configuration → Field integration → Production runs → Quality management → Process diagnosis → Process R&D
+           ↑                                                                                         ↓
+           └──────── Validated specifications, operating regions, and knowledge return to production ────────┘
 ```
 
-1. **Process configuration**: define products, variables, units, control parameters, quality measures, and safety boundaries.
-2. **Field integration**: connect controls, instruments, vision, inspection, and business systems to stable business semantics.
-3. **Production runs**: record actual conditions, stages, and trajectories for each real run.
-4. **Quality management**: enter, link, and independently review quality and safety outcomes for the same run.
-5. **Process diagnosis**: review data trust, compare like-for-like runs, and form candidate causes with evidence, counterevidence, and confounding limits.
-6. **Process R&D**: validate candidates through controlled experiments and choose more valuable next experiments within safety boundaries.
+1. **Process configuration** tells the system which variables, units, quality rules, and safety boundaries matter.
+2. **Field integration** turns control, instrument, and business data into consistent process fields.
+3. **Production runs** record actual conditions, stages, trajectories, and manufacturing context.
+4. **Quality management** links inspections uniquely and subjects them to independent review.
+5. **Process diagnosis** checks whether the data are reliable, compares runs, and finds differences worth testing.
+6. **Process R&D** turns those differences into experiments, proposes the next experiment within safety boundaries, and preserves validated results.
 
-These are one evidence chain, not six unrelated products. Acquisition makes facts trustworthy; analysis makes them useful; experiments determine whether a candidate survives.
+This order means “what must exist before the next step.” Navigation may follow day-to-day role needs, but analysis must still begin with trustworthy data.
 
-## Where to start
+## Current maturity
 
-Choose an entry by role, then follow the links into method detail. You do not need to read every document in order.
+The main software workflow runs and has automated tests. In formal terms, the current strategy has not yet passed an independent unseen-data acceptance; that is, it has not passed on a new dataset that was not inspected during development. Real-factory historical review, side-by-side shadow use, and controlled online validation also remain incomplete. You can inspect and evaluate the software today, but it is too early to claim that it consistently reduces experiments or development time.
 
-| Role or goal | Start with | Continue with |
-|---|---|---|
-| First evaluation or trial | [Getting started](getting-started.en.md) | [FAQ](faq.en.md) |
-| Process or data engineer | [Data integration](data-connection.en.md) | [Analysis and optimization](optimization.en.md) |
-| Process knowledge builder | [Mechanism knowledge design](mechanism-knowledge.en.md) | [Analysis and optimization](optimization.en.md) |
-| Platform operations or security | [Production architecture](production-architecture.en.md) | [Deployment](deployment.en.md) |
-| Project or validation lead | [Scenario validation](rollout.en.md) | [Roadmap](project-plan.en.md) |
-| Algorithm or validation contributor | [Public-data experiment-efficiency validation](https://github.com/liuweichaox/Ingot/blob/main/tools/public-validation/README.en.md) | [Analysis and optimization](optimization.en.md) |
-| Contributor or integrator | [System design](design.en.md) | [Production architecture](production-architecture.en.md) |
-| Public-content maintainer | [Brand guide](brand.en.md) | [Document status](#document-status) |
+See [Current status](status.en.md) for the complete layered conclusion. See [Optimizer experiment-efficiency validation](https://github.com/liuweichaox/Ingot/blob/main/tools/public-validation/README.en.md) for public method results and failure records.
 
-## Document status
+## Documentation map
 
-- **Normative baseline**: core value, product boundaries, evidence principles, and stable architecture. Changes require explicit product evidence or an ADR.
-- **Current strategy**: today's analysis methods, default experiment designs, and information architecture. These may evolve without changing the core value.
-- **Rolling status**: roadmap, implementation status, known limits, and validation results. These must track project facts.
+### Development and operation
 
-[Brand guide](brand.en.md) is the single source of truth for public wording; technical documents must not create another core value.
+- [Getting started](getting-started.en.md): synthetic tour and complete local stack
+- [Controlled pilot guide](pilot.en.md): move from an engineering problem to the first validation experiment
+- [Data integration](data-connection.en.md): identity, protocols, points, mappings, and data admission
+- [Deployment](deployment.en.md): configuration, health, monitoring, backup, and upgrade
+- [Frequently asked questions](faq.en.md): concise answers on product boundaries and method choice
 
-## Current facts
+### System and algorithm design
 
-The code covers the main business path across acquisition, run reconstruction, comparable-run analysis, quality linkage, candidate causes, controlled experiments, and next-experiment recommendations, with automated tests. Public physical-experiment replay confirms that the system finds passing settings faster than random trial and error. The unresolved question is whether, with limited data, it can reliably decide to continue along the observed trend or explore a possible best region and parameter interaction. Exact algorithm names, figures, failed subgroups, and confidence intervals are maintained only in [Public-data experiment-efficiency validation](https://github.com/liuweichaox/Ingot/blob/main/tools/public-validation/README.en.md).
+- [System design](design.en.md): stable business model and component responsibilities
+- [Analysis and optimization](optimization.en.md): how the system compares runs, validates causes, and selects the next experiment
+- [Mechanism knowledge design](mechanism-knowledge.en.md): sources, claims, review, fusion, and applicability
 
-Current repository implementation snapshot:
+### Validation and production engineering
 
-- Platform business records, Agent run snapshots, and evaluation evidence share the PostgreSQL recovery boundary.
-- Edge uses a durable local outbox and at-least-once delivery; Platform fails closed on site, event identity, schema, applied-configuration version, content hash, and quality flags.
-- Major Platform business workflows now live in Application, while PostgreSQL stores, external clients, and evidence assemblers remain in Infrastructure. A small set of operational adapters for Edge registration/diagnostics, identity, and runtime metrics still reaches Infrastructure from API; these are remaining convergence points, not templates for new business controllers.
-- Mechanism-knowledge sources, claims, reviews, conflicts, lifecycle, hard bounds, soft ranking, frozen snapshots, and usage traceability are integrated. Model-assisted semantic drafts, Bayesian priors/mechanism features/residual fusion, and paired long-horizon calibration remain incomplete.
-- The repository provides logical backup/restore, monitoring configuration, limited failure drills, and production-acceptance artifact validation. The default Compose deployment remains a single-instance reference topology, not an HA production cell, and does not include PITR, object storage, or controlled equipment writes.
+- [Current status](status.en.md): what works today and what remains unproven
+- [Scenario validation](rollout.en.md): how historical review, shadow use, and controlled experiments test value
+- [Production architecture](production-architecture.en.md): what a production deployment must satisfy
 
-Real production data, project and equipment identities, process parameters, quality distributions, and derived results are controlled factory evidence. They do not enter the public repository or public reports. Public materials provide protocols, schemas, synthetic examples, an explicitly licensed and checksum-verified public-data benchmark, acceptance methods, and conclusion boundaries. The public benchmark independently reproduces software and method behavior, but it does not replace internal validation on real data.
+### Project governance
 
-The current sequence is to prove that the evidence apparatus is reproducible and leakage-free through real historical replay, then establish value through prospective shadow and controlled online validation. Agent protocols and an open specification do not bypass those evidence stages.
+- [Roadmap](project-plan.en.md): long-term direction, priorities, and promotion gates
+- [Brand guide](brand.en.md): product positioning and public wording boundaries
+- [Open-source dependencies](open-source-dependencies.en.md): introduction and audit principles
 
-## Trustworthy-delivery principles
+## Reading status labels
 
-- Planned and actual values remain separate, and missingness stays visible.
-- Every run retains its analysis-admission or rejection reason.
-- Observational results remain candidate relationships until a controlled experiment decides them.
-- A constrained numerical service produces numerical process recommendations; language models organize evidence.
-- Platform enforces provenance, permission, approval, and equipment-safety boundaries for agents.
-- Every recommendation preserves inputs, provenance, versions, uncertainty, and applicability.
+- **Current operating guide**: procedures that can be executed with the current release.
+- **Current facts**: what is implemented, validated, and still limited.
+- **Architecture or specification baseline**: boundaries the product must continue to respect.
+- **Staged implementation or target design**: includes future work and is not current behavior.
+- **Rolling roadmap**: build order changes as evidence changes.
+
+Numeric facts are not copied across entry documents. [Brand guide](brand.en.md) governs the product category, [Current status](status.en.md) governs maturity, and the public validation record governs method figures.
 
 中文文档从 [index.md](index.md) 开始。

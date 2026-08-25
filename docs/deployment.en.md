@@ -2,6 +2,8 @@
 
 > Status: **current operations guide**. Deployment keeps acquisition, business records, and engineering decisions reliable inside the factory. The public website and documentation site are outside the factory runtime.
 
+This document defines service placement, configuration management, observability, failure recovery, backup, and upgrade requirements for long-running environments. See [Getting started](getting-started.en.md) for local development and validation procedures.
+
 This document describes the repository's current runnable form. See [Production architecture](production-architecture.en.md) for target requirements covering replicas, PITR, site production cells, and controlled action. A deployment that has not passed those admission gates must not claim the corresponding production level.
 
 ## Recommended topology

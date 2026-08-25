@@ -2,11 +2,13 @@
 
 > Document status: **incremental implementation**. The claim kernel, relational storage, workbench, evidence-promotion lifecycle, constraint ranking, knowledge-snapshot gates, and recommendation usage trace are implemented. Bayesian priors and mechanism-residual fusion remain later phases.
 
+Mechanism knowledge preserves engineering judgments together with their sources, applicability, and evidence status. An experience note or document passage must be reviewed, supported by experiments, and versioned before it can influence later recommendations.
+
 ## 1. Goal
 
 Mechanism knowledge turns engineering experience, process material, and experimental conclusions into sourced, scoped, reviewable, falsifiable, and versioned engineering assets. When evidence permits, those assets improve candidate causes, experiment design, and next-experiment recommendations.
 
-It does not create a second business spine. Knowledge follows the existing Ingot evidence loop:
+The mechanism-knowledge capability does not create a second business spine. Knowledge follows the existing Ingot evidence loop:
 
 ```text
 raw source → locatable fragment → mechanism-claim draft → engineer review

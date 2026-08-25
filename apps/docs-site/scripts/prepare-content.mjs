@@ -15,6 +15,8 @@ for (const name of ["ingot-mark-dark.svg", "ingot-lockup-dark.svg", "ingot-locku
 const publicSlugs = [
   "index",
   "getting-started",
+  "status",
+  "pilot",
   "design",
   "optimization",
   "mechanism-knowledge",

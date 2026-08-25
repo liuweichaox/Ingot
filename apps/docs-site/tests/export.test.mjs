@@ -7,9 +7,9 @@ const root = path.resolve(import.meta.dirname, "../../..");
 const out = path.join(root, "apps/docs-site/out");
 
 test("exports the bilingual product documentation journey", async () => {
-  for (const file of ["zh/index.html", "en/index.html", "zh/design/index.html", "en/design/index.html", "zh/optimization/index.html", "en/optimization/index.html", "zh/mechanism-knowledge/index.html", "en/mechanism-knowledge/index.html", "zh/rollout/index.html", "en/rollout/index.html", "search-index.json", "sitemap.xml", "robots.txt"])
+  for (const file of ["zh/index.html", "en/index.html", "zh/getting-started/index.html", "en/getting-started/index.html", "zh/status/index.html", "en/status/index.html", "zh/pilot/index.html", "en/pilot/index.html", "zh/design/index.html", "en/design/index.html", "zh/optimization/index.html", "en/optimization/index.html", "zh/mechanism-knowledge/index.html", "en/mechanism-knowledge/index.html", "zh/rollout/index.html", "en/rollout/index.html", "search-index.json", "sitemap.xml", "robots.txt"])
     assert.ok((await readFile(path.join(out, file))).length > 0, file);
-  for (const slug of ["getting-started", "design", "optimization", "mechanism-knowledge", "data-connection", "production-architecture", "project-plan", "rollout", "deployment", "faq", "brand", "open-source-dependencies"])
+  for (const slug of ["getting-started", "status", "pilot", "design", "optimization", "mechanism-knowledge", "data-connection", "production-architecture", "project-plan", "rollout", "deployment", "faq", "brand", "open-source-dependencies"])
     for (const lang of ["zh", "en"])
       assert.ok((await readFile(path.join(out, lang, slug, "index.html"))).length > 0, `${lang}/${slug}`);
 
@@ -31,10 +31,10 @@ test("uses the exact official brand assets", async () => {
 
 test("publishes the experiment-decision journey and public references without interface documentation", async () => {
   const search = JSON.parse(await readFile(path.join(out, "search-index.json"), "utf8"));
-  assert.equal(search.length, 26);
+  assert.equal(search.length, 30);
   assert.deepEqual(
     [...new Set(search.map((item) => item.slug))].sort(),
-    ["", "brand", "data-connection", "deployment", "design", "faq", "getting-started", "mechanism-knowledge", "open-source-dependencies", "optimization", "production-architecture", "project-plan", "rollout"],
+    ["", "brand", "data-connection", "deployment", "design", "faq", "getting-started", "mechanism-knowledge", "open-source-dependencies", "optimization", "pilot", "production-architecture", "project-plan", "rollout", "status"],
   );
 
   for (const lang of ["zh", "en"]) {
@@ -44,6 +44,7 @@ test("publishes the experiment-decision journey and public references without in
     assert.match(design, lang === "zh" ? /设计目标/ : /Design objective/i);
     assert.match(index, lang === "zh" ? /更快找到达到目标的工艺条件/ : /reach target process conditions faster/i);
     assert.match(index, lang === "zh" ? /工艺配置.*现场接入.*生产运行.*质量管理.*工艺追因.*工艺研发/s : /process configuration.*field integration.*production runs.*quality management.*diagnosis.*process R(?:&amp;|&#x26;)D/is);
+    assert.match(index, lang === "zh" ? /当前策略尚未通过独立的未见数据验收/ : /current strategy has not yet passed an independent unseen-data acceptance/i);
     assert.doesNotMatch(`${index}${design}`, /\/api\/|curl|ProductionEvent|InspectionRecord|endpoint|HTTP API/i);
   }
   assert.doesNotMatch(JSON.stringify(search), /\/api\/|curl|ProductionEvent|InspectionRecord|endpoint|HTTP API/i);

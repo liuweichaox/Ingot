@@ -4,6 +4,8 @@ Bilingual static website for Ingot. Public copy follows [`docs/brand.md`](../../
 
 The home page must:
 
+- use “Open-source Process Diagnosis & Optimization” as the product category and “Understand this run. Choose the right next experiment.” as the lead line;
+- use “Process R&D” for the business workflow, “constrained optimization” for the numerical capability, and “next-experiment recommendation” or “candidate process setting” for system output;
 - lead with real data supporting process-engineer decisions;
 - show acquisition, context, process executions, inspections, diagnosis, experiments, and optimization as one evidence chain;
 - explain that methods are selected by the question rather than presenting one algorithm as the product;

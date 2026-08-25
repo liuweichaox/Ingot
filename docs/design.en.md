@@ -2,6 +2,8 @@
 
 > Status: **v1 architecture baseline**. This document fixes product principles, business-record boundaries, and stable component responsibilities. Algorithms, default experiment parameters, page layouts, and implementation sequence remain evolvable strategies.
 
+This document defines component responsibilities, dependency direction, systems of record, runtime boundaries, and architecture constraints that may not be bypassed. Implementation changes are reviewed against this baseline and the automated architecture gates. See [Getting started](getting-started.en.md) for operating instructions.
+
 ## Design objective
 
 Ingot's core value is fixed by the [Brand guide](brand.en.md): turn every real run into comparable, testable engineering evidence so process engineers can avoid unproductive experiments and reach target process conditions faster.
@@ -19,10 +21,10 @@ The system is designed for one company on its factory network, shared by process
 ## Product model
 
 ```text
-Integrate field sources → Configure process semantics → Collect production data → Close the data loop → Process diagnosis → Process R&D
+Process configuration → Field integration → Production runs → Quality management → Process diagnosis → Process R&D
 ```
 
-The first four steps organize field activity into trustworthy run facts. The last two use those facts to support engineering decisions. Process diagnosis and Process R&D are not parallel products: diagnosis explains an observed result, while R&D validates candidates through falsifiable experiments and selects the next experiment. Safe optimization is a method within Process R&D, not a standalone business entry. Both must read the same evidence.
+The first four steps follow business dependencies to organize field activity into trustworthy run facts. The last two use those facts to support engineering decisions. Process diagnosis explains an observed result; Process R&D validates candidates through falsifiable experiments and optimizes the next experiment within objectives and safety boundaries. Constrained optimization is a Process R&D capability, not automatic control or a standalone business entry. Both must read the same evidence.
 
 The current Web information architecture balances the decision chain with frequent role-based tasks through seven business entries:
 
@@ -32,9 +34,9 @@ The current Web information architecture balances the decision chain with freque
 4. **Production runs**: production preparation, tooling installation, run records, the object catalog, and run events;
 5. **Quality management**: inspection entry, independent review, quality records, and quality-deviation analysis, with direct access for daily quality work;
 6. **Process diagnosis**: the diagnosis workbench, data trust, run comparison, and the analysis assistant; AI is an analysis method rather than a standalone business domain;
-7. **Process R&D**: R&D projects, experimental validation, and R&D outcomes.
+7. **Process R&D**: R&D projects, experiment design, constrained optimization, experimental validation, and R&D outcomes.
 
-After the workbench, the primary business entries follow “Field integration → Process configuration → Production runs → Quality management → Process diagnosis → Process R&D.” Field integration registers real sources and communication methods; process configuration reviews dependencies through its configuration overview, then establishes stable semantics, rules, and published versions before production, quality, diagnosis, and R&D. It summarizes the full loop rather than mapping one-to-one to the six stages above: Production runs also covers production preparation, collection, and traceability; Quality management covers inspection and quality-deviation work; and the complete data loop additionally depends on cross-entry evidence such as data trust and run context.
+After the workbench, the primary business entries follow “Field integration → Process configuration → Production runs → Quality management → Process diagnosis → Process R&D.” This navigation order prioritizes frequent role-specific work; it is not the business dependency order above. A new scenario still defines and publishes process semantics before mapping real sources to those semantics. Production runs also covers production preparation, collection, and traceability; Quality management covers inspection and quality-deviation work; and the complete data loop additionally depends on cross-entry evidence such as data trust and run context.
 
 System administration has a separate entry for users, role permissions, platform status, runtime logs, and assistant evaluation, so it does not compete with business tasks. Secondary navigation places frequent daily tasks before setup and maintenance actions. Before the first production release, only canonical current URLs are retained; development-era page aliases are not preserved. After production release, URLs and data contracts follow controlled version-migration discipline.
 
@@ -50,7 +52,7 @@ flowchart LR
     Platform --> Files["attachments and process knowledge"]
     Platform --> Web["Platform Web\nengineering workbench"]
     Platform --> Analysis["deterministic analysis\nquality · comparison · features · statistics"]
-    Platform --> Optimizer["Optimizer\nmodels · constraints · experiment proposals"]
+    Platform --> Optimizer["Optimizer\nexperiment design · constrained optimization"]
     Platform --> Agent["Agent\nquestion parsing · tools · evidence explanation"]
     Engineer["Process engineer"] --> Web
     Web --> Platform
@@ -187,7 +189,7 @@ Both must:
 - require engineer approval before execution;
 - update evidence from actual run results.
 
-One successful point is only a candidate setting. A operating region requires independent confirmation, repeatability, boundary or interaction validation, and an explicit applicability scope.
+One successful point is only a candidate process setting. An operating region requires independent confirmation, repeatability, boundary or interaction validation, and an explicit applicability scope.
 
 ## Consistency and replay
 

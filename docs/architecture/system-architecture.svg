@@ -18,8 +18,8 @@
   <rect width="1440" height="990" fill="#FFFFFF"/>
 
   <!-- Title -->
-  <text x="60" y="46" font-size="28" font-weight="800" fill="#0F172A" letter-spacing="0.3">Ingot 系统架构</text>
-  <text x="60" y="70" font-size="14" fill="#64748B">工艺工程师、现场数据、业务记录与数值服务之间的组件与数据流边界</text>
+  <text x="60" y="46" font-size="28" font-weight="800" fill="#0F172A" letter-spacing="0.3">Ingot 运行时组件架构</text>
+  <text x="60" y="70" font-size="14" fill="#64748B">运行组件、代码归属、正式记录源与跨服务数据流</text>
   <rect x="60" y="84" width="160" height="4" rx="2" fill="url(#titleAccent)"/>
 
   <!-- ============ Actors row ============ -->
@@ -129,7 +129,7 @@
     <rect x="546" y="676" width="82" height="18" rx="9" fill="#A16207"/>
     <text x="587" y="689" font-size="9.5" font-weight="700" fill="#FFFFFF" text-anchor="middle" letter-spacing="1">COMPUTE</text>
     <text x="710" y="716" font-size="17" font-weight="700" fill="#0F172A" text-anchor="middle">Optimizer</text>
-    <text x="710" y="734" font-size="12" fill="#334155" text-anchor="middle">模型 · 约束判断 · 实验建议 · 无状态数值服务</text>
+    <text x="710" y="734" font-size="12" fill="#334155" text-anchor="middle">实验设计 · 受约束优化 · 无状态数值服务</text>
     <text x="710" y="750" font-size="10.5" font-family="ui-monospace, Menlo, monospace" fill="#94A3B8" text-anchor="middle">optimizer/ · Python + BoTorch</text>
   </g>
 

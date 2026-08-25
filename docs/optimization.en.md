@@ -1,12 +1,19 @@
 # Analysis and optimization
 
-## Diagnostic readiness and confounder disclosure
-
-Execution-comparison responses expose a structured `readiness.mode`. `descriptive-only` shows coverage, missingness, trends, strata, and data-chain gaps and disables candidate-hypothesis generation. `exploratory` may show ranked observational candidates. `candidate-ranking` means out-of-sample performance and stability support a stronger ranking, but it still does not mean a confirmed cause. Every candidate requires controlled repeated experiments.
-
-The response also freezes the context variables actually adjusted, observed group imbalances, and known unmeasured confounders from both the versioned analysis plan and the current request. The first release fixes `sensitivityAssessment.status` at `not-estimable`: standardized coefficients and model importance are not an interpretable risk-ratio estimand and lack the required confidence interval, so the product does not display an invalid E-value. Metrics record only readiness modes and structured blocking reasons, never user-entered free text as labels.
-
 > Status: **current scientific strategy**. This document explains how methods are selected by the engineering question and describes the limits of today's numerical implementation. Algorithms may evolve without changing the core value or evidence principles.
+
+This document defines the scientific and implementation boundaries for analysis admission, run comparison, candidate-cause validation, experiment design, and sequential optimization. Numerical implementations, replay protocols, and method-promotion conditions must be independently reviewable by developers and scientific-method reviewers.
+
+## Analysis workflow overview
+
+Ingot executes analysis in the following order:
+
+1. Confirm that conditions, process data, and quality outcomes belong to the same real run.
+2. Compare eligible runs and identify both differences and evidence gaps.
+3. Test candidate causes with controlled, repeated experiments inside safety boundaries.
+4. Recommend the next experiment only when both the data and the method meet their requirements.
+
+The system does not prefer a method merely because it is more complex, and it does not turn historical correlation into a confirmed cause.
 
 ## Method-selection principle
 
@@ -15,11 +22,11 @@ Ingot starts from the engineer's decision, not from an algorithm:
 | Engineering question | Preferred methods | Required output |
 |---|---|---|
 | Can the data be used? | completeness, units, time, provenance, and drift checks | admitted or excluded with a specific reason |
-| Where did this run differ? | like-for-like matching, robust statistics, stage-trajectory comparison | difference, effect, uncertainty, and comparison baseline |
-| Which factors deserve validation? | screening, stratification, variance components, mixed effects, or stable feature selection | candidate causes, counterevidence, confounding, and coverage limits |
+| Where did this run differ? | like-for-like matching, robust statistics, stage-trajectory comparison | size of the difference, uncertainty, and comparison group |
+| Which factors deserve validation? | screening, grouped comparison, and stability checks | candidate causes, counterevidence, factors that changed together, and data limits |
 | Is a factor causal? | controls, repetition, blocking, randomization, or intervention | supported, rejected, or inconclusive |
-| What should the next experiment be? | DOE, response surfaces, active learning, or Bayesian optimization | settings, expected information, risk, and rationale |
-| How should it be explained? | deterministic result templates plus LLM-assisted language | readable explanation with source citations |
+| What should the next experiment be? | traditional design of experiments (DOE), response surfaces, or Bayesian optimization | candidate process settings, expected information, risk, and rationale |
+| How should it be explained? | fixed result templates plus language-model assistance | readable explanation with source citations |
 
 A complex method is not inherently better than a simple one. With few samples, poor coverage, or confounded variables, the right action may be to collect data, run an identifying experiment, or refuse to answer rather than fit a more elaborate model.
 
@@ -36,6 +43,18 @@ Before any model, confirm that a run has trustworthy evidence:
 - numbers are finite and run-to-quality linkage is unique.
 
 Runs that fail remain in the data-quality report. Exclusion reasons are themselves evidence for improving wiring and workflow.
+
+## Diagnostic readiness and confounder disclosure
+
+The system uses `readiness.mode` to state the strongest analysis the current evidence supports:
+
+- `descriptive-only`: show coverage, missingness, and trends, but do not generate candidate causes;
+- `exploratory`: show an early candidate ranking whose stability is still limited;
+- `candidate-ranking`: the ranking has passed out-of-sample and stability checks, but it is still not a confirmed cause.
+
+At every level, candidate causes still require controlled repeated experiments. The response also lists conditions that changed at the same time, group imbalances, and known influences that were not measured so they are not mistaken for confirmed causes.
+
+The API keeps a stricter statistical boundary: the first release fixes `sensitivityAssessment.status` at `not-estimable`. Current outputs are standardized coefficients or model importance, not risk-ratio estimates with the required confidence interval, so the product does not calculate an invalid E-value. Metrics record readiness modes and structured blocking reasons, never user-entered free text as labels.
 
 ## Description and comparison
 

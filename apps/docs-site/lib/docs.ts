@@ -20,6 +20,8 @@ const repositoryUrl = "https://github.com/liuweichaox/Ingot";
 const publicSlugs = [
   "index",
   "getting-started",
+  "status",
+  "pilot",
   "design",
   "optimization",
   "mechanism-knowledge",
@@ -52,10 +54,11 @@ export const docs: Doc[] = files.map((file) => {
 });
 
 export const groups = [
-  { key: "start", zh: "开始使用", en: "Get started", slugs: ["", "getting-started"] },
-  { key: "core", zh: "核心设计", en: "Core design", slugs: ["design", "optimization", "mechanism-knowledge", "data-connection"] },
-  { key: "operate", zh: "规划、验证与运行", en: "Plan, validate, and operate", slugs: ["project-plan", "rollout", "production-architecture", "deployment", "faq"] },
-  { key: "reference", zh: "产品与项目参考", en: "Product and project reference", slugs: ["brand", "open-source-dependencies"] },
+  { key: "start", zh: "项目入门", en: "Project introduction", slugs: ["", "getting-started", "status"] },
+  { key: "guide", zh: "集成与运维", en: "Integration and operations", slugs: ["pilot", "data-connection", "deployment", "faq"] },
+  { key: "concept", zh: "系统与算法", en: "System and algorithms", slugs: ["design", "optimization", "mechanism-knowledge"] },
+  { key: "trust", zh: "验证与生产", en: "Validation and production", slugs: ["rollout", "production-architecture"] },
+  { key: "reference", zh: "项目治理", en: "Project governance", slugs: ["project-plan", "brand", "open-source-dependencies"] },
 ];
 
 export const routeFor = (lang: Lang, slug: string) => `/${lang}${slug ? `/${slug}` : ""}`;
