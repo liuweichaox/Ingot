@@ -112,17 +112,17 @@ public sealed class AcquisitionLifecycleTracker
                 startedData));
         }
 
-        sample = sample with { ExecutionId = _activeExecutionId };
+        sample = ProductionEventIntegrity.Seal(sample with { ExecutionId = _activeExecutionId });
         var processSpecificationApplied = mapped.ProcessSpecificationApplied ?? (startedNewRun ? _latestProcessSpecificationApplied : null);
         if (processSpecificationApplied is not null)
         {
-            events.Add(processSpecificationApplied with
+            events.Add(ProductionEventIntegrity.Seal(processSpecificationApplied with
             {
                 EventId = Guid.CreateVersion7().ToString(),
                 RecordedAt = DateTimeOffset.UtcNow,
                 ExecutionId = _activeExecutionId,
                 Context = sample.Context
-            });
+            }));
         }
 
         if (sample.Context.TryGetValue(StageContextKey, out var step) &&

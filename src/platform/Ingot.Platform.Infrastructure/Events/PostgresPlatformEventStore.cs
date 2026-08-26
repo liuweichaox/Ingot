@@ -647,9 +647,11 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, ID
               GROUP BY execution_id
             )
             SELECT event.ingest_id, event.site_id, event.edge_id, event.ingested_at,
-                   event.event_id, event.event_type, event.type_version,
+                   event.event_id, event.schema_version, event.event_type, event.type_version,
                    event.occurred_at, event.recorded_at, event.source,
                    event.subject_type, event.subject_id, event.execution_id,
+                   event.configuration_kind, event.configuration_id, event.configuration_version,
+                   event.quality_flags::text, event.payload_hash,
                    event.context::text, event.data::text, event.seq,
                    COALESCE(sample_counts.sample_count, 0)
             FROM production_events AS event
@@ -671,7 +673,7 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, ID
                 eventsByExecution[executionId] = rows;
             }
             rows.Add(row);
-            sampleCounts[executionId] = checked((int)reader.GetInt64(16));
+            sampleCounts[executionId] = checked((int)reader.GetInt64(22));
         }
         return ids
             .Where(eventsByExecution.ContainsKey)

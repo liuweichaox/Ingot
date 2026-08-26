@@ -96,6 +96,7 @@ public sealed class AcquisitionProtocolTests
         var generatedExecutionId = firstEvents[0].ExecutionId;
         Assert.True(Guid.TryParse(generatedExecutionId, out _));
         Assert.All(firstEvents, item => Assert.Equal(generatedExecutionId, item.ExecutionId));
+        Assert.All(firstEvents, item => Assert.True(ProductionEventIntegrity.HasValidPayloadHash(item)));
         Assert.Equal(1000, firstEvents[0].Data["pollDelayMs"]);
         Assert.False(firstEvents[0].Data.ContainsKey("expectedSampleCount"));
 
@@ -111,6 +112,7 @@ public sealed class AcquisitionProtocolTests
         var continuedEvents = tracker.Track(nextSample, deployment.Task.Lifecycle, 1000);
         Assert.Equal(["process.sample"], continuedEvents.Select(item => item.EventType));
         Assert.Equal(generatedExecutionId, continuedEvents[0].ExecutionId);
+        Assert.True(ProductionEventIntegrity.HasValidPayloadHash(continuedEvents[0]));
     }
 
     [Fact]
