@@ -16,7 +16,7 @@ Ingot 是开源工艺追因与优化系统。系统统一关联运行条件、�
 | 审核系统建议形成过程 | [系统设计](design.md) | [分析与优化](optimization.md) |
 | 建设工艺知识 | [机理知识设计](mechanism-knowledge.md) | [分析与优化](optimization.md) |
 | 审核效果声明 | [当前状态](status.md) | [场景验证](rollout.md) |
-| 参与开发 | [贡献指南](../CONTRIBUTING.md) | [系统设计](design.md) |
+| 参与开发 | [贡献指南](https://github.com/liuweichaox/Ingot/blob/main/CONTRIBUTING.md) | [系统设计](design.md) |
 
 ## 产品闭环
 

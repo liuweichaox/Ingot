@@ -1,4 +1,4 @@
-
+// 消费站点明确的分析回填任务并逐运行执行安全物化。
 using Ingot.Contracts.Events;
 using Ingot.Platform.Application.ProcessExecutions;
 
@@ -7,6 +7,7 @@ namespace Ingot.Platform.Infrastructure.ProcessExecutions;
 public sealed class ProcessExecutionAnalysisBackfillService(
     IProcessExecutionAnalysisMaterializationStore store,
     IProcessExecutionService executions,
+    IProcessExecutionAnalysisRecomputeExecutor executor,
     ILogger<ProcessExecutionAnalysisBackfillService> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -50,11 +51,20 @@ public sealed class ProcessExecutionAnalysisBackfillService(
                     job.Request.PageSize,
                     offset,
                     null,
-                    ct).ConfigureAwait(false);
+                    ct,
+                    siteId: job.Request.SiteId).ConfigureAwait(false);
                 if (page.Data.Count == 0)
                     break;
-                var materialized = page.Data.Count(row =>
-                    row.AnalysisMaterialization.Status is "materialized" or "cached");
+                var materialized = 0;
+                foreach (var row in page.Data)
+                {
+                    var outcome = await executor.RecomputeAnalysisAsync(
+                        row.ExecutionId,
+                        job.Request.SiteId,
+                        ct).ConfigureAwait(false);
+                    if (outcome == ProcessExecutionAnalysisRecomputeOutcome.Completed)
+                        materialized++;
+                }
                 var failed = page.Data.Count - materialized;
                 offset += page.Data.Count;
                 job = job with

@@ -3,6 +3,7 @@
 using Ingot.Contracts.Analytics;
 using Ingot.Platform.Api.Agents;
 using Ingot.Platform.Application.Analytics;
+using Ingot.Platform.Application.Events;
 using Ingot.Platform.Application.Inspections;
 using Microsoft.AspNetCore.Mvc;
 
@@ -32,7 +33,7 @@ public sealed class QualityAnalysisController(
             return AuthenticationRequired("需要平台统一认证。");
         if (!identity.HasAnyRole(PlatformRoles.QualityRead))
             return AuthorizationDenied();
-        var siteFailure = PlatformSiteScope.Resolve(identity, siteId, true, out var authorizedSiteId);
+        var siteFailure = PlatformSiteScope.Resolve(identity, siteId, false, out var authorizedSiteId);
         if (siteFailure == SiteScopeFailure.Forbidden)
             return AuthorizationDenied("当前身份无权访问该站点。", ("siteId", siteId));
         if (siteFailure == SiteScopeFailure.Missing)
@@ -63,6 +64,10 @@ public sealed class QualityAnalysisController(
             }, ct).ConfigureAwait(false));
         }
         catch (InspectionQueryLimitExceededException exception)
+        {
+            return UnprocessableRequest(exception.Message);
+        }
+        catch (PlatformEventQueryLimitExceededException exception)
         {
             return UnprocessableRequest(exception.Message);
         }

@@ -89,6 +89,7 @@ public sealed class ResearchObservationAssemblerTests
         var inspectionRecord = new InspectionRecord
         {
             RecordId = Guid.CreateVersion7(),
+            SiteId = "SITE-001",
             OutputItemId = "lens-001",
             ExecutionId = executionKey,
             DefinitionCode = "lens-final",
@@ -133,6 +134,7 @@ public sealed class ResearchObservationAssemblerTests
             Code = "lens-a",
             Name = "镜片 A",
             ProcessName = "精密模压",
+            SiteCode = "SITE-001",
             Objectives =
             [
                 new ResearchObjective

@@ -1,3 +1,4 @@
+// 在工艺定义的兼容单位之间执行显式、可验证的数值转换。
 namespace Ingot.Platform.Application.ProcessConfiguration;
 
 public static class ProcessUnitConverter
@@ -89,6 +90,6 @@ public static class ProcessUnitConverter
         return millimeters > 0;
     }
 
-    private static bool IsCelsius(string unit) => unit is "c" or "°c" or "℃";
+    private static bool IsCelsius(string unit) => unit is "c" or "°c" or "℃" or "cel";
     private static bool IsKelvin(string unit) => unit is "k" or "kelvin";
 }

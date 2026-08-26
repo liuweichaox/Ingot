@@ -1,3 +1,4 @@
+// 通过受控 TCP 连接采集 MELSEC 1E 点位并映射为生产事件。
 using System.Buffers.Binary;
 using System.Globalization;
 using System.Net.Sockets;
@@ -9,6 +10,7 @@ namespace Ingot.Edge.ConnectorHost.Acquisition;
 public sealed class MelsecA1EAcquisitionRunner(
     IEventSink sink,
     AcquisitionStatus status,
+    AcquisitionHttpEgressPolicy egressPolicy,
     ILogger<MelsecA1EAcquisitionRunner> logger) : IAcquisitionProtocolRunner
 {
     public string Protocol => AcquisitionProtocols.MelsecA1E;
@@ -52,8 +54,12 @@ public sealed class MelsecA1EAcquisitionRunner(
         {
             try
             {
-                using var tcpClient = new TcpClient();
-                await ConnectAsync(tcpClient, connection, deployment.Task.Execution, ct).ConfigureAwait(false);
+                using var tcpClient = await egressPolicy.ConnectTcpAsync(
+                    connection.Host,
+                    connection.Port,
+                    "MELSEC 1E",
+                    deployment.Task.Execution.TimeoutMs,
+                    ct).ConfigureAwait(false);
                 using var stream = tcpClient.GetStream();
                 logger.LogInformation(
                     "MELSEC 1E 采集任务已连接：Configuration={Configuration}, Device={Host}:{Port}, " +
@@ -130,27 +136,6 @@ public sealed class MelsecA1EAcquisitionRunner(
                 logger.LogWarning(exception, "MELSEC 1E 采集任务 {Configuration} 读取失败，等待重连", configurationKey);
                 await Task.Delay(deployment.Task.Execution.ReconnectDelayMs, ct).ConfigureAwait(false);
             }
-        }
-    }
-
-    private static async Task ConnectAsync(
-        TcpClient client,
-        McA1EConnection connection,
-        AcquisitionExecutionOptions execution,
-        CancellationToken ct)
-    {
-        var timeout = Math.Max(1000, execution.TimeoutMs);
-        client.ReceiveTimeout = timeout;
-        client.SendTimeout = timeout;
-        using var attempt = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        attempt.CancelAfter(timeout);
-        try
-        {
-            await client.ConnectAsync(connection.Host, connection.Port, attempt.Token).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
-        {
-            throw new TimeoutException($"连接 MELSEC PLC {connection.Host}:{connection.Port} 超过 {timeout}ms 未完成。");
         }
     }
 

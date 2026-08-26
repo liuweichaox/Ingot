@@ -11,6 +11,7 @@ const pages = (await Promise.all(
     .map(entry => readFile(new URL(entry.name, pageDirectory), "utf8")),
 )).join("\n");
 const http = await readFile(new URL("../src/api/http.js", import.meta.url), "utf8");
+const auth = await readFile(new URL("../src/auth/AuthGate.jsx", import.meta.url), "utf8");
 const components = await readFile(new URL("../src/ui/components.jsx", import.meta.url), "utf8");
 const apiHook = await readFile(new URL("../src/hooks/useApi.js", import.meta.url), "utf8");
 const registryEditor = await readFile(new URL("../src/components/RegistryBusinessEditor.jsx", import.meta.url), "utf8");
@@ -91,35 +92,33 @@ test("platform identity presents Ingot as a process diagnosis and optimization s
   assert.doesNotMatch(html, /制造数据采集与工艺分析平台/);
 });
 
-test("demo mode starts with one out-of-spec run story", () => {
-  assert.match(pages, /import\.meta\.env\.MODE === "demo"/);
-  assert.match(pages, /三分钟演示：一片镜片为什么超差/);
-  assert.match(pages, /RUN-2026-0821-005/);
-  assert.match(pages, /0\.48 μm/);
-  assert.match(pages, /\/comparisons\?executionId=RUN-2026-0821-005/);
+test("demo mode is identified without mixing a scripted story into the workbench", () => {
+  assert.match(auth, /import\.meta\.env\.MODE === "demo"/);
+  assert.match(auth, /演示环境/);
+  assert.doesNotMatch(pages, /三分钟演示：一片镜片为什么超差|RUN-2026-0821-005|0\.48 μm/);
 });
 
 test("navigation and overlays are accessible Headless UI components", () => {
   assert.match(app, /DialogBackdrop/);
   assert.match(app, /DialogPanel/);
   assert.match(app, /MenuButton/);
-  for (const [id, domain] of [["overview", "工作台"], ["evidence", "生产运行"], ["quality", "质量管理"], ["diagnosis", "工艺追因"], ["process-definition", "工艺配置"], ["equipment-connection", "现场接入"]]) {
+  for (const [id, domain] of [["overview", "工作台"], ["evidence", "生产运行"], ["quality", "质量管理"], ["diagnosis", "工艺追因"], ["research", "工艺研发"], ["process-definition", "工艺配置"], ["equipment-connection", "现场接入"]]) {
     assert.match(app, new RegExp(`id: "${id}", label: "${domain}"`));
   }
-  assert.match(app, /id: "overview"[\s\S]*id: "equipment-connection"[\s\S]*id: "process-definition"[\s\S]*id: "evidence"[\s\S]*id: "quality"[\s\S]*id: "diagnosis"/);
+  assert.match(app, /id: "overview"[\s\S]*id: "equipment-connection"[\s\S]*id: "process-definition"[\s\S]*id: "evidence"[\s\S]*id: "quality"[\s\S]*id: "diagnosis"[\s\S]*id: "research"/);
   assert.doesNotMatch(app, /id: "optimization"/);
   assert.match(app, /const systemSection = \{/);
   assert.match(app, /sectionsForIdentity/);
   assert.match(app, /roles \|\| \[\]\)\.includes\("platform\.admin"\)/);
-  assert.match(app, /id: "equipment-connection"[\s\S]*\["\/edges", "现场节点"\], \["\/configuration\/ingestion-tasks", "数据源配置"\]/);
-  assert.match(app, /id: "process-definition"[\s\S]*\["\/configuration", "配置总览"\][\s\S]*\["\/configuration\/process-data-models", "工艺数据字典"\][\s\S]*\["\/configuration\/tooling-types", "工装结构定义"\][\s\S]*\["\/configuration\/scenario-packages", "配置发布"\]/);
-  assert.match(app, /id: "diagnosis"[\s\S]*label: "高级工程验证", items: \[\["\/research-projects", "研发项目"\], \["\/research-assets", "研发成果"\]\]/);
-  assert.match(app, /id: "system"[\s\S]*label: "身份与权限"[\s\S]*label: "平台运维"[\s\S]*label: "助手治理"/);
+  assert.match(app, /id: "equipment-connection"[\s\S]*\["\/edges", "现场节点"\], \["\/configuration\/ingestion-tasks", "采集配置"\]/);
+  assert.match(app, /id: "process-definition"[\s\S]*\["\/configuration", "配置总览"\][\s\S]*\["\/configuration\/process-data-models", "数据字典"\][\s\S]*\["\/configuration\/tooling-types", "工装结构"\][\s\S]*\["\/configuration\/scenario-packages", "配置发布"\]/);
+  assert.match(app, /id: "research"[\s\S]*items: \[\["\/research-projects", "研发项目"\], \["\/research-assets", "工艺知识"\]\]/);
+  assert.match(app, /id: "system"[\s\S]*label: "身份权限"[\s\S]*label: "平台运维"[\s\S]*label: "助手治理"/);
   assert.match(app, /\["\/chat", "分析助手"\]/);
-  assert.match(app, /items: \[\["\/research-projects", "研发项目"\], \["\/research-assets", "研发成果"\]\]/);
-  assert.match(app, /\["\/research-assets", "研发成果"\]/);
+  assert.match(app, /items: \[\["\/research-projects", "研发项目"\], \["\/research-assets", "工艺知识"\]\]/);
+  assert.match(app, /\["\/research-assets", "工艺知识"\]/);
   assert.match(app, /\["\/production\/changeover", "生产切换"\][\s\S]*\["\/process-executions", "运行记录"\]/);
-  assert.match(app, /\["\/data-quality", "数据可信度"\], \["\/comparisons", "运行对比"\]/);
+  assert.match(app, /\["\/data-quality", "数据质量"\], \["\/comparisons", "运行对比"\]/);
   assert.doesNotMatch(app, /优化工作|复用资产/);
   assert.match(pages, /title="研发项目"/);
   assert.match(pages, /工艺分析助手/);
@@ -147,8 +146,12 @@ test("navigation and overlays are accessible Headless UI components", () => {
   assert.doesNotMatch(app, /aria-label="全局导航"/);
   assert.doesNotMatch(app, /showSectionNavigation/);
   assert.doesNotMatch(app, /label: "运营工作台"/);
-  for (const obsoleteLabel of ["周期记录", "周期对比", "数据质量", "AI助手", "黄金问题集"]) {
+  for (const obsoleteLabel of ["周期记录", "周期对比", "AI助手", "黄金问题集", "研发成果"]) {
     assert.doesNotMatch(app, new RegExp(`label: "${obsoleteLabel}"`));
+  }
+  const itemLabels = [...app.matchAll(/\["\/[^\"]+", "([^\"]+)"\]/g)].map(match => match[1]);
+  for (const label of itemLabels) {
+    assert.ok([...label].length >= 3 && [...label].length <= 4, `menu label ${label} should contain 3–4 characters`);
   }
   assert.doesNotMatch(researchProjects, />新建项目</);
 });
@@ -156,7 +159,7 @@ test("navigation and overlays are accessible Headless UI components", () => {
 test("authenticated application exposes the identity administration surface", () => {
   assert.match(app, /function App\(\{ identity, logout \}\)/);
   assert.doesNotMatch(app, /username: "operator"/);
-  assert.match(app, /\["\/identity\/users", "用户与权限"\]/);
+  assert.match(app, /\["\/identity\/users", "用户权限"\]/);
   assert.match(app, /path="\/identity\/users" element=\{<RequireRole identity=\{identity\}/);
   assert.match(app, /当前岗位不能访问此功能/);
   assert.match(pages, /export function UsersPage\(\)/);
@@ -223,11 +226,12 @@ test("object catalog pages use the event summary contract and show an initial lo
 test("core workflows tell new users what to do next and confirm completed actions", () => {
   assert.match(components, /export function WorkflowGuide/);
   assert.match(components, /export function ToastHost/);
-  assert.match(pages, /今天先做这些/);
+  assert.match(pages, /质量待办/);
   assert.match(pages, /配置下一批生产/);
-  assert.match(researchProjects, /发现偏差 → 缩小候选原因 → 设计实验 → 验证并固化窗口/);
+  assert.match(researchProjects, /进行中与待处理/);
   assert.match(researchProjects, /让优化器设计验证实验/);
   assert.match(researchProjects, /实验建议准备度/);
+  assert.doesNotMatch(researchProjects, /从真实偏差进入研发闭环|发现偏差 → 缩小候选原因/);
   assert.match(app, /<ToastHost \/>/);
 });
 
@@ -337,7 +341,7 @@ test("configuration surfaces align write actions with platform roles", () => {
 
 test("form primitives keep controls aligned and make non-editable state visible", () => {
   assert.match(components, /grid min-w-0 content-start gap-1\.5 self-start/);
-  assert.match(components, /h-10 min-w-0 w-full rounded-lg/);
+  assert.match(components, /h-10 min-w-0 w-full rounded-md/);
   assert.match(components, /disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50/);
   assert.match(components, /role="alert"/);
   assert.match(styles, /input\[type="checkbox"\]/);
@@ -347,7 +351,7 @@ test("form primitives keep controls aligned and make non-editable state visible"
 });
 
 test("comparison investigation renders context as bounded business facts", () => {
-  assert.match(components, /min-w-0 break-words text-3xl/);
+  assert.match(components, /min-w-0 break-words text-2xl/);
   assert.match(pages, /function MatchingContext/);
   assert.match(pages, /comparisonContextLabels/);
   assert.match(pages, /<StatusBadge value=\{investigation\?\.dataQuality\?\.targetStatus/);

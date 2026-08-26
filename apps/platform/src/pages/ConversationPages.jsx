@@ -1,4 +1,4 @@
-
+// 管理 Chat 运行创建、历史、流式状态和受控删除交互。
 import { ArrowLeftIcon, ArrowPathIcon, ChatBubbleLeftRightIcon, MagnifyingGlassIcon, PaperAirplaneIcon, TrashIcon } from "@heroicons/react/24/outline";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router";
@@ -58,7 +58,6 @@ export function EventsPage() {
   return (
     <Page
       title="运行事件"
-      description="检索标准事件并回到所属生产运行。"
       actions={<label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" checked={live} onChange={event => { setPage(1); setLive(event.target.checked); }} />实时追踪</label>}
     >
       <Card title="事件筛选">
@@ -158,20 +157,6 @@ const researchStatusLabels = {
   archived: "已归档",
 };
 
-const globalSuggestedQuestions = [
-  "最近有哪些运行或质量记录值得优先关注？",
-  "哪些生产运行满足正式分析准入条件？",
-  "当前数据有哪些完整性、关联或可信度问题？",
-  "按现有证据，下一步最值得核对什么？",
-];
-
-const projectSuggestedQuestions = [
-  "概括当前项目已有证据、关键缺口和下一步建议。",
-  "哪些生产运行满足正式分析准入条件？",
-  "列出当前最值得优先验证的假设及其依据。",
-  "当前结论有哪些数据限制或因果边界？",
-];
-
 function chatProgressText(item) {
   const payload = item?.data || {};
   if (item?.type === "tool.completed" && payload.summary) return payload.summary;
@@ -185,7 +170,7 @@ function ChatAnswer({ answer, onFollowUp }) {
   if (!answer) return null;
   if (typeof answer === "string") {
     return (
-      <article className="rounded-xl border border-slate-200 bg-white shadow-sm">
+      <article className="rounded-lg border border-slate-200 bg-white">
         <header className="border-b border-slate-100 bg-slate-50/80 px-4 py-3">
           <p className="text-sm font-semibold text-slate-900">分析结论</p>
         </header>
@@ -206,11 +191,11 @@ function ChatAnswer({ answer, onFollowUp }) {
   };
   const combined = answer.combinedAnalysis;
   return (
-    <article className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+    <article className="overflow-hidden rounded-lg border border-slate-200 bg-white">
       <header className="flex items-center justify-between gap-3 border-b border-slate-100 bg-slate-50/80 px-4 py-3">
         <div>
           <p className="text-sm font-semibold text-slate-900">分析结论</p>
-          <p className="mt-0.5 text-xs text-slate-500">基于当前可访问记录生成，结论仍需工程验证</p>
+          <p className="mt-0.5 text-[13px] text-slate-500">基于当前可访问记录生成，结论仍需工程验证</p>
         </div>
         <Badge tone="blue">只读分析</Badge>
       </header>
@@ -218,14 +203,14 @@ function ChatAnswer({ answer, onFollowUp }) {
         <p className="whitespace-pre-wrap font-medium text-slate-900">{answer.summary || "未形成摘要。"}</p>
       {findings.length > 0 && (
         <div>
-          <p className="text-xs font-semibold tracking-wide text-slate-500">关键发现</p>
+          <p className="text-[13px] font-semibold text-slate-500">关键发现</p>
           <ol className="mt-2 space-y-2">
             {findings.map((item, index) => (
               <li key={`${item.statement}-${index}`} className="flex gap-3 rounded-lg bg-slate-50 px-3 py-2.5">
-                <span className="grid size-6 shrink-0 place-items-center rounded-full bg-blue-100 text-xs font-semibold text-blue-700">{index + 1}</span>
+                <span className="grid size-6 shrink-0 place-items-center rounded-full bg-blue-100 text-[13px] font-semibold text-blue-700">{index + 1}</span>
                 <span className="min-w-0 flex-1">
                   <span className="block">{item.statement}</span>
-                  <span className="mt-1 block text-xs text-slate-500">
+                  <span className="mt-1 block text-[13px] text-slate-500">
                     {findingStrengthLabels[item.strength] || "证据陈述"} · {item.evidenceReferences?.length || 0} 条记录引用
                   </span>
                 </span>
@@ -243,26 +228,26 @@ function ChatAnswer({ answer, onFollowUp }) {
         </div>
       )}
       {combined && (
-        <section className="rounded-xl border border-violet-200 bg-violet-50/60 p-4">
+        <section className="rounded-lg border border-slate-200 bg-slate-50 p-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
-              <p className="font-semibold text-violet-950">多视角研判</p>
-              <p className="mt-1 text-xs text-violet-700">工艺、质量和复核视角基于同一批记录交叉审查</p>
+              <p className="font-semibold text-slate-950">多视角研判</p>
+              <p className="mt-1 text-[13px] text-slate-500">工艺、质量和复核视角基于同一批记录交叉审查</p>
             </div>
             <Badge tone={combined.status === "needs-review" ? "warning" : "neutral"}>{combined.status === "needs-review" ? "待工程复核" : "证据不足"}</Badge>
           </div>
-          <p className="mt-3 text-sm leading-6 text-violet-950">{combined.summary}</p>
+          <p className="mt-3 text-sm leading-6 text-slate-700">{combined.summary}</p>
           {(combined.possibleCauses || []).length > 0 && (
             <div className="mt-4 grid gap-2">
-              <p className="text-xs font-semibold tracking-wide text-violet-700">可能原因</p>
+              <p className="text-[13px] font-semibold text-slate-500">可能原因</p>
               {combined.possibleCauses.map(cause => {
                 const reviews = (combined.reviews || []).filter(review => review.causeId === cause.causeId);
                 const latestReviews = Object.values(reviews.reduce((latest, review) => ({ ...latest, [review.authorRole]: review }), {}));
                 return (
-                  <article key={cause.causeId} className="rounded-lg border border-violet-100 bg-white p-3">
+                  <article key={cause.causeId} className="rounded-lg border border-slate-200 bg-white p-3">
                     <div className="flex flex-wrap items-center gap-2"><Badge tone="blue">{perspectiveLabels[cause.authorRole] || cause.authorRole}</Badge><strong className="text-sm text-slate-900">{cause.statement}</strong></div>
                     <p className="mt-1 text-sm leading-6 text-slate-600">{cause.reason}</p>
-                    {latestReviews.length > 0 && <div className="mt-2 flex flex-wrap gap-2">{latestReviews.map(review => <span key={review.authorRole} className="rounded-md bg-slate-100 px-2 py-1 text-xs text-slate-600">{perspectiveLabels[review.authorRole] || review.authorRole} · {reviewPositionLabels[review.position] || review.position}</span>)}</div>}
+                    {latestReviews.length > 0 && <div className="mt-2 flex flex-wrap gap-2">{latestReviews.map(review => <span key={review.authorRole} className="rounded-md bg-slate-100 px-2 py-1 text-[13px] text-slate-600">{perspectiveLabels[review.authorRole] || review.authorRole} · {reviewPositionLabels[review.position] || review.position}</span>)}</div>}
                   </article>
                 );
               })}
@@ -270,18 +255,18 @@ function ChatAnswer({ answer, onFollowUp }) {
           )}
           {(combined.reviewSteps || []).length > 0 && (
             <details className="mt-3">
-              <summary className="cursor-pointer text-xs font-medium text-violet-800">查看 {combined.reviewSteps.length} 条交叉审查记录</summary>
-              <ol className="mt-2 space-y-2">{combined.reviewSteps.map((step, index) => <li key={`${step.role}-${step.round}-${index}`} className="rounded-lg bg-white px-3 py-2 text-xs leading-5 text-slate-600"><strong className="text-slate-800">第 {step.round} 轮 · {perspectiveLabels[step.role] || step.role}</strong><p>{step.summary}</p></li>)}</ol>
+              <summary className="cursor-pointer text-[13px] font-medium text-slate-700">查看 {combined.reviewSteps.length} 条交叉审查记录</summary>
+              <ol className="mt-2 space-y-2">{combined.reviewSteps.map((step, index) => <li key={`${step.role}-${step.round}-${index}`} className="rounded-lg bg-white px-3 py-2 text-[13px] leading-5 text-slate-600"><strong className="text-slate-800">第 {step.round} 轮 · {perspectiveLabels[step.role] || step.role}</strong><p>{step.summary}</p></li>)}</ol>
             </details>
           )}
         </section>
       )}
       {(answer.relatedRecords || []).length > 0 && (
         <div>
-          <p className="text-xs font-semibold tracking-wide text-slate-500">相关记录</p>
+          <p className="text-[13px] font-semibold text-slate-500">相关记录</p>
           <div className="mt-2 flex flex-wrap gap-2">
             {answer.relatedRecords.map(item => item.url ? (
-              <Link key={`${item.kind}:${item.id}`} to={item.url} className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100">
+              <Link key={`${item.kind}:${item.id}`} to={item.url} className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-[13px] font-medium text-blue-700 hover:bg-blue-100">
                 {item.label}
               </Link>
             ) : null)}
@@ -290,10 +275,10 @@ function ChatAnswer({ answer, onFollowUp }) {
       )}
       {(answer.followUpQuestions || []).length > 0 && (
         <div>
-          <p className="text-xs font-semibold tracking-wide text-slate-500">继续调查</p>
+          <p className="text-[13px] font-semibold text-slate-500">继续调查</p>
           <div className="mt-2 flex flex-wrap gap-2">
             {answer.followUpQuestions.map(item => (
-              <button key={item} type="button" className="rounded-lg border border-slate-200 px-3 py-1.5 text-left text-xs text-slate-700 hover:border-blue-300 hover:bg-blue-50" onClick={() => onFollowUp(item)}>
+              <button key={item} type="button" className="rounded-lg border border-slate-200 px-3 py-1.5 text-left text-[13px] text-slate-700 hover:border-blue-300 hover:bg-blue-50" onClick={() => onFollowUp(item)}>
                 {item}
               </button>
             ))}
@@ -461,7 +446,6 @@ export function ChatPage() {
   const scopedHistory = projectId
     ? history.filter(item => item.pageContext?.kind === "research-project" && item.pageContext?.id === projectId)
     : history;
-  const suggestedQuestions = projectId ? projectSuggestedQuestions : globalSuggestedQuestions;
   const serviceEnabled = Boolean(capabilities?.enabled);
   const deterministicDemo = Boolean(capabilities?.isDeterministic);
   const analysisBlocked = capabilitiesLoading || !serviceEnabled || submitting;
@@ -475,11 +459,11 @@ export function ChatPage() {
           </Button>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto p-2">
-          <p className="px-2 py-2 text-xs font-semibold text-slate-500">{projectId ? "当前项目的对话" : "最近对话"}</p>
+          <p className="px-2 py-2 text-[13px] font-semibold text-slate-500">{projectId ? "当前项目的对话" : "最近对话"}</p>
           {historyLoading ? (
             <div className="inline-flex items-center gap-2 px-2 py-5 text-sm text-slate-500"><ArrowPathIcon className="size-4 animate-spin" />正在读取</div>
           ) : scopedHistory.length ? scopedHistory.map(item => (
-            <div key={item.runId} className="group mb-1 grid grid-cols-[minmax(0,1fr)_2rem] items-center rounded-lg hover:bg-white hover:shadow-sm">
+            <div key={item.runId} className="group mb-1 grid grid-cols-[minmax(0,1fr)_2rem] items-center rounded-md hover:bg-white">
               <button type="button" className="min-w-0 px-3 py-2.5 text-left disabled:opacity-60" onClick={() => openHistory(item.runId)} disabled={submitting}>
                 <p className="truncate text-sm font-medium text-slate-800">{item.question}</p>
                 <p className="mt-1 text-xs text-slate-400">{chatHistoryStatusLabels[item.status] || item.status} · {formatTime(item.createdAt)}</p>
@@ -490,14 +474,13 @@ export function ChatPage() {
             </div>
           )) : <p className="px-3 py-6 text-sm leading-6 text-slate-500">从一个生产、质量或工艺问题开始。</p>}
         </div>
-        <div className="border-t border-slate-200 px-4 py-3 text-xs leading-5 text-slate-500">生产 · 质量 · 工艺证据</div>
       </aside>
 
       <section className="flex min-h-0 min-w-0 flex-col bg-white">
         <header className="flex min-h-16 flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-3 sm:px-6">
           <div className="min-w-0">
             <div className="flex items-center gap-2"><ChatBubbleLeftRightIcon className="size-5 text-blue-600" /><h1 className="font-semibold text-slate-950">工艺分析助手</h1></div>
-            <p className="mt-0.5 truncate text-xs text-slate-500">{projectLoading ? "正在读取上下文…" : project ? `${project.name} · ${researchStatusLabels[project.status] || project.status}` : "生产与工艺数据"}</p>
+            <p className="mt-0.5 truncate text-[13px] text-slate-500">{projectLoading ? "正在读取上下文…" : project ? `${project.name} · ${researchStatusLabels[project.status] || project.status}` : "生产与工艺数据"}</p>
           </div>
           <div className="flex min-w-0 flex-1 items-center justify-end gap-2 sm:flex-none">
             {(capabilities?.modes || []).length > 1 && <Select aria-label="分析方法" className="w-36" value={mode} onChange={event => setMode(event.target.value)} disabled={!serviceEnabled || submitting} title={chatModeDescriptions[mode]}>
@@ -509,42 +492,45 @@ export function ChatPage() {
         </header>
 
         <div className="min-h-0 flex-1 overflow-y-auto bg-slate-50/50">
-          <div className="mx-auto flex min-h-full w-full max-w-4xl flex-col justify-center px-4 py-8 sm:px-6">
+          <div className="mx-auto flex min-h-full w-full max-w-4xl flex-col px-4 py-6 sm:px-6">
             <div className="space-y-3">
               {projectError && <Alert tone="danger" title="无法读取项目上下文">{projectError}</Alert>}
-              {!capabilitiesLoading && capabilities && !serviceEnabled && <Alert tone="warning" title="分析服务未启用">当前部署关闭了分析能力；启用确定性或 OpenAI-compatible 模型后即可对话。</Alert>}
+              {!capabilitiesLoading && capabilities && !serviceEnabled && <Alert tone="warning" title="分析服务未启用">当前部署未启用分析服务，请联系平台管理员检查模型服务配置。</Alert>}
               {!capabilitiesLoading && serviceEnabled && deterministicDemo && <Alert tone="info" title="当前分析范围">当前仅核对平台记录和证据边界，不提供多视角研判。</Alert>}
               {error && <Alert tone="danger">{error}</Alert>}
             </div>
             {!run ? (
-              <div className="mx-auto w-full max-w-2xl text-center">
-                <span className="mx-auto grid size-14 place-items-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-600/20"><ChatBubbleLeftRightIcon className="size-7" /></span>
-                <h2 className="mt-5 text-2xl font-semibold tracking-tight text-slate-950">今天要核对什么？</h2>
-                <p className="mt-2 text-sm leading-6 text-slate-500">核对生产运行、质量结果、设备状态和工艺证据。</p>
-                <div className="mt-7 grid gap-3 text-left sm:grid-cols-2">
-                  {suggestedQuestions.map(item => <button key={item} type="button" className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm leading-6 text-slate-700 shadow-sm hover:border-blue-300 hover:bg-blue-50 disabled:opacity-50" onClick={() => setQuestion(item)} disabled={!serviceEnabled || submitting}>{item}</button>)}
+              <div className="w-full max-w-3xl self-start rounded-lg border border-slate-200 bg-white">
+                <div className="border-b border-slate-200 px-4 py-3">
+                  <h2 className="text-sm font-semibold text-slate-950">新建分析</h2>
                 </div>
+                <dl className="grid grid-cols-[6rem_minmax(0,1fr)] text-sm sm:grid-cols-[8rem_minmax(0,1fr)]">
+                  <dt className="border-b border-r border-slate-100 px-4 py-3 font-medium text-slate-500">分析范围</dt>
+                  <dd className="border-b border-slate-100 px-4 py-3 text-slate-700">生产运行、质量结果、设备状态和工艺证据</dd>
+                  <dt className="border-r border-slate-100 px-4 py-3 font-medium text-slate-500">输入方式</dt>
+                  <dd className="px-4 py-3 text-slate-700">在下方输入运行号、设备编号或需要核对的问题</dd>
+                </dl>
               </div>
             ) : (
               <div className="w-full space-y-6 self-start">
-                <div className="flex justify-end"><div className="max-w-[85%] rounded-2xl rounded-br-md bg-blue-600 px-4 py-3 text-sm leading-6 text-white shadow-sm"><p className="whitespace-pre-wrap">{run.question}</p></div></div>
+                <div className="flex justify-end"><div className="max-w-[85%] rounded-lg rounded-br-md bg-blue-600 px-4 py-3 text-sm leading-6 text-white"><p className="whitespace-pre-wrap">{run.question}</p></div></div>
                 {!run.answer && visibleProgress.length > 0 && <ol className="space-y-2" aria-label="分析进度">{visibleProgress.map((item, index) => <li key={`${item.sequence || item.type || "event"}-${index}`} className="flex items-start gap-3 text-sm text-slate-600"><ArrowPathIcon className="mt-0.5 size-4 shrink-0 animate-spin text-blue-600" /><p className="whitespace-pre-wrap">{item.message}</p></li>)}</ol>}
                 {submitting && visibleProgress.length === 0 && <div className="inline-flex items-center gap-2 text-sm text-slate-500"><ArrowPathIcon className="size-4 animate-spin" />正在理解问题并核对记录</div>}
                 <ChatAnswer answer={run.answer} onFollowUp={setQuestion} />
                 {run.error && <Alert tone="danger" title="分析失败">{run.error}</Alert>}
                 {run.cancellationReason && <Alert title="分析已取消">{run.cancellationReason}</Alert>}
-                {run.runId && <p className="text-center text-[11px] text-slate-400" title={run.runId}>调查记录 {run.runId}</p>}
+                {run.runId && <p className="text-center text-xs text-slate-400" title={run.runId}>调查记录 {run.runId}</p>}
               </div>
             )}
           </div>
         </div>
 
         <footer className="border-t border-slate-200 bg-white px-3 py-3 sm:px-6">
-          <form className="mx-auto flex max-w-4xl items-end gap-2 rounded-2xl border border-slate-300 bg-white p-2 shadow-sm focus-within:border-blue-500 focus-within:ring-3 focus-within:ring-blue-500/15" onSubmit={start}>
+          <form className="mx-auto flex max-w-4xl items-end gap-2 rounded-lg border border-slate-300 bg-white p-2 focus-within:border-blue-500 focus-within:ring-3 focus-within:ring-blue-500/15" onSubmit={start}>
             <textarea aria-label="给工艺分析助手发送消息" className="max-h-40 min-h-10 min-w-0 flex-1 resize-none border-0 bg-transparent px-2 py-2 text-sm leading-6 text-slate-900 outline-none placeholder:text-slate-400" rows="1" required value={question} onChange={event => setQuestion(event.target.value)} disabled={!serviceEnabled || submitting} placeholder="询问生产、质量或工艺问题…" onKeyDown={event => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} />
             {submitting ? <Button type="button" onClick={cancel} disabled={cancelling}>{cancelling ? "取消中" : "停止"}</Button> : <Button className="size-10 rounded-xl px-0" variant="primary" type="submit" aria-label="发送消息" disabled={analysisBlocked || !question.trim()}><PaperAirplaneIcon className="size-5" /></Button>}
           </form>
-          <p className="mx-auto mt-2 max-w-4xl text-center text-[11px] text-slate-400">回答基于平台记录，并标注证据范围。</p>
+          <p className="mx-auto mt-2 max-w-4xl text-center text-[13px] text-slate-500">回答基于平台记录，并标注证据范围。</p>
         </footer>
       </section>
       {confirmationDialog}

@@ -116,6 +116,21 @@ def test_design_service_generates_reproducible_classic_doe_without_state():
     assert {run["block_key"] for run in payload["runs"]} == {"block-01", "block-02"}
 
 
+def test_design_service_rejects_oversized_factorial_before_materializing_points():
+    response = client.post("/v1/designs", json={
+        "method": "full-factorial",
+        "variables": [
+            {"name": f"factor-{index}", "low": 0.0, "high": 1.0}
+            for index in range(12)
+        ],
+        "levels": 5,
+        "replicates": 5,
+    })
+
+    assert response.status_code == 422
+    assert "40-run experiment limit" in response.json()["detail"]
+
+
 def test_design_service_supports_fractional_response_surface_and_latin_hypercube():
     variables = [
         {"name": "a", "low": 0.0, "high": 10.0},

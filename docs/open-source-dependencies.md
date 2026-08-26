@@ -9,7 +9,7 @@
 | .NET 平台与服务 | .NET、ASP.NET Core、Npgsql、SQLitePCLRaw | MIT / PostgreSQL |
 | 现场协议与采集 | MQTTnet、OPC Foundation UA .NET Standard、NModbus | MIT |
 | 数值计算与优化 | Python、PyTorch、GPyTorch、BoTorch、NumPy、SciPy | PSF / BSD / Apache-2.0 |
-| 产品前端 | React、Vite、Headless UI、Plotly.js | MIT |
+| 产品前端 | React、Vite、Headless UI、Plotly.js、oidc-client-ts | MIT / Apache-2.0 |
 | 官网与文档站 | Next.js、remark、rehype、Tailwind CSS | MIT |
 | 数据导入 | ClosedXML、PdfPig、MatFileHandler | MIT / Apache-2.0 |
 | 数据与时序存储 | PostgreSQL、TimescaleDB | PostgreSQL / Apache-2.0 |

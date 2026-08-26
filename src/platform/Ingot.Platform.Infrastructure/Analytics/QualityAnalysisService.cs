@@ -20,6 +20,8 @@ public sealed class QualityAnalysisService(
         QualityAnalysisQuery query,
         CancellationToken ct = default)
     {
+        if (string.IsNullOrWhiteSpace(query.SiteId))
+            throw new ArgumentException("质量分析必须指定站点。", nameof(query));
         var records = InspectionRecordSet.Effective(await QueryAllRecordsAsync(query, ct).ConfigureAwait(false));
         var scopes = (await inspections.ListScopesAsync(query.SiteId, ct).ConfigureAwait(false))
             .ToDictionary(static scope => scope.ScopeId, StringComparer.Ordinal);
@@ -28,10 +30,10 @@ public sealed class QualityAnalysisService(
             .Where(id => !scopes.ContainsKey(id))
             .Distinct(StringComparer.Ordinal)
             .ToArray();
-        var operationEvents = (await events.QueryByExecutionIdsAsync(operationIds, ct).ConfigureAwait(false))
-            .Where(item => string.IsNullOrWhiteSpace(query.SiteId) || string.Equals(
-                item.SiteId, query.SiteId, StringComparison.OrdinalIgnoreCase))
-            .ToArray();
+        var operationEvents = await events.QueryByExecutionIdsAsync(
+            operationIds,
+            query.SiteId,
+            ct).ConfigureAwait(false);
         var eventsByOperation = operationEvents
             .Where(static row => !string.IsNullOrWhiteSpace(row.Event.ExecutionId))
             .GroupBy(static row => row.Event.ExecutionId!, StringComparer.Ordinal)

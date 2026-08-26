@@ -1,4 +1,4 @@
-
+// 展示生产配置和执行生命周期，并保持站点上下文显式可见。
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
 import { deleteJson, postJson } from "../api/http";
@@ -621,7 +621,6 @@ function ToolingAssembliesPage({ canWrite = true }) {
   return (
     <Page
       title="实际工装总成"
-      description="一个工装总成拥有稳定身份；每次组件更换形成新的不可变配置版本，生产运行自动保留当时的真实组成。"
       actions={canWrite ? <Button variant="primary" onClick={() => { setActionError(""); setAssetOpen(true); }}>新建工装总成</Button> : undefined}
     >
       <RequestError
@@ -882,7 +881,7 @@ function ProductionRecordsPage({ section, canWrite = true }) {
   ];
 
   return (
-    <Page className="mx-auto max-w-7xl" title={resource.title} description={resource.description} actions={canWrite && section !== "context" ? <Button variant="primary" onClick={() => openEditor()}>{resource.createLabel}</Button> : undefined}>
+    <Page className="mx-auto max-w-7xl" title={resource.title} actions={canWrite && section !== "context" ? <Button variant="primary" onClick={() => openEditor()}>{resource.createLabel}</Button> : undefined}>
       <RequestError error={error} onRetry={reload} />
       {!open && actionError && <Alert tone="danger">{actionError}</Alert>}
       {loading && !data ? <LoadingCard /> : (

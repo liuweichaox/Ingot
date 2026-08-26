@@ -231,6 +231,12 @@ public sealed record AgentRunSnapshot
 
     public PageContextRef? PageContext { get; init; }
 
+    /// <summary>
+    /// Server-derived authorization scope captured when the run is admitted. Null denotes a
+    /// legacy snapshot whose data scope cannot be proven and must therefore be treated as denied.
+    /// </summary>
+    public AgentRunAccessScopeSnapshot? AccessScope { get; init; }
+
     public required string Mode { get; init; }
 
     public required string Status { get; init; }
@@ -481,9 +487,13 @@ public sealed record AgentRunListItem
 {
     public required string RunId { get; init; }
 
+    public required string UserId { get; init; }
+
     public required string Question { get; init; }
 
     public PageContextRef? PageContext { get; init; }
+
+    public AgentRunAccessScopeSnapshot? AccessScope { get; init; }
 
     public required string EntryPoint { get; init; }
 
@@ -500,6 +510,17 @@ public sealed record AgentRunListItem
     public string? Summary { get; init; }
 
     public AgentUsageSummary Usage { get; init; } = new();
+}
+
+public sealed record AgentRunAccessScopeSnapshot
+{
+    public const int CurrentVersion = 1;
+
+    public int Version { get; init; } = CurrentVersion;
+
+    public bool AllowAllSites { get; init; }
+
+    public IReadOnlyList<string> SiteIds { get; init; } = [];
 }
 
 public sealed record AgentRunPage

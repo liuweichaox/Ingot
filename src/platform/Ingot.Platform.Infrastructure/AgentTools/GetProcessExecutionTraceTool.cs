@@ -1,4 +1,4 @@
-
+// 读取单一授权站点内某次过程执行的有界事件轨迹。
 using System.Text.Json;
 using Ingot.Agent;
 using Ingot.Contracts.Agents;
@@ -18,8 +18,12 @@ public sealed class GetProcessExecutionTraceTool(IChatEventReader events) : IAna
         InputSchema = JsonSerializer.SerializeToElement(new
         {
             type = "object",
-            required = new[] { "executionId" },
-            properties = new { executionId = new { type = "string", minLength = 1, maxLength = 200 } },
+            required = new[] { "siteId", "executionId" },
+            properties = new
+            {
+                siteId = new { type = "string", minLength = 1, maxLength = 128 },
+                executionId = new { type = "string", minLength = 1, maxLength = 200 }
+            },
             additionalProperties = false
         })
     };
@@ -29,24 +33,28 @@ public sealed class GetProcessExecutionTraceTool(IChatEventReader events) : IAna
         AgentExecutionContext context,
         CancellationToken ct = default)
     {
+        if (!call.Arguments.TryGetValue("siteId", out var requestedSiteId))
+            throw new ArgumentException("请提供站点范围。", nameof(call));
+        var siteId = context.AccessScope.EnsureAuthorizedSite(requestedSiteId);
         if (!call.Arguments.TryGetValue("executionId", out var executionId) ||
             string.IsNullOrWhiteSpace(executionId))
             throw new ArgumentException("请提供生产过程执行号。", nameof(call));
         executionId = executionId.Trim();
         var rows = await events.QueryAllAsync(
             context.UserId,
-            new PlatformEventQuery { ExecutionId = executionId }, ct)
+            new PlatformEventQuery { SiteId = siteId, ExecutionId = executionId }, ct)
             .ConfigureAwait(false);
         var ordered = rows.OrderBy(static row => row.Event.OccurredAt)
             .ThenBy(static row => row.IngestId)
             .ToArray();
-        var executionUrl = $"/api/v1/process-executions/{Uri.EscapeDataString(executionId)}";
+        var executionUrl = $"/api/v1/process-executions/{Uri.EscapeDataString(executionId)}" +
+                           $"?siteId={Uri.EscapeDataString(siteId)}";
         RelatedRecordRef[] relatedRecords =
         [
             new RelatedRecordRef
             {
                 Kind = "process-execution-query",
-                Id = $"correlation:{executionId}",
+                Id = $"{siteId}:correlation:{executionId}",
                 Label = $"完整次执行 {executionId}",
                 Url = executionUrl
             }

@@ -122,6 +122,56 @@ public class IngestionTaskValidatorTests
     }
 
     [Fact]
+    public void HttpSecretReferenceAcceptsDedicatedAcquisitionEnvironmentVariable()
+    {
+        var profile = Profile(AcquisitionProtocols.HttpPolling, new AcquisitionValueMapping
+        {
+            DataItemCode = "press.temperature",
+            SourcePath = "temperature"
+        }) with
+        {
+            HttpPolling = new HttpPollingConnection
+            {
+                BaseUrl = "http://10.0.0.5",
+                SnapshotPath = "/snapshot",
+                HeaderSecretRefs = new Dictionary<string, string>
+                {
+                    ["Authorization"] = "env:DEVICE_PRESS_API_TOKEN"
+                }
+            }
+        };
+
+        Assert.True(IngestionTaskValidator.TryValidate(profile, null, out _, out var errors),
+            string.Join("；", errors));
+    }
+
+    [Fact]
+    public void HttpSecretReferenceRejectsProtectedEdgeRuntimeCredential()
+    {
+        var profile = Profile(AcquisitionProtocols.HttpPolling, new AcquisitionValueMapping
+        {
+            DataItemCode = "press.temperature",
+            SourcePath = "temperature"
+        }) with
+        {
+            HttpPolling = new HttpPollingConnection
+            {
+                BaseUrl = "http://10.0.0.5",
+                SnapshotPath = "/snapshot",
+                HeaderSecretRefs = new Dictionary<string, string>
+                {
+                    ["Authorization"] = "env:Edge__EventIngestToken"
+                }
+            }
+        };
+
+        Assert.False(IngestionTaskValidator.TryValidate(profile, null, out _, out var errors));
+        Assert.Contains(errors, item =>
+            item.Path == "httpPolling.headerSecretRefs.Authorization" &&
+            item.Message.Contains("运行时", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void MqttTopicBindingsMustReferenceConfiguredTopicsAndValidPayloadRoots()
     {
         var profile = Profile(AcquisitionProtocols.Mqtt, new AcquisitionValueMapping

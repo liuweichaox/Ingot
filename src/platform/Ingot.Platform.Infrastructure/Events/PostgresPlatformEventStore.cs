@@ -1,3 +1,4 @@
+// 在 PostgreSQL 中持久化生产事件并执行站点过滤和硬行数上限查询。
 using System.Globalization;
 using System.Text.Json;
 using Ingot.Contracts.Analytics;
@@ -18,6 +19,7 @@ namespace Ingot.Platform.Infrastructure.Events;
 
 public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, IDisposable
 {
+    private const int MaximumExecutionQueryRows = 50_000;
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     private readonly NpgsqlDataSource _dataSource;
@@ -112,7 +114,11 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, ID
         for (var index = 0; index < ordered.Length; index++)
         {
             ordered[index] = ProductionEventIntegrity.Seal(
-                await EnrichOperationContextAsync(ordered[index], capturedContexts, ct).ConfigureAwait(false));
+                await EnrichOperationContextAsync(
+                    request.SiteId,
+                    ordered[index],
+                    capturedContexts,
+                    ct).ConfigureAwait(false));
             await ValidateProcessSampleAsync(ordered[index], analysisConfigurations, ct).ConfigureAwait(false);
         }
 
@@ -201,7 +207,12 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, ID
                 }
                 if (effectiveEvent.EventType.EndsWith(".started", StringComparison.Ordinal))
                 {
-                    await UpsertOperationContextSnapshotAsync(connection, transaction, effectiveEvent, ct)
+                    await UpsertOperationContextSnapshotAsync(
+                            connection,
+                            transaction,
+                            request.SiteId,
+                            effectiveEvent,
+                            ct)
                         .ConfigureAwait(false);
                 }
                 accepted++;
@@ -261,6 +272,7 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, ID
     }
 
     private async Task<ProductionEvent> EnrichOperationContextAsync(
+        string siteId,
         ProductionEvent evt,
         IDictionary<string, IReadOnlyDictionary<string, string>> capturedContexts,
         CancellationToken ct)
@@ -274,7 +286,8 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, ID
         {
             if (!capturedContexts.TryGetValue(executionId, out var captured))
             {
-                captured = await LoadOperationContextSnapshotAsync(executionId, ct).ConfigureAwait(false);
+                captured = await LoadOperationContextSnapshotAsync(siteId, executionId, ct)
+                    .ConfigureAwait(false);
                 if (captured is not null)
                     capturedContexts[executionId] = captured;
             }
@@ -379,11 +392,17 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, ID
     }
 
     private async Task<IReadOnlyDictionary<string, string>?> LoadOperationContextSnapshotAsync(
+        string siteId,
         string executionId,
         CancellationToken ct)
     {
         await using var command = _dataSource.CreateCommand(
-            "SELECT context::text FROM operation_context_snapshots WHERE execution_id = @execution_id;");
+            """
+            SELECT context::text
+            FROM operation_context_snapshots
+            WHERE site_id = @site_id AND execution_id = @execution_id;
+            """);
+        command.Parameters.AddWithValue("site_id", siteId);
         command.Parameters.AddWithValue("execution_id", executionId);
         var raw = await command.ExecuteScalarAsync(ct).ConfigureAwait(false) as string;
         return string.IsNullOrWhiteSpace(raw)
@@ -394,15 +413,16 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, ID
     private static async Task UpsertOperationContextSnapshotAsync(
         NpgsqlConnection connection,
         NpgsqlTransaction transaction,
+        string siteId,
         ProductionEvent evt,
         CancellationToken ct)
     {
         await using var command = new NpgsqlCommand(
             """
             INSERT INTO operation_context_snapshots(
-              execution_id, subject_type, subject_id, started_event_type, captured_at, context)
-            VALUES (@execution_id, @subject_type, @subject_id, @started_event_type, @captured_at, @context)
-            ON CONFLICT (execution_id) DO UPDATE SET
+              site_id, execution_id, subject_type, subject_id, started_event_type, captured_at, context)
+            VALUES (@site_id, @execution_id, @subject_type, @subject_id, @started_event_type, @captured_at, @context)
+            ON CONFLICT (site_id, execution_id) DO UPDATE SET
               subject_type = EXCLUDED.subject_type,
               subject_id = EXCLUDED.subject_id,
               started_event_type = EXCLUDED.started_event_type,
@@ -411,6 +431,7 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, ID
             """,
             connection,
             transaction);
+        command.Parameters.AddWithValue("site_id", siteId);
         command.Parameters.AddWithValue("execution_id", evt.ExecutionId!);
         command.Parameters.AddWithValue("subject_type", evt.Subject.Type);
         command.Parameters.AddWithValue("subject_id", evt.Subject.Id);
@@ -594,9 +615,13 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, ID
 
     public async Task<IReadOnlyList<PlatformProductionEvent>> QueryByExecutionIdsAsync(
         IReadOnlyCollection<string> executionIds,
+        string siteId,
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(executionIds);
+        if (string.IsNullOrWhiteSpace(siteId))
+            throw new ArgumentException("站点标识不能为空。", nameof(siteId));
+        siteId = siteId.Trim();
         await InitializeAsync(ct).ConfigureAwait(false);
         var ids = executionIds
             .Where(static value => !string.IsNullOrWhiteSpace(value))
@@ -613,22 +638,34 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, ID
                    execution_id, configuration_kind, configuration_id, configuration_version,
                    quality_flags::text, payload_hash, context::text, data::text, seq
             FROM production_events
-            WHERE execution_id = ANY(@execution_ids)
-            ORDER BY execution_id, occurred_at, ingest_id;
+            WHERE site_id = @site_id
+              AND execution_id = ANY(@execution_ids)
+            ORDER BY execution_id, occurred_at, ingest_id
+            LIMIT @maximum_rows;
             """);
+        command.Parameters.AddWithValue("site_id", siteId);
         command.Parameters.AddWithValue("execution_ids", ids);
+        command.Parameters.AddWithValue("maximum_rows", MaximumExecutionQueryRows + 1);
         var result = new List<PlatformProductionEvent>();
         await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
         while (await reader.ReadAsync(ct).ConfigureAwait(false))
+        {
+            if (result.Count >= MaximumExecutionQueryRows)
+                throw new PlatformEventQueryLimitExceededException(MaximumExecutionQueryRows);
             result.Add(ReadEvent(reader));
+        }
         return result;
     }
 
     public async Task<IReadOnlyList<PlatformProcessExecutionSummarySource>> QueryExecutionSummarySourcesAsync(
         IReadOnlyCollection<string> executionIds,
+        string siteId,
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(executionIds);
+        if (string.IsNullOrWhiteSpace(siteId))
+            throw new ArgumentException("站点标识不能为空。", nameof(siteId));
+        siteId = siteId.Trim();
         await InitializeAsync(ct).ConfigureAwait(false);
         var ids = executionIds
             .Where(static value => !string.IsNullOrWhiteSpace(value))
@@ -641,10 +678,11 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, ID
         await using var command = _dataSource.CreateCommand(
             """
             WITH sample_counts AS (
-              SELECT execution_id, count(*) AS sample_count
+              SELECT site_id, execution_id, count(*) AS sample_count
               FROM process_sample_frames
-              WHERE execution_id = ANY(@execution_ids)
-              GROUP BY execution_id
+              WHERE site_id = @site_id
+                AND execution_id = ANY(@execution_ids)
+              GROUP BY site_id, execution_id
             )
             SELECT event.ingest_id, event.site_id, event.edge_id, event.ingested_at,
                    event.event_id, event.schema_version, event.event_type, event.type_version,
@@ -655,16 +693,23 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, ID
                    event.context::text, event.data::text, event.seq,
                    COALESCE(sample_counts.sample_count, 0)
             FROM production_events AS event
-            LEFT JOIN sample_counts USING (execution_id)
-            WHERE event.execution_id = ANY(@execution_ids)
-            ORDER BY event.execution_id, event.occurred_at, event.ingest_id;
+            LEFT JOIN sample_counts USING (site_id, execution_id)
+            WHERE event.site_id = @site_id
+              AND event.execution_id = ANY(@execution_ids)
+            ORDER BY event.execution_id, event.occurred_at, event.ingest_id
+            LIMIT @maximum_rows;
             """);
+        command.Parameters.AddWithValue("site_id", siteId);
         command.Parameters.AddWithValue("execution_ids", ids);
+        command.Parameters.AddWithValue("maximum_rows", MaximumExecutionQueryRows + 1);
         var eventsByExecution = new Dictionary<string, List<PlatformProductionEvent>>(StringComparer.Ordinal);
         var sampleCounts = new Dictionary<string, int>(StringComparer.Ordinal);
+        var rowCount = 0;
         await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
         while (await reader.ReadAsync(ct).ConfigureAwait(false))
         {
+            if (rowCount++ >= MaximumExecutionQueryRows)
+                throw new PlatformEventQueryLimitExceededException(MaximumExecutionQueryRows);
             var row = ReadEvent(reader);
             var executionId = row.Event.ExecutionId!;
             if (!eventsByExecution.TryGetValue(executionId, out var rows))
@@ -729,7 +774,8 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, ID
                                        coalesce(snapshot.context, jsonb_build_object()) AS context
                                 FROM process_sample_frames AS frame
                                 LEFT JOIN operation_context_snapshots AS snapshot
-                                  ON snapshot.execution_id = frame.execution_id
+                                  ON snapshot.site_id = frame.site_id
+                                 AND snapshot.execution_id = frame.execution_id
                               ),
                               records AS (
                                 SELECT ingest_id, site_id, edge_id, event_type, occurred_at, subject_type,

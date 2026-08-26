@@ -18,6 +18,11 @@ scrape_configs:
     static_configs:
       - targets: ["platform-api:8000"]
 
+  - job_name: ingot-platform-worker
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["platform-worker:8002"]
+
   - job_name: ingot-edge
     metrics_path: /metrics
     file_sd_configs:

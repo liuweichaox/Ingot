@@ -19,10 +19,12 @@ public interface IPlatformEventStore
 
     Task<IReadOnlyList<PlatformProductionEvent>> QueryByExecutionIdsAsync(
         IReadOnlyCollection<string> executionIds,
+        string siteId,
         CancellationToken ct = default);
 
     Task<IReadOnlyList<PlatformProcessExecutionSummarySource>> QueryExecutionSummarySourcesAsync(
         IReadOnlyCollection<string> executionIds,
+        string siteId,
         CancellationToken ct = default);
 
     Task<DataObjectPage> QueryDataObjectsAsync(
@@ -52,4 +54,11 @@ public sealed record PlatformEventScopeStats
     public DateTimeOffset? LatestOccurredAt { get; init; }
 
     public DateTimeOffset? EarliestOccurredAt { get; init; }
+}
+
+/// <summary>表示事件查询超过应用允许的硬行数预算。</summary>
+public sealed class PlatformEventQueryLimitExceededException(int maximumRows) : InvalidOperationException(
+    $"生产事件查询超过 {maximumRows} 行预算；请缩小站点、过程执行或时间范围。")
+{
+    public int MaximumRows { get; } = maximumRows;
 }

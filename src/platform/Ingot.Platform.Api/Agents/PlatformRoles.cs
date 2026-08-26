@@ -1,4 +1,4 @@
-
+// 定义平台角色、站点声明和站点范围解析规则。
 namespace Ingot.Platform.Api.Agents;
 
 public static class PlatformRoles
@@ -52,7 +52,17 @@ public static class PlatformSiteScope
     {
         siteId = requestedSiteId?.Trim();
         if (!string.IsNullOrWhiteSpace(siteId))
-            return identity.CanAccessSite(siteId) ? SiteScopeFailure.None : SiteScopeFailure.Forbidden;
+        {
+            if (identity.Roles.Contains(PlatformRoles.PlatformAdministrator))
+                return SiteScopeFailure.None;
+            var normalizedRequestedSiteId = siteId;
+            var canonicalSiteId = identity.SiteIds.FirstOrDefault(value =>
+                string.Equals(value, normalizedRequestedSiteId, StringComparison.OrdinalIgnoreCase));
+            if (canonicalSiteId is null)
+                return SiteScopeFailure.Forbidden;
+            siteId = canonicalSiteId;
+            return SiteScopeFailure.None;
+        }
         if (allowAllForAdministrator && identity.Roles.Contains(PlatformRoles.PlatformAdministrator))
         {
             siteId = null;

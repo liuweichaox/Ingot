@@ -61,6 +61,27 @@ cp .env.example .env
 只允许在明确隔离的演示环境使用，并且必须同时设置 `INGOT_ALLOW_INSECURE_DEMO=true`；该模式会把
 所有请求映射到固定的开发身份，不能暴露到厂内网络或反向代理之后。
 
+### OIDC 身份提供方
+
+OIDC 模式使用 Authorization Code + PKCE，前端是不持有客户端密钥的公共客户端。至少配置：
+
+- `INGOT_AUTHORITY`：OIDC issuer/authority 的 HTTPS URL；
+- `INGOT_AUDIENCE`：Platform API 期望的 access-token audience；
+- `INGOT_OIDC_CLIENT_ID`：在身份提供方注册的 SPA public client ID；
+- `INGOT_OIDC_SCOPE`：必须包含 `openid`，并加入身份提供方为 Platform API 配置的 scope；
+- `INGOT_OIDC_NAME_CLAIM_TYPE` 与 `INGOT_OIDC_ROLE_CLAIM_TYPE`：分别默认为 `name` 和 `roles`；
+- `INGOT_OIDC_ALLOWED_ORIGINS`：用空格分隔 discovery、token endpoint 和静默续期所需的 HTTPS origin；必须包含 authority origin，不允许通配符或路径。
+
+以 Platform Web 的对外 origin 为 `https://platform.example.com` 时，身份提供方必须精确登记以下 URI：
+
+```text
+https://platform.example.com/auth/callback
+https://platform.example.com/auth/silent-callback
+https://platform.example.com/auth/logout-callback
+```
+
+不得使用通配回调 URI。身份提供方还必须允许该 SPA 从浏览器访问 token endpoint。access token 的角色 claim 必须包含一个平台岗位，非管理员身份还必须包含一个或多个 `ingot:site`。
+
 不要提交 `.env` 或真实设备凭据。设备密码和证书应使用现场允许的密钥管理方式注入。
 
 ### 本地模型服务
@@ -96,7 +117,7 @@ docker compose -f docker-compose.app.yml down
 
 `down` 停止并移除容器和网络，但默认保留命名数据卷；不要在没有备份和明确重置意图时添加 `--volumes`。修改源代码后使用 `up -d --build`；只修改 `.env` 时使用 `up -d` 重新创建受影响容器。
 
-首次构建会下载较大的 SDK、PyTorch 和数据库镜像。必须等 `platform-migrate` 成功退出、四个 HTTP/数据库核心服务均为 `healthy` 且 `platform-worker` 持续为 `running` 后，才算启动完成。
+首次构建会下载较大的 SDK、PyTorch 和数据库镜像。必须等 `platform-migrate` 成功退出，且 PostgreSQL、Platform API、Platform Worker、Optimizer、Web 和 ConnectorHost 均为 `healthy` 后，才算启动完成。
 
 | 现象 | 先检查 | 常见原因与处理 |
 |---|---|---|
@@ -137,6 +158,8 @@ Platform 按 `EdgeId` 发布版本化采集配置。Edge 主动拉取、在本�
 - 生产环境禁止静默启用未版本化本地 fallback；
 - HTTP/MQTT 可以读取示例报文，OPC UA 可以浏览节点；
 - Modbus TCP 和 MELSEC 只读取用户明确配置的地址，不进行盲扫；
+- HTTP、MQTT、OPC UA、Modbus TCP 和 MELSEC 默认拒绝所有未登记目标；设备主机必须显式加入 `Acquisition:Security:AllowedHttpHosts`（HTTP）或 `AllowedNetworkHosts`，并固定使用校验过的 DNS 解析结果；回环、链路本地、未指定和组播地址即使列入白名单也不会放行；
+- 任何会发送 Edge 密钥、用户名密码或客户端证书的目标都必须显式加入上述主机白名单，只有“位于私网”不足以获得凭据；
 - 发布前和发布请求中都执行真实值校验。
 
 配置应用应在工艺允许的安全边界进行。离散设备优先在两次过程执行之间切换，失败时继续运行旧版本。
@@ -146,7 +169,7 @@ Platform 按 `EdgeId` 发布版本化采集配置。Edge 主动拉取、在本�
 | 服务 | 检查 | 含义 |
 |---|---|---|
 | Platform | `/health` | 中心进程和配置依赖状态 |
-| Platform Worker | 容器状态与任务心跳指标 | 持久任务处理进程持续运行 |
+| Platform Worker | `:8002/health` 与内网 `:8002/metrics` | Worker 调度心跳持续更新；Prometheus 对不可达和心跳超时分别告警 |
 | Optimizer | `/health` | HTTP 进程存活 |
 | Optimizer | `/ready` | PyTorch、GPyTorch 和 BoTorch 数值运行时可用 |
 | ConnectorHost | `/health` | 现场进程和配置依赖状态 |

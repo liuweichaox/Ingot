@@ -3,7 +3,7 @@
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from "@headlessui/react";
 import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
 import { useEffect, useMemo, useState } from "react";
-import { Link, useSearchParams } from "react-router";
+import { useSearchParams } from "react-router";
 import { getBlob, getJson, postForm, postJson } from "../api/http";
 import { qualityOutcomeTraces } from "../charts/chartAdapters";
 import { extractRows, useApi } from "../hooks/useApi";
@@ -248,36 +248,36 @@ export function InspectionsPage() {
   }
 
   return (
-    <Page title="检验任务" description="从待办开始完成检测录入、独立复核和原图追溯。" actions={<Button onClick={() => openTask()}>补录检测记录</Button>}>
+    <Page title="检验任务" actions={<Button onClick={() => openTask()}>补录检测记录</Button>}>
       <RequestError
         error={tasks.error || taskSummary.error || records.error || definitions.error || (!entryOpen && !reviewOpen && actionError)}
         onRetry={() => Promise.all([tasks.reload(), taskSummary.reload(), records.reload(), definitions.reload()])}
       />
-      <WorkflowGuide
-        title="检验任务怎么处理"
-        description="正常情况下直接点击任务队列中的操作按钮；只有补录历史结果时才使用右上角“补录检测记录”。"
-        steps={[
-          { title: "选择待办任务", description: "平台已按生产运行生成需要处理的检测项目。", state: Number(taskSummary.data?.pending || 0) > 0 ? "current" : "done" },
-          { title: "录入结果与附件", description: "检测值会按定义自动判定，原图与记录一起保存。", state: Number(taskSummary.data?.pending || 0) > 0 ? "current" : "done" },
-          { title: "由另一人复核", description: "待复核任务进入独立队列，确认或要求重检。", state: Number(taskSummary.data?.reviewPending || 0) > 0 ? "current" : "done" },
-        ]}
-      />
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Metric label="需要处理" value={taskSummary.data?.actionRequired ?? "—"} hint="录入与复核合计" />
-        <Metric label="待录入" value={taskSummary.data?.pending ?? "—"} />
-        <Metric label="待复核" value={taskSummary.data?.reviewPending ?? "—"} />
-        <Metric label="已完成" value={taskSummary.data?.completed ?? "—"} />
-      </div>
+      <section className="grid grid-cols-2 divide-x divide-y divide-slate-200 rounded-lg border border-slate-200 bg-white sm:grid-cols-4 sm:divide-y-0" aria-label="检验任务摘要">
+        {[
+          ["需要处理", taskSummary.data?.actionRequired ?? "—", "录入与复核"],
+          ["待录入", taskSummary.data?.pending ?? "—", "等待检测结果"],
+          ["待复核", taskSummary.data?.reviewPending ?? "—", "需要独立确认"],
+          ["已完成", taskSummary.data?.completed ?? "—", "记录已归档"],
+        ].map(([label, value, hint]) => (
+          <div key={label} className="px-4 py-3">
+            <p className="text-[13px] font-medium text-slate-500">{label}</p>
+            <div className="mt-1 flex items-baseline gap-2">
+              <strong className="text-xl font-semibold text-slate-950 tabular-nums">{value}</strong>
+              <span className="text-[13px] text-slate-500">{hint}</span>
+            </div>
+          </div>
+        ))}
+      </section>
       <TabGroup>
-        <TabList className="flex w-fit gap-1 rounded-xl bg-slate-200/70 p-1">
-          <Tab className="rounded-lg px-4 py-2 text-sm font-medium text-slate-600 outline-none data-selected:bg-white data-selected:text-blue-700 data-selected:shadow-sm">任务队列</Tab>
-          <Tab className="rounded-lg px-4 py-2 text-sm font-medium text-slate-600 outline-none data-selected:bg-white data-selected:text-blue-700 data-selected:shadow-sm">检测记录</Tab>
+        <TabList className="flex w-fit gap-1 rounded-lg border border-slate-200 bg-white p-1">
+          <Tab className="rounded-md px-4 py-2 text-sm font-medium text-slate-600 outline-none data-selected:bg-white data-selected:text-blue-700">任务队列</Tab>
+          <Tab className="rounded-md px-4 py-2 text-sm font-medium text-slate-600 outline-none data-selected:bg-white data-selected:text-blue-700">检测记录</Tab>
         </TabList>
         <TabPanels className="mt-4">
           <TabPanel>
             <Card
-              title="检测任务"
-              description={`共 ${tasks.data?.total ?? extractRows(tasks.data).length} 条`}
+              title={`检测任务（${tasks.data?.total ?? extractRows(tasks.data).length}）`}
               actions={(
                 <Select
                   className="min-w-32"
@@ -324,7 +324,7 @@ export function InspectionsPage() {
             </Card>
           </TabPanel>
           <TabPanel>
-            <Card title="检测记录" description={`共 ${records.data?.total ?? extractRows(records.data).length} 条`}>
+            <Card title={`检测记录（${records.data?.total ?? extractRows(records.data).length}）`}>
               <DataTable
                 rows={extractRows(records.data)}
                 keyField="recordId"
@@ -353,13 +353,6 @@ export function InspectionsPage() {
           </TabPanel>
         </TabPanels>
       </TabGroup>
-      <Card title="完成检验后的下一步" description="正式分析只使用已关联运行并完成复核的质量结果。">
-        <div className="flex flex-wrap gap-2">
-          <Link className="inline-flex min-h-10 items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700" to="/data-quality">检查数据可信度</Link>
-          <Link className="inline-flex min-h-10 items-center rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50" to="/process-executions">查看关联运行</Link>
-          <Link className="inline-flex min-h-10 items-center rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50" to="/quality-analysis">分析质量偏差</Link>
-        </div>
-      </Card>
       <Drawer
         open={entryOpen}
         onClose={() => setEntryOpen(false)}
@@ -562,7 +555,7 @@ export function QualityAnalysisPage() {
   }
 
   return (
-    <Page title="质量偏差分析" description="按产品、工艺规范和生产上下文识别质量偏差，并追溯到运行证据。">
+    <Page title="偏差分析">
       <Card title="分析范围">
         <form className="grid gap-3 md:grid-cols-[1fr_1fr_1fr_auto]" onSubmit={search}>
           <Field label="产品系列"><Input value={filters.productFamilyCode} onChange={event => setFilters({ ...filters, productFamilyCode: event.target.value })} /></Field>

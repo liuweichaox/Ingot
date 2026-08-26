@@ -1,9 +1,10 @@
+// 提供版本化业务配置注册表及显式创建、发布和退役操作。
 import { useState } from "react";
 import { Link } from "react-router";
 import { deleteJson, postJson } from "../api/http";
 import { createRegistryBusinessForm, RegistryBusinessEditor, registryBusinessPayload, registryBusinessValidation } from "../components/RegistryBusinessEditor";
 import { extractRows, useApi } from "../hooks/useApi";
-import { Alert, Button, Card, DataTable, Drawer, EmptyState, Field, Input, Page, RequestError, Select, StatusBadge, Textarea, WorkflowGuide, notify, useConfirmDialog } from "../ui/components";
+import { Alert, Button, Card, DataTable, Drawer, EmptyState, Field, Input, Page, RequestError, Select, StatusBadge, Textarea, notify, useConfirmDialog } from "../ui/components";
 import { formatTime, emptyInspectionCharacteristic, inspectionDefinitionForm, inspectionDefinitionPayload, inspectionDefinitionValidation, inspectionInputTypes, LoadingCard } from "./shared";
 
 export function ConfigurationHubPage() {
@@ -32,53 +33,53 @@ export function ConfigurationHubPage() {
   return (
     <Page
       title="配置总览"
-      description="查看数据、接入、分析、质量和工装的准备状态。"
       actions={!readinessLoading && !readinessError && (
         readyCount === readiness.length
-          ? <Link className="inline-flex min-h-10 items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700" to="/production/changeover">进入生产切换</Link>
-          : <Link className="inline-flex min-h-10 items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700" to={nextReadiness?.to || "/configuration"}>继续：{nextReadiness?.action || "完善配置"}</Link>
+          ? <Link className="inline-flex min-h-10 items-center rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700" to="/production/changeover">进入生产切换</Link>
+          : <Link className="inline-flex min-h-10 items-center rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700" to={nextReadiness?.to || "/configuration"}>继续：{nextReadiness?.action || "完善配置"}</Link>
       )}
     >
       <Card
-        title="当前准备度"
-        description={readinessLoading ? "正在检查生产运行和分析所需配置。" : readinessError ? "部分配置状态暂时无法读取，请先恢复接口后重新检查。" : `已完成 ${readyCount}/${readiness.length} 项；按顺序补齐待完成项后再发布生产配置。`}
+        title="配置准备度"
         actions={!readinessLoading && <span className={`text-sm font-semibold ${readinessError ? "text-rose-700" : readyCount === readiness.length ? "text-emerald-700" : "text-amber-700"}`}>{readinessError ? "检查未完成" : readyCount === readiness.length ? "生产配置已就绪" : `还需完成 ${readiness.length - readyCount} 项`}</span>}
       >
         {readinessError && <Alert tone="warning">部分准备度暂时无法读取：{readinessError}</Alert>}
         <div className="mb-4 h-2 overflow-hidden rounded-full bg-slate-100" role="progressbar" aria-label="配置准备进度" aria-valuemin="0" aria-valuemax={readiness.length} aria-valuenow={readyCount}>
           <div className={`h-full rounded-full transition-[width] ${readyCount === readiness.length ? "bg-emerald-600" : "bg-amber-500"}`} style={{ width: `${readinessLoading ? 0 : readyCount / readiness.length * 100}%` }} />
         </div>
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-          {readiness.map((item, index) => {
-            const cardTone = item.error ? "border-rose-200 bg-rose-50" : item.ready ? "border-emerald-200 bg-emerald-50" : "border-amber-200 bg-amber-50";
-            const textTone = item.error ? "text-rose-700" : item.ready ? "text-emerald-700" : "text-amber-700";
-            const linkTone = item.error ? "text-rose-800 hover:text-rose-950" : item.ready ? "text-emerald-800 hover:text-emerald-950" : "text-amber-800 hover:text-amber-950";
-            const status = item.loading ? "检查中" : item.error ? "无法检查" : item.ready ? "已准备" : "待完成";
-            const hint = item.error ? "状态接口暂时不可用，请进入对应页面查看详情。" : item.ready ? item.readyHint : item.pendingHint;
-            return (
-              <div key={item.title} className={`flex flex-col rounded-xl border p-4 sm:min-h-40 ${cardTone}`}>
-                <p className="flex items-center justify-between gap-2 font-semibold text-slate-950"><span>{index + 1}. {item.title}</span><span className={`text-xs ${textTone}`}>{status}</span></p>
-                <p className="mt-2 flex-1 text-sm leading-6 text-slate-600">{hint}</p>
-                <Link to={item.to} className={`mt-3 inline-flex text-sm font-semibold ${linkTone}`}>{item.action} →</Link>
-              </div>
-            );
-          })}
-        </div>
+        <DataTable
+          rows={readiness.map((item, index) => ({ ...item, order: index + 1 }))}
+          keyField="title"
+          columns={[
+            { key: "order", label: "序号", render: value => String(value).padStart(2, "0") },
+            { key: "title", label: "模块" },
+            {
+              key: "ready",
+              label: "状态",
+              render: (_, item) => <StatusBadge
+                value={item.loading ? "pending" : item.error ? "unavailable" : item.ready ? "ready" : "incomplete"}
+                label={item.loading ? "检查中" : item.error ? "无法检查" : item.ready ? "已准备" : "待完成"}
+              />,
+            },
+            { key: "pendingHint", label: "当前情况", render: (_, item) => item.error ? "状态接口暂时不可用" : item.ready ? item.readyHint : item.pendingHint },
+            { key: "action", label: "操作", render: (_, item) => <Link to={item.to} className="font-medium text-blue-700 hover:text-blue-900">{item.action}</Link> },
+          ]}
+        />
       </Card>
-      <details className="group rounded-xl border border-slate-200 bg-white shadow-sm">
+      <details className="group rounded-lg border border-slate-200 bg-white">
         <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 marker:content-none">
-          <div><p className="font-semibold text-slate-950">运行数据来源与追溯要求</p><p className="mt-1 text-sm text-slate-600">核对生产运行进入分析前必须具备的上下文。</p></div>
+          <p className="font-semibold text-slate-950">运行数据来源与追溯要求</p>
           <span className="text-sm font-medium text-blue-700 group-open:hidden">查看详情</span>
           <span className="hidden text-sm font-medium text-blue-700 group-open:inline">收起</span>
         </summary>
-        <div className="grid gap-3 border-t border-slate-200 p-5 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid border-t border-slate-200 md:grid-cols-2 xl:grid-cols-4 xl:divide-x xl:divide-slate-200">
           {[
             ["设备与运行身份", "由设备事件、现场节点和数据源配置映射提供。", "/configuration/ingestion-tasks", "检查数据源配置"],
             ["产品、工艺、材料与批次", "由生产准备或 MES 写入不可变生产上下文。", "/production/changeover", "检查生产上下文"],
             ["实际装机工装", "由工装装卸记录在运行开始时绑定。", "/production/tooling-installations", "检查工装装卸"],
             ["字段覆盖率", "由历史已完成运行计算；覆盖不足时可禁止分析或建模。", "/data-quality", "检查数据可信度"],
           ].map(([title, description, to, action]) => (
-            <div key={title} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <div key={title} className="border-b border-slate-200 p-4 md:[&:nth-last-child(-n+2)]:border-b-0 xl:border-b-0">
               <h3 className="font-semibold text-slate-900">{title}</h3>
               <p className="mt-1 min-h-12 text-sm leading-6 text-slate-600">{description}</p>
               <Link to={to} className="mt-3 inline-flex text-sm font-medium text-blue-700 hover:text-blue-900">{action} →</Link>
@@ -283,33 +284,12 @@ function RegistryPage({ definition, canWrite = true }) {
   return (
     <Page
       title={definition.title}
-      description={definition.description}
       actions={canWrite ? <Button variant="primary" onClick={openCreate}>{definition.createLabel || "创建新版本"}</Button> : undefined}
     >
-      {definition.kind === "inspectionDefinition" && (
-        <WorkflowGuide
-          title="先定义检测内容，再组成质量方案"
-          steps={[
-            { title: "创建检测定义", description: "设置要填写的检测项、单位、上下限或选项。", state: rows.length ? "done" : "current" },
-            { title: "加入质量方案", description: "决定哪些产品需要使用这些检测项目。", state: rows.length ? "current" : "upcoming" },
-            { title: "按任务录入", description: "生产运行完成后，平台自动生成质量待办。", state: "upcoming" },
-          ]}
-        />
-      )}
-      {definition.kind === "qualityPlan" && (
-        <WorkflowGuide
-          title="质量方案决定什么时候检测什么"
-          steps={[
-            { title: "准备检测定义", description: "先确认需要的检测项目已经建立。", state: rows.length ? "done" : "current" },
-            { title: "配置产品适用范围", description: "选择检测定义并设置原图、复核等要求。", state: rows.length ? "done" : "current" },
-            { title: "发布后自动生成任务", description: "新生产运行会按适用范围进入质量队列。", state: rows.some(row => row.status === "published") ? "done" : "upcoming" },
-          ]}
-        />
-      )}
       <RequestError error={error} onRetry={reload} />
       {!open && editorError && <Alert tone="danger">{editorError}</Alert>}
       {loading && !data ? <LoadingCard /> : (
-        <Card title={`${definition.title}列表`} description={`共 ${data?.total ?? rows.length} 条记录`}>
+        <Card title={`${definition.title}（${data?.total ?? rows.length}）`}>
           {rows.length ? <DataTable
             rows={rows}
             keyField={definition.key}

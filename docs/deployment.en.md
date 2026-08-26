@@ -57,6 +57,29 @@ Change at least:
 - `INGOT_EDGE_DIAGNOSTICS_BASE_URL`: the trusted, deployment-pinned Edge diagnostics API URL; reported node metadata cannot override it
 - `INGOT_ADMIN_PASSWORD`
 
+Production must use `INGOT_AUTH_MODE=Local` or `INGOT_AUTH_MODE=Oidc`. `INGOT_AUTH_MODE=Disabled` is permitted only for an explicitly isolated demo with `INGOT_ALLOW_INSECURE_DEMO=true`; it maps every request to a fixed development identity and must not be exposed to a plant network or reverse proxy.
+
+### OIDC identity provider
+
+OIDC mode uses Authorization Code + PKCE. The frontend is a public client and never holds a client secret. Configure at least:
+
+- `INGOT_AUTHORITY`: the HTTPS OIDC issuer/authority URL;
+- `INGOT_AUDIENCE`: the access-token audience expected by Platform API;
+- `INGOT_OIDC_CLIENT_ID`: the SPA public client ID registered with the identity provider;
+- `INGOT_OIDC_SCOPE`: must include `openid` plus the identity-provider scope for Platform API;
+- `INGOT_OIDC_NAME_CLAIM_TYPE` and `INGOT_OIDC_ROLE_CLAIM_TYPE`: default to `name` and `roles` respectively;
+- `INGOT_OIDC_ALLOWED_ORIGINS`: a space-separated list of HTTPS origins needed for discovery, the token endpoint, and silent renewal; it must include the authority origin and cannot contain wildcards or paths.
+
+When the externally visible Platform Web origin is `https://platform.example.com`, register these exact URIs with the identity provider:
+
+```text
+https://platform.example.com/auth/callback
+https://platform.example.com/auth/silent-callback
+https://platform.example.com/auth/logout-callback
+```
+
+Do not use wildcard callback URIs. The identity provider must also allow this SPA to reach its token endpoint from a browser. The access-token role claim must contain a Platform role; non-administrator identities must also carry one or more `ingot:site` claims.
+
 Never commit `.env` or real equipment credentials. Inject device passwords and certificates through a site-approved secret-management method.
 
 ### Local model service
@@ -92,7 +115,7 @@ docker compose -f docker-compose.app.yml down
 
 `down` removes containers and networks but retains named volumes by default. Do not add `--volumes` without a backup and an explicit reset decision. After source changes, use `up -d --build`; after `.env`-only changes, use `up -d` to recreate affected containers.
 
-The first build downloads large SDK, PyTorch, and database images. Startup is complete only after `platform-migrate` exits successfully, the four HTTP/database services are `healthy`, and `platform-worker` remains `running`.
+The first build downloads large SDK, PyTorch, and database images. Startup is complete only after `platform-migrate` exits successfully and PostgreSQL, Platform API, Platform Worker, Optimizer, Web, and ConnectorHost are all `healthy`.
 
 | Symptom | Check first | Common cause and response |
 |---|---|---|
@@ -130,6 +153,8 @@ Platform publishes versioned acquisition configuration by `EdgeId`. Edge pulls a
 - Production never silently enables an unversioned local fallback.
 - HTTP/MQTT may read a sample payload; OPC UA may browse nodes.
 - Modbus TCP and MELSEC read only explicitly configured addresses and never blind-scan.
+- HTTP, MQTT, OPC UA, Modbus TCP, and MELSEC reject every unregistered target by default. Device hosts require an explicit `Acquisition:Security:AllowedHttpHosts` entry for HTTP or `AllowedNetworkHosts` entry for other protocols, and connections use the validated DNS result as the pinned address. Loopback, link-local, unspecified, and multicast addresses remain forbidden even when allowlisted.
+- Every target that receives an Edge secret, username/password, or client certificate must be explicitly host-allowlisted; merely resolving to a private address is not enough to receive credentials.
 - Real-value validation runs before and during publication.
 
 Apply configuration at a process-safe boundary. For cyclic equipment, prefer switching between process executions and retain the old version on failure.
@@ -139,7 +164,7 @@ Apply configuration at a process-safe boundary. For cyclic equipment, prefer swi
 | Service | Check | Meaning |
 |---|---|---|
 | Platform | `/health` | central process and configured dependencies |
-| Platform Worker | container state and job-heartbeat metrics | durable job processor remains active |
+| Platform Worker | `:8002/health` and internal `:8002/metrics` | the worker scheduling heartbeat keeps advancing; Prometheus alerts separately on an unreachable or stale worker |
 | Optimizer | `/health` | HTTP process is alive |
 | Optimizer | `/ready` | PyTorch, GPyTorch, and BoTorch runtime is usable |
 | ConnectorHost | `/health` | field process and configured dependencies |

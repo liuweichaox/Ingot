@@ -19,6 +19,7 @@
   "dependencies": {
     "@headlessui/react": "^2.2.9",
     "@heroicons/react": "^2.2.0",
+    "oidc-client-ts": "3.5.0",
     "plotly.js-basic-dist-min": "^3.7.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",

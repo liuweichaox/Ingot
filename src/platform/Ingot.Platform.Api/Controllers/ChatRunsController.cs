@@ -1,4 +1,4 @@
-
+// 管理 Chat 运行生命周期，并在读取历史或流事件时重新校验捕获的站点范围。
 using System.Text.Json;
 using Ingot.Agent;
 using Ingot.Contracts.Agents;
@@ -24,16 +24,18 @@ public sealed class ChatRunsController(
             return InvalidRequest(error);
         if (!TryAuthorize(out var userId, out var unauthorized))
             return unauthorized!;
+        var identity = userResolver.ResolveIdentity(User)!;
         if (normalized!.PageContext is { Kind: "research-project" } pageContext)
         {
             if (!Guid.TryParse(pageContext.Id, out var projectId))
                 return InvalidRequest("研发项目上下文标识无效。");
             var project = await researchStore.GetProjectAsync(projectId, ct).ConfigureAwait(false);
-            var identity = userResolver.ResolveIdentity(User)!;
+            var isAdministrator = identity.HasAnyRole(PlatformRoles.PlatformAdministrator);
             var canAccess = project is not null &&
-                            (identity.HasAnyRole(PlatformRoles.PlatformAdministrator) ||
-                             string.Equals(project.OwnerUserId, identity.UserId, StringComparison.Ordinal) ||
-                             project.MemberUserIds.Contains(identity.UserId, StringComparer.Ordinal));
+                            (isAdministrator ||
+                             ((string.Equals(project.OwnerUserId, identity.UserId, StringComparison.Ordinal) ||
+                               project.MemberUserIds.Contains(identity.UserId, StringComparer.Ordinal)) &&
+                              identity.CanAccessSite(project.SiteCode)));
             if (!canAccess)
                 return AuthorizationDenied();
         }
@@ -44,6 +46,11 @@ public sealed class ChatRunsController(
                 ProductEntryPoints.Chat,
                 userId!,
                 normalized!,
+                new AgentAccessScope
+                {
+                    AllowAllSites = identity.HasAnyRole(PlatformRoles.PlatformAdministrator),
+                    SiteIds = identity.SiteIds
+                },
                 ct).ConfigureAwait(false);
             return Accepted(new
             {
@@ -66,10 +73,13 @@ public sealed class ChatRunsController(
     {
         if (!TryAuthorize(out var userId, out var unauthorized))
             return unauthorized!;
+        var identity = userResolver.ResolveIdentity(User)!;
         var page = await runtime.ListAsync(ProductEntryPoints.Chat, userId!, before, limit, ct).ConfigureAwait(false);
         return Ok(new ChatRunPage
         {
-            Items = page.Items.Select(static run => new ChatRunListItem
+            Items = page.Items
+                .Where(run => CanAccessRun(run.UserId, run.AccessScope, identity))
+                .Select(static run => new ChatRunListItem
             {
                 RunId = run.RunId,
                 Question = run.Question,
@@ -95,7 +105,8 @@ public sealed class ChatRunsController(
         var run = await runtime.GetAsync(ProductEntryPoints.Chat, runId, ct).ConfigureAwait(false);
         if (run is null)
             return ResourceNotFound();
-        return string.Equals(run.UserId, userId, StringComparison.OrdinalIgnoreCase)
+        var identity = userResolver.ResolveIdentity(User)!;
+        return CanAccessRun(run.UserId, run.AccessScope, identity)
             ? Ok(ToChatSnapshot(run))
             : ProblemResponse(StatusCodes.Status403Forbidden, "无权访问该 Chat 运行。", []);
     }
@@ -114,7 +125,8 @@ public sealed class ChatRunsController(
             Response.StatusCode = StatusCodes.Status404NotFound;
             return;
         }
-        if (!string.Equals(run.UserId, userId, StringComparison.OrdinalIgnoreCase))
+        var identity = userResolver.ResolveIdentity(User)!;
+        if (!CanAccessRun(run.UserId, run.AccessScope, identity))
         {
             Response.StatusCode = StatusCodes.Status403Forbidden;
             return;
@@ -148,7 +160,8 @@ public sealed class ChatRunsController(
         var run = await runtime.GetAsync(ProductEntryPoints.Chat, runId, ct).ConfigureAwait(false);
         if (run is null)
             return ResourceNotFound();
-        if (!string.Equals(run.UserId, userId, StringComparison.OrdinalIgnoreCase))
+        var identity = userResolver.ResolveIdentity(User)!;
+        if (!CanAccessRun(run.UserId, run.AccessScope, identity))
             return ProblemResponse(StatusCodes.Status403Forbidden, "无权访问该 Chat 运行。", []);
 
         var cancelled = await runtime.CancelAsync(
@@ -167,6 +180,12 @@ public sealed class ChatRunsController(
     {
         if (!TryAuthorize(out var userId, out var unauthorized))
             return unauthorized!;
+        var run = await runtime.GetAsync(ProductEntryPoints.Chat, runId, ct).ConfigureAwait(false);
+        if (run is null)
+            return ResourceNotFound();
+        var identity = userResolver.ResolveIdentity(User)!;
+        if (!CanAccessRun(run.UserId, run.AccessScope, identity))
+            return ProblemResponse(StatusCodes.Status403Forbidden, "无权访问该 Chat 运行。", []);
         try
         {
             return await runtime.DeleteAsync(ProductEntryPoints.Chat, runId, userId!, ct).ConfigureAwait(false)
@@ -259,5 +278,21 @@ public sealed class ChatRunsController(
 
         error = null;
         return true;
+    }
+
+    private static bool CanAccessRun(
+        string ownerUserId,
+        AgentRunAccessScopeSnapshot? capturedScope,
+        PlatformIdentity identity)
+    {
+        if (!string.Equals(ownerUserId, identity.UserId, StringComparison.OrdinalIgnoreCase) ||
+            capturedScope is null ||
+            capturedScope.Version != AgentRunAccessScopeSnapshot.CurrentVersion)
+            return false;
+        if (identity.HasAnyRole(PlatformRoles.PlatformAdministrator))
+            return true;
+        if (capturedScope.AllowAllSites || capturedScope.SiteIds.Count == 0)
+            return false;
+        return capturedScope.SiteIds.All(identity.CanAccessSite);
     }
 }

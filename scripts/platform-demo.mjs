@@ -343,6 +343,8 @@ async function handle(req, res) {
   }
   if (pathname === "/__demo/scenarios") return json(res, 200, { modes: ["normal", "empty", "error", "forbidden", "slow"], users: Object.fromEntries(Object.entries(passwords).map(([username, password]) => [username, { password, roles: identities[username].roles }])) });
 
+  if (pathname === "/api/v1/auth/config") return json(res, 200, { mode: "local" });
+
   if (pathname === "/api/v1/auth/login" && req.method === "POST") {
     const body = await readBody(req);
     const identity = identities[body.username];

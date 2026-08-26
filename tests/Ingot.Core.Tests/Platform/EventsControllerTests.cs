@@ -343,16 +343,22 @@ public sealed class EventsControllerTests
 
         public Task<IReadOnlyList<PlatformProductionEvent>> QueryByExecutionIdsAsync(
             IReadOnlyCollection<string> executionIds,
+            string siteId,
             CancellationToken ct = default)
             => Task.FromResult<IReadOnlyList<PlatformProductionEvent>>(rows
-                .Where(item => item.Event.ExecutionId is not null && executionIds.Contains(item.Event.ExecutionId))
+                .Where(item => string.Equals(item.SiteId, siteId, StringComparison.Ordinal) &&
+                               item.Event.ExecutionId is not null &&
+                               executionIds.Contains(item.Event.ExecutionId))
                 .ToArray());
 
         public Task<IReadOnlyList<PlatformProcessExecutionSummarySource>> QueryExecutionSummarySourcesAsync(
             IReadOnlyCollection<string> executionIds,
+            string siteId,
             CancellationToken ct = default)
             => Task.FromResult<IReadOnlyList<PlatformProcessExecutionSummarySource>>(rows
-                .Where(item => item.Event.ExecutionId is not null && executionIds.Contains(item.Event.ExecutionId))
+                .Where(item => string.Equals(item.SiteId, siteId, StringComparison.Ordinal) &&
+                               item.Event.ExecutionId is not null &&
+                               executionIds.Contains(item.Event.ExecutionId))
                 .GroupBy(item => item.Event.ExecutionId!, StringComparer.Ordinal)
                 .Select(group => new PlatformProcessExecutionSummarySource
                 {

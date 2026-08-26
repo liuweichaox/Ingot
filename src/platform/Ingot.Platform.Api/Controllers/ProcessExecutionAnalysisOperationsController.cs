@@ -1,4 +1,4 @@
-
+// 提供站点隔离的分析回填、特征聚合和失败任务重放运维接口。
 using Ingot.Contracts.Events;
 using Ingot.Platform.Api.Agents;
 using Ingot.Platform.Application.ProcessExecutions;
@@ -14,8 +14,16 @@ public sealed class ProcessExecutionAnalysisBackfillsController(
 {
     [HttpGet]
     public async Task<IActionResult> List(CancellationToken ct)
-        => DeniedConfigurationRead() ??
-           Ok(new { data = await operations.ListBackfillJobsAsync(ct).ConfigureAwait(false) });
+    {
+        var denied = DeniedConfigurationRead();
+        if (denied is not null) return denied;
+        var identity = ResolveIdentity()!;
+        var jobs = await operations.ListBackfillJobsAsync(ct).ConfigureAwait(false);
+        return Ok(new
+        {
+            data = jobs.Where(job => identity.CanAccessSite(job.Request.SiteId)).ToArray()
+        });
+    }
 
     [HttpGet("{jobId:guid}")]
     public async Task<IActionResult> Get(Guid jobId, CancellationToken ct)
@@ -24,17 +32,25 @@ public sealed class ProcessExecutionAnalysisBackfillsController(
         if (denied is not null)
             return denied;
         var job = await operations.GetBackfillJobAsync(jobId, ct).ConfigureAwait(false);
-        return job is null ? ResourceNotFound() : Ok(job);
+        return job is null || !ResolveIdentity()!.CanAccessSite(job.Request.SiteId)
+            ? ResourceNotFound()
+            : Ok(job);
     }
 
     [HttpPost]
     public async Task<IActionResult> Enqueue(
-        [FromBody] ProcessExecutionAnalysisBackfillRequest request,
+        [FromBody] ProcessExecutionAnalysisBackfillRequest? request,
         CancellationToken ct)
     {
         var denied = DeniedConfigurationWrite();
         if (denied is not null)
             return denied;
+        if (request is null)
+            return InvalidRequest("请求体不能为空。");
+        if (string.IsNullOrWhiteSpace(request.SiteId))
+            return InvalidRequest("siteId 不能为空。");
+        if (!ResolveIdentity()!.CanAccessSite(request.SiteId))
+            return AuthorizationDenied("当前身份无权访问该站点。", ("siteId", request.SiteId));
         try
         {
             return Accepted(await operations.EnqueueBackfillAsync(request, ResolveUserId()!, ct)
@@ -55,6 +71,7 @@ public sealed class ProcessExecutionFeatureAggregatesController(
 {
     [HttpGet]
     public async Task<IActionResult> Query(
+        [FromQuery] string? siteId,
         [FromQuery] string? signalCode,
         [FromQuery] string? phaseCode,
         [FromQuery] string? featureCode,
@@ -66,11 +83,16 @@ public sealed class ProcessExecutionFeatureAggregatesController(
         var denied = DeniedConfigurationRead();
         if (denied is not null)
             return denied;
+        if (string.IsNullOrWhiteSpace(siteId))
+            return InvalidRequest("siteId 不能为空。");
+        if (!ResolveIdentity()!.CanAccessSite(siteId))
+            return AuthorizationDenied("当前身份无权访问该站点。", ("siteId", siteId));
         if (from > to)
             return InvalidRequest("开始时间不能晚于结束时间。");
         if (limit is < 1 or > 500)
             return InvalidRequest("Limit 必须在 1 到 500 之间。");
         var rows = await operations.QueryFeatureAggregatesAsync(
+            siteId.Trim(),
             signalCode,
             phaseCode,
             featureCode,

@@ -20,6 +20,7 @@ public sealed class ProcessExecutionAnalysisOperationsServiceTests
         var job = await service.EnqueueBackfillAsync(
             new ProcessExecutionAnalysisBackfillRequest
             {
+                SiteId = " SITE-A ",
                 ProductCode = " product-a ",
                 EquipmentId = "  ",
                 PageSize = 100
@@ -27,6 +28,7 @@ public sealed class ProcessExecutionAnalysisOperationsServiceTests
             "engineer-1");
 
         Assert.Same(job, store.AddedJob);
+        Assert.Equal("SITE-A", job.Request.SiteId);
         Assert.Equal("product-a", job.Request.ProductCode);
         Assert.Null(job.Request.EquipmentId);
         Assert.Equal("engineer-1", job.CreatedBy);
@@ -50,11 +52,31 @@ public sealed class ProcessExecutionAnalysisOperationsServiceTests
         Assert.Equal("execution-1", store.ReplayedExecutionId);
     }
 
+    [Fact]
+    public async Task ReplayAnalysisAsync_DeniesExecutionIdObservedAtMultipleSites()
+    {
+        var store = new OperationsStore
+        {
+            ReplayResult = true,
+            ExecutionSites = ["site-a", "site-b"]
+        };
+        var service = new ProcessExecutionAnalysisOperationsService(
+            store,
+            new BoundaryStore(),
+            new ExecutionService(true));
+
+        var result = await service.ReplayAnalysisAsync("site-a", "execution-1");
+
+        Assert.Equal(ProcessExecutionReplayResult.ExecutionNotFound, result);
+        Assert.Null(store.ReplayedExecutionId);
+    }
+
     private sealed class OperationsStore : IProcessExecutionAnalysisOperationsStore
     {
         public ProcessExecutionAnalysisBackfillJob? AddedJob { get; private set; }
         public bool ReplayResult { get; init; }
         public string? ReplayedExecutionId { get; private set; }
+        public IReadOnlyList<string> ExecutionSites { get; init; } = ["site-a"];
 
         public Task<ProcessExecutionAnalysisBackfillJob> AddBackfillJobAsync(
             ProcessExecutionAnalysisBackfillJob job,
@@ -72,6 +94,10 @@ public sealed class ProcessExecutionAnalysisOperationsServiceTests
             return Task.FromResult(ReplayResult);
         }
 
+        public Task<IReadOnlyList<string>> ResolveExecutionSitesAsync(
+            string executionId,
+            CancellationToken ct = default) => Task.FromResult(ExecutionSites);
+
         public Task<ProcessExecutionAnalysisBackfillJob?> GetBackfillJobAsync(Guid jobId, CancellationToken ct = default)
             => Task.FromResult<ProcessExecutionAnalysisBackfillJob?>(null);
 
@@ -79,6 +105,7 @@ public sealed class ProcessExecutionAnalysisOperationsServiceTests
             => Task.FromResult<IReadOnlyList<ProcessExecutionAnalysisBackfillJob>>([]);
 
         public Task<IReadOnlyList<ProcessExecutionFeatureAggregate>> QueryFeatureAggregatesAsync(
+            string siteId,
             string? signalCode, string? phaseCode, string? featureCode,
             DateTimeOffset? from, DateTimeOffset? to, int limit, CancellationToken ct = default)
             => Task.FromResult<IReadOnlyList<ProcessExecutionFeatureAggregate>>([]);

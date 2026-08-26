@@ -1,14 +1,21 @@
+// 提供按用户成员关系和站点范围过滤的研发项目只读查询。
 using Ingot.Contracts.ProcessResearch;
 
 namespace Ingot.Platform.Application.ProcessResearch;
 
+/// <summary>提供按成员和站点范围过滤的研发项目查询用例。</summary>
 public sealed class ProcessResearchQueries(IProcessResearchStore research)
 {
     public Task<ResearchProject?> GetProjectAsync(Guid id, CancellationToken ct = default)
         => research.GetProjectAsync(id, ct);
     public Task<IReadOnlyList<ResearchProject>> ListProjectsAsync(
-        string userId, bool includeAll, int limit, int offset, CancellationToken ct = default)
-        => research.ListProjectsAsync(userId, includeAll, limit, offset, ct);
+        string userId,
+        bool includeAll,
+        IReadOnlyCollection<string>? siteIds,
+        int limit,
+        int offset,
+        CancellationToken ct = default)
+        => research.ListProjectsAsync(userId, includeAll, siteIds, limit, offset, ct);
     public Task<ResearchValidationPreregistration?> GetValidationPreregistrationAsync(
         Guid id, CancellationToken ct = default)
         => research.GetValidationPreregistrationAsync(id, ct);

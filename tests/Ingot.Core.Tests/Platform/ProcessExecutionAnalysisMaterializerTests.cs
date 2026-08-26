@@ -107,6 +107,31 @@ public sealed class ProcessExecutionAnalysisMaterializerTests
         Assert.Equal(1, store.SaveCount);
     }
 
+    [Fact]
+    public async Task UniqueSiteMaterialization_IsPersistedOnlyWhenExecutionSiteIsUnambiguous()
+    {
+        var store = new FakeStore { ExecutionSites = ["SITE-A"] };
+
+        var result = await Create(store).TryMaterializeForUniqueSiteAsync(
+            "execution-1", "SITE-A", Rows(), Start, Start.AddSeconds(2), Model(), Plan());
+
+        Assert.NotNull(result);
+        Assert.Equal("materialized", result.Materialization.Status);
+        Assert.Equal(1, store.SaveCount);
+    }
+
+    [Fact]
+    public async Task AmbiguousSiteMaterialization_FailsClosedWithoutPersisting()
+    {
+        var store = new FakeStore { ExecutionSites = ["SITE-A", "SITE-B"] };
+
+        var result = await Create(store).TryMaterializeForUniqueSiteAsync(
+            "execution-1", "SITE-A", Rows(), Start, Start.AddSeconds(2), Model(), Plan());
+
+        Assert.Null(result);
+        Assert.Equal(0, store.SaveCount);
+    }
+
     private static ProcessExecutionAnalysisMaterializer Create(FakeStore store)
         => new(store, new ProcessExecutionAnalysisEngine(), NullLogger<ProcessExecutionAnalysisMaterializer>.Instance);
 
@@ -178,6 +203,7 @@ public sealed class ProcessExecutionAnalysisMaterializerTests
         public int LoadCount { get; private set; }
         public int SaveCount { get; private set; }
         public bool InvalidateDuringSave { get; init; }
+        public IReadOnlyList<string> ExecutionSites { get; init; } = ["SITE-A"];
 
         public Task InitializeAsync(CancellationToken ct = default) => Task.CompletedTask;
 
@@ -214,6 +240,31 @@ public sealed class ProcessExecutionAnalysisMaterializerTests
             return Task.FromResult(snapshot);
         }
 
+        public Task<ProcessExecutionAnalysisSnapshot?> TrySaveForUniqueSiteAsync(
+            ProcessExecutionAnalysisMaterializationKey key,
+            string siteId,
+            ProcessExecutionAnalysisSourceFingerprint source,
+            WholeProcessExecutionAnalysisResult analysis,
+            CancellationToken ct = default)
+        {
+            if (ExecutionSites.Count != 1 ||
+                !string.Equals(ExecutionSites[0], siteId, StringComparison.OrdinalIgnoreCase))
+                return Task.FromResult<ProcessExecutionAnalysisSnapshot?>(null);
+            return SaveUniqueAsync(key, source, analysis, ct);
+        }
+
+        public Task<IReadOnlyList<string>> ResolveExecutionSitesAsync(
+            string executionId,
+            CancellationToken ct = default)
+            => Task.FromResult(ExecutionSites);
+
+        private async Task<ProcessExecutionAnalysisSnapshot?> SaveUniqueAsync(
+            ProcessExecutionAnalysisMaterializationKey key,
+            ProcessExecutionAnalysisSourceFingerprint source,
+            WholeProcessExecutionAnalysisResult analysis,
+            CancellationToken ct)
+            => await SaveAsync(key, source, analysis, ct);
+
         public Task MarkDirtyAsync(
             IReadOnlyCollection<string> executionIds,
             long invalidatedSourceMaxIngestId,
@@ -248,6 +299,7 @@ public sealed class ProcessExecutionAnalysisMaterializerTests
             CancellationToken ct = default) => Task.FromResult<IReadOnlyList<ProcessExecutionAnalysisBackfillJob>>([]);
 
         public Task<IReadOnlyList<ProcessExecutionFeatureAggregate>> QueryFeatureAggregatesAsync(
+            string siteId,
             string? signalCode,
             string? phaseCode,
             string? featureCode,

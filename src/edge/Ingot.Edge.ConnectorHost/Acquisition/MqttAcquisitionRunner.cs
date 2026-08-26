@@ -1,3 +1,4 @@
+// 通过固定目标和受控凭据订阅 MQTT，组装有界快照并发布生产事件。
 using System.Security.Cryptography.X509Certificates;
 using System.Text.Json;
 using Ingot.Contracts.Acquisition;
@@ -12,6 +13,7 @@ public sealed class MqttAcquisitionRunner(
     IEventSink sink,
     IAcquisitionSecretResolver secrets,
     AcquisitionStatus status,
+    AcquisitionHttpEgressPolicy egressPolicy,
     ILogger<MqttAcquisitionRunner> logger) : IAcquisitionProtocolRunner
 {
     public string Protocol => AcquisitionProtocols.Mqtt;
@@ -138,8 +140,13 @@ public sealed class MqttAcquisitionRunner(
             }
         };
 
+        var pinnedHost = await egressPolicy.ResolvePinnedHostAsync(
+            connection.Host,
+            "MQTT",
+            ct,
+            UsesCredentials(connection)).ConfigureAwait(false);
         var optionsBuilder = new MqttClientOptionsBuilder()
-            .WithTcpServer(connection.Host, connection.Port)
+            .WithTcpServer(pinnedHost, connection.Port)
             .WithClientId(string.IsNullOrWhiteSpace(connection.ClientId)
                 ? $"ingot-{deployment.Task.EdgeId}-{deployment.Task.TaskId}"
                 : connection.ClientId)
@@ -253,4 +260,10 @@ public sealed class MqttAcquisitionRunner(
             }
         }
     }
+
+    private static bool UsesCredentials(MqttConnection connection)
+        => !string.IsNullOrWhiteSpace(connection.Username) ||
+           !string.IsNullOrWhiteSpace(connection.PasswordSecretRef) ||
+           !string.IsNullOrWhiteSpace(connection.ClientCertificatePath) ||
+           !string.IsNullOrWhiteSpace(connection.ClientCertificatePasswordSecretRef);
 }

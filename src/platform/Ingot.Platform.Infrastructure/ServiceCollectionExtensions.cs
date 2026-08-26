@@ -1,3 +1,4 @@
+// 注册 Platform 基础设施端口、只读 Agent 工具和独立 Worker 服务。
 using Ingot.Agent;
 using Ingot.Platform.Application.Acquisition;
 using Ingot.Platform.Application.Analytics;
@@ -23,6 +24,7 @@ using Ingot.Platform.Infrastructure.ProcessResearch;
 using Ingot.Platform.Infrastructure.ResearchAssets;
 using Ingot.Platform.Infrastructure.Services;
 using Ingot.Platform.Infrastructure.TimeSeries;
+using Ingot.Platform.Infrastructure.Workers;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Npgsql;
@@ -87,7 +89,11 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ExecutionComparisonMetrics>();
         services.AddSingleton<IExecutionComparisonService, ExecutionComparisonService>();
         services.AddSingleton<ITimeWindowComparisonService, TimeWindowComparisonService>();
-        services.AddSingleton<IProcessExecutionService, ProcessExecutionService>();
+        services.AddSingleton<ProcessExecutionService>();
+        services.AddSingleton<IProcessExecutionService>(provider =>
+            provider.GetRequiredService<ProcessExecutionService>());
+        services.AddSingleton<IProcessExecutionAnalysisRecomputeExecutor>(provider =>
+            provider.GetRequiredService<ProcessExecutionService>());
         services.AddSingleton<IProcessExecutionAnalysisOperationsStore>(provider =>
             provider.GetRequiredService<IProcessExecutionAnalysisMaterializationStore>());
         services.AddSingleton<ProcessExecutionAnalysisOperationsService>();
@@ -156,8 +162,20 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
-    public static IServiceCollection AddIngotPlatformWorkers(this IServiceCollection services)
+    public static IServiceCollection AddIngotPlatformWorkers(
+        this IServiceCollection services,
+        IConfiguration configuration)
     {
+        services.TryAddSingleton(TimeProvider.System);
+        services.Configure<PlatformWorkerPulseOptions>(configuration.GetSection("PlatformWorkerPulse"));
+        services.AddOptions<PlatformWorkerPulseOptions>()
+            .Validate(
+                static value => value.Interval > TimeSpan.Zero &&
+                                value.StaleAfter > value.Interval * 2,
+                "Platform Worker 心跳间隔或超时配置无效。")
+            .ValidateOnStart();
+        services.AddSingleton<PlatformWorkerPulse>();
+        services.AddHostedService<PlatformWorkerPulseHostedService>();
         services.AddOptions<ExecutionBoundaryProjectionOptions>()
             .Validate(
                 static value => value.PollInterval > TimeSpan.Zero &&

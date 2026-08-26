@@ -112,6 +112,72 @@ public sealed class ProcessExecutionAnalysisMaterializer(
         }
     }
 
+    public async Task<MaterializedProcessExecutionAnalysis?> TryMaterializeForUniqueSiteAsync(
+        string executionId,
+        string siteId,
+        IReadOnlyList<ProcessSampleFrame> samples,
+        DateTimeOffset? startedAt,
+        DateTimeOffset? completedAt,
+        ProcessDataModel? dataModel,
+        ProcessAnalysisPlan? plan,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(siteId))
+            throw new ArgumentException("站点标识不能为空。", nameof(siteId));
+        var source = CreateSourceFingerprint(samples);
+        if (!completedAt.HasValue)
+        {
+            return QueryTime(
+                engine.Analyze(samples, startedAt, completedAt, dataModel, plan),
+                source);
+        }
+
+        var key = CreateKey(executionId, dataModel, plan);
+        var gate = _executionLocks[
+            (StringComparer.Ordinal.GetHashCode(executionId) & int.MaxValue) % _executionLocks.Length];
+        await gate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            try
+            {
+                await using var distributedLease = distributedLocks is null
+                    ? null
+                    : await distributedLocks.AcquireAsync(key, ct).ConfigureAwait(false);
+                // The database compute engine is execution-id scoped. Use the already site-scoped
+                // frames here, then let the store re-check site uniqueness under the ingest lock.
+                var analysis = engine.Analyze(samples, startedAt, completedAt, dataModel, plan);
+                var saved = await store.TrySaveForUniqueSiteAsync(
+                    key, siteId.Trim(), source, analysis, ct).ConfigureAwait(false);
+                if (saved is null)
+                {
+                    logger.LogError(
+                        "过程执行 {ExecutionId} 出现在多个站点或站点归属不稳定；拒绝写入全局物化键",
+                        executionId);
+                    return null;
+                }
+                return FromSnapshot(saved, "materialized");
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(
+                    ex,
+                    "过程执行 {ExecutionId} 的站点安全物化失败，将由后台队列重试",
+                    executionId);
+                return QueryTime(
+                    engine.Analyze(samples, startedAt, completedAt, dataModel, plan),
+                    source);
+            }
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
     private static MaterializedProcessExecutionAnalysis FromSnapshot(ProcessExecutionAnalysisSnapshot snapshot, string status)
         => new(
             snapshot.Analysis,

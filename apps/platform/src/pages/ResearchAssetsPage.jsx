@@ -1,4 +1,4 @@
-
+// 展示项目范围内的研发数据集、机制知识和验证资产。
 import { useCallback, useEffect, useState } from "react";
 import { getJson } from "../api/http";
 import { MechanismKnowledgeWorkbench } from "../components/MechanismKnowledgeWorkbench";
@@ -167,8 +167,7 @@ export function ResearchAssetsPage() {
 
   return (
     <Page
-      title="研发成果"
-      description="集中查看项目可复用的数据集、模型、机理和知识；正式研发结论仍在研发项目中形成。"
+      title="工艺知识"
     >
       <RequestError error={error} onRetry={() => projectId ? Promise.all([loadProjects(), load()]) : loadProjects()} />
       <Card title="项目范围" description="知识来源严格按研发项目隔离；其他版本化资产可被授权项目复用。">
@@ -182,11 +181,20 @@ export function ResearchAssetsPage() {
         </Field>
       </Card>
       {loading ? (
-        <Card><p className="py-8 text-center text-sm text-slate-500">正在读取研发成果…</p></Card>
+        <Card><p className="py-8 text-center text-sm text-slate-500">正在读取工艺知识…</p></Card>
       ) : (
         <div className="space-y-5">
-          <MechanismKnowledgeWorkbench projectId={projectId} sources={assets.knowledge || []} reloadAssets={load} />
-          {cursors.knowledge && (
+          {projectId ? (
+            <MechanismKnowledgeWorkbench projectId={projectId} sources={assets.knowledge || []} reloadAssets={load} />
+          ) : (
+            <Card>
+              <EmptyState
+                title="请先创建研发项目"
+                description="知识来源必须归属一个可访问的研发项目；创建项目后即可上传并提取文件。"
+              />
+            </Card>
+          )}
+          {projectId && cursors.knowledge && (
             <div className="flex justify-center">
               <Button disabled={loadingMore === "knowledge"} onClick={() => loadMore(assetDefinitions.find(item => item.key === "knowledge"))}>
                 {loadingMore === "knowledge" ? "正在加载…" : "加载更多知识来源"}
@@ -201,7 +209,7 @@ export function ResearchAssetsPage() {
               description={definition.description}
             >
               {(assets[definition.key] || []).length === 0 ? (
-                <EmptyState title={`暂无${definition.title}`} description="资产会在对应研发任务完成后进入这里。" />
+                <EmptyState title={`暂无${definition.title}`} description="内容会在对应研发任务完成后进入这里。" />
               ) : (
                 <DataTable
                   rows={assets[definition.key]}

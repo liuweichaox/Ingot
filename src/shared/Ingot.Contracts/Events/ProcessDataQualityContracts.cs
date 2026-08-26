@@ -1,3 +1,4 @@
+// 定义过程数据质量、站点回填任务和特征聚合的传输契约。
 namespace Ingot.Contracts.Events;
 
 public static class ProcessDataStatuses
@@ -82,6 +83,7 @@ public sealed record ProcessExecutionAnalysisMaterialization
 
 public sealed record ProcessExecutionAnalysisBackfillRequest
 {
+    public string SiteId { get; init; } = string.Empty;
     public DateTimeOffset? From { get; init; }
     public DateTimeOffset? To { get; init; }
     public string? ProductFamilyCode { get; init; }

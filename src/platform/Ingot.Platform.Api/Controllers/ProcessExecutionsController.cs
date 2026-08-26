@@ -1,6 +1,8 @@
-
+// 提供站点必填、预算受限的过程执行列表与分析明细接口。
 using Ingot.Platform.Api.Agents;
+using Ingot.Platform.Application.Events;
 using Ingot.Platform.Application.ProcessExecutions;
+using Ingot.Platform.Application.TimeSeries;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Ingot.Platform.Api.Controllers;
@@ -36,7 +38,7 @@ public sealed class ProcessExecutionsController(
             return AuthenticationRequired("需要平台统一认证。");
         if (!identity.HasAnyRole(PlatformRoles.QualityRead))
             return AuthorizationDenied();
-        var siteFailure = PlatformSiteScope.Resolve(identity, siteId, true, out var authorizedSiteId);
+        var siteFailure = PlatformSiteScope.Resolve(identity, siteId, false, out var authorizedSiteId);
         if (siteFailure == SiteScopeFailure.Forbidden)
             return AuthorizationDenied("当前身份无权访问该站点。", ("siteId", siteId));
         if (siteFailure == SiteScopeFailure.Missing)
@@ -52,24 +54,35 @@ public sealed class ProcessExecutionsController(
         if (search?.Length > 128)
             return InvalidRequest("搜索词不能超过 128 个字符。");
 
-        var result = await executions.QueryAsync(
-            from,
-            to,
-            productFamilyCode,
-            productCode,
-            processSpecificationId,
-            equipmentId,
-            outputItemId,
-            executionId,
-            status,
-            limit,
-            offset,
-            search,
-            ct,
-            edgeId,
-            externalBatchRef,
-            authorizedSiteId).ConfigureAwait(false);
-        return Ok(result);
+        try
+        {
+            var result = await executions.QueryAsync(
+                from,
+                to,
+                productFamilyCode,
+                productCode,
+                processSpecificationId,
+                equipmentId,
+                outputItemId,
+                executionId,
+                status,
+                limit,
+                offset,
+                search,
+                ct,
+                edgeId,
+                externalBatchRef,
+                authorizedSiteId).ConfigureAwait(false);
+            return Ok(result);
+        }
+        catch (PlatformEventQueryLimitExceededException exception)
+        {
+            return UnprocessableRequest(exception.Message);
+        }
+        catch (TimeSeriesQueryLimitExceededException exception)
+        {
+            return UnprocessableRequest(exception.Message);
+        }
     }
 
     [HttpGet("{executionId}/analysis")]
@@ -91,15 +104,26 @@ public sealed class ProcessExecutionsController(
         if (string.IsNullOrWhiteSpace(executionId) || executionId.Length > 200)
             return InvalidRequest("运行编号格式不正确。");
 
-        var authorized = await executions.QueryAsync(
-            null, null, null, null, null, null, null, executionId.Trim(), null, 1,
-            ct: ct, siteId: authorizedSiteId).ConfigureAwait(false);
-        if (authorized.Data.Count == 0)
-            return ResourceNotFound("未找到对应运行的分析记录。");
-        var result = await comparisons.GetProcessExecutionAsync(
-            executionId.Trim(), ct, authorizedSiteId).ConfigureAwait(false);
-        return result is null
-            ? ResourceNotFound("未找到对应运行的分析记录。")
-            : Ok(result);
+        try
+        {
+            var authorized = await executions.QueryAsync(
+                null, null, null, null, null, null, null, executionId.Trim(), null, 1,
+                ct: ct, siteId: authorizedSiteId).ConfigureAwait(false);
+            if (authorized.Data.Count == 0)
+                return ResourceNotFound("未找到对应运行的分析记录。");
+            var result = await comparisons.GetProcessExecutionAsync(
+                executionId.Trim(), ct, authorizedSiteId).ConfigureAwait(false);
+            return result is null
+                ? ResourceNotFound("未找到对应运行的分析记录。")
+                : Ok(result);
+        }
+        catch (PlatformEventQueryLimitExceededException exception)
+        {
+            return UnprocessableRequest(exception.Message);
+        }
+        catch (TimeSeriesQueryLimitExceededException exception)
+        {
+            return UnprocessableRequest(exception.Message);
+        }
     }
 }

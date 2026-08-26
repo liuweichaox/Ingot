@@ -16,7 +16,7 @@ The documentation can be read by task rather than in sequence.
 | Review how the system forms a recommendation | [System design](design.en.md) | [Analysis and optimization](optimization.en.md) |
 | Build process knowledge | [Mechanism knowledge design](mechanism-knowledge.en.md) | [Analysis and optimization](optimization.en.md) |
 | Review effect claims | [Current status](status.en.md) | [Scenario validation](rollout.en.md) |
-| Contribute code | [Contributing](../CONTRIBUTING.en.md) | [System design](design.en.md) |
+| Contribute code | [Contributing](https://github.com/liuweichaox/Ingot/blob/main/CONTRIBUTING.en.md) | [System design](design.en.md) |
 
 ## Product loop
 

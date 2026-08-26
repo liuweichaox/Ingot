@@ -1,4 +1,4 @@
-
+// 展示站点受限的数据对象目录、分页状态和观测摘要。
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
 import { extractRows, useApi } from "../hooks/useApi";
@@ -24,7 +24,6 @@ export function ObjectExplorerPage() {
   return (
     <Page
       title="对象目录"
-      description="从真实设备和生产对象出发，连续查看它的运行、事件、质量与数据健康。"
       actions={<Link className="inline-flex min-h-9 items-center rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700" to="/configuration/ingestion-tasks">接入设备</Link>}
     >
       {objects.error && <Alert tone="danger" title="工业对象暂不可用">{objects.error}</Alert>}
@@ -59,7 +58,7 @@ export function ObjectExplorerPage() {
                           aria-pressed={active}
                           onClick={() => setSelectedKey(rowKey(row))}
                           className={`rounded-xl border px-3 py-3 text-left transition ${active
-                            ? "border-blue-300 bg-white shadow-sm ring-2 ring-blue-100"
+                            ? "border-blue-300 bg-white ring-2 ring-blue-100"
                             : "border-transparent bg-white/70 hover:border-slate-200 hover:bg-white"}`}
                         >
                           <div className="flex items-center justify-between gap-3">
@@ -117,7 +116,7 @@ export function ObjectExplorerPage() {
                         {[
                           [`/process-executions?equipmentId=${encodeURIComponent(selected.subjectId)}`, "运行记录", "查看该对象的生产运行与上下文"],
                           [`/events?subjectId=${encodeURIComponent(selected.subjectId)}`, "事件时间线", "追溯该对象上报的事件与状态变化"],
-                          [`/quality-analysis?subjectType=${encodeURIComponent(selected.subjectType)}&subjectId=${encodeURIComponent(selected.subjectId)}`, "质量偏差分析", "查看与该对象关联的检测结果并追溯运行证据"],
+                          [`/quality-analysis?subjectType=${encodeURIComponent(selected.subjectType)}&subjectId=${encodeURIComponent(selected.subjectId)}`, "偏差分析", "查看与该对象关联的检测结果并追溯运行证据"],
                           [`/data-quality?subjectType=${encodeURIComponent(selected.subjectType)}&subjectId=${encodeURIComponent(selected.subjectId)}`, "数据健康", "确认样本范围、连续性和更新时间"],
                         ].map(([to, label, description]) => (
                           <Link key={label} to={to} className="rounded-xl border border-slate-200 p-4 transition hover:border-blue-300 hover:bg-blue-50/50">

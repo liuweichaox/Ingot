@@ -12,6 +12,11 @@ namespace Ingot.Core.Tests.Agent;
 
 public sealed class AgentRuntimeTests
 {
+    private static readonly AgentAccessScope SiteScope = new()
+    {
+        SiteIds = new HashSet<string>(["SITE-001"], StringComparer.OrdinalIgnoreCase)
+    };
+
     [Fact]
     public async Task ChatRun_CompletesWithWhitelistedReadOnlyToolAndRelatedRecords()
     {
@@ -21,7 +26,7 @@ public sealed class AgentRuntimeTests
         var created = await runtime.StartAsync(ProductEntryPoints.Chat, "analyst", new CreateChatRunRequest
         {
             Question = "检查最近数据是否完整"
-        });
+        }, SiteScope);
         var completed = await WaitForTerminalAsync(runtime, created.RunId);
 
         Assert.Equal(AgentRunStatuses.Completed, completed.Status);
@@ -45,7 +50,7 @@ public sealed class AgentRuntimeTests
         var created = await runtime.StartAsync(ProductEntryPoints.Chat, "analyst", new CreateChatRunRequest
         {
             Question = "检查数据完整性"
-        });
+        }, SiteScope);
         var completed = await WaitForTerminalAsync(runtime, created.RunId);
 
         Assert.Equal(AgentRunStatuses.Completed, completed.Status);
@@ -73,7 +78,8 @@ public sealed class AgentRuntimeTests
             {
                 Question = "综合核对最近数据是否完整",
                 Mode = "combined"
-            }));
+            },
+            SiteScope));
         Assert.Equal("多视角研判尚未启用。", error.Message);
     }
 
@@ -101,11 +107,39 @@ public sealed class AgentRuntimeTests
         var created = await runtime.StartAsync(ProductEntryPoints.Chat, "operator", new CreateChatRunRequest
         {
             Question = "检查数据"
-        });
+        }, SiteScope);
 
         Assert.True(await runtime.CancelAsync(ProductEntryPoints.Chat, created.RunId, "operator", "取消"));
         var completed = await WaitForTerminalAsync(runtime, created.RunId);
         Assert.Equal(AgentRunStatuses.Cancelled, completed.Status);
+    }
+
+    [Fact]
+    public async Task StartAsync_RejectsRunsBeyondConfiguredConcurrentLimit()
+    {
+        var runtime = CreateRuntime(
+            new MemoryRunStore(),
+            [new BlockingQualityTool()],
+            options =>
+            {
+                options.MaxConcurrentRuns = 1;
+                options.MaxConcurrentRunsPerUser = 1;
+            });
+        var first = await runtime.StartAsync(
+            ProductEntryPoints.Chat,
+            "operator",
+            new CreateChatRunRequest { Question = "检查数据" },
+            SiteScope);
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => runtime.StartAsync(
+            ProductEntryPoints.Chat,
+            "another-operator",
+            new CreateChatRunRequest { Question = "检查其他数据" },
+            SiteScope));
+
+        Assert.Contains("系统并发上限", error.Message, StringComparison.Ordinal);
+        Assert.True(await runtime.CancelAsync(ProductEntryPoints.Chat, first.RunId, "operator", "测试清理"));
+        await WaitForTerminalAsync(runtime, first.RunId);
     }
 
     [Fact]
@@ -130,7 +164,8 @@ public sealed class AgentRuntimeTests
         var created = await runtime.StartAsync(
             ProductEntryPoints.Chat,
             "operator",
-            new CreateChatRunRequest { Question = "作业指导书规定的温度上限是多少？" });
+            new CreateChatRunRequest { Question = "作业指导书规定的温度上限是多少？" },
+            SiteScope);
         var completed = await WaitForTerminalAsync(runtime, created.RunId);
 
         Assert.Equal(AgentRunStatuses.Completed, completed.Status);
@@ -150,23 +185,29 @@ public sealed class AgentRuntimeTests
         var created = await runtime.StartAsync(
             ProductEntryPoints.Chat,
             "operator",
-            new CreateChatRunRequest { Question = "检查数据质量" });
+            new CreateChatRunRequest { Question = "检查数据质量" },
+            SiteScope);
         var completed = await WaitForTerminalAsync(runtime, created.RunId);
 
         Assert.Equal(AgentRunStatuses.Completed, completed.Status);
         Assert.False(nonRead.Executed);
     }
 
-    private static AgentRuntime CreateRuntime(MemoryRunStore store, IReadOnlyList<IAnalysisTool> tools)
+    private static AgentRuntime CreateRuntime(
+        MemoryRunStore store,
+        IReadOnlyList<IAnalysisTool> tools,
+        Action<ChatOptions>? configure = null)
     {
-        var options = Options.Create(new ChatOptions
+        var chatOptions = new ChatOptions
         {
             Enabled = true,
             MaxRunSeconds = 10,
             EnableCombinedAnalysis = true,
             MaxDiscussionRounds = 1,
             MaxDiscussionTurns = 3
-        });
+        };
+        configure?.Invoke(chatOptions);
+        var options = Options.Create(chatOptions);
         var model = new DeterministicModelClient();
         return new AgentRuntime(
             store,

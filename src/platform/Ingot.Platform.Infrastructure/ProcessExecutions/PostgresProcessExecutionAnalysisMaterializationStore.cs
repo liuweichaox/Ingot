@@ -1,4 +1,4 @@
-
+// 持久化分析物化、租约和站点唯一性复核，并用事务锁协调失效写入。
 using System.Text.Json;
 using Ingot.Contracts.Events;
 using Npgsql;
@@ -115,6 +115,56 @@ public sealed class PostgresProcessExecutionAnalysisMaterializationStore : IProc
         return new ProcessExecutionAnalysisSnapshot(analysis, computedAt, source);
     }
 
+    public async Task<ProcessExecutionAnalysisSnapshot?> TrySaveForUniqueSiteAsync(
+        ProcessExecutionAnalysisMaterializationKey key,
+        string siteId,
+        ProcessExecutionAnalysisSourceFingerprint source,
+        WholeProcessExecutionAnalysisResult analysis,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(siteId))
+            throw new ArgumentException("站点标识不能为空。", nameof(siteId));
+        siteId = siteId.Trim();
+        await InitializeAsync(ct).ConfigureAwait(false);
+        var computedAt = DateTimeOffset.UtcNow;
+        await using var connection = await _dataSource.OpenConnectionAsync(ct).ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
+
+        await AcquireExecutionLocksAsync(connection, transaction, [key.ExecutionId], ct).ConfigureAwait(false);
+        var observedSites = await ResolveExecutionSitesAsync(
+            connection, transaction, key.ExecutionId, ct).ConfigureAwait(false);
+        if (observedSites.Count != 1 ||
+            !string.Equals(observedSites[0], siteId, StringComparison.OrdinalIgnoreCase))
+        {
+            await MarkUnsafeMaterializationDirtyAsync(
+                connection, transaction, key.ExecutionId, ct).ConfigureAwait(false);
+            await transaction.CommitAsync(ct).ConfigureAwait(false);
+            return null;
+        }
+
+        await UpsertMaterializationAsync(
+            connection, transaction, key, source, computedAt, analysis, ct)
+            .ConfigureAwait(false);
+        await DeleteDetailsAsync(connection, transaction, key, ct).ConfigureAwait(false);
+        await InsertPhasesAsync(connection, transaction, key, analysis, ct).ConfigureAwait(false);
+        await InsertFeaturesAsync(connection, transaction, key, analysis, ct).ConfigureAwait(false);
+
+        await transaction.CommitAsync(ct).ConfigureAwait(false);
+        return new ProcessExecutionAnalysisSnapshot(analysis, computedAt, source);
+    }
+
+    public async Task<IReadOnlyList<string>> ResolveExecutionSitesAsync(
+        string executionId,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(executionId))
+            throw new ArgumentException("过程执行标识不能为空。", nameof(executionId));
+        await InitializeAsync(ct).ConfigureAwait(false);
+        await using var connection = await _dataSource.OpenConnectionAsync(ct).ConfigureAwait(false);
+        return await ResolveExecutionSitesAsync(
+            connection, transaction: null, executionId.Trim(), ct).ConfigureAwait(false);
+    }
+
     public async Task MarkDirtyAsync(
         IReadOnlyCollection<string> executionIds,
         long invalidatedSourceMaxIngestId,
@@ -162,6 +212,7 @@ public sealed class PostgresProcessExecutionAnalysisMaterializationStore : IProc
         string reason,
         CancellationToken ct)
     {
+        await AcquireExecutionLocksAsync(connection, transaction, ids, ct).ConfigureAwait(false);
         await using var command = new NpgsqlCommand(
             """
             WITH dirty AS (
@@ -192,6 +243,73 @@ public sealed class PostgresProcessExecutionAnalysisMaterializationStore : IProc
         command.Parameters.AddWithValue("invalidated_source_max_ingest_id", invalidatedSourceMaxIngestId);
         command.Parameters.AddWithValue("reason", reason);
         command.Parameters.AddWithValue("execution_ids", ids);
+        await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+    }
+
+    private static async Task AcquireExecutionLocksAsync(
+        NpgsqlConnection connection,
+        NpgsqlTransaction transaction,
+        IReadOnlyCollection<string> executionIds,
+        CancellationToken ct)
+    {
+        await using var command = new NpgsqlCommand(
+            """
+            SELECT pg_advisory_xact_lock(hashtextextended(ordered.execution_id, 0))
+            FROM (
+              SELECT unnest(@execution_ids::text[]) AS execution_id
+              ORDER BY execution_id
+            ) AS ordered;
+            """,
+            connection,
+            transaction);
+        command.Parameters.AddWithValue("execution_ids", executionIds.ToArray());
+        await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+    }
+
+    private static async Task<IReadOnlyList<string>> ResolveExecutionSitesAsync(
+        NpgsqlConnection connection,
+        NpgsqlTransaction? transaction,
+        string executionId,
+        CancellationToken ct)
+    {
+        await using var command = new NpgsqlCommand(
+            """
+            SELECT site_id
+            FROM (
+              SELECT site_id FROM production_events WHERE execution_id = @execution_id
+              UNION
+              SELECT site_id FROM process_sample_frames WHERE execution_id = @execution_id
+            ) AS observed
+            ORDER BY site_id
+            LIMIT 2;
+            """,
+            connection,
+            transaction);
+        command.Parameters.AddWithValue("execution_id", executionId);
+        var sites = new List<string>(2);
+        await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
+        while (await reader.ReadAsync(ct).ConfigureAwait(false))
+            sites.Add(reader.GetString(0));
+        return sites;
+    }
+
+    private static async Task MarkUnsafeMaterializationDirtyAsync(
+        NpgsqlConnection connection,
+        NpgsqlTransaction transaction,
+        string executionId,
+        CancellationToken ct)
+    {
+        await using var command = new NpgsqlCommand(
+            """
+            UPDATE execution_analysis_materializations
+            SET status = 'dirty',
+                invalidated_at = now(),
+                invalidation_reason = 'execution_site_ambiguous'
+            WHERE execution_id = @execution_id;
+            """,
+            connection,
+            transaction);
+        command.Parameters.AddWithValue("execution_id", executionId);
         await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
     }
 
@@ -299,6 +417,7 @@ public sealed class PostgresProcessExecutionAnalysisMaterializationStore : IProc
     }
 
     public async Task<IReadOnlyList<ProcessExecutionFeatureAggregate>> QueryFeatureAggregatesAsync(
+        string siteId,
         string? signalCode,
         string? phaseCode,
         string? featureCode,
@@ -307,6 +426,8 @@ public sealed class PostgresProcessExecutionAnalysisMaterializationStore : IProc
         int limit,
         CancellationToken ct = default)
     {
+        if (string.IsNullOrWhiteSpace(siteId))
+            throw new ArgumentException("站点标识不能为空。", nameof(siteId));
         await InitializeAsync(ct).ConfigureAwait(false);
         await using var command = _dataSource.CreateCommand(
             """
@@ -332,6 +453,20 @@ public sealed class PostgresProcessExecutionAnalysisMaterializationStore : IProc
              AND m.analysis_plan_version = f.analysis_plan_version
             WHERE m.status = 'ready'
               AND f.feature_value IS NOT NULL
+              AND EXISTS (
+                SELECT 1 FROM production_events pe
+                WHERE pe.execution_id = f.execution_id AND pe.site_id = @site_id
+                UNION ALL
+                SELECT 1 FROM process_sample_frames ps
+                WHERE ps.execution_id = f.execution_id AND ps.site_id = @site_id
+              )
+              AND NOT EXISTS (
+                SELECT 1 FROM production_events pe
+                WHERE pe.execution_id = f.execution_id AND pe.site_id <> @site_id
+                UNION ALL
+                SELECT 1 FROM process_sample_frames ps
+                WHERE ps.execution_id = f.execution_id AND ps.site_id <> @site_id
+              )
               AND (@signal_code IS NULL OR f.signal_code = @signal_code)
               AND (@phase_code IS NULL OR f.phase_code = @phase_code)
               AND (@feature_code IS NULL OR f.feature_code = @feature_code)
@@ -342,6 +477,7 @@ public sealed class PostgresProcessExecutionAnalysisMaterializationStore : IProc
                      f.signal_code, f.phase_code, f.feature_code
             LIMIT @limit;
             """);
+        command.Parameters.AddWithValue("site_id", siteId.Trim());
         command.Parameters.AddWithValue(
             "signal_code",
             NpgsqlDbType.Text,

@@ -84,7 +84,7 @@ test("权限边界和管理员导航一致", async ({ page }) => {
   await login(page, "admin", "admin12345");
   await expect(page.getByRole("navigation", { name: "主导航" })).toContainText("系统管理");
   await page.goto("/identity/users");
-  await expect(page.getByRole("heading", { name: "用户与权限", exact: true }).first()).toBeVisible();
+  await expect(page.getByRole("heading", { name: "用户权限", exact: true }).first()).toBeVisible();
 });
 
 test("接口失败有可恢复路径", async ({ page, request }) => {
@@ -97,7 +97,7 @@ test("接口失败有可恢复路径", async ({ page, request }) => {
   await setScenario(request, "normal");
   await page.getByRole("button", { name: "重试" }).click();
   await expect(page.getByText("数据暂时无法读取", { exact: true })).toHaveCount(0);
-  await expect(page.getByText("数据可信度确认后的下一步", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "正式分析准入", exact: true })).toBeVisible();
 });
 
 test("窄屏导航和宽表仍可操作", async ({ page }) => {
@@ -109,7 +109,7 @@ test("窄屏导航和宽表仍可操作", async ({ page }) => {
   await page.getByRole("button", { name: "关闭模块导航" }).click();
 
   await page.goto("/process-executions");
-  await expect(page.getByText("左右滑动查看全部字段；操作列固定在右侧。", { exact: true })).toBeVisible();
+  await expect(page.getByText("左右滑动查看全部字段", { exact: true })).toBeVisible();
   await expect(page.getByText("RUN-2026-0821-005", { exact: true }).first()).toBeVisible();
 });
 
@@ -166,15 +166,15 @@ test("全部业务导航和关键详情深链可达", async ({ page }) => {
 test("全局搜索、面包屑和系统管理深链一致", async ({ page }) => {
   await login(page, "admin", "admin12345");
   await page.getByRole("button", { name: "打开功能搜索" }).click();
-  await page.getByPlaceholder("例如：数据源配置、工艺规范、运行对比、检验任务").fill("运行对比");
+  await page.getByPlaceholder("例如：采集配置、工艺规范、运行对比、检验任务").fill("运行对比");
   await page.getByText("运行对比", { exact: true }).last().click();
   await expect(page).toHaveURL(/\/comparisons$/);
   await expect(page.getByRole("navigation", { name: "面包屑" })).toContainText("运行对比");
 
   for (const [route, heading] of [
-    ["/identity/users", "用户与权限"],
+    ["/identity/users", "用户权限"],
     ["/logs", "平台日志"],
-    ["/golden-questions", "评测问题集"],
+    ["/golden-questions", "助手评测"],
   ]) {
     await page.goto(route);
     await expect(page.getByRole("heading", { name: heading, exact: true }).first(), route).toBeVisible();
@@ -193,8 +193,10 @@ test("模拟场景覆盖空态、加载态、权限态和生命周期状态", as
     await expect(page.getByText(status, { exact: true }).first()).toBeVisible();
   }
   await page.goto("/research-projects");
+  await page.getByRole("combobox", { name: "状态" }).selectOption("all");
+  const projectTable = page.getByRole("region", { name: "可横向滚动的数据表" });
   for (const status of ["草稿", "研发中", "验证中", "已完成", "已归档"]) {
-    await expect(page.getByText(status, { exact: true }).first()).toBeVisible();
+    await expect(projectTable.getByText(status, { exact: true }).first()).toBeVisible();
   }
 
   await setScenario(request, "empty");
@@ -219,7 +221,7 @@ test("模拟场景覆盖空态、加载态、权限态和生命周期状态", as
   await expect(page.getByRole("button", { name: "重试" })).toBeVisible();
 });
 
-test("危险操作有确认，证据边界和业务下一步可见", async ({ page }) => {
+test("危险操作有确认，证据边界和核心业务动作可见", async ({ page }) => {
   await login(page);
   await page.goto("/configuration/process-data-models");
   await page.getByRole("button", { name: "删除草稿", exact: true }).click();
@@ -229,11 +231,10 @@ test("危险操作有确认，证据边界和业务下一步可见", async ({ pa
   await confirmation.getByRole("button", { name: "取消" }).click();
 
   await page.goto("/inspections");
-  await expect(page.getByText("完成检验后的下一步", { exact: true })).toBeVisible();
-  await expect(page.getByRole("link", { name: "检查数据可信度" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "检验任务摘要" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "录入检测", exact: true })).toBeVisible();
   await page.goto("/data-quality");
-  await expect(page.getByText("数据可信度确认后的下一步", { exact: true })).toBeVisible();
-  await expect(page.getByRole("link", { name: "进入运行对比" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "正式分析准入", exact: true })).toBeVisible();
 
   await page.goto("/comparisons");
   await page.getByRole("button", { name: "生成对比结论", exact: true }).click();

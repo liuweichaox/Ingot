@@ -1,4 +1,4 @@
-
+// 读取同时满足项目成员关系与站点授权的研发项目证据。
 using System.Text.Json;
 using Ingot.Agent;
 using Ingot.Contracts.Agents;
@@ -53,6 +53,7 @@ public sealed class GetResearchProjectTool(
                 !(string.Equals(project.OwnerUserId, userId, StringComparison.Ordinal) ||
                   project.MemberUserIds.Contains(userId, StringComparer.Ordinal)))
                 throw new ProcessResearchRuleException("研发项目不存在或当前用户无权访问。");
+            context.AccessScope.EnsureAuthorizedSite(project.SiteCode);
             var workspace = await workflow.GetWorkspaceAsync(projectId, ct).ConfigureAwait(false);
             var validatedWindows = workspace.OperatingRegions.Count(
                 static value => value.Status == "validated");

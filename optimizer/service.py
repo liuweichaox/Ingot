@@ -383,33 +383,52 @@ def _latin_hypercube(values: list[VariableIn], sample_count: int, rng: random.Ra
     ]
 
 
+def _ensure_design_run_budget(point_count: int, replicates: int) -> None:
+    if point_count * replicates > 40:
+        raise ValueError("design exceeds the 40-run experiment limit after replication")
+
+
 def _design_runs(request: DesignRequest) -> tuple[list[dict[str, float]], str | None, list[str], str | None]:
     _validate_design_variables(request.variables)
     family = request.response_surface_family
     alias_structure: str | None = None
     warnings: list[str] = []
+    variable_count = len(request.variables)
     if request.method == "full-factorial":
+        _ensure_design_run_budget(request.levels ** variable_count, request.replicates)
         points = _full_factorial(request.variables, request.levels)
     elif request.method == "fractional-factorial":
         if request.levels != 2:
             raise ValueError("fractional factorial design supports exactly two levels")
+        point_count = 2 ** (variable_count if variable_count < 3 else variable_count - 1)
+        _ensure_design_run_budget(point_count, request.replicates)
         points, alias_structure, warnings = _fractional_factorial(request.variables)
     elif request.method == "response-surface":
-        if len(request.variables) < 2:
+        if variable_count < 2:
             raise ValueError("response surface design requires at least two variables")
         family = family or "central-composite"
         if family == "central-composite":
+            _ensure_design_run_budget(
+                2 ** variable_count + 2 * variable_count + 1,
+                request.replicates,
+            )
             points = _central_composite(request.variables)
         else:
+            if variable_count < 3:
+                raise ValueError("Box-Behnken design requires at least three variables")
+            _ensure_design_run_budget(
+                2 * variable_count * (variable_count - 1) + 1,
+                request.replicates,
+            )
             points = _box_behnken(request.variables)
     else:
+        _ensure_design_run_budget(request.sample_count, request.replicates)
         points = _latin_hypercube(
             request.variables,
             request.sample_count,
             random.Random(request.seed),
         )
-    if len(points) * request.replicates > 40:
-        raise ValueError("design exceeds the 40-run experiment limit after replication")
+    _ensure_design_run_budget(len(points), request.replicates)
     return points, alias_structure, warnings, family
 
 

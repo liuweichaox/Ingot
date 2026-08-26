@@ -21,7 +21,11 @@ public sealed class RoadmapAgentToolTests
         UserId = "operator",
         EntryPoint = ProductEntryPoints.Chat,
         Purpose = RunPurposes.ReadOnlyAnalysis,
-        Request = new CreateChatRunRequest { Question = "test" }
+        Request = new CreateChatRunRequest { Question = "test" },
+        AccessScope = new AgentAccessScope
+        {
+            SiteIds = new HashSet<string>(["SITE-001"], StringComparer.OrdinalIgnoreCase)
+        }
     };
 
     [Fact]
@@ -78,7 +82,11 @@ public sealed class RoadmapAgentToolTests
             new AnalysisToolCall
             {
                 Tool = tool.Definition.Name,
-                Arguments = new Dictionary<string, string?> { ["executionId"] = "execution-a" }
+                Arguments = new Dictionary<string, string?>
+                {
+                    ["siteId"] = "SITE-001",
+                    ["executionId"] = "execution-a"
+                }
             },
             ExecutionContext);
 
@@ -122,6 +130,7 @@ public sealed class RoadmapAgentToolTests
                 Tool = tool.Definition.Name,
                 Arguments = new Dictionary<string, string?>
                 {
+                    ["siteId"] = "SITE-001",
                     ["baselineProcessExecutionId"] = "execution-a",
                     ["comparisonProcessExecutionIds"] = "execution-b"
                 }
@@ -147,6 +156,33 @@ public sealed class RoadmapAgentToolTests
     }
 
     [Fact]
+    public async Task CompareExecutions_EnforcesOneAggregateEventBudgetAcrossExecutions()
+    {
+        var events = new CountingBudgetEventReader(new Dictionary<string, int>(StringComparer.Ordinal)
+        {
+            ["execution-a"] = 30_000,
+            ["execution-b"] = 20_001
+        });
+        var tool = new CompareExecutionsTool(events, new StubInspectionStore([]));
+
+        var error = await Assert.ThrowsAsync<ChatDataQueryLimitExceededException>(() => tool.ExecuteAsync(
+            new AnalysisToolCall
+            {
+                Tool = tool.Definition.Name,
+                Arguments = new Dictionary<string, string?>
+                {
+                    ["siteId"] = "SITE-001",
+                    ["baselineProcessExecutionId"] = "execution-a",
+                    ["comparisonProcessExecutionIds"] = "execution-b"
+                }
+            },
+            ExecutionContext));
+
+        Assert.Equal(50_000, error.MaximumRows);
+        Assert.Equal([50_000, 20_000], events.MaximumRows);
+    }
+
+    [Fact]
     public async Task CheckDataQuality_DoesNotTreatPhaseMetadataAsProcessExecutionCompleteness()
     {
         var tool = new CheckDataQualityTool(new FilteringEventReader(
@@ -159,7 +195,11 @@ public sealed class RoadmapAgentToolTests
         ]), EmptyTimeSeriesStore.Instance);
 
         var result = await tool.ExecuteAsync(
-            new AnalysisToolCall { Tool = tool.Definition.Name },
+            new AnalysisToolCall
+            {
+                Tool = tool.Definition.Name,
+                Arguments = new Dictionary<string, string?> { ["siteId"] = "SITE-001" }
+            },
             ExecutionContext);
 
         Assert.Equal(AnalysisToolOutcomes.InsufficientData, result.Outcome);
@@ -205,6 +245,7 @@ public sealed class RoadmapAgentToolTests
         => new()
         {
             RecordId = Guid.CreateVersion7(),
+            SiteId = "SITE-001",
             OutputItemId = $"wp-{executionId}-{value}",
             ExecutionId = executionId,
             DefinitionCode = "entryPoint",
@@ -247,7 +288,8 @@ public sealed class RoadmapAgentToolTests
         public Task<IReadOnlyList<PlatformProductionEvent>> QueryAllAsync(
             string userId,
             PlatformEventQuery query,
-            CancellationToken ct = default)
+            CancellationToken ct = default,
+            int? maximumRows = null)
         {
             IEnumerable<PlatformProductionEvent> filtered = rows;
             if (!string.IsNullOrWhiteSpace(query.ExecutionId))
@@ -272,6 +314,39 @@ public sealed class RoadmapAgentToolTests
                 EarliestOccurredAt = filtered.Count == 0 ? null : filtered.Min(static row => row.Event.OccurredAt)
             });
         }
+    }
+
+    private sealed class CountingBudgetEventReader(IReadOnlyDictionary<string, int> counts) : IChatEventReader
+    {
+        public List<int?> MaximumRows { get; } = [];
+
+        public Task<IReadOnlyList<PlatformProductionEvent>> QueryAsync(
+            string userId,
+            PlatformEventQuery query,
+            CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<PlatformProductionEvent>>([]);
+
+        public Task<IReadOnlyList<PlatformProductionEvent>> QueryAllAsync(
+            string userId,
+            PlatformEventQuery query,
+            CancellationToken ct = default,
+            int? maximumRows = null)
+        {
+            MaximumRows.Add(maximumRows);
+            var executionId = query.ExecutionId ?? string.Empty;
+            var count = counts.GetValueOrDefault(executionId);
+            if (maximumRows.HasValue && count > maximumRows.Value)
+                throw new ChatDataQueryLimitExceededException(maximumRows.Value);
+            var row = Row(1, "process.sample", executionId);
+            return Task.FromResult<IReadOnlyList<PlatformProductionEvent>>(
+                Enumerable.Repeat(row, count).ToArray());
+        }
+
+        public Task<PlatformEventScopeStats> GetScopeStatsAsync(
+            string userId,
+            PlatformEventQuery query,
+            CancellationToken ct = default)
+            => Task.FromResult(new PlatformEventScopeStats());
     }
 
     private sealed class StubInspectionStore(IReadOnlyList<InspectionRecord> records) : IInspectionRecordStore

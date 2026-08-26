@@ -29,11 +29,10 @@ import {
   Card,
   DataTable,
   EmptyState,
-  Metric,
   Page,
   RequestError,
+  Select,
   StatusBadge,
-  WorkflowGuide,
   notify,
   useConfirmDialog,
 } from "../ui/components";
@@ -43,6 +42,7 @@ export function ResearchProjectsPage({ identity }) {
   const { projectId } = useParams();
   const [searchParams] = useSearchParams();
   const [projects, setProjects] = useState([]);
+  const [statusFilter, setStatusFilter] = useState("open");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
@@ -96,10 +96,15 @@ export function ResearchProjectsPage({ identity }) {
   }, [projectId]);
 
   const metrics = useMemo(() => ({
-    active: projects.filter(project => project.status === "active").length,
-    validating: projects.filter(project => project.status === "validating").length,
     completed: projects.filter(project => project.status === "completed").length,
+    open: projects.filter(project => !["completed", "archived"].includes(project.status)).length,
   }), [projects]);
+
+  const filteredProjects = useMemo(() => projects.filter(project => {
+    if (statusFilter === "all") return true;
+    if (statusFilter === "open") return !["completed", "archived"].includes(project.status);
+    return project.status === statusFilter;
+  }), [projects, statusFilter]);
 
   async function refreshWorkspace(projectId = workspace?.project?.projectId) {
     if (!projectId) return;
@@ -791,7 +796,7 @@ export function ResearchProjectsPage({ identity }) {
     return (
       <Page
         title={project?.name || "研发项目工作区"}
-        description={project?.description || "围绕当前问题推进假设、实验、验证和知识复用。"}
+        description={project?.description || undefined}
         actions={(
           <>
             <Button onClick={() => navigate("/research-projects")}>返回项目列表</Button>
@@ -887,70 +892,50 @@ export function ResearchProjectsPage({ identity }) {
   return (
     <Page
       title="研发项目"
-      description="用最少的有效实验，把生产问题追溯为可验证证据，再形成可复用的工艺操作域。"
       actions={<Button variant="primary" onClick={() => setCreateOpen(true)}>新建研发项目</Button>}
     >
       <RequestError error={error} onRetry={load} />
-      <section className="grid gap-3 sm:grid-cols-3">
-        <Metric label="进行中的研发" value={metrics.active + metrics.validating} hint="需要工程决策或独立验证" />
-        <Metric label="已验证结论" value={metrics.completed} hint="已完成项目" />
-        <Metric label="项目组合" value={projects.length} hint="当前可访问项目" />
+      <section className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+        <label className="flex items-center gap-3 text-sm font-medium text-slate-700">
+          状态
+          <Select className="w-44" value={statusFilter} onChange={event => setStatusFilter(event.target.value)}>
+            <option value="open">进行中与待处理</option>
+            <option value="all">全部</option>
+            <option value="active">研发中</option>
+            <option value="validating">验证中</option>
+            <option value="completed">已完成</option>
+            <option value="archived">已归档</option>
+          </Select>
+        </label>
+        <p className="text-[13px] text-slate-500">
+          共 {projects.length} 项 · 待处理 {metrics.open} · 已完成 {metrics.completed}
+        </p>
       </section>
 
-      <Card
-        title="研发项目"
-        description="先处理需要决策或验证的项目；每个工作区保留完整证据链。"
-      >
+      <Card title="项目列表">
         {loading ? (
           <p className="py-12 text-center text-sm text-slate-500">正在读取研发项目…</p>
         ) : projects.length === 0 ? (
           <EmptyState title="从一个待解决的工艺问题开始" description="填写目标、首个可控变量和安全边界；其余证据会在推进过程中逐步补齐。" />
+        ) : filteredProjects.length === 0 ? (
+          <EmptyState title="当前筛选条件下没有项目" description="请选择其他状态查看项目。" />
         ) : (
           <DataTable
-            rows={projects}
+            rows={filteredProjects}
             keyField="projectId"
             onRowClick={openProject}
             columns={[
               { key: "name", label: "研发项目" },
               { key: "processName", label: "工艺" },
               { key: "productName", label: "产品", render: value => value || "—" },
-              { key: "status", label: "阶段", render: value => <StatusBadge value={statusLabels[value] || value} /> },
-              { key: "objectives", label: "目标", render: value => `${value?.length || 0} 项` },
+              { key: "status", label: "阶段", render: value => <StatusBadge value={value} label={statusLabels[value] || value} /> },
+              { key: "ownerUserId", label: "负责人", render: value => value === identity?.userId ? (identity.displayName || identity.username || value) : value || "—" },
               { key: "updatedAt", label: "最近更新", render: value => value ? new Date(value).toLocaleString("zh-CN") : "—" },
               { key: "open", label: "操作", render: (_, project) => <Button onClick={event => { event.stopPropagation(); openProject(project); }}>进入工作区</Button> },
             ]}
           />
         )}
       </Card>
-
-      <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]">
-        <div className="rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50 via-white to-white p-5 shadow-sm">
-          <p className="text-sm font-semibold text-blue-700">从真实偏差进入研发闭环</p>
-          <h2 className="mt-2 text-lg font-semibold tracking-tight text-slate-950">
-            发现偏差 → 缩小候选原因 → 设计实验 → 验证并固化窗口
-          </h2>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-            运行、质量和设备数据是证据来源；系统负责整理证据与下一步，工程人员负责审核和决策。
-          </p>
-          <div className="mt-4 flex flex-wrap gap-2">
-            <Button onClick={() => navigate("/comparisons")}>从运行对比开始</Button>
-            <Button onClick={() => navigate("/quality-analysis")}>查看质量偏差</Button>
-          </div>
-        </div>
-        <aside>
-          <WorkflowGuide
-            title="研发路径"
-            description="围绕真实问题推进证据、实验和验证。"
-            compact
-            steps={[
-              { title: "明确偏差", description: "从质量追因或历史对比确认问题和范围。", state: projects.length ? "done" : "current" },
-              { title: "设定边界", description: "写下研发目标、一个可控变量和安全限制。", state: projects.length ? "current" : "upcoming" },
-              { title: "执行建议", description: "系统依据已有观察推荐下一组实验。", state: "upcoming" },
-              { title: "验证窗口", description: "独立验证后才成为可复用结论。", state: "upcoming" },
-            ]}
-          />
-        </aside>
-      </section>
 
       <CreateProjectDrawer
         open={createOpen}

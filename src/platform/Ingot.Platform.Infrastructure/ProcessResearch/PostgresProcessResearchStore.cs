@@ -1,4 +1,4 @@
-
+// 在 PostgreSQL 中持久化研发项目及资产，并执行站点过滤的项目查询。
 using System.Text.Json;
 using Ingot.Contracts.ProcessResearch;
 using Ingot.Platform.Application.ProcessResearch;
@@ -32,6 +32,7 @@ public sealed class PostgresProcessResearchStore : IProcessResearchStore
     public async Task<IReadOnlyList<ResearchProject>> ListProjectsAsync(
         string userId,
         bool includeAll,
+        IReadOnlyCollection<string>? siteIds,
         int limit,
         int offset,
         CancellationToken ct = default)
@@ -46,11 +47,17 @@ public sealed class PostgresProcessResearchStore : IProcessResearchStore
               WHERE member.project_id = project.project_id
                 AND member.user_id = $2
             )
+            AND ($1 OR lower(project.payload->>'siteCode') = ANY($3))
             ORDER BY project.updated_at DESC, project.project_id
-            LIMIT $3 OFFSET $4
+            LIMIT $4 OFFSET $5
             """);
         command.Parameters.AddWithValue(includeAll);
         command.Parameters.AddWithValue(userId);
+        command.Parameters.AddWithValue(
+            NpgsqlDbType.Array | NpgsqlDbType.Text,
+            siteIds?.Select(static value => value.Trim().ToLowerInvariant())
+                .Distinct(StringComparer.Ordinal).ToArray()
+            ?? []);
         command.Parameters.AddWithValue(limit);
         command.Parameters.AddWithValue(offset);
         var values = new List<ResearchProject>();

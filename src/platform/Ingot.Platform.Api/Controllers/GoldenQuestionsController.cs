@@ -1,4 +1,4 @@
-
+// 管理黄金问题及评测，并阻止使用越权 Agent 运行作为评测证据。
 using Ingot.Contracts.Agents;
 using Ingot.Platform.Api.Agents;
 using Ingot.Platform.Application.Insight;
@@ -98,11 +98,21 @@ public sealed class GoldenQuestionsController(
             return InvalidRequest("agentRunId 不能为空。");
         var goldenCase = await application.GetAsync(caseId, version, ct).ConfigureAwait(false);
         if (goldenCase is null) return ResourceNotFound();
+        var identity = ResolveIdentity()!;
         try
         {
             var result = await application.EvaluateAsync(
-                goldenCase, request.AgentRunId.Trim(), ct).ConfigureAwait(false);
+                goldenCase,
+                request.AgentRunId.Trim(),
+                identity.UserId,
+                identity.HasAnyRole(PlatformRoles.PlatformAdministrator),
+                identity.SiteIds,
+                ct).ConfigureAwait(false);
             return Ok(result);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return AuthorizationDenied();
         }
         catch (ArgumentException exception)
         {

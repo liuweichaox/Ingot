@@ -3,6 +3,7 @@ import { Dialog, DialogBackdrop, DialogPanel, Menu, MenuButton, MenuItem, MenuIt
 import {
   AdjustmentsHorizontalIcon,
   Bars3Icon,
+  BeakerIcon,
   BoltIcon,
   ClipboardDocumentCheckIcon,
   ChevronDoubleLeftIcon,
@@ -33,44 +34,45 @@ const sections = [
   },
   {
     id: "equipment-connection", label: "现场接入", icon: SignalIcon, path: "/edges", groups: [
-      { label: "连接与采集", items: [["/edges", "现场节点"], ["/configuration/ingestion-tasks", "数据源配置"]] },
+      { label: "接入配置", items: [["/edges", "现场节点"], ["/configuration/ingestion-tasks", "采集配置"]] },
     ],
   },
   {
     id: "process-definition", label: "工艺配置", icon: AdjustmentsHorizontalIcon, path: "/configuration", groups: [
-      { label: "配置准备", items: [["/configuration", "配置总览"]] },
-      { label: "工艺标准", items: [["/configuration/process-data-models", "工艺数据字典"], ["/configuration/process-specifications", "工艺规范"]] },
-      { label: "分析规则", items: [["/configuration/process-analysis-plans", "运行分析规则"]] },
-      { label: "质量定义", items: [["/configuration/inspection-definitions", "检测定义"], ["/configuration/quality-plans", "质量方案"]] },
-      { label: "工装配置", items: [["/configuration/component-types", "组件分类"], ["/configuration/components", "组件资产"], ["/configuration/tooling-types", "工装结构定义"], ["/configuration/tooling-assemblies", "实际工装总成"]] },
-      { label: "配置发布", items: [["/configuration/scenario-packages", "配置发布"]] },
+      { label: "基础配置", items: [["/configuration", "配置总览"], ["/configuration/process-data-models", "数据字典"], ["/configuration/process-specifications", "工艺规范"], ["/configuration/process-analysis-plans", "分析规则"]] },
+      { label: "质量配置", items: [["/configuration/inspection-definitions", "检测定义"], ["/configuration/quality-plans", "质量方案"]] },
+      { label: "工装配置", items: [["/configuration/component-types", "组件分类"], ["/configuration/components", "组件台账"], ["/configuration/tooling-types", "工装结构"], ["/configuration/tooling-assemblies", "工装总成"]] },
+      { label: "发布管理", items: [["/configuration/scenario-packages", "配置发布"]] },
     ],
   },
   {
     id: "evidence", label: "生产运行", icon: CircleStackIcon, path: "/process-executions", groups: [
       { label: "生产准备", items: [["/production/changeover", "生产切换"], ["/production/tooling-installations", "工装装卸"]] },
-      { label: "运行与追溯", items: [["/process-executions", "运行记录"], ["/explorer", "对象目录"], ["/events", "运行事件"]] },
+      { label: "运行追溯", items: [["/process-executions", "运行记录"], ["/explorer", "对象目录"], ["/events", "运行事件"]] },
     ],
   },
   {
     id: "quality", label: "质量管理", icon: ClipboardDocumentCheckIcon, path: "/inspections", groups: [
       { label: "检验执行", items: [["/inspections", "检验任务"]] },
-      { label: "问题分析", items: [["/quality-analysis", "质量偏差分析"]] },
+      { label: "问题分析", items: [["/quality-analysis", "偏差分析"]] },
     ],
   },
   {
     id: "diagnosis", label: "工艺追因", icon: MagnifyingGlassCircleIcon, path: "/analysis", groups: [
-      { label: "开始追因", items: [["/analysis", "追因工作台"]] },
-      { label: "证据与比较", items: [["/data-quality", "数据可信度"], ["/comparisons", "运行对比"]] },
+      { label: "追因分析", items: [["/analysis", "追因总览"], ["/data-quality", "数据质量"], ["/comparisons", "运行对比"]] },
       { label: "辅助研判", items: [["/chat", "分析助手"]] },
-      { label: "高级工程验证", items: [["/research-projects", "研发项目"], ["/research-assets", "研发成果"]] },
+    ],
+  },
+  {
+    id: "research", label: "工艺研发", icon: BeakerIcon, path: "/research-projects", groups: [
+      { items: [["/research-projects", "研发项目"], ["/research-assets", "工艺知识"]] },
     ],
   },
 ];
 
 const systemSection = {
   id: "system", label: "系统管理", icon: Cog6ToothIcon, path: "/identity/users", groups: [
-    { label: "身份与权限", items: [["/identity/users", "用户与权限"]] },
+    { label: "身份权限", items: [["/identity/users", "用户权限"]] },
     { label: "平台运维", items: [["/platform-metrics", "平台状态"], ["/logs", "平台日志"]] },
     { label: "助手治理", items: [["/golden-questions", "助手评测"]] },
   ],
@@ -86,34 +88,34 @@ const pageDetails = {
   "/research-projects": ["研发项目", "从问题、证据与实验推进到经过验证的工艺窗口"],
   "/workbench": ["工作台", "集中查看待办、生产状态、质量风险与研发进展"],
   "/chat": ["工艺分析助手", "用自然语言查询运行、质量、配置、研发与知识证据"],
-  "/analysis": ["追因工作台", "从生产运行和可信证据进入差异比较、候选原因与工程验证"],
-  "/research-assets": ["研发成果", "查看项目可复用的数据集、模型、机理和知识"],
+  "/analysis": ["追因总览", "从生产运行和可信证据进入差异比较、候选原因与工程验证"],
+  "/research-assets": ["工艺知识", "查看项目可复用的数据集、模型、机理和知识"],
   "/explorer": ["对象目录", "选择真实业务对象，再进入它的运行、事件、质量与数据健康视图"],
   "/process-executions": ["运行记录", "查看生产运行及其数据、工艺与质量上下文"],
   "/events": ["运行事件", "查询、追溯并关联运行上下文"],
   "/production/changeover": ["生产切换", "让设备、产品、工艺规范和已装工装对接下来的运行生效"],
   "/production/tooling-installations": ["工装装卸", "记录工装组合版本在设备上的装入与卸下区间"],
   "/inspections": ["检验任务", "处理视觉检查、人工质检与原图复核"],
-  "/quality-analysis": ["质量偏差分析", "按产品、工艺规范和运行上下文定位质量偏差并追溯证据"],
+  "/quality-analysis": ["偏差分析", "按产品、工艺规范和运行上下文定位质量偏差并追溯证据"],
   "/comparisons": ["运行对比", "比较同类生产运行、运行段或时间窗口，生成待验证的候选原因"],
-  "/golden-questions": ["评测问题集", "用真实问题持续核对事实、记录引用、正确拒绝和因果边界"],
-  "/data-quality": ["数据可信度", "检查运行对象的数据范围、采样连续性与运行完整性"],
+  "/golden-questions": ["助手评测", "用真实问题持续核对事实、记录引用、正确拒绝和因果边界"],
+  "/data-quality": ["数据质量", "检查运行对象的数据范围、采样连续性与运行完整性"],
   "/configuration": ["配置总览", "按依赖顺序完成数据、接入、分析、质量、工装与最终发布"],
   "/configuration/scenario-packages": ["配置发布", "版本化组合工艺数据、采集、分析、质量、上下文和约束"],
-  "/configuration/process-analysis-plans": ["运行分析规则", "版本化定义同类比较条件、对齐方式、质量分组和数据项"],
-  "/configuration/process-data-models": ["工艺数据字典", "定义工艺变量、阶段号和控制参数，供现场数据源统一映射"],
+  "/configuration/process-analysis-plans": ["分析规则", "版本化定义同类比较条件、对齐方式、质量分组和数据项"],
+  "/configuration/process-data-models": ["数据字典", "定义工艺变量、阶段号和控制参数，供现场数据源统一映射"],
   "/configuration/process-specifications": ["工艺规范", "维护引用数据模型的完整工艺规范版本"],
-  "/configuration/ingestion-tasks": ["数据源配置", "选择现场节点和通信驱动，将来源字段映射到工艺变量"],
+  "/configuration/ingestion-tasks": ["采集配置", "选择现场节点和通信驱动，将来源字段映射到工艺变量"],
   "/configuration/inspection-definitions": ["检测定义", "定义要检测的特性、录入类型和判定规则"],
   "/configuration/quality-plans": ["质量方案", "配置产品适用的检测项目与复核规则"],
   "/configuration/component-types": ["组件分类", "维护模芯、模架等物理资产类别；上模和下模由装配位置决定"],
-  "/configuration/components": ["组件资产", "登记具有独立资产编号和序列号的可更换物理组件"],
-  "/configuration/tooling-types": ["工装结构定义", "定义工装总成结构、装配位置和各位置允许的组件分类"],
-  "/configuration/tooling-assemblies": ["实际工装总成", "查看工装总成身份、不可变配置版本及每个位置的实际成员"],
+  "/configuration/components": ["组件台账", "登记具有独立资产编号和序列号的可更换物理组件"],
+  "/configuration/tooling-types": ["工装结构", "定义工装总成结构、装配位置和各位置允许的组件分类"],
+  "/configuration/tooling-assemblies": ["工装总成", "查看工装总成身份、不可变配置版本及每个位置的实际成员"],
   "/edges": ["现场节点", "查看负责连接设备、仪器、系统并上报数据的现场节点"],
   "/platform-metrics": ["平台状态", "确认中心服务、现场节点和数据上行是否正常"],
   "/logs": ["平台日志", "查询平台运行记录"],
-  "/identity/users": ["用户与权限", "管理本地账户、岗位权限、密码和启停状态"],
+  "/identity/users": ["用户权限", "管理本地账户、岗位权限、密码和启停状态"],
 };
 
 const searchAliases = {
@@ -155,7 +157,7 @@ function SidebarSection({ section, activeSectionId, activeNavigationPath, expand
       <Link
         to={section.path}
         onClick={onNavigate}
-        className={cx("grid h-11 place-items-center rounded-xl text-slate-500 transition hover:bg-slate-100 hover:text-slate-950", active && "bg-blue-50 text-blue-700")}
+        className={cx("grid h-11 place-items-center rounded-xl text-slate-400 transition hover:bg-white/8 hover:text-white", active && "bg-trajectory-500/15 text-trajectory-100 ring-1 ring-inset ring-trajectory-500/20")}
         aria-label={section.label}
         title={section.label}
       >
@@ -166,7 +168,7 @@ function SidebarSection({ section, activeSectionId, activeNavigationPath, expand
 
   return (
     <div>
-      <div className={cx("flex items-center rounded-xl transition", active ? "bg-blue-50 text-blue-700" : "text-slate-700 hover:bg-slate-50")}>
+      <div className={cx("flex items-center rounded-xl transition", active ? "bg-trajectory-500/12 text-trajectory-100 ring-1 ring-inset ring-trajectory-500/15" : "text-slate-300 hover:bg-white/6 hover:text-white")}>
         <Link to={section.path} onClick={onNavigate} className="flex min-w-0 flex-1 items-center gap-3 px-3 py-2.5 text-[15px] font-semibold leading-5">
           <Icon className="size-5 shrink-0" />
           <span className="truncate">{section.label}</span>
@@ -174,7 +176,7 @@ function SidebarSection({ section, activeSectionId, activeNavigationPath, expand
         {hasNestedItems && (
           <button
             type="button"
-            className="mr-1 grid size-8 shrink-0 place-items-center rounded-lg hover:bg-white/70"
+            className="mr-1 grid size-8 shrink-0 place-items-center rounded-lg hover:bg-white/8"
             onClick={() => onToggle(section.id)}
             aria-label={`${expanded ? "收起" : "展开"}${section.label}`}
             aria-expanded={expanded}
@@ -184,13 +186,13 @@ function SidebarSection({ section, activeSectionId, activeNavigationPath, expand
         )}
       </div>
       {hasNestedItems && expanded && (
-        <div className="mt-1 grid gap-1">
+        <div className="mt-1 grid gap-0.5 border-l border-white/10 pl-3 ml-5">
           {items.map(([path, label]) => (
             <Link
               key={path}
               to={path}
               onClick={onNavigate}
-              className={cx("flex min-h-10 items-center rounded-lg py-2 pl-11 pr-3 text-sm font-medium leading-5", path === activeNavigationPath ? "bg-blue-50 font-semibold text-blue-700" : "text-slate-600 hover:bg-slate-50 hover:text-slate-950")}
+              className={cx("flex min-h-9 items-center rounded-lg px-3 py-2 text-sm font-medium leading-5", path === activeNavigationPath ? "bg-white/8 font-semibold text-white" : "text-slate-400 hover:bg-white/5 hover:text-slate-100")}
             >
               {label}
             </Link>
@@ -203,7 +205,7 @@ function SidebarSection({ section, activeSectionId, activeNavigationPath, expand
 
 function SidebarNavigation({ navigationSections, activeSectionId, activeNavigationPath, expandedSectionId, compact = false, onToggle, onNavigate }) {
   return (
-    <nav className={cx("grid flex-1 content-start overflow-y-auto", compact ? "gap-1 p-3" : "gap-1 p-3")} aria-label="主导航">
+    <nav className={cx("scrollbar-thin grid flex-1 content-start overflow-y-auto", compact ? "gap-1 p-3" : "gap-1.5 p-3")} aria-label="主导航">
       {navigationSections.map(item => (
         <SidebarSection
           key={item.id}
@@ -304,21 +306,21 @@ export default function App({ identity, logout }) {
     : location.pathname.startsWith("/edges/")
       ? ["节点诊断", "查看现场节点的连接、采集、上行和最近日志"]
       : location.pathname.startsWith("/research-projects/")
-        ? ["研发项目工作区", "围绕当前问题推进假设、实验、验证和知识复用"]
+        ? ["项目工作区", "围绕当前问题推进假设、实验、验证和知识复用"]
         : location.pathname.startsWith("/configuration/ingestion-tasks/")
           ? ["配置数据源", "配置设备连接、工艺映射和发布前验证"]
           : pageDetails[location.pathname] ?? ["页面不存在", "地址可能已经变更，请返回可用功能页面"];
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
-      <aside className={cx("fixed inset-y-0 left-0 z-50 hidden flex-col border-r border-slate-200 bg-white transition-[width] duration-200 lg:flex", sidebarCollapsed ? "w-18" : "w-64")}>
-        <div className={cx("flex h-16 shrink-0 items-center border-b border-slate-200", sidebarCollapsed ? "justify-center px-3" : "justify-between px-4")}>
+    <div className="app-canvas min-h-screen text-slate-900">
+      <aside className={cx("fixed inset-y-0 left-0 z-50 hidden flex-col border-r border-white/8 bg-coal-950 text-white shadow-[12px_0_40px_rgba(7,16,14,.08)] transition-[width] duration-200 lg:flex", sidebarCollapsed ? "w-18" : "w-64")}>
+        <div className={cx("flex h-16 shrink-0 items-center border-b border-white/8", sidebarCollapsed ? "justify-center px-3" : "justify-between px-4")}>
           <button className={cx("flex min-w-0 items-center gap-3 text-left", sidebarCollapsed && "justify-center")} onClick={() => navigate("/workbench")} aria-label="返回工作台">
-            <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-amber-50 ring-1 ring-amber-200">
+            <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-white/6 ring-1 ring-white/12">
               <img src="/ingot-mark.svg" alt="" className="size-7" />
             </span>
-            {!sidebarCollapsed && <span className="grid min-w-0"><strong className="text-base leading-5 text-slate-950">Ingot</strong><small className="truncate text-[11px] text-slate-500">工艺追因与优化系统</small></span>}
+            {!sidebarCollapsed && <span className="grid min-w-0"><strong className="text-base leading-5 text-white">Ingot</strong><small className="truncate text-xs text-slate-400">工艺证据工作台</small></span>}
           </button>
-          {!sidebarCollapsed && <button type="button" className="grid size-9 place-items-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700" onClick={() => setSidebarCollapsed(true)} aria-label="收起侧边栏"><ChevronDoubleLeftIcon className="size-4.5" /></button>}
+          {!sidebarCollapsed && <button type="button" className="grid size-9 place-items-center rounded-lg text-slate-500 hover:bg-white/8 hover:text-white" onClick={() => setSidebarCollapsed(true)} aria-label="收起侧边栏"><ChevronDoubleLeftIcon className="size-4.5" /></button>}
         </div>
         <SidebarNavigation
           navigationSections={navigationSections}
@@ -328,19 +330,20 @@ export default function App({ identity, logout }) {
           compact={sidebarCollapsed}
           onToggle={toggleSection}
         />
-        {sidebarCollapsed && <button type="button" className="mx-3 mb-3 grid h-10 place-items-center rounded-xl text-slate-500 hover:bg-slate-100 hover:text-slate-950" onClick={() => setSidebarCollapsed(false)} aria-label="展开侧边栏"><ChevronDoubleRightIcon className="size-4.5" /></button>}
+        {sidebarCollapsed && <button type="button" className="mx-3 mb-3 grid h-10 place-items-center rounded-xl text-slate-500 hover:bg-white/8 hover:text-white" onClick={() => setSidebarCollapsed(false)} aria-label="展开侧边栏"><ChevronDoubleRightIcon className="size-4.5" /></button>}
       </aside>
 
-      <header className={cx("fixed inset-x-0 top-0 z-40 flex h-16 items-stretch border-b border-slate-200 bg-white/95 shadow-sm backdrop-blur transition-[left] duration-200 lg:right-0", sidebarCollapsed ? "lg:left-18" : "lg:left-64")}>
+      <header className={cx("fixed inset-x-0 top-0 z-40 flex h-16 items-stretch border-b border-slate-200/80 bg-white/92 shadow-[0_1px_0_rgba(7,16,14,.02)] backdrop-blur-xl transition-[left] duration-200 lg:right-0", sidebarCollapsed ? "lg:left-18" : "lg:left-64")}>
         <button className="grid w-14 shrink-0 place-items-center text-slate-600 hover:bg-slate-50 lg:hidden" onClick={() => setMobileOpen(true)} aria-label="打开主导航"><Bars3Icon className="size-5" /></button>
         <div className="flex min-w-0 flex-1 items-center px-3 sm:px-5">
-          <div className="min-w-0">
-            <nav aria-label="面包屑" className="flex items-center gap-1.5 text-xs text-slate-500">
+          <div className="flex min-w-0 items-center gap-3">
+            <nav aria-label="面包屑" className="flex items-center gap-1.5 text-[13px] text-slate-500">
               <Link to={section.path} className="shrink-0 hover:text-blue-700">{section.label}</Link>
               <ChevronRightIcon className="size-3.5 shrink-0" aria-hidden="true" />
               <span className="truncate font-medium text-slate-700">{page[0]}</span>
             </nav>
-            <p className="mt-1 hidden truncate text-xs text-slate-500 sm:block">{page[1]}</p>
+            <span className="hidden h-4 w-px bg-slate-200 2xl:block" aria-hidden="true" />
+            <p className="hidden truncate text-xs text-slate-400 2xl:block">{page[1]}</p>
           </div>
         </div>
         <SystemStatusIndicator />
@@ -348,14 +351,14 @@ export default function App({ identity, logout }) {
           <MagnifyingGlassIcon className="size-5" /><span className="hidden md:inline">功能搜索</span><kbd className="hidden rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] text-slate-400 xl:inline">{searchShortcutLabel}</kbd>
         </button>
         <Menu as="div" className="relative flex border-l border-slate-100">
-          <MenuButton className="grid w-14 place-items-center text-slate-600 hover:bg-slate-50" aria-label="用户菜单">
-            <span className="text-xs font-semibold">{userInitials}</span>
+          <MenuButton className="grid w-16 place-items-center text-slate-600 hover:bg-slate-50" aria-label="用户菜单">
+            <span className="grid size-8 place-items-center rounded-full bg-coal-900 text-[11px] font-bold text-white ring-2 ring-white">{userInitials}</span>
           </MenuButton>
           <MenuItems transition anchor="bottom end" className="z-100 mt-2 w-64 origin-top-right rounded-xl border border-slate-200 bg-white p-1 text-sm shadow-xl transition data-closed:scale-95 data-closed:opacity-0">
             <div className="border-b border-slate-100 px-3 py-2">
               <p className="truncate font-medium text-slate-900">{displayName}</p>
-              {displayName !== identity?.username && <p className="mt-0.5 truncate text-xs text-slate-500">{identity?.username || "当前账户"}</p>}
-              <dl className="mt-2 grid gap-1 text-xs text-slate-500">
+              {displayName !== identity?.username && <p className="mt-0.5 truncate text-[13px] text-slate-500">{identity?.username || "当前账户"}</p>}
+              <dl className="mt-2 grid gap-1 text-[13px] text-slate-500">
                 <div className="grid grid-cols-[3rem_1fr] gap-2"><dt>岗位</dt><dd className="text-slate-700">{formatRoleSummary(identity?.roles)}</dd></div>
                 <div className="grid grid-cols-[3rem_1fr] gap-2"><dt>站点</dt><dd className="break-words text-slate-700">{formatSiteScope(identity?.siteIds, identity?.roles)}</dd></div>
               </dl>
@@ -372,18 +375,18 @@ export default function App({ identity, logout }) {
         </main>
       ) : (
         <div className={cx("pt-16 transition-[margin] duration-200", sidebarCollapsed ? "lg:ml-18" : "lg:ml-64")}>
-          <main className="mx-auto w-full max-w-[1600px] p-4 sm:p-6">
+          <main className="mx-auto w-full max-w-[1600px] p-4 sm:p-7 lg:p-8">
             <AppRoutes identity={identity} canConfigure={canConfigure} />
           </main>
         </div>
       )}
 
       <Dialog open={mobileOpen} onClose={setMobileOpen} className="relative z-80 lg:hidden">
-        <DialogBackdrop className="fixed inset-0 bg-slate-950/30" />
-        <DialogPanel className="fixed inset-y-0 left-0 flex w-80 max-w-[88vw] flex-col bg-white shadow-2xl">
-          <div className="flex h-16 items-center justify-between border-b border-slate-200 px-4">
-            <button className="flex items-center gap-3 text-left" onClick={() => { setMobileOpen(false); navigate("/workbench"); }}><img src="/ingot-mark.svg" alt="" className="size-8" /><span><strong className="block">Ingot</strong><small className="text-[11px] text-slate-500">工艺追因与优化系统</small></span></button>
-            <button className="grid size-9 place-items-center rounded-lg hover:bg-slate-100" onClick={() => setMobileOpen(false)} aria-label="关闭模块导航">
+        <DialogBackdrop className="fixed inset-0 bg-coal-950/55 backdrop-blur-sm" />
+        <DialogPanel className="fixed inset-y-0 left-0 flex w-80 max-w-[88vw] flex-col bg-coal-950 text-white shadow-2xl">
+          <div className="flex h-16 items-center justify-between border-b border-white/8 px-4">
+            <button className="flex items-center gap-3 text-left" onClick={() => { setMobileOpen(false); navigate("/workbench"); }}><img src="/ingot-mark.svg" alt="" className="size-8" /><span><strong className="block">Ingot</strong><small className="text-xs text-slate-400">工艺证据工作台</small></span></button>
+            <button className="grid size-9 place-items-center rounded-lg text-slate-400 hover:bg-white/8 hover:text-white" onClick={() => setMobileOpen(false)} aria-label="关闭模块导航">
               <XMarkIcon className="size-5" />
             </button>
           </div>
@@ -430,7 +433,7 @@ function GlobalSearchDialog({ open, onClose, navigate, entries }) {
               ref={inputRef}
               value={query}
               onChange={event => setQuery(event.target.value)}
-              placeholder="例如：数据源配置、工艺规范、运行对比、检验任务"
+              placeholder="例如：采集配置、工艺规范、运行对比、检验任务"
               className="mt-4 h-11 rounded-xl bg-slate-50 px-4 focus:bg-white"
             />
           </div>
@@ -453,7 +456,7 @@ export function RequireRole({ identity, roles, children }) {
   const allowed = (identity?.roles || []).some(role => roles.includes(role));
   if (allowed) return children;
   return (
-    <div className="grid min-h-[55vh] place-items-center rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm" role="alert">
+    <div className="grid min-h-[55vh] place-items-center rounded-lg border border-slate-200 bg-white p-8 text-center" role="alert">
       <div className="max-w-lg">
         <p className="text-sm font-semibold text-amber-700">权限不足</p>
         <h1 className="mt-2 text-2xl font-semibold text-slate-950">当前岗位不能访问此功能</h1>
@@ -471,7 +474,7 @@ function AppRoutes({ identity, canConfigure }) {
       <Route path="/research-projects" element={<Pages.ResearchProjectsPage identity={identity} />} />
       <Route path="/research-projects/:projectId" element={<Pages.ResearchProjectsPage identity={identity} />} />
       <Route path="/workbench" element={<Pages.WorkbenchPage identity={identity} />} />
-      <Route path="/analysis" element={<Pages.AnalysisHubPage />} />
+      <Route path="/analysis" element={<Pages.AnalysisHubPage identity={identity} />} />
       <Route path="/chat" element={<Pages.ChatPage />} />
       <Route path="/research-assets" element={<Pages.ResearchAssetsPage />} />
       <Route path="/explorer" element={<Pages.ObjectExplorerPage />} />

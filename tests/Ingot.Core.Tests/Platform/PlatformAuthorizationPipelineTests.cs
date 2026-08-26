@@ -40,6 +40,40 @@ public sealed class PlatformAuthorizationPipelineTests : IClassFixture<PlatformA
     }
 
     [Fact]
+    public async Task AnonymousAuthenticationConfiguration_IsAvailable()
+    {
+        var response = await client.GetAsync("/api/v1/auth/config");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains("\"mode\":\"local\"", await response.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task AnonymousOidcConfiguration_ExposesOnlySpaBootstrapValues()
+    {
+        await using var factory = new Factory();
+        await using var oidcFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.UseSetting("Authentication:Mode", "Oidc");
+            builder.UseSetting("Authentication:Authority", "https://identity.example.com/tenant/");
+            builder.UseSetting("Authentication:Audience", "private-platform-audience");
+            builder.UseSetting("Authentication:Oidc:ClientId", "ingot-platform-spa");
+            builder.UseSetting("Authentication:Oidc:Scope", "openid profile ingot-platform-api");
+        });
+        using var oidcClient = oidcFactory.CreateClient();
+
+        var response = await oidcClient.GetAsync("/api/v1/auth/config");
+        var body = await response.Content.ReadAsStringAsync();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains("\"mode\":\"oidc\"", body);
+        Assert.Contains("\"authority\":\"https://identity.example.com/tenant\"", body);
+        Assert.Contains("\"clientId\":\"ingot-platform-spa\"", body);
+        Assert.Contains("\"callbackPath\":\"/auth/callback\"", body);
+        Assert.DoesNotContain("private-platform-audience", body, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task AuthenticatedUserWithoutPlatformRole_IsForbiddenByRealAuthorizationMiddleware()
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/research-projects");
@@ -119,11 +153,13 @@ public sealed class PlatformAuthorizationPipelineTests : IClassFixture<PlatformA
 
         public Task<IReadOnlyList<PlatformProductionEvent>> QueryByExecutionIdsAsync(
             IReadOnlyCollection<string> executionIds,
+            string siteId,
             CancellationToken ct = default)
             => Task.FromResult<IReadOnlyList<PlatformProductionEvent>>([]);
 
         public Task<IReadOnlyList<PlatformProcessExecutionSummarySource>> QueryExecutionSummarySourcesAsync(
             IReadOnlyCollection<string> executionIds,
+            string siteId,
             CancellationToken ct = default)
             => Task.FromResult<IReadOnlyList<PlatformProcessExecutionSummarySource>>([]);
 

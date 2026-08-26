@@ -1,3 +1,4 @@
+// 管理平台用户、角色和站点授权声明，仅允许管理员变更身份配置。
 using Ingot.Contracts.Identity;
 using Ingot.Platform.Api.Agents;
 using Ingot.Platform.Application.Identity;
@@ -15,6 +16,8 @@ public sealed class UsersController(
     ILogger<UsersController> logger) : PlatformApiController
 {
     private const int MinPasswordLength = 8;
+    private const int MaxPasswordLength = 1024;
+    private const int MaxUsernameLength = 128;
 
     [HttpGet]
     public async Task<IActionResult> List(CancellationToken ct)
@@ -27,8 +30,12 @@ public sealed class UsersController(
         if (denied is not null) return denied;
         if (request is null || string.IsNullOrWhiteSpace(request.Username))
             return InvalidRequest("username 不能为空。");
-        if (string.IsNullOrWhiteSpace(request.Password) || request.Password.Length < MinPasswordLength)
-            return InvalidRequest($"password 至少 {MinPasswordLength} 位。");
+        if (request.Username.Length > MaxUsernameLength)
+            return InvalidRequest($"username 不能超过 {MaxUsernameLength} 位。");
+        if (string.IsNullOrWhiteSpace(request.Password) ||
+            request.Password.Length < MinPasswordLength ||
+            request.Password.Length > MaxPasswordLength)
+            return InvalidRequest($"password 必须为 {MinPasswordLength} 到 {MaxPasswordLength} 位。");
         if (!TryNormalizeRoles(request.Roles, out var roles, out var roleError))
             return InvalidRequest(roleError);
         if (!TryNormalizeSiteIds(request.SiteIds, out var siteIds, out var siteError))
@@ -87,8 +94,10 @@ public sealed class UsersController(
     {
         var denied = DeniedAdmin();
         if (denied is not null) return denied;
-        if (string.IsNullOrWhiteSpace(request?.Password) || request.Password.Length < MinPasswordLength)
-            return InvalidRequest($"password 至少 {MinPasswordLength} 位。");
+        if (string.IsNullOrWhiteSpace(request?.Password) ||
+            request.Password.Length < MinPasswordLength ||
+            request.Password.Length > MaxPasswordLength)
+            return InvalidRequest($"password 必须为 {MinPasswordLength} 到 {MaxPasswordLength} 位。");
 
         var updated = await store.SetPasswordHashAsync(userId, hasher.Hash(request.Password), ct).ConfigureAwait(false);
         if (updated) Audit("user.password.reset", userId, "sessions=revoked");

@@ -1,7 +1,13 @@
+// 读取一次生产运行的多信号时序，并在总点数预算内为每条曲线保形降采样。
 namespace Ingot.Platform.Application.TimeSeries;
 
+/// <summary>
+/// Queries every requested process signal and shares a bounded response-point budget across the returned series.
+/// </summary>
 public sealed class ProcessCurveQueryService(ITimeSeriesStore timeSeries)
 {
+    private const int MaximumReturnedPoints = 50_000;
+
     public async Task<ProcessCurveResponse> QueryAsync(
         string siteId,
         string executionId,
@@ -21,6 +27,9 @@ public sealed class ProcessCurveQueryService(ITimeSeriesStore timeSeries)
                 To = to
             },
             ct).ConfigureAwait(false);
+        var maximumPointsPerSeries = Math.Min(
+            maximumPoints,
+            Math.Max(4, MaximumReturnedPoints / Math.Max(1, signalCodes.Count)));
         var series = signalCodes.Select(code =>
         {
             var source = frames
@@ -37,7 +46,7 @@ public sealed class ProcessCurveQueryService(ITimeSeriesStore timeSeries)
             {
                 SignalCode = code,
                 SourcePointCount = source.Length,
-                Points = DownsampleMinMax(source, maximumPoints)
+                Points = DownsampleMinMax(source, maximumPointsPerSeries)
             };
         }).ToArray();
         return new ProcessCurveResponse

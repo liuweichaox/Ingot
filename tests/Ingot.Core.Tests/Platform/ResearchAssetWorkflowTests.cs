@@ -245,6 +245,7 @@ public sealed class ResearchAssetWorkflowTests
                 UserId = "engineer",
                 EntryPoint = AgentContracts.ProductEntryPoints.Chat,
                 Purpose = AgentContracts.RunPurposes.ReadOnlyAnalysis,
+                AccessScope = new AgentAccessScope { AllowAllSites = true },
                 Request = new AgentContracts.CreateChatRunRequest
                 {
                     Question = "保压温度上限是多少？",
@@ -308,6 +309,7 @@ public sealed class ResearchAssetWorkflowTests
                 UserId = "engineer",
                 EntryPoint = AgentContracts.ProductEntryPoints.Chat,
                 Purpose = AgentContracts.RunPurposes.ReadOnlyAnalysis,
+                AccessScope = new AgentAccessScope { AllowAllSites = true },
                 Request = new AgentContracts.CreateChatRunRequest { Question = "保压温度上限是多少？" }
             });
 

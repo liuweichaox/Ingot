@@ -18,6 +18,7 @@ public interface IProcessExecutionAnalysisOperationsStore
         CancellationToken ct = default);
 
     Task<IReadOnlyList<ProcessExecutionFeatureAggregate>> QueryFeatureAggregatesAsync(
+        string siteId,
         string? signalCode,
         string? phaseCode,
         string? featureCode,
@@ -27,6 +28,10 @@ public interface IProcessExecutionAnalysisOperationsStore
         CancellationToken ct = default);
 
     Task<bool> ReplayFailedRecomputeAsync(
+        string executionId,
+        CancellationToken ct = default);
+
+    Task<IReadOnlyList<string>> ResolveExecutionSitesAsync(
         string executionId,
         CancellationToken ct = default);
 }
@@ -57,12 +62,15 @@ public sealed class ProcessExecutionAnalysisOperationsService(
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(request);
+        if (string.IsNullOrWhiteSpace(request.SiteId))
+            throw new ArgumentException("回填任务必须指定站点。", nameof(request));
         if (request.From > request.To)
             throw new ArgumentException("回填开始时间不能晚于结束时间。", nameof(request));
         if (request.PageSize is < 10 or > 500)
             throw new ArgumentException("回填每批数量必须在 10 到 500 之间。", nameof(request));
         var normalized = request with
         {
+            SiteId = request.SiteId.Trim(),
             ProductFamilyCode = Normalize(request.ProductFamilyCode),
             ProductCode = Normalize(request.ProductCode),
             ProcessSpecificationId = Normalize(request.ProcessSpecificationId),
@@ -80,6 +88,7 @@ public sealed class ProcessExecutionAnalysisOperationsService(
     }
 
     public Task<IReadOnlyList<ProcessExecutionFeatureAggregate>> QueryFeatureAggregatesAsync(
+        string siteId,
         string? signalCode,
         string? phaseCode,
         string? featureCode,
@@ -87,6 +96,7 @@ public sealed class ProcessExecutionAnalysisOperationsService(
         DateTimeOffset? to,
         int limit,
         CancellationToken ct = default) => store.QueryFeatureAggregatesAsync(
+        siteId,
         signalCode,
         phaseCode,
         featureCode,
@@ -122,6 +132,10 @@ public sealed class ProcessExecutionAnalysisOperationsService(
             ct: ct,
             siteId: siteId).ConfigureAwait(false);
         if (authorized.Data.Count == 0)
+            return ProcessExecutionReplayResult.ExecutionNotFound;
+        var observedSites = await store.ResolveExecutionSitesAsync(executionId, ct).ConfigureAwait(false);
+        if (observedSites.Count != 1 ||
+            !string.Equals(observedSites[0], siteId, StringComparison.OrdinalIgnoreCase))
             return ProcessExecutionReplayResult.ExecutionNotFound;
         return await store.ReplayFailedRecomputeAsync(executionId, ct).ConfigureAwait(false)
             ? ProcessExecutionReplayResult.Accepted

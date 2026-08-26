@@ -1,59 +1,110 @@
-
-import { ArrowRightIcon, BeakerIcon, ChatBubbleLeftRightIcon, CheckBadgeIcon, ScaleIcon } from "@heroicons/react/24/outline";
+// 汇总分析入口，并在站点和执行上下文间提供可追踪导航。
 import { Link } from "react-router";
-import { Card, Page } from "../ui/components";
+import { extractRows, useApi } from "../hooks/useApi";
+import { statusLabels } from "../research/researchProjectModel";
+import { Card, DataTable, EmptyState, Page, RequestError, StatusBadge } from "../ui/components";
+import { formatTime } from "./shared";
 
-const steps = [
-  ["1", "选择需要解释的运行", "从质量异常、参数偏离或最新完成运行开始，不从空白问题开始。"],
-  ["2", "确认数据可信与可比", "检查运行边界、采样连续性和产品、设备、工装等同类条件。"],
-  ["3", "比较差异并形成候选", "用同类历史运行识别首次偏离、支持证据、反证和混杂因素。"],
-  ["4", "进入工程验证", "将仍需验证的候选转入研发项目，设计实验并固化经过验证的工艺窗口。"],
-];
+const needsAnalysis = execution => {
+  const quality = String(execution.qualityStatus || "").toLowerCase();
+  const data = String(execution.processDataQuality?.status || "").toLowerCase();
+  return ["fail", "failed", "inconclusive", "not_analyzable"].includes(quality)
+    || ["degraded", "unavailable", "blocked", "forbidden"].includes(data)
+    || execution.status === "failed";
+};
 
-const tools = [
-  { title: "运行对比", description: "适合已经知道哪次运行异常，需要系统匹配同类历史运行。", to: "/comparisons", action: "开始结构化对比", icon: ScaleIcon, primary: true },
-  { title: "数据可信度", description: "先确认运行是否完整、采样是否连续，以及哪些证据可以正式使用。", to: "/data-quality", action: "检查分析准入", icon: CheckBadgeIcon },
-  { title: "分析助手", description: "通过自然语言查询生产、质量和工艺记录，辅助定位下一步调查入口。", to: "/chat", action: "打开分析助手", icon: ChatBubbleLeftRightIcon },
-  { title: "研发项目", description: "把待验证候选推进为假设、实验、影子评估和受控验证。", to: "/research-projects", action: "进入工程验证", icon: BeakerIcon },
-];
+export function AnalysisHubPage({ identity }) {
+  const canAccessResearch = (identity?.roles || []).some(role =>
+    role === "process.engineer" || role === "platform.admin");
+  const executionsResponse = useApi("/api/v1/process-executions?status=completed&limit=50");
+  const projectsResponse = useApi("/api/v1/research-projects?limit=100", { enabled: canAccessResearch });
+  const executions = extractRows(executionsResponse.data);
+  const projects = extractRows(projectsResponse.data);
+  const targetExecutions = executions.filter(needsAnalysis);
+  const dataIssueCount = executions.filter(item =>
+    ["degraded", "unavailable", "blocked", "forbidden"].includes(
+      String(item.processDataQuality?.status || "").toLowerCase(),
+    )).length;
+  const activeProjects = projects.filter(item =>
+    ["active", "investigating", "trialing", "validating", "proposed"].includes(item.status));
+  const error = executionsResponse.error || (canAccessResearch ? projectsResponse.error : "");
+  const summaryItems = [
+    ["待分析运行", targetExecutions.length, "质量异常或数据不可用"],
+    ["数据问题", dataIssueCount, "需要补齐或降级处理"],
+    ...(canAccessResearch ? [["验证中项目", activeProjects.length, "仍需工程决策或实验"]] : []),
+  ];
 
-export function AnalysisHubPage() {
   return (
-    <Page title="追因工作台" description="从一次需要解释的生产运行出发，形成可追溯、可反驳、可验证的工程判断。">
-      <section className="overflow-hidden rounded-2xl border border-blue-100 bg-gradient-to-br from-slate-950 via-slate-900 to-blue-950 p-6 text-white shadow-sm sm:p-8">
-        <p className="text-sm font-semibold text-blue-200">证据驱动的工艺追因</p>
-        <h2 className="mt-3 max-w-4xl text-2xl font-semibold tracking-tight sm:text-3xl">先确认哪次运行值得分析，再比较差异，最后决定如何验证。</h2>
-        <p className="mt-4 max-w-3xl text-sm leading-7 text-slate-300">分析助手不会替代运行证据。Ingot 将生产条件、过程轨迹和质量结果放进同一上下文，帮助工程师把观察性候选推进到独立验证。</p>
-        <div className="mt-6 flex flex-wrap gap-3">
-          <Link to="/comparisons" className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-white px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-blue-50">开始运行对比<ArrowRightIcon className="size-4" /></Link>
-          <Link to="/process-executions" className="inline-flex min-h-10 items-center rounded-lg border border-white/25 px-4 py-2 text-sm font-medium text-white hover:bg-white/10">查看生产运行</Link>
-        </div>
+    <Page
+      title="追因总览"
+      actions={<Link to="/comparisons" className="inline-flex min-h-9 items-center rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700">新建运行对比</Link>}
+    >
+      <RequestError
+        error={error}
+        onRetry={() => Promise.all([
+          executionsResponse.reload(),
+          ...(canAccessResearch ? [projectsResponse.reload()] : []),
+        ])}
+      />
+
+      <section className={`grid grid-cols-1 divide-y divide-slate-200 rounded-lg border border-slate-200 bg-white sm:divide-x sm:divide-y-0 ${canAccessResearch ? "sm:grid-cols-3" : "sm:grid-cols-2"}`} aria-label="追因任务摘要">
+        {summaryItems.map(([label, value, hint]) => (
+          <div key={label} className="px-4 py-3.5">
+            <p className="text-[13px] font-medium text-slate-500">{label}</p>
+            <div className="mt-1 flex items-baseline gap-2">
+              <strong className="text-2xl font-semibold text-slate-950 tabular-nums">{value}</strong>
+              <span className="text-[13px] text-slate-500">{hint}</span>
+            </div>
+          </div>
+        ))}
       </section>
 
-      <Card title="一次分析如何完成" description="每一步都有明确输入、判断和下一步，不需要先理解平台的数据结构。">
-        <ol className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          {steps.map(([number, title, description]) => (
-            <li key={number} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-              <span className="grid size-7 place-items-center rounded-full bg-blue-600 text-xs font-semibold text-white">{number}</span>
-              <p className="mt-3 font-semibold text-slate-950">{title}</p>
-              <p className="mt-1 text-sm leading-6 text-slate-600">{description}</p>
-            </li>
-          ))}
-        </ol>
-      </Card>
+      <div className={`grid gap-5 ${canAccessResearch ? "xl:grid-cols-[minmax(0,1fr)_22rem]" : ""}`}>
+        <Card title="待分析运行" actions={<Link className="text-sm font-medium text-blue-700" to="/process-executions">查看全部运行</Link>}>
+          {executionsResponse.loading && !executionsResponse.data ? (
+            <p className="py-10 text-center text-sm text-slate-500">正在读取生产运行…</p>
+          ) : targetExecutions.length ? (
+            <DataTable
+              rows={targetExecutions.slice(0, 10)}
+              keyField="executionId"
+              columns={[
+                {
+                  key: "executionId",
+                  label: "运行",
+                  render: (value, row) => (
+                    <div>
+                      <Link className="font-medium text-blue-700 hover:text-blue-900" to={`/comparisons?executionId=${encodeURIComponent(value)}`}>{value}</Link>
+                      <p className="mt-0.5 text-[13px] text-slate-500">{row.productCode || "产品未记录"}</p>
+                    </div>
+                  ),
+                },
+                { key: "equipmentId", label: "设备" },
+                { key: "qualityStatus", label: "质量", render: value => <StatusBadge value={value} /> },
+                { key: "startedAt", label: "开始", render: formatTime },
+              ]}
+            />
+          ) : <EmptyState title="没有待分析运行" description="当前已完成运行未发现质量异常或数据准入问题。" />}
+        </Card>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        {tools.map(item => {
-          const Icon = item.icon;
-          return (
-            <Link key={item.to} to={item.to} className={`group rounded-2xl border bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${item.primary ? "border-blue-300 ring-1 ring-blue-100" : "border-slate-200"}`}>
-              <span className={`grid size-10 place-items-center rounded-xl ${item.primary ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-700"}`}><Icon className="size-5" /></span>
-              <h2 className="mt-4 font-semibold text-slate-950">{item.title}</h2>
-              <p className="mt-1 text-sm leading-6 text-slate-600">{item.description}</p>
-              <p className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-blue-700">{item.action}<ArrowRightIcon className="size-4 transition group-hover:translate-x-0.5" /></p>
-            </Link>
-          );
-        })}
+        {canAccessResearch && (
+          <Card title="待验证项目" actions={<Link className="text-sm font-medium text-blue-700" to="/research-projects">查看全部项目</Link>}>
+            {projectsResponse.loading && !projectsResponse.data ? (
+              <p className="py-10 text-center text-sm text-slate-500">正在读取研发项目…</p>
+            ) : activeProjects.length ? (
+              <div className="divide-y divide-slate-200">
+                {activeProjects.slice(0, 6).map(project => (
+                  <Link key={project.projectId} to={`/research-projects/${encodeURIComponent(project.projectId)}`} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0 hover:text-blue-800">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium text-slate-900">{project.name}</p>
+                      <p className="mt-0.5 truncate text-[13px] text-slate-500">{project.processName || project.processCode || "工艺未记录"}</p>
+                    </div>
+                    <StatusBadge value={project.status} label={statusLabels[project.status] || project.status} />
+                  </Link>
+                ))}
+              </div>
+            ) : <EmptyState title="没有待验证项目" description="需要验证的候选原因会显示在这里。" />}
+          </Card>
+        )}
       </div>
     </Page>
   );

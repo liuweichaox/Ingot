@@ -1,4 +1,4 @@
-
+// 管理研发项目机制知识，并复核项目成员与项目站点两层访问边界。
 using Ingot.Contracts.ProcessResearch;
 using Ingot.Contracts.ResearchAssets;
 using Ingot.Platform.Api.Agents;
@@ -144,9 +144,12 @@ public sealed class MechanismKnowledgeController(
             return (null, AuthorizationDenied());
         var project = await researchStore.GetProjectAsync(projectId, ct).ConfigureAwait(false);
         if (project is null) return (null, ResourceNotFound("研发项目不存在。"));
-        var canAccess = identity.HasAnyRole(PlatformRoles.PlatformAdministrator) ||
-                        string.Equals(project.OwnerUserId, identity.UserId, StringComparison.Ordinal) ||
-                        project.MemberUserIds.Contains(identity.UserId, StringComparer.Ordinal);
+        var isAdministrator = identity.HasAnyRole(PlatformRoles.PlatformAdministrator);
+        var isMember = string.Equals(project.OwnerUserId, identity.UserId, StringComparison.Ordinal) ||
+                       project.MemberUserIds.Contains(identity.UserId, StringComparer.Ordinal);
+        var canAccess = isAdministrator ||
+                        (isMember && !string.IsNullOrWhiteSpace(project.SiteCode) &&
+                         identity.CanAccessSite(project.SiteCode));
         if (!canAccess || requireWrite && (project.Status is
                 ResearchProjectStatuses.Completed or ResearchProjectStatuses.Archived))
             return (null, AuthorizationDenied());

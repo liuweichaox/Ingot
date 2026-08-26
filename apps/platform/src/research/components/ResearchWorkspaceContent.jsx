@@ -25,7 +25,6 @@ import {
   Card,
   DataTable,
   EmptyState,
-  Metric,
   StatusBadge,
 } from "../../ui/components";
 
@@ -145,17 +144,24 @@ export function WorkspaceContent({
           </Alert>
         )}
         <Card
-          title="阶段 0：预注册与数据基线"
-          description="在查看验证结果前冻结范围、纳入排除、比较方法、指标、停止与否证条件，并由另一名成员复核。"
+          title="预注册与数据基线"
         >
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            <Metric label="准入结论" value={stageZeroAdmission?.eligible ? "允许开始研发" : "尚未通过"} />
-            <Metric label="预注册版本" value={latestPreregistration ? `v${latestPreregistration.version}` : "—"} hint={latestPreregistration?.status === "reviewed" ? "已独立复核" : "等待独立复核"} />
-            <Metric label="当前流程耗时" value={latestPreregistration?.plan?.engineerWorkflowBaselines?.[0]?.totalMinutes == null ? "—" : `${formatResearchNumber(latestPreregistration.plan.engineerWorkflowBaselines[0].totalMinutes)} 分钟`} hint={`${latestPreregistration?.plan?.engineerWorkflowBaselines?.[0]?.steps?.length || 0} 个步骤`} />
-            <Metric label="数据基线运行" value={reliabilityBaseline ? formatResearchNumber(reliabilityBaseline.analyzedRunCount) : "—"} hint={reliabilityBaseline?.truncated ? "已达到最大运行数" : "已固化到当前版本"} />
-            <Metric label="正式分析准入率" value={analysisAdmissionRate == null ? "—" : `${formatResearchNumber(analysisAdmissionRate * 100)}%`} hint="不替代场景预注册阈值" />
-            <Metric label="内容哈希" value={latestPreregistration ? `${String(latestPreregistration.contentHash).slice(0, 12)}…` : "—"} />
-          </div>
+          <dl className="grid overflow-hidden rounded-md border border-slate-200 sm:grid-cols-2 xl:grid-cols-6">
+            {[
+              ["准入结论", stageZeroAdmission?.eligible ? "允许开始研发" : "尚未通过", ""],
+              ["预注册版本", latestPreregistration ? `v${latestPreregistration.version}` : "—", latestPreregistration?.status === "reviewed" ? "已独立复核" : "等待独立复核"],
+              ["流程耗时", latestPreregistration?.plan?.engineerWorkflowBaselines?.[0]?.totalMinutes == null ? "—" : `${formatResearchNumber(latestPreregistration.plan.engineerWorkflowBaselines[0].totalMinutes)} 分钟`, `${latestPreregistration?.plan?.engineerWorkflowBaselines?.[0]?.steps?.length || 0} 个步骤`],
+              ["基线运行", reliabilityBaseline ? formatResearchNumber(reliabilityBaseline.analyzedRunCount) : "—", reliabilityBaseline?.truncated ? "已达到最大运行数" : "已固化到当前版本"],
+              ["分析准入率", analysisAdmissionRate == null ? "—" : `${formatResearchNumber(analysisAdmissionRate * 100)}%`, "当前版本"],
+              ["内容哈希", latestPreregistration ? `${String(latestPreregistration.contentHash).slice(0, 12)}…` : "—", "审计标识"],
+            ].map(([label, value, hint]) => (
+              <div key={label} className="border-b border-slate-200 px-3 py-3 last:border-b-0 sm:[&:nth-last-child(-n+2)]:border-b-0 xl:border-b-0 xl:border-r xl:last:border-r-0">
+                <dt className="text-[13px] font-medium text-slate-500">{label}</dt>
+                <dd className="mt-1 break-words text-base font-semibold text-slate-950">{value}</dd>
+                {hint && <dd className="mt-0.5 text-[13px] text-slate-500">{hint}</dd>}
+              </div>
+            ))}
+          </dl>
           {(stageZeroAdmission?.failures || []).length > 0 && <Alert tone="warning" title="阶段 0 门禁未通过">{stageZeroAdmission.failures.map(item => <div key={item}>{item}</div>)}</Alert>}
           {(stageZeroAdmission?.warnings || []).length > 0 && <Alert tone="warning" title="数据基线提醒">{stageZeroAdmission.warnings.map(item => <div key={item}>{item}</div>)}</Alert>}
           <div className="mt-4 flex flex-wrap gap-2">
@@ -164,14 +170,14 @@ export function WorkspaceContent({
             <Link className="inline-flex min-h-9 items-center rounded-lg px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50" to="/data-quality">查看数据健康与正式分析准入</Link>
           </div>
         </Card>
-        <section className="rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50 to-white p-5">
+        <section className="rounded-lg border border-slate-200 bg-white p-5">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <p className="text-xs font-semibold tracking-wide text-blue-700">当前决策</p>
-              <h3 className="mt-1 text-xl font-semibold text-slate-950">{currentStage[0]}</h3>
+              <p className="text-[13px] font-medium text-slate-500">当前决策</p>
+              <h3 className="mt-1 text-lg font-semibold text-slate-950">{currentStage[0]}</h3>
               <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-600">{currentStage[1]}</p>
             </div>
-            <StatusBadge value={statusLabels[project.status] || project.status} />
+            <StatusBadge value={project.status} label={statusLabels[project.status] || project.status} />
           </div>
           {!methodEligible && (
             <Alert tone="warning" title="序贯优化已暂停">
@@ -208,29 +214,29 @@ export function WorkspaceContent({
               {project.status !== "draft" && canEdit && hasRunningExperiment && <Button onClick={() => onMaterializeExperimentResult(experiments.find(item => item.status === "running"))}>立即检查数据回收</Button>}
               {canEdit && validatedOperatingRegions.length > 0 && <Button variant="primary" onClick={() => onTask("claim")}>沉淀工艺知识</Button>}
             </div>
-            <div className="rounded-xl border border-white/80 bg-white/80 p-4">
+            <div className="rounded-md border border-slate-200 bg-slate-50 p-4">
               <p className="text-sm font-semibold text-slate-900">实验建议准备度</p>
               <p className="mt-1 text-2xl font-semibold text-slate-950">{observationSummary?.validObservationCount ?? 0}<span className="ml-1 text-sm font-normal text-slate-500">条有效观察</span></p>
-              <p className="mt-1 text-xs leading-5 text-slate-500">{hasObservation ? `已匹配 ${observationSummary?.candidateRunCount ?? 0} 个实验运行，可用于生成下一组建议。` : "尚无可用观察；完成运行、过程特征和检验结果的关联后自动具备条件。"}</p>
-              <p className={`mt-2 text-xs font-medium ${methodEligible ? "text-emerald-700" : "text-amber-700"}`}>
+              <p className="mt-1 text-[13px] leading-5 text-slate-500">{hasObservation ? `已匹配 ${observationSummary?.candidateRunCount ?? 0} 个实验运行，可用于生成下一组建议。` : "尚无可用观察；完成运行、过程特征和检验结果的关联后自动具备条件。"}</p>
+              <p className={`mt-2 text-[13px] font-medium ${methodEligible ? "text-emerald-700" : "text-amber-700"}`}>
                 {methodEligible ? "方法准入已通过" : "方法准入未通过，已切换到工程师设计路径"}
               </p>
             </div>
           </div>
         </section>
 
-        <nav className="sticky top-34 z-10 grid gap-2 rounded-2xl border border-slate-200 bg-white/95 p-2 shadow-sm backdrop-blur sm:grid-cols-5" aria-label="项目推进阶段">
+        <nav className="sticky top-14 z-10 grid gap-2 rounded-lg border border-slate-200 bg-white p-2 sm:grid-cols-5" aria-label="项目推进阶段">
           {workflowSteps.map((step, index) => (
             <a
               key={step.id}
               href={`#${step.id}`}
               className={[
-                "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition hover:bg-slate-50",
+                "flex items-center gap-3 rounded-md px-3 py-2.5 text-sm transition hover:bg-slate-50",
                 step.state === "current" ? "bg-blue-50 text-blue-800 ring-1 ring-blue-200" : "text-slate-600",
               ].join(" ")}
             >
               <span className={[
-                "grid size-7 shrink-0 place-items-center rounded-full text-xs font-semibold",
+                "grid size-7 shrink-0 place-items-center rounded-full text-[13px] font-semibold",
                 step.state === "done"
                   ? "bg-emerald-100 text-emerald-700"
                   : step.state === "current"
@@ -241,18 +247,28 @@ export function WorkspaceContent({
               </span>
               <span className="min-w-0">
                 <strong className="block text-slate-900">{step.title}</strong>
-                <span className="block truncate text-xs">{step.description}</span>
+                <span className="block truncate text-[13px]">{step.description}</span>
               </span>
             </a>
           ))}
         </nav>
 
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <Metric label="研发假设" value={hypotheses.length} hint="待验证的规律" />
-          <Metric label="有效实验计划" value={executionExperiments.length} hint="不含历史证据和取消记录" />
-          <Metric label="可用于研发" value={observationSummary?.validObservationCount ?? 0} hint="参数、过程与结果已关联" />
-          <Metric label="已验证窗口" value={validatedOperatingRegions.length} hint={`${reviewedOperatingRegions.length} 个窗口已完成复核`} />
-        </div>
+        <dl className="grid grid-cols-2 divide-x divide-y divide-slate-200 rounded-lg border border-slate-200 bg-white sm:grid-cols-4 sm:divide-y-0">
+          {[
+            ["研发假设", hypotheses.length, "待验证"],
+            ["有效实验", executionExperiments.length, "不含取消记录"],
+            ["有效观察", observationSummary?.validObservationCount ?? 0, "参数、过程与结果已关联"],
+            ["验证窗口", validatedOperatingRegions.length, `${reviewedOperatingRegions.length} 个已复核`],
+          ].map(([label, value, hint]) => (
+            <div key={label} className="px-4 py-3">
+              <dt className="text-[13px] font-medium text-slate-500">{label}</dt>
+              <dd className="mt-1 flex items-baseline gap-2">
+                <strong className="text-xl font-semibold text-slate-950 tabular-nums">{value}</strong>
+                <span className="text-[13px] text-slate-500">{hint}</span>
+              </dd>
+            </div>
+          ))}
+        </dl>
         {observationSummary?.excludedObservationCount > 0 && (
           <Alert tone="warning">
             有 {observationSummary.excludedObservationCount} 条运行因缺少检验值、过程特征或完整运行边界而未进入实验建议模型。
@@ -311,7 +327,7 @@ export function WorkspaceContent({
                   return (
                     <div className="min-w-44">
                       <strong className="text-slate-900">{value}</strong>
-                      <p className="mt-1 text-xs text-slate-500">{row.designMethod} · {size}</p>
+                      <p className="mt-1 text-[13px] text-slate-500">{row.designMethod} · {size}</p>
                     </div>
                   );
                 },
@@ -329,13 +345,13 @@ export function WorkspaceContent({
                       return (
                       <div key={`${row.experimentId}:${runIdentifier}:${runIndex}`} className="rounded-lg border border-slate-200 bg-slate-50 p-2">
                         <div className="flex items-center justify-between gap-2">
-                          <code className="block text-xs font-semibold text-slate-700">{runIdentifier}</code>
+                          <code className="block text-[13px] font-semibold text-slate-700">{runIdentifier}</code>
                           {!isHistorical && (
                             <StatusBadge value={observedExecutionKeys.has(run.executionKey) ? "数据已回收" : "等待运行"} />
                           )}
                         </div>
                         {(run.blockKey || run.replicateKey) && (
-                          <div className="mt-1 text-[11px] text-slate-500">
+                          <div className="mt-1 text-[13px] text-slate-500">
                             {run.blockKey ? `区组 ${run.blockKey}` : ""}
                             {run.blockKey && run.replicateKey ? " · " : ""}
                             {run.replicateKey ? `重复条件 ${run.replicateKey}` : ""}
@@ -344,7 +360,7 @@ export function WorkspaceContent({
                         {(run.factors || []).map((factor, factorIndex) => {
                           const variable = variableByCode.get(factor.variableCode);
                           return (
-                            <div key={`${factor.variableCode}:${factorIndex}`} className="mt-1 text-xs text-slate-600">
+                            <div key={`${factor.variableCode}:${factorIndex}`} className="mt-1 text-[13px] text-slate-600">
                               {variable?.name || factor.variableCode}：
                               <strong className="ml-1 text-slate-900">
                                 {formatResearchNumber(factor.value)} {factor.unit || variable?.unit || ""}
@@ -369,7 +385,7 @@ export function WorkspaceContent({
                       );
                     })}
                     {isHistorical && row.runPlan.length > runs.length && (
-                      <div className="text-xs text-slate-500">
+                      <div className="text-[13px] text-slate-500">
                         另有 {row.runPlan.length - runs.length} 条只读历史运行
                       </div>
                     )}
@@ -386,9 +402,9 @@ export function WorkspaceContent({
                     .filter(item => item.recommendationId === row.experimentId);
                   const appliedMechanismClaims = groupMechanismUsages(mechanismUsages);
                   return (
-                    <div className="min-w-72 space-y-2 text-xs text-slate-600">
+                    <div className="min-w-72 space-y-2 text-[13px] text-slate-600">
                       <div>
-                        贝叶斯优化基于 <strong className="text-slate-900">{value.observationCount}</strong> 条观察和{" "}
+                        贝叶斯优化基于 <strong className="text-slate-900">{formatResearchNumber(value.observationCount)}</strong> 条观察和{" "}
                         <strong className="text-slate-900">{value.processFeatureCount || 0}</strong> 个共同轨迹特征
                       </div>
                       {appliedMechanismClaims.length > 0 && (
@@ -396,7 +412,7 @@ export function WorkspaceContent({
                           <summary className="cursor-pointer font-semibold marker:text-indigo-500">
                             本次采用的机理知识 · {appliedMechanismClaims.length} 条
                           </summary>
-                          <p className="mt-1 text-[11px] text-indigo-700">
+                          <p className="mt-1 text-[13px] text-indigo-700">
                             冻结知识快照 <code>{String(value.mechanismKnowledgeSnapshotHash).slice(0, 12)}</code>
                           </p>
                           <div className="mt-2 space-y-2">
@@ -408,11 +424,11 @@ export function WorkspaceContent({
                                     <strong className="text-slate-900">{claim?.name || item.claimName || item.claimId} v{item.claimVersion}</strong>
                                     <code title={item.contentHash}>{String(item.contentHash).slice(0, 12)}</code>
                                   </div>
-                                  <p className="mt-1 text-[11px] text-indigo-700">{item.usageTypes.map(mechanismUsageLabel).join(" · ")}</p>
+                                  <p className="mt-1 text-[13px] text-indigo-700">{item.usageTypes.map(mechanismUsageLabel).join(" · ")}</p>
                                   {claim?.statement && <p className="mt-2 leading-5">{claim.statement}</p>}
                                   {(claim?.constraints || []).length > 0 && (
                                     <div className="mt-2 space-y-1">
-                                      <strong className="text-[11px] text-slate-500">实际采用的边界与偏好</strong>
+                                      <strong className="text-[13px] text-slate-500">实际采用的边界与偏好</strong>
                                       {claim.constraints.map(constraint => (
                                         <div className="rounded-md bg-slate-50 px-2 py-1" key={constraint.constraintId}>
                                           <span className={constraint.severity === "hard" ? "font-semibold text-red-700" : "font-semibold text-amber-700"}>
@@ -425,7 +441,7 @@ export function WorkspaceContent({
                                   )}
                                   {(claim?.forbiddenCombinations || []).length > 0 && (
                                     <div className="mt-2 space-y-1">
-                                      <strong className="text-[11px] text-slate-500">禁止参数组合</strong>
+                                      <strong className="text-[13px] text-slate-500">禁止参数组合</strong>
                                       {claim.forbiddenCombinations.map(combination => (
                                         <div className="rounded-md border border-red-100 bg-red-50 px-2 py-1 text-red-900" key={combination.combinationId}>
                                           <strong>{combination.name}</strong>
@@ -443,7 +459,7 @@ export function WorkspaceContent({
                                   )}
                                   {(claim?.evidence || []).length > 0 && (
                                     <div className="mt-2 space-y-1">
-                                      <strong className="text-[11px] text-slate-500">冻结证据引用</strong>
+                                      <strong className="text-[13px] text-slate-500">冻结证据引用</strong>
                                       {claim.evidence.map(evidence => (
                                         <div className="break-all rounded-md bg-slate-50 px-2 py-1" key={evidence.evidenceLinkId}>
                                           {mechanismEvidenceLabel(evidence.evidenceKind)} · {evidence.polarity === "opposing" ? "反对证据" : "支持证据"}<br />
@@ -506,7 +522,7 @@ export function WorkspaceContent({
                 render: (value, row) => {
                   const isHistorical = row.designMethod === "historical-observation";
                   return (
-                    <div className="min-w-32 space-y-1 text-xs">
+                    <div className="min-w-32 space-y-1 text-[13px]">
                       <StatusBadge value={isHistorical ? "已导入" : statusLabels[row.execution?.state] || statusLabels[value] || row.execution?.state || value} />
                       {!isHistorical && (
                         <p className="text-slate-500">
@@ -523,19 +539,19 @@ export function WorkspaceContent({
                 label: "操作",
                 render: (_, row) => (
                   <div className="flex gap-2">
-                    {row.status === "cancelled" && <span className="text-xs text-slate-500">已取消，仅保留审计记录</span>}
-                    {row.status !== "cancelled" && row.designMethod === "historical-observation" && <span className="text-xs text-slate-500">只读证据</span>}
+                    {row.status === "cancelled" && <span className="text-[13px] text-slate-500">已取消，仅保留审计记录</span>}
+                    {row.status !== "cancelled" && row.designMethod === "historical-observation" && <span className="text-[13px] text-slate-500">只读证据</span>}
                     {row.designMethod !== "historical-observation" && row.designMethod !== "bayesian-optimization" && row.status !== "cancelled" && canEdit && <Button onClick={event => { event.stopPropagation(); onCloneExperiment(row); }}>基于此实验新建</Button>}
-                    {row.status !== "cancelled" && row.optimization?.mode === "shadow" && <span className="text-xs text-slate-500">旁路评估，不可下发</span>}
+                    {row.status !== "cancelled" && row.optimization?.mode === "shadow" && <span className="text-[13px] text-slate-500">旁路评估，不可下发</span>}
                     {row.optimization?.mode === "controlled" && row.status === "planned" && !row.controlledDecision && row.createdBy !== currentUserId && <Button onClick={event => { event.stopPropagation(); onControlledDecision(row); }}>接受 / 修改 / 拒绝</Button>}
-                    {row.optimization?.mode === "controlled" && row.status === "planned" && !row.controlledDecision && row.createdBy === currentUserId && <span className="text-xs text-slate-500">等待现场工程师决策</span>}
+                    {row.optimization?.mode === "controlled" && row.status === "planned" && !row.controlledDecision && row.createdBy === currentUserId && <span className="text-[13px] text-slate-500">等待现场工程师决策</span>}
                     {row.designMethod !== "historical-observation" && row.optimization?.mode !== "shadow" && row.optimization?.mode !== "controlled" && row.status === "planned" && row.createdBy !== currentUserId && <Button onClick={event => { event.stopPropagation(); onExperimentStatus(row, "approved"); }}>批准</Button>}
-                    {row.designMethod !== "historical-observation" && row.optimization?.mode !== "shadow" && row.optimization?.mode !== "controlled" && row.status === "planned" && row.createdBy === currentUserId && <span className="text-xs text-slate-500">等待其他成员批准</span>}
+                    {row.designMethod !== "historical-observation" && row.optimization?.mode !== "shadow" && row.optimization?.mode !== "controlled" && row.status === "planned" && row.createdBy === currentUserId && <span className="text-[13px] text-slate-500">等待其他成员批准</span>}
                     {row.optimization?.mode === "controlled" && row.status === "planned" && row.controlledDecision && row.createdBy !== currentUserId && <Button onClick={event => { event.stopPropagation(); onExperimentStatus(row, "approved"); }}>批准本次运行</Button>}
-                    {row.optimization?.mode === "controlled" && row.controlledDecision && <span className="text-xs text-slate-500">{row.controlledDecision.decision === "modified" ? "已修改" : row.controlledDecision.decision === "rejected" ? "已拒绝" : "已接受"}，决策已冻结</span>}
+                    {row.optimization?.mode === "controlled" && row.controlledDecision && <span className="text-[13px] text-slate-500">{row.controlledDecision.decision === "modified" ? "已修改" : row.controlledDecision.decision === "rejected" ? "已拒绝" : "已接受"}，决策已冻结</span>}
                     {row.designMethod !== "historical-observation" && row.status === "approved" && <Button onClick={event => { event.stopPropagation(); onExperimentStatus(row, "running"); }}>记录下发</Button>}
                     {row.designMethod !== "historical-observation" && row.status === "running" && (
-                      <span className="text-xs text-slate-500">
+                      <span className="text-[13px] text-slate-500">
                         已记录下发意图，等待现场执行、采集和检验结果
                       </span>
                     )}
@@ -600,7 +616,7 @@ export function WorkspaceContent({
                             ? metric.observedValue >= target
                             : metric.observedValue <= target);
                       return (
-                        <div key={`${metric.objectiveCode}:${metricIndex}`} className="rounded-lg border border-slate-200 bg-slate-50 p-2 text-xs">
+                        <div key={`${metric.objectiveCode}:${metricIndex}`} className="rounded-lg border border-slate-200 bg-slate-50 p-2 text-[13px]">
                           <div className="flex flex-wrap items-center justify-between gap-2">
                             <strong>{objective?.name || metric.objectiveCode}</strong>
                             {Number.isFinite(Number(target)) && (
@@ -626,7 +642,7 @@ export function WorkspaceContent({
                 ),
               },
               { key: "safetyPassed", label: "安全约束", render: value => <StatusBadge value={value ? "passed" : "failed"} /> },
-              { key: "analysisHash", label: "分析快照", render: value => value ? <code className="text-xs text-slate-600">{String(value).slice(0, 12)}…</code> : "—" },
+              { key: "analysisHash", label: "分析快照", render: value => value ? <code className="text-[13px] text-slate-600">{String(value).slice(0, 12)}…</code> : "—" },
             ]} />
           )}
         </Card>
@@ -646,7 +662,7 @@ export function WorkspaceContent({
                     {(value || []).map((variable, variableIndex) => {
                       const definition = variableByCode.get(variable.variableCode);
                       return (
-                        <div key={`${variable.variableCode}:${variableIndex}`} className="text-xs">
+                        <div key={`${variable.variableCode}:${variableIndex}`} className="text-[13px]">
                           {definition?.name || variable.variableCode}：
                           <strong className="ml-1">
                             {variable.lowerBound === variable.upperBound
@@ -660,7 +676,7 @@ export function WorkspaceContent({
                   </div>
                 ),
               },
-              { key: "confidence", label: "置信度", render: value => `${Math.round(value * 100)}%` },
+              { key: "confidence", label: "置信度", render: value => value == null || !Number.isFinite(Number(value)) ? "—" : `${Math.round(Number(value) * 100)}%` },
               { key: "confidenceMethod", label: "方法" },
               { key: "applicability", label: "适用范围" },
               {
@@ -680,7 +696,7 @@ export function WorkspaceContent({
                 render: (_, row) => {
                   if (row.status === "candidate") {
                     if (project.status !== "validating") {
-                      return <span className="text-xs text-slate-500">先将项目推进到验证阶段</span>;
+                      return <span className="text-[13px] text-slate-500">先将项目推进到验证阶段</span>;
                     }
                     const validationExperiment = experiments.find(
                       experiment => experiment.validationOperatingRegionId === row.operatingRegionId
@@ -698,7 +714,7 @@ export function WorkspaceContent({
                     }
                     if (validationExperiment.status !== "completed") {
                       return (
-                        <span className="text-xs text-blue-700">
+                        <span className="text-[13px] text-blue-700">
                           验证实验：{statusLabels[validationExperiment.status] || validationExperiment.status}
                         </span>
                       );
@@ -706,7 +722,7 @@ export function WorkspaceContent({
                     const resultAttached = (row.supportingExperimentIds || [])
                       .includes(validationExperiment.experimentId);
                     if (!resultAttached) {
-                      return <span className="text-xs text-amber-700">等待验证结果计算</span>;
+                      return <span className="text-[13px] text-amber-700">等待验证结果计算</span>;
                     }
                     if (row.createdBy !== currentUserId) {
                       return (
@@ -718,7 +734,7 @@ export function WorkspaceContent({
                         </Button>
                       );
                     }
-                    return <span className="text-xs text-slate-500">等待其他成员审核验证结果</span>;
+                    return <span className="text-[13px] text-slate-500">等待其他成员审核验证结果</span>;
                   }
                   if (row.validationLevel === "laboratory" && row.validatedBy !== currentUserId) {
                     const controlledExperimentIds = new Set(experiments
@@ -733,12 +749,12 @@ export function WorkspaceContent({
                         && result.safetyPassed)
                       .reduce((count, result) => count + (result.runObservations?.filter(observation => observation.validForOptimization !== false).length || 0), 0);
                     if (controlledRunCount < 3) {
-                      return <span className="text-xs text-amber-700">先完成至少 3 条受控在线运行并回收源数据结果</span>;
+                      return <span className="text-[13px] text-amber-700">先完成至少 3 条受控在线运行并回收源数据结果</span>;
                     }
                     return <Button onClick={event => { event.stopPropagation(); onReleaseWindow(row); }}>发布生产</Button>;
                   }
                   if (row.validationLevel === "replay") {
-                    return <span className="text-xs text-amber-700">需跨区组重复实验</span>;
+                    return <span className="text-[13px] text-amber-700">需跨区组重复实验</span>;
                   }
                   return "—";
                 },
@@ -760,7 +776,7 @@ export function WorkspaceContent({
               {
                 key: "outcome",
                 label: "结论",
-                render: (value, row) => <div className="space-y-1"><StatusBadge value={statusLabels[value] || value} /><div className="text-xs text-slate-500">{statusLabels[row.status] || row.status}</div></div>,
+                render: (value, row) => <div className="space-y-1"><StatusBadge value={statusLabels[value] || value} /><div className="text-[13px] text-slate-500">{statusLabels[row.status] || row.status}</div></div>,
               },
               {
                 key: "relativeGain",
@@ -770,24 +786,24 @@ export function WorkspaceContent({
               {
                 key: "evidence",
                 label: "证据门禁",
-                render: (_, row) => <div className="text-xs leading-5">结构与单位：{row.schemaCompatible ? "通过" : "失败"}<br />重复与区组：{row.evidenceSufficient ? "通过" : "不足"}<br />安全：{row.safetyPassed ? "通过" : "失败"}</div>,
+                render: (_, row) => <div className="text-[13px] leading-5">结构与单位：{row.schemaCompatible ? "通过" : "失败"}<br />重复与区组：{row.evidenceSufficient ? "通过" : "不足"}<br />安全：{row.safetyPassed ? "通过" : "失败"}</div>,
               },
               {
                 key: "contextDifferences",
                 label: "变化条件",
-                render: value => <div className="max-w-72 text-xs leading-5">{(value || []).map((item, index) => <div key={`${item.field}:${index}`}>{item.field}：{item.sourceValue || "未声明"} → {item.targetValue || "未声明"}</div>)}</div>,
+                render: value => <div className="max-w-72 text-[13px] leading-5">{(value || []).map((item, index) => <div key={`${item.field}:${index}`}>{item.field}：{item.sourceValue || "未声明"} → {item.targetValue || "未声明"}</div>)}</div>,
               },
               {
                 key: "failures",
                 label: "失败与边界",
-                render: (value, row) => <div className="max-w-96 text-xs leading-5 text-slate-600">{(value || []).map((item, index) => <div key={`failure:${index}:${item}`}>失败：{item}</div>)}{(row.warnings || []).map((item, index) => <div key={`warning:${index}:${item}`}>提示：{item}</div>)}</div>,
+                render: (value, row) => <div className="max-w-96 text-[13px] leading-5 text-slate-600">{(value || []).map((item, index) => <div key={`failure:${index}:${item}`}>失败：{item}</div>)}{(row.warnings || []).map((item, index) => <div key={`warning:${index}:${item}`}>提示：{item}</div>)}</div>,
               },
               {
                 key: "actions",
                 label: "操作",
                 render: (_, row) => row.status === "recorded" && row.createdBy !== currentUserId
                   ? <Button onClick={event => { event.stopPropagation(); onReviewTransferAssessment(row); }}>独立复核</Button>
-                  : row.status === "recorded" ? <span className="text-xs text-slate-500">等待其他成员复核</span> : "—",
+                  : row.status === "recorded" ? <span className="text-[13px] text-slate-500">等待其他成员复核</span> : "—",
               },
             ]} />
           )}
@@ -803,7 +819,7 @@ export function WorkspaceContent({
                 label: "操作",
                 render: (_, row) => row.status === "draft" && row.createdBy !== currentUserId
                   ? <Button onClick={event => { event.stopPropagation(); onReviewClaim(row); }}>复核</Button>
-                  : row.status === "draft" ? <span className="text-xs text-slate-500">等待其他成员复核</span> : "—",
+                  : row.status === "draft" ? <span className="text-[13px] text-slate-500">等待其他成员复核</span> : "—",
               },
             ]} />
           )}

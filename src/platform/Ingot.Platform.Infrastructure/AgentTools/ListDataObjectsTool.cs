@@ -1,4 +1,4 @@
-
+// 列出单一授权站点内的生产数据对象并返回可核查链接。
 using System.Globalization;
 using System.Text.Json;
 using Ingot.Agent;
@@ -19,8 +19,10 @@ public sealed class ListDataObjectsTool(IChatDataObjectReader events) : IAnalysi
         InputSchema = JsonSerializer.SerializeToElement(new
         {
             type = "object",
+            required = new[] { "siteId" },
             properties = new
             {
+                siteId = new { type = "string", minLength = 1, maxLength = 128 },
                 subjectType = new { type = "string" },
                 subjectId = new { type = "string" },
                 limit = new { type = "string", minLength = 1, maxLength = 3 }
@@ -34,6 +36,9 @@ public sealed class ListDataObjectsTool(IChatDataObjectReader events) : IAnalysi
         AgentExecutionContext context,
         CancellationToken ct = default)
     {
+        if (!call.Arguments.TryGetValue("siteId", out var requestedSiteId))
+            throw new ArgumentException("list_data_objects 需要 siteId。", nameof(call));
+        var siteId = context.AccessScope.EnsureAuthorizedSite(requestedSiteId);
         call.Arguments.TryGetValue("subjectType", out var subjectType);
         call.Arguments.TryGetValue("subjectId", out var subjectId);
         call.Arguments.TryGetValue("limit", out var limitValue);
@@ -44,6 +49,7 @@ public sealed class ListDataObjectsTool(IChatDataObjectReader events) : IAnalysi
             context.UserId,
             new DataObjectQuery
             {
+                SiteId = siteId,
                 SubjectType = NullIfBlank(subjectType)?.ToLowerInvariant(),
                 SubjectId = NullIfBlank(subjectId),
                 Limit = limit
@@ -71,9 +77,9 @@ public sealed class ListDataObjectsTool(IChatDataObjectReader events) : IAnalysi
                 new RelatedRecordRef
                 {
                     Kind = "data-object-query",
-                    Id = $"data-objects:{subjectType ?? "*"}:{subjectId ?? "*"}",
+                    Id = $"{siteId}:data-objects:{subjectType ?? "*"}:{subjectId ?? "*"}",
                     Label = $"运行对象查询结果（{page.Total} 个对象）",
-                    Url = "/explorer"
+                    Url = $"/explorer?siteId={Uri.EscapeDataString(siteId)}"
                 }
             ],
             Limitations = objects.Count == 0 ? ["当前尚未收到符合条件的生产数据。"] : [],

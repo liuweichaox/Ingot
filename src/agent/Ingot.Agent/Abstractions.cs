@@ -20,6 +20,7 @@ public interface IAgentRuntime
         string entryPoint,
         string userId,
         CreateChatRunRequest request,
+        AgentAccessScope accessScope,
         CancellationToken ct = default);
 
     Task<AgentRunSnapshot?> GetAsync(string entryPoint, string runId, CancellationToken ct = default);
@@ -255,6 +256,37 @@ public sealed record AgentExecutionContext
     public required string Purpose { get; init; }
 
     public required CreateChatRunRequest Request { get; init; }
+
+    public required AgentAccessScope AccessScope { get; init; }
+}
+
+/// <summary>由宿主根据已认证身份构造、不得接受客户端直接声明的站点授权范围。</summary>
+public sealed record AgentAccessScope
+{
+    public bool AllowAllSites { get; init; }
+
+    public IReadOnlySet<string> SiteIds { get; init; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+    public string EnsureAuthorizedSite(string? requestedSiteId)
+    {
+        var siteId = requestedSiteId?.Trim();
+        if (string.IsNullOrWhiteSpace(siteId))
+            throw new UnauthorizedAccessException("分析工具必须指定站点范围。");
+        if (!AllowAllSites && !SiteIds.Contains(siteId))
+            throw new UnauthorizedAccessException("当前用户不能访问请求的站点数据。");
+        return siteId;
+    }
+
+    public string? SingleAuthorizedSiteOrDefault()
+    {
+        var values = SiteIds
+            .Where(static value => !string.IsNullOrWhiteSpace(value) && value != "*")
+            .Select(static value => value.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(2)
+            .ToArray();
+        return values.Length == 1 ? values[0] : null;
+    }
 }
 
 /// <summary>验证模型生成的分析计划只能调用获准工具。</summary>

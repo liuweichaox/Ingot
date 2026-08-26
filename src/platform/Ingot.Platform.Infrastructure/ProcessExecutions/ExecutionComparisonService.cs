@@ -27,6 +27,9 @@ public sealed class ExecutionComparisonService(
     IProcessOptimizerClient? optimizerClient = null,
     ExecutionComparisonMetrics? comparisonMetrics = null) : IExecutionComparisonService
 {
+    private const int MaximumScannedEventRows = 50_000;
+    private const int MaximumExecutionIds = 2_000;
+    private const int MaximumTimeSeriesFrames = 200_000;
     private readonly ProcessExecutionAnalysisEngine _wholeProcessExecutionAnalysis = wholeProcessExecutionAnalysis ?? new();
     private readonly ProcessExecutionAnalysisMaterializer? _materializer = materializer;
     private readonly ITimeSeriesStore _timeSeries = timeSeries;
@@ -51,6 +54,9 @@ public sealed class ExecutionComparisonService(
         string? siteId = null)
     {
         ArgumentNullException.ThrowIfNull(executionIds);
+        if (string.IsNullOrWhiteSpace(siteId))
+            throw new ArgumentException("过程运行比较必须指定站点。", nameof(siteId));
+        siteId = siteId.Trim();
         var ids = executionIds
             .Where(static id => !string.IsNullOrWhiteSpace(id))
             .Select(static id => id.Trim())
@@ -58,22 +64,16 @@ public sealed class ExecutionComparisonService(
             .ToArray();
         if (ids.Length == 0)
             return new Dictionary<string, ExecutionComparisonRow>(StringComparer.Ordinal);
+        if (ids.Length > MaximumExecutionIds)
+            throw new ArgumentException($"单次最多比较 {MaximumExecutionIds} 个过程执行。", nameof(executionIds));
 
-        var useMaterializer = _materializer is not null && string.IsNullOrWhiteSpace(siteId);
-        var summarySources = !useMaterializer
-            ? []
-            : await events.QueryExecutionSummarySourcesAsync(ids, ct).ConfigureAwait(false);
-        var summaryByExecution = summarySources.ToDictionary(
-            static source => source.ExecutionId,
+        // Current materializations are keyed by execution id only. Site-scoped reads
+        // intentionally compute from scoped source rows until that projection is migrated.
+        var summaryByExecution = new Dictionary<string, PlatformProcessExecutionSummarySource>(
             StringComparer.Ordinal);
-        var executionEvents = !useMaterializer
-            ? new Dictionary<string, IReadOnlyList<PlatformProductionEvent>>(
-                await LoadProcessExecutionsAsync(ids, ct, siteId).ConfigureAwait(false),
-                StringComparer.Ordinal)
-            : summaryByExecution.ToDictionary(
-                static pair => pair.Key,
-                static pair => pair.Value.Events,
-                StringComparer.Ordinal);
+        var executionEvents = new Dictionary<string, IReadOnlyList<PlatformProductionEvent>>(
+            await LoadProcessExecutionsAsync(ids, ct, siteId).ConfigureAwait(false),
+            StringComparer.Ordinal);
         var allInspections = InspectionRecordSet.Effective(
             await inspections.QueryAllByExecutionIdsAsync(ids, siteId, ct).ConfigureAwait(false));
         var inspectionsByProcessExecution = allInspections
@@ -88,37 +88,19 @@ public sealed class ExecutionComparisonService(
         var analyses = await analysisResolver.ResolveManyAsync(contexts, "production-execution", ct)
             .ConfigureAwait(false);
         var materializedByExecution = new Dictionary<string, MaterializedProcessExecutionAnalysis>(StringComparer.Ordinal);
-        if (useMaterializer)
-        {
-            var missingIds = new List<string>();
-            for (var index = 0; index < ids.Length; index++)
-            {
-                var cached = await _materializer!.TryLoadLatestAsync(
-                    ids[index],
-                    analyses[index]?.DataModel,
-                    analyses[index]?.Plan,
-                    ct).ConfigureAwait(false);
-                if (cached is null)
-                    missingIds.Add(ids[index]);
-                else
-                    materializedByExecution[ids[index]] = cached;
-            }
-            if (missingIds.Count > 0)
-            {
-                var fullRows = await LoadProcessExecutionsAsync(missingIds, ct, siteId).ConfigureAwait(false);
-                foreach (var pair in fullRows)
-                    executionEvents[pair.Key] = pair.Value;
-            }
-        }
         var result = new Dictionary<string, ExecutionComparisonRow>(StringComparer.Ordinal);
+        var remainingFrames = MaximumTimeSeriesFrames;
         for (var index = 0; index < ids.Length; index++)
         {
             var id = ids[index];
             if (!executionEvents.TryGetValue(id, out var rows) || rows.Count == 0)
                 continue;
             var analysis = analyses[index];
+            if (remainingFrames == 0)
+                throw new TimeSeriesQueryLimitExceededException(MaximumTimeSeriesFrames);
             var materialized = materializedByExecution.GetValueOrDefault(id) ??
-                               await AnalyzeAsync(id, rows, analysis, ct).ConfigureAwait(false);
+                               await AnalyzeAsync(id, rows, analysis, remainingFrames, ct).ConfigureAwait(false);
+            remainingFrames -= materialized.Materialization.SourceEventCount;
             var inspectionPlan = ResolveInspectionPlan(plans, rows);
             var eligibleInspections = InspectionRecordSet.AnalysisEligible(
                 inspectionsByProcessExecution.GetValueOrDefault(id, []),
@@ -143,6 +125,11 @@ public sealed class ExecutionComparisonService(
         string? siteId = null,
         IReadOnlyList<string>? additionalKnownUnmeasuredConfounders = null)
     {
+        if (string.IsNullOrWhiteSpace(siteId))
+            throw new ArgumentException("过程运行比较必须指定站点。", nameof(siteId));
+        siteId = siteId.Trim();
+        if (string.IsNullOrWhiteSpace(executionId) || limit is < 1 or > 200)
+            throw new ArgumentException("基准过程执行不能为空，且历史比较数量必须在 1 到 200 之间。", nameof(limit));
         var baselineEvents = await QueryAllAsync(
             new PlatformEventQuery { SiteId = siteId, ExecutionId = executionId }, ct).ConfigureAwait(false);
         if (baselineEvents.Count == 0)
@@ -179,6 +166,7 @@ public sealed class ExecutionComparisonService(
             executionEvents,
             analysis,
             additionalKnownUnmeasuredConfounders,
+            siteId,
             ct).ConfigureAwait(false);
     }
 
@@ -189,12 +177,17 @@ public sealed class ExecutionComparisonService(
         string? siteId = null,
         IReadOnlyList<string>? additionalKnownUnmeasuredConfounders = null)
     {
+        if (string.IsNullOrWhiteSpace(siteId))
+            throw new ArgumentException("过程运行比较必须指定站点。", nameof(siteId));
+        siteId = siteId.Trim();
         var allIds = new[] { baselineProcessExecutionId }
             .Concat(executionIds.Where(id => !string.Equals(id, baselineProcessExecutionId, StringComparison.Ordinal)))
             .Distinct(StringComparer.Ordinal)
             .ToArray();
         if (allIds.Length < 2)
             throw new ArgumentException("请选择至少两个不同的生产过程执行。", nameof(executionIds));
+        if (allIds.Length > MaximumExecutionIds)
+            throw new ArgumentException($"单次最多比较 {MaximumExecutionIds} 个过程执行。", nameof(executionIds));
 
         var executionEvents = await LoadProcessExecutionsAsync(allIds, ct, siteId).ConfigureAwait(false);
         if (allIds.Any(id => !executionEvents.TryGetValue(id, out var rows) || rows.Count == 0))
@@ -224,6 +217,7 @@ public sealed class ExecutionComparisonService(
                 executionEvents,
                 analysis,
                 additionalKnownUnmeasuredConfounders,
+                siteId,
                 ct)
             .ConfigureAwait(false);
     }
@@ -234,19 +228,29 @@ public sealed class ExecutionComparisonService(
         IReadOnlyDictionary<string, IReadOnlyList<PlatformProductionEvent>> executionEvents,
         ResolvedProcessAnalysis? analysis,
         IReadOnlyList<string>? additionalKnownUnmeasuredConfounders,
+        string siteId,
         CancellationToken ct)
     {
         var allInspections = InspectionRecordSet.Effective(
-            await inspections.QueryAllByExecutionIdsAsync(allIds, null, ct).ConfigureAwait(false));
+            await inspections.QueryAllByExecutionIdsAsync(allIds, siteId, ct).ConfigureAwait(false));
         var latestReviews = await reviews.GetLatestByInspectionRecordIdsAsync(
             allInspections.Select(static record => record.RecordId).ToArray(), ct).ConfigureAwait(false);
         var plans = await inspectionMasterData.ListInspectionPlansAsync(ct).ConfigureAwait(false);
         var inspectionsByProcessExecution = allInspections.GroupBy(static record => record.ExecutionId, StringComparer.Ordinal)
             .ToDictionary(static group => group.Key, static group => group.ToArray(), StringComparer.Ordinal);
         var materializedByProcessExecution = new Dictionary<string, MaterializedProcessExecutionAnalysis>(StringComparer.Ordinal);
+        var remainingFrames = MaximumTimeSeriesFrames;
         foreach (var id in allIds)
         {
-            materializedByProcessExecution[id] = await AnalyzeAsync(id, executionEvents[id], analysis, ct).ConfigureAwait(false);
+            if (remainingFrames == 0)
+                throw new TimeSeriesQueryLimitExceededException(MaximumTimeSeriesFrames);
+            materializedByProcessExecution[id] = await AnalyzeAsync(
+                id,
+                executionEvents[id],
+                analysis,
+                remainingFrames,
+                ct).ConfigureAwait(false);
+            remainingFrames -= materializedByProcessExecution[id].Materialization.SourceEventCount;
         }
         var rows = allIds.Select(id =>
             {
@@ -840,6 +844,7 @@ public sealed class ExecutionComparisonService(
         string executionId,
         IReadOnlyList<PlatformProductionEvent> rows,
         ResolvedProcessAnalysis? analysis,
+        int maximumFrames,
         CancellationToken ct)
     {
         var ordered = rows.OrderBy(static row => row.Event.OccurredAt).ThenBy(static row => row.IngestId).ToArray();
@@ -848,18 +853,10 @@ public sealed class ExecutionComparisonService(
         var samples = await TimeSeriesFrameReader.QueryAllAsync(
             _timeSeries,
             new TimeSeriesQuery { SiteId = ordered[0].SiteId, ExecutionId = executionId },
-            ct).ConfigureAwait(false);
-        if (_materializer is not null)
-        {
-            return await _materializer.GetOrComputeAsync(
-                executionId,
-                samples,
-                startedAt,
-                completedAt,
-                analysis?.DataModel,
-                analysis?.Plan,
-                ct).ConfigureAwait(false);
-        }
+            ct,
+            maximumFrames).ConfigureAwait(false);
+        // The persisted analysis key does not yet contain site id. Compute only from the
+        // already site-scoped frames instead of reusing a same-named execution cache.
 
         var source = ProcessExecutionAnalysisMaterializer.CreateSourceFingerprint(samples);
         return new MaterializedProcessExecutionAnalysis(
@@ -1060,15 +1057,20 @@ public sealed class ExecutionComparisonService(
         var result = new List<PlatformProductionEvent>();
         while (true)
         {
-            var page = await events.QueryAsync(query with { AfterIngestId = cursor, Limit = 500 }, ct).ConfigureAwait(false);
+            var remaining = MaximumScannedEventRows - result.Count;
+            var requestedLimit = Math.Min(500, remaining + 1);
+            var page = await events.QueryAsync(
+                query with { AfterIngestId = cursor, Limit = requestedLimit }, ct).ConfigureAwait(false);
             if (page.Count == 0)
                 break;
+            if (page.Count > remaining)
+                throw new PlatformEventQueryLimitExceededException(MaximumScannedEventRows);
             result.AddRange(page);
             var next = page.Max(static item => item.IngestId);
             if (next <= cursor)
                 throw new InvalidOperationException("历史过程执行比较查询游标没有前进。");
             cursor = next;
-            if (page.Count < 500)
+            if (page.Count < requestedLimit)
                 break;
         }
         return result;
@@ -1079,10 +1081,11 @@ public sealed class ExecutionComparisonService(
         CancellationToken ct,
         string? siteId = null)
     {
-        var rows = await events.QueryByExecutionIdsAsync(executionIds, ct).ConfigureAwait(false);
+        if (string.IsNullOrWhiteSpace(siteId))
+            throw new ArgumentException("过程运行比较必须指定站点。", nameof(siteId));
+        siteId = siteId.Trim();
+        var rows = await events.QueryByExecutionIdsAsync(executionIds, siteId, ct).ConfigureAwait(false);
         return rows
-            .Where(row => string.IsNullOrWhiteSpace(siteId) ||
-                          string.Equals(row.SiteId, siteId.Trim(), StringComparison.OrdinalIgnoreCase))
             .Where(static row => !string.IsNullOrWhiteSpace(row.Event.ExecutionId))
             .GroupBy(static row => row.Event.ExecutionId!, StringComparer.Ordinal)
             .ToDictionary(

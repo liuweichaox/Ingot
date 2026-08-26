@@ -51,6 +51,19 @@ wait_http() {
   return 1
 }
 
+wait_http_unavailable() {
+  local url="$1"
+  local attempts="$2"
+  local attempt
+  for ((attempt = 1; attempt <= attempts; attempt++)); do
+    if ! curl --fail --silent --show-error --max-time 2 "$url" >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 1
+  done
+  return 1
+}
+
 remove_pending() {
   local target="$1"
   local retained=()
@@ -65,6 +78,9 @@ remove_pending() {
 
 restore_pending() {
   local service
+  if (( ${#pending_restore[@]} == 0 )); then
+    return
+  fi
   for service in "${pending_restore[@]}"; do
     "${compose[@]}" start "$service" >/dev/null 2>&1 || true
   done
@@ -80,11 +96,27 @@ for service in "${required_services[@]}"; do
   fi
 done
 
+required_health_checks=(
+  "optimizer|http://127.0.0.1:8100/ready"
+  "platform-api|http://127.0.0.1:8000/health"
+  "platform-worker|http://127.0.0.1:8002/health"
+  "connector-host|http://127.0.0.1:8001/health"
+)
+for health_check in "${required_health_checks[@]}"; do
+  service="${health_check%%|*}"
+  health_url="${health_check#*|}"
+  if ! wait_http "$health_url" 5; then
+    echo "演练前置条件不满足：${service} 健康端点不可用（${health_url}）；未停止任何服务。" >&2
+    exit 2
+  fi
+done
+
 run_case() {
   local name="$1"
   local stopped_service="$2"
   local survival_url="$3"
   local recovery_url="$4"
+  local outage_url="$5"
   local case_started
   local case_failure=""
   local recovery_seconds
@@ -93,6 +125,8 @@ run_case() {
 
   if ! "${compose[@]}" stop --timeout 20 "$stopped_service" >/dev/null; then
     case_failure="stop-command"
+  elif ! wait_http_unavailable "$outage_url" 30; then
+    case_failure="outage-check"
   elif ! wait_http "$survival_url" 30; then
     case_failure="survival-check"
   fi
@@ -117,9 +151,9 @@ run_case() {
   fi
 }
 
-run_case optimizer_outage optimizer http://127.0.0.1:8000/health http://127.0.0.1:8100/ready
-run_case worker_outage platform-worker http://127.0.0.1:8000/health http://127.0.0.1:8000/health
-run_case api_outage platform-api http://127.0.0.1:8001/health http://127.0.0.1:8000/health
+run_case optimizer_outage optimizer http://127.0.0.1:8000/health http://127.0.0.1:8100/ready http://127.0.0.1:8100/ready
+run_case worker_outage platform-worker http://127.0.0.1:8000/health http://127.0.0.1:8002/health http://127.0.0.1:8002/health
+run_case api_outage platform-api http://127.0.0.1:8001/health http://127.0.0.1:8000/health http://127.0.0.1:8000/health
 restore_pending
 
 result=passed

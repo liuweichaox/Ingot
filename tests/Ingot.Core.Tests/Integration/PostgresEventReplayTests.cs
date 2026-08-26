@@ -197,6 +197,102 @@ public sealed class PostgresEventReplayTests(PostgresIntegrationFixture postgres
     }
 
     [LinuxDockerFact]
+    public async Task EqualExecutionIdentifiersAcrossSites_ShouldKeepSeparateOperationContexts()
+    {
+        await postgres.EnsureSchemaAsync();
+        var options = Options.Create(new PlatformEventOptions());
+        var manufacturing = new PostgresManufacturingContextStore(postgres.DataSource);
+        var configurations = new PostgresProcessConfigurationStore(postgres.DataSource);
+        var materializations = new PostgresProcessExecutionAnalysisMaterializationStore(
+            postgres.DataSource,
+            NullLogger<PostgresProcessExecutionAnalysisMaterializationStore>.Instance);
+        using var timeSeries = new PostgresTimeSeriesStore(
+            postgres.DataSource,
+            NullLogger<PostgresTimeSeriesStore>.Instance,
+            options);
+        using var store = new PostgresPlatformEventStore(
+            postgres.DataSource,
+            NullLogger<PostgresPlatformEventStore>.Instance,
+            new PlatformEventMetrics(),
+            options,
+            manufacturing,
+            new ProcessAnalysisResolver(configurations),
+            materializations,
+            timeSeries);
+        var suffix = Guid.NewGuid().ToString("N");
+        var executionId = $"shared-execution-{suffix}";
+        var siteA = $"SITE-A-{suffix}";
+        var siteB = $"SITE-B-{suffix}";
+        var edgeA = $"EDGE-A-{suffix}";
+        var edgeB = $"EDGE-B-{suffix}";
+        var now = DateTimeOffset.UtcNow;
+
+        static ProductionEvent LifecycleEvent(
+            string eventType,
+            string executionId,
+            string edgeId,
+            DateTimeOffset occurredAt,
+            long sequence,
+            string? marker = null)
+            => ProductionEvent.Create(
+                eventType,
+                occurredAt,
+                $"edge/{edgeId}/equipment/PRESS-01",
+                new ObjectRef("equipment", "PRESS-01"),
+                executionId,
+                marker is null
+                    ? null
+                    : new Dictionary<string, string> { ["site_marker"] = marker }) with
+            { Seq = sequence };
+
+        await store.IngestAsync(new EventBatchRequest
+        {
+            SiteId = siteA,
+            EdgeId = edgeA,
+            Events = [LifecycleEvent("process.execution.started", executionId, edgeA, now, 1, "A")]
+        });
+        await store.IngestAsync(new EventBatchRequest
+        {
+            SiteId = siteB,
+            EdgeId = edgeB,
+            Events = [LifecycleEvent("process.execution.started", executionId, edgeB, now, 1, "B")]
+        });
+        await store.IngestAsync(new EventBatchRequest
+        {
+            SiteId = siteA,
+            EdgeId = edgeA,
+            Events = [LifecycleEvent("process.execution.completed", executionId, edgeA, now.AddMinutes(1), 2)]
+        });
+        await store.IngestAsync(new EventBatchRequest
+        {
+            SiteId = siteB,
+            EdgeId = edgeB,
+            Events = [LifecycleEvent("process.execution.completed", executionId, edgeB, now.AddMinutes(1), 2)]
+        });
+
+        var siteAEvents = await store.QueryByExecutionIdsAsync([executionId], siteA);
+        var siteBEvents = await store.QueryByExecutionIdsAsync([executionId], siteB);
+        Assert.All(siteAEvents, row => Assert.Equal(siteA, row.SiteId));
+        Assert.All(siteBEvents, row => Assert.Equal(siteB, row.SiteId));
+        Assert.Equal(
+            "A",
+            siteAEvents.Single(row => row.Event.EventType == "process.execution.completed")
+                .Event.Context["site_marker"]);
+        Assert.Equal(
+            "B",
+            siteBEvents.Single(row => row.Event.EventType == "process.execution.completed")
+                .Event.Context["site_marker"]);
+
+        await using var connection = new NpgsqlConnection(postgres.ConnectionString);
+        await connection.OpenAsync();
+        await using var count = new NpgsqlCommand(
+            "SELECT count(*) FROM operation_context_snapshots WHERE execution_id = @execution_id;",
+            connection);
+        count.Parameters.AddWithValue("execution_id", executionId);
+        Assert.Equal(2L, await count.ExecuteScalarAsync());
+    }
+
+    [LinuxDockerFact]
     public async Task ProcessSample_ShouldPersistAndQueryOnlyTypedValues()
     {
         await postgres.EnsureSchemaAsync();

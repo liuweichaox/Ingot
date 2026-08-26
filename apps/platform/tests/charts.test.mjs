@@ -28,6 +28,17 @@ test("process traces preserve elapsed time, phase context, and signal metadata",
   assert.equal(traces[0].yaxis, "y");
 });
 
+test("process traces share one coordinate system", () => {
+  const series = Array.from({ length: 12 }, (_, index) => ({
+    signalCode: `signal-${index}`,
+    points: [{ occurredAt: "2026-07-23T08:00:00Z", value: index + 1 }],
+  }));
+  const traces = processCurveTraces(series, [], "2026-07-23T08:00:00Z");
+
+  assert.deepEqual(new Set(traces.map(trace => trace.yaxis)), new Set(["y"]));
+  assert.equal(new Set(traces.map(trace => trace.line.color)).size, traces.length);
+});
+
 test("React Plotly renderer is responsive, lazy, and used by quality analysis", async () => {
   const component = await readFile(new URL("../src/components/PlotlyChart.jsx", import.meta.url), "utf8");
   const pageDirectory = new URL("../src/pages/", import.meta.url);

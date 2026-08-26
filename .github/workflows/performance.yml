@@ -43,40 +43,41 @@ jobs:
       - name: Benchmark platform ingest
         run: ./scripts/benchmark-platform-ingest.sh
 
-      - name: Benchmark v2 public-data development regression
-        run: ./scripts/benchmark-public-validation.sh public-validation.json
+      - name: Verify frozen acceptance protocol integrity
+        run: |
+          mkdir -p artifacts
+          ./scripts/verify-optimizer-acceptance.sh > artifacts/optimizer-acceptance-integrity.json
 
-      - name: Verify v3 external-data evaluation candidate
-        run: ./scripts/verify-public-validation-v3.sh
+      - name: Benchmark optimizer development regression
+        run: ./scripts/benchmark-optimizer-development.sh artifacts/optimizer-development.json
 
-      - name: Verify public-data claim boundary
+      - name: Verify optimizer evidence boundary
         run: |
           python3 - <<'PY'
           import json
           from pathlib import Path
 
-          result = json.loads(Path("public-validation.json").read_text())
-          assert result["schema"] == "ingot-public-validation-v2"
-          assert result["summary"]["workflow_validation"] == "passed"
-          assert result["summary"]["dataset_count"] == 2
-          assert result["summary"]["scenario_count"] == 14
+          integrity = json.loads(Path("artifacts/optimizer-acceptance-integrity.json").read_text())
+          assert integrity["schema"] == "ingot-optimizer-acceptance-protocol"
+          assert integrity["status"] == "frozen"
+          assert integrity["evaluation_unit_count"] == 3
+          assert integrity["full_evaluation_allowed"] is False
+
+          result = json.loads(Path("artifacts/optimizer-development.json").read_text())
+          assert result["schema"] == "ingot-optimizer-development-regression"
+          assert result["evidence_status"] == "development-regression-only"
+          assert result["source_evidence"] == "inspected-fresh-data-acceptance"
+          assert result["summary"]["source_dataset_count"] == 3
+          assert result["summary"]["evaluation_unit_count"] == 3
+          assert result["summary"]["episode_count"] == 450
+          assert result["summary"]["all_evaluation_units_complete"] is True
           assert result["summary"]["all_initial_designs_unique"] is True
-          assert result["summary"]["experiment_reduction_vs_uninformed_search"] in {
-              "passed-public-benchmark",
-              "not-demonstrated",
-          }
-          assert result["summary"]["active_comparator_noninferiority"] in {
-              "passed-public-benchmark",
-              "not-demonstrated",
-          }
-          assert result["summary"]["experiment_reduction_claim"] in {
-              "passed-vs-seeded-random-search",
-              "not-demonstrated",
-          }
           PY
 
-      - name: Upload public-data result
+      - name: Upload optimizer evidence
         uses: actions/upload-artifact@v4
         with:
-          name: public-validation
-          path: public-validation.json
+          name: optimizer-evidence
+          path: |
+            artifacts/optimizer-acceptance-integrity.json
+            artifacts/optimizer-development.json

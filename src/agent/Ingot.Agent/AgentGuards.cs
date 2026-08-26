@@ -1,3 +1,4 @@
+// 校验 Agent 计划、工具结果、引用完整性和可表达结论的安全边界。
 using System.Globalization;
 using System.Numerics;
 using System.Text;
@@ -8,6 +9,7 @@ using Microsoft.Extensions.Options;
 
 namespace Ingot.Agent;
 
+/// <summary>校验模型生成计划只能调用获准只读工具并遵守运行预算。</summary>
 public sealed class DefaultPlanValidator(IOptions<ChatOptions> chatOptions) : IPlanValidator
 {
     private static readonly Regex CanonicalInteger = new(
@@ -382,6 +384,7 @@ public sealed class DefaultPlanValidator(IOptions<ChatOptions> chatOptions) : IP
     }
 }
 
+/// <summary>验证工具结果大小、引用、哈希和声明强度后再允许生成答案。</summary>
 public sealed class DefaultAnalysisResultValidator : IAnalysisResultValidator
 {
     private const int MaxToolDataBytes = 32 * 1024;
@@ -472,14 +475,13 @@ public sealed class DefaultAnalysisResultValidator : IAnalysisResultValidator
         if (!TryValidateProposals(answer.Proposals, results, out error))
             return false;
 
-        var source = string.Join('\n', results.Select(result =>
-            $"{result.Summary}\n{result.Data.GetRawText()}"));
-        var answerText = string.Join('\n', new[] { answer.Summary }
-            .Concat(answer.Findings.Select(static finding => finding.Statement))
-            .Concat(answer.Limitations)
-            .Concat(answer.Proposals.SelectMany(static proposal =>
-                new[] { proposal.Title, proposal.Rationale }.Concat(proposal.DraftFields.Values))));
-        var sourceNumbers = NumberGrounding.ExtractNormalized(source);
+        var sourceNumbers = SourceNumbers(results);
+        if (answer.CombinedAnalysis is not null &&
+            !TryValidateCombinedAnalysis(answer.CombinedAnalysis, results, sourceNumbers, out error))
+            return false;
+
+        var answerValues = AnalysisTextPolicy.EnumerateAnswerText(answer).ToArray();
+        var answerText = string.Join('\n', answerValues);
         if (!TryValidateCharts(answer.Charts, sourceNumbers, out error))
             return false;
 
@@ -489,13 +491,7 @@ public sealed class DefaultAnalysisResultValidator : IAnalysisResultValidator
             return false;
         }
 
-        if (answerText.Contains("导致", StringComparison.Ordinal) ||
-            answerText.Contains("已证明因果", StringComparison.Ordinal) ||
-            answerText.Contains("确定原因", StringComparison.Ordinal) ||
-            answerText.Contains("confirmed root cause", StringComparison.OrdinalIgnoreCase) ||
-            answerText.Contains("proven cause", StringComparison.OrdinalIgnoreCase) ||
-            answerText.Contains("directly caused", StringComparison.OrdinalIgnoreCase) ||
-            answerText.Contains("caused by", StringComparison.OrdinalIgnoreCase))
+        if (answerValues.Any(AnalysisTextPolicy.ContainsUnsupportedCausalClaim))
         {
             error = "回答把参数相关性说成了已经确认的原因。";
             return false;
@@ -504,6 +500,198 @@ public sealed class DefaultAnalysisResultValidator : IAnalysisResultValidator
         error = string.Empty;
         return true;
     }
+
+    internal static bool TryValidatePerspectiveAnalysis(
+        PerspectiveAnalysis value,
+        IReadOnlyList<AnalysisToolResult> results,
+        IReadOnlyCollection<string>? existingCauseIds,
+        out string error)
+    {
+        var allowedEvidence = AvailableEvidence(results);
+        var sourceNumbers = SourceNumbers(results);
+        var knownCauseIds = existingCauseIds?.ToHashSet(StringComparer.Ordinal) ??
+                            new HashSet<string>(StringComparer.Ordinal);
+        return TryValidatePerspective(value, allowedEvidence, sourceNumbers, knownCauseIds, out error);
+    }
+
+    internal static bool TryValidateCombinedAnalysis(
+        CombinedAnalysisResult value,
+        IReadOnlyList<AnalysisToolResult> results,
+        IReadOnlySet<string>? sourceNumbers,
+        out string error)
+    {
+        sourceNumbers ??= SourceNumbers(results);
+        var allowedEvidence = AvailableEvidence(results);
+        if (value.Status is not ("needs-review" or "insufficient-data"))
+        {
+            error = "多视角分析状态无效。";
+            return false;
+        }
+        if (!TryValidateText(value.Summary, 2000, sourceNumbers, out error))
+            return false;
+        if (value.PossibleCauses.Count > 45 || value.Reviews.Count > 150 ||
+            value.ReviewSteps.Count > 15 || value.Limitations.Count > 50)
+        {
+            error = "多视角分析内容超过允许边界。";
+            return false;
+        }
+        if (value.Status == "needs-review" && value.PossibleCauses.Count == 0)
+        {
+            error = "需要复核的多视角分析必须包含可追溯的可能原因。";
+            return false;
+        }
+        if (!TryValidateReferences(value.RelatedRecords, allowedEvidence, requireAny: true, out error))
+            return false;
+        foreach (var limitation in value.Limitations)
+        {
+            if (!TryValidateText(limitation, 2000, sourceNumbers, out error))
+                return false;
+        }
+
+        var knownCauseIds = new HashSet<string>(StringComparer.Ordinal);
+        if (!TryValidateCauses(value.PossibleCauses, allowedEvidence, sourceNumbers, knownCauseIds, out error) ||
+            !TryValidateReviews(value.Reviews, allowedEvidence, sourceNumbers, knownCauseIds, out error))
+            return false;
+        foreach (var step in value.ReviewSteps)
+        {
+            if (step.PossibleCauses.Any(cause => !knownCauseIds.Contains(cause.CauseId)))
+            {
+                error = "复核步骤包含未进入最终证据集合的可能原因。";
+                return false;
+            }
+            if (!TryValidatePerspective(step, allowedEvidence, sourceNumbers, knownCauseIds, out error))
+                return false;
+        }
+
+        error = string.Empty;
+        return true;
+    }
+
+    private static bool TryValidatePerspective(
+        PerspectiveAnalysis value,
+        IReadOnlySet<(string Kind, string Id)> allowedEvidence,
+        IReadOnlySet<string> sourceNumbers,
+        IReadOnlySet<string> existingCauseIds,
+        out string error)
+    {
+        if (!AnalysisPerspectives.All.Contains(value.Role) || value.Round is < 1 or > 5 ||
+            value.PossibleCauses.Count > 3 || value.Reviews.Count > 10)
+        {
+            error = "多视角参与者身份、轮次或内容数量无效。";
+            return false;
+        }
+        if (!TryValidateText(value.Summary, 500, sourceNumbers, out error))
+            return false;
+
+        var knownCauseIds = existingCauseIds.ToHashSet(StringComparer.Ordinal);
+        var causesInStep = new HashSet<string>(StringComparer.Ordinal);
+        if (!TryValidateCauses(value.PossibleCauses, allowedEvidence, sourceNumbers, causesInStep, out error))
+            return false;
+        knownCauseIds.UnionWith(causesInStep);
+        return TryValidateReviews(value.Reviews, allowedEvidence, sourceNumbers, knownCauseIds, out error);
+    }
+
+    private static bool TryValidateCauses(
+        IReadOnlyList<PossibleCause> causes,
+        IReadOnlySet<(string Kind, string Id)> allowedEvidence,
+        IReadOnlySet<string> sourceNumbers,
+        ISet<string> knownCauseIds,
+        out string error)
+    {
+        foreach (var cause in causes)
+        {
+            if (string.IsNullOrWhiteSpace(cause.CauseId) || cause.CauseId.Length > 100 ||
+                !knownCauseIds.Add(cause.CauseId) || !AnalysisPerspectives.All.Contains(cause.AuthorRole))
+            {
+                error = "可能原因的标识或作者角色无效或重复。";
+                return false;
+            }
+            if (!TryValidateText(cause.Statement, 500, sourceNumbers, out error) ||
+                !TryValidateText(cause.Reason, 1000, sourceNumbers, out error) ||
+                !TryValidateReferences(cause.RelatedRecords, allowedEvidence, requireAny: true, out error))
+                return false;
+        }
+        error = string.Empty;
+        return true;
+    }
+
+    private static bool TryValidateReviews(
+        IReadOnlyList<FindingReview> reviews,
+        IReadOnlySet<(string Kind, string Id)> allowedEvidence,
+        IReadOnlySet<string> sourceNumbers,
+        IReadOnlySet<string> knownCauseIds,
+        out string error)
+    {
+        foreach (var review in reviews)
+        {
+            if (!knownCauseIds.Contains(review.CauseId) ||
+                !AnalysisPerspectives.All.Contains(review.AuthorRole) ||
+                review.Position is not (FindingReviewPositions.Support or FindingReviewPositions.Oppose or
+                    FindingReviewPositions.Uncertain))
+            {
+                error = "可能原因复核引用了未知原因、角色或立场。";
+                return false;
+            }
+            if (!TryValidateText(review.Statement, 700, sourceNumbers, out error) ||
+                !TryValidateReferences(review.RelatedRecords, allowedEvidence, requireAny: true, out error))
+                return false;
+        }
+        error = string.Empty;
+        return true;
+    }
+
+    private static bool TryValidateReferences(
+        IReadOnlyList<RelatedRecordRef> references,
+        IReadOnlySet<(string Kind, string Id)> allowedEvidence,
+        bool requireAny,
+        out string error)
+    {
+        if ((requireAny && references.Count == 0) || references.Count > 100 || references.Any(reference =>
+                string.IsNullOrWhiteSpace(reference.Kind) || string.IsNullOrWhiteSpace(reference.Id) ||
+                string.IsNullOrWhiteSpace(reference.Label) ||
+                !allowedEvidence.Contains((reference.Kind, reference.Id))))
+        {
+            error = "多视角分析必须只引用本次工具返回的正式记录。";
+            return false;
+        }
+        error = string.Empty;
+        return true;
+    }
+
+    private static bool TryValidateText(
+        string? value,
+        int maxLength,
+        IReadOnlySet<string> sourceNumbers,
+        out string error)
+    {
+        if (string.IsNullOrWhiteSpace(value) || value.Length > maxLength)
+        {
+            error = "多视角分析包含空白或超长文本。";
+            return false;
+        }
+        if (AnalysisTextPolicy.ContainsUnsupportedCausalClaim(value))
+        {
+            error = "多视角分析包含未经证据支持的因果断言。";
+            return false;
+        }
+        if (!NumberGrounding.IsGrounded(value, sourceNumbers, out var unsupportedRaw))
+        {
+            error = $"多视角分析包含工具结果无法支持的数字: {unsupportedRaw}";
+            return false;
+        }
+        error = string.Empty;
+        return true;
+    }
+
+    private static IReadOnlySet<(string Kind, string Id)> AvailableEvidence(
+        IReadOnlyList<AnalysisToolResult> results)
+        => results.SelectMany(static result => result.RelatedRecords)
+            .Select(static reference => (reference.Kind, reference.Id))
+            .ToHashSet();
+
+    private static IReadOnlySet<string> SourceNumbers(IReadOnlyList<AnalysisToolResult> results)
+        => NumberGrounding.ExtractNormalized(string.Join('\n', results.Select(result =>
+            $"{result.Summary}\n{result.Data.GetRawText()}")));
 
     private static bool TryValidateClaims(
         AnalysisAnswer answer,

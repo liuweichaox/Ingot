@@ -1,4 +1,4 @@
-
+// 管理黄金问题审核并选择当前授权范围内的 Agent 运行进行评测。
 import { useCallback, useEffect, useState } from "react";
 import { getJson, postJson } from "../api/http";
 import {
@@ -174,7 +174,7 @@ export function GoldenQuestionsPage() {
   }));
 
   return (
-    <Page title="评测问题集" description="用真实现场问题冻结可核对事实与记录引用，持续评测分析结果是否诚实、有据并正确拒绝。" actions={<Button variant="primary" onClick={beginCreate}>录入真实问题</Button>}>
+    <Page title="助手评测" actions={<Button variant="primary" onClick={beginCreate}>录入真实问题</Button>}>
       {error && <Alert tone="danger">{error}</Alert>}
       <div className="grid gap-4 md:grid-cols-5">
         <Metric label="评测次数" value={summary.evaluationCount || 0} />

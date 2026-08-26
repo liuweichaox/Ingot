@@ -37,7 +37,10 @@ public sealed class ResearchExecutionEvidenceService(
                 "请选择包含基准过程执行的至少两个过程执行，并指定 1 到 10 条候选假设。");
         }
 
-        var comparison = await executionComparisons.CompareSelectedAsync(baselineId, executionIds, ct)
+        var project = await RequireProjectAsync(projectId, ct).ConfigureAwait(false);
+        var siteId = RequireSiteCode(project);
+        var comparison = await executionComparisons.CompareSelectedAsync(
+                baselineId, executionIds, ct, siteId)
             .ConfigureAwait(false)
             ?? throw new ProcessResearchRuleException("所选过程执行不存在，无法形成追因证据。");
         if (!string.Equals(
@@ -49,7 +52,6 @@ public sealed class ResearchExecutionEvidenceService(
             throw new ProcessResearchRuleException(
                 "当前运行对比仅形成探索性证据，不能批量生成候选假设。请补充质量结果、重复运行和上下文变量，待样本外验证通过后重试。");
         }
-        var project = await RequireProjectAsync(projectId, ct).ConfigureAwait(false);
         var contentHash = Convert.ToHexStringLower(SHA256.HashData(
             JsonSerializer.SerializeToUtf8Bytes(comparison)));
         var evidence = new EvidenceReference
@@ -144,13 +146,14 @@ public sealed class ResearchExecutionEvidenceService(
             throw new ProcessResearchRuleException("一次最多导入 2000 个历史运行。");
 
         var project = await RequireProjectAsync(projectId, ct).ConfigureAwait(false);
+        var siteId = RequireSiteCode(project);
         var controls = project.Variables
             .Where(static value => value.Role == ResearchVariableRoles.Control)
             .ToArray();
         if (controls.Length == 0)
             throw new ProcessResearchRuleException("项目没有定义可控变量，不能导入历史运行。");
 
-        var resolved = await executionComparisons.GetProcessExecutionsAsync(executionIds, ct)
+        var resolved = await executionComparisons.GetProcessExecutionsAsync(executionIds, ct, siteId)
             .ConfigureAwait(false);
         var executions = new List<ExecutionComparisonRow>(executionIds.Length);
         foreach (var executionId in executionIds)
@@ -216,6 +219,11 @@ public sealed class ResearchExecutionEvidenceService(
     private async Task<ResearchProject> RequireProjectAsync(Guid projectId, CancellationToken ct)
         => await store.GetProjectAsync(projectId, ct).ConfigureAwait(false)
            ?? throw new ProcessResearchRuleException("研发项目不存在。");
+
+    private static string RequireSiteCode(ResearchProject project)
+        => string.IsNullOrWhiteSpace(project.SiteCode)
+            ? throw new ProcessResearchRuleException("研发项目必须绑定站点后才能读取生产运行证据。")
+            : project.SiteCode.Trim();
 
     private static double ReadHistoricalValue(ExecutionComparisonRow execution, ResearchVariable variable)
     {

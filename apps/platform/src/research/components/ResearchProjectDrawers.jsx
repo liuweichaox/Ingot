@@ -209,7 +209,7 @@ export function TaskDrawer({ task, form, setForm, workspace, memberCandidates, s
           <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4 space-y-4">
             <div>
               <p className="text-sm font-semibold text-indigo-950">生成实验设计</p>
-              <p className="mt-1 text-xs leading-5 text-indigo-800">系统只生成可编辑运行表；保存后仍执行全部安全、目标与对照校验。</p>
+              <p className="mt-1 text-[13px] leading-5 text-indigo-800">系统只生成可编辑运行表；保存后仍执行全部安全、目标与对照校验。</p>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="设计方法"><Select value={form.designMethod} onChange={event => setForm({ ...form, designMethod: event.target.value, generatedRunPlan: [] })}><option value="full-factorial">全因子设计</option><option value="fractional-factorial">部分因子设计</option><option value="response-surface">响应面设计</option><option value="latin-hypercube">拉丁超立方</option></Select></Field>
@@ -223,7 +223,7 @@ export function TaskDrawer({ task, form, setForm, workspace, memberCandidates, s
             {form.designMethod === "latin-hypercube" && <Field label="样本数"><Input type="number" min="2" max="40" value={form.designSampleCount} onChange={update("designSampleCount")} /></Field>}
             {form.designMethod === "response-surface" && <Field label="响应面族"><Select value={form.responseSurfaceFamily} onChange={update("responseSurfaceFamily")}><option value="central-composite">中心复合设计（CCD）</option><option value="box-behnken">Box–Behnken</option></Select></Field>}
             <Button type="button" onClick={onPreviewExperimentDesign}>生成并预览运行表</Button>
-            {experimentPreview && <div className="space-y-2 rounded-lg border border-indigo-200 bg-white p-3 text-xs text-slate-700">
+            {experimentPreview && <div className="space-y-2 rounded-lg border border-indigo-200 bg-white p-3 text-[13px] text-slate-700">
               <div><strong>已生成 {experimentPreview.runPlan?.length || 0} 条运行</strong>{experimentPreview.aliasStructure ? ` · ${experimentPreview.aliasStructure}` : ""}</div>
               {(experimentPreview.warnings || []).map(item => <Alert key={item} tone="warning">{item}</Alert>)}
               <div className="max-h-48 overflow-auto rounded border border-slate-200">
@@ -265,7 +265,7 @@ export function TaskDrawer({ task, form, setForm, workspace, memberCandidates, s
           <Field label="回退方案"><Textarea required rows={3} value={form.rollbackPlan} onChange={update("rollbackPlan")} /></Field>
           {experimentValidation && <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
             <p className="text-sm font-semibold text-amber-950">本实验还差什么</p>
-            <ul className="mt-2 space-y-1 text-xs text-amber-900">
+            <ul className="mt-2 space-y-1 text-[13px] text-amber-900">
               {experimentValidation.isValid ? <li>✓ 当前预检已通过；提交时仍会校验最新项目版本。</li> : (experimentValidation.errors || []).map(issue => <li key={`${issue.field}-${issue.code}`}>✗ {issue.message}{issue.fixHint ? ` ${issue.fixHint}` : ""}</li>)}
             </ul>
           </div>}
@@ -309,7 +309,7 @@ export function TaskDrawer({ task, form, setForm, workspace, memberCandidates, s
                   placeholder="搜索运行号、产品、设备、Edge、批次或工艺规范"
                   aria-label="搜索已完成运行"
                 />
-                <p className="mt-2 text-xs leading-5 text-slate-500">
+                <p className="mt-2 text-[13px] leading-5 text-slate-500">
                   默认选中与项目产品匹配的运行。可跨节点多选；导入前请确认至少包含两种实际工艺规范条件。
                 </p>
               </div>
@@ -321,7 +321,7 @@ export function TaskDrawer({ task, form, setForm, workspace, memberCandidates, s
                     return (
                       <label
                         key={execution.executionId}
-                        className={`flex cursor-pointer gap-3 rounded-xl border p-4 transition ${selected ? "border-blue-400 bg-blue-50 shadow-sm" : "border-slate-200 bg-white hover:border-blue-300 hover:bg-blue-50/40"}`}
+                        className={`flex cursor-pointer gap-3 rounded-lg border p-4 transition ${selected ? "border-blue-400 bg-blue-50 ring-1 ring-blue-200" : "border-slate-200 bg-white hover:border-blue-300 hover:bg-blue-50/40"}`}
                       >
                         <input
                           type="checkbox"
@@ -332,16 +332,16 @@ export function TaskDrawer({ task, form, setForm, workspace, memberCandidates, s
                         <span className="min-w-0 flex-1">
                           <span className="flex items-start justify-between gap-3">
                             <strong className="truncate text-sm font-semibold text-slate-900" title={execution.executionId}>{product}</strong>
-                            <span className="shrink-0 text-xs text-slate-500">{execution.completedAt ? new Date(execution.completedAt).toLocaleString("zh-CN") : "完成时间未知"}</span>
+                            <span className="shrink-0 text-[13px] text-slate-500">{execution.completedAt ? new Date(execution.completedAt).toLocaleString("zh-CN") : "完成时间未知"}</span>
                           </span>
-                          <span className="mt-2 flex flex-wrap gap-1.5 text-xs">
+                          <span className="mt-2 flex flex-wrap gap-1.5 text-[13px]">
                             <span className="rounded-md bg-slate-100 px-2 py-1 text-slate-700">设备 {execution.equipmentId || "未标注"}</span>
                             <span className="rounded-md bg-slate-100 px-2 py-1 text-slate-700">Edge {execution.edgeIds?.join(" / ") || "未标注"}</span>
                           </span>
-                          <span className="mt-3 grid gap-1 text-xs leading-5 text-slate-600">
+                          <span className="mt-3 grid gap-1 text-[13px] leading-5 text-slate-600">
                             <span><span className="text-slate-400">工艺规范</span> {execution.processSpecificationId || "未标注"}</span>
                             {(execution.externalBatchRef || execution.outputItemId) && <span><span className="text-slate-400">追溯</span> {[execution.externalBatchRef && `批次 ${execution.externalBatchRef}`, execution.outputItemId && `工件 ${execution.outputItemId}`].filter(Boolean).join(" · ")}</span>}
-                            <span className="truncate font-mono text-[11px] text-slate-400" title={execution.executionId}>{execution.executionId}</span>
+                            <span className="truncate font-mono text-xs text-slate-400" title={execution.executionId}>{execution.executionId}</span>
                           </span>
                         </span>
                       </label>

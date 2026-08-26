@@ -46,6 +46,66 @@ public sealed class QualityWorkflowTests
         Assert.Equal(expectedStart, result.StartedAt);
         Assert.Equal(600, result.SampleCount);
     }
+
+    [Fact]
+    public async Task ProcessExecutionQuery_RestrictsSamplesToAuthorizedSiteWhenExecutionIdsCollide()
+    {
+        var rows = new List<PlatformProductionEvent>();
+        var expectedStart = DateTimeOffset.Parse("2026-07-20T08:00:00Z");
+        AddProcessExecution(rows, "RUN-SHARED", "LENS-A", "PRESS-01", expectedStart, 1);
+        var otherSite = new List<PlatformProductionEvent>();
+        AddProcessExecution(
+            otherSite,
+            "RUN-SHARED",
+            "LENS-A",
+            "PRESS-02",
+            DateTimeOffset.Parse("2026-07-21T08:00:00Z"),
+            rows.Count + 1);
+        rows.AddRange(otherSite.Select(row => row with { SiteId = "SITE-002" }));
+        var service = new ProcessExecutionService(
+            new FakeEventStore(rows),
+            new FakeInspectionStore([]),
+            new FakeReviewStore(),
+            new FakeMasterDataStore(),
+            new ProcessAnalysisResolver(new FakeProcessConfigurationStore()),
+            new FakeTimeSeriesStore(rows));
+
+        var result = await service.QueryAsync(
+            null, null, null, null, null, null, null, "RUN-SHARED", null, 10,
+            siteId: "SITE-001");
+
+        var execution = Assert.Single(result.Data);
+        Assert.Equal(expectedStart, execution.StartedAt);
+        Assert.Equal(600, execution.SampleCount);
+    }
+
+    [Fact]
+    public async Task ExecutionComparison_RestrictsInspectionOutcomesToAuthorizedSite()
+    {
+        var rows = new List<PlatformProductionEvent>();
+        AddProcessExecution(rows, "BASE-SITE", "LENS-A", "PRESS-01", DateTimeOffset.Parse("2026-07-20T08:00:00Z"), 1);
+        AddProcessExecution(rows, "HISTORY-SITE", "LENS-A", "PRESS-02", DateTimeOffset.Parse("2026-07-20T07:00:00Z"), rows.Count + 1);
+        var siteInspection = Inspection("BASE-SITE", "WP-BASE-SITE", "optical.final.manual", false);
+        var foreignInspection = Inspection("BASE-SITE", "WP-BASE-SITE", "optical.final.manual", false) with
+        {
+            SiteId = "SITE-002",
+            Outcome = "FAIL"
+        };
+        var service = new ExecutionComparisonService(
+            new FakeEventStore(rows),
+            new FakeInspectionStore([siteInspection, foreignInspection]),
+            new FakeReviewStore(),
+            new FakeMasterDataStore(),
+            new ProcessAnalysisResolver(new FakeProcessConfigurationStore()),
+            new FakeTimeSeriesStore(rows));
+
+        var result = await service.CompareSelectedAsync(
+            "BASE-SITE", ["BASE-SITE", "HISTORY-SITE"], siteId: "SITE-001");
+
+        Assert.NotNull(result);
+        Assert.Equal(["PASS"], result.Baseline.InspectionOutcomes);
+    }
+
     [Fact]
     public void AnalysisEligible_RequiresTrustedSubmissionAndIndependentReviewWhenPlanRequiresIt()
     {
@@ -182,7 +242,7 @@ public sealed class QualityWorkflowTests
             new ProcessAnalysisResolver(new FakeProcessConfigurationStore()),
             timeSeries: new FakeTimeSeriesStore(rows));
 
-        var result = await service.CompareWithHistoryAsync("BASE", 10);
+        var result = await service.CompareWithHistoryAsync("BASE", 10, siteId: "SITE-001");
 
         Assert.NotNull(result);
         Assert.Equal("LENS-A", result.ProductFamilyCode);
@@ -200,14 +260,15 @@ public sealed class QualityWorkflowTests
             item.FailProcessExecutionCount == 1);
         Assert.Equal(2, result.Acceptance.CompleteProcessExecutionCount);
 
-        var selected = await service.CompareSelectedAsync("HISTORY", ["BASE", "HISTORY"]);
+        var selected = await service.CompareSelectedAsync(
+            "HISTORY", ["BASE", "HISTORY"], siteId: "SITE-001");
         Assert.NotNull(selected);
         Assert.Equal("HISTORY", selected.BaselineProcessExecutionId);
         Assert.Equal("HISTORY", selected.Baseline.ExecutionId);
         Assert.Equal("BASE", Assert.Single(selected.HistoricalProcessExecutions).ExecutionId);
 
         await Assert.ThrowsAsync<ArgumentException>(() =>
-            service.CompareSelectedAsync("BASE", ["BASE", "OTHER"]));
+            service.CompareSelectedAsync("BASE", ["BASE", "OTHER"], siteId: "SITE-001"));
     }
 
     [Fact]
@@ -242,6 +303,7 @@ public sealed class QualityWorkflowTests
         var result = await service.CompareSelectedAsync(
             "BASE",
             ["BASE", "HISTORY"],
+            siteId: "SITE-001",
             additionalKnownUnmeasuredConfounders: ["环境波动", "环境波动"]);
 
         Assert.NotNull(result);
@@ -269,7 +331,7 @@ public sealed class QualityWorkflowTests
             new ProcessAnalysisResolver(new FakeProcessConfigurationStore()),
             timeSeries: new FakeTimeSeriesStore(rows));
 
-        var result = await service.CompareWithHistoryAsync("BASE", 10);
+        var result = await service.CompareWithHistoryAsync("BASE", 10, siteId: "SITE-001");
 
         Assert.NotNull(result);
         Assert.All(result.SignalComparisons, comparison => Assert.Null(comparison.RobustDeviation));
@@ -326,7 +388,8 @@ public sealed class QualityWorkflowTests
             new ProcessAnalysisResolver(new FakeProcessConfigurationStore()),
             timeSeries: new FakeTimeSeriesStore(rows));
 
-        var execution = await service.GetProcessExecutionAsync("OPTIMIZED-RUN-01");
+        var execution = await service.GetProcessExecutionAsync(
+            "OPTIMIZED-RUN-01", siteId: "SITE-001");
 
         Assert.NotNull(execution);
         Assert.Equal("RCP-LENS-A", execution.ProcessSpecificationId);
@@ -380,7 +443,8 @@ public sealed class QualityWorkflowTests
             new ProcessAnalysisResolver(new FakeProcessConfigurationStore(plannedProcessSpecification)),
             new FakeTimeSeriesStore(rows));
 
-        var execution = await service.GetProcessExecutionAsync("NO-ACTUAL-PARAMETERS");
+        var execution = await service.GetProcessExecutionAsync(
+            "NO-ACTUAL-PARAMETERS", siteId: "SITE-001");
 
         Assert.NotNull(execution);
         Assert.Empty(execution.ControlParameters);
@@ -427,7 +491,8 @@ public sealed class QualityWorkflowTests
             new FakeTimeSeriesStore(rows));
 
         var error = await Assert.ThrowsAsync<ArgumentException>(() =>
-            service.CompareSelectedAsync("RUN-V1", ["RUN-V1", "RUN-V2"]));
+            service.CompareSelectedAsync(
+                "RUN-V1", ["RUN-V1", "RUN-V2"], siteId: "SITE-001"));
 
         Assert.Contains("actual_process_specification_version", error.Message, StringComparison.Ordinal);
     }
@@ -473,7 +538,8 @@ public sealed class QualityWorkflowTests
             timeSeries: new FakeTimeSeriesStore(rows));
 
         var result = await service.QueryAsync(
-            null, null, "LENS-A", null, null, null, null, null, "completed", 100);
+            null, null, "LENS-A", null, null, null, null, null, "completed", 100,
+            siteId: "SITE-001");
 
         var execution = Assert.Single(result.Data);
         Assert.Equal(600, execution.SampleCount);
@@ -513,7 +579,8 @@ public sealed class QualityWorkflowTests
             new FakeTimeSeriesStore(rows));
 
         var result = await service.QueryAsync(
-            null, null, null, null, null, null, null, executionId, null, 100);
+            null, null, null, null, null, null, null, executionId, null, 100,
+            siteId: "SITE-001");
 
         var execution = Assert.Single(result.Data);
         Assert.False(execution.HasStarted);
@@ -541,7 +608,8 @@ public sealed class QualityWorkflowTests
             new FakeTimeSeriesStore(rows));
 
         var result = await service.QueryAsync(
-            null, null, "LENS-A", null, null, null, null, null, "completed", 1, 1);
+            null, null, "LENS-A", null, null, null, null, null, "completed", 1, 1,
+            siteId: "SITE-001");
 
         Assert.Single(result.Data);
         Assert.Equal(2, result.Total);
@@ -593,7 +661,8 @@ public sealed class QualityWorkflowTests
 
         var batch = await service.QueryAsync(
             null, null, null, null, null, null, null, null, "completed", 100,
-            externalBatchRef: "BATCH-42");
+            externalBatchRef: "BATCH-42",
+            siteId: "SITE-001");
 
         Assert.Equal(2, batch.Total);
         Assert.Equal(["PRESS-02", "PRESS-01"], batch.Data.Select(static row => row.EquipmentId).ToArray());
@@ -604,7 +673,8 @@ public sealed class QualityWorkflowTests
         var edge = await service.QueryAsync(
             null, null, null, null, null, null, null, null, "completed", 100,
             externalBatchRef: "BATCH-42",
-            edgeId: "EDGE-B");
+            edgeId: "EDGE-B",
+            siteId: "SITE-001");
         Assert.Equal("RUN-B", Assert.Single(edge.Data).ExecutionId);
     }
 
@@ -633,7 +703,7 @@ public sealed class QualityWorkflowTests
                 new() { WindowId = "morning-a", SubjectType = "optical-molding-machine", SubjectId = "PRESS-01", From = DateTimeOffset.Parse("2026-07-20T08:00:00Z"), To = DateTimeOffset.Parse("2026-07-20T08:10:01Z") },
                 new() { WindowId = "morning-b", SubjectType = "optical-molding-machine", SubjectId = "PRESS-01", From = DateTimeOffset.Parse("2026-07-20T10:00:00Z"), To = DateTimeOffset.Parse("2026-07-20T10:10:01Z") }
             ]
-        });
+        }, "SITE-001");
 
         Assert.Equal("window-comparison", result.AnalysisPlanId);
         Assert.Equal(600, result.Baseline.SampleCount);
@@ -665,6 +735,7 @@ public sealed class QualityWorkflowTests
             new()
             {
                 ScopeId = "quality-window-a",
+                SiteId = "SITE-001",
                 ScopeType = "analysis-window",
                 OutputItemId = "WP-A",
                 SubjectType = "optical-molding-machine",
@@ -689,7 +760,7 @@ public sealed class QualityWorkflowTests
                 new() { WindowId = "morning-a", SubjectType = "optical-molding-machine", SubjectId = "PRESS-01", From = DateTimeOffset.Parse("2026-07-20T08:00:00Z"), To = DateTimeOffset.Parse("2026-07-20T08:10:01Z") },
                 new() { WindowId = "morning-b", SubjectType = "optical-molding-machine", SubjectId = "PRESS-01", From = DateTimeOffset.Parse("2026-07-20T10:00:00Z"), To = DateTimeOffset.Parse("2026-07-20T10:10:01Z") }
             ]
-        });
+        }, "SITE-001");
 
         Assert.Equal(1, result.Baseline.Quality.ScopeCount);
         Assert.Equal(1, result.Baseline.Quality.InspectionCount);
@@ -793,6 +864,7 @@ public sealed class QualityWorkflowTests
         => new()
         {
             RecordId = Guid.CreateVersion7(),
+            SiteId = "SITE-001",
             OutputItemId = outputItemId,
             ExecutionId = executionId,
             DefinitionCode = definitionCode,
@@ -828,6 +900,7 @@ public sealed class QualityWorkflowTests
         public Task<IReadOnlyList<PlatformProductionEvent>> QueryAsync(PlatformEventQuery query, CancellationToken ct = default)
         {
             IEnumerable<PlatformProductionEvent> filtered = rows;
+            if (!string.IsNullOrWhiteSpace(query.SiteId)) filtered = filtered.Where(item => item.SiteId == query.SiteId);
             if (!string.IsNullOrWhiteSpace(query.EdgeId)) filtered = filtered.Where(item => item.EdgeId == query.EdgeId);
             if (!string.IsNullOrWhiteSpace(query.EventType)) filtered = filtered.Where(item => item.Event.EventType == query.EventType);
             if (!string.IsNullOrWhiteSpace(query.SubjectType)) filtered = filtered.Where(item => item.Event.Subject.Type == query.SubjectType);
@@ -841,15 +914,21 @@ public sealed class QualityWorkflowTests
         }
         public Task<IReadOnlyList<PlatformProductionEvent>> QueryByExecutionIdsAsync(
             IReadOnlyCollection<string> executionIds,
+            string siteId,
             CancellationToken ct = default)
             => Task.FromResult<IReadOnlyList<PlatformProductionEvent>>(rows
-                .Where(item => item.Event.ExecutionId is not null && executionIds.Contains(item.Event.ExecutionId))
+                .Where(item => string.Equals(item.SiteId, siteId, StringComparison.Ordinal) &&
+                               item.Event.ExecutionId is not null &&
+                               executionIds.Contains(item.Event.ExecutionId))
                 .ToArray());
         public Task<IReadOnlyList<PlatformProcessExecutionSummarySource>> QueryExecutionSummarySourcesAsync(
             IReadOnlyCollection<string> executionIds,
+            string siteId,
             CancellationToken ct = default)
             => Task.FromResult<IReadOnlyList<PlatformProcessExecutionSummarySource>>(rows
-                .Where(item => item.Event.ExecutionId is not null && executionIds.Contains(item.Event.ExecutionId))
+                .Where(item => string.Equals(item.SiteId, siteId, StringComparison.Ordinal) &&
+                               item.Event.ExecutionId is not null &&
+                               executionIds.Contains(item.Event.ExecutionId))
                 .GroupBy(item => item.Event.ExecutionId!, StringComparer.Ordinal)
                 .Select(group => new PlatformProcessExecutionSummarySource
                 {

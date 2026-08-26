@@ -1,3 +1,4 @@
+// 以冻结工具事实、引用和声明强度规则评估 Agent 运行的可审计性。
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text.Json;
@@ -5,15 +6,10 @@ using Ingot.Contracts.Agents;
 
 namespace Ingot.Platform.Application.Insight;
 
+/// <summary>依据冻结工具事实和引用规则评估 Agent 回答。</summary>
 public sealed class GoldenQuestionEvaluator
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
-    private static readonly string[] CausalClaims =
-    [
-        "导致", "已证明因果", "确定原因", "confirmed root cause", "proven cause",
-        "directly caused", "caused by"
-    ];
-
     public GoldenQuestionEvaluation Evaluate(GoldenQuestionCase goldenCase, AgentRunSnapshot run)
     {
         if (goldenCase.Status != GoldenQuestionStatuses.Reviewed)
@@ -63,13 +59,17 @@ public sealed class GoldenQuestionEvaluator
                 "数据不足类问题必须由工具证据触发，并拒绝给出确定结论或图表。");
         }
 
-        var forbidden = CausalClaims.Concat(goldenCase.ForbiddenAnswerText)
+        var forbidden = goldenCase.ForbiddenAnswerText
             .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
         var hasStructuredCausalClaim = run.Answer is not null &&
             (string.Equals(run.Answer.SummaryStrength, AnalysisClaimStrengths.Causal, StringComparison.Ordinal) ||
              run.Answer.Findings.Any(static finding =>
                  string.Equals(finding.Strength, AnalysisClaimStrengths.Causal, StringComparison.Ordinal)));
+        var answerValues = run.Answer is null
+            ? []
+            : AnalysisTextPolicy.EnumerateAnswerText(run.Answer).ToArray();
         Add("causal-guard", !hasStructuredCausalClaim &&
+            !answerValues.Any(AnalysisTextPolicy.ContainsUnsupportedCausalClaim) &&
             !forbidden.Any(term => AnswerText(run).Contains(term, StringComparison.OrdinalIgnoreCase)),
             "未经受控实验验证的回答不得包含因果断言或审核禁用文本。");
 
@@ -132,10 +132,10 @@ public sealed class GoldenQuestionEvaluator
            !string.IsNullOrWhiteSpace(run.PromptVersion) &&
            !string.IsNullOrWhiteSpace(run.ToolsetVersion) &&
            run.ToolResults.Count > 0 &&
-           run.ToolResults.All(static result => result.ContentHash.Length == 64);
+           run.ToolResults.All(AgentToolResultIntegrity.HasValidContentHash);
 
     private static string AnswerText(AgentRunSnapshot run)
-        => run.Answer is null ? string.Empty : string.Join('\n', new[] { run.Answer.Summary }
-            .Concat(run.Answer.Findings.Select(static finding => finding.Statement))
-            .Concat(run.Answer.Limitations));
+        => run.Answer is null
+            ? string.Empty
+            : string.Join('\n', AnalysisTextPolicy.EnumerateAnswerText(run.Answer));
 }

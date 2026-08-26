@@ -6,19 +6,25 @@ using Ingot.Contracts.Events;
 using Ingot.Domain.Events;
 using Ingot.Platform.Infrastructure.AgentTools;
 using Ingot.Platform.Infrastructure.Events;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace Ingot.Core.Tests.Agent;
 
 public sealed class AnalysisToolTests
 {
+    private static readonly AgentAccessScope SiteScope = new()
+    {
+        SiteIds = new HashSet<string>(["SITE-001"], StringComparer.OrdinalIgnoreCase)
+    };
     private static readonly AgentExecutionContext ExecutionContext = new()
     {
         RunId = "run-test",
         UserId = "operator",
         EntryPoint = ProductEntryPoints.Chat,
         Purpose = RunPurposes.ReadOnlyAnalysis,
-        Request = new CreateChatRunRequest { Question = "test" }
+        Request = new CreateChatRunRequest { Question = "test" },
+        AccessScope = SiteScope
     };
 
     [Fact]
@@ -33,7 +39,7 @@ public sealed class AnalysisToolTests
         ]), EmptyTimeSeriesStore.Instance);
 
         var result = await tool.ExecuteAsync(
-            new AnalysisToolCall { Tool = tool.Definition.Name },
+            QualityCall(tool),
             ExecutionContext);
 
         Assert.Equal(later, result.Data.GetProperty("latestOccurredAt").GetDateTimeOffset());
@@ -54,7 +60,7 @@ public sealed class AnalysisToolTests
             }), EmptyTimeSeriesStore.Instance);
 
         var result = await tool.ExecuteAsync(
-            new AnalysisToolCall { Tool = tool.Definition.Name },
+            QualityCall(tool),
             ExecutionContext);
 
         Assert.Equal(trueLatest, result.Data.GetProperty("latestOccurredAt").GetDateTimeOffset());
@@ -76,7 +82,7 @@ public sealed class AnalysisToolTests
         var tool = new CheckDataQualityTool(new StubEventReader(rows), EmptyTimeSeriesStore.Instance);
 
         var result = await tool.ExecuteAsync(
-            new AnalysisToolCall { Tool = tool.Definition.Name },
+            QualityCall(tool),
             ExecutionContext);
 
         Assert.Equal(AnalysisToolOutcomes.InsufficientData, result.Outcome);
@@ -86,6 +92,63 @@ public sealed class AnalysisToolTests
         Assert.DoesNotContain(result.Limitations, limitation => limitation.Contains("500", StringComparison.Ordinal));
         Assert.Contains("已完整检查 1202 条", result.Summary, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public async Task CheckDataQuality_RejectsUnauthorizedSiteBeforeReadingData()
+    {
+        var tool = new CheckDataQualityTool(new StubEventReader([]), EmptyTimeSeriesStore.Instance);
+        var call = QualityCall(tool) with
+        {
+            Arguments = new Dictionary<string, string?> { ["siteId"] = "SITE-OTHER" }
+        };
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
+            tool.ExecuteAsync(call, ExecutionContext));
+    }
+
+    [Fact]
+    public async Task CheckDataQuality_FailsBeforeScanningExecutionsBeyondBudget()
+    {
+        var at = DateTimeOffset.Parse("2026-07-18T10:00:00Z");
+        var tool = new CheckDataQualityTool(
+            new StubEventReader(
+            [
+                Row(1, 1, "process.execution.started", at, "execution-1"),
+                Row(2, 2, "process.execution.started", at, "execution-2")
+            ]),
+            EmptyTimeSeriesStore.Instance,
+            options: Options.Create(new ChatOptions { MaxProcessExecutionsPerTool = 1 }));
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            tool.ExecuteAsync(QualityCall(tool), ExecutionContext));
+
+        Assert.Contains("超过 1 个预算", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task CheckDataQuality_PassesExplicitEventRowBudgetToReader()
+    {
+        var at = DateTimeOffset.Parse("2026-07-18T10:00:00Z");
+        var tool = new CheckDataQualityTool(
+            new StubEventReader(
+            [
+                Row(1, 1, "telemetry.observed", at),
+                Row(2, 2, "telemetry.observed", at.AddSeconds(1))
+            ]),
+            EmptyTimeSeriesStore.Instance,
+            options: Options.Create(new ChatOptions { MaxEventRowsPerTool = 1 }));
+
+        var error = await Assert.ThrowsAsync<ChatDataQueryLimitExceededException>(() =>
+            tool.ExecuteAsync(QualityCall(tool), ExecutionContext));
+
+        Assert.Equal(1, error.MaximumRows);
+    }
+
+    private static AnalysisToolCall QualityCall(IAnalysisTool tool) => new()
+    {
+        Tool = tool.Definition.Name,
+        Arguments = new Dictionary<string, string?> { ["siteId"] = "SITE-001" }
+    };
 
     [Fact]
     public async Task GetProcessExecutionTrace_UsesTheFirstStartedEventAsProcessExecutionStart()
@@ -154,7 +217,11 @@ public sealed class AnalysisToolTests
     private static AnalysisToolCall ProcessExecutionCall(GetProcessExecutionTraceTool tool, string executionId) => new()
     {
         Tool = tool.Definition.Name,
-        Arguments = new Dictionary<string, string?> { ["executionId"] = executionId }
+        Arguments = new Dictionary<string, string?>
+        {
+            ["siteId"] = "SITE-001",
+            ["executionId"] = executionId
+        }
     };
 
     private static PlatformProductionEvent Row(
@@ -196,8 +263,12 @@ public sealed class AnalysisToolTests
         public Task<IReadOnlyList<PlatformProductionEvent>> QueryAllAsync(
             string userId,
             PlatformEventQuery query,
-            CancellationToken ct = default)
-            => Task.FromResult(rows);
+            CancellationToken ct = default,
+            int? maximumRows = null)
+            => maximumRows.HasValue && rows.Count > maximumRows.Value
+                ? Task.FromException<IReadOnlyList<PlatformProductionEvent>>(
+                    new ChatDataQueryLimitExceededException(maximumRows.Value))
+                : Task.FromResult(rows);
 
         public Task<PlatformEventScopeStats> GetScopeStatsAsync(
             string userId,

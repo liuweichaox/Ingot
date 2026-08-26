@@ -1,4 +1,4 @@
-
+// 管理项目研发资产，并在每个子资源入口复核成员关系和项目站点授权。
 using Ingot.Contracts.ProcessResearch;
 using Ingot.Contracts.ResearchAssets;
 using Ingot.Platform.Api.Agents;
@@ -427,9 +427,12 @@ public sealed class ProcessKnowledgeController(
         var project = await researchStore.GetProjectAsync(projectId, ct).ConfigureAwait(false);
         if (project is null)
             return (null, null, ResourceNotFound("研发项目不存在。"));
-        var canAccess = identity.HasAnyRole(PlatformRoles.PlatformAdministrator) ||
-                        string.Equals(project.OwnerUserId, identity.UserId, StringComparison.Ordinal) ||
-                        project.MemberUserIds.Contains(identity.UserId, StringComparer.Ordinal);
+        var isAdministrator = identity.HasAnyRole(PlatformRoles.PlatformAdministrator);
+        var isMember = string.Equals(project.OwnerUserId, identity.UserId, StringComparison.Ordinal) ||
+                       project.MemberUserIds.Contains(identity.UserId, StringComparer.Ordinal);
+        var canAccess = isAdministrator ||
+                        (isMember && !string.IsNullOrWhiteSpace(project.SiteCode) &&
+                         identity.CanAccessSite(project.SiteCode));
         if (!canAccess || requireWrite && (project.Status is
                 ResearchProjectStatuses.Completed or ResearchProjectStatuses.Archived))
             return (null, null, AuthorizationDenied());

@@ -87,7 +87,10 @@ public sealed class DataReliabilityBaselineServiceTests
                 [bad.ExecutionId] = bad
             }));
 
-        var baseline = await service.CalculateAsync(new DataReliabilityBaselineQuery());
+        var baseline = await service.CalculateAsync(new DataReliabilityBaselineQuery
+        {
+            SiteId = "SITE-001"
+        });
 
         Assert.Equal(2, baseline.MatchingCompletedRunCount);
         Assert.Equal(2, baseline.AnalyzedRunCount);
@@ -138,7 +141,10 @@ public sealed class DataReliabilityBaselineServiceTests
             new FakeEventStore(completed),
             new FakeProcessExecutionService(rows.ToDictionary(static row => row.ExecutionId)));
 
-        var baseline = await service.CalculateAsync(new DataReliabilityBaselineQuery());
+        var baseline = await service.CalculateAsync(new DataReliabilityBaselineQuery
+        {
+            SiteId = "SITE-001"
+        });
 
         var equipment = Assert.Single(baseline.ContextFactors, item => item.Field == "equipment_id");
         Assert.Equal(2, equipment.DistinctLevelCount);
@@ -256,6 +262,7 @@ public sealed class DataReliabilityBaselineServiceTests
             PlatformEventQuery query,
             CancellationToken ct = default)
             => Task.FromResult<IReadOnlyList<PlatformProductionEvent>>(rows
+                .Where(row => string.IsNullOrWhiteSpace(query.SiteId) || row.SiteId == query.SiteId)
                 .Where(row => query.EventType is null || row.Event.EventType == query.EventType)
                 .Where(row => !query.AfterIngestId.HasValue || row.IngestId > query.AfterIngestId)
                 .OrderBy(static row => row.IngestId)
@@ -264,16 +271,22 @@ public sealed class DataReliabilityBaselineServiceTests
 
         public Task<IReadOnlyList<PlatformProductionEvent>> QueryByExecutionIdsAsync(
             IReadOnlyCollection<string> executionIds,
+            string siteId,
             CancellationToken ct = default)
             => Task.FromResult<IReadOnlyList<PlatformProductionEvent>>(rows
-                .Where(row => row.Event.ExecutionId is not null && executionIds.Contains(row.Event.ExecutionId))
+                .Where(row => string.Equals(row.SiteId, siteId, StringComparison.Ordinal) &&
+                              row.Event.ExecutionId is not null &&
+                              executionIds.Contains(row.Event.ExecutionId))
                 .ToArray());
 
         public Task<IReadOnlyList<PlatformProcessExecutionSummarySource>> QueryExecutionSummarySourcesAsync(
             IReadOnlyCollection<string> executionIds,
+            string siteId,
             CancellationToken ct = default)
             => Task.FromResult<IReadOnlyList<PlatformProcessExecutionSummarySource>>(rows
-                .Where(row => row.Event.ExecutionId is not null && executionIds.Contains(row.Event.ExecutionId))
+                .Where(row => string.Equals(row.SiteId, siteId, StringComparison.Ordinal) &&
+                              row.Event.ExecutionId is not null &&
+                              executionIds.Contains(row.Event.ExecutionId))
                 .GroupBy(row => row.Event.ExecutionId!, StringComparer.Ordinal)
                 .Select(group => new PlatformProcessExecutionSummarySource
                 {

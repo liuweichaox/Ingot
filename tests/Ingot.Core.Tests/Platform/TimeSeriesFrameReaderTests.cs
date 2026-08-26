@@ -29,6 +29,30 @@ public sealed class TimeSeriesFrameReaderTests
         Assert.Equal(2, store.QueryCount);
     }
 
+    [Fact]
+    public async Task QueryAllAsync_FailsBeforeReturningFramesBeyondBudget()
+    {
+        var at = DateTimeOffset.Parse("2026-08-17T00:00:00Z");
+        var source = Enumerable.Range(1, 10_005)
+            .Select(index => new ProcessSampleFrame
+            {
+                EventId = $"event-{index}",
+                IngestId = index,
+                OccurredAt = at.AddSeconds(index),
+                RecordedAt = at.AddSeconds(index)
+            }).ToArray();
+        var store = new FrameStore(source);
+
+        var error = await Assert.ThrowsAsync<TimeSeriesQueryLimitExceededException>(() =>
+            TimeSeriesFrameReader.QueryAllAsync(
+                store,
+                new TimeSeriesQuery(),
+                maximumFrames: 10_000));
+
+        Assert.Equal(10_000, error.MaximumFrames);
+        Assert.Equal(2, store.QueryCount);
+    }
+
     private sealed class FrameStore(IReadOnlyList<ProcessSampleFrame> rows) : ITimeSeriesStore
     {
         public int QueryCount { get; private set; }

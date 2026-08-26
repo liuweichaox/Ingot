@@ -1,4 +1,4 @@
-
+// 在单一授权站点内寻找上下文匹配的可比较过程执行。
 using System.Text.Json;
 using Ingot.Agent;
 using Ingot.Contracts.Agents;
@@ -35,9 +35,10 @@ public sealed class FindComparableExecutionsTool(
         InputSchema = JsonSerializer.SerializeToElement(new
         {
             type = "object",
-            required = new[] { "executionId" },
+            required = new[] { "siteId", "executionId" },
             properties = new
             {
+                siteId = new { type = "string", minLength = 1, maxLength = 128 },
                 executionId = new { type = "string", minLength = 1, maxLength = 200 },
                 limit = new { type = "string", minLength = 1, maxLength = 3 }
             },
@@ -50,14 +51,15 @@ public sealed class FindComparableExecutionsTool(
         AgentExecutionContext context,
         CancellationToken ct = default)
     {
+        var siteId = context.AccessScope.EnsureAuthorizedSite(Require(call, "siteId"));
         var executionId = Require(call, "executionId").Trim();
         var limit = ParseLimit(call.Arguments.GetValueOrDefault("limit"), 20, 1, 200);
         var currentRows = await events.QueryAllAsync(
             context.UserId,
-            new PlatformEventQuery { ExecutionId = executionId },
+            new PlatformEventQuery { SiteId = siteId, ExecutionId = executionId },
             ct).ConfigureAwait(false);
         if (currentRows.Count == 0)
-            return Empty(executionId);
+            return Empty(siteId, executionId);
 
         var currentContext = currentRows.Select(static row => row.Event.Context)
             .FirstOrDefault(static item => item.Count > 0) ?? new Dictionary<string, string>();
@@ -87,9 +89,9 @@ public sealed class FindComparableExecutionsTool(
                     new RelatedRecordRef
                     {
                         Kind = "event-query",
-                        Id = $"correlation:{executionId}",
+                        Id = $"{siteId}:correlation:{executionId}",
                         Label = $"过程执行 {executionId} 事件",
-                        Url = $"/api/v1/events?executionId={Uri.EscapeDataString(executionId)}&limit=500"
+                        Url = $"/api/v1/events?siteId={Uri.EscapeDataString(siteId)}&executionId={Uri.EscapeDataString(executionId)}&limit=500"
                     }
                 ],
                 Limitations = [analysis is null
@@ -107,7 +109,7 @@ public sealed class FindComparableExecutionsTool(
             queryContext = contextFacts;
         var candidates = await events.QueryAllAsync(
             context.UserId,
-            new PlatformEventQuery { Context = queryContext },
+            new PlatformEventQuery { SiteId = siteId, Context = queryContext },
             ct).ConfigureAwait(false);
 
         var comparable = candidates
@@ -165,7 +167,7 @@ public sealed class FindComparableExecutionsTool(
                 {
                     Kind = "event-query",
                     Label = "同类过程执行生产记录明细（分页）",
-                    Url = BuildEventsUrl(queryContext)
+                    Url = BuildEventsUrl(siteId, queryContext)
                 }
             ],
             RelatedRecords =
@@ -173,9 +175,9 @@ public sealed class FindComparableExecutionsTool(
                 new RelatedRecordRef
                 {
                     Kind = "event-query",
-                    Id = $"comparable:{executionId}",
+                    Id = $"{siteId}:comparable:{executionId}",
                     Label = $"过程执行 {executionId} 同类检索",
-                    Url = BuildEventsUrl(queryContext)
+                    Url = BuildEventsUrl(siteId, queryContext)
                 }
             ],
             Limitations = limitations,
@@ -183,7 +185,7 @@ public sealed class FindComparableExecutionsTool(
         };
     }
 
-    private static AnalysisToolResult Empty(string executionId)
+    private static AnalysisToolResult Empty(string siteId, string executionId)
         => new()
         {
             Tool = "find_comparable_executions",
@@ -194,9 +196,9 @@ public sealed class FindComparableExecutionsTool(
                 new RelatedRecordRef
                 {
                     Kind = "event-query",
-                    Id = $"correlation:{executionId}",
+                    Id = $"{siteId}:correlation:{executionId}",
                     Label = $"过程执行 {executionId} 事件",
-                    Url = $"/api/v1/events?executionId={Uri.EscapeDataString(executionId)}&limit=500"
+                    Url = $"/api/v1/events?siteId={Uri.EscapeDataString(siteId)}&executionId={Uri.EscapeDataString(executionId)}&limit=500"
                 }
             ],
             Limitations = ["当前生产过程执行号没有对应的生产记录。"],
@@ -211,9 +213,13 @@ public sealed class FindComparableExecutionsTool(
     private static int ParseLimit(string? value, int fallback, int min, int max)
         => int.TryParse(value, out var parsed) ? Math.Clamp(parsed, min, max) : fallback;
 
-    private static string BuildEventsUrl(IReadOnlyDictionary<string, string> context)
+    private static string BuildEventsUrl(string siteId, IReadOnlyDictionary<string, string> context)
     {
-        var query = new List<string> { "limit=500" };
+        var query = new List<string>
+        {
+            $"siteId={Uri.EscapeDataString(siteId)}",
+            "limit=500"
+        };
         query.AddRange(context.Select(pair =>
             $"ctx.{Uri.EscapeDataString(pair.Key)}={Uri.EscapeDataString(pair.Value)}"));
         return $"/api/v1/events?{string.Join('&', query)}";

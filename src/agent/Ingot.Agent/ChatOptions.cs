@@ -1,5 +1,7 @@
+// 定义 Chat 模型、并发、时限和组合分析的受控配置。
 namespace Ingot.Agent;
 
+/// <summary>定义 Chat 运行、模型路由和组合分析的安全配置。</summary>
 public sealed class ChatOptions
 {
     public bool Enabled { get; set; }
@@ -20,6 +22,16 @@ public sealed class ChatOptions
 
     public int MaxRunSeconds { get; set; } = 60;
 
+    public int MaxConcurrentRuns { get; set; } = 8;
+
+    public int MaxConcurrentRunsPerUser { get; set; } = 2;
+
+    public int MaxEventRowsPerTool { get; set; } = 50_000;
+
+    public int MaxProcessExecutionsPerTool { get; set; } = 200;
+
+    public int MaxTimeSeriesFramesPerTool { get; set; } = 100_000;
+
     public bool EnableCombinedAnalysis { get; set; }
 
     public int MaxDiscussionRounds { get; set; } = 3;
@@ -30,6 +42,7 @@ public sealed class ChatOptions
         = new(StringComparer.OrdinalIgnoreCase);
 }
 
+/// <summary>定义单个模型的可选成本估算参数。</summary>
 public sealed class ModelPricingOptions
 {
     public decimal InputPerMillionTokens { get; set; }

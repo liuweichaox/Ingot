@@ -1,3 +1,4 @@
+// 运行 HTTP 轮询采集并在出站策略、超时与生命周期边界内发布事件。
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
@@ -19,6 +20,7 @@ internal sealed class HttpPollingAcquisitionHostedService(
     AcquisitionProbeService probeService,
     IAcquisitionSecretResolver secrets,
     IEnumerable<IAcquisitionProtocolRunner> protocolRunners,
+    AcquisitionHttpEgressPolicy egressPolicy,
     AcquisitionStatus status,
     ILogger<HttpPollingAcquisitionHostedService> logger) : BackgroundService
 {
@@ -402,6 +404,10 @@ internal sealed class HttpPollingAcquisitionHostedService(
         client.Timeout = TimeSpan.FromMilliseconds(Math.Max(1000, options.TimeoutMs));
         var endpoint = HttpAcquisitionRequestFactory.CreateEndpoint(
             options.DeviceBaseUrl, options.SnapshotPath);
+        await egressPolicy.EnsureAllowedAsync(
+            endpoint,
+            ct,
+            options.HeaderSecretRefs.Count > 0).ConfigureAwait(false);
         var delay = TimeSpan.FromMilliseconds(options.PollIntervalMs);
         string? currentProcessSpecification = null;
         var lifecycle = new AcquisitionLifecycleTracker();

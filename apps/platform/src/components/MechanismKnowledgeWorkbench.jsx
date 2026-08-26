@@ -1,4 +1,4 @@
-
+// 展示可引用、可审核且受项目范围约束的机制知识工作台。
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getJson, postForm, postJson } from "../api/http";
 import { Alert, Button, Card, EmptyState, Field, Input, Select, StatusBadge, Textarea } from "../ui/components";
@@ -161,7 +161,12 @@ export function MechanismKnowledgeWorkbench({ projectId, sources = [], reloadAss
   }
 
   async function uploadSource(event) {
-    event.preventDefault(); setBusy(true); setError("");
+    event.preventDefault();
+    if (!projectId) {
+      setError("请先选择研发项目。");
+      return;
+    }
+    setBusy(true); setError("");
     try {
       const data = new FormData();
       data.set("projectId", projectId); data.set("title", upload.title);
@@ -253,7 +258,7 @@ export function MechanismKnowledgeWorkbench({ projectId, sources = [], reloadAss
           <Field label="来源标题"><Input required value={upload.title} onChange={field(setUpload, "title")} /></Field>
           <Field label="来源类型"><Select value={upload.sourceKind} onChange={field(setUpload, "sourceKind")}><option value="document">文档</option><option value="spreadsheet">表格</option><option value="image">现场图片</option><option value="field-note">现场记录</option></Select></Field>
           <Field label="文件"><Input required type="file" accept=".pdf,.xlsx,.xlsm,.csv,.txt,.md,.png,.jpg,.jpeg,.webp,.tif,.tiff" onChange={event => setUpload(current => ({ ...current, file: event.target.files?.[0] || null }))} /></Field>
-          <Button type="submit" variant="primary" disabled={busy || !upload.file}>上传并提取</Button>
+          <Button type="submit" variant="primary" disabled={busy || !projectId || !upload.file}>上传并提取</Button>
         </form>
         {sources.length > 0 && <div className="mt-4 grid gap-2 md:grid-cols-2">{sources.map(source => <div className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2 text-sm" key={source.sourceId}><span><span className="font-medium text-slate-800">{source.title}</span><span className="ml-2 text-xs text-slate-500">{source.sha256.slice(0, 12)} · {extractionStatusLabel(source.extractionStatus)}</span></span><span className="flex gap-2">{source.extractionStatus === "completed" && <Button disabled={busy} onClick={() => generateDraft(source.sourceId)}>生成语义草稿</Button>}{source.extractionStatus === "failed" && <Button disabled={busy} onClick={() => retryExtraction(source.sourceId)}>重新提取</Button>}</span></div>)}</div>}
         <p className="mt-3 text-xs text-slate-500">语义生成只回填可编辑草稿，不会自动保存、审核或激活；模型输出必须保留原始片段引用。</p>

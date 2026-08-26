@@ -1,9 +1,10 @@
-using System.Text.RegularExpressions;
+// 在明确轮次、令牌和并发预算内执行多视角分析并汇总可审计结果。
 using Ingot.Contracts.Agents;
 using Microsoft.Extensions.Options;
 
 namespace Ingot.Agent;
 
+/// <summary>在固定讨论轮次、令牌和并发预算内执行组合分析。</summary>
 public sealed partial class BoundedCombinedAnalysisWorkflow(IOptions<ChatOptions> options) : ICombinedAnalysisWorkflow
 {
     private readonly ChatOptions _options = options.Value;
@@ -60,20 +61,16 @@ public sealed partial class BoundedCombinedAnalysisWorkflow(IOptions<ChatOptions
                     Reviews = claims.ToArray()
                 }, ct)).ToArray();
             var participantResults = await Task.WhenAll(roleTasks).ConfigureAwait(false);
+            turns += participantResults.Length;
             foreach (var failed in participantResults.Where(static item => item.ErrorType is not null))
             {
-                limitations.Add($"{failed.Role} 在第 {round} 轮不可用，已从本轮讨论中隔离。");
+                limitations.Add($"{failed.Role} 在本轮不可用，已从讨论中隔离。");
                 await publish(AgentStreamEventTypes.DiscussionParticipantFailed,
                     new { role = failed.Role, round, errorType = failed.ErrorType }, ct).ConfigureAwait(false);
             }
 
             var successful = participantResults.Where(static item => item.Result is not null).ToArray();
             modelCalls.AddRange(successful.Select(static item => item.Result!.Usage));
-            if (round == 1 && successful.Length < 2)
-            {
-                limitations.Add("第一轮少于两个角色成功返回，无法形成有交叉审查的可能原因。");
-                break;
-            }
             if (successful.Length == 0)
                 break;
 
@@ -89,6 +86,18 @@ public sealed partial class BoundedCombinedAnalysisWorkflow(IOptions<ChatOptions
                     relatedRecords,
                     hypotheses,
                     results);
+                if (!DefaultAnalysisResultValidator.TryValidatePerspectiveAnalysis(
+                        contribution,
+                        results,
+                        hypotheses.Select(static item => item.CauseId).ToArray(),
+                        out _))
+                {
+                    limitations.Add($"{participant.Role} 返回的内容未通过证据边界校验，已从讨论中隔离。");
+                    await publish(AgentStreamEventTypes.DiscussionParticipantFailed,
+                        new { role = participant.Role, round, errorType = "ValidationRejected" }, ct)
+                        .ConfigureAwait(false);
+                    continue;
+                }
                 normalizedThisRound.Add(contribution);
                 transcript.Add(contribution);
                 foreach (var hypothesis in contribution.PossibleCauses)
@@ -100,11 +109,15 @@ public sealed partial class BoundedCombinedAnalysisWorkflow(IOptions<ChatOptions
                         hypotheses.Add(hypothesis);
                 }
                 claims.AddRange(contribution.Reviews);
-                turns++;
                 await publish(AgentStreamEventTypes.DiscussionMessage, contribution, ct)
                     .ConfigureAwait(false);
             }
 
+            if (round == 1 && normalizedThisRound.Count < 2)
+            {
+                limitations.Add("第一轮少于两个角色通过证据边界校验，无法形成有交叉审查的可能原因。");
+                break;
+            }
             if (round == 1 && hypotheses.Count == 0)
                 break;
             if (round > 1 && normalizedThisRound.All(item => item.Reviews.Count == 0 && item.PossibleCauses.Count == 0))
@@ -136,6 +149,12 @@ public sealed partial class BoundedCombinedAnalysisWorkflow(IOptions<ChatOptions
             RelatedRecords = relatedRecords,
             Limitations = limitations.Distinct(StringComparer.Ordinal).ToArray()
         };
+        if (!DefaultAnalysisResultValidator.TryValidateCombinedAnalysis(
+                verdict,
+                results,
+                sourceNumbers: null,
+                out var validationError))
+            throw new InvalidOperationException($"多视角分析未通过证据边界校验: {validationError}");
         await publish(AgentStreamEventTypes.DiscussionCompleted, verdict, ct).ConfigureAwait(false);
         return new CombinedAnalysisWorkflowResult { Verdict = verdict, ModelCalls = modelCalls };
     }
@@ -187,7 +206,7 @@ public sealed partial class BoundedCombinedAnalysisWorkflow(IOptions<ChatOptions
                 Reason = Limit(item.Reason, 1000),
                 RelatedRecords = CanonicalRelatedRecords(item.RelatedRecords, allowed)
             })
-            .Where(static item => item.RelatedRecords.Count > 0)
+            .Where(item => item.RelatedRecords.Count > 0 && !knownCauseIds.Contains(item.CauseId))
             .ToArray();
         foreach (var hypothesis in hypotheses)
             knownCauseIds.Add(hypothesis.CauseId);
@@ -211,7 +230,9 @@ public sealed partial class BoundedCombinedAnalysisWorkflow(IOptions<ChatOptions
         {
             Role = expectedRole,
             Round = expectedRound,
-            Summary = Limit(raw.Summary, 500),
+            Summary = IsSafeStatement(raw.Summary) && HasGroundedNumbers(raw.Summary, groundedNumbers)
+                ? Limit(raw.Summary, 500)
+                : "该角色返回的摘要未通过证据边界校验。",
             PossibleCauses = hypotheses,
             Reviews = claims
         };
@@ -228,13 +249,10 @@ public sealed partial class BoundedCombinedAnalysisWorkflow(IOptions<ChatOptions
 
     private static bool IsSafeStatement(string? value)
         => !string.IsNullOrWhiteSpace(value) &&
-           !CausalLanguage().IsMatch(value);
+           !AnalysisTextPolicy.ContainsUnsupportedCausalClaim(value);
 
     private static bool HasGroundedNumbers(string? value, IReadOnlySet<string> groundedNumbers)
         => NumberGrounding.IsGrounded(value, groundedNumbers, out _);
-
-    [GeneratedRegex(@"确定原因|已证明因果|直接导致|confirmed\s+(the\s+)?root\s+cause|directly\s+caused|proves?\s+causation", RegexOptions.IgnoreCase)]
-    private static partial Regex CausalLanguage();
 
     private static string Limit(string? value, int maxLength)
     {

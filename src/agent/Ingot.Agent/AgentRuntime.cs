@@ -1,19 +1,22 @@
+// 编排受限 Agent 运行、持久化快照、工具调用、取消和并发预算。
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
-using System.Security.Cryptography;
-using System.Text.Json;
 using Ingot.Contracts.Agents;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace Ingot.Agent;
 
+/// <summary>编排 Agent 运行、持久化状态、执行只读工具并实施并发与时限预算。</summary>
 public sealed class AgentRuntime : IAgentRuntime
 {
     private const string ChatPromptVersion = "ingot-chat-v1";
     private const string ChatToolsetVersion = "production-records-readonly-v2";
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _active = new(StringComparer.Ordinal);
+    private readonly object _admissionGate = new();
+    private readonly Dictionary<string, int> _activeByUser = new(StringComparer.OrdinalIgnoreCase);
+    private int _activeCount;
     private readonly IAnalysisResultValidator _relatedRecordsVerifier;
     private readonly ILogger<AgentRuntime> _logger;
     private readonly ICombinedAnalysisWorkflow _investigationWorkflow;
@@ -47,8 +50,10 @@ public sealed class AgentRuntime : IAgentRuntime
         string entryPoint,
         string userId,
         CreateChatRunRequest request,
+        AgentAccessScope accessScope,
         CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(accessScope);
         ValidateEntryPoint(entryPoint);
         var settings = GetSettings();
         if (!settings.Enabled)
@@ -65,6 +70,8 @@ public sealed class AgentRuntime : IAgentRuntime
         var model = _models.GetClient(entryPoint, modelRole);
         if (!string.Equals(model.Provider, settings.Provider, StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException($"{entryPoint} 配置的模型 Provider 没有对应客户端。");
+        ReserveRun(userId, settings);
+        var admitted = true;
         var run = new AgentRunSnapshot
         {
             RunId = Guid.CreateVersion7().ToString(),
@@ -73,6 +80,7 @@ public sealed class AgentRuntime : IAgentRuntime
             Purpose = RunPurposes.ReadOnlyAnalysis,
             Question = request.Question,
             PageContext = request.PageContext,
+            AccessScope = SnapshotAccessScope(accessScope),
             Mode = request.Mode,
             Status = AgentRunStatuses.Queued,
             ModelProvider = model.Provider,
@@ -84,14 +92,26 @@ public sealed class AgentRuntime : IAgentRuntime
             Usage = new AgentUsageSummary()
         };
 
-        await _store.CreateAsync(run, ct).ConfigureAwait(false);
+        try
+        {
+            await _store.CreateAsync(run, ct).ConfigureAwait(false);
 
-        var timeout = TimeSpan.FromSeconds(Math.Clamp(settings.MaxRunSeconds, 1, 900));
-        var runCts = new CancellationTokenSource(timeout);
-        if (!_active.TryAdd(run.RunId, runCts))
-            throw new InvalidOperationException("无法注册 Chat 运行。");
-        _ = ExecuteAsync(run, request, model, tools, settings, runCts.Token);
-        return run;
+            var timeout = TimeSpan.FromSeconds(Math.Clamp(settings.MaxRunSeconds, 1, 900));
+            var runCts = new CancellationTokenSource(timeout);
+            if (!_active.TryAdd(run.RunId, runCts))
+            {
+                runCts.Dispose();
+                throw new InvalidOperationException("无法注册 Chat 运行。");
+            }
+            _ = ExecuteAsync(run, request, accessScope, model, tools, settings, runCts.Token);
+            admitted = false;
+            return run;
+        }
+        finally
+        {
+            if (admitted)
+                ReleaseRun(userId);
+        }
     }
 
     public AgentCapabilities GetCapabilities(string entryPoint)
@@ -146,8 +166,10 @@ public sealed class AgentRuntime : IAgentRuntime
             Items = page.Select(static run => new AgentRunListItem
             {
                 RunId = run.RunId,
+                UserId = run.UserId,
                 Question = run.Question,
                 PageContext = run.PageContext,
+                AccessScope = run.AccessScope,
                 EntryPoint = run.EntryPoint,
                 Purpose = run.Purpose,
                 Mode = run.Mode,
@@ -167,6 +189,20 @@ public sealed class AgentRuntime : IAgentRuntime
         var run = await _store.GetAsync(runId, ct).ConfigureAwait(false);
         return run is not null && string.Equals(run.EntryPoint, entryPoint, StringComparison.Ordinal) ? run : null;
     }
+
+    private static AgentRunAccessScopeSnapshot SnapshotAccessScope(AgentAccessScope accessScope)
+        => new()
+        {
+            AllowAllSites = accessScope.AllowAllSites,
+            SiteIds = accessScope.AllowAllSites
+                ? []
+                : accessScope.SiteIds
+                    .Where(static siteId => !string.IsNullOrWhiteSpace(siteId) && siteId != "*")
+                    .Select(static siteId => siteId.Trim())
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .Order(StringComparer.OrdinalIgnoreCase)
+                    .ToArray()
+        };
 
     public async IAsyncEnumerable<AgentStreamEvent> StreamAsync(
         string entryPoint,
@@ -251,6 +287,7 @@ public sealed class AgentRuntime : IAgentRuntime
     private async Task ExecuteAsync(
         AgentRunSnapshot initial,
         CreateChatRunRequest request,
+        AgentAccessScope accessScope,
         IModelClient model,
         IReadOnlyDictionary<string, IAnalysisTool> tools,
         EntryPointSettings settings,
@@ -278,7 +315,10 @@ public sealed class AgentRuntime : IAgentRuntime
                 .ConfigureAwait(false);
             modelCalls.Add(planResult.Usage);
             RecordModelCall(planResult.Usage);
-            var plan = planResult.Value with { EntryPoint = run.EntryPoint };
+            var plan = BindSingleSiteScope(
+                planResult.Value with { EntryPoint = run.EntryPoint },
+                accessScope,
+                tools);
             if (!_planValidator.TryValidate(run.EntryPoint, plan, tools, out var planError))
             {
                 await EmitAsync(run.RunId, AgentStreamEventTypes.PlanRejected, new { error = planError }, ct)
@@ -341,7 +381,8 @@ public sealed class AgentRuntime : IAgentRuntime
                                     UserId = run.UserId,
                                     EntryPoint = run.EntryPoint,
                                     Purpose = run.Purpose,
-                                    Request = request
+                                    Request = request,
+                                    AccessScope = accessScope
                                 },
                                 ct)
                             .ConfigureAwait(false);
@@ -512,21 +553,12 @@ public sealed class AgentRuntime : IAgentRuntime
                 new KeyValuePair<string, object?>("ingot.agent.run.outcome", outcome));
             if (_active.TryRemove(run.RunId, out var source))
                 source.Dispose();
+            ReleaseRun(run.UserId);
         }
     }
 
     private static AgentToolResultSnapshot Snapshot(AnalysisToolResult result, string version)
     {
-        var content = JsonSerializer.SerializeToUtf8Bytes(new
-        {
-            result.Tool,
-            Version = version,
-            result.Summary,
-            result.Data,
-            result.RelatedRecords,
-            result.Limitations,
-            result.Outcome
-        });
         return new AgentToolResultSnapshot
         {
             Tool = result.Tool,
@@ -536,7 +568,14 @@ public sealed class AgentRuntime : IAgentRuntime
             RelatedRecords = result.RelatedRecords,
             Limitations = result.Limitations,
             Outcome = result.Outcome,
-            ContentHash = Convert.ToHexStringLower(SHA256.HashData(content)),
+            ContentHash = AgentToolResultIntegrity.ComputeContentHash(
+                result.Tool,
+                version,
+                result.Summary,
+                result.Data,
+                result.RelatedRecords,
+                result.Limitations,
+                result.Outcome),
             VerifiedAt = DateTimeOffset.UtcNow
         };
     }
@@ -552,6 +591,60 @@ public sealed class AgentRuntime : IAgentRuntime
         => string.Equals(left.Tool, right.Tool, StringComparison.Ordinal) &&
            left.Arguments.OrderBy(static item => item.Key, StringComparer.Ordinal)
                .SequenceEqual(right.Arguments.OrderBy(static item => item.Key, StringComparer.Ordinal));
+
+    private static AnalysisPlan BindSingleSiteScope(
+        AnalysisPlan plan,
+        AgentAccessScope accessScope,
+        IReadOnlyDictionary<string, IAnalysisTool> tools)
+    {
+        var siteId = accessScope.SingleAuthorizedSiteOrDefault();
+        if (siteId is null)
+            return plan;
+        var calls = plan.ToolCalls.Select(call =>
+        {
+            if (call.Arguments.ContainsKey("siteId") ||
+                !tools.TryGetValue(call.Tool, out var tool) ||
+                !tool.Definition.InputSchema.TryGetProperty("properties", out var properties) ||
+                !properties.TryGetProperty("siteId", out _))
+                return call;
+            return call with
+            {
+                Arguments = new Dictionary<string, string?>(call.Arguments, StringComparer.Ordinal)
+                {
+                    ["siteId"] = siteId
+                }
+            };
+        }).ToArray();
+        return plan with { ToolCalls = calls };
+    }
+
+    private void ReserveRun(string userId, EntryPointSettings settings)
+    {
+        lock (_admissionGate)
+        {
+            if (_activeCount >= settings.MaxConcurrentRuns)
+                throw new InvalidOperationException("当前 Agent 运行已达到系统并发上限，请稍后重试。");
+            var userCount = _activeByUser.GetValueOrDefault(userId);
+            if (userCount >= settings.MaxConcurrentRunsPerUser)
+                throw new InvalidOperationException("当前用户的 Agent 运行已达到并发上限，请等待现有运行结束。");
+            _activeCount++;
+            _activeByUser[userId] = userCount + 1;
+        }
+    }
+
+    private void ReleaseRun(string userId)
+    {
+        lock (_admissionGate)
+        {
+            if (_activeCount > 0)
+                _activeCount--;
+            var userCount = _activeByUser.GetValueOrDefault(userId);
+            if (userCount <= 1)
+                _activeByUser.Remove(userId);
+            else
+                _activeByUser[userId] = userCount - 1;
+        }
+    }
 
     private static AgentUsageSummary BuildUsage(
         IReadOnlyList<ModelCallUsage> calls,
@@ -625,6 +718,8 @@ public sealed class AgentRuntime : IAgentRuntime
             _chatOptions.ReasoningModel,
             Math.Clamp(_chatOptions.MaxToolCalls, 1, 8),
             Math.Clamp(_chatOptions.MaxRunSeconds, 1, 900),
+            Math.Clamp(_chatOptions.MaxConcurrentRuns, 1, 128),
+            Math.Clamp(_chatOptions.MaxConcurrentRunsPerUser, 1, 32),
             _chatOptions.EnableCombinedAnalysis,
             Math.Clamp(_chatOptions.MaxDiscussionRounds, 1, 5),
             Math.Clamp(_chatOptions.MaxDiscussionTurns, 3, 15),
@@ -643,6 +738,8 @@ public sealed class AgentRuntime : IAgentRuntime
         string ReasoningModel,
         int MaxToolCalls,
         int MaxRunSeconds,
+        int MaxConcurrentRuns,
+        int MaxConcurrentRunsPerUser,
         bool EnableCombinedAnalysis,
         int MaxDiscussionRounds,
         int MaxDiscussionTurns,

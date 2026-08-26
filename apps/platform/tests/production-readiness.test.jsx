@@ -21,14 +21,17 @@ function response(status, payload) {
 
 describe("production-ready authentication and authorization", () => {
   it("treats an initial 401 as signed-out state without showing Unauthorized", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response(401, { title: "Unauthorized" })));
+    vi.stubGlobal("fetch", vi.fn()
+      .mockResolvedValueOnce(response(200, { mode: "local" }))
+      .mockResolvedValueOnce(response(401, { title: "Unauthorized" })));
     render(<AuthGate>{() => <div>signed in</div>}</AuthGate>);
-    expect(await screen.findByRole("heading", { name: "继续进入工作台" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "登录" })).toBeInTheDocument();
     expect(screen.queryByText("Unauthorized")).toBeNull();
   });
 
   it("localizes an explicit bad-password response", async () => {
     vi.stubGlobal("fetch", vi.fn()
+      .mockResolvedValueOnce(response(200, { mode: "local" }))
       .mockResolvedValueOnce(response(401, { title: "Unauthorized" }))
       .mockResolvedValueOnce(response(401, { title: "Unauthorized" })));
     render(<AuthGate>{() => <div>signed in</div>}</AuthGate>);

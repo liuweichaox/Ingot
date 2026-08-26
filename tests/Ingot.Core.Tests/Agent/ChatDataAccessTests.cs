@@ -58,6 +58,26 @@ public sealed class ChatDataAccessTests
         Assert.All(store.Queries, static query => Assert.Equal(500, query.Limit));
     }
 
+    [Fact]
+    public async Task Reader_QueryAll_FailsBeforeReturningRowsBeyondConfiguredBudget()
+    {
+        var store = new RecordingEventStore(1_201);
+        var reader = new ChatEventReader(store, Options.Create(new ChatDataAccessOptions
+        {
+            MaxRowsPerQuery = 1_000,
+            Users = new Dictionary<string, ChatUserDataScope>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["operator"] = new() { AllowAll = true }
+            }
+        }));
+
+        var error = await Assert.ThrowsAsync<ChatDataQueryLimitExceededException>(() =>
+            reader.QueryAllAsync("operator", new PlatformEventQuery()));
+
+        Assert.Equal(1_000, error.MaximumRows);
+        Assert.Equal([500, 500, 1], store.Queries.Select(static query => query.Limit));
+    }
+
     private sealed class RecordingEventStore
         : IPlatformEventStore
     {
@@ -97,10 +117,12 @@ public sealed class ChatDataAccessTests
 
         public Task<IReadOnlyList<PlatformProductionEvent>> QueryByExecutionIdsAsync(
             IReadOnlyCollection<string> executionIds,
+            string siteId,
             CancellationToken ct = default) => Task.FromResult<IReadOnlyList<PlatformProductionEvent>>([]);
 
         public Task<IReadOnlyList<PlatformProcessExecutionSummarySource>> QueryExecutionSummarySourcesAsync(
             IReadOnlyCollection<string> executionIds,
+            string siteId,
             CancellationToken ct = default) => Task.FromResult<IReadOnlyList<PlatformProcessExecutionSummarySource>>([]);
 
         public Task<PlatformEventScopeStats> GetScopeStatsAsync(

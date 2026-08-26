@@ -1,3 +1,4 @@
+// 按用户 Edge 与站点范围提供有界只读 Agent 事件和数据对象查询。
 using Ingot.Contracts.Analytics;
 using Ingot.Contracts.Events;
 using Ingot.Platform.Application.Events;
@@ -7,6 +8,8 @@ namespace Ingot.Platform.Infrastructure.AgentTools;
 
 public sealed class ChatDataAccessOptions
 {
+    public int MaxRowsPerQuery { get; set; } = 50_000;
+
     public Dictionary<string, ChatUserDataScope> Users { get; set; }
         = new(StringComparer.OrdinalIgnoreCase);
 }
@@ -18,6 +21,7 @@ public sealed class ChatUserDataScope
     public IReadOnlyList<string> EdgeIds { get; set; } = [];
 }
 
+/// <summary>按用户数据范围读取有界生产事件。</summary>
 public interface IChatEventReader
 {
     Task<IReadOnlyList<PlatformProductionEvent>> QueryAsync(
@@ -28,7 +32,8 @@ public interface IChatEventReader
     Task<IReadOnlyList<PlatformProductionEvent>> QueryAllAsync(
         string userId,
         PlatformEventQuery query,
-        CancellationToken ct = default);
+        CancellationToken ct = default,
+        int? maximumRows = null);
 
     Task<PlatformEventScopeStats> GetScopeStatsAsync(
         string userId,
@@ -37,6 +42,7 @@ public interface IChatEventReader
 
 }
 
+/// <summary>按用户数据范围读取有界生产数据对象。</summary>
 public interface IChatDataObjectReader
 {
     Task<DataObjectPage> QueryDataObjectsAsync(
@@ -50,6 +56,7 @@ public sealed class ChatEventReader(
     IOptions<ChatDataAccessOptions> options) : IChatEventReader, IChatDataObjectReader
 {
     private readonly ChatDataAccessOptions _options = options.Value;
+    private readonly int _maxRowsPerQuery = Math.Clamp(options.Value.MaxRowsPerQuery, 1, 1_000_000);
 
     public async Task<IReadOnlyList<PlatformProductionEvent>> QueryAsync(
         string userId,
@@ -76,21 +83,29 @@ public sealed class ChatEventReader(
     public async Task<IReadOnlyList<PlatformProductionEvent>> QueryAllAsync(
         string userId,
         PlatformEventQuery query,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        int? maximumRows = null)
     {
         const int pageSize = 500;
+        var rowBudget = maximumRows.HasValue
+            ? Math.Min(_maxRowsPerQuery, Math.Clamp(maximumRows.Value, 1, 1_000_000))
+            : _maxRowsPerQuery;
         var cursor = query.AfterIngestId ?? 0;
         var result = new List<PlatformProductionEvent>();
 
         while (true)
         {
+            var remaining = rowBudget - result.Count;
+            var requestedLimit = Math.Min(pageSize, remaining + 1);
             var page = await QueryAsync(
                     userId,
-                    query with { AfterIngestId = cursor, Limit = pageSize },
+                    query with { AfterIngestId = cursor, Limit = requestedLimit },
                     ct)
                 .ConfigureAwait(false);
             if (page.Count == 0)
                 break;
+            if (page.Count > remaining)
+                throw new ChatDataQueryLimitExceededException(rowBudget);
 
             var nextCursor = page.Max(static row => row.IngestId);
             if (nextCursor <= cursor)
@@ -98,7 +113,7 @@ public sealed class ChatEventReader(
 
             result.AddRange(page);
             cursor = nextCursor;
-            if (page.Count < pageSize)
+            if (page.Count < requestedLimit)
                 break;
         }
 
@@ -214,4 +229,10 @@ public sealed class ChatEventReader(
             MaximumSampleGapSeconds = rows.Max(static row => row.MaximumSampleGapSeconds)
         };
     }
+}
+
+public sealed class ChatDataQueryLimitExceededException(int maximumRows) : InvalidOperationException(
+    $"完整事件查询超过 {maximumRows} 条记录预算；请缩小站点、对象、过程执行或时间范围。")
+{
+    public int MaximumRows { get; } = maximumRows;
 }

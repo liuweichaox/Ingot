@@ -5,6 +5,7 @@ using System.Text;
 using Ingot.Contracts.Acquisition;
 using Ingot.Contracts.ProcessConfiguration;
 using Ingot.Edge.ConnectorHost.Acquisition;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace Ingot.Core.Tests.Edge;
@@ -16,7 +17,7 @@ public sealed class AcquisitionProbeServiceTests
     {
         var client = new HttpClient(new JsonHandler(
             """{"signals":{"temperature":125},"stageNumber":3}"""));
-        var service = new AcquisitionProbeService(
+        var service = CreateService(
             new SingleClientFactory(client),
             new NoSecrets());
         var result = await service.ProbeAsync(
@@ -43,7 +44,7 @@ public sealed class AcquisitionProbeServiceTests
     [Fact]
     public async Task HttpProbeRejectsMissingRequiredMapping()
     {
-        var service = new AcquisitionProbeService(
+        var service = CreateService(
             new SingleClientFactory(new HttpClient(new JsonHandler("""{"value":1}"""))),
             new NoSecrets());
         var result = await service.ProbeAsync(
@@ -64,7 +65,7 @@ public sealed class AcquisitionProbeServiceTests
     [Fact]
     public async Task HttpProbeBlocksPublishingWhenOptionalMappingWasNeverObserved()
     {
-        var service = new AcquisitionProbeService(
+        var service = CreateService(
             new SingleClientFactory(new HttpClient(new JsonHandler("""{"value":1}"""))),
             new NoSecrets());
         var result = await service.ProbeAsync(
@@ -87,7 +88,7 @@ public sealed class AcquisitionProbeServiceTests
     [Fact]
     public async Task HttpProbeRequiresAnExplicitlyConfiguredSequencePathToExist()
     {
-        var service = new AcquisitionProbeService(
+        var service = CreateService(
             new SingleClientFactory(new HttpClient(new JsonHandler("""{"value":1}"""))),
             new NoSecrets());
         var deployment = Deployment(new AcquisitionValueMapping
@@ -109,7 +110,7 @@ public sealed class AcquisitionProbeServiceTests
     [Fact]
     public async Task DiscoverySupportsServerSideFilteringAndStableCursorPaging()
     {
-        var service = new AcquisitionProbeService(
+        var service = CreateService(
             new SingleClientFactory(new HttpClient(new JsonHandler(
                 """{"signals":{"pressure":2,"temperature":1,"vacuum":3}}"""))),
             new NoSecrets());
@@ -142,7 +143,7 @@ public sealed class AcquisitionProbeServiceTests
     [Fact]
     public async Task DiscoveryRejectsInvalidCursor()
     {
-        var service = new AcquisitionProbeService(
+        var service = CreateService(
             new SingleClientFactory(new HttpClient(new JsonHandler("""{"value":1}"""))),
             new NoSecrets());
 
@@ -160,9 +161,10 @@ public sealed class AcquisitionProbeServiceTests
     public async Task HttpProbeUsesConfiguredMethodBodyAndSecretHeaders()
     {
         var handler = new CapturingHandler();
-        var service = new AcquisitionProbeService(
+        var service = CreateService(
             new SingleClientFactory(new HttpClient(handler)),
-            new FixedSecrets("token-secret", "Bearer test-token"));
+            new FixedSecrets("env:DEVICE_TOKEN", "Bearer test-token"),
+            "192.168.10.10");
         var deployment = Deployment(new AcquisitionValueMapping
         {
             DataItemCode = "mold.temperature",
@@ -179,7 +181,7 @@ public sealed class AcquisitionProbeServiceTests
                     RequestBody = "{\"read\":true}",
                     HeaderSecretRefs = new Dictionary<string, string>
                     {
-                        ["Authorization"] = "token-secret"
+                        ["Authorization"] = "env:DEVICE_TOKEN"
                     }
                 }
             }
@@ -191,6 +193,74 @@ public sealed class AcquisitionProbeServiceTests
         Assert.Equal(HttpMethod.Post, handler.Method);
         Assert.Equal("Bearer test-token", handler.Authorization);
         Assert.Equal("{\"read\":true}", handler.Body);
+    }
+
+    [Fact]
+    public async Task HttpProbeRejectsPublicTargetBeforeResolvingOrSendingSecrets()
+    {
+        var handler = new CapturingHandler();
+        var secrets = new FixedSecrets("env:DEVICE_TOKEN", "Bearer device-token");
+        var service = CreateService(
+            new SingleClientFactory(new HttpClient(handler)),
+            secrets);
+        var deployment = Deployment(new AcquisitionValueMapping
+        {
+            DataItemCode = "mold.temperature",
+            SourcePath = "value"
+        });
+        deployment = deployment with
+        {
+            Task = deployment.Task with
+            {
+                HttpPolling = deployment.Task.HttpPolling with
+                {
+                    BaseUrl = "https://203.0.113.10",
+                    HeaderSecretRefs = new Dictionary<string, string>
+                    {
+                        ["Authorization"] = "env:DEVICE_TOKEN"
+                    }
+                }
+            }
+        };
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => service.ProbeAsync(
+            deployment,
+            new SourceDiscoveryQuery(),
+            CancellationToken.None));
+
+        Assert.Contains("AllowedHttpHosts", exception.Message, StringComparison.Ordinal);
+        Assert.Equal(0, secrets.ResolveCount);
+        Assert.Equal(0, handler.RequestCount);
+    }
+
+    [Fact]
+    public async Task HttpProbeAllowsExplicitlyConfiguredPublicDeviceHost()
+    {
+        var handler = new CapturingHandler();
+        var service = CreateService(
+            new SingleClientFactory(new HttpClient(handler)),
+            new NoSecrets(),
+            "203.0.113.10");
+        var deployment = Deployment(new AcquisitionValueMapping
+        {
+            DataItemCode = "mold.temperature",
+            SourcePath = "value"
+        });
+        deployment = deployment with
+        {
+            Task = deployment.Task with
+            {
+                HttpPolling = deployment.Task.HttpPolling with { BaseUrl = "https://203.0.113.10" }
+            }
+        };
+
+        var result = await service.ProbeAsync(
+            deployment,
+            new SourceDiscoveryQuery(),
+            CancellationToken.None);
+
+        Assert.True(result.Success);
+        Assert.Equal(1, handler.RequestCount);
     }
 
     private static AcquisitionDeployment Deployment(AcquisitionValueMapping mapping)
@@ -208,7 +278,7 @@ public sealed class AcquisitionProbeServiceTests
                 TimestampMode = "edge-received",
                 HttpPolling = new HttpPollingConnection
                 {
-                    BaseUrl = "http://device.local",
+                    BaseUrl = "http://192.168.10.10",
                     SnapshotPath = "/snapshot"
                 },
                 Execution = new AcquisitionExecutionOptions { TimeoutMs = 1000 },
@@ -249,6 +319,20 @@ public sealed class AcquisitionProbeServiceTests
         public HttpClient CreateClient(string name) => client;
     }
 
+    private static AcquisitionProbeService CreateService(
+        IHttpClientFactory clients,
+        IAcquisitionSecretResolver secrets,
+        params string[] allowedHosts)
+        => new(
+            clients,
+            secrets,
+            new AcquisitionHttpEgressPolicy(Options.Create(new AcquisitionSecurityOptions
+            {
+                AllowedHttpHosts = allowedHosts,
+                AllowPrivateNetworkHttpTargets = true,
+                AllowPrivateNetworkTargets = true
+            })));
+
     private sealed class NoSecrets : IAcquisitionSecretResolver
     {
         public string? Resolve(string? reference) => null;
@@ -256,11 +340,18 @@ public sealed class AcquisitionProbeServiceTests
 
     private sealed class FixedSecrets(string reference, string value) : IAcquisitionSecretResolver
     {
-        public string? Resolve(string? requested) => requested == reference ? value : null;
+        public int ResolveCount { get; private set; }
+
+        public string? Resolve(string? requested)
+        {
+            ResolveCount++;
+            return requested == reference ? value : null;
+        }
     }
 
     private sealed class CapturingHandler : HttpMessageHandler
     {
+        public int RequestCount { get; private set; }
         public HttpMethod? Method { get; private set; }
         public string? Authorization { get; private set; }
         public string? Body { get; private set; }
@@ -269,8 +360,11 @@ public sealed class AcquisitionProbeServiceTests
             HttpRequestMessage request,
             CancellationToken cancellationToken)
         {
+            RequestCount++;
             Method = request.Method;
-            Authorization = request.Headers.GetValues("Authorization").Single();
+            Authorization = request.Headers.TryGetValues("Authorization", out var values)
+                ? values.Single()
+                : null;
             Body = request.Content is null ? null : await request.Content.ReadAsStringAsync(cancellationToken);
             return new HttpResponseMessage(HttpStatusCode.OK)
             {

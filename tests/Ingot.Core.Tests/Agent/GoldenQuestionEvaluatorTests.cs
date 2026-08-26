@@ -67,6 +67,61 @@ public sealed class GoldenQuestionEvaluatorTests
     }
 
     [Fact]
+    public void Evaluate_FailsCausalClaimContainedOnlyInCombinedAnalysis()
+    {
+        var golden = Golden(JsonSerializer.SerializeToElement(0.95));
+        var run = Run("完整率为 0.95，属于可核查结果。", "sufficient");
+        run = run with
+        {
+            Answer = run.Answer! with
+            {
+                CombinedAnalysis = new CombinedAnalysisResult
+                {
+                    Status = "needs-review",
+                    Summary = "需要复核。",
+                    PossibleCauses =
+                    [
+                        new PossibleCause
+                        {
+                            CauseId = "h-1",
+                            AuthorRole = AnalysisPerspectives.Process,
+                            Statement = "温度导致缺陷。",
+                            Reason = "需要复核。",
+                            RelatedRecords = [Reference()]
+                        }
+                    ],
+                    RelatedRecords = [Reference()]
+                }
+            }
+        };
+
+        var result = new GoldenQuestionEvaluator().Evaluate(golden, run);
+
+        Assert.False(result.Gates.Single(static gate => gate.Code == "causal-guard").Passed);
+    }
+
+    [Fact]
+    public void Evaluate_FailsAuditGateWhenToolResultContentWasTamperedAfterHashing()
+    {
+        var golden = Golden(JsonSerializer.SerializeToElement(0.95));
+        var run = Run("完整率为 0.95，属于可核查结果。", "sufficient");
+        run = run with
+        {
+            ToolResults =
+            [
+                run.ToolResults[0] with
+                {
+                    Data = JsonSerializer.SerializeToElement(new { completeness = 0.12 })
+                }
+            ]
+        };
+
+        var result = new GoldenQuestionEvaluator().Evaluate(golden, run);
+
+        Assert.False(result.Gates.Single(static gate => gate.Code == "execution.auditable").Passed);
+    }
+
+    [Fact]
     public void Evaluate_RequiresToolBackedRefusal()
     {
         var golden = Golden(JsonSerializer.SerializeToElement(0.95)) with
@@ -120,41 +175,43 @@ public sealed class GoldenQuestionEvaluatorTests
         ExpectedRecordReferences = [Reference()]
     };
 
-    private static AgentRunSnapshot Run(string summary, string outcome) => new()
+    private static AgentRunSnapshot Run(string summary, string outcome)
     {
-        RunId = "run-1",
-        UserId = "operator",
-        EntryPoint = ProductEntryPoints.Chat,
-        Purpose = RunPurposes.ReadOnlyAnalysis,
-        Question = "这批数据完整吗？",
-        Mode = "quick",
-        Status = AgentRunStatuses.Completed,
-        ModelProvider = "OpenAI",
-        Model = "local-qwen",
-        PromptVersion = "ingot-chat-v1",
-        ToolsetVersion = "production-records-readonly-v2",
-        CreatedAt = DateTimeOffset.UtcNow,
-        Answer = new AnalysisAnswer
+        var toolResult = new AgentToolResultSnapshot
         {
-            Summary = summary,
-            RelatedRecords = [Reference()]
-        },
-        ToolResults =
-        [
-            new AgentToolResultSnapshot
+            Tool = "check_data_quality",
+            Version = "1.0.0",
+            Summary = "完整率 0.95",
+            Data = JsonSerializer.SerializeToElement(new { completeness = 0.95 }),
+            RelatedRecords = [Reference()],
+            Outcome = outcome,
+            ContentHash = string.Empty,
+            VerifiedAt = DateTimeOffset.UtcNow
+        };
+        toolResult = toolResult with { ContentHash = AgentToolResultIntegrity.ComputeContentHash(toolResult) };
+        return new AgentRunSnapshot
+        {
+            RunId = "run-1",
+            UserId = "operator",
+            EntryPoint = ProductEntryPoints.Chat,
+            Purpose = RunPurposes.ReadOnlyAnalysis,
+            Question = "这批数据完整吗？",
+            Mode = "quick",
+            Status = AgentRunStatuses.Completed,
+            ModelProvider = "OpenAI",
+            Model = "local-qwen",
+            PromptVersion = "ingot-chat-v1",
+            ToolsetVersion = "production-records-readonly-v2",
+            CreatedAt = DateTimeOffset.UtcNow,
+            Answer = new AnalysisAnswer
             {
-                Tool = "check_data_quality",
-                Version = "1.0.0",
-                Summary = "完整率 0.95",
-                Data = JsonSerializer.SerializeToElement(new { completeness = 0.95 }),
-                RelatedRecords = [Reference()],
-                Outcome = outcome,
-                ContentHash = new string('a', 64),
-                VerifiedAt = DateTimeOffset.UtcNow
-            }
-        ],
-        Usage = new AgentUsageSummary()
-    };
+                Summary = summary,
+                RelatedRecords = [Reference()]
+            },
+            ToolResults = [toolResult],
+            Usage = new AgentUsageSummary()
+        };
+    }
 
     private static RelatedRecordRef Reference() => new()
     {

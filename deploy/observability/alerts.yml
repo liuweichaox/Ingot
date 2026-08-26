@@ -12,6 +12,24 @@ groups:
           summary: Platform API cannot be scraped
           description: Production event ingestion and reads may be unavailable.
 
+      - alert: IngotPlatformWorkerUnavailable
+        expr: up{job="ingot-platform-worker"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: Platform Worker cannot be scraped
+          description: Durable background jobs are not being processed by the worker host.
+
+      - alert: IngotPlatformWorkerHeartbeatStale
+        expr: platform_worker_heartbeat_age_seconds > platform_worker_heartbeat_stale_after_seconds
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: Platform Worker heartbeat is stale
+          description: The worker host is reachable but its scheduling heartbeat has stopped.
+
       - alert: IngotPostgresUnavailable
         expr: up{job="ingot-postgres"} == 0 or pg_up == 0
         for: 1m

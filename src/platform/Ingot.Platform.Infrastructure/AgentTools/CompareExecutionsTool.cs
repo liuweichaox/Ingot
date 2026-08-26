@@ -18,6 +18,8 @@ public sealed class CompareExecutionsTool(
     IInspectionReviewStore? reviews = null,
     IInspectionMasterDataStore? inspectionMasterData = null) : IAnalysisTool
 {
+    private const int MaximumAggregateEventRows = 50_000;
+
     public AnalysisToolDefinition Definition { get; } = new()
     {
         Name = "compare_executions",
@@ -28,9 +30,10 @@ public sealed class CompareExecutionsTool(
         InputSchema = JsonSerializer.SerializeToElement(new
         {
             type = "object",
-            required = new[] { "baselineProcessExecutionId", "comparisonProcessExecutionIds" },
+            required = new[] { "siteId", "baselineProcessExecutionId", "comparisonProcessExecutionIds" },
             properties = new
             {
+                siteId = new { type = "string", minLength = 1, maxLength = 128 },
                 baselineProcessExecutionId = new { type = "string", minLength = 1, maxLength = 200 },
                 comparisonProcessExecutionIds = new { type = "string", minLength = 1, maxLength = 4000 }
             },
@@ -43,6 +46,7 @@ public sealed class CompareExecutionsTool(
         AgentExecutionContext context,
         CancellationToken ct = default)
     {
+        var siteId = context.AccessScope.EnsureAuthorizedSite(Require(call, "siteId"));
         var baselineId = Require(call, "baselineProcessExecutionId").Trim();
         var candidateIds = Require(call, "comparisonProcessExecutionIds")
             .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
@@ -53,15 +57,35 @@ public sealed class CompareExecutionsTool(
         if (candidateIds.Length == 0)
             throw new ArgumentException("compare_executions 至少需要一个对比过程执行。", nameof(call));
 
-        var baseline = await LoadProcessExecutionAsync(context.UserId, baselineId, ct).ConfigureAwait(false);
+        var remainingEventRows = MaximumAggregateEventRows;
+        var baseline = await LoadProcessExecutionAsync(
+                context.UserId,
+                siteId,
+                baselineId,
+                remainingEventRows,
+                ct)
+            .ConfigureAwait(false);
+        remainingEventRows -= baseline.Events;
         var candidates = new List<ProcessExecutionSnapshot>();
         foreach (var candidateId in candidateIds)
-            candidates.Add(await LoadProcessExecutionAsync(context.UserId, candidateId, ct).ConfigureAwait(false));
+        {
+            if (remainingEventRows <= 0)
+                throw new ChatDataQueryLimitExceededException(MaximumAggregateEventRows);
+            var candidate = await LoadProcessExecutionAsync(
+                    context.UserId,
+                    siteId,
+                    candidateId,
+                    remainingEventRows,
+                    ct)
+                .ConfigureAwait(false);
+            candidates.Add(candidate);
+            remainingEventRows -= candidate.Events;
+        }
 
         var allInspections = InspectionRecordSet.Effective(
             await inspections.QueryAllByExecutionIdsAsync(
                 [baselineId, .. candidateIds],
-                null,
+                siteId,
                 ct).ConfigureAwait(false));
         var latestReviews = reviews is null
             ? new Dictionary<Guid, InspectionReview>()
@@ -106,7 +130,8 @@ public sealed class CompareExecutionsTool(
             : await executionComparisons.CompareSelectedAsync(
                 baselineId,
                 [baselineId, .. candidateIds],
-                ct).ConfigureAwait(false);
+                ct,
+                siteId).ConfigureAwait(false);
         var limitations = new List<string>();
         if (baseline.Events == 0)
             limitations.Add("基准过程执行没有生产记录。");
@@ -131,13 +156,13 @@ public sealed class CompareExecutionsTool(
             {
                 Kind = "event-query",
                 Label = "基准过程执行生产记录明细（分页）",
-                Url = $"/api/v1/events?executionId={Uri.EscapeDataString(baselineId)}&limit=500"
+                Url = $"/api/v1/events?siteId={Uri.EscapeDataString(siteId)}&executionId={Uri.EscapeDataString(baselineId)}&limit=500"
             },
             new()
             {
                 Kind = "inspection-query",
                 Label = "基准过程执行检测记录明细（分页）",
-                Url = $"/api/v1/inspection-records?executionId={Uri.EscapeDataString(baselineId)}&limit=500"
+                Url = $"/api/v1/inspection-records?siteId={Uri.EscapeDataString(siteId)}&executionId={Uri.EscapeDataString(baselineId)}&limit=500"
             }
         };
         if (topCandidate is not null)
@@ -177,7 +202,7 @@ public sealed class CompareExecutionsTool(
                 }
             }),
             Details = details,
-            RelatedRecords = BuildRelatedRecords(baselineId, candidateIds),
+            RelatedRecords = BuildRelatedRecords(siteId, baselineId, candidateIds),
             Limitations = limitations,
             Outcome = baseline.Events > 0 && candidates.Any(static item => item.Events > 0) &&
                       processComparison?.EvidenceLevel is "exploratory" or "stable"
@@ -186,12 +211,26 @@ public sealed class CompareExecutionsTool(
         };
     }
 
-    private async Task<ProcessExecutionSnapshot> LoadProcessExecutionAsync(string userId, string executionId, CancellationToken ct)
+    private async Task<ProcessExecutionSnapshot> LoadProcessExecutionAsync(
+        string userId,
+        string siteId,
+        string executionId,
+        int maximumRows,
+        CancellationToken ct)
     {
-        var rows = await events.QueryAllAsync(
-            userId,
-            new PlatformEventQuery { ExecutionId = executionId },
-            ct).ConfigureAwait(false);
+        IReadOnlyList<PlatformProductionEvent> rows;
+        try
+        {
+            rows = await events.QueryAllAsync(
+                userId,
+                new PlatformEventQuery { SiteId = siteId, ExecutionId = executionId },
+                ct,
+                maximumRows).ConfigureAwait(false);
+        }
+        catch (ChatDataQueryLimitExceededException)
+        {
+            throw new ChatDataQueryLimitExceededException(MaximumAggregateEventRows);
+        }
         var ordered = rows.OrderBy(static row => row.Event.OccurredAt).ThenBy(static row => row.IngestId).ToArray();
         var startedAt = ordered.FirstOrDefault(static row =>
             row.Event.EventType.EndsWith(".started", StringComparison.Ordinal))?.Event.OccurredAt;
@@ -303,22 +342,25 @@ public sealed class CompareExecutionsTool(
             ? null
             : records.Count(static record => record.Outcome == "PASS") / (double)records.Count;
 
-    private static IReadOnlyList<RelatedRecordRef> BuildRelatedRecords(string baselineId, IReadOnlyList<string> candidateIds)
+    private static IReadOnlyList<RelatedRecordRef> BuildRelatedRecords(
+        string siteId,
+        string baselineId,
+        IReadOnlyList<string> candidateIds)
         =>
         [
             new RelatedRecordRef
             {
                 Kind = "event-query",
-                Id = $"correlation:{baselineId}",
+                Id = $"{siteId}:correlation:{baselineId}",
                 Label = $"基准过程执行 {baselineId}",
-                Url = $"/api/v1/events?executionId={Uri.EscapeDataString(baselineId)}&limit=500"
+                Url = $"/api/v1/events?siteId={Uri.EscapeDataString(siteId)}&executionId={Uri.EscapeDataString(baselineId)}&limit=500"
             },
             .. candidateIds.Take(20).Select(id => new RelatedRecordRef
             {
                 Kind = "event-query",
-                Id = $"correlation:{id}",
+                Id = $"{siteId}:correlation:{id}",
                 Label = $"对比过程执行 {id}",
-                Url = $"/api/v1/events?executionId={Uri.EscapeDataString(id)}&limit=500"
+                Url = $"/api/v1/events?siteId={Uri.EscapeDataString(siteId)}&executionId={Uri.EscapeDataString(id)}&limit=500"
             })
         ];
 

@@ -38,6 +38,28 @@ public sealed class PlatformUserResolverTests
         Assert.False(identity.HasAnyRole(PlatformRoles.QualityInspector));
         Assert.True(identity.CanAccessSite("site-001"));
         Assert.False(identity.CanAccessSite("SITE-002"));
+        Assert.Equal(
+            SiteScopeFailure.None,
+            PlatformSiteScope.Resolve(identity, "site-001", false, out var canonicalSiteId));
+        Assert.Equal("SITE-001", canonicalSiteId);
+    }
+
+    [Fact]
+    public void RawOidcClaimsUseConfiguredSubjectRoleAndSiteTypes()
+    {
+        var resolver = new PlatformUserResolver(Environment("Production"));
+        var principal = new ClaimsPrincipal(new ClaimsIdentity(
+        [
+            new Claim("sub", "Oidc-Engineer-01"),
+            new Claim("name", "OIDC Engineer"),
+            new Claim("roles", "PROCESS.ENGINEER"),
+            new Claim(PlatformClaimTypes.SiteId, "SITE-001")
+        ], "oidc", "name", "roles"));
+
+        var identity = Assert.IsType<PlatformIdentity>(resolver.ResolveIdentity(principal));
+        Assert.Equal("oidc-engineer-01", identity.UserId);
+        Assert.True(identity.HasAnyRole(PlatformRoles.ProcessEngineer));
+        Assert.True(identity.CanAccessSite("SITE-001"));
     }
 
     [Fact]

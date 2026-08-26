@@ -1,4 +1,4 @@
-
+// 验证 Edge 令牌及其站点绑定，防止采集节点跨站提交事件。
 using System.Security.Cryptography;
 using System.Text;
 using Ingot.Platform.Application.Events;
@@ -44,5 +44,19 @@ public sealed class EdgeTokenValidator(IOptions<PlatformEventOptions> options)
             return false;
         token = configured;
         return true;
+    }
+
+    public bool TryGetSiteId(string edgeId, out string siteId)
+    {
+        siteId = string.Empty;
+        if (string.IsNullOrWhiteSpace(edgeId))
+            return false;
+        if (_options.EdgeSites.TryGetValue(edgeId.Trim(), out var configured) &&
+            !string.IsNullOrWhiteSpace(configured))
+        {
+            siteId = configured.Trim();
+            return true;
+        }
+        return false;
     }
 }

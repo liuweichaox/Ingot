@@ -17,13 +17,19 @@ public sealed class TimeWindowComparisonService(
     ITimeSeriesStore timeSeries,
     ProcessExecutionAnalysisEngine? wholeProcessExecutionAnalysis = null) : ITimeWindowComparisonService
 {
+    private const int MaximumTotalEventRows = 100_000;
+    private const int MaximumTotalTimeSeriesFrames = 200_000;
     private readonly ProcessExecutionAnalysisEngine _wholeProcessExecutionAnalysis = wholeProcessExecutionAnalysis ?? new();
     private readonly ITimeSeriesStore _timeSeries = timeSeries;
 
     public async Task<TimeWindowComparisonResult> CompareAsync(
         TimeWindowComparisonRequest request,
+        string siteId,
         CancellationToken ct = default)
     {
+        if (string.IsNullOrWhiteSpace(siteId))
+            throw new ArgumentException("连续过程比较必须指定站点。", nameof(siteId));
+        siteId = siteId.Trim();
         var scope = request.AnalysisScope?.Trim().ToLowerInvariant();
         if (scope is not ("analysis-window" or "production-run"))
             throw new ArgumentException("连续过程比较只支持 analysis-window 或 production-run。", nameof(request));
@@ -39,22 +45,32 @@ public sealed class TimeWindowComparisonService(
 
         var rows = new Dictionary<string, IReadOnlyList<PlatformProductionEvent>>(StringComparer.Ordinal);
         var samples = new Dictionary<string, IReadOnlyList<ProcessSampleFrame>>(StringComparer.Ordinal);
+        var remainingEventRows = MaximumTotalEventRows;
+        var remainingFrames = MaximumTotalTimeSeriesFrames;
         foreach (var window in request.Windows)
         {
+            if (remainingEventRows == 0)
+                throw new PlatformEventQueryLimitExceededException(MaximumTotalEventRows);
             rows[window.WindowId] = await QueryAllAsync(new PlatformEventQuery
             {
+                SiteId = siteId,
                 SubjectType = window.SubjectType.Trim(),
                 SubjectId = window.SubjectId.Trim(),
                 From = window.From.ToUniversalTime(),
                 To = window.To.ToUniversalTime()
-            }, ct).ConfigureAwait(false);
+            }, remainingEventRows, ct).ConfigureAwait(false);
+            remainingEventRows -= rows[window.WindowId].Count;
+            if (remainingFrames == 0)
+                throw new TimeSeriesQueryLimitExceededException(MaximumTotalTimeSeriesFrames);
             samples[window.WindowId] = await TimeSeriesFrameReader.QueryAllAsync(_timeSeries, new TimeSeriesQuery
             {
+                SiteId = siteId,
                 From = window.From.ToUniversalTime(),
                 To = window.To.ToUniversalTime(),
                 SubjectType = window.SubjectType.Trim(),
                 SubjectId = window.SubjectId.Trim(),
-            }, ct).ConfigureAwait(false);
+            }, ct, remainingFrames).ConfigureAwait(false);
+            remainingFrames -= samples[window.WindowId].Count;
         }
         var baselineSelection = request.Windows.Single(item => item.WindowId == request.BaselineWindowId);
         var baselineRows = rows[baselineSelection.WindowId];
@@ -82,7 +98,7 @@ public sealed class TimeWindowComparisonService(
             }
         }
 
-        var scopes = await inspections.ListScopesAsync(null, ct).ConfigureAwait(false);
+        var scopes = await inspections.ListScopesAsync(siteId, ct).ConfigureAwait(false);
         var scopesByWindow = request.Windows.ToDictionary(
             static window => window.WindowId,
             window => scopes.Where(scope => ScopeBelongsToWindow(scope, window)).ToArray(),
@@ -95,7 +111,7 @@ public sealed class TimeWindowComparisonService(
         var inspectionRecords = scopeIds.Length == 0
             ? []
             : InspectionRecordSet.Effective(
-                await inspections.QueryAllByExecutionIdsAsync(scopeIds, null, ct).ConfigureAwait(false));
+                await inspections.QueryAllByExecutionIdsAsync(scopeIds, siteId, ct).ConfigureAwait(false));
         var resultRows = request.Windows.Select(window => BuildRow(
             window,
             rows[window.WindowId],
@@ -236,21 +252,29 @@ public sealed class TimeWindowComparisonService(
         }
     }
 
-    private async Task<IReadOnlyList<PlatformProductionEvent>> QueryAllAsync(PlatformEventQuery query, CancellationToken ct)
+    private async Task<IReadOnlyList<PlatformProductionEvent>> QueryAllAsync(
+        PlatformEventQuery query,
+        int maximumRows,
+        CancellationToken ct)
     {
         var cursor = 0L;
         var result = new List<PlatformProductionEvent>();
         while (true)
         {
-            var page = await events.QueryAsync(query with { AfterIngestId = cursor, Limit = 500 }, ct).ConfigureAwait(false);
+            var remaining = maximumRows - result.Count;
+            var requestedLimit = Math.Min(500, remaining + 1);
+            var page = await events.QueryAsync(
+                query with { AfterIngestId = cursor, Limit = requestedLimit }, ct).ConfigureAwait(false);
             if (page.Count == 0)
                 break;
+            if (page.Count > remaining)
+                throw new PlatformEventQueryLimitExceededException(maximumRows);
             result.AddRange(page);
             var next = page.Max(static item => item.IngestId);
             if (next <= cursor)
                 throw new InvalidOperationException("分析窗口查询游标没有前进。");
             cursor = next;
-            if (page.Count < 500)
+            if (page.Count < requestedLimit)
                 break;
         }
         return result;

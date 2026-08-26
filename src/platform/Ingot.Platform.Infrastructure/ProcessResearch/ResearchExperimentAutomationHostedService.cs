@@ -1,3 +1,4 @@
+// 消费研发实验自动化任务并在冻结约束内推进离线计算。
 using Ingot.Contracts.ProcessResearch;
 using Ingot.Platform.Application.ProcessResearch;
 using Microsoft.Extensions.Hosting;
@@ -65,6 +66,7 @@ public sealed class ResearchExperimentAutomationHostedService(
             var projects = await store.ListProjectsAsync(
                 "system-research-automation",
                 true,
+                null,
                 pageSize,
                 offset,
                 ct).ConfigureAwait(false);

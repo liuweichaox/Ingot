@@ -1,4 +1,4 @@
-
+// 通过固定端点和受控凭据订阅 OPC UA 点位并发布生产事件。
 using System.Collections.Concurrent;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
@@ -14,6 +14,7 @@ public sealed class OpcUaAcquisitionRunner(
     IEventSink sink,
     IAcquisitionSecretResolver secrets,
     AcquisitionStatus status,
+    AcquisitionHttpEgressPolicy egressPolicy,
     ILogger<OpcUaAcquisitionRunner> logger) : IAcquisitionProtocolRunner
 {
     public string Protocol => AcquisitionProtocols.OpcUa;
@@ -37,12 +38,18 @@ public sealed class OpcUaAcquisitionRunner(
                 using var connectTimeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
                 connectTimeout.CancelAfter(deployment.Task.Execution.TimeoutMs);
                 var connectCt = connectTimeout.Token;
+                var usesCredentials = UsesCredentials(connection);
+                var discoveryUri = await egressPolicy.ResolvePinnedEndpointAsync(
+                    new Uri(connection.EndpointUrl),
+                    "OPC UA",
+                    connectCt,
+                    usesCredentials).ConfigureAwait(false);
                 var configuration = await CreateConfigurationAsync(
                     connection, secrets, connectCt, deployment.Task.Execution.TimeoutMs).ConfigureAwait(false);
                 var sessionFactory = new DefaultSessionFactory(DefaultTelemetry.Create(_ => { }));
                 using var discovery = await DiscoveryClient.CreateAsync(
                     configuration,
-                    new Uri(connection.EndpointUrl),
+                    discoveryUri,
                     DiagnosticsMasks.None,
                     connectCt).ConfigureAwait(false);
                 var endpoints = await discovery.GetEndpointsAsync(null, connectCt).ConfigureAwait(false);
@@ -66,6 +73,11 @@ public sealed class OpcUaAcquisitionRunner(
                     .FirstOrDefault()
                     ?? throw new InvalidOperationException(
                         $"OPC UA 服务器不提供配置的安全组合：{connection.SecurityMode}/{connection.SecurityPolicy}。");
+                selectedEndpoint.EndpointUrl = (await egressPolicy.ResolvePinnedEndpointAsync(
+                    new Uri(selectedEndpoint.EndpointUrl),
+                    "OPC UA",
+                    connectCt,
+                    usesCredentials).ConfigureAwait(false)).ToString();
                 var endpoint = new ConfiguredEndpoint(
                     null,
                     selectedEndpoint,
@@ -319,6 +331,13 @@ public sealed class OpcUaAcquisitionRunner(
         foreach (var mapping in processSpecification.ParameterMappings.Where(item => item.Required))
             yield return mapping.SourcePath;
     }
+
+    private static bool UsesCredentials(OpcUaConnection connection)
+        => connection.AuthenticationType != "anonymous" ||
+           !string.IsNullOrWhiteSpace(connection.Username) ||
+           !string.IsNullOrWhiteSpace(connection.PasswordSecretRef) ||
+           !string.IsNullOrWhiteSpace(connection.ClientCertificatePath) ||
+           !string.IsNullOrWhiteSpace(connection.ClientCertificatePasswordSecretRef);
 
     internal static IUserIdentity CreateIdentity(
         OpcUaConnection connection,

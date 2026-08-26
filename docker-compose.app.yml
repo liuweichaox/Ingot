@@ -86,6 +86,11 @@ services:
       - Authentication__Authority=${INGOT_AUTHORITY:-}
       - Authentication__Audience=${INGOT_AUDIENCE:-}
       - Authentication__RequireHttpsMetadata=${INGOT_AUTH_REQUIRE_HTTPS:-true}
+      - Authentication__Oidc__ClientId=${INGOT_OIDC_CLIENT_ID:-}
+      - Authentication__Oidc__Scope=${INGOT_OIDC_SCOPE:-openid profile}
+      - Authentication__Oidc__NameClaimType=${INGOT_OIDC_NAME_CLAIM_TYPE:-name}
+      - Authentication__Oidc__RoleClaimType=${INGOT_OIDC_ROLE_CLAIM_TYPE:-roles}
+      - Authentication__Oidc__AllowedOrigins=${INGOT_OIDC_ALLOWED_ORIGINS:-}
       - InspectionAttachments__RootPath=/app/Data/inspection-attachments
       - InspectionAttachments__ArchiveRootPath=/app/Archive/inspection-attachments
       - ProcessKnowledge__RootPath=/app/Data/process-knowledge
@@ -129,6 +134,8 @@ services:
     build:
       context: .
       dockerfile: src/platform/Ingot.Platform.Worker/Dockerfile
+    ports:
+      - "127.0.0.1:8002:8002"
     volumes:
       - ingot-process-knowledge:/app/Data/process-knowledge
       - ingot-process-knowledge-archive:/app/Archive/process-knowledge
@@ -149,11 +156,19 @@ services:
       - KnowledgeExtractionWorker__HeartbeatInterval=${INGOT_KNOWLEDGE_EXTRACTION_HEARTBEAT_INTERVAL:-00:01:00}
       - KnowledgeExtractionWorker__InitialRetryDelay=${INGOT_KNOWLEDGE_EXTRACTION_INITIAL_RETRY_DELAY:-00:00:30}
       - KnowledgeExtractionWorker__MaxRetryDelay=${INGOT_KNOWLEDGE_EXTRACTION_MAX_RETRY_DELAY:-00:30:00}
+      - PlatformWorkerPulse__Interval=${INGOT_PLATFORM_WORKER_HEARTBEAT_INTERVAL:-00:00:05}
+      - PlatformWorkerPulse__StaleAfter=${INGOT_PLATFORM_WORKER_HEARTBEAT_STALE_AFTER:-00:00:30}
       - Postgres__MinPoolSize=${INGOT_POSTGRES_MIN_POOL_SIZE:-2}
       - Postgres__MaxPoolSize=${INGOT_POSTGRES_MAX_POOL_SIZE:-50}
     depends_on:
       platform-migrate:
         condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:8002/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
     restart: unless-stopped
 
   postgres-exporter:
@@ -202,6 +217,7 @@ services:
       - alertmanager
       - postgres-exporter
       - platform-api
+      - platform-worker
     restart: unless-stopped
 
   grafana:
@@ -246,6 +262,8 @@ services:
     container_name: ingot-platform-web
     ports:
       - "127.0.0.1:3000:80"
+    environment:
+      - INGOT_OIDC_ALLOWED_ORIGINS=${INGOT_OIDC_ALLOWED_ORIGINS:-}
     depends_on:
       platform-api:
         condition: service_healthy

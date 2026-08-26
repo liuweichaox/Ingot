@@ -1,7 +1,7 @@
 
 // 呈现运行对比、候选原因与数据可信度，并在证据不足时阻止结论升级。
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import { getJson, postJson } from "../api/http";
 import { extractRows, useApi } from "../hooks/useApi";
 import { Alert, Badge, Button, Card, ConclusionBoundary, DataTable, EmptyState, EvidenceLevel, Field, Input, Metric, Page, RequestError, Select, StatusBadge, Textarea, notify } from "../ui/components";
@@ -285,30 +285,30 @@ export function ExecutionComparisonPage() {
     designLabel: `${item.minimumLevels} 水平 × ${item.minimumBlocks} 区组 × 每条件 ${item.repeatsPerCondition} 次`,
   }));
   return (
-    <Page title="运行对比" description="选择一条需要解释的运行，系统自动寻找生产条件一致的历史运行，并把差异整理成可验证结论。">
+    <Page title="运行对比">
       <RequestError error={error} onRetry={() => { setError(""); setCatalogRetryKey(value => value + 1); }} />
-      <Card title="选择目标运行并开始对比" description="默认选择最近完成的运行；如果存在质量异常或参数偏离，请优先选择对应运行。">
+      <Card title="对比条件">
         <form className="grid items-start gap-3 md:grid-cols-2 xl:grid-cols-[minmax(15rem,.8fr)_minmax(0,1.4fr)_minmax(12rem,.7fr)_minmax(15rem,.8fr)_auto]" onSubmit={compare}>
-          <Field label="筛选运行" hint={`显示 ${visibleProcessExecutions.length} / ${executions.length} 条已完成运行`}><Input value={executionFilter} onChange={event => setProcessExecutionFilter(event.target.value)} placeholder="产品、设备、规范或运行号" /></Field>
-          <Field label="目标运行" hint="通常选择质量异常、参数偏离或刚刚完成的一次运行。"><Select value={baseline} onChange={event => { setBaseline(event.target.value); setResult(null); }} required disabled={catalogLoading || !executions.length}><option value="">选择已完成运行</option>{baseline && !executions.some(item => item.executionId === baseline) && <option value={baseline}>{baseline}（来自当前页面链接）</option>}{visibleProcessExecutions.map(execution => <option key={execution.executionId} value={execution.executionId}>{executionLabel(execution)}</option>)}</Select></Field>
-          <Field label="对比范围" hint="历史样本组由服务端按产品、时间、质量和数据完整性筛选。"><Select value={comparisonScope} onChange={event => setComparisonScope(event.target.value)} disabled={!baseline}><option value="cohort">同产品历史样本组</option><option value="single">指定一个同类运行</option></Select></Field>
-          {comparisonScope === "single" ? <Field label="对比运行" hint={baselineProcessExecution?.productFamilyCode ? `仅显示产品系列“${baselineProcessExecution.productFamilyCode}”的运行。` : baselineProcessExecution ? `该运行未标注产品系列，暂按设备“${baselineProcessExecution.equipmentId || "未标注"}”筛选。` : "正在读取基准运行。"}><Select value={candidate} onChange={event => setCandidate(event.target.value)} required disabled={!baselineProcessExecution || catalogLoading}><option value="">选择同类运行</option>{comparableProcessExecutions.map(execution => <option key={execution.executionId} value={execution.executionId}>{executionLabel(execution)}</option>)}</Select></Field> : <div className="self-end rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm leading-5 text-slate-600">系统最多选择 24 个同产品历史运行，并保留质量覆盖和数据完整性证据。</div>}
+          <Field label="筛选运行"><Input value={executionFilter} onChange={event => setProcessExecutionFilter(event.target.value)} placeholder={`产品、设备、规范或运行号（${visibleProcessExecutions.length}/${executions.length}）`} /></Field>
+          <Field label="目标运行"><Select value={baseline} onChange={event => { setBaseline(event.target.value); setResult(null); }} required disabled={catalogLoading || !executions.length}><option value="">选择已完成运行</option>{baseline && !executions.some(item => item.executionId === baseline) && <option value={baseline}>{baseline}（来自当前页面链接）</option>}{visibleProcessExecutions.map(execution => <option key={execution.executionId} value={execution.executionId}>{executionLabel(execution)}</option>)}</Select></Field>
+          <Field label="对比范围"><Select value={comparisonScope} onChange={event => setComparisonScope(event.target.value)} disabled={!baseline}><option value="cohort">同产品历史样本组</option><option value="single">指定一个同类运行</option></Select></Field>
+          {comparisonScope === "single" ? <Field label="对比运行" hint={baselineProcessExecution?.productFamilyCode ? `仅显示产品系列“${baselineProcessExecution.productFamilyCode}”的运行。` : baselineProcessExecution ? `该运行未标注产品系列，暂按设备“${baselineProcessExecution.equipmentId || "未标注"}”筛选。` : "正在读取基准运行。"}><Select value={candidate} onChange={event => setCandidate(event.target.value)} required disabled={!baselineProcessExecution || catalogLoading}><option value="">选择同类运行</option>{comparableProcessExecutions.map(execution => <option key={execution.executionId} value={execution.executionId}>{executionLabel(execution)}</option>)}</Select></Field> : <div className="self-end px-1 py-2 text-[13px] leading-5 text-slate-500">最多使用 24 条同产品历史运行</div>}
           <Button variant="primary" type="submit" className="min-h-10 self-end" disabled={busy || !comparisonReady || (comparisonScope === "single" && !candidate)}>{busy ? "正在对比…" : "生成对比结论"}</Button>
         </form>
         <div className="mt-3">
-          <Field label="本次补充的潜在未测量混杂因素" hint="例如操作员、环境波动；每行一项。系统会与分析方案默认清单合并并写入本次结果快照。">
+          <Field label="补充混杂因素">
             <Textarea rows={2} value={additionalConfounders} onChange={event => setAdditionalConfounders(event.target.value)} placeholder={"操作员经验\n环境温湿度波动"} />
           </Field>
         </div>
         {catalogLoading && <p className="mt-3 text-sm text-slate-500">正在读取可比较的已完成运行…</p>}
         {!catalogLoading && executions.length === 0 && <Alert tone="warning" title="还没有已完成运行">完成生产准备并积累至少两次运行后，即可开始对比。</Alert>}
         {!catalogLoading && baselineProcessExecution && (
-          <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
-            <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-sm font-semibold text-slate-900">系统已核对同类条件</p><p className="mt-1 text-xs text-slate-500">匹配条件来自当前运行分析规则。</p></div><Badge tone={comparisonReady ? "success" : "warning"}>{comparisonReady ? `找到 ${comparableProcessExecutions.length} 条同类运行` : "没有同类运行"}</Badge></div>
+          <div className="mt-4 border-t border-slate-200 pt-4">
+            <div className="flex flex-wrap items-start justify-between gap-3"><p className="text-sm font-semibold text-slate-900">匹配条件</p><Badge tone={comparisonReady ? "success" : "warning"}>{comparisonReady ? `找到 ${comparableProcessExecutions.length} 条同类运行` : "没有同类运行"}</Badge></div>
             <dl className="mt-3 grid gap-2 sm:grid-cols-3">
-              <div><dt className="text-xs text-slate-500">产品系列</dt><dd className="mt-1 text-sm font-medium">{baselineProcessExecution.productFamilyCode || "未记录"}</dd></div>
-              <div><dt className="text-xs text-slate-500">设备</dt><dd className="mt-1 text-sm font-medium">{baselineProcessExecution.equipmentId || "未记录"}</dd></div>
-              <div><dt className="text-xs text-slate-500">工艺规范</dt><dd className="mt-1 text-sm font-medium">{baselineProcessExecution.processSpecificationId || "未记录"}</dd></div>
+              <div><dt className="text-[13px] text-slate-500">产品系列</dt><dd className="mt-1 text-sm font-medium">{baselineProcessExecution.productFamilyCode || "未记录"}</dd></div>
+              <div><dt className="text-[13px] text-slate-500">设备</dt><dd className="mt-1 text-sm font-medium">{baselineProcessExecution.equipmentId || "未记录"}</dd></div>
+              <div><dt className="text-[13px] text-slate-500">工艺规范</dt><dd className="mt-1 text-sm font-medium">{baselineProcessExecution.processSpecificationId || "未记录"}</dd></div>
             </dl>
             {!comparisonReady && <p className="mt-3 text-sm text-amber-800">需要另一条具有相同产品系列（未记录产品系列时使用相同设备）的已完成运行。</p>}
           </div>
@@ -316,7 +316,7 @@ export function ExecutionComparisonPage() {
       </Card>
       {result ? (
         <>
-          <Alert tone={investigation?.status === "ready" ? "success" : "warning"} title="3. 对比结论">
+          <Alert tone={investigation?.status === "ready" ? "success" : "warning"} title="对比结论">
             {investigation?.status === "ready"
               ? `已找到 ${firstDeviationRows.length} 个优先偏离和 ${causeRows.length} 个候选原因，可以进入受控验证。`
               : `对比计算已成功，但当前只能作为探索性证据。${(investigation?.missingData || []).length ? ` 还缺少：${investigation.missingData.join("；")}` : " 需要更多质量结果和重复运行。"}`}
@@ -377,7 +377,7 @@ export function ExecutionComparisonPage() {
             )}
             <ConclusionBoundary>{investigation?.conclusionGuardrail || "当前结果只能作为待验证假设。"}</ConclusionBoundary>
           </Card>
-          <details className="rounded-2xl border border-slate-200 bg-white shadow-sm"><summary className="cursor-pointer px-5 py-4 text-sm font-semibold text-slate-900">查看参与对比的 {comparedProcessExecutions.length} 条运行</summary><div className="border-t border-slate-100 p-5"><Card title="运行概况">
+          <details className="rounded-lg border border-slate-200 bg-white"><summary className="cursor-pointer px-5 py-4 text-sm font-semibold text-slate-900">查看参与对比的 {comparedProcessExecutions.length} 条运行</summary><div className="border-t border-slate-100 p-5"><Card title="运行概况">
             <DataTable
               rows={comparedProcessExecutions}
               getRowKey={row => `${row.comparisonRole}-${row.executionId}`}
@@ -478,7 +478,7 @@ export function ExecutionComparisonPage() {
               </>
             ) : <EmptyState title="尚无质量候选原因" description="至少需要合格与不合格运行，并且工艺规范或过程特征具有可比较差异。" />}
           </Card>
-          <details className="rounded-2xl border border-slate-200 bg-white shadow-sm"><summary className="cursor-pointer px-5 py-4 text-sm font-semibold text-slate-900">查看全部信号差异（{signalRows.length} 项）</summary><div className="border-t border-slate-100 p-5"><Card title="信号差异" description="按变化幅度列出前 30 项，便于工程师核对阶段和参数差异。">
+          <details className="rounded-lg border border-slate-200 bg-white"><summary className="cursor-pointer px-5 py-4 text-sm font-semibold text-slate-900">查看全部信号差异（{signalRows.length} 项）</summary><div className="border-t border-slate-100 p-5"><Card title="信号差异" description="按变化幅度列出前 30 项，便于工程师核对阶段和参数差异。">
             {signalRows.length ? (
               <DataTable
                 rows={signalRows}
@@ -547,10 +547,10 @@ export function DataQualityPage() {
   const error = baseline.error || objects.error;
   return (
     <Page
-      title="数据健康"
+      title="数据质量"
       description={params.get("subjectId")
         ? `检查对象 ${params.get("subjectId")} 的证据完整性、实际参数、上下文和质量关联。`
-        : "用明确分子、分母和排除原因建立可重复的数据可靠性基线。"}
+        : undefined}
     >
       <RequestError error={error} onRetry={() => Promise.all([baseline.reload(), objects.reload()])} />
       {loading ? <LoadingCard /> : (
@@ -558,19 +558,37 @@ export function DataQualityPage() {
           {baseline.data?.truncated && (
             <Alert tone="warning">匹配运行超过本次上限；当前基线只分析最近 {formatInteger(baseline.data.analyzedRunCount)} 次运行。</Alert>
           )}
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <Metric label="过程数据完整率" value={rateValue("process_data_completeness")} hint={`${rate("process_data_completeness")?.numerator ?? 0} / ${rate("process_data_completeness")?.denominator ?? 0} 次运行`} />
-            <Metric label="实际参数覆盖率" value={rateValue("actual_parameter_coverage")} hint="只认设备回读，不使用计划值" />
-            <Metric label="最小上下文覆盖率" value={rateValue("minimal_context_coverage")} hint="设备身份与运行身份同时存在" />
-            <Metric label="运行—质量关联率" value={rateValue("run_quality_association")} hint="至少关联一条有效检验结果" />
-          </div>
-          <div className="grid gap-5 xl:grid-cols-[1.4fr_.6fr]">
-            <Card title="正式分析准入" description="只有全部准入条件通过的运行才进入追因、实验分析和工艺研发。">
-              <div className="mb-4 grid gap-4 sm:grid-cols-3">
-                <Metric label="准入率" value={rateValue("analysis_admission")} hint={`${rate("analysis_admission")?.numerator ?? 0} / ${rate("analysis_admission")?.denominator ?? 0} 次运行`} />
-                <Metric label="序列缺口" value={formatInteger(baseline.data?.sequenceGapCount)} hint="已分析运行累计" />
-                <Metric label="最大采样空窗" value={baseline.data?.maximumSampleGapMs == null ? "—" : formatDuration(baseline.data.maximumSampleGapMs)} />
+          <dl className="grid grid-cols-2 divide-x divide-y divide-slate-200 rounded-lg border border-slate-200 bg-white xl:grid-cols-4 xl:divide-y-0">
+            {[
+              ["过程数据完整率", rateValue("process_data_completeness"), `${rate("process_data_completeness")?.numerator ?? 0} / ${rate("process_data_completeness")?.denominator ?? 0} 次运行`],
+              ["实际参数覆盖率", rateValue("actual_parameter_coverage"), "设备实际回读"],
+              ["最小上下文覆盖率", rateValue("minimal_context_coverage"), "设备与运行身份"],
+              ["运行—质量关联率", rateValue("run_quality_association"), "有效检验结果"],
+            ].map(([label, value, hint]) => (
+              <div key={label} className="px-4 py-3">
+                <dt className="text-[13px] font-medium text-slate-500">{label}</dt>
+                <dd className="mt-1 flex items-baseline gap-2">
+                  <strong className="text-xl font-semibold text-slate-950 tabular-nums">{value}</strong>
+                  <span className="text-[13px] text-slate-500">{hint}</span>
+                </dd>
               </div>
+            ))}
+          </dl>
+          <div className="grid gap-5 xl:grid-cols-[1.4fr_.6fr]">
+            <Card title="正式分析准入">
+              <dl className="mb-4 grid divide-y divide-slate-200 rounded-md border border-slate-200 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+                {[
+                  ["准入率", rateValue("analysis_admission"), `${rate("analysis_admission")?.numerator ?? 0} / ${rate("analysis_admission")?.denominator ?? 0} 次运行`],
+                  ["序列缺口", formatInteger(baseline.data?.sequenceGapCount), "已分析运行累计"],
+                  ["最大采样空窗", baseline.data?.maximumSampleGapMs == null ? "—" : formatDuration(baseline.data.maximumSampleGapMs), ""],
+                ].map(([label, value, hint]) => (
+                  <div key={label} className="px-4 py-3">
+                    <dt className="text-[13px] font-medium text-slate-500">{label}</dt>
+                    <dd className="mt-1 text-xl font-semibold text-slate-950 tabular-nums">{value}</dd>
+                    {hint && <dd className="mt-0.5 text-[13px] text-slate-500">{hint}</dd>}
+                  </div>
+                ))}
+              </dl>
               <DataTable
                 rows={rates}
                 keyField="code"
@@ -581,7 +599,7 @@ export function DataQualityPage() {
                 ]}
               />
             </Card>
-            <Card title="排除原因" description="同一次运行可能同时命中多个原因。">
+            <Card title="排除原因">
               {exclusions.length ? (
                 <DataTable
                   rows={exclusions}
@@ -594,17 +612,24 @@ export function DataQualityPage() {
               ) : <EmptyState title="没有准入缺口" description="当前分析范围内的运行全部满足正式准入规则。" />}
             </Card>
           </div>
-          <Card title="时间、顺序与上送质量" description="时钟偏差按设备源时间与 Edge 记录时间计算；上送延迟按 Edge 记录到 Platform 摄入计算，因此会真实包含断网积压。">
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              <Metric label="重复时间戳" value={formatInteger(baseline.data?.duplicateTimestampCount)} hint="累计被去重的采样" />
-              <Metric label="晚到或乱序" value={formatInteger(baseline.data?.outOfOrderCount)} hint="按摄入顺序检测" />
-              <Metric label="源序列缺口" value={formatInteger(baseline.data?.sequenceGapCount)} hint="设备源序号不连续" />
-              <Metric label="最大采样空窗" value={baseline.data?.maximumSampleGapMs == null ? "—" : formatDuration(baseline.data.maximumSampleGapMs)} />
-              <Metric label="最大设备时钟偏差" value={baseline.data?.maximumAbsoluteSourceClockOffsetMs == null ? "—" : formatDuration(baseline.data.maximumAbsoluteSourceClockOffsetMs)} hint="源时间与 Edge 记录时间的绝对差" />
-              <Metric label="最差运行 P95 上送延迟" value={baseline.data?.worstRunP95PlatformIngestLatencyMs == null ? "—" : formatDuration(baseline.data.worstRunP95PlatformIngestLatencyMs)} hint="包含离线缓存后的补传" />
-              <Metric label="最大上送延迟" value={baseline.data?.maximumPlatformIngestLatencyMs == null ? "—" : formatDuration(baseline.data.maximumPlatformIngestLatencyMs)} />
-              <Metric label="负上送延迟异常" value={formatInteger(baseline.data?.negativePlatformIngestLatencyCount)} hint="Platform 时间早于 Edge 超过 1 秒" />
-            </div>
+          <Card title="时间、顺序与上送质量">
+            <DataTable
+              rows={[
+                { id: "duplicate", name: "重复时间戳", value: formatInteger(baseline.data?.duplicateTimestampCount), definition: "累计被去重的采样" },
+                { id: "order", name: "晚到或乱序", value: formatInteger(baseline.data?.outOfOrderCount), definition: "按摄入顺序检测" },
+                { id: "sequence", name: "源序列缺口", value: formatInteger(baseline.data?.sequenceGapCount), definition: "设备源序号不连续" },
+                { id: "sample-gap", name: "最大采样空窗", value: baseline.data?.maximumSampleGapMs == null ? "—" : formatDuration(baseline.data.maximumSampleGapMs), definition: "相邻有效采样的最大间隔" },
+                { id: "clock", name: "最大设备时钟偏差", value: baseline.data?.maximumAbsoluteSourceClockOffsetMs == null ? "—" : formatDuration(baseline.data.maximumAbsoluteSourceClockOffsetMs), definition: "设备源时间与 Edge 记录时间的绝对差" },
+                { id: "p95", name: "最差运行 P95 上送延迟", value: baseline.data?.worstRunP95PlatformIngestLatencyMs == null ? "—" : formatDuration(baseline.data.worstRunP95PlatformIngestLatencyMs), definition: "包含离线缓存后的补传" },
+                { id: "latency", name: "最大上送延迟", value: baseline.data?.maximumPlatformIngestLatencyMs == null ? "—" : formatDuration(baseline.data.maximumPlatformIngestLatencyMs), definition: "Edge 记录到 Platform 摄入" },
+                { id: "negative", name: "负上送延迟异常", value: formatInteger(baseline.data?.negativePlatformIngestLatencyCount), definition: "Platform 时间早于 Edge 超过 1 秒" },
+              ]}
+              columns={[
+                { key: "name", label: "指标" },
+                { key: "value", label: "结果" },
+                { key: "definition", label: "计算定义" },
+              ]}
+            />
           </Card>
           <Card title="上下文字段覆盖" description="设备与运行身份是准入必需字段；材料、工装和维护校准字段先用于追溯与分层。">
             <DataTable
@@ -635,10 +660,7 @@ export function DataQualityPage() {
                 />
               ) : <EmptyState title="暂无可分层上下文" description="采集到设备、工装或材料批次后，这里会按实际水平汇总。" />}
             </Card>
-            <Card title="因素重叠与混杂" description="重叠度表示实际出现的因素组合占理论组合的比例；完全绑定的因素无法仅凭观察数据拆分影响。">
-              <div className="mb-4">
-                <Metric label="不可辨识混杂" value={formatInteger(baseline.data?.unidentifiableConfoundingCount)} hint="标记为完全混杂的因素对" />
-              </div>
+            <Card title="因素重叠与混杂" description="重叠度表示实际出现的因素组合占理论组合的比例；完全绑定的因素无法仅凭观察数据拆分影响。" actions={<span className="text-[13px] font-medium text-amber-700">不可辨识混杂 {formatInteger(baseline.data?.unidentifiableConfoundingCount)} 项</span>}>
               <DataTable
                 rows={factorOverlaps}
                 getRowKey={row => `${row.leftField}:${row.rightField}`}
@@ -665,13 +687,6 @@ export function DataQualityPage() {
                 { key: "lastSampleAt", label: "最后样本", render: formatTime },
               ]}
             />
-          </Card>
-          <Card title="数据可信度确认后的下一步" description="只有满足正式分析准入的运行才应进入候选原因排序；未通过的运行先补齐缺失证据。">
-            <div className="flex flex-wrap gap-2">
-              <Link className="inline-flex min-h-10 items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700" to="/comparisons">进入运行对比</Link>
-              <Link className="inline-flex min-h-10 items-center rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50" to="/inspections">补齐检验结果</Link>
-              <Link className="inline-flex min-h-10 items-center rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50" to="/process-executions">检查运行完整性</Link>
-            </div>
           </Card>
         </div>
       )}

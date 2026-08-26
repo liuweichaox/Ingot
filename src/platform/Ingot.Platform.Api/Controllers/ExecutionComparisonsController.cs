@@ -1,7 +1,9 @@
-
+// 提供站点隔离且受输入与扫描预算限制的过程执行比较接口。
 using Ingot.Contracts.Events;
 using Ingot.Platform.Api.Agents;
+using Ingot.Platform.Application.Events;
 using Ingot.Platform.Application.ProcessExecutions;
+using Ingot.Platform.Application.TimeSeries;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Ingot.Platform.Api.Controllers;
@@ -35,7 +37,7 @@ public sealed class ExecutionComparisonsController(
             .Distinct(StringComparer.Ordinal)
             .ToArray();
         if (string.IsNullOrWhiteSpace(baselineProcessExecutionId) || baselineProcessExecutionId.Length > 200 ||
-            executionIds.Length < 2 || executionIds.Any(static id => id.Length > 200) ||
+            executionIds.Length is < 2 or > 200 || executionIds.Any(static id => id.Length > 200) ||
             !executionIds.Contains(baselineProcessExecutionId, StringComparer.Ordinal))
         {
             return InvalidRequest("请选择至少两个过程执行，并从中指定一个基准过程执行。");
@@ -53,6 +55,14 @@ public sealed class ExecutionComparisonsController(
         catch (ArgumentException exception)
         {
             return InvalidRequest(exception.Message);
+        }
+        catch (PlatformEventQueryLimitExceededException exception)
+        {
+            return UnprocessableRequest(exception.Message);
+        }
+        catch (TimeSeriesQueryLimitExceededException exception)
+        {
+            return UnprocessableRequest(exception.Message);
         }
     }
 
@@ -76,14 +86,25 @@ public sealed class ExecutionComparisonsController(
             return InvalidRequest("比较过程执行必须指定当前身份有权访问的 siteId。");
         if (string.IsNullOrWhiteSpace(executionId) || executionId.Length > 200)
             return InvalidRequest("ExecutionId 格式不正确。");
-        if (limit < 1)
-            return InvalidRequest("Limit 必须大于 0。");
-        var result = await comparisons.CompareWithHistoryAsync(
-            executionId.Trim(),
-            limit,
-            ct,
-            authorizedSiteId,
-            knownUnmeasuredConfounder).ConfigureAwait(false);
-        return result is null ? ResourceNotFound("未找到基准过程执行。") : Ok(result);
+        if (limit is < 1 or > 200)
+            return InvalidRequest("Limit 必须在 1 到 200 之间。");
+        try
+        {
+            var result = await comparisons.CompareWithHistoryAsync(
+                executionId.Trim(),
+                limit,
+                ct,
+                authorizedSiteId,
+                knownUnmeasuredConfounder).ConfigureAwait(false);
+            return result is null ? ResourceNotFound("未找到基准过程执行。") : Ok(result);
+        }
+        catch (PlatformEventQueryLimitExceededException exception)
+        {
+            return UnprocessableRequest(exception.Message);
+        }
+        catch (TimeSeriesQueryLimitExceededException exception)
+        {
+            return UnprocessableRequest(exception.Message);
+        }
     }
 }

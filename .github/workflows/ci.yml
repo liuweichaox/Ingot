@@ -81,9 +81,48 @@ jobs:
           curl --fail --silent http://127.0.0.1:3000/health
           curl --fail --silent http://127.0.0.1:8000/health
           curl --fail --silent http://127.0.0.1:8001/health
+          curl --fail --silent http://127.0.0.1:8002/health
+          curl --fail --silent http://127.0.0.1:8002/metrics | grep -Fq platform_worker_heartbeat_timestamp_seconds
+          test "$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:3000/metrics)" = 404
+          curl --fail --silent --head http://127.0.0.1:3000/ | tr -d '\r' | grep -Fq 'X-Frame-Options: DENY'
+          curl --fail --silent --head http://127.0.0.1:3000/auth/silent-callback | tr -d '\r' | grep -Fq 'X-Frame-Options: SAMEORIGIN'
+          curl --fail --silent --head http://127.0.0.1:3000/auth/silent-callback | tr -d '\r' | grep -Fq "frame-ancestors 'self'"
 
       - name: Build public-site images
         run: docker compose -f deploy/compose.yml --profile site --profile docs build site docs
+
+      - name: Smoke final public-site images
+        run: |
+          cleanup_public_sites() {
+            docker rm --force ingot-site-smoke ingot-docs-smoke >/dev/null 2>&1 || true
+          }
+          trap cleanup_public_sites EXIT
+          docker run --detach --name ingot-site-smoke --publish 127.0.0.1:38080:80 ingot-site:local
+          docker run --detach --name ingot-docs-smoke --publish 127.0.0.1:38081:80 ingot-docs:local
+
+          for port in 38080 38081; do
+            for attempt in $(seq 1 30); do
+              if curl --fail --silent "http://127.0.0.1:${port}/healthz" >/dev/null; then
+                break
+              fi
+              if [[ "$attempt" == 30 ]]; then
+                echo "Public image on port ${port} did not become healthy." >&2
+                exit 1
+              fi
+              sleep 1
+            done
+          done
+
+          site_html="$(curl --fail --silent http://127.0.0.1:38080/)"
+          site_asset="$(grep -oE '/_next/static/[^"[:space:]]+\.(css|js)' <<<"$site_html" | sed -n '1p')"
+          test -n "$site_asset"
+          curl --fail --silent "http://127.0.0.1:38080${site_asset}" >/dev/null
+
+          docs_html="$(curl --fail --silent http://127.0.0.1:38081/zh/)"
+          docs_asset="$(grep -oE '/_next/static/[^"[:space:]]+\.(css|js)' <<<"$docs_html" | sed -n '1p')"
+          test -n "$docs_asset"
+          curl --fail --silent "http://127.0.0.1:38081${docs_asset}" >/dev/null
+          curl --fail --silent http://127.0.0.1:38081/search-index.json >/dev/null
 
       - name: Stop application stack
         if: always()

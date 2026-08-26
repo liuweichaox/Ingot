@@ -10,7 +10,7 @@
 | Run the complete system locally | [Start the complete stack](#start-the-complete-stack) | Web, API, Optimizer, and database are healthy |
 | Prepare a real project | [Controlled pilot guide](pilot.en.md) | Produce the first trustworthy run evidence and validation experiment |
 | Prepare production | [Production architecture](production-architecture.en.md) → [Deployment](deployment.en.md) | The site independently passes security, recovery, capacity, and observation acceptance |
-| Contribute code | [Contributing](../CONTRIBUTING.en.md) | `./scripts/verify.sh` passes locally |
+| Contribute code | [Contributing](https://github.com/liuweichaox/Ingot/blob/main/CONTRIBUTING.en.md) | `./scripts/verify.sh` passes locally |
 
 See [Current status](status.en.md) for capability and validation maturity.
 
@@ -74,7 +74,7 @@ Confirm at least that:
 
 - `platform-migrate` exited successfully;
 - `postgres`, `optimizer`, `platform-api`, and `platform-web` are `healthy`;
-- `platform-worker` and `connector-host` remain running;
+- `platform-worker` and `connector-host` remain `healthy`;
 - no container is restarting repeatedly.
 
 Then open:

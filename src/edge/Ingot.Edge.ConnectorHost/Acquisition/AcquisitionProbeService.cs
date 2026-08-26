@@ -1,6 +1,6 @@
+// 对已授权采集配置执行有界探查，并返回可发布前审阅的设备点位。
 using System.Buffers;
 using System.Globalization;
-using System.Net.Sockets;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.Json;
@@ -17,7 +17,8 @@ namespace Ingot.Edge.ConnectorHost.Acquisition;
 
 public sealed class AcquisitionProbeService(
     IHttpClientFactory httpClientFactory,
-    IAcquisitionSecretResolver secrets)
+    IAcquisitionSecretResolver secrets,
+    AcquisitionHttpEgressPolicy httpEgressPolicy)
 {
     private const int MaximumPoints = 20_000;
 
@@ -82,6 +83,10 @@ public sealed class AcquisitionProbeService(
         var connection = deployment.Task.HttpPolling;
         var requestUri = HttpAcquisitionRequestFactory.CreateEndpoint(
             connection.BaseUrl, connection.SnapshotPath);
+        await httpEgressPolicy.EnsureAllowedAsync(
+            requestUri,
+            ct,
+            connection.HeaderSecretRefs.Count > 0).ConfigureAwait(false);
         using var request = HttpAcquisitionRequestFactory.Create(
             requestUri,
             connection.Method,
@@ -238,8 +243,13 @@ public sealed class AcquisitionProbeService(
                 gate.Release();
             }
         };
+        var pinnedHost = await httpEgressPolicy.ResolvePinnedHostAsync(
+            connection.Host,
+            "MQTT",
+            ct,
+            UsesCredentials(connection)).ConfigureAwait(false);
         var optionsBuilder = new MqttClientOptionsBuilder()
-            .WithTcpServer(connection.Host, connection.Port)
+            .WithTcpServer(pinnedHost, connection.Port)
             .WithClientId(string.IsNullOrWhiteSpace(connection.ClientId)
                 ? $"ingot-probe-{Guid.NewGuid():N}"
                 : $"{connection.ClientId}-probe")
@@ -292,8 +302,12 @@ public sealed class AcquisitionProbeService(
     {
         var connection = deployment.Task.ModbusTcp
             ?? throw new InvalidOperationException("Modbus TCP 连接配置不能为空。");
-        using var client = new TcpClient();
-        await client.ConnectAsync(connection.Host, connection.Port, ct).ConfigureAwait(false);
+        using var client = await httpEgressPolicy.ConnectTcpAsync(
+            connection.Host,
+            connection.Port,
+            "Modbus TCP",
+            deployment.Task.Execution.TimeoutMs,
+            ct).ConfigureAwait(false);
         var factory = new ModbusFactory();
         using var master = factory.CreateMaster(client);
         var values = await ModbusTcpAcquisitionRunner.ReadSnapshotAsync(
@@ -306,14 +320,18 @@ public sealed class AcquisitionProbeService(
         return FromRegisterValues(values, "register", mappingsValidated);
     }
 
-    private static async Task<ProbeSnapshot> ProbeMelsecAsync(
+    private async Task<ProbeSnapshot> ProbeMelsecAsync(
         AcquisitionDeployment deployment,
         CancellationToken ct)
     {
         var connection = deployment.Task.MelsecA1E
             ?? throw new InvalidOperationException("MELSEC 1E 连接配置不能为空。");
-        using var client = new TcpClient();
-        await client.ConnectAsync(connection.Host, connection.Port, ct).ConfigureAwait(false);
+        using var client = await httpEgressPolicy.ConnectTcpAsync(
+            connection.Host,
+            connection.Port,
+            "MELSEC 1E",
+            deployment.Task.Execution.TimeoutMs,
+            ct).ConfigureAwait(false);
         await using var stream = client.GetStream();
         var selectors = MelsecA1EAcquisitionRunner.BuildSelectors(deployment);
         var plan = MelsecA1EAcquisitionRunner.BuildReadPlan(
@@ -335,12 +353,17 @@ public sealed class AcquisitionProbeService(
     {
         var connection = deployment.Task.OpcUa
             ?? throw new InvalidOperationException("OPC UA 连接配置不能为空。");
+        var discoveryUri = await httpEgressPolicy.ResolvePinnedEndpointAsync(
+            new Uri(connection.EndpointUrl),
+            "OPC UA",
+            ct,
+            UsesCredentials(connection)).ConfigureAwait(false);
         var configuration = await OpcUaAcquisitionRunner.CreateConfigurationAsync(connection, secrets, ct)
             .ConfigureAwait(false);
         var sessionFactory = new DefaultSessionFactory(DefaultTelemetry.Create(_ => { }));
         using var discovery = await DiscoveryClient.CreateAsync(
             configuration,
-            new Uri(connection.EndpointUrl),
+            discoveryUri,
             DiagnosticsMasks.None,
             ct).ConfigureAwait(false);
         var endpoints = await discovery.GetEndpointsAsync(null, ct).ConfigureAwait(false);
@@ -360,6 +383,11 @@ public sealed class AcquisitionProbeService(
         var selected = endpoints.FirstOrDefault(item =>
             item.SecurityMode == securityMode && item.SecurityPolicyUri == securityPolicy)
             ?? throw new InvalidOperationException("OPC UA 服务器不提供所选安全组合。");
+        selected.EndpointUrl = (await httpEgressPolicy.ResolvePinnedEndpointAsync(
+            new Uri(selected.EndpointUrl),
+            "OPC UA",
+            ct,
+            UsesCredentials(connection)).ConfigureAwait(false)).ToString();
         var endpoint = new ConfiguredEndpoint(
             null,
             selected,
@@ -434,6 +462,19 @@ public sealed class AcquisitionProbeService(
     private static bool IsDiscoveryProbe(AcquisitionDeployment deployment)
         => deployment.Task.ValueMappings.Any(item =>
             item.SourcePath == "__probe_only__" && !item.Required);
+
+    private static bool UsesCredentials(MqttConnection connection)
+        => !string.IsNullOrWhiteSpace(connection.Username) ||
+           !string.IsNullOrWhiteSpace(connection.PasswordSecretRef) ||
+           !string.IsNullOrWhiteSpace(connection.ClientCertificatePath) ||
+           !string.IsNullOrWhiteSpace(connection.ClientCertificatePasswordSecretRef);
+
+    private static bool UsesCredentials(OpcUaConnection connection)
+        => connection.AuthenticationType != "anonymous" ||
+           !string.IsNullOrWhiteSpace(connection.Username) ||
+           !string.IsNullOrWhiteSpace(connection.PasswordSecretRef) ||
+           !string.IsNullOrWhiteSpace(connection.ClientCertificatePath) ||
+           !string.IsNullOrWhiteSpace(connection.ClientCertificatePasswordSecretRef);
 
     private static bool ValidateProtocolMapping(
         AcquisitionDeployment deployment,

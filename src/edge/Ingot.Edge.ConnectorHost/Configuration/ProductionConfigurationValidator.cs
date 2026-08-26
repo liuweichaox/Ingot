@@ -1,5 +1,7 @@
-
+// 在 Edge 启动前校验生产配置、凭据许可和采集出站边界。
 namespace Ingot.Edge.ConnectorHost.Configuration;
+
+using Ingot.Contracts.Acquisition;
 
 public static class ProductionConfigurationValidator
 {
@@ -54,6 +56,7 @@ public static class ProductionConfigurationValidator
         }
         if (string.IsNullOrWhiteSpace(configuration["Acquisition:DeploymentCachePath"]))
             errors.Add("Acquisition:DeploymentCachePath is required in production.");
+        ValidateAcquisitionSecurity(configuration, errors);
         var startupHealthTimeoutMs = configuration.GetValue(
             "Acquisition:StartupHealthTimeoutMs",
             30000);
@@ -98,6 +101,69 @@ public static class ProductionConfigurationValidator
             return false;
         return value.All(static character =>
             char.IsLetterOrDigit(character) || character is '.' or '_' or '-');
+    }
+
+    private static void ValidateAcquisitionSecurity(
+        IConfiguration configuration,
+        ICollection<string> errors)
+    {
+        var secretNames = configuration
+            .GetSection("Acquisition:Security:AllowedSecretEnvironmentVariables")
+            .Get<string[]>() ?? [];
+        foreach (var name in secretNames)
+        {
+            if (!AcquisitionSecretReferencePolicy.IsValidEnvironmentVariableName(name) ||
+                AcquisitionSecretReferencePolicy.IsProtectedEnvironmentVariable(name))
+            {
+                errors.Add(
+                    "Acquisition:Security:AllowedSecretEnvironmentVariables contains an invalid or protected name.");
+                break;
+            }
+        }
+
+        ValidateHostAllowlist(configuration, "AllowedHttpHosts", errors);
+        ValidateHostAllowlist(configuration, "AllowedNetworkHosts", errors);
+    }
+
+    private static void ValidateHostAllowlist(
+        IConfiguration configuration,
+        string optionName,
+        ICollection<string> errors)
+    {
+        var hosts = configuration.GetSection($"Acquisition:Security:{optionName}").Get<string[]>() ?? [];
+        foreach (var host in hosts)
+        {
+            if (string.IsNullOrWhiteSpace(host) || host.Length > 253 ||
+                host.Contains('/') || host.Contains(':') && !System.Net.IPAddress.TryParse(host, out _))
+            {
+                errors.Add($"Acquisition:Security:{optionName} must contain host names or IP literals without schemes or paths.");
+                break;
+            }
+            if (System.Net.IPAddress.TryParse(host, out var address) && IsForbiddenAcquisitionAddress(address))
+            {
+                errors.Add(
+                    $"Acquisition:Security:{optionName} cannot allow loopback, link-local, unspecified, or multicast addresses.");
+                break;
+            }
+        }
+    }
+
+    private static bool IsForbiddenAcquisitionAddress(System.Net.IPAddress address)
+    {
+        if (address.IsIPv4MappedToIPv6)
+            address = address.MapToIPv4();
+        if (System.Net.IPAddress.IsLoopback(address) ||
+            address.Equals(System.Net.IPAddress.Any) ||
+            address.Equals(System.Net.IPAddress.IPv6Any) ||
+            address.Equals(System.Net.IPAddress.None) ||
+            address.Equals(System.Net.IPAddress.IPv6None) ||
+            address.IsIPv6Multicast ||
+            address.IsIPv6LinkLocal)
+            return true;
+        if (address.AddressFamily != System.Net.Sockets.AddressFamily.InterNetwork)
+            return false;
+        var bytes = address.GetAddressBytes();
+        return bytes[0] == 169 && bytes[1] == 254 || bytes[0] is >= 224 and <= 239;
     }
 
 }

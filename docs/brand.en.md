@@ -25,7 +25,7 @@ It represents the complete product loop: establish trustworthy run evidence, for
 
 Ingot works on reviewable process-run evidence rather than isolated data points or a single algorithm. The system selects robust statistics, controlled comparison, experimental design, causal validation, machine learning, Bayesian optimization, physical models, or language models according to the specific problem.
 
-*Process R&D* is the business entry in the product information architecture. It covers candidate validation, experiment design, constrained optimization, and R&D outcomes. *Optimization* is both a product-category and capability term: the system selects a more valuable next experiment around explicit objectives, allowed variables, and safety boundaries. It is not synonymous with automatic control, does not establish real-factory benefit by itself, and never bypasses engineering approval.
+*Process R&D* is the business entry in the product information architecture. It covers candidate validation, experiment design, constrained optimization, and process knowledge. *Optimization* is both a product-category and capability term: the system selects a more valuable next experiment around explicit objectives, allowed variables, and safety boundaries. It is not synonymous with automatic control, does not establish real-factory benefit by itself, and never bypasses engineering approval.
 
 ## Public commitments
 

@@ -25,6 +25,12 @@ RUN dotnet publish src/platform/Ingot.Platform.Worker/Ingot.Platform.Worker.cspr
 # ---- Runtime ----
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
 COPY --from=build /app/publish .
+
+ENV ASPNETCORE_URLS=http://+:8002
+EXPOSE 8002
 
 ENTRYPOINT ["dotnet", "Ingot.Platform.Worker.dll"]

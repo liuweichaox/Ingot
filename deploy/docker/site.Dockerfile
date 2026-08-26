@@ -9,18 +9,8 @@ RUN npm ci
 COPY apps/website/ ./
 RUN npm run build
 
-FROM node:22-alpine AS runtime
-WORKDIR /app
-ENV NODE_ENV=production \
-    NEXT_TELEMETRY_DISABLED=1 \
-    PORT=3000 \
-    HOSTNAME=0.0.0.0
+FROM nginx:1.29-alpine AS runtime
+COPY deploy/nginx-static.conf /etc/nginx/conf.d/default.conf
+COPY --from=build /app/out/ /usr/share/nginx/html/
 
-COPY --chown=node:node --from=build /app/package.json /app/package-lock.json ./
-COPY --chown=node:node --from=build /app/node_modules ./node_modules
-COPY --chown=node:node --from=build /app/.next ./.next
-COPY --chown=node:node --from=build /app/public ./public
-
-USER node
-EXPOSE 3000
-CMD ["npm", "run", "start"]
+EXPOSE 80

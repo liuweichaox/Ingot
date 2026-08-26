@@ -61,9 +61,11 @@ public sealed class DataReliabilityBaselineService(
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(query);
+        if (string.IsNullOrWhiteSpace(query.SiteId))
+            throw new ArgumentException("数据可靠性基线必须指定站点。", nameof(query));
         if (query.From > query.To)
             throw new ArgumentException("开始时间不能晚于结束时间。", nameof(query));
-        var maximumRuns = Math.Clamp(query.MaximumRuns, 1, 5000);
+        var maximumRuns = Math.Clamp(query.MaximumRuns, 1, 2000);
         var completedEvents = await QueryAllAsync(new PlatformEventQuery
         {
             SiteId = Normalize(query.SiteId),

@@ -80,6 +80,46 @@ public sealed class ProcessCurvesControllerTests
         Assert.Equal("request.invalid", Assert.IsType<ApiProblemDetails>(invalid.Value).Code);
     }
 
+    [Fact]
+    public async Task Query_accepts_more_than_thirty_two_signals()
+    {
+        var controller = Controller(new RecordingTimeSeriesStore([]));
+        var signalCodes = string.Join(',', Enumerable.Range(1, 40).Select(index => $"signal-{index}"));
+
+        var result = await controller.Query("execution-01", signalCodes, null, null);
+
+        var response = Assert.IsType<ProcessCurveResponse>(Assert.IsType<OkObjectResult>(result).Value);
+        Assert.Equal(40, response.Series.Count);
+    }
+
+    [Fact]
+    public async Task Query_service_bounds_total_points_without_dropping_signals()
+    {
+        var occurredAt = DateTimeOffset.Parse("2026-08-17T10:00:00Z");
+        var signalCodes = Enumerable.Range(1, 40).Select(index => $"signal-{index}").ToArray();
+        var frames = Enumerable.Range(0, 2_000).Select(index => new ProcessSampleFrame
+        {
+            EventId = $"event-{index}",
+            IngestId = index + 1,
+            OccurredAt = occurredAt.AddSeconds(index),
+            RecordedAt = occurredAt.AddSeconds(index),
+            NumericValues = signalCodes.ToDictionary(code => code, code => (double)(index + code.Length), StringComparer.Ordinal)
+        }).ToArray();
+        var service = new ProcessCurveQueryService(new RecordingTimeSeriesStore(frames));
+
+        var response = await service.QueryAsync(
+            "SITE-001",
+            "execution-01",
+            signalCodes,
+            null,
+            null,
+            2_000);
+
+        Assert.Equal(40, response.Series.Count);
+        Assert.True(response.ReturnedPointCount <= 50_000);
+        Assert.All(response.Series, series => Assert.NotEmpty(series.Points));
+    }
+
     private static ProcessCurvesController Controller(ITimeSeriesStore store)
         => new(new ProcessCurveQueryService(store), new PlatformUserResolver(new DevelopmentEnvironment()))
         {

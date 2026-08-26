@@ -24,11 +24,19 @@ public sealed class ListDataObjectsToolTests
 
         var call = Assert.Single(result.Value.ToolCalls);
         Assert.Equal("list_data_objects", call.Tool);
+        call = call with
+        {
+            Arguments = new Dictionary<string, string?> { ["siteId"] = "SITE-001" }
+        };
         var validator = new DefaultPlanValidator(Options.Create(new ChatOptions { MaxToolCalls = 8 }));
         Assert.True(
             validator.TryValidate(
                 ProductEntryPoints.Chat,
-                result.Value with { EntryPoint = ProductEntryPoints.Chat },
+                result.Value with
+                {
+                    EntryPoint = ProductEntryPoints.Chat,
+                    ToolCalls = [call]
+                },
                 new Dictionary<string, IAnalysisTool> { [tool.Definition.Name] = tool },
                 out var error),
             error);
@@ -53,21 +61,26 @@ public sealed class ListDataObjectsToolTests
         ]));
 
         var result = await tool.ExecuteAsync(
-            new AnalysisToolCall { Tool = tool.Definition.Name },
+            new AnalysisToolCall
+            {
+                Tool = tool.Definition.Name,
+                Arguments = new Dictionary<string, string?> { ["siteId"] = "SITE-001" }
+            },
             new AgentExecutionContext
             {
                 RunId = "run-1",
                 UserId = "operator",
                 EntryPoint = ProductEntryPoints.Chat,
                 Purpose = RunPurposes.ReadOnlyAnalysis,
-                Request = new CreateChatRunRequest { Question = "当前有哪些运行对象？" }
+                Request = new CreateChatRunRequest { Question = "当前有哪些运行对象？" },
+                AccessScope = new AgentAccessScope { AllowAllSites = true }
             });
 
         Assert.Equal(AnalysisToolOutcomes.Sufficient, result.Outcome);
         Assert.Contains("FURNACE-001", result.Summary, StringComparison.Ordinal);
         Assert.Contains("180 个样本", result.Summary, StringComparison.Ordinal);
         Assert.Equal(1, result.Data.GetProperty("total").GetInt32());
-        Assert.Equal("/explorer", Assert.Single(result.RelatedRecords).Url);
+        Assert.Equal("/explorer?siteId=SITE-001", Assert.Single(result.RelatedRecords).Url);
     }
 
     private sealed class StubDataObjectReader(IReadOnlyList<DataObjectSummary> rows) : IChatDataObjectReader

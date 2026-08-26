@@ -1,18 +1,34 @@
-import { useCallback, useEffect, useState } from "react";
+// 在本地认证与 OIDC Code+PKCE 模式间建立统一会话门禁。
+import { useCallback, useEffect, useRef, useState } from "react";
 import { getJson, postJson, setAuthToken } from "../api/http";
 import { Alert, Button, Field, Input } from "../ui/components";
+import {
+  createOidcManager,
+  currentReturnUrl,
+  loadAuthConfiguration,
+  oidcCallbackKind,
+  replaceBrowserPath,
+  safeReturnUrl,
+} from "./oidc";
 
-export default function AuthGate({ children }) {
+export default function AuthGate({ children, oidcManagerFactory = createOidcManager }) {
   const [identity, setIdentity] = useState(null);
+  const [authMode, setAuthMode] = useState(null);
   const [checking, setChecking] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [credentials, setCredentials] = useState({ username: "", password: "" });
+  const authModeRef = useRef(null);
+  const oidcManagerRef = useRef(null);
+  const initializationRef = useRef(null);
+  const renewalRef = useRef(null);
+  const unauthorizedRenewalAttemptedRef = useRef(false);
 
   const verifyIdentity = useCallback(async () => {
     setChecking(true);
     try {
       setIdentity(await getJson("/api/v1/auth/me"));
+      unauthorizedRenewalAttemptedRef.current = false;
       setError("");
     } catch (requestError) {
       setIdentity(null);
@@ -22,16 +38,135 @@ export default function AuthGate({ children }) {
     }
   }, []);
 
+  const acceptOidcUser = useCallback(user => {
+    if (!user?.access_token || user.expired) throw new Error("OIDC did not return a usable access token.");
+    setAuthToken(user.access_token);
+    return user;
+  }, []);
+
+  const renewOidcSession = useCallback(() => {
+    const manager = oidcManagerRef.current;
+    if (!manager) return Promise.resolve(null);
+    if (!renewalRef.current) {
+      renewalRef.current = manager.signinSilent()
+        .then(user => user ? acceptOidcUser(user) : null)
+        .finally(() => { renewalRef.current = null; });
+    }
+    return renewalRef.current;
+  }, [acceptOidcUser]);
+
   useEffect(() => {
-    verifyIdentity();
     const handleUnauthorized = () => {
-      setAuthToken(null);
       setIdentity(null);
-      setChecking(false);
+      if (authModeRef.current !== "oidc") {
+        setAuthToken(null);
+        setChecking(false);
+        return;
+      }
+      if (unauthorizedRenewalAttemptedRef.current) {
+        setAuthToken(null);
+        setError("企业身份令牌未通过平台校验，请重新登录。");
+        setChecking(false);
+        return;
+      }
+      unauthorizedRenewalAttemptedRef.current = true;
+      setChecking(true);
+      renewOidcSession()
+        .then(user => {
+          if (user) return verifyIdentity();
+          setAuthToken(null);
+          setChecking(false);
+          return null;
+        })
+        .catch(() => {
+          setAuthToken(null);
+          setError("企业身份会话已失效，请重新登录。");
+          setChecking(false);
+        });
     };
     window.addEventListener("ingot:unauthorized", handleUnauthorized);
     return () => window.removeEventListener("ingot:unauthorized", handleUnauthorized);
-  }, [verifyIdentity]);
+  }, [renewOidcSession, verifyIdentity]);
+
+  const initializeAuthentication = useCallback(async () => {
+    let phase = "configuration";
+    setChecking(true);
+    setError("");
+    try {
+      const configuration = await loadAuthConfiguration();
+      setAuthMode(configuration.mode);
+      authModeRef.current = configuration.mode;
+      if (configuration.mode !== "oidc") {
+        await verifyIdentity();
+        return;
+      }
+
+      const manager = oidcManagerFactory(configuration);
+      oidcManagerRef.current = manager;
+      manager.events.addUserLoaded(user => {
+        if (user?.access_token && !user.expired) {
+          unauthorizedRenewalAttemptedRef.current = false;
+          setAuthToken(user.access_token);
+        }
+      });
+      manager.events.addAccessTokenExpired(() => {
+        setAuthToken(null);
+        setIdentity(null);
+        setChecking(false);
+      });
+      manager.events.addSilentRenewError(() => {
+        setError("企业身份会话续期失败，请重新登录。");
+      });
+
+      const callback = oidcCallbackKind(configuration);
+      phase = callback || "session";
+      if (callback === "silent") {
+        await manager.signinSilentCallback(window.location.href);
+        setChecking(false);
+        return;
+      }
+      if (callback === "signout") {
+        await manager.signoutRedirectCallback(window.location.href);
+        setAuthToken(null);
+        setIdentity(null);
+        replaceBrowserPath("/");
+        setChecking(false);
+        return;
+      }
+
+      let user;
+      if (callback === "signin") {
+        user = await manager.signinRedirectCallback(window.location.href);
+      } else {
+        user = await manager.getUser();
+        if (user?.expired) user = await renewOidcSession();
+      }
+      if (!user) {
+        setAuthToken(null);
+        setIdentity(null);
+        setChecking(false);
+        return;
+      }
+      acceptOidcUser(user);
+      if (callback === "signin") replaceBrowserPath(safeReturnUrl(user.state?.returnUrl));
+      await verifyIdentity();
+    } catch {
+      setAuthToken(null);
+      setIdentity(null);
+      setError(phase === "signin"
+        ? "企业身份回调校验失败，请重新发起登录。"
+        : phase === "signout"
+          ? "企业身份退出回调校验失败，请刷新后重试。"
+          : phase === "configuration"
+            ? "无法读取平台认证配置，请联系管理员。"
+            : "企业身份会话无效，请重新登录。");
+      setChecking(false);
+    }
+  }, [acceptOidcUser, oidcManagerFactory, renewOidcSession, verifyIdentity]);
+
+  useEffect(() => {
+    if (!initializationRef.current) initializationRef.current = initializeAuthentication();
+  }, [initializeAuthentication]);
 
   async function login(event) {
     event.preventDefault();
@@ -49,7 +184,36 @@ export default function AuthGate({ children }) {
     }
   }
 
+  async function loginWithOidc() {
+    const manager = oidcManagerRef.current;
+    if (!manager) return;
+    setBusy(true);
+    setError("");
+    try {
+      await manager.signinRedirect({ state: { returnUrl: currentReturnUrl() } });
+    } catch {
+      setError("无法跳转到企业身份提供方，请稍后重试。");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function logout() {
+    if (authMode === "oidc") {
+      setAuthToken(null);
+      setIdentity(null);
+      setBusy(true);
+      try {
+        await oidcManagerRef.current?.signoutRedirect();
+      } catch {
+        await oidcManagerRef.current?.removeUser().catch(() => null);
+        setError("企业身份退出失败，本地会话已清除。");
+        setChecking(false);
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
     await postJson("/api/v1/auth/logout", {}).catch(() => null);
     setAuthToken(null);
     setIdentity(null);
@@ -57,10 +221,10 @@ export default function AuthGate({ children }) {
 
   if (checking) {
     return (
-      <div className="grid min-h-screen place-items-center bg-slate-50 px-4">
+      <div className="app-canvas grid min-h-screen place-items-center px-4">
         <div className="text-center">
-          <img src="/ingot-mark.svg" alt="" className="mx-auto size-12" />
-          <p className="mt-4 text-sm text-slate-500">正在确认平台身份…</p>
+          <span className="mx-auto grid size-16 place-items-center rounded-2xl bg-coal-950 shadow-xl"><img src="/ingot-mark.svg" alt="" className="size-11" /></span>
+          <p className="mt-5 text-sm font-medium text-slate-600">正在确认平台身份…</p>
         </div>
       </div>
     );
@@ -68,41 +232,79 @@ export default function AuthGate({ children }) {
 
   if (!identity) {
     return (
-      <main className="grid min-h-screen bg-slate-50 lg:grid-cols-[minmax(0,1fr)_32rem]">
-        <section className="hidden border-r border-slate-200 bg-slate-950 px-12 py-16 text-white lg:flex lg:flex-col lg:justify-between">
-          <div className="flex items-center gap-3">
-            <span className="grid size-11 place-items-center rounded-xl bg-amber-50"><img src="/ingot-mark.svg" alt="" className="size-8" /></span>
-            <div><strong className="text-lg">Ingot</strong><p className="text-sm text-slate-400">工艺追因与优化系统</p></div>
+      <main className="grid min-h-screen bg-coal-950 lg:grid-cols-[minmax(0,1.08fr)_minmax(28rem,.92fr)]">
+        <section className="product-panel-dark relative hidden min-h-screen overflow-hidden p-10 lg:flex lg:flex-col lg:justify-between xl:p-14" aria-label="产品介绍">
+          <div className="absolute inset-0 opacity-35" aria-hidden="true" style={{ backgroundImage: "linear-gradient(rgba(95,212,200,.09) 1px, transparent 1px), linear-gradient(90deg, rgba(95,212,200,.09) 1px, transparent 1px)", backgroundSize: "64px 64px", maskImage: "linear-gradient(to bottom, black, transparent 85%)" }} />
+          <div className="relative flex items-center gap-4">
+            <span className="grid size-12 place-items-center rounded-xl bg-white/6 ring-1 ring-white/12"><img src="/ingot-mark.svg" alt="" className="size-9" /></span>
+            <div><strong className="text-xl text-white">Ingot</strong><p className="mt-0.5 text-xs tracking-[0.08em] text-slate-400">PROCESS EVIDENCE WORKSPACE</p></div>
           </div>
-          <div className="max-w-xl">
-            <p className="text-sm font-semibold text-blue-300">看清这次运行，优化下一次运行。</p>
-            <h1 className="mt-4 text-4xl font-semibold leading-tight">让真实生产数据成为工艺追因与优化的共同证据。</h1>
-            <p className="mt-5 text-base leading-7 text-slate-300">连接生产条件、过程轨迹与质量结果，帮助工程师比较差异、验证候选原因并推进下一步实验。</p>
-          </div>
-          <p className="text-xs text-slate-400">支持厂内部署，生产数据与权限由企业自主掌控。</p>
-        </section>
-        <section className="flex items-center justify-center px-5 py-12 sm:px-10">
-          <div className="w-full max-w-sm">
-            <div className="mb-8 flex items-center gap-3 lg:hidden">
-              <span className="grid size-10 place-items-center rounded-xl bg-amber-50 ring-1 ring-amber-200"><img src="/ingot-mark.svg" alt="" className="size-7" /></span>
-              <div><strong>Ingot</strong><p className="text-xs text-slate-500">工艺追因与优化系统</p></div>
+
+          <div className="relative max-w-2xl py-14">
+            <p className="data-label text-evidence-400">Process diagnosis · constrained optimization</p>
+            <h1 className="mt-5 text-5xl font-semibold leading-[1.06] tracking-[-0.05em] text-white xl:text-6xl">看清这次运行，<br /><span className="text-evidence-400">做对下一项实验。</span></h1>
+            <p className="mt-7 max-w-xl text-base leading-8 text-slate-300">把真实运行条件、过程轨迹和质量结果整理为可复核的工程证据，帮助团队缩小候选原因并形成下一步验证实验。</p>
+
+            <div className="mt-10 overflow-hidden rounded-2xl border border-white/12 bg-black/15 backdrop-blur-sm">
+              <div className="flex items-center justify-between border-b border-white/8 px-5 py-4">
+                <div><p className="data-label text-slate-400">RUN EVIDENCE</p><p className="mt-1 text-sm font-semibold text-white">一次运行的证据摘要</p></div>
+                <span className="rounded-full bg-trajectory-500/12 px-3 py-1 text-xs font-semibold text-trajectory-100 ring-1 ring-inset ring-trajectory-500/20">等待工程判断</span>
+              </div>
+              <div className="grid grid-cols-3 divide-x divide-white/8 px-2 py-5">
+                {[["实际条件", "42.0"], ["轨迹偏差", "+1.8σ"], ["工装版本", "A-04"]].map(([label, value]) => (
+                  <div key={label} className="px-4"><p className="data-label text-slate-500">{label}</p><p className="data-value mt-2 text-xl font-semibold text-white">{value}</p></div>
+                ))}
+              </div>
             </div>
-            <p className="text-sm font-semibold text-blue-700">平台登录</p>
-            <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">继续进入工作台</h1>
-            <p className="mt-3 text-sm leading-6 text-slate-500">使用管理员分配的本地账户。登录会话仅保存在当前浏览器标签页。</p>
-            <form className="mt-8 space-y-5" onSubmit={login}>
-              <Field label="用户名">
-                <Input autoComplete="username" value={credentials.username} onChange={event => setCredentials({ ...credentials, username: event.target.value })} required autoFocus />
-              </Field>
-              <Field label="口令">
-                <Input type="password" autoComplete="current-password" value={credentials.password} onChange={event => setCredentials({ ...credentials, password: event.target.value })} required />
-              </Field>
-              {error && <Alert tone="danger">{error}</Alert>}
-              <Button type="submit" variant="primary" className="min-h-11 w-full justify-center" disabled={busy}>
-                {busy ? "正在登录…" : "登录"}
-              </Button>
-            </form>
-            <p className="mt-6 text-xs leading-5 text-slate-400">无法登录时，请联系平台管理员确认账户状态和岗位权限。</p>
+          </div>
+
+          <div className="relative flex gap-6 text-xs text-slate-400">
+            {['证据可追溯', '原因可验证', '建议可审核'].map(item => <span key={item} className="flex items-center gap-2"><i className="size-1.5 rounded-full bg-trajectory-500 shadow-[0_0_10px_rgba(95,212,200,.7)]" />{item}</span>)}
+          </div>
+        </section>
+
+        <section className="app-canvas grid min-h-screen place-items-center px-5 py-10">
+          <div className="w-full max-w-md">
+            <header className="mb-10 flex items-center justify-between lg:hidden">
+              <div className="flex items-center gap-3"><span className="grid size-11 place-items-center rounded-xl bg-coal-950"><img src="/ingot-mark.svg" alt="" className="size-8" /></span><div><strong className="text-base text-slate-950">Ingot</strong><p className="text-xs text-slate-500">工艺证据工作台</p></div></div>
+              <span className="rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-600">{import.meta.env.MODE === "demo" ? "演示环境" : "平台环境"}</span>
+            </header>
+            <div className="mb-8">
+              <div className="hidden items-center justify-between lg:flex">
+                <p className="data-label text-trajectory-700">Secure workspace</p>
+                <span className="rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-600">{import.meta.env.MODE === "demo" ? "演示环境" : "平台环境"}</span>
+              </div>
+              <h1 className="mt-3 text-3xl font-semibold tracking-[-0.04em] text-slate-950">进入 Ingot</h1>
+              <p className="mt-2 text-sm leading-6 text-slate-500">登录后继续查看运行证据、质量问题与研发进展。</p>
+            </div>
+            {authMode === "oidc" ? (
+              <div className="space-y-4">
+                <p className="text-sm leading-6 text-slate-600">使用组织的统一身份提供方完成登录，平台不会收集企业口令。</p>
+                {error && <Alert tone="danger">{error}</Alert>}
+                <Button type="button" variant="primary" className="min-h-12 w-full justify-center" disabled={busy} onClick={loginWithOidc}>
+                  {busy ? "正在跳转…" : "使用企业身份登录"}
+                </Button>
+              </div>
+            ) : authMode === "local" || authMode === "disabled" ? (
+              <form className="space-y-5" onSubmit={login}>
+                <Field label="用户名">
+                  <Input className="h-12 bg-white" autoComplete="username" value={credentials.username} onChange={event => setCredentials({ ...credentials, username: event.target.value })} required autoFocus />
+                </Field>
+                <Field label="口令">
+                  <Input className="h-12 bg-white" type="password" autoComplete="current-password" value={credentials.password} onChange={event => setCredentials({ ...credentials, password: event.target.value })} required />
+                </Field>
+                {error && <Alert tone="danger">{error}</Alert>}
+                <Button type="submit" variant="primary" className="min-h-12 w-full justify-center" disabled={busy}>
+                  {busy ? "正在登录…" : "登录"}
+                </Button>
+              </form>
+            ) : (
+              <div className="mt-6 space-y-4">
+                {error && <Alert tone="danger">{error}</Alert>}
+                <Button type="button" className="min-h-11 w-full justify-center" onClick={() => window.location.reload()}>重新读取认证配置</Button>
+              </div>
+            )}
+            <p className="mt-6 border-t border-slate-200 pt-5 text-xs leading-5 text-slate-500">无法登录时，请联系平台管理员确认账户状态和岗位权限。</p>
           </div>
         </section>
       </main>

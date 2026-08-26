@@ -1,7 +1,9 @@
+// 编排采集配置的验证、版本化和发布，不直接承担协议连接或持久化实现。
 using Ingot.Contracts.Acquisition;
 
 namespace Ingot.Platform.Application.Acquisition;
 
+/// <summary>编排采集配置验证、版本化和发布用例。</summary>
 public sealed class AcquisitionApplication(
     IIngestionTaskStore tasks,
     IIngestionConfigurationStore configurations)
@@ -43,4 +45,9 @@ public sealed class AcquisitionApplication(
         => configurations.GetDataSourceAsync(dataSourceId, version, ct);
     public Task<IReadOnlyList<IngestionTaskBinding>> ListBindingsAsync(CancellationToken ct = default)
         => configurations.ListBindingsAsync(ct);
+    public Task<IngestionTaskBinding?> GetBindingAsync(
+        string taskId,
+        int version,
+        CancellationToken ct = default)
+        => configurations.GetBindingAsync(taskId, version, ct);
 }

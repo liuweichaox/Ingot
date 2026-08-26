@@ -1,3 +1,4 @@
+// 校验实验设计、冻结输入并编排受约束的研发实验状态变更。
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -8,6 +9,7 @@ using Ingot.Platform.Application.ProcessConfiguration;
 
 namespace Ingot.Platform.Application.ProcessResearch;
 
+/// <summary>编排冻结约束下的研发实验设计和状态变更。</summary>
 public sealed partial class ResearchExperimentCommands(
     IResearchExperimentCommandStore store,
     IResearchOnlineAdmissionGate? onlineAdmission = null,
@@ -127,6 +129,11 @@ public sealed partial class ResearchExperimentCommands(
             runPlan.Length ||
             runPlan.Select(static value => value.Sequence).Distinct().Count() != runPlan.Length)
             throw new ProcessResearchRuleException("实验运行标识和执行顺序必须唯一。");
+        if (designMethod != ResearchDesignMethods.HistoricalObservation)
+        {
+            foreach (var run in runPlan)
+                ValidateHardBoundaries(project, run.Factors, $"实验运行 {run.ExecutionKey}");
+        }
         var baselineExecutionKeys = request.BaselineExecutionKeys
             .Select(value => RequiredText(value, "对照运行标识", 120))
             .Distinct(StringComparer.Ordinal)
@@ -357,7 +364,7 @@ public sealed partial class ResearchExperimentCommands(
     {
         var experiment = await store.GetExperimentAsync(experimentId, ct).ConfigureAwait(false)
             ?? throw new ProcessResearchRuleException("实验不存在。");
-        await RequireMutableProjectAsync(experiment.ProjectId, ct).ConfigureAwait(false);
+        var project = await RequireMutableProjectAsync(experiment.ProjectId, ct).ConfigureAwait(false);
         var actor = NormalizeUser(userId);
         targetStatus = NormalizeStatus(targetStatus, ResearchExperimentStatuses.IsValid, "实验状态");
         if (experiment.Status == targetStatus)
@@ -396,10 +403,16 @@ public sealed partial class ResearchExperimentCommands(
                 ct).ConfigureAwait(false);
         }
         if (targetStatus is ResearchExperimentStatuses.Approved or ResearchExperimentStatuses.Running)
+        {
+            if (experiment.DesignMethod == ResearchDesignMethods.HistoricalObservation)
+                throw new ProcessResearchRuleException("历史观察只用于只读证据，不能批准或下发执行。");
+            foreach (var run in experiment.RunPlan)
+                ValidateHardBoundaries(project, run.Factors, $"实验运行 {run.ExecutionKey}");
+        }
+        if (targetStatus is ResearchExperimentStatuses.Approved or ResearchExperimentStatuses.Running)
             await ValidateCurrentMechanismKnowledgeAsync(experiment, ct).ConfigureAwait(false);
         if (targetStatus == ResearchExperimentStatuses.Running &&
-            experiment.ProjectRevision !=
-            (await RequireProjectAsync(experiment.ProjectId, ct).ConfigureAwait(false)).Revision)
+            experiment.ProjectRevision != project.Revision)
             throw new ProcessResearchRuleException("项目定义已变化，请基于最新变量和目标重新制定实验计划。");
         if (targetStatus == ResearchExperimentStatuses.Completed)
         {
@@ -525,6 +538,7 @@ public sealed partial class ResearchExperimentCommands(
                 throw new ProcessResearchRuleException("接受建议时批准值必须等于模型建议；需要改值请使用 modified。");
             if (decisionStatus == ResearchControlledDecisionStatuses.Modified && (!changed || reason is null))
                 throw new ProcessResearchRuleException("修改建议必须提供不同的完整批准值并说明原因。");
+            ValidateHardBoundaries(project, approved, "工程师批准值");
         }
 
         var now = DateTimeOffset.UtcNow;
@@ -651,6 +665,38 @@ public sealed partial class ResearchExperimentCommands(
         if (result.Length > maximumLength)
             throw new ProcessResearchRuleException($"文本最长 {maximumLength} 个字符。");
         return result;
+    }
+
+    private static void ValidateHardBoundaries(
+        ResearchProject project,
+        IReadOnlyList<ExperimentFactorSetting> factors,
+        string label)
+    {
+        var values = factors.ToDictionary(
+            static factor => factor.VariableCode,
+            StringComparer.Ordinal);
+        foreach (var constraint in project.Constraints)
+        {
+            if (!values.TryGetValue(constraint.VariableCode, out var factor))
+                throw new ProcessResearchRuleException(
+                    $"{label}缺少安全约束变量 {constraint.VariableCode}。");
+            var limit = constraint.Limit;
+            if (!string.Equals(constraint.Unit, factor.Unit, StringComparison.OrdinalIgnoreCase) &&
+                !ProcessUnitConverter.TryConvert(constraint.Limit, constraint.Unit, factor.Unit, out limit))
+            {
+                throw new ProcessResearchRuleException(
+                    $"安全约束 {constraint.Code} 的单位不能换算为 {factor.Unit}。");
+            }
+            var passed = constraint.Operator switch
+            {
+                "<=" => factor.Value <= limit,
+                ">=" => factor.Value >= limit,
+                _ => false
+            };
+            if (!passed)
+                throw new ProcessResearchRuleException(
+                    $"{label}违反已声明安全边界 {constraint.Code}。");
+        }
     }
 
     [GeneratedRegex("^[a-z][a-z0-9._-]*$", RegexOptions.CultureInvariant)]

@@ -58,6 +58,28 @@ public sealed class LocalIdentityTests
         Assert.False(throttle.IsBlocked("other"));
     }
 
+    [Fact]
+    public void LoginThrottle_BoundsRotatingIdentityStateAndFailsClosed()
+    {
+        var throttle = new LoginThrottle();
+        for (var index = 0; index < LoginThrottle.MaxTrackedIdentities + 100; index++)
+            throttle.RecordFailure($"rotating-{index}");
+
+        Assert.Equal(LoginThrottle.MaxTrackedIdentities, throttle.TrackedIdentityCount);
+        Assert.True(throttle.IsBlocked("previously-unseen"));
+    }
+
+    [Fact]
+    public void LoginThrottle_BlocksPasswordSprayByClientKey()
+    {
+        var throttle = new LoginThrottle();
+        for (var index = 0; index < 25; index++)
+            throttle.RecordFailure($"user-{index}", "192.0.2.10");
+
+        Assert.True(throttle.IsBlocked("new-user", "192.0.2.10"));
+        Assert.False(throttle.IsBlocked("new-user", "192.0.2.11"));
+    }
+
     [Theory]
     [InlineData("platform.admin", true)]
     [InlineData("process.engineer", true)]

@@ -1,3 +1,4 @@
+// 管理采集任务与 Edge 探查租约，并在所有配置操作中执行站点授权。
 using System.Text.Json;
 using Ingot.Contracts.Acquisition;
 using Ingot.Contracts.ProcessConfiguration;
@@ -21,7 +22,16 @@ public sealed class IngestionTasksController(
 {
     [HttpGet]
     public async Task<IActionResult> List(CancellationToken ct)
-        => DeniedConfigurationRead() ?? Ok(new { data = await store.ListAsync(ct).ConfigureAwait(false) });
+    {
+        var denied = DeniedConfigurationRead();
+        if (denied is not null) return denied;
+        var identity = ResolveIdentity()!;
+        var tasks = await store.ListAsync(ct).ConfigureAwait(false);
+        return Ok(new
+        {
+            data = tasks.Where(task => CanAccessEdge(identity, task.EdgeId)).ToArray()
+        });
+    }
 
     [HttpGet("{taskId}/{version:int}")]
     public async Task<IActionResult> Get(string taskId, int version, CancellationToken ct)
@@ -29,7 +39,9 @@ public sealed class IngestionTasksController(
         var denied = DeniedConfigurationRead();
         if (denied is not null) return denied;
         var value = await store.GetAsync(NormalizeCode(taskId), version, ct).ConfigureAwait(false);
-        return value is null ? ResourceNotFound() : Ok(value);
+        return value is null || !CanAccessEdge(ResolveIdentity()!, value.EdgeId)
+            ? ResourceNotFound()
+            : Ok(value);
     }
 
     [HttpGet("active")]
@@ -39,7 +51,8 @@ public sealed class IngestionTasksController(
         var normalizedEdgeId = edgeId?.Trim() ?? string.Empty;
         if (string.IsNullOrWhiteSpace(normalizedEdgeId))
             return InvalidRequest("edgeId 不能为空。");
-        if (!edgeTokenValidator.IsAuthorized(normalizedEdgeId, Request.Headers.Authorization.ToString()))
+        if (!edgeTokenValidator.TryGetSiteId(normalizedEdgeId, out _) ||
+            !edgeTokenValidator.IsAuthorized(normalizedEdgeId, Request.Headers.Authorization.ToString()))
             return AuthenticationRequired("边缘节点认证失败。");
 
         var tasks = await store.ListPublishedForEdgeAsync(normalizedEdgeId, ct).ConfigureAwait(false);
@@ -69,6 +82,23 @@ public sealed class IngestionTasksController(
         if (!TryNormalize(request, out var normalized, out var error))
             return InvalidRequest(error);
         var protocolNormalized = normalized!;
+        var edgeDenied = DeniedEdgeAccess(protocolNormalized.EdgeId);
+        if (edgeDenied is not null) return edgeDenied;
+        var identity = ResolveIdentity()!;
+        var siblingVersions = await store.ListAsync(ct).ConfigureAwait(false);
+        if (siblingVersions.Any(task =>
+                string.Equals(task.TaskId, protocolNormalized.TaskId, StringComparison.OrdinalIgnoreCase) &&
+                !CanAccessEdge(identity, task.EdgeId)))
+            return ResourceNotFound("采集配置不存在或当前身份无权访问。");
+        var existing = await store.GetAsync(
+            protocolNormalized.TaskId,
+            protocolNormalized.Version,
+            ct).ConfigureAwait(false);
+        if (existing is not null)
+        {
+            edgeDenied = DeniedEdgeAccess(existing.EdgeId);
+            if (edgeDenied is not null) return edgeDenied;
+        }
 
         var model = await processStore.GetDataModelAsync(
             protocolNormalized.DataModelId,
@@ -95,7 +125,6 @@ public sealed class IngestionTasksController(
                     ("validation", probe.Result));
         }
 
-        var existing = await store.GetAsync(normalized.TaskId, normalized.Version, ct).ConfigureAwait(false);
         if (existing is not null && existing.Status != ConfigurationStatuses.Draft)
         {
             if (existing.Status == ConfigurationStatuses.Published && normalized.Status == ConfigurationStatuses.Retired)
@@ -126,6 +155,8 @@ public sealed class IngestionTasksController(
         if (requestBody?.Task is null)
             return InvalidRequest("采集配置不能为空。");
         var request = requestBody.Task;
+        var edgeDenied = DeniedEdgeAccess(request.EdgeId);
+        if (edgeDenied is not null) return edgeDenied;
         var model = await processStore.GetDataModelAsync(
             NormalizeCode(request.DataModelId),
             request.DataModelVersion,
@@ -210,7 +241,8 @@ public sealed class IngestionTasksController(
         var normalizedEdgeId = edgeId?.Trim() ?? string.Empty;
         if (string.IsNullOrWhiteSpace(normalizedEdgeId))
             return InvalidRequest("edgeId 不能为空。");
-        if (!edgeTokenValidator.IsAuthorized(normalizedEdgeId, Request.Headers.Authorization.ToString()))
+        if (!edgeTokenValidator.TryGetSiteId(normalizedEdgeId, out _) ||
+            !edgeTokenValidator.IsAuthorized(normalizedEdgeId, Request.Headers.Authorization.ToString()))
             return AuthenticationRequired("边缘节点认证失败。");
         var task = await probeTasks.ClaimNextAsync(normalizedEdgeId, ct).ConfigureAwait(false);
         return task is null ? NoContent() : Ok(task);
@@ -226,7 +258,8 @@ public sealed class IngestionTasksController(
         if (completion is null ||
             !string.Equals(taskId, completion.TaskId, StringComparison.Ordinal))
             return InvalidRequest("探查任务结果与路由不匹配。");
-        if (!edgeTokenValidator.IsAuthorized(completion.EdgeId, Request.Headers.Authorization.ToString()))
+        if (!edgeTokenValidator.TryGetSiteId(completion.EdgeId, out _) ||
+            !edgeTokenValidator.IsAuthorized(completion.EdgeId, Request.Headers.Authorization.ToString()))
             return AuthenticationRequired("边缘节点认证失败。");
         return await probeTasks.CompleteAsync(completion, ct).ConfigureAwait(false)
             ? NoContent()
@@ -253,6 +286,8 @@ public sealed class IngestionTasksController(
         if (denied is not null) return denied;
         var existing = await store.GetAsync(NormalizeCode(taskId), version, ct).ConfigureAwait(false);
         if (existing is null) return ResourceNotFound();
+        var edgeDenied = DeniedEdgeAccess(existing.EdgeId);
+        if (edgeDenied is not null) return edgeDenied;
         if (existing.Status != ConfigurationStatuses.Draft)
             return StateConflict("只有草稿采集配置可以删除。");
         return await store.DeleteAsync(existing.TaskId, version, ct).ConfigureAwait(false)
@@ -283,5 +318,18 @@ public sealed class IngestionTasksController(
 
     private static bool SamePayload<T>(T left, T right)
         => JsonSerializer.Serialize(left) == JsonSerializer.Serialize(right);
+
+    private IActionResult? DeniedEdgeAccess(string? edgeId)
+    {
+        var identity = ResolveIdentity();
+        return identity is not null && CanAccessEdge(identity, edgeId)
+            ? null
+            : ResourceNotFound("采集节点不存在或当前身份无权访问。");
+    }
+
+    private bool CanAccessEdge(PlatformIdentity identity, string? edgeId)
+        => edgeTokenValidator.TryGetSiteId(edgeId?.Trim() ?? string.Empty, out var siteId) &&
+           identity.CanAccessSite(siteId);
+
     private static string NormalizeCode(string? value) => value?.Trim().ToLowerInvariant() ?? string.Empty;
 }

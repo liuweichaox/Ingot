@@ -1,5 +1,5 @@
+// 通过受控 TCP 连接采集 Modbus 寄存器并映射为生产事件。
 using System.Buffers.Binary;
-using System.Net.Sockets;
 using Ingot.Contracts.Acquisition;
 using Ingot.Edge.Application.Abstractions;
 using NModbus;
@@ -9,6 +9,7 @@ namespace Ingot.Edge.ConnectorHost.Acquisition;
 public sealed class ModbusTcpAcquisitionRunner(
     IEventSink sink,
     AcquisitionStatus status,
+    AcquisitionHttpEgressPolicy egressPolicy,
     ILogger<ModbusTcpAcquisitionRunner> logger) : IAcquisitionProtocolRunner
 {
     private static readonly System.Text.Encoding StrictUtf8 =
@@ -30,8 +31,12 @@ public sealed class ModbusTcpAcquisitionRunner(
         {
             try
             {
-                using var tcpClient = new TcpClient();
-                await ConnectAsync(tcpClient, connection, deployment.Task.Execution, ct).ConfigureAwait(false);
+                using var tcpClient = await egressPolicy.ConnectTcpAsync(
+                    connection.Host,
+                    connection.Port,
+                    "Modbus TCP",
+                    deployment.Task.Execution.TimeoutMs,
+                    ct).ConfigureAwait(false);
                 var factory = new ModbusFactory();
                 using var master = factory.CreateMaster(tcpClient);
                 logger.LogInformation(
@@ -185,27 +190,6 @@ public sealed class ModbusTcpAcquisitionRunner(
             WordOrder = point.WordOrder,
             BitIndex = point.BitIndex
         };
-    }
-
-    private static async Task ConnectAsync(
-        TcpClient client,
-        ModbusTcpConnection connection,
-        AcquisitionExecutionOptions execution,
-        CancellationToken ct)
-    {
-        var timeout = Math.Max(1000, execution.TimeoutMs);
-        client.ReceiveTimeout = timeout;
-        client.SendTimeout = timeout;
-        using var attempt = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        attempt.CancelAfter(timeout);
-        try
-        {
-            await client.ConnectAsync(connection.Host, connection.Port, attempt.Token).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
-        {
-            throw new TimeoutException($"连接 Modbus 设备 {connection.Host}:{connection.Port} 超过 {timeout}ms 未完成。");
-        }
     }
 
     internal static async Task<Dictionary<string, object?>> ReadSnapshotAsync(

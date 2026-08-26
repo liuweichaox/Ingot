@@ -1,3 +1,4 @@
+// 冻结独立验证计划及其范围，防止在观察结果后改写准入规则。
 using System.Security.Cryptography;
 using System.Text.Json;
 using Ingot.Contracts.Analytics;
@@ -6,6 +7,7 @@ using Ingot.Platform.Application.Analytics;
 
 namespace Ingot.Platform.Application.ProcessResearch;
 
+/// <summary>创建和验证不可在结果观测后改写的独立验证预注册。</summary>
 public sealed class ResearchValidationPreregistrationService(
     IProcessResearchStore store,
     IDataReliabilityBaselineService? reliability = null)
@@ -30,6 +32,9 @@ public sealed class ResearchValidationPreregistrationService(
             ? EmptyReliabilityBaseline(plan)
             : await reliability.CalculateAsync(new DataReliabilityBaselineQuery
             {
+                SiteId = string.IsNullOrWhiteSpace(project.SiteCode)
+                    ? throw new ProcessResearchRuleException("研发项目必须绑定站点后才能冻结数据可靠性基线。")
+                    : project.SiteCode.Trim(),
                 From = plan.DataFrom,
                 To = plan.DataTo,
                 EdgeId = plan.EdgeId,

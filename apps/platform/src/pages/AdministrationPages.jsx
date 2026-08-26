@@ -1,4 +1,4 @@
-
+// 提供管理员维护用户角色与站点授权的受控页面。
 import { ArrowPathIcon } from "@heroicons/react/24/outline";
 import { useState } from "react";
 import { Link } from "react-router";
@@ -116,8 +116,7 @@ export function UsersPage() {
   const namedDemoAccounts = users.filter(user => !user.disabled && /^(demo|test|admin123)$/i.test(user.username || ""));
   return (
     <Page
-      title="用户与权限"
-      description="管理员创建本地账户，并按岗位分配最小必要权限。"
+      title="用户权限"
       actions={<Button variant="primary" onClick={startCreate}>创建用户</Button>}
     >
       <Alert tone="info" title="岗位分权">
@@ -265,7 +264,7 @@ export function MetricsPage() {
   const error = edgeResponse.error || metricResponse.error || executionResponse.error || qualityResponse.error || profileResponse.error || contextResponse.error || inspectionResponse.error || reliabilityResponse.error;
   const healthy = offline === 0 && unknown === 0 && threadQueue === 0;
   return (
-    <Page title="平台状态" description="从业务处理、设备采集和平台资源三个层面确认系统是否正常。">
+    <Page title="平台状态">
       <RequestError
         error={error}
         onRetry={() => Promise.all([edgeResponse.reload(), metricResponse.reload(), executionResponse.reload(), qualityResponse.reload(), profileResponse.reload(), contextResponse.reload(), inspectionResponse.reload(), reliabilityResponse.reload()])}
@@ -292,7 +291,7 @@ export function MetricsPage() {
       >
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           {pilotChecks.map(item => (
-            <Link key={item.title} to={item.to} className={`rounded-xl border p-4 transition hover:shadow-sm ${item.passed ? "border-emerald-200 bg-emerald-50" : "border-amber-200 bg-amber-50"}`}>
+            <Link key={item.title} to={item.to} className={`rounded-lg border p-4 transition ${item.passed ? "border-emerald-200 bg-emerald-50" : "border-amber-200 bg-amber-50"}`}>
               <p className="flex items-center justify-between gap-2 font-semibold text-slate-950"><span>{item.title}</span><span className={item.passed ? "text-emerald-700" : "text-amber-700"}>{item.passed ? "通过" : "待完成"}</span></p>
               <p className="mt-2 text-sm leading-6 text-slate-600">{item.detail}</p>
             </Link>
@@ -325,7 +324,7 @@ export function LogsPage() {
   const endpoint = edgeId ? `/api/edges/${encodeURIComponent(edgeId)}/logs?pageSize=200${level ? `&level=${level}` : ""}` : null;
   const logs = useApi(endpoint, { enabled: Boolean(edgeId), interval: 5000 });
   return (
-    <Page title="平台日志" description="按边缘节点和级别查询结构化运行记录。">
+    <Page title="平台日志">
       <Card title="查询条件">
         <div className="grid gap-3 md:grid-cols-2">
           <Field label="边缘节点"><Select value={edgeId} onChange={event => setEdgeId(event.target.value)}><option value="">选择节点</option>{edgeRows.map(row => <option key={row.edgeId} value={row.edgeId}>{row.edgeId}</option>)}</Select></Field>

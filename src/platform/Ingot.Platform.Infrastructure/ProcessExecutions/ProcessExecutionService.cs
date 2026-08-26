@@ -18,11 +18,71 @@ public sealed class ProcessExecutionService(
     ProcessAnalysisResolver analysisResolver,
     ITimeSeriesStore timeSeries,
     ProcessExecutionAnalysisEngine? wholeProcessExecutionAnalysis = null,
-    ProcessExecutionAnalysisMaterializer? materializer = null) : IProcessExecutionService
+    ProcessExecutionAnalysisMaterializer? materializer = null)
+    : IProcessExecutionService, IProcessExecutionAnalysisRecomputeExecutor
 {
+    private const int MaximumScannedEventRows = 50_000;
+    private const int MaximumTimeSeriesFrames = 200_000;
     private readonly ProcessExecutionAnalysisEngine _wholeProcessExecutionAnalysis = wholeProcessExecutionAnalysis ?? new();
     private readonly ProcessExecutionAnalysisMaterializer? _materializer = materializer;
     private readonly ITimeSeriesStore _timeSeries = timeSeries;
+
+    public async Task<ProcessExecutionAnalysisRecomputeOutcome> RecomputeAnalysisAsync(
+        string executionId,
+        string siteId,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(executionId))
+            throw new ArgumentException("过程执行标识不能为空。", nameof(executionId));
+        if (string.IsNullOrWhiteSpace(siteId))
+            throw new ArgumentException("站点标识不能为空。", nameof(siteId));
+        if (_materializer is null)
+            return ProcessExecutionAnalysisRecomputeOutcome.Retryable;
+        executionId = executionId.Trim();
+        siteId = siteId.Trim();
+
+        var rows = await QueryAllAsync(
+            new PlatformEventQuery { SiteId = siteId, ExecutionId = executionId }, ct).ConfigureAwait(false);
+        if (rows.Count == 0)
+            return ProcessExecutionAnalysisRecomputeOutcome.Retryable;
+        if (rows.Any(row => !string.Equals(row.SiteId, siteId, StringComparison.OrdinalIgnoreCase)))
+            return ProcessExecutionAnalysisRecomputeOutcome.Unsafe;
+
+        var ordered = rows
+            .OrderBy(static row => row.Event.OccurredAt)
+            .ThenBy(static row => row.IngestId)
+            .ToArray();
+        var startedAt = ordered
+            .FirstOrDefault(static row => row.Event.EventType == "process.execution.started")
+            ?.Event.OccurredAt;
+        var completedAt = ordered
+            .LastOrDefault(static row => row.Event.EventType == "process.execution.completed")
+            ?.Event.OccurredAt;
+        if (!startedAt.HasValue || !completedAt.HasValue)
+            return ProcessExecutionAnalysisRecomputeOutcome.Retryable;
+
+        var resolved = (await analysisResolver.ResolveManyAsync(
+            [ResolveContext(ordered)], "production-execution", ct).ConfigureAwait(false))[0];
+        var samples = await TimeSeriesFrameReader.QueryAllAsync(
+            _timeSeries,
+            new TimeSeriesQuery { SiteId = siteId, ExecutionId = executionId },
+            ct,
+            MaximumTimeSeriesFrames).ConfigureAwait(false);
+        var materialized = await _materializer.TryMaterializeForUniqueSiteAsync(
+            executionId,
+            siteId,
+            samples,
+            startedAt,
+            completedAt,
+            resolved?.DataModel,
+            resolved?.Plan,
+            ct).ConfigureAwait(false);
+        if (materialized is null)
+            return ProcessExecutionAnalysisRecomputeOutcome.Unsafe;
+        return materialized.Materialization.Status == "materialized"
+            ? ProcessExecutionAnalysisRecomputeOutcome.Completed
+            : ProcessExecutionAnalysisRecomputeOutcome.Retryable;
+    }
 
     public async Task<ProcessExecutionQueryResult> QueryAsync(
         DateTimeOffset? from,
@@ -42,6 +102,9 @@ public sealed class ProcessExecutionService(
         string? externalBatchRef = null,
         string? siteId = null)
     {
+        if (string.IsNullOrWhiteSpace(siteId))
+            throw new ArgumentException("过程运行查询必须指定站点。", nameof(siteId));
+        siteId = siteId.Trim();
         var context = BuildContext(productFamilyCode, productCode, processSpecificationId, outputItemId, externalBatchRef);
         var lifecycle = new List<PlatformProductionEvent>();
         if (!string.IsNullOrWhiteSpace(executionId))
@@ -99,10 +162,11 @@ public sealed class ProcessExecutionService(
                 allCandidates.Count(static row => row.HasStarted && row.HasCompleted),
                 allCandidates.Count(static row => row.HasStarted && !row.HasCompleted),
                 allCandidates.Count(static row => !row.HasStarted),
+                siteId,
                 ct).ConfigureAwait(false);
         }
 
-        var selectedEvents = await events.QueryByExecutionIdsAsync(ids, ct).ConfigureAwait(false);
+        var selectedEvents = await events.QueryByExecutionIdsAsync(ids, siteId, ct).ConfigureAwait(false);
         var executionEvents = selectedEvents
             .Where(static row => !string.IsNullOrWhiteSpace(row.Event.ExecutionId))
             .GroupBy(static row => row.Event.ExecutionId!, StringComparer.Ordinal)
@@ -111,7 +175,7 @@ public sealed class ProcessExecutionService(
                 static group => (IReadOnlyList<PlatformProductionEvent>)group.ToArray(),
                 StringComparer.Ordinal);
         var records = InspectionRecordSet.Effective(
-            await inspections.QueryAllByExecutionIdsAsync(ids, null, ct).ConfigureAwait(false));
+            await inspections.QueryAllByExecutionIdsAsync(ids, siteId, ct).ConfigureAwait(false));
         var latestReviews = await reviews.GetLatestByInspectionRecordIdsAsync(
             records.Select(static record => record.RecordId).ToArray(), ct).ConfigureAwait(false);
         var plans = await masterData.ListInspectionPlansAsync(ct).ConfigureAwait(false);
@@ -125,13 +189,19 @@ public sealed class ProcessExecutionService(
         var recordsByProcessExecution = records.GroupBy(static record => record.ExecutionId, StringComparer.Ordinal)
             .ToDictionary(static group => group.Key, static group => group.ToArray(), StringComparer.Ordinal);
         var materializedByProcessExecution = new Dictionary<string, MaterializedProcessExecutionAnalysis>(StringComparer.Ordinal);
+        var remainingFrames = MaximumTimeSeriesFrames;
         foreach (var id in ids)
         {
+            if (remainingFrames == 0)
+                throw new TimeSeriesQueryLimitExceededException(MaximumTimeSeriesFrames);
             materializedByProcessExecution[id] = await AnalyzeAsync(
                 id,
                 executionEvents.GetValueOrDefault(id, []),
                 analyses[id],
+                siteId,
+                remainingFrames,
                 ct).ConfigureAwait(false);
+            remainingFrames -= materializedByProcessExecution[id].Materialization.SourceEventCount;
         }
 
         var rows = candidates.Select(candidate => BuildSummary(
@@ -167,13 +237,14 @@ public sealed class ProcessExecutionService(
         int completedCount,
         int activeCount,
         int incompleteCount,
+        string siteId,
         CancellationToken ct)
     {
         var ids = candidates.Select(static item => item.Id).ToArray();
-        var sources = await events.QueryExecutionSummarySourcesAsync(ids, ct).ConfigureAwait(false);
+        var sources = await events.QueryExecutionSummarySourcesAsync(ids, siteId, ct).ConfigureAwait(false);
         var sourceByExecution = sources.ToDictionary(static source => source.ExecutionId, StringComparer.Ordinal);
         var records = InspectionRecordSet.Effective(
-            await inspections.QueryAllByExecutionIdsAsync(ids, null, ct).ConfigureAwait(false));
+            await inspections.QueryAllByExecutionIdsAsync(ids, siteId, ct).ConfigureAwait(false));
         var latestReviews = await reviews.GetLatestByInspectionRecordIdsAsync(
             records.Select(static record => record.RecordId).ToArray(), ct).ConfigureAwait(false);
         var plans = await masterData.ListInspectionPlansAsync(ct).ConfigureAwait(false);
@@ -197,11 +268,10 @@ public sealed class ProcessExecutionService(
             if (!sourceByExecution.TryGetValue(id, out var source) || source.Events.Count == 0)
                 continue;
             var resolved = analyses[id];
-            var materialized = await _materializer!.TryLoadLatestAsync(
-                id,
-                resolved?.DataModel,
-                resolved?.Plan,
-                ct).ConfigureAwait(false) ?? PendingAnalysis(source.SampleCount);
+            // Analysis materializations are currently keyed only by execution id. Until the
+            // projection key includes site id, a scoped list must not reuse a possibly
+            // same-named execution from another site.
+            var materialized = PendingAnalysis(source.SampleCount);
             rows.Add(BuildSummary(
                 id,
                 source.Events,
@@ -346,24 +416,21 @@ public sealed class ProcessExecutionService(
         string executionId,
         IReadOnlyList<PlatformProductionEvent> rows,
         ResolvedProcessAnalysis? analysis,
+        string siteId,
+        int maximumFrames,
         CancellationToken ct)
     {
         var ordered = rows.OrderBy(static row => row.Event.OccurredAt).ThenBy(static row => row.IngestId).ToArray();
         var startedAt = ordered.FirstOrDefault(static row => row.Event.EventType == "process.execution.started")?.Event.OccurredAt;
         var completedAt = ordered.LastOrDefault(static row => row.Event.EventType == "process.execution.completed")?.Event.OccurredAt;
         var samples = await TimeSeriesFrameReader.QueryAllAsync(
-            _timeSeries, new TimeSeriesQuery { ExecutionId = executionId }, ct).ConfigureAwait(false);
-        if (_materializer is not null)
-        {
-            return await _materializer.GetOrComputeAsync(
-                executionId,
-                samples,
-                startedAt,
-                completedAt,
-                analysis?.DataModel,
-                analysis?.Plan,
-                ct).ConfigureAwait(false);
-        }
+            _timeSeries,
+            new TimeSeriesQuery { SiteId = siteId, ExecutionId = executionId },
+            ct,
+            maximumFrames).ConfigureAwait(false);
+
+        // The persisted analysis key does not yet contain site id. Compute from the
+        // authorized frames instead of reading or overwriting a cross-site cache entry.
 
         var source = ProcessExecutionAnalysisMaterializer.CreateSourceFingerprint(samples);
         return new MaterializedProcessExecutionAnalysis(
@@ -496,15 +563,20 @@ public sealed class ProcessExecutionService(
         var result = new List<PlatformProductionEvent>();
         while (true)
         {
-            var page = await events.QueryAsync(query with { AfterIngestId = cursor, Limit = 500 }, ct).ConfigureAwait(false);
+            var remaining = MaximumScannedEventRows - result.Count;
+            var requestedLimit = Math.Min(500, remaining + 1);
+            var page = await events.QueryAsync(
+                query with { AfterIngestId = cursor, Limit = requestedLimit }, ct).ConfigureAwait(false);
             if (page.Count == 0)
                 break;
+            if (page.Count > remaining)
+                throw new PlatformEventQueryLimitExceededException(MaximumScannedEventRows);
             result.AddRange(page);
             var next = page.Max(static item => item.IngestId);
             if (next <= cursor)
                 throw new InvalidOperationException("生产过程执行查询的摄入游标没有前进。");
             cursor = next;
-            if (page.Count < 500)
+            if (page.Count < requestedLimit)
                 break;
         }
         return result;

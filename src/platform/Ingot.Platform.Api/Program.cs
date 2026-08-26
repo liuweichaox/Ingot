@@ -1,4 +1,4 @@
-
+// 组合 Platform API 的认证、应用服务、基础设施、健康检查与 HTTP 管道。
 using System.Diagnostics;
 using Ingot.Agent;
 using Ingot.Agent.Providers;
@@ -99,7 +99,11 @@ else if (useOidc)
             options.Authority = builder.Configuration["Authentication:Authority"];
             options.Audience = builder.Configuration["Authentication:Audience"];
             options.RequireHttpsMetadata = builder.Configuration.GetValue("Authentication:RequireHttpsMetadata", true);
-            options.MapInboundClaims = true;
+            options.MapInboundClaims = false;
+            options.TokenValidationParameters.NameClaimType =
+                builder.Configuration["Authentication:Oidc:NameClaimType"] ?? "name";
+            options.TokenValidationParameters.RoleClaimType =
+                builder.Configuration["Authentication:Oidc:RoleClaimType"] ?? "roles";
         });
 }
 else

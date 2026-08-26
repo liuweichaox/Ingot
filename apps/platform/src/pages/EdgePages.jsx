@@ -1,4 +1,4 @@
-
+// 展示 Edge 注册、心跳和采集运行状态，不推断未上报健康信息。
 import { useState } from "react";
 import { Link, useParams } from "react-router";
 import { extractRows, useApi } from "../hooks/useApi";
@@ -21,7 +21,6 @@ export function EdgesPage() {
   return (
     <Page
       title="现场节点"
-      description="查看部署在现场、负责连接设备并上报数据的节点。"
       actions={<Link className="inline-flex min-h-9 items-center rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700" to="/configuration/ingestion-tasks">配置数据源</Link>}
     >
       <RequestError error={error} title="现场节点暂不可用" onRetry={reload} />
@@ -92,7 +91,6 @@ export function EdgeDetailPage() {
   return (
     <Page
       title={edge?.hostname || edgeId || "数据源节点"}
-      description="确认现场数据是否已从设备连接、采集和上行，交付为可用于工艺追因与优化的过程证据。"
       actions={(
         <>
           <Link className="inline-flex min-h-9 items-center rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50" to="/edges">返回现场节点</Link>

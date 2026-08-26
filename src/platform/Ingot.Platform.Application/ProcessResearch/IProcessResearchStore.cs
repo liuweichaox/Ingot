@@ -11,6 +11,7 @@ public interface IProcessResearchStore
     Task<IReadOnlyList<ResearchProject>> ListProjectsAsync(
         string userId,
         bool includeAll,
+        IReadOnlyCollection<string>? siteIds,
         int limit,
         int offset,
         CancellationToken ct = default);

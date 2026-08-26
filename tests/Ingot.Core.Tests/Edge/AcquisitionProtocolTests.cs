@@ -4,6 +4,7 @@ using Ingot.Contracts.Acquisition;
 using Ingot.Contracts.ProcessConfiguration;
 using Ingot.Domain.Events;
 using Ingot.Edge.ConnectorHost.Acquisition;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace Ingot.Core.Tests.Edge;
@@ -26,7 +27,7 @@ public sealed class AcquisitionProtocolTests
         Environment.SetEnvironmentVariable(name, "secret-value");
         try
         {
-            var resolver = new EnvironmentAcquisitionSecretResolver();
+            var resolver = Resolver(name);
             Assert.Equal("secret-value", resolver.Resolve($"env:{name}"));
             Assert.Throws<InvalidOperationException>(() => resolver.Resolve("plain-text"));
         }
@@ -35,6 +36,34 @@ public sealed class AcquisitionProtocolTests
             Environment.SetEnvironmentVariable(name, null);
         }
     }
+
+    [Fact]
+    public void SecretResolver_RejectsEnvironmentVariableOutsideExplicitAllowlist()
+    {
+        var resolver = Resolver("DEVICE_TOKEN");
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            resolver.Resolve("env:UNLISTED_DEVICE_TOKEN"));
+
+        Assert.Contains("允许清单", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void SecretResolver_RejectsProtectedRuntimeSecretEvenWhenAllowlisted()
+    {
+        var resolver = Resolver("Edge__EventIngestToken");
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            resolver.Resolve("env:Edge__EventIngestToken"));
+
+        Assert.Contains("运行时", exception.Message, StringComparison.Ordinal);
+    }
+
+    private static EnvironmentAcquisitionSecretResolver Resolver(params string[] allowedNames)
+        => new(Options.Create(new AcquisitionSecurityOptions
+        {
+            AllowedSecretEnvironmentVariables = allowedNames
+        }));
 
     [Fact]
     public void ProtocolMapper_DoesNotTreatDeviceRegistersAsExecutionIdByDefault()

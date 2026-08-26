@@ -25,6 +25,13 @@ public interface IProcessExecutionAnalysisMaterializationStore : IProcessExecuti
         WholeProcessExecutionAnalysisResult analysis,
         CancellationToken ct = default);
 
+    Task<ProcessExecutionAnalysisSnapshot?> TrySaveForUniqueSiteAsync(
+        ProcessExecutionAnalysisMaterializationKey key,
+        string siteId,
+        ProcessExecutionAnalysisSourceFingerprint source,
+        WholeProcessExecutionAnalysisResult analysis,
+        CancellationToken ct = default);
+
     Task MarkDirtyAsync(
         IReadOnlyCollection<string> executionIds,
         long invalidatedSourceMaxIngestId,

@@ -1,3 +1,4 @@
+// 从站点受限事件和时序数据生成只读数据质量证据。
 using System.Text.Json;
 using Ingot.Agent;
 using Ingot.Contracts.Agents;
@@ -6,16 +7,24 @@ using Ingot.Platform.Application.Events;
 using Ingot.Platform.Application.ProcessExecutions;
 using Ingot.Platform.Infrastructure.ProcessExecutions;
 using Ingot.Platform.Infrastructure.TimeSeries;
+using Microsoft.Extensions.Options;
 
 namespace Ingot.Platform.Infrastructure.AgentTools;
 
 public sealed class CheckDataQualityTool(
     IChatEventReader events,
     ITimeSeriesStore timeSeries,
-    ProcessExecutionAnalysisEngine? wholeProcessExecutionAnalysis = null) : IAnalysisTool
+    ProcessExecutionAnalysisEngine? wholeProcessExecutionAnalysis = null,
+    IOptions<ChatOptions>? options = null) : IAnalysisTool
 {
     private readonly ProcessExecutionAnalysisEngine _wholeProcessExecutionAnalysis = wholeProcessExecutionAnalysis ?? new();
     private readonly ITimeSeriesStore _timeSeries = timeSeries;
+    private readonly int _maxEventRows = Math.Clamp(
+        options?.Value.MaxEventRowsPerTool ?? 50_000, 1, 1_000_000);
+    private readonly int _maxProcessExecutions = Math.Clamp(
+        options?.Value.MaxProcessExecutionsPerTool ?? 200, 1, 2_000);
+    private readonly int _maxTimeSeriesFrames = Math.Clamp(
+        options?.Value.MaxTimeSeriesFramesPerTool ?? 100_000, 1, 1_000_000);
 
     public AnalysisToolDefinition Definition { get; } = new()
     {
@@ -27,8 +36,10 @@ public sealed class CheckDataQualityTool(
         InputSchema = JsonSerializer.SerializeToElement(new
         {
             type = "object",
+            required = new[] { "siteId" },
             properties = new
             {
+                siteId = new { type = "string", minLength = 1, maxLength = 128 },
                 subjectId = new { type = "string" },
                 executionId = new { type = "string" }
             },
@@ -41,10 +52,12 @@ public sealed class CheckDataQualityTool(
         AgentExecutionContext context,
         CancellationToken ct = default)
     {
+        var siteId = context.AccessScope.EnsureAuthorizedSite(Require(call, "siteId"));
         call.Arguments.TryGetValue("subjectId", out var subjectId);
         call.Arguments.TryGetValue("executionId", out var executionId);
         var scope = new PlatformEventQuery
         {
+            SiteId = siteId,
             SubjectId = NullIfBlank(subjectId),
             ExecutionId = NullIfBlank(executionId)
         };
@@ -54,13 +67,17 @@ public sealed class CheckDataQualityTool(
         var rows = await events.QueryAllAsync(
             context.UserId,
             scope,
-            ct).ConfigureAwait(false);
+            ct,
+            _maxEventRows).ConfigureAwait(false);
         var ordered = rows.OrderBy(static row => row.IngestId).ToArray();
         var emptyContext = ordered.Count(static row => row.Event.Context.Count == 0);
         var correlations = ordered
             .Where(static row => !string.IsNullOrWhiteSpace(row.Event.ExecutionId))
             .GroupBy(static row => row.Event.ExecutionId!, StringComparer.Ordinal)
             .ToArray();
+        if (correlations.Length > _maxProcessExecutions)
+            throw new InvalidOperationException(
+                $"数据质量检查涉及 {correlations.Length} 个过程执行，超过 {_maxProcessExecutions} 个预算；请缩小查询范围。");
         var incompleteProcessExecutions = correlations.Count(group =>
             group.Any(static row => row.Event.EventType.EndsWith(".started", StringComparison.Ordinal)) !=
             group.Any(static row =>
@@ -68,14 +85,21 @@ public sealed class CheckDataQualityTool(
                 row.Event.EventType.EndsWith(".cleared", StringComparison.Ordinal) ||
                 row.Event.EventType.EndsWith(".exited", StringComparison.Ordinal)));
         var processQuality = new List<ProcessDataQualitySummary>();
+        var remainingFrames = _maxTimeSeriesFrames;
         foreach (var group in correlations)
         {
+            if (remainingFrames == 0)
+                throw new TimeSeriesQueryLimitExceededException(_maxTimeSeriesFrames);
             var startedAt = group.FirstOrDefault(static row =>
                 row.Event.EventType == "process.execution.started")?.Event.OccurredAt;
             var completedAt = group.LastOrDefault(static row =>
                 row.Event.EventType == "process.execution.completed")?.Event.OccurredAt;
             var samples = await TimeSeriesFrameReader.QueryAllAsync(
-                _timeSeries, new TimeSeriesQuery { ExecutionId = group.Key }, ct).ConfigureAwait(false);
+                _timeSeries,
+                new TimeSeriesQuery { SiteId = siteId, ExecutionId = group.Key },
+                ct,
+                remainingFrames).ConfigureAwait(false);
+            remainingFrames -= samples.Count;
             processQuality.Add(_wholeProcessExecutionAnalysis.Analyze(
                 samples, startedAt, completedAt, null, null).Quality);
         }
@@ -108,13 +132,13 @@ public sealed class CheckDataQualityTool(
             limitations.Add($"有 {degradedProcessProcessExecutions} 个过程执行存在采样空窗、重复时间戳或源序号间断，比较时需要降级处理。");
         if (unavailableProcessProcessExecutions > 0)
             limitations.Add($"有 {unavailableProcessProcessExecutions} 个过程执行没有可用的过程数据。");
-        var scopeId = $"events:{subjectId ?? "*"}:{executionId ?? "*"}:{ordered.FirstOrDefault()?.IngestId ?? 0}-{ordered.LastOrDefault()?.IngestId ?? 0}";
+        var scopeId = $"{siteId}:events:{subjectId ?? "*"}:{executionId ?? "*"}:{ordered.FirstOrDefault()?.IngestId ?? 0}-{ordered.LastOrDefault()?.IngestId ?? 0}";
         var relatedRecords = new RelatedRecordRef
         {
             Kind = "event-query",
             Id = scopeId,
             Label = $"生产事件查询结果（已完整检查 {ordered.Length} 条）",
-            Url = BuildEventsUrl(subjectId, executionId)
+            Url = BuildEventsUrl(siteId, subjectId, executionId)
         };
         var summary = scopeEmpty
             ? "当前范围没有生产事件，无法检查数据完整性。"
@@ -150,14 +174,19 @@ public sealed class CheckDataQualityTool(
     private static string? NullIfBlank(string? value)
         => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
-    private static string BuildEventsUrl(string? subjectId, string? executionId)
+    private static string BuildEventsUrl(string siteId, string? subjectId, string? executionId)
     {
-        var values = new List<string>();
+        var values = new List<string> { $"siteId={Uri.EscapeDataString(siteId)}" };
         if (!string.IsNullOrWhiteSpace(subjectId))
             values.Add($"subjectId={Uri.EscapeDataString(subjectId)}");
         if (!string.IsNullOrWhiteSpace(executionId))
             values.Add($"executionId={Uri.EscapeDataString(executionId)}");
-        return values.Count == 0 ? "/events" : $"/events?{string.Join('&', values)}";
+        return $"/events?{string.Join('&', values)}";
     }
+
+    private static string Require(AnalysisToolCall call, string name)
+        => call.Arguments.TryGetValue(name, out var value) && !string.IsNullOrWhiteSpace(value)
+            ? value
+            : throw new ArgumentException($"{call.Tool} 需要 {name}。", nameof(call));
 
 }

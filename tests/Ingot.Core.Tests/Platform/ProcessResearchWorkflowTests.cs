@@ -115,6 +115,8 @@ public sealed class ProcessResearchWorkflowTests
         Assert.Equal(0.980665, bar, 6);
         Assert.True(ProcessUnitConverter.TryConvert(25, "℃", "K", out var kelvin));
         Assert.Equal(298.15, kelvin, 8);
+        Assert.True(ProcessUnitConverter.TryConvert(25, "Cel", "K", out var canonicalKelvin));
+        Assert.Equal(298.15, canonicalKelvin, 8);
         Assert.False(ProcessUnitConverter.TryConvert(1, "HRC", "MPa", out _));
     }
 
@@ -302,6 +304,34 @@ public sealed class ProcessResearchWorkflowTests
 
         Assert.Equal(["engineer-a", "engineer-b"], updated.MemberUserIds);
         Assert.DoesNotContain("attacker", updated.MemberUserIds);
+    }
+
+    [Fact]
+    public async Task GeneralProjectUpdate_ShouldNotMoveProjectAcrossSites()
+    {
+        var store = new MemoryStore();
+        var workflow = CreateWorkflow(store);
+        var project = await workflow.CreateProjectAsync(
+            ProjectDraft() with { SiteCode = "site-a" },
+            "engineer-a");
+
+        var error = await Assert.ThrowsAsync<ProcessResearchRuleException>(() =>
+            workflow.UpdateProjectAsync(
+                project.ProjectId,
+                project with { SiteCode = "site-b" },
+                "engineer-a"));
+
+        Assert.Contains("站点不能更改", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Project_ShouldPreserveCanonicalSiteIdentifierCasing()
+    {
+        var workflow = CreateWorkflow(new MemoryStore());
+
+        var project = await workflow.CreateProjectAsync(ProjectDraft(), "engineer-a");
+
+        Assert.Equal("SITE-001", project.SiteCode);
     }
 
     [Fact]
@@ -614,6 +644,55 @@ public sealed class ProcessResearchWorkflowTests
                 "engineer-a"));
 
         Assert.Contains("创建人和批准人必须分离", error.Message);
+    }
+
+    [Fact]
+    public async Task Experiment_RejectsRunThatViolatesDeclaredSafetyConstraint()
+    {
+        var store = new MemoryStore();
+        var workflow = CreateWorkflow(store);
+        var project = await workflow.CreateProjectAsync(ProjectDraft(), "engineer-a");
+
+        var error = await Assert.ThrowsAsync<ProcessResearchRuleException>(() =>
+            workflow.ExperimentCommands.CreateExperimentAsync(
+                project.ProjectId,
+                new ResearchExperiment
+                {
+                    Name = "越界实验",
+                    RunPlan =
+                    [
+                        Run("safe", 1, 530, 10),
+                        Run("unsafe", 2, 549, 10)
+                    ],
+                    ObjectiveCodes = ["form-error"],
+                    StopRule = "触发安全约束时停止。",
+                    RollbackPlan = "恢复安全基线。"
+                },
+                "engineer-a"));
+
+        Assert.Contains("temperature-safety", error.Message);
+    }
+
+    [Fact]
+    public async Task Project_NormalizesConstraintUnitToItsControlVariable()
+    {
+        var store = new MemoryStore();
+        var workflow = CreateWorkflow(store);
+        var baseDraft = ProjectDraft();
+        var draft = baseDraft with
+        {
+            Code = "constraint-unit-normalization",
+            Constraints =
+            [
+                baseDraft.Constraints.Single() with { Limit = 818.15, Unit = "K" }
+            ]
+        };
+
+        var project = await workflow.CreateProjectAsync(draft, "engineer-a");
+
+        var constraint = Assert.Single(project.Constraints);
+        Assert.Equal("Cel", constraint.Unit);
+        Assert.Equal(545, constraint.Limit, 6);
     }
 
     [Fact]
@@ -2080,6 +2159,19 @@ public sealed class ProcessResearchWorkflowTests
             workflow.ExperimentCommands.ChangeExperimentStatusAsync(
                 experiment.ExperimentId, ResearchExperimentStatuses.Approved, "engineer-b"));
 
+        var unsafeApproved = Run("unsafe-approved", 1, 549, 11).Factors;
+        var safetyError = await Assert.ThrowsAsync<ProcessResearchRuleException>(() =>
+            workflow.ExperimentCommands.DecideControlledExperimentAsync(
+                experiment.ExperimentId,
+                new ResearchControlledDecisionRequest
+                {
+                    Decision = ResearchControlledDecisionStatuses.Modified,
+                    ApprovedFactors = unsafeApproved,
+                    Reason = "尝试越过安全上限"
+                },
+                "engineer-b"));
+        Assert.Contains("temperature-safety", safetyError.Message);
+
         var approved = Run("approved", 1, 522, 11).Factors;
         experiment = await workflow.ExperimentCommands.DecideControlledExperimentAsync(
             experiment.ExperimentId,
@@ -2615,6 +2707,7 @@ public sealed class ProcessResearchWorkflowTests
             Code = "optical-molding-window",
             Name = "光学模压工艺操作域研发",
             ProcessName = "光学玻璃精密模压",
+            SiteCode = "SITE-001",
             Objectives =
             [
                 new ResearchObjective
@@ -3024,12 +3117,17 @@ public sealed class ProcessResearchWorkflowTests
         public Task<IReadOnlyList<ResearchProject>> ListProjectsAsync(
             string userId,
             bool includeAll,
+            IReadOnlyCollection<string>? siteIds,
             int limit,
             int offset,
             CancellationToken ct = default)
             => Task.FromResult<IReadOnlyList<ResearchProject>>(
                 _projects.Values
                     .Where(value => includeAll || value.MemberUserIds.Contains(userId))
+                    .Where(value => includeAll ||
+                                    (!string.IsNullOrWhiteSpace(value.SiteCode) &&
+                                     siteIds is not null &&
+                                     siteIds.Contains(value.SiteCode, StringComparer.OrdinalIgnoreCase)))
                     .Skip(offset)
                     .Take(limit)
                     .ToArray());

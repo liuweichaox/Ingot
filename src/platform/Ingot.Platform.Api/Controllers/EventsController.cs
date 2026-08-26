@@ -1,4 +1,4 @@
-
+// 接收 Edge 事件并提供经身份和站点授权的有界事件查询。
 using System.Text.Json;
 using Ingot.Contracts.Events;
 using Ingot.Platform.Api.Agents;
@@ -24,6 +24,7 @@ public sealed class EventsController(
     PlatformEventMetrics metrics,
     ILogger<EventsController> logger) : PlatformApiController
 {
+    private const int MaximumExecutionEventRows = 50_000;
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private readonly PlatformEventOptions _eventOptions = eventOptions.Value;
 
@@ -239,9 +240,17 @@ public sealed class EventsController(
         var siteAccess = ResolveSiteAccess(siteId, requireExplicitForAdministrator: true);
         if (siteAccess.Denied is not null)
             return siteAccess.Denied;
-        var correlated = await QueryAllAsync(
-            BuildQuery(siteAccess.SiteId, null, null, null, null, executionId, null, null, null, null, 500),
-            ct).ConfigureAwait(false);
+        IReadOnlyList<PlatformProductionEvent> correlated;
+        try
+        {
+            correlated = await QueryAllAsync(
+                BuildQuery(siteAccess.SiteId, null, null, null, null, executionId, null, null, null, null, 500),
+                ct).ConfigureAwait(false);
+        }
+        catch (PlatformEventQueryLimitExceededException exception)
+        {
+            return UnprocessableRequest(exception.Message);
+        }
         var pair = correlated
             .OrderBy(static item => item.Event.OccurredAt)
             .ThenBy(static item => item.IngestId)
@@ -258,21 +267,29 @@ public sealed class EventsController(
             .Select(static item => (DateTimeOffset?)item.Event.OccurredAt)
             .LastOrDefault();
         var windowEnd = completedAt ?? pair.Max(static item => item.Event.OccurredAt);
-        var sameSubjectWindow = await QueryAllAsync(
-                BuildQuery(
-                    first.SiteId,
-                    first.EdgeId,
-                    null,
-                    first.Event.Subject.Type,
-                    first.Event.Subject.Id,
-                    null,
-                    startedAt,
-                    windowEnd,
-                    null,
-                    null,
-                    500),
-                ct)
-            .ConfigureAwait(false);
+        IReadOnlyList<PlatformProductionEvent> sameSubjectWindow;
+        try
+        {
+            sameSubjectWindow = await QueryAllAsync(
+                    BuildQuery(
+                        first.SiteId,
+                        first.EdgeId,
+                        null,
+                        first.Event.Subject.Type,
+                        first.Event.Subject.Id,
+                        null,
+                        startedAt,
+                        windowEnd,
+                        null,
+                        null,
+                        500),
+                    ct)
+                .ConfigureAwait(false);
+        }
+        catch (PlatformEventQueryLimitExceededException exception)
+        {
+            return UnprocessableRequest(exception.Message);
+        }
         var ordered = pair
             .Concat(sameSubjectWindow.Where(item =>
                 string.IsNullOrWhiteSpace(item.Event.ExecutionId) ||
@@ -331,12 +348,16 @@ public sealed class EventsController(
 
         while (true)
         {
+            var remaining = MaximumExecutionEventRows - result.Count;
+            var requestedLimit = Math.Min(pageSize, remaining + 1);
             var page = await store.QueryAsync(
-                    query with { AfterIngestId = cursor, Limit = pageSize },
+                    query with { AfterIngestId = cursor, Limit = requestedLimit },
                     ct)
                 .ConfigureAwait(false);
             if (page.Count == 0)
                 break;
+            if (page.Count > remaining)
+                throw new PlatformEventQueryLimitExceededException(MaximumExecutionEventRows);
 
             var nextCursor = page.Max(static item => item.IngestId);
             if (nextCursor <= cursor)
@@ -344,7 +365,7 @@ public sealed class EventsController(
 
             result.AddRange(page);
             cursor = nextCursor;
-            if (page.Count < pageSize)
+            if (page.Count < requestedLimit)
                 break;
         }
 

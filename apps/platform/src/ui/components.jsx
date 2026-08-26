@@ -10,12 +10,13 @@ export function cx(...values) {
 export function Page({ title, description, actions, className, children }) {
   return (
     <div className={cx("space-y-6", className)}>
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+      <div className="flex flex-col gap-4 border-b border-slate-200/80 pb-5 sm:flex-row sm:items-end sm:justify-between">
         <div className="min-w-0">
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-950 sm:text-[1.7rem]">{title}</h1>
-          {description && <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-500">{description}</p>}
+          <p className="data-label mb-2 text-trajectory-700">Engineering workspace</p>
+          <h1 className="text-[1.75rem] font-semibold leading-tight tracking-[-0.035em] text-slate-950 sm:text-[2rem]">{title}</h1>
+          {description && <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">{description}</p>}
         </div>
-        {actions && <div className="flex shrink-0 flex-wrap gap-2 sm:pt-0.5">{actions}</div>}
+        {actions && <div className="flex shrink-0 flex-wrap gap-2">{actions}</div>}
       </div>
       {children}
     </div>
@@ -24,12 +25,12 @@ export function Page({ title, description, actions, className, children }) {
 
 export function Card({ title, description, actions, className, children }) {
   return (
-    <section className={cx("min-w-0 rounded-2xl border border-slate-200 bg-white shadow-sm", className)}>
+    <section className={cx("product-panel min-w-0 overflow-hidden rounded-xl", className)}>
       {(title || actions) && (
-        <header className="flex flex-col gap-3 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-start sm:justify-between">
+        <header className="flex flex-col gap-2 border-b border-slate-200/80 px-5 py-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
-            {title && <h2 className="font-semibold text-slate-900">{title}</h2>}
-            {description && <p className="mt-0.5 text-sm leading-6 text-slate-500">{description}</p>}
+            {title && <h2 className="text-sm font-semibold tracking-[-0.01em] text-slate-900">{title}</h2>}
+            {description && <p className="mt-1 text-[13px] leading-5 text-slate-500">{description}</p>}
           </div>
           {actions && <div className="shrink-0">{actions}</div>}
         </header>
@@ -40,8 +41,8 @@ export function Card({ title, description, actions, className, children }) {
 }
 
 const buttonStyles = {
-  primary: "bg-blue-600 text-white hover:bg-blue-700 focus-visible:outline-blue-600",
-  secondary: "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 focus-visible:outline-blue-600",
+  primary: "border border-evidence-500 bg-evidence-500 text-coal-950 shadow-sm hover:border-evidence-400 hover:bg-evidence-400 focus-visible:outline-evidence-600",
+  secondary: "border border-slate-300 bg-white text-slate-700 shadow-sm hover:border-slate-400 hover:bg-slate-50 focus-visible:outline-blue-600",
   danger: "bg-rose-600 text-white hover:bg-rose-700 focus-visible:outline-rose-600",
   ghost: "text-slate-600 hover:bg-slate-100 focus-visible:outline-blue-600",
 };
@@ -51,7 +52,7 @@ export function Button({ variant = "secondary", className, type = "button", chil
     <button
       type={type}
       className={cx(
-        "inline-flex min-h-9 items-center justify-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-sm font-medium transition focus-visible:outline-2 focus-visible:outline-offset-2 disabled:pointer-events-none disabled:opacity-50",
+        "inline-flex min-h-10 items-center justify-center gap-2 whitespace-nowrap rounded-lg px-3.5 py-2 text-sm font-semibold transition focus-visible:outline-2 focus-visible:outline-offset-2 disabled:pointer-events-none disabled:opacity-50",
         buttonStyles[variant],
         className,
       )}
@@ -68,16 +69,16 @@ export function Badge({ tone = "neutral", children }) {
     success: "bg-emerald-50 text-emerald-700 ring-emerald-600/20",
     warning: "bg-amber-50 text-amber-700 ring-amber-600/20",
     danger: "bg-rose-50 text-rose-700 ring-rose-600/20",
-    info: "bg-blue-50 text-blue-700 ring-blue-600/20",
+    info: "bg-trajectory-50 text-trajectory-700 ring-trajectory-600/20",
   };
   return (
-    <span className={cx("inline-flex whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset", tones[tone])}>
+    <span className={cx("inline-flex whitespace-nowrap rounded-md px-2 py-0.5 text-xs font-semibold ring-1 ring-inset", tones[tone])}>
       {children}
     </span>
   );
 }
 
-export function StatusBadge({ value }) {
+export function StatusBadge({ value, label }) {
   const normalized = String(value ?? "unknown").toLowerCase();
   const labels = {
     active: "已启用",
@@ -173,7 +174,7 @@ export function StatusBadge({ value }) {
       : ["pending", "buffering", "validating", "waiting-execution-boundary", "applying", "rollback", "draft", "starting", "running", "uploaded", "dirty", "degraded", "collecting", "in_progress", "review_pending", "queued", "completed_with_errors", "incomplete", "cancelling", "proposed", "investigating", "trialing", "planned", "warning", "concluded", "withdrawn", "rolled-back", "maintenance", "candidate", "modified", "recorded"].includes(normalized)
         ? "warning"
         : "neutral";
-  return <Badge tone={tone}>{labels[normalized] ?? String(value ?? "待上报")}</Badge>;
+  return <Badge tone={tone}>{label ?? labels[normalized] ?? String(value ?? "待上报")}</Badge>;
 }
 
 const evidenceLevels = {
@@ -197,7 +198,7 @@ export function EvidenceLevel({ value, label, size = "default", className }) {
   const large = size === "large";
   return (
     <span
-      className={cx("inline-flex max-w-full items-center gap-2 whitespace-nowrap", large ? "text-sm" : "text-xs", className)}
+      className={cx("inline-flex max-w-full items-center gap-2 whitespace-nowrap", large ? "text-sm" : "text-[13px]", className)}
       role="img"
       aria-label={`证据等级：${displayLabel}，4 段中 ${definition.strength} 段`}
       title={`证据等级：${displayLabel}`}
@@ -222,7 +223,7 @@ export function EvidenceLevel({ value, label, size = "default", className }) {
 export function ConclusionBoundary({ title = "结论边界", children, className }) {
   return (
     <aside
-      className={cx("flex min-w-0 items-start gap-2 rounded-lg border border-dashed border-slate-300 bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-600", className)}
+      className={cx("flex min-w-0 items-start gap-2 rounded-lg border border-dashed border-slate-300 bg-slate-50 px-3 py-2 text-[13px] leading-5 text-slate-600", className)}
       aria-label={title}
     >
       <ShieldCheckIcon className="mt-0.5 size-4 shrink-0 text-slate-500" aria-hidden="true" />
@@ -236,26 +237,21 @@ export function ConclusionBoundary({ title = "结论边界", children, className
 
 export function WorkflowGuide({ title = "按步骤完成", description, steps, compact = false }) {
   return (
-    <section className="rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50 to-white p-5 shadow-sm">
-      <div>
-        <p className="font-semibold text-slate-950">{title}</p>
-        {description && <p className="mt-1 text-sm leading-6 text-slate-600">{description}</p>}
+    <section className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+      <div className="border-b border-slate-200 px-4 py-3">
+        <p className="text-sm font-semibold text-slate-900">{title}</p>
+        {description && <p className="mt-0.5 text-[13px] leading-5 text-slate-500">{description}</p>}
       </div>
-      <ol className={cx("mt-4 grid gap-3", !compact && "md:grid-cols-3")}>
+      <ol className={cx("grid divide-y divide-slate-200", !compact && "md:grid-cols-3 md:divide-x md:divide-y-0")}>
         {steps.map((step, index) => {
           const state = step.state || "upcoming";
           return (
             <li
               key={step.title}
-              className={cx(
-                "flex gap-3 rounded-xl border p-4",
-                state === "done" ? "border-emerald-200 bg-emerald-50/80" :
-                  state === "current" ? "border-blue-300 bg-white shadow-sm" :
-                    "border-slate-200 bg-white/70",
-              )}
+              className="flex gap-3 px-4 py-3"
             >
               <span className={cx(
-                "grid size-7 shrink-0 place-items-center rounded-full text-xs font-semibold",
+                "grid size-6 shrink-0 place-items-center rounded text-xs font-semibold",
 
                 state === "done" ? "bg-emerald-700 text-white" :
                   state === "current" ? "bg-blue-600 text-white" :
@@ -265,7 +261,7 @@ export function WorkflowGuide({ title = "按步骤完成", description, steps, c
               </span>
               <div>
                 <p className="text-sm font-semibold text-slate-900">{step.title}</p>
-                <p className="mt-1 text-xs leading-5 text-slate-500">{step.description}</p>
+                <p className="mt-0.5 text-[13px] leading-5 text-slate-500">{step.description}</p>
               </div>
             </li>
           );
@@ -311,7 +307,7 @@ export function Field({ label, hint, error, className, children }) {
       {label !== undefined && label !== null && <span className="min-w-0 leading-5">{label}</span>}
       {children}
       {hint && <span className="sr-only">{hint}</span>}
-      {error && <span className="min-w-0 text-xs font-normal leading-5 text-rose-600" role="alert">{error}</span>}
+      {error && <span className="min-w-0 text-[13px] font-normal leading-5 text-rose-600" role="alert">{error}</span>}
     </label>
   );
 }
@@ -320,7 +316,7 @@ export function Input({ className, ...props }) {
   return (
     <input
       className={cx(
-        "h-10 min-w-0 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus-visible:ring-3 focus-visible:ring-blue-500/35 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-600 disabled:shadow-none read-only:bg-slate-50 read-only:text-slate-600",
+        "h-10 min-w-0 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus-visible:ring-2 focus-visible:ring-blue-500/25 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-600 disabled:shadow-none read-only:bg-slate-50 read-only:text-slate-600",
         className,
       )}
       {...props}
@@ -332,7 +328,7 @@ export function Select({ className, children, ...props }) {
   return (
     <select
       className={cx(
-        "h-10 min-w-0 w-full rounded-lg border border-slate-300 bg-white px-3 pr-8 py-2 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus-visible:ring-3 focus-visible:ring-blue-500/35 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-600 disabled:shadow-none",
+        "h-10 min-w-0 w-full rounded-md border border-slate-300 bg-white px-3 pr-8 py-2 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus-visible:ring-2 focus-visible:ring-blue-500/25 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-600 disabled:shadow-none",
         className,
       )}
       {...props}
@@ -346,7 +342,7 @@ export function Textarea({ className, ...props }) {
   return (
     <textarea
       className={cx(
-        "min-h-28 min-w-0 w-full resize-y rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus-visible:ring-3 focus-visible:ring-blue-500/35 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-600 disabled:shadow-none read-only:bg-slate-50 read-only:text-slate-600",
+        "min-h-28 min-w-0 w-full resize-y rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus-visible:ring-2 focus-visible:ring-blue-500/25 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-600 disabled:shadow-none read-only:bg-slate-50 read-only:text-slate-600",
         className,
       )}
       {...props}
@@ -356,7 +352,7 @@ export function Textarea({ className, ...props }) {
 
 export function EmptyState({ title = "暂无数据", description = "数据到达后会自动显示在这里。", actions, details }) {
   return (
-    <div className="grid min-h-40 place-items-center rounded-xl border border-dashed border-slate-300 bg-slate-50/70 p-8 text-center">
+    <div className="grid min-h-40 place-items-center rounded-lg border border-dashed border-slate-300 bg-slate-50/75 p-8 text-center">
       <div className="max-w-xl">
         <p className="font-semibold text-slate-800">{title}</p>
         <p className="mt-1 text-sm leading-6 text-slate-600">{description}</p>
@@ -375,7 +371,7 @@ export function Alert({ tone = "info", title, children }) {
     success: "border-emerald-200 bg-emerald-50 text-emerald-800",
   };
   return (
-    <div className={cx("rounded-xl border px-4 py-3 text-sm", tones[tone])} role={tone === "danger" ? "alert" : "status"}>
+    <div className={cx("rounded-md border px-4 py-3 text-sm", tones[tone])} role={tone === "danger" ? "alert" : "status"}>
       {title && <p className="font-semibold">{title}</p>}
       {children && <div className={title ? "mt-1" : ""}>{children}</div>}
     </div>
@@ -400,22 +396,22 @@ export function RequestError({ error, onRetry, title }) {
 
 export function DataTable({ columns, rows, keyField = "id", getRowKey, onRowClick }) {
   if (!rows?.length) return <EmptyState />;
-  const minimumWidth = columns.length >= 8 ? "min-w-[1080px]" : columns.length >= 5 ? "min-w-[760px]" : "min-w-full";
+  const minimumWidth = columns.length >= 8 ? "min-w-[1080px]" : columns.length >= 6 ? "min-w-[840px]" : columns.length >= 5 ? "min-w-[760px]" : columns.length >= 4 ? "min-w-[640px]" : "min-w-full";
   const rowKeys = rows.map((row, index) => getRowKey ? getRowKey(row, index) : row[keyField] ?? index);
   const rowKeyCounts = new Map();
   rowKeys.forEach(key => rowKeyCounts.set(key, (rowKeyCounts.get(key) || 0) + 1));
   return (
-    <div className="relative overflow-x-auto rounded-xl border border-slate-200 bg-white scrollbar-thin" role="region" aria-label="可横向滚动的数据表" tabIndex={columns.length >= 5 ? 0 : undefined}>
-      {columns.length >= 5 && <p className="sticky left-0 top-0 z-20 border-b border-slate-200 bg-blue-50 px-3 py-1.5 text-xs text-blue-700 sm:hidden">左右滑动查看全部字段；操作列固定在右侧。</p>}
+    <div className="relative overflow-x-auto rounded-lg border border-slate-200 bg-white scrollbar-thin" role="region" aria-label="可横向滚动的数据表" tabIndex={columns.length >= 4 ? 0 : undefined}>
+      {columns.length >= 4 && <p className="sticky left-0 top-0 z-20 border-b border-slate-200 bg-slate-50 px-3 py-1.5 text-[13px] text-slate-600 sm:hidden">左右滑动查看全部字段</p>}
       <table className={cx("w-full divide-y divide-slate-200 text-left text-sm tabular-nums", minimumWidth)}>
-        <thead className="bg-slate-50/90 text-xs tracking-wide text-slate-600">
+        <thead className="bg-slate-50/95 text-xs tracking-[0.02em] text-slate-600">
           <tr>
             {columns.map((column, columnIndex) => (
               <th
                 key={column.id ?? `${column.key}:${columnIndex}`}
                 scope="col"
                 className={cx(
-                  "whitespace-nowrap px-4 py-3 font-semibold sm:px-5",
+                  "whitespace-nowrap px-3 py-3 font-semibold sm:px-4",
                   column.label === "操作" && "sticky right-0 z-10 w-px border-l border-slate-200 bg-slate-50 shadow-[-8px_0_12px_-12px_rgba(15,23,42,.45)]",
                   column.align === "right" && "text-right",
                 )}
@@ -430,7 +426,7 @@ export function DataTable({ columns, rows, keyField = "id", getRowKey, onRowClic
             <tr
               key={rowKeyCounts.get(rowKeys[index]) > 1 ? `${rowKeys[index]}:${index}` : rowKeys[index]}
               className={cx(
-                "text-slate-700 transition-colors hover:bg-slate-50/80",
+                "text-slate-700 transition-colors hover:bg-trajectory-50/60",
                 onRowClick && "cursor-pointer hover:bg-blue-50/50 focus-visible:bg-blue-50 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-blue-600",
               )}
               onClick={onRowClick ? () => onRowClick(row) : undefined}
@@ -447,7 +443,7 @@ export function DataTable({ columns, rows, keyField = "id", getRowKey, onRowClic
                 <td
                   key={column.id ?? `${column.key}:${columnIndex}`}
                   className={cx(
-                    "max-w-sm px-4 py-3.5 align-middle leading-5 sm:px-5",
+                    "max-w-sm px-3 py-3 align-middle leading-5 sm:px-4",
                     (column.primary || columnIndex === 0) && "font-medium text-slate-900",
                     column.label === "操作" && "sticky right-0 z-10 w-px min-w-max whitespace-nowrap border-l border-slate-100 bg-white shadow-[-8px_0_12px_-12px_rgba(15,23,42,.45)] [&_*]:whitespace-nowrap [&>div]:flex-nowrap",
                     column.align === "right" && "text-right",
@@ -500,12 +496,12 @@ export function Drawer({ open, onClose, title, description, children, footer, si
 
 export function Metric({ label, value, hint, className, valueClassName }) {
   return (
-    <div className={cx("min-w-0 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm", className)}>
-      <p className="text-sm text-slate-500">{label}</p>
-      <p className={cx("mt-2 min-w-0 break-words text-3xl font-semibold leading-tight tracking-tight text-slate-950 tabular-nums", valueClassName)}>
+    <div className={cx("product-panel min-w-0 rounded-xl p-5", className)}>
+      <p className="data-label">{label}</p>
+      <p className={cx("data-value mt-2 min-w-0 break-words text-[1.75rem] font-semibold leading-tight text-slate-950", valueClassName)}>
         {value ?? "—"}
       </p>
-      {hint && <p className="mt-1 break-words text-xs leading-5 text-slate-500">{hint}</p>}
+      {hint && <p className="mt-1 break-words text-[13px] leading-5 text-slate-500">{hint}</p>}
     </div>
   );
 }

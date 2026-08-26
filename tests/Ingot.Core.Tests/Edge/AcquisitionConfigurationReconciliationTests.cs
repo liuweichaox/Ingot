@@ -195,6 +195,13 @@ public sealed class AcquisitionConfigurationReconciliationTests
         EdgeReportingOptions? reporting = null)
     {
         clients ??= new ThrowingHttpClientFactory();
+        var securityOptions = Options.Create(new AcquisitionSecurityOptions
+        {
+            AllowPrivateNetworkHttpTargets = true,
+            AllowPrivateNetworkTargets = true
+        });
+        var secrets = new EnvironmentAcquisitionSecretResolver(securityOptions);
+        var egressPolicy = new AcquisitionHttpEgressPolicy(securityOptions);
         return new HttpPollingAcquisitionHostedService(
             clients,
             new NullEventSink(),
@@ -209,9 +216,13 @@ public sealed class AcquisitionConfigurationReconciliationTests
                 EnableEventShipping = false
             }),
             cache ?? new NullDeploymentCache(),
-            new AcquisitionProbeService(clients, new EnvironmentAcquisitionSecretResolver()),
-            new EnvironmentAcquisitionSecretResolver(),
+            new AcquisitionProbeService(
+                clients,
+                secrets,
+                egressPolicy),
+            secrets,
             [runner],
+            egressPolicy,
             status,
             NullLogger<HttpPollingAcquisitionHostedService>.Instance);
     }

@@ -1,3 +1,4 @@
+// 编排采集任务创建、探查、发布和站点可见性反馈。
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import {
@@ -177,7 +178,6 @@ export function IngestionTaskPage({ canWrite = true }) {
   return (
     <Page
       title={isNew ? "配置数据源" : form.name || form.taskId}
-      description={`${descriptor.label} · ${descriptor.summary}`}
       actions={
         <div className="flex items-center gap-2">
           <Link className="inline-flex min-h-9 items-center rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100"
@@ -317,7 +317,7 @@ export function IngestionTaskPage({ canWrite = true }) {
               onChange={value => update({ valueMappings: value })}
             />
 
-            <details className="rounded-xl border border-slate-200 bg-white shadow-sm">
+            <details className="rounded-lg border border-slate-200 bg-white">
               <summary className="cursor-pointer px-5 py-4 text-sm font-semibold text-slate-900">高级采集与运行识别</summary>
               <div className="grid gap-5 border-t border-slate-200 p-5">
                 <ContextPanel descriptor={descriptor} form={form} errors={errors} readOnly={readOnly} onChange={update} />
@@ -646,7 +646,6 @@ export function IngestionTasksPage({ canWrite = true }) {
   return (
     <Page
       title="数据源配置"
-      description="选择现场节点和通信驱动，把来源字段映射到稳定工艺变量。"
       actions={
         <div className="flex items-center gap-2">
           <Link className="inline-flex min-h-9 items-center rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100"
@@ -659,7 +658,7 @@ export function IngestionTasksPage({ canWrite = true }) {
       <div className="grid gap-4">
         {error && <Alert tone="danger">{error}</Alert>}
         {canWrite ? (
-          <details className="group rounded-xl border border-slate-200 bg-white shadow-sm">
+          <details className="group rounded-lg border border-slate-200 bg-white">
             <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 marker:content-none">
               <div>
                 <p className="font-semibold text-slate-950">批量接入同类设备</p>

@@ -48,10 +48,14 @@ public sealed class ResearchObservationAssembler(
             throw new ProcessResearchRuleException(
                 $"单次优化最多自动装配 {MaximumRunsPerAssembly} 个实验运行，请先归档历史项目。");
 
+        var siteId = string.IsNullOrWhiteSpace(project.SiteCode)
+            ? throw new ProcessResearchRuleException("研发项目必须绑定站点后才能装配生产运行观察。")
+            : project.SiteCode.Trim();
         var executionKeys = candidates.Select(static item => item.Run.ExecutionKey).ToArray();
-        var executionsByRun = await executions.GetProcessExecutionsAsync(executionKeys, ct).ConfigureAwait(false);
+        var executionsByRun = await executions.GetProcessExecutionsAsync(executionKeys, ct, siteId)
+            .ConfigureAwait(false);
         var allRecords = InspectionRecordSet.Effective(
-            await inspections.QueryAllByExecutionIdsAsync(executionKeys, null, ct).ConfigureAwait(false));
+            await inspections.QueryAllByExecutionIdsAsync(executionKeys, siteId, ct).ConfigureAwait(false));
         var latestReviews = await reviews.GetLatestByInspectionRecordIdsAsync(
             allRecords.Select(static record => record.RecordId).ToArray(), ct).ConfigureAwait(false);
         var inspectionPlans = await inspectionMasterData.ListInspectionPlansAsync(ct).ConfigureAwait(false);

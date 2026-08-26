@@ -1,3 +1,4 @@
+// 从可信认证声明解析规范化用户、角色和站点身份。
 using System.Security.Claims;
 
 namespace Ingot.Platform.Api.Agents;
@@ -12,6 +13,7 @@ public sealed class PlatformUserResolver(IHostEnvironment environment)
         if (principal.Identity?.IsAuthenticated == true)
         {
             var value = principal.FindFirstValue(ClaimTypes.NameIdentifier)
+                        ?? principal.FindFirstValue("sub")
                         ?? principal.Identity.Name;
             if (!string.IsNullOrWhiteSpace(value))
             {

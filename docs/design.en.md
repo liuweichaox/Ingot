@@ -30,11 +30,11 @@ The current Web information architecture balances the decision chain with freque
 
 1. **Workbench**: prioritized quality tasks, run status, field status, and R&D progress;
 2. **Field integration**: edge nodes, communication drivers, and mappings from multiple source fields to process variables;
-3. **Process configuration**: configuration overview, process data dictionaries, process specifications, analysis rules, quality, tooling, and configuration publishing;
+3. **Process configuration**: configuration overview, data dictionaries, process specifications, analysis rules, quality configuration, tooling configuration, and configuration publishing;
 4. **Production runs**: production preparation, tooling installation, run records, the object catalog, and run events;
-5. **Quality management**: inspection entry, independent review, quality records, and quality-deviation analysis, with direct access for daily quality work;
-6. **Process diagnosis**: the diagnosis workbench, data trust, run comparison, and the analysis assistant; AI is an analysis method rather than a standalone business domain;
-7. **Process R&D**: R&D projects, experiment design, constrained optimization, experimental validation, and R&D outcomes.
+5. **Quality management**: inspection tasks, independent review, quality records, and deviation analysis, with direct access for daily quality work;
+6. **Process diagnosis**: the diagnosis overview, data quality, run comparison, and the analysis assistant; AI is an analysis method rather than a standalone business domain;
+7. **Process R&D**: R&D projects, experiment design, constrained optimization, experimental validation, and process knowledge.
 
 After the workbench, the primary business entries follow “Field integration → Process configuration → Production runs → Quality management → Process diagnosis → Process R&D.” This navigation order prioritizes frequent role-specific work; it is not the business dependency order above. A new scenario still defines and publishes process semantics before mapping real sources to those semantics. Production runs also covers production preparation, collection, and traceability; Quality management covers inspection and quality-deviation work; and the complete data loop additionally depends on cross-entry evidence such as data trust and run context.
 

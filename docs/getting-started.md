@@ -10,7 +10,7 @@
 | 本地运行完整系统 | [启动完整栈](#启动完整栈) | Web、API、Optimizer 和数据库健康 |
 | 准备真实项目 | [受控试点指南](pilot.md) | 第一条可信运行证据和第一项验证实验 |
 | 准备生产环境 | [生产架构](production-architecture.md) → [部署运维](deployment.md) | 站点独立完成安全、恢复、容量和观察验收 |
-| 参与开发 | [贡献指南](../CONTRIBUTING.md) | 本地通过 `./scripts/verify.sh` |
+| 参与开发 | [贡献指南](https://github.com/liuweichaox/Ingot/blob/main/CONTRIBUTING.md) | 本地通过 `./scripts/verify.sh` |
 
 当前能力和验证成熟度统一见[当前状态](status.md)。
 
@@ -74,7 +74,7 @@ docker compose -f docker-compose.app.yml ps -a
 
 - `platform-migrate` 成功退出；
 - `postgres`、`optimizer`、`platform-api` 和 `platform-web` 为 `healthy`；
-- `platform-worker` 和 `connector-host` 持续运行；
+- `platform-worker` 和 `connector-host` 持续为 `healthy`；
 - 没有容器处于反复重启状态。
 
 然后访问：

@@ -1,4 +1,5 @@
 
+// 提供经过身份、站点和输入预算校验的生产运行曲线查询接口。
 using Ingot.Platform.Api.Agents;
 using Ingot.Platform.Application.TimeSeries;
 using Microsoft.AspNetCore.Mvc;
@@ -12,7 +13,6 @@ public sealed class ProcessCurvesController(
     PlatformUserResolver userResolver) : PlatformApiController
 {
     private const int DefaultMaximumPoints = 2_000;
-    private const int MaximumSignals = 32;
 
     [HttpGet]
     public async Task<IActionResult> Query(
@@ -47,8 +47,8 @@ public sealed class ProcessCurvesController(
             .ToArray();
         if (requestedSignals.Length == 0)
             return InvalidRequest("至少选择一个过程信号。");
-        if (requestedSignals.Length > MaximumSignals || requestedSignals.Any(static code => code.Length > 200))
-            return InvalidRequest($"一次最多查询 {MaximumSignals} 个有效信号。");
+        if (requestedSignals.Any(static code => code.Length > 200))
+            return InvalidRequest("信号代码长度不能超过 200 个字符。");
 
         return Ok(await curves.QueryAsync(
             authorizedSiteId!,

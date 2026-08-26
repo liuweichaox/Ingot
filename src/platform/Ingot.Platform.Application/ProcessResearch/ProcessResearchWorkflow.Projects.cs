@@ -1,4 +1,4 @@
-
+// 编排研发项目创建、成员与生命周期变更，并维护站点归属不变量。
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -52,6 +52,12 @@ public sealed partial class ProcessResearchWorkflow
             throw new ProcessResearchRuleException("研发项目已被其他人修改，请刷新后重试。");
         if (existing.Status is ResearchProjectStatuses.Completed or ResearchProjectStatuses.Archived)
             throw new ProcessResearchRuleException("已完成或已归档的研发项目保持只读。");
+        if (!string.IsNullOrWhiteSpace(existing.SiteCode) &&
+            !string.Equals(
+                existing.SiteCode.Trim(),
+                request.SiteCode?.Trim(),
+                StringComparison.OrdinalIgnoreCase))
+            throw new ProcessResearchRuleException("研发项目绑定的站点不能更改。");
 
         var updatedContext = WithoutClientPolicyHash(request.Context);
         if (existing.Status != ResearchProjectStatuses.Draft &&
@@ -259,7 +265,7 @@ public sealed partial class ProcessResearchWorkflow
         if (variables.Select(static item => item.Code).Distinct(StringComparer.Ordinal).Count() !=
             variables.Length)
             throw new ProcessResearchRuleException("工艺变量代码不能重复。");
-        var knownVariables = variables.Select(static item => item.Code).ToHashSet(StringComparer.Ordinal);
+        var knownVariables = variables.ToDictionary(static item => item.Code, StringComparer.Ordinal);
         var optimizationFeatures = NormalizeOptimizationFeatures(
             value.OptimizationFeatures,
             variables.Where(static item => item.Role == ResearchVariableRoles.Control)
@@ -267,20 +273,29 @@ public sealed partial class ProcessResearchWorkflow
         var constraints = value.Constraints.Select(item =>
         {
             var variableCode = NormalizeCode(item.VariableCode, "约束变量");
-            if (!knownVariables.Contains(variableCode))
+            if (!knownVariables.TryGetValue(variableCode, out var variable))
                 throw new ProcessResearchRuleException($"约束引用了未定义变量 {variableCode}。");
+            if (variable.Role != ResearchVariableRoles.Control)
+                throw new ProcessResearchRuleException($"参数约束 {item.Code} 必须引用可控变量。");
             if (!double.IsFinite(item.Limit))
                 throw new ProcessResearchRuleException("约束限值必须是有限数值。");
             var constraintOperator = item.Operator.Trim();
             if (constraintOperator is not ("<=" or ">="))
                 throw new ProcessResearchRuleException("参数约束操作符必须是 <= 或 >=。");
+            var unit = RequiredText(item.Unit, "约束单位", 40);
+            var limit = item.Limit;
+            if (!string.Equals(unit, variable.Unit, StringComparison.OrdinalIgnoreCase) &&
+                !ProcessUnitConverter.TryConvert(item.Limit, unit, variable.Unit, out limit))
+                throw new ProcessResearchRuleException(
+                    $"参数约束 {item.Code} 的单位必须与变量一致或可转换为 {variable.Unit}。");
             return item with
             {
                 Code = NormalizeCode(item.Code, "约束代码"),
                 Description = RequiredText(item.Description, "约束说明", 1000),
                 VariableCode = variableCode,
                 Operator = constraintOperator,
-                Unit = RequiredText(item.Unit, "约束单位", 40)
+                Limit = limit,
+                Unit = variable.Unit
             };
         }).ToArray();
         if (constraints.Select(static item => item.Code).Distinct(StringComparer.Ordinal).Count() !=
@@ -346,7 +361,7 @@ public sealed partial class ProcessResearchWorkflow
                 .Select(NormalizeUser)
                 .Distinct(StringComparer.Ordinal)
                 .ToArray(),
-            SiteCode = OptionalText(value.SiteCode, 120)?.ToLowerInvariant(),
+            SiteCode = OptionalText(value.SiteCode, 120),
             Context = value.Context
                 .Where(static pair => !string.IsNullOrWhiteSpace(pair.Key) &&
                                       !string.IsNullOrWhiteSpace(pair.Value))

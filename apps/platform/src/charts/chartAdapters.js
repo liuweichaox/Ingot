@@ -1,4 +1,5 @@
 
+// 将质量与过程数据转换为 Plotly trace，并保留原始测量语义和悬停证据。
 export const chartPalette = ["#3478c9", "#2f9d78", "#e09b3d", "#8a63c7", "#d45f65", "#4b98a7"];
 
 export function qualityOutcomeTraces(groups) {
@@ -31,13 +32,18 @@ export function processCurveTraces(series, signalDefinitions, startedAt) {
       name: definition.name || item.signalCode,
       x: points.map(point => point.x),
       y: points.map(point => point.y),
-      yaxis: index ? `y${index + 1}` : "y",
+      yaxis: "y",
       customdata: points.map(point => [point.occurredAt, point.phase]),
-      line: { color: chartPalette[index % chartPalette.length], width: 2 },
+      line: { color: curveColor(index), width: 2 },
       connectgaps: false,
       hovertemplate: `%{fullData.name}<br>相对时间 %{x:.1f}s<br>数值 %{y}${definition.unit ? ` ${definition.unit}` : ""}<br>%{customdata[0]}<br>阶段：%{customdata[1]}<extra></extra>`,
     };
   }).filter(trace => trace.x.length);
+}
+
+function curveColor(index) {
+  if (index < chartPalette.length) return chartPalette[index];
+  return `hsl(${Math.round((index * 137.508) % 360)} 58% 44%)`;
 }
 
 function numberOrNull(value) {

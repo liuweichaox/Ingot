@@ -1,3 +1,4 @@
+// 在 Platform API 启动前校验认证、密钥和生产依赖配置。
 namespace Ingot.Platform.Api.Configuration;
 
 public static class ProductionConfigurationValidator
@@ -37,6 +38,9 @@ public static class ProductionConfigurationValidator
         {
             RequireValue(configuration, "Authentication:Authority", errors);
             RequireValue(configuration, "Authentication:Audience", errors);
+            RequireValue(configuration, "Authentication:Oidc:ClientId", errors);
+            RequireValue(configuration, "Authentication:Oidc:AllowedOrigins", errors);
+            ValidateOidcConfiguration(configuration, errors);
         }
 
         RequireValue(configuration, "InspectionAttachments:ArchiveRootPath", errors);
@@ -191,6 +195,69 @@ public static class ProductionConfigurationValidator
     private static bool IsInsecureDemoAllowed(IConfiguration configuration) =>
         configuration.GetValue<bool>("Authentication:AllowInsecureDemo") ||
         configuration.GetValue<bool>("INGOT_ALLOW_INSECURE_DEMO");
+
+    private static void ValidateOidcConfiguration(
+        IConfiguration configuration,
+        ICollection<string> errors)
+    {
+        var authorityValue = configuration["Authentication:Authority"];
+        if (!string.IsNullOrWhiteSpace(authorityValue) &&
+            (!Uri.TryCreate(authorityValue, UriKind.Absolute, out var authority) ||
+             authority.Scheme is not ("http" or "https") ||
+             !string.IsNullOrEmpty(authority.UserInfo) ||
+             !string.IsNullOrEmpty(authority.Query) ||
+             !string.IsNullOrEmpty(authority.Fragment) ||
+             configuration.GetValue("Authentication:RequireHttpsMetadata", true) &&
+             authority.Scheme != Uri.UriSchemeHttps))
+        {
+            errors.Add(
+                "Authentication:Authority must be a trusted absolute OIDC issuer URL; HTTPS is required when metadata HTTPS is enabled.");
+        }
+
+        var clientId = configuration["Authentication:Oidc:ClientId"];
+        if (IsPlaceholder(clientId))
+            errors.Add("Authentication:Oidc:ClientId must not use a placeholder value.");
+
+        var scope = configuration["Authentication:Oidc:Scope"] ?? "openid profile";
+        if (!scope.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Contains("openid", StringComparer.Ordinal))
+        {
+            errors.Add("Authentication:Oidc:Scope must include 'openid'.");
+        }
+
+        var allowedOrigins = (configuration["Authentication:Oidc:AllowedOrigins"] ?? string.Empty)
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var requireHttps = configuration.GetValue("Authentication:RequireHttpsMetadata", true);
+        var parsedOrigins = new List<Uri>();
+        foreach (var originValue in allowedOrigins)
+        {
+            if (!Uri.TryCreate(originValue, UriKind.Absolute, out var origin) ||
+                origin.Scheme is not ("http" or "https") ||
+                requireHttps && origin.Scheme != Uri.UriSchemeHttps ||
+                !string.IsNullOrEmpty(origin.UserInfo) ||
+                !string.IsNullOrEmpty(origin.Query) ||
+                !string.IsNullOrEmpty(origin.Fragment) ||
+                origin.AbsolutePath != "/")
+            {
+                errors.Add(
+                    "Authentication:Oidc:AllowedOrigins must contain only absolute provider origins without wildcards, paths, user info, query, or fragment.");
+                parsedOrigins.Clear();
+                break;
+            }
+            parsedOrigins.Add(origin);
+        }
+        if (Uri.TryCreate(authorityValue, UriKind.Absolute, out var configuredAuthority) &&
+            parsedOrigins.Count > 0 &&
+            parsedOrigins.All(origin => Uri.Compare(
+                origin,
+                configuredAuthority,
+                UriComponents.SchemeAndServer,
+                UriFormat.Unescaped,
+                StringComparison.OrdinalIgnoreCase) != 0))
+        {
+            errors.Add("Authentication:Oidc:AllowedOrigins must include the configured authority origin.");
+        }
+    }
 
     private static bool IsPlaceholder(string? value)
     {

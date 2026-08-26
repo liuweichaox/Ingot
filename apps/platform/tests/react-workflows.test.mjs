@@ -53,8 +53,8 @@ test("configuration center presents dependencies before final process configurat
   }
   assert.match(pages, /运行数据来源与追溯要求/);
   assert.match(pages, /生产准备或 MES 写入不可变生产上下文/);
-  assert.match(pages, /当前准备度/);
-  assert.match(pages, /按顺序补齐待完成项后再发布生产配置/);
+  assert.match(pages, /配置准备度/);
+  assert.match(pages, /当前情况/);
   assert.doesNotMatch(pages, /工艺配置方案是最后一步，不是起点|不需要猜应该先打开哪个菜单/);
   assert.match(pages, /canWrite \? <Button variant="primary" onClick=\{openCreate\}/);
   assert.match(ingestionTasks, /!canWrite \|\| managedByBinding/);
@@ -122,7 +122,6 @@ test("data health exposes reproducible reliability baselines and strict admissio
   assert.match(pages, /minimal_context_coverage/);
   assert.match(pages, /run_quality_association/);
   assert.match(pages, /analysis_admission/);
-  assert.match(pages, /只认设备回读，不使用计划值/);
   assert.match(pages, /排除原因/);
   assert.match(pages, /上下文分层统计/);
   assert.match(pages, /因素重叠与混杂/);
@@ -235,8 +234,9 @@ test("edge pages use the registry heartbeat contract for status", () => {
 test("workbench and logs use current response contracts without misleading placeholders", () => {
   assert.match(pages, /\/api\/v1\/process-executions\?limit=8/);
   assert.match(pages, /\/api\/v1\/research-projects\?limit=100/);
-  assert.match(pages, /看清这次运行，优化下一次运行/);
+  assert.match(pages, /质量待办/);
   assert.match(pages, /开始工艺追因/);
+  assert.doesNotMatch(pages, /看清这次运行，优化下一次运行|三分钟演示/);
   assert.match(pages, /executionOverview: executions\.overview/);
   assert.match(pages, /state\.loading \? <LoadingCard \/>/);
   assert.match(pages, /logs\?pageSize=200/);
@@ -264,7 +264,7 @@ test("execution comparison submits the selection contract and renders business r
   assert.match(pages, /label="对比运行"/);
   assert.match(pages, /comparisonScope === "cohort"/);
   assert.match(pages, /processExecutionIds: \[baselineProcessExecutionId, candidate\]/);
-  assert.match(pages, /title="选择目标运行并开始对比"/);
+  assert.match(pages, /title="对比条件"/);
   assert.match(pages, /生成对比结论/);
   assert.match(pages, /找到 \$\{comparableProcessExecutions\.length\} 条同类运行/);
   assert.match(pages, /executionId=\$\{encodeURIComponent\(baseline\)\}&siteId=\$\{encodeURIComponent\(requestedSiteId\)\}&limit=1/);
@@ -290,14 +290,17 @@ test("execution detail presents actual processSpecification, source curves, phas
   assert.match(pages, /\/api\/v1\/process-executions\/\$\{encodedId\}\/analysis/);
   assert.match(pages, /useProcessCurves\(executionId, selectedSignalCodes/);
   assert.match(pages, /title="实际执行工艺规范"/);
-  assert.match(pages, /title="过程曲线工作台"/);
+  assert.match(pages, /title="过程曲线"/);
   assert.match(pages, /processCurveTraces\(curveResponse\.data\?\.series/);
+  assert.match(pages, /setSelectedSignalCodes\(availableSignals\.map/);
+  assert.doesNotMatch(pages, /一次最多显示 6 个信号|selectedSignalCodes\.length >= 6|current\.length < 6/);
+  assert.match(pages, /height=\{520\}/);
   assert.doesNotMatch(pages, /extractProcessSamples/);
   assert.match(pages, /已保形降采样/);
   assert.match(pages, /role="tablist"/);
   assert.match(pages, /title="阶段特征"/);
   assert.match(pages, /const stageFeatureRows = selectedSignals\.flatMap/);
-  assert.match(pages, /用于曲线对齐和特征计算/);
+  assert.match(pages, /title=\{`工艺阶段（/);
   assert.match(pages, /execution\.lifecycleComplete/);
   assert.doesNotMatch(pages, /execution\.phaseComplete|key: "isComplete", label: "状态"/);
   assert.match(pages, /keyField="recordId"/);
@@ -351,10 +354,10 @@ test("research projects expose the evidence-backed experiment and operating-regi
 test("research projects enforce reviewed phase-zero preregistration and separate usefulness from adoption", () => {
   assert.match(researchProjects, /stageZeroAdmission/);
   assert.match(researchProjects, /validation-preregistrations/);
-  assert.match(researchProjects, /阶段 0：预注册与数据基线/);
+  assert.match(researchProjects, /预注册与数据基线/);
   assert.match(researchProjects, /工程师当前流程基线/);
   assert.match(researchProjects, /reliabilityBaseline/);
-  assert.match(researchProjects, /正式分析准入率/);
+  assert.match(researchProjects, /分析准入率/);
   assert.match(researchProjects, /parseWorkflowSteps/);
   assert.match(researchProjects, /usefulnessRating/);
   assert.match(researchProjects, /部分有用/);
@@ -549,7 +552,7 @@ test("Chat is a standalone conversation workspace with optional project context 
   assert.match(pages, /capabilitiesLoading/);
   assert.match(pages, /scopedHistory/);
   assert.match(pages, /item\.pageContext\?\.id === projectId/);
-  assert.match(pages, /生产 · 质量 · 工艺证据/);
+  assert.match(pages, /新建分析/);
   assert.match(pages, /\{confirmationDialog\}/);
   assert.match(app, /isChatWorkspace/);
   assert.match(app, /h-\[100dvh\]/);

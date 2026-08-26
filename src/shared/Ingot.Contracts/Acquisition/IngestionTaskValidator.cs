@@ -1,3 +1,4 @@
+// 校验采集任务字段、协议约束、输入规模和秘密引用格式。
 using System.Text.RegularExpressions;
 using Ingot.Contracts.Events;
 using Ingot.Contracts.ProcessConfiguration;
@@ -459,6 +460,8 @@ public static partial class IngestionTaskValidator
                     found.Add(new AcquisitionValidationError($"{section}.requestBody", "GET 请求不能配置请求体。"));
                 ValidateHttpHeaders(value.HttpPolling.Headers, $"{section}.headers", allowSensitive: false, found);
                 ValidateHttpHeaders(value.HttpPolling.HeaderSecretRefs, $"{section}.headerSecretRefs", allowSensitive: true, found);
+                foreach (var (name, reference) in value.HttpPolling.HeaderSecretRefs)
+                    ValidateSecretReference(reference, $"{section}.headerSecretRefs.{name}", found);
                 foreach (var name in value.HttpPolling.Headers.Keys.Intersect(
                              value.HttpPolling.HeaderSecretRefs.Keys, StringComparer.OrdinalIgnoreCase))
                     found.Add(new AcquisitionValidationError(
@@ -498,6 +501,14 @@ public static partial class IngestionTaskValidator
                     !string.IsNullOrWhiteSpace(value.Mqtt.PasswordSecretRef))
                     found.Add(new AcquisitionValidationError(
                         $"{section}.passwordSecretRef", "配置密码密钥时必须同时配置用户名。"));
+                ValidateOptionalSecretReference(
+                    value.Mqtt.PasswordSecretRef,
+                    $"{section}.passwordSecretRef",
+                    found);
+                ValidateOptionalSecretReference(
+                    value.Mqtt.ClientCertificatePasswordSecretRef,
+                    $"{section}.clientCertificatePasswordSecretRef",
+                    found);
                 if (value.Mqtt.Topics.Count == 0)
                 {
                     found.Add(new AcquisitionValidationError($"{section}.topics", "至少需要一个订阅主题。"));
@@ -612,6 +623,14 @@ public static partial class IngestionTaskValidator
                     string.IsNullOrWhiteSpace(value.OpcUa.ClientCertificatePath))
                     found.Add(new AcquisitionValidationError(
                         $"{section}.clientCertificatePath", "证书认证需要配置客户端证书路径。"));
+                ValidateOptionalSecretReference(
+                    value.OpcUa.PasswordSecretRef,
+                    $"{section}.passwordSecretRef",
+                    found);
+                ValidateOptionalSecretReference(
+                    value.OpcUa.ClientCertificatePasswordSecretRef,
+                    $"{section}.clientCertificatePasswordSecretRef",
+                    found);
                 if (value.Status == ConfigurationStatuses.Published && value.OpcUa.TrustServerCertificate)
                     found.Add(new AcquisitionValidationError(
                         $"{section}.trustServerCertificate",
@@ -1292,6 +1311,24 @@ public static partial class IngestionTaskValidator
                     $"{path}.{name}",
                     $"HTTP 请求头 {name} 可能包含凭据，必须改用密钥引用请求头。"));
         }
+    }
+
+    private static void ValidateOptionalSecretReference(
+        string? reference,
+        string path,
+        List<AcquisitionValidationError> found)
+    {
+        if (!string.IsNullOrWhiteSpace(reference))
+            ValidateSecretReference(reference, path, found);
+    }
+
+    private static void ValidateSecretReference(
+        string? reference,
+        string path,
+        List<AcquisitionValidationError> found)
+    {
+        if (!AcquisitionSecretReferencePolicy.TryParseEnvironmentReference(reference, out _, out var error))
+            found.Add(new AcquisitionValidationError(path, error));
     }
 
     private static readonly HashSet<string> ForbiddenHttpHeaders = new(StringComparer.OrdinalIgnoreCase)

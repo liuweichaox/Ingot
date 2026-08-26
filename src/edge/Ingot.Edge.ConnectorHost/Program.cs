@@ -1,4 +1,4 @@
-
+// 组合 Edge Connector Host 的采集、持久化、上报、健康与出站安全服务。
 using System.Security.Cryptography;
 using System.Text;
 using Ingot.Edge.Application.Abstractions;
@@ -27,12 +27,17 @@ var urls = builder.Configuration["Urls"]
     ?? throw new InvalidOperationException("Urls is required.");
 builder.WebHost.UseUrls(urls);
 
+builder.Services.Configure<AcquisitionSecurityOptions>(
+    builder.Configuration.GetSection("Acquisition:Security"));
+builder.Services.AddSingleton<IAcquisitionDnsResolver, SystemAcquisitionDnsResolver>();
+builder.Services.AddSingleton<AcquisitionHttpEgressPolicy>();
 builder.Services.AddHttpClient();
 builder.Services.AddHttpClient("device-http-acquisition")
-    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+    .ConfigurePrimaryHttpMessageHandler(provider => new SocketsHttpHandler
     {
-
-        AllowAutoRedirect = false
+        AllowAutoRedirect = false,
+        UseProxy = false,
+        ConnectCallback = provider.GetRequiredService<AcquisitionHttpEgressPolicy>().ConnectAsync
     });
 
 builder.Services.Configure<Ingot.Domain.Events.EventOptions>(builder.Configuration.GetSection("Events"));

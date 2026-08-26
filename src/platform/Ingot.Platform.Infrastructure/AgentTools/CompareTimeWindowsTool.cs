@@ -1,4 +1,4 @@
-
+// 将站点受限的时间窗口比较结果包装为可验证 Agent 工具证据。
 using System.Text.Json;
 using Ingot.Agent;
 using Ingot.Contracts.Agents;
@@ -21,9 +21,10 @@ public sealed class CompareTimeWindowsTool(ITimeWindowComparisonService comparis
         InputSchema = JsonSerializer.SerializeToElement(new
         {
             type = "object",
-            required = new[] { "baselineWindowId", "windowsJson" },
+            required = new[] { "siteId", "baselineWindowId", "windowsJson" },
             properties = new
             {
+                siteId = new { type = "string", minLength = 1, maxLength = 128 },
                 baselineWindowId = new { type = "string", minLength = 1, maxLength = 200 },
                 windowsJson = new
                 {
@@ -40,6 +41,8 @@ public sealed class CompareTimeWindowsTool(ITimeWindowComparisonService comparis
         AgentExecutionContext context,
         CancellationToken ct = default)
     {
+        var siteId = Require(call, "siteId").Trim();
+        context.AccessScope.EnsureAuthorizedSite(siteId);
         var baselineWindowId = Require(call, "baselineWindowId");
         var windows = JsonSerializer.Deserialize<TimeWindowSelection[]>(
             Require(call, "windowsJson"),
@@ -49,7 +52,7 @@ public sealed class CompareTimeWindowsTool(ITimeWindowComparisonService comparis
             AnalysisScope = "analysis-window",
             BaselineWindowId = baselineWindowId,
             Windows = windows
-        }, ct).ConfigureAwait(false);
+        }, siteId, ct).ConfigureAwait(false);
         var rows = new[] { result.Baseline }.Concat(result.ComparisonWindows).ToArray();
         var qualityLinked = rows.Count(static row => row.Quality.InspectionCount > 0);
         var limitations = new List<string>();
@@ -64,9 +67,9 @@ public sealed class CompareTimeWindowsTool(ITimeWindowComparisonService comparis
             RelatedRecords = rows.Select(row => new RelatedRecordRef
             {
                 Kind = "event-query",
-                Id = $"window:{row.WindowId}",
+                Id = $"{siteId}:window:{row.WindowId}",
                 Label = row.Label ?? row.WindowId,
-                Url = $"/events?subjectId={Uri.EscapeDataString(row.SubjectId)}&from={Uri.EscapeDataString(row.From.ToString("O"))}&to={Uri.EscapeDataString(row.To.ToString("O"))}"
+                Url = $"/events?siteId={Uri.EscapeDataString(siteId)}&subjectId={Uri.EscapeDataString(row.SubjectId)}&from={Uri.EscapeDataString(row.From.ToString("O"))}&to={Uri.EscapeDataString(row.To.ToString("O"))}"
             }).ToArray(),
             Limitations = limitations,
             Outcome = qualityLinked > 0 ? AnalysisToolOutcomes.Sufficient : AnalysisToolOutcomes.InsufficientData

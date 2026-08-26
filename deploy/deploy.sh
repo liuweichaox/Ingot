@@ -71,7 +71,7 @@ ${www_address} {
 
 ${site_address} {
 	encode zstd gzip
-	reverse_proxy site:3000
+	reverse_proxy site:80
 	header {
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
 		-Server

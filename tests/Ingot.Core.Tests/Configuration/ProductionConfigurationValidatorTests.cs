@@ -147,6 +147,75 @@ public sealed class ProductionConfigurationValidatorTests
     }
 
     [Fact]
+    public void ConnectorHost_AcceptsDedicatedAcquisitionSecretAndHttpHostAllowlists()
+    {
+        var configuration = Build(new Dictionary<string, string?>
+        {
+            ["ConnectorHost:IngestToken"] = "connector-token-with-at-least-24-characters",
+            ["ConnectorHost:LocalApiToken"] = "local-api-token-with-at-least-24-characters",
+            ["Edge:SiteId"] = "SITE-001",
+            ["Edge:EnablePlatformReporting"] = "true",
+            ["Edge:EdgeId"] = "EDGE-001",
+            ["Edge:PlatformApiBaseUrl"] = "http://platform-api:8000",
+            ["Edge:EnableEventShipping"] = "true",
+            ["Edge:EventIngestToken"] = "edge-token-with-at-least-24-characters",
+            ["Acquisition:DeploymentCachePath"] = "/data/acquisition-deployments.json",
+            ["Acquisition:Security:AllowedSecretEnvironmentVariables:0"] = "DEVICE_API_TOKEN",
+            ["Acquisition:Security:AllowedHttpHosts:0"] = "device.example.internal",
+            ["Acquisition:Security:AllowedNetworkHosts:0"] = "broker.example.internal"
+        });
+
+        EdgeValidator.Validate(configuration);
+    }
+
+    [Fact]
+    public void ConnectorHost_RejectsForbiddenAcquisitionAllowlistLiteral()
+    {
+        var configuration = Build(new Dictionary<string, string?>
+        {
+            ["ConnectorHost:IngestToken"] = "connector-token-with-at-least-24-characters",
+            ["ConnectorHost:LocalApiToken"] = "local-api-token-with-at-least-24-characters",
+            ["Edge:SiteId"] = "SITE-001",
+            ["Edge:EnablePlatformReporting"] = "true",
+            ["Edge:EdgeId"] = "EDGE-001",
+            ["Edge:PlatformApiBaseUrl"] = "http://platform-api:8000",
+            ["Edge:EnableEventShipping"] = "true",
+            ["Edge:EventIngestToken"] = "edge-token-with-at-least-24-characters",
+            ["Acquisition:DeploymentCachePath"] = "/data/acquisition-deployments.json",
+            ["Acquisition:Security:AllowedNetworkHosts:0"] = "169.254.169.254"
+        });
+
+        var error = Assert.Throws<InvalidOperationException>(() => EdgeValidator.Validate(configuration));
+
+        Assert.Contains("cannot allow loopback, link-local", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ConnectorHost_RejectsProtectedAcquisitionRuntimeSecretAllowlistEntry()
+    {
+        var configuration = Build(new Dictionary<string, string?>
+        {
+            ["ConnectorHost:IngestToken"] = "connector-token-with-at-least-24-characters",
+            ["ConnectorHost:LocalApiToken"] = "local-api-token-with-at-least-24-characters",
+            ["Edge:SiteId"] = "SITE-001",
+            ["Edge:EnablePlatformReporting"] = "true",
+            ["Edge:EdgeId"] = "EDGE-001",
+            ["Edge:PlatformApiBaseUrl"] = "http://platform-api:8000",
+            ["Edge:EnableEventShipping"] = "true",
+            ["Edge:EventIngestToken"] = "edge-token-with-at-least-24-characters",
+            ["Acquisition:DeploymentCachePath"] = "/data/acquisition-deployments.json",
+            ["Acquisition:Security:AllowedSecretEnvironmentVariables:0"] = "EDGE__EVENTINGESTTOKEN"
+        });
+
+        var error = Assert.Throws<InvalidOperationException>(() => EdgeValidator.Validate(configuration));
+
+        Assert.Contains(
+            "AllowedSecretEnvironmentVariables contains an invalid or protected name",
+            error.Message,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void ConnectorHost_RejectsCredentialReuseAcrossTrustBoundaries()
     {
         const string reusedToken = "one-token-reused-across-trust-boundaries";
@@ -202,6 +271,28 @@ public sealed class ProductionConfigurationValidatorTests
 
         var error = Assert.Throws<InvalidOperationException>(() => PlatformValidator.Validate(configuration));
         Assert.Contains("Authentication:Authority", error.Message, StringComparison.Ordinal);
+        Assert.Contains("Authentication:Oidc:ClientId", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Platform_AcceptsCompleteOidcClientConfiguration()
+    {
+        var configuration = Build(CompletePlatformOidcConfiguration());
+
+        PlatformValidator.Validate(configuration);
+    }
+
+    [Theory]
+    [InlineData("https://identity.example.com/tenant")]
+    [InlineData("https://*.example.com")]
+    [InlineData("https://identity.example.com;script-src *")]
+    public void Platform_RejectsUnsafeOidcCspOrigins(string allowedOrigins)
+    {
+        var values = CompletePlatformOidcConfiguration();
+        values["Authentication:Oidc:AllowedOrigins"] = allowedOrigins;
+
+        var error = Assert.Throws<InvalidOperationException>(() => PlatformValidator.Validate(Build(values)));
+        Assert.Contains("Authentication:Oidc:AllowedOrigins", error.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -444,6 +535,26 @@ public sealed class ProductionConfigurationValidatorTests
 
     private static IConfiguration Build(IReadOnlyDictionary<string, string?> values) =>
         new ConfigurationBuilder().AddInMemoryCollection(values).Build();
+
+    private static Dictionary<string, string?> CompletePlatformOidcConfiguration() => new()
+    {
+        ["ConnectionStrings:Events"] = "Host=postgres;Database=ingot",
+        ["EventIngest:RequireToken"] = "true",
+        ["EventIngest:EdgeTokens:EDGE-001"] = "edge-token-with-at-least-24-characters",
+        ["EventIngest:EdgeSites:EDGE-001"] = "SITE-001",
+        ["EdgeDiagnostics:EdgeTokens:EDGE-001"] = "diagnostics-token-with-at-least-24-characters",
+        ["EdgeDiagnostics:EdgeBaseUrls:EDGE-001"] = "http://edge-001:8001",
+        ["Authentication:Mode"] = "Oidc",
+        ["Authentication:Authority"] = "https://identity.example.com/tenant",
+        ["Authentication:Audience"] = "ingot-platform-api",
+        ["Authentication:Oidc:ClientId"] = "ingot-platform-spa",
+        ["Authentication:Oidc:Scope"] = "openid profile ingot-platform-api",
+        ["Authentication:Oidc:AllowedOrigins"] = "https://identity.example.com",
+        ["InspectionAttachments:ArchiveRootPath"] = "/archive/inspection-attachments",
+        ["ProcessKnowledge:ArchiveRootPath"] = "/archive/process-knowledge",
+        ["Chat:Enabled"] = "false",
+        ["Cors:AllowedOrigins:0"] = "https://ingot.example.com"
+    };
 
     private sealed class UnavailableAgentRunStore : IAgentRunStore
     {

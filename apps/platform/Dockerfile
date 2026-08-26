@@ -11,6 +11,8 @@ RUN npm run build
 
 FROM nginx:1.29-alpine AS runtime
 COPY --from=build /app/dist/ /usr/share/nginx/html/
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+ENV NGINX_ENVSUBST_FILTER=^INGOT_OIDC_ALLOWED_ORIGINS$ \
+    INGOT_OIDC_ALLOWED_ORIGINS=""
+COPY nginx.conf /etc/nginx/templates/default.conf.template
 
 EXPOSE 80

@@ -6,6 +6,7 @@ using Ingot.Platform.Infrastructure.Inspections;
 using Ingot.Platform.Infrastructure.ProcessExecutions;
 using Ingot.Platform.Infrastructure.ProcessResearch;
 using Ingot.Platform.Infrastructure.ResearchAssets;
+using Ingot.Platform.Infrastructure.Workers;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -38,7 +39,7 @@ public sealed class PlatformWorkerRegistrationTests
     public async Task WorkerRegistration_ShouldAddMutatingWorkers()
     {
         var services = BuildServices();
-        services.AddIngotPlatformWorkers();
+        services.AddIngotPlatformWorkers(BuildConfiguration());
         services.AddIngotLocalIdentityMaintenance();
         await using var provider = services.BuildServiceProvider();
 
@@ -48,6 +49,40 @@ public sealed class PlatformWorkerRegistrationTests
         Assert.Contains(typeof(ProcessExecutionAnalysisBackfillService), hosted);
         Assert.Contains(typeof(ResearchExperimentAutomationHostedService), hosted);
         Assert.Contains(typeof(SessionPruneHostedService), hosted);
+        Assert.Contains(typeof(PlatformWorkerPulseHostedService), hosted);
+        Assert.Same(
+            provider.GetRequiredService<PlatformWorkerPulse>(),
+            provider.GetRequiredService<PlatformWorkerPulse>());
+    }
+
+    [Fact]
+    public async Task WorkerPulseHealth_ShouldRejectMissingAndStaleHeartbeat()
+    {
+        var time = new TestTimeProvider(DateTimeOffset.Parse("2026-08-26T00:00:00Z"));
+        var pulse = new PlatformWorkerPulse(time);
+        var options = Microsoft.Extensions.Options.Options.Create(new PlatformWorkerPulseOptions
+        {
+            Interval = TimeSpan.FromSeconds(5),
+            StaleAfter = TimeSpan.FromSeconds(30)
+        });
+        var health = new PlatformWorkerPulseHealthCheck(pulse, options);
+
+        Assert.Equal(
+            Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus.Unhealthy,
+            (await health.CheckHealthAsync(new())).Status);
+
+        pulse.RecordHeartbeat();
+        Assert.Equal(
+            Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus.Healthy,
+            (await health.CheckHealthAsync(new())).Status);
+        Assert.Contains(
+            "platform_worker_heartbeat_timestamp_seconds",
+            pulse.RenderPrometheus(options.Value.StaleAfter));
+
+        time.Advance(TimeSpan.FromSeconds(31));
+        Assert.Equal(
+            Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus.Unhealthy,
+            (await health.CheckHealthAsync(new())).Status);
     }
 
     private static ServiceCollection BuildServices()
@@ -68,4 +103,13 @@ public sealed class PlatformWorkerRegistrationTests
                 ["ProcessOptimizer:BaseUrl"] = "http://localhost:8100"
             })
             .Build();
+
+    private sealed class TestTimeProvider(DateTimeOffset utcNow) : TimeProvider
+    {
+        private DateTimeOffset _utcNow = utcNow;
+
+        public override DateTimeOffset GetUtcNow() => _utcNow;
+
+        public void Advance(TimeSpan duration) => _utcNow += duration;
+    }
 }

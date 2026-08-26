@@ -2,6 +2,11 @@
 import { formatResearchNumber, shadowDecisionLabels } from "../researchProjectModel";
 import { Alert, Button, Card, DataTable, EmptyState, Metric, StatusBadge } from "../../ui/components";
 
+function shortHash(value) {
+  const normalized = String(value || "").trim();
+  return normalized ? `${normalized.slice(0, 12)}…` : "—";
+}
+
 export function HistoricalReplayCard({ reports, currentUserId, onReview }) {
   return (
     <Card
@@ -15,34 +20,34 @@ export function HistoricalReplayCard({ reports, currentUserId, onReview }) {
           {
             key: "status",
             label: "状态",
-            render: (value, row) => <div className="space-y-2 text-xs"><StatusBadge value={value === "reviewed" ? "已独立审核" : "待独立审核"} /><StatusBadge value={row.gatePassed ? "回放闸门通过" : "回放闸门未通过"} /><code title={row.reportHash}>{String(row.reportHash).slice(0, 12)}…</code></div>,
+            render: (value, row) => <div className="space-y-2 text-[13px]"><StatusBadge value={value === "reviewed" ? "已独立审核" : "待独立审核"} /><StatusBadge value={row.gatePassed ? "回放闸门通过" : "回放闸门未通过"} /><code title={row.reportHash}>{shortHash(row.reportHash)}</code></div>,
           },
           {
             key: "conditions",
             label: "冻结数据",
-            render: (_, row) => <div className="text-xs leading-5">{row.sourceRunCount} 条运行<br />{row.uniqueConditionCount} 种唯一条件<br />预算 {row.budget} · {row.seedCount} 个随机种子<br /><code title={row.preregistrationHash}>预注册 {String(row.preregistrationHash || "not-registered").slice(0, 12)}…</code></div>,
+            render: (_, row) => <div className="text-[13px] leading-5">{formatResearchNumber(row.sourceRunCount)} 条运行<br />{formatResearchNumber(row.uniqueConditionCount)} 种唯一条件<br />预算 {formatResearchNumber(row.budget)} · {formatResearchNumber(row.seedCount)} 个随机种子<br /><code title={row.preregistrationHash}>预注册 {shortHash(row.preregistrationHash)}</code></div>,
           },
           {
             key: "comparison",
             label: "达到规格试验数",
-            render: (_, row) => <div className="min-w-52 text-xs leading-5">历史原顺序：<strong>{row.originalOrderTrials ?? "未达到"}</strong><br />优化器中位数：<strong>{row.optimizer?.medianTrials ?? "未达到"}</strong>（成功率 {Math.round(Number(row.optimizer?.successRate || 0) * 100)}%）<br />随机中位数：<strong>{row.random?.medianTrials ?? "未达到"}</strong>（成功率 {Math.round(Number(row.random?.successRate || 0) * 100)}%）<br />二次响应面：<strong>{row.responseSurface?.medianTrials ?? "不适用或未达到"}</strong>{row.responseSurface ? `（成功率 ${Math.round(Number(row.responseSurface.successRate || 0) * 100)}%）` : ""}{row.mechanismComparison && <div className="mt-2 border-t border-slate-200 pt-2">知识 vs 纯数据：成功率差 <strong>{signedPercent(row.mechanismComparison.successRateDelta)}</strong><br />中位试验数差：<strong>{signedNumber(row.mechanismComparison.medianTrialsDelta)}</strong><br />安全违规差：<strong>{signedNumber(row.mechanismComparison.safetyViolationDelta)}</strong><br /><code title={row.mechanismComparison.pairingHash}>配对 {String(row.mechanismComparison.pairingHash).slice(0, 12)}…</code></div>}</div>,
+            render: (_, row) => <div className="min-w-52 text-[13px] leading-5">历史原顺序：<strong>{row.originalOrderTrials ?? "未达到"}</strong><br />优化器中位数：<strong>{row.optimizer?.medianTrials ?? "未达到"}</strong>（成功率 {Math.round(Number(row.optimizer?.successRate || 0) * 100)}%）<br />随机中位数：<strong>{row.random?.medianTrials ?? "未达到"}</strong>（成功率 {Math.round(Number(row.random?.successRate || 0) * 100)}%）<br />二次响应面：<strong>{row.responseSurface?.medianTrials ?? "不适用或未达到"}</strong>{row.responseSurface ? `（成功率 ${Math.round(Number(row.responseSurface.successRate || 0) * 100)}%）` : ""}{row.mechanismComparison && <div className="mt-2 border-t border-slate-200 pt-2">知识 vs 纯数据：成功率差 <strong>{signedPercent(row.mechanismComparison.successRateDelta)}</strong><br />中位试验数差：<strong>{signedNumber(row.mechanismComparison.medianTrialsDelta)}</strong><br />安全违规差：<strong>{signedNumber(row.mechanismComparison.safetyViolationDelta)}</strong><br /><code title={row.mechanismComparison.pairingHash}>配对 {String(row.mechanismComparison.pairingHash).slice(0, 12)}…</code></div>}</div>,
           },
           {
             key: "calibration",
             label: "校准 / 安全",
-            render: (_, row) => <div className="text-xs leading-5">区间覆盖：<strong>{row.predictionIntervalChecks ? `${Math.round(Number(row.predictionIntervalCoverage || 0) * 100)}%` : "无检查"}</strong><br />覆盖检查：{row.predictionIntervalChecks}<br />优化器安全违规：<strong>{row.optimizerSafetyViolationCount}</strong></div>,
+            render: (_, row) => <div className="text-[13px] leading-5">区间覆盖：<strong>{row.predictionIntervalChecks ? `${Math.round(Number(row.predictionIntervalCoverage || 0) * 100)}%` : "无检查"}</strong><br />覆盖检查：{formatResearchNumber(row.predictionIntervalChecks)}<br />优化器安全违规：<strong>{formatResearchNumber(row.optimizerSafetyViolationCount)}</strong></div>,
           },
           {
             key: "gateFailures",
             label: "失败与限制",
-            render: (value, row) => <div className="max-w-96 text-xs leading-5 text-slate-600">{(value || []).map((item, index) => <div key={`failure:${index}:${item}`}>失败：{item}</div>)}<div>限制：{row.limitations}</div></div>,
+            render: (value, row) => <div className="max-w-96 text-[13px] leading-5 text-slate-600">{(value || []).map((item, index) => <div key={`failure:${index}:${item}`}>失败：{item}</div>)}<div>限制：{row.limitations || "—"}</div></div>,
           },
           {
             key: "actions",
             label: "操作",
             render: (_, row) => row.status === "generated" && row.generatedBy !== currentUserId
               ? <Button onClick={event => { event.stopPropagation(); onReview(row); }}>审核完整报告</Button>
-              : row.status === "generated" ? <span className="text-xs text-slate-500">等待其他工程师审核</span> : "已冻结",
+              : row.status === "generated" ? <span className="text-[13px] text-slate-500">等待其他工程师审核</span> : "已冻结",
           },
         ]} />
       )}
@@ -90,11 +95,11 @@ export function RollbackDrillCard({ drills, currentUserId, onReview }) {
         <EmptyState title="尚无回退演练证据" description="纸面回退方案不能放行受控在线；请执行一次可复核的现场或等价环境演练。" />
       ) : (
         <DataTable rows={drills} keyField="drillId" columns={[
-          { key: "name", label: "演练", render: (value, row) => <div className="max-w-72 text-xs leading-5"><strong>{value}</strong><div>{row.scenario}</div><code>{String(row.recordHash).slice(0, 12)}…</code></div> },
-          { key: "trigger", label: "停止 / 回退", render: (_, row) => <div className="max-w-80 text-xs leading-5">触发：{row.stopTrigger}<br />回退：{row.rollbackTarget}</div> },
-          { key: "evidence", label: "实际证据", render: (_, row) => <div className="max-w-72 text-xs leading-5">{(row.observedActions || []).map((value, index) => <div key={`action:${index}:${value}`}>· {value}</div>)}<div>{row.evidenceReference}</div></div> },
-          { key: "status", label: "结论", render: (value, row) => <div className="space-y-1 text-xs"><StatusBadge value={row.passed ? "演练通过" : "演练失败"} /><StatusBadge value={value === "reviewed" ? "已独立复核" : "待独立复核"} /></div> },
-          { key: "actions", label: "操作", render: (_, row) => row.status === "recorded" && row.conductedBy !== currentUserId ? <Button onClick={event => { event.stopPropagation(); onReview(row); }}>复核演练证据</Button> : row.status === "recorded" ? <span className="text-xs text-slate-500">等待其他工程师复核</span> : "已冻结" },
+          { key: "name", label: "演练", render: (value, row) => <div className="max-w-72 text-[13px] leading-5"><strong>{value || "未命名演练"}</strong>{row.scenario && <div>{row.scenario}</div>}<code>{shortHash(row.recordHash)}</code></div> },
+          { key: "trigger", label: "停止 / 回退", render: (_, row) => <div className="max-w-80 text-[13px] leading-5">触发：{row.stopTrigger}<br />回退：{row.rollbackTarget}</div> },
+          { key: "evidence", label: "实际证据", render: (_, row) => <div className="max-w-72 text-[13px] leading-5">{(row.observedActions || []).map((value, index) => <div key={`action:${index}:${value}`}>· {value}</div>)}<div>{row.evidenceReference}</div></div> },
+          { key: "status", label: "结论", render: (value, row) => <div className="space-y-1 text-[13px]"><StatusBadge value={row.passed ? "演练通过" : "演练失败"} /><StatusBadge value={value === "reviewed" ? "已独立复核" : "待独立复核"} /></div> },
+          { key: "actions", label: "操作", render: (_, row) => row.status === "recorded" && row.conductedBy !== currentUserId ? <Button onClick={event => { event.stopPropagation(); onReview(row); }}>复核演练证据</Button> : row.status === "recorded" ? <span className="text-[13px] text-slate-500">等待其他工程师复核</span> : "已冻结" },
         ]} />
       )}
     </Card>
@@ -121,9 +126,9 @@ export function OnlineCampaignCard({ report, objectiveByCode }) {
       </div>
       <DataTable rows={report.shadowComparisons || []} keyField="objectiveCode" columns={[
         { key: "objectiveCode", label: "目标", render: value => objectiveByCode.get(value)?.name || value },
-        { key: "shadow", label: "影子残差", render: (_, row) => <span className="text-xs">n={row.shadowCount} · 均值 {formatResearchNumber(row.shadowMeanResidual)}</span> },
-        { key: "online", label: "在线残差", render: (_, row) => <span className="text-xs">n={row.onlineCount} · 均值 {formatResearchNumber(row.onlineMeanResidual)}</span> },
-        { key: "shift", label: "残差均值变化", render: (_, row) => <div className="text-xs"><strong>{formatResearchNumber(row.meanResidualShift)}</strong><div>95% 区间 {formatResearchNumber(row.shiftLower95)} ～ {formatResearchNumber(row.shiftUpper95)}</div><StatusBadge value={row.systematicShiftDetected ? "系统性偏移" : row.onlineCount >= 5 && row.shadowCount >= 5 ? "未检出系统性偏移" : "样本不足"} /></div> },
+        { key: "shadow", label: "影子残差", render: (_, row) => <span className="text-[13px]">n={row.shadowCount} · 均值 {formatResearchNumber(row.shadowMeanResidual)}</span> },
+        { key: "online", label: "在线残差", render: (_, row) => <span className="text-[13px]">n={row.onlineCount} · 均值 {formatResearchNumber(row.onlineMeanResidual)}</span> },
+        { key: "shift", label: "残差均值变化", render: (_, row) => <div className="text-[13px]"><strong>{formatResearchNumber(row.meanResidualShift)}</strong><div>95% 区间 {formatResearchNumber(row.shiftLower95)} ～ {formatResearchNumber(row.shiftUpper95)}</div><StatusBadge value={row.systematicShiftDetected ? "系统性偏移" : row.onlineCount >= 5 && row.shadowCount >= 5 ? "未检出系统性偏移" : "样本不足"} /></div> },
       ]} />
     </Card>
   );
@@ -150,7 +155,7 @@ export function ShadowEvidenceCard({ recommendations, report, variableByCode, ob
         </div>
       )}
       {(report?.calibration || []).some(item => item.checkedCount > 0) && (
-        <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
+        <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-[13px] text-slate-600">
           预测区间覆盖：{report.calibration.filter(item => item.checkedCount > 0).map(item => `${objectiveByCode.get(item.objectiveCode)?.name || item.objectiveCode} ${item.coveredCount}/${item.checkedCount}`).join("；")}。报告哈希 <code>{String(report.reportHash).slice(0, 12)}…</code>
         </div>
       )}
@@ -161,22 +166,22 @@ export function ShadowEvidenceCard({ recommendations, report, variableByCode, ob
           {
             key: "suggestionExecutionKey",
             label: "模型建议 / 实际运行",
-            render: (value, row) => <div className="space-y-1 text-xs"><code>{value}</code><div>实际：<code>{row.actualExecutionKey}</code></div><div>模型：{row.modelVersion}</div><StatusBadge value={row.applicability?.status === "in-domain" ? "适用域内" : row.applicability?.status === "context-shift" ? "上下文变化" : row.applicability?.status === "parameter-extrapolation" ? "参数外推" : "历史不足"} /><div className="max-w-64 text-slate-500">{row.applicability?.summary}</div></div>,
+            render: (value, row) => <div className="space-y-1 text-[13px]"><code>{value || "—"}</code><div>实际：<code>{row.actualExecutionKey || "—"}</code></div><div>模型：{row.modelVersion || "—"}</div><StatusBadge value={row.applicability?.status === "in-domain" ? "适用域内" : row.applicability?.status === "context-shift" ? "上下文变化" : row.applicability?.status === "parameter-extrapolation" ? "参数外推" : "历史不足"} />{row.applicability?.summary && <div className="max-w-64 text-slate-500">{row.applicability.summary}</div>}</div>,
           },
           {
             key: "decision",
             label: "工程师选择",
-            render: (value, row) => <div className="space-y-2 text-xs"><StatusBadge value={shadowDecisionLabels[value] || value} /><div>有用性：{{ useful: "有用", "partly-useful": "部分有用", "not-useful": "无用" }[row.usefulnessRating] || "未评分"}</div>{(row.engineerSelectedFactors || []).map((factor, index) => <div key={`${factor.variableCode}:${index}`}>{variableByCode.get(factor.variableCode)?.name || factor.variableCode}：<strong>{formatResearchNumber(factor.value)} {factor.unit}</strong></div>)}</div>,
+            render: (value, row) => <div className="space-y-2 text-[13px]"><StatusBadge value={shadowDecisionLabels[value] || value} /><div>有用性：{{ useful: "有用", "partly-useful": "部分有用", "not-useful": "无用" }[row.usefulnessRating] || "未评分"}</div>{(row.engineerSelectedFactors || []).map((factor, index) => <div key={`${factor.variableCode}:${index}`}>{variableByCode.get(factor.variableCode)?.name || factor.variableCode}：<strong>{formatResearchNumber(factor.value)} {factor.unit}</strong></div>)}</div>,
           },
           {
             key: "reason",
             label: "拒绝原因 / 现场限制",
-            render: (_, row) => <div className="max-w-72 text-xs leading-5 text-slate-600"><div>{row.rejectionReason || "采用建议，无拒绝原因"}</div>{(row.siteLimitations || []).map((value, index) => <div key={`limitation:${index}:${value}`}>限制：{value}</div>)}</div>,
+            render: (_, row) => <div className="max-w-72 text-[13px] leading-5 text-slate-600"><div>{row.rejectionReason || "采用建议，无拒绝原因"}</div>{(row.siteLimitations || []).map((value, index) => <div key={`limitation:${index}:${value}`}>限制：{value}</div>)}</div>,
           },
           {
             key: "outcome",
             label: "源数据结果",
-            render: value => value ? <div className="space-y-1 text-xs"><StatusBadge value={value.validForOptimization ? "数据完整" : "数据不足"} />{Object.entries(value.outcomes || {}).map(([code, number]) => <div key={`outcome:${code}`}>{objectiveByCode.get(code)?.name || code}：<strong>{formatResearchNumber(number)}</strong></div>)}{Object.entries(value.settingDeviationFromEngineerSelection || {}).map(([code, number]) => <div key={`deviation:${code}`}>实际设置偏差 {variableByCode.get(code)?.name || code}：<strong>{formatResearchNumber(number)}</strong></div>)}<code title={value.sourceContentHash}>{String(value.sourceContentHash).slice(0, 12)}…</code></div> : <span className="text-xs text-slate-500">等待实际运行与检验</span>,
+            render: value => value ? <div className="space-y-1 text-[13px]"><StatusBadge value={value.validForOptimization ? "数据完整" : "数据不足"} />{Object.entries(value.outcomes || {}).map(([code, number]) => <div key={`outcome:${code}`}>{objectiveByCode.get(code)?.name || code}：<strong>{formatResearchNumber(number)}</strong></div>)}{Object.entries(value.settingDeviationFromEngineerSelection || {}).map(([code, number]) => <div key={`deviation:${code}`}>实际设置偏差 {variableByCode.get(code)?.name || code}：<strong>{formatResearchNumber(number)}</strong></div>)}<code title={value.sourceContentHash}>{shortHash(value.sourceContentHash)}</code></div> : <span className="text-[13px] text-slate-500">等待实际运行与检验</span>,
           },
           {
             key: "actions",
