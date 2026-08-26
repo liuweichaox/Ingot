@@ -316,7 +316,7 @@ export function Input({ className, ...props }) {
   return (
     <input
       className={cx(
-        "h-10 min-w-0 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus-visible:ring-2 focus-visible:ring-blue-500/25 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-600 disabled:shadow-none read-only:bg-slate-50 read-only:text-slate-600",
+        "h-10 min-w-0 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-[0_1px_2px_rgba(7,16,14,.025)] outline-none transition placeholder:text-slate-400 focus:border-trajectory-500 focus-visible:ring-2 focus-visible:ring-trajectory-500/20 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-600 disabled:shadow-none read-only:bg-slate-50 read-only:text-slate-600",
         className,
       )}
       {...props}
@@ -328,7 +328,7 @@ export function Select({ className, children, ...props }) {
   return (
     <select
       className={cx(
-        "h-10 min-w-0 w-full rounded-md border border-slate-300 bg-white px-3 pr-8 py-2 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus-visible:ring-2 focus-visible:ring-blue-500/25 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-600 disabled:shadow-none",
+        "h-10 min-w-0 w-full rounded-lg border border-slate-300 bg-white px-3 pr-8 py-2 text-sm text-slate-900 shadow-[0_1px_2px_rgba(7,16,14,.025)] outline-none transition focus:border-trajectory-500 focus-visible:ring-2 focus-visible:ring-trajectory-500/20 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-600 disabled:shadow-none",
         className,
       )}
       {...props}
@@ -342,7 +342,7 @@ export function Textarea({ className, ...props }) {
   return (
     <textarea
       className={cx(
-        "min-h-28 min-w-0 w-full resize-y rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus-visible:ring-2 focus-visible:ring-blue-500/25 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-600 disabled:shadow-none read-only:bg-slate-50 read-only:text-slate-600",
+        "min-h-28 min-w-0 w-full resize-y rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-[0_1px_2px_rgba(7,16,14,.025)] outline-none transition placeholder:text-slate-400 focus:border-trajectory-500 focus-visible:ring-2 focus-visible:ring-trajectory-500/20 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-600 disabled:shadow-none read-only:bg-slate-50 read-only:text-slate-600",
         className,
       )}
       {...props}

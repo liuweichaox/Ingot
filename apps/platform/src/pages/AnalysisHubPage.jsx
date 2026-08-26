@@ -1,4 +1,5 @@
 // 汇总分析入口，并在站点和执行上下文间提供可追踪导航。
+import { ArrowRightIcon, BeakerIcon, CircleStackIcon, ShieldExclamationIcon } from "@heroicons/react/24/outline";
 import { Link } from "react-router";
 import { extractRows, useApi } from "../hooks/useApi";
 import { statusLabels } from "../research/researchProjectModel";
@@ -29,15 +30,16 @@ export function AnalysisHubPage({ identity }) {
     ["active", "investigating", "trialing", "validating", "proposed"].includes(item.status));
   const error = executionsResponse.error || (canAccessResearch ? projectsResponse.error : "");
   const summaryItems = [
-    ["待分析运行", targetExecutions.length, "质量异常或数据不可用"],
-    ["数据问题", dataIssueCount, "需要补齐或降级处理"],
-    ...(canAccessResearch ? [["验证中项目", activeProjects.length, "仍需工程决策或实验"]] : []),
+    { label: "待分析运行", value: targetExecutions.length, hint: "质量异常或数据不可用", icon: CircleStackIcon, accent: "text-rose-700 bg-rose-50 ring-rose-200" },
+    { label: "数据问题", value: dataIssueCount, hint: "需要补齐或降级处理", icon: ShieldExclamationIcon, accent: "text-amber-700 bg-amber-50 ring-amber-200" },
+    ...(canAccessResearch ? [{ label: "验证中项目", value: activeProjects.length, hint: "仍需工程决策或实验", icon: BeakerIcon, accent: "text-trajectory-700 bg-trajectory-50 ring-trajectory-100" }] : []),
   ];
 
   return (
     <Page
       title="追因总览"
-      actions={<Link to="/comparisons" className="inline-flex min-h-9 items-center rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700">新建运行对比</Link>}
+      description="先确认数据是否足以比较，再把质量偏差推进为候选原因和验证任务。"
+      actions={<Link to="/comparisons" className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-evidence-500 bg-evidence-500 px-4 py-2 text-sm font-semibold text-coal-950 shadow-sm transition hover:border-evidence-400 hover:bg-evidence-400">新建运行对比<ArrowRightIcon className="size-4" /></Link>}
     >
       <RequestError
         error={error}
@@ -47,20 +49,23 @@ export function AnalysisHubPage({ identity }) {
         ])}
       />
 
-      <section className={`grid grid-cols-1 divide-y divide-slate-200 rounded-lg border border-slate-200 bg-white sm:divide-x sm:divide-y-0 ${canAccessResearch ? "sm:grid-cols-3" : "sm:grid-cols-2"}`} aria-label="追因任务摘要">
-        {summaryItems.map(([label, value, hint]) => (
-          <div key={label} className="px-4 py-3.5">
-            <p className="text-[13px] font-medium text-slate-500">{label}</p>
-            <div className="mt-1 flex items-baseline gap-2">
-              <strong className="text-2xl font-semibold text-slate-950 tabular-nums">{value}</strong>
-              <span className="text-[13px] text-slate-500">{hint}</span>
+      <section className={`product-panel grid grid-cols-1 divide-y divide-slate-200 overflow-hidden rounded-xl sm:divide-x sm:divide-y-0 ${canAccessResearch ? "sm:grid-cols-3" : "sm:grid-cols-2"}`} aria-label="追因任务摘要">
+        {summaryItems.map(({ label, value, hint, icon: Icon, accent }) => (
+          <div key={label} className="group px-5 py-5">
+            <div className="flex items-center justify-between gap-3">
+              <p className="data-label">{label}</p>
+              <span className={`grid size-9 place-items-center rounded-lg ring-1 ring-inset ${accent}`}><Icon className="size-4.5" /></span>
+            </div>
+            <div className="mt-4 flex items-end gap-3">
+              <strong className="data-value text-3xl font-semibold text-slate-950">{value}</strong>
+              <span className="pb-0.5 text-xs leading-5 text-slate-500">{hint}</span>
             </div>
           </div>
         ))}
       </section>
 
-      <div className={`grid gap-5 ${canAccessResearch ? "xl:grid-cols-[minmax(0,1fr)_22rem]" : ""}`}>
-        <Card title="待分析运行" actions={<Link className="text-sm font-medium text-blue-700" to="/process-executions">查看全部运行</Link>}>
+      <div className={`grid gap-6 ${canAccessResearch ? "xl:grid-cols-[minmax(0,1fr)_20rem]" : ""}`}>
+        <Card title="待分析运行" description="这里仅汇总质量异常、数据降级或分析准入受阻的已完成运行。" actions={<Link className="text-sm font-semibold text-trajectory-700" to="/process-executions">查看全部运行</Link>}>
           {executionsResponse.loading && !executionsResponse.data ? (
             <p className="py-10 text-center text-sm text-slate-500">正在读取生产运行…</p>
           ) : targetExecutions.length ? (
@@ -73,7 +78,7 @@ export function AnalysisHubPage({ identity }) {
                   label: "运行",
                   render: (value, row) => (
                     <div>
-                      <Link className="font-medium text-blue-700 hover:text-blue-900" to={`/comparisons?executionId=${encodeURIComponent(value)}`}>{value}</Link>
+                      <Link className="font-semibold text-trajectory-700 hover:text-trajectory-600" to={`/comparisons?executionId=${encodeURIComponent(value)}`}>{value}</Link>
                       <p className="mt-0.5 text-[13px] text-slate-500">{row.productCode || "产品未记录"}</p>
                     </div>
                   ),
@@ -87,18 +92,19 @@ export function AnalysisHubPage({ identity }) {
         </Card>
 
         {canAccessResearch && (
-          <Card title="待验证项目" actions={<Link className="text-sm font-medium text-blue-700" to="/research-projects">查看全部项目</Link>}>
+          <Card className="xl:self-start" title="待验证项目" description="候选原因只有经过工程审核与实验验证，才能提升结论强度。" actions={<Link className="text-sm font-semibold text-trajectory-700" to="/research-projects">查看全部项目</Link>}>
             {projectsResponse.loading && !projectsResponse.data ? (
               <p className="py-10 text-center text-sm text-slate-500">正在读取研发项目…</p>
             ) : activeProjects.length ? (
-              <div className="divide-y divide-slate-200">
+              <div className="grid gap-2">
                 {activeProjects.slice(0, 6).map(project => (
-                  <Link key={project.projectId} to={`/research-projects/${encodeURIComponent(project.projectId)}`} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0 hover:text-blue-800">
+                  <Link key={project.projectId} to={`/research-projects/${encodeURIComponent(project.projectId)}`} className="group flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50/60 px-3.5 py-3 transition hover:border-slate-300 hover:bg-white">
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium text-slate-900">{project.name}</p>
                       <p className="mt-0.5 truncate text-[13px] text-slate-500">{project.processName || project.processCode || "工艺未记录"}</p>
                     </div>
                     <StatusBadge value={project.status} label={statusLabels[project.status] || project.status} />
+                    <ArrowRightIcon className="size-4 shrink-0 text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-trajectory-700" />
                   </Link>
                 ))}
               </div>

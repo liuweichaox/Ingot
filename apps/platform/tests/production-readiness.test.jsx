@@ -25,7 +25,7 @@ describe("production-ready authentication and authorization", () => {
       .mockResolvedValueOnce(response(200, { mode: "local" }))
       .mockResolvedValueOnce(response(401, { title: "Unauthorized" })));
     render(<AuthGate>{() => <div>signed in</div>}</AuthGate>);
-    expect(await screen.findByRole("heading", { name: "登录" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "进入 Ingot" })).toBeInTheDocument();
     expect(screen.queryByText("Unauthorized")).toBeNull();
   });
 

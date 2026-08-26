@@ -186,7 +186,7 @@ function SidebarSection({ section, activeSectionId, activeNavigationPath, expand
         )}
       </div>
       {hasNestedItems && expanded && (
-        <div className="mt-1 grid gap-0.5 border-l border-white/10 pl-3 ml-5">
+        <div className="mt-1 ml-5 grid gap-0.5 border-l border-white/10">
           {items.map(([path, label]) => (
             <Link
               key={path}

@@ -136,7 +136,7 @@ test("navigation and overlays are accessible Headless UI components", () => {
   assert.match(app, /items\.map\(\(\[path, label\]\) =>/);
   assert.match(app, /expanded=\{expandedSectionId === item\.id\}/);
   assert.match(app, /setExpandedSectionId\(current => current === sectionId \? null : sectionId\)/);
-  assert.match(app, /min-h-10[^"]*pl-11[^"]*text-sm[^"]*font-medium/);
+  assert.match(app, /min-h-9[^"]*px-3[^"]*text-sm[^"]*font-medium/);
   assert.doesNotMatch(app, /pl-14/);
   assert.doesNotMatch(app, /border-l border-slate-200/);
   assert.match(app, /text-\[15px\] font-semibold leading-5/);
@@ -341,7 +341,7 @@ test("configuration surfaces align write actions with platform roles", () => {
 
 test("form primitives keep controls aligned and make non-editable state visible", () => {
   assert.match(components, /grid min-w-0 content-start gap-1\.5 self-start/);
-  assert.match(components, /h-10 min-w-0 w-full rounded-md/);
+  assert.match(components, /h-10 min-w-0 w-full rounded-lg/);
   assert.match(components, /disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50/);
   assert.match(components, /role="alert"/);
   assert.match(styles, /input\[type="checkbox"\]/);
@@ -351,7 +351,7 @@ test("form primitives keep controls aligned and make non-editable state visible"
 });
 
 test("comparison investigation renders context as bounded business facts", () => {
-  assert.match(components, /min-w-0 break-words text-2xl/);
+  assert.match(components, /data-value[^"]*min-w-0[^"]*break-words[^"]*text-\[1\.75rem\]/);
   assert.match(pages, /function MatchingContext/);
   assert.match(pages, /comparisonContextLabels/);
   assert.match(pages, /<StatusBadge value=\{investigation\?\.dataQuality\?\.targetStatus/);

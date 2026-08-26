@@ -1,6 +1,6 @@
 
 // 呈现生产运行、过程曲线和比较入口；页面只编排受权 API 数据，不在客户端推断工艺因果。
-import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
+import { ArrowRightIcon, BeakerIcon, CircleStackIcon, ClipboardDocumentCheckIcon, MagnifyingGlassIcon, SignalIcon } from "@heroicons/react/24/outline";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { getJson } from "../api/http";
@@ -123,34 +123,41 @@ export function WorkbenchPage({ identity }) {
     : isEngineeringRole
       ? [analysisAction, engineeringAction, isAdministrator ? platformAction : qualityAction]
       : [analysisAction, qualityAction, platformAction];
+  const overviewItems = [
+    { label: "生产运行", value: state.executionTotal, hint: `${activeProcessExecutions} 个进行中`, icon: CircleStackIcon, tone: "text-trajectory-100 bg-trajectory-500/12 ring-trajectory-500/20" },
+    { label: "待处理质检", value: pendingInspections, hint: "录入与复核", icon: ClipboardDocumentCheckIcon, tone: pendingInspections ? "text-amber-200 bg-amber-500/12 ring-amber-500/20" : "text-emerald-200 bg-emerald-500/12 ring-emerald-500/20" },
+    { label: "现场节点", value: `${onlineEdges}/${state.edges.length}`, hint: "在线 / 全部", icon: SignalIcon, tone: onlineEdges === state.edges.length && state.edges.length ? "text-emerald-200 bg-emerald-500/12 ring-emerald-500/20" : "text-rose-200 bg-rose-500/12 ring-rose-500/20" },
+    { label: "研发项目", value: activeOptimizationProjects, hint: `${activeContexts} 个有效上下文`, icon: BeakerIcon, tone: "text-evidence-400 bg-evidence-500/12 ring-evidence-500/20" },
+  ];
   return (
     <Page
       title="工作台"
-      actions={<Link to="/analysis" className="inline-flex min-h-9 items-center rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700">开始工艺追因</Link>}
+      description="把运行、质量、现场状态和研发进展汇总为今天需要处理的工程任务。"
+      actions={<Link to="/analysis" className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-evidence-500 bg-evidence-500 px-4 py-2 text-sm font-semibold text-coal-950 shadow-sm transition hover:border-evidence-400 hover:bg-evidence-400">开始工艺追因<ArrowRightIcon className="size-4" /></Link>}
     >
       <RequestError error={state.error} onRetry={() => setRetryKey(value => value + 1)} />
       {state.loading ? <LoadingCard /> : (
-        <div className="flex flex-col gap-5">
-          <section className="overflow-hidden rounded-lg border border-slate-200 bg-white" aria-label="运行概览">
-            <div className="grid grid-cols-2 divide-x divide-y divide-slate-200 sm:grid-cols-4 sm:divide-y-0">
-              {[
-                ["生产运行", state.executionTotal, `${activeProcessExecutions} 个进行中`],
-                ["待处理质检", pendingInspections, "录入与复核"],
-                ["现场节点", `${onlineEdges}/${state.edges.length}`, "在线 / 全部"],
-                ["研发项目", activeOptimizationProjects, `${activeContexts} 个有效上下文`],
-              ].map(([label, value, hint]) => (
-                <div key={label} className="min-w-0 px-4 py-3.5">
-                  <p className="text-[13px] font-medium text-slate-500">{label}</p>
-                  <div className="mt-1 flex min-w-0 items-baseline gap-2">
-                    <strong className="text-2xl font-semibold tracking-tight text-slate-950 tabular-nums">{value}</strong>
-                    <span className="truncate text-[13px] text-slate-500">{hint}</span>
+        <div className="flex flex-col gap-6">
+          <section className="product-panel-dark overflow-hidden rounded-2xl" aria-label="运行概览">
+            <div className="flex flex-col gap-3 border-b border-white/8 px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+              <div><p className="data-label text-evidence-400">Operational evidence</p><h2 className="mt-1 text-lg font-semibold tracking-[-0.02em] text-white">当前运行与证据状态</h2></div>
+              <p className="max-w-lg text-xs leading-5 text-slate-400">先处理影响分析准入的质量与数据问题，再把可比较运行推进到验证。</p>
+            </div>
+            <div className="grid grid-cols-2 divide-x divide-y divide-white/8 sm:grid-cols-4 sm:divide-y-0">
+              {overviewItems.map(({ label, value, hint, icon: Icon, tone }) => (
+                <div key={label} className="min-w-0 px-5 py-5 sm:px-6">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="data-label text-slate-400">{label}</p>
+                    <span className={`grid size-8 place-items-center rounded-lg ring-1 ring-inset ${tone}`}><Icon className="size-4" /></span>
                   </div>
+                  <strong className="data-value mt-4 block text-3xl font-semibold text-white">{value}</strong>
+                  <span className="mt-1 block truncate text-xs text-slate-400">{hint}</span>
                 </div>
               ))}
             </div>
           </section>
           {!hasProductionFoundation && (
-            <Card className="border-amber-300 border-l-4" title="先完成首次接入" description="按依赖顺序建立一条可追溯的数据闭环。">
+            <Card className="border-evidence-400 border-l-4" title="先完成首次接入" description="按依赖顺序建立一条可追溯的数据闭环。">
               <div className="grid divide-y divide-slate-200 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
                 <Link to="/configuration" className="px-3 py-2.5 text-sm font-medium text-slate-800 hover:bg-slate-50">1. 定义数据与判断规则</Link>
                 <Link to="/edges" className="px-3 py-2.5 text-sm font-medium text-slate-800 hover:bg-slate-50">2. 连接现场节点和设备</Link>
@@ -158,8 +165,8 @@ export function WorkbenchPage({ identity }) {
               </div>
             </Card>
           )}
-          <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_21rem]">
-            <Card title="最近生产运行" actions={<Link className="text-sm font-medium text-blue-600 hover:text-blue-700" to="/process-executions">查看全部</Link>}>
+          <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_20rem]">
+            <Card title="最近生产运行" description="优先查看质量异常、数据不可用和仍在进行的运行。" actions={<Link className="text-sm font-semibold text-trajectory-700 hover:text-trajectory-600" to="/process-executions">查看全部</Link>}>
               <DataTable
                 rows={state.executions}
                 keyField="executionId"
@@ -171,26 +178,27 @@ export function WorkbenchPage({ identity }) {
                 ]}
               />
             </Card>
-            <div className="grid content-start gap-5">
-              <Card title={isQualityRole && !isEngineeringRole ? "质量待办" : "待办"}>
-                <div className="divide-y divide-slate-200">
+            <div className="grid content-start gap-6">
+              <Card title={isQualityRole && !isEngineeringRole ? "质量待办" : "下一步"} description="按当前角色和证据状态排序。">
+                <div className="grid gap-2">
                   {dailyActions.map(action => (
-                    <Link key={action.to} to={action.to} className={`group block border-l-2 px-3 py-3 hover:bg-slate-50 ${action.tone}`}>
+                    <Link key={action.to} to={action.to} className={`group block rounded-lg border border-slate-200 border-l-2 bg-slate-50/60 px-3.5 py-3.5 transition hover:border-slate-300 hover:bg-white ${action.tone}`}>
                       <div className="flex items-start justify-between gap-3">
                         <p className="text-sm font-semibold text-slate-900">{action.title}</p>
-                        <span className="shrink-0 text-[13px] font-medium text-blue-700">{action.action} →</span>
+                        <ArrowRightIcon className="mt-0.5 size-4 shrink-0 text-slate-400 transition group-hover:translate-x-0.5 group-hover:text-trajectory-700" />
                       </div>
                       <p className="mt-1 text-[13px] leading-5 text-slate-500">{action.description}</p>
+                      <span className="mt-2 block text-xs font-semibold text-trajectory-700">{action.action}</span>
                     </Link>
                   ))}
                 </div>
               </Card>
-              <Card title="最新事件">
-                <div className="divide-y divide-slate-200">
+              <Card title="最新事件" description="来自现场和质量流程的最近记录。">
+                <div className="relative divide-y divide-slate-200 before:absolute before:bottom-3 before:left-[5px] before:top-3 before:w-px before:bg-slate-200">
                   {state.events.slice(0, 5).map(item => (
-                    <div key={item.ingestId} className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0">
-                      <Badge tone={item.event?.eventType?.startsWith("alarm.") ? "danger" : "neutral"}>{eventTypeLabel(item.event?.eventType)}</Badge>
-                      <p className="min-w-0 flex-1 truncate text-sm text-slate-700">{item.event?.subject?.id || item.event?.executionId || "—"}</p>
+                    <div key={item.ingestId} className="relative flex items-center gap-3 py-3 pl-5 first:pt-0 last:pb-0">
+                      <span className="absolute left-0 size-2.5 rounded-full border-2 border-white bg-trajectory-500 ring-1 ring-trajectory-500/25" />
+                      <div className="min-w-0 flex-1"><Badge tone={item.event?.eventType?.startsWith("alarm.") ? "danger" : "neutral"}>{eventTypeLabel(item.event?.eventType)}</Badge><p className="mt-1 truncate text-xs text-slate-500">{item.event?.subject?.id || item.event?.executionId || "—"}</p></div>
                       <span className="text-xs text-slate-400 tabular-nums">#{item.ingestId}</span>
                     </div>
                   ))}
