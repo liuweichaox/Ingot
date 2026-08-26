@@ -1,12 +1,44 @@
 // 提供管理员维护用户角色与站点授权的受控页面。
 import { ArrowPathIcon } from "@heroicons/react/24/outline";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { postJson } from "../api/http";
 import { extractRows, useApi } from "../hooks/useApi";
 import { Alert, Button, Card, DataTable, Drawer, EmptyState, Field, Input, Metric, Page, RequestError, Select, StatusBadge, notify, useConfirmDialog } from "../ui/components";
-import { formatTime, formatInteger, formatBytes, metricTotal, formatDuration, edgeStatus, LoadingCard } from "./shared";
+import { formatTime, formatInteger, formatBytes, metricTotal, edgeStatus, LoadingCard } from "./shared";
 import { formatRoleSummary, formatSiteScope, platformRoleOptions } from "../auth/identityPresentation";
+
+export function formatLiveUptime(milliseconds) {
+  const totalSeconds = Math.max(0, Math.floor(Number(milliseconds) / 1000));
+  if (!Number.isFinite(totalSeconds)) return "—";
+  const days = Math.floor(totalSeconds / 86400);
+  const hours = Math.floor((totalSeconds % 86400) / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  const clock = [hours, minutes, seconds].map(value => String(value).padStart(2, "0")).join(":");
+  return days ? `${days} 天 ${clock}` : clock;
+}
+
+export function PlatformUptimeMetric({ startedAtSeconds }) {
+  const [clockMs, setClockMs] = useState(() => Date.now());
+  const startMs = Number(startedAtSeconds) * 1000;
+  const hasStartTime = Number.isFinite(startMs) && startMs > 0;
+
+  useEffect(() => {
+    if (!hasStartTime) return undefined;
+    const timer = window.setInterval(() => setClockMs(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [hasStartTime, startedAtSeconds]);
+
+  return (
+    <Metric
+      label="平台运行时间"
+      value={hasStartTime ? formatLiveUptime(clockMs - startMs) : "—"}
+      valueClassName="font-mono tracking-[-0.03em]"
+      hint="每秒刷新 · 后端指标定期校准"
+    />
+  );
+}
 
 export function UsersPage() {
   const { data, loading, error, reload } = useApi("/api/v1/users");
@@ -159,12 +191,12 @@ export function UsersPage() {
         footer={<><Button onClick={() => setCreateOpen(false)}>取消</Button><Button variant="primary" disabled={busy || !createForm.username.trim() || createForm.password.length < 8 || createForm.roles.length === 0} onClick={createUser}>{busy ? "创建中" : "创建"}</Button></>}
       >
         {actionError && <Alert tone="danger">{actionError}</Alert>}
-        <div className="grid gap-4">
+        <div className="grid gap-3 sm:grid-cols-2">
           <Field label="用户名"><Input required autoComplete="off" value={createForm.username} onChange={event => setCreateForm({ ...createForm, username: event.target.value })} /></Field>
           <Field label="姓名"><Input value={createForm.displayName} onChange={event => setCreateForm({ ...createForm, displayName: event.target.value })} /></Field>
           <Field label="初始密码" hint="至少 8 位"><Input required type="password" autoComplete="new-password" value={createForm.password} onChange={event => setCreateForm({ ...createForm, password: event.target.value })} /></Field>
           <Field label="站点范围" hint="多个 SiteId 用英文逗号分隔；平台管理员可留空"><Input value={createForm.siteIdsText} onChange={event => setCreateForm({ ...createForm, siteIdsText: event.target.value })} placeholder="SITE-001, SITE-002" /></Field>
-          <RoleSelector value={createForm.roles} onChange={(role, enabled) => toggleRole(role, enabled, "create")} />
+          <div className="sm:col-span-2"><RoleSelector value={createForm.roles} onChange={(role, enabled) => toggleRole(role, enabled, "create")} /></div>
         </div>
       </Drawer>
 
@@ -214,11 +246,11 @@ function RoleSelector({ value, onChange }) {
   return (
     <fieldset>
       <legend className="text-sm font-medium text-slate-700">岗位权限</legend>
-      <div className="mt-2 grid gap-2">
+      <div className="mt-2 grid gap-2 sm:grid-cols-2">
         {platformRoleOptions.map(([role, label, description]) => (
-          <label key={role} className="flex cursor-pointer gap-3 rounded-xl border border-slate-200 p-3 hover:bg-slate-50">
-            <input type="checkbox" className="mt-1" checked={value.includes(role)} onChange={event => onChange(role, event.target.checked)} />
-            <span><span className="block text-sm font-medium text-slate-800">{label}</span><span className="mt-0.5 block text-xs text-slate-500">{description}</span></span>
+          <label key={role} className="flex min-w-0 cursor-pointer gap-2.5 rounded-lg border border-slate-200 bg-white p-2.5 transition hover:border-slate-300 hover:bg-slate-50">
+            <input type="checkbox" className="mt-0.5 size-4 shrink-0 accent-trajectory-600" checked={value.includes(role)} onChange={event => onChange(role, event.target.checked)} />
+            <span className="min-w-0"><span className="block text-[13px] font-semibold leading-5 text-slate-800">{label}</span><span className="block text-xs leading-4 text-slate-500">{description}</span></span>
           </label>
         ))}
       </div>
@@ -241,7 +273,6 @@ export function MetricsPage() {
   const metrics = metricResponse.data;
   const ingested = metricTotal(metrics, "event_ingest_total");
   const startedAtSeconds = metricTotal(metrics, "process_start_time_seconds");
-  const uptime = startedAtSeconds ? Date.now() - startedAtSeconds * 1000 : null;
   const memory = metricTotal(metrics, "process_working_set_bytes");
   const threadQueue = metricTotal(metrics, "system_runtime_dotnet_thread_pool_queue_length");
   const publishedProfiles = extractRows(profileResponse.data).filter(row => row.status === "published").length;
@@ -279,7 +310,7 @@ export function MetricsPage() {
         <Metric label="已摄入事件" value={formatInteger(ingested)} hint="本次平台运行累计" />
       </div>
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Metric label="平台运行时间" value={uptime == null ? "—" : formatDuration(uptime)} />
+        <PlatformUptimeMetric startedAtSeconds={startedAtSeconds} />
         <Metric label="当前内存" value={formatBytes(memory)} />
         <Metric label="后台排队" value={formatInteger(threadQueue)} />
         <Metric label="现场节点在线" value={`${online}/${rows.length}`} hint={`${offline} 个离线`} />

@@ -340,8 +340,8 @@ test("configuration surfaces align write actions with platform roles", () => {
 });
 
 test("form primitives keep controls aligned and make non-editable state visible", () => {
-  assert.match(components, /grid min-w-0 content-start gap-1\.5 self-start/);
-  assert.match(components, /h-10 min-w-0 w-full rounded-lg/);
+  assert.match(components, /grid min-w-0 content-start gap-1 self-start/);
+  assert.match(components, /h-9 min-w-0 w-full rounded-md/);
   assert.match(components, /disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50/);
   assert.match(components, /role="alert"/);
   assert.match(styles, /input\[type="checkbox"\]/);

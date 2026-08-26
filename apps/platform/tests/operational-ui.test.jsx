@@ -1,16 +1,18 @@
 // 验证生产运维页面的授权、分页、错误和业务状态呈现。
 import React from "react";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router";
 import { SystemStatusIndicator } from "../src/App";
 import { mergeRunIssues } from "../src/pages/OperationsPages";
+import { PlatformUptimeMetric } from "../src/pages/AdministrationPages";
 import { ConfigurationHubPage } from "../src/pages/RegistryPages";
-import { EmptyState, Field, Input } from "../src/ui/components";
+import { DataTable, EmptyState, Field, Input } from "../src/ui/components";
 
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 
 function jsonResponse(payload) {
@@ -21,6 +23,44 @@ function jsonResponse(payload) {
 }
 
 describe("生产界面状态反馈", () => {
+  it("每秒刷新平台运行时间而不等待指标轮询", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(10_000));
+    render(<PlatformUptimeMetric startedAtSeconds={5} />);
+
+    expect(screen.getByText("00:00:05")).toBeInTheDocument();
+    act(() => vi.advanceTimersByTime(1000));
+    expect(screen.getByText("00:00:06")).toBeInTheDocument();
+  });
+
+  it("使用 TanStack Table 对业务列排序并保持操作列不可排序", () => {
+    render(
+      <DataTable
+        rows={[
+          { id: "run-b", name: "批次 B", score: 2 },
+          { id: "run-a", name: "批次 A", score: 1 },
+          { id: "run-c", name: "批次 C", score: 3 },
+        ]}
+        columns={[
+          { key: "name", label: "批次" },
+          { key: "score", label: "评分", align: "right" },
+          { key: "action", label: "操作" },
+        ]}
+      />,
+    );
+
+    expect(within(screen.getAllByRole("row")[1]).getByText("批次 B")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /操作/ })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "批次：未排序，点击切换排序" }));
+    expect(screen.getByRole("columnheader", { name: /批次/ })).toHaveAttribute("aria-sort", "ascending");
+    expect(within(screen.getAllByRole("row")[1]).getByText("批次 A")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "批次：升序，点击切换排序" }));
+    expect(screen.getByRole("columnheader", { name: /批次/ })).toHaveAttribute("aria-sort", "descending");
+    expect(within(screen.getAllByRole("row")[1]).getByText("批次 C")).toBeInTheDocument();
+  });
+
   it("按文案去重数据问题时保留最高严重度", () => {
     const issues = mergeRunIssues(
       [{ code: "process_data.unavailable", message: "过程数据不可用。", severity: "error" }],

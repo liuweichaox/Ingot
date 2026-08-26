@@ -1,7 +1,26 @@
 // 提供平台统一、可访问且具备稳定列表标识的基础界面组件。
 import { Dialog, DialogBackdrop, DialogPanel, DialogTitle } from "@headlessui/react";
-import { ShieldCheckIcon, XMarkIcon } from "@heroicons/react/24/outline";
-import { useEffect, useRef, useState } from "react";
+import { ChevronDownIcon, ChevronUpDownIcon, ChevronUpIcon, ShieldCheckIcon, XMarkIcon } from "@heroicons/react/24/outline";
+import {
+  createSortedRowModel,
+  rowSortingFeature,
+  sortFn_alphanumeric,
+  sortFn_datetime,
+  sortFn_text,
+  tableFeatures,
+  useTable,
+} from "@tanstack/react-table";
+import { useEffect, useMemo, useRef, useState } from "react";
+
+const dataTableFeatures = tableFeatures({
+  rowSortingFeature,
+  sortedRowModel: createSortedRowModel(),
+  sortFns: {
+    alphanumeric: sortFn_alphanumeric,
+    datetime: sortFn_datetime,
+    text: sortFn_text,
+  },
+});
 
 export function cx(...values) {
   return values.filter(Boolean).join(" ");
@@ -303,7 +322,7 @@ export function ToastHost() {
 
 export function Field({ label, hint, error, className, children }) {
   return (
-    <label className={cx("grid min-w-0 content-start gap-1.5 self-start text-sm font-medium text-slate-700", className)}>
+    <label className={cx("grid min-w-0 content-start gap-1 self-start text-[13px] font-semibold text-slate-700", className)}>
       {label !== undefined && label !== null && <span className="min-w-0 leading-5">{label}</span>}
       {children}
       {hint && <span className="sr-only">{hint}</span>}
@@ -316,7 +335,7 @@ export function Input({ className, ...props }) {
   return (
     <input
       className={cx(
-        "h-10 min-w-0 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-[0_1px_2px_rgba(7,16,14,.025)] outline-none transition placeholder:text-slate-400 focus:border-trajectory-500 focus-visible:ring-2 focus-visible:ring-trajectory-500/20 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-600 disabled:shadow-none read-only:bg-slate-50 read-only:text-slate-600",
+        "h-9 min-w-0 w-full rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-[13px] text-slate-900 shadow-[0_1px_2px_rgba(7,16,14,.025)] outline-none transition placeholder:text-slate-400 focus:border-trajectory-500 focus-visible:ring-2 focus-visible:ring-trajectory-500/20 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-600 disabled:shadow-none read-only:bg-slate-50 read-only:text-slate-600",
         className,
       )}
       {...props}
@@ -328,7 +347,7 @@ export function Select({ className, children, ...props }) {
   return (
     <select
       className={cx(
-        "h-10 min-w-0 w-full rounded-lg border border-slate-300 bg-white px-3 pr-8 py-2 text-sm text-slate-900 shadow-[0_1px_2px_rgba(7,16,14,.025)] outline-none transition focus:border-trajectory-500 focus-visible:ring-2 focus-visible:ring-trajectory-500/20 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-600 disabled:shadow-none",
+        "h-9 min-w-0 w-full rounded-md border border-slate-300 bg-white px-2.5 pr-8 py-1.5 text-[13px] text-slate-900 shadow-[0_1px_2px_rgba(7,16,14,.025)] outline-none transition focus:border-trajectory-500 focus-visible:ring-2 focus-visible:ring-trajectory-500/20 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-600 disabled:shadow-none",
         className,
       )}
       {...props}
@@ -342,7 +361,7 @@ export function Textarea({ className, ...props }) {
   return (
     <textarea
       className={cx(
-        "min-h-28 min-w-0 w-full resize-y rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-[0_1px_2px_rgba(7,16,14,.025)] outline-none transition placeholder:text-slate-400 focus:border-trajectory-500 focus-visible:ring-2 focus-visible:ring-trajectory-500/20 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-600 disabled:shadow-none read-only:bg-slate-50 read-only:text-slate-600",
+        "min-h-20 min-w-0 w-full resize-y rounded-md border border-slate-300 bg-white px-2.5 py-2 text-[13px] leading-5 text-slate-900 shadow-[0_1px_2px_rgba(7,16,14,.025)] outline-none transition placeholder:text-slate-400 focus:border-trajectory-500 focus-visible:ring-2 focus-visible:ring-trajectory-500/20 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-600 disabled:shadow-none read-only:bg-slate-50 read-only:text-slate-600",
         className,
       )}
       {...props}
@@ -395,63 +414,114 @@ export function RequestError({ error, onRetry, title }) {
 }
 
 export function DataTable({ columns, rows, keyField = "id", getRowKey, onRowClick }) {
-  if (!rows?.length) return <EmptyState />;
-  const minimumWidth = columns.length >= 8 ? "min-w-[1080px]" : columns.length >= 6 ? "min-w-[840px]" : columns.length >= 5 ? "min-w-[760px]" : columns.length >= 4 ? "min-w-[640px]" : "min-w-full";
-  const rowKeys = rows.map((row, index) => getRowKey ? getRowKey(row, index) : row[keyField] ?? index);
-  const rowKeyCounts = new Map();
-  rowKeys.forEach(key => rowKeyCounts.set(key, (rowKeyCounts.get(key) || 0) + 1));
+  const safeColumns = columns || [];
+  const safeRows = rows || [];
+  const minimumWidth = safeColumns.length >= 8 ? "min-w-[1080px]" : safeColumns.length >= 6 ? "min-w-[840px]" : safeColumns.length >= 5 ? "min-w-[760px]" : safeColumns.length >= 4 ? "min-w-[640px]" : "min-w-full";
+  const rowIds = useMemo(() => {
+    const rowKeys = safeRows.map((row, index) => getRowKey ? getRowKey(row, index) : row[keyField] ?? index);
+    const rowKeyCounts = new Map();
+    rowKeys.forEach(key => rowKeyCounts.set(key, (rowKeyCounts.get(key) || 0) + 1));
+    return rowKeys.map((key, index) => String(rowKeyCounts.get(key) > 1 ? `${key}:${index}` : key));
+  }, [getRowKey, keyField, safeRows]);
+  const tableColumns = useMemo(() => safeColumns.map((column, columnIndex) => ({
+    id: String(column.id ?? `${column.key}:${columnIndex}`),
+    accessorFn: row => row[column.key],
+    header: column.label,
+    cell: info => column.render ? column.render(info.getValue(), info.row.original) : displayValue(info.getValue()),
+    enableSorting: column.sortable !== false && column.label !== "操作",
+    sortDescFirst: column.sortDescFirst,
+    sortFn: column.sortFn,
+    sortUndefined: column.sortUndefined ?? "last",
+    meta: { ingotColumn: column, columnIndex },
+  })), [safeColumns]);
+  const table = useTable({
+    features: dataTableFeatures,
+    columns: tableColumns,
+    data: safeRows,
+    enableMultiSort: true,
+    enableSortingRemoval: true,
+    getRowId: (_, index) => rowIds[index],
+  });
+
+  if (!safeRows.length) return <EmptyState />;
   return (
-    <div className="relative overflow-x-auto rounded-lg border border-slate-200 bg-white scrollbar-thin" role="region" aria-label="可横向滚动的数据表" tabIndex={columns.length >= 4 ? 0 : undefined}>
-      {columns.length >= 4 && <p className="sticky left-0 top-0 z-20 border-b border-slate-200 bg-slate-50 px-3 py-1.5 text-[13px] text-slate-600 sm:hidden">左右滑动查看全部字段</p>}
+    <div className="relative overflow-x-auto rounded-lg border border-slate-200 bg-white scrollbar-thin" role="region" aria-label="可横向滚动的数据表" tabIndex={safeColumns.length >= 4 ? 0 : undefined}>
+      {safeColumns.length >= 4 && <p className="sticky left-0 top-0 z-20 border-b border-slate-200 bg-slate-50 px-3 py-1.5 text-[13px] text-slate-600 sm:hidden">左右滑动查看全部字段</p>}
       <table className={cx("w-full divide-y divide-slate-200 text-left text-sm tabular-nums", minimumWidth)}>
         <thead className="bg-slate-50/95 text-xs tracking-[0.02em] text-slate-600">
-          <tr>
-            {columns.map((column, columnIndex) => (
-              <th
-                key={column.id ?? `${column.key}:${columnIndex}`}
-                scope="col"
-                className={cx(
-                  "whitespace-nowrap px-3 py-3 font-semibold sm:px-4",
-                  column.label === "操作" && "sticky right-0 z-10 w-px border-l border-slate-200 bg-slate-50 shadow-[-8px_0_12px_-12px_rgba(15,23,42,.45)]",
-                  column.align === "right" && "text-right",
-                )}
-              >
-                {column.label}
-              </th>
-            ))}
-          </tr>
+          {table.getHeaderGroups().map(headerGroup => (
+            <tr key={headerGroup.id}>
+              {headerGroup.headers.map((header, columnIndex) => {
+                const column = header.column.columnDef.meta.ingotColumn;
+                const canSort = header.column.getCanSort();
+                const sorted = header.column.getIsSorted();
+                const sortLabel = sorted === "asc" ? "升序" : sorted === "desc" ? "降序" : "未排序";
+                return (
+                  <th
+                    key={column.id ?? `${column.key}:${columnIndex}`}
+                    scope="col"
+                    aria-sort={sorted === "asc" ? "ascending" : sorted === "desc" ? "descending" : "none"}
+                    className={cx(
+                      "whitespace-nowrap px-3 py-3 font-semibold sm:px-4",
+                      column.label === "操作" && "sticky right-0 z-10 w-px border-l border-slate-200 bg-slate-50 shadow-[-8px_0_12px_-12px_rgba(15,23,42,.45)]",
+                      column.align === "right" && "text-right",
+                    )}
+                  >
+                    {header.isPlaceholder ? null : canSort ? (
+                      <button
+                        type="button"
+                        className={cx(
+                          "group inline-flex min-h-7 items-center gap-1 rounded px-1.5 py-1 transition hover:bg-slate-200/70 hover:text-slate-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-trajectory-600",
+                          column.align === "right" && "ml-auto",
+                        )}
+                        onClick={header.column.getToggleSortingHandler()}
+                        aria-label={`${column.label}：${sortLabel}，点击切换排序`}
+                        title="点击排序，Shift + 点击可按多列排序"
+                      >
+                        <table.FlexRender header={header} />
+                        {sorted === "asc" ? <ChevronUpIcon className="size-3.5 text-trajectory-700" /> : sorted === "desc" ? <ChevronDownIcon className="size-3.5 text-trajectory-700" /> : <ChevronUpDownIcon className="size-3.5 text-slate-400 transition group-hover:text-slate-600" />}
+                      </button>
+                    ) : <table.FlexRender header={header} />}
+                  </th>
+                );
+              })}
+            </tr>
+          ))}
         </thead>
         <tbody className="divide-y divide-slate-100">
-          {rows.map((row, index) => (
+          {table.getRowModel().rows.map(row => (
             <tr
-              key={rowKeyCounts.get(rowKeys[index]) > 1 ? `${rowKeys[index]}:${index}` : rowKeys[index]}
+              key={row.id}
               className={cx(
                 "text-slate-700 transition-colors hover:bg-trajectory-50/60",
                 onRowClick && "cursor-pointer hover:bg-blue-50/50 focus-visible:bg-blue-50 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-blue-600",
               )}
-              onClick={onRowClick ? () => onRowClick(row) : undefined}
+              onClick={onRowClick ? () => onRowClick(row.original) : undefined}
 
               tabIndex={onRowClick ? 0 : undefined}
               onKeyDown={onRowClick ? event => {
                 if (event.key === "Enter" || event.key === " ") {
                   event.preventDefault();
-                  onRowClick(row);
+                  onRowClick(row.original);
                 }
               } : undefined}
             >
-              {columns.map((column, columnIndex) => (
-                <td
-                  key={column.id ?? `${column.key}:${columnIndex}`}
-                  className={cx(
-                    "max-w-sm px-3 py-3 align-middle leading-5 sm:px-4",
-                    (column.primary || columnIndex === 0) && "font-medium text-slate-900",
-                    column.label === "操作" && "sticky right-0 z-10 w-px min-w-max whitespace-nowrap border-l border-slate-100 bg-white shadow-[-8px_0_12px_-12px_rgba(15,23,42,.45)] [&_*]:whitespace-nowrap [&>div]:flex-nowrap",
-                    column.align === "right" && "text-right",
-                  )}
-                >
-                  {column.render ? column.render(row[column.key], row) : displayValue(row[column.key])}
-                </td>
-              ))}
+              {row.getAllCells().map((cell, columnIndex) => {
+                const column = cell.column.columnDef.meta.ingotColumn;
+                return (
+                  <td
+                    key={column.id ?? `${column.key}:${columnIndex}`}
+                    className={cx(
+                      "max-w-sm px-3 py-3 align-middle leading-5 sm:px-4",
+                      (column.primary || columnIndex === 0) && "font-medium text-slate-900",
+                      column.label === "操作" && "sticky right-0 z-10 w-px min-w-max whitespace-nowrap border-l border-slate-100 bg-white shadow-[-8px_0_12px_-12px_rgba(15,23,42,.45)] [&_*]:whitespace-nowrap [&>div]:flex-nowrap",
+                      column.align === "right" && "text-right",
+                    )}
+                  >
+                    <table.FlexRender cell={cell} />
+                  </td>
+                );
+              })}
             </tr>
           ))}
         </tbody>
