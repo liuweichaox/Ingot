@@ -445,12 +445,17 @@ def create_design(request: DesignRequest) -> dict:
             runs.append({
                 "condition_key": f"condition-{condition:02d}",
                 "replicate_key": f"replicate-{replicate + 1:02d}",
-                "block_key": f"block-{replicate % request.block_count + 1:02d}",
                 "params": params,
             })
+    if request.block_count > len(runs):
+        raise HTTPException(
+            status_code=422,
+            detail="block_count cannot exceed the generated run count",
+        )
     rng.shuffle(runs)
     for sequence, run in enumerate(runs, start=1):
         run["sequence"] = sequence
+        run["block_key"] = f"block-{(sequence - 1) % request.block_count + 1:02d}"
         run["execution_key"] = f"{run['condition_key']}-{run['replicate_key']}"
     return {
         "method": request.method,

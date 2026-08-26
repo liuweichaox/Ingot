@@ -116,6 +116,44 @@ def test_design_service_generates_reproducible_classic_doe_without_state():
     assert {run["block_key"] for run in payload["runs"]} == {"block-01", "block-02"}
 
 
+def test_design_service_balances_blocks_independently_of_replicates():
+    response = client.post("/v1/designs", json={
+        "method": "full-factorial",
+        "variables": [
+            {"name": "temperature", "low": 300.0, "high": 340.0},
+            {"name": "pressure", "low": 1.0, "high": 3.0},
+        ],
+        "levels": 2,
+        "replicates": 1,
+        "block_count": 3,
+        "seed": 42,
+    })
+
+    assert response.status_code == 200
+    runs = response.json()["runs"]
+    assert [run["block_key"] for run in runs] == [
+        "block-01", "block-02", "block-03", "block-01",
+    ]
+    assert sorted(
+        sum(run["block_key"] == block for run in runs)
+        for block in {run["block_key"] for run in runs}
+    ) == [1, 1, 2]
+    assert {run["replicate_key"] for run in runs} == {"replicate-01"}
+
+
+def test_design_service_rejects_more_blocks_than_generated_runs():
+    response = client.post("/v1/designs", json={
+        "method": "full-factorial",
+        "variables": [{"name": "temperature", "low": 300.0, "high": 340.0}],
+        "levels": 2,
+        "replicates": 1,
+        "block_count": 3,
+    })
+
+    assert response.status_code == 422
+    assert "block_count cannot exceed" in response.json()["detail"]
+
+
 def test_design_service_rejects_oversized_factorial_before_materializing_points():
     response = client.post("/v1/designs", json={
         "method": "full-factorial",
