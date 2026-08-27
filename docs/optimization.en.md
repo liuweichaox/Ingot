@@ -2,7 +2,7 @@
 
 > Status: **current scientific strategy**. This document explains how methods are selected by the engineering question and describes the limits of today's numerical implementation. Algorithms may evolve without changing the core value or evidence principles.
 
-This document defines the scientific and implementation boundaries for analysis admission, run comparison, candidate-cause validation, experiment design, and sequential optimization. Numerical implementations, replay protocols, and method-promotion conditions must be independently reviewable by developers and scientific-method reviewers.
+This document defines the scientific and implementation boundaries for analysis admission, run comparison, real-recipe-run optimization, candidate-cause validation, and sequential optimization. Numerical implementations, replay protocols, and method-promotion conditions must be independently reviewable by developers and scientific-method reviewers.
 
 ## Analysis workflow overview
 
@@ -10,8 +10,8 @@ Ingot executes analysis in the following order:
 
 1. Confirm that conditions, process data, and quality outcomes belong to the same real run.
 2. Compare eligible runs and identify both differences and evidence gaps.
-3. Test candidate causes with controlled, repeated experiments inside safety boundaries.
-4. Recommend the next experiment only when both the data and the method meet their requirements.
+3. Turn admitted real recipe runs directly into optimization observations without requiring a separately created experiment.
+4. Recommend the next recipe inside safety boundaries and observed coverage; create controlled validation only for causal confirmation or extrapolation.
 
 The system does not prefer a method merely because it is more complex, and it does not turn historical correlation into a confirmed cause.
 
@@ -25,7 +25,8 @@ Ingot starts from the engineer's decision, not from an algorithm:
 | Where did this run differ? | like-for-like matching, robust statistics, stage-trajectory comparison | size of the difference, uncertainty, and comparison group |
 | Which factors deserve validation? | screening, grouped comparison, and stability checks | candidate causes, counterevidence, factors that changed together, and data limits |
 | Is a factor causal? | controls, repetition, blocking, randomization, or intervention | supported, rejected, or inconclusive |
-| What should the next experiment be? | traditional design of experiments (DOE), response surfaces, or Bayesian optimization | candidate process settings, expected information, risk, and rationale |
+| What should the next recipe be? | response surfaces, constrained candidate ranking, or Bayesian optimization | candidate recipe, prediction interval, risk, coverage, and rationale |
+| Is controlled validation required? | design of experiments (DOE), repetition, blocking, or intervention | support, rejection, or uncertainty plus executable validation conditions |
 | How should it be explained? | fixed result templates plus language-model assistance | readable explanation with source citations |
 
 A complex method is not inherently better than a simple one. With few samples, poor coverage, or confounded variables, the right action may be to collect data, run an identifying experiment, or refuse to answer rather than fit a more elaborate model.
@@ -52,7 +53,7 @@ The system uses `readiness.mode` to state the strongest analysis the current evi
 - `exploratory`: show an early candidate ranking whose stability is still limited;
 - `candidate-ranking`: the ranking has passed out-of-sample and stability checks, but it is still not a confirmed cause.
 
-At every level, candidate causes still require controlled repeated experiments. The response also lists conditions that changed at the same time, group imbalances, and known influences that were not measured so they are not mistaken for confirmed causes.
+At every level, candidate causes still require controlled repeated validation before promotion to a causal conclusion. The response also lists conditions that changed at the same time, group imbalances, and known influences that were not measured so they are not mistaken for confirmed causes.
 
 The API keeps a stricter statistical boundary: the first release fixes `sensitivityAssessment.status` at `not-estimable`. Current outputs are standardized coefficients or model importance, not risk-ratio estimates with the required confidence interval, so the product does not calculate an invalid E-value. Metrics record readiness modes and structured blocking reasons, never user-entered free text as labels.
 
@@ -77,9 +78,15 @@ Equipment, material, tooling, lot, and maintenance state begin as traceability a
 3. Use matching, variance components, mixed effects, time trends, or regularized models as appropriate.
 4. Test stability with resampling, out-of-time validation, or selection frequency.
 5. Label the result as stable association, confounded association, or insufficient evidence.
-6. Design the next experiment to identify important candidates.
+6. Create separate controlled validation for important candidates that require causal confirmation.
 
 A model cannot separate factors that never overlap. If every mold A run uses only material A, history alone cannot distinguish mold effect from material effect.
+
+## Recipe runs and optimization observations
+
+Every normal production recipe run is a candidate optimization sample, but it enters the model only when run boundaries, actual parameters, required process context, and valid quality outcomes are all available. An optimization task filters by product, equipment, and declared context without locking the scope to one process-specification version, so different recipes within the same optimization scope can be compared. Normal production runs remain production runs and require no engineer reclassification; excluded runs and their reasons remain visible.
+
+At least three valid runs and two distinct actual recipes are required before a next-recipe recommendation is generated. A recommendation stays inside safety boundaries and the observed parameter envelope, includes prediction intervals and evidence scope, and requires engineer confirmation through the normal production flow. It is stored as an independent append-only record with no experiment identifier, experiment run plan, approval state, or equipment-dispatch command. New real runs change the frozen input snapshot and allow a new candidate; old recommendations do not contaminate the next optimization round as pending experiments.
 
 ## Causal validation and experimental design
 
@@ -97,11 +104,11 @@ A single point or single block can provide intervention support at most. A conti
 
 ### Classical DOE previews
 
-Before saving an experiment, an R&D project can generate an editable run plan for full factorial, fractional factorial, central composite (CCD), Box–Behnken, and Latin-hypercube designs. The generator uses only declared controllable variables with approved ranges, fixes a random seed, and returns blocks, repetitions, run order, and the alias structure for fractional designs.
+When controlled validation is needed, an optimization task can generate an editable run plan for full factorial, fractional factorial, central composite (CCD), Box–Behnken, and Latin-hypercube designs. The generator uses only declared controllable variables with approved ranges, fixes a random seed, and returns blocks, repetitions, run order, and the alias structure for fractional designs.
 
 A preview is not an approval and never writes settings to equipment. Engineers still declare control runs, objectives, stopping rules, and fallback plans; the preflight checklist shows repairable issues together, and the same server-side rules are applied when the experiment is created.
 
-## Selecting the next experiment
+## Selecting the next recipe
 
 Choose methods by scale and data conditions:
 
@@ -113,12 +120,12 @@ Choose methods by scale and data conditions:
 
 The system supports two intentions:
 
-- **validate a hypothesis** by selecting conditions that distinguish candidate causes;
-- **reach specification** by searching promising settings inside objectives and safety constraints.
+- **continuously optimize recipes** by searching real recipe runs for a more promising next setting that remains inside observed coverage;
+- **validate a hypothesis** by selecting controlled conditions that distinguish candidate causes when an engineer explicitly needs causal confirmation.
 
 ## Current GP and Bayesian-optimization strategy
 
-The current Optimizer targets expensive, noisy, small-data, multi-objective, constrained sequential experiments.
+The current Optimizer targets expensive, noisy, small-data, multi-objective, constrained recipe optimization. Formal controlled validation reuses the same numerical kernel while retaining a separate approval boundary.
 
 Quality depends on both settings and the trajectory the equipment actually realizes, so the current implementation supports a two-stage surrogate:
 
@@ -154,7 +161,7 @@ Model constraints never replace equipment interlocks or engineering safety rules
 - Engineers can reject recommendations and record unmodeled constraints.
 - Recommendation failure, unavailable models, or excessive drift triggers an approved fallback.
 
-Parameters in Planned, Approved, and Running experiments become pending points so the system does not repeat conditions whose outcomes are not yet known.
+Only pending conditions from formal controlled validation become pending points, so unknown validation outcomes are not scheduled twice. Daily recipe recommendations do not enter the experiment pending queue: the same frozen input returns the same recommendation, and a new recommendation appears only after new production evidence arrives.
 
 ## Uncertainty and stopping
 
@@ -190,7 +197,7 @@ Optimizer remains free of business state. Variables, objectives, constraints, va
 
 Historical replay reveals outcomes sequentially in time; future runs are never visible early. Every algorithm change is compared with the historical engineer sequence, applicable traditional DOE, and simple baselines.
 
-Reach-specification experiments use fail-closed method admission: the newest historical replay for the current policy, mechanism-knowledge snapshot, and mechanism-model snapshot must have been independently reviewed and passed, and the current optimizer model version must actually appear in that replay trace, before Optimizer produces a sequential recommendation. A missing, unreviewed, or failing newest replay, or a model-version mismatch, pauses the method and explicitly downgrades to an applicable response surface or traditional DOE; an older passing report cannot mask a newer failure. Engineers may still design hypothesis-validation experiments because those do not claim that the sequential method saves trials. Controlled online experiments must additionally pass the stricter shadow-calibration, rollback-drill, and online-stop-signal gates.
+Formal sequential validation uses fail-closed method admission: the newest historical replay for the current policy, mechanism-knowledge snapshot, and mechanism-model snapshot must have been independently reviewed and passed, and the current optimizer model version must appear in that replay before the system claims that the method can save validation runs. A daily next-recipe recommendation makes no such efficiency claim: it uses admitted real runs only, remains inside safety boundaries and the observed envelope, and always requires engineer confirmation. Controlled online validation additionally requires stricter shadow-calibration, rollback-drill, and online-stop-signal gates.
 
 ### Public-data benchmark
 

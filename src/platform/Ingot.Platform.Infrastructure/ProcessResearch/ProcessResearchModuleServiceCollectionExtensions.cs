@@ -1,10 +1,11 @@
-
+// 注册配方优化、受控验证及其基础设施适配器的模块组合根。
 using Ingot.Platform.Application.ProcessResearch;
 using Ingot.Platform.Application.ResearchAssets;
 using Microsoft.Extensions.Options;
 
 namespace Ingot.Platform.Infrastructure.ProcessResearch;
 
+/// <summary>为 Platform 宿主注册工艺优化模块的应用服务和基础设施实现。</summary>
 public static class ProcessResearchModuleServiceCollectionExtensions
 {
     public static IServiceCollection AddIngotProcessResearch(
@@ -42,7 +43,7 @@ public static class ProcessResearchModuleServiceCollectionExtensions
             client.Timeout = TimeSpan.FromSeconds(Math.Clamp(options.RequestTimeoutSeconds, 1, 300));
         }).AddHttpMessageHandler<ProcessOptimizerCircuitBreakerHandler>();
         services.AddSingleton<ResearchExperimentDesignService>();
-        services.AddSingleton<ResearchExperimentOptimizer>();
+        services.AddSingleton<ResearchOptimizationService>();
         services.AddSingleton<ResearchShadowRecommendationService>();
         services.AddSingleton<ResearchHistoricalReplayService>();
         services.AddSingleton<ResearchOnlineAdmissionService>();

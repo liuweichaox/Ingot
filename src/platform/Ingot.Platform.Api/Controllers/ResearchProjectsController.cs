@@ -17,7 +17,7 @@ public sealed class ResearchProjectsController(
     ResearchExperimentCommands experimentCommands,
     ResearchExperimentDesignService experimentDesigns,
     ResearchExperimentValidationService experimentValidation,
-    ResearchExperimentOptimizer experimentOptimizer,
+    ResearchOptimizationService optimizationService,
     ResearchShadowRecommendationService shadowRecommendations,
     ResearchHistoricalReplayService historicalReplay,
     ResearchOnlineAdmissionService onlineAdmission,
@@ -30,6 +30,15 @@ public sealed class ResearchProjectsController(
     ResearchExecutionEvidenceService executionEvidence,
     PlatformUserResolver userResolver) : PlatformApiController
 {
+    [HttpGet("{projectId:guid}/recipe-recommendations")]
+    public Task<IActionResult> ListRecipeRecommendations(
+        Guid projectId,
+        [FromQuery] string? cursor,
+        [FromQuery] int limit = 100,
+        CancellationToken ct = default)
+        => ExecuteResearchPageAsync(projectId, cursor, limit,
+            value => store.ListRecipeRecommendationsPageAsync(projectId, value, limit, ct), ct);
+
     [HttpGet("{projectId:guid}/experiments")]
     public Task<IActionResult> ListExperiments(
         Guid projectId,
@@ -176,7 +185,7 @@ public sealed class ResearchProjectsController(
         => ExecuteForProjectAsync(
             projectId,
             false,
-            async _ => Ok(await experimentOptimizer.AssessMethodAdmissionAsync(projectId, ct)
+            async _ => Ok(await optimizationService.AssessMethodAdmissionAsync(projectId, ct)
                 .ConfigureAwait(false)),
             ct);
 
@@ -493,7 +502,22 @@ public sealed class ResearchProjectsController(
         => ExecuteForProjectAsync(
             projectId,
             true,
-            async identity => Ok(await experimentOptimizer.CreateNextExperimentAsync(
+            async identity => Ok(await optimizationService.CreateNextExperimentAsync(
+                projectId,
+                request,
+                identity.UserId,
+                ct).ConfigureAwait(false)),
+            ct);
+
+    [HttpPost("{projectId:guid}/recipe-recommendations")]
+    public Task<IActionResult> CreateRecipeRecommendation(
+        Guid projectId,
+        [FromBody] ResearchRecipeRecommendationRequest request,
+        CancellationToken ct)
+        => ExecuteForProjectAsync(
+            projectId,
+            true,
+            async identity => Ok(await optimizationService.CreateNextRecipeRecommendationAsync(
                 projectId,
                 request,
                 identity.UserId,
@@ -573,6 +597,32 @@ public sealed class ResearchProjectsController(
                     .ConfigureAwait(false);
                 var assembly = await observationAssembler.AssembleAsync(
                     project, experiments, ct).ConfigureAwait(false);
+                return Ok(new
+                {
+                    assembly.CandidateRunCount,
+                    assembly.ValidObservationCount,
+                    excludedObservationCount =
+                        assembly.Observations.Count - assembly.ValidObservationCount,
+                    observedExecutionKeys = assembly.Observations
+                        .Select(static observation => observation.ExecutionKey)
+                        .ToArray()
+                });
+            },
+            ct);
+
+    [HttpGet("{projectId:guid}/optimization-readiness")]
+    public Task<IActionResult> GetOptimizationReadiness(
+        Guid projectId,
+        CancellationToken ct)
+        => ExecuteForProjectAsync(
+            projectId,
+            false,
+            async _ =>
+            {
+                var project = await store.GetProjectAsync(projectId, ct).ConfigureAwait(false)
+                    ?? throw new ProcessResearchRuleException("优化范围不存在。");
+                var assembly = await observationAssembler.AssembleProductionRunsAsync(project, ct)
+                    .ConfigureAwait(false);
                 return Ok(new
                 {
                     assembly.CandidateRunCount,

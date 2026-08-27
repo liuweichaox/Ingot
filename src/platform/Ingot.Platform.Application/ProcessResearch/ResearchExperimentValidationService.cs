@@ -1,8 +1,10 @@
+// 校验可选受控验证计划的变量、运行条件、目标和安全边界。
 using Ingot.Contracts.ProcessResearch;
 using Ingot.Platform.Application.ProcessConfiguration;
 
 namespace Ingot.Platform.Application.ProcessResearch;
 
+/// <summary>集中校验受控验证计划的变量、运行、目标、停止和回退约束。</summary>
 public sealed class ResearchExperimentValidationService(IProcessResearchStore store)
     : IResearchExperimentPlanValidator
 {
@@ -28,7 +30,7 @@ public sealed class ResearchExperimentValidationService(IProcessResearchStore st
         var controlled = request.Optimization?.Mode == ResearchOptimizationModes.Controlled;
         if (request.RunPlan.Count < (controlled ? 1 : 2))
             Add("runPlan", "minimum-runs", "实验计划必须至少包含两个运行条件，不能用单点设置代替实验设计。",
-                "增加一个不同的变量组合；受控在线建议例外。 ");
+                "增加一个不同的变量组合；单条受控在线建议例外。 ");
         if (request.RunPlan.Count > 40)
             Add("runPlan", "maximum-runs", "单批实验运行数不能超过 40。", "减少水平数、重复数或变量数。");
         var controls = project.Variables

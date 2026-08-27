@@ -2,11 +2,11 @@
 
 > Document status: **incremental implementation**. The claim kernel, relational storage, workbench, evidence-promotion lifecycle, constraint ranking, knowledge-snapshot gates, and recommendation usage trace are implemented. Bayesian priors and mechanism-residual fusion remain later phases.
 
-Mechanism knowledge preserves engineering judgments together with their sources, applicability, and evidence status. An experience note or document passage must be reviewed, supported by experiments, and versioned before it can influence later recommendations.
+Mechanism knowledge preserves engineering judgments together with their sources, applicability, and evidence status. An experience note or document passage must be reviewed, supported by real runs or controlled validation, and versioned before it can influence later recipe recommendations or validation designs.
 
 ## 1. Goal
 
-Mechanism knowledge turns engineering experience, process material, and experimental conclusions into sourced, scoped, reviewable, falsifiable, and versioned engineering assets. When evidence permits, those assets improve candidate causes, experiment design, and next-experiment recommendations.
+Mechanism knowledge turns engineering experience, process material, and validation conclusions into sourced, scoped, reviewable, falsifiable, and versioned engineering assets. When evidence permits, those assets improve candidate causes, next-recipe recommendations, and optional controlled validation.
 
 The mechanism-knowledge capability does not create a second business spine. Knowledge follows the existing Ingot evidence loop:
 
@@ -451,9 +451,9 @@ Writes use structured requests and explicit authorization policies. State transi
 
 ## 12. UI information architecture
 
-### 12.1 Process R&D / Research assets
+### 12.1 Recipe optimization / Research assets
 
-The current stable entry is “Process R&D → Research assets.” Select a research project before opening the mechanism-knowledge workbench, which contains:
+The current stable entry is “Recipe optimization → Research assets.” Select a recipe-optimization task before opening the mechanism-knowledge workbench, which contains:
 
 - **Sources**: upload, extraction, hash, status, and project scope;
 - **Extraction review**: source and extraction side by side, with click-through to page or cell locations;
@@ -498,7 +498,7 @@ Data range, prediction, uncertainty, feasibility, and pending points remain in t
 
 Current-stage calibration: P0 is implemented. P1 now includes deterministic extraction, asynchronous jobs, the human workbench, and optional model-assisted semantic drafts. P2 includes hard bounds, forbidden combinations, soft ranking, snapshots, usage traceability, admission gates, and paired historical replay. P3 connects affine `mechanism-as-feature` models to recommendations and freezes exact model/fusion versions; other output-fusion modes and unified evidence promotion remain incomplete. P4 replay, shadow, and online-validation infrastructure exists, but no real-project evidence yet supports an external value claim.
 
-The repository regression suite fixes the following states: no knowledge, draft/reviewed, active and applicable, context mismatch, unresolved conflict, falsified/retired, and an optimizer returning a violating suggestion. Backend tests assert that only active, applicable, conflict-free claims enter the policy and that a changed knowledge snapshot blocks an existing experiment. Demo and Playwright regressions verify business-name mapping, inherited units, controlled project scope, and recommendation-usage traceability. Run them with:
+The repository regression suite fixes the following states: no knowledge, draft/reviewed, active and applicable, context mismatch, unresolved conflict, falsified/retired, and an optimizer returning a violating suggestion. Backend tests assert that only active, applicable, conflict-free claims enter the policy and that a changed knowledge snapshot blocks an existing controlled validation. Demo and Playwright regressions verify business-name mapping, inherited units, controlled project scope, and usage traceability for recipe recommendations or controlled validation. Run them with:
 
 ```bash
 dotnet test tests/Ingot.Core.Tests/Ingot.Core.Tests.csproj \

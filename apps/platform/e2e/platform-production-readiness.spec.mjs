@@ -66,7 +66,7 @@ test("核心数据接口和主要页面使用完整模拟场景", async ({ page,
     ["/process-executions", "运行记录", "RUN-2026-0821-005"],
     ["/inspections", "检验任务", "LENS-006"],
     ["/edges", "现场节点", "上海一号压机节点"],
-    ["/research-projects", "研发项目", "面形误差候选原因验证"],
+    ["/research-projects", "配方优化", "面形误差候选原因验证"],
   ]) {
     await page.goto(path);
     await expect(page.getByRole("heading", { name: heading, exact: true }).first()).toBeVisible();
@@ -239,11 +239,11 @@ test("危险操作有确认，证据边界和核心业务动作可见", async ({
   await page.goto("/comparisons");
   await page.getByRole("button", { name: "生成对比结论", exact: true }).click();
   await expect(page.getByText("观察结果只形成待验证候选", { exact: false })).toBeVisible();
-  await expect(page.getByText("因果关系仍需后续受控实验验证", { exact: false })).toBeVisible();
+  await expect(page.getByText("因果结论仍需可选的受控验证确认", { exact: false })).toBeVisible();
 
   await page.goto("/research-projects?create=1&executionId=RUN-2026-0821-005&comparisonExecutionIds=RUN-2026-0821-005,RUN-2026-0821-004");
   const projectDialog = page.getByRole("dialog");
-  await expect(projectDialog.getByText("创建工艺研发项目", { exact: true })).toBeVisible();
+  await expect(projectDialog.getByText("创建配方优化任务", { exact: true })).toBeVisible();
   await expect(projectDialog.getByRole("combobox").first()).toHaveValue("RUN-2026-0821-005");
 });
 
@@ -267,10 +267,10 @@ test("核心模块接口失败后均可原地重试恢复", async ({ page, reque
   }
 });
 
-test("机理知识从业务选择映射到可追溯实验建议", async ({ page }) => {
+test("机理知识从业务选择映射到可追溯配方建议", async ({ page }) => {
   await login(page);
   await page.goto("/research-assets");
-  await page.getByLabel("当前研发项目").selectOption({ label: "面形误差候选原因验证" });
+  await page.getByLabel("当前优化任务").selectOption({ label: "面形误差候选原因验证" });
 
   await expect(page.getByText("已激活的模压安全窗口", { exact: true })).toBeVisible();
   await expect(page.getByText("待审核的冷却速率观察", { exact: true })).toBeVisible();

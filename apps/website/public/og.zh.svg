@@ -44,11 +44,11 @@
   <!-- Headline -->
   <g transform="translate(64,268)">
     <text y="0" font-size="46" font-weight="800" fill="#F4F8F6">看清这次运行，</text>
-    <text y="58" font-size="46" font-weight="800" fill="#F4F8F6">做对下一项实验。</text>
+    <text y="58" font-size="46" font-weight="800" fill="#F4F8F6">做好下一份配方。</text>
   </g>
 
   <!-- Subheadline -->
-  <text x="64" y="372" font-size="19" fill="#9FB0AA">工艺追因 · 实验设计 · 受约束优化</text>
+  <text x="64" y="372" font-size="19" fill="#9FB0AA">真实配方运行 · 优化观察 · 下一配方</text>
 
   <!-- Divider -->
   <path d="M64 410h300" stroke="#E8AD56" stroke-opacity="0.4" stroke-width="1.5"/>
@@ -121,6 +121,6 @@
       <circle cx="150" cy="400" r="5" fill="#E8AD56"/>
       <text x="164" y="404" fill="#CBD8D3">超差运行</text>
     </g>
-    <text x="448" y="404" font-size="11" fill="#5C7A72" text-anchor="end">下一步：候选原因 → 实验建议</text>
+    <text x="448" y="404" font-size="11" fill="#5C7A72" text-anchor="end">下一步：真实运行 → 配方建议</text>
   </g>
 </svg>

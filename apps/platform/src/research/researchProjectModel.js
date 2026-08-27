@@ -1,4 +1,5 @@
 
+// 定义配方优化任务的表单默认值、状态文案和可选受控验证任务模型。
 export const projectFormInitial = {
   name: "",
   referenceProcessExecutionId: "",
@@ -51,7 +52,7 @@ export const statusLabels = {
   validated: "已验证",
   evidence: "候选证据",
   replay: "回放已复核",
-  laboratory: "实验室重复验证",
+  laboratory: "离线重复验证",
   production: "已发布生产",
   "awaiting-approval": "等待批准",
   ready: "待执行",
@@ -69,8 +70,8 @@ export const statusLabels = {
 
 export const taskTitles = {
   member: "添加项目成员",
-  hypothesis: "提出研发假设",
-  experiment: "设计验证实验",
+  hypothesis: "记录候选原因",
+  experiment: "设计受控验证",
   history: "导入历史运行",
   claim: "沉淀工艺知识",
   "rollback-drill": "记录停止与回退演练",
@@ -181,7 +182,7 @@ export function createTaskForm(task, workspace) {
     preregExclusionRules: "运行身份冲突\n关键过程数据缺失\n检验无效或无法唯一关联",
     preregMatchingRules: "同产品比较\n按设备、材料批次和工装分层\n保留上下文重叠与混杂结论",
     preregBaselineMethods: "工程师当前流程\n历史工程师顺序\n适用的传统 DOE 或响应面\n随机或空间填充基线",
-    preregPrimaryMetrics: "从异常到首个可执行假设的时间\n达到并重复确认规格的有效实验数",
+    preregPrimaryMetrics: "从异常到首个可执行建议的时间\n达到并重复确认规格的有效配方运行数",
     preregGuardrailMetrics: "运行—检验唯一关联率\n预测区间覆盖率\n已知安全边界违规数为零",
     preregStopConditions: "数据链无法稳定关联\n预测长期失准\n发生已知安全边界违规",
     preregFalsificationConditions: "Ingot 未缩短形成可执行假设的时间\n序贯建议不优于适用简单基线",

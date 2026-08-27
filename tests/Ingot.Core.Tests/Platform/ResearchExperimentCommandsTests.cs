@@ -98,7 +98,7 @@ public sealed class ResearchExperimentCommandsTests
             ExecutionKey = key,
             Factors =
             [
-                new ExperimentFactorSetting
+                new ResearchVariableSetting
                 {
                     VariableCode = "temperature",
                     Value = temperature,

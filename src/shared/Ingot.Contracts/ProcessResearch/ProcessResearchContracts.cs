@@ -477,7 +477,7 @@ public sealed record ResearchHypothesis
     public DateTimeOffset UpdatedAt { get; init; }
 }
 
-public sealed record ExperimentFactorSetting
+public sealed record ResearchVariableSetting
 {
     public required string VariableCode { get; init; }
     public required double Value { get; init; }
@@ -502,7 +502,7 @@ public sealed record ExperimentRunPlan
     public int Sequence { get; init; }
     public string? BlockKey { get; init; }
     public string? ReplicateKey { get; init; }
-    public IReadOnlyList<ExperimentFactorSetting> Factors { get; init; } = [];
+    public IReadOnlyList<ResearchVariableSetting> Factors { get; init; } = [];
 }
 
 public sealed record ResearchExperimentDesignRequest
@@ -548,7 +548,7 @@ public sealed record ExperimentExecutionCommand
     public int Sequence { get; init; }
     public string? BlockKey { get; init; }
     public string? ReplicateKey { get; init; }
-    public IReadOnlyList<ExperimentFactorSetting> RequestedFactors { get; init; } = [];
+    public IReadOnlyList<ResearchVariableSetting> RequestedFactors { get; init; } = [];
 }
 
 public sealed record ResearchExperimentExecution
@@ -653,7 +653,7 @@ public sealed record ResearchShadowDecisionRequest
 {
     public required string Decision { get; init; }
     public required string ActualExecutionKey { get; init; }
-    public IReadOnlyList<ExperimentFactorSetting> EngineerSelectedFactors { get; init; } = [];
+    public IReadOnlyList<ResearchVariableSetting> EngineerSelectedFactors { get; init; } = [];
     public string? RejectionReason { get; init; }
     public IReadOnlyList<string> SiteLimitations { get; init; } = [];
     public IReadOnlyDictionary<string, string> ContextSnapshot { get; init; } =
@@ -674,7 +674,7 @@ public static class ResearchUsefulnessRatings
 public sealed record ResearchShadowOutcome
 {
     public required string ActualExecutionKey { get; init; }
-    public IReadOnlyList<ExperimentFactorSetting> ActualFactors { get; init; } = [];
+    public IReadOnlyList<ResearchVariableSetting> ActualFactors { get; init; } = [];
     public IReadOnlyDictionary<string, double> SettingDeviationFromSuggestion { get; init; } =
         new Dictionary<string, double>();
     public IReadOnlyDictionary<string, double> SettingDeviationFromEngineerSelection { get; init; } =
@@ -722,8 +722,8 @@ public sealed record ResearchShadowRecommendation
     public required string ModelVersion { get; init; }
     public required string ModelInputHash { get; init; }
     public int ProjectRevision { get; init; }
-    public IReadOnlyList<ExperimentFactorSetting> SuggestedFactors { get; init; } = [];
-    public IReadOnlyList<ExperimentFactorSetting> EngineerSelectedFactors { get; init; } = [];
+    public IReadOnlyList<ResearchVariableSetting> SuggestedFactors { get; init; } = [];
+    public IReadOnlyList<ResearchVariableSetting> EngineerSelectedFactors { get; init; } = [];
     public required OptimizationRunPrediction Prediction { get; init; }
     public required ResearchShadowApplicabilityAssessment Applicability { get; init; }
     public string? RejectionReason { get; init; }
@@ -962,15 +962,15 @@ public sealed record ResearchOnlineCampaignReport
 public sealed record ResearchControlledDecisionRequest
 {
     public required string Decision { get; init; }
-    public IReadOnlyList<ExperimentFactorSetting> ApprovedFactors { get; init; } = [];
+    public IReadOnlyList<ResearchVariableSetting> ApprovedFactors { get; init; } = [];
     public string? Reason { get; init; }
 }
 
 public sealed record ResearchControlledDecision
 {
     public required string Decision { get; init; }
-    public IReadOnlyList<ExperimentFactorSetting> SuggestedFactors { get; init; } = [];
-    public IReadOnlyList<ExperimentFactorSetting> ApprovedFactors { get; init; } = [];
+    public IReadOnlyList<ResearchVariableSetting> SuggestedFactors { get; init; } = [];
+    public IReadOnlyList<ResearchVariableSetting> ApprovedFactors { get; init; } = [];
     public string? Reason { get; init; }
     public required string DecisionSnapshotHash { get; init; }
     public string DecidedBy { get; init; } = "";
@@ -995,7 +995,7 @@ public sealed record ResearchExperiment
     public int RandomizationSeed { get; init; }
     public IReadOnlyList<string> BlockingKeys { get; init; } = [];
     public string Status { get; init; } = ResearchExperimentStatuses.Planned;
-    public IReadOnlyList<ExperimentFactorSetting> Factors { get; init; } = [];
+    public IReadOnlyList<ResearchVariableSetting> Factors { get; init; } = [];
     public IReadOnlyList<ExperimentRunPlan> RunPlan { get; init; } = [];
 
     public IReadOnlyList<string> BaselineExecutionKeys { get; init; } = [];
@@ -1033,13 +1033,13 @@ public sealed record ExperimentMetricResult
     public required string ComputationMethod { get; init; }
 }
 
-public sealed record ExperimentRunObservation
+public sealed record ResearchRunObservation
 {
     public required string ExecutionKey { get; init; }
 
     public IReadOnlyDictionary<string, string> Context { get; init; } =
         new Dictionary<string, string>();
-    public IReadOnlyList<ExperimentFactorSetting> ActualFactors { get; init; } = [];
+    public IReadOnlyList<ResearchVariableSetting> ActualFactors { get; init; } = [];
     public IReadOnlyDictionary<string, double> SettingDeviationFromPlan { get; init; } =
         new Dictionary<string, double>();
     public bool HasSettingDeviation { get; init; }
@@ -1063,7 +1063,7 @@ public sealed record ResearchExperimentResult
     public Guid AnalysisRunId { get; init; }
     public string AnalysisHash { get; init; } = "";
     public IReadOnlyList<ExperimentMetricResult> Metrics { get; init; } = [];
-    public IReadOnlyList<ExperimentRunObservation> RunObservations { get; init; } = [];
+    public IReadOnlyList<ResearchRunObservation> RunObservations { get; init; } = [];
     public int RunCount { get; init; }
     public int ReplicateCount { get; init; }
     public int DistinctBlockCount { get; init; }
@@ -1179,6 +1179,7 @@ public sealed record ResearchProjectWorkspace
 {
     public required ResearchProject Project { get; init; }
     public IReadOnlyList<ResearchHypothesis> Hypotheses { get; init; } = [];
+    public IReadOnlyList<ResearchRecipeRecommendation> RecipeRecommendations { get; init; } = [];
     public IReadOnlyList<ResearchExperiment> Experiments { get; init; } = [];
     public IReadOnlyList<ResearchExperimentResult> ExperimentResults { get; init; } = [];
     public IReadOnlyList<ResearchShadowRecommendation> ShadowRecommendations { get; init; } = [];
@@ -1212,6 +1213,44 @@ public sealed record ResearchOptimizationRequest
     public Guid? HypothesisId { get; init; }
     public bool AutoAssembleObservations { get; init; } = true;
     public int ReplicatesPerCondition { get; init; } = 1;
+}
+
+public sealed record ResearchRecipeRecommendationRequest
+{
+    public int Seed { get; init; }
+}
+
+/// <summary>
+/// 面向日常生产的下一配方建议。数据来自真实配方运行，不要求用户建立验证计划。
+/// </summary>
+public sealed record ResearchRecipeRecommendation
+{
+    public Guid RecommendationId { get; init; }
+    public Guid ProjectId { get; init; }
+    public int ProjectRevision { get; init; }
+    public required string ModelVersion { get; init; }
+    public required string InputHash { get; init; }
+    public int ObservationCount { get; init; }
+    public int AutoAssembledObservationCount { get; init; }
+    public int PendingControlledValidationCount { get; init; }
+    public int ProcessFeatureCount { get; init; }
+    public required string FeatureSetId { get; init; }
+    public int FeatureSetVersion { get; init; }
+    public int DerivedFeatureCount { get; init; }
+    public required string MechanismKnowledgeSnapshotHash { get; init; }
+    public required string MechanismModelSnapshotHash { get; init; }
+    public IReadOnlyList<MechanismModelApplicationReference> MechanismModels { get; init; } = [];
+    public IReadOnlyList<ResearchRecipeRecommendationItem> Items { get; init; } = [];
+    public bool RequiresEngineerConfirmation { get; init; } = true;
+    public string CreatedBy { get; init; } = "";
+    public DateTimeOffset GeneratedAt { get; init; }
+}
+
+public sealed record ResearchRecipeRecommendationItem
+{
+    public required string RecommendationKey { get; init; }
+    public IReadOnlyList<ResearchVariableSetting> Parameters { get; init; } = [];
+    public required OptimizationRunPrediction Prediction { get; init; }
 }
 
 public sealed record ResearchAuditEntry

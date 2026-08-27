@@ -1,4 +1,4 @@
-// 编排研发项目从预注册、假设和实验到独立验证与受控生产发布的页面工作流。
+// 编排真实配方运行、持续优化建议、正式验证与受控生产发布的页面工作流。
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router";
 import { getJson, patchJson, postJson } from "../api/http";
@@ -115,7 +115,7 @@ export function ResearchProjectsPage({ identity }) {
     try {
       const next = await getJson(`/api/v1/research-projects/${projectId}`);
       if (!next?.project?.projectId) {
-        throw new Error("未找到该研发项目，项目可能已删除或尚未同步。");
+        throw new Error("未找到该优化任务，任务可能已删除或尚未同步。");
       }
       setWorkspace(current => ({
         ...next,
@@ -138,7 +138,7 @@ export function ResearchProjectsPage({ identity }) {
 
       try {
         const [observationSummary, methodAdmission, onlineAdmission, transferSources] = await Promise.all([
-          getJson(`/api/v1/research-projects/${projectId}/experiment-readiness`),
+          getJson(`/api/v1/research-projects/${projectId}/optimization-readiness`),
           getJson(`/api/v1/research-projects/${projectId}/method-admission`),
           getJson(`/api/v1/research-projects/${projectId}/online-admission`),
           getJson(`/api/v1/research-projects/${projectId}/transfer-sources`),
@@ -170,6 +170,7 @@ export function ResearchProjectsPage({ identity }) {
     if (!currentProjectId || historyLoading) return;
 
     const collections = [
+      ["recipeRecommendations", "recipe-recommendations", "recipe-recommendations"],
       ["experiments", "experiments", "experiments"],
       ["experimentResults", "experiment-results", "experiment-results"],
       ["shadowRecommendations", "shadow-recommendations", "shadow-recommendations"],
@@ -268,14 +269,14 @@ export function ResearchProjectsPage({ identity }) {
           });
           comparisonImported = true;
         } catch (requestError) {
-          notify(`研发项目已创建，但运行对比未能带入：${requestError.message}。可在项目内重新添加候选假设。`, "warning");
+          notify(`优化任务已创建，但运行对比未能带入：${requestError.message}。可在任务内重新添加候选原因。`, "warning");
         }
       }
       setProjects(current => [project, ...current]);
       setProjectForm(projectFormInitial);
       setCreateOpen(false);
       if (comparisonExecutionIds.length <= 1 || comparisonImported) {
-        notify(comparisonImported ? "研发项目和候选假设已从运行对比创建。" : "研发项目已创建。", "success");
+        notify(comparisonImported ? "优化任务和候选原因已从运行对比创建。" : "优化任务已创建。", "success");
       }
       openProject(project);
     } catch (requestError) {
@@ -310,7 +311,7 @@ export function ResearchProjectsPage({ identity }) {
         { targetStatus },
       );
       await refreshWorkspace();
-      notify("实验状态已更新。", "success");
+      notify("受控验证状态已更新。", "success");
     } catch (requestError) {
       notify(requestError.message, "danger");
     }
@@ -323,7 +324,7 @@ export function ResearchProjectsPage({ identity }) {
         { name: `${experiment.name}（副本）` },
       );
       await refreshWorkspace();
-      notify("已基于该实验创建新计划；结果、审批与执行状态均未复制。", "success");
+      notify("已基于该受控验证创建新计划；结果、审批与执行状态均未复制。", "success");
     } catch (requestError) {
       notify(requestError.message, "danger");
     }
@@ -333,7 +334,7 @@ export function ResearchProjectsPage({ identity }) {
     try {
       await postJson(`/api/v1/research-projects/experiments/${experiment.experimentId}/materialize-result`, {});
       await refreshWorkspace();
-      notify("已从冻结的工艺规范、过程与检验数据自动计算实验结果。", "success");
+      notify("已从冻结的工艺规范、过程与检验数据自动计算验证结果。", "success");
     } catch (requestError) {
       notify(requestError.message, "danger");
     }
@@ -527,7 +528,7 @@ export function ResearchProjectsPage({ identity }) {
         {},
       );
       await refreshWorkspace();
-      notify("已生成三个跨区组重复运行的独立验证实验，请先审核，再按计划执行。", "success");
+      notify("已生成三个跨区组重复的独立验证运行，请先审核，再按计划执行。", "success");
     } catch (requestError) {
       notify(requestError.message, "danger");
     }
@@ -560,8 +561,22 @@ export function ResearchProjectsPage({ identity }) {
     }
   }
 
-  async function generateOptimizationSuggestions(intent = "reach-specification", hypothesisId = null, mode = "experiment") {
+  async function generateOptimizationSuggestions(intent = "reach-specification", hypothesisId = null, mode = null) {
     try {
+      if (mode === null) {
+        const recommendation = await postJson(
+          `/api/v1/research-projects/${workspace.project.projectId}/recipe-recommendations`,
+          {
+            seed: 0,
+          },
+        );
+        await refreshWorkspace();
+        notify(
+          `已基于 ${Number(recommendation.observationCount || 0)} 条真实配方运行生成下一配方建议；建议不会自动下发，需由工程师确认。`,
+          "success",
+        );
+        return;
+      }
       const optimizationShape = mode === "controlled"
         ? { batchSize: 1, replicatesPerCondition: 1 }
         : { batchSize: 2, replicatesPerCondition: 2 };
@@ -588,16 +603,16 @@ export function ResearchProjectsPage({ identity }) {
             ? "已返回尚未登记完的影子建议，系统没有重复生成建议。"
             : mode === "controlled"
               ? "已返回尚未决策的受控在线建议，没有生成第二条。"
-            : "上一批优化实验尚未形成完整观察，已返回原实验，系统没有重复生成工艺规范。"
+            : "上一条优化建议尚未形成完整观察，系统没有重复生成建议。"
           : mode === "shadow"
             ? "已生成旁路影子建议；它不能批准或下发，请登记工程师实际选择。"
             : mode === "controlled"
               ? "已生成一条受控在线建议；必须先由现场工程师接受、修改或拒绝。"
           : intent === "validate-hypothesis"
-            ? "已设计安全的假设验证实验；完成检验后，证据和假设状态会自动更新。"
+            ? "已设计安全的受控验证条件；完成检验后，证据和假设状态会自动更新。"
             : observationCount > 0
-              ? `已基于 ${observationCount} 条冻结观察生成下一组优化实验，请按现有流程审核后执行。`
-              : "当前没有可用的冻结观察，已生成首组先验探索实验；结果回传前不形成工艺结论。",
+              ? `已基于 ${observationCount} 条冻结观察生成下一组受控验证条件，请按现有流程审核后执行。`
+              : "当前没有可用的冻结观察，不能生成受控验证条件。",
         "success",
       );
     } catch (requestError) {
@@ -719,7 +734,7 @@ export function ResearchProjectsPage({ identity }) {
         );
         setExperimentValidation(validation);
         if (!validation.isValid) {
-          notify("实验计划还未满足全部要求，请查看校验清单。", "danger");
+          notify("受控验证计划还未满足全部要求，请查看校验清单。", "danger");
           return;
         }
         await postJson(`/api/v1/research-projects/${project.projectId}/experiments`, payload);
@@ -795,11 +810,11 @@ export function ResearchProjectsPage({ identity }) {
     const projectAction = project ? nextProjectAction(project.status) : null;
     return (
       <Page
-        title={project?.name || "研发项目工作区"}
+        title={project?.name || "配方优化工作区"}
         description={project?.description || undefined}
         actions={(
           <>
-            <Button onClick={() => navigate("/research-projects")}>返回项目列表</Button>
+            <Button onClick={() => navigate("/research-projects")}>返回优化任务</Button>
             {projectAction && (
               <Button
                 variant="primary"
@@ -817,12 +832,12 @@ export function ResearchProjectsPage({ identity }) {
       >
         <RequestError error={error} onRetry={() => refreshWorkspace(projectId)} />
         {evidenceError && workspace && (
-          <Alert tone="warning" title="项目证据准备度暂不可用">{evidenceError}</Alert>
+          <Alert tone="warning" title="优化证据准备度暂不可用">{evidenceError}</Alert>
         )}
         {!project ? (
           <Card>
             <p className="py-16 text-center text-sm text-slate-500">
-              {detailLoading ? "正在读取项目工作区…" : "未找到可显示的研发项目。"}
+              {detailLoading ? "正在读取优化工作区…" : "未找到可显示的优化任务。"}
             </p>
           </Card>
         ) : (
@@ -891,8 +906,8 @@ export function ResearchProjectsPage({ identity }) {
 
   return (
     <Page
-      title="研发项目"
-      actions={<Button variant="primary" onClick={() => setCreateOpen(true)}>新建研发项目</Button>}
+      title="配方优化"
+      actions={<Button variant="primary" onClick={() => setCreateOpen(true)}>新建优化任务</Button>}
     >
       <RequestError error={error} onRetry={load} />
       <section className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
@@ -901,7 +916,7 @@ export function ResearchProjectsPage({ identity }) {
           <Select className="w-44" value={statusFilter} onChange={event => setStatusFilter(event.target.value)}>
             <option value="open">进行中与待处理</option>
             <option value="all">全部</option>
-            <option value="active">研发中</option>
+            <option value="active">优化中</option>
             <option value="validating">验证中</option>
             <option value="completed">已完成</option>
             <option value="archived">已归档</option>
@@ -912,20 +927,20 @@ export function ResearchProjectsPage({ identity }) {
         </p>
       </section>
 
-      <Card title="项目列表">
+      <Card title="优化任务">
         {loading ? (
-          <p className="py-12 text-center text-sm text-slate-500">正在读取研发项目…</p>
+          <p className="py-12 text-center text-sm text-slate-500">正在读取优化任务…</p>
         ) : projects.length === 0 ? (
-          <EmptyState title="从一个待解决的工艺问题开始" description="填写目标、首个可控变量和安全边界；其余证据会在推进过程中逐步补齐。" />
+          <EmptyState title="从一个配方优化目标开始" description="确定产品范围、质量目标、可控变量和安全边界；系统会直接吸收后续真实配方运行。" />
         ) : filteredProjects.length === 0 ? (
-          <EmptyState title="当前筛选条件下没有项目" description="请选择其他状态查看项目。" />
+          <EmptyState title="当前筛选条件下没有任务" description="请选择其他状态查看优化任务。" />
         ) : (
           <DataTable
             rows={filteredProjects}
             keyField="projectId"
             onRowClick={openProject}
             columns={[
-              { key: "name", label: "研发项目" },
+              { key: "name", label: "优化任务" },
               { key: "processName", label: "工艺" },
               { key: "productName", label: "产品", render: value => value || "—" },
               { key: "status", label: "阶段", render: value => <StatusBadge value={value} label={statusLabels[value] || value} /> },

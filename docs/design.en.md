@@ -1,30 +1,30 @@
 # System design
 
-> Status: **v1 architecture baseline**. This document fixes product principles, business-record boundaries, and stable component responsibilities. Algorithms, default experiment parameters, page layouts, and implementation sequence remain evolvable strategies.
+> Status: **v1 architecture baseline**. This document fixes product principles, business-record boundaries, and stable component responsibilities. Algorithms, default validation parameters, page layouts, and implementation sequence remain evolvable strategies.
 
 This document defines component responsibilities, dependency direction, systems of record, runtime boundaries, and architecture constraints that may not be bypassed. Implementation changes are reviewed against this baseline and the automated architecture gates. See [Getting started](getting-started.en.md) for operating instructions.
 
 ## Design objective
 
-Ingot's core value is fixed by the [Brand guide](brand.en.md): turn every real run into comparable, testable engineering evidence so process engineers can avoid unproductive experiments and reach target process conditions faster.
+Ingot's core value is fixed by the [Brand guide](brand.en.md): turn every real recipe run into optimization evidence and continuously recommend the next recipe within safety boundaries and observed coverage.
 
 The architecture must therefore:
 
 1. **Establish trustworthy facts first**: every analysis traces to a real run, actual conditions, process data, and quality outcomes.
 2. **Support engineering judgment next**: show differences, evidence, counterevidence, confounding, and uncertainty rather than only a score.
-3. **Make conclusions testable**: observational analysis forms candidates; controlled experiments determine support, rejection, or uncertainty.
-4. **Select methods by the problem**: statistics, experimental design, machine learning, Bayesian optimization, physical models, and LLMs are replaceable tools.
-5. **Keep engineers in control**: engineers define objectives and safety boundaries, review recommendations, and approve real experiments.
+3. **Let production naturally form optimization samples**: completed recipe runs automatically link actual parameters, process context, and quality outcomes without a separately created experiment.
+4. **Select methods by the problem**: statistics, response surfaces, machine learning, Bayesian optimization, physical models, and controlled validation are replaceable tools.
+5. **Keep engineers in control**: engineers define objectives and safety boundaries and confirm the next recipe; the system never dispatches it automatically.
 
 The system is designed for one company on its factory network, shared by process, quality, equipment, and R&D teams.
 
 ## Product model
 
 ```text
-Process configuration → Field integration → Production runs → Quality management → Process diagnosis → Process R&D
+Process configuration → Field integration → Production runs → Quality management → Process diagnosis → Recipe optimization
 ```
 
-The first four steps follow business dependencies to organize field activity into trustworthy run facts. The last two use those facts to support engineering decisions. Process diagnosis explains an observed result; Process R&D validates candidates through falsifiable experiments and optimizes the next experiment within objectives and safety boundaries. Constrained optimization is a Process R&D capability, not automatic control or a standalone business entry. Both must read the same evidence.
+The first four steps follow business dependencies to organize field activity into trustworthy run facts. The last two use those facts to support engineering decisions. Process diagnosis explains an observed result; recipe optimization directly consumes normal production runs and recommends the next recipe within objectives, safety boundaries, and observed coverage. Controlled validation is used only for causal confirmation, extrapolation, or operating-region validation; it is not a prerequisite for daily optimization. Both read the same evidence.
 
 The current Web information architecture balances the decision chain with frequent role-based tasks through seven business entries:
 
@@ -34,9 +34,9 @@ The current Web information architecture balances the decision chain with freque
 4. **Production runs**: production preparation, tooling installation, run records, the object catalog, and run events;
 5. **Quality management**: inspection tasks, independent review, quality records, and deviation analysis, with direct access for daily quality work;
 6. **Process diagnosis**: the diagnosis overview, data quality, run comparison, and the analysis assistant; AI is an analysis method rather than a standalone business domain;
-7. **Process R&D**: R&D projects, experiment design, constrained optimization, experimental validation, and process knowledge.
+7. **Recipe optimization**: optimization tasks, real-run observations, next-recipe recommendations, optional controlled validation, and process knowledge.
 
-After the workbench, the primary business entries follow “Field integration → Process configuration → Production runs → Quality management → Process diagnosis → Process R&D.” This navigation order prioritizes frequent role-specific work; it is not the business dependency order above. A new scenario still defines and publishes process semantics before mapping real sources to those semantics. Production runs also covers production preparation, collection, and traceability; Quality management covers inspection and quality-deviation work; and the complete data loop additionally depends on cross-entry evidence such as data trust and run context.
+After the workbench, the primary business entries follow “Field integration → Process configuration → Production runs → Quality management → Process diagnosis → Recipe optimization.” This navigation order prioritizes frequent role-specific work; it is not the business dependency order above. A new scenario still defines and publishes process semantics before mapping real sources to those semantics. Production runs also covers production preparation, collection, and traceability; Quality management covers inspection and quality-deviation work; and the complete data loop additionally depends on cross-entry evidence such as data trust and run context.
 
 System administration has a separate entry for users, role permissions, platform status, runtime logs, and assistant evaluation, so it does not compete with business tasks. Secondary navigation places frequent daily tasks before setup and maintenance actions. Before the first production release, only canonical current URLs are retained; development-era page aliases are not preserved. After production release, URLs and data contracts follow controlled version-migration discipline.
 
@@ -46,19 +46,30 @@ Menus may change, but these business facts must not be hidden, duplicated into p
 
 ```mermaid
 flowchart LR
-    Sources["PLC / instruments / vision / inspection / MES"] --> Edge["Edge ConnectorHost\nprotocols · mapping · process executions · buffering"]
-    Edge --> Platform["Platform API\nfactory system of record"]
-    Platform --> DB["PostgreSQL + TimescaleDB"]
-    Platform --> Files["attachments and process knowledge"]
-    Platform --> Web["Platform Web\nengineering workbench"]
-    Platform --> Analysis["deterministic analysis\nquality · comparison · features · statistics"]
-    Platform --> Optimizer["Optimizer\nexperiment design · constrained optimization"]
-    Platform --> Agent["Agent\nquestion parsing · tools · evidence explanation"]
-    Engineer["Process engineer"] --> Web
-    Web --> Platform
+    Sources["controls / instruments / vision / inspection\nMES / QMS / LIMS when integrated"] --> Edge["Edge ConnectorHost\nprotocol mapping · run detection · acquisition replay"]
+    EdgeStore[("local SQLite\noutbox · logs · configuration cache")] --- Edge
+    Engineer["Process engineer"] --> Web["Platform Web\nstatic engineering workbench"]
+    Web <--> Api
+    Edge -->|events and heartbeat| Api
+    Api -.->|configuration and diagnostics| Edge
+
+    subgraph ApiProcess["Platform API process"]
+        Api["Platform API\nformal business record · evidence assembly"]
+        Analysis["deterministic analysis\nquality · comparison · features · statistics"]
+        Agent["optional Agent\nread-only tools · evidence explanation"]
+        Api --- Analysis
+        Api -.-> Agent
+    end
+
+    Api <--> Optimizer["Optimizer\nrecipe recommendation · diagnosis · optional validation design"]
+    Api <--> DB[("PostgreSQL 17\nTimescaleDB extension")]
+    Api <--> Files[("persistent file volumes\nattachments · process knowledge · archives")]
+    Worker["Platform Worker\nprojection · recompute · maintenance · result materialization · knowledge jobs"] <--> DB
+    Worker -.-> Files
+    Migrator["Platform Migrator\none-shot migration and first-user bootstrap"] --> DB
 ```
 
-Code-project boundaries are not deployment boundaries. Factory runtime units are Platform API, independent Edge ConnectorHost instances, the database, Optimizer, and Web. A small site may share a physical server, while Edge and Platform retain independent processes, storage, identity, and recovery lifecycles.
+Code-project boundaries are not deployment boundaries. Current long-running units are Platform API, Platform Worker, independent Edge ConnectorHost instances, PostgreSQL/TimescaleDB, Optimizer, and Web; Migrator is a one-shot job completed before API and Worker start. Deterministic analysis and the optional Agent run in the Platform API process rather than as separate services. Inspection attachments and process knowledge use persistent file volumes while metadata and formal state remain in PostgreSQL. A small site may share a physical server, while Edge and Platform retain independent processes, storage, identity, and recovery lifecycles.
 
 This document fixes stable business boundaries. [Production architecture](production-architecture.en.md) defines the target topology for replicas, failure domains, data lifecycle, disaster recovery, and controlled action; [Deployment](deployment.en.md) defines current operating procedures. The target design must not be presented as a capability already delivered by the current Compose topology.
 
@@ -78,14 +89,14 @@ Discrete run identity must remain traceable across ConnectorHost restarts. If th
 
 ### Platform
 
-- Store industrial objects, equipment, manufacturing context, runs, process executions, inspections, R&D projects, experiments, evidence, and knowledge.
+- Store industrial objects, equipment, manufacturing context, runs, process executions, inspections, optimization tasks, recipe recommendations, controlled validations, evidence, and knowledge.
 - Maintain versioned configuration, provenance, units, permissions, audit, and business state machines.
 - Assemble the conditions, trajectory, and result of a real run into an immutable analytical observation.
 - Execute data-quality, matching, comparison, feature, and reviewable statistical calculations.
 - Admit inspection evidence to formal comparison and optimization only when it matches a published quality plan, has trusted identity, and satisfies independent-review requirements; versioned definitions determine non-numeric outcomes on the server.
 - Preserve inputs sent to numerical services and their returned results.
 
-Platform is the formal business system of record. Experiment state or conclusions must not exist only in Optimizer, Agent, or a browser.
+Platform is the formal business system of record. A next-recipe recommendation is an independent append-only record and does not reuse an experiment identifier, run plan, or state machine. Controlled-validation state and formal conclusions must not exist only in Optimizer, Agent, or a browser.
 
 The production host stores Agent run snapshots and event streams in Platform PostgreSQL. Agent core still depends only on `IAgentRunStore` and does not reference Npgsql. A run admitted to golden-question evaluation freezes its complete snapshot and SHA-256 inside the same recovery boundary and can no longer be deleted as an ordinary conversation.
 
@@ -101,10 +112,10 @@ Platform separates policy from implementation by use case: `Platform.Application
 
 ### Optimizer
 
-- Receive the complete problem definition, valid observations, pending points, and random seed.
+- Receive the complete optimization definition, valid real-run observations, pending recommendations, and a random seed.
 - Execute reproducible numerical modeling, constraint checks, and candidate selection.
 - Return predictions, uncertainty, feasibility, parameters, rationale, and model version.
-- Remain free of business state, never access equipment directly, and never approve experiments.
+- Remain free of business state, never access equipment directly, and never confirm or dispatch recipes.
 
 ### Agent
 
@@ -115,7 +126,7 @@ Platform separates policy from implementation by use case: `Platform.Application
 
 ### Web
 
-- Organize engineering work around business objects, runs, inspections, and R&D projects.
+- Organize engineering work around business objects, runs, inspections, and optimization tasks.
 - Present facts, data quality, evidence, and actionable steps together.
 - Avoid browser-local business state that conflicts with Platform.
 
@@ -173,23 +184,23 @@ comparable runs → differences and first deviation → candidate cause
 
 Specific statistics and models are described in [Analysis and optimization](optimization.en.md) and are not immutable architecture.
 
-## From candidate to next experiment
+## From real runs to the next recipe
 
-The system supports two distinct decisions:
+Daily recipe optimization consumes completed real production runs directly:
 
-1. **Validate a hypothesis** by selecting conditions that best distinguish candidate causes.
-2. **Reach specification** by searching promising settings inside declared objectives and safety boundaries.
+```text
+actual recipe + process context + valid quality outcome
+                         ↓
+              optimization observation
+                         ↓
+ next-recipe recommendation inside safety and observed coverage
+                         ↓
+       engineer confirmation through the existing production flow
+```
 
-Both must:
+A production run does not become an experiment and requires no engineer reclassification. Once at least three valid runs covering two distinct actual recipes pass admission, the system may create one independent append-only recommendation. It retains the input snapshot, prediction, uncertainty, evidence scope, and rationale, but has no experiment identifier, run plan, experiment approval state, or equipment-dispatch command. A new recommendation requires a new input snapshot after another real run arrives.
 
-- use only actually controllable variables;
-- declare hard bounds and outcome constraints;
-- account for experiments in progress but not yet observed;
-- show uncertainty and rationale;
-- require engineer approval before execution;
-- update evidence from actual run results.
-
-One successful point is only a candidate process setting. An operating region requires independent confirmation, repeatability, boundary or interaction validation, and an explicit applicability scope.
+Controlled validation is a separate decision used only to test a causal hypothesis, explore beyond the observed parameter envelope, or confirm a releasable operating region. It has its own plan, approval, execution, and result state machine; uses only actually controllable variables; declares hard bounds, stopping, and fallback conditions; and accounts for validation conditions whose outcomes are not yet known. One successful point remains only a candidate process setting. An operating region also requires independent confirmation, repeatability, boundary or interaction validation, and an explicit applicability scope.
 
 ## Consistency and replay
 

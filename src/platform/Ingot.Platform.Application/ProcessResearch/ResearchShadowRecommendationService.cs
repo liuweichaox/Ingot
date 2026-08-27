@@ -1,9 +1,11 @@
+// 记录影子优化中的工程师选择和实际结果，用于旁路校准而不触发设备动作。
 using System.Security.Cryptography;
 using System.Text.Json;
 using Ingot.Contracts.ProcessResearch;
 
 namespace Ingot.Platform.Application.ProcessResearch;
 
+/// <summary>管理影子建议决策、结果回收和校准报告。</summary>
 public sealed class ResearchShadowRecommendationService(
     IProcessResearchStore store,
     IResearchObservationAssembler observationAssembler)
@@ -381,9 +383,9 @@ public sealed class ResearchShadowRecommendationService(
         return saved;
     }
 
-    private static IReadOnlyList<ExperimentFactorSetting> NormalizeSelectedFactors(
+    private static IReadOnlyList<ResearchVariableSetting> NormalizeSelectedFactors(
         ResearchProject project,
-        IReadOnlyList<ExperimentFactorSetting> factors)
+        IReadOnlyList<ResearchVariableSetting> factors)
     {
         var controls = project.Variables
             .Where(static value => value.Role == ResearchVariableRoles.Control)
@@ -407,9 +409,9 @@ public sealed class ResearchShadowRecommendationService(
 
     private static ResearchShadowApplicabilityAssessment AssessApplicability(
         ResearchProject project,
-        IReadOnlyList<ExperimentFactorSetting> suggested,
+        IReadOnlyList<ResearchVariableSetting> suggested,
         IReadOnlyDictionary<string, string> context,
-        IReadOnlyList<ExperimentRunObservation> history)
+        IReadOnlyList<ResearchRunObservation> history)
     {
         if (history.Count == 0)
             return new ResearchShadowApplicabilityAssessment
@@ -528,7 +530,7 @@ public sealed class ResearchShadowRecommendationService(
 
     private static void ValidateHardBoundaries(
         ResearchProject project,
-        IReadOnlyList<ExperimentFactorSetting> factors,
+        IReadOnlyList<ResearchVariableSetting> factors,
         string label)
     {
         var values = factors.ToDictionary(static value => value.VariableCode,
@@ -552,8 +554,8 @@ public sealed class ResearchShadowRecommendationService(
     }
 
     private static IReadOnlyDictionary<string, double> Differences(
-        IReadOnlyList<ExperimentFactorSetting> expected,
-        IReadOnlyList<ExperimentFactorSetting> actual)
+        IReadOnlyList<ResearchVariableSetting> expected,
+        IReadOnlyList<ResearchVariableSetting> actual)
     {
         var actualValues = actual.ToDictionary(static value => value.VariableCode,
             static value => value.Value, StringComparer.Ordinal);
@@ -565,8 +567,8 @@ public sealed class ResearchShadowRecommendationService(
     }
 
     private static bool FactorsEqual(
-        IReadOnlyList<ExperimentFactorSetting> left,
-        IReadOnlyList<ExperimentFactorSetting> right)
+        IReadOnlyList<ResearchVariableSetting> left,
+        IReadOnlyList<ResearchVariableSetting> right)
     {
         if (left.Count != right.Count)
             return false;

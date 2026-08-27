@@ -31,7 +31,7 @@ public sealed class PlatformWorkerRegistrationTests
         Assert.DoesNotContain(typeof(KnowledgeExtractionWorker), hosted);
         Assert.DoesNotContain(typeof(ProcessExecutionAnalysisRecomputeHostedService), hosted);
         Assert.DoesNotContain(typeof(ProcessExecutionAnalysisBackfillService), hosted);
-        Assert.DoesNotContain(typeof(ResearchExperimentAutomationHostedService), hosted);
+        Assert.DoesNotContain(typeof(ResearchResultMaterializationHostedService), hosted);
         Assert.DoesNotContain(typeof(SessionPruneHostedService), hosted);
     }
 
@@ -47,7 +47,7 @@ public sealed class PlatformWorkerRegistrationTests
         Assert.Contains(typeof(KnowledgeExtractionWorker), hosted);
         Assert.Contains(typeof(ProcessExecutionAnalysisRecomputeHostedService), hosted);
         Assert.Contains(typeof(ProcessExecutionAnalysisBackfillService), hosted);
-        Assert.Contains(typeof(ResearchExperimentAutomationHostedService), hosted);
+        Assert.Contains(typeof(ResearchResultMaterializationHostedService), hosted);
         Assert.Contains(typeof(SessionPruneHostedService), hosted);
         Assert.Contains(typeof(PlatformWorkerPulseHostedService), hosted);
         Assert.Same(

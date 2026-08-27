@@ -1,3 +1,4 @@
+// 用冻结历史数据比较优化策略与基线方法，并保存可审核的方法准入证据。
 using System.Security.Cryptography;
 using System.Text.Json;
 using Ingot.Contracts.ProcessResearch;
@@ -5,6 +6,7 @@ using Ingot.Platform.Application.ResearchAssets;
 
 namespace Ingot.Platform.Application.ProcessResearch;
 
+/// <summary>运行、保存和审核优化策略的历史回放评估。</summary>
 public sealed class ResearchHistoricalReplayService(
     IProcessResearchStore store,
     IProcessOptimizerClient optimizerClient,
@@ -138,7 +140,7 @@ public sealed class ResearchHistoricalReplayService(
                 RunId = value.RunId,
                 OccurredAt = index
             }).ToArray();
-        var dataOnlyCampaign = ResearchExperimentOptimizer.BuildCampaign(
+        var dataOnlyCampaign = ResearchOptimizationService.BuildCampaign(
             project, ResearchOptimizationIntents.ReachSpecification, null);
         var call = new OptimizerHistoricalReplayCall
         {
@@ -513,7 +515,7 @@ public sealed class ResearchHistoricalReplayService(
         return value.ValueKind == JsonValueKind.Null ? null : value.GetDouble();
     }
 
-    private static string Signature(IReadOnlyList<ExperimentFactorSetting> factors)
+    private static string Signature(IReadOnlyList<ResearchVariableSetting> factors)
         => string.Join('|', factors.OrderBy(static value => value.VariableCode, StringComparer.Ordinal)
             .Select(static value => $"{value.VariableCode}:{value.Value:R}:{value.Unit}"));
 

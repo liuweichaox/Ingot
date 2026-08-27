@@ -191,6 +191,8 @@ public sealed partial class ProcessResearchWorkflow
         const int workspaceHistoryLimit = 100;
         var project = await RequireProjectAsync(projectId, ct).ConfigureAwait(false);
         var hypothesesTask = store.ListHypothesesAsync(projectId, ct);
+        var recipeRecommendationsTask = store.ListRecipeRecommendationsPageAsync(
+            projectId, null, workspaceHistoryLimit, ct);
         var experimentsTask = store.ListExperimentsPageAsync(
             projectId, null, workspaceHistoryLimit, ct);
         var resultsTask = store.ListExperimentResultsPageAsync(
@@ -212,6 +214,7 @@ public sealed partial class ProcessResearchWorkflow
             projectId, null, workspaceHistoryLimit, ct);
         await Task.WhenAll(
             hypothesesTask,
+            recipeRecommendationsTask,
             experimentsTask,
             resultsTask,
             shadowTask,
@@ -228,6 +231,7 @@ public sealed partial class ProcessResearchWorkflow
         {
             Project = project,
             Hypotheses = await hypothesesTask.ConfigureAwait(false),
+            RecipeRecommendations = (await recipeRecommendationsTask.ConfigureAwait(false)).Items,
             Experiments = (await experimentsTask.ConfigureAwait(false)).Items,
             ExperimentResults = (await resultsTask.ConfigureAwait(false)).Items,
             ShadowRecommendations = (await shadowTask.ConfigureAwait(false)).Items,
@@ -242,6 +246,8 @@ public sealed partial class ProcessResearchWorkflow
             Audit = (await auditTask.ConfigureAwait(false)).Items,
             NextCursors = new Dictionary<string, string>(StringComparer.Ordinal)
             {
+                ["recipe-recommendations"] =
+                    (await recipeRecommendationsTask.ConfigureAwait(false)).NextCursor ?? "",
                 ["experiments"] = (await experimentsTask.ConfigureAwait(false)).NextCursor ?? "",
                 ["experiment-results"] = (await resultsTask.ConfigureAwait(false)).NextCursor ?? "",
                 ["shadow-recommendations"] = (await shadowTask.ConfigureAwait(false)).NextCursor ?? "",

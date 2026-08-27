@@ -1,8 +1,8 @@
-# Controlled pilot guide
+# Recipe-optimization pilot guide
 
-> Document status: **current operating guide**. This guide starts with one bounded engineering problem and aims to produce the first trustworthy run evidence and the first controlled validation experiment. The guide is not production-deployment acceptance and does not guarantee optimization benefit from a pilot.
+> Document status: **current operating guide**. This guide starts with one bounded recipe-optimization objective and aims to turn normal production runs into the first qualified observations and one engineer-confirmed next-recipe recommendation. It is not production-deployment acceptance and does not guarantee optimization benefit from a pilot.
 
-This document provides a sequential pilot checklist. The initial pilot should be limited to one concrete engineering problem and complete one data chain and one validation experiment; its scope should not cover an entire line or use a broad objective such as “improve quality everywhere.”
+This document provides a sequential pilot checklist. Limit the first pilot to one product, equipment scope, and quality objective, then connect real recipe runs, actual settings, process context, and quality outcomes. Daily optimization requires neither experiment setup nor manual reclassification of existing recipes. Controlled validation is optional and separate for causal confirmation, extrapolation, or operating-region validation.
 
 ## Entry conditions
 
@@ -32,9 +32,9 @@ Select one bounded problem at a time:
 
 Do not begin by assigning an entire factory or a vague “improve quality” objective to the system.
 
-## 2. Preregister the validation plan
+## 2. Freeze the pilot baseline
 
-Preregistration fixes measures, comparison methods, and pass or fail criteria before results are reviewed. This reduces the risk of selective interpretation after the experiment.
+Before evaluating system recommendations, fix measures, comparison methods, and pass or fail criteria. This reduces selective interpretation and makes any reduction in manual operating cost measurable.
 
 Freeze the following in “Phase 0: preregistration and data baseline” for the research project:
 
@@ -42,7 +42,7 @@ Freeze the following in “Phase 0: preregistration and data baseline” for the
 - comparison baselines and matching conditions;
 - the most important outcome, metrics that must not get worse, and the smallest change that matters in practice;
 - safety boundaries, when to stop, and which result would show that the original judgment was wrong;
-- the steps, time, and experiments required by the current engineering process.
+- the steps and time engineers currently spend collecting data, organizing recipes, analyzing results, and choosing the next recipe.
 
 Another project member reviews the plan. A project cannot enter formal R&D without a current reviewed version.
 
@@ -80,10 +80,10 @@ A run with missing analysis-required context is retained but cannot enter that a
 
 ## 6. Complete a representative run
 
-One stable identity must span the experiment plan, field execution, and inspection:
+One stable identity must link field execution and inspection:
 
 ```text
-Research ExecutionKey ←→ Platform ExecutionId
+actual recipe + process context + quality outcome ←→ Platform ExecutionId
 ```
 
 After completion, verify under “Production runs → Run records” that:
@@ -116,24 +116,37 @@ When analysis conditions are not met, repair the data chain instead of training 
 
 Choose one nonconforming run and a conforming or historical baseline with explicit matching conditions. Review first deviation, planned-versus-actual differences, trajectory features, materials, tooling, equipment, and time factors.
 
-Observational analysis produces only candidate causes, stable associations, confounded associations, or insufficient evidence. An engineer reviews the evidence, counterevidence, coverage, and site limitations before creating a research hypothesis.
+Observational analysis produces only candidate causes, stable associations, confounded associations, or insufficient evidence. An engineer reviews evidence, counterevidence, coverage, and site limitations before using it in recipe optimization. A separate validation hypothesis is created only when causal confirmation is required.
 
-## 10. Design the validation experiment
+## 10. Form optimization observations
 
-An experiment draft defines at least:
+Create a task under “Recipe optimization” and define product scope, quality objectives, controllable variables, and safety boundaries. The system reads completed real recipe runs in scope automatically; no experiment or manual run-to-experiment classification is required.
 
-- the candidate cause and controlled variables to test;
+Verify that:
+
+- at least three runs pass completion, actual-setting, outcome, and context admission;
+- at least two distinct actual recipes are represented;
+- every excluded run has an explicit reason;
+- each observation retains its source run, configuration, quality rule, and content snapshot for recomputation.
+
+If samples are insufficient, continue normal production and wait for new runs, or repair the data chain. Do not create nominal experiments merely to satisfy a count threshold.
+
+## 11. Generate and confirm the next recipe
+
+The system generates one next-recipe recommendation only when trustworthy observations, controllable variables, a safety baseline, and current method admission are all present. The interface shows candidate settings, prediction intervals, outcome-safety probability, data range, model version, and rationale.
+
+The recommendation is an independent append-only record with no experiment identifier, run plan, experiment approval state, or equipment-dispatch command. Engineers adopt, modify, or reject it through the existing production-preparation, MES, or process-specification flow. New runs and outcomes create new observations and allow a new recommendation. If method admission is missing, unreviewed, failed, or bound to another model version, the system stops and explains the recommendation.
+
+## 12. Design controlled validation only when needed
+
+Do not rely directly on daily recipe recommendations when the task must establish a cause, exceed the observed parameter envelope, introduce new material or equipment, or extend one successful point into a releasable operating region. Create separate controlled validation and define at least:
+
+- the candidate cause or coverage boundary to test;
 - controls, repeats, blocks, and execution order;
 - objective, minimum meaningful effect, and safety boundaries;
 - stopping, failure, and fallback conditions.
 
-A classical DOE preview can produce an editable run table. A preview is not approval and writes nothing to equipment. Engineers modify and approve the plan before execution; source runs and inspections determine the result.
-
-## 11. Generate a next-step recommendation when appropriate
-
-Sequential advice begins only when trustworthy observations, controlled variables, a safety baseline, and current method admission are all present. The system shows candidate process settings, prediction intervals, outcome-safety probability, data range, model version, and rationale.
-
-If method admission is missing, unreviewed, failed, or bound to another model version, the system must stop that recommendation and identify an applicable response-surface or classical-DOE fallback. One successful setting is only a candidate. An operating region also requires independent repeat, boundary or interaction validation, and review by another engineer.
+Controlled validation has its own plan, approval, and state machine. A classical DOE preview may produce an editable run table, but it is not approval and writes nothing to equipment. One successful setting remains only a candidate; an operating region requires independent repeats, boundary or interaction validation, and review by another engineer.
 
 ## Completion criteria
 
@@ -141,8 +154,11 @@ The first pilot round is complete not when “the model produces a better settin
 
 - one representative run maps uniquely to actual conditions, trajectory, context, and reviewed outcome;
 - every inclusion, exclusion, comparison, and recommendation has an explicit reason and version;
-- one cause candidate has become an experiment with controls, safety, and stopping conditions;
-- an engineer can approve, modify, or reject advice and record the reason;
+- at least three valid runs covering two actual recipes automatically form observations without manual classification;
+- the system creates one independent next-recipe recommendation inside safety boundaries and observed coverage;
+- an engineer can adopt, modify, or reject the recommendation and record the reason, with no automatic dispatch;
 - results can be recomputed from source data, with failures and inconclusive outcomes retained.
+
+If the round includes causal confirmation or extrapolation, add “controlled validation has controls, safety boundaries, and stopping conditions” to the completion criteria. It is not mandatory for a daily recipe-optimization pilot.
 
 Continue historical, shadow, and online stages according to [Scenario validation](rollout.en.md). Use [Current status](status.en.md) as the unified capability and evidence-maturity page.

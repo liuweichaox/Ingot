@@ -1,4 +1,4 @@
-// 展示研发项目工作区的证据、实验、验证与复用状态，通过回调交还所有写操作。
+// 展示配方运行、优化建议、受控验证与复用状态，通过回调交还所有写操作。
 import { Link } from "react-router";
 import {
   experimentScale,
@@ -27,6 +27,10 @@ import {
   EmptyState,
   StatusBadge,
 } from "../../ui/components";
+
+function formatResearchDate(value) {
+  return value ? new Date(value).toLocaleString("zh-CN") : "时间未知";
+}
 
 export function MemberManagementButton({ allowed, onClick }) {
   return allowed ? <Button onClick={onClick}>添加协作成员</Button> : null;
@@ -62,6 +66,7 @@ export function WorkspaceContent({
   const {
     project,
     hypotheses = [],
+    recipeRecommendations = [],
     experiments = [],
     experimentResults = [],
     shadowRecommendations = [],
@@ -92,9 +97,33 @@ export function WorkspaceContent({
   const methodEligible = methodAdmission?.eligible === true;
   const methodAdmissionReason = (methodAdmission?.failures || []).join("；") ||
     "正在核对当前策略、机理快照和历史回放。";
-  const executionExperiments = experiments.filter(item =>
+  const controlledValidations = experiments.filter(item =>
     item.status !== "cancelled" && item.designMethod !== "historical-observation");
-  const hasRunningExperiment = executionExperiments.some(item => item.status === "running");
+  const optimizationRecords = [
+    ...recipeRecommendations.map(recommendation => ({
+      ...recommendation,
+      recordId: `recipe:${recommendation.recommendationId}`,
+      recordKind: "recipe",
+      name: `下一配方建议 · ${formatResearchDate(recommendation.generatedAt)}`,
+      designMethod: "bayesian-optimization",
+      runPlan: (recommendation.items || []).map((item, index) => ({
+        executionKey: item.recommendationKey,
+        sequence: index + 1,
+        factors: item.parameters || [],
+      })),
+      optimization: {
+        ...recommendation,
+        pendingExperimentCount: recommendation.pendingControlledValidationCount,
+        runPredictions: (recommendation.items || []).map(item => item.prediction),
+      },
+    })),
+    ...experiments.map(experiment => ({
+      ...experiment,
+      recordId: `validation:${experiment.experimentId}`,
+      recordKind: "validation",
+    })),
+  ];
+  const hasRunningExperiment = controlledValidations.some(item => item.status === "running");
   const observedExecutionKeys = new Set(
     observationSummary?.observedExecutionKeys ||
       (observationSummary?.observations || []).map(item => item.executionKey),
@@ -105,19 +134,19 @@ export function WorkspaceContent({
     (project.outcomeConstraints || []).map(item => [item.code, item]),
   );
   const currentStage = project.status === "completed" && validatedOperatingRegions.length === 0
-    ? ["历史项目待复验", "该项目按旧规则完成，但工艺操作域缺少跨区组重复证据；请新建复现实验完成实验室验证后再发布生产。"]
+    ? ["历史范围待验证", "该范围按旧规则完成，但工艺操作域缺少独立重复证据；需要时安排受控验证运行后再发布生产。"]
     : project.status === "completed"
-      ? ["研究已闭环", "工艺操作域已完成实验室验证或生产发布，可沉淀并复用于相似工艺。"]
+      ? ["优化已闭环", "工艺操作域已完成独立验证或生产发布，可沉淀并复用于相似工艺。"]
       : project.status === "draft"
-    ? ["定义问题", "先明确目标、可控变量和安全边界。"]
-    : hypotheses.length === 0
-      ? ["建立假设", "把经验或异常转为可验证的因果判断。"]
-      : executionExperiments.length === 0
-        ? ["设计实验", "优先使用智能建议，以最少实验获取最大信息量。"]
+    ? ["定义优化范围", "确认质量目标、可调配方参数和安全边界。"]
+    : !hasObservation
+      ? ["等待有效运行", "系统会自动读取已完成配方运行及其质量结果，不需要建立实验。"]
+      : recipeRecommendations.length === 0
+        ? ["生成下一配方", "用真实配方运行持续学习并给出下一配方建议。"]
         : hasRunningExperiment
-          ? ["收集证据", "等待运行和检验完成，再让系统更新模型。"]
+          ? ["收集验证证据", "等待受控验证运行和检验完成，再更新正式结论。"]
           : experimentResults.length === 0
-            ? ["计算结果", "把冻结的数据快照转成可追溯的实验结果。"]
+            ? ["持续优化", "后续正常生产结果会自动进入优化观察并更新建议。"]
             : operatingRegions.length === 0
               ? ["形成操作域", "将有证据支持的范围提交为候选工艺操作域。"]
               : validatedOperatingRegions.length === 0
@@ -125,9 +154,9 @@ export function WorkspaceContent({
                 : ["沉淀知识", "已具备可复用结论，可复核后服务下一个项目。"];
   const workflowSteps = [
     { id: "project-definition", title: "定义", description: "目标与边界", state: project.status === "draft" ? "current" : "done" },
-    { id: "project-diagnosis", title: "追因", description: "假设与证据", state: hypotheses.length ? "done" : project.status === "draft" ? "upcoming" : "current" },
-    { id: "project-experiments", title: "实验", description: "建议与执行", state: executionExperiments.length ? "done" : hypotheses.length ? "current" : "upcoming" },
-    { id: "project-validation", title: "验证", description: "结果与窗口", state: validatedOperatingRegions.length ? "done" : experimentResults.length ? "current" : "upcoming" },
+    { id: "project-diagnosis", title: "观察", description: "真实配方运行", state: hasObservation ? "done" : project.status === "draft" ? "upcoming" : "current" },
+    { id: "project-experiments", title: "建议", description: "下一配方", state: recipeRecommendations.length ? "done" : hasObservation ? "current" : "upcoming" },
+    { id: "project-validation", title: "验证", description: "可选受控确认", state: validatedOperatingRegions.length ? "done" : controlledValidations.length ? "current" : "upcoming" },
     { id: "project-reuse", title: "复用", description: "知识与迁移", state: knowledgeClaims.some(item => item.status === "reviewed") ? "done" : validatedOperatingRegions.length ? "current" : "upcoming" },
   ];
   return (
@@ -136,7 +165,7 @@ export function WorkspaceContent({
         {Object.values(workspace.nextCursors || {}).some(Boolean) && (
           <Alert tone="info" title="当前先显示最近 100 条记录">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <span>实验、结果、建议、回放和审计记录已按游标分页，可继续读取更早历史。</span>
+              <span>配方建议、验证、结果、回放和审计记录已按游标分页，可继续读取更早历史。</span>
               <Button disabled={historyLoading} onClick={onLoadOlderHistory}>
                 {historyLoading ? "正在加载…" : "加载更早记录"}
               </Button>
@@ -180,13 +209,12 @@ export function WorkspaceContent({
             <StatusBadge value={project.status} label={statusLabels[project.status] || project.status} />
           </div>
           {!methodEligible && (
-            <Alert tone="warning" title="序贯优化已暂停">
+            <Alert tone="warning" title="正式方法准入尚未通过">
               <p>{methodAdmissionReason}</p>
               <p className="mt-1">
-                当前仍可手动设计正则化响应面或适用的传统 DOE；完成当前版本历史回放并由另一名工程师审核后，再重新评估准入。
+                日常下一配方建议仍可使用真实运行并保持人工确认；影子验证、受控在线和正式工艺结论需要完成当前版本历史回放后再开放。
               </p>
               <div className="mt-3 flex flex-wrap gap-2">
-                {project.status !== "draft" && canEdit && <Button onClick={() => onTask("experiment")}>手动设计实验</Button>}
                 {project.status !== "draft" && canEdit && Number(observationSummary?.validObservationCount || 0) >= 3 && <Button onClick={onRunHistoricalReplay}>运行当前版本历史回放</Button>}
               </div>
             </Alert>
@@ -195,11 +223,10 @@ export function WorkspaceContent({
             <div className="flex flex-wrap content-start gap-2">
               <Button onClick={() => onAskAi(project.projectId)}>让 AI 协助分析</Button>
               <MemberManagementButton allowed={canManageMembers} onClick={() => onTask("member")} />
-              {canEdit && hypotheses.length === 0 && <Button variant="primary" onClick={() => onTask("hypothesis")}>提出第一个假设</Button>}
-              {project.status !== "draft" && canEdit && <Button onClick={() => onTask("history")}>导入历史运行</Button>}
-              {project.status !== "draft" && canEdit && hypotheses.length > 0 && !hasRunningExperiment && <Button variant="primary" disabled={!methodEligible} title={!methodEligible ? methodAdmissionReason : "已通过当前方法准入"} onClick={() => onGenerateOptimizationSuggestions()}>智能设计下一组实验</Button>}
-              {project.status !== "draft" && canEdit && hypotheses.length > 0 && <Button disabled={!methodEligible} title={!methodEligible ? methodAdmissionReason : "仅生成旁路建议"} onClick={() => onGenerateOptimizationSuggestions("reach-specification", null, "shadow")}>生成影子建议</Button>}
-              {project.status !== "draft" && canEdit && hypotheses.length > 0 && (
+              {project.status !== "draft" && canEdit && <Button variant="primary" disabled={Number(observationSummary?.validObservationCount || 0) < 3} title={Number(observationSummary?.validObservationCount || 0) < 3 ? "至少需要 3 条有效配方运行" : "基于真实配方运行生成，不自动下发"} onClick={() => onGenerateOptimizationSuggestions()}>生成下一配方建议</Button>}
+              {canEdit && hypotheses.length === 0 && <Button onClick={() => onTask("hypothesis")}>记录候选原因（可选）</Button>}
+              {project.status !== "draft" && canEdit && <Button disabled={!methodEligible} title={!methodEligible ? methodAdmissionReason : "仅生成旁路建议"} onClick={() => onGenerateOptimizationSuggestions("reach-specification", null, "shadow")}>生成影子建议</Button>}
+              {project.status !== "draft" && canEdit && (
                 <Button
                   variant="primary"
                   disabled={!methodEligible || !onlineAdmission?.eligible || hasRunningExperiment}
@@ -210,16 +237,16 @@ export function WorkspaceContent({
               {project.status !== "draft" && canEdit && Number(observationSummary?.validObservationCount || 0) >= 3 && <Button onClick={onRunHistoricalReplay}>运行历史回放</Button>}
               {project.status !== "draft" && canEdit && <Button onClick={() => onTask("rollback-drill")}>记录停止与回退演练</Button>}
               {project.status !== "draft" && canEdit && (workspace.transferSources || []).length > 0 && experimentResults.length >= 2 && <Button onClick={() => onTask("transfer")}>评估迁移收益</Button>}
-              {project.status !== "draft" && canEdit && hypotheses.length > 0 && <Button onClick={() => onTask("experiment")}>手动设计实验</Button>}
+              {project.status !== "draft" && canEdit && hypotheses.length > 0 && <Button onClick={() => onTask("experiment")}>设计受控验证（可选）</Button>}
               {project.status !== "draft" && canEdit && hasRunningExperiment && <Button onClick={() => onMaterializeExperimentResult(experiments.find(item => item.status === "running"))}>立即检查数据回收</Button>}
               {canEdit && validatedOperatingRegions.length > 0 && <Button variant="primary" onClick={() => onTask("claim")}>沉淀工艺知识</Button>}
             </div>
             <div className="rounded-md border border-slate-200 bg-slate-50 p-4">
-              <p className="text-sm font-semibold text-slate-900">实验建议准备度</p>
+              <p className="text-sm font-semibold text-slate-900">配方建议准备度</p>
               <p className="mt-1 text-2xl font-semibold text-slate-950">{observationSummary?.validObservationCount ?? 0}<span className="ml-1 text-sm font-normal text-slate-500">条有效观察</span></p>
-              <p className="mt-1 text-[13px] leading-5 text-slate-500">{hasObservation ? `已匹配 ${observationSummary?.candidateRunCount ?? 0} 个实验运行，可用于生成下一组建议。` : "尚无可用观察；完成运行、过程特征和检验结果的关联后自动具备条件。"}</p>
+              <p className="mt-1 text-[13px] leading-5 text-slate-500">{hasObservation ? `已匹配 ${observationSummary?.candidateRunCount ?? 0} 个真实配方运行，可用于生成下一配方建议。` : "尚无可用观察；生产运行、实际配方和检验结果关联后会自动具备条件。"}</p>
               <p className={`mt-2 text-[13px] font-medium ${methodEligible ? "text-emerald-700" : "text-amber-700"}`}>
-                {methodEligible ? "方法准入已通过" : "方法准入未通过，已切换到工程师设计路径"}
+                {methodEligible ? "正式方法准入已通过" : "日常建议可用，正式验证尚未准入"}
               </p>
             </div>
           </div>
@@ -256,7 +283,7 @@ export function WorkspaceContent({
         <dl className="grid grid-cols-2 divide-x divide-y divide-slate-200 rounded-lg border border-slate-200 bg-white sm:grid-cols-4 sm:divide-y-0">
           {[
             ["研发假设", hypotheses.length, "待验证"],
-            ["有效实验", executionExperiments.length, "不含取消记录"],
+            ["受控验证", controlledValidations.length, "不含取消记录"],
             ["有效观察", observationSummary?.validObservationCount ?? 0, "参数、过程与结果已关联"],
             ["验证窗口", validatedOperatingRegions.length, `${reviewedOperatingRegions.length} 个已复核`],
           ].map(([label, value, hint]) => (
@@ -271,7 +298,7 @@ export function WorkspaceContent({
         </dl>
         {observationSummary?.excludedObservationCount > 0 && (
           <Alert tone="warning">
-            有 {observationSummary.excludedObservationCount} 条运行因缺少检验值、过程特征或完整运行边界而未进入实验建议模型。
+            有 {observationSummary.excludedObservationCount} 条运行因缺少检验值、过程特征或完整运行边界而未进入配方建议模型。
           </Alert>
         )}
 
@@ -304,8 +331,8 @@ export function WorkspaceContent({
                 key: "actions",
                 label: "下一步",
                 render: (_, row) => row.validationOutcomeCode && row.expectedEffectDirection && row.minimumEffect > 0 && canEdit && project.status !== "draft"
-                  ? <Button onClick={event => { event.stopPropagation(); onGenerateOptimizationSuggestions("validate-hypothesis", row.hypothesisId); }}>让优化器设计验证实验</Button>
-                  : "补充验证标准后可自动设计实验",
+                  ? <Button onClick={event => { event.stopPropagation(); onGenerateOptimizationSuggestions("validate-hypothesis", row.hypothesisId, "experiment"); }}>设计受控验证条件</Button>
+                  : "补充验证标准后可设计受控验证",
               },
             ]} />
           )}
@@ -313,12 +340,12 @@ export function WorkspaceContent({
         </div>
 
         <div id="project-experiments" className="scroll-mt-60 space-y-5">
-        <Card title="实验">
-          {experiments.length === 0 ? <EmptyState title="尚未设计实验" description="实验必须包含至少两个不同运行条件。" /> : (
-            <DataTable rows={experiments} keyField="experimentId" columns={[
+        <Card title="配方建议与受控验证">
+          {optimizationRecords.length === 0 ? <EmptyState title="尚无配方建议" description="真实配方运行形成有效观察后，可以直接生成下一配方建议。" /> : (
+            <DataTable rows={optimizationRecords} keyField="recordId" columns={[
               {
                 key: "name",
-                label: "实验",
+                label: "建议或验证记录",
                 render: (value, row) => {
                   const scale = row.optimization ? experimentScale(row) : null;
                   const size = scale
@@ -343,7 +370,7 @@ export function WorkspaceContent({
                     {runs.map((run, runIndex) => {
                       const runIdentifier = run.executionKey || run.runKey || `run-${runIndex + 1}`;
                       return (
-                      <div key={`${row.experimentId}:${runIdentifier}:${runIndex}`} className="rounded-lg border border-slate-200 bg-slate-50 p-2">
+                      <div key={`${row.recordId}:${runIdentifier}:${runIndex}`} className="rounded-lg border border-slate-200 bg-slate-50 p-2">
                         <div className="flex items-center justify-between gap-2">
                           <code className="block text-[13px] font-semibold text-slate-700">{runIdentifier}</code>
                           {!isHistorical && (
@@ -368,7 +395,7 @@ export function WorkspaceContent({
                             </div>
                           );
                         })}
-                        {row.status !== "cancelled" && row.optimization?.mode === "shadow" && !shadowRecommendations.some(item =>
+                        {row.recordKind === "validation" && row.status !== "cancelled" && row.optimization?.mode === "shadow" && !shadowRecommendations.some(item =>
                           item.experimentId === row.experimentId && item.suggestionExecutionKey === run.executionKey) && canEdit && (
                           <Button onClick={event => { event.stopPropagation(); onShadowDecision(row, run); }}>
                             登记影子选择
@@ -398,8 +425,11 @@ export function WorkspaceContent({
                 label: "预测与可信度",
                 render: (value, row) => {
                   if (!value) return "—";
+                  const recommendationId = row.recordKind === "recipe"
+                    ? row.recommendationId
+                    : row.experimentId;
                   const mechanismUsages = (workspace.mechanismKnowledgeUsages || [])
-                    .filter(item => item.recommendationId === row.experimentId);
+                    .filter(item => item.recommendationId === recommendationId);
                   const appliedMechanismClaims = groupMechanismUsages(mechanismUsages);
                   return (
                     <div className="min-w-72 space-y-2 text-[13px] text-slate-600">
@@ -521,15 +551,18 @@ export function WorkspaceContent({
                 label: "进展",
                 render: (value, row) => {
                   const isHistorical = row.designMethod === "historical-observation";
+                  const isRecipeRecommendation = row.recordKind === "recipe";
                   return (
                     <div className="min-w-32 space-y-1 text-[13px]">
-                      <StatusBadge value={isHistorical ? "已导入" : statusLabels[row.execution?.state] || statusLabels[value] || row.execution?.state || value} />
-                      {!isHistorical && (
+                      <StatusBadge value={isHistorical ? "已导入" : isRecipeRecommendation ? "待工程师确认" : statusLabels[row.execution?.state] || statusLabels[value] || row.execution?.state || value} />
+                      {!isHistorical && !isRecipeRecommendation && (
                         <p className="text-slate-500">
                           {row.execution?.commands?.length || row.runPlan?.length || 0} 条设备无关执行指令
                         </p>
                       )}
-                      <p className="text-slate-500">{row.resultIds?.length || 0} 份结果</p>
+                      {isRecipeRecommendation
+                        ? <p className="text-slate-500">不会自动下发</p>
+                        : <p className="text-slate-500">{row.resultIds?.length || 0} 份结果</p>}
                     </div>
                   );
                 },
@@ -537,11 +570,15 @@ export function WorkspaceContent({
               {
                 key: "actions",
                 label: "操作",
-                render: (_, row) => (
+                render: (_, row) => {
+                  if (row.recordKind === "recipe") {
+                    return <span className="text-[13px] text-slate-500">在正常生产流程中确认采用；后续运行会自动进入优化观察</span>;
+                  }
+                  return (
                   <div className="flex gap-2">
                     {row.status === "cancelled" && <span className="text-[13px] text-slate-500">已取消，仅保留审计记录</span>}
                     {row.status !== "cancelled" && row.designMethod === "historical-observation" && <span className="text-[13px] text-slate-500">只读证据</span>}
-                    {row.designMethod !== "historical-observation" && row.designMethod !== "bayesian-optimization" && row.status !== "cancelled" && canEdit && <Button onClick={event => { event.stopPropagation(); onCloneExperiment(row); }}>基于此实验新建</Button>}
+                    {row.designMethod !== "historical-observation" && row.designMethod !== "bayesian-optimization" && row.status !== "cancelled" && canEdit && <Button onClick={event => { event.stopPropagation(); onCloneExperiment(row); }}>基于此验证新建</Button>}
                     {row.status !== "cancelled" && row.optimization?.mode === "shadow" && <span className="text-[13px] text-slate-500">旁路评估，不可下发</span>}
                     {row.optimization?.mode === "controlled" && row.status === "planned" && !row.controlledDecision && row.createdBy !== currentUserId && <Button onClick={event => { event.stopPropagation(); onControlledDecision(row); }}>接受 / 修改 / 拒绝</Button>}
                     {row.optimization?.mode === "controlled" && row.status === "planned" && !row.controlledDecision && row.createdBy === currentUserId && <span className="text-[13px] text-slate-500">等待现场工程师决策</span>}
@@ -556,7 +593,8 @@ export function WorkspaceContent({
                       </span>
                     )}
                   </div>
-                ),
+                  );
+                },
               },
             ]} />
           )}
@@ -583,12 +621,12 @@ export function WorkspaceContent({
         </div>
 
         <section id="project-validation" className="scroll-mt-60 space-y-5">
-        <Card title="实验结果" description="只接受由冻结数据快照计算的结果；它们是追因结论和优化建议的共同证据。">
+        <Card title="受控验证结果" description="只接受由冻结生产数据计算的结果；日常配方运行由优化观察自动吸收，不需要手工录入。">
           {experimentResults.length === 0 ? <EmptyState title="尚无可用结果" description="运行完成后，关联过程数据与检验结果并记录计算结果。" /> : (
             <DataTable rows={experimentResults} keyField="resultId" columns={[
               {
                 key: "experimentId",
-                label: "来源实验",
+                label: "来源验证",
                 render: value => experiments.find(item => item.experimentId === value)?.name || value,
               },
               { key: "runCount", label: "运行数" },
@@ -649,9 +687,9 @@ export function WorkspaceContent({
 
         <Card
           title="候选设置与已验证窗口"
-          description="优化先产生经重复实测的候选设置点；连续范围必须另做边界和交互作用实验。"
+          description="优化先产生经重复实测的候选设置点；连续范围需要另做边界和交互作用验证。"
         >
-          {operatingRegions.length === 0 ? <EmptyState title="尚未形成候选设置" description="完成优化实验后，系统会从同一条件的重复源数据中自动形成候选设置。" /> : (
+          {operatingRegions.length === 0 ? <EmptyState title="尚未形成候选设置" description="积累同配方重复运行后，系统会从真实源数据中形成候选设置。" /> : (
             <DataTable rows={operatingRegions} keyField="operatingRegionId" columns={[
               { key: "name", label: "窗口" },
               {
@@ -708,14 +746,14 @@ export function WorkspaceContent({
                           event.stopPropagation();
                           onDesignWindowValidation(row);
                         }}>
-                          设计独立验证实验
+                          设计独立验证运行
                         </Button>
                       );
                     }
                     if (validationExperiment.status !== "completed") {
                       return (
                         <span className="text-[13px] text-blue-700">
-                          验证实验：{statusLabels[validationExperiment.status] || validationExperiment.status}
+                          验证运行：{statusLabels[validationExperiment.status] || validationExperiment.status}
                         </span>
                       );
                     }
@@ -754,7 +792,7 @@ export function WorkspaceContent({
                     return <Button onClick={event => { event.stopPropagation(); onReleaseWindow(row); }}>发布生产</Button>;
                   }
                   if (row.validationLevel === "replay") {
-                    return <span className="text-[13px] text-amber-700">需跨区组重复实验</span>;
+                    return <span className="text-[13px] text-amber-700">需跨区组重复验证</span>;
                   }
                   return "—";
                 },

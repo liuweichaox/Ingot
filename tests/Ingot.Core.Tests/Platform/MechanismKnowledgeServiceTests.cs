@@ -359,6 +359,11 @@ public sealed class MechanismKnowledgeServiceTests
         public Task SaveUsagesAsync(IReadOnlyList<MechanismClaimUsage> values, CancellationToken ct = default)
             => Task.CompletedTask;
 
+        public Task SaveRecipeRecommendationUsagesAsync(
+            IReadOnlyList<MechanismClaimUsage> values,
+            CancellationToken ct = default)
+            => Task.CompletedTask;
+
         public Task<IReadOnlyList<MechanismClaimUsage>> ListUsagesAsync(Guid projectId, CancellationToken ct = default)
             => Task.FromResult<IReadOnlyList<MechanismClaimUsage>>([]);
 

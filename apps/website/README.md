@@ -4,10 +4,11 @@ Bilingual static website for Ingot. Public copy follows [`docs/brand.md`](../../
 
 The home page must:
 
-- use “Open-source Process Diagnosis & Optimization” as the product category and “Understand this run. Choose the right next experiment.” as the lead line;
-- use “Process R&D” for the business workflow, “constrained optimization” for the numerical capability, and “next-experiment recommendation” or “candidate process setting” for system output;
+- use “Open-source Process Diagnosis & Optimization” as the product category and “Understand this run. Improve the next recipe.” as the lead line;
+- use “recipe optimization” for the default workflow, “constrained optimization” for the numerical capability, and “next-recipe recommendation” for system output;
 - lead with real data supporting process-engineer decisions;
-- show acquisition, context, process executions, inspections, diagnosis, experiments, and optimization as one evidence chain;
+- show acquisition, context, production runs, inspections, diagnosis, optimization observations, and next-recipe recommendations as one evidence chain;
+- state that normal production requires no experiment setup or manual recipe reclassification, while controlled validation remains a separate optional workflow;
 - explain that methods are selected by the question rather than presenting one algorithm as the product;
 - preserve the engineer's authority and the boundary between association and validated cause;
 - distinguish implemented capability from historical replay, shadow evidence, and online validation;

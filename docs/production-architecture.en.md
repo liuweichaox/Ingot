@@ -8,7 +8,7 @@ This document defines production topology, failure models, data semantics, and s
 
 Production support does not mean connecting a model directly to a PLC, and it does not mean replacing PostgreSQL with another time-series database. Production capability has two independent levels:
 
-1. **Production observation and decision support**: continuously collect real runs, provide traceability, comparison, diagnosis, shadow recommendations, and controlled experiments without directly changing equipment state.
+1. **Production observation and decision support**: continuously collect real recipe runs and provide traceability, comparison, diagnosis, next-recipe recommendations, and optional controlled validation without directly changing equipment state.
 2. **Controlled action**: only after the first level has operated reliably and a specific scenario has passed admission, deliver an approved structured action to Edge for deterministic validation, bounds enforcement, stop, and rollback outside the field interlocks.
 
 The default delivery target is the first level. The second requires separate certification by equipment class and action type; analysis capability never grants it automatically.
@@ -47,7 +47,7 @@ PostgreSQL stores:
 - identities, permissions, sites, and equipment catalogues;
 - process configurations, analysis plans, and versions;
 - process executions, context, and inspection relationships;
-- R&D projects, experiments, approvals, and state machines;
+- recipe-optimization tasks, independent recipe recommendations, controlled validations, approvals, and state machines;
 - Agent runs, input snapshots, recommendations, and evidence hashes;
 - controlled actions, execution receipts, stop, and rollback outcomes;
 - data-retention, evidence-pinning, and audit policies.
@@ -75,7 +75,7 @@ flowchart LR
     subgraph OT["Field OT zone"]
         Sources["PLC / DCS / instruments / vision / MES"]
         Edge["Edge ConnectorHost\nprotocol mapping · local outbox · configuration cache"]
-        Safety["Edge Safety Executor\naction allow-list · validation · stop/rollback"]
+        Safety["future Edge Safety Executor\nbuild only after action gates pass · stop/rollback"]
         Sources --> Edge
         Safety --> Sources
     end
@@ -85,16 +85,16 @@ flowchart LR
         Api["Platform API × N\nstateless"]
         Worker["Platform Worker × N\nleased jobs"]
         Control["PostgreSQL HA\nformal business record"]
-        Series["Time-series data plane\nTimescaleDB"]
+        Series["conditional independent time-series plane\nonly after the capacity gate proves a need"]
         Files["Object/file storage\nattachments · knowledge · cold archive"]
         Optimizer["Optimizer × N\nno business state"]
         Observe["metrics · logs · traces · alerts"]
         LB --> Api
         Api --> Control
-        Api --> Series
+        Api -.-> Series
         Api --> Files
         Worker --> Control
-        Worker --> Series
+        Worker -.-> Series
         Worker --> Optimizer
         Api --> Optimizer
         Api --> Observe
@@ -104,7 +104,11 @@ flowchart LR
     Edge -->|"mTLS · at-least-once transport"| LB
     Api -. "approved signed action" .-> Safety
     Edge --> Observe
+    classDef future fill:#FFF7ED,stroke:#C2410C,stroke-width:1.5px,stroke-dasharray:5 4
+    class Safety,Series future
 ```
+
+Dashed orange nodes are conditional target capabilities, not current Compose services. An independent time-series plane is built only after capacity, recovery-time, or cost gates prove the existing PostgreSQL/TimescaleDB service insufficient. Edge Safety Executor is built only after controlled-action evidence gates pass. Attachments and process knowledge currently remain on Platform persistent file volumes; target object storage is a production replacement path, not a second source of formal business state.
 
 ### Site production cell
 

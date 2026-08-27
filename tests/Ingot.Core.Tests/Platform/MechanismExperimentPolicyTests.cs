@@ -127,7 +127,7 @@ public sealed class MechanismExperimentPolicyTests
         };
         var knowledge = MechanismKnowledgeExperimentPolicy.Select(project, [claim], []);
         var campaign = MechanismKnowledgeExperimentPolicy.ApplyHardConstraints(
-            ResearchExperimentOptimizer.BuildCampaign(
+            ResearchOptimizationService.BuildCampaign(
                 project, ResearchOptimizationIntents.ReachSpecification, null), knowledge);
 
         Assert.Equal("高温高压", Assert.Single(campaign.ForbiddenCombinations).Name);

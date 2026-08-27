@@ -1,4 +1,4 @@
-// 收集研发项目范围、目标、变量与安全边界，并复用现有工艺配置目录。
+// 收集配方优化范围、目标、变量与安全边界，并复用现有工艺配置目录。
 import { useEffect, useState } from "react";
 import { getJson } from "../../api/http";
 import { Alert, Button, Card, Drawer, Field, Input, Select, Textarea } from "../../ui/components";
@@ -178,26 +178,26 @@ export function CreateProjectDrawer({ open, saving, form, setForm, onClose, onSu
     <Drawer
       open={open}
       onClose={onClose}
-      title="创建工艺研发项目"
-      description="填写工艺范围、研发目标和首个可控变量。"
+      title="创建配方优化任务"
+      description="确定配方运行范围、质量目标和安全边界；无需另外建立实验。"
       size="xl"
       footer={<><Button disabled={saving} onClick={onClose}>取消</Button><Button variant="primary" disabled={saving} type="submit" form="research-project-form">{saving ? "正在创建…" : "创建项目"}</Button></>}
     >
       <form id="research-project-form" className="space-y-6" onSubmit={onSubmit}>
         {catalogError && <Alert tone="warning" title="部分选项暂不可用">{catalogError}</Alert>}
         {catalogLoading && <Alert tone="info">正在读取已完成运行、工艺配置、检测定义和工艺数据字典…</Alert>}
-        <Card title="1. 项目范围" description="先确定问题属于哪个工艺和产品范围。">
+        <Card title="1. 优化范围" description="先确定要持续比较的工艺、产品和设备范围。">
           <div className="grid gap-4 md:grid-cols-2">
-            <Field label="项目名称"><Input required value={form.name} onChange={field("name")} placeholder="光学模压工艺操作域研发" /></Field>
+            <Field label="任务名称"><Input required value={form.name} onChange={field("name")} placeholder="光学模压配方优化" /></Field>
             <Field label="参考运行" hint="选择后自动带入产品范围；不影响后续用更多运行形成证据。"><Select value={form.referenceProcessExecutionId} onChange={event => chooseReferenceProcessExecution(event.target.value)}><option value="">暂不关联历史运行</option>{catalog.executions.map(execution => <option key={execution.executionId} value={execution.executionId}>{executionLabel(execution)}</option>)}</Select></Field>
             <Field label="工艺配置（推荐）" hint="只允许选择不可变的已发布版本；其中 required-for-analysis 字段会成为优化准入条件。"><Select value={form.scenarioPackageKey} onChange={event => chooseScenarioPackage(event.target.value)}><option value="">暂不使用工艺配置</option>{selectableScenarios.map(item => <option key={`${item.packageId}:${item.version}`} value={`${item.packageId}:${item.version}`}>{item.name} · v{item.version}</option>)}</Select></Field>
             <Field label="工艺数据字典" hint="决定可选的控制参数与实际数据来源。"><Select required value={form.dataModelKey} onChange={event => chooseDataModel(event.target.value)}><option value="">选择已配置的工艺数据字典</option>{selectableModels.map(model => <option key={`${model.modelId}:${model.version}`} value={`${model.modelId}:${model.version}`}>{model.name} · v{model.version}</option>)}</Select></Field>
             <Field label="目标产品" hint="来自参考运行；未关联时可补充产品编号。"><Input value={form.productName} onChange={field("productName")} placeholder="产品编号（可选）" /></Field>
             <Field label="材料"><Input value={form.materialName} onChange={field("materialName")} /></Field>
-            <Field label="项目说明" className="md:col-span-2"><Textarea value={form.description} onChange={field("description")} rows={3} /></Field>
+            <Field label="任务说明" className="md:col-span-2"><Textarea value={form.description} onChange={field("description")} rows={3} /></Field>
           </div>
         </Card>
-        <Card title="2. 首要研发目标" description="选择要改善的质量指标及判定方向。">
+        <Card title="2. 首要优化目标" description="选择要改善的质量指标及判定方向。">
           <div className="grid gap-4 md:grid-cols-2">
             <Field label="质量目标" hint="可直接优化正式检验合格率，也可选择检测数值；代码、单位和数据来源会自动带入。"><Select required value={form.objectiveKey} onChange={event => chooseObjective(event.target.value)}><option value="">选择正式质检结论或数值指标</option>{objectiveOptions.map(option => <option key={option.key} value={option.key}>{option.kind === "outcome" ? `${option.definition.name} · 合格率` : `${option.definition.name} · ${option.characteristic.name}${option.characteristic.unit ? ` (${option.characteristic.unit})` : ""}`}</option>)}</Select></Field>
             <Field label="数据来源"><Input readOnly value={form.objectiveDataSource} placeholder="选择质量指标后自动带入" className="bg-slate-50 text-slate-600" /></Field>
@@ -207,13 +207,13 @@ export function CreateProjectDrawer({ open, saving, form, setForm, onClose, onSu
             <Field label="目标权重"><Input required type="number" min="0.01" step="any" value={form.objectiveWeight} onChange={field("objectiveWeight")} /></Field>
           </div>
         </Card>
-        <Card title="3. 首个可控变量" description="定义第一轮实验允许调整的参数范围。">
+        <Card title="3. 首个可控变量" description="定义下一配方建议允许调整的参数范围。">
           <div className="grid gap-4 md:grid-cols-2">
             <Field label="控制参数" hint={selectedModel ? "从所选工艺数据字典中选择。" : "请先选择工艺数据字典。"}><Select required disabled={!selectedModel} value={form.variableCode} onChange={event => chooseVariable(event.target.value)}><option value="">选择控制参数</option>{(selectedModel?.controlParameters || []).map(parameter => <option key={parameter.code} value={parameter.code}>{parameter.displayName || parameter.code}{parameter.unit ? ` (${parameter.unit})` : ""}</option>)}</Select></Field>
             <Field label="实际数据来源"><Input readOnly value={form.variableDataSource} placeholder="选择控制参数后自动带入" className="bg-slate-50 text-slate-600" /></Field>
             <Field label="变量单位"><Input readOnly required value={form.variableUnit} placeholder="自动带入" className="bg-slate-50 text-slate-600" /></Field>
-            <Field label="允许下限" hint="这是实验允许范围，请按设备/安全规范确认。"><Input required type="number" step="any" value={form.variableLower} onChange={field("variableLower")} /></Field>
-            <Field label="允许上限" hint="这是实验允许范围，请按设备/安全规范确认。"><Input required type="number" step="any" value={form.variableUpper} onChange={field("variableUpper")} /></Field>
+            <Field label="允许下限" hint="这是配方建议允许范围，请按设备/安全规范确认。"><Input required type="number" step="any" value={form.variableLower} onChange={field("variableLower")} /></Field>
+            <Field label="允许上限" hint="这是配方建议允许范围，请按设备/安全规范确认。"><Input required type="number" step="any" value={form.variableUpper} onChange={field("variableUpper")} /></Field>
           </div>
         </Card>
         <Card title="4. 结果安全边界（可选）" description="例如裂纹率、破损率或粘模指标；优化器只推荐达到最低安全概率的工艺规范。">

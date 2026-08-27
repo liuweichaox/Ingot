@@ -387,7 +387,7 @@ function buildApplicabilityCatalog(project) {
     if (!entry.values.includes(normalized)) entry.values.push(normalized);
     values.set(code, entry);
   };
-  add("project-code", "当前研发项目", project.code);
+  add("project-code", "当前优化任务", project.code);
   add("process", "工艺", project.processName);
   add("product", "产品", project.productName || context.product || context.product_code);
   add("material", "材料", project.materialName || context.material || context.material_lot_ref);

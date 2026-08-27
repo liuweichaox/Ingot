@@ -98,11 +98,11 @@ export function WorkbenchPage({ identity }) {
       action: pendingInspections ? "去处理" : "查看记录",
     };
   const engineeringAction = {
-      title: activeOptimizationProjects ? `${activeOptimizationProjects} 个研发项目正在推进` : "从一个真实问题开始研发",
-      description: activeOptimizationProjects ? "查看证据缺口、待审核实验或需要独立验证的工艺窗口。" : "将质量偏差或运行异常转为可验证的研发项目。",
+      title: activeOptimizationProjects ? `${activeOptimizationProjects} 个配方优化任务正在推进` : "从真实配方运行开始优化",
+      description: activeOptimizationProjects ? "查看新增运行、下一配方建议或可选受控验证。" : "确定目标和安全边界，后续运行会自动进入优化证据。",
       to: "/research-projects",
       tone: activeOptimizationProjects ? "border-l-blue-500" : "border-l-amber-500",
-      action: activeOptimizationProjects ? "进入研发" : "创建项目",
+      action: activeOptimizationProjects ? "进入优化" : "创建任务",
     };
   const platformAction = {
       title: `${onlineEdges}/${state.edges.length} 个现场节点在线`,
@@ -127,12 +127,12 @@ export function WorkbenchPage({ identity }) {
     { label: "生产运行", value: state.executionTotal, hint: `${activeProcessExecutions} 个进行中`, icon: CircleStackIcon, tone: "text-trajectory-100 bg-trajectory-500/12 ring-trajectory-500/20" },
     { label: "待处理质检", value: pendingInspections, hint: "录入与复核", icon: ClipboardDocumentCheckIcon, tone: pendingInspections ? "text-amber-200 bg-amber-500/12 ring-amber-500/20" : "text-emerald-200 bg-emerald-500/12 ring-emerald-500/20" },
     { label: "现场节点", value: `${onlineEdges}/${state.edges.length}`, hint: "在线 / 全部", icon: SignalIcon, tone: onlineEdges === state.edges.length && state.edges.length ? "text-emerald-200 bg-emerald-500/12 ring-emerald-500/20" : "text-rose-200 bg-rose-500/12 ring-rose-500/20" },
-    { label: "研发项目", value: activeOptimizationProjects, hint: `${activeContexts} 个有效上下文`, icon: BeakerIcon, tone: "text-evidence-400 bg-evidence-500/12 ring-evidence-500/20" },
+    { label: "配方优化", value: activeOptimizationProjects, hint: `${activeContexts} 个有效上下文`, icon: BeakerIcon, tone: "text-evidence-400 bg-evidence-500/12 ring-evidence-500/20" },
   ];
   return (
     <Page
       title="工作台"
-      description="把运行、质量、现场状态和研发进展汇总为今天需要处理的工程任务。"
+      description="把运行、质量、现场状态和配方优化进展汇总为今天需要处理的工程任务。"
       actions={<Link to="/analysis" className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-evidence-500 bg-evidence-500 px-4 py-2 text-sm font-semibold text-coal-950 shadow-sm transition hover:border-evidence-400 hover:bg-evidence-400">开始工艺追因<ArrowRightIcon className="size-4" /></Link>}
     >
       <RequestError error={state.error} onRetry={() => setRetryKey(value => value + 1)} />

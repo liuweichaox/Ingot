@@ -393,10 +393,10 @@ export function ExecutionComparisonPage() {
               ]}
             />
           </Card></div></details>
-          <Card title="将追因结果带入研发" description="系统只把有证据的关联转为候选假设；因果关系仍需后续受控实验验证。">
+          <Card title="将追因结果带入配方优化" description="系统只把有证据的关联转为候选原因；因果结论仍需可选的受控验证确认。">
             {!hypothesisGenerationReady && <Alert tone="warning" title="暂不能批量生成候选假设">当前证据仍处于探索阶段。补充质量结果、重复运行和上下文变量，并在样本外验证通过后再转入研发。</Alert>}
             <div className="grid gap-3 md:grid-cols-[1fr_auto]">
-              <Field label="研发项目"><Select value={researchProjectId} onChange={event => setResearchProjectId(event.target.value)}><option value="">选择研发项目</option>{researchProjects.filter(item => !["completed", "archived"].includes(item.status)).map(item => <option key={item.projectId} value={item.projectId}>{item.name}</option>)}</Select></Field>
+              <Field label="优化任务"><Select value={researchProjectId} onChange={event => setResearchProjectId(event.target.value)}><option value="">选择优化任务</option>{researchProjects.filter(item => !["completed", "archived"].includes(item.status)).map(item => <option key={item.projectId} value={item.projectId}>{item.name}</option>)}</Select></Field>
               {researchProjects.some(item => !["completed", "archived"].includes(item.status))
                 ? <Button className="self-end" disabled={!researchProjectId || busy || !hypothesisGenerationReady} onClick={createHypotheses}>生成候选假设</Button>
                 : <Button
@@ -411,7 +411,7 @@ export function ExecutionComparisonPage() {
                       });
                       navigate(`/research-projects?${next}`);
                     }}
-                  >新建研发项目并带入本次对比</Button>}
+                  >新建优化任务并带入本次对比</Button>}
             </div>
           </Card>
           <Card title="质量候选原因" description="同时比较实际控制参数与过程轨迹特征；优先选择能直接映射到可控变量的候选原因。">

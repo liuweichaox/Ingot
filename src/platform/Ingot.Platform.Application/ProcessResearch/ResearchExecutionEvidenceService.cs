@@ -172,7 +172,7 @@ public sealed class ResearchExecutionEvidenceService(
         {
             ExecutionKey = execution.ExecutionId,
             Sequence = index + 1,
-            Factors = controls.Select(variable => new ExperimentFactorSetting
+            Factors = controls.Select(variable => new ResearchVariableSetting
             {
                 VariableCode = variable.Code,
                 Value = ReadHistoricalValue(execution, variable),

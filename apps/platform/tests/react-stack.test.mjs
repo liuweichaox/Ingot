@@ -102,7 +102,7 @@ test("navigation and overlays are accessible Headless UI components", () => {
   assert.match(app, /DialogBackdrop/);
   assert.match(app, /DialogPanel/);
   assert.match(app, /MenuButton/);
-  for (const [id, domain] of [["overview", "工作台"], ["evidence", "生产运行"], ["quality", "质量管理"], ["diagnosis", "工艺追因"], ["research", "工艺研发"], ["process-definition", "工艺配置"], ["equipment-connection", "现场接入"]]) {
+  for (const [id, domain] of [["overview", "工作台"], ["evidence", "生产运行"], ["quality", "质量管理"], ["diagnosis", "工艺追因"], ["research", "配方优化"], ["process-definition", "工艺配置"], ["equipment-connection", "现场接入"]]) {
     assert.match(app, new RegExp(`id: "${id}", label: "${domain}"`));
   }
   assert.match(app, /id: "overview"[\s\S]*id: "equipment-connection"[\s\S]*id: "process-definition"[\s\S]*id: "evidence"[\s\S]*id: "quality"[\s\S]*id: "diagnosis"[\s\S]*id: "research"/);
@@ -112,15 +112,15 @@ test("navigation and overlays are accessible Headless UI components", () => {
   assert.match(app, /roles \|\| \[\]\)\.includes\("platform\.admin"\)/);
   assert.match(app, /id: "equipment-connection"[\s\S]*\["\/edges", "现场节点"\], \["\/configuration\/ingestion-tasks", "采集配置"\]/);
   assert.match(app, /id: "process-definition"[\s\S]*\["\/configuration", "配置总览"\][\s\S]*\["\/configuration\/process-data-models", "数据字典"\][\s\S]*\["\/configuration\/tooling-types", "工装结构"\][\s\S]*\["\/configuration\/scenario-packages", "配置发布"\]/);
-  assert.match(app, /id: "research"[\s\S]*items: \[\["\/research-projects", "研发项目"\], \["\/research-assets", "工艺知识"\]\]/);
+  assert.match(app, /id: "research"[\s\S]*items: \[\["\/research-projects", "优化任务"\], \["\/research-assets", "工艺知识"\]\]/);
   assert.match(app, /id: "system"[\s\S]*label: "身份权限"[\s\S]*label: "平台运维"[\s\S]*label: "助手治理"/);
   assert.match(app, /\["\/chat", "分析助手"\]/);
-  assert.match(app, /items: \[\["\/research-projects", "研发项目"\], \["\/research-assets", "工艺知识"\]\]/);
+  assert.match(app, /items: \[\["\/research-projects", "优化任务"\], \["\/research-assets", "工艺知识"\]\]/);
   assert.match(app, /\["\/research-assets", "工艺知识"\]/);
   assert.match(app, /\["\/production\/changeover", "生产切换"\][\s\S]*\["\/process-executions", "运行记录"\]/);
   assert.match(app, /\["\/data-quality", "数据质量"\], \["\/comparisons", "运行对比"\]/);
   assert.doesNotMatch(app, /优化工作|复用资产/);
-  assert.match(pages, /title="研发项目"/);
+  assert.match(pages, /title="配方优化"/);
   assert.match(pages, /工艺分析助手/);
   assert.doesNotMatch(app, /label: "AI 助手"/);
   assert.match(app, /aria-label="主导航"/);
@@ -229,8 +229,9 @@ test("core workflows tell new users what to do next and confirm completed action
   assert.match(pages, /质量待办/);
   assert.match(pages, /配置下一批生产/);
   assert.match(researchProjects, /进行中与待处理/);
-  assert.match(researchProjects, /让优化器设计验证实验/);
-  assert.match(researchProjects, /实验建议准备度/);
+  assert.match(researchProjects, /生成下一配方建议/);
+  assert.match(researchProjects, /配方建议准备度/);
+  assert.match(researchProjects, /不需要建立实验/);
   assert.doesNotMatch(researchProjects, /从真实偏差进入研发闭环|发现偏差 → 缩小候选原因/);
   assert.match(app, /<ToastHost \/>/);
 });
@@ -259,9 +260,9 @@ test("forms expose clear labels, edit intent, and required upload fields", () =>
   assert.match(pages, /aria-label="分析方法"/);
   assert.match(pages, /setEditorMode\(row \? \(section === "type" \? "version" : "edit"\) : "create"\)/);
   assert.match(pages, /editorMode === "create" \? resource\.createLabel/);
-  assert.match(researchProjects, /<Field label="项目名称">/);
-  assert.match(researchProjects, /<Field label="实验名称">/);
-  assert.match(researchAssets, /<Field label="当前研发项目">/);
+  assert.match(researchProjects, /<Field label="任务名称">/);
+  assert.match(researchProjects, /<Field label="受控验证名称">/);
+  assert.match(researchAssets, /<Field label="当前优化任务">/);
   assert.match(researchAssets, /\$\{definition\.endpoint\}\?projectId=/);
 });
 

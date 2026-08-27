@@ -44,12 +44,12 @@
   <!-- Headline -->
   <g transform="translate(64,270)">
     <text y="0" font-size="38" font-weight="800" fill="#F4F8F6">Understand this run.</text>
-    <text y="52" font-size="38" font-weight="800" fill="#F4F8F6">Choose the right</text>
-    <text y="104" font-size="38" font-weight="800" fill="#F4F8F6">next experiment.</text>
+    <text y="52" font-size="38" font-weight="800" fill="#F4F8F6">Improve the</text>
+    <text y="104" font-size="38" font-weight="800" fill="#F4F8F6">next recipe.</text>
   </g>
 
   <!-- Subheadline -->
-  <text x="64" y="408" font-size="18" fill="#9FB0AA">Process diagnosis · experiment design · constrained optimization</text>
+  <text x="64" y="408" font-size="18" fill="#9FB0AA">Real recipe runs · observations · next recipe</text>
 
   <!-- Divider -->
   <path d="M64 442h300" stroke="#E8AD56" stroke-opacity="0.4" stroke-width="1.5"/>
@@ -122,6 +122,6 @@
       <circle cx="176" cy="400" r="5" fill="#E8AD56"/>
       <text x="190" y="404" fill="#CBD8D3">flagged run</text>
     </g>
-    <text x="448" y="404" font-size="11" fill="#5C7A72" text-anchor="end">next: candidate → experiment</text>
+    <text x="448" y="404" font-size="11" fill="#5C7A72" text-anchor="end">next: real runs → recipe</text>
   </g>
 </svg>

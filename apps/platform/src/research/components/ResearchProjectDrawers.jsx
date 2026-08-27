@@ -20,7 +20,7 @@ export function ShadowDecisionDrawer({ target, form, setForm, saving, variables,
       open
       onClose={onClose}
       title="登记影子选择"
-      description="该记录只用于旁路比较，不批准实验，也不向设备写入参数。保存后不能修改。"
+      description="该记录只用于旁路比较，不批准生产运行，也不向设备写入参数。保存后不能修改。"
       size="lg"
       footer={<><Button disabled={saving} onClick={onClose}>取消</Button><Button variant="primary" disabled={saving} type="submit" form="shadow-decision-form">{saving ? "正在冻结…" : "冻结影子决策"}</Button></>}
     >
@@ -161,7 +161,7 @@ export function TaskDrawer({ task, form, setForm, workspace, memberCandidates, s
     const experiment = workspace.experiments.find(item => item.experimentId === result.experimentId);
     const metrics = (result.metrics || []).map(item =>
       `${item.objectiveCode} ${formatResearchNumber(item.observedValue)} ${item.unit}`).join("；");
-    return `${experiment?.name || "已计算实验"} · ${result.runCount || 0} 个运行${metrics ? ` · ${metrics}` : ""}`;
+    return `${experiment?.name || "已计算验证"} · ${result.runCount || 0} 个运行${metrics ? ` · ${metrics}` : ""}`;
   };
   return (
     <Drawer
@@ -191,7 +191,7 @@ export function TaskDrawer({ task, form, setForm, workspace, memberCandidates, s
           <Field label="假设"><Textarea required rows={4} value={form.statement} onChange={update("statement")} placeholder="说明哪个变量通过什么机制影响目标。" /></Field>
           <Field label="提出依据"><Textarea required rows={4} value={form.rationale} onChange={update("rationale")} placeholder="填写历史数据、物理机理或专家经验。" /></Field>
           <VariableSelect variables={variables} value={form.variableCode} onChange={update("variableCode")} />
-          <Field label="验证目标（可选）" hint="定义后可让优化器设计最有信息量的验证实验。"><Select value={form.validationOutcomeCode} onChange={update("validationOutcomeCode")}><option value="">暂不定义</option>{workspace.project.objectives.map(item => <option key={item.code} value={item.code}>{item.name}</option>)}</Select></Field>
+          <Field label="验证目标（可选）" hint="定义后可让优化器设计最有信息量的受控验证条件。"><Select value={form.validationOutcomeCode} onChange={update("validationOutcomeCode")}><option value="">暂不定义</option>{workspace.project.objectives.map(item => <option key={item.code} value={item.code}>{item.name}</option>)}</Select></Field>
           {form.validationOutcomeCode && <div className="grid gap-4 sm:grid-cols-2">
             <Field label="预期效应方向"><Select required value={form.expectedEffectDirection} onChange={update("expectedEffectDirection")}><option value="">请选择</option><option value="increase">指标增加</option><option value="decrease">指标降低</option></Select></Field>
             <Field label="最小可辨别效应"><Input required type="number" min="0.0000001" step="any" value={form.minimumEffect} onChange={update("minimumEffect")} /></Field>
@@ -200,15 +200,15 @@ export function TaskDrawer({ task, form, setForm, workspace, memberCandidates, s
           <Field label="作用链（每行一条）" hint="格式：起点变量 -> 终点变量 | 作用机制 | increase/decrease/nonlinear"><Textarea rows={4} value={form.causalChain} onChange={update("causalChain")} placeholder="melt.temperature -> defect.rate | 黏度下降改善充填 | decrease" /></Field>
           <Field label="时间特征（每行一条）" hint="格式：变量 | 特征代码 | 阶段代码 | 时滞毫秒 | 窗口毫秒"><Textarea rows={4} value={form.temporalFeatures} onChange={update("temporalFeatures")} placeholder="cavity.pressure | pressure.rise-rate | holding | 500 | 3000" /></Field>
           <Field label="交互作用（每行一条）" hint="格式：变量1,变量2 | 交互说明"><Textarea rows={3} value={form.interactions} onChange={update("interactions")} placeholder="melt.temperature,holding.pressure | 高温会放大保压压力对收缩的影响" /></Field>
-          <Field label="失效条件（每行一条）" hint="格式：触发条件 | 可观测征兆 | 必须采取的处置"><Textarea rows={3} value={form.failureConditions} onChange={update("failureConditions")} placeholder="材料温度超过降解阈值 | 挥发物或颜色异常 | 停止实验并恢复基线" /></Field>
+          <Field label="失效条件（每行一条）" hint="格式：触发条件 | 可观测征兆 | 必须采取的处置"><Textarea rows={3} value={form.failureConditions} onChange={update("failureConditions")} placeholder="材料温度超过降解阈值 | 挥发物或颜色异常 | 停止验证并恢复基线" /></Field>
           <Field label="反证条件（每行一条）" hint="写出出现什么结果时应否定或收缩该假设。"><Textarea required rows={3} value={form.falsificationConditions} onChange={update("falsificationConditions")} /></Field>
         </>}
         {task === "experiment" && <>
-          <Field label="实验名称"><Input required value={form.name} onChange={update("name")} /></Field>
+          <Field label="受控验证名称"><Input required value={form.name} onChange={update("name")} /></Field>
           <Field label="验证的假设"><Select value={form.hypothesisId} onChange={update("hypothesisId")}><option value="">不关联具体假设</option>{workspace.hypotheses.map(item => <option key={item.hypothesisId} value={item.hypothesisId}>{item.statement}</option>)}</Select></Field>
           <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4 space-y-4">
             <div>
-              <p className="text-sm font-semibold text-indigo-950">生成实验设计</p>
+              <p className="text-sm font-semibold text-indigo-950">生成受控验证条件</p>
               <p className="mt-1 text-[13px] leading-5 text-indigo-800">系统只生成可编辑运行表；保存后仍执行全部安全、目标与对照校验。</p>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
@@ -264,7 +264,7 @@ export function TaskDrawer({ task, form, setForm, workspace, memberCandidates, s
           <Field label="停止规则"><Textarea required rows={3} value={form.stopRule} onChange={update("stopRule")} /></Field>
           <Field label="回退方案"><Textarea required rows={3} value={form.rollbackPlan} onChange={update("rollbackPlan")} /></Field>
           {experimentValidation && <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
-            <p className="text-sm font-semibold text-amber-950">本实验还差什么</p>
+            <p className="text-sm font-semibold text-amber-950">本次验证还差什么</p>
             <ul className="mt-2 space-y-1 text-[13px] text-amber-900">
               {experimentValidation.isValid ? <li>✓ 当前预检已通过；提交时仍会校验最新项目版本。</li> : (experimentValidation.errors || []).map(issue => <li key={`${issue.field}-${issue.code}`}>✗ {issue.message}{issue.fixHint ? ` ${issue.fixHint}` : ""}</li>)}
             </ul>

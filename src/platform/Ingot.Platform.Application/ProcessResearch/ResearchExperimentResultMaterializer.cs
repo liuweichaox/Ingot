@@ -1,9 +1,11 @@
+// 将已完成受控验证的运行观察计算为冻结结果，并触发后续证据物化。
 using System.Security.Cryptography;
 using System.Text.Json;
 using Ingot.Contracts.ProcessResearch;
 
 namespace Ingot.Platform.Application.ProcessResearch;
 
+/// <summary>从完整运行、过程与检验观察生成受控验证结果。</summary>
 public sealed class ResearchExperimentResultMaterializer(
     ProcessResearchWorkflow workflow,
     ResearchOperatingRegionMaterializer? operatingRegionMaterializer = null,
@@ -127,8 +129,8 @@ public sealed class ResearchExperimentResultMaterializer(
 
     private static IReadOnlyList<ExperimentMetricResult> BuildMetrics(
         ResearchProject project,
-        IReadOnlyList<ExperimentRunObservation> observations,
-        IReadOnlyList<ExperimentRunObservation> baselineObservations)
+        IReadOnlyList<ResearchRunObservation> observations,
+        IReadOnlyList<ResearchRunObservation> baselineObservations)
         => project.Objectives.Select(objective =>
         {
             var values = observations.Select(value => value.Outcomes[objective.Code]).ToArray();
@@ -216,7 +218,7 @@ public sealed class ResearchExperimentResultMaterializer(
 
     private static bool SatisfiesOutcomeConstraints(
         ResearchProject project,
-        IReadOnlyList<ExperimentRunObservation> observations)
+        IReadOnlyList<ResearchRunObservation> observations)
         => project.OutcomeConstraints.All(constraint =>
             observations.All(observation =>
             {

@@ -29,7 +29,7 @@ test("uses the exact official brand assets", async () => {
   }
 });
 
-test("publishes the experiment-decision journey and public references without interface documentation", async () => {
+test("publishes the recipe-optimization journey and public references without interface documentation", async () => {
   const search = JSON.parse(await readFile(path.join(out, "search-index.json"), "utf8"));
   assert.equal(search.length, 30);
   assert.deepEqual(
@@ -40,10 +40,10 @@ test("publishes the experiment-decision journey and public references without in
   for (const lang of ["zh", "en"]) {
     const index = await readFile(path.join(out, lang, "index.html"), "utf8");
     const design = await readFile(path.join(out, lang, "design", "index.html"), "utf8");
-    assert.match(index, lang === "zh" ? /减少无效实验/ : /avoid unproductive experiments/i);
+    assert.match(index, lang === "zh" ? /每次真实配方运行变成优化证据/ : /every real recipe run into optimization evidence/i);
     assert.match(design, lang === "zh" ? /设计目标/ : /Design objective/i);
-    assert.match(index, lang === "zh" ? /更快找到达到目标的工艺条件/ : /reach target process conditions faster/i);
-    assert.match(index, lang === "zh" ? /工艺配置.*现场接入.*生产运行.*质量管理.*工艺追因.*工艺研发/s : /process configuration.*field integration.*production runs.*quality management.*diagnosis.*process R(?:&amp;|&#x26;)D/is);
+    assert.match(index, lang === "zh" ? /下一份配方建议/ : /next recipe recommendation/i);
+    assert.match(index, lang === "zh" ? /工艺配置.*现场接入.*生产运行.*质量管理.*工艺追因.*配方优化/s : /process configuration.*field integration.*production runs.*quality management.*diagnosis.*recipe optimization/is);
     assert.match(index, lang === "zh" ? /当前策略尚未通过独立的未见数据验收/ : /current strategy has not yet passed an independent unseen-data acceptance/i);
     assert.doesNotMatch(`${index}${design}`, /\/api\/|curl|ProductionEvent|InspectionRecord|endpoint|HTTP API/i);
   }

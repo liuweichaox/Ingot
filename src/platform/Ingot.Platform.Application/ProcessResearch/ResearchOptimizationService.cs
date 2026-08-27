@@ -1,4 +1,4 @@
-// 负责把研发观察转为受门禁约束的实验建议；不绕过历史回放、在线准入或人工审批边界。
+// 负责把真实配方运行转为受门禁约束的下一配方建议；受控验证保留独立审批边界。
 using System.Security.Cryptography;
 using System.Text.Json;
 using Ingot.Contracts.ProcessResearch;
@@ -8,9 +8,9 @@ using Ingot.Platform.Application.ResearchAssets;
 namespace Ingot.Platform.Application.ProcessResearch;
 
 /// <summary>
-/// 评估当前方法准入，并在证据门槛通过后生成可追溯的序贯实验设计。
+/// 从真实生产运行生成独立的下一配方建议，并为可选受控验证执行方法准入。
 /// </summary>
-public sealed class ResearchExperimentOptimizer(
+public sealed class ResearchOptimizationService(
     IProcessResearchStore store,
     IProcessOptimizerClient optimizerClient,
     IResearchObservationAssembler observationAssembler,
@@ -21,6 +21,252 @@ public sealed class ResearchExperimentOptimizer(
     IMechanismKnowledgeStore? mechanismKnowledgeStore = null,
     IResearchAssetStore? researchAssetStore = null)
 {
+    public async Task<ResearchRecipeRecommendation> CreateNextRecipeRecommendationAsync(
+        Guid projectId,
+        ResearchRecipeRecommendationRequest request,
+        string userId,
+        CancellationToken ct = default)
+    {
+        var project = await store.GetProjectAsync(projectId, ct).ConfigureAwait(false)
+            ?? throw new ProcessResearchRuleException("优化任务不存在。");
+        if (project.Status is ResearchProjectStatuses.Completed or ResearchProjectStatuses.Archived)
+            throw new ProcessResearchRuleException("已完成或已归档的优化任务保持只读。");
+
+        var mechanismKnowledge = mechanismKnowledgeStore is null
+            ? new AppliedMechanismKnowledge([], [], [], [])
+            : MechanismKnowledgeExperimentPolicy.Select(
+                project,
+                await mechanismKnowledgeStore.ListClaimsAsync(projectId, ct).ConfigureAwait(false),
+                await mechanismKnowledgeStore.ListConflictsAsync(projectId, ct).ConfigureAwait(false));
+        var mechanismKnowledgeSnapshotHash =
+            MechanismKnowledgeExperimentPolicy.SnapshotHash(mechanismKnowledge);
+        var mechanismModels = researchAssetStore is null
+            ? new AppliedMechanismModels([], [])
+            : MechanismModelExperimentPolicy.Select(
+                project,
+                await researchAssetStore.ListMechanismModelsAsync(ct).ConfigureAwait(false),
+                await researchAssetStore.ListMechanismFusionsAsync(ct).ConfigureAwait(false));
+
+        var objectiveCodes = project.Objectives.Select(static value => value.Code)
+            .ToHashSet(StringComparer.Ordinal);
+        var constraintCodes = project.OutcomeConstraints.Select(static value => value.Code)
+            .ToHashSet(StringComparer.Ordinal);
+        var experiments = await store.ListExperimentsAsync(projectId, ct).ConfigureAwait(false);
+        var experimentResults = await store.ListExperimentResultsAsync(projectId, ct)
+            .ConfigureAwait(false);
+        var assembled = await observationAssembler.AssembleProductionRunsAsync(project, ct)
+            .ConfigureAwait(false);
+        if (experiments.Count > 0)
+        {
+            var plannedAssembly = await observationAssembler.AssembleAsync(project, experiments, ct)
+                .ConfigureAwait(false);
+            var materialized = await resultMaterializer.MaterializeCompletedAsync(
+                project,
+                experiments,
+                experimentResults,
+                plannedAssembly,
+                userId,
+                ct).ConfigureAwait(false);
+            if (materialized.Count > 0)
+                experimentResults = experimentResults.Concat(materialized).ToArray();
+        }
+
+        var persisted = experimentResults
+            .SelectMany(static result => result.RunObservations)
+            .Where(value => value.ValidForOptimization &&
+                            value.Outcomes.Keys.ToHashSet(StringComparer.Ordinal)
+                                .SetEquals(objectiveCodes) &&
+                            value.ConstraintOutcomes.Keys.ToHashSet(StringComparer.Ordinal)
+                                .SetEquals(constraintCodes));
+        var validProductionRuns = assembled.Observations
+            .Where(value => value.ValidForOptimization &&
+                            value.Outcomes.Keys.ToHashSet(StringComparer.Ordinal)
+                                .SetEquals(objectiveCodes) &&
+                            value.ConstraintOutcomes.Keys.ToHashSet(StringComparer.Ordinal)
+                                .SetEquals(constraintCodes))
+            .ToArray();
+        var sourceObservations = persisted
+            .Concat(validProductionRuns)
+            .GroupBy(static value => value.ExecutionKey, StringComparer.Ordinal)
+            .Select(static group => group.Last())
+            .OrderBy(static value => value.ExecutionKey, StringComparer.Ordinal)
+            .ToArray();
+        var observedExecutionKeys = sourceObservations.Select(static value => value.ExecutionKey)
+            .ToHashSet(StringComparer.Ordinal);
+        var controls = project.Variables
+            .Where(static value => value.Role == ResearchVariableRoles.Control)
+            .ToDictionary(static value => value.Code, StringComparer.Ordinal);
+        var observations = sourceObservations
+            .Where(value => value.ActualFactors.Select(static factor => factor.VariableCode)
+                .ToHashSet(StringComparer.Ordinal).SetEquals(controls.Keys))
+            .Select(static value => new OptimizerObservationInput
+            {
+                Params = value.ActualFactors.ToDictionary(
+                    static factor => factor.VariableCode,
+                    static factor => factor.Value,
+                    StringComparer.Ordinal),
+                Outcomes = value.Outcomes,
+                ConstraintOutcomes = value.ConstraintOutcomes,
+                ProcessFeatures = value.ProcessFeatures
+            })
+            .ToArray();
+        if (observations.Length < 3)
+            throw new ProcessResearchRuleException(
+                "至少需要 3 条具有实际配方参数和有效质量结果的生产运行，才能生成下一配方建议。");
+        var distinctRecipes = observations
+            .Select(value => string.Join('|', value.Params
+                .OrderBy(static pair => pair.Key, StringComparer.Ordinal)
+                .Select(static pair => $"{pair.Key}:{pair.Value:R}")))
+            .Distinct(StringComparer.Ordinal)
+            .Count();
+        if (distinctRecipes < 2)
+            throw new ProcessResearchRuleException(
+                "当前生产记录只有一种实际配方，尚无法比较配方效果或推荐下一配方。");
+
+        var pendingPoints = experiments
+            .Where(static experiment => experiment.Status is ResearchExperimentStatuses.Planned
+                or ResearchExperimentStatuses.Approved
+                or ResearchExperimentStatuses.Running)
+            .Where(static experiment => experiment.Optimization?.Mode is not ResearchOptimizationModes.Shadow)
+            .Where(experiment => experiment.Optimization is null || string.Equals(
+                experiment.Optimization.MechanismKnowledgeSnapshotHash,
+                mechanismKnowledgeSnapshotHash,
+                StringComparison.Ordinal) && string.Equals(
+                experiment.Optimization.MechanismModelSnapshotHash,
+                mechanismModels.SnapshotHash,
+                StringComparison.Ordinal))
+            .SelectMany(static experiment => experiment.RunPlan)
+            .Where(run => !observedExecutionKeys.Contains(run.ExecutionKey) &&
+                          run.Factors.Select(static value => value.VariableCode)
+                              .ToHashSet(StringComparer.Ordinal).SetEquals(controls.Keys))
+            .Select(run => (IReadOnlyDictionary<string, double>)run.Factors
+                .OrderBy(static value => value.VariableCode, StringComparer.Ordinal)
+                .ToDictionary(
+                    static value => value.VariableCode,
+                    static value => value.Value,
+                    StringComparer.Ordinal))
+            .Distinct(DictionaryValueComparer.Instance)
+            .ToArray();
+        var optimizerTopK = mechanismKnowledge.RankingConstraints.Count == 0 ? 1 : 4;
+        var call = new OptimizerSuggestionCall
+        {
+            Campaign = MechanismModelExperimentPolicy.Apply(
+                MechanismKnowledgeExperimentPolicy.ApplyHardConstraints(
+                    BuildCampaign(project, ResearchOptimizationIntents.ReachSpecification, null),
+                    mechanismKnowledge),
+                mechanismModels),
+            Observations = observations,
+            PendingPoints = pendingPoints,
+            TopK = optimizerTopK,
+            Seed = request.Seed
+        };
+        var inputHash = Convert.ToHexStringLower(
+            SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new
+            {
+                Operation = "next-recipe-recommendation",
+                OptimizerCall = call,
+                MechanismClaims = mechanismKnowledge.Claims.Select(static value => new
+                {
+                    value.ClaimId,
+                    value.Version,
+                    value.ContentHash
+                }),
+                MechanismModels = mechanismModels.References
+            })));
+        var existing = await store.GetRecipeRecommendationByInputHashAsync(
+            projectId, inputHash, ct).ConfigureAwait(false);
+        if (existing is not null)
+        {
+            await SaveRecipeKnowledgeUsagesAsync(
+                existing.RecommendationId, mechanismKnowledge, ct).ConfigureAwait(false);
+            return existing;
+        }
+
+        var response = await optimizerClient.SuggestAsync(call, ct).ConfigureAwait(false);
+        if (response.ObservationCount != observations.Length ||
+            response.Suggestions.Count != optimizerTopK)
+            throw new ProcessResearchRuleException("优化服务使用的数据快照或返回的配方建议数量不一致。");
+        foreach (var candidate in response.Suggestions)
+        {
+            ValidateSuggestion(project, response.ModelVersion, candidate);
+            MechanismKnowledgeExperimentPolicy.ValidateHardConstraints(candidate, mechanismKnowledge);
+        }
+        var suggestion = MechanismKnowledgeExperimentPolicy.Rank(
+                response.Suggestions, mechanismKnowledge, controls)
+            .First();
+        ValidateControlledSuggestionInObservedEnvelope(suggestion, observations);
+
+        var recommendationId = CreateDeterministicOptimizationId(projectId, inputHash);
+        var recommendationKey = $"recipe-{recommendationId:N}"[..22];
+        var generatedAt = DateTimeOffset.UtcNow;
+        var recommendation = new ResearchRecipeRecommendation
+        {
+            RecommendationId = recommendationId,
+            ProjectId = projectId,
+            ProjectRevision = project.Revision,
+            ModelVersion = response.ModelVersion,
+            InputHash = inputHash,
+            ObservationCount = observations.Length,
+            AutoAssembledObservationCount = validProductionRuns.Length,
+            PendingControlledValidationCount = pendingPoints.Length,
+            ProcessFeatureCount = CommonProcessFeatureCount(observations),
+            FeatureSetId = project.OptimizationFeatures.FeatureSetId,
+            FeatureSetVersion = project.OptimizationFeatures.Version,
+            DerivedFeatureCount = call.Campaign.DerivedFeatures.Count,
+            MechanismKnowledgeSnapshotHash = mechanismKnowledgeSnapshotHash,
+            MechanismModelSnapshotHash = mechanismModels.SnapshotHash,
+            MechanismModels = mechanismModels.References,
+            Items =
+            [
+                new ResearchRecipeRecommendationItem
+                {
+                    RecommendationKey = recommendationKey,
+                    Parameters = suggestion.RecommendedParameters.Select(pair =>
+                        new ResearchVariableSetting
+                        {
+                            VariableCode = pair.Key,
+                            Value = pair.Value,
+                            Unit = controls[pair.Key].Unit
+                        }).ToArray(),
+                    Prediction = MapPrediction(recommendationKey, suggestion)
+                }
+            ],
+            CreatedBy = userId,
+            GeneratedAt = generatedAt
+        };
+        var audit = new ResearchAuditEntry
+        {
+            EntryId = Guid.CreateVersion7(),
+            ProjectId = projectId,
+            ResourceType = "recipe-recommendation",
+            ResourceId = recommendationId.ToString(),
+            Action = "created",
+            UserId = userId,
+            CreatedAt = generatedAt
+        };
+        try
+        {
+            var saved = await store.CreateRecipeRecommendationTransactionAsync(
+                recommendation, audit, ct).ConfigureAwait(false);
+            await SaveRecipeKnowledgeUsagesAsync(
+                saved.RecommendationId, mechanismKnowledge, ct).ConfigureAwait(false);
+            return saved;
+        }
+        catch (ProcessResearchRuleException)
+        {
+            var concurrent = await store.GetRecipeRecommendationAsync(recommendationId, ct)
+                .ConfigureAwait(false);
+            if (concurrent is not null &&
+                string.Equals(concurrent.InputHash, inputHash, StringComparison.Ordinal))
+            {
+                await SaveRecipeKnowledgeUsagesAsync(
+                    concurrent.RecommendationId, mechanismKnowledge, ct).ConfigureAwait(false);
+                return concurrent;
+            }
+            throw;
+        }
+    }
+
     public async Task<ResearchMethodAdmissionAssessment> AssessMethodAdmissionAsync(
         Guid projectId,
         CancellationToken ct = default)
@@ -137,15 +383,17 @@ public sealed class ResearchExperimentOptimizer(
         var experimentResults = await store.ListExperimentResultsAsync(projectId, ct)
             .ConfigureAwait(false);
         var assembled = request.AutoAssembleObservations
-            ? await observationAssembler.AssembleAsync(project, experiments, ct).ConfigureAwait(false)
+            ? await observationAssembler.AssembleProductionRunsAsync(project, ct).ConfigureAwait(false)
             : new ResearchObservationAssembly([], 0);
-        if (request.AutoAssembleObservations)
+        if (request.AutoAssembleObservations && experiments.Count > 0)
         {
+            var plannedAssembly = await observationAssembler.AssembleAsync(project, experiments, ct)
+                .ConfigureAwait(false);
             var materialized = await resultMaterializer.MaterializeCompletedAsync(
                 project,
                 experiments,
                 experimentResults,
-                assembled,
+                plannedAssembly,
                 userId,
                 ct).ConfigureAwait(false);
             if (materialized.Count > 0)
@@ -232,7 +480,7 @@ public sealed class ResearchExperimentOptimizer(
                 or ResearchExperimentStatuses.Approved
                 or ResearchExperimentStatuses.Running)
             .Where(static experiment =>
-                experiment.Optimization?.Mode != ResearchOptimizationModes.Shadow)
+                experiment.Optimization?.Mode is not ResearchOptimizationModes.Shadow)
             .Where(experiment => experiment.Optimization is null || string.Equals(
                 experiment.Optimization.MechanismKnowledgeSnapshotHash,
                 mechanismKnowledgeSnapshotHash,
@@ -324,7 +572,7 @@ public sealed class ResearchExperimentOptimizer(
             observations,
             controls);
 
-        var experimentId = CreateDeterministicExperimentId(projectId, inputHash);
+        var experimentId = CreateDeterministicOptimizationId(projectId, inputHash);
         var runPlan = new List<ExperimentRunPlan>();
         var predictions = new List<OptimizationRunPrediction>();
         var sequence = 1;
@@ -335,7 +583,7 @@ public sealed class ResearchExperimentOptimizer(
             {
                 var index = (position + replicate) % rankedSuggestions.Length;
                 var suggestion = rankedSuggestions[index];
-                if (mode == ResearchOptimizationModes.Controlled)
+                if (mode is ResearchOptimizationModes.Controlled)
                     ValidateControlledSuggestionInObservedEnvelope(suggestion, observations);
                 var executionKey = $"bo-{experimentId:N}"[..15] +
                              $"-{index + 1:D2}-r{replicate + 1:D2}";
@@ -346,7 +594,7 @@ public sealed class ResearchExperimentOptimizer(
                     BlockKey = $"block-{replicate + 1:D2}",
                     ReplicateKey = $"condition-{index + 1:D2}",
                     Factors = suggestion.RecommendedParameters.Select(pair =>
-                        new ExperimentFactorSetting
+                        new ResearchVariableSetting
                         {
                             VariableCode = pair.Key,
                             Value = pair.Value,
@@ -538,6 +786,25 @@ public sealed class ResearchExperimentOptimizer(
                 ContentHash = value.ContentHash
             })).ToArray();
         return mechanismKnowledgeStore.SaveUsagesAsync(usages, ct);
+    }
+
+    private Task SaveRecipeKnowledgeUsagesAsync(
+        Guid recommendationId,
+        AppliedMechanismKnowledge mechanismKnowledge,
+        CancellationToken ct)
+    {
+        if (mechanismKnowledgeStore is null || mechanismKnowledge.Claims.Count == 0)
+            return Task.CompletedTask;
+        var usages = mechanismKnowledge.Claims.SelectMany(value => UsageTypes(value)
+            .Select(usageType => new MechanismClaimUsage
+            {
+                RecommendationId = recommendationId,
+                ClaimId = value.ClaimId,
+                ClaimVersion = value.Version,
+                UsageType = usageType,
+                ContentHash = value.ContentHash
+            })).ToArray();
+        return mechanismKnowledgeStore.SaveRecipeRecommendationUsagesAsync(usages, ct);
     }
 
     private static IReadOnlyList<string> UsageTypes(MechanismClaimVersion claim)
@@ -824,7 +1091,7 @@ public sealed class ResearchExperimentOptimizer(
         return common.Count;
     }
 
-    private static Guid CreateDeterministicExperimentId(Guid projectId, string inputHash)
+    private static Guid CreateDeterministicOptimizationId(Guid projectId, string inputHash)
     {
         var bytes = SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new
         {

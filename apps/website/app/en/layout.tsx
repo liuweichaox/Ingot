@@ -9,11 +9,11 @@ const origin = "https://ingotstack.com";
 export const metadata: Metadata = {
   metadataBase: new URL(origin),
   title: "Ingot — Open-source Process Diagnosis & Optimization",
-  description: "An open-source process diagnosis and optimization system for run-evidence linkage, process diagnosis, experiment design, and constrained optimization.",
+  description: "An open-source process diagnosis and optimization system that turns real recipe runs into observations and recommends the next recipe within safety boundaries and observed coverage.",
   applicationName: "Ingot",
   keywords: [
-    "Ingot", "process diagnosis", "process optimization", "process R&D", "process engineer decisions",
-    "process executions", "experiment design", "constrained optimization",
+    "Ingot", "process diagnosis", "recipe optimization", "process optimization", "process engineer decisions",
+    "production runs", "next recipe", "constrained optimization",
     "operating region", "process data", "Bayesian optimization", "process knowledge",
   ],
   alternates: {
@@ -26,19 +26,19 @@ export const metadata: Metadata = {
     apple: "/brand/ingot-mark-dark.svg",
   },
   openGraph: {
-    title: "Ingot — Understand this run. Choose the right next experiment.",
-    description: "Connect real-run evidence, narrow candidate causes, design validation, and optimize the next experiment within safety boundaries.",
+    title: "Ingot — Understand this run. Improve the next recipe.",
+    description: "Connect real recipe runs and continuously recommend the next recipe within safety boundaries and observed coverage.",
     url: `${origin}/en/`,
     locale: "en_US",
     alternateLocale: ["zh_CN"],
     siteName: "Ingot",
     type: "website",
-    images: [{ url: "/og.png", width: 1200, height: 630, alt: "Ingot — Understand this run. Choose the right next experiment." }],
+    images: [{ url: "/og.png", width: 1200, height: 630, alt: "Ingot — Understand this run. Improve the next recipe." }],
   },
   twitter: {
     card: "summary_large_image",
     title: "Ingot — Open-source Process Diagnosis & Optimization",
-    description: "Use traceable run evidence for process diagnosis, experiment design, and constrained optimization.",
+    description: "Use traceable real runs for process diagnosis, next-recipe recommendations, and constrained optimization.",
     images: ["/og.png"],
   },
 };

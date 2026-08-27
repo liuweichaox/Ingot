@@ -128,7 +128,8 @@ public sealed class ResearchObservationAssemblerTests
             inspections,
             reviewStore,
             masterDataStore,
-            new FakeProcessConfigurationStore(scenario));
+            new FakeProcessConfigurationStore(scenario),
+            productionRuns: executionService);
         var project = new ResearchProject
         {
             Code = "lens-a",
@@ -200,7 +201,7 @@ public sealed class ResearchObservationAssemblerTests
                     Sequence = 1,
                     Factors =
                     [
-                        new ExperimentFactorSetting
+                        new ResearchVariableSetting
                         {
                             VariableCode = "temperature",
                             Value = 505,
@@ -312,11 +313,60 @@ public sealed class ResearchObservationAssemblerTests
         Assert.False(unitConflict.ValidForOptimization);
         Assert.Empty(unitConflict.ActualFactors);
         Assert.Contains("单位冲突", unitConflict.ExclusionReason);
+
+        var productionResult = await assembler.AssembleProductionRunsAsync(project);
+        Assert.Single(productionResult.Observations);
+        Assert.Equal(1, executionService.NaturalQueryCount);
+        Assert.Null(executionService.LastProcessSpecificationId);
     }
 
-    private sealed class FakeProcessExecutionService(ExecutionComparisonRow execution) : IExecutionComparisonService
+    private sealed class FakeProcessExecutionService(ExecutionComparisonRow execution)
+        : IExecutionComparisonService, IProcessExecutionService
     {
         public int BatchQueryCount { get; private set; }
+        public int NaturalQueryCount { get; private set; }
+        public string? LastProcessSpecificationId { get; private set; }
+
+        public Task<ProcessExecutionQueryResult> QueryAsync(
+            DateTimeOffset? from,
+            DateTimeOffset? to,
+            string? productFamilyCode,
+            string? productCode,
+            string? processSpecificationId,
+            string? equipmentId,
+            string? outputItemId,
+            string? executionId,
+            string? status,
+            int limit,
+            int offset = 0,
+            string? search = null,
+            CancellationToken ct = default,
+            string? edgeId = null,
+            string? externalBatchRef = null,
+            string? siteId = null)
+        {
+            NaturalQueryCount++;
+            LastProcessSpecificationId = processSpecificationId;
+            return Task.FromResult(new ProcessExecutionQueryResult
+            {
+                Data =
+                [
+                    new ProcessExecutionSummary
+                    {
+                        ExecutionId = execution.ExecutionId,
+                        SiteId = siteId ?? "SITE-001",
+                        EquipmentId = execution.EquipmentId,
+                        Status = "completed",
+                        HasStarted = true,
+                        HasCompleted = true,
+                        LifecycleComplete = true,
+                        StartedAt = execution.StartedAt,
+                        CompletedAt = execution.CompletedAt
+                    }
+                ],
+                Total = 1
+            });
+        }
 
         public Task<ExecutionComparisonRow?> GetProcessExecutionAsync(
             string executionId,

@@ -38,6 +38,26 @@ public interface IProcessResearchStore
         ResearchHypothesis value,
         CancellationToken ct = default);
 
+    Task<ResearchRecipeRecommendation?> GetRecipeRecommendationAsync(
+        Guid recommendationId,
+        CancellationToken ct = default);
+    Task<ResearchRecipeRecommendation?> GetRecipeRecommendationByInputHashAsync(
+        Guid projectId,
+        string inputHash,
+        CancellationToken ct = default);
+    Task<IReadOnlyList<ResearchRecipeRecommendation>> ListRecipeRecommendationsAsync(
+        Guid projectId,
+        CancellationToken ct = default);
+    Task<ResearchPage<ResearchRecipeRecommendation>> ListRecipeRecommendationsPageAsync(
+        Guid projectId,
+        string? cursor,
+        int limit,
+        CancellationToken ct = default);
+    Task<ResearchRecipeRecommendation> CreateRecipeRecommendationTransactionAsync(
+        ResearchRecipeRecommendation value,
+        ResearchAuditEntry audit,
+        CancellationToken ct = default);
+
     Task<ResearchExperiment?> GetExperimentAsync(Guid experimentId, CancellationToken ct = default);
     Task<IReadOnlyList<ResearchExperiment>> ListExperimentsAsync(
         Guid projectId,

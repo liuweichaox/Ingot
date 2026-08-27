@@ -40,6 +40,29 @@ project_check() {
   fi
 }
 
+diagram_require() {
+  local file="$1" text="$2" name="$3"
+  if [[ ! -f "$file" ]]; then
+    echo "✗ [$name] 架构图不存在: $file"
+    fail=1
+  elif ! grep -qF "$text" "$file"; then
+    echo "✗ [$name] 架构图缺少当前运行事实: $text"
+    fail=1
+  else
+    echo "✓ [$name] $text"
+  fi
+}
+
+diagram_reject() {
+  local file="$1" text="$2" name="$3"
+  if grep -qF "$text" "$file" 2>/dev/null; then
+    echo "✗ [$name] 架构图仍包含已失效描述: $text"
+    fail=1
+  else
+    echo "✓ [$name] 无失效描述: $text"
+  fi
+}
+
 echo "== 源码依赖 =="
 
 check "domain" src/shared/Ingot.Domain \
@@ -127,7 +150,7 @@ else
 fi
 
 compatibility_hits=$(grep -rnE \
-  'SqliteAgentStore|LegacySqliteAgentRunImporter|IAgentRunImportStore|ImportLegacySqlite|Chat:DatabasePath|IBatchedEventLog|CompatibleDateTimeOffsetConverter|ResearchExperimentCommandException|ResearchExperimentPlanValidationException|ApiProblemDetailsResultFilter' \
+  'SqliteAgentStore|LegacySqliteAgentRunImporter|IAgentRunImportStore|ImportLegacySqlite|Chat:DatabasePath|IBatchedEventLog|CompatibleDateTimeOffsetConverter|ResearchExperimentAutomationHostedService|ResearchExperimentCommandException|ResearchExperimentPlanValidationException|ApiProblemDetailsResultFilter' \
   src apps/platform/src docker-compose.app.yml scripts/run-platform-api.ps1 \
   --include='*.cs' --include='*.csproj' --include='*.json' --include='*.js' \
   --include='*.jsx' --include='*.yml' --include='*.ps1' \
@@ -231,7 +254,7 @@ unexpected_research_infrastructure=$(find src/platform/Ingot.Platform.Infrastruc
   ! -name 'PostgresProcessResearchStore.cs' \
   ! -name 'ProcessOptimizerCircuitBreakerHandler.cs' \
   ! -name 'ProcessOptimizerClient.cs' \
-  ! -name 'ResearchExperimentAutomationHostedService.cs' \
+  ! -name 'ResearchResultMaterializationHostedService.cs' \
   ! -name 'ResearchObservationAssembler.cs' \
   ! -name 'ProcessResearchModuleServiceCollectionExtensions.cs' \
   -print)
@@ -399,6 +422,64 @@ check "edge-infrastructure" src/edge/Ingot.Edge.Infrastructure \
 check "connector-contract" src \
   'IPlc|Plc(Read|Write)|WriteRegister|Read(UShort|UInt|ULong|Short|Int|Long|Float|Double|String|Bool)Async' \
   "核心源码必须保持连接器协议中立"
+
+echo "== 当前应用架构图 =="
+
+diagram_require docs/architecture/system-architecture.svg \
+  '本地 SQLite：outbox · 日志 · 配置缓存' \
+  'architecture-diagram-zh'
+diagram_require docs/architecture/system-architecture.svg \
+  'Platform Worker' \
+  'architecture-diagram-zh'
+diagram_require docs/architecture/system-architecture.svg \
+  '结果固化 · 知识处理' \
+  'architecture-diagram-zh'
+diagram_require docs/architecture/system-architecture.svg \
+  'Platform Migrator' \
+  'architecture-diagram-zh'
+diagram_require docs/architecture/system-architecture.svg \
+  'PostgreSQL 17 + TimescaleDB 扩展' \
+  'architecture-diagram-zh'
+diagram_require docs/architecture/system-architecture.svg \
+  '持久文件卷' \
+  'architecture-diagram-zh'
+diagram_require docs/architecture/system-architecture.svg \
+  '非独立部署单元' \
+  'architecture-diagram-zh'
+diagram_reject docs/architecture/system-architecture.svg \
+  '实验设计 · 受约束优化' \
+  'architecture-diagram-zh'
+diagram_reject docs/architecture/system-architecture.svg \
+  '批准实验' \
+  'architecture-diagram-zh'
+
+diagram_require docs/architecture/system-architecture.en.svg \
+  'Local SQLite: outbox · logs · configuration cache' \
+  'architecture-diagram-en'
+diagram_require docs/architecture/system-architecture.en.svg \
+  'Platform Worker' \
+  'architecture-diagram-en'
+diagram_require docs/architecture/system-architecture.en.svg \
+  'result materialization · knowledge jobs' \
+  'architecture-diagram-en'
+diagram_require docs/architecture/system-architecture.en.svg \
+  'Platform Migrator' \
+  'architecture-diagram-en'
+diagram_require docs/architecture/system-architecture.en.svg \
+  'PostgreSQL 17 + TimescaleDB extension' \
+  'architecture-diagram-en'
+diagram_require docs/architecture/system-architecture.en.svg \
+  'Persistent file volumes' \
+  'architecture-diagram-en'
+diagram_require docs/architecture/system-architecture.en.svg \
+  'not a deployment unit' \
+  'architecture-diagram-en'
+diagram_reject docs/architecture/system-architecture.en.svg \
+  'Experiment design · constrained optimization' \
+  'architecture-diagram-en'
+diagram_reject docs/architecture/system-architecture.en.svg \
+  'approves experiments' \
+  'architecture-diagram-en'
 
 echo "== 工程依赖 =="
 

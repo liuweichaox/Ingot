@@ -15,7 +15,7 @@ A qualified data chain answers:
 - What were the final quality and safety outcomes?
 - Where did each value come from, in which unit and configuration version?
 
-Data acquisition enters process R&D only when these facts can be linked reliably.
+Data enters process diagnosis and recipe optimization only when these facts can be linked reliably.
 
 ## Data sources
 

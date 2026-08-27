@@ -1,4 +1,4 @@
-// 消费研发实验自动化任务并在冻结约束内推进离线计算。
+// 周期性固化已经具备完整生产证据的优化观察结果。
 using Ingot.Contracts.ProcessResearch;
 using Ingot.Platform.Application.ProcessResearch;
 using Microsoft.Extensions.Hosting;
@@ -7,13 +7,13 @@ using Npgsql;
 
 namespace Ingot.Platform.Infrastructure.ProcessResearch;
 
-public sealed class ResearchExperimentAutomationHostedService(
+public sealed class ResearchResultMaterializationHostedService(
     NpgsqlDataSource dataSource,
     IProcessResearchStore store,
     IResearchObservationAssembler observationAssembler,
     ResearchExperimentResultMaterializer materializer,
     ResearchOperatingRegionMaterializer operatingRegionMaterializer,
-    ILogger<ResearchExperimentAutomationHostedService> logger) : BackgroundService
+    ILogger<ResearchResultMaterializationHostedService> logger) : BackgroundService
 {
     private const long AdvisoryLockKey = 0x496E676F74524553;
 
@@ -32,7 +32,7 @@ public sealed class ResearchExperimentAutomationHostedService(
             }
             catch (Exception exception)
             {
-                logger.LogWarning(exception, "自动回收研发实验结果失败；下一轮将重试");
+                logger.LogWarning(exception, "优化观察结果固化失败；下一轮将重试");
             }
         } while (await timer.WaitForNextTickAsync(stoppingToken).ConfigureAwait(false));
     }
@@ -48,7 +48,7 @@ public sealed class ResearchExperimentAutomationHostedService(
         }
         try
         {
-            await MaterializeReadyExperimentsAsync(ct).ConfigureAwait(false);
+            await MaterializeReadyResultsAsync(ct).ConfigureAwait(false);
         }
         finally
         {
@@ -58,13 +58,13 @@ public sealed class ResearchExperimentAutomationHostedService(
         }
     }
 
-    private async Task MaterializeReadyExperimentsAsync(CancellationToken ct)
+    private async Task MaterializeReadyResultsAsync(CancellationToken ct)
     {
         const int pageSize = 100;
         for (var offset = 0; ; offset += pageSize)
         {
             var projects = await store.ListProjectsAsync(
-                "system-research-automation",
+                "system-result-materialization",
                 true,
                 null,
                 pageSize,
@@ -88,12 +88,12 @@ public sealed class ResearchExperimentAutomationHostedService(
                         experiments,
                         results,
                         assembly,
-                        "system-research-automation",
+                        "system-result-materialization",
                         ct).ConfigureAwait(false);
                     if (created.Count > 0)
                     {
                         logger.LogInformation(
-                            "已自动固化研发项目 {ProjectId} 的 {ResultCount} 份实验结果",
+                            "已固化研发项目 {ProjectId} 的 {ResultCount} 份优化观察结果",
                             project.ProjectId,
                             created.Count);
                         experiments = await store.ListExperimentsAsync(project.ProjectId, ct)
@@ -119,7 +119,7 @@ public sealed class ResearchExperimentAutomationHostedService(
                             project,
                             experiment,
                             result,
-                            "system-research-automation",
+                            "system-result-materialization",
                             ct).ConfigureAwait(false);
                     }
                 }

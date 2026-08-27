@@ -1,8 +1,10 @@
+// 根据项目变量与安全约束预览可选受控验证设计，不写入正式运行计划。
 using System.Security.Cryptography;
 using Ingot.Contracts.ProcessResearch;
 
 namespace Ingot.Platform.Application.ProcessResearch;
 
+/// <summary>生成可复核的受控验证设计预览。</summary>
 public sealed class ResearchExperimentDesignService(
     IProcessResearchStore store,
     IProcessOptimizerClient optimizer)
@@ -71,7 +73,7 @@ public sealed class ResearchExperimentDesignService(
                 Sequence = run.Sequence,
                 BlockKey = run.BlockKey,
                 ReplicateKey = run.ReplicateKey,
-                Factors = variables.Select(variable => new ExperimentFactorSetting
+                Factors = variables.Select(variable => new ResearchVariableSetting
                 {
                     VariableCode = variable.Code,
                     Value = run.Params[variable.Code],

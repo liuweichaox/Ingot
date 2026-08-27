@@ -1,14 +1,14 @@
 # Getting started
 
-> Document status: **current operating guide**. This page provides a synthetic-workflow tour and instructions for starting the complete local stack. Requirements for a real pilot are defined in the [Controlled pilot guide](pilot.en.md).
+> Document status: **current operating guide**. This page provides a synthetic-workflow tour and instructions for starting the complete local stack. Requirements for a real pilot are defined in the [Recipe-optimization pilot guide](pilot.en.md).
 
 ## Choose a path
 
 | Objective | Path | Completion signal |
 |---|---|---|
-| Evaluate the product workflow | [Five-minute synthetic tour](#five-minute-synthetic-tour) | Complete the nonconforming-run comparison and experiment-decision workflow |
+| Evaluate the product workflow | [Five-minute synthetic tour](#five-minute-synthetic-tour) | Complete a nonconforming-run comparison and enter recipe optimization |
 | Run the complete system locally | [Start the complete stack](#start-the-complete-stack) | Web, API, Optimizer, and database are healthy |
-| Prepare a real project | [Controlled pilot guide](pilot.en.md) | Produce the first trustworthy run evidence and validation experiment |
+| Prepare a real project | [Recipe-optimization pilot guide](pilot.en.md) | Produce the first qualified observations and next-recipe recommendation |
 | Prepare production | [Production architecture](production-architecture.en.md) → [Deployment](deployment.en.md) | The site independently passes security, recovery, capacity, and observation acceptance |
 | Contribute code | [Contributing](https://github.com/liuweichaox/Ingot/blob/main/CONTRIBUTING.en.md) | `./scripts/verify.sh` passes locally |
 
@@ -41,7 +41,7 @@ Open `http://127.0.0.1:3001`:
 - `demo / demo`: tour the engineering workflow;
 - `admin / admin12345`: inspect system administration and pilot-acceptance entry points.
 
-The workbench guides the user through opening a nonconforming run, reviewing an approved inspection, choosing a conforming baseline, comparing actual conditions and trajectories, and inspecting candidate causes, confounders, and the next validation experiment. All data are synthetic. The demo validates pages and workflow, not real process benefit.
+The workbench guides the user through opening a nonconforming run, reviewing an approved inspection, choosing a conforming baseline, comparing actual conditions and trajectories, and inspecting candidate causes and the recipe-optimization entry point. The optimization workspace shows how real runs become observations and how next-recipe recommendations remain subject to engineer confirmation. All data are synthetic. The demo validates pages and workflow, not real process benefit.
 
 Press `Ctrl+C` in both terminals when finished.
 
@@ -107,7 +107,7 @@ docker compose -f docker-compose.app.yml logs --tail=200
 
 ## Next steps
 
-- To connect one real or representative run, continue with the [Controlled pilot guide](pilot.en.md).
+- To connect a set of real or representative recipe runs, continue with the [Recipe-optimization pilot guide](pilot.en.md).
 - To understand identity, points, and mappings, read [Data integration](data-connection.en.md).
 - To see which capabilities are actually validated, read [Current status](status.en.md).
 - To reproduce public method results, read [Optimizer experiment-efficiency validation](https://github.com/liuweichaox/Ingot/blob/main/tools/public-validation/README.en.md).

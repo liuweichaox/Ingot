@@ -8,9 +8,9 @@ This document distinguishes current capabilities from long-term objectives. Near
 
 Ingot's core value remains unchanged:
 
-> **Turn every real run into comparable, testable engineering evidence so process engineers can avoid unproductive experiments and reach target process conditions faster.**
+> **Turn every real recipe run into optimization evidence and continuously recommend the next recipe within safety boundaries and observed coverage.**
 
-Ingot keeps its current public category. *Optimization* means selecting the next experiment around explicit objectives and safety boundaries; it does not mean automatic control or demonstrated real-factory benefit:
+Ingot keeps its current public category. *Optimization* means turning real recipe runs into evidence and recommending the next recipe inside explicit objectives, safety boundaries, and observed coverage; it does not mean automatic control or demonstrated real-factory benefit:
 
 > **Open-source Process Diagnosis & Optimization.**
 
@@ -39,21 +39,22 @@ Ingot centers on a complete process-decision case, not a chat session, algorithm
 ```text
 engineering problem
 → trustworthy evidence bundle
-→ candidate causes and counterevidence
-→ falsifiable hypothesis
-→ experiment or adjustment proposal
-→ risk review and independent approval
-→ actual execution
+→ real recipe runs and optimization observations
+→ next-recipe recommendation with evidence boundaries
+→ engineer confirmation through the existing production flow
+→ actual recipe run
 → quality outcome and side effects
 → conclusion boundary
 → reusable process knowledge
 ```
 
+When causal proof, extrapolation, or operating-region confirmation is required, candidate causes branch into a separate controlled-validation plan, approval, execution, and result state machine. That branch is not a prerequisite for daily recipe optimization.
+
 The long-term capability chain is:
 
 ```text
-trusted acquisition → run and quality evidence → evidence-backed diagnosis
-→ falsifiable experiment → constrained optimization → knowledge reuse
+trusted acquisition → run and quality evidence → optimization observations
+→ next recipe → engineer confirmation → knowledge reuse
 ```
 
 This is a dependency chain, not menu order. Do not perform strong analysis with untrusted data, claim causes from observational evidence, enter shadow mode before replay, or enter controlled action before shadow and safety evidence pass.
@@ -142,7 +143,7 @@ Network effects come from equipment, agents, validators, scenario packages, and 
 
 ## 4. Product and commercial boundary
 
-Ingot serves expensive, small-data manufacturing process R&D with measurable quality objectives and safety boundaries. Process, quality, equipment, and R&D teams collaborate inside one company, with factory-local or hybrid deployment by default.
+Ingot serves costly, small-data manufacturing recipe optimization with measurable quality objectives and safety boundaries. Process, quality, equipment, and R&D teams collaborate inside one company, with factory-local or hybrid deployment by default.
 
 The core platform carries stable concepts:
 
@@ -156,7 +157,7 @@ The core platform carries stable concepts:
 
 Scenario differences belong in versioned configuration: variables, units, mappings, run boundaries, stages, quality plans, constraints, context, experiment policies, and optional mechanism knowledge.
 
-Ingot does not expand into a general MES, SCADA, interlock, scheduler, data lake, or unattended controller. It sits above those systems to manage process evidence, experiment decisions, controlled actions, and knowledge closure.
+Ingot does not expand into a general MES, SCADA, interlock, scheduler, data lake, or unattended controller. It sits above those systems to manage process evidence, next-recipe recommendations, optional controlled validation, and knowledge closure.
 
 Recommended open and commercial boundaries:
 
@@ -167,12 +168,14 @@ Commercial value should be measured by site, line, R&D workspace, or durable dec
 
 ## 5. Long-term architecture and safety invariants
 
+The diagram below is a long-term logical capability and control map, not the current deployment topology. See [System design](design.en.md#system-map) and [Production architecture](production-architecture.en.md) for current processes, database, and file-volume relationships.
+
 ```mermaid
 flowchart LR
-    Sources["controls / instruments / vision / inspection / MES"] --> Edge["Edge\nacquisition · mapping · buffering · controlled action gateway"]
+    Sources["controls / instruments / vision / inspection / MES"] --> Edge["Edge\nacquisition · mapping · buffering · future controlled action gateway"]
     Edge --> Platform["Platform\nformal facts · state machines · permissions · audit"]
     Platform --> Analysis["deterministic analysis\nquality · comparison · statistics"]
-    Platform --> Optimizer["Optimizer\nexperiment design · constrained optimization"]
+    Platform --> Optimizer["Optimizer\nrecipe recommendations · constrained optimization"]
     Platform --> Agent["Agent\nlanguage parsing · evidence retrieval · tool orchestration"]
     Platform --> Web["engineering workbench"]
     Engineer["Process engineer"] --> Web
@@ -183,7 +186,7 @@ flowchart LR
 
 Stable decisions:
 
-- **Platform** is the sole formal record for runs, context, inspections, experiments, evidence, approvals, agent proposals, and knowledge.
+- **Platform** is the sole formal record for runs, context, inspections, recipe recommendations, controlled validations, evidence, approvals, agent proposals, and knowledge.
 - **Edge** provides trusted acquisition, offline buffering, and replay. It may later host a controlled action gateway but never replaces PLC, DCS, or safety interlocks.
 - **Optimizer** is stateless business-wise and performs reproducible statistics, constraints, DOE, and numerical optimization. It cannot approve experiments or control equipment.
 - **Agent** is a replaceable language-parsing, evidence-retrieval, and tool-orchestration layer. Conversation context and model memory are not formal business state.
@@ -204,8 +207,8 @@ Protocol adapters, database topology, algorithms, model providers, and page layo
 | L1 trusted run | find actual conditions, trajectory, context, and outcome | no silent loss; missingness and versions are visible |
 | L2 comparable | find a qualified baseline and first deviation | matching, coverage, and confounding are explicit |
 | L3 diagnosable | receive candidates, evidence, counterevidence, and validation advice | correlation is not sold as cause; correct refusal works |
-| L4 experimentable | turn a candidate into a reviewable, falsifiable experiment | controls, repetition, blocks, safety, and stopping are explicit |
-| L5 optimizable | receive a next-experiment recommendation | leakage-free replay, calibrated uncertainty, zero known safety violations |
+| L4 validation-ready | when needed, turn a candidate into reviewable, falsifiable controlled validation | controls, repetition, blocks, safety, and stopping are explicit |
+| L5 optimizable | receive a next-recipe recommendation from real recipe runs | data admission, leakage-free replay, calibrated uncertainty, zero known safety violations |
 | L6 actionable | execute one reversible action inside approved scope | shadow evidence, permission, actual confirmation, and rollback drills pass |
 | L7 reusable | reuse conclusions on a new product, machine, or scenario | applicability, failure, drift, and negative transfer are visible |
 | L8 interoperable | external systems independently implement and validate the protocol | multi-scenario use, compatibility, conformance, and governance pass |
@@ -216,7 +219,7 @@ No level may use a higher-level demonstration to bypass lower-level evidence. Au
 
 Maintain four mutually constraining work lines:
 
-- **Product**: trusted data → comparison and diagnosis → experiment → optimization → controlled action → reuse.
+- **Product**: trusted data → real-run observations → next recipe → engineer confirmation → outcome feedback → reuse; causal or extrapolation questions branch into controlled validation.
 - **Scientific validation**: historical replay, shadow validation, controlled online validation, and cross-scenario transfer advance independently.
 - **Engineering assurance**: real-database tests, recovery exercises, performance baselines, security, and observability.
 - **Protocol ecosystem**: schema stability, reference implementations, conformance tests, external implementations, and governance.

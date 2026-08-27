@@ -19,6 +19,12 @@ public sealed class ProcessResearchQueries(IProcessResearchStore research)
     public Task<ResearchValidationPreregistration?> GetValidationPreregistrationAsync(
         Guid id, CancellationToken ct = default)
         => research.GetValidationPreregistrationAsync(id, ct);
+    public Task<ResearchRecipeRecommendation?> GetRecipeRecommendationAsync(
+        Guid id, CancellationToken ct = default)
+        => research.GetRecipeRecommendationAsync(id, ct);
+    public Task<ResearchPage<ResearchRecipeRecommendation>> ListRecipeRecommendationsPageAsync(
+        Guid projectId, string? cursor, int limit, CancellationToken ct = default)
+        => research.ListRecipeRecommendationsPageAsync(projectId, cursor, limit, ct);
     public Task<ResearchExperiment?> GetExperimentAsync(Guid id, CancellationToken ct = default)
         => research.GetExperimentAsync(id, ct);
     public Task<IReadOnlyList<ResearchExperiment>> ListExperimentsAsync(Guid projectId, CancellationToken ct = default)

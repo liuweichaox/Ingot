@@ -4,7 +4,7 @@
 
 ## Conclusion summary
 
-Ingot's main software workflow is implemented, including field-data integration, run comparison, process diagnosis, experiment design, and next-experiment recommendations that require engineer review.
+Ingot's main software workflow is implemented, including field-data integration, run comparison, process diagnosis, and engineer-confirmed next-recipe recommendations generated directly from real recipe runs. Controlled validation is a separate optional workflow.
 
 A working software workflow does not establish real-factory benefit. The current strategy has not yet passed an independent unseen-data acceptance, and formal real-factory historical review and prospective validation remain incomplete.
 
@@ -31,7 +31,9 @@ The repository currently covers:
 - linking equipment, product, specification, material, tooling, process curves, and quality outcomes to one run;
 - checking completeness, actual execution values, units, sources, and versions before analysis;
 - comparing eligible runs and showing key differences, candidate causes, counterevidence, and evidence gaps;
-- designing experiments with controls, repetition, and safety boundaries, then reviewing candidate operating regions;
+- automatically combining admitted real recipe runs with quality outcomes into optimization observations without requiring a user-created experiment;
+- generating next-recipe recommendations inside safety boundaries and the observed parameter envelope without automatic dispatch;
+- designing controlled validation with controls, repetition, and safety boundaries when needed, then reviewing candidate operating regions;
 - selecting response-surface or Gaussian-process methods according to the data, with fallback when a complex method is unsuitable;
 - preserving evidence, constraints, model versions, engineer review, and final outcomes for every recommendation;
 - providing a permissioned analysis assistant plus backup, restore, monitoring, and basic failure-drill tooling.

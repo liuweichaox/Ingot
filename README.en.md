@@ -6,7 +6,7 @@
   </a>
 
   <p><strong>Open-source Process Diagnosis &amp; Optimization</strong></p>
-  <p>Understand this run. Choose the right next experiment.</p>
+  <p>Understand this run. Improve the next recipe.</p>
 
   [![CI](https://github.com/liuweichaox/Ingot/actions/workflows/ci.yml/badge.svg)](https://github.com/liuweichaox/Ingot/actions/workflows/ci.yml)
   [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-E8AD56.svg)](LICENSE)
@@ -21,7 +21,7 @@
 </div>
 
 <a href="https://ingotstack.com/en/">
-  <img src="apps/website/public/og.png" alt="Ingot: Understand this run. Choose the right next experiment." width="100%">
+  <img src="apps/website/public/og.png" alt="Ingot: Understand this run. Improve the next recipe." width="100%">
 </a>
 
 <details>
@@ -48,17 +48,17 @@
 
 Ingot is an open-source process diagnosis and optimization system. The system links equipment records, production runs, process trajectories, inspection results, and R&D context into comparable, traceable run evidence.
 
-For each real run, Ingot provides three engineering capabilities:
+For real recipe runs, Ingot provides three engineering capabilities:
 
 - **Run reconstruction**: establish actual conditions, process changes, material, tooling, and quality outcomes;
-- **Cause validation**: compare eligible runs and record candidate causes, counterevidence, and evidence gaps;
-- **Experiment decisions**: design validation experiments and propose the next experiment within objectives and safety boundaries.
+- **Optimization observations**: automatically link actual recipes, process context, and quality outcomes while excluding untrustworthy runs;
+- **Next recipe**: propose a candidate recipe with uncertainty inside objectives, safety boundaries, and observed coverage.
 
 The fixed design objective is:
 
-> **Turn every real run into comparable, testable engineering evidence so process engineers can avoid unproductive experiments and reach target process conditions faster.**
+> **Turn every real recipe run into optimization evidence and continuously recommend the next recipe within safety boundaries and observed coverage.**
 
-Ingot applies to process development where experiments are expensive, samples are limited, and quality objectives and safety boundaries are explicit. The standard workflow covers data qualification, comparable-run selection, candidate-cause analysis, validation-experiment design, and constrained next-experiment recommendations. Engineers define objectives and boundaries, review recommendations, approve experiments, and decide whether conclusions may enter production.
+Ingot applies where recipe runs are expensive, samples are limited, and quality objectives and safety boundaries are explicit. The normal workflow is real recipe run → automatic optimization observation → next-recipe recommendation → engineer confirmation in the existing production flow → continued learning from the new run. Daily optimization does not require a separately created experiment. Engineers define objectives and boundaries, review recommendations, and decide whether a recipe may enter production. Controlled validation remains optional for causal confirmation, extrapolation beyond observed coverage, or operating-region validation.
 
 Methods are selected by question type, data coverage, and constraints. Available methods include traditional design of experiments (DOE), response surfaces, and constrained Bayesian optimization. Every recommendation retains its input data, applicability conditions, computational rationale, uncertainty, and review status.
 
@@ -69,12 +69,12 @@ Ingot does not replace production-execution, real-time-control, quality-complian
 | Typical task | System output |
 |---|---|
 | Nonconforming-run analysis | Eligible comparison runs, key differences, candidate causes, and evidence gaps |
-| Validation of a new material, machine, or parameter | A controlled, bounded experiment with a review record |
-| Selection of next-experiment conditions | Candidate process settings within quality objectives and safety constraints, with rationale, risk, and open questions |
+| Daily recipe optimization | A next recipe based on real runs, with prediction intervals, risk, and evidence scope |
+| Validation of a new material, machine, or extrapolated setting | Optional controlled validation with bounds and a review record |
 
 ## Local demo
 
-The synthetic demo uses a lens run that exceeds its surface-form error limit. The workflow covers opening the nonconforming run, reviewing its quality result, comparing it with a conforming run, and inspecting candidate causes and the next validation experiment.
+The synthetic demo uses a lens run that exceeds its surface-form error limit. The workflow covers opening the nonconforming run, reviewing its quality result, comparing it with a conforming run, inspecting candidate causes, and entering the recipe-optimization workspace.
 
 The demo requires Node.js 22.22+ but no database, equipment, or Docker:
 
@@ -97,7 +97,7 @@ Open `http://127.0.0.1:3001` and sign in with `demo / demo`. All demo data are s
 ## Domain workflow
 
 ```text
-Process configuration → Field integration → Production runs → Quality management → Process diagnosis → Process R&D
+Process configuration → Field integration → Production runs → Quality management → Process diagnosis → Recipe optimization
            ↑                                                                                         ↓
            └──────── Validated specifications, operating regions, and knowledge return to production ────────┘
 ```
@@ -109,13 +109,13 @@ Process configuration → Field integration → Production runs → Quality mana
 | Production runs | Record actual conditions, process trajectories, and production context |
 | Quality management | Link inspection results and perform independent review |
 | Process diagnosis | Compare run differences and form candidate causes, counterevidence, and evidence gaps |
-| Process R&D | Validate candidates and select the next experiment within objectives and safety boundaries |
+| Recipe optimization | Learn from real recipe runs and recommend the next recipe within safety boundaries and observed coverage; start controlled validation only when needed |
 
 Trustworthy run facts are a prerequisite for analysis and recommendations. Data acquisition and optimization methods serve the same evidence chain.
 
 ## Current status
 
-The main software workflow is implemented: the system can link runs to quality outcomes, check whether data are usable, compare like-for-like runs, form candidate causes, design experiments, and preserve review records.
+The main software workflow is implemented: the system can link real recipe runs to quality outcomes, decide whether they are usable for optimization, and generate an engineer-reviewed next-recipe recommendation that is never dispatched automatically. Optional controlled validation and its review records remain available.
 
 Benefit validation remains incomplete. The current strategy has not yet passed an independent unseen-data acceptance, and real-factory historical review, side-by-side shadow use, and controlled online validation remain in progress. The software is available for inspection and evaluation, but the current evidence does not establish fewer experiments or shorter development time in a real factory.
 
@@ -129,7 +129,7 @@ See [Current status](docs/status.en.md) for capability, validation, and producti
 |---|---|---|
 | MES, SCADA, historian | Receive run, equipment, and process facts | Does not replace execution, monitoring, or real-time control |
 | LIMS, QMS, ELN | Link inspection results, review, and R&D context | Does not replace complete sample, compliance, or document management |
-| DOE, response surfaces, Bayesian optimization | Optimize the next experiment under shared objectives, constraints, and evidence snapshots | Does not treat one algorithm as the answer to every process problem |
+| Response surfaces, Bayesian optimization, DOE | Recommend the next recipe from real runs and design controlled validation only when needed | Does not treat one algorithm as the answer to every process problem |
 | AI agent | Query, organize, and explain authorized facts | Does not generate numeric settings directly, approve experiments, or control equipment |
 
 ## Runtime architecture
@@ -163,7 +163,7 @@ cp .env.example .env
 docker compose -f docker-compose.app.yml up -d --build
 ```
 
-Before startup, change the database passwords, Edge token, and administrator settings in `.env`. Open `http://localhost:3000` after startup. See [Getting started](docs/getting-started.en.md) for health checks, authentication, and troubleshooting; follow the [Controlled pilot guide](docs/pilot.en.md) for a real pilot; and read [Production architecture](docs/production-architecture.en.md) and [Deployment](docs/deployment.en.md) before production use.
+Before startup, change the database passwords, Edge token, and administrator settings in `.env`. Open `http://localhost:3000` after startup. See [Getting started](docs/getting-started.en.md) for health checks, authentication, and troubleshooting; follow the [Recipe-optimization pilot guide](docs/pilot.en.md) for a real pilot; and read [Production architecture](docs/production-architecture.en.md) and [Deployment](docs/deployment.en.md) before production use.
 
 ## Development verification
 
@@ -180,7 +180,7 @@ See [Contributing](CONTRIBUTING.en.md) for common commands and engineering contr
 - [Documentation home](docs/index.en.md): choose a path by objective
 - [Getting started](docs/getting-started.en.md): tour the demo or run the complete local stack
 - [Current status](docs/status.en.md): implemented capabilities, validation evidence, and production boundaries
-- [Controlled pilot guide](docs/pilot.en.md): move from an engineering question to the first controlled experiment
+- [Recipe-optimization pilot guide](docs/pilot.en.md): move from real runs to the first next-recipe recommendation
 - [System design](docs/design.en.md): stable business boundaries and component responsibilities
 - [Analysis and optimization](docs/optimization.en.md): method selection, admission, and numerical strategy
 - [Data integration](docs/data-connection.en.md): identity, mapping, and data quality

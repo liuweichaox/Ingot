@@ -42,7 +42,7 @@ test("manufacturing and platform runtime statuses are localized", () => {
 test("research workspace rejects an incomplete detail response instead of crashing", () => {
   assert.match(researchProjects, /if \(!next\?\.project\?\.projectId\)/);
   assert.match(researchProjects, /\{!project \? \(/);
-  assert.match(researchProjects, /未找到可显示的研发项目/);
+  assert.match(researchProjects, /未找到可显示的优化任务/);
 });
 
 test("configuration center presents dependencies before final process configuration publishing", () => {
@@ -316,12 +316,12 @@ test("mechanism assets are presented as business fields instead of raw JSON", ()
   assert.doesNotMatch(researchAssets, /JSON\.stringify|JSON\.parse/);
 });
 
-test("research projects expose the evidence-backed experiment and operating-region workflow", () => {
+test("recipe optimization exposes natural-run recommendations and optional controlled validation", () => {
   assert.match(researchProjects, /project-definition/);
   assert.match(researchProjects, /project-validation/);
-  assert.match(researchProjects, /返回项目列表/);
-  assert.match(researchProjects, /提出研发假设/);
-  assert.match(researchProjects, /设计验证实验/);
+  assert.match(researchProjects, /返回优化任务/);
+  assert.match(researchProjects, /记录候选原因/);
+  assert.match(researchProjects, /设计受控验证（可选）/);
   assert.match(researchProjects, /导入历史运行/);
   assert.match(researchProjects, /experiments\/import-history/);
   assert.match(researchProjects, /实际控制参数回读、过程特征和检验记录/);
@@ -339,7 +339,7 @@ test("research projects expose the evidence-backed experiment and operating-regi
   assert.match(researchProjects, /设备无关执行指令/);
   assert.match(researchProjects, /onClick=\{\(\) => onGenerateOptimizationSuggestions\(\)\}/);
   assert.match(researchProjects, /design-validation/);
-  assert.match(researchProjects, /设计独立验证实验/);
+  assert.match(researchProjects, /设计独立验证运行/);
   assert.match(researchProjects, /95% 效果区间/);
   assert.match(researchProjects, /baselineExecutionKeys/);
   assert.match(researchProjects, /独立对照运行（可选）/);
@@ -395,16 +395,18 @@ test("research project setup reuses configured industrial definitions instead of
   assert.match(researchProjects, /选择控制参数后自动带入/);
 });
 
-test("research projects turn optimization into the existing experiment workflow", () => {
-  assert.match(researchProjects, /\/optimize/);
-  assert.match(researchProjects, /\/method-admission/);
-  assert.match(researchProjects, /序贯优化已暂停/);
-  assert.match(researchProjects, /正则化响应面或适用的传统 DOE/);
-  assert.match(researchProjects, /disabled=\{!methodEligible\}/);
-  assert.match(researchProjects, /batchSize:\s*2/);
-  assert.match(researchProjects, /智能设计下一组实验/);
-  assert.match(researchProjects, /当前没有可用的冻结观察，已生成首组先验探索实验/);
-  assert.match(researchProjects, /现有流程审核后执行/);
+test("recipe optimization learns from normal production runs without requiring an experiment", () => {
+  assert.match(researchProjects, /\/recipe-recommendations/);
+  assert.match(researchProjects, /\/optimization-readiness/);
+  assert.match(researchProjects, /seed:\s*0/);
+  assert.match(researchProjects, /生成下一配方建议/);
+  assert.match(researchProjects, /至少需要 3 条有效配方运行/);
+  assert.match(researchProjects, /不需要建立实验/);
+  assert.match(researchProjects, /建议不会自动下发/);
+  assert.match(researchProjects, /设计受控验证（可选）/);
+  assert.match(researchProjects, /recipeRecommendations = \[\]/);
+  assert.match(researchProjects, /recordKind: "recipe"/);
+  assert.doesNotMatch(researchProjects, /optimization\?\.mode === "recipe-recommendation"/);
   assert.doesNotMatch(researchProjects, /processProfile|optical-lens-molding-v1/);
   assert.doesNotMatch(researchProjects, /optimization-observations|optimization-suggestions/);
 });

@@ -4,7 +4,7 @@
 
 ## What core problem does Ingot solve?
 
-A shared run identity links actual conditions, process curves, and quality outcomes so engineers can review field facts in one place. The system then compares run differences, forms candidate causes worth testing, and designs the next experiment.
+A shared run identity links actual recipes, process curves, and quality outcomes so engineers can review field facts in one place. Normal production runs become optimization observations that support the next recipe within safety boundaries and observed coverage; controlled validation is designed separately when causal confirmation is needed.
 
 ## Is Ingot a data-acquisition system?
 
@@ -12,7 +12,7 @@ Data acquisition is not Ingot's only responsibility. Acquisition receives raw da
 
 ## Does Ingot replace process engineers?
 
-No. The system organizes facts, performs calculations, explains uncertainty, and proposes actions. Engineers frame the problem, review field constraints, approve experiments, and make the final judgment.
+No. The system organizes facts, performs calculations, explains uncertainty, and proposes actions. Engineers define objectives and safety boundaries, decide whether to adopt the next recipe, and approve separate controlled validation when it is needed.
 
 ## Can the system find root causes automatically?
 
@@ -54,17 +54,17 @@ No. Model Context Protocol (MCP) standardizes only how a model discovers and cal
 
 Bayesian optimization applies when individual experiments are costly and each result can guide subsequent experiment selection. The controllable-variable count must be limited, objectives measurable, and safety boundaries explicit. When variables are numerous, the process drifts rapidly, feedback is delayed, or key factors are unmeasured, the problem scope or data must be improved first.
 
-## How does a small-sample project start?
+## Can existing recipe runs be analyzed without creating an experiment?
 
-The project first establishes an approved safe baseline, then runs a small set of experiments that can separate the principal factors. The initial design may use engineering judgment, traditional design of experiments (DOE), or evenly distributed points within an approved region. Without safety evidence, an algorithm may not attempt arbitrary process settings.
+Yes. That is the default path. An optimization task automatically reads completed real recipe runs in scope and links actual parameters, process context, and quality outcomes. At least three valid runs and two distinct actual recipes are required before a next-recipe recommendation is generated. Normal production runs require no engineer reclassification. If only one recipe exists, required quality outcomes are missing, causal proof is needed, or a recommendation would exceed observed coverage, collect more runs or create separate controlled validation.
 
-## Can the system generate a batch of experiment recommendations?
+## Can the system generate multiple recipe recommendations at once?
 
-Yes. When equipment can run in parallel or the site schedules work in batches, the system can propose a group of experiments. Unfinished experiments remain “pending points” to prevent the next round from repeating the same conditions. Field capacity and experiment design determine the batch size.
+Daily optimization returns one next recipe by default to minimize field judgment and operating cost. Formal controlled validation can still generate multiple validation conditions according to field capacity. Unfinished validation conditions remain pending points so they are not scheduled twice.
 
-## Are experiment recommendations written automatically to controls?
+## Are recipe recommendations written automatically to controls?
 
-Not by default. A recommendation must become a formal experiment and pass engineer review before it is executed manually, through an MES or process-specification system, or through an approved integration. Equipment interlocks and field safety remain independent of the model.
+No. A next-recipe recommendation is not an experiment plan and creates no approval or equipment-dispatch command. An engineer decides whether to adopt it through the existing production-preparation, MES, or process-specification workflow. Equipment interlocks and field safety remain independent of the model.
 
 ## Does an optimization or language-model outage stop acquisition?
 

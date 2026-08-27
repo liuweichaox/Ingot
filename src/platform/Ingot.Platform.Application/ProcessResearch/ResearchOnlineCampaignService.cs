@@ -1,9 +1,11 @@
+// 汇总受控在线建议、工程师决策、实际结果与安全停止信号。
 using System.Security.Cryptography;
 using System.Text.Json;
 using Ingot.Contracts.ProcessResearch;
 
 namespace Ingot.Platform.Application.ProcessResearch;
 
+/// <summary>构建受控在线验证活动的校准与风险报告。</summary>
 public sealed class ResearchOnlineCampaignService(IProcessResearchStore store)
 {
     private const int MinimumComparisonCount = 5;
@@ -41,7 +43,7 @@ public sealed class ResearchOnlineCampaignService(IProcessResearchStore store)
             .Where(static value => value.Outcome is { ValidForOptimization: true })
             .Select(static value => new PredictionOutcomePair(
                 value.Prediction,
-                new ExperimentRunObservation
+                new ResearchRunObservation
                 {
                     ExecutionKey = value.ActualExecutionKey,
                     Outcomes = value.Outcome!.Outcomes,
@@ -200,5 +202,5 @@ public sealed class ResearchOnlineCampaignService(IProcessResearchStore store)
 
     private sealed record PredictionOutcomePair(
         OptimizationRunPrediction Prediction,
-        ExperimentRunObservation Observation);
+        ResearchRunObservation Observation);
 }

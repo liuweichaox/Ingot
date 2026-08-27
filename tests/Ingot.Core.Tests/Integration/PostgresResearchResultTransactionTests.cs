@@ -12,6 +12,69 @@ namespace Ingot.Core.Tests.Integration;
 public sealed class PostgresResearchResultTransactionTests(PostgresIntegrationFixture postgres)
 {
     [LinuxDockerFact]
+    public async Task RecipeRecommendation_ShouldUseIndependentAppendOnlyStorage()
+    {
+        await postgres.EnsureSchemaAsync();
+        var store = new PostgresProcessResearchStore(postgres.DataSource);
+        var now = DateTimeOffset.UtcNow;
+        var project = new ResearchProject
+        {
+            ProjectId = Guid.CreateVersion7(),
+            Code = $"recipe-store-{Guid.NewGuid():N}",
+            Name = "Recipe recommendation store",
+            ProcessName = "Test Process",
+            OwnerUserId = "engineer-a",
+            Revision = 1,
+            CreatedAt = now,
+            UpdatedAt = now
+        };
+        var recommendation = new ResearchRecipeRecommendation
+        {
+            RecommendationId = Guid.CreateVersion7(),
+            ProjectId = project.ProjectId,
+            ProjectRevision = project.Revision,
+            ModelVersion = "recipe-model-v1",
+            InputHash = new string('a', 64),
+            ObservationCount = 3,
+            FeatureSetId = "recipe-features",
+            MechanismKnowledgeSnapshotHash = "none",
+            MechanismModelSnapshotHash = "none",
+            CreatedBy = "engineer-a",
+            GeneratedAt = now
+        };
+        var audit = new ResearchAuditEntry
+        {
+            EntryId = Guid.CreateVersion7(),
+            ProjectId = project.ProjectId,
+            ResourceType = "recipe-recommendation",
+            ResourceId = recommendation.RecommendationId.ToString(),
+            Action = "created",
+            UserId = "engineer-a",
+            CreatedAt = now
+        };
+        await store.SaveProjectAsync(project);
+
+        await store.CreateRecipeRecommendationTransactionAsync(recommendation, audit);
+
+        var persisted = await store.GetRecipeRecommendationAsync(recommendation.RecommendationId);
+        Assert.Equal(recommendation.RecommendationId, persisted?.RecommendationId);
+        Assert.Equal(recommendation.InputHash, persisted?.InputHash);
+        Assert.Equal(recommendation.RecommendationId,
+            (await store.GetRecipeRecommendationByInputHashAsync(
+                project.ProjectId, recommendation.InputHash))?.RecommendationId);
+        Assert.Equal(recommendation.RecommendationId, Assert.Single(
+            (await store.ListRecipeRecommendationsPageAsync(project.ProjectId, null, 100)).Items)
+            .RecommendationId);
+        Assert.Empty(await store.ListExperimentsAsync(project.ProjectId));
+        Assert.Equal("recipe-recommendation", Assert.Single(
+            await store.ListAuditEntriesAsync(project.ProjectId)).ResourceType);
+        await Assert.ThrowsAsync<ProcessResearchRuleException>(() =>
+            store.CreateRecipeRecommendationTransactionAsync(
+                recommendation with { RecommendationId = Guid.CreateVersion7() },
+                audit with { EntryId = Guid.CreateVersion7() }));
+    }
+
+    [LinuxDockerFact]
     public async Task ExperimentTransition_ShouldAllowExactlyOneConcurrentWriterWithMatchingAudit()
     {
         await postgres.EnsureSchemaAsync();
@@ -130,11 +193,11 @@ public sealed class PostgresResearchResultTransactionTests(PostgresIntegrationFi
             ModelInputHash = new string('a', 64),
             SuggestedFactors =
             [
-                new ExperimentFactorSetting { VariableCode = "temperature", Value = 500, Unit = "Cel" }
+                new ResearchVariableSetting { VariableCode = "temperature", Value = 500, Unit = "Cel" }
             ],
             EngineerSelectedFactors =
             [
-                new ExperimentFactorSetting { VariableCode = "temperature", Value = 500, Unit = "Cel" }
+                new ResearchVariableSetting { VariableCode = "temperature", Value = 500, Unit = "Cel" }
             ],
             Prediction = new OptimizationRunPrediction
             {
@@ -280,7 +343,7 @@ public sealed class PostgresResearchResultTransactionTests(PostgresIntegrationFi
             Sequence = 1,
             Factors =
             [
-                new ExperimentFactorSetting
+                new ResearchVariableSetting
                     { VariableCode = "temperature", Value = 500, Unit = "Cel" }
             ]
         };
@@ -306,7 +369,7 @@ public sealed class PostgresResearchResultTransactionTests(PostgresIntegrationFi
 
         async Task<bool> TryFreezeAsync(double approvedValue, char hashCharacter)
         {
-            var approved = new ExperimentFactorSetting
+            var approved = new ResearchVariableSetting
             { VariableCode = "temperature", Value = approvedValue, Unit = "Cel" };
             var updated = experiment with
             {

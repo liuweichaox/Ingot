@@ -75,7 +75,7 @@ check_entry_order docs/design.md \
   '4. **生产运行**' \
   '5. **质量管理**' \
   '6. **工艺追因**' \
-  '7. **工艺研发**'
+  '7. **配方优化**'
 
 check_entry_order docs/design.en.md \
   '1. **Workbench**' \
@@ -84,18 +84,18 @@ check_entry_order docs/design.en.md \
   '4. **Production runs**' \
   '5. **Quality management**' \
   '6. **Process diagnosis**' \
-  '7. **Process R&D**'
+  '7. **Recipe optimization**'
 
-canonical_nav_zh='现场接入 → 工艺配置 → 生产运行 → 质量管理 → 工艺追因 → 工艺研发'
-canonical_nav_en='Field integration → Process configuration → Production runs → Quality management → Process diagnosis → Process R&D'
+canonical_nav_zh='现场接入 → 工艺配置 → 生产运行 → 质量管理 → 工艺追因 → 配方优化'
+canonical_nav_en='Field integration → Process configuration → Production runs → Quality management → Process diagnosis → Recipe optimization'
 if ! grep -Fq "$canonical_nav_zh" docs/design.md ||
    ! grep -Fq "$canonical_nav_en" docs/design.en.md; then
   echo "System design navigation summaries must match the canonical product order." >&2
   exit 1
 fi
 
-canonical_zh='把每次真实运行变成可比较、可验证的工程证据，帮助工艺工程师减少无效实验，更快找到达到目标的工艺条件。'
-canonical_en='Turn every real run into comparable, testable engineering evidence so process engineers can avoid unproductive experiments and reach target process conditions faster.'
+canonical_zh='把每次真实配方运行变成优化证据，在安全边界和历史覆盖范围内持续推荐下一份配方。'
+canonical_en='Turn every real recipe run into optimization evidence and continuously recommend the next recipe within safety boundaries and observed coverage.'
 canonical_category_zh='开源工艺追因与优化系统'
 canonical_category_en_pattern='Open-source Process Diagnosis (&|&amp;) Optimization'
 
@@ -154,6 +154,19 @@ if grep -RIniE --exclude='package-lock.json' \
   'every experiment[^.]*closer to (the )?optimum|closed-loop process optimization|optimization brain' \
   README.md README.en.md apps/website/app apps/docs-site/app; then
   echo "Public copy has drifted back to an algorithm-first product narrative." >&2
+  exit 1
+fi
+
+if grep -RIniE --exclude='package-lock.json' \
+  '自动实验|自动创建实验|automatic experiments?|automatically creates? experiments?' \
+  README.md README.en.md docs apps/website/app apps/docs-site/app; then
+  echo "Public copy must describe real-run recipe optimization, not automatic experiments." >&2
+  exit 1
+fi
+
+if ! grep -Fq '无需先建立实验，也无需工程师重新归类配方' apps/website/app/IngotSite.tsx ||
+   ! grep -Fq 'No experiment setup or manual recipe reclassification is required' apps/website/app/IngotSite.tsx; then
+  echo "The website must retain the no-experiment-setup, no-manual-reclassification boundary." >&2
   exit 1
 fi
 

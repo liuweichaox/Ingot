@@ -8,7 +8,7 @@
 
 Ingot 支撑生产，不等于把模型直接接到 PLC，也不等于把 PostgreSQL 换成另一种时序数据库。生产能力分为两个独立等级：
 
-1. **生产观测与决策支持**：持续采集真实运行，完成追溯、比较、诊断、影子建议和受控实验；平台不直接改变设备状态。
+1. **生产观测与决策支持**：持续采集真实配方运行，完成追溯、比较、诊断、下一配方建议和可选受控验证；平台不直接改变设备状态。
 2. **受控行动**：在前一级长期稳定且相应场景通过准入后，把已批准的结构化动作交给 Edge，在现场联锁之外再次执行确定性校验、限幅、停止和回滚。
 
 默认交付目标是第一级。第二级必须按设备类别和动作类型单独认证，不能因分析能力上线而自动获得。
@@ -47,7 +47,7 @@ PostgreSQL 保存：
 - 身份、权限、站点和设备目录；
 - 工艺配置、分析方案和版本；
 - 过程执行、上下文和检验关系；
-- 研发项目、实验、审批和状态机；
+- 配方优化任务、独立配方建议、受控验证、审批和状态机；
 - Agent 运行、输入快照、建议和证据哈希；
 - 受控动作、执行回执、停止与回滚结果；
 - 数据保留、证据固定和审计策略。
@@ -75,7 +75,7 @@ flowchart LR
     subgraph OT["现场 OT 区"]
         Sources["PLC / DCS / 仪器 / 视觉 / MES"]
         Edge["Edge ConnectorHost\n协议映射 · 本地 outbox · 配置缓存"]
-        Safety["Edge Safety Executor\n动作白名单 · 联锁外校验 · 停止/回滚"]
+        Safety["未来 Edge Safety Executor\n通过行动闸门后才建设 · 停止/回滚"]
         Sources --> Edge
         Safety --> Sources
     end
@@ -85,16 +85,16 @@ flowchart LR
         Api["Platform API × N\n无状态"]
         Worker["Platform Worker × N\n租约任务"]
         Control["PostgreSQL HA\n正式业务记录源"]
-        Series["时序数据平面\nTimescaleDB"]
+        Series["条件性独立时序数据平面\n仅在容量闸门证明需要后建设"]
         Files["对象/文件存储\n附件 · 知识 · 冷归档"]
         Optimizer["Optimizer × N\n无业务状态"]
         Observe["指标 · 日志 · 追踪 · 告警"]
         LB --> Api
         Api --> Control
-        Api --> Series
+        Api -.-> Series
         Api --> Files
         Worker --> Control
-        Worker --> Series
+        Worker -.-> Series
         Worker --> Optimizer
         Api --> Optimizer
         Api --> Observe
@@ -104,7 +104,11 @@ flowchart LR
     Edge -->|"mTLS · 至少一次传输"| LB
     Api -. "已批准的签名动作" .-> Safety
     Edge --> Observe
+    classDef future fill:#FFF7ED,stroke:#C2410C,stroke-width:1.5px,stroke-dasharray:5 4
+    class Safety,Series future
 ```
+
+虚线橙色节点是条件性目标能力，不属于当前 Compose：独立时序数据平面只有在容量、恢复时间或成本闸门证明现有 PostgreSQL/TimescaleDB 服务不足后才建设；Edge Safety Executor 只有在受控行动证据闸门通过后才建设。当前附件和工艺知识仍使用 Platform 持久文件卷，目标对象存储是生产化替换路径，不是第二份正式业务状态。
 
 ### 站点生产单元
 

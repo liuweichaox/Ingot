@@ -183,7 +183,7 @@ public sealed partial class ProcessResearchWorkflow
         var experimentId = Guid.CreateVersion7();
         var shortId = experimentId.ToString("N")[..8];
         var factors = window.Variables
-            .Select(variable => new ExperimentFactorSetting
+            .Select(variable => new ResearchVariableSetting
             {
                 VariableCode = variable.VariableCode,
                 Value = (variable.LowerBound + variable.UpperBound) / 2,
@@ -437,7 +437,7 @@ public sealed partial class ProcessResearchWorkflow
 
     private static bool IsInsideWindow(
         ResearchOperatingRegion window,
-        ExperimentRunObservation observation)
+        ResearchRunObservation observation)
     {
         var factors = observation.ActualFactors.ToDictionary(
             static value => value.VariableCode,
@@ -450,7 +450,7 @@ public sealed partial class ProcessResearchWorkflow
     }
 
     private static int CountDistinctContext(
-        IReadOnlyList<ExperimentRunObservation> observations,
+        IReadOnlyList<ResearchRunObservation> observations,
         params string[] keys)
         => observations
             .Select(observation => keys
@@ -462,7 +462,7 @@ public sealed partial class ProcessResearchWorkflow
 
     private static bool MeetsMeasuredSpecification(
         ResearchProject project,
-        ExperimentRunObservation observation)
+        ResearchRunObservation observation)
         => project.Objectives.All(objective =>
                observation.Outcomes.TryGetValue(objective.Code, out var value) &&
                MeetsObjective(objective, value)) &&

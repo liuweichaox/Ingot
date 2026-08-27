@@ -18,14 +18,15 @@ const retired = /Ingot Agent|desktop Agent|connector-workspaces|awaiting-package
 test("Chinese home uses the canonical diagnosis-and-optimization narrative", async () => {
   const source = await html();
   assert.match(source, /<title>Ingot — 开源工艺追因与优化系统<\/title>/i);
-  assert.match(source, /开源工艺追因与优化系统。关联设备、生产和检验数据/);
+  assert.match(source, /开源工艺追因与优化系统。把设备、生产和检验数据关联成可信证据/);
   assert.doesNotMatch(source, /面向工艺工程师的开源工艺追因与优化系统/);
   assert.match(source, /看清这次运行/);
-  assert.match(source, /做对下一项实验/);
+  assert.match(source, /做好下一份配方/);
   assert.match(source, /受约束优化/);
-  assert.match(source, /PROCESS R&amp;D · RUN-042/);
+  assert.match(source, /RECIPE OPTIMIZATION · RUN-042/);
+  assert.match(source, /无需先建立实验，也无需工程师重新归类配方/);
   assert.match(source, /先确认数据是否可靠，再选择分析与优化方法/);
-  for (const stage of ["建立运行证据", "开展工艺追因", "设计验证实验", "优化下一项实验"]) {
+  for (const stage of ["建立运行证据", "形成优化观察", "推荐下一配方", "继续从生产学习"]) {
     assert.match(source, new RegExp(stage));
   }
   assert.match(source, /优化能力持续升级，证据边界始终不变/);
@@ -41,13 +42,14 @@ test("English home uses the same diagnosis-and-optimization narrative", async ()
   const source = await html("/en/");
   assert.match(source, /<html lang="en">/);
   assert.match(source, /<title>Ingot — Open-source Process Diagnosis &amp; Optimization<\/title>/i);
-  assert.match(source, /system that links equipment, production, and inspection data/i);
+  assert.match(source, /system that turns linked equipment, production, and inspection data into trustworthy evidence/i);
   assert.doesNotMatch(source, /system for process engineers/i);
   assert.match(source, /Understand this run/);
-  assert.match(source, /Choose the right next experiment/);
+  assert.match(source, /Improve the next recipe/);
+  assert.match(source, /No experiment setup or manual recipe reclassification is required/);
   assert.match(source, /constrained optimization/i);
   assert.match(source, /Confirm that the data are trustworthy before choosing an analysis or optimization method/);
-  for (const stage of ["Build run evidence", "Diagnose the process", "Design validation", "Optimize the next experiment"]) {
+  for (const stage of ["Build run evidence", "Form observations", "Recommend the next recipe", "Keep learning from production"]) {
     assert.match(source, new RegExp(stage));
   }
   assert.match(source, /Optimization capabilities evolve/);

@@ -1,7 +1,9 @@
+// 从受控验证结果物化候选工艺操作域，并保持独立验证边界。
 using Ingot.Contracts.ProcessResearch;
 
 namespace Ingot.Platform.Application.ProcessResearch;
 
+/// <summary>把满足证据门槛的受控验证结果转为候选工艺操作域。</summary>
 public sealed class ResearchOperatingRegionMaterializer(
     IProcessResearchStore store,
     ProcessResearchWorkflow workflow)
@@ -111,7 +113,7 @@ public sealed class ResearchOperatingRegionMaterializer(
 
     private static bool MeetsMeasuredSpecification(
         ResearchProject project,
-        ExperimentRunObservation observation)
+        ResearchRunObservation observation)
         => project.Objectives.All(objective =>
                observation.Outcomes.TryGetValue(objective.Code, out var value) &&
                MeetsObjective(objective, value, value)) &&

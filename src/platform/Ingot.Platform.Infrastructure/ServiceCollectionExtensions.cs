@@ -203,7 +203,7 @@ public static class ServiceCollectionExtensions
         services.AddHostedService<ExecutionBoundaryProjectionHostedService>();
         services.AddHostedService(provider => provider.GetRequiredService<ProcessExecutionAnalysisBackfillService>());
         services.AddHostedService<KnowledgeExtractionWorker>();
-        services.AddHostedService<ResearchExperimentAutomationHostedService>();
+        services.AddHostedService<ResearchResultMaterializationHostedService>();
         return services;
     }
 }

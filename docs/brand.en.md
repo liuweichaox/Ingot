@@ -4,28 +4,28 @@
 
 ## Core value
 
-> **Turn every real run into comparable, testable engineering evidence so process engineers can avoid unproductive experiments and reach target process conditions faster.**
+> **Turn every real recipe run into optimization evidence and continuously recommend the next recipe within safety boundaries and observed coverage.**
 
 Avoiding unproductive experiments is the outcome the product is built to deliver, not a synonym for one algorithm. Data acquisition, process diagnosis, experimental design, linear or quadratic response surfaces, Bayesian optimization, mechanism fusion, and model interaction are means to that outcome.
 
 For product communication, prefer the more concrete action line:
 
-> **Understand this run. Choose the right next experiment.**
+> **Understand this run. Improve the next recipe.**
 
-It represents the complete product loop: establish trustworthy run evidence, form candidate causes, design validation, optimize the next experiment within objectives and safety boundaries, and preserve validated results as process knowledge.
+It represents the complete product loop: real recipe runs automatically become optimization observations, the system recommends the next recipe within objectives, safety boundaries, and observed coverage, engineers confirm it through the existing production flow, and later runs continue the loop. Controlled validation is used only for causal confirmation, extrapolation, or operating-region validation.
 
 ## Product position
 
 - **Category**: Open-source Process Diagnosis & Optimization / 开源工艺追因与优化系统
 - **Primary users**: process, quality, equipment, and R&D engineers developing new products, materials, and processes
-- **Unit of work**: the conditions, trajectory, quality result, engineering judgment, and next experiment for a real run
-- **Product responsibility**: organize trustworthy facts, compare runs, form testable candidates, design validation, optimize the next experiment within constraints, and preserve the limits of every conclusion
-- **Engineer responsibility**: frame the problem, review data and constraints, judge executability, approve experiments, and interpret field context
+- **Unit of work**: the actual parameters, trajectory, quality result, engineering judgment, and next recipe for a real recipe run
+- **Product responsibility**: organize trustworthy facts, automatically form optimization observations, recommend the next recipe within constraints, and preserve evidence and applicability boundaries
+- **Engineer responsibility**: define objectives, review data and constraints, confirm whether a recommendation enters normal production, and interpret field context
 - **System boundary**: Ingot does not replace engineers or bypass safety constraints, approvals, or equipment control systems
 
 Ingot works on reviewable process-run evidence rather than isolated data points or a single algorithm. The system selects robust statistics, controlled comparison, experimental design, causal validation, machine learning, Bayesian optimization, physical models, or language models according to the specific problem.
 
-*Process R&D* is the business entry in the product information architecture. It covers candidate validation, experiment design, constrained optimization, and process knowledge. *Optimization* is both a product-category and capability term: the system selects a more valuable next experiment around explicit objectives, allowed variables, and safety boundaries. It is not synonymous with automatic control, does not establish real-factory benefit by itself, and never bypasses engineering approval.
+*Recipe optimization* is the business entry in the product information architecture. It covers real-run observations, next-recipe recommendations, optional controlled validation, and process knowledge. *Optimization* means continuously selecting a candidate next recipe around explicit objectives, allowed variables, safety boundaries, and observed coverage. It is not synonymous with automatic control, does not establish real-factory benefit by itself, and never bypasses engineering confirmation.
 
 ## Public commitments
 
@@ -34,8 +34,9 @@ Public material may state that the system can:
 - link actual production conditions, process trajectories, and inspection results;
 - expose missingness, provenance, versions, and uncertainty;
 - help engineers compare runs and narrow candidate causes;
-- turn candidate causes into falsifiable experiments;
-- recommend the next experiment within declared variables and safety boundaries;
+- automatically turn admitted real recipe runs into optimization observations;
+- recommend the next recipe within declared variables, safety boundaries, and observed coverage;
+- turn candidate causes into falsifiable controlled validation when causal confirmation or extrapolation is needed;
 - preserve validated conclusions as process knowledge with an explicit scope.
 
 Without evidence from real projects, public material must not claim that:
@@ -54,28 +55,28 @@ Observational data can support candidate causes, stable associations, confounded
 |---|---|---|
 | Product category | 开源工艺追因与优化系统 | Open-source Process Diagnosis & Optimization |
 | Core value | 少做无效实验，更快找到达标工艺 | Avoid unproductive experiments and reach target process conditions faster |
-| Short tagline | 看清这次运行，做对下一项实验。 | Understand this run. Choose the right next experiment. |
-| Business entries | 工艺追因、工艺研发 | Process Diagnosis, Process R&D |
-| Capability terms | 运行比较、工艺追因、实验设计、受约束优化 | run comparison, process diagnosis, experiment design, constrained optimization |
+| Short tagline | 看清这次运行，做好下一份配方。 | Understand this run. Improve the next recipe. |
+| Business entries | 工艺追因、配方优化 | Process Diagnosis, Recipe Optimization |
+| Capability terms | 运行比较、工艺追因、配方建议、受约束优化、受控验证 | run comparison, process diagnosis, recipe recommendation, constrained optimization, controlled validation |
 | Data unit | 运行 / 过程执行 | run / process execution |
 | Observational conclusion | 候选原因、稳定关联、混杂关联、证据不足 | candidate cause, stable association, confounded association, insufficient evidence |
 | Experimental conclusion | 支持、否决、不确定、已验证原因 | supported, rejected, inconclusive, validated cause |
 | Evidence level | 证据不足、探索性证据、证据稳定、证据充分 | insufficient, exploratory, stable, sufficient |
-| Optimization result | 下一步实验建议、候选工艺设置、已验证工艺操作域 | next-experiment recommendation, candidate process setting, validated operating region |
+| Optimization result | 下一配方建议、候选工艺设置、已验证工艺操作域 | next-recipe recommendation, candidate process setting, validated operating region |
 
 Choose terms by object:
 
 - Describe the complete product as a “Process Diagnosis & Optimization system.”
-- Use “Process R&D” for the workspace where engineers validate candidates, run experiments, and preserve knowledge.
+- Use “Recipe optimization” for the workspace where engineers review real runs, next recipes, and optional validation.
 - Use “constrained optimization” or “sequential optimization” for numerical capabilities, together with objectives, safety boundaries, and method admission.
-- Call system outputs a “next-experiment recommendation” or “candidate process setting,” never an “optimal process” or “production-parameter recommendation.”
+- Call system outputs a “next-recipe recommendation” or “candidate process setting,” never an “optimal process” or “automatically dispatched parameter.”
 - Call a completed, supported outcome a “validated operating region”; one successful setting is not a process window.
 
-“Smart process” is incomplete and can imply an autonomous process, so it is not a product category, menu, or capability name. “Intelligent Process R&D” may appear only in promotional context that explicitly retains engineer review and constrained experiment recommendations; formal product descriptions should prefer “Process R&D,” “experiment design,” and “constrained optimization.” “Process recommendation” is not a formal term because the system recommends a next experiment or candidate process setting, not a complete production-ready process.
+“Smart process” is incomplete and can imply an autonomous process, so it is not a product category, menu, or capability name. Formal product descriptions prefer “Recipe optimization,” “next-recipe recommendation,” “constrained optimization,” and “controlled validation.” Normal production recipe runs directly become optimization observations, but the system neither repackages them as another business record nor dispatches recipes automatically.
 
 An evidence level answers “how strong is the current support?”, an observational conclusion answers “what relationship was observed?”, and an experimental conclusion answers “did the intervention support the hypothesis?” These concepts are not interchangeable. *Robust screening only* (`screening`) and *limited evidence* (`limited`) are degraded labels at levels one and two; they do not introduce additional conclusion categories.
 
-Use *root cause* only when the validating evidence is stated. *AI Process R&D* or *Intelligent Process R&D* may describe the interaction model but does not replace the product category. Algorithm names belong in technical explanations, not in the product value itself.
+Use *root cause* only when the validating evidence is stated. *AI recipe optimization* may describe the interaction model but does not replace the product category. Algorithm names belong in technical explanations, not in the product value itself.
 
 Do not present long-term automation ambitions, specification candidates without external adoption, or future controlled-action capabilities as a current product category, industry standard, or demonstrated benefit.
 

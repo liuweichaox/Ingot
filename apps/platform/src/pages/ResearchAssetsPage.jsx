@@ -171,7 +171,7 @@ export function ResearchAssetsPage() {
     >
       <RequestError error={error} onRetry={() => projectId ? Promise.all([loadProjects(), load()]) : loadProjects()} />
       <Card title="项目范围" description="知识来源严格按研发项目隔离；其他版本化资产可被授权项目复用。">
-        <Field label="当前研发项目">
+        <Field label="当前优化任务">
           <Select value={projectId} onChange={event => setProjectId(event.target.value)}>
             {projects.length === 0 && <option value="">暂无可访问项目</option>}
             {projects.map(project => (

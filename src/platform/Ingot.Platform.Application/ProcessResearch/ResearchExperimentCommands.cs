@@ -91,7 +91,7 @@ public sealed partial class ResearchExperimentCommands(
                     ? "实验计划必须至少包含两个运行条件，不能用单点设置代替实验设计。"
                     : "独立验证实验至少需要三个重复运行。");
 
-        ExperimentFactorSetting NormalizeFactor(ExperimentFactorSetting value)
+        ResearchVariableSetting NormalizeFactor(ResearchVariableSetting value)
         {
             var code = NormalizeCode(value.VariableCode, "实验变量");
             if (!knownVariables.TryGetValue(code, out var variable))
@@ -499,7 +499,7 @@ public sealed partial class ResearchExperimentCommands(
             .Where(static value => value.Role == ResearchVariableRoles.Control)
             .ToDictionary(static value => value.Code, StringComparer.Ordinal);
 
-        ExperimentFactorSetting NormalizeApproved(ExperimentFactorSetting factor)
+        ResearchVariableSetting NormalizeApproved(ResearchVariableSetting factor)
         {
             var code = NormalizeCode(factor.VariableCode, "批准变量");
             if (!controls.TryGetValue(code, out var variable) ||
@@ -513,7 +513,7 @@ public sealed partial class ResearchExperimentCommands(
             return factor with { VariableCode = code, Unit = variable.Unit };
         }
 
-        IReadOnlyList<ExperimentFactorSetting> approved;
+        IReadOnlyList<ResearchVariableSetting> approved;
         if (decisionStatus == ResearchControlledDecisionStatuses.Rejected)
         {
             if (reason is null)
@@ -669,7 +669,7 @@ public sealed partial class ResearchExperimentCommands(
 
     private static void ValidateHardBoundaries(
         ResearchProject project,
-        IReadOnlyList<ExperimentFactorSetting> factors,
+        IReadOnlyList<ResearchVariableSetting> factors,
         string label)
     {
         var values = factors.ToDictionary(

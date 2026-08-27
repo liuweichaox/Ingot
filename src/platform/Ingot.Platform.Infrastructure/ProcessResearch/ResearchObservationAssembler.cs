@@ -7,6 +7,7 @@ using Ingot.Contracts.ProcessConfiguration;
 using Ingot.Contracts.ProcessResearch;
 using Ingot.Platform.Application.Inspections;
 using Ingot.Platform.Application.ProcessConfiguration;
+using Ingot.Platform.Application.ProcessExecutions;
 using Ingot.Platform.Application.ProcessResearch;
 using Ingot.Platform.Infrastructure.Inspections;
 using Ingot.Platform.Infrastructure.ProcessConfiguration;
@@ -20,11 +21,69 @@ public sealed class ResearchObservationAssembler(
     IInspectionReviewStore reviews,
     IInspectionMasterDataStore inspectionMasterData,
     IProcessConfigurationStore? processConfigurations = null,
-    ResearchContextAdmissionEvaluator? contextAdmission = null) : IResearchObservationAssembler
+    ResearchContextAdmissionEvaluator? contextAdmission = null,
+    IProcessExecutionService? productionRuns = null) : IResearchObservationAssembler
 {
     private const int MaximumRunsPerAssembly = 2000;
     private readonly ResearchContextAdmissionEvaluator _contextAdmission =
         contextAdmission ?? new ResearchContextAdmissionEvaluator();
+
+    public async Task<ResearchObservationAssembly> AssembleProductionRunsAsync(
+        ResearchProject project,
+        CancellationToken ct = default)
+    {
+        if (productionRuns is null)
+            throw new ProcessResearchRuleException("当前运行时无法读取生产运行，不能形成优化观察。");
+        var siteId = string.IsNullOrWhiteSpace(project.SiteCode)
+            ? throw new ProcessResearchRuleException("优化范围必须绑定站点后才能读取生产运行。")
+            : project.SiteCode.Trim();
+        var context = project.Context;
+        var productFamilyCode = ContextValue(context, "product_family_code");
+        var productCode = ContextValue(context, "product_code");
+        var equipmentId = ContextValue(context, "equipment_id");
+        var executionIds = new List<string>();
+        const int pageSize = 500;
+        for (var offset = 0; offset < MaximumRunsPerAssembly; offset += pageSize)
+        {
+            var page = await productionRuns.QueryAsync(
+                    null,
+                    null,
+                    productFamilyCode,
+                    productCode,
+                    null,
+                    equipmentId,
+                    null,
+                    null,
+                    "completed",
+                    Math.Min(pageSize, MaximumRunsPerAssembly - offset),
+                    offset,
+                    null,
+                    ct,
+                    siteId: siteId)
+                .ConfigureAwait(false);
+            executionIds.AddRange(page.Data
+                .Where(static value => value.LifecycleComplete)
+                .Select(static value => value.ExecutionId));
+            if (executionIds.Count >= page.Total || page.Data.Count < pageSize)
+                break;
+        }
+        var distinctIds = executionIds
+            .Distinct(StringComparer.Ordinal)
+            .Take(MaximumRunsPerAssembly)
+            .ToArray();
+        if (distinctIds.Length == 0)
+            return new ResearchObservationAssembly([], 0);
+        var scenarioPackage = await ResolveContextPolicyAsync(project, ct).ConfigureAwait(false);
+        var candidates = distinctIds.Select((executionId, index) => new CandidateRun(
+            new ExperimentRunPlan
+            {
+                ExecutionKey = executionId,
+                Sequence = index + 1
+            },
+            DateTimeOffset.MinValue,
+            DateTimeOffset.MinValue)).ToArray();
+        return await AssembleRunsAsync(project, candidates, scenarioPackage, ct).ConfigureAwait(false);
+    }
 
     public async Task<ResearchObservationAssembly> AssembleAsync(
         ResearchProject project,
@@ -36,17 +95,29 @@ public sealed class ResearchObservationAssembler(
             .Where(static experiment => experiment.Status != ResearchExperimentStatuses.Cancelled)
             .Where(static experiment =>
                 experiment.Optimization?.Mode != ResearchOptimizationModes.Shadow)
-            .SelectMany(experiment => experiment.RunPlan.Select(run => new CandidateRun(experiment, run)))
+            .SelectMany(experiment => experiment.RunPlan.Select(run => new CandidateRun(
+                run,
+                experiment.CreatedAt,
+                experiment.UpdatedAt)))
             .GroupBy(static value => value.Run.ExecutionKey, StringComparer.Ordinal)
             .Select(static group => group
-                .OrderByDescending(static value => value.Experiment.UpdatedAt)
+                .OrderByDescending(static value => value.UpdatedAt)
                 .First())
-            .OrderBy(static value => value.Experiment.CreatedAt)
+            .OrderBy(static value => value.CreatedAt)
             .ThenBy(static value => value.Run.Sequence)
             .ToArray();
-        if (candidates.Length > MaximumRunsPerAssembly)
+        return await AssembleRunsAsync(project, candidates, scenarioPackage, ct).ConfigureAwait(false);
+    }
+
+    private async Task<ResearchObservationAssembly> AssembleRunsAsync(
+        ResearchProject project,
+        IReadOnlyList<CandidateRun> candidates,
+        ScenarioPackage? scenarioPackage,
+        CancellationToken ct)
+    {
+        if (candidates.Count > MaximumRunsPerAssembly)
             throw new ProcessResearchRuleException(
-                $"单次优化最多自动装配 {MaximumRunsPerAssembly} 个实验运行，请先归档历史项目。");
+                $"单次优化最多自动装配 {MaximumRunsPerAssembly} 个运行，请缩小范围或归档历史任务。");
 
         var siteId = string.IsNullOrWhiteSpace(project.SiteCode)
             ? throw new ProcessResearchRuleException("研发项目必须绑定站点后才能装配生产运行观察。")
@@ -62,7 +133,7 @@ public sealed class ResearchObservationAssembler(
         var recordsByRun = allRecords
             .GroupBy(static item => item.ExecutionId, StringComparer.Ordinal)
             .ToDictionary(static group => group.Key, static group => group.ToArray(), StringComparer.Ordinal);
-        var observations = new List<ExperimentRunObservation>(candidates.Length);
+        var observations = new List<ResearchRunObservation>(candidates.Count);
         foreach (var candidate in candidates)
         {
             ct.ThrowIfCancellationRequested();
@@ -86,11 +157,11 @@ public sealed class ResearchObservationAssembler(
         }
         return new ResearchObservationAssembly(
             ApplyCohortContextGates(observations, scenarioPackage),
-            candidates.Length);
+            candidates.Count);
     }
 
-    private static IReadOnlyList<ExperimentRunObservation> ApplyCohortContextGates(
-        IReadOnlyList<ExperimentRunObservation> observations,
+    private static IReadOnlyList<ResearchRunObservation> ApplyCohortContextGates(
+        IReadOnlyList<ResearchRunObservation> observations,
         ScenarioPackage? scenarioPackage)
     {
         if (scenarioPackage is null || observations.Count == 0)
@@ -126,11 +197,18 @@ public sealed class ResearchObservationAssembler(
         }).ToArray();
     }
 
-    private static string FactorSignature(ExperimentRunObservation observation)
+    private static string FactorSignature(ResearchRunObservation observation)
         => string.Join('|', observation.ActualFactors.OrderBy(static value => value.VariableCode, StringComparer.Ordinal)
             .Select(static value => $"{value.VariableCode}:{value.Value:R}:{value.Unit}"));
 
-    private ExperimentRunObservation BuildObservation(
+    private static string? ContextValue(
+        IReadOnlyDictionary<string, string> context,
+        string key)
+        => context.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value)
+            ? value.Trim()
+            : null;
+
+    private ResearchRunObservation BuildObservation(
         ResearchProject project,
         ExperimentRunPlan run,
         ExecutionComparisonRow execution,
@@ -144,7 +222,7 @@ public sealed class ResearchObservationAssembler(
                 static value => value.Code,
                 static value => new ActualValue(value.Value!.Value, value.Unit),
                 StringComparer.Ordinal);
-        var factors = new List<ExperimentFactorSetting>();
+        var factors = new List<ResearchVariableSetting>();
         var missing = new List<string>();
         foreach (var variable in project.Variables.Where(
                      static value => value.Role == ResearchVariableRoles.Control))
@@ -154,7 +232,7 @@ public sealed class ResearchObservationAssembler(
                 missing.Add($"控制变量:{variable.Code}（{reason}）");
                 continue;
             }
-            factors.Add(new ExperimentFactorSetting
+            factors.Add(new ResearchVariableSetting
             {
                 VariableCode = variable.Code,
                 Value = value,
@@ -266,7 +344,7 @@ public sealed class ResearchObservationAssembler(
         };
         var contentHash = Convert.ToHexStringLower(
             SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(hashPayload)));
-        return new ExperimentRunObservation
+        return new ResearchRunObservation
         {
             ExecutionKey = run.ExecutionKey,
             Context = context,
@@ -563,8 +641,9 @@ public sealed class ResearchObservationAssembler(
     }
 
     private sealed record CandidateRun(
-        ResearchExperiment Experiment,
-        ExperimentRunPlan Run);
+        ExperimentRunPlan Run,
+        DateTimeOffset CreatedAt,
+        DateTimeOffset UpdatedAt);
 
     private sealed record ActualValue(double Value, string? Unit);
 }

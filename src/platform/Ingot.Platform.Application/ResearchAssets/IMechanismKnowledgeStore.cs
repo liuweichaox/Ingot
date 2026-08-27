@@ -1,7 +1,9 @@
+// 定义机理声明、冲突、生命周期和两类优化建议知识引用的持久化端口。
 using Ingot.Contracts.ResearchAssets;
 
 namespace Ingot.Platform.Application.ResearchAssets;
 
+/// <summary>持久化版本化机理知识，并分别记录配方建议和受控验证的知识使用。</summary>
 public interface IMechanismKnowledgeStore
 {
     Task<MechanismClaimVersion?> GetClaimAsync(Guid claimId, int? version = null, CancellationToken ct = default);
@@ -14,6 +16,9 @@ public interface IMechanismKnowledgeStore
     Task<MechanismClaimConflict> ResolveConflictAsync(MechanismClaimConflict value, CancellationToken ct = default);
     Task<IReadOnlyList<MechanismClaimConflict>> ListConflictsAsync(Guid projectId, CancellationToken ct = default);
     Task SaveUsagesAsync(IReadOnlyList<MechanismClaimUsage> values, CancellationToken ct = default);
+    Task SaveRecipeRecommendationUsagesAsync(
+        IReadOnlyList<MechanismClaimUsage> values,
+        CancellationToken ct = default);
     Task<IReadOnlyList<MechanismClaimUsage>> ListUsagesAsync(Guid projectId, CancellationToken ct = default);
     Task<bool> LifecycleEvidenceUsedAsync(Guid claimId, string referenceId, CancellationToken ct = default);
     Task<bool> LifecycleActorUsedAsync(Guid claimId, string userId, CancellationToken ct = default);

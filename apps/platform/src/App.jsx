@@ -64,8 +64,8 @@ const sections = [
     ],
   },
   {
-    id: "research", label: "工艺研发", icon: BeakerIcon, path: "/research-projects", groups: [
-      { items: [["/research-projects", "研发项目"], ["/research-assets", "工艺知识"]] },
+    id: "research", label: "配方优化", icon: BeakerIcon, path: "/research-projects", groups: [
+      { items: [["/research-projects", "优化任务"], ["/research-assets", "工艺知识"]] },
     ],
   },
 ];
@@ -85,11 +85,11 @@ export const sectionsForIdentity = identity => (identity?.roles || []).includes(
 const sectionItems = section => section.groups.flatMap(group => group.items);
 
 const pageDetails = {
-  "/research-projects": ["研发项目", "从问题、证据与实验推进到经过验证的工艺窗口"],
+  "/research-projects": ["配方优化", "让真实配方运行持续形成证据并推荐下一份配方"],
   "/workbench": ["工作台", "集中查看待办、生产状态、质量风险与研发进展"],
   "/chat": ["工艺分析助手", "用自然语言查询运行、质量、配置、研发与知识证据"],
   "/analysis": ["追因总览", "从生产运行和可信证据进入差异比较、候选原因与工程验证"],
-  "/research-assets": ["工艺知识", "查看项目可复用的数据集、模型、机理和知识"],
+  "/research-assets": ["工艺知识", "查看优化任务可复用的数据集、模型、机理和知识"],
   "/explorer": ["对象目录", "选择真实业务对象，再进入它的运行、事件、质量与数据健康视图"],
   "/process-executions": ["运行记录", "查看生产运行及其数据、工艺与质量上下文"],
   "/events": ["运行事件", "查询、追溯并关联运行上下文"],
@@ -428,7 +428,7 @@ function GlobalSearchDialog({ open, onClose, navigate, entries }) {
         <DialogPanel className="mx-auto w-full max-w-2xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
           <div className="border-b border-slate-100 p-4 sm:p-5">
             <p className="text-sm font-semibold text-slate-950">功能搜索</p>
-            <p className="mt-1 text-xs text-slate-500">查找现场接入、工艺配置、生产运行、质量管理、工艺追因、工艺研发和系统功能。</p>
+            <p className="mt-1 text-xs text-slate-500">查找现场接入、工艺配置、生产运行、质量管理、工艺追因、配方优化和系统功能。</p>
             <Input
               ref={inputRef}
               value={query}

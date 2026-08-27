@@ -1,4 +1,4 @@
-
+// Defines bilingual document metadata and rejects unsupported locale routes.
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import "../globals.css";
@@ -18,8 +18,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       template: lang === "zh" ? "%s · Ingot 文档" : "%s · Ingot Documentation",
     },
     description: lang === "zh"
-      ? "了解 Ingot 如何让真实生产数据支持工艺工程师比较运行、验证原因并选择下一步实验"
-      : "Learn how Ingot uses real production evidence to help process engineers compare runs, validate causes, and select the next experiment",
+      ? "了解 Ingot 如何把真实配方运行变成优化证据，并在安全边界内推荐下一份配方"
+      : "Learn how Ingot turns real recipe runs into optimization evidence and recommends the next recipe within safety boundaries",
     robots: { index: true, follow: true },
   };
 }
